@@ -2976,6 +2976,7 @@ impl super::Adapter {
             desc_allocator: Mutex::new(desc_allocator),
             valid_ash_memory_types,
             naga_options,
+            stage_memo: Default::default(),
             #[cfg(feature = "renderdoc")]
             render_doc: Default::default(),
             counters: Default::default(),

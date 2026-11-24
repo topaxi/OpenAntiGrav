@@ -30,6 +30,8 @@ pub mod perfprobe;
 pub mod reaper;
 pub mod shader_file;
 pub mod split_finish;
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod stage_memo_tests;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod test_adapter;
 pub mod texture;

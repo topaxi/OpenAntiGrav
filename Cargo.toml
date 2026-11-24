@@ -1,5 +1,8 @@
 [workspace]
 resolver = "3"
+# Vendored crates are `[patch.crates-io]` sources, not members; excluding them
+# lets each be built and tested on its own (`vendor/README.md`).
+exclude = ["vendor"]
 members = [
   "crates/2048",
   "crates/ai",

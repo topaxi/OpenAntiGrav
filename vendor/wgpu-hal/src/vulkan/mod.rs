@@ -33,6 +33,7 @@ mod drm;
 mod instance;
 mod sampler;
 mod semaphore_list;
+mod stage_memo;
 mod swapchain;
 
 pub use adapter::PhysicalDeviceFeatures;
@@ -560,6 +561,8 @@ pub struct Device {
     desc_allocator: Mutex<descriptor::DescriptorAllocator>,
     valid_ash_memory_types: u32,
     naga_options: naga::back::spv::Options<'static>,
+    /// SPIR-V of intermediate modules' stages, reused across pipelines.
+    stage_memo: stage_memo::StageMemo,
     #[cfg(feature = "renderdoc")]
     render_doc: crate::auxil::renderdoc::RenderDoc,
     counters: Arc<wgt::HalCounters>,
@@ -1149,6 +1152,8 @@ pub enum ShaderModule {
     Intermediate {
         naga_shader: crate::NagaShader,
         runtime_checks: wgt::ShaderRuntimeChecks,
+        /// Identity of this module in the device's stage memo.
+        memo_id: u64,
     },
 }
 

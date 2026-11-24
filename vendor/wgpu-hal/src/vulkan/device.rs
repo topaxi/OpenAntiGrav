@@ -696,6 +696,91 @@ impl super::Device {
         Ok(raw)
     }
 
+    /// Resolves the override constants of an intermediate module's stage and
+    /// writes its SPIR-V for `binding_map`.
+    fn write_intermediate_stage(
+        &self,
+        naga_shader: &crate::NagaShader,
+        runtime_checks: wgt::ShaderRuntimeChecks,
+        stage: &crate::ProgrammableStage<super::ShaderModule>,
+        naga_stage: naga::ShaderStage,
+        binding_map: &naga::back::spv::BindingMap,
+    ) -> Result<Vec<u32>, crate::PipelineError> {
+        let stage_flags = crate::auxil::map_naga_stage(naga_stage);
+        let pipeline_options = naga::back::spv::PipelineOptions {
+            entry_point: stage.entry_point.to_owned(),
+            shader_stage: naga_stage,
+        };
+        let needs_temp_options = !runtime_checks.bounds_checks
+            || !runtime_checks.force_loop_bounding
+            || !runtime_checks.ray_query_initialization_tracking
+            || !binding_map.is_empty()
+            || naga_shader.debug_source.is_some()
+            || !stage.zero_initialize_workgroup_memory
+            || !runtime_checks.task_shader_dispatch_tracking
+            || !runtime_checks.mesh_shader_primitive_indices_clamp
+            || !runtime_checks.int_div_checks;
+
+        let mut temp_options;
+        let options = if needs_temp_options {
+            temp_options = self.naga_options.clone();
+            if !runtime_checks.bounds_checks {
+                temp_options.bounds_check_policies = naga::proc::BoundsCheckPolicies {
+                    index: naga::proc::BoundsCheckPolicy::Unchecked,
+                    buffer: naga::proc::BoundsCheckPolicy::Unchecked,
+                    image_load: naga::proc::BoundsCheckPolicy::Unchecked,
+                    binding_array: naga::proc::BoundsCheckPolicy::Unchecked,
+                };
+            }
+            if !runtime_checks.force_loop_bounding {
+                temp_options.force_loop_bounding = false;
+            }
+            if !runtime_checks.ray_query_initialization_tracking {
+                temp_options.ray_query_initialization_tracking = false;
+            }
+            if !binding_map.is_empty() {
+                temp_options.binding_map = binding_map.clone();
+            }
+
+            if let Some(ref debug) = naga_shader.debug_source {
+                temp_options.debug_info = Some(naga::back::spv::DebugInfo {
+                    source_code: &debug.source_code,
+                    file_name: debug.file_name.as_ref(),
+                    language: naga::back::spv::SourceLanguage::WGSL,
+                })
+            }
+            if !stage.zero_initialize_workgroup_memory {
+                temp_options.zero_initialize_workgroup_memory =
+                    naga::back::spv::ZeroInitializeWorkgroupMemoryMode::None;
+            }
+            if !runtime_checks.task_shader_dispatch_tracking {
+                temp_options.task_dispatch_limits = None;
+            }
+            temp_options.mesh_shader_primitive_indices_clamp =
+                runtime_checks.mesh_shader_primitive_indices_clamp;
+            temp_options.emit_int_div_checks = runtime_checks.int_div_checks;
+
+            &temp_options
+        } else {
+            &self.naga_options
+        };
+
+        let (module, info) = naga::back::pipeline_constants::process_overrides(
+            &naga_shader.module,
+            &naga_shader.info,
+            Some((naga_stage, stage.entry_point)),
+            stage.constants,
+        )
+        .map_err(|e| crate::PipelineError::PipelineConstants(stage_flags, format!("{e}")))?;
+
+        let spv = {
+            profiling::scope!("naga::spv::write_vec");
+            naga::back::spv::write_vec(&module, &info, options, Some(&pipeline_options))
+        }
+        .map_err(|e| crate::PipelineError::Linkage(stage_flags, format!("{e}")))?;
+        Ok(spv)
+    }
+
     fn compile_stage(
         &self,
         stage: &crate::ProgrammableStage<super::ShaderModule>,
@@ -708,80 +793,28 @@ impl super::Device {
             super::ShaderModule::Intermediate {
                 ref naga_shader,
                 runtime_checks,
+                memo_id,
             } => {
-                let pipeline_options = naga::back::spv::PipelineOptions {
-                    entry_point: stage.entry_point.to_owned(),
-                    shader_stage: naga_stage,
+                // Pipelines built from one module often repeat a stage exactly;
+                // the memo writes its SPIR-V once (see `stage_memo`).
+                let memo_key =
+                    super::stage_memo::StageKey::new(memo_id, stage, naga_stage, binding_map);
+                let spv = match self.stage_memo.get(&memo_key) {
+                    Some(spv) => spv,
+                    None => {
+                        let spv: Arc<[u32]> = self
+                            .write_intermediate_stage(
+                                naga_shader,
+                                runtime_checks,
+                                stage,
+                                naga_stage,
+                                binding_map,
+                            )?
+                            .into();
+                        self.stage_memo.insert(memo_key, Arc::clone(&spv));
+                        spv
+                    }
                 };
-                let needs_temp_options = !runtime_checks.bounds_checks
-                    || !runtime_checks.force_loop_bounding
-                    || !runtime_checks.ray_query_initialization_tracking
-                    || !binding_map.is_empty()
-                    || naga_shader.debug_source.is_some()
-                    || !stage.zero_initialize_workgroup_memory
-                    || !runtime_checks.task_shader_dispatch_tracking
-                    || !runtime_checks.mesh_shader_primitive_indices_clamp
-                    || !runtime_checks.int_div_checks;
-
-                let mut temp_options;
-                let options = if needs_temp_options {
-                    temp_options = self.naga_options.clone();
-                    if !runtime_checks.bounds_checks {
-                        temp_options.bounds_check_policies = naga::proc::BoundsCheckPolicies {
-                            index: naga::proc::BoundsCheckPolicy::Unchecked,
-                            buffer: naga::proc::BoundsCheckPolicy::Unchecked,
-                            image_load: naga::proc::BoundsCheckPolicy::Unchecked,
-                            binding_array: naga::proc::BoundsCheckPolicy::Unchecked,
-                        };
-                    }
-                    if !runtime_checks.force_loop_bounding {
-                        temp_options.force_loop_bounding = false;
-                    }
-                    if !runtime_checks.ray_query_initialization_tracking {
-                        temp_options.ray_query_initialization_tracking = false;
-                    }
-                    if !binding_map.is_empty() {
-                        temp_options.binding_map = binding_map.clone();
-                    }
-
-                    if let Some(ref debug) = naga_shader.debug_source {
-                        temp_options.debug_info = Some(naga::back::spv::DebugInfo {
-                            source_code: &debug.source_code,
-                            file_name: debug.file_name.as_ref(),
-                            language: naga::back::spv::SourceLanguage::WGSL,
-                        })
-                    }
-                    if !stage.zero_initialize_workgroup_memory {
-                        temp_options.zero_initialize_workgroup_memory =
-                            naga::back::spv::ZeroInitializeWorkgroupMemoryMode::None;
-                    }
-                    if !runtime_checks.task_shader_dispatch_tracking {
-                        temp_options.task_dispatch_limits = None;
-                    }
-                    temp_options.mesh_shader_primitive_indices_clamp =
-                        runtime_checks.mesh_shader_primitive_indices_clamp;
-                    temp_options.emit_int_div_checks = runtime_checks.int_div_checks;
-
-                    &temp_options
-                } else {
-                    &self.naga_options
-                };
-
-                let (module, info) = naga::back::pipeline_constants::process_overrides(
-                    &naga_shader.module,
-                    &naga_shader.info,
-                    Some((naga_stage, stage.entry_point)),
-                    stage.constants,
-                )
-                .map_err(|e| {
-                    crate::PipelineError::PipelineConstants(stage_flags, format!("{e}"))
-                })?;
-
-                let spv = {
-                    profiling::scope!("naga::spv::write_vec");
-                    naga::back::spv::write_vec(&module, &info, options, Some(&pipeline_options))
-                }
-                .map_err(|e| crate::PipelineError::Linkage(stage_flags, format!("{e}")))?;
                 self.create_shader_module_impl(&spv, &None)?
             }
         };
@@ -1868,6 +1901,7 @@ impl crate::Device for super::Device {
                 super::ShaderModule::Intermediate {
                     naga_shader,
                     runtime_checks: desc.runtime_checks,
+                    memo_id: self.stage_memo.next_module_id(),
                 }
             }
             crate::ShaderInput::Naga(naga_shader) => {
@@ -1918,7 +1952,9 @@ impl crate::Device for super::Device {
             super::ShaderModule::Raw(raw) => {
                 unsafe { self.shared.raw.destroy_shader_module(raw, None) };
             }
-            super::ShaderModule::Intermediate { .. } => {}
+            super::ShaderModule::Intermediate { memo_id, .. } => {
+                self.stage_memo.forget_module(memo_id);
+            }
         }
 
         self.counters.shader_modules.sub(1);
