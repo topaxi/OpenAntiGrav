@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [hd, 2048]
 updated: 2026-11-24
-summary: "`--from-png` draws a motion blur shot as one frame; drawing the blur needs the capture's last ticks drawn per plan frame and a camera kept relative to the craft."
+summary: "`--from-png` draws a motion blur shot as one frame; the blur needs a frame per plan tick and a camera kept relative to the craft."
 categories: [tooling]
 size: M (55)
 difficulty: medium (50)
