@@ -612,8 +612,9 @@ at 30 to 40 units), or have the maintainer say whether the original's mines are 
 
 **The displacement is the pair's camera (2026-11-24, `det-mine-look-re`; `detonator-mine-draw.md`).** The original draws each mine part at its
 object's position (`SceneNode_SetLocalMatrix` `0x00327500`, no view term); the pair's push-buffer camera is 1.5 to 4 ticks of travel newer than
-the picture (`mines-ahead` 3.55, `cannon-volley` 2.30, `pad` 1.55, fitted on the near mines, confirmed on a cross-track scenery edge; 80). The
-"twice the size" is mostly the `Electric_Visualiser` (bounding radius 2.45 against the football's 1.00), a camera-facing billboard ours does not
+the picture (`mines-ahead` 3.55, `cannon-volley` 2.30, `pad` 1.55, fitted on the near mines, one cross-track scenery edge agrees; 70, not
+reconciled with `hd-pair-lag-scan.py`'s 0 to 3 ticks: settle that first). The "twice the size" reads as the ring and the long spikes around an
+ordinary football (by eye on one mine, 55): the ring is the `Electric_Visualiser` (bounding radius 2.45), a camera-facing billboard ours does not
 draw (`DetonatorMine_PoseVisualiser` `0x00139308`, scale `1 + 0.4 (m+0xd8 - 1)` live, `0.9` dark; 65). **Ready to wire, in order:** (1) pair
 tooling: render ours from the picture's camera, moving `--camera-pose` and `--pose` back by a per-grab fitted `k` (`compare-page.md`, "The picture
 is older than the push buffer's camera"); likely moves every HD pair with near scenery; (2) draw the visualiser billboard; (3) carry `s`/`t` per

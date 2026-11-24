@@ -3,8 +3,9 @@
 `EBOOT.elf` (WipEout HD Fury, PS3, EU, `BCES00664`), Ghidra program `/hdfury/EBOOT-ps3-hdfury-eu.elf`. Read 2026-11-24
 (`det-mine-look-re`). Bodies read off `llvm-objdump -d --mattr=+altivec,+vsx` over their real extent; TOC slots through
 `scripts/ps3-toc.py resolve` (every function here declares TOC `0x008ad4d8`). The live legs are the push-buffer dumps and
-frames of the `det-mines` grabs (RPCS3, Talon's Junction, Feisar, stage 1, state
-`hd-detonator-talons-feisar-grid-late`) and the three Detonator pairs' `theirs.png`. The mine's objects are
+frames of two `det-mines` grabs of one boot (RPCS3, Talon's Junction, Feisar, stage 1, state
+`hd-detonator-talons-feisar-grid-late`; shot A at lap clock 2.70 s, push-buffer eye `199.27, -41.48, -194.98`; shot B a few
+ticks later, eye `206.47, -41.15, -194.76`) and the three Detonator pairs' `theirs.png`. The mine's objects are
 [detonator-mine.md](detonator-mine.md), its shader constants [detonator-mine-material.md](detonator-mine-material.md).
 
 ## Result
@@ -17,7 +18,7 @@ frames of the `det-mines` grabs (RPCS3, Talon's Junction, Feisar, stage 1, state
 | Spikes size | `spikeScale = clamp(4 t, 1, scale + 0.95)`, model bounding radius `1.04` | same | 85, 80 |
 | Dark mine | football and spikes at the rotation, rows unscaled (`scale` and `spikeScale` not applied) | `0x00139b78`-`0x00139cec` | 72 |
 | Visualiser | a **camera-facing** basis at `m+0x80`, rows `* (1 + 0.4 (m+0xd8 - 1))` live, `* 0.9` dark; model bounding radius `2.45` | `DetonatorMine_PoseVisualiser` `0x00139308` | 65 |
-| Near-mine displacement | **not the draw**: the RPCS3 picture is 1.5 to 4 ticks older than the push buffer's camera the pair renders from | "The displacement", below | 80 |
+| Near-mine displacement | **not the draw**: the RPCS3 picture is 1.5 to 4 ticks older than the push buffer's camera the pair renders from | "The displacement", below | 70 |
 
 ## `SceneNode_SetLocalMatrix(node, m, flag)` (`0x00327500`)
 
@@ -90,15 +91,16 @@ displace them** (above: translation `m+0x80`, no view term). **The camera is fro
 
 1. **No mine matrix is in the dumped regions.** The pair's camera comes from the push buffer
    (`rpcs3-drive.py`'s `PUSHBUFFER_REGIONS`: `0x40010000` 16 KiB, `0x40060000` and `0x40080000` 128 KiB each). A walk of
-   their `TRANSFORM_CONSTANT_LOAD` packets (`0x1efc`, both emitters) in `det-mines/m2` shot `00` finds 369 draws,
+   their `TRANSFORM_CONSTANT_LOAD` packets (`0x1efc`, both emitters) in shot A finds 369 draws,
    `c[256]`/`c[260]` loads that decompose to the camera, the hull (scale `0.63`, five translations), HUD and screen
    quads, and **no matrix whose translation is within 3 units of any of the 80 mines** (also as a 16-float window and as
    `M * viewProj^-1`). The world's draws (track, scenery, mines) are elsewhere in the command stream, so the frame the
    camera belongs to is not shown by these regions. Clean negative; live recipe for the mine's own matrix: a PPU
    breakpoint at `0x001399a4` reads 64 bytes at `r4` (the football's matrix as it is submitted).
-2. **Two shots of one boot disagree by exactly the camera's travel.** Shot `00b` (taken after `00`, push-buffer eye
-   `206.47`, 4 ticks on from `00`'s `199.27`) shows a picture whose near mines sit **on `00`'s push-buffer projection**
-   (3 mines, within about 5 px by eye). The same RAM objects, the same draw: only the camera moved.
+2. **Two shots of one boot disagree by the camera's travel.** Shot B's push-buffer eye is 4 ticks on from shot A's, yet
+   B's picture fits **A's** push-buffer camera moved back only 1.15 ticks (centroid fit below, rms 20 px; 0 by eye), so
+   B's picture is about 3 ticks behind its own push buffer, A's 2.15. The same RAM objects, the same draw: only the
+   camera moved, by a different lag on each shot.
 3. **A camera moved back along the craft's velocity fits every pair.** Projecting the RAM objects with the push-buffer
    `viewProj` shifted by `k` ticks of the craft's velocity, against the centroids of the original's lavender pixels
    (`b > 180`, `r > 150`, `r - g > 12`) in a window scaled by distance:
@@ -108,7 +110,7 @@ displace them** (above: translation `m+0x80`, no view term). **The camera is fro
    | `mines-ahead` (lap 2.67 s) | 3, at 12 to 18 units | 3.55 | 11.9 px | 135 px |
    | `cannon-volley` (2.63 s) | 3, at 19 to 25 units | 2.30 | 9.4 px | 107 px |
    | `pad` (2.02 s) | 4, at 83 to 89 units | 1.55 | 1.4 px | 5 px |
-   | `det-mines` `m2/00` (2.70 s, hand-picked centres) | 3 | 1.75 | 6.6 px | 82 px |
+   | shot A (2.70 s) | 3 | 2.15 | 11.7 px | 93 px |
 
    `pad` is why "a constant 7 units rejects pad" held: at 85 units a tick moves a mine about 3 px, so its lag is small
    and loosely bounded, and a fixed world offset would not depend on the grab. The lag is not a whole number because
@@ -118,15 +120,26 @@ displace them** (above: translation `m+0x80`, no view term). **The camera is fro
    the `mines-ahead` pair's flags with the camera and the craft moved back `k = 0..6` ticks: the left edge of the
    violet overhead panel at the top right, a feature across the line of travel 15 to 40 units away, stands at
    x `1565, 1554, 1540, 1524, 1512, 1501, 1491` for `k = 0..6` against the original's `1518`, so `k` about 3.5, the same
-   as the mines. Along-track features (the red lines, the floor dashes) do not move under this shift and cannot
-   decide it, which is why `det-mines` saw the strips agree.
-5. **The size law needs the lag.** At `k = 0` the `mines-ahead` middle mine (18.2 units) would show a football of
-   0.68 units, below the law's minimum (`scale >= 1`, radius `1.00`); at `k = 3.55` (24.5 units) it is 0.92.
+   as the mines, on x (its lower edge does not match on y at any `k`: ours' panel is drawn differently). Along-track
+   features (the red lines, the floor dashes, the right wall's panels) do not move under this shift and cannot decide
+   it, which is why `det-mines` saw the strips agree. **The rest of the scenery does not improve:** outside the near
+   mines and the hull the plain mean absolute grey goes `16.67, 16.73, 17.52` at `k = 0, 2, 4`, and the edge correlation
+   of the right wall peaks at `k = 0` (`0.565` against `0.396` at 4) while the upper-left structure peaks at 4 (`0.192`
+   against `0.141`). The re-render moves the eye only, not its orientation, which is one candidate for why the larger
+   regions do not follow; one cross-track edge is the scenery evidence, not a whole-frame fit.
+5. **The size law leans the same way.** At `k = 0` the `mines-ahead` middle mine (18.2 units) shows a football of
+   0.68 units against the law's minimum (`scale >= 1`, bounding radius `1.00`); at `k = 3.55` (24.5 units) 0.92. The
+   visible rim is not the bounding sphere, so this is directional support, not a discriminator.
 
-**Confidence 80** that the displacement is the camera's frame, not the draw: four grabs, two independent legs (mines and
-cross-track scenery), and the draw's own code. **Not reconciled:** the pairs record `presented_lag.hud_clock_ticks = 3`
-(the HUD clock in the picture against RAM) and `craft_ticks` 2 to 4 (push-buffer hull against RAM), so picture behind
-RAM by `craft_ticks + k` reads 5.6 to 6.3 ticks, not 3. Which clock the HUD lap time reads at a pause is unread.
+**Confidence 70** that the displacement is the camera's frame, not the draw: five grabs, the draw's own code (no view
+term), and one cross-track scenery edge; held below 80 by the scenery regions that do not follow and by the earlier
+measurements below. **Not reconciled with what the project measured before.** [compare-page.md](../../../tools/compare-page.md),
+"The skew is the pause, not the original's draw order", found the push buffer's hull and camera to be one frame, 1 or 2
+ticks behind RAM, and the pairs record the presented picture as 0 to 3 ticks older than RAM (`hd-pair-lag-scan.py`) and
+`hud_clock_ticks = 3`. Here the picture is `craft_ticks + k` = 5.6 to 6.3 ticks behind RAM. The hull and camera agreement
+is blind to this skew (both ride the camera). `hd-pair-lag-scan.py` scores whole-frame edge correlation with the eye
+rewound and orientation kept, which this page's own regions show is dominated by along-track features that do not move
+under the shift; that it is blind is likely but not shown. Which clock the HUD lap time reads at a pause is unread.
 
 ## One near mine, predicted and seen
 
@@ -141,13 +154,16 @@ RAM by `craft_ticks + k` reads 5.6 to 6.3 ticks, not 3. Which clock the HUD lap 
 | Spike tips | `34 * spikeScale` px, `spikeScale = min(4 t, scale + 0.95)`, the spikes' bands `11..14` at `0.65` to `0.99`: 64 to 74 px | about 70 px |
 | Visualiser | billboard ring, bounding `80 * (1 + 0.4 (scale - 1))` px | violet ring, about 57 px |
 
-The ring's own radius inside its 2.45-unit bounds is not measured (the model's arcs reach beyond it).
+The ring's own radius inside its 2.45-unit bounds is not measured (the model's arcs reach beyond it). Measured by eye on
+a 3x crop with rings at 20 to 60 px: shell about 30 px, ring about 57 px, spike tips about 70 px. **So the original's lit
+mine reads about twice ours' because of the ring and the long spikes around a football of ordinary size**, not a bigger
+football (confidence 55: one mine, by eye).
 
 ## Ready to wire
 
 | Row | What | Source | Confidence |
 | --- | --- | --- | ---: |
-| 1 | **Pair tooling, every HD pair:** render ours from the picture's camera, not the push buffer's: move `--camera-pose`'s eye and `--pose` back by `k` ticks of motion. `k` varies by grab (1.5 to 4 measured); measure it per grab (in Detonator from the near mines' centroids, `scripts/` would need the fit above; elsewhere from one cross-track feature), record it as `original.presented_lag.picture_ticks`, refuse a grab whose fit does not converge | "The displacement" | 80 |
+| 1 | **Pair tooling, every HD pair:** render ours from the picture's camera, not the push buffer's: move `--camera-pose`'s eye and `--pose` back by `k` ticks of motion. `k` varies by grab (1.15 to 3.55 measured); measure it per grab (in Detonator from the near mines' centroids; elsewhere from one cross-track feature) by extending `hd-pair-lag-scan.py` with a cross-track or static-object score, and record it in the existing `original.presented_lag` block; refuse a grab whose fit does not converge. Settle the disagreement with the earlier lag measurements first | "The displacement" | 70 |
 | 2 | Draw `Electric_Visualiser` at each mine: camera-facing, centred, scale `1 + 0.4 (football - 1)` live, `0.9` dark, colour `ElectricityColour` and the music binds already read | `0x00139308`, [detonator-mine-material.md](detonator-mine-material.md) | 65 |
 | 3 | Football and spikes translation stays the object's position; orientation is an axis-angle spin about `m+0xe0` by `m+0x150` (ours spins about its own choice; the axis's writer is unread) | `0x001396f0` | 60 |
 | 4 | Dark mine parts at scale 1 | `0x00139b78` | 72 |

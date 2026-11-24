@@ -2569,18 +2569,23 @@ along it leaves them where they are. Near static things (the mines at 12 to 25 u
 | `mines-ahead` pair | 3.55 | 11.9 / 135 px |
 | `cannon-volley` pair | 2.30 | 9.4 / 107 px |
 | `pad` pair | 1.55 | 1.4 / 5 px (85 units away: a weak lever) |
-| `det-mines` `m2/00` | 1.75 | 6.6 / 82 px |
-| `det-mines` `m2/00b` | its picture is `00`'s push-buffer camera, 4 ticks before its own | |
+| shot A of one `det-mines` boot (lap 2.70 s, push-buffer eye `199.27, -41.48, -194.98`) | 2.15 | 11.7 / 93 px |
+| shot B of the same boot (push-buffer eye `206.47`, 4 ticks on) | its picture fits shot A's camera at 1.15 (20 px), about 3 behind its own | |
 
 Method: project the RAM mine objects through the push-buffer `viewProj` with every point moved forward by `k` ticks of the craft's
 velocity (the same as the camera moved back), against the centroid of the original's lavender pixels (`b > 180`, `r > 150`,
 `r - g > 12`) in a window of `0.8 * 800 * 2.5 / z` px around each mine; `k` minimises the rms. **Scenery confirms it**: ours
 re-rendered from the `mines-ahead` pair's flags with camera and craft moved back `k = 0..6` ticks puts the left edge of the violet
-overhead panel (top right, across the line of travel) at x `1565, 1554, 1540, 1524, 1512, 1501, 1491`, the original at `1518`. The
-whole-frame mean absolute grey of that render moved 22.99 to 20.74 at `k = 4` (this tree's own render and a plain mean, not the page
-scorer). Not reconciled with the pair's `presented_lag`: `hud_clock_ticks = 3` against `craft_ticks + k` of 5.6 to 6.3.
+overhead panel (top right, across the line of travel) at x `1565, 1554, 1540, 1524, 1512, 1501, 1491`, the original at `1518` (x only;
+its lower edge does not match on y). **The rest does not follow:** outside the near mines and the hull the plain mean absolute grey goes
+`16.67, 16.73, 17.52` at `k = 0, 2, 4` and the right wall's edge correlation peaks at `k = 0`; the eye was moved, its orientation was not.
+The whole-frame plain mean moved 22.99 to 20.74 at `k = 4`, mostly from the mines (this tree's render, not the page scorer). **Confidence
+70, and not reconciled** with "The skew is the pause" above (push-buffer hull and camera one frame, 1 or 2 ticks behind RAM; blind to
+this, both ride the camera) or with `hd-pair-lag-scan.py`'s 0 to 3 ticks behind RAM (whole-frame edge correlation, which the regions
+here show is dominated by along-track features): here the picture is `craft_ticks + k` = 5.6 to 6.3 ticks behind RAM.
 
-**What a fix needs (not done):** the lag varies by grab, so it is measured per grab, not assumed. `rpcs3-hd-pair.py` would move
-`--camera-pose`'s eye and `--pose` back by `k` ticks of the original craft's velocity, `k` fitted from the near mines in Detonator or
-from one cross-track scenery edge elsewhere, recorded as `original.presented_lag.picture_ticks`. Every HD pair takes its camera from
+**What a fix needs (not done):** first settle the disagreement above. Then, since the lag varies by grab, measure it per grab:
+extend `hd-pair-lag-scan.py` with a score on static objects (the near mines in Detonator) or a cross-track edge, record `k` in the
+existing `original.presented_lag` block, and have `rpcs3-hd-pair.py` move `--camera-pose`'s eye and `--pose` back by `k` ticks of the
+original craft's velocity. Every HD pair takes its camera from
 the push buffer, so this likely moves every HD pair with near scenery, not only Detonator's.

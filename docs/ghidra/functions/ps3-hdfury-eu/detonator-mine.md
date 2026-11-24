@@ -407,8 +407,8 @@ not a model offset (both models are unit spheres about the origin) and not the o
 
 The "Open" line above is answered on [detonator-mine-draw.md](detonator-mine-draw.md): the mine is drawn at its object's
 position (`m+0x80`, no view term), and the pair's push-buffer camera is 1.5 to 4 ticks of travel newer than the picture
-(`mines-ahead` 3.55, `cannon-volley` 2.30, `pad` 1.55, fitted on the near mines and confirmed on a cross-track scenery
-edge). Confidence 80.
+(`mines-ahead` 3.55, `cannon-volley` 2.30, `pad` 1.55, fitted on the near mines; one cross-track scenery edge agrees on
+x). Confidence 70: not reconciled with the earlier lag measurements (that page, "The displacement").
 
 ## Cross-check: 2048 and Omega
 
