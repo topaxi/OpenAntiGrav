@@ -143,6 +143,13 @@ impl Renderer {
         self.hud.snapped_pens = on;
     }
 
+    /// Whether the snapped pens are on ([`Self::set_snapped_pens`]).
+    #[cfg(test)]
+    #[must_use]
+    pub(crate) fn snapped_pens(&self) -> bool {
+        self.hud.snapped_pens
+    }
+
     /// Ends right- and centre-aligned text on its last glyph's ink rather than its advance
     /// (`HudArt::ink_aligned_text`): the width an alignment uses loses that glyph's trailing
     /// bearing. Pulse's right-aligned rule rides on [`Self::set_whole_pixel_advances`] instead.
