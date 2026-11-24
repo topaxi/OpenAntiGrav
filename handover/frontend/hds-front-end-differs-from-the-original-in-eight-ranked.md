@@ -95,8 +95,9 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
   3. ~~**The player's own turn, pan and zoom of the craft**~~ (LANDED, `hd-shipselect-controls`):
      the update's law is `oag_title::ShipControl` (HD and Omega), applied by
      `oag_game::preview::ship_model::control`; pad right stick, R1 and left stick, and a
-     pointer drag and the wheel over the craft's frame. Still open: the SIXAXIS tilt
-     (`st+0x1028`, `+0x102c`; `oag-input` reads no motion sensor) and the sign of the pad axes
+     pointer drag and the wheel over the craft's frame. Still open (maintainer: leave open): the SIXAXIS tilt
+     (`st+0x1028`, `+0x102c` via `FUN_005b9408`; unwired because `oag-input` reads no motion sensor;
+     about half a day: a motion read in `oag-input` plus a `CraftInput` field) and the sign of the pad axes
      (chosen). See `team-selection-model.md`, "The player's own turn, pan and zoom".
   4. **The Detonator box** (`-2.0..0`) is Title data nobody uses: the preview
      does not draw the Detonator hull. Small (50).
