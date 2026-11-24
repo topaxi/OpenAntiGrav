@@ -476,9 +476,14 @@ pub struct RaceView {
     /// Putting these two floats in `ShipState` would move the determinism
     /// hashes every time somebody adjusted an animation.
     ///
-    /// One pair per slot, advanced for every craft a person flies, so a second local
-    /// person's hull swings its own flaps; an AI craft stays stowed.
+    /// One pair per slot. Every craft holds both flaps fully out ([`crate::GRID_FLAP_LEVEL`])
+    /// while it is in the grid state, from the race's load. After that a craft a person flies
+    /// swings its own flaps with its airbrakes, so a second local person's hull does too, and
+    /// an AI craft folds them back to stowed.
     pub(super) flaps: [[f32; 2]; MAX_SHIPS],
+    /// Whether the grid state forces the flaps out. Always on in play; a comparison capture of a
+    /// craft posed past the grid switches it off ([`Race::stow_grid_flaps`]).
+    pub(super) grid_flaps: bool,
     /// The authored deflection and the two rates, from `<AirbrakeGraphics>`.
     ///
     /// `amount` is already radians here: `oag_gameplay::airbrake_graphics_for`

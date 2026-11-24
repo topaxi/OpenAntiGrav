@@ -9,7 +9,7 @@ use oag_render::camera::chase::Chase;
 use oag_weapons::projectile::MAX_PROJECTILES;
 
 use crate::player_step::PlayerStep;
-use crate::{BOOST_FOV_CLOSE_RATE, BOOST_FOV_OPEN_RATE, RaceView, SimRace};
+use crate::{BOOST_FOV_CLOSE_RATE, BOOST_FOV_OPEN_RATE, GRID_FLAP_LEVEL, RaceView, SimRace};
 use oag_physics::Evaluated;
 
 /// What the drawn bounce and blast read off the projectile pool before
@@ -145,11 +145,23 @@ impl RaceView {
         // two milliseconds and the parameter would not be worth authoring.
         // It is also the convention `<Airbrake gain/falloff>` already uses on
         // the same scale, one element away.
+        let grid = oag_race::RaceState::thrust_gated(core.sim.world.tick);
         for slot in 0..MAX_SHIPS {
             // A craft nobody flies folds its flaps back, so a seat handed to the AI
             // does not keep its last deflection.
             let flown = core.sim.world.person_flown(slot);
             let ship = &core.sim.world.ships[slot].physics;
+            // The grid state forces both flaps fully out, every craft, whoever flies it
+            // (`docs/physics/grid-state.md`, "The flaps on the grid"). Written, not chased, so
+            // the first tick already draws them full; once the state ends the chase below
+            // folds them back at `down_speed`. The state is the countdown clock's, as
+            // `ShipState::on_grid` is (`Race::tick` writes it from `tick + 1` before the tick
+            // that has since advanced `world.tick`), so a craft rebuilt mid-countdown by a
+            // rescue keeps them out.
+            if grid && self.grid_flaps {
+                self.flaps[slot] = [GRID_FLAP_LEVEL; 2];
+                continue;
+            }
             for (flap, level) in self.flaps[slot]
                 .iter_mut()
                 .zip([ship.airbrake_left, ship.airbrake_right])

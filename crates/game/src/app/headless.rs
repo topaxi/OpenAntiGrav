@@ -897,6 +897,9 @@ pub(crate) fn run_race(
                 ),
                 pose_lean: pose_lean(cli)?,
                 pose_flaps: pose_flaps(cli)?,
+                stow_grid_flaps: cli.pose_from.is_some()
+                    || cli.field_from.is_some()
+                    || cli.pose.is_some(),
                 field_lean: field_lean(cli)?,
                 field_warmup: field_warmup_velocities(cli)?,
                 detonator_mines: cli.detonator_mines.as_ref().map(|m| m.0.clone()),

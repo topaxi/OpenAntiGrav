@@ -79,6 +79,7 @@ mod foreign_conventions_ground_truth;
 mod foreign_race_ground_truth;
 mod gantry_mount_hd_circuits_ground_truth;
 mod german_ground_truth;
+mod grid_flaps_ground_truth;
 mod grid_stagger_ground_truth;
 mod grid_walk_ground_truth;
 

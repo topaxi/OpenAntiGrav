@@ -849,6 +849,11 @@ pub const BOOST_FOV_OPEN_RATE: f32 = 9.0;
 /// How fast the kick closes again, per second. See [`BOOST_FOV_OPEN_RATE`].
 pub const BOOST_FOV_CLOSE_RATE: f32 = 3.5;
 
+/// The drawn flap level of a craft in the grid state, on the airbrake's `0..=100` scale: both
+/// flaps fully out from the race's load until the green light (`docs/physics/grid-state.md`,
+/// "The flaps on the grid").
+pub const GRID_FLAP_LEVEL: f32 = 100.0;
+
 #[cfg(test)]
 mod tests;
 #[cfg(feature = "view")]

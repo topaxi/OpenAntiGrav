@@ -393,6 +393,19 @@ impl Race {
         }
     }
 
+    /// Keeps every craft's flaps stowed through the grid state, from this call on.
+    ///
+    /// A **capture-only** switch: in play the grid always holds the flaps out. A comparison
+    /// capture uses it for a craft posed from a row read after the green light, which stands for
+    /// a craft long off the grid. A title whose original draws them stowed on the grid would use
+    /// it too; none measured does.
+    pub fn stow_grid_flaps(&mut self) {
+        self.view.grid_flaps = false;
+        for slot in 0..MAX_SHIPS {
+            self.force_flaps(slot, [0.0; 2]);
+        }
+    }
+
     /// The craft in `slot`'s airbrake flap levels (`0..=100`) at the draw alpha:
     /// the flaps swing between ticks with the hull they hang on.
     pub(super) fn flaps_between(&self, slot: usize) -> [f32; 2] {
