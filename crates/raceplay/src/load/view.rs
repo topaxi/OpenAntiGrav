@@ -614,11 +614,9 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
         .is_some_and(|manifest| manifest.vr_fx_on());
     let (mut sounds, announcer, class_announcer) = audio::banks_and_announcers(
         &mut archives,
-        title.race,
-        title.hud_art.lap_hud,
+        title,
         options.mode,
         vr_fx,
-        title.destroyed.value,
         slot_teams,
         &mut report,
     );

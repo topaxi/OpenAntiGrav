@@ -10,11 +10,9 @@ use super::*;
 /// fails, an empty result costs nothing to carry" terms.
 pub(super) fn banks_and_announcers(
     archives: &mut oag_assets::Archives,
-    race: &'static oag_title::RaceDefaults,
-    lap_hud: Option<oag_title::lap_hud::LapHud>,
+    title: &oag_title::Title,
     mode: Mode,
     vr_fx: bool,
-    destroyed: oag_title::destroyed::DestroyedCraft,
     slot_teams: &[String],
     report: &mut Vec<String>,
 ) -> (
@@ -22,6 +20,7 @@ pub(super) fn banks_and_announcers(
     oag_sound::sfx::Announcer,
     oag_sound::sfx::ClassAnnouncer,
 ) {
+    let (race, lap_hud, destroyed) = (title.race, title.hud_art.lap_hud, title.destroyed.value);
     // Adding a cue is adding its name and its trigger, never a loader. Zone
     // races read `ship_zone.bnk` instead of `ship.bnk` - a different bank
     // with the same cue names.
