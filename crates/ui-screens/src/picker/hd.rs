@@ -67,6 +67,7 @@ use oag_ui::screen::{
 use super::{Details, FaceScales, Layout, Picker};
 
 pub mod hex;
+pub mod slide;
 pub mod track;
 
 /// The screen every widget is authored on.
@@ -229,6 +230,13 @@ pub fn read(
     let mut extra = TeamScreen::default();
     walk(top, (0.0, 0.0), screens, strings, &mut extra);
     extra.bonus = screens.resolve(BONUS_GLOBAL).and_then(parse_argb);
+    // `SelectedColumnCol` is not a key `HexSelection_ParseXml` matches: the selected column's fill
+    // and the ring's pulse both reach for `HD_Blue` (`docs/ghidra/functions/ps3-hdfury-eu/ship-select-ring.md`).
+    // Without the global the widget draws neither.
+    if let Some(grid) = extra.hex.as_mut() {
+        grid.selected_column = extra.bonus.unwrap_or(0);
+        grid.ring_peak = extra.bonus;
+    }
 
     // The first bracket frames `CHOOSE TEAM` - the logo - and is where a
     // click steps the team; the one authoring `middle` frames `SHIP MODEL`
@@ -347,10 +355,10 @@ fn walk(
                     hex: colour("HexCol").unwrap_or(0x6480_8080),
                     hex_fade: colour("HexColFade").unwrap_or(0x3280_8080),
                     fade: None,
-                    selected_column: colour("SelectedColumnCol").unwrap_or(0x64ff_0000),
+                    selected_column: 0,
                     selected_lock: colour("SelectedLockCol").unwrap_or(0xff80_8080),
                     selected_lock_fade: colour("SelectedLockColFade").unwrap_or(0xff24_2424),
-                    ring: hex::TEAM_RING,
+                    ring_peak: None,
                     phase_by_entry: true,
                 });
             }
@@ -401,7 +409,7 @@ fn rating_fraction(rating: u8) -> f32 {
 }
 /// The palette entry a variant's added rating is drawn in, see
 /// [`TeamScreen::bonus`].
-const BONUS_GLOBAL: &str = "FEGlobals->HD_Blue";
+pub(super) const BONUS_GLOBAL: &str = "FEGlobals->HD_Blue";
 
 /// The small marker an `unselectable` block that authors `ArrowColor` shows
 /// at its left: the art `Info1 Arrow` names too, here tinted by the block's

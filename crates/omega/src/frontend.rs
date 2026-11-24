@@ -330,9 +330,9 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
         tone: None,
     }),
     team_hex_fade: None,
-    // The HD style's ring on the one Omega frame that shows it (`omega/menu-ship-select`): an opaque
-    // band reading 215/0/0 on a grey cell, a title-wide tint **chosen** from that one frame.
-    team_hex_ring: Some([0.84, 0.0, 0.0, 1.0]),
+    // The ring's update computes white to this red to black inline, not a lookup of `HD_Blue`
+    // (`FUN_0142caa0`, `docs/ghidra/functions/ps3-hdfury-eu/ship-select-ring.md`, "Omega").
+    team_hex_ring_peak: Some(0xffee_0707),
 };
 
 /// The file Omega's front end lights its models with. Omega always runs the HD style, so the

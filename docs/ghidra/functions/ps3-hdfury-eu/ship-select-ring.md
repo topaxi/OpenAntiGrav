@@ -201,6 +201,35 @@ the new team's rest picture at 11 (picture lag 3). The code's 6 update frames fr
 frames 4 to 9 or 10 after the press with that lag, half way after 3 (frame 7 to 8): consistent. "Distances
 to both ends exceed the gap between them at frames 4 to 7": a translation, not a blend, as read.
 
+## Wired (2026-11-24, `shipselect-ring-wire`)
+
+Every row of the table below is wired in `oag_ui_screens::picker::hd::{hex, slide}`, on Team
+Selection (HD, Fury and Omega through the same code) and, where marked, Track Select:
+
+- **Slide, spare column, content, step deferral**: `slide::Slide`, ticked by `Picker::tick`. A
+  step that lands while a slide runs is held, and fires on the first tick after it ends. Frame 0 is
+  the tick the step lands on; frame 3 is half a pitch; at frame 6 the columns are in their slots
+  with the new window. Team Selection only: the deferral guard is in `TeamSelectionScreen_Update`;
+  `TrackHexSelection_Update`'s own call site (`bl` at `0x002099ec`) is unread, so **Track Select
+  does not slide** (open).
+- **Ring**: one `Hexagon_HD_THICK_OUT.gtf` quad, drawn once after every cell (z + 50), x fixed at
+  the centre column, y eased by half per tick (`Slide::ring_offset`); pulse colour
+  `pulse_argb(HD_Blue, pulse_phase(Picker::seconds))`, opaque. Track Select shares the art, the
+  pulse and the fill (`hex::draw_cells`).
+- **Selected fill**: `HD_Blue`, once.
+- **Constants**: pitch 72 by 83, half row 42, quad 92x80.
+- **Omega**: the same code; `FrontEnd::team_hex_ring_peak` carries the red (238, 7, 7) its update
+  computes inline, and its colour template's `HD_Blue` is the same `0xffee0707`.
+- **Left as read, not wired**: the refill frame (the snap and the refill land on one tick here),
+  the pulse's zero point (the clock starts with the picker, not the page's entry), the cells'
+  edge-fade corners, the ring's ease on a model-row change (`_SetRow` also writes the ring target),
+  Omega's `Scale="0.8"` against the 72-unit pitch, and a held direction's input repeat.
+- **Compare pairs** (the pair as recorded against the worktree's binary, `--menu-page ship-select`,
+  settled): `hd/menu-ship-select` mean grey 3.04 to 2.73, rmse 0.054 to 0.047, edge 0.50 to 0.51;
+  `omega/menu-ship-select` 20.17 to 20.08, rmse 0.185 to 0.185, edge 0.32 to 0.33. The settled
+  still draws at pulse phase 3 (a settled `1.0 s` clock), where the ring is exactly the cell's fill
+  colour: invisible on the selected red, as it is on the original at that phase of its sawtooth.
+
 ## Ready to wire
 
 Against ours (`oag_ui_screens::picker::hd::hex`, `crates/ui-screens/src/picker/hd/hex.rs`) and the
@@ -226,7 +255,7 @@ cells' fade toward the edges (`_SetCell`: per-vertex lerp `HexColFade` to `HexCo
 
 ## Omega
 
-**Checked, applies, not wired (slide, step, ease); checked, differs (ring colour).** Read in
+**Wired (slide, step, ease, ring: `shipselect-ring-wire`); checked, differs (ring colour).** Read in
 `/omega/eboot-ps4-omega-eu.bin` (the `eboot.bin` in the shared Ghidra project; addresses are this build's:
 `0x015a3b80`, the Team Selection fit that [../ps4-omega-eu/team-selection-pose.md](../ps4-omega-eu/team-selection-pose.md)
 cites for `v107`, does not start a function here, it falls inside `FUN_015a3810`): `HexSelection` registers at `FUN_0142ea90` with vtable

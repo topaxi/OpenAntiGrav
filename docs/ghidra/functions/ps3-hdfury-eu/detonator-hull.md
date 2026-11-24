@@ -340,8 +340,8 @@ objects}`, `oag_hd::race::DETONATOR_CRAFT`, `DETONATOR_HANDLING`, `DETONATOR_OBJ
 - **Handling: HD, 2048 and Omega** read their own file before the Zone mask
   (`oag_raceplay::load::sim::mode_handling`); the two unauthored values (`landing_rebound`,
   `rebound_jump_time`) are Zone's live read on HD and inherited from HD elsewhere.
-- **`electric_visualiser` is not drawn**: it is music-driven (`MasterVolume`, `BassHit`, `Tempo`),
-  the loader report says so. The mine's and bomb's colour binds (`MineColour`,
+- **`electric_visualiser` is drawn on HD** as a camera-facing ring through its material's own program
+  ([detonator-mine-draw.md](detonator-mine-draw.md), "The visualiser, wired"); 2048 and Omega do not draw it. The mine's and bomb's colour binds (`MineColour`,
   `MineBrightness`, `BombColour` ...) are unwired; their law is read
   ([detonator-mine-material.md](detonator-mine-material.md)), so the models draw unbound and the
   football reads bright white until a per-instance constant path exists.

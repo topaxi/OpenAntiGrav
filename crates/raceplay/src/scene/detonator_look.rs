@@ -2,7 +2,7 @@
 //! glow tables. The values and the rules are [`crate::detonator_look`]'s.
 
 use super::*;
-use crate::detonator_look::{MinePart, bomb_constants, mine_constants};
+use crate::detonator_look::{MinePart, bomb_constants, mine_constants, visualiser_constants};
 
 impl super::Scene {
     /// Steps every laid mine's music envelope for the race clock `seconds` (a clock already stepped is left as
@@ -79,6 +79,21 @@ impl super::Scene {
         }
         let envelopes = self.step_mine_envelopes(race, &laid, seconds);
         for (index, (mine, envelope)) in laid.iter().zip(&envelopes).enumerate() {
+            if let Some(drawable) = parts.mine_visualiser.get(index) {
+                let v = visualiser_constants(mine.live, &stage, envelope, &self.band_levels.get());
+                drawable.write_program_glow(
+                    queue,
+                    oag_mesh::mesh::PROGRAM_ELECTRICITY,
+                    v.colour,
+                    v.master_volume,
+                );
+                drawable.write_program_glow(
+                    queue,
+                    oag_mesh::mesh::PROGRAM_ELECTRICITY_AUDIO,
+                    [v.pitch_volume, v.bass_hit, v.treble_hit],
+                    v.pitch_offset,
+                );
+            }
             for (pool, part) in [
                 (&self.mines, MinePart::Football),
                 (&parts.mine_spikes, MinePart::Spikes),

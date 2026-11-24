@@ -301,6 +301,17 @@ pub(super) fn material_setup(
         report,
     );
     super::mag_wave::merge(&mut mag_emissive, mine_maps);
+    // The Detonator mine's visualiser ring binds its three pictures and writes two entries.
+    let electric = super::electricity::electricity(
+        model,
+        &material_variants,
+        textures,
+        &mut material_slots,
+        (&mut skins, &mut seconds),
+        &mut emissive,
+        report,
+    );
+    super::mag_wave::merge(&mut mag_emissive, electric);
     super::bomb_tint::bomb_tint(
         model,
         &material_variants,

@@ -184,3 +184,25 @@ fn the_football_and_spikes_sizes_follow_the_envelopes_the_way_the_original_write
     assert_eq!(loud.football_scale(), 2.3);
     assert!((loud.spike_scale() - 3.25).abs() < 1e-6);
 }
+
+#[test]
+fn a_live_visualiser_takes_the_stage_colour_times_one_and_a_half_and_a_dark_one_the_literals() {
+    let envelope = MineEnvelope {
+        football: 0.5,
+        ..MineEnvelope::default()
+    };
+    let mut levels = [0.0_f32; 16];
+    levels[0] = 0.1;
+    levels[1] = 0.9;
+    let live = visualiser_constants(true, &stage(), &envelope, &levels);
+    assert_eq!(live.colour, [0.4 * 1.5, 0.0, 0.9 * 1.5]);
+    assert_eq!(live.master_volume, 0.5);
+    assert_eq!(live.pitch_volume, 0.4, "capped at 0.4");
+    assert_eq!(live.bass_hit, 0.125);
+    let dark = visualiser_constants(false, &stage(), &envelope, &levels);
+    assert_eq!(dark.colour, [2.0; 3]);
+    assert_eq!(
+        (dark.master_volume, dark.pitch_volume, dark.bass_hit),
+        (0.0, 0.0, 0.0)
+    );
+}

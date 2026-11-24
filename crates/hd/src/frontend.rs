@@ -493,7 +493,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
         columns: 2.22,
         span: Some(109.0),
     }),
-    team_hex_ring: None,
+    team_hex_ring_peak: None,
 };
 
 /// What lights Ship Select's craft: the two styles' files, and the tone stage the front end's

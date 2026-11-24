@@ -96,6 +96,11 @@ def rerender(pj, binary):
         at = flags.index("--input-script") + 1
         if not (ROOT / flags[at]).exists() and (pair_dir / "ours.inputs").exists():
             flags[at] = str(pair_dir / "ours.inputs")
+    # The same for a Detonator pair's pose file (`ours.pose_row`, made again by `ensure_detonator_inputs`).
+    if "--field-from" in flags and rec["ours"].get("pose_row"):
+        at = flags.index("--field-from") + 1
+        if not (ROOT / flags[at]).exists() and (pair_dir / "field.csv").exists():
+            flags[at] = str(pair_dir / "field.csv")
     # The HD and PS2 pair scripts record the run length beside the flags (`ours.ticks`), not in them; without it the
     # frame is tick 0 (a clock of 0.00.0, no GO board).
     if "--ticks" not in flags and rec["ours"].get("ticks") is not None:

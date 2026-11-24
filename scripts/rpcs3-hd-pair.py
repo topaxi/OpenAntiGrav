@@ -411,9 +411,9 @@ def main():
     pair.rec["original"]["scene_width"] = hd_scene_width.measure(out / "theirs.png")
     if ship.get("scene_width"):
         pair.rec["original"]["scene_width"]["at_pause"] = ship["scene_width"]
-    if args.field:
-        # the player goes in as slot 0 of the field file, an exact pose: no yaw solve, no tilt left uncarried
-        yaw, agree, our_up = 0.0, 1.0, ship["rows"][1]
+    if args.field or args.detonator:
+        # the player goes in as slot 0 of a field file, an exact pose: no yaw solve, no tilt left uncarried
+        yaw, agree, our_up = 0.0, 1.0, (frame_rows if args.detonator else ship["rows"])[1]
     else:
         yaw, agree, our_up = solve_yaw(args.oag_game, args.image, track, pos, forward, scratch)
     print("yaw %.3f deg, forward agreement %.6f" % (yaw, agree), file=sys.stderr)
@@ -491,6 +491,19 @@ def main():
             "--pose=" + pose, "--camera-pose=" + numbers, "--camera-fov", "%.4f" % camera["fov_y_deg"]] + flags + field_flags + detonator_flags
     if args.field:
         base.remove("--pose=" + pose)
+    if args.detonator and not args.field:
+        # `--pose` carries a yaw only, so ours' hull sat on the spline's attitude: 0.7 degrees flatter than the original's body
+        # (forward y 0.030 against 0.041 to 0.047) while ours' own free flight reads 0.041 at the same place
+        # (`docs/tools/compare-page.md`, "The pitch the heading check refused"). The push buffer's hull attitude goes in as slot 0 of
+        # a field file: an exact pose, nothing left uncarried.
+        row = {"player": True, "team": args.team, "left": frame_rows[0], "up": frame_rows[1], "fwd": frame_rows[2],
+               "pos": pos, "vel": [0.0, 0.0, 0.0]}
+        ce.write_field_csv(out / "field.csv", [row], with_player=True)
+        pair.rec["ours"]["pose_row"] = {k: row[k] for k in ("team", "left", "up", "fwd", "pos")}
+        pair.rec["ours"]["pose_row"]["source"] = ("the push buffer's hull attitude (`original.ship.hull_pb`), at the position ours' craft is "
+                                                  "put (lag-fitted when the picture lag was)")
+        base.remove("--pose=" + pose)
+        base += ["--field-from", out / "field.csv"]
     if args.variant:
         base += ["--variant", args.variant]
     if args.skin:
@@ -506,7 +519,7 @@ def main():
     ours_csv = out / "ours-trace.csv"
     cmd = base if args.field or args.zone else base + ["--pose-hold"] + (["--pose-hold-ticks"] if args.detonator else [])
     pair.rec["ours"]["pose_hold"] = not (args.field or args.zone)
-    pair.rec["ours"]["pose_arg"] = "exact, slot 0 of field.csv" if args.field else pose
+    pair.rec["ours"]["pose_arg"] = "exact, slot 0 of field.csv" if args.field or args.detonator else pose
     pair.rec["ours"]["flags"] = [str(c) for c in cmd[2:]]
     run(cmd + ["--ticks", args.ours_ticks, "--screenshot", out / "ours.png"], stdout=subprocess.DEVNULL)
     run(cmd + ["--ticks", args.ours_ticks, "--trace-out", ours_csv], stdout=subprocess.DEVNULL)

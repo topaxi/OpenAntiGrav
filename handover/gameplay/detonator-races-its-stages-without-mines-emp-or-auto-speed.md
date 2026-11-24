@@ -622,6 +622,14 @@ mine (above). Superseded: Next (1) of the paragraph above.
 
 **Row (1) is wired for Detonator (2026-11-24, `det-pair-lag`; `compare-page.md`, "The presented lag of a Detonator grab").** Reconciled: the picture is 6.0 ticks behind RAM on 15 grabs (85), which is 2 or 4 behind the push buffer as the hull's skew is 4 or 2; `hd-pair-lag-scan.py`'s 0 to 3 was a race-mode whole-frame score. `rpcs3-hd-pair.py --detonator` fits `k` per grab from the mines (`hd_picture_lag.py`) and moves ours back; mean grey 25.3 to 17.5, 20.3 to 17.2, 23.5 to 17.1 on three pairs, unchanged where no mine is 8 to 50 units ahead (`pad`, `cannon-volley` at 2.2 s). **Next:** grab `pad` and `cannon-volley` at 2.6 to 2.7 s so a fit exists; a stop within 8 ticks of the previous one reads 4.5 to 5.5 and fits worse (50, mechanism unknown); race-mode lag is unmeasured, so `--field` stays uncorrected; the heading check refuses most fresh Detonator pairs at 1.0 to 1.7 degrees (open pitch).
 
+**Pitch found, mines-ahead re-grabbed with the fit (2026-11-24, `det-regrab-fitted`).** The heading refusals were ours: `--pose` plus
+`--pose-hold-ticks` held the spline attitude (forward y 0.030) where the original body and ours' own free flight read 0.041 to 0.047. The pair now
+feeds the push buffer's hull attitude as an exact pose; heading reads 0.000 on every pair (`docs/tools/compare-page.md`, "The pitch the heading
+check refused"). `mines-ahead` re-grabbed as the first stop of a boot: fit 6.03 and 6.15 ticks, mean grey 16.40 published to 14.65 and 15.79
+(fit off 15.75 and 17.23); `pad` 8.82 to 8.43; `cannon-volley` 15.33 to 14.99 (the 2.2 s frame, refused before, now makes a pair at 12.95).
+Goal under 10 reached on `pad` only. **Next:** the mine's body (dark ball with ring where the original's is a bright spiked sphere), the lit billboard
+wall, the hull's lit strip; a cannon-volley grab at 2.7 s with the fit (the stored `b6/01` read 16.65 fitted) only if the mine body closes first.
+
 ## Zone Battle (HD mode `0xd`, Omega also `0x15`; 2048) is unread
 
 The brief's second priority. Nothing in `docs/` recovers its rules: the stage source
@@ -648,3 +656,10 @@ value (the original passes `param_1[0xb22]` there, a `u16` off the race record, 
 label is its Elimination; but `TrackStartup_Read`'s Combat board test `FUN_812b0880(mode, 1)`
 (`track-startup-sound-bank.md`) is unread, so which mode id picks `321Go_2048_Combat.vex` is
 not known. Read `FUN_812b0880` before mapping the board to `Mode::Eliminator` on 2048.
+
+**The visualiser ring is drawn on HD (2026-11-24, `det-mine-visualiser`; `detonator-mine-draw.md`, "The visualiser, wired").** Row (2) above: the
+ring is posed camera-facing and drawn with `electricity.rcsmaterial`'s own program. Published pairs (no picture-lag fit): `pad` 8.82 -> 8.82,
+`mines-ahead` 16.38 -> 16.40, `cannon-volley` 15.32 -> 15.33; middle-right cell MAD 36.79 -> 36.87 and 26.42 -> 26.46: the ring lands on the wrong pixels
+because ours' near mines are not where the picture has them (re-grab the pairs with the fitted lag, then re-measure). The original's ring is two smooth
+circles; ours a ragged band at the disc's rim: the ring's clock `t`, the unread level readers and the roll are the candidates. **Open:** 2048 and Omega (GXP
+program unread, ring not drawn); the original's ring look against ours on a lag-fitted pair.

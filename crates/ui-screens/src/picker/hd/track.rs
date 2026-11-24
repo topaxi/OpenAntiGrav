@@ -44,7 +44,7 @@
 use oag_ui::frontend::{Align, Draw, Placed, Video};
 use oag_ui::language::StringTable;
 use oag_ui::menu::Frame;
-use oag_ui::screen::{Screens, argb_to_rgba};
+use oag_ui::screen::{Screens, argb_to_rgba, parse_argb};
 
 use super::hex::{self, ArtSize, Face};
 use super::{TeamScreen, draw_labels, find_screen, find_text, sprite, text_draw, walk};
@@ -67,8 +67,6 @@ pub const RECORD_ROW_IDS: [&str; 3] = ["FE_PERSONAL", "FE_FRIENDS", "FE_GLOBAL"]
 /// unit, and the icon texture is drawn at the size that puts its own sails
 /// there (**chosen** from one frame, the texture's fill not measured).
 const ICON_SIZE: f32 = 62.0;
-/// The cursor ring's tint: the frame's pale band reads 223/169/174.
-const RING: [f32; 4] = [0.88, 0.70, 0.74, 1.0];
 
 /// What a widget the generic parser does not reach says.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -196,14 +194,14 @@ fn draw_grid(
     grid.rows = grid.rows.min(rows);
     hex::draw_cells(
         &grid,
+        (picker.index() % width.max(1), width, picker.pan(), None),
         (
-            picker.index() % width.max(1),
-            width,
-            picker.pan(),
-            f32::INFINITY,
+            Some(hex::Cursor {
+                row: picker.index() / width.max(1),
+                low: 0.0,
+            }),
+            picker.seconds(),
         ),
-        Some(picker.index() / width.max(1)),
-        RING,
         &face,
         sprites,
         out,
@@ -359,11 +357,16 @@ fn walk_track(
                 ]);
             }
             "trackhexselection" => {
-                out.hex_grid = Some(hex::HexGrid::unauthored(
+                let mut grid = hex::HexGrid::unauthored(
                     [inner.0, inner.1],
                     number(child, "columns").map_or(0, |v| v as usize),
                     number(child, "rows").map_or(0, |v| v as usize),
-                ));
+                );
+                // The same class as `Team Selection`'s: its selected fill and ring pulse are `HD_Blue`.
+                let blue = screens.resolve(super::BONUS_GLOBAL).and_then(parse_argb);
+                grid.selected_column = blue.unwrap_or(0);
+                grid.ring_peak = blue;
+                out.hex_grid = Some(grid);
             }
             _ => {}
         }

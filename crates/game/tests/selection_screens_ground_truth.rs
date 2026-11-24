@@ -881,7 +881,8 @@ fn hd_reads_its_own_team_selection() {
         (
             0x6480_8080,
             0x3280_8080,
-            0x64ff_0000,
+            // `HD_Blue` of the Fury style: `SelectedColumnCol` is not a key the widget reads.
+            0xffac_0717,
             0xff80_8080,
             0xff24_2424
         )
@@ -910,8 +911,8 @@ fn hd_reads_its_own_team_selection() {
             assert!(shell.sprites.get(&thumb).is_some(), "{thumb}");
         }
     }
-    use oag_ui_screens::picker::hd::hex::{HEX_SRC, LOCK_SRC, OUTLINE_SRC};
-    for src in [HEX_SRC, LOCK_SRC, OUTLINE_SRC] {
+    use oag_ui_screens::picker::hd::hex::{HEX_SRC, LOCK_SRC, THICK_OUT_SRC};
+    for src in [HEX_SRC, LOCK_SRC, THICK_OUT_SRC] {
         assert!(shell.sprites.get(src).is_some(), "{src}");
     }
     let classic = shell
@@ -996,7 +997,7 @@ fn hd_reads_its_own_track_creation() {
     // a stubbed unit test passes.
     for src in [
         oag_ui_screens::picker::hd::hex::HEX_SRC,
-        oag_ui_screens::picker::hd::hex::OUTLINE_SRC,
+        oag_ui_screens::picker::hd::hex::THICK_OUT_SRC,
         oag_ui_screens::campaign::hd::cell_brackets::SRC,
         oag_ui_screens::picker::hd::BLOCK_ARROW_SRC,
     ] {
@@ -1119,8 +1120,10 @@ fn omega_reads_its_own_team_selection() {
     assert_eq!([model.rot_x, model.rot_y], pose.rotation);
     let grid = extra.hex.expect("the honeycomb");
     assert_eq!((grid.columns, grid.rows, grid.scale), (5, 9, 0.8));
-    // Its cursor ring is the HD style's red, not the Fury style's pale pink the grid defaults to.
-    assert_eq!(grid.ring, [0.84, 0.0, 0.0, 1.0]);
+    // Its cursor ring pulses through the red its update computes inline (`ship-select-ring.md`,
+    // "Omega"), and the selected column is `HD_Blue` of its own colour template, the same red.
+    assert_eq!(grid.ring_peak, Some(0xffee_0707));
+    assert_eq!(grid.selected_column, 0xffee_0707);
     // The nineteen declared teams are all offered: the twelve HD-era, the two Tigrons and
     // the five 2048-era, whose `Logo.gtf` sits under their own `Ships\<Team>` directory.
     assert_eq!(shell.teams.len(), 19);

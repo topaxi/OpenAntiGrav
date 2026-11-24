@@ -2,7 +2,9 @@
 //! four bytes are a colour - split out of [`super`] under the 1,000-line rule, as
 //! [`super::stride`] is: one `impl Mesh` block about one question.
 
-use super::{Error, Mesh, NORMAL_OFFSET, Result, SubMesh, TexcoordFormat};
+use oag_bytes::ByteOrder;
+
+use super::{Error, Mesh, NORMAL_OFFSET, Result, SubMesh, TexcoordFormat, unpack_half};
 
 /// The inline strides whose tail may be a colour rather than a coordinate, see
 /// [`Mesh::texcoords`]. Stride 22 joined 18 on 2026-10-07: a stride-22
@@ -146,6 +148,66 @@ impl Mesh {
                 let at = submesh.vertex_offset + k * stride;
                 let byte = |o: usize| f32::from(data[at + o]) / 255.0;
                 [byte(14), byte(15), byte(16), byte(21)]
+            })
+            .collect())
+    }
+}
+
+/// One vertex of an undeclared stride-26 chunk that carries the electricity program's
+/// attributes, in the order `electricity.rcsmaterial`'s vertex program reads them
+/// (`scripts/ps3-microcode.py vp-file`, block #1): `VertexColour1` at `+0x0a` (`v[2]`, its `w`
+/// the output alpha), the pair `0xac7c75d0` at `+0x0e` (`v[3]`, `TC3.xy`) and the packed
+/// `Uv1_Uv2` at `+0x12` (`v[8]`: `.xy` to `TC3.zw`, `.zw` to `TC0.w` and `TC1.w`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct InlineElectricity {
+    /// `VertexColour1`'s fourth byte over 255.
+    pub alpha: f32,
+    /// `v[3].xy`.
+    pub pair: [f32; 2],
+    /// `v[8].xy`.
+    pub uv1: [f32; 2],
+    /// `v[8].zw`.
+    pub uv2: [f32; 2],
+}
+
+/// The bytes per vertex of the chunk [`Mesh::inline_electricity`] reads.
+pub const ELECTRICITY_STRIDE: usize = 26;
+
+impl Mesh {
+    /// The electricity chunk's per-vertex inputs, for a described-nothing chunk of stride
+    /// [`ELECTRICITY_STRIDE`] (`Electric_Visualiser`, the Detonator mine's ring).
+    ///
+    /// # Errors
+    ///
+    /// [`Error::UnknownChunkLayout`] for a described chunk or another stride, and
+    /// [`Error::OutOfBounds`] when the buffer leaves the file.
+    pub fn inline_electricity(
+        &self,
+        data: &[u8],
+        submesh: &SubMesh,
+        stride: usize,
+    ) -> Result<Vec<InlineElectricity>> {
+        if self.decl.is_some() || stride != ELECTRICITY_STRIDE {
+            return Err(Error::UnknownChunkLayout { got: 0x05, at: 0 });
+        }
+        let end = submesh.vertex_offset + stride * submesh.vertex_count;
+        if end > data.len() {
+            return Err(Error::OutOfBounds {
+                what: "a vertex buffer",
+                end,
+                len: data.len(),
+            });
+        }
+        let half = |at: usize| unpack_half(ByteOrder::Big.u16(data, at));
+        Ok((0..submesh.vertex_count)
+            .map(|k| {
+                let at = submesh.vertex_offset + k * stride;
+                InlineElectricity {
+                    alpha: f32::from(data[at + 13]) / 255.0,
+                    pair: [half(at + 14), half(at + 16)],
+                    uv1: [half(at + 18), half(at + 20)],
+                    uv2: [half(at + 22), half(at + 24)],
+                }
             })
             .collect())
     }
