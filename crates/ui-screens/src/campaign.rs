@@ -99,7 +99,7 @@ pub mod selection;
 
 pub(crate) use hex::{hex_image, hex_rect};
 
-pub use draw::{cell_draw_list, cell_help_draw, grid_draw_list};
+pub use draw::{HelpFace, cell_draw_list, cell_help_draw, grid_draw_list};
 pub use medal_art::MedalArt;
 
 #[cfg(test)]

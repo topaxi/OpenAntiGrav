@@ -105,7 +105,7 @@ impl Renderer {
                     && self
                         .buttons_role
                         .eq_ignore_ascii_case(oag_ui::language::roles::BUTTONS),
-                snapped: self.hud.snapped_pens,
+                pens: self.hud.pens(),
             })
         });
         self.hints.extend(found);
@@ -176,8 +176,7 @@ impl Renderer {
         // at that size and its origin put on a whole pixel; every other mode
         // leaves `scale` and the origin as given.
         let scale = self.hud.text_scale(atlas.texel_scale, scale);
-        let bearing_pens =
-            self.hud.bearing_pens && !self.hud.snapped_pens && !self.hud.whole_advances;
+        let bearing_pens = self.hud.pens() == font::Pens::Bearing;
         let width: f32 = if self.hud.snapped_pens {
             font::snapped_run(atlas, text, scale).end
         } else if bearing_pens {
@@ -330,7 +329,7 @@ impl Renderer {
         };
         let scale = self.hud.text_scale(atlas.texel_scale, scale);
         let line_height = atlas.line_height * scale;
-        for (index, line) in wrap_pens(atlas, text, scale, width, self.hud.snapped_pens)
+        for (index, line) in wrap_pens(atlas, text, scale, width, self.hud.pens())
             .into_iter()
             .enumerate()
         {

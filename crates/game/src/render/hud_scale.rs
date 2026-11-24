@@ -89,6 +89,16 @@ impl HudStretch {
         }
     }
 
+    /// How a text's pen is laid out, the choice every measure of a draw shares
+    /// ([`oag_ui::font::Pens`]): a snapped pen first, whole-pixel advances keep their own law.
+    pub(super) fn pens(&self) -> oag_ui::font::Pens {
+        if self.whole_advances && !self.snapped_pens {
+            oag_ui::font::Pens::Advance
+        } else {
+            oag_ui::font::Pens::of(self.snapped_pens, self.bearing_pens)
+        }
+    }
+
     /// The `hud` uniform `ui.wesl` reads.
     pub(super) fn uniform(&self) -> [f32; 4] {
         let sharp = f32::from(u8::from(self.mode.is_sharp_bilinear()));

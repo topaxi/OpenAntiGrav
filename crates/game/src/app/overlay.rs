@@ -138,7 +138,7 @@ impl Prompt {
             Model::Confirm(_) => return Vec::new(),
         };
         let entries = crate::app::hints::legend_entries(line, &presses);
-        oag_ui::hints::legend_wrapped(atlas, at, &entries, skin.snapped_pens())
+        oag_ui::hints::legend_wrapped(atlas, at, &entries, skin.pens())
     }
 
     /// Whether a desk key may type `c` into this prompt: the grid's own alphabet, so the two

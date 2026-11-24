@@ -1101,14 +1101,44 @@ pub fn snapped_run(atlas: &Atlas, text: &str, scale: f32) -> SnappedRun {
     run
 }
 
+/// How a front end lays a text's pen out: the one choice every measure of a draw (a wrap, a hit
+/// rectangle, an alignment, a marquee's overflow) has to share with the draw itself.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Pens {
+    /// Each pen steps by the advance alone, in fractions.
+    #[default]
+    Advance,
+    /// The first glyph's ink starts at the text's x and each pen steps by the glyph's bearing
+    /// ([`pen_step`] without the whole-unit step): Pulse's front end
+    /// (`oag_title::MenuSkin::bearing_pens`).
+    Bearing,
+    /// Each glyph's ink edge steps up to a whole unit ([`pen_step`]): Pure's front end
+    /// (`oag_title::MenuSkin::snapped_pens`).
+    Snapped,
+}
+
+impl Pens {
+    /// The pens a skin's two flags name; a snapped pen wins.
+    #[must_use]
+    pub fn of(snapped: bool, bearing: bool) -> Self {
+        if snapped {
+            Self::Snapped
+        } else if bearing {
+            Self::Bearing
+        } else {
+            Self::Advance
+        }
+    }
+}
+
 /// The width `text` draws at `scale` from its origin: [`snapped_run`]'s ink edge on a snapped
-/// pen, the fractional advance sum otherwise.
+/// pen, [`ink_width`] on a bearing pen, the fractional advance sum otherwise.
 #[must_use]
-pub fn run_width(atlas: &Atlas, text: &str, scale: f32, snapped: bool) -> f32 {
-    if snapped {
-        snapped_run(atlas, text, scale).ink_right
-    } else {
-        measure(atlas, text) * scale
+pub fn run_width(atlas: &Atlas, text: &str, scale: f32, pens: Pens) -> f32 {
+    match pens {
+        Pens::Snapped => snapped_run(atlas, text, scale).ink_right,
+        Pens::Bearing => ink_width(atlas, text, scale, false),
+        Pens::Advance => measure(atlas, text) * scale,
     }
 }
 
@@ -1122,20 +1152,14 @@ pub fn run_width(atlas: &Atlas, text: &str, scale: f32, snapped: bool) -> f32 {
 /// text.
 #[must_use]
 pub fn wrap(atlas: &Atlas, text: &str, scale: f32, max_width: f32) -> Vec<String> {
-    wrap_pens(atlas, text, scale, max_width, false)
+    wrap_pens(atlas, text, scale, max_width, Pens::Advance)
 }
 
-/// [`wrap`] on the pen the draw lays out: `snapped` measures each candidate line by [`ink_width`]'s
-/// snapped pass, as a front end whose pens step up to whole units ([`pen_step`]) draws it, and
-/// otherwise by the fractional advance sum.
+/// [`wrap`] on the pen the draw lays out ([`run_width`] of `pens`): a front end whose pens step up
+/// to whole units ([`pen_step`]) or by bearing is wrapped by the width it draws at, otherwise by
+/// the fractional advance sum.
 #[must_use]
-pub fn wrap_pens(
-    atlas: &Atlas,
-    text: &str,
-    scale: f32,
-    max_width: f32,
-    snapped: bool,
-) -> Vec<String> {
+pub fn wrap_pens(atlas: &Atlas, text: &str, scale: f32, max_width: f32, pens: Pens) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     let mut line = String::new();
     for word in text.split_whitespace() {
@@ -1144,7 +1168,7 @@ pub fn wrap_pens(
         } else {
             format!("{line} {word}")
         };
-        if !line.is_empty() && run_width(atlas, &candidate, scale, snapped) > max_width {
+        if !line.is_empty() && run_width(atlas, &candidate, scale, pens) > max_width {
             out.push(std::mem::take(&mut line));
             line = word.to_string();
         } else {
@@ -1405,8 +1429,8 @@ mod tests {
             (left, x) = pen_step(&cell, 0.7, x, true);
         }
         assert_eq!((run.end, run.ink_right), (x, left + cell.ink * 0.7));
-        assert_eq!(run_width(&atlas, "AAA", 0.7, true), run.ink_right);
-        assert_eq!(run_width(&atlas, "AAA", 0.7, false), 18.0 * 0.7);
+        assert_eq!(run_width(&atlas, "AAA", 0.7, Pens::Snapped), run.ink_right);
+        assert_eq!(run_width(&atlas, "AAA", 0.7, Pens::Advance), 18.0 * 0.7);
         assert_eq!(snapped_run(&atlas, "", 0.7).ink_right, 0.0);
     }
 

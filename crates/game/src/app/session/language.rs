@@ -171,7 +171,11 @@ impl Session {
                 .buttons_font
                 .clone()
                 .filter(|_| shell.menu_skin.stats_font.is_some());
-            stage.snapped_pens = shell.menu_skin.snapped_pens;
+            stage.small_atlas = shell
+                .title_font
+                .clone()
+                .filter(|_| shell.menu_skin.small_font.is_some());
+            stage.pens = crate::boot::fonts::pens_of(shell.menu_skin);
             let rows_face = shell
                 .menu_font
                 .clone()

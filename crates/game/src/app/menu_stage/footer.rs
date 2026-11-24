@@ -5,7 +5,6 @@
 //! plain move (`MenuStage::render` drew it inline before); the ticker half
 //! is new - see `MenuStage::render`'s own call site for both.
 
-use oag_ui::font;
 use oag_ui::frontend::Draw;
 use oag_ui_screens::picker;
 
@@ -83,7 +82,7 @@ impl MenuStage {
             return None;
         }
         let layout = self.ticker.as_ref()?;
-        let measure = |text: &str| font::measure(&self.default_atlas, text);
+        let measure = crate::boot::fonts::text_ink(&self.default_atlas, self.pens);
         let draw = oag_ui_screens::campaign::footer::ticker_draw(
             layout,
             self.ticker_elapsed,
@@ -106,7 +105,7 @@ impl MenuStage {
         let measure = crate::boot::fonts::description_ink(
             &self.default_atlas,
             self.stats_atlas.as_ref(),
-            self.snapped_pens,
+            self.pens,
         );
         oag_ui_screens::campaign::footer::description_draws(
             layout,

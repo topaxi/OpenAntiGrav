@@ -70,7 +70,7 @@ pub(super) fn capture(
         Option<&oag_ui_screens::campaign::footer::TickerLayout>,
         &oag_ui::font::Atlas,
         Option<&oag_ui::font::Atlas>,
-        bool,
+        oag_ui::font::Pens,
     ),
 ) -> Result<(Vec<oag_ui::frontend::Draw>, TickerClip)> {
     use crate::campaign::pure_chain::{Chain, present, present_main};
@@ -121,7 +121,7 @@ pub(super) fn capture(
     let mut list =
         oag_ui_screens::pure_chain::draw_list(&choice, skin, frame, backdrop, false).flatten();
     list.extend(art.draws());
-    let (legend, ticker, font, stats_font, snapped) = footer;
+    let (legend, ticker, font, stats_font, pens) = footer;
     let clip = menu_page::picker_footer(
         &mut list,
         legend,
@@ -133,7 +133,7 @@ pub(super) fn capture(
         skin,
     );
     if let (Some(layout), Some(row)) = (ticker, choice.selected_row()) {
-        let measure = crate::boot::fonts::description_ink(font, stats_font, snapped);
+        let measure = crate::boot::fonts::description_ink(font, stats_font, pens);
         list.extend(oag_ui_screens::campaign::footer::description_draws(
             layout,
             &row.description,

@@ -33,7 +33,7 @@ pub(super) fn picker_footer(
         crate::records::TICKER_CAPTURE_SEED,
     );
     let faces = crate::prompts::footer_faces(skin);
-    let measure = |text: &str| oag_ui::font::measure(default_font, text);
+    let measure = crate::boot::fonts::text_ink(default_font, skin.pens());
     if let Some(legend) = nav_legend {
         list.extend(legend.draw_gated(&faces, show_back));
     }

@@ -632,6 +632,13 @@ impl Skin {
         self.skin.snapped_pens
     }
 
+    /// How this title's front end lays its text pens out ([`oag_ui::font::Pens`]): what every
+    /// measure of a drawn text has to share with the draw.
+    #[must_use]
+    pub fn pens(&self) -> crate::font::Pens {
+        crate::font::Pens::of(self.skin.snapped_pens, self.skin.bearing_pens)
+    }
+
     /// The scale a row's text is drawn at. `FEGlobals->MenuScale`.
     #[must_use]
     pub fn row_scale(&self) -> f32 {

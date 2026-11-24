@@ -39,6 +39,12 @@ fn a_word_wider_than_the_column_is_kept_whole() {
 fn a_snapped_pen_breaks_a_line_the_fractional_one_keeps() {
     let atlas = Atlas::build();
     assert_eq!(wrap(&atlas, "aa bb", 0.7, 22.0), ["aa bb"]);
-    assert_eq!(wrap_pens(&atlas, "aa bb", 0.7, 22.0, false), ["aa bb"]);
-    assert_eq!(wrap_pens(&atlas, "aa bb", 0.7, 22.0, true), ["aa", "bb"]);
+    assert_eq!(
+        wrap_pens(&atlas, "aa bb", 0.7, 22.0, Pens::Advance),
+        ["aa bb"]
+    );
+    assert_eq!(
+        wrap_pens(&atlas, "aa bb", 0.7, 22.0, Pens::Snapped),
+        ["aa", "bb"]
+    );
 }

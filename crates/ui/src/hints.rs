@@ -79,9 +79,9 @@ pub struct Face<'a> {
     /// Whether it is the title's buttons face, the only face a `Scope::ButtonsFace` table
     /// holds glyphs in.
     pub buttons: bool,
-    /// Whether the renderer steps this face's pens up to whole units ([`crate::font::pen_step`]):
-    /// a rectangle then covers the ink as drawn, not the fractional advances.
-    pub snapped: bool,
+    /// How the renderer lays this face's pens out ([`crate::font::Pens`]): a rectangle covers the
+    /// ink as drawn, not the fractional advances.
+    pub pens: crate::font::Pens,
 }
 
 /// One drawn line, laid out.
@@ -235,16 +235,54 @@ fn advance(atlas: &Atlas, text: &str) -> f32 {
 }
 
 /// `(pen end, ink right)` of `text` drawn at `scale` from its origin: the fractional advance sum
-/// for both, or [`crate::font::snapped_run`] on a snapped face. A string is aligned by the first
-/// and a rectangle over it stops at the second.
+/// for both, [`crate::font::snapped_run`] on a snapped face, and on a bearing face the ink width
+/// (the text's first ink is its origin) for both. A string is aligned by the first and a
+/// rectangle over it stops at the second.
 fn placed(face: Face, text: &str, scale: f32) -> (f32, f32) {
-    if face.snapped {
-        let run = crate::font::snapped_run(face.atlas, text, scale);
-        (run.end, run.ink_right)
-    } else {
-        let width = advance(face.atlas, text) * scale;
-        (width, width)
+    match face.pens {
+        crate::font::Pens::Snapped => {
+            let run = crate::font::snapped_run(face.atlas, text, scale);
+            (run.end, run.ink_right)
+        }
+        crate::font::Pens::Bearing => {
+            let width = crate::font::ink_width(face.atlas, text, scale, false);
+            (width, width)
+        }
+        crate::font::Pens::Advance => {
+            let width = advance(face.atlas, text) * scale;
+            (width, width)
+        }
     }
+}
+
+/// `(ink left, ink right)` of each space-separated piece of `line` drawn on the bearing pen at
+/// `scale` from the line's first ink, so a rectangle over a piece covers the ink `push_text` draws.
+fn piece_ink(atlas: &Atlas, line: &str, scale: f32) -> Vec<(f32, f32)> {
+    let scale = scale * atlas.texel_scale;
+    let first = line.chars().find_map(|ch| atlas.cell(ch));
+    let mut pen = -first.map_or(0.0, |cell| cell.bearing * scale);
+    let mut spans: Vec<(f32, f32)> = vec![(f32::MAX, f32::MIN)];
+    for ch in line.chars() {
+        let Some(cell) = atlas.cell(ch) else { continue };
+        let (ink_left, next) = crate::font::pen_step(&cell, scale, pen, false);
+        if ch == ' ' {
+            spans.push((f32::MAX, f32::MIN));
+        } else if let Some(span) = spans.last_mut() {
+            span.0 = span.0.min(ink_left);
+            span.1 = span.1.max(cell.ink.mul_add(scale, ink_left));
+        }
+        pen = next;
+    }
+    spans
+        .into_iter()
+        .map(|(left, right)| {
+            if left > right {
+                (0.0, 0.0)
+            } else {
+                (left, right)
+            }
+        })
+        .collect()
 }
 
 /// The glyph-and-word pairs a string is made of, when it opens with a glyph and holds nothing but
@@ -252,20 +290,27 @@ fn placed(face: Face, text: &str, scale: f32) -> (f32, f32) {
 fn segments(run: &Run, substitution: &Substitution) -> Vec<Segment> {
     let atlas = run.face.atlas;
     let mut out: Vec<Segment> = Vec::new();
+    let scale = atlas.texel_scale * run.scale;
     let mut pen = run.left;
+    if run.face.pens == crate::font::Pens::Bearing {
+        // The text's first ink starts at `run.left`, as `Renderer::push_text` draws it.
+        let first = run.text.chars().find_map(|ch| atlas.cell(ch));
+        pen -= first.map_or(0.0, |cell| cell.bearing * scale);
+    }
     for ch in run.text.chars() {
-        let next = atlas.cell(ch).map_or(pen, |cell| {
-            let scale = atlas.texel_scale * run.scale;
-            if run.face.snapped {
-                crate::font::pen_step(&cell, scale, pen, true).1
-            } else {
-                pen + cell.advance * scale
-            }
-        });
+        let (ink_left, next) = atlas
+            .cell(ch)
+            .map_or((pen, pen), |cell| match run.face.pens {
+                crate::font::Pens::Snapped => {
+                    (pen, crate::font::pen_step(&cell, scale, pen, true).1)
+                }
+                crate::font::Pens::Bearing => crate::font::pen_step(&cell, scale, pen, false),
+                crate::font::Pens::Advance => (pen, pen + cell.advance * scale),
+            });
         match substitution.button_drawn(ch, run.face.buttons) {
             Some(prompt) => out.push(Segment {
                 prompt,
-                left: pen,
+                left: ink_left,
                 glyph_right: next,
                 word_right: next,
             }),
@@ -386,7 +431,12 @@ pub struct Wrapped {
 /// it at word boundaries ([`crate::font::wrap`]), so an entry's words are found on the lines they
 /// fall on, and an entry broken across two lines is a rectangle on each.
 #[must_use]
-pub fn legend_wrapped(atlas: &Atlas, at: Wrapped, entries: &[Entry], snapped: bool) -> Vec<Hint> {
+pub fn legend_wrapped(
+    atlas: &Atlas,
+    at: Wrapped,
+    entries: &[Entry],
+    pens: crate::font::Pens,
+) -> Vec<Hint> {
     let text = line_text(entries);
     // The entry each word belongs to, in the order `wrap` reads them.
     let owner: Vec<usize> = entries
@@ -402,9 +452,9 @@ pub fn legend_wrapped(atlas: &Atlas, at: Wrapped, entries: &[Entry], snapped: bo
     let face = Face {
         atlas,
         buttons: false,
-        snapped,
+        pens,
     };
-    for (row, line) in crate::font::wrap_pens(atlas, &text, at.scale, at.width, snapped)
+    for (row, line) in crate::font::wrap_pens(atlas, &text, at.scale, at.width, pens)
         .iter()
         .enumerate()
     {
@@ -424,21 +474,26 @@ pub fn legend_wrapped(atlas: &Atlas, at: Wrapped, entries: &[Entry], snapped: bo
                 });
             }
         };
-        for piece in line.split(' ') {
+        let walked = (pens == crate::font::Pens::Bearing).then(|| piece_ink(atlas, line, at.scale));
+        for (piece_at, piece) in line.split(' ').enumerate() {
             let width = placed(face, piece, at.scale).1;
             let space = placed(face, " ", at.scale).0;
+            let (left, right) = walked
+                .as_ref()
+                .and_then(|spans| spans.get(piece_at).copied())
+                .unwrap_or((pen, pen + width));
             let entry = owner[word];
             match from {
                 Some((current, _)) if current != entry => {
                     flush(current, last.0, last.1, &mut out);
-                    from = Some((entry, pen));
-                    last = (pen, pen + width);
+                    from = Some((entry, left));
+                    last = (left, right);
                 }
                 None => {
-                    from = Some((entry, pen));
-                    last = (pen, pen + width);
+                    from = Some((entry, left));
+                    last = (left, right);
                 }
-                Some(_) => last.1 = pen + width,
+                Some(_) => last.1 = right,
             }
             pen += width + space;
             word += 1;
