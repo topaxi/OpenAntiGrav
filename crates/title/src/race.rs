@@ -637,6 +637,10 @@ pub struct DetonatorPads {
     /// A weapon pad hands out nothing and charges the EMP once per pad, again only after another
     /// pad or the next start-line crossing.
     pub weapon_pad_charges: crate::pre_race::Sourced<bool>,
+    /// The circuit's own speed-pad and weapon-pad models are not drawn under the Detonator pad:
+    /// `WorldManager_Construct` deletes the circuit's pad importers before it loads
+    /// `padReplacement` and the `Detonator_Pad` model.
+    pub replaces_circuit_pads: crate::pre_race::Sourced<bool>,
 }
 
 /// The EMP's announcer lines: `Detonator_UpdateRace` raises `EMPREADY` and `EMPFULL` through

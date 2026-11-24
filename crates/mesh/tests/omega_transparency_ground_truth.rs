@@ -95,6 +95,7 @@ fn altimas_sea_draws_its_law_under_original_and_nothing_under_off() {
             None,
             &mut |p| archive.read_path(p).ok(),
             law,
+            false,
         )
         .expect("builds")
     };
@@ -193,6 +194,7 @@ fn every_circuit_binds(
             None,
             &mut |p| archives.iter_mut().find_map(|a| a.read_path(p).ok()),
             oag_display::display::Water::Original,
+            false,
         )
         .expect("builds");
         seas.push((path.clone(), report.sea.clone()));
