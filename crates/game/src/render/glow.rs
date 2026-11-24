@@ -28,6 +28,9 @@ pub(super) const BACKGROUND: u8 = 4;
 /// "The mask, measured": the PS2 has no floor of `4`).
 pub(super) const PS2_BACKGROUND: u8 = 0;
 
+/// The PS2 front end's frame, which its bloom composite's `-5, -5` is measured in.
+const FRONT_END_FRAME: (f32, f32) = (640.0, 448.0);
+
 /// A rectangle larger than any grid, so the background stamp covers the whole viewport.
 const EVERYWHERE: [f32; 4] = [-65_536.0, -65_536.0, 131_072.0, 131_072.0];
 
@@ -111,7 +114,11 @@ impl Glow {
         format: wgpu::TextureFormat,
     ) -> Result<&oag_post::ps2_bloom::Ps2Bloom> {
         if self.ps2.is_none() {
-            self.ps2 = Some(oag_post::ps2_bloom::Ps2Bloom::new(device, format)?);
+            self.ps2 = Some(oag_post::ps2_bloom::Ps2Bloom::with_frame(
+                device,
+                format,
+                FRONT_END_FRAME,
+            )?);
         }
         Ok(self.ps2.as_ref().expect("built above"))
     }
