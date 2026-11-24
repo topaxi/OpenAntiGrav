@@ -154,6 +154,17 @@ Less group time, not a different order, is what shortens these holds: fewer
 launches per test, a launch that starts faster (`docs/architecture/load-time.md`),
 or a larger cap (the cap exists for an 8 GiB card).
 
+### What a launch costs (second round)
+
+A launch of the game is 0.9 s alone for a menu test and 2.7 to 4.4 s for one
+that races, and the group's summed seconds are those launches' CPU under
+contention: the gate's mean of 6.4 s per `campaign_cursor_ground_truth` test is
+2x its mean at the cap alone. So the launch's CPU is the lever, not only its
+critical path. The profile, the table of phases and the two changes that came
+out of it (a pool of opened CHD handles, a faster PSARC path digest: user CPU
+of a campaign-cursor run 243 s -> 171 s) are in
+`docs/architecture/load-time.md`, "A scripted launch".
+
 ## Still open
 
 - `lead-test-data` builds under slice 1's lock when `gate-run.sh check` was not

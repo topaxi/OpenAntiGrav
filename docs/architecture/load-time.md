@@ -302,6 +302,98 @@ stage) at well under 1% of samples against the software rasteriser's threads.
 **No per-frame CPU hot spot was found in this build's own code**, and none was
 optimised; a presenting-GPU profile is the open step.
 
+## A scripted launch: what a `--drive` test pays
+
+The tests of the `gpu-vram` group (`docs/architecture/gate-wall-time.md`) are
+mostly one `oag-game --drive` launch each, and a launch is where their seconds
+go. Measured 2026-11-24 on the development desktop (AMD, 24 hardware threads),
+debug test profile (our crates and dependencies at opt-level 2), Pulse PSP EU,
+`--no-audio --no-intro`, a fresh profile per launch, the load average between
+17 and 60 (other lanes' gates ran throughout). **User CPU is the number to
+read**: wall clock moves with the load, and the instruction count of a launch
+(`perf stat -e instructions:u`) moved less than 1% between repeats.
+
+| Launch (script ends at) | Wall before | Wall after | User s before | User s after |
+| --- | ---: | ---: | ---: | ---: |
+| `boot; ticks 1` (first frame) | 0.83 s | 0.59 s | 1.45 s | 0.80 s |
+| Main menu | 0.95 s | 0.76 s | 1.70 s | 0.76 s |
+| RACE CAMPAIGN open, `ticks 10` | 1.81 s | 1.30 s | 1.99 s | 1.00 s |
+| Race, first tick | 2.55 s | 3.15 s | 3.53 s | 2.82 s |
+| Race, 400 ticks | 4.39 s | 3.70 s | 4.25 s | 2.86 s |
+| Race walk of the pause test (menu, race, pause, GAME OPTIONS, 2 presses) | 4.44 s | 4.08 s | 4.37 s | 2.91 s |
+
+(Medians of three. The race row's wall clocks are not ordered at this load, a
+run can wait for a core; their user seconds are.) User instructions, `perf stat`, interleaved before and after:
+
+| Launch | Before | After |
+| --- | ---: | ---: |
+| Pulse PSP, menu walk (RACE CAMPAIGN open) | 21.05 G | 9.4 G |
+| Pulse PSP, race to 400 ticks, pause, GAME OPTIONS, two presses | 43.6 G | 27.8 G |
+| Pulse PS2, the same race walk | 80.9 G | 64.4 G |
+
+Where a launch's CPU went before (`perf record -e cpu-clock:u --call-graph fp`
+on the frame-pointer build, share of the launch's samples; the shares of
+threads add up, the process has about fifteen):
+
+- **`Chd::open`: 25 %** of a PSP launch, 148 calls in one run (`circuit-lengths`
+  36, the main thread 14 on the Pulse PSP disc alone, the rest on the music and
+  source threads reading the other discs in `data/images/`). Each decodes the
+  whole hunk map, a Huffman walk and a CRC-16 per hunk: 8 to 14 ms of CPU for a
+  200 MB PSP image, 10 to 14 ms for the 3.7 GB PS2 one.
+- **PSARC path digests: 22 %** of a menu-only launch. The soundtrack survey
+  and the source list identify every 2048, HD and Omega archive on the disk,
+  and each `match_paths_to_entries` hashes every manifest path (tens of
+  thousands per archive).
+- **Pipeline compile in `race-build`: 31 to 35 %** of a launch that races
+  (`create_render_pipeline` -> naga `process_overrides` and SPIR-V writing, 20
+  % and 10 %). Untouched: the scene already shares modules and pipelines
+  across its drawables (`oag_mesh::mesh_render::pipeline_cache`), so what is
+  left is naga's cost per distinct override set.
+- **PS2 music, 36 % of a PS2 launch**: the menu and race songs are LZMA hunks
+  of the CHD, decoded on `menu-music` and `race-music` also under `--no-audio`,
+  whose null mixer keeps the song selection (the marquee) identical to a real
+  run. Untouched.
+- Boot to the first frame is 0.8 s wall here against the 0.3 s above because
+  a launch now also surveys every image in `data/images/`; the first frame
+  itself is not what it waits for.
+
+### Idle CHD handles are reused (`oag_disc::chd_source`)
+
+A dropped `ChdSource` hands its opened handle (the decoded map, its buffers and
+the hunk it last read) to a pool keyed by path, length and modification time;
+the next `ChdSource::open` of the same file takes one back instead of decoding
+the map again. A handle belongs to one source at a time, so no two threads
+share a read position, up to twelve are kept per file, and the web build, which
+opens a registered blob, does not pool. Bytes are the same: `a_reopened_chd_reads_the_bytes_a_new_handle_does`
+and the split-read test pass, as do the disc crate's 100 tests. Menu launch
+21.05 G -> 10.6 G user instructions, race walk 43.6 G -> 27.8 G.
+
+### PSARC path digests (`oag_formats::psarc`)
+
+`md5::digest` copied the message to pad it and picked each step's mixing
+function inside a 64 step loop; `path_digest` allocated the uppercased path.
+Now the tail is padded on the stack, each round is its own loop, and an ASCII
+path uppercases into a stack buffer. The digests are the same (RFC 1321 and
+`hashlib` vectors at the block boundaries, every entry of every real archive in
+`psarc_ground_truth`): 600,000 path digests 3.56 G -> 1.22 G user instructions
+(release build), a menu launch 10.6 G -> 9.4 G.
+
+### A whole module
+
+`campaign_cursor_ground_truth` (33 launching tests) alone with nextest at its
+cap of 4, six interleaved before/after pairs, load 17 to 42:
+
+| | Before (median, range) | After |
+| --- | ---: | ---: |
+| User CPU of the run | 243 s (224 to 283) | 171 s (155 to 206) |
+| Wall clock of the run | 37.3 s (34.6 to 57.5) | 32.4 s (29.2 to 54.6) |
+| Summed test seconds | 127 s (117 to 206) | 107 s (94 to 194) |
+
+The wall clock gains less than the CPU because at the cap of 4 a module is
+bound by its longest tests as well; in the gate, with the cores shared by the
+other 17 tests of a slice, CPU is the larger part of a launch's seconds
+(the module summed 210 s there against 116 s alone).
+
 ## Reproducing
 
 The scripts that produced every table are under the lane's scratch directory
