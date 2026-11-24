@@ -614,6 +614,10 @@ struct Flat {
     first: Vec<u32>,
     /// The [`Surface::Reset`] colliders, ascending.
     resets: Vec<u32>,
+    /// Every triangle of the [`Self::resets`] colliders in a tree of their own.
+    reset_tree: Bvh,
+    /// `(collider, triangle)` of each [`Self::reset_tree`] item.
+    reset_items: Vec<(u32, u32)>,
 }
 
 impl Flat {
@@ -631,12 +635,21 @@ impl Flat {
             .enumerate()
             .filter(|(_, soup)| soup.surface == Surface::Reset)
             .map(|(index, _)| index as u32)
-            .collect();
+            .collect::<Vec<u32>>();
+        let mut reset_boxes = Vec::new();
+        let mut reset_items = Vec::new();
+        for &index in &resets {
+            let soup = &colliders[index as usize];
+            reset_boxes.extend_from_slice(soup.broadphase.boxes());
+            reset_items.extend((0..soup.triangles.len() as u32).map(|triangle| (index, triangle)));
+        }
         Self {
             tree: Bvh::build(boxes),
             collider,
             first,
             resets,
+            reset_tree: Bvh::build(reset_boxes),
+            reset_items,
         }
     }
 
@@ -677,6 +690,69 @@ impl CollisionWorld {
 
     fn flat(&self) -> &Flat {
         self.broadphase.get_or_init(|| Flat::build(&self.colliders))
+    }
+
+    /// The nearest hit along `ray` among the [`Surface::Reset`] colliders alone, ignoring every
+    /// other class: [`Self::nearest_reset_ascending`]'s answer, from one walk of the reset
+    /// colliders' own tree folded as [`Raycaster::raycast`] folds (see [`Nearest`]). A
+    /// collider's box holds its triangles' boxes, so the box reject each collider made first
+    /// removes no candidate the walk would hand out.
+    #[must_use]
+    pub fn nearest_reset(&self, ray: Ray, skip: Option<u32>) -> Option<RaycastHit> {
+        if !(ray.length >= 0.0 && ray.length.is_finite()) {
+            return self.nearest_reset_ascending(ray, skip);
+        }
+        let p0 = ray.origin;
+        let p1 = ray.end();
+        let segment = Aabb::from_segment(p0, p1);
+        let flat = self.flat();
+        let mut nearest: Option<Nearest> = None;
+        let mut unordered = false;
+        flat.reset_tree.visit(&segment, |item| {
+            let (collider, triangle) = flat.reset_items[item as usize];
+            let soup = &self.colliders[collider as usize];
+            if skip == Some(soup.collider) {
+                return;
+            }
+            let [a, b, c] = soup.corners(triangle);
+            let Some(hit) = segment_triangle(p0, p1, a, b, c) else {
+                return;
+            };
+            if hit.t.is_nan() {
+                unordered = true;
+                return;
+            }
+            let candidate = Nearest {
+                distance: hit.t * ray.length,
+                collider: collider as usize,
+                t: hit.t,
+                triangle,
+            };
+            if nearest.is_none_or(|best| candidate.before(&best)) {
+                nearest = Some(candidate);
+            }
+        });
+        if unordered {
+            return self.nearest_reset_ascending(ray, skip);
+        }
+        nearest.map(|best| self.colliders[best.collider].hit(ray, best.triangle))
+    }
+
+    /// [`Self::nearest_reset`] as the scan asks it: each reset collider in ascending order,
+    /// its own nearest hit, and the strictly smaller distance across them (the lower collider
+    /// on a tie). The reference, and the fallback for a ray the fold does not cover.
+    fn nearest_reset_ascending(&self, ray: Ray, skip: Option<u32>) -> Option<RaycastHit> {
+        let mut nearest: Option<RaycastHit> = None;
+        for collider in self.reset_colliders() {
+            // `include_reset` is set because the collider would otherwise skip itself.
+            let Some(hit) = collider.raycast(ray, skip, true) else {
+                continue;
+            };
+            if nearest.is_none_or(|best| hit.distance < best.distance) {
+                nearest = Some(hit);
+            }
+        }
+        nearest
     }
 
     /// The narrowphase of [`Raycaster::raycast_all`] over candidate items, in their order.

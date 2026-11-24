@@ -10,14 +10,15 @@
 //! `crates/raceplay/src/lib.rs`, which owns the spline, scored there as the low-confidence guess
 //! it is. Keeping the split here means this module cannot quietly acquire an invented constant.
 //!
-//! # Why this does not go through [`Raycaster`]
+//! # Why this does not go through [`Raycaster`](crate::collide::Raycaster)
 //!
-//! [`Raycaster::raycast`] returns the **nearest** hit across every collider, and `include_reset`
+//! [`Raycaster::raycast`](crate::collide::Raycaster::raycast) returns the **nearest** hit across every collider, and `include_reset`
 //! only makes `Reset` a *candidate*. A reset volume is usually below or outside the track, so a
 //! probe at one passes through the floor first and the floor wins: a trigger that essentially
-//! never fires. So this walks [`CollisionWorld::colliders`] and queries only the `Reset` ones
-//! (each [`TriangleSoup`] is a [`Raycaster`], so the narrowphase is shared), in an ordered `Vec`
-//! as `docs/architecture/determinism.md` requires.
+//! never fires. So this asks only the `Reset` colliders ([`CollisionWorld::nearest_reset`]: their
+//! triangles in a tree of their own, the narrowphase shared, and the answer each collider's
+//! nearest hit in ascending collider order would give, as `docs/architecture/determinism.md`
+//! requires).
 //!
 //! # The probes are the hull's
 //!
@@ -28,7 +29,7 @@
 
 use oag_core::math::Vec3;
 
-use crate::collide::{CollisionWorld, Ray, Raycaster};
+use crate::collide::{CollisionWorld, Ray};
 use crate::forces::Environment;
 use crate::params::Handling;
 use crate::ship::ShipState;
@@ -108,28 +109,13 @@ fn nearest_reset(
     skip: Option<u32>,
     direction: Vec3,
 ) -> Option<ResetContact> {
-    let mut nearest: Option<(f32, ResetContact)> = None;
-
-    for collider in world.reset_colliders() {
-        // `include_reset` is set because the collider would otherwise skip itself.
-        let Some(hit) = collider.raycast(ray, skip, true) else {
-            continue;
-        };
-        let nearer = nearest.is_none_or(|(best, _)| hit.distance < best);
-        if nearer {
-            nearest = Some((
-                hit.distance,
-                ResetContact {
-                    point: hit.point,
-                    normal: wall::facing(hit.normal, direction),
-                    collider: hit.collider,
-                    swept: false,
-                },
-            ));
-        }
-    }
-
-    nearest.map(|(_, contact)| contact)
+    let hit = world.nearest_reset(ray, skip)?;
+    Some(ResetContact {
+        point: hit.point,
+        normal: wall::facing(hit.normal, direction),
+        collider: hit.collider,
+        swept: false,
+    })
 }
 
 #[cfg(test)]

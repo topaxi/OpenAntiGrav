@@ -486,3 +486,65 @@ fn the_folded_nearest_hit_is_the_ascending_scans() {
     assert!(hits > 1000, "only {hits} hits compared");
     assert!(ties > 500, "only {ties} tied hits compared");
 }
+
+/// The reset colliders' one tree answers as asking each reset collider in turn did: the same
+/// nearest hit, ties across colliders to the lower one, on a world whose ordinary colliders
+/// sit in front of the reset ones and with a reset collider skipped.
+#[test]
+fn the_reset_tree_answers_as_each_reset_collider_in_turn() {
+    let mut rng = oag_core::rng::Rng::new(29);
+    let mut at = |scale: f32| (rng.next_f32() - 0.5) * scale;
+    let mut cells = Vec::new();
+    for _ in 0..150 {
+        let base = [at(40.0), at(6.0), at(40.0)];
+        let corners: Vec<[f32; 3]> = (0..3)
+            .map(|_| [base[0] + at(6.0), base[1] + at(2.0), base[2] + at(6.0)])
+            .collect();
+        cells.push(corners);
+    }
+    let mut world = CollisionWorld::new();
+    for collider in 0..6u32 {
+        let mut vertices = Vec::new();
+        let mut triangles = Vec::new();
+        for (cell, corners) in cells.iter().enumerate() {
+            if collider >= 2 && cell % 2 != (collider % 2) as usize {
+                continue;
+            }
+            let first = vertices.len() as u32;
+            vertices.extend_from_slice(corners);
+            vertices.push([corners[0][0] + 1.0, corners[0][1], corners[0][2] - 2.0]);
+            triangles.push([first, first + 1, first + 2]);
+            triangles.push([first, first + 2, first + 3]);
+        }
+        // Colliders 1, 2, 4 and 5 are reset; 1 holds every cell and 2 and 4 the same half.
+        let surface = if collider == 0 || collider == 3 {
+            Surface::Wall
+        } else {
+            Surface::Reset
+        };
+        world.push(TriangleSoup::new(
+            vertices,
+            triangles,
+            Vec::new(),
+            surface,
+            collider,
+        ));
+    }
+
+    let mut hits = 0;
+    for case in 0..10_000 {
+        let origin = Vec3::new(at(40.0), at(8.0), at(40.0));
+        let direction = Vec3::new(at(2.0), at(2.0), at(2.0)).normalize_or_zero();
+        let length = if case % 50 == 0 {
+            0.0
+        } else {
+            at(2.0).abs() * 16.0
+        };
+        let ray = Ray::new(origin, direction, length);
+        let skip = (case % 5 == 0).then_some(1);
+        let want = world.nearest_reset_ascending(ray, skip);
+        assert_eq!(world.nearest_reset(ray, skip), want, "case {case}");
+        hits += usize::from(want.is_some());
+    }
+    assert!(hits > 1000, "only {hits} hits compared");
+}
