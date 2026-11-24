@@ -73,7 +73,7 @@ mod zone_cameras;
 #[cfg(feature = "view")]
 mod zone_livery;
 #[cfg(feature = "view")]
-pub use campaign::load_event;
+pub use campaign::{load_event, load_event_sim};
 #[cfg(feature = "view")]
 pub use environment::{authored_light, hd_bloom_params};
 use oag_source::pair::craft_of;
