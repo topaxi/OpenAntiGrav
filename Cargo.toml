@@ -363,6 +363,48 @@ incremental = false
 opt-level = 2
 debug = false
 
+# The third-party decoders the ground-truth suite spends its CPU in. Their
+# `debug_assert!`s and overflow checks are the dependency's own contract with its
+# own tests, not ours, and in a loop that runs billions of times they cost a
+# fifth or more of it (docs/architecture/workspace-layout.md, "Dependency
+# decoders without debug assertions"). Our own crates keep both.
+[profile.dev.package.atrac9dec]
+debug-assertions = false
+overflow-checks = false
+[profile.dev.package.zlib-rs]
+debug-assertions = false
+overflow-checks = false
+[profile.dev.package.lzma-rust2]
+debug-assertions = false
+overflow-checks = false
+[profile.dev.package.lzma-rs-perf-exp]
+debug-assertions = false
+overflow-checks = false
+[profile.dev.package.re_rav1d]
+debug-assertions = false
+overflow-checks = false
+[profile.dev.package.symphonia-core]
+debug-assertions = false
+overflow-checks = false
+[profile.dev.package.symphonia-bundle-mp3]
+debug-assertions = false
+overflow-checks = false
+[profile.dev.package.rubato]
+debug-assertions = false
+overflow-checks = false
+[profile.dev.package.crc]
+debug-assertions = false
+overflow-checks = false
+[profile.dev.package.bitreader]
+debug-assertions = false
+overflow-checks = false
+[profile.dev.package.fdeflate]
+debug-assertions = false
+overflow-checks = false
+[profile.dev.package.png]
+debug-assertions = false
+overflow-checks = false
+
 # Crates reached only through a build-script or proc-macro edge, which `package."*"`
 # above would otherwise build at opt-level 2. They run once per build, so opt-level
 # 0 costs nothing at run time (bindgen included) and cut their compile from 356 to
