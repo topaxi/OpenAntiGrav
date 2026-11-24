@@ -37,6 +37,14 @@ impl Frontend {
         self.picker_line_height = Some(line_height);
     }
 
+    /// Whether a widget authored in font `role` draws in the title's own `Stats` face: the
+    /// role is `Stats` or `Scroll` (one file on Pure, [`crate::language::roles`]) and the menu
+    /// skin names such a face ([`oag_title::MenuSkin::stats_font`]).
+    pub(crate) fn stats_face_named(&self, role: &str) -> bool {
+        crate::language::roles::names_stats(role)
+            && self.menu_skin.is_some_and(|skin| skin.stats_font.is_some())
+    }
+
     /// The scale a widget authored in font `role` draws at, against
     /// `Default`. `1.0` for a role nothing measured.
     pub(crate) fn face_scale(&self, role: &str) -> f32 {

@@ -262,7 +262,7 @@ fn snapped_atlas() -> Atlas {
         height: 8,
         palette: vec![[255, 255, 255, 255]; 16],
         indices: vec![1; 64],
-        glyphs: vec![glyph(b' '), glyph(b'a'), glyph(b'b')],
+        glyphs: vec![glyph(b' '), glyph(b'a'), glyph(b'b'), glyph(b'X')],
     };
     Atlas::from_font(&font)
 }
@@ -324,4 +324,26 @@ fn a_snapped_legend_of_two_entries_follows_one_pen_across_the_line() {
         second[0] > alone,
         "words measured alone would put it at {alone}"
     );
+}
+
+/// A right-aligned line on a snapped face ends its last quad on the anchor, as the draw does
+/// (`oag_game::render::Renderer::push_text`): the rectangle over `X aa` starts where `ink_right`
+/// puts the pen, not where the pen's end would, so a tap on its first glyph lands.
+#[test]
+fn a_snapped_right_aligned_line_ends_on_its_anchor() {
+    let atlas = snapped_atlas();
+    let list = [text(Some("Stats"), 200.0, 0.0, Align::Right, "X aa")];
+    let hints = scan(&list, None, &Substitution::reading(&TABLE), &|_| {
+        Some(Face {
+            atlas: &atlas,
+            buttons: false,
+            snapped: true,
+        })
+    });
+    let run = crate::font::snapped_run(&atlas, "X aa", 1.0);
+    assert!(
+        run.ink_right < run.end,
+        "the trailing advance is what differs"
+    );
+    assert_eq!(hints[0].rect[0], (200.0 - run.ink_right).ceil());
 }

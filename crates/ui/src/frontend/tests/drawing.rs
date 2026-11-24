@@ -610,3 +610,80 @@ fn a_blooming_titles_press_start_stamps_its_glyph_quads_on_the_pulse_ladder() {
     frontend.update(0.3, &mut input, None);
     assert_eq!(stamps(&frontend), [70]);
 }
+
+const STATS_TEXT_XML: &str = r#"
+<Screen>
+  <Screen type="FEMain" name="Top FE Screen">
+    <Screen name="FE Screen">
+      <Screen name="Title Screen">
+        <Viewport>
+          <Values x="0" y="0" height="272" width="480"></Values>
+          <Text delay="0.5">
+            <Values align="right" idstring="HOLD ON!" scale="0.7" font="Stats" x="416" y="239" color="0xFF00AAFF"></Values>
+          </Text>
+        </Viewport>
+      </Screen>
+    </Screen>
+  </Screen>
+</Screen>
+"#;
+
+fn stats_text_frontend() -> Frontend {
+    Frontend::new(
+        Screens::from_xml(STATS_TEXT_XML),
+        StringTable::default(),
+        Vec::new(),
+        Vec::new(),
+        0,
+        false,
+    )
+}
+
+/// A `font="Stats"` text draws in the title's own `Stats` face at its authored scale when the
+/// menu skin names one (Pure's `HOLD ON!`, `docs/ui/menus-original.md`, "Pure's right-aligned text
+/// ends on its ink"), whatever ratio the `Default` atlas is corrected by; a title with no such
+/// face draws the plain text as before.
+#[test]
+fn a_stats_text_draws_in_the_stats_face_where_the_skin_has_one() {
+    static STATS_SKIN: oag_title::MenuSkin = oag_title::MenuSkin {
+        stats_font: Some("Stats"),
+        ..crate::placeholder::MENU_SKIN
+    };
+    let mut frontend = stats_text_frontend();
+    frontend.set_face_scales(vec![("stats".to_string(), 0.5)], 20.0);
+    let hold_on = |draws: &[Draw]| {
+        draws
+            .iter()
+            .find(|d| {
+                matches!(d, Draw::Text { text, .. } | Draw::FacedText { text, .. } if text == "HOLD ON!")
+            })
+            .cloned()
+            .expect("the text is drawn")
+    };
+
+    assert!(matches!(
+        hold_on(&frontend.draw_screen("Title Screen")),
+        Draw::Text { scale, .. } if (scale - 0.35).abs() < 1e-6
+    ));
+
+    frontend.set_menu_skin(&STATS_SKIN);
+    match hold_on(&frontend.draw_screen("Title Screen")) {
+        Draw::FacedText {
+            role,
+            x,
+            y,
+            scale,
+            align,
+            ..
+        } => {
+            assert_eq!(role, crate::language::roles::STATS);
+            assert_eq!((x, y), (416.0, 239.0));
+            assert_eq!(
+                scale, 0.7,
+                "the face's own size: no ratio against `Default`"
+            );
+            assert_eq!(align, Align::Right);
+        }
+        other => panic!("not drawn in the Stats face: {other:?}"),
+    }
+}

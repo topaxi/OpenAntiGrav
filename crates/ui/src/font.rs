@@ -1114,9 +1114,10 @@ pub fn snapped_quad(cell: &Cell, scale: f32, pen: f32) -> SnappedQuad {
 /// reads, so that none of them disagrees with the draw.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SnappedRun {
-    /// The pen after the last glyph (its advance past the snapped ink edge): what an aligned
-    /// string is placed by (which edge a right- or centre-aligned string is placed by is chosen:
-    /// no captured Pure frame has one in a snapped face).
+    /// The pen after the last glyph (its advance past the snapped ink edge): what a centred
+    /// string is placed by (chosen: no captured Pure frame has one in a snapped face). A
+    /// right-aligned string is placed by [`Self::ink_right`] instead (`docs/ui/menus-original.md`,
+    /// "Pure's right-aligned text ends on its ink").
     pub end: f32,
     /// The right edge of the last glyph's quad: where the drawn text stops.
     pub ink_right: f32,

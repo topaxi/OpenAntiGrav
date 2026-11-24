@@ -78,7 +78,7 @@ pub fn prompt_ink<'a>(
     snapped: bool,
 ) -> impl Fn(&str, &str, f32) -> f32 + 'a {
     move |face, text, scale| {
-        let atlas = if face.eq_ignore_ascii_case("scroll") || face.eq_ignore_ascii_case("stats") {
+        let atlas = if oag_ui::language::roles::names_stats(face) {
             stats_font.unwrap_or(font)
         } else {
             font

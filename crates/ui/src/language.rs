@@ -116,6 +116,13 @@ pub mod roles {
     /// `LTe50325.fnt`, a small letter-spaced face (the table above), where Pulse
     /// fills it with `Pulse_14.fnt`.
     pub const STATS: &str = "Stats";
+
+    /// Whether a widget's authored `font` names the `Stats` slot: `Stats` itself or `Scroll`,
+    /// which Pure resolves to the same file (the table above).
+    #[must_use]
+    pub fn names_stats(font: &str) -> bool {
+        font.eq_ignore_ascii_case("stats") || font.eq_ignore_ascii_case("scroll")
+    }
 }
 
 /// One language the disc ships.

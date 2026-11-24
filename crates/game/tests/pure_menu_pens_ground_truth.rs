@@ -20,6 +20,10 @@
 //! was taken) ends its last glyph at x 425 on one line; at the scale the line drew with before
 //! (0.7) it ended 20 % short, and measured against the wrong face it wrapped its last word onto a
 //! second line.
+//!
+//! The title screen's `HOLD ON!` (`font="Stats"`, scale 0.7, right-aligned at 416) is that face too,
+//! its last glyph's ink ending on 416: the original's seven glyphs start at 366, 373, 380, 388,
+//! 400, 407 and 415 (the menu face drew them from 362; a pen-aligned right edge from 362 as well).
 
 use std::path::Path;
 
@@ -61,6 +65,80 @@ fn decode(png: &[u8]) -> oag_texture::replacer::Image {
     let image = oag_texture::replacer::decode_png(png).expect("the screenshot decodes");
     assert_eq!((image.width, image.height), (480, 272));
     image
+}
+
+/// The first column of each run of columns that hold a cyan-ish ink (red drawn down) in `rows`,
+/// between `columns`.
+fn cyan_starts(
+    image: &oag_texture::replacer::Image,
+    rows: std::ops::Range<u32>,
+    columns: std::ops::Range<u32>,
+) -> Vec<u32> {
+    let inked = |x: u32| {
+        rows.clone()
+            .map(|y| 255 - i32::from(image.rgba[((y * image.width + x) * 4) as usize]))
+            .sum::<i32>()
+            > 60
+    };
+    columns.filter(|&x| inked(x) && !inked(x - 1)).collect()
+}
+
+fn title_still(image: &Path, scratch: &Path) -> Vec<u8> {
+    std::fs::create_dir_all(scratch).expect("a scratch directory");
+    let out = scratch.join("title-screen.png");
+    let status = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
+        .arg(image)
+        .args([
+            "--no-audio",
+            "--size",
+            "480x272",
+            "--screen",
+            "Intro Screen->Title Screen",
+            "--ticks",
+            "200",
+            "--screenshot",
+        ])
+        .arg(&out)
+        .env("XDG_CONFIG_HOME", scratch.join("config"))
+        .env("XDG_STATE_HOME", scratch.join("state"))
+        .env("XDG_DATA_HOME", scratch.join("data"))
+        .env("OAG_DLC", scratch.join("no-dlc"))
+        .status()
+        .expect("running oag-game");
+    assert!(status.success(), "oag-game --screen on {}", image.display());
+    std::fs::read(&out).expect("the screenshot")
+}
+
+/// The ink-left column of each glyph of the title screen's `HOLD ON!` in the original's frame.
+const HOLD_ON_ORIGINAL: [u32; 7] = [366, 373, 380, 388, 400, 407, 415];
+
+#[test]
+#[ignore = "needs a Pure disc image in data/images/"]
+fn the_title_screens_hold_on_is_the_stats_face_ending_on_its_anchor() {
+    let images: Vec<(&str, std::path::PathBuf)> = ["pure-psp-eu.chd", "pure-psp-usa.chd"]
+        .into_iter()
+        .filter_map(|name| oag_testdata::image(name).map(|path| (name, path)))
+        .collect();
+    assert!(
+        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none() || !images.is_empty(),
+        "OAG_REQUIRE_GAME_DATA is set but neither Pure PSP image is present"
+    );
+    for (name, image) in images {
+        let scratch = std::env::temp_dir().join(format!("oag-pure-title-{name}"));
+        let frame = decode(&title_still(&image, &scratch));
+        let starts = cyan_starts(&frame, 242..248, 350..418);
+        assert_eq!(
+            starts.len(),
+            HOLD_ON_ORIGINAL.len(),
+            "{name}: HOLD ON!'s seven glyphs, got {starts:?}"
+        );
+        for (got, want) in starts.iter().zip(HOLD_ON_ORIGINAL) {
+            assert!(
+                got.abs_diff(want) <= 1,
+                "{name}: glyph at {got}, the original's at {want}: {starts:?}"
+            );
+        }
+    }
 }
 
 fn still(image: &Path, scratch: &Path) -> Vec<u8> {
