@@ -402,15 +402,20 @@ fn zero_saturation_is_grey_and_more_saturation_is_further_from_it() {
     );
 }
 
-/// A far field of one-pixel stripes, 1080 lines tall, through the pass at full aperture: what is
-/// left of the stripes (the spread between the brightest and the darkest pixel of a row well
-/// inside the field), and how many distinct pixels the gather's taps reach.
-fn far_stripes_at_1080(d: &Device) -> (u8, usize) {
-    const W: u32 = 256;
-    const H: u32 = 1080;
+const TALL: (u32, u32) = (256, 1080);
+
+/// A frame 1080 lines tall through the pass at full aperture and `focus`: `shade` and
+/// `distance` give each column's grey and eye distance. Returns the middle row's red channel.
+fn the_middle_row_at_1080(
+    d: &Device,
+    focus: f32,
+    shade: impl Fn(u32) -> u8,
+    distance: impl Fn(u32) -> f32,
+) -> Vec<u8> {
+    let (w, h) = TALL;
     let size = wgpu::Extent3d {
-        width: W,
-        height: H,
+        width: w,
+        height: h,
         depth_or_array_layers: 1,
     };
     let scene = d.device.create_texture(&wgpu::TextureDescriptor {
@@ -426,13 +431,13 @@ fn far_stripes_at_1080(d: &Device) -> (u8, usize) {
             | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
     });
-    let pixels: Vec<u8> = (0..H)
-        .flat_map(|_| (0..W).flat_map(|x| [if x % 2 == 0 { 255 } else { 0 }; 4]))
+    let pixels: Vec<u8> = (0..h)
+        .flat_map(|_| (0..w).flat_map(|x| [shade(x); 4]))
         .collect();
     let layout = wgpu::TexelCopyBufferLayout {
         offset: 0,
-        bytes_per_row: Some(W * 4),
-        rows_per_image: Some(H),
+        bytes_per_row: Some(w * 4),
+        rows_per_image: Some(h),
     };
     d.queue
         .write_texture(scene.as_image_copy(), &pixels, layout, size);
@@ -446,17 +451,19 @@ fn far_stripes_at_1080(d: &Device) -> (u8, usize) {
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
     });
-    let far = vec![z_of(400.0); (W * H) as usize];
+    let depths: Vec<f32> = (0..h)
+        .flat_map(|_| (0..w).map(|x| z_of(distance(x))))
+        .collect();
     d.queue.write_texture(
         depth.as_image_copy(),
-        bytemuck::cast_slice(&far),
+        bytemuck::cast_slice(&depths),
         layout,
         size,
     );
     let mut fx = PhotoFx::new(&d.device, wgpu::TextureFormat::Rgba8Unorm).expect("pipelines");
     let mut encoder = d.device.create_command_encoder(&Default::default());
     let dof = Dof {
-        focus: 0.0,
+        focus,
         aperture: 1.0,
     };
     fx.render(
@@ -467,14 +474,14 @@ fn far_stripes_at_1080(d: &Device) -> (u8, usize) {
             scene: &scene.create_view(&wgpu::TextureViewDescriptor::default()),
             depth: &depth.create_view(&wgpu::TextureViewDescriptor::default()),
             sample_count: 1,
-            size: (W, H),
-            viewport: (0.0, 0.0, W as f32, H as f32),
+            size: (w, h),
+            viewport: (0.0, 0.0, w as f32, h as f32),
             params: params(Some(dof), None),
         },
     );
     let readback = d.device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("readback"),
-        size: u64::from(W * H * 4),
+        size: u64::from(w * h * 4),
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
         mapped_at_creation: false,
     });
@@ -496,36 +503,85 @@ fn far_stripes_at_1080(d: &Device) -> (u8, usize) {
         .get_mapped_range()
         .expect("mapping")
         .to_vec();
-    // The middle row, clear of the picture's edges by more than the blur's reach.
-    let row = (H / 2 * W * 4) as usize;
-    let inner: Vec<u8> = (64..W - 64)
-        .map(|x| bytes[row + (x * 4) as usize])
-        .collect();
-    let spread = inner.iter().max().unwrap() - inner.iter().min().unwrap();
-    // The shader's own tap offsets at this reach (`gather`), counted here.
-    let reach = Dof::MAX_RADIUS * H as f32;
-    let mut reached = std::collections::BTreeSet::new();
-    for i in 0..56 {
-        let t = (i as f32 + 0.5) / 56.0;
-        let (r, a) = (t.sqrt() * reach, i as f32 * 2.399_963_3);
-        reached.insert(((a.cos() * r).round() as i32, (a.sin() * r).round() as i32));
-    }
-    (spread, reached.len())
+    let row = (h / 2 * w * 4) as usize;
+    (0..w).map(|x| bytes[row + (x * 4) as usize]).collect()
+}
+
+/// What is left of one-pixel stripes at `distance` with the focus at `d = 3`, well clear of the
+/// frame's edges: the spread between the brightest and the darkest pixel.
+fn stripes_left_at(d: &Device, distance: f32) -> u8 {
+    let stripes = |x: u32| if x % 2 == 0 { 255 } else { 0 };
+    let row = the_middle_row_at_1080(d, 0.0, stripes, |_| distance);
+    let inner = &row[64..(TALL.0 - 64) as usize];
+    inner.iter().max().unwrap() - inner.iter().min().unwrap()
 }
 
 /// The widest blur at 1080 lines is a disc 27 pixels in radius, about 2,290 pixels: one-pixel
 /// stripes inside it average to a flat grey. Fails while the gather reads 56 fixed pixels of the
 /// disc, the same 56 at every pixel, so the stripes come through at a fraction of their contrast.
 #[test]
-#[ignore = "photo-fx-review finding 3"]
+#[ignore = "photo-fx-review finding 6"]
 fn the_widest_blur_at_1080_lines_flattens_one_pixel_stripes() {
     let Some(d) = device() else { return };
-    let (spread, reached) = far_stripes_at_1080(&d);
-    println!(
-        "full aperture at 1080 lines: {reached} pixels read of a disc of about 2290; stripes of 255 left at {spread}"
-    );
+    let spread = stripes_left_at(&d, 400.0);
+    println!("full aperture at 1080 lines, the widest blur: stripes of 255 left at {spread}");
     assert!(
         spread <= 8,
         "one-pixel stripes survive the widest blur at a spread of {spread} of 255"
     );
+}
+
+/// A surface a little out of focus is a little blurred. Focus at `d = 3` is sharp to 6.66 and
+/// widest from 12.24; at 7.07 the circle of confusion is 2 of the reach's 27 pixels, a disc of
+/// 13 pixels. Fails while the taps are spread over the widest reach whatever the pixel's own
+/// radius: the innermost sits 2.55 pixels out, so a 2-pixel circle reaches none and the surface
+/// is as sharp as one in focus.
+#[test]
+#[ignore = "photo-fx-review finding 6"]
+fn a_surface_a_little_out_of_focus_is_blurred_at_1080_lines() {
+    let Some(d) = device() else { return };
+    let spread = stripes_left_at(&d, 7.07);
+    println!("full aperture at 1080 lines, a 2-pixel circle: stripes of 255 left at {spread}");
+    assert!(
+        spread < 200,
+        "one-pixel stripes under a 2-pixel circle of confusion are untouched: {spread} of 255"
+    );
+}
+
+/// A blurred near surface thins out over the sharp one behind it: half covered at its edge,
+/// nothing at its radius. A white near field left of column 128 (1.5 units away, a circle of 23
+/// pixels with the focus at `d = 23`) over a black surface in focus. Fails while a tap that does
+/// not reach the pixel is dropped from the average instead of counting as the pixel's own
+/// colour: five pixels outside the edge 36 percent of the circle lies on the near surface, and
+/// the pixel comes out nearly white.
+#[test]
+#[ignore = "photo-fx-review finding 5"]
+fn a_blurred_near_edge_thins_out_over_the_sharp_surface_behind_it() {
+    let Some(d) = device() else { return };
+    let shade = |x: u32| if x < 128 { 255 } else { 0 };
+    let distance = |x: u32| if x < 128 { 1.5 } else { 23.0 };
+    let row = the_middle_row_at_1080(&d, 0.5, shade, distance);
+    let outside: Vec<u8> = row[128..160].to_vec();
+    println!("white near field over a sharp black one, from the edge outward: {outside:?}");
+    assert!(
+        row[133] <= 153,
+        "five pixels outside the edge the near surface covers {} of 255",
+        row[133]
+    );
+}
+
+/// A rectangle that starts at or past the target's last column asks for nothing and does not
+/// stop the frame. Fails while the last pixel is clamped between the first and the target's
+/// edge with the first already past it, which `clamp` refuses.
+#[test]
+#[ignore = "photo-fx-review finding 12"]
+fn a_rectangle_past_the_target_is_empty_and_does_not_panic() {
+    let none = Params {
+        grade: None,
+        dof: None,
+        near: 1.0,
+        far: 1000.0,
+    };
+    let c = Constants::new((64.0, 0.0, 8.0, 8.0), (64, 64), &none);
+    assert!(c.rect[0] <= 63, "{:?}", c.rect);
 }

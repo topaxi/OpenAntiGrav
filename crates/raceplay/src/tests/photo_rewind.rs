@@ -569,7 +569,7 @@ fn the_accumulated_shot_keeps_the_band_the_preview_shows_sharp() {
 /// play between keyframes, the plan drops the blur and the shot is the one frame. Fails while the
 /// MOTION BLUR row is offered on the title's say alone.
 #[test]
-#[ignore = "photo-fx-review finding 6"]
+#[ignore = "photo-fx-review finding 8"]
 fn a_race_with_no_recording_is_not_offered_a_motion_blur() {
     let mut race = Box::new(Race::start(
         fixture(),
@@ -607,7 +607,7 @@ fn a_race_with_no_recording_is_not_offered_a_motion_blur() {
 /// picture's height. Fails while the ring's radius is worked out from the lens's own field and
 /// the frame is drawn with the speed widen added to that field.
 #[test]
-#[ignore = "photo-fx-review finding 8"]
+#[ignore = "photo-fx-review finding 9"]
 fn the_lens_ring_is_half_the_previews_blur_in_the_field_the_frame_is_drawn_with() {
     let (mut race, _, _) = driven();
     open(&mut race);
