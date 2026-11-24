@@ -45,6 +45,12 @@ impl MenuStage {
     /// from it shows both - this reproduces.
     #[must_use]
     fn nav_legend_overlay(&self) -> Vec<Draw> {
+        let mut draws = self.nav_legend_draws();
+        crate::campaign::drop_value_stamps(&self.skin, &mut draws);
+        draws
+    }
+
+    fn nav_legend_draws(&self) -> Vec<Draw> {
         // The disc's pause screen draws its own footer.
         if self.on_pause_page() {
             return Vec::new();

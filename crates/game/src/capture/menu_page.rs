@@ -35,7 +35,9 @@ pub(super) fn picker_footer(
     let faces = crate::prompts::footer_faces(skin);
     let measure = crate::boot::fonts::text_ink(default_font, skin.pens());
     if let Some(legend) = nav_legend {
-        list.extend(legend.draw_gated(&faces, show_back));
+        let mut legend_draws = legend.draw_gated(&faces, show_back);
+        crate::campaign::drop_value_stamps(skin, &mut legend_draws);
+        list.extend(legend_draws);
     }
     let draw = oag_ui_screens::campaign::footer::ticker_draw(layout, 0.0, &tips, &faces, &measure)?;
     let at = list.len();
@@ -469,6 +471,7 @@ pub(super) fn menu_page(
         .map(|(draws, _)| draws)
         .unwrap_or_default(),
     );
+    crate::campaign::drop_value_stamps(skin, &mut nav_legend_draws);
     // The footer's own scrolling tip ticker, frozen at `elapsed = 0.0` - a
     // still has no clock of its own to animate the scroll with, so this
     // shows whichever tip the rotation starts on rather than one mid-scroll.

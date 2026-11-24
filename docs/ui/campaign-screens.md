@@ -5587,7 +5587,8 @@ and pause row that the original does not have. The picker panels' and footer's v
 
 **What ours does**: `oag_pulse::frontend::PS2_MENU_SKIN` carries `glow: None` (the rows, the help line and the boot/title texts all
 read it: `oag_ui::menu::rows`, `oag_ui::frontend::draw`), and `oag_game::campaign::gate_glow` takes the skin and, where
-`MenuSkin::glow_by_texel` is set, drops every `Draw::GlowStamp` and `Draw::GlowText` (footer tag, picker and campaign texts): only
+`MenuSkin::glow_by_texel` is set, drops every `Draw::GlowStamp` and `Draw::GlowText` (picker and campaign texts), and `drop_value_stamps` does the same to the footer
+legend's list (its tag stamp), which is appended after the gate: only
 `Draw::GlowTexel` survives, so a `Selector` blooms through the PS2 chain and a screen without one blooms nothing. Tests:
 `pulse_ps2_menu_rows_stamp_nothing` (`oag-ui`, fails with the PS2 skin's `glow` back to the PSP's record),
 `the_ps2_front_end_keeps_its_texel_stamp_and_drops_the_value_stamps` (`oag-game`, fails with `gate_glow` reading no skin).
@@ -5599,15 +5600,18 @@ the same `theirs.png` and flags; mean absolute grey over the box, PIL L, 1280 x 
 
 | pair | grab | rows box | whole frame |
 | --- | --- | ---: | ---: |
-| main | 1 | 7.33 to 4.12 | 5.63 to 3.91 |
-| main | 2 | 7.34 to 4.13 | 5.49 to 3.78 |
-| options | 1 | 3.39 to 2.32 | 4.61 to 4.23 |
-| options | 2 | 2.56 to 1.24 | 4.01 to 3.54 |
+| main | 1 | 7.33 to 4.06 | 5.63 to 3.86 |
+| main | 2 | 7.34 to 4.07 | 5.49 to 3.72 |
+| options | 1 | 3.39 to 2.32 | 4.61 to 4.18 |
+| options | 2 | 2.56 to 1.24 | 4.01 to 3.48 |
 
 Re-capture noise on the same state and binary, from the two grabs: 0.01 grey on the main rows box (7.33/7.34 before), 0.8 on the
-options one (a different footer and state phase); each pair's improvement (3.2 on both main grabs, 1.1 and 1.3 on options) is
-past it. The Ship Select, Grid and Cell pairs are **byte-identical** (decoded RGBA) before and after: Grid and Cell already dropped
-their value stamps behind the `Selector`'s texel stamp, and ours' Ship Select draws no halo to begin with. The pause: the PS2 pause
+options one (a different footer and state phase); each pair's improvement (3.3 on both main grabs, 1.1 and 1.3 on options) is
+past it. The footer box (0,600,1280,120), where the `AAA` tag's own halo sat (the legend appends its `RealGlow` stamp after the
+page's gate; the original's tab writes no alpha), reads main 4.94/4.95 to 4.62/4.63, options 5.82/6.10 to 5.50/5.78. Grid and Cell are **byte-identical** (decoded RGBA) before and after: they already dropped their value stamps behind the
+`Selector`'s texel stamp. Ship Select (the picker) changes only at the footer tag (whole frame 4.65/4.74 to 4.60/4.69): its panel
+texts drew no halo in ours before. The Options pair was moved under a law measured on the Profile page (a four-down walk from the
+Main Menu landed there; same `<Menu>` widget and `Additional` skin); no Options dump was taken. The pause: the PS2 pause
 over a Time Trial of ours, before and after, against the Zone pause above (not the same race; no pair): the rows' halos are gone and
 the picture reads as the original's flat rows.
 

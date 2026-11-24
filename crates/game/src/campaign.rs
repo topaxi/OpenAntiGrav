@@ -284,26 +284,45 @@ pub fn draws_hd_campaign(title: &oag_title::Title) -> bool {
 
 /// `layers` with the glow-mask stamps dropped unless the title's front end blooms
 /// ([`Campaign::frontend_glow`]), and, where the skin's mask is the PS2's
-/// ([`oag_ui::menu::Skin::glow_by_texel`]), with every stamp but the texel ones dropped: the
-/// only draw of that front end that writes the framebuffer's alpha is the `Selector`'s quad, so a
-/// text, a tag or a panel stamps nothing and a screen without a `Selector` blooms nothing.
+/// ([`oag_ui::menu::Skin::glow_by_texel`]), with every stamp but the texel ones dropped
+/// ([`drop_value_stamps`]).
 #[must_use]
 pub fn gate_glow(
     frontend_glow: bool,
     skin: &oag_ui::menu::Skin,
     mut layers: oag_ui::menu::Layers,
 ) -> oag_ui::menu::Layers {
-    use oag_ui::frontend::Draw;
-    let value_stamps = !frontend_glow || skin.glow_by_texel();
-    if value_stamps {
-        for list in [&mut layers.backdrop, &mut layers.chrome, &mut layers.body] {
+    for list in [&mut layers.backdrop, &mut layers.chrome, &mut layers.body] {
+        if frontend_glow {
+            drop_value_stamps(skin, list);
+        } else {
             list.retain(|draw| {
-                !matches!(draw, Draw::GlowStamp { .. } | Draw::GlowText { .. })
-                    && (frontend_glow || !matches!(draw, Draw::GlowTexel))
+                !matches!(
+                    draw,
+                    oag_ui::frontend::Draw::GlowStamp { .. }
+                        | oag_ui::frontend::Draw::GlowText { .. }
+                        | oag_ui::frontend::Draw::GlowTexel
+                )
             });
         }
     }
     layers
+}
+
+/// `list` without its value stamps ([`oag_ui::frontend::Draw::GlowStamp`], `GlowText`) where the
+/// skin's mask is the PS2's: the only draw of that front end that writes the framebuffer's alpha
+/// is the `Selector`'s quad, so a text, a tag or a panel stamps nothing and a screen without a
+/// `Selector` blooms nothing. Also for a list appended after [`gate_glow`] (the footer's legend,
+/// whose tag stamps).
+pub fn drop_value_stamps(skin: &oag_ui::menu::Skin, list: &mut Vec<oag_ui::frontend::Draw>) {
+    if skin.glow_by_texel() {
+        list.retain(|draw| {
+            !matches!(
+                draw,
+                oag_ui::frontend::Draw::GlowStamp { .. } | oag_ui::frontend::Draw::GlowText { .. }
+            )
+        });
+    }
 }
 
 /// Reads the campaign screen off `archives`, title-dispatched: Pulse's
@@ -1277,6 +1296,9 @@ mod tests {
             oag_display::space::Space::PSP,
         );
         assert_eq!(gate_glow(true, &psp, list()).body.len(), 3);
+        let mut appended = list().body;
+        super::drop_value_stamps(&ps2, &mut appended);
+        assert!(matches!(appended.as_slice(), [Draw::GlowTexel]));
     }
 
     /// A saved rung beats the title's default; with none saved, Pulse opens
