@@ -157,7 +157,7 @@ pub(crate) struct App {
     /// Read on every windowed boot now, not only under `--prefetch`: the
     /// loading screen covers the movie decode on all of them.
     pub(crate) loading_assets: loading::Assets,
-    pub(crate) state: Option<Session>,
+    pub(crate) state: Option<Box<Session>>,
     /// The platform took the window away (`Suspended`) and has not given one
     /// back. Nothing is drawn meanwhile; the next `Resumed` rebuilds the
     /// surface. Only ever set on Android.
@@ -190,7 +190,7 @@ impl App {
             .unwrap_or_default()
     }
 
-    fn open(&mut self, event_loop: &ActiveEventLoop) -> Result<Option<Session>> {
+    fn open(&mut self, event_loop: &ActiveEventLoop) -> Result<Option<Box<Session>>> {
         let gpu = Gpu::new(
             event_loop,
             &self.settings.display,
@@ -202,7 +202,7 @@ impl App {
 
     /// The session on a device that is already up: the second half of [`Self::open`], and what
     /// `--drive` calls with a device that has no window (`crate::app::drive`).
-    pub(crate) fn open_with(&mut self, gpu: Gpu) -> Result<Option<Session>> {
+    pub(crate) fn open_with(&mut self, gpu: Gpu) -> Result<Option<Box<Session>>> {
         // Built before the stage, because a race's depth attachment has to match
         // this rather than the window. On the launcher and boot legs it is too
         // early to know a title to resolve `settings.render_profiles` against,
@@ -474,7 +474,7 @@ impl App {
             .pending
             .as_ref()
             .is_some_and(|pending| pending.cli.is_interactive());
-        let mut session = Session {
+        let mut session = Box::new(Session {
             idle: Default::default(),
             gpu,
             framebuffer,
@@ -676,7 +676,7 @@ impl App {
                 error!("could not load pilots: {e:#}");
                 pilots::Roster::built_in()
             }),
-        };
+        });
         // A direct `--race` lands in a race without the load hand-over that arms it.
         session.arm_rumble();
         Ok(Some(session))

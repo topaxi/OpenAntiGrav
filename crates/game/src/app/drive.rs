@@ -53,6 +53,7 @@ const WAIT_FRAME: Duration = Duration::from_micros(16_667);
 ///
 /// The device or session will not open, a step times out, or a row a step names is not there.
 /// The message carries the step, its line and the last state reported.
+#[inline(never)]
 pub(crate) fn run(app: &mut App, script: Script, state_log: Option<&Path>) -> Result<()> {
     if app.launcher.is_some() {
         bail!(
@@ -75,7 +76,7 @@ pub(crate) fn run(app: &mut App, script: Script, state_log: Option<&Path>) -> Re
         None => Box::new(std::io::stderr()),
     };
     let mut driver = Driver {
-        session,
+        session: *session,
         out,
         last: State::default(),
         down: None,
