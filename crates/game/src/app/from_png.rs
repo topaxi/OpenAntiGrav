@@ -91,7 +91,19 @@ fn blurred_of(meta: &shot_meta::Meta) -> (Option<shot_meta::Blurred>, Option<Str
         .camera
         .as_ref()
         .and_then(|camera| camera.mount.as_ref())
-        .and_then(shot_meta::Mount::mount);
+        .map(shot_meta::Mount::mount);
+    let mount = match mount {
+        Some(Ok(mount)) => Some(mount),
+        Some(Err(why)) if picture.motion_blur == "track" => {
+            return (
+                None,
+                Some(format!(
+                    "{said}; its [camera.mount] cannot be used ({why}), so this re-render is the one frame"
+                )),
+            );
+        }
+        Some(Err(_)) | None => None,
+    };
     if picture.motion_blur == "track" && mount.is_none() {
         return (
             None,
@@ -316,6 +328,7 @@ mod tests {
         let mount = shot_meta::Mount {
             follow: "craft".to_string(),
             rotation: [0.0, 0.0, 0.0, 1.0],
+            fov_deg: 65.0,
             ..shot_meta::Mount::default()
         };
         let (ship, line) = blurred_of(&blurred("ship", None));
@@ -327,6 +340,39 @@ mod tests {
         let (old, line) = blurred_of(&blurred("track", None));
         assert!(old.is_none());
         assert!(line.is_some_and(|line| line.contains("predates the camera mount")));
+        // A section that is partial, or names a rule this build lacks, is refused by what is wrong
+        // with it: its defaults would put a NaN view on every frame.
+        let partial = shot_meta::Mount {
+            follow: "craft".to_string(),
+            ..shot_meta::Mount::default()
+        };
+        let (refused, line) = blurred_of(&blurred("track", Some(partial)));
+        assert!(refused.is_none());
+        assert!(line.is_some_and(|line| line.contains("not a rotation")));
+        let unknown = shot_meta::Mount {
+            follow: "orbit".to_string(),
+            rotation: [0.0, 0.0, 0.0, 1.0],
+            fov_deg: 65.0,
+            ..shot_meta::Mount::default()
+        };
+        let (refused, line) = blurred_of(&blurred("track", Some(unknown)));
+        assert!(refused.is_none());
+        assert!(line.is_some_and(|line| line.contains("`orbit` is not a camera rule")));
+        for (rotation, fov_deg, said) in [
+            ([f32::NAN, 0.0, 0.0, 1.0], 65.0, "not a rotation"),
+            ([0.0, 0.0, 0.0, 1.0], 0.0, "not in (0, 180)"),
+            ([0.0, 0.0, 0.0, 1.0], f32::NAN, "not in (0, 180)"),
+        ] {
+            let bad = shot_meta::Mount {
+                follow: "craft".to_string(),
+                rotation,
+                fov_deg,
+                ..shot_meta::Mount::default()
+            };
+            let (refused, line) = blurred_of(&blurred("track", Some(bad)));
+            assert!(refused.is_none());
+            assert!(line.is_some_and(|line| line.contains(said)), "{said}");
+        }
         assert_eq!(blurred_of(&meta("photo mode", None)), (None, None));
     }
 

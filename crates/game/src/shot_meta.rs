@@ -165,14 +165,38 @@ impl Mount {
         }
     }
 
-    /// The mount this text describes, or `None` when its rule is not one this build knows.
-    #[must_use]
-    pub fn mount(&self) -> Option<oag_raceplay::photo::mount::Mount> {
-        Some(oag_raceplay::photo::mount::Mount {
-            follow: oag_raceplay::photo::mount::Follow::from_name(&self.follow)?,
+    /// The mount this text describes.
+    ///
+    /// # Errors
+    ///
+    /// A rule this build does not know, a rotation that is not finite or has no length, an eye
+    /// that is not finite or a field outside `(0, 180)` degrees: a hand-edited or partial section
+    /// would put a NaN view on the frames.
+    pub fn mount(&self) -> Result<oag_raceplay::photo::mount::Mount, String> {
+        use oag_core::math::{Quat, Vec3};
+        let follow = oag_raceplay::photo::mount::Follow::from_name(&self.follow)
+            .ok_or_else(|| format!("`{}` is not a camera rule this build knows", self.follow))?;
+        let rotation = Quat::from_array(self.rotation);
+        if !rotation.is_finite() || rotation.length() < 1.0e-3 {
+            return Err(format!(
+                "its rotation {:?} is not a rotation",
+                self.rotation
+            ));
+        }
+        if !self.eye.iter().all(|v| v.is_finite()) {
+            return Err(format!("its eye {:?} is not finite", self.eye));
+        }
+        if !(self.fov_deg > 0.0 && self.fov_deg < 180.0) {
+            return Err(format!(
+                "its field of view {} is not in (0, 180)",
+                self.fov_deg
+            ));
+        }
+        Ok(oag_raceplay::photo::mount::Mount {
+            follow,
             subject: self.subject,
-            eye: oag_core::math::Vec3::from_array(self.eye),
-            rotation: oag_core::math::Quat::from_array(self.rotation),
+            eye: Vec3::from_array(self.eye),
+            rotation: rotation.normalize(),
             fov_deg: self.fov_deg,
         })
     }

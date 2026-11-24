@@ -16,6 +16,31 @@ const TOLERANCE: f32 = 1.5;
 const LEFT_EDGE: (f32, f32, f32, f32) = (0.0, 0.25, 0.08, 0.70);
 const RIGHT_EDGE: (f32, f32, f32, f32) = (0.92, 0.25, 1.0, 0.70);
 
+/// `photo` written again with its text changed by `edit`: the picture and the stream as they
+/// were.
+fn rewritten(photo: &Path, to: &Path, edit: impl FnOnce(&mut oag_game::shot_meta::Meta)) {
+    let bytes = std::fs::read(photo).expect("the photo");
+    let found = oag_game::shot_meta::read(&bytes).expect("our chunks read");
+    let mut meta = found.meta.expect("the text chunk");
+    edit(&mut meta);
+    let (width, height, pixels) = decode(photo);
+    let png = oag_game::shot_meta::encode(width, height, &pixels, &meta, found.record.as_ref());
+    std::fs::write(to, png).expect("writing the rewritten photo");
+}
+
+/// The number after `text` in the first line of `stdout` that has it.
+fn number_after(stdout: &str, text: &str) -> f32 {
+    let line = stdout
+        .lines()
+        .find(|line| line.contains(text))
+        .unwrap_or_else(|| panic!("no line says `{text}`: {stdout}"));
+    let rest = &line[line.find(text).expect("found") + text.len()..];
+    rest.split(|c: char| !(c.is_ascii_digit() || c == '.'))
+        .next()
+        .and_then(|number| number.parse().ok())
+        .unwrap_or_else(|| panic!("no number after `{text}` in {line}"))
+}
+
 /// The mean and the 99th percentile of the difference between two pictures over the pixels
 /// outside the HUD, which is where `with` differs from `without` (the same shot with and without
 /// its HUD row: every pixel that differs by more than 2, grown by 3).
@@ -111,6 +136,46 @@ pub(super) fn blurred_shots_are_drawn_again(
             );
         }
     }
+    // A shot whose source is not photo mode (a hand-made or edited file) is drawn from its frames
+    // too, in the capture's own target and not the presentation's.
+    let screenshot = run.dir.join("track-from-a-screenshot-source.png");
+    rewritten(&photos[5], &screenshot, |meta| {
+        meta.shot.source = "screenshot".to_string();
+    });
+    let (stdout, _) = from_png(
+        binary,
+        image,
+        run,
+        &screenshot,
+        &run.dir.join("track-from-a-screenshot.png"),
+        &[],
+    );
+    assert!(stdout.contains("drew 120 frames"), "{stdout}");
+
+    // With depth of field on the lens ring is sized in the field the shot's tick draws with,
+    // which the speed has widened past the grid's.
+    let lens = run.dir.join("track-with-a-lens-source.png");
+    rewritten(&photos[5], &lens, |meta| {
+        let picture = meta.picture.as_mut().expect("the controls");
+        picture.depth_of_field = true;
+        picture.aperture = Some(60);
+        picture.focus = Some(20);
+    });
+    let (stdout, _) = from_png(
+        binary,
+        image,
+        run,
+        &lens,
+        &run.dir.join("track-with-a-lens.png"),
+        &[],
+    );
+    let at_the_shot = number_after(&stdout, "sized for a field of ");
+    let on_the_grid = number_after(&stdout, "(the grid's is ");
+    println!("lens ring: {at_the_shot} degrees at the shot, {on_the_grid} on the grid");
+    assert!(
+        at_the_shot > on_the_grid + 0.1,
+        "sized in the grid's field: {stdout}"
+    );
 }
 
 /// A speed blur shot is drawn again with the zoom ring's history it had: along the sides, where the

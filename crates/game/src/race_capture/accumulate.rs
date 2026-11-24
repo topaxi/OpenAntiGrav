@@ -28,6 +28,11 @@ pub(super) struct Shot {
     plan: Plan,
     /// The camera that rides the craft: a track blur's.
     mount: Option<Mount>,
+    effects: oag_raceplay::photo::effects::Effects,
+    accumulation: oag_title::photo::Accumulation,
+    aspect: f32,
+    /// The field the lens ring was first sized for, on the grid.
+    first_fov: f32,
 }
 
 impl Shot {
@@ -49,24 +54,52 @@ impl Shot {
             println!("from-png: a split screen is drawn as one frame");
             return None;
         }
-        let plan = Plan::of(
-            &blurred.effects,
+        let first_fov = race.drawn_fov_degrees(aspect, options.fov);
+        let shot = Self {
+            plan: Plan::of(
+                &blurred.effects,
+                accumulation,
+                u64::from(options.ticks),
+                true,
+                first_fov,
+            )?,
+            mount: blurred.mount,
+            effects: blurred.effects,
             accumulation,
-            u64::from(options.ticks),
-            true,
-            race.drawn_fov_degrees(aspect, options.fov),
-        )?;
-        if plan.frames() != blurred.frames {
+            aspect,
+            first_fov,
+        };
+        if shot.plan.frames() != blurred.frames {
             println!(
                 "from-png: the shot was averaged from {} frames and this build's plan for it is {}; drawing the plan's",
                 blurred.frames,
-                plan.frames()
+                shot.plan.frames()
             );
         }
-        Some(Self {
-            plan,
-            mount: blurred.mount,
-        })
+        Some(shot)
+    }
+
+    /// Sizes the lens ring in the field the race draws with now: live photo mode sizes it at the
+    /// shot's tick, where the speed has widened the field, and the race is driven to the tick
+    /// before the first frame by the time this is called again (`Self::driven` does not depend
+    /// on it).
+    pub(super) fn refit(&mut self, race: &Race, options: &CaptureOptions) {
+        let fov = race.drawn_fov_degrees(self.aspect, options.fov);
+        if let Some(plan) = Plan::of(
+            &self.effects,
+            self.accumulation,
+            self.plan.tick(),
+            true,
+            fov,
+        ) {
+            if plan.has_lens() {
+                println!(
+                    "from-png: the lens ring is sized for a field of {fov:.2} degrees at tick {} (the grid's is {:.2})",
+                    race.core.sim.world.tick, self.first_fov
+                );
+            }
+            self.plan = plan;
+        }
     }
 
     /// The tick before the first frame's: the race is driven this far before the frames begin,
@@ -74,6 +107,34 @@ impl Shot {
     pub(super) fn driven(&self) -> u32 {
         u32::try_from(self.plan.first_stand().saturating_sub(1)).unwrap_or(u32::MAX)
     }
+}
+
+/// One thing the capture does to the race on the way to a shot's frames.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Step {
+    /// A tick of the race, the camera of a track blur on the craft before it and after.
+    Tick,
+    /// The track blur's camera on the craft as the race stands: before every frame, because a
+    /// frame whose tick the race is already at has had no tick to put it there.
+    Ride,
+    /// Draw frame `index` of the plan.
+    Frame(u32),
+}
+
+/// The steps from a race at tick `now` through every frame of `plan`.
+fn steps(plan: &Plan, mut now: u64, riding: bool) -> Vec<Step> {
+    let mut steps = Vec::new();
+    for index in 0..plan.frames() {
+        while now < plan.frame(index).stand {
+            steps.push(Step::Tick);
+            now += 1;
+        }
+        if riding {
+            steps.push(Step::Ride);
+        }
+        steps.push(Step::Frame(index));
+    }
+    steps
 }
 
 /// What a frame is drawn into and read back from.
@@ -218,7 +279,10 @@ impl Rig<'_> {
     /// Draws the speed blur's ring for [`SETTLE_FRAMES`] ticks of its own at the moment the race
     /// stands at, so the history it feeds back is what the paused mode's had, then leaves the
     /// ring on the tick after: the frames that follow add one more step of it, as a
-    /// shot's frames do. Does nothing without a speed blur.
+    /// shot's frames do. The frames keep that tick: live photo mode's shot runs with the mode's
+    /// own tick standing still (`session::photo`'s `photo_wants_frames` returns before the mode
+    /// steps), so the ring's history is not stepped between its frames. Does nothing without a
+    /// speed blur.
     pub(super) fn settle_zoom(&mut self) {
         let blur = self
             .options
@@ -242,21 +306,27 @@ impl Rig<'_> {
         let plan = &shot.plan;
         let mut sum = Sum::default();
         let mut stats = None;
-        let mut settled = false;
-        for index in 0..plan.frames() {
-            let frame = plan.frame(index);
-            while self.race.core.sim.world.tick < frame.stand {
-                self.tick(shot.mount.as_ref());
+        let start = self.race.core.sim.world.tick;
+        for step in steps(plan, start, shot.mount.is_some()) {
+            match step {
+                Step::Tick => self.tick(shot.mount.as_ref()),
+                Step::Ride => {
+                    if let Some(mount) = &shot.mount {
+                        self.race.ride(mount);
+                    }
+                }
+                Step::Frame(index) => {
+                    let frame = plan.frame(index);
+                    if index == 0 {
+                        self.settle_zoom();
+                    }
+                    self.race.photo_set_shift(frame.lens);
+                    self.race.set_draw_alpha(frame.alpha);
+                    stats = Some(self.draw());
+                    let (pixels, size) = self.read().context("reading a frame of the shot")?;
+                    anyhow::ensure!(sum.add(&pixels, size), "a frame of the shot changed size");
+                }
             }
-            if !settled {
-                self.settle_zoom();
-                settled = true;
-            }
-            self.race.photo_set_shift(frame.lens);
-            self.race.set_draw_alpha(frame.alpha);
-            stats = Some(self.draw());
-            let (pixels, size) = self.read().context("reading a frame of the shot")?;
-            anyhow::ensure!(sum.add(&pixels, size), "a frame of the shot changed size");
         }
         self.race.photo_set_shift(None);
         self.race.set_draw_alpha(1.0);
@@ -271,5 +341,52 @@ impl Rig<'_> {
             size: sum.size(),
             stats: stats.context("the shot has no frame")?,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use oag_raceplay::photo::effects::{Effects, Row};
+
+    fn plan(tick: u64) -> Plan {
+        let mut effects = Effects::new().offering(true, true);
+        effects.set(Row::MotionBlur, 1);
+        effects.set(Row::Shutter, 100);
+        Plan::of(
+            &effects,
+            oag_title::photo::Accumulation::HD,
+            tick,
+            true,
+            65.0,
+        )
+        .expect("a track blur")
+    }
+
+    #[test]
+    fn a_frame_the_race_already_stands_at_has_the_camera_ridden_onto_it() {
+        // The shot is early enough that its first frames stand at tick 0, where the race begins:
+        // no tick runs before them.
+        let early = plan(10);
+        assert_eq!(early.first_stand(), 0);
+        let steps = steps(&early, 0, true);
+        assert_eq!(steps[..2], [Step::Ride, Step::Frame(0)]);
+        for (at, step) in steps.iter().enumerate() {
+            if matches!(step, Step::Frame(_)) {
+                assert_eq!(steps[at - 1], Step::Ride, "{at}");
+            }
+        }
+        assert_eq!(
+            steps.iter().filter(|step| **step == Step::Tick).count(),
+            10,
+            "the race is driven to the shot's tick"
+        );
+    }
+
+    #[test]
+    fn a_ship_blur_rides_nothing() {
+        let steps = steps(&plan(300), 285, false);
+        assert!(!steps.contains(&Step::Ride));
+        assert_eq!(steps.last(), Some(&Step::Frame(119)));
     }
 }

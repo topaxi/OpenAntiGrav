@@ -590,7 +590,7 @@ pub fn capture(
     let race_bench = race_bench::requested();
     // A motion blur shot drawn again is driven to the tick before its first frame, and the frames
     // draw it on from there (`accumulate`).
-    let accumulated = {
+    let mut accumulated = {
         let rect = oag_display::display::viewport((width, height), options.aspect);
         accumulate::Shot::of(options, title, &race, rect.2 / rect.3)
     };
@@ -732,6 +732,8 @@ pub fn capture(
         // it was just drawn into - see `oag_post::bloom`.
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT
             | wgpu::TextureUsages::COPY_SRC
+            // A shot of several frames puts its average back into the target (`accumulate`).
+            | wgpu::TextureUsages::COPY_DST
             | wgpu::TextureUsages::TEXTURE_BINDING,
         view_formats: &[],
     });
@@ -944,6 +946,9 @@ pub fn capture(
     }
     // The frames of a shot of several, averaged; or, for one frame with a speed blur, the zoom
     // ring's history before it.
+    if let Some(shot) = accumulated.as_mut() {
+        shot.refit(&race, options);
+    }
     let averaged = {
         let mut rig = accumulate::Rig {
             device: &device,
