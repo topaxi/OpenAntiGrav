@@ -8,6 +8,9 @@ functions and their evidence are on each binary's page:
 [2048](../ghidra/functions/vita-2048-eu-v104/photo-mode.md),
 [Omega](../ghidra/functions/ps4-omega-eu/photo-mode.md).
 
+Where this build's effects do something other than this page says, with a failing test or a
+capture for each: [the 2026-11-24 review](../reviews/2026-11-24-photo-mode-effects-review.md).
+
 ## By title
 
 | Title | Has one | Entry | Shot | Conf. |
