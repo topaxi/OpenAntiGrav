@@ -1979,9 +1979,35 @@ rows and moves the band-word box (y 98-155, x 100-380) from 610 to 240 px over 4
 193 px advance sum; the original starts it at 144, as the unchanged pen end does) one pixel left and worsens the footer box 352 to 565 px. **On the disc they are different elements**
 (`InGame_Definition.xml`, `InGame Main Menu`): the rows are `<Menu name="Option">` `Entry`s (`align="centre" scale="1.2" x="240" wrap="true"`), the footer a `<Text>` (`align="centre" x="240"`, scale 1),
 so each can have its own rounding; the rows' floor is a fit of three words in one frame, **not shipped** (placement 1 px left on two of three rows: confidence 85; the rounding rule: 40). The
-ink edge, the snapped end and a raised `<Menu>` scale (1.2 times 1.017, 1.025, 1.033: the box went from 610 to 802, 814 and 884 px) do not fit. **To decide it**, capture the Free Play pause
+ink edge, the snapped end and a raised `<Menu>` scale (1.2 times 1.017, 1.025, 1.033: the box went from 610 to 802, 814 and 884 px) do not fit. **To decide it** (done: the next paragraph), capture the Free Play pause
 (`End Session`) and the Tournament pause at scale 1.0 in the original: an odd advance sum is a tie, and which side it falls on says whether the rows' rule is a floor at every scale. Ours' rows 2 and 3
 are also 1 px taller at the top (121 and 139 against 122 and 140) with 7 to 8 % more ink mass: the 3x draw box-filtered down, not the original's native 1x sprite.
+
+**The rows' rounding, decided at scale 1.0 (2026-11-24, `pure-row-centring`): the floor rule is refuted, and no single law of the string's advance sum fits all seven rows.** The Free Play pause
+(`InGame Free Play Menu`: `Continue`, `Restart`, `End Session`) and the Tournament pause (`InGame NoRestart Main Menu`: `Continue`, `Quit`), both `<Menu>` rows at scale 1.0, were captured on PPSSPP
+1.20.4 (software renderer, USA disc, a fresh stick with a profile made through `NEW`; Vineta K, Feisar, Vector) on **two separate boots** each (the second a cold restart on the saved profile), and the Time Trial pause (scale 1.2) on the second boot and in the earlier lane's committed pair, with ours
+drawn from the same flow (`oag-game --drive-file`, `--original-menu`, 480x272) and the same race. Each row is measured by shifting ours' ink mask (luma over 100) against the original's inside the row's
+y band and keeping the shift with the fewest differing pixels, and by per-glyph column runs (luma over 110): every row has the same glyph pitch on both sides, so a shift is the string's start.
+
+| Row (advance sum at scale) | x - sum / 2 | Original's first quad (pen) | Ours today `ceil(240 - end / 2)` | `floor(240 - sum / 2)` |
+| --- | --- | --- | --- | --- |
+| `Continue`, 1.2 (104.4) | 187.8 | 187 | 186 (1 px left) | 187 |
+| `Restart`, 1.2 (100.8) | 189.6 | 189 | 188 (1 px left) | 189 |
+| `Quit`, 1.2 (49.2) | 215.4 | 215 | 215 | 215 |
+| `Continue`, 1.0 (87) | 196.5 | **197** (first ink 197 on both boots) | 197 | **196** |
+| `Restart`, 1.0 (84) | 198 | 198 | 198 | 198 |
+| `End Session`, 1.0 (118) | 181 | 181 | 181 | 181 |
+| `Quit`, 1.0 (41), Tournament | 219.5 | **220** (first ink 221 on both boots) | 220 | **219** |
+
+Ours' rows at scale 1.0 are **already the original's, to the pixel** (best shift 0 on `Continue`, `Restart`, Tournament's `Continue` and `Quit`; `End Session` ties between 0 and -1: its glyphs start at the same columns on both sides except the `S`, 224 on ours against 225, and ours reads 1 px wider on the right of nearly every
+glyph, which is the box-filtered 3x draw, not a space advance or a pen): the two odd sums, which are ties, round **up**, as today's ceil does and as the floor does not. At 1.2 the three rows are the original's
+less 0, 1 and 1 px (Time Trial, two captures: shifts +1, +1, 0 in both). A search over the width (raw sum, snapped end, ink edge, sums of per-glyph ceil, floor or round advances) and the rounding (floor, ceil, round,
+trunc, with an offset of -1 to 1, with `x - W / 2` rounded before or after) finds **no law that fits all seven rows**: the floor of the raw sum fits 5 of 7 (the two 1.0 ties wrong), ours today 4 of 7, and the
+best of the others 5 of 7; centring in unscaled units then scaling fits 5 of 7. The fractional part of `x - sum / 2` alone cannot decide it: .8, .6 and .4 fall below (scale 1.2) while .5 falls above (scale 1.0).
+**Verdict: the rule `floor(x - sum_of_advances * scale / 2)` for `<Menu>` rows is false (confidence 85 that it does not hold at scale 1.0; two ties on two boots each).** What stays true: a start 1 px left of
+the original on `Continue` and `Restart` at scale 1.2 (confidence 90, two captures), and ours exact at 1.0 (confidence 85). Whatever the original does at 1.2 is a scale-dependent step (a scaled sprite run's own
+rounding), which needs the original's text-draw code, not more frames; nothing was wired and no code changed. The Free Play and Tournament frames the 2026-11-07 pause lane cited as `data/reference/pure-pause-menu/`
+are gone from that directory, so these were captured again; the lead adopts them into `data/reference/pure-pause-menu/`. **Method caveat:** the original's leading column moves 1 px with the cursor (`Continue` at 1.2 reads 187 focused and 188 unfocused, Tournament's `Quit` 220 and 221 for the same reason: the grey rows' ink starts a column later under the threshold), so every comparison above has the cursor on the same row on both sides.
 
 **The HUD top, 1,396 px over 40 grey** (`CURRENT` clock 338, `BEST` clock 93, `BRONZE TIME` 383, the rest 582 in the scene behind): the clock digits' glyph edges are the race HUD's own text
 (shifting ours' `CURRENT` box by up to 2 px moves its mean difference only from 18.3 to 16.3, so it is the glyph and its shadow, not a placement), which the brief leaves to the Pure race HUD
