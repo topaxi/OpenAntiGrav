@@ -25,14 +25,14 @@ pub(crate) struct Averaged {
 const ROW_ALIGN: u32 = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
 
 impl Session {
-    /// Whether a shot of several frames still has a frame to draw: a frame of it, or the one that
-    /// puts the HUD over its average.
+    /// Whether a shot still has a frame to draw: a frame of it, the one that puts the HUD over
+    /// its average, or the one that shows its bar before it begins.
     pub(crate) fn photo_wants_frames(&self) -> bool {
         self.photo_job_running()
             || self
                 .photo
                 .as_ref()
-                .is_some_and(|open| open.averaged.is_some())
+                .is_some_and(|open| open.averaged.is_some() || open.announced.is_some())
     }
 
     /// Whether the frame being drawn leaves the HUD out: a shot of several frames is under way.

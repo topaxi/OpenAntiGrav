@@ -443,6 +443,32 @@ impl RenderProfile {
     }
 }
 
+impl RenderProfile {
+    /// The profile a saved photo is drawn with: the scene at the output's size (a render scale
+    /// of 100 %, which also stands in for a gamescope default) and no upscaler, so the picture
+    /// does not depend on how the player trades quality for speed while playing. The
+    /// anti-aliasing the profile asks for stays: MSAA, and FXAA or SMAA where they are the
+    /// reconstruction. A profile that already draws that way draws the same picture.
+    #[must_use]
+    pub fn for_a_photo(&self) -> Self {
+        let mut photo = self.clone();
+        photo.render_scale = oag_display::display::Scale::FULL;
+        photo.render_scale_chosen = true;
+        if photo.reconstruction.is_upscaler() {
+            photo.reconstruction = oag_display::display::Reconstruction::Off;
+        }
+        photo
+    }
+
+    /// Whether [`Self::for_a_photo`] draws a different picture than this profile does, for a
+    /// scene rectangle of `rect_pixels` (see [`Self::scale_for`]).
+    #[must_use]
+    pub fn photo_differs(&self, rect_pixels: (f32, f32), gamescope: bool) -> bool {
+        self.scale_for(rect_pixels, gamescope) != oag_display::display::Scale::FULL
+            || self.reconstruction.is_upscaler()
+    }
+}
+
 /// Marks a profile whose file already holds a render scale other than 100 as
 /// chosen: the flag did not exist when it was written, and a player's 75 is a
 /// choice. Runs on the parsed table, before serde, and only where the flag is

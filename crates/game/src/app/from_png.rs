@@ -21,10 +21,11 @@ fn read(path: &Path) -> Result<shot_meta::Found> {
 }
 
 /// What photo mode does to a frame whatever the settings say: it draws every section the
-/// circuit's visibility sets would cull, and none of the game's own motion blur (a flag the
-/// person gave stands).
+/// circuit's visibility sets would cull, at the output's size with no upscaler, and none of the
+/// game's own motion blur (a flag the person gave stands).
 fn draw_as_photo_mode(cli: &mut Cli) {
     cli.pvs = Some(false);
+    cli.photo_profile = true;
     cli.blur
         .motion_blur
         .get_or_insert(oag_display::display::MotionBlur::Off);
@@ -156,6 +157,7 @@ mod tests {
         let mut cli = Cli::try_parse_from(["oag-game"]).expect("parses");
         draw_as_photo_mode(&mut cli);
         assert_eq!(cli.pvs, Some(false));
+        assert!(cli.photo_profile);
         assert_eq!(
             cli.blur.motion_blur,
             Some(oag_display::display::MotionBlur::Off)
@@ -166,6 +168,26 @@ mod tests {
             asked.blur.motion_blur,
             Some(oag_display::display::MotionBlur::High)
         );
+    }
+
+    #[test]
+    fn a_photo_is_drawn_again_at_the_output_size_whatever_the_flags_of_the_run() {
+        use oag_display::display::{Reconstruction, Scale};
+        let mut cli = Cli::try_parse_from([
+            "oag-game",
+            "--render-scale",
+            "50",
+            "--reconstruction",
+            "fsr3",
+        ])
+        .expect("parses");
+        let mut profile = crate::settings::RenderProfile::default();
+        cli.apply_render_overrides(&mut profile, Some(Scale::HALF));
+        assert_eq!(profile.render_scale, Scale::HALF, "the flags apply");
+        draw_as_photo_mode(&mut cli);
+        cli.apply_render_overrides(&mut profile, Some(Scale::HALF));
+        assert_eq!(profile.scale_for((1920.0, 1080.0), false), Scale::FULL);
+        assert_eq!(profile.reconstruction, Reconstruction::Off);
     }
 
     #[test]

@@ -73,5 +73,8 @@ impl Cli {
         if let Some(weather) = self.weather {
             profile.weather = weather;
         }
+        if self.photo_profile {
+            *profile = profile.for_a_photo();
+        }
     }
 }

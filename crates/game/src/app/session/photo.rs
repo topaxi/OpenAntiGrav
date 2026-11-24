@@ -33,12 +33,25 @@ pub(crate) enum Origin {
     Viewer,
 }
 
+/// A shot that waits for the frame carrying its progress bar to be drawn.
+#[derive(Debug)]
+pub(super) struct Announced {
+    pub(super) path: std::path::PathBuf,
+    pub(super) pending: Option<super::photo_meta::Pending>,
+    /// That frame has been drawn.
+    pub(super) shown: bool,
+}
+
 /// Photo mode while it is open.
 #[derive(Debug)]
 pub(crate) struct Open {
     origin: Origin,
     /// The last shot's result and the ticks it stays up.
     message: Option<(String, u32)>,
+    /// A shot asked for that is drawn at the output's size (`RenderProfile::for_a_photo`) and
+    /// has not begun: the frame that shows its progress bar is drawn first, because the redraw
+    /// stalls the frame it is in.
+    pub(super) announced: Option<Announced>,
     /// A shot asked for this tick, read back by `Session::draw` once the frame is drawn.
     shot: Option<(std::path::PathBuf, Option<super::photo_meta::Pending>)>,
     /// The project's words in the player's language and in English, read once when the mode
@@ -211,6 +224,7 @@ impl super::Session {
         self.photo = Some(Open {
             origin,
             message: None,
+            announced: None,
             shot: None,
             own: oag_ui::strings::project_table(language),
             english: oag_ui::strings::project_table(None),
@@ -287,8 +301,16 @@ impl super::Session {
         // The frame that puts the HUD over a finished shot is part of it: the race stands where
         // it was taken until that frame is drawn, and no input moves it.
         if self.photo_wants_frames() {
-            if self.photo_job_running() && Self::photo_input_abandons(&pad, pointer, input, &view) {
+            let abandons = Self::photo_input_abandons(&pad, pointer, input, &view);
+            if self.photo_job_running() && abandons {
                 self.photo_job_cancel();
+            } else if abandons {
+                if let Some(open) = self.photo.as_mut() {
+                    open.announced = None;
+                }
+                self.photo_message(strings::CANCELLED);
+            } else {
+                self.photo_begin_announced();
             }
             return;
         }
@@ -379,14 +401,76 @@ impl super::Session {
         // The description is taken now: an accumulated shot moves the race and puts it back
         // before it writes.
         let pending = self.shot_pending("photo mode");
-        // Several frames when the title's shot accumulates and the controls ask for it, else the
-        // frame on screen.
+        // A shot drawn at the output's size is a redraw that stalls its frame: the frame with the
+        // progress bar goes first.
+        if self.photo_redraws() {
+            if let Some(open) = self.photo.as_mut() {
+                open.announced = Some(Announced {
+                    path,
+                    pending,
+                    shown: false,
+                });
+            }
+            return;
+        }
+        self.photo_begin(path, pending);
+    }
+
+    /// Begins the shot, once the frame that announces it has been drawn.
+    fn photo_begin_announced(&mut self) {
+        let Some(open) = self.photo.as_mut() else {
+            return;
+        };
+        if open.announced.as_ref().is_none_or(|waiting| !waiting.shown) {
+            return;
+        }
+        if let Some(Announced { path, pending, .. }) = open.announced.take() {
+            self.photo_begin(path, pending);
+        }
+    }
+
+    /// Begins the shot: several frames when the title's shot accumulates and the controls ask for
+    /// it, else the frame the next draw leaves on screen.
+    fn photo_begin(
+        &mut self,
+        path: std::path::PathBuf,
+        pending: Option<super::photo_meta::Pending>,
+    ) {
         let Err(pending) = self.start_photo_job(&path, pending) else {
             return;
         };
         if let Some(open) = self.photo.as_mut() {
             open.shot = Some((path, pending));
         }
+    }
+
+    /// Whether a shot is being drawn now (or waits for the frame that shows its bar): the frame
+    /// is drawn with the profile a photo is made with (`RenderProfile::for_a_photo`).
+    pub(super) fn photo_draws_natively(&self) -> bool {
+        self.photo.as_ref().is_some_and(|open| {
+            open.shot.is_some() || open.job.is_some() || open.averaged.is_some()
+        })
+    }
+
+    /// Whether the player's profile draws a different picture than a photo's does.
+    fn photo_redraws(&self) -> bool {
+        let rect = self.scene_rect(self.gpu.output.size());
+        let gamescope = crate::app::window::under_gamescope_cached(
+            self.gpu.output.window.current_monitor().as_ref(),
+        );
+        self.player_render_profile()
+            .photo_differs((rect.2, rect.3), gamescope)
+    }
+
+    /// How far a shot has got, for its bar: a shot of several frames by its frames, and a shot
+    /// that has not begun or is one frame as not started.
+    pub(super) fn photo_bar(&self) -> Option<(u32, u32)> {
+        self.photo_progress().or_else(|| {
+            self.photo
+                .as_ref()
+                .filter(|open| open.announced.is_some() || open.shot.is_some())
+                .map(|_| (0, 1))
+        })
     }
 
     pub(super) fn photo_message(&mut self, id: &str) {
@@ -400,6 +484,13 @@ impl super::Session {
     /// the screen nor (unless its row is on) the HUD is in the file. Called once the frame is
     /// submitted.
     pub(super) fn finish_photo_shot(&mut self) {
+        if let Some(waiting) = self
+            .photo
+            .as_mut()
+            .and_then(|open| open.announced.as_mut())
+        {
+            waiting.shown = true;
+        }
         // The average a job set aside on an earlier frame is written first: the frame that set
         // it aside has not drawn the HUD over it yet.
         self.photo_finish_averaged();
@@ -535,7 +626,7 @@ impl super::Session {
                 grid,
                 words,
                 open.message.as_ref().map(|(text, _)| text.as_str()),
-                self.photo_progress(),
+                self.photo_bar(),
             )
         })
         .unwrap_or_default()
@@ -544,7 +635,7 @@ impl super::Session {
     /// The hints of the mode's key legend in the grid `grid`: none when it is not open.
     pub(crate) fn photo_hints(&self, grid: (f32, f32)) -> Vec<oag_ui::hints::Hint> {
         self.with_photo_words(|photo, words, _| {
-            photo::legend_hints(photo, grid, words, self.photo_progress().is_some())
+            photo::legend_hints(photo, grid, words, self.photo_bar().is_some())
         })
         .unwrap_or_default()
     }
