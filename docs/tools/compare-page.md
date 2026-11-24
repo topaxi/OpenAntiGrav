@@ -1975,13 +1975,13 @@ footer line 522.
 the original's less the same shift (the pen steps 15, 15, 15, 15, 4, 15, 15 match). The earlier "3 px" came from `scripts/pause-band-metric.py`'s `min`-over-channels threshold of 95, which
 loses the right edge's antialiased column on one side. What differs is **where the string starts**: ours is 1 px left on `CONTINUE` and `RESTART`, equal on `QUIT`. The pen ours uses is
 `ceil(240 - end / 2)` (`end` the snapped run's 108.4, 104.4, 50.4); the original's first quads are at 187, 189, 215. `floor(240 - sum_of_advances * 1.2 / 2)` (187.8, 189.6, 215.4) fits all three
-rows and moves the band-word box (y 98-155, x 100-380) from 610 to 240 px over 40 grey, but it moves the footer `Press X to Confirm` (pen 143.5 on a 193 px advance sum; the original
-starts it at 144, as the unchanged pen end does) one pixel left and **worsens the footer box 352 to 565 px**, and the Tournament screen's first row at scale 1.0 (`CONTINUE`, sum 87, 196.5) read
-197 in the earlier lane's frame. No single rounding of `240 - width / 2` over the pen end, the ink edge or the advance sum fits the rows and the footer, so **nothing was shipped**: three words in
-one frame is not a law (confidence 40 that centring is where the gap lies, 25 on any rounding rule). A raised scale does not close it (`<Menu>` scale 1.2 times 1.017, 1.025, 1.033 moved the
-band-word box from 610 to 802, 814 and 884 px). **To decide it**, capture the Free Play pause (`End Session`) and the Tournament pause at scale 1.0 in the original: an odd advance sum is a
-tie, and which side it falls on says whether the rows' rule is a floor at every scale. Ours' rows 2 and 3 are also 1 px taller at the top (121 and 139 against 122 and 140) with 7 to 8 % more ink mass:
-the 3x draw box-filtered down, not the original's native 1x sprite.
+rows and moves the band-word box (y 98-155, x 100-380) from 610 to 240 px over 40 grey, but applied to every centred snapped string it moves the footer `Press X to Confirm` (pen 143.5 on a
+193 px advance sum; the original starts it at 144, as the unchanged pen end does) one pixel left and worsens the footer box 352 to 565 px. **On the disc they are different elements**
+(`InGame_Definition.xml`, `InGame Main Menu`): the rows are `<Menu name="Option">` `Entry`s (`align="centre" scale="1.2" x="240" wrap="true"`), the footer a `<Text>` (`align="centre" x="240"`, scale 1),
+so each can have its own rounding; the rows' floor is a fit of three words in one frame, **not shipped** (placement 1 px left on two of three rows: confidence 85; the rounding rule: 40). The
+ink edge, the snapped end and a raised `<Menu>` scale (1.2 times 1.017, 1.025, 1.033: the box went from 610 to 802, 814 and 884 px) do not fit. **To decide it**, capture the Free Play pause
+(`End Session`) and the Tournament pause at scale 1.0 in the original: an odd advance sum is a tie, and which side it falls on says whether the rows' rule is a floor at every scale. Ours' rows 2 and 3
+are also 1 px taller at the top (121 and 139 against 122 and 140) with 7 to 8 % more ink mass: the 3x draw box-filtered down, not the original's native 1x sprite.
 
 **The HUD top, 1,396 px over 40 grey** (`CURRENT` clock 338, `BEST` clock 93, `BRONZE TIME` 383, the rest 582 in the scene behind): the clock digits' glyph edges are the race HUD's own text
 (shifting ours' `CURRENT` box by up to 2 px moves its mean difference only from 18.3 to 16.3, so it is the glyph and its shadow, not a placement), which the brief leaves to the Pure race HUD
