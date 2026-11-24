@@ -86,7 +86,8 @@ pub const PAUSE_MENU: &PauseMenu = &PauseMenu {
 
 /// The four screens' `MusicList` (`y="220"`, no `Wrap`), drawn by the executable's `List` code
 /// (`docs/ghidra/functions/psp-pulse-usa/music-list.md`, "The draw"). The arrows' cuts and x offsets are
-/// read off `ListWidget_Enter`; their y offset and the dim share are measured off the PPSSPP frames.
+/// read off `ListWidget_Enter`, the half alpha at an end off `ListWidget_ShadeArrows`; their y offset is measured
+/// off the PPSSPP frames.
 pub const MUSIC_LIST: PauseMusicList = PauseMusicList {
     y: 220.0,
     font: "small",
@@ -94,12 +95,12 @@ pub const MUSIC_LIST: PauseMusicList = PauseMusicList {
     sheet: r"Data\FE\Images\pulse_assets.mip",
     arrows: [[282.0, 96.0, 25.0, 28.0], [306.0, 96.0, 25.0, 28.0]],
     arrow_offset: [(-32.0, -4.0), (-20.0, -4.0)],
-    arrow_dim: 0.56,
+    arrow_dim: 0.5,
 };
 
 /// The PS2 pressing's: the same four screens author `y="270"` and `font="menu"` in the PS2's grid.
-/// The arrows' cuts, offsets and dimming are **inherited from the PSP**: the PS2 executable's `List`
-/// code is not read.
+/// The PS2 executable's `List` and `MusicList` code is the PSP's, read on both
+/// (`docs/ghidra/functions/ps2-pulse-eu/music-list.md`): the same cuts, offsets, shade and law.
 pub const MUSIC_LIST_PS2: PauseMusicList = PauseMusicList {
     y: 270.0,
     font: "menu",
@@ -138,7 +139,7 @@ mod tests {
         let ps2 = PAUSE_MENU.music_list_for(Platform::Ps2).expect("PS2");
         assert_eq!((psp.y, psp.font, psp.wraps), (220.0, "small", false));
         assert_eq!((ps2.y, ps2.font, ps2.wraps), (270.0, "menu", false));
-        assert_eq!(ps2.arrows, psp.arrows, "inherited from the PSP");
+        assert_eq!(ps2.arrows, psp.arrows, "the PS2's List code is the PSP's");
     }
 
     #[test]

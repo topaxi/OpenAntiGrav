@@ -69,6 +69,17 @@ impl MusicList {
                 })
     }
 
+    /// Whether the selection is at the end a step `by` points to (the first song for `-1`, the
+    /// last for `1`), wrapping or not: what shades that arrow half.
+    #[must_use]
+    pub fn at_end(&self, by: i32) -> bool {
+        if by < 0 {
+            self.selected == 0
+        } else {
+            self.selected + 1 >= self.titles.len()
+        }
+    }
+
     /// One step: `UPDOWN` when it moves, `DECLINE` and no change at an end the list does not
     /// wrap past (`ListWidget_StepBack`, `ListWidget_StepForward`).
     fn step(&mut self, by: i32) -> Nav {
@@ -180,12 +191,12 @@ pub fn draw(menu: &Menu, skin: &Skin, art: &Art, out: &mut Vec<Draw>) {
     };
     let spots = spots(skin, &art.spec);
     let ink = skin.normal();
-    let dim = |lit: bool| {
-        if lit {
-            ink
+    // `ListWidget_ShadeArrows`: a half at the end it points to keeps part of its alpha.
+    let shade = |at_end: bool| {
+        if at_end {
+            [ink[0], ink[1], ink[2], ink[3] * art.spec.arrow_dim]
         } else {
-            let k = art.spec.arrow_dim;
-            [ink[0] * k, ink[1] * k, ink[2] * k, ink[3]]
+            ink
         }
     };
     if let Some(uvs) = art.arrows {
@@ -193,7 +204,7 @@ pub fn draw(menu: &Menu, skin: &Skin, art: &Art, out: &mut Vec<Draw>) {
             out.push(Draw::Sprite {
                 rect,
                 uv,
-                color: dim(list.can_step(by)),
+                color: shade(list.at_end(by)),
             });
         }
     }

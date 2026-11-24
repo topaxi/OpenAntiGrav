@@ -110,8 +110,9 @@ wired** (the header is the front end's frame bar, static). GAME MANUAL is drawn 
   pick to `Audio::pick_race_song`, which starts it from its beginning as a new song; the same song picked again
   resumes where it was. The step is `Nav::Moved` (`UPDOWN`), an end `Nav::Decline`. **Pointer** (chosen, the
   original has none): a click on the back or forward half of the pill steps that way with the pad's sounds, a
-  click on the title steps forward; neither moves the row cursor. The pill's y offset (- 4) and the dim share
-  (0.56 of `TextColor`) are measured off the frames. The next race goes on from the picked song through this
+  click on the title steps forward; neither moves the row cursor. The pill's y offset (- 4) is measured off the frames;
+  a half at its end keeps half its alpha (`ListWidget_ShadeArrows`, read on both binaries; it reads 0.56 of the lit
+  half over the dark frame, ours `(31, 90, 100)` against the original's `(32, 91, 100)`). The next race goes on from the picked song through this
   build's playlist (`docs/architecture/race-music-resume.md`). Tests: `oag_ui::menu::tests::music_list`,
   `oag_sound::pause_pick::tests`, `oag_sound::tests::song_name::a_paused_pick_resumes_as_a_new_song_and_the_playing_song_does_not`
   (the now-playing display re-shows a picked song after the resume, not the same song resumed),
@@ -133,8 +134,9 @@ wired** (the header is the front end's frame bar, static). GAME MANUAL is drawn 
   **PS2 Pulse: checked, differs, wired.** The PS2 executable carries the `MusicList` class, and its four screens
   author the widget at `y="270"` in `font="menu"` (its own grid and the rows' face), no `Wrap`, no `AutoRepeat`
   (the ground-truth test above reads all three pressings). `oag_pulse::pause_menu::MUSIC_LIST_PS2` carries that;
-  the step, the ends, the no-audition rule and the arrows are **inherited from the PSP** (the PS2's `List` code is
-  not read). **Seen on PCSX2** (2026-11-24, `data/saves/pulse-ps2/amphiseum-black.p2s`, START, 4 s): the screen
+  the step, the ends, the no-audition rule, the resume and the arrows are **the PSP's code, read on the PS2 too**
+  ([ps2-pulse-eu/music-list.md](../ghidra/functions/ps2-pulse-eu/music-list.md): the same `MusicList` overrides,
+  `List` constructor, step functions, arrow cuts and shade, 8 bytes further on), so only the authoring differs. **Seen on PCSX2** (2026-11-24, `data/saves/pulse-ps2/amphiseum-black.p2s`, START, 4 s): the screen
   lists four rows (CONTINUE, GAME OPTIONS, RESTART RACE, QUIT RACE) and the music row stands well below them at
   about y 285 of 448, `FENIX FUNK 5 (WIPEOUT EDIT)` in the rows' face after a smaller pill; ours on PS2 (no
   `--original-menu`) puts the row at about y 284. Two differences stay: ours names the PS2's songs `TRACK N` where

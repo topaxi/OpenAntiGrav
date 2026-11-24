@@ -24,6 +24,7 @@ and 1, `input.md`), and the music list never runs them; LEFT and RIGHT are the v
 | `0x088a9db4` | `ListWidget_StepBack` | 90 | Selection - 1 with `UPDOWN`; at 0, `DECLINE` and no change, or the last entry when `Wrap` |
 | `0x088a9e7c` | `ListWidget_StepForward` | 90 | Selection + 1 with `UPDOWN`; at the last, `DECLINE` and no change, or 0 when `Wrap` |
 | `0x088b528c` | `MenuWidget_StepCursor` | 85 | The `<Menu>` widget's cursor step: wraps both ways, skips a disabled entry, plays `UPDOWN` |
+| `0x088a9ba4` | `ListWidget_ShadeArrows` | 85 | Each arrow half in `ArrowColor`, its alpha halved while the selection is at that half's end |
 | `0x08ab0628` | `g_game_paused` | 85 | 1 while a single-player race is paused (data) |
 
 ## The class
@@ -117,10 +118,13 @@ there is dropped: static reading, 70.
   `(282, 68)` (`+0xf0`) and the right at `(306, 68)` (`+0xf4`), each 25 x 28 (`+0xd4`..`+0xe0`), coloured
   `ArrowColor`, placed at the text's x `- 32` and `- 20` (`+0xe4`, `+0xe8`), so the two halves of a pill sit left of
   the text; `ListWidget_Update` moves the UV's `v` to 96 when no focus-step press was seen this update (always, for
-  this list). Live, the left half is dark at entry 0 and the right half dark at entry 15, both lit between;
-  `0x088a9ba4` (the end-dim rule, from the frames) is not read. Confidence 80 for the geometry, 85 for the dimming
-  from the frames.
+  this list). Live, the left half is dark at entry 0 and the right half dark at entry 15, both lit between.
+  **`ListWidget_ShadeArrows` (`0x088a9ba4`)** is the rule: unless the list hides its arrows (`+0x100`, `+0x101`), each half
+  takes `ArrowColor` with its alpha byte halved (`>> 25` against `>> 24`) while the selection is at that half's end
+  (0 for the left, the last for the right), times the widget's fade (`+0x64`); it does not look at `Wrap`. Over the
+  dark pause frame the half-alpha arrow reads 0.56 of the lit one. Confidence 80 for the geometry, 85 for the shade.
 
 ## PS2 and Pure
 
-See `docs/ui/pause-menu.md`, "Pulse".
+PS2: the same code, read on [ps2-pulse-eu/music-list.md](../ps2-pulse-eu/music-list.md). Pure: none. See
+`docs/ui/pause-menu.md`, "Pulse".

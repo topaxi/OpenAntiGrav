@@ -1534,3 +1534,4 @@
 0x088a9e7c	function	ListWidget_StepForward	90	music-list.md
 0x088b528c	function	MenuWidget_StepCursor	85	music-list.md
 0x08ab0628	data	g_game_paused	85	music-list.md
+0x088a9ba4	function	ListWidget_ShadeArrows	85	music-list.md

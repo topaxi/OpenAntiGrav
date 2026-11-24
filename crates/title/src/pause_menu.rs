@@ -142,7 +142,8 @@ pub struct PauseMusicList {
     pub arrows: [[f32; 4]; 2],
     /// Each arrow's top-left from the text's left edge and top, left then right.
     pub arrow_offset: [(f32, f32); 2],
-    /// The share of the text colour an arrow that points past an end is drawn in.
+    /// The share of its alpha an arrow half keeps while the selection is at the end it points
+    /// to, whether or not the list wraps.
     pub arrow_dim: f32,
 }
 

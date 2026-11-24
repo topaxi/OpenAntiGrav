@@ -58,7 +58,7 @@ fn shown(menu: &Menu) -> Option<&str> {
 }
 
 /// The list starts on the song that is playing and draws its title under the rows, after the
-/// two arrow halves: the back half dim at the first song, the forward half lit.
+/// two arrow halves: the back half at half alpha at the first song, the forward half whole.
 #[test]
 fn the_list_shows_the_playing_song_with_its_arrows() {
     let menu = paused(1);
@@ -81,10 +81,12 @@ fn the_list_shows_the_playing_song_with_its_arrows() {
         })
         .collect();
     assert_eq!(colors.len(), 2, "two arrow halves");
-    assert!(
-        colors[0][1] < colors[1][1],
-        "the back half is dim at the first song"
+    assert_eq!(
+        colors[0][3],
+        colors[1][3] * oag_pulse::pause_menu::MUSIC_LIST.arrow_dim,
+        "the back half keeps half its alpha at the first song (`ListWidget_ShadeArrows`)"
     );
+    assert_eq!(colors[0][..3], colors[1][..3], "in the same colour");
     assert!(out.iter().any(|draw| matches!(
         draw,
         Draw::FacedText { text, .. } | Draw::Text { text, .. } if text == TITLES[0]

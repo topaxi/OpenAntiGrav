@@ -283,3 +283,17 @@
 0x001a7fe8	function	Text_Draw	85	frontend-pulse.md
 0x001a7010	function	Text_ParseValues	80	frontend-pulse.md
 0x00298118	data	g_text_vtable	75	frontend-pulse.md
+0x0019b7a0	function	MusicList_RegisterClass	85	music-list.md
+0x0019b618	function	MusicList_Update	80	music-list.md
+0x0019b670	function	MusicList_RebuildEntries	80	music-list.md
+0x0019b578	function	MusicList_Enter	80	music-list.md
+0x0019b5b0	function	MusicList_Leave	85	music-list.md
+0x001f9800	function	MusicPlayer_StartNextSong	80	music-list.md
+0x001942b0	function	ListWidget_Construct	85	music-list.md
+0x00194588	function	ListWidget_ReadElement	80	music-list.md
+0x00195518	function	ListWidget_Enter	80	music-list.md
+0x00194ce8	function	ListWidget_Update	75	music-list.md
+0x00194b40	function	ListWidget_StepBack	85	music-list.md
+0x00194bf8	function	ListWidget_StepForward	85	music-list.md
+0x00195a18	function	ListWidget_ShadeArrows	85	music-list.md
+0x0027a5c0	data	g_game_paused	70	music-list.md
