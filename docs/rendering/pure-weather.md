@@ -47,9 +47,10 @@ its weather without also switching on its placed nodes and camera stations, whic
 Pulse sets it exactly as it set `circuit_effects` (PSP and PS2, measured). Pure sets it on the PSP, **inherited from
 Pulse** (`Origin::InheritedFrom("Wipeout Pulse")`): the loader's `place_weather` runs unchanged on Pure's
 `TrackStartup.xml`, the mist, the lens droplets and the rain or snow emitter all through the existing
-`oag_raceplay::scenery_fx::weather`, `oag_fx::mist` and `oag_fx::psys` code. Pure's `title.weather` is now
-`Played` (rain circuit Sinucit), so the WEATHER setting row (`original` or `enhanced`) is offered on Pure, as on Pulse.
-A track module's `set-weather` on Pure borrows Sinucit's `<Weather>`.
+`oag_raceplay::scenery_fx::weather`, `oag_fx::mist` and `oag_fx::psys` code. Pure's `title.weather` stays `Unplayed`: the WEATHER setting row (`original` or `enhanced`) is not offered on Pure and a
+track module's `set-weather` does not borrow Sinucit's `<Weather>`, until the enhanced weather has been looked at on Pure.
+Flipping it later is one line in `crates/pure/src/lib.rs` (`Played { rain_circuit: Some(Sinucit) }`) plus the three menu
+and settings test expectations that name Pure.
 
 ## Result
 

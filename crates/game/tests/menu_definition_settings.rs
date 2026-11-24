@@ -251,7 +251,7 @@ fn the_boost_zoom_row_is_dropped_where_the_ring_cannot_be_borrowed() {
     };
     for (title, offered) in [
         (oag_pulse::TITLE, 1),
-        (oag_pure::TITLE, 1),
+        (oag_pure::TITLE, 0),
         (oag_hd::TITLE, 0),
     ] {
         let mut definition = built_in();
@@ -315,7 +315,7 @@ fn the_wingtip_contrails_row_is_offered_only_where_the_original_has_none() {
 }
 
 /// The OWN SHIELD row is offered on the titles whose original draws a shield of another look
-/// (Pulse, Pure) and dropped on those that draw the HD-style one (HD, 2048, Omega).
+/// (Pulse) and dropped on those that draw the HD-style one (HD, 2048, Omega).
 #[test]
 fn the_own_shield_row_is_offered_only_where_the_original_draws_another_look() {
     let rows = |definition: &Definition| {

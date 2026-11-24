@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [pure, pulse]
 updated: 2026-11-24
-summary: "Pure render: canopy, sky, effect names, flare, chrome-map pass and bloom closed; Modesto light, HUD open"
+summary: "Pure render: canopy, sky, effect names, flare, chrome-map pass, bloom and weather closed; Modesto light, Sinucit adverts and strip, HUD open"
 difficulty: medium (30)
 ---
 

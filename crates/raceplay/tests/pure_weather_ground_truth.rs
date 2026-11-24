@@ -3,8 +3,7 @@
 //! Sinucit authors rain (with the lens droplets) and Sebenco Climb snow, each with
 //! the `Mist.mip` screen overlay; no other circuit the disc names does
 //! (`docs/rendering/pure-weather.md`). The original draws the overlay as two additive
-//! screen layers, which is the whole-frame lift of about 24 grey the two compare pairs
-//! carried before it was played.
+//! screen layers: a whole-frame lift of about 24 grey on the two compare pairs.
 //!
 //! Drop the `circuit_weather` rule on Pure (`oag_pure::TITLE.looks`) and the weather,
 //! its mist and its effect never load, so the race tests below fail.
