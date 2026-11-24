@@ -2547,8 +2547,7 @@ would let a gantry node pass for scenery.
 yaw only, so ours' pitch is its own: 1.6 to 2.0 degrees (forward y 0.028 to 0.035) on every pair. The original's forward y is 0.031 to 0.044
 (mean 0.037, 5 frames on 3 boots, no volley fired) and 0.041 to 0.055 (mean 0.048, 7 frames on 4 boots) after a volley, so about 0.6 degrees
 higher, with the ranges overlapping (confidence 50). The volley frame at lap 2.2 s read 1.06, 1.54 and 1.10
-degrees (3 of 3 boots, refused); the fired frames at 2.6 and 3.0 s read 0.70 to 0.89 (4 of 4, passed). **The cause of the extra pitch at 2.2 s is
-undetermined:** unfired frames at lap 2.6 (forward y 0.040, 0.044) sit inside the fired range at the same clock, and no unfired frame exists at 2.21;
+degrees (3 of 3 boots, refused); the fired frames at 2.6 and 3.0 s read 0.70 to 0.89 (4 of 4, passed). **The cause of the extra pitch at 2.2 s was undetermined here and is read in "The pitch the heading check refused" below:** unfired frames at lap 2.6 (forward y 0.040, 0.044) sit inside the fired range at the same clock, and no unfired frame exists at 2.21;
 open discriminator: one boot with no fire and `--shot 2.21`. The refusal itself is pitch (`--pose` carries yaw only; ours runs under
 `--pose-hold-ticks`, so its pitch is not a reading of its physics). The pair is the 2.6 s frame. Whether the original pitches from the
 cannon's recoil or ours rests low is unread.
@@ -2562,6 +2561,49 @@ Pairs on `main` `3f8f627`, two boots each, mean grey (the page's score) / RMSE: 
 (`pad` 826,705 to 1093,943 original, 827,706 to 1094,939 ours). One boot of the volley never fired (the press landed with no tick
 running: lap clock before 1.867, after 1.867) and was discarded, and one boot's camera pick failed (`no frame-unique value`) and was
 retaken. The Detonator thread's "Render accuracy" holds the table and the region differences.
+
+### The pitch the heading check refused (2026-11-24, `det-regrab-fitted`)
+
+**Cause (confidence 80, ours): the pair held ours' craft on the spline's attitude.** `--pose x,y,z,yaw` takes its pitch and roll from the nearest
+spline sample and `--pose-hold-ticks` puts that back every tick, so ours' hull never carried the nose-up pitch a Detonator craft flies at.
+Discriminating test (the falsifier was written first: if ours' own flight also read about 0.030, it would be a physics difference, not the hold).
+On 21 stored grabs at lap 2.4 to 2.8 s (4 boots, `det-pair-lag` and `det-regrab`; ours' attitude from `oag-game --pose` at each grab's position,
+`our_attitude`): original body forward y 0.036 to 0.047, ours' spline attitude 0.030 to 0.031 at the same places (mean difference 0.0131,
+sd 0.0034, about 0.75 degrees), the push buffer's hull the same offset (0.0109) with a scatter of its own (hull minus RAM body: mean
+-0.0027, sd 0.0057, about 0.33 degrees, the hull's own motion between stops). Ours flown freely on the pair's inputs with no pose (full
+`--mode detonator` run, 420 ticks) reads forward y 0.0406 to 0.0431 from x = 140 to 193 (flat over 30 ticks, the pairs sit at x 200 to 215),
+inside the original's 0.041 to 0.047: **ours' physics pitches as the original does; only the held pose lacks it.** A lag error cannot explain
+it: the hull's forward y moves about 0.001 a tick (`b3/00` to `b3/02`), so 4 ticks is under 0.25 degrees. At lap 2.2 s after a volley the
+hull sits 0.007 to 0.011 above the RAM body (`b6/00`, `gD`, `gF`; unfired frames at 2.0 do not), the recoil being in the drawn hull and not the
+body; that is the earlier 2.2 s refusal (1.06 to 1.54 degrees), now explained to the same confidence. One outlier, `gE/00` (hull forward y
+0.023, camera pick failed), is excluded.
+
+**Fix.** `rpcs3-hd-pair.py --detonator` writes the push buffer's hull attitude (`frame_rows`, at the position ours' craft is put, lag-fitted when the
+picture lag was) as slot 0 of a one-row `field.csv` and passes `--field-from` instead of `--pose` (the exact-pose path the race pairs use;
+no opponents, zero velocity as before). The record carries it as `ours.pose_row`; `compare_env.ensure_detonator_inputs` makes `field.csv`
+again on a re-render and `compare-rerender-ours.py` finds it beside the `pair.json`. The heading check stays at 1.00 degrees but now reads
+0.000 on every pair: it tests the plumbing (ours draws what it was fed), and the physical check is the free-flight figure above. The
+`uncarried_tilt_deg` record is 0. All five stored grabs that were refused or marginal make a pair (the 2.2 s volley `gG/00` included).
+
+**Re-grab.** `mines-ahead` was grabbed as the first stop of two boots at lap 2.70 and 2.72 (`--shot 2.67`, the `-late` state, `--flush 3`; of
+five boots three read "camera null: no frame-unique value", a recall cost of `pick_camera`, retried). The fit gives 6.03 and 6.15 ticks behind RAM
+(2 mines each, 1.2 and 2.5 px rms), the 6.0 of the lag section reproduced on new boots. Mean grey (the page's score) and the middle-right cell
+(the 3x3 grid's row 2, column 3 of the grey difference: mean absolute, signed ours minus original):
+
+| Pair | published, re-rendered on this branch | re-made, fit off | re-made, fit on |
+| --- | --- | --- | --- |
+| `mines-ahead`, boot 1 (`h1`, 2.70 s) | 16.40, cell 36.87 (-20.04) | 15.75, cell 25.51 (-8.28) | **14.65**, cell **21.81** (-10.13) |
+| `mines-ahead`, boot 2 (`h5`, 2.72 s) | | 17.23, cell 37.20 (-19.30) | 15.79, cell 32.10 (-21.36) |
+| `pad` (same grab, 2.0 s) | 8.82, cell 6.26 (-2.08) | 8.43, cell 6.26 (-2.09) | no mine in fitting range: same |
+| `cannon-volley` (same grab, 2.63 s) | 15.33, cell 26.46 (-18.00) | 14.99, cell 26.46 (-18.00) | no mine in range: same |
+| `cannon-volley` 2.23 s (`gG/00`, refused before) | not made | 12.95, cell 22.89 (-13.40) | no mine in range: same |
+
+The brief's published 8.81, 16.23 and 14.88 are the same pairs scored at the earlier binary; the re-renders above are on this branch's. The
+campaign goal (all three under 10) is **not reached**: `pad` is (8.43), `mines-ahead` is 14.65 and 15.79, `cannon-volley` 14.99. The fit
+moves the near mines onto the original's pixels (crops read: two bright spiked spheres in the original, ours' two dark balls with a lavender
+ring now on the same places, a little smaller) and what remains is the mine's body (dark where the original's is bright white-lavender),
+the lit billboard wall and the hull's lit strip, none of them lag. Confidence 70 on the pitch cause's fix (two boots of the re-grab, five
+stored grabs), 80 on the cause. Not measured: whether the hull's frame to frame pitch scatter (sd 0.33 degrees) is the original's hull sway.
 
 ### The presented lag of a Detonator grab (2026-11-24, `det-pair-lag`)
 
