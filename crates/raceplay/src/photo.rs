@@ -59,6 +59,9 @@ pub const PAN_LIMIT: f32 = 5.0;
 pub const CLOSE_FOV: (f32, f32, f32) = (10.0, 100.0, 65.0);
 /// The `track` lens's vertical field, in degrees: `(least, greatest, opening)`.
 pub const TRACK_FOV: (f32, f32, f32) = (3.0, 40.0, 20.0);
+/// The vertical field the free lens can start on, in degrees: wide enough for the picture of
+/// either other lens, so choosing `free` from one starts on its field.
+const FREE_START_FOV: (f32, f32) = (TRACK_FOV.0.min(CLOSE_FOV.0), TRACK_FOV.1.max(CLOSE_FOV.1));
 
 /// Units per tick the free lens moves at full deflection before it has been held.
 pub const FREE_WALK_RATE: f32 = 0.4;
@@ -106,6 +109,12 @@ pub enum Lens {
 struct Rig {
     cam: Free,
     fov: f32,
+    /// The least field a zoom reaches: the `close` lens's, or the seed's own when it started
+    /// narrower (a `track` lens zoomed in).
+    least_fov: f32,
+    /// How far the eye may be from the craft: [`FREE_RANGE`], or the seed's own distance when
+    /// the lens it was seeded from stood further out.
+    reach: f32,
 }
 
 /// What the player's devices said this tick, already boiled down to what the mode reads.
@@ -461,12 +470,16 @@ impl Photo {
     /// Starts the free lens from `pose`, the camera on screen, with `craft` the position of the
     /// craft in the picture: the picture does not move. Also what TRIANGLE returns to.
     pub fn seed_free(&mut self, pose: CameraOverride, craft: Vec3) {
+        let cam = Free::from_orientation(pose.eye - craft, pose.orientation);
+        let fov = pose
+            .fov_deg
+            .unwrap_or(craft_view::FOV_DEGREES)
+            .clamp(FREE_START_FOV.0, FREE_START_FOV.1);
         let rig = Rig {
-            cam: Free::from_orientation(pose.eye - craft, pose.orientation),
-            fov: pose
-                .fov_deg
-                .unwrap_or(craft_view::FOV_DEGREES)
-                .clamp(CLOSE_FOV.0, CLOSE_FOV.1),
+            cam,
+            fov,
+            least_fov: CLOSE_FOV.0.min(fov),
+            reach: FREE_RANGE.max(cam.position.length()),
         };
         self.free = Some(rig);
         self.free_home = Some(rig);
@@ -711,8 +724,8 @@ impl Photo {
             },
             1.0,
         );
-        rig.cam.position = rig.cam.position.clamp_length_max(FREE_RANGE);
-        rig.fov = (rig.fov - zoom * ZOOM_RATE).clamp(CLOSE_FOV.0, CLOSE_FOV.1);
+        rig.cam.position = rig.cam.position.clamp_length_max(rig.reach);
+        rig.fov = (rig.fov - zoom * ZOOM_RATE).clamp(rig.least_fov, CLOSE_FOV.1);
         self.free = Some(rig);
     }
 

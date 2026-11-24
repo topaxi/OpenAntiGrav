@@ -134,7 +134,7 @@ impl Photo {
             },
             1.0,
         );
-        rig.cam.position = rig.cam.position.clamp_length_max(FREE_RANGE);
+        rig.cam.position = rig.cam.position.clamp_length_max(rig.reach);
         self.free = Some(rig);
     }
 }
