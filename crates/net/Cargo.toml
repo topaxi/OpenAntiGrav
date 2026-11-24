@@ -34,17 +34,18 @@ oag-source.workspace = true
 oag-title.workspace = true
 web-time = "1.1.0"
 
-# The native transport. QUIC through quinn, rustls on `ring` only (no aws-lc C
-# build, which would put cmake into the Android and iOS builds), and a
-# self-signed ECDSA P-256 certificate minted per run. Not on the web, where the
+# The native transport. QUIC through quinn with `web-transport-quinn`'s own
+# pure-Rust provider (rind; no aws-lc C build, which would put cmake into the
+# Android and iOS builds), and a self-signed ECDSA P-256 certificate minted per
+# run (`rcgen` on `ring`, which also hashes it). Not on the web, where the
 # browser's own `WebTransport` object is the transport (not built yet).
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 rcgen = { version = "0.14", default-features = false, features = ["ring", "crypto"] }
 ring = "0.17"
-rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+rustls = { version = "0.23", default-features = false, features = ["std"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync"] }
 url = "2"
-web-transport-quinn = { version = "0.13", default-features = false, features = ["ring"] }
+web-transport-quinn = "0.14"
 
 [features]
 # The predicting client (`client`), which draws the race it predicts: the game

@@ -240,6 +240,8 @@ class Art:
     animations: list = field(default_factory=list)
     sun_rotation: tuple = None  # the oag/sun node's rest rotation, exactly when the sun turns
     draw_collision: bool = False  # [art] draw_collision: the flat-shaded collision under the art
+    # Each own image's PNG bytes by file name, written beside the manifest; not in the format.
+    image_files: dict = field(default_factory=dict, compare=False, repr=False)
 
     def borrows_from_a_disc(self):
         """A host texture or a sky: the track must name its host."""
