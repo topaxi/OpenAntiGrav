@@ -29,7 +29,10 @@ impl Session {
     /// puts the HUD over its average.
     pub(crate) fn photo_wants_frames(&self) -> bool {
         self.photo_job_running()
-            || self.photo.as_ref().is_some_and(|open| open.averaged.is_some())
+            || self
+                .photo
+                .as_ref()
+                .is_some_and(|open| open.averaged.is_some())
     }
 
     /// Whether the frame being drawn leaves the HUD out: a shot of several frames is under way.

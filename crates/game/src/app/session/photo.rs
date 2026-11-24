@@ -590,7 +590,11 @@ impl super::Session {
     /// The drive's reading of the shot under way: `frames drawn / frames`, `hud` while its
     /// average waits for the HUD to be drawn over it, or `none`.
     pub(crate) fn photo_job_name(&self) -> String {
-        if self.photo.as_ref().is_some_and(|open| open.averaged.is_some()) {
+        if self
+            .photo
+            .as_ref()
+            .is_some_and(|open| open.averaged.is_some())
+        {
             return "hud".to_string();
         }
         self.photo_progress()

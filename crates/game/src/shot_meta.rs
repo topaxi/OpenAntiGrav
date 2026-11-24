@@ -295,7 +295,10 @@ impl Picture {
         effects.set(Row::SpeedBlur, self.speed_blur);
         if self.depth_of_field {
             effects.set(Row::DepthOfField, 1);
-            effects.set(Row::Aperture, self.aperture.unwrap_or(Effects::APERTURE_OPENS));
+            effects.set(
+                Row::Aperture,
+                self.aperture.unwrap_or(Effects::APERTURE_OPENS),
+            );
             effects.set(Row::Focus, self.focus.unwrap_or(Effects::FOCUS_OPENS));
         }
         effects
@@ -311,8 +314,14 @@ impl Picture {
             format!("speed_blur={}", self.speed_blur),
         ];
         if self.depth_of_field {
-            parts.push(format!("aperture={}", self.aperture.unwrap_or(Effects::APERTURE_OPENS)));
-            parts.push(format!("focus={}", self.focus.unwrap_or(Effects::FOCUS_OPENS)));
+            parts.push(format!(
+                "aperture={}",
+                self.aperture.unwrap_or(Effects::APERTURE_OPENS)
+            ));
+            parts.push(format!(
+                "focus={}",
+                self.focus.unwrap_or(Effects::FOCUS_OPENS)
+            ));
         }
         parts.join(",")
     }

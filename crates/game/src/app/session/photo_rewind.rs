@@ -15,8 +15,8 @@ use oag_raceplay::photo::shot::{Mover, Plan, Shot};
 use oag_ui::pointer::Pointer;
 
 use super::photo::Origin;
-use crate::shot_meta;
 use crate::app::stage::Stage;
+use crate::shot_meta;
 
 /// The stick deflection that abandons a shot under way: 2048's own threshold.
 const ABANDON_STICK: f32 = 0.2;

@@ -18,6 +18,8 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
+mod shot_fidelity;
+
 /// A race on `image` as far as `race_prefix` goes, then `script`, in a profile of its own.
 pub(crate) struct Run {
     pub(crate) status: std::process::ExitStatus,
@@ -953,6 +955,7 @@ fn each_picture_control_changes_the_saved_shot_and_at_neutral_it_is_the_unproces
         "the craft in focus changed: {}",
         difference(&neutral, &dof, CRAFT)
     );
+    shot_fidelity::controls_are_recorded_and_drawn_again(&image, &run, &photos);
 }
 
 /// The game's own motion blur is a setting the mode overrides: a saved shot is the same file
@@ -1013,7 +1016,10 @@ fn a_motion_blur_shot_smears_what_it_should_and_any_input_abandons_it() {
              {down}{down}{down}{down} hold right 1; ticks 2; {down} hold right 260; ticks 3; \
              press cross; ticks 3; until photo_job=none within 800; ticks 3; \
              hold up 1; ticks 3; hold right 1; ticks 3; press cross; ticks 3; \
-             until photo_job=none within 800; ticks 3"
+             until photo_job=none within 800; ticks 3; \
+             press square; ticks 3; press cross; ticks 3; until photo_job=none within 800; ticks 3; \
+             hold left 2; ticks 3; hold left 2; ticks 3; press cross; ticks 3; \
+             screenshot SHOTS/plain-hud.png; ticks 3"
         ),
         &shots,
     );
@@ -1021,10 +1027,11 @@ fn a_motion_blur_shot_smears_what_it_should_and_any_input_abandons_it() {
     let photos = the_photos(&run);
     assert_eq!(
         photos.len(),
-        3,
-        "a plain shot, a track blur and a ship blur: {photos:?}"
+        5,
+        "a plain shot, a track blur, a ship blur, then a ship blur and a plain shot with the HUD: {photos:?}"
     );
-    let [plain, track, ship] = [0, 1, 2].map(|i| decode(&photos[i]));
+    let [plain, track, ship, ship_hud, plain_hud] = [0, 1, 2, 3, 4].map(|i| decode(&photos[i]));
+    shot_fidelity::the_hud_is_drawn_once(&plain, &plain_hud, &ship, &ship_hud);
     assert_eq!((plain.0, plain.1), (track.0, track.1));
     // Where the craft's hull sits in the close lens turned by `hold left 8`, and a stretch of
     // scenery well clear of it. What a blur takes away is detail: a smear lowers the picture's
