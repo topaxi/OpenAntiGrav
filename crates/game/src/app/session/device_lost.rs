@@ -17,17 +17,28 @@ mod words {
 }
 
 impl Session {
-    /// The top of a frame: whether the device went since the last one. If so, everything that
+    /// The top of a frame: the last run's note once the menu is up, then whether the device went since the last frame. If it did, everything that
     /// can be kept is kept (the campaign position, the replays, the records, the playlist), a
     /// note is left for the next run, the window says what happened in the one place that needs
     /// no GPU, and the run is told to end. Returns whether it did, and the frame draws nothing.
     pub(crate) fn device_check(&mut self) -> bool {
+        if self.last_run_lost && matches!(self.stage, Stage::Menu(_)) {
+            self.last_run_lost = false;
+            self.notice = Some(super::shot_open::Notice::new(
+                self.project_word(words::LAST_RUN),
+            ));
+        }
         let Some(lost) = self.gpu.loss.take() else {
             return false;
         };
         error!(
-            "the graphics device was lost ({:?}): {}. Progress and the replay were saved; start the game again",
-            lost.reason, lost.message
+            "the graphics device was lost ({:?}){}. Saved what there was to save; start the game again",
+            lost.reason,
+            if lost.message.is_empty() {
+                String::new()
+            } else {
+                format!(": {}", lost.message)
+            }
         );
         self.wind_down();
         device_loss::leave_marker(&lost);
@@ -38,11 +49,11 @@ impl Session {
         true
     }
 
-    /// The note over the first screen of a run whose predecessor ended on a lost device.
-    pub(crate) fn say_last_run_lost_its_device(&mut self) {
-        self.notice = Some(super::shot_open::Notice::new(
-            self.project_word(words::LAST_RUN),
-        ));
+    /// The run before this one ended on a lost device: the main menu says so when it first
+    /// shows, which is the first screen a player reads (the boot sequence before it is a
+    /// movie, and a notice there would run out unseen).
+    pub(crate) fn last_run_lost_its_device(&mut self) {
+        self.last_run_lost = true;
     }
 
     /// Whether a game that lost its device may start itself again: on the front end, with

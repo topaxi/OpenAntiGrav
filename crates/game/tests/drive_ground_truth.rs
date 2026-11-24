@@ -512,7 +512,7 @@ fn a_device_lost_mid_race_saves_the_replay_and_ends_without_a_panic() {
          select launch_race; press cross; \
          until screen=picker; select 03_Track; press cross; \
          until screen.id=ship-select; select Feisar; press cross; \
-         until stage=race within 3000; ticks 120; lose-device; ticks 30",
+         until stage=race within 3000; ticks 400; lose-device; ticks 30",
         None,
     );
     let why = run.stderr();
@@ -531,7 +531,7 @@ fn a_device_lost_mid_race_saves_the_replay_and_ends_without_a_panic() {
         scratch.join("config/oag/device-lost.txt").is_file(),
         "no note for the next run"
     );
-    let replays = scratch.join("data/oag/replays");
+    let replays = scratch.join("data/oag/replays/auto");
     let kept = std::fs::read_dir(&replays)
         .map(|dir| dir.count())
         .unwrap_or(0);

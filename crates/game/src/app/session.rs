@@ -579,6 +579,8 @@ pub(crate) struct Session {
     pub(crate) lost: Option<crate::app::device_loss::Lost>,
     /// [`Session::wind_down`] has run: a second call has nothing left to save.
     pub(crate) wound_down: bool,
+    /// The run before this one ended on a lost device and the menu has not said so yet.
+    pub(crate) last_run_lost: bool,
     /// What the menus need, when this run has menus at all.
     pub(crate) shell: Option<Shell>,
     /// The source the race box's selection screens read, opened on a worker on the first menu

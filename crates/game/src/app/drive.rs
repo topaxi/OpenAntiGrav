@@ -135,7 +135,7 @@ impl Driver {
         self.session.frame()?;
         if let Some(lost) = &self.session.lost {
             bail!(
-                "the graphics device was lost ({:?}): {}; what could be saved was",
+                "the graphics device was lost ({:?}): {}; saved what there was to save",
                 lost.reason,
                 lost.message
             );

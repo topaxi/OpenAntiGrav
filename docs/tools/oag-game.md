@@ -231,6 +231,7 @@ by 0.04 of the width against a 0.01 tolerance.
 | `draw` | Draw the next frame (nothing is written). Hints on screen are collected from drawn frames only, so a script `draw`s before it reads `hints`. |
 | `click hint <button\|escape>` | Click the key or button hint on screen that presses this button, or `escape` (the disc chooser's `ESC QUIT`): a `draw`, then a click on the middle of its rectangle. Fails when no such hint is on screen. |
 | `screenshot <path>` | Draw the next frame offscreen through the window's own draw and write a PNG. |
+| `lose-device` | Destroy the GPU device, as a driver reset would. The run ends with an error naming the loss, after the session saved what it could ([device loss](../architecture/device-loss.md)); the `--script` flag takes the same entry as `SECONDS:lose-device`. |
 | `quit` | End the run. Reaching the end of the script does too. |
 
 Conditions are `key=value` or `key!=value`, case-insensitive: `stage` (`launcher`, `loading`,

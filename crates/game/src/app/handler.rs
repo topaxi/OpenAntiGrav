@@ -203,7 +203,7 @@ impl App {
         if device_loss::take_marker()
             && let Some(session) = session.as_mut()
         {
-            session.say_last_run_lost_its_device();
+            session.last_run_lost_its_device();
         }
         Ok(session)
     }
@@ -626,6 +626,7 @@ impl App {
             quit: false,
             lost: None,
             wound_down: false,
+            last_run_lost: false,
             // Both filled by `finish_loading`, off the movies the boot's own
             // worker is still decoding as this window opens. `--race` never
             // fills them at all.
