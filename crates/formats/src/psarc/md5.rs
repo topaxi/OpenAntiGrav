@@ -42,42 +42,21 @@ const K: [u32; 64] = [
 pub fn digest(data: &[u8]) -> [u8; 16] {
     let mut state: [u32; 4] = [0x6745_2301, 0xefcd_ab89, 0x98ba_dcfe, 0x1032_5476];
 
-    let mut message = data.to_vec();
-    let bit_len = (data.len() as u64).wrapping_mul(8);
-    message.push(0x80);
-    while message.len() % 64 != 56 {
-        message.push(0);
+    let (whole, rest) = data.as_chunks::<64>();
+    for block in whole {
+        compress(&mut state, block);
     }
-    message.extend_from_slice(&bit_len.to_le_bytes());
 
-    for chunk in message.as_chunks::<64>().0 {
-        let mut m = [0u32; 16];
-        for (word, bytes) in m.iter_mut().zip(chunk.as_chunks::<4>().0) {
-            *word = u32::from_le_bytes(*bytes);
-        }
-        let [mut a, mut b, mut c, mut d] = state;
-        for i in 0..64 {
-            let (f, g) = match i / 16 {
-                0 => ((b & c) | (!b & d), i),
-                1 => ((d & b) | (!d & c), (5 * i + 1) % 16),
-                2 => (b ^ c ^ d, (3 * i + 5) % 16),
-                _ => (c ^ (b | !d), (7 * i) % 16),
-            };
-            let tmp = d;
-            d = c;
-            c = b;
-            b = b.wrapping_add(
-                a.wrapping_add(f)
-                    .wrapping_add(K[i])
-                    .wrapping_add(m[g])
-                    .rotate_left(SHIFTS[i]),
-            );
-            a = tmp;
-        }
-        state[0] = state[0].wrapping_add(a);
-        state[1] = state[1].wrapping_add(b);
-        state[2] = state[2].wrapping_add(c);
-        state[3] = state[3].wrapping_add(d);
+    // The tail, a 0x80 byte, zeros and the bit length: one block when the tail leaves 8 bytes
+    // free, two otherwise. Built on the stack, never in a copy of the message.
+    let mut tail = [0u8; 128];
+    tail[..rest.len()].copy_from_slice(rest);
+    tail[rest.len()] = 0x80;
+    let end = if rest.len() < 56 { 64 } else { 128 };
+    let bit_len = (data.len() as u64).wrapping_mul(8);
+    tail[end - 8..end].copy_from_slice(&bit_len.to_le_bytes());
+    for block in tail[..end].as_chunks::<64>().0 {
+        compress(&mut state, block);
     }
 
     let mut out = [0u8; 16];
@@ -85,6 +64,44 @@ pub fn digest(data: &[u8]) -> [u8; 16] {
         *slot = word.to_le_bytes();
     }
     out
+}
+
+/// One 64-byte block into `state`: RFC 1321's four rounds of sixteen steps, each round its own
+/// loop so its mixing function and word order are constants.
+fn compress(state: &mut [u32; 4], block: &[u8; 64]) {
+    let mut m = [0u32; 16];
+    for (word, bytes) in m.iter_mut().zip(block.as_chunks::<4>().0) {
+        *word = u32::from_le_bytes(*bytes);
+    }
+    let [mut a, mut b, mut c, mut d] = *state;
+    macro_rules! round {
+        ($range:expr, |$b:ident, $c:ident, $d:ident| $f:expr, |$i:ident| $g:expr) => {
+            for $i in $range {
+                let f = {
+                    let ($b, $c, $d) = (b, c, d);
+                    $f
+                };
+                let tmp = d;
+                d = c;
+                c = b;
+                b = b.wrapping_add(
+                    a.wrapping_add(f)
+                        .wrapping_add(K[$i])
+                        .wrapping_add(m[$g])
+                        .rotate_left(SHIFTS[$i]),
+                );
+                a = tmp;
+            }
+        };
+    }
+    round!(0..16, |b, c, d| (b & c) | (!b & d), |i| i);
+    round!(16..32, |b, c, d| (d & b) | (!d & c), |i| (5 * i + 1) % 16);
+    round!(32..48, |b, c, d| b ^ c ^ d, |i| (3 * i + 5) % 16);
+    round!(48..64, |b, c, d| c ^ (b | !d), |i| (7 * i) % 16);
+    state[0] = state[0].wrapping_add(a);
+    state[1] = state[1].wrapping_add(b);
+    state[2] = state[2].wrapping_add(c);
+    state[3] = state[3].wrapping_add(d);
 }
 
 #[cfg(test)]
@@ -119,6 +136,28 @@ mod tests {
             ),
         ] {
             assert_eq!(hex(digest(input.as_bytes())), want, "MD5({input:?})");
+        }
+    }
+
+    /// Lengths either side of each block boundary, where the tail pads into one block or two
+    /// (digests of `x` repeated, from Python's `hashlib`).
+    #[test]
+    fn lengths_around_the_block_boundaries_match_hashlib() {
+        for (len, want) in [
+            (1, "9dd4e461268c8034f5c8564e155c67a6"),
+            (55, "04364420e25c512fd958a70738aa8f72"),
+            (57, "693037871c4a9d3d8685018905cb530a"),
+            (63, "7dc2ca208106a2f703567bdff99d8981"),
+            (64, "c1bb4f81d892b2d57947682aeb252456"),
+            (65, "1bc932052302d074bdec39795fe00cf6"),
+            (119, "ab347a5f68c8a443cfcddc633f12c24f"),
+            (120, "fb98667f98096de92620b64f46e1c5b5"),
+            (121, "e8bb0ccd83750100b37f4831cd5d7ee2"),
+            (127, "a0b28c1da68705c2ff883fe279b72753"),
+            (128, "d69cb61a6ee87200676eb0d4b90edbcb"),
+            (129, "3926841d393c00c3f36260e5ace10dc1"),
+        ] {
+            assert_eq!(hex(digest(&vec![b'x'; len])), want, "MD5 of {len} bytes");
         }
     }
 

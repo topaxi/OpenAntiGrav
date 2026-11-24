@@ -671,6 +671,15 @@ pub fn match_paths_to_entries(entries: &[Entry], manifest_paths: &[String]) -> V
 /// `docs/formats/psarc.md`.
 #[must_use]
 pub fn path_digest(path: &str) -> [u8; 16] {
+    // An ASCII path uppercases byte by byte, as `to_uppercase` does for it; the buffer spares
+    // the allocation a manifest of tens of thousands of paths would otherwise make.
+    let mut buffer = [0u8; 192];
+    if path.is_ascii() && path.len() <= buffer.len() {
+        let upper = &mut buffer[..path.len()];
+        upper.copy_from_slice(path.as_bytes());
+        upper.make_ascii_uppercase();
+        return md5::digest(upper);
+    }
     md5::digest(path.to_uppercase().as_bytes())
 }
 
