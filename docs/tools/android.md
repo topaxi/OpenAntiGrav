@@ -178,7 +178,7 @@ its callbacks (`resumed`, every frame) run on whatever is left of 2 MiB.
 Pulse and on HD (measured on the S21, Exynos 2100, Android 14, the `dist` build). A
 stack overflow in `naga`'s WGSL parser, on `Stage::race` -> `Scene::new` ->
 `create_shader_module`: the parser recurses, and the frames above it were
-`app::run` 482,000 bytes, `run_race` 545 KB, `App::open_with` 385 KB,
+`app::run` 481,936 bytes, `run_race` 545 KB, `App::open_with` 385 KB,
 `Stage::race` 315 KB, `Scene::new` 172 KB and the winit closure 160 KB, about 2.07 MB
 before the recursion began. The menu route survived because it never entered
 `run_race`, and builds its scene on the `race-build` thread. Upstream knows the

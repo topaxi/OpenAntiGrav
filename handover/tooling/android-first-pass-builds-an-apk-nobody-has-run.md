@@ -1,7 +1,7 @@
 ---
 status: blocked-hardware
 titles: [all]
-updated: 2026-11-18
+updated: 2026-11-24
 summary: "Android on the S24: deploy the APK, push data, launch and read the first-run log; fix what shows"
 ---
 
