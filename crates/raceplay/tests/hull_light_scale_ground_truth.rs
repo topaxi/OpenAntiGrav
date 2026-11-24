@@ -184,5 +184,8 @@ fn modestos_grid_hull_takes_the_second_light_the_ge_list_carries() {
         (got - want).length() < 1e-3,
         "slot 0 points along the original's vector: {got:?} against {want:?}"
     );
-    assert_eq!(slots[1], [0.0; 4], "the twin is out of range, slot 1 is empty");
+    assert_eq!(
+        slots[1], [0.0; 4],
+        "the twin is out of range, slot 1 is empty"
+    );
 }
