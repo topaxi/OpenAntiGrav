@@ -158,6 +158,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
             stages: 15,
         }),
         stage_textures: None,
+        cannon_lights: false,
         camera_scale: 0.7,
         hull_scale: None,
         layouts: Some(oag_title::DetonatorLayouts {

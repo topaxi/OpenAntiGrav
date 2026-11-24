@@ -435,6 +435,8 @@ pub struct RaceView {
     /// Whether a Missile that reaches a craft plays HD's explosion model. See
     /// `options::ViewSetup::hd_missile_blast`.
     pub(super) hd_missile_blast: bool,
+    /// `options::ViewSetup::detonator_cannon_lights`.
+    pub(super) detonator_cannon_lights: bool,
     /// The stage's generator, deliberately **not** `world.rng` - see
     /// [`Self::exhaust_rng`].
     pub(super) stage_rng: Rng,

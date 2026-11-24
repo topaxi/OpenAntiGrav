@@ -821,6 +821,11 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
         hd_bomb_blast: wm.bomb_blast_hd.is_some(),
         bomb_shockwave_fades: wm.bomb_blast_pulse.is_some_and(|b| b.shockwave_fades),
         hd_missile_blast: wm.missile_blast_hd.is_some(),
+        detonator_cannon_lights: options.mode == Mode::Detonator
+            && craft_title
+                .race
+                .detonator
+                .is_some_and(|detonator| detonator.cannon_lights),
         pulse_laid_pose: craft_title.looks.laid_pose.applies_everywhere(),
         laid_pose_scaled: craft_title.looks.laid_pose_scaled.applies_everywhere(),
         screen_flash: extents,

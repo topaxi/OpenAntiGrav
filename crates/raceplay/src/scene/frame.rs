@@ -45,6 +45,16 @@ pub(super) struct PortalPass {
 }
 
 impl Scene {
+    /// `lights` with the Detonator cannon's own appended: the muzzles are the loaded hulls'.
+    fn with_detonator_lights(
+        &self,
+        mut lights: Vec<mesh_render::SpuLight>,
+        race: &Race,
+    ) -> Vec<mesh_render::SpuLight> {
+        lights.extend(race.detonator_cannon_lights(&self.weapon_quads.draw));
+        lights
+    }
+
     /// Which of a PS3 circuit's chunks the viewed seat's craft and camera may draw: tier one on
     /// a circuit that partitions by chunk rather than by section (`oag_render::pvs::ChunkSet`).
     /// Located from world positions, because `track.pvs` carries its own cell positions and is
@@ -491,7 +501,9 @@ impl Scene {
             // The shadow map's own projection and strength, or `off` where
             // nothing casts - see `Scene::shadow_uniform`.
             shadow: self.shadow_uniform(shadows),
-            spu_lights: mesh_render::SpuLights::from_slice(&race.hd_spu_lights()),
+            spu_lights: mesh_render::SpuLights::from_slice(
+                &self.with_detonator_lights(race.hd_spu_lights(), race),
+            ),
             sun_occlusion: self.sun_occlusion_matrices(),
             craft_shadow: self.shadow_map.borrow().receiver_shadows(),
             refraction: self.target_projection(section_view).to_cols_array_2d(),
@@ -590,7 +602,9 @@ impl Scene {
         let ship_scene = mesh_render::Scene {
             zone: mesh_render::Zone::default(),
             light,
-            spu_lights: mesh_render::SpuLights::from_slice(&race.hd_craft_spu_lights()),
+            spu_lights: mesh_render::SpuLights::from_slice(
+                &self.with_detonator_lights(race.hd_craft_spu_lights(), race),
+            ),
             ..scene
         };
         let weapon_scene = Self::weapon_scene(&scene);
