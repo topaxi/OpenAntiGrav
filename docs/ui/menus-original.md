@@ -982,7 +982,7 @@ the anchor** (`oag_ui::font::snapped_run`'s `ink_right`), not its pen end: the p
 380, 388, 400, 407, 415; aligned by pen end ours started at 362, 369, 376, 383, 397, 403, 410 (the same pitch, 4 px left: the last glyph's
 trailing advance, 4.2 px for the `!`); on the ink edge ours starts 366, 373, 380, 387, 401, 407, 414, each within 1 px. Only this
 widget measures it: no other captured Pure frame has a right-aligned snapped string (`menu-main`, `-team`, `-mode`, `-sr-*`, `-t-*`
-and `-pause` re-rendered before and after are pixel for pixel equal). A centred string is still placed by the pen end; the pause band's three words are the only centred snapped strings in a Pure pair, and their rounding is open (`docs/tools/compare-page.md`, "The band's words and the HUD top, measured again"): 1 px left on `Continue` and `Restart` at scale 1.2; the rows at scale 1.0 (Free Play, Tournament) are already exact, and the floor rule that fits the 1.2 rows is false on the 1.0 ties ("The rows' rounding, decided at scale 1.0"). The pointer rectangles over a drawn line (`hints::scan`) follow
+and `-pause` re-rendered before and after are pixel for pixel equal). A centred string starts at `ceil(x - W / 2)`, `W` the original's measure (`oag_ui::font::snapped_centre_pen`, below, "Pure's centred text starts at half its measure"). The pointer rectangles over a drawn line (`hints::scan`) follow
 the same rule, so a tap lands on the ink; our own `menu.toml` pages' right-hand value columns on Pure now end their ink on
 `value_right` too (no Pure pair draws one).
 
@@ -1016,3 +1016,10 @@ space of another advance (3 to 10 texels, 28 mismatches in every variant over th
 detail of the original, unexplained. The typed band's remaining pixels over 40 grey: `menu-main` 150, `menu-mode` 142, `menu-sr-track` 75,
 `menu-t-sel` 46 (of 480x32). `menu-mode`'s are the reveal count, not the spacing: the original has typed three characters more (`CHOI_`
 against ours `C_`), 50 ms at 58 a second, inside the pair clock's stated two-character error ("The pair clock").
+
+## Pure's centred text starts at half its measure (2026-11-24, `pure-centre-rounding`)
+
+**Law (confidence 80, read off `Text_BuildGlyphQuads` `0x08947ae0` and `Text_MeasureString` `0x08947868`, fits all seven measured `<Menu>` rows).** A centred string's pen starts at `x - W / 2 - b0 * s` and is not rounded; the first glyph's own step (`ceil(pen + b0 * s)`) rounds it,
+so the first quad is `ceil(x - W / 2)`. `W` is the executable's measure: the first glyph's ink to the last glyph's ink, each pen stepped up to a whole unit on the way (`oag_ui::font::snapped_centre_pen`), not the advance sum nor `snapped_run().end`. An odd `W` at scale 1 is a `.5` tie and rounds up. Evidence and
+the seven-row table: `docs/ghidra/functions/psp-pure-usa/menu-text-centring.md`; the before and after of the pause pair: `docs/tools/compare-page.md`, "The rows' rounding, recovered from the executable". Wired for Pure only (`MenuSkin::snapped_pens`): `menu-pause`'s band-word box 610 to 240 px over 40 grey, every other Pure pair, Pulse and HD pairs pixel for pixel
+equal. Test: `font::centre_tests` (a tie at scale 1, a 1.2 string the old rule starts a unit left, a leading bearing) and `render::tests::a_snapped_pen_draws_each_glyph_at_a_whole_unit` (they fail with the law off), `pure_centre_ground_truth` (the seven rows, on the disc).
