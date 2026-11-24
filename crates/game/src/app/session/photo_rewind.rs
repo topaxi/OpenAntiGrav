@@ -32,9 +32,8 @@ const PLAY_RELEASE: f32 = 0.5;
 #[derive(Debug)]
 pub(super) struct Job {
     shot: Shot,
-    /// The channels of the frames so far, summed. At most 130 frames of 255 fit 16 bits.
-    sum: Vec<u16>,
-    size: (u32, u32),
+    /// The frames so far, summed.
+    sum: crate::photo::average::Sum,
     path: std::path::PathBuf,
     /// The description and stream of the tick the shot is taken at.
     pending: Option<super::photo_meta::Pending>,
@@ -280,6 +279,12 @@ impl super::Session {
         // The controls the shot kept: a blur the race cannot draw is not one of them.
         if let Some(pending) = pending.as_mut() {
             pending.meta.picture = Some(shot_meta::Picture::of(&effects, Some(&plan)));
+            // A track blur has the camera ride the craft; `--from-png` draws its frames with it.
+            if matches!(plan.blur(), Some((effects::Blur::Track, _)))
+                && let Some(camera) = pending.meta.camera.as_mut()
+            {
+                camera.mount = stage.race.photo_mount().as_ref().map(shot_meta::Mount::of);
+            }
         }
         debug!(
             "photo mode: a shot of {} frames at tick {tick} (blur {:?}, lens {})",
@@ -295,8 +300,7 @@ impl super::Session {
         );
         open.job = Some(Job {
             shot,
-            sum: Vec::new(),
-            size: (0, 0),
+            sum: crate::photo::average::Sum::default(),
             path: path.to_path_buf(),
             pending,
             started: web_time::Instant::now(),
@@ -333,14 +337,7 @@ impl super::Session {
         };
         match frame {
             Ok((pixels, width, height)) => {
-                if job.sum.is_empty() {
-                    job.sum = vec![0; pixels.len()];
-                    job.size = (width, height);
-                }
-                if job.size == (width, height) && job.sum.len() == pixels.len() {
-                    for (sum, &channel) in job.sum.iter_mut().zip(&pixels) {
-                        *sum += u16::from(channel);
-                    }
+                if job.sum.add(&pixels, (width, height)) {
                     job.shot.advance();
                 }
             }
@@ -371,7 +368,6 @@ impl super::Session {
         let Job {
             shot,
             sum,
-            size,
             path,
             pending,
             started,
@@ -388,11 +384,7 @@ impl super::Session {
             self.photo_message(crate::photo::strings::CANCELLED);
             return;
         }
-        let half = frames / 2;
-        let pixels: Vec<u8> = sum
-            .iter()
-            .map(|&total| ((u32::from(total) + half) / frames) as u8)
-            .collect();
+        let (pixels, size) = (sum.average(frames), sum.size());
         let averaged = super::photo_hud::Averaged {
             pixels,
             size,

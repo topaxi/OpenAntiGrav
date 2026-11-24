@@ -633,6 +633,8 @@ fn pose_flaps(cli: &Cli) -> Result<Option<crate::race_capture::pose_flaps::PoseF
 pub(crate) struct RaceRoute {
     pub(crate) net: Option<crate::net_play::NetPlay>,
     pub(crate) restage: Option<std::sync::Arc<oag_replay::ShotRecord>>,
+    /// With `restage`: the motion blur the shot was averaged from.
+    pub(crate) blurred: Option<crate::shot_meta::Blurred>,
 }
 
 /// Loads a track and a ship and either captures one frame or opens a window.
@@ -652,7 +654,11 @@ pub(crate) fn run_race(
     music_discs: oag_sound::MusicDiscs,
     route: RaceRoute,
 ) -> Result<()> {
-    let RaceRoute { net, restage } = route;
+    let RaceRoute {
+        net,
+        restage,
+        blurred,
+    } = route;
     options.water = crate::water_setting::for_source(settings, &options.source);
     options.shadow_resolution = cli.shadow_resolution.unwrap_or_else(|| {
         crate::water_setting::profile_for_source(settings, &options.source)
@@ -789,6 +795,7 @@ pub(crate) fn run_race(
                         .map(crate::shot_meta::Picture::from_flag)
                         .transpose()
                         .map_err(|why| anyhow::anyhow!("--picture: {why}"))?,
+                    blurred,
                 },
                 gpu,
                 give: give_weapon(cli.give())?,

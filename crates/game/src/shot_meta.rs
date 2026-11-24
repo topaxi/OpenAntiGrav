@@ -126,6 +126,56 @@ pub struct Camera {
     /// The vertical field of view in degrees, when the camera states one.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub fov_deg: Option<f32>,
+    /// How the camera follows its craft, written by a track blur shot: the camera that draws
+    /// each of its frames.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mount: Option<Mount>,
+}
+
+/// A camera bound to the craft it frames (`oag_raceplay::photo::mount::Mount`), in the text of a
+/// track blur shot: the shot's frames are drawn with the camera riding the craft.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Mount {
+    /// The rule: `craft` (rigid in the craft's frame), `offset` (the craft's position plus an
+    /// offset in world axes, at a world orientation) or `node` (on the circuit's camera node
+    /// nearest the craft, aimed at it).
+    pub follow: String,
+    /// The grid slot of the craft framed.
+    pub subject: usize,
+    /// The eye: in the craft's frame, relative to the craft, or the node's own position.
+    pub eye: [f32; 3],
+    /// The orientation as a quaternion `[x, y, z, w]`: in the craft's frame, in the world, or
+    /// the roll about the view axis, by the rule.
+    pub rotation: [f32; 4],
+    /// The vertical field of view in degrees.
+    pub fov_deg: f32,
+}
+
+impl Mount {
+    /// The text of `mount`.
+    #[must_use]
+    pub fn of(mount: &oag_raceplay::photo::mount::Mount) -> Self {
+        Self {
+            follow: mount.follow.name().to_string(),
+            subject: mount.subject,
+            eye: mount.eye.to_array(),
+            rotation: mount.rotation.to_array(),
+            fov_deg: mount.fov_deg,
+        }
+    }
+
+    /// The mount this text describes, or `None` when its rule is not one this build knows.
+    #[must_use]
+    pub fn mount(&self) -> Option<oag_raceplay::photo::mount::Mount> {
+        Some(oag_raceplay::photo::mount::Mount {
+            follow: oag_raceplay::photo::mount::Follow::from_name(&self.follow)?,
+            subject: self.subject,
+            eye: oag_core::math::Vec3::from_array(self.eye),
+            rotation: oag_core::math::Quat::from_array(self.rotation),
+            fov_deg: self.fov_deg,
+        })
+    }
 }
 
 /// Photo mode's picture controls as the panel shows them (`oag_raceplay::photo::effects`), so
@@ -319,6 +369,21 @@ impl Picture {
         effects
     }
 
+    /// The controls the shot's frames are drawn with: [`Self::effects`] and the motion blur the
+    /// shot kept, for [`Plan::of`]. `None` for a shot that was not a motion blur.
+    #[must_use]
+    pub fn blurred_effects(&self) -> Option<Effects> {
+        let kind = match self.motion_blur.as_str() {
+            "track" => 1,
+            "ship" => 2,
+            _ => return None,
+        };
+        let mut effects = self.effects().offering(true, true);
+        effects.set(Row::MotionBlur, kind);
+        effects.set(Row::Shutter, self.shutter.unwrap_or(Effects::SHUTTER_OPENS));
+        Some(effects)
+    }
+
     /// The `--picture` value that draws these controls: `key=value` pairs, the aperture and
     /// focus only with depth of field on.
     #[must_use]
@@ -465,6 +530,7 @@ pub fn camera_of(lens: &str, pose: &oag_raceplay::CameraOverride) -> Camera {
         forward: v(pose.orientation * oag_core::math::Vec3::NEG_Z),
         up: v(pose.orientation * oag_core::math::Vec3::Y),
         fov_deg: pose.fov_deg,
+        mount: None,
     }
 }
 
@@ -501,6 +567,19 @@ pub struct Context {
     pub render: Option<toml::Table>,
     /// The picture controls to draw the frame with and to record (`--picture`).
     pub picture: Option<Picture>,
+    /// A motion blur shot being made again (`--from-png`): the frames it was averaged from.
+    pub blurred: Option<Blurred>,
+}
+
+/// A motion blur shot as its text recorded it, to be drawn as the frames it was made of.
+#[derive(Debug, Clone)]
+pub struct Blurred {
+    /// The controls, with the blur.
+    pub effects: Effects,
+    /// How many frames the shot was averaged from, as recorded.
+    pub frames: u32,
+    /// How the camera followed the craft, kept by a track blur.
+    pub mount: Option<oag_raceplay::photo::mount::Mount>,
 }
 
 /// A render profile as the text's `[render]` table.

@@ -9,6 +9,7 @@ use log::warn;
 use oag_gameplay::ControlScheme;
 use oag_mesh::mesh_render::Anisotropy;
 use oag_raceplay::*;
+mod accumulate;
 mod bench;
 mod describe;
 pub mod gpu;
@@ -17,6 +18,7 @@ mod picture;
 pub mod pose_flaps;
 pub mod pose_hold;
 pub mod pose_lean;
+mod probe;
 mod race_bench;
 mod shot;
 pub mod spectrum;
@@ -586,12 +588,21 @@ pub fn capture(
     // rendered at the tick-before-last pose before that tick runs. Every
     // other capture drives all its ticks here, exactly as before.
     let race_bench = race_bench::requested();
+    // A motion blur shot drawn again is driven to the tick before its first frame, and the frames
+    // draw it on from there (`accumulate`).
+    let accumulated = {
+        let rect = oag_display::display::viewport((width, height), options.aspect);
+        accumulate::Shot::of(options, title, &race, rect.2 / rect.3)
+    };
     let deferred_tick = (race_bench.is_none()
+        && accumulated.is_none()
         && options.motion_blur != oag_display::display::MotionBlur::Off
         && options.ticks > 0)
         .then(|| options.ticks - 1);
     let driven = if race_bench.is_some() {
         0
+    } else if let Some(shot) = &accumulated {
+        shot.driven().min(options.ticks)
     } else {
         deferred_tick.unwrap_or(options.ticks)
     };
@@ -931,6 +942,42 @@ pub fn capture(
             advance_one_tick(&mut race, &mut held, audio, options, tick);
         }
     }
+    // The frames of a shot of several, averaged; or, for one frame with a speed blur, the zoom
+    // ring's history before it.
+    let averaged = {
+        let mut rig = accumulate::Rig {
+            device: &device,
+            queue: &queue,
+            scene: &mut scene,
+            race: &mut race,
+            held: &mut held,
+            audio,
+            options,
+            view: &view,
+            viewport,
+            camera_jitter,
+            presented: match (framebuffer.as_mut(), presented) {
+                (Some(framebuffer), Some(state)) => {
+                    framebuffer.resize_output(&device, (width, height));
+                    Some(accumulate::Resolve {
+                        framebuffer,
+                        rect,
+                        presentation: state.presentation,
+                        temporal_supported,
+                    })
+                }
+                _ => None,
+            },
+            target: &target,
+        };
+        match accumulated.filter(|_| !finished_early) {
+            Some(shot) => Some(rig.run(&shot)?),
+            None => {
+                rig.settle_zoom();
+                None
+            }
+        }
+    };
     options.ghost.finish(&mut race)?;
     if let (Some(age), None) = (options.pose_boost, warmed_boost) {
         race.force_boost_state(age, options.pose_intensity, options.pose_speed);
@@ -964,148 +1011,18 @@ pub fn capture(
     // rather than `#[cfg]`, so the harness still type-checks without
     // `perf-probe` and cannot rot between the runs that use it.
     if cfg!(feature = "perf-probe") {
-        let split = race.view_state().viewport_count() > 1;
-        let pacer = bench::TickPacer::from_env();
-        if !split && !race.windowed() {
-            bench::run(&device, &queue, |encoder, timestamps| {
-                if pacer.starts_tick() {
-                    scene.forget_shadow_gathers();
-                }
-                scene.render(
-                    &device,
-                    &queue,
-                    encoder,
-                    &view,
-                    &race,
-                    viewport,
-                    options.fov,
-                    options.frustum_culling,
-                    options.pvs_culling,
-                    options.anim_seconds,
-                    options.motion_blur,
-                    options.shadows,
-                    camera_jitter,
-                    &spectrum,
-                    timestamps.scene,
-                    timestamps.blur,
-                    timestamps.bloom,
-                );
-            });
-        }
-        // The whole frame as the window submits it, one view or many: what
-        // `bench::run` leaves out (finishing and submitting the encoder).
-        // A windowed race is benched window by window, each its own encoder and submission
-        // as the window's frame loop makes them (the scene side of the chain: the resolve,
-        // HUD and composite are the same per window whatever this lane changes).
-        let windowed = race.windowed();
-        let seats: Vec<usize> = (0..race.windows().len())
-            .map(|window| race.window_drawn(window).len())
-            .collect();
-        let bench_views = if windowed {
-            seats.iter().sum()
-        } else {
-            race.views_drawn()
-        };
-        bench::run_split(
-            &device,
-            &queue,
-            &adapter.get_info(),
-            bench_views,
-            |timers| {
-                if pacer.starts_tick() {
-                    scene.forget_shadow_gathers();
-                }
-                if windowed {
-                    let mut rest = &mut *timers;
-                    // The first window that draws does the frame's shared work, the rest read it.
-                    let mut shared = false;
-                    for (window, &count) in seats.iter().enumerate() {
-                        let (own, tail) = rest.split_at_mut(count.min(rest.len()));
-                        rest = tail;
-                        let mut encoder =
-                            device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                                label: Some("race bench window"),
-                            });
-                        scene.render_window(
-                            &device,
-                            &queue,
-                            &mut encoder,
-                            &view,
-                            &race,
-                            window,
-                            viewport,
-                            options.fov,
-                            options.frustum_culling,
-                            options.pvs_culling,
-                            options.anim_seconds,
-                            options.shadows,
-                            &spectrum,
-                            shared,
-                            oag_raceplay::WindowEffects {
-                                motion_blur: options.motion_blur,
-                                camera_jitter,
-                                ..Default::default()
-                            },
-                            own,
-                        );
-                        shared |= count > 0;
-                        queue.submit(Some(encoder.finish()));
-                    }
-                    return;
-                }
-                if split {
-                    scene.render_viewports(
-                        &device,
-                        &queue,
-                        &view,
-                        &race,
-                        viewport,
-                        options.fov,
-                        options.frustum_culling,
-                        options.pvs_culling,
-                        options.anim_seconds,
-                        options.shadows,
-                        &spectrum,
-                        oag_raceplay::WindowEffects {
-                            motion_blur: options.motion_blur,
-                            camera_jitter,
-                            ..Default::default()
-                        },
-                        timers,
-                    );
-                    return;
-                }
-                let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                    label: Some("race bench frame"),
-                });
-                let timer = timers.first_mut().and_then(Option::as_mut);
-                scene.render(
-                    &device,
-                    &queue,
-                    &mut encoder,
-                    &view,
-                    &race,
-                    viewport,
-                    options.fov,
-                    options.frustum_culling,
-                    options.pvs_culling,
-                    options.anim_seconds,
-                    options.motion_blur,
-                    options.shadows,
-                    camera_jitter,
-                    &spectrum,
-                    timer
-                        .as_deref()
-                        .and_then(oag_gpu::timing::PassTimer::writes),
-                    None,
-                    None,
-                );
-                if let Some(timer) = timer {
-                    timer.resolve(&mut encoder);
-                }
-                queue.submit(Some(encoder.finish()));
-            },
-        );
+        probe::run(probe::Probe {
+            device: &device,
+            queue: &queue,
+            adapter: adapter.get_info(),
+            scene: &mut scene,
+            race: &race,
+            view: &view,
+            viewport,
+            options,
+            camera_jitter,
+            spectrum: &spectrum,
+        });
     }
     // A `--windows` race is one picture per window, each its own frame: the loop is the
     // windows, and a race with none is the one pass it always was.
@@ -1129,7 +1046,9 @@ pub fn capture(
         });
         // A split screen draws one scene per view, in command buffers of its own: see
         // `Scene::render_viewports`. One view is the call below, untouched.
-        let stats = if let Some(index) = window {
+        let stats = if let Some(average) = &averaged {
+            average.stats
+        } else if let Some(index) = window {
             // One window of a multi-window race: its seats cut up in it, the same call the
             // window makes for each of its windows (a window of one seat is the whole frame).
             if race.window_drawn(index).is_empty() {
@@ -1246,7 +1165,9 @@ pub fn capture(
         // afterwards at presentation size, per
         // [ADR-0036](../../../docs/architecture/adr/0036-ui-composites-at-presentation-resolution.md);
         // the grade comes last, in `composite`, so the HUD is inside it.
-        if let (Some(framebuffer), Some(state)) = (framebuffer.as_mut(), presented) {
+        if let (Some(framebuffer), Some(state)) = (framebuffer.as_mut(), presented)
+            && averaged.is_none()
+        {
             framebuffer.resize_output(&device, (width, height));
             // **A `--presented` capture is the one place an upscaler's output can
             // be looked at**, which is what this flag exists for - so the temporal
@@ -1293,6 +1214,13 @@ pub fn capture(
                 temporal,
                 None,
             );
+        }
+        // The average of a shot's frames goes where the scene was, under the HUD.
+        if let Some(average) = &averaged {
+            let output = framebuffer
+                .as_ref()
+                .map_or(&target, oag_present::upscale::Framebuffer::output_texture);
+            average.encode((&device, &queue), &mut encoder, output);
         }
         // The HUD goes on the presentation target's aspect rectangle, else on the scene's texture.
         let (hud_view, hud_viewport) = match framebuffer.as_ref() {

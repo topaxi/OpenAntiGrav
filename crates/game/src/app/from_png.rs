@@ -68,16 +68,44 @@ fn picture_lines(meta: &shot_meta::Meta, cli: &mut Cli) -> Vec<String> {
         };
     };
     cli.picture = Some(picture.to_flag());
-    let mut lines = vec![format!("picture controls applied: {}", picture.to_flag())];
-    if !picture.motion_blur.is_empty() {
-        lines.push(format!(
-            "the shot is a {} motion blur (shutter {}, {} frames); this re-render is the one frame",
-            picture.motion_blur,
-            picture.shutter.unwrap_or_default(),
-            picture.frames
-        ));
+    vec![format!("picture controls applied: {}", picture.to_flag())]
+}
+
+/// The motion blur the shot was averaged from, when it was one, and the line that says what the
+/// re-render does about it. A track blur needs the camera it rode the craft with
+/// (`[camera.mount]`): a shot that predates the key is drawn as the one frame, and says so.
+fn blurred_of(meta: &shot_meta::Meta) -> (Option<shot_meta::Blurred>, Option<String>) {
+    let Some(picture) = &meta.picture else {
+        return (None, None);
+    };
+    let Some(effects) = picture.blurred_effects() else {
+        return (None, None);
+    };
+    let said = format!(
+        "the shot is a {} motion blur (shutter {}, {} frames)",
+        picture.motion_blur,
+        picture.shutter.unwrap_or_default(),
+        picture.frames
+    );
+    let mount = meta
+        .camera
+        .as_ref()
+        .and_then(|camera| camera.mount.as_ref())
+        .and_then(shot_meta::Mount::mount);
+    if picture.motion_blur == "track" && mount.is_none() {
+        return (
+            None,
+            Some(format!(
+                "{said}; it predates the camera mount a track blur is drawn with, so this re-render is the one frame"
+            )),
+        );
     }
-    lines
+    let blurred = shot_meta::Blurred {
+        effects,
+        frames: picture.frames,
+        mount,
+    };
+    (Some(blurred), Some(format!("{said}; drawing its frames")))
 }
 
 /// Prints what `path` carries to stdout.
@@ -112,7 +140,10 @@ pub(crate) fn info(path: &Path) -> Result<()> {
 }
 
 /// Reads `path` and points `cli` at the `--race --screenshot` run that makes its frame again.
-pub(crate) fn prepare(cli: &mut Cli, path: &Path) -> Result<Arc<ShotRecord>> {
+pub(crate) fn prepare(
+    cli: &mut Cli,
+    path: &Path,
+) -> Result<(Arc<ShotRecord>, Option<shot_meta::Blurred>)> {
     let found = read(path)?;
     let Some(record) = found.record else {
         let why = found
@@ -146,7 +177,8 @@ pub(crate) fn prepare(cli: &mut Cli, path: &Path) -> Result<Arc<ShotRecord>> {
         cli.camera_pose = Some(format!("{ex},{ey},{ez},{fx},{fy},{fz},{ux},{uy},{uz}"));
         cli.camera_fov = camera.fov_deg;
     }
-    for line in picture_lines(&meta, cli) {
+    let (blurred, blur_line) = blurred_of(&meta);
+    for line in picture_lines(&meta, cli).into_iter().chain(blur_line) {
         println!("from-png: {line}");
     }
     println!(
@@ -157,7 +189,7 @@ pub(crate) fn prepare(cli: &mut Cli, path: &Path) -> Result<Arc<ShotRecord>> {
         record.tick,
         record.hash
     );
-    Ok(Arc::new(record))
+    Ok((Arc::new(record), blurred))
 }
 
 #[cfg(test)]

@@ -223,9 +223,12 @@ fn run(mut cli: Cli) -> Result<()> {
     if let Some(path) = &cli.shot.png_info {
         return from_png::info(path);
     }
-    let restage = match cli.shot.from_png.clone() {
-        Some(path) => Some(from_png::prepare(&mut cli, &path)?),
-        None => None,
+    let (restage, blurred) = match cli.shot.from_png.clone() {
+        Some(path) => {
+            let (record, blurred) = from_png::prepare(&mut cli, &path)?;
+            (Some(record), blurred)
+        }
+        None => (None, None),
     };
 
     // Loaded (and, on first run or a missing key, written back complete) before
@@ -606,7 +609,11 @@ fn run(mut cli: Cli) -> Result<()> {
             anisotropy,
             audio,
             music_discs,
-            headless::RaceRoute { net, restage },
+            headless::RaceRoute {
+                net,
+                restage,
+                blurred,
+            },
         );
     }
 
