@@ -426,6 +426,17 @@ reproduces the 84 grabs' slab speed (6.28 px per frame measured, 0.69 to 0.72 s 
 Confidence 85 for the geometry (code), 80 for the 0.7 s ramp and the restart, 40 for the 0 to 2
 frame offset between the press and the reset. **Wired** (`hd-banner-wipe`, numbers in [image-widget.md](image-widget.md), "Wired").
 
+## The ring and the lattice slide: recovered (2026-11-24, `shipselect-ring-re`)
+
+The `HexSelection` widget's code is read in [ship-select-ring.md](ship-select-ring.md). On a step the
+lattice slides one column (72 units, left on a forward step) linearly over 0.1 s, a spare column
+entering with the incoming team, then snaps back with the column parity flipped and the window refilled;
+the ring is one `Hexagon_HD_THICK_OUT.gtf` quad fixed at the centre column, its y easing by half per
+frame to the new half-row, its colour a free-running 2/3 s sawtooth white to `HD_Blue` to black. The
+"ring displaced right" of the step grabs is the cells sliding under it. `SelectedColumnCol` is not a key
+the class reads; the selected fill is `HD_Blue`. Confidence 85 for the laws (code, two call sites, Omega's
+copy), ready to wire (the table there).
+
 ## Omega and 2048
 
 - **Omega: checked, differs; ported on its own constants (2026-11-19, `hd-ship-craft`).**
