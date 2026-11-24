@@ -64,15 +64,15 @@ the numbers below is measured unless it says so.
   skill needs a look only if `oag-ext-abi` moves. Size M (45), difficulty
   medium (50).
 - **A `wgpu::PipelineCache` on disk** (Vulkan pipeline cache, feature
-  `PIPELINE_CACHE`) would cut first-launch pipeline compiles on the Deck and
-  Android. It is **not applicable as it stands**: `Device::create_pipeline_cache`
-  is `unsafe` (the cache bytes are trusted), which the maintainer's rule
-  against wgpu's unsafe escape hatches and the workspace's
-  `unsafe_code = "deny"` both refuse. Listed so nobody re-derives it; it needs
-  a maintainer decision (`blocked-maintainer`) before any size is worth
-  estimating. Desktop race build is already 195-372 ms
-  (`docs/architecture/race-load-transition.md`), so the gain would be on
-  slower GPUs.
+  `PIPELINE_CACHE`; `Device::create_pipeline_cache` is `unsafe`): measured on
+  desktop RADV and not built. Mesa's own shader disk cache already takes a Pulse
+  PSP race launch from 65.7 G to 24.0 G instructions on the second launch, and a
+  pipeline cache adds about 1 % over that; naga's compile runs before it
+  (`docs/architecture/load-time.md`, "Third round"). Open only for a driver with
+  no disk cache of its own, unmeasured: the S24's Xclipse driver on Android.
+  Measuring command:
+  `perf stat -e instructions:u` around a race launch on that device with and
+  without the driver's cache warm; under about 10 % keeps it unbuilt.
 
 ## Next Steps
 

@@ -51,7 +51,7 @@ threads).
   screen; `campaign_cursor_ground_truth` (14 tests) and four `footer_hint_ground_truth`
   tests launch once for the three choices: the modules' user instructions -35 % and
   -19 %.
-- Measured and not changed: a disk pipeline cache is `unsafe` in wgpu 30, one shader
+- Measured and not changed: a disk pipeline cache adds about 1 % over mesa's own shader cache (`docs/architecture/load-time.md`, "Third round"), one shader
   module per stage gains 1.5 to 2 % of a race launch.
 
 ## Next Steps

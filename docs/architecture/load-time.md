@@ -441,19 +441,26 @@ is 42 to 45 % of a racing launch's CPU, 35 % of it `compile_stage` (naga's
 SPIR-V write 12 %); the driver's own compile is under 1 % because RADV links
 lazily.
 
-- **A disk pipeline cache cannot pay, so it is not built.** The maintainer
-  allows the one `unsafe` wgpu call (`Device::create_pipeline_cache`,
-  `docs/architecture/dependency-upgrades.md`, the `PipelineCache` bullet) only if
-  the benefit is big, and it is under 2 %. A pipeline cache is handed to
-  `vkCreateGraphicsPipelines` (`wgpu-hal` 30.0.1 `vulkan/device.rs`,
-  `create_render_pipeline`), after `compile_stage` has run naga's override
-  processing, validation and SPIR-V write, so the 35 % above is paid with or
-  without it. What it can skip is the driver's own compile: `perf record -e
-  cpu-clock:u -F 499 --sort dso` of a Pulse PSP race launch (400 ticks, RADV, the
-  mesa disk cache already warm, load 63 to 65) puts `libvulkan_radeon.so` at 1.97 %
-  and 0.97 % of the user samples in two runs (`oag-game` 83 %, `libc` 15 %). The
-  whole driver, not only pipeline creation, is that small, so the cache's ceiling
-  is 1 to 2 % of a racing launch's instructions, against the 10 % bar.
+- **A disk pipeline cache cannot pay, so it is not built.** The one `unsafe`
+  wgpu call it needs (`Device::create_pipeline_cache`,
+  `docs/architecture/dependency-upgrades.md`, the `PipelineCache` bullet) is
+  allowed only if the benefit is big. It is not, for two reasons.
+  - The cache goes to `vkCreateGraphicsPipelines` only (`wgpu-hal` 30.0.1
+    `vulkan/device.rs`, `create_render_pipeline`), after `compile_stage` has run
+    naga's override processing, validation and SPIR-V write, so the 35 % above is
+    paid with or without it.
+  - What it skips is the driver's compile, and mesa's own shader disk cache
+    (`~/.cache/mesa_shader_cache`, no code of ours) already skips that on a second
+    launch. Pulse PSP race launch, 400 ticks, `target/debug`, `perf stat -e
+    instructions:u`, three pairs at load 62 to 64: a fresh empty
+    `MESA_SHADER_CACHE_DIR` 65.5 / 65.9 / 65.9 G, the warmed one 24.0 / 24.1 /
+    23.8 G (-63 %). That is the whole cold-to-warm saving a pipeline cache could
+    offer, and the player and the gate already have it. What a pipeline cache adds
+    on top is the warm driver's own share: `perf record -e instructions:u -c
+    5000000` puts `libvulkan_radeon.so` at 0.50 % of the warm launch's 24.0 G
+    (`oag-game` 90.3 %, `libc` 8.7 %); `cpu-clock:u` sampling gave 1.97 % and
+    0.97 % in two runs. Ceiling: about 1 %, against the 10 % bar. RADV only;
+    NVIDIA's driver cache was not measured here.
 - **One module per stage did not pay.** `mesh.wesl` as a 10 KB vertex module
   (no entry point but `vs_main`, two overrides) and a 90 KB fragment module cut
   `process_overrides` on the vertex stage to a clone of 10 KB: 18.9 -> 18.5 G on

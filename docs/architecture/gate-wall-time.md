@@ -177,8 +177,8 @@ by user instructions of the whole module at the gate's profile:
   four `footer_hint_ground_truth` tests (671 G -> 545 G) launch once, not once
   per choice.
 - Measured and not changed: the race build's pipeline compile (a disk pipeline
-  cache is capped by the driver's whole share, 1 to 2 % of a racing launch, and
-  naga's work runs before it; one module per stage 1.5 to 2 %), the PS2 music read.
+  cache adds about 1 % over mesa's own shader cache, which already takes a racing
+  launch from 65.7 G to 24.0 G instructions, and naga's work runs before it; one module per stage 1.5 to 2 %), the PS2 music read.
 
 ## Still open
 

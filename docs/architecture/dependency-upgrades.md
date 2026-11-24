@@ -90,9 +90,9 @@ asked for benefits, wgpu 30's own release notes (`CHANGELOG.md`, `v30.0.0` and
 used:
 
 - **Surface colour space and `display_hdr_info`**: threaded (the HDR thread).
-- **`PipelineCache`**: not worth its `unsafe`: `create_pipeline_cache` is `unsafe`
-  (`unsafe_code = "deny"`; the maintainer's rule against wgpu's unsafe escape
-  hatches). Measured at under 2 % of a racing launch (`docs/architecture/load-time.md`, "Third round"), so not built.
+- **`PipelineCache`**: `create_pipeline_cache` is `unsafe`
+  (`unsafe_code = "deny"`; the maintainer allows this one call only if the
+  benefit is big). Measured at about 1 % of a racing launch over mesa's own cache (`docs/architecture/load-time.md`, "Third round"), so not built.
 - **`Queue::present`, optional vertex buffer slots, `dispatch_workgroups`
   renames, `Buffer::get_mapped_range` returning `Result`**: already migrated
   (the tree builds against 30.0.1).
