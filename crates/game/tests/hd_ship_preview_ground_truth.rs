@@ -366,8 +366,13 @@ fn silhouette(
         oag_game::preview::model(archives, entry).unwrap_or_else(|e| panic!("{entry}: {e:#}"));
     let space = oag_display::space::Space::HD;
     let framing = oag_game::preview::ship_model::rest(fit, space.display_aspect, box_z);
-    let (view_projection, placed) =
-        oag_game::preview::ship_model::framed(widget, Some((fit, framing)), space, safe_area);
+    let (view_projection, placed) = oag_game::preview::ship_model::framed(
+        widget,
+        Some((fit, framing)),
+        &oag_game::preview::ship_model::control::Craft::default(),
+        space,
+        safe_area,
+    );
     let matrix = view_projection * placed;
     let (mut across, mut down): (Vec<f32>, Vec<f32>) = model
         .vertices
@@ -641,8 +646,12 @@ fn omega_poses_feisars_concept_hull_where_the_original_draws_it() {
     let entry = oag_game::preview::ship_entry(title, &location, oag_race::Mode::default());
     let model = oag_game::preview::psp2_scene::model(&mut archives, &entry)
         .unwrap_or_else(|e| panic!("{entry}: {e:#}"));
-    let (view_projection, placed) =
-        oag_game::preview::ship_model::matrices(&widget, oag_display::space::Space::HD, 1.0);
+    let (view_projection, placed) = oag_game::preview::ship_model::matrices(
+        &widget,
+        &oag_game::preview::ship_model::control::Craft::default(),
+        oag_display::space::Space::HD,
+        1.0,
+    );
     let matrix = view_projection * placed;
     let (mut across, mut down): (Vec<f32>, Vec<f32>) = model
         .vertices

@@ -87,6 +87,13 @@ pub struct Screen {
     /// XML authors one), else `None`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub help: Option<&'static str>,
+    /// How far the craft is zoomed on a Ship Select the player can turn, as the degrees of lens
+    /// taken off (`0.00` at rest).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub craft_zoom: Option<String>,
+    /// The craft's turn about X and Y in radians, `x,y`, on the same screen.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub craft_turn: Option<String>,
     /// The selected entry's own description in the Help overlay (a team's `Team Ship Help`).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub help_text: Option<String>,
@@ -259,6 +266,8 @@ impl State {
             "screen.id" => one(screen.map(|s| s.id.clone())),
             "screen.help" => one(screen.and_then(|s| s.help).map(str::to_string)),
             "screen.help_text" => one(screen.and_then(|s| s.help_text.clone())),
+            "screen.craft_zoom" => one(screen.and_then(|s| s.craft_zoom.clone())),
+            "screen.craft_turn" => one(screen.and_then(|s| s.craft_turn.clone())),
             "title" => one(screen.map(|s| s.title.clone())),
             "photo" => one(self.photo.clone()),
             "photo_fx" => one(self.photo_fx.clone()),
@@ -326,6 +335,8 @@ impl State {
                 | "screen.id"
                 | "screen.help"
                 | "screen.help_text"
+                | "screen.craft_zoom"
+                | "screen.craft_turn"
                 | "title"
                 | "focus"
                 | "photo"

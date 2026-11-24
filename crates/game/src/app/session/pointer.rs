@@ -182,6 +182,7 @@ fn drive_picker(
     {
         pointer.scroll = 0;
     }
+    picker.take_craft_pointer(&mut pointer);
     picker.model.pointer(&pointer, &targets)
 }
 

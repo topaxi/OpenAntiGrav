@@ -842,6 +842,8 @@ impl Controls {
         }
         self.view = raw.read(self.pad.triggers());
         let inputs = self.merge_players(pads);
+        let stick = inputs.get(self.keyboard_slot());
+        self.view.left = (stick.stick_x, stick.stick_y);
         self.pad_spoke |= std::mem::take(&mut self.android_spoke);
         inputs
     }
