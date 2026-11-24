@@ -189,39 +189,199 @@ mod tests {
         assert_eq!(reach.unblended, Twins::default());
     }
 
-    /// Every draw of a built model is submitted through a pipeline of its own class and
-    /// cull mode: no draw lands on the stand-in a pair no draw picks holds.
+    /// A model of two triangles: vertices 0 to 2 name no material row (a circuit's plain draws),
+    /// 3 to 5 name one, so a prepassed build splits its transparent list into plain and rest.
+    fn two_triangles() -> crate::mesh::Model {
+        let mut model = triangle_model();
+        let plain = model.vertices.clone();
+        model
+            .vertices
+            .extend(plain.into_iter().map(|vertex| crate::mesh::GpuVertex {
+                slots: vertex.slots | (1 << crate::mesh::slots::MATERIAL_SHIFT),
+                ..vertex
+            }));
+        model.indices = vec![0, 1, 2, 3, 4, 5];
+        model
+    }
+
+    fn build_circuit(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        model: &crate::mesh::Model,
+    ) -> crate::mesh_render::Built {
+        use crate::mesh_render as mr;
+        let scope = mr::BuildCacheScope::open();
+        let built = mr::build_with(
+            device,
+            queue,
+            model,
+            wgpu::TextureFormat::Rgba8Unorm,
+            oag_gpu::formats::SceneStore::Computed,
+            mr::Anisotropy::Off,
+            1,
+            mr::Depth::Scene,
+            mr::TRANSPARENT_BLEND,
+            mr::GlowMask::Stamped,
+            mr::Velocity::Write,
+            &mr::zone::StageArt::NONE,
+            mr::ShadowMaps::NONE,
+            mr::ShadowReceiver::Never,
+            mr::Texcoords::Interleaved,
+            true,
+            false,
+            false,
+            false,
+        )
+        .expect("building the mesh pipeline");
+        drop(scope);
+        built
+    }
+
+    fn assert_all_distinct(what: &str, picked: &[&wgpu::RenderPipeline]) {
+        for (at, one) in picked.iter().enumerate() {
+            for (other_at, other) in picked.iter().enumerate().skip(at + 1) {
+                assert_ne!(
+                    one, other,
+                    "{what}: picks {at} and {other_at} share one pipeline"
+                );
+            }
+        }
+    }
+
+    /// Every draw of a built circuit-shaped model (prepass, glow stamps, a plain and a rest half,
+    /// both cull modes, every blend class, an authored state, cutouts with and without a
+    /// reference) is submitted through a pipeline built for it: no draw lands on a stand-in.
     #[test]
-    fn every_transparent_draw_selects_a_pipeline_built_for_it() {
+    fn every_draw_selects_a_pipeline_built_for_it() {
         let Some((device, queue)) = device() else {
             eprintln!("no GPU adapter: skipping");
             return;
         };
         let state = wgpu::BlendState::PREMULTIPLIED_ALPHA_BLENDING;
-        let mut model = triangle_model();
-        model.transparent_draws = vec![
-            draw(Some(BlendClass::AlphaOver), false),
-            draw(Some(BlendClass::Additive), true),
-            draw(Some(BlendClass::None), false),
-            draw(Some(BlendClass::None), true),
+        let mut model = two_triangles();
+        model.per_batch_cull = true;
+        let on = |draw: DrawCall, range: std::ops::Range<u32>| DrawCall { range, ..draw };
+        model.draws = vec![on(draw(None, false), 0..3), on(draw(None, true), 0..3)];
+        model.alpha_tested_draws = vec![
             DrawCall {
-                blend_state: Some(state),
+                alpha_test_ref: None,
+                ..draw(None, false)
+            },
+            DrawCall {
+                alpha_test_ref: Some(0.3),
                 ..draw(None, true)
             },
         ];
-        let scope = crate::mesh_render::BuildCacheScope::open();
-        let built = build_once(&device, &queue, &model);
-        drop(scope);
+        model.transparent_draws = Vec::new();
+        for range in [0..3, 3..6] {
+            for culled in [false, true] {
+                for class in [
+                    BlendClass::AlphaOver,
+                    BlendClass::Additive,
+                    BlendClass::None,
+                ] {
+                    model
+                        .transparent_draws
+                        .push(on(draw(Some(class), culled), range.clone()));
+                }
+                model.transparent_draws.push(on(
+                    DrawCall {
+                        blend_state: Some(state),
+                        ..draw(None, culled)
+                    },
+                    range.clone(),
+                ));
+            }
+        }
+        let built = build_circuit(&device, &queue, &model);
+
+        let plain = built
+            .plain_blend
+            .as_ref()
+            .expect("a plain half of the list");
         let set = built.transparent_set();
         let picked: Vec<&wgpu::RenderPipeline> = model
             .transparent_draws
             .iter()
-            .map(|draw| set.select(draw))
+            .enumerate()
+            .map(|(at, draw)| {
+                if plain.takes(at) {
+                    plain.pipelines().select(draw)
+                } else {
+                    set.select(draw)
+                }
+            })
             .collect();
-        for (at, one) in picked.iter().enumerate() {
-            for other in &picked[at + 1..] {
-                assert_ne!(one, other, "two classes or twins share one pipeline");
-            }
+        assert_eq!(picked.len(), 16);
+        assert_all_distinct("blended draws, plain and rest", &picked);
+
+        let stamp = built.stamp_pipeline.as_ref().expect("a stamping model");
+        let stamps: Vec<&wgpu::RenderPipeline> = model
+            .transparent_draws
+            .iter()
+            .filter(|draw| draw.range.start == 0)
+            .filter(|draw| draw.blend_state.is_none() && draw.blend != Some(BlendClass::None))
+            .map(|draw| stamp.select(draw))
+            .collect();
+        assert_eq!(stamps.len(), 4);
+        assert_all_distinct("glow stamps", &stamps);
+
+        let culled = built
+            .culled
+            .as_ref()
+            .expect("the culling twin of the solid set");
+        for (what, opaque, default, by_reference) in [
+            (
+                "two-sided",
+                &built.pipeline,
+                &built.alpha_test_pipeline,
+                &built.cutout_pipelines,
+            ),
+            (
+                "culled",
+                &culled.pipeline,
+                &culled.alpha_test_pipeline,
+                &culled.cutout_pipelines,
+            ),
+        ] {
+            let cutouts = crate::mesh_render::CutoutPipelines {
+                default,
+                by_reference,
+            };
+            let referenced = cutouts.select(&model.alpha_tested_draws[1]);
+            let unreferenced = cutouts.select(&model.alpha_tested_draws[0]);
+            assert_all_distinct(what, &[opaque, referenced, unreferenced]);
         }
+        assert_ne!(
+            built.alpha_test_pipeline, culled.alpha_test_pipeline,
+            "the culling twin's cutout is its own"
+        );
+    }
+
+    /// The overlay and shine passes index the alpha-over and additive pairs by any draw's
+    /// `culled`, whatever its list: a model with only opaque draws, both cull modes, builds
+    /// both twins of both.
+    #[test]
+    fn an_overlay_draws_every_list_through_a_pipeline_of_its_own_twin() {
+        let Some((device, queue)) = device() else {
+            eprintln!("no GPU adapter: skipping");
+            return;
+        };
+        let mut model = two_triangles();
+        model.draws = vec![draw(None, false), draw(None, true)];
+        let built = build_circuit(&device, &queue, &model);
+        assert_all_distinct(
+            "overlay pairs",
+            &[
+                &built.blend_pipeline[0],
+                &built.blend_pipeline[1],
+                &built.additive_pipeline[0],
+                &built.additive_pipeline[1],
+            ],
+        );
+        assert!(
+            built.stamp_pipeline.is_none(),
+            "no transparent draw, nothing to stamp"
+        );
     }
 }
