@@ -22,6 +22,8 @@ pub(super) struct Shared<'a> {
     pub multisample: wgpu::MultisampleState,
     /// The blended pipelines' own: tested, never written.
     pub depth_stencil: &'a wgpu::DepthStencilState,
+    /// The twins of each pair the model's transparent draws pick.
+    pub reach: super::reach::Stamped,
 }
 
 /// The stamp pipelines: one pair for the alpha-over batches and one for the
@@ -39,11 +41,18 @@ impl Stamp {
     /// The pipeline one transparent draw stamps through.
     #[must_use]
     pub fn select(&self, draw: &crate::mesh::DrawCall) -> &wgpu::RenderPipeline {
-        let set = match draw.blend {
-            Some(oag_vex::vex::BlendClass::Additive) => &self.additive,
-            _ => &self.alpha_over,
+        let set = if Self::is_additive(draw) {
+            &self.additive
+        } else {
+            &self.alpha_over
         };
         &set[usize::from(draw.culled)]
+    }
+
+    /// Whether `draw` stamps through the additive pair: the rule [`Self::select`] and
+    /// `reach::Stamped::of` (which pairs a model builds) share.
+    pub(super) fn is_additive(draw: &crate::mesh::DrawCall) -> bool {
+        draw.blend == Some(oag_vex::vex::BlendClass::Additive)
     }
 }
 
@@ -116,14 +125,36 @@ pub(super) fn pipelines(shared: &Shared<'_>) -> Stamp {
             },
         )
     };
+    let alpha_over = shared.reach.alpha_over.pair(
+        |cull| {
+            make(
+                if cull {
+                    "mesh glow stamp (culled)"
+                } else {
+                    "mesh glow stamp (two-sided)"
+                },
+                cull,
+                false,
+            )
+        },
+        || make("mesh glow stamp (two-sided)", false, false),
+    );
+    let additive = shared.reach.additive.pair(
+        |cull| {
+            make(
+                if cull {
+                    "mesh glow stamp (additive, culled)"
+                } else {
+                    "mesh glow stamp (additive, two-sided)"
+                },
+                cull,
+                true,
+            )
+        },
+        || alpha_over[0].clone(),
+    );
     Stamp {
-        alpha_over: [
-            make("mesh glow stamp (two-sided)", false, false),
-            make("mesh glow stamp (culled)", true, false),
-        ],
-        additive: [
-            make("mesh glow stamp (additive, two-sided)", false, true),
-            make("mesh glow stamp (additive, culled)", true, true),
-        ],
+        alpha_over,
+        additive,
     }
 }

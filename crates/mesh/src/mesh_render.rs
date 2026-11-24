@@ -58,6 +58,7 @@ mod geometry;
 pub use cutout::CutoutPipelines;
 pub use geometry::{Cursor, Geometry};
 mod draw_groups;
+mod reach;
 pub use draw_groups::draw_cutout_then_transparent;
 
 mod target;
@@ -186,7 +187,7 @@ pub struct Built {
     pub plain_blend: Option<PlainBlend>,
     /// Alpha-only pass that stamps a blended batch's glow byte into the mask,
     /// drawn over [`Model::transparent_draws`] after their colour - see
-    /// [`stamp`]. `Some` only for a [`GlowMask::Stamped`] model, and indexed by
+    /// [`stamp`]. `Some` only for a [`GlowMask::Stamped`] model with a transparent draw, and indexed by
     /// `culled as usize` like [`Built::blend_pipeline`], one pair per blend class.
     pub stamp_pipeline: Option<Stamp>,
     /// The depth and colour pair a circuit's blended foliage draws through under
@@ -866,7 +867,17 @@ pub fn build_with(
                 },
             )
         };
-        let alpha_test_pipeline = make_cutout("mesh alpha test", None);
+        // The model-level reference is picked only by a cutout draw that names none
+        // (`CutoutPipelines::select`).
+        let alpha_test_pipeline = if model
+            .alpha_tested_draws
+            .iter()
+            .any(|draw| draw.alpha_test_ref.is_none())
+        {
+            make_cutout("mesh alpha test", None)
+        } else {
+            pipeline.clone()
+        };
         let cutout_pipelines = cutout::pipelines(&model.alpha_tested_draws, |label, reference| {
             make_cutout(label, Some(reference))
         });
@@ -1017,24 +1028,83 @@ pub fn build_with(
     let make_pipeline = |label: &str, blend: Option<wgpu::BlendState>, cull: bool| {
         make_pipeline_with(label, blend, cull, &blend_depth_stencil)
     };
-    let blend_pipeline = [
-        make_pipeline("mesh blend (alpha over, two-sided)", Some(blend), false),
-        make_pipeline("mesh blend (alpha over, culled)", Some(blend), true),
-    ];
+    // Which twins of which class a draw can pick: the overlay and shine passes index the
+    // alpha-over and additive pairs by any draw's `culled`, so those two are built for every
+    // list; the rest only for the transparent draws that select them. A circuit's plain
+    // transparent draws select the plain set, the rest the model-wide one.
+    let plain_flags: Option<Vec<bool>> = match (&plain_blend_draws, &plain_blend_constants) {
+        (Some(plain), Some(_)) => Some(plain.draws.clone()),
+        _ => None,
+    };
+    let transparent_keys: Vec<(wgpu::BlendState, bool)> = model
+        .transparent_draws
+        .iter()
+        .filter_map(|draw| draw.blend_state.map(|state| (state, draw.writes_depth)))
+        .collect();
+    let flags = plain_flags.as_deref();
+    let in_set = |plain: bool| {
+        model
+            .transparent_draws
+            .iter()
+            .enumerate()
+            .filter(move |(at, _)| flags.is_some_and(|flags| flags[*at]) == plain)
+            .map(|(_, draw)| draw)
+    };
+    let every_list = reach::Twins::of(
+        model
+            .draws
+            .iter()
+            .chain(&model.alpha_tested_draws)
+            .chain(&model.transparent_draws),
+    );
+    let main_reach = reach::Blended::of(in_set(false), &transparent_keys);
+    let blend_pipeline = main_reach.alpha_over.union(every_list).pair(
+        |cull| {
+            make_pipeline(
+                if cull {
+                    "mesh blend (alpha over, culled)"
+                } else {
+                    "mesh blend (alpha over, two-sided)"
+                },
+                Some(blend),
+                cull,
+            )
+        },
+        || make_pipeline("mesh blend (alpha over, two-sided)", Some(blend), false),
+    );
+    // A pair no draw picks holds the alpha-over pair's two-sided pipeline, built above whether or
+    // not a draw picks it.
+    let blend_stand_in = || blend_pipeline[0].clone();
     crate::not_exiting()?;
-    let additive_pipeline = [
-        make_pipeline(
-            "mesh blend (additive, two-sided)",
-            Some(ADDITIVE_BLEND),
-            false,
-        ),
-        make_pipeline("mesh blend (additive, culled)", Some(ADDITIVE_BLEND), true),
-    ];
+    let additive_pipeline = main_reach.additive.union(every_list).pair(
+        |cull| {
+            make_pipeline(
+                if cull {
+                    "mesh blend (additive, culled)"
+                } else {
+                    "mesh blend (additive, two-sided)"
+                },
+                Some(ADDITIVE_BLEND),
+                cull,
+            )
+        },
+        blend_stand_in,
+    );
     crate::not_exiting()?;
-    let unblended_pipeline = [
-        make_pipeline("mesh blend (none, two-sided)", None, false),
-        make_pipeline("mesh blend (none, culled)", None, true),
-    ];
+    let unblended_pipeline = main_reach.unblended.pair(
+        |cull| {
+            make_pipeline(
+                if cull {
+                    "mesh blend (none, culled)"
+                } else {
+                    "mesh blend (none, two-sided)"
+                },
+                None,
+                cull,
+            )
+        },
+        blend_stand_in,
+    );
     crate::not_exiting()?;
     // One pair per *distinct* state the model's transparent draws name, in
     // first-seen order. A linear scan over a handful of entries rather than a
@@ -1049,11 +1119,7 @@ pub fn build_with(
         depth_write_enabled: Some(true),
         ..blend_depth_stencil.clone()
     };
-    for key in model
-        .transparent_draws
-        .iter()
-        .filter_map(|draw| draw.blend_state.map(|state| (state, draw.writes_depth)))
-    {
+    for key in transparent_keys.iter().copied() {
         if authored_pipelines.iter().any(|(seen, _)| *seen == key) {
             continue;
         }
@@ -1067,20 +1133,44 @@ pub fn build_with(
         };
         authored_pipelines.push((
             key,
-            [
-                make_pipeline_with(&label, Some(state), false, depth),
-                make_pipeline_with(&label, Some(state), true, depth),
-            ],
+            main_reach.authored(key).pair(
+                |cull| make_pipeline_with(&label, Some(state), cull, depth),
+                blend_stand_in,
+            ),
         ));
     }
 
     let plain_blend = match (plain_blend_draws, plain_blend_constants.as_deref()) {
         (Some(plain), Some(constants)) => {
-            let pair = |label: &str, blend: Option<wgpu::BlendState>, depth| {
-                [
-                    make_pipeline_in(constants, label, blend, false, depth),
-                    make_pipeline_in(constants, label, blend, true, depth),
-                ]
+            let plain_reach = reach::Blended::of(in_set(true), &transparent_keys);
+            let plain_alpha_over = plain_reach.alpha_over.pair(
+                |cull| {
+                    make_pipeline_in(
+                        constants,
+                        "mesh blend, plain (alpha over)",
+                        Some(blend),
+                        cull,
+                        &blend_depth_stencil,
+                    )
+                },
+                || {
+                    make_pipeline_in(
+                        constants,
+                        "mesh blend, plain (alpha over)",
+                        Some(blend),
+                        false,
+                        &blend_depth_stencil,
+                    )
+                },
+            );
+            let pair = |twins: reach::Twins,
+                        label: &str,
+                        blend: Option<wgpu::BlendState>,
+                        depth: &wgpu::DepthStencilState| {
+                twins.pair(
+                    |cull| make_pipeline_in(constants, label, blend, cull, depth),
+                    || plain_alpha_over[0].clone(),
+                )
             };
             crate::not_exiting()?;
             let authored = authored_pipelines
@@ -1093,42 +1183,51 @@ pub fn build_with(
                     };
                     (
                         (state, writes_depth),
-                        pair("mesh blend, plain (authored)", Some(state), depth),
+                        pair(
+                            plain_reach.authored((state, writes_depth)),
+                            "mesh blend, plain (authored)",
+                            Some(state),
+                            depth,
+                        ),
                     )
                 })
                 .collect();
             Some(PlainBlend {
                 draws: plain.draws,
-                alpha_over: pair(
-                    "mesh blend, plain (alpha over)",
-                    Some(blend),
-                    &blend_depth_stencil,
-                ),
+                alpha_over: plain_alpha_over.clone(),
                 additive: pair(
+                    plain_reach.additive,
                     "mesh blend, plain (additive)",
                     Some(ADDITIVE_BLEND),
                     &blend_depth_stencil,
                 ),
-                unblended: pair("mesh blend, plain (none)", None, &blend_depth_stencil),
+                unblended: pair(
+                    plain_reach.unblended,
+                    "mesh blend, plain (none)",
+                    None,
+                    &blend_depth_stencil,
+                ),
                 authored,
             })
         }
         _ => None,
     };
 
-    let stamp_pipeline = glow.stamps_blended().then(|| {
-        stamp::pipelines(&stamp::Shared {
-            device,
-            shader,
-            layout: &pipeline_layout,
-            vertex_buffers: &vertex_buffers,
-            constants,
-            velocity,
-            format,
-            multisample,
-            depth_stencil: &blend_depth_stencil,
-        })
-    });
+    let stamp_pipeline =
+        (glow.stamps_blended() && !model.transparent_draws.is_empty()).then(|| {
+            stamp::pipelines(&stamp::Shared {
+                device,
+                shader,
+                layout: &pipeline_layout,
+                vertex_buffers: &vertex_buffers,
+                constants,
+                velocity,
+                format,
+                multisample,
+                depth_stencil: &blend_depth_stencil,
+                reach: reach::Stamped::of(&model.transparent_draws),
+            })
+        });
 
     let foliage = (blend_entry == "fs_main_blend"
         && model.transparent_draws.iter().any(Foliage::takes_part))
