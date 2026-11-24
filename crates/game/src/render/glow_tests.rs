@@ -14,6 +14,16 @@ fn frame(list: &[Draw]) -> Option<Vec<u8>> {
 
 /// [`frame`] over a sprite sheet of the caller's.
 fn frame_with(list: &[Draw], sheet: &oag_hud::sprite::Sheet) -> Option<Vec<u8>> {
+    frame_pass(list, sheet, None)
+}
+
+/// [`frame_with`], drawn as a `LoadOp::Load` pass over the target when `over_scene` is
+/// `Some(flag)`, with [`Renderer::set_glow_over_scene`] set to `flag`.
+fn frame_pass(
+    list: &[Draw],
+    sheet: &oag_hud::sprite::Sheet,
+    over_scene: Option<bool>,
+) -> Option<Vec<u8>> {
     let instance = wgpu::Instance::default();
     let adapter = oag_gpu::test_adapter::request(&instance)?;
     let (device, queue) = pollster::block_on(adapter.request_device(&Default::default())).ok()?;
@@ -43,15 +53,30 @@ fn frame_with(list: &[Draw], sheet: &oag_hud::sprite::Sheet) -> Option<Vec<u8>> 
         mapped_at_creation: false,
     });
     let mut encoder = device.create_command_encoder(&Default::default());
-    renderer.render(
-        &device,
-        &queue,
-        &mut encoder,
-        &view,
-        list,
-        (0.0, 0.0, W as f32, H as f32),
-        None,
-    );
+    match over_scene {
+        None => renderer.render(
+            &device,
+            &queue,
+            &mut encoder,
+            &view,
+            list,
+            (0.0, 0.0, W as f32, H as f32),
+            None,
+        ),
+        Some(flag) => {
+            renderer.set_glow_over_scene(flag);
+            renderer.render_with(
+                wgpu::LoadOp::Load,
+                &device,
+                &queue,
+                &mut encoder,
+                &view,
+                list,
+                (0.0, 0.0, W as f32, H as f32),
+                None,
+            );
+        }
+    }
     encoder.copy_texture_to_buffer(
         target.as_image_copy(),
         wgpu::TexelCopyBufferInfo {
@@ -118,6 +143,29 @@ fn a_stamped_rectangle_glows_past_its_edge_and_an_unstamped_one_does_not() {
     // Far from every stamp nothing is added, and the square's own pixels are never darkened.
     assert_eq!(red(&stamped, 20, 20), 0);
     assert!(red(&stamped, 220, 120) >= red(&plain, 220, 120));
+}
+
+/// A page over a parked race is a `LoadOp::Load` pass: it blooms its stamps only when the
+/// renderer is told so (`menu_stage` does for a frozen race), and a `Load` list drawn without the
+/// flag stays as unbloomed as the overlays and the results table.
+#[test]
+fn a_load_pass_blooms_its_stamps_only_when_the_renderer_is_told_to() {
+    let sheet = oag_hud::sprite::Sheet::default();
+    let list = white_square(Some(200));
+    let (Some(on), Some(off)) = (
+        frame_pass(&list, &sheet, Some(true)),
+        frame_pass(&list, &sheet, Some(false)),
+    ) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    assert_eq!(red(&off, 194, 120), 0, "a Load pass keeps its stamps unbloomed");
+    assert!(
+        red(&on, 194, 120) > 8,
+        "told so, a Load pass blooms past the square's edge, got {}",
+        red(&on, 194, 120)
+    );
+    assert!(red(&on, 220, 120) >= red(&off, 220, 120));
 }
 
 #[test]
