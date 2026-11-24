@@ -323,13 +323,17 @@ read**: wall clock moves with the load, and the instruction count of a launch
 | Race walk of the pause test (menu, race, pause, GAME OPTIONS, 2 presses) | 4.44 s | 4.08 s | 4.37 s | 2.91 s |
 
 (Medians of three. The race row's wall clocks are not ordered at this load, a
-run can wait for a core; their user seconds are.) User instructions, `perf stat`, interleaved before and after:
+run can wait for a core; their user seconds are.) User instructions, `perf stat -e instructions:u`, interleaved before and after
+(both changes below), with the peak RSS of the process (`/usr/bin/time -f %M`,
+median of three):
 
-| Launch | Before | After |
-| --- | ---: | ---: |
-| Pulse PSP, menu walk (RACE CAMPAIGN open) | 21.05 G | 9.4 G |
-| Pulse PSP, race to 400 ticks, pause, GAME OPTIONS, two presses | 43.6 G | 27.8 G |
-| Pulse PS2, the same race walk | 80.9 G | 64.4 G |
+| Launch | Before | After | Peak RSS before / after |
+| --- | ---: | ---: | ---: |
+| Pulse PSP, menu walk (RACE CAMPAIGN open) | 21.05 G | 9.4 G | 200 / 208 MiB |
+| Pulse PSP, race to 400 ticks, pause, GAME OPTIONS, two presses | 43.6 G | 26.7 G | 307 / 316 MiB |
+| Pulse PS2, the same race walk | 80.5 G | 62.7 G | 457 / 470 MiB |
+
+The pool costs 8 to 13 MiB of idle handles (a decoded hunk map each).
 
 Where a launch's CPU went before (`perf record -e cpu-clock:u --call-graph fp`
 on the frame-pointer build, share of the launch's samples; the shares of
@@ -366,7 +370,7 @@ the map again. A handle belongs to one source at a time, so no two threads
 share a read position, up to twelve are kept per file, and the web build, which
 opens a registered blob, does not pool. Bytes are the same: `a_reopened_chd_reads_the_bytes_a_new_handle_does`
 and the split-read test pass, as do the disc crate's 100 tests. Menu launch
-21.05 G -> 10.6 G user instructions, race walk 43.6 G -> 27.8 G.
+21.05 G -> 10.6 G user instructions, race walk 43.6 G -> 27.8 G (the pool alone).
 
 ### PSARC path digests (`oag_formats::psarc`)
 
