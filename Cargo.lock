@@ -3204,7 +3204,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "lzma-rust2 0.25.0",
- "sha2 0.10.9",
+ "sha2 0.11.1",
  "tar",
  "ureq",
  "zip",
