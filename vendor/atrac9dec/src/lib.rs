@@ -23,7 +23,7 @@ mod unpack;
 pub use config::{CodecInfo, Config};
 pub use error::{Error, Result};
 
-use bit_reader::{BitReader, clamp16};
+use bit_reader::{BitReader, clamp16, round_half_up};
 use config::Config as At9Config;
 use quantization::{dequantize_channel, scale_spectrum};
 use structures::{BlockType, Frame};
@@ -164,8 +164,7 @@ impl Atrac9Decoder {
                     if ch < channels {
                         let v = pcm[smpl];
                         // Round and clamp
-                        let rounded = (v + 0.5).floor() as i32; // match C Round
-                        output[out_offset + smpl * channels + ch] = clamp16(rounded);
+                        output[out_offset + smpl * channels + ch] = clamp16(round_half_up(v));
                     }
                 }
             }
