@@ -24,7 +24,7 @@
 use oag_post::photo_fx::{Dof, Edges};
 use oag_title::photo::Accumulation;
 
-use super::effects::Blur;
+use super::effects::{Blur, Effects};
 use super::rewind::Rewind;
 use super::*;
 use crate::timeline::Keeper;
@@ -79,8 +79,25 @@ impl Plan {
     /// setting and the window's fit, which the lens ring is sized in.
     #[must_use]
     pub fn new(photo: &Photo, tick: u64, resimulates: bool, drawn_fov: f32) -> Option<Self> {
-        let acc = photo.accumulation()?;
-        let effects = photo.effects();
+        Self::of(
+            photo.effects(),
+            photo.accumulation()?,
+            tick,
+            resimulates,
+            drawn_fov,
+        )
+    }
+
+    /// The shot the controls `effects` ask of a title that accumulates `acc`: [`Self::new`]
+    /// for the mode's own, and what a saved shot's controls make of it when it is drawn again.
+    #[must_use]
+    pub fn of(
+        effects: &Effects,
+        acc: Accumulation,
+        tick: u64,
+        resimulates: bool,
+        drawn_fov: f32,
+    ) -> Option<Self> {
         let blur = effects.blur().filter(|_| resimulates).and_then(|kind| {
             let scale = match kind {
                 Blur::Track => 1.0,
@@ -107,6 +124,18 @@ impl Plan {
             blur,
             aperture,
         })
+    }
+
+    /// The tick the shot is taken at.
+    #[must_use]
+    pub fn tick(&self) -> u64 {
+        self.tick
+    }
+
+    /// The tick the race stands at for the first frame: where a replay of the shot starts to draw.
+    #[must_use]
+    pub fn first_stand(&self) -> u64 {
+        self.frame(0).stand
     }
 
     /// How many frames the shot is made of.
