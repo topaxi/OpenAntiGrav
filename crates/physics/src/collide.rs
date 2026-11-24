@@ -161,6 +161,21 @@ pub trait Raycaster {
         }
     }
 
+    /// [`Self::raycast`] of each ray in `rays`, into the matching slot of `out`: the same
+    /// answers, for geometry that can share one walk among rays cast together (a world does).
+    /// By default each ray is cast on its own.
+    fn raycast_each(
+        &self,
+        rays: &[Ray],
+        skip: Option<u32>,
+        include_reset: bool,
+        out: &mut [Option<RaycastHit>],
+    ) {
+        for (ray, slot) in rays.iter().zip(out) {
+            *slot = self.raycast(*ray, skip, include_reset);
+        }
+    }
+
     /// What this geometry can answer early for a batch of rays inside `bounds`, for
     /// [`Self::raycast_all_in`]. A world's walk for the whole batch; nothing by default.
     fn region(&self, _bounds: &Aabb) -> Region {
@@ -935,6 +950,82 @@ impl Raycaster for CollisionWorld {
             return self.raycast_ascending(ray, skip, include_reset);
         }
         nearest.map(|best| self.colliders[best.collider].hit(ray, best.triangle))
+    }
+
+    /// One walk over the union of the rays' boxes, each candidate folded into the nearest hit
+    /// of every ray whose own box overlaps the candidate's: the candidates each ray's own walk
+    /// would visit, since a box that overlaps a segment's box overlaps any box holding it, and
+    /// the fold no visiting order changes ([`Nearest`]).
+    fn raycast_each(
+        &self,
+        rays: &[Ray],
+        skip: Option<u32>,
+        include_reset: bool,
+        out: &mut [Option<RaycastHit>],
+    ) {
+        const MOST: usize = 8;
+        let rays = &rays[..rays.len().min(out.len())];
+        let foldable = rays
+            .iter()
+            .all(|ray| ray.length >= 0.0 && ray.length.is_finite());
+        if rays.len() < 2 || rays.len() > MOST || !foldable {
+            for (ray, slot) in rays.iter().zip(out) {
+                *slot = self.raycast(*ray, skip, include_reset);
+            }
+            return;
+        }
+        let mut ends = [(Vec3::ZERO, Vec3::ZERO); MOST];
+        let mut segments = [Aabb::EMPTY; MOST];
+        let mut union = Aabb::EMPTY;
+        for (index, ray) in rays.iter().enumerate() {
+            ends[index] = (ray.origin, ray.end());
+            segments[index] = Aabb::from_segment(ray.origin, ray.end());
+            union.expand(segments[index].min);
+            union.expand(segments[index].max);
+        }
+        let flat = self.flat();
+        let boxes = flat.tree.boxes();
+        let mut nearest: [Option<Nearest>; MOST] = [None; MOST];
+        let mut unordered = [false; MOST];
+        flat.tree.visit(&union, |item| {
+            let (collider, triangle) = flat.item(item);
+            let soup = &self.colliders[collider];
+            if !Self::asks(soup, skip, include_reset) {
+                return;
+            }
+            let item_box = &boxes[item as usize];
+            let mut corners = None;
+            for (index, ray) in rays.iter().enumerate() {
+                if !segments[index].overlaps(item_box) {
+                    continue;
+                }
+                let [a, b, c] = *corners.get_or_insert_with(|| soup.corners(triangle));
+                let (p0, p1) = ends[index];
+                let Some(hit) = segment_triangle(p0, p1, a, b, c) else {
+                    continue;
+                };
+                if hit.t.is_nan() {
+                    unordered[index] = true;
+                    continue;
+                }
+                let candidate = Nearest {
+                    distance: hit.t * ray.length,
+                    collider,
+                    t: hit.t,
+                    triangle,
+                };
+                if nearest[index].is_none_or(|best| candidate.before(&best)) {
+                    nearest[index] = Some(candidate);
+                }
+            }
+        });
+        for (index, (ray, slot)) in rays.iter().zip(out).enumerate() {
+            *slot = if unordered[index] {
+                self.raycast_ascending(*ray, skip, include_reset)
+            } else {
+                nearest[index].map(|best| self.colliders[best.collider].hit(*ray, best.triangle))
+            };
+        }
     }
 
     /// Every hit across every collider, in **ascending collider index** and, within one,

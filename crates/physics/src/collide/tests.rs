@@ -548,3 +548,62 @@ fn the_reset_tree_answers_as_each_reset_collider_in_turn() {
     }
     assert!(hits > 1000, "only {hits} hits compared");
 }
+
+/// Rays cast together answer as each cast alone: probes from one point a few units apart, as a
+/// hull's are, on colliders that repeat each other's triangles, with a skip, the reset class
+/// asked for and not, and batches of one to nine rays (past eight each is cast alone).
+#[test]
+fn rays_cast_together_answer_as_each_cast_alone() {
+    let mut rng = oag_core::rng::Rng::new(31);
+    let mut at = |scale: f32| (rng.next_f32() - 0.5) * scale;
+    let mut world = CollisionWorld::new();
+    for collider in 0..4u32 {
+        let mut vertices = Vec::new();
+        let mut triangles = Vec::new();
+        for cell in 0..200u32 {
+            let base = [at(30.0), at(4.0), at(30.0)];
+            for _ in 0..3 {
+                vertices.push([base[0] + at(6.0), base[1] + at(2.0), base[2] + at(6.0)]);
+            }
+            triangles.push([cell * 3, cell * 3 + 1, cell * 3 + 2]);
+        }
+        let surface = if collider == 3 {
+            Surface::Reset
+        } else {
+            Surface::Wall
+        };
+        world.push(TriangleSoup::new(
+            vertices,
+            triangles,
+            Vec::new(),
+            surface,
+            collider,
+        ));
+    }
+
+    let mut hits = 0;
+    for batch in 0..3000 {
+        let centre = Vec3::new(at(30.0), at(4.0) + 2.0, at(30.0));
+        let down = Vec3::new(at(0.5), -1.0, at(0.5)).normalize_or_zero();
+        let count = 1 + batch % 9;
+        let rays: Vec<Ray> = (0..count)
+            .map(|_| {
+                let origin = centre + Vec3::new(at(4.0), at(0.5), at(4.0));
+                Ray::new(origin, down, at(2.0).abs() * 6.0)
+            })
+            .collect();
+        let skip = (batch % 4 == 0).then_some(1);
+        let include_reset = batch % 3 == 0;
+        let mut together = vec![None; count];
+        world.raycast_each(&rays, skip, include_reset, &mut together);
+        for (ray, got) in rays.iter().zip(&together) {
+            assert_eq!(
+                got,
+                &world.raycast(*ray, skip, include_reset),
+                "batch {batch}"
+            );
+            hits += usize::from(got.is_some());
+        }
+    }
+    assert!(hits > 2000, "only {hits} hits compared");
+}
