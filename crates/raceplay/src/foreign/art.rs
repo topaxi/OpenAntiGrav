@@ -68,9 +68,57 @@ struct HostTable {
 
 fn host_table(archives: &mut Archives, entry: &str) -> anyhow::Result<HostTable> {
     let blob = archives.read_name(entry)?;
+    if vex::geometry_is_external(&blob) {
+        return material_table(archives, entry, &blob);
+    }
     Ok(HostTable {
         names: texture_names(&blob)?,
         slots: texture_slots(archives, entry, &blob)?,
+    })
+}
+
+/// The pictures of a circuit whose geometry is in an `.rcsmodel` beside the `.vex` (HD, 2048,
+/// Omega): its `Texture` nodes keep names and no texels (2048's and Omega's keep one dummy), and
+/// the pictures are the files the materials name. The table is those files, named as the
+/// materials spell them and decoded as the race reads them (`oag_texture::decode`), in the order
+/// the build asks for them. Rows stay in the file's order, which is the one a race's 3D path
+/// samples with the circuit's own texture coordinates, so a picture reads the way up it is drawn
+/// (`docs/formats/hd-loading.md`, "A `.gtf`'s rows run bottom-up"; only a 2D consumer flips).
+fn material_table(archives: &mut Archives, entry: &str, blob: &[u8]) -> anyhow::Result<HostTable> {
+    let mut requested: Vec<String> = Vec::new();
+    oag_livery::entry::scene_model_requesting(
+        archives,
+        entry,
+        blob,
+        None,
+        &mut Vec::new(),
+        &mut |path| {
+            if !requested
+                .iter()
+                .any(|seen| canonical(seen) == canonical(path))
+            {
+                requested.push(path.to_string());
+            }
+        },
+    )?;
+    let slots = requested
+        .iter()
+        .map(|path| {
+            let bytes = archives.read_name(path).ok()?;
+            let picture = oag_texture::decode::decode_named(path, &bytes).ok()?;
+            let label = path.rsplit(['/', '\\']).next().unwrap_or(path).to_string();
+            Some(Arc::new(ModelTexture::rgba8(
+                label,
+                picture.width,
+                picture.height,
+                picture.rgba,
+                Some(1),
+            )))
+        })
+        .collect();
+    Ok(HostTable {
+        names: requested.into_iter().map(Some).collect(),
+        slots,
     })
 }
 
@@ -153,11 +201,19 @@ fn texture_slots(
     ))
 }
 
-/// Whether `reference` names `name`: the whole asset path without case, or its
+/// A texture path as one spelling of it: lowercase, `/` a separator, no leading separator (a
+/// PS3 or PS4 material's path starts with one, a PSP node's does not).
+fn canonical(path: &str) -> String {
+    path.trim_start_matches(['\\', '/'])
+        .replace('\\', "/")
+        .to_ascii_lowercase()
+}
+
+/// Whether `reference` names `name`: the whole asset path ([`canonical`]), or its
 /// file name alone when the reference carries no directory.
 fn spells(reference: &str, name: &str) -> bool {
     if reference.contains(['\\', '/']) {
-        return reference.eq_ignore_ascii_case(name);
+        return canonical(reference) == canonical(name);
     }
     name.rsplit(['\\', '/'])
         .next()

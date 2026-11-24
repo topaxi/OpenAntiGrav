@@ -255,50 +255,87 @@ pub fn ps3_scene_model(
     livery: Option<crate::LiveryFolder<'_>>,
     report: &mut Vec<String>,
 ) -> anyhow::Result<(mesh::Model, Vec<String>)> {
-    use anyhow::Context as _;
-    let sibling =
-        mesh::rcs::sibling_name(entry).with_context(|| format!("{entry} names no .rcsmodel"))?;
-    let geometry = archives
-        .read_name(&sibling)
-        .with_context(|| format!("{entry}: reading its {sibling}"))?;
     let mut textures = Vec::new();
+    let model = scene_model_requesting(archives, entry, blob, livery, report, &mut |path| {
+        if oag_texture::decode::Container::of_name(path)
+            == Some(oag_texture::decode::Container::Gtf)
+        {
+            textures.push(path.to_string());
+        }
+    })?;
+    Ok((model, textures))
+}
+
+/// [`ps3_scene_model`]'s build, handing `requested` every texture path the build asks the
+/// archives for (any container: `.gtf`, `.gxt`, `.gnf`), in request order and repeats included.
+/// What a race's circuit draws is exactly these files, so a caller that wants a circuit's
+/// pictures reads them from here.
+///
+/// The `.rcsmodel` is the first of the plain and the Omega `.final` spellings the archives hold
+/// (`mesh::rcs::siblings::Siblings::probe`); 2048's and Omega's container needs no `.vex`
+/// (`oag_mesh::mesh::rcs::psp2`).
+///
+/// # Errors
+///
+/// As [`ps3_scene_model`].
+pub fn scene_model_requesting(
+    archives: &mut oag_assets::Archives,
+    entry: &str,
+    blob: &[u8],
+    livery: Option<crate::LiveryFolder<'_>>,
+    report: &mut Vec<String>,
+    requested: &mut dyn FnMut(&str),
+) -> anyhow::Result<mesh::Model> {
+    use anyhow::Context as _;
+    let sets = mesh::rcs::siblings::Siblings::probe(entry, false);
+    anyhow::ensure!(!sets.is_empty(), "{entry} names no .rcsmodel");
+    let mut first_error = None;
+    let mut found = None;
+    for set in &sets {
+        match archives.read_name(&set.model) {
+            Ok(geometry) => {
+                found = Some(geometry);
+                break;
+            }
+            Err(error) => {
+                first_error.get_or_insert((set.model.clone(), error));
+            }
+        }
+    }
+    let Some(geometry) = found else {
+        let (sibling, error) = first_error.expect("at least one spelling was tried");
+        return Err(error).with_context(|| format!("{entry}: reading its {sibling}"));
+    };
     let mut reads = crate::zone_livery::Reads::new(livery);
+    let mut read = |archives: &mut oag_assets::Archives, path: &str| {
+        if oag_texture::decode::Container::of_name(path).is_some() {
+            requested(path);
+        }
+        reads.read(archives, path)
+    };
     // 2048's and Omega's container is a different file under the same extension and needs no
     // `.vex` at all (`oag_mesh::mesh::rcs::psp2`).
-    if mesh::rcs::psp2::is_psp2(&geometry) {
-        let (mut model, built) = mesh::rcs::psp2::build(entry, &geometry, None, &mut |path| {
-            if oag_texture::decode::Container::of_name(path)
-                == Some(oag_texture::decode::Container::Gtf)
-            {
-                textures.push(path.to_string());
-            }
-            reads.read(archives, path)
-        })
+    let mut model = if mesh::rcs::psp2::is_psp2(&geometry) {
+        let (model, built) =
+            mesh::rcs::psp2::build(entry, &geometry, None, &mut |path| read(archives, path))
+                .with_context(|| format!("decoding the model {entry}"))?;
+        report.push(format!("{entry}: {}", built.describe()));
+        model
+    } else {
+        let (model, built) = mesh::rcs::build_scene(
+            entry,
+            blob,
+            &geometry,
+            &mut |path| read(archives, path),
+            // A front-end or HUD model draws into a gamma target, whose shaders decode with the
+            // plain power.
+            Default::default(),
+        )
         .with_context(|| format!("decoding the model {entry}"))?;
         report.push(format!("{entry}: {}", built.describe()));
-        report.extend(reads.describe(entry));
-        model.keep_nearest();
-        return Ok((model, textures));
-    }
-    let (mut model, built) = mesh::rcs::build_scene(
-        entry,
-        blob,
-        &geometry,
-        &mut |path| {
-            if oag_texture::decode::Container::of_name(path)
-                == Some(oag_texture::decode::Container::Gtf)
-            {
-                textures.push(path.to_string());
-            }
-            reads.read(archives, path)
-        },
-        // A front-end or HUD model draws into a gamma target, whose shaders decode with the
-        // plain power.
-        Default::default(),
-    )
-    .with_context(|| format!("decoding the model {entry}"))?;
-    report.push(format!("{entry}: {}", built.describe()));
+        model
+    };
     report.extend(reads.describe(entry));
     model.keep_nearest();
-    Ok((model, textures))
+    Ok(model)
 }

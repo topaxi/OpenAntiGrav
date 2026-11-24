@@ -125,13 +125,28 @@ pub fn export_entry(
         if let Some(dir) = file.parent() {
             std::fs::create_dir_all(dir)?;
         }
-        std::fs::write(
-            &file,
-            oag_texture::png::encode_rgba(texture.width, texture.height, &rgba),
-        )?;
+        write_png(&file, texture.width, texture.height, &rgba)?;
         done.written.push(file);
     }
     Ok(done)
+}
+
+/// `rgba` (top row first) as a compressed PNG at `file`. A stored-block PNG
+/// (`oag_texture::png`) would be the decoded size: a PS4 circuit's pictures
+/// come to gigabytes.
+fn write_png(file: &Path, width: u32, height: u32, rgba: &[u8]) -> anyhow::Result<()> {
+    let mut encoder = png::Encoder::new(
+        std::io::BufWriter::new(std::fs::File::create(file)?),
+        width,
+        height,
+    );
+    encoder.set_color(png::ColorType::Rgba);
+    encoder.set_depth(png::BitDepth::Eight);
+    encoder.set_compression(png::Compression::Fastest);
+    let mut writer = encoder.write_header()?;
+    writer.write_image_data(rgba)?;
+    writer.finish()?;
+    Ok(())
 }
 
 #[cfg(test)]
@@ -153,6 +168,49 @@ mod tests {
                  data/environments/generictracktextures/_wall6_1.png"
             ),
         );
+    }
+
+    /// The same rows as `HOST_TITLE_PATHS` in `scripts/blender/roundtrip.py`.
+    #[test]
+    fn each_titles_texture_names_land_where_the_add_on_looks() {
+        for (slug, entry, name, path) in [
+            (
+                "wipeout-hd",
+                "Data\\Environments\\03_Track\\track.vex",
+                "/data/environments/03_track/hd_textures/dds/ds_speedup_cs.gtf",
+                "wipeout-hd/data/environments/03_track/track.vex/\
+                 data/environments/03_track/hd_textures/dds/ds_speedup_cs.png",
+            ),
+            (
+                "wipeout-2048",
+                "Data\\art\\published\\environments\\altima\\track.vex",
+                "data/art/published/environments/altima/textures/jreilly_crane_da.gxt",
+                "wipeout-2048/data/art/published/environments/altima/track.vex/\
+                 data/art/published/environments/altima/textures/jreilly_crane_da.png",
+            ),
+            (
+                "wipeout-omega-collection",
+                "Data\\environments\\tech_de_ra\\track.vex",
+                "data/environments/tech_de_ra/texturesps4/hull.gnf",
+                "wipeout-omega-collection/data/environments/tech_de_ra/track.vex/\
+                 data/environments/tech_de_ra/texturesps4/hull.png",
+            ),
+            (
+                "wipeout-pure",
+                "Data\\Environments\\01_Vineta_K\\track.vex",
+                "Data\\Environments\\01_Vineta_K\\Textures\\ag03.tga",
+                "wipeout-pure/data/environments/01_vineta_k/track.vex/\
+                 data/environments/01_vineta_k/textures/ag03.png",
+            ),
+        ] {
+            assert_eq!(
+                texture_file(slug, entry, name)
+                    .as_deref()
+                    .and_then(|p| p.to_str()),
+                Some(path),
+                "{slug}"
+            );
+        }
     }
 
     #[test]

@@ -1,7 +1,7 @@
 ---
 status: ready-to-wire
 titles: [pulse, pure]
-updated: 2026-10-29
+updated: 2026-11-25
 summary: "Track art leftovers: Bake operator, sun on HD hosts, moving-sun gaps, glb sky images, track-file respawn, re-timing"
 size: L (60)
 difficulty: medium (50)
@@ -30,6 +30,13 @@ holds only what is open. Hillside, the demonstration track, lives in the mod-exa
   honoured by moving casters; a disc export writes `Anim Transform` geometry at time zero.
 - **Own sky:** images inside the glb have no texture form in 1.x; a Blender world Sky Texture or
   Environment Texture is not mapped (the add-on's panel colours and images are).
+- **Host sky as a Blender world image.** `just export-host-textures` writes a Pulse or Pure sky's
+  faces as the circuit's `Skycube` textures, but the add-on does not set them as the scene's World
+  (a cube needs six faces on a direction-to-face node tree or an equirect conversion, and the
+  faces' orientation is only measured on HD's `zone_1`, `docs/formats/gtf.md`). HD, 2048 and
+  Omega skies are a cubemap picture the circuit's materials do not name, so the export writes
+  none of them. Wire it for Pulse and Pure first (faces exist), then read the cube's face order
+  for the PS3/Vita/PS4 sky files.
 - **Track-file respawn.** With the autopilot on a track file, HD, Pure and PS2 Pulse respawn once at
   about tick 44, in Time Trial as well as Zone (seen by the Zone lane on the oval fixture). Not
   investigated.

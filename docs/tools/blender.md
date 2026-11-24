@@ -268,9 +268,38 @@ or stream), a NUL, or no part at all has no file on either side
 `None` and `export_host_textures` names it as skipped), so neither the link nor the export can
 reach outside its folder. Export writes the same `host = { entry, name }` rows as before. Keep
 the exported folder under `data/` (never committed) and out of a mod folder.
-Checked on Pulse PSP EU and PS2 EU (a PS2 circuit exports its external texture set too). Pure,
-HD, 2048 and Omega are untried: HD's `03_Track.vex` entry reads and every texture of it comes
-back "not decodable" (named, nothing written), and a Pure circuit has not been exported.
+**Every title.** One circuit of each title exports whole, with a disc-backed test apiece
+(`crates/raceplay/tests/host_export_ground_truth.rs`, "One circuit of each title"):
+
+| Title (image given to the recipe) | Circuit tried | PNGs | Where the pictures are |
+| --- | --- | --- | --- |
+| Pulse PSP (`pulse-psp-eu.chd`) | `03_Track` | over 100 | embedded in the `.vex` |
+| Pulse PS2 (`pulse-ps2-eu.chd`) | `03_Track` | 157 | the texture set before the `.vex` in the archive |
+| Pure (`pure-psp-eu.chd`) | `01_Vineta_K` | 188 | embedded in the `.vex` |
+| HD (`hdfury-ps3-eu-dec.iso`) | `03_Track` | 287 | `.gtf` files the `.rcsmodel`'s materials name |
+| 2048 (its extracted folder, `data/extracted/vita/PCSF00007`; the encrypted `.pkg` is not read in place) | `altima` (`Data\art\published\environments\altima\track.vex`) | 204 | `.gxt` files, same |
+| Omega (`omega-ps4-eu.pkg`) | `tech_de_ra` (`Data\environments\tech_de_ra\track.vex`) | 191 (about 1.5 GB) | `.gnf` files, same |
+
+An HD-family circuit (a `.vex` whose geometry is in an `.rcsmodel` beside it) keeps names and no
+texels in its `Texture` nodes (2048's and Omega's keep one `VexDummyTexture`), which is why it
+first exported nothing ("not decodable": the export read only the `.vex`'s own texture block).
+It now builds the circuit the way a race does and takes the texture files that build asks for
+(`oag_livery::entry::scene_model_requesting`), so its host names are the paths the materials
+spell (`/data/environments/03_track/hd_textures/dds/ds_speedup_cs.gtf`, with a leading
+separator on a PS3 or PS4 path; a reference matches a name without case and with `\` and `/`
+alike, and without the leading separator). The pictures are decoded by `oag_texture::decode` and
+written with rows as the file stores them, which is the way up the race's 3D path draws a `.gtf`
+(`docs/formats/hd-loading.md`, "A `.gtf`'s rows run bottom-up": only 2D consumers flip). PNGs are
+compressed, since a PS4 circuit's pictures are gigabytes stored. A track file whose art names
+such a host texture also draws it in a race, because `resolve_textures` takes the same table (read
+off the code; no HD, 2048 or Omega host track exists to race, so no picture of it was checked:
+the examples' hosts are all Pulse's).
+
+Checked against the add-on with a copy of Hillside whose 15 host rows were pointed at HD, 2048
+and Omega names (headless Blender 5.3, `roundtrip.py hostreal`): 15 of 15 host images linked on
+each, never packed. **2048 and Omega: ported** (the same `psp2` path, each with its own test).
+Not exported: HD, 2048 and Omega **skies** (HD's is a cubemap `.gtf` the circuit's materials do
+not name); see `handover/tooling/track-art-next-blender-sun-bake-motion.md`.
 
 ### Hillside, the worked example (2026-10-29)
 
