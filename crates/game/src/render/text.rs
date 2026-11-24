@@ -227,7 +227,9 @@ impl Renderer {
         if self.hud.snapped_pens && align == Align::Centre {
             // Pure's centred text starts at `x` less half its own measure, left unrounded for the
             // first glyph's step to round (`oag_ui::font::snapped_centre_pen`).
-            pen = self.hud.snap(font::snapped_centre_pen(atlas, text, scale, x));
+            pen = self
+                .hud
+                .snap(font::snapped_centre_pen(atlas, text, scale, x));
         } else if self.hud.snapped_pens {
             // The glyph quads start at whole pixels from a whole pen, so a line measures the same
             // wherever it is placed (`oag_ui::font::snapped_run` counts from 0).
