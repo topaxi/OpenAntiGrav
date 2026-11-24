@@ -86,6 +86,19 @@ wired** (the header is the front end's frame bar, static). GAME MANUAL is drawn 
   minimising and Android's `Suspended` open it the way ESCAPE does.
 - **Not animated:** the header bar slides in from `Y = -24` on the original (`delay="1"`); ours
   is there from the first frame.
+- **Pulse's pause rows bloom (2026-11-24, `fe-worst-residuals`, confidence 85).** The original's pause screen ends its frame in the
+  front end's bloom like every other front-end page: each row and the music line carry a halo (a PPSSPP frame of the Time Trial pause,
+  the focused `CONTINUE` and the idle rows, at 4x). Ours stamped the same `Draw::GlowText` and never ran the bloom, because the
+  pass ran only on a clearing draw and a pause is drawn over the parked race (`LoadOp::Load`). `Renderer::set_glow_over_scene` lets a
+  `Load` list bloom its stamps and `MenuStage::render` sets it for a frozen race only (`oag_game::render::glow_tests`,
+  `a_load_pass_blooms_its_stamps_only_when_the_renderer_is_told_to`); the overlays, the results table's emitted stamp and the track panel
+  also draw with `Load` and stay unbloomed (their stamps are unmeasured). The scratch frame holds the list alone, so a halo is
+  the text's colour blurred over black, then added to the scrimmed race. Result on `pulse-psp/menu-pause`: mean grey 4.01 (main's tree;
+  the page's 4.51 predates the music line) to 2.70, the rows box `(40,20,150,120)` 11.84 to 5.75. Pure draws no glow (its skin
+  has no `MenuGlow`, the other titles likewise): their pause pairs are unchanged. The focused row's stamp rides the pulse's phase, unpinned
+  on the drive route. **Pure's pause pair (5.06) shares none of this**: its residual is the race under the scrim and its HUD
+  (the HUD corners `(0,0,150,50)` 11.41 and `(370,0,110,45)` 12.54, the lap counter `(0,225,60,47)` 16.75, the same boxes score 10.93, 13.21 and
+  16.79 on the `pure-psp/vineta` race pair; the band `(0,95,480,100)` is 2.70).
 - **A campaign race pauses** now: ESCAPE used to leave it straight for `Cell Selection`.
 - **Rows left out**, named in the load report at `debug`: `IG_PAUSE_GMAN` (the game manual),
   `IG_PAUSE_ENDSES` (ending a Speed Lap session), `IG_PAUSE_SKIP` (a tournament leg).

@@ -720,7 +720,7 @@ impl Frontend {
             let body = self.strings.get_or_id(id).to_string();
             // A `widthlimited` text wraps where the line from its own `x` is the `Viewport`'s
             // width long, not at the `Viewport`'s width from the screen's edge
-            // (`docs/architecture/frontend-boot.md`, "BOOT_LEGAL's wrap width").
+            // (`docs/architecture/frontend-boot.md`, "Show Logo's faces and its legal line's wrap").
             let wrap_width = text.wrap_width.map(|width| width - text.x);
             // A widget in a role the title holds a face for draws in that face at its authored
             // scale (`Frontend::faced_role`); every other is the `Default` atlas, corrected by the

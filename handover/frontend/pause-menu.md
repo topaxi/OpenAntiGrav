@@ -30,6 +30,8 @@ pause screen where one applies). Online pause stays the maintainer's decision
   (chosen). The now-playing line under the pause is left out since 2026-11-23 (`song_line_under_scrim`); the pause has
   a compare pair (`docs/tools/compare-page.md`, "Pure Main Menu and pause menu pairs"): the band matches to the pixel row,
   ours' words are the original's width and start on the original's column (the centred start is the executable's own, `docs/ghidra/functions/psp-pure-usa/menu-text-centring.md`: the band-word box 610 to 240 px over 40 grey; `docs/tools/compare-page.md`, "The rows' rounding, recovered from the executable").
+- **Pulse pause rows bloom** (`Renderer::set_glow_over_scene`, set for a frozen race; `docs/ui/pause-menu.md`). Open: the focused row's stamp phase is unpinned on the drive route, and the PS2's
+  texel-alpha bloom over a pause page is unmeasured (`handover/frontend/the-worst-menu-pairs-after-the-pause-glow-and-the-title-faces.md`).
 - **2048: not wired** (`pause_menu: None`). 2048 has `InGame_Definition.xml` (36 screens) and
   `LegacyInGame_Definition.xml` on Vita, with a binder of its own; Omega's reads the same mode ids as HD's, so
   compare 2048's against it first. No Vita frame yet. A 2048 finding is checked against Omega and the reverse.

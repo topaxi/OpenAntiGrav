@@ -220,7 +220,7 @@ pub struct MenuSkin {
     /// in the [`Self::menu_font`] face, held in the boot renderer's second glyph slot beside the
     /// `Default` primary, instead of in `Default` at the authored size. The original draws it in
     /// `Pulse_20.fnt`: uppercase and wider than `pulse_text.fnt`
-    /// (`docs/ui/campaign-screens.md`, "The title's faces"). `false` keeps every text of the
+    /// (`docs/architecture/frontend-boot.md`, "Show Logo's faces and its legal line's wrap"). `false` keeps every text of the
     /// sequence in the `Default` atlas.
     pub menu_face_in_boot: bool,
     /// Unselected row text, as this title's own menu screens draw it.
