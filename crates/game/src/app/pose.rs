@@ -333,6 +333,7 @@ pub(crate) fn parse_hud_state(text: &str) -> Result<race::CaptureHud> {
             .filter(|&centiseconds| centiseconds > 0),
         boost_phase: None,
         autopilot_seconds: None,
+        held_pickup: None,
         song: None,
         head_to_head: None,
         zone: parts

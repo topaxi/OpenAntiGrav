@@ -127,6 +127,10 @@ def rerender(pj, binary):
     if "--hud-state" in flags and "--hud-autopilot" not in flags and rec["profile"] == "pulse-psp" and running \
             and timer is not None and 0.0 < timer <= 600.0:
         flags += ["--hud-autopilot", "%.4f" % timer]
+    # A held pickup (`original.held_pickup.held_word`, `record+0x1bc`) other than the running Autopilot: its backdrop and icon
+    # are the readout's, so a pair whose record names one but whose flags lack it keeps the row on a re-render.
+    if "--hud-state" in flags and "--hud-pickup" not in flags and rec["profile"] == "pulse-psp" and not running:
+        flags += ce.held_pickup_flags(held.get("held_word"))
     # An HD pair's gantry pin is the RAM time less the presented lag (`ce.gantry_pin`); pairs made before 2026-10-27 pin the raw
     # RAM time, which sits on the GO board's rising edge on Tech de Ra and Modesto Heights.
     lag = (orig.get("presented_lag") or {}).get("hud_clock_ticks")
