@@ -1,5 +1,6 @@
 // Distance fog.
 
+import oag_shaders::target::{decode, encode, linear_out};
 import package::bindings::{scene};
 
 // The GE's fog is a linear ramp between `near` and `far` - `Gu_Fog`
@@ -44,4 +45,17 @@ fn linear_fog(world: vec3<f32>) -> f32 {
 fn authored_fog(view_depth: f32) -> f32 {
     let scaled = scene.fog.density * view_depth;
     return clamp(exp(-scaled * scaled), 0.0, 1.0);
+}
+
+// A light the program adds after its fog lerp (`Lit::after_fog`), in linear light: added
+// straight to a linear scene's colour, and through the decode and encode on a gamma one. The
+// colour is returned untouched where there is nothing to add.
+fn plus_after_fog(colour: vec3<f32>, term: vec3<f32>) -> vec3<f32> {
+    if all(term == vec3<f32>(0.0)) {
+        return colour;
+    }
+    if linear_out > 0.5 {
+        return colour + term;
+    }
+    return encode(decode(max(colour, vec3<f32>(0.0))) + term);
 }

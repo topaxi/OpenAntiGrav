@@ -5,7 +5,7 @@
 
 import oag_shaders::target::{target_in};
 import package::bindings::{behind_glass_tex, emissive_scale, emissive_tint, scene, shadow_sampler};
-import package::fog::{fogged};
+import package::fog::{fogged, plus_after_fog};
 import package::shadow::{shadowed};
 import package::types::{Lit, VertexOutput};
 import package::wet::{is_wet_road, wet_road};
@@ -20,13 +20,14 @@ const MATERIAL_SHIFT: u32 = 24u;
 // where the material is one, the ordinary `fog(shadow(C))` everywhere else.
 fn opaque_colour(in: VertexOutput, lit_pixel: Lit) -> vec3<f32> {
     let shaded = lit_pixel.colour;
+    let shade_out = shadowed(shaded.rgb, lit_pixel.sun, in.world);
     if (in.slots & SLOT_REFRACTION) == 0u {
         if is_wet_road(in) {
-            return fogged(wet_road(shadowed(shaded.rgb, lit_pixel.sun, in.world), in), in.world, in.view_depth);
+            return plus_after_fog(fogged(wet_road(shade_out.colour, in), in.world, in.view_depth), shade_out.after_fog);
         }
-        return fogged(shadowed(shaded.rgb, lit_pixel.sun, in.world), in.world, in.view_depth);
+        return plus_after_fog(fogged(shade_out.colour, in.world, in.view_depth), shade_out.after_fog);
     }
-    let lit = shadowed(shaded.rgb, lit_pixel.sun, in.world);
+    let lit = shade_out.colour;
     let slot = in.slots >> MATERIAL_SHIFT;
     let tint = emissive_tint(slot);
     let weight = emissive_scale(slot);
@@ -48,5 +49,5 @@ fn opaque_colour(in: VertexOutput, lit_pixel: Lit) -> vec3<f32> {
     let ndc = clip.xy / max(clip.w, 1e-6);
     let uv = vec2<f32>(0.5 + 0.5 * ndc.x, 0.5 - 0.5 * ndc.y);
     let grab = target_in(textureSampleLevel(behind_glass_tex, shadow_sampler, uv, 0.0).rgb);
-    return fogged(lit * tint.w + grab * w, in.world, in.view_depth);
+    return plus_after_fog(fogged(lit * tint.w + grab * w, in.world, in.view_depth), shade_out.after_fog);
 }

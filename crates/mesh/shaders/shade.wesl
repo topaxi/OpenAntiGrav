@@ -134,7 +134,7 @@ override second_read: f32 = 1.0;
 // diagnostic is off for `lit_colour`'s reason: the call below is judged against this body.
 @diagnostic(off, derivative_uniformity)
 fn lit_texel(raw: VertexOutput) -> Lit {
-    var sun = SunTerms(vec3<f32>(0.0), 0.0, 0.0);
+    var sun = SunTerms(vec3<f32>(0.0), 0.0, 0.0, vec3<f32>(0.0), vec3<f32>(0.0));
     let colour = lit_colour(raw, &sun);
     return Lit(colour, sun);
 }
@@ -663,8 +663,10 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
         // lightmap and no baked vertex light on any draw (`EnvSettings+0x4b0` is cleared), so
         // `albedo * (stage ambient + sat(N.L) * stage sun)`, with no occlusion mask. A program
         // fed no scene light (`emissive`) keeps drawing its picture.
+        // Its `SVC1` twin adds the SPU vertex light to that sum, as every plain program does
+        // (`spu` above).
         if zone_plain && !emissive {
-            authored = scene.light.ambient + scene.light.sun * ndl;
+            authored = scene.light.ambient + scene.light.sun * ndl + spu;
             sun_light = scene.light.sun * ndl;
         }
         // **A chunk on its Zone program** is the same `Ambient` permutation where the title's
@@ -1334,6 +1336,8 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
     var authored_rgb = vec3<f32>(0.0);
     // What the sun adds to `authored_rgb`, in its output space.
     var sun_removed = vec3<f32>(0.0);
+    var zone_after = vec3<f32>(0.0);
+    var zone_redraw = vec3<f32>(0.0);
     if rig_on != 0.0 {
         let half_vector = to_eye + scene.light.direction;
         let ndh = clamp(
@@ -1706,6 +1710,22 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
             vec3<f32>(1.0 / 2.2),
         );
         sun_removed = authored_rgb - mix(sunless_encoded, sunless, linear_out);
+        // **HD's SPU vertex light on a chunk drawn on its Zone program.** The `SVC1` Zone twins
+        // (`HalfBrightZoneMode*`, `HalfBrightZoneTrans*`) add it last, after the fog lerp and
+        // outside `light * surface`, inside the closing `/2`: `out = (fogged + spu) / 2`, so it
+        // reaches a Zone surface whose stage colours are black (Detonator's stage 1). Their
+        // `ShadowToAlpha` redraw takes it inside its light instead, `surface * spu`. Only on a
+        // chunk the Zone grade applies to (not a plain or exempt one), where the title's Zone frame
+        // is read to be one; a pane's clear part takes none
+        // (`docs/ghidra/functions/ps3-hdfury-eu/detonator-cannon.md`, "The blue wash of a volley").
+        if zone_program != 0.0 && zone_weight > 0.0 && scene.zone.shape.w > 0.5
+            && simplified_lighting == 0.0 {
+            let spu_zone = in.spu_light * pane_cover;
+            zone_after = scene.light.output_scale * spu_zone;
+            let redraw = sunless + scene.light.output_scale * surface_linear * program_multiplier * spu_zone;
+            let redraw_encoded = pow(clamp(redraw, vec3<f32>(0.0), vec3<f32>(1.0)), vec3<f32>(1.0 / 2.2));
+            zone_redraw = mix(redraw_encoded, redraw, linear_out) - mix(sunless_encoded, sunless, linear_out);
+        }
     }
 
     // The stand-in path, byte-for-byte what every other title always drew.
@@ -2360,6 +2380,8 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
         if generic_combine && rig_on != 0.0 {
             (*sun).delta = rig_on * in.lit_light.x * sun_removed;
             (*sun).known = 1.0;
+            (*sun).after_fog = rig_on * in.lit_light.x * zone_after;
+            (*sun).redraw = rig_on * in.lit_light.x * zone_redraw;
         }
         // `grade-sky`: the sky draw only, and only when a track module asked, so every
         // other pixel keeps the path above untouched. The authored picture is flattened
