@@ -186,10 +186,33 @@ def box_grey(theirs, ours, box):
     return float(subprocess.run(args, capture_output=True, text=True, check=True).stdout)
 
 
+#: The least the original's hull box may vary (grey standard deviation) and shine (grey mean) for a sway fit to mean anything: a black or wrong GS frame
+#: has neither, and every phase would score as well as any other. The real Assegai frame reads a standard deviation of 33.9.
+MIN_HULL_STD = 8.0
+MIN_HULL_MEAN = 5.0
+#: The least the phases' scores may differ (max minus min, grey) for one to be picked: a flat set is a fit of nothing. The real frame's spread is about 17.
+MIN_SWAY_SPREAD = 2.0
+
+
+def box_stats(path, box):
+    """`(mean, standard deviation)` of the grey in `box` (x, y, w, h), 0 to 255."""
+    x, y, w, h = box
+    out = subprocess.run(["magick", str(path), "-crop", "%dx%d+%d+%d" % (w, h, x, y), "+repage", "-colorspace", "Gray", "-format",
+                          "%[fx:mean*255] %[fx:standard_deviation*255]", "info:"], capture_output=True, text=True, check=True).stdout.split()
+    return float(out[0]), float(out[1])
+
+
 def fit_sway(args, item, plat, profile, theirs, pdir):
     """The hull's `--menu-model-seconds`: PS2 Pulse has no recovered address for the ship node's clock and a loaded state keeps its phase while the VM
     runs on, so ours is rendered at phases a quarter second apart over the loop, then at the neighbours of the best, and the phase whose `HULL_BOX` lies
-    closest to the original's is kept. Returns `(seconds, {seconds: box grey})`."""
+    closest to the original's is kept. Returns `(seconds, {seconds: box grey})`.
+
+    Refuses (exit 3, with the reason) when the original's hull box is near flat or near black, and when the phases' scores hardly differ: either is a
+    frame the fit cannot read (a black or wrong GS grab), and a phase picked from it would be written into the pair."""
+    mean, std = box_stats(theirs, HULL_BOX)
+    if std < MIN_HULL_STD or mean < MIN_HULL_MEAN:
+        sys.exit("sway fit refused: the original's hull box %s reads mean %.1f, standard deviation %.1f (needs >= %.0f and >= %.0f): a black or wrong frame, "
+                 "not a hull; re-grab" % (list(HULL_BOX), mean, std, MIN_HULL_MEAN, MIN_HULL_STD))
     offset = ce.display_offset_record(plat["key"], "menu")
     scores = {}
 
@@ -212,6 +235,10 @@ def fit_sway(args, item, plat, profile, theirs, pdir):
         score(best - step)
         score(best + step)
     best = min(scores, key=scores.get)
+    spread = max(scores.values()) - min(scores.values())
+    if spread < MIN_SWAY_SPREAD:
+        sys.exit("sway fit refused: the %d phases score within %.2f grey of each other (needs >= %.1f): the hull moves nothing in ours, or the original's "
+                 "box shows no hull; pass --model-seconds to pin a phase by hand" % (len(scores), spread, MIN_SWAY_SPREAD))
     return best, dict(sorted(scores.items()))
 
 
