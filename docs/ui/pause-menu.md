@@ -359,7 +359,7 @@ doing nothing and the rows' actions are the menu's (`Definition::open_on_pause_s
 
 **Measured against the original** (`scripts/pause-band-metric.py`, both frames at 480x272; ours is a 1440x816
 capture box-filtered down): the two rules at rows 75 and 175 on both, x 0 to 480; the first row's ink at rows 103
-to 114 against 103 to 114 and its x from 188 to 291 against 188 to 293; the second row's 121 to 132 on both and the
+to 114 against 103 to 114 and its x from 188 to 291 against 188 to 293 (that script's threshold-95 metric; per glyph on the pair the widths are equal and ours starts 1 px left, `docs/tools/compare-page.md`, "The band's words and the HUD top, measured again"); the second row's 121 to 132 on both and the
 third's 139 to 150 against 140 to 150; the cursor row's ink 252 against 253 and the others 156 against 157; the
 Tournament screen's first row 104 to 112 against 104 to 113, x 197 to 282 on both. The mean absolute colour
 difference over the first row's box is 22.8 of 255 per channel on Single Race and 42 on Tournament, where the
