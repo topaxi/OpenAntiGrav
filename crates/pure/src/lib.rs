@@ -476,7 +476,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     borrows_ps2_split_screens: false,
     model_lighting: None,
     team_hex_fade: None,
-    team_hex_ring: None,
+    team_hex_ring_peak: None,
 };
 
 pub mod campaign;

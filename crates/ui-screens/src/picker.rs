@@ -199,6 +199,8 @@ pub struct Picker {
     /// which the original restarts on every selection (`TrackSelection_ApplySelection`
     /// transitions the new circuit's own state machine to `Info` afresh).
     since_selection: f32,
+    /// `HexSelection`'s step: the slide, the deferred step and the ring's ease.
+    slide: hd::slide::Slide,
     /// Seconds since the page became current, which its `vwipe` images count their `delay` from.
     /// Separate from [`Self::seconds`] so a still can state the wipes finished without moving the
     /// craft's turntable or the slideshow.
@@ -314,6 +316,7 @@ impl Picker {
             seconds: 0.0,
             text_seconds: None,
             since_selection: 0.0,
+            slide: hd::slide::Slide::at_rest(index),
             entry: EntryClock::default(),
             across: false,
             columns: 0,
@@ -474,6 +477,12 @@ impl Picker {
         (self.since_selection < self.seconds).then_some(self.since_selection)
     }
 
+    /// The hex grid's step state, see [`hd::slide::Slide`].
+    #[must_use]
+    pub fn slide(&self) -> &hd::slide::Slide {
+        &self.slide
+    }
+
     /// The clock the page's `vwipe` images wait their `delay` on.
     #[must_use]
     pub fn entry(&self) -> EntryClock {
@@ -486,15 +495,18 @@ impl Picker {
         self.entry = entry;
     }
 
-    /// Sets [`Self::since_selection`], for a still drawn a known time after a step.
+    /// Sets [`Self::since_selection`], for a still drawn a known time after a step; the hex grid's
+    /// slide is then that far into a forward step onto the selected entry.
     pub fn set_since_selection(&mut self, seconds: f32) {
         self.since_selection = seconds;
+        self.slide = hd::slide::Slide::stepped(self.index, self.entries.len(), seconds);
     }
 
     /// Advances the screen's own clock by one fixed tick.
     pub fn tick(&mut self, dt: f32) {
         self.seconds += dt;
         self.since_selection += dt;
+        self.slide.tick(dt, self.index, self.entries.len());
         self.entry.tick(dt);
         self.scroll.tick(dt, &pointer::hex_extent());
     }

@@ -4246,15 +4246,15 @@ the front end's own. Drawn by `oag_ui_screens::picker::hd::hex`:
 | Piece | Source | Confidence |
 | --- | --- | --- |
 | cell | `Data\FE\Images\Hexagon_HD.gtf` (72x62 art in 128x64) at 1.22 | 70 |
-| cursor ring | a band of `Hexagon_HD_OUTLINE.gtf` six units wide, tinted pale pink (`193/81/91` on the flats, `200/92/102` on the sides); see "The cursor ring" below. **Chosen, not measured** as widget constants | 60 |
+| cursor ring | one quad of `Hexagon_HD_THICK_OUT.gtf` (92x80 units, UV 74x64 texels) pulsing white to `HD_Blue` to black, wired from `ship-select-ring.md`; the older band reading is superseded, see "The cursor ring" below | 85 (law), pulse zero point unread |
 | padlock | `Padlock.gtf` (the image this screen authors at 512x512), visible art 91x129 texels drawn at 0.44; colour `SelectedLockCol` on the selected column, faded toward `SelectedLockColFade` by 0.2 and 0.65 one and two columns out (frame reads 128, 110, 68) | 70 |
 | model icon | `<modellocation>\FE\thumb<LiveryNumber>.gtf` - `Feisar_c1\FE\thumb4.gtf` for `concept1`, `Feisar\FE\thumb0.gtf` for `normal`; census: every model of every team carries one | 85 (the frame's two icons match thumb4 and thumb0) |
-| selected column | `SelectedColumnCol` drawn twice on the bare cell (the two-pass fill `Block_Render` uses): `0x64` twice over black is 160, the frame reads (151, 6, 20) | 70 |
+| selected column | `HD_Blue` once on the bare cell (`SelectedColumnCol` is not a key `HexSelection_ParseXml` reads); the frame reads (151, 6, 20), 0.88 of `HD_Blue` on each channel, one common factor (the cell art's coverage, unread) | 85 |
 | neighbour columns | the same cells in `HexCol` fading with distance (see "The honeycomb fades" below), open rows ghosting their thumbnail in black at 0.35: **chosen, not measured** (the frame shows faint silhouettes) | - |
 
 Geometry, one settled RPCS3 frame (Feisar selected, fresh profile of the
 maintainer's save): first column centre = the authored origin `x=272`, column
-pitch 72.2, row pitch 82.8, the columns of odd teams half a row lower (a team rule, not a window-slot rule: 24 rest grabs, `docs/ghidra/functions/ps3-hdfury-eu/team-selection-model.md`, "The banner and the hex column on a step"), hexagon 88x76. **70**:
+pitch 72 (fitted 72.2), row pitch 83 (fitted 82.8), half row 42, the columns of odd teams half a row lower (a team rule, not a window-slot rule: 24 rest grabs, `docs/ghidra/functions/ps3-hdfury-eu/team-selection-model.md`, "The banner and the hex column on a step"), hexagon 88x76. **70**:
 one frame, in authored units through the page scale of "The layout scale"
 below, which rests on one clean anchor (the stat blocks' 545-unit spacing).
 
@@ -4266,6 +4266,10 @@ only, and it follows `Up`/`Down` between variants and `Left`/`Right` between tea
 Our picker offers three
 liveries (`""`, `_c1`, `_n1`), each on the row its model occupies
 (`Team::hex_cells`, `model_for_directory`).
+
+**Superseded (2026-11-24, `shipselect-ring-wire`)**: the ring is one `Hexagon_HD_THICK_OUT.gtf` quad pulsing
+with the widget's own clock, not six outline copies (`docs/ghidra/functions/ps3-hdfury-eu/ship-select-ring.md`);
+the reading below is the history of the frame fit, whose 6 px band is that art's own thickness.
 
 **The cursor ring (2026-11-19, `hd-ship-variant-outline`)**: the maintainer
 reported that Ship Select did not highlight the selected variant. The ring was

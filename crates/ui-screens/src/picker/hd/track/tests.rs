@@ -48,7 +48,7 @@ fn strings() -> StringTable {
 }
 
 fn layout() -> Layout {
-    let screens = Screens::from_xml_with_fallback_globals(XML, &[]);
+    let screens = Screens::from_xml_with_fallback_globals(XML, &[("HD_Blue", "0xffac0717")]);
     read(
         XML,
         &screens,
@@ -108,7 +108,7 @@ fn the_child_screen_carries_the_parents_widgets_and_none_of_tournament_cs() {
 #[test]
 fn a_file_missing_either_screen_reads_as_none() {
     let xml = r#"<Screen name="TrackSelectionTopLevel"></Screen>"#;
-    let screens = Screens::from_xml_with_fallback_globals(xml, &[]);
+    let screens = Screens::from_xml_with_fallback_globals(xml, &[("HD_Blue", "0xffac0717")]);
     assert!(
         read(
             xml,
@@ -306,18 +306,17 @@ fn grid_draws(picker: &Picker) -> Vec<Draw> {
 fn the_grid_puts_a_circuit_in_each_hexagon_and_red_on_the_chosen_column() {
     let picker = grid();
     let draws = grid_draws(&picker);
-    // 9 columns x 2 rows: a hexagon and an icon each, the chosen column's
-    // two hexagons drawn twice, and the ring's six copies, twice each, on the forward row.
+    // 9 columns x 2 rows: a hexagon and an icon each, and the ring's one quad on the forward row.
     let sprites = draws
         .iter()
         .filter(|d| matches!(d, Draw::Sprite { .. }))
         .count();
-    assert_eq!(sprites, 18 + 2 + 18 + 12);
+    assert_eq!(sprites, 18 + 18 + 1);
     let red = draws
         .iter()
-        .filter(|d| matches!(d, Draw::Sprite { color, .. } if color[0] == 1.0 && color[1] == 0.0))
+        .filter(|d| matches!(d, Draw::Sprite { color, .. } if *color == oag_ui::screen::argb_to_rgba(0xffac_0717)))
         .count();
-    assert_eq!(red, 4, "both chosen-column hexagons, twice each");
+    assert_eq!(red, 2, "both chosen-column hexagons, once each");
 }
 
 #[test]
@@ -325,14 +324,14 @@ fn the_ring_follows_the_direction_row_and_dropping_the_grid_draws_nothing() {
     let mut picker = grid();
     let ring_y = |draws: &[Draw]| {
         draws.iter().rev().find_map(|d| match d {
-            Draw::Sprite { rect, color, .. } if (color[0] - RING[0]).abs() < 1e-6 => Some(rect[1]),
+            Draw::Sprite { rect, .. } if rect[2] == 92.0 && rect[3] == 80.0 => Some(rect[1]),
             _ => None,
         })
     };
     let forward = ring_y(&grid_draws(&picker)).expect("ring on the forward row");
     press(&mut picker, Button::Down);
     let reverse = ring_y(&grid_draws(&picker)).expect("ring on the reverse row");
-    assert!((reverse - forward - 82.8).abs() < 0.01);
+    assert!((reverse - forward - 83.0).abs() < 0.01);
     let layout = layout();
     let extra = layout.hd_track.as_deref().expect("hd");
     let mut bare = extra.clone();

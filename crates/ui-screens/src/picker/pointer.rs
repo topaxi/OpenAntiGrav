@@ -190,7 +190,12 @@ fn hd_targets(picker: &Picker, layout: &Layout, extra: &super::hd::TeamScreen) -
     if let Some(grid) = &extra.hex {
         // Open cells only: a padlocked cell is nothing, and its neighbour
         // hexagons are tested as hexagons, not boxes (`hex_contains`).
-        for cell in grid.cells(picker.index(), picker.entries().len(), picker.pan()) {
+        for cell in grid.cells_at(
+            picker.index(),
+            picker.entries().len(),
+            picker.pan(),
+            Some(picker.slide()),
+        ) {
             let Some(variant) = super::hd::hex::variant_at(picker, &cell) else {
                 continue;
             };
@@ -365,6 +370,10 @@ impl Picker {
         while self.scroll.offset() < -STEP_AT {
             self.scroll.shift(1.0);
             out.extend(self.step_entry(1));
+        }
+        // The pan already showed these columns moving: the grid rests on the new selection.
+        if !out.is_empty() {
+            self.slide.rest_on(self.index, out.len());
         }
         out
     }

@@ -45,7 +45,7 @@ fn layout() -> Layout {
 }
 
 fn layout_of(xml: &str) -> Layout {
-    let screens = Screens::from_xml_with_fallback_globals(xml, &[]);
+    let screens = Screens::from_xml_with_fallback_globals(xml, &[("HD_Blue", "0xffac0717")]);
     read(
         xml,
         &screens,
@@ -121,7 +121,11 @@ fn the_child_screen_carries_the_parents_widgets_and_its_own_title() {
     assert_eq!((grid.columns, grid.rows), (5, 7));
     assert_eq!(grid.origin, [272.0, 395.0], "the item offsets fold in");
     assert_eq!(grid.hex, 0x6480_8080);
-    assert_eq!(grid.selected_column, 0x64ff_0000);
+    assert_eq!(
+        grid.selected_column, 0xffac_0717,
+        "`SelectedColumnCol` is not a key the widget reads; its fill is `HD_Blue`"
+    );
+    assert_eq!(grid.ring_peak, Some(0xffac_0717));
     assert_eq!(grid.selected_lock, 0xff80_8080);
     assert_eq!(grid.selected_lock_fade, 0xff24_2424);
 }
@@ -242,7 +246,8 @@ fn the_logo_is_the_teams_own_front_end_texture() {
     );
 }
 
-use super::hex::{HEX_SRC, LOCK_SRC, ModelCell, OUTLINE_SRC};
+mod slide_draw;
+use super::hex::{HEX_SRC, LOCK_SRC, ModelCell, THICK_OUT_SRC};
 use oag_ui::frontend::Placed;
 
 /// A team with seven models in the disc's order, of which `normal` (row 3)
@@ -270,7 +275,7 @@ fn hex_team(id: &str) -> Entry {
 }
 
 fn sheet(name: &str) -> Option<Placed> {
-    let known = [HEX_SRC, LOCK_SRC, OUTLINE_SRC];
+    let known = [HEX_SRC, LOCK_SRC, THICK_OUT_SRC];
     (known.contains(&name) || name.contains("thumb")).then_some(Placed {
         x: 0,
         y: 0,
@@ -306,10 +311,10 @@ fn the_hex_column_draws_cells_padlocks_and_the_selected_team_in_red() {
             _ => None,
         })
         .collect();
-    let red = oag_ui::screen::argb_to_rgba(0x64ff_0000);
-    // Seven selected-column cells, each in the authored red twice.
-    assert_eq!(sprites.iter().filter(|(_, c)| *c == red).count(), 14);
-    // 5 columns x 7 rows of cells in all, 14 + 28 draws.
+    let red = oag_ui::screen::argb_to_rgba(0xffac_0717);
+    // Seven selected-column cells, each in `HD_Blue` once.
+    assert_eq!(sprites.iter().filter(|(_, c)| *c == red).count(), 7);
+    // 5 columns x 7 rows of cells in all, 7 + 28 draws.
     let grey = oag_ui::screen::argb_to_rgba(0x6480_8080);
     assert_eq!(sprites.iter().filter(|(_, c)| *c == grey).count(), 28);
     // Five of seven rows are padlocked in each of the five columns.
@@ -385,25 +390,46 @@ fn a_faded_grid_shades_each_fill_toward_the_selected_column() {
     );
 }
 
-/// The cursor ring: a band of the outline art, one copy per unit of its width, in `TEAM_RING`,
-/// on the chosen livery's cell of the selected team's column only, and following the chosen
-/// livery as the selection moves between variants and teams.
+/// The cursor ring: one quad of `Hexagon_HD_THICK_OUT.gtf`, 92x80 units over a 74x64 texel window,
+/// on the chosen livery's cell of the centre column only, following the chosen livery as the
+/// selection moves between variants and teams, and drawn after every cell.
 #[test]
-fn the_cursor_ring_is_a_band_on_the_chosen_liveries_cell() {
+fn the_cursor_ring_is_one_quad_on_the_chosen_liveries_cell() {
     let layout = layout();
     let extra = layout.hd.as_deref().unwrap();
     let grid = extra.hex.unwrap();
-    // The ring's copies, outermost first, in one frame's draws.
     let ring = |picker: &Picker| -> Vec<[f32; 4]> {
-        body(picker, &layout, extra, &Frame::default(), &|n| sheet(n))
-            .into_iter()
-            .filter_map(|draw| match draw {
-                Draw::Sprite { rect, color, .. } if color == super::hex::TEAM_RING => Some(rect),
+        let draws = body(picker, &layout, extra, &Frame::default(), &|n| sheet(n));
+        let ring: Vec<usize> = draws
+            .iter()
+            .enumerate()
+            .filter_map(|(at, draw)| match draw {
+                Draw::Sprite { uv, .. }
+                    if *uv
+                        == sheet(THICK_OUT_SRC)
+                            .unwrap()
+                            .sheet_rect([0.0, 0.0, 74.0, 64.0]) =>
+                {
+                    Some(at)
+                }
                 _ => None,
+            })
+            .collect();
+        let last_cell = draws
+            .iter()
+            .rposition(|draw| matches!(draw, Draw::GradientSprite { .. } | Draw::Sprite { .. }))
+            .unwrap();
+        assert!(
+            ring.iter().all(|at| *at == last_cell),
+            "the ring is the last sprite"
+        );
+        ring.iter()
+            .map(|at| match draws[*at] {
+                Draw::Sprite { rect, .. } => rect,
+                _ => unreachable!(),
             })
             .collect()
     };
-    // `row`'s cell in the selected column, which is the middle of five.
     let cell = |picker: &Picker, row: usize| {
         grid.cells(picker.index(), picker.entries().len(), 0.0)[2 * 7 + row].rect
     };
@@ -417,13 +443,17 @@ fn the_cursor_ring_is_a_band_on_the_chosen_liveries_cell() {
             .expect("the chosen livery has a row")
     };
     let mut picker = picker_of(&["A", "B", "C"], "B");
+    picker.tick(1.0);
     let mut input = Input::default();
     let mut step = |picker: &mut Picker, button: Button| {
         input.begin_frame(0);
         input.begin_frame(1 << button as u32);
         picker.update(&mut input);
+        // Long enough for the slide to end and the ring to reach its row.
+        for _ in 0..60 {
+            picker.tick(1.0 / 60.0);
+        }
     };
-    let (mut down, mut across) = (None, None);
     for (button, name) in [
         (None, "the opening livery"),
         (Some(Button::Down), "the second variant"),
@@ -434,49 +464,87 @@ fn the_cursor_ring_is_a_band_on_the_chosen_liveries_cell() {
             step(&mut picker, button);
         }
         let drawn = ring(&picker);
-        assert_eq!(
-            drawn.len(),
-            12,
-            "{name}: six copies of the outline, two passes each"
-        );
+        assert_eq!(drawn.len(), 1, "{name}: one quad");
+        let [x, y, w, h] = drawn[0];
+        assert_eq!((w, h), (92.0, 80.0), "{name}");
+        let at = cell(&picker, row_of(&picker));
         assert!(
-            drawn.chunks(2).all(|pass| pass[0] == pass[1]),
-            "{name}: the passes agree"
+            ((x + w * 0.5) - (at[0] + at[2] * 0.5)).abs() < 1e-3
+                && ((y + h * 0.5) - (at[1] + at[3] * 0.5)).abs() < 1e-3,
+            "{name}: centred on the chosen cell"
         );
-        let copies: Vec<[f32; 4]> = drawn.chunks(2).map(|pass| pass[0]).collect();
-        // The outermost copy is on the chosen row of the selected column: its offset from that
-        // row's cell is one constant for every row and team.
-        let row = row_of(&picker);
-        let (dy, dx) = (
-            copies[0][1] - cell(&picker, row)[1],
-            copies[0][0] - cell(&picker, row)[0],
-        );
-        assert_eq!(*down.get_or_insert(dy), dy, "{name}: on row {row}");
-        assert_eq!(*across.get_or_insert(dx), dx, "{name}: in the column");
-        // Each copy is the one before scaled down about the hexagon's centre by a unit, and the
-        // six of them span the band's six units.
-        let band = |copy: &[f32; 4]| (copies[0][3] - copy[3]) * 0.5 * 62.0 / 64.0;
-        for (n, copy) in copies.iter().enumerate() {
-            assert!((band(copy) - n as f32).abs() < 0.05, "{name}: copy {n}");
-        }
     }
-    // A cell's ring never reaches another row or column: one band in the frame, not one per cell.
-    assert_eq!(ring(&picker).len(), 12);
 }
 
-/// The ring is drawn in the grid's own tint, which a title's data may change (Omega's is red).
+/// The ring pulses with the widget's own clock from the grid's `ring_peak`: white at phase 0,
+/// the peak a third of a second in, black at two thirds, then a cut to white; opaque throughout.
 #[test]
-fn the_cursor_ring_takes_the_grids_tint() {
-    let mut layout = layout();
-    let red = [0.84, 0.0, 0.0, 1.0];
-    layout.hd.as_deref_mut().unwrap().hex.as_mut().unwrap().ring = red;
+fn the_cursor_ring_pulses_white_to_the_peak_to_black() {
+    use super::hex::{pulse_argb, pulse_phase};
+    let peak = 0xffac_0717;
+    assert_eq!(pulse_argb(peak, pulse_phase(0.0)), 0xffff_ffff);
+    assert_eq!(pulse_argb(peak, pulse_phase(1.0 / 3.0)), peak);
+    assert_eq!(pulse_argb(peak, 2.0), 0xff00_0000);
+    assert!(
+        pulse_phase(2.0 / 3.0 + 1.0 / 60.0) < 0.1,
+        "wraps back to white"
+    );
+    // Per byte, truncated: a sixth of a second in is half way from white to the peak.
+    assert_eq!(pulse_argb(peak, 0.5), 0xff_d5_83_8b);
+    // The drawn ring takes the colour from the picker's clock.
+    let layout = layout();
     let extra = layout.hd.as_deref().unwrap();
-    let picker = picker_of(&["A", "B", "C"], "B");
-    let rings = body(&picker, &layout, extra, &Frame::default(), &|n| sheet(n))
-        .into_iter()
-        .filter(|draw| matches!(draw, Draw::Sprite { color, .. } if *color == red))
-        .count();
-    assert_eq!(rings, 12);
+    let ring_colour = |seconds: f32| {
+        let mut picker = picker_of(&["A", "B", "C"], "B");
+        picker.tick(seconds);
+        body(&picker, &layout, extra, &Frame::default(), &|n| sheet(n))
+            .into_iter()
+            .rev()
+            .find_map(|draw| match draw {
+                Draw::Sprite { color, .. } => Some(color),
+                _ => None,
+            })
+            .unwrap()
+    };
+    assert_eq!(ring_colour(0.0), [1.0; 4]);
+    assert_eq!(ring_colour(1.0 / 3.0), oag_ui::screen::argb_to_rgba(peak));
+}
+
+/// A title's own peak replaces `HD_Blue` (Omega computes its red inline), and a grid with no peak
+/// draws no ring rather than a stand-in.
+#[test]
+fn the_cursor_ring_takes_the_grids_peak() {
+    let mut layout = layout();
+    let red = 0xffee_0707;
+    layout
+        .hd
+        .as_deref_mut()
+        .unwrap()
+        .hex
+        .as_mut()
+        .unwrap()
+        .ring_peak = Some(red);
+    let extra = layout.hd.as_deref().unwrap();
+    let mut picker = picker_of(&["A", "B", "C"], "B");
+    picker.tick(1.0 / 3.0);
+    let quads = |layout: &Layout| {
+        let extra = layout.hd.as_deref().unwrap();
+        body(&picker, layout, extra, &Frame::default(), &|n| sheet(n))
+            .into_iter()
+            .filter(|draw| matches!(draw, Draw::Sprite { color, .. } if *color == oag_ui::screen::argb_to_rgba(red)))
+            .count()
+    };
+    assert!(extra.hex.is_some());
+    assert!(quads(&layout) >= 1);
+    layout
+        .hd
+        .as_deref_mut()
+        .unwrap()
+        .hex
+        .as_mut()
+        .unwrap()
+        .ring_peak = None;
+    assert_eq!(quads(&layout), 0);
 }
 
 #[test]
@@ -542,7 +610,10 @@ fn clicking_a_hex_selects_its_team_and_livery_and_the_chosen_one_confirms() {
     let events = picker.pointer(&click, &targets(&picker, &layout, &skin, &|_| None));
     assert_eq!(events, vec![Event::Moved]);
     assert_eq!((picker.index(), picker.variant_index()), (1, 1));
-    // The same spot is now the centre column's `concept1`: already chosen.
+    // Once the slide is over, the same spot is the centre column's `concept1`: already chosen.
+    for _ in 0..8 {
+        picker.tick(1.0 / 60.0);
+    }
     let centre = grid.cells(1, 3, 0.0)[2 * 7 + 2];
     let at = (
         centre.rect[0] + centre.rect[2] * 0.5,
@@ -1002,8 +1073,8 @@ fn a_scaled_honeycomb_shrinks_its_pitch_and_its_cells() {
 }
 
 /// `Team Selection`'s columns alternate their half-row shift with the team's index, not with
-/// their slot in the window: the centre column of an odd team sits half a row lower than an
-/// even team's, and the grid `TrackHexSelection` builds keeps the window's slots.
+/// their slot in the window: the centre column of an odd team sits half a row (42 units) lower
+/// than an even team's, and the grid `TrackHexSelection` builds keeps the window's slots.
 #[test]
 fn the_team_grids_half_row_follows_the_team_index() {
     let layout = layout();
@@ -1022,7 +1093,9 @@ fn the_team_grids_half_row_follows_the_team_index() {
             .unwrap()
             .rect[1]
     };
-    let half = hex::PITCH[1] * grid.scale * 0.5;
+    let half = hex::HALF_ROW * grid.scale;
+    assert_eq!(hex::HALF_ROW, 42.0);
+    assert_eq!(hex::PITCH, [72.0, 83.0]);
     assert!((centre_y(&grid, 1) - centre_y(&grid, 0) - half).abs() < 1e-3);
     assert!((centre_y(&grid, 2) - centre_y(&grid, 0)).abs() < 1e-3);
     // A neighbour keeps its team's phase: team 1's column is lowered next to team 0 selected.
@@ -1034,32 +1107,127 @@ fn the_team_grids_half_row_follows_the_team_index() {
             .rect[1]
     };
     assert!((right(&grid) - centre_y(&grid, 0) - half).abs() < 1e-3);
-    // Through the first frames of a step the columns keep the previous team's phase.
-    let held = |since: f32| {
-        grid.cells_at(1, 12, 0.0, since)
-            .iter()
-            .find(|c| c.offset == 0 && c.row == 0)
-            .unwrap()
-            .rect[1]
-    };
-    assert!((held(0.0) - centre_y(&grid, 0)).abs() < 1e-3);
-    assert!((held(hex::PHASE_HOLD_SECONDS) - centre_y(&grid, 1)).abs() < 1e-3);
-    // The drawn grid takes the hold: a picker a frame after a step draws other rects than a settled one.
-    let extra = layout.hd.as_deref().unwrap();
-    let mut picker = picker_of(&["A", "B", "C"], "B");
-    picker.tick(1.0);
-    let settled = body(&picker, &layout, extra, &Frame::default(), &|n| sheet(n));
-    picker.set_since_selection(0.0);
-    let stepped = body(&picker, &layout, extra, &Frame::default(), &|n| sheet(n));
-    assert_ne!(settled, stepped);
-    picker.set_since_selection(1.0);
-    assert_eq!(
-        settled,
-        body(&picker, &layout, extra, &Frame::default(), &|n| sheet(n))
-    );
     let track = hex::HexGrid::unauthored([100.0, 200.0], 5, 7);
     assert!(!track.phase_by_entry);
     assert!((centre_y(&track, 1) - centre_y(&track, 0)).abs() < 1e-3);
+}
+
+/// A forward step slides every column 72 units left, linearly over six ticks, each column keeping
+/// the half-row shift of the window it came from, with the spare column bringing the incoming team
+/// in from the right; at the sixth tick the columns are back in their slots with the new window.
+/// Frame 0 is the tick the step lands on.
+#[test]
+fn a_forward_step_slides_the_lattice_a_pitch_and_then_snaps() {
+    let layout = layout();
+    let grid = layout.hd.as_deref().unwrap().hex.unwrap();
+    let mut picker = picker_of(&["A", "B", "C", "D", "E", "F"], "C");
+    picker.tick(1.0);
+    let mut input = Input::default();
+    input.begin_frame(0);
+    input.begin_frame(1 << Button::Right as u32);
+    picker.update(&mut input);
+    let frame = |picker: &Picker| {
+        grid.cells_at(
+            picker.index(),
+            picker.entries().len(),
+            0.0,
+            Some(picker.slide()),
+        )
+    };
+    let column = |cells: &[hex::Cell], entry: usize| {
+        let cell = cells
+            .iter()
+            .find(|c| c.entry == entry && c.row == 0)
+            .unwrap();
+        [
+            cell.rect[0] + cell.rect[2] * 0.5,
+            cell.rect[1] + cell.rect[3] * 0.5,
+        ]
+    };
+    picker.tick(1.0 / 60.0);
+    let at_rest = grid.cells(2, 6, 0.0);
+    let start = frame(&picker);
+    for entry in [0, 1, 2, 3, 4] {
+        assert_eq!(
+            column(&start, entry),
+            column(&at_rest, entry),
+            "frame 0, team {entry}"
+        );
+    }
+    assert_eq!(
+        start.len(),
+        6 * 7,
+        "the spare column is there from the first frame"
+    );
+    for _ in 0..3 {
+        picker.tick(1.0 / 60.0);
+    }
+    let mid = frame(&picker);
+    for entry in [0, 1, 2, 3, 4, 5] {
+        let (before, now) = (column(&start, entry), column(&mid, entry));
+        assert!(
+            (before[0] - now[0] - 36.0).abs() < 1e-2,
+            "frame 3, team {entry}: half a pitch left"
+        );
+        assert_eq!(
+            before[1], now[1],
+            "frame 3, team {entry}: no change in height"
+        );
+    }
+    let spare = column(&mid, 5);
+    assert!((spare[0] - (grid.origin[0] + 5.0 * hex::PITCH[0] * grid.scale - 36.0)).abs() < 1e-2);
+    for _ in 0..3 {
+        picker.tick(1.0 / 60.0);
+    }
+    let snapped = frame(&picker);
+    assert_eq!(snapped.len(), 5 * 7, "frame 6: the spare column is gone");
+    let settled = grid.cells(3, 6, 0.0);
+    for entry in [1, 2, 3, 4, 5] {
+        assert_eq!(
+            column(&snapped, entry),
+            column(&settled, entry),
+            "frame 6, team {entry}"
+        );
+    }
+}
+
+/// The ring stays on the centre column and only its height eases: a step onto an odd team (whose
+/// column sits 42 units lower) leaves it 42 units above the new row on the frame of the step, and
+/// half of what is left is gone with every tick after.
+#[test]
+fn the_ring_eases_half_a_row_and_never_moves_sideways() {
+    let layout = layout();
+    let extra = layout.hd.as_deref().unwrap();
+    let mut picker = picker_of(&["A", "B", "C", "D", "E", "F"], "C");
+    picker.tick(1.0);
+    let ring = |picker: &Picker| {
+        body(picker, &layout, extra, &Frame::default(), &|n| sheet(n))
+            .into_iter()
+            .rev()
+            .find_map(|draw| match draw {
+                Draw::Sprite { rect, .. } if rect[2] == 92.0 => Some(rect),
+                _ => None,
+            })
+            .unwrap()
+    };
+    let rest = ring(&picker);
+    let mut input = Input::default();
+    input.begin_frame(0);
+    input.begin_frame(1 << Button::Right as u32);
+    picker.update(&mut input);
+    picker.tick(1.0 / 60.0);
+    // Team D (index 3) is odd: its column is 42 lower than C's, and the ring starts 42 above it.
+    let settled_y = rest[1] + 42.0;
+    for (frame, left) in [(0, 42.0), (1, 21.0), (2, 10.5), (3, 5.25)] {
+        let at = ring(&picker);
+        assert_eq!(at[0], rest[0], "frame {frame}: x never moves");
+        assert!(
+            (settled_y - at[1] - left).abs() < 1e-3,
+            "frame {frame}: {} above",
+            settled_y - at[1]
+        );
+        picker.tick(1.0 / 60.0);
+    }
 }
 
 fn art(src: &str) -> Option<Placed> {
