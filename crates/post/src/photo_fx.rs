@@ -141,11 +141,22 @@ struct Constants {
 }
 
 impl Constants {
+    /// Whether `viewport` has a pixel inside a target of `size`.
+    fn covers(viewport: (f32, f32, f32, f32), size: (u32, u32)) -> bool {
+        viewport.2 > 0.0
+            && viewport.3 > 0.0
+            && viewport.0 + viewport.2 > 0.0
+            && viewport.1 + viewport.3 > 0.0
+            && viewport.0 < size.0 as f32
+            && viewport.1 < size.1 as f32
+    }
+
     fn new(viewport: (f32, f32, f32, f32), size: (u32, u32), params: &Params) -> Self {
-        let x0 = viewport.0.max(0.0) as i32;
-        let y0 = viewport.1.max(0.0) as i32;
-        let x1 = ((viewport.0 + viewport.2) as i32 - 1).clamp(x0, size.0.max(1) as i32 - 1);
-        let y1 = ((viewport.1 + viewport.3) as i32 - 1).clamp(y0, size.1.max(1) as i32 - 1);
+        let (last_x, last_y) = (size.0.max(1) as i32 - 1, size.1.max(1) as i32 - 1);
+        let x0 = (viewport.0.max(0.0) as i32).min(last_x);
+        let y0 = (viewport.1.max(0.0) as i32).min(last_y);
+        let x1 = ((viewport.0 + viewport.2) as i32 - 1).clamp(x0, last_x);
+        let y1 = ((viewport.1 + viewport.3) as i32 - 1).clamp(y0, last_y);
         let (dof, edges, radius) = match params.dof {
             Some(dof) => {
                 let e = Edges::new(dof.focus);
@@ -209,6 +220,12 @@ struct Targets {
     reach: wgpu::TextureView,
     /// Reads `tiles`; owns nothing of the caller's, so it lives as long as the targets.
     dilate: wgpu::BindGroup,
+    /// Reads `scratch`, to carry the result home.
+    home: wgpu::BindGroup,
+    /// The main pass's group, kept for the scene and depth views it was built for.
+    main: super::group_cache::ViewGroup,
+    /// The tile pass's group, kept for the depth view it was built for.
+    tile_depth: super::group_cache::ViewGroup,
 }
 
 fn load_entry(binding: u32, multisampled: bool) -> wgpu::BindGroupLayoutEntry {
@@ -377,7 +394,7 @@ impl PhotoFx {
         encoder: &mut wgpu::CommandEncoder,
         frame: &Frame<'_>,
     ) -> bool {
-        if !frame.params.active() {
+        if !frame.params.active() || !Constants::covers(frame.viewport, frame.size) {
             return false;
         }
         self.resize(device, frame.size);
@@ -398,42 +415,33 @@ impl PhotoFx {
             (&self.main, &self.layout, &self.tile, &self.tile_layout)
         };
         let view = wgpu::BindingResource::TextureView;
-        let group = oag_gpu::perfprobe::bind_group(
-            device,
-            &wgpu::BindGroupDescriptor {
-                label: Some("photo fx"),
-                layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: view(frame.scene),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: self.constants.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 2,
-                        resource: view(frame.depth),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 3,
-                        resource: view(&targets.reach),
-                    },
-                ],
-            },
-        );
-        let home = oag_gpu::perfprobe::bind_group(
-            device,
-            &wgpu::BindGroupDescriptor {
-                label: Some("photo fx copy"),
-                layout: &self.copy_layout,
-                entries: &[wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: view(&targets.scratch),
-                }],
-            },
-        );
+        let group = targets.main.get_all(&[frame.scene, frame.depth], || {
+            oag_gpu::perfprobe::bind_group(
+                device,
+                &wgpu::BindGroupDescriptor {
+                    label: Some("photo fx"),
+                    layout,
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: view(frame.scene),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: self.constants.as_entire_binding(),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 2,
+                            resource: view(frame.depth),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 3,
+                            resource: view(&targets.reach),
+                        },
+                    ],
+                },
+            )
+        });
         let [x0, y0, x1, y1] = constants.rect;
         let rect = (
             x0 as f32,
@@ -477,23 +485,25 @@ impl PhotoFx {
             pass.draw(0..3, 0..1);
         };
         if frame.params.dof.is_some() {
-            let tiles = oag_gpu::perfprobe::bind_group(
-                device,
-                &wgpu::BindGroupDescriptor {
-                    label: Some("photo fx tiles"),
-                    layout: tile_layout,
-                    entries: &[
-                        wgpu::BindGroupEntry {
-                            binding: 1,
-                            resource: self.constants.as_entire_binding(),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 2,
-                            resource: view(frame.depth),
-                        },
-                    ],
-                },
-            );
+            let tiles = targets.tile_depth.get(frame.depth, || {
+                oag_gpu::perfprobe::bind_group(
+                    device,
+                    &wgpu::BindGroupDescriptor {
+                        label: Some("photo fx tiles"),
+                        layout: tile_layout,
+                        entries: &[
+                            wgpu::BindGroupEntry {
+                                binding: 1,
+                                resource: self.constants.as_entire_binding(),
+                            },
+                            wgpu::BindGroupEntry {
+                                binding: 2,
+                                resource: view(frame.depth),
+                            },
+                        ],
+                    },
+                )
+            });
             pass(
                 "photo fx tiles",
                 tile_pipeline,
@@ -510,8 +520,23 @@ impl PhotoFx {
             );
         }
         pass("photo fx", pipeline, &group, &targets.scratch, rect);
-        pass("photo fx copy", &self.copy, &home, frame.scene, rect);
+        pass(
+            "photo fx copy",
+            &self.copy,
+            &targets.home,
+            frame.scene,
+            rect,
+        );
         true
+    }
+
+    /// How many times the main pass's group and the tile pass's group were built, for the test
+    /// that proves a frame builds neither again.
+    #[cfg(test)]
+    fn group_builds(&self) -> (u64, u64) {
+        self.targets
+            .as_ref()
+            .map_or((0, 0), |t| (t.main.builds(), t.tile_depth.builds()))
     }
 
     fn resize(&mut self, device: &wgpu::Device, size: (u32, u32)) {
@@ -558,8 +583,23 @@ impl PhotoFx {
                 ],
             },
         );
+        let scratch = target("photo fx scratch", size, self.format);
+        let home = oag_gpu::perfprobe::bind_group(
+            device,
+            &wgpu::BindGroupDescriptor {
+                label: Some("photo fx copy"),
+                layout: &self.copy_layout,
+                entries: &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&scratch),
+                }],
+            },
+        );
         self.targets = Some(Targets {
-            scratch: target("photo fx scratch", size, self.format),
+            scratch,
+            home,
+            main: super::group_cache::ViewGroup::default(),
+            tile_depth: super::group_cache::ViewGroup::default(),
             reach: target("photo fx reach", tiled, TILE_FORMAT),
             tiles,
             dilate,

@@ -570,6 +570,68 @@ fn a_lens_sample_keeps_the_focus_plane_sharp_at_the_edge_of_the_frame() {
     );
 }
 
+/// The picture controls' pass is built by the first frame that applies a control and freed by
+/// the first frame drawn after the mode closed. Fails while nothing sets the pass back to
+/// `None`, which keeps three pipelines and a target of the render size for the life of the scene.
+#[test]
+fn the_picture_controls_pass_is_freed_when_photo_mode_ends() {
+    use super::scene_build::{bare_scene_of, livery, test_gpu};
+    use super::split_blur::{AREA, target};
+    let Some((device, queue)) = test_gpu() else {
+        return;
+    };
+    let (mut race, _, _) = driven();
+    let liveries: Vec<_> = (0..race.core.sim.ship_count()).map(|_| livery()).collect();
+    let scene = bare_scene_of(&device, &queue, &liveries);
+    let frame = |race: &Race| {
+        let mut encoder = device.create_command_encoder(&Default::default());
+        scene.render(
+            &device,
+            &queue,
+            &mut encoder,
+            &target(&device).create_view(&Default::default()),
+            race,
+            AREA,
+            oag_display::display::Fov::AUTHORED,
+            true,
+            true,
+            None,
+            oag_display::display::MotionBlur::Off,
+            oag_display::display::Shadows::Off,
+            None,
+            &[],
+            None,
+            None,
+            None,
+        );
+        queue.submit(Some(encoder.finish()));
+    };
+
+    frame(&race);
+    assert!(
+        !scene.photo_fx_built(),
+        "a race that never opened the mode builds nothing"
+    );
+    open(&mut race);
+    race.photo_effects(|effects| {
+        effects.select(Row::DepthOfField);
+        effects.adjust(1);
+    });
+    frame(&race);
+    assert!(
+        scene.photo_fx_built(),
+        "a depth of field frame builds the pass"
+    );
+    frame(&race);
+    assert!(
+        scene.photo_fx_built(),
+        "the pass is kept while the mode is open"
+    );
+    race.photo_end();
+    frame(&race);
+    assert!(!scene.photo_fx_built(), "the pass outlived the mode");
+}
+
 /// An accumulated depth of field frame is drawn with the preview's own pass, at the full
 /// aperture. Fails if a frame under a lens sample asks the pass for less blur than the preview
 /// does: the ring is too small to stand for the rest.
