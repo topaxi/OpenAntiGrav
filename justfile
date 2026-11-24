@@ -1473,6 +1473,13 @@ check-web-shaders *ARGS:
 blender-fixtures *ARGS:
     scripts/blender-fixtures.sh "$@"
 
+# Write the textures a track file borrows from a disc (or every texture of one circuit
+# entry, e.g. 'Data\Environments\03_Track\track.vex') as PNG files under OUT, for the
+# Blender add-on's "Host texture folder". Disc content: keep OUT under data/, never
+# commit it. docs/tools/blender.md, "Host textures"
+export-host-textures IMAGE WHAT OUT:
+    cargo run -p oag-raceplay --example export_host_textures -- "{{IMAGE}}" "{{WHAT}}" "{{OUT}}"
+
 # Regenerate that table after a names.tsv or evidence-page change
 gen-status:
     python3 scripts/gen-re-coverage.py
