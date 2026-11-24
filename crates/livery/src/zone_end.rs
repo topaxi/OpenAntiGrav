@@ -35,7 +35,7 @@ fn entry_name(ships: oag_title::race::ShipPaths, stem: &str) -> Option<String> {
 /// One of the end's models. A Vita or PS4 `.rcsmodel` takes its node motion from the `.vex` it
 /// was exported beside (`mesh::rcs::psp2::build_with_vex`): the shell's `Anim Transform` is
 /// there and not in a skeleton, which neither title ships for it.
-fn model(
+pub(crate) fn model(
     archives: &mut oag_assets::Archives,
     name: &str,
     store: oag_gpu::formats::SceneStore,

@@ -482,6 +482,27 @@ pub(super) fn grid(
         )
         .map(std::sync::Arc::new);
     }
+    // An ordinary craft breaks into pieces at the end of its blast (`ship-destroy.md`, "The
+    // debris throw"): race-wide models, carried by the player's slot like the Zone end's. Zone and
+    // Detonator throw their own.
+    if options.hull_wreck
+        && !matches!(
+            options.mode,
+            oag_race::Mode::Zone | oag_race::Mode::Detonator
+        )
+        && let Some(spec) = craft_title.destroyed.value.ship_debris
+        && let Some(player) = liveries.first_mut()
+        && let Some(team) = slot_teams.first()
+    {
+        player.ship_debris = oag_livery::ship_debris::load(
+            archives,
+            craft_title.race.ships_for(team),
+            store,
+            spec,
+            report,
+        )
+        .map(std::sync::Arc::new);
+    }
     if craft_title
         .effect_on(oag_title::Trigger::WreckNode)
         .is_none()

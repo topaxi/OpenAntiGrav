@@ -321,6 +321,8 @@ pub mod scoreboard;
 pub mod sh_probes;
 #[cfg(feature = "view")]
 mod shadow;
+#[cfg(feature = "view")]
+mod ship_debris;
 mod sim;
 mod sim_race;
 #[cfg(feature = "view")]

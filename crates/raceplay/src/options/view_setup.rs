@@ -112,6 +112,9 @@ pub struct ViewSetup {
     /// The Zone end's shell and debris, where the title ships and loaded them - see
     /// `race::zone_end`.
     pub zone_end: Option<std::sync::Arc<oag_livery::ZoneEndModels>>,
+    /// The ordinary craft's debris pieces, and what throws them - see `race::ship_debris`.
+    pub ship_debris: Option<std::sync::Arc<oag_livery::ShipDebrisModels>>,
+    pub ship_debris_spec: Option<oag_title::destroyed::ShipDebris>,
     /// Whether the title throws the big blast (and its shockwave) when a wreck's state times
     /// out: its table names [`Trigger::WreckExplosion`]. See `race::wreck_fx`.
     pub wreck_shockwave: bool,
@@ -335,6 +338,8 @@ impl ViewSetup {
             cockpit_hit_noise: None,
             wreck_anchors: Vec::new(),
             zone_end: None,
+            ship_debris: None,
+            ship_debris_spec: None,
             wreck_shockwave: false,
             magstrip_wake: None,
             magstrip_pob: false,

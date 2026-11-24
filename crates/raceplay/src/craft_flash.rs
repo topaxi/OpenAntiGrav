@@ -83,6 +83,7 @@ impl RaceView {
     /// the destroyed-craft pass has settled every state.
     pub(super) fn advance_craft_flashes(&mut self, core: &SimRace) {
         self.advance_zone_end(core);
+        self.advance_ship_debris(core);
         let player = core.player_slot();
         let dt = core.sim.dt;
         for slot in 0..core.sim.world.ship_count as usize {
@@ -126,6 +127,7 @@ impl RaceView {
                 }
                 self.throw_wreck_fx(core, slot);
                 self.throw_death_plume(core, slot);
+                self.throw_ship_debris(core, slot);
                 // Every mode, the edge that ends a Single Race or a Zone run
                 // included: the finished race steps its cosmetics
                 // ([`Race::tick_cosmetics`]), so the shake decays under the

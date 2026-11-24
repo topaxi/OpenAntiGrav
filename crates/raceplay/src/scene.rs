@@ -41,6 +41,7 @@ mod split_blur;
 mod split_exposure;
 mod split_record;
 pub use split_record::Recording;
+mod ship_debris;
 mod velocity_gate;
 mod viewports;
 mod weapon_models;
@@ -229,6 +230,8 @@ pub struct Scene {
     wrecks: wreck::Wrecks,
     /// A Zone craft's shell and debris - see [`zone_end`].
     zone_end: zone_end::ZoneEndDraws,
+    /// An ordinary craft's thrown pieces - see [`ship_debris`].
+    ship_debris: ship_debris::ShipDebrisDraws,
     /// The circuit's own extra pass - see [`shine::TrackShine`].
     track_shine: Option<shine::TrackShine>,
     /// Pulse's caustic pass over the circuit - see [`caustic::TrackCaustic`].
@@ -1046,6 +1049,7 @@ impl Scene {
         let shine = slots.shines()?;
         let wrecks = wreck::Wrecks::build(&slots, scene_depth, zone_art)?;
         let zone_end = zone_end::ZoneEndDraws::build(&slots, scene_depth, zone_art)?;
+        let ship_debris = ship_debris::ShipDebrisDraws::build(&slots, scene_depth, zone_art)?;
         let shell = |l: &oag_livery::Livery| l.absorb_shell.clone();
         let never = mesh_render::ShadowReceiver::Never;
         let absorb_shell = slots.drawables(shell, exhaust::BLEND, scene_depth, never)?;
@@ -1255,6 +1259,7 @@ impl Scene {
             shine,
             wrecks,
             zone_end,
+            ship_debris,
             track_shine,
             track_caustic,
             anim_clock: std::cell::Cell::new(0.0),
