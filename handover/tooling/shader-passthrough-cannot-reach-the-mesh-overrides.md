@@ -1,8 +1,8 @@
 ---
-status: blocked-maintainer
+status: measure
 titles: [all]
 updated: 2026-11-24
-summary: "Build-time SPIR-V reaches 1.6 %; resolve-once measured 6.2 % (safe, unlanded); a wgpu-hal stage cache (about 19 %) needs a decision"
+summary: "Design 4 landed (vendored wgpu-hal stage memo, race launch -21 %); left: native device-lost handler, upstream PR, presenting-GPU wall clock"
 size: L (40)
 difficulty: hard (45)
 ---
@@ -19,30 +19,18 @@ reach 1.6 %.
 
 ## Open
 
-- **Decision: is a run-time SPIR-V path acceptable?** Two designs, both outside
-  the approved invariant ("the blob is naga's build-time output"):
-  1. In-process memo: naga writes each distinct (module, entry point, constants,
-     layout) stage once, later pipelines reuse it through passthrough. The race
-     compiles 202 stages, 64 distinct; ceiling about 17 % of the launch on every
-     launch.
-  2. A disk cache of those blobs keyed on naga's version, shader text, entry
-     point, constants, layout and the device's writer options. Ceiling about
-     31 % on a warm launch.
-  3. Measured, safe, not landed (`load-time.md`, "Sixth round"): resolve overrides once
-     per distinct stage and hand `wgpu` the IR (`ShaderSource::Naga`, `naga-ir` on
-     `oag-mesh`, no `unsafe`). Race walk 22.01 -> 20.63 G user instructions (-6.2 %),
-     bare race launch 12.03 -> 11.00 G (-8.6 %), the one frame compared byte-identical.
-     Under the 10 % bar, so it stayed a prototype (about 150 lines in `oag-mesh`'s
-     `pipeline_cache`). It needs `module.overrides` cleared by hand after naga's
-     `process_overrides`, which leaves it filled against its own documentation.
-  4. A stage cache inside `wgpu-hal`'s `compile_stage` (vendored or upstream), keyed on
-     module, entry point, constants and binding map: 44 compiles instead of 202, about
-     19 % of a race launch, SPIR-V write included. Not built; vendoring `wgpu` needs the
-     lead's word.
-  Designs 1 and 2 must mirror `wgpu-hal`'s private, device-derived writer options and its
-  per-layout binding renumbering, and must never pass a module with overrides
-  through (constants are dropped silently). The traps, with `path:line`, are in
-  the "Fifth round" section.
+- **Landed: design 4**, a per-device SPIR-V memo in a vendored `wgpu-hal`'s Vulkan
+  `compile_stage` (`docs/architecture/vendored-wgpu-hal.md`; `load-time.md`, "Seventh
+  round"): race walk -14.9 %, bare race launch -21.3 %, `bomb_orbit_ground_truth` -37.4 %
+  user instructions, frames pixel-identical. Designs 1 to 3 are no longer needed for the
+  launch; design 2 (a disk cache of the words) is the only one that would still take the
+  remaining 11 % of `compile_stage` (first writes), and it breaks the build-time invariant.
+- **Upstream PR not opened.** Its text is in `vendored-wgpu-hal.md`, "Upstream pull request
+  text"; sending it is the maintainer's call. Until a `wgpu` release carries it, every `wgpu`
+  upgrade re-vendors (`vendored-wgpu-hal.md`, "When to drop it").
+- **Player's load as wall clock on a presenting GPU is unmeasured.** The only wall clock
+  taken was lavapipe on Xvfb under load 48 to 63 (medians 10.4 s -> 6.8 s, best 6.40 ->
+  6.23 s); measure with `--measure-race-load 2` on the desktop or the Deck.
 - **No native device-lost handler.** Only the web build registers
   `set_device_lost_callback` and `on_uncaptured_error` (`oag-game`'s `app/gpu.rs`,
   `mod web`), and the renderer setting cannot leave Vulkan on Linux, Android or the
@@ -52,17 +40,10 @@ reach 1.6 %.
 
 ## Next Steps
 
-- Report upstream that naga's `process_overrides` writes the overrides arena back, against its
-  doc comment ("empty `overrides` arena"); design 3 would then stop clearing it by hand.
-- The prototype of design 3 is on branch `gate-walltime-7-design3` (not for merge: no wasm
-  gate, no tests).
-- Decide between landing design 3 as measured (6 to 9 %, safe, needs its tests and the
-  HD and menu frame comparisons), the `wgpu-hal` stage cache (design 4), and designs 1 or 2.
-- Ask the maintainer whether design 1 or 2 may go ahead (Opus, with the recovery
-  step of the original brief as a precondition).
+- Maintainer: send the upstream PR (text in `vendored-wgpu-hal.md`) and the naga
+  `process_overrides` overrides-arena report, or decide not to.
+- Measure the player's load on a presenting GPU: release build,
+  `oag-game data/images/pulse-psp-eu.chd --no-audio --measure-race-load 2`, base
+  (`[patch.crates-io]` line for `wgpu-hal` removed) against the memo, interleaved.
 - Independently, a lane for the native device-lost callback: log at `error`,
   tell the player to relaunch, keep the process from dying silently.
-- Measuring command for either design: the Fifth round's `perf stat -e
-  instructions:u` on the Pulse PSP `--drive` walk, warm `MESA_SHADER_CACHE_DIR`,
-  before and after, plus a stage census at `pipeline_cache::cached_pipeline`'s
-  miss.

@@ -61,6 +61,9 @@ threads).
 - Measured and not landed: resolving the override constants once per distinct stage and
   handing `wgpu` the IR, no `unsafe`, is -6.2 % of a race walk and -8.6 % of a bare race
   launch (`docs/architecture/load-time.md`, "Sixth round"), under the 10 % bar.
+- A per-device stage memo in a vendored `wgpu-hal` (`docs/architecture/vendored-wgpu-hal.md`):
+  race walk -14.9 %, bare race launch -21.3 %, `bomb_orbit_ground_truth` -37.4 % user
+  instructions (`docs/architecture/load-time.md`, "Seventh round").
 
 ## Next Steps
 

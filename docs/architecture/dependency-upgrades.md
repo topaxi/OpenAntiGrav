@@ -17,6 +17,10 @@ lockfile can still take and what is "behind latest"; `cargo outdated --workspace
 `num-bigint` and `x11rb` here), so the newest release of each direct dependency
 was also read from the crates.io sparse index.
 
+**`wgpu-hal` is vendored** (`vendor/wgpu-hal`, a per-device stage memo): a `wgpu`
+upgrade also re-vendors it or drops it, as [The vendored `wgpu-hal`](vendored-wgpu-hal.md),
+"When to drop it", says. Bumping `wgpu` alone leaves the patch pinning the old `wgpu-hal`.
+
 ## Gates
 
 Determinism: the simulation-reachable crates (`glam`, `flate2`, `zlib-rs`,

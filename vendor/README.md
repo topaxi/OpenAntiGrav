@@ -26,6 +26,15 @@ LibAtrac9's own licence sits beside it as `LICENSE-LibAtrac9` and ships in
 once a release decodes everything `crates/music/tests/atrac9_ground_truth.rs`
 and `omega_wem_ground_truth.rs` read, sample-identical to LibAtrac9.
 
+**`wgpu-hal/`** (30.0.2, MIT OR Apache-2.0, licence files kept). The Vulkan
+backend keeps each pipeline stage's SPIR-V per device, so pipelines built from one
+module with override constants stop re-resolving and re-writing identical stages: a
+race launch's user instructions fall by about 21 %. `NOTICE.md` lists the changed
+files; why, how it is tested and when to drop it are in
+`docs/architecture/vendored-wgpu-hal.md`. The workspace's `exclude = ["vendor"]`
+lets the crate's own tests run standalone. Drop the entry once a `wgpu` release
+carries an equivalent cache.
+
 Earlier entries: the Linux platform-native H.264 decode path
 (see [ADR-0017](../docs/architecture/adr/0017-gstreamer-native-video.md))
 used to vendor patched copies of `cros-libva` and `h264-reader` for a

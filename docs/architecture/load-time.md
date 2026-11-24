@@ -716,6 +716,58 @@ The prototype above is the cheaper half: 6 % of a race walk and 8.6 % of a bare 
 no `unsafe`, byte-identical in the one frame compared, about 150 lines in `oag-mesh`'s
 `pipeline_cache`, and it is what a later `wgpu-hal` cache would sit on top of.
 
+### Seventh round (2026-11-24): a stage memo in `wgpu-hal` clears the bar
+
+**Change.** The Sixth round's estimated ceiling, built: `wgpu-hal`'s Vulkan `compile_stage`
+keeps the SPIR-V of each distinct stage per device and reuses it. The key is the module id,
+stage, entry point, constants, zero-init flag and the layout's binding map. `wgpu-hal` is
+vendored for it under `vendor/wgpu-hal` (`[patch.crates-io]`). Why, the key, the bound and
+how to drop it are in [The vendored `wgpu-hal`](vendored-wgpu-hal.md). Our own crates did
+not change, and no `unsafe` was added.
+
+**Census first** (a temporary print in `compile_stage`, the Pulse PSP race walk below):
+308 calls, every one on the IR path, 126 distinct keys. One module (`mesh.wesl`) takes 172 of
+the calls. This round's walk counts the front end and every module. The Sixth round's
+202/44 counted the race's pipelines only.
+
+**Measured.** The Sixth round's Pulse PSP race walk (menus, `LAUNCH RACE`, 400 ticks), on
+`main` at `ecb8f7f04`, which is why the baseline is below the Sixth round's 22.0 G. Release
+build with frame pointers and line tables in its own target directory. Warm
+`MESA_SHADER_CACHE_DIR`, `perf stat -e instructions:u`, base and memo runs interleaved.
+Load average 48 to 68 throughout.
+
+| Launch | Before | After |
+| --- | ---: | ---: |
+| Race walk, G user instructions | 16.694, 16.700, 16.690 | 14.212, 14.082, 14.319 (**-14.9 %**) |
+| Race launch (`--race --screenshot --ticks 1`), G | 9.067, 9.171, 9.066 | 7.133, 7.132, 7.237 (**-21.3 %**) |
+| `bomb_orbit_ground_truth` (one test, spawns `oag-game --race`; `target/debug`), G | 27.095, 27.095, 27.095 | 16.956, 16.955, 16.956 (**-37.4 %**) |
+| `compile_stage`, share of the walk's samples (`perf record`, children) | 25.3 % | 11.4 % |
+| The player's path: `--measure-race-load 2`, run 2's confirm to first race frame (Xvfb, lavapipe, six interleaved pairs) | 6.40, 7.18, 9.29, 11.60, 17.81, 37.06 s | 6.23, 6.70, 6.72, 6.90, 7.43, 9.55 s |
+
+The walk and the 1-tick launch move about 1 % between repeats. The ground-truth test moves
+under 0.001 %. A ground-truth test gains the most because its debug-profile build runs naga
+slower than a release build does, so naga is a larger share of what it pays.
+
+The player's-path row is wall clock. It went through lavapipe, because RADV cannot present
+on Xvfb, at a load of 48 to 63, so read it as a direction, not a size. The medians are
+10.4 s against 6.8 s and the best runs 6.40 s against 6.23 s. The memo works on
+`race-build`'s CPU time, and lavapipe's own rasteriser dominates that run. The walk above
+is the same menus-to-race path, headless, so its -14.9 % is the player's load counted in
+instructions. A presenting-GPU wall clock is still unmeasured.
+
+**Pixels.** Decoded scanlines are identical between base and memo:
+- the Pulse PSP race at 1 tick, three pairs, also `cmp`-identical;
+- the HD/Fury race (`hdfury-ps3-eu-dec.iso`, 60 ticks), with the same state hash
+  `0x2e5cbe82b8e46874`;
+- the Pulse main menu (`--menu-page main`) and the HD race menu (`--menu-page race`), both
+  `cmp`-identical.
+
+All six race walks end on the same state hash, `135d7f9dadf028aa`.
+
+**What is left of `compile_stage`** (11.4 %) is the 126 first writes. A disk cache of the
+words (design 2, Fifth round) would take that on a warm launch as well, but it breaks the
+build-time invariant that design was refused on, so it was not built.
+
 ## Reproducing
 
 The scripts that produced every table are under the lane's scratch directory

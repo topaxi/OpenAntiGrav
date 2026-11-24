@@ -188,6 +188,10 @@ by user instructions of the whole module at the gate's profile:
   (22.01 -> 20.63 G user instructions), bare race launch -8.6 %, one frame byte-identical;
   under the 10 % bar. naga 30.0.2 hands the resolved module back with its overrides arena
   still filled, which makes `wgpu-hal` resolve it again (+4.3 % worse) until it is cleared.
+- Changed (`load-time.md`, "Seventh round"): a per-device stage memo in a vendored
+  `wgpu-hal` ([The vendored `wgpu-hal`](vendored-wgpu-hal.md)). Race walk -14.9 %, bare race
+  launch -21.3 %, `bomb_orbit_ground_truth` 27.1 -> 17.0 G user instructions (-37.4 %);
+  frames pixel-identical.
 
 ## Still open
 
