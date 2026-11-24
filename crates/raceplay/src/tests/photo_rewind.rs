@@ -678,15 +678,11 @@ fn the_accumulated_shot_keeps_the_band_the_preview_shows_sharp() {
 }
 
 /// A motion blur that cannot be drawn is not on offer: with no recording there is nothing to
-/// play between keyframes, the plan drops the blur and the shot is the one frame. Fails while the
-/// MOTION BLUR row is offered on the title's say alone.
+/// play between keyframes, so the panel has no MOTION BLUR or shutter row, choosing one does
+/// nothing, and the shot is the one frame. Fails while the MOTION BLUR row is offered on the
+/// title's say alone.
 #[test]
-#[ignore = "photo-fx-review finding 8"]
 fn a_race_with_no_recording_is_not_offered_a_motion_blur() {
-    // An open finding's proving test: `test-data` runs ignored tests, so it runs only when asked.
-    if std::env::var_os("OAG_REVIEW_FINDINGS").is_none() {
-        return;
-    }
     let mut race = Box::new(Race::start(
         fixture(),
         crate::tests::fixture_view(),
@@ -707,14 +703,26 @@ fn a_race_with_no_recording_is_not_offered_a_motion_blur() {
     assert!(!rewind.resimulates(), "nothing was recorded");
     blur(&mut race, 1, 100);
     let photo = race.photo().expect("open");
-    assert_eq!(photo.effects().blur(), Some(Blur::Track));
+    assert!(
+        !photo.effects().rows().contains(&Row::MotionBlur),
+        "the panel offers a MOTION BLUR row that the shot ignores"
+    );
+    assert!(!photo.effects().rows().contains(&Row::Shutter));
+    assert_eq!(photo.effects().blur(), None, "a blur that cannot be drawn");
     assert!(
         Plan::new(photo, LIVE, rewind.resimulates()).is_none(),
         "the shot is the one frame on screen"
     );
+    // The same race with a recording is offered it.
+    let (mut recorded, _, _) = driven();
+    open(&mut recorded);
     assert!(
-        !photo.effects().rows().contains(&Row::MotionBlur),
-        "the panel offers a MOTION BLUR row that the shot ignores"
+        recorded
+            .photo()
+            .expect("open")
+            .effects()
+            .rows()
+            .contains(&Row::MotionBlur)
     );
 }
 

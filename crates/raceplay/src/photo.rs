@@ -944,8 +944,10 @@ impl Race {
         rewinds: bool,
     ) {
         let live = self.core.sim.world.tick;
+        let records = self.recording();
         if let Some(photo) = self.view.photo.take() {
             let mut photo = photo.offering(accumulation, rewinds);
+            photo.effects_mut().set_recording(records);
             photo.effects_mut().set_live(live);
             self.view.photo = Some(photo);
         }
