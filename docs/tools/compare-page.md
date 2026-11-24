@@ -2464,9 +2464,10 @@ retaken. The Detonator thread's "Render accuracy" holds the table and the region
 **Question:** how many ticks older is the picture RPCS3 shows than the RAM state the pair feeds ours from, and does it agree with
 the two readings on record (`det-mine-look-re`: mines are drawn at their objects and the picture is 1.15 to 3.55 ticks older than the push
 buffer's camera, 5.6 to 6.3 behind RAM; `hd-pair-lag-scan.py`: 0 to 3 ticks)? **Answer for Detonator: the picture is 6.0 ticks (100 ms, three
-of the mode's two-tick frames) behind RAM on every grab taken after the game has run a while since the last stop, and 2 or 4 ticks behind
-the push buffer's frame, which is itself 4 or 2 behind RAM. Confidence 90 for that value on those grabs (15 grabs, 11 boots, spread
-5.85 to 6.25, sd 0.11); 60 for what happens on a stop taken right after another (below); the race modes are not measured here.**
+of the mode's two-tick frames) behind RAM on a first stop or a stop 16 or more ticks after the previous one, and 2 or 4 ticks behind
+the push buffer's frame, which is itself 4 or 2 behind RAM. Confidence 85 for that value on those grabs (runtime measurement, 15 grabs on 11 boots,
+spread 5.85 to 6.25, sd 0.11; one feature class, the mines, plus `det-mine-look-re`'s one panel edge, which is why it is not 90); 50 for what happens on a
+stop taken right after another (below); the race modes are not measured here.**
 
 **Falsifier written before the fits:** if the picture were a constant `k` behind the push buffer (the push buffer is the frame the pair
 already feeds), `k` would not move with the hull's skew; if it were a constant behind RAM, `skew + k` would not. The fits show the second.
@@ -2477,8 +2478,9 @@ tabulates the camera's pose per tick from every push-buffer camera of every reco
 craft flies one path on every boot, the eyes at one tick agree to 0.3 units), reprojects each near mine (8 to 60 units) through the
 tabulated camera at `T - L`, and takes the `L` that puts it on its blob's centroid. The residual at the best `L` is 0 to 3 px on a clean grab,
 against 20 to 130 px at `L = skew` (the push buffer's own camera). No camera velocity is assumed; the single-grab fit that does
-(`hd_picture_lag.py`, below) is 0.1 to 0.2 ticks from this on clean grabs and wrong by 3 ticks on a frame where the craft slows (`b5/03`:
-the camera's speed halved, a mine hit).
+(`hd_picture_lag.py`, below), run as shipped on the six grabs that carry the rig eye (`b5/00` to `b5/03`, `b6/01`, `b7/01`, three boots), reads 4.14, 3.91, 1.20, refused, 3.86 and 3.95
+against the table's `L - skew` 4.09, 4.05, 1.66, 0.81, 3.83 and 3.93: 0.02 to 0.14 ticks on four clean grabs, 0.46 on `b5/02`, and `b5/03` (the craft's speed halved, a mine hit; its nearest
+mines are 6 and 11 units) is refused because one mine is left between 8 and 50 units; an earlier version without that limit read it 3.4 ticks wrong.
 
 | Grab (boot, stop) | skew (hull behind RAM) | `L` behind RAM | `L - skew` (behind the push buffer) | rms px |
 | --- | --- | --- | --- | --- |
@@ -2491,7 +2493,7 @@ the camera's speed halved, a mine hit).
 The hull's skew takes only 2 and 4 on the clean grabs (3 on two stops that followed another closely), which reads as a frame every two ticks
 with one or two of them ahead of the picture at the pause (a reading, not located in the game). **Whatever the skew, the picture is at `T - 6.0`**:
 the grabs with skew 4 sit 2.0 behind the push buffer, those with skew 2 sit 4.0 behind it, at clocks 2.4 to 4.8 (skew 4) and 2.0 to 2.7 (skew 2). The fifteen grabs
-are the first four rows' clean ones and `gG`'s (one merged blob dropped); the earlier lanes' records carry no mine list, so their `L` values are fitted
+are the first three rows' and `gG`'s (one merged blob dropped); the earlier lanes' records carry no mine list, so their `L` values are fitted
 with the mine positions of one RAM read (the same 25 mines), not by the tool. That is the whole reconciliation:
 
 - `det-mine-look-re`'s 5.6 to 6.3 behind RAM stands (its 1.15 to 3.55 behind the push buffer is the same fit with the camera moved along the craft's velocity
@@ -2501,10 +2503,10 @@ with the mine positions of one RAM read (the same 25 mines), not by the tool. Th
   Detonator's two-tick frame suggests a mode-dependent pipeline depth (3 frames here), not a constant of RPCS3.
 - `det-camera`'s hull 2 to 4 ticks behind RAM is the skew column.
 
-**A stop taken within 2 to 8 ticks of the previous stop in the same boot reads 4.45 to 5.5**, not 6.0 (6 grabs, `b2/03` to `b5/03`), and
+**A stop taken 8 or fewer ticks after the previous stop in the same boot reads 4.45 to 5.5**, not 6.0 (5 grabs, `b2/03`, `b4/01`, `b4/02`, `b5/02`, `b5/03`; at 9 to 10 ticks it is mixed: 6.20, 6.25, 6.05 and, on one mine, 4.95), and
 `--flush 0` reads 5.1 to 5.7 where `--flush 3` and `--flush 10` read 6.0 (`b4/00`, flush 10: 6.05). Those fits are worse (rms 6 to 17 px against 1 to 4):
 the picture there fits no single tick on the path, so the values are what the best tick gives, not a measured instant (confidence 50). The
-recipe that gives 6.0 is one stop per boot or stops at least 9 ticks apart, `--flush 3`.
+recipe that gave 6.0 on every grab is the first stop of a boot or stops 16 or more ticks apart (`b1/02` 16, `b6/01` 28, `b7/01` 40), `--flush 3`.
 
 **What the pair does (`rpcs3-hd-pair.py --detonator`, `--picture-lag fit`, the default).** `hd_picture_lag.fit` reads the same mines from the
 frame and fits `k` = ticks behind the push buffer's camera with the camera moving at its own velocity (`rpcs3-hd-detonator-shots.py` now records the camera
@@ -2528,8 +2530,9 @@ the open pitch difference above, so those are not publishable; the numbers compa
 | cannon-volley (`b6/00`, clock 2.23) | none (same) | 13.89 to 13.89 | 0.166 to 0.166 |
 
 Read as a player would, `mines-ahead` before has two mines three times the original's size on the left; after, three mines at the original's
-places and sizes (the right one is a dark spiked ball where the original has a light football: the open mine-look item). Not done: a
-non-Detonator HD pair. The 13 grid pairs are at 0 km/h (a lag changes nothing in them) and the one moving race pair (`hd-race/talons-pack`) has no static
+places and sizes (the right one is a dark spiked ball where the original has a light football: the open mine-look item). Non-Detonator HD pairs are not
+corrected: the pair script's other paths are untouched (`talons` grid pair re-made from its stored capture with `main`'s script and this branch's: identical flags, mean grey 3.31217 both; the
+`hd-race/talons-pack` record carries no world clock and both refuse before rendering). The 13 grid pairs are at 0 km/h (a lag changes nothing in them) and the one moving race pair (`hd-race/talons-pack`) has no static
 marker to fit; its lag is the open `--field` item above.
 
 **Not settled:** the mode-dependence (race frames), the mechanism of the 4.45 to 5.5 stops, and pad and cannon-volley frames at clock 2.0 to 2.3, whose nearest
