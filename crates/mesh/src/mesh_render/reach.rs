@@ -9,8 +9,8 @@
 //! index into the alpha-over or additive pair; the model is immutable once built, so the
 //! twins and classes its draws name are known here.
 
+use super::blend::Pick;
 use crate::mesh::DrawCall;
-use oag_vex::vex::BlendClass;
 
 /// Which twin of a pipeline pair some draw picks: `[0]` two-sided, `[1]` culled.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -85,17 +85,15 @@ impl Blended {
             ..Self::default()
         };
         for draw in draws {
-            let twins = match draw.blend_state {
-                Some(state) => reach
+            let twins = match Pick::of(draw) {
+                Pick::Authored(key) => reach
                     .authored
                     .iter_mut()
-                    .find(|(seen, _)| *seen == (state, draw.writes_depth))
+                    .find(|(seen, _)| *seen == key)
                     .map_or(&mut reach.alpha_over, |(_, twins)| twins),
-                None => match draw.blend {
-                    Some(BlendClass::Additive) => &mut reach.additive,
-                    Some(BlendClass::None) => &mut reach.unblended,
-                    Some(BlendClass::AlphaOver) | None => &mut reach.alpha_over,
-                },
+                Pick::Additive => &mut reach.additive,
+                Pick::Unblended => &mut reach.unblended,
+                Pick::AlphaOver => &mut reach.alpha_over,
             };
             twins.note(draw);
         }
@@ -121,11 +119,73 @@ impl Stamped {
     pub(super) fn of<'a>(draws: impl IntoIterator<Item = &'a DrawCall>) -> Self {
         let mut reach = Self::default();
         for draw in draws {
-            match draw.blend {
-                Some(BlendClass::Additive) => reach.additive.note(draw),
-                _ => reach.alpha_over.note(draw),
+            if super::Stamp::is_additive(draw) {
+                reach.additive.note(draw);
+            } else {
+                reach.alpha_over.note(draw);
             }
         }
         reach
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::mesh_render::pipeline_cache::tests::triangle_model;
+    use oag_vex::vex::BlendClass;
+
+    fn draw(blend: Option<BlendClass>, culled: bool) -> DrawCall {
+        DrawCall {
+            blend,
+            culled,
+            ..triangle_model().draws.remove(0)
+        }
+    }
+
+    #[test]
+    fn twins_are_the_cull_modes_the_draws_name() {
+        assert_eq!(Twins::of([]), Twins::default());
+        assert_eq!(Twins::of([&draw(None, false)]).0, [true, false]);
+        assert_eq!(Twins::of([&draw(None, true)]).0, [false, true]);
+        let both = [draw(None, true), draw(None, false)];
+        assert_eq!(Twins::of(&both).0, [true, true]);
+        assert_eq!(
+            Twins::of([&draw(None, true)]).union(Twins::of([&draw(None, false)])),
+            Twins::of(&both)
+        );
+    }
+
+    #[test]
+    fn a_transparent_list_reaches_the_sets_its_draws_select() {
+        let state = wgpu::BlendState::ALPHA_BLENDING;
+        let authored = DrawCall {
+            blend_state: Some(state),
+            writes_depth: true,
+            ..draw(Some(BlendClass::Additive), true)
+        };
+        let draws = [
+            draw(Some(BlendClass::Additive), false),
+            draw(Some(BlendClass::None), true),
+            draw(None, false),
+            authored,
+        ];
+        let reach = Blended::of(&draws, &[(state, true), (state, false)]);
+        assert_eq!(reach.additive.0, [true, false]);
+        assert_eq!(reach.unblended.0, [false, true]);
+        assert_eq!(reach.alpha_over.0, [true, false]);
+        assert_eq!(reach.authored((state, true)).0, [false, true]);
+        assert_eq!(reach.authored((state, false)), Twins::default());
+        let stamped = Stamped::of(&draws);
+        assert_eq!(stamped.additive.0, [true, true]);
+        assert_eq!(stamped.alpha_over.0, [true, true]);
+    }
+
+    #[test]
+    fn a_model_with_no_transparent_draw_reaches_nothing() {
+        let reach = Blended::of([], &[]);
+        assert_eq!(reach.alpha_over, Twins::default());
+        assert_eq!(reach.additive, Twins::default());
+        assert_eq!(reach.unblended, Twins::default());
     }
 }

@@ -1058,12 +1058,6 @@ pub fn build_with(
             .chain(&model.transparent_draws),
     );
     let main_reach = reach::Blended::of(in_set(false), &transparent_keys);
-    let alpha_over_fallback = std::cell::OnceCell::new();
-    let alpha_over_fallback = || {
-        alpha_over_fallback
-            .get_or_init(|| make_pipeline("mesh blend (alpha over, two-sided)", Some(blend), false))
-            .clone()
-    };
     let blend_pipeline = main_reach.alpha_over.union(every_list).pair(
         |cull| {
             make_pipeline(
@@ -1076,8 +1070,11 @@ pub fn build_with(
                 cull,
             )
         },
-        &alpha_over_fallback,
+        || make_pipeline("mesh blend (alpha over, two-sided)", Some(blend), false),
     );
+    // A pair no draw picks holds the alpha-over pair's two-sided pipeline, built above whether or
+    // not a draw picks it.
+    let blend_stand_in = || blend_pipeline[0].clone();
     crate::not_exiting()?;
     let additive_pipeline = main_reach.additive.union(every_list).pair(
         |cull| {
@@ -1091,7 +1088,7 @@ pub fn build_with(
                 cull,
             )
         },
-        &alpha_over_fallback,
+        &blend_stand_in,
     );
     crate::not_exiting()?;
     let unblended_pipeline = main_reach.unblended.pair(
@@ -1106,7 +1103,7 @@ pub fn build_with(
                 cull,
             )
         },
-        &alpha_over_fallback,
+        &blend_stand_in,
     );
     crate::not_exiting()?;
     // One pair per *distinct* state the model's transparent draws name, in
@@ -1138,7 +1135,7 @@ pub fn build_with(
             key,
             main_reach.authored(key).pair(
                 |cull| make_pipeline_with(&label, Some(state), cull, depth),
-                &alpha_over_fallback,
+                &blend_stand_in,
             ),
         ));
     }
@@ -1146,27 +1143,33 @@ pub fn build_with(
     let plain_blend = match (plain_blend_draws, plain_blend_constants.as_deref()) {
         (Some(plain), Some(constants)) => {
             let plain_reach = reach::Blended::of(in_set(true), &transparent_keys);
-            let fallback = std::cell::OnceCell::new();
-            let fallback = || {
-                fallback
-                    .get_or_init(|| {
-                        make_pipeline_in(
-                            constants,
-                            "mesh blend, plain (alpha over)",
-                            Some(blend),
-                            false,
-                            &blend_depth_stencil,
-                        )
-                    })
-                    .clone()
-            };
+            let plain_alpha_over = plain_reach.alpha_over.pair(
+                |cull| {
+                    make_pipeline_in(
+                        constants,
+                        "mesh blend, plain (alpha over)",
+                        Some(blend),
+                        cull,
+                        &blend_depth_stencil,
+                    )
+                },
+                || {
+                    make_pipeline_in(
+                        constants,
+                        "mesh blend, plain (alpha over)",
+                        Some(blend),
+                        false,
+                        &blend_depth_stencil,
+                    )
+                },
+            );
             let pair = |twins: reach::Twins,
                         label: &str,
                         blend: Option<wgpu::BlendState>,
                         depth: &wgpu::DepthStencilState| {
                 twins.pair(
                     |cull| make_pipeline_in(constants, label, blend, cull, depth),
-                    &fallback,
+                    || plain_alpha_over[0].clone(),
                 )
             };
             crate::not_exiting()?;
@@ -1191,12 +1194,7 @@ pub fn build_with(
                 .collect();
             Some(PlainBlend {
                 draws: plain.draws,
-                alpha_over: pair(
-                    plain_reach.alpha_over,
-                    "mesh blend, plain (alpha over)",
-                    Some(blend),
-                    &blend_depth_stencil,
-                ),
+                alpha_over: plain_alpha_over.clone(),
                 additive: pair(
                     plain_reach.additive,
                     "mesh blend, plain (additive)",

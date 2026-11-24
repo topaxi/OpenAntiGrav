@@ -99,19 +99,42 @@ impl<'a> TransparentPipelines<'a> {
     /// a `Built` with a different model.
     #[must_use]
     pub fn select(&self, draw: &crate::mesh::DrawCall) -> &'a wgpu::RenderPipeline {
-        let set = match draw.blend_state {
-            Some(state) => self
+        let set = match Pick::of(draw) {
+            Pick::Authored(key) => self
                 .authored
                 .iter()
-                .find(|(seen, _)| *seen == (state, draw.writes_depth))
+                .find(|(seen, _)| *seen == key)
                 .map_or(self.alpha_over, |(_, pipelines)| pipelines),
-            None => match draw.blend {
-                Some(oag_vex::vex::BlendClass::Additive) => self.additive,
-                Some(oag_vex::vex::BlendClass::None) => self.unblended,
-                Some(oag_vex::vex::BlendClass::AlphaOver) | None => self.alpha_over,
-            },
+            Pick::Additive => self.additive,
+            Pick::Unblended => self.unblended,
+            Pick::AlphaOver => self.alpha_over,
         };
         &set[usize::from(draw.culled)]
+    }
+}
+
+/// Which set of [`TransparentPipelines`] a transparent draw is submitted through, before its
+/// two-sidedness picks the twin. The one rule [`TransparentPipelines::select`] and
+/// `reach::Blended::of` (which pipelines a model builds) both read, so what is built and what
+/// is drawn cannot drift apart.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(super) enum Pick {
+    Authored((wgpu::BlendState, bool)),
+    Additive,
+    Unblended,
+    AlphaOver,
+}
+
+impl Pick {
+    pub(super) fn of(draw: &crate::mesh::DrawCall) -> Self {
+        match draw.blend_state {
+            Some(state) => Self::Authored((state, draw.writes_depth)),
+            None => match draw.blend {
+                Some(oag_vex::vex::BlendClass::Additive) => Self::Additive,
+                Some(oag_vex::vex::BlendClass::None) => Self::Unblended,
+                Some(oag_vex::vex::BlendClass::AlphaOver) | None => Self::AlphaOver,
+            },
+        }
     }
 }
 
