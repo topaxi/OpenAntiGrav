@@ -20,35 +20,40 @@
 //! rather than guessing. See `docs/formats/ps3-disc.md`.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use oag_formats::psarc::{self, Directory};
 
 use crate::blob_source::BlobSource;
 use crate::{Error, Result};
 
+mod parsed;
+use parsed::Parsed;
+
 /// A PSARC archive with its directory and manifest parsed.
+///
+/// The parse is shared with every other open of the same bytes (`parsed`), so
+/// opening an archive a second time reads its table of contents and manifest
+/// but derives nothing again.
 pub struct Archive {
     source: BlobSource,
     label: String,
-    directory: Directory,
-    paths: Vec<String>,
-    /// Directory index storing `paths[n]`. `n + 1` on a version-1.3 archive,
+    /// `directory`, `paths` and `index` of the archive. `entry_of_path[n]` is the
+    /// directory index storing `paths[n]`: `n + 1` on a version-1.3 archive,
     /// where entry order is manifest order - not on a version-1.4 one, where
     /// it never is. See `oag_formats::psarc`'s "Entry 0 is the manifest, not
-    /// a file" section.
-    entry_of_path: Vec<usize>,
-    /// [`normalise`]d path to its position in `paths`, the first spelling
-    /// winning a collision as a scan in order would. A race load asks this
-    /// archive thousands of times, and a scan that normalised every stored
-    /// path per ask was a quarter of an HD race load.
-    index: HashMap<String, usize>,
+    /// a file" section. `index` maps a [`normalise`]d path to its position in
+    /// `paths`, the first spelling winning a collision as a scan in order
+    /// would; a race load asks it thousands of times, and a scan that
+    /// normalised every stored path per ask was a quarter of an HD race load.
+    parsed: Arc<Parsed>,
 }
 
 impl std::fmt::Debug for Archive {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("psarc::Archive")
             .field("label", &self.label)
-            .field("entries", &self.paths.len())
+            .field("entries", &self.parsed.paths.len())
             .finish()
     }
 }
@@ -96,24 +101,28 @@ impl Archive {
         // the same way. See `oag_formats::psarc`'s module docs.
         let (offset, len) = directory.entry_range(MANIFEST).map_err(bad)?;
         let stored = source.read(offset, len)?;
-        let manifest_bytes = directory.read_entry(MANIFEST, &stored).map_err(bad)?;
-        let manifest_paths = psarc::parse_manifest(&manifest_bytes);
-        let matches = psarc::match_paths_to_entries(&directory.entries, &manifest_paths);
-        let mut paths = Vec::with_capacity(matches.len());
-        let mut entry_of_path = Vec::with_capacity(matches.len());
-        for psarc::PathEntry { index, path } in matches {
-            paths.push(path);
-            entry_of_path.push(index);
-        }
-
-        let index = path_index(&paths);
+        let parsed = parsed::shared(&toc, &stored, || {
+            let manifest_bytes = directory.read_entry(MANIFEST, &stored).map_err(bad)?;
+            let manifest_paths = psarc::parse_manifest(&manifest_bytes);
+            let matches = psarc::match_paths_to_entries(&directory.entries, &manifest_paths);
+            let mut paths = Vec::with_capacity(matches.len());
+            let mut entry_of_path = Vec::with_capacity(matches.len());
+            for psarc::PathEntry { index, path } in matches {
+                paths.push(path);
+                entry_of_path.push(index);
+            }
+            let index = path_index(&paths);
+            Ok::<_, Error>(Parsed {
+                directory,
+                paths,
+                entry_of_path,
+                index,
+            })
+        })?;
         Ok(Self {
             source,
             label,
-            directory,
-            paths,
-            entry_of_path,
-            index,
+            parsed,
         })
     }
 
@@ -139,7 +148,7 @@ impl Archive {
     /// not a property of the archives.
     #[must_use]
     pub fn paths(&self) -> &[String] {
-        &self.paths
+        &self.parsed.paths
     }
 
     /// The parsed directory. Entry order carries no promised relationship to
@@ -150,16 +159,17 @@ impl Archive {
     /// manifest, not a file" section.
     #[must_use]
     pub fn directory(&self) -> &Directory {
-        &self.directory
+        &self.parsed.directory
     }
 
     /// Index of the entry with this path, matched case-insensitively and with a
     /// leading `/` optional on either side.
     #[must_use]
     pub fn index_of_path(&self, path: &str) -> Option<usize> {
-        self.index
+        self.parsed
+            .index
             .get(&normalise(path))
-            .map(|&n| self.entry_of_path[n])
+            .map(|&n| self.parsed.entry_of_path[n])
     }
 
     /// Whether an entry with this path exists.
@@ -179,9 +189,12 @@ impl Archive {
             archive: self.label.clone(),
             source,
         };
-        let (offset, len) = self.directory.entry_range(index).map_err(bad)?;
+        let (offset, len) = self.parsed.directory.entry_range(index).map_err(bad)?;
         let stored = self.source.read(offset, len)?;
-        self.directory.read_entry(index, &stored).map_err(bad)
+        self.parsed
+            .directory
+            .read_entry(index, &stored)
+            .map_err(bad)
     }
 
     /// Entry `index`'s first `len` bytes, reading and inflating only the
@@ -196,9 +209,14 @@ impl Archive {
             archive: self.label.clone(),
             source,
         };
-        let (offset, stored_len) = self.directory.entry_head_range(index, len).map_err(bad)?;
+        let (offset, stored_len) = self
+            .parsed
+            .directory
+            .entry_head_range(index, len)
+            .map_err(bad)?;
         let stored = self.source.read(offset, stored_len)?;
-        self.directory
+        self.parsed
+            .directory
             .read_entry_head(index, &stored, len)
             .map_err(bad)
     }

@@ -247,6 +247,15 @@ impl Driver {
                     }
                 }
             }
+            Step::Config { setting, value } => {
+                let value = Value::Text(value.clone());
+                self.session.apply_setting(setting, &value);
+                // A page that is open shows the row's old value until it is told.
+                if let Stage::Menu(stage) = &mut self.session.stage {
+                    stage.menu.seed(setting, &value);
+                }
+                self.frame(None)?;
+            }
             Step::Press(buttons) => {
                 for button in buttons {
                     self.tap(*button, crate::drive::script::DEFAULT_WITHIN)?;
