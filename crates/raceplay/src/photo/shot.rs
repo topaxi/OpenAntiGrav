@@ -227,12 +227,16 @@ pub struct Mover<'a> {
 pub struct Shot {
     plan: Plan,
     next: u32,
+    /// The song line as the race on screen has it: the ticks a blur plays step it on, and the
+    /// HUD drawn over the shot shows the moment the shot is of.
+    marquee: Option<oag_hud::now_playing::Display>,
 }
 
 impl Shot {
     /// Begins `plan` on the race `rewind` is moving: stands it at the shot's tick, and for a ship
     /// blur takes the camera there to hold.
     pub fn start(plan: Plan, mover: Option<Mover<'_>>, race: &mut Race) -> Self {
+        let marquee = race.marquee_state().filter(|_| plan.blur.is_some());
         if let Some(Mover { rewind, keeper }) = mover
             && plan.blur.is_some()
         {
@@ -248,7 +252,11 @@ impl Shot {
                 rewind.seek(keeper, race, plan.tick);
             }
         }
-        Self { plan, next: 0 }
+        Self {
+            plan,
+            next: 0,
+            marquee,
+        }
     }
 
     /// The plan the shot follows.
@@ -304,6 +312,9 @@ impl Shot {
         {
             rewind.follow = true;
             rewind.seek(keeper, race, self.plan.tick);
+        }
+        if let Some(marquee) = self.marquee {
+            race.set_marquee_state(marquee);
         }
         race.photo_set_shift(None);
         race.photo_repose();

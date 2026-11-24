@@ -398,8 +398,10 @@ impl super::Session {
     /// the screen nor (unless its row is on) the HUD is in the file. Called once the frame is
     /// submitted.
     pub(super) fn finish_photo_shot(&mut self) {
-        self.photo_job_collect();
+        // The average a job set aside on an earlier frame is written first: the frame that set
+        // it aside has not drawn the HUD over it yet.
         self.photo_finish_averaged();
+        self.photo_job_collect();
         let Some((path, pending)) = self.photo.as_mut().and_then(|open| open.shot.take()) else {
             return;
         };
@@ -585,8 +587,12 @@ impl super::Session {
         ))
     }
 
-    /// The drive's reading of the shot under way: `frames drawn / frames`, or `none`.
+    /// The drive's reading of the shot under way: `frames drawn / frames`, `hud` while its
+    /// average waits for the HUD to be drawn over it, or `none`.
     pub(crate) fn photo_job_name(&self) -> String {
+        if self.photo.as_ref().is_some_and(|open| open.averaged.is_some()) {
+            return "hud".to_string();
+        }
         self.photo_progress()
             .map_or_else(|| "none".to_string(), |(done, all)| format!("{done}/{all}"))
     }
