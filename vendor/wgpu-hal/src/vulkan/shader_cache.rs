@@ -14,9 +14,13 @@
 //! `vk::ShaderModule` is still created and destroyed per pipeline, exactly as
 //! without the cache.
 //!
-//! The bound is D3D12's: past [`MAX_ENTRIES`], only entries used within the last
-//! [`RECENT_COMPILES`] compiles are kept. Because the key names a module by its
-//! id, a module's entries are also dropped when it is destroyed.
+//! The bound follows D3D12's (past [`MAX_ENTRIES`], keep the [`RECENT_COMPILES`]
+//! most recent), with one change: every lookup, hit or miss, advances the clock.
+//! D3D12 advances it only on a compile, so entries refreshed by hits all share
+//! one stamp and a prune can evict nothing; here no two entries share a stamp,
+//! so a prune always leaves at most [`RECENT_COMPILES`] entries and the cache
+//! never holds more than `MAX_ENTRIES + 1`. Because the key names a module by
+//! its id, a module's entries are also dropped when it is destroyed.
 
 use alloc::{string::String, sync::Arc, vec::Vec};
 
@@ -24,7 +28,7 @@ use hashbrown::HashMap;
 
 /// Entry count past which the cache prunes (D3D12's value).
 pub(super) const MAX_ENTRIES: usize = 200;
-/// A pruned cache keeps the entries used within this many compiles (D3D12's value).
+/// A pruned cache keeps this many most recently used entries (D3D12's value).
 pub(super) const RECENT_COMPILES: u64 = 100;
 
 /// Everything that decides the SPIR-V `compile_stage` writes for an
@@ -81,14 +85,15 @@ impl ShaderCacheKey {
 
 #[derive(Debug)]
 pub(super) struct ShaderCacheValue {
-    /// [`ShaderCache::nr_of_shaders_compiled`] when the entry was last used.
+    /// [`ShaderCache::clock`] when the entry was last used; unique per entry.
     last_used: u64,
     spv: Arc<[u32]>,
 }
 
 #[derive(Debug, Default)]
 pub(super) struct ShaderCache {
-    nr_of_shaders_compiled: u64,
+    /// Advances on every `get` and `insert`.
+    clock: u64,
     next_module_id: u64,
     entries: HashMap<ShaderCacheKey, ShaderCacheValue>,
 }
@@ -102,16 +107,17 @@ impl ShaderCache {
     }
 
     pub fn get(&mut self, key: &ShaderCacheKey) -> Option<Arc<[u32]>> {
-        let now = self.nr_of_shaders_compiled;
+        self.clock += 1;
+        let now = self.clock;
         let value = self.entries.get_mut(key)?;
         value.last_used = now;
         Some(Arc::clone(&value.spv))
     }
 
-    /// Keeps `spv` for `key`, then prunes as D3D12's cache does.
+    /// Keeps `spv` for `key`, then prunes past [`MAX_ENTRIES`].
     pub fn insert(&mut self, key: ShaderCacheKey, spv: Arc<[u32]>) {
-        self.nr_of_shaders_compiled += 1;
-        let now = self.nr_of_shaders_compiled;
+        self.clock += 1;
+        let now = self.clock;
         // A replaced entry is the same stage written by two threads at once.
         self.entries.insert(
             key,
@@ -121,8 +127,10 @@ impl ShaderCache {
             },
         );
         if self.entries.len() > MAX_ENTRIES {
-            let oldest = now.saturating_sub(RECENT_COMPILES);
-            self.entries.retain(|_, v| v.last_used >= oldest);
+            // Stamps are unique, so at most `RECENT_COMPILES` entries are newer
+            // than `now - RECENT_COMPILES`.
+            let cutoff = now.saturating_sub(RECENT_COMPILES);
+            self.entries.retain(|_, v| v.last_used > cutoff);
         }
     }
 
@@ -189,19 +197,57 @@ mod tests {
     }
 
     #[test]
-    fn past_the_entry_cap_only_recently_used_entries_stay() {
+    fn forgetting_a_module_leaves_no_entry_of_it() {
+        let mut cache = ShaderCache::default();
+        for i in 0..5 {
+            cache.insert(key(7, i), words(i));
+        }
+        cache.insert(key(8, 0), words(9));
+        cache.forget_module(7);
+        assert!(cache.entries.keys().all(|k| k.module != 7));
+        assert_eq!(cache.len(), 1);
+    }
+
+    #[test]
+    fn a_prune_keeps_exactly_the_most_recent_entries() {
+        let mut cache = ShaderCache::default();
+        for i in 0..=MAX_ENTRIES as u32 {
+            cache.insert(key(0, i), words(i));
+        }
+        assert_eq!(cache.len(), RECENT_COMPILES as usize);
+        let first_kept = MAX_ENTRIES as u32 + 1 - RECENT_COMPILES as u32;
+        assert!(cache.get(&key(0, first_kept - 1)).is_none());
+        assert!(cache.get(&key(0, first_kept)).is_some());
+    }
+
+    #[test]
+    fn entries_refreshed_by_hits_do_not_let_the_cache_grow() {
+        let mut cache = ShaderCache::default();
+        let mut next = 0u32;
+        for _ in 0..10 {
+            // Hit every live entry, then miss a hundred times.
+            let live: Vec<ShaderCacheKey> = cache.entries.keys().cloned().collect();
+            for k in &live {
+                assert!(cache.get(k).is_some());
+            }
+            for _ in 0..RECENT_COMPILES {
+                cache.insert(key(1, next), words(next));
+                next += 1;
+                assert!(cache.len() <= MAX_ENTRIES + 1, "{}", cache.len());
+            }
+        }
+    }
+
+    #[test]
+    fn a_recently_hit_entry_survives_a_prune() {
         let mut cache = ShaderCache::default();
         for i in 0..MAX_ENTRIES as u32 {
             cache.insert(key(0, i), words(i));
         }
-        // Keep the first entry warm, then push past the cap.
         assert!(cache.get(&key(0, 0)).is_some());
         cache.insert(key(1, 0), words(0));
-        assert!(cache.len() <= RECENT_COMPILES as usize + 2);
-        assert!(
-            cache.get(&key(0, 0)).is_some(),
-            "a recently used entry stays"
-        );
-        assert!(cache.get(&key(0, 1)).is_none(), "an old one goes");
+        assert_eq!(cache.len(), RECENT_COMPILES as usize);
+        assert!(cache.get(&key(0, 0)).is_some());
+        assert!(cache.get(&key(0, 1)).is_none());
     }
 }

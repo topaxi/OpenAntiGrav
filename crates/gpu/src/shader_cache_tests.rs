@@ -149,10 +149,11 @@ fn run(
 }
 
 /// One device per adapter, or none (the tests then skip, as the other GPU
-/// tests in this crate do).
+/// tests in this crate do). With `OAG_REQUIRE_GPU` set, a run that opens no
+/// Vulkan device fails instead: the cache under test is Vulkan's.
 fn devices() -> Vec<(String, Gpu)> {
     let instance = wgpu::Instance::default();
-    crate::test_adapter::ordered(&instance)
+    let devices: Vec<(String, Gpu)> = crate::test_adapter::ordered(&instance)
         .into_iter()
         .filter_map(|adapter| {
             let info = adapter.get_info();
@@ -168,7 +169,15 @@ fn devices() -> Vec<(String, Gpu)> {
                 Gpu { device, queue },
             ))
         })
-        .collect()
+        .collect();
+    if std::env::var_os("OAG_REQUIRE_GPU").is_some() {
+        assert!(
+            devices.iter().any(|(name, _)| name.ends_with("(Vulkan)")),
+            "OAG_REQUIRE_GPU is set but no Vulkan device opened: {:?}",
+            devices.iter().map(|(name, _)| name).collect::<Vec<_>>()
+        );
+    }
+    devices
 }
 
 fn module(gpu: &Gpu, offset: u32) -> wgpu::ShaderModule {
@@ -216,8 +225,26 @@ fn two_override_values_of_one_stage_stay_apart() {
     }
 }
 
+/// Two modules alive at once, same entry point, constants and layout: each
+/// pipeline gets its own module's SPIR-V. Fails if module ids collide,
+/// whatever `forget_module` does.
+#[test]
+fn two_live_modules_with_equal_stages_stay_apart() {
+    for (name, gpu) in devices() {
+        let (group, layout) = layout(&gpu, &[1]);
+        let first = module(&gpu, 0);
+        let second = module(&gpu, 100);
+        let a = pipeline(&gpu, &first, &layout, 7.0);
+        let b = pipeline(&gpu, &second, &layout, 7.0);
+        assert_eq!(run(&gpu, &a, &group, &[1]), [7], "{name}: first module");
+        assert_eq!(run(&gpu, &b, &group, &[1]), [107], "{name}: second module");
+    }
+}
+
 /// A module created after another was dropped never gets the dropped one's
-/// SPIR-V, even with the same entry point, constants and layout.
+/// SPIR-V, even with the same entry point, constants and layout. With unique
+/// ids this cannot fail on its own; `forget_module` is checked directly by
+/// `vendor/wgpu-hal`'s `shader_cache` unit tests.
 #[test]
 fn a_new_module_does_not_inherit_a_dropped_ones_stages() {
     for (name, gpu) in devices() {

@@ -720,8 +720,8 @@ no `unsafe`, byte-identical in the one frame compared, about 150 lines in `oag-m
 
 **Change.** The Sixth round's estimated ceiling, built: `wgpu-hal`'s Vulkan `compile_stage`
 keeps the SPIR-V of each distinct stage per device and reuses it. Its placement and bound
-copy the D3D12 shader cache `wgpu` merged in gfx-rs/wgpu#7729 (past 200 entries, keep what
-the last 100 compiles used). The key is the module id,
+copy the D3D12 shader cache `wgpu` merged in gfx-rs/wgpu#7729 (past 200 entries, keep the
+100 most recently used; unlike #7729, hits advance the clock, so the bound holds). The key is the module id,
 stage, entry point, constants, zero-init flag and the layout's binding map. `wgpu-hal` is
 vendored for it under `vendor/wgpu-hal` (`[patch.crates-io]`). Why, the key, the bound and
 how to drop it are in [The vendored `wgpu-hal`](vendored-wgpu-hal.md). Our own crates did

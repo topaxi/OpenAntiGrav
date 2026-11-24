@@ -80,8 +80,13 @@ The device's writer options are fixed per device, and the cache lives on the dev
 `ShaderCacheKey::new` destructures `ProgrammableStage` exhaustively, so a field that
 `wgpu` adds there later fails to compile instead of silently missing from the key.
 
-**The bound is D3D12's.** Past 200 entries, only the entries used within the last 100
-compiles stay. Because the key names a module by id rather than by content, a destroyed
+**The bound is D3D12's, with one fix.** Past 200 entries, only the 100 most recently used
+entries stay. D3D12's counter advances only on a compile, so entries refreshed by hits all
+share one stamp, and a prune after that can evict nothing: a working set that keeps hitting
+its entries between misses grows the D3D12 cache without limit. Here every lookup, hit or
+miss, advances the clock, stamps are unique, and the prune keeps entries strictly newer
+than `now - 100`. A prune therefore always leaves at most 100 entries, and the cache never
+holds more than 201. Because the key names a module by id rather than by content, a destroyed
 module's entries also go at once, and the whole cache goes with the device. The Pulse PSP
 race walk produces 126 distinct keys over its whole run. That count includes front-end
 modules, whose entries go when they are freed.
@@ -103,12 +108,16 @@ which is this key.
   wrote. There are three cases:
   - two layouts that put the shader's binding 1 at different Vulkan bindings;
   - two override values on the same layout;
+  - two modules alive at once with equal stages, which fails if module ids collide;
   - a module created after another was dropped.
 
-  Each test fails when its part of the key is removed (checked by hand for the binding
+  With `OAG_REQUIRE_GPU` set, the tests fail when no Vulkan device opens; without it they
+  skip, as the crate's other GPU tests do. Each test fails when its part of the key is removed (checked by hand for the binding
   map, the constants and the module id).
 - `vendor/wgpu-hal`'s own unit tests in `shader_cache.rs` cover key inequality, eviction by
-  module and the prune past the cap. They run standalone, not in the gate:
+  module (`forget_module` leaves no entry of the module), the prune leaving exactly 100,
+  a hit-refreshed working set staying bounded, and a recently hit entry surviving a prune.
+  The three bound tests fail on D3D12's counting. They run standalone, not in the gate:
 
   ```sh
   cp ~/.cargo/registry/src/index.crates.io-*/wgpu-hal-30.0.2/Cargo.lock vendor/wgpu-hal/
@@ -153,8 +162,15 @@ The project has not opened it. This is the text for the maintainer to send to
 > This adds a per-device `ShaderCache` to the Vulkan backend, shaped like the D3D12 one
 > from #7729:
 > - It is a `Mutex<ShaderCache>` on `Device`.
-> - Entries carry a `last_used` compile counter.
-> - Past 200 entries, only the entries used within the last 100 compiles stay.
+> - Entries carry a `last_used` stamp.
+> - Past 200 entries, only the 100 most recently used stay.
+>
+> One deliberate difference in counting: #7729 advances its counter only on a compile, so
+> entries refreshed by hits share one stamp and a later prune can evict none of them, and
+> a working set that keeps hitting between misses grows the D3D12 cache without limit.
+> Here every lookup advances the counter and the prune keeps entries strictly newer than
+> `now - 100`, so a prune leaves at most 100 entries and the cache never exceeds 201. The
+> same fix would apply to the D3D12 cache.
 >
 > The key differs: on D3D12 the expensive step is DXC/FXC, after naga, so #7729 keys on the
 > HLSL text. On Vulkan the expensive step is naga itself, so the key is naga's inputs:
@@ -182,10 +198,12 @@ The project has not opened it. This is the text for the maintainer to send to
 > - the output is pixel-identical.
 >
 > **Testing**
-> - Unit tests for the key, eviction by module and the prune.
+> - Unit tests for the key, eviction by module, the exact prune bound, and a hit-refreshed
+>   working set staying bounded (these fail on the D3D12 counting).
 > - An application-side test builds compute pipelines from one module in three cases:
 >   - two layouts that renumber a binding differently;
 >   - two override values;
+>   - two live modules with equal stages;
 >   - a new module after the old one is replaced.
 >
 >   It checks that each pipeline writes through its own bindings and its own constant.
