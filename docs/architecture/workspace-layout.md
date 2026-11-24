@@ -1379,6 +1379,14 @@ runs agree to 0.6 %. Load 20 to 30 throughout. Every run printed the same
 - `race_ground_truth::a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round`
   prints the same twelve lines before and after, every circuit clean.
 
+- **Render bench** (`bench-render hd --size`, release, both binaries passed by
+  `--binary`, NVIDIA RTX PRO 2000 Blackwell laptop GPU): the same 7,019 frames
+  and final state hash `94a2261ef5045e63` at all three sizes, before and
+  after. `tick_us` p50 730 to 965 us at 1280x800, 648 to 435 us at 1920x1080
+  and 550 to 525 us at 3840x2160, at load 7 to 26, and `record_us` and
+  `submit_us`, which this change does not touch, moved by up to 40 % between
+  the same pairs: at that load the bench cannot see a change of this size.
+
 Measured and dropped: casting `hover::sweep`'s two rays together (fewer
 instructions, +0.6 % cycles: the union of two long parallel segments' boxes
 visits more nodes than the two walks). Not tried again: a node holding its
