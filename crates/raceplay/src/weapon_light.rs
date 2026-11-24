@@ -106,6 +106,16 @@ const BOMB_RANGE_ONE: f32 = 40.0;
 const BOMB_RANGE_TWO: f32 = 100.0;
 const BOMB_UP: f32 = 3.0;
 
+/// The Detonator cannon's muzzle light: `(0, 30, 40)` (the colour table at `0x00993f80`), range
+/// `2.7` (`0x008c1884`), exponent `1.0` (`0x008aa080`), read statically and live (two boots).
+const DETONATOR_FLASH_COLOUR: [f32; 3] = [0.0, 30.0, 40.0];
+const DETONATOR_FLASH_RANGE: f32 = 2.7;
+/// The light a Detonator round carries in flight: `(0, 0.003, 0.03)` (`0x00993fa0`), range `70`
+/// (`0x008c188c`), exponent `1.0` (`0x008c1890`).
+const DETONATOR_BOLT_COLOUR: [f32; 3] = [0.0, 0.003, 0.03];
+const DETONATOR_BOLT_RANGE: f32 = 70.0;
+const DETONATOR_EXPONENT: f32 = 1.0;
+
 fn record(position: Vec3, colour: [f32; 3], range: f32, exponent: f32) -> SpuLight {
     SpuLight {
         position: [position.x, position.y, position.z, exponent],
@@ -159,6 +169,26 @@ pub(crate) fn bomb_records(position: Vec3, up: Vec3, age: f32) -> [SpuLight; 2] 
         record(at, one, BOMB_RANGE_ONE * s, w),
         record(at, BOMB_LIGHT_TWO, BOMB_RANGE_TWO * s, w),
     ]
+}
+
+/// The light at a Detonator cannon's muzzle, for each round younger than the flash window.
+pub(crate) fn detonator_flash_record(position: Vec3) -> SpuLight {
+    record(
+        position,
+        DETONATOR_FLASH_COLOUR,
+        DETONATOR_FLASH_RANGE,
+        DETONATOR_EXPONENT,
+    )
+}
+
+/// The light on a Detonator round in flight.
+pub(crate) fn detonator_bolt_record(position: Vec3) -> SpuLight {
+    record(
+        position,
+        DETONATOR_BOLT_COLOUR,
+        DETONATOR_BOLT_RANGE,
+        DETONATOR_EXPONENT,
+    )
 }
 
 /// A flying Rocket's light.
