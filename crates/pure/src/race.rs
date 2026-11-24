@@ -363,7 +363,7 @@ pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
     crossfade: None,
     wwise: None,
     // The four Classic circuits author `<VrFx Type="1"/>`; both files hash to real entries on
-    // both pressings (`crates/pure/tests`, `pure_race_ground_truth`).
+    // both pressings (`crates/raceplay/tests/pure_race_ground_truth.rs`).
     vr: Some(oag_title::VrBanks {
         ship: r"Data\Sound\ship_classic.bnk",
         weapons: r"Data\Sound\weapons_classic.bnk",

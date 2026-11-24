@@ -717,13 +717,27 @@ fn a_classic_circuit_flies_the_vr_hull_on_every_slot_and_an_alpha_circuit_does_n
     }
 }
 
+/// Every circuit of the disc whose `TrackStartup.xml` authors `<VrFx>` with a non-zero `Type`, by
+/// `PI_Track` type and location: the four Classic circuits and the four Zone circuits. No Race
+/// circuit does.
+const FLAGGED: [(&str, &str); 8] = [
+    ("Classic", r"Data\ClassicsNS\01_Karbonis"),
+    ("Classic", r"Data\ClassicsNS\02_Sagarmartha"),
+    ("Classic", r"Data\ClassicsNS\03_Manor_Top"),
+    ("Classic", r"Data\ClassicsNS\04_Mandrashee"),
+    ("Zone", r"Data\Zone\01_Zone"),
+    ("Zone", r"Data\Zone\02_Zone"),
+    ("Zone", r"Data\Zone\03_Zone"),
+    ("Zone", r"Data\Zone\04_Zone"),
+];
+
 /// A circuit whose `TrackStartup.xml` authors `<VrFx Type="1"/>` loads `ship_classic.bnk` and
 /// `weapons_classic.bnk` where every other circuit loads `ship.bnk` and `weapons.bnk`
 /// (`FUN_08848bf8` sets the flag byte `0x08a8f604`, `FUN_08847a54` branches on it;
 /// `docs/ghidra/functions/psp-pure-usa/ship-models.md`). The flag is read off the circuit's own
 /// manifest, not off its `PI_Track` type, so the census below pins which circuits author it and
 /// the race loads pin which banks the cues come from: a loader that ignored the flag reads
-/// `ship.bnk` on Karbonis and fails here. `Zone\01_Zone` authors the flag too and keeps the Zone
+/// `ship.bnk` on Karbonis and fails here. The Zone circuits author the flag too and keep the Zone
 /// banks: the original's Zone branch of `FUN_08847a54` never reads it.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
@@ -731,33 +745,36 @@ fn a_circuit_that_authors_vrfx_loads_the_classic_sound_banks_and_no_other_does()
     for (label, image) in images() {
         let mut archives =
             oag_pure::open(image.to_str().expect("utf-8 path")).expect("open the image");
-        let mut flagged = Vec::new();
-        for circuit in [
-            r"Environments\01_Vineta_K",
-            r"Environments\08_Sinucit",
-            r"Zone\01_Zone",
-            r"ClassicsNS\01_Karbonis",
-            r"ClassicsNS\02_Sagarmartha",
-            r"ClassicsNS\03_Manor_Top",
-            r"ClassicsNS\04_Mandrashee",
-        ] {
-            let name = format!(r"Data\{circuit}\TrackStartup.xml");
-            let blob = archives.read_name(&name).expect(&name);
-            let manifest =
-                oag_tables::trackstartup::TrackStartup::parse(&String::from_utf8_lossy(&blob));
-            if manifest.vr_fx_on() {
-                flagged.push(circuit);
+        let definition = archives
+            .read_name(oag_pure::TITLE.plugin_definition)
+            .expect("the plugin definition");
+        let definition = String::from_utf8_lossy(&definition);
+        let mut flagged: Vec<(&str, String)> = Vec::new();
+        let mut counted = 0;
+        for kind in ["Race", "Classic", "Zone"] {
+            for entry in oag_raceplay::catalogue::tracks_of_kind(&definition, kind) {
+                counted += 1;
+                let name = format!(r"{}\TrackStartup.xml", entry.location);
+                let Ok(blob) = archives.read_name(&name) else {
+                    continue;
+                };
+                let manifest =
+                    oag_tables::trackstartup::TrackStartup::parse(&String::from_utf8_lossy(&blob));
+                if manifest.vr_fx_on() {
+                    flagged.push((kind, entry.location.clone()));
+                }
             }
         }
         assert_eq!(
+            counted, 16,
+            "{label}: the disc declares 8 Race, 4 Classic and 4 Zone circuits"
+        );
+        assert_eq!(
             flagged,
-            [
-                r"Zone\01_Zone",
-                r"ClassicsNS\01_Karbonis",
-                r"ClassicsNS\02_Sagarmartha",
-                r"ClassicsNS\03_Manor_Top",
-                r"ClassicsNS\04_Mandrashee",
-            ],
+            FLAGGED
+                .iter()
+                .map(|&(kind, circuit)| (kind, circuit.to_string()))
+                .collect::<Vec<_>>(),
             "{label}"
         );
 

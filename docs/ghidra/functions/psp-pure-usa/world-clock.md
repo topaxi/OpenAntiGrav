@@ -64,3 +64,14 @@ phase matches to within about a quarter of a second of offset. **Confidence 75**
 - The 0x0880c78c add and the `a0` frame counter sit in a function that is not read;
   `WorldNode_AdvanceAnimation` is named from its shape (confidence 65).
 - 2048 and Omega: see their own pages; Pure's layout is not assumed for them.
+
+## The stored Pure pairs predate the read
+
+The twelve race pairs under `data/reference/compare-page/pure-psp/` were captured before this read was wired: none
+records `original.world_clock_offset_s`, so ours animated from its own tick 0. On Manor Top the same held pose read
+mean grey 14.53, 13.47, 13.75, 10.65, 7.49 at ticks 330, 345, 360, 375, 390 and 6.78 at 540. The four Classic states
+re-captured with the clock read 9.32 -> 4.31 (Karbonis), 12.09 -> 6.86 (Mandrashee), 13.75 -> 6.36 (Manor Top) and
+9.12 -> 9.04 (Sagarmartha, whose remainder is the hull's 4 px shift); the original's world clock reads 10.04 s at
+race-clock zero in all four (`original.world_clock_offset_s`). Confidence 85 that the phase was the cause (the
+re-captures move the score by the amount the tick sweep predicted). The other eight Pure race pairs are unchanged
+and need the same re-capture (`docs/tools/compare-page.md`, "The Classic hull").
