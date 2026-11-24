@@ -256,6 +256,9 @@ impl super::Session {
         path: &std::path::Path,
         pending: Option<super::photo_meta::Pending>,
     ) -> Result<(), Option<super::photo_meta::Pending>> {
+        // The field the frames are drawn with, which the lens ring is sized in.
+        let rect = oag_display::display::viewport(self.gpu.output.size(), self.aspect());
+        let (aspect, setting) = (rect.2 / rect.3, self.settings.graphics.fov);
         let (Stage::Race(stage), Some(open)) = (&mut self.stage, self.photo.as_mut()) else {
             return Err(pending);
         };
@@ -273,7 +276,8 @@ impl super::Session {
         let Some(photo) = stage.race.photo() else {
             return Err(pending);
         };
-        let Some(plan) = Plan::new(photo, tick, resimulates) else {
+        let drawn_fov = stage.race.drawn_fov_degrees(aspect, setting);
+        let Some(plan) = Plan::new(photo, tick, resimulates, drawn_fov) else {
             return Err(pending);
         };
         debug!(

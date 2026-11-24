@@ -74,9 +74,11 @@ pub struct Frame {
 impl Plan {
     /// The shot `photo` asks for at `tick`, or `None` when it is the one frame on screen.
     /// `resimulates` is whether the race can be played between keyframes: without it there is no
-    /// motion blur to draw.
+    /// motion blur to draw. `drawn_fov` is the vertical field in degrees the frames are drawn
+    /// with ([`Race::drawn_fov_degrees`]): the lens's own plus the speed widen, the player's
+    /// setting and the window's fit, which the lens ring is sized in.
     #[must_use]
-    pub fn new(photo: &Photo, tick: u64, resimulates: bool) -> Option<Self> {
+    pub fn new(photo: &Photo, tick: u64, resimulates: bool, drawn_fov: f32) -> Option<Self> {
         let acc = photo.accumulation()?;
         let effects = photo.effects();
         let blur = effects.blur().filter(|_| resimulates).and_then(|kind| {
@@ -90,7 +92,7 @@ impl Plan {
             (ticks >= LEAST_SHUTTER_TICKS).then_some((kind, ticks))
         });
         let aperture = effects.depth_of_field().map(|(aperture, focus)| Aperture {
-            radius: ring_radius(aperture, focus, photo.fov()),
+            radius: ring_radius(aperture, focus, drawn_fov),
             focus: Edges::new(focus).distance,
             samples: acc.dof_frames.max(1),
         });
