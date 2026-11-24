@@ -1,7 +1,7 @@
 ---
 status: ready-to-wire
 titles: [pulse, hd, omega, 2048, pure]
-updated: 2026-11-23
+updated: 2026-11-24
 summary: "Pulse, HD, Fury, Omega and Pure pause into the disc's own screen per mode; 2048 opens the main page"
 ---
 
