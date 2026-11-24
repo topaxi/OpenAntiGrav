@@ -218,9 +218,13 @@ mod tests {
 
     #[test]
     fn the_eye_is_behind_and_above_the_craft_at_the_start_and_looks_at_it() {
-        let pose = Orbit::start(Vec3::new(1.0, 2.0, 3.0), Vec3::new(1.0, 10.0, 14.0)).pose(Quat::IDENTITY);
+        let pose =
+            Orbit::start(Vec3::new(1.0, 2.0, 3.0), Vec3::new(1.0, 10.0, 14.0)).pose(Quat::IDENTITY);
         let off = pose.eye - pose.focus;
-        assert!((off.length() - 185.0_f32.sqrt()).abs() < 1e-4, "the eye starts as far as the chase eye");
+        assert!(
+            (off.length() - 185.0_f32.sqrt()).abs() < 1e-4,
+            "the eye starts as far as the chase eye"
+        );
         assert!(off.z > 0.0 && off.y > 0.0, "{off:?}");
         let at_the_craft = pose.view().transform_point3(pose.focus);
         assert!(at_the_craft.z < 0.0);
