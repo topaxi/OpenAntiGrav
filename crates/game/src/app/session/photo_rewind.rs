@@ -4,8 +4,8 @@
 //! The rules are `oag_raceplay::photo::{rewind, shot}`; this is the frame loop around them. A
 //! shot runs behind a progress bar and any input abandons it, as 2048's accumulation does
 //! (`docs/ghidra/functions/vita-2048-eu-v104/photo-mode.md`, state 3). Each frame is read back
-//! from the presentation target before the grade and before anything is drawn over it, like a
-//! single shot, and the frames are averaged in 16 bits a channel.
+//! from the presentation target before the grade and without the HUD, which is drawn once over the
+//! average (`photo_hud`), and the frames are averaged in 16 bits a channel.
 
 use log::{debug, warn};
 use oag_gameplay::input::InputSnapshot;

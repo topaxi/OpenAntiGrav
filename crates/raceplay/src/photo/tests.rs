@@ -858,7 +858,11 @@ fn a_control_is_set_outright_and_stops_where_the_panel_stops() {
     effects.set(Row::MotionBlur, 9);
     assert_eq!(effects.value(Row::Exposure), 100);
     assert_eq!(effects.value(Row::Saturation), 0);
-    assert_eq!(effects.value(Row::SpeedBlur), 30, "a step of five rounds down");
+    assert_eq!(
+        effects.value(Row::SpeedBlur),
+        30,
+        "a step of five rounds down"
+    );
     assert!(effects.depth_of_field().is_some());
     assert_eq!(effects.value(Row::MotionBlur), 2);
     assert!(!effects.is_neutral());

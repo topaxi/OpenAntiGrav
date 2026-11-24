@@ -173,7 +173,10 @@ fn the_picture_flag_round_trips_and_a_bad_one_is_refused() {
         flag,
         "exposure=60,saturation=5,speed_blur=30,aperture=70,focus=45"
     );
-    assert_eq!(Picture::from_flag(&flag).expect("reads").effects(), graded());
+    assert_eq!(
+        Picture::from_flag(&flag).expect("reads").effects(),
+        graded()
+    );
     assert!(Picture::from_flag("exposure").is_err());
     assert!(Picture::from_flag("exposure=x").is_err());
     assert!(Picture::from_flag("brightness=4").is_err());

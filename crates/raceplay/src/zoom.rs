@@ -101,9 +101,7 @@ impl Race {
 
     /// The speed blur's ring and pulse from photo mode, or from the controls a saved shot is
     /// drawn again with.
-    fn picture_speed_blur(
-        &self,
-    ) -> Option<(oag_post::hd_zoom::Tuning, oag_post::hd_zoom::Frame)> {
+    fn picture_speed_blur(&self) -> Option<(oag_post::hd_zoom::Tuning, oag_post::hd_zoom::Frame)> {
         match &self.view.photo {
             Some(photo) => photo.speed_blur(),
             None => self.view.picture.as_ref()?.speed_blur(),

@@ -134,6 +134,17 @@ A sheared (off-axis) projection holds the plane exactly; the rotation is the che
 
 ### PF3. A saved shot does not record the picture controls, and `--from-png` redraws without them
 
+**Fixed** in `739f9d926`. The text has a `[picture]` section (exposure, saturation, speed blur,
+depth of field with aperture and focus, and for a shot of several frames the motion blur, shutter
+and frame count), written only when a control is off its opening value, so a default shot's text is
+unchanged. `--from-png` applies the controls through the preview's own pass (`--picture`, also in
+`reproduce.flags`) and prints `picture controls applied: ...`, or `no picture controls recorded`
+for a photo without the section; a motion blur is not redrawn and the output says so. Checked on
+Pulse: for an exposure-raised shot (mean luma 115.1 against 97.8 at neutral) the re-render reads
+100.8 when the section is ignored and is within half the shot's gain of it when applied
+(`each_picture_control_changes_the_saved_shot_and_at_neutral_it_is_the_unprocessed_one` fails if
+the re-render ignores the section).
+
 **Impact**: Medium - the file exists for rendering bug reports, and a report about a graded or
 blurred shot cannot be remade from it.
 **Priority**: P2. **Confidence**: 95. **Faithfulness**: n.a. **Effort**: S.
@@ -225,6 +236,14 @@ height (`crates/post/src/photo_fx.rs:152`) and the tap count does not. The inner
 The captured frames at aperture 40 and 816 lines (reach 8 px) read as smooth in the far field.
 
 ### PF7. The HUD in a motion blur shot is not the HUD on screen
+
+**Fixed** in `a6028d020` and `c1f884794`. Every frame of a shot of several leaves the HUD out; after
+the race is put back at the shot's tick the average is copied into the presentation target and the
+HUD is drawn once over it. The stray label was the song line: the ticks a blur replays stepped its
+clock, so it came up in the blurred shot only. It is put back as it stood. HD, HUD row on, track
+blur at full shutter: the clock reads `0.06.0`, the speed 160 and the thrust gauge 0, as in the
+plain shot. `a_motion_blur_shot_smears_what_it_should_and_any_input_abandons_it` fails with the
+old order (343 high-contrast pixels outside the HUD differ from the blurred shot without one).
 
 **Impact**: Low-Medium - with the HUD row on, a blurred shot shows ghosted readouts and can show
 a message that was not on screen.
@@ -368,11 +387,11 @@ Not proven, so not findings. Each says how to check it.
 | --- | --- | --- | --- | ---: | --- | --- | --- |
 | PF1 | Accumulated depth of field is not the previewed picture (fixed, `5e6674042`) | High | P1 | 95 | M | test, two captures | both |
 | PF2 | Lens sample rotates: the focus plane moves at the frame's edge (fixed, `5e6674042`) | Medium | P2 | 95 | S | test | both |
-| PF3 | A shot does not record the picture controls; `--from-png` redraws without them | Medium | P2 | 95 | S | capture | both |
+| PF3 | A shot does not record the picture controls; `--from-png` redraws without them (fixed, `739f9d926`) | Medium | P2 | 95 | S | capture | both |
 | PF4 | Saturation 0 leaves the glow's colour on Pulse | Medium | P2 | 85 | M | capture, control | first |
 | PF5 | A blurred near surface is nearly opaque out to its radius (fixed, `8a8cb1ffb`) | Medium | P2 | 90 | M | test | second |
 | PF6 | 56 taps over the widest reach: small blurs untouched, wide ones leak (fixed, `8a8cb1ffb`) | Low-Med | P2 | 90 | M | two tests | both |
-| PF7 | The HUD in a motion blur shot is averaged over the shutter | Low-Med | P2 | 90 | S | capture | first |
+| PF7 | The HUD in a motion blur shot is averaged over the shutter (fixed, `a6028d020`) | Low-Med | P2 | 90 | S | capture | first |
 | PF8 | MOTION BLUR offered with no recording | Low | P3 | 95 | S | test | both |
 | PF9 | Lens ring sized for the lens's field, not the drawn one | Low | P3 | 90 | S | test | first |
 | PF10 | The free lens does not always start where it was seeded | Low | P3 | 95 | S | two tests | both |

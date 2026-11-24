@@ -158,7 +158,10 @@ mod tests {
             cli.picture.as_deref(),
             Some("exposure=60,saturation=20,speed_blur=0")
         );
-        assert!(lines[0].starts_with("picture controls applied"), "{lines:?}");
+        assert!(
+            lines[0].starts_with("picture controls applied"),
+            "{lines:?}"
+        );
         assert!(
             lines.iter().any(|line| line.contains("track motion blur")),
             "{lines:?}"
@@ -169,7 +172,10 @@ mod tests {
     fn a_photo_without_the_keys_says_so_and_another_source_says_nothing() {
         let mut cli = Cli::try_parse_from(["oag-game"]).expect("parses");
         let lines = picture_lines(&meta("photo mode", None), &mut cli);
-        assert!(lines[0].contains("no picture controls recorded"), "{lines:?}");
+        assert!(
+            lines[0].contains("no picture controls recorded"),
+            "{lines:?}"
+        );
         assert_eq!(cli.picture, None);
         assert!(picture_lines(&meta("screenshot", None), &mut cli).is_empty());
     }
