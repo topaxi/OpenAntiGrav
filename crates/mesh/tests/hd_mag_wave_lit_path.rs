@@ -224,6 +224,57 @@ fn a_zone_race_draws_the_strip_without_its_wave() {
     }
 }
 
+/// The fixture's surface flagged as track, as `mesh::rcs` flags a chunk whose render block's bit 0 is set.
+fn track_model() -> Model {
+    let mut model = model(false);
+    for vertex in &mut model.vertices {
+        vertex.slots |= slots::ZONE_TRACK;
+    }
+    model
+}
+
+/// **A track chunk takes the stage's Track fog, and only a track chunk does**
+/// (`docs/ghidra/functions/ps3-hdfury-eu/zone-plain-chunks.md`, "The fog pick"). Fully fogged
+/// (a density no depth survives) the pixel is the fog colour; the same surface without the track
+/// bit, or with no Track fog authored, is untouched. Without the per-chunk pick the Detonator
+/// road and walls stay unfogged where the original's are orange-red.
+#[test]
+fn a_track_chunk_takes_the_stage_track_fog_and_a_scene_chunk_does_not() {
+    let instance = wgpu::Instance::default();
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let (device, queue) =
+        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+            .expect("requesting the device");
+    let at = |model: &Model, fog: mesh_render::TrackFog| {
+        let mut scene = Scene::off();
+        scene.light.enabled = 1.0;
+        scene.fog.camera = [0.0, 0.0, 100.5];
+        scene.zone.enabled = 1.0;
+        scene.track_fog = fog;
+        draw(&device, &queue, model, scene)
+    };
+    let red = mesh_render::TrackFog::authored([1.0, 0.0, 0.0], 1000.0);
+    let unfogged = at(&model(false), mesh_render::TrackFog::NONE);
+    let fogged = at(&track_model(), red);
+    assert!(
+        fogged[0] > 200 && fogged[1] < 40 && fogged[2] < 40,
+        "a track chunk is the Track fog's colour: {fogged:?}"
+    );
+    assert_eq!(
+        at(&model(false), red),
+        unfogged,
+        "a scene chunk keeps the scene's fog (here none)"
+    );
+    assert_eq!(
+        at(&track_model(), mesh_render::TrackFog::NONE),
+        unfogged,
+        "a track chunk with no Track fog authored keeps the scene's fog"
+    );
+}
+
 /// Identity camera and model, so clip space is model space.
 fn uniforms() -> Vec<u8> {
     let identity: [[f32; 4]; 4] = [

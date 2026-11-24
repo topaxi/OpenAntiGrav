@@ -995,12 +995,22 @@ pub struct TrackFog {
 
 impl TrackFog {
     /// No Track fog authored: track chunks take the scene's [`Fog`].
-    pub const NONE: Self = Self { colour: [0.0; 3], density: 0.0, authored: 0.0, pad: [0.0; 3] };
+    pub const NONE: Self = Self {
+        colour: [0.0; 3],
+        density: 0.0,
+        authored: 0.0,
+        pad: [0.0; 3],
+    };
 
     /// The stage's Track fog.
     #[must_use]
     pub const fn authored(colour: [f32; 3], density: f32) -> Self {
-        Self { colour, density, authored: 1.0, pad: [0.0; 3] }
+        Self {
+            colour,
+            density,
+            authored: 1.0,
+            pad: [0.0; 3],
+        }
     }
 }
 

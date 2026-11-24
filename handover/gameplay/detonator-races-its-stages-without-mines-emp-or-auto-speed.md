@@ -523,6 +523,12 @@ Ours' blue is still about 1.7 to 2.3 times the original's (a constant of about 2
 darker: the Track Fog `1.8 0.141 0.007` is not drawn), the upper right (ours 15 to 40 brighter), the floor (ours 10 to 20 brighter, now about 5 to 10),
 the mines and pad. Ours' floor also carries more red than the original's (box A red 9.8 against 5.1).
 
+**Track fog and the glass floor, wired (2026-11-24, `det-mines-ahead-structure`).** The mid-distance red band's cause is wired: a track chunk
+takes the stage's Track Fog (`mesh_render::TrackFog`), and `etched_glass_tech`'s Zone variants run no facing-ramp sheen (the "grey-green
+structure" on `mines-ahead` was this glass floor, present in the original, dark). `mines-ahead` 14.65 to 13.74, `pad` 8.17 to 7.68,
+`cannon-volley` 15.00 to 14.18; evidence on `detonator-look.md`, "Track fog and the glass floor". Open: ours' far-curve box is about 8 low in
+green and blue; the Zone variant's grid and paraboloid reflection; 2048/Omega Track fog (checked, applies, not wired: no original frame).
+
 **The vis texel's gamma flag, read (2026-11-23, `det-floor-gain-re`, `docs/ghidra/functions/ps3-hdfury-eu/zone-vis-gamma.md`).** `zoneTexVis`'s address
 word is `0x60730303` (gamma nibble 7, confidence 75): the original sRGB-decodes the strip, ours samples it raw into the linear sum. Applied alone (scratch,
 reverted) it overshoots: box blue ours over original goes from 1.7-2.3 to 0.38-0.89. **Ready to wire on its own** (the page, "Ready to wire"); measure the rest against the decoded floor. Open, in

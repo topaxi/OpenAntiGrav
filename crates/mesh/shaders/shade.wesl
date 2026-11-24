@@ -722,7 +722,10 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
     // rather than the diffuse UV every other material samples it at - the
     // view-angle sheen the traced microcode computes
     // (`DP3 R2.w, -R1, R2` then `TEX H2.xyz, -R2.wwww unit2`).
-    let ramp_sheen = (in.slots & 1024u) != 0u;
+    // **Not in a Zone race.** Every Zone variant of `etched_glass_tech` (blocks 10 to 19, the ones
+    // that declare `zoneColourTint`) samples no facing ramp (`0x94b2b285`): the surface is the generic
+    // Zone surface, as the magstrip's is (`docs/formats/rcsmaterial.md`, "Zone-mode wave materials").
+    let ramp_sheen = (in.slots & 1024u) != 0u && zone_program == 0.0;
     let view_dir = normalize(scene.fog.camera - in.world);
     let ramp_facing = dot(view_dir, n);
     let ramp_uv = vec2<f32>(ramp_facing, ramp_facing);

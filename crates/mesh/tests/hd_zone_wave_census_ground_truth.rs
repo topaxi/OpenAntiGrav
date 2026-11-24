@@ -75,3 +75,43 @@ fn no_zone_variant_of_a_wave_material_declares_the_wave() {
         "the census found {materials} wave materials and {zone_variants} Zone variants"
     );
 }
+
+/// `etched_glass_tech`'s Zone variants run no facing-ramp sheen: none samples the ramp
+/// (`0x94b2b285`), so a Zone race draws the glass floor as the generic Zone surface
+/// (`shade.wesl`'s `ramp_sheen` is off with `zone_program`).
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn no_zone_variant_of_the_glass_floor_samples_the_facing_ramp() {
+    const FACING_RAMP: u32 = 0x94b2_b285;
+    let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let spec = format!("{}:PS3_GAME/USRDIR/DATA00.PSARC", image.display());
+    let mut open = oag_assets::psarc::Archive::open(&spec).expect("DATA00 opens");
+    let blob = open
+        .read_path("data/environments/talons_junction/materials/etched_glass_tech.rcsmaterial")
+        .expect("Talon's Junction's glass floor material");
+    let material = RcsMaterial::parse(&blob).expect("the material parses");
+    let tint = rcsmaterial::name_hash("zoneColourTint");
+    let declared: Vec<Declared> = material
+        .variants
+        .iter()
+        .filter_map(|v| Declared::parse(&blob, v.fragment.offset))
+        .collect();
+    let ramp = |d: &Declared| d.samplers.iter().any(|&(s, _)| s == FACING_RAMP);
+    assert!(
+        declared
+            .iter()
+            .any(|d| !d.parameters.contains(&tint) && ramp(d)),
+        "the ordinary variants do sample the ramp"
+    );
+    let zone: Vec<_> = declared
+        .iter()
+        .filter(|d| d.parameters.contains(&tint))
+        .collect();
+    assert!(!zone.is_empty(), "the material ships Zone variants");
+    assert!(
+        zone.iter().all(|d| !ramp(d)),
+        "a Zone variant samples the ramp"
+    );
+}
