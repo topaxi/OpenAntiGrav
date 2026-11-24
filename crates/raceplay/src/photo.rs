@@ -212,9 +212,10 @@ pub struct Photo {
     walk_ticks: u32,
 }
 
-/// The eye moved by `(dx, dy)` in view space and aimed at the point `focus` ahead of where it
-/// was: one sample of the lens, so that the focus plane stays where it is and the rest of the
-/// picture smears about it (an accumulated depth of field).
+/// The eye moved by `(dx, dy)` in view space, with the frustum sheared so the plane `focus`
+/// ahead stays where it was on the picture: one sample of a thin lens (an off-axis frustum),
+/// so the focus plane holds across the whole frame and the rest smears about it (an
+/// accumulated depth of field).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LensShift {
     /// Sideways, in world units.
@@ -226,12 +227,21 @@ pub struct LensShift {
 }
 
 impl LensShift {
-    /// `view` (world to camera, looking down `-Z`) for the shifted eye.
+    /// `view` (world to camera, looking down `-Z`) for the shifted eye. A point at depth `z`
+    /// gains `-(dx, dy) * z / focus` across the picture: on the plane `z = -focus` that undoes
+    /// the eye's move exactly, at every point of the frame. A turn toward the focus point would
+    /// hold only a sphere through it, sharp on the axis alone. Depth is left as it was, so the
+    /// depth buffer still reads as distance from the eye.
     #[must_use]
     pub fn apply(self, view: Mat4) -> Mat4 {
-        let aim = Vec3::new(-self.dx, -self.dy, -self.focus).normalize();
-        let turn = Quat::from_rotation_arc(aim, Vec3::NEG_Z);
-        Mat4::from_quat(turn) * Mat4::from_translation(Vec3::new(-self.dx, -self.dy, 0.0)) * view
+        let focus = self.focus.max(f32::EPSILON);
+        let shear = Mat4::from_cols(
+            oag_core::math::Vec4::X,
+            oag_core::math::Vec4::Y,
+            oag_core::math::Vec4::new(-self.dx / focus, -self.dy / focus, 1.0, 0.0),
+            oag_core::math::Vec4::W,
+        );
+        shear * Mat4::from_translation(Vec3::new(-self.dx, -self.dy, 0.0)) * view
     }
 }
 
@@ -1093,14 +1103,9 @@ impl Race {
     #[must_use]
     pub fn photo_fx(&self, near: f32, far: f32) -> Option<oag_post::photo_fx::Params> {
         let photo = self.view.photo.as_ref()?;
-        let mut params = photo.effects().params(near, far);
-        // An accumulated depth of field frame keeps half of the single-frame pass's blur: the
-        // other half is the lens sample it is drawn through (`shot`).
-        if photo.shift().is_some()
-            && let Some(dof) = params.dof.as_mut()
-        {
-            dof.aperture *= 0.5;
-        }
+        // An accumulated depth of field frame is drawn with the preview's own pass: the lens
+        // sample only refines it (`shot`, "Depth of field").
+        let params = photo.effects().params(near, far);
         params.active().then_some(params)
     }
 

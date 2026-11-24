@@ -515,7 +515,6 @@ fn a_depth_of_field_plan_on_the_close_lens() -> (Plan, impl Fn(Mat4, Vec3) -> (f
 /// frame, not only on the axis. Fails while a lens sample turns the camera to aim at the focus
 /// point (a toe-in), which holds a sphere through the eye and not the plane.
 #[test]
-#[ignore = "photo-fx-review finding 2"]
 fn a_lens_sample_keeps_the_focus_plane_sharp_at_the_edge_of_the_frame() {
     let (plan, pixel) = a_depth_of_field_plan_on_the_close_lens();
     let shift = plan.frame(1).lens.expect("the first sample of the ring");
@@ -535,13 +534,64 @@ fn a_lens_sample_keeps_the_focus_plane_sharp_at_the_edge_of_the_frame() {
         moved < 0.5,
         "a point on the focus plane at the frame's edge moved {moved} px"
     );
+    // The ring is sized to the sharp band and is small at the opening values, so the plane is
+    // checked again under a sample as wide as the ring was before it was (half the preview's
+    // widest blur): the frustum, not the ring's size, is what holds it.
+    let wide = LensShift {
+        dx: 0.07,
+        dy: 0.0,
+        focus: shift.focus,
+    };
+    for corner in [(1.0, 0.0), (1.0, 1.0), (-1.0, -1.0), (0.0, 1.0)] {
+        let point = Vec3::new(
+            shift.focus * half_width * 0.999 * corner.0,
+            shift.focus * (65f32.to_radians() * 0.5).tan() * 0.999 * corner.1,
+            -shift.focus,
+        );
+        let (before, after) = (
+            pixel(Mat4::IDENTITY, point),
+            pixel(wide.apply(Mat4::IDENTITY), point),
+        );
+        let moved = (after.0 - before.0).hypot(after.1 - before.1);
+        assert!(
+            moved < 0.01,
+            "a wide lens sample moved the focus plane at {corner:?} by {moved} px"
+        );
+    }
+    let far = Vec3::new(0.0, 0.0, -1.0e5);
+    let (before, after) = (
+        pixel(Mat4::IDENTITY, far),
+        pixel(wide.apply(Mat4::IDENTITY), far),
+    );
+    assert!(
+        (after.0 - before.0).abs() > 5.0,
+        "a lens sample moves the far field: {} px",
+        after.0 - before.0
+    );
+}
+
+/// An accumulated depth of field frame is drawn with the preview's own pass, at the full
+/// aperture. Fails if a frame under a lens sample asks the pass for less blur than the preview
+/// does: the ring is too small to stand for the rest.
+#[test]
+fn a_lens_sample_frame_asks_the_pass_for_the_previews_blur() {
+    let (mut race, _, _) = driven();
+    open(&mut race);
+    race.photo_effects(|effects| {
+        effects.select(Row::DepthOfField);
+        effects.adjust(1);
+    });
+    let preview = race.photo_fx(1.0, 4000.0).expect("a depth of field");
+    let plan = Plan::new(race.photo().expect("open"), LIVE, false).expect("a depth of field");
+    race.photo_set_shift(plan.frame(1).lens);
+    assert!(race.photo().expect("open").shift().is_some());
+    assert_eq!(race.photo_fx(1.0, 4000.0), Some(preview));
 }
 
 /// What the single-frame pass shows sharp, the accumulated shot keeps sharp: HD's curve is sharp
 /// from `d - c` to `d + 2c`, and the preview draws that band untouched. Fails while the lens
 /// samples are a thin lens focused at `d` alone, which smears both ends of the band.
 #[test]
-#[ignore = "photo-fx-review finding 1"]
 fn the_accumulated_shot_keeps_the_band_the_preview_shows_sharp() {
     let (plan, pixel) = a_depth_of_field_plan_on_the_close_lens();
     let edges = oag_post::photo_fx::Edges::new(0.2);
