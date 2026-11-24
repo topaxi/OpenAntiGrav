@@ -16,9 +16,10 @@ const THREE_QUARTERS_FSR1: [&str; 4] = ["--render-scale", "75", "--reconstructio
 
 /// The most one channel of a pixel and the mean over the picture may differ between a shot that
 /// was redrawn at the output's size and the default's, which is not redrawn. Pulse has no
-/// difference. HD's bloom restarts its exposure adaptation on the reallocation and seeds it from
-/// the frame, where the default's has drifted over the frames of the preview: a mean of 0.6 of
-/// 255 and at most 8, measured with the race stood at one tick.
+/// difference. HD's bloom restarts its exposure adaptation on the reallocation and seeds it from the
+/// frame, where the default's has settled by its lerp over the frames of the preview: a mean of
+/// 0.6 of 255 and at most 8, measured with the race stood at one tick (0.43 against a default settled
+/// over 120 frames). The same at every scale, so it is not the render scale.
 const HD_TOLERANCE: (u8, f32) = (8, 1.0);
 
 /// How much of the picture a `--from-png` re-render may differ in, and by how much on average:
@@ -96,6 +97,19 @@ fn same_shots(
         assert!(
             fx_says(&one.run, needle),
             "{tag}: the run never read {needle}"
+        );
+    }
+    // The text says what the shot was drawn with, not what the player plays with.
+    let text = |one: &Made| {
+        let meta = meta_of(&one.photos[0]);
+        (meta.render, meta.reproduce.flags)
+    };
+    let default_text = text(&all[2]);
+    for one in &all[..2] {
+        assert_eq!(
+            text(one),
+            default_text,
+            "{tag}: a redrawn shot's text names the player's profile and not its own"
         );
     }
     for at in 0..count {

@@ -463,7 +463,7 @@ impl super::Session {
     }
 
     /// Whether the player's profile draws a different picture than a photo's does.
-    fn photo_redraws(&self) -> bool {
+    pub(super) fn photo_redraws(&self) -> bool {
         let rect = self.scene_rect(self.gpu.output.size());
         let gamescope = crate::app::window::under_gamescope_cached(
             self.gpu.output.window.current_monitor().as_ref(),
@@ -473,12 +473,12 @@ impl super::Session {
     }
 
     /// How far a shot has got, for its bar: a shot of several frames by its frames, and a shot
-    /// that has not begun or is one frame as not started.
+    /// that waits for the frame that shows its bar as not started.
     pub(super) fn photo_bar(&self) -> Option<(u32, u32)> {
         self.photo_progress().or_else(|| {
             self.photo
                 .as_ref()
-                .filter(|open| open.announced.is_some() || open.shot.is_some())
+                .filter(|open| open.announced.is_some())
                 .map(|_| (0, 1))
         })
     }

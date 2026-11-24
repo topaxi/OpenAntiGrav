@@ -613,12 +613,23 @@ the live frame and is unchanged. **Chosen, not measured.**
 - **Evidence.** `photo_mode_ground_truth::native_shot`: the same race and tick shot at half size through FSR 3,
   at 75 % through FSR 1 and at the default give files that are identical bit for bit for the two
   scaled profiles and for a Pulse single frame against the default. HD's differ from the default's
-  by at most 8 of 255 (a mean of 0.6, a motion blur shot 1 and 0.01, a depth of field shot 7 and 0.6):
-  the bloom's exposure adaptation restarts on the reallocation and is seeded from the frame, where the
-  default's has drifted over the frames the preview drew. It is the same difference at every scale
-  (25, 50, 75 and 150 % each give the same picture), and drawing more frames at the output's size
-  before the shot does not change it. Without the profile function the scaled profiles differ from each other by a mean
-  of 2 to 6.
+  by at most 8 of 255 (a mean of 0.6; a motion blur shot 1 and 0.01, a depth of field shot 7 and 0.6).
+  It is not the render scale: 25, 50, 75 and 150 % each give the same picture to the bit, and
+  drawing 1, 5 or 8 more frames at the output's size before the shot changes nothing. It is the
+  bloom's exposure adaptation. The reallocation restarts it and the first frame seeds it from itself
+  (`hd_bloom`, "rate forced to 1"), where the default's has settled by its lerp over the frames of the
+  preview: the default itself moves by up to 3 of 255 (mean 0.18) between a preview of a few frames
+  and one of 120, and a default settled over 120 or 500 frames still differs from the seeded shot by a
+  mean of 0.43. The seeded value is not where the lerp settles, and why was not found. With no reallocation (100 % and FSR 3 or
+  FSR 1) the difference is 1 of 255 (mean 0.01), probably the frame the redraw adds to that lerp. Without the profile
+  function the scaled profiles differ from each other by a mean of 2 to 6.
+- **The text says what the shot was drawn with.** A redrawn shot's `[render]` section and
+  `reproduce.flags` carry the profile it was drawn with (scale 100, no upscaler, `render_scale_chosen`
+  false), not the player's; the default shot's text differs from `main`'s only in the commit and
+  version (`--png-info` diff).
+- **The preview after a shot** is the preview before it (the live frame at the configured scale
+  through the upscaler), with the "PHOTO SAVED" message: no ghost, flash or smear in the frames after
+  (three screenshots under half size and FSR 3).
 - **Open.** A 2x supersample for the shot alone is not built: it needs its memory measured at 4K on
   an 8 GiB GPU and a fall back to the output's size on phones. The CPU governor's lowered shadows or
   model detail still reach a shot, as they reach the preview.
