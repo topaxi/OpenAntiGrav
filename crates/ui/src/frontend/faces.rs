@@ -41,7 +41,7 @@ impl Frontend {
     /// role is `Stats` or `Scroll` (one file on Pure, [`crate::language::roles`]) and the menu
     /// skin names such a face ([`oag_title::MenuSkin::stats_font`]).
     pub(crate) fn stats_face_named(&self, role: &str) -> bool {
-        (role.eq_ignore_ascii_case("stats") || role.eq_ignore_ascii_case("scroll"))
+        crate::language::roles::names_stats(role)
             && self.menu_skin.is_some_and(|skin| skin.stats_font.is_some())
     }
 

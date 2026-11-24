@@ -160,7 +160,7 @@ pub(super) fn face_role(font: &str) -> Option<&'static str> {
     // Pure's `Scroll` and `Stats` roles resolve to the one file, `LTe50325.fnt`
     // (`oag_ui::language::roles`' table), so the one `Stats` glyph slot serves both.
     // A title with no such slot draws the text in the primary face, as before.
-    if font.eq_ignore_ascii_case("scroll") || font.eq_ignore_ascii_case("stats") {
+    if oag_ui::language::roles::names_stats(font) {
         return Some(oag_ui::language::roles::STATS);
     }
     None

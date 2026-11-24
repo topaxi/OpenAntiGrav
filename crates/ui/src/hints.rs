@@ -151,10 +151,12 @@ pub fn scan<'a>(
             continue;
         }
         let Some(face) = faces(role) else { continue };
-        let width = placed(face, text, scale).0;
+        let (width, ink_right) = placed(face, text, scale);
         let left = match align {
             Align::Left => x,
             Align::Centre => x - width / 2.0,
+            // A snapped right-aligned line ends its last quad on `x`, as the draw does.
+            Align::Right if face.snapped => x - ink_right,
             Align::Right => x - width,
         };
         // A snapped line starts on a whole pixel, as the draw's does.

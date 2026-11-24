@@ -928,7 +928,9 @@ the anchor** (`oag_ui::font::snapped_run`'s `ink_right`), not its pen end: the p
 380, 388, 400, 407, 415; aligned by pen end ours started at 362, 369, 376, 383, 397, 403, 410 (the same pitch, 4 px left: the last glyph's
 trailing advance, 4.2 px for the `!`); on the ink edge ours starts 366, 373, 380, 387, 401, 407, 414, each within 1 px. Only this
 widget measures it: no other captured Pure frame has a right-aligned snapped string (`menu-main`, `-team`, `-mode`, `-sr-*`, `-t-*`
-and `-pause` re-rendered before and after are pixel for pixel equal). A centred string is still placed by the pen end (not measured).
+and `-pause` re-rendered before and after are pixel for pixel equal). A centred string is still placed by the pen end (not measured). The pointer rectangles over a drawn line (`hints::scan`) follow
+the same rule, so a tap lands on the ink; our own `menu.toml` pages' right-hand value columns on Pure now end their ink on
+`value_right` too (no Pure pair draws one).
 
 **`HOLD ON!` is the `Stats` face.** Ours had drawn it in the menu face (`FX300ANG.fnt`, wide, bold): `Frontend::draw_screen_over`
 emitted every screen text as a plain `Draw::Text`. A `font="Stats"` or `"Scroll"` text now draws as `Draw::FacedText { role: "Stats" }`
@@ -938,14 +940,19 @@ corrects a text drawn in the wrong atlas). Pulse, HD, 2048 and Omega name no suc
 
 **Why the title pair rose from 0.51 to 0.58 mean grey when the glyphs became whole-pixel sprites (`pure-leftovers`).** Measured with
 the binary of that merge's first parent against main's, both re-rendered against the same `theirs.png`: 0.23 % to 0.42 % of pixels over
-40 grey, the band of the wordmark's lower right (`PRESS START BUTTON` and `HOLD ON!`) 46 px to 152. Two causes. (1) `HOLD ON!` was in
-the wrong face (above); crisp whole-pixel quads of the bold menu face against the original's thin letters cross the 40-grey line
-where the same glyphs blurred by a fractional quad did not. Fixed: 0.42 % to 0.32 % over 40 grey, mean grey 0.58 to 0.53. (2) `PRESS
-START BUTTON` (`font="Title"`, scale 1.5, the menu face): the original's ink rows are 202 to 215, ours 202 to 216, the bottom row of
-the letters one pixel lower (ink rows summed over the last three letters: the original 1632, 1921, 1557, 95, ours 1217, 1970, 1939,
-778). **Open, not fixed**: shortening the quad's height by 1 px or by 0.5 px at scales over 1.3, or using `floor((h - 1) x s)`, all
-made the pair worse (0.97 %, 0.45 %, 0.99 % against 0.32 %); the law behind the original's 1.5 quads (a different rounding, or a y
-placement) needs a second measurement at a scale over 1.3 that this data does not have.
+40 grey. By band (`x 240-480, y 172-209` / `y 220-250` / the rest): 46, 126, 114 px to 152, 133, 257. The rise is the `PRESS START
+BUTTON` row (`font="Title"`, scale 1.5, the menu face, y 202-216, across the first and third band), **not** `HOLD ON!` (the typed band,
+wrong in both binaries: 126 and 133 px). On `PRESS START BUTTON` the merge moved the glyph starts onto the original's (ink-left 101,
+119, 137, 155, 173, 200 ... in the original and on main, one column left in the parent) and the edge sampling off it: the pixels over 40
+grey in the row's box went 168 to 416, spread evenly over the letters' rows. **Open, not fixed**: the half-texel `u` shift
+(`SNAPPED_UV_SHIFT`) is 0.75 px at scale 1.5 against 0.4 at 0.8 and 0.58 at 1.15; a shift of 0.3 to 0.4 px at every scale takes the
+title pair from 0.32 % to 0.10 to 0.13 % over 40 grey and leaves `menu-sr-track` and `menu-team` at 0.24 to 0.25 and 0.18, but
+`menu-pause` goes 2.51 % to 2.60 % and every pair's mean grey rises 0.01 to 0.03 (0.73 to 0.75 on `menu-main`), so one fixed pixel
+shift is not the law either. Shortening the quad's height by 1 px or 0.5 px, or using `floor((h - 1) x s)`, at scales over 1.3 made
+the pair worse (0.97 %, 0.45 %, 0.99 %). The law behind the original's 1.5 quads needs a second measurement at a scale over 1.3.
+
+**`HOLD ON!` is fixed on its own account** (above): the typed band of the title pair 133 px to 8, the whole pair 0.42 % to 0.32 % over
+40 grey, mean grey 0.58 to 0.53 (the first parent's 0.51).
 
 **The typed description's spacing needs no further law.** Re-measured on main, glyph ink-left columns of the typed lines against the
 originals' (`theirs.png`), line by line: `menu-main` 0.19 px and 0.24 px mean absolute residual (8 of 43 and 10 of 45 glyphs one pixel
