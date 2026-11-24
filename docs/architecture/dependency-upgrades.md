@@ -65,7 +65,78 @@ and `cargo check -p oag-game --features native-video` before relying on them.
 | `flate2` | 1.1.9 | 1.1.11 | `CHANGELOG.md` in <https://github.com/rust-lang/flate2-rs> | see its row below; brings `miniz_oxide` 0.9 beside `png`'s 0.8 | **applied** (commit `3749a2733`); the `Cargo.toml` comment on `flate2` names the second copy, which is not the inflater (zlib-rs is) |
 | `wgpu` (with `wgpu-core`, `wgpu-hal`, `wgpu-types`, `naga`, `naga-types`, `wgpu-naga-bridge`, `wgpu-core-deps-*`) | 30.0.1 | 30.0.2 | `CHANGELOG.md` in <https://github.com/gfx-rs/wgpu> (`v30` branch, 30.0.1 to 30.0.2) | Metal: sRGB no longer oversaturated on wide-gamut displays (#10286); a texture id no longer leaks when a surface acquire returns no texture (#10184, our Outdated/Lost/Timeout skip); no use-after-free of a mapped buffer on device loss (#10593, our readbacks); `Send`/`Sync` on `Global` (#9953, compile-time only); naga `glsl-in` build fix and WebGPU `PreMultiplied` report (not relevant: neither used) | **applied** (2026-11-16), lockfile only, no call-site change |
 | `wasmtime` (with `cranelift-*`, `pulley-*`, `wasmtime-internal-*`, `wasmtime-environ`) | 50.0.1 | 50.0.2 | release notes of <https://github.com/bytecodealliance/wasmtime/releases/tag/v50.0.2> | security fixes; two reach our build, which leaves out the `gc` and `threads` features: an abort in builds without `gc` (GHSA-rc4p-x33f-vpr2) and one without `threads` (GHSA-2674-w29h-wqvj). The rest are in `wasmtime-wasi`, components, GC heaps or `Caller::get_module_export`, none of which `oag-modhost` uses | **applied** (2026-11-16), the exact pin moved `=50.0.1` -> `=50.0.2` and the lockfile; no call-site change, `oag-ext-abi` and `oag-ext` unchanged, so `oag-mod-author`'s skill needs no edit |
+| `wasmtime` (with `cranelift-*` 0.137.3 -> 0.138.0, `pulley-*`, `wasmtime-internal-*`, `wasmtime-environ`, `wasmprinter` 0.263) | 50.0.3 | 51.0.0 | `RELEASES.md` section 51.0.0 of <https://github.com/bytecodealliance/wasmtime> | see "wasmtime 51" below: the one API break (`MemoryType::new` and `TableType::new` return a `Result`) is not called by `oag-modhost`; no new features adopted | **applied** (2026-11-24), the exact pin moved `=50.0.3` -> `=51.0.0` and the lockfile; no call-site change, `oag-ext-abi` and `oag-ext` unchanged, committed `ext/*.wasm` unchanged, so `oag-mod-author`'s skill needs no edit |
 | `web-transport-quinn` (with `web-transport-proto` 0.7, new `rind` 0.3.2, `rind-rustls` 0.23.3, `rustls-platform-verifier` 0.7) | 0.13.6 | 0.14.0 | `CHANGELOG.md` of <https://github.com/moq-dev/web-transport> (0.13.6 to 0.14.0), [#488](https://github.com/moq-dev/web-transport/pull/488), [#491](https://github.com/moq-dev/web-transport/pull/491) | #488 removes the `ring` and `aws-lc-rs` features and moves TLS and QUIC packet cryptography to `rind` (pure Rust) behind a provider-neutral adapter: the builder takes a process-installed rustls provider first and rind otherwise; `ClientError`/`ServerError` gain `UnsupportedCpu` and `Crypto`; the connection closes when the last `Session` drops (#480); default client sockets bind per address family (#490); `ServerBuilder`/`ClientBuilder` take a `TransportConfig` (#489); `reject` takes a `ConnectResponse` that can carry headers (#499) | **applied**. `crates/net/Cargo.toml`: the dependency is `"0.14"` with no feature, and our own `rustls` dependency drops its `ring` feature (it only names `rustls::pki_types`). `crates/net/src/wt.rs` needed **no code change**: `ServerBuilder::new().with_addr().with_certificate()`, `ClientBuilder::new().with_server_certificate_hashes()`, `Request::reject(StatusCode)` and the `Session` types all kept their signatures. No process provider is installed, so rind is the provider. `ring` stays as a direct dependency for `rcgen` (minting the self-signed certificate) and for the digests in `extract.rs`; it is no longer the TLS provider. `cargo tree -d --target all` gains one duplicate pair, `hax-lib` 0.3.7 and 0.4.2 (each a proc-macro annotation crate under `libcrux-intrinsics`, through `rind`), and loses `base64` 0.22. No `aws-lc-sys` is in the tree. What the duplicate check cannot see: `rind` is a second crypto implementation beside `ring` (`rind`, `rind-rustls`, `libcrux-aes`/`-sha2`/`-poly1305`, `curve25519-dalek` 5, `fiat-crypto`), so there are two stacks, because `rind` is not optional in 0.14 and `ring` stays for `rcgen`, `extract.rs` and the host-signature code. `crabgrind` (and `bindgen` under it) is locked but never built: `libcrux-secrets` depends on it only under `cfg(valgrind_ct_test)`, which no build of ours sets, and `cargo tree -i crabgrind` finds it on none of the Linux, Android, macOS, iOS, Windows or wasm32 targets, so no libclang requirement joins any build. `rind`'s CPU gate is `rind::cpu::check`: on x86_64 it requires nothing (its AVX2, ADX and AES paths are chosen at run time), so no x86 player is refused; it fails only on an aarch64 CPU without NEON (32-bit ARM requires nothing). All 137 `oag-net` tests pass; `cargo ndk -t arm64-v8a check -p oag-game --example oag_android --no-default-features --features android,extensions` and `just check-web` build, and the wasm graph holds neither `rind` nor `web-transport-quinn` (`oag-server` is native-only and does not build for wasm). Open upstream, not ours to fix: [#587](https://github.com/moq-dev/web-transport/issues/587) (an error `Display` repeats its sources, so a logged chain from this crate may name a cause twice) and [#565](https://github.com/moq-dev/web-transport/issues/565) (the qmux idle timer; `oag-net` uses the quinn transport) |
+
+## wasmtime 51
+
+`oag-modhost` is the only user (`crates/modhost`). Its pin is exact on purpose:
+fuel, NaN canonicalisation and the pooled per-tick instance are the sandbox's
+determinism, so the move was read and measured, not taken as a lockfile bump.
+
+**Breaking changes in 51.0.0 against what we call** (`Config`: `consume_fuel`,
+`cranelift_nan_canonicalization`, the `wasm_*` switches, `PoolingAllocationConfig`;
+`Store::{set_fuel,get_fuel}`, `Linker`, `Instance`, `Memory`, `TypedFunc`):
+
+- `MemoryType::new` and `TableType::new` return a `Result`: not called.
+- `Direct{Source,Destination}::remaining` return a `Result`, `LinearMemory` was
+  adjusted, WASI buffer sizes became configurable, the number of fibers in a
+  store is limited by default: components, WASI and async, none of which
+  `oag-modhost` builds (`runtime`, `cranelift`, `std`, `pooling-allocator` only).
+- Result: `cargo check -p oag-modhost --all-features` compiled with no edit.
+
+**Measured, 50.0.3 against 51.0.0**, `quick` profile, same machine, best of 7
+(compile) and three runs (tick):
+
+| What | 50.0.3 | 51.0.0 |
+| --- | --- | --- |
+| compile of the seven shipped guests (`checkpoint_circuit`, `energy_turbo`, `hillside_rain`, `tether`, `wall_penalty`, `window`, `slipstream`), sum of best | 79.9 ms | 78.9 ms |
+| `counter` tick on Cranelift | 9.8 to 10.2 us, 22 fuel | 10.1 to 10.5 us, 22 fuel |
+| `arithmetic` tick on Cranelift | 11.8 to 12.4 us, 9,058 fuel | 11.5 to 11.7 us, 9,058 fuel |
+| `arithmetic` tick on Pulley | 324 to 329 us, 9,058 fuel | 325 to 327 us, 9,058 fuel |
+
+The fuel totals are equal to the unit. The tick figures come from
+`tests::engines::per_tick_wall_time_of_each_engine` (`--features pulley`,
+`--no-capture`); the compile figures from a throwaway example that called
+`Module::compile` on each shipped `ext/*.wasm`.
+
+**Open upstream issues, and whether they reach us:**
+
+- [#15382](https://github.com/bytecodealliance/wasmtime/issues/15382), memory
+  growing quadratically when compiling thousands of GC global initializers
+  (`array.new_fixed`): **does not reach us**. The reproducer needs the GC
+  proposal, and our build has no `gc` feature; a guest cannot use it. Our guests
+  are 2.5 to 12 KB with no globals of that kind.
+- [#15363](https://github.com/bytecodealliance/wasmtime/issues/15363), a
+  compile-time regression of +0.5 % geomean (up to +7 % on one large module)
+  blamed on `regalloc2` 0.15.3: **reaches us in principle, costs nothing
+  measured**. The lockfile held `regalloc2` 0.15.3 under 50.0.3 as well (wasmtime
+  requires `^0.15`), so 51.0.0 does not change it; the table above is the same
+  compile time on both sides.
+
+**New in 51 and not adopted:**
+
+- `Global::get_numeric`: the host reads state through the I/O buffer, not guest globals.
+- Filling unknown imports with functions that return default values
+  ([#14746](https://github.com/bytecodealliance/wasmtime/pull/14746)): `Module::compile_on` refuses a module with any import (the `oag` namespace is
+  empty in ABI 1) and names it; a default-returning stub would let an
+  unsupported guest load.
+- `GuestProfiler` precomputed symbol tables ([#14753](https://github.com/bytecodealliance/wasmtime/pull/14753)):
+  we do not profile guests per store.
+- Cranelift `interrupt_poll` and the `volatile` memory flag: the sandbox stops
+  runaway guests with fuel, which is deterministic; an interrupt is not.
+- 128-bit atomics (AArch64, s390x), the WIT `map` type, WASI buffer sizes,
+  `wasmtime serve` options and HTTP/component-async changes: no component model,
+  no WASI, no threads.
+- Faster compile of host-defined functions ([#14517](https://github.com/bytecodealliance/wasmtime/pull/14517)):
+  taken for free; we define a handful of host functions and the compile total did
+  not move beyond noise.
+
+**Advisories in 51.0.0:** the without-`gc` and without-`threads` aborts were
+already taken in 50.0.2; the rest are in `wasmtime-wasi`, HTTP, components, GC
+heaps and `Caller::get_module_export`, which `oag-modhost` does not build or call.
+The `PAGEMAP_SCAN` fix does not apply either: wasmtime's default is off
+(`Config::pagemap_scan`, `Enabled::No`) and `build_engine` does not set it.
 
 ## Held back, with the reason
 
@@ -74,7 +145,6 @@ and `cargo check -p oag-game --features native-video` before relying on them.
 | `num-bigint` | 0.4.8 | 0.5.1 | superseded: `oag-disc` now takes 0.5.1 directly, and 0.4.8 stays only through `num-rational` 0.4 (`av-data`, the AV1 decoder's), a second copy that leaves when `av-data` moves. The 0.5.0 notes (`<https://github.com/rust-num/num-bigint>`, `RELEASES.md`) only split the `rand` features |
 | `x11rb` | 0.13.2 | 0.14.0 | superseded: 0.14.0 is our direct dependency (RandR); 0.13.2 stays through `winit` 0.30.13 and `arboard` 3.7.0. 0.14 drops abstract unix socket connections (as libxcb did), bumps its MSRV and `raw-window-handle` (commit log `v0.13.2...v0.14.0` of <https://github.com/psychon/x11rb>). The copy leaves with winit 0.31 and an arboard on x11rb 0.14 |
 | `generic-array` | 0.14.7 | 0.14.9 | `crypto-common` 0.1.7 requires `=0.14.7`; it arrives through `sha2` 0.10 from `cranelift-codegen`. `cargo update -p generic-array --precise 0.14.9` fails on that bound. **wasmtime 51 does not remove it**: `cranelift-codegen` 0.138.0 (wasmtime 51.0.0's) still requires `sha2 ^0.10.2` (crates.io index) |
-| `wasmtime` | 50.0.3 | 51.0.0 | 51.0.0 is stable since 2026-11-20 (the first pass held at `51.0.0-rc.1`); the exact pin `=50.0.3` is deliberate (determinism: fuel, NaN canonicalisation, the ABI word) and the move is its own lane, ready to open: see "Benefits ranked" |
 | `winit` | 0.30.13 | 0.31.0-beta.4 | beta (2026-10-24); no stable 0.31 on crates.io; the migration is a thread item |
 | `rustls` | 0.23.46 | 0.24.0-dev.2 | a development pre-release |
 | `toml-schema` (git) | rev `fa97c07e` | trunk is newer | pinned at the newest tagged release, `rust-v1.0.0-rc.2` (2026-08-20), by ADR-0064; trunk past it is untagged |
@@ -319,7 +389,7 @@ items are on the dependency's default branch only and are named as such.
 | # | Benefit | Kind | Files | Source | State |
 | --- | --- | --- | --- | --- | --- |
 | 1 | The TOML parser no longer overflows the stack on invalid input: an unexpected closing delimiter could take the recursion-depth count below zero and walk past its guard. We parse TOML a stranger can write (a mod's `oag-mod.toml`, a campaign, a track manifest, a menu a mod extends) | security | `crates/mod/src/manifest.rs`, `crates/mod/src/lib.rs`, `crates/mod/src/campaign.rs`, `crates/trackfile/src/manifest.rs`, `crates/ui/src/menu/definition.rs` | [toml-rs/toml#1265](https://github.com/toml-rs/toml/pull/1265), `crates/toml_parser/CHANGELOG.md` 1.1.6 | **applied** by this lock (`toml_parser` 1.1.6). A follow-up could pin it with a test that feeds a mod manifest a few thousand `[` and `]`; none was written here |
-| 2 | `wasmtime` 51.0.0: faster compile for host-defined functions ([#14517](https://github.com/bytecodealliance/wasmtime/pull/14517)), eight advisories listed (the without-`gc` and without-`threads` aborts we already took in 50.0.2; the others are in `wasmtime-wasi`, HTTP, components, GC heaps and `Caller::get_module_export`, none of which `oag-modhost` builds or calls), `Global::get_numeric` | performance, security | `crates/modhost/Cargo.toml` (`=50.0.3` pin, `pulley` feature), `crates/modhost/src` (no `MemoryType::new` or `TableType::new` call, whose `Result` is the 51 break), `docs/architecture/wasm-extensions/` | [release notes 51.0.0](https://github.com/bytecodealliance/wasmtime/releases/tag/v51.0.0) | held: stable since 2026-11-20, a lane of its own because the exact pin protects fuel, NaN canonicalisation and the ABI word. Its `cranelift-codegen` keeps `sha2` 0.10, so the second `generic-array` stays |
+| 2 | `wasmtime` 51.0.0: faster compile for host-defined functions ([#14517](https://github.com/bytecodealliance/wasmtime/pull/14517)), eight advisories listed (the without-`gc` and without-`threads` aborts we already took in 50.0.2; the others are in `wasmtime-wasi`, HTTP, components, GC heaps and `Caller::get_module_export`, none of which `oag-modhost` builds or calls), `Global::get_numeric` | performance, security | `crates/modhost/Cargo.toml` (`=51.0.0` pin, `pulley` feature), `crates/modhost/src` (no `MemoryType::new` or `TableType::new` call, whose `Result` is the 51 break), `docs/architecture/wasm-extensions/` | [release notes 51.0.0](https://github.com/bytecodealliance/wasmtime/releases/tag/v51.0.0) | **applied** (2026-11-24, "wasmtime 51" below); it was its own lane because the exact pin protects fuel, NaN canonicalisation and the ABI word. Its `cranelift-codegen` keeps `sha2` 0.10, so the second `generic-array` stays |
 | 3 | `zip`'s `zstd-rs` feature (zstd's new pure-Rust backend) would let the web build read zstd mod entries and drop the C `zstd-sys` build from native too, deleting the "zstd is a C library" split | workaround deleted, build time | `crates/mod/Cargo.toml` (the `cfg(not(target_arch = "wasm32"))` block and its comment), `crates/mod/src/lib.rs:22` (the native-only module) and `crates/mod/src/pack.rs` (writes zstd) | [zip2#1329](https://github.com/zip-rs/zip2/pull/1329), zip 9.8.0; `zstd` 0.14.4 `rust-backend` | not built; whether the Rust backend compiles for `wasm32-unknown-unknown` and decodes our entries is unchecked (`cargo check -p oag-mod --target wasm32-unknown-unknown` with the feature is the first test) |
 | 4 | `cpal` 0.19 reports a buffer under- or overrun as `CallbackInfo::xrun()` (and 0.18.2 already reports PipeWire, CoreAudio and AAudio xruns as `ErrorKind::Xrun` through the error callback). Our own timed "late callback" count in the output callback is what that replaces | workaround deleted | `crates/audio/src/output.rs` (the `callback_health.late` check around line 570 and the error callback at line 643, which today only logs) | `CHANGELOG.md` of <https://github.com/RustAudio/cpal> ("Unreleased" and 0.18.2) | 0.19 is unreleased and removes `ErrorKind::Xrun` again, so wait for it rather than wire 0.18.2's form |
 | 5 | `Features::UNRESTRICTED_BYTES_PER_ROW`: `copy_texture_to_buffer` rows need only the texel size, not 256 bytes, so the padded-row readback and the de-pad loop go | workaround deleted, performance | `crates/view/src/offscreen.rs:62`, `crates/mesh/src/capture.rs:326`, `crates/gpu/src/writes.rs:171` | [wgpu#10619](https://github.com/gfx-rs/wgpu/pull/10619) (unreleased, trunk; not in 30.0.2) | wait for wgpu 31; capture and upload paths only, so a gain would be in screenshots and texture upload, unmeasured |
@@ -348,7 +418,7 @@ row; "unreleased" is the dependency's default branch only.
 | `wgpu`, `naga` | 30.0.2 | 30.0.2 (31 unreleased) | 30.0.2: Metal sRGB wide-gamut fix and the Bt2100 colour space crash fix, texture id leak on an empty surface acquire, mapped-buffer use after free on device loss. 30.0.0 headline: `SurfaceColorSpace` and `display_hdr_info`, optional vertex buffer slots, integer shader I/O needs an explicit `@interpolate(flat)`, `Queue::present`, `BufferSlice` may be empty. Unreleased 31: `TEXTURE_COMPONENT_SWIZZLE`, `DeviceDescriptor::default_queue`, `BufferView` blocks `unmap`/`destroy` (a panic if one is alive), `Queue::submit` returns `Option<SubmissionIndex>`, `Features::UNRESTRICTED_BYTES_PER_ROW`, `Queue::present_with_damage`, `TextureFormat::is_srgb` renamed `has_srgb_suffix`, `ShaderStages` and `BufferUsages` split types. A 31 migration reads every `get_mapped_range` holder in `crates/gpu`, `crates/mesh` and `crates/view` for a view kept across `submit` or `poll` |
 | `winit` | 0.30.13 | 0.30.13 (0.31.0-beta.4) | 0.30.13 is the March 2026 maintenance release. beta.4: clipboard and primary-selection data transfer, `ScrollSource`, IME and Wayland fixes, `winit-core` drops `url` |
 | `cpal` | 0.18.2 | 0.18.2 (0.19 unreleased) | 0.18.2: xruns as `ErrorKind::Xrun` on AAudio, CoreAudio, PipeWire and WASAPI capture, monotonic timestamps across device changes, PipeWire streams no longer start before `play()`, rtkit burst-limit and real-time promotion fixes. 0.18.0: `StreamTrait::now`/`buffer_size`, `realtime` without D-Bus, more `ErrorKind` variants. Unreleased: `CallbackInfo::xrun`, graceful `stop`, duplex streams, `play` renamed `start` |
-| `wasmtime` | 50.0.3 | 51.0.0 | see ranked row 2; 50.0.3 is a Windows WASI sandbox escape fix ([GHSA-f2pq-268w-886c](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-f2pq-268w-886c)), not reachable here |
+| `wasmtime` | 51.0.0 | 51.0.0 | applied, see ranked row 2 |
 | `glam` | 0.34.3 | 0.34.3 | `camera` module (model, view, projection), handedness and Y-flip fixes in it, `transpose_mul_vecn` rename (old name deprecated), serde fixes for `BVec3A`/`BVec4A`, `lerp_monotonic`. 0.34.0 is the last breaking release before 1.0 |
 | `zip` | 9.8.2 | 9.8.2 | `zstd-rs` (9.8.0), central-directory and EOCD validation (9.8.1, 9.8.2), safe header parse methods (9.7.0), `ZipFile::comment_raw` (9.6.0), Android `st_mode` fix |
 | `clap` | 4.6.9 | 4.6.9 | `defer` attribute (4.6.7), `Command::get_overridden_usage` (4.6.6), derive stack and lint fixes; 5.0 is behind `unstable-v5` |
@@ -364,7 +434,7 @@ pre-release is named only where it is the next step.
 
 | Behind or held | Locked | Newest | Reason |
 | --- | --- | --- | --- |
-| `wasmtime` | 50.0.3 | 51.0.0 | exact pin, own lane (ranked row 2) |
+| `wasmtime` | 51.0.0 | 51.0.0 | exact pin, applied (ranked row 2) |
 | `winit` | 0.30.13 | 0.31.0-beta.4 | beta |
 | `rustls` | 0.23.46 | 0.24.0-dev | development pre-release |
 | `toml-schema` (git) | rev `fa97c07e` | not on crates.io | pinned by ADR-0064 |

@@ -84,7 +84,7 @@ Measured:
   both, about 168 a tick.
 - **Fuel is checked at function entry and loop headers, not per instruction.**
   wasmtime's translator emits the check in `fuel_function_entry` and
-  `translate_loop_header` (crate `wasmtime-internal-cranelift` 50.0.0,
+  `translate_loop_header` (crate `wasmtime-internal-cranelift` 51.0.0,
   `src/func_environ.rs`); between checks it only accumulates the cost. Measured
   consequence: the loop-free tick hook ran a whole race on budgets of 20
   and of 100 units without trapping (identically on both engines); a budget of 1
