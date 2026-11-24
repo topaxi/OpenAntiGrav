@@ -188,12 +188,18 @@ pub(crate) struct MenuArgs {
     #[arg(long, value_name = "ITEM@X")]
     pub(crate) menu_ticker: Option<String>,
 
-    /// With `--menu-page grid-select`/`cell-select` on Pulse, the seconds the card title's glow ladder
-    /// (`pulse="true"` texts, 1 s period) has run, where it is not `--menu-picker-seconds`: the
-    /// title's counter and the `Selector`'s are separate in the original, so a pair script pins each
-    /// to what it read. `None` follows `--menu-picker-seconds`.
+    /// With `--menu-page grid-select`/`cell-select`/`track-select` on Pulse, the seconds the card title's
+    /// (or the circuit name panel's) glow ladder (`pulse="true"` texts, 1 s period) has run, where it is
+    /// not `--menu-picker-seconds`: the text's counter and the `Selector`'s are separate in the original,
+    /// so a pair script pins each to what it read. `None` follows `--menu-picker-seconds`.
     #[arg(long, value_name = "SECONDS")]
     pub(crate) menu_title_seconds: Option<f32>,
+
+    /// With `--menu-page`, where the focused row's colour pulse stands, `0` at the unselected ink
+    /// and `1` at the peak: a still has no clock, so the pulse rests at `0`, and a pair script reads
+    /// the level the original's frame caught off the focused row's own ink. `None` rests at `0`.
+    #[arg(long, value_name = "LEVEL")]
+    pub(crate) menu_focus_level: Option<f32>,
 
     /// With `--menu-page`, the frame of the disc's looping menu backdrop movie
     /// to draw behind the page, counting from zero; past the end it wraps.

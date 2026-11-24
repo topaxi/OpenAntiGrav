@@ -402,6 +402,8 @@ pub(super) fn selection_layouts(
     font: &oag_ui::font::Atlas,
     menu_font: Option<&oag_ui::font::Atlas>,
     native_default: bool,
+    // `MenuSkin::small_font`: the glyph slot that holds the `small` face.
+    small_role: Option<&'static str>,
     // `MenuSkin::default_face_is_row_face`: HD's rows are the `default` face, ratio 1.
     default_is_row_face: bool,
     space: oag_display::space::Space,
@@ -428,6 +430,7 @@ pub(super) fn selection_layouts(
             |menu| font.line_height / menu.line_height,
         ),
         native_default,
+        small_role,
         ..oag_ui_screens::picker::FaceScales::default()
     };
     let track_select = race_box

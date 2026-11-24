@@ -150,11 +150,17 @@ pub(super) fn language(
     let plugins = title
         .front_end
         .map_or::<&[&str], _>(&[], |f| f.language_plugins);
-    let languages = oag_ui::language::load::load_languages(
-        archives,
-        plugins,
-        title.front_end.and_then(|f| f.disc_strings),
-        report,
+    let overlays = title.front_end.map_or(&[][..], |f| {
+        f.language_overlays(archives.layout.serial.as_deref())
+    });
+    let languages = oag_ui::language::load::with_overlays(
+        oag_ui::language::load::load_languages(
+            archives,
+            plugins,
+            title.front_end.and_then(|f| f.disc_strings),
+            report,
+        ),
+        overlays,
     );
     let strings =
         oag_ui::language::load::load_strings(archives, &languages, preferred_language, report);

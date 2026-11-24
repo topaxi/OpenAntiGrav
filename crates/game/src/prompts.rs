@@ -204,6 +204,17 @@ pub fn forced_family(style: PromptStyle) -> Option<PromptFamily> {
 #[cfg(test)]
 mod tests;
 
+/// The faces the front end's footer legend and reset prompt draw with: the menu face's ratios
+/// and, on a title whose renderer holds the `small` face in a glyph slot
+/// ([`oag_title::MenuSkin::small_font`]), that slot, so the button glyphs draw in it at its own size.
+#[must_use]
+pub fn footer_faces(skin: &oag_ui::menu::Skin) -> oag_ui_screens::picker::FaceScales {
+    oag_ui_screens::picker::FaceScales {
+        small_role: skin.small_font(),
+        ..oag_ui_screens::picker::FaceScales::default()
+    }
+}
+
 /// The footer's reset prompt (the title's `Square` glyph and `RESET TO DEFAULT`) while the
 /// selected row is off its default, drawn the way `Confirm` is so the prompt system redraws
 /// the glyph for the device in use, and the rect it occupies for a tap. `None` when there is
@@ -217,6 +228,7 @@ mod tests;
 pub fn reset_prompt(
     menu: &oag_ui::menu::Menu,
     legend: Option<&oag_ui_screens::campaign::footer::NavigationLegend>,
+    faces: &oag_ui_screens::picker::FaceScales,
     bindings: &dyn Fn(Button) -> Vec<&'static str>,
     measure: &dyn Fn(&str, &str, f32) -> f32,
     width: f32,
@@ -230,12 +242,5 @@ pub fn reset_prompt(
             word = format!("{word} ({keys})");
         }
     }
-    legend?.reset_prompt(
-        glyph,
-        &word,
-        &oag_ui_screens::picker::FaceScales::default(),
-        measure,
-        width,
-        blocked,
-    )
+    legend?.reset_prompt(glyph, &word, faces, measure, width, blocked)
 }

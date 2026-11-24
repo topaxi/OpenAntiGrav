@@ -247,3 +247,33 @@ fn pulses_main_menu_row_order_and_text_come_off_the_disc() {
     assert_eq!(text("FE_RACE_CAM"), "RACE CAMPAIGN");
     assert_eq!(text("FE_RACEBOX"), "RACEBOX");
 }
+
+/// Pulse's two footer strips are 14 rows tall in viewports 13 rows tall (`Skin.xml`), and the
+/// viewport cuts the last row: a row a compare frame of the original confirms, since `y=249` holds
+/// the lower strip's first row and nothing of the upper strip.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn pulses_footer_strips_are_cut_to_their_viewports() {
+    let Some(path) = image("pulse-psp-usa.chd") else {
+        return;
+    };
+    let mut archives = oag_assets::Archives::open(&path.to_string_lossy(), oag_pulse::TITLE)
+        .expect("the archives open");
+    let raw = archives
+        .read_name(r"Data\Plugins\PI001\GUI\Skin.xml")
+        .expect("every pressing carries the front-end root");
+    let screens = oag_ui::screen::Screens::from_xml(&fexml::text(&raw).expect("it is text"));
+    let strips: Vec<_> = screens
+        .screens
+        .iter()
+        .flat_map(|screen| &screen.images)
+        .filter(|image| image.y == 236.0 || image.y == 249.0)
+        .filter(|image| image.width == Some(454.0))
+        .map(|image| (image.y, image.height, image.texture_height))
+        .collect();
+    assert!(
+        strips.contains(&(236.0, Some(13.0), Some(13.0)))
+            && strips.contains(&(249.0, Some(13.0), Some(13.0))),
+        "both strips are 13 rows after their viewports: {strips:?}"
+    );
+}

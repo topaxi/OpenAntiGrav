@@ -105,6 +105,30 @@ Open: the original's hexagon is translucent (the scene shows through it) where o
 Zone pairs are unchanged (the flag is Pulse PSP's, from `restore_autopilot_timer`'s own pair types; the Zone pair's frame
 shows the same row and has not been given it).
 
+### The marquee and head-to-head bars of a race shot (2026-11-24, `hud-bars-headless`)
+
+Two more `CaptureHud` pins, for a HUD part no headless route reached: `--hud-song TITLE [--hud-song-artist ARTIST] [--hud-song-ticks N]`
+holds the now-playing marquee on a song (a capture runs no music, so none starts), and `--hud-head-to-head GAP,lead|trail` draws the
+Head to Head bar on the readout alone (`--mode` has no head-to-head, and a posed capture runs no standings). Both need `--hud-state` and
+reach nothing in the race: the marquee's display is stepped `N` times (default 60, past the fade-in, where the bar has stopped climbing) at load and then frozen, so the tick count of the capture does not move it, and the readout's gap is not read from the standings.
+The bar exists only in a layout that authors it: the arcade one (`--mode single_race`), not the time trial's.
+
+Measured on a posed Pulse PSP single race at 480x272, by regression of the frame with the pin against the frame without, over the bar's
+pixels left of the scrolled text (1,512 pixels, per channel; the marquee bar is black, so its alpha is `1 - slope`):
+
+| | marquee bar alpha | head-to-head bar |
+| --- | --- | --- |
+| with the fill drawn once (`4a445a7fa`) | 0.199 (about 51 over 255, where the fade-in ends: `Display::step`) | `0xFF7DEFC0` opaque |
+| with that fix reverted | 0.35 (`1 - 0.8^2`: drawn twice) | identical |
+
+The head-to-head bar is opaque in Pulse's layout (`HudColour2`), so the fix cannot show on it; it shows on the marquee's bar and on
+a translucent fill under the HUD font (`a_translucent_fill_under_an_outlined_font_is_drawn_once` is the unit pin, and
+`hud_boost_glow_ground_truth::the_capture_flags_draw_the_marquee_bar_and_the_head_to_head_bar` the frame). None of the 30 Pulse PSP
+`theirs.png` in `pulse-psp/` (circuits) and `pulse-psp-race/` shows either bar: the marquee's rectangle (x 130 to 280, y 247 to 267) is
+not darkened in any, and no pixel of the bar's mint is in the top right. The one original frame that shows the marquee is Pulse PS2's
+`moa-therma-white` (its text tail), outside the PSP set; ours draws none there until a song is pinned for it.
+
+
 ## Environment parity: the profile and the checks (2026-10-20)
 
 **The set from before 2026-10-20 is archived** (the maintainer's request: start fresh, make the original's and
@@ -1840,9 +1864,9 @@ the evidence.
 | `Grid Selection`, `Cell Selection` (the Race Campaign) | `--menu-page grid-select`, `cell-select` (`CellMode_Definition.xml`, `grid_00.xml`) | pair, pair | none: Pure draws a list (`this source has no Race Campaign to show`) |
 | Pure's Single Player chain: `Single Player`, `Class Selection`, `League Selection`, `Tournament Selection`, `Track Selection` | `--menu-page pure-chain[:MODE[:ROW...]]` | none | pair x6 |
 | `Track Creation` (Track Select), `Team Selection` | `--menu-page track-select`, `ship-select` | pair, pair | `Team Selection` pair; Pure's circuit list is `Track Selection` above |
-| `Main Menu` | Pure: `--menu-page pure-main` (`Skin.xml`'s `Main Menu`, the chain's drawer; the live main page is `menu.toml`'s, ADR-0066). Pulse: `menu.toml`'s `main` | **gap** | pair |
-| `Racebox`, `Single Player` (Racebox setup), `Additional` (Options+) | `menu.toml`'s `race`, `options` pages | **gap** x4 | none (Pure has no Racebox or Options row) |
-| pause menu | Pure: `--drive-file scripts/pure-pause.drive --original-menu` (our own session: a Time Trial on Vineta K, START); Pulse is a `Stage::Menu` with no route | **gap** | pair |
+| `Main Menu` | Pure: `--menu-page pure-main` (`Skin.xml`'s `Main Menu`, the chain's drawer; the live main page is `menu.toml`'s, ADR-0066). Pulse: `--menu-page pulse-main` (`MainMenu_Definition.xml`, the menu model) | pair | pair |
+| `Racebox`, `Single Player` (Racebox setup), `Additional` (Options+) | Pulse: `--menu-page pulse-racebox`, `pulse-single`, `pulse-options` (`RaceBox_Definition.xml`, `Additional_Definition.xml`) | pair x3 | none (Pure has no Racebox or Options row) |
+| pause menu | `--drive-file scripts/pure-pause.drive` / `scripts/pulse-pause.drive` with `--original-menu` (our own session: a Time Trial, START) | pair | pair |
 
 **The campaign pair (required).** Pulse: the Race Campaign's Grid Selection (`GRID 1`, the first tier, cursor on tier one) and **Cell
 Selection** (`SINGLE RACE`, `Moa Therma White`, the default cell), both with the footer's `AI difficulty (Medium)`. The difficulty
@@ -1859,11 +1883,11 @@ read side by side):
 
 | Pair | Overlap | Differs | Most visible difference |
 | --- | --- | --- | --- |
-| Pulse Track Select | 0.180 / 0.26 / 19.4 | 16.2 % (14.6 % re-made 2026-10-29) | the circuit photo (stacked cards, a different view), `1/3` on both sides since 2026-10-29 (ours showed `1/11`: the three circuits that author no `<Unlock>` plus eight DLC-pack circuits from the maintainer's `data/dlc`, which the pair run mounted; the compare menu route now sets an empty `$OAG_DLC`), distance `5178` against `5094`, the empty records `-.--.--` against `-` |
+| Pulse Track Select | 0.180 / 0.26 / 19.4 | 16.2 % (14.6 % re-made 2026-10-29) | the circuit photo (stacked cards, a different view), `1/3` on both sides since 2026-10-29 (ours showed `1/11`: the three circuits that author no `<Unlock>` plus eight DLC-pack circuits from the maintainer's `data/dlc`, which the pair run mounted; the compare menu route now sets an empty `$OAG_DLC`), distance `5178` against `5094`, the empty records `-.--.--` against `-` **2026-11-23 (`pulse-psp-track`), three footer fixes on one fresh grab (the TKR_TTTIM frame, `TICKER_PINNED`):** whole frame 1.60 % to 0.69 % over 40 grey; the footer below y 232 1543 to 358 px (ticker box 1267 to 226, `AAA` tag box 172 to 34, the line at y 249 316 to 0); everything above the footer unchanged at 543 px. The ticker is pinned (`tick:480` before `shot:track`, as `team`), the tag read by the shared pair script, and the footer strips are cut to their viewports (`docs/ui/menus-original.md`, "A viewport clips its images"). **Open, with the evidence:** the heading's glyph pens (every letter but the first and last one pixel right of the original's, `TRACK SELECT`: ours 50, 60, 68, 77, 86, 100 ... against 50, 59, 67, 76, 85, 99 ...; the other Pulse headings miss by one glyph each; a pen-rounding difference of the title face); one grab in four (the one at 26.3 s since entry) showed a bright teal haze left of and under the circuit name on the original that no frame of the backdrop movie reproduces (best of 270 scored on the panel box 15.1 against 16.4 grey at frame 0), so it is another clock (the text glow's `s` ladder is `caught up to the game clock`, `Text::glow_stamp`) and that grab read 2.22 % whole against 3.13 % before the three fixes, the glow-phase read being the next step (read the stamp off EDRAM as `selector_stamp` does); the footer prompts' icons are one pixel left of the original's (the nav legend, not this lane's files). **2026-11-23 (`pulse-fe-leftovers`):** the heading's pens, the prompt icons and the circuit name's haze are closed ("Pulse Cell and Track Select: glyphs, pens and the name's glow" below): fresh grabs, main's binary against this branch over 40 grey, whole frame 0.54 % to 0.14 %, 2.32 % to 0.15 % (the haze grab), the photo box 0 to 50 px |
 | Pulse Ship Select | 0.129 / 0.34 / 9.5 | 7.1 % (7.0 % re-made) | the Assegai hull: the original's blue-white livery large and tilted, ours a dark livery smaller; `1/8` on both sides since 2026-10-29 (it was `1/12`: four DLC teams) |
 | Pulse title | 0.069 / 0.30 / 4.7 | 2.6 % | the type: the original's wide `PRESS START BUTTON` and legal line against ours' small mixed-case `Press START button`; the rays are at another phase (animated) |
-| Pulse Grid Selection | 0.076 / 0.35 / 4.2 | 2.1 % (0.57 % on a 2026-11-23 grab, 1.32 % before the ticker and tag reached the campaign still) | the footer's prompt glyph rings and one bar row (the cursor halo is the bloom, drawn since 2026-10-29) |
-| Pulse Cell Selection | 0.077 / 0.39 / 4.3 | 1.8 % (0.65 % re-made 2026-11-23 on one fresh `theirs.png`, 2.14 % with main's binary on the same frame; see "Pulse Cell Selection: the footer, the tag and the title's glow phase" below) | what is left: the glyph rings of the four footer prompts (ours' rings are a half-texel softer) and one row of the silver bar (y 249) |
+| Pulse Grid Selection | 0.076 / 0.35 / 4.2 | 2.1 % (0.57 % on a 2026-11-23 grab, 1.32 % before the ticker and tag reached the campaign still) | the footer's prompt glyph rings and one bar row (the cursor halo is the bloom, drawn since 2026-10-29); rings and pens closed 2026-11-23 (`pulse-fe-leftovers`), re-rendered on a copy 1.41 % to 1.13 % against the same `theirs.png` (Team 1.38 % to 0.96 %) |
+| Pulse Cell Selection | 0.077 / 0.39 / 4.3 | 1.8 % (0.65 % re-made 2026-11-23 on one fresh `theirs.png`, 2.14 % with main's binary on the same frame; see "Pulse Cell Selection: the footer, the tag and the title's glow phase" below) | **2026-11-23 (`pulse-fe-leftovers`): 0.04 % (56 px) on two fresh grabs, main's binary 0.39 % and 0.41 % on the same frames**; what is left is the Confirm and Back prompts' dim top rows (below); the glyph rings and the silver bar's row y 249 are closed |
 | Pure Team Selection | 0.101 / 0.29 / 6.9 | 8.6 % (7.5 % re-made 2026-10-29, eight teams, Feisar to Harimau, as the original; 3.2 % on 2026-11-01 with the list in the menu face at the chain's 18-line pitch, the stat labels in the `Stats` face and the hull at the original's slideshow seconds (7.57 % the same fresh capture before)) | closed 2026-10-29: 17 teams listed (DLC and gated). Closed 2026-11-01: the list type (the `<Menu>` names no `font`, so it draws in the menu face at the chain's 18-line pitch, where it was the `default` role's 13/22 scale), the hull's angle (the three stills `Info`/`Side`/`Top` change every 2 s, the pair now at the original's seconds since entry), the stat labels (`font="Stats"` is Pure's `LTe50325.fnt`). Left: the description line the original types along the bottom, the two frame rules, the cursor arrow |
 | Pure Track Selection (single race) | 0.092 / 0.40 / 5.0 | 5.5 % (5.6 % re-made 2026-10-29 with the type-in; 4.2 % on 2026-11-01 with no context line in the still and the `Stats` face for the labels, cells and the description (5.63 % the same fresh capture before)) | what is left: the record separators (the original's are small mid-height dots with wide gaps, no `'` or `"` at 8x, and no Latin-1 character as the separator matches), the frame's dashed rule at y 217 and solid rule at y 251, the picker's scroll arrows against the original's pink cursor arrow. Closed 2026-11-01: the context line (the original draws none; the live screen keeps ours), the `m` case and the label type (the `Stats` face) |
 | Pure Single Player (mode) | 0.074 / 0.40 / 3.0 | 3.4 % | no context line here; the hint line and the `BACK` prompt differ (below) |
@@ -1874,8 +1898,7 @@ read side by side):
 Three differences recur on every Pure chain screen: the **context line** (ours' `SINGLE RACE - VENOM`, a known chosen stand-in of
 `docs/architecture/menus.md`, absent from the original), the **description line** along the bottom (the original types it in, so its frames hold a prefix; ours types it in too since 2026-10-29, and draws it settled when no `--menu-picker-seconds` is given: the string is the disc's `Text->SCREEN->ITEM->VALUE` entry, for example
 `Text->Track Selection->Track->Vineta K`, laid in the footer `TextInfo` viewport at `(21, 217)` 427 wide, amber `TextInfoBoxColor`, wrapped
-to its three `Text` lines; its scale `0.7` is **chosen** because the `FEGlobals` it names are not declared; the type-in (58 characters a second, a 3.12 s hold and a loop, a cursor) was measured and wired 2026-10-29 and the pairs are drawn at the original's seconds since entry, so the shares fell again: Track Selection 6.4 to 5.6 %, Class 3.6 to 2.6 %, League 4.5 to 2.8 %, Tournament 4.7 to 3.0 % (`docs/ui/menus-original.md`, "Wipeout Pure types its description line in"; before that wiring they had **risen** on a full text against the original's few typed letters; the original's face is the `Scroll` face, `LTe50325.fnt`,
-ours the menu face)) and the **footer's BACK prompt** (fixed 2026-10-29: the skin's `Back button` is the table's `Back Button`, found case-folded,
+to its three `Text` lines; its scale `0.7` is **chosen** because the `FEGlobals` it names are not declared; the type-in (58 characters a second, a 3.12 s hold and a loop, a cursor) was measured and wired 2026-10-29 and the pairs are drawn at the original's seconds since entry, so the shares fell again: Track Selection 6.4 to 5.6 %, Class 3.6 to 2.6 %, League 4.5 to 2.8 %, Tournament 4.7 to 3.0 % (`docs/ui/menus-original.md`, "Wipeout Pure types its description line in"; before that wiring they had **risen** on a full text against the original's few typed letters; the original's face is the `Scroll` face, `LTe50325.fnt`, which ours now draws too (2026-11-23))) and the **footer's BACK prompt** (fixed 2026-10-29: the skin's `Back button` is the table's `Back Button`, found case-folded,
 and draws the triangle glyph). Still open on the same frames: the dashed cyan rule across the bottom at y 217 and the solid footer rule at y 251,
 which the original draws and ours does not. Pulse's pairs share the footer
 ticker (scrolling in the original) and the cursor glow.
@@ -1885,10 +1908,9 @@ every pair. The original against itself: Pure 0.0 mean grey and at most 0.06 % o
 deterministic); Pulse 0.7-4.7 mean grey, 0.1-3.5 % over 40, the Ship Select turntable and the footer ticker (Track Select's photo cards
 2.5 %, the title 0.0 %).
 
-**Gaps** (original kept under `gap-*` with `gap.json`): Pulse `Main Menu` (ours' page is `menu.toml`'s with extra REMIX, RECORDS and MODS
-rows, title `OPENANTIGRAV`), `Racebox`, `Single Player` (the Racebox setup, ours' `race` page with different rows), `Additional`
-(Options+: GAME OPTIONS, CONTROLS, MUSIC PLAYLIST against ours' `options`) and the pause menu (`GAME PAUSED`: CONTINUE, GAME OPTIONS,
-PHOTO MODE, GAME MANUAL, RESTART RACE, QUIT RACE; a Time Trial restored from a savestate, Start pressed); Pure's `Main Menu` and pause menu were gaps until 2026-11-23 (`pure-main-pause`, below). Pure has no Options or Racebox screen in its main menu.
+**Gaps** (original kept under `gap-*` with `gap.json`): none left on Pulse. Pulse's `Main Menu`, `Racebox`, `Single Player`, `Additional` and
+pause menu were gaps (ours drew them from `menu.toml`, or not at all) until 2026-11-23 (`pulse-gap-pairs`, below); Pure's `Main Menu` and pause menu likewise
+(`pure-main-pause`, below). Pure has no Options or Racebox screen in its main menu.
 
 **Screen-entry clock (2026-10-29).** `original.seconds_since_entry` (`value`, `basis: measured`) is the wall clock from the state-name poll
 that saw the screen replace another (polled every 0.03 s, so +-0.015 s) to the middle of the frame grab; PPSSPP holds 60 fps, but entries
@@ -1907,10 +1929,12 @@ from a mean abs diff of 44.9 grey to 0.28 and the Ship Select hull box from 29.0
 **Reproduce:** `scripts/ppsspp-start.sh <lane> 91 <port> <image>` with `PPSSPP_EXTRA_INI` from `compare_env.py ppsspp-ini pulse-psp|pure-psp`,
 `source <scratch>/pp/env.sh`, ours' `XDG_*` under `data/scratch/<lane>/`, then `uv run --with websocket-client --with pillow python3
 scripts/psp-menu-pair.py pairs --title pulse|pure --out D --autopilot off --difficulty medium|""` (ours is run with an empty `$OAG_DLC`, `compare_menu.render_ours`, so `data/dlc` packs do not join its lists; about 90 s on Pulse from a walked
-`Main Menu`, about 3 min on Pure from a cold boot; `walk --plan "..."` photographs any plan, `--ids` restricts a run; Pulse's title is a
+`Main Menu` without a `tick:` step (the default plan has two, each waiting up to 480 s for a pinnable message: run it with `emu-run.py --bg --status F` and `wait F`, or one id's plan with `--plan` as the foreground watchdog's 570 s allows), about 3 min on Pure from a cold boot; `walk --plan "..."` photographs any plan, `--ids` restricts a run; Pulse's title is a
 separate boot: `--plan "st:Show Logo,wait:5,shot:title" --ids title`). Adopt: `python3 scripts/compare_env.py manifest
 data/reference/compare-page/menus-pulse.toml data/reference/compare-page/pulse-psp/menu-*` (and `menus-pure.toml` over `pure-psp/menu-*`),
 then `just compare-page`.
+
+**The Track Select ticker (2026-11-23, `pulse-psp-track`).** `track` is in `TICKERED` beside `grid`, `cell` and `team`: `PULSE_PLAN` has `tick:480` before `shot:track`, the grab waits for a pinnable message and ours is drawn with `--menu-ticker ITEM@X` and the matching lifetime row; the tag is read as on the other pairs. The walk to the shot takes 20 to 30 emulated seconds longer, and `--menu-picker-seconds` (photo cards, turntable) held at 21 to 26 s: the photo box read 0.2 % of its area differing on three of four grabs (50, 51, 50 px) and 0.7 % (215 px) on the fourth (22.0 s, the adopted pair), where it is now the largest region left and unexplained (a slideshow card or crossfade phase). `wait_ticker` makes a fresh `Watch` each wait, so a record's item remembered from the previous screen cannot pair with a new message.
 
 ### Pure Main Menu and pause menu pairs (2026-11-23, `pure-main-pause`)
 
@@ -1927,12 +1951,12 @@ differing region is fixed or measured. Share of pixels over 40 grey, whole 480 x
 instead: `--menu-page pure-main` reads `Skin.xml`'s `Main Menu` `Mode` entries (`Single Player`, `Multiplayer`, `Profile`, `On Line`; `Teasers` is a `noEntry`), the
 heading `Main Menu`, the row descriptions (`Text->Main Menu->Mode->ROW`) and the footer with `CONFIRM` alone (`backward="none"`), through the chain's drawer
 (`oag_ui_screens::pure_chain::draw_list`, `campaign::pure_chain::Chain::main_view`). The pair walk shoots it after BACK from Single Player, so the description's type-in clock
-(`--menu-picker-seconds`) is the press-to-grab tick count like every chain screen. **Largest regions** (px over 40 grey, of 3,029 on the shipped pair): the typed description
-1,342, row 1 544, row 4 344, heading 315. The description is the known open `Scroll` face advance (ours 6.5 px a character against the original's 7.6; `FEGlobals->TextInfoScale` is
-undeclared so 0.7 is chosen): measured, not fixed. **Row 4 reads `ON LINE` in ours and `DOWNLOAD` in the original**: the USA disc loads `PI012`, a US-spelling overlay
+(`--menu-picker-seconds`) is the press-to-grab tick count like every chain screen. **Largest regions** (px over 40 grey, of 3,029 on the pair as first shipped; the typed description was 1,342 of them
+until the `Scroll` face was drawn on the snapped pen at 0.8, 150 of 572 on main now, one-pixel misses on the first glyph of each word: `docs/ui/menus-original.md`, "Pure's right-aligned text ends on its ink"). **Row 4 reads `ON LINE` in ours and `DOWNLOAD` in the original**: the USA disc loads `PI012`, a US-spelling overlay
 (`Data\Plugins\PI012\Definition.xml`: `<Entry ID="On Line" String="Download">`, with `Téléchargement` and `Descarga` for French and Spanish), and ours does not
-(`oag_pure::LANGUAGE_MANIFESTS` leaves it out as "not a language"); it also holds `Synchronizing`, `favored` and the Zone and team descriptions. **Open, with the evidence**:
-the overlay is not wired because it is a string-table layer over English only on the USA pressing, wider than this lane's claim.
+(`oag_pure::LANGUAGE_MANIFESTS` leaves it out of the offered list as "not a language"); it also holds `Synchronizing`, `favored` and the Zone and team descriptions. **Fixed**: the
+manifest's `overlays` name it and `load_strings` lays its section for the chosen language over the table (`docs/architecture/frontend-boot.md`, "The offered languages are each executable's plugin manifest"), live and in this
+still alike; the EU disc ships the same file and its manifest never loads it, so a EU boot reads `On Line`. One fresh render of the shipped pair's flags, whole 480 x 272 frame: pixels with any channel more than 40 from the original 4,119 to 3,595 (3.16 % to 2.75 %; the shipped pair's `ours.png` predates later pure-menu work, which is why it is not the 2.97 % above), the same count on luma alone 1,381 to 1,027 (1.06 % to 0.79 %); row 4's band (y 100-120) 651 to 127 any-channel px and 354 to 0 luma px; mean grey 1.43 to 1.28, edge 0.533 to 0.543. The project's own main page (`menu.toml`) draws neither row.
 
 **Pause menu.** Ours is a menu over a parked race, so no still draws it: the route plays our own session the way the original is walked (`boot`, SINGLE PLAYER, TIME TRIAL, Vector,
 Alpha, Vineta K, the team, `@TICKS@` race ticks, START) with `--original-menu`, which now leaves this project's PHOTO MODE row out of a pause screen that authors none (the original has
@@ -1946,6 +1970,51 @@ box (130, 238, 200 x 24) 335 px to 54. The band itself matches: rules at rows 75
 **Largest regions left** (px over 40 grey of 3,688): the HUD top 1,396 (the digits' glyph edges and the blimp, the HUD lane's), the scene below the band 948, the band's rows 821 (ours'
 words are 3 px narrower over 105: `CONTINUE` ink 188-290 against 188-293, `RESTART` 190-288 against 190-291; the face's advance rounding, the same effect as the description's), the
 footer line 522.
+
+### Pulse list screens and the pause menu (2026-11-23, `pulse-gap-pairs`)
+
+Claim: Pulse PSP's Main Menu, Racebox, Single Player, Additional (Options+) and pause menu each have a pair against a fresh capture of the original (ours drawn from
+the disc's own screen, both English, a fresh profile), with the footer ticker and tag pinned, and the largest region of the worst pair is fixed or measured. Share of
+pixels over 40 grey, whole 480 x 272 frame, one fresh capture each (the BEFORE is `menu.toml`'s page against a fresh capture with its own ticker pin; the grabs differ, so the
+columns are two measurements, not one frame twice):
+
+| Pair | Before | After (mean grey, edge) | Route |
+| --- | --- | --- | --- |
+| Main Menu | gap; `menu.toml`'s `main` 11.40 % (mean grey 15.10) | 0.97 % (3.01, 0.41) | `--menu-page pulse-main` |
+| Racebox | gap (no page: RACEBOX opens `race`) | 0.44 % (1.66, 0.31) | `--menu-page pulse-racebox` |
+| Single Player | gap; `menu.toml`'s `race` 1.91 % (3.90) | 1.04 % (2.69, 0.41); 1.71 % before the focused value's bloom | `--menu-page pulse-single` |
+| Options+ (`Additional`) | gap; `menu.toml`'s `options` 5.88 % (9.15) | 0.44 % (2.01, 0.32) | `--menu-page pulse-options` |
+| Pause menu (Time Trial, Moa Therma White, Venom) | gap | 1.56 % (4.51, 0.94); 4.10 % on the first grab (2 s after START, header mid-slide) | `--drive-file scripts/pulse-pause.drive --original-menu` |
+
+**The four list screens are compare-only pages of the menu model** (`oag_game::capture::disc_screen_page`, named by the title's `FrontEnd::list_screens`: Pulse's four, empty elsewhere): the title, the rows and the help lines are read off the screen's own XML
+(`MainMenu_Definition.xml`'s `Main Menu`: `FE_MM`, the seven `Entry` rows, `helptext0` to `6`; `RaceBox_Definition.xml`'s `Racebox` and `Single Player`: the three rows, and the
+five `<List>`s with their `Text` labels and `default`s; `Additional_Definition.xml`'s `Additional`), through the same `oag_ui::menu::draw_list` the live pages use. The live pages stay
+`menu.toml`'s (ADR-0066, rule: our menu additions stay in play, compare shots draw the original's screen), every row of a still points at its own page (it is never activated), and
+Pulse's `MenuSettings.pages` lists `pulse-single` beside `race` so the settings look (rules, value column, step arrows) applies. `oag_ui::screen::Menu` keeps its `Entry` ids and
+`ListWidget` its literal entries (`Eliminations`' `5`, `10`, ...). The header of `Racebox` and `Single Player` is not authored on either screen (`AreaController area="RaceBox"`
+names it and the executable draws it); the frames read `RACEBOX`, the string of the Main Menu's `FE_RACEBOX` row, so that id is **chosen, not measured**. The footer is the same
+pin the campaign pages take (`--menu-ticker`, the stored tag, the Back prompt where the screen has a way back: `Main Menu` has none, `backward="none"`). The focused row's colour pulse is a
+clock a still does not have: the pair script reads its level off the frame (`focus_level`: the brightest red in the focused row's ink against the row below's) and ours pins to it
+(`--menu-focus-level`, `Skin::pin_pulse_level`); Options went 1.87 % to 0.55 % with it on the same grab (the focused `GAME OPTIONS` was the original's white and ours cyan). The backdrop movie's frame is
+fitted per pair (`compare-menu-movie-phase.py`: Main Menu needs frame 42, 4.75 to 0.45 grey over the bare pixels).
+
+**Largest regions left** (px over 40 grey): Main Menu 1,265: the typed help line and the focused row's glow 814, the footer ticker 324 and prompt rings 110. Racebox 571 and Options 580: the
+footer ticker 322 to 345 (glyph edges of the scrolling tip) and the prompt rings 225 (`Confirm`/`Back`, the half-texel softness `pulse-psp-cell` already measured). **Single Player was the worst of the four
+list screens at 1.71 % (2,238 px): the focused value `SINGLE RACE` 910 (the original blooms it: a haze round the glyphs; ours stamped no glow on a settings page, the code's "unmeasured"), the step arrows 66 on row 1 and 277 on rows 2 to 4, KILLS 128, the `Help` prompt (a triangle and `Help` at (20, 252): the screen's own `Text`s, not drawn) 191.
+Fixed: the focused value of a settings page stamps the glow (`rows.rs`, `skin.selected_stamp()`, the pulse's own ladder; the label and the other rows' values do not), 910 px to 35, whole frame 1.71 % to 1.04 %; it is also a live change to the RACE page's focused value on Pulse.**
+Left: the original's step arrows are dimmed where the list is at its first entry (every row is at entry 0 here, so every left arrow is dark and only the right one lit); ours lights both, because
+ours' lists wrap (the `race` page's design). KILLS is greyed on the original (ink peak 36 against ours' dimmed (114, 127, 142)) and holds `5` where the list's authored default is `10` (the
+native screen's rule for a disabled row is not read), and ours greys it by a rule read off this one frame (`Eliminations` is inert while `Mode` is not `Elimination`). Measured, not fixed.
+
+**Pause menu.** No still draws a menu over a parked race, so the route is `scripts/pulse-pause.drive` (`boot`, RACEBOX, the race page's `race.mode=time_trial`, Track Select `03_Track`,
+Ship Select, `@TICKS@` race ticks, START, 120 ticks) with `--original-menu`; `psp-menu-pair.py pairs --title pulse --plan "$PULSE_PAUSE_PLAN" --ids pause --pause-clock C`. The original is
+`data/saves/pulse-psp/time-trial-moa-therma-white-venom-grid.ppst` loaded (`psp-state.py`, the serial default is Pulse USA's), 4 s, START, 4 s. The saved state reads the HUD clock 0.40.6 to 0.40.8 at the
+pause (the CPU is held after the load; the wall waits do not move it), so `--pause-clock` is the `CURRENT` the frame shows, read by eye, and ours is played to it (`PAUSE_CLOCK_ZERO_TICKS["pulse"]` = 276:
+ours read 0.35.4 at 2,400 ticks, 0.40.8 at 2,724); with that the record 1.17.1, `current`, the GO board and the camera match. Fixed: the HUD under the tint, the tag off the footer, GAME MANUAL
+in a compare shot, and the header (taken settled, see `docs/ui/pause-menu.md`, "Pulse"). **The pause menu is the worst pair now (1.56 %).** **Largest regions left** (of 2,031): the rows 807 and the focused row 279: the original's rows are
+brighter (peak (65, 204, 225) against ours' (49, 155, 173), the bloom of the front end's glow stamps), because ours' glow pass runs only on a cleared target (`Renderer::render`'s `glowing` needs
+`LoadOp::Clear`) and a menu over a parked race draws with `Load`: **the cause, not fixed** (a renderer change); the music pill and `FENIX FUNK 5 (WIPEOUT EDIT)` 672 (the original is playing, ours
+runs `--no-audio` and has no now-playing line to draw); the `Confirm` ring 212. The focused row's pulse level is not pinned on the drive route (the session's own clock runs it).
 
 ### Pulse Cell Selection: the footer, the tag and the title's glow phase (2026-11-23, `pulse-psp-cell`)
 
@@ -1970,6 +2039,41 @@ The title box is `TITLE_BOX`: Cell (262, 30, 420, 60), Grid (262, 88, 340, 116).
 
 **Checked, not wired: Grid Selection's title** is pinned the same way and measured on one grab (title box 0 px over 40 grey); HD and Omega draw no pulse text (`frontend_glow` is `None`), so
 `--menu-title-seconds` is Pulse's alone (`campaign_page` sets it only in the Pulse branch).
+
+### Pulse Cell and Track Select: glyphs, pens and the name's glow (2026-11-23, `pulse-fe-leftovers`)
+
+Claim: the Cell Selection and Track Select pairs have a lower share of pixels differing by more than 40 grey on one fresh `theirs.png`, item by item.
+**True.** Each grab is one PPSSPP run (`:94`, USA, software renderer), ours drawn by main's binary and by this branch's from the same `pair.json`
+(`compare-rerender-ours.py`'s `rerender()` on copies; the movie frame set by `compare-menu-movie-phase.py --min-gain 0.1`):
+
+| pair, grab | main | this branch | what fixed it |
+| --- | ---: | ---: | --- |
+| Cell, grab 1 (`TKR_SRTIM`) | 0.39 % (505 px) | 0.04 % (56 px) | button glyphs from `Pulse_14`, the bearing pen |
+| Cell, grab 2 (`TKR_TTTIM`) | 0.41 % (536 px) | 0.04 % (56 px) | the same |
+| Track Select, grab 1 (`TKR_SLTIM`, photo mid-crossfade) | 2.38 % (3103 px) | 1.98 % (2581 px) | taken before the name's glow phase was read, so its haze is not pinned: name box 2370 px |
+| Track Select, grab 2 | 0.54 % (705 px) | 0.14 % (179 px) | the same three, the name's glow phase pinned (name box 26 px) |
+| Track Select, grab 3 | 2.32 % (3030 px) | 0.15 % (200 px) | name box 2304 px to 0 |
+
+Items, in the order the earlier lanes ranked them:
+
+1. **Cell prompt glyph rings (419 px, then 127):** closed, `docs/ui/menus-original.md`, "The footer's button glyphs are Pulse_14's" (confidence 90).
+2. **Cell silver bar row y 249 (341 px):** already gone on main (the 13-row footer clip of `pulse-psp-track`): 0 px.
+3. **Track Select photo box:** 0, 50, 49 and 50 px on the four grabs, 215 px once before; the crossfade of grab 1 matched ours' `--menu-picker-seconds`
+   without a pin (the 49 px), so no slideshow clock was read; not worth a pin.
+4. **Track Select heading pens:** closed, "A text's pen starts at its first glyph's ink" (confidence 80); the heading's 197 px is 0 in the region.
+5. **The circuit name's haze:** closed. The panel's `pulse="true"` texts stamp the title's `220 - 15 k` glow ladder on a counter of their own
+   (probed over the name box, 3,730 pixels stepping 15 each sample): `TITLE_BOX["track"]` (300, 30, 440, 80) reads it like the card title,
+   `--menu-title-seconds` now also pins `Picker::text_seconds` on `track-select` (the `glow_stamp` of the panel's texts). Test:
+   `pulse_menu_ticker_ground_truth::track_selects_circuit_name_takes_its_own_glow_phase`.
+6. **Footer prompt icons 1 px left:** closed by the glyph face (the icons now sit at the original's pixel columns).
+
+Reproduce a grab: `scripts/ppsspp-start.sh pulse-fe-leftovers 94 45094 <usa image>` with `PPSSPP_EXTRA_INI`, `source <scratch>/pp/env.sh`, then
+`emu-run.py --bg ... -- uv run --with websocket-client --with pillow python3 scripts/psp-menu-pair.py pairs --title pulse --ids cell|track --plan "back:Main Menu,wait:1,key:cross,st:Grid Selection,wait:3,key:cross,st:Cell Selection,wait:3,tick:480,shot:cell"`
+(Track Select: `key:down,key:cross,wait:2,st:Racebox,wait:2,key:cross,wait:2,st:Single Player,wait:2,key:cross,st:Track Creation,wait:3,tick:480,shot:track`), each about 45 s.
+
+**Open, with the evidence.** (a) The Confirm and Back prompts read dimmer over their first ten rows in the original (likely the footer's lower strip drawn over them,
+confidence 50, `docs/ui/menus-original.md` above): 56 px on both stills, the whole of Cell's remaining 56 px and a third of Track Select's. (b) Track Select's circuit map: the bright
+arcs that run along the outline sit elsewhere (94 to 115 px); a clock of its own, not read. Pulse PS2's skin gets the pen law (inherited from PSP) and not the glyph face (no third slot).
 
 ### The backdrop movie's phase (2026-11-05, `pulse-track-select-streaks`)
 
@@ -2008,7 +2112,7 @@ patches by gradient cross-correlation (Gaussian, strongest edges, parabolic sub-
 (`scripts/pcsx2-gsdump.py`), the exact quads. The selected hex mixes the outline and the ring: measure the ring alone with a brightness mask
 (ring pixels above 140 in the pair; the outline is dimmer).
 
-**Display offset (2026-10-29, `pulse-ps2-pair-dy`).** The PS2 menu pairs score ours with the game's `DISPLAY1/2.DY = 52` applied: `compare_env.DISPLAY_OFFSETS[("pulse-ps2", "menu")]` is 2.3 frame rows (3.70 px at 1280x720, measured, confidence 70, the DY sweep in `docs/ps2/aspect-ratio.md`). `compare_menu.menu_pair` and `compare-rerender-ours.py` shift `ours.png` down by it after the render (bicubic, black above) and record `ours.display_offset` in `pair.json`; a rerender applies it even to a pair that predates the field. Compare shots only: play stays centred. After it the hexes read `dy` within 0.02 px (Grid `+0.01/-0.01/+0.00`, Cell `+0.01`), `dx` unchanged at `-0.45..-0.50` (whole-frame Cell patch `-0.64`). Other platforms are untouched.
+**Display offset (2026-10-29, `pulse-ps2-pair-dy`; corrected 2026-11-24, `ps2-fe-layout`).** The PS2 menu pairs score ours with the game's `DISPLAY1/2.DY = 52` applied: `compare_env.DISPLAY_OFFSETS[("pulse-ps2", "menu")]` is **2.0 frame rows** (3.21 px at 1280x720, confidence 90): PCSX2's default `D0` is 50 and a synthetic bar frame replayed on two of the game's own dumps landed every bar exactly `DY - 50 = 2.000` rows low (scale 2.000, 0.000 at `DY = 50`; `scripts/pcsx2-gs-bar-probe.py`, `docs/ps2/aspect-ratio.md`, "Measured against PCSX2's frame"). The table said 2.3 until 2026-11-24: that was a fit to the pairs, and the 0.3 row over the display law is a constant half output pixel between ours' textured quads and PCSX2's replay of the game's, in both axes (`dx -0.5` below is the same thing), not display. `compare_menu.menu_pair` and `compare-rerender-ours.py` shift `ours.png` down by the table's offset after the render (bicubic, black above) and record `ours.display_offset` in `pair.json`; **a rerender reads the table, not the record stored in `pair.json`** (it used the stored 2.3 until 2026-11-24), so the three stored PS2 menu pairs move to 2.0 at their next rerender. Compare shots only: play stays centred. Two fresh captures of the three pairs scored over 40 grey at 2.3 against 2.0: Cell 2.86 / 2.70 % against 2.95 / 2.79 %, Grid 2.26 / 2.30 % against 2.41 / 2.45 %, Team 6.37 / 6.32 % against 6.40 / 6.34 % (run 1 / run 2): 0.02 to 0.15 points worse at 2.0 every time, inside the capture-to-capture noise at one offset (0.16, 0.04, 0.05). The hexes that read `dy +0.01` at 2.3 read about `-0.4 px` at 2.0, the same size as `dx`. Other platforms are untouched.
 
 **Result (1280x720), cause settled 2026-10-29 (`pulse-ps2-frame-offset`).** Against PCSX2's frame ours' unselected hexes (3 on Grid Selection, 5
 on Cell Selection) lay a frame-level `dx = +4.19 - 0.00728 x`, `dy = -3.68` (sd 0.04) px off, from **two separate causes**:
@@ -2023,9 +2127,9 @@ on Cell Selection) lay a frame-level `dx = +4.19 - 0.00728 x`, `dy = -3.68` (sd 
   `DBY` (1 to 0) change nothing. The draws themselves are at the XML's coordinates (title bar quad at frame row 0, `XYOFFSET_1` the window
   centre). So `dy` stays `-3.6 to -3.7` px (2.27 frame rows; `DY - 50` would be 2.0) on all eight hexes, the rules, the footer and the
   Main Menu rows: that is the console's own display position, which ours does not model (no display offset in `Space` or the viewport).
-  Confidence 70 that it is `DY`; the remainder over two rows is not explained.
+  Confidence 90 that it is `DY - 50` (2026-11-24: exactly 2.000 rows on a synthetic frame); the rest of the 2.27 rows, 0.46 output px at every size and upscale, is a sampling difference of textured quads, not display (`docs/ps2/aspect-ratio.md`).
 
-`menu_hex_offsets.py` therefore reads **`dy -3.65` as the console's display offset, not a layout error**, and `dx -0.5` as the pair's
+`menu_hex_offsets.py` therefore reads **`dy -3.2` (3.21 px at 720p) as the console's display offset, not a layout error**, and the 0.45 px left over in both axes (`dx -0.5`) as the pair's
 residual. (The decoded frame buffer cannot arbitrate: a dump's VRAM is the state before its packets, so FBP 0 and 140 hold the previous
 frame. `scripts/gs_fb_decode.py` decodes PSMCT32 from it, VRAM at byte 425 of the state; `scripts/gs_patch_display.py` rewrites the display
 registers of a dump for the replay above.) The selected ring: before the selector fix `+15.4 / +8.2` (grid) and `+13.9 / +7.7` (cell) px, 12 px

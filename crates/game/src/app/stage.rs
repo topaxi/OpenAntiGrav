@@ -290,19 +290,23 @@ impl Stage {
         // first frame of picture start on the same tick: `Session::frame` draws
         // before it ticks, and a movie whose voice started a frame late would
         // be a frame late for the whole reel.
-        let renderer = Renderer::new(
+        let mut renderer = frontend_renderer(
             &gpu.device,
             &gpu.queue,
             gpu.output.config.format,
             video_format,
-            loaded.font.clone(),
-            &loaded.sprites,
+            &FrontendFaces {
+                font: &loaded.font,
+                sprites: &loaded.sprites,
+                skin: loaded.menu_skin,
+                title_font: loaded.title_font.as_ref(),
+                buttons_font: loaded.buttons_font.as_ref(),
+            },
         )?;
         // The sequence's rects are in its source's grid, and the renderer maps
         // rects onto the viewport - so it has to be told which grid, or a PS2
         // screen's widgets are drawn a third again too big. See
         // `oag_display::space::Space`.
-        let mut renderer = renderer;
         renderer.set_space(loaded.frontend.space());
         // And the face that renderer draws `Draw::Text` with is the one whose
         // ink the language picker's pointer bands are centred on - measured
@@ -850,3 +854,46 @@ fn demo_screen_overlay(
         .transpose()
         .context("building the demo screen")
 }
+
+/// What the boot sequence's renderer is built from: [`boot::Boot`]'s font, sprites, menu skin and
+/// the two optional faces.
+pub(crate) struct FrontendFaces<'a> {
+    pub(crate) font: &'a oag_ui::font::Atlas,
+    pub(crate) sprites: &'a oag_hud::sprite::Sheet,
+    pub(crate) skin: &'static oag_title::MenuSkin,
+    pub(crate) title_font: Option<&'a oag_ui::font::Atlas>,
+    pub(crate) buttons_font: Option<&'a oag_ui::font::Atlas>,
+}
+
+/// The renderer of the boot sequence, with both glyph slots the title's front end draws with
+/// (`boot::fonts::install_faces`, the call `--screen`, the menus and a language switch make too),
+/// so the live title screen draws the faces and pens a capture of it does.
+pub(crate) fn frontend_renderer(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    format: wgpu::TextureFormat,
+    video_format: Option<VideoFormat>,
+    faces: &FrontendFaces<'_>,
+) -> Result<Renderer> {
+    let mut renderer = Renderer::new(
+        device,
+        queue,
+        format,
+        video_format,
+        faces.font.clone(),
+        faces.sprites,
+    )?;
+    boot::fonts::install_faces(
+        &mut renderer,
+        device,
+        queue,
+        faces.skin,
+        faces.font,
+        faces.title_font.cloned(),
+        faces.buttons_font.cloned(),
+    );
+    Ok(renderer)
+}
+
+#[cfg(test)]
+mod tests;

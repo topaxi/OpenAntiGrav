@@ -407,6 +407,19 @@ fn draw_text_rows(
                 Align::Left,
                 text,
             ));
+            // The focused value blooms, the label and the other rows' values do not: the glow stamp
+            // rides the value's own glyphs and the row's colour pulse (`docs/tools/compare-page.md`,
+            // "Pulse list screens and the pause menu": the haze round `SINGLE RACE`).
+            if selected
+                && entry.is_adjustable()
+                && !inert
+                && menu.unavailable(entry).is_none()
+                && let Some(glow) = skin.glow()
+            {
+                out.push(Draw::GlowText {
+                    value: skin.selected_stamp().unwrap_or(glow.row),
+                });
+            }
             if entry.is_adjustable() && !inert {
                 step_arrows(layout, y, selected, skin.normal(), &mut out);
             }

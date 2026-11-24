@@ -104,9 +104,22 @@ fn face_scale(faces: &FaceScales, font: &str) -> f32 {
         // fix `oag_title::HelpText::scale`'s own doc gives for the
         // identical shape one widget over - see [`face_role`].
         "default" => 1.0,
+        "small" if faces.small_role.is_some() => 1.0,
         "small" => faces.small,
         _ => 1.0,
     }
+}
+
+/// [`face_role`], except that a `small` text draws in the glyph slot that holds the `small`
+/// face when the title has one ([`FaceScales::small_role`]), at the face's own size
+/// ([`face_scale`]).
+pub(super) fn face_role_in(faces: &FaceScales, font: &str) -> Option<&'static str> {
+    if font.eq_ignore_ascii_case("small")
+        && let Some(role) = faces.small_role
+    {
+        return Some(role);
+    }
+    face_role(font)
 }
 
 /// The role a `font` value routes a [`Draw::in_role`] call to - `Default`
@@ -117,11 +130,12 @@ fn face_scale(faces: &FaceScales, font: &str) -> f32 {
 /// because it is the one Pulse face with real lowercase glyph art -
 /// `Pulse_20.fnt`/`Pulse_14.fnt` (`menu`/`small`) give every lowercase
 /// codepoint the identical box its uppercase twin has, measured off both
-/// pressings. Routing a `"small"`-labelled prompt the same way would change
-/// nothing it draws (`Pulse_14` has no lowercase to gain) and would be a
-/// role this crate picked rather than one this build has verified drawing
-/// through - see `docs/ui/menus-original.md`'s "Two faces, not one swapped
-/// for the other" section.
+/// pressings. A `"small"`-labelled prompt gains no lowercase from `Pulse_14`,
+/// but its button glyphs are that face's own 17 px art: they draw through the
+/// glyph slot that holds it ([`face_role_in`], `FaceScales::small_role`) and
+/// not as `Pulse_20`'s 22 px glyph minified - see `docs/ui/menus-original.md`'s
+/// "Two faces, not one swapped for the other" and "The footer's button glyphs are
+/// Pulse_14's" sections.
 ///
 /// **`Buttons`**: Wipeout HD/Fury's own `font="buttons"`,
 /// `ps_buttons.fnt`/`PS_BUTTONS.fnt` (Omega very likely, unverified this
@@ -160,7 +174,7 @@ pub(super) fn face_role(font: &str) -> Option<&'static str> {
     // Pure's `Scroll` and `Stats` roles resolve to the one file, `LTe50325.fnt`
     // (`oag_ui::language::roles`' table), so the one `Stats` glyph slot serves both.
     // A title with no such slot draws the text in the primary face, as before.
-    if font.eq_ignore_ascii_case("scroll") || font.eq_ignore_ascii_case("stats") {
+    if oag_ui::language::roles::names_stats(font) {
         return Some(oag_ui::language::roles::STATS);
     }
     None
@@ -593,7 +607,7 @@ impl NavigationLegend {
     fn draw_prompt(prompt: &Prompt, faces: &FaceScales) -> Draw {
         let scale = face_scale(faces, &prompt.font) * prompt.scale;
         Draw::in_role(
-            face_role(&prompt.font),
+            face_role_in(faces, &prompt.font),
             prompt.x,
             prompt.y,
             scale,
@@ -831,6 +845,9 @@ pub struct TickerLayout {
     /// `description_draws` reads them.
     text_scale: f32,
     text_lines: usize,
+    /// How far apart the description's lines sit, in pixels: the `TextInfo`'s `gap` where the
+    /// file resolves it, [`DESCRIPTION_LINE_GAP`] where it does not.
+    text_gap: f32,
     /// The `TextInfo`'s own `font` name, as authored (Pure: `scroll`).
     text_font: String,
     /// The messages the ticker draws among, the title's `PI_News` rows
@@ -891,6 +908,9 @@ impl TickerLayout {
                     },
                     |lines| lines.max(1.0) as usize,
                 ),
+            text_gap: bar
+                .and_then(|bar| number(globals, bar, "gap"))
+                .unwrap_or(DESCRIPTION_LINE_GAP),
             text_font: bar
                 .and_then(|bar| bar.value("font"))
                 .unwrap_or("default")
@@ -944,10 +964,18 @@ pub const DESCRIPTION_SCALE: f32 = 0.8;
 /// Confidence 70: one offset, five pairs, no authored number.
 pub const DESCRIPTION_TOP: f32 = 1.0;
 
+/// How far apart the description's lines are, in pixels, where the `TextInfo`'s `gap` does not
+/// resolve: Pure's names `FEGlobals->TextInfoGap`, which its `FEGlobals` never declares. **Measured,
+/// not read**: the original's three lines of `menu-team` and of `menu-t-sel` have their ink rows
+/// 222 to 228, 232 to 238 and 242 to 248, a steady 10 px, where the viewport's 32 px shared among
+/// its three lines put ours 10.67 apart (222, 233, 243). Confidence 75: two pairs, three lines each,
+/// one value (`docs/ui/selection-screens.md`, "The description line").
+pub const DESCRIPTION_LINE_GAP: f32 = 10.0;
+
 /// `text` wrapped into the viewport of `layout`, one [`Draw`] a line, in the
 /// `TextInfo`'s own colour and scale ([`DESCRIPTION_SCALE`] where it names
 /// none), at most its line count (the rest is cut: the original's box holds
-/// that many), spread evenly down the viewport's height. The description
+/// that many), [`DESCRIPTION_LINE_GAP`] apart down the viewport. The description
 /// Wipeout Pure types along a selection screen's bottom.
 ///
 /// `since` is the seconds since the screen appeared: the line is wrapped whole and then
@@ -962,7 +990,7 @@ pub fn description_draws(
     since: Option<f32>,
     measure: &dyn Fn(&str, f32) -> f32,
 ) -> Vec<Draw> {
-    let [x, y, width, height] = layout.viewport;
+    let [x, y, width, _] = layout.viewport;
     // No line to lay the text on: nothing to draw, and the pitch below would divide by zero.
     if text.trim().is_empty() || width <= 0.0 || layout.text_lines == 0 {
         return Vec::new();
@@ -995,7 +1023,7 @@ pub fn description_draws(
         - 1;
     let shown = since.map(|since| typein::typed(total, since));
     let mut left = shown.map_or(total, |shown| shown.chars);
-    let pitch = height / layout.text_lines as f32;
+    let pitch = layout.text_gap;
     let mut draws = Vec::new();
     for (index, line) in lines.into_iter().enumerate() {
         let length = line.chars().count();

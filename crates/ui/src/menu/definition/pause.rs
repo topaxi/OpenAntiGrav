@@ -10,6 +10,10 @@ use crate::language::StringTable;
 /// The id of the page [`Definition::open_on_pause_screen`] adds.
 pub const PAUSE_PAGE: &str = "pause";
 
+/// The row id of a row the disc authors that this build has nothing behind, where one is drawn
+/// ([`Definition::open_on_pause_screen_as_authored`]).
+pub const UNBUILT_ROW: &str = "pause_unbuilt";
+
 /// The row id of the project's PHOTO MODE row, on the pause page and where the extras attach it.
 pub const PHOTO_ROW: &str = "photo_mode";
 
@@ -58,6 +62,28 @@ impl Definition {
         mode: &str,
         strings: &StringTable,
     ) -> Pause {
+        self.build_pause_screen(pause, mode, strings, false)
+    }
+
+    /// [`Self::open_on_pause_screen`] for a comparison with the original's frame: a row the
+    /// disc authors that this build has nothing behind (the game manual) is drawn too, as a row
+    /// that opens nothing, so the page lists what the original lists.
+    pub fn open_on_pause_screen_as_authored(
+        &mut self,
+        pause: &PauseMenu,
+        mode: &str,
+        strings: &StringTable,
+    ) -> Pause {
+        self.build_pause_screen(pause, mode, strings, true)
+    }
+
+    fn build_pause_screen(
+        &mut self,
+        pause: &PauseMenu,
+        mode: &str,
+        strings: &StringTable,
+        draw_unbuilt: bool,
+    ) -> Pause {
         let screen = pause.screen_for(mode);
         let options = self.pages.iter().position(|page| page.id == "options");
         let audio = self.pages.iter().position(|page| page.id == "audio");
@@ -86,6 +112,18 @@ impl Definition {
         for row in screen.rows {
             let Some(action) = row.builds else {
                 built.unbuilt.push(row.disc_id);
+                if draw_unbuilt && let Some(label) = strings.get(row.disc_id) {
+                    // Opens the page it is on: a still never activates a row.
+                    let target = self.pages.len();
+                    push(
+                        &mut page,
+                        UNBUILT_ROW,
+                        Entry::Submenu {
+                            label: label.to_string(),
+                            target,
+                        },
+                    );
+                }
                 continue;
             };
             let Some(label) = strings.get(row.disc_id).map(str::to_string) else {

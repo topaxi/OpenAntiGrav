@@ -99,7 +99,7 @@ pub mod selection;
 
 pub(crate) use hex::{hex_image, hex_rect};
 
-pub use draw::{cell_draw_list, cell_help_draw, grid_draw_list};
+pub use draw::{HelpFace, cell_draw_list, cell_help_draw, grid_draw_list};
 pub use medal_art::MedalArt;
 
 #[cfg(test)]
@@ -1332,6 +1332,7 @@ impl Layout {
     fn face_scale(&self, font: &str) -> f32 {
         match font.to_ascii_lowercase().as_str() {
             "default" => 1.0,
+            "small" if self.faces.small_role.is_some() => 1.0,
             "small" => self.faces.small,
             _ => 1.0,
         }

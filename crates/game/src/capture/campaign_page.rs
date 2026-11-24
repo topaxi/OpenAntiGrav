@@ -160,6 +160,8 @@ pub(super) struct Footer<'a> {
     pub pin: Option<oag_ui_screens::campaign::footer::TickerPin>,
     /// The `Default`-role face the ticker's text is measured through.
     pub font: &'a oag_ui::font::Atlas,
+    /// How the title lays its text pens out, for that measure.
+    pub pens: oag_ui::font::Pens,
 }
 
 /// Draws `Campaign Selection`, `Grid Selection` on its first tier, or `Cell
@@ -300,7 +302,7 @@ pub(super) fn campaign_page(
         records,
         crate::records::TICKER_CAPTURE_SEED,
     );
-    let measure = |text: &str| oag_ui::font::measure(footer.font, text);
+    let measure = crate::boot::fonts::text_ink(footer.font, footer.pens);
     let footer_overlay = crate::campaign::static_footer_overlay(&campaign, &faces, &tips, &measure);
     let ticker_draw = campaign.ticker.as_ref().and_then(|layout| {
         oag_ui_screens::campaign::footer::ticker_draw(layout, 0.0, &tips, &faces, &measure)

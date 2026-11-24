@@ -475,11 +475,14 @@ pub fn load_shell(
     // named by a language plugin's `<Font>` slots - see [`load_font`], which
     // used to reach for a constant here and so did not need them.
     let offered_plugins = front_end.offered_languages(archives.layout.serial.as_deref());
-    let languages = load_languages(
-        &mut archives,
-        offered_plugins,
-        front_end.disc_strings,
-        &mut report,
+    let languages = with_overlays(
+        load_languages(
+            &mut archives,
+            offered_plugins,
+            front_end.disc_strings,
+            &mut report,
+        ),
+        front_end.language_overlays(archives.layout.serial.as_deref()),
     );
     steps.lap("languages");
     // Resolved once and threaded through every font/table read below rather
@@ -913,6 +916,7 @@ pub fn load_shell(
         &font,
         menu_font.as_ref(),
         fonts::default_in_own_slot(menu_skin),
+        menu_skin.small_font,
         menu_skin.default_face_is_row_face,
         space,
         title.front_end,
@@ -1441,7 +1445,7 @@ use movies::{
     authored_movie, load_movie, load_movie_sound, load_second_movie, resolve_movie_region,
     resolve_pure_movie_region, same_planes,
 };
-use oag_ui::language::load::{chosen_language, load_languages, load_strings};
+use oag_ui::language::load::{chosen_language, load_languages, load_strings, with_overlays};
 use oag_ui::xml::expand;
 pub use progress::MediaProgress;
 use progress::{loaded, lock_media, starting, watching};

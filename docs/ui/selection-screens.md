@@ -467,9 +467,12 @@ constant: Pure's pens step up to whole pixels and `TextInfoScale` is 0.8 (`docs/
 pens step up to whole pixels"). Its height was a constant offset: on five pairs (`menu-sr-track`, `menu-sr-class`,
 `menu-sr-league`, `menu-t-class`, `menu-t-sel`) the original's ink is rows 222 to 228 where the viewport's 217 plus the
 `TextInfo`'s `y="1"` put ours at 221 to 227, so the first line draws `footer::DESCRIPTION_TOP` (1 px) lower (measured,
-confidence 70). **Open:** why. `TextInfoGap` and `TextInfoNumLines` are undeclared in `FEGlobals` and are the likeliest
-carriers; a one-line description cannot separate a gap from a top offset, and the original's second line has never been
-captured (no Pure description in the walk wraps).
+confidence 70). **Second and third lines (`pure-leftovers`):** a grab of `menu-team` and `menu-t-sel` 2.7 to 2.9 s after the
+screen opens shows all three lines, their ink rows 222, 232 and 242: the lines are 10 px apart (`footer::DESCRIPTION_LINE_GAP`,
+confidence 75; `TextInfoGap` undeclared in `FEGlobals`, the viewport's 32 px shared among three lines would be 10.67). **Mode
+select** types its own line too, `Text->Single Player->Mode->Arcade` (and `Tournament`, `Time Trial`, `Zone`, `Free Play`), which
+ours had left empty; the dashed rule above it follows the line. `TextInfoNumLines` is undeclared, the three `Text` children
+are the lines. The glyphs' own geometry is `docs/ui/menus-original.md`, "Pure's glyph quads are whole pixels".
 
 ### HD's hex grids pan under a finger (2026-10-09)
 

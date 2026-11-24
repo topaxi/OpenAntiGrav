@@ -92,21 +92,23 @@ fn fe_screens_widgets_survive_the_anonymous_screen_wrappers() {
     footer.sort_by(|a, b| a.y.partial_cmp(&b.y).unwrap());
     assert_eq!(footer.len(), 2, "the two footer strips");
 
+    // Authored `height="14"` in viewports 13 rows tall: the viewport cuts the last row
+    // (`docs/ui/menus-original.md`, "A viewport clips its images").
     let (upper, lower) = (footer[0], footer[1]);
     assert_eq!((upper.x, upper.y), (12.0, 236.0));
-    assert_eq!(upper.height, Some(14.0));
+    assert_eq!(upper.height, Some(13.0));
     assert_eq!((upper.u, upper.v), (Some(5.0), Some(27.0)));
     assert_eq!(
         (upper.texture_width, upper.texture_height),
-        (Some(454.0), Some(14.0))
+        (Some(454.0), Some(13.0))
     );
 
     assert_eq!((lower.x, lower.y), (12.0, 249.0));
-    assert_eq!(lower.height, Some(14.0));
+    assert_eq!(lower.height, Some(13.0));
     assert_eq!((lower.u, lower.v), (Some(5.0), Some(52.0)));
     assert_eq!(
         (lower.texture_width, lower.texture_height),
-        (Some(454.0), Some(14.0))
+        (Some(454.0), Some(13.0))
     );
 }
 
@@ -178,14 +180,15 @@ fn the_frame_samples_its_own_patch_of_the_shared_sheet() {
     footer.sort_by(|a, b| a.0[1].partial_cmp(&b.0[1]).unwrap());
     assert_eq!(footer.len(), 2, "the two footer strips");
 
-    assert_eq!(footer[0].0, [12.0, 236.0, 454.0, 14.0]);
+    // 13 rows each: the strips author 14 inside viewports 13 tall.
+    assert_eq!(footer[0].0, [12.0, 236.0, 454.0, 13.0]);
     assert_eq!(
         footer[0].1,
-        [placed.x as f32 + 5.0, placed.y as f32 + 27.0, 454.0, 14.0]
+        [placed.x as f32 + 5.0, placed.y as f32 + 27.0, 454.0, 13.0]
     );
-    assert_eq!(footer[1].0, [12.0, 249.0, 454.0, 14.0]);
+    assert_eq!(footer[1].0, [12.0, 249.0, 454.0, 13.0]);
     assert_eq!(
         footer[1].1,
-        [placed.x as f32 + 5.0, placed.y as f32 + 52.0, 454.0, 14.0]
+        [placed.x as f32 + 5.0, placed.y as f32 + 52.0, 454.0, 13.0]
     );
 }

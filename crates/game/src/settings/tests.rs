@@ -1462,13 +1462,9 @@ fn the_reset_prompt_sits_on_confirms_row_and_only_off_default() {
     )
     .expect("a controller");
     let mut menu = Menu::new(Definition::built_in(&strings).expect("parses"));
-    supply_reset(
-        &mut menu,
-        oag_pulse::TITLE,
-        oag_disc::Platform::Psp,
-        &strings,
-    );
-    for (key, value) in default_seeds(oag_pulse::TITLE, oag_disc::Platform::Psp) {
+    let psp = oag_disc::Platform::Psp;
+    supply_reset(&mut menu, oag_pulse::TITLE, psp, &strings);
+    for (key, value) in default_seeds(oag_pulse::TITLE, psp) {
         menu.seed(key, &value);
     }
     assert!(menu.open("audio"));
@@ -1476,6 +1472,7 @@ fn the_reset_prompt_sits_on_confirms_row_and_only_off_default() {
         crate::prompts::reset_prompt(
             menu,
             Some(&legend),
+            &oag_ui_screens::picker::FaceScales::default(),
             &|_| Vec::new(),
             &|_, text, scale| text.chars().count() as f32 * 6.0 * scale,
             480.0,

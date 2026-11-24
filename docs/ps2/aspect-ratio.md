@@ -322,28 +322,43 @@ px, the 640x448 frame at 16:9).
   side at 1280x720, the whole of the `dx = 4.19 - 0.00728 x` the first PS2
   menu pairs measured. It is `16/9` now. Confidence 85 (one flush edge on two
   screens, plus the fit of the pair transform to the same numbers).
-- **y: a constant 2.3 frame rows lower than the dump's own coordinates, and
-  that is the game's `DISPLAY` register, not ours.** Every draw's coordinates
-  are frame rows (`XYOFFSET_1` is the window centre `(1728, 1824)`; the title
-  bar's quad starts at row 0), and the screenshot puts them `4.6` screenshot
-  rows (2.3 frame rows) lower. Replaying copies of the dump with `DISPLAY1/2.DY`
-  rewritten moves the screenshot by 2 screenshot rows per unit of `DY`: `DY`
-  40, 50, 51, 52 (the game's), 53 gave shifts of +24, +4, +2, 0, -2 rows
-  against the unpatched replay, linear, 1 frame row per `DY`; the game's
-  `DISPLAY2` reads `DY = 52` (`DISPLAY1` too), `DH = 446`, `MAGH = 3`, `DBY = 1`.
-  `DBY` rewritten to 0 changed nothing (identical image). So the picture sits
-  `DY - D0` rows down, with `D0` PCSX2's own default; 2.3 rows measured makes
-  `D0` about 49.7 (the NTSC 448-line `DY` of 50 would give 2.0). A real
-  television shows the same register: the PS2 front end is drawn 2 to 2.3
-  frame rows (about 3.2 px at 720p) below the frame's centre. Confidence 70
-  that it is `DY` (the sweep is exact), 45 on the 0.3-row remainder.
-  **Play does not apply it** (maintainer ruling, 2026-10-29: the port stays
-  centred; a PS2 race would need the 3D view shifted the same way). **The PS2
-  compare pairs do**: `compare_env.DISPLAY_OFFSETS` shifts ours down 2.3 frame
-  rows (3.70 px at 720p) after rendering, recorded as `ours.display_offset` in
-  `pair.json`; the hexes then read `dy +0.01 / -0.01 / +0.00` (Grid) and
-  `+0.01` (Cell) against `-3.65` and `-3.7`. `D0` is not determinable here, so
-  the 2.3 is recorded as measured, not computed from `DY - D0`.
+- **y: exactly 2.000 frame rows lower than the dump's own coordinates, and that is the game's `DISPLAY` register, not ours.**
+  Every draw's coordinates are frame rows (`XYOFFSET_1` is the window centre `(1728, 1824)`; the title bar's quad starts at row 0).
+  The game's `DISPLAY1/2` read `DX = 640`, `DY = 52`, `MAGH = 3`, `DW = 2559`, `DH = 447` and `446`, `DISPFB1/2.DBY = 0` and `1`,
+  `SMODE2.INT = 1`, `FFMD = 0`, `PMODE = 0x8067` (both circuits on, `ALP` 128), identical in the Main Menu, Grid, Cell and Team
+  Selection dumps (2026-11-24, `ps2-fe-layout`). Earlier sweeps of `DY` (40, 50, 51, 52, 53 gave shifts of `+24, +4, +2, 0, -2`
+  screenshot rows against the 52 replay, 1 frame row per unit, `DX` and `DBY` changing nothing) fixed the slope. **The offset
+  itself was measured on a synthetic frame**: `scripts/pcsx2-gs-bar-probe.py make` writes a GS dump whose frame is flat grey with
+  white bars (8 rows, rows 20, 120, 220, 320, 410; columns 40, 320, 600) and the real dump's own display registers, `replay`
+  runs it in PCSX2 (`pcsx2-qt -batch -nogui -- probe.gs`, OpenGL, upscale 2, the pair profile) and `measure` takes each bar's
+  centroid. Result, on the Cell Selection dump and the Main Menu dump: every row bar sits `+4.00` screenshot rows (**2.000 frame
+  rows**) below `2 * (row + 4)`, the scale is exactly 2.000 rows per frame row from row 20 to 410, columns sit within 0.03 px of `2.4875 * (column + 4)`, and with `DY` rewritten to 50 every bar lands at `+0.00`. So PCSX2's NTSC default
+  display offset `D0` is **50** and the picture sits `DY - 50 = 2` rows down. Confidence 90 (two source dumps, five bars each, exact
+  to 0.01 row; the Grid Selection probe gave no screenshot in two tries, cause not found). The earlier "2.3 rows, `D0` about 49.7" was a pair fit, not
+  PCSX2's geometry (see "What is left of 2.3" below).
+- **`pcrtc_antiblur`**: PCSX2's default draws the two display circuits as one source (the dumps' circuit 2 reads one row lower, `DBY = 1`,
+  blended at `ALP` 128: the console's anti-flicker trick). With `pcrtc_antiblur = false` PCSX2 blends them as the hardware does, the
+  centroid moves to **1.5 frame rows** and every edge gains a one-row blur (bars `+3.01` screenshot rows). The pair profile keeps the
+  default (anti-blur on, 2.000 rows); which is the better model of a real television is not hardware-verified (no confidence).
+  `pcrtc_offsets = false` changes nothing here and `pcrtc_overscan = true` ignores `DY` (the picture starts at frame row 0), so
+  neither is a way to get the unshifted frame; the display register is honoured by default. **Play does not apply it** (the port
+  stays centred, maintainer ruling 2026-10-29; a PS2 race would need the 3D view shifted the same way). **The PS2 compare pairs
+  do**: `compare_env.DISPLAY_OFFSETS` shifts ours down 2.0 frame rows (3.21 px at 720p) after rendering, recorded as
+  `ours.display_offset`, and `compare-rerender-ours.py` reads the table, not the stored record.
+- **What is left of 2.3 is not display.** Rendering ours at 796x448, 1592x896, 2389x1344, 3185x1792 (PCSX2 upscale 1 to 4, the replay
+  of the Cell Selection dump against ours, tiled gradient correlation, median of 18 tiles) leaves a residual of `0.46, 0.45, 0.47,
+  0.46` output pixels in y after the exact display shift and `0.71, 0.62, 0.78, 0.74` in x: a constant in **output pixels**, not in
+  frame units, so it is not a layout error of a fixed fraction of a frame pixel (that would shrink 4x from upscale 1 to 4). On
+  1280x720 and 1920x1080 (theirs resized, Lanczos, which a bar probe shows is unbiased to 0.03 px) it reads `0.46` and `0.52` in y.
+  The edges are not one rigid shift: on the Cell Selection frame (796x448, 1 output px per frame px) three rising (dark to
+  bright) edges sit `0.7` rows later in the original and the one falling edge measured sits `0.0` rows apart. It is a difference in how a textured quad's edge is sampled
+  (PCSX2 replays the game's draws at `.5` and `.0625` vertex fractions with its bilinear filter; ours places the XML's coordinates and
+  samples texel centres), not a placement law. Not wired, confidence 45 for "sampling, not placement". `UserHacks_HalfPixelOffset`
+  1, 2, 3 and 5 change nothing; 4 (align to native) moves everything by `0.5 px` and does not remove it.
+  Comparing the two, `compare_env.DISPLAY_OFFSETS` at 2.0 against the old 2.3 on two fresh captures of the three PS2 menu pairs
+  moved the share of pixels over 40 grey by `+0.09, +0.15, +0.03` points (run 1: Cell, Grid, Team) and `+0.09, +0.14, +0.02` (run 2),
+  against a capture-to-capture noise of `0.16, 0.04, 0.05` points at one offset: **inside the noise, slightly worse every time**,
+  because 2.3 absorbed the residual.
 - The decoded frame buffer is not the picture: the dump's VRAM is the state
   *before* the packets, so FBP 0 and FBP 140 hold the previous frame (the
   loading card). The 4 MiB VRAM starts 425 bytes into the state (`state_size -

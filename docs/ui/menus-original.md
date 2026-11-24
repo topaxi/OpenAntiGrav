@@ -397,7 +397,7 @@ own clock (`cpu.status.ticks / 222e6`) ran at 1.0000 of wall time over two 52 s 
 | start | **0.067 s after the pad press** | the eight grabs (0.082, 0.046, 0.044, 0.042, 0.073, 0.069, 0.099, 0.077 s); includes the press-to-screen latency, which cannot be separated |
 | cursor | `_` after the last typed character, **solid while typing**, then **blinking 0.5 s on, 0.5 s off** | every one of the eight partial grabs shows it; after the line completes it toggles every 15 frames of 30. The blink is **free-running, not tied to the cycle**: cycles 2 and 3 of one 52 s League recording toggle in opposite senses (163.2 frames is not a multiple of 30) |
 | wrap | the whole string is wrapped first, then revealed across the lines | Class keeps `AG` on line 1 while line 2 is still empty. **Whether a wrap's space costs a typed character is not measured**: ours counts it (chosen); leaving it out gives 57.6 a second from the same periods, also inside the held-out check |
-| line pitch, advance | 10 px between lines (glyph rows 222, 232, 242); 7.6 px per character in a 7 px cap height | the `Scroll` face's own metrics; **not wired**: ours draws the menu face at the chosen scale 0.7 and a pitch of the viewport height over three lines (10.7 px) |
+| line pitch, advance | 10 px between lines (glyph rows 222, 232, 242); 7.6 px per character in a 7 px cap height | the `Scroll` face's own metrics. **Wired** (`pure-sr-track`, `pure-leftovers`): `LTe50325.fnt` at 0.8 on the snapped pen, lines `DESCRIPTION_LINE_GAP` apart (below, "Pure's text pens step up to whole pixels", "Pure's glyph quads are whole pixels") |
 
 **The authored `<TextInfo delay="1.6">` matches none of these** (the start is 0.07 s, the hold 3.1 s) and is not used.
 **Not measured: whether moving the cursor to another row restarts the line.** Ours restarts it on a row change (chosen, not
@@ -798,6 +798,23 @@ Pure's `Stats` and `Scroll` roles resolve to `LTe50325.fnt` (the table in `oag_u
 
 **Open, same capture:** the record's separators read `0 . 00 . 00` with small mid-height dots and wide gaps at 8x, which is neither this build's `0.00.00` (baseline dots) nor the `0'00"00` the 2x reading suggested; no Latin-1 character drawn in `LTe50325.fnt` as the separator matches the frame (a sweep, 2026-11-01), so the original's format string is not recovered.
 
+## A viewport clips its images (2026-11-23, `pulse-psp-track`)
+
+Pulse's `Skin.xml` draws its two footer strips as 14-row images (`pulse_assets.mip` at `v=27` and `v=52`, `height="14"`) in
+`<Viewport>`s authored `y="236" height="13"` and `y="249" height="13"`. Measured on PPSSPP's frame of Track Select (confidence 85, four
+grabs, and the Ship Select, Grid and Cell pairs read the same): the original's row `y=249` holds the lower strip's first row (grey 72 at
+`x=200`) and **nothing of the upper strip's last row**; ours drew that row (grey 123), a one-pixel line across the whole ticker bar
+(316 of the pair's 2022 differing pixels). So the viewport is a scissor on what it holds, here its bottom edge.
+`oag_ui::screen::Screens::clip_images_to_viewport` cuts an image's height (and its sampled rows) to the viewport's `y + height` when the
+viewport authors `x`, `y`, `width` and `height`. Census (a temporary print in the clip, then `oag-game IMAGE --menu-page main|track-select|ship-select --screenshot` headless; on Pulse PSP it prints exactly the two strips,
+so the route reads the whole tree): **Pulse PSP** (USA) the two strips; **Pulse PS2** (EU) the same two strips, viewports `y=389` and `y=410` 21 rows tall over 23-row images,
+cut to 21 (the three PS2 menu pairs, ours re-rendered with and without the clip against the committed `theirs.png`: pixels over 40 grey fall 38374 to 36284 (Grid), 59487 to 57546
+(Cell), 79328 to 77230 (Team), the bottom 15 % 10820 to 8730, 16001 to 14060, 8937 to 6839; so the law holds on PS2, confidence 80); **Pure PSP** (USA and EU), **HD/Fury**
+(`hdfury-ps3-eu.iso`), **Omega** (`omega-ps4-eu.pkg`) and **2048** (`data/extracted/vita/PCSF00007`, `main`; it authors no Track selection screen): checked, clips nothing.
+Test: `a_viewport_cuts_the_bottom_off_an_image_that_runs_past_it`,
+`menu_layout_ground_truth::pulses_footer_strips_are_cut_to_their_viewports`. Not wired: the top, left and right edges (no image
+overruns them in Pulse), and the strips' slide-in `Key` animation, which moves the image inside the viewport and is cut by it live.
+
 ## Pure's text pens step up to whole pixels (2026-11-23, `pure-sr-track`)
 
 **Law (confidence 85).** On Pure's front end a glyph's ink edge is the pen plus the glyph's left bearing at the
@@ -844,3 +861,158 @@ Checked against the other titles, as the rule asks: **HD**: checked, differs (HD
 `oag_ui::font::ink_width`; no HD pair has been measured for a snapped draw). **Pulse**: not measured; its front end
 keeps the fractional pen, and a Pulse pair's label spacing is the check. **2048 and Omega**: not checkable here
 (no Pure-shaped front end).
+
+
+## The footer's button glyphs are Pulse_14's (2026-11-23, `pulse-fe-leftovers`)
+
+**Law (confidence 90).** `ControlTextConfirmButton`/`BackButton` (and Cell Selection's `HELP` and `CHANGE DIFFICULTY` glyphs) author `font="small"`,
+which Pulse's language plugins resolve to `Pulse_14.fnt`, the 17 px face that is also the `Title` role. Its `ε γ δ β` cells are 17 x 17 (advance 16,
+bearing -1). This build drew them from the `menu` face (`Pulse_20.fnt`, 22 px cells) at `faces.small` = 17/22, a minified resample: the ring was a
+half texel soft and half a pixel off the original's crisp, pixel-aligned one (theirs: square edges 238 and 254 on one pixel each; ours 168 and 98 split
+over two). With the glyph drawn from `Pulse_14` at scale 1 the four rings agree with `theirs.png` to a grey level (`Help` ring 0 px over 40 grey in the
+region, 97 before; difficulty ring 0 of 129; maximum difference 1 to 3 grey; Confirm and Back keep a separate difference, below).
+
+**Wiring.** `oag_title::MenuSkin::small_font` (`Some("Title")` on Pulse PSP only: the renderer's third glyph slot already holds `Pulse_14` under `Title`)
+reaches `oag_ui_screens::picker::FaceScales::small_role`; with it a `font="small"` text is a `Draw::FacedText` in that role at scale 1 (the footer legend,
+the campaign still, the picker's texts) and `faces.small` is not applied. Test: `pulse_menu_ticker_ground_truth::pulses_footer_button_glyphs_draw_in_the_small_face_at_its_own_size`
+(fails with the skin field removed), unit test `a_small_face_in_a_glyph_slot_draws_the_button_glyphs_at_its_own_size`.
+
+Share of pixels over 40 grey on the Cell pair re-rendered with main's binary and with this change alone against the same `theirs.png`: 0.40 % to 0.10 % (522 to 127 px).
+The picker stills (Track, Team) draw their footer through `menu_page::picker_footer`, a second route that built its own `FaceScales`; it takes the skin's `small_font`
+too (and so does the reset prompt, `prompts::footer_faces`), pinned for both stills by `the_stills_footer_glyphs_are_the_small_faces_own_cells` (the brightest pixel of the ring is 246 and 239 from the minified cell, 254 from the 17 px one).
+A prompt-style substitute (`--prompt-style xbox`) still draws on both stills: the `Title` face carries the substitute art like the others.
+
+**Cross-title.** HD, Omega and 2048 author `font="buttons"` and have their own `PS_BUTTONS.fnt` slot (not changed: their grid, cell and Track Select pairs re-render
+byte-identical). Pure's prompts draw in its `Stats` face (unchanged, byte-identical). **Pulse PS2: checked, differs in wiring** - its skin carries no
+third slot (`PS2_MENU_SKIN.title_font` is `None`), so the glyphs keep the menu face; the PS2's `Pulse_14.fnt` carries the six glyphs at its own size
+(`prompt_glyphs_ground_truth`), so this is checked, applies, not wired (a PS2 glyph slot is the open step).
+
+**Open: Confirm and Back dim at the top.** On every Pulse pair the four `NavigationController` texts (the two glyphs and the two words) read dimmer in the
+original over their first ten rows: (original minus background) over ours is 0.58 at `y=252` and 1.0 from about `y=262`, the same ramp on the glyphs and
+the words (row-mean differences -21, -22, -13, -9 ... on both rings), and not on `Help`, which belongs to a later screen. The ramp ends where the lower footer strip
+(`Viewport y=249 height=13`) ends, and `Skin.xml` authors the `NavigationController` before the two strips, so the likely cause is draw order: the original draws the
+strip's translucent lower rows **over** the prompts; ours draws the strips in the frame, under every text. Confidence 50 (not tested: ours has no way to put one
+frame image above a text). 56 px over 40 grey on each of the Cell and Track Select stills.
+
+## A text's pen starts at its first glyph's ink (2026-11-23, `pulse-fe-leftovers`)
+
+**Law (confidence 80).** On Pulse's front end the first glyph's ink starts at the widget's authored `x`, each later glyph's ink sits its font bearing right
+of the pen, and the next pen is the previous ink edge plus the advance less the bearing (`oag_ui::font::pen_step` without the whole-pixel step, started
+at `x` minus the first glyph's bearing; the same measure `font::ink_width` states). `Pulse_14.fnt` gives every letter but `T` a left bearing of -1, so
+the advance-only pen this build used inked every such letter one pixel right of the original's: Track Select's heading `TRACK SELECT` (x 50, `Title` role) had
+ink starts 50, 60, 68, 77, 86, 100, 109, 118, 126, 135, 143 against the original's 50, 59, 67, 76, 85, 99, 108, 117, 125, 134, 143. With the law they agree
+(the two `T`s have bearing 0 and never moved). Applying the bearing **without** shifting the first pen moves the first glyph of every string one
+pixel left wherever its bearing is -1 (prompt glyphs, words; whole-frame 2.71 % on Cell), so the first-glyph rule is part of the law; it differs from Pure's (`pen_step` from `x`, ink at `x` plus the first bearing, rounded
+up).
+
+Wired as `oag_title::MenuSkin::bearing_pens` (`Renderer::set_bearing_pens`, with the faces in `install_faces`): Pulse PSP measured; **Pulse PS2 inherits it from the PSP**
+(its skin sets the same field; the three PS2 pairs improve 0.02 to 0.05 points, 24876 to 24708, 23351 to 22874 and 60066 to 59656 px over 40 grey, so it is not
+a regression there; not measured on the PS2). Share over 40 grey on the four stored Pulse PSP pairs, main's binary against the branch (the glyph face, this pen law and the footer routes together), same
+`theirs.png`: Cell 0.40 % to 0.04 %, Track Select 0.53 % to 0.13 %, Grid 1.41 % to 1.13 %, Team 1.38 % to 0.96 %. Test: `render::tests::a_bearing_pen_starts_the_first_ink_at_x_and_steps_by_bearing`
+(fails with the pen law off), `title_behaviour_data::only_pulse_lays_its_front_end_pens_out_by_bearing`.
+
+Every measure of a drawn text takes the same pen (`oag_ui::font::Pens`: advance, bearing, snapped): the renderer's alignment and wrap, the hint scan and the wrapped legend's tap rectangles (`hints::placed`, `segments`, `piece_ink`), the footer prompts' widths (the `small` ones in `Pulse_14`'s atlas) and the reset prompt's tap rect, the description wrap, the ticker, marquee and wrapped-name measures and the pointer regions. Help paragraphs drawn in the glyph-slot face are measured in it (`cell_help_draw`'s `HelpFace`), or they stack on one another. Tests: `hints::tests::a_bearing_legend_rect_covers_its_drawn_ink`, `boot::tests::a_small_prompt_is_measured_in_the_small_face_on_the_drawn_pen`, `paragraphs_in_a_glyph_slot_face_flow_too`.
+
+**Cross-title: HD, Omega, 2048 checked, not measured.** `Font_MeasureString` is the same bearing arithmetic on HD (`font::ink_width`); whether HD's *draw* uses it has no
+capture here, so those three keep the advance-only pen (all their menu pairs re-render byte-identical with the field off). Pure: its own measured law above.
+
+## Pure's glyph quads are whole pixels (2026-11-23, `pure-leftovers`)
+
+**Law (confidence 85 on the Stats face at 0.8, 75 on the menu face at 1.15 and 0.97).** Each glyph is a PSP sprite: its quad
+starts at the **pen rounded up** (`ceil(pen)`, where the pen is the one `pen_step` carries, not the ink edge), is the glyph box's
+width and height at the widget's scale **rounded down** (`floor(width x scale)` by `floor(height x scale)`), and its texture
+coordinates start **half a texel early** in x (`oag_ui::font::snapped_quad`, `SNAPPED_UV_SHIFT`; no shift in y). The line's ink
+edge, which every layout reads (`snapped_run`: wraps, alignment, the pointer rects), is the last quad's right edge.
+
+Evidence: a fresh PPSSPP software grab of Track Selection (`menu-sr-track`, USA). Free fits of a quad (x edges, y edges, bilinear
+sampling at pixel centres, the Stats atlas dumped from `LTe50325.fnt`) to the ten glyphs of `RACE RECORD`: every glyph fits
+`left = ink-edge law - 0.65`, width 4.95 (box 7 texels, so 5.6 nominal), step 8, height 10.5 to 10.85 (14 texels, 11.2
+nominal). The same fit on ours' frame returns the nominal 5.6 and 11. On the menu face (`FX300ANG.fnt`, `MODESTO` at 1.15) the
+free fit returns widths 1 px under nominal (12.85 to 13.05 against 13.8) and a left edge half a pixel right of the ink edge.
+Read as one convention: quad `[ceil(pen), + floor(w x s)]`, `u` from -0.5. Worked by hand for the `R`'s top bar (texel
+columns 61, 96, 85, 85, 91, 91 % ink, bilinear at pixel centres, 1.4 texels a pixel), it gives 43, 95, 85, 90 and 64 % across
+columns 249 to 253 against the frame's 44, 100, 90, 97 and 58 %, and nothing in 254, where ours drew a fractional quad from the
+ink edge (250, 5.6 wide) with nothing in 249 and a faint 255.
+
+Whole-frame share of pixels over 40 grey on `menu-sr-track` (one `theirs.png`, rendered by main's binary and by this branch) by
+region, ours as drawn before to after:
+
+| region (x, y, w, h) | before | after |
+| --- | ---: | ---: |
+| title (0, 25, 300, 10) | 174 px | 9 |
+| list rows (0, 51, 250, 47) | 76 px | 0 |
+| stat labels and values (240, 172, 240, 38) | 871 px | 108 |
+| description (0, 220, 480, 31) | 360 px | 81 |
+| footer Confirm and Back (0, 254, 480, 9) | 209 px | 101 |
+| **whole frame** | **1.32 %** | **0.26 %** |
+
+The seven Single Player and Tournament pairs, before (main) to after, on one fresh `theirs.png` each: `menu-team` 0.98 % to
+0.20 %, `menu-sr-track` 1.32 to 0.26, `menu-mode` 0.70 to 0.19, `menu-sr-class` 0.44 to 0.12, `menu-sr-league` 0.51 to 0.14,
+`menu-t-class` 0.44 to 0.14, `menu-t-sel` 0.51 to 0.14.
+
+Half-way variants tried on the same frame, whole `menu-sr-track`: an integer quad from the ink edge less one (`ink_left - 1`)
+fixed the Stats face (stats region 871 to 0) and broke the menu face (title 174 to 436, list 76 to 382); a texture shift in y as
+well made every region worse (0.91 %); a width of `round((w - 1) x s)` is as good on the Stats face and worse in the list (31
+px); a u shift of 0.3 to 0.7 texel is within 0.05 points of 0.5, so the half texel is the principled value, not a fit.
+Guards (a review's findings, measured on both Pure faces): no glyph of `LTe50325.fnt` or `FX300ANG.fnt` is under two texels wide, so
+the floor never reaches zero on a measured glyph (a box with ink is still held to one pixel); no box starts left of texel 2 and
+none has ink in the texel before it, so the half-texel shift reads transparent texels on both faces (the shift is clamped at the
+atlas edge for any other face). Every snapped line starts on a whole pixel (`ceil` of its aligned pen), so `snapped_run`, which
+counts from 0, measures it wherever it is placed; the pointer rects of a wrapped or scanned line follow one pen across the
+line and the glyph quads' own extent.
+What is still open: the pen law that ceils the ink edge and the quad that ceils the pen are two readings of one rule that this
+data cannot separate (every Stats pen is fractional), and the remaining 108 px on the stat labels and 101 on the footer are the
+record separators' dots (`0 . 00 . 00`) and the `Confirm` glyph rings.
+
+The second row of the description is **10 px** below the first (ink rows 222, 232, 242), not the viewport's 32 px shared among its
+three lines (222, 233, 243): `oag_ui_screens::campaign::footer::DESCRIPTION_LINE_GAP`, confidence 75, on a late grab of
+`menu-team` and `menu-t-sel` that shows all three lines (`TextInfoGap` is named by `Skin.xml` and undeclared in `FEGlobals`).
+`menu-team` 1.75 % to 1.54 % on that frame for the gap alone.
+
+Checked against the other titles: **Pulse and HD**: not applicable, the snapped quad is `MenuSkin::snapped_pens` (Pure only); a
+Pulse and an HD menu page rendered by main's binary and this one are byte for byte equal. **2048 and Omega**: not checkable
+(no Pure-shaped front end).
+
+## Pure's right-aligned text ends on its ink (2026-11-23, `pure-letter-spacing`)
+
+**Law (confidence 70, one widget in one frame).** A right-aligned string in a snapped face puts its **last glyph's quad edge on
+the anchor** (`oag_ui::font::snapped_run`'s `ink_right`), not its pen end: the pen starts `ink_right` to the left of `x`, rounded up
+(`Renderer::push_text`). Evidence: the title screen's `HOLD ON!` (`Skin.xml`: `font="Stats"`, `scale="0.7"`, `align="right"`,
+`x="416"`, `DisplayType="TELETYPE"`; PPSSPP software, USA, the pair `menu-title`). The original's seven glyphs start at columns 366, 373,
+380, 388, 400, 407, 415; aligned by pen end ours started at 362, 369, 376, 383, 397, 403, 410 (the same pitch, 4 px left: the last glyph's
+trailing advance, 4.2 px for the `!`); on the ink edge ours starts 366, 373, 380, 387, 401, 407, 414, each within 1 px. Only this
+widget measures it: no other captured Pure frame has a right-aligned snapped string (`menu-main`, `-team`, `-mode`, `-sr-*`, `-t-*`
+and `-pause` re-rendered before and after are pixel for pixel equal). A centred string is still placed by the pen end (not measured). The pointer rectangles over a drawn line (`hints::scan`) follow
+the same rule, so a tap lands on the ink; our own `menu.toml` pages' right-hand value columns on Pure now end their ink on
+`value_right` too (no Pure pair draws one).
+
+**`HOLD ON!` is the `Stats` face.** Ours had drawn it in the menu face (`FX300ANG.fnt`, wide, bold): `Frontend::draw_screen_over`
+emitted every screen text as a plain `Draw::Text`. A `font="Stats"` or `"Scroll"` text now draws as `Draw::FacedText { role: "Stats" }`
+at its authored scale when the title's menu skin names a Stats face (`MenuSkin::stats_font`, Pure only), which is how the team panel,
+the circuit panel and the description already reached `LTe50325.fnt`. No ratio against the `Default` atlas applies (that ratio
+corrects a text drawn in the wrong atlas). Pulse, HD, 2048 and Omega name no such face and draw as before.
+
+**Why the title pair rose from 0.51 to 0.58 mean grey when the glyphs became whole-pixel sprites (`pure-leftovers`).** Measured with
+the binary of that merge's first parent against main's, both re-rendered against the same `theirs.png`: 0.23 % to 0.42 % of pixels over
+40 grey. By band (`x 240-480, y 172-209` / `y 220-250` / the rest): 46, 126, 114 px to 152, 133, 257. The rise is the `PRESS START
+BUTTON` row (`font="Title"`, scale 1.5, the menu face, y 202-216, across the first and third band), **not** `HOLD ON!` (the typed band,
+wrong in both binaries: 126 and 133 px). On `PRESS START BUTTON` the merge moved the glyph starts onto the original's (ink-left 101,
+119, 137, 155, 173, 200 ... in the original and on main, one column left in the parent) and the edge sampling off it: the pixels over 40
+grey in the row's box went 168 to 416, spread evenly over the letters' rows. **Open, not fixed**: the half-texel `u` shift
+(`SNAPPED_UV_SHIFT`) is 0.75 px at scale 1.5 against 0.4 at 0.8 and 0.58 at 1.15; a shift of 0.3 to 0.4 px at every scale takes the
+title pair from 0.32 % to 0.10 to 0.13 % over 40 grey and leaves `menu-sr-track` and `menu-team` at 0.24 to 0.25 and 0.18, but
+`menu-pause` goes 2.51 % to 2.60 % and every pair's mean grey rises 0.01 to 0.03 (0.73 to 0.75 on `menu-main`), so one fixed pixel
+shift is not the law either. Shortening the quad's height by 1 px or 0.5 px, or using `floor((h - 1) x s)`, at scales over 1.3 made
+the pair worse (0.97 %, 0.45 %, 0.99 %). The law behind the original's 1.5 quads needs a second measurement at a scale over 1.3.
+
+**`HOLD ON!` is fixed on its own account** (above): the typed band of the title pair 133 px to 8, the whole pair 0.42 % to 0.32 % over
+40 grey, mean grey 0.58 to 0.53 (the first parent's 0.51).
+
+**The typed description's spacing needs no further law.** Re-measured on main, glyph ink-left columns of the typed lines against the
+originals' (`theirs.png`), line by line: `menu-main` 0.19 px and 0.24 px mean absolute residual (8 of 43 and 10 of 45 glyphs one pixel
+off), `menu-sr-track` line 1 0.26 px (11 of 47). The one-pixel misses on `menu-main` line 1 are the first glyph of every word after the
+first (ours one pixel right, the rest of the word equal); neither exact decimal against `f32` arithmetic, an unsnapped space, nor a
+space of another advance (3 to 10 texels, 28 mismatches in every variant over three lines) removes them, so they are sub-pixel quad
+detail of the original, unexplained. The typed band's remaining pixels over 40 grey: `menu-main` 150, `menu-mode` 142, `menu-sr-track` 75,
+`menu-t-sel` 46 (of 480x32). `menu-mode`'s are the reveal count, not the spacing: the original has typed three characters more (`CHOI_`
+against ours `C_`), 50 ms at 58 a second, inside the pair clock's stated two-character error ("The pair clock").

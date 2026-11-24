@@ -311,7 +311,11 @@ impl Session {
                     .buttons_font
                     .clone()
                     .filter(|_| shell.menu_skin.stats_font.is_some()),
-                snapped_pens: shell.menu_skin.snapped_pens,
+                small_atlas: shell
+                    .title_font
+                    .clone()
+                    .filter(|_| shell.menu_skin.small_font.is_some()),
+                pens: crate::boot::fonts::pens_of(shell.menu_skin),
                 frame: if pause_view.is_some() {
                     shell.frame.without_marks()
                 } else if pause_scrim.is_some() {

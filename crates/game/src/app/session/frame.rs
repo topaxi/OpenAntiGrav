@@ -16,7 +16,7 @@ use oag_ui::frontend::{self};
 /// Ticks a network race may stand ended with nobody finished before the menus return: one
 /// second. **Chosen.**
 const NET_OVER_TICKS: u32 = 60;
-use oag_ui::{font, menu};
+use oag_ui::menu;
 
 /// What the end screens of a multi-window race read from every seat, not only the keyboard's
 /// slot, besides Back (`Roles::back`): the menu's move and confirm, the photo's spectator pad.
@@ -766,7 +766,7 @@ impl Session {
                         &stage.menu,
                         &stage.skin,
                         &|button| self.controls.bound_keys(button),
-                        &|text| font::measure(&stage.text_atlas, text),
+                        &crate::boot::fonts::text_ink(&stage.text_atlas, stage.pens),
                         None,
                         &stage.frame,
                         // The same fact `Session::draw`'s own call reads off

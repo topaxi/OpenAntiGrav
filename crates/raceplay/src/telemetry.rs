@@ -307,7 +307,7 @@ impl Race {
             now_playing: if primary { self.now_playing() } else { None },
             radar_blips: self.radar_blips(slot),
         };
-        if let Some(hud) = self.view.capture_hud.filter(|_| primary) {
+        if let Some(hud) = self.view.capture_hud.as_ref().filter(|_| primary) {
             readout.place = hud.place;
             readout.lap = hud.lap;
             readout.lap_ticks = hud.lap_ticks;
@@ -327,6 +327,9 @@ impl Race {
                     .pickup
                     .or(Some(oag_tables::weapons::Weapon::Autopilot));
                 readout.sub_weapon = Some(oag_hud::SubWeapon::Autopilot(seconds));
+            }
+            if let Some(pinned) = hud.head_to_head {
+                readout.head_to_head = Some(self.core.pinned_head_to_head(slot, pinned));
             }
         }
         if finished.is_some() {
@@ -494,6 +497,26 @@ impl RaceSim {
 }
 
 impl SimRace {
+    #[cfg(feature = "view")]
+    /// The readout a capture pins ([`crate::CaptureHeadToHead`]): its gap and leader, with the team
+    /// names the real readout would carry, read off the first other craft in the race.
+    fn pinned_head_to_head(
+        &self,
+        player: usize,
+        pinned: crate::CaptureHeadToHead,
+    ) -> oag_hud::HeadToHead {
+        let world = &self.sim.world;
+        let opponent =
+            (0..world.ship_count as usize).find(|&slot| slot != player && world.ships[slot].active);
+        oag_hud::HeadToHead {
+            gap: pinned.gap,
+            player_leads: pinned.player_leads,
+            own_team: None,
+            other_team: opponent.and_then(|slot| self.outcome.slot_teams.get(slot).cloned()),
+            stacked: false,
+        }
+    }
+
     #[cfg(feature = "view")]
     /// Head2Head's gap readout: the unwrapped-progress difference between the
     /// player and the one opponent, and who leads. `None` outside Head2Head.

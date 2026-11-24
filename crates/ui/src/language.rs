@@ -19,7 +19,8 @@
 //! German, `PI010` Spanish, `PI011` Italian and `PI012` English; on Pure the
 //! same four non-English plugins keep their ids but English is `PI000`, not
 //! `PI012` - `PI012` on Pure is an unrelated American-spelling patch with no
-//! `<Font>` block of its own. Each mapping was recovered by reading every
+//! `<Font>` block of its own, applied as a string overlay
+//! ([`Language::overlays`]). Each mapping was recovered by reading every
 //! plugin on its own disc, never carried over from the other title. See
 //! `docs/formats/pure-status.md#the-language-plugin-id-space-is-pures-own-not-pulses`.
 //!
@@ -115,6 +116,13 @@ pub mod roles {
     /// `LTe50325.fnt`, a small letter-spaced face (the table above), where Pulse
     /// fills it with `Pulse_14.fnt`.
     pub const STATS: &str = "Stats";
+
+    /// Whether a widget's authored `font` names the `Stats` slot: `Stats` itself or `Scroll`,
+    /// which Pure resolves to the same file (the table above).
+    #[must_use]
+    pub fn names_stats(font: &str) -> bool {
+        font.eq_ignore_ascii_case("stats") || font.eq_ignore_ascii_case("scroll")
+    }
 }
 
 /// One language the disc ships.
@@ -155,6 +163,10 @@ pub struct Language {
     /// `fonts` are the disc's English ones, so the table underneath it is the
     /// disc's English text, and this names what overlays it.
     pub disc_strings: Option<&'static str>,
+    /// The overlay plugins this language's release loads over its strings
+    /// ([`oag_title::FrontEnd::language_overlays`]), set by
+    /// [`load::with_overlays`]; [`load::load_strings`] lays each over the table.
+    pub overlays: Vec<String>,
 }
 
 impl Language {
@@ -207,6 +219,7 @@ impl Language {
             name,
             entries,
             disc_strings: None,
+            overlays: Vec::new(),
         })
     }
 }
@@ -224,6 +237,21 @@ impl StringTable {
         Self {
             entries: string_entries(&parse(xml)).into_iter().collect(),
         }
+    }
+
+    /// What an overlay plugin's `StringTable` says for `language`.
+    ///
+    /// An overlay states several languages in one file, and an entry's `Language`
+    /// attribute opens a section that every entry after it belongs to until the next
+    /// one (`PI012`: `Language="English"` on its first entry, `Language="French"`
+    /// partway down), so a flat read would let the last language's text win every id.
+    /// Entries before any marker belong to no language.
+    #[must_use]
+    pub fn section(xml: &str, language: &str) -> HashMap<String, String> {
+        let mut current = None;
+        let mut out = HashMap::new();
+        section_entries(&parse(xml), language, &mut current, &mut out);
+        out
     }
 
     /// Looks up an id, **exactly**: what this copy of the table literally says.
@@ -551,6 +579,30 @@ fn collect_font_borders(node: &Node, out: &mut Vec<(String, u32)>) {
 }
 
 /// Every `<Entry ID=... String=...>` in the tree, in document order.
+fn section_entries<'a>(
+    node: &'a Node,
+    language: &str,
+    current: &mut Option<&'a str>,
+    out: &mut HashMap<String, String>,
+) {
+    if node.name.eq_ignore_ascii_case("Entry") {
+        if let Some(marker) = node.attr("Language") {
+            *current = Some(marker);
+        }
+        if let Some(id) = node.attr("ID")
+            && current.is_some_and(|marker| marker.eq_ignore_ascii_case(language))
+        {
+            out.insert(
+                id.to_string(),
+                node.attr("String").unwrap_or_default().to_string(),
+            );
+        }
+    }
+    for child in &node.children {
+        section_entries(child, language, current, out);
+    }
+}
+
 fn string_entries(node: &Node) -> Vec<(String, String)> {
     let mut out = Vec::new();
     collect_entries(node, &mut out);
@@ -625,6 +677,42 @@ mod tests {
         assert_eq!(table.len(), 2);
         assert_eq!(table.get("FE_CONFIRM"), Some("Confirm"));
         assert_eq!(table.get("BOOT_PRESS_START"), Some("Press START button"));
+    }
+
+    /// Trimmed to shape from `Data\Plugins\PI012\Definition.xml`: one marker opens a
+    /// section that holds until the next, and an id repeats across sections.
+    #[test]
+    fn an_overlay_section_runs_to_the_next_language_marker() {
+        let xml = r#"<StringTable>
+            <Entry ID="before any marker" String="nobody's"></Entry>
+            <Entry Language="English" ID="On Line" String="Download"></Entry>
+            <Entry ID="Memory" String="At least"></Entry>
+            <Entry Language="French" ID="On Line" String="Telechargement"></Entry>
+            <Entry ID="Memory" String="REQUIS"></Entry>
+            <Entry Language="Spanish" ID="On Line" String="Descarga"></Entry>
+          </StringTable>"#;
+        let english = StringTable::section(xml, "english");
+        assert_eq!(english.len(), 2);
+        assert_eq!(english["On Line"], "Download");
+        assert_eq!(english["Memory"], "At least");
+        let french = StringTable::section(xml, "French");
+        assert_eq!(french["On Line"], "Telechargement");
+        assert_eq!(french["Memory"], "REQUIS");
+        assert_eq!(StringTable::section(xml, "Spanish").len(), 1);
+        assert!(StringTable::section(xml, "German").is_empty());
+    }
+
+    #[test]
+    fn a_marker_with_no_id_still_closes_the_section_before_it() {
+        let xml = r#"<StringTable>
+            <Entry Language="English" ID="a" String="1"></Entry>
+            <Entry Language="German"></Entry>
+            <Entry ID="b" String="2"></Entry>
+          </StringTable>"#;
+        let english = StringTable::section(xml, "English");
+        assert_eq!(english.len(), 1);
+        assert!(english.contains_key("a"));
+        assert_eq!(StringTable::section(xml, "German")["b"], "2");
     }
 
     #[test]

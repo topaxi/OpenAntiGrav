@@ -25,6 +25,9 @@ pub(super) struct HudStretch {
     /// Whether each glyph's ink edge steps up to a whole grid unit, see
     /// [`Renderer::set_snapped_pens`].
     pub(super) snapped_pens: bool,
+    /// Whether the pen starts at the first glyph's ink and steps by bearing, see
+    /// [`Renderer::set_bearing_pens`].
+    pub(super) bearing_pens: bool,
     /// Whether right- and centre-aligned text ends on its last glyph's ink, see
     /// [`Renderer::set_ink_aligned_text`].
     pub(super) ink_aligned: bool,
@@ -40,6 +43,7 @@ impl Default for HudStretch {
             pixels_per_grid: 0.0,
             whole_advances: false,
             snapped_pens: false,
+            bearing_pens: false,
             ink_aligned: false,
             half_unit_glyphs: false,
         }
@@ -82,6 +86,16 @@ impl HudStretch {
             (value * self.pixels_per_grid).round() / self.pixels_per_grid
         } else {
             value
+        }
+    }
+
+    /// How a text's pen is laid out, the choice every measure of a draw shares
+    /// ([`oag_ui::font::Pens`]): a snapped pen first, whole-pixel advances keep their own law.
+    pub(super) fn pens(&self) -> oag_ui::font::Pens {
+        if self.whole_advances && !self.snapped_pens {
+            oag_ui::font::Pens::Advance
+        } else {
+            oag_ui::font::Pens::of(self.snapped_pens, self.bearing_pens)
         }
     }
 
@@ -141,6 +155,20 @@ impl Renderer {
     /// only; the race HUD keeps [`Self::set_whole_pixel_advances`].
     pub fn set_snapped_pens(&mut self, on: bool) {
         self.hud.snapped_pens = on;
+    }
+
+    /// Starts each text's first glyph's ink at its x and sits every later glyph's ink its bearing
+    /// right of the pen (`oag_title::MenuSkin::bearing_pens`), where the pen otherwise steps by the
+    /// advance alone. Ignored while [`Self::set_snapped_pens`] or whole-pixel advances are on.
+    pub fn set_bearing_pens(&mut self, on: bool) {
+        self.hud.bearing_pens = on;
+    }
+
+    /// Whether the snapped pens are on ([`Self::set_snapped_pens`]).
+    #[cfg(test)]
+    #[must_use]
+    pub(crate) fn snapped_pens(&self) -> bool {
+        self.hud.snapped_pens
     }
 
     /// Ends right- and centre-aligned text on its last glyph's ink rather than its advance

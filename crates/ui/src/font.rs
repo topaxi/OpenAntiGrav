@@ -1069,16 +1069,57 @@ pub fn pen_step(cell: &Cell, scale: f32, x: f32, snap: bool) -> (f32, f32) {
     )
 }
 
+/// How far, in atlas texels, the texture coordinates of a glyph on Pure's snapped pen start before
+/// its box: the original samples each glyph half a texel to the left of where the box begins
+/// (`docs/ui/menus-original.md`, "Pure's glyph quads are whole pixels"). Horizontal only.
+pub const SNAPPED_UV_SHIFT: f32 = 0.5;
+
+/// The quad of one glyph on Pure's snapped pen, in screen units: whole pixels, as a PSP sprite
+/// is.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SnappedQuad {
+    /// The pen rounded up (the quad starts at the pen, not at the ink: the box's bearing is in
+    /// the texture).
+    pub left: f32,
+    /// The box's width at `scale`, rounded down, at least one pixel for a box with ink.
+    pub width: f32,
+    /// The box's height at `scale`, rounded down.
+    pub height: f32,
+}
+
+/// [`SnappedQuad`] of `cell` with the pen before it at `pen` and `scale` screen units per atlas
+/// texel. Measured on every Pure face (`docs/ui/menus-original.md`, "Pure's glyph quads are whole
+/// pixels"); not read from the executable.
+#[must_use]
+pub fn snapped_quad(cell: &Cell, scale: f32, pen: f32) -> SnappedQuad {
+    // A box with ink is at least one pixel: a one-texel glyph at a scale under 1 would vanish.
+    // No glyph of Pure's two faces is under two texels, so the floor alone decides on every
+    // measured glyph.
+    let whole = |texels: u32| {
+        if texels == 0 {
+            0.0
+        } else {
+            (texels as f32 * scale).floor().max(1.0)
+        }
+    };
+    SnappedQuad {
+        left: pen.ceil(),
+        width: whole(cell.width),
+        height: whole(cell.height),
+    }
+}
+
 /// Where a line of text ends when it is drawn on the snapped pen ([`pen_step`]) from a whole-unit
 /// origin: the single measure every layout of Pure's front end (wrap, alignment, hit rectangles)
 /// reads, so that none of them disagrees with the draw.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SnappedRun {
-    /// The pen after the last glyph (its advance past the snapped ink edge): what an aligned
-    /// string is placed by (which edge a right- or centre-aligned string is placed by is chosen:
-    /// no captured Pure frame has one in a snapped face).
+    /// The pen after the last glyph (its advance past the snapped ink edge): what a centred
+    /// string is placed by (chosen: no captured Pure frame has one in a snapped face). A
+    /// right-aligned string is placed by [`Self::ink_right`] instead (`docs/ui/menus-original.md`,
+    /// "Pure's right-aligned text ends on its ink").
     pub end: f32,
-    /// The right edge of the last glyph's ink: where the drawn text stops.
+    /// The right edge of the last glyph's quad: where the drawn text stops.
     pub ink_right: f32,
 }
 
@@ -1094,21 +1135,21 @@ pub fn snapped_run(atlas: &Atlas, text: &str, scale: f32) -> SnappedRun {
         ink_right: 0.0,
     };
     for cell in text.chars().filter_map(|c| atlas.cell(c)) {
-        let (left, next) = pen_step(&cell, scale, run.end, true);
-        run.ink_right = cell.ink.mul_add(scale, left);
-        run.end = next;
+        let quad = snapped_quad(&cell, scale, run.end);
+        run.ink_right = quad.left + quad.width;
+        run.end = pen_step(&cell, scale, run.end, true).1;
     }
     run
 }
 
 /// The width `text` draws at `scale` from its origin: [`snapped_run`]'s ink edge on a snapped
-/// pen, the fractional advance sum otherwise.
+/// pen, [`ink_width`] on a bearing pen, the fractional advance sum otherwise.
 #[must_use]
-pub fn run_width(atlas: &Atlas, text: &str, scale: f32, snapped: bool) -> f32 {
-    if snapped {
-        snapped_run(atlas, text, scale).ink_right
-    } else {
-        measure(atlas, text) * scale
+pub fn run_width(atlas: &Atlas, text: &str, scale: f32, pens: Pens) -> f32 {
+    match pens {
+        Pens::Snapped => snapped_run(atlas, text, scale).ink_right,
+        Pens::Bearing => ink_width(atlas, text, scale, false),
+        Pens::Advance => measure(atlas, text) * scale,
     }
 }
 
@@ -1122,20 +1163,14 @@ pub fn run_width(atlas: &Atlas, text: &str, scale: f32, snapped: bool) -> f32 {
 /// text.
 #[must_use]
 pub fn wrap(atlas: &Atlas, text: &str, scale: f32, max_width: f32) -> Vec<String> {
-    wrap_pens(atlas, text, scale, max_width, false)
+    wrap_pens(atlas, text, scale, max_width, Pens::Advance)
 }
 
-/// [`wrap`] on the pen the draw lays out: `snapped` measures each candidate line by [`ink_width`]'s
-/// snapped pass, as a front end whose pens step up to whole units ([`pen_step`]) draws it, and
-/// otherwise by the fractional advance sum.
+/// [`wrap`] on the pen the draw lays out ([`run_width`] of `pens`): a front end whose pens step up
+/// to whole units ([`pen_step`]) or by bearing is wrapped by the width it draws at, otherwise by
+/// the fractional advance sum.
 #[must_use]
-pub fn wrap_pens(
-    atlas: &Atlas,
-    text: &str,
-    scale: f32,
-    max_width: f32,
-    snapped: bool,
-) -> Vec<String> {
+pub fn wrap_pens(atlas: &Atlas, text: &str, scale: f32, max_width: f32, pens: Pens) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     let mut line = String::new();
     for word in text.split_whitespace() {
@@ -1144,7 +1179,7 @@ pub fn wrap_pens(
         } else {
             format!("{line} {word}")
         };
-        if !line.is_empty() && run_width(atlas, &candidate, scale, snapped) > max_width {
+        if !line.is_empty() && run_width(atlas, &candidate, scale, pens) > max_width {
             out.push(std::mem::take(&mut line));
             line = word.to_string();
         } else {
@@ -1183,7 +1218,10 @@ fn solid_patch(coverage: &mut [u8], width: u32, x: u32, y: u32) -> Cell {
 }
 
 mod border;
+mod pens;
 mod reduce;
+
+pub use pens::Pens;
 
 #[cfg(test)]
 mod tests {
@@ -1394,19 +1432,21 @@ mod tests {
         assert_eq!(measure(&atlas, "A B"), 18.0);
     }
 
-    /// The run of a string is the pen steps of [`pen_step`], the last glyph included.
+    /// The run of a string is the pen steps of [`pen_step`] and ends at the last glyph's quad ([`snapped_quad`]).
     #[test]
     fn a_snapped_run_ends_on_the_last_glyphs_snapped_ink() {
         let atlas = Atlas::build();
         let cell = atlas.cell('A').expect("a glyph");
         let run = snapped_run(&atlas, "AAA", 0.7);
-        let (mut x, mut left) = (0.0, 0.0);
+        let (mut x, mut right) = (0.0, 0.0);
         for _ in 0..3 {
-            (left, x) = pen_step(&cell, 0.7, x, true);
+            let quad = snapped_quad(&cell, 0.7, x);
+            right = quad.left + quad.width;
+            x = pen_step(&cell, 0.7, x, true).1;
         }
-        assert_eq!((run.end, run.ink_right), (x, left + cell.ink * 0.7));
-        assert_eq!(run_width(&atlas, "AAA", 0.7, true), run.ink_right);
-        assert_eq!(run_width(&atlas, "AAA", 0.7, false), 18.0 * 0.7);
+        assert_eq!((run.end, run.ink_right), (x, right));
+        assert_eq!(run_width(&atlas, "AAA", 0.7, Pens::Snapped), run.ink_right);
+        assert_eq!(run_width(&atlas, "AAA", 0.7, Pens::Advance), 18.0 * 0.7);
         assert_eq!(snapped_run(&atlas, "", 0.7).ink_right, 0.0);
     }
 

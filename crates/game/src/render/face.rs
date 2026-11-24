@@ -172,4 +172,12 @@ impl super::Renderer {
         self.buttons_atlas = atlas;
         self.buttons_role = role;
     }
+
+    /// The role the third glyph slot holds, `None` while it is empty: what a `FacedText` in that
+    /// role draws from.
+    #[cfg(test)]
+    #[must_use]
+    pub(crate) fn third_slot_role(&self) -> Option<&'static str> {
+        self.buttons_atlas.as_ref().map(|_| self.buttons_role)
+    }
 }

@@ -32,8 +32,8 @@ use crate::render::to_grid;
 use oag_display::space::Space;
 use oag_gameplay::input::Button;
 use oag_input::Controls;
+use oag_ui::menu;
 use oag_ui::pointer::Pointer;
-use oag_ui::{font, menu};
 use oag_ui_screens::picker;
 
 use crate::app::menu_stage::MenuStage;
@@ -111,9 +111,12 @@ pub(super) fn menu_pointer(
         Some(view) => {
             oag_ui_screens::pause::regions(&view.screen, view.table, &stage.menu, &stage.skin)
         }
-        None => menu::pointer::regions(&stage.menu, &stage.skin, &stage.frame, &|text| {
-            font::measure(&stage.text_atlas, text)
-        }),
+        None => menu::pointer::regions(
+            &stage.menu,
+            &stage.skin,
+            &stage.frame,
+            &crate::boot::fonts::text_ink(&stage.text_atlas, stage.pens),
+        ),
     };
     let hit = pointer
         .at

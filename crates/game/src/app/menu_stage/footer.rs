@@ -5,7 +5,6 @@
 //! plain move (`MenuStage::render` drew it inline before); the ticker half
 //! is new - see `MenuStage::render`'s own call site for both.
 
-use oag_ui::font;
 use oag_ui::frontend::Draw;
 use oag_ui_screens::picker;
 
@@ -53,7 +52,19 @@ impl MenuStage {
         let Some(legend) = &self.nav_legend else {
             return Vec::new();
         };
-        legend.draw_gated(&picker::FaceScales::default(), self.menu.depth() > 1)
+        // A pause screen laid out as the front end's own list (Pulse's) keeps the `Confirm` prompt and
+        // loses the player's tag, which belongs to the frame bar the pause screen does not draw
+        // (`docs/ui/pause-menu.md`, "Pulse").
+        if self.pause_scrim.is_some() {
+            return legend
+                .clone()
+                .with_tag("")
+                .draw_gated(&picker::FaceScales::default(), self.menu.depth() > 1);
+        }
+        legend.draw_gated(
+            &crate::prompts::footer_faces(&self.skin),
+            self.menu.depth() > 1,
+        )
     }
 
     /// The footer's own scrolling tip ticker, at [`Self::ticker_elapsed`] -
@@ -80,7 +91,7 @@ impl MenuStage {
             return None;
         }
         let layout = self.ticker.as_ref()?;
-        let measure = |text: &str| font::measure(&self.default_atlas, text);
+        let measure = crate::boot::fonts::text_ink(&self.default_atlas, self.pens);
         let draw = oag_ui_screens::campaign::footer::ticker_draw(
             layout,
             self.ticker_elapsed,
@@ -103,7 +114,7 @@ impl MenuStage {
         let measure = crate::boot::fonts::description_ink(
             &self.default_atlas,
             self.stats_atlas.as_ref(),
-            self.snapped_pens,
+            self.pens,
         );
         oag_ui_screens::campaign::footer::description_draws(
             layout,

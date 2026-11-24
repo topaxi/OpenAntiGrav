@@ -54,7 +54,8 @@ fn rgba_of(png: &[u8], width: usize, height: usize) -> Vec<u8> {
         .collect()
 }
 
-fn frame(image: &Path, scratch: &Path, name: &str, boost: Option<&str>) -> Vec<u8> {
+/// A posed Pulse PSP frame in `mode` with `extra` capture flags on the command line.
+fn frame_in(image: &Path, scratch: &Path, name: &str, mode: &str, extra: &[&str]) -> Vec<u8> {
     let out = scratch.join(format!("{name}.png"));
     let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"));
     command
@@ -76,7 +77,7 @@ fn frame(image: &Path, scratch: &Path, name: &str, boost: Option<&str>) -> Vec<u
             "--ticks",
             "0",
         ])
-        .args(["--mode", "time_trial", "--class", "venom"])
+        .args(["--mode", mode, "--class", "venom"])
         .args(["--track", r"Data\Environments\16_Track\track.vex"])
         .arg("--pose=-118.4,-49.2,-702.0,2.8")
         .args(["--hud-state", "5,2,29.4,39.3,562.9,99.4,56.34"])
@@ -85,11 +86,22 @@ fn frame(image: &Path, scratch: &Path, name: &str, boost: Option<&str>) -> Vec<u
         .env("XDG_CONFIG_HOME", scratch.join("config"))
         .env("XDG_DATA_HOME", scratch.join("data"))
         .env("XDG_STATE_HOME", scratch.join("state"));
-    if let Some(phase) = boost {
-        command.args(["--hud-boost-phase", phase]);
-    }
+    command.args(extra);
     assert!(command.status().expect("running oag-game").success());
     rgba_of(&std::fs::read(&out).expect("the frame"), 480, 272)
+}
+
+fn frame(image: &Path, scratch: &Path, name: &str, boost: Option<&str>) -> Vec<u8> {
+    match boost {
+        Some(phase) => frame_in(
+            image,
+            scratch,
+            name,
+            "time_trial",
+            &["--hud-boost-phase", phase],
+        ),
+        None => frame_in(image, scratch, name, "time_trial", &[]),
+    }
 }
 
 /// The mean of channel `channel` over the rectangle `[x0, x1) x [y0, y1)`.
@@ -235,4 +247,61 @@ fn an_absorb_lights_the_shield_bar_and_its_halo_in_both_blink_phases() {
             band(&control)
         );
     }
+}
+
+/// The race HUD's marquee bar and head-to-head bar, drawn from the capture flags, on a posed single
+/// race (the arcade layout is the one that authors `HeadToHeadBar`): the now-playing marquee's bar
+/// darkens the track under it to about four fifths (alpha 0.2 at the end of its fade-in, drawn once), and the
+/// head-to-head bar is a column of the HUD's mint (`0xFF7DEFC0`) the plain frame lacks. Dropping the flags' wiring in `oag_game::app` or `oag_raceplay` leaves both out.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd and a GPU adapter"]
+fn the_capture_flags_draw_the_marquee_bar_and_the_head_to_head_bar() {
+    let Some(image) = oag_testdata::image("data/images/pulse-psp-usa.chd") else {
+        return;
+    };
+    let scratch = scratch();
+    let plain = frame_in(&image, &scratch, "bars-plain", "single_race", &[]);
+    let bars = frame_in(
+        &image,
+        &scratch,
+        "bars-on",
+        "single_race",
+        &[
+            "--hud-song",
+            "Test Title",
+            "--hud-song-artist",
+            "Some Artist",
+            "--hud-head-to-head",
+            "150,lead",
+        ],
+    );
+    std::fs::remove_dir_all(&scratch).ok();
+
+    // The marquee's bar (x 130..280, y 247..267) left of where the text has scrolled to: green
+    // channel, whose track pixels are bright enough to read a ratio of.
+    let bar = |frame: &[u8]| mean(frame, 1, (135, 215), (249, 265));
+    let ratio = bar(&bars) / bar(&plain);
+    assert!(
+        (0.74..0.86).contains(&ratio),
+        "the marquee bar leaves {ratio} of the track under it, not about 0.8 (about 0.2, drawn once)"
+    );
+
+    // The head-to-head bar: a column of the HUD's mint, 5 units wide at the right, and a few
+    // stray pixels of the same colour in the plain frame.
+    let mint = |frame: &[u8]| {
+        (0..272usize)
+            .flat_map(|y| (440..480usize).map(move |x| (x, y)))
+            .filter(|&(x, y)| frame[(y * 480 + x) * 4..][..3] == [0x7D, 0xEF, 0xC0])
+            .count()
+    };
+    assert!(
+        mint(&plain) < 20,
+        "{} mint pixels without the flag",
+        mint(&plain)
+    );
+    assert!(
+        mint(&bars) > 100,
+        "the bar is {} mint pixels, expected a column",
+        mint(&bars)
+    );
 }

@@ -241,3 +241,47 @@ fn a_title_with_a_stats_face_labels_the_third_slot_with_it() {
     let (_, role) = super::fonts::third_atlas_slot(oag_hd::frontend::MENU_SKIN, None, None);
     assert_eq!(role, oag_ui::language::roles::BUTTONS);
 }
+
+/// A footer prompt authored `font="small"` is measured in the `small` face's atlas where the title holds
+/// it in a glyph slot, not in the body face, and on the pen the renderer draws it with; every other face is
+/// measured as before. A glyph-slot face of 9 px advances against the body face's 6 px tells them apart.
+#[test]
+fn a_small_prompt_is_measured_in_the_small_face_on_the_drawn_pen() {
+    use oag_texture::fnt::{Font, Glyph};
+    let atlas = |advance: u8, bearing: i8| {
+        oag_ui::font::Atlas::from_font(&Font {
+            line_height: 8,
+            unknown: 0,
+            width: 8,
+            height: 8,
+            palette: vec![[255, 255, 255, 255]; 16],
+            indices: vec![1; 64],
+            glyphs: vec![Glyph {
+                codepoint: u16::from(b'a'),
+                width: 4,
+                height: 4,
+                u0: 0,
+                u1: 4,
+                v0: 0,
+                v1: 4,
+                advance,
+                bearing,
+            }],
+        })
+    };
+    let (body, small) = (atlas(6, 0), atlas(9, -1));
+    let on = |pens| super::fonts::prompt_ink(&body, None, Some(&small), pens);
+    let advance = on(oag_ui::font::Pens::Advance);
+    assert_eq!(advance("small", "aa", 1.0), 18.0);
+    assert_eq!(advance("default", "aa", 1.0), 12.0);
+    // The bearing pen measures first ink to last ink: the second glyph's ink starts 9 on and is 4 wide, 1 in
+    // from its box (13), where the advance sum is 18.
+    let bearing = on(oag_ui::font::Pens::Bearing);
+    assert_eq!(bearing("small", "aa", 1.0), 13.0);
+    assert_eq!(
+        super::fonts::prompt_ink(&body, None, None, oag_ui::font::Pens::Advance)(
+            "small", "aa", 1.0
+        ),
+        12.0
+    );
+}

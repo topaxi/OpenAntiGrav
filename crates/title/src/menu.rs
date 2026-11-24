@@ -140,6 +140,13 @@ pub struct MenuSkin {
     /// a title whose body text is the `menu` face or its title's face (HD, Pure,
     /// 2048, Omega).
     pub body_font: Option<&'static str>,
+    /// The loaded role whose face is this title's `font="small"` face, **when a glyph slot
+    /// carries it**: Pulse's PSP pressings resolve `Small` and `Title` to the one file,
+    /// `Pulse_14.fnt` (17 px), and hold it in the renderer's third slot under `Title`. A
+    /// `font="small"` text then draws in that face at its native size, where the menu face
+    /// (`Pulse_20.fnt`, 22 px) would be minified by 17/22 and sample the footer's prompt
+    /// glyphs half a texel soft. `None` draws `small` text as that scaled menu face, as before.
+    pub small_font: Option<&'static str>,
     /// The role of the face a `font="Stats"` widget draws in, **when the title has
     /// a face of its own for it** and no `Buttons` face to hold the renderer's
     /// third glyph slot: Pure's `Stats` (`LTe50325.fnt`), the small letter-spaced
@@ -153,6 +160,13 @@ pub struct MenuSkin {
     /// 1.15 and its title at 0.97: `docs/ui/menus-original.md`, "Pure's text pens step up to
     /// whole pixels"); every other title draws fractions as before.
     pub snapped_pens: bool,
+    /// Whether a text's first glyph's ink starts at the text's x and each next glyph's ink sits its
+    /// font bearing right of the pen (`oag_ui::font::pen_step` without the whole-unit step): the
+    /// original's `Font_MeasureString` pen. **Measured on Pulse PSP** (Track Select's heading in
+    /// `Pulse_14.fnt`, bearing -1 on every glyph but `T`: ink starts 50, 59, 67, 76, 85 against 50, 60,
+    /// 68, 77, 86 without it; `docs/ui/menus-original.md`, "A text's pen starts at its first glyph's
+    /// ink"). `false` lays the pen out on the advance alone.
+    pub bearing_pens: bool,
     /// Whether a selection screen's `font="default"` rows draw at their authored
     /// scale in the one face the title has (`true`: HD and Omega, which load no
     /// `menu`-role face) or as the `menu` face scaled by Pulse's `default` over
@@ -555,8 +569,10 @@ mod tests {
         title_scale: 1.0,
         title_font: Some("Title"),
         body_font: Some("Default"),
+        small_font: None,
         stats_font: None,
         snapped_pens: false,
+        bearing_pens: false,
         default_face_is_row_face: false,
         first_row_y: Some(32.0),
         row_extra_leading: Some(6.0),

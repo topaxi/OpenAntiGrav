@@ -565,7 +565,7 @@ pub fn load_sim(options: &Options) -> Result<SimLoad> {
         wall_restitution,
         pose_override,
         field_poses: options.field.clone(),
-        capture_zone: options.hud.and_then(|hud| hud.zone),
+        capture_zone: options.hud.as_ref().and_then(|hud| hud.zone),
     };
     seams.mark(Seam::Finish, &report);
     Ok(SimLoad {

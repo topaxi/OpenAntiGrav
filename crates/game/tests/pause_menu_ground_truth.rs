@@ -122,6 +122,68 @@ fn a_time_trial_pauses_into_the_time_trial_screen() {
     assert_eq!(rows(&run), the_rows());
 }
 
+/// A compare shot (`--original-menu`) lists the disc's GAME MANUAL row, which this build has nothing behind: the
+/// live list above does not.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_compare_shot_lists_the_game_manual_the_live_pause_leaves_out() {
+    let Some(image) = pulse() else {
+        return;
+    };
+    let run = run_on_with(
+        &image,
+        "manual",
+        &format!("{} {OPEN}", to_the_race("time_trial")),
+        &["--original-menu"],
+    );
+    let labels: Vec<String> = rows(&run).into_iter().map(|(label, _)| label).collect();
+    assert_eq!(
+        labels,
+        [
+            "Continue",
+            "Game options",
+            "Photo mode",
+            "Game manual",
+            "Restart race",
+            "Quit race"
+        ]
+    );
+}
+
+/// Pulse's pause keeps the HUD on screen under the tint, dimmed with the rest: the paused frame's lower-left
+/// `current` clock box is not black (the tint leaves white at about a ninth), where a pause that dropped the
+/// HUD leaves the road's dark pixels there.
+#[test]
+#[ignore = "needs a disc image in data/images/ and a GPU adapter"]
+fn a_pulse_pause_draws_the_hud_dimmed_under_the_tint() {
+    let Some(image) = pulse() else {
+        return;
+    };
+    let shot = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("pause-shots/pulse-hud.png");
+    let _ = std::fs::remove_file(&shot);
+    let _ = run_on_with(
+        &image,
+        "hud",
+        &format!(
+            "{} {OPEN} ticks 120; draw; screenshot SHOTS/pulse-hud.png",
+            to_the_race("time_trial")
+        ),
+        &[],
+    );
+    let png = oag_texture::replacer::decode_png(&std::fs::read(&shot).expect("the screenshot"))
+        .expect("a PNG");
+    let scale = png.width as usize / 480;
+    let brightest = (248 * scale..270 * scale)
+        .flat_map(|y| (30 * scale..112 * scale).map(move |x| (y * png.width as usize + x) * 4))
+        .map(|at| u32::from(png.rgba[at..at + 3].iter().copied().max().unwrap_or(0)))
+        .max()
+        .unwrap_or(0);
+    assert!(
+        brightest >= 16,
+        "the clock box under the tint holds nothing brighter than {brightest}"
+    );
+}
+
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn a_speed_lap_pauses_into_the_speed_lap_screen() {

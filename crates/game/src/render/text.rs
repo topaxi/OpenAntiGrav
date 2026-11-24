@@ -105,7 +105,7 @@ impl Renderer {
                     && self
                         .buttons_role
                         .eq_ignore_ascii_case(oag_ui::language::roles::BUTTONS),
-                snapped: self.hud.snapped_pens,
+                pens: self.hud.pens(),
             })
         });
         self.hints.extend(found);
@@ -176,8 +176,15 @@ impl Renderer {
         // at that size and its origin put on a whole pixel; every other mode
         // leaves `scale` and the origin as given.
         let scale = self.hud.text_scale(atlas.texel_scale, scale);
-        let width: f32 = if self.hud.snapped_pens {
-            font::snapped_run(atlas, text, scale).end
+        let snapped_run = self
+            .hud
+            .snapped_pens
+            .then(|| font::snapped_run(atlas, text, scale));
+        let bearing_pens = self.hud.pens() == font::Pens::Bearing;
+        let width: f32 = if let Some(run) = snapped_run {
+            run.end
+        } else if bearing_pens {
+            font::ink_width(atlas, text, scale, false)
         } else if self.hud.whole_advances {
             text.chars()
                 .filter_map(|c| atlas.cell(c))
@@ -212,9 +219,24 @@ impl Renderer {
         let mut pen = self.hud.snap(match align {
             Align::Left => x,
             Align::Centre => x - (width - trailing) / 2.0,
+            // Pure's right-aligned text ends its last glyph's quad on `x`, not its pen
+            // (`docs/ui/menus-original.md`, "Pure's right-aligned text ends on its ink").
+            Align::Right if snapped_run.is_some() => x - snapped_run.map_or(0.0, |r| r.ink_right),
             Align::Right => x - width + trailing,
         });
+        if self.hud.snapped_pens {
+            // The glyph quads start at whole pixels from a whole pen, so a line measures the same
+            // wherever it is placed (`oag_ui::font::snapped_run` counts from 0).
+            pen = pen.ceil();
+        }
         let y = self.hud.snap(y);
+        if bearing_pens {
+            // The text's first glyph's ink starts at `x` (`font::ink_width` measures from there).
+            let first = text
+                .chars()
+                .find_map(|c| self.atlas_for(slot).and_then(|atlas| atlas.cell(c)));
+            pen -= first.map_or(0.0, |cell| cell.bearing * scale * texel);
+        }
 
         for ch in text.chars() {
             // Re-derived rather than reusing `atlas` above: `self.quads.push`
@@ -236,11 +258,24 @@ impl Renderer {
             // ([`oag_ui::font::pen_step`]): the quad sits at the snapped ink edge, not the pen.
             let (ink_left, next) = if self.hud.snapped_pens {
                 font::pen_step(&cell, scale * texel, pen, true)
+            } else if bearing_pens {
+                font::pen_step(&cell, scale * texel, pen, false)
             } else {
                 (pen, pen + self.hud.advance(cell.advance * scale * texel))
             };
-            let (mut rect, mut uv) =
-                atlas.glyph_quad(if half_unit { &bare } else { &cell }, ink_left, y, scale);
+            let snapped = self.hud.snapped_pens;
+            let (mut rect, mut uv) = atlas.glyph_quad(
+                if half_unit || snapped { &bare } else { &cell },
+                ink_left,
+                y,
+                scale,
+            );
+            if snapped {
+                // A PSP sprite: whole pixels from the pen, the texture started half a texel early.
+                let quad = font::snapped_quad(&cell, scale * texel, pen);
+                (rect[0], rect[2], rect[3]) = (quad.left, quad.width, quad.height);
+                uv[0] = (uv[0] - font::SNAPPED_UV_SHIFT).max(0.0);
+            }
             if self.hud.whole_advances || half_unit {
                 // The PSP's glyph rect is the box grown half a pixel each side with the uv grown
                 // half a texel to match (`225.5..249.5` for the box `226..249` in a GE list of
@@ -317,7 +352,7 @@ impl Renderer {
         };
         let scale = self.hud.text_scale(atlas.texel_scale, scale);
         let line_height = atlas.line_height * scale;
-        for (index, line) in wrap_pens(atlas, text, scale, width, self.hud.snapped_pens)
+        for (index, line) in wrap_pens(atlas, text, scale, width, self.hud.pens())
             .into_iter()
             .enumerate()
         {

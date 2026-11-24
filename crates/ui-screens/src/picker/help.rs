@@ -66,10 +66,11 @@ impl Help {
         &self,
         sprites: &dyn Fn(&str) -> Option<Placed>,
         atlas: &Atlas,
+        small: Option<campaign::HelpFace>,
         ship_help: Option<&str>,
     ) -> Vec<Draw> {
         let Some(text) = ship_help else {
-            return campaign::cell_help_draw(&self.layout, sprites, atlas);
+            return campaign::cell_help_draw(&self.layout, sprites, atlas, small);
         };
         let mut layout = self.layout.clone();
         for widget in &mut layout.screen.texts {
@@ -77,6 +78,6 @@ impl Help {
                 widget.string = Some(text.to_string());
             }
         }
-        campaign::cell_help_draw(&layout, sprites, atlas)
+        campaign::cell_help_draw(&layout, sprites, atlas, small)
     }
 }

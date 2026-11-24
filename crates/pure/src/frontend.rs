@@ -338,8 +338,10 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     // (see that function's own doc).
     title_font: Some("Title"),
     body_font: None,
+    small_font: None,
     stats_font: Some("Stats"),
     snapped_pens: true,
+    bearing_pens: false,
     default_face_is_row_face: false,
     // **Authored, and measured across the whole GUI tree rather than off one
     // screen.** Pure has no `MainMenu_Definition.xml` to read a single number

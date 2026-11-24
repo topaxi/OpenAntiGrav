@@ -43,7 +43,7 @@ fn paragraphs(draws: &[Draw]) -> Vec<(f32, f32, String)> {
 #[test]
 fn each_paragraph_starts_below_the_one_before_by_its_authored_gap() {
     let atlas = Atlas::build();
-    let draws = cell_help_draw(&help_layout(), &|_| None, &atlas);
+    let draws = cell_help_draw(&help_layout(), &|_| None, &atlas, None);
     let paragraphs = paragraphs(&draws);
     assert_eq!(paragraphs.len(), 3);
     let authored_gap = [15.0, 10.0, 10.0];
@@ -76,7 +76,7 @@ fn the_panel_draws_its_dimming_backdrop() {
         PSP_GRID,
     )
     .unwrap();
-    let draws = cell_help_draw(&layout, &|_| None, &Atlas::build());
+    let draws = cell_help_draw(&layout, &|_| None, &Atlas::build(), None);
     assert!(
         draws.iter().any(|draw| matches!(
             draw,
@@ -84,4 +84,43 @@ fn the_panel_draws_its_dimming_backdrop() {
         )),
         "{draws:?}"
     );
+}
+
+/// On a title that draws `small` text in a glyph slot ([`crate::picker::FaceScales::small_role`]) the paragraphs are
+/// `Draw::FacedText`; they flow all the same, measured in that slot's face, so none lands on the one before.
+#[test]
+fn paragraphs_in_a_glyph_slot_face_flow_too() {
+    let mut layout = help_layout();
+    layout.faces.small_role = Some("Title");
+    let atlas = Atlas::build();
+    let face = HelpFace {
+        role: "Title",
+        atlas: &atlas,
+        pens: oag_ui::font::Pens::Advance,
+    };
+    let draws = cell_help_draw(&layout, &|_| None, &atlas, Some(face));
+    let tops: Vec<(f32, f32)> = draws
+        .iter()
+        .filter_map(|draw| match draw {
+            Draw::FacedText { y, scale, .. } => Some((*y, *scale)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(tops.len(), 3, "{draws:?}");
+    let authored_gap = [15.0, 10.0, 10.0];
+    let mut bottom = 0.0;
+    for (index, (top, scale)) in tops.iter().enumerate() {
+        assert!(
+            (top - (bottom + authored_gap[index])).abs() < 1e-3,
+            "paragraph {index} starts at {top}, the one before ends at {bottom}"
+        );
+        let lines = wrap(
+            &atlas,
+            if index == 2 { "short" } else { WORDS },
+            *scale,
+            300.0,
+        )
+        .len();
+        bottom = top + lines as f32 * atlas.line_height * scale;
+    }
 }
