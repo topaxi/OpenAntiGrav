@@ -111,7 +111,7 @@ impl Race {
     /// The Detonator cannon's point lights, as `PulseBullet`'s render queue (`0x00122098`) submits
     /// them to `SpuLight_AddCandidate`: a blue light at each muzzle for the round's first
     /// [`FLASH_WINDOW_SECONDS`] and a faint one on each round in flight; and the EMP wave's,
-    /// at its centre while it runs (`EMP_Draw`, `0x0013b300`). Empty under the same
+    /// at its centre while it runs (`EMP_DrawLights`, `0x0013b300`). Empty under the same
     /// switches that silence every weapon light ([`Self::hd_weapon_lights`]'s).
     #[must_use]
     pub(crate) fn detonator_cannon_lights(&self, draw: &CannonDraw) -> Vec<SpuLight> {

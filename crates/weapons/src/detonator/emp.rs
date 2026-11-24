@@ -8,7 +8,7 @@
 //!
 //! # The wave
 //!
-//! `EMP_Update` (`0x0013c320`) adds the frame's `dt` to the wave's age, steps its AI-track
+//! `EMP_UpdateWave` (`0x0013c320`) adds the frame's `dt` to the wave's age, steps its AI-track
 //! cursor `speed` points forward (the table's `speed`, `1` on the disc) and ends once the age
 //! reaches `extent = minDistance + (maxDistance - minDistance) * gauge`: `extent` is a lifetime
 //! in seconds, `0.25` to `2.0` (`detonator-emp.md`, "The wave: a Repulser wave that clears
@@ -52,7 +52,7 @@ pub struct Config {
     /// `maxDistance`: at gauge `1`.
     pub max_distance: f32,
     /// `speed`: survey entries the wave steps a tick (`slot+0x1f8`, `EMPManager_Fire`; the
-    /// sweep's step count, `EMP_Update`).
+    /// sweep's step count, `EMP_UpdateWave`).
     pub speed: u32,
     /// `DistanceOffsetBetweenMines`, to place a laid object.
     pub lane_width: f32,
@@ -240,7 +240,7 @@ pub fn fire(field: &mut Field, survey: &Survey, config: &Config, from: u16) -> V
     }]
 }
 
-/// One tick of the wave (`EMP_Update`, `0x0013c320`): the age grows by `dt`, the front clears
+/// One tick of the wave (`EMP_UpdateWave`, `0x0013c320`): the age grows by `dt`, the front clears
 /// the entry it stands on and steps `speed` entries on, and the wave ends once the age has
 /// reached its lifetime. Every mine and bomb on a cleared entry goes, scored with `<Emp>` (a mine
 /// laid this stage `new_mine_score`, a dark one `old_mine_score`, a bomb `bomb_score`); the mines

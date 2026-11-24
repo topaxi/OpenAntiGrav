@@ -205,7 +205,7 @@ fn the_wave_runs_over_wave_time_not_at_once() {
     );
 }
 
-/// `EMP_Update`: one entry a tick (`speed = 1`) for `extent` seconds. At an empty gauge
+/// `EMP_UpdateWave`: one entry a tick (`speed = 1`) for `extent` seconds. At an empty gauge
 /// (`0.25` s, fifteen ticks) the front clears the fifteen entries from where it was fired and
 /// no further; at a full gauge (`2.0` s) it runs about 120.
 #[test]

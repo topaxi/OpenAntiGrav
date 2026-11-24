@@ -275,7 +275,7 @@ placement RNG cannot match the original's `Libc_Rand` (a departure, documented).
 
 **What remains open for Detonator (2026-11-23, after phase 15).** Phases 1-15 are in; what a player still
 misses is, by title. *All three:* the medal tier colours (the tiers draw one grey), the bomb flash writer
-(`b+0x154`, unread: brightness stays `0.2`/`0.8`), the EMP wave's reach (chosen) and the radial bloom
+(`b+0x154`, unread: brightness stays `0.2`/`0.8`), ~~the EMP wave's reach (chosen)~~ (read and drawn on HD, `det-emp-look-re`) and the radial bloom
 (`oag-post` has no pass, Zone included), the floor spectrum feed (the pairs stay black under `--no-audio`), the
 hull strip and wreck. *HD:* the new-record banner (needs the best-score table `0x0001ef28` and a store).
 *Omega:* the end-race screen (its `endrace_entry` is `None`, wiring HD's reader leaves `EndRace Menu` with no
@@ -409,8 +409,13 @@ original frame to compare. The detail is below.
   above (`DetonatorMine_Construct` `0x0013a7d8`, `DetonatorBomb_Construct`); effects `WO_BOMB_EXPLO_DETONATOR`,
   `WO_MINE_EXPLO_DETONATOR[_DEAD]`, `WO_CANNON_SPARKS_DETONATOR` (2048 `data2.psarc`), whose
   triggers need the hit read first.
-- **EMP: wired** (`det-emp-wire`, `detonator-emp.md` "Wired"). Open: the wave's reach and speed
-  (chosen; recipe on the page), the kill's effect and sound, whether the wave hurts the player,
+- **EMP: wired** (`det-emp-wire`, `detonator-emp.md` "Wired"). ~~The wave's reach and speed, the kill's
+  effect and sound~~: read live and drawn on HD (`det-emp-look-re`, 2026-11-24, `detonator-emp.md`
+  "What HD draws for a fired EMP": one survey entry a tick for `extent` seconds, `WO_QUAKE_DETONATOR`
+  on the front with a `(0, 5, 10)` light; the stepper is the Repulser's, copied). Open: ours leaves
+  faint particle rows on the road the original does not show (same page, "The frames"); the fork
+  (`REP2`) and `~MAGPULSETRAVEL` unwired; 2048 and Omega checked, applies, not wired. Still open:
+  whether the wave hurts the player,
   `EmpBarEffect` (an `<ImageModel>` the HUD layout reader does not model; the gauge is exposed),
   the ready pulse and post-fire flash on `EmpReady`, 2048's
   pad arms (unread: its pads keep boost and pickup, so its EMP never charges) and its

@@ -60,7 +60,7 @@ RACE_MANAGER = 0x008A6814
 EMP_CHARGE = 0x2DD8
 #: The player's gauge, `ship+0x7da0`.
 EMP_GAUGE = 0x7DA0
-#: The EMP's point-light colour, the `vec4` `EMP_Draw` (`0x0013b300`) loads at `0x00994480 + 0x10` (the TOC holds the address).
+#: The EMP's point-light colour, the `vec4` `EMP_DrawLights` (`0x0013b300`) loads at `0x00994480 + 0x10` (the TOC holds the address).
 EMP_LIGHT_COLOUR = 0x00994490
 
 
