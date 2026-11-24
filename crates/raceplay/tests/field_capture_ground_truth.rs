@@ -132,10 +132,12 @@ fn a_held_pickup_pin_puts_the_pickup_row_on_the_readout_alone() {
     assert_eq!(readout.pickup, Some(Weapon::Turbo));
     assert_eq!(readout.sub_weapon, None, "a held pickup shows no countdown");
     assert!((readout.speed_kmh - 165.0).abs() < 1e-3);
+    let ship = &held.core.sim.world.ships[0];
     assert_eq!(
-        held.core.sim.world.ships[0].autopilot_timer, 0.0,
+        ship.pickup.weapon, None,
         "the craft holds nothing: the pin is the readout's alone"
     );
+    assert_eq!(ship.autopilot_timer, 0.0);
     assert_eq!(start(None).readout().pickup, None, "no pin, no pickup row");
 }
 
