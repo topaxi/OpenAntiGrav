@@ -105,6 +105,30 @@ Open: the original's hexagon is translucent (the scene shows through it) where o
 Zone pairs are unchanged (the flag is Pulse PSP's, from `restore_autopilot_timer`'s own pair types; the Zone pair's frame
 shows the same row and has not been given it).
 
+### The marquee and head-to-head bars of a race shot (2026-11-24, `hud-bars-headless`)
+
+Two more `CaptureHud` pins, for a HUD part no headless route reached: `--hud-song TITLE [--hud-song-artist ARTIST] [--hud-song-ticks N]`
+holds the now-playing marquee on a song (a capture runs no music, so none starts), and `--hud-head-to-head GAP,lead|trail` draws the
+Head to Head bar on the readout alone (`--mode` has no head-to-head, and a posed capture runs no standings). Both need `--hud-state` and
+reach nothing in the race: the marquee's display is stepped `N` times (default 60, past the fade-in, where the bar has stopped climbing) at load and then frozen, so the tick count of the capture does not move it, and the readout's gap is not read from the standings.
+The bar exists only in a layout that authors it: the arcade one (`--mode single_race`), not the time trial's.
+
+Measured on a posed Pulse PSP single race at 480x272, by regression of the frame with the pin against the frame without, over the bar's
+pixels left of the scrolled text (1,512 pixels, per channel; the marquee bar is black, so its alpha is `1 - slope`):
+
+| | marquee bar alpha | head-to-head bar |
+| --- | --- | --- |
+| with the fill drawn once (`4a445a7fa`) | 0.199 (about 51 over 255, where the fade-in ends: `Display::step`) | `0xFF7DEFC0` opaque |
+| with that fix reverted | 0.35 (`1 - 0.8^2`: drawn twice) | identical |
+
+The head-to-head bar is opaque in Pulse's layout (`HudColour2`), so the fix cannot show on it; it shows on the marquee's bar and on
+a translucent fill under the HUD font (`a_translucent_fill_under_an_outlined_font_is_drawn_once` is the unit pin, and
+`hud_boost_glow_ground_truth::the_capture_flags_draw_the_marquee_bar_and_the_head_to_head_bar` the frame). None of the 30 Pulse PSP
+`theirs.png` in `pulse-psp/` (circuits) and `pulse-psp-race/` shows either bar: the marquee's rectangle (x 130 to 280, y 247 to 267) is
+not darkened in any, and no pixel of the bar's mint is in the top right. The one original frame that shows the marquee is Pulse PS2's
+`moa-therma-white` (its text tail), outside the PSP set; ours draws none there until a song is pinned for it.
+
+
 ## Environment parity: the profile and the checks (2026-10-20)
 
 **The set from before 2026-10-20 is archived** (the maintainer's request: start fresh, make the original's and
@@ -1840,9 +1864,9 @@ the evidence.
 | `Grid Selection`, `Cell Selection` (the Race Campaign) | `--menu-page grid-select`, `cell-select` (`CellMode_Definition.xml`, `grid_00.xml`) | pair, pair | none: Pure draws a list (`this source has no Race Campaign to show`) |
 | Pure's Single Player chain: `Single Player`, `Class Selection`, `League Selection`, `Tournament Selection`, `Track Selection` | `--menu-page pure-chain[:MODE[:ROW...]]` | none | pair x6 |
 | `Track Creation` (Track Select), `Team Selection` | `--menu-page track-select`, `ship-select` | pair, pair | `Team Selection` pair; Pure's circuit list is `Track Selection` above |
-| `Main Menu` | Pure: `--menu-page pure-main` (`Skin.xml`'s `Main Menu`, the chain's drawer; the live main page is `menu.toml`'s, ADR-0066). Pulse: `menu.toml`'s `main` | **gap** | pair |
-| `Racebox`, `Single Player` (Racebox setup), `Additional` (Options+) | `menu.toml`'s `race`, `options` pages | **gap** x4 | none (Pure has no Racebox or Options row) |
-| pause menu | Pure: `--drive-file scripts/pure-pause.drive --original-menu` (our own session: a Time Trial on Vineta K, START); Pulse is a `Stage::Menu` with no route | **gap** | pair |
+| `Main Menu` | Pure: `--menu-page pure-main` (`Skin.xml`'s `Main Menu`, the chain's drawer; the live main page is `menu.toml`'s, ADR-0066). Pulse: `--menu-page pulse-main` (`MainMenu_Definition.xml`, the menu model) | pair | pair |
+| `Racebox`, `Single Player` (Racebox setup), `Additional` (Options+) | Pulse: `--menu-page pulse-racebox`, `pulse-single`, `pulse-options` (`RaceBox_Definition.xml`, `Additional_Definition.xml`) | pair x3 | none (Pure has no Racebox or Options row) |
+| pause menu | `--drive-file scripts/pure-pause.drive` / `scripts/pulse-pause.drive` with `--original-menu` (our own session: a Time Trial, START) | pair | pair |
 
 **The campaign pair (required).** Pulse: the Race Campaign's Grid Selection (`GRID 1`, the first tier, cursor on tier one) and **Cell
 Selection** (`SINGLE RACE`, `Moa Therma White`, the default cell), both with the footer's `AI difficulty (Medium)`. The difficulty
@@ -1885,10 +1909,9 @@ every pair. The original against itself: Pure 0.0 mean grey and at most 0.06 % o
 deterministic); Pulse 0.7-4.7 mean grey, 0.1-3.5 % over 40, the Ship Select turntable and the footer ticker (Track Select's photo cards
 2.5 %, the title 0.0 %).
 
-**Gaps** (original kept under `gap-*` with `gap.json`): Pulse `Main Menu` (ours' page is `menu.toml`'s with extra REMIX, RECORDS and MODS
-rows, title `OPENANTIGRAV`), `Racebox`, `Single Player` (the Racebox setup, ours' `race` page with different rows), `Additional`
-(Options+: GAME OPTIONS, CONTROLS, MUSIC PLAYLIST against ours' `options`) and the pause menu (`GAME PAUSED`: CONTINUE, GAME OPTIONS,
-PHOTO MODE, GAME MANUAL, RESTART RACE, QUIT RACE; a Time Trial restored from a savestate, Start pressed); Pure's `Main Menu` and pause menu were gaps until 2026-11-23 (`pure-main-pause`, below). Pure has no Options or Racebox screen in its main menu.
+**Gaps** (original kept under `gap-*` with `gap.json`): none left on Pulse. Pulse's `Main Menu`, `Racebox`, `Single Player`, `Additional` and
+pause menu were gaps (ours drew them from `menu.toml`, or not at all) until 2026-11-23 (`pulse-gap-pairs`, below); Pure's `Main Menu` and pause menu likewise
+(`pure-main-pause`, below). Pure has no Options or Racebox screen in its main menu.
 
 **Screen-entry clock (2026-10-29).** `original.seconds_since_entry` (`value`, `basis: measured`) is the wall clock from the state-name poll
 that saw the screen replace another (polled every 0.03 s, so +-0.015 s) to the middle of the frame grab; PPSSPP holds 60 fps, but entries
@@ -1933,8 +1956,9 @@ heading `Main Menu`, the row descriptions (`Text->Main Menu->Mode->ROW`) and the
 1,342, row 1 544, row 4 344, heading 315. The description is the known open `Scroll` face advance (ours 6.5 px a character against the original's 7.6; `FEGlobals->TextInfoScale` is
 undeclared so 0.7 is chosen): measured, not fixed. **Row 4 reads `ON LINE` in ours and `DOWNLOAD` in the original**: the USA disc loads `PI012`, a US-spelling overlay
 (`Data\Plugins\PI012\Definition.xml`: `<Entry ID="On Line" String="Download">`, with `Téléchargement` and `Descarga` for French and Spanish), and ours does not
-(`oag_pure::LANGUAGE_MANIFESTS` leaves it out as "not a language"); it also holds `Synchronizing`, `favored` and the Zone and team descriptions. **Open, with the evidence**:
-the overlay is not wired because it is a string-table layer over English only on the USA pressing, wider than this lane's claim.
+(`oag_pure::LANGUAGE_MANIFESTS` leaves it out of the offered list as "not a language"); it also holds `Synchronizing`, `favored` and the Zone and team descriptions. **Fixed**: the
+manifest's `overlays` name it and `load_strings` lays its section for the chosen language over the table (`docs/architecture/frontend-boot.md`, "The offered languages are each executable's plugin manifest"), live and in this
+still alike; the EU disc ships the same file and its manifest never loads it, so a EU boot reads `On Line`. One fresh render of the shipped pair's flags, whole 480 x 272 frame: pixels with any channel more than 40 from the original 4,119 to 3,595 (3.16 % to 2.75 %; the shipped pair's `ours.png` predates later pure-menu work, which is why it is not the 2.97 % above), the same count on luma alone 1,381 to 1,027 (1.06 % to 0.79 %); row 4's band (y 100-120) 651 to 127 any-channel px and 354 to 0 luma px; mean grey 1.43 to 1.28, edge 0.533 to 0.543. The project's own main page (`menu.toml`) draws neither row.
 
 **Pause menu.** Ours is a menu over a parked race, so no still draws it: the route plays our own session the way the original is walked (`boot`, SINGLE PLAYER, TIME TRIAL, Vector,
 Alpha, Vineta K, the team, `@TICKS@` race ticks, START) with `--original-menu`, which now leaves this project's PHOTO MODE row out of a pause screen that authors none (the original has
@@ -1948,6 +1972,51 @@ box (130, 238, 200 x 24) 335 px to 54. The band itself matches: rules at rows 75
 **Largest regions left** (px over 40 grey of 3,688): the HUD top 1,396 (the digits' glyph edges and the blimp, the HUD lane's), the scene below the band 948, the band's rows 821 (ours'
 words are 3 px narrower over 105: `CONTINUE` ink 188-290 against 188-293, `RESTART` 190-288 against 190-291; the face's advance rounding, the same effect as the description's), the
 footer line 522.
+
+### Pulse list screens and the pause menu (2026-11-23, `pulse-gap-pairs`)
+
+Claim: Pulse PSP's Main Menu, Racebox, Single Player, Additional (Options+) and pause menu each have a pair against a fresh capture of the original (ours drawn from
+the disc's own screen, both English, a fresh profile), with the footer ticker and tag pinned, and the largest region of the worst pair is fixed or measured. Share of
+pixels over 40 grey, whole 480 x 272 frame, one fresh capture each (the BEFORE is `menu.toml`'s page against a fresh capture with its own ticker pin; the grabs differ, so the
+columns are two measurements, not one frame twice):
+
+| Pair | Before | After (mean grey, edge) | Route |
+| --- | --- | --- | --- |
+| Main Menu | gap; `menu.toml`'s `main` 11.40 % (mean grey 15.10) | 0.97 % (3.01, 0.41) | `--menu-page pulse-main` |
+| Racebox | gap (no page: RACEBOX opens `race`) | 0.44 % (1.66, 0.31) | `--menu-page pulse-racebox` |
+| Single Player | gap; `menu.toml`'s `race` 1.91 % (3.90) | 1.04 % (2.69, 0.41); 1.71 % before the focused value's bloom | `--menu-page pulse-single` |
+| Options+ (`Additional`) | gap; `menu.toml`'s `options` 5.88 % (9.15) | 0.44 % (2.01, 0.32) | `--menu-page pulse-options` |
+| Pause menu (Time Trial, Moa Therma White, Venom) | gap | 1.56 % (4.51, 0.94); 4.10 % on the first grab (2 s after START, header mid-slide) | `--drive-file scripts/pulse-pause.drive --original-menu` |
+
+**The four list screens are compare-only pages of the menu model** (`oag_game::capture::disc_screen_page`, named by the title's `FrontEnd::list_screens`: Pulse's four, empty elsewhere): the title, the rows and the help lines are read off the screen's own XML
+(`MainMenu_Definition.xml`'s `Main Menu`: `FE_MM`, the seven `Entry` rows, `helptext0` to `6`; `RaceBox_Definition.xml`'s `Racebox` and `Single Player`: the three rows, and the
+five `<List>`s with their `Text` labels and `default`s; `Additional_Definition.xml`'s `Additional`), through the same `oag_ui::menu::draw_list` the live pages use. The live pages stay
+`menu.toml`'s (ADR-0066, rule: our menu additions stay in play, compare shots draw the original's screen), every row of a still points at its own page (it is never activated), and
+Pulse's `MenuSettings.pages` lists `pulse-single` beside `race` so the settings look (rules, value column, step arrows) applies. `oag_ui::screen::Menu` keeps its `Entry` ids and
+`ListWidget` its literal entries (`Eliminations`' `5`, `10`, ...). The header of `Racebox` and `Single Player` is not authored on either screen (`AreaController area="RaceBox"`
+names it and the executable draws it); the frames read `RACEBOX`, the string of the Main Menu's `FE_RACEBOX` row, so that id is **chosen, not measured**. The footer is the same
+pin the campaign pages take (`--menu-ticker`, the stored tag, the Back prompt where the screen has a way back: `Main Menu` has none, `backward="none"`). The focused row's colour pulse is a
+clock a still does not have: the pair script reads its level off the frame (`focus_level`: the brightest red in the focused row's ink against the row below's) and ours pins to it
+(`--menu-focus-level`, `Skin::pin_pulse_level`); Options went 1.87 % to 0.55 % with it on the same grab (the focused `GAME OPTIONS` was the original's white and ours cyan). The backdrop movie's frame is
+fitted per pair (`compare-menu-movie-phase.py`: Main Menu needs frame 42, 4.75 to 0.45 grey over the bare pixels).
+
+**Largest regions left** (px over 40 grey): Main Menu 1,265: the typed help line and the focused row's glow 814, the footer ticker 324 and prompt rings 110. Racebox 571 and Options 580: the
+footer ticker 322 to 345 (glyph edges of the scrolling tip) and the prompt rings 225 (`Confirm`/`Back`, the half-texel softness `pulse-psp-cell` already measured). **Single Player was the worst of the four
+list screens at 1.71 % (2,238 px): the focused value `SINGLE RACE` 910 (the original blooms it: a haze round the glyphs; ours stamped no glow on a settings page, the code's "unmeasured"), the step arrows 66 on row 1 and 277 on rows 2 to 4, KILLS 128, the `Help` prompt (a triangle and `Help` at (20, 252): the screen's own `Text`s, not drawn) 191.
+Fixed: the focused value of a settings page stamps the glow (`rows.rs`, `skin.selected_stamp()`, the pulse's own ladder; the label and the other rows' values do not), 910 px to 35, whole frame 1.71 % to 1.04 %; it is also a live change to the RACE page's focused value on Pulse.**
+Left: the original's step arrows are dimmed where the list is at its first entry (every row is at entry 0 here, so every left arrow is dark and only the right one lit); ours lights both, because
+ours' lists wrap (the `race` page's design). KILLS is greyed on the original (ink peak 36 against ours' dimmed (114, 127, 142)) and holds `5` where the list's authored default is `10` (the
+native screen's rule for a disabled row is not read), and ours greys it by a rule read off this one frame (`Eliminations` is inert while `Mode` is not `Elimination`). Measured, not fixed.
+
+**Pause menu.** No still draws a menu over a parked race, so the route is `scripts/pulse-pause.drive` (`boot`, RACEBOX, the race page's `race.mode=time_trial`, Track Select `03_Track`,
+Ship Select, `@TICKS@` race ticks, START, 120 ticks) with `--original-menu`; `psp-menu-pair.py pairs --title pulse --plan "$PULSE_PAUSE_PLAN" --ids pause --pause-clock C`. The original is
+`data/saves/pulse-psp/time-trial-moa-therma-white-venom-grid.ppst` loaded (`psp-state.py`, the serial default is Pulse USA's), 4 s, START, 4 s. The saved state reads the HUD clock 0.40.6 to 0.40.8 at the
+pause (the CPU is held after the load; the wall waits do not move it), so `--pause-clock` is the `CURRENT` the frame shows, read by eye, and ours is played to it (`PAUSE_CLOCK_ZERO_TICKS["pulse"]` = 276:
+ours read 0.35.4 at 2,400 ticks, 0.40.8 at 2,724); with that the record 1.17.1, `current`, the GO board and the camera match. Fixed: the HUD under the tint, the tag off the footer, GAME MANUAL
+in a compare shot, and the header (taken settled, see `docs/ui/pause-menu.md`, "Pulse"). **The pause menu is the worst pair now (1.56 %).** **Largest regions left** (of 2,031): the rows 807 and the focused row 279: the original's rows are
+brighter (peak (65, 204, 225) against ours' (49, 155, 173), the bloom of the front end's glow stamps), because ours' glow pass runs only on a cleared target (`Renderer::render`'s `glowing` needs
+`LoadOp::Clear`) and a menu over a parked race draws with `Load`: **the cause, not fixed** (a renderer change); the music pill and `FENIX FUNK 5 (WIPEOUT EDIT)` 672 (the original is playing, ours
+runs `--no-audio` and has no now-playing line to draw); the `Confirm` ring 212. The focused row's pulse level is not pinned on the drive route (the session's own clock runs it).
 
 ### Pulse Cell Selection: the footer, the tag and the title's glow phase (2026-11-23, `pulse-psp-cell`)
 
@@ -2540,3 +2609,89 @@ rising at the read), so the picture may predate the rise; only `pad` (A) and `mi
 band 3 predicts (box A blue 19.1 and 14.0 at 0.58 and 0.51). Next: grabs where raw is below held, or a lag-scanned frame
 (`hd-pair-lag-scan.py`). Ours was not tuned.
 
+
+### The original's mines in a Detonator pair (2026-11-23, `det-mines`)
+
+**Claim tested:** the middle-right cell of `mines-ahead` and `cannon-volley` (original 36.4 and 26.2, ours 20.7 and 17.8 darker) is
+the original's lit mines in places ours' seeded layout has none, so carrying the layout and the mine look closes it. **Placement
+is carried exactly; the cell does not close, and the frames get worse, because the original draws its near mines somewhere other
+than their objects (below).**
+
+**The pair reads the mine objects.** `rpcs3-hd-detonator-shots.py` scans the heap for `DetonatorMine` objects in the same pause
+(`rpcs3_hd_field.detonator_mines`; vtable `0x008642f0`, `docs/ghidra/functions/ps3-hdfury-eu/detonator-mine.md`, "Where a mine
+stands") and records `ship.mines` (flags, position, entry, lane, live, age; `OAG_MINE_RAW=1` keeps the object's bytes for a survey
+of its other fields). `rpcs3-hd-pair.py --detonator` writes the armed ones (`flags & 9 == 9`; a mine that left the pool keeps flag
+`1`) to `original.detonator.mines` and gives ours
+`--detonator-mines "X,Y,Z;X,Y,Z;..."`: ours lays the opening stage as usual (its bomb, its counter), then puts every mine on the
+survey lane nearest each position across the section (`RaceSim::carry_detonator_mines`, a snap of at most 4 units across and 1.5 of the 3.0 lift in height, so a lane on another deck never takes it; a position with
+no lane, or whose lane another carried mine or the bomb holds, is dropped with a warning). Positions, not the original's entry numbers: its survey starts at the player's start cursor and
+ours at the spline's origin, 7 entries apart on Talon's Junction. The flag is in `ours.flags`, so `compare-rerender-ours.py` replays
+it. A shot without mines (an older record) keeps ours' seeded layout and the pair says so.
+
+**Evidence the carry is exact** (`detonator_ground_truth::carried_mines_stand_where_the_originals_objects_stood`, disc-backed): 80
+objects, identical (position to the bit) at lap 2.7 and 3.4 s and across three boots of the same save state, so the layout is
+deterministic from the state and one read stands for every frame of it; all 80 snap to a lane within 0.47 units across the
+section (mean 0.06), and stand 3.00 above ours' lane point along the up axis (mean 2.92). The 3.0 is `MINE_LIFT`: ours drew a mine
+on the lane point, 3 units too low, 130 px at a mine 18 units ahead.
+
+**Placement against look, in numbers** (`mines-ahead`, middle-right cell MAD / mean grey of the frame, page scorer):
+
+| ours | cell MAD (signed ours - original) | whole frame |
+| --- | --- | --- |
+| seeded layout (main `d011cf24f`) | 36.4 (-20.7) | 16.23 |
+| carried, mine on its lane point | not recorded | 17.56 |
+| carried, lifted 3.0 | 41.1 (-16.9) | 17.41 |
+| carried, lifted, **and shifted 7 units along the view** (scratch, not committed: the fitted offset below) | 34.6 (-18.5) | 15.90 |
+| carried, lifted, size breathing wired | 46.4 (-12.7) | 18.59 |
+
+So with the mines in the original's places the cell stays at 35 to 46: **placement is not most of the cell; the look is** (the
+original's mine is a lit white-violet shell with its holes and long spikes about twice ours' size; ours was a small dark rim
+disc). The size breathing (`detonator-mine-material.md`, "Wired") gives ours the spikes and the size, and the cell gets worse
+because ours' mines are then bigger *and* 7 units nearer than the original draws them.
+
+**The unexplained part.** Projected through the pair's own camera, the original's near mines are drawn 30 % closer to the screen
+centre than their objects (`mines-ahead`: objects at `666, 1075, 1703` across, drawn at `770, 1040, 1490`), the far mines (185 to
+208 units) and all four near mines of `pad` (83 to 89 units, 2.0 s) land within 4 px, and `cannon-volley` (2.63 s) draws 0.87.
+Ours draws each at its object's projection. Scenery agrees (the red strips within 8 to 25 px). Not time (the objects are static),
+not a model offset (unit spheres about the origin). A shift of the object 7 units along the view reproduces `mines-ahead`
+(residual 35 to 50 px) and rejects `pad`, so it is not a constant. Left open; the pairs are not published with the flag until it is
+known (the lead's call).
+
+**Per pair** (main `d011cf24f` to this branch; mean grey of the frame / RMSE; middle-right cell MAD, signed ours - original):
+`pad` 8.81 to 8.80, 0.130 to 0.129, cell 6.3 (-2.1) to 6.3 (-2.1); `mines-ahead` 16.23 to 18.59, 0.187 to 0.209, 36.4 (-20.7) to
+46.4 (-12.7); `cannon-volley` 14.88 to 15.24, 0.178 to 0.179, 26.2 (-17.8) to 27.6 (-17.0). The carried read for `cannon-volley` is
+a boot where the volley fired (lap clock 1.900 to 1.967 over the hold): one mine had left the pool by 2.63 s.
+
+### The picture is older than the push buffer's camera (2026-11-24, `det-mine-look-re`)
+
+**The `det-mines` "unexplained part" is the pair's camera, not the mine.** The original draws a mine at its object's position
+(`docs/ghidra/functions/ps3-hdfury-eu/detonator-mine-draw.md`, no view-dependent term on the way to `SceneNode_SetLocalMatrix`).
+The camera the pair renders ours from is the push buffer's, and the picture RPCS3 shows at the pause is **1.5 to 4 ticks of travel
+older** than that camera. The hull rides with the camera, so it never showed the skew; the red strips run along the travel, so a move
+along it leaves them where they are. Near static things (the mines at 12 to 25 units) show it; far ones (185 units and more) hardly.
+
+| Grab | Fitted lag `k` (ticks of craft velocity) | Near-mine rms after / before |
+| --- | ---: | --- |
+| `mines-ahead` pair | 3.55 | 11.9 / 135 px |
+| `cannon-volley` pair | 2.30 | 9.4 / 107 px |
+| `pad` pair | 1.55 | 1.4 / 5 px (85 units away: a weak lever) |
+| shot A of one `det-mines` boot (lap 2.70 s, push-buffer eye `199.27, -41.48, -194.98`) | 2.15 | 11.7 / 93 px |
+| shot B of the same boot (push-buffer eye `206.47`, 4 ticks on) | its picture fits shot A's camera at 1.15 (20 px), about 3 behind its own | |
+
+Method: project the RAM mine objects through the push-buffer `viewProj` with every point moved forward by `k` ticks of the craft's
+velocity (the same as the camera moved back), against the centroid of the original's lavender pixels (`b > 180`, `r > 150`,
+`r - g > 12`) in a window of `0.8 * 800 * 2.5 / z` px around each mine; `k` minimises the rms. **Scenery confirms it**: ours
+re-rendered from the `mines-ahead` pair's flags with camera and craft moved back `k = 0..6` ticks puts the left edge of the violet
+overhead panel (top right, across the line of travel) at x `1565, 1554, 1540, 1524, 1512, 1501, 1491`, the original at `1518` (x only;
+its lower edge does not match on y). **The rest does not follow:** outside the near mines and the hull the plain mean absolute grey goes
+`16.67, 16.73, 17.52` at `k = 0, 2, 4` and the right wall's edge correlation peaks at `k = 0`; the eye was moved, its orientation was not.
+The whole-frame plain mean moved 22.99 to 20.74 at `k = 4`, mostly from the mines (this tree's render, not the page scorer). **Confidence
+70, and not reconciled** with "The skew is the pause" above (push-buffer hull and camera one frame, 1 or 2 ticks behind RAM; blind to
+this, both ride the camera) or with `hd-pair-lag-scan.py`'s 0 to 3 ticks behind RAM (whole-frame edge correlation, which the regions
+here show is dominated by along-track features): here the picture is `craft_ticks + k` = 5.6 to 6.3 ticks behind RAM.
+
+**What a fix needs (not done):** first settle the disagreement above. Then, since the lag varies by grab, measure it per grab:
+extend `hd-pair-lag-scan.py` with a score on static objects (the near mines in Detonator) or a cross-track edge, record `k` in the
+existing `original.presented_lag` block, and have `rpcs3-hd-pair.py` move `--camera-pose`'s eye and `--pose` back by `k` ticks of the
+original craft's velocity. Every HD pair takes its camera from
+the push buffer, so this likely moves every HD pair with near scenery, not only Detonator's.

@@ -52,6 +52,15 @@ impl MenuStage {
         let Some(legend) = &self.nav_legend else {
             return Vec::new();
         };
+        // A pause screen laid out as the front end's own list (Pulse's) keeps the `Confirm` prompt and
+        // loses the player's tag, which belongs to the frame bar the pause screen does not draw
+        // (`docs/ui/pause-menu.md`, "Pulse").
+        if self.pause_scrim.is_some() {
+            return legend
+                .clone()
+                .with_tag("")
+                .draw_gated(&picker::FaceScales::default(), self.menu.depth() > 1);
+        }
         legend.draw_gated(
             &crate::prompts::footer_faces(&self.skin),
             self.menu.depth() > 1,

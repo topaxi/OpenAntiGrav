@@ -284,6 +284,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     track_select: Some(names::TRACK_SELECTION_DEFINITION),
     news: None,
     race_setup: None,
+    list_screens: &[],
     track_label_overrides: &[],
     card_track_aliases: &[],
     track_record_empty: "-",
@@ -442,6 +443,7 @@ pub const LANGUAGE_MANIFESTS: &[oag_title::LanguageManifest] = &[oag_title::Lang
         r"Languages\turkish",
         r"Languages\portuguesebr",
     ],
+    overlays: &[],
     evidence: "omega-ps4-eu eboot FUN_0174ca60 table, region mask 1 (USER_DEFINED_PARAM_1 = 1); patch 1.07 table adds Turkish",
 }];
 

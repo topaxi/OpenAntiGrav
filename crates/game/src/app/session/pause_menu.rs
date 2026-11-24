@@ -96,7 +96,11 @@ impl Session {
             offers_photo: pause.offers_photo && !self.original_menu,
             ..*pause
         };
-        let built = trial.open_on_pause_screen(&authored, mode, strings);
+        let built = if self.original_menu {
+            trial.open_on_pause_screen_as_authored(&authored, mode, strings)
+        } else {
+            trial.open_on_pause_screen(&authored, mode, strings)
+        };
         let resumes = trial
             .page(oag_ui::menu::PAUSE_PAGE)
             .is_some_and(|page| page.row_with_id("pause_resume").is_some());

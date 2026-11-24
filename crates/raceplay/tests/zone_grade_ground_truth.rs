@@ -166,14 +166,14 @@ fn two_stages_of_the_real_table_produce_two_different_fogs() {
 
     // Driven to `Start` explicitly: a race opens on stage 1 now, because
     // `Start` is the pre-race state. It is still the stage that proves a
-    // zero-density stage leaves the circuit's own fog standing.
+    // zero-density stage draws no fog, the circuit's own fog included.
     grade.request_stage(0);
     grade.commit();
     grade.set_weight(1.0);
-    let start = grade.fog(Some(base)).expect("stage 0 leaves the circuit's");
+    let start = grade.fog(Some(base)).expect("stage 0 authors its own fog");
     assert_eq!(
-        start.colour, base.colour,
-        "Start authors Fog density 0, so the circuit's own fog stands"
+        start.enabled, 0.0,
+        "Start authors Fog density 0, so there is no fog"
     );
 
     grade.request_stage(1);
@@ -187,9 +187,10 @@ fn two_stages_of_the_real_table_produce_two_different_fogs() {
     assert_eq!(sub_venom.colour, [0.0, 1.733_333, 2.0]);
     assert_eq!(sub_venom.density, 0.002);
     assert_ne!(
-        sub_venom.colour, start.colour,
+        sub_venom.colour, base.colour,
         "a stage change has to be visible, or the table is doing nothing"
     );
+    assert_eq!(sub_venom.enabled, 1.0, "Sub Venom's fog is drawn");
 
     // Halfway between them is halfway between the two authored colours - the
     // recovered cross-fade, on real data.

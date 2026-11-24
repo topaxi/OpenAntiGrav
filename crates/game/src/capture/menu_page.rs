@@ -186,6 +186,14 @@ pub(super) fn menu_page(
     // is kept here, since a still never races it.
     let installed = loaded.installed_for(title, &|_| true);
     crate::campaign::custom::add_picker(&mut definition, &mut mods, &installed, title, strings);
+    let disc_screen = super::disc_screen_page::spec(title, page);
+    if let Some(spec) = disc_screen {
+        let source = source.context("a disc screen needs the disc it is read off")?;
+        let own = definition.pages.len();
+        definition.pages.push(super::disc_screen_page::page(
+            title, spec, source, strings, own,
+        )?);
+    }
     if definition.page(page).is_none() {
         anyhow::bail!(
             "no menu page named {page:?}; this definition has {}",
@@ -440,9 +448,12 @@ pub(super) fn menu_page(
     // `model.depth()` is always `1` regardless of which page was named.
     // See `crate::app::menu_stage::MenuStage::render`'s own call site,
     // which this mirrors, for the live session's own gate.
-    let mut nav_legend_draws: Vec<oag_ui::frontend::Draw> = nav_legend
-        .map_or_else(Vec::new, |legend| {
-            legend.draw_gated(&crate::prompts::footer_faces(skin), model.depth() > 1)
+    let mut nav_legend_draws: Vec<oag_ui::frontend::Draw> =
+        nav_legend.map_or_else(Vec::new, |legend| {
+            legend.draw_gated(
+                &crate::prompts::footer_faces(skin),
+                model.depth() > 1 || disc_screen.is_some_and(|spec| spec.back),
+            )
         });
     // The reset prompt, as the live footer draws it (`MenuStage::footer_overlay`).
     nav_legend_draws.extend(

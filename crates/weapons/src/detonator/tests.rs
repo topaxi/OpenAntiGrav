@@ -204,7 +204,8 @@ mod contact {
             active: true,
             ..Ship::default()
         };
-        ship.physics.body.position = Vec3::new(0.0, 0.0, z);
+        // A mine stands `MINE_LIFT` above its lane point: the craft flies at that height.
+        ship.physics.body.position = Vec3::new(0.0, MINE_LIFT, z);
         ship.physics.body.linear_velocity = Vec3::new(0.0, 0.0, 100.0);
         ship.physics.shield = 100.0;
         ship.handling.dimensions.shield = 100.0;
@@ -230,6 +231,39 @@ mod contact {
         assert_eq!(field.live_mines, 0);
         assert!((ships[0].physics.shield - 90.0).abs() < 1e-4);
         assert_eq!(ships[0].physics.body.linear_velocity.z, 50.0);
+    }
+
+    #[test]
+    fn a_bomb_is_not_lifted_where_a_mine_is() {
+        let (survey, layout) = (lap(300, 7), layout());
+        let lane = layout.values.distance_offset_between_mines;
+        let placed = Placed {
+            entry: 5,
+            lane: 1,
+            live: true,
+        };
+        let at = Vec3::new(3.5, 0.0, 50.0);
+        let contact = contact();
+        // The bomb's trigger sphere is 6: 7 above its lane point is out of reach, on it is in.
+        let mut field = Field::new();
+        field.bombs[0] = placed;
+        field.live_bombs = 1;
+        let mut ship = craft_at(50.0);
+        ship.physics.body.position = at + Vec3::new(0.0, 7.0, 0.0);
+        let went = step_contacts(&mut field, &survey, lane, &contact, &mut [ship], rules());
+        assert!(went.is_empty(), "a bomb is not lifted");
+        let mut ship = craft_at(50.0);
+        ship.physics.body.position = at;
+        let went = step_contacts(&mut field, &survey, lane, &contact, &mut [ship], rules());
+        assert_eq!(went.len(), 1, "a craft on the lane point touches the bomb");
+        // The mine in the same place is the other way about: on the lane point is 3 off, out of reach.
+        let mut field = Field::new();
+        field.mines[0] = placed;
+        field.live_mines = 1;
+        let mut ship = craft_at(50.0);
+        ship.physics.body.position = at;
+        let went = step_contacts(&mut field, &survey, lane, &contact, &mut [ship], rules());
+        assert!(went.is_empty(), "a mine stands 3 above its lane point");
     }
 
     #[test]
@@ -293,4 +327,24 @@ mod contact {
             "the stage-1 bomb is gone"
         );
     }
+}
+
+#[test]
+fn a_mine_stands_its_lift_above_its_lane_point_and_a_bomb_on_it() {
+    let (survey, layout) = (lap(300, 7), layout());
+    let lane = layout.values.distance_offset_between_mines;
+    let placed = Placed {
+        entry: 5,
+        lane: 1,
+        live: true,
+    };
+    let at = Vec3::new(3.5, 0.0, 50.0);
+    // The lane point is the survey's own, not a copy of the lift's arithmetic: entry 5 of the test lap,
+    // one lane over.
+    assert_eq!(survey.point(&placed, lane).expect("in the survey").0, at);
+    assert_eq!(
+        survey.mine_point(&placed, lane).expect("in the survey").0,
+        at + Vec3::new(0.0, 3.0, 0.0),
+        "the lift is the measured 3.0, along up"
+    );
 }

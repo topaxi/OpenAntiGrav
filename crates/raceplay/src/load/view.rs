@@ -750,12 +750,25 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
 
     seams.mark(Seam::Flyby, &report);
     let cockpit_hit_noise = weapon_models::load_cockpit_hit(&mut archives, wm, &mut report);
-    let destroy_stations = super::destroy_camera::stations(circuit_fx, &track_blob, &mut report);
+    let destroy_stations = super::destroy_camera::stations(
+        circuit_fx,
+        &title.destroyed.value.camera,
+        &track_blob,
+        &mut report,
+    );
     let intro_camera = intro::read(&mut archives, &track, options, pre_race, &mut report);
     let intro_voice = intro::read_voice(&mut archives, title, &track, pre_race, &mut report);
 
     seams.mark(Seam::Finish, &report);
-    let now_playing = crate::now_playing::View::read(&mut archives, title, &hud, &mut report);
+    let mut now_playing = crate::now_playing::View::read(&mut archives, title, &hud, &mut report);
+    if let Some(song) = options.hud.as_ref().and_then(|hud| hud.song.as_ref()) {
+        match now_playing.as_mut() {
+            Some(view) => view.pin(song),
+            None => {
+                report.push("now playing: --hud-song given, but the title has no display".into())
+            }
+        }
+    }
     let demo_overlay = intro::read_demo_screen(&mut archives, title, options, &hud, &mut report);
     let track_panel = intro::read_panel(
         &mut archives,
@@ -841,7 +854,7 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
         rumble,
         zoom_ring: title.race.zoom_ring.or(borrowed_zoom),
         zoom_borrowed: borrowed_zoom.is_some(),
-        capture_hud: options.hud,
+        capture_hud: options.hud.clone(),
         hud_waits_for_go: title
             .race
             .hud_waits_for_go

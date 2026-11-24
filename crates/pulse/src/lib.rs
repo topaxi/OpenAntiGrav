@@ -317,6 +317,37 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     track_select: None,
     news: Some(names::NEWS_DEFINITION),
     race_setup: Some(names::RACE_SETUP_DEFINITION),
+    // The Racebox's two screens are headed by their area, `RACEBOX` (the string of the Main Menu's `FE_RACEBOX`).
+    list_screens: &[
+        oag_title::ListScreen {
+            page: "pulse-main",
+            file: names::MAIN_MENU_DEFINITION,
+            screen: "Main Menu",
+            title_id: None,
+            back: false,
+        },
+        oag_title::ListScreen {
+            page: "pulse-racebox",
+            file: names::RACE_SETUP_DEFINITION,
+            screen: "Racebox",
+            title_id: Some("FE_RACEBOX"),
+            back: true,
+        },
+        oag_title::ListScreen {
+            page: "pulse-single",
+            file: names::RACE_SETUP_DEFINITION,
+            screen: "Single Player",
+            title_id: Some("FE_RACEBOX"),
+            back: true,
+        },
+        oag_title::ListScreen {
+            page: "pulse-options",
+            file: names::ADDITIONAL_DEFINITION,
+            screen: "Additional",
+            title_id: None,
+            back: true,
+        },
+    ],
     // `TrackSelection_ApplySelection` hands `MSC_DISTANCE` to `Info1 Title` through
     // `0x088ede50` (`0x088cd0f4` sets the label); the XML's `IG_HUD_DISTANCE` is never shown.
     track_label_overrides: &[("Info1 Title", "MSC_DISTANCE")],
@@ -493,6 +524,10 @@ pub mod names {
     /// The race box's `Single Player` screen: its `Mode`, `Class`, `Weapons`,
     /// `Difficulty` and `Eliminations` lists. See `docs/formats/race-setup.md`.
     pub const RACE_SETUP_DEFINITION: &str = r"Data\Plugins\PI001\GUI\RaceBox_Definition.xml";
+    /// `MainMenu_Definition.xml`: the `Main Menu` screen, seven `Entry` rows and a help line each.
+    pub const MAIN_MENU_DEFINITION: &str = r"Data\Plugins\PI001\GUI\MainMenu_Definition.xml";
+    /// `Additional_Definition.xml`: the `Additional` screen (OPTIONS+), `Settings` and `Music`.
+    pub const ADDITIONAL_DEFINITION: &str = r"Data\Plugins\PI001\GUI\Additional_Definition.xml";
     /// The in-race screens: the pause menu, the photo mode's, and `Race End
     /// Photo`, the state a race sits in between the flag and `EndRace Results`.
     /// No recovered name list carried it; it is the hash `31b50f2e`'s name,
@@ -763,16 +798,19 @@ pub const LANGUAGE_MANIFESTS: &[oag_title::LanguageManifest] = &[
     oag_title::LanguageManifest {
         serial: "UCES-00465",
         plugins: &["PI000", "PI008", "PI009", "PI010", "PI011"],
+        overlays: &[],
         evidence: "pulse-psp-eu BOOT.BIN manifest; English is PI000, no PI012 on the disc",
     },
     oag_title::LanguageManifest {
         serial: "UCUS-98712",
         plugins: &["PI012", "PI010", "PI008", "PI009", "PI011"],
+        overlays: &[],
         evidence: "pulse-psp-usa BOOT.BIN manifest (0x08ab110c)",
     },
     oag_title::LanguageManifest {
         serial: "SCES-54748",
         plugins: &["PI012", "PI010", "PI008", "PI009", "PI011"],
+        overlays: &[],
         evidence: "pulse-ps2-eu SCES_547.48 manifest string run",
     },
 ];

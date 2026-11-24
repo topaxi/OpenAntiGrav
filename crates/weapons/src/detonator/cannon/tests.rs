@@ -50,6 +50,8 @@ fn config() -> Config {
 fn craft() -> Ship {
     let mut ship = Ship::default();
     ship.physics.body.orientation = Quat::from_xyzw(0.0, 1.0, 0.0, 0.0);
+    // A mine stands `MINE_LIFT` above its lane point: the craft flies at that height.
+    ship.physics.body.position.y = crate::detonator::MINE_LIFT;
     ship
 }
 
@@ -519,7 +521,7 @@ fn a_shot_mine_reports_whether_it_was_live_and_where_it_was() {
             shot,
             [Event {
                 kind: EventKind::MineShot { live },
-                at: Vec3::new(0.0, 0.0, 150.0),
+                at: Vec3::new(0.0, crate::detonator::MINE_LIFT, 150.0),
             }]
         );
     }

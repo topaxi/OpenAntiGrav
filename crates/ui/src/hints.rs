@@ -157,6 +157,12 @@ pub fn scan<'a>(
             Align::Centre => x - width / 2.0,
             Align::Right => x - width,
         };
+        // A snapped line starts on a whole pixel, as the draw's does.
+        let left = if face.pens == crate::font::Pens::Snapped {
+            left.ceil()
+        } else {
+            left
+        };
         runs.push(Run {
             index,
             text,
@@ -298,25 +304,36 @@ fn segments(run: &Run, substitution: &Substitution) -> Vec<Segment> {
         pen -= first.map_or(0.0, |cell| cell.bearing * scale);
     }
     for ch in run.text.chars() {
-        let (ink_left, next) = atlas
-            .cell(ch)
-            .map_or((pen, pen), |cell| match run.face.pens {
-                crate::font::Pens::Snapped => {
-                    (pen, crate::font::pen_step(&cell, scale, pen, true).1)
-                }
-                crate::font::Pens::Bearing => crate::font::pen_step(&cell, scale, pen, false),
-                crate::font::Pens::Advance => (pen, pen + cell.advance * scale),
-            });
+        // The glyph's own extent: its quad on a snapped face (whole pixels from the pen), its ink
+        // on a bearing face, the advance otherwise.
+        let (next, left, right) =
+            atlas
+                .cell(ch)
+                .map_or((pen, pen, pen), |cell| match run.face.pens {
+                    crate::font::Pens::Snapped => {
+                        let quad = crate::font::snapped_quad(&cell, scale, pen);
+                        let next = crate::font::pen_step(&cell, scale, pen, true).1;
+                        (next, quad.left, quad.left + quad.width)
+                    }
+                    crate::font::Pens::Bearing => {
+                        let (ink_left, next) = crate::font::pen_step(&cell, scale, pen, false);
+                        (next, ink_left, next)
+                    }
+                    crate::font::Pens::Advance => {
+                        let next = pen + cell.advance * scale;
+                        (next, pen, next)
+                    }
+                });
         match substitution.button_drawn(ch, run.face.buttons) {
             Some(prompt) => out.push(Segment {
                 prompt,
-                left: ink_left,
-                glyph_right: next,
-                word_right: next,
+                left,
+                glyph_right: right,
+                word_right: right,
             }),
             None if ch.is_whitespace() => {}
             None => match out.last_mut() {
-                Some(segment) => segment.word_right = next,
+                Some(segment) => segment.word_right = right,
                 None => return Vec::new(),
             },
         }
@@ -458,7 +475,6 @@ pub fn legend_wrapped(
         .iter()
         .enumerate()
     {
-        let mut pen = 0.0;
         let mut from = None;
         let mut last = (0.0, 0.0);
         let flush = |entry: usize, left: f32, right: f32, out: &mut Vec<Hint>| {
@@ -475,13 +491,23 @@ pub fn legend_wrapped(
             }
         };
         let walked = (pens == crate::font::Pens::Bearing).then(|| piece_ink(atlas, line, at.scale));
+        let mut start = 0;
         for (piece_at, piece) in line.split(' ').enumerate() {
-            let width = placed(face, piece, at.scale).1;
-            let space = placed(face, " ", at.scale).0;
+            // One pen walks the whole line, as the draw's does: a word is where the text before
+            // it puts the pen, not where it would stand measured alone.
+            let end = start + piece.len();
+            let pen = placed(face, &line[..start], at.scale).0;
+            let left = if pens == crate::font::Pens::Snapped {
+                pen.ceil()
+            } else {
+                pen
+            };
+            let right = placed(face, &line[..end], at.scale).1;
             let (left, right) = walked
                 .as_ref()
                 .and_then(|spans| spans.get(piece_at).copied())
-                .unwrap_or((pen, pen + width));
+                .unwrap_or((left, right));
+            start = end + 1;
             let entry = owner[word];
             match from {
                 Some((current, _)) if current != entry => {
@@ -495,7 +521,6 @@ pub fn legend_wrapped(
                 }
                 Some(_) => last.1 = right,
             }
-            pen += width + space;
             word += 1;
         }
         if let Some((current, _)) = from {

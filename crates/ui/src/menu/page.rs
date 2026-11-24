@@ -44,6 +44,28 @@ pub struct Page {
 }
 
 impl Page {
+    /// A page of `entries` with the second lines in `subtitles` (same length, `None` where a
+    /// row has none) and no row ids: what a screen read off the disc becomes, where no mod
+    /// names a row.
+    #[must_use]
+    pub fn new(
+        id: impl Into<String>,
+        title: impl Into<String>,
+        entries: Vec<Entry>,
+        subtitles: Vec<Option<String>>,
+    ) -> Self {
+        debug_assert_eq!(entries.len(), subtitles.len());
+        let meta = vec![RowMeta::default(); entries.len()];
+        Self {
+            id: id.into(),
+            title: title.into(),
+            entries,
+            subtitles,
+            meta,
+            parked: Vec::new(),
+        }
+    }
+
     /// Drops rows from [`Self::entries`] and their [`Self::subtitles`] and
     /// [`Self::meta`] together, so the three never drift out of the lockstep
     /// those fields' own docs promise. Every row-dropping pass of

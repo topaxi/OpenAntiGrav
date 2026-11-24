@@ -74,7 +74,9 @@ pub const PAUSE_MENU: &PauseMenu = &PauseMenu {
     ],
     scrim_argb: 0xe800_0000,
     layout: None,
-    hud_under_scrim: false,
+    // The paused frame of a Time Trial shows the HUD under the tint: the record time, the lap hexagon and the `current`
+    // clock, dimmed with the scene (`docs/ui/pause-menu.md`, "Pulse").
+    hud_under_scrim: true,
     song_line_under_scrim: true,
     offers_photo: true,
     origin: Origin::Measured,
@@ -95,6 +97,12 @@ mod tests {
         for mode in ["single_race", "head_to_head", "zone", "eliminator"] {
             assert_eq!(screen(mode), "InGame Pause SP", "{mode}");
         }
+    }
+
+    /// The paused frame of a Time Trial keeps the HUD under the tint.
+    #[test]
+    fn the_hud_stays_under_the_tint() {
+        assert!(PAUSE_MENU.hud_under_scrim);
     }
 
     #[test]

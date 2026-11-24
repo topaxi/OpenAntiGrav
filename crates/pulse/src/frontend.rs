@@ -209,7 +209,7 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     settings: Some(oag_title::MenuSettings {
         file: r"Data\Plugins\PI001\GUI\RaceBox_Definition.xml",
         screen: "Single Player",
-        pages: &["race"],
+        pages: &["race", "pulse-single"],
         font: "Title",
         sheet: r"Data\FE\Images\pulse_assets.mip",
         arrow: [[289.0, 76.0, 9.0, 10.0], [314.0, 76.0, 9.0, 10.0]],

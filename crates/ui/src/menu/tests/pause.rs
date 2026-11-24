@@ -42,6 +42,7 @@ fn words() -> crate::language::StringTable {
         r#"<StringTable>
              <Entry ID="IG_PAUSE_GPAUSED" String="GAME PAUSED"></Entry>
              <Entry ID="IG_PAUSE_CONT" String="CONTINUE"></Entry>
+             <Entry ID="IG_PAUSE_GMAN" String="GAME MANUAL"></Entry>
              <Entry ID="OPT_GAME_OPT" String="GAME OPTIONS"></Entry>
              <Entry ID="EXT_PHOTO" String="PHOTO MODE"></Entry>
              <Entry ID="IG_PAUSE_REST" String="RESTART RACE"></Entry>
@@ -56,6 +57,36 @@ fn ids(definition: &Definition) -> Vec<String> {
         .iter()
         .map(|meta| meta.id.clone().unwrap_or_default())
         .collect()
+}
+
+/// A row the disc authors and this build has nothing behind is left off the live page and drawn, opening
+/// nothing, on the page a comparison with the original's frame uses.
+#[test]
+fn a_page_as_authored_draws_the_rows_this_build_has_nothing_behind() {
+    let labels = |definition: &Definition| -> Vec<String> {
+        let page = definition.page(PAUSE_PAGE).expect("the pause page");
+        page.entries
+            .iter()
+            .map(|entry| entry.label().to_string())
+            .collect()
+    };
+    let mut live = built_in();
+    live.open_on_pause_screen(SCREENS, "time_trial", &words());
+    assert!(!labels(&live).contains(&"GAME MANUAL".to_string()));
+
+    let mut authored = built_in();
+    authored.open_on_pause_screen_as_authored(SCREENS, "time_trial", &words());
+    assert_eq!(
+        labels(&authored),
+        [
+            "CONTINUE",
+            "GAME OPTIONS",
+            "PHOTO MODE",
+            "GAME MANUAL",
+            "RESTART RACE",
+            "QUIT RACE"
+        ]
+    );
 }
 
 #[test]

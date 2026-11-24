@@ -1246,7 +1246,9 @@ naively is unsafe:
   through to its first `<Entry Language="English">` for want of a `<Font>`
   match anywhere above it, so it *does* parse as "English" - a second,
   string-table-only "English" that must not be added to the picker list.
-- **`PI012`** is the same shape for the same reason: no `<Font>` block, and
+- **`PI012`** (lives in `Data.wad`, byte-identical on both pressings; USA's
+  manifest loads it, EU's does not - now applied as the release's string overlay,
+  `docs/architecture/frontend-boot.md`) is the same shape for the same reason: no `<Font>` block, and
   its own comment reads `US-English ie English with different spellings` - a
   handful of American-spelling overrides (`Synchronizing` for
   `Synchronising`, `minimize` for `minimise`), not a base language. It also

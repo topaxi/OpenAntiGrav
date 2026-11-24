@@ -13,6 +13,7 @@ use crate::render::{Renderer, VideoFormat};
 use oag_raceplay as race;
 mod campaign_page;
 mod card;
+mod disc_screen_page;
 mod endrace_page;
 mod endrace_touch_page;
 mod join_page;
@@ -175,6 +176,8 @@ pub struct Options {
     /// With `--menu-page grid-select`/`cell-select`/`track-select`, the seconds the card title or the name panel's glow ladder has run -
     /// see the CLI flag's own docs. `None` follows `menu_picker_seconds`.
     pub menu_title_seconds: Option<f32>,
+    /// With `--menu-page`, where the focused row's colour pulse stands - see the CLI flag's own docs.
+    pub menu_focus_level: Option<f32>,
     /// Which modal prompt to draw over that page: `rename`, `rename-note`,
     /// `delete` or `delete-built-in`.
     ///
@@ -570,6 +573,7 @@ pub fn run(
                 pose_flaps: None,
                 field_lean: Vec::new(),
                 field_warmup: None,
+                detonator_mines: None,
                 pose_sparks: Vec::new(),
                 presented: options.presented.then_some(crate::race_capture::Presented {
                     render_scale: render_profile.render_scale,
@@ -632,11 +636,14 @@ pub fn run(
     let mut ticker_clip: Option<(usize, f32, f32)> = None;
     // The rows' skin, once for every screen this arm draws: the pitch comes off the
     // menu face's line height, the one thing a still must not guess.
-    let skin = oag_ui::menu::Skin::new(
+    let mut skin = oag_ui::menu::Skin::new(
         menu_skin,
         space,
         menu_font.as_ref().unwrap_or(&font).line_height,
     );
+    if let Some(level) = options.menu_focus_level {
+        skin.pin_pulse_level(level);
+    }
     let (mut movie, video_format, list, space) = match (&options.menu_page, &options.screen) {
         (Some(page), _) => {
             let showing = backdrop.as_ref().filter(|movie| movie.frames.is_some());

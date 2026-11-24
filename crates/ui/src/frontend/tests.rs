@@ -81,6 +81,7 @@ fn languages() -> Vec<Language> {
         fonts: Vec::new(),
         font_borders: Vec::new(),
         disc_strings: None,
+        overlays: Vec::new(),
     })
     .collect()
 }

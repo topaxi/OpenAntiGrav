@@ -255,7 +255,7 @@ impl super::Scene {
         );
         self.write_detonator_looks(race, queue, seconds, bomb_matrices.len());
         self.write_detonator_parts(
-            (race, &mine_matrices, &bomb_matrices),
+            (race, &race.mine_spike_matrices(), &bomb_matrices),
             prev,
             queue,
             (view_projection, prev_vp),
@@ -293,7 +293,7 @@ impl super::Scene {
         // A round or a flash has no pose to blur against: drawn without a previous one.
         let none: Vec<Mat4> = Vec::new();
         for (pool, matrices, previous) in [
-            (&parts.mine_spikes, mines, &prev.mines),
+            (&parts.mine_spikes, mines, &prev.mine_spikes),
             (&parts.bomb_equalisers, bombs, &prev.bombs),
             (&parts.bomb_glow_edges, bombs, &prev.bombs),
             (&parts.cannon_bolt, &rounds[..], &none),

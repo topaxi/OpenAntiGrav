@@ -22,6 +22,9 @@ pub struct ListWidget {
     pub y: f32,
     /// The entries' `idstring`s, in document order.
     pub entries: Vec<String>,
+    /// The `string` of each entry that spells a literal instead of an `idstring` (the
+    /// race box's `Eliminations`: `5`, `10`, ...), in document order.
+    pub literal_entries: Vec<String>,
     /// `default`: the entry the list holds before anything is chosen.
     pub default: Option<String>,
     /// `ActiveColor`, the fill while focused.
@@ -51,6 +54,10 @@ impl Screens {
             entries: node
                 .children_named("Entry")
                 .filter_map(|entry| entry.value("idstring").map(str::to_string))
+                .collect(),
+            literal_entries: node
+                .children_named("Entry")
+                .filter_map(|entry| entry.value("string").map(str::to_string))
                 .collect(),
             default: node.attr("default").map(str::to_string),
             active_color: argb("ActiveColor"),

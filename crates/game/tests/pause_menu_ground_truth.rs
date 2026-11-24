@@ -122,6 +122,68 @@ fn a_time_trial_pauses_into_the_time_trial_screen() {
     assert_eq!(rows(&run), the_rows());
 }
 
+/// A compare shot (`--original-menu`) lists the disc's GAME MANUAL row, which this build has nothing behind: the
+/// live list above does not.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_compare_shot_lists_the_game_manual_the_live_pause_leaves_out() {
+    let Some(image) = pulse() else {
+        return;
+    };
+    let run = run_on_with(
+        &image,
+        "manual",
+        &format!("{} {OPEN}", to_the_race("time_trial")),
+        &["--original-menu"],
+    );
+    let labels: Vec<String> = rows(&run).into_iter().map(|(label, _)| label).collect();
+    assert_eq!(
+        labels,
+        [
+            "Continue",
+            "Game options",
+            "Photo mode",
+            "Game manual",
+            "Restart race",
+            "Quit race"
+        ]
+    );
+}
+
+/// Pulse's pause keeps the HUD on screen under the tint, dimmed with the rest: the paused frame's lower-left
+/// `current` clock box is not black (the tint leaves white at about a ninth), where a pause that dropped the
+/// HUD leaves the road's dark pixels there.
+#[test]
+#[ignore = "needs a disc image in data/images/ and a GPU adapter"]
+fn a_pulse_pause_draws_the_hud_dimmed_under_the_tint() {
+    let Some(image) = pulse() else {
+        return;
+    };
+    let shot = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("pause-shots/pulse-hud.png");
+    let _ = std::fs::remove_file(&shot);
+    let _ = run_on_with(
+        &image,
+        "hud",
+        &format!(
+            "{} {OPEN} ticks 120; draw; screenshot SHOTS/pulse-hud.png",
+            to_the_race("time_trial")
+        ),
+        &[],
+    );
+    let png = oag_texture::replacer::decode_png(&std::fs::read(&shot).expect("the screenshot"))
+        .expect("a PNG");
+    let scale = png.width as usize / 480;
+    let brightest = (248 * scale..270 * scale)
+        .flat_map(|y| (30 * scale..112 * scale).map(move |x| (y * png.width as usize + x) * 4))
+        .map(|at| u32::from(png.rgba[at..at + 3].iter().copied().max().unwrap_or(0)))
+        .max()
+        .unwrap_or(0);
+    assert!(
+        brightest >= 16,
+        "the clock box under the tint holds nothing brighter than {brightest}"
+    );
+}
+
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn a_speed_lap_pauses_into_the_speed_lap_screen() {
@@ -753,35 +815,50 @@ mod pure_screens {
         assert_eq!(ended.states.last().expect("a state")["stage"], "menu");
     }
 
-    /// START and CONTINUE resume, CIRCLE on the root does nothing, RESTART loads the race again,
-    /// QUIT leaves for the main page and PHOTO MODE opens from the screen.
+    /// One game run per row, each its own test: START and CONTINUE resume, CIRCLE on the root
+    /// does nothing, RESTART loads the race again, QUIT leaves for the main page and PHOTO MODE
+    /// opens from the screen.
+    fn the_race_paused(tag: &str, then: &str) -> Run {
+        let race = to_the_race("single_race");
+        run_pure(tag, &format!("{race} {OPEN} {then}"))
+    }
+
     #[test]
     #[ignore = "needs a disc image in data/images/"]
-    fn the_rows_work_by_pad() {
+    fn start_resumes_by_pad() {
         if pure().is_none() {
             return;
         }
-        let race = to_the_race("single_race");
-        let resumed = run_pure(
-            "start",
-            &format!("{race} {OPEN} press start; until stage=race; ticks 30"),
-        );
+        let resumed = the_race_paused("start", "press start; until stage=race; ticks 30");
         assert_eq!(
             resumed.states.last().expect("a state")["stage"],
             "race",
             "START resumes"
         );
-        let circle = run_pure(
+    }
+
+    #[test]
+    #[ignore = "needs a disc image in data/images/"]
+    fn circle_on_the_pause_root_does_nothing_by_pad() {
+        if pure().is_none() {
+            return;
+        }
+        let circle = the_race_paused(
             "circle",
-            &format!("{race} {OPEN} press circle; ticks 20; expect stage=menu page=pause"),
+            "press circle; ticks 20; expect stage=menu page=pause",
         );
         assert_eq!(rows(&circle), rows_with_restart(), "CIRCLE does nothing");
-        let restart = run_pure(
+    }
+
+    #[test]
+    #[ignore = "needs a disc image in data/images/"]
+    fn restart_loads_the_race_again_by_pad() {
+        if pure().is_none() {
+            return;
+        }
+        let restart = the_race_paused(
             "restart",
-            &format!(
-                "{race} {OPEN} select pause_restart; press cross; until stage=race within 4000; \
-                 ticks 20"
-            ),
+            "select pause_restart; press cross; until stage=race within 4000; ticks 20",
         );
         let sims: Vec<u64> = restart
             .states
@@ -792,16 +869,30 @@ mod pure_screens {
             sims.last().copied().unwrap_or(u64::MAX) < 100,
             "RESTART: {sims:?}"
         );
-        let quit = run_pure(
+    }
+
+    #[test]
+    #[ignore = "needs a disc image in data/images/"]
+    fn quit_leaves_for_the_main_page_by_pad() {
+        if pure().is_none() {
+            return;
+        }
+        let quit = the_race_paused(
             "quit",
-            &format!(
-                "{race} {OPEN} select pause_quit; press cross; until stage=menu; expect page=main"
-            ),
+            "select pause_quit; press cross; until stage=menu; expect page=main",
         );
         assert_eq!(quit.states.last().expect("a state")["screen"]["id"], "main");
-        let photo = run_pure(
+    }
+
+    #[test]
+    #[ignore = "needs a disc image in data/images/"]
+    fn photo_mode_opens_from_the_pause_screen_by_pad() {
+        if pure().is_none() {
+            return;
+        }
+        let photo = the_race_paused(
             "photo",
-            &format!("{race} {OPEN} select photo_mode; press cross; until photo=free within 200"),
+            "select photo_mode; press cross; until photo=free within 200",
         );
         assert!(
             photo.states.iter().any(|state| state["photo"] == "free"),

@@ -526,4 +526,9 @@ pub struct RaceView {
     /// What the weather adds to the original's. `[render_profiles.<title>] weather`;
     /// see [`Race::set_weather`].
     pub(super) weather: oag_display::display::Weather,
+    /// Each laid Detonator mine's football and spikes size (`m+0xd8` and the spikes' own), by survey entry
+    /// and lane, as the scene last stepped its music envelope. Absent is `1`. Written by
+    /// [`crate::scene`]'s `write_detonator_looks`, read by [`Race::mine_model_matrices`]: one source for the
+    /// draw, the shadows and the blur's previous pose.
+    pub(super) mine_sizes: std::sync::Mutex<std::collections::BTreeMap<(u16, i8), (f32, f32)>>,
 }

@@ -73,6 +73,19 @@ pub fn load_languages(
     out
 }
 
+/// Names the overlay plugins every language of a release loads over its strings
+/// ([`oag_title::FrontEnd::language_overlays`]).
+#[must_use]
+pub fn with_overlays(mut languages: Vec<Language>, overlays: &[&str]) -> Vec<Language> {
+    for language in &mut languages {
+        language.overlays = overlays
+            .iter()
+            .map(|plugin| (*plugin).to_string())
+            .collect();
+    }
+    languages
+}
+
 /// The archive entry of a language plugin's `definition.xml`.
 fn definition_entry(plugin: &str) -> String {
     pulse::names::language_definition(plugin)
@@ -283,6 +296,7 @@ pub fn load_strings(
     {
         Ok(xml) => {
             let mut table = StringTable::from_xml(&xml);
+            overlay_plugins(archives, language, &mut table, report);
             if let Some(namespace) = language.disc_strings {
                 crate::strings::overlay_disc(&mut table, namespace, &language.name, report);
             }
@@ -303,6 +317,35 @@ pub fn load_strings(
             report.push(format!("{name}: {e}"));
             StringTable::default()
         }
+    }
+}
+
+/// Lays each of `language`'s overlay plugins over its table, in manifest order, taking only the
+/// section that states the language's own name. A plugin the source does not hold is named in
+/// `report` and skipped.
+fn overlay_plugins(
+    archives: &mut oag_assets::Archives,
+    language: &Language,
+    table: &mut StringTable,
+    report: &mut Vec<String>,
+) {
+    for plugin in &language.overlays {
+        let name = definition_entry(plugin);
+        let Some(xml) = archives
+            .read_name(&name)
+            .ok()
+            .and_then(|blob| expand(&blob).ok())
+        else {
+            report.push(format!("overlay plugin {plugin}: no readable {name}"));
+            continue;
+        };
+        let section = StringTable::section(&xml, &language.name);
+        report.push(format!(
+            "{plugin}: {} overlay string(s) for {}",
+            section.len(),
+            language.name
+        ));
+        table.merge(section);
     }
 }
 

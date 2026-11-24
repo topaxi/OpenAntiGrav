@@ -194,27 +194,46 @@ fn white(&[r, g, b]: &[u8; 3]) -> bool {
     r > 240 && g > 240 && b > 240
 }
 
-/// The sixteen `ThickLine_bighalo` streaks draw, and outlive the blast.
-///
-/// Near-white pixels of 522,240 from the side camera. With the streak draw dropped the
-/// frame reads 3,635 at tick 335 and 2,548 at tick 365; drawn, 13,658 and 9,524. At tick
-/// 410, a second after the blast retired (age 1.0 at tick 350) and past the 1.2 s of
-/// its last node, 2,567: every streak has died.
+/// White pixels of the side camera's frame at `ticks`.
+fn streak_pixels(ticks: u32) -> Option<usize> {
+    frame_with(ticks, &[side_camera()]).map(|frame| frame.iter().filter(|p| white(p)).count())
+}
+
+/// The sixteen `ThickLine_bighalo` streaks draw, and outlive the blast: three frames, one
+/// test each, near-white pixels of 522,240 from the side camera. With the streak draw
+/// dropped the frame reads 3,635 at tick 335 and 2,548 at tick 365; drawn, 13,658 and
+/// 9,524. At tick 410, a second after the blast retired (age 1.0 at tick 350) and past the
+/// 1.2 s of its last node, 2,567: every streak has died.
 #[test]
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso and a GPU adapter"]
-fn the_explosions_streaks_draw_and_outlive_it() {
-    let camera = [side_camera()];
-    let at =
-        |ticks| frame_with(ticks, &camera).map(|frame| frame.iter().filter(|p| white(p)).count());
-    let (Some(burst), Some(after), Some(gone)) = (at(335), at(365), at(410)) else {
+fn the_explosions_streaks_draw_at_0_75_s() {
+    let Some(burst) = streak_pixels(335) else {
         return;
     };
-    println!("white pixels: burst {burst}, after the blast {after}, all dead {gone}");
+    println!("white pixels: burst {burst}");
     assert!(burst > 9_000, "the streaks are missing at 0.75 s: {burst}");
+}
+
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso and a GPU adapter"]
+fn the_explosions_streaks_outlive_the_blast() {
+    let Some(after) = streak_pixels(365) else {
+        return;
+    };
+    println!("white pixels: after the blast {after}");
     assert!(
         after > 6_000,
         "the streaks died with the blast instead of outliving it: {after}"
     );
+}
+
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso and a GPU adapter"]
+fn the_explosions_streaks_all_die() {
+    let Some(gone) = streak_pixels(410) else {
+        return;
+    };
+    println!("white pixels: all dead {gone}");
     assert!(gone < 4_500, "a streak never dies: {gone}");
 }
 

@@ -291,10 +291,19 @@ per rendered frame; the bomb is colour times brightness; the bomb flash is `0` (
 band levels are the raw array (`Scene::set_band_levels`, fed from `Spectrum::levels()` next to
 `set_blur_resolution` in the three draw sites and the capture).
 
+**Size breathing wired** (2026-11-23, `det-mines`): a live mine's football is drawn at `scale = clamp(2.3 s, 1, 2.3)` and its
+spikes at `clamp(4 t, 1, scale + 0.95)`, about the mine's centre, from the same envelope as the brightness
+(`MineEnvelope::{football_scale, spike_scale}`; `RaceView::mine_sizes` is the one source for the draw, the shadows and the
+blur's previous pose; the scene steps the envelope before it writes the matrices). A dark mine stays at `1` (its `m+0xd8`
+is `0`; what the draw does with it is unread). **Live check** (`detonator-mine.md`, "Where a mine stands"): one laid mine
+read `s = 0.5886`, `t = 0.568`, `m+0xd8 = 1.3537`, `MineBrightness = 1.1771`, `MineColour = (0.4784, 0.098, 1.0)`: `2.3 s`,
+`2 s` and stage 1's `(122, 25, 255)` to the digit, so the size, brightness and colour laws are lifted to **85** (the
+colour order too). Chosen: what the original reads as one `s` per mine over a history, ours steps once per tick from the
+frame's bands with no history, so a pair's mine is the original's size only if its `s` is carried (not done).
+
 **Not wired:** the equalisers' rays (`Colour`, `Brightness`) and the glow edges (`RainbowColour`,
 `Brightness`) keep their authored values (their names are shared with other families and their
-programs are unread); the mine's size (`scale`, `spikeScale`, `m+0xd8`) stays at `1`; the visualiser
-(`Electric_Visualiser`) is still not loaded.
+programs are unread); the visualiser (`Electric_Visualiser`) is still not loaded.
 
 ## What the port needs
 
@@ -354,6 +363,13 @@ programs are unread); the mine's size (`scale`, `spikeScale`, `m+0xd8`) stays at
 - **A live capture.** Nothing here ran. A read watchpoint on `m+0x100` and `m+0x138` of a laid
   mine in RPCS3 (the football's `MineBrightness` against a known stage colour) would lift the law
   to 85+; `det-pairs` holds the RPCS3 session.
+
+## Correction: the dark branch does not submit the visualiser (2026-11-24, `det-mine-look-re`)
+
+The dark-mine block above says "Both models and the visualiser are re-submitted". The two calls at `0x00139ccc` and
+`0x00139cec` pass `m+0xcc` and `m+0xd0` (the football and the spikes); `m+0xd4`, the visualiser, is posed by
+`DetonatorMine_PoseVisualiser` (`0x00139308`), a camera-facing billboard scaled `1 + 0.4 (m+0xd8 - 1)` live and `0.9`
+dark: [detonator-mine-draw.md](detonator-mine-draw.md). That is also the reader of `m+0xd8` this page left open.
 
 ## Lineage (2048 and Omega)
 

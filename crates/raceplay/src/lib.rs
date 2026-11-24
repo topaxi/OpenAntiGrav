@@ -402,8 +402,9 @@ pub use load::{authored_light, hd_bloom_params};
 #[cfg(feature = "view")]
 pub(crate) use oag_title::Trigger;
 pub use options::{
-    CameraOverride, Campaign2048Progress, CaptureHud, CaptureZone, Loaded, Options, PoseRequest,
-    SeatPick, Sighting, SimSetup, TrailHits, ViewSetup, WingtipContrails,
+    CameraOverride, Campaign2048Progress, CaptureHeadToHead, CaptureHud, CaptureSong, CaptureZone,
+    Loaded, Options, PoseRequest, SeatPick, Sighting, SimSetup, TrailHits, ViewSetup,
+    WingtipContrails,
 };
 pub use replay::{ApplyError, Launch, OriginalAi, UnknownOption, rebuild};
 #[cfg(feature = "view")]

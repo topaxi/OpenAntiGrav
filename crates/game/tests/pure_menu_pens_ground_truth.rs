@@ -30,6 +30,17 @@ const DESCRIPTION_LAST_ORIGINAL: u32 = 425;
 
 const RACE_RECORD_ORIGINAL: [u32; 10] = [250, 258, 266, 274, 289, 297, 305, 313, 321, 329];
 
+/// The strongest ink of any row of `rows` in column `x`, on a 0 to 255 scale (white is 0).
+fn ink_at(image: &oag_texture::replacer::Image, rows: std::ops::Range<u32>, x: u32) -> i32 {
+    rows.map(|y| {
+        let at = ((y * image.width + x) * 4) as usize;
+        let rgb = &image.rgba[at..at + 3];
+        (255 * 3 - rgb.iter().map(|&c| i32::from(c)).sum::<i32>()) / 3
+    })
+    .max()
+    .unwrap_or(0)
+}
+
 /// The first column of each run of inked columns in `rows`, between `columns`.
 fn glyph_starts(
     image: &oag_texture::replacer::Image,
@@ -114,6 +125,18 @@ fn the_circuit_panels_label_steps_eight_pixels_a_glyph_as_the_originals_does() {
             (starts[9] - starts[0]).abs_diff(79) <= 1,
             "{name}: the label spans {} px, the original's 79: {starts:?}",
             starts[9] - starts[0]
+        );
+        // The glyph is a whole-pixel quad from the pen (`oag_ui::font::snapped_quad`): the
+        // first `R` of `RACE RECORD` (pen 249, a 5 px quad) takes a faint left column at 249 and
+        // stops at 253; the original's frame has ink 44 % strong at 249 and none at 255, where
+        // a fractional quad from the ink edge (250, 5.6 wide) leaves 249 blank and reaches 255.
+        assert!(
+            ink_at(&frame, 171..180, 249) > 40,
+            "{name}: no ink in column 249, where the whole-pixel quad starts"
+        );
+        assert!(
+            ink_at(&frame, 171..180, 255) < 10,
+            "{name}: ink in column 255, past the whole-pixel quad"
         );
         // The description line: one line, its last glyph (the cursor) where the original's is.
         let line = glyph_starts(&frame, 219..231, 20..480);

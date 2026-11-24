@@ -31,7 +31,7 @@ fn models() -> Arc<ZoneEndModels> {
     })
 }
 
-fn zone_race(destroyed: DestroyedCraft) -> Race {
+pub(super) fn zone_race(destroyed: DestroyedCraft) -> Race {
     let mut setup = setup(hulled_handling());
     setup.destroyed = destroyed;
     setup.mode = Mode::Zone;
