@@ -1203,3 +1203,16 @@
 # 2026-11-24 det-mine-look-re: the mine parts' matrices and the visualiser billboard (detonator-mine-draw.md)
 0x00327500	function	SceneNode_SetLocalMatrix	72	detonator-mine-draw.md
 0x00139308	function	DetonatorMine_PoseVisualiser	65	detonator-mine-draw.md
+# 2026-11-24 shipselect-ring-re: HexSelection, the Ship Select ring pulse and lattice slide (ship-select-ring.md)
+0x001b0b58	function	HexSelection_RegisterPrototype	80	ship-select-ring.md
+0x00699a70	function	HexSelection_Construct	80	ship-select-ring.md
+0x001b03f0	function	HexSelection_ParseXml	85	ship-select-ring.md
+0x001b2360	function	HexSelection_Build	80	ship-select-ring.md
+0x001b10f8	function	HexSelection_Update	85	ship-select-ring.md
+0x001b09b8	function	HexSelection_Step	85	ship-select-ring.md
+0x001b0920	function	HexSelection_SetRow	75	ship-select-ring.md
+0x001b0c28	function	HexSelection_SetCell	70	ship-select-ring.md
+0x001b0320	function	HexSelection_ClearCell	70	ship-select-ring.md
+0x001b2a48	function	HexSelection_Destroy	70	ship-select-ring.md
+0x002096f0	function	TrackHexSelection_Update	70	ship-select-ring.md
+0x00200498	function	Colour_LerpArgb	85	ship-select-ring.md
