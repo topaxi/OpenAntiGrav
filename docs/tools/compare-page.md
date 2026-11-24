@@ -101,7 +101,15 @@ slot values above).
 | pixels that changed in ours | none outside the box; the row is 60x53 at (210, 8) | |
 | whole frame RMSE | 0.0486 | 0.0361 |
 
-Open: the original's hexagon is translucent (the scene shows through it) where ours' is a flat green; the HD race pair (`hd-race/talons-pack`) and the
+The hexagon itself is translucent in ours too: the backdrop word is the weapon's table word, alpha included (Autopilot `0x801CBC1C`,
+alpha `0x80`; `oag_hud` `pickup_sprites`), and the scene shows through it. On `talons-boost`, regressing each frame's hexagon wings (1,304
+pixels outside the icon and the countdown) against ours rendered without the row gives a blend alpha of 0.24 to 0.27 in ours and 0.26 to 0.29
+in the original (the word's 0.5 times the sheet's own alpha, which was not read here). The wings differ by 4 to 8 grey on average, against 2 to 5
+in a control region off the row; ours' wings read a little lighter (green about 225 against 202). On `talons-alongside` the same regression is
+not usable (the pad and the rocket behind the hexagon make the per-channel slopes 0.17 to 0.55 for ours and 0.29 to 0.51 for the original),
+but both frames show the scene through the hexagon and the wings differ by 8 grey in red and 4 in green and blue. What still differs in the
+pickup box is the icon and the `5.00` glyphs. `talons-uturn-airbrakes` is a scenery pair (`--ticks 10829`, no `--hud-state`): its original frame shows a Turbo
+hexagon with chevrons, 165 km/h and 99 shield, where ours draws no pickup row, 0 km/h and 100, so no hexagon is drawn at all. The HD race pair (`hd-race/talons-pack`) and the
 Zone pairs are unchanged (the flag is Pulse PSP's, from `restore_autopilot_timer`'s own pair types; the Zone pair's frame
 shows the same row and has not been given it).
 
