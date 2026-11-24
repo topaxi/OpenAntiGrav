@@ -55,7 +55,7 @@ mod x11_refresh;
 use crate::app::args::{autopilot_pilot, give_weapon};
 use crate::app::cli::Cli;
 use crate::app::handler::App;
-use crate::app::headless::{run_race, run_windowless};
+use crate::app::headless::{race_launch, run_windowless};
 use crate::app::pose::{
     capture_hud, field_from_csv, parse_camera_pose, parse_pose, pose_from_trace,
 };
@@ -197,7 +197,50 @@ fn new_event_loop() -> Result<EventLoop<()>> {
     Ok(EventLoop::new()?)
 }
 
-fn run(mut cli: Cli) -> Result<()> {
+/// The command line, run: to the end when nothing needs a window, otherwise as far as the window.
+fn run(cli: Cli) -> Result<()> {
+    match launch(cli)? {
+        Launch::Done => Ok(()),
+        Launch::Window(window) => run_window(*window),
+    }
+}
+
+/// What [`launch`] leaves for [`run_window`].
+pub(crate) enum Launch {
+    /// Everything the command line asked for has run.
+    Done,
+    /// A window's event loop is next, on this app.
+    Window(Box<Windowed>),
+}
+
+/// An [`App`] built and waiting for its window.
+pub(crate) struct Windowed {
+    app: Box<App>,
+    drive: Option<crate::drive::Script>,
+    state_log: Option<std::path::PathBuf>,
+}
+
+impl Windowed {
+    /// A window for `app` with no scripted session to run in its place.
+    pub(crate) fn new(app: App) -> Self {
+        Self {
+            app: Box::new(app),
+            drive: None,
+            state_log: None,
+        }
+    }
+}
+
+/// Builds the window's app, or runs whatever needs no window.
+///
+/// **Kept apart from the loop on purpose.** This function inlines every route's locals, the
+/// command line, the settings, a race's [`App`] and its capture options, into one frame of about
+/// 470 KB. Run in the same function as the event loop, that frame stayed under every callback of
+/// the game, and on Android's 2 MiB `android_main` stack it left no room for `naga`'s parser
+/// (`docs/tools/android.md`, "The stack"). Returning the app boxed ends the frame before the loop
+/// starts.
+#[inline(never)]
+fn launch(mut cli: Cli) -> Result<Launch> {
     // Ahead of settings and the disc search, deliberately: rasterising the
     // icon needs neither, and `just install-desktop-file` /
     // `scripts/build-appimage.sh` both call this on machines that may have no
@@ -217,11 +260,11 @@ fn run(mut cli: Cli) -> Result<()> {
         let png = oag_texture::png::encode_rgba(width, height, &pixels);
         std::fs::write(path, png).with_context(|| format!("writing {}", path.display()))?;
         println!("wrote {}x{} {}", width, height, path.display());
-        return Ok(());
+        return Ok(Launch::Done);
     }
 
     if let Some(path) = &cli.shot.png_info {
-        return from_png::info(path);
+        return from_png::info(path).map(|()| Launch::Done);
     }
     let (restage, blurred) = match cli.shot.from_png.clone() {
         Some(path) => {
@@ -244,11 +287,14 @@ fn run(mut cli: Cli) -> Result<()> {
         return crate::ffmpeg_cli::run(
             &oag_source::cache::default_ffmpeg_dir(),
             settings.ffmpeg.use_pinned,
-        );
+        )
+        .map(|()| Launch::Done);
     }
     if cli.probe_pad {
         info!("--probe-pad: printing pad events until stopped; no window opens");
-        return oag_input::probe::run(&mut std::io::stdout(), || false).map_err(anyhow::Error::msg);
+        return oag_input::probe::run(&mut std::io::stdout(), || false)
+            .map(|()| Launch::Done)
+            .map_err(anyhow::Error::msg);
     }
     #[cfg(feature = "dev-cli")]
     if let Some(pattern) = &cli.dev.rumble_pattern {
@@ -257,7 +303,8 @@ fn run(mut cli: Cli) -> Result<()> {
             source: cli.source.as_deref().or(settings.source.image.as_deref()),
             token: &settings.controls.rumble,
             hold: cli.dev.rumble_hold,
-        });
+        })
+        .map(|()| Launch::Done);
     }
     let anisotropy = cli.anisotropy.unwrap_or(settings.graphics.anisotropy);
     // A CLI render-profile flag overrides *every* title's entry for this run
@@ -524,7 +571,7 @@ fn run(mut cli: Cli) -> Result<()> {
             {
                 println!("demo {}: {report}", n + 1);
             }
-            return Ok(());
+            return Ok(Launch::Done);
         }
         let track = catalogue
             .tracks
@@ -535,7 +582,7 @@ fn run(mut cli: Cli) -> Result<()> {
         options.mode = oag_race::Mode::SingleRace;
         options.track = track.map(race::catalogue::Track::entry_name);
         options.team = team.map(|team| team.value.clone());
-        return run_race(
+        return race_launch(
             cli,
             options,
             settings,
@@ -602,7 +649,7 @@ fn run(mut cli: Cli) -> Result<()> {
             Some(net) => net.race_options(options)?,
             None => options,
         };
-        return run_race(
+        return race_launch(
             cli,
             options,
             settings,
@@ -635,7 +682,8 @@ fn run(mut cli: Cli) -> Result<()> {
             anisotropy,
             audio,
             music_discs,
-        );
+        )
+        .map(|()| Launch::Done);
     }
 
     // Which way in this window takes: straight to a boot, or the chooser first.
@@ -799,8 +847,7 @@ fn run(mut cli: Cli) -> Result<()> {
     let drive = cli.dev.drive()?;
     let state_log = cli.dev.state_log.clone();
 
-    #[cfg_attr(target_arch = "wasm32", allow(unused_mut))]
-    let mut app = App {
+    let app = App {
         pvs_culling: cli.pvs,
         camera_jitter: cli.camera_jitter,
         boot_shell,
@@ -840,7 +887,7 @@ fn run(mut cli: Cli) -> Result<()> {
         settings,
         shell,
         // Every route through `main` has a shell or is about to load one;
-        // only `--race`, which is `headless::run_race`, has neither.
+        // only `--race`, which is `headless::race_launch`, has neither.
         race_title: None,
         race_platform: None,
         audio: Some(audio),
@@ -854,6 +901,22 @@ fn run(mut cli: Cli) -> Result<()> {
         suspended: false,
         occluded: false,
     };
+    Ok(Launch::Window(Box::new(Windowed {
+        app: Box::new(app),
+        drive,
+        state_log,
+    })))
+}
+
+/// The window's loop, or the scripted session or wallpaper that stands in for it.
+#[inline(never)]
+fn run_window(window: Windowed) -> Result<()> {
+    #[cfg_attr(target_arch = "wasm32", allow(unused_mut))]
+    let Windowed {
+        mut app,
+        drive,
+        state_log,
+    } = window;
     #[cfg(not(target_arch = "wasm32"))]
     if let Some(script) = drive {
         oag_sound::probe::mark_frame_thread();
@@ -883,12 +946,12 @@ fn run(mut cli: Cli) -> Result<()> {
     #[cfg(target_arch = "wasm32")]
     {
         use winit::platform::web::EventLoopExtWebSys;
-        event_loop.spawn_app(app);
+        event_loop.spawn_app(*app);
         Ok(())
     }
     #[cfg(not(target_arch = "wasm32"))]
     {
-        event_loop.run_app(&mut app)?;
+        event_loop.run_app(&mut *app)?;
         app.finish_audio()?;
         app.finish_prefetch();
         Ok(())

@@ -73,7 +73,7 @@ offered.
 
 `just launch-android` starts the app and follows `adb logcat -s oag` (cleared first, so only this run's lines); `--stop` forces a cold start, `--no-logs` only launches.
 
-**A run without touch: the launch file.** (On main `d5bfef6` `--race` in it crashes at once, see "Performance on the Galaxy S21", "Reaching a race"; the other arguments work.) Android hands a NativeActivity no command
+**A run without touch: the launch file.** (On main `d5bfef6` `--race` in it crashed at once; fixed, see "The stack".) Android hands a NativeActivity no command
 line, so the app reads one from `files/oag-args.txt` at launch and deletes it
 (`oag_mobile::android::take_launch_args`). One argument a line; a line
 `OAG_NAME=value` sets that environment variable instead (`OAG_SPLIT_FINISH=0`). It is
@@ -164,6 +164,100 @@ question.
   intro sound track); see `docs/formats/atrac9.md`. A desktop run with `PATH` emptied (`--no-audio --screenshot
   --until "Language Selection"`) still reaches the Language Selection screen, which is
   the nearest check available without a device.
+
+## The stack
+
+NativeActivity runs `android_main` on a thread `android-activity` spawns with the
+default 2 MiB stack (`std::thread::spawn` in its `native_activity/glue.rs`), and
+winit must poll on that thread: the looper that carries the input queue and the
+activity's commands is prepared there and `poll_events` reads `ALooper_forThread()`.
+So the game cannot choose the stack its front end and its event loop start on, and
+its callbacks (`resumed`, every frame) run on whatever is left of 2 MiB.
+
+**What overflowed.** `--race` from the launch file crashed at once with SIGSEGV, on
+Pulse and on HD (measured on the S21, Exynos 2100, Android 14, the `dist` build). A
+stack overflow in `naga`'s WGSL parser, on `Stage::race` -> `Scene::new` ->
+`create_shader_module`: the parser recurses, and the frames above it were
+`app::run` 481,936 bytes, `run_race` 545 KB, `App::open_with` 385 KB,
+`Stage::race` 315 KB, `Scene::new` 172 KB and the winit closure 160 KB, about 2.07 MB
+before the recursion began. The menu route survived because it never entered
+`run_race`, and builds its scene on the `race-build` thread. Upstream knows the
+recursion: gfx-rs/wgpu#9497, #9456 and #5759.
+
+**Three things stand in its way now.**
+
+- **A big stack for the scene.** `oag_thread::on_big_stack` runs a closure on a
+  thread with `oag_thread::BIG_STACK` (16 MiB) and waits for it. `Stage::race` (the
+  `--race` route) builds its scene there, and the `race-build` worker the menus use
+  is spawned with the same stack. Every platform takes this path, so a desktop
+  `--race` is the one that proves it (below). The thread holds a
+  `gpu_workers::Guard`, as every GPU-touching thread does. The browser has no
+  second thread and builds in place, as it did.
+- **Frames that end before the loop starts.** `app::launch` (the old `run`) and
+  `headless::race_launch` (the old `run_race`) build the `App` and return it boxed
+  (`Launch::Window`); `app::run_window` then runs the loop from a 1.6 KB frame. Before,
+  the 470 KB and 532 KB frames of the two functions stayed under every callback of the
+  game. `Session` (160 KB) and the race's `Loaded` (62 KB) travel boxed
+  (`App::state`, `open_with`'s result, `Stage::race`, `BuildWorker::spawn`), so the
+  winit closure's frame fell from 156 KiB to 2.7 KiB.
+- **The build reads the frames.** `scripts/check-android-stack.py` reads every
+  function's frame off the unstripped library and `scripts/build-apk.sh` runs it:
+  `android_main`, `run_window`, the winit callback and `Stage::race` must each stay
+  under 64 KiB, and must still exist under that name (a rename cannot leave one
+  unchecked, and a resident function with no prologue found fails too). It follows the
+  stack pointer through each function's first 300 instructions (probed frames, a
+  prologue after an early exit) and refuses a stripped library. It reads prologues, not
+  call depth: a margin, not a proof. `--all` checks every function; `--top N` lists the
+  largest; `--selftest` (`just check-android-stack-script`, in the gate) runs the reader
+  on disassembly snippets.
+
+Frames in the `dist` build (`cargo ndk -t arm64-v8a -P 26 build -p oag-game --example
+oag_android --no-default-features --features android,extensions --profile dist`,
+read with `scripts/check-android-stack.py`, KiB):
+
+| Function | Before | After | Where it runs |
+| --- | --- | --- | --- |
+| `app::run` / `app::launch` | 469.8 | 314.0 (`launch`, gone before the loop) | `android_main` thread, transient |
+| `headless::run_race` / `race_launch` | 532.2 | 376.2 (gone before the loop) | transient |
+| `run_window` (the loop) | inside `run` | 1.6 | `android_main` thread, resident |
+| winit `run_app` closure | 156.1 | 2.7 | resident |
+| `Stage::race` | 308.1 | 60.1 | `android_main` thread, while it waits |
+| `build_race_stage` | inside `Stage::race` | 308.1 | the 16 MiB thread |
+| `Scene::new` | 168.2 | 168.2 | the 16 MiB thread |
+| `App::open_with` | 376.1 | 356.1 | `android_main` thread (`Session` is built here) |
+| `BuildWorker::spawn` | 188.0 | 64.0 | `android_main` thread |
+
+`open_with` is still large: it builds the `Session` literal before boxing it, and the
+shaders compiled under it (the overlay's, the present pipeline's) run on the
+`android_main` thread with about 0.4 MB of frames above them, where the menu route
+before this change ran them under `launch`'s 470 KB as well. Shrinking `Session`
+itself (its overlay and panel fields are 57 KB and 43 KB) is open.
+
+**On the S21** (Galaxy S21, Android 14, the `dist` APK of this change, media volume 0,
+`--no-audio`, `--autopilot`, `--frame-log`, default settings): the launch-file
+`--race` finishes the race on Pulse (Talon's Junction, 3 laps, 1:49.35, process alive
+throughout) and on HD (Vineta K, 3 laps, 1:51.50), where it was a SIGSEGV four
+seconds in. The menu route (Racebox, Single Race, the launch file naming the image and
+`--autopilot`) also finishes, on Pulse (4 laps) and on HD: each logs
+`saved a new ghost: a lap of N ticks` per lap and ends in `race finished`. The
+`--race` route has no front end, so it logs the ghost lines (Pulse 2194 and 2167
+ticks, HD 2234 and 2211 ticks) and shows the RACE COMPLETE screen, but no
+`race finished` line. The phone's speed varies with its temperature, so this proves a lap
+finishes and no rate.
+
+**Reproducing it on a desktop.** The main thread's stack is `ulimit -s`. A windowed
+`--race` under a 2 MiB limit is the same situation (inside your own display, with
+`--no-audio`):
+
+```sh
+(ulimit -s 2048; env -u WAYLAND_DISPLAY WINIT_UNIX_BACKEND=x11 DISPLAY=:91 \
+  VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json \
+  target/debug/oag-game --no-audio --race --script 20:quit data/images/pulse-psp-eu.chd)
+```
+
+Before the change this printed `thread 'main' has overflowed its stack` for Pulse and
+for HD in the `dev` build; with it, both run and quit. Not in the gate: it needs a
+display.
 
 ## What was verified
 
@@ -706,10 +800,10 @@ and a floor that does not fall with them.
 
 ### Reaching a race, and what does not work
 
-- **The launch file's `--race` crashes on this build.** `android_main` runs on a 2 MiB thread (`android-activity` spawns it with `std::thread::spawn`),
-  and the `--race` path stacks `app::run` (481 KB frame), `headless::run_race` (545 KB), `App::open_with` (385 KB), `Stage::race` (315 KB),
-  `Scene::new` (172 KB) and winit's closure (160 KB): 2.07 MB, and naga's WGSL parser overflows the stack in `create_shader_module` (SIGSEGV, `SEGV_MAPERR` in `android_main`;
-  Pulse and HD alike). `scripts/android-race-phases.sh` uses `--race` and fails the same way (run once on this phone: `Fatal signal 11` four seconds after the launch; the script also passes no `--no-audio`). The menu route has no `run_race` frame and runs.
+- **The launch file's `--race` crashed on `d5bfef6`; fixed** ("The stack"). `android_main` runs on a 2 MiB thread (`android-activity` spawns it with `std::thread::spawn`),
+  and the `--race` path stacked `app::run` (481 KB frame), `headless::run_race` (545 KB), `App::open_with` (385 KB), `Stage::race` (315 KB),
+  `Scene::new` (172 KB) and winit's closure (160 KB): 2.07 MB, and naga's WGSL parser overflowed the stack in `create_shader_module` (SIGSEGV, `SEGV_MAPERR` in `android_main`;
+  Pulse and HD alike). `scripts/android-race-phases.sh` uses `--race` and failed the same way (it passes no `--no-audio`). The menu route had no `run_race` frame and ran.
   A `llvm-addr2line` over the unstripped library names the frames; the sizes are the `sub sp` of each prologue.
 - **The menu route, scripted.** The launch file takes the image and `--no-audio --frame-log --autopilot --seed 1 --no-intro`; `files/config/oag/settings.toml` skips the
   prompts (top-level `language = "English"`, `[player] name` and `tag`) and holds `[race] mode = "single_race"`; then `adb shell input tap` on the 2400x1080 frame:
@@ -756,7 +850,6 @@ The S21's HD scene pass is about 30 times a desktop iGPU's 1080p race pass ([`hd
   user-adjustable layout, no per-player scheme (a stick or zones, left- or
   right-handed). A gamepad's analog triggers, right stick and hat are not reachable
   through winit (see "Bluetooth and USB gamepads").
-- **`--race` from the launch file overflows the `android_main` thread's 2 MiB stack** on main `d5bfef6` (frames of 160 to 545 KB on that path); `scripts/android-race-phases.sh` fails with it. Fix: shrink those frames or run the loop on a thread with a bigger stack. Details in "Performance on the Galaxy S21".
 - **Xclipse 940 (the S24's EU GPU, Samsung's Vulkan driver) is untested.** Expect
   surprises in present modes, `PRIMARY` backend adapter selection and the temporal
   upscaler's capability probe.

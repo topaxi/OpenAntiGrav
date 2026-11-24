@@ -111,13 +111,19 @@ impl BuildWorker {
     pub(crate) fn spawn(request: Request, loaded: race::Loaded) -> Self {
         let allocation = request.allocation;
         let guard = oag_thread::gpu_workers::Guard::enter("race-build");
+        // Boxed so the closure and the copies the thread's start makes carry a pointer rather
+        // than the 62 KB it points at.
+        let loaded = Box::new(loaded);
         let handle = std::thread::Builder::new()
             // Named like `race-load` beside it, so a debugger and `top` say
             // which thread the loading screen is waiting on.
             .name("race-build".to_string())
+            // The scene's shaders compile on this thread, and `naga` recurses deeply
+            // (`docs/tools/android.md`, "The stack").
+            .stack_size(oag_thread::BIG_STACK)
             .spawn(move || {
                 guard.hold_to_thread_end();
-                build(request, loaded)
+                build(request, *loaded)
             })
             .ok();
         Self { handle, allocation }

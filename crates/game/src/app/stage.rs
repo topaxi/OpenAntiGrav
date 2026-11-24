@@ -389,7 +389,7 @@ impl Stage {
     #[allow(clippy::too_many_arguments)]
     #[inline(never)]
     pub(crate) fn race(
-        gpu: &impl GpuContext,
+        gpu: &Gpu,
         loaded: race::Loaded,
         size: (u32, u32),
         anisotropy: Anisotropy,
@@ -408,19 +408,35 @@ impl Stage {
         // "what came back".
         track_entry: Option<&str>,
     ) -> Result<Self> {
-        Ok(Self::Race(Self::build_race_stage(
-            gpu,
-            loaded,
-            size,
-            anisotropy,
-            settings,
-            render_profile,
-            scheme,
-            autopilot,
-            autopilot_pilot,
-            autopilot_skill,
-            track_entry,
-        )?))
+        // The scene's shaders are compiled below this call, and `naga`'s parser recurses deeply
+        // enough that the 2 MiB `android_main` thread overflowed under the frames already
+        // above it (`docs/tools/android.md`, "The stack"). Every `--race` builds on a stack
+        // sized for that, so no platform runs a path another one does not.
+        let handles = gpu.handles();
+        // Boxed so the closure, and the copies of it the thread's start makes, carry a pointer
+        // rather than the 62 KB it points at.
+        let loaded = Box::new(loaded);
+        let build = || {
+            Self::build_race_stage(
+                &handles,
+                *loaded,
+                size,
+                anisotropy,
+                settings,
+                render_profile,
+                scheme,
+                autopilot,
+                autopilot_pilot,
+                autopilot_skill,
+                track_entry,
+            )
+        };
+        #[cfg(not(target_arch = "wasm32"))]
+        let built = oag_thread::on_big_stack("race-stage", build)
+            .context("starting the race stage's thread")??;
+        #[cfg(target_arch = "wasm32")]
+        let built = build()?;
+        Ok(Self::Race(built))
     }
 
     /// The scene-building half of [`Self::race`], split out so it can be run

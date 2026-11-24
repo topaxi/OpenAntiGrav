@@ -2,13 +2,13 @@
 status: measure
 titles: [all]
 updated: 2026-11-24
-summary: "S21: Pulse about 60 fps CPU-bound, HD 6 to 8 fps GPU-bound; launch-file --race overflows the 2 MiB android_main stack; ranked fixes, none tried"
+summary: "S21: Pulse about 60 fps CPU-bound, HD 6 to 8 fps GPU-bound; the launch-file --race overflow is fixed; ranked fixes, none tried"
 categories: [rendering]
 size: L (50)
 difficulty: medium (50)
 ---
 
-# The S21 runs Pulse at about 60 fps and HD at about 6; the launch file's `--race` crashes
+# The S21 runs Pulse at about 60 fps and HD at about 6 (its launch-file `--race` crash is fixed)
 
 The numbers, the method and the commands are in `docs/tools/android.md`, "Performance on the Galaxy S21" (Galaxy S21, Mali-G78 MP14, main `d5bfef6`,
 release build, a 10 minute run per title and preset). Pulse defaults settle at 59.9 fps (median frame 14.7 ms, p99 24.4 ms over two laps);
@@ -33,10 +33,7 @@ Ranked by the frame-time win expected on this phone. Each names the evidence and
 6. **The frame thread sits on the A78 cluster** (46 to 54 % of the trace there, 4 to 22 % on the X1) while the thermal caps bring all three clusters to 1352 MHz; the X1 is the faster core at the same clock.
    `sched_setaffinity` to the X1 from inside the app, or an `APerformanceHint` session (Android 12 and later), would place it. Not measured: `adb shell taskset -p` is refused for a release app's thread.
    Measure: a build that pins, the Pulse defaults 10 minute run, settled fps against 59.9.
-7. **`--race` in the launch file overflows `android_main`'s 2 MiB stack** (frames of 160 to 545 KB: `app::run`, `headless::run_race`, `App::open_with`, `Stage::race`, `Scene::new`; 2.07 MB in all) and `scripts/android-race-phases.sh` fails with it.
-   Not a frame-time item but it blocks the quickest way to a measured race. Fix: box the large locals or `#[inline(never)]` them, or build the race off the stack; or start the loop on a thread with a larger stack.
-   `scripts/android-race-phases.sh` was run once: `Fatal signal 11` four seconds in, and it passes no `--no-audio`, so a run that works would play on the phone.
-   Measure: `OAG_APK_DEV_CLI=1 just apk`, then `scripts/android-race-phases.sh --serial S --out F` ends in a `frame-log` line and no `Fatal signal 11` in `logcat`.
+7. ~~**`--race` in the launch file overflows `android_main`'s 2 MiB stack.**~~ Fixed: the scene builds on a 16 MiB thread and the launch frames end before the loop (`docs/tools/android.md`, "The stack"); `scripts/android-race-phases.sh` can now run, and still passes no `--no-audio`, which a run on the phone should add.
 
 ## Measured and dropped
 
@@ -48,5 +45,5 @@ Ranked by the frame-time win expected on this phone. Each names the evidence and
 
 1. Item 1 first: a phone default for HD's render scale, then the same A/B table.
 2. A simpleperf profile of HD at scale 25 (`docs/tools/android.md`, "Reproducing it") to size item 3.
-3. Item 7, then re-run the phase script on both phones.
+3. Re-run the phase script on both phones (item 7 is fixed), with `--no-audio` added.
 4. Compare presets only from one start state (skin 30 C or the same warm state), and run the Pulse defaults twice more to learn the spread (three runs so far).

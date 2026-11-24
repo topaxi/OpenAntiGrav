@@ -37,6 +37,55 @@ pub fn lock<T>(mutex: &Mutex<T>) -> LockResult<MutexGuard<'_, T>> {
     mutex.lock()
 }
 
+/// The stack of a thread that runs stack-hungry work: 16 MiB, twice the page's and the desktop
+/// main thread's.
+///
+/// What needs it is a deep recursion nobody here wrote: `naga`'s WGSL parser compiling a big
+/// shader, under a call chain that is already hundreds of kilobytes of frames
+/// (`docs/tools/android.md`, "The stack"). The reservation is address space; pages are only
+/// committed as the stack grows into them.
+pub const BIG_STACK: usize = 16 << 20;
+
+/// Runs `job` on a new thread called `name` with a [`BIG_STACK`] stack, waits for it and returns
+/// its result. A panic in `job` is raised again here.
+///
+/// For a caller that cannot choose its own stack: Android's `NativeActivity` runs `android_main`
+/// on a 2 MiB thread `android-activity` spawns, and winit has to poll on that thread, so work that
+/// needs more goes to a thread of ours instead. The thread holds a [`gpu_workers::Guard`] for its
+/// whole life, because `job` touches the GPU. In the browser there is no second thread: `job`
+/// runs in place.
+///
+/// # Errors
+///
+/// The thread could not be started; `job` has not run.
+pub fn on_big_stack<R: Send>(
+    name: &'static str,
+    job: impl FnOnce() -> R + Send,
+) -> std::io::Result<R> {
+    #[cfg(target_arch = "wasm32")]
+    {
+        let _ = name;
+        Ok(job())
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let guard = gpu_workers::Guard::enter(name);
+        std::thread::scope(|scope| {
+            let worker = std::thread::Builder::new()
+                .name(name.to_string())
+                .stack_size(BIG_STACK)
+                .spawn_scoped(scope, move || {
+                    guard.hold_to_thread_end();
+                    job()
+                })?;
+            match worker.join() {
+                Ok(result) => Ok(result),
+                Err(panic) => std::panic::resume_unwind(panic),
+            }
+        })
+    }
+}
+
 /// The closure behind a [`Task`] panicked.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Panicked;
@@ -139,6 +188,47 @@ mod tests {
     fn a_panicking_task_is_reported_rather_than_resumed() {
         let mut task = Task::spawn("test-panic", || -> u32 { panic!("on purpose") });
         assert_eq!(task.join(), Some(Err(Panicked)));
+    }
+
+    /// A call chain of `depth` frames of 64 KiB each.
+    fn deep(depth: usize) -> usize {
+        let mut frame = [0u8; 64 * 1024];
+        frame[depth % frame.len()] = 1;
+        std::hint::black_box(&mut frame);
+        if depth == 0 {
+            0
+        } else {
+            deep(depth - 1) + usize::from(frame[depth % frame.len()])
+        }
+    }
+
+    #[test]
+    fn the_big_stack_holds_what_a_two_mebibyte_thread_cannot() {
+        // 100 frames of 64 KiB is 6.4 MiB: three times the stack `android-activity` gives
+        // `android_main`. Run there directly it would overflow and abort the test binary.
+        let small = std::thread::Builder::new()
+            .stack_size(2 << 20)
+            .spawn(|| on_big_stack("test-big-stack", || deep(100)).unwrap())
+            .unwrap();
+        assert_eq!(small.join().unwrap(), 100);
+    }
+
+    #[test]
+    fn the_big_stack_is_at_least_sixteen_mebibytes() {
+        const { assert!(BIG_STACK >= 16 << 20) };
+    }
+
+    #[test]
+    fn the_job_runs_on_a_named_thread_and_a_panic_comes_back() {
+        let name = on_big_stack("test-named", || {
+            std::thread::current().name().map(str::to_owned)
+        })
+        .unwrap();
+        assert_eq!(name.as_deref(), Some("test-named"));
+        let panicked = std::panic::catch_unwind(|| {
+            let _ = on_big_stack("test-big-panic", || -> u32 { panic!("on purpose") });
+        });
+        assert!(panicked.is_err());
     }
 
     #[test]

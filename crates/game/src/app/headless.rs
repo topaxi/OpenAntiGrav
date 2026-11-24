@@ -15,8 +15,6 @@ use oag_raceplay as race;
 use oag_ui::frontend::EarnedTier;
 use oag_ui::strings;
 
-use winit::event_loop::ControlFlow;
-
 use crate::app::args::{
     autopilot_pilot, button_mask, give_weapon, parse_progress, parse_size, parse_step,
     resolve_scheme,
@@ -645,7 +643,12 @@ pub(crate) struct RaceRoute {
 /// performance overlay that the same file was setting for every other route -
 /// and the overlay is most wanted exactly here, where a track is on screen.
 /// Nothing on this path writes the file back.
-pub(crate) fn run_race(
+///
+/// **Returns the window's app rather than running it**, so the frame this function needs for the
+/// load, a capture's options and the app itself (about 530 KB) is gone before the event loop starts
+/// (`crate::app::Launch`; `docs/tools/android.md`, "The stack").
+#[inline(never)]
+pub(crate) fn race_launch(
     cli: &Cli,
     mut options: race::Options,
     settings: &settings::Settings,
@@ -653,7 +656,7 @@ pub(crate) fn run_race(
     mut audio: oag_sound::Audio,
     music_discs: oag_sound::MusicDiscs,
     route: RaceRoute,
-) -> Result<()> {
+) -> Result<crate::app::Launch> {
     let RaceRoute {
         net,
         restage,
@@ -697,14 +700,14 @@ pub(crate) fn run_race(
     oag_raceplay::loader_log::lines(&loaded.report);
 
     if cli.dry_run {
-        return Ok(());
+        return Ok(crate::app::Launch::Done);
     }
 
     let scheme = resolve_scheme(cli, settings);
 
     if let Some(path) = cli.trace_out.clone() {
         write_trace(loaded, cli, scheme, &path)?;
-        return audio.finish();
+        return audio.finish().map(|()| crate::app::Launch::Done);
     }
 
     if let Some(path) = cli.screenshot.clone() {
@@ -968,7 +971,7 @@ pub(crate) fn run_race(
             },
             &mut audio,
         )?;
-        return audio.finish();
+        return audio.finish().map(|()| crate::app::Launch::Done);
     }
 
     let hint_strings = strings::project_table(settings.language.as_deref());
@@ -980,13 +983,10 @@ pub(crate) fn run_race(
 
     let give = give_weapon(cli.give())?;
 
-    let event_loop = crate::app::new_event_loop()?;
-    // Poll rather than Wait: the simulation runs whether or not input arrives.
-    event_loop.set_control_flow(ControlFlow::Poll);
     // Read before `loaded` is moved into the app below.
     let race_title = loaded.title;
     let race_platform = loaded.platform;
-    let mut app = App {
+    let app = App {
         pvs_culling: cli.pvs,
         camera_jitter: cli.camera_jitter,
         boot_shell: None,
@@ -1058,9 +1058,9 @@ pub(crate) fn run_race(
         suspended: false,
         occluded: false,
     };
-    oag_sound::probe::mark_frame_thread();
-    event_loop.run_app(&mut app)?;
-    app.finish_audio()
+    Ok(crate::app::Launch::Window(Box::new(
+        crate::app::Windowed::new(app),
+    )))
 }
 
 #[cfg(test)]
