@@ -400,7 +400,9 @@ fn ship_select_still(
     team: &str,
     step_seconds: &str,
 ) -> oag_texture::replacer::Image {
-    let dir = std::env::temp_dir().join(format!(
+    // Under the build's own scratch directory, not the machine's `/tmp`: a second checkout
+    // running this test at the same time would write the same files.
+    let dir = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!(
         "oag-hd-ship-swap-ground-truth-{}-{team}",
         image
             .file_name()
