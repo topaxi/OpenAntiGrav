@@ -38,9 +38,8 @@ pub struct EmbeddedTexture {
     ///
     /// **Authored, not derived**: the bytes after the base level in the texel
     /// block, at the padded stride [`texture_row_stride`] establishes. Empty for a
-    /// one-level texture. A pre-swizzled node (flags bit 0) of version 5 or later
-    /// has each level unswizzled on its own first; a version-4 one keeps none (its
-    /// chain is synthesised).
+    /// one-level texture. A pre-swizzled node (flags bit 0) has each level
+    /// unswizzled on its own first, on every version.
     pub levels: Vec<Vec<u8>>,
 }
 
@@ -210,7 +209,6 @@ pub fn stored_textures<'a>(
 /// list.
 pub fn textures(data: &[u8]) -> Result<Vec<Option<EmbeddedTexture>>> {
     let tree = nodes(data)?;
-    let classes = classes_of(data)?;
     let mut out = Vec::new();
     for stored in stored_textures(data, &tree)? {
         let Some(StoredTexture {
@@ -238,8 +236,7 @@ pub fn textures(data: &[u8]) -> Result<Vec<Option<EmbeddedTexture>>> {
         // texel block is already in the GE's 16-byte by 8-row block order, so a
         // literal read comes out scrambled.
         //
-        // **Acted on for every version** (levels below the base only from version
-        // 5). It was once gated to version 4 and below because the bit appears on
+        // **Acted on for every version.** It was once gated to version 4 and below because the bit appears on
         // 88 Pulse PSP nodes with no known meaning. A live PPSSPP capture of
         // Pulse's shield shell (`pulse_shield_test_ADD`, flags `0xe5`) settled it:
         // the GE reads every Pulse texture swizzled (`TEXMODE` bit 0 on every
@@ -255,18 +252,14 @@ pub fn textures(data: &[u8]) -> Result<Vec<Option<EmbeddedTexture>>> {
         // stride past 16 bytes is copied through (none exists on a flagged Pulse
         // texture; unverified).
         let swizzled = flags & oag_formats::swizzle::FLAG_SWIZZLED != 0;
-        // **Version 4 and below (Pure, Pulse's Zone wrecks)** keep the base level
-        // unswizzled as one block and no authored levels, so the renderer
-        // synthesises their chain (`docs/rendering/frame-audit.md`). Their levels
-        // are swizzled like any other (236 of 236 flagged levels agree), but
-        // handing them on would switch Pure onto the slope level rule, which
-        // nothing here measured.
-        let authored_levels = classes.version >= 5;
+        // **Every version authors its levels.** A flagged version-4 file (Pure, Pulse's Zone
+        // wrecks) lays its levels out like a version-5 one, each swizzled at its own padded
+        // stride, and the GE selects among them by slope (`TEXLODSLOPE` `1/256` on all 430
+        // PRIMs of a Pure race frame, mode 2 on every texture), so the renderer takes them
+        // as the disc's own chain and runs the same slope rule
+        // (`docs/ghidra/functions/psp-pure-usa/hull-shine.md`, "The hull's texture level").
         let linear;
-        let texels = if swizzled && !authored_levels {
-            linear = oag_formats::swizzle::unswizzle(block, stride, usize::from(height));
-            &linear[..]
-        } else if swizzled {
+        let texels = if swizzled {
             linear = unswizzle_levels(block, width, height, bits_per_pixel, mip_count);
             &linear[..]
         } else {
@@ -297,7 +290,7 @@ pub fn textures(data: &[u8]) -> Result<Vec<Option<EmbeddedTexture>>> {
         // the last at its own padded stride, stopping at the first level the block
         // cannot hold (fewer levels, not padded ones).
         let mut levels = Vec::new();
-        if !swizzled || authored_levels {
+        {
             let mut offset = stride * usize::from(height);
             for level in 1..u32::from(mip_count) {
                 let (w, h) = (

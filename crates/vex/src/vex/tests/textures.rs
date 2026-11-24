@@ -246,5 +246,5 @@ fn a_flagged_texture_is_unswizzled_and_only_version_six_keeps_its_levels() {
         .remove(0)
         .expect("decodes");
     assert_eq!(four.indices, six.indices, "level 0 is the same on both");
-    assert!(four.levels.is_empty(), "version 4 keeps no authored levels");
+    assert_eq!(four.levels, six.levels, "version 4 authors its levels too");
 }
