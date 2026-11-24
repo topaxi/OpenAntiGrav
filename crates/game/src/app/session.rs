@@ -78,6 +78,7 @@ mod online;
 #[path = "session/online_web.rs"]
 mod online;
 mod photo;
+mod photo_hud;
 pub(crate) mod photo_meta;
 mod photo_rewind;
 mod pilot_editor;

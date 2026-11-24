@@ -393,6 +393,39 @@ impl super::Session {
             .iter()
             .map(|&total| ((u32::from(total) + half) / frames) as u8)
             .collect();
+        let averaged = super::photo_hud::Averaged {
+            pixels,
+            size,
+            path,
+            pending,
+            frames,
+            started,
+            under_hud: false,
+        };
+        // The HUD is drawn once over the average, at the tick the shot is taken at, by the
+        // frame that follows (`photo_hud`).
+        let hud = matches!(&self.stage, Stage::Race(stage)
+            if stage.race.photo().is_some_and(oag_raceplay::photo::Photo::hud));
+        if hud && size == self.framebuffer.output_size() {
+            if let Some(open) = self.photo.as_mut() {
+                open.averaged = Some(averaged);
+            }
+        } else {
+            self.photo_write_shot(averaged);
+        }
+    }
+
+    /// Writes a finished shot to its file and says so on the mode's screen.
+    pub(super) fn photo_write_shot(&mut self, shot: super::photo_hud::Averaged) {
+        let super::photo_hud::Averaged {
+            pixels,
+            size,
+            path,
+            pending,
+            frames,
+            started,
+            ..
+        } = shot;
         let written = match pending {
             Some(pending) => pending.write(&path, size.0, size.1, &pixels),
             None => crate::capture::write_png(&path, size.0, size.1, &pixels),

@@ -50,6 +50,9 @@ pub(crate) struct Open {
     pub(super) rewind: Option<oag_raceplay::photo::rewind::Rewind>,
     /// A shot of several frames under way.
     pub(super) job: Option<super::photo_rewind::Job>,
+    /// A finished shot of several frames waiting for the HUD to be drawn over it
+    /// (`photo_hud`).
+    pub(super) averaged: Option<super::photo_hud::Averaged>,
     /// The tick the rewind row last asked for.
     pub(super) asked: u64,
     /// Whether the viewer this mode was opened from was playing when it was, so leaving puts
@@ -213,6 +216,7 @@ impl super::Session {
             english: oag_ui::strings::project_table(None),
             rewind: None,
             job: None,
+            averaged: None,
             asked,
             resume_viewer: false,
             play_latched: false,
@@ -395,6 +399,7 @@ impl super::Session {
     /// submitted.
     pub(super) fn finish_photo_shot(&mut self) {
         self.photo_job_collect();
+        self.photo_finish_averaged();
         let Some((path, pending)) = self.photo.as_mut().and_then(|open| open.shot.take()) else {
             return;
         };
