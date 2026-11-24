@@ -977,10 +977,7 @@ pub fn capture(
         };
         match accumulated.filter(|_| !finished_early) {
             Some(shot) => Some(rig.run(&shot)?),
-            None => {
-                rig.settle_zoom();
-                None
-            }
+            None => None,
         }
     };
     options.ghost.finish(&mut race)?;

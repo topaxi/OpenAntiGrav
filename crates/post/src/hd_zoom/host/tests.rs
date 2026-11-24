@@ -10,6 +10,7 @@ fn frame(boost: f32, tick: u64) -> Frame {
         damage: 0.0,
         size: [1.0, 1.0],
         tick,
+        settle: 0,
     }
 }
 
@@ -174,4 +175,37 @@ fn the_ring_stays_inside_the_drawn_rectangle() {
         off[1],
         on[1]
     );
+}
+
+/// A settling frame draws its history until it has settled, over a ring just built: the rim it
+/// draws is the one the plain copy of a still scene gives, where one draw at the weight over the
+/// zeros the ring starts from would leave it a quarter dark.
+#[test]
+fn a_settling_frame_draws_the_history_of_a_scene_that_stands_still() {
+    let probes = [(1, 1), (32, 32)];
+    let settling = |settle| Frame {
+        settle,
+        ..frame(1.0, 1)
+    };
+    let (Some(copy), Some(settled), Some(once)) = (
+        run(&[frame(1.0, 1)], (0, 0), (64, 64), &probes),
+        run(
+            &[settling(super::super::SETTLE_PASSES)],
+            (0, 0),
+            (64, 64),
+            &probes,
+        ),
+        run(&[settling(1)], (0, 0), (64, 64), &probes),
+    ) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let near = |a: [u8; 4], b: [u8; 4]| a.iter().zip(b).all(|(a, b)| a.abs_diff(b) <= 1);
+    assert!(
+        near(settled[0], copy[0]),
+        "{:?} against {:?}",
+        settled[0],
+        copy[0]
+    );
+    assert!(!near(once[0], copy[0]), "one draw settled: {:?}", once[0]);
 }

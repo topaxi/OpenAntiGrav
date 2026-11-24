@@ -18,6 +18,7 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
+mod first_speed_blur_shot;
 mod from_png_blur;
 mod native_shot;
 mod picture_controls;

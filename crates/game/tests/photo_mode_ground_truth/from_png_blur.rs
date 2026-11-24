@@ -179,13 +179,9 @@ pub(super) fn blurred_shots_are_drawn_again(
 }
 
 /// A speed blur shot is drawn again with the zoom ring's history it had: along the sides, where the
-/// streak is, the redraw is within [`TOLERANCE`] of the saved shot (drawn with no history it was at
-/// 2.5 and 3.6 on the same shot).
-///
-/// **Of the second shot of a visit, not the first**: the first shot of a visit to the mode
-/// carries a history that settled frames do not reproduce (its streak is stronger and its redraw
-/// is 4.2 and 7.4 from it, as far as the one-frame redraw was); the shots after it carry the
-/// settled one. The first is printed, not asserted.
+/// streak is, the redraw of each of a visit's two shots is within [`TOLERANCE`] of the saved shot
+/// (drawn with no history it was at 2.5 and 3.6 on the same shot; measured 0.86 and 0.88 on the
+/// first, 0.84 and 0.86 on the second).
 #[test]
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
 fn a_speed_blur_shot_is_drawn_again_with_its_zoom_history() {
@@ -229,7 +225,14 @@ fn a_speed_blur_shot_is_drawn_again_with_its_zoom_history() {
         );
         edges.push((left, right));
     }
-    let (left, right) = edges[1];
-    assert!(left < TOLERANCE, "the left edge is {left} from the shot");
-    assert!(right < TOLERANCE, "the right edge is {right} from the shot");
+    for (at, (left, right)) in edges.into_iter().enumerate() {
+        assert!(
+            left < TOLERANCE,
+            "shot {at}: the left edge is {left} from it"
+        );
+        assert!(
+            right < TOLERANCE,
+            "shot {at}: the right edge is {right} from it"
+        );
+    }
 }

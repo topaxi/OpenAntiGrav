@@ -213,9 +213,11 @@ impl Driver {
     fn exec(&mut self, step: &Step) -> Result<()> {
         match step {
             Step::Boot { within } => {
-                // Start skips the logo and the intro; the language list confirms on Cross.
+                // Start skips the logo and the intro; the language list confirms on Cross. A
+                // title whose front end has no menus of ours (2048) goes on from there into
+                // its first race, which ends the boot too.
                 let mut taps = [Button::Start, Button::Cross].into_iter().cycle();
-                while self.last.stage != "menu" {
+                while !matches!(self.last.stage.as_str(), "menu" | "race") {
                     self.spend(*within)?;
                     if self.last.stage == "frontend" {
                         let button = taps.next().unwrap_or(Button::Start);
