@@ -7,7 +7,7 @@
 
 use oag_tables::race_campaign::{Cell, Difficulty, Medal, MedalTiers, Mode};
 
-use oag_ui::font::{Atlas, wrap};
+use oag_ui::font::{Atlas, wrap, wrap_pens};
 use oag_ui::frontend::{Align, Draw, Placed};
 use oag_ui::language::StringTable;
 use oag_ui::menu::{Frame, Layers, Picture, Skin};
@@ -798,6 +798,19 @@ const TIER_OUTLINE_TINT: u32 = 0x7f34_acc2;
 /// (`down arrow`), full white otherwise. Measured, confidence 85.
 const ARROW_DISABLED_TINT: u32 = 0xff50_5050;
 
+/// The face a `font="small"` help paragraph draws in when the title holds it in a glyph slot
+/// ([`crate::picker::FaceScales::small_role`]), for measuring the paragraph the way the renderer
+/// wraps it.
+#[derive(Debug, Clone, Copy)]
+pub struct HelpFace<'a> {
+    /// The glyph-slot role the paragraph is drawn in.
+    pub role: &'a str,
+    /// That role's atlas.
+    pub atlas: &'a Atlas,
+    /// The pen the renderer lays the face out on.
+    pub pens: oag_ui::font::Pens,
+}
+
 /// `Cell Help`'s own overlay: every widget on that screen at its authored position, with no
 /// animation.
 ///
@@ -812,7 +825,8 @@ const ARROW_DISABLED_TINT: u32 = 0xff50_5050;
 /// equals the authored `y`, `docs/ui/campaign-screens.md`, "Back and Help on the PS2, and how `Cell Help` is laid out"). Drawing each at its raw
 /// `y` laid all three over each other near the panel's top. The height of a paragraph is its
 /// wrapped lines (`oag_ui::font::wrap`, the wrap the renderer draws it with, over `atlas`, the
-/// primary face the `small` font draws in) times the atlas's line height.
+/// primary face the `small` font draws in, or over `small`'s atlas on a title that holds the
+/// `small` face in a glyph slot) times the atlas's line height.
 ///
 /// `Speed Class Help`/`Event Help` are the disc's own literal authored text
 /// (`MSC_LOAD_VENOM`/`MSC_EVENT_SR`) regardless of the cell actually selected: no per-cell
@@ -826,6 +840,7 @@ pub fn cell_help_draw(
     layout: &Layout,
     sprites: &dyn Fn(&str) -> Option<Placed>,
     atlas: &Atlas,
+    small: Option<HelpFace>,
 ) -> Vec<Draw> {
     let screen = &layout.screen;
     let mut out = screen.plain_draws(sprites);
@@ -844,16 +859,31 @@ pub fn cell_help_draw(
             ..text.clone()
         };
         let draw = text_draw(&placed, content, layout);
-        if let Draw::Text {
-            scale,
-            wrap_width: Some(width),
-            ..
-        } = &draw
-        {
-            let lines = wrap(atlas, content, *scale, *width).len();
-            bottom = top + lines as f32 * atlas.line_height * scale;
-        } else {
-            bottom = top;
+        match (&draw, small) {
+            (
+                Draw::Text {
+                    scale,
+                    wrap_width: Some(width),
+                    ..
+                },
+                _,
+            ) => {
+                let lines = wrap(atlas, content, *scale, *width).len();
+                bottom = top + lines as f32 * atlas.line_height * scale;
+            }
+            (
+                Draw::FacedText {
+                    role,
+                    scale,
+                    wrap_width: Some(width),
+                    ..
+                },
+                Some(face),
+            ) if role.eq_ignore_ascii_case(face.role) => {
+                let lines = wrap_pens(face.atlas, content, *scale, *width, face.pens).len();
+                bottom = top + lines as f32 * face.atlas.line_height * scale;
+            }
+            _ => bottom = top,
         }
         out.push(draw);
     }
@@ -884,7 +914,7 @@ pub(crate) fn text_draw(text: &Text, content: &str, layout: &Layout) -> Draw {
     };
     let content = content.to_string();
     let wrap_width = text.wrap_width;
-    match super::footer::face_role(&text.font) {
+    match super::footer::face_role_in(&layout.faces, &text.font) {
         Some(role) => Draw::FacedText {
             role,
             x,

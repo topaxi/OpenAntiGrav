@@ -1143,13 +1143,13 @@ pub fn snapped_run(atlas: &Atlas, text: &str, scale: f32) -> SnappedRun {
 }
 
 /// The width `text` draws at `scale` from its origin: [`snapped_run`]'s ink edge on a snapped
-/// pen, the fractional advance sum otherwise.
+/// pen, [`ink_width`] on a bearing pen, the fractional advance sum otherwise.
 #[must_use]
-pub fn run_width(atlas: &Atlas, text: &str, scale: f32, snapped: bool) -> f32 {
-    if snapped {
-        snapped_run(atlas, text, scale).ink_right
-    } else {
-        measure(atlas, text) * scale
+pub fn run_width(atlas: &Atlas, text: &str, scale: f32, pens: Pens) -> f32 {
+    match pens {
+        Pens::Snapped => snapped_run(atlas, text, scale).ink_right,
+        Pens::Bearing => ink_width(atlas, text, scale, false),
+        Pens::Advance => measure(atlas, text) * scale,
     }
 }
 
@@ -1163,20 +1163,14 @@ pub fn run_width(atlas: &Atlas, text: &str, scale: f32, snapped: bool) -> f32 {
 /// text.
 #[must_use]
 pub fn wrap(atlas: &Atlas, text: &str, scale: f32, max_width: f32) -> Vec<String> {
-    wrap_pens(atlas, text, scale, max_width, false)
+    wrap_pens(atlas, text, scale, max_width, Pens::Advance)
 }
 
-/// [`wrap`] on the pen the draw lays out: `snapped` measures each candidate line by [`ink_width`]'s
-/// snapped pass, as a front end whose pens step up to whole units ([`pen_step`]) draws it, and
-/// otherwise by the fractional advance sum.
+/// [`wrap`] on the pen the draw lays out ([`run_width`] of `pens`): a front end whose pens step up
+/// to whole units ([`pen_step`]) or by bearing is wrapped by the width it draws at, otherwise by
+/// the fractional advance sum.
 #[must_use]
-pub fn wrap_pens(
-    atlas: &Atlas,
-    text: &str,
-    scale: f32,
-    max_width: f32,
-    snapped: bool,
-) -> Vec<String> {
+pub fn wrap_pens(atlas: &Atlas, text: &str, scale: f32, max_width: f32, pens: Pens) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     let mut line = String::new();
     for word in text.split_whitespace() {
@@ -1185,7 +1179,7 @@ pub fn wrap_pens(
         } else {
             format!("{line} {word}")
         };
-        if !line.is_empty() && run_width(atlas, &candidate, scale, snapped) > max_width {
+        if !line.is_empty() && run_width(atlas, &candidate, scale, pens) > max_width {
             out.push(std::mem::take(&mut line));
             line = word.to_string();
         } else {
@@ -1224,7 +1218,10 @@ fn solid_patch(coverage: &mut [u8], width: u32, x: u32, y: u32) -> Cell {
 }
 
 mod border;
+mod pens;
 mod reduce;
+
+pub use pens::Pens;
 
 #[cfg(test)]
 mod tests {
@@ -1448,8 +1445,8 @@ mod tests {
             x = pen_step(&cell, 0.7, x, true).1;
         }
         assert_eq!((run.end, run.ink_right), (x, right));
-        assert_eq!(run_width(&atlas, "AAA", 0.7, true), run.ink_right);
-        assert_eq!(run_width(&atlas, "AAA", 0.7, false), 18.0 * 0.7);
+        assert_eq!(run_width(&atlas, "AAA", 0.7, Pens::Snapped), run.ink_right);
+        assert_eq!(run_width(&atlas, "AAA", 0.7, Pens::Advance), 18.0 * 0.7);
         assert_eq!(snapped_run(&atlas, "", 0.7).ink_right, 0.0);
     }
 

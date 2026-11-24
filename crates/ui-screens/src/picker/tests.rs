@@ -1273,7 +1273,7 @@ fn a_screen_reads_the_help_its_own_redirect_names_on_the_face_button_it_authors(
         "a screen that authors none has none"
     );
     let words: Vec<String> = help
-        .draw(&|_| None, &oag_ui::font::Atlas::build(), None)
+        .draw(&|_| None, &oag_ui::font::Atlas::build(), None, None)
         .into_iter()
         .filter_map(|draw| match draw {
             Draw::Text { text, .. } | Draw::FacedText { text, .. } => Some(text),
@@ -1385,7 +1385,7 @@ fn team_help_shows_the_selected_teams_own_description_in_team_ship_help() {
     .expect("reads");
     let help = layout.help.as_ref().expect("has help");
     let words = |ship: Option<&str>| -> Vec<String> {
-        help.draw(&|_| None, &oag_ui::font::Atlas::build(), ship)
+        help.draw(&|_| None, &oag_ui::font::Atlas::build(), None, ship)
             .into_iter()
             .filter_map(|draw| match draw {
                 Draw::Text { text, .. } | Draw::FacedText { text, .. } => Some(text),

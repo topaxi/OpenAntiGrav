@@ -162,8 +162,12 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     // it, see `body_font`.
     title_font: Some("Title"),
     body_font: Some("Default"),
+    // `Small` and `Title` are both `Pulse_14.fnt` in Pulse's language plugins (`oag_ui::language::roles`),
+    // so the third slot's `Title` atlas is the `small` face (`docs/ui/menus-original.md`, "The footer's button glyphs are Pulse_14's").
+    small_font: Some("Title"),
     stats_font: None,
     snapped_pens: false,
+    bearing_pens: true,
     default_face_is_row_face: false,
     // `MainMenu_Definition.xml`'s menu widget, `y="32"`.
     first_row_y: Some(32.0),
@@ -311,8 +315,11 @@ pub const PS2_MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     title_scale: 0.8,
     title_font: None,
     body_font: None,
+    small_font: None,
     stats_font: None,
     snapped_pens: false,
+    // Inherited from PSP: the pen law measured on the PSP's `Pulse_14.fnt` heading, not measured on the PS2.
+    bearing_pens: true,
     default_face_is_row_face: false,
     first_row_y: Some(53.0),
     row_extra_leading: Some(17.0),

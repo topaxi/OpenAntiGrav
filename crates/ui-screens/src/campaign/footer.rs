@@ -104,9 +104,22 @@ fn face_scale(faces: &FaceScales, font: &str) -> f32 {
         // fix `oag_title::HelpText::scale`'s own doc gives for the
         // identical shape one widget over - see [`face_role`].
         "default" => 1.0,
+        "small" if faces.small_role.is_some() => 1.0,
         "small" => faces.small,
         _ => 1.0,
     }
+}
+
+/// [`face_role`], except that a `small` text draws in the glyph slot that holds the `small`
+/// face when the title has one ([`FaceScales::small_role`]), at the face's own size
+/// ([`face_scale`]).
+pub(super) fn face_role_in(faces: &FaceScales, font: &str) -> Option<&'static str> {
+    if font.eq_ignore_ascii_case("small")
+        && let Some(role) = faces.small_role
+    {
+        return Some(role);
+    }
+    face_role(font)
 }
 
 /// The role a `font` value routes a [`Draw::in_role`] call to - `Default`
@@ -117,11 +130,12 @@ fn face_scale(faces: &FaceScales, font: &str) -> f32 {
 /// because it is the one Pulse face with real lowercase glyph art -
 /// `Pulse_20.fnt`/`Pulse_14.fnt` (`menu`/`small`) give every lowercase
 /// codepoint the identical box its uppercase twin has, measured off both
-/// pressings. Routing a `"small"`-labelled prompt the same way would change
-/// nothing it draws (`Pulse_14` has no lowercase to gain) and would be a
-/// role this crate picked rather than one this build has verified drawing
-/// through - see `docs/ui/menus-original.md`'s "Two faces, not one swapped
-/// for the other" section.
+/// pressings. A `"small"`-labelled prompt gains no lowercase from `Pulse_14`,
+/// but its button glyphs are that face's own 17 px art: they draw through the
+/// glyph slot that holds it ([`face_role_in`], `FaceScales::small_role`) and
+/// not as `Pulse_20`'s 22 px glyph minified - see `docs/ui/menus-original.md`'s
+/// "Two faces, not one swapped for the other" and "The footer's button glyphs are
+/// Pulse_14's" sections.
 ///
 /// **`Buttons`**: Wipeout HD/Fury's own `font="buttons"`,
 /// `ps_buttons.fnt`/`PS_BUTTONS.fnt` (Omega very likely, unverified this
@@ -593,7 +607,7 @@ impl NavigationLegend {
     fn draw_prompt(prompt: &Prompt, faces: &FaceScales) -> Draw {
         let scale = face_scale(faces, &prompt.font) * prompt.scale;
         Draw::in_role(
-            face_role(&prompt.font),
+            face_role_in(faces, &prompt.font),
             prompt.x,
             prompt.y,
             scale,

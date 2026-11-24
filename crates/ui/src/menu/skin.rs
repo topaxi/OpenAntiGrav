@@ -643,6 +643,13 @@ impl Skin {
         self.skin.snapped_pens
     }
 
+    /// How this title's front end lays its text pens out ([`oag_ui::font::Pens`]): what every
+    /// measure of a drawn text has to share with the draw.
+    #[must_use]
+    pub fn pens(&self) -> crate::font::Pens {
+        crate::font::Pens::of(self.skin.snapped_pens, self.skin.bearing_pens)
+    }
+
     /// The scale a row's text is drawn at. `FEGlobals->MenuScale`.
     #[must_use]
     pub fn row_scale(&self) -> f32 {
@@ -727,6 +734,12 @@ impl Skin {
     #[must_use]
     pub fn title_font(&self) -> Option<&'static str> {
         self.skin.title_font
+    }
+
+    /// The glyph-slot role whose face is the `small` face - see [`oag_title::MenuSkin::small_font`].
+    #[must_use]
+    pub fn small_font(&self) -> Option<&'static str> {
+        self.skin.small_font
     }
 
     /// The screen title's colour.
@@ -970,8 +983,10 @@ mod tests {
         title_scale: 1.0,
         title_font: None,
         body_font: None,
+        small_font: None,
         stats_font: None,
         snapped_pens: false,
+        bearing_pens: false,
         default_face_is_row_face: false,
         first_row_y: Some(32.0),
         row_extra_leading: Some(6.0),

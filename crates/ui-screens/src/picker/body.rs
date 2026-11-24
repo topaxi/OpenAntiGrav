@@ -226,7 +226,7 @@ pub(super) fn body(
             text_draw(text, &content, layout),
             fade_in(text.transition, picker.seconds()),
         ));
-        let value = text.glow_stamp(picker.seconds());
+        let value = text.glow_stamp(picker.text_seconds());
         if value > 0 {
             out.push(Draw::GlowText { value });
         }
@@ -369,6 +369,23 @@ fn text_draw(text: &Text, content: &str, layout: &Layout) -> Draw {
     let color = argb_to_rgba(text.color);
     let text_in = content.to_string();
     if let Some(role) = super::stats_role(&text.font) {
+        return Draw::FacedText {
+            role,
+            x,
+            y,
+            scale,
+            color,
+            border: None,
+            align,
+            text: text_in,
+            wrap_width: text.wrap_width,
+        };
+    }
+    // `font="small"` in the glyph slot that holds that face, at its own size
+    // ([`FaceScales::small_role`]; `face_scale` above already left the scale alone).
+    if let Some(role) = layout.faces.small_role
+        && text.font.eq_ignore_ascii_case("small")
+    {
         return Draw::FacedText {
             role,
             x,

@@ -84,7 +84,7 @@ pub(super) fn capture(
     )
     .flatten();
     let (legend, ticker, font) = footer;
-    let clip = menu_page::picker_footer(&mut list, legend, true, ticker, strings, font);
+    let clip = menu_page::picker_footer(&mut list, legend, true, ticker, strings, font, skin);
     (list, clip)
 }
 

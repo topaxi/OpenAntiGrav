@@ -23,6 +23,7 @@ pub(super) fn picker_footer(
     ticker: Option<&oag_ui_screens::campaign::footer::TickerLayout>,
     strings: &oag_ui::language::StringTable,
     default_font: &oag_ui::font::Atlas,
+    skin: &oag_ui::menu::Skin,
 ) -> TickerClip {
     let layout = ticker?;
     let tips = crate::records::ticker_tips(
@@ -31,8 +32,8 @@ pub(super) fn picker_footer(
         &crate::records::load(),
         crate::records::TICKER_CAPTURE_SEED,
     );
-    let faces = oag_ui_screens::picker::FaceScales::default();
-    let measure = |text: &str| oag_ui::font::measure(default_font, text);
+    let faces = crate::prompts::footer_faces(skin);
+    let measure = crate::boot::fonts::text_ink(default_font, skin.pens());
     if let Some(legend) = nav_legend {
         list.extend(legend.draw_gated(&faces, show_back));
     }
@@ -450,7 +451,7 @@ pub(super) fn menu_page(
     let mut nav_legend_draws: Vec<oag_ui::frontend::Draw> =
         nav_legend.map_or_else(Vec::new, |legend| {
             legend.draw_gated(
-                &oag_ui_screens::picker::FaceScales::default(),
+                &crate::prompts::footer_faces(skin),
                 model.depth() > 1 || disc_screen.is_some_and(|spec| spec.back),
             )
         });
@@ -459,6 +460,7 @@ pub(super) fn menu_page(
         crate::prompts::reset_prompt(
             &model,
             nav_legend,
+            &crate::prompts::footer_faces(skin),
             &|button| settings.controls.live_bindings().names_for(button),
             prompt_ink,
             skin.space().size.0,
@@ -930,6 +932,8 @@ pub(super) fn picker_page(
     // `--menu-entry-seconds` - seconds since the page became current, for its `vwipe` images;
     // `None` draws them finished.
     entry_seconds: Option<f32>,
+    // `--menu-title-seconds` - where the panel's glow ladder stands; `None` follows `seconds`.
+    text_seconds: Option<f32>,
     // Draw over what is already on screen rather than over the screen's own backdrop: the
     // second half of the shared two-person page.
     over: bool,
@@ -1031,6 +1035,7 @@ pub(super) fn picker_page(
             oag_ui::screen::EntryClock::at(s)
         }),
     );
+    picker.set_text_seconds(text_seconds);
     if let Some(since) = step_seconds {
         picker.set_since_selection(since);
     }

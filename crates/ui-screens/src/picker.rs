@@ -192,6 +192,9 @@ pub struct Picker {
     index: usize,
     variant: usize,
     seconds: f32,
+    /// Where the glow ladder of the panel's `pulse="true"` texts stands when it is not
+    /// [`Self::seconds`] ([`Self::set_text_seconds`]).
+    text_seconds: Option<f32>,
     /// Seconds since the selection last moved - the slideshow's clock,
     /// which the original restarts on every selection (`TrackSelection_ApplySelection`
     /// transitions the new circuit's own state machine to `Info` afresh).
@@ -309,6 +312,7 @@ impl Picker {
             index,
             variant: 0,
             seconds: 0.0,
+            text_seconds: None,
             since_selection: 0.0,
             entry: EntryClock::default(),
             across: false,
@@ -441,6 +445,20 @@ impl Picker {
     #[must_use]
     pub fn seconds(&self) -> f32 {
         self.seconds
+    }
+
+    /// Seconds the panel's glow ladder has run: [`Self::seconds`] unless a still pins it
+    /// ([`Self::set_text_seconds`]).
+    #[must_use]
+    pub fn text_seconds(&self) -> f32 {
+        self.text_seconds.unwrap_or(self.seconds)
+    }
+
+    /// Pins the glow ladder of the panel's `pulse="true"` texts apart from [`Self::seconds`]: the
+    /// original's text counter and the screen's own clock are separate counters (`None` follows
+    /// the screen's).
+    pub fn set_text_seconds(&mut self, seconds: Option<f32>) {
+        self.text_seconds = seconds.map(|seconds| seconds.max(0.0));
     }
 
     /// Seconds since the selection last moved, or since the screen opened.
@@ -607,6 +625,11 @@ pub struct FaceScales {
     /// than as the menu face scaled by [`Self::default`]. True on Pulse, where
     /// the renderer's face slot carries `pulse_text.fnt`.
     pub native_default: bool,
+    /// The glyph-slot role whose atlas is the `small` face, when the renderer holds it
+    /// ([`oag_title::MenuSkin::small_font`]): `small` text then draws in that atlas at its own
+    /// size ([`Self::small`] is not applied), where otherwise it is the menu face scaled by
+    /// [`Self::small`].
+    pub small_role: Option<&'static str>,
 }
 
 impl Default for FaceScales {
@@ -617,6 +640,7 @@ impl Default for FaceScales {
             default: 13.0 / 22.0,
             small: 17.0 / 22.0,
             native_default: false,
+            small_role: None,
         }
     }
 }
@@ -872,6 +896,7 @@ impl Layout {
         match font.to_ascii_lowercase().as_str() {
             "default" if self.faces.native_default => 1.0,
             "default" => self.faces.default,
+            "small" if self.faces.small_role.is_some() => 1.0,
             "small" => self.faces.small,
             _ => 1.0,
         }

@@ -55,35 +55,55 @@ pub fn legend_ink<'a>(
     }
 }
 
+/// How `skin`'s front end lays its text pens out: the one choice the renderer's draw and every measure
+/// of it (`text_ink`, `description_ink`, `prompt_ink`) share.
+#[must_use]
+pub fn pens_of(skin: &oag_title::MenuSkin) -> oag_ui::font::Pens {
+    oag_ui::font::Pens::of(skin.snapped_pens, skin.bearing_pens)
+}
+
+/// A text's width at scale 1 in `atlas`, on the pen the renderer draws it with: what a marquee, a
+/// right-aligned value, a wrapped name and the footer ticker measure against.
+pub fn text_ink(
+    atlas: &oag_ui::font::Atlas,
+    pens: oag_ui::font::Pens,
+) -> impl Fn(&str) -> f32 + '_ {
+    move |text| oag_ui::font::run_width(atlas, text, 1.0, pens)
+}
+
 /// A description line's measured width at a scale, for the wrap in
 /// [`oag_ui_screens::campaign::footer::description_draws`]: the `Stats` face's atlas where the title
 /// has one ([`oag_title::MenuSkin::stats_font`], held in the third glyph slot), the body face's
-/// otherwise, laid out on the same pen the renderer draws it with (`snapped`,
-/// [`oag_title::MenuSkin::snapped_pens`]).
+/// otherwise, laid out on the same pen the renderer draws it with ([`pens_of`]).
 pub fn description_ink<'a>(
     font: &'a oag_ui::font::Atlas,
     stats_font: Option<&'a oag_ui::font::Atlas>,
-    snapped: bool,
+    pens: oag_ui::font::Pens,
 ) -> impl Fn(&str, f32) -> f32 + 'a {
-    move |text, scale| oag_ui::font::run_width(stats_font.unwrap_or(font), text, scale, snapped)
+    move |text, scale| oag_ui::font::run_width(stats_font.unwrap_or(font), text, scale, pens)
 }
 
 /// A footer prompt's width at a scale, for the rectangles the reset prompt's tap target is laid
 /// out from ([`oag_ui_screens::campaign::footer::NavigationLegend::reset_prompt`]): `font` is the
 /// widget's own, the `Stats` face's atlas for a `scroll`/`stats` widget where the title has one,
-/// the body face's for every other, on the pen the renderer draws it with (`snapped`).
+/// the `small` face's atlas for a `small` widget where the title holds it in a glyph slot
+/// ([`oag_title::MenuSkin::small_font`]), the body face's for every other, on the pen the renderer
+/// draws it with (`pens`).
 pub fn prompt_ink<'a>(
     font: &'a oag_ui::font::Atlas,
     stats_font: Option<&'a oag_ui::font::Atlas>,
-    snapped: bool,
+    small_font: Option<&'a oag_ui::font::Atlas>,
+    pens: oag_ui::font::Pens,
 ) -> impl Fn(&str, &str, f32) -> f32 + 'a {
     move |face, text, scale| {
         let atlas = if oag_ui::language::roles::names_stats(face) {
             stats_font.unwrap_or(font)
+        } else if face.eq_ignore_ascii_case("small") {
+            small_font.unwrap_or(font)
         } else {
             font
         };
-        oag_ui::font::run_width(atlas, text, scale, snapped)
+        oag_ui::font::run_width(atlas, text, scale, pens)
     }
 }
 
@@ -428,6 +448,7 @@ pub fn install_faces(
     let (third, third_role) = third_atlas_slot(skin, title_font, buttons_font);
     renderer.set_buttons_atlas(device, queue, third, third_role);
     renderer.set_snapped_pens(skin.snapped_pens);
+    renderer.set_bearing_pens(skin.bearing_pens);
 }
 
 /// Reads the PlayStation button-glyph face

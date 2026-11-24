@@ -48,7 +48,7 @@ fn found(list: &[Draw], clip: Option<usize>, substitution: &Substitution) -> Vec
         Some(Face {
             atlas: &atlas,
             buttons: role == Some("Buttons"),
-            snapped: false,
+            pens: crate::font::Pens::Advance,
         })
     })
 }
@@ -221,7 +221,12 @@ fn a_wrapped_legend_puts_a_rect_on_each_line_an_entry_falls_on() {
         scale: 1.0,
         width,
     };
-    let one = legend_wrapped(&atlas, place(10_000.0), &entries, false);
+    let one = legend_wrapped(
+        &atlas,
+        place(10_000.0),
+        &entries,
+        crate::font::Pens::Advance,
+    );
     assert_eq!(one.len(), 2);
     // `wrap` joins the words with one space, as the renderer draws them.
     assert_eq!(one[0].rect[0], 10.0);
@@ -231,7 +236,12 @@ fn a_wrapped_legend_puts_a_rect_on_each_line_an_entry_falls_on() {
     assert!((one[1].rect[0] - (10.0 + width("X TYPE "))).abs() < 0.01);
 
     // Narrow enough that the second entry wraps below the first.
-    let narrow = legend_wrapped(&atlas, place(width("X TYPE") + 2.0), &entries, false);
+    let narrow = legend_wrapped(
+        &atlas,
+        place(width("X TYPE") + 2.0),
+        &entries,
+        crate::font::Pens::Advance,
+    );
     let cancel: Vec<_> = narrow
         .iter()
         .filter(|hint| hint.press == Press::Button(Button::Circle))
@@ -279,18 +289,18 @@ fn a_snapped_legend_rect_covers_its_drawn_ink() {
         scale: 0.7,
         width: 10_000.0,
     };
-    let rect_right = |snapped| {
-        let hints = legend_wrapped(&atlas, place, &entries, snapped);
+    let rect_right = |pens| {
+        let hints = legend_wrapped(&atlas, place, &entries, pens);
         hints[0].rect[0] + hints[0].rect[2]
     };
     let ink_right = 10.0 + crate::font::snapped_run(&atlas, "aaabbb", 0.7).ink_right;
     assert!(
-        rect_right(true) >= ink_right - 1e-3,
+        rect_right(crate::font::Pens::Snapped) >= ink_right - 1e-3,
         "the rect ends at {}, the ink at {ink_right}",
-        rect_right(true)
+        rect_right(crate::font::Pens::Snapped)
     );
     assert!(
-        rect_right(false) < ink_right - 0.1,
+        rect_right(crate::font::Pens::Advance) < ink_right - 0.1,
         "the fractional rect would stop short of the drawn ink"
     );
 }
@@ -311,7 +321,7 @@ fn a_snapped_legend_of_two_entries_follows_one_pen_across_the_line() {
         scale: 0.7,
         width: 10_000.0,
     };
-    let hints = legend_wrapped(&atlas, place, &entries, true);
+    let hints = legend_wrapped(&atlas, place, &entries, crate::font::Pens::Snapped);
     assert_eq!(hints.len(), 2, "{hints:?}");
     let run = |text: &str| crate::font::snapped_run(&atlas, text, 0.7);
     let (first, second) = (hints[0].rect, hints[1].rect);
@@ -326,6 +336,56 @@ fn a_snapped_legend_of_two_entries_follows_one_pen_across_the_line() {
     );
 }
 
+/// On a bearing face (Pulse's front end) a wrapped legend's rectangle runs from the first glyph's ink to the
+/// last glyph's ink, which `Renderer::push_text` draws from the text's x: with a bearing of -1 the ink ends
+/// `bearing + ink - advance` short of the advance sum, so the advance rectangle overshoots it.
+#[test]
+fn a_bearing_legend_rect_covers_its_drawn_ink() {
+    use oag_texture::fnt::{Font, Glyph};
+    let glyph = |ch: u8| Glyph {
+        codepoint: u16::from(ch),
+        width: 7,
+        height: 4,
+        u0: 0,
+        u1: 7,
+        v0: 0,
+        v1: 4,
+        advance: 9,
+        bearing: -1,
+    };
+    let font = Font {
+        line_height: 8,
+        unknown: 0,
+        width: 16,
+        height: 8,
+        palette: vec![[255, 255, 255, 255]; 16],
+        indices: vec![1; 128],
+        glyphs: vec![glyph(b'a'), glyph(b'b')],
+    };
+    let atlas = Atlas::from_font(&font);
+    let entries = [Entry::button(Button::Cross, "aaabbb")];
+    let place = Wrapped {
+        x: 10.0,
+        y: 50.0,
+        scale: 1.0,
+        width: 10_000.0,
+    };
+    let right = |pens| {
+        let hints = legend_wrapped(&atlas, place, &entries, pens);
+        hints[0].rect[0] + hints[0].rect[2]
+    };
+    let ink_right = 10.0 + crate::font::ink_width(&atlas, "aaabbb", 1.0, false);
+    assert!(
+        (right(crate::font::Pens::Bearing) - ink_right).abs() < 1e-3,
+        "the rect ends at {}, the ink at {ink_right}",
+        right(crate::font::Pens::Bearing)
+    );
+    assert!(
+        right(crate::font::Pens::Advance) > ink_right + 1.0,
+        "the advance rect would overshoot the drawn ink"
+    );
+}
+
 /// A right-aligned line on a snapped face ends its last quad on the anchor, as the draw does
 /// (`oag_game::render::Renderer::push_text`): the rectangle over `X aa` starts where `ink_right`
 /// puts the pen, not where the pen's end would, so a tap on its first glyph lands.
@@ -337,7 +397,7 @@ fn a_snapped_right_aligned_line_ends_on_its_anchor() {
         Some(Face {
             atlas: &atlas,
             buttons: false,
-            snapped: true,
+            pens: crate::font::Pens::Snapped,
         })
     });
     let run = crate::font::snapped_run(&atlas, "X aa", 1.0);

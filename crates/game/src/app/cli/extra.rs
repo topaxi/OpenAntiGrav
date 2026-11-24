@@ -188,10 +188,10 @@ pub(crate) struct MenuArgs {
     #[arg(long, value_name = "ITEM@X")]
     pub(crate) menu_ticker: Option<String>,
 
-    /// With `--menu-page grid-select`/`cell-select` on Pulse, the seconds the card title's glow ladder
-    /// (`pulse="true"` texts, 1 s period) has run, where it is not `--menu-picker-seconds`: the
-    /// title's counter and the `Selector`'s are separate in the original, so a pair script pins each
-    /// to what it read. `None` follows `--menu-picker-seconds`.
+    /// With `--menu-page grid-select`/`cell-select`/`track-select` on Pulse, the seconds the card title's
+    /// (or the circuit name panel's) glow ladder (`pulse="true"` texts, 1 s period) has run, where it is
+    /// not `--menu-picker-seconds`: the text's counter and the `Selector`'s are separate in the original,
+    /// so a pair script pins each to what it read. `None` follows `--menu-picker-seconds`.
     #[arg(long, value_name = "SECONDS")]
     pub(crate) menu_title_seconds: Option<f32>,
 

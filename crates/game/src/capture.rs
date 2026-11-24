@@ -173,7 +173,7 @@ pub struct Options {
     /// With `--menu-page`, the one footer-ticker message to draw, `ITEM@X` - see the CLI flag's
     /// own docs.
     pub menu_ticker: Option<String>,
-    /// With `--menu-page grid-select`/`cell-select`, the seconds the card title's glow ladder has run -
+    /// With `--menu-page grid-select`/`cell-select`/`track-select`, the seconds the card title or the name panel's glow ladder has run -
     /// see the CLI flag's own docs. `None` follows `menu_picker_seconds`.
     pub menu_title_seconds: Option<f32>,
     /// With `--menu-page`, where the focused row's colour pulse stands - see the CLI flag's own docs.
@@ -749,8 +749,10 @@ pub fn run(
                     &mut sprites,
                     options.menu_picker_seconds,
                 );
-                let measure =
-                    |text: &str| oag_ui::font::measure(menu_font.as_ref().unwrap_or(&font), text);
+                let measure = crate::boot::fonts::text_ink(
+                    menu_font.as_ref().unwrap_or(&font),
+                    crate::boot::fonts::pens_of(menu_skin),
+                );
                 let (mut list, request) = picker_page(
                     kind,
                     &circuit_names,
@@ -770,6 +772,7 @@ pub fn run(
                     options.menu_picker_seconds,
                     options.menu_picker_step_seconds,
                     options.menu_entry_seconds,
+                    options.menu_title_seconds,
                     false,
                 );
                 // The shared two-person page: the second half on the next team, the first
@@ -802,6 +805,7 @@ pub fn run(
                         options.menu_picker_seconds,
                         options.menu_picker_step_seconds,
                         options.menu_entry_seconds,
+                        options.menu_title_seconds,
                         true,
                     );
                     let (mut second_list, _) = picker_page(
@@ -823,6 +827,7 @@ pub fn run(
                         options.menu_picker_seconds,
                         options.menu_picker_step_seconds,
                         options.menu_entry_seconds,
+                        options.menu_title_seconds,
                         false,
                     );
                     // The second half is the base (it brings the screen's own backdrop and
@@ -858,8 +863,9 @@ pub fn run(
                 }
                 if !layout.is_hd() {
                     let (legend, ticker) = (nav_legend.as_ref(), ticker.as_ref());
-                    ticker_clip =
-                        menu_page::picker_footer(&mut list, legend, true, ticker, &strings, &font);
+                    ticker_clip = menu_page::picker_footer(
+                        &mut list, legend, true, ticker, &strings, &font, &skin,
+                    );
                     // The selected entry's description, typed along the footer as the live
                     // screen types it (`MenuStage`'s picker pass).
                     let selected = match kind {
@@ -878,7 +884,7 @@ pub fn run(
                                 buttons_font
                                     .as_ref()
                                     .filter(|_| menu_skin.stats_font.is_some()),
-                                menu_skin.snapped_pens,
+                                crate::boot::fonts::pens_of(menu_skin),
                             ),
                         ));
                     }
@@ -916,6 +922,7 @@ pub fn run(
                         oag_ui_screens::picker::FaceScales::default().default,
                         |menu| font.line_height / menu.line_height,
                     ),
+                    small_role: menu_skin.small_font,
                     ..oag_ui_screens::picker::FaceScales::default()
                 };
                 let globals: Vec<(&str, &str)> = frontend
@@ -945,6 +952,7 @@ pub fn run(
                     tag: options.settings.player.footer_tag(&loaded.title.profile),
                     pin: pinned_ticker.clone(),
                     font: &font,
+                    pens: crate::boot::fonts::pens_of(menu_skin),
                 };
                 let (list, shot, clip) = campaign_page(
                     kind,
@@ -1052,7 +1060,7 @@ pub fn run(
                     buttons_font
                         .as_ref()
                         .filter(|_| menu_skin.stats_font.is_some()),
-                    menu_skin.snapped_pens,
+                    crate::boot::fonts::pens_of(menu_skin),
                 );
                 let globals: Vec<(&str, &str)> = frontend
                     .screens()
@@ -1133,19 +1141,25 @@ pub fn run(
                     // default: the pitch comes off its line height, so reading
                     // the wrong one spaces the rows for a font nothing draws.
                     &skin,
-                    &|text| oag_ui::font::measure(menu_font.as_ref().unwrap_or(&font), text),
+                    &crate::boot::fonts::text_ink(
+                        menu_font.as_ref().unwrap_or(&font),
+                        crate::boot::fonts::pens_of(menu_skin),
+                    ),
                     &menu_frame,
                     options.menu_anim_phase,
                     options.menu_prompt.as_deref(),
                     options.race.as_ref().map(|r| r.source.as_str()),
                     nav_legend.as_ref(),
-                    &|text| oag_ui::font::measure(&font, text),
+                    &crate::boot::fonts::text_ink(&font, crate::boot::fonts::pens_of(menu_skin)),
                     &crate::boot::fonts::prompt_ink(
                         &font,
                         buttons_font
                             .as_ref()
                             .filter(|_| menu_skin.stats_font.is_some()),
-                        menu_skin.snapped_pens,
+                        title_font
+                            .as_ref()
+                            .filter(|_| menu_skin.small_font.is_some()),
+                        crate::boot::fonts::pens_of(menu_skin),
                     ),
                     ticker.as_ref(),
                     &ticker_tips,

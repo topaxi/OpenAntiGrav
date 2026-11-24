@@ -62,8 +62,11 @@ pub(crate) struct MenuStage {
     /// The face a `font="Stats"`/`"scroll"` widget draws in, on a title that has one of its own
     /// ([`oag_title::MenuSkin::stats_font`]); what a description line's wrap measures against.
     pub(crate) stats_atlas: Option<font::Atlas>,
-    /// [`oag_title::MenuSkin::snapped_pens`] of the title this stage draws.
-    pub(crate) snapped_pens: bool,
+    /// The face a `font="small"` widget draws in, on a title that holds it in a glyph slot
+    /// ([`oag_title::MenuSkin::small_font`]); what the footer prompts' widths measure against.
+    pub(crate) small_atlas: Option<font::Atlas>,
+    /// How the title this stage draws lays its text pens out ([`crate::boot::fonts::pens_of`]).
+    pub(crate) pens: font::Pens,
     /// The disc's own frame around every page: what the screen clears to and
     /// the rules it draws. Read once, off the front-end XML this source shipped
     /// - see `menu::read_frame` - and empty for a title whose frame is unread.
@@ -551,7 +554,7 @@ impl MenuStage {
                 if frozen_race { None } else { shown },
                 frozen_race,
                 &|src| picker.placed(src),
-                &|text| font::measure(&self.text_atlas, text),
+                &crate::boot::fonts::text_ink(&self.text_atlas, self.pens),
             );
             layers.body.extend(picker.slideshow_draws());
             picker.pump_fly_by(&mut self.renderer, gpu);
@@ -565,7 +568,7 @@ impl MenuStage {
                     None,
                     true,
                     &|src| partner.placed(src),
-                    &|text| font::measure(&self.text_atlas, text),
+                    &crate::boot::fonts::text_ink(&self.text_atlas, self.pens),
                 );
                 layers.chrome.extend(other.chrome);
                 layers.body.extend(other.body);
@@ -583,6 +586,7 @@ impl MenuStage {
                 Some(help) if picker.model.help_open() => help.draw(
                     &|src| picker.placed(src),
                     &self.text_atlas,
+                    small_help_face(&self.skin, self.small_atlas.as_ref(), self.pens),
                     picker.model.help_text(),
                 ),
                 _ => Vec::new(),
@@ -777,7 +781,7 @@ impl MenuStage {
                 }
             } else {
                 // The ticker's tips draw in the `Default` role.
-                let default_measure = |text: &str| font::measure(&self.default_atlas, text);
+                let default_measure = crate::boot::fonts::text_ink(&self.default_atlas, self.pens);
                 if let Some(editor) = &campaign.editor {
                     let faces = &campaign.cell_layout().faces;
                     let mut footer_overlay = campaign.nav_legend_draw(faces);
@@ -834,6 +838,11 @@ impl MenuStage {
                                     cell_help,
                                     &|src| campaign.sprites.get(src),
                                     &self.text_atlas,
+                                    small_help_face(
+                                        &self.skin,
+                                        self.small_atlas.as_ref(),
+                                        self.pens,
+                                    ),
                                 )
                             } else {
                                 Vec::new()
@@ -935,7 +944,7 @@ impl MenuStage {
             &self.menu,
             &self.skin,
             bound_keys,
-            &|text| font::measure(&self.text_atlas, text),
+            &crate::boot::fonts::text_ink(&self.text_atlas, self.pens),
             // `None` over a parked race even when `shown` just decoded a
             // fresh frame above: the decode keeps running so the loop has
             // not drifted by the time a player resumes, but the picture
@@ -994,7 +1003,7 @@ impl MenuStage {
                 arriving.flatten(),
                 &self.menu,
                 &self.skin,
-                &|text| font::measure(&self.text_atlas, text),
+                &crate::boot::fonts::text_ink(&self.text_atlas, self.pens),
                 self.marquee.elapsed(),
             ),
         };
@@ -1048,11 +1057,13 @@ impl MenuStage {
             let measure = crate::boot::fonts::prompt_ink(
                 &self.default_atlas,
                 self.stats_atlas.as_ref(),
-                self.snapped_pens,
+                self.small_atlas.as_ref(),
+                self.pens,
             );
             crate::prompts::reset_prompt(
                 &self.menu,
                 self.nav_legend.as_ref(),
+                &crate::prompts::footer_faces(&self.skin),
                 bound_keys,
                 &measure,
                 self.skin.space().size.0,
@@ -1171,6 +1182,20 @@ fn overlay_rect(space: oag_display::space::Space, viewport: (f32, f32, f32, f32)
         full_width,
         full_height,
     ]
+}
+
+/// The `small` face as the help overlays measure their paragraphs in it, on a title whose
+/// renderer holds that face in a glyph slot ([`oag_title::MenuSkin::small_font`]).
+fn small_help_face<'a>(
+    skin: &oag_ui::menu::Skin,
+    atlas: Option<&'a font::Atlas>,
+    pens: oag_ui::font::Pens,
+) -> Option<oag_ui_screens::campaign::HelpFace<'a>> {
+    Some(oag_ui_screens::campaign::HelpFace {
+        role: skin.small_font()?,
+        atlas: atlas?,
+        pens,
+    })
 }
 
 #[cfg(test)]

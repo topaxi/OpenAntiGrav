@@ -105,7 +105,7 @@ impl Renderer {
                     && self
                         .buttons_role
                         .eq_ignore_ascii_case(oag_ui::language::roles::BUTTONS),
-                snapped: self.hud.snapped_pens,
+                pens: self.hud.pens(),
             })
         });
         self.hints.extend(found);
@@ -180,8 +180,11 @@ impl Renderer {
             .hud
             .snapped_pens
             .then(|| font::snapped_run(atlas, text, scale));
+        let bearing_pens = self.hud.pens() == font::Pens::Bearing;
         let width: f32 = if let Some(run) = snapped_run {
             run.end
+        } else if bearing_pens {
+            font::ink_width(atlas, text, scale, false)
         } else if self.hud.whole_advances {
             text.chars()
                 .filter_map(|c| atlas.cell(c))
@@ -227,6 +230,13 @@ impl Renderer {
             pen = pen.ceil();
         }
         let y = self.hud.snap(y);
+        if bearing_pens {
+            // The text's first glyph's ink starts at `x` (`font::ink_width` measures from there).
+            let first = text
+                .chars()
+                .find_map(|c| self.atlas_for(slot).and_then(|atlas| atlas.cell(c)));
+            pen -= first.map_or(0.0, |cell| cell.bearing * scale * texel);
+        }
 
         for ch in text.chars() {
             // Re-derived rather than reusing `atlas` above: `self.quads.push`
@@ -248,6 +258,8 @@ impl Renderer {
             // ([`oag_ui::font::pen_step`]): the quad sits at the snapped ink edge, not the pen.
             let (ink_left, next) = if self.hud.snapped_pens {
                 font::pen_step(&cell, scale * texel, pen, true)
+            } else if bearing_pens {
+                font::pen_step(&cell, scale * texel, pen, false)
             } else {
                 (pen, pen + self.hud.advance(cell.advance * scale * texel))
             };
@@ -340,7 +352,7 @@ impl Renderer {
         };
         let scale = self.hud.text_scale(atlas.texel_scale, scale);
         let line_height = atlas.line_height * scale;
-        for (index, line) in wrap_pens(atlas, text, scale, width, self.hud.snapped_pens)
+        for (index, line) in wrap_pens(atlas, text, scale, width, self.hud.pens())
             .into_iter()
             .enumerate()
         {

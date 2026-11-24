@@ -114,8 +114,10 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     // seen to be *consumed* by the executable.
     title_font: Some("Title"),
     body_font: None,
+    small_font: None,
     stats_font: None,
     snapped_pens: false,
+    bearing_pens: false,
     default_face_is_row_face: true,
     // **Not authored, and the reason is the finding.** HD's main menu is a
     // `<HorizMenu>` - horizontal - so it has no first row to put a y on, and the

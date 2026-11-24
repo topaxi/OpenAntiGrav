@@ -310,6 +310,55 @@ fn pulses_footer_tag_and_card_titles_author_their_glow() {
     }
 }
 
+/// **Pulse PSP's footer button glyphs draw in `Pulse_14`, the face its `small` role names, at its own
+/// 17 px.** The legend authors `font="small"` for `ε`/`γ`; with `Pulse_20`'s 22 px glyph scaled by 17/22 their
+/// rings sampled half a texel soft against the original's. `oag_pulse::FRONT_END.menu.small_font` carries the
+/// slot (`Title`), so dropping it turns both back into scaled menu-face text.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn pulses_footer_button_glyphs_draw_in_the_small_face_at_its_own_size() {
+    use oag_ui::frontend::Draw;
+    use oag_ui_screens::picker::FaceScales;
+
+    let images = images();
+    assert!(
+        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none() || !images.is_empty(),
+        "OAG_REQUIRE_GAME_DATA is set but neither Pulse PSP image is present"
+    );
+    let small_role = oag_pulse::FRONT_END
+        .menu
+        .expect("Pulse's PSP skin")
+        .small_font;
+    for (label, path) in images {
+        let mut archives = oag_assets::Archives::open(&path.to_string_lossy(), oag_pulse::TITLE)
+            .unwrap_or_else(|e| panic!("{label}: the archives open: {e}"));
+        let xml = front_end_root_xml(&mut archives);
+        let screens = Screens::from_xml(&xml);
+        let legend = oag_ui_screens::campaign::footer::NavigationLegend::read(
+            &parse(&xml),
+            &screens.globals,
+            &oag_ui::language::StringTable::default(),
+        )
+        .unwrap_or_else(|| panic!("{label}: Skin.xml authors a NavigationController"));
+        let draws = legend.draw(&FaceScales {
+            small_role,
+            ..FaceScales::default()
+        });
+        let glyphs: Vec<_> = draws
+            .iter()
+            .filter(|draw| {
+                matches!(draw, Draw::FacedText { role, scale, .. }
+                    if role.eq_ignore_ascii_case("Title") && *scale == 1.0)
+            })
+            .collect();
+        assert_eq!(
+            glyphs.len(),
+            2,
+            "{label}: the Confirm and Back glyphs draw in the Title slot (Pulse_14) at scale 1: {draws:?}"
+        );
+    }
+}
+
 /// What Pulse authors for the glow it stamps on the title and the Main Menu, against the numbers
 /// `oag_pulse::FRONT_END.menu.glow` carries (EDRAM frames of both screens on PPSSPP): the seven
 /// `helptext` widgets author `RealGlow="128"` (the `help` reference), the title's
@@ -707,4 +756,86 @@ fn the_discs_list_screens_draw_their_own_rows_and_header() {
         strip_mean(36) > strip_mean(59) + 30.0,
         "{label}: the focused value of Single Player has no glow haze"
     );
+}
+
+/// **Track Select's circuit name takes its own glow phase.** The name panel's `pulse="true"` texts stamp
+/// the same `220 - 15 k` ladder as a card title, on a counter of its own, so a pair script pins it
+/// (`--menu-title-seconds`) from the byte the original stamps over the name. The two phases differ in the
+/// name's box `(300, 30, 140, 50)` and nowhere else.
+#[test]
+#[ignore = "needs a Pulse PSP disc image in data/images and a GPU adapter"]
+fn track_selects_circuit_name_takes_its_own_glow_phase() {
+    let images = images();
+    assert!(
+        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none() || !images.is_empty(),
+        "OAG_REQUIRE_GAME_DATA is set but neither Pulse PSP image is present"
+    );
+    let Some((label, image)) = images.into_iter().next() else {
+        return;
+    };
+    let name = (300, 30, 140, 50);
+    let rest = [(0, 0, 480, 30), (0, 80, 480, 192), (0, 30, 300, 50)];
+    let still = |seconds: &str, tag: &str| {
+        menu_page_still(
+            &image,
+            "track-select",
+            &[
+                "--menu-picker-seconds",
+                "0.2",
+                "--menu-title-seconds",
+                seconds,
+            ],
+            None,
+            tag,
+        )
+    };
+    let high = still("0.0", "name-high");
+    let low = still("0.5", "name-low");
+    assert!(
+        differing_in(&high, &low, name) > 300,
+        "{label}: --menu-title-seconds does not move the circuit name's glow"
+    );
+    assert_eq!(
+        rest.iter()
+            .map(|&r| differing_in(&high, &low, r))
+            .sum::<usize>(),
+        0,
+        "{label}: the name's glow phase moved something outside the name panel"
+    );
+}
+
+/// **The Cell and Track Select stills draw the footer's Confirm and Back glyphs in `Pulse_14` at its own size, as the live
+/// footer does.** The stills build their legend through two routes (the campaign still's faces, the picker still's
+/// `picker_footer`) and each had to be given the skin's `small_font`: from the minified `Pulse_20` cell the ring never
+/// reaches full white (brightest pixel 246 and 239), from the 17 px cell it does (254).
+#[test]
+#[ignore = "needs a Pulse PSP disc image in data/images and a GPU adapter"]
+fn the_stills_footer_glyphs_are_the_small_faces_own_cells() {
+    let images = images();
+    assert!(
+        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none() || !images.is_empty(),
+        "OAG_REQUIRE_GAME_DATA is set but neither Pulse PSP image is present"
+    );
+    let Some((label, image)) = images.into_iter().next() else {
+        return;
+    };
+    let brightest = |rgba: &[u8], (x, y, w, h): (usize, usize, usize, usize)| {
+        (y..y + h)
+            .flat_map(|row| (x..x + w).map(move |col| (row * 480 + col) * 4))
+            .map(|at| rgba[at + 1])
+            .max()
+            .unwrap_or(0)
+    };
+    for page in ["cell-select", "track-select"] {
+        let still = menu_page_still(&image, page, &["--menu-picker-seconds", "0.2"], None, page);
+        for (glyph, at) in [
+            ("Confirm", (348, 252, 17, 17)),
+            ("Back", (415, 252, 17, 17)),
+        ] {
+            assert!(
+                brightest(&still, at) >= 250,
+                "{label}: {page}'s {glyph} glyph is not drawn from Pulse_14's 17 px cell"
+            );
+        }
+    }
 }
