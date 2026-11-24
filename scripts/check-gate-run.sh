@@ -3,26 +3,44 @@
 # lock, no build. A free lock runs the recipe at once with nothing prebuilt; a busy one
 # starts the prebuild, which is stopped if the lock comes first and left to finish if
 # it is done; every run lands one row in the times file with the right exit code; the
-# build's hash is fixed; a recipe with no prebuild is left alone.
+# build's hash is fixed; a recipe with no prebuild is left alone; an interrupt stops the
+# prebuild, the wait and the recipe, and frees the lock only once the recipe is dead.
+#
+# No scenario waits a fixed time. A lock is held until the check releases it, the stand-in
+# `just` writes a marker once its TERM trap is armed and holds a shutdown open until the
+# check lets it die, and every wait is on one of those events with a 60 s deadline. A fixed
+# sleep decides nothing on a host under load: the process it stands for may not have started
+# or died yet. `GATE_RUN_UNDER_TEST` points at another copy of gate-run.sh (a mutant, to
+# prove each scenario still fails against a broken wrapper).
 set -uo pipefail
 cd "$(dirname "$0")/.."
 root=$PWD
+gate_run=${GATE_RUN_UNDER_TEST:-$root/scripts/gate-run.sh}
 tmp=$(mktemp -d)
-trap 'rm -rf "$tmp"' EXIT
+trap 'rm -rf "$tmp"; kill $(jobs -p) 2>/dev/null' EXIT
 mkdir "$tmp/bin"
 cat >"$tmp/bin/just" <<'JUST'
 #!/usr/bin/env bash
+# Every wait here ends when its file appears, when $FAKE_DIR is gone (the check exited) or
+# after two minutes, so a failed check never leaves a stand-in spinning.
+wait_file() {
+    local n=0
+    until [ -e "$1" ] || [ ! -d "$FAKE_DIR" ] || [ "$n" -ge 1200 ]; do sleep 0.1; n=$((n + 1)); done
+}
 echo "$* hash=$OAG_GIT_HASH data=${OAG_REQUIRE_GAME_DATA:-unset}" >>"$FAKE_LOG"
 case "$1" in
     gate-prep)
         if [ "${PREP_MODE:-}" = grandchild ]; then
-            # The leader dies at once; a child of it takes a second to notice TERM.
-            (trap 'sleep 1; echo grandchild-dead >>"$FAKE_LOG"; exit 0' TERM
+            # The leader dies at once; a child of it is slow to notice TERM.
+            (trap 'echo grandchild-term >>"$FAKE_LOG"; wait_file "$FAKE_DIR/let-grandchild-die"
+                   echo grandchild-dead >>"$FAKE_LOG"; exit 0' TERM
+             echo grandchild-armed >>"$FAKE_LOG"
              sleep 30 & wait $!) &
             trap 'exit 143' TERM
             wait
         fi
         trap 'echo prep-stopped >>"$FAKE_LOG"; exit 143' TERM
+        echo prep-armed >>"$FAKE_LOG"
         sleep "${PREP_SLEEP:-30}" &
         wait $!
         echo prep-finished >>"$FAKE_LOG"
@@ -31,39 +49,93 @@ case "$1" in
     busy-code) exit 111 ;;
     hold)
         # A recipe with a child of its own that is slow to die.
-        trap 'sleep 1.5; echo hold-dead >>"$FAKE_LOG"; exit 143' TERM
+        trap 'echo hold-term >>"$FAKE_LOG"; wait_file "$FAKE_DIR/let-hold-die"
+              echo hold-dead >>"$FAKE_LOG"; exit 143' TERM
+        echo hold-armed >>"$FAKE_LOG"
         sleep 30 &
         wait $!
+        ;;
+    *)
+        # A recipe starts only once no prebuild process is left.
+        if pgrep -f -- "$FAKE_DIR/bin/just gate-prep" >/dev/null; then echo prep-alive >>"$FAKE_LOG"; fi
         ;;
 esac
 JUST
 chmod +x "$tmp/bin/just"
 # What a caller's shell exports must not decide what is asserted.
 unset OAG_GIT_HASH OAG_BUILD_DATE OAG_REQUIRE_GAME_DATA OAG_GATE_ENTERED
-export PATH="$tmp/bin:$PATH" FAKE_LOG="$tmp/log" OAG_GATE_LOCK="$tmp/lock" OAG_GATE_TIMES="$tmp/times.tsv" \
-    OAG_GATE_PREP_LOG="$tmp/prep.log"
+export PATH="$tmp/bin:$PATH" FAKE_DIR="$tmp" FAKE_LOG="$tmp/log" OAG_GATE_LOCK="$tmp/lock" \
+    OAG_GATE_TIMES="$tmp/times.tsv" OAG_GATE_PREP_LOG="$tmp/prep.log"
 : >"$FAKE_LOG"
-fail() { echo "check-gate-run: $*" >&2; cat "$FAKE_LOG" "$OAG_GATE_TIMES" >&2; exit 1; }
-busy() { (flock -o "$OAG_GATE_LOCK" sleep "$1" &) ; sleep 0.3; }
-run() { "$root/scripts/gate-run.sh" "$@" >"$tmp/out" 2>&1; }
+fail() { echo "check-gate-run: $*" >&2; cat "$tmp/out" "$FAKE_LOG" "$OAG_GATE_TIMES" >&2 2>/dev/null; exit 1; }
 col() { awk -F'\t' -v n="$1" -v c="$2" 'NR == n { print $c }' "$OAG_GATE_TIMES"; }
+logged() { grep -q -- "$1" "$FAKE_LOG"; }
+lock_free() { flock -n -o "$OAG_GATE_LOCK" true; }
+# wait_for WHAT CONDITION: the condition is shell text, polled for 60 s.
+wait_for() {
+    local n=0
+    until eval "$2"; do
+        n=$((n + 1))
+        [ "$n" -le 600 ] || fail "timed out waiting for $1"
+        sleep 0.1
+    done
+}
+
+# The lock is held until `release`, however long the scenario takes to get there.
+hold_lock() {
+    rm -f "$tmp/held"
+    : >"$tmp/hold"
+    flock -o "$OAG_GATE_LOCK" bash -c 'n=0; : >"$1/held"
+        while [ -e "$1/hold" ] && [ "$n" -lt 1200 ]; do sleep 0.1; n=$((n + 1)); done' _ "$tmp" &
+    holder=$!
+    wait_for "the lock holder to start" '[ -e "$tmp/held" ]'
+}
+release() { rm -f "$tmp/hold"; wait "$holder"; }
+
+# The gate in the background. `waiting` is true once it sits on the blocking flock, which
+# is after the prebuild was started.
+start_run() { "$gate_run" "$@" >"$tmp/out" 2>&1 & runpid=$!; }
+waiting() { pgrep -P "$runpid" -f '^flock -o ' >/dev/null; }
+finish_run() {
+    wait_for "the gate to finish" '! kill -0 "$runpid" 2>/dev/null'
+    wait "$runpid"
+}
+run() { "$gate_run" "$@" >"$tmp/out" 2>&1; }
+no_prep_left() { ! pgrep -f -- "$tmp/bin/just gate-prep" >/dev/null; }
 
 run gate-affected || fail "a free lock failed"
 grep -q '^gate-affected hash=test-data data=unset$' "$FAKE_LOG" || fail "free lock: wrong environment"
 grep -q gate-prep "$FAKE_LOG" && fail "free lock: prebuilt"
 [ "$(col 1 6)" = none ] || fail "free lock: prebuild state $(col 1 6)"
 
-busy 3; PREP_SLEEP=60 run gate-affected || fail "busy lock, long prebuild failed"
-grep -q prep-stopped "$FAKE_LOG" || fail "the unfinished prebuild was not stopped"
+# A busy lock with a long prebuild: the prebuild is stopped when the lock is taken.
+hold_lock
+PREP_SLEEP=60 start_run gate-affected
+wait_for "the prebuild to arm" 'logged prep-armed'
+release
+finish_run || fail "busy lock, long prebuild failed"
+logged prep-stopped || fail "the unfinished prebuild was not stopped"
+logged prep-alive && fail "the recipe started beside a live prebuild"
 case "$(col 2 6)" in stopped@*) ;; *) fail "busy lock: prebuild state $(col 2 6)" ;; esac
 
-busy 3; PREP_SLEEP=1 run test-data-affected || fail "busy lock, short prebuild failed"
-grep -q prep-finished "$FAKE_LOG" || fail "the short prebuild did not finish"
+# A busy lock with a prebuild that is done before the lock comes: it is left alone.
+hold_lock
+PREP_SLEEP=0 start_run test-data-affected
+wait_for "the short prebuild to finish" 'logged prep-finished && no_prep_left'
+release
+finish_run || fail "busy lock, short prebuild failed"
 grep -q '^test-data-affected hash=test-data data=1$' "$FAKE_LOG" || fail "test-data-affected: wrong environment"
 [ "$(col 3 6)" = done ] || fail "short prebuild state $(col 3 6)"
 
-busy 2; run check-docs || fail "busy lock, no prebuild failed"
+# A recipe with no prebuild waits on a busy lock and prebuilds nothing.
+: >"$FAKE_LOG"
+hold_lock
+start_run check-docs
+wait_for "the gate to wait on the lock" 'waiting'
+release
+finish_run || fail "busy lock, no prebuild failed"
 [ "$(col 4 6)" = none ] || fail "a recipe with no prebuild was prebuilt: $(col 4 6)"
+logged gate-prep && fail "a recipe with no prebuild started one"
 
 run fail; [ $? -eq 0 ] && fail "a failing recipe passed"
 [ "$(col 5 7)" = 7 ] || fail "exit code not recorded: $(col 5 7)"
@@ -72,42 +144,67 @@ run busy-code; [ $? -eq 111 ] || fail "a recipe's own 111 was swallowed"
 [ "$(grep -c '^busy-code' "$FAKE_LOG")" -eq 1 ] || fail "a recipe exiting 111 ran twice"
 [ "$(wc -l <"$OAG_GATE_TIMES")" -eq 6 ] || fail "expected six rows"
 
+# An interrupt while the gate waits stops the prebuild and the wait; nothing runs later.
 : >"$FAKE_LOG"
-busy 4
-PREP_SLEEP=60 "$root/scripts/gate-run.sh" gate-affected >"$tmp/out" 2>&1 &
-waiter=$!
-sleep 1
-kill -TERM "$waiter"
-wait "$waiter" 2>/dev/null
-sleep 0.5
-grep -q prep-stopped "$FAKE_LOG" || fail "an interrupted gate left its prebuild running"
-sleep 4
-grep -q '^gate-affected' "$FAKE_LOG" && fail "an interrupted gate still ran"
-: >"$FAKE_LOG"
+hold_lock
+PREP_SLEEP=60 start_run gate-affected
+wait_for "the prebuild to arm" 'logged prep-armed'
+wait_for "the gate to wait on the lock" 'waiting'
+waiters=$(pgrep -P "$runpid" -f '^flock -o ')
+kill -TERM "$runpid"
+finish_run; [ $? -eq 130 ] || fail "an interrupted waiting gate did not exit 130"
+logged prep-stopped || fail "an interrupted gate left its prebuild running"
+no_prep_left || fail "an interrupted gate left prebuild processes"
+release
+wait_for "the interrupted gate's wait to be gone" \
+    'for w in $waiters; do ! kill -0 "$w" 2>/dev/null || exit 1; done'
+lock_free || fail "the lock is held after the interrupted gate"
+logged '^gate-affected' && fail "an interrupted gate still ran"
+
 # An interrupt while the recipe holds the lock stops the recipe, and the lock is free only
 # once the recipe is dead.
-"$root/scripts/gate-run.sh" hold >"$tmp/out" 2>&1 &
-holder=$!
-sleep 1
-flock -n -o "$OAG_GATE_LOCK" true && fail "the lock was free while a recipe held it"
-kill -TERM "$holder"
-sleep 0.5
-grep -q hold-dead "$FAKE_LOG" && fail "the recipe died before it had to"
-flock -n -o "$OAG_GATE_LOCK" true && fail "an interrupted gate freed the lock before its recipe was dead"
-wait "$holder"; [ $? -eq 130 ] || fail "an interrupted gate did not exit 130"
-grep -q hold-dead "$FAKE_LOG" || fail "an interrupted gate left its recipe running"
-flock -n -o "$OAG_GATE_LOCK" true || fail "the lock is still held after the interrupted gate"
-
 : >"$FAKE_LOG"
+start_run hold
+wait_for "the recipe to arm" 'logged hold-armed'
+lock_free && fail "the lock was free while a recipe held it"
+kill -TERM "$runpid"
+wait_for "the recipe to get the TERM" 'logged hold-term'
+logged hold-dead && fail "the recipe died before it had to"
+lock_free && fail "an interrupted gate freed the lock before its recipe was dead"
+: >"$tmp/let-hold-die"
+finish_run; [ $? -eq 130 ] || fail "an interrupted gate did not exit 130"
+logged hold-dead || fail "an interrupted gate left its recipe running"
+lock_free || fail "the lock is still held after the interrupted gate"
+
 # A prebuild whose child outlives its leader is gone before the recipe starts.
-busy 3; PREP_MODE=grandchild run gate-affected || fail "grandchild prebuild: the gate failed"
+: >"$FAKE_LOG"
+hold_lock
+PREP_MODE=grandchild start_run gate-affected
+wait_for "the prebuild's child to arm" 'logged grandchild-armed'
+release
+wait_for "the prebuild's child to get the TERM" 'logged grandchild-term'
+# The child holds on; a wrapper that only watches the leader starts the recipe now.
+n=0
+while [ "$n" -lt 30 ]; do
+    logged '^gate-affected' && fail "the recipe started before the prebuild's child was dead"
+    sleep 0.1; n=$((n + 1))
+done
+: >"$tmp/let-grandchild-die"
+finish_run || fail "grandchild prebuild: the gate failed"
 awk '/grandchild-dead/ { dead = NR } /^gate-affected/ { ran = NR } END { exit !(dead && ran && dead < ran) }' "$FAKE_LOG" \
     || fail "the recipe started before the prebuild's child was dead"
+logged prep-alive && fail "the recipe started beside a live prebuild child"
 
+# A lock that frees as soon as the gate waits for it: the prebuild may have barely
+# started, and is still stopped.
 : >"$FAKE_LOG"
-# A lock that frees at once: the prebuild may have barely started, and is still stopped.
-(flock -o "$OAG_GATE_LOCK" sleep 0.2 &) ; sleep 0.05
-PREP_SLEEP=5 run gate-affected || fail "quick lock: the gate failed"
-sleep 0.5
-grep -q prep-finished "$FAKE_LOG" && fail "the prebuild ran on beside the recipe"
+hold_lock
+PREP_SLEEP=60 start_run gate-affected
+wait_for "the gate to wait on the lock" 'waiting'
+release
+finish_run || fail "quick lock: the gate failed"
+logged prep-finished && fail "the prebuild ran to its end beside the recipe"
+logged prep-alive && fail "the recipe started beside a live prebuild"
+no_prep_left || fail "the prebuild ran on beside the recipe"
+case "$(tail -n 1 "$OAG_GATE_TIMES" | cut -f6)" in stopped@*) ;; *) fail "quick lock: prebuild state" ;; esac
 echo "check-gate-run: ok"
