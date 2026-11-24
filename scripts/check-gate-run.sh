@@ -8,7 +8,7 @@
 #
 # No scenario waits a fixed time. A lock is held until the check releases it, the stand-in
 # `just` writes a marker once its TERM trap is armed and holds a shutdown open until the
-# check lets it die, and every wait is on one of those events with a 60 s deadline. A fixed
+# check lets it die, and every wait is on one of those events with a two minute deadline. A fixed
 # sleep decides nothing on a host under load: the process it stands for may not have started
 # or died yet. `GATE_RUN_UNDER_TEST` points at another copy of gate-run.sh (a mutant, to
 # prove each scenario still fails against a broken wrapper).
@@ -72,12 +72,13 @@ fail() { echo "check-gate-run: $*" >&2; cat "$tmp/out" "$FAKE_LOG" "$OAG_GATE_TI
 col() { awk -F'\t' -v n="$1" -v c="$2" 'NR == n { print $c }' "$OAG_GATE_TIMES"; }
 logged() { grep -q -- "$1" "$FAKE_LOG"; }
 lock_free() { flock -n -o "$OAG_GATE_LOCK" true; }
-# wait_for WHAT CONDITION: the condition is shell text, polled for 60 s.
+# wait_for WHAT CONDITION: the condition is shell text, polled for two minutes of wall
+# clock (a poll that forks takes longer than its sleep on a loaded host, and a prebuild at
+# idle priority can wait whole seconds for a core).
 wait_for() {
-    local n=0
+    local start=$SECONDS
     until eval "$2"; do
-        n=$((n + 1))
-        [ "$n" -le 600 ] || fail "timed out waiting for $1"
+        [ $((SECONDS - start)) -le 120 ] || fail "timed out waiting for $1"
         sleep 0.1
     done
 }
