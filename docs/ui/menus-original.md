@@ -982,7 +982,7 @@ the anchor** (`oag_ui::font::snapped_run`'s `ink_right`), not its pen end: the p
 380, 388, 400, 407, 415; aligned by pen end ours started at 362, 369, 376, 383, 397, 403, 410 (the same pitch, 4 px left: the last glyph's
 trailing advance, 4.2 px for the `!`); on the ink edge ours starts 366, 373, 380, 387, 401, 407, 414, each within 1 px. Only this
 widget measures it: no other captured Pure frame has a right-aligned snapped string (`menu-main`, `-team`, `-mode`, `-sr-*`, `-t-*`
-and `-pause` re-rendered before and after are pixel for pixel equal). A centred string is still placed by the pen end (not measured). The pointer rectangles over a drawn line (`hints::scan`) follow
+and `-pause` re-rendered before and after are pixel for pixel equal). A centred string is still placed by the pen end; the pause band's three words are the only centred snapped strings in a Pure pair, and their rounding is open (`docs/tools/compare-page.md`, "The band's words and the HUD top, measured again"): 1 px left on two of three, no rule fit with the footer. The pointer rectangles over a drawn line (`hints::scan`) follow
 the same rule, so a tap lands on the ink; our own `menu.toml` pages' right-hand value columns on Pure now end their ink on
 `value_right` too (no Pure pair draws one).
 

@@ -29,7 +29,7 @@ pause screen where one applies). Online pause stays the maintainer's decision
   does; Free Play's END SESSION leaves like QUIT where the original shows a `RETURN TO MAIN MENU` screen first
   (chosen). The now-playing line under the pause is left out since 2026-11-23 (`song_line_under_scrim`); the pause has
   a compare pair (`docs/tools/compare-page.md`, "Pure Main Menu and pause menu pairs"): the band matches to the pixel row,
-  ours' words are 3 px narrower over 105.
+  ours' words are the original's width, 1 px left on two of three rows (centring rounding open: the same page, "The band's words and the HUD top, measured again").
 - **2048: not wired** (`pause_menu: None`). 2048 has `InGame_Definition.xml` (36 screens) and
   `LegacyInGame_Definition.xml` on Vita, with a binder of its own; Omega's reads the same mode ids as HD's, so
   compare 2048's against it first. No Vita frame yet. A 2048 finding is checked against Omega and the reverse.
