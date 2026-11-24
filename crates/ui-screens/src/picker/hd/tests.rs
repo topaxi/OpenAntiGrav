@@ -246,6 +246,7 @@ fn the_logo_is_the_teams_own_front_end_texture() {
     );
 }
 
+mod slide_draw;
 use super::hex::{HEX_SRC, LOCK_SRC, ModelCell, THICK_OUT_SRC};
 use oag_ui::frontend::Placed;
 
@@ -609,7 +610,10 @@ fn clicking_a_hex_selects_its_team_and_livery_and_the_chosen_one_confirms() {
     let events = picker.pointer(&click, &targets(&picker, &layout, &skin, &|_| None));
     assert_eq!(events, vec![Event::Moved]);
     assert_eq!((picker.index(), picker.variant_index()), (1, 1));
-    // The same spot is now the centre column's `concept1`: already chosen.
+    // Once the slide is over, the same spot is the centre column's `concept1`: already chosen.
+    for _ in 0..8 {
+        picker.tick(1.0 / 60.0);
+    }
     let centre = grid.cells(1, 3, 0.0)[2 * 7 + 2];
     let at = (
         centre.rect[0] + centre.rect[2] * 0.5,
@@ -1224,35 +1228,6 @@ fn the_ring_eases_half_a_row_and_never_moves_sideways() {
         );
         picker.tick(1.0 / 60.0);
     }
-}
-
-/// A step during a slide waits for the slide's end: the lattice keeps sliding away from the first
-/// step's window, and the second slide starts after it.
-#[test]
-fn a_step_during_the_slide_does_not_move_the_columns_until_it_ends() {
-    let layout = layout();
-    let grid = layout.hd.as_deref().unwrap().hex.unwrap();
-    let mut picker = picker_of(&["A", "B", "C", "D", "E", "F"], "C");
-    picker.tick(1.0);
-    let mut input = Input::default();
-    for _ in 0..2 {
-        input.begin_frame(0);
-        input.begin_frame(1 << Button::Right as u32);
-        picker.update(&mut input);
-        picker.tick(1.0 / 60.0);
-    }
-    assert_eq!(picker.index(), 4, "the selection itself has moved twice");
-    assert_eq!(
-        picker.slide().previous(),
-        2,
-        "the slide still shows the first step"
-    );
-    let drawn = grid.cells_at(picker.index(), 6, 0.0, Some(picker.slide()));
-    assert!(drawn.iter().any(|c| c.offset == 0 && c.entry == 2));
-    for _ in 0..6 {
-        picker.tick(1.0 / 60.0);
-    }
-    assert_eq!(picker.slide().previous(), 3, "the deferred step has begun");
 }
 
 fn art(src: &str) -> Option<Placed> {

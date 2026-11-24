@@ -19,9 +19,12 @@ const SLIDE_SLACK: f32 = 1e-4;
 const RING_EASE: f32 = 0.5;
 
 /// One grid's step state, ticked with the screen. Frame 0 is the tick on which the step lands.
+///
+/// The grid draws [`Self::shown`], not the picker's selection: a selection that runs ahead is
+/// stepped toward one column per slide, so nothing flashes before its slide.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Slide {
-    /// The entry the centre column shows once the slide is over: what the last step went to.
+    /// The entry the centre column shows once the slide is over.
     shown: usize,
     /// The entry that was the centre column before the step.
     prev: usize,
@@ -31,18 +34,26 @@ pub struct Slide {
     age: f32,
     /// The ring's offset below its target, in half rows: positive is low.
     ring: f32,
+    /// The column parity bit (`+0xb4`): whether the even columns sit half a row low. Each step
+    /// toggles it, so a wrap on an odd roster still flips the phase.
+    parity: bool,
+    /// The parity before the running step.
+    prev_parity: bool,
 }
 
 impl Slide {
-    /// A grid at rest on `shown`.
+    /// A grid at rest on `shown`, whose columns follow its index's parity.
     #[must_use]
     pub fn at_rest(shown: usize) -> Self {
+        let parity = shown % 2 == 1;
         Self {
             shown,
             prev: shown,
             dir: 0,
             age: SLIDE_SECONDS,
             ring: 0.0,
+            parity,
+            prev_parity: parity,
         }
     }
 
@@ -51,39 +62,60 @@ impl Slide {
     pub fn stepped(shown: usize, count: usize, age: f32) -> Self {
         let mut out = Self::at_rest(shown);
         if count > 1 {
-            out.begin((shown + count - 1) % count, shown, count);
+            let from = (shown + count - 1) % count;
+            out = Self::at_rest(from);
+            out.begin(from, shown, count);
             out.age = age;
-            let ticks = (age * 60.0).floor().max(0.0);
-            out.ring *= RING_EASE.powi(ticks as i32);
+            out.ring *= RING_EASE.powi((age * 60.0).floor().max(0.0) as i32);
         }
         out
     }
 
-    fn begin(&mut self, from: usize, to: usize, count: usize) {
-        let forward = if from + 1 == count && to == 0 {
-            true
-        } else if from == 0 && to + 1 == count {
-            false
-        } else {
-            to > from
-        };
-        self.prev = from;
-        self.shown = to;
-        self.dir = if forward { -1 } else { 1 };
-        self.age = 0.0;
-        // The centre column's half-row follows its team's parity: the ring heads to the new one.
-        self.ring += low(from) - low(to);
+    /// Rests on `shown` with no slide after `steps` whole-column steps the grid already showed
+    /// (a finger's pan), keeping the parity those steps leave.
+    pub fn rest_on(&mut self, shown: usize, steps: usize) {
+        let parity = self.parity ^ (steps % 2 == 1);
+        *self = Self::at_rest(shown);
+        self.parity = parity;
+        self.prev_parity = parity;
     }
 
-    /// Advances one fixed tick toward `target` of `count` entries.
+    /// Starts the one-column step from `from` toward `to`.
+    fn begin(&mut self, from: usize, to: usize, count: usize) {
+        let forward = if to == (from + 1) % count {
+            true
+        } else if from == (to + 1) % count {
+            false
+        } else {
+            (to + count - from) % count <= count / 2
+        };
+        self.prev = from;
+        self.shown = if forward {
+            (from + 1) % count
+        } else {
+            (from + count - 1) % count
+        };
+        self.dir = if forward { -1 } else { 1 };
+        self.age = 0.0;
+        self.prev_parity = self.parity;
+        self.parity = !self.parity;
+        self.ring += f32::from(u8::from(self.prev_parity)) - f32::from(u8::from(self.parity));
+    }
+
+    /// Advances `dt` seconds toward `target` of `count` entries.
     pub fn tick(&mut self, dt: f32, target: usize, count: usize) {
+        let ease = if (dt * 60.0 - 1.0).abs() < 1e-3 {
+            RING_EASE
+        } else {
+            RING_EASE.powf(dt * 60.0)
+        };
         if self.moving() {
             self.age += dt;
-            self.ring *= RING_EASE;
+            self.ring *= ease;
         } else if target != self.shown && count > 1 {
             self.begin(self.shown, target, count);
         } else {
-            self.ring *= RING_EASE;
+            self.ring *= ease;
         }
     }
 
@@ -105,6 +137,22 @@ impl Slide {
         self.shown
     }
 
+    /// The entry the centre column shows now: the previous window while the slide runs.
+    #[must_use]
+    pub fn centre(&self) -> usize {
+        if self.moving() { self.prev } else { self.shown }
+    }
+
+    /// Whether the even columns sit half a row low now (the old phase while the slide runs).
+    #[must_use]
+    pub fn parity(&self) -> bool {
+        if self.moving() {
+            self.prev_parity
+        } else {
+            self.parity
+        }
+    }
+
     /// Which way the columns move: `-1` toward the left (a forward step), `+1` toward the right.
     #[must_use]
     pub fn direction(&self) -> i8 {
@@ -122,11 +170,12 @@ impl Slide {
     pub fn ring_offset(&self) -> f32 {
         self.ring
     }
-}
 
-/// `1.0` for an odd entry, whose column sits half a row low.
-fn low(entry: usize) -> f32 {
-    if entry % 2 == 1 { 1.0 } else { 0.0 }
+    /// Whether the ring's own target is a half row low: the new phase, not the running slide's.
+    #[must_use]
+    pub fn ring_target_low(&self) -> bool {
+        self.parity
+    }
 }
 
 #[cfg(test)]

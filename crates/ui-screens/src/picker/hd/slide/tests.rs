@@ -93,3 +93,59 @@ fn a_still_is_seeded_mid_slide() {
     assert!((slide.progress() - 0.5).abs() < 1e-4);
     assert_eq!(slide.ring_offset(), -0.125);
 }
+
+/// With two teams a step to the other one is forward from 0 and, as the original reads it, a wrap
+/// forward from 1; a click several columns away slides toward the nearer way round, one column at
+/// a time.
+#[test]
+fn the_direction_is_the_nearer_way_round() {
+    let mut two = Slide::at_rest(0);
+    two.tick(DT, 1, 2);
+    assert_eq!(two.direction(), -1);
+    let mut far = Slide::at_rest(0);
+    far.tick(DT, 10, 12);
+    assert_eq!(
+        (far.direction(), far.shown()),
+        (1, 11),
+        "two columns back is nearer than ten forward"
+    );
+    let mut ahead = Slide::at_rest(0);
+    ahead.tick(DT, 4, 12);
+    assert_eq!((ahead.direction(), ahead.shown()), (-1, 1));
+}
+
+/// Each step toggles the column parity, so the wrap on an odd roster flips the phase too.
+#[test]
+fn the_parity_toggles_on_every_step_even_across_an_odd_wrap() {
+    let mut slide = Slide::at_rest(2);
+    let rest = slide.parity();
+    slide.tick(DT, 0, 3);
+    assert!(slide.moving());
+    assert_eq!(slide.parity(), rest, "the old phase while it slides");
+    ticks(&mut slide, 6, 0);
+    assert_ne!(slide.parity(), rest);
+}
+
+/// A finger's pan rests the grid on the new selection with no slide and the parity its steps left.
+#[test]
+fn a_pan_rests_the_grid_without_a_slide() {
+    let mut slide = Slide::at_rest(2);
+    let rest = slide.parity();
+    slide.rest_on(3, 1);
+    assert!(!slide.moving());
+    assert_eq!(slide.shown(), 3);
+    assert_ne!(slide.parity(), rest);
+    slide.tick(DT, 3, 12);
+    assert!(!slide.moving());
+}
+
+/// The ring eases per 60 Hz frame of time, not per call.
+#[test]
+fn the_ring_ease_follows_elapsed_time() {
+    let mut slide = Slide::at_rest(2);
+    slide.tick(DT, 3, 12);
+    slide.tick(0.0, 3, 12);
+    assert_eq!(slide.ring_offset(), -1.0, "no time, no ease");
+    slide.tick(2.0 * DT, 3, 12);
+    assert!((slide.ring_offset() + 0.25).abs() < 1e-5);
+}

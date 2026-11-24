@@ -224,22 +224,29 @@ impl HexGrid {
         if count == 0 || self.columns == 0 {
             return out;
         }
-        let moving = slide.filter(|slide| slide.moving() && self.phase_by_entry);
-        let (selected, along, dir) = moving.map_or((selected, 0.0, 0), |slide| {
-            (
-                slide.previous(),
-                f32::from(slide.direction()) * slide.progress(),
-                slide.direction(),
-            )
+        let slide = slide.filter(|_| self.phase_by_entry);
+        let moving = slide.filter(|slide| slide.moving() && pan == 0.0);
+        let dir = moving.map_or(0, |slide| slide.direction());
+        let along = moving.map_or(0.0, |slide| f32::from(slide.direction()) * slide.progress());
+        let selected = slide.map_or(selected, |slide| {
+            if pan == 0.0 {
+                slide.centre()
+            } else {
+                slide.shown()
+            }
         });
         let centre = self.columns / 2;
         let blend = pan.abs().min(1.0);
         let first = if pan > 0.0 || dir > 0 { -1 } else { 0 };
         let last = self.columns as i64 - 1 + i64::from(pan < 0.0 || dir < 0);
-        let phase = if self.phase_by_entry {
-            selected as i64
-        } else {
-            0
+        let phase = match (self.phase_by_entry, slide) {
+            (false, _) => 0,
+            (true, None) => selected as i64,
+            (true, Some(slide)) => i64::from(if pan == 0.0 {
+                slide.parity()
+            } else {
+                slide.ring_target_low()
+            }),
         };
         let heave = |column: i64| {
             if (column + phase).rem_euclid(2) == 1 {
@@ -480,10 +487,10 @@ pub(super) fn draw_cells(
     if let (Some(cursor), Some(peak), Some(placed)) =
         (cursor, grid.ring_peak, sprites(THICK_OUT_SRC))
     {
-        let parity = if grid.phase_by_entry {
-            (selected % 2) as f32
-        } else {
-            0.0
+        let parity = match (grid.phase_by_entry, slide) {
+            (false, _) => 0.0,
+            (true, None) => (selected % 2) as f32,
+            (true, Some(slide)) => f32::from(u8::from(slide.ring_target_low())),
         };
         let centre = (grid.columns / 2) as f32;
         let (cx, cy) = (
@@ -508,7 +515,8 @@ pub(super) fn draw(
     sprites: &dyn Fn(&str) -> Option<Placed>,
     out: &mut Vec<Draw>,
 ) {
-    let cursor = models_of(picker, picker.index())
+    let slide = picker.slide();
+    let cursor = models_of(picker, slide.shown())
         .iter()
         .position(|cell| cell.variant == Some(picker.variant_index()));
     let face = |cell: &Cell| match models_of(picker, cell.entry).get(cell.row) {
@@ -518,7 +526,6 @@ pub(super) fn draw(
         }),
         _ => Face::Lock,
     };
-    let slide = picker.slide();
     draw_cells(
         grid,
         (
