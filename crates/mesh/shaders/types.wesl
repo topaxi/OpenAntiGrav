@@ -418,6 +418,8 @@ struct SunTerms {
 struct Lit {
     colour: vec4<f32>,
     sun: SunTerms,
+    // Added after the fog by every caller: `shade::zone_spu_after_fog`.
+    after_fog: vec3<f32>,
 }
 ;
 

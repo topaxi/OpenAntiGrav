@@ -136,7 +136,23 @@ override second_read: f32 = 1.0;
 fn lit_texel(raw: VertexOutput) -> Lit {
     var sun = SunTerms(vec3<f32>(0.0), 0.0, 0.0);
     let colour = lit_colour(raw, &sun);
-    return Lit(colour, sun);
+    return Lit(colour, sun, zone_spu_after_fog(raw));
+}
+
+// **HD's SPU vertex light on a chunk drawn on its Zone program.** The `SVC1` Zone twins
+// (`HalfBrightZoneMode*`, `HalfBrightZoneTrans*`) decode the light into a texcoord of its own
+// and the shared fragment program adds it last, after the fog lerp and outside the
+// `light * surface` product, inside the closing `/2`: `out = (fogged + spu) / 2`. So the
+// light reaches a Zone surface whose stage colours are black (Detonator's stage 1), and the
+// fog does not dim it (`docs/ghidra/functions/ps3-hdfury-eu/detonator-cannon.md`, "The blue
+// wash of a volley"). Zero off a Zone chunk, where `lit_colour` adds the light before the
+// albedo multiply instead.
+fn zone_spu_after_fog(raw: VertexOutput) -> vec3<f32> {
+    let zone_on = select(0.0, scene.zone.enabled, zone_race != 0.0);
+    let zone_plain = (raw.slots & slots_present & 1073741824u) != 0u;
+    let on = zone_on != 0.0 && !zone_plain && scene.zone.shape.w > 0.5
+        && simplified_lighting == 0.0;
+    return select(vec3<f32>(0.0), raw.spu_light * scene.light.output_scale, on);
 }
 
 // **Why its derivative-uniformity diagnostic is off.** Tint treats every fragment input, flat ones
@@ -663,8 +679,10 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
         // lightmap and no baked vertex light on any draw (`EnvSettings+0x4b0` is cleared), so
         // `albedo * (stage ambient + sat(N.L) * stage sun)`, with no occlusion mask. A program
         // fed no scene light (`emissive`) keeps drawing its picture.
+        // Its `SVC1` twin adds the SPU vertex light to that sum, as every plain program does
+        // (`spu` above).
         if zone_plain && !emissive {
-            authored = scene.light.ambient + scene.light.sun * ndl;
+            authored = scene.light.ambient + scene.light.sun * ndl + spu;
             sun_light = scene.light.sun * ndl;
         }
         // **A chunk on its Zone program** is the same `Ambient` permutation where the title's
