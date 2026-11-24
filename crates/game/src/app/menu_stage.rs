@@ -365,7 +365,7 @@ impl MenuStage {
             .flatten()
         {
             picker.model.tick(dt);
-            picker.tick_fit(aspect, dt);
+            picker.tick_craft(aspect, dt);
             picker.tick_turntable(dt);
             picker.tick_fly_by(dt);
         }

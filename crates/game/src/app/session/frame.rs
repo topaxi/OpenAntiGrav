@@ -700,6 +700,14 @@ impl Session {
                     // for a race the menu just started.
                     let grid =
                         pointer::in_grid(pointer, stage.skin.space(), rect, stage.renderer.inset());
+                    // A held mouse button's travel is the craft's on a screen that lets the
+                    // player turn it (`PickerStage::take_craft_pointer`).
+                    self.pointer.set_mouse_pans(
+                        stage
+                            .picker
+                            .as_ref()
+                            .is_some_and(|picker| picker.has_craft_control()),
+                    );
                     if stage.picker.is_some() {
                         self.tick_picker(&grid);
                         if !matches!(self.stage, Stage::Menu(_)) {

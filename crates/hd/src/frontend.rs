@@ -431,6 +431,26 @@ pub const CIRCUIT_TURNTABLE: oag_title::CircuitTurntable = oag_title::CircuitTur
     frames_per_second: 60.0,
 };
 
+/// The player's own turn, zoom and pan of the craft, read off `TeamSelection_Screen`'s update
+/// (`docs/ghidra/functions/ps3-hdfury-eu/team-selection-model.md`, "The player's own turn, pan
+/// and zoom"); constants of the function and of its TOC slots.
+pub const SHIP_CONTROL: oag_title::ShipControl = oag_title::ShipControl {
+    deadzone: 0.2,
+    turn_rate: 1.0 / 30.0,
+    turn_ease: 0.125,
+    wrap: 3.1459,
+    zoom_scale: 0.5,
+    zoom_ease: 0.25,
+    zoom_active: 0.1,
+    fov_per_zoom: -60.0,
+    pan_scale: [2.0, 1.0],
+    pan_ease: 0.125,
+    push_decay: 0.875,
+    push_scale: 4.0,
+    idle_frames: 181,
+    idle_step: 0.05,
+};
+
 pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     root: names::FRONTEND_ROOT,
     language_plugins: LANGUAGE_PLUGINS,
@@ -474,6 +494,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     ship_preview_hull: Some("ship.vex"),
     ship_preview_pose: None,
     ship_preview_fit: Some(SHIP_FIT),
+    ship_control: Some(SHIP_CONTROL),
     circuit_models: &CIRCUIT_MODELS,
     circuit_turntable: Some(CIRCUIT_TURNTABLE),
     circuit_fly_by: Some(r"FE\preview.bik"),

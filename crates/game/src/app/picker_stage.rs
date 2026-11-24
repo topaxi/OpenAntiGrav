@@ -22,6 +22,7 @@ use oag_ui_screens::picker::{self, Picker};
 
 use crate::app::gpu::Gpu;
 
+mod craft;
 mod fly_by;
 
 /// Where an entry's preview mesh is on the disc.
@@ -467,10 +468,15 @@ pub(crate) struct PickerStage {
     /// race box, which reads that seat's device alone - see
     /// `crate::app::session::picker`'s `seat` module. `None` is every ordinary screen.
     pub(crate) seat: Option<(usize, usize)>,
-    /// The title's depth fit as it plays across frames, where it has one: ticked
-    /// every frame with whatever model is selected, so a step carries the last
-    /// model's depth into the next - see [`crate::preview::ship_model::FitPlayer`].
-    fit_motion: Option<crate::preview::ship_model::FitPlayer>,
+    /// The title's depth fit and the player's own control of the craft as they play across
+    /// frames, where the title has either: ticked every frame with whatever model is selected,
+    /// so a step carries the last model's depth into the next - see
+    /// [`crate::preview::ship_model::ShipPlayer`].
+    ship_player: Option<crate::preview::ship_model::ShipPlayer>,
+    /// What the devices said this tick about the craft, spent by the next [`Self::tick_craft`].
+    craft_input: crate::preview::ship_model::control::CraftInput,
+    /// A pointer press that began on the craft's frame is still down.
+    craft_grab: bool,
     /// The circuit model's turntable on a title whose update is read, stepped every frame
     /// whichever circuit is selected - see [`crate::preview::track_model::Turntable`].
     turntable: crate::preview::track_model::Turntable,
@@ -518,7 +524,9 @@ impl PickerStage {
             sheet_uploaded: false,
             laps: Vec::new(),
             seat: None,
-            fit_motion: None,
+            ship_player: None,
+            craft_input: crate::preview::ship_model::control::CraftInput::default(),
+            craft_grab: false,
             turntable: crate::preview::track_model::Turntable::default(),
             fly_by: None,
         }
@@ -760,8 +768,9 @@ impl PickerStage {
         // selected model's box is known.
         let ship_fit = self
             .ship_fit()
-            .zip(self.fit_motion)
-            .map(|((fit, _), player)| (*fit, player.framing()));
+            .zip(self.ship_player)
+            .and_then(|((fit, _), player)| Some((*fit, player.framing()?)));
+        let craft = self.craft();
         let circuit_law = self
             .previews
             .front_end
@@ -794,6 +803,7 @@ impl PickerStage {
             let (view_projection, model) = crate::preview::ship_model::framed(
                 &widget,
                 ship_fit.as_ref().map(|(fit, framing)| (fit, *framing)),
+                &craft,
                 space,
                 safe_area,
             );
@@ -843,18 +853,6 @@ impl PickerStage {
         );
         let length = picker::hd::selected_length(&self.model);
         crate::preview::ship_model::box_z(fit, zone_hull, length).map(|box_z| (fit, box_z))
-    }
-
-    /// Advances the depth fit by the fixed ticks `dt` seconds make, one frame of
-    /// the original's update each. Runs while the craft is hidden and on every
-    /// step, as the original's does. `aspect` is the screen's own.
-    pub(crate) fn tick_fit(&mut self, aspect: f32, dt: f32) {
-        let Some((fit, box_z)) = self.ship_fit().map(|(fit, box_z)| (*fit, box_z)) else {
-            return;
-        };
-        self.fit_motion
-            .get_or_insert_with(|| crate::preview::ship_model::FitPlayer::open(&fit))
-            .tick(&fit, aspect, box_z, dt);
     }
 
     /// Advances the circuit model's turntable by the fixed ticks `dt` seconds make, in the

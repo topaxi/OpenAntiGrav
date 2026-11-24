@@ -240,6 +240,27 @@ pub const TOUCH: &oag_title::TouchFrontEnd = &oag_title::TouchFrontEnd {
 };
 
 /// Omega's front end: the layout it authors and the boot order it takes.
+/// The player's own turn, zoom and pan of the craft, read off Omega's `Team Selection` update
+/// (`0x0157f360`), which carries HD's law with the same constants but a push scale of `3.5`
+/// (`docs/ghidra/functions/ps3-hdfury-eu/team-selection-model.md`, "The player's own turn, pan
+/// and zoom").
+pub const SHIP_CONTROL: oag_title::ShipControl = oag_title::ShipControl {
+    deadzone: 0.2,
+    turn_rate: 1.0 / 30.0,
+    turn_ease: 0.125,
+    wrap: 3.1459,
+    zoom_scale: 0.5,
+    zoom_ease: 0.25,
+    zoom_active: 0.1,
+    fov_per_zoom: -60.0,
+    pan_scale: [2.0, 1.0],
+    pan_ease: 0.125,
+    push_decay: 0.875,
+    push_scale: 3.5,
+    idle_frames: 181,
+    idle_step: 0.05,
+};
+
 pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     root: names::FRONTEND_ROOT,
     language_plugins: LANGUAGE_PLUGINS,
@@ -308,6 +329,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     // The same update runs HD's fit and eases its result into three fields nothing reads, so no
     // depth fit frames the craft and a step has no settle.
     ship_preview_fit: None,
+    ship_control: Some(SHIP_CONTROL),
     circuit_models: &CIRCUIT_MODELS,
     // Omega's `PI_Track` authors `RotX`, `PosX`, `PosY`, `PosZ` and `Scale` (`RotX` 0.45, `PosZ`
     // -2.05, `Scale` 0.012 on Vineta K), in the widget's own scaled units; its screen's update is

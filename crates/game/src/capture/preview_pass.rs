@@ -188,7 +188,13 @@ pub(super) fn draw_preview(
                 .as_ref()
                 .map(|(fit, framing)| (fit, *framing));
             let (view_projection, model) =
-                crate::preview::ship_model::framed(widget, fit, space, safe_area);
+                crate::preview::ship_model::framed(
+                    widget,
+                    fit,
+                    &crate::preview::ship_model::control::Craft::default(),
+                    space,
+                    safe_area,
+                );
             preview.draw_matrices(
                 device,
                 queue,

@@ -670,6 +670,10 @@ pub struct FrontEnd {
     /// depth to the selected model's authored length. `None` where the title's
     /// screen has no such code or it is unread. See [`ShipFit`].
     pub ship_preview_fit: Option<ShipFit>,
+    /// How the player turns, zooms and pans the craft on `Team Selection`: the update's own
+    /// law over the widget's rotation, depth, lens and position. `None` where the title's
+    /// screen has no such control (the PSP titles) or it is unread. See [`ShipControl`].
+    pub ship_control: Option<ShipControl>,
     /// The model each circuit's selection screen draws in its circuit-model frame,
     /// found by the circuit's environment folder: HD's track-select record names
     /// `<environment>\FE\track0N.vex` per circuit, and the number is not the
@@ -842,6 +846,51 @@ pub struct ShipFit {
     /// The box's fore and aft extent in a Zone race, in place of the model's
     /// length (the Zone hull's model authors none).
     pub zone_box: [f32; 2],
+}
+
+/// The player's own turn, zoom and pan of the craft on `Team Selection`, read off the screen's
+/// update (`docs/ghidra/functions/ps3-hdfury-eu/team-selection-model.md`, "The player's own
+/// turn, pan and zoom"). Every number is a constant of that function; per frame, not per second,
+/// so a caller turns a tick into frames at the console's 60 a second.
+///
+/// The turn is two accumulators (about X and Y) the right stick pushes at `turn_rate` per frame
+/// outside `deadzone`; the drawn turn eases toward them at `turn_ease` and both wrap at
+/// `+-wrap` (`wrap` is the original's `3.1459`, a typo of pi, kept). The zoom is the zoom
+/// button's pull times `zoom_scale`, eased at `zoom_ease`; the pan is the left stick times the
+/// zoom (`pan_scale` across and down), eased at `pan_ease`, so it is dead until the craft is
+/// zoomed. Anything that moves one resets an idle counter, and `idle_frames` frames later the
+/// accumulators walk back to rest `idle_step` a frame.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ShipControl {
+    /// The right stick's dead band; outside it the stick counts as the distance past it.
+    pub deadzone: f32,
+    /// Radians an accumulator moves each frame at a stick's full travel past the dead band.
+    pub turn_rate: f32,
+    /// The fraction of the way to its accumulator the drawn turn moves each frame.
+    pub turn_ease: f32,
+    /// The accumulators wrap from `wrap` to `-wrap`, and the drawn turn goes with them.
+    pub wrap: f32,
+    /// What the zoom button's pull is multiplied by to make the zoom term.
+    pub zoom_scale: f32,
+    /// The fraction of the way to its target the zoom term moves each frame.
+    pub zoom_ease: f32,
+    /// A zoom term past this counts as the player touching the controls.
+    pub zoom_active: f32,
+    /// Degrees of lens the whole zoom term takes off the resting lens.
+    pub fov_per_zoom: f32,
+    /// How far the craft moves across and down at a full left stick, per unit of the zoom
+    /// button's pull.
+    pub pan_scale: [f32; 2],
+    /// The fraction of the way to its target the pan moves each frame.
+    pub pan_ease: f32,
+    /// The push (depth) term's decay per frame: nothing in the update drives it.
+    pub push_decay: f32,
+    /// How much a push term moves the craft in depth.
+    pub push_scale: f32,
+    /// Frames without input before the accumulators walk back to rest.
+    pub idle_frames: u32,
+    /// Radians an accumulator walks each idle frame.
+    pub idle_step: f32,
 }
 
 /// One circuit's front-end model, see [`FrontEnd::circuit_models`].
