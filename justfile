@@ -70,7 +70,7 @@ native_video_flags := if os() == "linux" { "--features native-video" } else { ""
 # order they get there, so nothing here changes what either asserts. Output of
 # the recipes interleaves; a failure names its recipe.
 [parallel]
-check: fmt-check lint check-ballisticng check-extensions check-web test check-docs check-deps check-unused-deps check-determinism check-size check-comment-history check-title-branching check-title-reach check-names check-captures check-hd-clock-grab check-pair-provenance check-test-data-script check-gate-run check-handover check-link-data check-strings check-just-args check-status check-weapon-lineage check-test-groups check-schemas (check-guests "--strict")
+check: fmt-check lint check-ballisticng check-extensions check-web test check-docs check-deps check-unused-deps check-determinism check-size check-comment-history check-title-branching check-title-reach check-names check-captures check-hd-clock-grab check-pair-provenance check-test-data-script check-gate-run check-android-stack-script check-handover check-link-data check-strings check-just-args check-status check-weapon-lineage check-test-groups check-schemas (check-guests "--strict")
 
 # Documentation is a deliverable, so its links are checked like any other build output
 check-docs:
@@ -224,6 +224,12 @@ check-test-data-script:
 check-gate-run:
     bash scripts/check-gate-run.sh
 
+# The prologue reader behind `scripts/check-android-stack.py` (the guard on the
+# frames under Android's 2 MiB `android_main` thread, run by `build-apk.sh`), on
+# aarch64 disassembly snippets. Offline, no NDK, no build.
+check-android-stack-script:
+    python3 scripts/check-android-stack.py --selftest
+
 # A member lane's gate: every check in `check` in full, but only the tests the
 # branch's change can reach. `scripts/affected.py` says what it selected and
 # why: the packages that link a changed one, narrowed to the test modules that
@@ -236,7 +242,7 @@ check-gate-run:
 # `check-status` is left out: a member never commits `status.md`, so a stale table is
 # the lead's to regenerate, and the full `just` checks it.
 [parallel]
-gate-affected: fmt-check lint check-ballisticng check-extensions check-web test-affected check-docs check-deps check-unused-deps check-determinism check-size check-comment-history check-title-branching check-title-reach check-names check-captures check-hd-clock-grab check-pair-provenance check-test-data-script check-gate-run check-handover check-link-data check-strings check-just-args check-weapon-lineage check-test-groups check-schemas (check-guests "--strict")
+gate-affected: fmt-check lint check-ballisticng check-extensions check-web test-affected check-docs check-deps check-unused-deps check-determinism check-size check-comment-history check-title-branching check-title-reach check-names check-captures check-hd-clock-grab check-pair-provenance check-test-data-script check-gate-run check-android-stack-script check-handover check-link-data check-strings check-just-args check-weapon-lineage check-test-groups check-schemas (check-guests "--strict")
 
 # `just test`, narrowed to what `scripts/affected.py` selects. A selection is
 # nextest arguments, one per line; `--no-tests=pass` because a narrowed
