@@ -76,14 +76,31 @@ fn options(source: &Path, mode: oag_race::Mode) -> race::Options {
     }
 }
 
-fn setup(title: &str) -> Option<race::Loaded> {
-    setup_in(title, oag_race::Mode::TimeTrial)
+/// What `Race::start` takes: a race's simulation half and a headless view that carries the
+/// launch request a recording writes into its header. The runs here read no picture, no sound
+/// and no report line, and the state hash is the same with or without them
+/// (`view_independence_ground_truth`); the rebuild under test loads the whole race.
+struct Sim {
+    setup: race::SimSetup,
+    view: race::ViewSetup,
+    modules: race::extensions::Prepared,
 }
 
-fn setup_in(title: &str, mode: oag_race::Mode) -> Option<race::Loaded> {
+fn sim_load(options: &race::Options) -> anyhow::Result<Sim> {
+    let sim = race::load_sim(options)?;
+    let mut view = race::ViewSetup::headless();
+    view.request = Some(options.replay_setup_on(&sim.circuit));
+    Ok(Sim {
+        setup: sim.setup,
+        view,
+        modules: sim.modules,
+    })
+}
+
+fn setup(title: &str) -> Option<Sim> {
     let source = source(title)?;
-    let loaded =
-        race::load(&options(&source, mode)).unwrap_or_else(|e| panic!("loading {title}: {e:#}"));
+    let loaded = sim_load(&options(&source, oag_race::Mode::TimeTrial))
+        .unwrap_or_else(|e| panic!("loading {title}: {e:#}"));
     Some(loaded)
 }
 
@@ -464,13 +481,9 @@ fn recorded_at_tick_zero(
     mode: oag_race::Mode,
 ) -> Option<(PathBuf, race::Race, Replay, race::Launch)> {
     let source = source(title)?;
-    // Not ticked, so no art is read; the rebuild under test loads the full race. Omega only:
-    // a Pulse load without art drops its track statistics (`finished_thrust`).
-    let loaded = race::load(&race::Options {
-        ribbon: title == "omega",
-        ..options(&source, mode)
-    })
-    .unwrap_or_else(|e| panic!("loading {title} {}: {e:#}", mode.name()));
+    // Not ticked, so no art is read; the rebuild under test loads the full race.
+    let loaded = sim_load(&options(&source, mode))
+        .unwrap_or_else(|e| panic!("loading {title} {}: {e:#}", mode.name()));
     let seed = loaded.setup.seed;
     let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let launch = race::Launch {
