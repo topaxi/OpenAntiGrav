@@ -1,7 +1,7 @@
 ---
 status: ready-to-wire
 titles: [hd, 2048, omega]
-updated: 2026-11-23
+updated: 2026-11-24
 summary: "Detonator: all 15 phases in; open: Omega EndRace Menu, 2048 Results, medal tiers, radial bloom, floor gain vs bands"
 categories: [rendering]
 ---
@@ -609,6 +609,15 @@ cell MAD (signed ours - original) seeded to carried+lift+size: `pad` 6.3 (-2.1) 
 at 30 to 40 units), or have the maintainer say whether the original's mines are drawn ahead of their objects; (2) carry each mine's `s`/`t`
 (`+0xf4`, `+0xf8`, read in the same pass with `OAG_MINE_RAW=1`) so a pair's mine is the original's brightness and size, not a history-less envelope;
 (3) the pairs stay unpublished with the flag until (1).
+
+**The displacement is the pair's camera (2026-11-24, `det-mine-look-re`; `detonator-mine-draw.md`).** The original draws each mine part at its
+object's position (`SceneNode_SetLocalMatrix` `0x00327500`, no view term); the pair's push-buffer camera is 1.5 to 4 ticks of travel newer than
+the picture (`mines-ahead` 3.55, `cannon-volley` 2.30, `pad` 1.55, fitted on the near mines, confirmed on a cross-track scenery edge; 80). The
+"twice the size" is mostly the `Electric_Visualiser` (bounding radius 2.45 against the football's 1.00), a camera-facing billboard ours does not
+draw (`DetonatorMine_PoseVisualiser` `0x00139308`, scale `1 + 0.4 (m+0xd8 - 1)` live, `0.9` dark; 65). **Ready to wire, in order:** (1) pair
+tooling: render ours from the picture's camera, moving `--camera-pose` and `--pose` back by a per-grab fitted `k` (`compare-page.md`, "The picture
+is older than the push buffer's camera"); likely moves every HD pair with near scenery; (2) draw the visualiser billboard; (3) carry `s`/`t` per
+mine (above). Superseded: Next (1) of the paragraph above.
 
 ## Zone Battle (HD mode `0xd`, Omega also `0x15`; 2048) is unread
 
