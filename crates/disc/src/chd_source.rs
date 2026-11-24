@@ -197,7 +197,8 @@ struct TrackInfo {
 
 /// A CHD file exposed as a sector source.
 pub struct ChdSource {
-    chd: Chd<BufReader<crate::mount::ImageFile>>,
+    /// `None` only while [`Drop`] hands the handle to the pool.
+    chd: Option<Chd<BufReader<crate::mount::ImageFile>>>,
     path: PathBuf,
     layout: UnitLayout,
     sectors_per_hunk: u32,
@@ -205,6 +206,9 @@ pub struct ChdSource {
     hunk_buf: Vec<u8>,
     compressed_buf: Vec<u8>,
     cached_hunk: Option<u32>,
+    /// What the file was when it was opened, the pool's key.
+    #[cfg(not(target_arch = "wasm32"))]
+    stamp: Option<pool::Stamp>,
 }
 
 impl std::fmt::Debug for ChdSource {
@@ -231,6 +235,24 @@ impl ChdSource {
     /// than one track. Neither occurs for any in-scope Wipeout title.
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref().to_path_buf();
+        #[cfg(not(target_arch = "wasm32"))]
+        let stamp = pool::Stamp::of(&path);
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(source) = stamp.and_then(|stamp| pool::take(&path, stamp)) {
+            return Ok(source);
+        }
+        Self::open_fresh(
+            path,
+            #[cfg(not(target_arch = "wasm32"))]
+            stamp,
+        )
+    }
+
+    /// Opens the file and decodes its hunk map, which is most of what [`Self::open`] costs.
+    fn open_fresh(
+        path: PathBuf,
+        #[cfg(not(target_arch = "wasm32"))] stamp: Option<pool::Stamp>,
+    ) -> Result<Self> {
         let file = crate::mount::open(&path).map_err(|e| Error::io(&path, e))?;
         let mut chd = Chd::open(BufReader::new(file), None)?;
 
@@ -281,7 +303,7 @@ impl ChdSource {
         let hunk_buf = chd.get_hunksized_buffer();
 
         Ok(Self {
-            chd,
+            chd: Some(chd),
             path,
             layout,
             sectors_per_hunk,
@@ -289,6 +311,8 @@ impl ChdSource {
             hunk_buf,
             compressed_buf: Vec::new(),
             cached_hunk: None,
+            #[cfg(not(target_arch = "wasm32"))]
+            stamp,
         })
     }
 
@@ -307,6 +331,8 @@ impl ChdSource {
         // a hunk whose buffer contents are actually from the previous one.
         self.cached_hunk = None;
         self.chd
+            .as_mut()
+            .expect("a CHD handle is present until the source is dropped")
             .hunk(hunk)?
             .read_hunk_in(&mut self.compressed_buf, &mut self.hunk_buf)?;
         self.cached_hunk = Some(hunk);
@@ -405,6 +431,123 @@ impl ChdSource {
             self.read_sector(i, sector)?;
         }
         Ok(())
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl Drop for ChdSource {
+    fn drop(&mut self) {
+        pool::give_back(self);
+    }
+}
+
+/// Opened CHD handles waiting for the next [`ChdSource::open`] of the same file.
+///
+/// Opening a CHD decodes its whole hunk map (a Huffman walk and a CRC-16 per hunk), about
+/// 9 ms for a PSP disc and more for a PS2 one, and a running game opens the same few images
+/// a hundred times: every `DiscImage::open`, each worker of a split read, each track's
+/// length. A source that is dropped hands its handle here, and an open of the same path,
+/// length and modification time takes it back with the hunk map already decoded. A handle
+/// belongs to one source at a time, so no two threads share a read position.
+#[cfg(not(target_arch = "wasm32"))]
+mod pool {
+    use std::collections::HashMap;
+    use std::path::{Path, PathBuf};
+    use std::sync::Mutex;
+    use std::time::SystemTime;
+
+    use super::{Chd, ChdSource, UnitLayout};
+
+    /// What a file was when its handle was opened. A file that changed since is not served
+    /// from the pool.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub(super) struct Stamp {
+        len: u64,
+        modified: SystemTime,
+    }
+
+    impl Stamp {
+        /// `None` when the file cannot be stat-ed or has no modification time; such a
+        /// file is never pooled.
+        pub(super) fn of(path: &Path) -> Option<Self> {
+            let metadata = std::fs::metadata(path).ok()?;
+            Some(Self {
+                len: metadata.len(),
+                modified: metadata.modified().ok()?,
+            })
+        }
+    }
+
+    /// An idle source: everything [`ChdSource`] holds but its path, which is the shelf's key.
+    struct Idle {
+        stamp: Stamp,
+        chd: Chd<std::io::BufReader<crate::mount::ImageFile>>,
+        layout: UnitLayout,
+        sectors_per_hunk: u32,
+        sector_count: u32,
+        hunk_buf: Vec<u8>,
+        compressed_buf: Vec<u8>,
+        cached_hunk: Option<u32>,
+    }
+
+    /// The most idle handles kept per file: one per worker of a split read, and a few
+    /// more for the threads that open the disc beside it.
+    const MAX_IDLE_PER_FILE: usize = 12;
+
+    type Shelves = HashMap<PathBuf, Vec<Idle>>;
+
+    static IDLE: Mutex<Option<Shelves>> = Mutex::new(None);
+
+    fn shelves() -> std::sync::MutexGuard<'static, Option<Shelves>> {
+        IDLE.lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    /// An idle source for `path` that was opened on a file of this `stamp`.
+    pub(super) fn take(path: &Path, stamp: Stamp) -> Option<ChdSource> {
+        let idle = {
+            let mut shelves = shelves();
+            let shelf = shelves.as_mut()?.get_mut(path)?;
+            // A handle of an older file will never match again.
+            shelf.retain(|idle| idle.stamp == stamp);
+            shelf.pop()?
+        };
+        Some(ChdSource {
+            chd: Some(idle.chd),
+            path: path.to_path_buf(),
+            layout: idle.layout,
+            sectors_per_hunk: idle.sectors_per_hunk,
+            sector_count: idle.sector_count,
+            hunk_buf: idle.hunk_buf,
+            compressed_buf: idle.compressed_buf,
+            cached_hunk: idle.cached_hunk,
+            stamp: Some(stamp),
+        })
+    }
+
+    /// Keeps the handle of a source being dropped, unless the file has no stamp or the
+    /// file's shelf is full.
+    pub(super) fn give_back(source: &mut ChdSource) {
+        let (Some(chd), Some(stamp)) = (source.chd.take(), source.stamp) else {
+            return;
+        };
+        let mut shelves = shelves();
+        let shelf = shelves
+            .get_or_insert_with(HashMap::new)
+            .entry(source.path.clone())
+            .or_default();
+        if shelf.len() < MAX_IDLE_PER_FILE {
+            shelf.push(Idle {
+                stamp,
+                chd,
+                layout: source.layout,
+                sectors_per_hunk: source.sectors_per_hunk,
+                sector_count: source.sector_count,
+                hunk_buf: std::mem::take(&mut source.hunk_buf),
+                compressed_buf: std::mem::take(&mut source.compressed_buf),
+                cached_hunk: source.cached_hunk,
+            });
+        }
     }
 }
 

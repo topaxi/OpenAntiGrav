@@ -233,6 +233,40 @@ fn a_split_chd_read_is_byte_identical_to_a_sector_by_sector_one() {
     assert!(source.read_sectors(source.sector_count() - 1, 2).is_err());
 }
 
+/// A source that was dropped hands its handle to the next open of the same file, and the bytes
+/// that open reads are the ones a handle opened new reads: the sectors a handle read before it
+/// was dropped, then a read that starts in the hunk it left cached and one far from it, and a
+/// second source open at the same time as the first.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_reopened_chd_reads_the_bytes_a_new_handle_does() {
+    use oag_disc::chd_source::ChdSource;
+    use oag_disc::{SECTOR_SIZE, SectorSource};
+    let Some(path) = image("pulse-psp-eu.chd") else {
+        return;
+    };
+    let read = |source: &mut ChdSource, lba: u32| {
+        let mut sector = vec![0u8; SECTOR_SIZE];
+        source.read_sector(lba, &mut sector).expect("sector read");
+        sector
+    };
+    let mut first = ChdSource::open(&path).expect("open");
+    let last = first.sector_count() - 1;
+    let wanted = [0, 1, 7, 8, 5_000, last / 2, last];
+    let before: Vec<_> = wanted.iter().map(|&lba| read(&mut first, lba)).collect();
+    let left_cached = read(&mut first, 5_001);
+    drop(first);
+
+    let mut again = ChdSource::open(&path).expect("reopen");
+    let mut beside = ChdSource::open(&path).expect("a second source beside the first");
+    assert_eq!(read(&mut again, 5_001), left_cached);
+    for (&lba, bytes) in wanted.iter().zip(&before) {
+        assert_eq!(&read(&mut again, lba), bytes, "sector {lba} after a reopen");
+        assert_eq!(&read(&mut beside, lba), bytes, "sector {lba} beside it");
+    }
+    assert_eq!(again.sector_count(), last + 1);
+}
+
 #[test]
 #[ignore = "needs the Vita and PS4 packages in data/images/"]
 fn the_real_vita_packages_are_refused_by_name() {
