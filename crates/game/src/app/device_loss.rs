@@ -19,6 +19,9 @@
 //! causes on purpose, and the only other way to get it is something outside the game ending the
 //! device. `docs/architecture/device-loss.md` has what is saved and what stays unrecoverable.
 
+// The web build has its own handler (`web_fault`); on wasm32 only the types are used.
+#![cfg_attr(target_arch = "wasm32", allow(dead_code))]
+
 use std::sync::{Arc, Mutex, PoisonError};
 
 /// Why the device went, as the callback gave it.
