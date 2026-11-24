@@ -443,6 +443,8 @@ OAG_REPLAYS_REFUSED = { text = "NÃO PODE SER RECONSTRUÍDO AQUI: %s", human = f
 OAG_REPLAY_OPENING = { text = "ABRINDO REPLAY", human = false }
 OAG_REPLAY_MISMATCH = { text = "ESTE REPLAY FOI GRAVADO EM UMA VERSÃO ANTERIOR E DEIXA DE CORRESPONDER EM %s", human = false }
 OAG_REPLAY_STOPPED = { text = "PARA AQUI: ESTA VERSÃO NÃO CONSEGUE RECONSTRUIR O RESTO", human = false }
+OAG_DEVICE_LOST_LAST_RUN = { text = "O DRIVER DE VÍDEO PAROU DURANTE A ÚLTIMA SESSÃO. SEU PROGRESSO E O REPLAY DA CORRIDA FORAM SALVOS", human = false }
+OAG_DEVICE_LOST_TITLE = { text = "OpenAntiGrav - o dispositivo gráfico foi perdido. Seu progresso foi salvo. Feche esta janela e abra o jogo de novo", human = false }
 OAG_REPLAY_PLAY = { text = "REPRODUZIR", human = false }
 OAG_REPLAY_PAUSE = { text = "PAUSAR", human = false }
 OAG_REPLAY_EXIT = { text = "SAIR", human = false }

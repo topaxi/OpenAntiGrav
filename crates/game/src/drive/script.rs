@@ -23,6 +23,7 @@
 //! ticks 120                        let this many ticks pass
 //! screenshot out.png               draw the next frame offscreen into a PNG
 //! drop shot.png                    a file dropped on the window (a screenshot of ours opens in the replay viewer on the main menu or in a demo)
+//! lose-device                      destroy the GPU device, as a driver reset would; the run ends with its loss reported and what it could keep saved
 //! quit                             end the run (reaching the end of the script does too)
 //! ```
 //!
@@ -184,6 +185,8 @@ pub enum Step {
     Screenshot(PathBuf),
     /// A file dropped on the window.
     Drop(PathBuf),
+    /// Destroy the GPU device, so the game meets a lost device.
+    LoseDevice,
     /// End the run.
     Quit,
 }
@@ -240,6 +243,7 @@ impl std::fmt::Display for Step {
             Self::Ticks(n) => write!(f, "ticks {n}"),
             Self::Screenshot(path) => write!(f, "screenshot {}", path.display()),
             Self::Drop(path) => write!(f, "drop {}", path.display()),
+            Self::LoseDevice => f.write_str("lose-device"),
             Self::Quit => f.write_str("quit"),
         }
     }
@@ -518,6 +522,7 @@ impl Script {
                 _ => return Err("mouse takes an x and a y".into()),
             },
             "touch" => Step::Touch(parse_touch(&words)?),
+            "lose-device" if words.is_empty() => Step::LoseDevice,
             "quit" => Step::Quit,
             other => return Err(format!("unknown step {other:?}")),
         })

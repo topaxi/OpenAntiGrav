@@ -496,6 +496,48 @@ fn a_row_that_does_not_exist_and_a_wait_that_never_ends_fail_with_the_state() {
     );
 }
 
+/// A GPU device lost mid-race ends the run with its loss said, no panic, the race's replay and a
+/// note for the next run written. Fails on a build with no device-lost handling: wgpu's own
+/// handler panics on the first call into the dead device.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_device_lost_mid_race_saves_the_replay_and_ends_without_a_panic() {
+    let Some(image) = pulse() else {
+        return;
+    };
+    let run = drive(
+        &image,
+        "device-lost-race",
+        "boot; select racebox; press cross; until page=race; \
+         select launch_race; press cross; \
+         until screen=picker; select 03_Track; press cross; \
+         until screen.id=ship-select; select Feisar; press cross; \
+         until stage=race within 3000; ticks 120; lose-device; ticks 30",
+        None,
+    );
+    let why = run.stderr();
+    assert!(!run.output.status.success(), "the script must not finish");
+    assert!(
+        !why.contains("panicked") && !why.contains("Handling wgpu errors as fatal"),
+        "the lost device panicked:\n{why}"
+    );
+    assert!(
+        why.contains("the graphics device was lost"),
+        "the loss was not said:\n{why}"
+    );
+    assert_eq!(text(run.last(), &["stage"]), Some("race"));
+    let scratch = Path::new(env!("CARGO_TARGET_TMPDIR")).join("drive-device-lost-race");
+    assert!(
+        scratch.join("config/oag/device-lost.txt").is_file(),
+        "no note for the next run"
+    );
+    let replays = scratch.join("data/oag/replays");
+    let kept = std::fs::read_dir(&replays)
+        .map(|dir| dir.count())
+        .unwrap_or(0);
+    assert!(kept > 0, "no replay of the race was kept under {replays:?}");
+}
+
 /// The labels of the remix TRACK row in every state that shows it, in order.
 fn remix_tracks(run: &Run) -> Vec<Vec<String>> {
     let mut seen: Vec<Vec<String>> = Vec::new();

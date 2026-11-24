@@ -67,6 +67,9 @@ impl Session {
     /// The run is ending, whichever way: the rumble stops, the playlist's place, the campaign
     /// position and the replays are kept, and the background saves are finished.
     pub(crate) fn wind_down(&mut self) {
+        if std::mem::replace(&mut self.wound_down, true) {
+            return;
+        }
         self.stop_rumble();
         self.controls.silence_motors();
         self.save_race_music();

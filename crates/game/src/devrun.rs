@@ -41,6 +41,8 @@ pub enum Step {
     Tap(Button),
     /// A tap from the placeholder keyboard of this seat (`cross@1`), which has no key to press.
     SeatTap(usize, Button),
+    /// Destroy the GPU device, so the game meets a lost device (`lose-device`).
+    LoseDevice,
     /// End the run (the window closes, the log flushes).
     Quit,
 }
@@ -87,6 +89,8 @@ impl Script {
             };
             let step = if what.eq_ignore_ascii_case("quit") {
                 Step::Quit
+            } else if what.eq_ignore_ascii_case("lose-device") {
+                Step::LoseDevice
             } else if let Some((name, seat)) = what.split_once('@') {
                 let seat: usize = seat
                     .trim()
