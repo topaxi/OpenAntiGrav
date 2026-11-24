@@ -23,9 +23,8 @@
 //! fixed-timestep loop (`oag_raceplay::Race::tick`), so a headless
 //! `--dump-audio` capture matches a window's samples at the same tick count
 //! (`docs/architecture/determinism.md`). There is deliberately **no** per-frame
-//! call: with a device `cpal` drains the mixer from its own thread, and with
-//! none [`oag_audio::Output::render_tick`] is the only reader, once a tick, into
-//! the dump or into nothing. See [`Audio::tick`].
+//! call: with a device `cpal` drains the mixer from its own thread, and with none
+//! [`oag_audio::Output::render_tick`] does, into the dump or nothing. See [`Audio::tick`].
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -1068,8 +1067,8 @@ impl Audio {
     /// Advances the mixer by one simulation tick.
     ///
     /// Called from inside the fixed-timestep loop, never per frame, so a capture
-    /// of `ticks * sample_rate / 60` frames reproduces exactly. Does nothing with
-    /// a device attached: `cpal`'s callback is already draining the mixer.
+    /// of `ticks * sample_rate / 60` frames reproduces exactly. With no device the tick is rendered
+    /// and dropped, so a voice ends and frees its slot (`docs/ui/pause-menu.md`, "Pulse").
     pub fn tick(&mut self) {
         // Before the race-boundary check: a switch landing this tick may have
         // just replaced `race_voice`, and polling first keeps the two from
@@ -1093,12 +1092,7 @@ impl Audio {
         if let Some(dump) = &mut self.dump {
             self.output.render_tick(TICK_HZ, &mut dump.samples);
         } else if !self.output.is_streaming() {
-            // A null output plays on unheard: one tick of the mix is rendered and dropped, so a
-            // voice ends when its sound does. Without it the voices never finish, the slots fill
-            // and the race song is refused, and with it the now-playing display
-            // (`docs/ui/pause-menu.md`, "Pulse").
-            let mut unheard = Vec::new();
-            self.output.render_tick(TICK_HZ, &mut unheard);
+            self.output.render_tick(TICK_HZ, &mut Vec::new());
         }
     }
 
