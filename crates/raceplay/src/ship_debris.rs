@@ -139,6 +139,10 @@ impl RaceView {
                 }
             })
             .collect();
+        log::debug!(
+            "ship debris: slot {slot} throws {} piece(s) from {at:?}, forward {forward:?}, up {up:?}",
+            pieces.len()
+        );
         let copy = self.ship_debris.next;
         self.ship_debris.next = (copy + 1) % self.ship_debris.copies.len();
         self.stop_debris_fires(copy);
