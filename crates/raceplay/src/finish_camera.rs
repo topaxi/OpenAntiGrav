@@ -475,13 +475,7 @@ impl FinishCamera {
                     self.smoothed += (subject - self.smoothed) * self.smoothing;
                 }
                 self.fov += (target_fov - self.fov) * destroy::FOV_RATE;
-                let pose = Destroy {
-                    eye: node,
-                    focus: self.smoothed,
-                    focus_target: self.smoothed,
-                    fov: self.fov,
-                    focus_rate: self.smoothing,
-                };
+                let pose = Destroy::posed(node, self.smoothed, self.fov, self.smoothing);
                 let (_, orientation, _) = pose.to_world().to_scale_rotation_translation();
                 CameraOverride {
                     eye: node,

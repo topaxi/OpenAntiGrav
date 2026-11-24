@@ -1,7 +1,7 @@
 ---
 status: ready-to-wire
 titles: [hd, 2048, omega]
-updated: 2026-11-23
+updated: 2026-11-24
 summary: "Detonator: all 15 phases in; open: Omega EndRace Menu, 2048 Results, medal tiers, radial bloom, floor gain vs bands"
 categories: [rendering]
 ---
@@ -443,7 +443,7 @@ positions differ by construction (ours places with its own seeded `Rng`), so a m
 | 1 | Sky and background (upper band, y < 340) | 31 % | 0.38-0.41 | 12-13 | Ours draws the circuit's day sky (clouds, blue); the original's frame is near black (mean `(18, 10, 11)` over `x 200..900, y 60..300`, ours `(96, 111, 121)`). **Cause read (80):** the original swaps in `ZoneSky.gtf` and draws the gradient dome on `g_ZoneEffectsActive`, which mode 14 sets; Detonator stage 1 authors `Sky horizon colour` and `Sky zenith colour` `0 0 0`, so the dome is black. Ours gates the sky swap and dome on `Mode::Zone` (`load/environment.rs:71`). `docs/ghidra/functions/ps3-hdfury-eu/detonator-look.md`. |
 | 2 | Mid band (far track, mines, pad, y 340-640) | 28 % | 0.18-0.36 | 5-10 | Mines (row 4), pad (row 5), the original's bluish-purple ambient on gantries against ours' neutral grey. The gantry violet is likely the stage's `EQ colour tint` `171 9 255` on the billboards, which ours leaves off (the shared stage target is `Mode::Zone` only, `load/gantry_visibility.rs:25`; the original's gate is the byte, 80). |
 | 3 | Lower band (near track, hull, y > 640) | 41 % | 0.14-0.22 | 6-9 | The original's track is a saturated blue-violet with red edge strips; ours is near black with the same red strips. Brighter by 10-19 grey in the original. Ours already applies Detonator's grade (its file, texture sets, Track recolour `[0.97, 0, 0]`); **Cause read (85, `det-track-look`, `detonator-look.md`, "The floor's violet"): the floor is the `zoneTexVis` visualiser, which is spectrum-driven and wholly black under the pairs' `--no-audio`.** 87 % of Detonator's track texture indexes smooth slot 164 (band 3), which takes `EQ analogue colour tint` `14 1 55` times the band's level; the dashes are bar segments (3.5 % of the texels) in `EQ colour tint` `171 9 255`. Ours wrote the bar tint into the smooth slots too (hue wrong at every level); now the analogue tint (`EqTints`). Floor boxes under `--zone-spectrum-test`, ours before to after against the original: A `(33.7, 5.0, 41.3)` to `(9.5, 0.0, 21.7)` against `(5.9, 0.0, 18.0)`, B `(65.7, 10.8, 80.1)` to `(19.8, 0.0, 42.9)` against `(9.0, 0.0, 31.5)`. **The pairs now record the original's held bands and ours is fed them (2026-11-23, `det-pair-bands`, next paragraph): the floor is lit, but ours is 2.2 to 3 times too bright on blue.** 0.22 on the volley pair (the ground ahead of the hull lit by the flash in the original). |
-| 4 | Mines | 1-3 % (by eye) | not cropped | 1-2 (estimate) | Original: a spiky purple-white sphere with a lit shell, grows large as it nears. Ours: a small hard white ball before `det-colour`; since then a stage-coloured rim sphere (the colour and brightness binds are wired; the spikes still barely show at a distance, and the mine's size breathing is open). |
+| 4 | Mines | 1-3 % (by eye) | not cropped | 1-2 (estimate) | Original: a spiky purple-white sphere with a lit shell, grows large as it nears. Ours: a small hard white ball before `det-colour`; since then a stage-coloured rim sphere (the colour and brightness binds are wired; the spikes still barely show at a distance, and the mine's size breathing is wired since `det-mines`: football `clamp(2.3 s, 1, 2.3)`, spikes `clamp(4 t, 1, football + 0.95)`, long spikes and a bigger shell; a mine's own `s` is not carried, so ours is the original's size only by chance). |
 | 5 | Detonator pad | 2-3 % (by eye) | not cropped | 1 (estimate) | Original: a white slab with red squares, matt. Ours: a purple glassy slab with cut-out squares. Different material and colour; position and size agree. |
 | 6 | Cannon muzzle flash and rounds | under 1 % (by eye) | not cropped | under 1 (estimate) | Original: two blue-white flashes at the wing tips and blue-white rounds with a trail, still lit 6 ticks after the hold. Ours (craft held at rest, volley of 16 ticks, frame 4 ticks after it): no flash at the wing tips, and a white burst far ahead where a round hit one of ours' mines (score 0000100). Confidence 55: ours' flash window and round colour were not read, only the one frame compared. |
 | 7 | Hull | 6.6 % | 0.25-0.29 | 1.6-1.9 | Pose agrees (0.000 units, 0.9 degrees). Original: dark gunmetal body, blue strip lit, cyan wing edges. Ours was a pale silver body with white wing edges. **Cause read and fixed (90, `det-hull-look`, `detonator-look.md`, "The hull's paint"): `emissive` added the hull's second texture as a glow** (`detonator_stripe.gtf`, a facing ramp, on the panels; `detonator_ao.gtf`, the picture itself, on the body), and the panels' iridescent overlay `2 * Colour * AO * stripe(N.V)` is now drawn (`mesh::rcs::hull_overlay`, 85). Side-panel box mean RGB ours `(109.4, 97.4, 98.1)` to `(67.7, 50.1, 50.6)` (`(54.1, 30.9, 32.0)` with the glow refusal alone), original `(60.5, 44.2, 44.5)`; ours is now 6 grey above it, cause open; the other HD pairs unchanged. **Still open:** the fuselage's own overlay (`rich_iridescent`, the iridescence ramp at another coordinate), and the lit blue strip and cyan wing edges (the `Charge1`/`Charge2` block's writer, `detonator-hull.md`). |
@@ -593,6 +593,32 @@ Not reached: **the EMP and the pad pair's contact.** One steered attempt (stick 
 toward the pad but into a mine first; the pad is at the right edge about 2.0-2.3 s into the lap and needs a steered line past the
 first mines. The EMP pips, L1 and the wave were not captured. `rpcs3-hd-detonator-shots.py --steer` and `--emp-clock` exist for a
 next try (tune the stick window; mines near 3 s may need the cannon fired first).
+
+**The original's mines (2026-11-23, `det-mines`; `docs/tools/compare-page.md`, "The original's mines in a Detonator pair"; `detonator-mine.md`, "Where a mine stands").**
+Claim: the middle-right cell of `mines-ahead` (36.4) and `cannon-volley` (26.2) falls well below its value and the frame toward under 10.
+**False as it stands.** *Placement is carried exactly*: the pair reads the 80 `DetonatorMine` objects (heap scan, vtable `0x008642f0`) and
+ours lays each on the survey lane nearest its position (`--detonator-mines`, `RaceSim::carry_detonator_mines`); the layout is the same to the bit on
+three boots, all 80 within 0.47 units across the section, and the objects stand **3.0 above** ours' lane point (`MINE_LIFT`, now the mine's draw,
+contact, cannon and EMP point). But with the mines in the original's places the cell stays at 35 to 46 (seeded 36.4): **the look dominates, not
+the placement** (ours was a small dark rim disc, the original a lit white-violet shell with its holes and long spikes about twice the size). Size
+breathing is wired (the original's `m+0xd8 = 2.3 s` read back to the digit), and the frames get *worse* (`mines-ahead` 16.23 to 18.59, `cannon-volley`
+14.88 to 15.24, `pad` 8.81 to 8.80) because **the original draws its near mines about 30 % closer to the screen centre than their objects**
+(`mines-ahead`; 0.87 on the volley; none at 83 to 89 units in `pad`; the far mines exact): undetermined, and ours' mines are 7 units nearer. Per pair
+cell MAD (signed ours - original) seeded to carried+lift+size: `pad` 6.3 (-2.1) to 6.3 (-2.1), `mines-ahead` 36.4 (-20.7) to 46.4 (-12.7), `cannon-volley`
+26.2 (-17.8) to 27.6 (-17.0). **Next:** (1) the displacement: read it from a third frame at another depth (a `--shot` at 2.3 s puts the three near mines
+at 30 to 40 units), or have the maintainer say whether the original's mines are drawn ahead of their objects; (2) carry each mine's `s`/`t`
+(`+0xf4`, `+0xf8`, read in the same pass with `OAG_MINE_RAW=1`) so a pair's mine is the original's brightness and size, not a history-less envelope;
+(3) the pairs stay unpublished with the flag until (1).
+
+**The displacement is the pair's camera (2026-11-24, `det-mine-look-re`; `detonator-mine-draw.md`).** The original draws each mine part at its
+object's position (`SceneNode_SetLocalMatrix` `0x00327500`, no view term); the pair's push-buffer camera is 1.5 to 4 ticks of travel newer than
+the picture (`mines-ahead` 3.55, `cannon-volley` 2.30, `pad` 1.55, fitted on the near mines, one cross-track scenery edge agrees; 70, not
+reconciled with `hd-pair-lag-scan.py`'s 0 to 3 ticks: settle that first). The "twice the size" reads as the ring and the long spikes around an
+ordinary football (by eye on one mine, 55): the ring is the `Electric_Visualiser` (bounding radius 2.45), a camera-facing billboard ours does not
+draw (`DetonatorMine_PoseVisualiser` `0x00139308`, scale `1 + 0.4 (m+0xd8 - 1)` live, `0.9` dark; 65). **Ready to wire, in order:** (1) pair
+tooling: render ours from the picture's camera, moving `--camera-pose` and `--pose` back by a per-grab fitted `k` (`compare-page.md`, "The picture
+is older than the push buffer's camera"); likely moves every HD pair with near scenery; (2) draw the visualiser billboard; (3) carry `s`/`t` per
+mine (above). Superseded: Next (1) of the paragraph above.
 
 ## Zone Battle (HD mode `0xd`, Omega also `0x15`; 2048) is unread
 

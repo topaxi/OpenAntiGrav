@@ -271,6 +271,9 @@ pub struct CaptureOptions {
     /// exhaust of every craft is replayed on a straight path to its pose before the frame
     /// ([`Race::warm_up_field`]).
     pub field_warmup: Option<Vec<oag_core::math::Vec3>>,
+    /// `--detonator-mines`: the original's mine positions, laid on ours' nearest survey lanes in place of
+    /// the seeded opening layout ([`oag_raceplay::RaceSim::carry_detonator_mines`]).
+    pub detonator_mines: Option<Vec<oag_core::math::Vec3>>,
     /// `--pose-spark`: contact sparks the original threw before the frame, thrown that long
     /// before it on the warmed field ([`Race::warm_up_contact_sparks`]).
     pub pose_sparks: Vec<oag_raceplay::ContactSeed>,
@@ -483,6 +486,15 @@ pub fn capture(
         let ticks = race.core.sim.field_warm_up_ticks();
         race.warm_up_field(velocities, ticks, warmed_boost);
         race.warm_up_contact_sparks(velocities, &options.pose_sparks);
+    }
+    if let Some(mines) = &options.detonator_mines {
+        let dropped = race.core.sim.carry_detonator_mines(mines);
+        if dropped > 0 {
+            warn!(
+                "--detonator-mines: {dropped} of {} positions have no survey lane near them",
+                mines.len()
+            );
+        }
     }
     // A network race's AI and seats are the server's (`oag_net::race::prepare`,
     // applied by `NetPlay::join` below).

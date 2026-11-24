@@ -861,3 +861,62 @@ fn an_hd_detonator_cannon_and_emp_work_off_the_primary_slot() {
         "Square in the primary seat fires the cannon"
     );
 }
+
+/// **A pair carries the original's mines by position.** Four mine objects read out of an HD
+/// Detonator race on Talon's Junction (world position, RPCS3 pause 2.7 s after GO):
+/// `--detonator-mines` puts each on ours' nearest survey lane, and the lane is where the
+/// original's object stood across the section. The original's entry numbers run from the player's
+/// start cursor and ours from the spline's origin, so only the positions are compared
+/// (`docs/tools/compare-page.md`, "Detonator pairs").
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn carried_mines_stand_where_the_originals_objects_stood() {
+    const READ: [[f32; 3]; 5] = [
+        [217.6, -44.3, -192.3],
+        [211.8, -43.3, -199.6],
+        [216.9, -46.7, -178.6],
+        [210.7, -48.0, -172.0],
+        [386.7, -36.2, -110.0],
+    ];
+    let Some(path) = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let loaded = race::load(&race::Options {
+        source: path.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::Detonator,
+        track: Some(r"Data\Environments\Talons_Junction\track.vex".to_string()),
+        ..race::Options::default()
+    })
+    .expect("loading an HD Detonator race on Talon's Junction");
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
+    let positions: Vec<oag_core::math::Vec3> = READ
+        .iter()
+        .map(|&p| oag_core::math::Vec3::from_array(p))
+        .collect();
+    assert_eq!(race.core.sim.carry_detonator_mines(&positions), 0);
+    assert_eq!(race.core.sim.world.detonator.live_mines, 5);
+    for (index, read) in positions.iter().enumerate() {
+        let at = race
+            .core
+            .sim
+            .detonator_mine_position(index)
+            .expect("a carried mine");
+        // The whole distance, height included: a mine left on its lane point is 3 units off.
+        let apart = (at - *read).length();
+        println!("ours {at:?}, read {read:?}, {apart:.2} apart");
+        assert!(
+            apart < 1.0,
+            "{read:?} lands {apart:.2} units from the original's"
+        );
+    }
+    // The same position twice (one lane holds one mine) and one at the right place across but 33
+    // units too high (a lane on another deck): the twin and the high one are dropped.
+    let first = positions[0];
+    let high = first + oag_core::math::Vec3::new(0.0, 33.0, 0.0);
+    assert_eq!(
+        race.core.sim.carry_detonator_mines(&[first, first, high]),
+        2
+    );
+    assert_eq!(race.core.sim.world.detonator.live_mines, 1);
+}

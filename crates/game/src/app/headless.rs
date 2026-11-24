@@ -899,6 +899,7 @@ pub(crate) fn run_race(
                 pose_flaps: pose_flaps(cli)?,
                 field_lean: field_lean(cli)?,
                 field_warmup: field_warmup_velocities(cli)?,
+                detonator_mines: cli.detonator_mines.as_ref().map(|m| m.0.clone()),
                 pose_sparks: pose_sparks(cli)?,
                 presented: cli.presented.then_some(crate::race_capture::Presented {
                     render_scale: render_profile.render_scale,

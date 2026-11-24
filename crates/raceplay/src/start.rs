@@ -892,13 +892,17 @@ impl Race {
                 restores: 0,
                 photo: None,
                 spectates_from_start: false,
-                finish_camera: (!destroy_stations.is_empty()).then(|| {
-                    super::finish_camera::FinishCamera::new(
-                        destroy_stations.clone(),
-                        destroy_focus_rate,
-                        super::finish_camera::SPECTATOR_SEED,
-                    )
-                }),
+                // The end-of-race spectator is Pulse's (`finish_camera`): a title whose destroy
+                // camera reads its stations without `circuit_effects` has no such director.
+                finish_camera: (!destroy_stations.is_empty()
+                    && !destroyed.camera.stations_without_circuit_effects)
+                    .then(|| {
+                        super::finish_camera::FinishCamera::new(
+                            destroy_stations.clone(),
+                            destroy_focus_rate,
+                            super::finish_camera::SPECTATOR_SEED,
+                        )
+                    }),
                 // Cold, then snapped on the first tick. A race starts from a standing
                 // start with no thrust, so there is nothing to snap *to* here.
                 //
@@ -1045,6 +1049,7 @@ impl Race {
                 model_detail: oag_mesh::mesh::ModelDetail::default(),
                 texture_detail: oag_mesh::mesh_render::TextureDetail::default(),
                 trail_order: oag_display::display::TrailOrder::default(),
+                mine_sizes: Default::default(),
                 scenery_sort: oag_display::display::ScenerySort::default(),
                 weather: oag_display::display::Weather::default(),
                 boost_kick: 0.0,

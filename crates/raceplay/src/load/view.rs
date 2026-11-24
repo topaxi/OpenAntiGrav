@@ -750,7 +750,12 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
 
     seams.mark(Seam::Flyby, &report);
     let cockpit_hit_noise = weapon_models::load_cockpit_hit(&mut archives, wm, &mut report);
-    let destroy_stations = super::destroy_camera::stations(circuit_fx, &track_blob, &mut report);
+    let destroy_stations = super::destroy_camera::stations(
+        circuit_fx,
+        &title.destroyed.value.camera,
+        &track_blob,
+        &mut report,
+    );
     let intro_camera = intro::read(&mut archives, &track, options, pre_race, &mut report);
     let intro_voice = intro::read_voice(&mut archives, title, &track, pre_race, &mut report);
 

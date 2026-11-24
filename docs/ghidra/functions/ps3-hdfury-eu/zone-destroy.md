@@ -76,7 +76,7 @@ reading, its trigger at `0x000ec928` unread).
 ## The ready-to-wire table (mode 6)
 
 **Ready to wire:** Z1, Z3-Z9 and Z12 fully; Z2 (camera mode 2's per-frame view, what the player
-watches for 5.5 s, now read in [destroy-camera.md](destroy-camera.md) with the orbit's first-entry branch open), Z10 (the side calls `0x000f9610` and `0x003f5878`) and Z11 (the launch velocity)
+watches for 5.5 s, **wired 2026-11-23** as `ZoneEnd::orbit_camera`, [destroy-camera.md](destroy-camera.md) "Wired", with the orbit's first-entry branch still open), Z10 (the side calls `0x000f9610` and `0x003f5878`) and Z11 (the launch velocity)
 each with one unread value and its address under "Open".
 
 Role is `ship+0x628c` (`0` local, `2` AI, `1` remote). A Zone race has the one local craft.
