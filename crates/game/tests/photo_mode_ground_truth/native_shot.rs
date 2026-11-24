@@ -75,7 +75,6 @@ fn fx_says(run: &Run, needle: &str) -> bool {
 struct Made {
     name: &'static str,
     run: Run,
-    flags: &'static [&'static str],
     photos: Vec<PathBuf>,
 }
 
@@ -114,12 +113,7 @@ fn made(
     );
     let photos = the_photos(&run);
     assert_eq!(photos.len(), count, "{name}: {photos:?}");
-    Made {
-        name,
-        run,
-        flags,
-        photos,
-    }
+    Made { name, run, photos }
 }
 
 fn all_made(
@@ -184,7 +178,7 @@ fn different(a: &Made, b: &Made, at: usize, least: f32) {
 /// run it is drawn in asks for: the run here is a hostile one, half size through FSR 3, and
 /// `--presented`, which is what lets a run's render flags reach a capture at all.
 fn drawn_again(tag: &str, image: &Path, shots: &[Made], at: usize, skip: &[bool]) {
-    let flags = [&HALF_FSR3.1[..], &["--presented"]].concat();
+    let flags = [HALF_FSR3.1, &["--presented"]].concat();
     for one in shots {
         let shot = decode(&one.photos[at]);
         let out = one.run.dir.join(format!("rerender-{tag}.png"));
