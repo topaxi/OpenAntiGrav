@@ -839,6 +839,8 @@ fn menu_back_circle_leaves_cell_selection_on_the_circle_and_moves_help_to_the_tr
 struct Screen {
     tag: &'static str,
     reach: &'static str,
+    /// The last forward steps of `reach`: from the screen Back returns to, back onto this one.
+    again: &'static str,
     here: &'static str,
     away: &'static str,
     /// The screen authors a Help: the button that is not Back opens it, so it is pressed again to
@@ -849,6 +851,7 @@ struct Screen {
 const RACE_PAGE: Screen = Screen {
     tag: "race-page",
     reach: "boot; select racebox; press cross; until page=race; ticks 10",
+    again: "select racebox; press cross; until page=race; ticks 10",
     here: "page=race",
     away: "page!=race",
     helps: false,
@@ -857,6 +860,7 @@ const TRACK_PICKER: Screen = Screen {
     tag: "track-picker",
     reach: "boot; select racebox; press cross; until page=race; select launch_race; \
             press cross; until screen=picker; ticks 10",
+    again: "select launch_race; press cross; until screen=picker; ticks 10",
     here: "screen.id=track-select",
     away: "screen.id!=track-select",
     helps: true,
@@ -865,6 +869,7 @@ const SHIP_PICKER: Screen = Screen {
     tag: "ship-picker",
     reach: "boot; select racebox; press cross; until page=race; select launch_race; \
             press cross; until screen=picker; press cross; until screen.id=ship-select; ticks 10",
+    again: "press cross; until screen.id=ship-select; ticks 10",
     here: "screen.id=ship-select",
     away: "screen.id!=ship-select",
     helps: true,
@@ -874,6 +879,7 @@ const NAME_PROMPT: Screen = Screen {
     tag: "name-prompt",
     reach: "boot; select options; press cross; ticks 10; select edit_player_name; \
             press cross; until screen=prompt; ticks 10",
+    again: "select edit_player_name; press cross; until screen=prompt; ticks 10",
     here: "screen=prompt",
     away: "screen!=prompt",
     helps: false,
@@ -886,6 +892,7 @@ const PAUSE_OPTIONS: Screen = Screen {
             until screen.id=ship-select; press cross; until stage=race within 4000; ticks 400; \
             press start; until stage=menu; expect page=pause; ticks 5; select \"Game options\"; \
             press cross; until page=options; ticks 10",
+    again: "select \"Game options\"; press cross; until page=options; ticks 10",
     here: "page=options",
     away: "page!=options",
     helps: false,
@@ -908,33 +915,43 @@ fn buttons(original: &'static str, choice: &str) -> (&'static str, &'static str)
     }
 }
 
+/// How a folded script gets onto `screen` for each choice of MENU BACK: the first on the whole
+/// `reach`, the others by applying the choice (`config`) where Back left the player and going
+/// forward onto the screen again.
+fn onto_the_screen_under(screen: &Screen, number: usize, choice: &str) -> String {
+    if number == 0 {
+        screen.reach.to_string()
+    } else {
+        format!("config controls.menu_back={choice}; {}", screen.again)
+    }
+}
+
 /// On `screen` the face button that is not Back leaves nothing and Back leaves, under every choice of
-/// MENU BACK: one launch per choice, `expect` checking before and after.
+/// MENU BACK: one launch for all three, `config` switching the choice and `expect` checking before
+/// and after each.
 fn leaves_on_the_resolved_button(image: &Path, screen: &Screen, original: &'static str) {
     let profile = Profile::fresh(screen.tag);
-    for choice in ["original", "circle", "triangle"] {
+    profile.menu_back("original");
+    let mut script = String::new();
+    for (number, choice) in ["original", "circle", "triangle"].into_iter().enumerate() {
         let (back, other) = buttons(original, choice);
         println!(
             "{}: MENU BACK {choice}: {back} leaves, {other} does not",
             screen.tag
         );
-        profile.menu_back(choice);
-        profile.drive_on(
-            image,
-            &format!(
-                "{}; press {other}; ticks 30; expect {}; {}press {back}; ticks 30; expect {}",
-                screen.reach,
-                screen.here,
-                if screen.helps {
-                    format!("press {other}; ticks 10; ")
-                } else {
-                    String::new()
-                },
-                screen.away
-            ),
-            &format!("{choice}.jsonl"),
-        );
+        script.push_str(&format!(
+            "{}; press {other}; ticks 30; expect {}; {}press {back}; ticks 30; expect {}; ",
+            onto_the_screen_under(screen, number, choice),
+            screen.here,
+            if screen.helps {
+                format!("press {other}; ticks 10; ")
+            } else {
+                String::new()
+            },
+            screen.away
+        ));
     }
+    profile.drive_on(image, &script, "folded.jsonl");
 }
 
 fn ps2() -> Option<std::path::PathBuf> {
@@ -1090,31 +1107,30 @@ fn pulse_psp_photo_mode_and_viewer_still_leave_on_the_circle() {
 
 /// On a selection screen that authors a Help, the face button Back left over opens it, Back
 /// closes it without leaving, and Back then leaves, under every choice of MENU BACK: one launch
-/// per choice. `original` is the pressing's own Back, so the Help button is the other one.
+/// for all three, `config` switching the choice. `original` is the pressing's own Back, so the Help
+/// button is the other one.
 fn help_opens_on_the_displaced_button(image: &Path, screen: &Screen, original: &'static str) {
     let profile = Profile::fresh(&format!("{}-help", screen.tag));
-    for choice in ["original", "circle", "triangle"] {
+    profile.menu_back("original");
+    let mut script = String::new();
+    for (number, choice) in ["original", "circle", "triangle"].into_iter().enumerate() {
         let (back, other) = buttons(original, choice);
         println!(
             "{}: MENU BACK {choice}: {other} opens Help, {back} closes it and then leaves",
             screen.tag
         );
-        profile.menu_back(choice);
-        profile.drive_on(
-            image,
-            &format!(
-                "{reach}; expect screen.help=closed; press {other}; ticks 10; \
-                 expect screen.help=open; expect {here}; press {back}; ticks 10; \
-                 expect screen.help=closed; expect {here}; press {other}; ticks 10; \
-                 expect screen.help=open; press {other}; ticks 10; expect screen.help=closed; \
-                 press {back}; ticks 30; expect {away}",
-                reach = screen.reach,
-                here = screen.here,
-                away = screen.away
-            ),
-            &format!("{choice}.jsonl"),
-        );
+        script.push_str(&format!(
+            "{reach}; expect screen.help=closed; press {other}; ticks 10; \
+             expect screen.help=open; expect {here}; press {back}; ticks 10; \
+             expect screen.help=closed; expect {here}; press {other}; ticks 10; \
+             expect screen.help=open; press {other}; ticks 10; expect screen.help=closed; \
+             press {back}; ticks 30; expect {away}; ",
+            reach = onto_the_screen_under(screen, number, choice),
+            here = screen.here,
+            away = screen.away
+        ));
     }
+    profile.drive_on(image, &script, "folded.jsonl");
 }
 
 #[test]

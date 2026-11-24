@@ -9,6 +9,7 @@
 //! expect page=race                 the state must hold right now
 //! select <row>                     move focus to a row by id, setting key, label or #index
 //! set race.mode=time_trial         select that row, then step its value until it reads so
+//! config controls.menu_back=circle apply that setting now, from any screen, as the menu applies a changed row
 //! press cross down                 tap each button in turn
 //! hold select left 40              hold every button down together for this many ticks
 //! rstick 1 0 30                    a pad's right stick (x y), held for this many ticks; `lstick` is the left, which flies and steers
@@ -141,6 +142,9 @@ pub enum Step {
         value: String,
         within: u32,
     },
+    /// Apply a setting the way a changed menu row does (`Session::apply_setting`), without
+    /// the row: from any screen, a race's pause included.
+    Config { setting: String, value: String },
     /// Tap each button in turn.
     Press(Vec<Button>),
     /// Hold every button down together for this many ticks, then let go.
@@ -194,6 +198,7 @@ impl std::fmt::Display for Step {
                 value,
                 within,
             } => write!(f, "set {setting}={value} within {within}"),
+            Self::Config { setting, value } => write!(f, "config {setting}={value}"),
             Self::Press(buttons) => write!(f, "press {buttons:?}"),
             Self::Hold { buttons, ticks } => write!(f, "hold {buttons:?} {ticks}"),
             Self::Pad { pad, ticks } => write!(f, "pad {pad:?} {ticks}"),
@@ -355,6 +360,19 @@ impl Script {
                     setting: key,
                     value,
                     within,
+                }
+            }
+            "config" => {
+                let [pair] = words.as_slice() else {
+                    return Err("config takes one setting=value".into());
+                };
+                let Some((key, value)) = pair.split_once('=').filter(|(key, _)| !key.is_empty())
+                else {
+                    return Err(format!("{pair:?} is not setting=value"));
+                };
+                Step::Config {
+                    setting: key.to_string(),
+                    value: value.to_string(),
                 }
             }
             "press" => {

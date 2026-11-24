@@ -247,6 +247,11 @@ impl Driver {
                     }
                 }
             }
+            Step::Config { setting, value } => {
+                self.session
+                    .apply_setting(setting, &Value::Text(value.clone()));
+                self.frame(None)?;
+            }
             Step::Press(buttons) => {
                 for button in buttons {
                     self.tap(*button, crate::drive::script::DEFAULT_WITHIN)?;
