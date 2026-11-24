@@ -154,6 +154,9 @@ pub fn scan<'a>(
         let (width, ink_right) = placed(face, text, scale);
         let left = match align {
             Align::Left => x,
+            Align::Centre if face.pens == crate::font::Pens::Snapped => {
+                crate::font::snapped_centre_pen(face.atlas, text, scale, x)
+            }
             Align::Centre => x - width / 2.0,
             // A snapped right-aligned line ends its last quad on `x`, as the draw does.
             Align::Right if face.pens == crate::font::Pens::Snapped => x - ink_right,

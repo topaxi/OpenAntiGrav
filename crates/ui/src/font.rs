@@ -1114,10 +1114,9 @@ pub fn snapped_quad(cell: &Cell, scale: f32, pen: f32) -> SnappedQuad {
 /// reads, so that none of them disagrees with the draw.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SnappedRun {
-    /// The pen after the last glyph (its advance past the snapped ink edge): what a centred
-    /// string is placed by (chosen: no captured Pure frame has one in a snapped face). A
-    /// right-aligned string is placed by [`Self::ink_right`] instead (`docs/ui/menus-original.md`,
-    /// "Pure's right-aligned text ends on its ink").
+    /// The pen after the last glyph (its advance past the snapped ink edge). A centred string is
+    /// not placed by it ([`snapped_centre_pen`]), and a right-aligned one by [`Self::ink_right`]
+    /// (`docs/ui/menus-original.md`, "Pure's right-aligned text ends on its ink").
     pub end: f32,
     /// The right edge of the last glyph's quad: where the drawn text stops.
     pub ink_right: f32,
@@ -1218,9 +1217,11 @@ fn solid_patch(coverage: &mut [u8], width: u32, x: u32, y: u32) -> Cell {
 }
 
 mod border;
+mod centre;
 mod pens;
 mod reduce;
 
+pub use centre::snapped_centre_pen;
 pub use pens::Pens;
 
 #[cfg(test)]
@@ -1484,3 +1485,6 @@ mod fold_tests;
 mod reduce_tests;
 #[cfg(test)]
 mod wrap_tests;
+
+#[cfg(test)]
+mod centre_tests;
