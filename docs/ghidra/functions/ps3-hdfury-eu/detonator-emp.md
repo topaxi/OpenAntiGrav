@@ -92,15 +92,49 @@ Detonator.** Confidence **75**.
 
 ### Do the circuit's own pads still draw?
 
-Not read in the executable. **Wired as not drawn** (2026-11-22): where a title's Detonator pad
-model loads, a Detonator race drops the circuit's separate pad models and, on the four original
-circuits whose speed pads are pad-material chunks in the world-space pass, those chunks
-(`mesh::rcs::build_scene_views`' `hide_pads`; on `zone_1` exactly the 2093 pad triangles,
-`detonator_hull_ground_truth.rs`). [detonator-hull.md](detonator-hull.md) reads that `WorldManager_Construct` adds a
-`Detonator_Pad` model on every speed and weapon pad. Live, four frames taken on the tick a speed
-pad was entered (Vineta K, stages 1 and 2) show the white `Detonator_Pad` blocks on plain track:
-no chevron or glow of Vineta K's own speed pad is visible round or between them. Confidence 60
-that the circuit's pad is not drawn (a flat decal under the blocks' footprint would not show).
+**No, on all three titles; HD 80, Omega 65, 2048 65.** Measured 2026-11-24.
+
+**The code.** Before it loads `padReplacement` and the `Detonator_Pad` models,
+`WorldManager_Construct` (`0x000b8590`) runs, for modes `0xd`, `0xe` and `0x15` only, a loop
+that calls vtable slot 13 (`+0x34`) on every entry of the two pad lists (`this+0x4c`, count
+`+0x114`: the speed pads; `this+0x118`, count `+0x1e0`: the weapon pads) and then zeroes both
+counts. Slot 13 of `WeaponPad_Importer_Vtable` (`0x006b5818`) and of `SpeedupPad_Importer_Vtable`
+(`0x006b5f78`) is the deleting destructor (restore the vtable, base destructor `0x002bec80` /
+`0x003265b8`, free `0x006761f8`). So the circuit's own pad objects are deleted, and
+`WorldManager_CountPads` then counts the pads of `padReplacement.vex`, whose `.rcsmodel` has no
+mesh at all (`docs/formats/rcsmodel.md`, 128 bytes, count 0). The `Detonator_Pad` (or, in modes
+`0xd`/`0x15`, `Zone_Battle_Pad`) is then the only model on each pad.
+
+**Same shape on the other two.** Omega `eboot.bin` `FUN_01393610` (string `0x018175f7`): the
+mode gate is `0x206000 >> mode & 1` (modes 13, 14, 21), three lists (`+0x88`, `+0x3b0`,
+`+0x6d8` words, counts at `+0x3a8`/`+0x6d0`/`+0x1358`), vtable slot `+0x50`, counts zeroed, then
+`padReplacement`. 2048 v1.04 `FUN_8121e862` (string `0x814aa45c`): modes `0xe`/`0xd`/`0x15`,
+three lists, vtable slot `+0x28`, counts zeroed, `padReplacement`, then `Detonator_Pad` for each
+pad of the first two lists (mode 14) or `Zone_Battle_Pad` (modes 13, 21). The destructor targets
+of those two were not read (only the HD pair above).
+
+**The frame.** The stored RPCS3 grab of the HD `pad` pair (Talons Junction, the pad two craft
+lengths ahead) shows the dark floor and nothing but the `Detonator_Pad` blocks. Ours with the
+circuit's pad left drawn (hide switched off for the render) adds the Talons pad's cyan chevrons
+and dark feet round and between the blocks, which the original frame lacks; the floor is not dark
+enough to hide them. With the hide on, ours matches. One pose, one grab (80, not repeated).
+
+**What is not proven.** The destroy loop removes the pad *objects*. HD's four original circuits
+and Omega's HD-lineage circuits draw their pads as mesh shapes (`weapon_pads` material chunks, and on
+Omega `tracksurface:speedup_pad_*` shapes on the start-line material), which the loop does not
+obviously own; the frame is what settles HD, and Omega and 2048 inherit it. No original frame of
+Omega or 2048 was taken (their Detonator mode needs HD's `Data\New_Mode_Pads` files and neither
+emulator was driven to a pad).
+
+**Wired** as `oag_title::DetonatorPads::replaces_circuit_pads` (`true` on HD, Omega, 2048): HD
+drops the pad-material chunks of the world-space pass and the separate pad models
+(`mesh::rcs::build_scene_views`' `hide_pads`; `zone_1` exactly 2093 triangles,
+`detonator_hull_ground_truth.rs`); Omega and 2048 drop the circuit's `weapon_pads` and `speed_pads`
+material submeshes and every shape named `speedup_pad` or `weapon_pad`
+(`mesh::rcs::psp2::is_circuit_pad`; `psp2_circuit_pads_ground_truth.rs` holds the triangles
+dropped equal to the file's own pad triangles on Omega's `talons_junction` and `arena` and 2048's
+`altima`). A normal race on the same circuits is pixel-identical before and after. Modes 13 and 21
+(Zone Battle) run the same loop but are not wired.
 
 ## Live
 

@@ -305,8 +305,9 @@ registers it, and binds it to the pad's transform list. Modes 13 and 21 do the s
 `Zone_Battle_Pad`. So **every speed pad and every weapon pad carries a `Detonator_Pad` model in
 Detonator**. The pad uses `diffuse_normal_specular_emmissive_alpha` and `emissivecolourchange`
 materials, with `ds_weaponup_cs.gtf` and `ds_weaponup_ne.gtf`. **70**: the loop bodies' transform
-binding was read only far enough to see the per-pad list. Two things are unread: whether the
-original pad geometry still draws underneath, and what a craft crossing the pad does (the EMP charge
+binding was read only far enough to see the per-pad list. Before these loops the constructor
+deletes the circuit's own pad objects (`detonator-emp.md`, "Do the circuit's own pads still
+draw?", 80): the pad underneath is not drawn. Still unread: what a craft crossing the pad does (the EMP charge
 flag `craft+0x6a64 & 0x8000000`, [detonator-mode.md](detonator-mode.md)).
 `WorldManager_CountPads` is **60**: the two type-identifier compares and the two stores are read,
 the walk around them is not.
@@ -346,8 +347,8 @@ objects}`, `oag_hd::race::DETONATOR_CRAFT`, `DETONATOR_HANDLING`, `DETONATOR_OBJ
   ([detonator-mine-material.md](detonator-mine-material.md)), so the models draw unbound and the
   football reads bright white until a per-instance constant path exists.
 - **Pads**: the Detonator pad draws at every speed pad's and weapon pad's own `to_world`
-  (`PadVolume::to_world`) **in addition to** the circuit's own pad geometry (whether the
-  original still draws that underneath is unread). Whether the model's origin is the pad's
+  (`PadVolume::to_world`) and the circuit's own pad geometry is **not** drawn under it on HD, Omega and 2048
+  (`DetonatorPads::replaces_circuit_pads`, `detonator-emp.md`). Whether the model's origin is the pad's
   transform origin is **chosen**, not measured.
 - **The bomb's HD halo** (`bomb_blast_hd.halo`) still draws on a laid Detonator bomb, as before:
   unread.

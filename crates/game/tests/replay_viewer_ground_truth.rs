@@ -84,6 +84,9 @@ impl Profile {
         for root in [self.dir.join("config"), self.dir.join("data/oag/ghosts")] {
             collect(&root, &mut out);
         }
+        // The race music's place moves wherever music plays, a replay being watched included
+        // (`docs/architecture/race-music-resume.md`); it is not a record.
+        out.retain(|path, _| path.file_name().is_none_or(|name| name != "music.toml"));
         out
     }
 

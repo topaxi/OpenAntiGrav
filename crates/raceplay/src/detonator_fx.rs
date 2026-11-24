@@ -3,16 +3,18 @@
 //! [`oag_weapons::detonator::Event`]s.
 //!
 //! Evidence: `docs/ghidra/functions/ps3-hdfury-eu/detonator-cannon.md`, `detonator-mine.md` and
-//! `detonator-bomb.md`. The round's draw (`0x00121e68`) is unread, so the placement here is
-//! **chosen, not measured**: the round's model rides its position, its nose along its velocity
-//! and its up along the craft's up at launch; the flash is re-placed at the firing craft's
-//! locator for the round's first [`FLASH_WINDOW_SECONDS`], as HD's ordinary Cannon does
-//! (`oag_fx::weapon_quads::geometry`, `docs/ghidra/functions/ps3-hdfury-eu/cannon.md`).
+//! `detonator-bomb.md`. The round's draw (`0x00121e68`) only pushes and pops a matrix, so the
+//! round's own placement is **chosen, not measured**: its model rides its position, its nose
+//! along its velocity and its up along the craft's up at launch. The flash is re-placed at the
+//! firing craft's locator for the round's first [`FLASH_WINDOW_SECONDS`] and rolled every tick as
+//! `PulseBullet_Update` rolls it, and `PulseBullet`'s render queue's point lights ride it
+//! (`detonator-cannon.md`, "The flash's per-tick roll").
 //!
 //! The original spawns each effect only when the object is in some view's potentially-visible
 //! set; this plays every one, whatever the camera sees.
 
 use oag_fx::weapon_quads::geometry::FLASH_WINDOW_SECONDS;
+use oag_mesh::mesh_render::SpuLight;
 use oag_title::Trigger;
 use oag_weapons::detonator::cannon::Round;
 use oag_weapons::detonator::{Event, EventKind};
@@ -54,14 +56,23 @@ impl Race {
     }
 
     /// One matrix per round still inside the flash window, at the locator it left from carried by
-    /// the craft's live pose: the position and the three unit axes of the locator in the world,
-    /// as [`Self::cannon_muzzle_matrix`] builds them for HD's ordinary Cannon.
+    /// the craft's live pose, rolled the way `PulseBullet_Update` rolls it every tick of the window
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/detonator-cannon.md`, "The flash's per-tick roll"):
+    /// the three unit axes of the locator in the world as [`Self::cannon_muzzle_matrix`] builds
+    /// them for HD's ordinary Cannon, turned about the third axis by a roll of `[0, 2 pi)`
+    /// (`Matrix_RotateRowsByAxisAngle`), all three scaled by a roll of
+    /// [`FLASH_SIZE_ROLL`] and the third by a further roll of [`FLASH_STRETCH_ROLL`].
     ///
     /// A volley's first round leaves the left locator and the second the right
-    /// (`Round::slot`'s parity, the ring staying even).
+    /// (`Round::slot`'s parity, the ring staying even). **Chosen, not measured:** the rolls are
+    /// drawn from `oag_fx::weapon_quads::random` seeded by the round's slot and the tick, one
+    /// draw per 60 Hz tick (the original draws one per frame, 30 Hz in the capture), so the
+    /// simulation's own stream is never advanced.
     #[must_use]
     pub(crate) fn detonator_flash_matrices(&self, draw: &CannonDraw) -> Vec<Mat4> {
+        use oag_fx::weapon_quads::{geometry::FLASH_SIZE_SCALE, random};
         let ship = self.view.ship_model_matrix_of(&self.core, 0);
+        let tick = self.core.sim.world.tick as u32;
         self.core
             .sim
             .world
@@ -82,16 +93,59 @@ impl Race {
                 } else {
                     z
                 };
+                let seed = u32::from(round.slot);
+                let (angle, half_size, _) = random::ranged_flash_roll(seed, tick, FLASH_SIZE_ROLL);
+                let size = half_size / FLASH_SIZE_SCALE;
+                let stretch = random::stretch_roll(seed, tick, FLASH_STRETCH_ROLL);
+                let (sin, cos) = angle.sin_cos();
                 Some(Mat4::from_cols(
-                    x.extend(0.0),
-                    y.extend(0.0),
-                    z.extend(0.0),
+                    ((x * cos + y * sin) * size).extend(0.0),
+                    ((y * cos - x * sin) * size).extend(0.0),
+                    (z * (size * stretch)).extend(0.0),
                     world.w_axis,
                 ))
             })
             .collect()
     }
+
+    /// The Detonator cannon's point lights, as `PulseBullet`'s render queue (`0x00122098`) submits
+    /// them to `SpuLight_AddCandidate`: a blue light at each muzzle for the round's first
+    /// [`FLASH_WINDOW_SECONDS`] and a faint one on each round in flight. Empty under the same
+    /// switches that silence every weapon light ([`Self::hd_weapon_lights`]'s).
+    #[must_use]
+    pub(crate) fn detonator_cannon_lights(&self, draw: &CannonDraw) -> Vec<SpuLight> {
+        if !self.view.detonator_cannon_lights
+            || !self.view.hd_trail_active
+            || !self.view.spu_vertex_lights
+            || !self.view.hd_weapon_lights
+        {
+            return Vec::new();
+        }
+        let flashes = self
+            .detonator_flash_matrices(draw)
+            .into_iter()
+            .map(|matrix| weapon_light::detonator_flash_record(matrix.w_axis.truncate()));
+        let bolts = self
+            .core
+            .sim
+            .world
+            .detonator
+            .cannon
+            .rounds
+            .iter()
+            .filter(|round| round.live)
+            .map(|round| weapon_light::detonator_bolt_record(round.pos));
+        flashes.chain(bolts).collect()
+    }
 }
+
+/// The range `PulseBullet_Update` rolls the flash's size from, applied to all three axes
+/// (`0x001231e0`, constants `0x008aa0d8` and `0x008aa080`).
+pub(crate) const FLASH_SIZE_ROLL: (f32, f32) = (0.25, 1.0);
+
+/// The range of the further roll that stretches the flash along its own third axis
+/// (`0x00123244`, constants `0x008aa0c8` and `0x008aa0cc`).
+pub(crate) const FLASH_STRETCH_ROLL: (f32, f32) = (0.7, 1.3);
 
 /// Which of the disc's effects an event plays, or `None` for one that plays none.
 ///

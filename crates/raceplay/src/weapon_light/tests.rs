@@ -197,3 +197,154 @@ fn a_craft_over_a_mag_strip_takes_the_strips_colour() {
         "leaving it restores the skin's"
     );
 }
+
+fn firing_race() -> (Race, crate::CannonDraw) {
+    let mut race = hd_race();
+    race.view.spu_vertex_lights = true;
+    race.view.detonator_cannon_lights = true;
+    let rounds = &mut race.core.sim.world.detonator.cannon.rounds;
+    for (index, round) in rounds.iter_mut().take(2).enumerate() {
+        round.live = true;
+        round.age = 0.0;
+        round.slot = index as u8;
+        round.pos = Vec3::new(10.0 * (index as f32 + 1.0), 0.0, 0.0);
+    }
+    let muzzles = vec![[
+        Some(oag_core::math::Mat4::from_translation(Vec3::new(
+            -1.0, 0.0, 2.0,
+        ))),
+        Some(oag_core::math::Mat4::from_translation(Vec3::new(
+            1.0, 0.0, 2.0,
+        ))),
+    ]];
+    let draw = crate::CannonDraw {
+        look: None,
+        muzzles,
+    };
+    (race, draw)
+}
+
+/// `(0, 30, 40)`, `D = 2.7`, `w = 1` at the muzzle; `(0, 0.003, 0.03)`, `D = 70`, `w = 1` on the
+/// round: the colour table's and the constants' own values.
+#[test]
+fn the_detonator_lights_are_the_values_the_render_queue_loads() {
+    let flash = detonator_flash_record(Vec3::new(1.0, 2.0, 3.0));
+    assert_eq!(flash.position, [1.0, 2.0, 3.0, 1.0]);
+    assert_eq!(flash.colour, [0.0, 30.0, 40.0, 2.7]);
+    let bolt = detonator_bolt_record(Vec3::new(4.0, 5.0, 6.0));
+    assert_eq!(bolt.position, [4.0, 5.0, 6.0, 1.0]);
+    assert_eq!(bolt.colour, [0.0, 0.003, 0.03, 70.0]);
+}
+
+/// A young round lights its muzzle and its flight, an old one only its flight; dropping the wiring
+/// or the age gate fails this.
+#[test]
+fn a_detonator_round_lights_its_muzzle_while_young() {
+    let (mut race, draw) = firing_race();
+    assert_eq!(race.detonator_cannon_lights(&draw).len(), 4);
+    for round in race
+        .core
+        .sim
+        .world
+        .detonator
+        .cannon
+        .rounds
+        .iter_mut()
+        .take(2)
+    {
+        round.age = 0.2;
+    }
+    let lights = race.detonator_cannon_lights(&draw);
+    assert_eq!(lights.len(), 2);
+    assert!(lights.iter().all(|light| light.colour[3] == 70.0));
+}
+
+/// The weapons' switches silence the cannon's lights as they do every weapon light.
+#[test]
+fn the_detonator_lights_follow_the_weapon_light_switches() {
+    let (mut race, draw) = firing_race();
+    race.set_weapon_lights(false);
+    assert!(race.detonator_cannon_lights(&draw).is_empty());
+    race.set_weapon_lights(true);
+    race.view.spu_vertex_lights = false;
+    assert!(race.detonator_cannon_lights(&draw).is_empty());
+}
+
+/// `PulseBullet_Update` rolls the flash every tick: its size over `[0.25, 1]` on all three axes,
+/// its third axis a further `[0.7, 1.3]`, its facing a turn about that axis. The two rounds roll
+/// apart, and a tick later each rolls again.
+#[test]
+fn the_detonator_flash_is_rolled_every_tick_and_apart_per_round() {
+    let (mut race, draw) = firing_race();
+    let first = race.detonator_flash_matrices(&draw);
+    assert_eq!(first.len(), 2);
+    assert_ne!(
+        first[0].x_axis, first[1].x_axis,
+        "left and right roll apart"
+    );
+    let mut sizes = Vec::new();
+    let mut stretches = Vec::new();
+    for tick in 0..64 {
+        race.core.sim.world.tick = tick;
+        for matrix in race.detonator_flash_matrices(&draw) {
+            let (x, y, z) = (
+                matrix.x_axis.truncate().length(),
+                matrix.y_axis.truncate().length(),
+                matrix.z_axis.truncate().length(),
+            );
+            assert!((x - y).abs() < 1e-5, "one size on the first two axes");
+            assert!(
+                matrix.x_axis.truncate().dot(matrix.z_axis.truncate()).abs() < 1e-4,
+                "the turn is about the third axis"
+            );
+            assert!((0.25..=1.0).contains(&x), "size {x}");
+            let stretch = z / x;
+            assert!((0.7..=1.3).contains(&stretch), "stretch {stretch}");
+            sizes.push(x);
+            stretches.push(stretch);
+        }
+    }
+    let spread = |v: &[f32]| {
+        v.iter().copied().fold(f32::MIN, f32::max) - v.iter().copied().fold(f32::MAX, f32::min)
+    };
+    assert!(spread(&sizes) > 0.5, "the size covers its range");
+    assert!(spread(&stretches) > 0.4, "the stretch covers its range");
+}
+
+/// The facing turns about the third axis: the third axis keeps one direction on every tick (the
+/// locator's forward carried by the craft) while the first axis turns through most of a circle
+/// about it. Dropping the rotation, or turning about another axis, fails this.
+#[test]
+fn the_detonator_flash_turns_about_its_forward() {
+    let (mut race, draw) = firing_race();
+    let mut reference: Option<(Vec3, Vec3)> = None;
+    let mut angles = Vec::new();
+    for tick in 0..64 {
+        race.core.sim.world.tick = tick;
+        let matrix = race.detonator_flash_matrices(&draw)[0];
+        let z = matrix.z_axis.truncate().normalize();
+        let x = matrix.x_axis.truncate().normalize();
+        let (z0, x0) = *reference.get_or_insert((z, x));
+        assert!(
+            (z - z0).length() < 1e-4,
+            "forward moved: {z:?} against {z0:?}"
+        );
+        angles.push(x.dot(z0.cross(x0)).atan2(x.dot(x0)));
+    }
+    let spread = angles.iter().copied().fold(f32::MIN, f32::max)
+        - angles.iter().copied().fold(f32::MAX, f32::min);
+    assert!(
+        spread > 4.0,
+        "the facing turns through most of a circle: {spread}"
+    );
+}
+
+/// A title whose Detonator data does not say its cannon submits lights draws none, whatever
+/// the trail and the switches say (2048 and Omega).
+#[test]
+fn a_title_without_the_cannon_lights_flag_emits_none() {
+    let (mut race, draw) = firing_race();
+    assert!(!race.detonator_cannon_lights(&draw).is_empty());
+    race.view.detonator_cannon_lights = false;
+    assert!(race.detonator_cannon_lights(&draw).is_empty());
+}

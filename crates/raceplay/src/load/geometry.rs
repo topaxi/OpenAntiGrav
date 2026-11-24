@@ -88,8 +88,9 @@ pub(super) fn with_batch_cull(
 /// keep the `wohdmeshrefract` meshes in the main view and draw no refraction target
 /// (`psp2::refraction_only`).
 ///
-/// `hide_pads` leaves the circuit's own speed-pad chunks out of the world-space pass, for a race
-/// that draws its own pad model in their place (`mesh::rcs::build_scene_views`).
+/// `hide_pads` leaves the circuit's own pad chunks out of the world-space pass, for a race
+/// that draws its own pad model in their place (`mesh::rcs::build_scene_views`, and
+/// `mesh::rcs::psp2::build_circuit` for 2048 and Omega).
 #[allow(clippy::too_many_arguments)]
 pub(super) fn track_model(
     archives: &mut oag_assets::Archives,
@@ -133,6 +134,7 @@ pub(super) fn track_model(
                 animation.as_ref(),
                 &mut crate::stages::reader(archives),
                 water,
+                hide_pads,
             ) {
                 Ok((mut model, built)) => {
                     report.push(format!("{track}: {}", built.describe()));

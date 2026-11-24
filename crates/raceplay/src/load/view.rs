@@ -153,6 +153,10 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
         .and_then(|detonator| detonator.objects)
         .filter(|_| options.mode == Mode::Detonator);
     let detonator_weapons;
+    let replaces_circuit_pads = craft_title
+        .race
+        .detonator
+        .is_some_and(|detonator| detonator.pads.replaces_circuit_pads.value);
     let wm = match &detonator_objects {
         Some(objects) => {
             detonator_weapons =
@@ -190,6 +194,7 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
         bomb_blast_models.detonator =
             weapon_models::load_detonator_objects(&mut archives, objects, pads, store, &mut report);
     }
+    let hides_circuit_pads = replaces_circuit_pads && bomb_blast_models.detonator.pad.is_some();
     // The cockpit half of the shield, on the same terms and for the same
     // reason: not per team, not per track, one entry for every craft in the
     // game. The shell beside it *is* per team and loads with the livery above.
@@ -243,7 +248,7 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
         options.mode == Mode::Zone,
         store,
         options.water,
-        bomb_blast_models.detonator.pad.is_some(),
+        hides_circuit_pads,
         &mut report,
     );
     stages::checkpoint()?;
@@ -485,11 +490,11 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
         track_model.radius
     ));
 
-    // A Detonator race draws its own `Detonator_Pad` on every speed and weapon pad, and the
-    // circuit's own pad is not seen beneath it (four live frames,
-    // `docs/ghidra/functions/ps3-hdfury-eu/detonator-emp.md`, "Do the circuit's own pads still
-    // draw?", 60): where the title's pad model loaded, the circuit's two pad models are dropped.
-    let (pad_model, weapon_pad_model) = if bomb_blast_models.detonator.pad.is_some() {
+    // A Detonator race draws its own `Detonator_Pad` on every speed and weapon pad in place of the
+    // circuit's own (`docs/ghidra/functions/ps3-hdfury-eu/detonator-emp.md`, "Do the circuit's
+    // own pads still draw?"): where the title's pad model loaded, the circuit's two pad models
+    // are dropped.
+    let (pad_model, weapon_pad_model) = if hides_circuit_pads {
         report.push(
             "detonator: the circuit's own speed and weapon pads are not drawn under the \
              Detonator pad"
@@ -821,6 +826,11 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
         hd_bomb_blast: wm.bomb_blast_hd.is_some(),
         bomb_shockwave_fades: wm.bomb_blast_pulse.is_some_and(|b| b.shockwave_fades),
         hd_missile_blast: wm.missile_blast_hd.is_some(),
+        detonator_cannon_lights: options.mode == Mode::Detonator
+            && craft_title
+                .race
+                .detonator
+                .is_some_and(|detonator| detonator.cannon_lights),
         pulse_laid_pose: craft_title.looks.laid_pose.applies_everywhere(),
         laid_pose_scaled: craft_title.looks.laid_pose_scaled.applies_everywhere(),
         screen_flash: extents,

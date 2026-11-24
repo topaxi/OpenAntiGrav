@@ -603,6 +603,10 @@ pub struct Detonator {
     pub layouts: Option<DetonatorLayouts>,
     /// The hull and livery a Detonator race flies, or `None` where a title's are not located.
     pub craft: Option<DetonatorCraft>,
+    /// Whether the pulse cannon's round and muzzle flash submit point lights to the vertex light
+    /// list: read on HD (`PulseBullet`'s render queue, `detonator-cannon.md`, "The cannon's three
+    /// point lights"); 2048's and Omega's queues are unread.
+    pub cannon_lights: bool,
     /// The handling file a Detonator race flies in place of the team's, or `None` where a
     /// title's is not located.
     pub handling: Option<crate::zone_handling::ZoneHandling>,
@@ -633,6 +637,10 @@ pub struct DetonatorPads {
     /// A weapon pad hands out nothing and charges the EMP once per pad, again only after another
     /// pad or the next start-line crossing.
     pub weapon_pad_charges: crate::pre_race::Sourced<bool>,
+    /// The circuit's own speed-pad and weapon-pad models are not drawn under the Detonator pad:
+    /// `WorldManager_Construct` deletes the circuit's pad importers before it loads
+    /// `padReplacement` and the `Detonator_Pad` model.
+    pub replaces_circuit_pads: crate::pre_race::Sourced<bool>,
 }
 
 /// The EMP's announcer lines: `Detonator_UpdateRace` raises `EMPREADY` and `EMPFULL` through

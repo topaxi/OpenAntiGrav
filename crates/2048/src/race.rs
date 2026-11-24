@@ -492,6 +492,7 @@ pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
         extension: ".gxt",
         stages: 15,
     }),
+    cannon_lights: false,
     camera_scale: 0.7,
     hull_scale: None,
     layouts: Some(oag_title::DetonatorLayouts {
@@ -508,6 +509,7 @@ pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
     pads: oag_title::DetonatorPads {
         speed_pad_charges: oag_title::pre_race::Sourced::chosen(false),
         weapon_pad_charges: oag_title::pre_race::Sourced::chosen(false),
+        replaces_circuit_pads: oag_title::pre_race::Sourced::measured(true),
     },
     // 2048's cue names are hashed and its Detonator speech bank is not located.
     voices: None,

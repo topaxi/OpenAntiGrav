@@ -71,6 +71,8 @@ pub struct ViewSetup {
     pub bomb_shockwave_fades: bool,
     /// Whether a Missile hit plays HD's explosion: `missile_blast_hd.is_some()`.
     pub hd_missile_blast: bool,
+    /// Whether the Detonator cannon submits its point lights: `Detonator::cannon_lights`.
+    pub detonator_cannon_lights: bool,
     /// Whether a laid Mine and Bomb take Pulse's own measured poses - the
     /// Mine spun and scaled by `Mine_PoseNode`, the Bomb squared to the world
     /// by `Bomb_Init` - rather than the frozen craft pose. A title fact:
@@ -329,6 +331,7 @@ impl ViewSetup {
             hd_bomb_blast: false,
             bomb_shockwave_fades: false,
             hd_missile_blast: false,
+            detonator_cannon_lights: false,
             pulse_laid_pose: false,
             laid_pose_scaled: false,
             screen_flash: false,

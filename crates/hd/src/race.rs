@@ -465,6 +465,7 @@ pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
         extension: ".gtf",
         stages: 15,
     }),
+    cannon_lights: true,
     camera_scale: 0.7,
     // A live Detonator frame's hull world matrix in the push buffer, rows of length 0.630 (`0.7 * 0.9`).
     hull_scale: Some(0.63),
@@ -481,6 +482,7 @@ pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
     pads: oag_title::DetonatorPads {
         speed_pad_charges: oag_title::pre_race::Sourced::measured(true),
         weapon_pad_charges: oag_title::pre_race::Sourced::measured(true),
+        replaces_circuit_pads: oag_title::pre_race::Sourced::measured(true),
     },
     // The two names are in `speech_det.bnk` (`DATA00`) and in no other speech bank on the disc;
     // which bank the mode opens is not read, the census places them.

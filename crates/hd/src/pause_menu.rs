@@ -108,6 +108,8 @@ pub const PAUSE_MENU: &PauseMenu = &PauseMenu {
     hud_under_scrim: true,
     song_line_under_scrim: true,
     offers_photo: true,
+    music_list: None,
+    music_list_ps2: None,
     origin: Origin::Measured,
 };
 
