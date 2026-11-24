@@ -897,7 +897,8 @@ pub(crate) fn run_race(
                 ),
                 pose_lean: pose_lean(cli)?,
                 pose_flaps: pose_flaps(cli)?,
-                stow_grid_flaps: cli.pose_from.is_some()
+                stow_grid_flaps: cli.no_grid_flaps
+                    || cli.pose_from.is_some()
                     || cli.field_from.is_some()
                     || cli.pose.is_some(),
                 field_lean: field_lean(cli)?,

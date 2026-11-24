@@ -481,8 +481,8 @@ pub struct RaceView {
     /// swings its own flaps with its airbrakes, so a second local person's hull does too, and
     /// an AI craft folds them back to stowed.
     pub(super) flaps: [[f32; 2]; MAX_SHIPS],
-    /// Whether the grid state forces the flaps out. Always on in play; a comparison capture of a
-    /// craft posed past the grid switches it off ([`Race::stow_grid_flaps`]).
+    /// Whether the grid state forces the flaps out. Always on in play; a capture of a craft posed
+    /// past the grid, or of the flaps alone, switches it off ([`Race::stow_grid_flaps`]).
     pub(super) grid_flaps: bool,
     /// The authored deflection and the two rates, from `<AirbrakeGraphics>`.
     ///

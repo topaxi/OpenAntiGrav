@@ -457,7 +457,11 @@ fn the_flaps_and_the_shield_swell_move_between_ticks() {
 #[test]
 fn forced_flaps_draw_at_their_levels_at_every_alpha() {
     let mut race = gliding_race();
-    race.tick(&PlayerInputs::none());
+    // The grid's flaps, folded: they hold the airbrake level of a craft that touches nothing.
+    let fold = (100.0 / (race.view.flap_graphics.down_speed * race.core.sim.dt)).ceil() as u32;
+    for _ in 0..=fold {
+        race.tick(&PlayerInputs::none());
+    }
     assert_eq!(
         race.airbrake_flaps_of(0),
         [0.0; 2],

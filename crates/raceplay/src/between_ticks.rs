@@ -397,8 +397,8 @@ impl Race {
     ///
     /// A **capture-only** switch: in play the grid always holds the flaps out. A comparison
     /// capture uses it for a craft posed from a row read after the green light, which stands for
-    /// a craft long off the grid. A title whose original draws them stowed on the grid would use
-    /// it too; none measured does.
+    /// a craft long off the grid, and `--no-grid-flaps` for a frame of the flaps alone. A title
+    /// whose original draws them stowed on the grid would use it too; none measured does.
     pub fn stow_grid_flaps(&mut self) {
         self.view.grid_flaps = false;
         for slot in 0..MAX_SHIPS {

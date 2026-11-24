@@ -264,9 +264,9 @@ pub struct CaptureOptions {
     pub pose_lean: Option<pose_lean::PoseLean>,
     /// `--pose-flaps`: ship 0's air brake levels from the pose's trace row, after the ticks. See [`pose_flaps`].
     pub pose_flaps: Option<pose_flaps::PoseFlaps>,
-    /// The grid state does not force the flaps out: a posed capture (`--pose-from`, `--field-from`,
-    /// `--pose`) stands for a craft off the grid, so it draws them as a craft in the race does.
-    /// See [`oag_raceplay::Race::stow_grid_flaps`].
+    /// `--no-grid-flaps`, or a posed capture (`--pose-from`, `--field-from`, `--pose`), which stands
+    /// for a craft off the grid: the grid state does not force the flaps out. See
+    /// [`oag_raceplay::Race::stow_grid_flaps`].
     pub stow_grid_flaps: bool,
     /// `--field-from`'s `steer_lean` / `roll_phase` columns: the opponents' drawn lean and roll phase
     /// as the original's RAM held them, slots 1.. in order; `None` for a craft whose row has no columns.

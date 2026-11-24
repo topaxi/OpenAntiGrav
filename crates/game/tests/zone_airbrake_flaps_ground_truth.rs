@@ -16,9 +16,9 @@
 //! flaps are small, so a brake that raised a blob mid-hull read as "the flaps
 //! do not move".
 //!
-//! Two frames of the same race at the same tick, one with the airbrakes held:
-//! everything the brake changes is the flaps, so where the changed pixels sit is
-//! where the flaps are drawn. A hull is symmetric about the screen's centre
+//! Two frames of the same race at the same tick, the craft parked on the grid, one with the grid's
+//! flaps fully out and one with `--no-grid-flaps`: everything that differs is the flaps, so where the
+//! changed pixels sit is where the flaps are drawn. A hull is symmetric about the screen's centre
 //! column from the chase camera, and its flaps hang on either side of it.
 
 use std::path::Path;
@@ -59,7 +59,7 @@ fn decode(png: &[u8]) -> Vec<u8> {
         .collect()
 }
 
-fn frame(source: &Path, scratch: &Path, name: &str, mode: &str, hold: &str) -> Vec<u8> {
+fn frame(source: &Path, scratch: &Path, name: &str, mode: &str, stowed: bool) -> Vec<u8> {
     let out = scratch.join(format!("{name}.png"));
     let run = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
         .arg(source)
@@ -67,7 +67,8 @@ fn frame(source: &Path, scratch: &Path, name: &str, mode: &str, hold: &str) -> V
         .args(["--render-scale", "100", "--msaa", "off"])
         .args(["--screen-filter", "off", "--anisotropy", "off"])
         .args(["--motion-blur", "off", "--scheme", "novice"])
-        .args(["--mode", mode, "--hold", hold, "--ticks", "240"])
+        .args(["--mode", mode, "--ticks", "240"])
+        .args(stowed.then_some("--no-grid-flaps"))
         .arg("--screenshot")
         .arg(&out)
         .env("XDG_CONFIG_HOME", scratch.join(format!("{name}-config")))
@@ -126,14 +127,8 @@ fn check(source: &Path, tag: &str, mode: &str) {
     // Each has its own profile directories: two processes sharing one settings
     // file read and rewrite it under each other.
     let (rest, brake) = std::thread::scope(|scope| {
-        let rest = scope.spawn(|| frame(source, &scratch, &format!("{mode}-rest"), mode, "cross"));
-        let brake = frame(
-            source,
-            &scratch,
-            &format!("{mode}-brake"),
-            mode,
-            "cross,l,r",
-        );
+        let rest = scope.spawn(|| frame(source, &scratch, &format!("{mode}-rest"), mode, true));
+        let brake = frame(source, &scratch, &format!("{mode}-brake"), mode, false);
         (rest.join().expect("the rest frame"), brake)
     });
     let (left, right, centre) = columns(&brake, &rest);
