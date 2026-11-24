@@ -482,7 +482,9 @@ pub struct Options {
 
 /// The two capture aids [`Options::pose`] and [`Options::camera`] carry.
 mod capture;
-pub use capture::{CameraOverride, CaptureHud, CaptureZone, PoseRequest};
+pub use capture::{
+    CameraOverride, CaptureHeadToHead, CaptureHud, CaptureSong, CaptureZone, PoseRequest,
+};
 
 /// [`Options`]' `Default`.
 mod defaults;

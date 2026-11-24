@@ -1093,6 +1093,27 @@ pub(crate) struct Cli {
     #[arg(long, value_name = "SECONDS", requires = "hud_state")]
     pub(crate) hud_autopilot: Option<f32>,
 
+    /// With `--hud-state`: holds the now-playing marquee on this song title (Pulse draws one; a title without
+    /// one draws nothing). A capture runs no music, so no song starts and the bar and scrolling text never appear.
+    /// **A capture aid**: the display is stepped `--hud-song-ticks` times and frozen there.
+    #[arg(long, value_name = "TITLE", requires = "hud_state")]
+    pub(crate) hud_song: Option<String>,
+
+    /// With `--hud-song`: the artist shown ahead of the title.
+    #[arg(long, value_name = "ARTIST", requires = "hud_song")]
+    pub(crate) hud_song_artist: Option<String>,
+
+    /// With `--hud-song`: marquee updates (60 per second) into the song's animation. The bar and text fade in over
+    /// the first few, then the text scrolls. Default 60, past the fade-in, where the bar has stopped climbing.
+    #[arg(long, value_name = "TICKS", requires = "hud_song")]
+    pub(crate) hud_song_ticks: Option<u32>,
+
+    /// With `--hud-state`: draws the Head to Head bar on the HUD alone, `GAP,lead` or `GAP,trail` (the gap in the
+    /// race's arc-length units, the number printed before the `m`; whether the player is in first place). The race's
+    /// mode and standings are untouched.
+    #[arg(long, value_name = "GAP,lead|trail", requires = "hud_state")]
+    pub(crate) hud_head_to_head: Option<String>,
+
     /// Seconds added to the world meshes' texture-animation clock (scrolling surfaces, flip-book signs, the neon
     /// strips), which is the race's own tick count over 60 otherwise. The original feeds them a clock that is the
     /// HUD clock plus a per-state constant (13.6 to 24.3 s on the 24 Pulse PSP grid states; inferred to be the time

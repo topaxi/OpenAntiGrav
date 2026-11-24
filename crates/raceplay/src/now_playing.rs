@@ -31,6 +31,9 @@ pub struct View {
     gated: bool,
     /// Whether the HUD is up. Only ever `false` on a `gated` title.
     hud_shown: bool,
+    /// Whether a capture pinned the song ([`Self::pin`]): the display is held where it was put,
+    /// and no song or tick moves it.
+    pinned: bool,
 }
 
 impl View {
@@ -87,7 +90,28 @@ impl View {
             serial: 0,
             gated: title.hud_art.dynamic_hud.is_some(),
             hud_shown: true,
+            pinned: false,
         })
+    }
+
+    /// Holds the display on a capture's song, `song.ticks` updates into its animation, and freezes
+    /// it there ([`crate::CaptureSong`]).
+    pub fn pin(&mut self, song: &crate::CaptureSong) {
+        self.serial = 1;
+        self.show(&oag_sound::NowPlaying {
+            serial: 1,
+            started: 0,
+            name: Some(oag_sound::SongName {
+                artist: song.artist.clone(),
+                title: song.title.clone(),
+            }),
+            author: None,
+            track: None,
+        });
+        for _ in 0..song.ticks {
+            self.display.step();
+        }
+        self.pinned = true;
     }
 }
 
@@ -156,7 +180,7 @@ impl Race {
         let Some(view) = self.view.now_playing.as_mut() else {
             return;
         };
-        let Some(song) = song.filter(|song| song.serial != view.serial) else {
+        let Some(song) = song.filter(|song| song.serial != view.serial && !view.pinned) else {
             return;
         };
         view.serial = song.serial;
@@ -175,7 +199,7 @@ impl Race {
         let Some(view) = self.view.now_playing.as_mut() else {
             return;
         };
-        let Some(song) = song else {
+        let Some(song) = song.filter(|_| !view.pinned) else {
             return;
         };
         view.serial = song.serial;
@@ -193,7 +217,7 @@ impl Race {
             return;
         };
         view.hud_shown = !view.gated || choice.shows_hud();
-        if !view.hud_shown {
+        if !view.hud_shown && !view.pinned {
             view.display.hide();
         }
     }
@@ -217,7 +241,7 @@ impl Race {
 impl RaceView {
     /// One tick of the marquee.
     pub(super) fn advance_now_playing(&mut self) {
-        if let Some(view) = self.now_playing.as_mut() {
+        if let Some(view) = self.now_playing.as_mut().filter(|view| !view.pinned) {
             view.display.step();
         }
     }
