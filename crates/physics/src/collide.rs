@@ -716,17 +716,18 @@ impl CollisionWorld {
     fn asks(soup: &TriangleSoup, skip: Option<u32>, include_reset: bool) -> bool {
         skip != Some(soup.collider) && (include_reset || !soup.surface.is_skipped_by_default())
     }
-}
 
-impl Raycaster for CollisionWorld {
-    /// Nearest hit across every collider. Self-skipping and the [`Surface::Reset`] exclusion
-    /// are each collider's business; the original applies both at the broadphase, the same
-    /// thing one level up.
-    ///
-    /// The scan's two comparisons, kept apart: within a collider the strictly smaller `t`,
-    /// the lower triangle on a tie ([`TriangleSoup::raycast`]); across colliders the
-    /// strictly smaller distance, the lower collider on a tie.
-    fn raycast(&self, ray: Ray, skip: Option<u32>, include_reset: bool) -> Option<RaycastHit> {
+    /// [`Raycaster::raycast`] as the scan asks it: candidates in ascending collider, then
+    /// triangle, each collider's nearest by the strictly smaller `t` (the lower triangle on a
+    /// tie), then across colliders the strictly smaller distance (the lower collider on a tie).
+    /// The unordered fold answers the same; this is its reference and its fallback for a ray
+    /// the fold's argument does not cover.
+    fn raycast_ascending(
+        &self,
+        ray: Ray,
+        skip: Option<u32>,
+        include_reset: bool,
+    ) -> Option<RaycastHit> {
         let p0 = ray.origin;
         let p1 = ray.end();
         let segment = Aabb::from_segment(p0, p1);
@@ -777,6 +778,87 @@ impl Raycaster for CollisionWorld {
         settle(walking, &mut nearest);
 
         nearest
+    }
+}
+
+/// One candidate of [`CollisionWorld::raycast`]'s fold.
+///
+/// The scan picks each collider's least `(t, triangle)`, then the least `(distance, collider)`
+/// of those. For a finite length that is not negative, `distance = t * length` never decreases
+/// as `t` grows (rounding is monotone), so a collider's least `t` is also its least distance,
+/// and the scan's answer is the least `(distance, collider, t, triangle)` over every
+/// candidate: a total order on non-`NaN` values, which no visiting order can change.
+#[derive(Clone, Copy)]
+struct Nearest {
+    distance: f32,
+    collider: usize,
+    t: f32,
+    triangle: u32,
+}
+
+impl Nearest {
+    fn before(&self, other: &Self) -> bool {
+        if self.distance != other.distance {
+            return self.distance < other.distance;
+        }
+        if self.collider != other.collider {
+            return self.collider < other.collider;
+        }
+        if self.t != other.t {
+            return self.t < other.t;
+        }
+        self.triangle < other.triangle
+    }
+}
+
+impl Raycaster for CollisionWorld {
+    /// Nearest hit across every collider. Self-skipping and the [`Surface::Reset`] exclusion
+    /// are each collider's business; the original applies both at the broadphase, the same
+    /// thing one level up.
+    ///
+    /// The scan's two comparisons, kept apart: within a collider the strictly smaller `t`,
+    /// the lower triangle on a tie ([`TriangleSoup::raycast`]); across colliders the
+    /// strictly smaller distance, the lower collider on a tie.
+    fn raycast(&self, ray: Ray, skip: Option<u32>, include_reset: bool) -> Option<RaycastHit> {
+        // `t * length` is monotone in `t` only for a finite length that is not negative; any
+        // other ray takes the scan's own order.
+        if !(ray.length >= 0.0 && ray.length.is_finite()) {
+            return self.raycast_ascending(ray, skip, include_reset);
+        }
+        let p0 = ray.origin;
+        let p1 = ray.end();
+        let segment = Aabb::from_segment(p0, p1);
+        let flat = self.flat();
+        let mut nearest: Option<Nearest> = None;
+        let mut unordered = false;
+        flat.tree.visit(&segment, |item| {
+            let (collider, triangle) = flat.item(item);
+            let soup = &self.colliders[collider];
+            if !Self::asks(soup, skip, include_reset) {
+                return;
+            }
+            let [a, b, c] = soup.corners(triangle);
+            let Some(hit) = segment_triangle(p0, p1, a, b, c) else {
+                return;
+            };
+            if hit.t.is_nan() {
+                unordered = true;
+                return;
+            }
+            let candidate = Nearest {
+                distance: hit.t * ray.length,
+                collider,
+                t: hit.t,
+                triangle,
+            };
+            if nearest.is_none_or(|best| candidate.before(&best)) {
+                nearest = Some(candidate);
+            }
+        });
+        if unordered {
+            return self.raycast_ascending(ray, skip, include_reset);
+        }
+        nearest.map(|best| self.colliders[best.collider].hit(ray, best.triangle))
     }
 
     /// Every hit across every collider, in **ascending collider index** and, within one,

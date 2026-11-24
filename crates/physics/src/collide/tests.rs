@@ -403,3 +403,86 @@ fn a_region_answers_each_ray_as_its_own_walk_does() {
     }
     assert!(compared > 500, "only {compared} hits compared");
 }
+
+/// The world's nearest hit, folded over the walk in whatever order it visits, is the scan's
+/// to the bit: on colliders that repeat each other's triangles (equal distances, so the lower
+/// collider must win), coplanar repeats inside one collider (equal `t`, the lower triangle),
+/// shared edges, a skipped collider, the reset class asked for and not, and a zero-length ray.
+#[test]
+fn the_folded_nearest_hit_is_the_ascending_scans() {
+    let mut rng = oag_core::rng::Rng::new(23);
+    let mut at = |scale: f32| (rng.next_f32() - 0.5) * scale;
+    let mut cells = Vec::new();
+    for _ in 0..150 {
+        let base = [at(40.0), at(6.0), at(40.0)];
+        let corners: Vec<[f32; 3]> = (0..3)
+            .map(|_| [base[0] + at(6.0), base[1] + at(2.0), base[2] + at(6.0)])
+            .collect();
+        cells.push(corners);
+    }
+    let mut world = CollisionWorld::new();
+    for collider in 0..5u32 {
+        let mut vertices = Vec::new();
+        let mut triangles = Vec::new();
+        for (cell, corners) in cells.iter().enumerate() {
+            // Colliders 0 and 3 hold the same cells, 1 and 4 every other one: ties across
+            // colliders. Each cell's fan shares its edges.
+            if collider % 3 != (cell % 3) as u32 && collider % 3 != 0 {
+                continue;
+            }
+            let first = vertices.len() as u32;
+            vertices.extend_from_slice(corners);
+            vertices.push([corners[0][0] + 1.0, corners[0][1], corners[0][2] - 2.0]);
+            triangles.push([first, first + 1, first + 2]);
+            triangles.push([first, first + 2, first + 3]);
+            if cell % 7 == 0 {
+                triangles.push([first, first + 1, first + 2]);
+            }
+        }
+        let surface = if collider == 2 {
+            Surface::Reset
+        } else {
+            Surface::Wall
+        };
+        world.push(TriangleSoup::new(
+            vertices,
+            triangles,
+            Vec::new(),
+            surface,
+            collider,
+        ));
+    }
+
+    let mut hits = 0;
+    let mut ties = 0;
+    for case in 0..10_000 {
+        let origin = Vec3::new(at(40.0), at(8.0), at(40.0));
+        let direction = Vec3::new(at(2.0), at(2.0), at(2.0)).normalize_or_zero();
+        let length = if case % 50 == 0 {
+            0.0
+        } else {
+            at(2.0).abs() * 16.0
+        };
+        let ray = Ray::new(origin, direction, length);
+        let skip = (case % 5 == 0).then_some(0);
+        let include_reset = case % 3 == 0;
+        let want = world.raycast_ascending(ray, skip, include_reset);
+        let got = world.raycast(ray, skip, include_reset);
+        assert_eq!(got, want, "case {case}");
+        if let Some(hit) = want {
+            hits += 1;
+            let mut all = [None; 16];
+            let found = world.raycast_all(ray, skip, include_reset, &mut all);
+            ties += usize::from(
+                all[..found]
+                    .iter()
+                    .flatten()
+                    .filter(|other| other.distance == hit.distance)
+                    .count()
+                    > 1,
+            );
+        }
+    }
+    assert!(hits > 1000, "only {hits} hits compared");
+    assert!(ties > 500, "only {ties} tied hits compared");
+}
