@@ -401,3 +401,131 @@ fn zero_saturation_is_grey_and_more_saturation_is_further_from_it() {
         "saturation 2 widens the red-blue gap: {vivid:?}"
     );
 }
+
+/// A far field of one-pixel stripes, 1080 lines tall, through the pass at full aperture: what is
+/// left of the stripes (the spread between the brightest and the darkest pixel of a row well
+/// inside the field), and how many distinct pixels the gather's taps reach.
+fn far_stripes_at_1080(d: &Device) -> (u8, usize) {
+    const W: u32 = 256;
+    const H: u32 = 1080;
+    let size = wgpu::Extent3d {
+        width: W,
+        height: H,
+        depth_or_array_layers: 1,
+    };
+    let scene = d.device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("scene"),
+        size,
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Rgba8Unorm,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+            | wgpu::TextureUsages::TEXTURE_BINDING
+            | wgpu::TextureUsages::COPY_DST
+            | wgpu::TextureUsages::COPY_SRC,
+        view_formats: &[],
+    });
+    let pixels: Vec<u8> = (0..H)
+        .flat_map(|_| (0..W).flat_map(|x| [if x % 2 == 0 { 255 } else { 0 }; 4]))
+        .collect();
+    let layout = wgpu::TexelCopyBufferLayout {
+        offset: 0,
+        bytes_per_row: Some(W * 4),
+        rows_per_image: Some(H),
+    };
+    d.queue
+        .write_texture(scene.as_image_copy(), &pixels, layout, size);
+    let depth = d.device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("depth"),
+        size,
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::R32Float,
+        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        view_formats: &[],
+    });
+    let far = vec![z_of(400.0); (W * H) as usize];
+    d.queue.write_texture(
+        depth.as_image_copy(),
+        bytemuck::cast_slice(&far),
+        layout,
+        size,
+    );
+    let mut fx = PhotoFx::new(&d.device, wgpu::TextureFormat::Rgba8Unorm).expect("pipelines");
+    let mut encoder = d.device.create_command_encoder(&Default::default());
+    let dof = Dof {
+        focus: 0.0,
+        aperture: 1.0,
+    };
+    fx.render(
+        &d.device,
+        &d.queue,
+        &mut encoder,
+        &Frame {
+            scene: &scene.create_view(&wgpu::TextureViewDescriptor::default()),
+            depth: &depth.create_view(&wgpu::TextureViewDescriptor::default()),
+            sample_count: 1,
+            size: (W, H),
+            viewport: (0.0, 0.0, W as f32, H as f32),
+            params: params(Some(dof), None),
+        },
+    );
+    let readback = d.device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("readback"),
+        size: u64::from(W * H * 4),
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+    encoder.copy_texture_to_buffer(
+        scene.as_image_copy(),
+        wgpu::TexelCopyBufferInfo {
+            buffer: &readback,
+            layout,
+        },
+        size,
+    );
+    d.queue.submit(Some(encoder.finish()));
+    readback.slice(..).map_async(wgpu::MapMode::Read, |_| {});
+    d.device
+        .poll(wgpu::PollType::wait_indefinitely())
+        .expect("draining the queue");
+    let bytes = readback
+        .slice(..)
+        .get_mapped_range()
+        .expect("mapping")
+        .to_vec();
+    // The middle row, clear of the picture's edges by more than the blur's reach.
+    let row = (H / 2 * W * 4) as usize;
+    let inner: Vec<u8> = (64..W - 64)
+        .map(|x| bytes[row + (x * 4) as usize])
+        .collect();
+    let spread = inner.iter().max().unwrap() - inner.iter().min().unwrap();
+    // The shader's own tap offsets at this reach (`gather`), counted here.
+    let reach = Dof::MAX_RADIUS * H as f32;
+    let mut reached = std::collections::BTreeSet::new();
+    for i in 0..56 {
+        let t = (i as f32 + 0.5) / 56.0;
+        let (r, a) = (t.sqrt() * reach, i as f32 * 2.399_963_3);
+        reached.insert(((a.cos() * r).round() as i32, (a.sin() * r).round() as i32));
+    }
+    (spread, reached.len())
+}
+
+/// The widest blur at 1080 lines is a disc 27 pixels in radius, about 2,290 pixels: one-pixel
+/// stripes inside it average to a flat grey. Fails while the gather reads 56 fixed pixels of the
+/// disc, the same 56 at every pixel, so the stripes come through at a fraction of their contrast.
+#[test]
+#[ignore = "photo-fx-review finding 3"]
+fn the_widest_blur_at_1080_lines_flattens_one_pixel_stripes() {
+    let Some(d) = device() else { return };
+    let (spread, reached) = far_stripes_at_1080(&d);
+    println!(
+        "full aperture at 1080 lines: {reached} pixels read of a disc of about 2290; stripes of 255 left at {spread}"
+    );
+    assert!(
+        spread <= 8,
+        "one-pixel stripes survive the widest blur at a spread of {spread} of 255"
+    );
+}
