@@ -179,6 +179,10 @@ by user instructions of the whole module at the gate's profile:
 - Measured and not changed: the race build's pipeline compile (a disk pipeline
   cache adds about 1 % over mesa's own shader cache, which already takes a racing
   launch from 65.7 G to 24.0 G instructions, and naga's work runs before it; one module per stage 1.5 to 2 %), the PS2 music read.
+- Measured and not changed (`load-time.md`, "Fifth round"): SPIR-V written at build time
+  and passed through. naga is about 31 % of a race launch's instructions, but 29 of it is
+  the mesh pipelines, whose override constants exist only at run time; what a build-time
+  blob reaches is 1.6 %.
 
 ## Still open
 
