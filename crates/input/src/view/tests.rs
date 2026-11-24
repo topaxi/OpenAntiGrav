@@ -107,6 +107,9 @@ fn the_view_keeps_the_raw_right_stick_and_the_left_stick() {
     controls.player_snapshots();
     let view = controls.view();
     assert_eq!(view.right_raw, (0.15, -0.5));
-    assert!(view.right.0 == 0.0 || view.right.0.abs() < 0.15, "ours has dropped its dead band");
+    assert!(
+        view.right.0 == 0.0 || view.right.0.abs() < 0.15,
+        "ours has dropped its dead band"
+    );
     assert!(view.left.0 > 0.0, "{:?}", view.left);
 }

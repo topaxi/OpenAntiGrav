@@ -26,12 +26,18 @@ fn a_stick_pushes_the_turn_and_the_drawn_turn_eases_after_it() {
     run(&mut control, &pushed((1.0, 0.0), (0.0, 0.0), 0.0), 1);
     let pushed_to = 0.8 / 30.0;
     let drawn = control.pose().turn[1];
-    assert!((drawn.abs() - pushed_to * LAW.turn_ease).abs() < 1.0e-6, "{drawn}");
+    assert!(
+        (drawn.abs() - pushed_to * LAW.turn_ease).abs() < 1.0e-6,
+        "{drawn}"
+    );
     run(&mut control, &pushed((1.0, 0.0), (0.0, 0.0), 0.0), 1);
     let second = control.pose().turn[1];
     let accumulated = 2.0 * pushed_to;
     let expected = drawn.abs() + (accumulated - drawn.abs()) * LAW.turn_ease;
-    assert!((second.abs() - expected).abs() < 1.0e-6, "{second} against {expected}");
+    assert!(
+        (second.abs() - expected).abs() < 1.0e-6,
+        "{second} against {expected}"
+    );
     assert_eq!(control.pose().turn[0], 0.0, "the other axis stays at rest");
 }
 
@@ -70,7 +76,10 @@ fn the_zoom_button_eases_the_lens_in() {
     let craft = control.pose().of(&LAW);
     assert!((craft.fov_delta + 30.0).abs() < 0.1, "{craft:?}");
     run(&mut control, &CraftInput::default(), 60);
-    assert!(control.pose().zoom.abs() < 1.0e-3, "released, it eases back");
+    assert!(
+        control.pose().zoom.abs() < 1.0e-3,
+        "released, it eases back"
+    );
 }
 
 /// The pan is the left stick times the zoom button's pull, so it is dead until the craft is
@@ -82,7 +91,10 @@ fn the_left_stick_pans_only_while_the_craft_is_zoomed() {
     assert_eq!(control.pose().pan, [0.0, 0.0]);
     run(&mut control, &pushed((0.0, 0.0), (1.0, 1.0), 1.0), 80);
     let pan = control.pose().pan;
-    assert!((pan[0] - 2.0).abs() < 0.01 && (pan[1] - 1.0).abs() < 0.01, "{pan:?}");
+    assert!(
+        (pan[0] - 2.0).abs() < 0.01 && (pan[1] - 1.0).abs() < 0.01,
+        "{pan:?}"
+    );
 }
 
 /// The idle return: a pushed turn stays put for the 181 frames after the last touch, then its
@@ -97,7 +109,10 @@ fn the_turn_returns_to_rest_after_181_idle_frames() {
     run(&mut control, &CraftInput::default(), 150);
     let held = control.pose().turn[1];
     let pushed_to = 60.0 * 0.8 / 30.0;
-    assert!((held.abs() - pushed_to).abs() < 0.01, "held through the wait: {held}");
+    assert!(
+        (held.abs() - pushed_to).abs() < 0.01,
+        "held through the wait: {held}"
+    );
     run(&mut control, &CraftInput::default(), 90);
     assert!(control.pose().turn[1].abs() < 0.07, "{:?}", control.pose());
     assert!(control.pose().turn[1].abs() < turned.abs() / 4.0);
@@ -116,7 +131,10 @@ fn the_turn_wraps_at_pi() {
             |pose| peak = peak.max(pose.turn[1].abs()),
         );
     }
-    assert!(peak < LAW.wrap + 0.3, "the drawn turn trails the accumulator across the wrap: {peak}");
+    assert!(
+        peak < LAW.wrap + 0.3,
+        "the drawn turn trails the accumulator across the wrap: {peak}"
+    );
     assert!(peak > 3.0, "it did reach the wrap: {peak}");
 }
 
@@ -125,7 +143,12 @@ fn the_turn_wraps_at_pi() {
 fn without_a_law_the_craft_stays_at_rest() {
     let mut control = CraftControl::default();
     for _ in 0..30 {
-        control.advance(None, &pushed((1.0, 1.0), (1.0, 1.0), 1.0), FRAME_SECONDS, |_| {});
+        control.advance(
+            None,
+            &pushed((1.0, 1.0), (1.0, 1.0), 1.0),
+            FRAME_SECONDS,
+            |_| {},
+        );
     }
     assert_eq!(control.pose(), CraftPose::default());
 }
@@ -169,16 +192,26 @@ fn a_drag_and_the_wheel_do_what_the_sticks_do() {
     };
     run(&mut control, &wheel, 1);
     run(&mut control, &CraftInput::default(), 60);
-    assert!((control.pose().zoom - 0.5).abs() < 0.01, "{:?}", control.pose());
+    assert!(
+        (control.pose().zoom - 0.5).abs() < 0.01,
+        "{:?}",
+        control.pose()
+    );
 
     run(&mut control, &drag, 1);
     run(&mut control, &CraftInput::default(), 80);
     let pan = control.pose().pan;
-    assert!(pan[0] != 0.0 && pan[1] != 0.0, "zoomed, a drag pans: {pan:?}");
+    assert!(
+        pan[0] != 0.0 && pan[1] != 0.0,
+        "zoomed, a drag pans: {pan:?}"
+    );
 
     run(&mut control, &CraftInput::default(), 400);
     let pose = control.pose();
-    assert!(pose.zoom.abs() < 0.01 && pose.pan[0].abs() < 0.01 && pose.turn[1].abs() < 0.05, "{pose:?}");
+    assert!(
+        pose.zoom.abs() < 0.01 && pose.pan[0].abs() < 0.01 && pose.turn[1].abs() < 0.05,
+        "{pose:?}"
+    );
 }
 
 /// A drag is one event: a tick that says it spends it on its first frame only.

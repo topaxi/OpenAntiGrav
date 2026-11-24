@@ -1215,7 +1215,12 @@ fn a_wheel_over_the_craft_zooms_it_and_elsewhere_steps_the_team() {
          select launch_race; press cross; until screen=picker; press cross; \
          until screen.id=ship-select; ticks 120";
     let focus = |tag: &str, aim: &str| {
-        let run = drive(&image, tag, &format!("{to_ship_select}; {aim}; wheel 1; ticks 30"), None);
+        let run = drive(
+            &image,
+            tag,
+            &format!("{to_ship_select}; {aim}; wheel 1; ticks 30"),
+            None,
+        );
         assert!(run.output.status.success(), "{}", run.why_not_success());
         text(run.last(), &["screen", "focus", "id"]).map(str::to_owned)
     };
@@ -1224,6 +1229,14 @@ fn a_wheel_over_the_craft_zooms_it_and_elsewhere_steps_the_team() {
         text(run.last(), &["screen", "focus", "id"]).map(str::to_owned)
     };
     assert!(before.is_some());
-    assert_eq!(focus("hd-wheel-craft", "mouse 900 380"), before, "over the craft");
-    assert_ne!(focus("hd-wheel-away", "mouse 150 780"), before, "off the craft");
+    assert_eq!(
+        focus("hd-wheel-craft", "mouse 900 380"),
+        before,
+        "over the craft"
+    );
+    assert_ne!(
+        focus("hd-wheel-away", "mouse 150 780"),
+        before,
+        "off the craft"
+    );
 }

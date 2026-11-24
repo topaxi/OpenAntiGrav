@@ -289,19 +289,13 @@ impl ShipPlayer {
 
     /// Advances by `dt` seconds with `fit` (and the aspect and `box_z` of the model selected
     /// now) where the title fits its craft, and what the devices said.
-    pub fn tick(
-        &mut self,
-        fit: Option<(&ShipFit, f32, [f32; 2])>,
-        input: &CraftInput,
-        dt: f32,
-    ) {
+    pub fn tick(&mut self, fit: Option<(&ShipFit, f32, [f32; 2])>, input: &CraftInput, dt: f32) {
         let motion = &mut self.motion;
-        self.control
-            .advance(self.law.as_ref(), input, dt, |pose| {
-                if let (Some(motion), Some((fit, aspect, box_z))) = (motion.as_mut(), fit) {
-                    motion.frame_turned(fit, aspect, box_z, pose.turn);
-                }
-            });
+        self.control.advance(self.law.as_ref(), input, dt, |pose| {
+            if let (Some(motion), Some((fit, aspect, box_z))) = (motion.as_mut(), fit) {
+                motion.frame_turned(fit, aspect, box_z, pose.turn);
+            }
+        });
     }
 
     /// Where the fit holds the craft now, where the title has one.

@@ -305,7 +305,10 @@ impl Driver {
             Step::Wheel(detents) => {
                 self.session
                     .pointer
-                    .wheel(winit::event::MouseScrollDelta::LineDelta(0.0, -(*detents as f32)));
+                    .wheel(winit::event::MouseScrollDelta::LineDelta(
+                        0.0,
+                        -(*detents as f32),
+                    ));
                 self.frame(None)?;
             }
             Step::Drag { dx, dy } => {

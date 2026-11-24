@@ -253,7 +253,13 @@ fn touch_steps_parse_and_name_what_is_wrong() {
 fn a_wheel_and_a_drag_parse_and_print_back() {
     let script = Script::parse("wheel -5; drag 120 -40").unwrap();
     assert_eq!(script.steps[0].1, Step::Wheel(-5));
-    assert_eq!(script.steps[1].1, Step::Drag { dx: 120.0, dy: -40.0 });
+    assert_eq!(
+        script.steps[1].1,
+        Step::Drag {
+            dx: 120.0,
+            dy: -40.0
+        }
+    );
     assert!(Script::parse("wheel x").is_err() && Script::parse("drag 1").is_err());
     for (_, step) in &script.steps {
         assert_eq!(&Script::parse(&step.to_string()).unwrap().steps[0].1, step);

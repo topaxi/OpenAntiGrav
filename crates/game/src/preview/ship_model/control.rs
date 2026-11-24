@@ -170,7 +170,8 @@ impl CraftControl {
         if spend {
             if input.wheel != 0 {
                 // A wheel detent toward the player zooms out.
-                self.wheel_pull = (self.wheel_pull - input.wheel as f32 * WHEEL_PULL).clamp(0.0, 1.0);
+                self.wheel_pull =
+                    (self.wheel_pull - input.wheel as f32 * WHEEL_PULL).clamp(0.0, 1.0);
                 touched = true;
             }
             if let Some((across, down)) = input.drag
@@ -237,8 +238,10 @@ impl CraftControl {
 
     /// Holds the craft `across` and `down` grid units further along, within the stick's own reach.
     fn grab_pan(&mut self, across: f32, down: f32) {
-        self.grabbed_pan[0] = (self.grabbed_pan[0] + PAN_SIGN[0] * across * DRAG_PAN).clamp(-2.0, 2.0);
-        self.grabbed_pan[1] = (self.grabbed_pan[1] - PAN_SIGN[1] * down * DRAG_PAN).clamp(-1.0, 1.0);
+        self.grabbed_pan[0] =
+            (self.grabbed_pan[0] + PAN_SIGN[0] * across * DRAG_PAN).clamp(-2.0, 2.0);
+        self.grabbed_pan[1] =
+            (self.grabbed_pan[1] - PAN_SIGN[1] * down * DRAG_PAN).clamp(-1.0, 1.0);
     }
 }
 

@@ -482,7 +482,10 @@ impl Script {
                 _ => return Err("mouse takes an x and a y".into()),
             },
             "wheel" => match words.as_slice() {
-                [n] => Step::Wheel(n.parse().map_err(|_| format!("{n:?} is not a number of detents"))?),
+                [n] => Step::Wheel(
+                    n.parse()
+                        .map_err(|_| format!("{n:?} is not a number of detents"))?,
+                ),
                 _ => return Err("wheel takes a number of detents".into()),
             },
             "drag" => match words.as_slice() {

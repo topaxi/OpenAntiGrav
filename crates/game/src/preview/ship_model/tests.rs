@@ -85,9 +85,18 @@ fn the_fit_uses_its_own_origin_and_the_zone_box() {
     let widget = widget([1220.0, 412.0]);
     let framing = rest(&FIT, ASPECT, [-3.8, 3.8]);
     let authored = framed(&widget, None, &Craft::default(), Space::HD, 1.0);
-    let fit = framed(&widget, Some((&FIT, framing)), &Craft::default(), Space::HD, 1.0);
+    let fit = framed(
+        &widget,
+        Some((&FIT, framing)),
+        &Craft::default(),
+        Space::HD,
+        1.0,
+    );
     assert_ne!(authored, fit);
-    assert_eq!(fit, fitted(&FIT, framing, &Craft::default(), Space::HD, 1.0));
+    assert_eq!(
+        fit,
+        fitted(&FIT, framing, &Craft::default(), Space::HD, 1.0)
+    );
 }
 
 /// `ObeySafeZone` shrinks the picture and pulls its origin towards the
@@ -96,8 +105,7 @@ fn the_fit_uses_its_own_origin_and_the_zone_box() {
 fn an_obeying_widget_is_drawn_inside_the_safe_area() {
     let mut widget = widget([1220.0, 412.0]);
     let fit = Some((&FIT, rest(&FIT, ASPECT, [-3.8, 3.8])));
-    let at =
-        |matrices: (Mat4, Mat4), point: Vec3| (matrices.0 * matrices.1).project_point3(point);
+    let at = |matrices: (Mat4, Mat4), point: Vec3| (matrices.0 * matrices.1).project_point3(point);
     let full = framed(&widget, fit, &Craft::default(), Space::HD, 1.0);
     let inset = framed(&widget, fit, &Craft::default(), Space::HD, 0.96);
     for point in [Vec3::ZERO, Vec3::new(1.0, 0.5, -3.0)] {
@@ -106,7 +114,10 @@ fn an_obeying_widget_is_drawn_inside_the_safe_area() {
         assert!((inset.y - 0.96 * full.y).abs() < 1e-5);
     }
     widget.obey_safe_zone = false;
-    assert_eq!(framed(&widget, fit, &Craft::default(), Space::HD, 0.96), full);
+    assert_eq!(
+        framed(&widget, fit, &Craft::default(), Space::HD, 0.96),
+        full
+    );
 }
 
 /// A step to a model that rests deeper keeps the fit's state: the target
@@ -412,7 +423,11 @@ fn a_step_leaves_the_players_terms_alone() {
     let idle = control::CraftInput::default();
     for frame in 0..120 {
         let length = if frame < 60 { 3.2 } else { 4.5 };
-        player.tick(Some((&FIT, ASPECT, [-length, length])), &idle, FRAME_SECONDS);
+        player.tick(
+            Some((&FIT, ASPECT, [-length, length])),
+            &idle,
+            FRAME_SECONDS,
+        );
         assert_eq!(player.craft(), Craft::default(), "frame {frame}");
     }
     let turn = control::CraftInput {
