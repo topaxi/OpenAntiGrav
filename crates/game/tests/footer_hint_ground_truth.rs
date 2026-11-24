@@ -110,31 +110,38 @@ fn buttons(original: &'static str, choice: &str) -> (&'static str, &'static str)
 
 const TRACK_SELECT: &str = "boot; select racebox; press cross; until page=race; \
      select launch_race; press cross; until screen=picker; ticks 30";
+/// The last steps of [`TRACK_SELECT`], from the race page Back returns to.
+const TRACK_SELECT_AGAIN: &str = "select launch_race; press cross; until screen=picker; ticks 30";
 const SHIP_SELECT: &str = "boot; select racebox; press cross; until page=race; \
      select launch_race; press cross; until screen=picker; press cross; \
      until screen.id=ship-select; ticks 30";
+/// The last steps of [`SHIP_SELECT`], from the Track Select Back returns to.
+const SHIP_SELECT_AGAIN: &str = "press cross; until screen.id=ship-select; ticks 30";
 const RACE_PAGE: &str = "boot; select racebox; press cross; until page=race; ticks 30";
 
 /// Pulse's Track Select, under every MENU BACK choice: the hint that depicts Help opens it, the
-/// one that depicts Back leaves, and each is the button the choice put there.
+/// one that depicts Back leaves, and each is the button the choice put there. One launch for all
+/// three: `config` switches the choice and the race page's LAUNCH RACE opens Track Select again.
 fn track_select_hints(image: &Path, original: &'static str, tag: &str) {
     let profile = Profile::fresh(tag);
-    for choice in ["original", "circle", "triangle"] {
+    profile.menu_back("original");
+    let mut script = String::new();
+    for (number, choice) in ["original", "circle", "triangle"].into_iter().enumerate() {
         let (back, help) = buttons(original, choice);
         println!("Track Select, MENU BACK {choice}: {help} opens Help, {back} leaves");
-        profile.menu_back(choice);
-        profile.drive(
-            image,
-            &[],
-            &format!(
-                "{TRACK_SELECT}; draw; expect hints={back}; expect hints={help}; expect hints=cross; \
-                 click hint {help}; ticks 10; expect screen.help=open; expect screen.id=track-select; \
-                 press {help}; ticks 10; expect screen.help=closed; \
-                 click hint {back}; ticks 30; expect screen.id!=track-select"
-            ),
-            &format!("{choice}.jsonl"),
-        );
+        script.push_str(&format!(
+            "{onto}; draw; expect hints={back}; expect hints={help}; expect hints=cross; \
+             click hint {help}; ticks 10; expect screen.help=open; expect screen.id=track-select; \
+             press {help}; ticks 10; expect screen.help=closed; \
+             click hint {back}; ticks 30; expect screen.id!=track-select; ",
+            onto = if number == 0 {
+                TRACK_SELECT.to_string()
+            } else {
+                format!("config controls.menu_back={choice}; {TRACK_SELECT_AGAIN}")
+            }
+        ));
     }
+    profile.drive(image, &[], &script, "folded.jsonl");
 }
 
 #[test]
@@ -157,22 +164,24 @@ fn pulse_psp_track_select_hints_follow_menu_back() {
 fn pulse_ps2_ship_select_hints_follow_menu_back() {
     let Some(image) = ps2() else { return };
     let profile = Profile::fresh("ps2-ship");
-    for choice in ["original", "circle"] {
+    profile.menu_back("original");
+    let mut script = String::new();
+    for (number, choice) in ["original", "circle"].into_iter().enumerate() {
         let (back, help) = buttons("triangle", choice);
         println!("Ship Select, MENU BACK {choice}: {help} opens Team Help, {back} leaves");
-        profile.menu_back(choice);
-        profile.drive(
-            &image,
-            &[],
-            &format!(
-                "{SHIP_SELECT}; draw; expect hints={back}; expect hints={help}; \
-                 click hint {help}; ticks 10; expect screen.help=open; expect screen.id=ship-select; \
-                 press {help}; ticks 10; expect screen.help=closed; \
-                 click hint {back}; ticks 30; expect screen.id!=ship-select"
-            ),
-            &format!("{choice}.jsonl"),
-        );
+        script.push_str(&format!(
+            "{onto}; draw; expect hints={back}; expect hints={help}; \
+             click hint {help}; ticks 10; expect screen.help=open; expect screen.id=ship-select; \
+             press {help}; ticks 10; expect screen.help=closed; \
+             click hint {back}; ticks 30; expect screen.id!=ship-select; ",
+            onto = if number == 0 {
+                SHIP_SELECT.to_string()
+            } else {
+                format!("config controls.menu_back={choice}; {SHIP_SELECT_AGAIN}")
+            }
+        ));
     }
+    profile.drive(&image, &[], &script, "folded.jsonl");
 }
 
 /// Confirm on a picker's footer is the cross: it takes the track to Ship Select, and on Ship
@@ -200,20 +209,22 @@ fn pulse_ps2_confirm_hint_confirms_on_both_pickers() {
 fn pulse_ps2_menu_page_hints_confirm_and_leave() {
     let Some(image) = ps2() else { return };
     let profile = Profile::fresh("ps2-page");
-    for choice in ["original", "circle"] {
+    profile.menu_back("original");
+    let mut script = String::new();
+    for (number, choice) in ["original", "circle"].into_iter().enumerate() {
         let (back, _) = buttons("triangle", choice);
-        profile.menu_back(choice);
-        profile.drive(
-            &image,
-            &[],
-            &format!(
-                "boot; until stage=menu within 3000; select racebox; ticks 30; \
-                 draw; expect hints=cross; click hint cross; until page=race; ticks 30; \
-                 draw; expect hints={back}; click hint {back}; until page=main; expect page=main"
-            ),
-            &format!("{choice}.jsonl"),
-        );
+        script.push_str(&format!(
+            "{onto}; select racebox; ticks 30; \
+             draw; expect hints=cross; click hint cross; until page=race; ticks 30; \
+             draw; expect hints={back}; click hint {back}; until page=main; expect page=main; ",
+            onto = if number == 0 {
+                "boot; until stage=menu within 3000".to_string()
+            } else {
+                format!("config controls.menu_back={choice}")
+            }
+        ));
     }
+    profile.drive(&image, &[], &script, "folded.jsonl");
 }
 
 /// The footer of the racebox page, on a title with Help authored nowhere: the Back hint leaves
