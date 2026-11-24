@@ -73,7 +73,9 @@ links it, once per profile. In the `test` profile alone that is `oag-net` and
   priority (stopping the process group left nothing behind and the next `cargo`
 did not wait for a build-directory lock); a free lock is taken at once with
 nothing prebuilt. An interrupted
-  `gate-run.sh` stops its prebuild and its wait.
+  `gate-run.sh` stops its prebuild (the whole process group, until it is empty),
+  signals a recipe that holds the lock through its own process and exits only
+  once the recipe is dead, so the lock is never free while the recipe runs.
 - **`OAG_GIT_HASH` and `OAG_BUILD_DATE` are fixed** for a `gate-run.sh` run, as
   `scripts/test-data.py` fixes them, so a new commit no longer rebuilds
   `oag-net`'s cone. No test reads the hash or the submodule pins beyond
@@ -87,7 +89,7 @@ nothing prebuilt. An interrupted
   `check-ballisticng` and `check-extensions` shared as justfile variables. A
   prebuild that falls behind a recipe costs the lock a little compile and never
   a wrong answer.
-- **`just check-gate-run`** (offline, eight seconds) holds the behaviour above
+- **`just check-gate-run`** (offline, twenty seconds) holds the behaviour above
   against a stand-in `just` and a private lock.
 
 ## Measured

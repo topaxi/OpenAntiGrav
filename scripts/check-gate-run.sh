@@ -15,6 +15,13 @@ cat >"$tmp/bin/just" <<'JUST'
 echo "$* hash=$OAG_GIT_HASH data=${OAG_REQUIRE_GAME_DATA:-unset}" >>"$FAKE_LOG"
 case "$1" in
     gate-prep)
+        if [ "${PREP_MODE:-}" = grandchild ]; then
+            # The leader dies at once; a child of it takes a second to notice TERM.
+            (trap 'sleep 1; echo grandchild-dead >>"$FAKE_LOG"; exit 0' TERM
+             sleep 30 & wait $!) &
+            trap 'exit 143' TERM
+            wait
+        fi
         trap 'echo prep-stopped >>"$FAKE_LOG"; exit 143' TERM
         sleep "${PREP_SLEEP:-30}" &
         wait $!
@@ -22,6 +29,12 @@ case "$1" in
         ;;
     fail) exit 7 ;;
     busy-code) exit 111 ;;
+    hold)
+        # A recipe with a child of its own that is slow to die.
+        trap 'sleep 1.5; echo hold-dead >>"$FAKE_LOG"; exit 143' TERM
+        sleep 30 &
+        wait $!
+        ;;
 esac
 JUST
 chmod +x "$tmp/bin/just"
@@ -70,4 +83,31 @@ sleep 0.5
 grep -q prep-stopped "$FAKE_LOG" || fail "an interrupted gate left its prebuild running"
 sleep 4
 grep -q '^gate-affected' "$FAKE_LOG" && fail "an interrupted gate still ran"
+: >"$FAKE_LOG"
+# An interrupt while the recipe holds the lock stops the recipe, and the lock is free only
+# once the recipe is dead.
+"$root/scripts/gate-run.sh" hold >"$tmp/out" 2>&1 &
+holder=$!
+sleep 1
+flock -n -o "$OAG_GATE_LOCK" true && fail "the lock was free while a recipe held it"
+kill -TERM "$holder"
+sleep 0.5
+grep -q hold-dead "$FAKE_LOG" && fail "the recipe died before it had to"
+flock -n -o "$OAG_GATE_LOCK" true && fail "an interrupted gate freed the lock before its recipe was dead"
+wait "$holder"; [ $? -eq 130 ] || fail "an interrupted gate did not exit 130"
+grep -q hold-dead "$FAKE_LOG" || fail "an interrupted gate left its recipe running"
+flock -n -o "$OAG_GATE_LOCK" true || fail "the lock is still held after the interrupted gate"
+
+: >"$FAKE_LOG"
+# A prebuild whose child outlives its leader is gone before the recipe starts.
+busy 3; PREP_MODE=grandchild run gate-affected || fail "grandchild prebuild: the gate failed"
+awk '/grandchild-dead/ { dead = NR } /^gate-affected/ { ran = NR } END { exit !(dead && ran && dead < ran) }' "$FAKE_LOG" \
+    || fail "the recipe started before the prebuild's child was dead"
+
+: >"$FAKE_LOG"
+# A lock that frees at once: the prebuild may have barely started, and is still stopped.
+(flock -o "$OAG_GATE_LOCK" sleep 0.2 &) ; sleep 0.05
+PREP_SLEEP=5 run gate-affected || fail "quick lock: the gate failed"
+sleep 0.5
+grep -q prep-finished "$FAKE_LOG" && fail "the prebuild ran on beside the recipe"
 echo "check-gate-run: ok"

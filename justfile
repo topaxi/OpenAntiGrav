@@ -220,7 +220,7 @@ check-test-data-script:
 
 # `scripts/gate-run.sh` against a stand-in `just` and a private lock: the prebuild
 # starts only when the lock is busy and is stopped when the lock comes first, and
-# every run leaves a row in the times file. Offline, no build, about eight seconds.
+# every run leaves a row in the times file. Offline, no build, about twenty seconds.
 check-gate-run:
     bash scripts/check-gate-run.sh
 
