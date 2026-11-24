@@ -101,8 +101,8 @@ fn sun_flare_is_the_circuits_own(loaded: &race::Loaded) {
         flare.colour
     );
     assert_eq!((flare.atlas.width, flare.atlas.height), (64, 64));
-    // A version-4 file authors no levels below the base (`oag_vex::vex::textures`).
-    assert_eq!(flare.atlas.levels.len(), 1);
+    // The atlas's four levels, the ones its file authors (`oag_vex::vex::textures`).
+    assert_eq!(flare.atlas.levels.len(), 4);
     assert!(
         loaded
             .report

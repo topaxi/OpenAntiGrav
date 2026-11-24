@@ -29,6 +29,7 @@ mod pads_ground_truth;
 mod payload_coverage_ground_truth;
 mod placed_psys_ground_truth;
 mod probes_ground_truth;
+mod pure_texture_levels_ground_truth;
 mod pvs_ground_truth;
 mod quake_ground_truth;
 mod shadow_occluder_ground_truth;

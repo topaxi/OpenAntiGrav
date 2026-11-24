@@ -40,12 +40,14 @@ Ranked by what a player notices: hull and plume, then effects, then track and li
 
 1. ~~**Hull canopy.**~~ Closed: the extra pass was never off in the data, the roster's `applies_everywhere()`
    gate was. The weight is `header_flags & 0x02` (`BLENDMODE 0x2a` in the recorded lists).
-2. **Hull, the rest.** ~~The grid's light scale `250`~~ closed (`pure-light-scale`): ours already read `250/250/251/251`,
-   and `Course::light_scale_at` now runs the original's integer blend at the craft's parameter (Pure grids now `250, 249, 250, 250`
-   against the original's `250` on all four; hull box MAD moves by 0.00 to 0.03 grey on Pure, below what a frame shows;
-   `psp-pure-usa/hull-shine.md`, "Light scale"). Open: the craft's own spline parameter (the original's is not the nearest
-   point to its pose; De Konstruct's live list fixes it at `t` 0.578, `psp-pulse-usa/scene-light.md`); and Modesto's second light (`(208, 47, 1)` along `(-19.24, 7.19, 1.42)`) is closed: it is `wopointShape2`, a point light the builder hands the GE as a
-   type-0 light, and ours already drew it (`hull-shine.md`, "Modesto's second light"; pair hull box MAD 7.69 without it, 5.83 with it).
+2. **Hull, the rest.** ~~The grid's light scale `250`~~ closed (`pure-light-scale`). ~~Modesto's second light~~ closed: `wopointShape2`, drawn
+   (`hull-shine.md`, "Modesto's second light"). ~~The residual hull-box error~~ closed by `pure-modesto-hull`: **texture level**. Pure's
+   `.vex` textures dropped their authored mip levels, so no Pure texture took the GE's slope rule (`TEXLODSLOPE` `1/256`, mode 2, on 430
+   of 430 PRIMs); the hull, at view depth 6 to 17, reads level 0 in the original and a coarser sampler-chosen level in ours. Reading the
+   levels moved the Modesto hull box 5.09 -> 2.74 (the canopy 16.9 -> 5.2, the whole high-pass gap closed) and ten of twelve race pairs'
+   hulls (`hull-shine.md`, "The hull's texture level"). Open from it: the original's per-texture bias (hull 3.3 to 4.1; ours 1.0 on
+   every texture, same as Pulse), the extra pass's `TEXMODE` level 0 only, and what the box still holds (plume glow, the ground
+   shadow, canopy edge). The craft's own spline parameter only feeds the light scale; it is not the residual.
 3. **Effects Pure ships that ours never loads.** Pure's executable names 24 `WO_*` effects (25 strings,
    one of them `WO_Game`; `search_strings` over `/pure/BOOT-psp-pure-usa.BIN`, `0x08a47f50`..`0x08a7a49c`).
    Not loaded:
