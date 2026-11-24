@@ -300,11 +300,39 @@ Zone and `Race_ComputeLoyaltyAward` banks a Zone race to the picked team
 What Zone does replace, inside that handling: the engine (the auto-speed law), the brakes (disabled) and the hover
 variant (`Ship_HoverFourCorner`, whose bank-to-yaw gain is `50.0` against the two-point law's `30.0`; ported).
 
-**Pure is unread; HD reads its file (2026-10-20).** Pure's definition marks `Zone_01` as `type="Zone"`, so a Pure Zone
-race presumably flies that block; that executable was not read. HD's Zone modes read `/data/ships/zone` as the team's
+**Pure: its cameras are read, its physics are not (2026-11-24, `pure-zone-pairs`); HD reads its file (2026-10-20).** Pure's
+definition marks `Zone_01` as `type="Zone"`, so a Pure Zone race presumably flies that block; the executable's loader was not
+read, the physics stay unread (see "Pure's Zone cameras" below). HD's Zone modes read `/data/ships/zone` as the team's
 file, its blocks land in class 0 and a mode-6 race flies class 0, read live; this engine flies it on HD's Zone
 (`oag_hd::race::ZONE_HANDLING`, [hover-four-point.md](../ghidra/functions/ps3-hdfury-eu/hover-four-point.md#zone-read-live-the-ray-the-class-the-grid-and-the-brakes-2026-10-20-hd-zone-handling)). Watch the near-miss on Pulse: `Data\Ships\Zone` is
 `<Stats team="Zone">` **with** classes and is the unlockable Zone *livery*, a raceable team; `Zone_01` is the leftover.
+
+### Pure's Zone cameras are `Zone_01`'s own, read off the disc (2026-11-24)
+
+**Claim: a Pure Zone race frames its chase view from `Data\Ships\Zone_01\handlingstats.xml`, not from the player's team.
+True, confidence 85 (two live reads on one PPSSPP boot, a disc-authored match to 0.01 units; not a second cold boot).**
+
+- **Falsifier, written before the render.** Zone_01's `<ExternalCameraClose>` times the `0.75` craft scale must read
+  `(2.25 up, 7.125 back)` within 0.1, and ours rebuilt on it must drop the whole-frame mean grey by more than half the gap
+  to the original. The file authors `pos_height 3.0`, `pos_length -9.5`, `fov 70` (Assegai: `4.0`, `-15.0`, `60`). Times
+  `0.75`: `(2.25, 7.125)`, 7.473 from the body. The original's tripod, read live in the two Zone states
+  (`docs/tools/compare-page.md`, "Zone pairs: Wipeout Pure"), sat at `(+0.31, 2.23, -7.13)` and `(-0.26, 2.27, -7.12)` in the
+  body frame, 7.48 from it at both 158 and 208 units/s. **That is the authored block, not a speed spring**: the "7.48 at both
+  speeds" the Zone pairs recorded is one fixed rig. The Far block (`3.8`, `-15`, `70`) was not read live.
+- **The field of view is the same law as every racing view**: authored `70` plus `0.075 * dot(fwd, vel)`
+  (`docs/rendering/projection-vs-the-original.md`). The pairs' reads, `81.54` at 158.37 units/s and `85.59` at 207.99, are
+  `70 + 11.88 = 81.88` (the forward component of the velocity is a little under the speed) and `70 + 15.60 = 85.60`. So Pure's
+  Zone widen is the racing term on Zone_01's `70`; the "fov is not 60 in Zone" reading was this.
+- **What is wired**: `oag_raceplay::load::zone_cameras` takes the five camera blocks from the Zone craft's own file when the
+  title's Zone craft is a ship directory of its own (`ZoneCraft::OwnShip`, Pure) and the race is on the Zone mask. The six
+  physics blocks of that file stay unread (no `<Class>`, `handling::parse` drops them, `pures_zone_mode_file_authors_its_blocks_outside_any_class`):
+  a Zone race still flies the player's team's numbers, which is a hybrid the original is not. Reading them is an open lane
+  (below), because Pure's Zone engine, turning and antigrav numbers have no live measurement here.
+- **Hull**: the original's drawn hull node in both states has axes of length `0.75` (read at `Ship_UpdateCameraRigs`,
+  `*(entity + 0x9ec) + 0x80`), the racing value, and the picture's hull is the shape ours draws from `Data\Ships\Zone_01\Ship.vex`
+  (the pair's craft line said Assegai; the hull was Zone_01's all along, its handling was Assegai's).
+- **HD**: reads its Zone file including the camera blocks (`oag_hd::race::ZONE_HANDLING`); **Pulse**: the file is unread by
+  the executable (above), so nothing changes there. Checked, not applicable to 2048 and Omega (no `OwnShip` Zone craft).
 
 ### What Zone's escalating speed steps are: names over one scale (2026-10-12)
 

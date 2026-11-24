@@ -1570,7 +1570,7 @@ and `--hud-autopilot` (the timer read from the pickup record); both flags are ho
 - **Numbers** (rmse / edge correlation / mean grey, the page's own scores): zone 8 0.325 / 0.06 / 52.7; zone 9 0.390 / 0.10 / 64.1. Pose agreement 0.000 units and 0.000 degrees at the posed tick
   (ours is posed on the original's body), fov 81.54 and 85.59 degrees fed as read. **Seen once**: every number comes from one PPSSPP boot and one Zone race. The zone 8 pair was rebuilt three times from the same state (a state load is a restore, so the original's frame, ours' frame and every metric
   were bit-identical: a check of the script, not a repeat); a second cold boot of the Zone race has not been made (confidence 55 on the numbers below).
-- **What differs, read off both `side.png`.** (1) **The camera** (confidence 55, one boot, two states): the original's eye at Zone speed is 7.48 units from the body (right 0.32, up 2.23, back 7.13 at 158 units/s; 0.26 left, 2.27 up, 7.12 back
+- **What differs, read off both `side.png`** (**corrected 2026-11-24, "Why the Pure Zone pairs read 53 and 64" below: (1) is Zone_01's authored Close block, not a spring, and ours drew fov 60 where the original drew 81 to 86; (2)'s brightness gap was a stale figure, the frames read 144 against 135 and 177 against 186 mean grey; the craft is Zone_01's hull, with Assegai's handling**). (1) **The camera** (confidence 55, one boot, two states): the original's eye at Zone speed is 7.48 units from the body (right 0.32, up 2.23, back 7.13 at 158 units/s; 0.26 left, 2.27 up, 7.12 back
   at 208 units/s: one tick-aligned read each, `eye_body_frame` in `pair.json`) against the Close rig's 11.64 (3.0 up, 11.25 back) at rest, so a Zone craft is drawn about 1.6 times larger and the road
   fills more of the frame; **whether this is a speed spring or a fixed Zone rig is open** (7.48 at both 158 and 208 units/s, no at-rest Zone read); ours keeps its rest rig, so its hull is small and sits higher, and the wall panels and floor pads the original's wider, closer view shows are off-frame in ours. The hull offset
   (+6, -6) and (+10, -3) px is recorded, not gated. The eye must be read against the body at the tripod's own stop: the tripod is one tick after the pose read at `Ship_UpdateCraft`'s entry (the body advances 5.24 and 6.88 units between the two stops, 0.0331 s of
@@ -1583,6 +1583,32 @@ and `--hud-autopilot` (the timer read from the pickup record); both flags are ho
 - **Open**: the at-rest Zone camera and a fixed-place palette read, the Zone counters' RAM addresses, a second cold boot of the Zone race, and the three unpaired circuits (`02_Zone` to `04_Zone`).
 - **Not matched, in each pair's caveats**: the zone clock, ours' exhaust and trail history (no ticks), the shield bar (drawn full), the ZONE label (fading in the original).
 - **Pure against the other titles**: not checked here (the Pulse Zone camera and HD's Zone frame were not compared in this lane); the camera spring is a Pure measurement only.
+
+### Why the Pure Zone pairs read 53 and 64 (2026-11-24, `pure-zone-pairs`)
+
+**Claim: the dominant residual of `pure-psp-zone-pro-tozo-z8` and `-z9` is named by region with a measured cause, and wired. True: two
+disc-authored inputs were wrong in ours, the chase camera and the field of view. Both pairs drop (mean grey, edge correlation):
+z9 64.14 to 34.54 (0.10 to 0.26), z8 52.87 to 35.22 (0.06 to 0.21).** Confidence 85 on the cause (two Zone states, one PPSSPP boot, a
+disc value matching two live reads; no second cold boot).
+
+- **Region split** (the original's pixels pasted over one region of ours, mean grey of the whole frame after; the HD method, a short numpy script over
+  `theirs.png` and `ours.png`; boxes: HUD glyphs and bars 16 % of the frame, hull `x 130..340, y 150..272` 19 %, road rows 150 and down 20 %, background above row 150
+  46 %). Before, z9 (whole 64.3): HUD -8.0, hull -9.8, road -8.6, **background -37.8**; z8 (52.3): -7.9, -8.1, -6.7, **-29.7**. After
+  the camera and the field of view, z9 (34.4): -6.4, -7.8, -2.2, **-18.0**; z8 (35.0): -6.5, -10.1, -4.6, **-13.9**. So the walls and ceiling above the road
+  dominated, as a framing error does: the frames' whole-frame mean grey is the same within 9 (original 143.8 and 176.6, ours 134.6 and 185.9), so it was never a colour or palette law.
+- **Cause 1, the camera** (`docs/gameplay/race-modes.md`, "Pure's Zone cameras"): the Zone craft's own `handlingstats.xml` authors
+  `<ExternalCameraClose pos_height 3.0 pos_length -9.5>`; times the `0.75` craft scale that is `(2.25, 7.125)`, 7.473 from the body, and the original's tripod read
+  7.48 at 158 and at 208 units/s. The race had flown Assegai's `(4.0, -15.0)`, 11.64 away. Ours reads the five camera blocks from the Zone file now. Alone: z9 64.14 to 47.73, z8 52.87 to 41.19.
+- **Cause 2, the field of view**: `--camera-fov` was dropped whenever `--no-camera` was (Pure's sheared tripod is never fed), so every Pure pair drew the authored field plus no speed
+  widen: 60 here against the original's 81.54 and 85.59. The Zone file authors `70`, and `70 + 0.075 * dot(fwd, vel)` is 81.88 and 85.60 (the velocity's forward
+  component is a little under the speed at 158). `Options::fov_override` carries the flag with the chase rig kept; a pair at rest and at fov 60
+  (every Time Trial and Classic pair) renders pixel-identical (modesto and karbonis compared: 0 pixels differ). The pairs were then re-made from their states with the script, which read the world clock this time (`original.world_clock_offset_s` 93.06 and 84.15, ours put on it): the scores did not move to four digits, so the scenery's animation phase is not a cause here. Alone with the camera: the two numbers above.
+  The hull that looked 1.33 times too wide at the new eye was this: at the right field it is the original's size and place.
+- **The hull**: the original's drawn hull node (`*(entity + 0x9ec) + 0x80`, read at `Ship_UpdateCameraRigs` in both states) has axes of length `0.750`, as in a race, and its shape in
+  the frame is `Data\Ships\Zone_01\Ship.vex`, which ours draws. The pair's "ours: Assegai" craft line is the handling, not the hull.
+- **What is left** (z9, by region after paste): the hull box -7.8 and -10.1 (the original's bright blue engine glow ours does not draw, ours' hull shadow the original lacks), the HUD
+  -6.4 (ours' zone-clock digits and the ZONE label's fade, the shield bar), the walls' black bands and pink-violet bloom at the lights, and the road's pads. Not measured: Pure's Zone
+  engine, turning and antigrav numbers (the Zone file's six physics blocks are unread, so a Zone race flies the player's team's), a Far-view read, a second cold boot.
 
 ## HD Zone race-start pair (RPCS3, 2026-11-19, `hd-zone-replace`)
 

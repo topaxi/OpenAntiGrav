@@ -1170,7 +1170,8 @@ pub(crate) struct Cli {
 
     /// With `--pose-from`: render the recorded camera at this fov instead of
     /// the disc's authored value, in **vertical degrees** - the authored
-    /// value's own unit (confidence 94).
+    /// value's own unit (confidence 94). With `--no-camera` it sets the field
+    /// the chase camera draws with (`Options::fov_override`).
     ///
     /// It was the calibration knob for settling that unit. It is now a
     /// *measurement instrument* rather than a leftover: `place_at` resets the
