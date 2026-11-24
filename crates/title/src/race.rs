@@ -603,6 +603,10 @@ pub struct Detonator {
     pub layouts: Option<DetonatorLayouts>,
     /// The hull and livery a Detonator race flies, or `None` where a title's are not located.
     pub craft: Option<DetonatorCraft>,
+    /// Whether the pulse cannon's round and muzzle flash submit point lights to the vertex light
+    /// list: read on HD (`PulseBullet`'s render queue, `detonator-cannon.md`, "The cannon's three
+    /// point lights"); 2048's and Omega's queues are unread.
+    pub cannon_lights: bool,
     /// The handling file a Detonator race flies in place of the team's, or `None` where a
     /// title's is not located.
     pub handling: Option<crate::zone_handling::ZoneHandling>,

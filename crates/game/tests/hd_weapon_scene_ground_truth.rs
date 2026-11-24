@@ -298,3 +298,66 @@ fn a_plasma_explosions_sphere_fades_with_its_age() {
     assert!(young > 6000, "the young sphere fills its box: {young}");
     assert!(old < 1500, "the sphere is still a dome a second on: {old}");
 }
+
+/// Talon's Junction in Detonator mode, Square held for two ticks from tick 385 and the frame at
+/// tick 388, with the weapon lights on or off.
+fn detonator_volley_frame(weapon_lights: bool) -> Option<Vec<[u8; 3]>> {
+    let image = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso")?;
+    let scratch = std::env::temp_dir().join(format!(
+        "oag-det-volley-{}-{weapon_lights}",
+        std::process::id()
+    ));
+    std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
+    let out = scratch.join("frame.png");
+    let script = scratch.join("fire.inputs");
+    std::fs::write(&script, "385 none\n2 square\n1 none\n").expect("the input script");
+    let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"));
+    command
+        .arg(image)
+        .args(["--race", "--no-audio", "--size", "960x544"])
+        .args(["--track", r"Data\Environments\Talons_Junction\track.vex"])
+        .args(["--team", "FEISAR", "--mode", "detonator"])
+        .args(["--render-scale", "100", "--msaa", "off"])
+        .args(["--screen-filter", "off", "--anisotropy", "off"])
+        .args(["--motion-blur", "off", "--shadows", "off"])
+        .args(["--ticks", "388", "--input-script"])
+        .arg(&script)
+        .arg("--screenshot")
+        .arg(&out)
+        .env("XDG_CONFIG_HOME", scratch.join("config"))
+        .env("XDG_DATA_HOME", scratch.join("data"))
+        .env("XDG_STATE_HOME", scratch.join("state"));
+    if !weapon_lights {
+        command.arg("--no-weapon-lights");
+    }
+    assert!(command.status().expect("running oag-game").success());
+    let frame = rgb_of(&std::fs::read(&out).expect("the frame"));
+    std::fs::remove_dir_all(&scratch).ok();
+    Some(frame)
+}
+
+/// **The Detonator cannon's muzzle lights reach the frame** (`Scene::with_detonator_lights`): the
+/// same volley drawn with and without the weapon lights differs on the hull beside the muzzles
+/// (1,008 pixels over a summed difference of 12 on the measured frame; none when the scene's
+/// wiring or the title's flag is dropped).
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso and a GPU adapter"]
+fn the_detonator_cannons_lights_reach_the_frame() {
+    let (Some(lit), Some(dark)) = (detonator_volley_frame(true), detonator_volley_frame(false))
+    else {
+        return;
+    };
+    let differing = lit
+        .iter()
+        .zip(&dark)
+        .filter(|(a, b)| {
+            a.iter()
+                .zip(b.iter())
+                .map(|(x, y)| i32::from(*x).abs_diff(i32::from(*y)))
+                .sum::<u32>()
+                > 12
+        })
+        .count();
+    println!("pixels the cannon's lights change: {differing}");
+    assert!(differing > 300, "the lights never reached the frame");
+}

@@ -114,7 +114,10 @@ impl Race {
     /// switches that silence every weapon light ([`Self::hd_weapon_lights`]'s).
     #[must_use]
     pub(crate) fn detonator_cannon_lights(&self, draw: &CannonDraw) -> Vec<SpuLight> {
-        if !self.view.hd_trail_active || !self.view.spu_vertex_lights || !self.view.hd_weapon_lights
+        if !self.view.detonator_cannon_lights
+            || !self.view.hd_trail_active
+            || !self.view.spu_vertex_lights
+            || !self.view.hd_weapon_lights
         {
             return Vec::new();
         }

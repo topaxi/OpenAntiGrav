@@ -201,6 +201,7 @@ fn a_craft_over_a_mag_strip_takes_the_strips_colour() {
 fn firing_race() -> (Race, crate::CannonDraw) {
     let mut race = hd_race();
     race.view.spu_vertex_lights = true;
+    race.view.detonator_cannon_lights = true;
     let rounds = &mut race.core.sim.world.detonator.cannon.rounds;
     for (index, round) in rounds.iter_mut().take(2).enumerate() {
         round.live = true;
@@ -308,4 +309,42 @@ fn the_detonator_flash_is_rolled_every_tick_and_apart_per_round() {
     };
     assert!(spread(&sizes) > 0.5, "the size covers its range");
     assert!(spread(&stretches) > 0.4, "the stretch covers its range");
+}
+
+/// The facing turns about the third axis: the third axis keeps one direction on every tick (the
+/// locator's forward carried by the craft) while the first axis turns through most of a circle
+/// about it. Dropping the rotation, or turning about another axis, fails this.
+#[test]
+fn the_detonator_flash_turns_about_its_forward() {
+    let (mut race, draw) = firing_race();
+    let mut reference: Option<(Vec3, Vec3)> = None;
+    let mut angles = Vec::new();
+    for tick in 0..64 {
+        race.core.sim.world.tick = tick;
+        let matrix = race.detonator_flash_matrices(&draw)[0];
+        let z = matrix.z_axis.truncate().normalize();
+        let x = matrix.x_axis.truncate().normalize();
+        let (z0, x0) = *reference.get_or_insert((z, x));
+        assert!(
+            (z - z0).length() < 1e-4,
+            "forward moved: {z:?} against {z0:?}"
+        );
+        angles.push(x.dot(z0.cross(x0)).atan2(x.dot(x0)));
+    }
+    let spread = angles.iter().copied().fold(f32::MIN, f32::max)
+        - angles.iter().copied().fold(f32::MAX, f32::min);
+    assert!(
+        spread > 4.0,
+        "the facing turns through most of a circle: {spread}"
+    );
+}
+
+/// A title whose Detonator data does not say its cannon submits lights draws none, whatever
+/// the trail and the switches say (2048 and Omega).
+#[test]
+fn a_title_without_the_cannon_lights_flag_emits_none() {
+    let (mut race, draw) = firing_race();
+    assert!(!race.detonator_cannon_lights(&draw).is_empty());
+    race.view.detonator_cannon_lights = false;
+    assert!(race.detonator_cannon_lights(&draw).is_empty());
 }

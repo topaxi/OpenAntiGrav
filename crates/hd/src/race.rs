@@ -465,6 +465,7 @@ pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
         extension: ".gtf",
         stages: 15,
     }),
+    cannon_lights: true,
     camera_scale: 0.7,
     // A live Detonator frame's hull world matrix in the push buffer, rows of length 0.630 (`0.7 * 0.9`).
     hull_scale: Some(0.63),

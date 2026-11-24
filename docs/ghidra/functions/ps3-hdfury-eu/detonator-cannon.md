@@ -740,5 +740,5 @@ the third light's live trigger.
   and an Omega Detonator race too. Their `PulseBullet` updates (Omega `PulseBullet` tag `0x01878a4c`, 2048
   `FUN_8120058c`) were **not read for the three rolls**: a byte search of both executables (Omega, 2048 v1.04
   and base) for the `[2.7, 5.0, 70.0, 1.0]` constants block found nothing, as the table may be literals
-  there. The point lights are HD-only in this engine (they ride `hd_trail_active`, as every weapon light
-  does), so 2048 and Omega draw the roll and no light; whether theirs submit one is unread.
+  there. The point lights are HD-only in this engine (`Detonator::cannon_lights` is `true` on HD alone; the
+  trail flag is true on 2048 and Omega too, so it is not the gate), so 2048 and Omega draw the roll and no light; whether theirs submit one is unread.
