@@ -816,7 +816,8 @@ install-desktop-file *ARGS:
 # No REV builds this checkout; a git rev builds in a temporary worktree (removed after, artifact kept in data/deploy-builds);
 # an .apk / .AppImage is deployed as is. Android installs with `adb install -r -d`
 # (a downgrade keeps the app's data); deck copies the portable AppImage over ssh
-# (`user@host` as an argument). No game data - that is `just push-data`. See
+# (`user@host` as an argument; `--fast` for a quick thin-LTO + mold dev build, never a release).
+# No game data - that is `just push-data`. See
 # scripts/deploy.sh, docs/tools/android.md and docs/tools/packaging.md#steam-deck
 deploy TARGET *ARGS:
     ./scripts/deploy.sh {{TARGET}} {{ARGS}}
@@ -1472,6 +1473,13 @@ check-web-shaders *ARGS:
 # docs/tools/blender.md
 blender-fixtures *ARGS:
     scripts/blender-fixtures.sh "$@"
+
+# Write the textures a track file borrows from a disc (or every texture of one circuit
+# entry, e.g. 'Data\Environments\03_Track\track.vex') as PNG files under OUT, for the
+# Blender add-on's "Host texture folder". Disc content: keep OUT under data/, never
+# commit it. docs/tools/blender.md, "Host textures"
+export-host-textures IMAGE WHAT OUT:
+    cargo run -p oag-raceplay --example export_host_textures -- "{{IMAGE}}" "{{WHAT}}" "{{OUT}}"
 
 # Regenerate that table after a names.tsv or evidence-page change
 gen-status:

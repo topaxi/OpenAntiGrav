@@ -59,6 +59,11 @@ fn driven_with_hashes() -> (Box<Race>, Keeper, Vec<String>, Vec<u64>) {
     (race, keeper, text, hashes)
 }
 
+/// The field the frames are drawn with, in degrees, at the 16:9 the tests draw at.
+fn drawn(race: &Race) -> f32 {
+    race.drawn_fov_degrees(16.0 / 9.0, oag_display::display::Fov::AUTHORED)
+}
+
 fn open(race: &mut Race) {
     assert!(race.photo_begin(false, false, None));
     race.photo_offer(Some(Accumulation::HD), true);
@@ -189,12 +194,12 @@ fn the_plan_spreads_its_frames_over_the_shutter_and_ends_on_the_shot() {
     open(&mut race);
     let photo = race.photo().expect("open");
     assert!(
-        Plan::new(photo, LIVE, true).is_none(),
+        Plan::new(photo, LIVE, true, drawn(&race)).is_none(),
         "nothing asked, the frame on screen"
     );
     blur(&mut race, 1, 100);
     let photo = race.photo().expect("open");
-    let plan = Plan::new(photo, LIVE, true).expect("a track blur");
+    let plan = Plan::new(photo, LIVE, true, drawn(&race)).expect("a track blur");
     assert_eq!(plan.frames(), 120);
     assert_eq!(plan.blur(), Some((Blur::Track, 15.0)));
     let first = plan.frame(0);
@@ -209,19 +214,19 @@ fn the_plan_spreads_its_frames_over_the_shutter_and_ends_on_the_shot() {
         time = t;
     }
     assert!(
-        Plan::new(photo, LIVE, false).is_none(),
+        Plan::new(photo, LIVE, false, drawn(&race)).is_none(),
         "with no recording there is no blur to draw"
     );
     // A short shutter stays within a tick or two of the shot.
     blur(&mut race, 0, 20);
     let photo = race.photo().expect("open");
-    let short = Plan::new(photo, LIVE, true).expect("still a blur");
+    let short = Plan::new(photo, LIVE, true, drawn(&race)).expect("still a blur");
     assert!(short.frame(0).stand >= LIVE - 1);
     // 2048's ship shutter is a twentieth of the track's.
     race.photo_offer(Some(Accumulation::WIPEOUT_2048), true);
     blur(&mut race, 1, 100);
     let photo = race.photo().expect("open");
-    let ship = Plan::new(photo, LIVE, true).expect("a ship blur");
+    let ship = Plan::new(photo, LIVE, true, drawn(&race)).expect("a ship blur");
     assert_eq!(ship.frames(), 130);
     let (kind, ticks) = ship.blur().expect("blur");
     assert_eq!(kind, Blur::Ship);
@@ -237,7 +242,7 @@ fn the_lens_samples_surround_the_centre_and_average_to_it() {
         effects.adjust(1);
     });
     let photo = race.photo().expect("open");
-    let plan = Plan::new(photo, LIVE, false).expect("a depth of field");
+    let plan = Plan::new(photo, LIVE, false, drawn(&race)).expect("a depth of field");
     assert_eq!(plan.frames(), 7);
     assert!(plan.has_lens());
     let shifts: Vec<LensShift> = (0..7)
@@ -296,7 +301,13 @@ fn the_eye_and_the_craft_through(kind: i32) -> Vec<(Vec3, Vec3, Vec3)> {
     open(&mut race);
     blur(&mut race, kind, 100);
     let mut rewind = Rewind::begin(&mut keeper, &mut race).expect("running");
-    let plan = Plan::new(race.photo().expect("open"), LIVE, rewind.resimulates()).expect("blur");
+    let plan = Plan::new(
+        race.photo().expect("open"),
+        LIVE,
+        rewind.resimulates(),
+        drawn(&race),
+    )
+    .expect("blur");
     let mut shot = Shot::start(
         plan,
         Some(Mover {
@@ -501,7 +512,7 @@ fn a_depth_of_field_plan_on_the_close_lens() -> (Plan, impl Fn(Mat4, Vec3) -> (f
     let photo = race.photo().expect("open");
     assert_eq!(photo.lens(), crate::photo::Lens::Close);
     assert_eq!(photo.fov(), 65.0);
-    let plan = Plan::new(photo, LIVE, false).expect("a depth of field");
+    let plan = Plan::new(photo, LIVE, false, drawn(&race)).expect("a depth of field");
     let projection =
         oag_core::math::camera::perspective(65f32.to_radians(), 16.0 / 9.0, 1.0, 4000.0);
     let pixel = move |view: Mat4, point: Vec3| {
@@ -570,6 +581,68 @@ fn a_lens_sample_keeps_the_focus_plane_sharp_at_the_edge_of_the_frame() {
     );
 }
 
+/// The picture controls' pass is built by the first frame that applies a control and freed by
+/// the first frame drawn after the mode closed. Fails while nothing sets the pass back to
+/// `None`, which keeps three pipelines and a target of the render size for the life of the scene.
+#[test]
+fn the_picture_controls_pass_is_freed_when_photo_mode_ends() {
+    use super::scene_build::{bare_scene_of, livery, test_gpu};
+    use super::split_blur::{AREA, target};
+    let Some((device, queue)) = test_gpu() else {
+        return;
+    };
+    let (mut race, _, _) = driven();
+    let liveries: Vec<_> = (0..race.core.sim.ship_count()).map(|_| livery()).collect();
+    let scene = bare_scene_of(&device, &queue, &liveries);
+    let frame = |race: &Race| {
+        let mut encoder = device.create_command_encoder(&Default::default());
+        scene.render(
+            &device,
+            &queue,
+            &mut encoder,
+            &target(&device).create_view(&Default::default()),
+            race,
+            AREA,
+            oag_display::display::Fov::AUTHORED,
+            true,
+            true,
+            None,
+            oag_display::display::MotionBlur::Off,
+            oag_display::display::Shadows::Off,
+            None,
+            &[],
+            None,
+            None,
+            None,
+        );
+        queue.submit(Some(encoder.finish()));
+    };
+
+    frame(&race);
+    assert!(
+        !scene.photo_fx_built(),
+        "a race that never opened the mode builds nothing"
+    );
+    open(&mut race);
+    race.photo_effects(|effects| {
+        effects.select(Row::DepthOfField);
+        effects.adjust(1);
+    });
+    frame(&race);
+    assert!(
+        scene.photo_fx_built(),
+        "a depth of field frame builds the pass"
+    );
+    frame(&race);
+    assert!(
+        scene.photo_fx_built(),
+        "the pass is kept while the mode is open"
+    );
+    race.photo_end();
+    frame(&race);
+    assert!(!scene.photo_fx_built(), "the pass outlived the mode");
+}
+
 /// An accumulated depth of field frame is drawn with the preview's own pass, at the full
 /// aperture. Fails if a frame under a lens sample asks the pass for less blur than the preview
 /// does: the ring is too small to stand for the rest.
@@ -582,7 +655,8 @@ fn a_lens_sample_frame_asks_the_pass_for_the_previews_blur() {
         effects.adjust(1);
     });
     let preview = race.photo_fx(1.0, 4000.0).expect("a depth of field");
-    let plan = Plan::new(race.photo().expect("open"), LIVE, false).expect("a depth of field");
+    let plan = Plan::new(race.photo().expect("open"), LIVE, false, drawn(&race))
+        .expect("a depth of field");
     race.photo_set_shift(plan.frame(1).lens);
     assert!(race.photo().expect("open").shift().is_some());
     assert_eq!(race.photo_fx(1.0, 4000.0), Some(preview));
@@ -616,15 +690,11 @@ fn the_accumulated_shot_keeps_the_band_the_preview_shows_sharp() {
 }
 
 /// A motion blur that cannot be drawn is not on offer: with no recording there is nothing to
-/// play between keyframes, the plan drops the blur and the shot is the one frame. Fails while the
-/// MOTION BLUR row is offered on the title's say alone.
+/// play between keyframes, so the panel has no MOTION BLUR or shutter row, choosing one does
+/// nothing, and the shot is the one frame. Fails while the MOTION BLUR row is offered on the
+/// title's say alone.
 #[test]
-#[ignore = "photo-fx-review finding 8"]
 fn a_race_with_no_recording_is_not_offered_a_motion_blur() {
-    // An open finding's proving test: `test-data` runs ignored tests, so it runs only when asked.
-    if std::env::var_os("OAG_REVIEW_FINDINGS").is_none() {
-        return;
-    }
     let mut race = Box::new(Race::start(
         fixture(),
         crate::tests::fixture_view(),
@@ -645,28 +715,42 @@ fn a_race_with_no_recording_is_not_offered_a_motion_blur() {
     assert!(!rewind.resimulates(), "nothing was recorded");
     blur(&mut race, 1, 100);
     let photo = race.photo().expect("open");
-    assert_eq!(photo.effects().blur(), Some(Blur::Track));
-    assert!(
-        Plan::new(photo, LIVE, rewind.resimulates()).is_none(),
-        "the shot is the one frame on screen"
-    );
     assert!(
         !photo.effects().rows().contains(&Row::MotionBlur),
         "the panel offers a MOTION BLUR row that the shot ignores"
     );
+    assert!(!photo.effects().rows().contains(&Row::Shutter));
+    assert_eq!(photo.effects().blur(), None, "a blur that cannot be drawn");
+    assert!(
+        Plan::new(photo, LIVE, rewind.resimulates(), drawn(&race)).is_none(),
+        "the shot is the one frame on screen"
+    );
+    // A race that cannot be rewound (a finished one on its end screens) has no ticks to play
+    // either, recording or not.
+    let mut fixed = crate::photo::effects::Effects::new().offering(true, false);
+    assert!(!fixed.rows().contains(&Row::MotionBlur));
+    fixed.set_recording(true);
+    assert!(!fixed.rows().contains(&Row::MotionBlur));
+    // The same race with a recording is offered it.
+    let (mut recorded, _, _) = driven();
+    open(&mut recorded);
+    assert!(
+        recorded
+            .photo()
+            .expect("open")
+            .effects()
+            .rows()
+            .contains(&Row::MotionBlur)
+    );
 }
 
-/// The ring of an accumulated depth of field is half of the widest blur the preview draws
-/// (`shot`): a ring sample moves a point at infinity by `0.5 * MAX_RADIUS * aperture` of the
-/// picture's height. Fails while the ring's radius is worked out from the lens's own field and
-/// the frame is drawn with the speed widen added to that field.
+/// The lens ring is worked out in the field the frame is drawn with, not the lens's own: a ring
+/// sample moves a point at infinity by the same share of the picture's height whether the craft
+/// is at rest (drawn at the lens's 65 degrees) or at speed (drawn wider, `camera.rs`'s speed
+/// widen). Fails while the ring is sized from `Photo::fov`: at speed it is then too narrow by the
+/// ratio of the two fields' tangents.
 #[test]
-#[ignore = "photo-fx-review finding 9"]
-fn the_lens_ring_is_half_the_previews_blur_in_the_field_the_frame_is_drawn_with() {
-    // An open finding's proving test: `test-data` runs ignored tests, so it runs only when asked.
-    if std::env::var_os("OAG_REVIEW_FINDINGS").is_none() {
-        return;
-    }
+fn the_lens_rings_reach_is_the_same_share_of_the_picture_in_the_field_it_is_drawn_with() {
     let (mut race, _, _) = driven();
     open(&mut race);
     race.photo_cycle_lens();
@@ -675,31 +759,34 @@ fn the_lens_ring_is_half_the_previews_blur_in_the_field_the_frame_is_drawn_with(
         effects.select(Row::DepthOfField);
         effects.adjust(1);
     });
-    // A craft at speed: the draw adds 0.075 degrees of field per unit a second of it.
     let slot = race.core.player_slot();
-    let body = &mut race.core.sim.world.ships[slot].physics.body;
-    body.linear_velocity = body.forward() * 150.0;
-    race.photo_repose();
-    let photo = race.photo().expect("open");
-    assert_eq!(photo.fov(), 65.0);
-    let plan = Plan::new(photo, LIVE, false).expect("a depth of field");
-    let shift = plan.frame(1).lens.expect("the first sample of the ring");
-    let drawn = race
-        .view
-        .vertical_fov(&race.core, 16.0 / 9.0, oag_display::display::Fov::AUTHORED);
-    let far = shift
-        .apply(Mat4::IDENTITY)
-        .transform_point3(Vec3::new(0.0, 0.0, -1.0e6));
-    let moved = (far.x / -far.z).hypot(far.y / -far.z) / (2.0 * (drawn * 0.5).tan());
-    let wanted = 0.5 * oag_post::photo_fx::Dof::MAX_RADIUS * 0.4;
+    let share = |race: &mut Race, speed: f32| {
+        // A craft at speed: the draw adds 0.075 degrees of field per unit a second of it.
+        let body = &mut race.core.sim.world.ships[slot].physics.body;
+        body.linear_velocity = body.forward() * speed;
+        race.photo_repose();
+        assert_eq!(race.photo().expect("open").fov(), 65.0);
+        let drawn = drawn(race);
+        let plan = race
+            .photo_plan(LIVE, false, 16.0 / 9.0, oag_display::display::Fov::AUTHORED)
+            .expect("a depth of field");
+        let shift = plan.frame(1).lens.expect("the first sample of the ring");
+        let far = shift
+            .apply(Mat4::IDENTITY)
+            .transform_point3(Vec3::new(0.0, 0.0, -1.0e6));
+        let height = 2.0 * (drawn.to_radians() * 0.5).tan();
+        ((far.x / -far.z).hypot(far.y / -far.z) / height, drawn)
+    };
+    let (at_rest, rest_fov) = share(&mut race, 0.0);
+    let (at_speed, speed_fov) = share(&mut race, 150.0);
     println!(
-        "the lens says 65 degrees and the frame is drawn at {}: a ring sample moves infinity {moved} of the height, {wanted} wanted",
-        drawn.to_degrees()
+        "drawn at {rest_fov} and {speed_fov}: a ring sample moves infinity {at_rest} and {at_speed} of the height"
     );
+    assert!(speed_fov > rest_fov + 5.0, "the speed widened the field");
     assert!(
-        (moved / wanted - 1.0).abs() < 0.02,
-        "the ring is {} of the half blur it stands for",
-        moved / wanted
+        (at_speed / at_rest - 1.0).abs() < 0.01,
+        "the ring is {} of the share it has at rest",
+        at_speed / at_rest
     );
 }
 
@@ -734,4 +821,56 @@ fn a_rewind_draws_the_flaps_of_the_tick_it_shows_and_puts_the_live_ones_back() {
     }
     rewind.end(&mut keeper, &mut race);
     assert_eq!(race.view.flaps[0], live, "the live flaps were not put back");
+}
+
+/// Fails if the ticks a blurred shot replays leave the HUD's own state where they ran it to: a
+/// message live at the shot's tick, a pickup banner, a shield flash or a gap popup would have
+/// expired or come up again by the time the HUD is drawn over the shot.
+#[test]
+fn a_blurred_shot_leaves_the_huds_state_as_it_stood_at_the_shot() {
+    let (mut race, mut keeper, _) = driven();
+    open(&mut race);
+    blur(&mut race, 1, 100);
+    let slot = race.core.player_slot();
+    race.view.huds[slot].messages.push("MESSAGE_LIVE", true);
+    let before = format!("{:?}", race.view.huds);
+    let mut rewind = Rewind::begin(&mut keeper, &mut race).expect("running");
+    let plan = Plan::new(
+        race.photo().expect("open"),
+        LIVE,
+        rewind.resimulates(),
+        drawn(&race),
+    )
+    .expect("blur");
+    let mut shot = Shot::start(
+        plan,
+        Some(Mover {
+            rewind: &mut rewind,
+            keeper: &mut keeper,
+        }),
+        &mut race,
+    );
+    while !shot.done() {
+        shot.prepare(
+            Some(Mover {
+                rewind: &mut rewind,
+                keeper: &mut keeper,
+            }),
+            &mut race,
+        );
+        shot.advance();
+    }
+    assert_ne!(
+        format!("{:?}", race.view.huds),
+        before,
+        "the replayed ticks moved the HUD's state, which is what the shot must undo"
+    );
+    shot.finish(
+        Some(Mover {
+            rewind: &mut rewind,
+            keeper: &mut keeper,
+        }),
+        &mut race,
+    );
+    assert_eq!(format!("{:?}", race.view.huds), before);
 }

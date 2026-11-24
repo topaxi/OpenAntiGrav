@@ -95,6 +95,65 @@ pub fn export_track(options: &Options) -> Result<oag_trackfile::Track> {
     track_art::export(options, &mut archives, title)
 }
 
+/// The host textures a track file names, or every texture of one circuit, written as PNG
+/// files under `out` from the disc `options` opens (`foreign::art::host_export`).
+/// **Local use only**: the result is disc content.
+///
+/// `what` is a `.track.toml` (the textures its art borrows, and its sky circuit's) or a
+/// circuit's `.vex` entry (all of that circuit's textures).
+///
+/// # Errors
+///
+/// Whatever [`load`] would refuse the source for, a track file that will not read, a
+/// circuit that does not read on this disc, and a file that will not write.
+#[cfg(feature = "view")]
+pub fn export_host_textures(
+    options: &Options,
+    what: &str,
+    out: &std::path::Path,
+) -> Result<crate::foreign::art::host_export::Exported> {
+    use crate::foreign::art::host_export::{Exported, export_entry};
+    use std::collections::{BTreeMap, BTreeSet};
+
+    let (packs, pure_packs, _) = oag_source::dlc::packs_from_defaults(
+        &options.dlc,
+        &oag_source::cache::default_dlc_cache_dir(),
+    );
+    let pair = oag_source::pair::SourcePair::open(&options.source, None, packs, pure_packs)?;
+    let (opened, _, title, _) = pair.into_parts();
+    let mut archives = opened.archives.memoising_reads();
+    let slug = oag_source::layers::slug(title);
+    let mut all = Exported::default();
+    let mut merge = |done: Exported| {
+        all.written.extend(done.written);
+        all.skipped.extend(done.skipped);
+    };
+    if what.ends_with(".track.toml") {
+        let loaded = oag_trackfile::read(std::path::Path::new(what))?;
+        let Some(art) = loaded.track.art.as_ref() else {
+            anyhow::bail!("{what} has no art section, so it borrows no texture");
+        };
+        let mut wanted: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+        for source in &art.textures {
+            if let oag_trackfile::art::TextureSource::Host { entry, name } = source {
+                wanted
+                    .entry(entry.clone())
+                    .or_default()
+                    .insert(name.clone());
+            }
+        }
+        for (entry, names) in &wanted {
+            merge(export_entry(&mut archives, &slug, entry, Some(names), out)?);
+        }
+        if let Some(sky) = art.sky.as_ref() {
+            merge(export_entry(&mut archives, &slug, sky, None, out)?);
+        }
+    } else {
+        merge(export_entry(&mut archives, &slug, what, None, out)?);
+    }
+    Ok(all)
+}
+
 /// Loads a track, a ship and its handling out of a disc image: the sim phase
 /// ([`load_sim`]), then, in a build that draws, the view phase (`load_view`) off what it
 /// read.

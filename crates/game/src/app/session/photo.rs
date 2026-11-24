@@ -50,6 +50,9 @@ pub(crate) struct Open {
     pub(super) rewind: Option<oag_raceplay::photo::rewind::Rewind>,
     /// A shot of several frames under way.
     pub(super) job: Option<super::photo_rewind::Job>,
+    /// A finished shot of several frames waiting for the HUD to be drawn over it
+    /// (`photo_hud`).
+    pub(super) averaged: Option<super::photo_hud::Averaged>,
     /// The tick the rewind row last asked for.
     pub(super) asked: u64,
     /// Whether the viewer this mode was opened from was playing when it was, so leaving puts
@@ -213,6 +216,7 @@ impl super::Session {
             english: oag_ui::strings::project_table(None),
             rewind: None,
             job: None,
+            averaged: None,
             asked,
             resume_viewer: false,
             play_latched: false,
@@ -280,8 +284,10 @@ impl super::Session {
         let clicked = pointer.clicked && (!finger || frame.tap.is_some());
         // A shot of several frames under way owns the mode: any input abandons it, and the
         // controls stand still while it runs.
-        if self.photo_job_running() {
-            if Self::photo_input_abandons(&pad, pointer, input, &view) {
+        // The frame that puts the HUD over a finished shot is part of it: the race stands where
+        // it was taken until that frame is drawn, and no input moves it.
+        if self.photo_wants_frames() {
+            if self.photo_job_running() && Self::photo_input_abandons(&pad, pointer, input, &view) {
                 self.photo_job_cancel();
             }
             return;
@@ -394,6 +400,9 @@ impl super::Session {
     /// the screen nor (unless its row is on) the HUD is in the file. Called once the frame is
     /// submitted.
     pub(super) fn finish_photo_shot(&mut self) {
+        // The average a job set aside on an earlier frame is written first: the frame that set
+        // it aside has not drawn the HUD over it yet.
+        self.photo_finish_averaged();
         self.photo_job_collect();
         let Some((path, pending)) = self.photo.as_mut().and_then(|open| open.shot.take()) else {
             return;
@@ -580,8 +589,16 @@ impl super::Session {
         ))
     }
 
-    /// The drive's reading of the shot under way: `frames drawn / frames`, or `none`.
+    /// The drive's reading of the shot under way: `frames drawn / frames`, `hud` while its
+    /// average waits for the HUD to be drawn over it, or `none`.
     pub(crate) fn photo_job_name(&self) -> String {
+        if self
+            .photo
+            .as_ref()
+            .is_some_and(|open| open.averaged.is_some())
+        {
+            return "hud".to_string();
+        }
         self.photo_progress()
             .map_or_else(|| "none".to_string(), |(done, all)| format!("{done}/{all}"))
     }

@@ -5,7 +5,7 @@ motion blur shots, the rewind, the free lens, and what a saved shot carries. Wha
 meant to do is [photo mode](../ui/photo-mode.md); this page is where it does something else.
 Findings are graded with the rubric of [2026-08-18-code-review.md](2026-08-18-code-review.md).
 
-Nothing here was fixed on the way past; this is findings only. Every finding has a test that was
+Nothing was fixed on the way past; the fixes came after and each finding says where. Every finding has a test that was
 written and run, a capture, or exact arithmetic. What could not be proven is listed apart, under
 "Unconfirmed". Two reads were made, one after the other and blind to each other; "The second
 read" says which found what.
@@ -134,6 +134,17 @@ A sheared (off-axis) projection holds the plane exactly; the rotation is the che
 
 ### PF3. A saved shot does not record the picture controls, and `--from-png` redraws without them
 
+**Fixed** in `739f9d926`. The text has a `[picture]` section (exposure, saturation, speed blur,
+depth of field with aperture and focus, and for a shot of several frames the motion blur, shutter
+and frame count), written on every photo mode shot with the opening values as they are, so a photo without it
+is known to predate the keys. `--from-png` applies the controls through the preview's own pass (`--picture`, also in
+`reproduce.flags`) and prints `picture controls applied: ...`, or `no picture controls recorded`
+for a photo without the section; a motion blur is not redrawn and the output says so. Checked on
+Pulse: for an exposure-raised shot (mean luma 115.1 against 97.8 at neutral) the re-render reads
+100.8 when the section is ignored and is within half the shot's gain of it when applied
+(`each_picture_control_changes_the_saved_shot_and_at_neutral_it_is_the_unprocessed_one` fails if
+the re-render ignores the section).
+
 **Impact**: Medium - the file exists for rendering bug reports, and a report about a graded or
 blurred shot cannot be remade from it.
 **Priority**: P2. **Confidence**: 95. **Faithfulness**: n.a. **Effort**: S.
@@ -152,6 +163,12 @@ names the HUD as the one thing the text does not record.
   Nothing in the output says the picture was processed.
 
 ### PF4. Saturation 0 on Pulse leaves colour in the picture
+
+**Fixed** in `c9c2c1778`: with a control on, `Scene::finish_view` adds the glow of Pulse, the PS2 and Pure to
+the frame ahead of the pass, so the controls cover it as they cover HD's. On Pulse, at saturation 0 the worst pixel's
+chroma on the same capture is at most 2 (92 before; PS2 and Pure take the same path, not run here); the Pulse ground truth now asserts no pixel keeps a chroma above 2
+(it fails at 92 with the change dropped). With every control at its opening the picture is byte-identical to
+`main`'s.
 
 **Impact**: Medium - a black and white photo is not one on Pulse, PS2 and Pure. The glow escapes
 every picture control there.
@@ -226,6 +243,14 @@ The captured frames at aperture 40 and 816 lines (reach 8 px) read as smooth in 
 
 ### PF7. The HUD in a motion blur shot is not the HUD on screen
 
+**Fixed** in `a6028d020` and `c1f884794`. Every frame of a shot of several leaves the HUD out; after
+the race is put back at the shot's tick the average is copied into the presentation target and the
+HUD is drawn once over it. The stray label was the song line: the ticks a blur replays stepped its
+clock, so it came up in the blurred shot only. It is put back as it stood. HD, HUD row on, track
+blur at full shutter: the clock reads `0.06.0`, the speed 160 and the thrust gauge 0, as in the
+plain shot. `a_motion_blur_shot_smears_what_it_should_and_any_input_abandons_it` fails with the
+old order (343 high-contrast pixels outside the HUD differ from the blurred shot without one).
+
 **Impact**: Low-Medium - with the HUD row on, a blurred shot shows ghosted readouts and can show
 a message that was not on screen.
 **Priority**: P2. **Confidence**: 90. **Faithfulness**: n.a. **Effort**: S.
@@ -243,6 +268,10 @@ at its own tick of the shutter. The HUD is drawn from that tick, so its readouts
 
 ### PF8. The MOTION BLUR row is offered to a race that cannot draw one
 
+**Fixed** in `93360d0ae`: `Race::photo_offer` tells the effects whether the race records, and without a
+recording, or a race that cannot be rewound (a finished one on its end screens), neither blur row is offered (a
+blur already chosen goes with it). The test runs unguarded and passes.
+
 **Impact**: Low - with recording off the row and its shutter work, and the shot is silently one
 frame.
 **Priority**: P3. **Confidence**: 95. **Faithfulness**: n.a. **Effort**: S.
@@ -258,9 +287,10 @@ blur is not offered". `[replay] record = false` is the case.
 
 ### PF9. The lens ring is sized for the lens's field, not the field the frame is drawn with
 
-**Its test's premise changed with PF1's fix** (`5e6674042`): the ring is no longer half of the
-preview's blur (`shot::ring_radius`, sized to the sharp band), so the assertion has to be restated
-against that sizing. The finding stands: the ring is still worked out from `photo.fov()`.
+**Fixed** in `aae7b93ad`. The test's premise changed with PF1's fix (`5e6674042`): the ring is no longer half of
+the preview's blur (`shot::ring_radius`, sized to the sharp band), so the test is restated: a ring sample moves
+infinity the same share of the picture at rest and at speed. `Plan::new` takes the drawn field
+(`Race::drawn_fov_degrees`); the restated test fails at 0.81 of the share with `photo.fov()` put back.
 
 **Impact**: Low - at speed the accumulated half of the blur is narrower than intended.
 **Priority**: P3. **Confidence**: 90. **Faithfulness**: no. **Effort**: S.
@@ -277,6 +307,11 @@ The same widen means the lens's stated range (10 to 100, 3 to 40 on `track`) is 
 range. That is by design (the first frame is the one the pause left) and is not counted here.
 
 ### PF10. The free lens does not always start where it was seeded
+
+**Fixed** (the two proving tests run unguarded and pass): the free rig carries its own least field (the `close`
+lens's 10, or the seed's own when narrower) and reach (`FREE_RANGE`, or the seed's own distance), which `fly` and
+the touch path clamp to (`76c997163`); and a seed whose pitch is past what the rig holds is drawn as it was until
+the first look or tilt (a pinned orientation; `the_free_lens_seeded_from_a_steep_pitch_keeps_it_until_it_is_turned`).
 
 **Impact**: Low - the picture jumps on choosing `free` from a `track` lens zoomed in past 10
 degrees, or from a camera more than 400 units from the craft.
@@ -299,6 +334,11 @@ the `close` lens can reach that pitch, so the same choice can jump by up to 4.1 
 
 ### PF11. The pass builds two bind groups a frame and is kept until the race ends
 
+**Fixed** in `34a018127`: the main pass's and the tile pass's groups are kept per scene and depth view
+(`ViewGroup` keys on several views now), the copy group lives with the targets, and the scene drops the pass on the
+first frame drawn after the mode closed. `a_frame_on_the_same_views_builds_no_bind_group` and
+`the_picture_controls_pass_is_freed_when_photo_mode_ends` fail with either dropped.
+
 **Impact**: Low - a steady stream of bind groups while a control is moved, and memory held after
 the mode closes.
 **Priority**: P3. **Confidence**: 85. **Faithfulness**: n.a. **Effort**: S.
@@ -312,6 +352,9 @@ slot back to `None`): three pipelines and a scratch target of the render size, 3
 measured on a device.
 
 ### PF12. `Constants::new` panics on a rectangle that starts past the target
+
+**Fixed** in `34a018127`: the first pixel is held inside the target, and `render` skips a rectangle with no pixel in
+it. The test runs unguarded and passes.
 
 **Impact**: Low - not reachable today: the mode draws one whole view from the target's origin.
 **Priority**: P3. **Confidence**: 95. **Faithfulness**: n.a. **Effort**: S.
@@ -368,16 +411,16 @@ Not proven, so not findings. Each says how to check it.
 | --- | --- | --- | --- | ---: | --- | --- | --- |
 | PF1 | Accumulated depth of field is not the previewed picture (fixed, `5e6674042`) | High | P1 | 95 | M | test, two captures | both |
 | PF2 | Lens sample rotates: the focus plane moves at the frame's edge (fixed, `5e6674042`) | Medium | P2 | 95 | S | test | both |
-| PF3 | A shot does not record the picture controls; `--from-png` redraws without them | Medium | P2 | 95 | S | capture | both |
-| PF4 | Saturation 0 leaves the glow's colour on Pulse | Medium | P2 | 85 | M | capture, control | first |
+| PF3 | A shot does not record the picture controls; `--from-png` redraws without them (fixed, `739f9d926`) | Medium | P2 | 95 | S | capture | both |
+| PF4 | Saturation 0 leaves the glow's colour on Pulse (fixed, `c9c2c1778`) | Medium | P2 | 85 | M | capture, control | first |
 | PF5 | A blurred near surface is nearly opaque out to its radius (fixed, `8a8cb1ffb`) | Medium | P2 | 90 | M | test | second |
 | PF6 | 56 taps over the widest reach: small blurs untouched, wide ones leak (fixed, `8a8cb1ffb`) | Low-Med | P2 | 90 | M | two tests | both |
-| PF7 | The HUD in a motion blur shot is averaged over the shutter | Low-Med | P2 | 90 | S | capture | first |
-| PF8 | MOTION BLUR offered with no recording | Low | P3 | 95 | S | test | both |
-| PF9 | Lens ring sized for the lens's field, not the drawn one | Low | P3 | 90 | S | test | first |
-| PF10 | The free lens does not always start where it was seeded | Low | P3 | 95 | S | two tests | both |
-| PF11 | Two bind groups a frame; the pass is kept until the race ends | Low | P3 | 85 | S | code | first |
-| PF12 | `Constants::new` panics on a rectangle past the target | Low | P3 | 95 | S | test | second |
+| PF7 | The HUD in a motion blur shot is averaged over the shutter (fixed, `a6028d020`) | Low-Med | P2 | 90 | S | capture | first |
+| PF8 | MOTION BLUR offered with no recording (fixed) | Low | P3 | 95 | S | test | both |
+| PF9 | Lens ring sized for the lens's field, not the drawn one (fixed) | Low | P3 | 90 | S | test | first |
+| PF10 | The free lens does not always start where it was seeded (fixed) | Low | P3 | 95 | S | two tests | both |
+| PF11 | Two bind groups a frame; the pass is kept until the race ends (fixed, `34a018127`) | Low | P3 | 85 | S | code | first |
+| PF12 | `Constants::new` panics on a rectangle past the target (fixed, `34a018127`) | Low | P3 | 95 | S | test | second |
 
 ## Suggested order
 
@@ -387,10 +430,7 @@ Not proven, so not findings. Each says how to check it.
 2. **PF5 and PF6 together**: one gather, its weights and where its taps go.
 3. **PF3**: add the controls to the text and say in `--from-png`'s output when a shot was
    processed.
-4. **PF4**: the glow's order on Pulse, or at least the saturation, and a tighter bound in the
-   ground truth.
-5. **PF7, PF8, PF10, PF12**: small and local.
-6. **PF9, PF11**: when the pass is next open.
+4. **PF7**: small and local (PF4, PF8 to PF12 are fixed).
 
 ## The second read
 

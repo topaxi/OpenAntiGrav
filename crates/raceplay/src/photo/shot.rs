@@ -74,9 +74,11 @@ pub struct Frame {
 impl Plan {
     /// The shot `photo` asks for at `tick`, or `None` when it is the one frame on screen.
     /// `resimulates` is whether the race can be played between keyframes: without it there is no
-    /// motion blur to draw.
+    /// motion blur to draw. `drawn_fov` is the vertical field in degrees the frames are drawn
+    /// with ([`Race::drawn_fov_degrees`]): the lens's own plus the speed widen, the player's
+    /// setting and the window's fit, which the lens ring is sized in.
     #[must_use]
-    pub fn new(photo: &Photo, tick: u64, resimulates: bool) -> Option<Self> {
+    pub fn new(photo: &Photo, tick: u64, resimulates: bool, drawn_fov: f32) -> Option<Self> {
         let acc = photo.accumulation()?;
         let effects = photo.effects();
         let blur = effects.blur().filter(|_| resimulates).and_then(|kind| {
@@ -90,7 +92,7 @@ impl Plan {
             (ticks >= LEAST_SHUTTER_TICKS).then_some((kind, ticks))
         });
         let aperture = effects.depth_of_field().map(|(aperture, focus)| Aperture {
-            radius: ring_radius(aperture, focus, photo.fov()),
+            radius: ring_radius(aperture, focus, drawn_fov),
             focus: Edges::new(focus).distance,
             samples: acc.dof_frames.max(1),
         });
@@ -227,12 +229,47 @@ pub struct Mover<'a> {
 pub struct Shot {
     plan: Plan,
     next: u32,
+    /// The HUD's own state at the shot's tick: the ticks a blur replays step it on, and the HUD
+    /// drawn over the shot shows the moment the shot is of.
+    hud: Option<HudMemory>,
+}
+
+/// The state the HUD keeps between ticks, as the race on screen has it: every slot's bars,
+/// messages and banners, the lap gap popup, the warnings waiting for the next advance and the
+/// song line.
+#[derive(Debug)]
+struct HudMemory {
+    huds: [crate::slot_hud::SlotHud; oag_gameplay::MAX_SHIPS],
+    split_gap: Option<crate::split_gap::SplitGap>,
+    incoming_raises: Vec<oag_hud::incoming::Look>,
+    marquee: Option<oag_hud::now_playing::Display>,
+}
+
+impl HudMemory {
+    fn of(race: &Race) -> Self {
+        Self {
+            huds: race.view.huds.clone(),
+            split_gap: race.view.split_gap.clone(),
+            incoming_raises: race.view.incoming_raises.clone(),
+            marquee: race.marquee_state(),
+        }
+    }
+
+    fn put_back(self, race: &mut Race) {
+        race.view.huds = self.huds;
+        race.view.split_gap = self.split_gap;
+        race.view.incoming_raises = self.incoming_raises;
+        if let Some(marquee) = self.marquee {
+            race.set_marquee_state(marquee);
+        }
+    }
 }
 
 impl Shot {
     /// Begins `plan` on the race `rewind` is moving: stands it at the shot's tick, and for a ship
     /// blur takes the camera there to hold.
     pub fn start(plan: Plan, mover: Option<Mover<'_>>, race: &mut Race) -> Self {
+        let hud = plan.blur.is_some().then(|| HudMemory::of(race));
         if let Some(Mover { rewind, keeper }) = mover
             && plan.blur.is_some()
         {
@@ -248,7 +285,7 @@ impl Shot {
                 rewind.seek(keeper, race, plan.tick);
             }
         }
-        Self { plan, next: 0 }
+        Self { plan, next: 0, hud }
     }
 
     /// The plan the shot follows.
@@ -304,6 +341,9 @@ impl Shot {
         {
             rewind.follow = true;
             rewind.seek(keeper, race, self.plan.tick);
+        }
+        if let Some(hud) = self.hud {
+            hud.put_back(race);
         }
         race.photo_set_shift(None);
         race.photo_repose();

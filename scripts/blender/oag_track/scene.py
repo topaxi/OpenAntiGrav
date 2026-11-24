@@ -26,7 +26,7 @@ import re
 import bpy
 from mathutils import Matrix, Vector
 
-from . import derive, f32, racing_line, scene_art, trackfile
+from . import derive, f32, images, racing_line, scene_art, trackfile
 from .model import (
     COLLISION_KINDS,
     HEADER_WORD,
@@ -531,7 +531,10 @@ def write_track(context, path):
     track = collect(context)
     trackfile.write(track, path)
     if track.art is not None:
-        scene_art.copy_images(track.art, context.scene, os.path.dirname(os.path.abspath(path)))
+        manifest_dir = os.path.dirname(os.path.abspath(path))
+        for name, data in track.art.image_files.items():
+            with open(os.path.join(manifest_dir, name), "wb") as f:
+                f.write(data)
     return track
 
 
@@ -735,8 +738,9 @@ def make_collision_object(scene, kind, mesh, node, n, m, multi):
     return _link(scene, obj)
 
 
-def populate(context, track, manifest_dir="."):
-    """Creates the objects and scene properties for `track` (the importer)."""
+def populate(context, track, manifest_dir=".", host_folder=""):
+    """Creates the objects and scene properties for `track` (the importer). `host_folder`:
+    where the host textures were exported to, to link them (`images.link_host_images`)."""
     scene = context.scene
     scene.oag_track_id = track.id
     scene.oag_track_title = track.title
@@ -771,6 +775,8 @@ def populate(context, track, manifest_dir="."):
             make_collision_object(scene, node.kind, mesh, node, n, m, len(node.meshes) > 1)
     if track.art is not None:
         scene_art.populate(context, track.art, manifest_dir)
+        if host_folder and track.host:
+            images.link_host_images(host_folder, track.host)
     context.view_layer.update()
 
 

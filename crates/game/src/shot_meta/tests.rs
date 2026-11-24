@@ -1,4 +1,5 @@
 use super::*;
+use oag_raceplay::photo::effects::{Effects, Row};
 
 fn meta() -> Meta {
     let race = Race {
@@ -37,7 +38,7 @@ fn meta() -> Meta {
         },
         reproduce: Reproduce {
             exact: "oag-game --from-png <this file>".into(),
-            flags: flags(&race, Some(&camera), Some(&craft), (2, 2)),
+            flags: flags(&race, Some(&camera), Some(&craft), None, (2, 2)),
         },
         race: Some(race),
         camera: Some(camera),
@@ -131,4 +132,71 @@ fn the_command_line_loses_every_path() {
             "cross"
         ]
     );
+}
+
+fn graded() -> Effects {
+    let mut effects = Effects::new();
+    effects.set(Row::Exposure, 60);
+    effects.set(Row::Saturation, 5);
+    effects.set(Row::SpeedBlur, 30);
+    effects.set(Row::DepthOfField, 1);
+    effects.set(Row::Aperture, 70);
+    effects.set(Row::Focus, 45);
+    effects
+}
+
+#[test]
+fn a_picture_at_its_opening_values_is_recorded_as_them() {
+    let picture = Picture::of(&Effects::new(), None);
+    assert_eq!(picture.exposure, Effects::EXPOSURE_OPENS);
+    assert_eq!(picture.saturation, Effects::SATURATION_OPENS);
+    assert!(!picture.depth_of_field && picture.motion_blur.is_empty());
+    assert!(picture.effects().is_neutral());
+    let mut meta = meta();
+    meta.picture = Some(picture);
+    assert!(meta.to_text().contains("[picture]"));
+}
+
+#[test]
+fn the_picture_controls_survive_the_text_and_draw_the_same_effects() {
+    let picture = Picture::of(&graded(), None);
+    let mut meta = meta();
+    meta.picture = Some(picture.clone());
+    let read = Meta::from_text(&meta.to_text()).expect("parses");
+    assert_eq!(read.picture.as_ref(), Some(&picture));
+    assert_eq!(picture.effects(), graded());
+    // The text names the controls, not a bare table.
+    assert!(meta.to_text().contains("[picture]"), "{}", meta.to_text());
+}
+
+#[test]
+fn the_picture_flag_round_trips_and_a_bad_one_is_refused() {
+    let picture = Picture::of(&graded(), None);
+    let flag = picture.to_flag();
+    assert_eq!(
+        flag,
+        "exposure=60,saturation=5,speed_blur=30,aperture=70,focus=45"
+    );
+    assert_eq!(
+        Picture::from_flag(&flag).expect("reads").effects(),
+        graded()
+    );
+    assert!(Picture::from_flag("exposure").is_err());
+    assert!(Picture::from_flag("exposure=x").is_err());
+    assert!(Picture::from_flag("brightness=4").is_err());
+    let race = Race::default();
+    assert!(flags(&race, None, None, Some(&picture), (2, 2)).contains(&"--picture".to_string()));
+    assert!(!flags(&race, None, None, None, (2, 2)).contains(&"--picture".to_string()));
+}
+
+#[test]
+fn a_picture_section_that_leaves_controls_out_has_them_at_their_opening_values() {
+    let meta = Meta::from_text("[picture]\nspeed_blur = 50\n").expect("parses");
+    let picture = meta.picture.expect("the section");
+    assert_eq!(picture.speed_blur, 50);
+    assert_eq!(picture.exposure, Effects::EXPOSURE_OPENS);
+    assert_eq!(picture.saturation, Effects::SATURATION_OPENS);
+    let effects = picture.effects();
+    assert_eq!(effects.value(Row::Exposure), Effects::EXPOSURE_OPENS);
+    assert_eq!(effects.value(Row::Saturation), Effects::SATURATION_OPENS);
 }

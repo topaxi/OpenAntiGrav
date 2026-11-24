@@ -894,6 +894,7 @@ impl Race {
                 gantry_seconds,
                 restores: 0,
                 photo: None,
+                picture: None,
                 spectates_from_start: false,
                 // The end-of-race spectator is Pulse's (`finish_camera`): a title whose destroy
                 // camera reads its stations without `circuit_effects` has no such director.

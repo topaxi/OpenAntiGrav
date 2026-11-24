@@ -59,6 +59,9 @@ pub const PAN_LIMIT: f32 = 5.0;
 pub const CLOSE_FOV: (f32, f32, f32) = (10.0, 100.0, 65.0);
 /// The `track` lens's vertical field, in degrees: `(least, greatest, opening)`.
 pub const TRACK_FOV: (f32, f32, f32) = (3.0, 40.0, 20.0);
+/// The vertical field the free lens can start on, in degrees: wide enough for the picture of
+/// either other lens, so choosing `free` from one starts on its field.
+const FREE_START_FOV: (f32, f32) = (TRACK_FOV.0.min(CLOSE_FOV.0), TRACK_FOV.1.max(CLOSE_FOV.1));
 
 /// Units per tick the free lens moves at full deflection before it has been held.
 pub const FREE_WALK_RATE: f32 = 0.4;
@@ -106,6 +109,15 @@ pub enum Lens {
 struct Rig {
     cam: Free,
     fov: f32,
+    /// The least field a zoom reaches: the `close` lens's, or the seed's own when it started
+    /// narrower (a `track` lens zoomed in).
+    least_fov: f32,
+    /// The seed's own orientation while its pitch is past what the rig can hold, drawn until the
+    /// first turn so the picture does not jump when `free` is chosen.
+    pinned: Option<Quat>,
+    /// How far the eye may be from the craft: [`FREE_RANGE`], or the seed's own distance when
+    /// the lens it was seeded from stood further out.
+    reach: f32,
 }
 
 /// What the player's devices said this tick, already boiled down to what the mode reads.
@@ -245,6 +257,64 @@ impl LensShift {
     }
 }
 
+/// The zoom ring's pulse a speed blur of `effects` holds, with the ring's numbers, or `None` with
+/// the row at zero. `age` is the mode's own tick: the ring's history advances once per tick of
+/// it, and the race is not stepping.
+fn speed_blur_pulse(
+    effects: &Effects,
+    tuning: oag_post::hd_zoom::Tuning,
+    age: u64,
+) -> Option<(oag_post::hd_zoom::Tuning, oag_post::hd_zoom::Frame)> {
+    let blur = effects.speed_blur();
+    (blur > 0.0).then(|| {
+        (
+            tuning,
+            oag_post::hd_zoom::Frame {
+                boost: blur,
+                // The original writes the damage pulse too, which tints the streak red; a speed
+                // blur does not read as damage here.
+                damage: 0.0,
+                size: [1.0, 1.0],
+                // Far from any tick the race counts.
+                tick: u64::MAX / 2 + age,
+            },
+        )
+    })
+}
+
+/// The picture controls of a frame drawn without photo mode open: a saved shot drawn again
+/// (`oag-game --from-png`), which has the controls the shot was taken with and none of the mode's
+/// camera or panel.
+#[derive(Debug, Clone, Copy)]
+pub struct FixedPicture {
+    effects: Effects,
+    zoom: Option<oag_post::hd_zoom::Tuning>,
+}
+
+impl FixedPicture {
+    /// The controls `effects` holds, with the zoom ring the speed blur plays (none: the row does
+    /// nothing, as in the mode).
+    #[must_use]
+    pub fn new(effects: Effects, zoom: Option<&'static oag_title::ZoomRing>) -> Self {
+        Self {
+            effects,
+            zoom: zoom.map(crate::zoom::tuning),
+        }
+    }
+
+    /// The controls.
+    #[must_use]
+    pub fn effects(&self) -> &Effects {
+        &self.effects
+    }
+
+    /// The speed blur's ring and pulse, when the row is above zero.
+    #[must_use]
+    pub fn speed_blur(&self) -> Option<(oag_post::hd_zoom::Tuning, oag_post::hd_zoom::Frame)> {
+        speed_blur_pulse(&self.effects, self.zoom?, 0)
+    }
+}
+
 impl Photo {
     /// The mode on `subject`, on the `internal` lens, with the HUD off and the help up.
     /// `track_available` is whether the circuit authors a camera node. `restore` is the
@@ -379,23 +449,7 @@ impl Photo {
     /// The zoom ring's numbers and the pulse the speed blur holds, when the row is above zero.
     #[must_use]
     pub fn speed_blur(&self) -> Option<(oag_post::hd_zoom::Tuning, oag_post::hd_zoom::Frame)> {
-        let blur = self.effects.speed_blur();
-        let tuning = self.zoom?;
-        (blur > 0.0).then(|| {
-            (
-                tuning,
-                oag_post::hd_zoom::Frame {
-                    boost: blur,
-                    // The original writes the damage pulse too, which tints the streak red;
-                    // a speed blur does not read as damage here.
-                    damage: 0.0,
-                    size: [1.0, 1.0],
-                    // A tick of the mode's own, far from any the race counts: the ring's
-                    // history advances once per tick of it, and the race is not stepping.
-                    tick: u64::MAX / 2 + u64::from(self.age),
-                },
-            )
-        })
+        speed_blur_pulse(&self.effects, self.zoom?, u64::from(self.age))
     }
 
     /// The lens that is up.
@@ -461,12 +515,18 @@ impl Photo {
     /// Starts the free lens from `pose`, the camera on screen, with `craft` the position of the
     /// craft in the picture: the picture does not move. Also what TRIANGLE returns to.
     pub fn seed_free(&mut self, pose: CameraOverride, craft: Vec3) {
+        let cam = Free::from_orientation(pose.eye - craft, pose.orientation);
+        let fov = pose
+            .fov_deg
+            .unwrap_or(craft_view::FOV_DEGREES)
+            .clamp(FREE_START_FOV.0, FREE_START_FOV.1);
         let rig = Rig {
-            cam: Free::from_orientation(pose.eye - craft, pose.orientation),
-            fov: pose
-                .fov_deg
-                .unwrap_or(craft_view::FOV_DEGREES)
-                .clamp(CLOSE_FOV.0, CLOSE_FOV.1),
+            cam,
+            fov,
+            least_fov: CLOSE_FOV.0.min(fov),
+            pinned: (cam.orientation().dot(pose.orientation).abs() < 1.0 - 1e-6)
+                .then_some(pose.orientation),
+            reach: FREE_RANGE.max(cam.position.length()),
         };
         self.free = Some(rig);
         self.free_home = Some(rig);
@@ -698,6 +758,9 @@ impl Photo {
             pitch -= dy * FREE_DRAG_LOOK;
         }
         advance -= pad.scroll * FREE_DOLLY;
+        if yaw != 0.0 || pitch != 0.0 || tilt != 0.0 {
+            rig.pinned = None;
+        }
         rig.cam = rig.cam.advance(
             &Motion {
                 advance,
@@ -711,8 +774,8 @@ impl Photo {
             },
             1.0,
         );
-        rig.cam.position = rig.cam.position.clamp_length_max(FREE_RANGE);
-        rig.fov = (rig.fov - zoom * ZOOM_RATE).clamp(CLOSE_FOV.0, CLOSE_FOV.1);
+        rig.cam.position = rig.cam.position.clamp_length_max(rig.reach);
+        rig.fov = (rig.fov - zoom * ZOOM_RATE).clamp(rig.least_fov, CLOSE_FOV.1);
         self.free = Some(rig);
     }
 
@@ -744,7 +807,7 @@ impl Photo {
         if let (Lens::Free, Some(rig)) = (self.lens, self.free) {
             return CameraOverride {
                 eye: craft.position + rig.cam.position,
-                orientation: rig.cam.orientation(),
+                orientation: rig.pinned.unwrap_or_else(|| rig.cam.orientation()),
                 fov_deg: Some(rig.fov),
             };
         }
@@ -931,11 +994,32 @@ impl Race {
         rewinds: bool,
     ) {
         let live = self.core.sim.world.tick;
+        let records = self.recording();
         if let Some(photo) = self.view.photo.take() {
             let mut photo = photo.offering(accumulation, rewinds);
+            photo.effects_mut().set_recording(records);
             photo.effects_mut().set_live(live);
             self.view.photo = Some(photo);
         }
+    }
+
+    /// The shot the open mode asks for at `tick`, or `None` when it is the one frame on screen
+    /// ([`shot::Plan::new`]), with its lens ring sized in the field the frames are drawn with at
+    /// `aspect` and the player's `setting`.
+    #[must_use]
+    pub fn photo_plan(
+        &self,
+        tick: u64,
+        resimulates: bool,
+        aspect: f32,
+        setting: oag_display::display::Fov,
+    ) -> Option<shot::Plan> {
+        shot::Plan::new(
+            self.photo()?,
+            tick,
+            resimulates,
+            self.drawn_fov_degrees(aspect, setting),
+        )
     }
 
     /// Moves the lens sample the next draw is made with; `None` is the camera as it is.
@@ -1102,11 +1186,26 @@ impl Race {
     /// control stands where it opened.
     #[must_use]
     pub fn photo_fx(&self, near: f32, far: f32) -> Option<oag_post::photo_fx::Params> {
-        let photo = self.view.photo.as_ref()?;
         // An accumulated depth of field frame is drawn with the preview's own pass: the lens
         // sample only refines it (`shot`, "Depth of field").
-        let params = photo.effects().params(near, far);
+        let effects = match (&self.view.photo, &self.view.picture) {
+            (Some(photo), _) => photo.effects(),
+            (None, Some(fixed)) => fixed.effects(),
+            (None, None) => return None,
+        };
+        let params = effects.params(near, far);
         params.active().then_some(params)
+    }
+
+    /// Draws every frame with `picture`'s controls, as a saved shot was taken with them.
+    pub fn set_picture(&mut self, picture: FixedPicture) {
+        self.view.picture = Some(picture);
+    }
+
+    /// Whether every frame is drawn with a saved shot's controls (`set_picture`).
+    #[must_use]
+    pub fn has_fixed_picture(&self) -> bool {
+        self.view.picture.is_some()
     }
 
     /// Closes photo mode and puts the camera back as it was.

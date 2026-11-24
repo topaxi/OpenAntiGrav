@@ -19,7 +19,8 @@
 //! On a title whose photo mode accumulates (`oag_title::photo::Accumulation`), three rows more:
 //! the motion blur (off, track, ship), its shutter (`(v * 0.01)^2 * 0.25` seconds, default `20`)
 //! and, where the race can be moved through its past, the rewind (`docs/ui/photo-mode.md`,
-//! "Accumulated shots and rewind").
+//! "Accumulated shots and rewind"). A race that records nothing, or that cannot be moved through
+//! its past, has no ticks to play between keyframes, so it is offered neither blur row.
 //!
 //! **Chosen, not measured:** the direction of the exposure slider (up is brighter; HD's own value
 //! falls as the slider rises and what its shader does with it was never read), the exposure as
@@ -74,6 +75,9 @@ pub struct Effects {
     selected: Row,
     /// Whether the title's photo mode accumulates frames, so the blur rows are on offer.
     accumulates: bool,
+    /// Whether the race records, which a motion blur needs to play the ticks between keyframes
+    /// (`shot::Plan::new`): without it the blur rows are not offered.
+    records: bool,
     /// 0 off, 1 track, 2 ship.
     motion_blur: i32,
     shutter: i32,
@@ -132,6 +136,7 @@ impl Effects {
             focus: Self::FOCUS_OPENS,
             selected: Row::Exposure,
             accumulates: false,
+            records: true,
             motion_blur: 0,
             shutter: Self::SHUTTER_OPENS,
             rewinds: false,
@@ -150,6 +155,15 @@ impl Effects {
         self
     }
 
+    /// Tells the rows whether the race records: a motion blur is on offer only to one that does.
+    /// A blur already chosen is dropped with its row.
+    pub fn set_recording(&mut self, records: bool) {
+        self.records = records;
+        if !records {
+            self.motion_blur = 0;
+        }
+    }
+
     /// The rows on offer, top to bottom: aperture and focus only while depth of field is on,
     /// the shutter only while a motion blur is chosen.
     #[must_use]
@@ -163,7 +177,7 @@ impl Effects {
         if self.depth_of_field {
             rows.extend([Row::Aperture, Row::Focus]);
         }
-        if self.accumulates {
+        if self.accumulates && self.records && self.rewinds {
             rows.push(Row::MotionBlur);
             if self.motion_blur != 0 {
                 rows.push(Row::Shutter);
@@ -289,6 +303,24 @@ impl Effects {
     /// Moves the selected row's value `by` steps (negative is down), stopping at its ends.
     pub fn adjust(&mut self, by: i32) {
         self.adjust_row(self.selected, by);
+    }
+
+    /// Puts `row` at `value`, as the panel would after enough steps: a slider stops at its ends
+    /// and a step the row does not take rounds down. The rewind and play rows are the race's
+    /// moment, not a control, and are left alone.
+    pub fn set(&mut self, row: Row, value: i32) {
+        let slider = |value: i32, step: i32| value.clamp(0, 100) / step * step;
+        match row {
+            Row::Exposure => self.exposure = slider(value, 1),
+            Row::Saturation => self.saturation = slider(value, 1),
+            Row::SpeedBlur => self.speed_blur = slider(value, Self::SPEED_BLUR_STEP),
+            Row::DepthOfField => self.depth_of_field = value > 0,
+            Row::Aperture => self.aperture = slider(value, 1),
+            Row::Focus => self.focus = slider(value, 1),
+            Row::MotionBlur => self.motion_blur = value.clamp(0, 2),
+            Row::Shutter => self.shutter = slider(value, 1),
+            Row::Rewind | Row::Play => {}
+        }
     }
 
     /// Moves `row`'s value `by` steps.

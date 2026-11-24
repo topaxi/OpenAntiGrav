@@ -131,11 +131,18 @@ impl Driver {
             self.down = Some(button);
         }
         // A window draws every frame; a drive draws the ones it is asked for, and a photo mode
-        // shot of several frames is one frame drawn at a time.
-        if self.session.photo_job_running() {
+        // shot of several frames is one frame drawn at a time, and one more with its HUD.
+        if self.session.photo_wants_frames() {
             self.session.gpu.output.draw_next = true;
         }
         self.session.frame()?;
+        if let Some(lost) = &self.session.lost {
+            bail!(
+                "the graphics device was lost ({:?}): {}; saved what there was to save",
+                lost.reason,
+                lost.message
+            );
+        }
         if self.session.quit {
             bail!("the game quit (the last state is below)");
         }
@@ -366,6 +373,10 @@ impl Driver {
             Step::Screenshot(path) => self.screenshot(path)?,
             Step::Drop(path) => {
                 self.session.file_dropped(path);
+                self.frame(None)?;
+            }
+            Step::LoseDevice => {
+                self.session.gpu.lose_device();
                 self.frame(None)?;
             }
             Step::Quit => {}

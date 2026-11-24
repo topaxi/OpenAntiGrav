@@ -690,6 +690,8 @@ OAG_REPLAYS_REFUSED = { text = "CANNOT BE REBUILT HERE: %s", human = false }
 OAG_REPLAY_OPENING = { text = "OPENING REPLAY", human = false }
 OAG_REPLAY_MISMATCH = { text = "THIS REPLAY WAS RECORDED ON AN EARLIER VERSION AND STOPS MATCHING AT %s", human = false }
 OAG_REPLAY_STOPPED = { text = "IT STOPS HERE: THIS VERSION CANNOT REBUILD THE REST", human = false }
+OAG_DEVICE_LOST_LAST_RUN = { text = "THE GRAPHICS DRIVER STOPPED LAST TIME. YOUR PROGRESS IS SAVED", human = false }
+OAG_DEVICE_LOST_TITLE = { text = "OpenAntiGrav - the graphics device was lost. Your progress is saved. Close this window and start the game again", human = false }
 OAG_REPLAY_PLAY = { text = "PLAY", human = false }
 OAG_REPLAY_PAUSE = { text = "PAUSE", human = false }
 OAG_REPLAY_EXIT = { text = "EXIT", human = false }

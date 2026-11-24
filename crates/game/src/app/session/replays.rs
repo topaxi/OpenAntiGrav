@@ -47,6 +47,15 @@ impl Session {
     /// Writes the recordings of the race on screen and of the one parked behind the menus: the
     /// process is ending, and a stage that is never dropped writes nothing else.
     pub(crate) fn keep_replays(&mut self) {
+        // Photo mode's rewind has taken the recording out of the race, and only leaving the mode
+        // puts it back: without that the race has nothing to write.
+        if self
+            .photo
+            .as_ref()
+            .is_some_and(|open| open.origin() != super::photo::Origin::Viewer)
+        {
+            self.leave_photo();
+        }
         if let Stage::Race(stage) = &mut self.stage {
             stage.write_auto_replay();
         }
