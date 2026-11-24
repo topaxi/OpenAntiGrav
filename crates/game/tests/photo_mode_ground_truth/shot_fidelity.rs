@@ -1,5 +1,6 @@
 //! What a saved photo mode shot records of its picture controls and how its HUD is drawn: checks
-//! over the runs `photo_mode_ground_truth` already makes, so no race is played for them.
+//! over the runs `photo_mode_ground_truth` already makes, so no race is played for them. The game
+//! binary is handed in by that module, which is the one the test groups name.
 
 use super::*;
 
@@ -13,8 +14,14 @@ fn meta_of(photo: &Path) -> oag_game::shot_meta::Meta {
 
 /// `oag-game --from-png` on `photo` in the profile `run` made it in: its stdout and the picture
 /// it drew.
-fn from_png(image: &Path, run: &Run, photo: &Path, out: &Path) -> (String, (u32, u32, Vec<u8>)) {
-    let output = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
+fn from_png(
+    binary: &str,
+    image: &Path,
+    run: &Run,
+    photo: &Path,
+    out: &Path,
+) -> (String, (u32, u32, Vec<u8>)) {
+    let output = std::process::Command::new(binary)
         .arg("--from-png")
         .arg(photo)
         .arg("--screenshot")
@@ -41,7 +48,12 @@ fn from_png(image: &Path, run: &Run, photo: &Path, out: &Path) -> (String, (u32,
 
 /// Each control a shot was made with is in its text, a shot at neutral writes none, and
 /// `--from-png` draws the controls again: a brighter exposure stays brighter in the re-render.
-pub(super) fn controls_are_recorded_and_drawn_again(image: &Path, run: &Run, photos: &[PathBuf]) {
+pub(super) fn controls_are_recorded_and_drawn_again(
+    binary: &str,
+    image: &Path,
+    run: &Run,
+    photos: &[PathBuf],
+) {
     let picture = |at: usize| meta_of(&photos[at]).picture;
     for (name, at) in [
         ("neutral", 0),
@@ -62,7 +74,7 @@ pub(super) fn controls_are_recorded_and_drawn_again(image: &Path, run: &Run, pho
     assert!(dof.depth_of_field && dof.aperture.is_some() && dof.focus.is_some());
 
     let out = run.dir.join("rerender-bright.png");
-    let (stdout, again) = from_png(image, run, &photos[1], &out);
+    let (stdout, again) = from_png(binary, image, run, &photos[1], &out);
     assert!(stdout.contains("MATCH"), "{stdout}");
     assert!(stdout.contains("picture controls applied"), "{stdout}");
     let (neutral, bright) = (decode(&photos[0]), decode(&photos[1]));

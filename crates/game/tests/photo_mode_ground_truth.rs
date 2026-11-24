@@ -955,7 +955,12 @@ fn each_picture_control_changes_the_saved_shot_and_at_neutral_it_is_the_unproces
         "the craft in focus changed: {}",
         difference(&neutral, &dof, CRAFT)
     );
-    shot_fidelity::controls_are_recorded_and_drawn_again(&image, &run, &photos);
+    shot_fidelity::controls_are_recorded_and_drawn_again(
+        env!("CARGO_BIN_EXE_oag-game"),
+        &image,
+        &run,
+        &photos,
+    );
 }
 
 /// The game's own motion blur is a setting the mode overrides: a saved shot is the same file
