@@ -2429,6 +2429,17 @@ same save made after the script's connection closed was a bad state that never r
   the pose's stop. Whole-frame mean grey difference **4.66** (RMSE 0.062, edge NCC 0.31); the same frame with ours stowed reads 4.81.
   Hull crops (4x): the original's lower flap fins are drawn on both of ours' with `--pose-flaps` and missing with it off.
 - **Repeat.** Two grabs from two instance boots: `theirs.png` RMSE 3.1 of 65535 (4.8e-5) apart, same clock bits (37.9077 s).
+- **Re-captured (`alongside-airbrakes-inputs`, 2026-11-24)** from `data/saves/pulse-psp/alongside-airbrakes.ppst` with the stored
+  `argv`'s flags (own PPSSPP, `psp-pulse-pair.py --field --layout forward --mid-lap --air-brakes --autopilot off --ram-write ...`),
+  25 parity checks, two grabs (`--state` loaded twice through the pause menu; `trace.csv`, `field.csv`, `field.json` and `theirs.png`
+  are byte-identical between them). Against the stored `theirs.png`: same race clock (37.90767), pose, camera, fov, shield (134.4671),
+  air brakes 100.00 / 100.00, field and HUD record (`original.hud` unchanged); the frame differs by RMSE 8.1 of 65535 (1.2e-4), 0.09 %
+  of pixels over 0.5 % and none over 2 % (largest channel step 3 of 255): no framing or pose change. Ours re-rendered from the copy
+  of the pair directory: rmse 0.0618, edge NCC 0.309, mean grey 4.68 (stored 0.0617 / 0.310 / 4.66). The stored record's `meta.id`
+  was the sibling's (`pulse-psp-race/talons-alongside`); the re-capture carries its own. `--field` now reads the shield bar's flash
+  timer and blink (`hud+0x11c`, `+0x1dc`) into `original.hud` and passes the held pickup and flash flags like a scenery pair
+  (`--hud-readout` alone did it before; the field block then overwrote `original.hud`). On this state the flash reads 0.0 and no held
+  pickup, so ours' flags gain nothing.
 - **Not matched.** (1) The original draws the green Autopilot-pickup hexagon top centre although the timer is 0; ours draws none
   (whole-frame grey 4.68, 3.82 with that 75x60 box masked). (2) The frame is the presented one (lag 1) and the brakes decay 8.4 a tick once the pad is
   released at the load: row 0 reads 100, the row the frame shows 91.6, and ours draws row 0's 100. (3) This is a new moment (race clock 37.91, HUD 27.99 s,
@@ -2483,6 +2494,18 @@ provenance or a reaped path (a broken rule is listed as a note there, `scan --st
 be an accepted exception, a pair script never makes one silently). `check-docs` already refuses a tracked file that
 cites a disposable `data/` directory; it also refuses one that names another lane's worktree. A re-made
 `argv` that names `{scratch}` is refused by `compare-rerender` until that flag is remapped.
+
+**Where a pair's inputs live.** The files ours' recorded flags read (`--pose-from` the `trace.csv`, `--field-from` the
+`field.csv`, `--input-script` a Detonator pair's `ours.inputs`; `field.json` beside them) are written by the pair script into
+its `--out`, and that directory is what is copied whole into `data/reference/compare-page/<pair>/`, as in
+`pulse-psp-race/talons-alongside`. `compare-rerender-ours.py` reads each of them from the pair directory by file name
+(`compare_env.resolve_input_flags`, whatever path the flag records), and `check-pair-provenance` runs that same rule: an input
+that is not in the pair's own directory fails the scan with `INPUT <pair>: <path>: no <file> in the pair directory`, which is
+exactly when a re-render would skip the pair. A Detonator pair's `ours.inputs` and `field.csv` are made again from the record
+(`ensure_detonator_inputs`), so they need not be stored. `argv` itself (`--out {scratch}/...`, `--state`) is not checked: it
+names the capture's own scratch and the save state, neither of which a re-render reads. Copy `--out` whole, never `pair.json`
+and `theirs.png` alone (`pulse-psp-race/talons-alongside-airbrakes` was adopted that way, with `--out {scratch}/pairs/a2`
+wiped, and skipped on every re-render until it was captured again from its surviving state).
 
 ## Publishing
 

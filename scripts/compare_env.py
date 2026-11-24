@@ -96,6 +96,44 @@ def ensure_detonator_inputs(rec, pair_dir):
     return wrote
 
 
+#: Flags of ours' `oag-game` whose value is a file the pair's own original produced (the pose rows, the field rows, an
+#: input script). A re-render reads them from the pair directory, so they are the pair's recorded inputs.
+INPUT_FILE_FLAGS = ("--pose-from", "--field-from", "--input-script")
+#: A recorded path that no longer exists: a lane's scratch directory or a reaped worktree.
+STALE_PATH = re.compile(r"\{scratch\}/|OpenAntiGrav-worktrees/|/data/scratch/")
+
+
+def inputs_made_again(rec):
+    """File names `ensure_detonator_inputs` writes into a pair directory on a re-render, so they need not be stored there."""
+    names = set()
+    if (rec.get("original") or {}).get("detonator") is not None:
+        names.add("ours.inputs")
+        if (rec.get("ours") or {}).get("pose_row"):
+            names.add("field.csv")
+    return names
+
+
+def resolve_input_flags(rec, flags, pair_dir):
+    """`(flags, problems)`: ours' recorded flags with every input file and every stale path read from `pair_dir`.
+
+    An `INPUT_FILE_FLAGS` value, and any other value naming a lane's scratch or a reaped worktree, becomes the file of the
+    same name in the pair directory; one that is not there (and that `inputs_made_again` does not write) is a problem
+    naming the file. `compare-rerender-ours.py` skips a pair with a problem, and `compare_provenance.py scan` fails it."""
+    pair_dir = Path(pair_dir)
+    again = inputs_made_again(rec)
+    out, problems = [], []
+    for i, f in enumerate(flags):
+        f = str(f)
+        if STALE_PATH.search(f) or (i and str(flags[i - 1]) in INPUT_FILE_FLAGS):
+            name = Path(f).name
+            if (pair_dir / name).exists() or name in again:
+                f = str(pair_dir / name)
+            else:
+                problems.append("%s: no %s in the pair directory" % (f, name))
+        out.append(f)
+    return out, problems
+
+
 def go_tick(plat=None):
     """Our race's tick at which the race clock leaves zero: the countdown's length, read from the source of truth
     (`oag_race::COUNTDOWN_TICKS`, `crates/race/src/state.rs`) rather than copied into each pair script. A platform
