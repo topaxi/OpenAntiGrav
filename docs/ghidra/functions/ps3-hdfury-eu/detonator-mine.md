@@ -357,6 +357,52 @@ Dark mines hit exactly as live ones: the contact test reads no `+0x160`. Confide
 - `0x00677048` (both explosions call it), the recolour's sources, `0x00126c38`'s owner test,
   the wave probe's role in Detonator.
 
+## Where a mine stands, and what a laid mine object holds (2026-11-23, `det-mines`, RPCS3)
+
+**Read live**, not from the disassembly: 80 `DetonatorMine` objects (vtable `0x008642f0`, found by a heap scan,
+`rpcs3_hd_field.detonator_mines`) of an HD Detonator race on Talon's Junction, Feisar, stage 1, paused at lap clock
+2.7 s and again at 3.4 s (two boots, a third with the objects' bytes kept). A laid object (`0x170` bytes):
+
+| Offset | Holds | Seen |
+| --- | --- | --- |
+| `+0x00` | vtable | `0x008642f0` |
+| `+0x40` | flags | `9` (active, armed) on a laid mine; `1` once it left the pool (the craft hit one by 3.4 s: 79 at `9`, one at `1`, `+0x160` read `0`) |
+| `+0x50`, `+0x60`, `+0x70` | the basis, rows `(0.9993, 0.036, ..)`, `(-0.036, 0.986, 0.165)`, `(0.006, -0.165, 0.986)` | the up row is the section's up, tilted with the track |
+| `+0x80` | position | static: 80 of 80 identical at 2.7 s and 3.4 s, and identical across boots |
+| `+0x90` | velocity `(99.86, 2.82, 4.58)`, `+0x9c` its length `100.0` | `sec.v10 * 100` of the placer; the position does not move (above) |
+| `+0xc0` | age, s | 58.37 at a world clock of 56.5 (not the lap clock) |
+| `+0xc6` / `+0xc8` | track entry (u16) / lane index `j` (u8) | `j = lanes / 2 + lane` |
+| `+0xd8`, `+0xf4`, `+0xf8`, `+0x100` | football size, envelope `s`, envelope `t`, `MineBrightness` | `1.3537`, `0.5886`, `0.568`, `1.1771`: `2.3 s = 1.3538`, `2 s = 1.1772` exactly as `detonator-mine-material.md` writes them |
+| `+0x138` | `MineColour` | `(0.4784, 0.098, 1.0)` = `(122, 25, 255) / 255`, stage 1's `Detonator Mine Colour` in file order |
+| `+0x154`, `+0x158` | band indices | the football's and its `+ 11` |
+| `+0x160` | live | `0x01000000` (a byte `1`) |
+
+**Height.** The object's position sits **3.00 along the section's up above** the point
+`oag_weapons::detonator::Survey::point` gives for its entry and lane (70 of 80 within 0.1; the other ten 2.5 to 2.9 on
+banked or sloped sections, where the object's up is the ground normal and ours the section's), and **0.06 across the
+section on average (0.47 at most)** on all 80, so the lane lattice, `3.5` a lane, is the original's to the unit. That
+is `oag_weapons::detonator::MINE_LIFT`; draw, contact (`trigger_radius 3`, from the object's position), the cannon
+round's capsule test and the EMP's event point read it through `Survey::mine_point`. A bomb stays on `point` (unmeasured).
+Confidence 75: the offset is measured on one circuit and one stage; why it is `3.0` is not read (a `Collision_SweepSegment`
+down to the track in `DetonatorMine_Place`, `0x00139ed0`, is the candidate, which would also explain the ten that differ).
+
+**Placement is deterministic from the state.** The same 80 `(entry, lane)` addresses and positions came out of three
+boots of the same save state (`Libc_Rand`'s stream is seeded the same), so one read stands for a pair's frames at any
+lap clock of that state. **The entry number is the original's, not ours':** its survey starts at the player's start
+cursor (`Detonator_PlaceStageObjects`, "Walk", `detonator-placement.md`), ours at the spline's origin, **7 entries
+apart on Talon's Junction** (original entry `n` is ours `n - 7`), so a carried mine is matched by position
+(`RaceSim::carry_detonator_mines`).
+
+**Open: the near mines are drawn further away than their objects.** In `mines-ahead` (lap 2.67 s) the three mines 12 to 18
+units ahead of the camera project, with the pair's camera, 30 % further from the screen centre than the original draws
+them (`666, 1075, 1703` against `770, 1040, 1490` across), as if 7 units further down the view; the far mines (185 to 208
+units) and, in `pad` (2.0 s), all four near mines at 83 to 89 units, project to within 4 px of where the original draws
+them, and the scenery's red strips agree to 8 to 25 px. In `cannon-volley` (2.63 s) the factor is 0.87. It is not time,
+not a model offset (both models are unit spheres about the origin) and not the objects' motion. Undetermined.
+
+**2048/Omega:** not checked (the object layout is HD's `DetonatorMine`; 2048 and Omega place with the same files,
+`detonator-placement.md`). **Checked, applies, not wired**: the height and the carry are HD's.
+
 ## Cross-check: 2048 and Omega
 
 - **Weapon table**: `weaponstats_Detonator.xml` (2048 v1.04 `data1.psarc`) and

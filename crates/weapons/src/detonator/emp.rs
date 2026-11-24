@@ -281,7 +281,7 @@ fn clear_entry(
             continue;
         }
         let at = survey
-            .point(&placed, config.lane_width)
+            .mine_point(&placed, config.lane_width)
             .map_or(oag_core::math::Vec3::ZERO, |(at, _)| at);
         let cannon = &mut field.cannon;
         let points = if placed.live {

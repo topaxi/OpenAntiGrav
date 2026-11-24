@@ -55,6 +55,14 @@ const PROBE_DOWN: f32 = 64.0;
 /// Entries within this of the first are the start zone and take nothing.
 const START_ZONE: f32 = 150.0;
 
+/// How far across a section a carried mine may be from its nearest lane and still be snapped to it:
+/// under one lane step.
+const SNAP_RADIUS: f32 = 4.0;
+
+/// How far a carried mine's height above a lane may differ from [`oag_weapons::detonator::MINE_LIFT`] (the
+/// measured spread is 2.5 to 3.2): under one lane step, so a lane on another deck never takes the snap.
+const LIFT_TOLERANCE: f32 = 1.5;
+
 /// The share of the measured width the lanes fan across.
 const USABLE_WIDTH: f32 = 0.9;
 
@@ -183,7 +191,7 @@ impl crate::sim::RaceSim {
         let detonator = self.detonator.as_ref()?;
         let mine = self.world.detonator.live_mines().get(index)?;
         let lane = detonator.layout.values.distance_offset_between_mines;
-        detonator.survey.point(mine, lane).map(|(at, _)| at)
+        detonator.survey.mine_point(mine, lane).map(|(at, _)| at)
     }
 
     /// Where a craft stands to shoot laid mine `index`: `distance` before it along the lap, with
@@ -193,7 +201,7 @@ impl crate::sim::RaceSim {
         let detonator = self.detonator.as_ref()?;
         let mine = self.world.detonator.live_mines().get(index)?;
         let lane = detonator.layout.values.distance_offset_between_mines;
-        let (at, up) = detonator.survey.point(mine, lane)?;
+        let (at, up) = detonator.survey.mine_point(mine, lane)?;
         let entries = &detonator.survey.entries;
         let here = usize::from(mine.entry);
         let (from, to) = if here + 1 < entries.len() {
@@ -294,6 +302,89 @@ impl crate::sim::RaceSim {
                 EventKind::MineEmped { .. } | EventKind::BombEmped => {}
             }
         }
+    }
+
+    /// Puts the opening stage's mines where the original's were, all live, in place of the seeded layout
+    /// (`--detonator-mines`): each position is snapped to the free lane of ours' survey nearest to it
+    /// across the section (the offset along the section's up axis is the mine's hover height and is not
+    /// compared). The stage is laid first so the bomb and the stage counter are the race's own. Returns how
+    /// many positions had no lane within [`SNAP_RADIUS`] across and [`LIFT_TOLERANCE`] of the mine's height, or
+    /// a lane another carried mine or the bomb already holds, and were dropped. Nothing happens off Detonator.
+    ///
+    /// A comparison against the original carries its mines this way: the placer's `Libc_Rand` stream is not
+    /// carried, and the original numbers its entries from the player's start cursor where ours starts at the
+    /// spline's origin (7 apart on Talon's Junction), so a mine's own entry number does not transfer; its
+    /// position does (`docs/tools/compare-page.md`, "Detonator pairs").
+    pub fn carry_detonator_mines(&mut self, positions: &[Vec3]) -> usize {
+        use oag_weapons::detonator::{MAX_MINES, MINE_LIFT, Placed};
+        let Some(detonator) = self.detonator.clone() else {
+            return 0;
+        };
+        if self.world.detonator.stages_laid == 0 {
+            let _ = oag_weapons::detonator::place_stage(
+                &mut self.world.detonator,
+                &detonator.survey,
+                &detonator.layout,
+                &mut self.world.rng,
+                0,
+            );
+        }
+        let lane_width = detonator.layout.values.distance_offset_between_mines;
+        let bombs: Vec<Placed> = self.world.detonator.live_bombs().to_vec();
+        let mut laid: Vec<Placed> = Vec::new();
+        let mut dropped = 0;
+        for &position in positions {
+            let mut best: Option<(f32, Placed)> = None;
+            for (index, entry) in detonator.survey.entries.iter().enumerate() {
+                if !entry.usable {
+                    continue;
+                }
+                for j in 0..entry.lanes {
+                    if entry.blocked & (1 << j) != 0 {
+                        continue;
+                    }
+                    let placed = Placed {
+                        entry: index as u16,
+                        lane: j as i8 - (entry.lanes / 2) as i8,
+                        live: true,
+                    };
+                    let Some((at, up)) = detonator.survey.point(&placed, lane_width) else {
+                        continue;
+                    };
+                    let apart = position - at;
+                    let along = apart.dot(up);
+                    // A lane on another deck (an overpass) has the right place across and the wrong height.
+                    if (along - MINE_LIFT).abs() > LIFT_TOLERANCE {
+                        continue;
+                    }
+                    let across = (apart - up * along).length();
+                    if best.is_none_or(|(nearest, _)| across < nearest) {
+                        best = Some((across, placed));
+                    }
+                }
+            }
+            match best {
+                Some((across, placed))
+                    if across <= SNAP_RADIUS
+                        && laid.len() < MAX_MINES
+                        && !laid
+                            .iter()
+                            .any(|l| (l.entry, l.lane) == (placed.entry, placed.lane))
+                        && !bombs
+                            .iter()
+                            .any(|b| (b.entry, b.lane) == (placed.entry, placed.lane)) =>
+                {
+                    laid.push(placed);
+                }
+                _ => dropped += 1,
+            }
+        }
+        let field = &mut self.world.detonator;
+        for (slot, placed) in field.mines.iter_mut().zip(&laid) {
+            *slot = *placed;
+        }
+        field.live_mines = laid.len() as u16;
+        dropped
     }
 
     /// Lays the stages the player has reached: the opening one on the first tick, then one per

@@ -20,6 +20,12 @@ pub(crate) const BAND_CHOICES: usize = 4;
 pub(crate) const SPIKE_BAND_OFFSET: usize = 11;
 /// `MineBrightness = 2 s`.
 pub(crate) const MINE_BRIGHTNESS_GAIN: f32 = 2.0;
+/// The football's size is `clamp(2.3 s, 1, 2.3)`.
+pub(crate) const FOOTBALL_SCALE_GAIN: f32 = 2.3;
+/// The spikes' size is `clamp(4 t, 1, football size + 0.95)`.
+pub(crate) const SPIKE_SCALE_GAIN: f32 = 4.0;
+/// How far past the football's size the spikes may reach.
+pub(crate) const SPIKE_REACH: f32 = 0.95;
 /// A dark mine's `MineColour` on the football, `(2, 2, 2)`.
 pub(crate) const DARK_FOOTBALL: [f32; 3] = [2.0; 3];
 /// A dark mine's `MineColour` on the spikes, `(10, 10, 10)`.
@@ -111,6 +117,18 @@ impl MineEnvelope {
     pub(crate) fn step(&mut self, levels: &[f32], band: usize) {
         self.football = follow(self.football, band_level(levels, band));
         self.spikes = follow(self.spikes, band_level(levels, band + SPIKE_BAND_OFFSET));
+    }
+
+    /// The football's size, `clamp(2.3 s, 1, 2.3)` (`m+0xd8`).
+    #[must_use]
+    pub(crate) fn football_scale(&self) -> f32 {
+        (self.football * FOOTBALL_SCALE_GAIN).clamp(1.0, FOOTBALL_SCALE_GAIN)
+    }
+
+    /// The spikes' size, `clamp(4 t, 1, football size + 0.95)`.
+    #[must_use]
+    pub(crate) fn spike_scale(&self) -> f32 {
+        (self.spikes * SPIKE_SCALE_GAIN).clamp(1.0, self.football_scale() + SPIKE_REACH)
     }
 
     /// `MineBrightness`, the one value both models read: `2 s` of the football's envelope.

@@ -131,3 +131,33 @@ fn the_laid_mines_the_draw_colours_are_the_ones_it_places() {
         "the opening stage's mines are all live"
     );
 }
+
+/// A laid mine's size reaches its football's and its spikes' matrices as the scene recorded it
+/// (`m+0xd8` and the spikes' own); a mine with none recorded is drawn at size 1.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn a_laid_mines_recorded_size_scales_its_football_and_its_spikes() {
+    let Some(image) = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let loaded = crate::load(&crate::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: Mode::Detonator,
+        ..crate::Options::default()
+    })
+    .expect("loading an HD Detonator race");
+    let mut race = Race::start(loaded.setup, loaded.view, loaded.modules);
+    race.tick(&oag_gameplay::PlayerInputs::none());
+    let (ordinary, laid) = race.detonator_mine_looks();
+    let first = ordinary;
+    let axis = |m: &oag_core::math::Mat4| m.x_axis.truncate().length();
+    assert_eq!(axis(&race.mine_model_matrices()[first]), 1.0);
+    race.view
+        .mine_sizes
+        .lock()
+        .expect("not poisoned")
+        .insert((laid[0].entry, laid[0].lane), (1.5, 2.25));
+    assert!((axis(&race.mine_model_matrices()[first]) - 1.5).abs() < 1e-5);
+    assert!((axis(&race.mine_spike_matrices()[first]) - 2.25).abs() < 1e-5);
+}

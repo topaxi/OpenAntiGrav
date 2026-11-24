@@ -512,7 +512,7 @@ fn test_hits(
     let mut i = 0;
     while i < usize::from(field.live_mines) {
         let placed = field.mines[i];
-        let Some((at, _)) = survey.point(&placed, config.lane_width) else {
+        let Some((at, _)) = survey.mine_point(&placed, config.lane_width) else {
             i += 1;
             continue;
         };
@@ -592,7 +592,7 @@ fn chain_reaction(
     let mut i = 0;
     while i < usize::from(field.live_mines) {
         let placed = field.mines[i];
-        let Some((at, _)) = survey.point(&placed, config.lane_width) else {
+        let Some((at, _)) = survey.mine_point(&placed, config.lane_width) else {
             i += 1;
             continue;
         };

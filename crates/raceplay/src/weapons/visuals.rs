@@ -278,7 +278,22 @@ impl Race {
     #[must_use]
     pub fn mine_model_matrices(&self) -> Vec<Mat4> {
         let mut matrices = self.projectile_model_matrices(oag_tables::weapons::Weapon::Mine);
-        matrices.extend(self.detonator_matrices(self.core.sim.world.detonator.live_mines()));
+        matrices.extend(self.detonator_matrices(
+            self.core.sim.world.detonator.live_mines(),
+            Laid::Mines(MinePart::Football),
+        ));
+        matrices
+    }
+
+    /// [`Self::mine_model_matrices`] with each laid Detonator mine at its spikes' size: the matrices the
+    /// `mine_rita_spikes` pool draws.
+    #[must_use]
+    pub(crate) fn mine_spike_matrices(&self) -> Vec<Mat4> {
+        let mut matrices = self.projectile_model_matrices(oag_tables::weapons::Weapon::Mine);
+        matrices.extend(self.detonator_matrices(
+            self.core.sim.world.detonator.live_mines(),
+            Laid::Mines(MinePart::Spikes),
+        ));
         matrices
     }
 
@@ -312,16 +327,35 @@ impl Race {
         (ordinary, laid)
     }
 
-    /// The model matrices of laid Detonator objects, off the lap's survey. Empty when the race has
-    /// none.
-    fn detonator_matrices(&self, laid: &[oag_weapons::detonator::Placed]) -> Vec<Mat4> {
+    /// The model matrices of laid Detonator objects (`mines`: they, else bombs), off the lap's survey.
+    /// Empty when the race has none.
+    fn detonator_matrices(&self, laid: &[oag_weapons::detonator::Placed], kind: Laid) -> Vec<Mat4> {
         let Some(detonator) = &self.core.sim.detonator else {
             return Vec::new();
         };
         let lane_width = detonator.layout.values.distance_offset_between_mines;
+        let sizes = crate::drawable::lock(&self.view.mine_sizes);
         laid.iter()
-            .filter_map(|placed| detonator.survey.point(placed, lane_width))
-            .map(|(position, up)| detonator_matrix(position, up))
+            .filter_map(|placed| {
+                let (position, up) = match kind {
+                    Laid::Mines(_) => detonator.survey.mine_point(placed, lane_width),
+                    Laid::Bombs => detonator.survey.point(placed, lane_width),
+                }?;
+                let size = match kind {
+                    Laid::Mines(part) => {
+                        let (football, spikes) = sizes
+                            .get(&(placed.entry, placed.lane))
+                            .copied()
+                            .unwrap_or((1.0, 1.0));
+                        match part {
+                            MinePart::Football => football,
+                            MinePart::Spikes => spikes,
+                        }
+                    }
+                    Laid::Bombs => 1.0,
+                };
+                Some(detonator_matrix(position, up) * Mat4::from_scale(Vec3::splat(size)))
+            })
             .collect()
     }
 
@@ -335,7 +369,9 @@ impl Race {
     #[must_use]
     pub fn bomb_model_matrices(&self) -> Vec<Mat4> {
         let mut matrices = self.projectile_model_matrices(oag_tables::weapons::Weapon::Bomb);
-        matrices.extend(self.detonator_matrices(self.core.sim.world.detonator.live_bombs()));
+        matrices.extend(
+            self.detonator_matrices(self.core.sim.world.detonator.live_bombs(), Laid::Bombs),
+        );
         matrices
     }
 
@@ -474,6 +510,15 @@ impl Race {
 /// and the world Z axis (`docs/ghidra/functions/ps3-hdfury-eu/detonator-placement.md`); the init
 /// is unread. **Chosen, not measured**: the same axes, orthonormalised about the up axis so a
 /// banked section does not shear the model. The model is `DetonatorObjects`' (`detonator_models`).
+/// Which laid Detonator object a matrix list is for.
+#[derive(Clone, Copy)]
+enum Laid {
+    Mines(MinePart),
+    Bombs,
+}
+
+use crate::detonator_look::MinePart;
+
 fn detonator_matrix(position: Vec3, up: Vec3) -> Mat4 {
     let up = up.normalize_or_zero();
     let up = if up == Vec3::ZERO { Vec3::Y } else { up };

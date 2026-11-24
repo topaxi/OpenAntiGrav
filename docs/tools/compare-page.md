@@ -2503,3 +2503,55 @@ rising at the read), so the picture may predate the rise; only `pad` (A) and `mi
 band 3 predicts (box A blue 19.1 and 14.0 at 0.58 and 0.51). Next: grabs where raw is below held, or a lag-scanned frame
 (`hd-pair-lag-scan.py`). Ours was not tuned.
 
+
+### The original's mines in a Detonator pair (2026-11-23, `det-mines`)
+
+**Claim tested:** the middle-right cell of `mines-ahead` and `cannon-volley` (original 36.4 and 26.2, ours 20.7 and 17.8 darker) is
+the original's lit mines in places ours' seeded layout has none, so carrying the layout and the mine look closes it. **Placement
+is carried exactly; the cell does not close, and the frames get worse, because the original draws its near mines somewhere other
+than their objects (below).**
+
+**The pair reads the mine objects.** `rpcs3-hd-detonator-shots.py` scans the heap for `DetonatorMine` objects in the same pause
+(`rpcs3_hd_field.detonator_mines`; vtable `0x008642f0`, `docs/ghidra/functions/ps3-hdfury-eu/detonator-mine.md`, "Where a mine
+stands") and records `ship.mines` (flags, position, entry, lane, live, age; `OAG_MINE_RAW=1` keeps the object's bytes for a survey
+of its other fields). `rpcs3-hd-pair.py --detonator` writes the armed ones (`flags & 9 == 9`; a mine that left the pool keeps flag
+`1`) to `original.detonator.mines` and gives ours
+`--detonator-mines "X,Y,Z;X,Y,Z;..."`: ours lays the opening stage as usual (its bomb, its counter), then puts every mine on the
+survey lane nearest each position across the section (`RaceSim::carry_detonator_mines`, a snap of at most 4 units across and 1.5 of the 3.0 lift in height, so a lane on another deck never takes it; a position with
+no lane, or whose lane another carried mine or the bomb holds, is dropped with a warning). Positions, not the original's entry numbers: its survey starts at the player's start cursor and
+ours at the spline's origin, 7 entries apart on Talon's Junction. The flag is in `ours.flags`, so `compare-rerender-ours.py` replays
+it. A shot without mines (an older record) keeps ours' seeded layout and the pair says so.
+
+**Evidence the carry is exact** (`detonator_ground_truth::carried_mines_stand_where_the_originals_objects_stood`, disc-backed): 80
+objects, identical (position to the bit) at lap 2.7 and 3.4 s and across three boots of the same save state, so the layout is
+deterministic from the state and one read stands for every frame of it; all 80 snap to a lane within 0.47 units across the
+section (mean 0.06), and stand 3.00 above ours' lane point along the up axis (mean 2.92). The 3.0 is `MINE_LIFT`: ours drew a mine
+on the lane point, 3 units too low, 130 px at a mine 18 units ahead.
+
+**Placement against look, in numbers** (`mines-ahead`, middle-right cell MAD / mean grey of the frame, page scorer):
+
+| ours | cell MAD (signed ours - original) | whole frame |
+| --- | --- | --- |
+| seeded layout (main `d011cf24f`) | 36.4 (-20.7) | 16.23 |
+| carried, mine on its lane point | not recorded | 17.56 |
+| carried, lifted 3.0 | 41.1 (-16.9) | 17.41 |
+| carried, lifted, **and shifted 7 units along the view** (scratch, not committed: the fitted offset below) | 34.6 (-18.5) | 15.90 |
+| carried, lifted, size breathing wired | 46.4 (-12.7) | 18.59 |
+
+So with the mines in the original's places the cell stays at 35 to 46: **placement is not most of the cell; the look is** (the
+original's mine is a lit white-violet shell with its holes and long spikes about twice ours' size; ours was a small dark rim
+disc). The size breathing (`detonator-mine-material.md`, "Wired") gives ours the spikes and the size, and the cell gets worse
+because ours' mines are then bigger *and* 7 units nearer than the original draws them.
+
+**The unexplained part.** Projected through the pair's own camera, the original's near mines are drawn 30 % closer to the screen
+centre than their objects (`mines-ahead`: objects at `666, 1075, 1703` across, drawn at `770, 1040, 1490`), the far mines (185 to
+208 units) and all four near mines of `pad` (83 to 89 units, 2.0 s) land within 4 px, and `cannon-volley` (2.63 s) draws 0.87.
+Ours draws each at its object's projection. Scenery agrees (the red strips within 8 to 25 px). Not time (the objects are static),
+not a model offset (unit spheres about the origin). A shift of the object 7 units along the view reproduces `mines-ahead`
+(residual 35 to 50 px) and rejects `pad`, so it is not a constant. Left open; the pairs are not published with the flag until it is
+known (the lead's call).
+
+**Per pair** (main `d011cf24f` to this branch; mean grey of the frame / RMSE; middle-right cell MAD, signed ours - original):
+`pad` 8.81 to 8.80, 0.130 to 0.129, cell 6.3 (-2.1) to 6.3 (-2.1); `mines-ahead` 16.23 to 18.59, 0.187 to 0.209, 36.4 (-20.7) to
+46.4 (-12.7); `cannon-volley` 14.88 to 15.24, 0.178 to 0.179, 26.2 (-17.8) to 27.6 (-17.0). The carried read for `cannon-volley` is
+a boot where the volley fired (lap clock 1.900 to 1.967 over the hold): one mine had left the pool by 2.63 s.
