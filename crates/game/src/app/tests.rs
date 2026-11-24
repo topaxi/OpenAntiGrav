@@ -153,6 +153,7 @@ fn a_hud_state_is_place_lap_and_two_clocks_in_ticks() {
             boost_phase: None,
             autopilot_seconds: None,
             held_pickup: None,
+            shield_flash: None,
             song: None,
             head_to_head: None,
             zone: None,
@@ -199,6 +200,15 @@ fn a_head_to_head_pin_is_a_gap_and_who_leads() {
     assert!(pose::parse_head_to_head("150").is_err());
     assert!(pose::parse_head_to_head("150,ahead").is_err());
     assert!(pose::parse_head_to_head("-3,lead").is_err());
+}
+
+#[test]
+fn a_shield_flash_pin_is_the_timer_and_the_blink_accumulator() {
+    let pin = pose::parse_shield_flash("0.1335, 0").expect("a timer and a blink");
+    assert_eq!((pin.timer, pin.blink), (0.1335, 0.0));
+    assert!(pose::parse_shield_flash("0.1335").is_err());
+    assert!(pose::parse_shield_flash("x,0").is_err());
+    assert!(pose::parse_shield_flash("-0.1,0").is_err());
 }
 
 /// One frame of the PSP's backdrop, to the nanosecond.
@@ -572,13 +582,14 @@ fn zone_bands_take_sixteen_levels_and_conflict_with_the_ramp() {
     );
 }
 
-const HUD_PINS: [&[&str]; 6] = [
+const HUD_PINS: [&[&str]; 7] = [
     &["--hud-state", "5,2,29.4,39.3,562.9,99.4,56.34"],
     &["--hud-state", "1,1,0,0", "--hud-boost-phase", "0.5"],
     &["--hud-state", "1,1,0,0", "--hud-autopilot", "5"],
     &["--hud-state", "1,1,0,0", "--hud-pickup", "Turbo"],
     &["--hud-state", "1,1,0,0", "--hud-song", "Title"],
     &["--hud-state", "1,1,0,0", "--hud-head-to-head", "150,lead"],
+    &["--hud-state", "1,1,0,0", "--hud-shield-flash", "0.1335,0"],
 ];
 
 const CERT_HASH: &str = "0000000000000000000000000000000000000000000000000000000000000000";
@@ -667,6 +678,8 @@ fn a_pair_scripts_capture_still_pins_the_hud() {
         "0.457",
         "--hud-head-to-head",
         "150,trail",
+        "--hud-shield-flash",
+        "0.1335,0",
         "--ticks",
         "0",
         "--screenshot",
@@ -679,6 +692,7 @@ fn a_pair_scripts_capture_still_pins_the_hud() {
     assert_eq!((hud.place, hud.lap), (5, 2));
     assert_eq!(hud.boost_phase, Some(0.457));
     assert!(hud.held_pickup.is_some());
+    assert_eq!(hud.shield_flash.map(|pin| pin.timer), Some(0.1335));
     assert!(hud.head_to_head.is_some_and(|pin| !pin.player_leads));
 }
 

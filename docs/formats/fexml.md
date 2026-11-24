@@ -326,6 +326,34 @@ covers the `EndRace Results` consequence against the real disc; see
 `crates/hd/tests/campaign_grids_ground_truth.rs` for `grid_04`'s own
 disc-backed coverage.
 
+## Hostile input
+
+`oag_tables::fexml` (`expand`, `dictionary`, `text`, `parse`, `asset_paths`,
+and `tag_end`'s other reader, `oag_tables::rumble`) returns an error, or a tree
+of what it could read, on any byte input; it never panics. Disc XML and mod XML
+both reach it (`oag_ui::language::load::overlay_plugins` forwards
+`<code`-prefixed bytes). Three shapes used to panic:
+
+- **`<code<`**: the implied tag end (above) falls before the dictionary body
+  starts, so the body slice was `[5..4]`. Now `NoDictionary`.
+- **A multi-byte character just before an unquoted `<`**: the implied end is
+  that character's last byte, and every reader sliced there. `tag_inner` drops
+  the whole character, as the one-byte case drops its one.
+- **Deep nesting**: `parse` builds the tree iteratively, but dropping or
+  cloning a 200,000-deep one overflows the stack. Nesting past 256 ends the
+  document there, as an unterminated one does.
+
+**Valid input is unchanged.** A census of **7,063** XML entries, read old and
+new and compared by hash of the expanded text, the parsed tree, the asset paths
+and the rumble reading, found **no difference**: Pulse PSP EU/USA and PS2 EU,
+Pure PSP EU/USA, HD (the disc, the PSN build, the update chain), Omega (base
+and patch) and 2048 (base, patch, both DLC packs). **The deepest document nests
+12 elements**, so the 256 limit is not within reach of a shipped file. The
+census is a scratch walk (every disc image and `data/extracted/` tree this
+project reads); the tests are `fexml::tests::robustness`, a seeded sweep of
+truncations, single-byte edits, token soup, random bytes and mutations of a
+real-shaped document.
+
 ## Parser behaviour worth knowing
 
 From the reader itself, documented on both builds

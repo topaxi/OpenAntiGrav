@@ -200,6 +200,7 @@ fn a_mode_held_until_go_draws_no_hud_before_the_release() {
         boost_phase: None,
         autopilot_seconds: None,
         held_pickup: None,
+        shield_flash: None,
         song: None,
         head_to_head: None,
         zone: None,

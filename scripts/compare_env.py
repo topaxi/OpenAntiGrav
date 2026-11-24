@@ -860,6 +860,16 @@ PULSE_HELD_ID_TYPES = ["Rocket", "Missile", "Quake", "Cannon", "Turbo", "Shield"
                        "LeachBeam", "Repulser", "Shuriken"]
 
 
+def shield_flash_flags(hud):
+    """`["--hud-shield-flash", "TIMER,BLINK"]` for a pair record's `original.hud` that read the shield bar's flash timer
+    above zero (Pulse PSP `hud+0x11c`, with the blink accumulator `hud+0x1dc`), or `[]`: the bar draws forced red while the
+    timer runs, and ours' posed capture runs no tick that arms its own."""
+    timer = (hud or {}).get("shield_flash_s")
+    if timer is None or not timer > 0.0:
+        return []
+    return ["--hud-shield-flash", "%.6f,%.6f" % (timer, hud.get("shield_blink_s") or 0.0)]
+
+
 def held_pickup_flags(held_word):
     """`["--hud-pickup", TYPE]` for a Pulse PSP held id, or `[]` when the slot is empty or the id is not a weapon's."""
     if held_word is None or not 0 <= held_word < len(PULSE_HELD_ID_TYPES):

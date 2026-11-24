@@ -116,8 +116,12 @@ a full shield and no pickup row where the original showed 160 km/h and a held Tu
 `--hud-pickup` to a stored Pulse PSP pair whose record names a held id other than the running Autopilot, and a re-render from the record alone
 is pixel-identical to the capture. Re-made from the stored state (`airbrake-uturn-c.ppst`): `theirs.png` pixel-identical to the stored
 one, ours now draws the hexagon and the readout, the hexagon box (205, 0, 76x64) over 40 grey 48.2 % -> 5.8 % of its pixels, the whole frame
-16.5 % -> 6.5 %. What is left on that frame is the bottom bar (ours is cyan where the original's is red, a different gap) and the
-hull. The HD race pair (`hd-race/talons-pack`) and the
+16.5 % -> 6.5 %. The bottom bar is the shield bar, red in the original because its post-hit flash timer was running (`hud+0x11c` read
+0.1335 s at the stop with the pool at 99.98 %, `shield.md`, "The flash timer read live"); `psp-pulse-pair.py --hud-readout` reads that
+timer and the blink accumulator beside the readout and passes `--hud-shield-flash TIMER,BLINK`, which sets the readout's flash and
+blink phase alone, and `compare-rerender-ours.py` replays it from `original.hud.shield_flash_s`. The bar's box (x 304 to 448, y 245
+to 259) over 40 grey went 68.06 % -> 1.14 % of its pixels and the whole frame 6.468 % -> 5.434 %; `talons-boost` and
+`talons-alongside` re-render byte-identical (their records carry no `shield_flash_s`). What is left on that frame is the hull. The HD race pair (`hd-race/talons-pack`) and the
 Zone pairs are unchanged (the flag is Pulse PSP's, from `restore_autopilot_timer`'s own pair types; the Zone pair's frame
 shows the same row and has not been given it).
 

@@ -42,6 +42,7 @@ fn a_captured_field_and_hud_state_are_what_the_race_starts_with() {
         boost_phase: None,
         autopilot_seconds: Some(5.0),
         held_pickup: None,
+        shield_flash: None,
         song: None,
         head_to_head: None,
         zone: None,
@@ -118,6 +119,7 @@ fn a_held_pickup_pin_puts_the_pickup_row_on_the_readout_alone() {
                 boost_phase: None,
                 autopilot_seconds: None,
                 held_pickup,
+                shield_flash: None,
                 song: None,
                 head_to_head: None,
                 zone: None,
@@ -139,6 +141,57 @@ fn a_held_pickup_pin_puts_the_pickup_row_on_the_readout_alone() {
     );
     assert_eq!(ship.autopilot_timer, 0.0);
     assert_eq!(start(None).readout().pickup, None, "no pin, no pickup row");
+}
+
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_shield_flash_pin_turns_the_shield_bar_red_on_the_readout_alone() {
+    let Some(image) = oag_testdata::image("data/images/pulse-psp-eu.chd") else {
+        return;
+    };
+    let start = |shield_flash: Option<race::CaptureShieldFlash>| {
+        let loaded = race::load(&race::Options {
+            source: image.display().to_string(),
+            class: "VENOM".to_string(),
+            mode: oag_race::Mode::TimeTrial,
+            pose: Some(race::PoseRequest::Exact(pose_at(-100.0, -170.0))),
+            hud: Some(race::CaptureHud {
+                place: 1,
+                lap: 1,
+                lap_ticks: 10_554,
+                race_ticks: 10_554,
+                speed_kmh: Some(160.0),
+                shield_percent: Some(99.98),
+                best_lap_ticks: None,
+                best_lap_centiseconds: None,
+                boost_phase: None,
+                autopilot_seconds: None,
+                held_pickup: None,
+                shield_flash,
+                song: None,
+                head_to_head: None,
+                zone: None,
+            }),
+            ..race::Options::default()
+        })
+        .expect("loading the race");
+        race::Race::start(loaded.setup, loaded.view, loaded.modules)
+    };
+    let flashing = start(Some(race::CaptureShieldFlash {
+        timer: 0.1335,
+        blink: 0.0,
+    }));
+    let readout = flashing.readout();
+    assert!(readout.shield_fraction() > 0.99, "the pool is not low");
+    assert!(readout.shield_flashing && readout.shield_forced_red());
+    assert!(
+        readout.shield_blink_phase_on(),
+        "the bar is drawn on the frame's blink phase"
+    );
+    assert!(
+        !start(None).readout().shield_forced_red(),
+        "no pin, the bar keeps its authored colour"
+    );
 }
 
 #[test]

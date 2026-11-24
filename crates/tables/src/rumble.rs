@@ -24,7 +24,7 @@
 
 use std::fmt;
 
-use crate::fexml::{attributes, tag_end};
+use crate::fexml::{attributes, tag_end, tag_inner};
 
 /// Frames per second every shipped pattern declares. Not read by the original;
 /// a different value is refused.
@@ -220,7 +220,7 @@ pub fn parse(data: &[u8]) -> Result<Pattern, Error> {
     while let Some(open) = rest.find('<') {
         rest = &rest[open..];
         let close = tag_end(rest).ok_or(Error::Malformed("RumbleData"))?;
-        let tag = &rest[1..close];
+        let tag = tag_inner(rest, close);
         let self_closed = tag.ends_with('/');
         let tag = tag.trim_end_matches('/');
         let (name, attr_text) = tag.split_once(char::is_whitespace).unwrap_or((tag, ""));
