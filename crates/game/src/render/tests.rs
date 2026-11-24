@@ -715,6 +715,17 @@ fn a_snapped_pen_draws_each_glyph_at_a_whole_unit() {
                 advance: 9,
                 bearing: 1,
             },
+            Glyph {
+                codepoint: u16::from(b'c'),
+                width: 4,
+                height: 4,
+                u0: 2,
+                u1: 6,
+                v0: 2,
+                v1: 6,
+                advance: 9,
+                bearing: 1,
+            },
         ],
     };
     let mut renderer = Renderer::new(
@@ -758,6 +769,25 @@ fn a_snapped_pen_draws_each_glyph_at_a_whole_unit() {
         loose_uv - oag_ui::font::SNAPPED_UV_SHIFT,
         "the texture starts half a texel early"
     );
+    // The box's `4 + 1` texels are spread over the sprite's fractional 3.2 pixels and cut to 3:
+    // the original's `[u0 - 0.5, u1 + 0.5]` by `[v0 - 0.5, v1 + 0.5]`, on both axes.
+    renderer.quads.clear();
+    renderer.push_text(
+        GlyphSlot::Primary,
+        249.0,
+        0.0,
+        0.8,
+        [1.0; 4],
+        [0.0; 4],
+        Align::Left,
+        "c",
+        None,
+    );
+    let span = 5.0 * 3.0 / (4.0 * 0.8);
+    let uv = renderer.quads[0].uv;
+    assert_eq!((uv[0], uv[1]), (1.5, 1.5), "half a texel early in x and y");
+    assert!((uv[2] - span).abs() < 1e-5, "u span {}", uv[2]);
+    assert!((uv[3] - span).abs() < 1e-5, "v span {}", uv[3]);
     // A glyph at the atlas's left edge has no texel before it: the shift stops there.
     renderer.quads.clear();
     renderer.push_text(

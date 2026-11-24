@@ -921,7 +921,7 @@ capture here, so those three keep the advance-only pen (all their menu pairs re-
 **Law (confidence 85 on the Stats face at 0.8, 75 on the menu face at 1.15 and 0.97).** Each glyph is a PSP sprite: its quad
 starts at the **pen rounded up** (`ceil(pen)`, where the pen is the one `pen_step` carries, not the ink edge), is the glyph box's
 width and height at the widget's scale **rounded down** (`floor(width x scale)` by `floor(height x scale)`), and its texture
-coordinates start **half a texel early** in x (`oag_ui::font::snapped_quad`, `SNAPPED_UV_SHIFT`; no shift in y). The line's ink
+coordinates start **half a texel early** on both axes and span `(texels + 1) * whole / fractional` of them (`oag_ui::font::snapped_quad`, `SNAPPED_UV_SHIFT`; the span and the y shift came in with `pure-title-press-start`, below, and this paragraph's first measurement had x only). The line's ink
 edge, which every layout reads (`snapped_run`: wraps, alignment, the pointer rects), is the last quad's right edge.
 
 Evidence: a fresh PPSSPP software grab of Track Selection (`menu-sr-track`, USA). Free fits of a quad (x edges, y edges, bilinear
@@ -952,7 +952,7 @@ The seven Single Player and Tournament pairs, before (main) to after, on one fre
 
 Half-way variants tried on the same frame, whole `menu-sr-track`: an integer quad from the ink edge less one (`ink_left - 1`)
 fixed the Stats face (stats region 871 to 0) and broke the menu face (title 174 to 436, list 76 to 382); a texture shift in y as
-well made every region worse (0.91 %); a width of `round((w - 1) x s)` is as good on the Stats face and worse in the list (31
+well made every region worse (0.91 %; the y shift was right and the span was not widened with it, see the correction below); a width of `round((w - 1) x s)` is as good on the Stats face and worse in the list (31
 px); a u shift of 0.3 to 0.7 texel is within 0.05 points of 0.5, so the half texel is the principled value, not a fit.
 Guards (a review's findings, measured on both Pure faces): no glyph of `LTe50325.fnt` or `FX300ANG.fnt` is under two texels wide, so
 the floor never reaches zero on a measured glyph (a box with ink is still held to one pixel); no box starts left of texel 2 and
@@ -972,6 +972,11 @@ three lines (222, 233, 243): `oag_ui_screens::campaign::footer::DESCRIPTION_LINE
 Checked against the other titles: **Pulse and HD**: not applicable, the snapped quad is `MenuSkin::snapped_pens` (Pure only); a
 Pulse and an HD menu page rendered by main's binary and this one are byte for byte equal. **2048 and Omega**: not checkable
 (no Pure-shaped front end).
+
+**Correction (`pure-title-press-start`): the texture span.** The executable's sprite samples `[u0 - 0.5, u1 + 0.5]` by `[v0 - 0.5, v1 + 0.5]`, `w + 1` by `h + 1` texels, over the fractional `w*s` by `h*s` it is built with and keeps whole pixels of
+(`docs/ghidra/functions/psp-pure-usa/menu-text-centring.md`, "The quad", confidence 80). `snapped_quad` now carries that span (`u_span`, `v_span`) and the start is half a texel early in y too. The title pair's `PRESS START BUTTON` (the scale-1.5 menu face, the share the
+first measurement above left at 0.32 %) goes 0.32 % to 0.01 % whole frame (its text box 5.91 % to 0.00 %); all ten Pure menu pairs improve, `menu-sr-track` 0.25 % to 0.18 % and mean grey 0.73 to 0.33, `menu-pause` 2.23 % to 1.80 %. Pure circuit pairs (`modesto`, `karbonis`), a Pulse PSP menu pair and an HD menu pair re-render byte for byte equal.
+Checked against the other titles: Pulse and HD do not use the snapped quad (equal); 2048 and Omega: not applicable.
 
 ## Pure's right-aligned text ends on its ink (2026-11-23, `pure-letter-spacing`)
 

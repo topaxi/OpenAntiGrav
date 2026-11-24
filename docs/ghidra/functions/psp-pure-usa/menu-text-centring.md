@@ -1,6 +1,6 @@
 # Pure's text layout: where a centred string starts
 
-Where Pure's front end places a centred string, read off the executable and fitted to the seven pause-menu rows measured in PPSSPP. The Pure PSP USA `BOOT.BIN` (Ghidra program `/pure/BOOT-psp-pure-usa.BIN`, image base `0x08804000`). Lane `pure-centre-rounding` (2026-11-24), a follow-up of `pure-row-centring`, which refuted every closed-form rule of the advance sum and asked for the draw code.
+Where Pure's front end places a centred string, read off the executable and fitted to the seven pause-menu rows measured in PPSSPP. The Pure PSP USA `BOOT.BIN` (Ghidra program `/pure/BOOT-psp-pure-usa.BIN`, image base `0x08804000`). Lanes `pure-centre-rounding` (2026-11-24), a follow-up of `pure-row-centring`, which refuted every closed-form rule of the advance sum and asked for the draw code.
 
 ## Functions
 
@@ -26,6 +26,19 @@ Every constant below is a value in the glyph record (`+0x02` ink width, `+0x0c` 
 
 So a centred string's first glyph is at `ceil(x - width/2)`, with no other rounding of the start: an odd width at scale 1 is a `.5` tie and rounds up, and at scale 1.2 the width is the sum of per-glyph snapped pens, not the raw advance sum.
 
+## The quad (confidence 80)
+
+The per-glyph sprite is two vertices, built in `Text_BuildGlyphQuads` (`0x08947f88` to `0x08948054`, the face's border pad zero; the padded branch at `0x08947e88` grows the quad and the uv by the pad on every side and draws twice). With `q` the ceiled left edge above, `y` the layout's top (`local_5c`: the origin less the widget's `+0xac` offset and any vertical alignment, ceiled when the flag is set) and `w`, `h` the record's `+0x02`, `+0x03` bytes:
+
+- corner 0: position `(q, y)`, texture `(u0 - 0.5, v0 - 0.5)`;
+- corner 1: position `(q + w*s, y + h*s)`, texture `(u1 + 0.5, v1 + 0.5)`;
+
+`u0`, `u1`, `v0`, `v1` are the record's `+0x04`, `+0x06`, `+0x08`, `+0x0a` halfwords (`u1 - u0 = w`: the right and bottom edges are exclusive, so the box is `w` by `h` texels). The two positions go to the GE as floats through a sprite primitive; the rasteriser keeps whole pixels of the quad (inferred from the fit, not read: ours: `floor(w*s)` by `floor(h*s)`, measured on the Stats and menu faces, `docs/ui/menus-original.md`, "Pure's glyph quads are whole pixels") and computes the texture slope from the **fractional** span. So the sprite samples `w + 1` by `h + 1` texels, starting half a texel early on **both** axes, spread over `w*s` by `h*s` pixels and cut to whole pixels: the span of the quad's own pixels is `(w + 1) * floor(w*s) / (w*s)` texels in x and the same in y (`oag_ui::font::snapped_quad`, `u_span`, `v_span`).
+
+Evidence: a texture span of exactly `w` (the previous wiring) is the only part of this that differed from the code. Rendered from `PRESS START BUTTON` (`FX300ANG.fnt`, scale 1.5, `w` 12, `h` 15: 18 by 22 pixels from 18 by 22.5) the span turns the title pair's share of pixels more than 40 grey apart from 0.32 % to 0.01 % (mean grey 0.53 to 0.08), the text's box (x 100 to 420, y 198 to 220) from 5.91 % to 0.00 %. All ten Pure menu pairs improve (whole frame, mean grey: main 0.18 to 0.13 %, 0.55 to 0.27; mode 0.22 to 0.15, 0.58 to 0.27; pause 2.23 to 1.80, 5.52 to 5.09; sr-class 0.14 to 0.08, 0.42 to 0.18; sr-league 0.14 to 0.08, 0.38 to 0.17; sr-track 0.25 to 0.18, 0.73 to 0.33; t-class 0.13 to 0.07, 0.41 to 0.17; t-sel 0.16 to 0.10, 0.45 to 0.20; team 0.18 to 0.12, 0.65 to 0.26). Variants tried on the same pairs: `w + 1` texels over the whole-pixel width (title 0.01 %, but sr-track 0.25 % to 0.49 %: the Stats face at 0.8 has a 0.6 pixel fraction), `h + 1` in y alone (title 0.28 %), a shift without the wider span (title 0.17 % to 0.11 %, every other pair worse). Confidence **80**: the decompile and the disassembly read, ten of ten pairs closer to the original; no live GE list or vertex read.
+
+Pure's menu skin names no `borderExtendPixels` for any face, so the unpadded branch is the one read and the one wired; a padded face would be the other branch.
+
 ## Evidence (confidence 80)
 
 1. **The seven measured rows fit, with no free parameter.** `FX300ANG.fnt` (the `<Menu>` face) at x 240, first quad column against the original's, in float32 (`crates/ui/tests/pure_centre_ground_truth.rs`):
@@ -50,7 +63,7 @@ What this is not: a live breakpoint. The addresses are read from the decompile a
 
 ## Open
 
-- **The quad's right edge.** The layout builds it as `q + w*s`, fractional, where ours (`oag_ui::font::snapped_quad`, measured on the Stats and menu faces) uses `floor(w*s)`. The measured law and the code disagree here; not changed by this lane (it would move every Pure pair).
+- ~~**The quad's right edge.**~~ Closed: the code builds the corner fractional and the rasteriser keeps `floor(w*s)` pixels of it; what was missing was the texture span (above, "The quad").
 - **The quad's left edge for a glyph with a bearing.** The code reads `ceil(pen + b*s)`; ours uses `ceil(pen)` where `pen` is before the bearing. Identical for bearing 0, which is every glyph of the seven rows and every first glyph of Pure's menu strings; they differ for a string led by a glyph with a bearing (punctuation).
 - **The left-aligned first glyph.** The code starts the pen at `x - b0*s` and so the first quad at `ceil(x)`; ours starts at `ceil(x)` and adds the bearing before the ceil. Not touched.
 - **Which widget draws a `<Menu>` row.** The pause rows are `<Menu name="Option">` entries; the 7/7 fit says they lay out through `Text_BuildGlyphQuads`, but the widget between the menu and `0x08947a48` (`0x088bd0d0` or `0x088d4838`) was not read.
