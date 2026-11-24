@@ -58,6 +58,10 @@ fn a_scaled_measure_steps_each_glyph_up_before_it_ends_on_the_ink() {
     assert_eq!(by_pen_end(&atlas, "bcb", 1.2, 240.0), 217.0);
     assert_eq!(start("ccb"), 219.0);
     assert_eq!(by_pen_end(&atlas, "ccb", 1.2, 240.0), 218.0);
+    // Each pen's own step up decides `cccb`: without the steps it measures 0.6 less and starts at
+    // 212; by the pen end it starts at 210.
+    assert_eq!(start("cccb"), 211.0);
+    assert_eq!(by_pen_end(&atlas, "cccb", 1.2, 240.0), 210.0);
 }
 
 /// A first glyph's bearing moves the pen it starts from but not where its ink lands: the pen is
