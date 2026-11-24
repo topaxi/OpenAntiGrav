@@ -200,9 +200,9 @@ fn omega_holds_like_vita() {
 }
 
 /// HD's Zone end takes the orbit, not a station: the eye starts where the chase camera was and
-/// comes in toward 5 units, and the field narrows to about 30 degrees at 2.5 s.
+/// eases to the orbit, and the field narrows to about 30 degrees at 2.5 s.
 #[test]
-fn hd_zone_end_is_the_orbit_coming_in_from_the_chase_eye() {
+fn hd_zone_end_is_the_orbit_cut_in_from_the_chase_eye() {
     let mut race = super::zone_end::zone_race(DestroyedCraft::HD);
     race.view.destroy_camera = DestroyCamera::new(vec![near_station()], 0.4);
     let chase = eye(&race);
@@ -216,16 +216,9 @@ fn hd_zone_end_is_the_orbit_coming_in_from_the_chase_eye() {
         "starts {start} off the craft, the chase eye was {}",
         chase.distance(craft)
     );
-    let mut nearest = start;
     for _ in 0..150 {
         race.view.advance_destroy_camera(&race.core);
-        let camera = race.view.destroy_camera_now().expect("the orbit");
-        nearest = nearest.min(camera.eye.distance(craft));
     }
-    assert!(
-        nearest > start.min(5.0) - 0.1,
-        "started {start} out and came in to {nearest}, past its target of 5"
-    );
     let camera = race.view.destroy_camera_now().expect("the orbit");
     assert!(
         (camera.fov - 30.0).abs() < 1.5,

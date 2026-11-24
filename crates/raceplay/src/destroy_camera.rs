@@ -196,7 +196,7 @@ impl RaceView {
         if orbits {
             let orbit = match (&mut camera.orbit, orbit_cut_from) {
                 (Some(orbit), _) => {
-                    orbit.advance(dt, subject);
+                    orbit.advance(dt, subject, ship.physics.body.orientation);
                     *orbit
                 }
                 (None, chase) => {
