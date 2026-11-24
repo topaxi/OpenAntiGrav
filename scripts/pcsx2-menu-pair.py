@@ -52,6 +52,12 @@ HEAD_MARGIN = 40.0
 #: The ticker box in the 1280 x 720 pair (the bar between the tag box and the right end, text rows only) the head fit scores.
 TICKER_BOX = (210, 628, 1030, 40)
 
+#: The craft's box in the 1280 x 720 `team` pair (the hull and its wings, not the stat panel) the sway fit scores.
+HULL_BOX = (100, 200, 500, 320)
+#: The length of `ship_FE.vex`'s `Anim Transform` loop, in seconds (359 frames at 60 a second: `docs/ui/selection-screens.md`, "The craft sways"):
+#: a phase outside it is the same pose.
+SWAY_LOOP = 5.983
+
 #: One pair per entry. `state` is the savestate file under `data/saves/pulse-ps2/menu/`; `page` is ours' `--menu-page`.
 WALK = [
     {"id": "grid", "title": "Race Campaign: Grid Selection", "screen": "Grid Selection", "page": "grid-select", "state": "grid-selection.p2s",
@@ -169,6 +175,46 @@ def ticker_box_grey(theirs, ours):
     return float(numpy.abs(boxes[0] - boxes[1]).mean())
 
 
+def box_grey(theirs, ours, box):
+    """Mean absolute grey difference of `box` (x, y, w, h) between two same-size frames, ImageMagick's grey as `compare_env.overlap_score`
+    reads it, so the box moves with the pair's own `mean_grey`."""
+    x, y, w, h = box
+    args = ["magick"]
+    for path in (theirs, ours):
+        args += ["(", str(path), "-crop", "%dx%d+%d+%d" % (w, h, x, y), "+repage", ")"]
+    args += ["-colorspace", "Gray", "-compose", "difference", "-composite", "-format", "%[fx:mean*255]", "info:"]
+    return float(subprocess.run(args, capture_output=True, text=True, check=True).stdout)
+
+
+def fit_sway(args, item, plat, profile, theirs, pdir):
+    """The hull's `--menu-model-seconds`: PS2 Pulse has no recovered address for the ship node's clock and a loaded state keeps its phase while the VM
+    runs on, so ours is rendered at phases a quarter second apart over the loop, then at the neighbours of the best, and the phase whose `HULL_BOX` lies
+    closest to the original's is kept. Returns `(seconds, {seconds: box grey})`."""
+    offset = ce.display_offset_record(plat["key"], "menu")
+    scores = {}
+
+    def score(seconds):
+        seconds = round(seconds % SWAY_LOOP, 3)
+        if seconds not in scores:
+            png = pdir / ("sway-fit-%s.png" % seconds)
+            cm.render_ours(args.oag_game, args.source, plat, item["page"], png, profile, ce.size_text(plat),
+                           ("--menu-model-seconds", "%.3f" % seconds))
+            if offset:
+                ce.apply_display_offset(png, offset)
+            scores[seconds] = round(box_grey(theirs, png, HULL_BOX), 3)
+            png.unlink()
+        return scores[seconds]
+
+    for step in range(int(SWAY_LOOP / 0.25) + 1):
+        score(step * 0.25)
+    for step in (0.1, 0.05, 0.025):
+        best = min(scores, key=scores.get)
+        score(best - step)
+        score(best + step)
+    best = min(scores, key=scores.get)
+    return best, dict(sorted(scores.items()))
+
+
 def fit_head(args, item, plat, profile, theirs, capture, pdir, extra):
     """The head the screenshot caught, between the two RAM reads: ours is rendered with the message pinned at candidate heads (every third one, then
     the neighbours of the best) and the head whose ticker box lies closest to the original's is kept. Returns `(head, {head: box grey})`."""
@@ -244,6 +290,13 @@ def build_pair(args, item, out, plat, profile, raw, captured_at, capture):
     player = {"name": capture["name"], "tag": capture["tag"]}
     prepare_profile(plat, profile, player)
     model = ("--menu-model-seconds", "%.3f" % args.model_seconds) if item["id"] == "team" and args.model_seconds is not None else ()
+    if item["id"] == "team" and args.model_seconds is None:
+        sway, sway_scores = fit_sway(args, item, plat, profile, pdir / "resized.png", pdir)
+        model = ("--menu-model-seconds", "%.3f" % sway)
+        pair.rec["original"]["ship_sway_fitted"] = {
+            "value": sway, "hull_box_mean_grey": sway_scores, "box": list(HULL_BOX), "loop_s": SWAY_LOOP,
+            "basis": "fitted: the hull's `Anim Transform` phase whose hull box in ours is closest to the original's (ours rendered at each); the PS2's node clock "
+                     "has no recovered address, so this is a fit and not a read"}
     head, scores = fit_head(args, item, plat, profile, pdir / "resized.png", capture, pdir, model)
     clocked = pulse_flags(pair, capture, head) if item["id"] in CLOCKED else ()
     pair.rec["original"]["footer_ticker"] = {
