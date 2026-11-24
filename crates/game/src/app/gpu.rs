@@ -15,6 +15,7 @@ use oag_display::display;
 use winit::event_loop::ActiveEventLoop;
 use winit::window::Window;
 
+use crate::app::device_loss;
 use crate::app::hints;
 use crate::app::window::{Look, attributes, choose_monitor, frame_latency, present_modes};
 
@@ -294,6 +295,8 @@ pub(crate) struct Gpu {
     pub(crate) reaper: Option<oag_gpu::reaper::Reaper>,
     pub(crate) device: wgpu::Device,
     pub(crate) queue: wgpu::Queue,
+    /// Whether the device has been lost, and why (`crate::app::device_loss`).
+    pub(crate) loss: device_loss::DeviceLoss,
     /// What the RENDERER row offers. See [`adapter::Chosen::offered`].
     pub(crate) adapters: Vec<String>,
     /// What the RENDERER row would have to say to describe this run, which is
@@ -347,6 +350,7 @@ pub(crate) struct BroughtUp {
     adapters: Vec<String>,
     in_use: Vec<String>,
     temporal: bool,
+    loss: device_loss::DeviceLoss,
 }
 
 impl Gpu {
@@ -355,6 +359,14 @@ impl Gpu {
     /// (`crate::app::handler::controls_for`).
     pub(crate) fn is_headless(&self) -> bool {
         self.output.surface.is_none()
+    }
+
+    /// Ends the device the way a driver reset would, for `--script` and `--drive`'s
+    /// `lose-device`: destroyed, then polled so the loss callback runs now and not at some later
+    /// submit.
+    pub(crate) fn lose_device(&self) {
+        self.device.destroy();
+        let _ = self.device.poll(wgpu::PollType::wait_indefinitely());
     }
 
     /// Everything downstream of picking an adapter, so it can be *re*-run.
@@ -393,6 +405,10 @@ impl Gpu {
                 ..oag_mesh::mesh_render::device_descriptor("oag-game", &chosen.adapter)
             }))
             .context("requesting the device")?;
+        #[cfg(not(target_arch = "wasm32"))]
+        let loss = device_loss::DeviceLoss::install(&device);
+        #[cfg(target_arch = "wasm32")]
+        let loss = device_loss::DeviceLoss::default();
         let mut config = match surface {
             Some(surface) => surface
                 .get_default_config(&chosen.adapter, size.width.max(1), size.height.max(1))
@@ -448,6 +464,7 @@ impl Gpu {
             },
         );
         Ok(BroughtUp {
+            loss,
             temporal,
             adapter: chosen.adapter,
             device,
@@ -605,6 +622,7 @@ impl Gpu {
             adapters,
             in_use,
             temporal,
+            loss,
         } = brought;
 
         Ok(Self {
@@ -629,6 +647,7 @@ impl Gpu {
             adapter,
             device,
             queue,
+            loss,
             adapters,
             in_use,
         })
@@ -657,6 +676,7 @@ impl Gpu {
             adapters,
             in_use,
             temporal,
+            loss,
         } = Self::bring_up(&instance, None, size, renderer)?;
         let mut gpu = Self {
             temporal,
@@ -680,6 +700,7 @@ impl Gpu {
             adapter,
             device,
             queue,
+            loss,
             adapters,
             in_use,
         };
