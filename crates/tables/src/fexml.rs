@@ -171,9 +171,10 @@ pub fn expand(data: &[u8]) -> Result<String> {
 /// The tag ends at `index - 1`, one short of the `<`: callers' `close + 1`
 /// resumes at the next tag, and [`attributes`] treats end-of-input as the
 /// unterminated value's closing quote, so `"-0.5"` still reads whole. Guarded
-/// at `index > 1`, not `> 0`: callers slice `rest[1..close]`, which panics for
-/// `close == 0`, so a second-character `<` (a stray `<<`, not on any disc) and
-/// the tag's own opening `<` must not end it.
+/// at `index > 1`, not `> 0`: a second-character `<` (a stray `<<`, not on any
+/// disc) and the tag's own opening `<` do not end a tag, so `<<Foo/>` reads as
+/// one tag. Callers take the tag's text through [`tag_inner`], which drops a
+/// whole multi-byte character where `close` falls inside one.
 pub(crate) fn tag_end(rest: &str) -> Option<usize> {
     if let Some(body) = rest.strip_prefix("<!--") {
         return body.find("-->").map(|at| at + "<!--".len() + 2);
@@ -305,7 +306,8 @@ impl Node {
 }
 
 /// Deepest element nesting [`parse`] builds before treating the rest of the
-/// document as unterminated.
+/// document as unterminated: dropping a deeper tree overflows the stack. The
+/// deepest shipped document nests 12 (`docs/formats/fexml.md`, "Hostile input").
 const MAX_DEPTH: usize = 256;
 
 /// Parses expanded front-end XML into a synthetic `"#document"` root (the files
@@ -369,8 +371,6 @@ pub fn parse(xml: &str) -> Node {
                 parent.children.push(node);
             }
         } else if stack.len() > MAX_DEPTH {
-            // Dropping a tree this deep would overflow the stack, and no shipped
-            // file is within an order of magnitude of it: treat it as unterminated.
             break;
         } else {
             stack.push(node);
