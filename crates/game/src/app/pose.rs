@@ -6,6 +6,8 @@ use log::warn;
 
 use oag_raceplay as race;
 
+use crate::app::cli::Cli;
+
 /// Parses `--pose`: three or four comma-separated numbers, the fourth a yaw in
 /// degrees.
 pub(crate) fn parse_pose(text: &str) -> Result<(oag_core::math::Vec3, f32)> {
@@ -291,6 +293,41 @@ pub(crate) fn parse_head_to_head(text: &str) -> Result<race::CaptureHeadToHead> 
         other => bail!("--hud-head-to-head takes lead or trail after the comma, not {other:?}"),
     };
     Ok(race::CaptureHeadToHead { gap, player_leads })
+}
+
+/// The HUD the `--hud-*` pins impose, or `None` when `--hud-state` is not given. Every child flag
+/// requires `--hud-state`, and `--hud-state` requires `--screenshot` (`Cli::hud_state`), so a
+/// `Some` only comes out of a capture run.
+pub(crate) fn capture_hud(cli: &Cli) -> Result<Option<race::CaptureHud>> {
+    let mut hud_state = cli.hud_state.as_deref().map(parse_hud_state).transpose()?;
+    if let Some(hud) = hud_state.as_mut() {
+        hud.boost_phase = cli.hud_boost_phase;
+        hud.autopilot_seconds = cli.hud_autopilot;
+        hud.held_pickup = cli
+            .hud_pickup
+            .as_deref()
+            .map(|name| {
+                oag_tables::weapons::Weapon::from_type(name)
+                    .with_context(|| format!("--hud-pickup {name:?} is not a weapon's type"))
+            })
+            .transpose()?;
+        hud.shield_flash = cli
+            .hud_shield_flash
+            .as_deref()
+            .map(parse_shield_flash)
+            .transpose()?;
+        hud.song = cli.hud_song.clone().map(|title| race::CaptureSong {
+            artist: cli.hud_song_artist.clone(),
+            title,
+            ticks: cli.hud_song_ticks.unwrap_or(60),
+        });
+        hud.head_to_head = cli
+            .hud_head_to_head
+            .as_deref()
+            .map(parse_head_to_head)
+            .transpose()?;
+    }
+    Ok(hud_state)
 }
 
 pub(crate) fn parse_hud_state(text: &str) -> Result<race::CaptureHud> {

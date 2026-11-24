@@ -1142,3 +1142,24 @@ pub(super) fn hud_font(
         }
     }
 }
+
+/// What `--hud-head-to-head` cannot do on `layout`, or `None` when the layout carries the bar.
+///
+/// The pinned readout is drawn by `oag_hud`'s Head to Head swap, which needs the layout's
+/// `HeadToHeadBar` (Pulse's arcade layout). Without it the gap sits under the `Position` label
+/// as a stand-in, and a layout with neither draws nothing, which the pin must not do quietly.
+pub(super) fn head_to_head_pin_gap(layout: Option<&oag_hud::Layout>) -> Option<&'static str> {
+    let Some(layout) = layout else {
+        return Some("no HUD layout was read, so nothing is drawn");
+    };
+    if layout.fill("HeadToHeadBar").is_some() {
+        None
+    } else if layout.label("Position").is_some() {
+        Some("the layout has no HeadToHeadBar, so the gap is drawn under the place as a stand-in")
+    } else {
+        Some("the layout has no HeadToHeadBar and no place readout, so nothing is drawn")
+    }
+}
+
+#[cfg(test)]
+mod tests;

@@ -131,7 +131,9 @@ Two more `CaptureHud` pins, for a HUD part no headless route reached: `--hud-son
 holds the now-playing marquee on a song (a capture runs no music, so none starts), and `--hud-head-to-head GAP,lead|trail` draws the
 Head to Head bar on the readout alone (`--mode` has no head-to-head, and a posed capture runs no standings). Both need `--hud-state` and
 reach nothing in the race: the marquee's display is stepped `N` times (default 60, past the fade-in, where the bar has stopped climbing) at load and then frozen, so the tick count of the capture does not move it, and the readout's gap is not read from the standings.
-The bar exists only in a layout that authors it: the arcade one (`--mode single_race`), not the time trial's.
+The bar exists only in a layout that authors it: the arcade one (`--mode single_race`), not the time trial's. `--hud-head-to-head` names a layout without the bar at load (a stand-in gap under the place, or nothing).
+
+**Every `--hud-*` pin is capture-only** (`hud-flags-capture-only`): `--hud-state` requires `--screenshot` and conflicts with `--connect`, `--online`, `--drive` and `--drive-file`, and each other pin requires `--hud-state`, so a menu launch, a windowed `--race` or a network race refuses them at the command line. Every pair script already ends in `--screenshot`; `compare-rerender-ours.py` appends its own.
 
 Measured on a posed Pulse PSP single race at 480x272, by regression of the frame with the pin against the frame without, over the bar's
 pixels left of the scrolled text (1,512 pixels, per channel; the marquee bar is black, so its alpha is `1 - slope`):
