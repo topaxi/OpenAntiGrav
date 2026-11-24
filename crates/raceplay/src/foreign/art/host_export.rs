@@ -112,7 +112,7 @@ pub fn export_entry(
             ));
             continue;
         }
-        let Some(texture) = table.slots.get(at).cloned().flatten() else {
+        let Some(texture) = table.texture(archives, at) else {
             done.skipped
                 .push(format!("{entry}: {name} is not decodable"));
             continue;

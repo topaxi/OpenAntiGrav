@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
-titles: [pulse, pure]
+titles: [pulse, pure, hd, 2048, omega]
 updated: 2026-11-25
-summary: "Track art leftovers: Bake operator, sun on HD hosts, moving-sun gaps, glb sky images, track-file respawn, re-timing"
+summary: "Track art leftovers: Bake operator, sun on HD hosts, sky as world image, HD-family disc export names, moving-sun gaps, respawn, re-timing"
 size: L (60)
 difficulty: medium (50)
 categories: [tooling, rendering]
@@ -37,6 +37,12 @@ holds only what is open. Hillside, the demonstration track, lives in the mod-exa
   Omega skies are a cubemap picture the circuit's materials do not name, so the export writes
   none of them. Wire it for Pulse and Pure first (faces exist), then read the cube's face order
   for the PS3/Vita/PS4 sky files.
+- **Disc export names an HD-family circuit's textures by dummy nodes.** `track_art::export` (a disc
+  circuit written as a track file) takes host `name`s from the `.vex` `Texture` nodes, which on HD,
+  2048 and Omega are names with no pictures or one `VexDummyTexture` (the host export now takes the
+  files the circuit's materials name, `foreign::art::material_table`). Export those circuits with
+  the material paths as host names, per material, before an HD-hosted track can be made from a disc
+  circuit.
 - **Track-file respawn.** With the autopilot on a track file, HD, Pure and PS2 Pulse respawn once at
   about tick 44, in Time Trial as well as Zone (seen by the Zone lane on the oval fixture). Not
   investigated.

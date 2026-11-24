@@ -64,6 +64,10 @@ pub struct Extras {
 struct HostTable {
     names: Vec<Option<String>>,
     slots: TextureSlots,
+    /// The pictures are files named by `names` and decoded when asked for
+    /// ([`Self::texture`]), `slots` empty: a PS4 circuit's pictures are gigabytes
+    /// decoded, and a track file names a few of them.
+    from_files: bool,
 }
 
 fn host_table(archives: &mut Archives, entry: &str) -> anyhow::Result<HostTable> {
@@ -74,6 +78,7 @@ fn host_table(archives: &mut Archives, entry: &str) -> anyhow::Result<HostTable>
     Ok(HostTable {
         names: texture_names(&blob)?,
         slots: texture_slots(archives, entry, &blob)?,
+        from_files: false,
     })
 }
 
@@ -101,28 +106,36 @@ fn material_table(archives: &mut Archives, entry: &str, blob: &[u8]) -> anyhow::
             }
         },
     )?;
-    let slots = requested
-        .iter()
-        .map(|path| {
-            let bytes = archives.read_name(path).ok()?;
-            let picture = oag_texture::decode::decode_named(path, &bytes).ok()?;
-            let label = path.rsplit(['/', '\\']).next().unwrap_or(path).to_string();
-            Some(Arc::new(ModelTexture::rgba8(
-                label,
-                picture.width,
-                picture.height,
-                picture.rgba,
-                Some(1),
-            )))
-        })
-        .collect();
     Ok(HostTable {
         names: requested.into_iter().map(Some).collect(),
-        slots,
+        slots: Vec::new(),
+        from_files: true,
     })
 }
 
+/// The picture of the file `path` of a circuit's materials, decoded as the race reads it.
+fn material_texture(archives: &mut Archives, path: &str) -> Option<Arc<ModelTexture>> {
+    let bytes = archives.read_name(path).ok()?;
+    let picture = oag_texture::decode::decode_named(path, &bytes).ok()?;
+    let label = path.rsplit(['/', '\\']).next().unwrap_or(path).to_string();
+    Some(Arc::new(ModelTexture::rgba8(
+        label,
+        picture.width,
+        picture.height,
+        picture.rgba,
+        None,
+    )))
+}
+
 impl HostTable {
+    /// The decoded picture of node `at`, `None` where it will not decode.
+    fn texture(&self, archives: &mut Archives, at: usize) -> Option<Arc<ModelTexture>> {
+        if self.from_files {
+            return material_texture(archives, self.names.get(at)?.as_deref()?);
+        }
+        self.slots.get(at).cloned().flatten()
+    }
+
     /// The first node `name` spells, and how many more it spells.
     fn find(&self, name: &str) -> Option<(usize, usize)> {
         let mut hits = self
@@ -153,10 +166,7 @@ pub fn host_texture(
         .find(name)
         .ok_or_else(|| format!("{entry} has no texture node {name}"))?;
     table
-        .slots
-        .get(first)
-        .cloned()
-        .flatten()
+        .texture(archives, first)
         .ok_or_else(|| format!("{entry}: {name} is not decodable"))
 }
 
@@ -269,7 +279,7 @@ pub fn resolve_textures(
                             more + 1
                         ));
                     }
-                    t.slots.get(first).cloned().flatten()
+                    t.texture(archives, first)
                 });
                 if found.is_none() && table.is_some() {
                     report.push(format!(
