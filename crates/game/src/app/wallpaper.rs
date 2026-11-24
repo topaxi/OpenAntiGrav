@@ -135,7 +135,12 @@ pub(crate) fn run(app: &mut App) -> Result<bool> {
             .dispatch(Some(wait), &mut state)
             .context("the Wayland connection")?;
         state.place_outputs();
-        if STOP.load(Ordering::Relaxed) || state.session.as_ref().is_some_and(|s| s.quit) {
+        if STOP.load(Ordering::Relaxed)
+            || state
+                .session
+                .as_ref()
+                .is_some_and(|s| s.quit || s.lost.is_some())
+        {
             break;
         }
         state.frame()?;

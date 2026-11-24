@@ -29,6 +29,7 @@ pub(crate) mod endrace;
 // under the 1,000-line rule; see `escape.rs`'s own doc for why this pair is
 // the seam.
 mod demo;
+mod device_lost;
 mod escape;
 mod frame;
 pub(crate) mod frame_timing;
@@ -573,6 +574,13 @@ pub(crate) struct Session {
     pub(crate) races_launched: u64,
     /// Set when a menu asks to quit, read by the event loop.
     pub(crate) quit: bool,
+    /// The graphics device was lost and the session has saved what it could
+    /// (`session::device_lost`); the run ends, or restarts itself on the front end.
+    pub(crate) lost: Option<crate::app::device_loss::Lost>,
+    /// [`Session::wind_down`] has run: a second call has nothing left to save.
+    pub(crate) wound_down: bool,
+    /// The run before this one ended on a lost device and the menu has not said so yet.
+    pub(crate) last_run_lost: bool,
     /// What the menus need, when this run has menus at all.
     pub(crate) shell: Option<Shell>,
     /// The source the race box's selection screens read, opened on a worker on the first menu
