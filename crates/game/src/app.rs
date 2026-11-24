@@ -879,7 +879,7 @@ fn launch(mut cli: Cli) -> Result<Launch> {
         settings,
         shell,
         // Every route through `main` has a shell or is about to load one;
-        // only `--race`, which is `headless::run_race`, has neither.
+        // only `--race`, which is `headless::race_launch`, has neither.
         race_title: None,
         race_platform: None,
         audio: Some(audio),

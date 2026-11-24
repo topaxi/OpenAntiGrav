@@ -330,7 +330,7 @@ impl App {
                 self.autopilot_pilot,
                 self.autopilot_skill,
                 // `self.race_options` is this same load's own request - see
-                // `run_race` in `headless.rs`, the only place that builds
+                // `race_launch` in `headless.rs`, the only place that builds
                 // both `self.race` and `self.race_options` together.
                 self.race_options
                     .as_ref()

@@ -165,6 +165,83 @@ question.
   --until "Language Selection"`) still reaches the Language Selection screen, which is
   the nearest check available without a device.
 
+## The stack
+
+NativeActivity runs `android_main` on a thread `android-activity` spawns with the
+default 2 MiB stack (`std::thread::spawn` in its `native_activity/glue.rs`), and
+winit must poll on that thread: the looper that carries the input queue and the
+activity's commands is prepared there and `poll_events` reads `ALooper_forThread()`.
+So the game cannot choose the stack its front end and its event loop start on, and
+its callbacks (`resumed`, every frame) run on whatever is left of 2 MiB.
+
+**What overflowed.** `--race` from the launch file crashed at once with SIGSEGV, on
+Pulse and on HD (measured on the S21, Exynos 2100, Android 14, the `dist` build). A
+stack overflow in `naga`'s WGSL parser, on `Stage::race` -> `Scene::new` ->
+`create_shader_module`: the parser recurses, and the frames above it were
+`app::run` 482,000 bytes, `run_race` 545 KB, `App::open_with` 385 KB,
+`Stage::race` 315 KB, `Scene::new` 172 KB and the winit closure 160 KB, about 2.07 MB
+before the recursion began. The menu route survived because it never entered
+`run_race`, and builds its scene on the `race-build` thread. Upstream knows the
+recursion: gfx-rs/wgpu#9497, #9456 and #5759.
+
+**Three things stand in its way now.**
+
+- **A big stack for the scene.** `oag_thread::on_big_stack` runs a closure on a
+  thread with `oag_thread::BIG_STACK` (16 MiB) and waits for it. `Stage::race` (the
+  `--race` route) builds its scene there, and the `race-build` worker the menus use
+  is spawned with the same stack. Every platform takes this path, so a desktop
+  `--race` is the one that proves it (below). The thread holds a
+  `gpu_workers::Guard`, as every GPU-touching thread does. The browser has no
+  second thread and builds in place, as it did.
+- **Frames that end before the loop starts.** `app::launch` (the old `run`) and
+  `headless::race_launch` (the old `run_race`) build the `App` and return it boxed
+  (`Launch::Window`); `app::run_window` then runs the loop from a 1.6 KB frame. Before,
+  the 470 KB and 532 KB frames of the two functions stayed under every callback of the
+  game. `Session` (160 KB) and the race's `Loaded` (62 KB) travel boxed
+  (`App::state`, `open_with`'s result, `Stage::race`, `BuildWorker::spawn`), so the
+  winit closure's frame fell from 156 KiB to 2.7 KiB.
+- **The build reads the frames.** `scripts/check-android-stack.py` reads every
+  function's frame off the unstripped library and `scripts/build-apk.sh` runs it:
+  `android_main`, `run_window`, the winit callback and `Stage::race` must each stay
+  under 64 KiB, and must still exist under that name (a rename cannot leave one
+  unchecked). It reads prologues, not call depth: a margin, not a proof.
+  `--all` checks every function; `--top N` lists the largest.
+
+Frames in the `dist` build (`cargo ndk -t arm64-v8a -P 26 build -p oag-game --example
+oag_android --no-default-features --features android,extensions --profile dist`,
+read with `scripts/check-android-stack.py`, KiB):
+
+| Function | Before | After | Where it runs |
+| --- | --- | --- | --- |
+| `app::run` / `app::launch` | 469.8 | 314.0 (`launch`, gone before the loop) | `android_main` thread, transient |
+| `headless::run_race` / `race_launch` | 532.2 | 376.2 (gone before the loop) | transient |
+| `run_window` (the loop) | inside `run` | 1.6 | `android_main` thread, resident |
+| winit `run_app` closure | 156.1 | 2.7 | resident |
+| `Stage::race` | 308.1 | 60.1 | `android_main` thread, while it waits |
+| `build_race_stage` | inside `Stage::race` | 308.1 | the 16 MiB thread |
+| `Scene::new` | 168.2 | 168.2 | the 16 MiB thread |
+| `App::open_with` | 376.1 | 356.1 | `android_main` thread (`Session` is built here) |
+| `BuildWorker::spawn` | 188.0 | 64.0 | `android_main` thread |
+
+`open_with` is still large: it builds the `Session` literal before boxing it, and no
+`naga` recursion runs under it except the overlay's and the present pipeline's shaders,
+which the menu route already survived under `launch`'s 470 KB. Shrinking `Session`
+itself (its overlay and panel fields are 57 KB and 43 KB) is open.
+
+**Reproducing it on a desktop.** The main thread's stack is `ulimit -s`. A windowed
+`--race` under a 2 MiB limit is the same situation (inside your own display, with
+`--no-audio`):
+
+```sh
+(ulimit -s 2048; env -u WAYLAND_DISPLAY WINIT_UNIX_BACKEND=x11 DISPLAY=:91 \
+  VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json \
+  target/debug/oag-game --no-audio --race --script 20:quit data/images/pulse-psp-eu.chd)
+```
+
+Before the change this printed `thread 'main' has overflowed its stack` for Pulse and
+for HD in the `dev` build; with it, both run and quit. Not in the gate: it needs a
+display.
+
 ## What was verified
 
 | Step | How | Result |

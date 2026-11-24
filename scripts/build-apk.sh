@@ -75,6 +75,8 @@ features=android,extensions
 [ -z "${OAG_APK_DEV_CLI:-}" ] || features+=,dev-cli
 cargo ndk "${ndk_targets[@]}" -P "$api" build -p oag-game --example oag_android --no-default-features --features "$features" "${cargo_profile[@]}"
 so="$root/target/aarch64-linux-android/$profile/examples/liboag_android.so"
+# The frames under `android_main` (2 MiB, not ours to size): docs/tools/android.md, "The stack".
+python3 "$root/scripts/check-android-stack.py" "$so"
 "$llvm_strip" --strip-all -o "$stage/lib/arm64-v8a/liboag_android.so" "$so"
 if [ "$x86" = yes ]; then
     "$llvm_strip" --strip-all -o "$stage/lib/x86_64/liboag_android.so" \

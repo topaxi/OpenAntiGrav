@@ -15,7 +15,6 @@ use oag_raceplay as race;
 use oag_ui::frontend::EarnedTier;
 use oag_ui::strings;
 
-
 use crate::app::args::{
     autopilot_pilot, button_mask, give_weapon, parse_progress, parse_size, parse_step,
     resolve_scheme,
