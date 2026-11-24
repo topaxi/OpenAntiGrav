@@ -180,4 +180,11 @@ impl super::Renderer {
     pub(crate) fn third_slot_role(&self) -> Option<&'static str> {
         self.buttons_atlas.as_ref().map(|_| self.buttons_role)
     }
+
+    /// The role the second slot holds, `None` while it is empty.
+    #[cfg(test)]
+    #[must_use]
+    pub(crate) fn face_slot_role(&self) -> Option<&'static str> {
+        self.face_atlas.as_ref().and(self.face_role)
+    }
 }

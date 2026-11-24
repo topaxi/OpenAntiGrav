@@ -94,7 +94,7 @@ fn boot_legal_wraps_to_two_lines_that_clear_the_screen() {
     // breaks the line after "A" where the 400 wide reading would carry on to "registered".
     let skin = oag_pulse::FRONT_END.menu.expect("Pulse's menu skin");
     assert_eq!(skin.small_font, Some(roles::TITLE));
-    assert!(skin.menu_face_in_boot);
+    assert!(skin.menu_face_in_boot && skin.wrap_from_text_x);
     for language in &languages {
         assert_eq!(
             language.font(roles::SMALL),

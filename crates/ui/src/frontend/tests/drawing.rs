@@ -710,14 +710,15 @@ const SHOW_LOGO_XML: &str = r#"
 
 /// Pulse's `Show Logo` draws `BOOT_PRESS_START` in the menu face and `BOOT_LEGAL` in the `small`
 /// face (`Pulse_14.fnt`, the third slot's `Title`), each at its authored scale; a skin that holds
-/// neither face draws both in the `Default` atlas as before. The legal line wraps over the width
-/// left from its own `x` (360), where the `Viewport` is 400 wide.
+/// neither face draws both in the `Default` atlas as before and wraps at the `Viewport`'s 400. The
+/// legal line wraps over the width left from its own `x` (360) where the skin says so.
 #[test]
 fn show_logo_draws_its_texts_in_their_authored_faces_where_the_skin_holds_them() {
     static HELD: oag_title::MenuSkin = oag_title::MenuSkin {
         small_font: Some("Title"),
         menu_font: Some("menu"),
         menu_face_in_boot: true,
+        wrap_from_text_x: true,
         ..crate::placeholder::MENU_SKIN
     };
     let mut frontend = Frontend::new(
@@ -743,7 +744,7 @@ fn show_logo_draws_its_texts_in_their_authored_faces_where_the_skin_holds_them()
     ));
     assert!(matches!(
         find(&plain, "BOOT_LEGAL"),
-        Draw::Text { wrap_width: Some(w), .. } if w == 360.0
+        Draw::Text { wrap_width: Some(w), .. } if w == 400.0
     ));
 
     frontend.set_menu_skin(&HELD);
