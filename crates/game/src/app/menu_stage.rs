@@ -1184,6 +1184,20 @@ fn overlay_rect(space: oag_display::space::Space, viewport: (f32, f32, f32, f32)
     ]
 }
 
+/// The `small` face as the help overlays measure their paragraphs in it, on a title whose
+/// renderer holds that face in a glyph slot ([`oag_title::MenuSkin::small_font`]).
+fn small_help_face<'a>(
+    skin: &oag_ui::menu::Skin,
+    atlas: Option<&'a font::Atlas>,
+    pens: oag_ui::font::Pens,
+) -> Option<oag_ui_screens::campaign::HelpFace<'a>> {
+    Some(oag_ui_screens::campaign::HelpFace {
+        role: skin.small_font()?,
+        atlas: atlas?,
+        pens,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1243,18 +1257,4 @@ mod tests {
             );
         }
     }
-}
-
-/// The `small` face as the help overlays measure their paragraphs in it, on a title whose
-/// renderer holds that face in a glyph slot ([`oag_title::MenuSkin::small_font`]).
-fn small_help_face<'a>(
-    skin: &oag_ui::menu::Skin,
-    atlas: Option<&'a font::Atlas>,
-    pens: oag_ui::font::Pens,
-) -> Option<oag_ui_screens::campaign::HelpFace<'a>> {
-    Some(oag_ui_screens::campaign::HelpFace {
-        role: skin.small_font()?,
-        atlas: atlas?,
-        pens,
-    })
 }
