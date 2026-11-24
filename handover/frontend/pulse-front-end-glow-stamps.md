@@ -31,9 +31,9 @@ Wired by `pulse-glow-stamps` (`docs/ui/campaign-screens.md`, "The front end's bl
 - `FUN_0889812c` still stamps `(1 - f) * 150 + 70` for an `Image` with `+0x2c & 0x200`; the `Selector`'s issuer is not located.
 - Pure's front end: no tag glow is authored; whether it stamps anything is not measured (two EDRAM attempts landed on PPSSPP's own
   memory-stick `Load` dialog). PS2 draws these stamps through the shared title record, uncompared; the Main Menu constants are
-  inherited from PSP there. Pulse PS2's Grid and Cell Selection are measured and differ: the `Selector`'s texel alpha is the whole mask
-  (`MenuSkin::glow_by_texel`, `docs/ui/campaign-screens.md`, "The selector's halo on Pulse PS2 ..."); the PS2 Main Menu, the pickers
-  and the generic screens still draw the PSP's value stamps and chain, unmeasured (a GS dump of each shows whether they write alpha).
+  inherited from PSP there. Pulse PS2's front end is measured: the `Selector`'s texel alpha is the whole mask (`MenuSkin::glow_by_texel`,
+  `docs/ui/campaign-screens.md`, "The selector's halo on Pulse PS2 ..."), and no text, row, footer or panel writes alpha on the title,
+  Main Menu, Profile, Ship Select or pause, so PS2 stamps none of them (`PS2_MENU_SKIN.glow` is `None`, `gate_glow` drops value stamps).
 
 - One `s` runs on two periods now: `Text::glow_stamp` steps its ladder at 20 per second (1.0 s) while the title's text throb is the
   measured 1.1 s `PULSE_PERIOD` and the Main Menu's selected stamp rides the 1.1 s colour pulse; the title halo drifts against its text.
