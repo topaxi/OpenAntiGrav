@@ -60,14 +60,21 @@ pub fn export_entry(
             .names
             .iter()
             .enumerate()
-            .map(|(i, n)| (i, n.clone().unwrap_or_else(|| format!("unnamed texture node {i}"))))
+            .map(|(i, n)| {
+                (
+                    i,
+                    n.clone()
+                        .unwrap_or_else(|| format!("unnamed texture node {i}")),
+                )
+            })
             .collect(),
         Some(names) => names
             .iter()
             .filter_map(|name| match table.find(name) {
                 Some((first, _)) => Some((first, name.clone())),
                 None => {
-                    done.skipped.push(format!("{entry}: no texture node {name}"));
+                    done.skipped
+                        .push(format!("{entry}: no texture node {name}"));
                     None
                 }
             })
@@ -76,8 +83,9 @@ pub fn export_entry(
     for (at, name) in wanted {
         let file = out.join(texture_file(slug, entry, &name));
         if !seen.insert(file.clone()) {
-            done.skipped
-                .push(format!("{entry}: {name} names a second node; the first is written"));
+            done.skipped.push(format!(
+                "{entry}: {name} names a second node; the first is written"
+            ));
             continue;
         }
         let Some(texture) = table.slots.get(at).cloned().flatten() else {

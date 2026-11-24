@@ -16,7 +16,9 @@ use oag_raceplay as race;
 fn main() -> anyhow::Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let [image, what, out] = args.as_slice() else {
-        anyhow::bail!("usage: export_host_textures <image> <track file or circuit entry> <out-dir>");
+        anyhow::bail!(
+            "usage: export_host_textures <image> <track file or circuit entry> <out-dir>"
+        );
     };
     let options = race::Options {
         source: image.clone(),

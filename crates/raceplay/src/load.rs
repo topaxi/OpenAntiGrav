@@ -136,7 +136,10 @@ pub fn export_host_textures(
         let mut wanted: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
         for source in &art.textures {
             if let oag_trackfile::art::TextureSource::Host { entry, name } = source {
-                wanted.entry(entry.clone()).or_default().insert(name.clone());
+                wanted
+                    .entry(entry.clone())
+                    .or_default()
+                    .insert(name.clone());
             }
         }
         for (entry, names) in &wanted {
