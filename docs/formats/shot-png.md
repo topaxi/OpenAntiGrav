@@ -71,7 +71,7 @@ rebuild runs exactly the listed modules and **refuses by name**, before a tick, 
 machine lacks or has another build of. The re-render draws the picture controls in `[picture]` (it prints
 `from-png: picture controls applied: ...`, from `--picture`, which also sits in `reproduce.flags`), or
 for a photo-mode shot without the section prints `no picture controls recorded: the shot predates
-them, so it is drawn without any`. It is one frame: a motion blur shot is drawn without
+them, so it is drawn without any`. Like the mode, it draws none of the game's own motion blur (`--motion-blur` still overrides). It is one frame: a motion blur shot is drawn without
 its blur and the output says so. The re-render draws
 the HUD, which the text does not record: a photo taken with its HUD row off (the default) differs
 there. A photo's re-render turns the visibility sets off, as photo mode does. **Default mods**: the

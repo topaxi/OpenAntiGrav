@@ -431,9 +431,10 @@ rendering bug reports: take the shot in photo mode and attach the file.
 **The HUD of a shot of several frames is drawn once**, when its row is on: every frame of the
 shot leaves the HUD out, and after the race is put back at the shot's tick the average is copied
 into the presentation target and the HUD is drawn over it (`oag-game`'s `session::photo_hud`), so
-its readouts are the ones on screen at that tick and not an average over the shutter. The song
-line a blur's replayed ticks would step on is put back as it stood
-(`oag_raceplay::photo::shot::Shot`). `a_motion_blur_shot_smears_what_it_should_and_any_input_abandons_it`
+its readouts are the ones on screen at that tick and not an average over the shutter. No input
+acts on that one frame. The HUD's own state (each slot's bars and messages, the gap popup, the
+warnings waiting, the song line) is kept at the shot's tick and put back after the ticks a blur
+replays (`oag_raceplay::photo::shot::Shot`). `a_motion_blur_shot_smears_what_it_should_and_any_input_abandons_it`
 checks the blurred shot holds the plain shot's HUD glyphs and no high-contrast pixel outside the
 HUD differs from the blurred shot without one.
 
