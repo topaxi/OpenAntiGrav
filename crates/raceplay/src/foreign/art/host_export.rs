@@ -18,16 +18,34 @@ use super::host_table;
 /// directory separator. A texture name is unique within its circuit, and the
 /// engine matches names without case, so lowercasing loses nothing a lookup
 /// keeps; the add-on spells the same rule (`oag_track/images.py`).
+///
+/// `None` for names that would leave the folder or name no file: a `.` or `..`
+/// part, a part with a `:` (a Windows drive or stream) or a NUL, or an entry or a
+/// name with no part at all. A circuit's own asset paths are data of the disc, not trusted.
 #[must_use]
-pub fn texture_file(slug: &str, entry: &str, name: &str) -> PathBuf {
-    let mut path = PathBuf::from(slug.to_ascii_lowercase());
-    for part in entry.split(['\\', '/']).chain(name.split(['\\', '/'])) {
-        if !part.is_empty() {
-            path.push(part.to_ascii_lowercase());
-        }
+pub fn texture_file(slug: &str, entry: &str, name: &str) -> Option<PathBuf> {
+    let split = |path: &str| -> Vec<String> {
+        path.split(['\\', '/'])
+            .filter(|part| !part.is_empty())
+            .map(str::to_ascii_lowercase)
+            .collect()
+    };
+    let (entry, name) = (split(entry), split(name));
+    if entry.is_empty() || name.is_empty() {
+        return None;
     }
+    let parts = entry.into_iter().chain(name);
+    let parts: Vec<String> = parts.collect();
+    if parts
+        .iter()
+        .any(|part| part == "." || part == ".." || part.contains([':', '\0']))
+    {
+        return None;
+    }
+    let mut path = PathBuf::from(slug.to_ascii_lowercase());
+    path.extend(parts);
     path.set_extension("png");
-    path
+    Some(path)
 }
 
 /// What an export wrote and what it could not.
@@ -81,7 +99,13 @@ pub fn export_entry(
             .collect(),
     };
     for (at, name) in wanted {
-        let file = out.join(texture_file(slug, entry, &name));
+        let Some(relative) = texture_file(slug, entry, &name) else {
+            done.skipped.push(format!(
+                "{entry}: {name} would leave the export folder; not written"
+            ));
+            continue;
+        };
+        let file = out.join(relative);
         if !seen.insert(file.clone()) {
             done.skipped.push(format!(
                 "{entry}: {name} names a second node; the first is written"
@@ -122,7 +146,8 @@ mod tests {
                 "Data\\Environments\\03_Track\\track.vex",
                 "Data\\Environments\\GenericTrackTextures\\_Wall6_1.tga",
             )
-            .to_str(),
+            .as_deref()
+            .and_then(|p| p.to_str()),
             Some(
                 "wipeout-pulse/data/environments/03_track/track.vex/\
                  data/environments/generictracktextures/_wall6_1.png"
@@ -133,8 +158,31 @@ mod tests {
     #[test]
     fn a_name_with_no_directory_and_no_extension_gets_a_png_extension() {
         assert_eq!(
-            texture_file("wipeout-hd", "a.vex", "Sky").to_str(),
+            texture_file("wipeout-hd", "a.vex", "Sky")
+                .as_deref()
+                .and_then(|p| p.to_str()),
             Some("wipeout-hd/a.vex/sky.png")
         );
+    }
+
+    #[test]
+    fn a_name_that_leaves_the_folder_or_names_no_file_has_no_path() {
+        let e = "Data\\Environments\\03_Track\\track.vex";
+        for name in [
+            "..\\..\\x.tga",
+            "Data\\..\\..\\tmp\\out.tga",
+            "a/../../b.tga",
+            "c:\\windows\\x.tga",
+            "stream:x.tga",
+            "a\0b.tga",
+            ".",
+            "\\",
+            "",
+        ] {
+            assert_eq!(texture_file("wipeout-pulse", e, name), None, "{name:?}");
+        }
+        assert_eq!(texture_file("wipeout-pulse", "..", "x.tga"), None);
+        assert_eq!(texture_file("wipeout-pulse", "/", "/"), None);
+        assert!(texture_file("wipeout-pulse", e, "a.b\\c.tga").is_some());
     }
 }

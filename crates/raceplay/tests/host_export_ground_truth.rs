@@ -58,11 +58,14 @@ fn a_whole_circuit_writes_every_texture_it_decodes() {
     let out = scratch("circuit");
     let done = oag_raceplay::export_host_textures(&options, CIRCUIT, &out).expect("an export");
     assert!(done.written.len() > 100, "{} written", done.written.len());
-    let road = out.join(texture_file(
-        "wipeout-pulse",
-        CIRCUIT,
-        "Data\\Environments\\GenericTrackTextures\\_surface6_1.tga",
-    ));
+    let road = out.join(
+        texture_file(
+            "wipeout-pulse",
+            CIRCUIT,
+            "Data\\Environments\\GenericTrackTextures\\_surface6_1.tga",
+        )
+        .expect("a safe path"),
+    );
     assert_a_picture(&road);
     for file in done.written.iter().take(12) {
         decode(file);
@@ -96,7 +99,7 @@ fn a_track_files_host_rows_each_resolve_to_a_file() {
     }
     assert!(!hosts.is_empty());
     for (entry, name) in &hosts {
-        decode(&out.join(texture_file("wipeout-pulse", entry, name)));
+        decode(&out.join(texture_file("wipeout-pulse", entry, name).expect("a safe path")));
     }
     assert!(
         done.skipped.is_empty(),

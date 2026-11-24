@@ -568,6 +568,9 @@ def texture_checks(out_dir):
     data = bpy.data.images.new("normals", 2, 2, float_buffer=True)
     data.colorspace_settings.name = "Non-Color"
     data.pixels = [0.5, 0.5, 1.0, 1.0] * 4
+    premul = bpy.data.images.new("premul", 2, 2, alpha=True, float_buffer=True)
+    premul.alpha_mode = "PREMUL"
+    premul.pixels = [0.5, 0.0, 0.0, 0.5] * 4  # straight linear (1, 0, 0) at alpha 0.5
 
     jpg_path = os.path.join(work, "photo.jpg")
     jpg = bpy.data.images.new("photo", 8, 8)
@@ -594,7 +597,7 @@ def texture_checks(out_dir):
     dirty.name = "dirty"
     dirty.pixels = [0.0, 1.0, 0.0, 1.0] * 16
 
-    images = [a, b, packed, painted, floaty, data, jpg, tga, dirty, a]
+    images = [a, b, packed, painted, floaty, data, jpg, tga, dirty, a, premul]
     for i, image in enumerate(images):
         quad_with(ctx, f"q{i}", image, 100.0 + 60.0 * i)
     path = os.path.join(work, "tex.track.toml")
@@ -619,6 +622,7 @@ def texture_checks(out_dir):
     jr, jg, jb, ja = exported_bytes(f("photo"))
     assert abs(jr - 200) <= 4 and abs(jg - 100) <= 4 and abs(jb - 50) <= 4, (jr, jg, jb)
     assert exported_bytes(f("skin")) in {(127, 127, 127, 255), (128, 128, 128, 255)}, "a TGA keeps its stored values"
+    assert exported_bytes(f("premul")) == (255, 0, 0, 128), f"premultiplied alpha: {exported_bytes(f('premul'))}"
     assert all(os.path.splitext(n)[1] == ".png" for n in rows)
     assert exported_bytes(f("dirty")) == (0, 255, 0, 255), "a PNG painted since it loaded was copied stale"
     for n in rows:
@@ -655,6 +659,48 @@ def host_image(name):
     image = bpy.data.images.new(name.rsplit("\\", 1)[-1], 8, 8)
     image["oag_host_entry"], image["oag_host_name"] = HOST_ENTRY, name
     return image
+
+
+def packed_in(path):
+    """The names of the images a .blend file holds packed. The file is compressed, so its
+    bytes cannot be searched: its images are linked in and read, then dropped."""
+    import shutil
+
+    probe = path + ".probe.blend"  # the open file cannot be linked from
+    shutil.copyfile(path, probe)
+    with bpy.data.libraries.load(probe, link=True) as (src, dst):
+        dst.images = list(src.images)
+    names = sorted(i.name for i in dst.images if i.packed_file is not None)
+    libs = {i.library for i in dst.images}
+    bpy.data.batch_remove(dst.images)
+    for lib in libs:
+        bpy.data.libraries.remove(lib)
+    return names
+
+
+def escape_checks(work, folder):
+    """Names that would leave the host folder are refused, on this side as in Rust."""
+    from oag_track import images
+
+    for entry, name in (
+        (HOST_ENTRY, "..\\..\\outside.tga"),
+        (HOST_ENTRY, "Data\\..\\..\\..\\outside.tga"),
+        ("..", "outside.tga"),
+        (HOST_ENTRY, "c:\\windows\\x.tga"),
+        ("/", "/"),
+        (HOST_ENTRY, "\\"),
+    ):
+        assert images.host_file(folder, HOST_SLUG, entry, name) is None, (entry, name)
+    assert images.host_file(folder, HOST_SLUG, HOST_ENTRY, "a.b\\c.tga") is not None
+    outside = os.path.join(os.path.dirname(os.path.abspath(folder)), "outside.png")
+    solid_png(outside, (1, 2, 3, 255))
+    traversal = host_image("..\\..\\outside.tga")
+    traversal.name = "traversal"
+    before = traversal.source
+    linked, missing = images.link_host_images(folder, HOST_SLUG)
+    assert traversal.source == before and "..\\..\\outside.tga" in missing, "a name outside the folder was linked"
+    bpy.data.images.remove(traversal)
+    os.remove(outside)
 
 
 def host_checks(out_dir, manifest=None, folder=None):
@@ -732,25 +778,79 @@ def host_checks(out_dir, manifest=None, folder=None):
     else:
         assert not unlinked, f"host textures with no exported file: {unlinked}"
 
+    escape_checks(work, folder)
+
+    # A host image that lost its properties is still a host image (it is linked from the
+    # folder), and one whose properties were emptied is refused: neither exports as an own texture.
+    victim = next(i for i in host if i.source == "FILE")
+    entry, name = victim["oag_host_entry"], victim["oag_host_name"]
+    from oag_track import scene_art as art
+
+    for state in ("deleted", "emptied"):
+        if state == "deleted":
+            del victim["oag_host_entry"], victim["oag_host_name"]
+        else:
+            victim["oag_host_entry"] = victim["oag_host_name"] = ""
+        assert images.is_host(victim), f"a host image with its properties {state} became an own image"
+        try:
+            scene.write_track(bpy.context, os.path.join(work, f"{state}.track.toml"))
+        except art.ArtError as e:
+            assert victim.name in str(e), str(e)
+        else:
+            raise AssertionError(f"a host image with its properties {state} was exported")
+        assert not os.path.exists(os.path.join(work, f"{state}.track.toml")), "a refused export wrote a manifest"
+    victim["oag_host_entry"], victim["oag_host_name"] = entry, name
+
     solid_png(os.path.join(work, "own_file.png"), (30, 60, 90, 255))
     own = bpy.data.images.load(os.path.join(work, "own_file.png"))
     own.name = "own_painted"
     own.use_fake_user = True
-    # What a player can do: pack everything, and switch Automatically Pack on.
+    solid_png(os.path.join(work, "own_gone.png"), (90, 60, 30, 255))
+    gone = bpy.data.images.load(os.path.join(work, "own_gone.png"))
+    gone.name = "own_gone"
+    gone.use_fake_user = True
+    os.remove(os.path.join(work, "own_gone.png"))  # an external file that is missing
+    # What a player can do: switch Automatically Pack on and save. Nothing is packed by hand,
+    # so the packing of the own images is the save's own.
     bpy.data.use_autopack = True
-    bpy.ops.file.pack_all()
     blend = os.path.join(work, "host.blend")
     bpy.ops.wm.save_as_mainfile(filepath=blend)
-    assert bpy.data.use_autopack, "the save left Automatically Pack off"
+    assert bpy.data.use_autopack, "the save left Automatically Pack off in the session"
     bpy.ops.wm.open_mainfile(filepath=blend)
+    assert bpy.data.use_autopack, "the user's Automatically Pack setting was lost by the save"
     host = [i for i in bpy.data.images if i.get("oag_host_entry")]
     assert host and all(i.packed_file is None for i in host), "a host image was saved packed"
     assert bpy.data.images["own_painted"].packed_file is not None, "an own image lost its autopack"
-    raw = open(blend, "rb").read()
-    for i in host:
-        if i.source == "FILE":
-            with open(bpy.path.abspath(i.filepath), "rb") as f:
-                assert f.read() not in raw, f"{i.name}'s pixels are inside the .blend"
+    assert bpy.data.images["own_gone"].packed_file is None
+    hosts_by_name = {i.name for i in host}
+    saved = packed_in(blend)
+    assert not hosts_by_name & set(saved), f"host pixels are inside the .blend: {saved}"
+    assert "own_painted" in saved and "own_gone" not in saved, saved
+
+    # Blender's autosave and quit.blend write the session with no save_pre: a host image the
+    # user packed must not stay packed in memory. Without the unpack the bytes do land in the file.
+    bpy.data.use_autopack = False  # an autosave does not autopack
+    img = next(i for i in host if i.source == "FILE")
+    bpy.app.handlers.save_pre.remove(images.unpack_host_images)
+    bpy.app.handlers.depsgraph_update_post.remove(images.unpack_on_update)
+    try:
+        img.pack()
+        leak = os.path.join(work, "leak.blend")
+        bpy.ops.wm.save_as_mainfile(filepath=leak, copy=True)
+        assert img.name in packed_in(leak), "the autosave model does not write a packed image"
+        assert images._tick() >= 1 and img.packed_file is None, "the timer left a host image packed"
+        img.pack()
+        images.unpack_hosts()
+        autosave = os.path.join(work, "autosave.blend")
+        bpy.ops.wm.save_as_mainfile(filepath=autosave, copy=True)
+        assert img.name not in packed_in(autosave), "a packed host image reached the autosave"
+    finally:
+        bpy.app.handlers.save_pre.append(images.unpack_host_images)
+        bpy.app.handlers.depsgraph_update_post.append(images.unpack_on_update)
+        bpy.data.use_autopack = True
+    img.pack()
+    bpy.context.view_layer.update()
+    print("depsgraph_update_post unpacks a packed host image:", img.packed_file is None)
     print("host textures: linked from the folder, never packed (pack all, autopack, save, reload): ok")
 
     again = os.path.join(work, "again.track.toml")

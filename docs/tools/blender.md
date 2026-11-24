@@ -214,7 +214,7 @@ disagree. Each case is asserted by `just blender-fixtures` (`roundtrip.py textur
 | a PNG file on disk, unchanged | the file, byte for byte |
 | a PNG packed in the .blend (the file may be gone) | the packed bytes |
 | generated, painted, or a PNG edited since it loaded (`is_dirty`) | its pixels, encoded by `pngwrite.py` (the same bytes on every Blender version; `Image.save` is not) |
-| a JPG, TGA, EXR or any other format | its pixels as an sRGB PNG: a byte image keeps the values it stores, a float image holds scene-linear light and is encoded to sRGB, an image whose colour space is Non-Color or Raw is written as it is. Alpha is straight, rows are flipped to top first |
+| a JPG, TGA, EXR or any other format | its pixels as an sRGB PNG: a byte image keeps the values it stores, a float image holds scene-linear light and is encoded to sRGB, an image whose colour space is Non-Color or Raw is written as it is. A premultiplied image (an EXR loads so) is un-premultiplied first, so alpha is straight; rows are flipped to top first |
 | two images that would share a name | the first keeps `rock.png`, the next is `rock-2.png`; one image used by several meshes is one row |
 | a file image with no file and nothing packed | refused, naming the image and the path; no manifest is written |
 
@@ -241,13 +241,34 @@ file, and the Art panel's **Link Host Textures** does the same for a scene alrea
 `.blend` imported before the folder existed). A texture with no exported file keeps its
 placeholder and the operator names it.
 
-**Disc pixels never enter a .blend or a mod.** The images are linked, not packed, and a
-`save_pre` handler (`images.unpack_host_images`) unpacks any host image someone packed
-(*File > External Data > Pack Resources*, an image's **Pack**) and holds *Automatically Pack
-Resources* off for that save, because Blender runs the autopack after save handlers; the other
-images are packed first as it would have and the switch comes back afterwards. Export writes the
-same `host = { entry, name }` rows as before. Keep the exported folder under `data/` (never
-committed) and out of a mod folder. Checked on Pulse PSP EU and PS2 EU (a PS2 circuit exports its external texture set too). Pure,
+**Disc pixels never enter a .blend or a mod.** The images are linked, not packed, and three
+guards keep it so (`images.py`):
+
+- *A packed host image does not stay packed.* A one-second timer and every dependency graph
+  update unpack any host image someone packed (*File > External Data > Pack Resources*, an
+  image's **Pack**), because Blender's autosave and `quit.blend` write the session with no
+  `save_pre`, so a recovery file would otherwise carry the disc's pixels. The window is the
+  timer's second; the Pack operators themselves are not overridden.
+- *A save made with Automatically Pack on does not pack them.* Blender runs the autopack after
+  the save handlers, so `save_pre` switches it off for a save that holds a host image, unpacks
+  the host images first, then packs the other images one by one as autopack would (an image
+  whose file is missing is skipped, it cannot stop the protection). The file stores the switch
+  as it was at the write, i.e. **off**; the user's setting is kept as the scene property
+  `oag_autopack` (written into the file) and restored in the session after the save and on
+  load. A save that fails leaves the switch off until the next save starts, which restores it.
+  Opening such a file without the add-on shows Automatically Pack off.
+- *A host image is recognised without its properties.* It is a host image while it carries
+  `oag_host_entry` or `oag_host_name` (emptied too), or its file is under the host texture
+  folder (the preference, or a folder linked this session). Deleting the properties does not turn
+  it into an own texture: export refuses it by name, and the packing guards cover it.
+
+Names are not trusted either: a host `entry` or `name` with a `..` or `.` part, a `:` (a drive
+or stream), a NUL, or no part at all has no file on either side
+(`images.host_file` returns None and the image counts as missing; Rust's `texture_file` returns
+`None` and `export_host_textures` names it as skipped), so neither the link nor the export can
+reach outside its folder. Export writes the same `host = { entry, name }` rows as before. Keep
+the exported folder under `data/` (never committed) and out of a mod folder.
+Checked on Pulse PSP EU and PS2 EU (a PS2 circuit exports its external texture set too). Pure,
 HD, 2048 and Omega are untried: HD's `03_Track.vex` entry reads and every texture of it comes
 back "not decodable" (named, nothing written), and a Pure circuit has not been exported.
 
@@ -383,7 +404,7 @@ physics, and draws flat-shaded collision unless the file has an art section. A f
 | Pad plates (2026-10-29): *Place Pad Plates* on the loop's two pads (`blender_loop.*`) | each plate tagged with its pad's kind, 0.3 above the pad over its box (`blender.rs`); raced to the weapon pad with `--autopilot --ticks 2375`, the amber plate draws in `--mode single_race` and not in `--mode time_trial` |
 | Motion (2026-10-29): the loop plus an airship box (two material slots) flying over the first straight and spinning, looping, and a sun turning 30 degrees and holding (`blender_motion.*`) | sampled at 30 fps, read back as keyed (`blender.rs`, `motion_authored_in_blender_reads_back_as_keyed`); imported and exported again, every key time equal and every value within 1e-6 (`blender_motion.reexport.*`); raced with `--autopilot --ticks 480` at `--anim-seconds` 0, 0.8 and 1.6 the airship is ahead, a quarter turn round, then half a turn round and farther along |
 | Own textures (2026-11-24): an export of each case in the table above, `roundtrip.py textures` | file, packed, generated, float, data (Non-Color), JPG, TGA, painted-since-load, a name collision, one image used twice and a missing file each come out as asserted (a float 0.214 is byte 127 or 128, never 55; the second `rock.png` is `rock-2.png` with its own pixels) |
-| Host textures (2026-11-24): generated stand-ins, then Hillside on Pulse PSP EU | stand-ins: import links 2 of 3 (the third has no file and keeps its placeholder), the panel's operator links the same files, pack-all with *Automatically Pack* on then save and reload leaves no packed host image and none of their bytes in the .blend, the own image stays packed, export writes the unchanged `host` rows and no file for them. Hillside's 15 host textures: 159 PNGs exported from the disc (`crates/raceplay/tests/host_export_ground_truth.rs`), an import with the preference set (the add-on installed as an extension) links 15 of 15, none packed |
+| Host textures (2026-11-24): generated stand-ins, then Hillside on Pulse PSP EU | stand-ins: import links 2 of 3 (the third has no file and keeps its placeholder), the panel's operator links the same files, with *Automatically Pack* on a save (an own image's file deleted) and reload leaves no packed host image (read back from the saved file; the .blend is compressed, so bytes cannot be searched), the own image is packed by the save and the user's setting survives, a host image packed by hand is unpacked before an autosave-style write (and is written when the guard is removed), deleting or emptying the host properties does not make it exportable, a `..`/drive/separator-only name is neither linked nor exported, export writes the unchanged `host` rows and no file for them. Hillside's 15 host textures: 159 PNGs exported from the disc (`crates/raceplay/tests/host_export_ground_truth.rs`), an import with the preference set (the add-on installed as an extension) links 15 of 15, none packed |
 | Art (2026-10-29): the loop's canopy, checker, sun, fill light, ambient, sky and flare (`blender_loop.*`, `blender_checker.png`) | every mapping read back as authored (`blender.rs`); the loop imported and exported again is byte-identical (`blender_loop.reexport.*`); on Pulse PSP the art resolves with no miss in the loader report (`trackfile_ground_truth`) |
 
 The Blender-driven part cannot run in CI (no Blender), so it is a local recipe whose output is

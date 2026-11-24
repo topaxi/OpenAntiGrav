@@ -432,9 +432,13 @@ class OAG_PT_track(Panel):
                 layout.prop(mat, "oag_blend")
                 layout.prop(mat, "use_backface_culling", text="Culled")
                 image = scene_art._image_node(mat)
-                if image is not None and scene_art.HOST_ENTRY in image:
-                    layout.prop(image, f'["{scene_art.HOST_ENTRY}"]', text="Host entry")
-                    layout.prop(image, f'["{scene_art.HOST_NAME}"]', text="Host name")
+                if image is not None and images.is_host(image):
+                    for key, text in ((scene_art.HOST_ENTRY, "Host entry"), (scene_art.HOST_NAME, "Host name")):
+                        if key in image:
+                            layout.prop(image, f'["{key}"]', text=text)
+                    if not images.has_host_marks(image):
+                        layout.label(text="Linked from the host folder: use Make Host Texture", icon="ERROR")
+                        layout.operator("oag.host_texture")
                 elif image is not None:
                     layout.operator("oag.host_texture")
         elif obj.type == "LIGHT" and obj.data.type == "SUN":
@@ -495,6 +499,14 @@ CLASSES = (
     OAG_OT_trigger_from_mesh,
     OAG_PT_track,
     OAG_PT_art,
+)
+
+
+HANDLERS = (
+    (bpy.app.handlers.save_pre, images.unpack_host_images),
+    (bpy.app.handlers.save_post, images.restore_autopack),
+    (bpy.app.handlers.load_post, images.apply_autopack_mark),
+    (bpy.app.handlers.depsgraph_update_post, images.unpack_on_update),
 )
 
 
@@ -669,17 +681,17 @@ def register():
     _props()
     for cls in CLASSES:
         bpy.utils.register_class(cls)
-    bpy.app.handlers.save_pre.append(images.unpack_host_images)
-    bpy.app.handlers.save_post.append(images.restore_autopack)
+    for handlers, fn in HANDLERS:
+        handlers.append(fn)
+    bpy.app.timers.register(images._tick, first_interval=1.0, persistent=True)
 
 
 def unregister():
-    for handlers, fn in (
-        (bpy.app.handlers.save_pre, images.unpack_host_images),
-        (bpy.app.handlers.save_post, images.restore_autopack),
-    ):
+    for handlers, fn in HANDLERS:
         if fn in handlers:
             handlers.remove(fn)
+    if bpy.app.timers.is_registered(images._tick):
+        bpy.app.timers.unregister(images._tick)
     for cls in reversed(CLASSES):
         bpy.utils.unregister_class(cls)
     _unprops()
