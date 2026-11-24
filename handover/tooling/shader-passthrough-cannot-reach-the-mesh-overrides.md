@@ -52,6 +52,10 @@ reach 1.6 %.
 
 ## Next Steps
 
+- Report upstream that naga's `process_overrides` writes the overrides arena back, against its
+  doc comment ("empty `overrides` arena"); design 3 would then stop clearing it by hand.
+- The prototype of design 3 is on branch `gate-walltime-7-design3` (not for merge: no wasm
+  gate, no tests).
 - Decide between landing design 3 as measured (6 to 9 %, safe, needs its tests and the
   HD and menu frame comparisons), the `wgpu-hal` stage cache (design 4), and designs 1 or 2.
 - Ask the maintainer whether design 1 or 2 may go ahead (Opus, with the recovery

@@ -670,7 +670,8 @@ pipeline cache miss, each stage got its own module from a memo; the pipeline the
 constants. `cached_pipeline`'s closure received the two modules in place of the shared one.
 
 **Measured** (Pulse PSP race walk of the Fifth round, 400 ticks, same frame-pointer build
-flags, warm Mesa cache, `perf stat -e instructions:u`, runs interleaved with the baseline):
+flags, warm Mesa cache, `perf stat -e instructions:u`; baseline runs before and after the
+prototype runs, the bare launches alternated):
 
 | Build | Race walk, G user instructions | Race launch (`--race --screenshot --ticks 1`), G |
 | --- | ---: | ---: |
@@ -705,10 +706,11 @@ resolved stage still validates twice, once inside `process_overrides` (`revalida
 and once in `wgpu-core`'s `create_shader_module`, and neither can be skipped without `unsafe`.
 The ceiling test shows the shared module's own validations are 0.2 % and not worth removing.
 
-**What would reach the bar** is a cache in `wgpu-hal`'s `compile_stage` keyed on (module,
+**What could reach the bar**, as an estimated ceiling and not a measurement, is a cache in `wgpu-hal`'s `compile_stage` keyed on (module,
 entry point, constants, binding map), which also removes the 9.9 % SPIR-V write for the
-repeated stages: the stages compile 44 times instead of 202, so about 78 % of `compile_stage`'s
-25 % (about 19 % of the launch), with no change to what is drawn. That is a patch to
+repeated stages: the stages compile 44 times instead of 202, so at most about 78 % of
+`compile_stage`'s 25 % (about 19 % of the launch, 44/202 arithmetic), with no change to what
+is drawn. That is a patch to
 `wgpu-hal` (vendored or upstream), which this lane did not make without the lead's word.
 The prototype above is the cheaper half: 6 % of a race walk and 8.6 % of a bare race launch,
 no `unsafe`, byte-identical in the one frame compared, about 150 lines in `oag-mesh`'s
