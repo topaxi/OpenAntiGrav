@@ -58,6 +58,9 @@ threads).
   because the mesh pipelines' override constants are run-time data
   (`docs/architecture/load-time.md`, "Fifth round"; run-time designs in
   `shader-passthrough-cannot-reach-the-mesh-overrides.md`).
+- Measured and not landed: resolving the override constants once per distinct stage and
+  handing `wgpu` the IR, no `unsafe`, is -6.2 % of a race walk and -8.6 % of a bare race
+  launch (`docs/architecture/load-time.md`, "Sixth round"), under the 10 % bar.
 
 ## Next Steps
 

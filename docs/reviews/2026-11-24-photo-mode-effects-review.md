@@ -61,7 +61,9 @@ Sizes are of a 1920x1080 picture unless a capture's own size is given. The captu
 EU, Time Trial, Anulpha Pass, tick 702, the `close` lens turned by `hold left 8`, 1440x816, debug
 build, headless `--drive`, and Pulse EU, the default race, tick 400. The HD script is the motion
 blur test's in `photo_mode_ground_truth.rs` as far as the mode. A test named here is in the tree,
-`#[ignore = "photo-fx-review finding N"]`, and fails today.
+`#[ignore = "photo-fx-review finding N"]`, and fails today when run with `OAG_REVIEW_FINDINGS=1`;
+without it the test returns at once, because `just test-data` runs every ignored test and an open
+finding must not turn the gate red. A fix removes the guard and the `#[ignore]` together.
 
 ### PF1. An accumulated depth of field shot is not the picture the preview shows
 

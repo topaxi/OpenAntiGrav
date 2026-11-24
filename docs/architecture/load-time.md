@@ -643,7 +643,8 @@ naga's build-time output", so neither was built):
    (`ShaderSource::Naga`, behind `wgpu`'s `naga-ir` feature). A module with one entry point
    and no overrides skips the compaction and revalidation (`pipeline_constants.rs` around
    line 93), but `wgpu-core` still validates each module and the SPIR-V write still runs per
-   pipeline, so the gain is some part of `process_overrides`' 15.4 %, not measured.
+   pipeline, so the gain is some part of `process_overrides`' 15.4 %. Measured in the Sixth
+   round: 6.2 % of a race walk, 8.6 % of a bare race launch.
 
 Neither of the first two has a device-lost fallback to lean on: the native build registers no device-lost
 callback (only the web build does, `oag-game`'s `app/gpu.rs`).
@@ -654,6 +655,66 @@ Reproducing: build `oag-game` with `RUSTFLAGS=-Cforce-frame-pointers=yes` into a
 4000; ticks 400;`, `--seed 7 --no-audio --no-intro`, headless, `OAG_MODS` and `XDG_*` on a
 scratch profile) under `perf stat -e instructions:u` and the `perf record` above; split with
 `perf report --children --no-inline --sort sym`.
+
+### Sixth round (2026-11-24): resolving the overrides once per stage reaches 6 %, not 10
+
+**Question.** The Fifth round's safe design 3: resolve each distinct (variant, stage, entry
+point, constants) once with `naga::back::pipeline_constants::process_overrides` and hand
+`wgpu` the result as `ShaderSource::Naga` (`wgpu`'s `naga-ir` feature on `oag-mesh`, no
+`unsafe`, no passthrough), so `wgpu-hal` finds a module with one entry point and no overrides
+and returns it unchanged. Bar: about 10 % of a race launch, else docs only.
+
+**Prototype** (not landed): `mesh.wesl`'s two variants parsed and validated once into naga IR
+(the shared module created from that IR, so the WGSL is parsed once and not twice); on a
+pipeline cache miss, each stage got its own module from a memo; the pipeline then carried no
+constants. `cached_pipeline`'s closure received the two modules in place of the shared one.
+
+**Measured** (Pulse PSP race walk of the Fifth round, 400 ticks, same frame-pointer build
+flags, warm Mesa cache, `perf stat -e instructions:u`; baseline runs before and after the
+prototype runs, the bare launches alternated):
+
+| Build | Race walk, G user instructions | Race launch (`--race --screenshot --ticks 1`), G |
+| --- | ---: | ---: |
+| Baseline | 22.009, 22.009, 22.006 | 12.034, 12.032 |
+| Resolved modules, overrides arena left as naga returns it | 22.958 (**+4.3 %**) | not run |
+| Resolved modules, arena cleared (the prototype) | 20.632, 20.629 (**-6.2 %**) | 10.997, 10.997 (**-8.6 %**) |
+| The prototype with the shared module replaced by a stub, a ceiling test | 20.590, 20.587 (-6.4 %) | not run |
+
+The run-to-run spread is 3 M instructions in 22 G. Instruction counts do not move with load
+(the runs were at load 23 to 55). The 1-tick headless screenshot of the baseline and the
+prototype is byte-identical (`cmp` on the PNGs, two pairs). HD and the menu were not captured:
+the result stopped below the bar first.
+
+**The trap that cost the first attempt.** `process_overrides` documents its result as having
+"an empty `overrides` arena", but naga 30.0.2 puts the arena back before it revalidates
+(`back/pipeline_constants.rs`, `module.overrides = overrides;` just above the final
+`revalidate`). A resolved module that still lists overrides fails `process_overrides`'s early
+return (`entry_points.len() <= 1 && overrides.is_empty()`, around line 93), so `wgpu-hal`
+resolved every one of the 202 stages again on top of our 44 and the launch got 4.3 % worse.
+Every use of an override is a constant by then, so assigning `module.overrides = Default::default()`
+on the resolved module restores the documented contract; the prototype did exactly that, and a
+naga bump that changes it shows as the early return failing (a unit test on `Cow::Borrowed`
+would pin it).
+
+**Why it stops at 6 %.** `perf record` after the change (`children` percentages of the
+walk): `compile_stage` fell from 25.2 % to 11.5 %, and of what is left 9.9 % is
+`spv::write_vec`, which still runs for every pipeline (`wgpu-hal` keeps no SPIR-V between
+pipelines, and `SEPARATE_ENTRY_POINTS` keeps every module as IR). `process_overrides` fell
+from 15.3 % to 6.8 %, now all of it ours, for 44 resolved stages (counted on a 50-tick run;
+the Fifth round's census found 64 keys, a difference this round did not chase). Each
+resolved stage still validates twice, once inside `process_overrides` (`revalidate`, 3.7 %)
+and once in `wgpu-core`'s `create_shader_module`, and neither can be skipped without `unsafe`.
+The ceiling test shows the shared module's own validations are 0.2 % and not worth removing.
+
+**What could reach the bar**, as an estimated ceiling and not a measurement, is a cache in `wgpu-hal`'s `compile_stage` keyed on (module,
+entry point, constants, binding map), which also removes the 9.9 % SPIR-V write for the
+repeated stages: the stages compile 44 times instead of 202, so at most about 78 % of
+`compile_stage`'s 25 % (about 19 % of the launch, 44/202 arithmetic), with no change to what
+is drawn. That is a patch to
+`wgpu-hal` (vendored or upstream), which this lane did not make without the lead's word.
+The prototype above is the cheaper half: 6 % of a race walk and 8.6 % of a bare race launch,
+no `unsafe`, byte-identical in the one frame compared, about 150 lines in `oag-mesh`'s
+`pipeline_cache`, and it is what a later `wgpu-hal` cache would sit on top of.
 
 ## Reproducing
 
