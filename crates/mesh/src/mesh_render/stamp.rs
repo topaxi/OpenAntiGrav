@@ -22,6 +22,8 @@ pub(super) struct Shared<'a> {
     pub multisample: wgpu::MultisampleState,
     /// The blended pipelines' own: tested, never written.
     pub depth_stencil: &'a wgpu::DepthStencilState,
+    /// The twins of each pair the model's transparent draws pick.
+    pub reach: super::reach::Stamped,
 }
 
 /// The stamp pipelines: one pair for the alpha-over batches and one for the
@@ -116,14 +118,40 @@ pub(super) fn pipelines(shared: &Shared<'_>) -> Stamp {
             },
         )
     };
+    let alpha_over_fallback = std::cell::OnceCell::new();
+    let alpha_over_fallback = || {
+        alpha_over_fallback
+            .get_or_init(|| make("mesh glow stamp (two-sided)", false, false))
+            .clone()
+    };
     Stamp {
-        alpha_over: [
-            make("mesh glow stamp (two-sided)", false, false),
-            make("mesh glow stamp (culled)", true, false),
-        ],
-        additive: [
-            make("mesh glow stamp (additive, two-sided)", false, true),
-            make("mesh glow stamp (additive, culled)", true, true),
-        ],
+        alpha_over: shared.reach.alpha_over.pair(
+            |cull| {
+                make(
+                    if cull {
+                        "mesh glow stamp (culled)"
+                    } else {
+                        "mesh glow stamp (two-sided)"
+                    },
+                    cull,
+                    false,
+                )
+            },
+            &alpha_over_fallback,
+        ),
+        additive: shared.reach.additive.pair(
+            |cull| {
+                make(
+                    if cull {
+                        "mesh glow stamp (additive, culled)"
+                    } else {
+                        "mesh glow stamp (additive, two-sided)"
+                    },
+                    cull,
+                    true,
+                )
+            },
+            &alpha_over_fallback,
+        ),
     }
 }
