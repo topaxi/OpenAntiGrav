@@ -520,7 +520,6 @@ fn stripes_left_at(d: &Device, distance: f32) -> u8 {
 /// stripes inside it average to a flat grey. Fails while the gather reads 56 fixed pixels of the
 /// disc, the same 56 at every pixel, so the stripes come through at a fraction of their contrast.
 #[test]
-#[ignore = "photo-fx-review finding 6"]
 fn the_widest_blur_at_1080_lines_flattens_one_pixel_stripes() {
     let Some(d) = device() else { return };
     let spread = stripes_left_at(&d, 400.0);
@@ -537,7 +536,6 @@ fn the_widest_blur_at_1080_lines_flattens_one_pixel_stripes() {
 /// radius: the innermost sits 2.55 pixels out, so a 2-pixel circle reaches none and the surface
 /// is as sharp as one in focus.
 #[test]
-#[ignore = "photo-fx-review finding 6"]
 fn a_surface_a_little_out_of_focus_is_blurred_at_1080_lines() {
     let Some(d) = device() else { return };
     let spread = stripes_left_at(&d, 7.07);
@@ -555,7 +553,6 @@ fn a_surface_a_little_out_of_focus_is_blurred_at_1080_lines() {
 /// colour: five pixels outside the edge 36 percent of the circle lies on the near surface, and
 /// the pixel comes out nearly white.
 #[test]
-#[ignore = "photo-fx-review finding 5"]
 fn a_blurred_near_edge_thins_out_over_the_sharp_surface_behind_it() {
     let Some(d) = device() else { return };
     let shade = |x: u32| if x < 128 { 255 } else { 0 };
@@ -567,6 +564,26 @@ fn a_blurred_near_edge_thins_out_over_the_sharp_surface_behind_it() {
         row[133] <= 153,
         "five pixels outside the edge the near surface covers {} of 255",
         row[133]
+    );
+    // The rest of the profile: about half at the edge, from both sides, so the near surface
+    // has no hard step at its outline, and nothing left past its radius.
+    let inside: Vec<u8> = row[96..128].to_vec();
+    println!("the same, inward from the edge: {inside:?}");
+    assert!(
+        (96..=160).contains(&row[128]),
+        "the first pixel outside the edge is {} of 255, not about half",
+        row[128]
+    );
+    assert!(
+        row[127].abs_diff(row[128]) <= 40,
+        "the near surface keeps a hard outline: {} inside, {} outside",
+        row[127],
+        row[128]
+    );
+    assert!(
+        row[152..192].iter().all(|&v| v <= 8),
+        "the near surface reaches past its radius: {:?}",
+        &row[152..192]
     );
 }
 
