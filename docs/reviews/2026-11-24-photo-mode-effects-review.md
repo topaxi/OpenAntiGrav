@@ -65,6 +65,13 @@ blur test's in `photo_mode_ground_truth.rs` as far as the mode. A test named her
 
 ### PF1. An accumulated depth of field shot is not the picture the preview shows
 
+**Fixed** in `5e6674042`. Every accumulated frame now runs the preview's pass at the full aperture,
+and the lens ring is sized so the band's ends move at most 1/4320 of the height and no depth more
+than a quarter of the pass's blur there. The test passes; the two captures, rerun, give a saved shot
+0.18 and 0.22 levels from the preview over the craft (detail kept 0.997 and 0.995). The default
+shot is the same picture to the pixel. `a_lens_sample_frame_asks_the_pass_for_the_previews_blur`
+fails if a lens-sample frame asks the pass for less blur than the preview again.
+
 **Impact**: High - on HD and 2048 the saved shot differs from what the player framed, from a soft
 craft at the opening values to seven ghost craft with the focus set far.
 **Priority**: P1. **Confidence**: 95. **Faithfulness**: no. **Effort**: M.
@@ -99,6 +106,10 @@ capture `hold down 1` twice and `hold right 260`), `press start; screenshot prev
 cross; until photo_job=none within 800`.
 
 ### PF2. A lens sample turns the camera, so the focus plane is sharp only on the axis
+
+**Fixed** in `5e6674042`: `LensShift::apply` shears the frustum (off-axis) instead of turning it.
+The test passes, and checks four points of the focus plane under a sample as wide as the old ring
+(0.07 units), which the rotation moved 6.9 px.
 
 **Impact**: Medium - the same shot smears the plane of focus toward the frame's edge, more at a
 wide field.
@@ -163,6 +174,10 @@ the glow off (no setting turns it off), hence 85.
 
 ### PF5. A blurred near surface is drawn almost opaque out to its blur radius
 
+**Fixed** in `8a8cb1ffb`. Nearer surfaces that reach a pixel are a layer laid over its own circle's
+average by the share of it they cover. The test passes and now checks the whole profile: 127 at the
+edge outside and 135 inside it, 94 five pixels out, 0 from 22.
+
 **Impact**: Medium - in the preview and in every single-frame shot, on every title, something
 near and out of focus grows by its blur radius and keeps a hard edge.
 **Priority**: P2. **Confidence**: 90. **Faithfulness**: no. **Effort**: M.
@@ -183,6 +198,10 @@ The far side is right: a tap behind the pixel is held to the pixel's own radius,
 field does not halo over a sharp craft (the existing test).
 
 ### PF6. The gather's 56 taps are spread over the widest reach, whatever the pixel's own radius
+
+**Fixed** in `8a8cb1ffb`. An 8x8 tile pass and a dilation give each pixel the widest blur that can
+reach it, the taps spread over that, and each tap is a 2x2 quad. Both tests pass: stripes under a
+2 px circle are left at 33 of 255, under the widest blur at 2.
 
 **Impact**: Low-Medium - a surface a little out of focus is not blurred at all, and at the wide
 end fine detail comes through. Both get worse as the picture gets larger.
@@ -236,6 +255,10 @@ blur is not offered". `[replay] record = false` is the case.
   returns no plan.
 
 ### PF9. The lens ring is sized for the lens's field, not the field the frame is drawn with
+
+**Its test's premise changed with PF1's fix** (`5e6674042`): the ring is no longer half of the
+preview's blur (`shot::ring_radius`, sized to the sharp band), so the assertion has to be restated
+against that sizing. The finding stands: the ring is still worked out from `photo.fov()`.
 
 **Impact**: Low - at speed the accumulated half of the blur is narrower than intended.
 **Priority**: P3. **Confidence**: 90. **Faithfulness**: no. **Effort**: S.
@@ -341,12 +364,12 @@ Not proven, so not findings. Each says how to check it.
 
 | ID | Finding | Impact | Priority | Confidence | Effort | Evidence | Found by |
 | --- | --- | --- | --- | ---: | --- | --- | --- |
-| PF1 | Accumulated depth of field is not the previewed picture | High | P1 | 95 | M | test, two captures | both |
-| PF2 | Lens sample rotates: the focus plane moves at the frame's edge | Medium | P2 | 95 | S | test | both |
+| PF1 | Accumulated depth of field is not the previewed picture (fixed, `5e6674042`) | High | P1 | 95 | M | test, two captures | both |
+| PF2 | Lens sample rotates: the focus plane moves at the frame's edge (fixed, `5e6674042`) | Medium | P2 | 95 | S | test | both |
 | PF3 | A shot does not record the picture controls; `--from-png` redraws without them | Medium | P2 | 95 | S | capture | both |
 | PF4 | Saturation 0 leaves the glow's colour on Pulse | Medium | P2 | 85 | M | capture, control | first |
-| PF5 | A blurred near surface is nearly opaque out to its radius | Medium | P2 | 90 | M | test | second |
-| PF6 | 56 taps over the widest reach: small blurs untouched, wide ones leak | Low-Med | P2 | 90 | M | two tests | both |
+| PF5 | A blurred near surface is nearly opaque out to its radius (fixed, `8a8cb1ffb`) | Medium | P2 | 90 | M | test | second |
+| PF6 | 56 taps over the widest reach: small blurs untouched, wide ones leak (fixed, `8a8cb1ffb`) | Low-Med | P2 | 90 | M | two tests | both |
 | PF7 | The HUD in a motion blur shot is averaged over the shutter | Low-Med | P2 | 90 | S | capture | first |
 | PF8 | MOTION BLUR offered with no recording | Low | P3 | 95 | S | test | both |
 | PF9 | Lens ring sized for the lens's field, not the drawn one | Low | P3 | 90 | S | test | first |
