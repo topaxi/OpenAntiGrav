@@ -2085,8 +2085,9 @@ pause (the CPU is held after the load; the wall waits do not move it), so `--pau
 ours read 0.35.4 at 2,400 ticks, 0.40.8 at 2,724); with that the record 1.17.1, `current`, the GO board and the camera match. Fixed: the HUD under the tint, the tag off the footer, GAME MANUAL
 in a compare shot, and the header (taken settled, see `docs/ui/pause-menu.md`, "Pulse"). **The pause menu is the worst pair now (1.56 %).** **Largest regions left** (of 2,031): the rows 807 and the focused row 279: the original's rows are
 brighter (peak (65, 204, 225) against ours' (49, 155, 173), the bloom of the front end's glow stamps), because ours' glow pass runs only on a cleared target (`Renderer::render`'s `glowing` needs
-`LoadOp::Clear`) and a menu over a parked race draws with `Load`: **the cause, not fixed** (a renderer change); the music pill and `FENIX FUNK 5 (WIPEOUT EDIT)` 672 (the original is playing, ours
-runs `--no-audio` and has no now-playing line to draw); the `Confirm` ring 212. The focused row's pulse level is not pinned on the drive route (the session's own clock runs it).
+`LoadOp::Clear`) and a menu over a parked race draws with `Load`: **the cause, not fixed** (a renderer change); the music pill and `FENIX FUNK 5 (WIPEOUT EDIT)` 672, **since drawn** (2026-11-24: the pause
+`MusicList`, `docs/ui/pause-menu.md`; on a fresh grab of the same state the whole frame went 1.56 % to 1.05 % and the
+music row 674 px to 12 px); the `Confirm` ring 212. The focused row's pulse level is not pinned on the drive route (the session's own clock runs it).
 
 ### Pulse Cell Selection: the footer, the tag and the title's glow phase (2026-11-23, `pulse-psp-cell`)
 

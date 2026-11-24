@@ -37,8 +37,7 @@ and no frame bar.
 
 Frames, same track (Talon's Junction), the originals from PPSSPP on the USA disc and ours from the
 EU disc, original beside ours: Time Trial, Speed Lap and Single Race, read side by side. The rows, the heading, the row pitch, the
-`Confirm` legend and the heavy tint match; ours leaves out GAME MANUAL, END SESSION and the
-`MusicList`.
+`Confirm` legend and the heavy tint match; ours leaves out GAME MANUAL and END SESSION.
 
 **The HUD, the footer and the header (2026-11-23, `pulse-gap-pairs`, confidence 90).** A fresh capture of a Time Trial on Moa Therma White
 (the `time-trial-moa-therma-white-venom-grid` state, START, 4 s) against ours played to the same race clock
@@ -103,6 +102,32 @@ wired** (the header is the front end's frame bar, static). GAME MANUAL is drawn 
   drops the pick (measured: back on the screen the row shows the playing song again); RESTART RACE and
   QUIT RACE drop it too (static, 70). This **corrects** the first reading (2026-11-23), which had LEFT/RIGHT
   on the focus step with `LEFTRIGHT`: those are UP/DOWN.
+
+  **Built (2026-11-24):** `oag_title::PauseMenu::music_list` (`oag_pulse::pause_menu::MUSIC_LIST`) carries the
+  numbers; `oag_ui::menu::music_list` is the widget (state, step, draw, pointer) on the pause page's root; the
+  session gives it the race playlist (`oag_sound::Audio::race_playlist`, each song's title, the booted disc's
+  order then the other enabled sources, a folder file by its file name: **chosen**) and, on resuming, hands the
+  pick to `Audio::pick_race_song`, which starts it from its beginning as a new song; the same song picked again
+  resumes where it was. The step is `Nav::Moved` (`UPDOWN`), an end `Nav::Decline`. **Pointer** (chosen, the
+  original has none): a click on the back or forward half of the pill steps that way with the pad's sounds, a
+  click on the title steps forward; neither moves the row cursor. The pill's y offset (- 4) and the dim share
+  (0.56 of `TextColor`) are measured off the frames. The next race goes on from the picked song through this
+  build's playlist (`docs/architecture/race-music-resume.md`). Tests: `oag_ui::menu::tests::music_list`,
+  `oag_sound::pause_pick::tests`, `oag_pulse::pause_menu::tests::each_pressing_draws_its_own_music_list` and
+  `main_menu_ground_truth::pulses_pause_screens_author_the_music_list_the_table_draws`.
+
+  **The pair** (`scripts/pulse-pause.drive`, the original's frame from the
+  `time-trial-moa-therma-white-venom-grid` state, START, 4 s, clock 0.40.9; ours played to it, the same frame
+  for both columns): whole frame **1.56 % to 1.05 %** of pixels over 40 grey (2,033 to 1,371 px, mean grey 4.17 to
+  3.71); the music row (20, 215, 300, 25) **674 px to 12 px**. After RIGHT the original reads `STEADY RUSH` (USA
+  disc, song 1) and ours `SLINGSHOT (WIPEOUT MIX)`: ours renders the EU disc, whose song 1 is another.
+
+  **PS2 Pulse: checked, differs, wired.** The PS2 executable carries the `MusicList` class, and its four screens
+  author the widget at `y="270"` in `font="menu"` (its own grid and the rows' face), no `Wrap`, no `AutoRepeat`
+  (the ground-truth test above reads all three pressings). `oag_pulse::pause_menu::MUSIC_LIST_PS2` carries that;
+  the step, the ends, the no-audition rule and the arrows are **inherited from the PSP** (the PS2's `List` code is
+  not read). **Pure: checked, differs.** Its executable has no `MusicList` class (no string) and its `InGame
+  Pause` screen authors no music widget; `oag_pure`'s table has none.
 
 Tests: the disc's lists per screen and the default, both pressings and PS2
 (`main_menu_ground_truth::pulses_*_pause_screens_*`); the mode-to-screen table

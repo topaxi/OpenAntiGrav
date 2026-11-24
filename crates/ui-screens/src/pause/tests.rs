@@ -44,6 +44,8 @@ const TABLE: &PauseMenu = &PauseMenu {
     hud_under_scrim: true,
     song_line_under_scrim: true,
     offers_photo: false,
+    music_list: None,
+    music_list_ps2: None,
     origin: Origin::Chosen,
 };
 
@@ -321,6 +323,8 @@ mod menu_widget {
         hud_under_scrim: true,
         song_line_under_scrim: true,
         offers_photo: false,
+        music_list: None,
+        music_list_ps2: None,
         origin: Origin::Measured,
     };
 

@@ -869,6 +869,20 @@ pub fn load_shell(
         sprites.entries(),
         &mut report,
     );
+    // The pause screen's music list draws its arrows off the front end's own sheet.
+    frame.music_list = title
+        .pause_menu
+        .and_then(|pause| pause.music_list_for(archives.layout.platform))
+        .map(|spec| {
+            let art = oag_ui::menu::music_list::Art::resolve(spec, sprites.entries());
+            if art.arrows.is_none() {
+                report.push(format!(
+                    "pause music list: {} is not among the sheets, so its arrows are not drawn",
+                    spec.sheet
+                ));
+            }
+            art
+        });
     // See [`screens::read_nav_legend`]'s own doc.
     let nav_legend =
         read_nav_legend(skin_xml.as_deref(), &screens.globals, &strings).map(|legend| {

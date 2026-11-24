@@ -62,6 +62,8 @@ pub const PAUSE_MENU: &PauseMenu = &PauseMenu {
     // no line under a pause.
     song_line_under_scrim: false,
     offers_photo: true,
+    music_list: None,
+    music_list_ps2: None,
     origin: Origin::Measured,
 };
 

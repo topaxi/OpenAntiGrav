@@ -3,7 +3,7 @@
 use oag_title::{
     Origin,
     PauseAction::{Options, Photo, Quit, Restart, Resume},
-    PauseMenu, PauseScreen,
+    PauseMenu, PauseMusicList, PauseScreen,
     pause_menu::row,
 };
 
@@ -79,7 +79,31 @@ pub const PAUSE_MENU: &PauseMenu = &PauseMenu {
     hud_under_scrim: true,
     song_line_under_scrim: true,
     offers_photo: true,
+    music_list: Some(MUSIC_LIST),
+    music_list_ps2: Some(MUSIC_LIST_PS2),
     origin: Origin::Measured,
+};
+
+/// The four screens' `MusicList` (`y="220"`, no `Wrap`), drawn by the executable's `List` code
+/// (`docs/ghidra/functions/psp-pulse-usa/music-list.md`, "The draw"). The arrows' cuts and x offsets are
+/// read off `ListWidget_Enter`; their y offset and the dim share are measured off the PPSSPP frames.
+pub const MUSIC_LIST: PauseMusicList = PauseMusicList {
+    y: 220.0,
+    font: "small",
+    wraps: false,
+    sheet: r"Data\FE\Images\pulse_assets.mip",
+    arrows: [[282.0, 96.0, 25.0, 28.0], [306.0, 96.0, 25.0, 28.0]],
+    arrow_offset: [(-32.0, -4.0), (-20.0, -4.0)],
+    arrow_dim: 0.56,
+};
+
+/// The PS2 pressing's: the same four screens author `y="270"` and `font="menu"` in the PS2's grid.
+/// The arrows' cuts, offsets and dimming are **inherited from the PSP**: the PS2 executable's `List`
+/// code is not read.
+pub const MUSIC_LIST_PS2: PauseMusicList = PauseMusicList {
+    y: 270.0,
+    font: "menu",
+    ..MUSIC_LIST
 };
 
 #[cfg(test)]
@@ -103,6 +127,18 @@ mod tests {
     #[test]
     fn the_hud_stays_under_the_tint() {
         assert!(PAUSE_MENU.hud_under_scrim);
+    }
+
+    /// Each pressing draws the music list its own screens author: the PSP's at `y="220"` in the small
+    /// face, the PS2's at `y="270"` in the rows' face; neither wraps.
+    #[test]
+    fn each_pressing_draws_its_own_music_list() {
+        use oag_title::Platform;
+        let psp = PAUSE_MENU.music_list_for(Platform::Psp).expect("PSP");
+        let ps2 = PAUSE_MENU.music_list_for(Platform::Ps2).expect("PS2");
+        assert_eq!((psp.y, psp.font, psp.wraps), (220.0, "small", false));
+        assert_eq!((ps2.y, ps2.font, ps2.wraps), (270.0, "menu", false));
+        assert_eq!(ps2.arrows, psp.arrows, "inherited from the PSP");
     }
 
     #[test]

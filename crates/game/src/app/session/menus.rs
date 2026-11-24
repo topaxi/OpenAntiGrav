@@ -1029,6 +1029,9 @@ impl Session {
         let paused = self.add_pause_screen(&mut definition);
         let mut model = menu::Menu::new(definition);
         model.set_pause_screen(paused);
+        if paused {
+            model.set_music_list(self.pause_music_list(shell));
+        }
         // PHOTO MODE is a row of the pause menu: there while a race with one view is held
         // behind the menus, and on no other page of the front end.
         model.offer(menu::Action::PhotoMode, self.photo_available());

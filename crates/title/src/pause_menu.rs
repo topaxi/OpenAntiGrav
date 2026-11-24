@@ -114,8 +114,36 @@ pub struct PauseMenu {
     /// Whether a screen with no photo row of its own gets this project's PHOTO MODE row
     /// after OPTIONS. Photo mode is one implementation on every title.
     pub offers_photo: bool,
+    /// The music list the screens draw under their rows, where the title authors one (Pulse's
+    /// `MusicList`). `None` draws none.
+    pub music_list: Option<PauseMusicList>,
+    /// [`Self::music_list`] on the PS2 pressing, whose screens author it in their own grid and
+    /// face. `None` takes [`Self::music_list`].
+    pub music_list_ps2: Option<PauseMusicList>,
     /// Where [`Self::screens`] and [`Self::by_mode`] were read.
     pub origin: Origin,
+}
+
+/// A pause screen's music list: the race playlist's song names, one shown, stepped by LEFT and
+/// RIGHT whichever row the cursor is on; the step plays nothing until the race resumes, which
+/// starts the song shown from its beginning (`docs/ghidra/functions/psp-pulse-usa/music-list.md`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PauseMusicList {
+    /// The text's top in the screen's grid (the widget's authored `y`); its left edge is the
+    /// menu rows' own.
+    pub y: f32,
+    /// The face the text is drawn in, as the widget names it: `small`, or `menu` (the rows' own).
+    pub font: &'static str,
+    /// Whether a step past either end goes round to the other (the widget's `Wrap`).
+    pub wraps: bool,
+    /// The sheet the two arrows are cut from.
+    pub sheet: &'static str,
+    /// The left and right arrow in the sheet, `[u, v, w, h]`.
+    pub arrows: [[f32; 4]; 2],
+    /// Each arrow's top-left from the text's left edge and top, left then right.
+    pub arrow_offset: [(f32, f32); 2],
+    /// The share of the text colour an arrow that points past an end is drawn in.
+    pub arrow_dim: f32,
 }
 
 impl PauseMenu {
@@ -136,6 +164,15 @@ impl PauseMenu {
     #[must_use]
     pub fn screen(&self, name: &str) -> Option<&'static PauseScreen> {
         self.screens.iter().find(|screen| screen.name == name)
+    }
+
+    /// The music list the pressing for `platform` draws.
+    #[must_use]
+    pub fn music_list_for(&self, platform: crate::Platform) -> Option<PauseMusicList> {
+        match platform {
+            crate::Platform::Ps2 => self.music_list_ps2.or(self.music_list),
+            _ => self.music_list,
+        }
     }
 }
 

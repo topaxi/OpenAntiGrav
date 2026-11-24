@@ -96,7 +96,9 @@ pub use menu::{
     StripBlocks,
 };
 pub use oag_disc::Platform;
-pub use pause_menu::{PauseAction, PauseLayout, PauseMenu, PauseMenuRows, PauseRow, PauseScreen};
+pub use pause_menu::{
+    PauseAction, PauseLayout, PauseMenu, PauseMenuRows, PauseMusicList, PauseRow, PauseScreen,
+};
 pub use pressing::{Pressing, Pressings};
 pub use race::sound::{
     FrontEndSounds, MedalScreen, MenuCues, ResultsLaw, ResultsVoices, StyledCue, TournamentPlace,

@@ -44,7 +44,10 @@ pause screen where one applies). Online pause stays the maintainer's decision
 - **Split screen** keeps START's freeze and the ownership rule; HD's `InGame Pause Split Player 1`/`2`,
   `Tournament Split` and `Zone P1`/`P2` screens are the model (`PauseMenu_BindRedirectForMode` on HD
   picks them per pad); the same drawer (`oag_ui_screens::pause`) takes them.
-- **Pulse `MusicList`** (the playing track at the foot, LEFT and RIGHT change it): not drawn.
+- **Pulse `MusicList`**: built (`oag_ui::menu::music_list`, `docs/ui/pause-menu.md`). Open: the PS2's arrows are
+  inherited from the PSP (its `List` code is not read); the end-dim rule `0x088a9ba4` is read off the frames, not
+  the code; on the drive route ours shows no now-playing marquee at all (not at the race start either), so the
+  marquee the original shows after a resume on a new pick is not seen in ours there (pre-existing, not chased).
 - **Pulse GAME MANUAL, END SESSION (Speed Lap), SKIP (Tournament)**: authored, nothing behind them here.
 - **Pulse Tournament**: the screen is the static reading of the executable (conf 85); not walked live.
 - **ESCAPE** (and the phone Back) resumes: chosen, the original has no such button; CIRCLE on the root does nothing, as on the disc.
