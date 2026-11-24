@@ -121,7 +121,14 @@ impl Orbit {
         };
         self.dist += (dist - self.dist) * DIST_RATE;
         self.fov += (fov - self.fov) * FOV_RATE;
-        self.offset += (self.orbit_offset(orientation) - self.offset) * EYE_RATE;
+        let heading = self.orbit_offset(orientation);
+        self.offset += (heading - self.offset) * EYE_RATE;
+        // The ease is a chord across a turning orbit: it must not bring the eye inside the radius it is
+        // heading for.
+        let reach = self.offset.length();
+        if reach > f32::EPSILON && reach < self.dist {
+            self.offset *= self.dist / reach;
+        }
     }
 
     /// Where the eye is heading, from the focus.
