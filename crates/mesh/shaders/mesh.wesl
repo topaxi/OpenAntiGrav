@@ -176,7 +176,7 @@ fn fs_main_blend(in: VertexOutput) -> @location(0) vec4<f32> {
     let shaded = lit.colour;
     let shade_out = shadowed(shaded.rgb, lit.sun, in.world);
     return vec4<f32>(
-        target_out(plus_after_fog(fogged(shade_out.colour, in.world, in.view_depth), shade_out.after_fog)),
+        target_out(plus_after_fog(fogged(shade_out.colour, in.world, in.view_depth, in.slots), shade_out.after_fog)),
         shaded.a
     );
 }
@@ -192,7 +192,7 @@ fn fs_main_blend_velocity(in: VertexOutput) -> BlendMrtOutput {
     let shade_out = shadowed(shaded.rgb, lit.sun, in.world);
     return BlendMrtOutput(
         vec4<f32>(
-            target_out(plus_after_fog(fogged(shade_out.colour, in.world, in.view_depth), shade_out.after_fog)),
+            target_out(plus_after_fog(fogged(shade_out.colour, in.world, in.view_depth, in.slots), shade_out.after_fog)),
             shaded.a
         ),
         vec4<f32>(velocity_of(in), 0.0, shaded.a),
@@ -234,7 +234,7 @@ fn fs_main_alpha_test(in: VertexOutput) -> @location(0) vec4<f32> {
     }
     let shade_out = shadowed(shaded.rgb, lit.sun, in.world);
     return vec4<f32>(
-        target_out(plus_after_fog(fogged(shade_out.colour, in.world, in.view_depth), shade_out.after_fog)),
+        target_out(plus_after_fog(fogged(shade_out.colour, in.world, in.view_depth, in.slots), shade_out.after_fog)),
         stamped_alpha(in, shaded.a)
     );
 }
@@ -286,7 +286,7 @@ fn fs_main_alpha_test_velocity(in: VertexOutput) -> MrtOutput {
     let shade_out = shadowed(shaded.rgb, lit.sun, in.world);
     return MrtOutput(
         vec4<f32>(
-            target_out(plus_after_fog(fogged(shade_out.colour, in.world, in.view_depth), shade_out.after_fog)),
+            target_out(plus_after_fog(fogged(shade_out.colour, in.world, in.view_depth, in.slots), shade_out.after_fog)),
             stamped_alpha(in, shaded.a)
         ),
         velocity_of(in),

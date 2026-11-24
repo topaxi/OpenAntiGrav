@@ -16,7 +16,15 @@ import package::bindings::{scene};
 // 15 % at the corners of Pulse's authored field of view. Reproducing view-space
 // z needs the view matrix separately, which this uniform block does not carry;
 // recorded as a known divergence rather than silently accepted.
-fn fogged(colour: vec3<f32>, world: vec3<f32>, view_depth: f32) -> vec3<f32> {
+fn fogged(colour: vec3<f32>, world: vec3<f32>, view_depth: f32, slots: u32) -> vec3<f32> {
+    // A track chunk of a Zone-family race takes the stage's Track fog where the file authors one:
+    // the original's fog pick reads the chunk's flag bit 0 and binds the Track buffer
+    // (`Scene_GetZoneTrackFog`, `docs/ghidra/functions/ps3-hdfury-eu/zone-plain-chunks.md`).
+    if scene.track_fog.authored > 0.5 && (slots & 512u) != 0u {
+        let scaled = scene.track_fog.density * view_depth;
+        let clear = clamp(exp(-scaled * scaled), 0.0, 1.0);
+        return mix(scene.track_fog.colour * scene.light.output_scale, colour, clear);
+    }
     // `curve` is 0.0 or 1.0 on every title, so a uniform branch runs one of the two factors and
     // not both; the `mix` stays for any other value.
     var factor: f32;

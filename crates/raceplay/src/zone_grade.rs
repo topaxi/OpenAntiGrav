@@ -779,6 +779,19 @@ impl ZoneGrade {
         Some(mesh_render::Fog::authored_exp2(colour, density))
     }
 
+    /// The Track fog this stage authors, taken by a track-flagged chunk
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/zone-plain-chunks.md`, "The fog pick").
+    /// [`mesh_render::TrackFog::NONE`] where the table names none (2048's blocks are
+    /// not read), so those chunks keep [`Self::fog`].
+    #[must_use]
+    pub fn track_fog(&self) -> mesh_render::TrackFog {
+        let palette = self.palette();
+        match (palette.track_fog_colour, palette.track_fog_density) {
+            (Some(colour), Some(density)) => mesh_render::TrackFog::authored(colour, density),
+            _ => mesh_render::TrackFog::NONE,
+        }
+    }
+
     /// The circuit's light rig with this stage's colour terms laid over it.
     ///
     /// **A tint, never a rig of its own.** This schema has no `Sun direction`
