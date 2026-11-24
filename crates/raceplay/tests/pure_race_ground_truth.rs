@@ -716,3 +716,131 @@ fn a_classic_circuit_flies_the_vr_hull_on_every_slot_and_an_alpha_circuit_does_n
         );
     }
 }
+
+/// A circuit whose `TrackStartup.xml` authors `<VrFx Type="1"/>` loads `ship_classic.bnk` and
+/// `weapons_classic.bnk` where every other circuit loads `ship.bnk` and `weapons.bnk`
+/// (`FUN_08848bf8` sets the flag byte `0x08a8f604`, `FUN_08847a54` branches on it;
+/// `docs/ghidra/functions/psp-pure-usa/ship-models.md`). The flag is read off the circuit's own
+/// manifest, not off its `PI_Track` type, so the census below pins which circuits author it and
+/// the race loads pin which banks the cues come from: a loader that ignored the flag reads
+/// `ship.bnk` on Karbonis and fails here. `Zone\01_Zone` authors the flag too and keeps the Zone
+/// banks: the original's Zone branch of `FUN_08847a54` never reads it.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_circuit_that_authors_vrfx_loads_the_classic_sound_banks_and_no_other_does() {
+    for (label, image) in images() {
+        let mut archives =
+            oag_pure::open(image.to_str().expect("utf-8 path")).expect("open the image");
+        let mut flagged = Vec::new();
+        for circuit in [
+            r"Environments\01_Vineta_K",
+            r"Environments\08_Sinucit",
+            r"Zone\01_Zone",
+            r"ClassicsNS\01_Karbonis",
+            r"ClassicsNS\02_Sagarmartha",
+            r"ClassicsNS\03_Manor_Top",
+            r"ClassicsNS\04_Mandrashee",
+        ] {
+            let name = format!(r"Data\{circuit}\TrackStartup.xml");
+            let blob = archives.read_name(&name).expect(&name);
+            let manifest =
+                oag_tables::trackstartup::TrackStartup::parse(&String::from_utf8_lossy(&blob));
+            if manifest.vr_fx_on() {
+                flagged.push(circuit);
+            }
+        }
+        assert_eq!(
+            flagged,
+            [
+                r"Zone\01_Zone",
+                r"ClassicsNS\01_Karbonis",
+                r"ClassicsNS\02_Sagarmartha",
+                r"ClassicsNS\03_Manor_Top",
+                r"ClassicsNS\04_Mandrashee",
+            ],
+            "{label}"
+        );
+
+        let classic = load(&image, r"Data\ClassicsNS\01_Karbonis\track.vex");
+        let alpha = load(&image, r"Data\Environments\01_Vineta_K\track.vex");
+        let zone = race::load(&race::Options {
+            source: image.display().to_string(),
+            class: "VENOM".to_string(),
+            mode: oag_race::Mode::Zone,
+            track: Some(r"Data\Zone\01_Zone\track.vex".to_string()),
+            ..race::Options::default()
+        })
+        .expect("loading the Zone circuit");
+        let from = |loaded: &race::Loaded, bank: &str| {
+            loaded
+                .report
+                .iter()
+                .filter(|line| {
+                    line.starts_with("sfx: ")
+                        && line.contains("waveform(s) from")
+                        && line.ends_with(bank)
+                })
+                .count()
+        };
+        assert!(
+            classic
+                .report
+                .iter()
+                .any(|line| line.contains("<VrFx> is on") && line.contains("ship_classic.bnk")),
+            "{label}: the load report does not say the flag swapped the banks: {:#?}",
+            classic.report
+        );
+        assert!(
+            from(&classic, r"Data\Sound\ship_classic.bnk") > 0
+                && from(&classic, r"Data\Sound\weapons_classic.bnk") > 0,
+            "{label}: no cue loaded out of the Classic banks: {:#?}",
+            classic.report
+        );
+        assert_eq!(
+            (
+                from(&classic, r"Data\Sound\ship.bnk"),
+                from(&classic, r"Data\Sound\weapons.bnk")
+            ),
+            (0, 0),
+            "{label}: a Classic circuit still loads cues from the plain banks"
+        );
+        assert!(
+            from(&alpha, r"Data\Sound\ship.bnk") > 0 && from(&alpha, r"Data\Sound\weapons.bnk") > 0,
+            "{label}: an Alpha circuit lost its own banks"
+        );
+        assert_eq!(
+            (
+                from(&alpha, r"Data\Sound\ship_classic.bnk"),
+                from(&alpha, r"Data\Sound\weapons_classic.bnk")
+            ),
+            (0, 0),
+            "{label}: an Alpha circuit loads Classic banks"
+        );
+        assert_eq!(
+            (
+                from(&zone, r"Data\Sound\ship_classic.bnk"),
+                from(&zone, r"Data\Sound\weapons_classic.bnk")
+            ),
+            (0, 0),
+            "{label}: a Zone race loads Classic banks"
+        );
+        assert!(
+            zone.report
+                .iter()
+                .all(|line| !line.contains("<VrFx> is on")),
+            "{label}: a Zone race reports the flag"
+        );
+        assert!(
+            from(&zone, r"Data\Sound\ship_zone.bnk") > 0,
+            "{label}: the Zone race lost its own ship bank"
+        );
+        assert!(
+            classic
+                .report
+                .iter()
+                .all(|line| !line.contains("not read") || !line.contains("_classic.bnk")),
+            "{label}: a Classic bank did not read: {:#?}",
+            classic.report
+        );
+    }
+}

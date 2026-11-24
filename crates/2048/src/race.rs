@@ -687,6 +687,7 @@ pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
         zone_infix: Some("ZONE_"),
     }),
     wwise: None,
+    vr: None,
 };
 
 /// The craft-body laws. The box mass, the wall point rate and the shield slot are read in this

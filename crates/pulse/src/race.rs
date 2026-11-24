@@ -158,6 +158,7 @@ pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
     },
     crossfade: None,
     wwise: None,
+    vr: None,
 };
 
 /// The banks Pulse's `ready` and `go` are read from in the two modes that do

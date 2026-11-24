@@ -610,11 +610,14 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
         .lend(handles, &mut report);
 
     stages::checkpoint()?;
+    let vr_fx = oag_sound::sfx::circuit_manifest(&mut archives, &track)
+        .is_some_and(|manifest| manifest.vr_fx_on());
     let (mut sounds, announcer, class_announcer) = audio::banks_and_announcers(
         &mut archives,
         title.race,
         title.hud_art.lap_hud,
         options.mode,
+        vr_fx,
         title.destroyed.value,
         slot_teams,
         &mut report,
