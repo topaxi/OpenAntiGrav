@@ -71,6 +71,7 @@ mod water;
 mod weapon_models;
 #[cfg(feature = "view")]
 mod zone_livery;
+mod zone_cameras;
 #[cfg(feature = "view")]
 pub use campaign::load_event;
 #[cfg(feature = "view")]
