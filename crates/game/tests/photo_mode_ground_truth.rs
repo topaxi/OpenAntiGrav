@@ -938,7 +938,13 @@ fn each_picture_control_changes_the_saved_shot_and_at_neutral_it_is_the_unproces
     );
     // And no pixel of it: Pulse's glow is added over the HUD in the original's order, and the
     // control still covers it (`docs/ui/photo-mode.md`, "Picture controls").
-    let worst = grey.2.chunks_exact(4).map(chroma).fold(0.0_f32, f32::max);
+    let worst = grey
+        .2
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|pixel| chroma(pixel))
+        .fold(0.0_f32, f32::max);
     assert!(
         worst <= 2.0,
         "saturation 0 left a pixel with a chroma of {worst} (the glow escaped the control)"
