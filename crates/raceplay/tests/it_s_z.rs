@@ -76,6 +76,7 @@ mod zone_ground_truth;
 mod zone_hover_sweep;
 mod zone_sky_ground_truth;
 mod zone_start_ground_truth;
+mod zz_scratch_wp;
 
 /// A `tests/*.rs` file missing from every `tests/it*.rs` listing compiles into
 /// nothing, and its tests stop running without a word.

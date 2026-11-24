@@ -715,6 +715,13 @@ impl Skin {
         self.skin.selector_origin
     }
 
+    /// Whether a `pulse="true"` text on the campaign screens stamps the glow mask. See
+    /// [`oag_title::MenuSkin::pulse_text_glow`].
+    #[must_use]
+    pub fn pulse_text_glow(&self) -> bool {
+        self.skin.pulse_text_glow
+    }
+
     /// Where the screen title sits, and how big.
     ///
     /// The scale is dimensionless and stays as authored: it multiplies a face
@@ -997,6 +1004,7 @@ mod tests {
         selected: Some(0xFFFF_FFFF),
         selected_pulse_period_secs: Some(1.1),
         selector_origin: None,
+        pulse_text_glow: true,
         transition_secs: 0.5,
         strip: None,
         blocks: None,
@@ -1070,6 +1078,7 @@ mod tests {
         const FLAT: oag_title::MenuSkin = oag_title::MenuSkin {
             selected_pulse_period_secs: None,
             selector_origin: None,
+            pulse_text_glow: true,
             ..PULSING
         };
         let mut skin = Skin::new(&FLAT, oag_display::space::Space::PSP, 22.0);

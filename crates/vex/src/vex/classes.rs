@@ -145,6 +145,11 @@ pub struct Classes {
     /// The sun's lens flare anchor ([`crate::lensflare`]). Pure authors it at
     /// `0x390`; Pulse's name table lists `0x3de` and no Pulse file authors one.
     pub lensflare: Option<u32>,
+    /// A `weatherPos` shape, the rain's anchor in a covered section ([`crate::weather`]). Pulse's
+    /// is [`crate::weather::CLASS_WEATHER_POS`]; Pure's sits the same `0x4e` below it as
+    /// `lensflare` does, and 12 on Sinucit, 2 on Sebenco Climb are named `weatherPosShape`
+    /// under a `weatherPos` transform, as on Pulse.
+    pub weather_pos: Option<u32>,
 }
 
 /// The table used by every file Pulse ships except one; recovered in full (see
@@ -188,6 +193,7 @@ pub const V6: Classes = Classes {
     // The name table's id, from `class_names.rs`; no Pulse file authors a node of it
     // (`docs/rendering/shadows.md`), so listing it changes nothing Pulse decodes.
     lensflare: Some(0x3de),
+    weather_pos: Some(crate::weather::CLASS_WEATHER_POS),
 };
 
 /// The table Pure's 156 version-4 files use, and Pulse's one legacy
@@ -332,6 +338,8 @@ pub const V4: Classes = Classes {
     // authoring circuit, the consumer read and watched live on Vineta K
     // (`docs/ghidra/functions/psp-pure-usa/lensflare.md`).
     lensflare: Some(0x390),
+    // `0x3da - 0x4e`, the offset `lensflare` (`0x3de` to `0x390`) and `texture` (`0x3c1` to `0x373`) carry.
+    weather_pos: Some(0x38c),
 };
 
 /// The table Pure's 15 version-3 files use. Nothing is recovered; version 3 also
@@ -370,6 +378,7 @@ pub const V3: Classes = Classes {
     wopoint: None,
     wospot: None,
     lensflare: None,
+    weather_pos: None,
 };
 
 /// The class table for a file's version word, or `None` for a version this

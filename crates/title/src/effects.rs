@@ -893,9 +893,16 @@ pub struct Looks {
     /// archive.
     pub ps2_trail: Rule,
     /// What a circuit's own `.vex` authors for the race to play: its placed
-    /// `ParticleSystem` nodes, its `<Weather>` element and its `Camera` nodes
-    /// (the destroy camera's stations). Keyed on the race's own archive.
+    /// `ParticleSystem` nodes and its `Camera` nodes (the destroy camera's
+    /// stations). Keyed on the race's own archive.
     pub circuit_effects: Rule,
+    /// A circuit's `TrackStartup` `<Weather>` element played: the rain or snow
+    /// effect, the lens droplets and the screen mist
+    /// (`docs/ghidra/functions/psp-pulse-usa/weather.md`). Separate from
+    /// [`Self::circuit_effects`] because a title can author weather without
+    /// having its placed nodes or camera stations read. Keyed on the race's own
+    /// archive.
+    pub circuit_weather: Rule,
     /// The Quake's road ripple: the circuit's `Quake` span table moving the
     /// road's vertices under the wave. Keyed on the race's own archive.
     pub road_ripple: Rule,
@@ -1056,6 +1063,7 @@ impl Looks {
             ps2_glow_mask: Rule::UNREAD,
             ps2_trail: Rule::UNREAD,
             circuit_effects: Rule::UNREAD,
+            circuit_weather: Rule::UNREAD,
             road_ripple: Rule::UNREAD,
             hull_lights: Rule::UNREAD,
             hull_shine_lit: Rule::UNREAD,

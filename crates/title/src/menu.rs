@@ -291,6 +291,19 @@ pub struct MenuSkin {
     /// `FUN_001905d8` keeps the PSP's `5.0`/`7.0` literals, so the PS2 art's 56 px
     /// stretch of a 43 px sprite likely explains the rest; the y half is not.
     pub selector_origin: Option<(f32, f32)>,
+    /// Whether a `pulse="true"` text on Grid Selection and Cell Selection (the card title)
+    /// stamps its 220-to-70 ladder into the glow mask the frame-end bloom reads
+    /// (`Text_Draw`, `docs/ui/campaign-screens.md`, "The card title on Pulse PS2 has no halo").
+    ///
+    /// `true` is Pulse PSP's measured behaviour (EDRAM reads of Grid Selection's `GRID 1`).
+    /// **Pulse PS2 is `false`, measured**, confidence 75: six PCSX2 grabs of Grid and Cell
+    /// Selection show the title with no halo, and its box is pixel-identical between grabs
+    /// (greatest grey difference 1 on Grid, 0 on Cell) although the ladder byte read from EE RAM
+    /// (`Text + 0xed`) was 75, 90, 105, 120 and 135 at those grabs. Ours drawn with no title
+    /// stamp fits every grab better than at any ladder step; the dimmest step still shows a
+    /// halo the original lacks. Why the counter does not reach the PS2 pixels is not known.
+    /// Texts that stamp a fixed `RealGlow` are not covered: nothing has measured them on PS2.
+    pub pulse_text_glow: bool,
     /// How long a page change takes, in seconds. Authored, `transition=`. Seconds,
     /// confirmed: Pulse's `Main Menu` is authored `0.5` and runs about 13 presented
     /// frames at the front end's 30 Hz.
@@ -583,6 +596,7 @@ mod tests {
         selected: Some(0xFFFF_FFFF),
         selected_pulse_period_secs: Some(1.1),
         selector_origin: None,
+        pulse_text_glow: true,
         transition_secs: 0.5,
         // Pulse's discs author no `<HorizMenu>`.
         strip: None,

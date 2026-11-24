@@ -15,7 +15,8 @@
 
 use crate::vex::{self, Node};
 
-/// Class id of a `weatherPos` node, version 6 (Pulse).
+/// Class id of a `weatherPos` node, version 6 (Pulse). Version 4 (Pure) is
+/// [`crate::vex::classes::V4`]'s `weather_pos`.
 pub const CLASS_WEATHER_POS: u32 = 0x3da;
 
 /// A covered section's weather anchor.
@@ -31,7 +32,7 @@ pub struct Anchor {
 
 /// Every covered section's anchor, in section order.
 ///
-/// Version-6 files only: another version returns nothing, not a guess. A
+/// A version whose class table names no `weatherPos` (version 3) returns nothing, not a guess. A
 /// `weatherPos` with no ancestor parenting a `section` is left out, as the
 /// original's walk reaches the root and returns.
 #[must_use]
@@ -39,13 +40,13 @@ pub fn anchors(data: &[u8], nodes: &[Node]) -> Vec<Anchor> {
     let Ok(classes) = vex::classes_of(data) else {
         return Vec::new();
     };
-    let (Some(section_class), 6) = (classes.section, classes.version) else {
+    let (Some(section_class), Some(weather_class)) = (classes.section, classes.weather_pos) else {
         return Vec::new();
     };
     let world = vex::world_transforms(data, nodes);
     let mut found: [Option<[f32; 16]>; 64] = [None; 64];
     for (at, node) in nodes.iter().enumerate() {
-        if node.class_id != CLASS_WEATHER_POS {
+        if node.class_id != weather_class {
             continue;
         }
         let mut up = node.parent;

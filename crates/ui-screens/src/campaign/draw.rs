@@ -173,7 +173,7 @@ pub fn grid_draw_list(
             _ => text.string.clone(),
         };
         let Some(content) = content else { continue };
-        push_text(&mut out, text, &content, layout, model.pulse());
+        push_text(&mut out, text, &content, layout, model.pulse(), skin);
     }
     layers.body = out;
     layers
@@ -377,7 +377,7 @@ pub fn cell_draw_list(
             _ => text.string.clone(),
         };
         let Some(content) = content else { continue };
-        push_text(&mut out, text, &content, layout, model.pulse());
+        push_text(&mut out, text, &content, layout, model.pulse(), skin);
     }
     // The three medal-tier swatches: shown iff their own text row is.
     for image in &screen.images {
@@ -733,15 +733,20 @@ pub(super) fn selector_tinted_draw(
 }
 
 /// `text`'s draw and, after it, what `Text_Draw` stamps into the glow mask for it
-/// ([`Text::glow_stamp`]) over its glyph quads. The title gates whether the frame blooms.
+/// ([`Text::glow_stamp`]) over its glyph quads. The title gates whether the frame blooms, and the
+/// skin whether a `pulse="true"` text stamps at all ([`Skin::pulse_text_glow`]).
 pub(super) fn push_text(
     out: &mut Vec<Draw>,
     text: &Text,
     content: &str,
     layout: &Layout,
     pulse: &super::pulse::SelectorPulse,
+    skin: &Skin,
 ) {
     out.push(text_draw(text, content, layout));
+    if text.pulse && !skin.pulse_text_glow() {
+        return;
+    }
     let value = text.glow_stamp(pulse.text_seconds());
     if value > 0 {
         out.push(Draw::GlowText { value });

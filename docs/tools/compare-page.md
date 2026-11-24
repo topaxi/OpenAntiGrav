@@ -101,7 +101,23 @@ slot values above).
 | pixels that changed in ours | none outside the box; the row is 60x53 at (210, 8) | |
 | whole frame RMSE | 0.0486 | 0.0361 |
 
-Open: the original's hexagon is translucent (the scene shows through it) where ours' is a flat green; the HD race pair (`hd-race/talons-pack`) and the
+The hexagon itself is translucent in ours too: the backdrop word is the weapon's table word, alpha included (Autopilot `0x801CBC1C`,
+alpha `0x80`; `oag_hud` `pickup_sprites`), and the scene shows through it. On `talons-boost`, regressing each frame's hexagon wings (1,304
+pixels outside the icon and the countdown) against ours rendered without the row gives a blend alpha of 0.24 to 0.27 in ours and 0.26 to 0.29
+in the original (the word's 0.5 times the sheet's own alpha, which was not read here). The wings differ by 4 to 8 grey on average, against 2 to 5
+in a control region off the row; ours' wings read a little lighter (green about 225 against 202). On `talons-alongside` the same regression is
+not usable (the pad and the rocket behind the hexagon make the per-channel slopes 0.17 to 0.55 for ours and 0.29 to 0.51 for the original),
+but both frames show the scene through the hexagon and the wings differ by 8 grey in red and 4 in green and blue. What still differs in the
+pickup box is the icon and the `5.00` glyphs. `talons-uturn-airbrakes` is a scenery pair (`--ticks 10829`, a Time Trial frame): it carried no `--hud-state`, so ours drew speed 0,
+a full shield and no pickup row where the original showed 160 km/h and a held Turbo (the hexagon with chevrons). `psp-pulse-pair.py
+--hud-readout` now reads the readout at the stop (the player's field row: place, lap, lap time, shield, the HUD block's speed; the held id
+`record+0x1bc`, read **4**, Turbo in `pickup-colour.md`'s table, with the fire word `0` and no timer) and passes `--hud-state` and
+`--hud-pickup Turbo` (a `CaptureHud` field, readout alone, requiring `--hud-state` like `--hud-autopilot`). `compare-rerender-ours.py` adds
+`--hud-pickup` to a stored Pulse PSP pair whose record names a held id other than the running Autopilot, and a re-render from the record alone
+is pixel-identical to the capture. Re-made from the stored state (`airbrake-uturn-c.ppst`): `theirs.png` pixel-identical to the stored
+one, ours now draws the hexagon and the readout, the hexagon box (205, 0, 76x64) over 40 grey 48.2 % -> 5.8 % of its pixels, the whole frame
+16.5 % -> 6.5 %. What is left on that frame is the bottom bar (ours is cyan where the original's is red, a different gap) and the
+hull. The HD race pair (`hd-race/talons-pack`) and the
 Zone pairs are unchanged (the flag is Pulse PSP's, from `restore_autopilot_timer`'s own pair types; the Zone pair's frame
 shows the same row and has not been given it).
 
@@ -111,7 +127,9 @@ Two more `CaptureHud` pins, for a HUD part no headless route reached: `--hud-son
 holds the now-playing marquee on a song (a capture runs no music, so none starts), and `--hud-head-to-head GAP,lead|trail` draws the
 Head to Head bar on the readout alone (`--mode` has no head-to-head, and a posed capture runs no standings). Both need `--hud-state` and
 reach nothing in the race: the marquee's display is stepped `N` times (default 60, past the fade-in, where the bar has stopped climbing) at load and then frozen, so the tick count of the capture does not move it, and the readout's gap is not read from the standings.
-The bar exists only in a layout that authors it: the arcade one (`--mode single_race`), not the time trial's.
+The bar exists only in a layout that authors it: the arcade one (`--mode single_race`), not the time trial's. `--hud-head-to-head` names a layout without the bar at load (a stand-in gap under the place, or nothing).
+
+**Every `--hud-*` pin is capture-only** (`hud-flags-capture-only`): `--hud-state` requires `--screenshot` and conflicts with `--connect`, `--online`, `--drive` and `--drive-file`, and each other pin requires `--hud-state`, so a menu launch, a windowed `--race` or a network race refuses them at the command line. Every pair script already ends in `--screenshot`; `compare-rerender-ours.py` appends its own.
 
 Measured on a posed Pulse PSP single race at 480x272, by regression of the frame with the pin against the frame without, over the bar's
 pixels left of the scrolled text (1,512 pixels, per channel; the marquee bar is black, so its alpha is `1 - slope`):
@@ -1967,9 +1985,59 @@ The original is `data/saves/pure-psp/time-trial-vineta-vector-feisar-restart.pps
 0.22.3 and `BRONZE TIME` 1.47.6. `--from-png pause=PNG` re-makes ours' side from a frame already grabbed, with no emulator. **Fixed**: the race's song-name line under the tint (the
 original shows none: the music widgets are `InGame`'s and the pause screens are its siblings): `PauseMenu::song_line_under_scrim` is `false` on Pure, `true` elsewhere (unmeasured); song
 box (130, 238, 200 x 24) 335 px to 54. The band itself matches: rules at rows 75 and 175, ink rows 103-114, 121-132, 139-150, peak ink 252/156/149 against 253/157/149.
-**Largest regions left** (px over 40 grey of 3,688): the HUD top 1,396 (the digits' glyph edges and the blimp, the HUD lane's), the scene below the band 948, the band's rows 821 (ours'
-words are 3 px narrower over 105: `CONTINUE` ink 188-290 against 188-293, `RESTART` 190-288 against 190-291; the face's advance rounding, the same effect as the description's), the
+**Largest regions left** (px over 40 grey of 3,688): the HUD top 1,396 (the digits' glyph edges and the blimp, the HUD lane's), the scene below the band 948, the band's rows 821 (read then as ours' words 3 px narrower over 105: wrong, corrected below), the
 footer line 522.
+
+**The band's words and the HUD top, measured again (2026-11-24, `pure-pause-hud`; ours re-rendered from the branch, luma over 110, per-glyph column runs).** The words are **not narrower**:
+`CONTINUE` is 108 px wide on both (original 187-294, ours 186-293), `RESTART` 102 on both (190-291 against 189-290), `QUIT` 48 on both (216-263 on both), and every glyph's start is
+the original's less the same shift (the pen steps 15, 15, 15, 15, 4, 15, 15 match). The earlier "3 px" came from `scripts/pause-band-metric.py`'s `min`-over-channels threshold of 95, which
+loses the right edge's antialiased column on one side. What differs is **where the string starts**: ours is 1 px left on `CONTINUE` and `RESTART`, equal on `QUIT`. The pen ours uses is
+`ceil(240 - end / 2)` (`end` the snapped run's 108.4, 104.4, 50.4); the original's first quads are at 187, 189, 215. `floor(240 - sum_of_advances * 1.2 / 2)` (187.8, 189.6, 215.4) fits all three
+rows and moves the band-word box (y 98-155, x 100-380) from 610 to 240 px over 40 grey, but applied to every centred snapped string it moves the footer `Press X to Confirm` (pen 143.5 on a
+193 px advance sum; the original starts it at 144, as the unchanged pen end does) one pixel left and worsens the footer box 352 to 565 px. **On the disc they are different elements**
+(`InGame_Definition.xml`, `InGame Main Menu`): the rows are `<Menu name="Option">` `Entry`s (`align="centre" scale="1.2" x="240" wrap="true"`), the footer a `<Text>` (`align="centre" x="240"`, scale 1),
+so each can have its own rounding; the rows' floor is a fit of three words in one frame, **not shipped** (placement 1 px left on two of three rows: confidence 85; the rounding rule: 40). The
+ink edge, the snapped end and a raised `<Menu>` scale (1.2 times 1.017, 1.025, 1.033: the box went from 610 to 802, 814 and 884 px) do not fit. **To decide it** (done: the next paragraph), capture the Free Play pause
+(`End Session`) and the Tournament pause at scale 1.0 in the original: an odd advance sum is a tie, and which side it falls on says whether the rows' rule is a floor at every scale. Ours' rows 2 and 3
+are also 1 px taller at the top (121 and 139 against 122 and 140) with 7 to 8 % more ink mass: the 3x draw box-filtered down, not the original's native 1x sprite.
+
+**The rows' rounding, decided at scale 1.0 (2026-11-24, `pure-row-centring`): the floor rule is refuted, and no single law of the string's advance sum fits all seven rows.** The Free Play pause
+(`InGame Free Play Menu`: `Continue`, `Restart`, `End Session`) and the Tournament pause (`InGame NoRestart Main Menu`: `Continue`, `Quit`), both `<Menu>` rows at scale 1.0, were captured on PPSSPP
+1.20.4 (software renderer, USA disc, a fresh stick with a profile made through `NEW`; Vineta K, Feisar, Vector) on **two separate boots** each (the second a cold restart on the saved profile), and the Time Trial pause (scale 1.2) on the second boot and in the earlier lane's committed pair, with ours
+drawn from the same flow (`oag-game --drive-file`, `--original-menu`, 480x272) and the same race. Each row is measured by shifting ours' ink mask (luma over 100) against the original's inside the row's
+y band and keeping the shift with the fewest differing pixels, and by per-glyph column runs (luma over 110): every row has the same glyph pitch on both sides, so a shift is the string's start.
+
+| Row (advance sum at scale) | x - sum / 2 | Original's first quad (pen) | Ours today `ceil(240 - end / 2)` | `floor(240 - sum / 2)` |
+| --- | --- | --- | --- | --- |
+| `Continue`, 1.2 (104.4) | 187.8 | 187 | 186 (1 px left) | 187 |
+| `Restart`, 1.2 (100.8) | 189.6 | 189 | 188 (1 px left) | 189 |
+| `Quit`, 1.2 (49.2) | 215.4 | 215 | 215 | 215 |
+| `Continue`, 1.0 (87) | 196.5 | **197** (first ink 197 on both boots) | 197 | **196** |
+| `Restart`, 1.0 (84) | 198 | 198 | 198 | 198 |
+| `End Session`, 1.0 (118) | 181 | 181 | 181 | 181 |
+| `Quit`, 1.0 (41), Tournament | 219.5 | **220** (first ink 221 on both boots) | 220 | **219** |
+
+Ours' rows at scale 1.0 are **already the original's, to the pixel** (best shift 0 on `Continue`, `Restart`, Tournament's `Continue` and `Quit`; `End Session` ties between 0 and -1: its glyphs start at the same columns on both sides except the `S`, 224 on ours against 225, and ours reads 1 px wider on the right of nearly every
+glyph, which is the box-filtered 3x draw, not a space advance or a pen): the two odd sums, which are ties, round **up**, as today's ceil does and as the floor does not. At 1.2 the three rows are the original's
+less 0, 1 and 1 px (Time Trial, two captures: shifts +1, +1, 0 in both). A search over the width (raw sum, snapped end, ink edge, sums of per-glyph ceil, floor or round advances) and the rounding (floor, ceil, round,
+trunc, with an offset of -1 to 1, with `x - W / 2` rounded before or after) finds **no law that fits all seven rows**: the floor of the raw sum fits 5 of 7 (the two 1.0 ties wrong), ours today 4 of 7, and the
+best of the others 5 of 7; centring in unscaled units then scaling fits 5 of 7. The fractional part of `x - sum / 2` alone cannot decide it: .8, .6 and .4 fall below (scale 1.2) while .5 falls above (scale 1.0).
+**Verdict: the rule `floor(x - sum_of_advances * scale / 2)` for `<Menu>` rows is false (confidence 85 that it does not hold at scale 1.0; two ties on two boots each).** What stays true: a start 1 px left of
+the original on `Continue` and `Restart` at scale 1.2 (confidence 90, two captures), and ours exact at 1.0 (confidence 85). Whatever the original does at 1.2 is a scale-dependent step (a scaled sprite run's own
+rounding), which needs the original's text-draw code, not more frames; nothing was wired and no code changed. The Free Play and Tournament frames the 2026-11-07 pause lane cited as `data/reference/pure-pause-menu/`
+are gone from that directory, so these were captured again; the lead adopts them into `data/reference/pure-pause-menu/`. **Method caveat:** the original's leading column moves 1 px with the cursor (`Continue` at 1.2 reads 187 focused and 188 unfocused, Tournament's `Quit` 220 and 221 for the same reason: the grey rows' ink starts a column later under the threshold), so every comparison above has the cursor on the same row on both sides.
+
+**The rows' rounding, recovered from the executable (2026-11-24, `pure-centre-rounding`): a centred string starts at `ceil(x - W / 2)`, `W` the executable's own measure, and it fits all seven rows (confidence 80).** `docs/ghidra/functions/psp-pure-usa/menu-text-centring.md` has the function
+(`Text_BuildGlyphQuads`, `0x08947ae0`; the measure `Text_MeasureString`, `0x08947868`; `Math_Ceilf`, `0x088da5e0`). `W` is not an advance sum: it starts the pen at the first glyph's ink (`-b0 * s`), steps every glyph's pen up to a whole unit (`ceil(pen + b * s)`, then `- b * s + advance * s`) and ends on
+the last glyph's ink (`bearing + authored width`). In `f32`, `FX300ANG.fnt`, x 240: `Continue` 1.2 measures 107.8 (start 186.1, first quad 187), `Restart` 1.2 103.8 (188.1, 189), `Quit` 1.2 50 (215, 215), `Continue` 1.0 87 (196.5, 197), `Restart` 1.0 84 (198), `End Session` 1.0 118 (181) and
+`Quit` 1.0 41 (219.5, 220): seven of seven, the two ties rounding up, with no parameter chosen (`crates/ui/tests/pure_centre_ground_truth.rs`). Wired for Pure's snapped pens (`oag_ui::font::snapped_centre_pen`, `Renderer::push_text` and `hints::scan`): the band-word box (y 98-155, x 100-380) goes from **610 to 240 px
+over 40 grey**, every band row's best shift against the original is 0 (it was +1, +1, 0), and the rows of the Free Play and Tournament pauses (scale 1.0) are as exact as before. The footer, a `<Text>` centred through the same function, renders pixel for pixel as before. Every other Pure pair (the nine other menu pages and the fourteen circuit shots), a Pulse PSP and a Pulse PS2 menu and two HD menus
+re-render pixel for pixel equal. Still open, listed on the Ghidra page: the quad's fractional right edge (the code) against `floor(w * s)` (ours, measured), and the quad's left edge for a glyph with a bearing. The remaining 240 px of the band box are the 3x draw's box filter and the ink mass, not a pen.
+
+**The HUD top, 1,396 px over 40 grey** (`CURRENT` clock 338, `BEST` clock 93, `BRONZE TIME` 383, the rest 582 in the scene behind): the clock digits' glyph edges are the race HUD's own text
+(shifting ours' `CURRENT` box by up to 2 px moves its mean difference only from 18.3 to 16.3, so it is the glyph and its shadow, not a placement), which the brief leaves to the Pure race HUD
+lane; the scene behind is moving: the pennants on the pole at the left and the blimp wave and drift with the world clock, which differs between a state load and ours' ticks (their shape differs
+in `side.png`). Nothing here was changed.
 
 ### Pulse list screens and the pause menu (2026-11-23, `pulse-gap-pairs`)
 
@@ -2181,7 +2249,7 @@ shift costs 25 to 70 grey on.)
 - **Ours drew no footer on these two pages.** `--menu-ticker` and the stored tag were applied to the picker pages' legend and ticker (`capture.rs`), and the campaign pages build their own from the screen file (`Campaign::nav_legend`, `Campaign::ticker`) and drew
   an empty bar and a blank tag box whatever was passed (the head fit's table read 28.618 at every head). `campaign_page` now sets the tag on its legend, pins its ticker, measures through the `Default` face and returns the ticker's clip; with no pin it draws the capture seed's first tip, as the picker pages do (the `before` rows below were made
   with the pin and tag removed on the first version of this wiring, an empty bar). `pulse-psp-cell` wired the same footer for the PSP in parallel; the two were merged into this one (`Footer`), and the PSP cell pair re-renders byte-identical.
-- **No `--menu-picker-seconds` on the PS2 pairs.** The PSP pairs draw the selector at the clock they read out of RAM; the PS2 front end's clock is not recovered, so ours is drawn at clock 0 and the PS2 states keep their own phase (see the sweep below).
+- **`--menu-picker-seconds` on the PS2 pairs (2026-11-24, `ps2-pulse-clock`).** The PS2 pairs were drawn at clock 0 while the states kept their own phase (the sweep below). `scripts/ps2_pulse.py` finds the `Selector`'s controller (phase at `+0xa0`) and the card title's `Text` (ladder byte at `+0xed`) in EE RAM; `pcsx2-menu-pair.py` reads both on each side of the screenshot, places them at the fitted ticker head's frame and passes the phase (`original.seconds_since_entry`); laws and live reads in [`frontend-pulse.md`](../ghidra/functions/ps2-pulse-eu/frontend-pulse.md). `Selector` box over 40 grey, ours with and without the flag on the same `theirs.png`, five grabs: Grid 15.5/20.0/12.1 % to 6.5/4.8/7.2 %, Cell 19.2/23.4 % to 5.0/16.7 % (the second at the white end, where the hex's shape and halo remain). **The title's ladder is recorded (`original.title_glow`) and not passed**: it runs in RAM, but the original's title box is pixel-identical across grabs whose ladder read 75 to 135, and a sweep of ours' 11 steps fits the dimmest whatever the RAM holds. The PS2 title shows no pulse, so ours' halo on `SINGLE RACE` and `GRID 1` was ours' alone: closed 2026-11-24 (`ps2-title-no-pulse`), the PS2 skin stamps no title glow (`MenuSkin::pulse_text_glow`, `docs/ui/campaign-screens.md`, "The card title on Pulse PS2 has no halo"); title box over 40 grey Grid 13.3 % to 4.9 %, Cell 11.0 % to 10.1 %, whole frame 2.14 % to 2.03 % and 2.43 % to 2.41 %.
 
 | `pulse-ps2` pair, one `theirs.png` per row group | RMSE | >40 grey, whole frame | >40 grey, footer box (30, 626, 1220 x 44) |
 | --- | ---: | ---: | ---: |
@@ -2202,7 +2270,7 @@ shift costs 25 to 70 grey on.)
 - **What is left, cell (2.96 % over 40 grey), ranked by pixels over 40 grey** (regions found by labelling the dilated mask, `theirs.png` against `ours.png`): the footer box 34 % (silver bar gradient and glyph antialiasing, as on Ship Select); the `SINGLE RACE` title 28 %
   (ours has a white halo, the original none); the `RACE CAMPAIGN` header 17 % (the original's is a bold dark face, ours a thinner, wider one: ours' PS2 menu `Text` draws through the outlined atlas, not measured further); the `Points`/`Best` area 8 % (the backdrop movie's streak crossing the original's frame); the selector hex 5 %.
   **Phase sweep (measured on this pair, not wired):** ours rendered at `--menu-picker-seconds` 0 to 1 in 0.05 steps against the one `theirs.png`: the whole-frame >40 grey is 2.93 % at 0, **2.57 % at 0.2 and 0.8**, 2.94 % at 0.5 (the pulse is a triangle of period 1 s, symmetric about 0.5), but the title's box mean grey falls from 23.2 at 0 to 13.1 at 0.5 and the
-  selector's box rises from 3.6 to 9.8 over the same range: the two widgets want different phases, so one fitted phase buys about 0.35 points and not the title's halo. The PS2 pulse clock is the open lead (the PSP's is `*(0x08b317b0)+0x40`), and whether the PS2 title text glows at all (`pulse="true"` on the title, stamped as the PSP's `GlowText`, uncompared on the PS2).
+  selector's box rises from 3.6 to 9.8 over the same range: the two widgets want different phases, so one fitted phase buys about 0.35 points and not the title's halo. The two phases are read from RAM since 2026-11-24 (the bullet above).
 
 ## Pulse PSP pairs over 5 mean grey: where the grey sits (2026-11-19, `pulse-psp-pairs`)
 

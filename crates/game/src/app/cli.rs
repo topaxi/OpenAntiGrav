@@ -1084,9 +1084,16 @@ pub(crate) struct Cli {
     /// `PLACE,LAP,LAP_SECONDS,RACE_SECONDS[,SPEED_KMH[,SHIELD_PERCENT[,BEST_LAP_SECONDS[,ZONE[,ZONE_SCORE[,ZONE_SECONDS]]]]]]` (lap 1-based, the clocks in seconds; the last three are Zone mode's counters, written into the race's own state so the grade follows), read out of the
     /// emulator's RAM at the same stop as the pose. A posed capture runs no ticks, so without this
     /// the HUD reads the grid's place and zero clocks.
+    ///
+    /// **A capture aid, so it needs `--screenshot`** and every `--hud-*` pin below follows it. The
+    /// pin overwrites the readout every frame and writes its Zone counters into the race's own
+    /// state, which a race a person plays, a network race (`--connect`, `--online`) or a driven
+    /// session (`--drive`) must never have.
     #[arg(
         long,
-        value_name = "PLACE,LAP,LAP_S,RACE_S[,KMH[,SHIELD_PCT[,BEST_S[,ZONE[,SCORE[,ZONE_S]]]]]]"
+        value_name = "PLACE,LAP,LAP_S,RACE_S[,KMH[,SHIELD_PCT[,BEST_S[,ZONE[,SCORE[,ZONE_S]]]]]]",
+        requires = "screenshot",
+        conflicts_with_all = ["connect", "online", "drive", "drive_file"]
     )]
     pub(crate) hud_state: Option<String>,
 
@@ -1102,6 +1109,12 @@ pub(crate) struct Cli {
     /// and a held pickup shows no countdown until it runs.
     #[arg(long, value_name = "SECONDS", requires = "hud_state")]
     pub(crate) hud_autopilot: Option<f32>,
+
+    /// With `--hud-state`: the pickup the player holds (a weapon's `type`, such as `Turbo`; Pulse PSP `record+0x1bc`),
+    /// whose backdrop and icon the HUD draws, settled and with no countdown. Drawn on the HUD alone, so the craft
+    /// holds nothing. A posed capture runs no tick, and `--give` acts inside one.
+    #[arg(long, value_name = "TYPE", requires = "hud_state")]
+    pub(crate) hud_pickup: Option<String>,
 
     /// With `--hud-state`: holds the now-playing marquee on this song title (Pulse draws one; a title without
     /// one draws nothing). A capture runs no music, so no song starts and the bar and scrolling text never appear.

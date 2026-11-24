@@ -335,3 +335,11 @@
 0x088462f8	function	Camera_SetSubject	74	ship-destroy.md
 0x08845d94	function	Camera_PickStation	72	ship-destroy.md
 0x088467f0	function	Camera_UpdateSpectatorView	74	ship-destroy.md
+# 2026-11-24 pure-centre-rounding lane: the text widget's draw, layout and measure (menu-text-centring.md)
+0x088d3000	function	Text_Draw	75	menu-text-centring.md
+0x08947ae0	function	Text_BuildGlyphQuads	80	menu-text-centring.md
+0x08947868	function	Text_MeasureString	85	menu-text-centring.md
+0x088da5e0	function	Math_Ceilf	90	menu-text-centring.md
+0x0894722c	function	Font_FindGlyph	80	menu-text-centring.md
+0x0894728c	function	Font_GetKerning	80	menu-text-centring.md
+0x08ab459c	data	g_text_snap_pens	80	menu-text-centring.md

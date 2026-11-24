@@ -108,6 +108,9 @@ pub const TITLE: &Title = &Title {
     cursor: include_str!("../../../assets/cursors/pure.svg"),
     // Pure authors none of the seven shadow classes (`docs/formats/pure-status.md`): nothing is the right picture.
     original_shadows: oag_title::shadow::OriginalShadows::Absent,
+    // Sinucit's rain and Sebenco Climb's snow play through `circuit_weather`
+    // (`docs/rendering/pure-weather.md`). The WEATHER setting row and a track module's
+    // `set-weather` stay off until the enhanced weather has been looked at on Pure.
     weather: oag_title::weather::Weather::Unplayed,
     // `original` draws Vineta K's caustic pass (`docs/rendering/water.md`, "Pure"); `off` does not.
     water: oag_title::water::Water {

@@ -56,8 +56,7 @@ use crate::app::cli::Cli;
 use crate::app::handler::App;
 use crate::app::headless::{run_race, run_windowless};
 use crate::app::pose::{
-    field_from_csv, parse_camera_pose, parse_head_to_head, parse_hud_state, parse_pose,
-    pose_from_trace,
+    capture_hud, field_from_csv, parse_camera_pose, parse_pose, pose_from_trace,
 };
 
 /// Installs the sink every `log` call in this workspace ends up in.
@@ -420,21 +419,7 @@ fn run(mut cli: Cli) -> Result<()> {
         .or(pose);
     let field = field.map(|field| field.opponents).unwrap_or_default();
 
-    let mut hud_state = cli.hud_state.as_deref().map(parse_hud_state).transpose()?;
-    if let Some(hud) = hud_state.as_mut() {
-        hud.boost_phase = cli.hud_boost_phase;
-        hud.autopilot_seconds = cli.hud_autopilot;
-        hud.song = cli.hud_song.clone().map(|title| race::CaptureSong {
-            artist: cli.hud_song_artist.clone(),
-            title,
-            ticks: cli.hud_song_ticks.unwrap_or(60),
-        });
-        hud.head_to_head = cli
-            .hud_head_to_head
-            .as_deref()
-            .map(parse_head_to_head)
-            .transpose()?;
-    }
+    let hud_state = capture_hud(&cli)?;
 
     let leg = if cli.reel {
         frontend::Leg::DevPubReel

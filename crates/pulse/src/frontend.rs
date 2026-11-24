@@ -192,6 +192,7 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     // `oag_title::MenuSkin::selected_pulse_period_secs`.
     selected_pulse_period_secs: Some(1.1),
     selector_origin: None,
+    pulse_text_glow: true,
     transition_secs: 0.5,
     // **A measurement, not a gap.** Pulse's main menu is a vertical `<Menu>`,
     // and no `<HorizMenu>` exists anywhere on either pressing: every blob of
@@ -330,6 +331,8 @@ pub const PS2_MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     selected: Some(0xFFFF_FFFF),
     selected_pulse_period_secs: Some(1.1),
     selector_origin: Some((-11.0, -14.0)),
+    // Measured on the PS2 (`oag_title::MenuSkin::pulse_text_glow`): its card title draws no halo.
+    pulse_text_glow: false,
     transition_secs: 0.5,
     strip: None,
     blocks: None,

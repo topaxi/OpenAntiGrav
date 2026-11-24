@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [pure, pulse]
-updated: 2026-11-17
-summary: "Pure render: canopy, sky, effect names, flare, chrome-map pass and bloom closed; Modesto light, HUD open"
+updated: 2026-11-24
+summary: "Pure render: canopy, sky, effect names, flare, chrome-map pass, bloom and weather closed; Sinucit adverts and strip, HUD open"
 difficulty: medium (30)
 ---
 
@@ -17,6 +17,11 @@ Lanes `pure-render-fidelity` and `pure-render-fidelity-2`, 2026-10-26. Closed so
 - **the bloom** (`pure-sign-glow`): Pure runs Pulse's four-pass bloom over Pulse's stencil mask, composited before its HUD.
   Modesto's neon signs glow: sign box mean luma 75.5 to 111.3 against the original's 111.1, frame MAD 8.96 to 6.51
   ([`psp-pure-usa/bloom.md`](../../docs/ghidra/functions/psp-pure-usa/bloom.md), `Looks::psp_glow_mask`, `Looks::bloom_under_hud`).
+
+- **the weather** (`pure-race-worst-two`): Sinucit and Sebenco Climb author a `<Weather>` (rain and lens, snow, and the
+  `Mist.mip` screen overlay) that Pure never played. `Looks::circuit_weather` now plays it with Pulse's law: both pairs'
+  whole frame read 23 grey dark, now +8.5 and +3 (mean grey 26.9 -> 15.4 and 25.7 -> 15.5; the other twelve pairs and a
+  Pulse, HD, 2048 and Omega pair unchanged to the pixel; `docs/rendering/pure-weather.md`).
 
 The last three: [`psp-pure-usa/hull-shine.md`](../../docs/ghidra/functions/psp-pure-usa/hull-shine.md).
 
@@ -39,9 +44,8 @@ Ranked by what a player notices: hull and plume, then effects, then track and li
    and `Course::light_scale_at` now runs the original's integer blend at the craft's parameter (Pure grids now `250, 249, 250, 250`
    against the original's `250` on all four; hull box MAD moves by 0.00 to 0.03 grey on Pure, below what a frame shows;
    `psp-pure-usa/hull-shine.md`, "Light scale"). Open: the craft's own spline parameter (the original's is not the nearest
-   point to its pose; De Konstruct's live list fixes it at `t` 0.578, `psp-pulse-usa/scene-light.md`); and Modesto's list also carries a second directional
-   `(208, 47, 1)` along `(-19.24, 7.19, 1.42)`, unnormalised; ours draws no second light there. Which wopoint
-   it is, and why it is a directional, is unread (Pure's builder `0x08841648`).
+   point to its pose; De Konstruct's live list fixes it at `t` 0.578, `psp-pulse-usa/scene-light.md`); and Modesto's second light (`(208, 47, 1)` along `(-19.24, 7.19, 1.42)`) is closed: it is `wopointShape2`, a point light the builder hands the GE as a
+   type-0 light, and ours already drew it (`hull-shine.md`, "Modesto's second light"; pair hull box MAD 7.69 without it, 5.83 with it).
 3. **Effects Pure ships that ours never loads.** Pure's executable names 24 `WO_*` effects (25 strings,
    one of them `WO_Game`; `search_strings` over `/pure/BOOT-psp-pure-usa.BIN`, `0x08a47f50`..`0x08a7a49c`).
    Not loaded:
@@ -96,6 +100,12 @@ Ranked by what a player notices: hull and plume, then effects, then track and li
    changes palette between zones at one fixed place was not tested; ours' `--zone-stage` is a no-op on Pure. The Zone craft's hull in the
    original is not identified (ours flies Assegai, Pure's default; `Data\Ships\Zone_01` exists). Unpaired: `02_Zone`, `03_Zone`, `04_Zone`.
    The Zone counters' RAM addresses (zone, score, zone seconds) are not located. A second cold boot of the same Zone race has not been made.
+
+10. **Sinucit's and Sebenco's remaining regions** (`docs/rendering/pure-weather.md`, "What is left"): Sinucit's advert
+    screens (the original plays a cyan and yellow picture over three panels; ours three cyan strips, billboard slots drawn
+    nothing), the blue strip across the track at the craft's height (wider and bloomier than the original's thin line, 8 to
+    11 % of each pair's `>40` pixels), the mist's random UV pattern (the original rolls it each re-roll; a pair's RAM holds
+    the offsets, ours a fixed table) and Pure's `FxScreenMist` draw function, unread (relocation trap, confidence 70).
 
 ## Next Steps
 

@@ -25,6 +25,7 @@ just test         # nextest, quick profile (our crates opt-level 0, examples not
 just test-data    # also the #[ignore]d ground-truth tests; needs data/images/; skips binaries that passed unchanged, --full runs all
 just lead-test-data [-n M]   # the lead's full test-data as M (4) slices, each under its own gate lock (`test-data --partition N/M`); never inside `flock`
 just gate-affected / test-data-affected   # same checks in full, only the tests the branch can reach (scripts/affected.py); a drive member's gate
+scripts/gate-run.sh RECIPE   # a gate recipe under the shared gate lock: prebuilt while it waits, every hold logged (docs/architecture/gate-wall-time.md); never inside `flock`
 just check-docs   # internal links in docs/ (not CLAUDE.md, .claude/ or HANDOVER.md)
 just check-deps   # the six dependency rules below
 just check-unused-deps   # no unused or test-only-used normal dependency (cargo shear)

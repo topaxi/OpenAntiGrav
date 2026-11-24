@@ -333,7 +333,7 @@ touch geometry (`Modifier_WrapBox` only wraps and blows them), so it has no spla
   an enhanced race stepped together hash identically every tick, the enhanced draw lists
   begin with the original's byte for byte, every splash lies on a floor, and the enhanced
   race throws splashes on 1,041 of 1,500 ticks on Fort Gale and 569 on Outpost 7.
-- **PS2** loads the same circuits' weather (`circuit_effects`) and the art (a load test on
+- **PS2** loads the same circuits' weather (`circuit_weather`) and the art (a load test on
   `14_Track`); inherited from the PSP, not seen on a PS2 frame.
 
 ### Snow melt (ours, 2026-11-12)
@@ -399,7 +399,7 @@ Title check: HD, 2048 and Omega: not checkable here, the lens is Pulse-only code
 - **The original updates at its frame rate**: the wind step is not scaled by `dt`, so on the
   PSP's 30 fps the fall is half as fast in time. Ours is 60 Hz.
 - **Other titles.** The PS2 disc authors `<Weather>` on `07`, `11` (not on the PSP disc) and
-  `14`; since 2026-10-17 it is loaded and reported there (`circuit_effects`), not yet seen on a
+  `14`; since 2026-10-17 it is loaded and reported there (`circuit_weather`), not yet seen on a
   PS2 frame. Wipeout HD carries neither effect.
 - **The PS2 executable has the same law** (2026-10-04, static, confidence **75**). In
   `SCES_547.48` the `TrackStartup` parser `FUN_00146668` reads the same attribute list
