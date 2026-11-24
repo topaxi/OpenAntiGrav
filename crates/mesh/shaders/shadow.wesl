@@ -295,13 +295,26 @@ fn sun_occlusion(world: vec3<f32>) -> f32 {
 // them and not one: a race draws through the `_velocity` pair, so a version of
 // this that only reached `fs_main` shadowed the scenery a blended material drew
 // and left the road untouched. That is exactly what the first cut did.
-fn shadowed(colour: vec3<f32>, sun: SunTerms, world: vec3<f32>) -> vec3<f32> {
+// **And the light a Zone program adds after its fog** (`SunTerms::after_fog`), weighted the
+// same way: the original's redraw replaces the lit pass by its coverage and takes the light
+// inside its own light term (`SunTerms::redraw`), so under a covered texel the after-fog light
+// is gone and only `surface * spu` is left.
+struct Shadowed {
+    colour: vec3<f32>,
+    after_fog: vec3<f32>,
+}
+
+fn shadowed(colour: vec3<f32>, sun: SunTerms, world: vec3<f32>) -> Shadowed {
     if sun.exempt > 0.5 {
-        return colour;
+        return Shadowed(colour, sun.after_fog);
     }
     let coverage = shadow_coverage(world);
     if scene.shadow.mode < 1.5 && sun.known > 0.5 {
-        return max(colour - coverage * sun.delta, vec3<f32>(0.0));
+        return Shadowed(
+            max(colour - coverage * sun.delta + coverage * sun.redraw, vec3<f32>(0.0)),
+            sun.after_fog * (1.0 - coverage),
+        );
     }
-    return colour * (1.0 - coverage * scene.shadow.strength);
+    let keep = 1.0 - coverage * scene.shadow.strength;
+    return Shadowed(colour * keep, sun.after_fog * keep);
 }

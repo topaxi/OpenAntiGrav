@@ -109,6 +109,7 @@ mod vertex_buffer_census_ground_truth;
 mod vita_fc17_edge_lit_path;
 mod weapon_pad_order_ground_truth;
 mod zone_recolour;
+mod zone_spu_light;
 
 /// A `tests/*.rs` file missing from every `tests/it*.rs` listing compiles into
 /// nothing, and its tests stop running without a word.

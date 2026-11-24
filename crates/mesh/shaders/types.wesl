@@ -411,6 +411,13 @@ struct SunTerms {
     // `0x78d0c0` draws the colour the lit pass does). The craft's shadow is absent from the
     // original's frame there.
     exempt: f32,
+    // HD's SPU vertex light on a chunk drawn on its Zone program, which the program adds after
+    // its fog lerp and outside the surface multiply: zero on every other fragment
+    // (`docs/ghidra/functions/ps3-hdfury-eu/detonator-cannon.md`, "The blue wash of a volley").
+    after_fog: vec3<f32>,
+    // What the same light adds to the `ShadowToAlpha` redraw, which takes it inside its light
+    // term: `output_scale * surface * spu`, in the colour's own space, before the fog.
+    redraw: vec3<f32>,
 }
 
 // A lit fragment: its colour and the sun terms `shadowed` needs to match. Returned together so
@@ -418,8 +425,6 @@ struct SunTerms {
 struct Lit {
     colour: vec4<f32>,
     sun: SunTerms,
-    // Added after the fog by every caller: `shade::zone_spu_after_fog`.
-    after_fog: vec3<f32>,
 }
 ;
 

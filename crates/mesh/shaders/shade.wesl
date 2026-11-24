@@ -134,25 +134,9 @@ override second_read: f32 = 1.0;
 // diagnostic is off for `lit_colour`'s reason: the call below is judged against this body.
 @diagnostic(off, derivative_uniformity)
 fn lit_texel(raw: VertexOutput) -> Lit {
-    var sun = SunTerms(vec3<f32>(0.0), 0.0, 0.0);
+    var sun = SunTerms(vec3<f32>(0.0), 0.0, 0.0, vec3<f32>(0.0), vec3<f32>(0.0));
     let colour = lit_colour(raw, &sun);
-    return Lit(colour, sun, zone_spu_after_fog(raw));
-}
-
-// **HD's SPU vertex light on a chunk drawn on its Zone program.** The `SVC1` Zone twins
-// (`HalfBrightZoneMode*`, `HalfBrightZoneTrans*`) decode the light into a texcoord of its own
-// and the shared fragment program adds it last, after the fog lerp and outside the
-// `light * surface` product, inside the closing `/2`: `out = (fogged + spu) / 2`. So the
-// light reaches a Zone surface whose stage colours are black (Detonator's stage 1), and the
-// fog does not dim it (`docs/ghidra/functions/ps3-hdfury-eu/detonator-cannon.md`, "The blue
-// wash of a volley"). Zero off a Zone chunk, where `lit_colour` adds the light before the
-// albedo multiply instead.
-fn zone_spu_after_fog(raw: VertexOutput) -> vec3<f32> {
-    let zone_on = select(0.0, scene.zone.enabled, zone_race != 0.0);
-    let zone_plain = (raw.slots & slots_present & 1073741824u) != 0u;
-    let on = zone_on != 0.0 && !zone_plain && scene.zone.shape.w > 0.5
-        && simplified_lighting == 0.0;
-    return select(vec3<f32>(0.0), raw.spu_light * scene.light.output_scale, on);
+    return Lit(colour, sun);
 }
 
 // **Why its derivative-uniformity diagnostic is off.** Tint treats every fragment input, flat ones
@@ -1352,6 +1336,8 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
     var authored_rgb = vec3<f32>(0.0);
     // What the sun adds to `authored_rgb`, in its output space.
     var sun_removed = vec3<f32>(0.0);
+    var zone_after = vec3<f32>(0.0);
+    var zone_redraw = vec3<f32>(0.0);
     if rig_on != 0.0 {
         let half_vector = to_eye + scene.light.direction;
         let ndh = clamp(
@@ -1724,6 +1710,22 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
             vec3<f32>(1.0 / 2.2),
         );
         sun_removed = authored_rgb - mix(sunless_encoded, sunless, linear_out);
+        // **HD's SPU vertex light on a chunk drawn on its Zone program.** The `SVC1` Zone twins
+        // (`HalfBrightZoneMode*`, `HalfBrightZoneTrans*`) add it last, after the fog lerp and
+        // outside `light * surface`, inside the closing `/2`: `out = (fogged + spu) / 2`, so it
+        // reaches a Zone surface whose stage colours are black (Detonator's stage 1). Their
+        // `ShadowToAlpha` redraw takes it inside its light instead, `surface * spu`. Only on a
+        // chunk the Zone grade applies to (not a plain or exempt one), where the title's Zone frame
+        // is read to be one; a pane's clear part takes none
+        // (`docs/ghidra/functions/ps3-hdfury-eu/detonator-cannon.md`, "The blue wash of a volley").
+        if zone_program != 0.0 && zone_weight > 0.0 && scene.zone.shape.w > 0.5
+            && simplified_lighting == 0.0 {
+            let spu_zone = in.spu_light * pane_cover;
+            zone_after = scene.light.output_scale * spu_zone;
+            let redraw = sunless + scene.light.output_scale * surface_linear * program_multiplier * spu_zone;
+            let redraw_encoded = pow(clamp(redraw, vec3<f32>(0.0), vec3<f32>(1.0)), vec3<f32>(1.0 / 2.2));
+            zone_redraw = mix(redraw_encoded, redraw, linear_out) - mix(sunless_encoded, sunless, linear_out);
+        }
     }
 
     // The stand-in path, byte-for-byte what every other title always drew.
@@ -2378,6 +2380,8 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
         if generic_combine && rig_on != 0.0 {
             (*sun).delta = rig_on * in.lit_light.x * sun_removed;
             (*sun).known = 1.0;
+            (*sun).after_fog = rig_on * in.lit_light.x * zone_after;
+            (*sun).redraw = rig_on * in.lit_light.x * zone_redraw;
         }
         // `grade-sky`: the sky draw only, and only when a track module asked, so every
         // other pixel keeps the path above untouched. The authored picture is flattened
