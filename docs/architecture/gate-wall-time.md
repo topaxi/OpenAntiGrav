@@ -65,9 +65,14 @@ links it, once per profile. In the `test` profile alone that is `oag-net` and
   `--no-run`, `check-web` and `check-guests` commands as the recipes, so the
   gate finds every artefact built. Nothing but the mod guests' own tests runs.
   It sits below the lead's `nice -n 10`, so a prebuild only takes cores the
-  holder leaves idle. When the lock is taken the prebuild is stopped (a
+  holder leaves idle (checked with `ps` on a real prebuild: every `rustc`,
+  `clippy-driver` and `cargo` is in the idle class and in the prebuild's process
+  group; only `kache`'s resident daemon, which restores cached units, keeps its
+  normal priority). When the lock is taken the prebuild is stopped (a
   half-built cargo is safe to stop) and the gate finishes the rest at its own
-  priority; a free lock is taken at once with nothing prebuilt. An interrupted
+  priority (stopping the process group left nothing behind and the next `cargo`
+did not wait for a build-directory lock); a free lock is taken at once with
+nothing prebuilt. An interrupted
   `gate-run.sh` stops its prebuild and its wait.
 - **`OAG_GIT_HASH` and `OAG_BUILD_DATE` are fixed** for a `gate-run.sh` run, as
   `scripts/test-data.py` fixes them, so a new commit no longer rebuilds
@@ -98,12 +103,18 @@ Same probe, same worktree, two commits later (`oag-render` again), through
 | lock wait, `gate-affected` | 916 s | 1,354 s |
 | lock wait, `test-data-affected` | 1,216 s | 2,156 s |
 
-One run each, so read the first two rows to a few tens of seconds; the waits
-are other members' holds and say nothing about the change (the queue held two
-to five gates throughout). `gate-affected` fell by 41 % because its compile
-moved out of the hold and the 60 s of quick tests that remain are what it is
-made of; `test-data-affected` fell by the build only, because its 2,068 tests
-are the same tests (the run's suite time is within its noise).
+One run each, at different loads, so read the first two rows to a few tens of
+seconds; the waits are other members' holds and say nothing about the change
+(the queue held two to five gates throughout). Where the time went is in the
+logs of the same runs: the ten cargo builds that finished inside the
+`gate-affected` hold before sum to 358 s (they overlap, as the recipe's
+dependencies run in parallel) and compiled 33 units; the nine that finished
+inside the hold after sum to 42 s and compiled 5 units, 35 s of it one quick
+build of the `-p` selection that the first prebuild did not cover (it now does,
+`just prep-cargo`). `test-data-affected` fell by its build only: 43 s and 34
+units before, 0.3 s and none after, with the same 2,068 tests and a suite time
+within the noise. A hold with nothing selected, everything prebuilt, was 51 s
+(this branch's own gate), which is the quick unit tests' 49 s.
 
 The hash pin, on a branch where only HEAD moved (an empty commit), builds in the
 same worktree at load 41 to 87, wall seconds and `oag-*` units recompiled
@@ -133,7 +144,9 @@ tests), `drive_ground_truth` (193 s, 24), `pause_menu_ground_truth` (186 s, 26)
 and `net_rejoin_ground_truth` (113 s, 3); a typical test is one launch of
 `oag-game` at 6 to 8 s. The lead's four slices are close to it too: 181 to
 210 s of wall clock against 118 to 133 s of group floor and 100 to 120 s of
-CPU floor per slice (`lead-gate/target/test-data.slice-N-of-4.log`, 2026-11-23).
+CPU floor per slice (the four slice logs of the lead's `just lead-test-data` on
+2026-11-23: wall clock from each `Summary` line, group seconds from the test
+names against `.config/nextest.toml`'s `gpu-vram` modules).
 
 Less group time, not a different order, is what shortens these holds: fewer
 launches per test, a launch that starts faster (`docs/architecture/load-time.md`),

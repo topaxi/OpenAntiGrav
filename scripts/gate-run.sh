@@ -37,6 +37,7 @@ export OAG_BUILD_DATE="${OAG_BUILD_DATE-}"
 # The locked half marks that it ran, so a recipe that itself exits 111 is not read as a
 # busy lock.
 entered="${OAG_GATE_ENTERED:-}"
+prep_log="${OAG_GATE_PREP_LOG:-target/gate-prep.log}"
 
 # A finished prebuild is a zombie of this process, which `kill -0` still reaches.
 running() {
@@ -94,10 +95,10 @@ if [ "$rc" -ne 111 ] || [ -e "$entered" ]; then exit "$rc"; fi
 prep_pid=0
 prep_started=$(date +%s)
 if [ -n "$scope" ]; then
-    mkdir -p target
-    echo "gate-run: the lock is busy; prebuilding (just gate-prep $scope, log target/gate-prep.log)" >&2
+    mkdir -p "$(dirname "$prep_log")"
+    echo "gate-run: the lock is busy; prebuilding (just gate-prep $scope, log $prep_log)" >&2
     # Its own session, so stopping it stops cargo and every compiler under it.
-    setsid chrt -i 0 ionice -c 3 nice -n 19 just gate-prep "$scope" >target/gate-prep.log 2>&1 </dev/null &
+    setsid chrt -i 0 ionice -c 3 nice -n 19 just gate-prep "$scope" >"$prep_log" 2>&1 </dev/null &
     prep_pid=$!
 fi
 # An interrupted gate stops its prebuild and its wait for the lock, so neither outlives it.

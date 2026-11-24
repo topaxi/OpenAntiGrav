@@ -301,12 +301,15 @@ prep-cargo scope:
     if [ "{{scope}}" = full ]; then
         cargo nextest run --workspace --tests --run-ignored all --no-run
     else
+        # `-p` builds unify features over the selected packages only, so they are units of
+        # their own next to the workspace build above, in both profiles.
         selection=$(python3 scripts/affected.py) || exit 0
         case "$selection" in
             none) ;;
             full) cargo nextest run --workspace --tests --run-ignored only --no-run ;;
             *)
                 mapfile -t args <<<"$selection"
+                cargo nextest run "${args[@]}" --tests --cargo-profile quick --no-run --no-tests=pass
                 cargo nextest run "${args[@]}" --tests --run-ignored only --no-run --no-tests=pass
                 ;;
         esac

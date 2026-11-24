@@ -25,7 +25,10 @@ case "$1" in
 esac
 JUST
 chmod +x "$tmp/bin/just"
-export PATH="$tmp/bin:$PATH" FAKE_LOG="$tmp/log" OAG_GATE_LOCK="$tmp/lock" OAG_GATE_TIMES="$tmp/times.tsv"
+# What a caller's shell exports must not decide what is asserted.
+unset OAG_GIT_HASH OAG_BUILD_DATE OAG_REQUIRE_GAME_DATA OAG_GATE_ENTERED
+export PATH="$tmp/bin:$PATH" FAKE_LOG="$tmp/log" OAG_GATE_LOCK="$tmp/lock" OAG_GATE_TIMES="$tmp/times.tsv" \
+    OAG_GATE_PREP_LOG="$tmp/prep.log"
 : >"$FAKE_LOG"
 fail() { echo "check-gate-run: $*" >&2; cat "$FAKE_LOG" "$OAG_GATE_TIMES" >&2; exit 1; }
 busy() { (flock -o "$OAG_GATE_LOCK" sleep "$1" &) ; sleep 0.3; }
