@@ -263,10 +263,10 @@ impl super::Session {
         let (Stage::Race(stage), Some(open)) = (&mut self.stage, self.photo.as_mut()) else {
             return Err(pending);
         };
-        let Some(photo) = stage.race.photo() else {
+        let Some(effects) = stage.race.photo().map(|photo| *photo.effects()) else {
             return Err(pending);
         };
-        if photo.effects().blur().is_some()
+        if effects.blur().is_some()
             && open.rewind.is_none()
             && let Some(keeper) = stage.keeper.as_mut()
         {
@@ -279,7 +279,7 @@ impl super::Session {
         };
         // The controls the shot kept: a blur the race cannot draw is not one of them.
         if let Some(pending) = pending.as_mut() {
-            pending.meta.picture = Some(shot_meta::Picture::of(photo.effects(), Some(&plan)));
+            pending.meta.picture = Some(shot_meta::Picture::of(&effects, Some(&plan)));
         }
         debug!(
             "photo mode: a shot of {} frames at tick {tick} (blur {:?}, lens {})",

@@ -835,7 +835,13 @@ fn a_blurred_shot_leaves_the_huds_state_as_it_stood_at_the_shot() {
     race.view.huds[slot].messages.push("MESSAGE_LIVE", true);
     let before = format!("{:?}", race.view.huds);
     let mut rewind = Rewind::begin(&mut keeper, &mut race).expect("running");
-    let plan = Plan::new(race.photo().expect("open"), LIVE, rewind.resimulates()).expect("blur");
+    let plan = Plan::new(
+        race.photo().expect("open"),
+        LIVE,
+        rewind.resimulates(),
+        drawn(&race),
+    )
+    .expect("blur");
     let mut shot = Shot::start(
         plan,
         Some(Mover {
