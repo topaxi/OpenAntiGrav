@@ -24,8 +24,8 @@
 //! `--dump-audio` capture matches a window's samples at the same tick count
 //! (`docs/architecture/determinism.md`). There is deliberately **no** per-frame
 //! call: with a device `cpal` drains the mixer from its own thread, and with
-//! none [`oag_audio::Output::render_tick`] is the only reader. See
-//! [`Audio::tick`].
+//! none [`oag_audio::Output::render_tick`] is the only reader, once a tick, into
+//! the dump or into nothing. See [`Audio::tick`].
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -1092,6 +1092,13 @@ impl Audio {
         }
         if let Some(dump) = &mut self.dump {
             self.output.render_tick(TICK_HZ, &mut dump.samples);
+        } else if !self.output.is_streaming() {
+            // A null output plays on unheard: one tick of the mix is rendered and dropped, so a
+            // voice ends when its sound does. Without it the voices never finish, the slots fill
+            // and the race song is refused, and with it the now-playing display
+            // (`docs/ui/pause-menu.md`, "Pulse").
+            let mut unheard = Vec::new();
+            self.output.render_tick(TICK_HZ, &mut unheard);
         }
     }
 

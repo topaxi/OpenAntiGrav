@@ -122,10 +122,13 @@ wired** (the header is the front end's frame bar, static). GAME MANUAL is drawn 
   `time-trial-moa-therma-white-venom-grid` state, START, 4 s, clock 0.40.9; ours played to it, the same frame
   for both columns): whole frame **1.56 % to 1.05 %** of pixels over 40 grey (2,033 to 1,371 px, mean grey 4.17 to
   3.71); the music row (20, 215, 300, 25) **674 px to 12 px**. After RIGHT the original reads `STEADY RUSH` (USA
-  disc, song 1) and ours `SLINGSHOT (WIPEOUT MIX)`: ours renders the EU disc, whose song 1 is another. On the
-  drive route ours shows no now-playing marquee at all, not at the race start either, so the marquee the original
-  shows after a resumed pick is covered by the unit test, not a frame; the likely cause is the `--no-audio` mixer,
-  whose voice slots fill (the log counts hundreds refused), not checked.
+  disc, song 1) and ours `SLINGSHOT (WIPEOUT MIX)`: ours renders the EU disc, whose song 1 is another. **The
+  marquee after a resumed pick** shows on the drive route too (2026-11-24): the null output (`--no-audio`, and a
+  machine with no sound device) never advanced its mixer outside `--dump-audio`, so no voice ever ended, the 32 slots
+  filled with the race's effects and the race song was refused (`start_race_voice` logged `voice=None`), leaving the
+  now-playing display blank even at the race start. `oag_sound::Audio::tick` now renders one tick of the mix and drops
+  it on a null output (`tests::no_audio::no_audio_retires_a_voice_when_its_sound_ends_and_frees_its_slot`); the drive
+  then draws `APHEX TWIN - FENIX FUNK ...` after GO and the picked song's line after the resume.
 
   **PS2 Pulse: checked, differs, wired.** The PS2 executable carries the `MusicList` class, and its four screens
   author the widget at `y="270"` in `font="menu"` (its own grid and the rows' face), no `Wrap`, no `AutoRepeat`
