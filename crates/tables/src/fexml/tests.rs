@@ -5,6 +5,8 @@
 
 use super::*;
 
+mod robustness;
+
 const SAMPLE: &str = concat!(
     r#"<code as="Values" bs="Screen" ds="name" es="Model" ls="Src"></code>"#,
     "\n",
@@ -231,9 +233,8 @@ fn an_unquoted_lt_ends_a_tag_one_character_short_of_it() {
     assert_eq!(outer.children[1].name, "Bar");
 }
 
-/// A stray `<<`, not on any disc: `tag_end`'s `close = index - 1` would be `0`
-/// and callers slice `rest[1..close]`, which panics. The `index > 1` guard
-/// exists for this input; see [`tag_end`].
+/// A stray `<<`, not on any disc: the `index > 1` guard in [`tag_end`] decides
+/// what it parses to (one tag, `<<Foo/>`), and it must not panic.
 #[test]
 fn a_stray_double_lt_does_not_panic() {
     let root = parse("<Outer><<Foo/></Outer>");
