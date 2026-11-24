@@ -1202,6 +1202,12 @@ impl Race {
         self.view.picture = Some(picture);
     }
 
+    /// Whether every frame is drawn with a saved shot's controls (`set_picture`).
+    #[must_use]
+    pub fn has_fixed_picture(&self) -> bool {
+        self.view.picture.is_some()
+    }
+
     /// Closes photo mode and puts the camera back as it was.
     pub fn photo_end(&mut self) {
         if let Some(photo) = self.view.photo.take() {
