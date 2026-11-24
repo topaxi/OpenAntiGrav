@@ -503,16 +503,18 @@ def build_text(binary):
 
 
 #: Where the original's display sits that ours (centred, as in play) does not: `(profile, pair kind)` to the offset.
-#: Pulse PS2 draws its frame `DISPLAY1/2.DY - D0` rows below the raster's centre; the sweep of `DY` (40, 50, 51, 52, 53)
-#: moved PCSX2's screenshot exactly 1 frame row per unit and the shift at the game's `DY = 52` measured 2.3 rows
-#: (`docs/ps2/aspect-ratio.md`, "Measured against PCSX2's frame"). PCSX2's own default `D0` is not determinable here
-#: (about 49.7 from that shift), so the 2.3 is recorded as measured rather than computed from `DY - D0`.
-#: Compare shots only: play keeps the console port centred (maintainer, 2026-10-29).
+#: Pulse PS2 sets `DISPLAY1/2.DY = 52` and PCSX2 puts frame row `r` on output row `r + (DY - 50)`: its NTSC default `DY` is 50,
+#: so the picture sits exactly 2 frame rows low. A synthetic frame (flat grey, white bars at known rows and columns, the game's
+#: own display registers) replayed on two dumps gave 2.000 rows at every bar from row 20 to 410 (scale 2.000, no x offset) and 0.000
+#: with `DY = 50` (`docs/ps2/aspect-ratio.md`, "Measured against PCSX2's frame"). A shift past 2 rows would absorb ours' own
+#: sub-pixel content residual against PCSX2's draw of textured quads (about half an output pixel in both axes, at every upscale
+#: and output size measured), which is not display.
+#: Compare shots only: play keeps the console port centred.
 DISPLAY_OFFSETS = {
     ("pulse-ps2", "menu"): {
-        "frame_rows": 2.3, "frame_height": 448, "direction": "down",
-        "basis": "measured (confidence 70): game DISPLAY1/2.DY = 52, DY sweep 40/50/51/52/53 = 1 frame row per unit, "
-                 "shift 2.3 frame rows (PCSX2 default D0 about 49.7); pulse-ps2-pair-dy 2026-10-29",
+        "frame_rows": 2.0, "frame_height": 448, "direction": "down",
+        "basis": "measured (confidence 90): game DISPLAY1/2.DY = 52 less PCSX2's default 50, bar probe exact on two dumps "
+                 "(scale 2.000, 0.000 at DY 50), PCSX2 default anti-blur",
     },
 }
 
