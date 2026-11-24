@@ -31,6 +31,7 @@ const OWN: [Trigger; 24] = [
     Trigger::WreckDebris,
     Trigger::WreckSmoke,
     Trigger::WreckPlume,
+    Trigger::DebrisFire,
     Trigger::DamageMild,
     Trigger::DamageModerate,
     Trigger::DamageCritical,
@@ -135,6 +136,8 @@ fn each_trigger_is_answered_by_exactly_the_titles_that_read_it() {
         [true, false, true, true, true]
     );
     assert_eq!(has(Trigger::WreckPlume), [false, false, true, true, true]);
+    // Only HD's thrown-piece fire is read.
+    assert_eq!(has(Trigger::DebrisFire), [false, false, true, false, false]);
     // Pure's own big blast is built from three names Pulse's executable does not carry.
     for big in [
         Trigger::WreckBigNode,

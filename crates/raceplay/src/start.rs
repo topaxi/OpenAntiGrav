@@ -158,6 +158,8 @@ impl Race {
             cockpit_hit_noise,
             wreck_anchors,
             zone_end,
+            ship_debris,
+            ship_debris_spec,
             wreck_shockwave,
             magstrip_wake,
             magstrip_pob,
@@ -1011,6 +1013,7 @@ impl Race {
                 },
                 craft_flashes: Default::default(),
                 zone_end: super::zone_end::ZoneEndFx::new(zone_end),
+                ship_debris: super::ship_debris::ShipDebrisFx::new(ship_debris, ship_debris_spec),
                 wreck_fx: super::wreck_fx::WreckFx::new(wreck_anchors)
                     .with_shockwave(wreck_shockwave),
                 destroy_camera: super::destroy_camera::DestroyCamera::new(

@@ -27,26 +27,32 @@ const SPIN: (f32, f32) = (2.0, 9.0);
 
 /// One flying piece.
 #[derive(Debug, Clone, Copy)]
-struct Piece {
+pub(super) struct Piece {
     /// Where its vertices' centre was when it was thrown.
-    centre: Vec3,
+    pub(super) centre: Vec3,
     /// How far it has travelled since.
-    offset: Vec3,
-    velocity: Vec3,
-    axis: Vec3,
-    spin: f32,
-    angle: f32,
+    pub(super) offset: Vec3,
+    pub(super) velocity: Vec3,
+    pub(super) axis: Vec3,
+    pub(super) spin: f32,
+    pub(super) angle: f32,
 }
 
 /// What a throw fixed: the pieces and the world-space vertices they are posed from.
 #[derive(Debug, Clone)]
-struct Thrown {
-    pieces: Vec<Piece>,
+pub(super) struct Thrown {
+    pub(super) pieces: Vec<Piece>,
     /// Each debris vertex's position and normal at the throw, in the world.
-    base: Vec<(Vec3, Vec3)>,
-    /// The craft's up, and a point on the plane the pieces come to rest on.
-    up: Vec3,
-    floor: Vec3,
+    pub(super) base: Vec<(Vec3, Vec3)>,
+    /// The plane's normal the pieces come to rest on, and a point on it.
+    pub(super) up: Vec3,
+    pub(super) floor: Vec3,
+    /// The pull on a piece, units a second squared.
+    pub(super) gravity: Vec3,
+    /// Seconds since the throw.
+    pub(super) age: f32,
+    /// Seconds after which a piece is no longer drawn, `None` where it stays.
+    pub(super) lifetime: Option<f32>,
 }
 
 /// The Zone end's own state on [`crate::RaceView`].
@@ -163,6 +169,9 @@ impl RaceView {
                 base: Vec::new(),
                 up: Vec3::Y,
                 floor: Vec3::ZERO,
+                gravity: Vec3::ZERO,
+                age: 0.0,
+                lifetime: None,
             });
             return;
         };
@@ -216,6 +225,9 @@ impl RaceView {
             base,
             up,
             floor: origin - up * 1.0,
+            gravity: -up * GRAVITY,
+            age: 0.0,
+            lifetime: None,
         });
     }
 
@@ -229,29 +241,45 @@ impl RaceView {
         }
         out.clear();
         out.extend(models.debris.vertices.iter().copied());
-        for (piece, vertices) in thrown.pieces.iter().zip(&models.pieces) {
-            let turn = Quat::from_axis_angle(piece.axis, piece.angle);
-            for &index in vertices {
-                let (position, normal) = thrown.base[index as usize];
-                let vertex = &mut out[index as usize];
-                vertex.position =
-                    (piece.centre + piece.offset + turn * (position - piece.centre)).to_array();
-                vertex.normal = (turn * normal).to_array();
-            }
-        }
+        thrown.pose(&models.pieces, 0, out);
         true
     }
 }
 
 impl Thrown {
+    /// Writes every piece's posed vertices into `out`, the copy of the model starting at vertex
+    /// `offset`; a piece past its lifetime collapses to a point.
+    pub(super) fn pose(
+        &self,
+        pieces: &[Vec<u32>],
+        offset: u32,
+        out: &mut [oag_mesh::mesh::GpuVertex],
+    ) {
+        let expired = self.lifetime.is_some_and(|life| self.age >= life);
+        for (piece, vertices) in self.pieces.iter().zip(pieces) {
+            let turn = Quat::from_axis_angle(piece.axis, piece.angle);
+            for &index in vertices {
+                let (position, normal) = self.base[index as usize];
+                let vertex = &mut out[(offset + index) as usize];
+                vertex.position = if expired {
+                    [0.0; 3]
+                } else {
+                    (piece.centre + piece.offset + turn * (position - piece.centre)).to_array()
+                };
+                vertex.normal = (turn * normal).to_array();
+            }
+        }
+    }
+
     /// One tick: every piece flies, falls and comes to rest on the floor plane.
-    fn advance(&mut self, dt: f32) {
+    pub(super) fn advance(&mut self, dt: f32) {
+        self.age += dt;
         for piece in &mut self.pieces {
             let resting = piece.velocity == Vec3::ZERO;
             if resting {
                 continue;
             }
-            piece.velocity -= self.up * GRAVITY * dt;
+            piece.velocity += self.gravity * dt;
             piece.offset += piece.velocity * dt;
             piece.angle += piece.spin * dt;
             let height = (piece.centre + piece.offset - self.floor).dot(self.up);
