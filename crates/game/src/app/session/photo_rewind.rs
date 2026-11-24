@@ -11,7 +11,7 @@ use log::{debug, warn};
 use oag_gameplay::input::InputSnapshot;
 use oag_raceplay::photo::effects;
 use oag_raceplay::photo::rewind::Rewind;
-use oag_raceplay::photo::shot::{Mover, Plan, Shot};
+use oag_raceplay::photo::shot::{Mover, Shot};
 use oag_ui::pointer::Pointer;
 
 use super::photo::Origin;
@@ -273,11 +273,7 @@ impl super::Session {
         }
         let resimulates = open.rewind.as_ref().is_some_and(Rewind::resimulates);
         let tick = stage.race.core.sim.world.tick;
-        let Some(photo) = stage.race.photo() else {
-            return Err(pending);
-        };
-        let drawn_fov = stage.race.drawn_fov_degrees(aspect, setting);
-        let Some(plan) = Plan::new(photo, tick, resimulates, drawn_fov) else {
+        let Some(plan) = stage.race.photo_plan(tick, resimulates, aspect, setting) else {
             return Err(pending);
         };
         debug!(

@@ -19,8 +19,8 @@
 //! On a title whose photo mode accumulates (`oag_title::photo::Accumulation`), three rows more:
 //! the motion blur (off, track, ship), its shutter (`(v * 0.01)^2 * 0.25` seconds, default `20`)
 //! and, where the race can be moved through its past, the rewind (`docs/ui/photo-mode.md`,
-//! "Accumulated shots and rewind"). A race that records nothing has no ticks to play between
-//! keyframes, so it is offered neither blur row.
+//! "Accumulated shots and rewind"). A race that records nothing, or that cannot be moved through
+//! its past, has no ticks to play between keyframes, so it is offered neither blur row.
 //!
 //! **Chosen, not measured:** the direction of the exposure slider (up is brighter; HD's own value
 //! falls as the slider rises and what its shader does with it was never read), the exposure as
@@ -177,7 +177,7 @@ impl Effects {
         if self.depth_of_field {
             rows.extend([Row::Aperture, Row::Focus]);
         }
-        if self.accumulates && self.records {
+        if self.accumulates && self.records && self.rewinds {
             rows.push(Row::MotionBlur);
             if self.motion_blur != 0 {
                 rows.push(Row::Shutter);

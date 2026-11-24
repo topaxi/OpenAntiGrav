@@ -29,8 +29,9 @@ impl Scene {
     }
 
     /// Applies the mode's controls to `view`, last: after the glow of HD, 2048 and Omega and the
-    /// motion blur, before the HUD. (Pulse's and Pure's glow is added over the HUD afterwards,
-    /// as in the original, so it is not graded or blurred.) Returns whether anything was drawn.
+    /// motion blur, before the HUD. Pulse's, the PS2's and Pure's glow is added over or under the
+    /// HUD in the original's order, but while a control is on `finish_view` adds it just ahead of
+    /// this pass, so the controls cover it too. Returns whether anything was drawn.
     pub(super) fn run_photo_fx(
         &self,
         device: &wgpu::Device,

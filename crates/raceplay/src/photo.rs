@@ -112,6 +112,9 @@ struct Rig {
     /// The least field a zoom reaches: the `close` lens's, or the seed's own when it started
     /// narrower (a `track` lens zoomed in).
     least_fov: f32,
+    /// The seed's own orientation while its pitch is past what the rig can hold, drawn until the
+    /// first turn so the picture does not jump when `free` is chosen.
+    pinned: Option<Quat>,
     /// How far the eye may be from the craft: [`FREE_RANGE`], or the seed's own distance when
     /// the lens it was seeded from stood further out.
     reach: f32,
@@ -479,6 +482,8 @@ impl Photo {
             cam,
             fov,
             least_fov: CLOSE_FOV.0.min(fov),
+            pinned: (cam.orientation().dot(pose.orientation).abs() < 1.0 - 1e-6)
+                .then_some(pose.orientation),
             reach: FREE_RANGE.max(cam.position.length()),
         };
         self.free = Some(rig);
@@ -711,6 +716,9 @@ impl Photo {
             pitch -= dy * FREE_DRAG_LOOK;
         }
         advance -= pad.scroll * FREE_DOLLY;
+        if yaw != 0.0 || pitch != 0.0 || tilt != 0.0 {
+            rig.pinned = None;
+        }
         rig.cam = rig.cam.advance(
             &Motion {
                 advance,
@@ -757,7 +765,7 @@ impl Photo {
         if let (Lens::Free, Some(rig)) = (self.lens, self.free) {
             return CameraOverride {
                 eye: craft.position + rig.cam.position,
-                orientation: rig.cam.orientation(),
+                orientation: rig.pinned.unwrap_or_else(|| rig.cam.orientation()),
                 fov_deg: Some(rig.fov),
             };
         }
@@ -951,6 +959,25 @@ impl Race {
             photo.effects_mut().set_live(live);
             self.view.photo = Some(photo);
         }
+    }
+
+    /// The shot the open mode asks for at `tick`, or `None` when it is the one frame on screen
+    /// ([`shot::Plan::new`]), with its lens ring sized in the field the frames are drawn with at
+    /// `aspect` and the player's `setting`.
+    #[must_use]
+    pub fn photo_plan(
+        &self,
+        tick: u64,
+        resimulates: bool,
+        aspect: f32,
+        setting: oag_display::display::Fov,
+    ) -> Option<shot::Plan> {
+        shot::Plan::new(
+            self.photo()?,
+            tick,
+            resimulates,
+            self.drawn_fov_degrees(aspect, setting),
+        )
     }
 
     /// Moves the lens sample the next draw is made with; `None` is the camera as it is.

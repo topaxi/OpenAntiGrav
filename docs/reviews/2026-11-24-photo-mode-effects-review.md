@@ -250,7 +250,8 @@ at its own tick of the shutter. The HUD is drawn from that tick, so its readouts
 ### PF8. The MOTION BLUR row is offered to a race that cannot draw one
 
 **Fixed** in `93360d0ae`: `Race::photo_offer` tells the effects whether the race records, and without a
-recording neither blur row is offered (a blur already chosen goes with it). The test runs unguarded and passes.
+recording, or a race that cannot be rewound (a finished one on its end screens), neither blur row is offered (a
+blur already chosen goes with it). The test runs unguarded and passes.
 
 **Impact**: Low - with recording off the row and its shutter work, and the shot is silently one
 frame.
@@ -288,10 +289,10 @@ range. That is by design (the first frame is the one the pause left) and is not 
 
 ### PF10. The free lens does not always start where it was seeded
 
-**Fixed** in `76c997163` (the two proving tests run unguarded and pass): the free rig carries its own least field
-(the `close` lens's 10, or the seed's own when narrower) and reach (`FREE_RANGE`, or the seed's own distance), which
-`fly` and the touch path clamp to. **Not changed:** `Free::from_orientation` still brings a pitch past 1.5 rad
-back to it, so a `close` lens at that pitch still jumps by up to 4.1 degrees on choosing `free`.
+**Fixed** (the two proving tests run unguarded and pass): the free rig carries its own least field (the `close`
+lens's 10, or the seed's own when narrower) and reach (`FREE_RANGE`, or the seed's own distance), which `fly` and
+the touch path clamp to (`76c997163`); and a seed whose pitch is past what the rig holds is drawn as it was until
+the first look or tilt (a pinned orientation; `the_free_lens_seeded_from_a_steep_pitch_keeps_it_until_it_is_turned`).
 
 **Impact**: Low - the picture jumps on choosing `free` from a `track` lens zoomed in past 10
 degrees, or from a camera more than 400 units from the craft.
@@ -396,9 +397,9 @@ Not proven, so not findings. Each says how to check it.
 | PF5 | A blurred near surface is nearly opaque out to its radius (fixed, `8a8cb1ffb`) | Medium | P2 | 90 | M | test | second |
 | PF6 | 56 taps over the widest reach: small blurs untouched, wide ones leak (fixed, `8a8cb1ffb`) | Low-Med | P2 | 90 | M | two tests | both |
 | PF7 | The HUD in a motion blur shot is averaged over the shutter | Low-Med | P2 | 90 | S | capture | first |
-| PF8 | MOTION BLUR offered with no recording (fixed, `93360d0ae`) | Low | P3 | 95 | S | test | both |
-| PF9 | Lens ring sized for the lens's field, not the drawn one (fixed, `aae7b93ad`) | Low | P3 | 90 | S | test | first |
-| PF10 | The free lens does not always start where it was seeded (fixed, `76c997163`) | Low | P3 | 95 | S | two tests | both |
+| PF8 | MOTION BLUR offered with no recording (fixed) | Low | P3 | 95 | S | test | both |
+| PF9 | Lens ring sized for the lens's field, not the drawn one (fixed) | Low | P3 | 90 | S | test | first |
+| PF10 | The free lens does not always start where it was seeded (fixed) | Low | P3 | 95 | S | two tests | both |
 | PF11 | Two bind groups a frame; the pass is kept until the race ends (fixed, `34a018127`) | Low | P3 | 85 | S | code | first |
 | PF12 | `Constants::new` panics on a rectangle past the target (fixed, `34a018127`) | Low | P3 | 95 | S | test | second |
 

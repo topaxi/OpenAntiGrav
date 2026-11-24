@@ -123,6 +123,9 @@ impl Photo {
             pitch = touch.drag.1 * look;
         }
         strafe -= touch.pan.0 * TOUCH_SLIDE;
+        if yaw != 0.0 || pitch != 0.0 || touch.twist != 0.0 {
+            rig.pinned = None;
+        }
         rig.cam = rig.cam.advance(
             &Motion {
                 advance,

@@ -435,8 +435,9 @@ code: `oag_raceplay::photo::{rewind, shot}`, `oag_raceplay::timeline::Keeper`, `
 
 **Rows.** In the effects panel: MOTION BLUR (off, track, ship), SHUTTER (shown with a blur chosen,
 0 to 100, opens on 20) and REWIND (the race's clock at the moment on screen, `M:SS.s`) and PLAY (on or off). The first two
-are on offer where the title's `photo_shot` is set **and the race records** (a blur plays the ticks between keyframes
-from the recording: `a_race_with_no_recording_is_not_offered_a_motion_blur`), the last two in a race that has keyframes and was
+are on offer where the title's `photo_shot` is set, **the race records and it can be rewound** (a blur plays the ticks
+between keyframes from the recording, which a finished race on `Race End Photo` has no way to do:
+`a_race_with_no_recording_is_not_offered_a_motion_blur`), the last two in a race that has keyframes and was
 entered from the pause menu (not from `Race End Photo`, which keeps its board), or over the replay
 viewer. A click on the row's arrows moves them as the stick does.
 

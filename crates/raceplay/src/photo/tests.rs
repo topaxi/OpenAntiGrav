@@ -650,6 +650,36 @@ fn the_free_lens_seeded_beyond_its_range_does_not_move_with_nothing_held() {
     );
 }
 
+/// The free lens seeded from a camera pitched past what its own rig holds (the `close` lens
+/// reaches nearly straight up) draws that camera until it is turned: the seed is not clamped on
+/// the first frame. Fails while the pose is always rebuilt from the rig's clamped angles.
+#[test]
+fn the_free_lens_seeded_from_a_steep_pitch_keeps_it_until_it_is_turned() {
+    let craft = craft(0);
+    let steep = CameraOverride {
+        fov_deg: Some(70.0),
+        ..pose_at(craft.position + Vec3::new(3.0, 5.0, 20.0), 0.7, 1.56, 0.0)
+    };
+    let mut photo = Photo::new(0, true, None).opening_on(steep, craft.position);
+    let apart = |photo: &Photo| {
+        let pose = photo.pose(&craft, None);
+        (pose.orientation * Vec3::NEG_Z).angle_between(steep.orientation * Vec3::NEG_Z)
+    };
+    assert!(
+        apart(&photo) < 1e-3,
+        "the first frame turned {}",
+        apart(&photo)
+    );
+    photo.step(stick(0.0, 1.0), &[0]);
+    assert!(apart(&photo) < 1e-3, "walking turned it {}", apart(&photo));
+    let look = Pad {
+        right: (1.0, 0.0),
+        ..Pad::default()
+    };
+    photo.step(look, &[0]);
+    assert!(apart(&photo) > 1e-3, "turning left it pinned");
+}
+
 #[test]
 fn opening_on_a_pose_shows_that_pose_to_the_bit() {
     let (photo, craft, start) = on_free();

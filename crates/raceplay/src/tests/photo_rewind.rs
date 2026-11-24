@@ -725,6 +725,12 @@ fn a_race_with_no_recording_is_not_offered_a_motion_blur() {
         Plan::new(photo, LIVE, rewind.resimulates(), drawn(&race)).is_none(),
         "the shot is the one frame on screen"
     );
+    // A race that cannot be rewound (a finished one on its end screens) has no ticks to play
+    // either, recording or not.
+    let mut fixed = crate::photo::effects::Effects::new().offering(true, false);
+    assert!(!fixed.rows().contains(&Row::MotionBlur));
+    fixed.set_recording(true);
+    assert!(!fixed.rows().contains(&Row::MotionBlur));
     // The same race with a recording is offered it.
     let (mut recorded, _, _) = driven();
     open(&mut recorded);
@@ -759,10 +765,11 @@ fn the_lens_rings_reach_is_the_same_share_of_the_picture_in_the_field_it_is_draw
         let body = &mut race.core.sim.world.ships[slot].physics.body;
         body.linear_velocity = body.forward() * speed;
         race.photo_repose();
-        let photo = race.photo().expect("open");
-        assert_eq!(photo.fov(), 65.0);
+        assert_eq!(race.photo().expect("open").fov(), 65.0);
         let drawn = drawn(race);
-        let plan = Plan::new(photo, LIVE, false, drawn).expect("a depth of field");
+        let plan = race
+            .photo_plan(LIVE, false, 16.0 / 9.0, oag_display::display::Fov::AUTHORED)
+            .expect("a depth of field");
         let shift = plan.frame(1).lens.expect("the first sample of the ring");
         let far = shift
             .apply(Mat4::IDENTITY)
