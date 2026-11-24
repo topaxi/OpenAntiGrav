@@ -289,7 +289,7 @@ impl SceneRead {
 }
 
 /// A scratch colour buffer: sampled by the next pass, drawn into by this one.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Target {
     texture: wgpu::Texture,
     view: wgpu::TextureView,
@@ -634,7 +634,7 @@ impl Chain {
             None,
             read.resolve_constants(),
         );
-        let sized = Self::sized(device, &layout, &sampler, size, params, read);
+        let sized = Self::sized(device, &layout, &sampler, size, params, read, None);
         let zoom = Self::zoom_for(device, &params, &sized, read.format())?;
         Ok(Self {
             params,
@@ -710,8 +710,11 @@ impl Chain {
     }
 
     /// Rebuilds the targets for a new viewport size. The adaptation state
-    /// restarts from zero, which the next frame's rate-1 jump re-seeds.
+    /// is kept (`Lane::adaptation`).
     pub fn resize(&mut self, device: &wgpu::Device, size: (u32, u32)) {
+        // The window's adaptation is the picture's, not the targets': it is kept, so a
+        // reallocation does not seed it again from one frame.
+        let adaptation = self.sized.window.adaptation();
         self.sized = Self::sized(
             device,
             &self.layout,
@@ -719,6 +722,7 @@ impl Chain {
             size,
             self.params,
             self.read,
+            Some(adaptation),
         );
         self.zoom = Self::zoom_for(device, &self.params, &self.sized, self.read.format())
             .ok()
@@ -737,6 +741,7 @@ impl Chain {
         (width, height): (u32, u32),
         params: Params,
         read: SceneRead,
+        kept: Option<lanes::Adaptation>,
     ) -> Sized {
         let (width, height) = (width.max(1), height.max(1));
         let half = ((width / 2).max(1), (height / 2).max(1));
@@ -852,7 +857,7 @@ impl Chain {
             extent: (width, height),
             quarter,
         };
-        let window = Lane::new(device, layout, sampler, &inputs);
+        let window = Lane::new(device, layout, sampler, &inputs, kept);
         let blur_vertical = pass(
             "hd bloom blur-v",
             &quarter_b.view,

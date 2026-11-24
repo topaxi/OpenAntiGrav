@@ -659,7 +659,8 @@ absence and harder to notice as a bug.
   widget inside it starts at the rect's own left edge. A scissor rect for this
   screen would be dead code.
 - **`widthlimited="true"` means wrap, and the width is the enclosing
-  `Viewport`'s own `width`.** `Text::wrap_width` carries it down through
+  `Viewport`'s own `width`** (corrected on the boot sequence by the original's own frame: the
+  `Viewport`'s width less the text's `x`, "Show Logo's faces and its legal line's wrap" below). `Text::wrap_width` carries it down through
   `collect_widgets`, `Draw::Text` gained the same field, and `crate::render`'s
   `push_wrapped_text` breaks the string at word boundaries with
   [`wrap`](../../crates/game/src/loading.rs) - the same function `loading.rs`
@@ -678,6 +679,36 @@ absence and harder to notice as a bug.
 line with it, and moves `BOOT_PRESS_START` from `y="220"` to `y="230"` to fill
 the gap. The other two `Viewport`s in the file hold `Animation` and `TextInfo`
 widgets this build does not model at all, so nothing else was waiting on this.
+
+### Show Logo's faces and its legal line's wrap (`menu-title` pair, 2026-11-24)
+
+**Claim and evidence.** The original's title screen (PPSSPP, USA disc, `pulse-psp/menu-title`) draws two widgets in faces ours had in
+`Default` (confidence 90, read off the frame at 3x against ours drawn in each face):
+
+| Widget | Authored | Original draws | Ours drew |
+| --- | --- | --- | --- |
+| `BOOT_PRESS_START` | `font="Menu"`, no scale | `Pulse_20.fnt`, uppercase and wide (the face has one box for a letter and its twin) | `pulse_text.fnt`, `Press START button` |
+| `BOOT_LEGAL` | `font="small"`, `scale="0.7"` | `Pulse_14.fnt` (`Small` and `Title` are one file), uppercase | `pulse_text.fnt`, mixed case |
+
+Wired through the existing mechanism, not a second one: `Frontend::draw_screen_over` asks `Frontend::faced_role` for a widget's face
+(`Stats` in the title's own face, `small` in the slot `MenuSkin::small_font` names, `menu` in the slot `MenuSkin::menu_face_in_boot` fills) and draws a
+`Draw::FacedText` at the authored scale. The boot renderer's primary atlas is `Default`, so its second slot (a `Default` copy on a menu stage) holds the menu face
+(`boot::fonts::install_boot_menu_face`, the live stage and the headless capture both). Pulse's PSP skin sets both; the other skins draw as before
+(Pure, HD, 2048, Omega: every `menu-*` pair re-renders byte for byte equal, 27 pairs). **Pulse PS2 inherits it from the PSP** (its skin sets
+`menu_face_in_boot`, its `small` face is not loaded: PS2 has no third slot for it): no PS2 original of this screen exists, so the PS2 title is not measured.
+
+**Result.** `menu-title` mean grey 4.54 to 3.37 (the press-start box `(235,212,240,32)` 28.66 to 7.81).
+
+**The wrap width, from this frame.** The original breaks the legal line after `IS A`: the first line spans 40 to 378 px (338 wide) and `IS A REGISTERED`
+would span 378. The `Viewport` is `x=40 width=400`, the text `x=40`. A 400 wide line fits `REGISTERED` (ours did); the line breaks at a limit in `[338, 378)`.
+**A `widthlimited` text wraps over `Viewport.width - text.x` (360), confidence 55**: one string, two bounds, 360 the simplest reading; the doc comment on
+`Text::wrap_width` called 400 and 360 indistinguishable and was wrong. Applied in `draw_screen_over` only (the boot sequence) and only where the skin sets `MenuSkin::wrap_from_text_x` (Pulse's, PS2 inherited): the campaign
+screens' own `widthlimited` texts (`Cell Help`) and every other title's boot screens are unmeasured and keep the `Viewport` width.
+
+**Left open (documented, one residual):** at `scale 0.7` the original's `Pulse_14` glyphs are about 1.07 to 1.08 times wider than ours and its two lines
+sit 11 px apart where ours sit 12.3 (the legal box `(0,244,420,28)` is still 17.9 mean grey, 14.7 at a hand-fitted 1.08 x scale). Not the authored scale; the
+pen law (`bearing_pens`, measured on `Pulse_14`'s heading) or a quad rounding as Pure's `snapped_quad` is the lead. Checked against 2048 and Omega:
+not applicable (neither names `small_font` or `menu_face_in_boot`; their boot screens are HD's).
 
 ### What the disc actually does at boot
 

@@ -1570,7 +1570,7 @@ and `--hud-autopilot` (the timer read from the pickup record); both flags are ho
 - **Numbers** (rmse / edge correlation / mean grey, the page's own scores): zone 8 0.325 / 0.06 / 52.7; zone 9 0.390 / 0.10 / 64.1. Pose agreement 0.000 units and 0.000 degrees at the posed tick
   (ours is posed on the original's body), fov 81.54 and 85.59 degrees fed as read. **Seen once**: every number comes from one PPSSPP boot and one Zone race. The zone 8 pair was rebuilt three times from the same state (a state load is a restore, so the original's frame, ours' frame and every metric
   were bit-identical: a check of the script, not a repeat); a second cold boot of the Zone race has not been made (confidence 55 on the numbers below).
-- **What differs, read off both `side.png`.** (1) **The camera** (confidence 55, one boot, two states): the original's eye at Zone speed is 7.48 units from the body (right 0.32, up 2.23, back 7.13 at 158 units/s; 0.26 left, 2.27 up, 7.12 back
+- **What differs, read off both `side.png`** (**corrected 2026-11-24, "Why the Pure Zone pairs read 53 and 64" below: (1) is Zone_01's authored Close block, not a spring, and ours drew fov 60 where the original drew 81 to 86; (2)'s brightness gap was a stale figure, the frames read 144 against 135 and 177 against 186 mean grey; the craft is Zone_01's hull, with Assegai's handling**). (1) **The camera** (confidence 55, one boot, two states): the original's eye at Zone speed is 7.48 units from the body (right 0.32, up 2.23, back 7.13 at 158 units/s; 0.26 left, 2.27 up, 7.12 back
   at 208 units/s: one tick-aligned read each, `eye_body_frame` in `pair.json`) against the Close rig's 11.64 (3.0 up, 11.25 back) at rest, so a Zone craft is drawn about 1.6 times larger and the road
   fills more of the frame; **whether this is a speed spring or a fixed Zone rig is open** (7.48 at both 158 and 208 units/s, no at-rest Zone read); ours keeps its rest rig, so its hull is small and sits higher, and the wall panels and floor pads the original's wider, closer view shows are off-frame in ours. The hull offset
   (+6, -6) and (+10, -3) px is recorded, not gated. The eye must be read against the body at the tripod's own stop: the tripod is one tick after the pose read at `Ship_UpdateCraft`'s entry (the body advances 5.24 and 6.88 units between the two stops, 0.0331 s of
@@ -1583,6 +1583,32 @@ and `--hud-autopilot` (the timer read from the pickup record); both flags are ho
 - **Open**: the at-rest Zone camera and a fixed-place palette read, the Zone counters' RAM addresses, a second cold boot of the Zone race, and the three unpaired circuits (`02_Zone` to `04_Zone`).
 - **Not matched, in each pair's caveats**: the zone clock, ours' exhaust and trail history (no ticks), the shield bar (drawn full), the ZONE label (fading in the original).
 - **Pure against the other titles**: not checked here (the Pulse Zone camera and HD's Zone frame were not compared in this lane); the camera spring is a Pure measurement only.
+
+### Why the Pure Zone pairs read 53 and 64 (2026-11-24, `pure-zone-pairs`)
+
+**Claim: the dominant residual of `pure-psp-zone-pro-tozo-z8` and `-z9` is named by region with a measured cause, and wired. True: two
+disc-authored inputs were wrong in ours, the chase camera and the field of view. Both pairs drop (mean grey, edge correlation):
+z9 64.14 to 34.54 (0.10 to 0.26), z8 52.87 to 35.22 (0.06 to 0.21).** Confidence 85 on the cause (two Zone states, one PPSSPP boot, a
+disc value matching two live reads; no second cold boot).
+
+- **Region split** (the original's pixels pasted over one region of ours, mean grey of the whole frame after; the HD method, a short numpy script over
+  `theirs.png` and `ours.png`; boxes: HUD glyphs and bars 16 % of the frame, hull `x 130..340, y 150..272` 19 %, road rows 150 and down 20 %, background above row 150
+  46 %). Before, z9 (whole 64.3): HUD -8.0, hull -9.8, road -8.6, **background -37.8**; z8 (52.3): -7.9, -8.1, -6.7, **-29.7**. After
+  the camera and the field of view, z9 (34.4): -6.4, -7.8, -2.2, **-18.0**; z8 (35.0): -6.5, -10.1, -4.6, **-13.9**. So the walls and ceiling above the road
+  dominated, as a framing error does: the frames' whole-frame mean grey is the same within 9 (original 143.8 and 176.6, ours 134.6 and 185.9), so it was never a colour or palette law.
+- **Cause 1, the camera** (`docs/gameplay/race-modes.md`, "Pure's Zone cameras"): the Zone craft's own `handlingstats.xml` authors
+  `<ExternalCameraClose pos_height 3.0 pos_length -9.5>`; times the `0.75` craft scale that is `(2.25, 7.125)`, 7.473 from the body, and the original's tripod read
+  7.48 at 158 and at 208 units/s. The race had flown Assegai's `(4.0, -15.0)`, 11.64 away. Ours reads the five camera blocks from the Zone file now. Alone: z9 64.14 to 47.73, z8 52.87 to 41.19.
+- **Cause 2, the field of view**: `--camera-fov` was dropped whenever `--no-camera` was (Pure's sheared tripod is never fed), so every Pure pair drew the authored field plus no speed
+  widen: 60 here against the original's 81.54 and 85.59. The Zone file authors `70`, and `70 + 0.075 * dot(fwd, vel)` is 81.88 and 85.60 (the velocity's forward
+  component is a little under the speed at 158). `Options::fov_override` carries the flag with the chase rig kept, only with `--no-camera` (a sweep of the stored pairs: the 14 that pass `--camera-fov` with `--no-camera` are all Pure, 11 at 60.0000, blue-ridge at 59.9999 and these two; the Pulse and HD pairs pass a camera and are untouched); a pair at rest and at fov 60
+  (the Time Trial and Classic pairs) renders pixel-identical (modesto and karbonis compared: 0 pixels differ). The pairs were then re-made from their states with the script, which read the world clock this time (`original.world_clock_offset_s` 93.06 and 84.15, ours put on it): the scores did not move to four digits, so the scenery's animation phase is not a cause here. `psp-pure-pair.py`'s "field of view" parity check passes the fov as both sides and could not have caught cause 2 (thread `pure-zone-pairs-what-is-left-after-the-camera`). Alone with the camera: the two numbers above.
+  The hull that looked 1.33 times too wide at the new eye was this: at the right field it is the original's size and place.
+- **The hull**: the original's drawn hull node (`*(entity + 0x9ec) + 0x80`, read at `Ship_UpdateCameraRigs` in both states) has axes of length `0.750`, as in a race, and its shape in
+  the frame is `Data\Ships\Zone_01\Ship.vex`, which ours draws. The pair's "ours: Assegai" craft line is the handling, not the hull.
+- **What is left** (z9, by region after paste): the hull box -7.8 and -10.1 (the original's bright blue engine glow ours does not draw, ours' hull shadow the original lacks), the HUD
+  -6.4 (ours' zone-clock digits and the ZONE label's fade, the shield bar), the walls' black bands and pink-violet bloom at the lights, and the road's pads. Not measured: Pure's Zone
+  engine, turning and antigrav numbers (the Zone file's six physics blocks are unread, so a Zone race flies the player's team's), a Far-view read, a second cold boot.
 
 ## HD Zone race-start pair (RPCS3, 2026-11-19, `hd-zone-replace`)
 
@@ -2910,3 +2936,29 @@ extend `hd-pair-lag-scan.py` with a score on static objects (the near mines in D
 existing `original.presented_lag` block, and have `rpcs3-hd-pair.py` move `--camera-pose`'s eye and `--pose` back by `k` ticks of the
 original craft's velocity. Every HD pair takes its camera from
 the push buffer, so this likely moves every HD pair with near scenery, not only Detonator's.
+
+## The four worst front-end pairs, split by region (2026-11-24, `fe-worst-residuals`)
+
+Claim: for each of `pure-psp/menu-pause` (5.06), `pulse-ps2/menu-team` (4.60), `pulse-psp/menu-title` (4.54) and `pulse-psp/menu-pause` (4.51), the largest
+residual region is named with its cause, and where the cause is a law the disc or executable authors it is wired and the region and the frame drop by more than the 0.3
+grey of re-capture noise. **True for three, and the fourth is not a front-end law.** Boxes are 480 x 272 (PSP) or 1280 x 720 (PS2) pixels; every number is
+`compare_env.overlap_score`'s mean grey over the box (`magick ... -colorspace Gray -compose difference`), ours re-rendered by the same recipe (`compare-rerender-ours.py`'s
+`rerender`) with main's tree ("before") and this lane's ("after"), against the stored `theirs.png`.
+
+| Pair | Largest region and cause | Box, before to after | Whole frame, before to after | Kind |
+| --- | --- | --- | --- | --- |
+| `pulse-psp/menu-pause` | the rows' halo: the pause draws over a parked race (`LoadOp::Load`) and the bloom ran only on a clear | rows `(40,20,150,120)` 11.84 to 5.75 | 4.01 to 2.70 (the page's 4.51 predates the music line, main's tree is 4.01) | law, wired (`docs/ui/pause-menu.md`) |
+| `pulse-psp/menu-title` | `BOOT_PRESS_START` and `BOOT_LEGAL` in `Default`, the original in `Pulse_20`/`Pulse_14`; the legal line's wrap width | press `(235,212,240,32)` 28.66 to 7.81; legal `(0,244,420,28)` 17.07 to 17.88 (wrap right, glyph pitch open) | 4.54 to 3.37 | law, wired (`docs/architecture/frontend-boot.md`) |
+| `pulse-ps2/menu-team` | the craft's `Anim Transform` phase (PS2 node clock unrecovered): ours drew the loop's start | hull `(100,200,500,320)` 14.74 to 1.99 | 4.60 to 2.35 | capture phase, fitted in `pcsx2-menu-pair.py` (`fit_sway`) |
+| `pure-psp/menu-pause` | the race under the scrim and its HUD, not the pause: HUD corners 11.41 and 12.54, lap counter 16.75, craft 8.63, band 2.70 | unchanged | 5.06 to 5.06 | not a front-end law: `pure-psp/vineta` scores 10.93, 13.21, 16.79 on the same boxes |
+
+**Shared cause between the two pause pairs: false.** Pulse's is the front end's bloom; Pure's skin carries no `MenuGlow` and its band already matched to the pixel row.
+
+**Same-family pairs, before to after** (mean grey; the ones with no move are byte for byte equal in `ours.png`): `pure-psp/menu-title` 0.08 and `menu-team` 0.26, `2048/menu-title` 3.80
+and `menu-team` 27.31, `pulse-psp/menu-team` 2.48: unchanged. Every other `menu-*` pair of Pulse PSP (7), Pulse PS2 (2 besides the team pair), Pure (7), HD (5), Omega (5) and 2048
+(5) re-renders byte for byte equal. No pause pair exists for HD, Omega, 2048 or PS2; 2048 and Omega: checked, not applicable (neither skin carries `MenuGlow`, `small_font` or `menu_face_in_boot`).
+**Pulse PS2 inherits** the boot-face rule (`menu_face_in_boot`) and the pause bloom from the PSP, unmeasured on the PS2 (no PS2 title or pause frame).
+
+**Re-make the pairs** (the lead adopts the lane's re-made pairs):
+`pulse-psp/menu-pause` and `menu-title` and `pure-psp/menu-pause` are `compare-rerender-ours.py --only <pair>` from a tree with this lane; `pulse-ps2/menu-team`
+needs `--menu-model-seconds 0.575` in its recorded flags (and `original.ship_sway_fitted`; a fresh PCSX2 capture fits it itself).

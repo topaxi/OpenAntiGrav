@@ -15,8 +15,6 @@ use oag_raceplay as race;
 use oag_ui::frontend::EarnedTier;
 use oag_ui::strings;
 
-use winit::event_loop::ControlFlow;
-
 use crate::app::args::{
     autopilot_pilot, button_mask, give_weapon, parse_progress, parse_size, parse_step,
     resolve_scheme,
@@ -633,6 +631,8 @@ fn pose_flaps(cli: &Cli) -> Result<Option<crate::race_capture::pose_flaps::PoseF
 pub(crate) struct RaceRoute {
     pub(crate) net: Option<crate::net_play::NetPlay>,
     pub(crate) restage: Option<std::sync::Arc<oag_replay::ShotRecord>>,
+    /// With `restage`: the motion blur the shot was averaged from.
+    pub(crate) blurred: Option<crate::shot_meta::Blurred>,
 }
 
 /// Loads a track and a ship and either captures one frame or opens a window.
@@ -643,7 +643,12 @@ pub(crate) struct RaceRoute {
 /// performance overlay that the same file was setting for every other route -
 /// and the overlay is most wanted exactly here, where a track is on screen.
 /// Nothing on this path writes the file back.
-pub(crate) fn run_race(
+///
+/// **Returns the window's app rather than running it**, so the frame this function needs for the
+/// load, a capture's options and the app itself (about 530 KB) is gone before the event loop starts
+/// (`crate::app::Launch`; `docs/tools/android.md`, "The stack").
+#[inline(never)]
+pub(crate) fn race_launch(
     cli: &Cli,
     mut options: race::Options,
     settings: &settings::Settings,
@@ -651,8 +656,12 @@ pub(crate) fn run_race(
     mut audio: oag_sound::Audio,
     music_discs: oag_sound::MusicDiscs,
     route: RaceRoute,
-) -> Result<()> {
-    let RaceRoute { net, restage } = route;
+) -> Result<crate::app::Launch> {
+    let RaceRoute {
+        net,
+        restage,
+        blurred,
+    } = route;
     options.water = crate::water_setting::for_source(settings, &options.source);
     options.shadow_resolution = cli.shadow_resolution.unwrap_or_else(|| {
         crate::water_setting::profile_for_source(settings, &options.source)
@@ -691,14 +700,14 @@ pub(crate) fn run_race(
     oag_raceplay::loader_log::lines(&loaded.report);
 
     if cli.dry_run {
-        return Ok(());
+        return Ok(crate::app::Launch::Done);
     }
 
     let scheme = resolve_scheme(cli, settings);
 
     if let Some(path) = cli.trace_out.clone() {
         write_trace(loaded, cli, scheme, &path)?;
-        return audio.finish();
+        return audio.finish().map(|()| crate::app::Launch::Done);
     }
 
     if let Some(path) = cli.screenshot.clone() {
@@ -789,6 +798,7 @@ pub(crate) fn run_race(
                         .map(crate::shot_meta::Picture::from_flag)
                         .transpose()
                         .map_err(|why| anyhow::anyhow!("--picture: {why}"))?,
+                    blurred,
                 },
                 gpu,
                 give: give_weapon(cli.give())?,
@@ -911,15 +921,28 @@ pub(crate) fn run_race(
                 field_warmup: field_warmup_velocities(cli)?,
                 detonator_mines: cli.detonator_mines.as_ref().map(|m| m.0.clone()),
                 pose_sparks: pose_sparks(cli)?,
-                presented: cli.presented.then_some(crate::race_capture::Presented {
-                    render_scale: render_profile.render_scale,
-                    presentation: oag_present::upscale::Presentation {
-                        reconstruction: render_profile.reconstruction,
-                        sharpness: render_profile.upscale_sharpness.stops(),
-                        brightness: settings.display.brightness,
-                        gamma: settings.display.gamma,
+                // A photo is drawn through the presentation chain, at the output's size and
+                // before the grade, as the session reads it back: no brightness, gamma or
+                // screen filter of the machine it is drawn on.
+                presented: (cli.presented || cli.photo_profile).then_some(
+                    crate::race_capture::Presented {
+                        render_scale: render_profile.render_scale,
+                        presentation: oag_present::upscale::Presentation {
+                            reconstruction: render_profile.reconstruction,
+                            sharpness: render_profile.upscale_sharpness.stops(),
+                            brightness: if cli.photo_profile {
+                                Default::default()
+                            } else {
+                                settings.display.brightness
+                            },
+                            gamma: if cli.photo_profile {
+                                Default::default()
+                            } else {
+                                settings.display.gamma
+                            },
+                        },
                     },
-                }),
+                ),
                 zone_feed: crate::race_capture::spectrum::ZoneFeed::from_flags(
                     cli.zone_spectrum_test,
                     cli.zone_bands,
@@ -937,15 +960,18 @@ pub(crate) fn run_race(
                 // Resolved here rather than in `crate::race_capture::capture`, which has no
                 // config directory in hand: the same catalogue the window
                 // reads, so a `--presented` capture shows the same preset.
-                screen_filter:
+                screen_filter: if cli.photo_profile {
+                    None
+                } else {
                     crate::screen::Catalogue::load(crate::screen::Catalogue::directory())
                         .get(&render_profile.screen_filter)
-                        .cloned(),
+                        .cloned()
+                },
                 screen_filter_strength: render_profile.screen_filter_strength,
             },
             &mut audio,
         )?;
-        return audio.finish();
+        return audio.finish().map(|()| crate::app::Launch::Done);
     }
 
     let hint_strings = strings::project_table(settings.language.as_deref());
@@ -957,13 +983,10 @@ pub(crate) fn run_race(
 
     let give = give_weapon(cli.give())?;
 
-    let event_loop = crate::app::new_event_loop()?;
-    // Poll rather than Wait: the simulation runs whether or not input arrives.
-    event_loop.set_control_flow(ControlFlow::Poll);
     // Read before `loaded` is moved into the app below.
     let race_title = loaded.title;
     let race_platform = loaded.platform;
-    let mut app = App {
+    let app = App {
         pvs_culling: cli.pvs,
         camera_jitter: cli.camera_jitter,
         boot_shell: None,
@@ -1035,9 +1058,9 @@ pub(crate) fn run_race(
         suspended: false,
         occluded: false,
     };
-    oag_sound::probe::mark_frame_thread();
-    event_loop.run_app(&mut app)?;
-    app.finish_audio()
+    Ok(crate::app::Launch::Window(Box::new(
+        crate::app::Windowed::new(app),
+    )))
 }
 
 #[cfg(test)]

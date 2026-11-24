@@ -1,7 +1,7 @@
 ---
 status: blocked-hardware
 titles: [all]
-updated: 2026-11-18
+updated: 2026-11-24
 summary: "Android on the S24: deploy the APK, push data, launch and read the first-run log; fix what shows"
 ---
 
@@ -82,6 +82,21 @@ manifest and `cache/<image>` rows in `just push-data`.
 - **GameActivity** if on-screen keyboard text entry matters.
 - **Omega and 2048 check.** Nothing title-specific moved; the packaging is title-agnostic
   (checked, applies to every title, no per-title wiring).
+- **The `--race` stack overflow** (`docs/tools/android.md`, "The stack"): the scene
+  builds on a 16 MiB thread and the launch frames end before the loop; verified on the
+  host with a 2 MiB main stack, on the S21 per the doc. Still open: `App::open_with`
+  (356 KiB) builds the `Session` literal in its own frame before boxing it, and
+  `Session` holds a 57 KB and a 43 KB overlay by value. Boxing those and building the
+  `Session` in place would put every frame on the `android_main` thread under 64 KiB.
+  Measure with `python3 scripts/check-android-stack.py <unstripped liboag_android.so>
+  --all --top 20`.
+  About 0.4 MB of frames sit above the shaders compiled under `open_with` on the 2 MiB
+  `android_main` thread, so it is safe today (the S21 finishes Pulse and HD on both
+  routes). `Stage::race` is 60.1 KiB against `check-android-stack.py`'s 64 KiB limit: an
+  unrelated change can fail an APK build, so either give it a per-function limit or
+  shrink it (the thread-start closure copies are the rest of its frame). The check turns
+  red only in `build-apk.sh` (`just apk`, `just deploy android`, a `v*` tag or a manual
+  release run), not in the gate.
 
 ## Next Steps
 

@@ -394,18 +394,24 @@ fn silhouette(
     ]
 }
 
+/// A scratch directory of this call's own under the build's, named by process and call: two
+/// tests of one run, or two checkouts, never share a settings file or a still.
+fn scratch_dir(tag: &str) -> std::path::PathBuf {
+    static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!(
+        "{tag}-{}-{}",
+        std::process::id(),
+        NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    ))
+}
+
 /// A still of `team`'s Ship Select `step_seconds` after a step, as RGBA.
 fn ship_select_still(
     image: &std::path::Path,
     team: &str,
     step_seconds: &str,
 ) -> oag_texture::replacer::Image {
-    let dir = std::env::temp_dir().join(format!(
-        "oag-hd-ship-swap-ground-truth-{}-{team}",
-        image
-            .file_name()
-            .map_or_else(String::new, |name| name.to_string_lossy().into_owned())
-    ));
+    let dir = scratch_dir("oag-hd-ship-swap-ground-truth");
     std::fs::create_dir_all(dir.join("config/oag")).expect("a temp directory");
     std::fs::write(
         dir.join("config/oag/settings.toml"),
@@ -436,7 +442,10 @@ fn ship_select_still(
         .status()
         .expect("running oag-game");
     assert!(status.success(), "oag-game --menu-page ship-select");
-    oag_texture::replacer::decode_png(&std::fs::read(&out).expect("the screenshot")).expect("a PNG")
+    let still = oag_texture::replacer::decode_png(&std::fs::read(&out).expect("the screenshot"))
+        .expect("a PNG");
+    let _ = std::fs::remove_dir_all(&dir);
+    still
 }
 
 /// Where the hull's left and right edges are, pixels: the 2nd and 98th percentile of x of what `still` draws beyond
@@ -1070,7 +1079,7 @@ fn ship_select_entry_still(
     image: &std::path::Path,
     entry_seconds: Option<&str>,
 ) -> oag_texture::replacer::Image {
-    let dir = std::env::temp_dir().join("oag-hd-entry-wipe-ground-truth");
+    let dir = scratch_dir("oag-hd-entry-wipe-ground-truth");
     std::fs::create_dir_all(dir.join("config/oag")).expect("a temp directory");
     std::fs::write(
         dir.join("config/oag/settings.toml"),
@@ -1101,7 +1110,10 @@ fn ship_select_entry_still(
         .status()
         .expect("running oag-game");
     assert!(status.success(), "oag-game --menu-page ship-select");
-    oag_texture::replacer::decode_png(&std::fs::read(&out).expect("the screenshot")).expect("a PNG")
+    let still = oag_texture::replacer::decode_png(&std::fs::read(&out).expect("the screenshot"))
+        .expect("a PNG");
+    let _ = std::fs::remove_dir_all(&dir);
+    still
 }
 
 /// Pixels of `a` and `b` that differ by more than 40 in a channel inside `[left, top, right, bottom]`.

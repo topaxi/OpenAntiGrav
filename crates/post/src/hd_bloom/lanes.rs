@@ -40,10 +40,17 @@ pub(super) struct LaneInputs {
     pub quarter: (u32, u32),
 }
 
+/// A lane's adaptation, to carry across a rebuild of the targets its passes read.
+#[derive(Debug, Clone)]
+pub(super) struct Adaptation {
+    adapted: [Target; 2],
+    current: usize,
+    fresh: bool,
+}
+
 /// One picture's adaptation state and the passes bound to it.
 #[derive(Debug)]
 pub(super) struct Lane {
-    #[expect(dead_code, reason = "held so the views stay valid")]
     adapted: [Target; 2],
     /// `adapt[i]` writes ping-pong texture `i`, reading the other as the previous state.
     pub adapt: [Pass; 2],
@@ -63,11 +70,19 @@ impl Lane {
         layout: &wgpu::BindGroupLayout,
         sampler: &wgpu::Sampler,
         inputs: &LaneInputs,
+        kept: Option<Adaptation>,
     ) -> Self {
-        let adapted = [
-            Target::new(device, "hd bloom adapted a", (1, 1)),
-            Target::new(device, "hd bloom adapted b", (1, 1)),
-        ];
+        let (adapted, current, fresh) = match kept {
+            Some(kept) => (kept.adapted, kept.current, kept.fresh),
+            None => (
+                [
+                    Target::new(device, "hd bloom adapted a", (1, 1)),
+                    Target::new(device, "hd bloom adapted b", (1, 1)),
+                ],
+                0,
+                true,
+            ),
+        };
         let pass = |label: &str,
                     source: &wgpu::TextureView,
                     state: &wgpu::TextureView,
@@ -158,8 +173,17 @@ impl Lane {
             adapt,
             gate,
             encode,
-            current: Cell::new(0),
-            fresh: Cell::new(true),
+            current: Cell::new(current),
+            fresh: Cell::new(fresh),
+        }
+    }
+
+    /// The adaptation as it stands.
+    pub(super) fn adaptation(&self) -> Adaptation {
+        Adaptation {
+            adapted: self.adapted.clone(),
+            current: self.current.get(),
+            fresh: self.fresh.get(),
         }
     }
 }
@@ -204,7 +228,13 @@ impl Chain {
     ) {
         let seat = run.seat.min(MAX_SEATS - 1);
         let lane = self.seats.get_or_build(seat, || {
-            Lane::new(device, &self.layout, &self.sampler, &self.sized.inputs)
+            Lane::new(
+                device,
+                &self.layout,
+                &self.sampler,
+                &self.sized.inputs,
+                None,
+            )
         });
         let (x, y, w, h) = run.rect;
         self.run_placed(

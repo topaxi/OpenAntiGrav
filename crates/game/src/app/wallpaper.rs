@@ -65,6 +65,7 @@ static STOP: AtomicBool = AtomicBool::new(false);
 /// # Errors
 ///
 /// The device or the session would not open, or the Wayland connection failed while running.
+#[inline(never)]
 pub(crate) fn run(app: &mut App) -> Result<bool> {
     if std::env::var("WINIT_UNIX_BACKEND").is_ok_and(|b| b == "x11") {
         return Ok(false);
@@ -251,7 +252,7 @@ impl Pace for Pacer {
 
 struct State {
     /// Declared first, so it drops before the Wayland objects its surfaces were made over.
-    session: Option<Session>,
+    session: Option<Box<Session>>,
     /// In the session's window order once placed: index 0 is window 1.
     surfaces: Vec<Background>,
     /// Every output went away and window 1 draws nothing until one comes back.
@@ -370,7 +371,7 @@ impl State {
         let until_due = self
             .session
             .as_ref()
-            .and_then(Session::next_frame_at)
+            .and_then(|session| session.next_frame_at())
             .map_or(Duration::ZERO, |at| {
                 at.saturating_duration_since(Instant::now())
             });

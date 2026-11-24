@@ -279,6 +279,8 @@ pub struct ViewSetup {
     /// [`Options::camera`], carried through to [`Race::view`]. Plain data, so
     /// it rides in the simulation half even though only the renderer reads it.
     pub camera_override: Option<CameraOverride>,
+    /// [`Options::fov_override`], carried through to [`Race::view`].
+    pub fov_override: Option<f32>,
     /// The drawn reticle's grids and law, off the loaded HUD: [`SimSetup::sight`]'s lock
     /// grid seen from this machine's screen ([`Sighting::view_sight`]).
     pub sight: Sighting,
@@ -391,6 +393,7 @@ impl ViewSetup {
             world_clock_offset: 0.0,
             gantry_seconds: None,
             camera_override: None,
+            fov_override: None,
             sight: Sighting::default(),
             track_sections: None,
         }

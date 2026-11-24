@@ -184,6 +184,48 @@ fn a_pulse_pause_draws_the_hud_dimmed_under_the_tint() {
     );
 }
 
+/// Pulse's pause rows bloom: the front end's bloom runs over a page drawn on the parked race
+/// (`Renderer::set_glow_over_scene`), so the strip just under the first row's glyphs is lit by the halo where a pause without it leaves the tinted
+/// race's dark pixels (blue channel, about 3 without and 7 with).
+#[test]
+#[ignore = "needs a disc image in data/images/ and a GPU adapter"]
+fn a_pulse_pause_blooms_its_rows_into_the_gaps_between_them() {
+    let Some(image) = pulse() else {
+        return;
+    };
+    let shot =
+        std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("pause-shots/pulse-bloom.png");
+    let _ = std::fs::remove_file(&shot);
+    let _ = run_on_with(
+        &image,
+        "bloom",
+        &format!(
+            "{} {OPEN} ticks 120; draw; screenshot SHOTS/pulse-bloom.png",
+            to_the_race("time_trial")
+        ),
+        &[],
+    );
+    let png = oag_texture::replacer::decode_png(&std::fs::read(&shot).expect("the screenshot"))
+        .expect("a PNG");
+    let scale = png.width as usize / 480;
+    let mean = |xs: std::ops::Range<usize>, ys: std::ops::Range<usize>| {
+        let mut sum = 0u64;
+        let mut count = 0u64;
+        for y in ys.start * scale..ys.end * scale {
+            for x in xs.start * scale..xs.end * scale {
+                let at = (y * png.width as usize + x) * 4;
+                sum += u64::from(png.rgba[at + 2]);
+                count += 1;
+            }
+        }
+        sum as f64 / count as f64
+    };
+    // Just under CONTINUE's ink (to about y 51), over the words: the halo's reach. A pause with no
+    // bloom leaves the tinted race's pixels there, which are dark.
+    let under = mean(52..150, 52..56);
+    assert!(under > 5.0, "no halo under the row: {under:.1}");
+}
+
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn a_speed_lap_pauses_into_the_speed_lap_screen() {

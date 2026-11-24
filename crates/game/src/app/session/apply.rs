@@ -157,7 +157,21 @@ impl Session {
     /// capture with no menus): the render loop needs *a* value to draw with
     /// every frame, and [`settings::RenderProfile::default`] is exactly what
     /// `Graphics`'s own fields fell back to before this split.
+    ///
+    /// **While a photo mode shot is being drawn this is the profile the shot is made with**
+    /// ([`settings::RenderProfile::for_a_photo`]): the scene at the output's size and no
+    /// upscaler, whatever the player plays with. Every reader of the frame's profile follows.
     pub(crate) fn render_profile(&self) -> settings::RenderProfile {
+        let profile = self.player_render_profile();
+        if self.photo_draws_natively() {
+            profile.for_a_photo()
+        } else {
+            profile
+        }
+    }
+
+    /// The player's own render profile for this title, as set.
+    pub(crate) fn player_render_profile(&self) -> settings::RenderProfile {
         self.shell
             .as_ref()
             .map(|shell| (shell.title, shell.platform))

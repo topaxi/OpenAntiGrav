@@ -52,6 +52,12 @@ HEAD_MARGIN = 40.0
 #: The ticker box in the 1280 x 720 pair (the bar between the tag box and the right end, text rows only) the head fit scores.
 TICKER_BOX = (210, 628, 1030, 40)
 
+#: The craft's box in the 1280 x 720 `team` pair (the hull and its wings, not the stat panel) the sway fit scores.
+HULL_BOX = (100, 200, 500, 320)
+#: The length of `ship_FE.vex`'s `Anim Transform` loop, in seconds (359 frames at 60 a second: `docs/ui/selection-screens.md`, "The craft sways"):
+#: a phase outside it is the same pose.
+SWAY_LOOP = 5.983
+
 #: One pair per entry. `state` is the savestate file under `data/saves/pulse-ps2/menu/`; `page` is ours' `--menu-page`.
 WALK = [
     {"id": "grid", "title": "Race Campaign: Grid Selection", "screen": "Grid Selection", "page": "grid-select", "state": "grid-selection.p2s",
@@ -169,6 +175,73 @@ def ticker_box_grey(theirs, ours):
     return float(numpy.abs(boxes[0] - boxes[1]).mean())
 
 
+def box_grey(theirs, ours, box):
+    """Mean absolute grey difference of `box` (x, y, w, h) between two same-size frames, ImageMagick's grey as `compare_env.overlap_score`
+    reads it, so the box moves with the pair's own `mean_grey`."""
+    x, y, w, h = box
+    args = ["magick"]
+    for path in (theirs, ours):
+        args += ["(", str(path), "-crop", "%dx%d+%d+%d" % (w, h, x, y), "+repage", ")"]
+    args += ["-colorspace", "Gray", "-compose", "difference", "-composite", "-format", "%[fx:mean*255]", "info:"]
+    return float(subprocess.run(args, capture_output=True, text=True, check=True).stdout)
+
+
+#: The least the original's hull box may vary (grey standard deviation) and shine (grey mean) for a sway fit to mean anything: a black or wrong GS frame
+#: has neither, and every phase would score as well as any other. The real Assegai frame reads a standard deviation of 33.9.
+MIN_HULL_STD = 8.0
+MIN_HULL_MEAN = 5.0
+#: The least the phases' scores may differ (max minus min, grey) for one to be picked: a flat set is a fit of nothing. The real frame's spread is about 17.
+MIN_SWAY_SPREAD = 2.0
+
+
+def box_stats(path, box):
+    """`(mean, standard deviation)` of the grey in `box` (x, y, w, h), 0 to 255."""
+    x, y, w, h = box
+    out = subprocess.run(["magick", str(path), "-crop", "%dx%d+%d+%d" % (w, h, x, y), "+repage", "-colorspace", "Gray", "-format",
+                          "%[fx:mean*255] %[fx:standard_deviation*255]", "info:"], capture_output=True, text=True, check=True).stdout.split()
+    return float(out[0]), float(out[1])
+
+
+def fit_sway(args, item, plat, profile, theirs, pdir):
+    """The hull's `--menu-model-seconds`: PS2 Pulse has no recovered address for the ship node's clock and a loaded state keeps its phase while the VM
+    runs on, so ours is rendered at phases a quarter second apart over the loop, then at the neighbours of the best, and the phase whose `HULL_BOX` lies
+    closest to the original's is kept. Returns `(seconds, {seconds: box grey})`.
+
+    Refuses (exit 3, with the reason) when the original's hull box is near flat or near black, and when the phases' scores hardly differ: either is a
+    frame the fit cannot read (a black or wrong GS grab), and a phase picked from it would be written into the pair."""
+    mean, std = box_stats(theirs, HULL_BOX)
+    if std < MIN_HULL_STD or mean < MIN_HULL_MEAN:
+        sys.exit("sway fit refused: the original's hull box %s reads mean %.1f, standard deviation %.1f (needs >= %.0f and >= %.0f): a black or wrong frame, "
+                 "not a hull; re-grab" % (list(HULL_BOX), mean, std, MIN_HULL_MEAN, MIN_HULL_STD))
+    offset = ce.display_offset_record(plat["key"], "menu")
+    scores = {}
+
+    def score(seconds):
+        seconds = round(seconds % SWAY_LOOP, 3)
+        if seconds not in scores:
+            png = pdir / ("sway-fit-%s.png" % seconds)
+            cm.render_ours(args.oag_game, args.source, plat, item["page"], png, profile, ce.size_text(plat),
+                           ("--menu-model-seconds", "%.3f" % seconds))
+            if offset:
+                ce.apply_display_offset(png, offset)
+            scores[seconds] = round(box_grey(theirs, png, HULL_BOX), 3)
+            png.unlink()
+        return scores[seconds]
+
+    for step in range(int(SWAY_LOOP / 0.25) + 1):
+        score(step * 0.25)
+    for step in (0.1, 0.05, 0.025):
+        best = min(scores, key=scores.get)
+        score(best - step)
+        score(best + step)
+    best = min(scores, key=scores.get)
+    spread = max(scores.values()) - min(scores.values())
+    if spread < MIN_SWAY_SPREAD:
+        sys.exit("sway fit refused: the %d phases score within %.2f grey of each other (needs >= %.1f): the hull moves nothing in ours, or the original's "
+                 "box shows no hull; pass --model-seconds to pin a phase by hand" % (len(scores), spread, MIN_SWAY_SPREAD))
+    return best, dict(sorted(scores.items()))
+
+
 def fit_head(args, item, plat, profile, theirs, capture, pdir, extra):
     """The head the screenshot caught, between the two RAM reads: ours is rendered with the message pinned at candidate heads (every third one, then
     the neighbours of the best) and the head whose ticker box lies closest to the original's is kept. Returns `(head, {head: box grey})`."""
@@ -244,6 +317,13 @@ def build_pair(args, item, out, plat, profile, raw, captured_at, capture):
     player = {"name": capture["name"], "tag": capture["tag"]}
     prepare_profile(plat, profile, player)
     model = ("--menu-model-seconds", "%.3f" % args.model_seconds) if item["id"] == "team" and args.model_seconds is not None else ()
+    if item["id"] == "team" and args.model_seconds is None:
+        sway, sway_scores = fit_sway(args, item, plat, profile, pdir / "resized.png", pdir)
+        model = ("--menu-model-seconds", "%.3f" % sway)
+        pair.rec["original"]["ship_sway_fitted"] = {
+            "value": sway, "hull_box_mean_grey": sway_scores, "box": list(HULL_BOX), "loop_s": SWAY_LOOP,
+            "basis": "fitted: the hull's `Anim Transform` phase whose hull box in ours is closest to the original's (ours rendered at each); the PS2's node clock "
+                     "has no recovered address, so this is a fit and not a read"}
     head, scores = fit_head(args, item, plat, profile, pdir / "resized.png", capture, pdir, model)
     clocked = pulse_flags(pair, capture, head) if item["id"] in CLOCKED else ()
     pair.rec["original"]["footer_ticker"] = {

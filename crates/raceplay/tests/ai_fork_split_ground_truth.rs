@@ -31,7 +31,7 @@ struct Forks {
 /// Runs a full grid, the player's craft on autopilot, for `ticks`, tallying
 /// every decision and checking the lap count as it goes.
 fn run(source: &str, track: &str, ticks: u32, ribbon: bool) -> Option<(Forks, usize)> {
-    let loaded = race::load(&race::Options {
+    let loaded = race::load_sim(&race::Options {
         source: source.to_string(),
         mode: oag_race::Mode::SingleRace,
         track: Some(track.to_string()),
@@ -41,7 +41,7 @@ fn run(source: &str, track: &str, ticks: u32, ribbon: bool) -> Option<(Forks, us
     .unwrap_or_else(|e| panic!("loading {track}: {e:#}"));
     let mut setup = loaded.setup;
     crate::perturb::apply(&mut setup, 0.0);
-    let mut race = race::Race::start(setup, loaded.view, loaded.modules);
+    let mut race = race::Race::start(setup, oag_raceplay::ViewSetup::headless(), loaded.modules);
     race.core.sim.set_autopilot(true);
     let count = race.core.sim.ship_count() as usize;
     assert!(count >= 2, "{track}: no field to split");
@@ -210,7 +210,7 @@ fn a_craft_shoved_onto_the_other_side_of_a_fork_follows_that_side() {
         .find(|t| t.id == "05_Track" && !t.reversed)
         .expect("05_Track is on the disc")
         .entry_name();
-    let loaded = race::load(&race::Options {
+    let loaded = race::load_sim(&race::Options {
         source,
         mode: oag_race::Mode::SingleRace,
         track: Some(track),
@@ -219,7 +219,7 @@ fn a_craft_shoved_onto_the_other_side_of_a_fork_follows_that_side() {
     .expect("loading 05_Track");
     let mut setup = loaded.setup;
     crate::perturb::apply(&mut setup, 0.0);
-    let mut race = race::Race::start(setup, loaded.view, loaded.modules);
+    let mut race = race::Race::start(setup, oag_raceplay::ViewSetup::headless(), loaded.modules);
     for slot in 2..8 {
         race.core.sim.world.ships[slot].active = false;
     }

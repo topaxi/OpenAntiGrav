@@ -25,8 +25,9 @@ ours' own rig (`chase_view_sheared`) draws it and the pair checks ours' eye agai
 (`scripts/psp-pure-zone-state.py`): ours renders at tick 0 (`--mode zone`) on the original's craft pose, with the zone number and
 score passed through `--hud-state` and the Autopilot countdown read from the pickup record. Pure's Zone counters are not located in
 RAM (no address is documented), so the zone and the score are read off the original's HUD by eye and given here; the zone clock is
-written as 0 and recorded as a caveat. The original's camera at Zone speed is sprung, so the close-eye and the hull-offset checks
-are recorded as numbers, not gated, and the fov gate drops its at-rest speed term.
+written as 0 and recorded as a caveat. In Zone ours reads Zone_01's own camera blocks (`oag_raceplay::load::zone_cameras`: Close eye 2.25 up and 7.125 back, not the racing
+3 and 11.25), so the close-eye and the hull-offset checks are recorded as numbers, not gated (the engine glow and ground shadow dominate the hull box),
+and the fov gate drops its at-rest speed term: the field is the authored 70 plus 0.075 times the forward speed, fed with `--camera-fov`.
 """
 
 import argparse
@@ -344,10 +345,10 @@ def main():
             "against_the_pose_one_tick_earlier": {"right": eye_body[0], "up": eye_body[1], "fwd": eye_body[2], "distance": dist},
             "body_advance_between_the_two_stops": math.dist(pose0["pos"], tb["pos"]),
             "close_rest": [0.0, 3.0, -11.25], "close_distance": CLOSE_DISTANCE}
-        pair.caveat("the original's camera at Zone speed is sprung: eye in the body frame (right, up, fwd) = (%.3f, %.3f, %.3f), %.3f from "
+        pair.caveat("the original's Zone eye in the body frame (right, up, fwd) = (%.3f, %.3f, %.3f), %.3f from "
                     "the body, read against the body at the tripod's own stop (against the pose one tick earlier: %s; the body moved %.2f units "
-                    "between the stops); Close at rest is (0, 3.000, -11.250), %.3f. Ours keeps its own Close chase rig, so the two cameras "
-                    "differ by the spring" % (*tick_eye, tick_dist, eye_text.split("= ")[1], math.dist(pose0["pos"], tb["pos"]), CLOSE_DISTANCE))
+                    "between the stops); the racing Close rig is (0, 3.000, -11.250), %.3f. Zone_01's file authors Close at pos_height 3.0 and pos_length -9.5, "
+                    "7.125 back and 2.25 up after the 0.75 scale, which ours' own rig reads" % (*tick_eye, tick_dist, eye_text.split("= ")[1], math.dist(pose0["pos"], tb["pos"]), CLOSE_DISTANCE))
     else:
         pair.check("the original's camera is the Close chase view (11.643 units from the body, 3.0 up, 11.25 back)",
                    abs(dist - CLOSE_DISTANCE) < 0.1 and abs(eye_body[1] - 3.0) < 0.05 and abs(eye_body[2] + 11.25) < 0.1, eye_text)
@@ -443,7 +444,7 @@ def main():
     pair.rec["craft_offset_px"] = off
     if zone:
         pair.rec["craft_offset_px"]["gated"] = False
-        pair.caveat("hull offset recorded, not gated: the original's camera is sprung at Zone speed (dx %+d, dy %+d px, edge correlation %.3f)"
+        pair.caveat("hull offset recorded, not gated: the engine glow and the ground shadow differ in this region (dx %+d, dy %+d px, edge correlation %.3f)"
                     % (off["dx"], off["dy"], off["ncc_at_best"]))
     elif args.hull_differs:
         # The offset search assumes both sides draw one hull; with a different one it reads noise (Karbonis: +7 px, edge correlation 0.09).

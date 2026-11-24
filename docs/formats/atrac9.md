@@ -113,6 +113,14 @@ patch" comment at its site.
    secondary channel's intensity units carried the primary's scale factors.
 5. **The fine residual used the coarse step table** (`QuantizerFineStepSize`).
 
+One change that is not a fix: the output sample is rounded by `bit_reader::round_half_up`
+(a truncating cast and one compare) and not by `(v + 0.5).floor() as i32`, whose `floor` is a
+software routine on the baseline x86-64 target and ran once per sample. The two agree on every
+`f64` (a unit test compares them over 600,000 values including NaN, both infinities and the
+`i32` edges), so the conformance below holds unchanged; the LibAtrac9 sweep itself was not rerun
+for it, and `atrac9_ground_truth`'s FFmpeg census, which pins exact differing-sample counts,
+passed before and after.
+
 Before the fixes, against LibAtrac9: 4,076 of 2048's 9,486 files failed
 part-way with a bitstream error, 3,218 more decoded but differed, and 2,192
 were identical; every Omega stream of four channels or more was refused.

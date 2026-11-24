@@ -69,6 +69,7 @@ mod variant;
 mod water;
 #[cfg(feature = "view")]
 mod weapon_models;
+mod zone_cameras;
 #[cfg(feature = "view")]
 mod zone_livery;
 #[cfg(feature = "view")]

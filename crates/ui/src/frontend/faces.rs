@@ -45,6 +45,26 @@ impl Frontend {
             && self.menu_skin.is_some_and(|skin| skin.stats_font.is_some())
     }
 
+    /// The glyph-slot role a sequence widget authored in font `font` draws in, `None` for the
+    /// `Default` atlas at the authored size: `Stats` in the title's own `Stats` face
+    /// ([`Self::stats_face_named`]), `small` in the slot that holds the `small` face
+    /// ([`oag_title::MenuSkin::small_font`]) and `menu` in the second slot's menu face
+    /// ([`oag_title::MenuSkin::menu_face_in_boot`]). A face is the widget's own size: no ratio
+    /// against `Default` applies.
+    pub(crate) fn faced_role(&self, font: &str) -> Option<&'static str> {
+        if self.stats_face_named(font) {
+            return Some(crate::language::roles::STATS);
+        }
+        let skin = self.menu_skin?;
+        if font.eq_ignore_ascii_case("small") {
+            skin.small_font
+        } else if font.eq_ignore_ascii_case("menu") && skin.menu_face_in_boot {
+            skin.menu_font
+        } else {
+            None
+        }
+    }
+
     /// The scale a widget authored in font `role` draws at, against
     /// `Default`. `1.0` for a role nothing measured.
     pub(crate) fn face_scale(&self, role: &str) -> f32 {

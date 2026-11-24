@@ -189,6 +189,14 @@ pub fn load_sim(options: &Options) -> Result<SimLoad> {
         None => handling::from_blob(&stats_blob),
     }
     .map_err(|e| anyhow::anyhow!("{stats_name}: {e}"))?;
+    let stats = zone_cameras::overlay(
+        stats,
+        craft_title,
+        options.mode,
+        &team,
+        &mut archives,
+        &mut report,
+    );
     // **A borrowed pitch response is never silent.** Pure authors no `<pitch>` in any
     // `<Class>`, so `handling_for` substitutes `oag_gameplay::handling::PITCH_STAND_IN` -
     // another title's tuning on a ship whose own is unknown. That is exactly the kind of

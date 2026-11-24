@@ -16,6 +16,7 @@ use oag_raceplay::photo::{Lens, Photo};
 use oag_ui::frontend::{Align, Draw};
 use oag_ui::hints::Entry;
 
+pub(crate) mod average;
 pub mod touch_layout;
 
 /// The directory under the user's data directory shots are written to.

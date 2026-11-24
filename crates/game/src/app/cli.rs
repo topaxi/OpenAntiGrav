@@ -1170,7 +1170,8 @@ pub(crate) struct Cli {
 
     /// With `--pose-from`: render the recorded camera at this fov instead of
     /// the disc's authored value, in **vertical degrees** - the authored
-    /// value's own unit (confidence 94).
+    /// value's own unit (confidence 94). With `--no-camera` it sets the field
+    /// the chase camera draws with (`Options::fov_override`).
     ///
     /// It was the calibration knob for settling that unit. It is now a
     /// *measurement instrument* rather than a leftover: `place_at` resets the
@@ -1217,6 +1218,12 @@ pub(crate) struct Cli {
     /// race's past and is not drawn.
     #[arg(long, value_name = "CONTROLS")]
     pub(crate) picture: Option<String>,
+
+    /// Draw with the profile a photo mode shot is made with (`RenderProfile::for_a_photo`): set
+    /// by `--from-png` on a photo, so its re-render is not at the render scale or through the
+    /// upscaler of the profile it runs in.
+    #[arg(skip)]
+    pub(crate) photo_profile: bool,
 
     /// With `--screenshot`: force the exhaust into the state it would hold this
     /// many seconds after entering a speed pad, at saturated intensity.

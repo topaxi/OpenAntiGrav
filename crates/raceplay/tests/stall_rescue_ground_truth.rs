@@ -92,7 +92,7 @@ struct Solo {
 /// else - the same isolation `race_ground_truth`'s solo benchmark uses.
 fn solo(level: oag_ai::Difficulty, track: &str, ticks: u64) -> Option<Solo> {
     let image = image()?;
-    let loaded = race::load(&race::Options {
+    let loaded = race::load_sim(&race::Options {
         source: image.display().to_string(),
         class: "VENOM".to_string(),
         mode: oag_race::Mode::SingleRace,
@@ -101,7 +101,11 @@ fn solo(level: oag_ai::Difficulty, track: &str, ticks: u64) -> Option<Solo> {
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
+    let mut race = race::Race::start(
+        loaded.setup,
+        oag_raceplay::ViewSetup::headless(),
+        loaded.modules,
+    );
     for slot in 2..oag_gameplay::MAX_SHIPS {
         race.core.sim.world.ships[slot].active = false;
     }

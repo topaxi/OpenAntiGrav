@@ -43,17 +43,21 @@ fn suffix(team: &str) -> &'static str {
 }
 
 fn started(image: &std::path::Path, team: &str) -> (Race, Vec<String>) {
-    let loaded = race::load(&options(image, team)).expect("loading the race");
+    let loaded = race::load_sim(&options(image, team)).expect("loading the race");
     let teams = loaded.setup.slot_teams.clone();
     (
-        Race::start(loaded.setup, loaded.view, loaded.modules),
+        Race::start(
+            loaded.setup,
+            oag_raceplay::ViewSetup::headless(),
+            loaded.modules,
+        ),
         teams,
     )
 }
 
 /// The tuning a lone craft of `team` flies, as the player.
 fn own_handling(image: &std::path::Path, team: &str) -> oag_physics::Handling {
-    race::load(&options(image, team))
+    race::load_sim(&options(image, team))
         .expect("loading the race")
         .setup
         .handling
@@ -149,12 +153,16 @@ fn pulse_opponents_fly_their_own_teams_handling() {
         team: team.map(str::to_string),
         ..race::Options::default()
     };
-    let loaded = race::load(&options(None)).expect("loading the race");
+    let loaded = race::load_sim(&options(None)).expect("loading the race");
     let teams = loaded.setup.slot_teams.clone();
-    let race = Race::start(loaded.setup, loaded.view, loaded.modules);
+    let race = Race::start(
+        loaded.setup,
+        oag_raceplay::ViewSetup::headless(),
+        loaded.modules,
+    );
     let mut differing = 0;
     for (slot, team) in teams.iter().enumerate().skip(1) {
-        let own = race::load(&options(Some(team)))
+        let own = race::load_sim(&options(Some(team)))
             .expect("load")
             .setup
             .handling;

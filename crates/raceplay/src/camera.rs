@@ -710,7 +710,11 @@ impl RaceView {
     /// `view` through the lens sample an accumulated depth of field frame is drawn with
     /// ([`crate::photo::LensShift`]), or `view` itself with none.
     fn lens_sampled(&self, view: Mat4) -> Mat4 {
-        match self.photo.as_ref().and_then(crate::photo::Photo::shift) {
+        let shift = match &self.photo {
+            Some(photo) => photo.shift(),
+            None => self.picture.as_ref().and_then(|picture| picture.shift()),
+        };
+        match shift {
             Some(shift) => shift.apply(view),
             None => view,
         }
@@ -878,6 +882,7 @@ impl RaceView {
             .camera_override
             .as_ref()
             .and_then(|over| over.fov_deg)
+            .or(self.fov_override)
             .unwrap_or(view_fov);
         // The original's speed widen, added to the authored degrees before
         // anything else - which is where `Ship_UpdateCameraRigs` adds it, and it

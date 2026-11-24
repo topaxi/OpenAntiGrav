@@ -44,7 +44,7 @@ fn load(
     } else {
         oag_testdata::image(image)?
     };
-    let loaded = oag_raceplay::load(&oag_raceplay::Options {
+    let loaded = oag_raceplay::load_sim(&oag_raceplay::Options {
         source: path.display().to_string(),
         class: class.to_string(),
         mode: oag_race::Mode::SingleRace,
@@ -59,7 +59,7 @@ fn load(
     crate::perturb::apply(&mut setup, eps);
     Some(oag_raceplay::Race::start(
         setup,
-        loaded.view,
+        oag_raceplay::ViewSetup::headless(),
         loaded.modules,
     ))
 }

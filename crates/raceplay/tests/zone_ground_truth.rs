@@ -454,6 +454,60 @@ fn pures_zone_craft_is_a_team_the_definition_declares() {
     }
 }
 
+/// **A Pure Zone race frames its chase view from the Zone craft's own file.** The
+/// file authors `<ExternalCameraClose pos_height 3.0 pos_length -9.5>` and fov 70;
+/// times the craft's `0.75` scale the eye is `(2.25 up, 7.125 back)`, the eye the
+/// original's tripod read live in two Zone states (`docs/gameplay/race-modes.md`,
+/// "Pure's Zone cameras"). The same circuit in Time Trial keeps the team's own
+/// block, so the overlay is the mode's and not a change to every race.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn pures_zone_race_reads_its_cameras_from_the_zone_craft() {
+    let Some(path) = image("data/images/pure-psp-usa.chd") else {
+        return;
+    };
+    let load = |mode| {
+        race::load(&race::Options {
+            source: path.display().to_string(),
+            class: "VECTOR".to_string(),
+            mode,
+            track: Some(r"Data\Zone\01_Zone\track.vex".to_string()),
+            ..race::Options::default()
+        })
+        .expect("loading Pure's Zone circuit")
+    };
+    let line = |loaded: &race::Loaded, what: &str| {
+        loaded
+            .report
+            .iter()
+            .find(|line| line.contains(what))
+            .cloned()
+            .unwrap_or_else(|| panic!("no report line with {what:?}: {:#?}", loaded.report))
+    };
+
+    let zone = load(oag_race::Mode::Zone);
+    assert!(
+        line(&zone, "cameras from").contains(r"Data\Ships\Zone_01\handlingstats.xml"),
+        "the cameras do not come from the Zone craft's file"
+    );
+    let close = line(&zone, "<ExternalCameraClose>");
+    assert!(
+        close.contains("fov 70") && close.contains("eye 2.25 up and 7.125 back"),
+        "Zone's Close rig is not the authored block times 0.75: {close}"
+    );
+
+    let trial = load(oag_race::Mode::TimeTrial);
+    assert!(
+        !trial.report.iter().any(|l| l.contains("cameras from")),
+        "a Time Trial on the Zone circuit took the Zone craft's cameras"
+    );
+    let close = line(&trial, "<ExternalCameraClose>");
+    assert!(
+        close.contains("fov 60") && close.contains("eye 3 up and 11.25 back"),
+        "the racing Close rig moved: {close}"
+    );
+}
+
 /// **HD is shaped like Pure**, which is the third measurement and the reason
 /// neither variant of the enum rests on one example.
 ///
