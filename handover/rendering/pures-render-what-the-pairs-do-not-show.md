@@ -1,7 +1,7 @@
 ---
 status: ready-to-wire
 titles: [pure, pulse]
-updated: 2026-11-17
+updated: 2026-11-24
 summary: "Pure render: canopy, sky, effect names, flare, chrome-map pass and bloom closed; Modesto light, HUD open"
 difficulty: medium (30)
 ---
@@ -17,6 +17,11 @@ Lanes `pure-render-fidelity` and `pure-render-fidelity-2`, 2026-10-26. Closed so
 - **the bloom** (`pure-sign-glow`): Pure runs Pulse's four-pass bloom over Pulse's stencil mask, composited before its HUD.
   Modesto's neon signs glow: sign box mean luma 75.5 to 111.3 against the original's 111.1, frame MAD 8.96 to 6.51
   ([`psp-pure-usa/bloom.md`](../../docs/ghidra/functions/psp-pure-usa/bloom.md), `Looks::psp_glow_mask`, `Looks::bloom_under_hud`).
+
+- **the weather** (`pure-race-worst-two`): Sinucit and Sebenco Climb author a `<Weather>` (rain and lens, snow, and the
+  `Mist.mip` screen overlay) that Pure never played. `Looks::circuit_weather` now plays it with Pulse's law: both pairs'
+  whole frame read 23 grey dark, now +8 and +3 (mean grey 26.9 -> 15.7 and 25.7 -> 15.7; the other twelve pairs and a
+  Pulse, HD, 2048 and Omega pair unchanged to the pixel; `docs/rendering/pure-weather.md`).
 
 The last three: [`psp-pure-usa/hull-shine.md`](../../docs/ghidra/functions/psp-pure-usa/hull-shine.md).
 
@@ -96,6 +101,12 @@ Ranked by what a player notices: hull and plume, then effects, then track and li
    changes palette between zones at one fixed place was not tested; ours' `--zone-stage` is a no-op on Pure. The Zone craft's hull in the
    original is not identified (ours flies Assegai, Pure's default; `Data\Ships\Zone_01` exists). Unpaired: `02_Zone`, `03_Zone`, `04_Zone`.
    The Zone counters' RAM addresses (zone, score, zone seconds) are not located. A second cold boot of the same Zone race has not been made.
+
+10. **Sinucit's and Sebenco's remaining regions** (`docs/rendering/pure-weather.md`, "What is left"): Sinucit's advert
+    screens (the original plays a cyan and yellow picture over three panels; ours three cyan strips, billboard slots drawn
+    nothing), the blue strip across the track at the craft's height (wider and bloomier than the original's thin line, 8 to
+    11 % of each pair's `>40` pixels), the mist's random UV pattern (the original rolls it each re-roll; a pair's RAM holds
+    the offsets, ours a fixed table) and Pure's `FxScreenMist` draw function, unread (relocation trap, confidence 70).
 
 ## Next Steps
 

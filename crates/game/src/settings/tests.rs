@@ -1199,7 +1199,7 @@ fn scenery_sort_is_seeded_on_the_psp_circuit_and_defaults_to_the_original() {
     );
 }
 
-/// WEATHER is seeded only where the weather is played (Pulse); elsewhere its row is
+/// WEATHER is seeded only where the weather is played (Pulse, Pure); elsewhere its row is
 /// dropped (`Definition::drop_unavailable_weather`).
 #[test]
 fn weather_is_seeded_only_where_the_weather_is_played() {
@@ -1209,7 +1209,7 @@ fn weather_is_seeded_only_where_the_weather_is_played() {
             .any(|(key, _)| key == "graphics.weather")
     };
     assert!(seeded(oag_pulse::TITLE, oag_disc::Platform::Psp));
-    assert!(!seeded(oag_pure::TITLE, oag_disc::Platform::Psp));
+    assert!(seeded(oag_pure::TITLE, oag_disc::Platform::Psp));
     assert!(!seeded(oag_hd::TITLE, oag_disc::Platform::Ps3));
 }
 

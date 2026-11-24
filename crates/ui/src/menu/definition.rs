@@ -751,7 +751,7 @@ impl Definition {
     }
 
     /// Drops the WEATHER row on a title whose weather is not played
-    /// (`oag_title::weather::Weather::is_played`): every title but Pulse. Same
+    /// (`oag_title::weather::Weather::is_played`): HD, 2048 and Omega. Same
     /// once-before-read timing as [`Self::drop_unavailable_boost_zoom`].
     pub fn drop_unavailable_weather(&mut self, title: &oag_title::Title) {
         if title.weather.is_played() {

@@ -726,6 +726,11 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
             .looks
             .circuit_effects
             .applies(archives.layout.platform);
+    let circuit_weather = vex_geometry
+        && title
+            .looks
+            .circuit_weather
+            .applies(archives.layout.platform);
     let road_ripple = vex_geometry && title.looks.road_ripple.applies(archives.layout.platform);
     let pre_race = intro::rule(title, &archives).filter(|_| !ribbon);
     let hull_lights = vex_geometry && title.looks.hull_lights.applies(archives.layout.platform);
@@ -948,7 +953,7 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
     );
     pulse_psp::finish(
         &mut loaded,
-        (circuit_fx, road_ripple, hull_lights),
+        (circuit_fx, circuit_weather, road_ripple, hull_lights),
         psp_glow_mask,
         track_shine,
         &track_blob,
