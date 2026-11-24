@@ -124,8 +124,8 @@ pub fn load_event_sim(
 struct EventPlan {
     event_name: String,
     archives: oag_assets::Archives,
-    doc: oag_2048::campaign::Document,
-    event: oag_2048::campaign::Event,
+    doc: oag_tables::mjolnir::Document,
+    event: oag_tables::mjolnir::campaign::Event,
     forced_craft: Option<String>,
     restricted: Vec<&'static str>,
 }
