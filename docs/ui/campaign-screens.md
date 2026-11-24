@@ -5499,5 +5499,52 @@ Selection only). Not covered, unmeasured on PS2: texts that stamp a fixed `RealG
 `Track Selection`) and the generic screens' texts. Test: `the_ps2_card_title_stamps_no_glow_where_the_psp_one_does` (fails with the
 skin field read nowhere or set `true`). Pulse PSP, HD and Omega Cell/Grid pages, and the PS2 `menu-team` page, render pixel-identical
 to the build before. **Not checkable on HD/Omega**: they have no `frontend_glow`, so no title stamp is drawn there to begin with.
-The `Selector`'s halo on the PS2 is a different shape from ours' too (small, offset up and left in the original, a broad round bloom
-in ours); that is the PS2 skin's residual, not this change.
+The `Selector`'s halo on the PS2 was a different shape from ours' (small, offset up and left in the original, a broad round bloom
+in ours); closed the same day, next section.
+
+#### The selector's halo on Pulse PS2 is the ring's own texels through the PS2 chain (2026-11-24, `ps2-selector-halo`)
+
+Claim: ours' halo on Grid and Cell Selection is the original's shape (small, up and left, a dark hex interior). **True, confidence 85.**
+
+**What the original draws.** PCSX2 GS dumps of the settled screens (`scripts/pcsx2-drive.py gsdump`, `scripts/pcsx2-gsdump.py`; one
+Cell and one Grid, two fields each) list, after the page's draws, the five bloom passes of a race
+([`ps2-bloom.md`](../rendering/ps2-bloom.md)): a 320 x 224 downsample (`ALPHA 0x88`), 896-triangle taps with the vertex colours
+`16 32 32 64 32 32 16` twice, and a composite at `FIX 0x40` whose quad is **640 x 448 with its corner at (-5, -5)**. The groups whose
+`FRAME_1` has `FBMSK` 0 (the ones that write the frame's alpha) are two: the clear to `(0,0,0,0)` and the 56 x 56 `Selector` quad
+(Cell group 21, Grid group 25; `TEST` `0x316f5` / `0x315f5`: alpha test `LESS`, `AFAIL` = FB only, so every fragment lands). Its vertex
+colour is `(123..101, ..., 127)`, so the alpha it writes is the sprite's texel alpha times `127/128`: a ring, with the transparent
+interior and corners at 0. The card title, the footer tab and every hex outline carry `FBMSK 0xff000000` and write none, which is also
+why the title shows no halo above. `Selector + 0xfc` (the stamp `int(80 + 150 t)`, [`frontend-pulse.md`](../ghidra/functions/ps2-pulse-eu/frontend-pulse.md))
+never reaches the mask on the PS2.
+
+**What ours did**: the PSP's rule (a 42 x 43 stencil stamp over the whole quad at the pulse's value, background `4`) through the PSP's
+chain (11 taps at 240 x 136, composite at 1:1): a broad round bloom that also lit the hex's teal fill under the transparent interior.
+
+**What ours does**: `oag_title::MenuSkin::glow_by_texel` (`true` on `oag_pulse::frontend::PS2_MENU_SKIN` only) makes
+`push_selector` emit `Draw::GlowTexel` instead of a `Draw::GlowStamp`. The renderer copies the sprite's quads into the mask pass (the
+`fs_stamp` fragment samples the sheet's alpha for a sheet quad), clears the mask to 0 (`PS2_BACKGROUND`, no floor of 4), drops value
+stamps, and blooms through `oag_post::ps2_bloom` built for the front end's 640 x 448 frame (`Ps2Bloom::with_frame`: the same 5 pixels are
+`5/640` and `5/448` of the viewport, where a race's 512 x 512 makes them `5/512` of both). Tests:
+`the_ps2_selector_stamps_its_texels_where_the_psp_one_stamps_its_quad` (fails with the skin field `false`),
+`a_texel_stamp_blooms_where_the_sprite_is_opaque_and_nowhere_else` and `a_texel_stamp_after_a_fill_blooms_nothing` (`oag-game`
+`render::glow_tests`), `the_front_end_frame_shifts_the_composite_by_its_own_fractions` (`oag-render`, `#[ignore]`, GPU; fails if
+`with_frame` is not applied).
+
+**Measured on the pairs** (two PCSX2 grabs per screen, `Selector` box over 40 grey on the 1280 x 720 pair, main's code against this
+change on the same `theirs.png` and flags; boxes Grid (140,370,140,115), Cell (280,200,130,120)):
+
+| grab | pair | `Selector` box | whole frame |
+| --- | --- | ---: | ---: |
+| 1 | cell | 24.13 to 5.26 | 2.75 to 2.43 |
+| 1 | grid | 5.24 to 1.61 | 1.85 to 1.79 |
+| 2 | cell | 5.69 to 1.78 | 2.27 to 2.21 |
+| 2 | grid | 9.24 to 3.12 | 1.83 to 1.72 |
+
+Before the `with_frame` shift the same four boxes read (race-frame shift, 5/512): 4.42, 1.31, 3.70, 1.39 on an earlier pair of grabs;
+the 640 x 448 shift took them to 1.87, 0.50, 1.72, 0.88 on those grabs. The crops (original, before, after) agree on shape and offset;
+ours' halo stays a little brighter on the upper left, and the tint follows the phase read from RAM.
+
+**Unchanged, byte-identical** (decoded RGBA, main's binary against this change): Pulse PSP `menu-cell`, `menu-grid`, `menu-main`; Pulse
+PS2 race pairs `moa-therma-white` and `zone-talons-white-z5` (the race chain keeps `Ps2Bloom::new`, 512 x 512).
+**Not wired, unmeasured on the PS2**: the Main Menu's and the Picker panels' stamps (they keep the PSP's value stamps and chain).
+**2048/Omega**: not applicable (Pulse PS2's front end; HD and Omega draw no `frontend_glow`).
