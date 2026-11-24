@@ -35,6 +35,7 @@ impl Pending {
                 race,
                 self.meta.camera.as_ref(),
                 self.meta.craft.as_ref(),
+                self.meta.picture.as_ref(),
                 (width, height),
             );
         }
@@ -113,6 +114,9 @@ impl Session {
         let camera = race.photo().zip(race.photo_camera()).map(|(photo, pose)| {
             shot_meta::camera_of(&format!("{:?}", photo.lens()).to_lowercase(), &pose)
         });
+        let picture = race
+            .photo()
+            .and_then(|photo| shot_meta::Picture::of(photo.effects(), None));
         let render = self
             .settings
             .render_profiles
@@ -156,6 +160,7 @@ impl Session {
             },
             race: Some(race_info),
             camera,
+            picture,
             craft: Some(craft),
             render,
             gpu: Some(self.gpu.describe()),

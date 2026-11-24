@@ -13,6 +13,7 @@ mod bench;
 mod describe;
 pub mod gpu;
 mod overlays;
+mod picture;
 pub mod pose_flaps;
 pub mod pose_hold;
 pub mod pose_lean;
@@ -529,6 +530,7 @@ pub fn capture(
     let best_lap = previous.and_then(|r| r.best_lap_ticks);
     race.watch_laps(&hud, best_lap);
     race.set_camera_view(options.camera_view);
+    picture::apply(&mut race, &options.shot);
     race.core.sim.apply_launch(&oag_raceplay::Launch {
         scheme: options.scheme,
         difficulty,

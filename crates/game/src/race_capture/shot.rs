@@ -159,6 +159,7 @@ impl Facts {
                 platform: self.platform.clone(),
             },
             race: Some(race_info),
+            picture: self.context.picture.clone(),
             craft: Some(craft),
             render: self.context.render.clone(),
             mods: race

@@ -20,6 +20,32 @@ fn read(path: &Path) -> Result<shot_meta::Found> {
     shot_meta::read(&bytes).with_context(|| format!("reading {}", path.display()))
 }
 
+/// What the re-render does about the picture controls the shot was made with, and points `cli`
+/// at them. One line for each thing the reader could take for granted that is not so.
+fn picture_lines(meta: &shot_meta::Meta, cli: &mut Cli) -> Vec<String> {
+    let Some(picture) = &meta.picture else {
+        return if meta.shot.source == "photo mode" {
+            vec![
+                "no picture controls recorded: they were all at their opening values, or the shot predates the keys"
+                    .to_string(),
+            ]
+        } else {
+            Vec::new()
+        };
+    };
+    cli.picture = Some(picture.to_flag());
+    let mut lines = vec![format!("picture controls applied: {}", picture.to_flag())];
+    if !picture.motion_blur.is_empty() {
+        lines.push(format!(
+            "the shot is a {} motion blur (shutter {}, {} frames); this re-render is the one frame",
+            picture.motion_blur,
+            picture.shutter.unwrap_or_default(),
+            picture.frames
+        ));
+    }
+    lines
+}
+
 /// Prints what `path` carries to stdout.
 pub(crate) fn info(path: &Path) -> Result<()> {
     let found = read(path)?;
@@ -85,6 +111,9 @@ pub(crate) fn prepare(cli: &mut Cli, path: &Path) -> Result<Arc<ShotRecord>> {
         let [ux, uy, uz] = camera.up;
         cli.camera_pose = Some(format!("{ex},{ey},{ez},{fx},{fy},{fz},{ux},{uy},{uz}"));
         cli.camera_fov = camera.fov_deg;
+    }
+    for line in picture_lines(&meta, cli) {
+        println!("from-png: {line}");
     }
     println!(
         "from-png: {}, {} on {}, tick {}, recorded hash {:#018x}",

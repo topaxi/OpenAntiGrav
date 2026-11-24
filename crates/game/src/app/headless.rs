@@ -783,6 +783,12 @@ pub(crate) fn run_race(
                 shot: crate::shot_meta::Context {
                     restage,
                     render: crate::shot_meta::render_table(&render_profile),
+                    picture: cli
+                        .picture
+                        .as_deref()
+                        .map(crate::shot_meta::Picture::from_flag)
+                        .transpose()
+                        .map_err(|why| anyhow::anyhow!("--picture: {why}"))?,
                 },
                 gpu,
                 give: give_weapon(cli.give())?,

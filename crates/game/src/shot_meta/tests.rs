@@ -37,7 +37,7 @@ fn meta() -> Meta {
         },
         reproduce: Reproduce {
             exact: "oag-game --from-png <this file>".into(),
-            flags: flags(&race, Some(&camera), Some(&craft), (2, 2)),
+            flags: flags(&race, Some(&camera), Some(&craft), None, (2, 2)),
         },
         race: Some(race),
         camera: Some(camera),

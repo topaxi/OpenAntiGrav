@@ -11,6 +11,8 @@
 //! **No player name or tag and no filesystem path is written**: the disc is named by its serial,
 //! a track by its archive entry, and a mod by its id.
 
+use oag_raceplay::photo::effects::{Blur, Effects, Row};
+use oag_raceplay::photo::shot::Plan;
 use oag_replay::ShotRecord;
 use serde::{Deserialize, Serialize};
 
@@ -37,6 +39,9 @@ pub struct Meta {
     /// The camera the frame was drawn from.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub camera: Option<Camera>,
+    /// The picture controls the frame was made with, when any is off its opening value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub picture: Option<Picture>,
     /// The player's craft in the frame.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub craft: Option<Craft>,
@@ -120,6 +125,41 @@ pub struct Camera {
     /// The vertical field of view in degrees, when the camera states one.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub fov_deg: Option<f32>,
+}
+
+/// Photo mode's picture controls as the panel shows them (`oag_raceplay::photo::effects`), so
+/// the frame can be made again: a shot of a graded or blurred picture is not the race as drawn.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Picture {
+    /// Exposure, `0..=100`.
+    pub exposure: i32,
+    /// Saturation, `0..=100`.
+    pub saturation: i32,
+    /// Speed blur, `0..=100`.
+    pub speed_blur: i32,
+    /// Whether depth of field was on.
+    pub depth_of_field: bool,
+    /// The aperture, with depth of field on.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub aperture: Option<i32>,
+    /// The focus, with depth of field on.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub focus: Option<i32>,
+    /// What the shot smeared: `track` or `ship`; absent when it was not a motion blur shot.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub motion_blur: String,
+    /// The shutter row, `0..=100`, with a motion blur.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub shutter: Option<i32>,
+    /// How many frames the saved picture is the average of, for a shot of several; absent for
+    /// the one frame on screen.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub frames: u32,
+}
+
+fn is_zero(frames: &u32) -> bool {
+    *frames == 0
 }
 
 /// The player's craft.
@@ -216,6 +256,99 @@ impl Meta {
     }
 }
 
+impl Picture {
+    /// The controls of `effects` as a shot of `plan` kept them (`None`: the one frame on
+    /// screen), or `None` when the picture is as the camera drew it.
+    #[must_use]
+    pub fn of(effects: &Effects, plan: Option<&Plan>) -> Option<Self> {
+        let blur = plan.and_then(Plan::blur);
+        if effects.is_neutral() && blur.is_none() {
+            return None;
+        }
+        let dof = effects.depth_of_field().is_some();
+        Some(Self {
+            exposure: effects.value(Row::Exposure),
+            saturation: effects.value(Row::Saturation),
+            speed_blur: effects.value(Row::SpeedBlur),
+            depth_of_field: dof,
+            aperture: dof.then(|| effects.value(Row::Aperture)),
+            focus: dof.then(|| effects.value(Row::Focus)),
+            motion_blur: blur
+                .map(|(kind, _)| match kind {
+                    Blur::Track => "track",
+                    Blur::Ship => "ship",
+                })
+                .unwrap_or_default()
+                .to_string(),
+            shutter: blur.map(|_| effects.shutter()),
+            frames: plan.map_or(0, Plan::frames),
+        })
+    }
+
+    /// The controls a frame is drawn with: the single frame the panel previews. A motion blur
+    /// needs the race's past and is not part of it.
+    #[must_use]
+    pub fn effects(&self) -> Effects {
+        let mut effects = Effects::new();
+        effects.set(Row::Exposure, self.exposure);
+        effects.set(Row::Saturation, self.saturation);
+        effects.set(Row::SpeedBlur, self.speed_blur);
+        if self.depth_of_field {
+            effects.set(Row::DepthOfField, 1);
+            effects.set(Row::Aperture, self.aperture.unwrap_or(Effects::APERTURE_OPENS));
+            effects.set(Row::Focus, self.focus.unwrap_or(Effects::FOCUS_OPENS));
+        }
+        effects
+    }
+
+    /// The `--picture` value that draws these controls: `key=value` pairs, the aperture and
+    /// focus only with depth of field on.
+    #[must_use]
+    pub fn to_flag(&self) -> String {
+        let mut parts = vec![
+            format!("exposure={}", self.exposure),
+            format!("saturation={}", self.saturation),
+            format!("speed_blur={}", self.speed_blur),
+        ];
+        if self.depth_of_field {
+            parts.push(format!("aperture={}", self.aperture.unwrap_or(Effects::APERTURE_OPENS)));
+            parts.push(format!("focus={}", self.focus.unwrap_or(Effects::FOCUS_OPENS)));
+        }
+        parts.join(",")
+    }
+
+    /// Reads a `--picture` value.
+    ///
+    /// # Errors
+    ///
+    /// A pair that is not `key=value`, an unknown key or a value that is not a whole number.
+    pub fn from_flag(text: &str) -> Result<Self, String> {
+        let mut picture = Self {
+            exposure: Effects::EXPOSURE_OPENS,
+            saturation: Effects::SATURATION_OPENS,
+            ..Self::default()
+        };
+        for pair in text.split(',').filter(|pair| !pair.is_empty()) {
+            let (key, value) = pair
+                .split_once('=')
+                .ok_or_else(|| format!("`{pair}` is not key=value"))?;
+            let number: i32 = value
+                .parse()
+                .map_err(|_| format!("`{value}` for {key} is not a whole number"))?;
+            match key {
+                "exposure" => picture.exposure = number,
+                "saturation" => picture.saturation = number,
+                "speed_blur" => picture.speed_blur = number,
+                "aperture" => picture.aperture = Some(number),
+                "focus" => picture.focus = Some(number),
+                other => return Err(format!("no picture control named `{other}`")),
+            }
+        }
+        picture.depth_of_field = picture.aperture.is_some() || picture.focus.is_some();
+        Ok(picture)
+    }
+}
+
 /// A hash as the text spells it.
 #[must_use]
 pub fn hex(hash: u64) -> String {
@@ -231,6 +364,7 @@ pub fn flags(
     race: &Race,
     camera: Option<&Camera>,
     craft: Option<&Craft>,
+    picture: Option<&Picture>,
     size: (u32, u32),
 ) -> Vec<String> {
     let mut flags: Vec<String> = ["--race", "--no-audio", "--track", &race.track]
@@ -265,6 +399,9 @@ pub fn flags(
         if let Some(fov) = camera.fov_deg {
             flags.extend(["--camera-fov".to_string(), fov.to_string()]);
         }
+    }
+    if let Some(picture) = picture {
+        flags.extend(["--picture".to_string(), picture.to_flag()]);
     }
     flags.extend(["--size".to_string(), format!("{}x{}", size.0, size.1)]);
     flags
@@ -342,6 +479,8 @@ pub struct Context {
     pub restage: Option<std::sync::Arc<ShotRecord>>,
     /// The render settings in force, as the text carries them.
     pub render: Option<toml::Table>,
+    /// The picture controls to draw the frame with and to record (`--picture`).
+    pub picture: Option<Picture>,
 }
 
 /// A render profile as the text's `[render]` table.

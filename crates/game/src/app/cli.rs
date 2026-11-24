@@ -1208,6 +1208,16 @@ pub(crate) struct Cli {
     #[arg(long, value_name = "EYE,FWD,UP", conflicts_with = "pose_from")]
     pub(crate) camera_pose: Option<String>,
 
+    /// With `--screenshot`: draw the frame with photo mode's picture controls, as
+    /// `exposure=N,saturation=N,speed_blur=N` and, for depth of field, `aperture=N,focus=N`
+    /// (the panel's `0..=100` values; a missing one is where the panel opens it).
+    ///
+    /// What a photo-mode shot's `[picture]` text names, so `--from-png` and a bug report's
+    /// `reproduce.flags` draw the graded or blurred picture. One frame: a motion blur needs the
+    /// race's past and is not drawn.
+    #[arg(long, value_name = "CONTROLS")]
+    pub(crate) picture: Option<String>,
+
     /// With `--screenshot`: force the exhaust into the state it would hold this
     /// many seconds after entering a speed pad, at saturated intensity.
     ///

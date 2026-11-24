@@ -15,6 +15,7 @@ use oag_raceplay::photo::shot::{Mover, Plan, Shot};
 use oag_ui::pointer::Pointer;
 
 use super::photo::Origin;
+use crate::shot_meta;
 use crate::app::stage::Stage;
 
 /// The stick deflection that abandons a shot under way: 2048's own threshold.
@@ -254,7 +255,7 @@ impl super::Session {
     pub(super) fn start_photo_job(
         &mut self,
         path: &std::path::Path,
-        pending: Option<super::photo_meta::Pending>,
+        mut pending: Option<super::photo_meta::Pending>,
     ) -> Result<(), Option<super::photo_meta::Pending>> {
         let (Stage::Race(stage), Some(open)) = (&mut self.stage, self.photo.as_mut()) else {
             return Err(pending);
@@ -276,6 +277,10 @@ impl super::Session {
         let Some(plan) = Plan::new(photo, tick, resimulates) else {
             return Err(pending);
         };
+        // The controls the shot kept: a blur the race cannot draw is not one of them.
+        if let Some(pending) = pending.as_mut() {
+            pending.meta.picture = shot_meta::Picture::of(photo.effects(), Some(&plan));
+        }
         debug!(
             "photo mode: a shot of {} frames at tick {tick} (blur {:?}, lens {})",
             plan.frames(),

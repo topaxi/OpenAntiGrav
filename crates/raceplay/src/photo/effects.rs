@@ -291,6 +291,24 @@ impl Effects {
         self.adjust_row(self.selected, by);
     }
 
+    /// Puts `row` at `value`, as the panel would after enough steps: a slider stops at its ends
+    /// and a step the row does not take rounds down. The rewind and play rows are the race's
+    /// moment, not a control, and are left alone.
+    pub fn set(&mut self, row: Row, value: i32) {
+        let slider = |value: i32, step: i32| value.clamp(0, 100) / step * step;
+        match row {
+            Row::Exposure => self.exposure = slider(value, 1),
+            Row::Saturation => self.saturation = slider(value, 1),
+            Row::SpeedBlur => self.speed_blur = slider(value, Self::SPEED_BLUR_STEP),
+            Row::DepthOfField => self.depth_of_field = value > 0,
+            Row::Aperture => self.aperture = slider(value, 1),
+            Row::Focus => self.focus = slider(value, 1),
+            Row::MotionBlur => self.motion_blur = value.clamp(0, 2),
+            Row::Shutter => self.shutter = slider(value, 1),
+            Row::Rewind | Row::Play => {}
+        }
+    }
+
     /// Moves `row`'s value `by` steps.
     pub fn adjust_row(&mut self, row: Row, by: i32) {
         let slide = |value: i32, step: i32| (value + by * step).clamp(0, 100);
