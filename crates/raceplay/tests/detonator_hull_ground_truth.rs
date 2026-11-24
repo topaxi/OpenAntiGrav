@@ -141,8 +141,8 @@ fn an_hd_detonator_race_flies_its_own_handling_file_and_zone_keeps_its_own() {
 }
 
 /// A Detonator mine is the football and its spikes, a bomb its body, equalisers and glow edges,
-/// and every speed pad and weapon pad carries the Detonator pad. `electric_visualiser` is named
-/// as not drawn.
+/// and every speed pad and weapon pad carries the Detonator pad. A mine also carries its
+/// `electric_visualiser` ring, drawn through the electricity program's two glow-table entries.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn an_hd_detonator_race_draws_its_own_mine_bomb_and_pad_models() {
@@ -175,12 +175,26 @@ fn an_hd_detonator_race_draws_its_own_mine_bomb_and_pad_models() {
         "the circuit's own pads are not drawn under the Detonator pad"
     );
 
+    assert!(label(&parts.mine_visualiser).contains("electric_visualiser"));
+    let ring = parts
+        .mine_visualiser
+        .as_ref()
+        .expect("the visualiser loaded");
+    let programs: Vec<f32> = ring.emissive.iter().map(|entry| entry.program[0]).collect();
     assert!(
-        loaded
-            .report
-            .iter()
-            .any(|line| line.contains("electric_visualiser is music-driven")),
-        "the visualiser is named as not drawn"
+        programs.contains(&oag_mesh::mesh::PROGRAM_ELECTRICITY)
+            && programs.contains(&oag_mesh::mesh::PROGRAM_ELECTRICITY_AUDIO),
+        "the ring is drawn by its own program, not the generic path: {programs:?}"
+    );
+    // `shade.wesl` reads the audio row as the entry after the electricity row.
+    let at = programs
+        .iter()
+        .position(|&p| p == oag_mesh::mesh::PROGRAM_ELECTRICITY)
+        .expect("electricity row");
+    assert_eq!(
+        programs.get(at + 1),
+        Some(&oag_mesh::mesh::PROGRAM_ELECTRICITY_AUDIO),
+        "the audio row follows the electricity row"
     );
     // The control: a Zone race on the same circuit keeps the ordinary bodies.
     let Some(zone) = load(oag_race::Mode::Zone, "Qirex") else {

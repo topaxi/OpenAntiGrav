@@ -297,6 +297,39 @@ impl Race {
         matrices
     }
 
+    /// Where each laid Detonator mine's visualiser ring stands for a camera at `eye`, one per mine
+    /// in [`Self::detonator_mine_looks`]'s order: centred on the mine, facing the camera, at
+    /// `1 + 0.4 (football - 1)` of its model size while live and `0.9` dark
+    /// (`DetonatorMine_PoseVisualiser`, `docs/ghidra/functions/ps3-hdfury-eu/detonator-mine-draw.md`).
+    ///
+    /// **The ring's axis and its roll are chosen, not measured**: the model lies in its own XY
+    /// plane, so the camera direction becomes its Z, and the roll about it follows the mine's own
+    /// up; which row the original's basis puts the camera direction in is read from the shape of
+    /// its code only (confidence 65).
+    #[must_use]
+    pub(crate) fn mine_visualiser_matrices(&self, eye: Vec3) -> Vec<Mat4> {
+        let Some(detonator) = &self.core.sim.detonator else {
+            return Vec::new();
+        };
+        let lane_width = detonator.layout.values.distance_offset_between_mines;
+        let sizes = crate::drawable::lock(&self.view.mine_sizes);
+        self.core
+            .sim
+            .world
+            .detonator
+            .live_mines()
+            .iter()
+            .filter_map(|placed| {
+                let (position, up) = detonator.survey.mine_point(placed, lane_width)?;
+                let football = sizes
+                    .get(&(placed.entry, placed.lane))
+                    .map_or(1.0, |&(football, _)| football);
+                let size = visualiser_scale(placed.live, football);
+                Some(camera_facing_matrix(position, up, eye) * Mat4::from_scale(Vec3::splat(size)))
+            })
+            .collect()
+    }
+
     /// The laid Detonator mines [`Self::mine_model_matrices`] draws after the ordinary ones, in
     /// its order: how many ordinary mines come first, then each laid mine's survey entry and lane
     /// (its identity for as long as it exists) and whether it is live this stage. A mine the
@@ -518,6 +551,44 @@ enum Laid {
 }
 
 use crate::detonator_look::MinePart;
+
+/// How much of the football's growth the visualiser takes: `1 + 0.4 (football - 1)`.
+const VISUALISER_GROWTH: f32 = 0.4;
+
+/// A dark mine's visualiser size.
+const DARK_VISUALISER_SCALE: f32 = 0.9;
+
+/// The visualiser's size: `1 + 0.4 (football - 1)` while live, `0.9` dark.
+pub(crate) fn visualiser_scale(live: bool, football: f32) -> f32 {
+    if live {
+        1.0 + VISUALISER_GROWTH * (football - 1.0)
+    } else {
+        DARK_VISUALISER_SCALE
+    }
+}
+
+/// A basis at `position` whose Z points at `eye` and whose Y is as near `up` as that allows.
+fn camera_facing_matrix(position: Vec3, up: Vec3, eye: Vec3) -> Mat4 {
+    let toward = (eye - position).normalize_or_zero();
+    if toward == Vec3::ZERO {
+        return detonator_matrix(position, up);
+    }
+    let up = up.normalize_or_zero();
+    let reference = if up == Vec3::ZERO || up.dot(toward).abs() > 0.99 {
+        Vec3::Y
+    } else {
+        up
+    };
+    let right = reference.cross(toward).normalize_or_zero();
+    let right = if right == Vec3::ZERO { Vec3::X } else { right };
+    let top = toward.cross(right);
+    Mat4::from_cols(
+        right.extend(0.0),
+        top.extend(0.0),
+        toward.extend(0.0),
+        position.extend(1.0),
+    )
+}
 
 fn detonator_matrix(position: Vec3, up: Vec3) -> Mat4 {
     let up = up.normalize_or_zero();
@@ -1317,5 +1388,19 @@ impl RaceView {
             };
             self.stage.play(&effect, projectile.position, 1.0);
         }
+    }
+}
+
+#[cfg(test)]
+mod ring_tests {
+    use super::visualiser_scale;
+
+    /// A dark mine's ring is `0.9` whatever the football's size, a live one `1 + 0.4 (football - 1)`.
+    #[test]
+    fn a_dark_mines_visualiser_is_nine_tenths_and_a_live_ones_follows_the_football() {
+        assert_eq!(visualiser_scale(false, 2.3), 0.9);
+        assert_eq!(visualiser_scale(false, 1.0), 0.9);
+        assert!((visualiser_scale(true, 2.3) - 1.52).abs() < 1e-6);
+        assert_eq!(visualiser_scale(true, 1.0), 1.0);
     }
 }

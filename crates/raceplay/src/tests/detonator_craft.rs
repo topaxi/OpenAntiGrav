@@ -161,3 +161,39 @@ fn a_laid_mines_recorded_size_scales_its_football_and_its_spikes() {
     assert!((axis(&race.mine_model_matrices()[first]) - 1.5).abs() < 1e-5);
     assert!((axis(&race.mine_spike_matrices()[first]) - 2.25).abs() < 1e-5);
 }
+
+/// A laid mine's visualiser ring is centred on the mine, its Z axis points at the camera, and it
+/// takes `1 + 0.4 (football - 1)` of the football's size.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn a_laid_mines_visualiser_ring_faces_the_camera_and_follows_the_footballs_size() {
+    let Some(image) = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let loaded = crate::load(&crate::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: Mode::Detonator,
+        ..crate::Options::default()
+    })
+    .expect("loading an HD Detonator race");
+    let mut race = Race::start(loaded.setup, loaded.view, loaded.modules);
+    race.tick(&oag_gameplay::PlayerInputs::none());
+    let (ordinary, laid) = race.detonator_mine_looks();
+    let eye = oag_core::math::Vec3::new(10.0, 20.0, 30.0);
+    let football = race.mine_model_matrices()[ordinary];
+    let ring = race.mine_visualiser_matrices(eye);
+    assert_eq!(ring.len(), laid.len(), "one ring per laid mine");
+    let centre = football.w_axis.truncate();
+    assert!((ring[0].w_axis.truncate() - centre).length() < 1e-4);
+    let toward = (eye - centre).normalize();
+    assert!(ring[0].z_axis.truncate().normalize().dot(toward) > 0.9999);
+    assert!((ring[0].z_axis.truncate().length() - 1.0).abs() < 1e-4);
+    race.view
+        .mine_sizes
+        .lock()
+        .expect("not poisoned")
+        .insert((laid[0].entry, laid[0].lane), (2.0, 1.0));
+    let grown = race.mine_visualiser_matrices(eye);
+    assert!((grown[0].z_axis.truncate().length() - 1.4).abs() < 1e-4);
+}

@@ -164,13 +164,38 @@ football (confidence 55: one mine, by eye).
 | Row | What | Source | Confidence |
 | --- | --- | --- | ---: |
 | 1 | **Pair tooling, every HD pair:** render ours from the picture's camera, not the push buffer's: move `--camera-pose`'s eye and `--pose` back by `k` ticks of motion. `k` varies by grab (1.15 to 3.55 measured); measure it per grab (in Detonator from the near mines' centroids; elsewhere from one cross-track feature) by extending `hd-pair-lag-scan.py` with a cross-track or static-object score, and record it in the existing `original.presented_lag` block; refuse a grab whose fit does not converge. Settle the disagreement with the earlier lag measurements first | "The displacement" | 70 |
-| 2 | Draw `Electric_Visualiser` at each mine: camera-facing, centred, scale `1 + 0.4 (football - 1)` live, `0.9` dark, colour `ElectricityColour` and the music binds already read | `0x00139308`, [detonator-mine-material.md](detonator-mine-material.md) | 65 |
+| 2 | **Wired on HD** ("The visualiser, wired"). Draw `Electric_Visualiser` at each mine: camera-facing, centred, scale `1 + 0.4 (football - 1)` live, `0.9` dark, colour `ElectricityColour` and the music binds already read | `0x00139308`, [detonator-mine-material.md](detonator-mine-material.md) | 65 |
 | 3 | Football and spikes translation stays the object's position; orientation is an axis-angle spin about `m+0xe0` by `m+0x150` (ours spins about its own choice; the axis's writer is unread) | `0x001396f0` | 60 |
 | 4 | Dark mine parts at scale 1 | `0x00139b78` | 72 |
 | 5 | Carry each mine's `s` (`+0xf4`) and `t` (`+0xf8`) into a pair, so a pair's mine has the original's size: open since `det-mines` | [detonator-mine-material.md](detonator-mine-material.md) | 85 |
 
 Row 1 decides how much of the `mines-ahead` and `cannon-volley` gap is real: re-rendering `mines-ahead` with
 `k = 4` moved the whole-frame mean absolute grey of this tree's render (not the page scorer's number) from 22.99 to 20.74.
+
+## The visualiser, wired (2026-11-24, `det-mine-visualiser`)
+
+`oag_raceplay::Race::mine_visualiser_matrices` poses the ring and `oag_mesh::mesh::rcs::electricity` draws it with
+`electricity.rcsmaterial`'s own program (`PROGRAM_ELECTRICITY`, `shade.wesl`); HD only.
+
+- **The program, read** (`ps3-microcode.py fp-file`/`vp-file`, fragment and vertex block #1; instruction offsets in the
+  module's doc): `rgb = overlay(uvd(uv1.x, uv1.y + 0.3 m).rgb * VertexColour1.w, ElectricityColour) * |N.V|^P`,
+  `alpha = VertexColour1.w * |N.V|^P`, `m` the music-driven distortion built from three taps (`electricity_bass_treble_hits`
+  unit 0, `electricity_pitch` unit 1, `electricity_uv_dist` unit 2). `P` is the material's authored `0x5cfb25e3` (1.0),
+  `0x906b67ba` the engine clock. Confidence 75 (read end to end; the gamma nibbles and the blend factors are not).
+- **The model**, 132 vertices, 192 triangles, an undeclared stride-26 chunk (`VertexColour1` at `+0x0a`, the pair
+  `0xac7c75d0` at `+0x0e`, `Uv1_Uv2` at `+0x12`), is a flat disc in its own XY plane, radius 2.45. The lightning ring is the
+  texture's, at the disc's rim.
+- **Chosen, not measured:** which model axis takes the camera direction (Z, the disc's normal) and the roll about it (the
+  mine's own up); `MasterVolume` and `PitchVolume` read bands 0 and 1 (the original's level readers at `0x304cc8` are
+  unread); `PitchOffset` and `TrebleHit` stay 0 (accumulator step and `.bss` writer unread); the colour tap is decoded.
+- **On the three published Detonator pairs the cell and frame barely move** (pairs as published, no picture-lag fit):
+  `pad` 8.82 -> 8.82, `mines-ahead` 16.38 -> 16.40, `cannon-volley` 15.32 -> 15.33 mean grey. Ours' near mines are
+  smaller and nearer the screen edge than the original's there (the picture lag the pairs do not carry), so the ring lands
+  on the wrong pixels; by eye the original's ring is two smooth concentric circles, ours a ragged band at the disc's rim.
+- **2048: checked, applies, not wired.** The same model and material ship (`Weapons2048/electric_visualiser`), but the
+  material is a GXP program: with no handler the generic path draws the disc as a plain alpha-over picture of the bass/treble
+  texture, so the title data names no visualiser (`DetonatorObjects::mine_visualiser: None`) and the loader says so.
+  Omega: ships the same model, same outcome.
 
 ## Still open
 

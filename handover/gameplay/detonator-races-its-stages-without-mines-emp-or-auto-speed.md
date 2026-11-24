@@ -648,3 +648,10 @@ value (the original passes `param_1[0xb22]` there, a `u16` off the race record, 
 label is its Elimination; but `TrackStartup_Read`'s Combat board test `FUN_812b0880(mode, 1)`
 (`track-startup-sound-bank.md`) is unread, so which mode id picks `321Go_2048_Combat.vex` is
 not known. Read `FUN_812b0880` before mapping the board to `Mode::Eliminator` on 2048.
+
+**The visualiser ring is drawn on HD (2026-11-24, `det-mine-visualiser`; `detonator-mine-draw.md`, "The visualiser, wired").** Row (2) above: the
+ring is posed camera-facing and drawn with `electricity.rcsmaterial`'s own program. Published pairs (no picture-lag fit): `pad` 8.82 -> 8.82,
+`mines-ahead` 16.38 -> 16.40, `cannon-volley` 15.32 -> 15.33; middle-right cell MAD 36.79 -> 36.87 and 26.42 -> 26.46: the ring lands on the wrong pixels
+because ours' near mines are not where the picture has them (re-grab the pairs with the fitted lag, then re-measure). The original's ring is two smooth
+circles; ours a ragged band at the disc's rim: the ring's clock `t`, the unread level readers and the roll are the candidates. **Open:** 2048 and Omega (GXP
+program unread, ring not drawn); the original's ring look against ours on a lag-fitted pair.
