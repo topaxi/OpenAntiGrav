@@ -1,8 +1,8 @@
 ---
 status: parked
 titles: [all]
-updated: 2026-11-09
-summary: "Dependency benefits too big for the upgrade lane: wgpu HDR surface colour space, winit 0.31 and wasmtime 51 once stable, a headphone mixer bench rerun"
+updated: 2026-11-24
+summary: "Dependency benefits left for lanes: wasmtime 51 and web-transport-quinn 0.14 ready, zip zstd-rs, cpal 0.19, wgpu 31, winit 0.31, HDR, mixer bench"
 categories: [rendering, audio]
 size: L (40)
 difficulty: medium (40)
@@ -56,13 +56,48 @@ the numbers below is measured unless it says so.
   Size XL (30), difficulty hard (40): the event-loop and window API changed.
   Wait for the stable release; reopen as an `oag-game` and `oag-view` migration
   lane then.
-- **wasmtime 51** is `51.0.0-rc.1`; ours is the exact pin `=50.0.2` on purpose
-  (determinism: fuel, NaN canonicalisation, ABI word). Its `cranelift-codegen`
-  decides whether `sha2` 0.10 (hence `generic-array` 0.14.7 and
-  `crypto-common` 0.1, a second copy beside aes 0.9's `crypto-common` 0.2)
-  leaves the tree. Re-check `cargo tree -d` when 51 is stable; the mod author
-  skill needs a look only if `oag-ext-abi` moves. Size M (45), difficulty
+- **wasmtime 51.0.0 is stable (2026-11-20) and ready to open as a lane.** Ours
+  is the exact pin `=50.0.3` on purpose (determinism: fuel, NaN
+  canonicalisation, ABI word). Gains: faster compile of host-defined functions
+  ([#14517](https://github.com/bytecodealliance/wasmtime/pull/14517)) and the
+  advisories in its notes (none reachable from `oag-modhost`). It does **not**
+  remove the second `sha2`/`generic-array` copy: `cranelift-codegen` 0.138.0
+  still requires `sha2 ^0.10.2`. `MemoryType::new` and `TableType::new` now
+  return `Result`; `crates/modhost/src` calls neither. Measuring command: the
+  extension ground truths and the mod hash tests of `oag-modhost`, plus
+  `cargo tree -d`; the mod author skill needs a look only if `oag-ext-abi`
+  moves. Size M (45), difficulty medium (50).
+- **web-transport-quinn 0.14.0** (2026-11-23) drops its `ring` and `aws-lc-rs`
+  features for `rind`, a pure-Rust crypto provider, adds
+  `rustls-platform-verifier` and `jni` (Android's certificate store), and moves
+  to `web-transport-proto` 0.7; its release notes are empty. `oag-net` selects
+  `features = ["ring"]` (`crates/net/Cargo.toml`) and names `ring` as the
+  provider in `crates/net/src/wt.rs`, so the move is an `oag-net` change, not a
+  lockfile one. Read first: whether a caller can still pick the rustls provider.
+  Measuring command: `cargo nextest run -p oag-net`. Size M (50), difficulty
   medium (50).
+- **zip's `zstd-rs` feature** (zip 9.8.0,
+  [#1329](https://github.com/zip-rs/zip2/pull/1329); `zstd` 0.14.4's
+  `rust-backend`) would let the web build read zstd mod entries and drop the C
+  `zstd-sys` build, which `crates/mod/Cargo.toml` names as the reason zstd is
+  native-only. Check first:
+  `cargo check -p oag-mod --target wasm32-unknown-unknown` with the feature on.
+  Size S (60), difficulty easy (60).
+- **cpal 0.19 xruns** (`CallbackInfo::xrun()`, unreleased) replace the timed
+  late-callback count in `crates/audio/src/output.rs`; 0.18.2 reports
+  PipeWire, CoreAudio and AAudio xruns as `ErrorKind::Xrun` but 0.19 removes
+  that kind again, so wait for 0.19. Size S (60), difficulty easy (60).
+- **wgpu 31 (unreleased)**: `Features::UNRESTRICTED_BYTES_PER_ROW`
+  ([#10619](https://github.com/gfx-rs/wgpu/pull/10619)) retires the 256-byte
+  row padding in `crates/view/src/offscreen.rs`, `crates/mesh/src/capture.rs`
+  and `crates/gpu/src/writes.rs`. The same release makes a live `BufferView`
+  block `unmap` and `destroy`, and `Queue::submit` returns an `Option`. Read
+  every mapped-range holder before the bump. Size M (50), difficulty medium (50).
+- **A toml regression test.** `toml_parser` 1.1.6 fixes a stack overflow on
+  invalid TOML ([toml-rs/toml#1265](https://github.com/toml-rs/toml/pull/1265));
+  the lock has it. A test feeding a mod manifest thousands of unbalanced `[` and
+  `]` would pin it for the mod loader (`crates/mod/src/manifest.rs`). Size XS
+  (70), difficulty easy (80).
 - **A `wgpu::PipelineCache` on disk** (Vulkan pipeline cache, feature
   `PIPELINE_CACHE`; `Device::create_pipeline_cache` is `unsafe`): measured on
   desktop RADV and not built. Mesa's own shader disk cache already takes a Pulse
@@ -78,8 +113,9 @@ the numbers below is measured unless it says so.
 
 1. When the maintainer next has a Deck on the desk, run the headphone mixer
    bench (S) and close that item.
-2. When winit 0.31 and wasmtime 51 reach stable, open the two migration lanes
-   above and drop `num-bigint` and `x11rb` holds where the second copy goes
-   away (`docs/architecture/dependency-upgrades.md`, "Held back").
+2. Open the wasmtime 51 and web-transport-quinn 0.14 lanes now; open the winit
+   0.31 lane when it is stable. The `x11rb` 0.13 copy goes with winit and
+   `arboard` (`docs/architecture/dependency-upgrades.md`, "Held back" and
+   "Benefits ranked").
 3. Decide the HDR direction with the existing HDR target thread before anything
    in `gpu.rs` changes.
