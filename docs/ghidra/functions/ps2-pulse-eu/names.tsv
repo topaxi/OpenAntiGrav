@@ -278,6 +278,7 @@
 0x001545c8	function	Ship_Damage	80	rumble.md
 0x0018a080	function	Options_ReadVibration	68	rumble.md
 0x0017fa68	function	Definition_IsUnlocked	85	definition-unlock.md
+# frontend-pulse.md, 2026-11-24, ps2-pulse-clock
 0x0018ee30	function	GridController_UpdateSelectorStamp	90	frontend-pulse.md
 0x001a7fe8	function	Text_Draw	85	frontend-pulse.md
 0x001a7010	function	Text_ParseValues	80	frontend-pulse.md

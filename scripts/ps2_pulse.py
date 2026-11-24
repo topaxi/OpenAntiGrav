@@ -7,7 +7,7 @@ Two counters run apart on Grid and Cell Selection, as on the PSP:
   (`0x0018ee30`), which also writes the stamp `int(80 + 150 t)` at `*(controller + 0xc0) + 0xfc`; ours' `--menu-picker-seconds` is `phase / 2`;
 - the `pulse="true"` title's ladder, `Text_Draw` (`0x001a7fe8`): the byte `s` at `text + 0xed` steps 15 per tick of the front-end clock
   (`*(0x002e3640) + 0x40`, seconds, times 20), up to 150 and back, the direction in bit 31 of the word at `text + 0xec`, whose low byte is
-  the tick last stepped to. Ours' `--menu-title-seconds` puts ours' step `s / 15` mid-tick.
+  the tick last stepped to. It runs in RAM but no step of it shows in the frame, so the pair script records it and passes nothing.
 
 The objects are found by shape in one RAM read and kept only if they move between two reads.
 """

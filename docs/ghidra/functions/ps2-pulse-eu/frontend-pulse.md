@@ -14,7 +14,7 @@ Grid and Cell Selection pulse two things on **two counters**, as on the PSP:
 | Counter | Where | Law | Ours |
 | --- | --- | --- | --- |
 | `Selector` phase | `float` at `GridController + 0xa0` (one controller per screen) | `+= 2 dt`, wrapped at `2.0` | `--menu-picker-seconds = phase / 2` |
-| title glow ladder | byte `s` at `Text + 0xed`, direction in bit 31 of the word at `Text + 0xec`, the low byte of that word the tick last stepped to | one step of 15 per tick of `*(0x002e3640) + 0x40` times 20, 0 up to 150 and back | `--menu-title-seconds = (s / 15 + 0.5) / 20` |
+| title glow ladder | byte `s` at `Text + 0xed`, direction in bit 31 of the word at `Text + 0xec`, the low byte of that word the tick last stepped to | one step of 15 per tick of `*(0x002e3640) + 0x40` times 20, 0 up to 150 and back | not passed: no step of it reaches the frame (below) |
 
 `*(0x002e3640) + 0x40` is the front end's clock in seconds (read live: it advanced 0.049 s for
 each 0.05 s of wall time over 30 reads on Cell Selection). It is the address
@@ -23,7 +23,9 @@ directly, so on the front end it plays the role of the PSP's `g_fe_anim_clock`
 (`*(0x08b317b0) + 0x40`). The existing name is not changed here.
 
 `scripts/ps2_pulse.py` finds both objects in EE RAM by these shapes and
-`scripts/pcsx2-menu-pair.py` reads them on each side of the GS screenshot.
+`scripts/pcsx2-menu-pair.py` reads them on each side of the GS screenshot. Only the `Selector`'s
+phase goes to ours: the title's ladder runs in RAM, but the original's title box is the same
+picture at every step it read.
 
 ## Names recovered
 
@@ -95,12 +97,12 @@ Selection (`SINGLE RACE`; `+0xa0`/`+0xa4` read 360, 63), `PulseMultiplier` 1.0 o
 held ticks at the ends. The other pulse `Text`s in RAM (four) did not move: the other screens'.
 
 **Confidence 85**: decompile plus a live ladder on two screens following it step for step; the
-draw half after the stamp (the glow pass through `FUN_0020d3e0`) is not dissected.
+draw half after the stamp (the glow pass through `FUN_0020d3e0`) is not dissected, and its
+output does not show in the frame (next section).
 
 **Checked, differs** (not wired): ours' `Text::glow_stamp` steps a 20-step, 1.0 s ladder
-(`crates/ui/src/screen.rs`); the PS2 original's is 22 ticks, 1.1 s. A still pinned with
-`--menu-title-seconds` draws the right step either way; a running clock drifts 0.1 s a cycle.
-The PSP's `Text_Draw` was not re-read for the held ticks.
+(`crates/ui/src/screen.rs`); the PS2 original's is 22 ticks, 1.1 s in RAM. The PSP's
+`Text_Draw` was not re-read for the held ticks.
 
 ## The pair script's placement
 
@@ -111,22 +113,47 @@ phase advanced `2 dt`, the ladder stepped to that frame's tick. A check on one b
 the second read, the phase came out 1.9116 against 1.9117 read and the ladder at 45 rising,
 the byte read.
 
-**Measured effect** (pixels whose grey differs by more than 40, ours rendered with and without the
-two flags against the same `theirs.png`, 1280 x 720; boxes `(x, y, w, h)`: Grid `Selector`
-(140, 370, 140, 115), `GRID 1` (690, 235, 180, 70); Cell `Selector` (280, 200, 130, 120),
-`SINGLE RACE` (690, 95, 330, 60)):
+### The ladder does not reach the picture
 
-| Pair, grab | `Selector` box | title box | whole frame |
-| --- | ---: | ---: | ---: |
-| Grid, grab 1 | 15.49 % -> 6.53 % | 15.82 % -> 5.66 % | 2.40 % -> 2.11 % |
-| Grid, grab 2 | 19.99 % -> 4.82 % | 15.82 % -> 5.75 % | 2.26 % -> 1.86 % |
-| Grid, grab 3 | 12.09 % -> 7.21 % | 15.82 % -> 5.55 % | 2.32 % -> 2.09 % |
-| Cell, grab 1 | 19.18 % -> 4.97 % | 35.08 % -> 10.86 % | 3.09 % -> 2.33 % |
-| Cell, grab 3 | 23.35 % -> 16.72 % | 35.08 % -> 15.46 % | 3.08 % -> 2.55 % |
+Over three grabs per screen the ladder read 105, 90 and 120 on Grid Selection and 135, 105 and
+75 on Cell Selection, and the original's title box (Grid (690, 235, 180, 70), Cell (690, 95, 330,
+60) of the 1280 x 720 pair) is the same picture in all of them: the largest grey difference
+between two grabs is 1 on Grid and 0 on Cell. Ours rendered at each of the 11 steps against one
+Cell grab scores 35.1 % of the title box over 40 grey at `s = 0` falling steadily to 10.9 % at
+`s = 135` and 150: the original reads as ours' dimmest step whatever its ladder holds. So the PS2
+draws `SINGLE RACE` and `GRID 1` with no visible pulse, and ours' bright halo at the ladder's top
+is ours' alone. Which part of `Text_Draw`'s output never lands (the white-to-colour lerp of a
+white text, the glow pass's alpha on a target the PS2 does not composite) is not read.
+**Confidence 80** on "no visible pulse" (three grabs per screen, pixel-identical; one sweep).
+`--menu-title-seconds` is therefore not passed on PS2 (a value that fits by accident is a
+stand-in); ours' title follows the `Selector`'s seconds, as before this page.
+
+## The pair script's placement
+
+The VM runs while PCSX2 takes its screenshot, so `pcsx2-menu-pair.py` reads both counters and the
+clock just before the F8 key and again when the file appears (with the ticker record), and puts
+the frame the ticker head fit picked the same fraction of the way between the two reads: the
+phase advanced `2 dt`, the ladder stepped to that frame's tick. A check on one bracket: placed at
+the second read, the phase came out 1.9116 against 1.9117 read and the ladder at 45 rising,
+the byte read.
+
+**Measured effect** (pixels whose grey differs by more than 40, ours rendered with and without
+`--menu-picker-seconds` against the same `theirs.png`, 1280 x 720; `Selector` boxes `(x, y, w, h)`:
+Grid (140, 370, 140, 115), Cell (280, 200, 130, 120)):
+
+| Pair, grab | `Selector` box | whole frame |
+| --- | ---: | ---: |
+| Grid, grab 1 | 15.49 % -> 6.53 % | 2.40 % -> 2.19 % |
+| Grid, grab 2 | 19.99 % -> 4.82 % | 2.26 % -> 1.87 % |
+| Grid, grab 3 | 12.09 % -> 7.21 % | 2.32 % -> 2.20 % |
+| Cell, grab 1 | 19.18 % -> 4.97 % | 3.09 % -> 2.62 % |
+| Cell, grab 3 | 23.35 % -> 16.72 % | 3.08 % -> 2.45 % |
 
 (Cell grab 2 found no single moving controller with the first version of the finder, which
 checked the stamp inside one 32 MiB read that spans several frames; the finder now re-reads phase
-and stamp back to back.) Every grab moves both boxes by more than the spread between grabs of
-the same flags (title 0.2 points on Grid, 4.6 on Cell; `Selector` 2.4 on Grid). What is left in
-the Cell `Selector` box at the white end is the hex's shape and halo, not its phase: the
-crops show the same tint on both sides.
+and stamp back to back.) The `Selector` box's "before" varies with the original's phase from grab
+to grab (12.1 to 23.4 %); every grab improves by 4.9 to 15.2 points, and the "after" spread on
+Grid is 2.4 points. What is left in the Cell box at the white end (grab 3) is the hex's shape and
+halo, not its phase: the crops show the same tint on both sides. The whole frame moves with the
+title too, because ours' title follows the `Selector`'s seconds (its halo is brightest where the
+`Selector` is cyan).

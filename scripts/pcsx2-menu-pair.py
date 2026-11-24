@@ -16,7 +16,8 @@ Selection, cross again for Cell Selection (Single Race, Moa Therma White, AI dif
 
 The screen is read by eye from the frame: PS2 Pulse's front-end state name has no recovered address, so `original.screen_basis` says so.
 The selector's pulse and the card title's glow ladder are two counters (`scripts/ps2_pulse.py`): both are read from EE RAM on each side of
-the screenshot, placed at the frame the ticker head fit picks, and passed as `--menu-picker-seconds` and `--menu-title-seconds`.
+the screenshot and placed at the frame the ticker head fit picks. The Selector's phase is passed as `--menu-picker-seconds`; the title's ladder
+is recorded but not passed: it runs in RAM and the original's frame shows no step of it (`frontend-pulse.md`, "The ladder does not reach the picture").
 """
 
 import argparse
@@ -197,8 +198,8 @@ def fit_head(args, item, plat, profile, theirs, capture, pdir, extra):
 
 
 def pulse_flags(pair, capture, head):
-    """Ours' `--menu-picker-seconds` and `--menu-title-seconds` for the frame the ticker head fit picked: the counters read before and after the
-    screenshot, placed the same fraction of the way as the fitted head is between its two reads (both move once a frame)."""
+    """Ours' `--menu-picker-seconds` for the frame the ticker head fit picked: the counters read before and after the screenshot, placed the
+    same fraction of the way as the fitted head is between its two reads (both move once a frame). The title's ladder step is recorded only."""
     pulse = capture["pulse"]
     span = capture["head_before"] - capture["head_after"]
     frac = (capture["head_before"] - head) / span if span > 0 else 0.0
@@ -213,12 +214,11 @@ def pulse_flags(pair, capture, head):
             "basis": "not a wall clock: the Selector's phase (float at controller + 0xa0, GridController_UpdateSelectorStamp 0x0018ee30, advanced 2 dt and "
                      "wrapped at 2) read from EE RAM over PINE before and after the screenshot, placed at the fitted ticker head's frame; ours draws phase / 2 s"}
     if "s" in placed:
-        flags += ("--menu-title-seconds", "%.3f" % pp.title_seconds(placed["s"]))
         pair.rec["original"]["title_glow"] = {
             "value": placed["s"], "rising": bool(placed["up"]), "seconds": round(pp.title_seconds(placed["s"]), 3), "text": "0x%08x" % pulse["text"], "reads": reads,
             "basis": "the card title's ladder byte s (Text + 0xed, Text_Draw 0x001a7fe8: 15 a tick of the front-end clock *(0x002e3640)+0x40 times 20, 0 to "
-                     "150 and back) read from EE RAM over PINE before and after the screenshot and stepped to the fitted frame's tick; ours pins its title "
-                     "ladder to step s / 15 (--menu-title-seconds), apart from the Selector's phase"}
+                     "150 and back) read from EE RAM over PINE before and after the screenshot and stepped to the fitted frame's tick; recorded, not passed to "
+                     "ours: the original's title box is the same picture at every step"}
     return flags
 
 
