@@ -134,10 +134,14 @@ impl Session {
     /// `EndRace`'s `RETURN TO GRID` keeps the cell instead
     /// (`Session::return_to_campaign`).
     ///
-    /// **Ours, not the original's**: launching a cell files the campaign's
-    /// shared cursor slot, so the restore inside `open_cell_selection` puts
-    /// the cursor back on the cell raced (when it shows no lock glyph) rather
-    /// than the default cell the Head2Head reading saw
+    /// **Measured, PPSSPP (USA):** a QUIT RACE from a Time Trial and from a
+    /// Single Race cell reopens `Cell Selection` on the cell raced, and so does
+    /// a finished race, because the slot is shared and outlives the race
+    /// (`docs/ui/campaign-screens.md`, "The original's rules, read off the
+    /// running game"). Launching a cell here files the campaign's shared cursor
+    /// slot, so the restore inside `open_cell_selection` does the same (when
+    /// the cell shows no lock glyph). The Head2Head reading above, which saw
+    /// the default cell, was not reproduced and is the one case left open
     /// (`campaign_cursor_ground_truth`).
     ///
     /// **Chosen, not measured:** on a title without a pause screen escape is

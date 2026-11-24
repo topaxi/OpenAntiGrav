@@ -2939,16 +2939,57 @@ glyph filter (a runtime read, G1 and its control seen once each, the decompile's
 
 ### Where the campaign reopens: kept across launches, ours (2026-10-29, `campaign-cursor-memory`)
 
-**Measured, original (PPSSPP, `pulse-psp-usa`, above):** `Cell Selection`'s cursor is one `(x, y)` slot shared by every
-grid, and it survives backing out to `Main Menu` and re-entering `RACE CAMPAIGN` (the screen object outlives the
-campaign). **Not measured:** a reboot (boot 2's walk started from the default, but boot 1 ended on `grid0_3_1`, which
-*is* the default, so the two boots cannot tell "persists" from "resets"; nothing in the original is known to write the
-slot to the save), a race (the 2026-10-08 QUIT RACE reading, `Session::quit_campaign_race`, saw the Head2Head cell's
-grid land on its **default** cell, one cell on one grid), and `Grid Selection`'s tile index across leaving the
-campaign. Decompile, 2026-10-29 (`/pulse/BOOT-psp-pulse-usa.BIN`, confidence 40): `GridSelection_OnEnter` (`0x088de0f0`)
-calls `GridSelection_PopulateGrids` (`0x088de380`), which writes the current tile slot (`+0x114`) to 0 and the selection
-sentinel (`+0xdc`) to -1 on every entry and passes `+0xe0` and `FUN_088de27c`'s result as the page; whether `+0xe0`
-survives a leave was not traced, so the original may well reopen `Grid Selection` on the first page.
+**Measured, original (PPSSPP, `pulse-psp-usa`, "Where the cursor lives" above):** `Cell Selection`'s cursor is one `(x, y)`
+slot shared by every grid, and it survives backing out to `Main Menu` and re-entering `RACE CAMPAIGN` (the screen object
+outlives the campaign).
+
+#### The original's rules, read off the running game (2026-11-24, `campaign-cursor-memory`)
+
+PPSSPP v1.20.4 (SDL, software renderer, muted), `pulse-psp-usa.chd`, a private copy of the memory stick, four boots (two reboots between them). The
+cursor is read as raw state, not only from a frame: a breakpoint at `CellSelection_Update` (`0x088d6430`, screen object
+`a0` = `0x08d73170` on every read, the selected cell pointer at `+0xdc`, its name through `cell+0x74`) and at
+`GridSelection_Update` (`0x088dec24`, screen object `0x08d357e0`), each frame read alongside.
+
+**Falsifiers, written before the first capture.** Two earlier readings could not decide because the carried value was
+also the default. Every walk here launches from a slot that is not the grid's first-unlocked default (`3_1`) and shows no
+lock glyph, so "persists" and "resets" predict different cells.
+
+| Question | Walk | Read | Falsifies |
+| --- | --- | --- | --- |
+| (a) a race and back, QUIT RACE | `grid0_3_2` (Time Trial), launch, pause, QUIT RACE | `Cell Selection` on `grid0_3_2`, same screen object | "resets" (default `3_1`) |
+| (a) the same, another mode | `grid0_2_3` (Single Race, Metropia White), QUIT RACE | `grid0_2_3`, same object | "resets", and "Time Trial only" |
+| (a) a finished race | `grid0_3_2`, then `grid1_3_2`, then `grid1_3_2` again, each finished and walked through `EndRace Results`, `Rewards`, `Race End Save`, `Menu`, `Kill Game` | `Cell Selection` on the raced cell each time (gold medal drawn), same object | "resets" |
+| (b) leaving to `Main Menu` | slot `3_2` on `grid0`, back out to `Main Menu`, `RACE CAMPAIGN`, enter `grid1` | `grid1_3_2` (boot 2; the 2026-10-02 rows A and R2 are the same walk on a fresh profile) | "default" (`grid1_3_1`) |
+| Grid Selection, leaving | tile `Grid 6` (page 2 of 4), back to `Main Menu`, `RACE CAMPAIGN` | opens on **page 2 with Grid 6 highlighted**, twice (boots 1 and 2); screen object unchanged | "resets to Grid 1 page 1" |
+| (c) a reboot | cursor on `grid1_3_2`, Grid Selection on `Grid 2`, a profile write after the last move (`PROFILE.BIN` mtime advanced at the finish of each last race, 02:04:35 and 02:09:25), PPSSPP stopped by pid, restarted | Grid Selection on `Grid 1`, `Cell Selection` on `grid0_3_1` (the default), both boots; the gold on `3_2` and `grid1_3_2` persisted, the cursor did not | "persists" |
+
+**Result.** (a) The cursor survives a race and back, QUIT RACE and a finished race alike, in the two modes tried.
+(b) Re-confirmed. Grid Selection's grid and page survive leaving the campaign. (c) **Neither the cell slot nor the grid
+survives a reboot**: the game does write the profile after the cursor sat on a non-default cell, and the next boot
+opens on `Grid 1` / `grid0_3_1`. `PROFILE.BIN` differs in 78,900 of its 79,243 bytes between two writes (it is rewritten
+scrambled), so the bytes cannot be diffed for a slot field; the reboot read is the test.
+
+The grid screen's fields, from the same reads: `+0xdc` the selected grid index (0..15, `Grid 6` is 5), `+0xe0` the page
+(0..3; `Grid 6` is page 1), `+0x114` a tile counter that reads 0 right after a re-entry while the highlight is on the kept
+grid, so it is not the highlight. The 2026-10-29 decompile's reading of `+0xdc` as a sentinel written `-1` on every
+entry does not match the live value (5 on re-entry), and `+0xe0` does survive a leave. A grid entered by `confirm` is the
+grid the cursor reopens on after the race (`Grid 2` after racing `grid1`, read in `+0xdc`).
+
+**Not reproduced.** The 2026-10-08 reading, a QUIT RACE from a Head2Head cell (`grid4_5_2`) that landed on the grid's
+default cell, was not repeated: that grid needs far more progress than the profile had, and its launch cell was not
+recorded, so a mode dependence (Head2Head only) is not excluded. Speed Lap, Zone and Tournament cells were not walked.
+
+**Method caveats.** The finished races armed the original's Autopilot pickup and wrote `g_race_laps` to 1
+(`scripts/psp-postrace.py`'s arming) to reach `EndRace` quickly: this is a path test, not a physics measurement. `grid1`
+was opened by writing its `PI_Grid` `Locked` byte (`0x08f609e0 + 0xa0`, the 2026-10-02 poke) before the first walk; after
+the reboot its byte read 1 again and `grid1` still opened, so the test the screen applies is not that byte alone (not traced). Confidence **85** for (a), (b) and the Grid Selection grid
+and page (RAM and frame agree, repeated), **80** for (c) (two reboots, the write confirmed by mtime, one profile and
+one binary), **60** for the field meanings above, **40** for Head2Head.
+
+**Ours versus the original.** Ours already matches (a), (b) and the Grid Selection rule. It differs on (c) alone:
+`[[campaign_cursor]]` keeps the cell and the grid across a relaunch. That is the maintainer's ask (below) and our product
+rule (progress persists with no save slots), so it stays: the trade-off is that a player who wants the original's fresh
+`Grid 1` on boot gets the grid they left instead. It throws no player state away, which a reset would.
 
 **Ours, not the original's** (maintainer ask, 2026-10-29: "store the selected grid and cell in campaigns, so when
 navigating through it, we end up quickly where we left off"): the same slot **and** the grid `Grid Selection` was last
@@ -2982,10 +3023,11 @@ on persist per campaign in `records.toml`, so the rule holds after a relaunch to
   right after a save sees it. Order: `records::tests::background_saves_land_in_order_and_none_is_lost`; the
   results save landing beside the cursor: `campaign_cursor_ground_truth::the_cell_raced_is_the_one_the_campaign_reopens_on`.
 - Back from a race: `RETURN TO GRID` selects the cell raced (`reopen_cell_selection`, HD's measured-by-choice keep).
-  Pulse's pause-menu QUIT RACE was read once to land on the grid's default cell (Head2Head `grid4_5_2`, 2026-10-08), but
-  launching a cell files the shared slot and `open_cell_selection` restores it, so ours lands on the cell raced
-  (`campaign_cursor_ground_truth::the_cell_raced_is_the_one_the_campaign_reopens_on`, a real launch then `escape`).
-  **Ours, not the original's**; this was already so before this lane (the cursor was filed at launch in memory).
+  Pulse's pause-menu QUIT RACE and a finished race both land on the cell raced (measured 2026-11-24, "The original's
+  rules, read off the running game"; the one earlier reading to the grid's default cell, Head2Head `grid4_5_2`,
+  2026-10-08, was not reproduced). Launching a cell files the shared slot and `open_cell_selection` restores it, so ours
+  lands on the cell raced too (`campaign_cursor_ground_truth::the_cell_raced_is_the_one_the_campaign_reopens_on`, a real
+  launch then `escape`). **Matches the original** on the two modes walked.
 - Per title: **Pulse (PSP, PS2 inherits), HD/Fury, Omega, 2048** share `CampaignStage`, so all four are wired.
   Pointer/touch: remembering sets the same model selection a hover does; a click on the remembered
   hexagon confirms, a click elsewhere moves (`campaign_pointer_ground_truth::pulse_a_remembered_cell_answers_a_click_like_a_picked_one`).
