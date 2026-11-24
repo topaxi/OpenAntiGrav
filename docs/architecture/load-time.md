@@ -580,7 +580,7 @@ enough of that (a stop bar of about 10 % of the launch)?
 | of it `process_overrides` (override substitution, compaction, `revalidate`) | 15.43 % | 15.43 % |
 | of it `spv::write_vec` | 9.35 % | 9.30 % |
 | `create_shader_module` (WGSL parse and validate) | 5.47 % | 5.59 % |
-| Launch total, `perf stat -e instructions:u`, three runs | 21.82, 21.82, 21.82 G | |
+| Launch total, `perf stat -e instructions:u`, three runs (the frame-pointer build, hence above the Fourth round's 21.13 G) | 21.82, 21.82, 21.82 G | |
 
 By caller (run 1, stacks walked up to the first `oag_` frame): `compile_stage` 25.0 % from
 the mesh scope (`mesh_render::build_with`, `foliage`, `stamp`, `prepass`) and 0.5 % from
@@ -595,9 +595,11 @@ setting, and about twenty 0/1 flags decided by the model (`mesh_render::build_wi
 `texlod::constants`). The build has no disc, and naga 30's SPIR-V writer cannot emit
 specialization constants (`back/spv/block.rs:724` and `writer.rs:2772` return
 `Error::Override`), so there is no build-time blob to hand over for any mesh stage. What
-build-time SPIR-V can reach is the non-mesh 1.6 % (0.5 + 1.1). A race-spawning module
-runs far more frames per compiled pipeline than this 400-tick launch, so its share is
-smaller still. Below the bar: nothing was built.
+build-time SPIR-V can reach is the non-mesh 1.6 % (0.5 + 1.1), about 0.35 G per race
+launch, a fixed amount whatever the test does after. The cheapest race launch a module can
+make, `--race --screenshot --ticks 1` (same build and cache, three runs, load 47), is 11.94,
+11.94, 11.94 G, so no race-spawning module can save more than about 2.9 %. Below the bar:
+nothing was built.
 
 **Traps recorded for any later passthrough work** (`wgpu-hal` 30.0.2, `wgpu-core` 30.0.2):
 
@@ -636,7 +638,14 @@ naga's build-time output", so neither was built):
    on a warm launch. A cache read from disk is input the driver trusts, so it needs the
    recovery a passthrough path would need anyway.
 
-Neither has a device-lost fallback to lean on: the native build registers no device-lost
+3. Unmeasured, and with no `unsafe`: resolve the overrides once per distinct key with
+   `naga::back::pipeline_constants::process_overrides` and hand `wgpu` the resulting IR
+   (`ShaderSource::Naga`, behind `wgpu`'s `naga-ir` feature). A module with one entry point
+   and no overrides skips the compaction and revalidation (`pipeline_constants.rs` around
+   line 93), but `wgpu-core` still validates each module and the SPIR-V write still runs per
+   pipeline, so the gain is some part of `process_overrides`' 15.4 %, not measured.
+
+Neither of the first two has a device-lost fallback to lean on: the native build registers no device-lost
 callback (only the web build does, `oag-game`'s `app/gpu.rs`).
 
 Reproducing: build `oag-game` with `RUSTFLAGS=-Cforce-frame-pointers=yes` into a separate

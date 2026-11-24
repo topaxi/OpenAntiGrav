@@ -28,14 +28,17 @@ reach 1.6 %.
   2. A disk cache of those blobs keyed on naga's version, shader text, entry
      point, constants, layout and the device's writer options. Ceiling about
      31 % on a warm launch.
-  Either must mirror `wgpu-hal`'s private, device-derived writer options and its
+  3. Unmeasured, safe: resolve overrides once per distinct key and hand wgpu the
+     IR (`ShaderSource::Naga`, `naga-ir` feature); recovers some of
+     `process_overrides`' 15.4 %, no `unsafe` (the Fifth round, item 3).
+  Designs 1 and 2 must mirror `wgpu-hal`'s private, device-derived writer options and its
   per-layout binding renumbering, and must never pass a module with overrides
   through (constants are dropped silently). The traps, with `path:line`, are in
   the "Fifth round" section.
 - **No native device-lost handler.** Only the web build registers
-  `set_device_lost_callback` (`oag-game`'s `app/gpu.rs`), and the renderer setting
-  cannot leave Vulkan on Linux, Android or the Deck. A lost device in a native
-  build today is not reported to the player. This is a player-safety gap with or
+  `set_device_lost_callback` and `on_uncaptured_error` (`oag-game`'s `app/gpu.rs`,
+  `mod web`), and the renderer setting cannot leave Vulkan on Linux, Android or the
+  Deck. What a player sees when a native device is lost is not measured. This is a player-safety gap with or
   without passthrough; the brief's recovery step (kill switch, crash-loop marker,
   device-lost callback) was not built because its trigger, passthrough, was not.
 

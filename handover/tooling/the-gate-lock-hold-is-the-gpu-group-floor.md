@@ -54,6 +54,10 @@ threads).
 - A model builds only the blended twins, classes and stamp pairs its draws can pick (`mesh_render/reach.rs`): race launch 24.12 -> 21.13 G user instructions (-12.4 %), 158 -> 104 pipelines, `photo_mode_ground_truth` -9 %.
 - Measured and not changed: a disk pipeline cache adds about 1 % over mesa's own shader cache (`docs/architecture/load-time.md`, "Third round"), one shader
   module per stage gains 1.5 to 2 % of a race launch.
+- Measured and not built: build-time SPIR-V passthrough reaches 1.6 % of a race launch,
+  because the mesh pipelines' override constants are run-time data
+  (`docs/architecture/load-time.md`, "Fifth round"; run-time designs in
+  `shader-passthrough-cannot-reach-the-mesh-overrides.md`).
 
 ## Next Steps
 
