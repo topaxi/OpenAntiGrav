@@ -662,7 +662,11 @@ and 2.000 and 2.033 (lit), the mean RGB of the top-left screen quarter goes from
 `(9.4, 9.5, 33.6)` and `(9.1, 8.0, 27.3)`, the top-right quarter from `(13.5, 4.5, 9.6)` to
 `(10.9, 6.0, 23.4)`: a wash well beyond a `D = 2.7` light's reach and beyond the `D = 70` one's colour of
 `0.03`. Ours, with the light wired, leaves the same quarter at `(13.5, 8.5, 13.2)` on every flash tick.
-Its source (a screen-space wash tied to the flash, or the bloom of a brighter core) is **unread**, below 50.
+Its source is **not read** (below 50), but narrowed (`det-muzzle-flash-re`, second pass):
+
+- **It is the flash, not the music.** Four unfired grabs from the same restored state (lap 2.167 to 2.233, held bass bands up to 0.7) leave the top-left quarter at `(7.2..8.0, 2.7..3.1, 3.4..4.5)`; only the fired frames carry the wash. (The fired grab at 2.000 had held bass bands of 0.85 to 0.97, above any unfired one, so a band threshold is not excluded outright; 0.7 gave nothing.)
+- **It is the scenery that lights, not a screen wash.** The difference of two original frames (1.933 against 2.000) shows the overhead girders and side structures going blue, shape by shape, the red track edge strips unchanged; a uniform overlay or a bloom would not follow the geometry.
+- **Not the wired lights in ours.** The only candidate in the visible list with a range past the craft is the round's `D = 70` light, whose colour `(0, 0.003, 0.03)` reaches at most `+8` of 255 in `lit_sum` and the wash is `+27`. Ours with that colour multiplied by ten leaves the quarter at `(13.5, 8.5, 13.2)`: ours' scenery draws (`shade.wesl`, the `spu` term inside the material classes that take it) are not receivers of a weapon light at all. So two things are unread: which scenery materials the original lights through its `SVC1` twins, and the gain between a record's colour and the picture.
 
 **`V_Offset`.** `PulseBullet_Construct` (`0x001235a8`) makes no `Material_BindInstanceParamPointer`
 (`0x00677018`) call and no hash-name call (`0x00676ff8`), so the flash material has no game-side `V_Offset`
