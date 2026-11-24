@@ -582,10 +582,9 @@ mod ring_tests {
     #[test]
     fn a_title_that_names_no_visualiser_says_so_in_the_loader_report() {
         assert_eq!(unread_ring_line(&oag_hd::race::DETONATOR_OBJECTS), None);
-        for objects in [&oag_2048::race::DETONATOR_OBJECTS] {
-            assert!(objects.mine_visualiser.is_none());
-            let line = unread_ring_line(objects).expect("a report line");
-            assert!(line.contains("electric_visualiser") && line.contains("not drawn"));
-        }
+        let objects = &oag_2048::race::DETONATOR_OBJECTS;
+        assert!(objects.mine_visualiser.is_none());
+        let line = unread_ring_line(objects).expect("a report line");
+        assert!(line.contains("electric_visualiser") && line.contains("not drawn"));
     }
 }
