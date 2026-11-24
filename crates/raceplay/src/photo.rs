@@ -260,7 +260,9 @@ impl LensShift {
 
 /// The zoom ring's pulse a speed blur of `effects` holds, with the ring's numbers, or `None` with
 /// the row at zero. `age` is the mode's own tick: the ring's history advances once per tick of
-/// it, and the race is not stepping.
+/// it, and the race is not stepping. The scene stands still, so each tick's history draw is
+/// repeated until it has settled (`oag_post::hd_zoom::SETTLE_PASSES`): a shot sees the history
+/// the preview of the same scene has, however few frames the mode drew before it.
 fn speed_blur_pulse(
     effects: &Effects,
     tuning: oag_post::hd_zoom::Tuning,
@@ -278,6 +280,7 @@ fn speed_blur_pulse(
                 size: [1.0, 1.0],
                 // Far from any tick the race counts.
                 tick: u64::MAX / 2 + age,
+                settle: oag_post::hd_zoom::SETTLE_PASSES,
             },
         )
     })
@@ -290,8 +293,6 @@ fn speed_blur_pulse(
 pub struct FixedPicture {
     effects: Effects,
     zoom: Option<oag_post::hd_zoom::Tuning>,
-    /// The ring's tick, as the mode's age is.
-    age: u64,
     /// The eye moved across the lens for one frame of an accumulated shot.
     shift: Option<LensShift>,
 }
@@ -304,7 +305,6 @@ impl FixedPicture {
         Self {
             effects,
             zoom: zoom.map(crate::zoom::tuning),
-            age: 0,
             shift: None,
         }
     }
@@ -324,7 +324,7 @@ impl FixedPicture {
     /// The speed blur's ring and pulse, when the row is above zero.
     #[must_use]
     pub fn speed_blur(&self) -> Option<(oag_post::hd_zoom::Tuning, oag_post::hd_zoom::Frame)> {
-        speed_blur_pulse(&self.effects, self.zoom?, self.age)
+        speed_blur_pulse(&self.effects, self.zoom?, 0)
     }
 }
 
@@ -1041,16 +1041,6 @@ impl Race {
             photo.shift = shift;
         } else if let Some(picture) = self.view.picture.as_mut() {
             picture.shift = shift;
-        }
-    }
-
-    /// Moves the speed blur's ring to its tick `age` (the mode's own tick count): the history
-    /// steps once per tick it is drawn under, as it does in the mode with the race standing still
-    /// ([`speed_blur_pulse`]). A frame drawn without photo mode open, with a saved shot's
-    /// controls ([`FixedPicture`]).
-    pub fn picture_set_age(&mut self, age: u64) {
-        if let Some(picture) = self.view.picture.as_mut() {
-            picture.age = age;
         }
     }
 

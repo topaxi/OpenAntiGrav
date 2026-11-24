@@ -123,6 +123,7 @@ fn the_ring_is_the_live_cpu_mesh() {
         damage: 0.0,
         size: [1.0, 1.0],
         tick: 1,
+        settle: 0,
     };
     let mesh = ring(&tuning(), &frame);
     assert_eq!(mesh.len(), 96);
@@ -151,6 +152,7 @@ fn the_damage_tint_is_the_live_one() {
             damage: p,
             size: [1.0; 2],
             tick: 1,
+            settle: 0,
         };
         let outer = ring(&tuning(), &frame)[1].colour;
         for k in 0..3 {
@@ -302,6 +304,7 @@ fn a_boost_brightens_the_rim_and_not_the_centre() {
         damage: 0.0,
         size: [1.0, 1.0],
         tick: 1,
+        settle: 0,
     };
     let quiet = Frame {
         boost: 0.0,
@@ -330,6 +333,7 @@ fn a_quiet_pulse_changes_nothing() {
         damage: 0.0,
         size: [1.0, 1.0],
         tick: 1,
+        settle: 0,
     };
     let (Some(off), Some(on)) = (resolve(&[None]), resolve(&[Some(quiet)])) else {
         eprintln!("no GPU adapter: skipping");

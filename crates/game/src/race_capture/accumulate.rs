@@ -18,11 +18,6 @@ use super::tick::advance_one_tick;
 use super::*;
 use crate::photo::average::Sum;
 
-/// Frames the speed blur's ring is drawn at the shot's moment before the frames that are kept:
-/// the history it feeds back (a weight of at most `0.25` a frame, `oag_post::hd_zoom`) has all
-/// but settled by then. The paused mode has drawn it for as long as the person stayed in it.
-const SETTLE_FRAMES: u64 = 40;
-
 /// A shot to draw as the frames it was made of.
 pub(super) struct Shot {
     plan: Plan,
@@ -276,31 +271,6 @@ impl Rig<'_> {
         }
     }
 
-    /// Draws the speed blur's ring for [`SETTLE_FRAMES`] ticks of its own at the moment the race
-    /// stands at, so the history it feeds back is what the paused mode's had, then leaves the
-    /// ring on the tick after: the frames that follow add one more step of it, as a
-    /// shot's frames do. The frames keep that tick: live photo mode's shot runs with the mode's
-    /// own tick standing still (`session::photo`'s `photo_wants_frames` returns before the mode
-    /// steps), so the ring's history is not stepped between its frames. Does nothing without a
-    /// speed blur.
-    pub(super) fn settle_zoom(&mut self) {
-        let blur = self
-            .options
-            .shot
-            .picture
-            .as_ref()
-            .is_some_and(|picture| picture.speed_blur > 0);
-        if !blur || !self.race.has_fixed_picture() {
-            return;
-        }
-        self.race.set_draw_alpha(1.0);
-        for age in 0..SETTLE_FRAMES {
-            self.race.picture_set_age(age);
-            self.draw();
-        }
-        self.race.picture_set_age(SETTLE_FRAMES);
-    }
-
     /// Draws each frame of `shot` as the race passes its tick, and averages them.
     pub(super) fn run(&mut self, shot: &Shot) -> Result<Averaged> {
         let plan = &shot.plan;
@@ -317,9 +287,6 @@ impl Rig<'_> {
                 }
                 Step::Frame(index) => {
                     let frame = plan.frame(index);
-                    if index == 0 {
-                        self.settle_zoom();
-                    }
                     self.race.photo_set_shift(frame.lens);
                     self.race.set_draw_alpha(frame.alpha);
                     stats = Some(self.draw());
