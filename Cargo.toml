@@ -363,11 +363,14 @@ incremental = false
 opt-level = 2
 debug = false
 
-# The third-party decoders the ground-truth suite spends its CPU in. Their
-# `debug_assert!`s and overflow checks are the dependency's own contract with its
-# own tests, not ours, and in a loop that runs billions of times they cost a
-# fifth or more of it (docs/architecture/workspace-layout.md, "Dependency
-# decoders without debug assertions"). Our own crates keep both.
+# The third-party decoders and resamplers the ground-truth suite spends its CPU in.
+# Their `debug_assert!`s and overflow checks are each dependency's own contract with
+# its own tests, not ours, and `release` and `dist` never had them: a test now
+# runs the arithmetic a player runs. Measured per test in user instructions
+# (docs/architecture/workspace-layout.md, "Dependency decoders without debug
+# assertions"): the AV1 intro decode -82 %, a resampler test -74 %, a GXP corpus
+# walk -28 %, ATRAC9 and LZMA tests about -11 %. A crate that moved nothing
+# (`png`, `fdeflate`, `crc`, `bitreader`) is not listed. Our own crates keep both.
 [profile.dev.package.atrac9dec]
 debug-assertions = false
 overflow-checks = false
@@ -390,18 +393,6 @@ overflow-checks = false
 debug-assertions = false
 overflow-checks = false
 [profile.dev.package.rubato]
-debug-assertions = false
-overflow-checks = false
-[profile.dev.package.crc]
-debug-assertions = false
-overflow-checks = false
-[profile.dev.package.bitreader]
-debug-assertions = false
-overflow-checks = false
-[profile.dev.package.fdeflate]
-debug-assertions = false
-overflow-checks = false
-[profile.dev.package.png]
 debug-assertions = false
 overflow-checks = false
 
