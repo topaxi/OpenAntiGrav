@@ -1211,6 +1211,7 @@ impl Renderer {
             draw_quads(&mut pass, drawn..total);
         };
         let size = (viewport.2 as u32, viewport.3 as u32);
+        let picture = picture_rect(size, self.space.display_aspect);
         if glowing && let Some(glow) = self.glow.as_mut() {
             let scratch = glow.scratch(device, self.target_format, size).clone();
             record(
@@ -1232,7 +1233,18 @@ impl Renderer {
                 viewport: size,
             };
             match glow.ps2.as_ref().filter(|_| ps2_mask) {
-                Some(ps2) => ps2.prepare(device, queue, encoder, frame),
+                // The PS2's composite is a fraction of the picture, so the chain reads and
+                // writes the letterboxed picture, not the bars around it.
+                Some(ps2) => ps2.prepare(
+                    device,
+                    queue,
+                    encoder,
+                    oag_post::bloom::Frame {
+                        origin: picture.0,
+                        viewport: picture.1,
+                        ..frame
+                    },
+                ),
                 None => glow.bloom.prepare(device, queue, encoder, frame),
             }
         }
@@ -1240,11 +1252,30 @@ impl Renderer {
         if glowing && let Some(glow) = self.glow.as_ref() {
             let origin = (viewport.0, viewport.1);
             match glow.ps2.as_ref().filter(|_| ps2_mask) {
-                Some(ps2) => ps2.composite(encoder, view, origin, size),
+                Some(ps2) => {
+                    let at = (origin.0 + picture.0.0, origin.1 + picture.0.1);
+                    ps2.composite(encoder, view, at, picture.1);
+                }
                 None => glow.bloom.composite(encoder, view, origin, size),
             }
         }
     }
+}
+
+/// Where the screen's picture sits inside a `size` viewport: its top-left corner and its size, in
+/// pixels, as `letterbox_in` fits a display of `display_aspect` into it.
+#[must_use]
+fn picture_rect(size: (u32, u32), display_aspect: f32) -> ((f32, f32), (u32, u32)) {
+    let [sx, sy] = letterbox_in(size, display_aspect);
+    let picture = (
+        ((size.0 as f32 * sx).round() as u32).clamp(1, size.0.max(1)),
+        ((size.1 as f32 * sy).round() as u32).clamp(1, size.1.max(1)),
+    );
+    let origin = (
+        size.0.saturating_sub(picture.0) as f32 / 2.0,
+        size.1.saturating_sub(picture.1) as f32 / 2.0,
+    );
+    ((origin.0.floor(), origin.1.floor()), picture)
 }
 
 /// Scale that fits 480x272 inside `target` without distorting it.

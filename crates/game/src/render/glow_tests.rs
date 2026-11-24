@@ -317,7 +317,12 @@ fn a_texel_stamp_blooms_where_the_sprite_is_opaque_and_nowhere_else() {
     );
 }
 
-/// A texel stamp after a draw that is not a sprite stamps nothing, so nothing blooms.
+/// Where the fill of the test below sits: its glow, were it stamped, reaches a few pixels left of its
+/// edge, which no stamp of the sprite's reaches.
+const FILL: [f32; 4] = [260.0, 100.0, 40.0, 40.0];
+
+/// A texel stamp after a draw that is not a sprite stamps nothing, so nothing blooms: neither the
+/// earlier sprite's quads (a `last_sprite` that was not cleared) nor the fill's.
 #[test]
 fn a_texel_stamp_after_a_fill_blooms_nothing() {
     let list = [
@@ -327,7 +332,7 @@ fn a_texel_stamp_after_a_fill_blooms_nothing() {
             color: [1.0, 1.0, 1.0, 1.0],
         },
         Draw::Fill {
-            rect: [300.0, 100.0, 40.0, 40.0],
+            rect: FILL,
             color: [1.0, 1.0, 1.0, 1.0],
         },
         Draw::GlowTexel,
@@ -337,9 +342,20 @@ fn a_texel_stamp_after_a_fill_blooms_nothing() {
         return;
     };
     assert_eq!(
-        red(&frame, 190, 120),
+        red(&frame, 195, 120),
         0,
         "the sprite was not the draw before the stamp"
     );
-    assert_eq!(red(&frame, 290, 120), 0, "nor was the fill a sprite");
+    assert_eq!(red(&frame, 256, 120), 0, "nor was the fill a sprite");
+}
+
+/// The PS2 chain's picture is the letterboxed one: on the display's own aspect it is the whole
+/// viewport, and in a taller window it is the centred band the screen is fitted into, so the
+/// composite's `5/640` and `5/448` are fractions of the picture and not of the bars around it.
+#[test]
+fn the_ps2_chain_reads_the_letterboxed_picture() {
+    let wide = 16.0 / 9.0;
+    assert_eq!(picture_rect((1280, 720), wide), ((0.0, 0.0), (1280, 720)));
+    assert_eq!(picture_rect((1280, 960), wide), ((0.0, 120.0), (1280, 720)));
+    assert_eq!(picture_rect((1600, 720), wide), ((160.0, 0.0), (1280, 720)));
 }

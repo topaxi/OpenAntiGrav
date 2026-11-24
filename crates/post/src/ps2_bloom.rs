@@ -91,6 +91,9 @@ struct Lane {
     #[expect(dead_code, reason = "held so the groups' bindings stay valid")]
     fixed: [wgpu::Buffer; 3],
     written: std::cell::Cell<Option<Constants>>,
+    /// The downsample's group over the scene view it last read; the lane owns `constants_down`,
+    /// so the scene view is the only thing that can change under it.
+    down_group: super::group_cache::ViewGroup,
 }
 
 /// The three passes and their lanes of two buffers.
@@ -178,6 +181,7 @@ impl Lane {
             constants_down,
             fixed: [constants_x, constants_y, constants_composite],
             written: std::cell::Cell::new(Some(whole)),
+            down_group: super::group_cache::ViewGroup::default(),
         })
     }
 }
@@ -415,14 +419,16 @@ impl Ps2Bloom {
             queue.write_buffer(&lane.constants_down, 0, bytemuck::bytes_of(&wanted));
             lane.written.set(Some(wanted));
         }
-        let down_group = scene_group(
-            device,
-            &self.layout,
-            &self.sampler,
-            "ps2 bloom down",
-            scene,
-            &lane.constants_down,
-        );
+        let down_group = lane.down_group.get(scene, || {
+            scene_group(
+                device,
+                &self.layout,
+                &self.sampler,
+                "ps2 bloom down",
+                scene,
+                &lane.constants_down,
+            )
+        });
         let mut pass = |label: &'static str,
                         pipeline: &wgpu::RenderPipeline,
                         group: &wgpu::BindGroup,
