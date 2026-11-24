@@ -5219,8 +5219,10 @@ Conditional breakpoint `[a0+0x2c] & 0x200` on `0x088a3e8c` (PPSSPP 1.20.4, softw
   `campaign_cursor_ground_truth::the_selector_pulse_resumes_where_the_screen_was_left` (`--drive` reports `screen.pulse_ms`; it
   fails with the wiring dropped). `stamp()` rounds where the original truncates (`trunc.w.s` at `0x088a4074`/`0x088a40b4`),
   a one-step difference inside the measurement.
-- **PS2**: `0x001905d8` is the PS2 twin of `0x088a5700`; the PS2 twin of `0x088a3e8c` was not located (checked: not checkable
-  from the `pulse-ps2-hex-align` page alone). **Not checkable against the other titles here**: this is Pulse PSP's widget code; Pure,
+- **PS2**: `0x001905d8` is the PS2 twin of `0x088a5700`, and `0x0018ee30` the twin of `0x088a3e8c` (2026-11-24, `ps2-pulse-clock`):
+  phase at `GridController + 0xa0`, the stamp at `Selector + 0xfc`, read live on PCSX2 on Grid and Cell Selection
+  ([`frontend-pulse.md`](../ghidra/functions/ps2-pulse-eu/frontend-pulse.md), confidence 90). The title's ladder is `Text_Draw`'s (`0x001a7fe8`)
+  byte at `Text + 0xed`, stepped off the front end's clock `*(0x002e3640) + 0x40`; it runs 22 ticks a cycle (1.1 s) on the PS2, where ours runs 20 (1.0 s), and no step of it shows in the PS2 frame (three grabs per screen, pixel-identical title). **Not checkable against the other titles here**: this is Pulse PSP's widget code; Pure,
   HD, 2048 and Omega front ends were not run.
 
 #### The halo is the front end's bloom, not a `SelectorGlow` image (2026-10-29, `pulse-selector-glow`)

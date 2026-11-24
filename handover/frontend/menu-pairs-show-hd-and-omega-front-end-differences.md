@@ -1,7 +1,7 @@
 ---
 status: ready-to-wire
 titles: [hd, omega, 2048, pulse, pure]
-updated: 2026-11-23
+updated: 2026-11-24
 categories: [frontend, rendering]
 summary: "Menu pairs on the compare page, ranked differences; Omega chooser, 2048 card art; Pulse list screens and pause now pairs"
 difficulty: medium (30)
@@ -131,4 +131,4 @@ Gaps (original kept, no pair): none on Pulse or Pure. Pure's `Main Menu` and pau
 8. Pulse PS2 menu pairs (2026-11-23, `ps2-ship-select`, `ps2-grid-cell`): Ship Select, Grid Selection and Cell Selection carry the original's footer ticker message and tag (`docs/tools/compare-page.md`, "PS2 menu pairs: the footer
    ticker and the tag are read from PCSX2 RAM", and "`menu-grid` and `menu-cell` re-made"); footer box >40-grey share 17 % to 8.6-9.0 % on the two campaign pages, whole frame 3.3-3.5 % to 2.8-3.0 %; translucent fills under an outlined atlas were drawn twice
    (the largest region on both pairs, 31-50 % of the pixels over 40 grey) and are drawn once. Open: the PS2 ticker widget's own fields (item index, weight) are not recovered, so only the six tips are pinnable and a frame with a statistic message (menu time, favourite music) is not grabbed;
-   the PS2 front end's pulse clock (ours is drawn at 0, the states keep their phase: the title's glow and the selector want different phases, 0.35 points of whole-frame >40 grey between them); the `RACE CAMPAIGN` header face (bold dark in the original); whether the PS2 title text glows.
+   ~~the PS2 front end's pulse clock~~ (closed 2026-11-24, `ps2-pulse-clock`: the `Selector` phase is read from EE RAM at the grab and passed, `docs/ghidra/functions/ps2-pulse-eu/frontend-pulse.md`); the PS2 title shows no pulse (its `Text_Draw` ladder runs in RAM, the frame never changes), so ours' title halo on PS2 Grid and Cell Selection is ours' alone and should be gated off on PS2 (a crate change, not made); the `RACE CAMPAIGN` header face (bold dark in the original). The committed `menu-grid`/`menu-cell` pairs need re-grabbing with the new script.
