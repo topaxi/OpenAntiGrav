@@ -5473,3 +5473,31 @@ buffer's glow-mask byte over the title's glyph box (EDRAM, CPU stopped) and ours
 so the counter is its own (confidence 70, one session; the `Text_Draw` counter's source is unread). Cell Selection's title box (260, 34, 150, 50) went from 1065 px over 40 grey to 18 on one frame
 (`docs/tools/compare-page.md`, "Pulse Cell Selection: the footer, the tag and the title's glow phase"). The cursor hex box on the same frame: 0 px over 40 grey, mean abs 0.14: the halo
 asked for in "The halo is the front end's bloom" is drawn.
+
+#### The card title on Pulse PS2 has no halo (2026-11-24, `ps2-title-no-pulse`)
+
+The PS2's `Text_Draw` ladder byte (`Text + 0xed`, `0x001a7fe8`) ran 75, 90, 105, 120 and 135 across the grabs of
+[`frontend-pulse.md`](../ghidra/functions/ps2-pulse-eu/frontend-pulse.md), and the original's title box is the same picture in all
+of them (greatest grey difference 1 on Grid, 0 on Cell). Ours drawn at each ladder step, then with no title stamp, scored against
+the six grabs of both screens (three each; the adopted pairs are the third; title box share over 40 grey, Cell / Grid):
+
+| ours' title | Cell | Grid |
+| --- | ---: | ---: |
+| follows the `Selector`'s seconds (before) | 10.95 | 13.31 |
+| ladder pinned at its dimmest step (`--menu-title-seconds 0.5`, stamp 70) | 10.94 | 5.12 |
+| **no stamp (now)** | **10.07** | **4.94** |
+
+The dimmest step and no stamp are within a point of each other, so the share alone does not separate them; the crops do: the
+original's `SINGLE RACE` and `GRID 1` have no halo at all and the dimmest step still draws a faint one. **No stamp**, confidence 75
+(six grabs, one pixel-identical title per screen, a crop at the size a player sees). What is left in the Cell box is the glyph
+placement, not the halo. Why the counter does not reach the PS2 pixels is **not known** (a lerp or a pass `Text_Draw` does that the
+PS2 does not composite were not read).
+
+`oag_title::MenuSkin::pulse_text_glow` carries it: `false` on `oag_pulse::frontend::PS2_MENU_SKIN`, `true` on every other skin.
+`oag_ui_screens::campaign::draw::push_text` skips a `pulse="true"` text's `Draw::GlowText` on a skin with it off (Grid and Cell
+Selection only). Not covered, unmeasured on PS2: texts that stamp a fixed `RealGlow`, the Picker's panel texts (`Team Selection`,
+`Track Selection`) and the generic screens' texts. Test: `the_ps2_card_title_stamps_no_glow_where_the_psp_one_does` (fails with the
+skin field read nowhere or set `true`). Pulse PSP, HD and Omega Cell/Grid pages, and the PS2 `menu-team` page, render pixel-identical
+to the build before. **Not checkable on HD/Omega**: they have no `frontend_glow`, so no title stamp is drawn there to begin with.
+The `Selector`'s halo on the PS2 is a different shape from ours' too (small, offset up and left in the original, a broad round bloom
+in ours); that is the PS2 skin's residual, not this change.

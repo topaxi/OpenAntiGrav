@@ -126,7 +126,10 @@ is ours' alone. Which part of `Text_Draw`'s output never lands (the white-to-col
 white text, the glow pass's alpha on a target the PS2 does not composite) is not read.
 **Confidence 80** on "no visible pulse" (three grabs per screen, pixel-identical; one sweep).
 `--menu-title-seconds` is therefore not passed on PS2 (a value that fits by accident is a
-stand-in); ours' title follows the `Selector`'s seconds, as before this page.
+stand-in). Ours now draws the PS2's `pulse="true"` card title with no glow stamp
+(`oag_title::MenuSkin::pulse_text_glow`, `docs/ui/campaign-screens.md`, "The card title on Pulse
+PS2 has no halo", confidence 75): no stamp fits every grab (six), the dimmest step within a point of it
+but with a faint halo the original lacks.
 
 ## The pair script's placement
 
@@ -154,6 +157,6 @@ checked the stamp inside one 32 MiB read that spans several frames; the finder n
 and stamp back to back.) The `Selector` box's "before" varies with the original's phase from grab
 to grab (12.1 to 23.4 %); every grab improves by 4.9 to 15.2 points, and the "after" spread on
 Grid is 2.4 points. What is left in the Cell box at the white end (grab 3) is the hex's shape and
-halo, not its phase: the crops show the same tint on both sides. The whole frame moves with the
-title too, because ours' title follows the `Selector`'s seconds (its halo is brightest where the
-`Selector` is cyan).
+halo, not its phase: the crops show the same tint on both sides. The whole frame moved with the
+title too, because ours' title then followed the `Selector`'s seconds (its halo is brightest where
+the `Selector` is cyan); the title now stamps nothing on PS2, see above.
