@@ -421,11 +421,25 @@ A shot's PNG says what it is of: an `iTXt` text chunk (keyword `oag`: title and 
 camera of the lens on screen with the free lens's eye, the render settings, adapter and driver, mods,
 build and the flags that draw it again) and the private chunk `oaGs` (the person's input stream to the
 tick, the seed and the state hash there). A rewound shot carries the stream to the tick on screen.
+The picture controls the shot used (exposure, saturation, speed blur, depth of field with its
+aperture and focus, and for a shot of several frames the motion blur, its shutter and the frame
+count) are a `[picture]` section, written on every photo mode shot with the opening values as they are: a photo without it predates the keys.
 `oag-game --png-info FILE` prints the text; `--from-png FILE` re-simulates, checks the hash and draws
-the frame. Layout, privacy and evidence: [the format page](../formats/shot-png.md). It is for
+the frame with those controls (one frame: a motion blur needs the race's past, and the output says
+so), and says when a photo has no such section. Layout, privacy and evidence: [the format page](../formats/shot-png.md). It is for
 rendering bug reports: take the shot in photo mode and attach the file.
 
 ## Accumulated shots and rewind
+
+**The HUD of a shot of several frames is drawn once**, when its row is on: every frame of the
+shot leaves the HUD out, and after the race is put back at the shot's tick the average is copied
+into the presentation target and the HUD is drawn over it (`oag-game`'s `session::photo_hud`), so
+its readouts are the ones on screen at that tick and not an average over the shutter. No input
+acts on that one frame. The HUD's own state (each slot's bars and messages, the gap popup, the
+warnings waiting, the song line) is kept at the shot's tick and put back after the ticks a blur
+replays (`oag_raceplay::photo::shot::Shot`). `a_motion_blur_shot_smears_what_it_should_and_any_input_abandons_it`
+checks the blurred shot holds the plain shot's HUD glyphs and no high-contrast pixel outside the
+HUD differs from the blurred shot without one.
 
 Motion blur (track and ship), accumulated depth of field and a rewind, on the titles whose originals
 have the first two (`oag_title::photo::Accumulation`: HD and 2048) and on every title for the rewind

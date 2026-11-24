@@ -111,6 +111,8 @@ pub struct RaceView {
     pub(super) spectates_from_start: bool,
     /// Photo mode's camera while it is open. See [`super::photo`].
     pub(super) photo: Option<super::photo::Photo>,
+    /// The picture controls of a saved shot drawn again, with photo mode closed.
+    pub(super) picture: Option<super::photo::FixedPicture>,
     /// How many times a viewer has put the race back to another tick
     /// ([`Race::restore_for_viewing`]): each is a cut, so the motion blur and a temporal
     /// upscaler do not read the jump as motion ([`crate::RaceView::camera_cuts`]).

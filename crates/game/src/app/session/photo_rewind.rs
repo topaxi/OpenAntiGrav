@@ -4,8 +4,8 @@
 //! The rules are `oag_raceplay::photo::{rewind, shot}`; this is the frame loop around them. A
 //! shot runs behind a progress bar and any input abandons it, as 2048's accumulation does
 //! (`docs/ghidra/functions/vita-2048-eu-v104/photo-mode.md`, state 3). Each frame is read back
-//! from the presentation target before the grade and before anything is drawn over it, like a
-//! single shot, and the frames are averaged in 16 bits a channel.
+//! from the presentation target before the grade and without the HUD, which is drawn once over the
+//! average (`photo_hud`), and the frames are averaged in 16 bits a channel.
 
 use log::{debug, warn};
 use oag_gameplay::input::InputSnapshot;
@@ -16,6 +16,7 @@ use oag_ui::pointer::Pointer;
 
 use super::photo::Origin;
 use crate::app::stage::Stage;
+use crate::shot_meta;
 
 /// The stick deflection that abandons a shot under way: 2048's own threshold.
 const ABANDON_STICK: f32 = 0.2;
@@ -254,7 +255,7 @@ impl super::Session {
     pub(super) fn start_photo_job(
         &mut self,
         path: &std::path::Path,
-        pending: Option<super::photo_meta::Pending>,
+        mut pending: Option<super::photo_meta::Pending>,
     ) -> Result<(), Option<super::photo_meta::Pending>> {
         // The field the frames are drawn with, which the lens ring is sized in.
         let rect = oag_display::display::viewport(self.gpu.output.size(), self.aspect());
@@ -276,6 +277,10 @@ impl super::Session {
         let Some(plan) = stage.race.photo_plan(tick, resimulates, aspect, setting) else {
             return Err(pending);
         };
+        // The controls the shot kept: a blur the race cannot draw is not one of them.
+        if let Some(pending) = pending.as_mut() {
+            pending.meta.picture = Some(shot_meta::Picture::of(photo.effects(), Some(&plan)));
+        }
         debug!(
             "photo mode: a shot of {} frames at tick {tick} (blur {:?}, lens {})",
             plan.frames(),
@@ -388,6 +393,39 @@ impl super::Session {
             .iter()
             .map(|&total| ((u32::from(total) + half) / frames) as u8)
             .collect();
+        let averaged = super::photo_hud::Averaged {
+            pixels,
+            size,
+            path,
+            pending,
+            frames,
+            started,
+            under_hud: false,
+        };
+        // The HUD is drawn once over the average, at the tick the shot is taken at, by the
+        // frame that follows (`photo_hud`).
+        let hud = matches!(&self.stage, Stage::Race(stage)
+            if stage.race.photo().is_some_and(oag_raceplay::photo::Photo::hud));
+        if hud && size == self.framebuffer.output_size() {
+            if let Some(open) = self.photo.as_mut() {
+                open.averaged = Some(averaged);
+            }
+        } else {
+            self.photo_write_shot(averaged);
+        }
+    }
+
+    /// Writes a finished shot to its file and says so on the mode's screen.
+    pub(super) fn photo_write_shot(&mut self, shot: super::photo_hud::Averaged) {
+        let super::photo_hud::Averaged {
+            pixels,
+            size,
+            path,
+            pending,
+            frames,
+            started,
+            ..
+        } = shot;
         let written = match pending {
             Some(pending) => pending.write(&path, size.0, size.1, &pixels),
             None => crate::capture::write_png(&path, size.0, size.1, &pixels),

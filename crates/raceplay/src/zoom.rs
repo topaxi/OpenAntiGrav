@@ -66,12 +66,7 @@ impl Race {
     /// draw runs once per tick however fast frames render.
     #[must_use]
     pub fn hd_zoom_frame(&self) -> Option<Frame> {
-        if let Some((_, frame)) = self
-            .view
-            .photo
-            .as_ref()
-            .and_then(|photo| photo.speed_blur())
-        {
+        if let Some((_, frame)) = self.picture_speed_blur() {
             return Some(frame);
         }
         self.viewed_zoom().map(oag_post::hd_zoom::Pulse::frame)
@@ -101,7 +96,16 @@ impl Race {
             .flatten();
         // Photo mode's speed blur draws the ring wherever no chain of the scene's own does
         // (`Scene::run_boost_zoom` leaves it to HD's chain when there is one).
-        borrowed.or_else(|| Some(self.view.photo.as_ref()?.speed_blur()?.0))
+        borrowed.or_else(|| Some(self.picture_speed_blur()?.0))
+    }
+
+    /// The speed blur's ring and pulse from photo mode, or from the controls a saved shot is
+    /// drawn again with.
+    fn picture_speed_blur(&self) -> Option<(oag_post::hd_zoom::Tuning, oag_post::hd_zoom::Frame)> {
+        match &self.view.photo {
+            Some(photo) => photo.speed_blur(),
+            None => self.view.picture.as_ref()?.speed_blur(),
+        }
     }
 }
 

@@ -822,3 +822,49 @@ fn a_rewind_draws_the_flaps_of_the_tick_it_shows_and_puts_the_live_ones_back() {
     rewind.end(&mut keeper, &mut race);
     assert_eq!(race.view.flaps[0], live, "the live flaps were not put back");
 }
+
+/// Fails if the ticks a blurred shot replays leave the HUD's own state where they ran it to: a
+/// message live at the shot's tick, a pickup banner, a shield flash or a gap popup would have
+/// expired or come up again by the time the HUD is drawn over the shot.
+#[test]
+fn a_blurred_shot_leaves_the_huds_state_as_it_stood_at_the_shot() {
+    let (mut race, mut keeper, _) = driven();
+    open(&mut race);
+    blur(&mut race, 1, 100);
+    let slot = race.core.player_slot();
+    race.view.huds[slot].messages.push("MESSAGE_LIVE", true);
+    let before = format!("{:?}", race.view.huds);
+    let mut rewind = Rewind::begin(&mut keeper, &mut race).expect("running");
+    let plan = Plan::new(race.photo().expect("open"), LIVE, rewind.resimulates()).expect("blur");
+    let mut shot = Shot::start(
+        plan,
+        Some(Mover {
+            rewind: &mut rewind,
+            keeper: &mut keeper,
+        }),
+        &mut race,
+    );
+    while !shot.done() {
+        shot.prepare(
+            Some(Mover {
+                rewind: &mut rewind,
+                keeper: &mut keeper,
+            }),
+            &mut race,
+        );
+        shot.advance();
+    }
+    assert_ne!(
+        format!("{:?}", race.view.huds),
+        before,
+        "the replayed ticks moved the HUD's state, which is what the shot must undo"
+    );
+    shot.finish(
+        Some(Mover {
+            rewind: &mut rewind,
+            keeper: &mut keeper,
+        }),
+        &mut race,
+    );
+    assert_eq!(format!("{:?}", race.view.huds), before);
+}

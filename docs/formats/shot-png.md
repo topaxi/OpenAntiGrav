@@ -22,6 +22,7 @@ UTF-8, uncompressed, TOML text (`oag-game --png-info FILE` prints it). Sections:
 | `[title]` | `name`, `serial` (the disc's, which names the pressing), `platform` |
 | `[race]` | `track` (the archive entry, never a path), `mode`, `class`, `team`, `seed` |
 | `[camera]` | `lens`, `eye`, `forward`, `up`, `fov_deg`: the free lens included; absent for a shot with no camera of its own |
+| `[picture]` | photo mode's picture controls, written on every photo mode shot, opening values included (a photo without it predates the keys): `exposure`, `saturation`, `speed_blur`, `depth_of_field` with `aperture` and `focus`, and with a motion blur `motion_blur` (`track` or `ship`), `shutter`, and `frames` (the number averaged); the panel's `0..=100` values |
 | `[craft]` | position and rotation quaternion of the framed craft |
 | `[render]` | the title's render profile as the settings file spells it (scale, MSAA, reconstruction, motion blur, ...) |
 | `[gpu]` | adapter, backend, driver, driver info |
@@ -67,7 +68,11 @@ camera the text names at the file's size. **The disc must be the title's, with t
 mods**: DLC packs change the race and are not in the text (`resimulate` takes their directories, the
 CLI mounts the settings'), and a simulation mod is named in the header with its SHA-256, so the
 rebuild runs exactly the listed modules and **refuses by name**, before a tick, a module this
-machine lacks or has another build of. The re-render draws
+machine lacks or has another build of. The re-render draws the picture controls in `[picture]` (it prints
+`from-png: picture controls applied: ...`, from `--picture`, which also sits in `reproduce.flags`), or
+for a photo-mode shot without the section prints `no picture controls recorded: the shot predates
+them, so it is drawn without any`. Like the mode, it draws none of the game's own motion blur (`--motion-blur` still overrides). It is one frame: a motion blur shot is drawn without
+its blur and the output says so. The re-render draws
 the HUD, which the text does not record: a photo taken with its HUD row off (the default) differs
 there. A photo's re-render turns the visibility sets off, as photo mode does. **Default mods**: the
 mods that ship enabled in a dev checkout (`oag.energy-turbo` among them) run a simulation module, so

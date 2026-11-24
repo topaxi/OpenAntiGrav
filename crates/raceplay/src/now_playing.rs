@@ -208,6 +208,21 @@ impl Race {
         }
     }
 
+    /// The marquee as it stands, to put back after ticks that were played for a picture and not
+    /// for the race on screen (`photo::shot`): the song line is a clock of the ticks it is
+    /// stepped through.
+    #[must_use]
+    pub fn marquee_state(&self) -> Option<oag_hud::now_playing::Display> {
+        Some(self.view.now_playing.as_ref()?.display.clone())
+    }
+
+    /// Puts the marquee back as [`Self::marquee_state`] had it.
+    pub fn set_marquee_state(&mut self, display: oag_hud::now_playing::Display) {
+        if let Some(view) = self.view.now_playing.as_mut() {
+            view.display = display;
+        }
+    }
+
     /// The player's `Dynamic HUD` choice, on a title whose options have one (anything else is
     /// ignored). `off` takes a marquee that is up down and keeps the next songs from showing one;
     /// switching back on shows nothing until a song starts. Display state, so the frame loop

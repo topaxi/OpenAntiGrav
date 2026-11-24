@@ -290,6 +290,7 @@ impl Session {
         // A photo mode shot of several frames stands the race at its next frame and says how far
         // between ticks to draw it (`session::photo_rewind`).
         let job_alpha = self.photo_job_prepare();
+        let photo_job = self.photo_hides_hud();
         let size = self.framebuffer.extent();
         let inside = (0.0, 0.0, size.0 as f32, size.1 as f32);
         let scene_target = self.framebuffer.view();
@@ -762,6 +763,8 @@ impl Session {
         // this target already did, above - **except the menus**, which draw
         // here instead. See the block below.
         self.phases.mark(super::phases::Phase::Scene);
+        // The average of a finished photo mode shot goes in under the HUD (`photo_hud`).
+        self.photo_encode_average(&mut encoder);
         if let Stage::Race(stage) = &mut self.stage {
             // Pure's glow lands before its HUD (`Looks::bloom_under_hud`); a no-op elsewhere.
             stage
@@ -791,6 +794,8 @@ impl Session {
                     rect,
                     self.framebuffer.output_size(),
                 ),
+                // Every frame of a shot of several leaves the HUD out; the average has it once.
+                Some(true) if photo_job => {}
                 Some(true) => stage.draw_view_hud(
                     &self.gpu,
                     &mut encoder,

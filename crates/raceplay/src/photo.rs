@@ -257,6 +257,64 @@ impl LensShift {
     }
 }
 
+/// The zoom ring's pulse a speed blur of `effects` holds, with the ring's numbers, or `None` with
+/// the row at zero. `age` is the mode's own tick: the ring's history advances once per tick of
+/// it, and the race is not stepping.
+fn speed_blur_pulse(
+    effects: &Effects,
+    tuning: oag_post::hd_zoom::Tuning,
+    age: u64,
+) -> Option<(oag_post::hd_zoom::Tuning, oag_post::hd_zoom::Frame)> {
+    let blur = effects.speed_blur();
+    (blur > 0.0).then(|| {
+        (
+            tuning,
+            oag_post::hd_zoom::Frame {
+                boost: blur,
+                // The original writes the damage pulse too, which tints the streak red; a speed
+                // blur does not read as damage here.
+                damage: 0.0,
+                size: [1.0, 1.0],
+                // Far from any tick the race counts.
+                tick: u64::MAX / 2 + age,
+            },
+        )
+    })
+}
+
+/// The picture controls of a frame drawn without photo mode open: a saved shot drawn again
+/// (`oag-game --from-png`), which has the controls the shot was taken with and none of the mode's
+/// camera or panel.
+#[derive(Debug, Clone, Copy)]
+pub struct FixedPicture {
+    effects: Effects,
+    zoom: Option<oag_post::hd_zoom::Tuning>,
+}
+
+impl FixedPicture {
+    /// The controls `effects` holds, with the zoom ring the speed blur plays (none: the row does
+    /// nothing, as in the mode).
+    #[must_use]
+    pub fn new(effects: Effects, zoom: Option<&'static oag_title::ZoomRing>) -> Self {
+        Self {
+            effects,
+            zoom: zoom.map(crate::zoom::tuning),
+        }
+    }
+
+    /// The controls.
+    #[must_use]
+    pub fn effects(&self) -> &Effects {
+        &self.effects
+    }
+
+    /// The speed blur's ring and pulse, when the row is above zero.
+    #[must_use]
+    pub fn speed_blur(&self) -> Option<(oag_post::hd_zoom::Tuning, oag_post::hd_zoom::Frame)> {
+        speed_blur_pulse(&self.effects, self.zoom?, 0)
+    }
+}
+
 impl Photo {
     /// The mode on `subject`, on the `internal` lens, with the HUD off and the help up.
     /// `track_available` is whether the circuit authors a camera node. `restore` is the
@@ -391,23 +449,7 @@ impl Photo {
     /// The zoom ring's numbers and the pulse the speed blur holds, when the row is above zero.
     #[must_use]
     pub fn speed_blur(&self) -> Option<(oag_post::hd_zoom::Tuning, oag_post::hd_zoom::Frame)> {
-        let blur = self.effects.speed_blur();
-        let tuning = self.zoom?;
-        (blur > 0.0).then(|| {
-            (
-                tuning,
-                oag_post::hd_zoom::Frame {
-                    boost: blur,
-                    // The original writes the damage pulse too, which tints the streak red;
-                    // a speed blur does not read as damage here.
-                    damage: 0.0,
-                    size: [1.0, 1.0],
-                    // A tick of the mode's own, far from any the race counts: the ring's
-                    // history advances once per tick of it, and the race is not stepping.
-                    tick: u64::MAX / 2 + u64::from(self.age),
-                },
-            )
-        })
+        speed_blur_pulse(&self.effects, self.zoom?, u64::from(self.age))
     }
 
     /// The lens that is up.
@@ -1144,11 +1186,20 @@ impl Race {
     /// control stands where it opened.
     #[must_use]
     pub fn photo_fx(&self, near: f32, far: f32) -> Option<oag_post::photo_fx::Params> {
-        let photo = self.view.photo.as_ref()?;
         // An accumulated depth of field frame is drawn with the preview's own pass: the lens
         // sample only refines it (`shot`, "Depth of field").
-        let params = photo.effects().params(near, far);
+        let effects = match (&self.view.photo, &self.view.picture) {
+            (Some(photo), _) => photo.effects(),
+            (None, Some(fixed)) => fixed.effects(),
+            (None, None) => return None,
+        };
+        let params = effects.params(near, far);
         params.active().then_some(params)
+    }
+
+    /// Draws every frame with `picture`'s controls, as a saved shot was taken with them.
+    pub fn set_picture(&mut self, picture: FixedPicture) {
+        self.view.picture = Some(picture);
     }
 
     /// Closes photo mode and puts the camera back as it was.
