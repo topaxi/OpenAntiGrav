@@ -226,7 +226,8 @@ for a title whose original is found to stow them.
 brackets): Omega `sol-2` 48.5 to 40.2 (31.40 to 30.81), `anulpha-pass` 41.1 to 31.0 (20.94 to 20.30), `vineta-k` 28.0 to 24.4,
 `talons-junction` 46.3 to 42.9, `metropia` 34.4 to 30.8; 2048 `mall` 47.3 to 32.0 (23.84 to 23.42), `sol-2` 34.2 to 28.4,
 `metropia` 21.0 to 19.9, `talons-junction` 33.3 to 32.5, `empire-climb` 45.0 to 45.9 (its pose and camera are not matched, see
-its note). The original's flap is larger than ours at the grid on both titles (camera not matched); the angle and side are right.
+its note). The flaps now stand out on both sides as the original's do; how far, against the original, is not measured (the cameras are
+not matched, and Omega's original flap reads larger in the frame).
 
 ## Zone: the grid state gates the auto-speed, and `on_grid` is on (2026-10-02)
 
