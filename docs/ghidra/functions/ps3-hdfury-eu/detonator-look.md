@@ -366,8 +366,10 @@ difference was shading, not a node the original hides (nothing in the mode `0xe`
    sample the Zone textures (`0xd5e000d1`, `0x1f6f85a3`) instead. A lightmapped glass chunk (Tech de Ra, the Amphiseum) keeps the grid as its coverage in Zone; only the sheen's colour is dropped. The census covers every material
    with a ramp-sampling variant and Zone variants (`no_zone_variant_of_a_facing_ramp_material_samples_the_ramp`: `etched_glass_tech`, `etched_glass_amph`, `etched_glass`). Ours ran the sheen over the Zone surface. `shade.wesl`'s
    `ramp_sheen` is now off with `zone_program`, as the magstrip wave is. Confidence 80 (census over the material's blocks:
-   `hd_zone_wave_census_ground_truth::no_zone_variant_of_a_facing_ramp_material_samples_the_ramp`; the Zone variant's own
-   grid term and paraboloid reflection are still not drawn).
+   `hd_zone_wave_census_ground_truth::no_zone_variant_of_a_facing_ramp_material_samples_the_ramp`). **Since 2026-11-25** the
+   vertex-lit glass keeps its grid coverage in Zone, as every non-redraw Zone block writes it; the paraboloid reflection is read
+   and not drawn, because the Zone scenery tint `iblScalePower` is unread ([rcsmaterial.md](../../../formats/rcsmaterial.md),
+   "The Zone glass program").
 
 **Numbers** (`mines-ahead`, the pair's own mean grey, lower is better): whole frame 14.65 to 13.74; far-curve box
 `x1000..1500 y250..520` mean absolute grey difference against the original 29.1 to 19.4 (whole frame by the same measure 15.5
