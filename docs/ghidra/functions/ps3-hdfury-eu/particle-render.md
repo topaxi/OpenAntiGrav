@@ -326,8 +326,16 @@ particle spans (array draws) need this extra step.
 
 ## Open
 
-- A matched original frame with the camera inside a CraftBlast: the picture check of the wired
-  law.
+- The picture at a near CraftBlast does not match yet, for reasons outside the law
+  ([particle-fill.md](../../../rendering/particle-fill.md), "Against the original at a near
+  blast"). The law's cull and cap were read there on the blast's own quads (2026-11-26, three
+  hits: no quad nearer than 1.037, size pinned at 0.5, 1.0, 0.3 and 0.2 times depth).
+- Single-quad additive draws at half height = 2 x depth, full screen, in the frames of a Rocket
+  craft hit up to 0.23 s: which emitter or node draws them. 2.0 is the cap authored by the mode 5
+  emitters of `WO_ROCKET_EXPLO` (`FIRESPIKES`, `FIRE_TRAILS_ONEQUAD`), whose sizes (2.1 to 9.2)
+  cannot reach the sizes seen (up to 47).
+- Where a `.pob` effect's streaks are drawn: the dumped `QUADS` lists held only screen-facing
+  quads.
 - A real PS3's frame at a near blast: how far the width level moves, and whether it holds 60.
 - What modes 1 and 2 of `+0xc8c` did where they were live, if any build has them.
 - Omega's passes 8 to 10 by target size; the PSP builds' quad builders.
