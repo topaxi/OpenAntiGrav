@@ -698,5 +698,6 @@ not known. Read `FUN_812b0880` before mapping the board to `Mode::Eliminator` on
 ring is posed camera-facing and drawn with `electricity.rcsmaterial`'s own program. Published pairs (no picture-lag fit): `pad` 8.82 -> 8.82,
 `mines-ahead` 16.38 -> 16.40, `cannon-volley` 15.32 -> 15.33; middle-right cell MAD 36.79 -> 36.87 and 26.42 -> 26.46: the ring lands on the wrong pixels
 because ours' near mines are not where the picture has them (re-grab the pairs with the fitted lag, then re-measure). The original's ring is two smooth
-circles; ours a ragged band at the disc's rim: the ring's clock `t`, the unread level readers and the roll are the candidates. **Omega draws it too (2026-11-25, `det-visualiser-2048-omega`;** its GCN program is HD's law, `detonator-mine-draw.md`). **Open:** 2048 (GXP
-program not HD's listing: 3 texture fetches against Omega's 5, unread, ring not drawn); the original's ring look against ours on a lag-fitted pair.
+circles; ours a ragged band at the disc's rim: the ring's clock `t`, the unread level readers and the roll are the candidates. **Omega draws it too (2026-11-25, `det-visualiser-2048-omega`;** its GCN program is HD's law, `detonator-mine-draw.md`). **2048 draws it too (2026-11-25,
+`det-visualiser-2048`):** its USSE program is HD's law with two prefetched taps (five fetches, not three) and the colour-bearing taps squared
+in code (`detonator-mine-draw.md`). **Open:** the original's ring look against ours on a lag-fitted pair (HD; no 2048 or Omega capture of the ring).

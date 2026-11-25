@@ -87,6 +87,10 @@ pub const UVSET1_HASH: u32 = 0x49f7_6806;
 /// declaration also lists `Uv1` and `Uv2` entries, both at the offset of the second pair;
 /// nothing explains them.
 pub const UV1_UV2_HASH: u32 = 0x1aef_e524;
+/// `~crc32("Uv3")`: a half pair, the Detonator mine's visualiser ring's bass and treble pair (the
+/// pair HD's `electricity` chunk carries at `+0x0e`). 2048's ring declares `Uv1` too, at the
+/// offset of `Uv1_Uv2`'s second pair, so the diffuse pick is not this.
+pub const UV3_HASH: u32 = 0xac7c_75d0;
 /// `~crc32("VertexColour1")`: four normalised bytes per vertex (type nibble 11 on PS4).
 pub const VERTEX_COLOUR1_HASH: u32 = 0x7493_d450;
 /// `~crc32("VertexColour2")`: four normalised bytes per vertex on the PS4 (type nibble 11); the

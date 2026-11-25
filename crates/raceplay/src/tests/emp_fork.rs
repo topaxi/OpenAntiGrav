@@ -384,9 +384,15 @@ fn an_hd_ring_launch_away_from_a_split_is_unchanged() {
 #[test]
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
 fn an_hd_emp_fired_beside_the_merge_stands_still_until_it() {
-    let Some(mut race) = start(r"Data\Environments\zone_3\track.vex") else {
+    let Some(race) = start(r"Data\Environments\zone_3\track.vex") else {
         return;
     };
+    the_merge_releases_the_stuck_front(race);
+}
+
+/// On a `zone_3` race (split at ring entry 9, merge at 0): a launch three entries short of the
+/// merge leaves a motionless second front until the merge releases it, and the split forks anew.
+fn the_merge_releases_the_stuck_front(mut race: Race) {
     let survey = race
         .core
         .sim
@@ -536,8 +542,8 @@ fn an_omega_emp_fired_on_or_beside_a_branch_follows_it() {
     );
 }
 
-/// **2048 runs the same law** (`FUN_811e7c68`, `FUN_811e7dd6`), on HD's `zone_3` as 2048's DLC1
-/// pack ships it. Its pads do not charge the EMP yet, so the charge is set by the test.
+/// **2048 runs the same law** (`FUN_811e7c68`, `FUN_811e7dd6`: branch launch, launch fork and the
+/// merge's release), on HD's `zone_3` as 2048's DLC1 pack ships it. Its pads do not charge the EMP yet, so the charge is set by the test.
 #[test]
 #[ignore = "needs the unpacked 2048 packages in data/extracted/"]
 fn a_2048_emp_fired_on_or_beside_a_branch_follows_it() {
@@ -551,8 +557,17 @@ fn a_2048_emp_fired_on_or_beside_a_branch_follows_it() {
         );
         return;
     }
-    the_law_holds_on(
-        &path.display().to_string(),
-        &[r"data\art\published\DLC1\environments\zone_3\track.vex"],
-    );
+    let source = path.display().to_string();
+    let track = r"data\art\published\DLC1\environments\zone_3\track.vex";
+    the_law_holds_on(&source, &[track]);
+    let loaded = crate::load(&crate::Options {
+        source,
+        class: "VENOM".to_string(),
+        mode: Mode::Detonator,
+        track: Some(track.to_string()),
+        no_effects: true,
+        ..crate::Options::default()
+    })
+    .expect("loading a 2048 Detonator race");
+    the_merge_releases_the_stuck_front(Race::start(loaded.setup, loaded.view, loaded.modules));
 }

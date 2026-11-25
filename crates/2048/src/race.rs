@@ -533,7 +533,7 @@ pub const DETONATOR_OBJECTS: oag_title::DetonatorObjects = oag_title::DetonatorO
         r"Data\Weapons\mine_rita_football.vex",
         r"Data\Weapons\mine_rita_spikes.vex",
     ],
-    mine_visualiser: None,
+    mine_visualiser: Some(r"Data\Weapons\electric_visualiser.vex"),
     bomb: [
         r"Data\Weapons\detonator_bomb_final.vex",
         r"Data\Weapons\detonator_bomb_final_equalisers.vex",

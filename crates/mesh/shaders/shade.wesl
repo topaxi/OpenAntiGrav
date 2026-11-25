@@ -2322,16 +2322,20 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
     // after it carries `(PitchVolume, BassHit, TrebleHit)` and `PitchOffset`. The colour is the
     // overlay blend of the lightning against `ElectricityColour`, times `|N.V|^P`. The colour tap
     // is decoded (chosen, not measured: the unit's gamma nibble is unread). See the module's doc
-    // for the program's instructions.
+    // for the program's instructions. 2048's program squares the bass tap's and the pitch tap's
+    // red itself (the next entry's scale is 1, `oag_rcs::gxp::electricity`).
     let electric_entry_on = row_scale.z > 24.5 && row_scale.z < 25.5;
     if electric_entry_on {
         let audio = emissive_tint(((in.slots >> 24u) & 63u) + 1u);
+        let squared_taps = emissive_scale(((in.slots >> 24u) & 63u) + 1u).x > 0.5;
         let alpha_v = sun_mask;
-        let n0 = material_sample(MATERIAL_ALBEDO, vec2<f32>(in.lightmap_texcoord.z, in.lightmap_texcoord.w - audio.y)).x;
+        let n0_texel = material_sample(MATERIAL_ALBEDO, vec2<f32>(in.lightmap_texcoord.z, in.lightmap_texcoord.w - audio.y)).x;
+        let n0 = select(n0_texel, n0_texel * n0_texel, squared_taps);
         let n1 = material_sample(MATERIAL_ALBEDO, vec2<f32>(in.texcoord.x, in.texcoord.y - audio.z)).w;
         let s = in.lightmap_texcoord.y + scene.time.x + n0 + n1;
         let d = material_sample(MATERIAL_PAD_MASK, vec2<f32>(in.lightmap_texcoord.x, row_scale.x * s)).w - n0 - n1;
-        let pitch = material_sample(MATERIAL_LIGHTMAP, vec2<f32>(in.lightmap_texcoord.x, audio.w)).x;
+        let pitch_texel = material_sample(MATERIAL_LIGHTMAP, vec2<f32>(in.lightmap_texcoord.x, audio.w)).x;
+        let pitch = select(pitch_texel, pitch_texel * pitch_texel, squared_taps);
         let m = (pitch * audio.x + d) * row_tint.w;
         let lightning = decode(material_sample(
             MATERIAL_PAD_MASK,
