@@ -315,8 +315,8 @@ uploaded vertex code is a byte run of `detonator_mine_normal_alpha.rcsmaterial` 
 spikes' `_n` map. A second dump with the fragment programs (`HOOK_LIGHT=1`), RPCS3's own decompiled shaders
 (`Log shader programs: true`) and a GDB read of the bound VRAM were taken in the same session.
 
-**What the lit pass runs** (confidence 90). The 40 mine draws on the scene target `0x1920000` (football then spikes, per mine,
-then the visualiser) run **vertex block `#15`** (`@0x5150`, code at file offset `0x5200`), not `#1`. Its table puts
+**What the lit pass runs** (confidence 90). The 26 football and spikes draws of the 13 mines on the scene target `0x1920000`
+(football, spikes, then the mine's visualiser, per mine) run **vertex block `#15`** (`@0x5150`, code at file offset `0x5200`), not `#1`. Its table puts
 `world` (`0xc588eebc`) at `c256` and `viewProj` at `c260`:
 
 ```text
@@ -347,7 +347,7 @@ and the port's `normalize(scene.fog.camera - in.world)` against a world normal i
 | Vertex decode | position `S32K x3` at `+0`, normal `CMP` (11:11:10) at `+6`, tangent `UB x4` at `+10`, uv `SF x2` at `+14`, stride 18; RPCS3's `CMP` fetch is the same 11:11:10 split | `rcsmodel::unpack_normal` |
 | Normal map | unit 0 VRAM `0x0cb0e480` byte-identical to `mine_rita_football_n_1024x1024.gtf` at six offsets; remap `0xaae4` (identity), unsigned; the body is `(128, 127, 255)` on 816,206 of 1,048,576 texels | same file |
 | Alpha test | `GREATER 0x7f` | `GREATER 0.5` |
-| Cull | enabled, `BACK`, front `CCW`, window `0x1438`: the same class as the 396 circuit draws of the frame | `cull_as_authored` (state 62) |
+| Cull | enabled, `BACK`, front `CCW`, window `0x1438`: the same state as every other culled draw on the scene target (396 in the frame, the circuit's included) | `cull_as_authored` (state 62) |
 
 **The football is two coincident shells** (240 vertices, 232 triangles, the live buffer and ours agree vertex for vertex): 116
 triangles wound outward with outward normals and 116 wound inward with inward normals. In the frame's window space every
@@ -361,16 +361,25 @@ the inner one and turns the ball white, but it breaks every circuit, so it is no
 the normal, `w = 255`). So ours' relief drops the map's `x` and `y`; only `z` and the alpha reach the rim. It changes the hubs,
 not the flat body.
 
-**Open** (next address to try): a live A/B on the original, not more reading. Clear bit 4 of the football material's state
-word in RAM (both shells drawn) or patch the football's fragment constants in VRAM, grab, and see whether the white moves.
-The draws after the mine that could whiten the ball are unread: the visualiser (additive, `SRC_COLOR, ONE`, depth test, no
-write) and the post chain, which reads the scene's alpha as the glow mask while the mine's draws write no alpha (colour mask
-`0x00010101`).
+**A live A/B says the white is this program, at a rim well above 0** (confidence 80). Same state, lap clock 2.5 s: the mine's
+brightness factor `K[0x3c]` (`0x008c1a18`, read `2.0`) written to `0.0` while paused, the game run 0.6 s, grabbed, then
+written back and run 0.6 s again. With `MineBrightness` 0 (so `p = 5`) the near ball's body turns **dark with bright
+rings**, the port's picture; restored, the bodies are white again. `rim^5` darkening the body while `rim^1 / (1 - 0.9 C)`
+whitens it puts the body's `rim` at roughly 0.4 to 0.7, not 0: **in the original the tangent-space eye vector at the flat body
+is well off the map's `(0, 0, 1)`**, although every constant, the vertex buffer and the map read here say it should not be.
+Frames: the lane's scratch only; the reproducing writes are the two lines above.
 
-**2048 and Omega: checked, nothing to port.** The finding is that the eye is world space, which the port already feeds to
-every title; both later titles name the same `eyePositionWorldSpace` uniform in world space ([gxp.md](../../../formats/gxp.md),
-[gcn.md](../../../formats/gcn.md)). Their mine programs and a live value are not checkable here (no memory readout on Vita3K or
-shadPS4), and the white centre is open on HD itself.
+**Open** (next address to try): read `f[TC1]` itself. Patch the football's fragment program in VRAM (its code is at the
+`SET_SHADER_PROGRAM` offset of the draw, `0x01122d00` local in the dump) to output `normalize(f[TC1]) * 0.5 + 0.5`, grab, and
+compare with the port's tangent-space `V`. If it is off-normal, the next suspects are the vertex inputs as the RSX fetches them
+(`VERTEX_DATA_BASE_OFFSET` `0x1738`, the `CMP` normal's scale), not the constants. The visualiser (additive, `SRC_COLOR,
+ONE`) and the post chain's alpha-keyed glow are ruled out as the source of the white by the A/B (they do not read
+`MineBrightness`).
+
+**2048 and Omega: not checkable** for this finding: it is a live constant of HD's draw, and the cause of the white body is
+open on HD itself, so there is nothing yet to compare. Their mine programs are unread; both name the same world-space
+`eyePositionWorldSpace` uniform ([gxp.md](../../../formats/gxp.md), [gcn.md](../../../formats/gcn.md)), which the port already
+feeds to every title.
 
 **Chosen, not measured:** the normal is the map through the chunk's tangent frame in the world frame
 (the program dots a tangent-space `V`; the angle is the same); a divisor at or below zero draws

@@ -280,8 +280,9 @@ placement RNG cannot match the original's `Libc_Rand` (a departure, documented).
   RPCS3 read; (2) with the envelope high, the ball's centre is dark in ours and bright in the original. **Not the eye**
   (`det-mine-eye-centre`, `detonator-mine-material.md`, "The lit draw, read live"): the lit pass is block `#15` and `c[209]`
   is the world camera, as ours feeds; the program, vertex decode, map, alpha test and cull all match, and the formula gives
-  dark there in RPCS3's own shaders. Next: a live A/B (clear the football material's cull bit or patch its fragment
-  constants in RAM/VRAM, grab) and the draws after it (visualiser, the alpha-keyed glow chain; the mine writes no alpha).
+  dark there in RPCS3's own shaders. A live A/B (`K[0x3c]` 0) turns the original's body dark with bright rings, so its
+  body rim is about 0.4-0.7, not 0: its tangent-space `V` is off-normal. Next: patch the football's fragment program in
+  VRAM to output `normalize(f[TC1])` and grab; then the vertex fetch (`0x1738` base offset, `CMP` scale).
   (3) Ours builds the football and spikes with no tangent (0 of 240 / 630), the live buffer has one at `+10`: wire it
   (relief `x`/`y` lost).
 
