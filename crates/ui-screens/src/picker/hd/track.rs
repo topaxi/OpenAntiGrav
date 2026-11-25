@@ -192,15 +192,21 @@ fn draw_grid(
     };
     let mut grid = *grid;
     grid.rows = grid.rows.min(rows);
+    let slide = picker.slide();
     hex::draw_cells(
         &grid,
-        (picker.index() % width.max(1), width, picker.pan(), None),
+        (
+            picker.index() % width.max(1),
+            width,
+            picker.pan(),
+            Some(slide),
+        ),
         (
             Some(hex::Cursor {
                 row: picker.index() / width.max(1),
-                low: 0.0,
+                low: slide.ring_offset(),
             }),
-            picker.seconds(),
+            picker.ring_seconds(),
         ),
         &face,
         sprites,
@@ -362,6 +368,9 @@ fn walk_track(
                     number(child, "columns").map_or(0, |v| v as usize),
                     number(child, "rows").map_or(0, |v| v as usize),
                 );
+                // The same class steps the same way: each step flips which columns sit a half
+                // row low, so a column's phase follows the circuit's index (RAM, `ship-select-ring.md`).
+                grid.phase_by_entry = true;
                 // The same class as `Team Selection`'s: its selected fill and ring pulse are `HD_Blue`.
                 let blue = screens.resolve(super::BONUS_GLOBAL).and_then(parse_argb);
                 grid.selected_column = blue.unwrap_or(0);
@@ -612,7 +621,8 @@ pub(in crate::picker) fn targets(
         let (width, rows) = shape(picker);
         let mut grid = *grid;
         grid.rows = grid.rows.min(rows);
-        for cell in grid.cells(picker.index() % width.max(1), width, picker.pan()) {
+        let slide = Some(picker.slide());
+        for cell in grid.cells_at(picker.index() % width.max(1), width, picker.pan(), slide) {
             out.push(Target {
                 what: What::Cell {
                     entry: cell.row * width + cell.entry,

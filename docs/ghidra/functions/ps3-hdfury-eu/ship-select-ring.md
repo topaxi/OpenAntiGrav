@@ -28,7 +28,7 @@ static registration: it builds the prototype at `0x009a5ad4` with the class name
 subclass: its slot 18 is the same `0x001b03f0`, its slot 3 is `0x002096f0`, which calls
 `HexSelection_Update` directly (`bl` at `0x00209cc4`) and `HexSelection_Step` (`bl` at `0x002099ec`).
 That is the second, independent call site for both prototypes. **Track Select's grid therefore runs the
-same pulse, ease and slide** (scope for a wire lane; not measured on Track Select).
+same pulse, ease and slide**: read in full and measured live on 2026-11-25, see "Track Select" below.
 
 ## The names
 
@@ -44,7 +44,7 @@ same pulse, ease and slide** (scope for a wire lane; not measured on Track Selec
 | `0x001b0c28` | `HexSelection_SetCell` | 70 |
 | `0x001b0320` | `HexSelection_ClearCell` | 70 |
 | `0x001b2a48` | `HexSelection_Destroy` | 70 |
-| `0x002096f0` | `TrackHexSelection_Update` | 70 |
+| `0x002096f0` | `TrackHexSelection_Update` | 85 |
 | `0x00200498` | `Colour_LerpArgb` | 85 |
 
 Scores: decompilation unambiguous, two call sites (the Team screen and `TrackHexSelection`) and Omega's
@@ -209,9 +209,9 @@ Selection (HD, Fury and Omega through the same code) and, where marked, Track Se
 - **Slide, spare column, content, step deferral**: `slide::Slide`, ticked by `Picker::tick`. A
   step that lands while a slide runs is held, and fires on the first tick after it ends. Frame 0 is
   the tick the step lands on; frame 3 is half a pitch; at frame 6 the columns are in their slots
-  with the new window. Team Selection only: the deferral guard is in `TeamSelectionScreen_Update`;
-  `TrackHexSelection_Update`'s own call site (`bl` at `0x002099ec`) is unread, so **Track Select
-  does not slide** (open).
+  with the new window. Team Selection only: the deferral guard is in `TeamSelectionScreen_Update`.
+  **Track Select slides too since 2026-11-25** (`hd-front-end-ranked`), with its own frame count: see
+  "Track Select" below.
 - **Ring**: one `Hexagon_HD_THICK_OUT.gtf` quad, drawn once after every cell (z + 50), x fixed at
   the centre column, y eased by half per tick (`Slide::ring_offset`); pulse colour
   `pulse_argb(HD_Blue, pulse_phase(Picker::seconds))`, opaque. Track Select shares the art, the
@@ -220,15 +220,97 @@ Selection (HD, Fury and Omega through the same code) and, where marked, Track Se
 - **Constants**: pitch 72 by 83, half row 42, quad 92x80.
 - **Omega**: the same code; `FrontEnd::team_hex_ring_peak` carries the red (238, 7, 7) its update
   computes inline, and its colour template's `HD_Blue` is the same `0xffee0707`.
-- **Left as read, not wired**: the refill frame (the snap and the refill land on one tick here),
-  the pulse's zero point (the clock starts with the picker, not the page's entry), the cells'
-  edge-fade corners, the ring's ease on a model-row change (`_SetRow` also writes the ring target),
-  Omega's `Scale="0.8"` against the 72-unit pitch, and a held direction's input repeat.
+- **Left as read, not wired**: the refill frame on Team Selection (the snap and the refill land on
+  one tick here; Track Select's is read and one frame, below), the pulse's zero point on Team
+  Selection (the clock starts with the picker, not the page's entry; Track Select's is measured,
+  below), the cells' edge-fade corners, the ring's ease on a model-row change on Team Selection
+  (`_SetRow` also writes the ring target; wired on Track Select), Omega's `Scale="0.8"` against the
+  72-unit pitch, and a held direction's input repeat.
 - **Compare pairs** (the pair as recorded against the worktree's binary, `--menu-page ship-select`,
   settled): `hd/menu-ship-select` mean grey 3.04 to 2.73, rmse 0.054 to 0.047, edge 0.50 to 0.51;
   `omega/menu-ship-select` 20.17 to 20.08, rmse 0.185 to 0.185, edge 0.32 to 0.33. The settled
   still draws at pulse phase 3 (a settled `1.0 s` clock), where the ring is exactly the cell's fill
   colour: invisible on the selected red, as it is on the original at that phase of its sawtooth.
+
+## Track Select (2026-11-25, `hd-front-end-ranked`)
+
+`TrackHexSelection_Update` (`0x002096f0`, vtable slot 3 at `0x00868090`) read in full, its constants resolved
+through its own TOC (`scripts/ps3-toc.py resolve 0x002096f0 <disp>`, TOC `0x008ad4d8`), and checked against
+the live object in RPCS3 (found by its vtable word; `Columns` 9, `Rows` 2, 12 entries; `scripts/hd_track_hex.py`).
+
+| Field | Meaning | Source |
+| --- | --- | --- |
+| `+0x110` | row, 0 = forward, 1 = reverse (the two `Rows`) | `0x002097e8`, `0x0020988c` |
+| `+0x118`, `+0x11c` | previous and current circuit (the column the centre shows) | `0x002099a4`, `0x002099b0` |
+| `+0x114`, `+0x115` | a row-change flag, and a refill flag (set with each step, cleared by the refill) | `0x002097f4`, `0x002099e8` |
+| `+0x120` | circuits per row (12) | the wrap at `0x00209998..0x002099b0` |
+| `+0x148` | the direction glyph child (the `>>>` under the forward hexagon), placed from the ring's own x and y | `0x00209bf4..0x00209cc0` |
+| `+0x14c` | one counter, two jobs: the input cooldown and the glyph's scroll clock | `0x00209738..0x00209758` |
+
+- **Input cooldown** (`+0x14c`, constants `0x23c8` = 0.0, `0x23f8` = -0.2, `0x2408` = 1.0): each update adds `dt`; above 1.0 it
+  is set to 0.0. A press (left, right, up, down) is accepted only when the counter is at or above 0.0 and sets it to **-0.2**.
+  So a direction steps at most once every 0.2 s: the slide's 0.1 s is shorter, so **no press ever lands mid-slide and there is
+  no deferral** (`_Step`'s `timer == 0` parity guard is never false here either). Read live: a press moved the counter from
+  1.0 down to -0.131 and it climbed 0.0167 a frame. The scrolling `>>>` glyph is the same counter (`int(+0x14c * 4) << 3`
+  pixels, `0x240c` = 4.0, plus 32.0 when the front end is not Fury, `0x2410`), hidden while it is negative: **not wired**.
+- **Up and down** (pad words 0 and 1) only change `+0x110`, set the ring target through `HexSelection_SetRow` (`0x001b0920`) and
+  turn the glyph by pi (`0x23cc` = 3.14159) on the reverse row; the lattice does not move. **Left and right** (words 2 and 3)
+  move `+0x11c` by one, wrapping at `+0x120`, and call `HexSelection_Step(+0x118, +0x11c)` at `0x002099ec`. The class's own
+  `_Step` then sets the 0.1 s timer and flips the parity, exactly as on Team Selection.
+- **The step and the widget's update are one frame.** `HexSelection_Update` is called from the end of this function
+  (`bl` at `0x00209cc4`), after the step: the step frame's update already takes one frame off the timer. Read live, the first frame
+  after a press had `timer` 0.079 to 0.083 and the columns at `i * 72 - 12`, i.e. **a sixth of a pitch** (Team Selection's update
+  order is the other way: its widget updates before the screen steps). A sample at timer 0.014 had every column at
+  `i * 72 - 61.9 = 72 * (1 - 10 * 0.014)`, the spare column visible at 586.1. So frame `k` after the step reads timer
+  `0.1 - (k + 1) / 60`, the columns stand `(k + 1) / 6` of a pitch in, and **frame 5 is the snap** (timer 0, parity flipped, the
+  columns back in their slots in one frame).
+- **The refill and the snap are one frame.** At the top of the update (`0x00209770..0x00209790`, `0x00209e50..0x00209e68`) the
+  refill (`FUN_002092a8`) runs when the timer less `dt` is at or below 0.0 and `+0x115` is set; the update then ends in
+  `HexSelection_Update`, which takes the timer to 0 and snaps the columns. Read live: the frame the timer read 0.0 had the columns
+  in their slots and the refill flag clear. The spare column is filled at the step (`0x00209a34..0x00209ad8`, index `cc + new`
+  forward, `new - cc` backward, `0.5` = `0x23d8` for `cc`), as on Team Selection.
+- **Parity follows the circuit's index.** RAM `+0xb4` read 0, 1, 0, 1 at circuits 0 to 3 and 0 at 4 and 0 (the wrap on 12 entries
+  keeps it), with column y `[0, 42, 0, 42, ...]` at parity 0 and `[42, 0, ...]` at parity 1. So Track Select's lattice is
+  `HexGrid::phase_by_entry`, like Team Selection's.
+- **Row change.** `SetRow` writes the ring's target y (`row * 83 + 42 * odd`); the end-of-update ease then closes half the
+  distance every frame (83 to 41.5 to 20.75 and so on), the same ease as after a column step.
+
+**The pulse's zero point (measured).** The widget is built once and kept: its `+0x10c` (built) byte is 1 while the screen is
+up and 0 when it is left, and `HexSelection_Update` returns at once while it is 0. The phase `+0xe0` read 0.6212 on leaving and
+the next read after re-entering (a few frames later) was 0.8972: **the counter is not reset by a visit, it counts the widget's
+own updates since the boot's first visit**, `+0.05` a frame (read at 60 fps: 0.4721, 0.5211, 0.5711, ...), wrapping past 2.
+It is the same count as the circuit model's turntable angle (`track-selection-screen.md`, "The angle"), which also persists. So
+there is no page-entry zero: a still of the original needs the counter read out of RAM. The picture lags that read: with
+the game stopped, ten grabs showed the ring's colour 0.118 to 0.228 of a phase behind `+0xe0` (mean 0.176 = 3.5 frames; the ring
+is white to `HD_Blue` for phase 0 to 1 and `HD_Blue` to black for 1 to 2, so the colour reads the phase). The stopped
+step grabs put the picture's lattice at the RAM frame less about 3 (at RAM frame 3 the lattice stood 11.3 px = a sixth of a
+pitch at 0.96, the Safe Area; the lag varies by a frame or so between grabs, 2 to 4).
+
+**Wired (`hd-front-end-ranked`).** The grid draws `Picker::slide` (a `Slide` that follows the picker's column and, for a grid of
+rows, its row: `Slide::follow_row`; `Slide::leading` for the step frame's tick); `track::read` sets `phase_by_entry`; the
+ring's colour is `Picker::ring_seconds`, which a still pins with `--menu-ring-seconds` (the pair script reads `+0xe0` and the
+turntable angle in one stopped grab, `scripts/hd_track_hex.py`, `rpcs3-hd-menu-pair.py`). Tests:
+`track::tests::a_circuit_step_slides_the_lattice_a_pitch_and_snaps_on_the_fifth_frame`,
+`slide::tests::a_leading_slide_has_moved_a_sixth_of_a_pitch_on_its_step_frame`, `the_ring_eases_to_the_other_row_by_halves`,
+`the_rings_pulse_follows_its_own_clock`, and the disc-backed
+`hd_ship_preview_ground_truth::the_track_grids_ring_and_slide_follow_their_clocks`. Pair `hd/menu-track-select` (the original
+re-captured with the ring phase read, ours drawn with the base binary and the same flags against the new): the ring's left band
+27.4 to 2.9 mean grey, the ring box (460, 480, 560, 560) 19.7 to 14.3, the grid region (180, 440, 860, 720) 3.99 to 3.68; a
+second capture of the same state (ring phase 1.78 against 0.59 in the first) read 26.99 to 2.06, 19.61 to 14.15 and 3.98 to
+3.67, so the re-capture noise is under 0.15. The stills at circuit 0 are byte-identical to the base binary's with the flag
+absent, and every adopted HD and Omega menu pair (campaign, grid, cell, ship, track) re-renders byte-identical (the other pairs
+were not re-captured: their pages draw none of this). With the fly-by frame fitted (`compare-menu-movie-phase.py`, frame 442) the
+whole frame reads 4.08 (base binary, same original) to 3.77; the adopted pair before this lane read 4.35 on an older capture.
+The step: twelve stopped grabs at frames 3 to 8 after a press, one per circuit step 1 to 11 and 0, ours drawn at RAM frame less 3
+(`--menu-picker-step-seconds`, the circuit's `NN_Track` id read off the `circuits:` loader line: the forward list is
+`01 08 03 04 02 06 05 07 17 19 21 23`, not index + 1), grid region mean grey 13.73 without the slide to 6.50 with it (every
+trial improves; frame 8 is the snap, 5.13 to 4.30 there). The lag is a frame or so loose between grabs. The input cooldown is
+wired as `Picker::step_gate` (12 whole frames) (`a_direction_inside_the_cooldown_of_the_last_one_taken_is_dropped`): the pad's four directions
+on a grid of rows are taken only 0.2 s after the last one taken. RAM: `right` held for 1.1 s stepped at 0.05, 0.56 and 0.88 s,
+so the input layer's own repeat (about 0.5 s then 0.3 s) is a separate floor over the 0.2 s one.
+
+**Not wired, in the box:** the ring counter's persistence across visits in live play (a new `Picker` starts its clock at 0 on every visit, so only stills pinned with `--menu-ring-seconds` carry the original's count; the turntable restarts the same way; carrying one f32 in the session needs an offset rather than a pin), the `>>>` glyph's scroll and hide-while-cooling, the fill (0.87 of `HD_Blue`: the original draws
+`Hexagon_HD_Faded.gtf`, ours `Hexagon_HD.gtf`, 149 against 172 on both Ship and Track Select), the cells' edge fade.
 
 ## Ready to wire
 
@@ -254,6 +336,20 @@ cells' fade toward the edges (`_SetCell`: per-vertex lerp `HexColFade` to `HexCo
 `0x64000000`) is read but its vertex order (which pair of corners gets which end) is not; 60.
 
 ## Omega
+
+**Track Select: ported** (test `omega_campaign_screens_ground_truth::omegas_track_grid_slides_on_a_step_and_pulses_on_its_own_clock`). `/omega` `eboot-ps4-omega-eu-v107.bin` registers `TrackHexSelection` at `FUN_0152bab0` (the string at
+`0x0188547f`, vtable `0x01989fd8`), slot 3 is `FUN_015298d0`: the same update as HD's `0x002096f0` instruction for instruction as far
+as read: the counter at `+0x200` (clamped to 0 above 1.0), `0xbe4ccccd` (-0.2) stored after a press, the refill (`FUN_0152b650`) when
+`+0x174 - dt <= 0` and `+0x1a1` is set, `FUN_0145b490` (the step: 0.1 stored to `+0x174` as `0x3dcccccd`, the parity byte `+0x130`
+toggled, the direction at `+0x178`, with the extra direction argument of Team Selection's) called from the press, and
+`FUN_01459330` (`HexSelection_Update`: `p += dt * 3`, wrapped past 2, the ring colour inline `255 - 17 p` and `255 - 248 p`, then
+`(p - 1) * -238 + 238` and `(p - 1) * -7 + 7`; the slide `(i + dir * (1 - 10 t)) * pitch`) called at the end, so the same
+order and the same frame counts. No live read (shadPS4 has no memory readout). Ours reads Omega's `Track_Selection` XML through the same
+`track::read`, so the slide is wired through the same path: a step still at 0.05 s moves 35,080 pixels of its grid and panel
+region, and the adopted `omega/menu-track-select` is byte-identical. The addresses in the Omega paragraph below
+(`FUN_0142ea90`, `FUN_0142caa0`, `FUN_0142f0a0`) do not start those functions in `eboot-ps4-omega-eu-v107.bin`: `0x0142caa0` falls
+inside `FUN_0142c7f0`, a menu-list update, so they belong to another Omega build and the v107 ones are the ones above; the
+**Team Selection** copy in v107 was not located again.
 
 **Wired (slide, step, ease, ring: `shipselect-ring-wire`); checked, differs (ring colour).** Read in
 `/omega/eboot-ps4-omega-eu.bin` (the `eboot.bin` in the shared Ghidra project; addresses are this build's:
