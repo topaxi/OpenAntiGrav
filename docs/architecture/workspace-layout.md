@@ -1397,6 +1397,8 @@ probes' `region`, whose ascending order `raycast_all` needs.
 
 ## Test-data suite measurements
 
+To find the slowest tests when a ceiling fires: `grep -E '^\s+(PASS|FAIL)\s+\[' target/test-data.log | sed -E 's/^\s+\w+\s+\[\s*([0-9.]+)s\].*\)\s+/\1 /' | sort -rn | head -20`.
+
 Moved out of `CLAUDE.md`, which keeps the rules and the ceilings.
 
 - **Size and time.** `just test-data` ran 7,271 tests in about 330 s at load 20-38 on 2026-10-07 (465 s before the HD reopen fix and the parallel `ai_roll`/`ram` sweeps; 368 s for 5,831 tests before 2026-10-01's profile change). The table under "Reopened archives, serial sweeps and an affected gate" has the per-step numbers.

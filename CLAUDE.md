@@ -18,36 +18,25 @@ matrix) before assuming a subsystem exists.
 
 ## Commands
 
+`just` is the gate every commit must pass (`just --list` shows every recipe,
+`just --show check` the checks). Each `check-*` recipe's comment says what it
+guards.
+
 ```sh
-just              # the gate every commit must pass (`just --show check` lists its checks)
 just fmt | lint | build | docs
 just test         # nextest, quick profile (our crates opt-level 0, examples not built)
 just test-data    # also the #[ignore]d ground-truth tests; needs data/images/; skips binaries that passed unchanged, --full runs all
-just lead-test-data [-n M]   # the lead's full test-data as M (4) slices, each under its own gate lock (`test-data --partition N/M`); never inside `flock`
+just lead-test-data [-n M]   # the lead's full test-data as M (4) slices, each under its own gate lock; never inside `flock`
 just gate-affected / test-data-affected   # same checks in full, only the tests the branch can reach (scripts/affected.py); a drive member's gate
-scripts/gate-run.sh RECIPE   # a gate recipe under the shared gate lock: prebuilt while it waits, every hold logged (docs/architecture/gate-wall-time.md); never inside `flock`
+scripts/gate-run.sh RECIPE   # a gate recipe under the shared gate lock, prebuilt while it waits (docs/architecture/gate-wall-time.md); never inside `flock`
 just check-docs   # internal links in docs/ (not CLAUDE.md, .claude/ or HANDOVER.md)
-just check-deps   # the six dependency rules below
-just check-unused-deps   # no unused or test-only-used normal dependency (cargo shear)
-just check-determinism   # no platform transcendental in simulation code
-just check-size   # ratchet: file length 1,500, inline #[cfg(test)] mod 500
-just check-comment-history   # ratchet: no dates, "maintainer" or lane names in code comments
-just check-title-branching   # ratchet on `title.name == oag_X::TITLE.name` in generic crates; per-title behaviour is `Title` data (ADR-0058)
-just check-title-reach       # ratchet on generic crates naming a title package by path; they go through `oag_title::Title`, the oag-source registry or the composition root
-just check-hd-clock-grab   # every HD/Fury grab of the original goes through `rpcs3-drive.py`'s `grab_with_clock`, which writes the world clock beside the frame; an HD pair without `original.world_clock_offset_s` fails `check-pair-provenance`
-just check-names  # every names.tsv row still matches its evidence page, offline
-just check-handover          # HANDOVER.md under 256 KiB (the Read tool's ceiling)
-just check-weapon-lineage    # docs/gameplay/weapon-lineage.md's checked axes match the title crates
-just check-test-groups       # every test module that spawns the game or captures a frame is in nextest's gpu-vram group
-just check-schemas           # shipped TOML validates against schemas/v1/ (ADR-0064)
-just check-guests            # every mod guest's tests, and each committed ext/*.wasm against a fresh build; `--strict` (what `just`, gate-affected and CI run) fails a stale one or a missing wasm32 target; `just rebuild-guests` regenerates them
+just check-names | check-handover | check-schemas | check-weapon-lineage | check-guests   # `check-guests --strict` (the gate) fails a stale ext/*.wasm; `just rebuild-guests` regenerates
 just check-status # status.md's RE-coverage table matches names.tsv; `just gen-status` regenerates it
-just check-strings           # menu.toml rows have string_id + english.toml text (ratchet)
-just check-test-budget       # test-data ceilings, see "The test-data suite"
-just blender-fixtures        # Blender add-on fixtures; needs Blender 4.2+, not in the gate
-just bench-render [title...] # whole-race render benchmark to data/bench/; takes the gate lock itself, never inside a gate; `just bench-compare A B`; docs/tools/render-bench.md
+just check-title-branching | check-title-reach   # ratchets: per-title behaviour is `Title` data (ADR-0058), and generic crates reach a title only through `oag_title::Title`
+just check-hd-clock-grab   # every HD/Fury grab of the original goes through `rpcs3-drive.py`'s `grab_with_clock`
+just bench-render [title...] # whole-race render benchmark; takes the gate lock itself, never inside a gate (docs/tools/render-bench.md)
 just audit-leakage           # no tracked game content
-just unpack|wad|view|play ...   # asset tools and the game (see the justfile); just build-allegrex (JDK 21); just mine-names <image>
+just unpack|wad|view|play ...   # asset tools and the game; just build-allegrex (JDK 21); just mine-names <image>; just blender-fixtures (Blender 4.2+, not in the gate)
 just sync-saves <host> [-n]     # data/saves/ both ways with another workstation over ssh, newer file wins, nothing deleted
 ```
 
@@ -61,35 +50,33 @@ a disc image under `data/images/`, and never run in CI.
 ### The test-data suite
 
 Ceilings (`scripts/check-test-budget.py`): suite 450 s, single test 300 s,
-both *under load*, so they catch gross regressions, not drift. Judge speed on
-an idle machine or not at all. Measurements:
+both *under load*, so they catch gross regressions, not drift; judge speed on
+an idle machine or not at all. `just test-data` skips a test binary that passed
+unchanged (`scripts/test-data.py`; skips are listed by name, never counted as
+passed); `--full` (or `OAG_TEST_DATA_FULL=1`) runs everything and is what the
+suite ceiling is judged on. Measurements and the profiling method:
 `docs/architecture/workspace-layout.md` ("Test-data suite measurements").
 
-`just test-data` skips a test binary that passed unchanged
-(`scripts/test-data.py`); skips are listed by name, never counted as passed.
-`--full` (or `OAG_TEST_DATA_FULL=1`) runs everything and is what the suite
-ceiling is judged on; a partial run holds each test to its own ceiling only.
-
-When a ceiling fires, **stop and re-profile the tail before adding tests**:
-
-1. Sort the log: `grep -E '^\s+(PASS|FAIL)\s+\[' target/test-data.log | sed -E 's/^\s+\w+\s+\[\s*([0-9.]+)s\].*\)\s+/\1 /' | sort -rn | head -20`.
-2. The slowest test is almost always a matrix (circuits x tiers x seeds) in nested `for` loops in one `#[test]`. Nextest parallelises across tests, so it runs on one core.
-3. Make the matrix the test axis, choosing a split the assertion survives: `max` over a partition is `max` over the whole (`stall_rescue_ground_truth.rs`), an ordered `assert_eq!` filters with its list (`spawn_heading_ground_truth.rs`), a chained ordering is its pairwise links (`ai_roll_ground_truth.rs`).
-4. Add a `BASELINE` row only when a split would change what is asserted, and say why in the row's comment (`ram_ground_truth.rs`: its bound is a ratio and slicing rebuilds the small-denominator flake).
+When a ceiling fires, **stop and re-profile the tail before adding tests**: sort
+`target/test-data.log` by time. The slowest test is almost always a matrix
+(circuits x tiers x seeds) in nested `for` loops in one `#[test]`, which runs on
+one core: make the matrix the test axis with a split the assertion survives
+(`workspace-layout.md`, "The unit of parallelism is the test, so a matrix must
+be tests"). Add a `BASELINE` row only when a split would change what is
+asserted, and say why in the row's comment (`ram_ground_truth.rs`).
 
 **Before adding a disc-backed test, find what already walks that data.**
 Nextest shares nothing between tests, so a second test over an archive pays the
 whole read and decode again.
 
-1. `rg` the archive or file family in `crates/*/tests/`. If a test walks it, add your claim as a named check function over that one pass (`crates/rcs/tests/gxp_ground_truth.rs`).
-2. Sniff before you read (`Archive::peek`, a few decompressed bytes) and read in full only what can match.
+1. `rg` the archive or file family in `crates/*/tests/`; if a test walks it, add your claim as a named check function over that one pass (`crates/rcs/tests/gxp_ground_truth.rs`).
+2. Sniff before you read (`Archive::peek`); read only what the assertion needs; stop a simulation at the tick its claim is decided.
 3. A test that only prints is a scratch sweep: `#[ignore]` with a reason and an early return unless `OAG_SWEEP` is set.
 4. Remove redundancy before splitting for the tail: every slice pays its own fixture load.
-5. Do only the work the assertion needs: read only the bytes, entries or files it checks, and stop a simulation at the tick its claim is decided (a lap count, a first contact, a divergence), not at the race's end.
 
 **A new `tests/*.rs` file is a `mod` line in its crate's `tests/it*.rs`**, not a
 binary of its own. `oag-game` and `oag-raceplay` have five binaries
-(`tests/it_*.rs`, by first letter). An unlisted file is never compiled
+(`tests/it_*.rs`, by first letter); an unlisted file is never compiled
 (`every_test_file_is_listed` fails naming it). `oag-physics`, `oag-gameplay` and
 `oag-ai` keep a binary per file (CI runs `--test determinism` by name). Test
 names carry the module path; filter with `test(...)`, not `binary(...)`.
@@ -97,31 +84,17 @@ names carry the module path; filter with `test(...)`, not `binary(...)`.
 **A test module that spawns `oag-game` (or calls `capture_pixels_from`/`capture_from`)
 is one name in the `gpu-vram` group's regex in `.config/nextest.toml`**: it caps
 those tests at 4 at once so an 8 GiB GPU does not die with `wgpu error: Out of
-Memory`. `just check-test-groups` fails naming the module
-(`docs/architecture/workspace-layout.md`, "Test groups").
+Memory` (`docs/architecture/workspace-layout.md`, "Test groups").
 
 **A test goes in the lowest crate whose dependencies reach everything it reads.**
-`oag-game`'s binaries rerun on nearly every change. A test belongs in `oag-game`
-only if it names `oag_game` or spawns the `oag-game` binary; a race test that
-needs only `oag_raceplay::race` goes in `oag-raceplay`, a decoder census in the
-decoder's crate.
+`oag-game`'s binaries rerun on nearly every change: a test belongs there only if
+it names `oag_game` or spawns the binary; a race test that needs only
+`oag_raceplay::race` goes in `oag-raceplay`, a decoder census in the decoder's crate.
 
 ### Gates by change
 
-- **Affected-only gating**: `scripts/affected.py` selects the tests that link
-  the change (every package that links a changed one, narrowed to the test
-  modules that name a crate that does). A docs-only or comments-only change
-  selects no tests; the root `Cargo.toml`, the toolchain or `.cargo/` selects
-  the full suite. Rules and misses:
-  [`docs/architecture/affected-gate.md`](docs/architecture/affected-gate.md).
-  Drive members use `gate-affected`; the lead runs the full `just` and
-  `test-data` once per merge batch (CI has no images). See
-  `.claude/skills/oag-drive/SKILL.md`.
-- **Docs-only** (`docs/`, `handover/`, `HANDOVER.md`, `.claude/`, or doc
-  comments in a `.rs` file): run `just check-docs`, plus `just check-handover`
-  if `HANDOVER.md` changed. If any `.rs` file changed, also `just fmt-check`
-  and `just lint`. If the change turns out to touch code logic, run the full
-  `just`.
+- **Affected-only gating**: `scripts/affected.py` selects the tests that link the change. A docs-only or comments-only change selects no tests; the root `Cargo.toml`, the toolchain or `.cargo/` selects the full suite. Rules and misses: [`docs/architecture/affected-gate.md`](docs/architecture/affected-gate.md). Drive members use `gate-affected`; the lead runs the full `just` and `test-data` once per merge batch (CI has no images). See `.claude/skills/oag-drive/SKILL.md`.
+- **Docs-only** (`docs/`, `handover/`, `HANDOVER.md`, `.claude/`, or doc comments in a `.rs` file): run `just check-docs`, plus `just check-handover` if `HANDOVER.md` changed. If any `.rs` file changed, also `just fmt-check` and `just lint`. If the change turns out to touch code logic, run the full `just`.
 
 ### Data and images
 
@@ -132,7 +105,7 @@ committed** (`.gitignore`, CI's `leakage` job, `just audit-leakage`;
 
 - **`fd` and `rg` skip `.gitignore`d paths and return nothing under `data/` with exit code 0.** Use `--no-ignore`, or `ls`/`find`/`grep`.
 - **A spawned agent that sees `data/images/` empty has a sandbox limitation, not missing images**: `data/` does not travel into a worktree or restricted sandbox. Check `/bin/ls -la data/images/` first. If empty, **say so in your report** rather than skipping the real-data check, and give the orchestrator the exact command to run.
-- **Save states never go in a repository**, the private one included (they are memory dumps, [ADR-0085](docs/architecture/adr/0085-comparison-originals-live-in-a-private-repository.md) rule 4). Between the maintainer's workstations they travel with `just sync-saves <host>`; a state another host made is there after a sync, not a pull.
+- **Save states never go in a repository**, the private one included (memory dumps, [ADR-0085](docs/architecture/adr/0085-comparison-originals-live-in-a-private-repository.md) rule 4); they travel with `just sync-saves <host>`.
 - **In a worktree run `just link-data`** right after `git worktree add` (symlinks `data/` subdirectories from the main checkout; no-op in the main checkout). Without it, tests skip silently, or fail in a heap under `OAG_REQUIRE_GAME_DATA=1`.
 
 ## Commit messages
@@ -164,76 +137,77 @@ from the original.
                         oag-game
 ```
 
-Crates (`crates/<name>`; the full table and reasoning:
+Crates (`crates/<name>`; full table and reasoning:
 [`docs/architecture/workspace-layout.md`](docs/architecture/workspace-layout.md)).
 Add a crate only when its milestone opens; no placeholder crates.
 **Every crate has a short `README.md` in its root, and a new crate lands with
-one**: what the crate is for in a few lines, plus the relations that matter
-(its layer, what it must not depend on, the crate it complements). No
-dependency lists, API tables or status: `Cargo.toml`, rustdoc and `docs/`
-carry those, and a README that repeats them drifts.
+one**: what it is for in a few lines, plus the relations that matter (its layer,
+what it must not depend on, the crate it complements). No dependency lists, API
+tables or status: `Cargo.toml`, rustdoc and `docs/` carry those.
+
+ADRs are `docs/architecture/adr/NNNN-*.md`.
 
 | Crate | Purpose |
 | --- | --- |
-| `oag-bytes` | Endian-aware byte reading, and the workspace's one `ByteOrder`. |
+| `oag-bytes` | Endian-aware byte reading, the one `ByteOrder`. |
 | `oag-core` | Deterministic `f32` math (no SIMD), `TickClock`, seeded `Rng`, state hashing. Everything depends on it. |
 | `oag-disc` | CHD and raw ISO readers, ISO 9660, platform identification. |
-| `oag-display` | Screen/shape/pixel/brightness vocabulary and a source's layout coordinate space. Depends on `oag-disc` and `serde` only. |
-| `oag-formats` | Containers and sound: WAD, PSARC, LZSS, sound banks, magic triage, GE swizzle. Split by format family ([ADR-0050](docs/architecture/adr/0050-format-crates-split-by-format-family.md)). |
-| `oag-rcs` | `RCSMODEL` scene (PS3/Vita): models, materials, visibility sets, Vita shader programs. |
-| `oag-vex` | `.vex` scene tree and its payloads: geometry, collision, spline, pads, PVS, fog, lights, emitters, shadow hulls, PS2 VIF, 2048 collision. |
-| `oag-pob` | `.pob` particle system. Depends on `oag-formats` and `oag-bytes` only. |
+| `oag-display` | Screen/shape/pixel/brightness vocabulary, a source's layout space. Depends on `oag-disc`, `serde` only. |
+| `oag-formats` | Containers and sound: WAD, PSARC, LZSS, sound banks, magic triage, GE swizzle (ADR-0050). |
+| `oag-rcs` | `RCSMODEL` scene (PS3/Vita): models, materials, visibility sets, Vita shaders. |
+| `oag-vex` | `.vex` scene tree and payloads: geometry, collision, spline, pads, PVS, fog, lights, emitters, PS2 VIF, 2048 collision. |
+| `oag-pob` | `.pob` particle system. Depends on `oag-formats`, `oag-bytes` only. |
 | `oag-texture` | Every pixel format decoded to RGBA8888, plus a PNG writer. |
 | `oag-tables` | XML-authored tables (handling, weapons, campaign, load manifests, lighting). Zero dependencies. |
-| `oag-video` | `.PMF`, `IPUF`, Bink, and the IVF/AV1 cache. Depends on `oag-bytes` only. |
-| `oag-unity` | Generic Unity asset-bundle reader; knows no game; depends on `oag-bytes` only ([ADR-0062](docs/architecture/adr/0062-unity-content-is-a-generic-reader-with-a-content-layer-on-top.md)). |
-| `oag-ballisticng` | BallisticNG Workshop content on `oag-unity`: `.wtrk`, `.csf`, track data as typed structs. Reads; maps nothing into this engine. |
-| `oag-bng-import` | Maps a BallisticNG Workshop track (`.wtrk`, read by `oag-ballisticng`) into `oag_trackfile::Track`, with every chosen mapping constant. `oag-raceplay` reaches `oag-ballisticng` and `oag-unity` only through it (its `ballisticng` feature). Forbidden to gameplay crates. |
-| `oag-trackfile` | Own custom-track format: glTF 2.0 binary plus TOML manifest; refuses an unknown major by name. `oag-bng-import` maps BallisticNG tracks into it. Forbidden to gameplay crates ([ADR-0063](docs/architecture/adr/0063-the-own-track-format-is-glb-plus-a-toml-manifest.md)). |
-| `oag-schema` | The `[toml-schema]` header of every TOML of ours ([ADR-0064](docs/architecture/adr/0064-project-toml-files-declare-a-toml-schema.md)); `validate` feature is tests-only. |
-| `oag-assets` | Runtime `Archive`: a WAD by path or out of a disc image, by index/name/hash. |
-| `oag-ui-screens` | Front-end screens on `oag-ui` (campaign, end of race, pickers, prompts). `oag-ui` never depends on it. |
+| `oag-video` | `.PMF`, `IPUF`, Bink, the IVF/AV1 cache. Depends on `oag-bytes` only. |
+| `oag-unity` | Generic Unity asset-bundle reader; depends on `oag-bytes` only (ADR-0062). |
+| `oag-ballisticng` | BallisticNG Workshop content on `oag-unity` as typed structs. Reads; maps nothing into this engine. |
+| `oag-bng-import` | Maps a Workshop track into `oag_trackfile::Track`; `oag-raceplay` reaches the two readers only through it (`ballisticng` feature). Forbidden to gameplay crates. |
+| `oag-trackfile` | Own custom-track format: glTF 2.0 binary plus TOML manifest. Forbidden to gameplay crates (ADR-0063). |
+| `oag-schema` | The `[toml-schema]` header of every TOML of ours (ADR-0064); `validate` is tests-only. |
+| `oag-assets` | Runtime `Archive`: a WAD by path or out of a disc image. |
+| `oag-ui-screens` | Front-end screens on `oag-ui`. `oag-ui` never depends on it. |
 | `oag-title` | The `Title` type and its three axes (archive candidates, entry names, foreign-serial deny-list). Types only. |
 | `oag-pulse` | What Pulse ships: archive/entry names, hashes, presentation tables. |
 | `oag-pure` | Same for Pure, deliberately thin: only what `docs/formats/pure-status.md` measured. |
-| `oag-hd` | Same for HD/Fury: seven PSARC archives on a PS3 disc. Front end `Measured` ([ADR-0025](docs/architecture/adr/0025-a-boot-chain-carries-its-provenance.md), `docs/formats/hd-frontend.md`). |
-| `oag-omega` | Same for Omega (PS4): HD's `PI001` front end off a base package plus a mandatory patch (`data09.psarc` carries the only complete front end). Boot chain `Provenance::Declared`. `eboot.bin` is in Ghidra and shadPS4 runs it, without a memory readout. Races start but are incomplete: `docs/formats/omega-status.md`. |
+| `oag-hd` | Same for HD/Fury; front end `Measured` (ADR-0025, `docs/formats/hd-frontend.md`). |
+| `oag-omega` | Same for Omega (PS4): HD's front end off a base package plus a mandatory patch; boot chain `Provenance::Declared`. Races start but are incomplete: `docs/formats/omega-status.md`. |
 | `oag-2048` | What 2048 ships (Vita PSARC packages and paths), deliberately thin. |
 | `oag-tools` | CLI: `oag-unpack`, `oag-wad`. |
 | `oag-physics` | Ship dynamics and collision queries. Depends on `oag-core` only. |
 | `oag-race` | Race rules: modes, lap timing, progress. |
-| `oag-ai` | Opponent driver following the authored racing line. Depends on `oag-core`, `oag-physics` only. |
+| `oag-ai` | Opponent driver on the authored racing line. Depends on `oag-core`, `oag-physics` only. |
 | `oag-weapons` | Pickups, projectiles, blasts, beams; reaches a craft only through the `Craft` trait. |
 | `oag-gameplay` | The `World` struct, `InputSnapshot`, spline spawning. |
-| `oag-replay` | Replays (per-slot input stream is the truth) and ghosts (pose track), [ADR-0055](docs/architecture/adr/0055-replays-are-inputs-and-a-ghost-is-poses.md). |
+| `oag-replay` | Replays (input stream is the truth) and ghosts (pose track), ADR-0055. |
 | `oag-mesh` | Mesh pipeline: decodes `.vex`/`RCSMODEL`, draws offscreen or to a surface; orbit camera, capture. |
-| `oag-gpu` | Shared GPU vocabulary: perf probe, GPU timestamps, offscreen formats. |
+| `oag-gpu` | Shared GPU vocabulary: perf probe, timestamps, offscreen formats. |
 | `oag-post` | Bloom, tonemap, motion blur, SMAA, FXAA, FSR 1/3. |
-| `oag-fx` | Visual effects: `.pob` player, exhaust, mist, clouds, beams, flashes, hull overlays. Render-side. |
-| `oag-render` | wgpu renderer: track ribbon, shadows, PVS, cameras. Owns no window. Reads `oag-pulse`'s tables (allowed; rule 1 forbids only the other direction). |
+| `oag-fx` | Render-side effects: `.pob` player, exhaust, mist, clouds, beams, flashes, hull overlays. |
+| `oag-render` | wgpu renderer: track ribbon, shadows, PVS, cameras; owns no window. Reads `oag-pulse`'s tables (allowed, see rule 3). |
 | `oag-present` | Scene-to-glass: upscale/grade/filter composite, dynamic resolution, perf meter. |
 | `oag-shader-check` | Build-dependency only: validates every WESL shader with `naga`. |
-| `oag-livery` | A race's hulls, skins, shields, plumes, wrecks from a title's archive entries. |
-| `oag-thread` | A closure on another thread on every target (`std::thread` or a Web Worker). Depends on nothing of ours. |
-| `oag-ffmpeg` | The one resolver for `ffmpeg`/`ffprobe` (`PATH`, then a downloaded copy) and the verified download of a pinned LGPL build ([`docs/architecture/ffmpeg.md`](docs/architecture/ffmpeg.md)). Leaf crate. |
-| `oag-io` | File I/O helpers: the atomic write (ADR-0095) behind `oag-game`'s `profile::write`, the campaign editor and the PS3 disc-key cache. Std only; leaf crate. |
+| `oag-livery` | A race's hulls, skins, shields, plumes, wrecks from archive entries. |
+| `oag-thread` | A closure on another thread on every target. Depends on nothing of ours. |
+| `oag-ffmpeg` | The one `ffmpeg`/`ffprobe` resolver and verified download (`docs/architecture/ffmpeg.md`). Leaf. |
+| `oag-io` | File I/O helpers: the atomic write (ADR-0095). Std only; leaf. |
 | `oag-log` | Binaries' log sink: terminal plus a pruned timestamped file. |
-| `oag-mobile` | Android/iOS app glue under `oag-game` ([ADR-0065](docs/architecture/adr/0065-one-mobile-crate-for-every-phone-os.md)). |
-| `oag-mod` | Mods (folder, `.zip`, `.oagmod`), `oag-mod.toml`, search path, built-in `oag-extras` ([ADR-0066](docs/architecture/adr/0066-the-menu-is-the-disc-plus-mods.md)). |
-| `oag-modhost` | WebAssembly extension host behind the `extensions` feature (wasmtime, fuel, NaN canonicalisation; a fresh pooled instance per tick). Knows no game ([`docs/architecture/wasm-extensions/`](docs/architecture/wasm-extensions/README.md)). |
-| `oag-ext-abi` | ABI 1 defined once: I/O buffer layout, records, `REVISION`. `no_std`, no dependencies; host and guest SDK compile against it. |
+| `oag-mobile` | Android/iOS app glue under `oag-game` (ADR-0065). |
+| `oag-mod` | Mods (folder, `.zip`, `.oagmod`), `oag-mod.toml`, search path, built-in `oag-extras` (ADR-0066). |
+| `oag-modhost` | WebAssembly extension host behind the `extensions` feature; knows no game (`docs/architecture/wasm-extensions/`). |
+| `oag-ext-abi` | ABI 1 defined once: buffer layout, records, `REVISION`. `no_std`, no dependencies. |
 | `oag-ext` | The Rust guest SDK a mod is built on. No engine crate may depend on it. |
-| `oag-net` | Network play: wire messages, WebTransport `Link`, authoritative `host`, predicting `client` (feature), the `oag-server` binary ([ADR-0070](docs/architecture/adr/0070-the-network-transport-is-webtransport.md)). |
+| `oag-net` | Network play: wire messages, WebTransport `Link`, `host`, `client` (feature), `oag-server` (ADR-0070). |
 | `oag-input` | Real devices to the abstract button layer and an `InputSnapshot`. |
 | `oag-view` | Asset viewer: CLI, window, texture browser. |
-| `oag-trace` | Per-tick trace capture and comparison against the original (`show\|run\|compare\|script\|drive\|track`). |
-| `oag-audio` | Voice pool, mixer, `cpal` stream or none, WAV writer. Cues are a per-tick *output*, never `World` state ([ADR-0018](docs/architecture/adr/0018-audio-mixer-architecture.md)). |
-| `oag-music` | A title's soundtrack: reading it and decoding ATRAC3+, ATRAC9, MP3, Wwise to PCM. |
+| `oag-trace` | Per-tick trace capture and comparison against the original. |
+| `oag-audio` | Voice pool, mixer, `cpal` stream or none. Cues are a per-tick *output*, never `World` state (ADR-0018). |
+| `oag-music` | A title's soundtrack: reading it, decoding ATRAC3+, ATRAC9, MP3, Wwise to PCM. |
 | `oag-sound` | Soundtrack selection, effect banks and cues, HD's authored mix, over `oag-audio`. |
-| `oag-raceplay` | A race from load to finish. Its drawing half is the default `view` feature; without it, the simulation half that `oag-server` links. In `NOT_TITLE_PACKAGES`. |
-| `oag-source` | Finding and opening a title's disc image, DLC packs, a race's track/craft sources, caches. |
-| `oag-hud` | In-race HUD: layout model, `Readout`, `Draw` list, `sprite` sheet. No GPU pass (`oag_game::hud_overlay`, `hud_countdown`). In `NOT_TITLE_PACKAGES`. |
-| `oag-ui` | Front end: boot movies, menus, HUD font, strings, the `Draw` vocabulary `oag_game::render` rasterises. In `NOT_TITLE_PACKAGES`. |
+| `oag-raceplay` | A race from load to finish. Drawing half is the default `view` feature; without it, the simulation half `oag-server` links. In `NOT_TITLE_PACKAGES`. |
+| `oag-source` | Finding and opening a title's disc image, DLC packs, a race's sources, caches. |
+| `oag-hud` | In-race HUD: layout model, `Readout`, `Draw` list, `sprite` sheet. No GPU pass. In `NOT_TITLE_PACKAGES`. |
+| `oag-ui` | Front end: boot movies, menus, HUD font, strings, the `Draw` vocabulary. In `NOT_TITLE_PACKAGES`. |
 | `oag-game` | Composition root; a thin `[[bin]]` over `[lib]`. |
 | `oag-testdata` | **Dev-dependency only.** Finds disc images for tests; the `OAG_REQUIRE_GAME_DATA` skip-or-fail contract. |
 
@@ -248,7 +222,7 @@ Six dependency rules, enforced by `just check-deps`
 2. No crate depends on `oag-game`, and no engine crate on the guest SDK `oag-ext`.
 3. No generic render-side crate (`oag-fx`, `oag-gpu`, `oag-mesh`, `oag-post`) reaches a title package (`oag-pulse`, `oag-pure`, `oag-hd`, `oag-omega`, `oag-2048`); tables are injected by the caller. `oag-render` still reads `oag-pulse`'s presentation tables and is not listed.
 4. `oag-unity` depends on no workspace crate but `oag-bytes` (allowlist). A content layer is a separate crate on top, never the reverse.
-5. `oag-ballisticng` reaches `oag-unity`, `oag-texture`, `oag-formats`, `oag-bytes` only; no gameplay crate may depend on it or on `oag-unity`. How a foreign track maps into this engine is the consumer's choice: `oag-bng-import` is that consumer, and the one crate that depends on both.
+5. `oag-ballisticng` reaches `oag-unity`, `oag-texture`, `oag-formats`, `oag-bytes` only; no gameplay crate may depend on it or on `oag-unity`. `oag-bng-import` is the one crate that depends on both.
 6. `oag-server` (`oag-net` built with default features) links no renderer, window, audio or UI crate: `cargo tree -p oag-net -e normal` reaches none of `wgpu`, `winit`, `cpal` or the drawing crates (`oag-render`, `oag-fx`, `oag-audio`, `oag-sound`, `oag-mesh`, `oag-ui`, `oag-hud`, `oag-input`). Checked per package, because the workspace's unified features hide it.
 
 Two size rules, `just check-size` (`scripts/check-file-size.py`), ratchets over
@@ -269,22 +243,20 @@ the gap in its `[untranslated]` table, never by omitting the id. Machine
 translation may fill a gap as `ID = { text = "...", human = false }`; `human`
 is `true` only when a human wrote or approved it.
 
-### GPU debugging
-
-wgpu's debug labels and shader debug info are off in every build. Set `OAG_WGPU_DEBUG=1` on `oag-game` for RenderDoc or to read a validation message by label; this leaves validation as it was (`docs/architecture/load-time.md`).
+**GPU debugging**: wgpu debug labels are off in every build; set `OAG_WGPU_DEBUG=1` on `oag-game` for RenderDoc or to read a validation message by label (`docs/architecture/load-time.md`).
 
 ### Logging
 
-Full table and how to get lines back: [`docs/architecture/logging.md`](docs/architecture/logging.md).
+Level table and how to get lines back: [`docs/architecture/logging.md`](docs/architecture/logging.md).
 The default filter shows `info` from our crates, so **every `info!` is a line each
-player reads on every launch**. Sort a line by what a player loses or wants to know:
-
-- `error`: the player loses something. `warn`: degraded but working, including every absence.
-- `info`: a lifecycle line a user wants: the disc, the renderer, a race starting, a flag they passed being acknowledged, a capture's result.
-- `debug`: what a load or a subsystem did: counts, timings, loader reports, end-of-race summaries, a subsystem arming.
-- `trace`: one line per item: per cue, pattern, ship, frame or tick.
-
-**Default a new line to `debug`.** `info` needs a reason a player cares. Statistics, "armed" or "ready" lines, and anything that repeats during play (each race, pause, pickup) are `debug` or lower, even when a line is useful while building the feature. Prefer no line over a line nothing reads. The simulation crates log nothing. Before moving an existing line, grep `crates/*/tests` and `scripts/` for its text: some tests parse them.
+player reads on every launch**. `error`: the player loses something. `warn`:
+degraded but working, including every absence. `info`: a lifecycle line a user
+wants (the disc, the renderer, a race starting, an acknowledged flag, a capture's
+result). `debug`: what a load or subsystem did (counts, timings, loader reports,
+"armed" lines, anything that repeats during play). `trace`: one line per item.
+**Default a new line to `debug`**; prefer no line over a line nothing reads. The
+simulation crates log nothing. Before moving an existing line, grep
+`crates/*/tests` and `scripts/` for its text: some tests parse them.
 
 ### Determinism
 
@@ -301,8 +273,8 @@ release (not with the PSP/PS2 itself). Full rules:
 These bind `oag-core`, `oag-physics`, `oag-gameplay`, `oag-ai`, `oag-race` and
 `oag-formats` (what `just check-determinism` scans). `oag-render` is exempt (a
 pixel is not compared across machines): `mul_add`, SIMD glam, reassociation and
-the algebraic float ops (`f32::algebraic_add`, Rust 1.98) are fair game in a
-proven-hot per-frame loop.
+the algebraic float ops (`f32::algebraic_add`) are fair game in a proven-hot
+per-frame loop.
 
 CI's `determinism` job asserts hashes match a committed reference
 (`crates/core/src/hash.rs`, `crates/core/tests/determinism.rs`). **When it
@@ -319,22 +291,21 @@ without reopening Ghidra. Everywhere in `docs/`:
 
 - Names are `Subsystem_VerbNoun`. **Below 70 confidence add `_q`; below 50 do not rename** (leave `FUN_08831af0`, write the hypothesis down).
 - Every rename needs a page under `docs/ghidra/functions/<binary>/` (address, purpose, args, confidence, evidence). Docs are authoritative over the Ghidra database ([ADR-0005](docs/architecture/adr/0005-ghidra-conventions.md)).
-- **Every recovered name also goes in `docs/ghidra/functions/psp-pulse-usa/names.tsv` in the same change**: `address<TAB>kind<TAB>name<TAB>confidence<TAB>page`, `kind` is `function` or `data`, name column is the bare name (the `_q` is derived from confidence). `scripts/apply-ghidra-names.py` refuses a row whose address and name are not both on the cited page; `just check-names` makes the same checks offline. `just apply-names` replays the file into a fresh Ghidra import.
+- **Every recovered name also goes in `docs/ghidra/functions/psp-pulse-usa/names.tsv` in the same change**: `address<TAB>kind<TAB>name<TAB>confidence<TAB>page`, `kind` is `function` or `data`, name column is the bare name (the `_q` is derived from confidence). `just check-names` refuses a row whose address and name are not both on the cited page; `just apply-names` replays the file into a fresh Ghidra import.
 - Loop: observe, hypothesise, verify, document, implement ([methodology](docs/reverse-engineering/methodology.md)). Do not implement from a plausible reading.
-- The PSP `BOOT.BIN` and PS2 main executable are unencrypted ELFs. Ghidra setup: [`docs/reverse-engineering/toolchain.md`](docs/reverse-engineering/toolchain.md). The Allegrex/VFPU module (`just build-allegrex`) is required for PSP ([`docs/psp/allegrex-vfpu.md`](docs/psp/allegrex-vfpu.md)). The `ghidra-mcp` server (`.mcp.json`) drives Ghidra when a project is open.
+- Ghidra setup: [`docs/reverse-engineering/toolchain.md`](docs/reverse-engineering/toolchain.md); PSP needs the Allegrex/VFPU module (`just build-allegrex`, [`docs/psp/allegrex-vfpu.md`](docs/psp/allegrex-vfpu.md)). The `ghidra-mcp` server (`.mcp.json`) drives Ghidra when a project is open.
 
 ### A 2048 finding is checked against Omega, and the reverse
 
 2048 (Vita) and Omega (PS4) share an asset lineage: Omega reads through 2048's
-`.rcsmodel` readers (8-byte pointers aside), keeps 2048's ship directories and
-three-way plugin split, and re-ships 2048's circuits at the same layouts
+`.rcsmodel` readers, keeps 2048's ship directories and plugin split, and
+re-ships 2048's circuits at the same layouts
 ([`docs/formats/omega-status.md`](docs/formats/omega-status.md)). Re-shipped is
-not identical: XML tables are byte-identical, but models are re-cooked
-(re-welded vertices), textures are `.gnf` against `.gxt`, shaders are
-recompiled. HD's circuits ship in 2048's container with HD's geometry; Omega's
-front end is HD's. So a law read off one title's shader or model is checked
-against the other's own file, never assumed; a front-end finding is checked
-against HD.
+not identical: XML tables are byte-identical, but models are re-cooked,
+textures are `.gnf` against `.gxt`, shaders are recompiled. HD's circuits ship
+in 2048's container with HD's geometry; Omega's front end is HD's. So a law
+read off one title's shader or model is checked against the other's own file,
+never assumed; a front-end finding is checked against HD.
 
 **Anything recovered or wired for one of the two (format field, law, material
 rule, table, asset path) gets a quick check against the other in the same
@@ -354,22 +325,17 @@ or asset finding.
 
 **If a thing exists in the disc's own data, play the data. Do not author a
 stand-in, and do not hand-transcribe it into a `const`.** This covers particle
-effects (`Data\Psys\*.POB`), models, textures, tables and tuning values. Two
-failures this rule exists for:
-
-1. A hand-transcribed table (`oag_fx::sparks` carried four emitters as a `const`): correct, but not re-derivable.
-2. A plausible stand-in (the rocket drew invented smoke puffs because the `.pob` payload was believed undecoded). A legible stand-in is how a wrong picture survives review.
+effects (`Data\Psys\*.POB`), models, textures, tables and tuning values. A
+hand-transcribed table is correct but not re-derivable; a plausible stand-in (the
+rocket's invented smoke puffs) is how a wrong picture survives review.
 
 Parse it and play it; if it will not parse, **draw nothing and say so** in the
 loader report. Where a stand-in cannot be avoided (a texture with no located
 WAD entry), keep it a substitute for the missing asset alone, never an override
-of data you have (`crates/fx/src/psys.wgsl` once lost a whitening term for this).
-
-Effects load generically: `oag_fx::psys::Library` loads any
-`Data\Psys\<name>.POB` and `psys::Stage` plays any number. Adding an effect is
-adding its name and its **trigger**, and the trigger needs reverse-engineering;
-an effect with no recovered trigger stays unwired rather than fired on a guess
-(`docs/formats/pob.md` lists them).
+of data you have. Effects load generically (`oag_fx::psys::Library`,
+`psys::Stage`): adding one is adding its name and its **trigger**, and the
+trigger needs reverse-engineering; an effect with no recovered trigger stays
+unwired rather than fired on a guess (`docs/formats/pob.md` lists them).
 
 **Label provenance only where it is in doubt.** A value standing in for
 something the original has is marked **chosen, not measured** (no confidence
