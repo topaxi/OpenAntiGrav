@@ -120,7 +120,9 @@ binary, and the call shape is read. The block's writer is `Ship_UpdateDetonatorH
 (`0x00107c28`, 62, [detonator-ammo-gauge.md](detonator-ammo-gauge.md)): `Charge1` goes to `1` while
 its input `v` is over `0`, `Charge2` while `v >= 1`, each smoothed; `v` is the EMP charge mapped
 between its ready and full thresholds (70), so Charge1 lights once the EMP is ready and Charge2 once
-it is full. The
+it is full. Neither hull material declares them: the two plasma shells in the same `ship.rcsmodel`
+(`detonator_shield_plasma`, `detonator_shield_plasma1`) do, as their alpha, and they are wired
+([detonator-ammo-gauge.md](detonator-ammo-gauge.md), "`Charge1`, `Charge2`"). The
 cannon clip is **not** it: the clip drives the separate `detonator_bulletgaugesegments` block. The hull's materials carry
 these names hashed (no plain string in any `detonator_*.rcsmaterial`).
 
@@ -410,7 +412,7 @@ objects}`, `oag_hd::race::DETONATOR_CRAFT`, `DETONATOR_HANDLING`, `DETONATOR_OBJ
 - The substitution table's reader ([zone-craft.md](zone-craft.md)). It would raise the livery reading
   above 78.
 - The race-side write of `ship+0x6298` (which `PI_TeamModel` a Detonator craft carries).
-- `Charge1`/`Charge2`: who writes the block at `0x00992f40`.
+- `Charge1`/`Charge2`: written by `Ship_UpdateDetonatorHullParams`, read by the plasma shells; open: `0x002a3718`'s body and a live capture.
 - The `Detonator_Pad` loop's transform binding, and whether the original pad still draws.
 - The mine's and bomb's colour and brightness binds: read, see
   [detonator-mine-material.md](detonator-mine-material.md); what stays open there is the shader's
