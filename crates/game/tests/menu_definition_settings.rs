@@ -655,9 +655,15 @@ fn the_supplied_mode_rows_are_exactly_the_modes_the_game_has() {
             .collect::<Vec<_>>(),
         "the supplied rows and Mode::ALL must be one list, in the same order"
     );
-    // Pulse ships no Detonator, so its row does not offer one.
+    // Pure ships no Detonator and names none, so its row does not offer one; Pulse's is
+    // this project's own (`docs/gameplay/detonator-pulse.md`).
     assert!(
         mode_choices(&strings, oag_pulse::TITLE)
+            .iter()
+            .any(|choice| choice.value == oag_race::Mode::Detonator.name())
+    );
+    assert!(
+        mode_choices(&strings, oag_pure::TITLE)
             .iter()
             .all(|choice| choice.value != oag_race::Mode::Detonator.name())
     );

@@ -1205,4 +1205,25 @@ fn a_pulse_detonator_race_lays_pulse_mines_on_a_zone_circuit_with_red_charging_p
         Some((3, true)),
         "three pads ready the EMP"
     );
+    assert!(race.core.sim.l1_is_flip(), "L1 is the EMP");
+    // The EMP clears the mines ahead, paid by this project's `<Emp>` (5 a live mine).
+    let (live, paid) = emp_from_a_stand(&loaded, true).expect("a mine to stand before");
+    assert!(live > 0, "the wave clears a mine");
+    assert_eq!(paid, 5 * live as i32);
+    // Square spends Pulse's own Cannon clip.
+    let mut race = race::Race::start(
+        loaded.setup.clone(),
+        loaded.view.clone(),
+        loaded.modules.clone(),
+    );
+    start_racing(&mut race);
+    let full = race.core.sim.world.detonator.cannon.clip;
+    for _ in 0..3 {
+        race.tick(&square());
+        keep_alive(&mut race);
+    }
+    assert!(
+        race.core.sim.world.detonator.cannon.clip < full,
+        "a volley left the clip"
+    );
 }
