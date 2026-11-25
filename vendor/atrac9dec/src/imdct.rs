@@ -143,7 +143,7 @@ impl Mdct {
         }
 
         let stage_count = mdct_bits - 1;
-        for stage in 0..stage_count {
+        for stage in 0..stage_count - 2 {
             let block_size_bits = stage_count - stage;
             let block_half_size_bits = block_size_bits - 1;
             let block_size = 1usize << block_size_bits;
@@ -154,22 +154,6 @@ impl Mdct {
             // A block spans `2 * block_size` entries: the front half holds `block_half_size`
             // pairs, and each pair meets the pair `block_size` entries behind it.
             let mut start = 0;
-            if block_half_size == 1 {
-                // The last stage: one pair meets one pair, on the table's only entry.
-                let (sin, cos) = (sin_table[0], cos_table[0]);
-                while start < mdct_size {
-                    let quad = &mut temp[start..start + 4];
-                    let (f0, f1, b0, b1) = (quad[0], quad[1], quad[2], quad[3]);
-                    let a = f0 - b0;
-                    let b = f1 - b1;
-                    quad[0] = f0 + b0;
-                    quad[1] = f1 + b1;
-                    quad[2] = a * cos + b * sin;
-                    quad[3] = a * sin - b * cos;
-                    start += 4;
-                }
-                continue;
-            }
             while start < mdct_size {
                 let (front, back) = temp[start..start + 2 * block_size].split_at_mut(block_size);
                 for i in 0..block_half_size {
@@ -187,10 +171,51 @@ impl Mdct {
             }
         }
 
+        // The last two stages meet inside spans of eight entries, one span at a time and in
+        // registers: the stage of blocks of four (two pairs against two pairs, on the second
+        // table), then the stage of blocks of two (a pair against a pair, on the table's only
+        // entry). Each entry takes the same operations in the same order as it does stage by
+        // stage over the whole array.
+        let (sin_four, cos_four) = (&t.sin_tables[1], &t.cos_tables[1]);
+        let (sin_two, cos_two) = (t.sin_tables[0][0], t.cos_tables[0][0]);
+        let mut start = 0;
+        while start < mdct_size {
+            let span: &mut [f64; 8] = (&mut temp[start..start + 8])
+                .try_into()
+                .expect("a span of eight entries");
+            let a0 = span[0] - span[4];
+            let a1 = span[1] - span[5];
+            let a2 = span[2] - span[6];
+            let a3 = span[3] - span[7];
+            let f0 = span[0] + span[4];
+            let f1 = span[1] + span[5];
+            let f2 = span[2] + span[6];
+            let f3 = span[3] + span[7];
+            let b0 = a0 * cos_four[0] + a1 * sin_four[0];
+            let b1 = a0 * sin_four[0] - a1 * cos_four[0];
+            let b2 = a2 * cos_four[1] + a3 * sin_four[1];
+            let b3 = a2 * sin_four[1] - a3 * cos_four[1];
+
+            let front_a = f0 - f2;
+            let front_b = f1 - f3;
+            span[0] = f0 + f2;
+            span[1] = f1 + f3;
+            span[2] = front_a * cos_two + front_b * sin_two;
+            span[3] = front_a * sin_two - front_b * cos_two;
+            let back_a = b0 - b2;
+            let back_b = b1 - b3;
+            span[4] = b0 + b2;
+            span[5] = b1 + b3;
+            span[6] = back_a * cos_two + back_b * sin_two;
+            span[7] = back_a * sin_two - back_b * cos_two;
+            start += 8;
+        }
+
         let shuffle_table = &t.shuffle_tables[mdct_bits][..mdct_size];
         let output = &mut output[..mdct_size];
         for i in 0..mdct_size {
-            output[i] = temp[shuffle_table[i]];
+            // The table's entries are below the transform size, which is at most the array's.
+            output[i] = dct_temp[shuffle_table[i] % MAX_FRAME_SAMPLES];
         }
     }
 }
