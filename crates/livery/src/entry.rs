@@ -256,14 +256,44 @@ pub fn ps3_scene_model(
     report: &mut Vec<String>,
 ) -> anyhow::Result<(mesh::Model, Vec<String>)> {
     let mut textures = Vec::new();
-    let model = scene_model_requesting(archives, entry, blob, livery, report, &mut |path| {
-        if oag_texture::decode::Container::of_name(path)
-            == Some(oag_texture::decode::Container::Gtf)
-        {
-            textures.push(path.to_string());
-        }
-    })?;
+    let model = scene_model_requesting(
+        archives,
+        entry,
+        blob,
+        livery,
+        report,
+        Reading::default(),
+        &mut |path| {
+            if oag_texture::decode::Container::of_name(path)
+                == Some(oag_texture::decode::Container::Gtf)
+            {
+                textures.push(path.to_string());
+            }
+        },
+    )?;
     Ok((model, textures))
+}
+
+/// How [`scene_model_requesting`] builds.
+#[derive(Clone, Copy, Debug)]
+pub struct Reading {
+    /// The water law a 2048 or Omega circuit is built under: it decides which of a sea's
+    /// textures are asked for (a race builds under the player's, `Original` by default).
+    pub water: oag_display::display::Water,
+    /// Whether a texture file's bytes are handed to the build. Without them the build still
+    /// asks for each file it would use, and decodes none: the model is untextured and
+    /// only the requests are of use.
+    pub pictures: bool,
+}
+
+impl Default for Reading {
+    /// What [`ps3_scene_model`] reads: pictures, and no water.
+    fn default() -> Self {
+        Self {
+            water: oag_display::display::Water::Off,
+            pictures: true,
+        }
+    }
 }
 
 /// [`ps3_scene_model`]'s build, handing `requested` every texture path the build asks the
@@ -284,6 +314,7 @@ pub fn scene_model_requesting(
     blob: &[u8],
     livery: Option<crate::LiveryFolder<'_>>,
     report: &mut Vec<String>,
+    reading: Reading,
     requested: &mut dyn FnMut(&str),
 ) -> anyhow::Result<mesh::Model> {
     use anyhow::Context as _;
@@ -310,15 +341,24 @@ pub fn scene_model_requesting(
     let mut read = |archives: &mut oag_assets::Archives, path: &str| {
         if oag_texture::decode::Container::of_name(path).is_some() {
             requested(path);
+            if !reading.pictures {
+                return None;
+            }
         }
         reads.read(archives, path)
     };
     // 2048's and Omega's container is a different file under the same extension and needs no
     // `.vex` at all (`oag_mesh::mesh::rcs::psp2`).
     let mut model = if mesh::rcs::psp2::is_psp2(&geometry) {
-        let (model, built) =
-            mesh::rcs::psp2::build(entry, &geometry, None, &mut |path| read(archives, path))
-                .with_context(|| format!("decoding the model {entry}"))?;
+        let (model, built) = mesh::rcs::psp2::build_circuit(
+            entry,
+            &geometry,
+            None,
+            &mut |path| read(archives, path),
+            reading.water,
+            false,
+        )
+        .with_context(|| format!("decoding the model {entry}"))?;
         report.push(format!("{entry}: {}", built.describe()));
         model
     } else {

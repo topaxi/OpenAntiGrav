@@ -56,6 +56,17 @@ pub struct Exported {
     pub skipped: Vec<String>,
 }
 
+/// The names of the textures of the circuit `entry`, as [`export_entry`] with no names would
+/// write them.
+///
+/// # Errors
+///
+/// The circuit not reading on this disc.
+pub fn list_entry(archives: &mut Archives, entry: &str) -> anyhow::Result<Vec<String>> {
+    let mut table = host_table(archives, entry)?;
+    Ok(table.listed(archives)?.iter().flatten().cloned().collect())
+}
+
 /// Writes the textures of the circuit `entry` under `out`: the ones `names`
 /// spells, or every `Texture` node when `names` is `None`. A name that matches
 /// no decodable node is a line in [`Exported::skipped`], never a stand-in.
@@ -70,12 +81,12 @@ pub fn export_entry(
     names: Option<&BTreeSet<String>>,
     out: &Path,
 ) -> anyhow::Result<Exported> {
-    let table = host_table(archives, entry)?;
+    let mut table = host_table(archives, entry)?;
     let mut done = Exported::default();
     let mut seen = BTreeSet::new();
     let wanted: Vec<(usize, String)> = match names {
         None => table
-            .names
+            .listed(archives)?
             .iter()
             .enumerate()
             .map(|(i, n)| {
@@ -88,7 +99,7 @@ pub fn export_entry(
             .collect(),
         Some(names) => names
             .iter()
-            .filter_map(|name| match table.find(name) {
+            .filter_map(|name| match table.find(archives, name) {
                 Some((first, _)) => Some((first, name.clone())),
                 None => {
                     done.skipped

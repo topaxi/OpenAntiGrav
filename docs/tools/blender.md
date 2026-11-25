@@ -283,8 +283,14 @@ the exported folder under `data/` (never committed) and out of a mod folder.
 An HD-family circuit (a `.vex` whose geometry is in an `.rcsmodel` beside it) keeps names and no
 texels in its `Texture` nodes (2048's and Omega's keep one `VexDummyTexture`), which is why it
 first exported nothing ("not decodable": the export read only the `.vex`'s own texture block).
-It now builds the circuit the way a race does and takes the texture files that build asks for
-(`oag_livery::entry::scene_model_requesting`), so its host names are the paths the materials
+A host name with a directory is now the texture file it spells, read by the race's texture
+lookup (`Archives::read_texture`) with no build, so a track naming one picture costs one read
+and decode (Omega: 0.9 s and 0.3 GB, against 24 s and 1.9 GB for a whole circuit). The whole
+list (`just export-host-textures` of a circuit entry, `oag_raceplay::list_host_textures`) is
+what the circuit's build asks for, built as a race builds it (the race's water law, which adds a
+2048 sea's normal map, and with its pictures: a material whose picture does not decode asks for
+no lightmap, so a build without them lists 142 of Tech De Ra's 191;
+`oag_livery::entry::scene_model_requesting`), so its host names are the paths the materials
 spell (`/data/environments/03_track/hd_textures/dds/ds_speedup_cs.gtf`, with a leading
 separator on a PS3 or PS4 path; a reference matches a name without case and with `\` and `/`
 alike, and without the leading separator). The pictures are decoded by `oag_texture::decode` and

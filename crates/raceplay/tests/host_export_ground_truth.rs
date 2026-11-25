@@ -116,32 +116,70 @@ fn a_track_files_host_rows_each_resolve_to_a_file() {
     let _ = std::fs::remove_dir_all(&out);
 }
 
-/// One title's circuit, exported whole.
+/// One title's circuit: its texture list checked whole, its pictures written for a sample.
 struct Circuit {
     /// What `oag_testdata::exact` opens: an image, or 2048's extracted package.
     source: &'static str,
     slug: &'static str,
     entry: &'static str,
-    /// Fewer than this many PNGs is a regression (the count the disc gave, less a margin).
+    /// Fewer than this many names is a regression (the count the disc gave, less a margin).
     at_least: usize,
     /// One texture, spelled as the circuit names it.
     name: &'static str,
     size: (u32, u32),
     /// Pixels `(x, y)` of that texture, straight RGBA.
     pixels: &'static [((u32, u32), [u8; 4])],
+    /// Write every texture, not a sample: only where that is cheap (a circuit of embedded
+    /// pictures). A PS4 circuit is 1.5 GB written.
+    whole: bool,
 }
 
-fn export_one_circuit(tag: &str, circuit: &Circuit) {
-    let Some(source) = oag_testdata::exact(circuit.source) else {
-        return;
-    };
+/// A texture path as a list spells it, for comparing names.
+fn spelled(name: &str) -> String {
+    name.trim_start_matches(['\\', '/'])
+        .replace('\\', "/")
+        .to_ascii_lowercase()
+}
+
+fn listed(source: &str, entry: &str) -> Option<(oag_raceplay::Options, Vec<String>)> {
+    let source = oag_testdata::exact(source)?;
     let options = oag_raceplay::Options {
         source: source.display().to_string(),
         ..oag_raceplay::Options::default()
     };
+    let names = oag_raceplay::list_host_textures(&options, entry)
+        .unwrap_or_else(|e| panic!("{entry}: {e:#}"));
+    Some((options, names))
+}
+
+fn export_one_circuit(tag: &str, circuit: &Circuit) {
+    let Some((options, names)) = listed(circuit.source, circuit.entry) else {
+        return;
+    };
+    assert!(
+        names.len() >= circuit.at_least,
+        "{tag}: {} names, expected at least {}",
+        names.len(),
+        circuit.at_least
+    );
+    assert!(
+        names.iter().any(|n| spelled(n) == spelled(circuit.name)),
+        "{tag}: {} is not in the list",
+        circuit.name
+    );
     let out = scratch(tag);
-    let done = oag_raceplay::export_host_textures(&options, circuit.entry, &out)
-        .unwrap_or_else(|e| panic!("{tag}: {e:#}"));
+    let done = if circuit.whole {
+        oag_raceplay::export_host_textures(&options, circuit.entry, &out)
+    } else {
+        let mut sample: BTreeSet<String> = names
+            .iter()
+            .step_by(names.len().div_ceil(11))
+            .cloned()
+            .collect();
+        sample.insert(circuit.name.to_string());
+        oag_raceplay::export_named_host_textures(&options, circuit.entry, &sample, &out)
+    }
+    .unwrap_or_else(|e| panic!("{tag}: {e:#}"));
     assert!(
         done.skipped.is_empty(),
         "{tag}: {} texture(s) left out, the first: {:?}",
@@ -149,10 +187,15 @@ fn export_one_circuit(tag: &str, circuit: &Circuit) {
         done.skipped.first()
     );
     assert!(
-        done.written.len() >= circuit.at_least,
-        "{tag}: {} written, expected at least {}",
+        !circuit.whole || done.written.len() == names.len(),
+        "{tag}: {} written of {} listed",
         done.written.len(),
-        circuit.at_least
+        names.len()
+    );
+    assert!(
+        done.written.len() >= 12,
+        "{tag}: {} written",
+        done.written.len()
     );
     let file = out.join(
         texture_file(circuit.slug, circuit.entry, circuit.name)
@@ -165,10 +208,23 @@ fn export_one_circuit(tag: &str, circuit: &Circuit) {
         assert_eq!(&picture.rgba[at..at + 4], &want, "{tag}: pixel ({x}, {y})");
     }
     assert_a_picture(&file);
-    for file in done.written.iter().step_by(done.written.len().div_ceil(12)) {
+    for file in done.written.iter().take(40) {
         decode(file);
     }
     let _ = std::fs::remove_dir_all(&out);
+}
+
+/// A circuit's list holds `wanted`: the textures only the race's water law asks for.
+fn lists(source: &str, entry: &str, wanted: &[&str]) {
+    let Some((_, names)) = listed(source, entry) else {
+        return;
+    };
+    for want in wanted {
+        assert!(
+            names.iter().any(|n| spelled(n) == spelled(want)),
+            "{entry}: {want} is not listed"
+        );
+    }
 }
 
 #[test]
@@ -187,6 +243,7 @@ fn pulse_ps2_writes_its_circuit_textures() {
                 ((64, 32), [115, 116, 132, 255]),
                 ((64, 96), [140, 146, 164, 255]),
             ],
+            whole: true,
         },
     );
 }
@@ -204,6 +261,7 @@ fn pure_writes_its_circuit_textures() {
             name: "Data\\Environments\\01_Vineta_K\\Textures\\ag03.tga",
             size: (64, 128),
             pixels: &[],
+            whole: true,
         },
     );
 }
@@ -224,6 +282,7 @@ fn hd_writes_the_pictures_its_circuit_materials_name() {
                 ((128, 128), [68, 69, 82, 55]),
                 ((128, 384), [186, 187, 186, 238]),
             ],
+            whole: false,
         },
     );
 }
@@ -244,6 +303,7 @@ fn wipeout_2048_writes_the_pictures_its_circuit_materials_name() {
                 ((32, 32), [102, 65, 28, 143]),
                 ((32, 96), [103, 70, 24, 153]),
             ],
+            whole: false,
         },
     );
 }
@@ -264,6 +324,40 @@ fn omega_writes_the_pictures_its_circuit_materials_name() {
                 ((128, 128), [57, 69, 83, 255]),
                 ((128, 384), [30, 36, 44, 255]),
             ],
+            whole: false,
         },
+    );
+}
+
+#[test]
+#[ignore = "needs data/extracted/vita/PCSF00007"]
+fn wipeout_2048_lists_the_textures_its_seas_ask_for_under_the_races_water_law() {
+    // A sea of `fc15`/`fc17_effects_vscroll_water` asks for its normal map only where water is
+    // drawn, as it is in a race by default; Altima's blended edge hides this one.
+    for (circuit, normal) in [
+        ("mall", "waternormalmap.gxt"),
+        ("tower", "waternormalmap.gxt"),
+        ("square", "dc_waternormalmap.gxt"),
+        ("park", "water_lapping_waves2_n.gxt"),
+    ] {
+        lists(
+            "data/extracted/vita/PCSF00007",
+            &format!("Data\\art\\published\\environments\\{circuit}\\track.vex"),
+            &[&format!(
+                "data/art/published/environments/{circuit}/textures/{normal}"
+            )],
+        );
+    }
+}
+
+#[test]
+#[ignore = "needs data/images/omega-ps4-eu.pkg"]
+fn omega_lists_its_2048_era_sea_normal_map() {
+    // Omega's seas list the same files under either water law (checked on ten circuits); the
+    // normal map is one of them.
+    lists(
+        "data/images/omega-ps4-eu.pkg",
+        "Data\\environments2048\\mall\\track.vex",
+        &["data/environments2048/mall/textures/dc_waternormalmap.gnf"],
     );
 }

@@ -393,8 +393,6 @@ pub use hit_sparks::{ContactSeed, HIT_SPARK_SEVERITY};
 pub use hud::{hud_layout, splice_assist_indicator};
 pub use load::authored_length;
 #[cfg(feature = "view")]
-pub use load::export_host_textures;
-#[cfg(feature = "view")]
 pub use load::load_event;
 #[cfg(feature = "view")]
 pub use load::load_view;
@@ -403,6 +401,8 @@ pub use load::ripple::{Ripples, SpanPlaces};
 pub use load::{SimLoad, export_track, load, load_sim};
 #[cfg(feature = "view")]
 pub use load::{authored_light, hd_bloom_params};
+#[cfg(feature = "view")]
+pub use load::{export_host_textures, export_named_host_textures, list_host_textures};
 #[cfg(feature = "view")]
 pub(crate) use oag_title::Trigger;
 pub use options::{
