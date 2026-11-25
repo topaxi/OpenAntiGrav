@@ -112,3 +112,41 @@ fn a_forked_circuit_lays_mines_on_its_branch() {
     }
     assert!(bare.is_empty(), "nothing laid on the branch: {bare:?}");
 }
+
+/// **Omega's placer walks the fork the same way** (`FUN_012a2300`, selectors at `0x012a2613`,
+/// `0x012a2691`, `0x012a2976`), and its re-shipped HD circuits with a split get branch mines.
+/// Omega's `zone_3` decodes to no triangles, so it is not among them.
+#[test]
+#[ignore = "needs data/images/omega-ps4-eu.pkg"]
+fn an_omega_forked_circuit_lays_mines_on_its_branch() {
+    let Some(image) = oag_testdata::image("omega-ps4-eu.pkg") else {
+        return;
+    };
+    for track in [
+        r"Data\Environments\05_ubermall\track.vex",
+        r"Data\Environments\15_anulpha_pass\track.vex",
+    ] {
+        let loaded = crate::load(&crate::Options {
+            source: image.display().to_string(),
+            class: "VENOM".to_string(),
+            mode: Mode::Detonator,
+            track: Some(track.to_string()),
+            no_effects: true,
+            ..crate::Options::default()
+        })
+        .expect("loading an Omega Detonator race");
+        let race = Race::start(loaded.setup, loaded.view, loaded.modules);
+        let detonator = race.core.sim.detonator.as_ref().expect("a Detonator race");
+        let ring = detonator.survey.entries.len();
+        let laid = lay_all(&race, 0x5eed);
+        let on_branch = laid
+            .iter()
+            .filter(|&&(_, _, entry, _)| usize::from(entry) >= ring)
+            .count();
+        println!(
+            "omega {track}: {} objects, {on_branch} on the branch",
+            laid.len()
+        );
+        assert!(on_branch > 0, "omega {track}: nothing laid on the branch");
+    }
+}
