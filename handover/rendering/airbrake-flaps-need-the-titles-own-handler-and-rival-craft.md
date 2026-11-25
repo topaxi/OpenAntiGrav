@@ -1,7 +1,7 @@
 ---
 status: re-first
 titles: [hd, 2048, omega]
-updated: 2026-11-24
+updated: 2026-11-25
 summary: "Read HD's Airbrake class 0x3c5 handler for axis and sign; deflect rival craft from their own sim level"
 ---
 
@@ -50,3 +50,11 @@ Zone (`ZoneCraft::OwnShipAt`, since 2026-10-06), which carries the same HD flap 
 2048 had no such defect (no `Anim Transform` hinge). Omega racing: not checkable.
 Still open: the shine pass's own drawable (`oag-render`'s `shine`) writes no
 node table either; it is a Pulse mechanism, not checked on HD.
+
+## Closed 2026-11-25: Omega's Zone flaps stayed raised
+
+The Omega `.rcsmodel` poses the shared Zone hull's flap nodes 45 degrees open, which the
+"same HD flap hinges" line above did not see: that was true of the `.vex`, not of the node
+the psp2 loader baked through. `Model::seat_flaps_on_vex` carries every 2048 and Omega
+hull's flaps onto the `.vex` hinge (`docs/physics/grid-state.md`, "The Zone hull's flaps").
+
