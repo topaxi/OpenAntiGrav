@@ -136,8 +136,9 @@ pub struct Options {
     /// [`oag_display::display::ReflectionResolution`].
     pub reflection_resolution: oag_display::display::ReflectionResolution,
     /// Whether the frame loop times the glass and sea target's pass, which is what steps
-    /// `auto` (`oag_present::drs::reflection`); read only for the loader report's line.
-    pub reflection_timed: bool,
+    /// `auto` (`oag_present::drs::reflection`), or `None` where the race loads before the device
+    /// exists (the `--race` routes); read only for the loader report's line.
+    pub reflection_timed: Option<bool>,
     /// Team id, which selects both the handling stats and the model, or `None`
     /// for the source's own.
     ///

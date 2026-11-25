@@ -643,6 +643,13 @@ impl Session {
         if self.reflection_race != Some(race) {
             self.reflection_race = Some(race);
             self.drs.reset_reflection();
+            // Once a race, for the routes whose loader report could not know (`--race`).
+            if self.pass_stamps.is_none() {
+                debug!(
+                    "reflection resolution auto: nothing times a pass on this device, so the glass \
+                     and sea target stays at the original's size"
+                );
+            }
         }
         let step = self.drs.reflection_step();
         let (glass, passes) = reflection_reading(&self.pass_scratch, self.stall_frame, |frame| {
