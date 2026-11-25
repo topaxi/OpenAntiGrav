@@ -50,9 +50,9 @@ fn image() -> Option<PathBuf> {
 
 /// A single race: the one mode with weapons on, and so the only one a pickup can
 /// happen in at all.
-fn single_race() -> Option<race::Loaded> {
+fn single_race() -> Option<race::SimLoad> {
     let image = image()?;
-    let loaded = race::load(&race::Options {
+    let loaded = race::load_sim(&race::Options {
         source: image.display().to_string(),
         class: "VENOM".to_string(),
         mode: oag_race::Mode::SingleRace,
@@ -80,7 +80,7 @@ fn single_race() -> Option<race::Loaded> {
 /// blind spot.
 fn hand_out_once(weapon: Weapon, ticks: usize) -> Option<(usize, usize)> {
     let loaded = single_race()?;
-    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
+    let mut race = race::Race::start(loaded.setup, race::ViewSetup::headless(), loaded.modules);
     // **This project's fire law, which never absorbs.** Since 2026-10-19 the
     // original's law has its absorb half too (`oag_ai::weapon_ai::Decision`),
     // so under it a weapon turning into energy is sometimes the law and not
@@ -261,7 +261,7 @@ fn a_field_racing_with_real_pads_does_not_mine_itself_to_death() {
     let mut means = Vec::new();
     let mut depleted_total = 0usize;
     for seed in 0..SEEDS {
-        let loaded = race::load(&race::Options {
+        let loaded = race::load_sim(&race::Options {
             source: image.display().to_string(),
             class: "VENOM".to_string(),
             mode: oag_race::Mode::SingleRace,
@@ -269,7 +269,7 @@ fn a_field_racing_with_real_pads_does_not_mine_itself_to_death() {
             ..race::Options::default()
         })
         .expect("loading the race");
-        let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
+        let mut race = race::Race::start(loaded.setup, race::ViewSetup::headless(), loaded.modules);
 
         let opponents = 1..usize::from(race.core.sim.ship_count());
         let full: f32 = race.core.sim.world.ships[1].handling.dimensions.shield;

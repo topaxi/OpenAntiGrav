@@ -579,7 +579,7 @@ impl MenuStage {
             layers
                 .chrome
                 .extend(footer::hd_nav(&self.nav_legend, picker));
-            let layers = crate::campaign::gate_glow(self.frontend_glow, layers);
+            let layers = crate::campaign::gate_glow(self.frontend_glow, &self.skin, layers);
             let (mut flat, ticker_clip) = footer::append(layers.flatten(), picker_footer);
             flat.extend(description);
             // The screen's Help goes over the page, its footer and the 3D preview, in a pass of
@@ -866,7 +866,7 @@ impl MenuStage {
                     }
                 }
             };
-            let layers = crate::campaign::gate_glow(campaign.frontend_glow, layers);
+            let layers = crate::campaign::gate_glow(campaign.frontend_glow, &self.skin, layers);
             let split = layers.backdrop.len();
             let flat = layers.flatten();
             // The ticker's own clip: `Renderer::render_with`'s `clip` is

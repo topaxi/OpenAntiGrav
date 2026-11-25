@@ -25,7 +25,7 @@ fn started(
     difficulty: oag_ai::Difficulty,
     skill_level: Option<u8>,
 ) -> (Race, Vec<String>) {
-    let loaded = race::load(&race::Options {
+    let loaded = race::load_sim(&race::Options {
         source: image.display().to_string(),
         class: "VENOM".to_string(),
         mode: oag_race::Mode::SingleRace,
@@ -40,7 +40,7 @@ fn started(
     .expect("loading the race");
     let teams = loaded.setup.slot_teams.clone();
     (
-        Race::start(loaded.setup, loaded.view, loaded.modules),
+        Race::start(loaded.setup, race::ViewSetup::headless(), loaded.modules),
         teams,
     )
 }
@@ -164,18 +164,36 @@ fn try_authored(
     Some(stats.misc)
 }
 
+/// What a race starts from and the loader's report: a simulation load's, or a campaign event's
+/// whole one.
+struct Parts {
+    setup: race::SimSetup,
+    modules: race::extensions::Prepared,
+    report: Vec<String>,
+}
+
+impl From<race::SimLoad> for Parts {
+    fn from(sim: race::SimLoad) -> Self {
+        Self {
+            setup: sim.setup,
+            modules: sim.modules,
+            report: sim.report,
+        }
+    }
+}
+
 /// Every active craft's pool against `expected(its team's <Misc>)`, read from `title`'s own
 /// files, how many differ from plain `shield`, and the loader report.
 fn pools_in(
     source: &str,
     title: &oag_title::Title,
-    loaded: race::Loaded,
+    loaded: Parts,
     label: &str,
     expected: impl Fn(&handling::Misc) -> f32,
 ) -> (usize, Vec<String>) {
     let report = loaded.report.clone();
     let teams = loaded.setup.slot_teams.clone();
-    let race = Race::start(loaded.setup, loaded.view, loaded.modules);
+    let race = Race::start(loaded.setup, race::ViewSetup::headless(), loaded.modules);
     let mut archives = oag_assets::Archives::open(source, title).expect("opening the archives");
     let mut moved = 0;
     for (slot, team) in teams.iter().enumerate() {
@@ -220,7 +238,7 @@ fn omegas_novice_field_starts_on_each_teams_easyshield() {
     };
     let source = image.display().to_string();
     let load = |difficulty| {
-        race::load(&race::Options {
+        race::load_sim(&race::Options {
             source: source.clone(),
             mode: oag_race::Mode::SingleRace,
             difficulty,
@@ -232,7 +250,7 @@ fn omegas_novice_field_starts_on_each_teams_easyshield() {
     let (moved, report) = pools_in(
         &source,
         oag_omega::TITLE,
-        load(oag_ai::Difficulty::Novice),
+        load(oag_ai::Difficulty::Novice).into(),
         "Omega Novice",
         |misc| misc.easyshield.expect("Omega authors easyshield"),
     );
@@ -244,7 +262,7 @@ fn omegas_novice_field_starts_on_each_teams_easyshield() {
     let (moved, report) = pools_in(
         &source,
         oag_omega::TITLE,
-        load(oag_ai::Difficulty::Elite),
+        load(oag_ai::Difficulty::Elite).into(),
         "Omega Elite",
         |misc| misc.shield_for(1),
     );
@@ -277,7 +295,7 @@ fn a_2048_novice_field_starts_on_each_teams_easyshield() {
     let Some(source) = vita_2048_source() else {
         return;
     };
-    let loaded = race::load(&race::Options {
+    let loaded = race::load_sim(&race::Options {
         source: source.clone(),
         mode: oag_race::Mode::SingleRace,
         difficulty: oag_ai::Difficulty::Novice,
@@ -285,9 +303,13 @@ fn a_2048_novice_field_starts_on_each_teams_easyshield() {
         ..race::Options::default()
     })
     .expect("loading the race");
-    let (moved, report) = pools_in(&source, oag_2048::TITLE, loaded, "2048 Novice", |misc| {
-        misc.shield_for(0)
-    });
+    let (moved, report) = pools_in(
+        &source,
+        oag_2048::TITLE,
+        loaded.into(),
+        "2048 Novice",
+        |misc| misc.shield_for(0),
+    );
     assert!(
         moved > 0,
         "no 2048 craft's easyshield differs from its shield"
@@ -314,7 +336,11 @@ fn a_2048_event_starts_on_its_own_level_not_the_difficulty() {
     let (_, report) = pools_in(
         &source,
         oag_2048::TITLE,
-        loaded,
+        Parts {
+            setup: loaded.setup,
+            modules: loaded.modules,
+            report: loaded.report,
+        },
         "2048 - Event 4 under Novice",
         |misc| {
             easy_differs
@@ -339,7 +365,7 @@ fn pulses_novice_field_starts_on_each_teams_easyshield() {
     };
     let source = image.display().to_string();
     let load = |difficulty| {
-        let loaded = race::load(&race::Options {
+        let loaded = race::load_sim(&race::Options {
             source: source.clone(),
             class: "VENOM".to_string(),
             mode: oag_race::Mode::SingleRace,
@@ -350,7 +376,7 @@ fn pulses_novice_field_starts_on_each_teams_easyshield() {
         .expect("loading the race");
         let teams = loaded.setup.slot_teams.clone();
         (
-            Race::start(loaded.setup, loaded.view, loaded.modules),
+            Race::start(loaded.setup, race::ViewSetup::headless(), loaded.modules),
             teams,
         )
     };

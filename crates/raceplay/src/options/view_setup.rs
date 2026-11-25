@@ -297,6 +297,16 @@ pub struct ViewSetup;
 
 #[cfg(feature = "view")]
 impl ViewSetup {
+    /// [`Self::headless`] for a race loaded from `options` onto `circuit` ([`SimLoad::circuit`]),
+    /// carrying the launch request a recording of it writes into its header.
+    #[must_use]
+    pub fn headless_on(options: &Options, circuit: &str) -> Self {
+        Self {
+            request: Some(options.replay_setup_on(circuit)),
+            ..Self::headless()
+        }
+    }
+
     /// The view of [`SimSetup::headless`]'s race: every field the empty value its type
     /// defines, so a test that builds a race by hand draws and plays nothing it did not ask for.
     #[must_use]
@@ -405,6 +415,12 @@ impl ViewSetup {
     /// Nothing, as [`ViewSetup`] itself is in this build.
     #[must_use]
     pub fn headless() -> Self {
+        Self
+    }
+
+    /// Nothing, as [`ViewSetup`] itself is in this build.
+    #[must_use]
+    pub fn headless_on(_options: &super::Options, _circuit: &str) -> Self {
         Self
     }
 }

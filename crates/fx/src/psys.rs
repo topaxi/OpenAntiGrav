@@ -272,6 +272,8 @@ pub struct EmitterSpec {
     /// emitter's `0x200` flag: zero where the flag is clear, however the
     /// field is authored.
     pub gravity_per_tick2: f32,
+    /// Modifier type `0x11`, see [`turbulence`].
+    pub turbulence: Option<turbulence::Turbulence>,
     /// The emitter's own live-particle cap; an emission that would exceed it
     /// is skipped whole.
     pub live_cap: usize,
@@ -579,6 +581,7 @@ impl EmitterSpec {
             } else {
                 0.0
             },
+            turbulence: turbulence::Turbulence::from_record(record),
             live_cap: record.live_cap.max(0) as usize,
             size: record.size.clone(),
             alpha: record.alpha.clone(),
@@ -658,6 +661,8 @@ pub struct System {
     /// one it spawned with - see [`System::set_draws_live_severity`].
     live_severity: bool,
     ignitions: u32,
+    /// Seconds advanced, the clock a [`turbulence`] force drifts with.
+    clock: f32,
 }
 
 impl Default for System {
@@ -684,6 +689,7 @@ impl System {
             ridden: None,
             live_severity: false,
             ignitions: 0,
+            clock: 0.0,
         }
     }
 
@@ -779,6 +785,7 @@ impl System {
         self.across = spawn::frame_x(self.across, self.up);
         self.ride(effect);
         self.emit(effect, dt_ticks, moved, rng);
+        self.clock += dt;
         self.integrate(effect, dt, dt_ticks, rng);
     }
 
@@ -887,10 +894,7 @@ impl System {
             if !matches!(spec.render, Render::Streak { from_spawn: true }) {
                 particle.origin = particle.position;
             }
-            // `ParticleSystem_Update` precomputes `pow(k, dt_ticks)` per
-            // axis once a tick; `dt_ticks` is 1 at the fixed step, so the
-            // exponent is normally 1 - kept general so a different step
-            // stays correct.
+            // `pow(k, dt_ticks)` per axis, as `ParticleSystem_Update` precomputes it.
             let drag = Vec3::new(
                 spec.drag_per_tick.x.powf(dt_ticks),
                 spec.drag_per_tick.y.powf(dt_ticks),
@@ -898,6 +902,7 @@ impl System {
             );
             particle.velocity *= drag;
             particle.velocity.y += spec.gravity_per_tick2 * TICK_HZ * TICK_HZ * dt;
+            turbulence::apply(spec, particle, self.clock, dt_ticks);
             particle.position += particle.velocity * dt;
             let before = 1.0 - (particle.life / particle.max_life).clamp(0.0, 1.0);
             particle.life -= dt;
@@ -1483,6 +1488,7 @@ use quad::{billboard, quad};
 
 mod roll;
 mod template;
+pub mod turbulence;
 
 #[cfg(test)]
 mod frame_tests;

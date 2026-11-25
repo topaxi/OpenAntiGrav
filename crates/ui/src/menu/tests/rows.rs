@@ -453,6 +453,36 @@ fn the_editor_row_makes_the_picker_exist_and_comes_last() {
     ));
 }
 
+/// Pulse PS2's `Main Menu` stamps nothing: every draw of its text writes no alpha, so the mask is
+/// the clear's `0` there (GS dump of the Main Menu, Profile and Ship Select,
+/// `docs/ui/campaign-screens.md`). Giving the PS2 skin the PSP's `MenuGlow` puts the halos back.
+#[test]
+fn pulse_ps2_menu_rows_stamp_nothing() {
+    let menu = Menu::new(built_in());
+    let ps2 = Skin::new(
+        oag_pulse::FRONT_END.menu_ps2.unwrap(),
+        oag_display::space::Space::PS2,
+        PULSE_MENU_LINE_HEIGHT,
+    );
+    assert!(ps2.glow().is_none());
+    let draws = draw_list(
+        &menu,
+        &ps2,
+        &no_bindings,
+        &measure,
+        None,
+        &Frame::default(),
+        false,
+    )
+    .flatten();
+    assert!(
+        draws
+            .iter()
+            .any(|d| matches!(d, Draw::Text { .. } | Draw::FacedText { .. }))
+    );
+    assert!(!draws.iter().any(|d| matches!(d, Draw::GlowText { .. })));
+}
+
 /// What a blooming title's vertical `<Menu>` stamps into the glow mask (Pulse PSP's `Main Menu`,
 /// EDRAM, six frames): idle rows 110 at every phase, the help line 128, the selected row a
 /// `70 + 15 k` ladder that follows the row's colour pulse.

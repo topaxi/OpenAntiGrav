@@ -283,11 +283,19 @@ pub fn draws_hd_campaign(title: &oag_title::Title) -> bool {
 }
 
 /// `layers` with the glow-mask stamps dropped unless the title's front end blooms
-/// ([`Campaign::frontend_glow`]).
+/// ([`Campaign::frontend_glow`]), and, where the skin's mask is the PS2's
+/// ([`oag_ui::menu::Skin::glow_by_texel`]), with every stamp but the texel ones dropped
+/// ([`drop_value_stamps`]).
 #[must_use]
-pub fn gate_glow(frontend_glow: bool, mut layers: oag_ui::menu::Layers) -> oag_ui::menu::Layers {
-    if !frontend_glow {
-        for list in [&mut layers.backdrop, &mut layers.chrome, &mut layers.body] {
+pub fn gate_glow(
+    frontend_glow: bool,
+    skin: &oag_ui::menu::Skin,
+    mut layers: oag_ui::menu::Layers,
+) -> oag_ui::menu::Layers {
+    for list in [&mut layers.backdrop, &mut layers.chrome, &mut layers.body] {
+        if frontend_glow {
+            drop_value_stamps(skin, list);
+        } else {
             list.retain(|draw| {
                 !matches!(
                     draw,
@@ -299,6 +307,22 @@ pub fn gate_glow(frontend_glow: bool, mut layers: oag_ui::menu::Layers) -> oag_u
         }
     }
     layers
+}
+
+/// `list` without its value stamps ([`oag_ui::frontend::Draw::GlowStamp`], `GlowText`) where the
+/// skin's mask is the PS2's: the only draw of that front end that writes the framebuffer's alpha
+/// is the `Selector`'s quad, so a text, a tag or a panel stamps nothing and a screen without a
+/// `Selector` blooms nothing. Also for a list appended after [`gate_glow`] (the footer's legend,
+/// whose tag stamps).
+pub fn drop_value_stamps(skin: &oag_ui::menu::Skin, list: &mut Vec<oag_ui::frontend::Draw>) {
+    if skin.glow_by_texel() {
+        list.retain(|draw| {
+            !matches!(
+                draw,
+                oag_ui::frontend::Draw::GlowStamp { .. } | oag_ui::frontend::Draw::GlowText { .. }
+            )
+        });
+    }
 }
 
 /// Reads the campaign screen off `archives`, title-dispatched: Pulse's
@@ -1234,8 +1258,47 @@ mod tests {
             }],
             ..Default::default()
         };
-        assert_eq!(gate_glow(true, stamped()).body.len(), 1);
-        assert!(gate_glow(false, stamped()).body.is_empty());
+        let psp = oag_ui::menu::Skin::new(
+            oag_pulse::FRONT_END.menu.unwrap(),
+            oag_display::space::Space::PSP,
+            22.0,
+        );
+        assert_eq!(gate_glow(true, &psp, stamped()).body.len(), 1);
+        assert!(gate_glow(false, &psp, stamped()).body.is_empty());
+    }
+
+    /// Pulse PS2's only alpha writer in the front end is the `Selector`'s sprite
+    /// (`docs/ui/campaign-screens.md`): its texel stamp survives the gate and every value stamp
+    /// (a text, the footer tag, a panel) is dropped, where the PSP's skin keeps all of them.
+    #[test]
+    fn the_ps2_front_end_keeps_its_texel_stamp_and_drops_the_value_stamps() {
+        use oag_ui::frontend::Draw;
+        let list = || oag_ui::menu::Layers {
+            body: vec![
+                Draw::GlowText { value: 100 },
+                Draw::GlowStamp {
+                    rect: [0.0; 4],
+                    value: 100,
+                },
+                Draw::GlowTexel,
+            ],
+            ..Default::default()
+        };
+        let skin = |menu, space| oag_ui::menu::Skin::new(menu, space, 22.0);
+        let ps2 = skin(
+            oag_pulse::FRONT_END.menu_ps2.unwrap(),
+            oag_display::space::Space::PS2,
+        );
+        let kept = gate_glow(true, &ps2, list()).body;
+        assert!(matches!(kept.as_slice(), [Draw::GlowTexel]), "{kept:?}");
+        let psp = skin(
+            oag_pulse::FRONT_END.menu.unwrap(),
+            oag_display::space::Space::PSP,
+        );
+        assert_eq!(gate_glow(true, &psp, list()).body.len(), 3);
+        let mut appended = list().body;
+        super::drop_value_stamps(&ps2, &mut appended);
+        assert!(matches!(appended.as_slice(), [Draw::GlowTexel]));
     }
 
     /// A saved rung beats the title's default; with none saved, Pulse opens

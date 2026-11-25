@@ -176,6 +176,9 @@ pub struct Options {
     /// With `--menu-page grid-select`/`cell-select`/`track-select`, the seconds the card title or the name panel's glow ladder has run -
     /// see the CLI flag's own docs. `None` follows `menu_picker_seconds`.
     pub menu_title_seconds: Option<f32>,
+    /// With `--menu-page ship-select`/`track-select`, where the hex ring's pulse stands - see the
+    /// CLI flag's own docs. `None` follows `menu_picker_seconds`.
+    pub menu_ring_seconds: Option<f32>,
     /// With `--menu-page`, where the focused row's colour pulse stands - see the CLI flag's own docs.
     pub menu_focus_level: Option<f32>,
     /// Which modal prompt to draw over that page: `rename`, `rename-note`,
@@ -576,6 +579,7 @@ pub fn run(
                 field_warmup: None,
                 detonator_mines: None,
                 detonator_mine_envelopes: None,
+                detonator_emp_charge: None,
                 pose_sparks: Vec::new(),
                 presented: options.presented.then_some(crate::race_capture::Presented {
                     render_scale: render_profile.render_scale,
@@ -775,6 +779,7 @@ pub fn run(
                     options.menu_picker_step_seconds,
                     options.menu_entry_seconds,
                     options.menu_title_seconds,
+                    options.menu_ring_seconds,
                     false,
                 );
                 // The shared two-person page: the second half on the next team, the first
@@ -808,6 +813,7 @@ pub fn run(
                         options.menu_picker_step_seconds,
                         options.menu_entry_seconds,
                         options.menu_title_seconds,
+                        options.menu_ring_seconds,
                         true,
                     );
                     let (mut second_list, _) = picker_page(
@@ -830,6 +836,7 @@ pub fn run(
                         options.menu_picker_step_seconds,
                         options.menu_entry_seconds,
                         options.menu_title_seconds,
+                        options.menu_ring_seconds,
                         false,
                     );
                     // The second half is the base (it brings the screen's own backdrop and

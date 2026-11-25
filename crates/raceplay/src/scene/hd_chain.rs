@@ -200,6 +200,9 @@ impl Scene {
         let Some(hd) = &self.hd else {
             return;
         };
+        if oag_gpu::skip::skipped("bloom") {
+            return;
+        }
         hd.set_zoom_frame(zoom);
         hd.run(
             queue,

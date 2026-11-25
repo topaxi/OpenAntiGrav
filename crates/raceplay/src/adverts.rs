@@ -274,6 +274,9 @@ pub(super) fn render(
     race: &Race,
     anim_seconds: Option<f32>,
 ) {
+    if oag_gpu::skip::skipped("adverts") {
+        return;
+    }
     if let Some(cards) = cards {
         cards.render(queue, encoder, seconds, &|timeline| {
             timeline.seconds(race, anim_seconds)

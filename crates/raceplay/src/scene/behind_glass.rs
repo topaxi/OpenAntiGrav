@@ -517,6 +517,9 @@ impl Scene {
         let Some(target) = &self.behind_glass else {
             return SceneStats::default();
         };
+        if oag_gpu::skip::skipped("glass") {
+            return SceneStats::default();
+        }
         let Some(mirror) = target.mirror else {
             target.write(
                 queue,

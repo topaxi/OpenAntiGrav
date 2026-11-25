@@ -32,6 +32,7 @@ impl<'a> BitReader<'a> {
     }
 
     /// Peek `bits` bits without advancing the position.
+    #[inline]
     pub fn peek(&self, bits: u32) -> u32 {
         debug_assert!(bits <= 32);
         if bits == 0 {
@@ -41,6 +42,18 @@ impl<'a> BitReader<'a> {
         let byte_index = self.position / 8;
         let bit_index = self.position % 8;
         let buffer = self.buffer;
+
+        // Four whole bytes cover any read of up to 25 bits at any bit offset: the same bits
+        // the narrower paths below cut out of fewer bytes.
+        if bits <= 25 {
+            if let Some(&[b0, b1, b2, b3]) = buffer
+                .get(byte_index..)
+                .and_then(|rest| rest.first_chunk::<4>())
+            {
+                let word = u32::from_be_bytes([b0, b1, b2, b3]);
+                return (word << bit_index) >> (32 - bits);
+            }
+        }
 
         // Fast paths matching the original C implementation.
         if bits <= 9 {
@@ -206,6 +219,30 @@ mod tests {
         }
         for v in cases {
             assert_eq!(round_half_up(v), reference(v), "{v:e}");
+        }
+    }
+
+    #[test]
+    fn peek_equals_the_bit_by_bit_reader_at_every_offset_and_length() {
+        let mut state = 0x9e37_79b9_7f4a_7c15u64;
+        let data: Vec<u8> = (0..19)
+            .map(|_| {
+                state = state
+                    .wrapping_mul(6_364_136_223_846_793_005)
+                    .wrapping_add(1_442_695_040_888_963_407);
+                (state >> 56) as u8
+            })
+            .collect();
+        for position in 0..data.len() * 8 + 40 {
+            let mut br = BitReader::new(&data);
+            br.skip(position as u32);
+            for bits in 1..=32u32 {
+                assert_eq!(
+                    br.peek(bits),
+                    br.peek_fallback(bits),
+                    "{bits} bits at bit {position}"
+                );
+            }
         }
     }
 

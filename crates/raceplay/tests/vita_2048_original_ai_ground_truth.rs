@@ -29,7 +29,16 @@ fn source() -> Option<PathBuf> {
     None
 }
 
-fn loaded(event: &str) -> Option<oag_raceplay::Loaded> {
+/// An event's simulation half: what `Race::start` takes, the loader's report and the event's
+/// progress record. The races here are flown for their simulation alone.
+struct EventSim {
+    setup: oag_raceplay::SimSetup,
+    modules: oag_raceplay::extensions::Prepared,
+    report: Vec<String>,
+    campaign_2048_event: Option<oag_raceplay::Campaign2048Progress>,
+}
+
+fn loaded(event: &str) -> Option<EventSim> {
     let source = source()?;
     let options = oag_raceplay::Options {
         source: source.display().to_string(),
@@ -38,7 +47,13 @@ fn loaded(event: &str) -> Option<oag_raceplay::Loaded> {
         ribbon: true,
         ..oag_raceplay::Options::default()
     };
-    Some(oag_raceplay::load_event(&options, event).expect("the event loads"))
+    let (sim, progress) = oag_raceplay::load_event_sim(&options, event).expect("the event loads");
+    Some(EventSim {
+        setup: sim.setup,
+        modules: sim.modules,
+        report: sim.report,
+        campaign_2048_event: Some(progress),
+    })
 }
 
 /// The race as the campaign launches it, with `skill` in place of the
@@ -57,7 +72,8 @@ fn race_at(event: &str, skill: Option<f32>, offset: f32) -> Option<oag_raceplay:
         .expect("a race event with the original's AI");
     let mut setup = loaded.setup;
     crate::perturb::apply(&mut setup, offset);
-    let mut race = oag_raceplay::Race::start(setup, loaded.view, loaded.modules);
+    let mut race =
+        oag_raceplay::Race::start(setup, oag_raceplay::ViewSetup::headless(), loaded.modules);
     assert!(
         race.core
             .sim
@@ -400,7 +416,8 @@ fn super_phantom_challenges_fly_the_original_driver() {
             .unwrap_or_else(|| panic!("{event} authors the original's AI"));
         let mut setup = loaded.setup;
         crate::perturb::apply(&mut setup, 0.0);
-        let mut race = oag_raceplay::Race::start(setup, loaded.view, loaded.modules);
+        let mut race =
+            oag_raceplay::Race::start(setup, oag_raceplay::ViewSetup::headless(), loaded.modules);
         assert!(
             race.core
                 .sim
@@ -477,11 +494,11 @@ fn a_super_phantom_race_box_race_runs_without_opponents() {
             ribbon: true,
             ..oag_raceplay::Options::default()
         };
-        let loaded = oag_raceplay::load(&options).expect("loads");
+        let loaded = oag_raceplay::load_sim(&options).expect("loads");
         {
             let mut setup = loaded.setup;
             crate::perturb::apply(&mut setup, 0.0);
-            oag_raceplay::Race::start(setup, loaded.view, loaded.modules)
+            oag_raceplay::Race::start(setup, oag_raceplay::ViewSetup::headless(), loaded.modules)
         }
         .core
         .sim

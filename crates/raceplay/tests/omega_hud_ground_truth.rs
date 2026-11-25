@@ -669,8 +669,17 @@ fn a_2048_era_circuit_runs_the_original_s_laps_per_class() {
         return;
     }
     let laps_of = |track: &str, class: &str| {
-        let loaded = load_on(track, class);
-        oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules)
+        let source = omega().expect("checked above");
+        let sim = oag_raceplay::load_sim(&oag_raceplay::Options {
+            source: source.display().to_string(),
+            track: Some(track.to_string()),
+            class: class.to_string(),
+            mode: oag_race::Mode::SingleRace,
+            seed: Some(1),
+            ..oag_raceplay::Options::default()
+        })
+        .expect("an Omega race loads");
+        oag_raceplay::Race::start(sim.setup, oag_raceplay::ViewSetup::headless(), sim.modules)
             .readout()
             .laps
     };

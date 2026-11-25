@@ -110,7 +110,8 @@ impl Race {
 
     /// The Detonator cannon's point lights, as `PulseBullet`'s render queue (`0x00122098`) submits
     /// them to `SpuLight_AddCandidate`: a blue light at each muzzle for the round's first
-    /// [`FLASH_WINDOW_SECONDS`] and a faint one on each round in flight. Empty under the same
+    /// [`FLASH_WINDOW_SECONDS`] and a faint one on each round in flight; and the EMP wave's,
+    /// at its centre while it runs (`EMP_DrawLights`, `0x0013b300`). Empty under the same
     /// switches that silence every weapon light ([`Self::hd_weapon_lights`]'s).
     #[must_use]
     pub(crate) fn detonator_cannon_lights(&self, draw: &CannonDraw) -> Vec<SpuLight> {
@@ -135,7 +136,12 @@ impl Race {
             .iter()
             .filter(|round| round.live)
             .map(|round| weapon_light::detonator_bolt_record(round.pos));
-        flashes.chain(bolts).collect()
+        let emp = self
+            .view
+            .emp_effect
+            .and_then(|playing| self.view.stage.anchor_of(playing))
+            .map(weapon_light::detonator_emp_record);
+        flashes.chain(bolts).chain(emp).collect()
     }
 }
 
@@ -149,30 +155,28 @@ pub(crate) const FLASH_STRETCH_ROLL: (f32, f32) = (0.7, 1.3);
 
 /// Which of the disc's effects an event plays, or `None` for one that plays none.
 ///
-/// A mine a craft runs into is always dark (the contact darkens it first), a shot or chained
-/// mine plays by whether it was laid this stage (`DetonatorMine_Explode`, `detonator-mine.md`);
-/// every bomb plays the one (`DetonatorBombBlast_Start`, `detonator-bomb.md`).
+/// A mine a craft runs into is always dark (the contact darkens it first), a shot, chained or
+/// EMP'd mine plays by whether it was laid this stage (`DetonatorMine_Explode`; the EMP's
+/// `MineManager_DestroyAtLane` darkens nothing, `detonator-mine.md`); every bomb plays the one
+/// (`DetonatorBombBlast_Start`, which `BombManager_DestroyAtLane` reaches, `detonator-bomb.md`).
 #[must_use]
 pub(crate) fn effect_for(kind: EventKind) -> Option<Trigger> {
     match kind {
         EventKind::MineTouched => Some(Trigger::DetonatorMineExploDead),
-        EventKind::MineShot { live } | EventKind::MineChained { live } => Some(if live {
+        EventKind::MineShot { live }
+        | EventKind::MineChained { live }
+        | EventKind::MineEmped { live } => Some(if live {
             Trigger::DetonatorMineExplo
         } else {
             Trigger::DetonatorMineExploDead
         }),
-        EventKind::BombTouched | EventKind::BombShot | EventKind::BombReplaced => {
-            Some(Trigger::DetonatorBombExplo)
-        }
+        EventKind::BombTouched
+        | EventKind::BombShot
+        | EventKind::BombReplaced
+        | EventKind::BombEmped => Some(Trigger::DetonatorBombExplo),
         EventKind::RoundWall { .. } => Some(Trigger::DetonatorCannonSparks),
-        // The EMP's kill goes through `MineManager_DestroyAtLane`/`BombManager_DestroyAtLane`,
-        // whose effect is unread (`detonator-emp.md`, "Open"): nothing is played for it.
-        EventKind::Volley
-        | EventKind::EmpReady
-        | EventKind::EmpFull
-        | EventKind::EmpLaunch
-        | EventKind::MineEmped { .. }
-        | EventKind::BombEmped => None,
+        // The wave itself rides its front (`RaceView::advance_emp_visual`), not a one-shot.
+        EventKind::Volley | EventKind::EmpReady | EventKind::EmpFull | EventKind::EmpLaunch => None,
     }
 }
 
@@ -186,6 +190,59 @@ impl RaceView {
                 continue;
             };
             self.stage.play(&effect, *at, 1.0);
+        }
+    }
+}
+
+impl RaceView {
+    /// Keeps [`Trigger::DetonatorEmp`] on the EMP wave's front while it runs and releases it when
+    /// the wave ends.
+    ///
+    /// `EMP_SpawnLaunchEffect` (`0x0013afe8`) attaches it to the wave's matrix on the launch tick;
+    /// `EMP_SweepSections` (`0x0013b930`, the Repulser's `AdvanceWave` with the effect renamed)
+    /// sets that matrix every tick to the midpoint of the track's two edges at the front and the
+    /// instance's extent co-factor to the edges' distance over `100` (`0x3c23d70a`); the frame is
+    /// the Repulser wave's, `Y` the track's up and `X` across it
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/detonator-emp.md`, "What HD draws for a fired EMP").
+    /// The front's point is the spline sample nearest the survey entry it stands on.
+    pub(crate) fn advance_emp_visual(&mut self, core: &SimRace) {
+        let front = core.sim.detonator.as_ref().and_then(|detonator| {
+            let entry = oag_weapons::detonator::emp::front_entry(
+                &core.sim.world.detonator.emp.wave,
+                &detonator.survey,
+            )?;
+            Some(detonator.survey.entries[entry].centre)
+        });
+        let Some((_, sample, _)) = front.and_then(|at| core.sim.spline.nearest(at)) else {
+            if let Some(playing) = self.emp_effect.take() {
+                self.stage.release(playing);
+            }
+            return;
+        };
+        let lateral = Vec3::from_array(sample.lateral);
+        let up = -Vec3::from_array(sample.down);
+        let mid = Vec3::from_array(sample.pos)
+            + lateral * ((sample.half_width_right - sample.half_width_left) * 0.5);
+        let width = (lateral * (sample.half_width_left + sample.half_width_right)).length();
+        let playing = match self.emp_effect {
+            Some(playing) => {
+                self.stage.follow(playing, mid);
+                Some(playing)
+            }
+            None => {
+                let effect = self.handles.get(Trigger::DetonatorEmp).cloned();
+                self.emp_effect = effect.and_then(|e| self.stage.attach(&e, mid, 1.0));
+                // `EMP_SpawnLaunchEffect` hands the spawn its matrix by pointer (`li r7,1` at
+                // `0x0013b09c`), so the local-space emitters (flag `0x2`) ride the wave.
+                if let Some(playing) = self.emp_effect {
+                    self.stage.set_rides_frame(playing, true);
+                }
+                self.emp_effect
+            }
+        };
+        if let Some(playing) = playing {
+            self.stage.orient(playing, up);
+            self.stage.stretch(playing, width / 100.0, -lateral);
         }
     }
 }

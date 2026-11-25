@@ -1166,3 +1166,78 @@ fn the_team_logo_waits_its_delay_and_wipes_on_the_page_entry() {
         "0.6 s is a slab: {slab_ink} of {ink} pixels"
     );
 }
+
+/// Vineta K's Track Select, the Fury backdrop off, with `flags` added, as RGBA.
+fn track_select_still(
+    image: &std::path::Path,
+    tag: &str,
+    flags: &[&str],
+) -> oag_texture::replacer::Image {
+    let dir = scratch_dir("oag-hd-track-hex-ground-truth");
+    std::fs::create_dir_all(dir.join("config/oag")).expect("a temp directory");
+    let out = dir.join(format!("{tag}.png"));
+    let status = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
+        .arg(image)
+        .args([
+            "--no-audio",
+            "--size",
+            "1920x1080",
+            "--menu-page",
+            "track-select",
+            "--fury-tint",
+            "0",
+            "--no-hull-shake",
+        ])
+        .args(flags)
+        .arg("--screenshot")
+        .arg(&out)
+        .env("XDG_CONFIG_HOME", dir.join("config"))
+        .env("XDG_STATE_HOME", dir.join("state"))
+        .env("XDG_DATA_HOME", dir.join("data"))
+        .status()
+        .expect("running oag-game");
+    assert!(status.success(), "oag-game --menu-page track-select");
+    let still = oag_texture::replacer::decode_png(&std::fs::read(&out).expect("the screenshot"))
+        .expect("a PNG");
+    let _ = std::fs::remove_dir_all(&dir);
+    still
+}
+
+/// Track Select's hex grid is `HexSelection` with its own update (`ship-select-ring.md`, "Track
+/// Select"): the ring pulses on the widget's own counter, which a still pins with
+/// `--menu-ring-seconds` (white at 0, the `HD_Blue` mix 0.195 s in), and a circuit step slides the
+/// lattice a sixth of a pitch on its first frame. This fails if the grid is drawn without the
+/// picker's slide or the ring ignores its clock: the stills would be identical.
+#[test]
+#[ignore = "needs hdfury-ps3-eu-dec.iso under data/images"]
+fn the_track_grids_ring_and_slide_follow_their_clocks() {
+    let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let grid = [180, 440, 860, 720];
+    let ring = [460, 560, 640, 680];
+    let rest = track_select_still(&image, "rest", &["--menu-ring-seconds", "0.195"]);
+    let white = track_select_still(&image, "white", &["--menu-ring-seconds", "0"]);
+    let band = differing(&rest, &white, ring);
+    assert!(
+        band > 150,
+        "the ring's pulse moves {band} pixels of its band"
+    );
+    let same = track_select_still(&image, "same", &["--menu-ring-seconds", "0.195"]);
+    assert_eq!(differing(&rest, &same, grid), 0, "a still is repeatable");
+    let stepped = track_select_still(
+        &image,
+        "stepped",
+        &[
+            "--menu-ring-seconds",
+            "0.195",
+            "--menu-picker-step-seconds",
+            "0.05",
+        ],
+    );
+    let moved = differing(&rest, &stepped, grid);
+    assert!(
+        moved > 2000,
+        "three frames into a step the lattice has moved: {moved} pixels"
+    );
+}

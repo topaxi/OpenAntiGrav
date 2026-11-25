@@ -87,7 +87,7 @@ fn the_ring_closes_half_its_distance_every_tick() {
 /// A still `age` seconds after a forward step is that far into the slide.
 #[test]
 fn a_still_is_seeded_mid_slide() {
-    let slide = Slide::stepped(3, 12, 3.0 * DT);
+    let slide = Slide::stepped(3, 12, 3.0 * DT, false);
     assert!(slide.moving());
     assert_eq!((slide.previous(), slide.direction()), (2, -1));
     assert!((slide.progress() - 0.5).abs() < 1e-4);
@@ -148,4 +148,94 @@ fn the_ring_ease_follows_elapsed_time() {
     assert_eq!(slide.ring_offset(), -1.0, "no time, no ease");
     slide.tick(2.0 * DT, 3, 12);
     assert!((slide.ring_offset() + 0.25).abs() < 1e-5);
+}
+
+/// A move to the other row of a two-row grid leaves the ring a whole row (83 against the half row's
+/// 42) off its new target, easing half way on every tick, and a grid that stays on its row leaves
+/// it alone.
+#[test]
+fn a_row_change_leaves_the_ring_a_row_off_and_eases_it() {
+    let row = super::super::hex::PITCH[1] / super::super::hex::HALF_ROW;
+    let mut slide = Slide::at_rest(3);
+    slide.follow_row(0);
+    assert_eq!(slide.ring_offset(), 0.0);
+    slide.follow_row(1);
+    assert!(
+        (slide.ring_offset() + row).abs() < 1e-5,
+        "above the lower row"
+    );
+    slide.tick(DT, 3, 12);
+    assert!((slide.ring_offset() + row * 0.5).abs() < 1e-5);
+    slide.follow_row(0);
+    assert!(
+        (slide.ring_offset() - row * 0.5).abs() < 1e-5,
+        "back on the upper row it is half a row below it"
+    );
+}
+
+/// `TrackHexSelection_Update` steps and then runs the widget's own update in one frame, so its step
+/// frame is already a sixth of a pitch in (RAM: the slide timer read 0.0833 on the first frame, and a
+/// stopped grab's lattice stood 11.3 px, a sixth of a pitch at 0.96, when RAM said the fourth frame
+/// after three frames of picture lag) and the slide ends on the fifth frame, not the sixth.
+#[test]
+fn a_leading_slide_has_moved_a_sixth_of_a_pitch_on_its_step_frame() {
+    let mut slide = Slide::at_rest(2).leading();
+    slide.tick(DT, 3, 12);
+    assert!(slide.moving());
+    assert!(
+        (slide.progress() - 1.0 / 6.0).abs() < 1e-4,
+        "{}",
+        slide.progress()
+    );
+    assert!(
+        (slide.ring_offset() + 0.5).abs() < 1e-5,
+        "the ring eases once on the step frame too"
+    );
+    ticks(&mut slide, 3, 3);
+    assert!((slide.progress() - 4.0 / 6.0).abs() < 1e-4);
+    ticks(&mut slide, 1, 3);
+    assert!(
+        (slide.progress() - 5.0 / 6.0).abs() < 1e-4,
+        "frame 4 is the last one moving"
+    );
+    assert!(slide.moving());
+    ticks(&mut slide, 1, 3);
+    assert!(!slide.moving(), "frame 5 is the snap");
+}
+
+/// A still `age` seconds into a leading step is where the live slide is that many ticks after its step frame.
+#[test]
+fn a_leading_still_matches_the_live_slide_tick_for_tick() {
+    for frame in 0..5 {
+        let mut live = Slide::at_rest(2).leading();
+        live.tick(DT, 3, 12);
+        ticks(&mut live, frame, 3);
+        let still = Slide::stepped(3, 12, frame as f32 * DT, true);
+        assert!(
+            (live.progress() - still.progress()).abs() < 1e-3,
+            "frame {frame}"
+        );
+        assert!(
+            (live.ring_offset() - still.ring_offset()).abs() < 1e-3,
+            "frame {frame}"
+        );
+    }
+}
+
+/// A finger's pan rests the grid with no slide, and a pad step after it is still a leading one: the
+/// pan must not turn the step frame's tick off.
+#[test]
+fn a_pad_step_after_a_pan_keeps_its_leading_frame() {
+    let mut slide = Slide::at_rest(2).leading();
+    slide.rest_on(3, 1);
+    slide.tick(DT, 4, 12);
+    assert!(
+        (slide.progress() - 1.0 / 6.0).abs() < 1e-4,
+        "{}",
+        slide.progress()
+    );
+    ticks(&mut slide, 4, 4);
+    assert!(slide.moving(), "frame 4 is the last one moving");
+    ticks(&mut slide, 1, 4);
+    assert!(!slide.moving(), "frame 5 is the snap, as without the pan");
 }

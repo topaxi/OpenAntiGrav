@@ -78,7 +78,7 @@ fn start(
     field: bool,
 ) -> race::Race {
     let image = oag_testdata::image("data/images/pulse-psp-eu.chd").expect("checked by the caller");
-    let loaded = race::load(&race::Options {
+    let loaded = race::load_sim(&race::Options {
         source: image.display().to_string(),
         foreign_track: Some(file.to_path_buf()),
         class: "VENOM".to_string(),
@@ -90,7 +90,7 @@ fn start(
         ..race::Options::default()
     })
     .expect("loading the race");
-    let race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
+    let race = race::Race::start(loaded.setup, race::ViewSetup::headless(), loaded.modules);
     assert_eq!(
         race.core.sim.route_count(),
         1,

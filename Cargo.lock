@@ -3629,6 +3629,7 @@ dependencies = [
  "anyhow",
  "oag-assets",
  "oag-core",
+ "oag-display",
  "oag-fx",
  "oag-gpu",
  "oag-mesh",

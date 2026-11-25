@@ -142,30 +142,30 @@ impl Atrac9Decoder {
 
                 // IMDCT
                 for ch in &mut block.channels {
-                    let mut pcm = [0.0f64; 256];
-                    let specs = ch.spectra;
-                    ch.mdct
-                        .run(&specs[..ch.mdct.size], &mut pcm[..ch.mdct.size]);
-                    ch.pcm = pcm;
+                    let size = ch.mdct.size;
+                    ch.mdct.run(&ch.spectra[..size], &mut ch.pcm[..size]);
                 }
             }
 
             // Interleave PCM into output
             let out_offset = frame_idx * samples_per_frame;
             // Collect channel pointers in order
-            let mut ch_pcm: Vec<&[f64; 256]> = Vec::new();
+            let mut ch_pcm: [&[f64; 256]; 8] = [&[0.0; 256]; 8];
+            let mut ch_count = 0;
             for block in &self.frame.blocks {
                 for ch in &block.channels {
-                    ch_pcm.push(&ch.pcm);
+                    if ch_count < ch_pcm.len() {
+                        ch_pcm[ch_count] = &ch.pcm;
+                        ch_count += 1;
+                    }
                 }
             }
+            let ch_count = ch_count.min(channels);
             for smpl in 0..frame_samples {
-                for (ch, pcm) in ch_pcm.iter().enumerate() {
-                    if ch < channels {
-                        let v = pcm[smpl];
-                        // Round and clamp
-                        output[out_offset + smpl * channels + ch] = clamp16(round_half_up(v));
-                    }
+                let base = out_offset + smpl * channels;
+                for ch in 0..ch_count {
+                    // Round and clamp
+                    output[base + ch] = clamp16(round_half_up(ch_pcm[ch][smpl]));
                 }
             }
         }

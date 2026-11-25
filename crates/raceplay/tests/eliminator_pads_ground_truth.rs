@@ -22,7 +22,7 @@ const SEEDS: [u64; 6] = [1, 2, 3, 4, 5, 6];
 
 fn eliminator(seed: u64) -> Option<race::Race> {
     let image = oag_testdata::image("data/images/pulse-psp-usa.chd")?;
-    let loaded = race::load(&race::Options {
+    let loaded = race::load_sim(&race::Options {
         source: image.display().to_string(),
         class: "VENOM".to_string(),
         mode: oag_race::Mode::Eliminator,
@@ -31,7 +31,11 @@ fn eliminator(seed: u64) -> Option<race::Race> {
         ..race::Options::default()
     })
     .expect("loading the race");
-    Some(race::Race::start(loaded.setup, loaded.view, loaded.modules))
+    Some(race::Race::start(
+        loaded.setup,
+        race::ViewSetup::headless(),
+        loaded.modules,
+    ))
 }
 
 /// Pickups the opponents collected, and the craft-ticks they spent racing
@@ -101,14 +105,14 @@ fn a_single_race_does_not_steer_for_pads() {
     let Some(image) = oag_testdata::image("data/images/pulse-psp-usa.chd") else {
         return;
     };
-    let loaded = race::load(&race::Options {
+    let loaded = race::load_sim(&race::Options {
         source: image.display().to_string(),
         class: "VENOM".to_string(),
         mode: oag_race::Mode::SingleRace,
         ..race::Options::default()
     })
     .expect("loading the race");
-    let race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
+    let race = race::Race::start(loaded.setup, race::ViewSetup::headless(), loaded.modules);
     assert!(
         !race.core.sim.weapon_pads().is_empty(),
         "a Single Race arms its pads"

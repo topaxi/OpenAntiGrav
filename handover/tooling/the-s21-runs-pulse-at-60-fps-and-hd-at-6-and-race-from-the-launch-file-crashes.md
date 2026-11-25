@@ -1,8 +1,8 @@
 ---
 status: measure
 titles: [all]
-updated: 2026-11-24
-summary: "S21: Pulse about 60 fps CPU-bound, HD 6 to 8 fps GPU-bound; the launch-file --race overflow is fixed; ranked fixes, none tried"
+updated: 2026-11-25
+summary: "S21: HD at scale 25 races at 17 fps (CPU 23 ms, glass target 11 ms); --race stays in the flyby on the phone; mixer runs under --no-audio"
 categories: [rendering]
 size: L (50)
 difficulty: medium (50)
@@ -18,6 +18,14 @@ HD defaults at 7.5 fps from a cold start and 5.9 from a warm one (median frame 1
 
 Ranked by the frame-time win expected on this phone. Each names the evidence and the command that would show the number move.
 
+0. **The launch file's `--race` on the phone never leaves the pre-race flyby** (main `f928359`, HD Vineta K both directions): `simpleperf` has no
+   `Race::tick`, `frame-phases` ticks 0.2 ms, the screen is the flyby camera with no HUD. Phone measurements must use the menu route until it is fixed.
+   Measure: `--race --frame-log` on the phone, then `adb exec-out screencap -p` after 60 s and a `frame-phases` `ticks` above 1 ms.
+0a. **HD racing at render scale 25 is CPU and GPU both** (`docs/tools/android.md`, "Where an HD frame goes on the S21"): frame thread about 23 ms
+   (ticks 5.6, scene 8.3, submit 9.1), frame 47 to 62 ms. Per pass with `OAG_SKIP_PASSES` while racing: the glass target 10.6 ms; adverts and bloom inside the noise.
+   A `simpleperf` of the frame thread: the audio mixer runs under `--no-audio` (6.8 %), `RaceView::capture_poses` 6 %, particles about 10 %; each a candidate for an exact CPU cut.
+   Measure: the same 20 s `simpleperf --app` on a menu-route race and the `frame-phases` `ticks`.
+   Picture-changing proposal for the maintainer: the glass target sized off the render scale (the original's is half its 1280x720 output per axis), up to 10.6 ms on Vineta K only.
 1. **HD's phone default is a render scale the phone cannot draw.** Scene pass 114 ms at 1906x1080, 41 ms at render scale 50, 14 ms at scale 25 (fps 5.5, 10.6, 16.1, warm starts).
    A mobile default (or dynamic resolution on with a floor of 25 %, where the `minimum_resolution` default is 50) is a 2 to 3 times win for one setting.
    Measure: the same HD race at the new default, `--frame-log` `fps` and `gpu_ms` over race seconds 20 to 80 (docs table, "HD variant").
@@ -37,12 +45,17 @@ Ranked by the frame-time win expected on this phone. Each names the evidence and
 
 ## Measured and dropped
 
+- HD, render scale 25 (`docs/tools/android.md`, "Where an HD frame goes on the S21"; on the flyby): drawing the resolve and HUD straight onto the surface (slower, 38.7 against 34.6 ms);
+  skipping the glass target on frames with no glass draw (exact, but it fires on 2 of 26 frames); a prepass for the glass target (inside the noise, and not exact);
+  a portrait surface to avoid SurfaceFlinger's GPU composition (no change); the main track's prepass off, `OAG_BINDLESS=0` (both slower). The catch-up cap is already 8 ticks (`oag_core::tick`).
+
 - HD anisotropy `off` (6.0 against 5.5 fps) and shadows `off` (6.1): inside the run-to-run spread, nothing to take out.
 - Pulse at render scale 50: the scene pass halves (4.6 to 2.1 ms) and the frame moves 1 to 2 ms; the three default runs read 68.0, 60.6 and 61.0 fps over their first minute, so 59.9 against 65.8 settled is not a result.
 - Pinning with `taskset`: refused for a release app, see item 6.
 
 ## Next Steps
 
+0. Fix item 0, then profile item 0a's frame thread for exact CPU cuts (the mixer under `--no-audio` first); the glass-target proposal is the maintainer's.
 1. Item 1 first: a phone default for HD's render scale, then the same A/B table.
 2. A simpleperf profile of HD at scale 25 (`docs/tools/android.md`, "Reproducing it") to size item 3.
 3. Re-run the phase script on both phones (item 7 is fixed), with `--no-audio` added.

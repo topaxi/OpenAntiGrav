@@ -78,7 +78,7 @@ fn load(
     track: Option<&str>,
     ribbon: bool,
 ) -> (Race, Vec<String>) {
-    let loaded = race::load(&race::Options {
+    let loaded = race::load_sim(&race::Options {
         source: source.display().to_string(),
         class: class.to_string(),
         mode: oag_race::Mode::TimeTrial,
@@ -90,7 +90,7 @@ fn load(
     .expect("loading the race");
     let report = loaded.report.clone();
     (
-        Race::start(loaded.setup, loaded.view, loaded.modules),
+        Race::start(loaded.setup, race::ViewSetup::headless(), loaded.modules),
         report,
     )
 }
@@ -293,7 +293,7 @@ fn no_opponent_ever_gets_either_level() {
         return;
     };
     for level in [Level::Normal, Level::Extreme] {
-        let loaded = race::load(&race::Options {
+        let loaded = race::load_sim(&race::Options {
             source: source.display().to_string(),
             class: "VENOM".to_string(),
             mode: oag_race::Mode::SingleRace,
@@ -302,7 +302,7 @@ fn no_opponent_ever_gets_either_level() {
             ..race::Options::default()
         })
         .unwrap();
-        let mut race = Race::start(loaded.setup, loaded.view, loaded.modules);
+        let mut race = Race::start(loaded.setup, race::ViewSetup::headless(), loaded.modules);
         race.core.sim.set_pilot_assist(level);
         let inputs = thrust();
         for _ in 0..900 {

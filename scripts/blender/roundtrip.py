@@ -654,6 +654,39 @@ HOST_PATH = (
 )  # the same literal as `host_export::tests` in oag-raceplay
 
 
+# (slug, circuit entry, texture name, path under the folder): the same rows as
+# `each_titles_texture_names_land_where_the_add_on_looks` in oag-raceplay. A PS3 or PS4
+# material's name starts with a separator and keeps its own extension.
+HOST_TITLE_PATHS = (
+    (
+        "wipeout-hd",
+        "Data\\Environments\\03_Track\\track.vex",
+        "/data/environments/03_track/hd_textures/dds/ds_speedup_cs.gtf",
+        "wipeout-hd/data/environments/03_track/track.vex/data/environments/03_track/hd_textures/dds/ds_speedup_cs.png",
+    ),
+    (
+        "wipeout-2048",
+        "Data\\art\\published\\environments\\altima\\track.vex",
+        "data/art/published/environments/altima/textures/jreilly_crane_da.gxt",
+        "wipeout-2048/data/art/published/environments/altima/track.vex/"
+        "data/art/published/environments/altima/textures/jreilly_crane_da.png",
+    ),
+    (
+        "wipeout-omega-collection",
+        "Data\\environments\\tech_de_ra\\track.vex",
+        "data/environments/tech_de_ra/texturesps4/hull.gnf",
+        "wipeout-omega-collection/data/environments/tech_de_ra/track.vex/"
+        "data/environments/tech_de_ra/texturesps4/hull.png",
+    ),
+    (
+        "wipeout-pure",
+        "Data\\Environments\\01_Vineta_K\\track.vex",
+        "Data\\Environments\\01_Vineta_K\\Textures\\ag03.tga",
+        "wipeout-pure/data/environments/01_vineta_k/track.vex/data/environments/01_vineta_k/textures/ag03.png",
+    ),
+)
+
+
 def host_image(name):
     """A host reference as an import makes it: an 8 x 8 placeholder carrying its two properties."""
     image = bpy.data.images.new(name.rsplit("\\", 1)[-1], 8, 8)
@@ -720,6 +753,9 @@ def host_checks(out_dir, manifest=None, folder=None):
         "absent": "Data\\Environments\\03_Track\\Textures\\NotExported.tga",
     }
     assert os.path.relpath(images.host_file(work, HOST_SLUG, HOST_ENTRY, names["wall"]), work) == HOST_PATH
+    for slug, entry, name, path in HOST_TITLE_PATHS:
+        at = images.host_file(work, slug, entry, name)
+        assert at is not None and os.path.relpath(at, work).replace(os.sep, "/") == path, (slug, at)
     if manifest is None:
         folder = os.path.join(work, "exported")
         colours = {"wall": (250, 10, 10, 255), "grass": (10, 250, 10, 255)}

@@ -344,6 +344,15 @@ pub const DETONATOR_MINE_EXPLO_DEAD_EFFECT: &str = "WO_MINE_EXPLO_DETONATOR_DEAD
 /// it, or the EMP's `MineManager_DestroyAtLane` (same function, other arm; 70).
 pub const DETONATOR_MINE_EXPLO_EFFECT: &str = "WO_MINE_EXPLO_DETONATOR";
 
+/// Detonator's EMP wave, riding its front for as long as the wave runs: `EMP_SpawnLaunchEffect`
+/// (`0x0013afe8`, fourcc `EMP1`) spawns it attached at the wave's matrix, which `EMP_SweepSections`
+/// sets each tick to the midpoint of the track's two edges at the front with an extent co-factor
+/// of the track's width over `100`
+/// (`docs/ghidra/functions/ps3-hdfury-eu/detonator-emp.md`, "What HD draws for a fired EMP", 75).
+/// The file is the Quake's wave recoloured blue. HD, 2048 and Omega ship and name it; HD's is
+/// the one wired.
+pub const DETONATOR_EMP_EFFECT: &str = "WO_QUAKE_DETONATOR";
+
 /// Detonator's bomb detonating, by contact, by the cannon's fourth hit or by the stage step that
 /// replaces it (`DetonatorBombBlast_Start` `0x00137150`, fourcc `BMOB`;
 /// `docs/ghidra/functions/ps3-hdfury-eu/detonator-bomb.md`, 72).

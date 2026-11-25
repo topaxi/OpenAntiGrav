@@ -223,18 +223,23 @@ pub fn fingerprint(race: &Race) -> u64 {
 /// the title it opened. The server's path; the windowed client builds its race
 /// through the game's own load (with [`options`]) and then calls [`prepare`].
 ///
+/// The race is the simulation half on a headless view that carries the launch request a
+/// recording writes, whether or not this build links a renderer: nothing here draws, and the
+/// state hash is the same either way (`oag_raceplay`'s `view_independence_ground_truth`).
+///
 /// # Errors
 ///
-/// Whatever `oag_raceplay::load` refuses, and a title other than `params.title`
+/// Whatever `oag_raceplay::load_sim` refuses, and a title other than `params.title`
 /// when that is not empty.
 pub fn load(params: &RaceParams, source: &str) -> Result<(Box<Race>, &'static str)> {
     let options = options(params, source)?;
-    let loaded = oag_raceplay::load(&options).with_context(|| format!("loading {source}"))?;
+    let loaded = oag_raceplay::load_sim(&options).with_context(|| format!("loading {source}"))?;
     check_title(params, loaded.title.name)?;
     let title = loaded.title.name;
     // Boxed where it is made: a `Race` is 141 KB, and moved by value up an
     // unoptimised call chain its copies overflowed a test thread's 2 MiB stack.
-    let mut race = Box::new(Race::start(loaded.setup, loaded.view, loaded.modules));
+    let view = oag_raceplay::ViewSetup::headless_on(&options, &loaded.circuit);
+    let mut race = Box::new(Race::start(loaded.setup, view, loaded.modules));
     prepare(&mut race, params)?;
     Ok((race, title))
 }

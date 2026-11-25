@@ -37,6 +37,7 @@ pub(super) fn effect(name: &str, looping: bool, duration_ticks: f32) -> std::syn
             direction: Direction::Cone { half_angle: 0.0 },
             drag_per_tick: Vec3::ONE,
             gravity_per_tick2: 0.0,
+            turbulence: None,
             live_cap: 100,
             size: constant(1.0),
             alpha: constant(255.0),

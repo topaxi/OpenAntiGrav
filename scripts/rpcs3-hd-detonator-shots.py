@@ -52,6 +52,38 @@ RAW_BANDS = 0x32B8
 HELD_BANDS = 0x32F8
 
 
+#: `*(WEAPON_MANAGER)` is the weapon manager; `+0x84` its `EMPManager`, whose `+0x64` is the one `EMP` object
+#: (`EMPManager_Construct`, `0x00113288`; `docs/ghidra/functions/ps3-hdfury-eu/detonator-emp.md`, "What HD draws").
+WEAPON_MANAGER = 0x00994198
+#: The race manager `**0x008a6814`; `+0x2dd8` the EMP charge (`detonator-emp.md`, "The charge and the gauge").
+RACE_MANAGER = 0x008A6814
+EMP_CHARGE = 0x2DD8
+#: The player's gauge, `ship+0x7da0`.
+EMP_GAUGE = 0x7DA0
+#: The EMP's point-light colour, the `vec4` `EMP_DrawLights` (`0x0013b300`) loads at `0x00994480 + 0x10` (the TOC holds the address).
+EMP_LIGHT_COLOUR = 0x00994490
+
+
+def u32be(gdb, address):
+    return struct.unpack(">I", gdb.read(address, 4))[0]
+
+
+def read_emp(gdb):
+    """The `EMP` object's state, paused: age, extent, both wave matrices, the AI-track cursor, the handles, the light colour."""
+    wm = u32be(gdb, WEAPON_MANAGER)
+    mgr = u32be(gdb, wm + 0x84)
+    emp = u32be(gdb, mgr + 0x64)
+    blob = gdb.read(emp, 0x1a0)
+    f = lambda o: struct.unpack_from(">f", blob, o)[0]
+    w = lambda o: struct.unpack_from(">I", blob, o)[0]
+    rows = lambda o: [list(struct.unpack_from(">4f", blob, o + 16 * i)) for i in range(4)]
+    return {"emp": emp, "live_count": u32be(gdb, mgr + 0x68), "flags_34": w(0x34), "flags_40": w(0x40),
+            "extent_54": f(0x54), "age_158": f(0x158), "handle_5c": w(0x5c), "handle_60": w(0x60),
+            "matrix_70": rows(0x70), "matrix_b0": rows(0xb0), "prev_f0": list(struct.unpack_from(">4f", blob, 0xf0)),
+            "cursor_168": [w(0x168 + 4 * i) for i in range(4)], "fork_178": [w(0x178 + 4 * i) for i in range(4)],
+            "fork_live_188": blob[0x188], "light_colour": list(struct.unpack(">4f", gdb.read(EMP_LIGHT_COLOUR, 16)))}
+
+
 def race_clock(gdb, ship):
     return struct.unpack(">f", gdb.read(ship + CLOCK, 4))[0]
 
@@ -102,6 +134,12 @@ def observe(session, gdb, ship, body, out, stem, flush):
         print("  %s: %d active mines" % (stem, len(pose["mines"])), flush=True)
     except Exception as error:  # noqa: BLE001 - a bonus
         print("  %s: no mines (%s)" % (stem, error), flush=True)
+    try:
+        pose["emp"] = read_emp(gdb)
+        print("  %s: emp age %.3f extent %.3f cursor %s centre %s" % (stem, pose["emp"]["age_158"], pose["emp"]["extent_54"],
+              pose["emp"]["cursor_168"], ["%.1f" % v for v in pose["emp"]["matrix_70"][3][:3]]), flush=True)
+    except Exception as error:  # noqa: BLE001 - a bonus
+        print("  %s: no emp (%s)" % (stem, error), flush=True)
     pose["scenery_clock"] = (None if grab_clock is None or grab_clock["world_clock_s"] is None else
                              {"time_s": grab_clock["world_clock_s"], "nodes": grab_clock["nodes"], "total": grab_clock["total"]})
     blobs = []
@@ -141,6 +179,9 @@ def main():
     ap.add_argument("--steer", metavar="LAP_CLOCK,WALL_HOLD,X", action="append", default=[],
                     help="from the first stop at or past LAP_CLOCK hold the left stick at X (-1..1) for WALL_HOLD wall seconds; repeatable")
     ap.add_argument("--emp-clock", type=float, help="tap L1 (the EMP) at the first stop at or past this lap clock")
+    ap.add_argument("--emp-charge", type=int, help="write this EMP charge (and a full gauge) just before the --emp-clock tap")
+    ap.add_argument("--emp-poll", type=float, default=0.0,
+                    help="after the L1 tap, sample the EMP object paused every ~30 ms for this many lap-clock seconds, to OUT/emp-poll.json")
     ap.add_argument("--interval", type=float, default=0.12, help="seconds between the two frames of a stop")
     ap.add_argument("--flush", type=float, default=3.0, help="seconds a paused frame is given to be presented")
     ap.add_argument("--team", default="feisar", help="recorded beside the camera")
@@ -207,11 +248,31 @@ def main():
                 print("steer %.2f for %.2f wall s from lap clock %.3f to %.3f" % (rest[1], rest[0], now, race_clock(gdb, ship)), flush=True)
                 continue
             if kind == "emp":
+                if args.emp_charge is not None:
+                    rm = u32be(gdb, u32be(gdb, RACE_MANAGER))
+                    gdb.write(rm + EMP_CHARGE, struct.pack(">I", args.emp_charge))
+                    gdb.write(ship + EMP_GAUGE, struct.pack(">f", 1.0))
+                    print("emp: rm %#x ship %#x (rm+0x13e8 %#x), charge %d, gauge 1.0 written" % (rm, ship, rm + 0x13E8, args.emp_charge), flush=True)
                 gdb.resume()
                 session.pad.set("l1", True)
                 time.sleep(0.3)
                 session.pad.set("l1", False)
                 gdb.pause()
+                if args.emp_poll > 0:
+                    start = race_clock(gdb, ship)
+                    samples = []
+                    while True:
+                        sample = read_emp(gdb)
+                        sample["race_clock_s"] = race_clock(gdb, ship)
+                        sample["pos"] = list(place.read_pose(gdb, body)["pos"])
+                        samples.append(sample)
+                        if sample["race_clock_s"] - start > args.emp_poll or len(samples) > 400:
+                            break
+                        gdb.resume()
+                        time.sleep(0.03)
+                        gdb.pause()
+                    (out / "emp-poll.json").write_text(json.dumps(samples, indent=1) + "\n")
+                    print("emp poll: %d samples from lap clock %.3f" % (len(samples), start), flush=True)
                 continue
             if kind == "reload":
                 gdb.resume()

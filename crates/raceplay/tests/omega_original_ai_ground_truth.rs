@@ -26,10 +26,12 @@ fn source() -> Option<String> {
     )
 }
 
-fn loaded(track: &str, class: &str) -> Option<oag_raceplay::Loaded> {
+/// The race's simulation half, which is all this file flies and reads: the laws line is the
+/// simulation phase's own report.
+fn loaded(track: &str, class: &str) -> Option<oag_raceplay::SimLoad> {
     let source = source()?;
     Some(
-        oag_raceplay::load(&oag_raceplay::Options {
+        oag_raceplay::load_sim(&oag_raceplay::Options {
             source,
             class: class.to_string(),
             mode: oag_race::Mode::SingleRace,
@@ -222,7 +224,8 @@ fn fly_at(
     };
     let mut setup = loaded.setup;
     crate::perturb::apply(&mut setup, eps);
-    let mut race = oag_raceplay::Race::start(setup, loaded.view, loaded.modules);
+    let mut race =
+        oag_raceplay::Race::start(setup, oag_raceplay::ViewSetup::headless(), loaded.modules);
     assert!(
         race.core.sim.use_original_ai(None, 1),
         "Omega flies the original driver"

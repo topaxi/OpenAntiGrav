@@ -698,9 +698,7 @@ pub(crate) struct Cli {
     pub(crate) detonator_mines: Option<MinePositions>,
 
     /// Comparison input: hold each `--detonator-mines` mine's music envelope at the original's
-    /// (`S,T;S,T;...`, the football's `m+0xf4` and the spikes' `m+0xf8` read in the same pause, in
-    /// the same order), so a mine is drawn as bright as the original's was: ours' envelope has no
-    /// history of the music before the frame.
+    /// (`S,T;...`: `m+0xf4` and `m+0xf8`, same order), ours having no history of the music.
     #[arg(
         long,
         value_name = "S,T;...",
@@ -708,6 +706,11 @@ pub(crate) struct Cli {
         requires = "detonator_mines"
     )]
     pub(crate) detonator_mine_envelopes: Option<MineEnvelopes>,
+
+    /// Comparison input: start the Detonator EMP at this many charges (the gauge they give), as
+    /// the original's charge was written for the capture it is compared with.
+    #[arg(long, value_name = "N")]
+    pub(crate) detonator_emp_charge: Option<u32>,
 
     /// Comparison input: draw the Zone and Detonator music-driven look from these
     /// sixteen held band levels, read off the original at the frame being compared
@@ -718,10 +721,10 @@ pub(crate) struct Cli {
     /// Replaces the live spectrum the way `--zone-spectrum-test` does, with
     /// the original's levels instead of a ramp.
     #[arg(
-        long,
-        value_name = "B0,...,B15",
-        value_parser = crate::race_capture::spectrum::parse_bands
-    )]
+    long,
+    value_name = "B0,...,B15",
+    value_parser = crate::race_capture::spectrum::parse_bands
+)]
     pub(crate) zone_bands: Option<crate::race_capture::spectrum::Bands>,
 
     /// The sixteen raw band levels (`+0x32b8` of the stage block) the Detonator mine's
