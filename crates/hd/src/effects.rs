@@ -185,7 +185,8 @@ const TEMPLATES: &[&str] = &[
 ];
 
 /// The effects whose `.gtf` sprites HD plays: the Detonator cannon's wall spark, whose five
-/// emitters name five entries under `/data/psys/tex/` that all decode, the Rocket's wall burst, whose
+/// emitters name five entries under `/data/psys/tex/` that all decode (`detonator-cannon.md`,
+/// "The spark's matrix, read live"), the Rocket's wall burst, whose
 /// nine emitters name nine entries under `/data/psys/tex/` that all decode
 /// (`docs/ghidra/functions/ps3-hdfury-eu/particle-triggers.md`, "The Rocket's
 /// smoke"), the Quake's wave and the Detonator EMP's (its blue recolour, paired against the

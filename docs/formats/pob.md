@@ -1081,10 +1081,12 @@ only when the object is in some view's potentially-visible set.
 
 **Wired on HD, 2026-11-22**: all four names are `Trigger::DetonatorMineExploDead`,
 `DetonatorMineExplo`, `DetonatorBombExplo` and `DetonatorCannonSparks` in HD's effect table, fired
-off the tick's `oag_weapons::detonator::Event` list (`oag_raceplay::detonator_fx`). They play from
-the engine's procedural profile: none is in HD's `SPRITES`, `EXTENTS` or `TEMPLATES` lists (no
-matched capture of the original to decide it), and the mine's recolour toward white is not
-applied. 2048 and Omega: all four ship and parse (`psys_2048_ground_truth.rs`,
+off the tick's `oag_weapons::detonator::Event` list (`oag_raceplay::detonator_fx`). The two mine
+effects and the bomb's play their disc emitters with procedural pictures: none is in HD's
+`SPRITES`, `EXTENTS` or `TEMPLATES` lists (no matched capture of the original to decide it), and the
+mine's recolour toward white is not applied. The cannon's wall spark draws its disc sprites and its
+bars since 2026-11-25, spawned in the original's frame
+([detonator-cannon.md](../ghidra/functions/ps3-hdfury-eu/detonator-cannon.md#the-sparks-matrix-read-live-2026-11-25-det-cannon-spark)). 2048 and Omega: all four ship and parse (`psys_2048_ground_truth.rs`,
 `psys_omega_ground_truth.rs`), **checked, applies, not wired** - their tables do not answer the
 triggers yet, because the contact and hit laws are not read on either.
 `WO_QUAKE_DETONATOR` is the EMP's wave, read and wired on HD since 2026-11-24 ([detonator-emp.md](../ghidra/functions/ps3-hdfury-eu/detonator-emp.md#what-hd-draws-for-a-fired-emp-2026-11-24)); `_TRAILS` is named nowhere in `EMP.cpp`'s span and stays unread. All three systems above ship on 2048 (`data.psarc`, `data/particles/` and
