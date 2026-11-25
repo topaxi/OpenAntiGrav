@@ -45,6 +45,10 @@ impl Writes for wgpu::Queue {
         if crate::skip::writes_frozen() {
             return;
         }
+        if let Some(device) = crate::skip::writes_dummy_device() {
+            dummy_write(device, self, buffer, offset, data);
+            return;
+        }
         if crate::skip::named("writes-same") {
             held_write(self, buffer, offset, data);
             return;
@@ -89,6 +93,37 @@ fn held_write(
         .entry((buffer.clone(), offset, data.len()))
         .or_insert_with(|| data.to_vec());
     wgpu::Queue::write_buffer(queue, buffer, offset, bytes);
+}
+
+/// `writes-dummy` ([`crate::skip`]): the write copied into a scratch buffer of its own (one per
+/// buffer range, kept), which no pass reads.
+fn dummy_write(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    buffer: &wgpu::Buffer,
+    offset: wgpu::BufferAddress,
+    data: &[u8],
+) {
+    type Scratch = std::collections::HashMap<(wgpu::Buffer, wgpu::BufferAddress), wgpu::Buffer>;
+    static SCRATCH: std::sync::Mutex<Option<Scratch>> = std::sync::Mutex::new(None);
+    let mut scratch = SCRATCH
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let size = (data.len() as wgpu::BufferAddress).next_multiple_of(wgpu::COPY_BUFFER_ALIGNMENT);
+    let target = scratch
+        .get_or_insert_with(Default::default)
+        .entry((buffer.clone(), offset))
+        .or_insert_with(|| {
+            device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("writes-dummy scratch"),
+                size,
+                usage: wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            })
+        });
+    if target.size() >= data.len() as wgpu::BufferAddress {
+        wgpu::Queue::write_buffer(queue, target, 0, data);
+    }
 }
 
 enum Target {

@@ -28,6 +28,9 @@
 //! never dropped. `writes-same` is its control: every write is still made, but with the bytes
 //! that buffer range was given when the window began, so the picture freezes as under
 //! `writes` while every copy, and every hazard it carries, stays in the submission.
+//! `writes-dummy` copies every write into a scratch buffer nothing reads instead: the copies and
+//! their barriers stay, the wait on the previous frame's reads goes, and the picture freezes as
+//! under `writes`.
 //!
 //! With a toggle period set, every change of window prints one line to stderr
 //! (`OAG_SKIP_PASSES: window N on|off`), which a phone's Perfetto trace carries with its own
@@ -37,7 +40,7 @@ use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 /// The names a call site asks about. Anything else in the variable is reported once.
-pub const NAMES: [&str; 13] = [
+pub const NAMES: [&str; 14] = [
     "hud",
     "bloom",
     "adverts",
@@ -48,6 +51,7 @@ pub const NAMES: [&str; 13] = [
     "extra-passes",
     "writes",
     "writes-same",
+    "writes-dummy",
     "track-plain",
     "track-rich",
     "mips",
@@ -137,11 +141,24 @@ pub fn extra_passes(encoder: &mut wgpu::CommandEncoder, target: Option<&wgpu::Te
 }
 
 static WRITES_ARMED: AtomicBool = AtomicBool::new(false);
+static DEVICE: OnceLock<wgpu::Device> = OnceLock::new();
 
 /// Lets `writes` drop the queue's writes from now on: the race stage calls it every frame it
-/// draws, so nothing a load uploads is ever dropped.
-pub fn arm_writes() {
+/// draws, so nothing a load uploads is ever dropped. `device` is where `writes-dummy` makes its
+/// scratch buffers.
+pub fn arm_writes(device: &wgpu::Device) {
+    if named("writes-dummy") {
+        DEVICE.get_or_init(|| device.clone());
+    }
     WRITES_ARMED.store(true, Ordering::Relaxed);
+}
+
+/// The device `writes-dummy` makes its scratch buffers on, once armed and in an odd window.
+#[must_use]
+pub fn writes_dummy_device() -> Option<&'static wgpu::Device> {
+    (WRITES_ARMED.load(Ordering::Relaxed) && skipped("writes-dummy"))
+        .then(|| DEVICE.get())
+        .flatten()
 }
 
 /// Whether `writes` drops a write made now: named, armed and in an odd window.
@@ -197,7 +214,7 @@ mod tests {
             assert!(!super::skipped(name), "{name}");
             assert!(!super::named(name), "{name}");
         }
-        super::arm_writes();
+        super::WRITES_ARMED.store(true, super::Ordering::Relaxed);
         assert!(!super::writes_frozen());
         assert!(!super::writes_replayed());
     }
