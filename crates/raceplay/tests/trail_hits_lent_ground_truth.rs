@@ -15,10 +15,15 @@
 use oag_raceplay as race;
 
 const PULSE: &str = "data/images/pulse-psp-eu.chd";
+const PS2: &str = "data/images/pulse-ps2-eu.chd";
 const HD: &str = "data/images/hdfury-ps3-eu-dec.iso";
 
 fn load(trail_hits: race::TrailHits) -> Option<race::Loaded> {
-    let pulse = oag_testdata::image(PULSE)?;
+    load_from(PULSE, trail_hits)
+}
+
+fn load_from(source: &str, trail_hits: race::TrailHits) -> Option<race::Loaded> {
+    let pulse = oag_testdata::image(source)?;
     let loaded = race::load(&race::Options {
         source: pulse.display().to_string(),
         mode: oag_race::Mode::SingleRace,
@@ -57,6 +62,18 @@ fn tucked_in_a_rivals_trail(loaded: race::Loaded) -> race::Race {
     race
 }
 
+/// The PS2 leaves the ribbon's deep blue layer out, so its burst is pink-white where the PSP's is
+/// violet.
+#[test]
+#[ignore = "needs data/images/pulse-ps2-eu.chd and data/images/hdfury-ps3-eu-dec.iso"]
+fn trail_hits_lent_on_the_ps2_takes_its_own_ribbons_hue() {
+    let Some(on) = lent_from_hd() else { return };
+    let Some(loaded) = load_from(PS2, on) else {
+        return;
+    };
+    assert_burst_is_in_the_ribbons_hue(&loaded, oag_fx::exhaust::TrailLaw::Baked);
+}
+
 #[test]
 #[ignore = "needs data/images/pulse-psp-eu.chd and data/images/hdfury-ps3-eu-dec.iso"]
 fn trail_hits_lent_on_pulse_a_craft_tucked_in_a_rivals_trail_plays_hds_burst() {
@@ -70,7 +87,7 @@ fn trail_hits_lent_on_pulse_a_craft_tucked_in_a_rivals_trail_plays_hds_burst() {
     );
     let lent = line("trail hits: ").expect("the report names the lending");
     assert!(lent.contains("Wipeout HD"), "{lent}");
-    assert_burst_is_in_the_ribbons_hue(&loaded);
+    assert_burst_is_in_the_ribbons_hue(&loaded, oag_fx::exhaust::TrailLaw::Ramped);
     let race = tucked_in_a_rivals_trail(loaded);
     assert!(
         race.stage().playing_count() > 0,
@@ -86,17 +103,18 @@ fn chroma(rgb: [f32; 3]) -> ([f32; 3], f32) {
     (c.map(|v| v / length.max(1e-9)), length)
 }
 
-/// **The lent burst is drawn in the colour of the Pulse ribbon it was struck in, not HD's
-/// cyan-blue**: every emitter of the real `WO_TRAIL_HITSHIP`, sprite times colour table, points the
-/// way the PSP ribbon's summed layers do (`docs/formats/pulse-absent-effects.md`, "Trail-hit burst
-/// colour"). The vertex colour alone does not say what is drawn: the sprite texel multiplies it.
-fn assert_burst_is_in_the_ribbons_hue(loaded: &race::Loaded) {
+/// **The lent burst is drawn in the colour of the ribbon it was struck in, not HD's cyan-blue**:
+/// every emitter of the real `WO_TRAIL_HITSHIP`, sprite times colour table, points the way the
+/// summed layers of the platform's ribbon do (`docs/formats/pulse-absent-effects.md`, "Trail-hit
+/// burst colour"). The vertex colour alone does not say what is drawn: the sprite texel multiplies
+/// it.
+fn assert_burst_is_in_the_ribbons_hue(loaded: &race::Loaded, law: oag_fx::exhaust::TrailLaw) {
     let effect = loaded
         .view
         .handles
         .get(oag_title::Trigger::TrailHitship)
         .expect("the lent burst is loaded");
-    let (target, _) = chroma(oag_fx::exhaust::TrailLaw::Ramped.ribbon_colour());
+    let (target, _) = chroma(law.ribbon_colour());
     assert!(!effect.emitters.is_empty());
     for emitter in &effect.emitters {
         let sprite = emitter.sprite.as_ref().expect("HD authors both sprites");
