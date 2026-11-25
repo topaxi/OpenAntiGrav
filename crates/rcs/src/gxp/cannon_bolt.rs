@@ -9,33 +9,16 @@
 //! displacement `0.8`, the clock rate and exponent `5` and `1`.
 //! `docs/rendering/hd-unlit-programs.md`, "The Detonator cannon bolt on 2048 and Omega".
 
+use super::operands::{Bank, Tables, Word, field, sample, src0_bank, src12_bank, tables};
 use super::{Category, Program, usse};
 
 /// The picture of the noise and colour taps.
 pub const LIGHTNING: &str = "LightningTexture";
 /// The ring strip.
 pub const RING: &str = "Texture1";
-/// The container literals and dependent-sampler descriptors live in.
-const SECONDARY_CONTAINER: u16 = 19;
 /// The interpolants of `Uv1_Uv2.zw` and `.xy`.
 const NOISE_INTERPOLANT: u32 = 2;
 const RING_INTERPOLANT: u32 = 1;
-
-fn field(word: u64, lo: u32, n: u32) -> u32 {
-    ((word >> lo) & ((1 << n) - 1)) as u32
-}
-
-fn le32(b: &[u8], at: usize) -> Option<u32> {
-    Some(u32::from_le_bytes(b.get(at..at + 4)?.try_into().ok()?))
-}
-
-fn le16(b: &[u8], at: usize) -> Option<u16> {
-    Some(u16::from_le_bytes(b.get(at..at + 2)?.try_into().ok()?))
-}
-
-fn rel(b: &[u8], at: usize) -> Option<usize> {
-    Some(at + le32(b, at)? as usize)
-}
 
 /// An IEEE half as `f32`, for the normal values a literal holds.
 fn half(bits: u16) -> f32 {
@@ -47,29 +30,11 @@ fn half(bits: u16) -> f32 {
     f32::from_bits((u32::from(bits >> 15) << 31) | ((exponent + 112) << 23) | (mantissa << 13))
 }
 
-/// The `+0x2c` fragment input block's texel records: `(sampler resource, interpolant)`.
-fn texels(b: &[u8]) -> Option<Vec<(u32, u32)>> {
-    let block = rel(b, 0x2c)?;
-    let count = le16(b, block + 0x0c)? as usize;
-    let table = rel(b, block + 0x10)?;
-    let mut out = Vec::new();
-    for k in 0..count {
-        let info = le32(b, table + 16 * k)?;
-        let resource = le32(b, table + 16 * k + 4)?;
-        if info & 0xf != 0xf {
-            out.push((resource, info & 0xf));
-        }
-    }
-    Some(out)
-}
-
 /// The rim's tint, when the literal records hold exactly the bolt's.
-fn literals(b: &[u8]) -> Option<[f32; 3]> {
-    let at = rel(b, 0x74)?;
+fn literals(t: &Tables) -> Option<[f32; 3]> {
     let mut floats = Vec::new();
     let mut pairs = Vec::new();
-    for k in 0..le32(b, 0x70)? as usize {
-        let bits = le32(b, at + 8 * k + 4)?;
+    for &(_, bits) in &t.literals {
         let value = f32::from_bits(bits);
         if value == 0.8 || value == 5.0 || value == 1.0 {
             floats.push(value);
@@ -93,17 +58,6 @@ fn literals(b: &[u8]) -> Option<[f32; 3]> {
     (ones == 2 && gains == 1).then_some([red, green, 1.0])
 }
 
-/// The result register of the one `smp` and the `sa` word of its sampler state.
-fn sample(word: u64) -> Option<(u32, u32)> {
-    if usse::classify(word) != Some(usse::Class::Smp) {
-        return None;
-    }
-    // A primary-bank destination, a secondary-bank state word.
-    let secondary = field(word, 30, 2) == 3 && field(word, 49, 1) == 0;
-    (field(word, 39, 1) == 1 && secondary)
-        .then(|| (field(word, 21, 7), (field(word, 7, 7) << 1) & 0xff))
-}
-
 /// Whether `word` is a half-float `mad` whose first two sources are the same `xyzw` lanes of
 /// primary register `register`: its square, plus the third source.
 fn squares(word: u64, register: u32) -> bool {
@@ -112,10 +66,8 @@ fn squares(word: u64, register: u32) -> bool {
         && field(word, 58, 1) == 1
         // An f16 write to a register bank covers halves: bit 0 the pair `xy`, bit 2 `zw`.
         && field(word, 39, 4) == 0b0101
-        // Source 0: primary bank. Source 1: primary bank, no extension.
-        && field(word, 34, 1) == 1
-        && field(word, 30, 2) == 2
-        && field(word, 49, 1) == 0
+        && src0_bank(field(word, 34, 1)) == Bank::Primary
+        && src12_bank(field(word, 30, 2), field(word, 49, 1)) == Bank::Primary
         && field(word, 12, 6) * 2 == register
         && field(word, 6, 6) * 2 == register
         && field(word, 18, 2) | (field(word, 53, 1) << 2) == XYZW
@@ -136,33 +88,25 @@ pub fn program(bytes: &[u8], p: &Program) -> Option<[f32; 3]> {
     resource(Category::Uniform, "fresnelBase")?;
     let lightning = resource(Category::Sampler, LIGHTNING)?;
     let ring = resource(Category::Sampler, RING)?;
-    let texels = texels(bytes)?;
-    (texels.contains(&(lightning, NOISE_INTERPOLANT))
-        && texels.contains(&(ring, RING_INTERPOLANT)))
-    .then_some(())?;
-    // The dependent-sampler table at `+0x84`: `resource * 4 + k` low, the `sa` word relative to
-    // container 19's base high.
-    let container_at = rel(bytes, 0x94)?;
-    let base = (0..le32(bytes, 0x90)? as usize).find_map(|k| {
-        let at = container_at + 8 * k;
-        (le16(bytes, at)? == SECONDARY_CONTAINER).then(|| le16(bytes, at + 4).map(u32::from))?
-    })?;
-    let dependent_at = rel(bytes, 0x84)?;
-    let sampler_of = |sa: u32| {
-        (0..le32(bytes, 0x80)? as usize).find_map(|k| {
-            let at = dependent_at + 4 * k;
-            (base + u32::from(le16(bytes, at + 2)?) == sa)
-                .then(|| le16(bytes, at).map(|d| u32::from(d / 4)))?
-        })
+    let t = tables(bytes)?;
+    let prefetched = |resource: u32, interpolant: u32| {
+        t.texels
+            .iter()
+            .any(|x| x.resource == resource && x.interpolant == interpolant)
     };
+    (prefetched(lightning, NOISE_INTERPOLANT) && prefetched(ring, RING_INTERPOLANT))
+        .then_some(())?;
     let code: Vec<u64> = usse::words(bytes, &p.primary).collect();
-    let taps: Vec<(u32, u32)> = code.iter().filter_map(|&w| sample(w)).collect();
-    let &[(register, state)] = taps.as_slice() else {
+    let taps: Vec<(Word, Word, u32)> = code.iter().filter_map(|&w| sample(w)).collect();
+    let &[(Word(Bank::Primary, register), _, state)] = taps.as_slice() else {
         return None;
     };
-    (sampler_of(state) == Some(lightning)).then_some(())?;
+    t.samplers
+        .iter()
+        .any(|&(resource, sa)| resource == lightning && t.base + sa == state)
+        .then_some(())?;
     code.iter().any(|&w| squares(w, register)).then_some(())?;
-    literals(bytes)
+    literals(&t)
 }
 
 /// The tint of a `.rcsmaterial` file, where every fragment program that declares `fresnelBase`
@@ -196,7 +140,10 @@ mod tests {
     fn the_colour_tap_is_read_and_squared() {
         // `smp2d.f16.f32 pa6.x, pa4.xy, sa6`, then `mad.f16 pa0.xyzw, pa6.xyzw, pa6.xyzw,
         // pa0.xyzw`, off `data2.psarc`'s program #1.
-        assert_eq!(sample(0xe041_8484_e0c0_8180), Some((6, 6)));
+        assert_eq!(
+            sample(0xe041_8484_e0c0_8180).map(|(dst, _, state)| (dst, state)),
+            Some((Word(Bank::Primary, 6), 6))
+        );
         assert!(squares(0x04a0_9286_a000_30c0, 6));
         assert!(!squares(0x04a0_9286_a000_30c0, 4));
         // `mad.f16 pa0.xyzw, pa4.xxxx, pa0.xyzw, sa2.xyzw` squares nothing.
