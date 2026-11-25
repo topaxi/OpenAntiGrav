@@ -397,12 +397,20 @@ the wall about 100 units ahead, still the road's full width. 7.4 s (45): the wal
 `+50`/`+100`/`+200` score pops behind it, score `500`. 8.0 s (67): the wave gone over the rise,
 mine debris falling, score `1050`. Ours, the same frame counts after an L1 press with
 `--detonator-emp-charge 12`: the same blue wall and cyan wash at 8; at 24, 45 and 67 the wall
-runs on and the mines behind it go. Ours is about 2x as far ahead at 24 and 45 frames, since the
-emulator ran at ~35 fps and ours at 60. **What differs:** ours leaves rows of faint grey particles
-on the road along the wave's path (the five world-space emitters' bursts, one row per tick across
-the extent), which the original's frames at the same frame counts do not show. Not explained: the
-emitters are world-space in the file (flags `0x02500099`, `0x84104205`, `0x8010020d`, `0x86000005`,
-`0x80000001`), and the extent spread is not the cause (switched off, the frame is the same).
+runs on and the mines behind it go. The wave itself agrees per frame: the original's front covered
+about 143 units in its first 24 frames (`(466.3, -30.4, -67.2)` to `(570.8, -17.3, 29.7)`), ours
+24 survey entries of about 6 units. The gap between the craft and the wave differs: the emulator
+ran at ~35 fps, so its craft covered more road per frame, and ours fired 28 ticks after GO, still
+on the auto-speed ramp. **What differs:** ours leaves rows of soft grey half-domes on the road
+along the wave's path, one row per tick; the original's road between the craft and the wave is
+clean at the same frame count. Not explained: the root emitter loops (`0x02500099`, bit `0x1`) and
+is world-space (no `0x2`) with a 50-tick life, so the file itself leaves particles behind; the
+other four world-space emitters are `0x84104205`, `0x8010020d`, `0x86000005`, `0x80000001`; the
+extent spread is not the cause (switched off, the frame is the same). Whether the shared particle
+player does the same for the Quake's wave (same root flags) was not checked: no Quake frame was taken.
+
+Before this section, main drew nothing for the wave (`EmpLaunch` played no effect) and swept a
+chosen `40 * extent` entries over `wave_time`.
 
 ## Wired: the look (2026-11-24)
 
@@ -414,7 +422,7 @@ emitters are world-space in the file (flags `0x02500099`, `0x84104205`, `0x80100
 | The kills | `MineEmped` plays the mine explosion by liveness, `BombEmped` the bomb's; `MINEEXPL`/`BOMBEXPL` with them |
 | Captures | `--detonator-emp-charge N` (`oag-game`) starts the race at `N` charges; the shots script's `--emp-charge`, `--emp-poll` |
 
-Not wired: the fork (this engine's survey is one route); the travel cue `~MAGPULSETRAVEL`.
+Not wired: the fork, and the travel cue `~MAGPULSETRAVEL`. The fork is reachable on HD: a census of every HD circuit's `WO Track` (`oag_vex::track::from_vex`, 2026-11-24) finds one alternate successor on `zone_3`, `05_ubermall` (both directions) and `15_anulpha_pass` (forward), none on the other 24 files; this engine's Detonator survey follows one route, so the EMP's wave there never splits.
 
 Tests: `emp::tests::the_wave_steps_one_entry_a_tick_for_extent_seconds` (15 entries at gauge `0`,
 120 at `1`), `tests::detonator_fx::an_hd_emp_wave_carries_the_discs_effect_on_its_front_until_it_ends`
