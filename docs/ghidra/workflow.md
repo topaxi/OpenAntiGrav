@@ -683,7 +683,7 @@ import is the actual fix and is nobody's task yet.
 `0x08804000` image base. Scanning the extracted binary for calls to
 `0x0884d850` means searching for `0x0C012614`, not `0x0E213614`.
 
-`BOOT.BIN` is a PRX (`e_type` `0xff80`) with `.text` at file offset `0x80`,
+`BOOT.BIN` is a PRX (`e_type` `0xffa0`, as above) with `.text` at file offset `0x80`,
 virtual `0x0`, length `0x272a3c` in `psp-pulse-usa`. Walk four bytes at a time
 keeping each `lui`'s immediate per register; when an `addiu`/`ori` completes a
 pair, compare against `<target> - 0x08804000`. A `jal` target is

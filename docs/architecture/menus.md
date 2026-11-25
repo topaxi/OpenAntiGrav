@@ -569,8 +569,13 @@ decrypted twin it shares a serial with, and two Down presses plus Return booted
 `pure-psp-eu.chd` (survey of seven images: 0.85 s). To repeat it, input must go
 over X11 (`unset WAYLAND_DISPLAY`; `xdotool` cannot reach a Wayland window and
 `xdotool key --window` does not work, so focus the window and use plain
-`xdotool key`). Xvfb is no substitute: Mesa reports "No DRI3 support detected -
-required for presentation" and nothing is drawn or ticked.
+`xdotool key`). On that day Xvfb was no substitute: Mesa reported "No DRI3 support detected -
+required for presentation" and nothing was drawn or ticked. **Unsettled
+since**: `docs/ui/endrace-screens.md` and `docs/networking/online-lobby.md` drive
+a windowed `oag-game` under Xvfb on lavapipe with `xdotool`. One `just launch`
+under `scripts/xvfb-own.sh` with
+`VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json` would settle it for the
+chooser.
 
 ## Rebinding
 

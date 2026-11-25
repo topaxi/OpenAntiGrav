@@ -40,14 +40,14 @@ in isolated worktrees.
 
 ## The loop, every cycle
 
-1. `ListAgents`; total the running cost. **Peer sessions are not yours**; only subagents you spawned count, plus any mechanical-writer helper a member announced (`member-rules.md`, step zero 4: sonnet 1, haiku 0.5; it works inside the member's worktree and ends before the member reports).
+1. `ListAgents`; total the running cost. **Peer sessions are not yours**; only subagents you spawned count, plus any mechanical-writer helper a member announced (`member-rules.md`, step zero 4: sonnet 1, haiku 0.5).
 2. `git log --oneline -1`, `git status --porcelain`, and per branch `git log --oneline main..<branch> | wc -l`.
-3. **Liveness, every member, every tick**: `.claude/skills/oag-drive/member-liveness.sh <member>[=<worktree-dir>] ...`. `ListAgents` keeps showing a dead member as `pane`, and uncommitted edits or a quiet branch say nothing either way (a dead member sat 2.5 h because a tick read its diff as "mid-implementation"). The transcript's age is the signal.
+3. **Liveness, every member, every tick**: `.claude/skills/oag-drive/member-liveness.sh <member>[=<worktree-dir>] ...`. `ListAgents` keeps showing a dead member as `pane`, and uncommitted edits or a quiet branch say nothing (a dead member sat 2.5 h): the transcript's age is the signal.
    - `DEAD` (transcript idle 30+ min, no process in its worktree): `TaskStop` it at once and spawn a successor on the **same worktree** (keep the uncommitted edits), briefed with what its transcript and scratch show it finished (`jq` over the transcript the script names: last text blocks and last commands).
    - `SUSPECT` (idle 90+ min with processes, possibly a dead session's orphans): `SendMessage` it; no reply by the next tick counts as `DEAD`.
-   - **While any member runs, the fallback tick is 30 minutes, not an hour**, so a death costs at most one tick plus the 30-minute window.
+   - **While any member runs, the fallback tick is 30 minutes, not an hour.**
 4. For each finished member: verify, merge, gate, reap (below).
-5. Only if under budget, fill to budget (a finished opus frees two slots and may become two sonnets).
+5. Only if under budget, fill to budget.
 6. Report: slot usage, what merged, what is running, each member's liveness line, anything needing the user.
 
 ## Merging a member
@@ -143,4 +143,4 @@ The rest is in `member-rules.md` and CLAUDE.md (golden hashes, `_q` naming, judg
 
 ## When the user reports something from play
 
-Treat it as a reliable oracle (their observations repeatedly beat static analysis). Turn it into a *measurement* for a member with the discriminating question and what would falsify it. Do not have members tune to match a memory (one report was an accurate memory of a **different title**). The observation stays open until a player would no longer notice it, or the maintainer accepts a stop. Keep it in the queue as a chain (measure, follow-up, wire), and every report on it says what is next.
+Treat it as a reliable oracle (their observations repeatedly beat static analysis). Turn it into a *measurement* with the discriminating question and what would falsify it; do not have members tune to match a memory (one was an accurate memory of a **different title**). It stays open until a player would no longer notice it, or the maintainer accepts a stop; keep it in the queue as a chain (measure, follow-up, wire).

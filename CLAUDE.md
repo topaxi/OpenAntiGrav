@@ -33,7 +33,7 @@ just check-docs   # internal links in docs/ (not CLAUDE.md, .claude/ or HANDOVER
 just check-deps | check-unused-deps (cargo shear) | check-determinism | check-size | check-comment-history   # the rules below
 just check-names | check-handover | check-schemas | check-weapon-lineage | check-guests   # `check-guests --strict` (the gate) fails a stale ext/*.wasm; `just rebuild-guests` regenerates
 just check-status # status.md's RE-coverage table matches names.tsv; `just gen-status` regenerates it
-just check-title-branching | check-title-reach   # ratchets: per-title behaviour is `Title` data (ADR-0058), and generic crates reach a title only through `oag_title::Title`
+just check-title-branching | check-title-reach   # ratchets: per-title behaviour is `Title` data (ADR-0058), and generic crates reach a title only through `oag_title::Title`, the oag-source registry or the composition root
 just check-hd-clock-grab   # every HD/Fury grab of the original goes through `rpcs3-drive.py`'s `grab_with_clock`
 just bench-render [title...] # whole-race render benchmark; takes the gate lock itself, never inside a gate (docs/tools/render-bench.md)
 just audit-leakage           # no tracked game content
@@ -43,10 +43,9 @@ just sync-saves <host> [-n]     # data/saves/ both ways with another workstation
 
 Single test: `cargo nextest run -p oag-core some_test_name` (nextest, not
 `cargo test`). `just test` builds `target/quick`, `just test-data` builds
-`target/debug` (opt-level 2); pass `--cargo-profile quick` to a plain test to
-reuse `just test`'s build, and omit it for a ground-truth test.
-Ground-truth tests (`crates/*/tests/*ground_truth*.rs`) are `#[ignore]`d, need
-a disc image under `data/images/`, and never run in CI.
+`target/debug`; pass `--cargo-profile quick` to a plain test to reuse `just test`'s
+build, and omit it for a ground-truth test (`crates/*/tests/*ground_truth*.rs`:
+`#[ignore]`d, needs a disc image under `data/images/`, never runs in CI).
 
 ### The test-data suite
 
@@ -122,7 +121,7 @@ in and emits a state snapshot out; drawing, audio, windowing and file I/O are
 outside it. That keeps it testable without a GPU and comparable against a trace
 from the original.
 
-Layering: everything depends on `oag-core`; the disc/format/asset chain (`oag-disc`, `oag-formats`, `oag-assets`, the title packages) and the simulation crates (physics, ai, weapons, race) meet in `oag-gameplay`, which depends on no render, audio or input crate (rule 1); `oag-game` is the composition root that joins everything (diagram: `docs/architecture/workspace-layout.md`, "Dependency rules").
+Layering: everything depends on `oag-core`; the simulation crates (physics, ai, weapons, race) with `oag-vex` and `oag-tables` meet in `oag-gameplay`, which depends on no render, audio, input or title crate (rule 1); the disc/format/asset chain, the title packages and the render, audio and input crates meet in `oag-game`, the composition root (diagram: `docs/architecture/workspace-layout.md`, "Dependency rules").
 
 Crates (`crates/<name>`; full table and reasoning:
 [`docs/architecture/workspace-layout.md`](docs/architecture/workspace-layout.md)).
@@ -354,13 +353,11 @@ Start at [`docs/README.md`](docs/README.md). Entry points:
 is not in the docs tree (deferred work, single-source versus verified findings,
 traps); read it before non-trivial work and update it when handing off.
 
-Work in flight is one file per thread under [`handover/`](handover/), each with
-`## Open` and `## Next Steps`, in `rendering/`, `gameplay/`, `frontend/`,
-`tooling/` or `audio/` (a thread crossing categories carries a `categories:`
-frontmatter block naming the extras). Every thread also carries `status`,
-`titles`, `updated` and `summary` frontmatter; `just threads [--status S]
-[--title T] [--category C]` is the index (`HANDOVER.md`, "Open threads"). Delete
-a thread's file once the work lands; `just check-handover` gates the frontmatter.
+Work in flight is one file per thread under [`handover/`](handover/) (`rendering/`,
+`gameplay/`, `frontend/`, `tooling/` or `audio/`), each with `## Open`, `## Next
+Steps` and `status`, `titles`, `updated`, `summary` frontmatter
+(`HANDOVER.md`, "Open threads"; `just threads` is the index). Delete a thread's
+file once the work lands; `just check-handover` gates the frontmatter.
 
 **Nothing outside `handover/` and `HANDOVER.md` may link into `handover/`.**
 Threads are deleted when landed, and `check-docs` only proves links resolve
