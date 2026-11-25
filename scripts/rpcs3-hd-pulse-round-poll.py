@@ -12,7 +12,7 @@ START RACE until the lap clock runs, runs to `--fire-clock`, pauses and turns th
 (`rpcs3_place.write_pose`: forward `cos f + sin r`, speed kept), then holds the use button and reads the whole
 round pool through `/proc/<pid>/mem` as fast as Python goes. The pool is every object whose first word is the
 `PulseBullet` vtable (`0x00863d98`, `docs/ghidra/functions/ps3-hdfury-eu/detonator-cannon.md`). A sample of a round
-is kept whenever its age (`+0x4c`) changed: `+0x40` flags, `+0x12c` rebounds left, `+0xd0` velocity, `+0xe0` prev,
+is kept whenever its age (`+0x4c`) changed (`--place` first puts one round anywhere, e.g. at the foot of a loop): `+0x40` flags, `+0x12c` rebounds left, `+0xd0` velocity, `+0xe0` prev,
 the rows `+0x140` right, `+0x150` up, `+0x160` forward, `+0x170` position, `+0x180` surface normal. Writes
 `<out>/poll.json`.
 """
@@ -75,6 +75,14 @@ def main():
     ap.add_argument("--redirect-deg", type=float, default=0.0,
                     help="turn each newly fired round's velocity this many degrees to the craft's right (alternating left) "
                          "while it is under 0.07 s old, to send it at a side wall; only +0xd0 is written")
+    ap.add_argument("--place", default="",
+                    help="x,y,z,nx,ny,nz,fx,fy,fz: put the first round fired (under 0.07 s old) at the point with that "
+                         "surface normal (also its up row) and a velocity of 500 along the direction; writes +0x170, "
+                         "+0xe0, +0x150, +0x180 and +0xd0, so a round can be sent through a loop the craft is not on")
+    ap.add_argument("--craft-at", default="",
+                    help="x,y,z,ux,uy,uz,fx,fy,fz,speed: put the craft there before firing (`rpcs3_place.write_pose`, "
+                         "right = up x forward); the round's floor probe only finds collision near the craft, so a "
+                         "round meant for a loop is fired from the loop's foot")
     ap.add_argument("--poll-seconds", type=float, default=2.0)
     ap.add_argument("--pre-wait", type=float, default=30.0)
     ap.add_argument("--fire-button", default="triangle")
@@ -128,11 +136,21 @@ def main():
             time.sleep(args.settle)
             gdb.pause()
             pose = place.read_pose(gdb, body)
+        if args.craft_at:
+            c = [float(x) for x in args.craft_at.split(",")]
+            up, fwd = c[3:6], c[6:9]
+            right = (up[1] * fwd[2] - up[2] * fwd[1], up[2] * fwd[0] - up[0] * fwd[2], up[0] * fwd[1] - up[1] * fwd[0])
+            place.write_pose(gdb, body, tuple(c[0:3]), [right, tuple(up), tuple(fwd)], c[9])
+            gdb.resume()
+            time.sleep(args.settle)
+            gdb.pause()
+            pose = place.read_pose(gdb, body)
         print("craft pose %s rows %s" % (pose["pos"], pose["rows"]), flush=True)
         last = {}
         seen = set()
         samples = []
         turned = 0
+        placed = []
         gdb.resume()
         session.pad.set(args.fire_button, True)
         t0 = time.time()
@@ -152,6 +170,17 @@ def main():
                 if not (0.0 < age < 3.0):
                     continue
                 row = decode(blob)
+                if args.place and not placed and age < 0.07:
+                    placed.append(addr)
+                    v = [float(x) for x in args.place.split(",")]
+                    gdb.pause()
+                    gdb.write(addr + 0x170, struct.pack(">3f", *v[0:3]))
+                    gdb.write(addr + 0xE0, struct.pack(">3f", *v[0:3]))
+                    gdb.write(addr + 0x150, struct.pack(">3f", *v[3:6]))
+                    gdb.write(addr + 0x180, struct.pack(">3f", *v[3:6]))
+                    gdb.write(addr + 0xD0, struct.pack(">3f", *[500.0 * c for c in v[6:9]]))
+                    gdb.resume()
+                    row["placed"] = v
                 if args.redirect_deg and addr not in seen and age < 0.07:
                     seen.add(addr)
                     a = math.radians(args.redirect_deg) * (1 if turned % 2 == 0 else -1)
@@ -170,7 +199,8 @@ def main():
         final = place.read_pose(gdb, body)
         gdb.resume()
         (out / "poll.json").write_text(json.dumps({"pool": pool, "start_pose": pose, "end_pose": final,
-                                                    "yaw_deg": args.yaw_deg, "samples": samples}) + "\n")
+                                                    "yaw_deg": args.yaw_deg, "placed": placed,
+                                                    "samples": samples}) + "\n")
         print("done: %d samples, %d distinct rounds" % (len(samples), len({s["addr"] for s in samples})), flush=True)
 
 

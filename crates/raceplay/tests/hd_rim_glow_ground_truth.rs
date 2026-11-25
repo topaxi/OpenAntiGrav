@@ -539,7 +539,9 @@ fn the_cannon_bolt_earns_its_ring_program_with_both_coordinate_pairs() {
         .iter()
         .position(|&word| slots::material_index(word) as usize == row)
         .expect("the slot");
-    let ring = model.lightmaps[slot].as_ref().expect("the ring strip bound second");
+    let ring = model.lightmaps[slot]
+        .as_ref()
+        .expect("the ring strip bound second");
     assert_eq!((ring.width, ring.height), (4, 128));
     let near = |a: [f32; 2], b: [f32; 2]| (a[0] - b[0]).abs() < 2e-3 && (a[1] - b[1]).abs() < 2e-3;
     assert!(
