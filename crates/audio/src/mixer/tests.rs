@@ -1033,3 +1033,19 @@ fn a_mixer_that_is_not_silent_still_mixes() {
     heard.render_tick(60, &mut out);
     assert!(out.iter().any(|s| *s != 0.0));
 }
+
+#[test]
+fn advancing_a_silent_mixer_without_a_buffer_moves_the_voices_like_a_rendered_tick() {
+    let (mut heard, ids) = busy_mixer(false);
+    let (mut silent, _) = busy_mixer(true);
+    let mut out = Vec::new();
+    for tick in 0..120 {
+        out.clear();
+        heard.render_tick(60, &mut out);
+        silent.advance_tick(60);
+        assert_eq!(heard.active_voices(), silent.active_voices(), "tick {tick}");
+        for &id in &ids {
+            assert_eq!(heard.position(id), silent.position(id), "tick {tick}");
+        }
+    }
+}

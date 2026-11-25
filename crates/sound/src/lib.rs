@@ -1098,7 +1098,7 @@ impl Audio {
         if let Some(dump) = &mut self.dump {
             self.output.render_tick(TICK_HZ, &mut dump.samples);
         } else if !self.output.is_streaming() {
-            self.output.render_tick(TICK_HZ, &mut Vec::new());
+            self.output.advance_tick(TICK_HZ);
         }
     }
 

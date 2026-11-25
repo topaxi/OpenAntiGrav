@@ -1308,6 +1308,21 @@ impl Mixer {
         self.silent = silent;
     }
 
+    /// One simulation tick of a mixer whose samples nobody takes: the frame count and its
+    /// remainder as [`Self::render_tick`] has them, and no buffer at all when the mixer is
+    /// [silent](Self::set_silent). Otherwise the tick is rendered and dropped.
+    pub fn advance_tick(&mut self, tick_hz: u32) {
+        if self.silent && self.binaural.is_none() {
+            let total = self.sample_rate + self.tick_frame_remainder;
+            let tick_hz = tick_hz.max(1);
+            self.tick_frame_remainder = total % tick_hz;
+            self.music_tap.clear();
+            self.advance_voices((total / tick_hz) as usize);
+        } else {
+            self.render_tick(tick_hz, &mut Vec::new());
+        }
+    }
+
     /// Renders exactly one simulation tick's worth of audio, appending to
     /// `out`.
     ///

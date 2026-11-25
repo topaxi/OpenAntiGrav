@@ -451,6 +451,15 @@ impl Output {
         });
     }
 
+    /// Moves the mixer on one tick and keeps no samples ([`Mixer::advance_tick`]): what a null
+    /// backend does each simulation tick that no dump reads. Nothing with a device attached,
+    /// whose callback drains the mixer.
+    pub fn advance_tick(&self, tick_hz: u32) {
+        if !self.is_streaming() {
+            self.with_mixer(|mixer| mixer.advance_tick(tick_hz));
+        }
+    }
+
     /// Renders one tick's audio into `out`, for the offline dump.
     ///
     /// Only meaningful on a null backend: with a device attached the callback
