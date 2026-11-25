@@ -1058,7 +1058,7 @@ impl Session {
                     );
                     // A server that ends a race nobody had finished (the host left, a link
                     // died) leaves a frozen world: after a second of it, back to the menus.
-                    match self.net.as_ref().and_then(crate::net_play::NetPlay::over) {
+                    match self.net.as_deref().and_then(crate::net_play::NetPlay::over) {
                         Some(why) if !stage.race.core.sim.finished() => {
                             self.net_over_ticks += 1;
                             if self.net_over_ticks == NET_OVER_TICKS {

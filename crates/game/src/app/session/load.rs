@@ -853,7 +853,7 @@ impl Session {
                         &mut self.replay_refused,
                         self.settings.language.as_deref(),
                         race_stage,
-                        watching,
+                        *watching,
                     ) {
                         Ok(active) => {
                             self.viewer = Some(active);

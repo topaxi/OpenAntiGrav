@@ -102,7 +102,7 @@ pub(crate) struct App {
     /// `--camera-jitter`, carried to the session. See `Session::camera_jitter`.
     pub(crate) camera_jitter: bool,
     /// A race loaded before the window opened, which is what `--race` does.
-    pub(crate) race: Option<race::Loaded>,
+    pub(crate) race: Option<Box<race::Loaded>>,
     /// What a race started from `Launch Game` is flown on.
     ///
     /// `None` while the chooser is up: its `source` field is the one thing a
@@ -492,7 +492,7 @@ impl App {
             pointer: crate::app::pointer::Window::default(),
             touch_overlay: crate::app::touch::Overlay::default(),
             gestures: oag_input::gesture::Gestures::new((1.0, 1.0)),
-            audio,
+            audio: Box::new(audio),
             music_discs: self.music_discs.clone(),
             music_pool_seen: String::new(),
             music_place,
@@ -531,7 +531,7 @@ impl App {
             frame_index: 0,
             stall_frame: 0,
             memory: perf::memory::Probe::new(),
-            overlay,
+            overlay: Box::new(overlay),
             cursor_sheet,
             cursor_title: None,
             stalled: true,
@@ -566,7 +566,7 @@ impl App {
             original_menu: self.original_menu,
             dev: std::mem::take(&mut self.dev),
             dev_clock: crate::app::session::devrun::Clock::default(),
-            net: self.net.take(),
+            net: self.net.take().map(Box::new),
             net_bot: self.net_bot,
             net_over_ticks: 0,
             prompt: crate::prompts::PromptState {

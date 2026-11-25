@@ -1020,7 +1020,7 @@ pub(crate) fn race_launch(
         windows_fullscreen: cli.driver.windows_fullscreen,
         split_cut: cli.driver.cut(),
         anim_seconds: cli.anim_seconds,
-        race: Some(loaded),
+        race: Some(Box::new(loaded)),
         race_options: Some(options),
         trace: cli.trace,
         log_every: cli.log_every,
