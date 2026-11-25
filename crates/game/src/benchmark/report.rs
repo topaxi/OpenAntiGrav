@@ -10,7 +10,7 @@
 
 use std::fmt::Write as _;
 
-use super::plan::WARMUP_FRAMES;
+use super::plan::COUNTDOWN_TICKS;
 use super::recorder::{Ending, Frame};
 use super::stats::{Summary, json_string, low_fps, summarise};
 
@@ -69,6 +69,8 @@ pub struct Context {
     pub settings: Vec<(String, String)>,
     /// The refresh rate the budget is read against, and what it came from.
     pub refresh: (f64, &'static str),
+    /// The rate the frame limiter holds the loop to, where one is in force.
+    pub frame_limit_hz: Option<f64>,
     /// The preset the run drew with; `None` is the player's own settings.
     pub preset: Option<String>,
     /// Where the benchmark was started from: `cli`, `extras` or `graphics`.
@@ -92,13 +94,13 @@ pub struct Context {
 pub struct Report {
     /// What is not a frame time.
     pub context: Context,
-    /// Every frame, warm-up included.
+    /// Every frame, the countdown's included.
     pub frames: Vec<Frame>,
     /// Where the race ended.
     pub ending: Ending,
 }
 
-/// The figures the screen shows, over the frames after the warm-up.
+/// The figures the screen shows, over the frames after the start-line countdown.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Figures {
     /// Frames counted.
@@ -107,8 +109,9 @@ pub struct Figures {
     pub average_fps: f64,
     /// The rate of the slowest 1 % of frames.
     pub low_1: f64,
-    /// The rate of the slowest 0.1 % of frames.
-    pub low_01: f64,
+    /// The rate of the slowest 0.1 % of frames; `None` under [`LOW_01_FRAMES`] counted frames,
+    /// where it would be the one worst frame.
+    pub low_01: Option<f64>,
     /// Median, 95th and 99th percentile and worst frame time, in milliseconds.
     pub median_ms: f64,
     /// 95th percentile, milliseconds.
@@ -121,15 +124,27 @@ pub struct Figures {
     pub over_budget: usize,
     /// The refresh budget, milliseconds.
     pub budget_ms: f64,
+    /// The frame limit, when the average sits on it: the figure is then the limiter's, not
+    /// the machine's.
+    pub limited_by: Option<f64>,
 }
 
+/// Counted frames below which the 0.1 % low is only the worst frame.
+pub const LOW_01_FRAMES: usize = 1000;
+
+/// An average this close under the frame limit (or over it) is the limiter's.
+const LIMITER_BINDS: f64 = 0.9;
+
 impl Report {
-    fn counted(&self) -> Vec<f64> {
+    /// The frames after the countdown: the craft is released and the race is what is drawn.
+    fn raced(&self) -> impl Iterator<Item = &Frame> {
         self.frames
             .iter()
-            .skip(WARMUP_FRAMES)
-            .map(|frame| frame.frame_us)
-            .collect()
+            .filter(|frame| frame.tick >= COUNTDOWN_TICKS)
+    }
+
+    fn counted(&self) -> Vec<f64> {
+        self.raced().map(|frame| frame.frame_us).collect()
     }
 
     /// The summary of the counted frame times, in microseconds.
@@ -144,11 +159,16 @@ impl Report {
         let counted = self.counted();
         let summary = summarise(&counted)?;
         let budget_us = 1e6 / self.context.refresh.0;
+        let average_fps = 1e6 / summary.mean;
         Some(Figures {
             counted: summary.count,
-            average_fps: 1e6 / summary.mean,
+            average_fps,
             low_1: low_fps(&counted, 1.0)?,
-            low_01: low_fps(&counted, 0.1)?,
+            low_01: if summary.count >= LOW_01_FRAMES {
+                low_fps(&counted, 0.1)
+            } else {
+                None
+            },
             median_ms: summary.p50 / 1000.0,
             p95_ms: summary.p95 / 1000.0,
             p99_ms: summary.p99 / 1000.0,
@@ -158,6 +178,10 @@ impl Report {
                 .filter(|us| **us > budget_us * OVER_BUDGET_SLACK)
                 .count(),
             budget_ms: budget_us / 1000.0,
+            limited_by: self
+                .context
+                .frame_limit_hz
+                .filter(|limit| average_fps >= limit * LIMITER_BINDS),
         })
     }
 
@@ -214,7 +238,11 @@ impl Report {
             json_string(&format!("{:016x}", self.ending.state_hash)),
         );
         put("frames", self.frames.len().to_string());
-        put("warmup_frames_excluded", WARMUP_FRAMES.to_string());
+        put(
+            "warmup_frames_excluded",
+            (self.frames.len() - self.raced().count()).to_string(),
+        );
+        put("countdown_ticks_excluded", COUNTDOWN_TICKS.to_string());
         put("wall_seconds", format!("{:.3}", c.wall_seconds));
         put("load_average_start", json_string(&c.load.0));
         put("load_average_end", json_string(&c.load.1));
@@ -241,14 +269,18 @@ impl Report {
             put(
                 "in_game",
                 format!(
-                    "{{\"average_fps\": {:.2}, \"low_1pct_fps\": {:.2}, \"low_0_1pct_fps\": {:.2}, \"frames_over_budget\": {}, \"budget_ms\": {:.3}, \"refresh_hz\": {:.2}, \"refresh_source\": {}, \"device\": {}, \"driver\": {}}}",
+                    "{{\"average_fps\": {:.2}, \"low_1pct_fps\": {:.2}, \"low_0_1pct_fps\": {}, \"frames_over_budget\": {}, \"budget_ms\": {:.3}, \"refresh_hz\": {:.2}, \"refresh_source\": {}, \"frame_limit_hz\": {}, \"limiter_binds\": {}, \"device\": {}, \"driver\": {}}}",
                     f.average_fps,
                     f.low_1,
-                    f.low_01,
+                    f.low_01
+                        .map_or_else(|| "null".to_string(), |low| format!("{low:.2}")),
                     f.over_budget,
                     f.budget_ms,
                     c.refresh.0,
                     json_string(c.refresh.1),
+                    c.frame_limit_hz
+                        .map_or_else(|| "null".to_string(), |hz| format!("{hz:.0}")),
+                    f.limited_by.is_some(),
                     json_string(&c.device),
                     json_string(&c.driver),
                 ),
@@ -263,9 +295,7 @@ impl Report {
         let laps = (1..=last_lap)
             .map(|lap| {
                 let of: Vec<f64> = self
-                    .frames
-                    .iter()
-                    .skip(WARMUP_FRAMES)
+                    .raced()
                     .filter(|f| f.lap == lap)
                     .map(|f| f.frame_us)
                     .collect();

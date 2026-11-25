@@ -115,7 +115,7 @@ impl Session {
     /// The prompt was answered: a yes starts the download, either answer is stored.
     pub(crate) fn ffmpeg_answered(&mut self, yes: bool) {
         self.settings.ffmpeg.download = if yes { Download::Yes } else { Download::Never };
-        if let Err(e) = crate::settings::save(&self.settings) {
+        if let Err(e) = self.save_settings() {
             warn!("could not save the ffmpeg answer: {e:#}");
         }
         if yes {

@@ -1138,6 +1138,8 @@ impl Session {
             }
             Err(RaceBuildError::Load(e)) => {
                 error!("cannot start a race: {e:#}");
+                // A benchmark that would not load gives the player's own options back.
+                self.abandon_benchmark_launch();
                 // A demo that would not load ends a `--demo` chain rather than retrying it.
                 if self.demo.loading.take().is_some() {
                     self.demo.cli = None;

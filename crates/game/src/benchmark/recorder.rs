@@ -16,6 +16,8 @@ pub struct Frame {
     pub lap: u32,
     /// Simulation ticks the frame stepped.
     pub ticks: u32,
+    /// The world's tick once the frame had stepped.
+    pub tick: u64,
 }
 
 /// Where the race ended, taken on the tick it ended and not a frame later.
@@ -52,7 +54,7 @@ impl Recorder {
 
     /// Records a frame. Ignored once the race has ended: the stats screen's own frames are not
     /// the race's.
-    pub fn frame(&mut self, frame_seconds: f32, lap: u32, ticks: u32) {
+    pub fn frame(&mut self, frame_seconds: f32, lap: u32, ticks: u32, tick: u64) {
         if self.ending.is_some() {
             return;
         }
@@ -60,6 +62,7 @@ impl Recorder {
             frame_us: f64::from(frame_seconds) * 1e6,
             lap,
             ticks,
+            tick,
         });
     }
 
@@ -106,13 +109,13 @@ mod tests {
     #[test]
     fn frames_after_the_end_are_not_the_races() {
         let mut run = Recorder::begin("0 0 0".into());
-        run.frame(0.016, 1, 1);
+        run.frame(0.016, 1, 1, 300);
         run.end(Ending {
             tick: 10,
             state_hash: 7,
             finished: true,
         });
-        run.frame(0.5, 3, 1);
+        run.frame(0.5, 3, 1, 301);
         run.end(Ending {
             tick: 99,
             state_hash: 8,

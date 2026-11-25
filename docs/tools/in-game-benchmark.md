@@ -16,12 +16,16 @@ the player's present mode, and the same figures come out of a desktop, a Steam D
 
 `title` is a disc image or folder like any first argument, or a title's short name (`pulse`,
 `pure`, `hd`, `2048`, `omega`) for the first playable disc of that title on the search path. On
-Android the launch file takes the same flags (`files/oag-args.txt`, [Android](android.md)):
-`<image> --benchmark`; the result is in the app's `files/data/oag/bench/` (`adb pull`). `--ticks N` stops the race at tick N and the result says `finished: false`;
-it is for a short test run, not for results.
+Android the launch file takes the same flags, **one argument per line** (`files/oag-args.txt`,
+[Android](android.md)): the image path on one line, `--benchmark` on the next, and `--preset` and
+its name on two more. The result is in the app's `files/data/oag/bench/` (`adb pull`). `--ticks N`
+stops the race at tick N and the result says `finished: false`; it is for a short test run, not
+for results (`--ticks` under 272 ends inside the countdown and has no figures).
 
 Escape during the race abandons it with no result. The race cannot be paused: a pause would be a
-frame time.
+frame time. Losing focus does not pause or abandon it either, and neither does the Android system
+Back, in the race or on the stats screen (there BACK is the button). RUN BENCHMARK is not offered
+over a race parked behind the menus: it would replace that race.
 
 ## The race
 
@@ -36,7 +40,7 @@ the same race as flags, and `the_offscreen_bench_flies_the_same_race` holds the 
   player's team, circuit or difficulty never moves the race. Graphics, the HUD and the preset are
   the player's.
 - Nothing it does is a record, a ghost or a recording (`result_saved`, the ghost hidden, no
-  auto-replay), and the pre-race flyby and the countdown before tick zero are not timed.
+  auto-replay), and the pre-race flyby has no tick, so it is not recorded.
 
 **Same race as the offscreen bench, checked.** 240 ticks on every title end on the offscreen
 bench's state hash (Pulse `e90e3913bf520931`, Pure `9cd28090d7b085f6`, HD `9f831f9e0e9c728e`, 2048
@@ -48,18 +52,29 @@ line, inside the frame loop, not on the frame after, which is what keeps the has
 ## What it measures
 
 A frame is recorded when the performance meter records it (`Session::frame`'s `elapsed`, under the
-same rule): a frame that carried a load is not a frame time. The first 60 raced frames are left
-out of every figure (they pay pipeline and buffer first use), not out of the CSV.
+same rule): a frame that carried a load is not a frame time. The frames drawn while the world is
+still in its 272-tick start-line countdown (`COUNTDOWN_TICKS`: the grid, the lights, nothing
+moving, and the first frames' pipeline and buffer first use) are left out of every figure, the
+per-lap rows and `warmup_frames_excluded`'s count, not out of the CSV or `frames`. The offscreen
+bench counts them after its first 60 frames, so the two differ by that grid time.
 
 | Figure | Definition |
 | --- | --- |
 | Average FPS | frames counted over their summed time (`1e6 / mean frame_us`) |
-| 1 % low, 0.1 % low | the rate of the slowest 1 % (0.1 %) of frames: 1,000 ms over the **mean** frame time of the slowest `ceil(n x 1 %)` frames, at least one (`stats::low_fps`) |
+| 1 % low, 0.1 % low | the rate of the slowest 1 % (0.1 %) of frames: 1,000 ms over the **mean** frame time of the slowest `ceil(n x 1 %)` frames, at least one (`stats::low_fps`). Under 1,000 counted frames the 0.1 % low would be the one worst frame, so the screen says `N/A UNDER 1000 FRAMES` and the file has `null` |
 | Median, P95, P99, worst | nearest-rank percentiles of the frame time, so each is a frame that happened (`stats::percentile`) |
 | Over the budget | frames that took more than 1.05 times `1000 / refresh Hz`; the refresh rate is the display's when the loop measured it, else 60 Hz and the result says `assumed` |
 
-The screen also lists the settings that change what a frame costs, the adapter and driver, and the
-machine (operating system, architecture, processor).
+The screen also lists the settings that change what a frame costs (the vsync mode, the frame limit
+and the dynamic-resolution target among them), the adapter and driver, and the machine (operating
+system, architecture, processor).
+
+**The frame limit.** A fresh install runs vsync off with a 240 fps limit, so any machine faster
+than that reports about 240 fps: the number is the limiter's, not the GPU's. When the average sits
+within 10 % of the limit in force (the limit is not in force under vsync on, where the display
+paces), the screen says so on its own line and the file has `limiter_binds: true`; set
+`frame_limit` to unlimited to measure the machine. The refresh budget (`over the budget`) is the
+display's, and under vsync on most "over" frames are missed refreshes.
 
 ## The result file
 
@@ -70,8 +85,9 @@ up by file name). The JSON is `bench-render`'s format: `title`, `git_hash`, `bui
 `frames`, `metrics.frame_us` (`count, min, mean, p50, p95, p99, max`), `per_lap`, the load average
 at the start and the end, and `run` (`kind: "in_game"`, the circuit as the loader names it, the
 preset, where it started from, the flags). `in_game` carries what is new: the average and the two
-lows, the frames over the budget and the budget, the refresh rate and where it came from, the
-device and the driver. The CPU and GPU columns of the offscreen bench are not timed through a
+lows (`low_0_1pct_fps` is `null` under 1,000 counted frames), the frames over the budget and the
+budget, the refresh rate and where it came from, the frame limit in force (`frame_limit_hz`) and
+whether the average sits on it (`limiter_binds`), the device and the driver. The CPU and GPU columns of the offscreen bench are not timed through a
 window and are absent: the comparison says so.
 
 ```sh

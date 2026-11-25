@@ -224,6 +224,8 @@ by 0.04 of the width against a 0.01 tolerance.
 | `hold <button> ... N` | Hold every named button down together for N ticks, then let go: `hold left 60` turns photo mode's camera, `hold select up 30` zooms it. |
 | `rstick <x> <y> N`, `lstick <x> <y> N` | A pad that is not there: its right (or left) stick held at `x y` (`-1` to `1`, up positive) for N ticks, then let go. The right stick is view-side only (photo mode zooms and tilts with it, the viewer jogs); the left is the snapshot stick, as a real pad's. |
 | `pull <l2\|r2> <amount> N` | A trigger pulled `amount` (`0` to `1`) for N ticks. It raises its shoulder's (or, under `thrust_brake`, CROSS's) button in the race's snapshot as a real trigger does, and the replay viewer and photo mode read it apart from the buttons: L2 and R2 scrub, a full R2 is PLAY in photo mode. |
+| `back` | The Android system Back (`Session::back`): escape that never quits, and does nothing during an in-game benchmark. |
+| `away` | The window lost focus (alt-tab): pauses a running race where `pause_on_focus_loss` says to, and never an in-game benchmark. |
 | `key` | A key no button is bound to went down (what the attract demo counts as somebody being there). |
 | `mouse <x> <y>`, `click` | The mouse moved to a window pixel; the primary button went down and up. |
 | `ticks N` | Let N ticks pass. |

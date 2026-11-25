@@ -108,7 +108,11 @@ pub fn draw_list(
     // settings, the adapter, the device and the file. The text is scaled down until they fit
     // above the buttons.
     let base = (line_height + 2.0).max(10.0);
-    let rows = if figures.is_some() { 9.5 } else { 2.5 };
+    let rows = match &figures {
+        Some(figures) if figures.limited_by.is_some() => 10.5,
+        Some(_) => 9.5,
+        None => 2.5,
+    };
     let wrapped =
         |scale: f32| settings_lines(&context.settings, chars_per_line(char_width, scale)).len();
     let lines_at = |scale: f32| 2.7 + rows + wrapped(scale) as f32 + 0.5 + 3.0;
@@ -175,13 +179,22 @@ pub fn draw_list(
         worst_ms,
         over_budget,
         budget_ms,
+        limited_by,
     }) = figures
     {
         row(&mut out, y, "AVERAGE FPS", format!("{average_fps:.1}"));
         y += line;
         row(&mut out, y, "1% LOW FPS", format!("{low_1:.1}"));
         y += line;
-        row(&mut out, y, "0.1% LOW FPS", format!("{low_01:.1}"));
+        row(
+            &mut out,
+            y,
+            "0.1% LOW FPS",
+            low_01.map_or_else(
+                || format!("N/A UNDER {} FRAMES", super::report::LOW_01_FRAMES),
+                |low| format!("{low:.1}"),
+            ),
+        );
         y += line;
         row(
             &mut out,
@@ -202,6 +215,16 @@ pub fn draw_list(
             &format!("OVER THE {budget_ms:.1} MS BUDGET"),
             format!("{over_budget} OF {counted}"),
         );
+        if let Some(limit) = limited_by {
+            y += line;
+            out.push(text(
+                left,
+                y,
+                Align::Left,
+                HEAD,
+                format!("THE {limit:.0} FPS FRAME LIMIT HOLDS THE AVERAGE: NOT THE GPU'S SPEED"),
+            ));
+        }
         y += line * 1.5;
     } else {
         out.push(text(

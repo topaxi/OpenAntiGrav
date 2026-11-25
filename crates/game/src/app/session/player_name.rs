@@ -141,7 +141,7 @@ impl Session {
             Purpose::PlayerTag if self.settings.player.set_tag(text) => {}
             _ => return,
         }
-        if let Err(e) = crate::settings::save(&self.settings) {
+        if let Err(e) = self.save_settings() {
             warn!("cannot remember the player name: {e:#}");
         }
         if let Stage::Menu(stage) = &mut self.stage {

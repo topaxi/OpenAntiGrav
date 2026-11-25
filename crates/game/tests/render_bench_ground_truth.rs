@@ -9,7 +9,8 @@
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game render_bench_ground_truth:: --run-ignored all
 //! ```
 
-const TICKS: usize = 240;
+/// Long enough to clear the 272-tick start-line countdown, whose frames are in no figure.
+const TICKS: usize = 420;
 
 /// The string or number after `"key": ` in the summary.
 fn field(json: &str, key: &str) -> String {
@@ -162,18 +163,20 @@ fn a_split_race_is_benched_per_view_and_the_cut_does_not_change_the_race() {
 
 /// Flies the in-game benchmark (`--benchmark`, driven with no window through the same `Session` a
 /// window runs) for `TICKS` ticks in `dir` with `extra` flags, and returns its result file and the
-/// path of the stats screen it drew.
+/// path of the stats screen it drew. `during` is drive steps run once the race is flying.
 fn in_game(
     dir: &std::path::Path,
     image: &std::path::Path,
     extra: &[&str],
+    during: &str,
 ) -> (String, std::path::PathBuf) {
     // A fresh run directory: an earlier run's result would be a second one.
     let _ = std::fs::remove_dir_all(dir.join("data"));
     std::fs::create_dir_all(dir).expect("a temp directory");
     let shot = dir.join("stats.png");
     let script = format!(
-        "until benchmark=stats within 3000; screenshot {}; quit",
+        "until benchmark=running within 3000; {during}; until benchmark=stats within 6000; \
+         screenshot {}; quit",
         shot.display()
     );
     let out = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
@@ -215,7 +218,7 @@ fn the_in_game_benchmark_flies_the_race_the_offscreen_bench_does() {
     };
     let base = std::env::temp_dir().join("oag-in-game-benchmark-ground-truth");
     let (offscreen, _) = bench(&base.join("offscreen"), &image);
-    let (json, shot) = in_game(&base.join("in-game"), &image, &[]);
+    let (json, shot) = in_game(&base.join("in-game"), &image, &[], "ticks 1");
 
     assert_eq!(field(&json, "final_tick"), TICKS.to_string());
     assert_eq!(field(&json, "finished"), "false");
@@ -293,9 +296,44 @@ fn a_preset_changes_the_picture_and_not_the_race_or_the_players_settings() {
         return;
     };
     let base = std::env::temp_dir().join("oag-in-game-benchmark-preset-ground-truth");
-    let (plain, _) = in_game(&base.join("plain"), &image, &[]);
+    let (plain, _) = in_game(&base.join("plain"), &image, &[], "ticks 1");
     let low_dir = base.join("low");
-    let (low, _) = in_game(&low_dir, &image, &["--preset", "low"]);
+    // The player's own settings file, written before the run: a render scale the preset's is
+    // not, so a preset that reached the file would change it.
+    let _ = std::fs::remove_dir_all(&low_dir);
+    std::fs::create_dir_all(&low_dir).expect("a temp directory");
+    let seeded = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
+        .arg(&image)
+        .args([
+            "--no-audio",
+            "--no-intro",
+            "--drive",
+            "boot; select options; press cross; until page=options; select GRAPHICS; press cross; \
+             until page=graphics; set graphics.render_scale=75; quit",
+        ])
+        .env("XDG_CONFIG_HOME", low_dir.join("config"))
+        .env("XDG_STATE_HOME", low_dir.join("state"))
+        .env("XDG_DATA_HOME", low_dir.join("data"))
+        .output()
+        .expect("running oag-game");
+    assert!(
+        seeded.status.success(),
+        "{}",
+        String::from_utf8_lossy(&seeded.stderr)
+    );
+    let settings = low_dir.join("config/oag/settings.toml");
+    let before = std::fs::read_to_string(&settings)
+        .expect("the seeding run wrote settings.toml where the benchmark run reads it");
+    assert!(before.contains("render_scale = 75"), "{before}");
+    // The camera button saves the settings file on every press; with a preset in force it must
+    // not. Losing focus and the system Back must neither end the run nor give the settings back
+    // while it flies.
+    let (low, _) = in_game(
+        &low_dir,
+        &image,
+        &["--preset", "low"],
+        "press select; away; ticks 5; back; ticks 5; expect benchmark=running",
+    );
 
     assert_eq!(
         field(&low, "final_state_hash"),
@@ -306,10 +344,81 @@ fn a_preset_changes_the_picture_and_not_the_race_or_the_players_settings() {
     assert!(low.contains("\"shadows\": \"Blob\""), "{low}");
     assert!(low.contains("\"preset\": \"low\""), "{low}");
     assert!(plain.contains("\"preset\": null"), "{plain}");
-    let saved =
-        std::fs::read_to_string(low_dir.join("config/oag/settings.toml")).unwrap_or_default();
+    assert_eq!(
+        std::fs::read_to_string(&settings).expect("settings.toml is still there"),
+        before,
+        "the preset's values (or the camera cycle) reached settings.toml"
+    );
+}
+
+/// RUN BENCHMARK would replace a race parked behind the menus, so the row is not on the graphics
+/// page then, and is there when no race is parked. Fails on a build that offers it over a parked
+/// race.
+#[test]
+#[ignore = "needs data/images/pulse-psp-eu.chd and a GPU"]
+fn run_benchmark_is_not_offered_over_a_parked_race() {
+    let Some(image) = oag_testdata::image("data/images/pulse-psp-eu.chd") else {
+        return;
+    };
+    let dir = std::env::temp_dir().join("oag-in-game-benchmark-parked-ground-truth");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("a temp directory");
+    let log = dir.join("state.jsonl");
+    let rows = |middle: &str| -> Vec<String> {
+        let _ = std::fs::remove_file(&log);
+        let script = format!("boot; {middle}; draw; quit");
+        let out = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
+            .arg(&image)
+            .args(["--no-audio", "--no-intro", "--state-log"])
+            .arg(&log)
+            .arg("--drive")
+            .arg(script)
+            .env("XDG_CONFIG_HOME", dir.join("config"))
+            .env("XDG_STATE_HOME", dir.join("state"))
+            .env("XDG_DATA_HOME", dir.join("data"))
+            .output()
+            .expect("running oag-game");
+        assert!(
+            out.status.success(),
+            "oag-game: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let last = std::fs::read_to_string(&log)
+            .expect("a state log")
+            .lines()
+            .last()
+            .expect("a state line")
+            .to_string();
+        let state: serde_json::Value = serde_json::from_str(&last).unwrap();
+        state["screen"]["rows"]
+            .as_array()
+            .expect("rows")
+            .iter()
+            .filter_map(|row| row["label"].as_str().map(str::to_string))
+            .collect()
+    };
+    // Control: with no race, the row is there.
     assert!(
-        !saved.contains("blob"),
-        "the preset's shadows reached settings.toml"
+        rows(
+            "select options; press cross; until page=options; select GRAPHICS; press cross; \
+              until page=graphics"
+        )
+        .iter()
+        .any(|label| label == "RUN BENCHMARK"),
+        "the control run has no RUN BENCHMARK row"
+    );
+    // A race flown a moment and left with Escape is parked; its pause menu reaches the same
+    // OPTIONS page through GAME OPTIONS.
+    let parked = rows(
+        "select racebox; press cross; until page=race; select launch_race; press cross; \
+         until screen=picker; press cross; until screen.id=ship-select within 600; press cross; \
+         until stage=race within 4000; ticks 30; escape; until stage=menu within 600; \
+         select pause_options; press cross; until page=options; select GRAPHICS; press cross; \
+         until page=graphics",
+    );
+    assert!(parked.iter().any(|label| label == "ADVANCED"), "{parked:?}");
+    assert!(
+        !parked.iter().any(|label| label == "RUN BENCHMARK"),
+        "{parked:?}"
     );
 }

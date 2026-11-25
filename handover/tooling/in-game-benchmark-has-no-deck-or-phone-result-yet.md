@@ -22,6 +22,12 @@ finishes in the window on it too.
   like HD, Omega and Pure, whose disc menus author no EXTRAS row.
 - **A mod-supplied or player-supplied preset file** (`overrides/<title>/Data/XML/BenchmarkPresets_<Title>.toml`)
   is read through the asset layers like every other file of ours, but no test puts one there.
+- **Two restore paths have no automated test.** A benchmark whose race fails to build
+  (`Session::abandon_benchmark_launch`, called from `finish_race_loading`'s error arm) and the
+  anisotropy put back after a preset (`restore_benchmark_player`) need a `Session` with a window,
+  which no unit test has; a drive script cannot make a load fail or read the runtime field after
+  the CLI run quits. Focus loss, the system Back, a preset's settings file and RUN BENCHMARK over
+  a parked race do have `render_bench_ground_truth` tests.
 - **The refresh budget is 60 Hz where the loop has not measured the display** (a `--drive` run, the
   first seconds of a window): the result says `refresh_source: assumed`.
 

@@ -42,9 +42,20 @@ struct Launch {
     tick_cap: u32,
 }
 
+/// The launch fields a benchmark clears, as the player (or a dev flag) had them.
+struct Pinned {
+    autopilot_pilot: Option<oag_ai::Pilot>,
+    autopilot_skill: Option<oag_ai::Difficulty>,
+    campaign_cell: Option<oag_tables::race_campaign::Cell>,
+    campaign_custom: Option<crate::campaign::custom::Launch>,
+    campaign_difficulty: Option<oag_tables::race_campaign::Difficulty>,
+    campaign_ai_skill_scale: Option<f32>,
+}
+
 struct Saved {
     race_options: Option<oag_raceplay::Options>,
     autopilot: bool,
+    pinned: Pinned,
     /// The settings as the player has them, put back when a preset was applied over them.
     settings: Option<crate::settings::Settings>,
     trail: Vec<oag_ui::menu::Spot>,
@@ -57,6 +68,15 @@ impl State {
         self.saved
             .as_ref()
             .is_some_and(|saved| saved.settings.is_some())
+    }
+
+    /// Writes `settings` to `settings.toml`, except while a preset is in effect: the preset is in
+    /// memory only and the player's file is theirs.
+    pub(crate) fn save(&self, settings: &crate::settings::Settings) -> anyhow::Result<()> {
+        if self.holds_settings() {
+            return Ok(());
+        }
+        crate::settings::save(settings)
     }
 
     /// The benchmark the race being built is, if one is being launched: handed to the stage.
@@ -82,6 +102,19 @@ impl State {
 }
 
 impl Session {
+    /// Whether the menus being opened (or open) sit over a race that is kept: a benchmark
+    /// replaces the race it is started over, so its rows are not offered then.
+    pub(crate) fn race_is_parked_behind_menus(&self) -> bool {
+        self.suspended_race.is_some()
+            || matches!(&self.stage, Stage::Race(stage)
+                if stage.benchmark.is_none() && !stage.race.core.sim.finished())
+    }
+
+    /// Whether the stage on screen is a benchmark's: its race or its stats screen.
+    pub(crate) fn on_benchmark(&self) -> bool {
+        matches!(&self.stage, Stage::Race(stage) if stage.benchmark.is_some())
+    }
+
     /// Whether the race on screen is a benchmark that has not ended.
     pub(crate) fn in_benchmark(&self) -> bool {
         matches!(&self.stage, Stage::Race(stage)
@@ -154,6 +187,14 @@ impl Session {
             self.benchmark.saved = Some(Saved {
                 race_options: player,
                 autopilot: self.autopilot,
+                pinned: Pinned {
+                    autopilot_pilot: self.autopilot_pilot.take(),
+                    autopilot_skill: self.autopilot_skill.take(),
+                    campaign_cell: self.campaign_cell.take(),
+                    campaign_custom: self.campaign_custom.take(),
+                    campaign_difficulty: self.campaign_difficulty.take(),
+                    campaign_ai_skill_scale: self.campaign_ai_skill_scale.take(),
+                },
                 settings: preset_settings.is_some().then(|| self.settings.clone()),
                 trail,
             });
@@ -183,12 +224,22 @@ impl Session {
             Ok(()) => true,
             Err(error) => {
                 warn!("cannot start the benchmark: {error:#}");
-                self.benchmark.launching = None;
-                self.benchmark.cli = None;
-                self.restore_benchmark_player();
+                self.abandon_benchmark_launch();
                 false
             }
         }
+    }
+
+    /// A benchmark whose race did not build: the player's own options come back and nothing
+    /// is left to turn the next ordinary race into a benchmark. A run started on the command
+    /// line has nothing left to do and ends.
+    pub(crate) fn abandon_benchmark_launch(&mut self) {
+        let Some(launch) = self.benchmark.launching.take() else {
+            return;
+        };
+        self.benchmark.cli = None;
+        self.restore_benchmark_player();
+        self.quit |= launch.origin == Origin::Cli;
     }
 
     /// The settings the preset `name` sets, or why there is no such preset.
@@ -206,13 +257,27 @@ impl Session {
         }
     }
 
+    /// Writes `settings.toml`, except while a benchmark preset is in effect.
+    pub(crate) fn save_settings(&self) -> anyhow::Result<()> {
+        self.benchmark.save(&self.settings)
+    }
+
     /// Puts the player's own options, autopilot flag and (after a preset) settings back.
     fn restore_benchmark_player(&mut self) {
         if let Some(saved) = self.benchmark.saved.take() {
             self.race_options = saved.race_options;
             self.autopilot = saved.autopilot;
+            let pinned = saved.pinned;
+            self.autopilot_pilot = pinned.autopilot_pilot;
+            self.autopilot_skill = pinned.autopilot_skill;
+            self.campaign_cell = pinned.campaign_cell;
+            self.campaign_custom = pinned.campaign_custom;
+            self.campaign_difficulty = pinned.campaign_difficulty;
+            self.campaign_ai_skill_scale = pinned.campaign_ai_skill_scale;
             if let Some(settings) = saved.settings {
                 self.settings = settings;
+                // The one preset key with a runtime field of its own beside the setting.
+                self.anisotropy = self.settings.graphics.anisotropy;
             }
         }
     }
@@ -227,10 +292,11 @@ impl Session {
             return;
         };
         let world = &stage.race.core.sim.world;
-        // The flyby and the grid before tick zero are not the race: the offscreen bench starts
-        // on its first tick too.
+        // The flyby has no tick; the countdown's frames are recorded and left out of every
+        // figure (`benchmark::report`).
         if world.tick > 0 {
-            live.recorder.frame(seconds, world.race[0].lap, ticks);
+            live.recorder
+                .frame(seconds, world.race[0].lap, ticks, world.tick);
         }
     }
 
@@ -486,6 +552,17 @@ impl Session {
             ),
             ("autopilot".to_string(), "true".to_string()),
         ];
+        settings.extend([
+            (
+                "vsync".to_string(),
+                format!("{:?}", self.settings.display.vsync),
+            ),
+            (
+                "frame_limit".to_string(),
+                String::from(self.settings.display.frame_limit),
+            ),
+            ("target_fps".to_string(), String::from(profile.target_fps)),
+        ]);
         settings.retain(|(_, value)| !value.is_empty());
         let info = self.gpu.adapter_info();
         let refresh = self
@@ -508,6 +585,7 @@ impl Session {
             device: benchmark::device_label(),
             settings,
             refresh,
+            frame_limit_hz: self.frame_period().map(|period| 1.0 / period.as_secs_f64()),
             preset: live.preset.clone(),
             origin: live.origin.name(),
             command,

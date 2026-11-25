@@ -1040,6 +1040,7 @@ impl Session {
         // PHOTO MODE is a row of the pause menu: there while a race with one view is held
         // behind the menus, and on no other page of the front end.
         model.offer(menu::Action::PhotoMode, self.photo_available());
+        model.offer(menu::Action::Benchmark, !self.race_is_parked_behind_menus());
         // EXPORT is a row of the REPLAYS page on a phone, which has a Downloads folder to give.
         model.offer(menu::Action::ExportReplay, oag_mobile::export::available());
         // Just the first frame's own value - `MenuStage::render` refreshes

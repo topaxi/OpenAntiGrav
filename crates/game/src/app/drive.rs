@@ -300,6 +300,15 @@ impl Driver {
                 self.session.escape();
                 self.frame(None)?;
             }
+            Step::Back => {
+                self.session.back();
+                self.frame(None)?;
+            }
+            Step::Away => {
+                self.session
+                    .window_away(crate::app::session::lifecycle::Away::FocusLost);
+                self.frame(None)?;
+            }
             Step::Key => {
                 self.session.demo.key = true;
                 self.frame(None)?;

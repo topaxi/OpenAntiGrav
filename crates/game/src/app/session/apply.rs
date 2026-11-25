@@ -66,7 +66,7 @@ impl Session {
                     &menu::Value::Text(display::WindowMode::Windowed.to_string()),
                 );
             }
-            if let Err(e) = settings::save(&self.settings) {
+            if let Err(e) = self.save_settings() {
                 error!("could not save settings: {e:#}");
             }
         }
@@ -1046,11 +1046,7 @@ impl Session {
             }
         }
         self.resupply_queries(Some(setting));
-        // A benchmark preset is in memory only: the player's file is theirs.
-        if self.benchmark.holds_settings() {
-            return;
-        }
-        if let Err(e) = settings::save(&self.settings) {
+        if let Err(e) = self.save_settings() {
             error!("could not save settings: {e:#}");
         }
     }
@@ -1080,7 +1076,7 @@ impl Session {
         // Nothing re-seeds the menu here: `settings::menu_seeds` reads
         // `self.settings` when the page opens, so the `CAMERA VIEW` row already
         // opens on whatever the player last flew with.
-        if let Err(e) = settings::save(&self.settings) {
+        if let Err(e) = self.save_settings() {
             error!("could not save settings: {e:#}");
         }
     }
@@ -1137,7 +1133,7 @@ impl Session {
         self.controls.bindings_mut().rebind(button, name);
         self.settings.controls.bindings = self.controls.bindings().to_pairs();
         self.awaiting_binding = None;
-        if let Err(e) = settings::save(&self.settings) {
+        if let Err(e) = self.save_settings() {
             error!("could not save settings: {e:#}");
         }
     }

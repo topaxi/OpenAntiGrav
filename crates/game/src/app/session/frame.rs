@@ -5,7 +5,7 @@
 use anyhow::Result;
 use log::{debug, error, warn};
 
-use crate::{records, report, settings};
+use crate::{records, report};
 use oag_display::display;
 use oag_display::space::Space;
 use oag_gameplay::input::Button;
@@ -98,7 +98,7 @@ impl Session {
             && self.settings.language.as_deref() != Some(language)
         {
             self.settings.language = Some(language.to_string());
-            if let Err(e) = settings::save(&self.settings) {
+            if let Err(e) = self.save_settings() {
                 warn!("could not save the chosen language: {e:#}");
             }
         }
@@ -630,7 +630,7 @@ impl Session {
                         stage.renderer.set_inset(scale);
                         if self.settings.graphics.hud_safe_area != Some(percent) {
                             self.settings.graphics.hud_safe_area = Some(percent);
-                            if let Err(e) = settings::save(&self.settings) {
+                            if let Err(e) = self.benchmark.save(&self.settings) {
                                 warn!("could not save the screen size: {e:#}");
                             }
                         }

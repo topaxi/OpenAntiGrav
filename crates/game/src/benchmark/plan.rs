@@ -22,9 +22,10 @@ pub const CLASS: &str = "venom";
 /// Ticks after which a race that has not ended is stopped and reported `finished: false`.
 pub const TICK_CAP: u32 = 40_000;
 
-/// Frames left out of every summary (not out of the file's frame count): the first drawn frames
-/// pay pipeline and buffer first use.
-pub const WARMUP_FRAMES: usize = 60;
+/// Ticks of the start-line countdown (`oag_race::state::COUNTDOWN_TICKS`): the frames drawn
+/// before the craft are released are in the file's frame count and in no summary. The grid is
+/// still, and the first drawn frames pay pipeline and buffer first use.
+pub const COUNTDOWN_TICKS: u64 = oag_race::state::COUNTDOWN_TICKS;
 
 /// Sets every option the simulation reads to the benchmark's race, over whatever the front end
 /// had chosen: the title's default circuit and team, a Single Race at the default class and the
