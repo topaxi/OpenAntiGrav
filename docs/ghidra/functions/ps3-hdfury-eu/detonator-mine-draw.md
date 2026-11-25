@@ -192,16 +192,35 @@ Row 1 decides how much of the `mines-ahead` and `cannon-volley` gap is real: re-
   `pad` 8.82 -> 8.82, `mines-ahead` 16.38 -> 16.40, `cannon-volley` 15.32 -> 15.33 mean grey. Ours' near mines are
   smaller and nearer the screen edge than the original's there (the picture lag the pairs do not carry), so the ring lands
   on the wrong pixels; by eye the original's ring is two smooth concentric circles, ours a ragged band at the disc's rim.
-- **2048: checked, applies, not wired.** The same model and material ship (`Weapons2048/electric_visualiser`), but the
-  material is a GXP program: with no handler the generic path draws the disc as a plain alpha-over picture of the bass/treble
-  texture, so the title data names no visualiser (`DetonatorObjects::mine_visualiser: None`) and the loader says so.
-  Omega: ships the same model, same outcome.
+- **Omega: ported** (2026-11-25, `det-visualiser-2048-omega`). The ring is drawn by its own program on Omega's Detonator
+  mines: `oag_mesh::mesh::rcs::psp2` (`electricity`) binds `electricity.rcsmaterial`'s three pictures and two glow-table
+  entries and `shade.wesl`'s mode 25 draws it, HD's path unchanged. The program, read with `oag_rcs::gcn`
+  (`gcn_dump <data00.psarc> Data/weapons/Materials/electricity.rcsmaterial`, pixel `Shdr @0xf84`, 139 instructions):
+  two taps of `Bass_Treble_HitsTexture` (slot 2, at `Uv3` and at `uv2`), `s = uv1.y + time + n0 + n1` scaled by `Tempo`,
+  one tap of `ElectricityTexture` (slot 0, alpha) minus the two noise taps, one of `PitchTexture` (slot 1) times
+  `PitchVolume`, times `MasterVolume`, the colour tap at `uv1.y + 0.3 m` (the literal read off a `v_madmk_f32`), the
+  overlay against `ElectricityColour` and `|N.V|^FacingPower`: **the law above, instruction for instruction**. The
+  samplers are named, not numbered the same: Omega's slot 0 is HD's unit 2, slot 2 is HD's unit 0 (bound by name). The
+  vertex program (`Shdr @0x984`) writes `Uv3` as the bass and treble pair, `Uv1_Uv2.xy` as `uv1`, `.zw` minus `BassHit`
+  as `uv2` and `VertexColour1.w` as the alpha, as HD's chunk does. The lit variant (`@0x29a4`) differs only in the
+  attribute numbering, and the shipped program ends in a fog lerp the scene's own fog replaces. **Confidence 80** (read end
+  to end; no PS4 emulator has drawn it, the units' gamma is inherited from HD). Census: `electricity.rcsmaterial` in
+  `data00` (`weapons/`, `weapons2048/`) and the patch's `data05` and `data08` (both folders): six files, twelve pixel
+  programs, all read as this program with the shift `0.3` (`every_omega_electricity_material_reads_as_the_visualiser_program`);
+  `electric_visualiser.rcsmodel` in `data00` under both folders builds with the ring bound
+  (`both_omega_visualiser_models_bind_the_electricity_program`). `oag_omega::race::DETONATOR_OBJECTS` names HD's entry.
+  Frame: ours on Omega's Tech De Ra, Detonator, a laid mine with its violet ring.
+- **2048: checked, applies, not wired.** 2048 has the Detonator mode (mode `0xe`, `vita-2048-eu-v104/detonator-hull.md`) and
+  ships the same model and material, but the material is GXP and **its pixel program is not HD's listing**: the USSE
+  program (`vita-usse.py disasm <data.psarc:/materials/electricity> 1`, 48 primary instructions) carries three texture
+  fetches where Omega's GCN has five, so the taps are packed differently. Not read to the end, so
+  `DetonatorObjects::mine_visualiser` stays `None` there and the loader says so.
 
 ## Still open
 
 - `0x006ca538`'s stores (whether the object's basis survives the spin) and the writer of the axis `m+0xe0`.
 - The eye behind `0x00987884+0x70` (the visualiser's camera), read to its writer.
-- The ring's own radius inside `Electric_Visualiser`, and its material `electricity.rcsmaterial`'s program.
+- The ring's own radius inside `Electric_Visualiser` (HD's material program is read: "The visualiser, wired").
 - A live read of the mine's submitted matrix (`0x001399a4`, `r4`) would lift rows 3 and 4 above 80.
 
 ## Lineage (2048 and Omega)

@@ -579,10 +579,13 @@ pub(super) fn load_cockpit_hit(
 mod ring_tests {
     use super::unread_ring_line;
 
-    /// HD names the ring and says nothing; 2048 and Omega name none and the loader says so.
+    /// HD and Omega name the ring and say nothing; 2048 names none and the loader says so.
     #[test]
     fn a_title_that_names_no_visualiser_says_so_in_the_loader_report() {
         assert_eq!(unread_ring_line(&oag_hd::race::DETONATOR_OBJECTS), None);
+        let omega = &oag_omega::race::DETONATOR_OBJECTS;
+        assert!(omega.mine_visualiser.is_some());
+        assert_eq!(unread_ring_line(omega), None);
         let objects = &oag_2048::race::DETONATOR_OBJECTS;
         assert!(objects.mine_visualiser.is_none());
         let line = unread_ring_line(objects).expect("a report line");
