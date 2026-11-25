@@ -1007,6 +1007,7 @@ impl Race {
                 detonator_cannon_lights,
                 detonator_ammo_gauge,
                 ammo_gauge_shown: std::sync::Mutex::new(None),
+                ammo_gauge_speed: std::sync::Mutex::new(None),
                 hd_plasma_blast,
                 plasma_blast_law,
                 disruptor_halo_law,

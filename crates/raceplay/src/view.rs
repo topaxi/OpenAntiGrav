@@ -448,6 +448,8 @@ pub struct RaceView {
     /// `options::ViewSetup::detonator_ammo_gauge`, and what the gauge showed last frame.
     pub(super) detonator_ammo_gauge: Option<oag_title::DetonatorAmmoGauge>,
     pub(super) ammo_gauge_shown: std::sync::Mutex<Option<crate::ammo_gauge::Shown>>,
+    /// The speed the gauge's gate reads in place of the craft's (`--detonator-gauge-speed`).
+    pub(super) ammo_gauge_speed: std::sync::Mutex<Option<f32>>,
     /// The stage's generator, deliberately **not** `world.rng` - see
     /// [`Self::exhaust_rng`].
     pub(super) stage_rng: Rng,

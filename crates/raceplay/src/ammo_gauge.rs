@@ -47,12 +47,25 @@ impl Shown {
 }
 
 impl crate::Race {
+    /// Makes the gauge's speed gate read `speed` instead of the craft's (`--detonator-gauge-speed`): a
+    /// comparison that holds the craft at rest still shows the gauge the original's moving craft
+    /// kept updating.
+    pub fn pin_ammo_gauge_speed(&self, speed: f32) {
+        *crate::drawable::lock(&self.view.ammo_gauge_speed) = Some(speed);
+    }
+
+    /// The speed the gauge's gate reads: the pinned one, else the player's own.
+    fn gauge_speed(&self) -> f32 {
+        (*crate::drawable::lock(&self.view.ammo_gauge_speed))
+            .unwrap_or_else(|| self.core.ship().physics.body.linear_velocity.length())
+    }
+
     /// This frame's cannon gauge on the player's craft, or `None` where the title draws none (off
     /// Detonator, or a title whose law is not read). Steps the block the last frame left.
     pub(crate) fn ammo_gauge(&self) -> Option<Shown> {
         let gauge = self.view.detonator_ammo_gauge?;
         let cannon = self.core.sim.detonator_cannon()?;
-        let speed = self.core.ship().physics.body.linear_velocity.length();
+        let speed = self.gauge_speed();
         let mut held = crate::drawable::lock(&self.view.ammo_gauge_shown);
         let shown = held
             .unwrap_or_else(|| Shown::bind(&gauge))
@@ -126,6 +139,17 @@ mod tests {
         });
         race.restore_for_viewing(&snapshot);
         assert!(crate::drawable::lock(&race.view.ammo_gauge_shown).is_none());
+    }
+
+    /// A craft held at rest reads speed 0 and so never passes the gate; a comparison that pins the
+    /// original's speed makes it pass.
+    #[test]
+    fn a_pinned_speed_replaces_a_resting_craft_s() {
+        let race = crate::tests::race_with_a_grid();
+        let at_rest = race.gauge_speed();
+        assert!(at_rest <= HD.speed_gate, "{at_rest}");
+        race.pin_ammo_gauge_speed(102.3);
+        assert_eq!(race.gauge_speed(), 102.3);
     }
 
     /// Below the gate the block holds what the last update wrote.

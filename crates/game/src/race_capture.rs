@@ -286,6 +286,8 @@ pub struct CaptureOptions {
     pub detonator_mine_envelopes: Option<Vec<(f32, f32)>>,
     /// `--detonator-emp-charge` ([`oag_raceplay::RaceSim::charge_detonator_emp`]).
     pub detonator_emp_charge: Option<u32>,
+    /// `--detonator-gauge-speed` ([`oag_raceplay::Race::pin_ammo_gauge_speed`]).
+    pub detonator_gauge_speed: Option<f32>,
     /// `--pose-spark`: contact sparks the original threw before the frame, thrown that long
     /// before it on the warmed field ([`Race::warm_up_contact_sparks`]).
     pub pose_sparks: Vec<oag_raceplay::ContactSeed>,
@@ -522,6 +524,9 @@ pub fn capture(
     }
     if (options.detonator_emp_charge).is_some_and(|n| !race.core.sim.charge_detonator_emp(n)) {
         warn!("--detonator-emp-charge: this race runs no EMP");
+    }
+    if let Some(speed) = options.detonator_gauge_speed {
+        race.pin_ammo_gauge_speed(speed);
     }
     // A network race's AI and seats are the server's (`oag_net::race::prepare`,
     // applied by `NetPlay::join` below).

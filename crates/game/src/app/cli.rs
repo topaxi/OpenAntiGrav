@@ -13,6 +13,7 @@ use oag_mesh::mesh_render::Anisotropy;
 use crate::app::args::DEFAULT_SIZE;
 
 pub(crate) mod extra;
+pub(crate) mod detonator;
 mod render_overrides;
 
 #[derive(Parser, Debug)]
@@ -687,30 +688,9 @@ pub(crate) struct Cli {
     #[arg(long, conflicts_with = "zone_bands")]
     pub(crate) zone_spectrum_test: bool,
 
-    /// Comparison input: lay the Detonator opening stage's mines at these world positions
-    /// (`X,Y,Z;X,Y,Z;...`, the original's mine objects read in the frame's pause), each on the
-    /// survey lane nearest to it, in place of the seeded layout.
-    #[arg(
-        long,
-        value_name = "X,Y,Z;...",
-        value_parser = parse_detonator_mines
-    )]
-    pub(crate) detonator_mines: Option<MinePositions>,
-
-    /// Comparison input: hold each `--detonator-mines` mine's music envelope at the original's
-    /// (`S,T;...`: `m+0xf4` and `m+0xf8`, same order), ours having no history of the music.
-    #[arg(
-        long,
-        value_name = "S,T;...",
-        value_parser = parse_mine_envelopes,
-        requires = "detonator_mines"
-    )]
-    pub(crate) detonator_mine_envelopes: Option<MineEnvelopes>,
-
-    /// Comparison input: start the Detonator EMP at this many charges (the gauge they give), as
-    /// the original's charge was written for the capture it is compared with.
-    #[arg(long, value_name = "N")]
-    pub(crate) detonator_emp_charge: Option<u32>,
+    /// The Detonator comparison inputs - see [`detonator::DetonatorArgs`].
+    #[command(flatten)]
+    pub(crate) detonator: detonator::DetonatorArgs,
 
     /// Comparison input: draw the Zone and Detonator music-driven look from these
     /// sixteen held band levels, read off the original at the frame being compared
@@ -1455,46 +1435,3 @@ impl Cli {
     }
 }
 
-/// `--detonator-mines`: `X,Y,Z` triples, semicolon separated.
-/// The positions of `--detonator-mines`, one value to clap (a bare `Vec` would read as repeated values).
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) struct MinePositions(pub(crate) Vec<oag_core::math::Vec3>);
-
-/// The envelopes of `--detonator-mine-envelopes`, one value to clap.
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) struct MineEnvelopes(pub(crate) Vec<(f32, f32)>);
-
-fn parse_mine_envelopes(text: &str) -> Result<MineEnvelopes, String> {
-    let number = |n: &str| {
-        n.trim()
-            .parse::<f32>()
-            .map_err(|_| format!("`{n}` is not a number"))
-    };
-    text.split(';')
-        .map(|pair| match pair.split_once(',') {
-            Some((s, t)) => Ok((number(s)?, number(t)?)),
-            None => Err(format!("`{pair}` is not S,T")),
-        })
-        .collect::<Result<Vec<_>, String>>()
-        .map(MineEnvelopes)
-}
-
-fn parse_detonator_mines(text: &str) -> Result<MinePositions, String> {
-    text.split(';')
-        .map(|triple| {
-            let parts = triple
-                .split(',')
-                .map(|n| {
-                    n.trim()
-                        .parse::<f32>()
-                        .map_err(|_| format!("`{n}` is not a number"))
-                })
-                .collect::<Result<Vec<f32>, String>>()?;
-            match parts[..] {
-                [x, y, z] => Ok(oag_core::math::Vec3::new(x, y, z)),
-                _ => Err(format!("`{triple}` is not X,Y,Z")),
-            }
-        })
-        .collect::<Result<Vec<_>, String>>()
-        .map(MinePositions)
-}
