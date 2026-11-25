@@ -52,8 +52,8 @@ effects.
      design.
   4. The lent burst is the blue variant only, its sprites redrawn in the ribbon's summed-layer hue
      (`docs/formats/pulse-absent-effects.md`, "Trail-hit burst colour"). On the PSP and Pure that is
-     purple (about 276 degrees) where the original ribbon's mean reads blue-violet (about 250); the
-     maintainer's eye on it is the check left. PS2 matches its original.
+     violet (about 269 degrees), between the original's thin rival trail (293) and its near wide
+     one (250); the maintainer's eye on it is the check left. PS2 matches its original.
   5. The stage holds 64 effects and a trail hit is expendable, so it no longer evicts a
      detonation or an absorb burst; the lent burst fires every other tick
      (`docs/formats/pulse-absent-effects.md`, "Trail-hit burst budget"). Unmeasured: a rocket
