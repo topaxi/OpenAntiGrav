@@ -25,7 +25,7 @@ use oag_physics::{CollisionWorld, Ray, Raycaster, Surface};
 use oag_race::Course;
 use oag_tables::detonator_layout::GamePlayValues;
 use oag_weapons::detonator::cannon::Sweep;
-use oag_weapons::detonator::{Entry, Layout, MAX_LANES, Survey, SurveyBranch};
+use oag_weapons::detonator::{Entry, Layout, MAX_LANES, Partner, Survey, SurveyBranch};
 
 use crate::spline::Spline;
 
@@ -188,10 +188,12 @@ fn lap_order(ring: usize, forks: &mut [Fork]) -> Vec<usize> {
     lap
 }
 
-/// Each route's partner on the other, for the EMP's launch-time fork
-/// (`oag_weapons::detonator::emp::launch_fork`): per branch section the primary route's nearest
-/// ring entry, and per primary section (counted from `split`) the branch's nearest offset, each
-/// only where it lies within the reach `EMP_ForkAtJunction` tests.
+/// How far `Track_FindSiblingSection` searches the other route (`0x000a96d8`).
+const SIBLING_SEARCH: f32 = 500.0;
+
+/// Each route's partner on the other (`oag_weapons::detonator::Partner`): per branch section the
+/// primary route's nearest ring entry, and per primary section (counted from `split`) the
+/// branch's nearest offset, marked where it lies within the launch fork's reach.
 ///
 /// The route is compared section position to section position, as [`separated`] reads
 /// `0x000a96d8`. `0x000a5290`, the two spans' neighbour listing, is taken as always.
@@ -200,7 +202,7 @@ fn siblings(
     primary: Option<u16>,
     split: usize,
     alternate: &[Measured],
-) -> (Vec<Option<u16>>, Vec<Option<u16>>) {
+) -> (Vec<Option<Partner>>, Vec<Option<Partner>>) {
     let total = ring.len();
     let count = ring.iter().filter(|m| m.path == primary).count();
     let route: Vec<usize> = (0..count).map(|o| (split + o) % total.max(1)).collect();
@@ -209,8 +211,13 @@ fn siblings(
         among
             .map(|(index, p)| (index, (p - at).length_squared()))
             .min_by(|a, b| a.1.total_cmp(&b.1))
-            .filter(|&(_, d)| d < reach * reach)
-            .and_then(|(index, _)| u16::try_from(index).ok())
+            .filter(|&(_, d)| d < SIBLING_SEARCH * SIBLING_SEARCH)
+            .and_then(|(index, d)| {
+                Some(Partner {
+                    at: u16::try_from(index).ok()?,
+                    near: d < reach * reach,
+                })
+            })
     };
     let to_primary = alternate
         .iter()

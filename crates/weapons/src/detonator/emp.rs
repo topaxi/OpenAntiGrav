@@ -32,8 +32,8 @@
 //!   launch-time one ([`launch_fork`]): a craft within [`SIBLING_REACH`] of the other route at a
 //!   split gets a second front there at once, and one born on the far half of that route never
 //!   moves (`detonator-emp.md`, "The launch-time fork").
-//! - **Not wired**: the sweep's per-point lookup of the other route's records when the front's
-//!   own point holds none (`detonator-emp.md`, "The launch-time fork", open).
+//! - **The other route's record**: a front on a point with no usable placement record destroys
+//!   the lanes at the other route's nearest point instead (`sweep_entry`).
 
 use oag_tables::detonator_layout::Scoring;
 
@@ -345,7 +345,7 @@ fn advance_fork(
         let Some(entry) = field.emp.wave.fork.step(survey) else {
             break;
         };
-        clear_entry(field, survey, config, entry, events);
+        sweep_entry(field, survey, config, entry, events);
         if leaves {
             release_fork(&mut field.emp.wave);
             break;
@@ -369,24 +369,24 @@ pub fn launch_fork(survey: &Survey, from: usize) -> Option<Fork> {
     };
     if let Some((branch, at)) = survey.branch_of(from) {
         let b = &survey.branches[branch];
-        let partner = (*b.to_primary.get(at)?)?;
-        let offset = (usize::from(partner) + total - usize::from(b.split)) % total;
+        let partner = (*b.to_primary.get(at)?).filter(|p| p.near)?;
+        let offset = (usize::from(partner.at) + total - usize::from(b.split)) % total;
         let fork = Fork {
             branch: u8::try_from(branch).ok()?,
             on_ring: true,
-            at: partner,
+            at: partner.at,
         };
         return born(offset, b.from_primary.len(), fork);
     }
     survey.branches.iter().enumerate().find_map(|(branch, b)| {
         let offset = (from + total).checked_sub(usize::from(b.split))? % total.max(1);
-        let partner = (*b.from_primary.get(offset)?)?;
+        let partner = (*b.from_primary.get(offset)?).filter(|p| p.near)?;
         let fork = Fork {
             branch: u8::try_from(branch).ok()?,
             on_ring: false,
-            at: partner,
+            at: partner.at,
         };
-        born(usize::from(partner), b.entries.len(), fork)
+        born(usize::from(partner.at), b.entries.len(), fork)
     })
 }
 
@@ -457,7 +457,7 @@ pub fn step_wave(field: &mut Field, survey: &Survey, config: &Config, dt: f32) -
         if first == 0 {
             // A launch fork stands on its point at birth, cleared as the front's start is.
             if let Some(entry) = field.emp.wave.fork.standing(survey) {
-                clear_entry(field, survey, config, entry, &mut events);
+                sweep_entry(field, survey, config, entry, &mut events);
             }
         } else {
             advance_fork(field, survey, config, steps, &mut events);
@@ -467,7 +467,7 @@ pub fn step_wave(field: &mut Field, survey: &Survey, config: &Config, dt: f32) -
         let Some(entry) = route_entry(survey, from, step) else {
             break;
         };
-        clear_entry(field, survey, config, entry, &mut events);
+        sweep_entry(field, survey, config, entry, &mut events);
         let wave = &mut field.emp.wave;
         if wave.forked || step == 0 {
             continue;
@@ -489,7 +489,7 @@ pub fn step_wave(field: &mut Field, survey: &Survey, config: &Config, dt: f32) -
             at: 0,
         };
         if let Some(first_entry) = survey.branch_entry(branch, 0) {
-            clear_entry(field, survey, config, first_entry, &mut events);
+            sweep_entry(field, survey, config, first_entry, &mut events);
         }
         advance_fork(field, survey, config, last - step - 1, &mut events);
     }
@@ -513,6 +513,27 @@ pub fn front_entry(wave: &Wave, survey: &Survey) -> Option<usize> {
         return None;
     }
     route_entry(survey, usize::from(wave.from), usize::from(wave.front))
+}
+
+/// What a front does on the point it reaches (`EMP_SweepSections`): destroys the lanes of the
+/// point's own placement record, or, with none, those of the record at the other route's nearest
+/// point (`0x0013baa4`-`0x0013bb2c`, `detonator-emp.md`, "The other route's record").
+fn sweep_entry(
+    field: &mut Field,
+    survey: &Survey,
+    config: &Config,
+    entry: usize,
+    events: &mut Vec<Event>,
+) {
+    let target = if survey.has_record(entry) {
+        entry
+    } else {
+        match survey.sibling(entry).filter(|&s| survey.has_record(s)) {
+            Some(sibling) => sibling,
+            None => return,
+        }
+    };
+    clear_entry(field, survey, config, target, events);
 }
 
 fn clear_entry(

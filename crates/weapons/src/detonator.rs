@@ -91,12 +91,21 @@ pub struct SurveyBranch {
     pub entries: Vec<Entry>,
     /// The branch's path in the spline table: how the firing craft is located on it.
     pub path: u16,
-    /// Per branch entry: the primary route's ring entry within [`emp::SIBLING_REACH`] of it,
-    /// the EMP's launch-time fork's partner. The primary route is the ring from [`Self::split`].
-    pub to_primary: Vec<Option<u16>>,
-    /// Per primary-route entry, counted from [`Self::split`]: the branch offset within reach of
-    /// it. Its length is the primary route's.
-    pub from_primary: Vec<Option<u16>>,
+    /// Per branch entry: the primary route's nearest ring entry. The primary route is the ring
+    /// from [`Self::split`].
+    pub to_primary: Vec<Option<Partner>>,
+    /// Per primary-route entry, counted from [`Self::split`]: the nearest branch offset. Its
+    /// length is the primary route's.
+    pub from_primary: Vec<Option<Partner>>,
+}
+
+/// An entry's nearest section on the other route of a split (`Track_FindSiblingSection`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Partner {
+    /// A ring entry, or a branch offset.
+    pub at: u16,
+    /// Within [`emp::SIBLING_REACH`]: close enough for the EMP's launch-time fork.
+    pub near: bool,
 }
 
 /// What a race reads from the layout files.
@@ -152,6 +161,35 @@ impl Survey {
             at -= b.entries.len();
         }
         None
+    }
+
+    /// Whether the original holds a usable placement record for `index`: a section placement's
+    /// walk stored (the ring's alone on an unforked lap) and did not mark unusable. The EMP's
+    /// sweep matches only these.
+    #[must_use]
+    pub fn has_record(&self, index: usize) -> bool {
+        self.entry(index).is_some_and(|e| e.usable)
+            && if self.lap.is_empty() {
+                index < self.entries.len()
+            } else {
+                u16::try_from(index).is_ok_and(|i| self.lap.contains(&i))
+            }
+    }
+
+    /// The index of the nearest section on the other route of the split `index` lies beside, or
+    /// `None` away from every split.
+    #[must_use]
+    pub fn sibling(&self, index: usize) -> Option<usize> {
+        if let Some((branch, at)) = self.branch_of(index) {
+            let partner = (*self.branches[branch].to_primary.get(at)?)?;
+            return Some(usize::from(partner.at));
+        }
+        let total = self.entries.len();
+        self.branches.iter().enumerate().find_map(|(branch, b)| {
+            let offset = (index + total).checked_sub(usize::from(b.split))? % total.max(1);
+            let partner = (*b.from_primary.get(offset)?)?;
+            self.branch_entry(branch, usize::from(partner.at))
+        })
     }
 
     /// How many entries placement lays into: [`Self::lap`]'s, or the ring's.

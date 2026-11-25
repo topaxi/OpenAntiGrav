@@ -1,7 +1,7 @@
 //! The EMP law on a straight invented lap, against `detonator-emp.md`'s tables.
 
 use super::*;
-use crate::detonator::{Entry, Placed};
+use crate::detonator::{Entry, Partner, Placed};
 use oag_core::math::Vec3;
 
 /// The disc's `<Weapon type="EMP">` and `<Emp>` values.
@@ -269,7 +269,19 @@ fn forked_lap() -> Survey {
         to_primary: Vec::new(),
         from_primary: Vec::new(),
     });
+    lay_the_whole_split(&mut survey);
     survey
+}
+
+/// Gives every entry of the ring and of each branch a record, as a lap whose walk stored them all.
+fn lay_the_whole_split(survey: &mut Survey) {
+    let all = survey.entries.len()
+        + survey
+            .branches
+            .iter()
+            .map(|b| b.entries.len())
+            .sum::<usize>();
+    survey.lap = (0..all as u16).collect();
 }
 
 fn branch_mine(survey: &Survey, offset: usize) -> Placed {
@@ -389,6 +401,7 @@ fn the_main_fronts_merge_releases_the_fork_and_a_later_split_forks_again() {
     let mut second = survey.branches[0].clone();
     second.split = 95;
     survey.branches.push(second);
+    lay_the_whole_split(&mut survey);
     let mut field = Field::new();
     charge(&mut field, 8);
     fire(&mut field, &survey, &config(), 40);
@@ -406,12 +419,21 @@ fn the_main_fronts_merge_releases_the_fork_and_a_later_split_forks_again() {
 fn forked_lap_with_overlap() -> Survey {
     let mut survey = forked_lap();
     let branch = &mut survey.branches[0];
-    let near = |o: usize| !(4..16).contains(&o);
     branch.to_primary = (0..20)
-        .map(|k| near(k).then_some(50 + k as u16 * 2))
+        .map(|k| {
+            Some(Partner {
+                at: 50 + k * 2,
+                near: !(4..16).contains(&k),
+            })
+        })
         .collect();
     branch.from_primary = (0..40)
-        .map(|o| (!(4..36).contains(&o)).then_some(o as u16 / 2))
+        .map(|o| {
+            Some(Partner {
+                at: o / 2,
+                near: !(4..36).contains(&o),
+            })
+        })
         .collect();
     survey
 }
@@ -492,6 +514,7 @@ fn a_launch_beside_the_far_half_walks_nothing_until_the_merge() {
     second.to_primary = Vec::new();
     second.from_primary = Vec::new();
     survey.branches.push(second);
+    lay_the_whole_split(&mut survey);
     assert_eq!(launch_fork(&survey, 88), Some(Fork::INERT));
 
     let mut field = Field::new();
@@ -522,4 +545,39 @@ fn a_launch_away_from_the_other_route_does_not_fork_at_once() {
     }
     let mid = survey.branch_entry(0, 9).expect("a branch entry");
     assert_eq!(launch_fork(&survey, mid), None);
+}
+
+/// A front on a point with no record (its own entry unusable) destroys the lanes of the record
+/// at the other route's nearest point, whether or not the routes are within the fork's reach.
+#[test]
+fn a_point_with_no_record_takes_the_other_routes_record() {
+    let mut survey = forked_lap_with_overlap();
+    let hole = survey.branch_entry(0, 10).expect("a branch entry");
+    survey.lap.retain(|&i| usize::from(i) != hole);
+    assert!(!survey.has_record(hole));
+    assert_eq!(survey.sibling(hole), Some(70));
+
+    let mut field = Field::new();
+    field.mines[0] = mine(70, false);
+    field.live_mines = 1;
+    charge(&mut field, 8);
+    let from = u16::try_from(survey.branch_entry(0, 5).expect("an entry")).expect("fits");
+    fire(&mut field, &survey, &config(), from);
+    assert!(!field.emp.wave.forked, "branch 5 is out of reach");
+    run_wave(&mut field, &survey, 6);
+    assert_eq!(field.live_mines, 0, "taken from branch offset 10");
+}
+
+/// With its own record, a point never reaches across.
+#[test]
+fn a_point_with_a_record_leaves_the_other_route_alone() {
+    let survey = forked_lap_with_overlap();
+    let mut field = Field::new();
+    field.mines[0] = mine(70, false);
+    field.live_mines = 1;
+    charge(&mut field, 8);
+    let from = u16::try_from(survey.branch_entry(0, 5).expect("an entry")).expect("fits");
+    fire(&mut field, &survey, &config(), from);
+    run_wave(&mut field, &survey, 14);
+    assert_eq!(field.live_mines, 1);
 }
