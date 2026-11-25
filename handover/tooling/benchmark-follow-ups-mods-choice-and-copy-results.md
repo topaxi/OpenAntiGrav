@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [pulse, pure, hd, 2048, omega]
 updated: 2026-11-25
-summary: "Benchmark follow-ups: a vanilla or with-mods run recorded in the result, and COPY TO CLIPBOARD on the stats screen"
+summary: "Benchmark follow-ups: a plain-language stats screen with DETAILS, COPY TO CLIPBOARD, and a vanilla or with-mods run recorded in the result"
 categories: [frontend]
 size: S (40)
 difficulty: easy (40)
@@ -21,7 +21,7 @@ The maintainer wants two kinds of run:
 
 ## Next Steps
 
-Start only after `benchmark-no-input` (benchmark input: abort only) has merged; both touch the stats screen.
+Do A, C and B as one lane (all three touch the stats screen). Start only after `benchmark-no-input` (benchmark input: abort only) has merged; both touch the stats screen.
 
 **A. Copy to clipboard (maintainer, 2026-11-25).** The stats screen gets a COPY TO CLIPBOARD action beside BACK and RUN AGAIN, with pointer and touch support, a `string_id` and English text.
 - What it copies: a plain-text summary a player can paste into a forum or issue: title, track, average FPS, 1 % and 0.1 % lows, median, P95, P99, worst, frames over budget, the settings summary, the mods line (below), device, GPU, driver, build version.
@@ -30,6 +30,27 @@ Start only after `benchmark-no-input` (benchmark input: abort only) has merged; 
 - Tests:
   - the text formatter, with a unit test pinning its exact lines;
   - the action's presence or absence per platform.
+
+**C. A stats screen a non-engineer can read (maintainer, 2026-11-25: "more human readable as well as more readable for a non-engineer").** Today `crates/game/src/benchmark/screen.rs` has these problems:
+- It leads with engineer terms: P95, P99, 1 % and 0.1 % low, frame time median, budget.
+- It shows the circuit's internal name (`16_Track`) and raw setting keys (`frustum culling true`).
+- It says "THE 240 FPS FRAME LIMIT HOLDS THE AVERAGE: NOT THE GPU'S SPEED", which means the frame cap, not the hardware, set the result.
+- Every line is hard-coded English, so nothing translates.
+
+Rework it:
+- **A verdict line first:** SMOOTH, MOSTLY SMOOTH or CHOPPY, from the share of frames that missed one screen refresh, plus the average FPS and the screen's refresh rate. Write the thresholds in the doc.
+- **Then plain lines:**
+  - "Slowest moments: N FPS (worst 1 in 100 frames)";
+  - "Stutters: N of M frames took longer than one screen refresh";
+  - when the frame limit binds: "Your frame limit (N FPS) capped this result. Turn FRAME LIMIT off to see how fast your hardware can go."
+- **Names:** the title and the circuit's display name (the track select's), never the archive name.
+- **A DETAILS action** that opens today's full numbers and the settings, labelled with the menu's own row names and values (the strings the settings pages show), plus device, GPU and driver.
+- **Strings:** every line through string ids (`english.toml`, pt-BR `human = false`, `[untranslated]` for the rest), with `%s` placeholders for numbers.
+- **The copied text (A)** uses the same order: plain lines first, then a DETAILS block.
+- **Tests:**
+  - the verdict thresholds;
+  - the frame-limit line appears only when the limit binds;
+  - no internal name (`_Track`, `track.vex`) reaches the screen.
 
 **B. The mods choice:**
 
