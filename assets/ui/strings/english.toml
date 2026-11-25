@@ -279,6 +279,7 @@ OAG_GRAPHICS_SHADOW_RESOLUTION = { text = "SHADOW RESOLUTION", human = false }
 OAG_GRAPHICS_SCENE_PRECISION = { text = "SCENE PRECISION", human = false }
 OAG_GRAPHICS_CIRCUIT_LIGHTING = { text = "CIRCUIT LIGHTING", human = false }
 OAG_GRAPHICS_REFLECTION_RESOLUTION = { text = "REFLECTION RESOLUTION", human = false }
+OAG_GRAPHICS_REFLECTION_AUTO = { text = "AUTO", human = false }
 OAG_GRAPHICS_WATER = { text = "WATER", human = false }
 OAG_GRAPHICS_MODEL_DETAIL = { text = "MODEL DETAIL", human = false }
 OAG_GRAPHICS_TEXTURE_DETAIL = { text = "TEXTURE DETAIL", human = false }

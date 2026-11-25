@@ -909,6 +909,11 @@ against, and either way larger than the glass pass's own 10.6 ms: the scene `gpu
 the seven seconds over 33.3 ms (peak 38.9 ms, 25.7 fps) fall in one slow stretch of each lap, where the frame time climbs from 24 to 37 ms (not tied to the glass: `original` has the same stretch, higher), and p95 is 35.8 ms. `original` is over 33.3 ms in 75 to 82 seconds of 90. One more run of each arm
 (60 s each, no figures taken from them, a `screencap` every 12 s) shows the same ship positions in both: the glass in the tunnel is visibly coarser under `quarter` (a 160x90 target stretched over the
 view) and the rest of the picture is unchanged. Moa Therma (the sea), Ubermall, Chenghou, Modesto and `half` are not measured.
+REFLECTION RESOLUTION `auto`, the default since 2026-11-25, settles at `quarter` here within about 10 s of the
+race starting and matches the fixed `quarter` within the run-to-run spread (34.6 against 33.9 fps pooled, same
+protocol, two arms each); `half` reads 30.3 ms, and leaving the pass out entirely gains nothing over `quarter`
+(so there is no `off`). The table and the policy are in [water.md](../rendering/water.md),
+"REFLECTION RESOLUTION `auto`".
 
 **Measured and dropped** (same method, one run each unless said):
 

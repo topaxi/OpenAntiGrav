@@ -1559,7 +1559,8 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
                 let pushed = in.world + scene.sea_reflection.x * vec3<f32>(n_lit.x, 0.0, n_lit.z);
                 let q = scene.refraction * vec4<f32>(pushed, 1.0);
                 let ndc = q.xy / max(q.w, 1e-6);
-                let uv = vec2<f32>(0.5 + 0.5 * ndc.x, 0.5 - 0.5 * ndc.y);
+                // Kept inside the rectangle the target was drawn into (`scene.sea_reflection.zw`).
+                let uv = min(vec2<f32>(0.5 + 0.5 * ndc.x, 0.5 - 0.5 * ndc.y), scene.sea_reflection.zw);
                 let texel = textureSampleLevel(behind_glass_tex, shadow_sampler, uv, 0.0).rgb;
                 // A gamma target already stores the encoded value, which is `R` as it is.
                 let stored = clamp(texel, vec3<f32>(0.0), vec3<f32>(1.0));

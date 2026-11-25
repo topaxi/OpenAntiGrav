@@ -525,6 +525,8 @@ impl App {
             blur_cost: perf::ChainCost::new(),
             blur_timer,
             blur_drawn: Default::default(),
+            reflection_drawn: Default::default(),
+            reflection_race: None,
             hd_bloom_cost: perf::ChainCost::new(),
             hd_bloom_timer,
             cpu_cost: perf::Meter::new(),

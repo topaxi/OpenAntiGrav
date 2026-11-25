@@ -473,20 +473,20 @@ impl RenderProfile {
     }
 
     /// Whether [`Self::for_a_photo`] draws a different picture than this profile does, for a
-    /// scene rectangle of `rect_pixels` (see [`Self::scale_for`]). `glass_target` is whether the
-    /// circuit draws a glass or sea target: a smaller one is a reason to redraw only there.
+    /// scene rectangle of `rect_pixels` (see [`Self::scale_for`]). `glass_step` is the step the
+    /// circuit's glass or sea target is drawn at now (`auto`'s included), `None` where it draws
+    /// none: a target drawn smaller than the original's is a reason to redraw only there.
     #[must_use]
     pub fn photo_differs(
         &self,
         rect_pixels: (f32, f32),
         gamescope: bool,
-        glass_target: bool,
+        glass_step: Option<oag_display::display::ReflectionResolution>,
     ) -> bool {
         u32::from(self.scale_for(rect_pixels, gamescope)) < 100
             || self.reconstruction.is_upscaler()
-            || (glass_target
-                && self.reflection_resolution
-                    != oag_display::display::ReflectionResolution::Original)
+            || glass_step
+                .is_some_and(|step| step != oag_display::display::ReflectionResolution::Original)
     }
 }
 

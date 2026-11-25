@@ -234,7 +234,8 @@ struct Scene {
     // read by `quake.wesl` for the surfaces whose vertex carries `quake`.
     quake: QuakeWave,
     // `mesh_render::Scene::sea_reflection`: `x` the sea's `distortion`, `y` 1.0 where the planar
-    // reflection target is bound in `behind_glass_tex` through `refraction`.
+    // reflection target is bound in `behind_glass_tex` through `refraction`, `zw` the largest
+    // texture coordinate inside the rectangle that target was drawn into (1.0 at full size).
     sea_reflection: vec4<f32>,
     // `mesh_render::Scene::track_fog`.
     track_fog: TrackFog,

@@ -685,7 +685,7 @@ fn circuit_lighting_round_trips_and_defaults_to_the_originals() {
 }
 
 #[test]
-fn reflection_resolution_round_trips_and_defaults_to_the_originals() {
+fn reflection_resolution_round_trips_and_defaults_to_auto() {
     for value in ReflectionResolution::ALL {
         assert_eq!(value.name().parse::<ReflectionResolution>(), Ok(value));
     }
@@ -694,10 +694,10 @@ fn reflection_resolution_round_trips_and_defaults_to_the_originals() {
         Ok(ReflectionResolution::Quarter)
     );
     assert!("scaled".parse::<ReflectionResolution>().is_err());
-    assert_eq!(
-        ReflectionResolution::default(),
-        ReflectionResolution::Original
-    );
+    assert_eq!(ReflectionResolution::default(), ReflectionResolution::Auto);
+    // Auto is the original's size until the frame loop steps it, and never a step itself.
+    assert_eq!(ReflectionResolution::Auto.size((640, 360)), (640, 360));
+    assert!(!ReflectionResolution::STEPS.contains(&ReflectionResolution::Auto));
 }
 
 #[test]

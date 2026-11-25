@@ -475,12 +475,14 @@ impl super::Session {
         let gamescope = crate::app::window::under_gamescope_cached(
             self.gpu.output.window.current_monitor().as_ref(),
         );
-        let glass_target = matches!(
-            &self.stage,
-            Stage::Race(stage) if stage.scene.reflection_target_size().is_some()
-        );
-        self.player_render_profile()
-            .photo_differs((rect.2, rect.3), gamescope, glass_target)
+        let profile = self.player_render_profile();
+        let glass_step = match &self.stage {
+            Stage::Race(stage) if stage.scene.reflection_target_size().is_some() => {
+                Some(self.reflection_step(&profile))
+            }
+            _ => None,
+        };
+        profile.photo_differs((rect.2, rect.3), gamescope, glass_step)
     }
 
     /// How far a shot has got, for its bar: a shot of several frames by its frames, and a shot

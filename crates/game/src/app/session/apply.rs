@@ -665,9 +665,9 @@ impl Session {
                     return;
                 }
             },
-            // Applied by the next frame of the race on screen, which rebuilds the target at the
-            // new size (`oag_raceplay::Scene::set_reflection_resolution`); the next race loads
-            // at it too.
+            // Applied by the next frame of the race on screen, which draws the target's rectangle
+            // at the new step (`oag_raceplay::Scene::set_reflection_resolution`); `auto` takes the
+            // reflection rung's step from there.
             "graphics.reflection_resolution" => {
                 match text.parse::<display::ReflectionResolution>() {
                     Ok(resolution) => {

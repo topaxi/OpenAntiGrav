@@ -706,6 +706,20 @@ extent's ceiling, after three seconds of frames predicted to land under the dead
 `drs::Limits`, and it writes no setting either. Measurements and the running-race check
 are in [the half-gather blur rung](motion-blur-half-rung.md).
 
+## A third output: the reflection step (2026-11-25)
+
+REFLECTION RESOLUTION `auto` (the default) is a rung of the same controller, `drs::reflection`:
+the glass and sea target is drawn at `original`, `half` or `quarter` of its fixed size by the
+target's own timed pass (the `GLASS` row). It runs **whether or not a resolution target is on**,
+because its budget is the target's period when one runs and otherwise the rate the limiter or the
+output holds the loop to (the CPU governor's `held_hz`); with neither it is inert. While it still
+has a step to give up and wants to, an overrun **holds the extent** instead of falling, so
+reflections reach `quarter` before the render scale moves; with the glass a small share it never
+holds and the extent loop is the one it was (`a_small_share_leaves_the_extent_loop_exactly_as_it_was`).
+It restores only with the extent at its ceiling. The policy, thresholds and the phone runs are in
+[water.md](water.md), "REFLECTION RESOLUTION `auto`"; the restore patience and relapse backoff are
+the blur rung's own (`drs::patience`, shared).
+
 ## Three properties the controller does not break
 
 - **It never writes `settings.graphics.render_scale`**, and cannot: `drs.rs`

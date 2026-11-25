@@ -258,6 +258,13 @@ pub(crate) struct Session {
     /// [`Session::blur_timer`] has not brought back is told "blur did not run"
     /// (free) from "not measured" (a skipped frame). See [`timing::Drawn`].
     pub(crate) blur_drawn: timing::Drawn,
+    /// The step each recent frame drew the glass and sea target at under REFLECTION RESOLUTION
+    /// `auto`, `None` for a frame drawn otherwise, so the reflection rung is fed only readings
+    /// of the step it is at (`oag_present::drs::reflection`).
+    pub(crate) reflection_drawn: timing::Drawn<Option<oag_display::display::ReflectionResolution>>,
+    /// The race the reflection rung last learned on (`cpu_governor::combination`): another
+    /// circuit's target starts it again from the original's size.
+    pub(crate) reflection_race: Option<u64>,
     /// What Wipeout HD/Fury's read bloom chain costs on the **GPU**, in the
     /// same seconds.
     ///

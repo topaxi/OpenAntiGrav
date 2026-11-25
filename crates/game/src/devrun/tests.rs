@@ -57,15 +57,21 @@ fn the_line_carries_every_field_and_dashes_what_was_not_read() {
         render: None,
         governor: 0,
         passes: &[],
+        reflection: None,
     });
     assert!(line.starts_with("frame-log stage=menu:window-layout fps=59.9"));
     assert!(line.contains("gpu_ms=- "));
-    assert!(line.contains("window=3840x2160 surface=3840x2160 render=- governor=0 pass_ms=-"));
+    assert!(
+        line.contains(
+            "window=3840x2160 surface=3840x2160 render=- governor=0 pass_ms=- reflection=-"
+        )
+    );
 }
 
 /// Every timed pass is a `name:ms` pair in one space-free field appended after `governor`, in
 /// the overlay's order and with the rows the overlay hides, so a script that splits the line on
-/// spaces and reads the fields before it is unaffected.
+/// spaces and reads the fields before it is unaffected; the glass and sea target's step comes
+/// after it.
 #[test]
 fn the_pass_field_lists_every_timed_pass_after_the_old_fields() {
     let line = format_line(&Reading {
@@ -82,9 +88,10 @@ fn the_pass_field_lists_every_timed_pass_after_the_old_fields() {
         render: Some((1280, 720)),
         governor: 0,
         passes: &[("SHADOW MAP", 1.234), ("HUD AND UI", 0.05)],
+        reflection: Some("quarter"),
     });
     assert!(
-        line.ends_with(" governor=0 pass_ms=shadow_map:1.23,hud_and_ui:0.05"),
+        line.ends_with(" governor=0 pass_ms=shadow_map:1.23,hud_and_ui:0.05 reflection=quarter"),
         "{line}"
     );
     assert!(line.contains(" gpu_ms=4.00 "), "{line}");

@@ -970,7 +970,9 @@ pub struct Scene {
     /// `distortion` (`Water.Water distortion`, the world units the mapped normal's `x` and `z`
     /// push the sampled point), `y` 1.0 where the reflection target is bound in the
     /// behind-the-glass slot (with [`Self::refraction`] its matrix) and 0.0 everywhere else,
-    /// where the sea keeps its sky stand-in. `zw` unused. See
+    /// where the sea keeps its sky stand-in. `zw` the largest texture coordinate the glass and the
+    /// sea may read the target at: half a texel inside the rectangle it was drawn into, `1.0`
+    /// where it fills the texture or none is bound. See
     /// `docs/rendering/water.md`, "The planar reflection, drawn".
     pub sea_reflection: [f32; 4],
     /// The stage's Track fog, for a track chunk ([`TrackFog::NONE`] where none).
@@ -1069,7 +1071,7 @@ impl Scene {
             craft_shadow: [CraftShadow::NONE; super::shadow_map::OCCLUSION_LAYERS as usize],
             refraction: Mat4::IDENTITY.to_cols_array_2d(),
             quake: QuakeWave::off(),
-            sea_reflection: [0.0; 4],
+            sea_reflection: [0.0, 0.0, 1.0, 1.0],
             track_fog: TrackFog::NONE,
         }
     }

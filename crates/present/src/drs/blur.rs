@@ -70,6 +70,7 @@
 
 use oag_display::display::BlurResolution;
 
+use super::patience::Patience;
 use super::{GRID, Limits};
 
 /// How long, in the target's own frames, a restore must be predicted to fit
@@ -142,15 +143,8 @@ impl Shed {
 pub(super) struct Rung {
     /// What the shed measured, or `None` while the full gather is in force.
     shed: Option<Shed>,
-    /// Consecutive frames at the ceiling a restore was predicted to fit.
-    run: u32,
-    /// Frames since the last restore, or since the last relapse window that
-    /// held, while a backoff is still being paid back.
-    since_restore: Option<u32>,
-    /// Doublings of the restore patience earned by restores that did not hold.
-    backoff: u32,
-    /// The restore patience at this frame's target, before backoff.
-    frames: u32,
+    /// The run a restore needs at the ceiling, and its backoff.
+    patience: Patience,
 }
 
 impl Rung {
@@ -174,11 +168,6 @@ impl Rung {
         self.shed.is_some()
     }
 
-    /// The restore patience in force, after backoff.
-    fn patience(&self) -> u32 {
-        self.frames << self.backoff.min(MAX_BACKOFF)
-    }
-
     /// Called once per recorded frame, before any decision.
     ///
     /// Ineligible limits put the rung back to the full gather and forget
@@ -190,16 +179,7 @@ impl Rung {
             *self = Self::default();
             return;
         };
-        self.frames = restore_frames(period);
-        if let Some(since) = self.since_restore.as_mut() {
-            *since += 1;
-            if *since >= relapse_frames(period) {
-                // A window held: one doubling paid back, and the next window
-                // starts counting.
-                self.backoff = self.backoff.saturating_sub(1);
-                self.since_restore = (self.backoff > 0).then_some(0);
-            }
-        }
+        self.patience.begin_frame(period);
     }
 
     /// Whether an over-budget reading should shed the full gather instead of
@@ -222,12 +202,7 @@ impl Rung {
             full: at_ceiling(blur, steps),
             ratio: None,
         });
-        self.run = 0;
-        // Inside a window: either a restore that did not hold, or one paying
-        // back an earlier backoff, which did not hold either.
-        if self.since_restore.take().is_some() {
-            self.backoff = (self.backoff + 1).min(MAX_BACKOFF);
-        }
+        self.patience.shed();
         true
     }
 
@@ -255,17 +230,10 @@ impl Rung {
         let fits = steps == GRID
             && budget > 0.0
             && (scalable - blur_now + full) / budget <= *super::DEADBAND.start();
-        if !fits {
-            self.run = 0;
-            return false;
-        }
-        self.run += 1;
-        if self.run < self.patience() {
+        if !self.patience.ready(fits) {
             return false;
         }
         self.shed = None;
-        self.run = 0;
-        self.since_restore = Some(0);
         true
     }
 
@@ -274,7 +242,7 @@ impl Rung {
     /// The ratio stays: like the controller's residual it is a property of the
     /// machine and the scene, and a load is the one moment it cannot be read.
     pub(super) fn reset(&mut self) {
-        self.run = 0;
+        self.patience.reset_run();
     }
 }
 

@@ -51,6 +51,31 @@ impl Session {
     /// allocation. Read the other way it would mean a different pixel count at
     /// every render scale, which is not what a row spelled `50` beside a row
     /// spelled `100` says.
+    /// The step the glass and sea target is drawn at under `profile`: the player's fixed choice,
+    /// or under `auto` the reflection rung's (`drs::reflection`). A photo's profile is
+    /// `original`, so a shot draws the full target.
+    pub(super) fn reflection_step(
+        &self,
+        profile: &crate::settings::RenderProfile,
+    ) -> oag_display::display::ReflectionResolution {
+        if profile.reflection_resolution.is_auto() {
+            self.drs.reflection_step()
+        } else {
+            profile.reflection_resolution
+        }
+    }
+
+    /// The step's name in a race whose circuit draws a glass or sea target, for the overlay and
+    /// the frame log; `None` otherwise.
+    pub(super) fn reflection_drawn_name(&self) -> Option<&'static str> {
+        match &self.stage {
+            Stage::Race(race) if race.scene.reflection_target_size().is_some() => {
+                Some(self.reflection_step(&self.render_profile()).name())
+            }
+            _ => None,
+        }
+    }
+
     fn drs_limits(&self) -> drs::Limits {
         let surface = self.gpu.output.size();
         // A multi-window race shares one scene allocation, the largest any window wants, so
@@ -350,6 +375,7 @@ impl Session {
         // Read before `self.stage` is borrowed mutably below, for the same
         // reason `pvs_culling` is.
         let render_profile = self.governed_profile();
+        let reflection_step = self.reflection_step(&render_profile);
         // Photo mode frames one still picture: the game's motion blur smears a frozen race
         // (the camera the player flies moves the velocity buffer), so the mode draws none
         // whatever the setting says, and leaving puts the player's setting back untouched.
@@ -416,11 +442,7 @@ impl Session {
                             .race
                             .set_ghost_visible(self.settings.display.ghost_ship_shown(shell.title));
                     }
-                    parked.scene.set_reflection_resolution(
-                        &self.gpu.device,
-                        &self.gpu.queue,
-                        render_profile.reflection_resolution,
-                    );
+                    parked.scene.set_reflection_resolution(reflection_step);
                     parked.scene.set_blur_resolution(blur_resolution);
                     parked.scene.set_band_levels(spectrum);
                     parked.render(
@@ -517,10 +539,12 @@ impl Session {
                 }
                 // The glass and sea target at the profile's fraction, which a photo's frame
                 // draws at the original's size (`RenderProfile::for_a_photo`).
-                stage.scene.set_reflection_resolution(
-                    &self.gpu.device,
-                    &self.gpu.queue,
-                    render_profile.reflection_resolution,
+                stage.scene.set_reflection_resolution(reflection_step);
+                self.reflection_drawn.mark(
+                    self.frame_index,
+                    (render_profile.reflection_resolution.is_auto()
+                        && stage.scene.reflection_target_size().is_some())
+                    .then_some(reflection_step),
                 );
                 stage.scene.set_blur_resolution(blur_resolution);
                 stage.scene.set_band_levels(spectrum);
@@ -1112,6 +1136,7 @@ impl Session {
                     .stats()
                     .map(|s| s.mean_ms / 1000.0),
                 passes: self.pass_costs.rows(),
+                reflection: self.reflection_drawn_name(),
             },
             // The wall-clock half, and a frame behind for a plainer reason
             // than the GPU readings are: this frame's own duration is not

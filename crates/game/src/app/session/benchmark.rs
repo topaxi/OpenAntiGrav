@@ -722,6 +722,15 @@ impl Session {
                 "motion_blur_resolution".to_string(),
                 profile.motion_blur_resolution.name().to_string(),
             ),
+            // Under `auto`, the step the run ended at as well.
+            (
+                "reflection_resolution".to_string(),
+                if profile.reflection_resolution.is_auto() {
+                    format!("auto, at {}", self.drs.reflection_step())
+                } else {
+                    profile.reflection_resolution.to_string()
+                },
+            ),
             (
                 "anisotropy".to_string(),
                 format!("{:?}", self.settings.graphics.anisotropy),

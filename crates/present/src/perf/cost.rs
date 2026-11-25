@@ -112,6 +112,9 @@ pub struct GpuCost {
     /// [`crate::drs::Cost`] stays the five readings above, so the controller sees the numbers
     /// it always saw and only the overlay's `OTHER` is smaller.
     pub passes: PassRows,
+    /// The step the glass and sea target is drawn at (`graphics.reflection_resolution`, the
+    /// step `auto` is at), named on the `GLASS` row; `None` where no target is drawn.
+    pub reflection: Option<&'static str>,
 }
 
 /// Pass rows under this many milliseconds are left off the overlay (and kept in the frame log).
@@ -153,7 +156,14 @@ impl GpuCost {
         }
         for (name, seconds) in self.passes.ordered_when_run() {
             if seconds * 1000.0 >= HIDE_BELOW_MS {
-                rows.push(format!("{name} {:.2} MS", seconds * 1000.0));
+                match self.reflection.filter(|_| name == "GLASS") {
+                    Some(step) => rows.push(format!(
+                        "{name} {} {:.2} MS",
+                        step.to_uppercase(),
+                        seconds * 1000.0
+                    )),
+                    None => rows.push(format!("{name} {:.2} MS", seconds * 1000.0)),
+                }
             }
         }
         if let Some(residual) = self.residual_ms(frame_ms) {

@@ -256,7 +256,26 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
     if !behind_glass.groups.is_empty() || behind_glass.mirror.is_some() {
         behind_glass.resolution = options.reflection_resolution;
         let (original, size) = (behind_glass.size, behind_glass.drawn_size());
-        if size != original {
+        if options.reflection_resolution.is_auto() {
+            report.push(match options.reflection_timed {
+                Some(true) => format!(
+                    "{track}: the glass and sea target starts at {}x{} under reflection resolution \
+                     auto, and steps to half and quarter by its own timed cost",
+                    original.0, original.1
+                ),
+                Some(false) => format!(
+                    "{track}: the glass and sea target stays at {}x{} under reflection resolution \
+                     auto: nothing times its pass here, so there is no cost to step it by",
+                    original.0, original.1
+                ),
+                None => format!(
+                    "{track}: the glass and sea target starts at {}x{} under reflection resolution \
+                     auto, and steps to half and quarter by its own timed cost where the frame loop \
+                     can time it",
+                    original.0, original.1
+                ),
+            });
+        } else if size != original {
             report.push(format!(
                 "{track}: the glass and sea target is {}x{} at reflection resolution {} (the \
                  original's is {}x{})",
