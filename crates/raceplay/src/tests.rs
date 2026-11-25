@@ -325,6 +325,7 @@ fn setup(handling: Handling) -> SimSetup {
         finished_thrust: None,
         original_tables: None,
         slot_teams: Vec::new(),
+        row_teams: Vec::new(),
         sight: Sighting::default(),
         collision: CollisionWorld::new(),
         handling,
@@ -465,6 +466,7 @@ pub(crate) fn fixture_view() -> ViewSetup {
         trail_sparks: false,
         request: None,
         campaign_event: false,
+        score_pass: None,
         spark_anchors: Vec::new(),
         // The nearer external view, deliberately a *different* set of round
         // numbers from `chase`: a test that cycles to it and back has to be

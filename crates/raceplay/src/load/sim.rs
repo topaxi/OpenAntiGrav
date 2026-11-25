@@ -488,6 +488,10 @@ pub fn load_sim(options: &Options) -> Result<SimLoad> {
         laid_from_rear: craft_title.looks.laid_from_rear.applies_everywhere(),
         grid_frame_from_sample: extents,
         slot_teams: slot_teams.clone(),
+        row_teams: slot_teams
+            .iter()
+            .map(|id| craft_title.team_key(id))
+            .collect(),
         sight: super::Sighting::without_view(
             craft_of(&mut craft, &mut archives).layout.platform,
             craft_title,

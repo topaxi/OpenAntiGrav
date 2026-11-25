@@ -242,6 +242,8 @@ pub struct RaceView {
     pub(super) trail_sparks: bool,
     /// [`ViewSetup::campaign_event`]: what the HUD's `RaceXPTxt` and `ObjectiveTxt` ask.
     pub(super) campaign_event: bool,
+    /// [`ViewSetup::score_pass`].
+    pub(super) score_pass: Option<u32>,
     /// The campaign cell's gold, silver and bronze targets, for the Detonator HUD's medal
     /// widgets ([`crate::Race::set_medal_targets`]). `None` outside a campaign cell.
     pub(super) medal_targets: Option<oag_tables::race_campaign::MedalTargets>,

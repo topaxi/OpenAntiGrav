@@ -4,7 +4,7 @@
 //! `docs/ghidra/functions/ps3-hdfury-eu/eliminator-score.md`.
 
 use oag_tables::race_campaign::Difficulty;
-use oag_title::eliminator::EliminatorRule;
+use oag_title::eliminator::{EliminatorRule, ScoreTarget};
 
 /// A race's Eliminator rule, resolved.
 pub(crate) struct Resolved {
@@ -67,8 +67,8 @@ fn resolve(
     })
 }
 
-/// The target a race starts on: a kill rule's pick, or a score rule's own, a campaign cell's or
-/// the Racebox minimum off the disc.
+/// The target a race starts on: a kill rule's pick, or for a score rule the event's or the
+/// player's own, else the rule's: the Racebox minimum off the disc, or the executable's default.
 ///
 /// With no authored minimum a score race has no target at all and says so in the report; a kill
 /// count's fallback would end it on the first five points.
@@ -87,16 +87,19 @@ fn target(
     if options.eliminator_score_target.is_some() {
         return options.eliminator_score_target;
     }
+    let path = match rule.target {
+        ScoreTarget::Fixed(target) => return Some(target),
+        ScoreTarget::Slider(path) => path,
+    };
     let authored = archives
-        .read_name(rule.race_setup)
+        .read_name(path)
         .ok()
         .and_then(|blob| oag_tables::fexml::text(&blob).ok())
         .and_then(|xml| oag_tables::race_setup::slider(&xml, "Eliminations"))
         .map(|slider| slider.min);
     if authored.is_none() {
         report.push(format!(
-            "{}: no Eliminations slider - this Eliminator has no target",
-            rule.race_setup
+            "{path}: no Eliminations slider - this Eliminator has no target"
         ));
     }
     Some(authored.unwrap_or(u32::MAX))
@@ -112,7 +115,7 @@ mod tests {
         kill: 20.0,
         lap: 5.0,
         death: 5.0,
-        race_setup: "",
+        target: ScoreTarget::Slider(""),
     };
 
     #[test]

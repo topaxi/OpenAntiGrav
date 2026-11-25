@@ -507,6 +507,7 @@ impl RaceStage {
             }),
             zone: self.race.core.sim.world.primary_race().zone,
             kills: standing.kills,
+            score: standing.score as u32,
         };
         match oag_2048::campaign::evaluate_tier(objectives, &outcome)? {
             oag_2048::campaign::Tier::Elite => Some(crate::records::Medal::Gold),

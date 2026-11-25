@@ -1193,6 +1193,19 @@ impl Title {
         prompts::MenuButtons::resolve(original, choice, authored_help)
     }
 
+    /// A grid's team id as the string table keys the team: a variant directory (`Assegai_c1`,
+    /// `Feisar2048\3`) is its base team, spelled as [`Title::teams`] lists it. An id neither
+    /// knows is returned as it is, livery and all.
+    ///
+    /// The variant half is [`race::RaceDefaults::base_team`], the rule [`Self::team_identity`]
+    /// credits by, so the name a screen prints and the row an award banks agree. It drops a
+    /// livery suffix first: an event's authored grid row reaches a slot with one still on it.
+    #[must_use]
+    pub fn team_key(&self, id: &str) -> String {
+        let base = self.race.base_team(id).unwrap_or(id);
+        team::listed_id(self.teams, base).to_string()
+    }
+
     /// The shared identity `team` (an id as this title spells it) is kept under.
     ///
     /// **A variant directory credits its team.** The id a race reaches the records

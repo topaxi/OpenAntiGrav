@@ -13,8 +13,11 @@
 
 use std::path::Path;
 
-use oag_mesh::mesh::rcs::psp2::{self, circuit_pads::HidePads};
-use oag_mesh::mesh::slots;
+use oag_mesh::mesh::rcs::psp2::{
+    self,
+    circuit_pads::{HidePads, PadClass},
+};
+use oag_mesh::mesh::{Model, slots};
 
 const OMEGA: [&str; 9] = [
     "ps4/omega-eu/uroot/data00.psarc",
@@ -42,12 +45,46 @@ const ALTIMA: (usize, usize, usize) = (419_023, 18_389, 14_762);
 /// and it has no weapon pad.
 const ZONE_2: (usize, usize, usize) = (0, 5382, 0);
 
+/// The triangles drawing their light bars from each class's glow entry, in [`PadClass::ALL`]
+/// order.
+fn bar_triangles(model: &Model) -> [usize; 3] {
+    let class_of = |index: u32| {
+        let entry = slots::material_index(model.vertices[index as usize].slots) as usize;
+        let program = model.emissive.get(entry.checked_sub(1)?)?.program[0];
+        PadClass::ALL.iter().position(|c| c.program() == program)
+    };
+    let mut out = [0; 3];
+    for triangle in model.indices.as_chunks::<3>().0 {
+        if let Some(class) = class_of(triangle[0]) {
+            out[class] += 1;
+        }
+    }
+    out
+}
+
+/// Every weapon pad triangle draws its bars from one class's entry and no other triangle does,
+/// with the classes this circuit's node names give.
+fn check_bars(name: &str, model: &Model, weapon: usize, classes: [bool; 3]) {
+    let bars = bar_triangles(model);
+    assert_eq!(
+        bars.iter().sum::<usize>(),
+        weapon,
+        "{name}: the weapon pads' triangles, and only they, take a class entry: {bars:?}"
+    );
+    assert_eq!(
+        bars.map(|n| n > 0),
+        classes,
+        "{name}: (offensive, defensive, other) present, {bars:?}"
+    );
+}
+
 /// Builds `blob` all three ways: each hidden build loses exactly its pads and keeps every other
 /// submesh of the file (the start line, the walls).
 fn check(
     name: &str,
     blob: &[u8],
     (all, pads, weapon): (usize, usize, usize),
+    classes: [bool; 3],
     read: &mut dyn FnMut(&str) -> Option<Vec<u8>>,
 ) {
     let build = |hide, read: &mut dyn FnMut(&str) -> Option<Vec<u8>>| {
@@ -69,6 +106,7 @@ fn check(
         pads,
         "{name}: exactly the pad triangles go"
     );
+    check_bars(name, &whole, weapon, classes);
     // A pad's vertices say so, and no other vertex does: a Zone race draws them on their own
     // program instead of the Zone surface (`slots::ZONE_PLAIN`).
     let plain = whole
@@ -121,21 +159,31 @@ fn omegas_circuits_drop_exactly_their_pad_triangles() {
         .filter_map(|a| oag_assets::psarc::Archive::open_file(&root.join(a)).ok())
         .collect();
     // An HD circuit (`weapon_pads` and `speedup_pad` shapes) and a 2048 circuit (`speed_pads`
-    // and `weapon_pads`).
-    for (path, expected) in [
+    // and `weapon_pads`). HD's names give no class, so every pad is the red `Other`; 2048's
+    // name each `offensive` or `defensive`.
+    for (path, expected, classes) in [
         (
             "Data/environments/talons_junction/track.final.rcsmodel",
             TALONS,
+            [false, false, true],
         ),
-        ("Data/environments2048/arena/track.final.rcsmodel", ARENA),
-        ("Data/environments/zone_2/track.rcsmodel", ZONE_2),
+        (
+            "Data/environments2048/arena/track.final.rcsmodel",
+            ARENA,
+            [true, true, false],
+        ),
+        (
+            "Data/environments/zone_2/track.rcsmodel",
+            ZONE_2,
+            [false; 3],
+        ),
     ] {
         let at = (0..archives.len())
             .find(|&i| archives[i].contains(path))
             .unwrap_or_else(|| panic!("{path} is in no archive"));
         let blob = archives[at].read_path(path).expect("the model");
         let mut read = |p: &str| archives.iter_mut().find_map(|a| a.read_path(p).ok());
-        check(path, &blob, expected, &mut read);
+        check(path, &blob, expected, classes, &mut read);
     }
 }
 
@@ -158,5 +206,5 @@ fn a_2048_circuit_drops_exactly_its_pad_triangles() {
         .read_path("data/art/published/environments/altima/track.rcsmodel")
         .expect("model");
     let mut read = |p: &str| archive.read_path(p).ok();
-    check("altima", &blob, ALTIMA, &mut read);
+    check("altima", &blob, ALTIMA, [true, true, false], &mut read);
 }

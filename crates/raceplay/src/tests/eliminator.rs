@@ -567,6 +567,24 @@ mod flip {
     }
 
     #[test]
+    fn a_crafts_own_flip_time_replaces_the_laws() {
+        let mut race = racing(LAW);
+        race.core.sim.world.ships[0].handling.eliminator_flip_time = Some(0.4);
+        race.tick(&press(Button::Flip));
+        for _ in 0..22 {
+            race.tick(&held(Button::Flip));
+        }
+        assert!(
+            race.core.sim.world.ships[0].physics.flip.active,
+            "twenty-four ticks at 60 Hz is 0.4 s"
+        );
+        // The summed per-tick angle can land a hair under `pi`, so one tick of slack.
+        race.tick(&held(Button::Flip));
+        race.tick(&held(Button::Flip));
+        assert!(!race.core.sim.world.ships[0].physics.flip.active);
+    }
+
+    #[test]
     fn holding_the_button_flips_once_and_a_new_press_flips_back() {
         let mut race = racing(LAW);
         race.core.sim.world.ships[0].physics.body.linear_velocity = Vec3::ZERO;

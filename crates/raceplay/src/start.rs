@@ -102,6 +102,7 @@ impl Race {
             laid_from_rear,
             grid_frame_from_sample,
             slot_teams,
+            row_teams,
             sight,
             capture_zone,
             foreign: _,
@@ -111,6 +112,7 @@ impl Race {
             trail_sparks,
             request,
             campaign_event,
+            score_pass,
             chase_close,
             internal,
             nozzles,
@@ -857,6 +859,7 @@ impl Race {
                 },
                 outcome: crate::outcome::Outcome {
                     slot_teams,
+                    row_teams,
                     ..Default::default()
                 },
                 plans: None,
@@ -936,6 +939,7 @@ impl Race {
                 hull_reach: [0.0; MAX_SHIPS],
                 trail_sparks,
                 campaign_event,
+                score_pass,
                 medal_targets: None,
                 trail_inside: [0; MAX_SHIPS],
                 trail_hit_rest: [0; MAX_SHIPS],

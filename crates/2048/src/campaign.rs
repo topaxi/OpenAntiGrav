@@ -676,6 +676,46 @@ pub struct EventOutcome {
     /// Opponent kills scored so far - meaningful only for
     /// [`objective_type::KILLS`], gated on nothing else for the same reason.
     pub kills: u32,
+    /// The Eliminator score so far, whole points: an [`EventKind::Elimination`] event's
+    /// [`objective_type::BEAT_VALUE`] metric.
+    pub score: u32,
+}
+
+/// What an event sets on its race before the load.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RaceTerms {
+    /// [`engine_mode`]'s token.
+    pub mode: &'static str,
+    /// The score an Elimination event's race ends on: its elite bar, else its pass bar, when it
+    /// is a [`objective_type::BEAT_VALUE`]. `None` for every other event, whose race takes the
+    /// title's default.
+    ///
+    /// **Chosen, not measured:** the elite bar, so both bars are in reach. The executable's end
+    /// test is unread (`docs/formats/2048-campaign.md`, "The objective law").
+    pub score_target: Option<u32>,
+    /// The pass bar below [`Self::score_target`]: the target the original's HUD shows first.
+    pub score_pass: Option<u32>,
+}
+
+/// `event`'s [`RaceTerms`], `None` for an event this engine has no mode for.
+#[must_use]
+pub fn race_terms(document: &Document, event: &Event) -> Option<RaceTerms> {
+    let mode = engine_mode(event)?;
+    let bars = (event.kind == EventKind::Elimination)
+        .then(|| event_objectives(document, event))
+        .flatten();
+    let bar = |rule: ObjectiveRule| {
+        (rule.objective_type == Some(objective_type::BEAT_VALUE))
+            .then_some(rule.target?)
+            .and_then(|target| u32::try_from(target).ok())
+    };
+    let pass = bars.and_then(|objectives| bar(objectives.pass));
+    let score_target = bars.and_then(|objectives| bar(objectives.elite)).or(pass);
+    Some(RaceTerms {
+        mode,
+        score_target,
+        score_pass: pass.filter(|&pass| Some(pass) < score_target),
+    })
 }
 
 /// Which of an event's own two authored bars an [`EventOutcome`] cleared.
@@ -691,18 +731,10 @@ pub enum Tier {
 /// The best [`Tier`] `outcome` earns against `objectives`'s own pass/elite
 /// rules, or `None` when neither is met.
 ///
-/// **One case never awards a tier at all, on purpose.** An
-/// [`EventKind::Elimination`] event's own [`objective_type::BEAT_VALUE`]
-/// objective (all 15 measured instances, targets `25`-`100`) has no metric
-/// this engine can name with any confidence: `oag_race::Standing::kills`
-/// (the only per-race count 2048's own simulation tracks) never approaches
-/// those numbers in a real match, and nothing else - a damage total, a
-/// points score - is tracked at all. Confidence under 50 for any specific
-/// guess, so none is made; see `docs/formats/2048-campaign.md`'s "what is
-/// not determined" section. An Elimination event still plays and still
-/// unlocks whatever names it as a prerequisite (gated on `finished`, not on
-/// a medal - see `oag_game`'s own unlock-gate evaluator), it simply never
-/// carries a medal.
+/// An [`EventKind::Elimination`] event's [`objective_type::BEAT_VALUE`] is the player's score
+/// at or above the target, whether or not the player finished: the executable's evaluator
+/// compares the pilot's score field with the value (`docs/formats/2048-campaign.md`,
+/// "The objective law").
 #[must_use]
 pub fn evaluate_tier(objectives: &EventObjectives, outcome: &EventOutcome) -> Option<Tier> {
     if objective_met(objectives.kind, objectives.elite, outcome) == Some(true) {
@@ -716,9 +748,7 @@ pub fn evaluate_tier(objectives: &EventObjectives, outcome: &EventOutcome) -> Op
 
 /// `None` means "cannot be graded" (an unfinished attempt against a rule
 /// that needs one, or a rule this function does not know how to read) -
-/// never "failed". [`evaluate_tier`] treats both the same way (no tier),
-/// but keeping them apart here is what let this function's own doc comment
-/// state the Elimination gap as "never guessed" rather than "always fails".
+/// never "failed". [`evaluate_tier`] treats both the same way (no tier).
 fn objective_met(kind: EventKind, rule: ObjectiveRule, outcome: &EventOutcome) -> Option<bool> {
     match rule.objective_type {
         Some(objective_type::FINISH) => Some(outcome.finished),
@@ -737,7 +767,7 @@ fn objective_met(kind: EventKind, rule: ObjectiveRule, outcome: &EventOutcome) -
                 Some(outcome.finish_centiseconds? <= rule.target?)
             }
             EventKind::Zone => Some(i64::from(outcome.zone) >= rule.target?),
-            EventKind::Elimination => None,
+            EventKind::Elimination => Some(i64::from(outcome.score) >= rule.target?),
         },
         Some(_) | None => None,
     }

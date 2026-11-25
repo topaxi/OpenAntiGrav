@@ -12,6 +12,7 @@
 //!   `0x002e02b8`), measured on RPCS3: the program's inline constant read
 //!   `{1.166, 0.033, 0, 1}` on one pad and `{1.656, 0.041, 0, 1}` on another of
 //!   the same circuit whose material authors cyan.
+//! - **2048 and Omega** write it per class of pad, read off the node's name.
 //! - **Everything else** keeps the authored value, which is what the loader
 //!   already binds.
 
@@ -25,6 +26,67 @@ pub enum WeaponPadGlow {
     /// A per-pad cycle through keyframes while the pad is ready, and a flat
     /// colour while it cools down.
     Cycle(Cycle),
+    /// A cycle per class of pad, the class read off the pad's node name: 2048 and Omega, whose
+    /// pads are drawn with their circuit.
+    ByClass(ClassCycles),
+}
+
+/// The three tables 2048's and Omega's weapon pads cycle through.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ClassCycles {
+    /// Node names holding `offensive`.
+    pub offensive: Cycle,
+    /// Node names holding `defensive`.
+    pub defensive: Cycle,
+    /// Every other node name.
+    pub other: Cycle,
+}
+
+impl ClassCycles {
+    /// The three cycles as offensive, defensive, other: the order a loader numbers its per-class
+    /// glow entries in.
+    #[must_use]
+    pub const fn in_order(&self) -> [Cycle; 3] {
+        [self.offensive, self.defensive, self.other]
+    }
+
+    /// What both executables hold, each read in its own (`docs/rendering/pads.md`,
+    /// "2048 and Omega"): yellow, green and HD's red, three keys a second, `1/255`.
+    pub const LINEAGE: Self = Self {
+        offensive: lineage_cycle(&[
+            [1952.0, 696.0, 48.0],
+            [976.0, 348.0, 24.0],
+            [244.0, 87.0, 6.0],
+            [1952.0, 696.0, 48.0],
+            [976.0, 348.0, 24.0],
+            [244.0, 87.0, 6.0],
+        ]),
+        defensive: lineage_cycle(&[
+            [0.0, 1072.0, 0.0],
+            [0.0, 536.0, 0.0],
+            [0.0, 134.0, 0.0],
+            [0.0, 1072.0, 0.0],
+            [0.0, 536.0, 0.0],
+            [0.0, 134.0, 0.0],
+        ]),
+        other: lineage_cycle(&[
+            [512.0, 16.0, 0.0],
+            [256.0, 0.0, 0.0],
+            [64.0, 0.0, 0.0],
+            [512.0, 16.0, 0.0],
+            [256.0, 0.0, 0.0],
+            [64.0, 0.0, 0.0],
+        ]),
+    };
+}
+
+const fn lineage_cycle(keyframes: &'static [[f32; 3]]) -> Cycle {
+    Cycle {
+        keyframes,
+        keys_per_second: 3.0,
+        scale: 1.0 / 255.0,
+        cooling: [0.025, 0.0, 0.01],
+    }
 }
 
 /// HD's weapon-pad colour cycle: the numbers `WeaponPad_UpdateRefreshTimer`
@@ -90,6 +152,20 @@ mod tests {
         scale: 1.0 / 255.0,
         cooling: [0.025, 0.0, 0.01],
     };
+
+    #[test]
+    fn the_lineage_classes_start_yellow_green_and_red() {
+        let first = ClassCycles::LINEAGE.in_order().map(|c| c.colour(0.0));
+        let key = |v: [f32; 3]| v.map(|x| x * (1.0 / 255.0));
+        assert_eq!(
+            first,
+            [
+                key([1952.0, 696.0, 48.0]),
+                key([0.0, 1072.0, 0.0]),
+                key([512.0, 16.0, 0.0]),
+            ]
+        );
+    }
 
     #[test]
     fn a_whole_position_is_its_keyframe_scaled() {

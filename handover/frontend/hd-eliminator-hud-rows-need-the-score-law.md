@@ -1,8 +1,8 @@
 ---
-status: ready-to-wire
+status: re-first
 titles: [hd, omega, 2048]
-updated: 2026-11-09
-summary: "HD Eliminator is scored, drawn, ranked on POINTS, sets its target and runs at the original's pace; ScoreFeedBack popups are open"
+updated: 2026-11-26
+summary: "HD, Omega and 2048 Eliminators are won on score and drawn by their own layouts; per-pad cycle, 2048 end test, ScoreFeedBack open"
 ---
 
 # HD's Eliminator: what is left after the score law
@@ -14,15 +14,31 @@ summary: "HD Eliminator is scored, drawn, ranked on POINTS, sets its target and 
 
 ## Open
 
+- **Pads' per-pad cycle** (2048, Omega): each pad's start phase and the dark cooling colour are not
+  drawn, because a class shares one glow entry and the table holds 64 (`docs/rendering/pads.md`,
+  "2048 and Omega").
+- **2048's event end test.** Ours ends an Elimination event on the elite score (chosen); the
+  executable's tiered target state and end test are unread (`docs/formats/2048-campaign.md`, "The
+  objective law"). Which events are tiered also decides whether the rows show at all.
+- **Weapon pads the original does not show.** On the `omega/arena-2048` pair's grid the original
+  shows road paint where ours draws two pads (`docs/rendering/pads.md`, "2048 and Omega").
+- **Omega's own writer of the 2048-era elimination HUD** is unread; ours runs 2048's law there.
+- **2048's HD and Fury cells** write the target line `"%s (%d)"`; ours writes HD's `"%s ( %d )"`.
+  Their row format is unread.
+- **2048's opponent scale table:** which of the two the race reads is unconfirmed; ours takes the
+  loaded `WeaponAIStats` row.
+- **Pace on 2048 and Omega** is HD's, tuned on HD alone.
+- **Flip outside an Eliminator** (`race_eliminator_flip`, Omega's event `+0x21c`), 2048's stick
+  trigger and the opponents' flip (`eliminator-flip.md`, "Per title").
+- **The 2048 and Omega lane's play report:** which Omega circuit the maintainer flew is unknown.
+  Both layouts now head the race with its score.
 - ~~**Racebox TARGET row.**~~ Landed 2026-11-09: `race.score_target` offers the slider's 21 steps and
-  reaches `Options::eliminator_score_target` (`eliminator-score.md`, "What ours does"). Omega's own
-  slider is `50..600` by `25` and its rule is kills, so the row is HD's alone until Omega's awards are read.
+  reaches `Options::eliminator_score_target` (`eliminator-score.md`, "What ours does"). Omega offers
+  its own slider's `50..600` by `25`; 2048 has no slider and no row.
 - **`ScoreFeedBack0-15`.** Authored and read, never caught in a frame.
 - **Opponent lap refill.** Ours refills every craft; on HD an AI's shield did not move on any lap.
 - **Not captured:** the split-screen Eliminator pair (`splitscreen_elimination_hud_{0,1}.xml`, same
   widgets, unchecked).
-- **2048 and Omega: checked, applies, not wired.** Both keep the kill rule, inherited from Pulse.
-  Their score writers are unread, and Omega's named file has no `<EliminatorAIStats>` row.
 - **`HighlightBar`'s width** needs a font in the HUD's draw list.
 - ~~**Ours reaches the target about four times sooner.**~~ Landed 2026-11-09 (`eliminator-pace`,
   `oag_raceplay::score_pace`, `docs/gameplay/race-modes.md`, "The pace of a score Eliminator"). The

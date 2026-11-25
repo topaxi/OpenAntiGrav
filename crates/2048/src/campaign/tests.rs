@@ -589,3 +589,29 @@ fn map_roles_walk_the_chain_then_the_branches_and_leave_the_rest_alone() {
     );
     assert_eq!(role_of("Feisar - P Ship Challenge"), Some(MapRole::Side));
 }
+
+#[test]
+fn an_elimination_score_bar_is_the_players_score() {
+    let rule = |target| ObjectiveRule {
+        objective_type: Some(objective_type::BEAT_VALUE),
+        target: Some(target),
+    };
+    let objectives = EventObjectives {
+        kind: EventKind::Elimination,
+        pass: rule(50),
+        elite: rule(100),
+    };
+    let tier = |score| {
+        evaluate_tier(
+            &objectives,
+            &EventOutcome {
+                score,
+                ..EventOutcome::default()
+            },
+        )
+    };
+    assert_eq!(
+        (tier(49), tier(50), tier(100)),
+        (None, Some(Tier::Pass), Some(Tier::Elite))
+    );
+}

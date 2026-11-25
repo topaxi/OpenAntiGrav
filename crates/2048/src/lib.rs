@@ -92,13 +92,24 @@ pub const TITLE: &Title = &Title {
     front_end: Some(frontend::FRONT_END),
     hud: hud::LAYOUTS,
     hud_art: hud::ART,
-    eliminator: oag_title::pre_race::Sourced::inherited(
-        oag_title::eliminator::EliminatorRule::Kills,
-        "Wipeout Pulse",
+    // HD's awards, read in this title's own executable
+    // (`docs/ghidra/functions/ps3-hdfury-eu/eliminator-score.md`, "Other titles"). There is no
+    // Racebox slider; 200 is what the Elimination manager's constructor writes as its target.
+    eliminator: oag_title::pre_race::Sourced::measured(
+        oag_title::eliminator::EliminatorRule::Score(oag_title::eliminator::ScoreRule {
+            damage: 0.1,
+            kill: 20.0,
+            lap: 5.0,
+            death: 5.0,
+            target: oag_title::eliminator::ScoreTarget::Fixed(200),
+        }),
     ),
-    // The executable has it, off `<Misc eliminator_flip_time>` per craft and class; not wired
+    // Read in this title's own executable: `pi` over the craft's `<Misc eliminator_flip_time>`,
+    // `0.2` where the file authors none
     // (`docs/ghidra/functions/ps3-hdfury-eu/eliminator-flip.md`, "Per title").
-    eliminator_flip: oag_title::pre_race::Sourced::chosen(None),
+    eliminator_flip: oag_title::pre_race::Sourced::measured(Some(
+        oag_title::eliminator::FlipRule { seconds: 0.2 },
+    )),
     teams: race::TEAM_IDENTITIES,
     loyalty: Some(oag_title::loyalty::LoyaltyEarning {
         law: oag_title::loyalty::LoyaltyLaw::Hd,
@@ -121,7 +132,10 @@ pub const TITLE: &Title = &Title {
         "/data/tex/smoke_trails_frame1_alpha.gxt",
         oag_title::Origin::InheritedFrom("Wipeout HD"),
     )),
-    weapon_pad_glow: &oag_title::weapon_pad::WeaponPadGlow::Authored,
+    // Read in this title's own executable (`docs/rendering/pads.md`, "2048 and Omega").
+    weapon_pad_glow: &oag_title::weapon_pad::WeaponPadGlow::ByClass(
+        oag_title::weapon_pad::ClassCycles::LINEAGE,
+    ),
     flare: &oag_title::flare::Flare::PerTeam(oag_title::flare::Authored {
         stem: "engineflare",
         always: "EF_Main",

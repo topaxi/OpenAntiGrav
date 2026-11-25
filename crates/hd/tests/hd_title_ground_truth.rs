@@ -174,6 +174,22 @@ fn the_team_roster_matches_the_disc_and_the_variants_are_left_out() {
         base, listed,
         "teams plus mode ships should be every base id"
     );
+
+    let mut archives = archives;
+    no_craft_authors_a_flip_time(&mut archives, &ships);
+}
+
+/// HD's executable turns at a fixed `5 pi`, and no craft of its own authors the time 2048 and
+/// Omega read off the handling file, so reading it everywhere changes nothing on HD
+/// (`docs/ghidra/functions/ps3-hdfury-eu/eliminator-flip.md`, "Per title").
+fn no_craft_authors_a_flip_time(archives: &mut oag_assets::Archives, ships: &[&str]) {
+    for ship in ships {
+        let name = format!(r"Data\Ships\{ship}\handlingstats.xml");
+        let blob = archives.read_name(&name).expect("the handling file");
+        let text = String::from_utf8_lossy(&blob);
+        assert!(text.contains("<Stats"), "{name} is not plain XML");
+        assert!(!text.contains("eliminator_flip_time"), "{name}");
+    }
 }
 
 /// **The seven archives overlap, and the search order therefore decides which

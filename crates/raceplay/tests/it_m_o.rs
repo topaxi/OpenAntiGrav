@@ -32,6 +32,7 @@ mod omega_2048_era_craft_ground_truth;
 mod omega_2048_shield_colour_ground_truth;
 mod omega_assist_hud_ground_truth;
 mod omega_countdown_ground_truth;
+mod omega_eliminator_ground_truth;
 mod omega_font_scale_ground_truth;
 mod omega_hud_ground_truth;
 mod omega_lightmap_ground_truth;
