@@ -336,10 +336,14 @@ impl Session {
         // armed for this thread until `resolve` or `abandon` below. **Not with further windows
         // open**: their passes are recorded into encoders this one is not submitted after, so
         // a pair resolved here could be read before its pass has run.
-        if self.screens.is_empty()
-            && let Some(timer) = self.pass_stamps.as_mut()
-        {
-            timer.begin(self.frame_index);
+        if self.screens.is_empty() {
+            if let Some(timer) = self.pass_stamps.as_mut() {
+                timer.begin(self.frame_index);
+            }
+        } else {
+            // No claim, so no readings: what was last measured must not linger in the rows
+            // and in `OTHER`.
+            self.pass_costs.stalled(self.frame_index);
         }
         // Read before the match, which borrows `self.stage` mutably.
         let pvs_culling = self.pvs_culling();
@@ -594,6 +598,7 @@ impl Session {
                 // still held the HUD's: no per-pass rows while split.
                 if !timed && let Some(timer) = self.pass_stamps.as_mut() {
                     timer.abandon();
+                    self.pass_costs.stalled(self.frame_index);
                 }
                 (Some(stats), None)
             }

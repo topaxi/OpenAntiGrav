@@ -239,10 +239,14 @@ not inside `SCENE`'s pass or one of the chains above takes a pass-boundary
 timestamp pair of its own (`RenderPassTimestampWrites`, valid on tile-based
 GPUs, unlike a timestamp between draws), and its label names the row. The rows,
 in the overlay's order: `GLASS` (the behind-the-glass and sea reflection
-target), `SHADOW MAP`, `SELF SHADOW`, `OCCLUSION`, `PROBE BLEND`, `PS2 BLOOM`,
-`PSP BLOOM`, `SMAA`, `FXAA`, `FSR1`, `HD ZOOM`, `OMEGA TONEMAP`,
-`WO COMPOSITE`, `PHOTO FX`, `COMPOSITE`, `BLIT` (the plain upscale pass) and
-`HUD AND UI`. Passes that share a label (the shadow map is one pass per layer)
+target), `ADVERT CARDS`, `DISTORT`, `SHADOW MAP`, `SELF SHADOW`, `OCCLUSION`,
+`PROBE BLEND`, `LENS FLARE`, `PS2 BLOOM`, `PSP BLOOM`, `SMAA`, `FXAA`, `FSR1`,
+`FSR3 CLEAR`, `HD ZOOM`, `OMEGA TONEMAP` (its bloom too), `WO COMPOSITE`,
+`PHOTO FX`, `COMPOSITE`, `BLIT` (the plain upscale pass), `BACKDROP` and
+`MENU SCENE` (the front end's) and `HUD AND UI` (the HUD, its countdown and
+glow mask, the menus, this overlay). **On HD the grade and encode are the last
+pass of `BLOOM`'s chain**, so they are in `BLOOM` and have no row of their own
+(one attribution per pass). Passes that share a label (the shadow map is one pass per layer)
 are summed, a pass that did not run in a frame costs that frame zero, and a
 row under 0.1 ms is left off the overlay and kept in the frame log. A pass
 recorded on another thread (each view of a split screen) is not timed, so a

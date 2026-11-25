@@ -456,6 +456,7 @@ impl Cards {
             }
             card.drawable.write_anims(queue, seconds);
             card.drawable.write_node_anims(queue, seconds);
+            let stamp = oag_gpu::timing::stamp("advert card");
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("advert"),
                 color_attachments: &[
@@ -491,7 +492,7 @@ impl Cards {
                     }),
                     stencil_ops: None,
                 }),
-                timestamp_writes: None,
+                timestamp_writes: stamp.as_ref().map(oag_gpu::timing::Stamp::render_writes),
                 occlusion_query_set: None,
                 multiview_mask: None,
             });

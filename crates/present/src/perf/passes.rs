@@ -19,24 +19,30 @@ const WINDOW: usize = 120;
 /// Prefixes rather than whole labels because the shared full-screen pass helper stamps with
 /// each pass's own label (the PSP bloom's lanes are several), and a row is a *group* of
 /// passes. The PS2 prefix comes before the PSP one it contains.
-const ROWS: [(&str, &str); 17] = [
+const ROWS: &[(&str, &str)] = &[
     ("glass", "GLASS"),
+    ("advert card", "ADVERT CARDS"),
+    ("psys distort", "DISTORT"),
     ("shadow map", "SHADOW MAP"),
     ("self shadow", "SELF SHADOW"),
     ("shadow occlusion", "OCCLUSION"),
     ("probe blend", "PROBE BLEND"),
+    ("lens flare", "LENS FLARE"),
     ("ps2 bloom", "PS2 BLOOM"),
     ("bloom", "PSP BLOOM"),
     ("smaa", "SMAA"),
     ("fxaa", "FXAA"),
     ("fsr1", "FSR1"),
+    ("fsr3 clear", "FSR3 CLEAR"),
     ("hd zoom", "HD ZOOM"),
-    ("omega tonemap", "OMEGA TONEMAP"),
+    ("omega", "OMEGA TONEMAP"),
     ("wo composite", "WO COMPOSITE"),
     ("photo fx", "PHOTO FX"),
     ("composite", "COMPOSITE"),
     ("blit", "BLIT"),
-    ("hud and ui", "HUD AND UI"),
+    ("backdrop", "BACKDROP"),
+    ("menu scene", "MENU SCENE"),
+    ("hud", "HUD AND UI"),
 ];
 
 /// The row a label belongs to: its position in the overlay's order and its name, or `None` for a

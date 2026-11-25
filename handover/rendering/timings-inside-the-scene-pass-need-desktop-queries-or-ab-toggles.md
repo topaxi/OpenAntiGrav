@@ -10,6 +10,11 @@ difficulty: medium (60)
 
 # What happens inside the scene pass cannot be timed on a tiler by timestamps
 
+Every pass the frame loop encodes on its own thread is timed (the `ROWS` table in
+`crates/present/src/perf/passes.rs` names them). Still untimed besides the inside of `SCENE`:
+passes recorded on another thread (each view of a split screen, a race with further windows) and
+the FSR3 readback harness, which only tests run.
+
 Every separately-encoded pass now has its own overlay row and frame-log field
 (`docs/rendering/dynamic-resolution.md`, "Every other pass has a row of its own"). What stays
 untimed is the inside of `SCENE`: the race is **one render pass** holding the sky, the track, its

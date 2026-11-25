@@ -312,3 +312,58 @@ fn a_pass_that_did_not_run_costs_the_frame_nothing() {
     costs.record_frame(3, &[("glass", 0.002)]);
     assert!((costs.rows().total() - 0.002).abs() < 1e-6);
 }
+
+/// Every label a pass site stamps, or hands the shared pass helper, belongs to a named row: one
+/// that did not would be drawn under its lowercase label, and `MAX_ROWS` would be spent on it.
+///
+/// Reads the sources: a label is a string literal at the site, and this is the one place that
+/// can see all of them. The helper-fed labels (`pass::draw` and friends) are listed by hand
+/// because their literal sits a call away from the stamp.
+#[test]
+fn every_stamped_label_has_a_row() {
+    let crates = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+    let mut labels: Vec<String> = [
+        "bloom bright",
+        "bloom blur x",
+        "bloom composite",
+        "ps2 bloom composite",
+        "wo composite gate",
+        "wo composite blur",
+        "wo composite clear",
+        "omega tonemap luma",
+        "omega tonemap halve",
+        "omega tonemap apply",
+        "omega tonemap clear",
+        "omega bloom bright",
+    ]
+    .map(String::from)
+    .to_vec();
+    let mut stack = vec![crates];
+    while let Some(dir) = stack.pop() {
+        for entry in std::fs::read_dir(&dir).expect("a crate directory") {
+            let path = entry.expect("an entry").path();
+            if path.is_dir() {
+                if path.file_name().is_some_and(|name| name != "target") {
+                    stack.push(path);
+                }
+            } else if path.extension().is_some_and(|ext| ext == "rs")
+                && !path.to_string_lossy().contains("tests")
+                && let Ok(text) = std::fs::read_to_string(&path)
+            {
+                for part in text.split("timing::stamp(\"").skip(1) {
+                    labels.push(part.split('"').next().expect("a closing quote").to_string());
+                }
+            }
+        }
+    }
+    assert!(
+        labels.len() > 30,
+        "found only {labels:?}: the scan stopped matching"
+    );
+    for label in labels {
+        let mut rows = PassRows::default();
+        rows.add(Box::leak(label.clone().into_boxed_str()), 0.001);
+        let name = rows.ordered()[0].0.to_string();
+        assert_ne!(name, label, "`{label}` has no row in perf/passes.rs's ROWS");
+    }
+}
