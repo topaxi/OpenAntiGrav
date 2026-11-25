@@ -935,6 +935,60 @@ compare-page race pairs are pixel-identical (0 pixels differ): Pulse PSP `talons
 Moa Therma, Ubermall, Chenghou and Modesto included: none of their poses frames the sea). The target
 is built only on an HD circuit whose sea draws under `original`, and the sea is the only reader.
 
+### The reflection target's resolution (2026-11-25, `glass-target-scale`)
+
+**What it is.** The row REFLECTION RESOLUTION, `[render_profiles.<title>] reflection_resolution`,
+`--reflection-resolution`, per title and read when a race loads its circuit (`oag_display::display::ReflectionResolution`).
+It sizes the one screen-space target a circuit's glass or sea reads: HD's behind-the-glass target
+(Vineta K, 640 x 360) and its planar sea reflection (Moa Therma and Ubermall draw reflected chunks,
+Chenghou and Modesto hold the sky alone; 960 x 540), and 2048's and Omega's refraction target
+(`psp2::refraction_only::target_size`, 480 x 272 and 960 x 540). `original` is the default and keeps
+those fixed sizes. `scaled` is the original's size times `render_scale`, per axis, rounded, never above
+the original's (a render scale over 100 buys no sharper glass), at least one texel. A function of the
+scale alone, not of the window, so one scale builds the same target on every machine; dynamic resolution
+does not move it (it is sized once, at the race load, from the ceiling scale). Chosen, not measured: the
+original's target is half its 1280x720 output per axis whatever the player does, so `scaled` is a
+departure for speed, with a coarser view through the glass and in the sea. The row is dropped where no
+target is drawn (`oag_title::Looks::screen_space_target`: Pulse and Pure).
+
+**Where.** One call site: `oag_raceplay::load::view` rescales `BehindGlassModels::size` right after
+`geometry::track_model` returns, so all three branches (HD glass, HD sea, psp2) share it, and a circuit
+with no target has nothing to resize. The loader report says the new size when it differs.
+
+**Byte identity under the default.** HD Vineta K (the pose of `hd_behind_glass_frame_ground_truth`) and
+Moa Therma (the pose of "Against the original, one sea pose"), 960x544, `--render-scale 100` and `50`,
+`--screen-filter off --motion-blur off --msaa off`: the pixel data (the PNG's IDAT) of main and of this
+change is identical in all four frames. The PNG's text chunk gains one line (`reflection_resolution =
+"original"`), as the shot's recorded render profile does for every setting. `scaled` at render scale 100
+is pixel-identical to `original`; at 50 it moves 72,348 of 2,089,504 pixel bytes on Vineta K and 145,781
+on Moa Therma, inside the glass and the sea, and nowhere shifted or offset (looked at, both frames).
+
+**Sizes** (`hd_reflection_resolution_ground_truth`, one load per test): Vineta K 640 x 360 under
+`original` at 100 and 50, 640 x 360 `scaled` at 100, 320 x 180 `scaled` at 50; Moa Therma 960 x 540,
+960 x 540, 960 x 540, 480 x 270. At 25: 160 x 90 and 480 x 270 / 240 x 135 (unit test).
+
+**GPU cost on a desktop** (`OAG_RENDER_GPU_BENCH=200`, the `behind the glass` span, 1920x1080, RX 7800 XT
+(RADV), tick 240 on Vineta K and 572 on Moa Therma, two runs each, medians; load average 7 to 30 from
+other members, the two arms interleaved):
+
+| Circuit | Render scale | `original` | `scaled` |
+| --- | ---: | ---: | ---: |
+| Vineta K | 50 | 115.8 / 115.1 us | 66.2 / 66.6 us (73,396 fragments) |
+| Vineta K | 100 | 115.6 / 115.8 us | 114.6 / 116.2 us |
+| Moa Therma | 50 | 124.8 / 125.2 us | 109.2 / 109.0 us |
+| Moa Therma | 100 | 126.1 / 124.7 us | 124.6 / 125.0 us |
+
+A discrete desktop GPU spends a tenth of a millisecond on the target; the whole race pass is about 480 us
+there. The setting exists for a phone: the S21 pays 10.6 ms for the Vineta K glass at render scale 25
+(`docs/tools/android.md`, "Where an HD frame goes on the S21"). Phone numbers for each circuit are open.
+
+**Open: the Android default.** The default is `original` everywhere. Whether the Android build should
+default a phone to `scaled` is the maintainer's call, to be made after the phone numbers.
+
+**2048 and Omega.** Same call site and law, so checked, applies, wired; the size law is unit-tested and
+the title rule is pinned by the menu test, but no disc-backed test loads a 2048 or Omega circuit under
+`scaled` (HD's two circuits above are the disc-backed rows).
+
 ## Enhanced: this project's own water on Pulse and Pure
 
 2026-11-17, lane `water-enhanced`. **Chosen, not measured, everywhere but the shape of the
@@ -1063,7 +1117,7 @@ frame of Omega's own sea was taken (shadPS4 was not run in this lane).
    read off live frames", with the recipe for these). The planar reflection is drawn
    ("The planar reflection, drawn"); left from it: who fills the reflect list and how it is
    culled, the refract job's content below `h` on a sea circuit, the 5-6-5 quantisation, and the
-   target's frame cost at 800p, 1080p and 4K (not measured).
+   target's frame cost at 800p and 4K (1080p on a desktop: "The reflection target's resolution").
 2. Vostok Reef on PCSX2 or PPSSPP (with the download pack): a frame of the
    caustic pass to compare against ours (batch state `0x202`'s blend is read: additive by alpha).
 4. Omega: what `reflectProject` holds (the program hands it `eye - P`), `distortion`, and the
