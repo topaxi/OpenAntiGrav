@@ -155,6 +155,35 @@ override emissive_rows: u32 = 1u;
 // alone, and so kept every title's program branches. 1.0, the table deciding, by default.
 override programs_present: f32 = 1.0;
 
+// **Which row kinds the table holds** (`mesh_render::specialise::row_codes`): bit `k` of
+// `program_codes` is set where some row's program (`scale.z`) is nearest `k`, of `rate_codes`
+// where some row's rate (`scale.y`) is; bit 31 stands for every value from 30.5 up. A kind test
+// goes through [`program_in`], [`rate_in`] or [`rate_from`], which also ask the bit, so a kind no
+// row carries is a constant `false` and the driver drops its branch. All bits, the table
+// deciding, by default.
+override program_codes: u32 = 4294967295u;
+override rate_codes: u32 = 4294967295u;
+
+// The bits `lo` to `hi` of a code mask.
+fn code_bits(lo: u32, hi: u32) -> u32 {
+    return (0xffffffffu >> (31u - hi)) & (0xffffffffu << lo);
+}
+
+// Whether a row's program `v` is a code from `lo` to `hi`: `v > lo - 0.5 && v < hi + 0.5`.
+fn program_in(v: f32, lo: u32, hi: u32) -> bool {
+    return (program_codes & code_bits(lo, hi)) != 0u && v > f32(lo) - 0.5 && v < f32(hi) + 0.5;
+}
+
+// Whether a row's rate `v` is a code from `lo` to `hi`: `v > lo - 0.5 && v < hi + 0.5`.
+fn rate_in(v: f32, lo: u32, hi: u32) -> bool {
+    return (rate_codes & code_bits(lo, hi)) != 0u && v > f32(lo) - 0.5 && v < f32(hi) + 0.5;
+}
+
+// Whether a row's rate `v` is a code `lo` or above: `v > lo - 0.5`.
+fn rate_from(v: f32, lo: u32) -> bool {
+    return (rate_codes & code_bits(lo, 31u)) != 0u && v > f32(lo) - 0.5;
+}
+
 fn emissive_scale(entry: u32) -> vec4<f32> {
     if emissive_rows == 0u {
         return vec4<f32>(0.0);
