@@ -183,6 +183,7 @@ impl Pending {
             scene_precision: oag_display::display::ScenePrecision::default(),
             circuit_lighting: oag_display::display::CircuitLighting::default(),
             reflection_resolution: oag_display::display::ReflectionResolution::default(),
+            reflection_timed: None,
             foreign_track: self
                 .foreign_entry
                 .as_ref()
@@ -193,6 +194,7 @@ impl Pending {
             recorded_mods: None,
             // Filled at launch (`crate::texture_pack::attach`), from the packs on then.
             find_texture_packs: None,
+            no_overrides: false,
             // Passed straight through like `track` above, `None` included:
             // `race::load` resolves an unnamed team from the title it opened,
             // which is the only place the title is known. See

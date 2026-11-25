@@ -314,6 +314,7 @@ impl Maps {
         self.staged.stage(layer, matrix * track.model);
         let sun = fit.towards_light.normalize_or_zero();
 
+        let stamp = oag_gpu::timing::stamp("shadow occlusion");
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("sun occlusion map"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -326,7 +327,7 @@ impl Maps {
                 },
             })],
             depth_stencil_attachment: None,
-            timestamp_writes: None,
+            timestamp_writes: stamp.as_ref().map(oag_gpu::timing::Stamp::render_writes),
             occlusion_query_set: None,
             multiview_mask: None,
         });
@@ -408,6 +409,7 @@ impl Maps {
         self.drawn[layer] = 0;
         self.matrices[layer] = Mat4::IDENTITY;
         self.self_shadow.clear(encoder, layer);
+        let stamp = oag_gpu::timing::stamp("shadow occlusion");
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("sun occlusion map clear"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -420,7 +422,7 @@ impl Maps {
                 },
             })],
             depth_stencil_attachment: None,
-            timestamp_writes: None,
+            timestamp_writes: stamp.as_ref().map(oag_gpu::timing::Stamp::render_writes),
             occlusion_query_set: None,
             multiview_mask: None,
         });

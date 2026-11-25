@@ -461,6 +461,7 @@ impl PhotoFx {
                         group: &wgpu::BindGroup,
                         target: &wgpu::TextureView,
                         rect: (f32, f32, f32, f32)| {
+            let stamp = oag_gpu::timing::stamp("photo fx");
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some(label),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -474,7 +475,7 @@ impl PhotoFx {
                     },
                 })],
                 depth_stencil_attachment: None,
-                timestamp_writes: None,
+                timestamp_writes: stamp.as_ref().map(oag_gpu::timing::Stamp::render_writes),
                 occlusion_query_set: None,
                 multiview_mask: None,
             });

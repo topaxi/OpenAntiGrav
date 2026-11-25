@@ -836,6 +836,7 @@ fn full_pass<'a>(
     view: &wgpu::TextureView,
     clear: bool,
 ) -> wgpu::RenderPass<'a> {
+    let stamp = oag_gpu::timing::stamp("backdrop");
     encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
         label: Some(label),
         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -852,7 +853,7 @@ fn full_pass<'a>(
             },
         })],
         depth_stencil_attachment: None,
-        timestamp_writes: None,
+        timestamp_writes: stamp.as_ref().map(oag_gpu::timing::Stamp::render_writes),
         occlusion_query_set: None,
         multiview_mask: None,
     })

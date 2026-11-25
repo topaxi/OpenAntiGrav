@@ -250,8 +250,8 @@ pub enum Sights {
         /// `None` where only the layout is known and the widgets draw as authored.
         ///
         /// Wipeout HD (`docs/ghidra/functions/ps3-hdfury-eu/hud-sight.md`,
-        /// "Measured live"). 2048 and Omega author the same widget names and
-        /// have not been read.
+        /// "Measured live"). 2048 and Omega author the same widget names, have not been
+        /// read, and inherit HD's (`oag_hd::hud::LIVE_SIGHT`).
         live: Option<LiveSight>,
     },
     /// This title's reticle has not been read.

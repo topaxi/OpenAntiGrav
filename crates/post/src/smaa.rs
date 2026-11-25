@@ -539,6 +539,7 @@ fn clear_pass<'a>(
     view: &wgpu::TextureView,
     viewport: (u32, u32),
 ) -> Pass<'a> {
+    let stamp = oag_gpu::timing::stamp("smaa");
     let mut pass = Pass(encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
         label: Some(label),
         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -551,7 +552,7 @@ fn clear_pass<'a>(
             },
         })],
         depth_stencil_attachment: None,
-        timestamp_writes: None,
+        timestamp_writes: stamp.as_ref().map(oag_gpu::timing::Stamp::render_writes),
         occlusion_query_set: None,
         multiview_mask: None,
     }));

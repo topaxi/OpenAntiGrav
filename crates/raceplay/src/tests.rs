@@ -640,9 +640,29 @@ pub(super) fn title_sighting(pulse: bool) -> Sighting {
     sighting_of(if pulse {
         oag_pulse::hud::ART.sights
     } else {
-        oag_2048::hud::ART.sights
+        UNREAD_CONCENTRIC
     })
 }
+
+/// HD's concentric reticle with no run-time reading (`live: None`): the Missile's law for every
+/// weapon and the authored ring sizes. No shipped title is left like this (2048 and Omega
+/// inherit HD's reading), so the fallback is built here.
+const UNREAD_CONCENTRIC: &oag_title::hud::Sights = &oag_title::hud::Sights::Concentric {
+    seeking: &[
+        "MissileSightBG",
+        "MissileSightOuter",
+        "MissileSightInner",
+        "MissileSightMiddle",
+    ],
+    locked: &["MissileSightLockedOnLines", "MissileSightLockedOnMiddle"],
+    leach: Some([
+        "LeachBeamSightBG",
+        "LeachBeamSightOuter",
+        "LeachBeamSightMiddle",
+        "LeachBeamSightInner",
+    ]),
+    live: None,
+};
 
 /// A weapon table with one Turbo in it, weighted for a human.
 ///

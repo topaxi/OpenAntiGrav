@@ -146,8 +146,11 @@ law, and its centre chase on HD keeps the Missile's unscaled step in ours. Open.
   `r22` was not traced.
 - The distance dependence of the seeking size; the `Middle` growth before it hides; the sound, if any, at the lock; the
   alpha ramp of `Outer` and `Middle` before they are full (ours multiplies the law's own alpha).
-- **2048 and Omega**: same widget names (`Sights::Concentric` rows), checked, applies, not wired: `live: None` there, so
-  their chase gain stays `1.0`. Their updates are not located: the bind functions are `FUN_81158d88` (2048 v1.04) and
+- **2048 and Omega**: same widget names (`Sights::Concentric` rows), checked, applies, **inherited from HD
+  (2026-11-25, maintainer: "inherit by lineage")**: both now run `oag_hd::hud::LIVE_SIGHT` (gain `4.0`, HD's extent units),
+  unmeasured on either. Before that they had `live: None` and a chase gain of `1.0`, and Omega was reported not to show
+  a Missile lock. On 2048 the inheritance is the weaker one: its HUD grid is not HD's, so the extent units may draw
+  the rings at the wrong size. Their updates are not located: the bind functions are `FUN_81158d88` (2048 v1.04) and
   `FUN_0126c020` (Omega), the sight widgets' offsets are read there, and a search for the PSP's `0.12` literal
   (`8f c2 f5 3d`) turns up no function that reads the sight's widget offsets (Omega's only xref'd hit is `FUN_016372a0`, a
   10 KB render function). Omega draws HD's `1920 x 1080` HUD space, so the same `4.0` is the expectation there; 2048's grid is

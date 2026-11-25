@@ -12,9 +12,10 @@
 //!
 //! # The reading, and why it is an upper bound rather than a measurement
 //!
-//! `frame - (scene + blur + bloom + fsr3)` is already computed every frame for
-//! the `dev` overlay's `OTHER` row - see [`crate::perf::GpuCost::residual_ms`].
-//! It is the real per-machine number, and it is **contaminated by sleep**: a
+//! `frame - (scene + blur + bloom + fsr3)` is the number the `dev` overlay's `OTHER` row
+//! shows less the passes it times separately - see [`crate::perf::GpuCost::residual_ms`]
+//! and `GpuCost::passes`, which the controller's cost does not carry. It is the real
+//! per-machine number, and it is **contaminated by sleep**: a
 //! paced loop sleeps to its vsync or its frame limit whenever there is
 //! headroom, so a comfortable frame's wall clock reads as the target period
 //! however little work it did. That is the whole of

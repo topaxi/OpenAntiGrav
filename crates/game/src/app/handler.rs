@@ -473,6 +473,13 @@ impl App {
         let blur_timer = oag_gpu::timing::PassTimer::new(&gpu.device, &gpu.queue);
         // And a fourth - see `Session::hd_bloom_cost`.
         let hd_bloom_timer = oag_gpu::timing::PassTimer::new(&gpu.device, &gpu.queue);
+        // And one that holds a frame's every labelled pass, which the overlay and the frame
+        // log show as rows of their own and the controller never reads.
+        let pass_stamps = oag_gpu::timing::PassTimer::with_passes(
+            &gpu.device,
+            &gpu.queue,
+            crate::app::session::PASS_STAMPS,
+        );
         debug!(
             "GPU timing: {}",
             if pass_timer.is_some() {
@@ -508,6 +515,9 @@ impl App {
             scene_cost: perf::Meter::new(),
             drs: oag_present::drs::Controller::new(),
             pass_timer,
+            pass_stamps,
+            pass_costs: perf::PassCosts::new(),
+            pass_scratch: Vec::new(),
             upscale_cost: perf::ChainCost::new(),
             upscale_timer,
             upscale_presented_cost: perf::ChainCost::new(),
@@ -515,6 +525,8 @@ impl App {
             blur_cost: perf::ChainCost::new(),
             blur_timer,
             blur_drawn: Default::default(),
+            reflection_drawn: Default::default(),
+            reflection_race: None,
             hd_bloom_cost: perf::ChainCost::new(),
             hd_bloom_timer,
             cpu_cost: perf::Meter::new(),
@@ -1009,7 +1021,9 @@ impl ApplicationHandler for App {
                     event.state == ElementState::Pressed,
                     event.repeat,
                 ) {
-                    session.toggle_window_fullscreen(id);
+                    if crate::app::window::fullscreen_may_change(session.benchmark_running()) {
+                        session.toggle_window_fullscreen(id);
+                    }
                     return;
                 }
                 // **`repeat` matters now that escape navigates.** winit resends

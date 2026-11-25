@@ -187,6 +187,7 @@ impl SceneBackdrop {
 
         // 1. The scene, on white. `Preview` loads the colour it is given, so the
         // clear is its own pass.
+        let stamp = oag_gpu::timing::stamp("menu scene");
         drop(encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("scene clear"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -199,7 +200,7 @@ impl SceneBackdrop {
                 },
             })],
             depth_stencil_attachment: None,
-            timestamp_writes: None,
+            timestamp_writes: stamp.as_ref().map(oag_gpu::timing::Stamp::render_writes),
             occlusion_query_set: None,
             multiview_mask: None,
         }));
@@ -261,6 +262,7 @@ impl SceneBackdrop {
                     pipeline: &wgpu::RenderPipeline,
                     bind: &wgpu::BindGroup,
                     target: &wgpu::TextureView| {
+            let stamp = oag_gpu::timing::stamp("menu scene");
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some(label),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -273,7 +275,7 @@ impl SceneBackdrop {
                     },
                 })],
                 depth_stencil_attachment: None,
-                timestamp_writes: None,
+                timestamp_writes: stamp.as_ref().map(oag_gpu::timing::Stamp::render_writes),
                 occlusion_query_set: None,
                 multiview_mask: None,
             });

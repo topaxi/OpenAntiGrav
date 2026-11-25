@@ -15,7 +15,7 @@
 
 use crate::settings;
 use log::{debug, trace, warn};
-use oag_present::drs;
+use oag_present::{drs, perf};
 
 use crate::app::stage::Stage;
 
@@ -168,36 +168,54 @@ pub(crate) fn assemble(
 }
 
 /// Whether each recent frame encoded the motion-blur chain, kept so its reading, which lands a
-/// frame or more later, can be told "did not run" from "was not measured" ([`Expects::blur`]).
+/// frame or more later, can be told "did not run" from "was not measured" ([`Expects::blur`]);
+/// and, as `Drawn<Option<ReflectionResolution>>`, the step each frame drew the glass and sea
+/// target at under `auto`, so a glass reading is credited to the step it was drawn at.
 ///
 /// **Per frame, not the setting**: the chain encodes nothing at `off`, before its scratch
 /// targets exist or when its shaders failed to build, and a setting that names a chain that will
 /// never be timed would skip every frame and freeze the controller. A frame this has forgotten
 /// reads as drawn, a skipped frame rather than a cheap one; it holds four times the readings a
 /// ring can have in flight, so a reading still to come is never that old.
-#[derive(Clone, Copy, Debug, Default)]
-pub(crate) struct Drawn {
-    frames: [Option<(u64, bool)>; Self::FRAMES],
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct Drawn<T: Copy = bool> {
+    frames: [Option<(u64, T)>; DRAWN_FRAMES],
 }
 
-impl Drawn {
-    const FRAMES: usize = 4 * oag_gpu::timing::PassTimer::SLOTS;
+/// How many frames [`Drawn`] remembers.
+const DRAWN_FRAMES: usize = 4 * oag_gpu::timing::PassTimer::SLOTS;
 
-    /// Records whether the chain encoded on `frame`.
-    pub(crate) fn mark(&mut self, frame: u64, drawn: bool) {
+impl<T: Copy> Default for Drawn<T> {
+    fn default() -> Self {
+        Self {
+            frames: [None; DRAWN_FRAMES],
+        }
+    }
+}
+
+impl<T: Copy> Drawn<T> {
+    /// Records what `frame` drew.
+    pub(crate) fn mark(&mut self, frame: u64, drawn: T) {
         self.frames[Self::slot(frame)] = Some((frame, drawn));
     }
 
-    /// Whether the chain encoded on `frame`, `true` once that frame is forgotten.
-    pub(crate) fn drawn(&self, frame: u64) -> bool {
+    /// What `frame` drew, or `None` once that frame is forgotten.
+    pub(crate) fn get(&self, frame: u64) -> Option<T> {
         match self.frames[Self::slot(frame)] {
-            Some((marked, drawn)) if marked == frame => drawn,
-            _ => true,
+            Some((marked, drawn)) if marked == frame => Some(drawn),
+            _ => None,
         }
     }
 
     fn slot(frame: u64) -> usize {
-        (frame % Self::FRAMES as u64) as usize
+        (frame % DRAWN_FRAMES as u64) as usize
+    }
+}
+
+impl Drawn<bool> {
+    /// Whether the chain encoded on `frame`, `true` once that frame is forgotten.
+    pub(crate) fn drawn(&self, frame: u64) -> bool {
+        self.get(frame).unwrap_or(true)
     }
 }
 
@@ -504,6 +522,10 @@ impl Session {
             }
             readings
         };
+        self.read_pass_stamps();
+        // Before the controller records this frame's cost, so a reflection step it is about to
+        // take holds the extent on the same frame (`drs::reflection`).
+        self.feed_reflection(frame_seconds, drs_limits);
         let scene_readings = drain(&mut self.pass_timer, &self.gpu.device);
         let blur_readings = drain(&mut self.blur_timer, &self.gpu.device);
         let hd_bloom_readings = drain(&mut self.hd_bloom_timer, &self.gpu.device);
@@ -587,6 +609,73 @@ impl Session {
             );
         }
         self.feed_windows(render_profile, frame_seconds, drs_limits);
+    }
+
+    /// What the labelled passes cost, drained into the overlay's and the frame log's means.
+    ///
+    /// **Not an input to the controller**: nothing here reaches [`assemble`] or `drs::Cost`, so
+    /// the resolution controller is fed what it was before these rows existed.
+    fn read_pass_stamps(&mut self) {
+        let Some(timer) = self.pass_stamps.as_mut() else {
+            return;
+        };
+        timer.drain_labelled(&self.gpu.device, &mut self.pass_scratch);
+        record_passes(&mut self.pass_costs, &self.pass_scratch, self.stall_frame);
+    }
+
+    /// The newest drained frame drawn at the reflection rung's step, its glass pass and every
+    /// timed pass of it, into the rung, with this frame's wall clock and budget. Only under
+    /// REFLECTION RESOLUTION `auto` in a race whose circuit draws a glass or sea target; a
+    /// device with no timestamps never has a reading, so `auto` stays at the original's size.
+    fn feed_reflection(&mut self, frame_seconds: Option<f32>, drs_limits: drs::Limits) {
+        let Some(frame) = frame_seconds else {
+            return;
+        };
+        let Stage::Race(stage) = &self.stage else {
+            return;
+        };
+        if stage.scene.reflection_target_size().is_none()
+            || !self.render_profile().reflection_resolution.is_auto()
+        {
+            return;
+        }
+        let race = super::cpu_governor::combination(&stage.result_key);
+        if self.reflection_race != Some(race) {
+            self.reflection_race = Some(race);
+            self.drs.reset_reflection();
+            // Once a race, for the routes whose loader report could not know (`--race`).
+            if self.pass_stamps.is_none() {
+                debug!(
+                    "reflection resolution auto: nothing times a pass on this device, so the glass \
+                     and sea target stays at the original's size"
+                );
+            }
+        }
+        let step = self.drs.reflection_step();
+        let (glass, passes) = reflection_reading(&self.pass_scratch, self.stall_frame, |frame| {
+            self.reflection_drawn.get(frame) == Some(Some(step))
+        })
+        .unzip();
+        let reading = drs::reflection::Reading {
+            glass,
+            gpu: passes.map(|passes| passes + self.governor_gpu_fresh().unwrap_or(0.0)),
+            frame,
+            period: drs_limits
+                .target()
+                .period()
+                .or_else(|| self.held_hz().map(|hz| 1.0 / hz as f32)),
+        };
+        if let Some(change) = self.drs.record_reflection(reading, drs_limits) {
+            debug!(
+                "reflection resolution auto: {} to {} - glass {:.2} ms of a {:.2} ms frame, \
+                 budget {:.2} ms",
+                change.from,
+                change.to,
+                change.glass * 1000.0,
+                change.frame * 1000.0,
+                change.period * 1000.0,
+            );
+        }
     }
 
     /// One scene reading into the controller, with the other rings' readings
@@ -848,6 +937,59 @@ impl Session {
             _ => true,
         }
     }
+}
+
+/// A drained set of labelled readings into `costs`, one whole frame at a time and oldest first,
+/// dropping every frame up to `stall_frame` (a load, not a cost) and any non-positive reading.
+pub(crate) fn record_passes(
+    costs: &mut perf::PassCosts,
+    readings: &[oag_gpu::timing::PassReading],
+    stall_frame: u64,
+) {
+    let mut start = 0;
+    while start < readings.len() {
+        let frame = readings[start].frame;
+        let end = readings[start..]
+            .iter()
+            .position(|reading| reading.frame != frame)
+            .map_or(readings.len(), |offset| start + offset);
+        if frame > stall_frame {
+            let frame_readings: Vec<(&'static str, f32)> = readings[start..end]
+                .iter()
+                .filter(|reading| reading.seconds > 0.0)
+                .map(|reading| (reading.label, reading.seconds))
+                .collect();
+            costs.record_frame(frame, &frame_readings);
+        }
+        start = end;
+    }
+}
+
+/// The glass pass's seconds and every labelled pass's seconds of the newest frame in `readings`
+/// after `stall_frame` that `drawn_at_step` accepts and that timed a glass pass, or `None`.
+pub(crate) fn reflection_reading(
+    readings: &[oag_gpu::timing::PassReading],
+    stall_frame: u64,
+    drawn_at_step: impl Fn(u64) -> bool,
+) -> Option<(f32, f32)> {
+    let newest = readings
+        .iter()
+        .filter(|reading| {
+            reading.frame > stall_frame
+                && reading.label.starts_with("glass")
+                && reading.seconds > 0.0
+                && drawn_at_step(reading.frame)
+        })
+        .map(|reading| reading.frame)
+        .max()?;
+    let of_frame = readings.iter().filter(|reading| reading.frame == newest);
+    let glass = of_frame
+        .clone()
+        .filter(|reading| reading.label.starts_with("glass"))
+        .map(|reading| reading.seconds)
+        .sum();
+    let passes = of_frame.map(|reading| reading.seconds.max(0.0)).sum();
+    Some((glass, passes))
 }
 
 /// What the controller is holding back this frame, in milliseconds.

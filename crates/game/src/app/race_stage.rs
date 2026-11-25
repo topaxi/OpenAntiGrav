@@ -775,12 +775,16 @@ impl RaceStage {
         target_size: (u32, u32),
     ) -> bool {
         if let Some(done) = self.benchmark.as_ref().and_then(|live| live.done.as_ref()) {
+            let say =
+                |id: &str, english: &str| done.strings.get_or_fallback(id, english).to_string();
             let list = crate::benchmark::screen::draw_list(
                 &done.report,
                 self.scoreboard.line_height(),
                 self.scoreboard.char_width(),
                 done.focus,
                 done.saved.as_deref(),
+                &say,
+                done.view,
             );
             self.scoreboard
                 .draw_list(gpu.device(), gpu.queue(), encoder, view, &list, viewport);

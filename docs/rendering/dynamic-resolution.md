@@ -213,8 +213,9 @@ residual learns" below:
 | `hd_bloom` | `drs::Cost::scalable` | Also falls with the extent; timed as one chain the same way since ADR-0043. `Scene::has_hd_bloom` tells "ring full" from "no chain to measure" - Pulse, Pure, and an HD circuit with no `HDR and Bloom` block all have none |
 | The FSR 3.1 chain's six render-resolution dispatches | `drs::Cost::scalable` | Also fall with the extent; timed as their own compute pass (`Session::upscale_cost`) since [ADR-0045](../architecture/adr/0045-fsr3-splits-into-a-scaled-and-a-presented-reading.md) |
 | The FSR 3.1 chain's `accumulate` and `rcas` | `drs::Cost::fixed` | Timed (`Session::upscale_presented_cost`), and the one part of the frame that genuinely does not fall with the extent: both run at presentation size. Until ADR-0045 the *whole* chain was counted here, which was deliberately conservative and, on a Steam Deck where the chain costs 4-5 ms, no longer a small thumb on the scale |
-| `bloom` | The residual | Not timed. Draws at a fixed 240x136 regardless of scale, so - unlike `hd_bloom` - it does not belong in `scalable` even once it is timed |
-| FXAA, SMAA, FSR 1, the blit, the HUD, the composite, the perf overlay, AI/physics for opponents beyond the player | The residual | Presentation-resolution, driver overhead, or CPU-side work off the render-extent path entirely - permanently outside the extent's reach |
+| `bloom` (Pulse's, PS2's) | The residual | Timed for the overlay and the frame log only (`PSP BLOOM`, `PS2 BLOOM`, see "Every other pass has a row of its own"), never in `drs::Cost`. Draws at a fixed 240x136 regardless of scale, so - unlike `hd_bloom` - it does not belong in `scalable` even once it is timed |
+| FXAA, SMAA, FSR 1, the blit, the HUD, the composite, the glass and shadow passes, the probe blend, the Omega tonemap, the HD zoom, photo fx | The residual | Timed for the overlay and the frame log only; **not in `drs::Cost`** (they are presentation-resolution, fixed-size or off the extent path, or - the glass and shadow passes - not yet shown to scale with it). Their time is in the controller's residual reading all the same, which is why the overlay's `OTHER` shows less than it |
+| The perf overlay, AI/physics for opponents beyond the player | The residual | Driver overhead, or CPU-side work off the render-extent path entirely - permanently outside the extent's reach |
 
 Each pass is timed and summed rather than the encoder being bracketed
 first-to-last: bracketing would need `TIMESTAMP_QUERY_INSIDE_ENCODERS`, which is
@@ -223,13 +224,49 @@ with the bloom, motion-blur and HD-chain settings.
 
 The `dev` overlay's own GPU-cost panel - top left, separate from the
 frame-time panel at top right - prints one row per timed reading, `SCENE`,
-`BLOOM`, `BLUR`, `FSR3`, each only once it has a reading, followed by an
-`OTHER` row: `perf::Meter`'s own wall-clock frame time minus whatever the rows
-above add up to. That is the residual made visible rather than assumed - see
+`BLOOM`, `BLUR`, `FSR3`, each only once it has a reading, then **one row per
+separately-encoded pass** (below), followed by an `OTHER` row:
+`perf::Meter`'s own wall-clock frame time minus whatever the rows above add up
+to. That is the residual made visible rather than assumed - see
 `perf::GpuCost::rows` and `residual_ms`, and, for the same subtraction fed back
 into the budget instead of only printed, "The residual learns" below. Its own panel rather
 than a block inside the frame-time one, so a reader is not holding five
 numbers on one crammed line.
+
+**Every other pass has a row of its own** (`perf::PassRows`,
+`oag_gpu::timing::PassTimer::with_passes`): each render or compute pass that is
+not inside `SCENE`'s pass or one of the chains above takes a pass-boundary
+timestamp pair of its own (`RenderPassTimestampWrites`, valid on tile-based
+GPUs, unlike a timestamp between draws), and its label names the row. The rows,
+in the overlay's order: `GLASS` (the behind-the-glass and sea reflection
+target), `ADVERT CARDS`, `DISTORT`, `SHADOW MAP`, `SELF SHADOW`, `OCCLUSION`,
+`PROBE BLEND`, `LENS FLARE`, `PS2 BLOOM`, `PSP BLOOM`, `SMAA`, `FXAA`, `FSR1`,
+`FSR3 CLEAR`, `HD ZOOM`, `OMEGA TONEMAP` (its bloom too), `WO COMPOSITE`,
+`PHOTO FX`, `COMPOSITE`, `BLIT` (the plain upscale pass), `BACKDROP` and
+`MENU SCENE` (the front end's) and `HUD AND UI` (the HUD, its countdown and
+glow mask, the menus, this overlay). **On HD the grade and encode are the last
+pass of `BLOOM`'s chain**, so they are in `BLOOM` and have no row of their own
+(one attribution per pass). Passes that share a label (the shadow map is one pass per layer)
+are summed. Each row has two means over the last 120 frames. **The overlay shows the mean
+over only the frames the pass ran in**, so a pass that runs a second in every few (the HD zoom
+ring, the photo effects, the glass outside the tunnel) reads its cost and not a fraction of it;
+a row appears while the pass ran in the window and that mean is at least 0.1 ms, and goes
+when no frame of the window ran it. `OTHER` and the frame log's `pass_ms` use the **per-frame**
+mean, a pass that did not run in a frame costing that frame zero, so `frame - timed` stays
+honest (`perf::PassRows::total` against `ordered_when_run`). A row under 0.1 ms is left off the
+overlay and kept in the frame log. A pass
+recorded on another thread (each view of a split screen) is not timed, so a
+**split screen shows no per-pass rows**, and neither does a race with further
+windows. `OTHER` subtracts all of them, hidden rows included.
+
+**`OTHER` is not exactly the controller's reading any more.** The controller
+learns from `frame - drs::Cost::total()`, and `drs::Cost` stays the five
+readings it was fed before these rows (`SCENE`, `BLUR`, `BLOOM` and the two
+`FSR3` halves): the labelled passes never reach `session::timing::assemble`.
+The overlay's `OTHER` is that reading less the labelled passes' sum
+(`the_overlays_other_is_the_controllers_reading_less_the_labelled_passes`).
+What they do not time is the parts **inside** `SCENE`'s pass (track, craft,
+particles, sky, fog), which a tile-based GPU cannot split.
 
 **A `FRAME` row and three indented rows under it sit below `OTHER` since
 2026-09-07, and none of them is a GPU timestamp**: `CPU`, `PRESENT` and
@@ -250,9 +287,7 @@ three; nesting them under `OTHER` would put a visibly wrong sum on an
 instrument. And the third row is spelled `OUTSIDE` rather than `SLEEP`:
 `App::about_to_wait` only waits while the deadline is still ahead, so a loop
 already at or behind its limit takes the `Poll` branch and the same gap is
-event-loop dispatch rather than sleep. `OTHER` itself is unchanged, because it
-is the reading the controller learns from and the panel should show what the
-controller is fed. See `perf::CpuCost`.
+event-loop dispatch rather than sleep. See `perf::CpuCost`.
 
 They are **display-only** and deliberately not fed to `drs::Cost`: that type
 splits GPU cost by whether the render extent moves it, and a wall-clock
@@ -670,6 +705,20 @@ extent's ceiling, after three seconds of frames predicted to land under the dead
 `drs::blur`). The player's `motion_blur_resolution` is its ceiling, carried in
 `drs::Limits`, and it writes no setting either. Measurements and the running-race check
 are in [the half-gather blur rung](motion-blur-half-rung.md).
+
+## A third output: the reflection step (2026-11-25)
+
+REFLECTION RESOLUTION `auto` (the default) is a rung of the same controller, `drs::reflection`:
+the glass and sea target is drawn at `original`, `half` or `quarter` of its fixed size by the
+target's own timed pass (the `GLASS` row). It runs **whether or not a resolution target is on**,
+because its budget is the target's period when one runs and otherwise the rate the limiter or the
+output holds the loop to (the CPU governor's `held_hz`); with neither it is inert. While it still
+has a step to give up and wants to, an overrun **holds the extent** instead of falling, so
+reflections reach `quarter` before the render scale moves; with the glass a small share it never
+holds and the extent loop is the one it was (`a_small_share_leaves_the_extent_loop_exactly_as_it_was`).
+It restores only with the extent at its ceiling. The policy, thresholds and the phone runs are in
+[water.md](water.md), "REFLECTION RESOLUTION `auto`"; the restore patience and relapse backoff are
+the blur rung's own (`drs::patience`, shared).
 
 ## Three properties the controller does not break
 

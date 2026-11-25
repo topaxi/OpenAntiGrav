@@ -225,6 +225,7 @@ impl Fxaa {
         let Some(output) = &self.output else { return };
 
         let bind_group = self.bind_group(device, frame.source);
+        let stamp = oag_gpu::timing::stamp("fxaa");
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("fxaa"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -237,7 +238,7 @@ impl Fxaa {
                 },
             })],
             depth_stencil_attachment: None,
-            timestamp_writes: None,
+            timestamp_writes: stamp.as_ref().map(oag_gpu::timing::Stamp::render_writes),
             occlusion_query_set: None,
             multiview_mask: None,
         });

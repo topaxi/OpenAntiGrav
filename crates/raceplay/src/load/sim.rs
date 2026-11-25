@@ -113,11 +113,12 @@ pub fn load_sim(options: &Options) -> Result<SimLoad> {
     let pair = if options.server_source {
         oag_source::pair::SourcePair::open_server(&options.source, packs, pure_packs)?
     } else {
-        oag_source::pair::SourcePair::open(
+        oag_source::pair::SourcePair::open_in(
             &options.source,
             options.craft_source.as_deref(),
             packs,
             pure_packs,
+            &options.override_bases(),
         )?
     };
     let (opened, craft_opened, title, craft_title) = pair.into_parts();

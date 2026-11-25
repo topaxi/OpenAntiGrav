@@ -79,15 +79,15 @@ fn drawn_remembers_each_frame_and_reads_a_forgotten_one_as_drawn() {
     // Never marked: pessimistic, a skipped frame rather than a free blur.
     assert!(drawn.drawn(12));
     // Overwritten by a frame a whole record later: frame 11 is forgotten, not "not drawn".
-    drawn.mark(11 + Drawn::FRAMES as u64, true);
+    drawn.mark(11 + DRAWN_FRAMES as u64, true);
     assert!(drawn.drawn(11));
     // Blur off for a whole run of frames: every frame a reading can still name reads as not
     // drawn, so blur off never skips a frame.
-    let last = 100 + 3 * Drawn::FRAMES as u64;
+    let last = 100 + 3 * DRAWN_FRAMES as u64;
     for frame in 100..last {
         drawn.mark(frame, false);
     }
-    assert!((last - Drawn::FRAMES as u64..last).all(|frame| !drawn.drawn(frame)));
+    assert!((last - DRAWN_FRAMES as u64..last).all(|frame| !drawn.drawn(frame)));
 }
 
 fn rings() -> Rings {
@@ -188,4 +188,184 @@ fn a_frame_a_window_never_comes_back_for_is_given_up_on() {
         "10 was dropped, 11 on was fed"
     );
     assert!(!ahead.contains_key(&10));
+}
+
+fn reading(frame: u64, label: &'static str, seconds: f32) -> oag_gpu::timing::PassReading {
+    oag_gpu::timing::PassReading {
+        frame,
+        label,
+        seconds,
+    }
+}
+
+/// A drained set is recorded a whole frame at a time, so a label absent from a frame costs it
+/// nothing, and frames up to a stall are dropped.
+#[test]
+fn drained_pass_readings_are_recorded_a_frame_at_a_time_and_a_stall_drops_its_frames() {
+    let mut costs = perf::PassCosts::new();
+    record_passes(
+        &mut costs,
+        &[
+            reading(2, "glass", 0.500),
+            reading(4, "glass", 0.002),
+            reading(4, "hud and ui", 0.001),
+            reading(5, "glass", 0.004),
+        ],
+        3,
+    );
+    let rows = costs.rows().ordered();
+    assert_eq!(rows.len(), 2, "{rows:?}");
+    assert_eq!(rows[0].0, "GLASS");
+    assert!(
+        (rows[0].1 - 0.003).abs() < 1e-6,
+        "frame 2 is at or before the stall and frames 4 and 5 average: {rows:?}"
+    );
+    assert_eq!(rows[1].0, "HUD AND UI");
+    assert!(
+        (rows[1].1 - 0.000_5).abs() < 1e-6,
+        "frame 5 had no HUD reading and so cost the frame nothing: {rows:?}"
+    );
+}
+
+/// What the resolution controller is fed does not depend on the labelled passes, and the overlay's
+/// `OTHER` is exactly the controller's own `frame - cost` reading less them.
+///
+/// The controller learns its reserve from `frame - cost.total()` where `cost` is
+/// [`assemble`]'s; the overlay prints `GpuCost::residual_ms`. The two definitions agreeing but
+/// for the passes is what keeps "OTHER is what the controller's reserve is made of" true: a pass
+/// moved into [`assemble`] (the controller's cost) or out of the overlay's subtraction breaks it.
+#[test]
+fn the_overlays_other_is_the_controllers_reading_less_the_labelled_passes() {
+    let (scene, blur, bloom) = (0.004_f32, 0.001_f32, 0.002_f32);
+    let upscale = (0.003_f32, 0.000_5_f32);
+    let cost = assemble(scene, Some(blur), Some(bloom), Some(upscale), ALL).expect("measured");
+    let frame_ms = 16.0_f32;
+    let controllers_reading_ms = frame_ms - cost.total() * 1000.0;
+
+    let mut passes = perf::PassRows::default();
+    for (label, seconds) in [
+        ("glass", 0.000_6),
+        ("shadow map", 0.001_4),
+        ("hud and ui", 0.000_8),
+    ] {
+        passes.add(label, seconds);
+    }
+    let overlay = perf::GpuCost {
+        scene: Some(scene),
+        blur: Some(blur),
+        bloom: Some(bloom),
+        upscale: Some(upscale.0),
+        upscale_presented: Some(upscale.1),
+        passes,
+        reflection: None,
+    };
+    let other_ms = overlay.residual_ms(frame_ms).expect("measured");
+    assert!(
+        (other_ms + passes.total() * 1000.0 - controllers_reading_ms).abs() < 1e-3,
+        "OTHER {other_ms} + passes {} != the controller's reading {controllers_reading_ms}",
+        passes.total() * 1000.0
+    );
+    // And with the passes gone the overlay is the controller's reading, which is what it was.
+    let without = perf::GpuCost {
+        passes: perf::PassRows::default(),
+        ..overlay
+    };
+    assert!(
+        (without.residual_ms(frame_ms).expect("measured") - controllers_reading_ms).abs() < 1e-3
+    );
+    // The cost the controller is fed is the same function of the five readings with or without.
+    assert_eq!(
+        cost,
+        assemble(scene, Some(blur), Some(bloom), Some(upscale), ALL).expect("measured")
+    );
+}
+
+/// The reflection rung is fed the newest frame drawn at its step that timed a glass pass, with
+/// every labelled pass of that same frame; a frame drawn at another step (one in flight across a
+/// step, a photo's full target) and a frame from before a load are not its readings.
+#[test]
+fn the_reflection_reading_is_the_newest_frame_drawn_at_the_rungs_step() {
+    use oag_display::display::ReflectionResolution;
+    let readings = [
+        reading(40, "glass", 0.009),
+        reading(40, "hud and ui", 0.001),
+        reading(41, "glass", 0.013),
+        reading(41, "shadow map", 0.002),
+        reading(42, "glass", 0.020),
+        reading(42, "hud and ui", 0.001),
+        reading(43, "hud and ui", 0.001),
+    ];
+    let mut drawn: Drawn<Option<ReflectionResolution>> = Drawn::default();
+    drawn.mark(40, Some(ReflectionResolution::Half));
+    drawn.mark(41, Some(ReflectionResolution::Half));
+    drawn.mark(42, Some(ReflectionResolution::Original));
+    drawn.mark(43, Some(ReflectionResolution::Half));
+    let at = |step| move |frame| drawn.get(frame) == Some(Some(step));
+    let (glass, passes) =
+        reflection_reading(&readings, 0, at(ReflectionResolution::Half)).expect("frame 41");
+    assert!((glass - 0.013).abs() < 1e-7 && (passes - 0.015).abs() < 1e-7);
+    let (glass, _) =
+        reflection_reading(&readings, 0, at(ReflectionResolution::Original)).expect("frame 42");
+    assert!((glass - 0.020).abs() < 1e-7);
+    assert_eq!(
+        reflection_reading(&readings, 41, at(ReflectionResolution::Half)),
+        None,
+        "frames up to a load are not readings"
+    );
+    assert_eq!(
+        reflection_reading(&readings, 0, at(ReflectionResolution::Quarter)),
+        None
+    );
+}
+
+/// An intermittent pass absent from this frame still leaves `OTHER` the controller's reading less
+/// the passes' **per-frame** mean: the overlay row shows what the pass costs when it runs, and
+/// `OTHER` takes off what it costs a frame on average, so `frame - timed` is not short by the
+/// frames the pass sat out.
+#[test]
+fn an_intermittent_pass_absent_this_frame_leaves_other_on_per_frame_values() {
+    let (scene, blur, bloom) = (0.004_f32, 0.001_f32, 0.002_f32);
+    let upscale = (0.003_f32, 0.000_5_f32);
+    let cost = assemble(scene, Some(blur), Some(bloom), Some(upscale), ALL).expect("measured");
+    let frame_ms = 16.0_f32;
+    let controllers_reading_ms = frame_ms - cost.total() * 1000.0;
+
+    let mut costs = perf::PassCosts::new();
+    let readings: Vec<_> = (1..=120_u64)
+        .flat_map(|frame| {
+            let ran = frame % 4 == 1 && frame < 120;
+            let mut frame_readings = vec![reading(frame, "hud and ui", 0.001)];
+            if ran {
+                frame_readings.push(reading(frame, "hd zoom", 0.004));
+            }
+            frame_readings
+        })
+        .collect();
+    record_passes(&mut costs, &readings, 0);
+    let passes = costs.rows();
+    let overlay = perf::GpuCost {
+        scene: Some(scene),
+        blur: Some(blur),
+        bloom: Some(bloom),
+        upscale: Some(upscale.0),
+        upscale_presented: Some(upscale.1),
+        passes,
+        reflection: None,
+    };
+    let shown = overlay.rows(frame_ms);
+    assert!(
+        shown.contains(&"HD ZOOM 4.00 MS".to_string()),
+        "30 frames of 120 at 4.0 ms shows 4.0: {shown:?}"
+    );
+    let per_frame_ms = passes.total() * 1000.0;
+    assert!(
+        (per_frame_ms - (1.0 + 4.0 * 30.0 / 120.0)).abs() < 1e-3,
+        "{per_frame_ms}"
+    );
+    let other_ms = overlay.residual_ms(frame_ms).expect("measured");
+    assert!(
+        (other_ms + per_frame_ms - controllers_reading_ms).abs() < 1e-3,
+        "OTHER {other_ms} + per-frame passes {per_frame_ms} != the controller's reading \
+         {controllers_reading_ms}"
+    );
 }

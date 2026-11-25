@@ -531,6 +531,7 @@ impl Session {
         options.scene_precision = self.render_profile().scene_precision;
         options.circuit_lighting = self.render_profile().circuit_lighting;
         options.reflection_resolution = self.render_profile().reflection_resolution;
+        options.reflection_timed = Some(self.pass_stamps.is_some());
         // And for the WATER row: the profile's choice, resolved against the discs this machine has.
         if let Some(shell) = self.shell.as_ref() {
             options.water = crate::water_setting::resolve(
@@ -574,6 +575,9 @@ impl Session {
             );
         }
         crate::texture_pack::attach(&mut options, &self.settings.mods);
+        if self.benchmark.runs_without_mods() {
+            crate::benchmark::plan::without_mods(&mut options);
+        }
         if !options.demo {
             self.seat_the_windows(&mut options);
         }

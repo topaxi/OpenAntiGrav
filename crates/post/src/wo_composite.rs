@@ -613,9 +613,10 @@ impl Chain {
         pipeline: &wgpu::ComputePipeline,
         seat: &Seat,
     ) {
+        let stamp = oag_gpu::timing::stamp("wo composite");
         let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: Some("wo composite step"),
-            timestamp_writes: None,
+            timestamp_writes: stamp.as_ref().map(oag_gpu::timing::Stamp::compute_writes),
         });
         oag_gpu::perfprobe::marks::mark_compute(&mut pass, "wo composite step");
         pass.set_pipeline(pipeline);

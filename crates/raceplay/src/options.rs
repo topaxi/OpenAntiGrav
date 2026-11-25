@@ -96,6 +96,10 @@ pub struct Options {
     /// Opens the texture packs the player has on, on the load thread
     /// ([`crate::texture_pack::Finder`]); `None` draws the disc's own textures.
     pub find_texture_packs: Option<crate::texture_pack::Finder>,
+    /// Mounts no player override directory around the source, only this project's own fallback
+    /// layer: a race that must not depend on the player's files (the benchmark with its mods
+    /// off, `docs/tools/in-game-benchmark.md`).
+    pub no_overrides: bool,
     /// The ring the player's `graphics.boost_zoom` borrows, handed in by the composition
     /// root (the one place that may name HD's); `None` is off. Used only where
     /// `oag_title::RaceDefaults::borrows_zoom_ring`.
@@ -135,6 +139,10 @@ pub struct Options {
     /// sea target gets, read when the circuit loads. See
     /// [`oag_display::display::ReflectionResolution`].
     pub reflection_resolution: oag_display::display::ReflectionResolution,
+    /// Whether the frame loop times the glass and sea target's pass, which is what steps
+    /// `auto` (`oag_present::drs::reflection`), or `None` where the race loads before the device
+    /// exists (the `--race` routes); read only for the loader report's line.
+    pub reflection_timed: Option<bool>,
     /// Team id, which selects both the handling stats and the model, or `None`
     /// for the source's own.
     ///

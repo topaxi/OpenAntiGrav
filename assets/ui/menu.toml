@@ -168,6 +168,76 @@ kind = "back"
 label = "BACK"
 string_id = "OAG_MENU_BACK"
 
+# BENCHMARK and RUN BENCHMARK open this page before every run (`docs/tools/in-game-benchmark.md`).
+# Its rows are this run's own: they start from the player's current settings, change nothing the
+# player has saved, and are forgotten when the page is left. The `benchmark.` keys are held by the
+# session (`Session::apply_setting`), not by `settings.toml`. MODS is left out of the page while no
+# mod is enabled; its list, like FRAME LIMIT's, is the display page's own.
+[[page]]
+id = "benchmark_options"
+title = "BENCHMARK OPTIONS"
+title_string_id = "OAG_BENCH_OPTIONS_TITLE"
+
+[[page.entry]]
+kind = "choice"
+label = "MODS"
+string_id = "OAG_BENCH_MODS"
+setting = "benchmark.mods"
+values = ["off", "on"]
+subtitle = "OFF runs the game as shipped, so results compare across machines"
+subtitle_string_id = "OAG_BENCH_MODS_SUBTITLE"
+
+[[page.entry]]
+kind = "choice"
+label = "VSYNC"
+string_id = "OAG_DISPLAY_VSYNC"
+setting = "benchmark.vsync"
+values = ["off", "on", "smooth"]
+
+[[page.entry]]
+kind = "choice"
+label = "FRAME LIMIT"
+string_id = "OAG_DISPLAY_FRAME_LIMIT"
+setting = "benchmark.frame_limit"
+disabled_by = { setting = "benchmark.vsync", value = "on" }
+values = [
+    "unlimited",
+    "30",
+    "60",
+    "70",
+    "72",
+    "75",
+    "90",
+    "100",
+    "120",
+    "144",
+    "165",
+    "240",
+    "360",
+    "480",
+    "1000",
+    "refresh_rate",
+]
+
+[[page.entry]]
+kind = "choice"
+label = "PRESET"
+string_id = "OAG_BENCH_PRESET"
+setting = "benchmark.preset"
+values = ["settings", "low", "medium", "high"]
+
+[[page.entry]]
+id = "benchmark_start"
+kind = "action"
+label = "START BENCHMARK"
+string_id = "OAG_BENCH_START"
+action = "benchmark_start"
+
+[[page.entry]]
+kind = "back"
+label = "BACK"
+string_id = "OAG_MENU_BACK"
+
 [[page]]
 id = "multiplayer"
 title = "MULTIPLAYER"
@@ -1395,10 +1465,13 @@ values = ["original", "simplified"]
 
 # How many texels the screen-space target gets that a circuit's glass or sea reads:
 # Wipeout HD's behind-the-glass target (Vineta K's tunnel glass) and its planar sea
-# reflection (Moa Therma, Ubermall), 2048's and Omega's refraction target. `original`
-# is the default and the original's fixed size (640x360 for the glass, 960x540 for
-# the sea). `half` and `quarter` take that fraction of it on each axis, whatever the
-# render scale: cheaper, with a coarser view through the glass and in the sea. A photo
+# reflection (Moa Therma, Ubermall), 2048's and Omega's refraction target. `auto` is
+# the default: the original's size, stepped to `half` and then `quarter` while the
+# target's timed pass is a large share of a frame that misses its budget, and back
+# when there is room (`oag_present::drs::reflection`); with no GPU timestamps it stays
+# at the original's. `original` is the original's fixed size (640x360 for the glass,
+# 960x540 for the sea). `half` and `quarter` take that fraction of it on each axis,
+# whatever the render scale: cheaper, with a coarser view through the glass and in the sea. A photo
 # mode shot always draws the original's size. Only a title that draws the target has a
 # choice; the row is dropped elsewhere
 # (`Definition::drop_unavailable_reflection_resolution`). Applied to the race on screen
@@ -1408,7 +1481,7 @@ kind = "choice"
 label = "REFLECTION RESOLUTION"
 string_id = "OAG_GRAPHICS_REFLECTION_RESOLUTION"
 setting = "graphics.reflection_resolution"
-values = ["original", "half", "quarter"]
+values = ["auto", "original", "half", "quarter"]
 
 # Which law draws a sea, a lake or a pool: `off` is the surface's constant
 # colour or texture, lit, with no wave normal, scroll or reflection; `original`

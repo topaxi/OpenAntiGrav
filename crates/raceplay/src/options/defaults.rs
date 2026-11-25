@@ -1,4 +1,4 @@
-//! [`Options`]' `Default`: split out of `options.rs` under the 1,000-line rule in
+//! [`Options`]' `Default` and its source-opening helpers: split out of `options.rs` under the 1,000-line rule in
 //! `scripts/check-file-size.py`; a move, with no behaviour change.
 
 use super::*;
@@ -21,6 +21,7 @@ impl Default for Options {
             find_extensions: None,
             recorded_mods: None,
             find_texture_packs: None,
+            no_overrides: false,
             boost_zoom: None,
             trail_hits: TrailHits::Off,
             wingtip_contrails: WingtipContrails::Off,
@@ -31,6 +32,7 @@ impl Default for Options {
             scene_precision: oag_display::display::ScenePrecision::default(),
             circuit_lighting: oag_display::display::CircuitLighting::default(),
             reflection_resolution: oag_display::display::ReflectionResolution::default(),
+            reflection_timed: None,
             team: None,
             hull_variant: None,
             skin: None,
@@ -81,5 +83,31 @@ impl Default for Options {
             fov_override: None,
             demo: false,
         }
+    }
+}
+
+impl Options {
+    /// Where the player's override directories are looked for when this race opens a source:
+    /// the default search path, or none under [`Self::no_overrides`] (the fallback layer alone).
+    #[must_use]
+    pub fn override_bases(&self) -> Vec<std::path::PathBuf> {
+        if self.no_overrides {
+            Vec::new()
+        } else {
+            oag_source::layers::overrides_search_path()
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_race_without_overrides_looks_in_no_override_directory() {
+        let mut options = Options::default();
+        assert!(!options.override_bases().is_empty());
+        options.no_overrides = true;
+        assert!(options.override_bases().is_empty());
     }
 }

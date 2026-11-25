@@ -92,6 +92,11 @@ mod shot_open;
 mod shoulder;
 mod stutter;
 pub(crate) mod timing;
+
+/// Timestamp pairs a frame's labelled passes may take (`Session::pass_stamps`): the shadow map
+/// is one pass per cascade layer and the post chain a handful, so this is several times a busy
+/// frame's use, at 16 bytes a pair.
+pub(crate) const PASS_STAMPS: usize = 64;
 mod tournament;
 #[cfg(target_os = "linux")]
 mod wallpaper;
@@ -177,6 +182,15 @@ pub(crate) struct Session {
     /// be greyed for it: `disabled_by` names a *setting* and an adapter
     /// capability is not one. See `docs/architecture/menus.md`.
     pub(crate) pass_timer: Option<oag_gpu::timing::PassTimer>,
+    /// The ring that times every separately-encoded pass under a label of its own (the glass
+    /// target, the shadow passes, the probe blend, the post passes, the HUD): the rows
+    /// [`oag_present::perf::GpuCost::passes`] carries. `None` on a device that cannot be asked.
+    /// **Not read by the resolution controller**, which sees the five rings above only.
+    pub(crate) pass_stamps: Option<oag_gpu::timing::PassTimer>,
+    /// The means behind [`Self::pass_stamps`]'s rows and the frame log's `pass_ms` field.
+    pub(crate) pass_costs: perf::PassCosts,
+    /// Readings [`Self::pass_stamps`] last drained, kept to reuse the allocation.
+    pub(crate) pass_scratch: Vec<oag_gpu::timing::PassReading>,
     /// What FSR 3.1's six **render-resolution** dispatches cost on the GPU, in
     /// the seconds [`Session::scene_cost`] is fed.
     ///
@@ -244,6 +258,13 @@ pub(crate) struct Session {
     /// [`Session::blur_timer`] has not brought back is told "blur did not run"
     /// (free) from "not measured" (a skipped frame). See [`timing::Drawn`].
     pub(crate) blur_drawn: timing::Drawn,
+    /// The step each recent frame drew the glass and sea target at under REFLECTION RESOLUTION
+    /// `auto`, `None` for a frame drawn otherwise, so the reflection rung is fed only readings
+    /// of the step it is at (`oag_present::drs::reflection`).
+    pub(crate) reflection_drawn: timing::Drawn<Option<oag_display::display::ReflectionResolution>>,
+    /// The race the reflection rung last learned on (`cpu_governor::combination`): another
+    /// circuit's target starts it again from the original's size.
+    pub(crate) reflection_race: Option<u64>,
     /// What Wipeout HD/Fury's read bloom chain costs on the **GPU**, in the
     /// same seconds.
     ///

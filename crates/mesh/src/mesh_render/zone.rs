@@ -420,15 +420,6 @@ pub struct RebindResources {
     stage: [wgpu::TextureView; 2],
 }
 
-impl RebindResources {
-    /// Points the group at a new behind-the-glass target, for the next [`rebind`] or
-    /// [`rebind_buffer`]. The target's texture is re-made when its size changes; a bind group
-    /// names a view, so the group is built again over the new one.
-    pub fn set_behind_glass(&mut self, view: wgpu::TextureView) {
-        self.shadow.behind_glass_view = view;
-    }
-}
-
 /// Bind group 2 itself, from the stage's two arrays and everything
 /// [`RebindResources`] keeps underneath them. The one assembly
 /// [`scene_bind_group`]'s initial build and [`rebind`]'s later one share, so

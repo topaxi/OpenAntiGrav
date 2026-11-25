@@ -44,10 +44,10 @@ fn the_players_supersampling_stays() {
             percent,
             "{percent} %"
         );
-        assert!(!profile(percent, Reconstruction::Off).photo_differs(RECT, false, false));
+        assert!(!profile(percent, Reconstruction::Off).photo_differs(RECT, false, None));
     }
     let upscaled = profile(150, Reconstruction::Fsr3);
-    assert!(upscaled.photo_differs(RECT, false, false));
+    assert!(upscaled.photo_differs(RECT, false, None));
     let photo = upscaled.for_a_photo();
     assert_eq!(u32::from(photo.scale_for(RECT, false)), 150);
     assert_eq!(photo.reconstruction, Reconstruction::Off);
@@ -61,10 +61,7 @@ fn a_profile_that_already_draws_natively_is_not_redrawn() {
         Reconstruction::Smaa,
     ] {
         let native = profile(100, reconstruction);
-        assert!(
-            !native.photo_differs(RECT, false, false),
-            "{reconstruction}"
-        );
+        assert!(!native.photo_differs(RECT, false, None), "{reconstruction}");
         let photo = native.for_a_photo();
         assert_eq!(photo.scale_for(RECT, false), native.scale_for(RECT, false));
         assert_eq!(photo.reconstruction, native.reconstruction);
@@ -74,37 +71,40 @@ fn a_profile_that_already_draws_natively_is_not_redrawn() {
 
 #[test]
 fn a_profile_that_draws_smaller_or_upscaled_is_redrawn() {
-    assert!(profile(50, Reconstruction::Off).photo_differs(RECT, false, false));
-    assert!(profile(100, Reconstruction::Fsr3).photo_differs(RECT, false, false));
-    assert!(profile(100, Reconstruction::Fsr1).photo_differs(RECT, false, false));
+    assert!(profile(50, Reconstruction::Off).photo_differs(RECT, false, None));
+    assert!(profile(100, Reconstruction::Fsr3).photo_differs(RECT, false, None));
+    assert!(profile(100, Reconstruction::Fsr1).photo_differs(RECT, false, None));
 }
 
 #[test]
 fn a_gamescope_default_scale_is_redrawn() {
     let mut unchosen = profile(100, Reconstruction::Off);
     unchosen.render_scale_chosen = false;
-    assert!(unchosen.photo_differs((3840.0, 2160.0), true, false));
-    assert!(!unchosen.photo_differs((3840.0, 2160.0), false, false));
+    assert!(unchosen.photo_differs((3840.0, 2160.0), true, None));
+    assert!(!unchosen.photo_differs((3840.0, 2160.0), false, None));
 }
 
 #[test]
 fn a_photo_draws_the_glass_and_sea_target_at_the_originals_size() {
     use oag_display::display::ReflectionResolution;
-    let mut quarter = profile(100, Reconstruction::Off);
-    assert!(!quarter.photo_differs(RECT, false, true));
-    quarter.reflection_resolution = ReflectionResolution::Quarter;
+    let profile = profile(100, Reconstruction::Off);
+    // The step drawn now decides, `auto`'s included: a shot redraws only a smaller target.
+    assert!(!profile.photo_differs(RECT, false, Some(ReflectionResolution::Original)));
+    for step in [ReflectionResolution::Half, ReflectionResolution::Quarter] {
+        assert!(
+            profile.photo_differs(RECT, false, Some(step)),
+            "a smaller target is redrawn"
+        );
+    }
     assert!(
-        quarter.photo_differs(RECT, false, true),
-        "a smaller target is redrawn"
-    );
-    assert!(
-        !quarter.photo_differs(RECT, false, false),
+        !profile.photo_differs(RECT, false, None),
         "a circuit with no target has nothing to redraw"
     );
+    let mut any = profile;
     for resolution in ReflectionResolution::ALL {
-        quarter.reflection_resolution = resolution;
+        any.reflection_resolution = resolution;
         assert_eq!(
-            quarter.for_a_photo().reflection_resolution,
+            any.for_a_photo().reflection_resolution,
             ReflectionResolution::Original
         );
     }

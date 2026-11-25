@@ -11,6 +11,7 @@ use crate::app::stage::Stage;
 const TARGET_FPS: &str = "graphics.target_fps";
 const FOLLOW_VALUE: &str = "default";
 const FRAME_LIMIT: &str = "display.frame_limit";
+const BENCHMARK_FRAME_LIMIT: &str = "benchmark.frame_limit";
 const FOLLOW_LIMIT_VALUE: &str = "refresh_rate";
 
 const REPORT_EVERY: std::time::Duration = std::time::Duration::from_secs(1);
@@ -191,7 +192,7 @@ impl Session {
 
     /// What the rows that follow the output's rate draw for that value: the rate
     /// it resolves to now, as `(setting, value, label)`.
-    fn rate_labels(&self) -> [(&'static str, &'static str, String); 2] {
+    pub(super) fn rate_labels(&self) -> [(&'static str, &'static str, String); 4] {
         let strings = oag_ui::strings::project_table(self.settings.language.as_deref());
         let hz = (self.display.hz().unwrap_or(Target::FOLLOW_FALLBACK_HZ)).to_string();
         let say = |id: &str, english: &str| strings.get_or_fallback(id, english).replace("%s", &hz);
@@ -205,6 +206,16 @@ impl Session {
                 FRAME_LIMIT,
                 FOLLOW_LIMIT_VALUE,
                 say("OAG_DISPLAY_FRAME_LIMIT_REFRESH_RATE", "REFRESH RATE (%s)"),
+            ),
+            (
+                BENCHMARK_FRAME_LIMIT,
+                FOLLOW_LIMIT_VALUE,
+                say("OAG_DISPLAY_FRAME_LIMIT_REFRESH_RATE", "REFRESH RATE (%s)"),
+            ),
+            (
+                "benchmark.preset",
+                "settings",
+                say("OAG_BENCH_PRESET_SETTINGS", "YOUR SETTINGS"),
             ),
         ]
     }

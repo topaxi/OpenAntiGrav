@@ -1160,7 +1160,10 @@ fn every_settings_row_is_one_the_game_seeds() {
             // The MODS page's MOD row only says which mod the rows under it are about, and
             // its ENABLED row is seeded from `[mods] disabled` for that mod
             // (`oag_game::mods::resupply_switch`), not from a key of its own.
+            // The BENCHMARK OPTIONS rows are one run's own and never a setting: the session holds
+            // and seeds them each time the page opens (`Session::open_benchmark_options`).
             if PILOT_EDITOR_ROWS.contains(&setting)
+                || setting.starts_with("benchmark.")
                 || setting == oag_game::mods::SELECTED
                 || setting == oag_game::mods::ENABLED
                 || setting == oag_game::replays::page::SELECTED

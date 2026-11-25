@@ -1139,6 +1139,7 @@ impl Renderer {
                       target: &wgpu::TextureView,
                       load: wgpu::LoadOp<wgpu::Color>,
                       viewport: (f32, f32, f32, f32)| {
+            let stamp = oag_gpu::timing::stamp("hud and ui");
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("frame"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -1151,7 +1152,7 @@ impl Renderer {
                     },
                 })],
                 depth_stencil_attachment: None,
-                timestamp_writes: None,
+                timestamp_writes: stamp.as_ref().map(oag_gpu::timing::Stamp::render_writes),
                 occlusion_query_set: None,
                 multiview_mask: None,
             });

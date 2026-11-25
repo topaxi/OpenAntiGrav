@@ -629,6 +629,7 @@ fn the_wall_clock_rows_join_the_gpu_panel_and_fit_inside_it() {
         bloom: Some(0.003_1),
         upscale: Some(0.001_8),
         upscale_presented: Some(0.000_6),
+        ..Default::default()
     };
     let cpu = CpuCost {
         frame: Some(0.005),
@@ -701,6 +702,7 @@ fn the_gpu_panel_is_dev_only_and_sits_top_left() {
         bloom: Some(0.003_1),
         upscale: Some(0.001_8),
         upscale_presented: None,
+        ..Default::default()
     };
     let has_panel = |mode| {
         draw_list(

@@ -216,6 +216,7 @@ impl Distort {
                 Some(msaa) => (msaa, Some(&target.resolved)),
                 None => (&target.resolved, None),
             };
+            let stamp = oag_gpu::timing::stamp("psys distort");
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("psys distort"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -236,7 +237,7 @@ impl Distort {
                     depth_ops: None,
                     stencil_ops: None,
                 }),
-                timestamp_writes: None,
+                timestamp_writes: stamp.as_ref().map(oag_gpu::timing::Stamp::render_writes),
                 occlusion_query_set: None,
                 multiview_mask: None,
             });

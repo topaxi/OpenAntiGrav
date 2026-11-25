@@ -104,6 +104,7 @@ fn load_whole() -> Option<boot::Boot> {
         refresh_video: false,
         prefer_av1_cache: false,
         find_texture_packs: None,
+        no_overrides: false,
     };
     Some(boot::load(&options).expect("loading the boot sequence"))
 }

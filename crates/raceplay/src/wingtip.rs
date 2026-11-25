@@ -161,7 +161,12 @@ fn lend(
         ));
         return None;
     };
-    let opened = match oag_source::title::open_source(lender, Vec::new(), Vec::new()) {
+    let opened = match oag_source::title::open_source_in(
+        lender,
+        Vec::new(),
+        Vec::new(),
+        &options.override_bases(),
+    ) {
         Ok(opened) => opened,
         Err(why) => {
             report.push(format!(

@@ -665,9 +665,9 @@ impl Session {
                     return;
                 }
             },
-            // Applied by the next frame of the race on screen, which rebuilds the target at the
-            // new size (`oag_raceplay::Scene::set_reflection_resolution`); the next race loads
-            // at it too.
+            // Applied by the next frame of the race on screen, which draws the target's rectangle
+            // at the new step (`oag_raceplay::Scene::set_reflection_resolution`); `auto` takes the
+            // reflection rung's step from there.
             "graphics.reflection_resolution" => {
                 match text.parse::<display::ReflectionResolution>() {
                     Ok(resolution) => {
@@ -1044,6 +1044,13 @@ impl Session {
             }
             // The REPLAY row moves the detail lines; nothing is stored.
             crate::replays::page::SELECTED => return,
+            // The BENCHMARK OPTIONS rows: this run's own, held by the session and never saved.
+            other if other.starts_with("benchmark.") => {
+                if !self.apply_benchmark_option(other, &text) {
+                    warn!("nothing applies {other}");
+                }
+                return;
+            }
             // Saved by the switch itself, into `[mods] disabled`, and rebuilt live.
             crate::mods::ENABLED => {
                 self.switch_selected_mod(text == "on");

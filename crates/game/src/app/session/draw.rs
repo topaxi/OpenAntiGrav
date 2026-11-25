@@ -51,6 +51,31 @@ impl Session {
     /// allocation. Read the other way it would mean a different pixel count at
     /// every render scale, which is not what a row spelled `50` beside a row
     /// spelled `100` says.
+    /// The step the glass and sea target is drawn at under `profile`: the player's fixed choice,
+    /// or under `auto` the reflection rung's (`drs::reflection`). A photo's profile is
+    /// `original`, so a shot draws the full target.
+    pub(super) fn reflection_step(
+        &self,
+        profile: &crate::settings::RenderProfile,
+    ) -> oag_display::display::ReflectionResolution {
+        if profile.reflection_resolution.is_auto() {
+            self.drs.reflection_step()
+        } else {
+            profile.reflection_resolution
+        }
+    }
+
+    /// The step's name in a race whose circuit draws a glass or sea target, for the overlay and
+    /// the frame log; `None` otherwise.
+    pub(super) fn reflection_drawn_name(&self) -> Option<&'static str> {
+        match &self.stage {
+            Stage::Race(race) if race.scene.reflection_target_size().is_some() => {
+                Some(self.reflection_step(&self.render_profile()).name())
+            }
+            _ => None,
+        }
+    }
+
     fn drs_limits(&self) -> drs::Limits {
         let surface = self.gpu.output.size();
         // A multi-window race shares one scene allocation, the largest any window wants, so
@@ -332,11 +357,25 @@ impl Session {
         if has_scene && let Some(timer) = self.hd_bloom_timer.as_mut() {
             timer.begin(self.frame_index);
         }
+        // And the ring that times every labelled pass of the frame (`oag_gpu::timing::stamp`),
+        // armed for this thread until `resolve` or `abandon` below. **Not with further windows
+        // open**: their passes are recorded into encoders this one is not submitted after, so
+        // a pair resolved here could be read before its pass has run.
+        if self.screens.is_empty() {
+            if let Some(timer) = self.pass_stamps.as_mut() {
+                timer.begin(self.frame_index);
+            }
+        } else {
+            // No claim, so no readings: what was last measured must not linger in the rows
+            // and in `OTHER`.
+            self.pass_costs.stalled(self.frame_index);
+        }
         // Read before the match, which borrows `self.stage` mutably.
         let pvs_culling = self.pvs_culling();
         // Read before `self.stage` is borrowed mutably below, for the same
         // reason `pvs_culling` is.
         let render_profile = self.governed_profile();
+        let reflection_step = self.reflection_step(&render_profile);
         // Photo mode frames one still picture: the game's motion blur smears a frozen race
         // (the camera the player flies moves the velocity buffer), so the mode draws none
         // whatever the setting says, and leaving puts the player's setting back untouched.
@@ -403,11 +442,7 @@ impl Session {
                             .race
                             .set_ghost_visible(self.settings.display.ghost_ship_shown(shell.title));
                     }
-                    parked.scene.set_reflection_resolution(
-                        &self.gpu.device,
-                        &self.gpu.queue,
-                        render_profile.reflection_resolution,
-                    );
+                    parked.scene.set_reflection_resolution(reflection_step);
                     parked.scene.set_blur_resolution(blur_resolution);
                     parked.scene.set_band_levels(spectrum);
                     parked.render(
@@ -504,10 +539,12 @@ impl Session {
                 }
                 // The glass and sea target at the profile's fraction, which a photo's frame
                 // draws at the original's size (`RenderProfile::for_a_photo`).
-                stage.scene.set_reflection_resolution(
-                    &self.gpu.device,
-                    &self.gpu.queue,
-                    render_profile.reflection_resolution,
+                stage.scene.set_reflection_resolution(reflection_step);
+                self.reflection_drawn.mark(
+                    self.frame_index,
+                    (render_profile.reflection_resolution.is_auto()
+                        && stage.scene.reflection_target_size().is_some())
+                    .then_some(reflection_step),
                 );
                 stage.scene.set_blur_resolution(blur_resolution);
                 stage.scene.set_band_levels(spectrum);
@@ -579,6 +616,13 @@ impl Session {
                 };
                 if !timed && let Some(timer) = self.pass_timer.as_mut() {
                     timer.abandon();
+                }
+                // Each view of a split records on a thread of its own, where nothing is armed,
+                // so the glass and shadow passes of a split would be missing from a sum that
+                // still held the HUD's: no per-pass rows while split.
+                if !timed && let Some(timer) = self.pass_stamps.as_mut() {
+                    timer.abandon();
+                    self.pass_costs.stalled(self.frame_index);
                 }
                 (Some(stats), None)
             }
@@ -1091,6 +1135,8 @@ impl Session {
                     .upscale_presented_cost
                     .stats()
                     .map(|s| s.mean_ms / 1000.0),
+                passes: self.pass_costs.rows(),
+                reflection: self.reflection_drawn_name(),
             },
             // The wall-clock half, and a frame behind for a plainer reason
             // than the GPU readings are: this frame's own duration is not
@@ -1183,6 +1229,9 @@ impl Session {
         // the copy has to follow the pass that wrote the timestamps and
         // precede the submit that runs both.
         if let Some(timer) = self.pass_timer.as_mut() {
+            timer.resolve(&mut encoder);
+        }
+        if let Some(timer) = self.pass_stamps.as_mut() {
             timer.resolve(&mut encoder);
         }
         super::timing::resolve_upscale(

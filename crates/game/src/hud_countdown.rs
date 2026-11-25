@@ -392,6 +392,7 @@ impl Countdown {
         let (width, height) = (target_size.0.max(1), target_size.1.max(1));
         let depth_view = self.depth_view(device, width, height).clone();
 
+        let stamp = oag_gpu::timing::stamp("hud countdown");
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("countdown"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -411,7 +412,7 @@ impl Countdown {
                 }),
                 stencil_ops: None,
             }),
-            timestamp_writes: None,
+            timestamp_writes: stamp.as_ref().map(oag_gpu::timing::Stamp::render_writes),
             occlusion_query_set: None,
             multiview_mask: None,
         });

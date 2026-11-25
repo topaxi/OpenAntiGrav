@@ -143,6 +143,28 @@ A `println!` is a command's output, not a note about it: `oag-unpack` tables,
 for a player at the terminal. They are what a user redirects, so `RUST_LOG` does
 not touch them. Runtime chatter belongs on the logger.
 
+## The frame-log line
+
+`--frame-log` (or `OAG_FRAME_LOG`) prints one `info` line a second, `key=value` fields split on
+spaces (`crates/game/src/devrun.rs`, `format_line`): `stage`, `fps`, `frame_ms`, `p99_ms`,
+`cpu_ms`, `gpu_ms` (the scene pass alone), `present_ms`, `target_hz`, `window`, `surface`,
+`render`, `governor`, `pass_ms`, `reflection`, and last the four chains timed apart from the scene
+pass and the labelled passes: `bloom_ms` (HD/Fury's bloom chain), `blur_ms` (the motion blur),
+`upscale_ms` and `upscale_presented_ms` (FSR 3's render- and presentation-resolution halves), each
+the overlay's mean of the same reading and `-` until it has one (a title or setting that draws no such
+chain never has). With them the line carries every GPU timer the game keeps. **New fields are only
+ever appended**, because the Android scripts read the earlier ones by name.
+
+`pass_ms` is `-` until a pass has come back, else every separately-encoded pass's mean GPU time over
+the last 120 frames, a frame the pass did not run in counting zero (the overlay shows the mean over
+only the frames it ran in), in milliseconds as comma-joined `name:ms` pairs in the overlay's row
+order, the name lowercased with `_` for a space: `pass_ms=glass:2.97,shadow_map:2.36,self_shadow:1.77,occlusion:4.23,probe_blend:0.15,hd_zoom:0.50,blit:3.61,hud_and_ui:1.42`.
+Rows the overlay hides under 0.1 ms are kept here. The rows and what they time are in
+[dynamic-resolution.md](../rendering/dynamic-resolution.md), "Every other pass has a row of its own".
+`reflection` is the step the glass and sea target is drawn at (`original`, `half` or `quarter`, the
+step REFLECTION RESOLUTION `auto` is at), `-` in a race or stage with no such target; the overlay's
+`GLASS` row names the same step.
+
 ## Getting the rest back
 
 `RUST_LOG` replaces the whole default expression, so name `warn` again unless

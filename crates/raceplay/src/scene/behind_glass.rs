@@ -114,7 +114,8 @@ pub struct BehindGlassModels {
     /// The original's target size in pixels: HD's [`SIZE`], or the psp2 titles' own
     /// (`oag_mesh::mesh::rcs::psp2::refraction_only::target_size`).
     pub size: (u32, u32),
-    /// The fraction of [`Self::size`] the target is drawn at (`graphics.reflection_resolution`).
+    /// The fraction of [`Self::size`] the target is drawn at first
+    /// (`graphics.reflection_resolution`); the texture is always [`Self::size`].
     pub resolution: oag_display::display::ReflectionResolution,
     /// The two fog groups, both `None` on every circuit but Vineta K.
     pub groups: oag_mesh::mesh::rcs::BehindGlass,
@@ -147,12 +148,19 @@ impl Default for BehindGlassModels {
 }
 
 /// The target and what draws into it.
+///
+/// **Allocated at the original's size and drawn into a rectangle of it** from the top-left
+/// corner, the way dynamic resolution varies a viewport and not an allocation (ADR-0037): a
+/// smaller `graphics.reflection_resolution`, a step of `auto`, or a photo's full size is a new
+/// rectangle on the next frame, never a new texture or bind group. The readers scale their
+/// lookup to the rectangle and clamp it half a texel inside ([`Scene::target_projection`],
+/// [`Scene::sea_reflection`]).
 #[derive(Debug)]
 pub(super) struct Target {
-    /// The original's size, which a photo draws at.
+    /// The original's size: the colour texture's and the attachments', and what a photo draws.
     original: (u32, u32),
-    /// The size the colour texture and the attachments have now.
-    size: (u32, u32),
+    /// The rectangle drawn this frame, from the top-left corner, at most [`Self::original`].
+    drawn: (u32, u32),
     texture: wgpu::Texture,
     colour: wgpu::TextureView,
     depth: wgpu::TextureView,
@@ -177,7 +185,7 @@ fn colour_texture(
     if models.groups.is_empty() && models.mirror.is_none() {
         return None;
     }
-    Some(colour_texture_of(device, models.drawn_size(), format))
+    Some(colour_texture_of(device, models.size, format))
 }
 
 fn colour_texture_of(
@@ -278,19 +286,9 @@ impl Target {
         &self.colour
     }
 
-    /// Makes the colour texture and the attachments `size` wide, which a bind group over
-    /// [`Self::colour`] must then be rebuilt for. Returns whether anything changed. The
-    /// drawables are size-independent: a pass takes its viewport from its attachments.
-    fn resize(&mut self, device: &wgpu::Device, size: (u32, u32)) -> bool {
-        if size == self.size {
-            return false;
-        }
-        let texture = colour_texture_of(device, size, self.texture.format());
-        self.colour = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        self.texture = texture;
-        (self.depth, self.velocity) = attachments(device, size);
-        self.size = size;
-        true
+    /// The rectangle drawn at `resolution`: a function of the original's size alone.
+    fn rect(&self, resolution: oag_display::display::ReflectionResolution) -> (u32, u32) {
+        resolution.size(self.original)
     }
 
     /// Builds the drawables that fill `texture`.
@@ -307,7 +305,7 @@ impl Target {
         zone_art: &mesh_render::zone::StageArt,
         shadow_maps: mesh_render::ShadowMaps<'_>,
     ) -> Result<Self> {
-        let (depth, velocity) = attachments(device, models.drawn_size());
+        let (depth, velocity) = attachments(device, models.size);
         // Single-sided, as every chunk draw into the original's target is
         // (`oag_mesh::mesh::rcs::build_scene_views`): its eye sits inside
         // shells authored to be seen from outside. The sky is two-sided, as
@@ -345,7 +343,7 @@ impl Target {
                 cull_all,
             )
         };
-        let size = models.drawn_size();
+        let drawn = models.drawn_size();
         let BehindGlassModels {
             size: original,
             resolution: _,
@@ -355,7 +353,7 @@ impl Target {
         } = models;
         Ok(Self {
             original,
-            size,
+            drawn,
             colour: texture.create_view(&wgpu::TextureViewDescriptor::default()),
             texture,
             depth,
@@ -471,6 +469,7 @@ impl Target {
         frustum: Option<&Frustum>,
         draw: bool,
     ) -> SceneStats {
+        let stamp = oag_gpu::timing::stamp("glass");
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("behind the glass"),
             color_attachments: &[
@@ -503,11 +502,16 @@ impl Target {
                 }),
                 stencil_ops: None,
             }),
-            timestamp_writes: None,
+            timestamp_writes: stamp.as_ref().map(oag_gpu::timing::Stamp::render_writes),
             occlusion_query_set: None,
             multiview_mask: None,
         });
         oag_gpu::perfprobe::marks::mark(&mut pass, "behind the glass");
+        // The rectangle this frame draws; the clear above covers the whole texture, so a texel
+        // outside it is black, and the readers never reach one (`Scene::sea_reflection`).
+        let (width, height) = (self.drawn.0 as f32, self.drawn.1 as f32);
+        pass.set_viewport(0.0, 0.0, width, height, 0.0, 1.0);
+        pass.set_scissor_rect(0, 0, self.drawn.0, self.drawn.1);
         if !draw {
             oag_gpu::perfprobe::marks::close(&mut pass);
             return SceneStats::default();
@@ -519,7 +523,6 @@ impl Target {
             stats.add(group.draw_lists(&mut pass, block, None, set, chunks, frustum, solid));
         }
         if let Some(sky) = &self.sky {
-            let (width, height) = (self.size.0 as f32, self.size.1 as f32);
             pass.set_viewport(0.0, 0.0, width, height, 1.0, 1.0);
             let _ = sky.draw(&mut pass, block, None, None, None, None);
             pass.set_viewport(0.0, 0.0, width, height, 0.0, 1.0);
@@ -597,54 +600,96 @@ impl Scene {
     }
 
     /// Draws the circuit's glass and sea target at `resolution` of the original's size from the
-    /// next frame on, and rebinds the circuit's drawable to it; a circuit with no target, and a
-    /// target already that size, do nothing. Called every frame with the frame's profile, so a
-    /// photo (which draws the original's size) and the frame after it (which goes back) cost one
-    /// rebuild each.
+    /// next frame on: a rectangle of the one texture, so nothing is reallocated or rebound. A
+    /// circuit with no target does nothing. Called every frame with the frame's step (a fixed
+    /// choice, the step `auto` is at, or a photo's `original`); `auto` itself draws the
+    /// original's size.
     pub fn set_reflection_resolution(
         &mut self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
         resolution: oag_display::display::ReflectionResolution,
     ) {
-        let Some(target) = self.behind_glass.as_mut() else {
-            return;
-        };
-        if !target.resize(device, resolution.size(target.original)) {
-            return;
+        if let Some(target) = self.behind_glass.as_mut() {
+            target.drawn = target.rect(resolution);
         }
-        let stage = self
-            .zone_grade
-            .as_ref()
-            .map(crate::zone_grade::ZoneGrade::stage_art_pair);
-        self.track
-            .rebind_behind_glass(device, queue, target.colour(), stage.as_ref());
     }
 
-    /// The glass and sea target's size in texels now, or `None` on a circuit with no target.
+    /// The glass and sea target's drawn rectangle in texels now, or `None` on a circuit with no
+    /// target.
     #[must_use]
     pub fn reflection_target_size(&self) -> Option<(u32, u32)> {
-        self.behind_glass.as_ref().map(|target| target.size)
+        self.behind_glass.as_ref().map(|target| target.drawn)
     }
 
     /// The matrix the circuit's screen-space target is read through (`scene.refraction`):
     /// the glass's `refractProject` ([`view_projection`]), or, for the planar reflection, the
-    /// main view-projection the sea's `reflectProject` is, flipped as the target is drawn.
+    /// main view-projection the sea's `reflectProject` is, flipped as the target is drawn;
+    /// either then mapped onto the drawn rectangle ([`rect_mapping`]).
     pub(super) fn target_projection(&self, main: Mat4) -> Mat4 {
-        match self.behind_glass.as_ref().and_then(|target| target.mirror) {
+        let Some(target) = self.behind_glass.as_ref() else {
+            return view_projection(main);
+        };
+        let projection = match target.mirror {
             Some(_) => flip_x() * main,
             None => view_projection(main),
-        }
+        };
+        rect_mapping(target.drawn, target.original) * projection
     }
 
-    /// `scene.sea_reflection`: the sea's `distortion` and the flag that the planar target is
-    /// bound, or zero where the circuit has none.
+    /// `scene.sea_reflection`: `x` the sea's `distortion` and `y` the flag that the planar target
+    /// is bound (both zero where the circuit has no mirror), `zw` the largest texture coordinate
+    /// a reader of the target may sample: half a texel inside the drawn rectangle, so neither a
+    /// lookup past it nor the filter's footprint reaches a texel outside it. `1.0` with no target.
     pub(super) fn sea_reflection(&self) -> [f32; 4] {
-        self.behind_glass
-            .as_ref()
-            .and_then(|target| target.mirror)
-            .map_or([0.0; 4], |mirror| [mirror.distortion, 1.0, 0.0, 0.0])
+        let Some(target) = self.behind_glass.as_ref() else {
+            return [0.0, 0.0, 1.0, 1.0];
+        };
+        let (distortion, bound) = target
+            .mirror
+            .map_or((0.0, 0.0), |mirror| (mirror.distortion, 1.0));
+        let [u, v] = uv_limit(target.drawn, target.original);
+        [distortion, bound, u, v]
     }
+}
+
+/// Clip space onto the drawn rectangle's: the readers map clip `x` and `y` to a texture coordinate
+/// `u = (1 + x) / 2` and `v = (1 - y) / 2`, so scaling `u` and `v` by the rectangle's share of the
+/// texture is `x' = f x + (f - 1) w` and `y' = f y + (1 - f) w`, a linear map folded into the
+/// projection the readers already take. The identity at the original's size.
+pub(super) fn rect_mapping(drawn: (u32, u32), original: (u32, u32)) -> Mat4 {
+    let fx = drawn.0 as f32 / original.0.max(1) as f32;
+    let fy = drawn.1 as f32 / original.1.max(1) as f32;
+    Mat4::from_cols_array(&[
+        fx,
+        0.0,
+        0.0,
+        0.0, //
+        0.0,
+        fy,
+        0.0,
+        0.0, //
+        0.0,
+        0.0,
+        1.0,
+        0.0, //
+        fx - 1.0,
+        1.0 - fy,
+        0.0,
+        1.0,
+    ])
+}
+
+/// The largest texture coordinate inside the drawn rectangle: its far edge less half a texel,
+/// where a bilinear lookup reads that edge's texels alone. `1.0` at the original's size (the
+/// sampler's clamp already holds there).
+pub(super) fn uv_limit(drawn: (u32, u32), original: (u32, u32)) -> [f32; 2] {
+    let axis = |drawn: u32, original: u32| {
+        if drawn >= original {
+            1.0
+        } else {
+            (drawn as f32 - 0.5) / original.max(1) as f32
+        }
+    };
+    [axis(drawn.0, original.0), axis(drawn.1, original.1)]
 }
 
 /// `OAG_DUMP_BEHIND_GLASS=<path.png>`: writes the target after a capture.
@@ -669,11 +714,12 @@ impl Scene {
         let (Ok(dump), Some(target)) = (std::env::var(DUMP_VAR), &self.behind_glass) else {
             return Ok(());
         };
+        let size = target.drawn;
         let texel = target.texture.format().block_copy_size(None).unwrap_or(4);
-        let row = (target.size.0 * texel).div_ceil(256) * 256;
+        let row = (size.0 * texel).div_ceil(256) * 256;
         let buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("behind the glass readback"),
-            size: u64::from(row * target.size.1),
+            size: u64::from(row * size.1),
             usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
             mapped_at_creation: false,
         });
@@ -685,19 +731,19 @@ impl Scene {
                 layout: wgpu::TexelCopyBufferLayout {
                     offset: 0,
                     bytes_per_row: Some(row),
-                    rows_per_image: Some(target.size.1),
+                    rows_per_image: Some(size.1),
                 },
             },
-            extent(target.size),
+            extent(size),
         );
         queue.submit([encoder.finish()]);
         let slice = buffer.slice(..);
         slice.map_async(wgpu::MapMode::Read, |_| {});
         device.poll(wgpu::PollType::wait_indefinitely())?;
         let mapped = slice.get_mapped_range()?;
-        let mut rgba = Vec::with_capacity((target.size.0 * target.size.1 * 4) as usize);
-        for line in mapped.chunks(row as usize).take(target.size.1 as usize) {
-            for pixel in line[..(target.size.0 * texel) as usize].chunks(texel as usize) {
+        let mut rgba = Vec::with_capacity((size.0 * size.1 * 4) as usize);
+        for line in mapped.chunks(row as usize).take(size.1 as usize) {
+            for pixel in line[..(size.0 * texel) as usize].chunks(texel as usize) {
                 if texel == 8 {
                     let channel = |i: usize| {
                         half_to_f32(u16::from_le_bytes([pixel[2 * i], pixel[2 * i + 1]]))
@@ -711,15 +757,9 @@ impl Scene {
         }
         drop(mapped);
         buffer.unmap();
-        std::fs::write(
-            &dump,
-            oag_texture::png::encode_rgba(target.size.0, target.size.1, &rgba),
-        )
-        .map_err(|error| anyhow::anyhow!("writing {dump}: {error}"))?;
-        println!(
-            "wrote {dump} (behind the glass, {}x{})",
-            target.size.0, target.size.1
-        );
+        std::fs::write(&dump, oag_texture::png::encode_rgba(size.0, size.1, &rgba))
+            .map_err(|error| anyhow::anyhow!("writing {dump}: {error}"))?;
+        println!("wrote {dump} (behind the glass, {}x{})", size.0, size.1);
         Ok(())
     }
 }
@@ -777,6 +817,79 @@ mod tests {
         let mirror = Mirror::DEFAULT.matrix();
         assert!(mirror.determinant() < 0.0);
         assert!((flip_x() * mirror).determinant() > 0.0);
+    }
+
+    /// A bilinear lookup with the sampler's clamp-to-edge, as `shadow_sampler` reads the target.
+    fn bilinear(image: &[f32], size: (u32, u32), uv: [f32; 2]) -> f32 {
+        let texel = |x: i64, y: i64| {
+            let x = x.clamp(0, i64::from(size.0) - 1) as usize;
+            let y = y.clamp(0, i64::from(size.1) - 1) as usize;
+            image[y * size.0 as usize + x]
+        };
+        let u = uv[0].clamp(0.0, 1.0) * size.0 as f32 - 0.5;
+        let v = uv[1].clamp(0.0, 1.0) * size.1 as f32 - 0.5;
+        let (x0, y0) = (u.floor(), v.floor());
+        let (fx, fy) = (u - x0, v - y0);
+        let (x0, y0) = (x0 as i64, y0 as i64);
+        let top = texel(x0, y0) * (1.0 - fx) + texel(x0 + 1, y0) * fx;
+        let bottom = texel(x0, y0 + 1) * (1.0 - fx) + texel(x0 + 1, y0 + 1) * fx;
+        top * (1.0 - fy) + bottom * fy
+    }
+
+    /// What `refraction.wesl` and `shade.wesl` do with a clip-space point and the target.
+    fn shader_uv(clip: oag_core::math::Vec4, limit: [f32; 2]) -> [f32; 2] {
+        let (x, y) = (clip.x / clip.w.max(1e-6), clip.y / clip.w.max(1e-6));
+        [(0.5 + 0.5 * x).min(limit[0]), (0.5 - 0.5 * y).min(limit[1])]
+    }
+
+    /// The sub-viewport reads the same texels a quarter-size allocation would: the rectangle's
+    /// mapping lands a lookup on the same texel centres, and the clamp half a texel inside it
+    /// stands where the smaller texture's own edge clamp stood, so the junk outside the rectangle
+    /// (a frame drawn larger before, or the clear) is never reached, whatever the point.
+    #[test]
+    fn a_quarter_rectangle_reads_what_a_quarter_size_target_holds() {
+        use oag_display::display::ReflectionResolution;
+        for original in [SIZE, REFLECTION_SIZE, (480, 272)] {
+            for step in ReflectionResolution::STEPS {
+                let small = step.size(original);
+                let pattern = |x: u32, y: u32| ((x * 7919 + y * 104_729) % 251) as f32 / 251.0;
+                let own: Vec<f32> = (0..small.1)
+                    .flat_map(|y| (0..small.0).map(move |x| pattern(x, y)))
+                    .collect();
+                let full: Vec<f32> = (0..original.1)
+                    .flat_map(|y| {
+                        (0..original.0).map(move |x| {
+                            if x < small.0 && y < small.1 {
+                                pattern(x, y)
+                            } else {
+                                1000.0
+                            }
+                        })
+                    })
+                    .collect();
+                let mapping = rect_mapping(small, original);
+                let limit = uv_limit(small, original);
+                for i in 0..2000u32 {
+                    // Points across and well past the target's view, at several depths.
+                    let x = (i % 50) as f32 / 49.0 * 3.2 - 1.6;
+                    let y = (i / 50) as f32 / 39.0 * 3.2 - 1.6;
+                    let w = 0.5 + (i % 7) as f32;
+                    let clip = oag_core::math::Vec4::new(x * w, y * w, 0.3, w);
+                    let want = bilinear(&own, small, shader_uv(clip, [1.0, 1.0]));
+                    let got = bilinear(&full, original, shader_uv(mapping * clip, limit));
+                    assert!(
+                        (want - got).abs() < 1e-3,
+                        "{step} of {original:?} at clip ({x}, {y}): {got} against {want}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_rectangle_mapping_is_the_identity_at_the_originals_size() {
+        assert_eq!(rect_mapping(SIZE, SIZE), Mat4::IDENTITY);
+        assert_eq!(uv_limit(SIZE, SIZE), [1.0, 1.0]);
     }
 
     /// The reflect job doubles the sun colour and the prelit scale and nothing else.

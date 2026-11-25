@@ -166,6 +166,14 @@ impl Session {
         }
         let ms = |s: Option<oag_present::perf::Stats>| s.map(|s| s.mean_ms);
         let stage = self.dev_stage_name();
+        let reflection = self.reflection_drawn_name();
+        let passes: Vec<(&'static str, f32)> = self
+            .pass_costs
+            .rows()
+            .ordered()
+            .into_iter()
+            .map(|(name, seconds)| (name, seconds * 1000.0))
+            .collect();
         info!(
             "{}",
             devrun::format_line(&Reading {
@@ -181,6 +189,14 @@ impl Session {
                 surface,
                 render,
                 governor: self.governor.level(),
+                passes: &passes,
+                reflection,
+                chains: devrun::Chains {
+                    bloom_ms: ms(self.hd_bloom_cost.stats()),
+                    blur_ms: ms(self.blur_cost.stats()),
+                    upscale_ms: ms(self.upscale_cost.stats()),
+                    upscale_presented_ms: ms(self.upscale_presented_cost.stats()),
+                },
             })
         );
     }

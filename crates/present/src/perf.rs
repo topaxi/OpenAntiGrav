@@ -73,11 +73,13 @@ pub mod cost;
 pub mod memory;
 pub mod mods;
 pub mod net;
+pub mod passes;
 pub mod scene;
 pub mod transition;
 
 pub use chain::ChainCost;
 pub use cost::{CpuCost, GpuCost};
+pub use passes::{PassCosts, PassRows};
 pub use scene::SceneStats;
 
 /// How many frames the meter remembers: two seconds at 60 Hz.
