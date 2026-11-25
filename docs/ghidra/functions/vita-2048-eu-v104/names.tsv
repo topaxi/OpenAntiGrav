@@ -440,3 +440,6 @@
 0x81217616	function	Camera_UpdateHoldView	55	../ps3-hdfury-eu/destroy-camera.md
 0x812ab114	function	Psys_UpdateParticle	75	../ps3-hdfury-eu/ship-destroy.md
 0x8112e050	function	PauseMenu_BindRedirectForMode	80	pause-menu.md
+0x811ccdf4	function	Craft_ApplySpeedPad	80	detonator-pads.md
+0x811c9c7a	function	Ship_TestWeaponPad	75	detonator-pads.md
+0x8100f7c2	function	WeaponStats_ParseEmp	70	detonator-pads.md

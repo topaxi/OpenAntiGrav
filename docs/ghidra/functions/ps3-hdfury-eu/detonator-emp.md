@@ -272,7 +272,7 @@ tick after the cannon; the pad arms are in `oag_raceplay::pads`.
 | Fire | `emp::fire` | `Button::Flip` (the pad's L1) as a press edge, **chosen**; gated as the cannon is (a person flying, past the countdown); the charge resets even while a wave runs |
 | Wave | `emp::step_wave` | forward from the craft's nearest survey entry; ~~`extent * SECTIONS_PER_EXTENT` (40, chosen) entries over `wave_time`~~ one entry a tick while `age < extent` since 2026-11-24 (below); `<Emp>` scores; mines counted into the destroyed count; a bomb chains nothing |
 | HUD | `oag_hud::detonator` | `Emp_0..7` while the charge is over `i`, `EmpReady` at `lo`; `EmpBarEffect` not drawn (an `<ImageModel>`) |
-| Titles | `oag_title::Detonator::pads` | HD measured; Omega the speed pad measured, the weapon pad inherited from HD; 2048 `false` (its pads keep boost and pickup, so its EMP never charges) |
+| Titles | `oag_title::Detonator::pads` | HD measured; Omega and 2048 both arms measured (2026-11-25, [`vita-2048-eu-v104/detonator-pads.md`](../vita-2048-eu-v104/detonator-pads.md)) |
 
 Tests: `crates/weapons/src/detonator/emp/tests.rs` (the live gauge table for `n = 0..39`, the
 literal law, the cue edges, fire, the wave's `+25`/`+50`/`+1000`),
@@ -603,8 +603,8 @@ shared `emp` module, and both builds carry the same code (2048 `FUN_811e7c68`, `
 Omega `0x0133c600`). Tests: `tests::emp_fork::a_2048_emp_fired_on_or_beside_a_branch_follows_it`
 (HD's `zone_3` as 2048's DLC1 pack ships it) and
 `an_omega_emp_fired_on_or_beside_a_branch_follows_it` (`05_ubermall`, `15_anulpha_pass`).
-**2048's pads still never charge the EMP** (`oag_title::Detonator::pads` false: its pad arms are
-unread), so no player fires one there; the tests set the charge. Omega's `0x0133c600` is the
+These tests set the charge by hand; since 2026-11-25 2048's pads charge it too
+([`vita-2048-eu-v104/detonator-pads.md`](../vita-2048-eu-v104/detonator-pads.md)). Omega's `0x0133c600` is the
 **EMP's** sweep (it spawns `WO_QUAKE_DETONATOR` with `EMP2`), which closes the 50 below (80).
 
 ## The other route's record (2026-11-25)
@@ -670,13 +670,19 @@ clears fewer. `zone_3` and `15_anulpha_pass` ring launches clear the same set.
   `min((n - (hi - lo)) / (hi - lo), 1)` into `ship+0x8c0c` and raises `EMPREADY`/`EMPFULL` on the
   same two latches. The speed-pad arm is in the craft update `FUN_0133fff0`: on a pad hit with the
   mode `0xe`, a pad other than `craft+0x2f0` sets `ship+0x76f4 |= 0x8000000` and plays
-  `WEAPONPICKUP`. Omega's weapon-pad arm, fire and wave were not read.
+  `WEAPONPICKUP`. Omega's weapon-pad arm (2026-11-25, base import `/omega/eboot-ps4-omega-eu.bin`
+  `0x0130593b`-`0x01305954`): a pad other than `ship+0x8130` is stored and, in mode `0xe`, bit 27
+  of the same flag word is set: HD's law, **ported** (wired as measured). Fire and wave not read.
 - **2048: checked, applies, not wired.** `/2048/eboot-vita-2048-eu-v104.elf`: `FUN_8117e9c2`
   tests `ship+0x60a4 & 0x8000000`, counts into `rm+0x2b1f0`, reads table `+0x234`/`+0x238`, and
   computes the same gauge into `ship+0x7458`, with the divide done as a NEON reciprocal estimate
   and three Newton steps (so not bit-identical to an f32 divide), clamped to `1`, then
-  `EMPREADY`/`EMPFULL`. Its pads, fire and wave were not read; its HUD widgets differ
-  (`EmpCharge`/`EmpFull`, [detonator-hud.md](detonator-hud.md)).
+  `EMPREADY`/`EMPFULL`. **Its pads: ported** (2026-11-25): `Craft_ApplySpeedPad` (`0x811ccdf4`) and
+  `Ship_TestWeaponPad` (`0x811c9c7a`) are HD's two arms without the net guard, and the counts are
+  read from `+0x234`/`+0x238` (`4`/`8`)
+  ([`vita-2048-eu-v104/detonator-pads.md`](../vita-2048-eu-v104/detonator-pads.md), 75-80). Fire
+  and wave were not read; its HUD widgets differ (`EmpCharge`/`EmpFull`,
+  [detonator-hud.md](detonator-hud.md)).
 
 ## Names
 
