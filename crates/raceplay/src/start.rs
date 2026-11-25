@@ -1062,6 +1062,7 @@ impl Race {
                 texture_detail: oag_mesh::mesh_render::TextureDetail::default(),
                 trail_order: oag_display::display::TrailOrder::default(),
                 mine_sizes: Default::default(),
+                mine_pins: Default::default(),
                 scenery_sort: oag_display::display::ScenerySort::default(),
                 weather: oag_display::display::Weather::default(),
                 boost_kick: 0.0,

@@ -138,6 +138,21 @@ impl MineEnvelope {
     }
 }
 
+/// Replaces the envelope of every live mine in `pins` (by survey entry and lane) with the pinned
+/// football `s` and spikes `t`: a comparison holds a mine at the original's read.
+pub(crate) fn hold_pinned(
+    laid: &[LaidMine],
+    envelopes: &mut [MineEnvelope],
+    pins: &std::collections::BTreeMap<(u16, i8), (f32, f32)>,
+) {
+    for (mine, envelope) in laid.iter().zip(envelopes) {
+        if let Some(&(football, spikes)) = pins.get(&(mine.entry, mine.lane)).filter(|_| mine.live)
+        {
+            *envelope = MineEnvelope { football, spikes };
+        }
+    }
+}
+
 /// The constants of one mine part's material for a frame.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct MineConstants {

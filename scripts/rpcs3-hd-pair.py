@@ -214,10 +214,16 @@ def mine_flags(pair, ship):
         pair.caveat("no mine objects were read at the pause: ours lays its own seeded mine layout")
         return []
     pair.rec["original"]["detonator"]["mines"] = [
-        {"entry": m["entry"], "lane": m["lane"], "position": m["position"], "live": bool(m["live"])} for m in mines]
+        {"entry": m["entry"], "lane": m["lane"], "position": m["position"], "live": bool(m["live"]),
+         "football_s": m.get("football_s"), "spikes_t": m.get("spikes_t")} for m in mines]
     pair.caveat("Detonator mines: the original's %d mine objects were read in the pause (track entry, lane, position) and ours lays each on its "
                 "survey lane nearest that position (`--detonator-mines`); its bomb and any mine laid later are ours" % len(mines))
-    return ["--detonator-mines", ";".join("%.3f,%.3f,%.3f" % tuple(m["position"]) for m in mines)]
+    flags = ["--detonator-mines", ";".join("%.3f,%.3f,%.3f" % tuple(m["position"]) for m in mines)]
+    if all(m.get("football_s") is not None for m in mines):
+        flags += ["--detonator-mine-envelopes", ";".join("%.4f,%.4f" % (m["football_s"], m["spikes_t"]) for m in mines)]
+        pair.caveat("each mine's music envelope (`+0xf4`, `+0xf8`) was read in the same pause and ours holds it (`--detonator-mine-envelopes`): "
+                    "ours' own has no history of the music before the frame")
+    return flags
 
 
 def detonator_inputs(pair, out, ship, clock):

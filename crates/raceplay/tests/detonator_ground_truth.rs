@@ -970,7 +970,13 @@ fn carried_mines_stand_where_the_originals_objects_stood() {
         .iter()
         .map(|&p| oag_core::math::Vec3::from_array(p))
         .collect();
-    assert_eq!(race.core.sim.carry_detonator_mines(&positions), 0);
+    assert!(
+        race.core
+            .sim
+            .carry_detonator_mines(&positions)
+            .iter()
+            .all(Option::is_some)
+    );
     assert_eq!(race.core.sim.world.detonator.live_mines, 5);
     for (index, read) in positions.iter().enumerate() {
         let at = race
@@ -990,9 +996,7 @@ fn carried_mines_stand_where_the_originals_objects_stood() {
     // units too high (a lane on another deck): the twin and the high one are dropped.
     let first = positions[0];
     let high = first + oag_core::math::Vec3::new(0.0, 33.0, 0.0);
-    assert_eq!(
-        race.core.sim.carry_detonator_mines(&[first, first, high]),
-        2
-    );
+    let lanes = race.core.sim.carry_detonator_mines(&[first, first, high]);
+    assert_eq!(lanes.iter().filter(|lane| lane.is_none()).count(), 2);
     assert_eq!(race.core.sim.world.detonator.live_mines, 1);
 }

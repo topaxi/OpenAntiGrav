@@ -274,6 +274,12 @@ placement RNG cannot match the original's `Libc_Rand` (a departure, documented).
 
 ## Open
 
+- **Mine look (`det-mine-lit`)**: the normal map is read now (the chunk has one coordinate set), so hubs and holes show.
+  Open: (1) a pair's mines stay dark because the envelope has no history under raw bands below 0.3; carrying each mine's
+  `m+0xf4`/`m+0xf8` out of the original's RAM (`ship/mines[].address`) into a flag that seeds `MineEnvelopes` needs an
+  RPCS3 read; (2) with the envelope high, the ball's centre is dark in ours and bright in the original (eye-vector space,
+  `detonator-mine-material.md`, "Wired").
+
 **What remains open for Detonator (2026-11-23, after phase 15).** Phases 1-15 are in; what a player still
 misses is, by title. *All three:* the medal tier colours (the tiers draw one grey), the bomb flash writer
 (`b+0x154`, unread: brightness stays `0.2`/`0.8`), ~~the EMP wave's reach (chosen)~~ (read and drawn on HD, `det-emp-look-re`) and the radial bloom

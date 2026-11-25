@@ -153,6 +153,31 @@ fn an_envelope_belongs_to_its_mine_not_to_a_pool_slot() {
 }
 
 #[test]
+fn a_pinned_live_mine_holds_the_originals_envelope_whatever_the_bands_are() {
+    let mut envelopes = MineEnvelopes::default();
+    let mines = [laid(5, 0, true), laid(6, 0, true), laid(7, 0, false)];
+    let quiet = [0.1_f32; 16];
+    let mut stepped = envelopes.advance(&mines, &quiet, 1.0);
+    assert!(
+        stepped.iter().all(|e| e.brightness() == 0.0),
+        "quiet bands never attack"
+    );
+    let pins = std::collections::BTreeMap::from([((5, 0), (0.5886, 0.568)), ((7, 0), (0.9, 0.9))]);
+    hold_pinned(&mines, &mut stepped, &pins);
+    assert_eq!(stepped[0].brightness(), 2.0 * 0.5886);
+    assert_eq!(
+        stepped[1],
+        MineEnvelope::default(),
+        "an unpinned mine keeps its own"
+    );
+    assert_eq!(
+        stepped[2],
+        MineEnvelope::default(),
+        "a dark mine is never pinned"
+    );
+}
+
+#[test]
 fn a_dark_mine_never_steps() {
     let mut envelopes = MineEnvelopes::default();
     let dark = [laid(4, 0, false)];
