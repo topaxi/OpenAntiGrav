@@ -517,8 +517,9 @@ vertices, a streak about `1.1` wide running from `z = -1.8` to `z = 30.5` along 
 (the mesh bias `14.34` puts it there), with one material, `hd_detonator_cannonbolt_halo`
 (state `0x79`, blended `SrcAlpha`/`One`, culls). Its two units are
 `hd_detonator_cannonbolt.gtf` (256x256: a horizontal blue band, a cloud in its alpha) and
-`hd_detonator_cannonbolt_glow.gtf` (4x128: white, its alpha **eight rings**, a sawtooth of
-period 16 texels whose peaks climb from 0 to 250 along `v`). The model authors `fresnelBase`
+`hd_detonator_cannonbolt_glow.gtf` (4x128: white, its alpha **eight rings**, a wave of
+period 16 texels whose peaks fall from 255 at `v = 0`, the round's end of the streak, to 0 near
+`v = 1`; read off the decoded rows, which ours samples in the same order). The model authors `fresnelBase`
 (`0x743ea80b`) as `0.49874`.
 
 The race resolves `HalfBrightAmbientSunSpot0SVC0` (vertex `@0x1a10`, fragment `@0x1b70`;
@@ -555,14 +556,54 @@ lines above. **Chosen, not measured:** the colour tap is sRGB-decoded as the oth
 The bolt's pose (the half turn that makes the streak trail the round) is on
 [detonator-cannon.md](../ghidra/functions/ps3-hdfury-eu/detonator-cannon.md#the-bolts-look-and-the-loop-2026-11-25-det-cannon-bolt-look).
 
-**2048 and Omega: checked, applies, not wired.** Both ship the model and material (2048
-`data/weapons/detonator_cannonbolt.rcsmodel` and `weapons2048/`, Omega `data00.psarc` both
-directories): the same 288 triangles, the same two samplers on `.gxt`/`.gnf` copies of the two
-pictures, `fresnelBase` `0.49874`, state 121 (`0x79`), and on 2048 the same split attribute
-(`Uv1_Uv2`, four halves, `psp2_material_dump` with `DECL_SUB=0`) and the same extent along `+Z` (2048 `-2..30`, Omega `-1.80..30.50`).
-Their programs are GXP and GCN, which this matcher does not read; ours draws them through the
-generic psp2 path, which on Omega picks the ring strip as the diffuse. Wiring them means reading
-each program and matching it, which this lane did not do.
+**2048 and Omega: differs in the tint and the colour tap; ported.** See the next section.
+
+## The Detonator cannon bolt on 2048 and Omega (2026-11-25, `det-cannon-bolt-2048-omega`)
+
+Both ship the model and material (2048 `data/weapons/detonator_cannonbolt.rcsmodel` and
+`weapons2048/`, Omega `data00.psarc` both directories): 288 triangles, the samplers
+`LightningTexture` (the band) and `Texture1` (the ring strip), `fresnelBase` `0.49874`, state
+121, `Uv1_Uv2` as four halves. The programs are HD's arithmetic (**confidence 85**, static):
+
+```text
+noise = tex0(zw).a                          c = tex0(zw + 0.8 noise + 5 time)
+ring  = tex1(xy).a                          F = fB + (1 - fB) sat(1 - N.V)^5
+rgb   = C(c.rgb) + sat(1 - F)^3 T           alpha = 5 c.a ring
+then the fog lerp, with no `/2` and no globalAlphaScaler
+```
+
+| | colour tap `C` | tint `T` | read from |
+| --- | --- | --- | --- |
+| HD | unread gamma, decoded (chosen) | `(0.0619202, 0.744629, 1)` | fp `@0x1b70` |
+| 2048 | **the program squares it** (`mad.f16 pa0, pa6, pa6, pa0`) | `(0.06192, 0.74463, 1)`, HD's at half precision | USSE fragment program, `vita-usse.py disasm` |
+| Omega | the picture is **sRGB-typed** (`.gnf` channel type 9), so the unit decodes it | `(0.0619075, 0.74453, 1)`, **its own** | GCN pixel program, `gcn_dump` |
+
+- **2048.** The noise and ring taps are prefetched (the fragment input records: `LightningTexture`
+  at interpolant 2 = `Uv1_Uv2.zw`, `Texture1` at interpolant 1 = `.xy`, matched to the vertex
+  program's `mov o8 = uv.xy`, `o10 = uv.zw`); the one `smp` is the colour tap. The literals are
+  the tint's half pair, `1`, `5`, `0.8`, `5`, `1`.
+- **Omega.** `v_madmk` literals `5, 5, 0.8, 0.8` and the tint on red and green (blue adds
+  `(1 - F)^3` with no literal), alpha `v_mul_f32` by `5`. The 106- and 114-instruction pixel
+  programs of data00, 05 and 08 agree. The 35-instruction program, which writes `5 c.a ring` to
+  alpha only, and the 4-instruction one are other passes and are not wired (no pass of ours
+  takes them).
+- **Census.** 2048: 6 files (`Weapons` and `Weapons2048` in `data`, `data1`, `data2`), all
+  read. Omega: 18 files (data00, 05, 08, two directories, plain, `_1`, `_2`): the 6 plain ones
+  read; the 12 `_1`/`_2` PS4 Pro compiles (tint through VOP3P mixes), which no model references,
+  are refused.
+
+**Wired.** `oag_rcs::gxp::cannon_bolt` and `oag_rcs::gcn::cannon_bolt` read the tint off the
+code; `oag_mesh::mesh::rcs::psp2`'s `cannon_bolt` binds the band as the diffuse and the strip
+second and gives HD's glow-table mode the title's tint and a "colour tap is decoded" flag.
+Before, the generic path bound the ring strip as the diffuse (Omega: white rings; 2048: thin
+streaks off the band). HD's frame is byte-identical. The alpha is held to `1` (chosen, as on
+HD); the fog is the caller's. Tests: `rcs` `cannon_bolt_ground_truth` (24 files),
+`mesh` `psp2_cannon_bolt_ground_truth` (both titles' two models).
+
+2048's ring strip needed a decoder fix: a `PVRTII4BPP` level under eight texels stores only
+its own words ([gxt.md](../formats/gxt.md#a-level-under-eight-texels-stores-its-own-words)).
+
+**Not measured:** no frame of either original's bolt (no 2048 or PS4 capture).
 
 ## Open
 
