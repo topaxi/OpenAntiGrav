@@ -369,8 +369,8 @@ difference was shading, not a node the original hides (nothing in the mode `0xe`
    `ramp_sheen` is now off with `zone_program`, as the magstrip wave is. Confidence 80 (census over the material's blocks:
    `hd_zone_wave_census_ground_truth::no_zone_variant_of_a_facing_ramp_material_samples_the_ramp`). **Since 2026-11-25** the
    vertex-lit glass keeps its grid coverage in Zone, as every non-redraw Zone block writes it; the paraboloid reflection is read
-   and not drawn, because the Zone scenery tint `iblScalePower` is unread ([rcsmaterial.md](../../../formats/rcsmaterial.md),
-   "The Zone glass program").
+   and not drawn: the tint is read live as `(1, 1, 1, 0)` with weight 1, but drawing it with those values moves the mines-ahead glass box
+   9.23 to 20.55 ([rcsmaterial.md](../../../formats/rcsmaterial.md), "The Zone glass program").
 
 **Numbers** (`mines-ahead`, the pair's own mean grey, lower is better): whole frame 14.65 to 13.74; far-curve box
 `x1000..1500 y250..520` mean absolute grey difference against the original 29.1 to 19.4 (whole frame by the same measure 15.5
