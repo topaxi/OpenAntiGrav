@@ -43,8 +43,9 @@
 //! [`GpuCost::residual_ms`] - `frame - (the timed passes)` - overlaps all
 //! three of the rows above, is not replaced by them, and is deliberately
 //! *not* the row they are indented under: they sum to the frame, not to it. It is the reading
-//! [`crate::drs::Residual`] learns from, so the overlay showing exactly what
-//! the controller is fed is the point of it, and the three rows below it are
+//! [`crate::drs::Residual`] learns from **less the separately-timed passes**
+//! ([`GpuCost::passes`], which the controller's [`crate::drs::Cost`] does not carry), and the
+//! three rows below it are
 //! what say **which** of sleep, CPU work and untimed GPU passes a large one is
 //! made of. See `crates/present/src/drs/residual.rs`, which spells out the same
 //! contamination from the controller's side.
@@ -167,9 +168,10 @@ impl GpuCost {
     /// `Stats::mean_ms`, the same wall-clock reading the panel's own top row
     /// already carries - is what the machine is actually doing, timed passes
     /// and untimed ones both. The difference is real cost sitting outside
-    /// every `PassTimer` this build has - the shadow map, the PSP bloom, FXAA,
-    /// SMAA, FSR 1, the HUD, the menus, the composite, this overlay itself,
-    /// the driver's own overhead and the frame loop's own CPU-side work - plus
+    /// every `PassTimer` this build has - what happens inside the scene pass
+    /// (a tiler cannot split it), a pass recorded on another thread, the menus'
+    /// own draws, this overlay itself, the driver's own overhead and the frame
+    /// loop's own CPU-side work - plus
     /// **any time the loop spent asleep**, which is not cost at all. See
     /// [`CpuCost`], whose three rows say which of those a large residual is.
     ///
