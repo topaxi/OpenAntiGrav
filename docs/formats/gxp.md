@@ -464,6 +464,25 @@ that title. 2048's DLC and Omega's re-shipped `.rcsmaterial` programs differ
 only in this instruction set, so a law read here (the fog visibility above) is
 checked against Omega's own program, never assumed.
 
+### The Detonator mine's visualiser program (2026-11-25)
+
+`electricity.rcsmaterial`'s fragment programs are read by `oag_rcs::gxp::electricity`, the narrow decode
+[`texcoord_flip`](../../crates/rcs/src/gxp/texcoord_flip.rs) set the pattern for: `smp`, `mad2` (`f32`) and `nmad`
+operands by their bits. Two facts it rests on, both new here:
+
+- **Prefetched texels.** A fragment input record with a fetch nibble other than `0xf` is a texel of the record's
+  sampler at that interpolant, written into the `pa` file before the program runs; it has no `smp` word. The
+  visualiser's two bass and treble taps are fetched that way, so its code holds three `smp` words for five taps.
+- **Container 19 and the dependent-sampler table.** Container 19 (present on every program swept) is the `sa` area the
+  literal records and the dependent samplers are relative to: `sa = base + index`. The table at `+0x84` holds four
+  records per dependently sampled sampler, `resource * 4 + k` in the low half and the `sa` offset in the high half
+  (2,577 of 2,577 fragment programs of `data.psarc`'s materials that carry it: every record names a declared sampler,
+  and every `smp`'s sampler word is one the table lists). Confidence 80.
+
+The law and its listing are on
+[detonator-mine-draw.md](../ghidra/functions/ps3-hdfury-eu/detonator-mine-draw.md) ("The visualiser, wired", the 2048
+line).
+
 ### What is still unread
 
 - `ldst` (288 words) and `sop2m` (28): refused by name, in 100 programs.

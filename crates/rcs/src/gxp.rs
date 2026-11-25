@@ -90,6 +90,7 @@
 //!
 //! Header fields absent from the table above are unread rather than guessed.
 
+pub mod electricity;
 pub mod sampler_use;
 pub mod texcoord_flip;
 

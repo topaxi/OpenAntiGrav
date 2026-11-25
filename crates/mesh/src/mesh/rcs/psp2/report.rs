@@ -303,7 +303,7 @@ impl Report {
             String::new()
         } else {
             format!(
-                "; {} electricity material(s) drawn by their own program (the GCN arithmetic read, the units' gamma inherited from HD), {} left as the generic reading",
+                "; {} electricity material(s) drawn by their own program (the GCN or USSE arithmetic read; on GCN the units' gamma inherited from HD), {} left as the generic reading",
                 self.electricity_materials, self.electricity_unread
             )
         };

@@ -579,16 +579,22 @@ pub(super) fn load_cockpit_hit(
 mod ring_tests {
     use super::unread_ring_line;
 
-    /// HD and Omega name the ring and say nothing; 2048 names none and the loader says so.
+    /// HD, Omega and 2048 name the ring and say nothing; a title that names none says so.
     #[test]
     fn a_title_that_names_no_visualiser_says_so_in_the_loader_report() {
-        assert_eq!(unread_ring_line(&oag_hd::race::DETONATOR_OBJECTS), None);
-        let omega = &oag_omega::race::DETONATOR_OBJECTS;
-        assert!(omega.mine_visualiser.is_some());
-        assert_eq!(unread_ring_line(omega), None);
-        let objects = &oag_2048::race::DETONATOR_OBJECTS;
-        assert!(objects.mine_visualiser.is_none());
-        let line = unread_ring_line(objects).expect("a report line");
+        for objects in [
+            &oag_hd::race::DETONATOR_OBJECTS,
+            &oag_omega::race::DETONATOR_OBJECTS,
+            &oag_2048::race::DETONATOR_OBJECTS,
+        ] {
+            assert!(objects.mine_visualiser.is_some());
+            assert_eq!(unread_ring_line(objects), None);
+        }
+        let none = oag_title::DetonatorObjects {
+            mine_visualiser: None,
+            ..oag_2048::race::DETONATOR_OBJECTS
+        };
+        let line = unread_ring_line(&none).expect("a report line");
         assert!(line.contains("electric_visualiser") && line.contains("not drawn"));
     }
 }
