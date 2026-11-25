@@ -526,8 +526,8 @@ the mines and pad. Ours' floor also carries more red than the original's (box A 
 **Track fog and the glass floor, wired (2026-11-24, `det-mines-ahead-structure`).** The mid-distance red band's cause is wired: a track chunk
 takes the stage's Track Fog (`mesh_render::TrackFog`), and `etched_glass_tech`'s Zone variants run no facing-ramp sheen (the "grey-green
 structure" on `mines-ahead` was this glass floor, present in the original, dark). `mines-ahead` 14.65 to 13.74, `pad` 8.17 to 7.68,
-`cannon-volley` 15.00 to 14.18; evidence on `detonator-look.md`, "Track fog and the glass floor". Open: ours' far-curve box is about 8 low in
-green and blue; the Zone variant's grid and paraboloid reflection; 2048/Omega Track fog (checked, applies, not wired: no original frame).
+`cannon-volley` 15.00 to 14.18; evidence on `detonator-look.md`, "Track fog and the glass floor". The far-curve box's "8 low" (`det-glass-box-colour`, 2026-11-25) is the
+mine drawn black in ours and pale violet in the original: without it the box is within 1.8 grey per channel (`detonator-look.md`, "The \"8 low\" was the mine"); the mine's lit look is `det-colour`'s. Open: the Zone variant's grid and paraboloid reflection; 2048/Omega Track fog (checked, applies, not wired: no original frame).
 
 **The vis texel's gamma flag, read (2026-11-23, `det-floor-gain-re`, `docs/ghidra/functions/ps3-hdfury-eu/zone-vis-gamma.md`).** `zoneTexVis`'s address
 word is `0x60730303` (gamma nibble 7, confidence 75): the original sRGB-decodes the strip, ours samples it raw into the linear sum. Applied alone (scratch,

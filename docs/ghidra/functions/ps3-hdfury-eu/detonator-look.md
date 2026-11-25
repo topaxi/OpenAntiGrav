@@ -376,8 +376,22 @@ rest. `talons` (a Time Trial race, no Zone grade) re-renders at 3.32 to 3.31 on 
 change reaches it: `track_fog.authored` is `0` and `zone_program` is `0`). `zone-vineta-k-z5` 6.55 to 6.28 (a Zone race: the
 same two rules apply there).
 
-**Still open.** The far curve's panels are dim in the original and in ours now; the mid-distance red is closer but ours' green
-and blue in the box are about 8 low (box mean RGB ours `(47, 22, 24)` against `(53, 29, 31)`). Which of `Fog`, `Alt Fog` (flag bit 5) and
+**The "8 low" was the mine, not the glass (2026-11-25, `det-glass-box-colour`, confidence 90).** The box `x1000..1500 y250..520`
+holds a mine at its bottom-left (`x1000..1130, y400..520`, 14 % of the box): the original draws it pale violet and lit, ours a
+black sphere with a ring (`det-colour-re`'s mine colour bind, below). Per channel, mean RGB, ours against the original:
+
+| Region | Ours | Original |
+| --- | --- | --- |
+| whole box | `(47.4, 21.6, 23.8)` | `(53.1, 29.0, 31.4)` |
+| box without the mine | `(44.4, 21.8, 22.3)` | `(43.8, 21.4, 20.5)` |
+| the same, top 90 rows (buildings) also dropped | `(63.8, 28.0, 29.1)` | `(67.2, 31.8, 30.6)` |
+| orange road pixels (`R > 120`) | `(168.5, 113.0, 112.7)` | `(181.0, 115.5, 115.3)` |
+
+Without the mine the box is within 0.6, 0.4 and 1.8 grey of the original per channel (within 3.8 on the panels alone), so no term
+of the glass floor is short: not the Track Fog colour or density, not the grade's ambient, not the glass base. The strip's
+sRGB decode ([zone-vis-gamma.md](zone-vis-gamma.md)) is not needed to close this box, so it stays unwired (not run against it). No code changed. A mine inside the box is what any later colour read of it must mask.
+
+**Still open.** The far curve's panels are dim in the original and in ours now; the mid-distance red is closer. Which of `Fog`, `Alt Fog` (flag bit 5) and
 `Track Fog` a given draw takes is read for the track bit only. **2048 and Omega:** checked, applies, not wired (gated off by Title data above): 2048's
 tables author `Fog.Track Fog Colour` (density in the fourth lane, `key::TRACK_FOG_COLOUR_2048`) and ship the same
 `etched_glass_tech`-style materials in the HD lineage, but their per-chunk Track bit is the chosen shape-name rule and no 2048
