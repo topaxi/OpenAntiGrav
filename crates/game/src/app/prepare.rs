@@ -118,9 +118,10 @@ impl Pending {
             // `None` when `--movie` was not given: which entry that is depends
             // on the source's own title, not known here yet, so `boot::load`
             // resolves it once the source is open. See `boot::Options::movie`.
-            movie: self.cli.movie.clone(),
+            movie: self.cli.boot.movie.clone(),
             cache: self
                 .cli
+                .boot
                 .cache
                 .clone()
                 .unwrap_or_else(oag_source::cache::default_cache_dir),
@@ -130,11 +131,12 @@ impl Pending {
             // stop the sequence before the thing it exists to show.
             extent: self
                 .cli
+                .boot
                 .movie_frames
                 .map_or(movie::Extent::Whole, movie::Extent::Frames),
-            no_video: self.cli.no_video,
-            refresh_video: self.cli.refresh_video,
-            prefer_av1_cache: self.cli.prefer_av1_cache,
+            no_video: self.cli.boot.no_video,
+            refresh_video: self.cli.boot.refresh_video,
+            prefer_av1_cache: self.cli.boot.prefer_av1_cache,
             // The packs on now, for the faces; a MODS page switch is read at the next boot.
             find_texture_packs: Some(crate::texture_pack::finder(&self.settings.mods)),
         }
@@ -151,19 +153,20 @@ impl Pending {
             // `None` outside a two-title race - the ordinary CLI/menu route names
             // one source, and `race::load` treats that as "craft comes from
             // the same place as the track". See `race::Options::craft_source`.
-            craft_source: self.cli.craft_source.clone(),
+            craft_source: self.cli.race_setup.craft_source.clone(),
             hud_style: self
                 .cli
+                .race_setup
                 .hud_style
                 .clone()
                 .or_else(|| self.settings.display.hud_style_choice()),
-            add_on_campaign: self.cli.add_on_campaign.clone(),
+            add_on_campaign: self.cli.race_setup.add_on_campaign.clone(),
             campaign: false,
             dlc: self.dlc.clone(),
             // Passed straight through, `None` included: `race::load` resolves an
             // unnamed circuit from the title it opened, which is the only place
             // the title is known. See `race::Options::track`.
-            track: self.cli.track.clone(),
+            track: self.cli.race_setup.track.clone(),
             boost_zoom: self
                 .settings
                 .graphics
@@ -194,17 +197,17 @@ impl Pending {
             // `race::load` resolves an unnamed team from the title it opened,
             // which is the only place the title is known. See
             // `race::Options::team`.
-            team: self.cli.team.clone(),
+            team: self.cli.race_setup.team.clone(),
             // Passed straight through, `None` included: a team with no
             // `HullVariant` axis, or a stem it does not offer, is the same
             // "unrecognised, race the baseline and say so" shape `team`
             // and `track` already resolve at. See
             // `race::Options::hull_variant`.
-            hull_variant: self.cli.variant.clone(),
+            hull_variant: self.cli.race_setup.variant.clone(),
             // `race::Options::skin` - the player's own paint job, resolved
             // against what the team declares once the source is open.
-            skin: self.cli.skin.clone(),
-            livery: self.cli.livery.clone(),
+            skin: self.cli.race_setup.skin.clone(),
+            livery: self.cli.race_setup.livery.clone(),
             class: self.class.clone(),
             // See `race::Options::no_driver_for_class`.
             no_driver_for_class: !oag_ai::coverage::project_driver_covers(&self.class),
@@ -232,8 +235,8 @@ impl Pending {
             // The saved WEAPONS row, for a single race only. See
             // `race::Options::weapons_override`.
             weapons_override: self.settings.race.weapons_override(self.mode),
-            zone_stage: self.cli.zone_stage,
-            exposure_hold: self.cli.hold_exposure,
+            zone_stage: self.cli.race_debug.zone_stage,
+            exposure_hold: self.cli.race_debug.hold_exposure,
             opponent_teams,
             // Only `race::load_event`'s 2048-campaign resolution and a captured field
             // (`--field-from`, one team per row) set this. See `race::Options::grid_teams`.
@@ -246,6 +249,7 @@ impl Pending {
             // is the headless way.
             seat_picks: self
                 .cli
+                .race_setup
                 .seat_team
                 .iter()
                 .map(|spec| match spec.split_once(':') {
@@ -263,12 +267,12 @@ impl Pending {
                 .collect(),
             // See `race::Options::zone_model`: on since `fc01_dummy`'s road was read.
             zone_model: true,
-            hull_shine: !self.cli.no_hull_shine,
+            hull_shine: !self.cli.capture_view.no_hull_shine,
             hull_wreck: !self.cli.wreck.no_hull_wreck,
-            track_shine: !self.cli.no_track_shine,
-            ribbon: self.cli.ribbon,
-            no_effects: self.cli.no_effects,
-            collision: self.cli.collision,
+            track_shine: !self.cli.capture_view.no_track_shine,
+            ribbon: self.cli.race_debug.ribbon,
+            no_effects: self.cli.audio.no_effects,
+            collision: self.cli.race_debug.collision,
             // **From the settings here, not only in the menu path.** `--race`
             // bypasses the menus entirely, and a difficulty wired only into
             // `LaunchRace` would be silently ignored by the flag most testing
@@ -276,7 +280,7 @@ impl Pending {
             // and the default is used rather than failing the boot.
             difficulty: resolve_difficulty(&self.settings),
             skill_level: None,
-            opponents: self.cli.opponents || self.cli.driver.people() > 1,
+            opponents: self.cli.race_debug.opponents || self.cli.driver.people() > 1,
             // The load reads a title's authored split HUD for two views. Windows are not
             // views: each shows the whole-screen HUD, which is the sheet one view packs.
             views: match self.cli.driver.window_layout() {
@@ -287,18 +291,19 @@ impl Pending {
             },
             // Every seat of every window, which `views` is not (see `Options::people`).
             people: self.cli.driver.people(),
-            trail_sparks: self.cli.trail_sparks,
+            trail_sparks: self.cli.race_debug.trail_sparks,
             seed: self.cli.seed(),
             pose: self.pose,
             field: self.field.iter().map(|craft| craft.pose).collect(),
             hud: self.hud_state.clone(),
-            world_clock_offset: self.cli.world_clock_offset.unwrap_or(0.0),
-            gantry_seconds: self.cli.gantry_seconds,
+            world_clock_offset: self.cli.capture_view.world_clock_offset.unwrap_or(0.0),
+            gantry_seconds: self.cli.capture_view.gantry_seconds,
             camera: self.camera,
             fov_override: self
                 .cli
+                .capture_view
                 .camera_fov
-                .filter(|_| self.camera.is_none() && self.cli.no_camera),
+                .filter(|_| self.camera.is_none() && self.cli.capture_view.no_camera),
             demo: false,
         };
         // A track file that borrows from another title's disc races as a two-title race
@@ -327,7 +332,7 @@ impl Pending {
     /// the rest of the load, rather than when the AUDIO page is opened. Skipped
     /// under `--dry-run` for the same reason the music is.
     pub(crate) fn music_discs(&self, source: &str) -> oag_sound::MusicDiscs {
-        if self.cli.dry_run {
+        if self.cli.diagnostics.dry_run {
             return oag_sound::MusicDiscs::default();
         }
         // On a worker: a title picked in the launcher loads inside one frame,
@@ -341,7 +346,7 @@ impl Pending {
         );
         // With no soundtrack nothing plays from the pool, so its scan of every other disc and
         // folder has nothing to serve.
-        if !self.cli.no_soundtrack {
+        if !self.cli.audio.no_soundtrack {
             discs.start_pool(
                 &self.settings.audio.music_switches,
                 &self.settings.audio.music_folders,
@@ -463,12 +468,12 @@ impl Pending {
             race_options,
             music_discs,
             // Asked for, not started: see `Session::start_prefetch`.
-            prefetch: self.cli.prefetch.then(|| prefetch::Options {
+            prefetch: self.cli.boot.prefetch.then(|| prefetch::Options {
                 source: source.to_string(),
                 movies: options.cache.clone(),
                 audio: oag_source::cache::default_audio_cache_dir(),
                 dlc: self.dlc.clone(),
-                refresh_video: self.cli.refresh_video,
+                refresh_video: self.cli.boot.refresh_video,
             }),
         })
     }

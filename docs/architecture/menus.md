@@ -562,6 +562,21 @@ which disc the skin should come from. It is its own small module,
 Nothing else should follow it out of `menu.rs`. The test is whether a screen
 can have a title behind it, and every screen but this one can.
 
+It was driven end to end by hand on one machine (2026-08-18): `just launch`
+listed every image under `data/images/` with title, platform and serial read
+off each disc, `hdfury-ps3-eu.iso` came up red and unselectable beside the
+decrypted twin it shares a serial with, and two Down presses plus Return booted
+`pure-psp-eu.chd` (survey of seven images: 0.85 s). To repeat it, input must go
+over X11 (`unset WAYLAND_DISPLAY`; `xdotool` cannot reach a Wayland window and
+`xdotool key --window` does not work, so focus the window and use plain
+`xdotool key`). On that day Xvfb was no substitute: Mesa reported "No DRI3 support detected -
+required for presentation" and nothing was drawn or ticked. **Unsettled
+since**: `docs/ui/endrace-screens.md` and `docs/networking/online-lobby.md` drive
+a windowed `oag-game` under Xvfb on lavapipe with `xdotool`. One `just launch`
+under `scripts/xvfb-own.sh` with
+`VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json` would settle it for the
+chooser.
+
 ## Rebinding
 
 `oag_input::keys::map_key` used to be the hardcoded `match` a `binding` row

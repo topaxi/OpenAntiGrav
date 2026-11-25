@@ -61,13 +61,13 @@ pub struct Options {
     /// Plays this static path of the Fury menu backdrop instead of the
     /// picker's roll, with [`Self::anim_seconds`] as the time into it - the
     /// pair that lines a `--menu-page` capture up with an RPCS3 frame whose
-    /// path and clock were read. See `Cli::fury_path`.
+    /// path and clock were read. See `FuryArgs::fury_path`.
     pub fury_path: Option<usize>,
     /// The Fury menu backdrop's screen tint, stated for all three channels
-    /// instead of read off the skin's row. See `Cli::fury_tint`.
+    /// instead of read off the skin's row. See `FuryArgs::fury_tint`.
     pub fury_tint: Option<f32>,
     /// The adapted luma the Fury front end is exposed at, stated instead of the
-    /// craft's constant and the chain's own average. See `Cli::fury_adapted_luma`.
+    /// craft's constant and the chain's own average. See `FuryArgs::fury_adapted_luma`.
     pub fury_adapted_luma: Option<f32>,
     /// Offset the camera by a sub-pixel each frame, on the race this hands off
     /// to. `--camera-jitter`; see `crate::race_capture::CaptureOptions::camera_jitter`.

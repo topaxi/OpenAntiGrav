@@ -28,55 +28,55 @@ impl Cli {
             profile.render_scale = render_scale;
             profile.render_scale_chosen = true;
         }
-        if let Some(reconstruction) = self.reconstruction {
+        if let Some(reconstruction) = self.render.reconstruction {
             profile.reconstruction = reconstruction;
         }
-        if let Some(msaa) = self.msaa {
+        if let Some(msaa) = self.render.msaa {
             profile.msaa = msaa;
         }
-        if let Some(motion_blur) = self.blur.motion_blur {
+        if let Some(motion_blur) = self.render.blur.motion_blur {
             profile.motion_blur = motion_blur;
         }
-        if let Some(resolution) = self.blur.motion_blur_resolution {
+        if let Some(resolution) = self.render.blur.motion_blur_resolution {
             profile.motion_blur_resolution = resolution;
         }
-        if let Some(shadows) = self.shadows {
+        if let Some(shadows) = self.render.shadows {
             profile.shadows = shadows;
         }
-        if let Some(resolution) = self.shadow_resolution {
+        if let Some(resolution) = self.render.shadow_resolution {
             profile.shadow_resolution = resolution;
         }
-        if let Some(precision) = self.scene_precision {
+        if let Some(precision) = self.render.scene_precision {
             profile.scene_precision = precision;
         }
-        if let Some(lighting) = self.circuit_lighting {
+        if let Some(lighting) = self.render.circuit_lighting {
             profile.circuit_lighting = lighting;
         }
-        if let Some(resolution) = self.reflection_resolution {
+        if let Some(resolution) = self.render.reflection_resolution {
             profile.reflection_resolution = resolution;
         }
-        if let Some(screen_filter) = &self.screen_filter {
+        if let Some(screen_filter) = &self.render.screen_filter {
             profile.screen_filter = screen_filter.clone();
         }
-        if let Some(detail) = self.lod {
+        if let Some(detail) = self.render.lod {
             profile.model_detail = detail;
         }
-        if let Some(detail) = self.texture_detail {
+        if let Some(detail) = self.render.texture_detail {
             profile.texture_detail = detail;
         }
-        if let Some(order) = self.trail_order {
+        if let Some(order) = self.render.trail_order {
             profile.trail_order = order;
         }
-        if let Some(sort) = self.scenery_sort {
+        if let Some(sort) = self.render.scenery_sort {
             profile.scenery_sort = sort;
         }
-        if let Some(length) = self.trail_length {
+        if let Some(length) = self.render.trail_length {
             profile.trail_length = length;
         }
-        if let Some(weather) = self.weather {
+        if let Some(weather) = self.render.weather {
             profile.weather = weather;
         }
-        if self.photo_profile {
+        if self.capture_view.photo_profile {
             *profile = profile.for_a_photo();
         }
     }

@@ -25,10 +25,11 @@ fn read(path: &Path) -> Result<shot_meta::Found> {
 /// sea target at the original's size, and none of the game's own motion blur (a flag the person
 /// gave stands).
 fn draw_as_photo_mode(cli: &mut Cli) {
-    cli.pvs = Some(false);
-    cli.reflection_resolution = Some(oag_display::display::ReflectionResolution::Original);
-    cli.photo_profile = true;
-    cli.blur
+    cli.render.pvs = Some(false);
+    cli.render.reflection_resolution = Some(oag_display::display::ReflectionResolution::Original);
+    cli.capture_view.photo_profile = true;
+    cli.render
+        .blur
         .motion_blur
         .get_or_insert(oag_display::display::MotionBlur::Off);
 }
@@ -45,14 +46,14 @@ fn draw_as_the_photo_was(meta: &shot_meta::Meta, cli: &mut Cli) {
         .and_then(toml::Value::as_integer)
         .and_then(|percent| u32::try_from(percent).ok())
     {
-        cli.render_scale = Some(percent.max(100));
+        cli.render.render_scale = Some(percent.max(100));
     }
     if let Some(reconstruction) = render
         .get("reconstruction")
         .and_then(toml::Value::as_str)
         .and_then(|text| text.parse().ok())
     {
-        cli.reconstruction = Some(reconstruction);
+        cli.render.reconstruction = Some(reconstruction);
     }
 }
 
@@ -69,7 +70,7 @@ fn picture_lines(meta: &shot_meta::Meta, cli: &mut Cli) -> Vec<String> {
             Vec::new()
         };
     };
-    cli.picture = Some(picture.to_flag());
+    cli.capture_view.picture = Some(picture.to_flag());
     vec![format!("picture controls applied: {}", picture.to_flag())]
 }
 
@@ -170,7 +171,7 @@ pub(crate) fn prepare(
     };
     let meta = found.meta.unwrap_or_default();
     cli.race = true;
-    cli.ticks = u32::try_from(record.tick).context("the shot's tick does not fit")?;
+    cli.capture.ticks = u32::try_from(record.tick).context("the shot's tick does not fit")?;
     if cli.screenshot.is_none() {
         let stem = path
             .file_stem()
@@ -182,14 +183,15 @@ pub(crate) fn prepare(
         draw_as_the_photo_was(&meta, cli);
     }
     if meta.shot.width > 0 && meta.shot.height > 0 {
-        cli.size = format!("{}x{}", meta.shot.width, meta.shot.height);
+        cli.capture.size = format!("{}x{}", meta.shot.width, meta.shot.height);
     }
     if let Some(camera) = &meta.camera {
         let [ex, ey, ez] = camera.eye;
         let [fx, fy, fz] = camera.forward;
         let [ux, uy, uz] = camera.up;
-        cli.camera_pose = Some(format!("{ex},{ey},{ez},{fx},{fy},{fz},{ux},{uy},{uz}"));
-        cli.camera_fov = camera.fov_deg;
+        cli.capture_view.camera_pose =
+            Some(format!("{ex},{ey},{ez},{fx},{fy},{fz},{ux},{uy},{uz}"));
+        cli.capture_view.camera_fov = camera.fov_deg;
     }
     let (blurred, blur_line) = blurred_of(&meta);
     for line in picture_lines(&meta, cli).into_iter().chain(blur_line) {
@@ -226,16 +228,16 @@ mod tests {
     fn a_photo_is_drawn_again_without_the_games_motion_blur_unless_asked_for() {
         let mut cli = Cli::try_parse_from(["oag-game"]).expect("parses");
         draw_as_photo_mode(&mut cli);
-        assert_eq!(cli.pvs, Some(false));
-        assert!(cli.photo_profile);
+        assert_eq!(cli.render.pvs, Some(false));
+        assert!(cli.capture_view.photo_profile);
         assert_eq!(
-            cli.blur.motion_blur,
+            cli.render.blur.motion_blur,
             Some(oag_display::display::MotionBlur::Off)
         );
         let mut asked = Cli::try_parse_from(["oag-game", "--motion-blur", "high"]).expect("parses");
         draw_as_photo_mode(&mut asked);
         assert_eq!(
-            asked.blur.motion_blur,
+            asked.render.blur.motion_blur,
             Some(oag_display::display::MotionBlur::High)
         );
     }
@@ -267,7 +269,7 @@ mod tests {
             .expect("parses");
         draw_as_photo_mode(&mut cli);
         assert_eq!(
-            cli.reflection_resolution,
+            cli.render.reflection_resolution,
             Some(ReflectionResolution::Original)
         );
         let mut profile = crate::settings::RenderProfile {
@@ -300,16 +302,16 @@ mod tests {
         ])
         .expect("parses");
         draw_as_the_photo_was(&text(150, "smaa"), &mut cli);
-        assert_eq!(cli.render_scale, Some(150));
-        assert_eq!(cli.reconstruction, Some(Reconstruction::Smaa));
+        assert_eq!(cli.render.render_scale, Some(150));
+        assert_eq!(cli.render.reconstruction, Some(Reconstruction::Smaa));
         draw_as_the_photo_was(&text(50, "off"), &mut cli);
         assert_eq!(
-            cli.render_scale,
+            cli.render.render_scale,
             Some(100),
             "a photo is never drawn below 100"
         );
         draw_as_the_photo_was(&shot_meta::Meta::default(), &mut cli);
-        assert_eq!(cli.render_scale, Some(100), "no text, no change");
+        assert_eq!(cli.render.render_scale, Some(100), "no text, no change");
     }
 
     #[test]
@@ -322,7 +324,7 @@ mod tests {
         };
         let lines = picture_lines(&meta("photo mode", Some(picture)), &mut cli);
         assert_eq!(
-            cli.picture.as_deref(),
+            cli.capture_view.picture.as_deref(),
             Some("exposure=60,saturation=20,speed_blur=0")
         );
         assert!(
@@ -407,7 +409,7 @@ mod tests {
             lines[0].contains("no picture controls recorded"),
             "{lines:?}"
         );
-        assert_eq!(cli.picture, None);
+        assert_eq!(cli.capture_view.picture, None);
         assert!(picture_lines(&meta("screenshot", None), &mut cli).is_empty());
     }
 }

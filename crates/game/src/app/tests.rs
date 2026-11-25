@@ -354,6 +354,37 @@ fn the_icon_flags_do_not_make_themselves_required() {
     Cli::try_parse_from(["oag-game"]).expect("no flags at all must still parse");
 }
 
+/// A group left out of `Cli`'s flattening drops its flags from the command line
+/// without a compile error: nothing reads some of them but a script.
+#[test]
+fn every_flag_group_is_flattened_into_the_command() {
+    use clap::CommandFactory as _;
+    let command = Cli::command();
+    command.clone().debug_assert();
+    for id in [
+        "no_video",
+        "loading_screen",
+        "no_effects",
+        "fury_path",
+        "size",
+        "fetch_ffmpeg",
+        "craft_source",
+        "zone_stage",
+        "force_shake",
+        "anisotropy",
+        "pose_from",
+        "hud_state",
+        "world_clock_offset",
+        "pose_boost",
+    ] {
+        assert!(
+            command.get_arguments().any(|arg| arg.get_id() == id),
+            "--{} is not on the command line",
+            id.replace('_', "-")
+        );
+    }
+}
+
 /// A one-page, one-row definition whose row is a binding for `button` -
 /// [`menu::tests::an_unbound_button_draws_the_word_rather_than_nothing`]'s
 /// fixture shape, reused here for `Session::maybe_begin_binding` rather than
@@ -556,9 +587,9 @@ fn zone_bands_take_sixteen_levels_and_conflict_with_the_ramp() {
         .join(",");
     let cli = Cli::try_parse_from(["oag-game", "--race", "--zone-bands", &levels])
         .expect("sixteen levels parse");
-    let bands = cli.zone_bands.expect("the flag was given");
+    let bands = cli.race_debug.zone_bands.expect("the flag was given");
     assert!((bands[15] - 0.15).abs() < 1e-6);
-    assert_eq!(cli.zone_bands_raw, None);
+    assert_eq!(cli.race_debug.zone_bands_raw, None);
 
     let short = (0..15).map(|_| "0.5").collect::<Vec<_>>().join(",");
     for bad in [short.as_str(), "NaN,0.5", "-0.5,0.5"] {

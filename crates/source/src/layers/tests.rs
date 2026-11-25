@@ -87,3 +87,15 @@ fn the_fallback_carries_every_rumble_pattern_in_its_directory() {
     }
     assert_eq!(seen, RUMBLE_PATTERNS.len());
 }
+
+/// A sorted table is what keeps two additions on separate lines, and a repeated
+/// path would let the later insert silently win.
+#[test]
+fn the_embedded_table_is_sorted_with_no_path_twice() {
+    let names: Vec<&str> = EMBEDDED.iter().map(|(name, _)| *name).collect();
+    assert!(names.windows(2).all(|pair| pair[0] < pair[1]), "{names:?}");
+    let layer = fallback_layer();
+    for name in names {
+        assert!(layer.contains(name), "{name} is not in the fallback layer");
+    }
+}

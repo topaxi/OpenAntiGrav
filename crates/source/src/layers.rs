@@ -121,38 +121,46 @@ pub const RUMBLE_PATTERNS: &[(&str, &[u8])] = rumble_patterns![
     "wrong_way",
 ];
 
-/// This project's own rocket effect behind `graphics.own_rockets`: three effect files in
-/// the format a mod's effect is written in, and the puff sprites they name
+/// A file embedded from `assets/fallback/`, by its path under that directory.
+macro_rules! embedded {
+    ($($path:literal),* $(,)?) => {
+        &[$((
+            $path,
+            include_bytes!(concat!("../../../assets/fallback/", $path)) as &[u8],
+        )),*]
+    };
+}
+
+/// Every embedded entry of the fallback layer except the rumble patterns, one
+/// per line and sorted by path: a layer's entry is named by its path relative
+/// to the directory, so a new file is one new line here. The own rocket effect
+/// behind `graphics.own_rockets` is three effect files in the format a mod's
+/// effect is written in and the puff sprites they name
 /// (`docs/rendering/own-rockets.md`).
-const OWN_ROCKET: [(&str, &[u8]); 7] = [
-    (
-        "Data\\Psys\\OAGRocketFlight.toml",
-        include_bytes!("../../../assets/fallback/Data/Psys/OAGRocketFlight.toml"),
-    ),
-    (
-        "Data\\Psys\\OAGRocketImpactTrack.toml",
-        include_bytes!("../../../assets/fallback/Data/Psys/OAGRocketImpactTrack.toml"),
-    ),
-    (
-        "Data\\Psys\\OAGRocketImpactCraft.toml",
-        include_bytes!("../../../assets/fallback/Data/Psys/OAGRocketImpactCraft.toml"),
-    ),
-    (
-        "Data\\Psys\\Tex\\OAGRocketPuff1.oagmask",
-        include_bytes!("../../../assets/fallback/Data/Psys/Tex/OAGRocketPuff1.oagmask"),
-    ),
-    (
-        "Data\\Psys\\Tex\\OAGRocketPuff2.oagmask",
-        include_bytes!("../../../assets/fallback/Data/Psys/Tex/OAGRocketPuff2.oagmask"),
-    ),
-    (
-        "Data\\Psys\\Tex\\OAGRocketPuff3.oagmask",
-        include_bytes!("../../../assets/fallback/Data/Psys/Tex/OAGRocketPuff3.oagmask"),
-    ),
-    (
-        "Data\\Psys\\Tex\\OAGRocketPuff4.oagmask",
-        include_bytes!("../../../assets/fallback/Data/Psys/Tex/OAGRocketPuff4.oagmask"),
-    ),
+const EMBEDDED: &[(&str, &[u8])] = embedded![
+    "Data/HUD/Textures/AssistIndicator.pix",
+    "Data/Psys/OAGRocketFlight.toml",
+    "Data/Psys/OAGRocketImpactCraft.toml",
+    "Data/Psys/OAGRocketImpactTrack.toml",
+    "Data/Psys/Tex/OAGRocketPuff1.oagmask",
+    "Data/Psys/Tex/OAGRocketPuff2.oagmask",
+    "Data/Psys/Tex/OAGRocketPuff3.oagmask",
+    "Data/Psys/Tex/OAGRocketPuff4.oagmask",
+    "Data/Psys/Tex/OAGSplash.oagmask",
+    "Data/XML/BenchmarkPresets_2048.toml",
+    "Data/XML/BenchmarkPresets_HD.toml",
+    "Data/XML/BenchmarkPresets_Omega.toml",
+    "Data/XML/BenchmarkPresets_Pulse.toml",
+    "Data/XML/BenchmarkPresets_Pure.toml",
+    "Data/XML/HUD_assist_indicator.xml",
+    "Data/XML/LoadingScreen_2048.toml",
+    "Data/XML/LoadingScreen_HD.toml",
+    "Data/XML/LoadingScreen_Omega.toml",
+    "Data/XML/NowPlaying_2048.xml",
+    "Data/XML/SplitHud_2048.toml",
+    "Data/XML/SplitHud_HD.toml",
+    "Data/XML/SplitHud_Pulse.toml",
+    "Data/XML/SplitHud_Pure.toml",
 ];
 
 /// This project's own substitutes, carried in the binary.
@@ -163,71 +171,7 @@ const OWN_ROCKET: [(&str, &[u8]); 7] = [
 #[must_use]
 pub fn fallback_layer() -> Layer {
     let mut layer = Layer::new(Kind::Fallback, "this project's own assets");
-    layer.insert_bytes(
-        "Data\\XML\\HUD_assist_indicator.xml",
-        include_bytes!("../../../assets/fallback/Data/XML/HUD_assist_indicator.xml"),
-    );
-    layer.insert_bytes(
-        "Data\\HUD\\Textures\\AssistIndicator.pix",
-        include_bytes!("../../../assets/fallback/Data/HUD/Textures/AssistIndicator.pix"),
-    );
-    layer.insert_bytes(
-        "Data\\XML\\NowPlaying_2048.xml",
-        include_bytes!("../../../assets/fallback/Data/XML/NowPlaying_2048.xml"),
-    );
-    layer.insert_bytes(
-        "Data\\XML\\BenchmarkPresets_Pulse.toml",
-        include_bytes!("../../../assets/fallback/Data/XML/BenchmarkPresets_Pulse.toml"),
-    );
-    layer.insert_bytes(
-        "Data\\XML\\BenchmarkPresets_Pure.toml",
-        include_bytes!("../../../assets/fallback/Data/XML/BenchmarkPresets_Pure.toml"),
-    );
-    layer.insert_bytes(
-        "Data\\XML\\BenchmarkPresets_HD.toml",
-        include_bytes!("../../../assets/fallback/Data/XML/BenchmarkPresets_HD.toml"),
-    );
-    layer.insert_bytes(
-        "Data\\XML\\BenchmarkPresets_2048.toml",
-        include_bytes!("../../../assets/fallback/Data/XML/BenchmarkPresets_2048.toml"),
-    );
-    layer.insert_bytes(
-        "Data\\XML\\BenchmarkPresets_Omega.toml",
-        include_bytes!("../../../assets/fallback/Data/XML/BenchmarkPresets_Omega.toml"),
-    );
-    layer.insert_bytes(
-        "Data\\XML\\SplitHud_Pulse.toml",
-        include_bytes!("../../../assets/fallback/Data/XML/SplitHud_Pulse.toml"),
-    );
-    layer.insert_bytes(
-        "Data\\XML\\SplitHud_Pure.toml",
-        include_bytes!("../../../assets/fallback/Data/XML/SplitHud_Pure.toml"),
-    );
-    layer.insert_bytes(
-        "Data\\XML\\SplitHud_HD.toml",
-        include_bytes!("../../../assets/fallback/Data/XML/SplitHud_HD.toml"),
-    );
-    layer.insert_bytes(
-        "Data\\XML\\SplitHud_2048.toml",
-        include_bytes!("../../../assets/fallback/Data/XML/SplitHud_2048.toml"),
-    );
-    layer.insert_bytes(
-        "Data\\XML\\LoadingScreen_HD.toml",
-        include_bytes!("../../../assets/fallback/Data/XML/LoadingScreen_HD.toml"),
-    );
-    layer.insert_bytes(
-        "Data\\XML\\LoadingScreen_2048.toml",
-        include_bytes!("../../../assets/fallback/Data/XML/LoadingScreen_2048.toml"),
-    );
-    layer.insert_bytes(
-        "Data\\XML\\LoadingScreen_Omega.toml",
-        include_bytes!("../../../assets/fallback/Data/XML/LoadingScreen_Omega.toml"),
-    );
-    layer.insert_bytes(
-        "Data\\Psys\\Tex\\OAGSplash.oagmask",
-        include_bytes!("../../../assets/fallback/Data/Psys/Tex/OAGSplash.oagmask"),
-    );
-    for (name, bytes) in OWN_ROCKET {
+    for (name, bytes) in EMBEDDED {
         layer.insert_bytes(name, bytes);
     }
     for (name, bytes) in RUMBLE_PATTERNS {

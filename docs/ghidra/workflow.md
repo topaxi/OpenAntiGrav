@@ -489,6 +489,40 @@ one. Two habits keep this useful:
   [`billboards.md`](functions/psp-pulse-usa/billboards.md#construction-writes-no-transform---true-for-placement-not-true-for-identity)
   for the full correction.
 
+- **`switch_program` sets a global "current program" that any session can
+  move**, and it can reply success without switching: three
+  `rename_function_by_address` calls with no `program` once reported success
+  and landed on another title's binary. Pass `program` on every mutating call
+  (`rename_*`, `set_*`, `create_*`) and re-verify with an explicit-`program`
+  read. `run_script_inline` with an explicit `program` does not depend on the
+  pointer (all 309 `ps3-hdfury-eu` names were applied that way on 2026-09-15
+  while `just apply-names` refused).
+- **Four binaries share the display name `BOOT.BIN`** (`psp-pulse-usa`,
+  `psp-pulse-eu`, `psp-pure-usa`, `psp-pure-eu`). `rename_function_by_address`
+  and `create_function` ignore `program` and act on the active program (unlike
+  `get_function_by_address`): 234 stray names once landed on `psp-pulse-usa`.
+  Check `list_open_programs` (what the tool has open; `list_instances` reports
+  the project's files) before believing a program is unreachable, and before a
+  cross-binary `apply-names`: `psp-pure-usa` and `psp-pure-eu` simply had not
+  been opened, and one `open_program` each fixed it.
+  `scripts/apply-ghidra-names.py` and `scripts/audit-ghidra-names.py --prune`
+  re-read the true active program after a switch and abort loudly.
+- **`rename_data` rejects this project's global naming
+  (`missing_hungarian_prefix`) while `rename_function` only warns.** Do not
+  rename to satisfy the validator ([ADR-0005](../architecture/adr/0005-ghidra-conventions.md)
+  and `names.tsv` are authoritative): use `create_label`, which applies the name
+  and only warns. The "not PascalCase" and "not a recognized verb" warnings on
+  `Subsystem_VerbNoun` are noise; the rename lands.
+- **`search_byte_patterns` accepts a `mask` and ignores it**: a masked search
+  degrades to exact match and reads like "not found" (`d0000108`/`fc00ffff`
+  found nothing while `d03f0108` found three). Use `search_instructions` with
+  `mnemonic`/`operand_pattern` (`stfs`, `0x108(` found 48), and sanity-check any
+  masked result against a known-present sequence.
+- **A duplicate address in `names.tsv` silently broke `just apply-names`** for
+  `psp-pulse-usa` (`plasma.md` re-documented two names `weapon-stats.md` owned;
+  `apply_group` refuses the whole group on the first duplicate).
+  `check-ghidra-names.py`'s `check_duplicates` rule trips offline now.
+
 ### The database can disagree with `names.tsv`, and the docs win
 
 Moved here from `HANDOVER.md` on 2026-08-09. Per
@@ -648,6 +682,23 @@ import is the actual fix and is nobody's task yet.
 `jal` targets in `BOOT.BIN` encode the **ELF vaddr** (base 0), not the
 `0x08804000` image base. Scanning the extracted binary for calls to
 `0x0884d850` means searching for `0x0C012614`, not `0x0E213614`.
+
+`BOOT.BIN` is a PRX (`e_type` `0xffa0`, as above) with `.text` at file offset `0x80`,
+virtual `0x0`, length `0x272a3c` in `psp-pulse-usa`. Walk four bytes at a time
+keeping each `lui`'s immediate per register; when an `addiu`/`ori` completes a
+pair, compare against `<target> - 0x08804000`. A `jal` target is
+`(word & 0x03ffffff) << 2`, already naive, so comparing with
+`<function> - 0x08804000` yields the caller list. This takes seconds against a
+long failed `get_xrefs_to` search: reach for it as soon as one xref comes back
+empty. Check a naive address against the section table first (`.text` below
+`0x272a3c`, `.rodata` `0x274000`-`0x2ac5e4`, `.data` from `0x2ac600`):
+`0x08a884dc - 0x08804000 = 0x002844dc`, and borrowing a digit gives an address
+inside `.text` and a confident empty result. A `.rodata` string reference has no
+working xref at all (`%s\ship_eliminator.dat`, `%s\Ship.vex` and
+`Data\Psys\%s.POB` all come back empty on both forms), so an empty result
+proves nothing until calibrated against a string whose consumer is known.
+`get_xrefs_to` on the naive address does work for a `lui`/`lw` data reference
+(`0x002ac818` returned all 27 `g_ingame` sites) but not for a `jal`.
 
 ### `get_xrefs_to` on `ps3-hdfury-eu`: code xrefs are sound, data xrefs are not
 

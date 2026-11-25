@@ -20,22 +20,34 @@ use crate::app::gpu::Gpu;
 use crate::app::{race_stage::RaceStage, stage::Stage};
 
 mod apply;
+mod benchmark;
 mod campaign;
 mod campaign_editor;
 mod cpu_governor;
+mod custom_tracks;
+mod demo;
+mod device_lost;
+pub(crate) mod devrun;
 mod draw;
 pub(crate) mod endrace;
 // `Session::escape` and `Session::resume_race` - split out of `menus.rs`
 // under the 1,000-line rule; see `escape.rs`'s own doc for why this pair is
 // the seam.
-mod benchmark;
-mod demo;
-mod device_lost;
 mod escape;
+mod ffmpeg;
 mod frame;
 pub(crate) mod frame_timing;
 mod hints;
 mod hosted_map;
+mod join;
+// The browser build takes the module named below instead (`lan_web.rs`,
+// `online_web.rs`): a different file under the same module name, which only
+// `#[path]` expresses.
+#[cfg(not(target_arch = "wasm32"))]
+mod lan;
+#[cfg(target_arch = "wasm32")]
+#[path = "session/lan_web.rs"]
+mod lan;
 mod language;
 mod launch2048;
 mod launch_keys;
@@ -44,54 +56,40 @@ mod load;
 mod load_probe;
 mod menu_sound;
 mod menu_source;
+pub(crate) mod menus;
 mod mods_page;
+mod multiplayer;
 mod music;
 mod music_pool_page;
-mod opening_reads;
-pub(crate) mod phases;
-mod reconnect;
-pub(crate) mod replays;
-mod rumble;
-mod shot_open;
-mod shoulder;
-pub(crate) use benchmark::State as BenchmarkState;
-pub(crate) use demo::State as DemoState;
-pub(crate) use load_probe::LoadProbe;
-pub(crate) use mods_page::Rebuilt;
-pub(crate) mod menus;
-mod pacing;
-pub(crate) mod pause;
-mod pause_menu;
-mod picker;
-// Named `pilot_editor`, not `pilots` - `oag_raceplay::pilots` is already imported
-// unaliased above, and a sibling module of the same name would shadow it.
-mod custom_tracks;
-pub(crate) mod devrun;
-mod join;
-#[cfg(not(target_arch = "wasm32"))]
-mod lan;
-#[cfg(target_arch = "wasm32")]
-#[path = "session/lan_web.rs"]
-mod lan;
-// The browser build takes the module named below instead (`lan_web.rs`, `online_web.rs`): a different file under the same module name, which only `#[path]` expresses.
-mod ffmpeg;
-mod multiplayer;
 #[cfg(not(target_arch = "wasm32"))]
 mod online;
 #[cfg(target_arch = "wasm32")]
 #[path = "session/online_web.rs"]
 mod online;
+mod opening_reads;
+mod pacing;
+pub(crate) mod pause;
+mod pause_menu;
+pub(crate) mod phases;
 mod photo;
 mod photo_hud;
 pub(crate) mod photo_meta;
 mod photo_rewind;
+mod picker;
+// Named `pilot_editor`, not `pilots` - `oag_raceplay::pilots` is already imported
+// unaliased above, and a sibling module of the same name would shadow it.
 mod pilot_editor;
 mod placeholder;
 mod player_name;
 mod pointer;
 mod pure_chain;
 mod queries;
+mod reconnect;
+pub(crate) mod replays;
+mod rumble;
 mod seat_assign;
+mod shot_open;
+mod shoulder;
 mod stutter;
 pub(crate) mod timing;
 mod tournament;
@@ -99,6 +97,11 @@ mod tournament;
 mod wallpaper;
 mod window_layout;
 mod windows;
+
+pub(crate) use benchmark::State as BenchmarkState;
+pub(crate) use demo::State as DemoState;
+pub(crate) use load_probe::LoadProbe;
+pub(crate) use mods_page::Rebuilt;
 
 /// Everything that only exists once there is a window.
 pub(crate) struct Session {
