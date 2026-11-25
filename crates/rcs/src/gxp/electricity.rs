@@ -169,8 +169,11 @@ fn scalar32(word: u64) -> Option<Scalar32> {
     })
 }
 
+/// An `f32` `mad2`'s written word and its three source words, `None` for a constant lane.
+type Mad32 = (Word, Option<Word>, Option<Word>, Option<Word>);
+
 /// An `f32` `mad2` writing one lane: `(dst, s0, s1, s2)` words.
-fn mad32(word: u64) -> Option<(Word, Option<Word>, Option<Word>, Option<Word>)> {
+fn mad32(word: u64) -> Option<Mad32> {
     if usse::classify(word) != Some(usse::Class::Mad2) || field(word, 58, 1) != 0 {
         return None;
     }
