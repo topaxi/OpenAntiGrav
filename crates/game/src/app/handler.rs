@@ -60,6 +60,8 @@ pub(crate) struct App {
     pub(crate) demo_limit: Option<oag_present::perf::FrameLimit>,
     /// `--benchmark`: what the run asks for. See `session::benchmark`.
     pub(crate) benchmark: Option<crate::benchmark::Request>,
+    /// `--ticks`: where a benchmark is stopped, when it is given (a short run for a test).
+    pub(crate) benchmark_ticks: Option<u32>,
     /// `--replay-png`: the screenshot to open in the viewer once the main menu is up.
     pub(crate) replay_png: Option<std::path::PathBuf>,
     /// `--give`, resolved to a weapon at startup. See the CLI field.
@@ -544,7 +546,7 @@ impl App {
             replay_refused: std::collections::BTreeMap::new(),
             watching: None,
             demo: crate::app::session::DemoState::with_cli(self.demo, self.demo_limit),
-            benchmark: crate::app::session::BenchmarkState::with_cli(self.benchmark.clone()),
+            benchmark: crate::app::session::BenchmarkState::with_cli(self.benchmark.clone(), self.benchmark_ticks),
             viewer: None,
             notice: None,
             shot_cli: self.replay_png.clone(),

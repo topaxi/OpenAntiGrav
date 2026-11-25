@@ -19,13 +19,9 @@ pub(crate) struct BenchmarkArgs {
 
 impl BenchmarkArgs {
     /// What the run asks for, when it is a benchmark.
-    ///
-    /// `ticks` is `--ticks`: where it is non-zero the run stops there and says it did not finish
-    /// (a short run for a test; a result file records the cap it ran under).
-    pub(crate) fn request(&self, ticks: u32) -> Option<crate::benchmark::Request> {
+    pub(crate) fn request(&self) -> Option<crate::benchmark::Request> {
         self.benchmark.then(|| crate::benchmark::Request {
             preset: self.preset.clone(),
-            tick_cap: (ticks > 0).then_some(ticks),
         })
     }
 }

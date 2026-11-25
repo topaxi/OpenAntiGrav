@@ -27,6 +27,9 @@ use super::Session;
 pub(crate) struct State {
     /// `--benchmark`: asked for on the command line, launched once the menus are up.
     pub(crate) cli: Option<Request>,
+    /// `--ticks` with `--benchmark`: where every benchmark of this run stops, menu launches
+    /// included (a short run for a test).
+    tick_cap: Option<u32>,
     /// The launch, from the call to the race's hand-over.
     launching: Option<Launch>,
     /// What the player had, set aside while a benchmark's stand in its place.
@@ -59,8 +62,9 @@ impl State {
     }
 
     /// The state of a run started with `--benchmark`, or of a plain one.
-    pub(crate) fn with_cli(cli: Option<Request>) -> Self {
+    pub(crate) fn with_cli(cli: Option<Request>, tick_cap: Option<u32>) -> Self {
         Self {
+            tick_cap,
             cli,
             ..Self::default()
         }
@@ -78,6 +82,28 @@ impl Session {
     pub(crate) fn on_benchmark_screen(&self) -> bool {
         matches!(&self.stage, Stage::Race(stage)
             if stage.benchmark.as_ref().is_some_and(|live| live.done.is_some()))
+    }
+
+    /// Where the benchmark is, for a script that waits on it: `loading`, `running` or `stats`.
+    pub(crate) fn benchmark_phase(&self) -> Option<&'static str> {
+        match &self.stage {
+            Stage::Race(stage) => stage
+                .benchmark
+                .as_ref()
+                .map(|live| if live.done.is_some() { "stats" } else { "running" }),
+            Stage::Loading(_) if self.benchmark.launching.is_some() => Some("loading"),
+            _ => None,
+        }
+    }
+
+    /// A BENCHMARK or RUN BENCHMARK row was fired: starts the benchmark with the player's own
+    /// settings, and remembers the page it came from for the stats screen's BACK.
+    pub(crate) fn start_benchmark_from_menu(&mut self) {
+        let origin = match &self.stage {
+            Stage::Menu(stage) if stage.menu.page().id == "graphics" => Origin::Graphics,
+            _ => Origin::Extras,
+        };
+        self.launch_benchmark(origin, None, None);
     }
 
     /// Starts a benchmark from `origin` with the preset the request names. Returns whether the
@@ -116,7 +142,7 @@ impl Session {
         self.benchmark.launching = Some(Launch {
             origin,
             preset,
-            tick_cap: tick_cap.unwrap_or(plan::TICK_CAP),
+            tick_cap: tick_cap.or(self.benchmark.tick_cap).unwrap_or(plan::TICK_CAP),
         });
         info!("starting the benchmark");
         match self.launch_race() {
@@ -170,7 +196,7 @@ impl Session {
             && self.attract_eligible()
         {
             let request = self.benchmark.cli.take().unwrap_or_default();
-            return self.launch_benchmark(Origin::Cli, request.preset, request.tick_cap);
+            return self.launch_benchmark(Origin::Cli, request.preset, None);
         }
         let Stage::Race(stage) = &mut self.stage else {
             return false;
@@ -342,7 +368,7 @@ impl Session {
         let mut settings = vec![
             ("size".to_string(), format!("{}x{}", config.width, config.height)),
             ("present".to_string(), format!("{:?}", config.present_mode)),
-            ("render_scale".to_string(), format!("{:?}", profile.render_scale)),
+            ("render_scale".to_string(), plain(&format!("{:?}", profile.render_scale))),
             ("upscaler".to_string(), format!("{:?}", profile.reconstruction)),
             ("msaa".to_string(), format!("{:?}", profile.msaa)),
             ("shadows".to_string(), format!("{:?}", profile.shadows)),
@@ -361,8 +387,7 @@ impl Session {
             ("frustum_culling".to_string(), format!("{:?}", self.settings.graphics.frustum_culling)),
             ("pvs_culling".to_string(), format!("{:?}", self.settings.graphics.pvs_culling)),
             ("camera_view".to_string(), format!("{:?}", self.settings.graphics.camera_view)),
-            ("fov".to_string(), format!("{:?}", self.settings.graphics.fov)),
-            ("hud_scale".to_string(), format!("{:?}", self.settings.graphics.hud_scale)),
+            ("fov".to_string(), plain(&format!("{:?}", self.settings.graphics.fov))),
             ("autopilot".to_string(), "true".to_string()),
         ];
         settings.retain(|(_, value)| !value.is_empty());
@@ -402,6 +427,16 @@ impl Session {
             ending,
         })
     }
+}
+
+/// A percentage type's debug text (`Scale(100)`) as the number it carries (`100%`); anything
+/// else as it is.
+fn plain(debug: &str) -> String {
+    debug
+        .split_once('(')
+        .and_then(|(_, rest)| rest.strip_suffix(')'))
+        .filter(|inner| inner.chars().all(|c| c.is_ascii_digit()))
+        .map_or_else(|| debug.to_string(), |inner| format!("{inner}%"))
 }
 
 /// Writes the result under the user data directory, and says where.

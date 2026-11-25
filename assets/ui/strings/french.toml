@@ -589,6 +589,11 @@ ids = [
     "OAG_PHOTO_LOOK",
     "OAG_PHOTO_MOVE",
     # The REPLAYS page and the replay viewer (ADR-0087); no translation pass yet.
+    # The BENCHMARK rows; no translation pass yet.
+    "OAG_MENU_BENCHMARK",
+    "OAG_MENU_BENCHMARK_SUBTITLE",
+    "OAG_GRAPHICS_RUN_BENCHMARK",
+    "OAG_GRAPHICS_RUN_BENCHMARK_SUBTITLE",
     "OAG_MENU_REPLAYS",
     "OAG_MENU_REPLAYS_SUBTITLE",
     "OAG_REPLAYS_PAGE_TITLE",

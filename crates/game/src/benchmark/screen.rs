@@ -76,6 +76,12 @@ fn track_label(track: &str) -> String {
     }
 }
 
+/// The last three components of a path: `bench/run-1795576464/pulse.json`.
+fn short_path(path: &str) -> String {
+    let parts: Vec<&str> = path.split(['\\', '/']).filter(|part| !part.is_empty()).collect();
+    parts[parts.len().saturating_sub(3)..].join("/")
+}
+
 /// Characters a line of the panel holds at text scale one: measured against the Pulse HUD face
 /// at the panel's width.
 const WIDTH_AT_ONE: f32 = 52.0;
@@ -198,7 +204,7 @@ pub fn draw_list(report: &Report, line_height: f32, focus: Choice, saved: Option
     out.push(text(left, y, Align::Left, CAPTION, context.device.to_uppercase()));
     y += line;
     if let Some(saved) = saved {
-        out.push(text(left, y, Align::Left, CAPTION, format!("SAVED {saved}").to_uppercase()));
+        out.push(text(left, y, Align::Left, CAPTION, format!("SAVED {}", short_path(saved)).to_uppercase()));
     }
     for (choice, label) in [(Choice::Back, "BACK"), (Choice::Again, "RUN AGAIN")] {
         let rect = button_rect(choice);
@@ -229,6 +235,15 @@ mod tests {
             assert_eq!(hit(x - 1.0, y + h / 2.0), None);
         }
         assert_eq!(hit(240.0, 100.0), None);
+    }
+
+    #[test]
+    fn a_saved_path_is_shown_by_its_tail() {
+        assert_eq!(
+            short_path("/home/a/.local/share/oag/bench/run-1/pulse.json"),
+            "bench/run-1/pulse.json"
+        );
+        assert_eq!(short_path("pulse.json"), "pulse.json");
     }
 
     #[test]

@@ -1216,6 +1216,18 @@ string_id = "OAG_GRAPHICS_CAMERA_VIEW"
 setting = "graphics.camera_view"
 values = ["internal", "close", "far"]
 
+# RUN BENCHMARK flies the fixed benchmark race with these settings and comes back to this page
+# with the stats on screen first (`docs/tools/in-game-benchmark.md`). The same action as the
+# extras' BENCHMARK row; where it returns to is the page it was fired from. Chosen, not measured.
+[[page.entry]]
+id = "graphics_benchmark"
+kind = "action"
+label = "RUN BENCHMARK"
+string_id = "OAG_GRAPHICS_RUN_BENCHMARK"
+action = "benchmark"
+subtitle = "Fly one fixed race with these settings and read the frame rate"
+subtitle_string_id = "OAG_GRAPHICS_RUN_BENCHMARK_SUBTITLE"
+
 # Everything on this page that is not the original's picture or a performance
 # control: the rows that change how the game looks beyond what the disc drew, and
 # the ones whose values include the original beside this project's own. A

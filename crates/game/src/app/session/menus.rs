@@ -572,6 +572,8 @@ impl Session {
             }
             // The pause menu's PHOTO MODE row (`session::photo`).
             menu::MenuEvent::Fired(menu::Action::PhotoMode) => self.open_photo_from_menu(),
+            // The extras' BENCHMARK row and the graphics page's RUN BENCHMARK (`session::benchmark`).
+            menu::MenuEvent::Fired(menu::Action::Benchmark) => self.start_benchmark_from_menu(),
             // The pause menu's RESTART RACE and QUIT RACE rows (`session::pause_menu`).
             menu::MenuEvent::Fired(menu::Action::RestartRace) => self.restart_parked_race(),
             menu::MenuEvent::Fired(menu::Action::QuitRace) => self.quit_parked_race(),

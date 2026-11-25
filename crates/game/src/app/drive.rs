@@ -615,6 +615,7 @@ fn state_of(session: &mut Session) -> State {
         Stage::Loading(_) if session.demo.loading.is_some() => Some("loading".to_string()),
         _ => None,
     };
+    state.benchmark = session.benchmark_phase().map(str::to_string);
     state
 }
 

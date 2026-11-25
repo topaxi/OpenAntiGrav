@@ -90,8 +90,6 @@ pub fn title_key(title_name: &str) -> String {
 pub struct Request {
     /// The preset to draw with; `None` is the player's own settings.
     pub preset: Option<String>,
-    /// `--ticks`: stop the race here and report it unfinished, instead of at [`plan::TICK_CAP`].
-    pub tick_cap: Option<u32>,
 }
 
 /// Where the benchmark was started from, and so where the stats screen's BACK leaves to.
