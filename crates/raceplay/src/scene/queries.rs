@@ -23,6 +23,14 @@ impl Scene {
             .map_or(0, crate::adverts::Cards::rebound)
     }
 
+    /// How many advert card passes this scene has encoded, all frames together.
+    #[cfg(test)]
+    pub(crate) fn adverts_encoded(&self) -> usize {
+        self.adverts
+            .as_ref()
+            .map_or(0, crate::adverts::Cards::encoded)
+    }
+
     /// How many of those were bound with a wrapping sampler.
     #[cfg(test)]
     pub(crate) fn adverts_wrapped(&self) -> usize {

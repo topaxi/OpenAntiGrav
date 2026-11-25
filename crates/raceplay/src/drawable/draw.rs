@@ -699,3 +699,58 @@ impl Drawable {
         stats
     }
 }
+
+/// One draw of a model: its list and its index in that list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ListDraw {
+    Opaque(usize),
+    Cutout(usize),
+    Blended(usize),
+}
+
+impl Drawable {
+    /// Every draw of the model, in any list, that samples texture slot `slot`.
+    pub(crate) fn draws_of_texture(&self, slot: usize) -> Vec<ListDraw> {
+        let of = |draws: &[DrawCall], list: fn(usize) -> ListDraw| {
+            draws
+                .iter()
+                .enumerate()
+                .filter(|(_, draw)| draw.texture == Some(slot))
+                .map(move |(index, _)| list(index))
+                .collect::<Vec<_>>()
+        };
+        let mut found = of(&self.model.draws, ListDraw::Opaque);
+        found.extend(of(&self.model.alpha_tested_draws, ListDraw::Cutout));
+        found.extend(of(&self.model.transparent_draws, ListDraw::Blended));
+        found
+    }
+
+    /// Whether `draw` passes the culling tiers [`Self::draw_lists`] applies to it with the
+    /// same arguments. The level of detail and the hidden panels are not asked, so this is
+    /// true of every draw the pass draws and of some it leaves out.
+    pub(crate) fn may_draw(
+        &self,
+        draw: ListDraw,
+        sections: Option<&DrawSections>,
+        set: Option<&VisibleSet>,
+        chunks: Option<&ChunkSet>,
+        frustum: Option<&Frustum>,
+    ) -> bool {
+        let empty: &[u64] = &[];
+        let (opaque, alpha_tested, transparent) = sections.map_or((empty, empty, empty), |s| {
+            (&s.opaque[..], &s.alpha_tested[..], &s.transparent[..])
+        });
+        let (call, placed) = match draw {
+            ListDraw::Opaque(index) => (&self.model.draws[index], DrawSections::at(opaque, index)),
+            ListDraw::Cutout(index) => (
+                &self.model.alpha_tested_draws[index],
+                DrawSections::at(alpha_tested, index),
+            ),
+            ListDraw::Blended(index) => (
+                &self.model.transparent_draws[index],
+                DrawSections::at(transparent, index),
+            ),
+        };
+        visible(call, placed, set, chunks, frustum)
+    }
+}

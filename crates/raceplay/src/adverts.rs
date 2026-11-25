@@ -29,6 +29,7 @@
 //! track's own placeholder materials).
 
 use super::*;
+use crate::drawable::draw::ListDraw;
 
 /// What a circuit's billboard slots become: the start gantry on slot 8's quad,
 /// and an advert drawn into each of the other slots' quads that has a model.
@@ -225,6 +226,8 @@ struct CardGpu {
     uniforms_written: std::cell::Cell<bool>,
     colour: wgpu::TextureView,
     wrap: bool,
+    /// The track's draws that show this card ([`Cards::bind_into`]).
+    shown_by: Vec<ListDraw>,
     #[cfg(test)]
     target: wgpu::Texture,
     #[cfg(test)]
@@ -244,6 +247,9 @@ pub(super) struct Cards {
     /// How many uniform writes [`Cards::render`] has made, all cards together.
     #[cfg(test)]
     uniform_writes: std::cell::Cell<usize>,
+    /// How many card passes [`Cards::render`] has encoded, all frames together.
+    #[cfg(test)]
+    encoded: std::cell::Cell<usize>,
     depth: wgpu::TextureView,
     velocity: wgpu::TextureView,
     /// The one-pixel target of `OAG_SKIP_PASSES=extra-passes`, built only when it is named.
@@ -266,23 +272,54 @@ impl std::fmt::Debug for Cards {
 /// track samples this as an ordinary albedo.
 const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 
-/// Draws every card of `cards`, if the circuit has any, ahead of the scene pass
-/// that samples them, at `seconds` on the scenery clock.
+/// The one view that samples a frame's cards: the track and the culling its scene pass
+/// draws the track with.
+#[derive(Clone, Copy)]
+pub(super) struct Seen<'a> {
+    pub track: &'a Drawable,
+    pub sections: Option<&'a DrawSections>,
+    pub set: Option<&'a VisibleSet>,
+    pub chunks: Option<&'a ChunkSet>,
+    pub frustum: Option<&'a Frustum>,
+}
+
+impl Seen<'_> {
+    /// Whether one of `draws` can be drawn by the view.
+    fn shows(&self, draws: &[ListDraw]) -> bool {
+        draws.iter().any(|&draw| {
+            self.track
+                .may_draw(draw, self.sections, self.set, self.chunks, self.frustum)
+        })
+    }
+}
+
+/// Draws the cards of `cards`, if the circuit has any, ahead of the scene pass that samples
+/// them, at `seconds` on the scenery clock: every card, or with `seen` only the cards a
+/// track draw that survives its culling shows.
+///
+/// A card is a function of the scenery clock alone, cleared before each draw, so one left
+/// out holds a picture nobody samples and is drawn whole on the frame a view shows it
+/// again: the picture is the same as drawing every card every frame, which is what the
+/// originals do (`docs/rendering/frame-thread-cpu.md`, "Advert cards: drawn only when shown").
 pub(super) fn render(
     cards: &Option<Cards>,
     queue: &wgpu::Queue,
     encoder: &mut wgpu::CommandEncoder,
     seconds: f32,
-    race: &Race,
-    anim_seconds: Option<f32>,
+    (race, anim_seconds): (&Race, Option<f32>),
+    seen: Option<Seen<'_>>,
 ) {
     if oag_gpu::skip::skipped("adverts") {
         return;
     }
     if let Some(cards) = cards {
-        cards.render(queue, encoder, seconds, &|timeline| {
-            timeline.seconds(race, anim_seconds)
-        });
+        cards.render(
+            queue,
+            encoder,
+            seconds,
+            &|timeline| timeline.seconds(race, anim_seconds),
+            seen,
+        );
     }
 }
 
@@ -391,6 +428,7 @@ impl Cards {
                 uniforms_written: std::cell::Cell::new(false),
                 colour: target.create_view(&wgpu::TextureViewDescriptor::default()),
                 wrap: card.wrap,
+                shown_by: Vec::new(),
                 #[cfg(test)]
                 target,
                 #[cfg(test)]
@@ -405,6 +443,8 @@ impl Cards {
             wrapped: 0,
             #[cfg(test)]
             uniform_writes: std::cell::Cell::new(0),
+            #[cfg(test)]
+            encoded: std::cell::Cell::new(0),
             depth,
             velocity,
             pass_probe,
@@ -422,8 +462,9 @@ impl Cards {
         placeholders: &[(usize, u32)],
     ) {
         for &(texture_slot, number) in placeholders {
-            if let Some(card) = self.cards.iter().find(|c| c.slot == number) {
+            if let Some(card) = self.cards.iter_mut().find(|c| c.slot == number) {
                 track.set_albedo(device, queue, texture_slot, &card.colour, card.wrap);
+                card.shown_by.extend(track.draws_of_texture(texture_slot));
                 #[cfg(test)]
                 {
                     self.rebound += 1;
@@ -450,13 +491,21 @@ impl Cards {
         self.wrapped
     }
 
-    /// Draws every card into its target at `seconds` on the scenery clock.
+    /// How many card passes [`Self::render`] has encoded.
+    #[cfg(test)]
+    pub(super) fn encoded(&self) -> usize {
+        self.encoded.get()
+    }
+
+    /// Draws every card into its target at `seconds` on the scenery clock, or with `seen`
+    /// only the cards that view shows ([`render`]).
     pub(super) fn render(
         &self,
         queue: &wgpu::Queue,
         encoder: &mut wgpu::CommandEncoder,
         seconds: f32,
         gantry_clock: &dyn Fn(&crate::gantry::CardTimeline) -> f32,
+        seen: Option<Seen<'_>>,
     ) {
         // A card is drawn into its own texture, outside any view: its matrices go straight to
         // its own buffer.
@@ -464,6 +513,11 @@ impl Cards {
         oag_gpu::skip::extra_passes(encoder, self.pass_probe.as_ref());
         let draws = !oag_gpu::skip::skipped("advert-draws");
         for card in &self.cards {
+            if seen.is_some_and(|seen| !seen.shows(&card.shown_by)) {
+                continue;
+            }
+            #[cfg(test)]
+            self.encoded.set(self.encoded.get() + 1);
             let seconds = card.timeline.as_ref().map_or(seconds, |timeline| {
                 timeline.apply(&card.drawable, gantry_clock(timeline))
             });

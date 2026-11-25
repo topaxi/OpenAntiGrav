@@ -17,6 +17,7 @@
 use super::*;
 use oag_vex::track;
 
+mod advert_views;
 mod autopilot;
 mod between_ticks;
 mod bindless;
