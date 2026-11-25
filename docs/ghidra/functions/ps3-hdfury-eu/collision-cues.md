@@ -515,10 +515,8 @@ The gate on `ship + 0x5f42` (the player's internal view or look-back, read 2026-
 **One spark per record, whatever the number of views.** The ring walk's view loop
 (`0x000ec3e4`..`0x000ec4a4`) calls `Ship_SpawnContactFx` from `0x000ec9fc` for the first view
 that passes, then branches past the loop (`0x000eca00`, `b 0x000ec4a8`). A kind 2 node is
-allocated per call, so a frame with three floor records makes three. Confidence 85. Confidence 80 for the branch; **60 that the spark sits at the locator**: whether
-the scene update composes the parent locator's world matrix into `node + 0xf0` is not read.
-Recipe: after a floor contact, read `node + 0x120` (the translation row) against the locator's
-world position, or read the update reached through the node's vtable.
+allocated per call, so a frame with three floor records makes three. Confidence 85. Confidence 80 for the branch; **the spark rides its locator, confidence 88**, read live 2026-11-25
+("Does the floor spark ride its locator", below; it was 60).
 
 ### Not read here
 
@@ -544,8 +542,10 @@ ring walk's reach, as `field_sparks`), a craft that is not racing, and a title w
 nothing). A frame of only frictionless records counts as touching for the attached spark's
 release rule, for the seat and for the opponents.
 
-- **Chosen, not measured:** the spark stays where it spawned instead of riding its locator (the
-  confidence-60 value above stays open); the eight-record cap. The flag `ship + 0x5f42`
+- **The spark rides its locator** (2026-11-25, below): each is held as a riding instance and moved
+  to its locator on the drawn hull every tick until its emitters end (test
+  `a_floor_spark_rides_its_locator_and_lets_go_when_it_ends`). **Chosen, not measured:** the
+  eight-record cap and 32 sparks riding at once. The flag `ship + 0x5f42`
   is read (2026-11-25, [particle-triggers.md](particle-triggers.md), "the camera-mode flags"): the
   internal view or the look-back of the player's own craft, 0 for every rival; this engine has
   neither view, so it is always 0 here and the gate changes no frame.
@@ -579,3 +579,35 @@ release rule, for the seat and for the opponents.
   `0x0193fc54`). A craft (0 or 1) gets `0x3d0f5c29` (`0.035`) against a craft, `0.025`/`0.035`
   against 4, 5, 6, and the literal `0` against everything else: the compiler folded the
   never-written float to a constant. Same law as 2048's.
+
+## 2026-11-25: does the floor spark ride its locator
+
+Lane `hd-contact-sparks`. `scripts/rpcs3-hd-floor-spark-ride.py` on RPCS3 0.0.43-20574,
+`hd-racebox-talons-venom-weapons-grid`, three runs of 30 single game frames from lap clock 4 s.
+The player's body is pushed 3 units along its down axis for three frames: the hull sinks through
+the road, the floor and reset records fire, and the reset plane teleports the craft (a jump of
+`(-2.0, +16.5, -10.0)` units in one frame, `ride4` frame 26 to 27).
+
+- **Three `LinkObj` nodes appear at once** (vtable word `0x008745a0` at `node + 8`, found by a heap
+  scan at each paused frame), each a child of one of the craft's ten locator nodes
+  (`node + 0xc` = `ship + 0x79d0 + 4 * i`; the locators `0x307f7e20`, `0x307f7d10`, `0x307f8040`).
+  That is `ShipCollisionFx_Trigger` kind 2, one node per record.
+- **The node's own matrix never changes**: `node + 0x120` reads `(0, 0, 0, 1)`, the identity from
+  `0x002c8c70`, on every one of 30 frames while the hull sinks 10 units and is teleported 17. So the
+  placement is composed from the parent at use, not copied into the node once.
+- **The particle instance follows the hull.** The instance sits `0x190` after its node (found by
+  the back pointer at `instance + 0x2c` and the `1.0` of scale-block slot 0 at `+0x30`). Its world
+  translation (`+0xe0`, `+0xe4`, `+0xe8`, and the copy at `+0x130`) read `(-127.84, -51.88, -175.69)`
+  at birth, `y` falling `-54.16`, `-57.12`, ... `-62.46` with the hull (`-52.6` to `-62.2`), then
+  `(-128.29, -45.86, -185.66)` the frame the craft is teleported to `(-132.8, -45.7, -185.3)`. The
+  emitter's anchor (`+0x90`..`+0x98`) tracked the sinking hull for as long as the effect emitted
+  (`y` `-52.43`, `-54.63`, `-57.62` against the hull's `-52.6`, `-55.6`, `-56.9`) and froze when its
+  emission ended (`+0x148` counts the effect's ticks down, `+0x14c` up).
+- **Frames agree** (`ride2`, screenshots of the paused frames): the white sparks stay around the
+  craft through the teleport and none is left at the contact site.
+
+So the one-shot rides its locator for as long as it emits, through a teleport. Confidence 88
+(a live read, three runs; the two runs that scanned the instance agree). Wired in
+`crates/raceplay/src/floor_sparks.rs`: a riding instance (`Stage::play_riding`) moved to its
+locator on the drawn hull every tick (`Stage::follow`) and let go when `Stage::is_emitting` ends.
+2048 and Omega: ported by title data with the rest of the floor spark, not run.

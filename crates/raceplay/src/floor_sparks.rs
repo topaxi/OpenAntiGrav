@@ -17,10 +17,14 @@
 //! [`crate::hit_sparks::throws_weapon_spark`]): that list is `Ship_DispatchCollisionFx`'s, the
 //! one this dispatch reads. Pulse and Pure keep none, so they throw nothing here.
 //!
-//! **Chosen, not measured:** the spark stays where it spawned instead of riding its locator
-//! (`collision-cues.md` keeps that value open, confidence 60); a record cap of
-//! [`MAX_FRICTIONLESS`] per craft per tick; the cockpit-view flag (`ship + 0x5f42`, inferred)
-//! that stops every kind is not applied.
+//! **The spark rides its locator** (`collision-cues.md`, "Does the floor spark ride its
+//! locator", read live): the node is a child of the locator and the instance's world matrix
+//! follows the hull every frame, through a teleport as well. Each spark is held as a riding
+//! instance, moved to its locator on the drawn hull every tick until its emitters end.
+//!
+//! **Chosen, not measured:** a record cap of [`MAX_FRICTIONLESS`] per craft per tick and
+//! [`MAX_RIDING`] sparks riding at once. The cockpit-view flag (`ship + 0x5f42`) is the player's
+//! internal or look-back view, which this engine has not.
 //!
 //! **Nothing here is simulation state.**
 
@@ -82,8 +86,21 @@ pub(super) fn not_racing_record(
 /// locator nearest the record, at the pose the record was made in) and where the craft was, for
 /// the reach test. Placed when noted because a reset plane's record teleports the craft the same
 /// tick.
+/// How many floor sparks ride their locators at once.
+const MAX_RIDING: usize = 32;
+
+/// A floor spark riding the craft it was thrown from.
+#[derive(Debug, Clone, Copy)]
+struct Riding {
+    playing: oag_fx::psys::Playing,
+    slot: usize,
+    /// The locator's position in the craft's model space.
+    anchor: Vec3,
+}
+
 #[derive(Debug, Clone, Copy, Default)]
 struct Hits {
+    /// The locators nearest the records, in the craft's model space.
     at: [Vec3; MAX_FRICTIONLESS],
     count: usize,
     position: Vec3,
@@ -93,6 +110,8 @@ struct Hits {
 #[derive(Debug, Clone, Default)]
 pub(super) struct FloorSparks {
     hits: [Hits; MAX_SHIPS],
+    /// The sparks riding their locators.
+    riding: Vec<Riding>,
     /// How many sparks have started, ever - for tests.
     started: u32,
     /// How many records were noted for a kind 2 throw, ever - for tests.
@@ -127,7 +146,7 @@ impl FloorSparks {
         hits.position = ship.physics.body.position;
         for point in points {
             if let Some(at) = crate::hit_sparks::nearest_locator(anchors, model, point) {
-                hits.at[hits.count] = at;
+                hits.at[hits.count] = model.inverse().transform_point3(at);
                 hits.count += 1;
             }
         }
@@ -145,6 +164,18 @@ impl Race {
     }
 
     /// How many frictionless sparks have ever started, for tests.
+    /// Where every floor spark riding a craft sits now, for tests.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn floor_spark_anchors_for_tests(&self) -> Vec<Vec3> {
+        self.view
+            .floor_sparks
+            .riding
+            .iter()
+            .filter_map(|spark| self.view.stage.anchor_of(spark.playing))
+            .collect()
+    }
+
     #[doc(hidden)]
     #[must_use]
     pub fn floor_sparks_started_for_tests(&self) -> u32 {
@@ -154,34 +185,53 @@ impl Race {
 
 #[cfg(feature = "view")]
 impl RaceView {
-    /// Throws one no-damage spark per stashed record, from the locator nearest it, then forgets
-    /// them. Nothing under a Shield (the ring loop's shield branch precedes the dispatch), none
-    /// for a craft no local view sees within 100 units (`Ship_UpdateEntity`'s reach, as
-    /// [`crate::field_sparks`]), and none from a craft that is not racing (kind 3 is not this
-    /// spark). One spark per record whichever views see it.
     pub(super) fn advance_floor_sparks(&mut self, core: &SimRace) {
+        let mut riding = std::mem::take(&mut self.floor_sparks.riding);
+        riding.retain(|spark| {
+            if self.stage.is_emitting(spark.playing) {
+                let at = self
+                    .drawn_model(core, spark.slot)
+                    .transform_point3(spark.anchor);
+                self.stage.follow(spark.playing, at);
+                true
+            } else {
+                self.stage.detach(spark.playing);
+                false
+            }
+        });
         let hits = std::mem::take(&mut self.floor_sparks.hits);
-        if hits.iter().all(|hits| hits.count == 0) {
-            return;
-        }
-        let Some(effect) = self.handles.get(Trigger::CollisionSparkNoDamage).cloned() else {
-            return;
-        };
+        let effect = self.handles.get(Trigger::CollisionSparkNoDamage).cloned();
         let eyes = self.view_eyes(core);
         for (slot, hits) in hits.iter().enumerate() {
             let ship = &core.sim.world.ships[slot];
             let seen = eyes.iter().any(|eye| {
                 (hits.position - *eye).length_squared() < crate::field_sparks::REACH_SQUARED
             });
+            let Some(effect) = effect.as_ref() else {
+                break;
+            };
             if hits.count == 0 || !seen || ship.physics.shield_pickup_timer > 0.0 {
                 continue;
             }
-            for &at in &hits.at[..hits.count] {
-                if self.stage.play(&effect, at, 1.0).is_some() {
+            let model = self.drawn_model(core, slot);
+            for &anchor in &hits.at[..hits.count] {
+                if riding.len() >= MAX_RIDING {
+                    break;
+                }
+                if let Some(playing) =
+                    self.stage
+                        .play_riding(effect, model.transform_point3(anchor), 1.0)
+                {
+                    riding.push(Riding {
+                        playing,
+                        slot,
+                        anchor,
+                    });
                     self.floor_sparks.started += 1;
                     log::trace!("floor spark: slot {slot} tick {}", core.sim.world.tick);
                 }
             }
         }
+        self.floor_sparks.riding = riding;
     }
 }
