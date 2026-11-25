@@ -89,6 +89,14 @@ pub struct SurveyBranch {
     pub merge: u16,
     /// The branch's entries in driving order.
     pub entries: Vec<Entry>,
+    /// The branch's path in the spline table: how the firing craft is located on it.
+    pub path: u16,
+    /// Per branch entry: the primary route's ring entry within [`emp::SIBLING_REACH`] of it,
+    /// the EMP's launch-time fork's partner. The primary route is the ring from [`Self::split`].
+    pub to_primary: Vec<Option<u16>>,
+    /// Per primary-route entry, counted from [`Self::split`]: the branch offset within reach of
+    /// it. Its length is the primary route's.
+    pub from_primary: Vec<Option<u16>>,
 }
 
 /// What a race reads from the layout files.
@@ -128,6 +136,20 @@ impl Survey {
                 return branch.entries.get(at);
             }
             at -= branch.entries.len();
+        }
+        None
+    }
+
+    /// The branch and the offset into it that the index of a branch entry names, or `None` for
+    /// a ring index or one past the survey: the inverse of [`Self::branch_entry`].
+    #[must_use]
+    pub fn branch_of(&self, index: usize) -> Option<(usize, usize)> {
+        let mut at = index.checked_sub(self.entries.len())?;
+        for (branch, b) in self.branches.iter().enumerate() {
+            if at < b.entries.len() {
+                return Some((branch, at));
+            }
+            at -= b.entries.len();
         }
         None
     }

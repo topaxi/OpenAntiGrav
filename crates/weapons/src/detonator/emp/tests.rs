@@ -265,6 +265,9 @@ fn forked_lap() -> Survey {
                 ..survey.entries[0]
             })
             .collect(),
+        path: 1,
+        to_primary: Vec::new(),
+        from_primary: Vec::new(),
     });
     survey
 }
@@ -374,4 +377,124 @@ fn the_fork_walks_its_branch_then_the_ring_and_ends_with_the_wave() {
     run_wave(&mut field, &survey, 120);
     assert!(!field.emp.wave.live);
     assert_eq!(fork_entry(&field.emp.wave, &survey), None);
+}
+
+/// [`forked_lap`] with the two routes within reach of each other over the first and last four
+/// sections of the split, as `EMP_ForkAtJunction` finds the disc's.
+fn forked_lap_with_overlap() -> Survey {
+    let mut survey = forked_lap();
+    let branch = &mut survey.branches[0];
+    let near = |o: usize| o < 4 || o >= 16;
+    branch.to_primary = (0..20)
+        .map(|k| near(k).then_some(50 + k as u16 * 2))
+        .collect();
+    branch.from_primary = (0..40)
+        .map(|o| (o < 4 || o >= 36).then_some(o as u16 / 2))
+        .collect();
+    survey
+}
+
+/// A craft on the branch launches there: the front walks the branch, then the ring from the
+/// merge.
+#[test]
+fn a_launch_on_a_branch_walks_the_branch_then_the_ring() {
+    let survey = forked_lap();
+    let from = u16::try_from(survey.branch_entry(0, 5).expect("a branch entry")).expect("fits");
+    let mut field = Field::new();
+    field.mines[0] = branch_mine(&survey, 12);
+    field.mines[1] = Placed {
+        entry: 93,
+        lane: 0,
+        live: false,
+    };
+    field.mines[2] = Placed {
+        entry: 6,
+        lane: 0,
+        live: false,
+    };
+    field.live_mines = 3;
+    charge(&mut field, 8);
+    fire(&mut field, &survey, &config(), from);
+    assert!(!field.emp.wave.forked);
+    assert_eq!(
+        front_entry(&field.emp.wave, &survey),
+        Some(usize::from(from))
+    );
+    run_wave(&mut field, &survey, 14);
+    assert_eq!(front_entry(&field.emp.wave, &survey), Some(219));
+    run_wave(&mut field, &survey, 1);
+    assert_eq!(front_entry(&field.emp.wave, &survey), Some(90), "the merge");
+    run_wave(&mut field, &survey, 30);
+    assert_eq!(field.live_mines, 1, "the ring's far entry stays");
+    assert_eq!(field.mines[0].entry, 6);
+}
+
+/// `EMP_ForkAtJunction`: within reach on the near half of the other route, a second front
+/// starts on it at launch, from either side.
+#[test]
+fn a_launch_beside_the_other_route_forks_onto_it() {
+    let survey = forked_lap_with_overlap();
+    let ring = launch_fork(&survey, 52).expect("ring side");
+    assert_eq!((ring.on_ring, ring.at), (false, 1));
+    let branch = survey.branch_entry(0, 2).expect("a branch entry");
+    let on_branch = launch_fork(&survey, branch).expect("branch side");
+    assert_eq!((on_branch.on_ring, on_branch.at), (true, 54));
+
+    let mut field = Field::new();
+    field.mines[0] = branch_mine(&survey, 1);
+    field.mines[1] = branch_mine(&survey, 10);
+    field.live_mines = 2;
+    charge(&mut field, 8);
+    fire(&mut field, &survey, &config(), 52);
+    assert!(field.emp.wave.forked);
+    assert_eq!(
+        fork_entry(&field.emp.wave, &survey),
+        survey.branch_entry(0, 1)
+    );
+    run_wave(&mut field, &survey, 1);
+    assert_eq!(
+        field.live_mines, 1,
+        "cleared where it stands on the first tick"
+    );
+    run_wave(&mut field, &survey, 20);
+    assert_eq!(field.live_mines, 0);
+}
+
+/// A fork born on the far half of the other route travels the other way and is never advanced:
+/// it walks nothing, and it holds the wave's one fork against a later split.
+#[test]
+fn a_launch_beside_the_far_half_holds_the_fork_and_walks_nothing() {
+    let mut survey = forked_lap_with_overlap();
+    // A second split further on that the same wave would otherwise fork at.
+    let mut second = survey.branches[0].clone();
+    second.split = 95;
+    second.to_primary = Vec::new();
+    second.from_primary = Vec::new();
+    survey.branches.push(second);
+    assert_eq!(launch_fork(&survey, 88), Some(Fork::INERT));
+
+    let mut field = Field::new();
+    field.mines[0] = Placed {
+        entry: u16::try_from(survey.branch_entry(1, 3).expect("an entry")).expect("fits"),
+        lane: 0,
+        live: false,
+    };
+    field.live_mines = 1;
+    charge(&mut field, 8);
+    fire(&mut field, &survey, &config(), 88);
+    assert!(field.emp.wave.forked);
+    assert_eq!(fork_entry(&field.emp.wave, &survey), None);
+    run_wave(&mut field, &survey, 40);
+    assert_eq!(field.live_mines, 1, "no fork at the second split");
+}
+
+/// A launch away from the split is as it was: no fork at launch, and nothing out of reach.
+#[test]
+fn a_launch_away_from_the_other_route_does_not_fork_at_once() {
+    let survey = forked_lap_with_overlap();
+    for from in [10, 60, 150] {
+        assert_eq!(launch_fork(&survey, from), None, "from {from}");
+    }
+    let mid = survey.branch_entry(0, 9).expect("a branch entry");
+    assert_eq!(launch_fork(&survey, mid), None);
 }
