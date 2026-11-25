@@ -343,3 +343,4 @@
 0x0894722c	function	Font_FindGlyph	80	menu-text-centring.md
 0x0894728c	function	Font_GetKerning	80	menu-text-centring.md
 0x08ab459c	data	g_text_snap_pens	80	menu-text-centring.md
+0x088567c8	function	Rocket_FireVolley	78	floor-follow.md
