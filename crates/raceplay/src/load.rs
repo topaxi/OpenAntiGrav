@@ -116,14 +116,7 @@ pub fn export_host_textures(
     use crate::foreign::art::host_export::{Exported, export_entry};
     use std::collections::{BTreeMap, BTreeSet};
 
-    let (packs, pure_packs, _) = oag_source::dlc::packs_from_defaults(
-        &options.dlc,
-        &oag_source::cache::default_dlc_cache_dir(),
-    );
-    let pair = oag_source::pair::SourcePair::open(&options.source, None, packs, pure_packs)?;
-    let (opened, _, title, _) = pair.into_parts();
-    let mut archives = opened.archives.memoising_reads();
-    let slug = oag_source::layers::slug(title);
+    let (mut archives, slug) = host_archives(options)?;
     let mut all = Exported::default();
     let mut merge = |done: Exported| {
         all.written.extend(done.written);
@@ -153,6 +146,51 @@ pub fn export_host_textures(
         merge(export_entry(&mut archives, &slug, what, None, out)?);
     }
     Ok(all)
+}
+
+/// The textures of the circuit `entry` a host reference can name, in the spelling it names
+/// them: its `Texture` nodes' paths, or on HD, 2048 and Omega the texture files its materials
+/// name. Nothing is written, and no picture is decoded for the list beyond what the circuit's
+/// own build decodes.
+///
+/// # Errors
+///
+/// As [`export_host_textures`].
+#[cfg(feature = "view")]
+pub fn list_host_textures(options: &Options, entry: &str) -> Result<Vec<String>> {
+    let (mut archives, _) = host_archives(options)?;
+    crate::foreign::art::host_export::list_entry(&mut archives, entry)
+}
+
+/// [`export_host_textures`] for the circuit `entry` and only the textures `names` spells.
+///
+/// # Errors
+///
+/// As [`export_host_textures`].
+#[cfg(feature = "view")]
+pub fn export_named_host_textures(
+    options: &Options,
+    entry: &str,
+    names: &std::collections::BTreeSet<String>,
+    out: &std::path::Path,
+) -> Result<crate::foreign::art::host_export::Exported> {
+    let (mut archives, slug) = host_archives(options)?;
+    crate::foreign::art::host_export::export_entry(&mut archives, &slug, entry, Some(names), out)
+}
+
+/// The archives of the source `options` opens, memoising reads, and its title's slug.
+#[cfg(feature = "view")]
+fn host_archives(options: &Options) -> Result<(oag_assets::Archives, String)> {
+    let (packs, pure_packs, _) = oag_source::dlc::packs_from_defaults(
+        &options.dlc,
+        &oag_source::cache::default_dlc_cache_dir(),
+    );
+    let pair = oag_source::pair::SourcePair::open(&options.source, None, packs, pure_packs)?;
+    let (opened, _, title, _) = pair.into_parts();
+    Ok((
+        opened.archives.memoising_reads(),
+        oag_source::layers::slug(title),
+    ))
 }
 
 /// Loads a track, a ship and its handling out of a disc image: the sim phase

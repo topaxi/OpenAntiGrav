@@ -64,19 +64,139 @@ pub struct Extras {
 struct HostTable {
     names: Vec<Option<String>>,
     slots: TextureSlots,
+    /// For a circuit whose pictures are files named by materials, not nodes: the circuit,
+    /// until its materials have been listed. A PS4 circuit's pictures are gigabytes decoded,
+    /// and a track file names a few of them, so a table decodes a picture when asked for
+    /// ([`Self::texture`]) and lists the materials only when a name needs it.
+    files: Option<Files>,
+}
+
+struct Files {
+    entry: String,
+    blob: Vec<u8>,
+    listed: bool,
 }
 
 fn host_table(archives: &mut Archives, entry: &str) -> anyhow::Result<HostTable> {
     let blob = archives.read_name(entry)?;
+    if vex::geometry_is_external(&blob) {
+        return Ok(HostTable {
+            names: Vec::new(),
+            slots: Vec::new(),
+            files: Some(Files {
+                entry: entry.to_string(),
+                blob,
+                listed: false,
+            }),
+        });
+    }
     Ok(HostTable {
         names: texture_names(&blob)?,
         slots: texture_slots(archives, entry, &blob)?,
+        files: None,
     })
 }
 
+/// The texture files a circuit whose geometry is in an `.rcsmodel` beside the `.vex` (HD, 2048,
+/// Omega) draws, named as its materials spell them, in the order its build asks for them. The
+/// `Texture` nodes of such a `.vex` keep names and no texels (2048's and Omega's keep one
+/// dummy), so the files are the pictures. The build is the race's, water included, and is given
+/// the pictures: a material whose picture does not decode asks for no lightmap, so a build
+/// without them lists fewer files (Tech De Ra: 142 of 191).
+fn material_files(
+    archives: &mut Archives,
+    entry: &str,
+    blob: &[u8],
+) -> anyhow::Result<Vec<String>> {
+    let mut requested: Vec<String> = Vec::new();
+    oag_livery::entry::scene_model_requesting(
+        archives,
+        entry,
+        blob,
+        None,
+        &mut Vec::new(),
+        oag_livery::entry::Reading {
+            water: oag_display::display::Water::default(),
+            pictures: true,
+        },
+        &mut |path| {
+            if !requested
+                .iter()
+                .any(|seen| canonical(seen) == canonical(path))
+            {
+                requested.push(path.to_string());
+            }
+        },
+    )?;
+    Ok(requested)
+}
+
+/// The picture of the texture file `path`, decoded as the race reads it (`oag_texture::decode`).
+/// Rows stay in the file's order, which is the one a race's 3D path samples with the circuit's
+/// own texture coordinates, so a picture reads the way up it is drawn
+/// (`docs/formats/hd-loading.md`, "A `.gtf`'s rows run bottom-up"; only a 2D consumer flips).
+fn file_texture(archives: &mut Archives, path: &str) -> Option<Arc<ModelTexture>> {
+    let (held, bytes) = archives.read_texture(path).ok()?;
+    let picture = oag_texture::decode::decode_named(&held, &bytes).ok()?;
+    let label = path.rsplit(['/', '\\']).next().unwrap_or(path).to_string();
+    Some(Arc::new(ModelTexture::rgba8(
+        label,
+        picture.width,
+        picture.height,
+        picture.rgba,
+        None,
+    )))
+}
+
 impl HostTable {
-    /// The first node `name` spells, and how many more it spells.
-    fn find(&self, name: &str) -> Option<(usize, usize)> {
+    /// Every node's name; for a circuit of files, what its materials name.
+    ///
+    /// # Errors
+    ///
+    /// A circuit whose build will not run.
+    fn listed(&mut self, archives: &mut Archives) -> anyhow::Result<&[Option<String>]> {
+        if let Some(files) = self.files.as_mut().filter(|f| !f.listed) {
+            files.listed = true;
+            for path in material_files(archives, &files.entry, &files.blob)? {
+                if !self
+                    .names
+                    .iter()
+                    .flatten()
+                    .any(|n| canonical(n) == canonical(&path))
+                {
+                    self.names.push(Some(path));
+                }
+            }
+        }
+        Ok(&self.names)
+    }
+
+    /// The decoded picture of node `at`, `None` where it will not decode.
+    fn texture(&self, archives: &mut Archives, at: usize) -> Option<Arc<ModelTexture>> {
+        if self.files.is_some() {
+            return file_texture(archives, self.names.get(at)?.as_deref()?);
+        }
+        self.slots.get(at).cloned().flatten()
+    }
+
+    /// The first node `name` spells, and how many more it spells. In a circuit of files a name
+    /// with a directory is the file it spells, listed or not; a bare file name is looked up in
+    /// what the materials name.
+    fn find(&mut self, archives: &mut Archives, name: &str) -> Option<(usize, usize)> {
+        if self.files.is_some() && name.contains(['\\', '/']) {
+            let at = self
+                .names
+                .iter()
+                .position(|n| n.as_deref().is_some_and(|n| spells(name, n)))
+                .unwrap_or_else(|| {
+                    self.names.push(Some(name.to_string()));
+                    self.names.len() - 1
+                });
+            return Some((at, 0));
+        }
+        if let Err(e) = self.listed(archives) {
+            log::debug!("host circuit: its materials do not list ({e:#})");
+        }
         let mut hits = self
             .names
             .iter()
@@ -99,16 +219,13 @@ pub fn host_texture(
     entry: &str,
     name: &str,
 ) -> Result<Arc<ModelTexture>, String> {
-    let table = host_table(archives, entry)
+    let mut table = host_table(archives, entry)
         .map_err(|e| format!("host circuit {entry} does not read on this disc ({e})"))?;
     let (first, _) = table
-        .find(name)
+        .find(archives, name)
         .ok_or_else(|| format!("{entry} has no texture node {name}"))?;
     table
-        .slots
-        .get(first)
-        .cloned()
-        .flatten()
+        .texture(archives, first)
         .ok_or_else(|| format!("{entry}: {name} is not decodable"))
 }
 
@@ -153,11 +270,19 @@ fn texture_slots(
     ))
 }
 
-/// Whether `reference` names `name`: the whole asset path without case, or its
+/// A texture path as one spelling of it: lowercase, `/` a separator, no leading separator (a
+/// PS3 or PS4 material's path starts with one, a PSP node's does not).
+fn canonical(path: &str) -> String {
+    path.trim_start_matches(['\\', '/'])
+        .replace('\\', "/")
+        .to_ascii_lowercase()
+}
+
+/// Whether `reference` names `name`: the whole asset path ([`canonical`]), or its
 /// file name alone when the reference carries no directory.
 fn spells(reference: &str, name: &str) -> bool {
     if reference.contains(['\\', '/']) {
-        return reference.eq_ignore_ascii_case(name);
+        return canonical(reference) == canonical(name);
     }
     name.rsplit(['\\', '/'])
         .next()
@@ -205,15 +330,15 @@ pub fn resolve_textures(
                         })
                         .ok()
                 });
-                let found = table.as_ref().and_then(|t| {
-                    let (first, more) = t.find(name)?;
+                let found = table.as_mut().and_then(|t| {
+                    let (first, more) = t.find(archives, name)?;
                     if more > 0 {
                         report.push(format!(
                             "art texture {i}: {name} names {} nodes of {entry}; the first is drawn",
                             more + 1
                         ));
                     }
-                    t.slots.get(first).cloned().flatten()
+                    t.texture(archives, first)
                 });
                 if found.is_none() && table.is_some() {
                     report.push(format!(
