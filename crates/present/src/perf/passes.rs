@@ -54,27 +54,59 @@ fn row_of(label: &str) -> Option<(usize, &'static str)> {
         .map(|(index, (_, name))| (index, *name))
 }
 
+/// Whether two labels are one row.
+fn same_row(a: &'static str, b: &'static str) -> bool {
+    row_of(a).map_or(a, |(_, name)| name) == row_of(b).map_or(b, |(_, name)| name)
+}
+
+/// One row's two readings, in seconds.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Reading {
+    /// The mean over every frame of the window, a frame the pass did not run in counting zero.
+    per_frame: f32,
+    /// The mean over only the frames the pass ran in; zero when it ran in none of them.
+    when_run: f32,
+}
+
 /// One frame's passes by row, in seconds: what [`super::GpuCost`] carries.
 ///
 /// Fixed-size so `GpuCost` stays `Copy`. Rows are by **row name**, so two labels of one row
 /// are one entry.
+///
+/// Each row holds two means. The **per-frame** one counts a frame without the pass as zero, so
+/// [`Self::total`] is what the passes cost a frame on average and `frame - total` stays honest;
+/// [`Self::ordered`] reads it too, for the frame log. The **when-run** one is what a pass costs
+/// on a frame it runs in, for the overlay ([`Self::ordered_when_run`]): a pass that runs a
+/// second in every few would otherwise read as a fraction of its cost.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct PassRows {
-    rows: [Option<(&'static str, f32)>; MAX_ROWS],
+    rows: [Option<(&'static str, Reading)>; MAX_ROWS],
 }
 
 impl PassRows {
     /// Adds `seconds` to the row `label` belongs to, naming a label no row claims after itself.
+    /// A pass added is a pass that ran, so both of the row's means take `seconds`.
     pub fn add(&mut self, label: &'static str, seconds: f32) {
+        self.insert(
+            label,
+            Reading {
+                per_frame: seconds,
+                when_run: seconds,
+            },
+        );
+    }
+
+    fn insert(&mut self, label: &'static str, reading: Reading) {
         let name = row_of(label).map_or(label, |(_, name)| name);
         for slot in &mut self.rows {
             match slot {
                 Some((known, total)) if *known == name => {
-                    *total += seconds;
+                    total.per_frame += reading.per_frame;
+                    total.when_run += reading.when_run;
                     return;
                 }
                 None => {
-                    *slot = Some((name, seconds));
+                    *slot = Some((name, reading));
                     return;
                 }
                 Some(_) => {}
@@ -88,26 +120,44 @@ impl PassRows {
         self.rows[0].is_none()
     }
 
-    /// Every row's seconds added up: what [`super::GpuCost::residual_ms`] takes off the frame.
+    /// Every row's per-frame seconds added up: what [`super::GpuCost::residual_ms`] takes off the
+    /// frame. Never the when-run means, which would take a pass's cost off frames it did not
+    /// run in.
     #[must_use]
     pub fn total(&self) -> f32 {
-        self.rows.iter().flatten().map(|(_, seconds)| seconds).sum()
+        self.rows
+            .iter()
+            .flatten()
+            .map(|(_, reading)| reading.per_frame)
+            .sum()
     }
 
     /// The rows in the overlay's order: the known ones as [`ROWS`] lists them, then any other by
-    /// name. Each is `(name, seconds)`.
+    /// name. Each is `(name, per-frame seconds)`, which is what the frame log's `pass_ms` prints.
     #[must_use]
     pub fn ordered(&self) -> Vec<(&'static str, f32)> {
+        self.sorted(|reading| reading.per_frame)
+    }
+
+    /// The same rows and order as [`Self::ordered`], each with its mean over the frames it ran
+    /// in, which is what the overlay shows. A pass that ran in none of the window reads zero,
+    /// which the overlay's hide threshold leaves off.
+    #[must_use]
+    pub fn ordered_when_run(&self) -> Vec<(&'static str, f32)> {
+        self.sorted(|reading| reading.when_run)
+    }
+
+    fn sorted(&self, seconds: impl Fn(&Reading) -> f32) -> Vec<(&'static str, f32)> {
         let mut rows: Vec<(usize, &'static str, f32)> = self
             .rows
             .iter()
             .flatten()
-            .map(|&(name, seconds)| {
+            .map(|(name, reading)| {
                 let index = ROWS
                     .iter()
-                    .position(|(_, row)| *row == name)
+                    .position(|(_, row)| row == name)
                     .unwrap_or(ROWS.len());
-                (index, name, seconds)
+                (index, *name, seconds(reading))
             })
             .collect();
         rows.sort_by(|a, b| (a.0, a.1).cmp(&(b.0, b.1)));
@@ -148,9 +198,38 @@ impl Window {
     fn mean(&self) -> f32 {
         self.samples[..self.len.min(WINDOW)].iter().sum::<f32>() / self.len.max(1) as f32
     }
+
+    /// The sample `back` frames before the newest, `None` past what has been recorded.
+    fn back(&self, back: usize) -> Option<f32> {
+        (back < self.len).then(|| self.samples[(self.next + WINDOW - 1 - back) % WINDOW])
+    }
 }
 
-/// The overlay's and the frame log's per-pass means.
+/// The mean over only the frames any of `labels` ran in, zero when none did.
+///
+/// A row can be several labels (the PSP bloom's lanes), so a frame counts once if any of them
+/// ran, and its cost is theirs added: the windows are aligned on the newest frame, which every
+/// one of them records each frame. A sample is a frame the pass ran in when it is above zero,
+/// since a reading that is not is never recorded as one (`record_passes`).
+fn mean_when_run(labels: &[&Window]) -> f32 {
+    let longest = labels.iter().map(|window| window.len).max().unwrap_or(0);
+    let (mut sum, mut ran) = (0.0, 0_u32);
+    for back in 0..longest {
+        let frame: f32 = labels
+            .iter()
+            .filter_map(|window| window.back(back))
+            .filter(|seconds| *seconds > 0.0)
+            .sum();
+        if frame > 0.0 {
+            sum += frame;
+            ran += 1;
+        }
+    }
+    if ran == 0 { 0.0 } else { sum / ran as f32 }
+}
+
+/// The overlay's and the frame log's per-pass means: each row over every frame of the window, and
+/// over the frames it ran in.
 #[derive(Debug, Clone, Default)]
 pub struct PassCosts {
     windows: Vec<Window>,
@@ -194,23 +273,33 @@ impl PassCosts {
         self.floor = self.floor.max(frame);
     }
 
-    /// Every label's mean, in seconds, for [`super::GpuCost`]; empty before the first frame.
+    /// Every row's two means, in seconds, for [`super::GpuCost`]: over every frame of the window
+    /// and over only the frames the pass ran in ([`PassRows`]). Empty before the first frame.
     #[must_use]
     pub fn rows(&self) -> PassRows {
         let mut rows = PassRows::default();
-        for window in &self.windows {
-            rows.add(window.label, window.mean());
+        let mut grouped: Vec<&Window> = Vec::new();
+        for (at, window) in self.windows.iter().enumerate() {
+            if self.windows[..at]
+                .iter()
+                .any(|earlier| same_row(earlier.label, window.label))
+            {
+                continue;
+            }
+            grouped.clear();
+            grouped.extend(
+                self.windows[at..]
+                    .iter()
+                    .filter(|other| same_row(other.label, window.label)),
+            );
+            rows.insert(
+                window.label,
+                Reading {
+                    per_frame: grouped.iter().map(|window| window.mean()).sum(),
+                    when_run: mean_when_run(&grouped),
+                },
+            );
         }
         rows
-    }
-
-    /// Every label's mean in milliseconds, **under its own label** and not grouped into a
-    /// row, for the frame log: `(label, ms)`.
-    #[must_use]
-    pub fn means_ms(&self) -> Vec<(&'static str, f32)> {
-        self.windows
-            .iter()
-            .map(|window| (window.label, window.mean() * 1000.0))
-            .collect()
     }
 }

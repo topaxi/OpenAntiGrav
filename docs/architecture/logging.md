@@ -151,9 +151,10 @@ spaces (`crates/game/src/devrun.rs`, `format_line`): `stage`, `fps`, `frame_ms`,
 `render`, `governor`, and last `pass_ms`. **New fields are only ever appended**, because the
 Android scripts read the earlier ones by name.
 
-`pass_ms` is `-` until a pass has come back, else every separately-encoded pass's mean GPU time in
-milliseconds as comma-joined `name:ms` pairs in the overlay's row order, the name lowercased with
-`_` for a space: `pass_ms=glass:2.97,shadow_map:2.36,self_shadow:1.77,occlusion:4.23,probe_blend:0.15,hd_zoom:0.50,blit:3.61,hud_and_ui:1.42`.
+`pass_ms` is `-` until a pass has come back, else every separately-encoded pass's mean GPU time over
+the last 120 frames, a frame the pass did not run in counting zero (the overlay shows the mean over
+only the frames it ran in), in milliseconds as comma-joined `name:ms` pairs in the overlay's row
+order, the name lowercased with `_` for a space: `pass_ms=glass:2.97,shadow_map:2.36,self_shadow:1.77,occlusion:4.23,probe_blend:0.15,hd_zoom:0.50,blit:3.61,hud_and_ui:1.42`.
 Rows the overlay hides under 0.1 ms are kept here. The rows and what they time are in
 [dynamic-resolution.md](../rendering/dynamic-resolution.md), "Every other pass has a row of its own".
 
