@@ -712,6 +712,7 @@ impl RaceStage {
         viewport: (f32, f32, f32, f32),
         target_size: (u32, u32),
     ) {
+        oag_gpu::skip::arm_writes(gpu.device());
         if oag_gpu::skip::skipped("hud") {
             return;
         }

@@ -818,8 +818,8 @@ off 15.00 as well: the change does not move it (the stored figure comes from an 
 **Open:** the `+0x130` alpha word's reader; the `0.3` nudges of the light's position;
 the third light's live trigger.
 
-- **The wall death.** `WO_CANNON_SPARKS_DETONATOR` at the hit point on a round's second wall hit
-  (72). The original spawns it only when the round is in some view's potentially-visible set; here
+- **The wall death.** `WO_CANNON_SPARKS_DETONATOR` on a round's second wall hit, in the frame and
+  at the place of "The spark's matrix, read live" below (85). The original spawns it only when the round is in some view's potentially-visible set; here
   every one plays (**chosen**).
 - **Sounds.** `CANNON` once per round (two a volley) on the firing craft, `CANNONEXPLWALL` at the
   wall death, both as per-tick cue outputs (ADR-0018). Which weapon bank a Detonator race plays
@@ -891,10 +891,123 @@ now `Round::normal` is the up, and `Round::heading` carries the drawn forward ro
 **The round's draw** (`0x00122098`, bolt branch `0x1221b4`, read): rows `+0x140/+0x150/+0x160` are turned half a turn
 about the up row (`0x00677688`, angle pi), the width rows scaled by `0.75` (`0x008c1870 +0x28`), the forward row by
 `0.75 * (0.5 + 0.5 * min(age / 0.1, 1))` (`+0x24` = 0.1), placed at `+0x170`. Static, 75; not yet watched live.
-Wired: scale and growth, `oag_raceplay::detonator_fx::round_matrix`. **Open:** the half turn is not applied (ours
-faces along forward already, unchecked), and the look differs: from behind, the original's bolt is a wide translucent
+Wired: scale and growth, `oag_raceplay::detonator_fx::round_matrix`; the half turn and the look since 2026-11-25 (below).
+**Before that** the half turn was not applied and the look differed: from behind, the original's bolt is a wide translucent
 blue ring stack (about 100 px at 1080p, lap 2.000 of the `cannon-volley` capture), ours a narrow white teardrop (about
 40 px). Why is not found (model axes, material or the turn), so the bolt's shape is **not matched**.
 
 **2048 / Omega:** checked, applies for the law (their `PulseBullet` updates probe 9.0 and ride 3.5 as above; the up-row
 rule was not re-read there); not wired separately (shared code). The draw read is HD's.
+
+## The bolt's look and the loop (2026-11-25, `det-cannon-bolt-look`)
+
+**The look: the model's own program, and the half turn.** The bolt is one model,
+`Data\Weapons\detonator_cannonbolt`, one material, `hd_detonator_cannonbolt_halo`, two pictures (a blue band
+with a cloud in its alpha, and a 4x128 strip whose alpha is eight rings), drawn once per round: no trail and no
+second draw. The ring stack is the strip's alpha along the streak; the program is read instruction by instruction on
+[hd-unlit-programs.md](../../../rendering/hd-unlit-programs.md#the-detonator-cannon-bolt-2026-11-25-det-cannon-bolt-look)
+(90). Ours drew the material through the lit path with the strip unbound, hence the white teardrop; it now draws the
+program (`oag_mesh::mesh::rcs::cannon_bolt`, `PROGRAM_CANNON_BOLT`).
+
+The streak runs along the model's `+Z` from `-1.8` to `30.5`, so the render queue's half turn about up
+(`0x00677688`, angle pi, read 75) puts it **behind** the round: a streak about 23 units long (after the `0.75` scale)
+trailing from the round back toward the muzzle, which is why the original's bolt sits between the muzzle flash and the
+round and looks wide from a chase camera. Ours drew it ahead of the round. Now `round_matrix` negates the right and
+forward rows (`a_round_is_drawn_turned_half_about_up_so_the_streak_trails_it`). From behind, at the `pad` pair's
+camera and ours' tick 387 of a held volley, ours' bolt is a blue ring stack between the muzzle flash and the round, of
+the original's width and placement (D14's `cannon-volley` crop against ours: a player sees the same bolt). **Not
+measured:** a side-on view of the original (its camera was not moved), and the unit-0 gamma nibble of this draw.
+
+**Through the loop: the ride law holds, live.** Talon's Junction has a full loop (spline samples 1150 to 1350: the
+climb reaches 81.6 degrees at sample 1243, the track is inverted at 1330). RPCS3, `hd-detonator-talons-feisar-grid`
+restored, the craft set at rest at the loop's foot (sample 1090, aimed at sample 1200), one volley
+(`scripts/rpcs3-hd-pulse-round-poll.py --craft-at ...`); the round was polled every frame (`dt = 1/30`) from age
+`0.033` to its end:
+
+| Age (s) | Where | Up row (= `+0x180`) | Heading | Confidence |
+| ---: | --- | --- | --- | ---: |
+| 0.033 | the foot, `(-259.6, -73.6, 55.5)` | `(0.018, 0.999, -0.028)` | level | 85 |
+| 0.367 | climbing, `y -15.7` | `(0.896, 0.424, 0.130)` | pitched up 64 degrees | 85 |
+| 0.467 | vertical, `y 30.9` | `(0.984, -0.013, 0.179)` | straight up | 85 |
+| 0.733 | inverted, `(-342.3, 112.9, 101.8)` | `(-0.011, -1.000, -0.002)` | level, upside down | 85 |
+| 0.867 | coming down | `(-0.675, -0.735, -0.067)` | pitched down 41 degrees | 85 |
+| 0.900 | a side-wall rebound (`+0x12c` 1 to 0), then straight on to age 1.0 | | | 80 |
+
+In all 30 samples the up row equals the surface normal and `|v| = 500` with `v.n = 0` (the flattening), so a round
+rides a loop all the way round with no gravity: the same law as on the curve, now on every slope. An earlier attempt
+that wrote a round straight into the loop with the craft 700 units away flew straight through it: the floor probe
+finds nothing there, so **collision for the probe is only present near the craft** (observed once, 70). Ours seeded
+with the original's round at age `0.033` follows it through the loop: up row within `0.06` degrees, heading within
+`2.1`, position within `0.05` units at `0.2` s growing sideways to `4.8` at `0.87` s (ours steps at 60 Hz, the
+original at 30 Hz: the likely cause, not proven). Test:
+`detonator_loop_ground_truth::a_cannon_round_rides_the_talons_junction_loop_as_the_original_does` (red with the
+normal update dropped).
+
+## The spark's matrix, read live (2026-11-25, `det-cannon-spark`)
+
+On the death branch (`flags |= 0x14`, `0x00122b60`) `PulseBullet_Update` builds a matrix and hands it to the
+spawn (`0x002c9108`, `r6 = r1 + 0xe0`, fourcc `BDOR`, `0x00123338`). The spawn's constructor (`0x002c8c70`, flags
+`0`) copies it into the particle instance: vtable `0x0086a070`, rows at `+0xf0`, `+0x100`, `+0x110`, translation
+at `+0x120`, `+0xd0` pointing at `+0xf0`. That makes the matrix readable after the fact with no breakpoint.
+
+**Method.** RPCS3 (recompiler) restored from `hd-detonator-talons-feisar-grid`, the cannon held, each new round
+turned toward a wall (`+0xd0`) with its rebound count cleared (`+0x12c`) so the first wall kills it; on the
+wall-death flags the game is paused and every instance with that vtable is read
+(`scripts/rpcs3-hd-pulse-spark-poll.py`). Two restores, 7 wall deaths. Falsifier, written before the capture:
+row 1 world-up, or more than 5 degrees from `v - 2 (v.n) n` with `n` from our collision on the original's own
+segment.
+
+**Result** (ours' `n` and hit point from the original's `prev`, velocity and surface normal):
+
+| Hit | Row 1 against the reflection (deg) | Row 1 against world up (deg) | Translation - our hit, along surface normal | along wall normal |
+| ---: | ---: | ---: | ---: | ---: |
+| 1 | 0.22 | 91.0 | -3.491 | -0.301 |
+| 2 | 0.00 | 97.1 | -3.464 | -0.295 |
+| 3 | 0.00 | 91.5 | -3.494 | -0.337 |
+| 4 | 0.44 | 86.6 | -3.500 | -0.303 |
+| 5 | 0.54 | 85.8 | -3.502 | -0.270 |
+| 6 | 0.00 | 86.7 | -3.500 | -0.300 |
+| 7 | 0.00 | 83.5 | -3.512 | -0.303 |
+
+| Row | Read | Confidence |
+| --- | --- | ---: |
+| 0 (`+0xf0`) | `row1 x row2`; the matrix is orthonormal, determinant 1 | 85 |
+| 1 (`+0x100`) | the velocity reflected off the wall, `v - 2 (v.n) n`, unit | 85 |
+| 2 (`+0x110`) | the round's surface normal (`+0x180`), dot `1.0000` with it: the static read's `r29 + 0x20` is the floor record's vector | 85 |
+| translation | `3.5` below the hit along that normal, so on the road, not at the round's ride height | 85 |
+| the `-0.3` along the wall normal | our hit point against the original's; not explained. Statically the translation is `hit + n + k * V` (`0x00122d9c`), so the original's own hit sits about `1.3` short of ours | 50 |
+
+Ours: `EventKind::RoundWall` carries `spawn = hit - 3.5 * surface normal` and `rebound`, and
+`oag_raceplay::detonator_fx` plays the effect at `spawn` and turns its frame's `+Y` along `rebound`. Row 0
+and row 2 are not set: every emitter of this effect that reads the frame draws its azimuth uniformly about
+`+Y`. The `-0.3` is not applied. Test:
+`tests::detonator_fx::an_hd_detonator_race_plays_the_discs_effects_for_each_event` (the seven segments above;
+red with the frame left world-up, with the rebound wrong, or with either sprite list dropped).
+
+**The pictures.** The emitters were always the disc's `.pob` (five emitters). What stood in was their look:
+the effect was in neither `oag_hd::effects` list, so all five drew the procedural profile and its three class-6
+streaks drew as procedural strips. It is now in `SPRITES` and `FAR_BARS` (both are needed: a sprite list alone
+leaves the three streaks procedural). All five sprites ship under `/data/psys/tex/`; the copies in `DATA00`,
+`DATA02`, `DATA03` and `DATA06` decode to identical top-level pixels. `EXTENTS` is not listed (spawn radii
+0.1 to 0.8 units, unmatched). Compared by eye with the original's frames at the same craft position (ours with
+the original's matrices replayed at their game times): both show the arcing blue ribbon, the white dashes along
+the rebound and the small flash. Not tick-matched and not camera-matched, so size and brightness are not
+measured, and by eye ours is fainter (60 for "the same elements"). **Open:** at the grab's own game time one of
+the two frames of ours shows no spark where the original shows the arcs; they appear 11 to 33 ticks later. Either
+the earlier hits sit behind ours' closer chase camera or ours' particles run late; not settled.
+
+**2048 / Omega, the spark.** Both ship `WO_CANNON_SPARKS_DETONATOR.POB` and parse it
+(`psys_2048_ground_truth.rs`, `psys_omega_ground_truth.rs`), and both spawn it with HD's fourcc `0x42444f52` in
+the same frame. 2048 (`vita-2048-eu-v104` `FUN_8120058c`): row 1 `v - 2 (v.n) n`, row 2 the negated surface
+record vector `+0x20`, translation probed from `hit + n + 5 V` down to the floor. Omega (`ps4-omega-eu`
+`FUN_013644c0`, the one function referencing the string; `0x01391b30`, cited above as its update, decompiles as
+`TrackStartup_Load` in that program): `flags |= 0x14`, the same reflection and surface vector, the same spawn.
+Static, 70. **Checked, applies, not wired**: neither title's effect table answers
+`Trigger::DetonatorCannonSparks`, their contact and hit laws being unread (`docs/formats/pob.md`).
+
+**2048 / Omega.** The half turn: **checked, applies; wired as HD's** (`round_matrix` is title-agnostic). Both ship
+the same model with the same extent along `+Z` (`psp2_material_dump` with `DECL_SUB=0`: 2048 `-2..30`, Omega
+`-1.80..30.50`); their own render-queue turn is unread. The program: **checked, applies, not wired**
+(their GXP and GCN programs are unread; see the rendering page). The loop law: not re-read live on either (no 2048 or
+Omega memory poll); their `PulseBullet` updates probe and ride as HD's (above).
+

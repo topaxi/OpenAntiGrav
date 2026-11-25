@@ -49,6 +49,7 @@ mod chevron;
 pub mod circuit_pads;
 mod crowd;
 mod crowd_rigs;
+mod electricity;
 mod emissive_add;
 mod flat_constant;
 mod glow;
@@ -343,6 +344,13 @@ fn build_scanned(
     let mut twin = twin_blend::plan(&decoded, &mut glow.emissive, &mut *textures, &mut report);
     // `dc_hologramwithstatic` rides the same bindings and glow table.
     static_hologram::plan(
+        &decoded,
+        (&mut twin, &mut glow.emissive),
+        &mut *textures,
+        &mut report,
+    );
+    // The Detonator mine's visualiser ring (`electricity.rcsmaterial`) rides them too.
+    electricity::plan(
         &decoded,
         (&mut twin, &mut glow.emissive),
         &mut *textures,
@@ -781,6 +789,10 @@ fn build_scanned(
                 Some(v) => (v.colour, v.sun_mask, v.lightmap_texcoord, v.texcoord2),
                 None => (colour, sun_mask, lightmap_texcoord, texcoord2),
             };
+            // The visualiser ring's vertices carry `Uv3`, `uv1`, `uv2` and `VertexColour1.w`.
+            let ring = electricity::vertex(twin_here, &model.emissive, submesh, i);
+            let (texcoord, lightmap_texcoord, texcoord2, sun_mask) =
+                ring.unwrap_or((texcoord, lightmap_texcoord, texcoord2, sun_mask));
             // `rt_icetunnel` weights its grab by the baked colour's red (`refraction::is_ice`).
             let colour = match submesh.colours.get(i) {
                 Some(&[r, ..]) if glass.is_ice(submesh.material) => {

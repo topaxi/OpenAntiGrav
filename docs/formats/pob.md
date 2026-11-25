@@ -1081,10 +1081,12 @@ only when the object is in some view's potentially-visible set.
 
 **Wired on HD, 2026-11-22**: all four names are `Trigger::DetonatorMineExploDead`,
 `DetonatorMineExplo`, `DetonatorBombExplo` and `DetonatorCannonSparks` in HD's effect table, fired
-off the tick's `oag_weapons::detonator::Event` list (`oag_raceplay::detonator_fx`). They play from
-the engine's procedural profile: none is in HD's `SPRITES`, `EXTENTS` or `TEMPLATES` lists (no
-matched capture of the original to decide it), and the mine's recolour toward white is not
-applied. 2048 and Omega: all four ship and parse (`psys_2048_ground_truth.rs`,
+off the tick's `oag_weapons::detonator::Event` list (`oag_raceplay::detonator_fx`). The two mine
+effects and the bomb's play their disc emitters with procedural pictures: none is in HD's
+`SPRITES`, `EXTENTS` or `TEMPLATES` lists (no matched capture of the original to decide it), and the
+mine's recolour toward white is not applied. The cannon's wall spark draws its disc sprites and its
+bars since 2026-11-25, spawned in the original's frame
+([detonator-cannon.md](../ghidra/functions/ps3-hdfury-eu/detonator-cannon.md#the-sparks-matrix-read-live-2026-11-25-det-cannon-spark)). 2048 and Omega: all four ship and parse (`psys_2048_ground_truth.rs`,
 `psys_omega_ground_truth.rs`), **checked, applies, not wired** - their tables do not answer the
 triggers yet, because the contact and hit laws are not read on either.
 `WO_QUAKE_DETONATOR` is the EMP's wave, read and wired on HD since 2026-11-24 ([detonator-emp.md](../ghidra/functions/ps3-hdfury-eu/detonator-emp.md#what-hd-draws-for-a-fired-emp-2026-11-24)); `_TRAILS` is named nowhere in `EMP.cpp`'s span and stays unread. All three systems above ship on 2048 (`data.psarc`, `data/particles/` and
@@ -1218,6 +1220,25 @@ effects to each); the same stems as 2048's directories, different bytes again.
 - **Which directory a race reads** is chosen by a runtime flag in the
   executable, not read down to a circuit: `docs/ghidra/functions/ps4-omega-eu/particle-paths.md`.
   The port picks by circuit directory (chosen, not measured).
+
+## HD's record tail: the near size cap and the resolution mode - 2026-11-25
+
+HD's emitter record runs past the PSP record's `0x9b8` bytes. Two more of its tail fields are
+read (`particle-fill-fable`; the evidence is
+[particle-render.md](../ghidra/functions/ps3-hdfury-eu/particle-render.md)):
+
+| Offset | Type | Meaning | Confidence |
+| --- | --- | --- | --- |
+| `+0xc80` | `f32` | **Near size cap** of a billboard (render modes 1 to 4): the drawn size is `min(size, view depth * cap)`. The streak modes do not read it | 94 |
+| `+0xc8c` | `u8` | **Resolution mode**: 4 picks 2, 1 or 0 by the instance's view depth (under 17, under 35, beyond), 3 means 0, anything else is used as it is. HD's draw computes it and does not use it | 85 |
+
+Census over the 71 effect files (189 emitters) of HD's `DATA02.PSARC`: the cap is 0.2 on 47
+billboard emitters, 0.3 on 1, 0.5 on 19 and 1.0 on 21; the mode is 4 on 161 emitters, 3 on 22
+and 0 on 6. The cap goes with two rules that are code and not data: a billboard nearer than 1
+unit of view depth is not drawn, and its alpha fades over depth 1 to 4.
+
+**Not read by `oag-pob` yet.** `Emitter` has no field for either. Omega's files carry `+0xc80`
+too (its builder reads it); 2048's were not censused. The PSP and PS2 records end before it.
 
 ## Evidence summary
 

@@ -91,6 +91,7 @@ mod psp2_airbrake_flaps_ground_truth;
 mod psp2_alpha_emissive_ground_truth;
 mod psp2_backface_cull_ground_truth;
 mod psp2_circuit_pads_ground_truth;
+mod psp2_electricity_ground_truth;
 mod psp2_glow_ground_truth;
 mod psp2_nitro_hull_ground_truth;
 mod psp2_nova_sun_mask_smooth;

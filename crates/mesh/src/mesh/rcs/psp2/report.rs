@@ -116,6 +116,12 @@ pub struct Report {
     /// Of that name, the ones left as the generic reading drew them (a picture or a rate
     /// missing).
     pub static_hologram_unread: usize,
+    /// `electricity.rcsmaterial` materials (the Detonator mine's visualiser ring) drawn by their
+    /// own program - see `electricity`.
+    pub electricity_materials: usize,
+    /// Of that name, the ones left as the generic reading drew them (the program did not read as
+    /// the ring's, a picture or a value was missing, or a submesh lacked a vertex pair).
+    pub electricity_unread: usize,
     /// Submeshes on a placeholder shader (`fc01_dummy`), drawn as the fog colour - see
     /// [`psp2::material::Material::is_placeholder`].
     pub placeholder_submeshes: usize,
@@ -294,6 +300,14 @@ impl Report {
             format!(
                 "; {} dc_hologramwithstatic material(s) drawn by HD's law without its /2 (units and rates from the material record; the GCN arithmetic read, the units' gamma inherited from HD), {} left as the generic reading",
                 self.static_hologram_materials, self.static_hologram_unread
+            )
+        };
+        let electricity = if self.electricity_materials + self.electricity_unread == 0 {
+            String::new()
+        } else {
+            format!(
+                "; {} electricity material(s) drawn by their own program (the GCN arithmetic read, the units' gamma inherited from HD), {} left as the generic reading",
+                self.electricity_materials, self.electricity_unread
             )
         };
         let zone_colours = if self.zone_colour_submeshes == 0 {
@@ -533,7 +547,7 @@ impl Report {
         let hull_colour = self.hull_colour.describe();
         format!(
             "{} triangle(s) over {} submesh(es), {texture}, {} authored \
-             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{placeholders}{zone_colours}{track_shapes}{scrolls}{twins}{holograms}{tangents}{flipped}{lightmaps}{see_through}{nodes}{gnf}{lighting_only}{alpha_product}{flat_constants}{emissive_add}{pad_bars}{tarmac}{crowd}{snow}{rock}{vertex_blend}{alpha_emissive}{lightning}{refraction}{uv_keys}{panel}{hull_colour}",
+             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{placeholders}{zone_colours}{track_shapes}{scrolls}{twins}{holograms}{electricity}{tangents}{flipped}{lightmaps}{see_through}{nodes}{gnf}{lighting_only}{alpha_product}{flat_constants}{emissive_add}{pad_bars}{tarmac}{crowd}{snow}{rock}{vertex_blend}{alpha_emissive}{lightning}{refraction}{uv_keys}{panel}{hull_colour}",
             self.triangles, self.submeshes, self.authored_normals, self.unpaired
         )
     }

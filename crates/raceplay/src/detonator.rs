@@ -25,7 +25,7 @@ use oag_physics::{CollisionWorld, Ray, Raycaster, Surface};
 use oag_race::Course;
 use oag_tables::detonator_layout::GamePlayValues;
 use oag_weapons::detonator::cannon::Sweep;
-use oag_weapons::detonator::{Entry, Layout, MAX_LANES, Survey, SurveyBranch};
+use oag_weapons::detonator::{Entry, Layout, MAX_LANES, Partner, Survey, SurveyBranch};
 
 use crate::spline::Spline;
 
@@ -101,13 +101,16 @@ pub(crate) fn survey(
         }
         let first = all.len();
         let primary = all[usize::from(split)].path;
+        let len = measured.len();
         let kept = separated(&all[..ring], primary, &measured);
         forks.push(Fork {
             split: usize::from(split),
             merge: usize::from(merge),
             alternate: kept.into_iter().map(|k| first + k).collect(),
         });
-        branches.push((split, merge, measured.len()));
+        let (to_primary, from_primary) =
+            siblings(&all[..ring], primary, usize::from(split), &measured);
+        branches.push((split, merge, branch.path, len, to_primary, from_primary));
         all.extend(measured);
     }
     let lap = lap_order(ring, &mut forks);
@@ -123,11 +126,16 @@ pub(crate) fn survey(
     let ring_entries: Vec<Entry> = entries.by_ref().take(ring).collect();
     let branches = branches
         .into_iter()
-        .map(|(split, merge, len)| SurveyBranch {
-            split,
-            merge,
-            entries: entries.by_ref().take(len).collect(),
-        })
+        .map(
+            |(split, merge, path, len, to_primary, from_primary)| SurveyBranch {
+                split,
+                merge,
+                entries: entries.by_ref().take(len).collect(),
+                path,
+                to_primary,
+                from_primary,
+            },
+        )
         .collect();
     let lap = if lap.iter().copied().eq(0..ring) {
         Vec::new()
@@ -178,6 +186,58 @@ fn lap_order(ring: usize, forks: &mut [Fork]) -> Vec<usize> {
     }
     lap.extend(next..ring);
     lap
+}
+
+/// How far `Track_FindSiblingSection` searches the other route (`0x000a96d8`).
+const SIBLING_SEARCH: f32 = 500.0;
+
+/// Each route's partner on the other (`oag_weapons::detonator::Partner`): per branch section the
+/// primary route's nearest ring entry, and per primary section (counted from `split`) the
+/// branch's nearest offset, marked where it lies within the launch fork's reach.
+///
+/// The route is compared section position to section position, as [`separated`] reads
+/// `0x000a96d8`. `0x000a5290`, the two spans' neighbour listing, is taken as always.
+fn siblings(
+    ring: &[Measured],
+    primary: Option<u16>,
+    split: usize,
+    alternate: &[Measured],
+) -> (Vec<Option<Partner>>, Vec<Option<Partner>>) {
+    let total = ring.len();
+    let count = ring.iter().filter(|m| m.path == primary).count();
+    let route: Vec<usize> = (0..count).map(|o| (split + o) % total.max(1)).collect();
+    let reach = oag_weapons::detonator::emp::SIBLING_REACH;
+    let nearest = |at: Vec3, among: &mut dyn Iterator<Item = (usize, Vec3)>| {
+        among
+            .map(|(index, p)| (index, (p - at).length_squared()))
+            .min_by(|a, b| a.1.total_cmp(&b.1))
+            .filter(|&(_, d)| d < SIBLING_SEARCH * SIBLING_SEARCH)
+            .and_then(|(index, d)| {
+                Some(Partner {
+                    at: u16::try_from(index).ok()?,
+                    near: d < reach * reach,
+                })
+            })
+    };
+    let to_primary = alternate
+        .iter()
+        .map(|a| {
+            nearest(
+                a.position,
+                &mut route.iter().map(|&i| (i, ring[i].position)),
+            )
+        })
+        .collect();
+    let from_primary = route
+        .iter()
+        .map(|&i| {
+            nearest(
+                ring[i].position,
+                &mut alternate.iter().enumerate().map(|(k, m)| (k, m.position)),
+            )
+        })
+        .collect();
+    (to_primary, from_primary)
 }
 
 /// Which of an alternate route's sections enter the lap array: from the second on, those whose
@@ -657,7 +717,7 @@ impl crate::sim::RaceSim {
             .is_pressed(oag_gameplay::input::Button::Flip);
         if pressed && self.cannon_handed(slot) {
             let at = self.world.ships[slot].physics.body.position;
-            let from = nearest_entry(&detonator.survey, at);
+            let from = firer_entry(&detonator.survey, &self.spline, at);
             let fired = emp::fire(&mut self.world.detonator, &detonator.survey, config, from);
             self.detonator_events.extend(fired);
         }
@@ -723,10 +783,28 @@ impl crate::sim::RaceSim {
     }
 }
 
-/// The survey entry nearest `at`: where the EMP's wave starts.
-fn nearest_entry(survey: &Survey, at: Vec3) -> u16 {
+/// Where the EMP's wave starts: the entry nearest `at` on the path the craft is on, a branch's
+/// or else the ring's. The original copies the firing ship's own AI-track cursor
+/// (`ship+0x7820`); the craft's path is read here off its nearest spline sample.
+fn firer_entry(survey: &Survey, spline: &Spline, at: Vec3) -> u16 {
+    let on = spline
+        .nearest(at)
+        .and_then(|(index, _, _)| spline.path_of(index));
     survey
-        .entries
+        .branches
+        .iter()
+        .position(|b| Some(b.path) == on)
+        .and_then(|branch| {
+            let offset = nearest_of(&survey.branches[branch].entries, at)?;
+            u16::try_from(survey.branch_entry(branch, offset)?).ok()
+        })
+        .or_else(|| u16::try_from(nearest_of(&survey.entries, at)?).ok())
+        .unwrap_or(0)
+}
+
+/// The index of the entry of `entries` nearest `at`.
+fn nearest_of(entries: &[Entry], at: Vec3) -> Option<usize> {
+    entries
         .iter()
         .enumerate()
         .min_by(|(_, a), (_, b)| {
@@ -734,8 +812,7 @@ fn nearest_entry(survey: &Survey, at: Vec3) -> u16 {
                 .length_squared()
                 .total_cmp(&(b.centre - at).length_squared())
         })
-        .and_then(|(index, _)| u16::try_from(index).ok())
-        .unwrap_or(0)
+        .map(|(index, _)| index)
 }
 
 /// What a round's segment meets in the track: a floor to ride, a wall to bounce off, or nothing.

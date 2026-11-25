@@ -211,3 +211,13 @@ so none of the three answers above can be read on a 2048 program by this decoder
 - What the unlisted Pro opcodes are, and what selects `_1` against `_2`.
 - The `+0x14` reflection records and the stage-4 layout (eboot only).
 - What kinds `0x0f`, `0x11`, `0x13` (second, no flags) and `0x15` of the header's tail are, and the flags byte of a usage record.
+
+## The electricity program (Omega's Detonator mine ring)
+
+`oag_rcs::gcn::electricity` (`crates/rcs/src/gcn/electricity.rs`) recognises the pixel program of
+`electricity.rcsmaterial` by what the code does: exactly two taps of `Bass_Treble_HitsTexture`, one of
+`PitchTexture` and two of `ElectricityTexture`, and returns the `v_madmk_f32` literal that feeds the last
+`ElectricityTexture` tap's `v` (`uv1.y + 0.3 m`), found by data flow. All six shipped copies (`data00` and the
+patch's `data05` and `data08`, `weapons/` and `weapons2048/`) hold two such pixel programs each, every one reading `0.3`
+(`gcn_ground_truth::every_omega_electricity_material_reads_as_the_visualiser_program`). The draw is
+[detonator-mine-draw.md](../ghidra/functions/ps3-hdfury-eu/detonator-mine-draw.md), "The visualiser, wired".

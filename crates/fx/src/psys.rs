@@ -1187,8 +1187,6 @@ struct Instance {
     generation: u32,
     /// The emitter frame's `+Y` in world space - see [`Stage::orient`].
     up: Vec3,
-    /// The hue every vertex of the instance is redrawn in: see [`Tint`].
-    tint: Option<Tint>,
 }
 
 impl Instance {
@@ -1202,7 +1200,6 @@ impl Instance {
         claimed: 0,
         generation: 0,
         up: Vec3::Y,
-        tint: None,
     };
 
     fn busy(&self) -> bool {
@@ -1447,7 +1444,6 @@ impl Stage {
         instance.held = false;
         instance.expendable = false;
         instance.up = Vec3::Y;
-        instance.tint = None;
         instance.system.ignite(effect, point, scale);
         Playing {
             index: index as u16,

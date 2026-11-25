@@ -22,6 +22,7 @@
 //! their own (an absorb burst, a hit's sparks): nothing is freed early.
 
 use super::{Playing, Stage, System};
+use oag_core::math::Vec3;
 
 impl Stage {
     /// Hands an attached instance back the way the original's weapon pools do
@@ -56,6 +57,22 @@ impl Stage {
             })
             .map(|instance| instance.system.alive_count())
             .sum()
+    }
+
+    /// The anchor and frame `+Y` of every instance playing `effect`, by identity: where a
+    /// spawn put it and which way it faces.
+    #[must_use]
+    pub fn frames_of(&self, effect: &std::sync::Arc<super::Effect>) -> Vec<(Vec3, Vec3)> {
+        self.instances
+            .iter()
+            .filter(|instance| {
+                instance
+                    .effect
+                    .as_ref()
+                    .is_some_and(|held| std::sync::Arc::ptr_eq(held, effect))
+            })
+            .map(|instance| (instance.anchor, instance.up))
+            .collect()
     }
 
     /// Ends an attached instance outright: its emitters stop and every

@@ -84,7 +84,9 @@ fn a_zone_race_on_altima_draws_its_zone_model_through_its_zone_skeleton() {
         track.contains("1587 submesh(es) take a Zone_ColourN"),
         "{track}"
     );
-    assert!(track.contains("2302 hidden"), "{track}");
+    // The model's own hidden nodes and, Zone running weapons off, its 61 weapon pad submeshes
+    // (`docs/gameplay/pickups.md`, "A weapons-off race draws no weapon pad").
+    assert!(track.contains("2363 hidden"), "{track}");
 }
 
 #[test]

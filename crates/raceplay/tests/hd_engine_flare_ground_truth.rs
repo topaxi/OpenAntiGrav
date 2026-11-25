@@ -559,6 +559,59 @@ fn the_trail_hit_effects_are_on_the_disc_and_load(loaded: &race::Loaded) {
             "{name}: loaded but reported no emitters - {line}"
         );
     }
+    the_trail_hit_bursts_are_their_ribbons_colours(loaded);
+}
+
+/// **Each variant is drawn in its own ribbon's colour**, which takes its sprite: the red
+/// variant's colour ramp is near white (`255, 230, 230` falling to `255, 159, 156`) and its red
+/// is `red_glow.gtf` and `trailhit_core_4x2_red.gtf`. Without them it draws the procedural
+/// white disc and a Fury ribbon sparks white.
+fn the_trail_hit_bursts_are_their_ribbons_colours(loaded: &race::Loaded) {
+    for (name, strong, weak) in [
+        (oag_title::engine_effects::TRAIL_HITSHIP_EFFECT, 2, 0),
+        (oag_title::engine_effects::TRAIL_HITSHIP_RED_EFFECT, 0, 2),
+    ] {
+        let effect = loaded
+            .view
+            .effects
+            .get(name)
+            .unwrap_or_else(|| panic!("{name}: not loaded"));
+        for emitter in &effect.emitters {
+            let sprite = emitter
+                .sprite
+                .as_ref()
+                .unwrap_or_else(|| panic!("{name}/{}: no sprite", emitter.name));
+            let drawn = drawn_colour(emitter, sprite);
+            assert!(
+                drawn[strong] > drawn[weak] * 1.3 && drawn[strong] > drawn[1] * 1.3,
+                "{name}/{}: drawn {drawn:?}",
+                emitter.name
+            );
+        }
+    }
+}
+
+/// The colour an emitter's quads add on average: the sprite's alpha-weighted mean texel times the
+/// mean of the emitter's colour table.
+fn drawn_colour(
+    emitter: &oag_fx::psys::EmitterSpec,
+    sprite: &oag_fx::psys::sprite::Sprite,
+) -> [f32; 3] {
+    let (mut texel, mut weight) = ([0.0f32; 3], 0.0f32);
+    for t in sprite.rgba.as_chunks::<4>().0 {
+        let a = f32::from(t[3]);
+        for c in 0..3 {
+            texel[c] += f32::from(t[c]) * a;
+        }
+        weight += a;
+    }
+    let mut palette = [0.0f32; 3];
+    for entry in emitter.palette.iter() {
+        for c in 0..3 {
+            palette[c] += entry[c];
+        }
+    }
+    std::array::from_fn(|c| texel[c] / weight.max(1.0) * palette[c] / 256.0)
 }
 
 /// **Every HD hull authors `Ship Collision Fx` locators**, which is what the

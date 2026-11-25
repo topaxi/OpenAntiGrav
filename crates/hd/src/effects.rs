@@ -156,12 +156,15 @@ pub const EFFECTS: &Effects = &{
 /// never moved").
 const TURBULENCE: &[&str] = &[engine_effects::DETONATOR_EMP_EFFECT];
 
-/// The effects whose class-6 particles draw as HD's view-space bar: the engine's two
-/// trail hits, the Detonator EMP's sparks (`docs/ghidra/functions/ps3-hdfury-eu/detonator-emp.md`,
+/// The effects whose class-6 particles draw as HD's view-space bar: the Detonator cannon's
+/// wall spark's three streaks
+/// (`docs/ghidra/functions/ps3-hdfury-eu/detonator-cannon.md`, "The spark's matrix, read
+/// live"), the engine's two trail hits, the Detonator EMP's sparks (`docs/ghidra/functions/ps3-hdfury-eu/detonator-emp.md`,
 /// "The grey rows were sparks that never moved"), and the Plasma's five, whose lightning is that class. Paired against the
 /// original phase by phase: with the bar the launch's and the blast's white blobs are
 /// lightning (`docs/ghidra/functions/ps3-hdfury-eu/plasma.md`, "The pairs").
 const FAR_BARS: &[&str] = &[
+    engine_effects::DETONATOR_CANNON_SPARKS_EFFECT,
     engine_effects::TRAIL_HITSHIP_EFFECT,
     engine_effects::TRAIL_HITSHIP_RED_EFFECT,
     engine_effects::DETONATOR_EMP_EFFECT,
@@ -181,7 +184,9 @@ const TEMPLATES: &[&str] = &[
     engine_effects::PLASMA_CHARGING_EFFECT,
 ];
 
-/// The effects whose `.gtf` sprites HD plays: the Rocket's wall burst, whose
+/// The effects whose `.gtf` sprites HD plays: the Detonator cannon's wall spark, whose five
+/// emitters name five entries under `/data/psys/tex/` that all decode (`detonator-cannon.md`,
+/// "The spark's matrix, read live"), the Rocket's wall burst, whose
 /// nine emitters name nine entries under `/data/psys/tex/` that all decode
 /// (`docs/ghidra/functions/ps3-hdfury-eu/particle-triggers.md`, "The Rocket's
 /// smoke"), the Quake's wave and the Detonator EMP's (its blue recolour, paired against the
@@ -189,17 +194,21 @@ const TEMPLATES: &[&str] = &[
 /// filament-ring atlas the colour ramp is authored against (`weapons.md`,
 /// "The Missile's red rings"), the ship explosion, whose root's black colour ramp is a blend
 /// weight, not a colour (`ship-destroy.md`, "`colour_mode` 3 is a blend toward the scene light"),
+/// the two trail hits, whose colour lives in the sprite (the red variant's ramp is near white,
+/// `engine-trail.md`, "The red variant's colour is in its sprites"),
 /// and the Plasma's five, paired against the
 /// original phase by phase (`plasma.md`, "The pairs"). Every other HD effect
 /// still draws the procedural profile until a matched capture says its sprite
 /// reads right.
 const SPRITES: &[&str] = &[
+    engine_effects::DETONATOR_CANNON_SPARKS_EFFECT,
     engine_effects::TRACK_BLAST_EFFECT,
     engine_effects::EXPLOSION_EFFECT,
     engine_effects::QUAKE_EFFECT,
     engine_effects::DETONATOR_EMP_EFFECT,
     engine_effects::MISSILE_FLARE_EFFECT,
     engine_effects::TRAIL_HITSHIP_EFFECT,
+    engine_effects::TRAIL_HITSHIP_RED_EFFECT,
     engine_effects::PLASMA_FLARE_EFFECT,
     engine_effects::PLASMA_CHARGING_EFFECT,
     engine_effects::PLASMA_LAUNCH_EFFECT,

@@ -15,11 +15,32 @@
 //! advert cards' passes and clears and drops their draws (pixels against passes), and
 //! `extra-passes` adds [`EXTRA_PASSES`] one-pixel clear passes to the frame
 //! (`docs/tools/android.md`, "What a render pass costs").
+//!
+//! Three names look inside the scene pass: `track-plain` and `track-rich` leave out the
+//! shading half of a prepassed circuit's draws that name no material row and that name one
+//! (its depth half stays), and `mips` binds every material texture from two mip levels down
+//! (`docs/tools/android.md`, "Inside the scene pass").
+//!
+//! `writes` drops every [`crate::writes::Writes`] write made on the queue itself once a race
+//! has drawn its first frame ([`arm_writes`]), so the frame's upload copies leave the
+//! submission and every buffer keeps what it last held: whether frame N's copies wait on
+//! frame N-1 (`docs/tools/android.md`, "Freezing the frame's writes"). A load's writes are
+//! never dropped. `writes-same` is its control: every write is still made, but with the bytes
+//! that buffer range was given when the window began, so the picture freezes as under
+//! `writes` while every copy, and every hazard it carries, stays in the submission.
+//! `writes-dummy` copies every write into a scratch buffer nothing reads instead: the copies and
+//! their barriers stay, the wait on the previous frame's reads goes, and the picture freezes as
+//! under `writes`.
+//!
+//! With a toggle period set, every change of window prints one line to stderr
+//! (`OAG_SKIP_PASSES: window N on|off`), which a phone's Perfetto trace carries with its own
+//! timestamps under `android.log`, so a GPU timeline splits by arm.
 
 use std::sync::OnceLock;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 /// The names a call site asks about. Anything else in the variable is reported once.
-pub const NAMES: [&str; 8] = [
+pub const NAMES: [&str; 14] = [
     "hud",
     "bloom",
     "adverts",
@@ -28,6 +49,12 @@ pub const NAMES: [&str; 8] = [
     "composite",
     "advert-draws",
     "extra-passes",
+    "writes",
+    "writes-same",
+    "writes-dummy",
+    "track-plain",
+    "track-rich",
+    "mips",
 ];
 
 /// How many one-pixel passes `extra-passes` adds to a frame.
@@ -113,6 +140,47 @@ pub fn extra_passes(encoder: &mut wgpu::CommandEncoder, target: Option<&wgpu::Te
     }
 }
 
+static WRITES_ARMED: AtomicBool = AtomicBool::new(false);
+// A wgpu handle is not `Sync` in the browser build, which has no toggle clock either: the two
+// arms that hold one are native only.
+#[cfg(not(target_arch = "wasm32"))]
+static DEVICE: OnceLock<wgpu::Device> = OnceLock::new();
+
+/// Lets `writes` drop the queue's writes from now on: the race stage calls it every frame it
+/// draws, so nothing a load uploads is ever dropped. `device` is where `writes-dummy` makes its
+/// scratch buffers.
+pub fn arm_writes(device: &wgpu::Device) {
+    #[cfg(target_arch = "wasm32")]
+    let _ = device;
+    #[cfg(not(target_arch = "wasm32"))]
+    if named("writes-dummy") {
+        DEVICE.get_or_init(|| device.clone());
+    }
+    WRITES_ARMED.store(true, Ordering::Relaxed);
+}
+
+/// The device `writes-dummy` makes its scratch buffers on, once armed and in an odd window.
+#[cfg(not(target_arch = "wasm32"))]
+#[must_use]
+pub fn writes_dummy_device() -> Option<&'static wgpu::Device> {
+    (WRITES_ARMED.load(Ordering::Relaxed) && skipped("writes-dummy"))
+        .then(|| DEVICE.get())
+        .flatten()
+}
+
+/// Whether `writes` drops a write made now: named, armed and in an odd window.
+#[must_use]
+pub fn writes_frozen() -> bool {
+    WRITES_ARMED.load(Ordering::Relaxed) && skipped("writes")
+}
+
+/// Whether `writes-same` replays held bytes for a write made now: named, armed and in an odd
+/// window.
+#[must_use]
+pub fn writes_replayed() -> bool {
+    WRITES_ARMED.load(Ordering::Relaxed) && skipped("writes-same")
+}
+
 /// Whether `OAG_SKIP_PASSES` leaves `name` out of this frame.
 #[must_use]
 pub fn skipped(name: &str) -> bool {
@@ -124,8 +192,22 @@ pub fn skipped(name: &str) -> bool {
         // The browser build has no monotonic clock here; a toggle there leaves the pass
         // out throughout.
         #[cfg(not(target_arch = "wasm32"))]
-        Some(period) => ((switch.start.elapsed().as_secs_f32() / period) as u64) % 2 == 1,
+        Some(period) => {
+            let window = (switch.start.elapsed().as_secs_f32() / period) as u64;
+            announce(window);
+            window % 2 == 1
+        }
         _ => true,
+    }
+}
+
+/// Prints the window a toggle run has entered, once per window.
+#[cfg(not(target_arch = "wasm32"))]
+fn announce(window: u64) {
+    static LAST: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(u64::MAX);
+    if LAST.swap(window, Ordering::Relaxed) != window {
+        let arm = if window % 2 == 1 { "on" } else { "off" };
+        eprintln!("OAG_SKIP_PASSES: window {window} {arm}");
     }
 }
 
@@ -139,5 +221,8 @@ mod tests {
             assert!(!super::skipped(name), "{name}");
             assert!(!super::named(name), "{name}");
         }
+        super::WRITES_ARMED.store(true, super::Ordering::Relaxed);
+        assert!(!super::writes_frozen());
+        assert!(!super::writes_replayed());
     }
 }

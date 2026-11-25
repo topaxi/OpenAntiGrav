@@ -519,3 +519,40 @@ fn the_detonator_hull_plasma_shells_earn_their_charge() {
         assert_eq!(model.emissive[row - 1].offset, 0.0);
     }
 }
+
+/// The Detonator cannon bolt's `hd_detonator_cannonbolt_halo` runs its own program, block `@0x1b70`
+/// (`docs/rendering/hd-unlit-programs.md`, "The Detonator cannon bolt"): it earns a
+/// `PROGRAM_CANNON_BOLT` entry its slot names, holding the model's `fresnelBase` (`0.49874`), binds
+/// the ring strip second, and its vertices carry both halves of the one `float4` attribute: `uv1`
+/// (`+0x0e`, unit 0's) as the coordinate and `uv0` (`+0x0a`, the ring strip's) as the second set.
+/// Vertex 0 of the chunk reads `uv0 (0.529, 0.990)`, `uv1 (0.500, -0.522)`.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn the_cannon_bolt_earns_its_ring_program_with_both_coordinate_pairs() {
+    let Some(image) = image() else { return };
+    let model = build(&image, "/data/weapons/detonator_cannonbolt.vex");
+    let (row, named) = program_row(&model, mesh::PROGRAM_CANNON_BOLT).expect("a bolt entry");
+    assert!(named, "no slot names row {row}");
+    assert!((model.emissive[row - 1].offset - 0.49874).abs() < 1e-4);
+    let slot = model
+        .material_slots
+        .iter()
+        .position(|&word| slots::material_index(word) as usize == row)
+        .expect("the slot");
+    let ring = model.lightmaps[slot]
+        .as_ref()
+        .expect("the ring strip bound second");
+    assert_eq!((ring.width, ring.height), (4, 128));
+    let near = |a: [f32; 2], b: [f32; 2]| (a[0] - b[0]).abs() < 2e-3 && (a[1] - b[1]).abs() < 2e-3;
+    assert!(
+        model
+            .vertices
+            .iter()
+            .any(|v| near(v.texcoord, [0.5, -0.5225]) && near(v.lightmap_texcoord, [0.529, 0.990])),
+        "vertex 0's two pairs"
+    );
+    assert!(
+        model.vertices.iter().all(|v| v.lightmap_texcoord[1] >= 0.0),
+        "the ring strip's v is uv0's, which stays in [0, 1]"
+    );
+}

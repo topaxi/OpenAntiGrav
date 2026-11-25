@@ -195,6 +195,8 @@ fn a_2048_circuit_stays_unbound() {
             let e = &model.emissive[index - 1];
             e.program[0] == oag_mesh::mesh::PROGRAM_VERTEX_BLEND
                 || e.program[0] == oag_mesh::mesh::PROGRAM_EMISSIVE_ADD && e.tint == [1.0; 3]
+                // A weapon pad's bar mask, one entry per class of pad.
+                || oag_mesh::mesh::PROGRAM_PAD_BARS.contains(&e.program[0])
         }
     };
     let blended_textures: Vec<usize> = model
