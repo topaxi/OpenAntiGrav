@@ -76,42 +76,62 @@ fn no_zone_variant_of_a_wave_material_declares_the_wave() {
     );
 }
 
-/// `etched_glass_tech`'s Zone variants run no facing-ramp sheen: none samples the ramp
-/// (`0x94b2b285`), so a Zone race draws the glass floor as the generic Zone surface
-/// (`shade.wesl`'s `ramp_sheen` is off with `zone_program`).
+/// The glass floors' Zone variants run no facing-ramp sheen: across all four PS3 archives, every
+/// material with a variant that samples the ramp (`0x94b2b285`) and a Zone variant
+/// (`zoneColourTint`) has Zone variants that sample none, so a Zone race draws it as the generic
+/// Zone surface (`shade.wesl`'s `ramp_sheen` is off with `zone_program`). The census must cover
+/// Talon's Junction's and Tech de Ra's `etched_glass_tech`, Modesto Heights' `etched_glass` and
+/// the Amphiseum's `etched_glass_amph`.
 #[test]
 #[ignore = "needs a decrypted PS3 disc image in data/images"]
-fn no_zone_variant_of_the_glass_floor_samples_the_facing_ramp() {
+fn no_zone_variant_of_a_facing_ramp_material_samples_the_ramp() {
     const FACING_RAMP: u32 = 0x94b2_b285;
     let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
         return;
     };
-    let spec = format!("{}:PS3_GAME/USRDIR/DATA00.PSARC", image.display());
-    let mut open = oag_assets::psarc::Archive::open(&spec).expect("DATA00 opens");
-    let blob = open
-        .read_path("data/environments/talons_junction/materials/etched_glass_tech.rcsmaterial")
-        .expect("Talon's Junction's glass floor material");
-    let material = RcsMaterial::parse(&blob).expect("the material parses");
     let tint = rcsmaterial::name_hash("zoneColourTint");
-    let declared: Vec<Declared> = material
-        .variants
-        .iter()
-        .filter_map(|v| Declared::parse(&blob, v.fragment.offset))
-        .collect();
-    let ramp = |d: &Declared| d.samplers.iter().any(|&(s, _)| s == FACING_RAMP);
-    assert!(
-        declared
+    let mut covered: Vec<String> = Vec::new();
+    for archive in ["DATA00", "DATA01", "DATA02", "DATA03"] {
+        let spec = format!("{}:PS3_GAME/USRDIR/{archive}.PSARC", image.display());
+        let Ok(mut open) = oag_assets::psarc::Archive::open(&spec) else {
+            continue;
+        };
+        let paths: Vec<String> = open
+            .paths()
             .iter()
-            .any(|d| !d.parameters.contains(&tint) && ramp(d)),
-        "the ordinary variants do sample the ramp"
-    );
-    let zone: Vec<_> = declared
-        .iter()
-        .filter(|d| d.parameters.contains(&tint))
-        .collect();
-    assert!(!zone.is_empty(), "the material ships Zone variants");
-    assert!(
-        zone.iter().all(|d| !ramp(d)),
-        "a Zone variant samples the ramp"
-    );
+            .filter(|p| p.ends_with(".rcsmaterial"))
+            .cloned()
+            .collect();
+        for path in paths {
+            let Ok(blob) = open.read_path(&path) else {
+                continue;
+            };
+            let Ok(material) = RcsMaterial::parse(&blob) else {
+                continue;
+            };
+            let declared: Vec<Declared> = material
+                .variants
+                .iter()
+                .filter_map(|v| Declared::parse(&blob, v.fragment.offset))
+                .collect();
+            let ramp = |d: &Declared| d.samplers.iter().any(|&(s, _)| s == FACING_RAMP);
+            let zone = |d: &&Declared| d.parameters.contains(&tint);
+            if !declared.iter().any(|d| ramp(d) && !zone(&d)) || !declared.iter().any(|d| zone(&d))
+            {
+                continue;
+            }
+            covered.push(path.clone());
+            assert!(
+                declared.iter().filter(zone).all(|d| !ramp(d)),
+                "{archive} {path}: a Zone variant samples the facing ramp"
+            );
+        }
+    }
+    for stem in ["etched_glass_tech", "etched_glass_amph", "etched_glass"] {
+        let file = format!("/{stem}.rcsmaterial");
+        assert!(
+            covered.iter().any(|p| p.ends_with(&file)),
+            "the census missed {stem}: {covered:#?}"
+        );
+    }
 }

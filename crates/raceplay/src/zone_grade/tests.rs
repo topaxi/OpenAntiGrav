@@ -15,6 +15,8 @@ const HD_TWO_STAGES: &str = concat!(
     "\"1 Sub Venom.Lighting.Constant Ambient Colour\"=1.500000 1.500000 1.500000 0.000000\n",
     "\"1 Sub Venom.Lighting.Fog colour\"=0.000000 1.305882 1.800000 0.000000\n",
     "\"1 Sub Venom.Lighting.Fog density\"=0.002100\n",
+    "\"1 Sub Venom.Lighting.Track Fog colour\"=1.800000 0.141176 0.007059 0.000000\n",
+    "\"1 Sub Venom.Lighting.Track Fog density\"=0.001500\n",
 );
 
 fn grade() -> ZoneGrade {
@@ -706,5 +708,20 @@ fn a_zone_hull_tint_cross_fades_with_the_stage() {
     assert!(
         tint[1] < 1.003_92 && tint[1] > 2.0 * 0.282_353,
         "between the two stages: {tint:?}"
+    );
+}
+
+/// **The Track fog is a title's choice**: a table that authors it hands it to a track chunk only
+/// where the title's `ZoneFrame::track_fog` says so (HD). 2048 and Omega read the same bytes for their
+/// HD-lineage circuits but mark a chunk track by shape name, so they keep the primary fog.
+#[test]
+fn the_track_fog_reaches_a_chunk_only_where_the_title_asks_for_it() {
+    let mut grade = grade();
+    grade.show_stage(1);
+    assert_eq!(grade.track_fog(), mesh_render::TrackFog::NONE);
+    let grade = grade.with_track_fog(true);
+    assert_eq!(
+        grade.track_fog(),
+        mesh_render::TrackFog::authored([1.8, 0.141_176, 0.007_059], 0.001_5)
     );
 }

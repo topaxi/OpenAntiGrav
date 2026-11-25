@@ -233,13 +233,13 @@ fn track_model() -> Model {
     model
 }
 
-/// **A track chunk takes the stage's Track fog, and only a track chunk does**
-/// (`docs/ghidra/functions/ps3-hdfury-eu/zone-plain-chunks.md`, "The fog pick"). Fully fogged
-/// (a density no depth survives) the pixel is the fog colour; the same surface without the track
-/// bit, or with no Track fog authored, is untouched. Without the per-chunk pick the Detonator
-/// road and walls stay unfogged where the original's are orange-red.
+/// **A track chunk takes the stage's Track fog in place of the primary fog, and only a track chunk
+/// does** (`docs/ghidra/functions/ps3-hdfury-eu/zone-plain-chunks.md`, "The fog pick"). The scene
+/// carries a dense blue primary fog throughout: a scene chunk is blue, a track chunk is the dense
+/// red Track fog, a track chunk whose stage authors density 0 is unfogged (Sub Venom's road under the
+/// stage's cyan fog), and a track chunk with no Track fog authored keeps the primary.
 #[test]
-fn a_track_chunk_takes_the_stage_track_fog_and_a_scene_chunk_does_not() {
+fn a_track_chunk_takes_the_stage_track_fog_and_a_scene_chunk_keeps_the_primary() {
     let instance = wgpu::Instance::default();
     let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping");
@@ -251,27 +251,40 @@ fn a_track_chunk_takes_the_stage_track_fog_and_a_scene_chunk_does_not() {
     let at = |model: &Model, fog: mesh_render::TrackFog| {
         let mut scene = Scene::off();
         scene.light.enabled = 1.0;
+        scene.fog = mesh_render::Fog::authored_exp2([0.0, 0.0, 1.0], 1000.0);
         scene.fog.camera = [0.0, 0.0, 100.5];
         scene.zone.enabled = 1.0;
         scene.track_fog = fog;
         draw(&device, &queue, model, scene)
     };
     let red = mesh_render::TrackFog::authored([1.0, 0.0, 0.0], 1000.0);
-    let unfogged = at(&model(false), mesh_render::TrackFog::NONE);
+    let primary = at(&model(false), mesh_render::TrackFog::NONE);
+    assert!(
+        primary[2] > 200 && primary[0] < 40,
+        "a scene chunk is the primary fog's blue: {primary:?}"
+    );
     let fogged = at(&track_model(), red);
     assert!(
-        fogged[0] > 200 && fogged[1] < 40 && fogged[2] < 40,
-        "a track chunk is the Track fog's colour: {fogged:?}"
+        fogged[0] > 200 && fogged[2] < 40,
+        "a track chunk is the Track fog's red, not the primary's blue: {fogged:?}"
     );
     assert_eq!(
         at(&model(false), red),
-        unfogged,
-        "a scene chunk keeps the scene's fog (here none)"
+        primary,
+        "a scene chunk keeps the primary fog"
     );
     assert_eq!(
         at(&track_model(), mesh_render::TrackFog::NONE),
-        unfogged,
-        "a track chunk with no Track fog authored keeps the scene's fog"
+        primary,
+        "a track chunk with no Track fog authored keeps the primary fog"
+    );
+    let clear = at(
+        &track_model(),
+        mesh_render::TrackFog::authored([0.0; 3], 0.0),
+    );
+    assert!(
+        clear[2] < 40 && clear != primary,
+        "an authored Track fog of density 0 leaves the road unfogged under a dense primary: {clear:?}"
     );
 }
 

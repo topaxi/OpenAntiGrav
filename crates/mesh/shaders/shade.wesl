@@ -725,7 +725,8 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
     // **Not in a Zone race.** Every Zone variant of `etched_glass_tech` (blocks 10 to 19, the ones
     // that declare `zoneColourTint`) samples no facing ramp (`0x94b2b285`): the surface is the generic
     // Zone surface, as the magstrip's is (`docs/formats/rcsmaterial.md`, "Zone-mode wave materials").
-    let ramp_sheen = (in.slots & 1024u) != 0u && zone_program == 0.0;
+    let ramp_sheen_bit = (in.slots & 1024u) != 0u;
+    let ramp_sheen = ramp_sheen_bit && zone_program == 0.0;
     let view_dir = normalize(scene.fog.camera - in.world);
     let ramp_facing = dot(view_dir, n);
     let ramp_uv = vec2<f32>(ramp_facing, ramp_facing);
@@ -1028,7 +1029,7 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
     // sun mask, where the unlit-by-atlas variant weights the sun by the colour set's fourth byte.
     // The atlas is raw (its address word's gamma field is 0). Fetched under explicit gradients so
     // the branch stays out of the derivative-uniform flow.
-    let sheen_lightmapped = ramp_sheen && (in.slots & 1u) != 0u;
+    let sheen_lightmapped = ramp_sheen_bit && (in.slots & 1u) != 0u;
     let sheen_dx = dpdx(in.texcoord);
     let sheen_dy = dpdy(in.texcoord);
     var vertex_light_sheen = sheen_prelit + in.sun_mask * ramp_sun;
@@ -1875,7 +1876,12 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
     // light (the traced `vertexLight`) rather than being multiplied by
     // `authored`'s ambient/prelit/sun sum, so running both would shade it
     // twice.
-    let shaded_or_sheen = select(shaded, sheen, ramp_sheen);
+    var shaded_or_sheen = select(shaded, sheen, ramp_sheen);
+    // A lightmapped glass chunk in a Zone race keeps the grid as its coverage (the sheen's alpha is
+    // the grid), where the grid is bound beside the atlas; only the sheen's colour is dropped.
+    if ramp_sheen_bit && !ramp_sheen && sheen_lightmapped {
+        shaded_or_sheen.a = sheen.a;
+    }
     // **The magstrip floor's own combine** (`slots::MAG_LOOP`), traced in
     // `oag_mesh::mesh::rcs::mag_wave`: `vertexLight * grid * (ramp + c) +
     // (grid + ramp) * d`, alpha the grid. `albedo` is the grid and `lightmap`

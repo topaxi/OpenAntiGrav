@@ -356,13 +356,15 @@ difference was shading, not a node the original hides (nothing in the mode `0xe`
    its primary `Fog density` is `0`, so a scene chunk is unfogged and a track chunk (road, walls) orange-red. Ours fogged every
    chunk with the primary pair. Now `oag_mesh::mesh_render::TrackFog` (`Scene::track_fog`) carries the stage's pair and
    `fog.wesl`'s `fogged` takes it on `slots::ZONE_TRACK` chunks, `ZoneGrade::track_fog` reading it from the palette
-   (`StagePalette::track_fog_colour`/`track_fog_density`). 2048's table has no such key read, so it binds none and keeps the
-   primary fog.
+   (`StagePalette::track_fog_colour`/`track_fog_density`). The pick is Title data (`oag_title::ZoneFrame::track_fog`, HD only): 2048 and Omega read the same
+   HD tables for their HD-lineage circuits but mark a chunk track by a shape-name rule (`psp2::is_track_shape`) with no measured fog pick, so
+   they keep the primary fog until measured.
 2. **The glass floor's Zone variants run no facing-ramp sheen.** The grey-green panels are `etched_glass_tech`
    (slot 417, flags `0x1`, Track). The material ships ten Zone variants (fragment blocks 10 to 19, those declaring
    `zoneColourTint`); none samples the facing ramp `0x94b2b285` that the sheen combine
    ([rcsmaterial.md](../../../formats/rcsmaterial.md), "Talon's Junction's missing floor is a glass floor") is built on, and they
-   sample the Zone textures (`0xd5e000d1`, `0x1f6f85a3`) instead. Ours ran the sheen over the Zone surface. `shade.wesl`'s
+   sample the Zone textures (`0xd5e000d1`, `0x1f6f85a3`) instead. A lightmapped glass chunk (Tech de Ra, the Amphiseum) keeps the grid as its coverage in Zone; only the sheen's colour is dropped. The census covers every material
+   with a ramp-sampling variant and Zone variants (`no_zone_variant_of_a_facing_ramp_material_samples_the_ramp`: `etched_glass_tech`, `etched_glass_amph`, `etched_glass`). Ours ran the sheen over the Zone surface. `shade.wesl`'s
    `ramp_sheen` is now off with `zone_program`, as the magstrip wave is. Confidence 80 (census over the material's blocks:
    `hd_zone_wave_census_ground_truth::no_zone_variant_of_the_glass_floor_samples_the_facing_ramp`; the Zone variant's own
    grid term and paraboloid reflection are still not drawn).
@@ -376,7 +378,7 @@ same two rules apply there).
 
 **Still open.** The far curve's panels are dim in the original and in ours now; the mid-distance red is closer but ours' green
 and blue in the box are about 8 low (box mean RGB ours `(47, 22, 24)` against `(53, 29, 31)`). Which of `Fog`, `Alt Fog` (flag bit 5) and
-`Track Fog` a given draw takes is read for the track bit only. **2048 and Omega:** checked, applies, not wired: 2048's
+`Track Fog` a given draw takes is read for the track bit only. **2048 and Omega:** checked, applies, not wired (gated off by Title data above): 2048's
 tables author `Fog.Track Fog Colour` (density in the fourth lane, `key::TRACK_FOG_COLOUR_2048`) and ship the same
 `etched_glass_tech`-style materials in the HD lineage, but their per-chunk Track bit is the chosen shape-name rule and no 2048
 or Omega Detonator frame of the original exists to measure against.
