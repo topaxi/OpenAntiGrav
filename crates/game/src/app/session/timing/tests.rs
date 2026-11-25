@@ -350,6 +350,7 @@ fn an_intermittent_pass_absent_this_frame_leaves_other_on_per_frame_values() {
         upscale: Some(upscale.0),
         upscale_presented: Some(upscale.1),
         passes,
+        reflection: None,
     };
     let shown = overlay.rows(frame_ms);
     assert!(
