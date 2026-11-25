@@ -178,9 +178,11 @@ EMP's charge indicator: dark at EMP not ready, `Charge1` once ready, `Charge2` a
 (`0x008a9840`, `0x008a9844`), and the targets are the constants at `0x008a9838` (`1.0`) and
 `0x008a983c` (`0.0`) (read from the executable's memory, 85).
 
-Still unread: `0x002a3718`'s body, so whether `v` is `0` at exactly `n = lo` (ours reads the HUD's
-`gauge`, which is `0` there, so the strip stays dark at the ready count and lights one charge later),
-and a live capture of the block at the three states (the RPCS3 instance was held by another lane).
+`0x002a3718` is read and the block is read live: **`v` is `0.2` at the ready count, not `0`**, so
+`Charge1` lights at `n = lo`, one charge before the HUD's gauge leaves `0`. The table and the frames
+are in [detonator-hull.md](detonator-hull.md), "Read live: Charge1 and Charge2 against the EMP
+charge" (confidence 90). The craft update's `v` is `0` below `lo`, else `0.2 + 0.8 * (n - lo) /
+(hi - lo)` capped at `1`; it never reads the gauge.
 
 ## Wired
 

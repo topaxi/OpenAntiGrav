@@ -136,10 +136,10 @@ impl Race {
             .iter()
             .filter(|round| round.live)
             .map(|round| weapon_light::detonator_bolt_record(round.pos));
-        let emp = self
-            .view
-            .emp_effect
-            .and_then(|playing| self.view.stage.anchor_of(playing))
+        let emp = [self.view.emp_effect, self.view.emp_fork_effect]
+            .into_iter()
+            .flatten()
+            .filter_map(|playing| self.view.stage.anchor_of(playing))
             .map(weapon_light::detonator_emp_record);
         flashes.chain(bolts).chain(emp).collect()
     }
@@ -206,43 +206,63 @@ impl RaceView {
     /// (`docs/ghidra/functions/ps3-hdfury-eu/detonator-emp.md`, "What HD draws for a fired EMP").
     /// The front's point is the spline sample nearest the survey entry it stands on.
     pub(crate) fn advance_emp_visual(&mut self, core: &SimRace) {
-        let front = core.sim.detonator.as_ref().and_then(|detonator| {
-            let entry = oag_weapons::detonator::emp::front_entry(
-                &core.sim.world.detonator.emp.wave,
-                &detonator.survey,
-            )?;
-            Some(detonator.survey.entries[entry].centre)
-        });
+        let wave = &core.sim.world.detonator.emp.wave;
+        let at = |index: fn(
+            &oag_weapons::detonator::emp::Wave,
+            &oag_weapons::detonator::Survey,
+        ) -> Option<usize>| {
+            let survey = &core.sim.detonator.as_ref()?.survey;
+            Some(survey.entry(index(wave, survey)?)?.centre)
+        };
+        let (front, fork) = (
+            at(oag_weapons::detonator::emp::front_entry),
+            at(oag_weapons::detonator::emp::fork_entry),
+        );
+        let slot = self.emp_effect.take();
+        self.emp_effect = self.drive_emp_front(core, slot, front);
+        let slot = self.emp_fork_effect.take();
+        self.emp_fork_effect = self.drive_emp_front(core, slot, fork);
+    }
+
+    /// One front's effect: released with no front, otherwise attached or moved to the spline
+    /// sample nearest `front`.
+    fn drive_emp_front(
+        &mut self,
+        core: &SimRace,
+        slot: Option<psys::Playing>,
+        front: Option<Vec3>,
+    ) -> Option<psys::Playing> {
         let Some((_, sample, _)) = front.and_then(|at| core.sim.spline.nearest(at)) else {
-            if let Some(playing) = self.emp_effect.take() {
+            if let Some(playing) = slot {
                 self.stage.release(playing);
             }
-            return;
+            return None;
         };
         let lateral = Vec3::from_array(sample.lateral);
         let up = -Vec3::from_array(sample.down);
         let mid = Vec3::from_array(sample.pos)
             + lateral * ((sample.half_width_right - sample.half_width_left) * 0.5);
         let width = (lateral * (sample.half_width_left + sample.half_width_right)).length();
-        let playing = match self.emp_effect {
+        let playing = match slot {
             Some(playing) => {
                 self.stage.follow(playing, mid);
                 Some(playing)
             }
             None => {
                 let effect = self.handles.get(Trigger::DetonatorEmp).cloned();
-                self.emp_effect = effect.and_then(|e| self.stage.attach(&e, mid, 1.0));
+                let playing = effect.and_then(|e| self.stage.attach(&e, mid, 1.0));
                 // `EMP_SpawnLaunchEffect` hands the spawn its matrix by pointer (`li r7,1` at
                 // `0x0013b09c`), so the local-space emitters (flag `0x2`) ride the wave.
-                if let Some(playing) = self.emp_effect {
+                if let Some(playing) = playing {
                     self.stage.set_rides_frame(playing, true);
                 }
-                self.emp_effect
+                playing
             }
         };
         if let Some(playing) = playing {
             self.stage.orient(playing, up);
             self.stage.stretch(playing, width / 100.0, -lateral);
         }
+        playing
     }
 }

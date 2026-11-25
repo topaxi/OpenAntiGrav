@@ -486,7 +486,13 @@ fn draw_with_sky(
             occlusion_query_set: None,
             multiview_mask: None,
         });
-        pass.set_pipeline(&built.pipeline);
+        // A fixture that lists its draw as transparent draws it blended, so the target's alpha
+        // holds the fragment's own coverage rather than the opaque pass's glow mask.
+        if model.transparent_draws.is_empty() {
+            pass.set_pipeline(&built.pipeline);
+        } else {
+            pass.set_pipeline(&built.blend_pipeline[0]);
+        }
         pass.set_bind_group(0, &bind_group, &[0]);
         // Slot 1: the model's own textures. Slot 0 is `build`'s white 1x1.
         pass.set_bind_group(1, &built.texture_binds[1], &[]);
@@ -709,4 +715,60 @@ fn the_rgb_window_reflects_the_sky_by_one_minus_its_masks_red() {
         lit(1.0, 0)[1] <= 2,
         "an opaque picture reflects nothing under `1 - a`"
     );
+}
+
+/// **A glass floor drawn on its Zone program keeps the grid as its coverage.** Every `ZoneMode`
+/// block of `etched_glass_tech`, `etched_glass` and `etched_glass_amph` that is not a
+/// `ShadowToAlpha` redraw ends `MOV H0.w, <grid>.x`, the red of the `Texture1` tap
+/// (`docs/formats/rcsmaterial.md`, "The Zone glass program"), as the sheen's own block does off
+/// Zone. So a vertex-lit glass chunk in a Zone frame is blended by the grid's red, not drawn opaque
+/// by the albedo's alpha. The grid rides the second binding, as `glass_sheen` routes it; the albedo
+/// is opaque white. Drawn blended over black, the Zone colour under a grid of red 96 must be the
+/// colour under a full grid times the grid's decoded red.
+#[test]
+fn a_vertex_lit_glass_floor_keeps_its_grid_coverage_in_zone() {
+    let instance = wgpu::Instance::default();
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let (device, queue) =
+        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+            .expect("requesting the device");
+    let glass = |grid: u8| {
+        let mut model = model(slots::DEFAULT | slots::FACING_RAMP_SHEEN);
+        model.lightmaps = vec![Some(texture("grid", [grid, grid, grid, 255]))];
+        model.transparent_draws = model.draws.clone();
+        // Turned away from the eye, so the Zone surface's `rim^5` summand lights it.
+        for vertex in &mut model.vertices {
+            vertex.normal = [0.99, 0.0, 0.141];
+        }
+        model
+    };
+    let mut zone = rig(SUN);
+    zone.zone.enabled = 1.0;
+    // The zone textures bind black in this harness, so `zoneBaseAlt` (white) carries the surface.
+    for set in [
+        &mut zone.zone.scene,
+        &mut zone.zone.scene_outer,
+        &mut zone.zone.track,
+        &mut zone.zone.track_outer,
+    ] {
+        set.base_alt = [1.0, 1.0, 1.0, 0.0];
+    }
+    let full = draw(&device, &queue, &glass(255), zone, None);
+    let covered = draw(&device, &queue, &glass(96), zone, None);
+    assert!(
+        full[0] > 60,
+        "the fixture's Zone surface must draw something: {full:?}"
+    );
+    let grid = (96.0f32 / 255.0).powf(2.2);
+    for channel in 0..3 {
+        let expected = f32::from(full[channel]) * grid;
+        assert!(
+            (f32::from(covered[channel]) - expected).abs() <= 2.0,
+            "channel {channel}: in Zone the glass is blended by its grid, {covered:?} against \
+             {full:?} times {grid}"
+        );
+    }
 }

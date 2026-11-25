@@ -15,6 +15,7 @@ fn lap(entries: usize, lanes: u8) -> Survey {
                 up: Vec3::Y,
             })
             .collect(),
+        ..Survey::default()
     }
 }
 

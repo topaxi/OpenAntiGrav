@@ -352,6 +352,8 @@ pub struct RaceView {
     /// The [`Trigger::DetonatorEmp`] instance riding the EMP wave's front, or `None` with no
     /// wave in flight. See `RaceView::advance_emp_visual`.
     pub(super) emp_effect: Option<psys::Playing>,
+    /// The same effect on the wave's second front, once it has forked.
+    pub(super) emp_fork_effect: Option<psys::Playing>,
     /// Per [`oag_gameplay::World::repulsers`] slot, the four instances a live
     /// Repulser carries: its blast, its forward and backward wave, then its
     /// fork wave. See `RaceView::advance_repulser_visual`.

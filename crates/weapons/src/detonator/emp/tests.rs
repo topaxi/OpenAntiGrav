@@ -34,6 +34,7 @@ fn lap(entries: usize) -> Survey {
                 up: Vec3::Y,
             })
             .collect(),
+        ..Survey::default()
     }
 }
 
@@ -250,4 +251,127 @@ fn the_ramp_climbs_over_one_point_three_seconds_from_a_dead_tenth() {
     assert_eq!(ramp, 1.0);
     assert!(last >= 1.0);
     assert_eq!(step_ramp(&mut ramp, 1.0 / 60.0), 1.0);
+}
+
+/// A 200-entry ring with a 20-entry branch that leaves at entry 50 and rejoins at entry 90.
+fn forked_lap() -> Survey {
+    let mut survey = lap(200);
+    survey.branches.push(crate::detonator::SurveyBranch {
+        split: 50,
+        merge: 90,
+        entries: (0..20)
+            .map(|i| Entry {
+                centre: Vec3::new(100.0, 0.0, 500.0 + i as f32 * 10.0),
+                ..survey.entries[0]
+            })
+            .collect(),
+    });
+    survey
+}
+
+fn branch_mine(survey: &Survey, offset: usize) -> Placed {
+    Placed {
+        entry: u16::try_from(survey.branch_entry(0, offset).expect("a branch entry"))
+            .expect("fits"),
+        lane: 0,
+        live: false,
+    }
+}
+
+fn run_wave(field: &mut Field, survey: &Survey, ticks: usize) {
+    for _ in 0..ticks {
+        step_wave(field, survey, &config(), 1.0 / 60.0);
+    }
+}
+
+/// The wave splits where the original's does: the front that steps onto the split entry forks,
+/// and each front clears the mines on its own route.
+#[test]
+fn a_wave_that_crosses_a_split_clears_both_branches() {
+    let survey = forked_lap();
+    let mut field = Field::new();
+    field.mines[0] = mine(60, false);
+    field.mines[1] = branch_mine(&survey, 4);
+    field.mines[2] = branch_mine(&survey, 18);
+    field.mines[3] = mine(120, false);
+    field.live_mines = 4;
+    charge(&mut field, 8);
+    fire(&mut field, &survey, &config(), 40);
+    run_wave(&mut field, &survey, 125);
+    assert!(field.emp.wave.forked);
+    assert_eq!(field.live_mines, 0, "the ring's and the branch's mines");
+}
+
+/// The branch's mines survive without the fork: the same wave on the same lap with the
+/// branch dropped from the survey leaves them (the test fails if the fork is not wired).
+#[test]
+fn without_the_fork_the_branch_is_left_alone() {
+    let survey = forked_lap();
+    let ring_only = Survey {
+        branches: Vec::new(),
+        ..survey.clone()
+    };
+    let mut field = Field::new();
+    field.mines[0] = mine(60, false);
+    field.mines[1] = Placed {
+        entry: 200 + 4,
+        ..mine(0, false)
+    };
+    field.live_mines = 2;
+    charge(&mut field, 8);
+    fire(&mut field, &ring_only, &config(), 40);
+    run_wave(&mut field, &ring_only, 125);
+    assert!(!field.emp.wave.forked);
+    assert_eq!(field.live_mines, 1, "only the ring's mine went");
+}
+
+/// A wave launched past the split, or with too short a life to reach it, never forks, and the
+/// fork is born once.
+#[test]
+fn a_wave_that_never_steps_onto_the_split_does_not_fork() {
+    let survey = forked_lap();
+    for from in [51, 100, 10] {
+        let mut field = Field::new();
+        charge(&mut field, 4);
+        fire(&mut field, &survey, &config(), from);
+        run_wave(&mut field, &survey, 15);
+        assert!(!field.emp.wave.forked, "from {from}");
+    }
+    let mut field = Field::new();
+    charge(&mut field, 8);
+    fire(&mut field, &survey, &config(), 50);
+    run_wave(&mut field, &survey, 125);
+    assert!(
+        !field.emp.wave.forked,
+        "a wave that starts on the split steps onto it on tick zero"
+    );
+}
+
+/// The fork walks the branch one entry a tick, then the ring on from the merge, and ends with
+/// the wave.
+#[test]
+fn the_fork_walks_its_branch_then_the_ring_and_ends_with_the_wave() {
+    let survey = forked_lap();
+    let mut field = Field::new();
+    charge(&mut field, 8);
+    fire(&mut field, &survey, &config(), 40);
+    run_wave(&mut field, &survey, 10);
+    assert_eq!(fork_entry(&field.emp.wave, &survey), None, "front at 50");
+    run_wave(&mut field, &survey, 1);
+    assert_eq!(
+        fork_entry(&field.emp.wave, &survey),
+        survey.branch_entry(0, 0)
+    );
+    run_wave(&mut field, &survey, 19);
+    assert_eq!(
+        fork_entry(&field.emp.wave, &survey),
+        survey.branch_entry(0, 19)
+    );
+    run_wave(&mut field, &survey, 1);
+    assert_eq!(fork_entry(&field.emp.wave, &survey), Some(90), "the merge");
+    run_wave(&mut field, &survey, 5);
+    assert_eq!(fork_entry(&field.emp.wave, &survey), Some(95));
+    run_wave(&mut field, &survey, 120);
+    assert!(!field.emp.wave.live);
+    assert_eq!(fork_entry(&field.emp.wave, &survey), None);
 }
