@@ -135,3 +135,87 @@ fn no_zone_variant_of_a_facing_ramp_material_samples_the_ramp() {
         );
     }
 }
+
+/// The glass floors' Zone variants: every one that is not a `ShadowToAlpha` redraw (those declare
+/// `shadowMapTex`, `0x730df9ee`, and write `1 - shadow` as alpha) takes its output alpha from the
+/// `Texture1` grid's own unit, so a Zone race blends the glass by its grid as the sheen does off
+/// Zone (`shade.wesl`). Every Zone variant also samples `paraboloidReflectionTex` (`0x9edd3243`)
+/// under the weight `0x5e5b1937` and the engine tint `iblScalePower` (`0x7480de6d`): the
+/// reflection term, whose Zone-frame scenery tint is unread and which is not drawn
+/// (`docs/formats/rcsmaterial.md`, "The Zone glass program").
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn the_glass_floors_zone_variants_take_the_grid_as_their_alpha() {
+    use oag_rcs::rcsmaterial::fragment::{Program, Texel};
+    const TEXTURE1: u32 = 0x3bdc_0403;
+    const SHADOW_MAP: u32 = 0x730d_f9ee;
+    const REFLECTION: u32 = 0x9edd_3243;
+    const WEIGHT: u32 = 0x5e5b_1937;
+    const IBL_SCALE_POWER: u32 = 0x7480_de6d;
+    let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let spec = format!("{}:PS3_GAME/USRDIR/DATA00.PSARC", image.display());
+    let mut open = oag_assets::psarc::Archive::open(&spec).expect("opening DATA00");
+    let tint = rcsmaterial::name_hash("zoneColourTint");
+    for (path, covered) in [
+        (
+            "/data/environments/talons_junction/materials/etched_glass_tech.rcsmaterial",
+            6,
+        ),
+        (
+            "/data/environments/modesto_heights/materials/etched_glass.rcsmaterial",
+            6,
+        ),
+        (
+            "/data/environments/amphiseum/materials/etched_glass_amph.rcsmaterial",
+            6,
+        ),
+    ] {
+        let blob = open.read_path(path).expect("reading the material");
+        let material = RcsMaterial::parse(&blob).expect("parsing the material");
+        let mut offsets: Vec<usize> = material
+            .variants
+            .iter()
+            .map(|v| v.fragment.offset)
+            .collect();
+        offsets.sort_unstable();
+        offsets.dedup();
+        let mut grid_alpha = 0;
+        for at in offsets {
+            let Some(declared) = Declared::parse(&blob, at) else {
+                continue;
+            };
+            if !declared.parameters.contains(&tint) {
+                continue;
+            }
+            let has = |h: u32| declared.samplers.iter().any(|&(s, _)| s == h);
+            assert!(
+                has(REFLECTION)
+                    && declared.parameters.contains(&WEIGHT)
+                    && declared.parameters.contains(&IBL_SCALE_POWER),
+                "{path} @{at:#x}: a Zone variant without the reflection term"
+            );
+            if has(SHADOW_MAP) {
+                continue;
+            }
+            let grid_unit = declared
+                .samplers
+                .iter()
+                .find(|&&(s, _)| s == TEXTURE1)
+                .map(|&(_, unit)| unit);
+            let program = Program::parse(&blob, at).expect("decoding the block");
+            let alpha = program.output_texels()[3];
+            assert!(
+                grid_unit.is_some()
+                    && matches!(alpha, Texel::Unit { unit, .. } if Some(u32::from(unit)) == grid_unit),
+                "{path} @{at:#x}: alpha {alpha:?} is not the grid's (unit {grid_unit:?})"
+            );
+            grid_alpha += 1;
+        }
+        assert_eq!(
+            grid_alpha, covered,
+            "{path}: Zone variants with the grid's alpha"
+        );
+    }
+}
