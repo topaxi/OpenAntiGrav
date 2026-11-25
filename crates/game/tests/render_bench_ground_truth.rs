@@ -860,13 +860,16 @@ fn the_stats_screen_swaps_to_details_and_answers_a_copy() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("a temp directory");
     let shot = |name: &str| dir.join(format!("{name}.png"));
+    // The focus moves with the presses, so each action is compared with the screen the same focus
+    // gave just before it.
     let script = format!(
-        "until benchmark=stats within 6000; screenshot {}; press left; press left; press cross; \
-         ticks 3; screenshot {}; press cross; ticks 3; screenshot {}; press right; press cross; \
-         ticks 3; screenshot {}; quit",
-        shot("summary").display(),
+        "until benchmark=stats within 6000; press left; press left; ticks 3; screenshot {}; \
+         press cross; ticks 3; screenshot {}; press cross; ticks 3; screenshot {}; press right; \
+         ticks 3; screenshot {}; press cross; ticks 3; screenshot {}; quit",
+        shot("focused").display(),
         shot("details").display(),
         shot("summary-again").display(),
+        shot("copy-focused").display(),
         shot("copied").display(),
     );
     let out = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
@@ -890,12 +893,15 @@ fn the_stats_screen_swaps_to_details_and_answers_a_copy() {
     let read = |name: &str| std::fs::read(shot(name)).expect("a screenshot");
     // Compared as booleans: a failed `assert_eq!` would print two PNGs.
     assert!(
-        read("summary") != read("details"),
+        read("focused") != read("details"),
         "DETAILS changed nothing"
     );
     assert!(
-        read("details") != read("summary-again"),
+        read("focused") == read("summary-again"),
         "SUMMARY did not come back to the plain lines"
     );
-    assert!(read("summary") != read("copied"), "COPY answered nothing");
+    assert!(
+        read("copy-focused") != read("copied"),
+        "COPY answered nothing"
+    );
 }

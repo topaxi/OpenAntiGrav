@@ -31,5 +31,7 @@ fn set(text: &str) -> Result<(), Error> {
 
 #[cfg(not(target_os = "android"))]
 fn set(_text: &str) -> Result<(), Error> {
-    Err(Error::Unsupported("the clipboard is written on Android only"))
+    Err(Error::Unsupported(
+        "the clipboard is written on Android only",
+    ))
 }

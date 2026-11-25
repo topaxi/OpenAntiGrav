@@ -217,7 +217,7 @@ impl Session {
     fn benchmark_mods_on_offer(&self) -> bool {
         self.shell
             .as_ref()
-            .is_some_and(|shell| shell.mods.iter().any(|listing| is_loaded_mod(listing)))
+            .is_some_and(|shell| shell.mods.iter().any(is_loaded_mod))
     }
 
     /// The BENCHMARK OPTIONS rows' own keys: held for the run, never saved.
