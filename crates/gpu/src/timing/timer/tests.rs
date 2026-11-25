@@ -309,3 +309,161 @@ fn a_device_without_the_feature_gets_no_timer() {
     .expect("a device with nothing asked of it");
     assert!(PassTimer::new(&device, &queue).is_none());
 }
+
+/// Pairs summed by the label they were stamped with, in first-seen order.
+#[test]
+fn passes_sharing_a_label_are_summed_in_first_seen_order() {
+    // Period 1e9 makes a tick one second, so the sums read off directly.
+    let sums = sum_by_label(
+        &["shadow", "glass", "shadow"],
+        &[],
+        &[(0, 2), (10, 13), (20, 21)],
+        1e9,
+    );
+    assert_eq!(sums, [("shadow", 3.0), ("glass", 3.0)]);
+}
+
+/// A label that lost a pass to a full slot, or has a wrapped pair, is a part of its cost, and a
+/// part is worse than no row.
+#[test]
+fn a_label_with_a_missing_or_wrapped_pass_reports_nothing() {
+    let dropped = sum_by_label(&["a", "b"], &["a"], &[(0, 1), (0, 1)], 1e9);
+    assert_eq!(dropped, [("b", 1.0)], "a dropped label is left out whole");
+    let wrapped = sum_by_label(&["a", "a", "b"], &[], &[(0, 1), (5, 4), (0, 1)], 1e9);
+    assert_eq!(wrapped, [("b", 1.0)], "one wrapped pair takes its label");
+}
+
+/// Nothing is armed until a ring claims a frame, so a pass site outside a measured frame gets
+/// no stamp and pays only the lookup.
+#[test]
+fn a_stamp_outside_a_claimed_frame_is_none() {
+    assert!(stamp("shadow").is_none());
+}
+
+fn stamped_pass(
+    device: &wgpu::Device,
+    encoder: &mut wgpu::CommandEncoder,
+    view: &wgpu::TextureView,
+    label: &'static str,
+) {
+    let stamp = stamp(label);
+    encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+        label: Some(label),
+        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+            view,
+            depth_slice: None,
+            resolve_target: None,
+            ops: wgpu::Operations {
+                load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                store: wgpu::StoreOp::Store,
+            },
+        })],
+        depth_stencil_attachment: None,
+        timestamp_writes: stamp.as_ref().map(Stamp::render_writes),
+        occlusion_query_set: None,
+        multiview_mask: None,
+    });
+    let _ = device;
+}
+
+/// The whole labelled path on every adapter that can be timed: two frames in flight with
+/// different passes each, read back after both are submitted, each reading naming its own
+/// frame and its own labels. A ring-wide label table would label frame 1's reading with frame
+/// 2's passes.
+#[test]
+fn labelled_passes_come_back_under_their_own_frames_labels() {
+    let instance = wgpu::Instance::default();
+    for adapter in &crate::test_adapter::ordered(&instance) {
+        let info = adapter.get_info();
+        let timing = super::super::Timing::of(adapter);
+        if !timing.can_time_a_pass() {
+            eprintln!("{}: {}, skipping", info.name, timing.describe());
+            continue;
+        }
+        let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+            label: Some("labelled pass timer test"),
+            required_features: timing.features(),
+            ..Default::default()
+        }))
+        .expect("a device with what was probed");
+        let mut timer = PassTimer::with_passes(&device, &queue, 3).expect("a timer");
+        let target = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("labelled pass timer test"),
+            size: wgpu::Extent3d {
+                width: 64,
+                height: 64,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
+        });
+        let view = target.create_view(&Default::default());
+        // Frame 21: shadow twice, glass. Frame 22: hud alone. Frame 23: four passes of two
+        // labels into three pairs, so `shadow` loses a pass. Frame 24: nothing stamped.
+        let frames: [(u64, &[&'static str]); 4] = [
+            (21, &["shadow", "glass", "shadow"]),
+            (22, &["hud"]),
+            (23, &["glass", "shadow", "shadow", "shadow"]),
+            (24, &[]),
+        ];
+        for (frame, passes) in frames {
+            timer.begin(frame);
+            let mut encoder = device.create_command_encoder(&Default::default());
+            for label in passes {
+                stamped_pass(&device, &mut encoder, &view, label);
+            }
+            timer.resolve(&mut encoder);
+            queue.submit(Some(encoder.finish()));
+        }
+        let mut seen: Vec<(u64, &'static str)> = Vec::new();
+        let mut out = Vec::new();
+        for _ in 0..1_000 {
+            device
+                .poll(wgpu::PollType::wait_indefinitely())
+                .expect("the GPU");
+            timer.drain_labelled(&device, &mut out);
+            seen.extend(out.iter().map(|reading| (reading.frame, reading.label)));
+            for reading in &out {
+                assert!(
+                    reading.seconds > 0.0 && reading.seconds < 60.0,
+                    "{}: {} took {} s",
+                    info.name,
+                    reading.label,
+                    reading.seconds
+                );
+            }
+            if seen.len() >= 5 {
+                break;
+            }
+        }
+        seen.sort_unstable();
+        assert_eq!(
+            seen,
+            [
+                (21, "glass"),
+                (21, "shadow"),
+                (22, "hud"),
+                (23, "glass"),
+            ],
+            "{}: frame 23's `shadow` lost a pass to the full slot and must report nothing, and \
+             frame 24 stamped nothing and must report nothing",
+            info.name
+        );
+        // The empty frame gave its slot back, so a fifth claim is not refused.
+        for frame in 30..34 {
+            timer.begin(frame);
+            timer.abandon();
+        }
+        timer.begin(40);
+        assert!(
+            timer.writing.is_some(),
+            "{}: a frame that stamped nothing or was abandoned held its slot",
+            info.name
+        );
+        timer.abandon();
+    }
+}
