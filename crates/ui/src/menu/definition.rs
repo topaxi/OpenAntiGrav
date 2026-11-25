@@ -27,7 +27,7 @@
 //! at once and neither can a player watching one screen ever tell that a
 //! *different* screen forgot.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, HashMap};
 
 use crate::language::StringTable;
 use oag_core::buttons::button_from_name;
