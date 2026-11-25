@@ -84,6 +84,20 @@ fn a_desktop_cost_never_leaves_the_originals_size() {
 }
 
 #[test]
+fn a_target_under_the_floor_is_kept_whatever_its_share() {
+    // A frame that misses a 240 Hz limit with a 0.6 ms target, 11 % of it: above the share,
+    // under FLOOR_SECONDS, so the coarser view would buy too little to give it up.
+    let machine = Machine {
+        base: 4.9 * MS,
+        glass: [0.6 * MS, 0.2 * MS, 0.1 * MS],
+        period: 1.0 / 240.0,
+        paced: false,
+    };
+    let mut rung = Rung::new();
+    assert!(run(&mut rung, machine, 60.0).is_empty());
+}
+
+#[test]
 fn a_mali_cost_settles_at_quarter_and_stays() {
     let mut rung = Rung::new();
     let changes = run(&mut rung, MALI, 10.0);
@@ -126,13 +140,24 @@ fn headroom_restores_one_step_at_a_time_after_a_patient_run() {
         glass: [2.0 * MS, 0.6 * MS, 0.2 * MS],
         ..MALI
     };
-    // The run is counted in frames of the budget's period (3 s of 120 Hz), as the blur rung's.
-    let changes = run(&mut rung, light, 0.5);
-    assert!(
-        changes.is_empty(),
-        "a restore waits for its run: {changes:?}"
-    );
-    let changes = run(&mut rung, light, 30.0);
+    // The run is counted in frames of the budget's period (3 s of 120 Hz), as the blur rung's:
+    // the first restore comes no sooner than that many frames into the light scene.
+    let patience = crate::drs::restore_frames(MALI.period);
+    let mut changes = Vec::new();
+    let mut frames = 0u32;
+    while frames < 20 * patience {
+        let reading = light.reading(rung.step());
+        frames += 1;
+        if let Some(change) = rung.record(reading, true) {
+            if changes.is_empty() {
+                assert!(
+                    frames >= patience,
+                    "restored after {frames} of {patience} frames"
+                );
+            }
+            changes.push(change);
+        }
+    }
     let steps: Vec<_> = changes.iter().map(|c| c.to).collect();
     assert_eq!(
         steps,
@@ -224,6 +249,7 @@ fn a_small_share_leaves_the_extent_loop_exactly_as_it_was() {
         .unwrap();
     let mut plain = Controller::new();
     let mut fed = Controller::new();
+    let mut lowest = 1.0f32;
     // Over, then under, then over again: falls and rises both.
     let ratios = (0..900).map(|i| match i / 300 {
         0 => 1.4,
@@ -249,6 +275,8 @@ fn a_small_share_leaves_the_extent_loop_exactly_as_it_was() {
             "frame {frame}"
         );
         assert_eq!(plain.scale(), fed.scale());
+        lowest = lowest.min(plain.scale());
     }
+    assert!(lowest < 1.0, "the sequence moves the extent");
     assert_eq!(fed.reflection_step(), ReflectionResolution::Original);
 }
