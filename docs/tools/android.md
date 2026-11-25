@@ -932,7 +932,8 @@ protocol, two arms each); `half` reads 30.3 ms, and leaving the pass out entirel
 
 ### What the frame thread waits for
 
-Measured 2026-11-25 on the same phone. Release build of main `2d42134` plus the frame log's chain fields (`OAG_APK_DEV_CLI=1 OAG_APK_PROFILEABLE=1 just apk`),
+Measured 2026-11-25 on the same phone. Release builds (`OAG_APK_DEV_CLI=1 OAG_APK_PROFILEABLE=1 just apk`) of main `2d42134` (the `simpleperf` and Perfetto runs) and of
+main plus the frame log's chain fields and a local, uncommitted `OAG_DIAG_FRAME_LATENCY` override of `desired_maximum_frame_latency` (every other run; the override is inert unless set),
 HD/Fury Vineta K forward, the launch file's `--race --track /data/environments/01_vineta_k/track.vex --autopilot --seed 1 --no-intro --no-audio --frame-log`,
 **render scale 25** (476x270 scene), REFLECTION RESOLUTION `auto` (it settles at `quarter`), every other setting a fresh profile's. Each run starts once the AP sensor reads
 33 C or less; figures are medians over racing seconds 20 to 80. The start state still moves a run by about a third: from AP 27 C the GPU held 858 MHz and the frame read 26.3 ms;
@@ -970,12 +971,14 @@ the Mali driver's `semaphores_to_platform_fence` → `enqueue_base_fence_signal`
 the frame thread. Mali's backend thread (`mali-cmar-backe`) spends 82 % of its time off the CPU, mostly in `poll` on the kernel driver: it waits on the GPU, it does not build
 commands for the frame thread to wait on.
 
-**What the wait is for: the previous frame, so the CPU and GPU already overlap.** A Perfetto trace with the `gfx` category (15 s, 384 frames;
+**What the wait is for: the previous frame, so the CPU and GPU already overlap, with a gap between frames.** A Perfetto trace with the `gfx` category (15 s, 384 frames;
 `scripts/android-fence-timeline.py`) pairs each frame's `QueuePresentKHR` with the GPU completion fence `queueBuffer` hands over, which the app's own FenceMonitor thread
 records when it signals. Medians: the present returns **5.3 ms after the previous frame's fence signals**, and the frame's own fence signals **30.3 ms after the present has
 returned** (in 99.7 % of frames it signals after). Fences signal every 35.3 ms and frames come every 36.7 ms. So frame N's GPU work runs while the CPU builds frame N+1, and the frame
-thread waits because the GPU takes as long as the whole frame. The GPU is 81 to 86 % busy over the racing window (`/sys/kernel/gpu/gpu_busy`, which counts every user of the GPU,
-SurfaceFlinger's composition of this landscape surface included). Its timestamps add up to about 15 ms (scene 8.9 to 10.5, glass, adverts, bloom and the rest), half of what the
+rate is set by the GPU's timeline, not by the CPU's work plus the GPU's. That timeline is not full: the GPU is 81 to 86 % busy over the racing window (`/sys/kernel/gpu/gpu_busy`,
+which counts every user of the GPU, SurfaceFlinger's composition of this landscape surface included), about 5 to 7 ms idle a frame, and in the 5.3 ms between the previous
+fence and the present's return Mali's backend thread is on the CPU for a median 4.5 ms (86 % of that gap; its `thread_state` in the same trace). That reads as the driver
+submitting the next frame's jobs after the previous frame completes, with the GPU waiting on it; the GPU's idle time inside that gap is not measured directly. Its timestamps add up to about 15 ms (scene 8.9 to 10.5, glass, adverts, bloom and the rest), half of what the
 fence period says the GPU spends a frame.
 
 **A third swapchain image changes nothing**: `desired_maximum_frame_latency` 3 against the default 2 (Mailbox, fullscreen), from the same start (AP 32.9 C), read 35.0 against
@@ -991,7 +994,8 @@ An earlier run of the same toggle with the window edges recovered from the row r
 compositor on that GPU puts a default-adapter window, and 0.16 ms (0.02 ms a card) on the Radeon RX 7800 XT at the same 1440x816. On the 610M every card costs 0.16 to 0.30 ms
 whatever its draw count (26 draws 0.16 ms, 3 draws 0.30 ms), the cards with their draws left out and only the clears kept read 0.15 ms for all eight, and the frame goes from about 80
 to about 99 fps without them; anisotropy `off`, `RADV_DEBUG=nodcc` or `nohiz`, and `OAG_BINDLESS=0` move nothing. The single-frame bench on the 7800 XT at 1920x1080 reads 91 us
-for the eight cards' draws and 2.3 us with the clears only. On both GPUs the cost goes with the pixels the cards shade.
+for the eight cards' draws and 2.3 us with the clears only. That is consistent with the cost being the pixels the cards shade (the clears are cheap, and the 7800 XT with
+30 times the 610M's compute units is about 16 times faster on them); not checked are the cards' texture sizes, formats and mips (on Mali HD's DXT textures are decoded to RGBA8).
 
 ### Against the S24
 

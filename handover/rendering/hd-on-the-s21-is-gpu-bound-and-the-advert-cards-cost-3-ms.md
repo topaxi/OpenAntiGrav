@@ -2,7 +2,7 @@
 status: measure
 titles: [hd]
 updated: 2026-11-25
-summary: "S21 HD is GPU-bound, not serialised; half its GPU frame is untimed; advert cards cost about 3 ms at render scale 25: pick the levers"
+summary: "S21 HD runs at the GPU's pace with a ~5 ms driver gap per frame; half its GPU frame is untimed; advert cards cost ~3 ms: pick levers"
 categories: [tooling]
 difficulty: medium (40)
 ---
@@ -11,12 +11,21 @@ difficulty: medium (40)
 
 Evidence and method: `docs/tools/android.md`, "What the frame thread waits for". In short: the frame
 thread's 14 to 20 ms in `Queue::present` is Mali's `vkQueueSignalReleaseImageANDROID` waiting for
-the **previous** frame's GPU fence, so the CPU already runs one frame ahead; the frame is the GPU's
-time, about twice what the timestamps add up to. No improvement was implemented; this thread lists
+the **previous** frame's GPU fence, so the CPU already runs one frame ahead and the frame rate is the
+GPU timeline's, about twice what the timestamps add up to. That timeline is 81 to 86 % busy, and in
+the 5.3 ms between a frame's fence and the next present's return Mali's backend thread is on the CPU
+for 4.5 ms. No improvement was implemented; this thread lists
 the leads for whoever picks them.
 
 ## Open
 
+- **The driver gap between frames.** After frame N-1's fence, Mali's `mali-cmar-backe` runs about
+  4.5 ms (median) before frame N's present returns, and the GPU is 14 to 19 % idle. If that is the
+  backend submitting frame N's job chains, fewer render passes (eight advert passes, the bloom
+  chain's small passes) shorten it. Measure: the GPU's idle time inside the gap (a Mali counter or
+  `gpu_busy` sampled faster than 1 s), and the backend's on-CPU time per gap against the pass count
+  (`OAG_SKIP_PASSES=adverts` removes eight passes). `scripts/android-fence-timeline.py` pairs the
+  frames; the backend's `thread_state` over the gap is one more query on the same trace.
 - **Where the other half of the GPU frame goes.** The fence period (35 ms in the traced run) is
   about twice the timed passes plus `bloom_ms` (about 15 to 18 ms). Candidates not separated:
   untimed passes (the composite, the resolve), Mali's vertex and tiling work, which its timestamps
