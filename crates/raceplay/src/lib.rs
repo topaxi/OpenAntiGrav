@@ -185,6 +185,7 @@ pub mod catch_up;
 pub const VIEW: bool = cfg!(feature = "view");
 #[cfg(feature = "view")]
 mod ammo_gauge;
+mod hull_charge;
 #[cfg(feature = "view")]
 mod cockpit_hit;
 #[cfg(feature = "view")]

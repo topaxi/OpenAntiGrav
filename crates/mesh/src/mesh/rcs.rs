@@ -170,6 +170,7 @@ mod alpha_emissive;
 mod billboard_glass;
 mod bomb_tint;
 pub mod bullet_gauge;
+mod hull_charge;
 mod chevron_pulse;
 mod cutout;
 mod damage_lights;

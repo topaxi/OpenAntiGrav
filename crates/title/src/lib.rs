@@ -104,7 +104,7 @@ pub use race::sound::{
     FrontEndSounds, MedalScreen, MenuCues, ResultsLaw, ResultsVoices, StyledCue, TournamentPlace,
 };
 pub use race::{
-    CircuitBanks, CountdownEvent, CountdownVoice, Crossfade, Detonator, DetonatorAmmoGauge,
+    CircuitBanks, CountdownEvent, CountdownVoice, Crossfade, Detonator, DetonatorAmmoGauge, DetonatorHullCharge,
     DetonatorCraft, DetonatorLayouts, DetonatorObjects, DetonatorPads, DetonatorVoices,
     GuestRoster, RaceDefaults, SequenceTick, SoundBanks, SpeedClasses, StartCue, TeamVariant,
     TeamVariants, TrackBanks, VariantJoin, VrBanks, WwiseBank, WwiseCue, WwiseCues, WwiseState,

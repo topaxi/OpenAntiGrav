@@ -497,3 +497,25 @@ fn the_detonator_hull_gauge_earns_its_segment_program() {
     assert_eq!(entry.tint, [1.0, 0.0, 0.0]);
     assert_eq!(entry.offset, 1.0);
 }
+
+/// The Detonator hull's two plasma shells declare `Charge1` (`detonator_shield_plasma`) and `Charge2`
+/// (`detonator_shield_plasma1`) as their alpha (`detonator-ammo-gauge.md`, "`Charge1`, `Charge2`"):
+/// each earns the program its parameter names, an entry a slot names, holding the bind-time charge
+/// `0`; nothing else on the hull does.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn the_detonator_hull_plasma_shells_earn_their_charge() {
+    let Some(image) = image() else { return };
+    let model = build(&image, "/data/ships/detonator/ship.vex");
+    for program in [mesh::PROGRAM_HULL_CHARGE_1, mesh::PROGRAM_HULL_CHARGE_2] {
+        let shells = model
+            .emissive
+            .iter()
+            .filter(|e| e.program[0] == program)
+            .count();
+        assert_eq!(shells, 1, "one shell material for program {program}");
+        let (row, named) = program_row(&model, program).expect("a charge entry");
+        assert!(named, "no slot names row {row}");
+        assert_eq!(model.emissive[row - 1].offset, 0.0);
+    }
+}

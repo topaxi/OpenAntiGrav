@@ -609,6 +609,9 @@ pub struct Detonator {
     pub cannon_lights: bool,
     /// The cannon gauge on the craft's back, or `None` where a title's law is not read.
     pub ammo_gauge: Option<DetonatorAmmoGauge>,
+    /// The plasma shells on the craft's wings that the EMP's charge lights, or `None` where a
+    /// title's law is not read.
+    pub hull_charge: Option<DetonatorHullCharge>,
     /// The handling file a Detonator race flies in place of the team's, or `None` where a
     /// title's is not located.
     pub handling: Option<crate::zone_handling::ZoneHandling>,
@@ -645,6 +648,16 @@ pub struct DetonatorAmmoGauge {
     pub bind: ([f32; 3], f32),
     /// The craft speed the update needs to exceed; at or below it the gauge holds what it showed.
     pub speed_gate: f32,
+}
+
+/// What drives the Detonator craft's `Charge1` and `Charge2`, the alpha of its two plasma-shell
+/// materials: `Ship_UpdateDetonatorHullParams` moves each toward its target by `rate * dt`, the
+/// targets being `1` and `1` while the EMP's charge `v` is full, `1` and `0` while it is over zero,
+/// `0` and `0` otherwise (`docs/ghidra/functions/ps3-hdfury-eu/detonator-ammo-gauge.md`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DetonatorHullCharge {
+    /// Per second, `Charge1` then `Charge2`.
+    pub rates: [f32; 2],
 }
 
 /// What Detonator's pads do (`docs/ghidra/functions/ps3-hdfury-eu/detonator-emp.md`, "Pads
