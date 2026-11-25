@@ -223,6 +223,14 @@ def pct(a, b):
     return (b - a) / a * 100.0
 
 
+def mods_of(result):
+    """The mods a result loaded, as sorted `id version hash` strings; empty when it ran without any."""
+    mods = result.get("run", {}).get("mods", "off")
+    if mods == "off" or mods is None:
+        return []
+    return sorted(f"{m['id']} {m['version']} {m['hash']}" for m in mods)
+
+
 def compare_pair(a, b):
     lines = []
     warnings = []
@@ -234,6 +242,13 @@ def compare_pair(a, b):
     kind_a, kind_b = a.get("run", {}).get("kind", "offscreen"), b.get("run", {}).get("kind", "offscreen")
     if kind_a != kind_b:
         warnings.append(f"run kind differs: {kind_a} vs {kind_b} (an in-game frame is the interval between two presents, under the player's present mode; an offscreen frame has no idle between frames)")
+    mods_a, mods_b = (mods_of(r) for r in (a, b))
+    if mods_a != mods_b:
+        warnings.append(f"mods differ: {mods_a or 'off'} vs {mods_b or 'off'} (a run with mods loads their extensions, effects, shaders and overrides, so it is not the game as shipped)")
+    for key, what in (("vsync_requested", "vsync"), ("present_mode", "present mode"), ("frame_limit", "frame limit")):
+        value_a, value_b = a.get("run", {}).get(key), b.get("run", {}).get(key)
+        if value_a != value_b and value_a is not None and value_b is not None:
+            warnings.append(f"{what} differs: {value_a} vs {value_b} (the pacing an in-game frame is measured under)")
     if a.get("run", {}).get("track") != b.get("run", {}).get("track"):
         warnings.append(f"track differs: {a.get('run', {}).get('track')} vs {b.get('run', {}).get('track')}")
     if a["adapter"]["name"] != b["adapter"]["name"] or a["adapter"]["driver_info"] != b["adapter"]["driver_info"]:
@@ -325,6 +340,20 @@ def cmd_selftest(_):
             self.assertIn("not timed in one of the runs", text)
             self.assertNotIn("the race itself differs", text)
             self.assertNotIn("run kind differs", compare_pair(in_game, in_game))
+
+        def test_a_run_with_mods_is_told_from_one_without(self):
+            plain, modded = self.result(100.0), self.result(100.0)
+            for r in (plain, modded):
+                r["run"] = {"kind": "in_game", "case": "1", "mods": "off", "vsync_requested": "off", "present_mode": "Immediate", "frame_limit": "240"}
+            self.assertNotIn("mods differ", compare_pair(plain, plain))
+            modded["run"]["mods"] = [{"id": "oag.energy-turbo", "version": "1.0.0", "hash": "ab"}]
+            self.assertIn("mods differ: off vs ['oag.energy-turbo 1.0.0 ab']", compare_pair(plain, modded))
+            modded["run"]["mods"] = "off"
+            modded["run"]["vsync_requested"] = "on"
+            modded["run"]["frame_limit"] = "60"
+            text = compare_pair(plain, modded)
+            self.assertIn("vsync differs: off vs on", text)
+            self.assertIn("frame limit differs: 240 vs 60", text)
 
         def test_a_different_race_is_flagged(self):
             text = compare_pair(self.result(100.0), self.result(100.0, tick=101))

@@ -1,6 +1,6 @@
 # In-game benchmark
 
-One fixed race per title, flown in the window with the player's own settings (or a named preset),
+One fixed race per title, flown in the window with the player's own settings (or a named preset and the run's own vsync and frame limit),
 ending on a stats screen and a result file that `just bench-compare` reads. It is the player-facing
 half of the [whole-race render bench](render-bench.md): that one draws offscreen and measures the
 renderer; this one draws through the window, so a frame is the interval between two presents under
@@ -10,9 +10,49 @@ the player's present mode, and the same figures come out of a desktop, a Steam D
 
 | From | How | BACK on the stats screen |
 | --- | --- | --- |
-| The command line | `oag-game --benchmark [title] [--preset NAME]` | quits |
-| The menus | Pulse: EXTRAS (its disc's own `FE_EXTRAS` row, last in the disc's order) opens an EXTRAS page of ours holding BENCHMARK. Every other title: BENCHMARK, the row the built-in `oag-extras` mod adds after OPTIONS (`assets/mods/oag-extras/menu.toml`; on a flat main menu it draws inline after OPTIONS) | the page it was fired from |
+| The command line | `oag-game --benchmark [title] [--preset NAME] [--benchmark-mods on\|off] [--benchmark-vsync MODE] [--benchmark-frame-limit LIMIT]` | quits |
+| The menus (both rows open BENCHMARK OPTIONS first) | Pulse: EXTRAS (its disc's own `FE_EXTRAS` row, last in the disc's order) opens an EXTRAS page of ours holding BENCHMARK. Every other title: BENCHMARK, the row the built-in `oag-extras` mod adds after OPTIONS (`assets/mods/oag-extras/menu.toml`; on a flat main menu it draws inline after OPTIONS) | the page it was fired from |
 | The graphics page | RUN BENCHMARK, before ADVANCED (`assets/ui/menu.toml`): change a setting, run, change it again | the graphics page |
+
+## Benchmark options
+
+BENCHMARK and RUN BENCHMARK open a BENCHMARK OPTIONS page (`assets/ui/menu.toml`, page
+`benchmark_options`; pad, pointer and touch like every page) before the run, with START BENCHMARK
+and BACK. Its rows are **this run's own**: they start from the player's current settings every
+time the page opens, are held by the session (`Session::apply_setting`'s `benchmark.` keys) and are
+never written, so `settings.toml`, which holds the `[mods]` switches and the `[mod_settings]`
+tables, is byte for byte what it was after any run
+(`render_bench_ground_truth::the_options_page_reaches_the_run_and_saves_nothing`).
+
+| Row | Values | Default | Reaches the run as |
+| --- | --- | --- | --- |
+| MODS | off, on | off; the row is left out while no mod of the player's is enabled (`Menu::offer_choice`) | `--benchmark-mods` |
+| VSYNC | the display page's: off, on, smooth | the player's | `--benchmark-vsync`; the surface is reconfigured for the run and again when it ends |
+| FRAME LIMIT | the display page's list (greyed under vsync on, as there) | the player's | `--benchmark-frame-limit` |
+| PRESET | YOUR SETTINGS, low, medium, high | YOUR SETTINGS | `--preset` |
+
+On the command line the options page is skipped and the flags are the rows; `--benchmark-vsync`
+and `--benchmark-frame-limit` are benchmark-scoped (the game has no persisting `--vsync`). On
+Android the launch file takes them one argument per line like `--preset`. BACK on the stats screen
+returns to the page the BENCHMARK row was on, not the options page; firing the row again reopens
+it, and RUN AGAIN repeats the run with the same options.
+
+**MODS OFF is the game as shipped.** `plan::without_mods` clears every door a mod comes in by:
+the simulation modules and the mods' effects, shaders and sounds (`find_extensions`), the texture
+packs (`find_texture_packs`) and the player's override directory
+(`Options::no_overrides`, which mounts only this project's own fallback layer). The mods still
+list on the MODS page and the built-in `oag-extras` is not a mod for this purpose (it adds menu
+rows, not race content); the official `oag.*` mods are mods and load under MODS ON. The rumble
+patterns' and the wingtip lender's own source opens (haptics and one effect's borrowed textures)
+are outside the guard, so a rumble override there still answers (**not guarded, checked in the
+code, not measured**).
+
+The result's `run` object records `mods` (`"off"` or `[{id, version, hash}]`; `hash` is the
+SHA-256 of the mod's simulation module, empty for a mod with none), `vsync_requested`,
+`present_mode` (the surface's `wgpu` present mode) and `frame_limit` (as configured, a rate,
+`unlimited` or `refresh_rate`), and `command` repeats the flags. `just bench-compare` warns when
+two results differ in any of them (`mods differ`, `vsync differs`, `present mode differs`,
+`frame limit differs`).
 
 `title` is a disc image or folder like any first argument, or a title's short name (`pulse`,
 `pure`, `hd`, `2048`, `omega`) for the first playable disc of that title on the search path. On
@@ -168,6 +208,9 @@ checks each value against the page.
 - `render_bench_ground_truth::no_input_changes_a_pulse_benchmark` and `..._an_hd_benchmark`: a run
   with every input spent (held CROSS, click, SELECT, START, a stick, focus loss, a key) has the
   untouched run's flyby length, final tick, state hash, frame count and `settings.toml`.
+  `a_benchmark_with_its_mods_off_loads_no_extension_and_no_override`,
+  `the_options_page_reaches_the_run_and_saves_nothing` and
+  `the_mods_row_is_left_out_while_no_mod_is_enabled`: BENCHMARK OPTIONS.
   `back_abandons_a_benchmark_and_writes_nothing`: Back by the pad and the system Back from the EXTRAS page, Escape from the command line.
 - Unit tests in `crates/game/src/benchmark/` for the lows, the figures, the JSON keys `compare`
   reads, the screen's hit rectangles and layout, the presets, and the command line.
