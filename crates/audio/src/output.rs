@@ -170,6 +170,16 @@ impl Output {
         }
     }
 
+    /// A null mixer for a run with no device: `silent` makes it mix nothing
+    /// ([`Mixer::set_silent`]), for a run no one hears and nothing reads, which still needs its
+    /// voices to start and end. A dump wants the mix, so it is not silent.
+    #[must_use]
+    pub fn headless(sample_rate: u32, silent: bool) -> Self {
+        let output = Self::null(sample_rate);
+        output.with_mixer(|mixer| mixer.set_silent(silent));
+        output
+    }
+
     /// Pauses or restarts the device's stream, for a window that is not on
     /// screen (Android `Suspended`, a minimised desktop window).
     ///
