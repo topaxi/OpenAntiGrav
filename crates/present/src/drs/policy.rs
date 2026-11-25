@@ -7,7 +7,7 @@
 
 use oag_display::display::BlurResolution;
 
-use super::{Cost, Limits, Residual, blur::Rung};
+use super::{Cost, Limits, Residual, blur::Rung, reflection};
 
 /// The band around the budget in which nothing happens, as a fraction of it.
 ///
@@ -119,6 +119,9 @@ pub struct Controller {
     /// The blur rung: whether the half gather is in force, and what earns the
     /// full one back - see [`super::blur`].
     rung: Rung,
+    /// The reflection rung: the step `auto` draws the glass and sea target at - see
+    /// [`super::reflection`]. Fed by [`Self::record_reflection`], with or without a target.
+    reflection: reflection::Rung,
 }
 
 impl Default for Controller {
@@ -138,6 +141,7 @@ impl Controller {
             unreachable: 0,
             residual: Residual::new(),
             rung: Rung::default(),
+            reflection: reflection::Rung::new(),
         }
     }
 
@@ -236,6 +240,14 @@ impl Controller {
             .try_restore(cost.blur, scalable, budget, self.steps)
         {
             self.cooldown = COOLDOWN;
+            self.under = 0;
+            return None;
+        }
+        // **The reflection rung before the extent** as well: while it still has a step to give
+        // up and wants to, or is settling after one, an overrun holds the scale rather than
+        // falling. It never holds while the glass is a small share, so then this is the loop
+        // it always was.
+        if ratio > *DEADBAND.end() && self.reflection.holds_extent() {
             self.under = 0;
             return None;
         }
@@ -374,6 +386,30 @@ impl Controller {
         self.under = 0;
         self.unreachable = 0;
         self.rung.reset();
+        self.reflection.stall();
+    }
+
+    /// Records one frame into the reflection rung ([`super::reflection`]) and returns its change
+    /// of step, if any. Called every frame a glass or sea target is drawn under `auto`, whether
+    /// or not a resolution target runs; a restore waits for the extent to be at its ceiling.
+    pub fn record_reflection(
+        &mut self,
+        reading: reflection::Reading,
+        limits: Limits,
+    ) -> Option<reflection::Change> {
+        let at_ceiling = !limits.target().is_on() || self.steps == GRID;
+        self.reflection.record(reading, at_ceiling)
+    }
+
+    /// The step `auto` draws the glass and sea target at.
+    #[must_use]
+    pub fn reflection_step(&self) -> oag_display::display::ReflectionResolution {
+        self.reflection.step()
+    }
+
+    /// Back to the original's size with nothing learned: a new circuit's target.
+    pub fn reset_reflection(&mut self) {
+        self.reflection.reset();
     }
 
     /// The extent to draw at, re-derived from the bounds in force now.

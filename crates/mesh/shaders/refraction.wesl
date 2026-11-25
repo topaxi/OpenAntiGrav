@@ -47,7 +47,8 @@ fn opaque_colour(in: VertexOutput, lit_pixel: Lit) -> vec3<f32> {
     let n = in.normal * inverseSqrt(max(dot(in.normal, in.normal), 1e-12));
     let clip = scene.refraction * vec4<f32>(in.world + n * reach, 1.0);
     let ndc = clip.xy / max(clip.w, 1e-6);
-    let uv = vec2<f32>(0.5 + 0.5 * ndc.x, 0.5 - 0.5 * ndc.y);
+    // Kept inside the rectangle the target was drawn into (`scene.sea_reflection.zw`).
+    let uv = min(vec2<f32>(0.5 + 0.5 * ndc.x, 0.5 - 0.5 * ndc.y), scene.sea_reflection.zw);
     let grab = target_in(textureSampleLevel(behind_glass_tex, shadow_sampler, uv, 0.0).rgb);
     return plus_after_fog(fogged(lit * tint.w + grab * w, in.world, in.view_depth, in.slots), shade_out.after_fog);
 }

@@ -155,7 +155,7 @@ fn stage() -> Option<(wgpu::Device, wgpu::Queue, Scene)> {
     scene.light =
         mesh_render::Light::authored([0.0, 0.0, 1.0], [0.2; 3], [0.1; 3], [1.0; 3], [1.0; 3], 0.0);
     scene.fog.camera = [0.0, 0.0, 100.5];
-    scene.sea_reflection = [40.0, 1.0, 0.0, 0.0];
+    scene.sea_reflection = [40.0, 1.0, 1.0, 1.0];
     Some((device, queue, scene))
 }
 
