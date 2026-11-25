@@ -448,7 +448,7 @@ impl SimRace {
             .filter_map(|row| {
                 let slot = slots[row];
                 Some(oag_hud::KillTag {
-                    team: self.outcome.slot_teams.get(slot)?.clone(),
+                    team: self.outcome.row_teams.get(slot)?.clone(),
                     count: counts[row],
                     player: slot == player,
                 })

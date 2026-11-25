@@ -324,6 +324,7 @@ fn setup(handling: Handling) -> SimSetup {
         finished_thrust: None,
         original_tables: None,
         slot_teams: Vec::new(),
+        row_teams: Vec::new(),
         sight: Sighting::default(),
         collision: CollisionWorld::new(),
         handling,

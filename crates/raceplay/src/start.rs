@@ -102,6 +102,7 @@ impl Race {
             laid_from_rear,
             grid_frame_from_sample,
             slot_teams,
+            row_teams,
             sight,
             capture_zone,
             foreign: _,
@@ -857,6 +858,7 @@ impl Race {
                 },
                 outcome: crate::outcome::Outcome {
                     slot_teams,
+                    row_teams,
                     ..Default::default()
                 },
                 plans: None,

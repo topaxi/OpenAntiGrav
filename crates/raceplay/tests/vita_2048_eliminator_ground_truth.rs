@@ -79,6 +79,9 @@ fn a_2048_craft_turns_over_its_own_flip_time() {
     })
     .expect("loading a 2048 Eliminator");
     check_pads(&loaded.setup);
+    // A grid's variant id names its team on the rows.
+    assert_eq!(loaded.setup.slot_teams[0], r"Auricom2048\4");
+    assert_eq!(loaded.setup.row_teams[0], "Auricom2048");
     // No event and no Racebox slider: the manager's own default.
     check_score(&loaded.setup, 200);
     let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
@@ -86,6 +89,8 @@ fn a_2048_craft_turns_over_its_own_flip_time() {
     for _ in 0..60 * 6 {
         race.tick(&PlayerInputs::none());
     }
+    let own = race.readout().kill_tags.into_iter().find(|t| t.player);
+    assert_eq!(own.map(|t| t.team).as_deref(), Some("Auricom2048"));
     race.tick(&press_flip());
     assert!(race.core.sim.world.ships[0].physics.flip.active);
     let mut ticks = 1;
