@@ -12,8 +12,8 @@ use oag_mesh::mesh_render::Anisotropy;
 
 use crate::app::args::DEFAULT_SIZE;
 
-mod detonator;
 pub(crate) mod benchmark;
+mod detonator;
 pub(crate) mod extra;
 mod render_overrides;
 
