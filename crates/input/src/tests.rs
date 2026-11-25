@@ -771,31 +771,36 @@ fn a_button_is_the_button_the_device_pressed() {
     assert!(!controls.buttons().is_pressed(Button::Triangle));
 }
 
-/// An L1 press while L2 is held is the flip's edge and no new `L` edge: with L1 the flip, `L`
-/// comes from the trigger alone, so the sideshift the shoulder counts is not asked for twice.
+/// With L1 the flip, `L` and the left airbrake come from L2 alone: an L1 press makes the flip's
+/// edge and no `L`, a pull on L2 under a held L1 makes the `L` edge and an axis of its own depth,
+/// and letting go of L2 under a held L1 releases `L`.
 #[test]
-fn an_l1_press_over_a_held_l2_makes_a_flip_edge_and_no_l_edge() {
+fn l1_as_the_flip_leaves_l_and_the_axis_to_l2_through_the_merge() {
     let mut config = pad::TriggerConfig::default();
     config.l1_is_flip = true;
     let l1 = pad::bits_of(gilrs::Button::LeftTrigger, Button::L, config.l1_is_flip);
-    let tick = |buttons: u32| {
+    let tick = |buttons: u32, brake: f32| {
         pad::resolve(
             Reading {
                 buttons,
-                brake: 0.6,
+                brake,
                 ..Reading::default()
             },
             config,
         )
     };
     let mut controls = Controls::without_pad();
-    let first = controls.merge_one(tick(0));
-    assert!(first.buttons.is_pressed(Button::L));
-    let second = controls.merge_one(tick(l1));
-    assert!(second.buttons.is_pressed(Button::Flip));
-    assert!(second.buttons.is_held(Button::L));
-    assert!(
-        !second.buttons.is_pressed(Button::L),
-        "the L1 press made an L edge"
-    );
+    let flip = controls.merge_one(tick(l1, 0.0));
+    assert!(flip.buttons.is_pressed(Button::Flip));
+    assert!(!flip.buttons.is_held(Button::L), "L1 raised L");
+    assert_eq!(flip.airbrake_left, 0.0, "L1 pulled the airbrake");
+
+    let pulled = controls.merge_one(tick(l1, 0.6));
+    assert!(pulled.buttons.is_pressed(Button::L), "L2's edge");
+    assert!(pulled.buttons.is_held(Button::Flip));
+    assert_eq!(pulled.airbrake_left, pad::condition(0.6, 1.0));
+
+    let let_go = controls.merge_one(tick(l1, 0.0));
+    assert!(let_go.buttons.is_released(Button::L), "L stuck on with L1");
+    assert_eq!(let_go.airbrake_left, 0.0);
 }

@@ -183,6 +183,9 @@ craft has flipped.
   touch and Android raise none. Host and client share the sim, so the network needs nothing more.
   A replay recorded before this change from an HD flip race holds `L | Flip` for L1 and now replays
   with L1 braking; pre-release, so no version bump.
+  Two keys held on purpose: a keyboard's `Q` and `F` together brake and flip. The host does not
+  normalise a client's snapshot, so a client sending `L | Flip` for L1 (an older build) would
+  brake; same-build play is unaffected.
 - The lean is `ShipState::steer_lean_follower`, HD's `craft+0x6a58` follower.
 - The race line's marker turns on `RaceSim::facing_back`, the test `wrong_way_kill` runs. The original's
   frames of a flip show no `WRONG WAY`, so a race with a flip draws none; the rumble is untouched.

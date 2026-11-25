@@ -52,6 +52,7 @@ mod reconnect;
 pub(crate) mod replays;
 mod rumble;
 mod shot_open;
+mod shoulder;
 pub(crate) use demo::State as DemoState;
 pub(crate) use load_probe::LoadProbe;
 pub(crate) use mods_page::Rebuilt;
