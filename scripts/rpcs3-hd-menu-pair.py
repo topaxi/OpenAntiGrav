@@ -39,6 +39,7 @@ import compare_menu as cm  # noqa: E402
 import compare_provenance as cp  # noqa: E402
 import hd_flyer_clock as fc  # noqa: E402
 import hd_fury_backdrop as fb  # noqa: E402
+import hd_track_hex as hth  # noqa: E402
 
 drive = importlib.import_module("rpcs3-drive")
 walk = importlib.import_module("rpcs3-hd-menu-walk")
@@ -60,6 +61,10 @@ ANGLE_SLOT = 0x008AD4D8 + 0x49EC
 ANGLE_FIELD = 0x1C4
 #: Radians the angle moves a frame (`TOC + 0x4b4c`) and frames a second: ours reads `--menu-picker-seconds` at 60 fps.
 ANGLE_STEP, FRAMES_PER_SECOND = 0.01, 60.0
+
+#: The `CLOCKED` ids whose grab is taken with the game stopped, the turntable angle and the ring's pulse phase read in the stop
+#: (`hd_track_hex.py`): the grab takes 0.1 to 0.7 s, in which both move by tens of frames. The picture is `hth.PICTURE_LAG_FRAMES` older than the read.
+STOPPED_GRAB = ("track-select",)
 
 #: The `WALK` ids photographed with the Fury backdrop hidden on both sides: the screens whose page is mostly backdrop. The cloud, its
 #: path and how far along it are a new roll on every boot, two paths in three are modes ours does not draw and the music pulses it,
@@ -195,6 +200,7 @@ def main():
     taps_before = dict(item.split("=", 1) for item in args.taps_before)
     card_clock = None
     widget = None
+    hex_widget = None
     steps = LOADING_WALK if args.walk == "loading" else WALK
     for item in steps:
         if isinstance(item, str):
@@ -224,7 +230,18 @@ def main():
         # the angle read before a grab runs 0.04 rad ahead of the frame, the one read after it 0.12).
         angle = turntable_angle() if item["id"] in CLOCKED else None
         card = None
-        if item["id"] in CARD_CLOCKED:
+        ring = None
+        if item["id"] in STOPPED_GRAB:
+            hex_widget = hex_widget or hth.Widget(mem)
+
+            class StoppedClock:
+                """What the stopped game holds: the angle and the pulse phase."""
+                def seconds(self):
+                    state = hex_widget.state()
+                    return (turntable_angle(), state["phase"], tuple(sorted(state.items())))
+            (angle, phase, state), after = fc.grab_paused(StoppedClock(), lambda: walk.grab(png, w, h), GDB_PORT)
+            ring = {"read": phase, "stopped": after == (angle, phase, state), "state": dict(state)}
+        elif item["id"] in CARD_CLOCKED:
             card_clock = card_clock or fc.Clock(mem)
             before, after = fc.grab_paused(card_clock, lambda: walk.grab(png, w, h), GDB_PORT)
             card = {"before": before, "after": after, "loop": card_clock.loop()}
@@ -233,7 +250,7 @@ def main():
         if hidden is not None:
             widget.restore()
         seen[item["id"]] = {"screen": screen, "feature": feature_read(), "png": png, "at": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
-                            "angle": angle, "hidden": hidden, "card": card}
+                            "angle": angle, "hidden": hidden, "card": card, "ring": ring}
         print("shot %-16s screen %r" % (item["id"], screen), flush=True)
     refused = []
     for item in (i for i in steps if isinstance(i, dict)):
@@ -299,14 +316,32 @@ def main():
         extra = list(item.get("args", []))
         if item["id"] in CLOCKED and shot["angle"] is not None:
             # Ours' table starts at zero and its angle is the picture's yaw modulo a turn.
-            since_entry = (shot["angle"] % (2 * math.pi)) / (ANGLE_STEP * FRAMES_PER_SECOND)
+            lag = hth.PICTURE_LAG_FRAMES * ANGLE_STEP if shot["ring"] is not None else 0.0
+            since_entry = ((shot["angle"] - lag) % (2 * math.pi)) / (ANGLE_STEP * FRAMES_PER_SECOND)
             extra += ["--menu-picker-seconds", "%.3f" % since_entry]
             pair.rec["original"]["turntable_angle"] = {
                 "radians": round(shot["angle"], 4),
                 "ours_seconds": round(since_entry, 3),
-                "basis": "measured: the circuit model's global angle read out of the emulator's RAM just before the grab (`*(*(0x008ad4d8 + 0x49ec) + 0x1c4)`, "
-                         "the `Track Creation` update's own RotY, stepped 0.01 rad a frame); ours is drawn at the seconds that turn its own table that far "
-                         "at 60 frames a second"}
+                "basis": "measured: the circuit model's global angle read out of the emulator's RAM %s the grab (`*(*(0x008ad4d8 + 0x49ec) + 0x1c4)`, "
+                         "the `Track Creation` update's own RotY, stepped 0.01 rad a frame)%s; ours is drawn at the seconds that turn its own table that far "
+                         "at 60 frames a second" % (
+                             "in the stop of" if shot["ring"] is not None else "just before",
+                             ", less the picture's %.1f frames of lag (a forward circuit)" % hth.PICTURE_LAG_FRAMES if shot["ring"] is not None else "")}
+        if shot.get("ring") is not None:
+            ring = shot["ring"]
+            shown = hth.shown_phase(ring["read"])
+            extra += ["--menu-ring-seconds", "%.4f" % (shown / 3.0)]
+            pair.check("the game stood still through the grab", ring["stopped"], "angle and ring phase read in the stop agree with the read after the grab")
+            pair.rec["original"]["ring_phase"] = {
+                "read": round(ring["read"], 4),
+                "shown": round(shown, 4),
+                "ours_seconds": round(shown / 3.0, 4),
+                "picture_lag_frames": hth.PICTURE_LAG_FRAMES,
+                "widget": {key: ring["state"][key] for key in ("parity", "selected", "row", "built", "slide_timer")},
+                "basis": "measured: the `TrackHexSelection` widget's pulse counter (`+0xe0`, found by its vtable word `0x00868090`, `hd_track_hex.py`) read out of the "
+                         "emulator's RAM with the game stopped, less the picture's lag (ten stopped grabs: the ring's colour ran 0.118 to 0.228 of a phase "
+                         "behind the read, mean 0.176). The counter is the widget's own update count since the boot's first visit and is never reset, so "
+                         "ours is pinned to it (`--menu-ring-seconds`)"}
         if shot.get("card") is not None:
             extra += fc.record(pair.rec, shot["card"]["before"], shot["card"]["after"], shot["card"]["loop"])
             pair.check("the card's clock stood still through the grab", shot["card"]["after"] == shot["card"]["before"],

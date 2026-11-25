@@ -4969,7 +4969,14 @@ hold 24 `Tournament` cells in the archive read, none walked).
    shaded circuit model landed 2026-10-09, `hd-track-model`.)* Layout and
    records table match; the moving fly-by
    picture landed 2026-11-19 (`hd-track-flyby`; it moves: 17 % of the window's pixels differ across 1.5 s). Ours
-   also draws the hex window's stills as nothing (`no slideshow chain`).
+   also draws the hex window's stills as nothing (`no slideshow chain`). **The hex grid's slide, half-row phase, ring ease and
+   ring clock landed 2026-11-25 (`hd-front-end-ranked`)**: `TrackHexSelection_Update` runs `HexSelection`'s step and update in
+   one frame (a sixth of a pitch on the step frame, snap on the fifth), steps at most once per 0.2 s, keeps its half-row phase
+   by the circuit's index, eases the ring half way to the other direction's row each frame, and pulses the ring on a counter that
+   is never reset between visits (`docs/ghidra/functions/ps3-hdfury-eu/ship-select-ring.md`, "Track Select"). The pair
+   `hd/menu-track-select`: the ring's band 27.4 to 2.9 mean grey, the ring box 19.7 to 14.3, the grid region 3.99 to 3.68
+   (twin capture 3.98 to 3.67). Open: the `>>>` glyph's scroll and the fill (0.87 of `HD_Blue`, the
+   `Faded` art; 149 against 172 on Ship and Track Select). The 0.2 s input cooldown is wired.
 8. **Loading, EndRace.** Not re-paired: ours on software Vulkan sat on Ship
    Select for 32 s without reaching a load. See the `hd-loading-screen` and
    `lane-hd-endrace` captures.
@@ -5550,5 +5557,72 @@ ours' halo stays a little brighter on the upper left, and the tint follows the p
 
 **Unchanged, byte-identical** (decoded RGBA, main's binary against this change): Pulse PSP `menu-cell`, `menu-grid`, `menu-main`; Pulse
 PS2 race pairs `moa-therma-white` and `zone-talons-white-z5` (the race chain keeps `Ps2Bloom::new`, 512 x 512).
-**Not wired, unmeasured on the PS2**: the Main Menu's and the Picker panels' stamps (they keep the PSP's value stamps and chain).
+The Main Menu's, the pickers' and the generic screens' stamps were left on the PSP's value stamps and chain here; the next section
+measures them.
 **2048/Omega**: not applicable (Pulse PS2's front end; HD and Omega draw no `frontend_glow`).
+
+#### The Selector's sprite is the only alpha writer of Pulse PS2's front end (2026-11-24, `ps2-fe-glow-pages`)
+
+Claim: Pulse PS2's Main Menu, pickers and generic screens draw the PS2's own row glow, not the PSP's. **Measured: the PS2's own row
+glow is none.** Confidence 88 (the registers of one dump per screen; no alpha replay was run, the claim is the absence of any write, which `FBMSK`
+states directly).
+
+**What the original draws.** PCSX2 GS dumps (`scripts/pcsx2-drive.py gsdump`, decoded with `scripts/pcsx2-gsdump.py`; the first field
+of each) of five screens: the title (`PRESS START BUTTON`, the legal line, the logo), Main Menu, Profile (a generic `<Menu>` list),
+Ship Select (the picker) and the pause menu over a Zone race. Each runs the five bloom passes after its page (the 320 x 224
+downsample, two 896-triangle blurs at `FIX 0x80`, the composite at `FIX 0x40`, [`ps2-bloom.md`](../rendering/ps2-bloom.md)), so
+the chain runs on every screen. What differs is the mask: counting the groups whose `FRAME_1` has `FBMSK` 0 (the ones that write the
+frame's alpha), the page itself has **none**. Only the clear to `(0,0,0,0)` and the passes' own clears and blurs write alpha:
+
+| screen | page groups | page groups with `FBMSK` 0 |
+| --- | ---: | ---: |
+| title (`PRESS START BUTTON`) | 2-9 | 0 |
+| Main Menu | 2-16 | 0 |
+| Profile | 2-17 | 0 |
+| Ship Select | 2-46 | 0 |
+| pause over a race (menu groups 424-442) | 19 | 0 (the race's own glow batches before it still write, 395-410) |
+
+Every text, row, help line, footer tab, panel and header carries `FBMSK 0xff000000`: the mask is `0` outside a `Selector`, the
+downsample reads `rgb * 0 = 0`, the blurs add nothing, and the screen has **no halo at all**. A capture agrees with it: the Main Menu's
+selected `RACE CAMPAIGN` is white with no bloom, and the pause's rows are as flat. The PSP's `Main Menu` stamps `110`/`70..220`/`128`
+from the `Menu` widget; the PS2 pressing has no such stamp (the same dump of the title shows the logo's halo is the artwork's own
+texels, drawn at `FBMSK 0xff000000`).
+
+**What ours did**: the PS2 skin inherited `oag_title::MenuGlow` from the PSP, so every row and help line stamped through the PSP's
+chain wherever the list had no `Selector` (a list with one already dropped value stamps): a broad halo on every Main Menu, Options
+and pause row that the original does not have. The picker panels' and footer's value stamps were the same case.
+
+**What ours does**: `oag_pulse::frontend::PS2_MENU_SKIN` carries `glow: None` (the rows, the help line and the boot/title texts all
+read it: `oag_ui::menu::rows`, `oag_ui::frontend::draw`), and `oag_game::campaign::gate_glow` takes the skin and, where
+`MenuSkin::glow_by_texel` is set, drops every `Draw::GlowStamp` and `Draw::GlowText` (picker and campaign texts), and `drop_value_stamps` does the same to the footer
+legend's list (its tag stamp), which is appended after the gate: only
+`Draw::GlowTexel` survives, so a `Selector` blooms through the PS2 chain and a screen without one blooms nothing. Tests:
+`pulse_ps2_menu_rows_stamp_nothing` (`oag-ui`, fails with the PS2 skin's `glow` back to the PSP's record),
+`the_ps2_front_end_keeps_its_texel_stamp_and_drops_the_value_stamps` (`oag-game`, fails with `gate_glow` reading no skin).
+
+**Measured on the pairs** (two PCSX2 grabs each, `data/reference/compare-page/pulse-ps2/menu-*` captured by
+`scripts/pcsx2-menu-pair.py`, whose `WALK` gained `main` and `options` here; ours rendered by the base binary and by this change on
+the same `theirs.png` and flags; mean absolute grey over the box, PIL L, 1280 x 720; boxes main rows (100,90,820,600), options rows
+(100,90,820,400)):
+
+| pair | grab | rows box | whole frame |
+| --- | --- | ---: | ---: |
+| main | 1 | 7.33 to 4.06 | 5.63 to 3.86 |
+| main | 2 | 7.34 to 4.07 | 5.49 to 3.72 |
+| options | 1 | 3.39 to 2.32 | 4.61 to 4.18 |
+| options | 2 | 2.56 to 1.24 | 4.01 to 3.48 |
+
+Re-capture noise on the same state and binary, from the two grabs: 0.01 grey on the main rows box (7.33/7.34 before), 0.8 on the
+options one (a different footer and state phase); each pair's improvement (3.3 on both main grabs, 1.1 and 1.3 on options) is
+past it. The footer box (0,600,1280,120), where the `AAA` tag's own halo sat (the legend appends its `RealGlow` stamp after the
+page's gate; the original's tab writes no alpha), reads main 4.94/4.95 to 4.62/4.63, options 5.82/6.10 to 5.50/5.78. Grid and Cell are **byte-identical** (decoded RGBA) before and after: they already dropped their value stamps behind the
+`Selector`'s texel stamp. Ship Select (the picker) changes only at the footer tag (whole frame 4.65/4.74 to 4.60/4.69): its panel
+texts drew no halo in ours before. The Options pair was moved under a law measured on the Profile page (a four-down walk from the
+Main Menu landed there; same `<Menu>` widget and `Additional` skin); no Options dump was taken. The pause: the PS2 pause
+over a Time Trial of ours, before and after, against the Zone pause above (not the same race; no pair): the rows' halos are gone and
+the picture reads as the original's flat rows.
+
+**Unchanged, byte-identical** (decoded RGBA, base binary against this change): Pulse PSP `menu-cell`, `menu-grid`, `menu-main`,
+`menu-options`, `menu-racebox`, `menu-single`, `menu-team`, `menu-title`, `menu-track`.
+**Left open**: the PS2 title screen has no pair (the dump is the evidence; ours' PS2 title stamps are gone with the skin field).
+**2048/Omega**: not applicable (Pulse PS2's front end; no `frontend_glow` on HD or Omega, so no value stamps to drop).

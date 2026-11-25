@@ -1668,5 +1668,34 @@ The heaviest families after the change, by CPU-s after (the 1,393-test unit buck
 Measured and not done:
 
 - libc is 12.8 % of the heavy samples (`memcpy` with `vmovdqa64` zmm stores, and `memset`). A frame-pointer build of `omega_normal_map` puts its callers at `Archive::read` (34 %), zeroed `Vec`s for the untile and the picture decodes (26 %) and the untile (18 %); the untile's share is the part changed above.
-- `replay_ground_truth`, `replay_timeline_ground_truth` and the other Omega rebuild tests read about 2.3 GB stored per load; the test's first load only seeds a recording and could be a `load_sim` with the request attached, which needs a way to build the recording's request without the view (not done: it is a production change).
-- ATRAC9: the rounding loop (about a quarter of `decode`) and the butterflies are the rest of its self time; a sample-identical rewrite of the IMDCT stages is the next candidate.
+- `replay_ground_truth`, `replay_timeline_ground_truth` and the other Omega rebuild tests read about 2.3 GB stored per load: done in the next section (the recording load is a `load_sim` with the request attached by `ViewSetup::headless_on`; the rebuild under test stays whole).
+- ATRAC9: done in the next section; what is left of `Mdct::run` (about 35 % of an `omega_music` song) is scalar `f64` butterflies, which SIMD intrinsics would speed up lane for lane with the same results; not done, they need `unsafe` and a per-architecture fallback.
+
+### Races that read no picture, in the recordings, the field laws and the server
+
+Measured 2026-11-25 (Ryzen 9 7900), by user instructions per test as in the section above. A full `test-data` run, every test, per-test user instructions and CPU from a nextest target runner:
+
+| `just test-data --full` (14,025 tests) | summed CPU-s | summed user instructions | load (start, end) |
+| --- | --- | --- | --- |
+| `main` at `71cf4e89e` | 7,490 | 65,760 G | 19, 9 |
+| this branch | **6,700** (-10.5 %) | **59,114 G (-10.1 %)** | 14, 10 |
+
+2,169 tests whose instructions moved by under 0.5 % (42,793 G of work) read 4,827 CPU-s before and 4,777 after, a load factor of 0.99, so the load accounts for about 1 point of the 10.5 % and the work for the rest. All 14,025 tests passed in both runs (the first after-run had one failure, `ppsspp_pack_ground_truth::pure_usa_keys` reading 4,565 textures for 4,567, which passed alone and in the second run). `main` itself reads 65,760 G where the section above's after-run read 62,758 G on the same 13,937 common tests plus 55: the games the `photo_mode`, `detonator` and `net_hosted` tests spawn count more instructions on the tree that followed it, so the yardstick for this lane is the run on `main` at `71cf4e89e`, taken the same way (the section above's number would give -8.8 % on the 13,937 tests both runs share).
+
+| Change | Tests (user instructions, before then after, one tree, `HEAD` against the edit) |
+| --- | --- |
+| the superseded GNF tile-config search returns early unless `OAG_SWEEP` is set (it prints only) | `gnf::search_tests::search_the_reduced_tile_config_space_against_multi_size_oracle_pairs` 377.6 G to 0 |
+| `replay_timeline` and `replay` record on the simulation half and a headless view that carries the launch request (`ViewSetup::headless_on`) | `replay_timeline_ground_truth` 13 tests 1,042 to 416 G; `replay_ground_truth` 22 tests 1,326 to 911 G; the Omega tick-zero rebuilds of speed lap and single race, and the mode-swapped one, rebuild the simulation half: 417 to 109 G; a tampered replay and one without its events desync on it: 294 to 224 G. Every rebuild that has to reproduce stays on `race::rebuild` |
+| Omega original AI, Omega lap counts per class, Eliminator pad stamps and pad steering, Pilot Assist walls, the pose-track respawn: `load_sim` | 39 tests 1,326 to 438 G |
+| shield pools, launch boost laws, slipstream pad odds, two HD Eliminator scoring tests | 35 tests 1,476 to 965 G |
+| Pilot Assist levels, the original fire law, opponent weapon odds, the pit-lane circuit, the energy turbo mod | 27 tests 806 to 254 G |
+| the spawn-heading sweeps (the PS2 texture-set claim keeps the whole load) | 12 tests 622 to 291 G |
+| `load_event_sim`: a 2048 campaign event on the simulation half | `vita_2048_original_ai` 18 tests 664 to 477 G; `vita_2048_campaign_progress` 8 tests 121 to 54 G |
+| `oag_net::race::load` (the server's path) loads the simulation half on a headless view that carries the request, whether or not the build links a renderer | the `oag-net` suite, 105 tests: 1,535 to 870 G (the extraction tests record what the server reads, as `oag-server extract` does) |
+| `atrac9dec`: slice-shaped IMDCT, the last two butterfly stages fused per span of eight, a four-byte `BitReader::peek`, no per-channel `format!` in the trace calls | 2,626 Omega `.wem` files, every PCM buffer hashed: all identical, 1,481 to 1,225 G (-17.3 %); `omega_wem` family 3,464 to 2,848 G, `omega_music` 1,793 to 1,509 G, `music_resume` 783 to 713 G, `atrac9_ground_truth` 467 to 410 G |
+
+**Why the sim-only loads give the same race.** `load` is `load_sim` then `load_view`, which takes the `SimSetup` and the modules by move; `view_independence_ground_truth` compares the state hash at every tick of a Pulse, HD and Omega race between the two, and a scratch probe did the same for `ribbon: true` loads on all five titles (400 ticks, Single Race and Eliminator, equal at every tick). A test keeps the whole load where it reads a HUD, a drawn pose, a model, a livery, a sound or an effect counter, or where the load or the rebuild is the claim. The report lines a sim-only test reads are the simulation phase's (`SimLoad::report`): the `<StartBoost>`, launch-law, `Pilot Assist`, weapon-AI and `shield:` lines are pushed by `load_sim`, the gantry-clock and billboard lines by `load_view`.
+
+**Why the ATRAC9 change moves no sample.** Every output word is the same IEEE `f64` operation in the same order (no fused multiply-add, no reassociation); `imdct::tests` runs the indexed LibAtrac9 loops beside the fast ones over random frames of 64, 128 and 256 samples and compares every output and overlap word by bit pattern, and the 2,626-file PCM hash above agrees before and after each step.
+
+Measured and not done: a Pulse PS2 game process spends 57 % of its instructions in `lzma_rust2` (the music threads, `race-music` and `menu-music`, and `boot-media`, read the soundtrack out of the CHD); the three PS2 photo-mode and footer-hint tests are 110 to 124 G each, and `--no-audio` does not stop it, because the music state machine is what the `now_playing` tests read.

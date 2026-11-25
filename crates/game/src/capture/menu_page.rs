@@ -35,7 +35,9 @@ pub(super) fn picker_footer(
     let faces = crate::prompts::footer_faces(skin);
     let measure = crate::boot::fonts::text_ink(default_font, skin.pens());
     if let Some(legend) = nav_legend {
-        list.extend(legend.draw_gated(&faces, show_back));
+        let mut legend_draws = legend.draw_gated(&faces, show_back);
+        crate::campaign::drop_value_stamps(skin, &mut legend_draws);
+        list.extend(legend_draws);
     }
     let draw = oag_ui_screens::campaign::footer::ticker_draw(layout, 0.0, &tips, &faces, &measure)?;
     let at = list.len();
@@ -469,6 +471,7 @@ pub(super) fn menu_page(
         .map(|(draws, _)| draws)
         .unwrap_or_default(),
     );
+    crate::campaign::drop_value_stamps(skin, &mut nav_legend_draws);
     // The footer's own scrolling tip ticker, frozen at `elapsed = 0.0` - a
     // still has no clock of its own to animate the scroll with, so this
     // shows whichever tip the rotation starts on rather than one mid-scroll.
@@ -934,6 +937,8 @@ pub(super) fn picker_page(
     entry_seconds: Option<f32>,
     // `--menu-title-seconds` - where the panel's glow ladder stands; `None` follows `seconds`.
     text_seconds: Option<f32>,
+    // `--menu-ring-seconds` - where the hex ring's pulse stands; `None` follows `seconds`.
+    ring_seconds: Option<f32>,
     // Draw over what is already on screen rather than over the screen's own backdrop: the
     // second half of the shared two-person page.
     over: bool,
@@ -1036,6 +1041,7 @@ pub(super) fn picker_page(
         }),
     );
     picker.set_text_seconds(text_seconds);
+    picker.set_ring_seconds(ring_seconds);
     if let Some(since) = step_seconds {
         picker.set_since_selection(since);
     }
@@ -1175,7 +1181,7 @@ pub(super) fn picker_page(
         &|src| sprites.get(src),
         measure,
     );
-    let layers = crate::campaign::gate_glow(title.campaign.frontend_glow.is_some(), layers);
+    let layers = crate::campaign::gate_glow(title.campaign.frontend_glow.is_some(), skin, layers);
     (layers.flatten(), request)
 }
 

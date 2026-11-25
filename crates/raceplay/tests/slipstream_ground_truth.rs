@@ -425,7 +425,7 @@ fn its_share_of_the_pad_draws_is_a_fraction_of_a_turbo_on_every_titles_real_tabl
         let Some(image) = oag_testdata::image(image) else {
             continue;
         };
-        let loaded = race::load(&race::Options {
+        let loaded = race::load_sim(&race::Options {
             source: image.display().to_string(),
             class: "VENOM".to_string(),
             mode: oag_race::Mode::SingleRace,

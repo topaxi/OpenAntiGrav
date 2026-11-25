@@ -16,7 +16,7 @@ use oag_race::Mode;
 use oag_raceplay as race;
 
 fn refresh(source: &std::path::Path, track: Option<&str>, mode: Mode) -> f32 {
-    let loaded = race::load(&race::Options {
+    let loaded = race::load_sim(&race::Options {
         source: source.display().to_string(),
         class: "VENOM".to_string(),
         mode,
@@ -28,7 +28,7 @@ fn refresh(source: &std::path::Path, track: Option<&str>, mode: Mode) -> f32 {
     let refresh = loaded.setup.weapon_pad_refresh;
     if mode == Mode::Eliminator {
         assert!(
-            !race::Race::start(loaded.setup, loaded.view, loaded.modules)
+            !race::Race::start(loaded.setup, race::ViewSetup::headless(), loaded.modules)
                 .core
                 .sim
                 .weapon_pads()

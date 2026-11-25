@@ -76,14 +76,29 @@ fn options(source: &Path, mode: oag_race::Mode) -> race::Options {
     }
 }
 
-fn setup(title: &str) -> Option<race::Loaded> {
-    setup_in(title, oag_race::Mode::TimeTrial)
+/// What `Race::start` takes: a race's simulation half and a headless view that carries the
+/// launch request a recording writes into its header. The runs here read no picture, no sound
+/// and no report line, and the state hash is the same with or without them
+/// (`view_independence_ground_truth`); the rebuild under test loads the whole race.
+struct Sim {
+    setup: race::SimSetup,
+    view: race::ViewSetup,
+    modules: race::extensions::Prepared,
 }
 
-fn setup_in(title: &str, mode: oag_race::Mode) -> Option<race::Loaded> {
+fn sim_load(options: &race::Options) -> anyhow::Result<Sim> {
+    let sim = race::load_sim(options)?;
+    Ok(Sim {
+        view: race::ViewSetup::headless_on(options, &sim.circuit),
+        setup: sim.setup,
+        modules: sim.modules,
+    })
+}
+
+fn setup(title: &str) -> Option<Sim> {
     let source = source(title)?;
-    let loaded =
-        race::load(&options(&source, mode)).unwrap_or_else(|e| panic!("loading {title}: {e:#}"));
+    let loaded = sim_load(&options(&source, oag_race::Mode::TimeTrial))
+        .unwrap_or_else(|e| panic!("loading {title}: {e:#}"));
     Some(loaded)
 }
 
@@ -198,9 +213,23 @@ fn record(title: &str) -> Option<(race::Race, Replay, oag_replay::ShotRecord)> {
 /// reader's own), applying the recorded events between the same two ticks, and checks every
 /// stored hash.
 fn verify(title: &str, replay: &Replay) -> Result<u64, oag_replay::Desync> {
-    let source = source(title).expect("source present");
-    let mut race = race::rebuild(&replay.header, &source.display().to_string())
-        .unwrap_or_else(|e| panic!("{title}: rebuilding from the header: {e:#}"));
+    verify_on(title, replay, true)
+}
+
+/// [`verify`] for a replay that has to be refused: the simulation half rebuilds it and the
+/// desync is the state's, so the whole load is not paid again.
+fn desyncs(title: &str, replay: &Replay) -> Result<u64, oag_replay::Desync> {
+    verify_on(title, replay, false)
+}
+
+fn verify_on(title: &str, replay: &Replay, whole: bool) -> Result<u64, oag_replay::Desync> {
+    let source = source(title).expect("source present").display().to_string();
+    let mut race = if whole {
+        race::rebuild(&replay.header, &source)
+    } else {
+        rebuild_sim(&replay.header, &source)
+    }
+    .unwrap_or_else(|e| panic!("{title}: rebuilding from the header: {e:#}"));
     Verifier::run(replay, race.core.sim.state_hash(), |events, inputs| {
         for event in events {
             race.core
@@ -355,7 +384,7 @@ fn tamper(title: &str, mut replay: Replay) {
     let index = usize::try_from(tick).expect("fits");
     let snapshot = &mut replay.inputs[0][index];
     snapshot.stick_x = if snapshot.stick_x > 0.0 { -1.0 } else { 1.0 };
-    let desync = verify(title, &replay).expect_err("a changed stick must desync");
+    let desync = desyncs(title, &replay).expect_err("a changed stick must desync");
     println!(
         "{title}: tampered tick {tick}, desync reported at {}",
         desync.tick
@@ -464,13 +493,9 @@ fn recorded_at_tick_zero(
     mode: oag_race::Mode,
 ) -> Option<(PathBuf, race::Race, Replay, race::Launch)> {
     let source = source(title)?;
-    // Not ticked, so no art is read; the rebuild under test loads the full race. Omega only:
-    // a Pulse load without art drops its track statistics (`finished_thrust`).
-    let loaded = race::load(&race::Options {
-        ribbon: title == "omega",
-        ..options(&source, mode)
-    })
-    .unwrap_or_else(|e| panic!("loading {title} {}: {e:#}", mode.name()));
+    // Not ticked, so no art is read; the rebuild under test loads the full race.
+    let loaded = sim_load(&options(&source, mode))
+        .unwrap_or_else(|e| panic!("loading {title} {}: {e:#}", mode.name()));
     let seed = loaded.setup.seed;
     let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let launch = race::Launch {
@@ -488,6 +513,17 @@ fn recorded_at_tick_zero(
     race.start_recording(header);
     let replay = race.recorded().expect("recording");
     Some((source, race, replay, launch))
+}
+
+/// [`race::rebuild`] with the simulation half in place of the whole load: the header's launch
+/// options and seats, a [`race::load_sim`] and [`race::replay::start_recorded`] on a headless
+/// view that carries the request. A load of Omega reads 2.3 GB stored and draws nothing the
+/// tick-zero hash reads, so only the first Omega test below pays for the whole one.
+fn rebuild_sim(header: &Header, source: &str) -> anyhow::Result<race::Race> {
+    let options = race::Options::for_replay(header, source)?;
+    let sim = race::load_sim(&options)?;
+    let view = race::ViewSetup::headless_on(&options, &sim.circuit);
+    race::replay::start_recorded(sim.setup, view, sim.modules, header)
 }
 
 /// The rebuild from the file's header alone agrees with the recorded race at tick zero, on the
@@ -510,7 +546,13 @@ fn tick_zero(title: &str, mode: oag_race::Mode) {
     );
     assert_eq!(race::Launch::from_table(&read.header.options), Ok(launch));
 
-    let rebuilt = race::rebuild(&read.header, &source.display().to_string()).expect("rebuilds");
+    let whole = title != "omega" || mode == oag_race::Mode::TimeTrial;
+    let rebuilt = if whole {
+        race::rebuild(&read.header, &source.display().to_string())
+    } else {
+        rebuild_sim(&read.header, &source.display().to_string())
+    }
+    .expect("rebuilds");
     Verifier::new(&read, rebuilt.core.sim.state_hash()).unwrap_or_else(|d| {
         panic!(
             "{title} {}: the rebuild disagrees at tick zero: {d}",
@@ -526,8 +568,12 @@ fn tick_zero(title: &str, mode: oag_race::Mode) {
         let mut swapped = read.clone();
         swapped.header.setup.as_mut().expect("present").mode =
             oag_race::Mode::SingleRace.name().to_string();
-        let rebuilt =
-            race::rebuild(&swapped.header, &source.display().to_string()).expect("rebuilds");
+        let rebuilt = if title == "omega" {
+            rebuild_sim(&swapped.header, &source.display().to_string())
+        } else {
+            race::rebuild(&swapped.header, &source.display().to_string())
+        }
+        .expect("rebuilds");
         let desync = Verifier::new(&swapped, rebuilt.core.sim.state_hash())
             .expect_err("a request naming another mode is another race");
         assert_eq!(desync.tick, 0, "{title}");
@@ -626,7 +672,7 @@ fn mid_race_events(title: &str) {
         stripped
             .events
             .retain(|e| keep.is_some_and(|kind| e.kind() == Some(kind)));
-        let desync = verify(title, &stripped)
+        let desync = desyncs(title, &stripped)
             .expect_err(&format!("{title}: a replay without {dropped} must desync"));
         println!("{title}: without {dropped}, desync at {}", desync.tick);
     }

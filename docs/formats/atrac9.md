@@ -121,13 +121,26 @@ software routine on the baseline x86-64 target and ran once per sample. The two 
 for it, and `atrac9_ground_truth`'s FFmpeg census, which pins exact differing-sample counts,
 passed before and after.
 
+Three more changes are about speed and move no sample. The IMDCT's butterflies and windowing run
+over slices cut to length first, the last two butterfly stages run together in registers one span
+of eight entries at a time, and the output interleave reads a stack array of channel planes in place of a `Vec` and two 2 KiB copies per
+channel; every operation is the same IEEE `f64` operation in the same order (a unit test runs the
+indexed LibAtrac9 loops beside them over random frames of 64, 128 and 256 samples and compares
+every output and overlap word by bit pattern). `BitReader::peek` takes four whole bytes when it
+has them (a unit test compares it with the bit-by-bit reader at every offset and length). The
+`unpack` trace calls no longer build a `format!` string per channel when the `trace` feature is
+off. Measured by decoding 2,626 Omega `.wem` files (loose in `data00` and `data08`, and the
+embedded media of `data08`'s banks) and hashing every PCM buffer before and after: all 2,626
+hashes identical, 1,481 G to 1,225 G user instructions (-17.3 %). The crate's repository
+(`claimore22/atrac9dec`) has no issue or pull request open on any of this.
+
 Before the fixes, against LibAtrac9: 4,076 of 2048's 9,486 files failed
 part-way with a bitstream error, 3,218 more decoded but differed, and 2,192
 were identical; every Omega stream of four channels or more was refused.
 
 The vendored crate stays a separate package with its own `MIT` manifest and
 LibAtrac9's licence beside it (`vendor/atrac9dec/LICENSE-LibAtrac9`). The fixes
-are upstreamable; no upstream contact was made from this project.
+are upstreamable; no upstream contact was made from this project. `gh search issues` and `gh search prs` on `claimore22/atrac9dec` return nothing, and on `Thealexbarney/LibAtrac9` nothing about speed or floating-point rounding (the open "Fixed-point version", #7, is a different decoder).
 
 ## Conformance
 

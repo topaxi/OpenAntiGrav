@@ -654,7 +654,7 @@ pub(super) fn campaign_page(
             }
         }
     };
-    let layers = crate::campaign::gate_glow(campaign.frontend_glow, layers);
+    let layers = crate::campaign::gate_glow(campaign.frontend_glow, skin, layers);
     let split = layers.backdrop.len();
     let shot = campaign.flyers.and_then(|mut flyers| {
         if let Some(seconds) = card_seconds {

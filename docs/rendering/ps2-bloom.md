@@ -209,6 +209,9 @@ downsample (`ALPHA 0x88`), the two 896-triangle tap passes (vertex colours `16 3
 which on these screens are the `Selector`'s 56 x 56 quad alone, at its texel alpha. Ours builds the chain with `Ps2Bloom::with_frame(640, 448)`
 for it; full account in `docs/ui/campaign-screens.md`, "The selector's halo on Pulse PS2 is the ring's own texels through the PS2 chain".
 Closes "whether any mode (menus, replay) skips it" for the menus; replays are not read.
+The same dumps of the title, Main Menu, Profile, Ship Select and the pause (`ps2-fe-glow-pages`, confidence 88) list the five passes
+over a mask the page never writes: those screens have no `Selector`, so nothing blooms (`docs/ui/campaign-screens.md`, "The
+Selector's sprite is the only alpha writer of Pulse PS2's front end").
 
 ## Still needed
 

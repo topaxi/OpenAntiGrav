@@ -82,6 +82,55 @@ use super::*;
 ///   real file but not assumed away either).
 /// - Everything [`load`] itself can return, once the override is applied.
 pub fn load_event(options: &Options, event_name: &str) -> Result<Loaded> {
+    let (resolved, plan) = resolve(options, event_name)?;
+    let mut loaded = load(&resolved)?;
+    let progress = plan.apply(&mut loaded.setup, &mut loaded.report, loaded.title);
+    // A campaign event is one of the original's CRC-id modes, whose start is
+    // `321_NGP` and `Go_NGP` where a named mode's is `ready` and `go`
+    // (`docs/ghidra/functions/vita-2048-eu-v104/countdown-voice.md`).
+    #[cfg(feature = "view")]
+    if loaded.view.sounds.use_event_start() {
+        loaded
+            .report
+            .push("sfx: this race is a campaign event: its start plays the event pair".to_string());
+    }
+    // The HUD binds the current `SP.xml` event at `hud+4`; this is what says one exists.
+    #[cfg(feature = "view")]
+    {
+        loaded.view.campaign_event = true;
+    }
+    loaded.campaign_2048_event = Some(progress);
+    Ok(loaded)
+}
+
+/// [`load_event`]'s simulation half: [`load_sim`] on the resolved options, with the event's
+/// weapon set and report lines applied the same way, and the progress a finish is graded
+/// against. For a caller that flies the event and reads no picture or sound.
+///
+/// # Errors
+///
+/// [`load_event`]'s and [`load_sim`]'s.
+pub fn load_event_sim(
+    options: &Options,
+    event_name: &str,
+) -> Result<(SimLoad, Campaign2048Progress)> {
+    let (resolved, plan) = resolve(options, event_name)?;
+    let mut sim = load_sim(&resolved)?;
+    let progress = plan.apply(&mut sim.setup, &mut sim.report, sim.title);
+    Ok((sim, progress))
+}
+
+/// What an event resolved to besides the [`Options`] it overlays, kept for after the load.
+struct EventPlan {
+    event_name: String,
+    archives: oag_assets::Archives,
+    doc: oag_tables::mjolnir::Document,
+    event: oag_tables::mjolnir::campaign::Event,
+    forced_craft: Option<String>,
+    restricted: Vec<&'static str>,
+}
+
+fn resolve(options: &Options, event_name: &str) -> Result<(Options, EventPlan)> {
     let (packs, pure_packs, _) = oag_source::dlc::packs_from_defaults(
         &options.dlc,
         &oag_source::cache::default_dlc_cache_dir(),
@@ -179,114 +228,125 @@ pub fn load_event(options: &Options, event_name: &str) -> Result<Loaded> {
     resolved.skill_level = Some(oag_tables::mjolnir::campaign::Event::LEVEL);
 
     let restriction = oag_2048::campaign::craft::restriction(instance);
-    let restricted: Vec<&str> = ["combat", "agility", "speed", "prototype"]
+    let restricted: Vec<&'static str> = ["combat", "agility", "speed", "prototype"]
         .into_iter()
         .zip(restriction)
         .filter_map(|(label, prevented)| prevented.then_some(label))
         .collect();
 
-    let mut loaded = load(&resolved)?;
-    if let Some(forced) = forced_craft {
-        loaded
-            .report
-            .push(format!("{event_name:?} forces the player craft: {forced}"));
-    } else if !restricted.is_empty() {
-        loaded.report.push(format!(
+    Ok((
+        resolved,
+        EventPlan {
+            event_name: event_name.to_string(),
+            archives,
+            doc,
+            event,
+            forced_craft,
+            restricted,
+        },
+    ))
+}
+
+impl EventPlan {
+    /// The event's own report lines and weapon set on a loaded race, and its progress record.
+    fn apply(
+        self,
+        setup: &mut SimSetup,
+        report: &mut Vec<String>,
+        title: &'static oag_title::Title,
+    ) -> Campaign2048Progress {
+        let Self {
+            event_name,
+            mut archives,
+            doc,
+            event,
+            forced_craft,
+            restricted,
+        } = self;
+        if let Some(forced) = forced_craft {
+            report.push(format!("{event_name:?} forces the player craft: {forced}"));
+        } else if !restricted.is_empty() {
+            report.push(format!(
             "{event_name:?} forbids these craft categories - enforced at the campaign map's own launch gate, not here: {}",
             restricted.join(", ")
         ));
-    }
+        }
 
-    // **Set on `loaded.setup` rather than threaded through `Options`/`load`**,
-    // the way `campaign_2048_event` below already is - a new required
-    // `Options` field would have touched every exhaustive call site across
-    // this workspace for a feature only this campaign needs (see this
-    // module's own doc comment on why `load_event` is a second entry point
-    // rather than that). `oag_tables::mjolnir::campaign::WeaponSet::allowed_weapons`
-    // only decodes the bits this project has pinned at confidence >= 70 - see
-    // `docs/formats/2048-campaign.md`'s "The weapon set gate" section - so an
-    // event whose set authors only low-confidence bits races unrestricted,
-    // the same "an empty `SimSetup::allowed_weapons` is no override" reading
-    // every other race is already in, rather than this project guessing at
-    // the bits it could not pin.
-    if let Some(weapon_set) = event
-        .weapon_set
-        .and_then(|reference| oag_2048::campaign::weapon_set_for(&doc, reference))
-    {
-        let allowed = weapon_set.allowed_weapons();
-        if allowed.is_empty() {
-            loaded.report.push(format!(
+        // **Set on `loaded.setup` rather than threaded through `Options`/`load`**,
+        // the way `campaign_2048_event` below already is - a new required
+        // `Options` field would have touched every exhaustive call site across
+        // this workspace for a feature only this campaign needs (see this
+        // module's own doc comment on why `load_event` is a second entry point
+        // rather than that). `oag_tables::mjolnir::campaign::WeaponSet::allowed_weapons`
+        // only decodes the bits this project has pinned at confidence >= 70 - see
+        // `docs/formats/2048-campaign.md`'s "The weapon set gate" section - so an
+        // event whose set authors only low-confidence bits races unrestricted,
+        // the same "an empty `SimSetup::allowed_weapons` is no override" reading
+        // every other race is already in, rather than this project guessing at
+        // the bits it could not pin.
+        if let Some(weapon_set) = event
+            .weapon_set
+            .and_then(|reference| oag_2048::campaign::weapon_set_for(&doc, reference))
+        {
+            let allowed = weapon_set.allowed_weapons();
+            if allowed.is_empty() {
+                report.push(format!(
                 "{event_name:?}'s weapon set {:?} decodes to no weapon this project has pinned at \
                  confidence >= 70; racing unrestricted rather than guessing",
                 weapon_set.name
             ));
-        } else {
-            loaded.report.push(format!(
-                "{event_name:?} restricts weapon pads to {:?}'s own set: {}",
-                weapon_set.name,
-                allowed
-                    .iter()
-                    .map(|weapon| format!("{weapon:?}"))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ));
+            } else {
+                report.push(format!(
+                    "{event_name:?} restricts weapon pads to {:?}'s own set: {}",
+                    weapon_set.name,
+                    allowed
+                        .iter()
+                        .map(|weapon| format!("{weapon:?}"))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ));
+            }
+            setup.allowed_weapons = allowed;
         }
-        loaded.setup.allowed_weapons = allowed;
-    }
-    // Resolved here, where the parsed `Document` is already in hand, rather
-    // than re-opened later at grading time - see `Loaded::campaign_2048_event`'s
-    // own doc for why this rides on `Loaded` instead of through `Session` the
-    // way Pulse/HD's own `campaign_cell` does.
-    // An Elimination event's throttle is a law of 2048's own (`0x81199800`,
-    // unread), so its opponents keep this project's driver; see
-    // `docs/ghidra/functions/vita-2048-eu-v104/ai-controls.md`.
-    let defaults = loaded
-        .title
-        .race
-        .original_driver
-        .and_then(|driver| driver.event_ai);
-    let ai = if event.kind == oag_tables::mjolnir::campaign::EventKind::Elimination {
-        loaded.report.push(format!(
-            "{event_name:?} is an Elimination event: its opponents keep this project's driver \
+        // Resolved here, where the parsed `Document` is already in hand, rather
+        // than re-opened later at grading time - see `Loaded::campaign_2048_event`'s
+        // own doc for why this rides on `Loaded` instead of through `Session` the
+        // way Pulse/HD's own `campaign_cell` does.
+        // An Elimination event's throttle is a law of 2048's own (`0x81199800`,
+        // unread), so its opponents keep this project's driver; see
+        // `docs/ghidra/functions/vita-2048-eu-v104/ai-controls.md`.
+        let defaults = title
+            .race
+            .original_driver
+            .and_then(|driver| driver.event_ai);
+        let ai = if event.kind == oag_tables::mjolnir::campaign::EventKind::Elimination {
+            report.push(format!(
+                "{event_name:?} is an Elimination event: its opponents keep this project's driver \
              (2048's own Eliminator thrust law is unread)"
-        ));
-        None
-    } else {
-        defaults.map(|ai| {
-            ai.with_authored(
-                event.skill_scale,
-                event.ai_pad_tracking_skill,
-                event.ai_weapon_avoidance_skill,
-            )
-        })
-    };
-    // A campaign event is one of the original's CRC-id modes, whose start is
-    // `321_NGP` and `Go_NGP` where a named mode's is `ready` and `go`
-    // (`docs/ghidra/functions/vita-2048-eu-v104/countdown-voice.md`).
-    #[cfg(feature = "view")]
-    if loaded.view.sounds.use_event_start() {
-        loaded
-            .report
-            .push("sfx: this race is a campaign event: its start plays the event pair".to_string());
+            ));
+            None
+        } else {
+            defaults.map(|ai| {
+                ai.with_authored(
+                    event.skill_scale,
+                    event.ai_pad_tracking_skill,
+                    event.ai_weapon_avoidance_skill,
+                )
+            })
+        };
+        let (objectives, xp_tables, xp_column) =
+            oag_2048::campaign::event_progress(&mut archives, &doc, &event);
+        let (xp_awards, xp_ranks) = match xp_tables {
+            Some((awards, ranks)) => (Some(awards), Some(ranks)),
+            None => (None, None),
+        };
+        Campaign2048Progress {
+            name: event.name.clone(),
+            objectives,
+            ai,
+            xp_awards,
+            xp_ranks,
+            xp_column,
+        }
     }
-    // The HUD binds the current `SP.xml` event at `hud+4`; this is what says one exists.
-    #[cfg(feature = "view")]
-    {
-        loaded.view.campaign_event = true;
-    }
-    let (objectives, xp_tables, xp_column) =
-        oag_2048::campaign::event_progress(&mut archives, &doc, &event);
-    let (xp_awards, xp_ranks) = match xp_tables {
-        Some((awards, ranks)) => (Some(awards), Some(ranks)),
-        None => (None, None),
-    };
-    loaded.campaign_2048_event = Some(Campaign2048Progress {
-        name: event.name.clone(),
-        objectives,
-        ai,
-        xp_awards,
-        xp_ranks,
-        xp_column,
-    });
-    Ok(loaded)
 }

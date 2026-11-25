@@ -242,8 +242,8 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
 };
 
 /// What `Main Menu`'s texts stamp into the glow mask, read out of EDRAM on the PSP
-/// (`oag_title::MenuGlow`): rows `110`, help line `128`. The PS2 pressing uses the same record:
-/// **inherited from PSP**, not measured on the PS2.
+/// (`oag_title::MenuGlow`): rows `110`, help line `128`. The PS2 pressing stamps no text
+/// ([`PS2_MENU_SKIN`]'s `glow` is `None`).
 const MENU_GLOW: oag_title::MenuGlow = oag_title::MenuGlow {
     row: 110,
     help: 128,
@@ -350,7 +350,9 @@ pub const PS2_MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
         scale: 1.0,
         color: 0xFFFF_FFFF,
     }),
-    glow: Some(MENU_GLOW),
+    // Measured on the PS2 (`docs/ui/campaign-screens.md`, "The front end's only alpha writer on the
+    // PS2 is the Selector's sprite"): no text stamps the glow mask, so no row, help line or title does.
+    glow: None,
 };
 
 #[cfg(test)]

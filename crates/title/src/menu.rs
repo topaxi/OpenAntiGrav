@@ -328,7 +328,10 @@ pub struct MenuSkin {
     /// (`FBMSK` 0, alpha test with `AFAIL` = FB only, so every fragment lands), whose written alpha
     /// is the texel's times the vertex colour's `127/128`. Nothing else on either screen writes
     /// alpha, the card title and the footer included (`docs/ui/campaign-screens.md`, "The
-    /// selector's halo on Pulse PS2").
+    /// selector's halo on Pulse PS2"). The same dumps of the title, Main Menu, Profile, Ship Select
+    /// and the pause list no other group that writes alpha: a title whose mask is by texel stamps
+    /// no text ([`Self::glow`] is `None`) and its value stamps are dropped
+    /// (`docs/ui/campaign-screens.md`, "The Selector's sprite is the only alpha writer").
     pub glow_by_texel: bool,
     /// How long a page change takes, in seconds. Authored, `transition=`. Seconds,
     /// confirmed: Pulse's `Main Menu` is authored `0.5` and runs about 13 presented

@@ -31,7 +31,7 @@ use oag_raceplay as race;
 use oag_raceplay::FireLaw;
 
 fn started(source: String, mode: oag_race::Mode, terms: &str) -> race::Race {
-    let loaded = race::load(&race::Options {
+    let loaded = race::load_sim(&race::Options {
         source,
         mode,
         seed: Some(1),
@@ -47,7 +47,7 @@ fn started(source: String, mode: oag_race::Mode, terms: &str) -> race::Race {
         "no weapon-AI line naming {terms}'s terms in the loader report: {:#?}",
         loaded.report
     );
-    race::Race::start(loaded.setup, loaded.view, loaded.modules)
+    race::Race::start(loaded.setup, race::ViewSetup::headless(), loaded.modules)
 }
 
 /// Seconds of racing after the green light [`opponents_fire_under_the_original_driver`]
