@@ -66,18 +66,21 @@ pub struct Entry {
 /// The lap's entries in driving order. Track data, not world state.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Survey {
-    /// One per section of the ring, the route a lap drives. Placement and every ring walk read
-    /// only these.
+    /// One per section of the ring, the route a lap drives. Every ring walk reads only these.
     pub entries: Vec<Entry>,
-    /// The alternate paths off the ring, which only the EMP wave's fork walks.
+    /// The alternate paths off the ring, measured whole: the EMP wave's fork walks them.
     pub branches: Vec<SurveyBranch>,
+    /// What placement lays into: the original's entry array, survey indices (as [`Self::entry`]
+    /// takes them) in the order its walk stores them, a fork's primary route then its
+    /// alternate's separated sections (`detonator-placement.md`, "The fork walk"). Empty: the
+    /// ring alone, in order.
+    pub lap: Vec<u16>,
 }
 
 /// One alternate path off the ring, measured like the ring.
 ///
-/// Nothing is laid on it: `Detonator_PlaceStageObjects`' fork walk is unread
-/// (`docs/ghidra/functions/ps3-hdfury-eu/detonator-placement.md`). An object put on one is
-/// addressed by [`Survey::branch_entry`]'s index, which [`Survey::point`] reads.
+/// Placement lays on the entries [`Survey::lap`] names; an object put on one is addressed by
+/// [`Survey::branch_entry`]'s index, which [`Survey::point`] reads.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct SurveyBranch {
     /// The ring entry the front steps onto at the split.
@@ -127,6 +130,27 @@ impl Survey {
             at -= branch.entries.len();
         }
         None
+    }
+
+    /// How many entries placement lays into: [`Self::lap`]'s, or the ring's.
+    #[must_use]
+    pub fn lap_len(&self) -> usize {
+        if self.lap.is_empty() {
+            self.entries.len()
+        } else {
+            self.lap.len()
+        }
+    }
+
+    /// The survey index of position `at` of the lap array, and its entry.
+    #[must_use]
+    pub fn lap_entry(&self, at: usize) -> Option<(usize, &Entry)> {
+        let index = if self.lap.is_empty() {
+            at
+        } else {
+            usize::from(*self.lap.get(at)?)
+        };
+        Some((index, self.entry(index)?))
     }
 
     /// The index [`Self::entry`] and [`Placed::entry`] address entry `offset` of branch
@@ -305,7 +329,7 @@ pub fn place_stage(
     for mine in &mut field.mines[..usize::from(field.live_mines)] {
         mine.live = false;
     }
-    let total = survey.entries.len();
+    let total = survey.lap_len();
     let Some(count) = layout.values.mine_count(old_stage as usize + 1) else {
         return replaced;
     };
@@ -394,10 +418,12 @@ pub fn place_stage(
         let mut found = None;
         for _ in 0..attempts {
             let e = rng.below(total as u32) as usize;
-            let candidate = &survey.entries[e];
+            let Some((index, candidate)) = survey.lap_entry(e) else {
+                continue;
+            };
             let lanes = candidate.lanes.max(1);
             let lane = rng.below(u32::from(lanes)) as i32 - i32::from(lanes / 2);
-            if candidate.usable && raw_lane_free(field, candidate, e, lane) && lane >= 0 {
+            if candidate.usable && raw_lane_free(field, candidate, index, lane) && lane >= 0 {
                 found = Some((e, lane));
                 break;
             }
@@ -423,10 +449,12 @@ pub fn place_stage(
     // One bomb: the same draw, without the `lane >= 0` test, and one attempt only. A negative
     // lane reads before the original's array; here it lays nothing.
     let e = rng.below(total as u32) as usize;
-    let candidate = &survey.entries[e];
+    let Some((index, candidate)) = survey.lap_entry(e) else {
+        return replaced;
+    };
     let lanes = candidate.lanes.max(1);
     let lane = rng.below(u32::from(lanes)) as i32 - i32::from(lanes / 2);
-    if candidate.usable && raw_lane_free(field, candidate, e, lane) {
+    if candidate.usable && raw_lane_free(field, candidate, index, lane) {
         spawn(
             field,
             survey,
@@ -460,8 +488,8 @@ fn lane_free(field: &Field, entry: &Entry, index: usize, lane: i32) -> bool {
         && !field.occupied(index, lane)
 }
 
-/// `Detonator_SpawnObject`: lays up to `count` objects of `kinds` down the track in one lane,
-/// `spacing` entries apart.
+/// `Detonator_SpawnObject`: lays up to `count` objects of `kinds` down the lap array from
+/// `position` in one lane, `spacing` array positions apart.
 #[allow(clippy::too_many_arguments)]
 fn spawn(
     field: &mut Field,
@@ -491,11 +519,11 @@ fn spawn(
                 return;
             }
         }
-        let Some(entry) = survey.entries.get(position) else {
+        let Some((index, entry)) = survey.lap_entry(position) else {
             return;
         };
-        if lane_free(field, entry, position, lane) {
-            let (Ok(entry), Ok(lane)) = (u16::try_from(position), i8::try_from(lane)) else {
+        if lane_free(field, entry, index, lane) {
+            let (Ok(entry), Ok(lane)) = (u16::try_from(index), i8::try_from(lane)) else {
                 return;
             };
             let placed = Placed {
