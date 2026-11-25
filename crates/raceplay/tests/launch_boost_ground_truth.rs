@@ -261,7 +261,7 @@ fn every_title_flies_a_launch_boost_and_names_its_source() {
 
 fn authored(image: &str) -> Option<(Option<oag_physics::launch::StartBoost>, Vec<String>)> {
     let path = oag_testdata::image(image)?;
-    let loaded = race::load(&race::Options {
+    let loaded = race::load_sim(&race::Options {
         source: path.display().to_string(),
         class: "VENOM".to_string(),
         mode: oag_race::Mode::SingleRace,
@@ -282,14 +282,14 @@ fn pulse_ps2_times_its_launch_like_the_psp() {
         return;
     };
     let speed_after = |edge: u64, frames: u64| {
-        let loaded = race::load(&race::Options {
+        let loaded = race::load_sim(&race::Options {
             source: image.display().to_string(),
             class: "VENOM".to_string(),
             mode: oag_race::Mode::TimeTrial,
             ..race::Options::default()
         })
         .expect("loading the PS2 race");
-        let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
+        let mut race = race::Race::start(loaded.setup, race::ViewSetup::headless(), loaded.modules);
         for _ in 0..COUNTDOWN_TICKS - 1 {
             race.tick(&PlayerInputs::single(held(false)));
         }

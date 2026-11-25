@@ -92,7 +92,7 @@ BASELINE: dict[str, int] = {
     "crates/raceplay/src/effects.rs": 4,
     "crates/raceplay/src/hud.rs": 2,
     "crates/raceplay/src/lib.rs": 2,
-    "crates/raceplay/src/load/campaign.rs": 19,
+    "crates/raceplay/src/load/campaign.rs": 18,
     "crates/raceplay/src/load/track_stats.rs": 1,
     "crates/raceplay/src/options.rs": 1,
     "crates/raceplay/src/scene/frame/shadow.rs": 2,

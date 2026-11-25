@@ -130,7 +130,7 @@ fn agreement_and_grid(
     grid: bool,
     also: Option<Also>,
 ) -> (Vec<f32>, f32) {
-    let loaded = race::load(&race::Options {
+    let options = race::Options {
         source: source.display().to_string(),
         class: "VENOM".to_string(),
         track: Some(track.to_string()),
@@ -138,17 +138,23 @@ fn agreement_and_grid(
         // Only the PS2 sweep's extra claim reads the track model's textures.
         ribbon: also.is_none(),
         ..race::Options::default()
-    })
-    .unwrap_or_else(|e| panic!("{track}: loading the race: {e:#}"));
-    if let Some(also) = also {
+    };
+    let (setup, view, modules) = if let Some(also) = also {
+        let loaded =
+            race::load(&options).unwrap_or_else(|e| panic!("{track}: loading the race: {e:#}"));
         also(track, &loaded);
-    }
+        (loaded.setup, loaded.view, loaded.modules)
+    } else {
+        let sim =
+            race::load_sim(&options).unwrap_or_else(|e| panic!("{track}: loading the race: {e:#}"));
+        (sim.setup, race::ViewSetup::headless(), sim.modules)
+    };
 
-    let slot = loaded.setup.start_position;
-    let spline = loaded.setup.spline.clone();
-    let colliders = grid.then(|| loaded.setup.collision.clone());
-    let bound = loaded.setup.spline.max_half_width() * 2.0;
-    let race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
+    let slot = setup.start_position;
+    let spline = setup.spline.clone();
+    let colliders = grid.then(|| setup.collision.clone());
+    let bound = setup.spline.max_half_width() * 2.0;
+    let race = race::Race::start(setup, view, modules);
     if let Some(colliders) = &colliders {
         the_grid_lands_on_the_track(track, &race, colliders, bound);
     }
@@ -583,7 +589,7 @@ fn the_ps2s_stale_slot_is_corrected_to_what_the_psps_own_file_authors() {
     let entry = r"Data\Environments\09_Track\track.vex";
 
     let slot_of = |image: &Path| {
-        race::load(&race::Options {
+        race::load_sim(&race::Options {
             source: image.display().to_string(),
             class: "VENOM".to_string(),
             track: Some(entry.to_string()),
@@ -615,7 +621,7 @@ fn the_ps2s_stale_slot_is_corrected_to_what_the_psps_own_file_authors() {
     );
 
     // What the PS2 craft now points along, against what the PSP file authors.
-    let corrected = race::Race::start(on_ps2.setup, on_ps2.view, on_ps2.modules)
+    let corrected = race::Race::start(on_ps2.setup, race::ViewSetup::headless(), on_ps2.modules)
         .core
         .sim
         .world

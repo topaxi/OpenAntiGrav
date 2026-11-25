@@ -307,7 +307,8 @@ fn load_event_wires_2048_event_6s_own_weapon_set_onto_setup() {
         source: source.display().to_string(),
         ..race::Options::default()
     };
-    let resolved = race::load_event(&options, "2048 - Event 6").expect("\"2048 - Event 6\" loads");
+    let (resolved, _) =
+        race::load_event_sim(&options, "2048 - Event 6").expect("\"2048 - Event 6\" loads");
     assert_eq!(resolved.setup.allowed_weapons, expected);
 }
 
@@ -324,10 +325,7 @@ fn a_finished_event_raises_the_stored_xp_by_the_authored_award() {
         source: source.display().to_string(),
         ..race::Options::default()
     };
-    let progress = race::load_event(&options, "2048 - Event 1")
-        .expect("the event loads")
-        .campaign_2048_event
-        .expect("load_event always fills this");
+    let (_, progress) = race::load_event_sim(&options, "2048 - Event 1").expect("the event loads");
     let mut archives = oag_2048::open(&source.display().to_string()).expect("this is 2048");
     let (awards, ranks) = oag_2048::campaign::xp_tables(&mut archives).expect("both XP tables");
     let column = oag_tables::xp::Column::Race;
@@ -397,10 +395,10 @@ fn an_autopiloted_event_pays_the_lap_and_place_awards_the_table_authors() {
         source: source.display().to_string(),
         ..race::Options::default()
     };
-    let loaded = race::load_event(&options, "2048 - Event 1").expect("the event loads");
-    let progress = loaded.campaign_2048_event.clone().expect("an event");
+    let (loaded, progress) =
+        race::load_event_sim(&options, "2048 - Event 1").expect("the event loads");
     let awards = progress.xp_awards.clone().expect("the table loads");
-    let mut run = race::Race::start(loaded.setup, loaded.view, loaded.modules);
+    let mut run = race::Race::start(loaded.setup, race::ViewSetup::headless(), loaded.modules);
     run.core.sim.arm_event_xp(&progress);
     run.core.sim.set_autopilot(true);
     let max = run.core.sim.world.ships[0].handling.dimensions.shield;

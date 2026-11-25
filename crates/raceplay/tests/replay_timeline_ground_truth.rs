@@ -123,9 +123,9 @@ fn write_between_ticks(race: &mut Race, assist: Option<Level>, tick: u64) {
 
 pub(crate) fn record(title: &str, ticks: Option<u64>) -> Option<(std::path::PathBuf, Run)> {
     let source = source(title)?;
-    let loaded = race::load(&single_race(&source)).expect("loading the race");
-    let seed = loaded.setup.seed;
-    let mut race = Race::start(loaded.setup, loaded.view, loaded.modules);
+    let start = Start::sim(&single_race(&source));
+    let seed = start.setup.seed;
+    let mut race = start.race();
     race.core.sim.apply_launch(&launch());
     race.start_recording(header_of(title, oag_race::Mode::SingleRace, seed));
     let assist = assist_level(&race);
@@ -207,11 +207,15 @@ struct Start {
 }
 
 impl Start {
-    fn of(loaded: race::Loaded) -> Self {
+    /// The simulation half of `options`' race on a headless view that carries the launch
+    /// request a recording writes into its header: the run reads no picture, no sound and no
+    /// report line (`view_independence_ground_truth`: the state hash is the same either way).
+    fn sim(options: &race::Options) -> Self {
+        let sim = race::load_sim(options).expect("loading the race");
         Self {
-            setup: loaded.setup,
-            view: loaded.view,
-            modules: loaded.modules,
+            view: race::ViewSetup::headless_on(options, &sim.circuit),
+            setup: sim.setup,
+            modules: sim.modules,
         }
     }
 
@@ -222,10 +226,9 @@ impl Start {
 
 /// The race a file names, loaded from its header alone.
 fn file_setup(source: &Path, run: &Run) -> Start {
-    Start::of(
-        race::replay::load_recorded(&run.replay.header, &source.display().to_string())
-            .expect("rebuilds"),
-    )
+    let options = race::Options::for_replay(&run.replay.header, &source.display().to_string())
+        .expect("a header that names its race");
+    Start::sim(&options)
 }
 
 /// Opens the file as a viewer does, seeking to the prefix's end while the pass runs.
@@ -498,7 +501,7 @@ fn a_split_screen_recording_reproduces() {
         mode,
         ..single_race(&source)
     };
-    let start = Start::of(race::load(&options).expect("loading the race"));
+    let start = Start::sim(&options);
     let seed = start.setup.seed;
     let mut race = start.clone().race();
     let unseated = race.core.sim.state_hash();

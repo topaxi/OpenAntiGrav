@@ -123,7 +123,7 @@ fn unpack_standard_block(
             qprev,
             primary_baseline.as_ref(),
         )?;
-        crate::trace::stage(&format!("scale_factors_ch{}", ch_idx), br.position());
+        crate::trace::channel_stage("scale_factors_ch", ch_idx, br.position());
 
         calculate_mask(&mut block.channels[ch_idx], block.quantization_unit_count);
         // Need block info for precisions - pass by extracting needed fields
@@ -179,9 +179,9 @@ fn unpack_standard_block(
             &ctx.spectrum_codebooks,
             high_rate,
         )?;
-        crate::trace::stage(&format!("spectra_ch{}", ch_idx), br.position());
+        crate::trace::channel_stage("spectra_ch", ch_idx, br.position());
         read_spectra_fine(&mut block.channels[ch_idx], br)?;
-        crate::trace::stage(&format!("spectra_fine_ch{}", ch_idx), br.position());
+        crate::trace::channel_stage("spectra_fine_ch", ch_idx, br.position());
     }
 
     block.quantization_units_prev = if block.band_extension_enabled {

@@ -84,7 +84,7 @@ fn race_on(
     field: bool,
 ) -> Option<race::Race> {
     let image = oag_testdata::image("data/images/pulse-psp-eu.chd")?;
-    let loaded = race::load(&race::Options {
+    let loaded = race::load_sim(&race::Options {
         source: image.display().to_string(),
         track: Some(TRACK.to_string()),
         class: "VENOM".to_string(),
@@ -94,7 +94,7 @@ fn race_on(
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
+    let mut race = race::Race::start(loaded.setup, race::ViewSetup::headless(), loaded.modules);
     // This project's driver steers (a scripted stick finds the first bend's wall); the
     // buttons below still reach the pickup and the mod.
     race.core.sim.set_autopilot(true);

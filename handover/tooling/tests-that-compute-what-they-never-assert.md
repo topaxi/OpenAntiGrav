@@ -1,7 +1,7 @@
 ---
 status: ready-to-wire
 titles: [all]
-updated: 2026-11-22
+updated: 2026-11-25
 summary: "Slow test-data tests that load art or run ticks their assertions never read; ribbon batch on HD, Omega, 2048 first"
 categories: [tooling]
 size: S (30)
@@ -37,7 +37,9 @@ on HD, Omega and 2048. On Pulse PSP and PS2 it drops `finished_thrust.skill`
 (4.0 becomes 2.0). Pure was never compared. Every ribbon row below names only
 HD, Omega and 2048, and leaves Pulse and Pure on the disc load.
 
-## Worth a lane now: one ribbon batch
+**2026-11-25: rows 1, 2 and 4 are done, by `load_sim` rather than `ribbon: true`.** A sim-only load reads no art at all and is 99 % cheaper than a ribbon load (`omega_hud` laps test 161 to 3 G, `slipstream` pad odds 151 to 6 G, `launch_boost` 168 to 17 G), and `ViewSetup::headless_on` keeps the launch request a recording needs. Row 3 (`split_grid`) was done by `gate-walltime-9`. Rows 5 to 7 are open.
+
+## Worth a lane now: one ribbon batch (done, kept for the probe it asks for)
 
 All four rows need one `Setup` probe first: `{:?}` of each field with and without
 the ribbon, on the titles named in each row, including Altima and Tech De Ra
