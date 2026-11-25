@@ -483,6 +483,12 @@ The law and its listing are on
 [detonator-mine-draw.md](../ghidra/functions/ps3-hdfury-eu/detonator-mine-draw.md) ("The visualiser, wired", the 2048
 line).
 
+### The Detonator cannon bolt's program (2026-11-25)
+
+`oag_rcs::gxp::cannon_bolt` reads it with the same operand and header-table reading as the visualiser's
+(`crates/rcs/src/gxp/operands.rs`). The law, the colour tap's square and the census are on
+[hd-unlit-programs.md](../rendering/hd-unlit-programs.md#the-detonator-cannon-bolt-on-2048-and-omega-2026-11-25-det-cannon-bolt-2048-omega).
+
 ### What is still unread
 
 - `ldst` (288 words) and `sop2m` (28): refused by name, in 100 programs.
