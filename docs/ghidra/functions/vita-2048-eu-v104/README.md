@@ -74,6 +74,8 @@ full comparison.
   the boot chain, the tagged-allocation idiom, and the lineage finding above.
 - [track-and-collision-loaders.md](track-and-collision-loaders.md) - the
   track geometry and collision loaders.
+- [particle-near-law.md](particle-near-law.md) - the two particle quad builders, and the
+  near-camera law (cull under 1, fade to 4, size cap `+0xc80`) both carry.
 - [ships-effects.md](ships-effects.md) - `MagstripWake_Construct`, found by
   cross-referencing this binary against `ps4-omega-eu`'s.
 - [race-hud-selection.md](race-hud-selection.md) - which of the 26 shipped

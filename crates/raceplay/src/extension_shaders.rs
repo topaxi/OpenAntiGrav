@@ -135,9 +135,13 @@ impl Race {
     ) -> Vec<(usize, Vec<GpuVertex>)> {
         let mut surfaces = Vec::new();
         let guard = self.stage_guard_band();
+        let cull = oag_fx::psys::Cull {
+            guard: guard.as_ref(),
+            ..self.near_cull()
+        };
         self.view
             .stage
-            .extend_shaded(&mut surfaces, right, up, guard.as_ref());
+            .extend_shaded(&mut surfaces, right, up, cull);
         for (mod_id, beam) in self.core.sim.extension_beams() {
             let place = match beam.shader {
                 None => Some(FLAT),

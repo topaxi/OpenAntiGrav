@@ -1237,8 +1237,13 @@ billboard emitters, 0.3 on 1, 0.5 on 19 and 1.0 on 21; the mode is 4 on 161 emit
 and 0 on 6. The cap goes with two rules that are code and not data: a billboard nearer than 1
 unit of view depth is not drawn, and its alpha fades over depth 1 to 4.
 
-**Not read by `oag-pob` yet.** `Emitter` has no field for either. Omega's files carry `+0xc80`
-too (its builder reads it); 2048's were not censused. The PSP and PS2 records end before it.
+`+0xc80` is `Emitter::near_cap`, read since 2026-11-25; `+0xc8c` has no field. 2048's and
+Omega's files author `+0xc80` too: every billboard emitter of every parsed effect has a positive
+cap between 0.02 and 4.0 (`crates/fx/tests/psys_2048_ground_truth.rs` and
+`psys_omega_ground_truth.rs`). HD's whole disc (all seven archives) authors 0.2, 0.3, 0.5, 1.0
+and 2.0 (`crates/pob/tests/pob_ground_truth.rs`). The PSP and PS2 records end before it: what a
+reader finds at `+0xc80` of their files is another block (zero on most, garbage on others), so
+only a title whose executable reads the field may use it (`oag_title::Effects::near_law`).
 
 ## Evidence summary
 

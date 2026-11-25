@@ -440,3 +440,5 @@
 0x81217616	function	Camera_UpdateHoldView	55	../ps3-hdfury-eu/destroy-camera.md
 0x812ab114	function	Psys_UpdateParticle	75	../ps3-hdfury-eu/ship-destroy.md
 0x8112e050	function	PauseMenu_BindRedirectForMode	80	pause-menu.md
+0x8128ceca	function	Particle_PushScaledQuadBatch	75	particle-near-law.md
+0x8128e100	function	Particle_PushQuadBatch	75	particle-near-law.md

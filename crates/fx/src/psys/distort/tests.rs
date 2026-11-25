@@ -28,7 +28,7 @@ fn quads(effect: &Effect) -> (Vec<GpuVertex>, Vec<GpuVertex>, Vec<GpuVertex>) {
     assert!(system.alive_count() > 0, "the emitter spawned nothing");
     let (additive, alpha_over) = system.vertices(effect, Vec3::X, Vec3::Y);
     let mut distort = Vec::new();
-    system.extend_distort_vertices(&mut distort, effect, Vec3::X, Vec3::Y);
+    system.extend_distort_vertices(&mut distort, effect, Vec3::X, Vec3::Y, Cull::NONE);
     (additive, alpha_over, distort)
 }
 

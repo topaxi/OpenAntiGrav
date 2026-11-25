@@ -24,7 +24,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use oag_assets::psarc::Archive;
 use oag_fx::psys::sprite::Sprite;
-use oag_fx::psys::{Blend, ColourScale, Effect};
+use oag_fx::psys::{Blend, ColourScale, Effect, Render};
 use oag_pob as pob;
 
 const ARCHIVES: [&str; 2] = [
@@ -42,6 +42,23 @@ const GET: [&str; 2] = ["Data/particles/Get", "Data/particles2048/Get"];
 fn open(rel: &str) -> Option<Archive> {
     let path = oag_testdata::exact(rel)?;
     Some(Archive::open_file(&path).expect("the archive opens"))
+}
+
+/// Every billboard emitter authors the near law's size cap (`+0xc80`) as a positive fraction of
+/// its depth, as this title's builder reads it.
+fn check_near_caps(effect: &Effect) {
+    for spec in &effect.emitters {
+        if spec.template || !matches!(spec.render, Render::Billboard) {
+            continue;
+        }
+        let cap = spec.near_cap.expect("the record reaches +0xc80");
+        assert!(
+            (0.01..=4.0).contains(&cap),
+            "{}/{}: near cap {cap}",
+            effect.name,
+            spec.name
+        );
+    }
 }
 
 /// The counts above hold in both archives, and every refusal is a known one.
@@ -71,6 +88,7 @@ fn every_omega_effect_parses_or_is_refused_by_name() {
             row.0 += 1;
             match Effect::parse(&blob, ColourScale::Full) {
                 Ok(effect) => {
+                    check_near_caps(&effect);
                     row.1 += 1;
                     for spec in &effect.emitters {
                         *words.entry(spec.authored_colour_mode).or_default() += 1;

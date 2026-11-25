@@ -198,13 +198,62 @@ measured.
 | Blend | `(SA, 1)` and `(SA, 1-SA)`, alpha kept | the same two | same |
 | Sort | none: one run in submission order | none | same |
 | Extra attachment | none | the velocity target, write-masked, when motion blur is on | ours only, no fill of its own |
-| Near particles | cull, fade, cap | none | **ours draws more** |
-| Particles behind the camera | not built | built, uploaded, clipped | ours wastes vertices, not fill |
+| Near particles | cull, fade, cap | the same law on HD, 2048 and Omega since 2026-11-25 ("Wired") | same |
+| Particles behind the camera | not built | not built under the law (nearer than 1 unit); Pulse and Pure build, upload and clip them | same on HD, 2048, Omega |
 | Resolution | 1.4 to 2.07 megapixels, dynamic width | the output's, fixed (`render_scale = 100`, `target_fps = "off"`) | the player's choice |
 
 Counts, sizes and lifetimes are the disc's in both: ours plays the same records, and no
 difference was found there. The law above is the difference.
 
+## Wired
+
+2026-11-25. The law runs in `oag_fx::psys` (`near`), switched per title by
+`oag_title::Effects::near_law` (HD, 2048 and Omega;
+[particle-render.md](../ghidra/functions/ps3-hdfury-eu/particle-render.md), "Wired", lists what
+of ours it reaches). The state hash at tick 800 of the reproduction is unchanged
+(`62b06c2ee353b11d`): the law is drawing only. With the law switched off, the same code draws
+ticks 775 and 777 byte-identically to the build before it.
+
+Fill, in screens, from a throwaway counter over the whole run (the same one as the probe above),
+and it reproduces the probe to the hundredth:
+
+| Tick | Before | Wired |
+| --- | --- | --- |
+| 771 | 14.22 | 12.84 |
+| 772 | 20.38 | 16.84 |
+| 773 | 28.66 | 20.49 |
+| 774 | 39.82 | 20.42 |
+| 775 | 52.70 | 14.79 |
+| 776 | 51.35 | 8.26 |
+| 777 | 26.52 | 4.52 |
+
+The peak over ticks 760 to 789 falls from 52.7 screens to 20.5.
+
+GPU scene time over ticks 760 to 789, six interleaved pairs each, medians, the main build against
+this one, RX 7800 XT, RADV, one-minute load 19 to 65 with other work on the same card:
+
+| Size | Mean before | wired | Worst frame before | wired |
+| --- | --- | --- | --- | --- |
+| 3840x2160 | 2.27 ms | 1.96 ms | 5.53 ms (5.27 to 5.96) | 3.21 ms (3.16 to 3.22) |
+| 1920x1080 | 1.53 ms | 1.48 ms | 3.26 ms | 3.16 ms |
+
+At 3840x2160 the worst frame falls by 42 % and the window by 14 %; at 1920x1080 by 3 %, the part
+that does not scale with fill (above). The absolute numbers are lower than the probe's table:
+the card was in its faster regime.
+
+**What is unchanged.** The law caps a particle's size at any depth, not only near the camera: a
+smoke particle of size 11 under cap 0.5 is capped out to 22 units. So "particles beyond depth 4
+look as before" is false, and identity holds for a frame in which no particle is culled, faded or
+capped. Ticks 429 and 540 of the reproduction draw particles and touch none: their screenshots
+are byte-identical before and after at 1920x1080 and 3840x2160. Pulse's craft hits (ticks 700,
+720, 740, 1920x1080) are byte-identical, the law being off there.
+
+No comparison pair moves: all 79 HD, Omega and 2048 pairs (the Detonator ones included),
+re-rendered on scratch copies with the build before and the build with the law, are
+byte-identical. None has a particle the law touches in frame.
+
 ## What is left
 
-The near-camera law is recovered and not wired. The ranked plan is in the handover thread.
+The picture has no matched original frame from close range yet, and neither the Deck nor the
+scene-width throttle has been measured. The ranked plan for the other two ideas is in the
+handover thread.

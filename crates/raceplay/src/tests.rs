@@ -108,6 +108,7 @@ mod message_cue;
 mod mode_override;
 mod models;
 mod multiplayer_time_trial;
+mod near_law;
 mod pads;
 mod people_grid;
 mod perfect_start;
