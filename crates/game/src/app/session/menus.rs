@@ -169,6 +169,8 @@ impl Session {
         // And where that face keeps its ink, for the pointer bands on the
         // selection screens' rows - the renderer below draws them with it.
         skin.set_row_ink(oag_ui::pointer::RowInk::measure(&rows_face));
+        // And where its capitals stand, for what sits under the rows (the pause music list).
+        skin.set_row_baseline(oag_ui::pointer::RowInk::baseline(&rows_face));
         let model = self.menu_model(&shell, &skin);
         let pause_scrim = shell
             .title
