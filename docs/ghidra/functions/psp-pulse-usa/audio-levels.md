@@ -115,7 +115,7 @@ PSP disc. **Against a pinned config, not the machine's**, because every volume
 row now scales what the dump holds and a settings file drifts:
 
 ```sh
-mkdir -p /tmp/pin/oag && printf '[audio]\nmusic_volume = 100\nsfx_volume = 100\nspeech_volume = 100\nmaster_volume = 100\nmusic_source = "auto"\n' > /tmp/pin/oag/settings.toml
+mkdir -p /tmp/pin/oag && printf '[audio]\nmusic_volume = 100\nsfx_volume = 100\nspeech_volume = 100\nmaster_volume = 100\n' > /tmp/pin/oag/settings.toml
 XDG_CONFIG_HOME=/tmp/pin cargo run --release -p oag-game -- data/images/pulse-psp-eu.chd \
   --race --mode single_race --autopilot --ticks 1800 \
   --screenshot /tmp/pin.png --dump-audio /tmp/pin.wav

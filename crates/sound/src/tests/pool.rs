@@ -322,3 +322,38 @@ fn a_missing_folder_fails_at_once_rather_than_scanning() {
         scan.status()
     );
 }
+
+#[test]
+fn the_booted_titles_switches_apply_and_no_other_titles() {
+    let (pool, path) = folder_pool(&["/mnt/music/a.mp3"], false);
+    let folder = format!("folder:{}", path.display());
+    let by_title = crate::pool::SwitchesByTitle::from([(
+        "Wipeout HD".to_string(),
+        crate::pool::Switches::from([(folder, true), ("disc:wipeout-pure:psp".into(), true)]),
+    )]);
+    pool.configure(
+        &by_title,
+        &[MusicFolder {
+            path,
+            enabled: false,
+        }],
+    );
+    // Another disc the title has switched on is waited for; a title without one is not.
+    assert!(pool.discs_unstarted());
+    let waited = |pool: &Pool| {
+        let from = Instant::now();
+        pool.wait_scans(Duration::from_millis(200));
+        from.elapsed() >= Duration::from_millis(200)
+    };
+
+    pool.set_booted("Wipeout Pulse", Platform::Psp, "psp.chd");
+    assert_eq!(crate::pool::playlist_len(&pool, 16), 16);
+    assert!(!waited(&pool), "Pulse switched no other disc on");
+
+    pool.set_booted("Wipeout HD", Platform::Ps3, "hd.iso");
+    assert_eq!(crate::pool::playlist_len(&pool, 16), 17);
+    assert!(
+        waited(&pool),
+        "HD's own switch asks for a disc still scanning"
+    );
+}

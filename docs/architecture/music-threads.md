@@ -134,13 +134,23 @@ clock has to move.
 OPTIONS > AUDIO > MUSIC lists every soundtrack source this machine can open, each on or off:
 the booted disc (on by default), each other title's disc image found on the search path (one
 row per title and platform, off; the first image found stands for it) and each folder under `[audio] music_folders` in `settings.toml` (off
-unless its `enabled` is set). Switches persist in `[audio] music_switches`, keyed by a stable
-source id (`disc:<title slug>:<platform>`, `folder:<path>`); an id absent from the table
-takes the default. The page has one on/off row per source (label left, ON or OFF right, the image's or folder's
+unless its `enabled` is set). Switches persist per title (below), keyed by a stable source id
+(`disc:<title slug>:<platform>`, `folder:<path>`); an id absent from the table takes the
+default. The page has one on/off row per source (label left, ON or OFF right, the image's or folder's
 full path under the selected row), made from one template row in `menu.toml` by
 `Definition::expand_rows`, so pad, mouse and touch work as on every other choice row. With
 fewer than two sources the page and the MUSIC row that opens it are left out.
 Adding a folder from the menu needs a text input widget and is open.
+
+**Kept per title.** Each title has a `[music_profiles."<Title::name>"]` table holding
+`music_source` (the `MUSIC SOURCE` row) and `music_switches` (this page), so what is chosen
+while playing one title changes no other. Both pressings of a title share it: `MUSIC SOURCE`
+is itself the choice between them. The folder list (`music_folders`), `music_order` and the
+volumes stay in `[audio]`, one value for every title. A file with the old `[audio]
+music_source` or `music_switches` has them copied into every title's table on load, a title's
+own value winning, and the old keys are dropped
+(`oag_game::settings`'s `music_profile` module). The pool is given every title's switches and
+applies the booted title's once the survey has named it (`Pool::configure`).
 
 **What a race plays.** The playlist is one numbered list: the booted soundtrack in its own
 order first (when the booted disc is on), then every other enabled source's songs, discs

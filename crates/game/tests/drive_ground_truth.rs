@@ -898,8 +898,8 @@ fn a_race_resumed_from_the_pause_menu_draws_its_hud_at_the_new_screen_size() {
     );
 }
 
-/// The MUSIC page's rows reach the settings file: the booted disc's own row
-/// saves a switch into `[audio] music_switches`, and turning it back on saves that too.
+/// The MUSIC page's rows reach the settings file: the booted disc's own row saves a switch
+/// into the booted title's `music_switches` and into no other title's.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn the_music_page_saves_its_switches() {
@@ -928,8 +928,19 @@ fn the_music_page_saves_its_switches() {
     )
     .expect("the run saved its settings");
     let saved: toml::Table = saved.parse().unwrap();
+    let profiles = saved["music_profiles"].as_table().expect("music_profiles");
+    let switched: Vec<&str> = profiles
+        .iter()
+        .filter(|(_, profile)| profile["music_switches"].get(booted).is_some())
+        .map(|(title, _)| title.as_str())
+        .collect();
     assert_eq!(
-        saved["audio"]["music_switches"][booted].as_bool(),
+        switched,
+        ["Wipeout Pulse"],
+        "only the booted title: {saved}"
+    );
+    assert_eq!(
+        profiles["Wipeout Pulse"]["music_switches"][booted].as_bool(),
         Some(false),
         "the booted disc's switch is saved off: {saved}"
     );

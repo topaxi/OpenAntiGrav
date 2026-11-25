@@ -6,6 +6,12 @@
 //! version never wrote. A CLI flag still wins over whatever is on disk for
 //! that one run; see `--anisotropy` in `app.rs`.
 //!
+//! # Music profiles
+//!
+//! `[music_profiles."<title>"]` is each title's music choice (`music_profile`). It was
+//! one value in `[audio]`, which [`load`] copies into every title's table
+//! (`music_profile::migrate_music_profiles`).
+//!
 //! # Display against graphics against render profiles
 //!
 //! Three tables:
@@ -63,6 +69,7 @@ use oag_mesh::mesh_render::Anisotropy;
 
 mod controls;
 pub mod ffmpeg;
+mod music_profile;
 mod online;
 pub mod platform;
 pub mod player;
@@ -76,6 +83,7 @@ pub use online::Online;
 pub use player::Player;
 pub use race::Race;
 pub mod mod_settings;
+use music_profile::migrate_music_profiles;
 pub use render_profile::{RenderProfile, SCREEN_FILTER_OFF, profile_key};
 use render_profile::{
     ensure_known_titles, migrate_platform_split, migrate_reconstruction_keys,
@@ -124,6 +132,9 @@ pub struct Settings {
     pub render_profiles: BTreeMap<String, RenderProfile>,
     #[serde(default)]
     pub audio: oag_sound::settings::Settings,
+    /// Each title's music choice, keyed by `Title::name` (`music_profile`).
+    #[serde(default)]
+    pub music_profiles: BTreeMap<String, oag_sound::settings::MusicProfile>,
     #[serde(default)]
     pub source: Source,
     #[serde(default)]
@@ -1004,6 +1015,7 @@ fn load_from(path: &std::path::Path) -> Result<Settings> {
 
             check_header(path, &table);
             migrate(&mut table);
+            migrate_music_profiles(&mut table);
             migrate_render_profiles(&mut table);
             // After it, not before - see `migrate_reconstruction_keys`.
             migrate_reconstruction_keys(&mut table);
@@ -1303,7 +1315,7 @@ pub fn menu_seeds(
         ),
         (
             "audio.music_source",
-            text(&settings.audio.music_source.to_string()),
+            text(&settings.music_source(Some(title)).to_string()),
         ),
         (
             "audio.spatial_audio",
@@ -1451,3 +1463,6 @@ mod menu_back_tests;
 
 #[cfg(test)]
 mod photo_profile_tests;
+
+#[cfg(test)]
+mod seed_key_tests;

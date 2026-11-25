@@ -305,7 +305,27 @@ type = "string"
 [types.spatial-device.mode]
 type = "string"
 
-# [audio]: bus volumes (percent) and the music pool.
+# One [music_profiles."<title>"] table: that title's music choice.
+[types.music-profile]
+type = "table"
+
+[types.music-profile.music_source]
+type = "string"
+optional = true
+
+# By source id; present only for the sources the player switched.
+[types.music-profile.music_switches]
+type = "types.bool-map"
+optional = true
+
+# Keyed by title name, e.g. "Wipeout Pulse". The keys are the titles this build links, so
+# the schema says any.
+[types.music-profiles]
+type = "collection"
+itemtype = "types.music-profile"
+keypattern = "^.+$"
+
+# [audio]: bus volumes (percent) and the music folders.
 [types.audio]
 type = "table"
 
@@ -325,10 +345,6 @@ optional = true
 type = "integer"
 optional = true
 
-[types.audio.music_source]
-type = "string"
-optional = true
-
 [types.audio.music_order]
 type = "string"
 optional = true
@@ -346,11 +362,6 @@ optional = true
 [types.audio.music_folders]
 type = "array"
 itemtype = "types.music-folder"
-optional = true
-
-# By source id; present only for the sources the player switched.
-[types.audio.music_switches]
-type = "types.bool-map"
 optional = true
 
 # [source]: the disc image and DLC folders opened when the command line names none.
@@ -607,6 +618,10 @@ optional = true
 
 [elements.audio]
 type = "types.audio"
+optional = true
+
+[elements.music_profiles]
+type = "types.music-profiles"
 optional = true
 
 [elements.source]

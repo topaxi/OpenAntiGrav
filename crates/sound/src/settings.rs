@@ -1,6 +1,6 @@
-//! The persisted audio volumes and the music source. Lives with the sound crate
-//! because every field is one of its own types; `oag-game` embeds it as the
-//! `[audio]` section of its settings file.
+//! The persisted audio settings and each title's music choice. Lives with the sound
+//! crate because every field is one of its own types; `oag-game` embeds [`Settings`] as
+//! the `[audio]` section of its settings file and [`MusicProfile`] per title.
 
 use serde::{Deserialize, Serialize};
 
@@ -62,19 +62,6 @@ pub struct Settings {
     /// scale on the effects bus alone, so one control moves both buses together.
     #[serde(default)]
     pub master_volume: Volume,
-    /// Which release's encode of the soundtrack plays: `auto`, `psp` or `ps2`.
-    ///
-    /// `auto`, the booted disc, by default. Only the sixteen soundtrack tracks
-    /// have a proven counterpart (`docs/formats/ps2-audio.md`); voice, every
-    /// sound bank and the PSP front end's music (no PS2 counterpart, so a PSP
-    /// boot sounds the same at every value) stay on the booted disc. See
-    /// [`MusicSource`].
-    ///
-    /// The menu row is offered only with both discs, but the key is always in the
-    /// file: a settings file moves between machines and an unhonourable value
-    /// falls back to the booted disc, not silence.
-    #[serde(default)]
-    pub music_source: MusicSource,
     /// In which order the race playlist plays: `sequential` (the default, as on the disc) or
     /// `random`, a shuffled deck that plays every song before repeating one.
     #[serde(default)]
@@ -105,11 +92,29 @@ pub struct Settings {
     /// read on a worker and a hung one never stalls a frame (`oag_sound::folders`).
     #[serde(default)]
     pub music_folders: Vec<crate::pool::MusicFolder>,
+}
+
+/// Which music one title plays, kept per title (`[music_profiles."<Title::name>"]`).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MusicProfile {
+    /// Which release's encode of the soundtrack plays: `auto`, `psp` or `ps2`.
+    ///
+    /// `auto`, the booted disc, by default. Only the sixteen soundtrack tracks
+    /// have a proven counterpart (`docs/formats/ps2-audio.md`); voice, every
+    /// sound bank and the PSP front end's music (no PS2 counterpart, so a PSP
+    /// boot sounds the same at every value) stay on the booted disc. See
+    /// [`MusicSource`].
+    ///
+    /// The menu row is offered only with both discs, but the key is always in the
+    /// file: a settings file moves between machines and an unhonourable value
+    /// falls back to the booted disc, not silence.
+    #[serde(default)]
+    pub music_source: MusicSource,
     /// The MUSIC page's switches, by source id, for the sources the player has
     /// switched. Absent means the default: the booted disc on, every other
     /// source off. A folder's `enabled` is its own default until it is here.
     #[serde(default)]
-    pub music_switches: std::collections::BTreeMap<String, bool>,
+    pub music_switches: crate::pool::Switches,
 }
 
 /// How many outputs [`Settings::spatial_devices`] remembers.
