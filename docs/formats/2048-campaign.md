@@ -339,7 +339,8 @@ of the 80 fully-authored events, no exception found either way):
 (`elimination_score_target`), **chosen, not measured**, so both bars are in reach: the manager
 (`0x812bf3f0`) takes its target from the event's first objective block, and in its tiered state
 (`0x812bf28c`) the target its HUD shows moves from the first block's value to the second's once the
-first is met. Which flag puts a race in that state, and the end test, are unread. Omega ships no
+first is met. Which flag puts a race in that state, and the end test, are unread; ours shows the
+pass value until it is met and then the elite one. Omega ships no
 `SP.xml` event campaign, so this does not carry over there.
 
 ## `Data\xml\MP.xml` is not `SP.xml`'s schema

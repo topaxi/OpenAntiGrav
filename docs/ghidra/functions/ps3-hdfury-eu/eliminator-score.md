@@ -188,14 +188,18 @@ in.
   when that is a `BEAT_VALUE` (type `2`). The disc authors no Racebox, so there is no slider and no
   `TARGET` row. Native campaign events: [2048-campaign.md](../../../formats/2048-campaign.md),
   "The objective law".
-- **2048's HUD:** **checked, differs, not wired** (confidence 80, static). Its bind
-  (`0x81191b9c`) takes `Score`, `ScoreTxt` (`IG_HUD_SCORE`, or `IG_HUD_KILLS` for a kill
-  objective), hides `PositionTxt`, and hides `TimeLimitParent` where there is no limit. Its update
-  (`0x811921f2`) writes `Score` as `"%d/%d"` of score over target, and the rows as `"%s (%d)"`,
-  the person's green (`0xff30ff30`) at scale `0.6` against `0.5`. Ours draws score rows there with
-  HD's spacing, leaves `Score` empty and shows `POS` and `TIME`. The HD and Fury layouts
-  (`*_HUD_HD.xml`) take their target line at `PositionTxt2`, which `0x81158d88` writes as
-  `"%s (%d)"`.
+- **2048's HUD:** **ported** (wired 2026-11-25, `crates/hud/src/score_over.rs`; confidence 80,
+  static). Its bind (`0x81191b9c`) takes `Score`, `ScoreTxt` (`IG_HUD_SCORE`, or `IG_HUD_KILLS` for
+  a kill objective), hides `PositionTxt`, and hides `TimeLimitParent` where there is no limit. Its
+  update (`0x811921f2`) writes `Score` as `"%d/%d"` of score over target, and the rows as
+  `"%s (%d)"`, the person's green (`0xff30ff30`) at scale `0.6` against `0.5`. The header's second
+  number comes from `0x812bf28c`: the manager's `+0x424`, loaded from the event's first objective
+  (the pass value), or in the tiered state (`+0x430 == 4`) a block picked by `+0x2d8`, which also
+  hides the rows' parent. **Chosen, not measured:** ours shows the pass value until it is met, then
+  the value the race ends on; which events are tiered is unread. The `Position` value is not drawn
+  either: the mode's HUD flags (`0x10a93`) leave out the position bit (confidence 65). The HD and
+  Fury layouts (`*_HUD_HD.xml`) take their target line at `PositionTxt2`, which `0x81158d88` writes
+  as `"%s (%d)"`.
 - **2048's results table:** **checked, differs.** Its executable carries no
   `%s - %s: %d %s: %d` string, and its summaries are the touch screens'.
 - **Omega:** the score law: **ported** (the same awards, read on its 1.07 patch,

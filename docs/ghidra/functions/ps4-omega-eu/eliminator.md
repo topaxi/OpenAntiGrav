@@ -64,12 +64,13 @@ Colour is by the pad's node name, in every mode, and carries no Eliminator test.
 
 `oag_omega::TITLE` states the score rule, the flip and the three cycles as measured.
 `crates/raceplay/tests/omega_eliminator_ground_truth.rs` guards the score law, the target of `50`,
-the HUD's header and rows, the pad cycles and a prototype craft's `0.5 s` turn.
+the HUD's header and rows on both layouts, the pad cycles and a prototype craft's `0.5 s` turn.
+
+A 2048-era circuit reads Omega's `2048_hud` layout, which authors `SCORE`, an empty `Score` value
+and no target line. Ours fills it by 2048's law (**inherited from 2048**,
+[eliminator-score.md](../ps3-hdfury-eu/eliminator-score.md), "Other titles").
 
 **Open:**
 
-- A score Eliminator's HUD on a 2048-era circuit reads Omega's `2048_hud` layout, which authors
-  `SCORE` with an empty `Score` value we do not fill and no target line. 2048's executable fills
-  it ([eliminator-score.md](../ps3-hdfury-eu/eliminator-score.md), "Other titles"); Omega's own
-  writer is unread.
+- Omega's own writer of the 2048-era `Score` and rows is unread.
 - The event object's `+0x21c`, the second way into the flip.

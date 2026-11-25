@@ -1,8 +1,8 @@
 ---
-status: ready-to-wire
+status: re-first
 titles: [hd, omega, 2048]
 updated: 2026-11-25
-summary: "HD, Omega and 2048 Eliminators are won on score; 2048's own HUD layout still draws SCORE empty (law read); per-pad cycle, ScoreFeedBack open"
+summary: "HD, Omega and 2048 Eliminators are won on score and drawn by their own layouts; per-pad cycle, 2048 end test, ScoreFeedBack open"
 ---
 
 # HD's Eliminator: what is left after the score law
@@ -14,24 +14,20 @@ summary: "HD, Omega and 2048 Eliminators are won on score; 2048's own HUD layout
 
 ## Open
 
-- **2048's own elimination HUD** (ready to wire; also what Omega draws on its 2048-era circuits).
-  Today `SCORE` is empty, `POS` and `TIME` show, and there is no target line. 2048's law is read
-  (`eliminator-score.md`, "Other titles"): `Score` is `"%d/%d"` of score over target, `PositionTxt`
-  and a limitless `TimeLimitParent` are hidden, rows are `"%s (%d)"` with the person's green and
-  larger. Omega's own writer is unread. Size: one HUD dialect arm and a test.
 - **Pads' per-pad cycle** (2048, Omega): each pad's start phase and the dark cooling colour are not
   drawn, because a class shares one glow entry and the table holds 64 (`docs/rendering/pads.md`,
   "2048 and Omega").
 - **2048's event end test.** Ours ends an Elimination event on the elite score (chosen); the
   executable's tiered target state and end test are unread (`docs/formats/2048-campaign.md`, "The
-  objective law").
+  objective law"). Which events are tiered also decides whether the rows show at all.
+- **Omega's own writer of the 2048-era elimination HUD** is unread; ours runs 2048's law there.
 - **2048's opponent scale table:** which of the two the race reads is unconfirmed; ours takes the
   loaded `WeaponAIStats` row.
 - **Pace on 2048 and Omega** is HD's, tuned on HD alone.
 - **Flip outside an Eliminator** (`race_eliminator_flip`, Omega's event `+0x21c`), 2048's stick
   trigger and the opponents' flip (`eliminator-flip.md`, "Per title").
-- **The 2048 and Omega lane's play report:** which Omega circuit the maintainer flew is unknown. On
-  an HD-lineage circuit the HUD now matches Fury's; on a 2048-era one it is the first item above.
+- **The 2048 and Omega lane's play report:** which Omega circuit the maintainer flew is unknown.
+  Both layouts now head the race with its score.
 - ~~**Racebox TARGET row.**~~ Landed 2026-11-09: `race.score_target` offers the slider's 21 steps and
   reaches `Options::eliminator_score_target` (`eliminator-score.md`, "What ours does"). Omega offers
   its own slider's `50..600` by `25`; 2048 has no slider and no row.
