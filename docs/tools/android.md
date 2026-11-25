@@ -1080,7 +1080,7 @@ submission (`wgpu-core/src/device/queue.rs`, the write's `transition_buffers` th
 buffers changes neither, so it is not built. Upstream reported the pattern as gfx-rs/wgpu#6673 and fixed it in gfx-rs/wgpu#10319
 ("Record 1 barrier for N Queue::write_buffer/texture calls by deferring to submit time", merged 2026-10-25, after 30.0.2's
 branch; a first write per resource per submission only, copies unchanged). Its 13 hunks do not apply to 30.0.2 as they stand
-(3 fail). What would cut the copies is fewer writes: one per-frame buffer that the passes read at offsets (the S21 perf plan's item 4).
+(3 fail by this count; `git apply --reject` with the paths rewritten rejects 6, see the next section). What would cut the copies is fewer writes: one per-frame buffer that the passes read at offsets (the S21 perf plan's item 4).
 
 ### gfx-rs/wgpu#10319 on 30.0.2: what one barrier buys
 
@@ -1097,7 +1097,8 @@ What it changes, counted inside wgpu-core per batch (S21, 120-batch averages): a
 distinct buffers; 30.0.2 records one `vkCmdPipelineBarrier` before each copy (28 a batch), the backport records 3 inline (the
 writes into a buffer already written in that batch, whose `COPY_DST` to `COPY_DST` barrier must stay between the two copies) and
 one barrier of about 53 entries (every staging buffer and every first destination) in a command buffer ahead of the copies. The
-copies themselves stay. On the desktop's 1280x720 race bench the same count is 65 to 89 writes into 48 to 60 buffers, inline
+copies themselves stay. The census prints every 120 batches, about once a second against 35 to 45 frames a second, so a frame
+is about three batches (submissions): about 85 writes a frame, in line with the gdb census's 95. On the desktop's 1280x720 race bench the same count is 65 to 89 writes into 48 to 60 buffers, inline
 barriers 65 to 89 against 17 to 29.
 
 | Run (start AP) | Frame ms, 30.0.2 / #10319 | `submit` phase ms | Present ms | Previous fence to present return, ms |
@@ -1109,9 +1110,22 @@ barriers 65 to 89 against 17 to 29.
 So **the backport takes 2.4 to 3.1 ms off the S21's HD frame** (three runs, the same sign every time), 1.1 to 1.3 ms of it on
 the frame thread's `submit` and the rest in the present wait: the present now returns as the previous frame's fence signals,
 as it did with every write frozen (`writes`, above), where with the 30.0.2 barriers kept (`writes-same`, `writes-dummy`) it
-returned 1.6 to 2.5 ms later. Of the 3.5 to 4.7 ms the copies cost, **about 0.4 to 2.3 ms remains** (that range is the two
-lanes' runs against each other, not one in-run pair): the ~28 copies a batch and the few inline barriers left, which only
-fewer writes remove. The fence period in the trace moved both ways (19.6 to 17.5, 21.3 to 21.1, 20.0 to 23.4 ms), with six
+returned 1.6 to 2.5 ms later.
+
+**What remains: nothing measurable.** The same subtraction as above, on the measuring build with the backport on throughout
+(`OAG_WGPU_HOIST=1` plus the `writes` or `writes-same` toggle, one run each), and an A/A control run (the toggle naming no
+arm) for the noise:
+
+| Run, backport on throughout (start AP) | Frame ms, made / arm | Present ms | Previous fence to present return, ms |
+| --- | ---: | ---: | ---: |
+| A/A control (no arm toggled) (27.3) | 20.4 / 19.9 | 9.9 / 9.3 | |
+| `writes` (32.9) | 27.9 / 23.5 | 15.7 / 13.2 | 0.07 / 0.08 |
+| `writes-same` (33.0) | 29.4 / 24.5 | 17.0 / 13.3 | 0.08 / 0.07 |
+
+Dropping every write saves 4.4 ms, keeping every copy with the same frozen picture saves 4.9 ms: what the copies still cost is
+the difference, -0.5 ms, inside the control's 0.5 ms. On 30.0.2 the same pair differed by 3.5 to 4.7 ms. So with #10319 the
+remaining ~85 copies and ~9 inline barriers a frame cost **about 0 ms (within 0.5 ms, one run each)**, and the 4.4 to 4.9 ms
+is the frozen picture itself; fewer writes would buy nothing more on this phone. The fence period in the trace moved both ways (19.6 to 17.5, 21.3 to 21.1, 20.0 to 23.4 ms), with six
 windows a trace; read it as unresolved.
 
 Desktop (RX 7800 XT, RADV, `OAG_WGPU_HOIST=1` turning the backport on for a whole run), no regression:
@@ -1122,11 +1136,13 @@ Desktop (RX 7800 XT, RADV, `OAG_WGPU_HOIST=1` turning the backport on for a whol
 | User instructions, G | 83.196, 83.195 | 82.920, 83.068 (-0.2 to -0.3 %) | `perf stat -e instructions:u` over a 3,000-tick `OAG_RENDER_BENCH_RACE` run of Vineta K at 1280x720, load 46 to 50 (cycles at that load are noise) |
 
 The GPU's p50 does not move on RDNA, as the PR's own Bevy test found on a desktop. The picture is byte-identical: a 960x540
-`--screenshot` of HD Vineta K at tick 900 with every batch hoisted and with none, `cmp` equal. No Khronos validation layer is
-installed on the workstation, so no synchronisation validation ran; a missing barrier would not necessarily show on RDNA.
+`--screenshot` of HD Vineta K at tick 900 with every batch hoisted and with none, `cmp` equal. That is one frame on RDNA only:
+no Khronos validation layer is installed on the workstation, so no synchronisation validation ran, a missing barrier would not
+necessarily show on RDNA, and the S21's picture during the hoisted windows was not inspected. Upstream reviewed and merged the
+reordering; a build that ships it should take it from a wgpu release.
 
 Reproduce: the backport is not in the tree. Copy wgpu-core 30.0.2 out of the cargo registry, apply the PR's diff
-(`gh pr diff 10319 -R gfx-rs/wgpu`, paths without the `wgpu-core/` prefix) with `git apply --reject`, write the 3 failing
+(`gh pr diff 10319 -R gfx-rs/wgpu`, paths without the `wgpu-core/` prefix) with `git apply --reject`, write the 6 failing
 hunks by hand, add the switch, point a root `[patch.crates-io] wgpu-core` at the copy, and build the APK as above.
 
 ### Inside the scene pass

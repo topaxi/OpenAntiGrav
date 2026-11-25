@@ -80,20 +80,26 @@ scene is 1.5 ms. Every "fidelity none" item passes the byte-identity or pair che
    nothing reads, so a ring of destination buffers would not help and is not built. The cost is the barrier-plus-copy pair
    wgpu-core 30.0.2 records per `write_buffer` (gfx-rs/wgpu#6673). **gfx-rs/wgpu#10319 backported in a measuring build only**
    (in-run toggle, three runs): S21 HD frame **-2.4, -2.7, -3.1 ms** (23.9 to 21.5, 28.4 to 25.7, 29.0 to 25.9), `submit` -1.1
-   to -1.3 ms, and the present again returns as the previous fence signals; inline barriers per batch 28 to 3, copies unchanged.
-   About 0.4 to 2.3 ms of the copies' cost remains. Host picture byte-identical; host bench in `docs/tools/android.md`
+   to -1.3 ms, and the present again returns as the previous fence signals; inline barriers per batch 28 to 3 (about three
+   batches a frame), copies unchanged. **What the copies still cost with it: about 0 ms** (`writes` -4.4 against `writes-same`
+   -4.9 ms on the backport build, A/A control 0.5 ms; one run each). Host picture byte-identical on one RDNA frame, no sync
+   validation run; host bench in `docs/tools/android.md`
    ("gfx-rs/wgpu#10319 on 30.0.2: what one barrier buys"). Upstream: merged 2026-10-25 on trunk, **not on the `v30` branch**
    (v30.0.2, 2026-11-12, does not carry it), so it ships in **wgpu 31**; the v31 milestone (due 2026-10-09) has 1 open issue of
    5. The PR's own Bevy test saw no perf change on a desktop. Options, ranked:
-   - **Take wgpu 31 when it ships (recommended).** Gets the 2.4 to 3.1 ms with no fork. Cost: the upgrade's API breaks
-     (`TextureViewDescriptor::swizzle`, `DeviceDescriptor::default_queue`, and whatever else trunk's CHANGELOG lists) across the
-     render crates, naga with it; 6 to 12 h, confidence 40. Re-measure with the `writes-same` toggle against `writes` after.
+   - **Take wgpu 31 when it ships (recommended).** Gets the 2.4 to 3.1 ms with no fork. Cost: trunk's CHANGELOG "Unreleased"
+     has six major-change headings; the ones that touch us are new fields on `TextureDescriptor` (215 struct literals in 148
+     files), `TextureViewDescriptor` (22 in 16) and `DeviceDescriptor` (29 in 22), mechanical; and `BufferView`s now blocking
+     unmap (128 `get_mapped_range` calls in 103 files to check), plus naga for `oag-shader-check`. The tree has been on wgpu 30
+     since its first window, so there is no earlier major bump to size from: 8 to 16 h, confidence 35. Re-measure with the
+     `writes-same` toggle against `writes` after.
    - **Carry the backport as a vendored wgpu-core** until 31: 3 to 4 h (the measuring diff minus its switch and counters,
      `vendor/wgpu-core` at 2.1 MB of source, a `[patch.crates-io]` row, a `vendor/README.md` entry). Against it: `vendor/` is for
      small fixes, wgpu-core is the renderer's core, and no synchronisation validation has run (no Khronos layer on the
      workstation). Worth it only if 31 slips past the next drive that needs the S21 frame.
-   - **One write a frame** (the per-frame uniforms in one buffer read at offsets): 16 to 24 h, confidence 45; after #10319 it
-     buys only the remaining 0.4 to 2.3 ms (the copies), so it drops below items 6 and 7 until measured again on wgpu 31.
+   - **One write a frame** (the per-frame uniforms in one buffer read at offsets): 16 to 24 h, confidence 45. **Not worth it
+     with #10319**: the copies it would remove measured at about 0 ms on the S21. Only without wgpu 31 would it pay, and the
+     vendored backport is far cheaper for the same gain.
 
 5. ~~Measure the track's shading on Mali~~ **measured, one fix landed** (`s21-shading`): the rich
    tenth of the circuit's draws costs half the scene pass (`track-rich` 11.1 to 5.6 ms of scene
