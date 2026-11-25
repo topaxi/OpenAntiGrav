@@ -1,7 +1,7 @@
 # The now-playing display on the race screen
 
 All five titles show the song on the race HUD; two author it and read it off their own
-executable, one authors it and borrows the law, two author nothing and borrow a layout. Pinned
+executable, one authors it and borrows the law, one (Pure) authors it as plain text and ours draws a borrowed marquee instead, one authors nothing and borrows a layout. Pinned
 by `crates/game/tests/now_playing_ground_truth.rs` (`just test-data`).
 
 | Title | Layout | Strings | Behaviour | State |
@@ -175,22 +175,22 @@ shows `COLD STORAGE / ONYX`). Ours draws the one-line `ARTIST - TRACK` marquee (
 state frame by frame and grabbing the 480x272 window at chosen race clocks (`launch-grade a0 + 0x130`, GO at 0). The text's peak grey,
 against the 100 of the road behind it on Karbonis:
 
-| Race clock (s) | 1.6 to 6.0 | 7.00 | 7.25 | 7.50 | 7.75 | 8.00 | 8.25 | 8.50 and later |
+| Race clock (s) | 1.6, 3.0, 5.0 | 7.00 | 7.25 | 7.50 | 7.75 | 8.00 | 8.25 | 8.50 and later |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | Peak grey | 230 to 243 | 220 | 195 | 175 | 153 | 134 | 114 | 100 (gone) |
 
-A straight line of about 80 grey a second from full at about 6.7 s to gone at about 8.5 s: 1.8 s, which is 51 frames at 30 a second times
-Pulse's 5 of 255 per step (`fade_step`, above), so **the fade step is Pulse's**. The fade-in on Sebenco Climb reads peak 163, 174, 189, 205, 227, 242
+A straight line of about 80 grey a second from full at about 6.7 s to gone at about 8.5 s: about 1.8 s at 0.25 s sampling, consistent with 51 frames
+at 30 a second times Pulse's 5 of 255 per step (1.70 s; `fade_step`, above), so **the fade step is probably Pulse's**. The fade-in on Sebenco Climb reads peak 163, 174, 189, 205, 227, 242
 at 0.83, 1.00, 1.20, 1.40, 1.60, 1.80 s (the road behind it is brighter and moving there): the same slope, from zero at about GO, full at about
 1.8 s. So the display is: on at GO, fade in 1.8 s, hold about 4.9 s, fade out 1.8 s, nothing scrolls; in frames at race clock 16.7 and 17.8 s (Vineta,
-Modesto) it is gone. Confidence **70** for the layout and the strings (the disc authors them and 8 frames show the result), **60** for the
-timing (one song per end of the life, 0.25 s resolution, the hold's start and end each read once; whether the display times from GO or from the song's
+Modesto) it is gone (what happens at a song change is not measured). Confidence **80** for the layout and the strings (the disc authors them and 10 frames show the result), **60** for the
+timing (seen once: one song per end of the life, 0.25 s resolution, the hold's start and end each read once; whether the display times from GO or from the song's
 start is not separated, because every state's song started at the grid). The song a state plays differs per state; the original's choice of
 song is not read here.
 
 **Effect on the comparison.** Ours' bar is the largest piece of the Classic pairs' hull box's "original brighter" (`docs/tools/compare-page.md`, "The
-Classic hull"): pasting the original's pixels over ours in the bar's left part and the original's text box lowers the whole-frame mean grey by 0.4 to
-0.7 on every Pure race pair whose original shows the text. **Wiring** is the display, a title-data row (a static three-widget text display: where, fonts, the two
+Classic hull"): pasting the original's pixels over ours in the bar's left part and the original's text box lowers the whole-frame mean absolute RGB-channel difference by 0.4 to
+0.7 on every Pure race pair whose original shows the text (the page's own Gray score reads about the same; not recomputed). **Wiring** is the display, a title-data row (a static three-widget text display: where, fonts, the two
 strings, the fade step, the hold) instead of Pulse's bar, and `NowPlaying_Pure.xml` retired for the disc's own widgets: ready to wire, not wired by the
 lane that read it. Whether Pulse's, HD's, 2048's or Omega's `InGame` screens carry the same three widgets beside their `InGameMusicDisplay` was not checked
 (the Pulse and HD pages above read the item, not the screen's other `Text` widgets).
