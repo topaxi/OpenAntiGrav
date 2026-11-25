@@ -633,7 +633,6 @@ mod flip {
         let controls = plain.core.sim.player_controls(0, snapshot(0.6).get(0));
         assert_eq!(controls.airbrake_left, 0.6);
     }
-
 }
 
 /// The medal's place is the original's end-of-race sort, not the HUD's: a player who tied an
