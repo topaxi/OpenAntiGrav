@@ -191,3 +191,44 @@ fn a_block_chain_parks_every_level_and_drains_in_whole_block_rows() {
     assert!(steps >= 4, "level 0 alone is four bands, took {steps}");
     drop(scope);
 }
+
+/// The S21's fallback without its ASTC: a device with neither BC nor ASTC decodes a BC
+/// texture to RGBA8 whether the setting is on or off, and never consults the cache.
+#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+#[test]
+fn a_device_without_astc_keeps_its_rgba8_upload_with_the_setting_on() {
+    use crate::mesh_render::astc;
+    let Some((device, queue)) = small_device(8192, false) else {
+        return;
+    };
+    let texture = ModelTexture {
+        label: "bc1".into(),
+        width: 16,
+        height: 16,
+        texels: Texels::Blocks {
+            format: BlockFormat::Bc1,
+            levels: vec![vec![0x5a; 16 * 8]],
+        },
+        mip_count: None,
+    };
+    let off = upload(&device, &queue, &texture, false).expect("fits");
+    let dir = std::env::temp_dir().join(format!("oag-astc-inert-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    astc::configure(Some(dir.clone()));
+    let on = upload(&device, &queue, &texture, false).expect("fits");
+    astc::configure(None);
+    for placed in [&off, &on] {
+        assert_eq!(placed.view.texture().format(), FORMAT);
+    }
+    assert_eq!(
+        (on.gpu_bytes, on.view.texture().mip_level_count()),
+        (off.gpu_bytes, off.view.texture().mip_level_count()),
+    );
+    let tally = astc::take_tally();
+    assert_eq!(
+        (tally.hits, tally.misses),
+        (0, 0),
+        "a device that cannot sample ASTC never looks in the cache"
+    );
+    assert!(!dir.exists(), "and never starts the encoder");
+}

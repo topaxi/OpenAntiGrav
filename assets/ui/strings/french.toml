@@ -229,6 +229,7 @@ OAG_GRAPHICS_SHADOWS = { text = "OMBRES", human = false }
 OAG_GRAPHICS_SHADOW_RESOLUTION = { text = "RÉSOLUTION DES OMBRES", human = false }
 OAG_GRAPHICS_SCENE_PRECISION = { text = "PRÉCISION DE LA SCÈNE", human = false }
 OAG_GRAPHICS_CIRCUIT_LIGHTING = { text = "ÉCLAIRAGE DU CIRCUIT", human = false }
+OAG_GRAPHICS_TEXTURE_COMPRESSION = { text = "COMPRESSION DES TEXTURES", human = false }
 OAG_GRAPHICS_REFLECTION_RESOLUTION = { text = "RÉSOLUTION DES REFLETS", human = false }
 OAG_GRAPHICS_REFLECTION_AUTO = { text = "AUTO", human = false }
 OAG_GRAPHICS_WATER = { text = "EAU", human = false }

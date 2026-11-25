@@ -285,6 +285,7 @@ fn launch(mut cli: Cli) -> Result<Launch> {
         use_pinned: settings.ffmpeg.use_pinned,
         root: Some(oag_source::cache::default_ffmpeg_dir()),
     });
+    crate::texture_cache::apply(settings.graphics.texture_compression);
     if cli.diagnostics.fetch_ffmpeg {
         return crate::ffmpeg_cli::run(
             &oag_source::cache::default_ffmpeg_dir(),

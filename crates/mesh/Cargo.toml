@@ -27,6 +27,15 @@ serde.workspace = true
 log.workspace = true
 pollster.workspace = true
 
+# The opt-in ASTC re-encode of block textures on a device without BC
+# (`mesh_render::astc`): ARM's astcenc, vendored and built by `cc` (Apache-2.0;
+# the binding is MIT OR Apache-2.0 OR Zlib). Its build script supports these two
+# architectures only, so the web build and any other target go without.
+[target.'cfg(any(target_arch = "x86_64", target_arch = "aarch64"))'.dependencies]
+ctt-astcenc = "0.6.1"
+sha2 = "0.11"
+oag-io.workspace = true
+
 [build-dependencies]
 oag-shader-check.workspace = true
 

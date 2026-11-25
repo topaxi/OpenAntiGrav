@@ -729,6 +729,7 @@ impl Stage {
         let keeper = keeper_setup.map(|(setup, view, modules)| {
             Box::new(race::timeline::Keeper::new(setup, view, modules, &race))
         });
+        crate::texture_cache::report_load();
         Ok(Box::new(RaceStage {
             scene,
             race,

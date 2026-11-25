@@ -49,6 +49,7 @@ mod scenery_sort;
 mod screen_filter;
 mod shadow_resolution;
 mod shadows;
+mod texture_compression;
 mod trail_length;
 mod trail_order;
 mod water;
@@ -59,8 +60,8 @@ pub use {
     motion_blur::*, msaa::Msaa, reconstruction::Reconstruction,
     reflection_resolution::ReflectionResolution, scene_precision::ScenePrecision,
     scenery_sort::ScenerySort, screen_filter::FilterStrength, shadow_resolution::ShadowResolution,
-    shadows::Shadows, trail_length::TrailLength, trail_order::TrailOrder, water::Water,
-    weather::Weather,
+    shadows::Shadows, texture_compression::TextureCompression, trail_length::TrailLength,
+    trail_order::TrailOrder, water::Water, weather::Weather,
 };
 
 /// What kind of window the game asks the compositor for.

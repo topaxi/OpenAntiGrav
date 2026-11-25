@@ -391,6 +391,32 @@ fn upload_with(
         let skip =
             first_fitting_level(texture.width, texture.height, levels.len().max(1), limit, 1)?;
         let (width, height) = level_dims(skip);
+        // The opt-in re-encode: the same picture and chain as below, as ASTC
+        // blocks from the cache, when the setting is on and the device takes it
+        // (`super::astc`). A miss queues the encode and falls through.
+        #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+        if let Some(cache) = super::astc::active(device)
+            && let Some(source) = levels.get(skip)
+        {
+            let count = mip_chain_dims(width, height).len().min(
+                texture.mip_count.map_or(usize::MAX, |count| {
+                    count.saturating_sub(skip as u32) as usize
+                }),
+            );
+            if let Some(mut placed) = super::astc::upload(
+                device,
+                queue,
+                &cache,
+                &texture.label,
+                *format,
+                source,
+                (width, height),
+                count,
+            ) {
+                placed.dropped_levels += skip as u32;
+                return Some(placed);
+            }
+        }
         let decoded = levels
             .get(skip)
             .and_then(|level| format.decode_level(level, width, height));

@@ -52,11 +52,26 @@ pub fn optional_features(adapter: &wgpu::Adapter) -> wgpu::Features {
     };
     adapter.features()
         & (wgpu::Features::TEXTURE_COMPRESSION_BC
+            | astc_where_no_bc(adapter.features())
             | wgpu::Features::TIMESTAMP_QUERY
             | wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | wgpu::Features::SHADER_F16
             | probe)
         | arrays
+}
+
+/// `TEXTURE_COMPRESSION_ASTC`, **only on an adapter without BC**, for the opt-in
+/// ASTC re-encode (`super::astc`): an adapter with BC keeps the disc's blocks and
+/// asks for exactly what it always did. The web build and an architecture
+/// astcenc does not build for have no encoder, so they never ask.
+fn astc_where_no_bc(features: wgpu::Features) -> wgpu::Features {
+    if cfg!(any(target_arch = "x86_64", target_arch = "aarch64"))
+        && !features.contains(wgpu::Features::TEXTURE_COMPRESSION_BC)
+    {
+        wgpu::Features::TEXTURE_COMPRESSION_ASTC
+    } else {
+        wgpu::Features::empty()
+    }
 }
 
 /// Inside-pass timestamps and fragment counts, only for `perfprobe::marks`: a default build asks
@@ -113,6 +128,8 @@ pub fn device_descriptor<'a>(
             adapter.get_info().name
         );
     }
+    #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+    super::astc::note_adapter(adapter.features());
     wgpu::DeviceDescriptor {
         label: Some(label),
         required_features: optional_features(adapter),
