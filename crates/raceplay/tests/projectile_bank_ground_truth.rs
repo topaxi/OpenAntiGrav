@@ -1,7 +1,7 @@
 //! On Pulse's steepest bank a Rocket and a Plasma bolt ride the floor to the collision cage, update
-//! for update as the original's do, under Pulse's floor arms (`FloorArms::SteerToRidePoint`). A
-//! parallel turn of the Rocket's and Plasma's probe arm (HD's) missed the same flights by 15 to 21
-//! units when applied for a run (`rocket-visuals.md`, "Pulse on the steepest bank").
+//! for update as the original's do, under Pulse's floor arms (`FloorArms::SteerToRidePoint`), and
+//! not under HD's parallel turn, which misses the same flights by 15 to 21 units
+//! (`rocket-visuals.md`, "Pulse on the steepest bank").
 //!
 //! **`#[ignore]`d and never run in CI**: needs `data/images/pulse-psp-usa.chd` and
 //! `data/images/pure-psp-usa.chd`.
@@ -194,6 +194,27 @@ fn the_rockets_ride_the_helix_to_the_cage() {
     for (rows, calls, end) in ends {
         let flight = chain(&race, "VENOM", Weapon::Rocket, rows, ROCKET_KMH, arms);
         matches(&flight, 0.01, calls, end);
+    }
+}
+
+/// The parallel turn (HD's arm) leaves every one of these flights by more than ten units, so the
+/// helix tells the two laws apart.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn the_parallel_turn_leaves_the_helix_flights() {
+    let Some(race) = start() else { return };
+    for (kind, rows, kmh) in [
+        (Weapon::Plasma, &PLASMA[..], PLASMA_LAUNCH_KMH),
+        (Weapon::Rocket, &ROCKET_0[..], ROCKET_KMH),
+        (Weapon::Rocket, &ROCKET_1[..], ROCKET_KMH),
+        (Weapon::Rocket, &ROCKET_2[..], ROCKET_KMH),
+    ] {
+        let flight = chain(&race, "VENOM", kind, rows, kmh, FloorArms::ParallelToFloor);
+        assert!(
+            flight.worst > 10.0,
+            "{kind:?}: only {} units off",
+            flight.worst
+        );
     }
 }
 
