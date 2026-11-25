@@ -90,6 +90,7 @@
 //!
 //! Header fields absent from the table above are unread rather than guessed.
 
+pub mod cannon_bolt;
 pub mod sampler_use;
 pub mod texcoord_flip;
 
