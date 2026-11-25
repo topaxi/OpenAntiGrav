@@ -179,6 +179,10 @@ craft has flipped.
   (its EMP) set the flag (`hd_flip_ground_truth`, `detonator_ground_truth`); Omega and 2048 have no
   Eliminator flip wired (`eliminator_flip: None`), so their L1 stays an airbrake. The flag is held
   off in photo mode, the replay viewer and a finished race, which page on L1.
+  Every `Flip` producer raises it alone under the flag: pad L1 (`bits_of`) and the keyboard's `F`;
+  touch and Android raise none. Host and client share the sim, so the network needs nothing more.
+  A replay recorded before this change from an HD flip race holds `L | Flip` for L1 and now replays
+  with L1 braking; pre-release, so no version bump.
 - The lean is `ShipState::steer_lean_follower`, HD's `craft+0x6a58` follower.
 - The race line's marker turns on `RaceSim::facing_back`, the test `wrong_way_kill` runs. The original's
   frames of a flip show no `WRONG WAY`, so a race with a flip draws none; the rumble is untouched.
