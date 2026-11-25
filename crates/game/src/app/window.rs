@@ -245,6 +245,7 @@ pub(crate) fn is_fullscreen_key(key: &winit::keyboard::Key, pressed: bool, repea
 
 /// Whether F11 may change the window: not while a benchmark is loading or running, where a new
 /// output size would move every figure measured after it (`docs/tools/in-game-benchmark.md`).
+#[cfg(not(any(target_arch = "wasm32", target_os = "android", target_os = "ios")))]
 pub(crate) const fn fullscreen_may_change(benchmark_running: bool) -> bool {
     !benchmark_running
 }
@@ -763,6 +764,7 @@ mod tests {
         assert!(toggled_fullscreen(on, None).is_none());
     }
 
+    #[cfg(not(any(target_arch = "wasm32", target_os = "android", target_os = "ios")))]
     #[test]
     fn f11_is_ignored_while_a_benchmark_runs() {
         assert!(fullscreen_may_change(false));
