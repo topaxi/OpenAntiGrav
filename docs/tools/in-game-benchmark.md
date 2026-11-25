@@ -17,7 +17,7 @@ the player's present mode, and the same figures come out of a desktop, a Steam D
 `title` is a disc image or folder like any first argument, or a title's short name (`pulse`,
 `pure`, `hd`, `2048`, `omega`) for the first playable disc of that title on the search path. On
 Android the launch file takes the same flags (`files/oag-args.txt`, [Android](android.md)):
-`<image> --benchmark`. `--ticks N` stops the race at tick N and the result says `finished: false`;
+`<image> --benchmark`; the result is in the app's `files/data/oag/bench/` (`adb pull`). `--ticks N` stops the race at tick N and the result says `finished: false`;
 it is for a short test run, not for results.
 
 Escape during the race abandons it with no result. The race cannot be paused: a pause would be a
