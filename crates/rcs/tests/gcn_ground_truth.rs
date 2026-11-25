@@ -700,5 +700,8 @@ fn every_omega_electricity_material_reads_as_the_visualiser_program() {
             .filter(|p| p.electricity().is_some())
             .count();
     }
-    assert_eq!(declaring, 12, "two pixel variants (plain, one vertex light) in each of six files");
+    assert_eq!(
+        declaring, 12,
+        "two pixel variants (plain, one vertex light) in each of six files"
+    );
 }
