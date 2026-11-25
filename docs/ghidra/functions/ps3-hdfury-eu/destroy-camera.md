@@ -273,3 +273,20 @@ Not renamed: `0x000ab2d8` (a second constructor-shaped writer of `+0x4c`/`+0x28c
    field's first steps; H1 predicts the frame mode 0 returns, at the camera clock's next 8 s.
    For Z2, the same in a Zone race with `r4 == 2`, logging `+0x2a4`, `+0x2a0`, `+0x238`,
    `+0x22c` and `+0x2c4`. **Z2's eye distance was read live 2026-11-24** ("Measured on RPCS3: the Zone end orbit"); the camera object itself was not found (the `+0x1f0` target scan matched no object with a mode field of 2), so yaw, pitch, field and clock are unread live, and mode 8's rows are still unread.
+
+## The orbit eye, read statically against the live eye (2026-11-25, `zone-orbit-eye-read`)
+
+Static, from the disassembly of `Camera_UpdateOrbitView_q` (`0x000ae6c0`, Ghidra's decompile of it is useless: VMX128 stops it); the live numbers are the ones under "Measured on RPCS3".
+
+| What | Finding | Address | Conf. |
+| --- | --- | --- | ---: |
+| Eye build | `eye = focus + K x v + dist x unit(v)`, where `v` is row 2 of `Rx(pitch)` carried through the earlier matrix product (a unit direction), `K = cam+0x3b4`, `dist` the value just eased at `+0x238`. The eye is written to row 3 of the matrix passed in r5 (the render camera, `+0x40..+0x70`). Z2d's "eye = focus + normalize(row) x dist" **omits the `K x v` term**. | `0x000aeab8` (loads `+0x3b4`), `0x000aeb50` (stores it to the stack), `0x000aebe0` (`v x K + focus`), `0x000aec4c` (`+ unit x dist`), `0x000aec7c` (stores row 3) | 70 |
+| `K` | `cam+0x3b4` = block `0x008c1520 + 0x10` = **5.0**, written only by the constructors `Camera_Construct` `0x000ab014` and `0x000ab89c`; the live rows (`cam3`, `cam5`, 228 rows) read 5.0 in every row. It is a constant, not a state. | above | 85 |
+| Smoothing | **None in this function.** It reads no previous eye: the only eases are focus (0.6, `0x000ae7e8`-`0x000ae7fc`), `dist` (`+0x240`), field (`+0x234`) and yaw/pitch. The code after the dispatch (`0x000b0268`-`0x000b03a0`) only inverts the matrix; `0x000a3328`/`0x000a3340` are a two-word camera-id setter; `0x000a97f0` is a wrapper over `0x000a8b20` (the "AI track data" lookup, an out vector and a bool), not an eye. | as listed | 75 (negative) |
+| Cockpit view | The orbit depends on the craft's body matrix and the object's own state only; nothing in `0x000ae6c0` or `0x000aa090` reads the chase or cockpit eye. A cut from the cockpit view therefore enters the same orbit as one from an external view. What the cut shows on its first frame is the live question below. | `0x000aa090`, `0x000ae6c0` | 60 |
+
+**The contradiction, unresolved.** The static law gives an eye length `5 + dist`: 5.5 at the cut growing to 9.0 at 2.5 s. The eye read live in the pushbuffer is 13.88 at the cut and shrinks (9.12, 8.91, 6.96 at 1.37, 1.55, 2.50 s; `5 + 8.88 x 0.98^n`). The two trend in opposite directions and the 2.5 s reading is below what any downstream blend of a longer eye could give. So either the pushbuffer eye the earlier capture scanned for is not the render camera row this function writes, or code outside this function acts on the eye. **Neither the 0.01 fit nor the static law is confirmed as what draws.** The fit (45) stays, and `ORBIT_CLEARANCE` stays, until the live read below.
+
+**Decisive read** (about 1 h, needs the RPCS3 slot): break at `0x000b0780` (just after the orbit call, before the inversion) for a few frames from the `hd-zone-circuit0-feisar-grid-orbit` state, and log the render camera's row 3 (`*0x008a7f38 + 0x70`, and r5's matrix) beside the object rows. 5.5 at the cut: the smoothing is downstream of this function; 13.9: the static decode misses something.
+
+**2048 and Omega:** not checkable here: Omega's orbit view (`0x01383a10`) and 2048's are unread; Omega's enter writes the same block constants as HD's (above), which is the only agreement.
