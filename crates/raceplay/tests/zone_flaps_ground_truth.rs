@@ -1,13 +1,13 @@
-//! A Zone craft's flaps: fully out on the grid, folded back after the start, and stowed on the
-//! hull at rest, on every title that draws them.
+//! A Zone craft's flaps: fully out on the grid, folded after the start, following the airbrake
+//! input afterwards, and stowed on the hull at rest, on every title that draws them.
 //!
 //! **`#[ignore]`d and never run in CI.** It needs game content; run with `just test-data`.
 //!
 //! The level is the view's (`docs/physics/grid-state.md`, "The flaps on the grid"). The pose is
 //! the hull's: Omega's shared Zone hull poses its flap nodes 45 degrees out of its `.vex` hinge,
-//! so a level of zero still drew them raised until the hinge came from the `.vex`
-//! ("The Zone hull's flaps"). Drop `Model::seat_flaps_on_vex` from the hull load and the Omega
-//! case goes red.
+//! so a level of zero draws them raised unless `Model::seat_flaps_on_vex` takes the hinge from
+//! the `.vex` ("The Zone hull's flaps"). Drop that call from the hull load and the Omega case
+//! goes red.
 
 use oag_raceplay as race;
 
@@ -46,6 +46,18 @@ fn check(source: &std::path::Path, hinge_aft: bool) {
         race.airbrake_flaps_of(0),
         [0.0; 2],
         "folded after the start"
+    );
+    let left = oag_gameplay::PlayerInputs::single(oag_gameplay::InputSnapshot {
+        airbrake_left: 1.0,
+        ..oag_gameplay::InputSnapshot::EMPTY
+    });
+    for _ in 0..60 {
+        race.tick(&left);
+    }
+    let held = race.airbrake_flaps_of(0);
+    assert!(
+        held[0] > 0.0 && held[1] == 0.0,
+        "the held airbrake's side alone is out: {held:?}"
     );
 }
 

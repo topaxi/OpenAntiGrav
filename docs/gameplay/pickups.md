@@ -190,9 +190,9 @@ match its 7 trigger volumes). Ground truth:
 `crates/raceplay/tests/zone_weapon_pads_ground_truth.rs`.
 
 Neither 2048's nor Omega's executable was read for this: the rule is
-**inherited** from Pulse and HD by lineage, and the Omega Zone frame of the
-native port shows no weapon pad. 2048 and Omega share the container, so both
-are **ported**.
+**inherited** from Pulse and HD by lineage. That Omega should follow the other
+titles here is the maintainer's report from play; no frame of the original was
+matched at a pad. 2048 and Omega share the container, so both are **ported**.
 
 ### The free Turbo, and how the second record was found
 

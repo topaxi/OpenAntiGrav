@@ -246,10 +246,13 @@ pitched **45.2 and 44.8 degrees** open. Its `.vex` is HD's, locator for locator.
 `Model::seat_flaps_on_vex` carries each psp2 hull's flaps from the node pose onto the
 `.vex` hinge (the locator is an `Anim Transform`, so the world matrix, not
 `anim_anchors`' unbaked identity). After it the Omega Zone craft matches HD's: raised on the
-grid, flush after GO, as the Zone frame of the native port (no raised flap at speed).
-**Lineage**: Omega **fixed**; 2048 **checked, applies, differs in nothing visible** (its Zone
-hull's node is 0.4 degrees off); HD **not affected** (its PS3 hull hangs the flap in hinge
-space). Ground truth: `crates/mesh/tests/psp2_airbrake_flaps_ground_truth.rs`,
+grid, flush after GO. The native port's Zone 5 frame (compare page `omega/zone-vineta-k-z5`)
+shows the Zone craft at speed with no raised flap. On every other hull the seat turns a flap
+by under a degree: in a 960x540 Omega single race 681 pixels differ by more than 12/255 with
+the flaps out (mostly their top edges) and 327 with them folded; on 2048, 35 and 6.
+**Lineage**: Omega **ported** (fixed); 2048 **ported** (the same seat on every hull; its Zone
+hull's node is 0.4 degrees off); HD **checked, differs** (its PS3 hull hangs the flap in hinge
+space already). Ground truth: `crates/mesh/tests/psp2_airbrake_flaps_ground_truth.rs`,
 `crates/raceplay/tests/zone_flaps_ground_truth.rs` (Pulse, PS2, Pure, HD, 2048, Omega).
 
 ## Zone: the grid state gates the auto-speed, and `on_grid` is on (2026-10-02)

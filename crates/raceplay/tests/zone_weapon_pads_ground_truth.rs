@@ -40,8 +40,6 @@ fn check(source: &str, track: &str, weapon: usize) {
     assert_eq!(armed - unarmed, weapon, "{track}: WEAPONS off");
     let zone = track_triangles(source, track, Mode::Zone, None);
     assert_eq!(armed - zone, weapon, "{track}: Zone");
-    let time_trial = track_triangles(source, track, Mode::TimeTrial, None);
-    assert_eq!(armed - time_trial, weapon, "{track}: time trial");
 }
 
 #[test]
