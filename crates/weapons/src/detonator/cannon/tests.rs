@@ -656,11 +656,22 @@ fn a_round_dying_on_a_wall_reports_the_wall() {
     }
     assert!(!walls.is_empty());
     assert_eq!(walls[0].at.z, 50.0);
-    assert_eq!(
-        walls[0].kind,
-        EventKind::RoundWall {
-            normal: Vec3::NEG_Z
-        }
+    // The round flies `+Z` into a wall facing `-Z`: it would rebound straight back, and
+    // the spark spawns on the road, `RIDE` below the hit.
+    let EventKind::RoundWall {
+        normal,
+        spawn,
+        rebound,
+    } = walls[0].kind
+    else {
+        panic!("{:?}", walls[0].kind)
+    };
+    assert_eq!(normal, Vec3::NEG_Z);
+    assert!(rebound.distance(Vec3::NEG_Z) < 1e-4, "rebound {rebound:?}");
+    assert!(
+        spawn.distance(walls[0].at - Vec3::Y * 3.5) < 1e-4,
+        "spawn {spawn:?} from the hit {:?}",
+        walls[0].at
     );
 }
 

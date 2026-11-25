@@ -275,9 +275,10 @@ placement RNG cannot match the original's `Libc_Rand` (a departure, documented).
 ## Open
 
 - **Cannon bolt (`det-cannon-bolt-look`)**: the bolt's program and the half turn are wired on HD and the loop ride is
-  confirmed live (`detonator-cannon.md`, "The bolt's look and the loop"). Open: (1) the spark's frame is read statically
-  only (55: faces the rebound direction); read the spawn's `r6` live at `0x00123338` (interpreter breakpoint) before
-  orienting ours'; (2) the bolt's GXP (2048) and GCN (Omega) programs are unread, so those titles draw it through the
+  confirmed live (`detonator-cannon.md`, "The bolt's look and the loop"). ~~(1) the spark's frame~~ read live and wired (`det-cannon-spark`, `detonator-cannon.md`, "The spark's matrix, read
+  live"); left of it: the `-0.3` along the wall normal, size, brightness and timing (a camera-matched pair at a close wall
+  hit: read the view matrix in the death pause, fire ours through the simulation, render with `--camera-pose`), and 2048's and
+  Omega's tables not answering the trigger. Open: (2) the bolt's GXP (2048) and GCN (Omega) programs are unread, so those titles draw it through the
   generic path (Omega binds the ring strip as diffuse); (3) the 0.05 to 4.8 unit sideways drift through the loop, 60 Hz
   against 30 Hz suspected; (4) no side-on capture of the original's bolt.
 

@@ -818,8 +818,8 @@ off 15.00 as well: the change does not move it (the stored figure comes from an 
 **Open:** the `+0x130` alpha word's reader; the `0.3` nudges of the light's position;
 the third light's live trigger.
 
-- **The wall death.** `WO_CANNON_SPARKS_DETONATOR` at the hit point on a round's second wall hit
-  (72). The original spawns it only when the round is in some view's potentially-visible set; here
+- **The wall death.** `WO_CANNON_SPARKS_DETONATOR` on a round's second wall hit, in the frame and
+  at the place of "The spark's matrix, read live" below (85). The original spawns it only when the round is in some view's potentially-visible set; here
   every one plays (**chosen**).
 - **Sounds.** `CANNON` once per round (two a volley) on the firing craft, `CANNONEXPLWALL` at the
   wall death, both as per-tick cue outputs (ADR-0018). Which weapon bank a Detonator race plays
@@ -943,19 +943,67 @@ original at 30 Hz: the likely cause, not proven). Test:
 `detonator_loop_ground_truth::a_cannon_round_rides_the_talons_junction_loop_as_the_original_does` (red with the
 normal update dropped).
 
-**The spark: read statically, not wired.** On the death branch (`flags |= 0x14`, `0x00122b60`) `PulseBullet_Update`
-builds the matrix it hands the spawn (`0x002c9108`, `r6 = r1 + 0xe0`, fourcc `BDOR`, `0x00123338`): the velocity
-reflected off the hit normal, `v - 2 (v.n) n` (`fadds f0, f0, f0` at `0x00122c44`, `vsubfp` at `0x00122c5c`), normalised
-into the second row (`r1 + 0xf0`, `0x00122cb8`); a second vector orthogonalised against it into the third row
-(`r1 + 0x100`, `0x00122d20`); their cross product into the first (`r1 + 0xe0`, `0x00122d34`); the translation into
-`r1 + 0x110` (`0x00122de8`). So the spark faces **along the rebound direction** at the hit. Confidence **55**: the
-source of the second vector (`r29 + r24`) and the exact translation are not traced, nothing was watched live. Ours plays
-the effect at the hit point with no orientation (`play_detonator_events`), from the engine's own profile rather than
-the disc's emitters (`docs/formats/pob.md`), so turning it would orient a stand-in. **Open**: a live read of the
-spawned instance's matrix (a breakpoint at `0x00123338` under the interpreter, `r6`; one attempt on 2026-11-25 failed
-before reaching it: the interpreter serve restored, then timed out on its first GDB exchange and exited), and whether
-the disc's `WO_CANNON_SPARKS_DETONATOR` emitters are directional. Also not captured: camera-matched frames of the
-original at a bounce and on the loop (a yawed craft's chase camera lags it and the bolts leave the view).
+## The spark's matrix, read live (2026-11-25, `det-cannon-spark`)
+
+On the death branch (`flags |= 0x14`, `0x00122b60`) `PulseBullet_Update` builds a matrix and hands it to the
+spawn (`0x002c9108`, `r6 = r1 + 0xe0`, fourcc `BDOR`, `0x00123338`). The spawn's constructor (`0x002c8c70`, flags
+`0`) copies it into the particle instance: vtable `0x0086a070`, rows at `+0xf0`, `+0x100`, `+0x110`, translation
+at `+0x120`, `+0xd0` pointing at `+0xf0`. That makes the matrix readable after the fact with no breakpoint.
+
+**Method.** RPCS3 (recompiler) restored from `hd-detonator-talons-feisar-grid`, the cannon held, each new round
+turned toward a wall (`+0xd0`) with its rebound count cleared (`+0x12c`) so the first wall kills it; on the
+wall-death flags the game is paused and every instance with that vtable is read
+(`scripts/rpcs3-hd-pulse-spark-poll.py`). Two restores, 7 wall deaths. Falsifier, written before the capture:
+row 1 world-up, or more than 5 degrees from `v - 2 (v.n) n` with `n` from our collision on the original's own
+segment.
+
+**Result** (ours' `n` and hit point from the original's `prev`, velocity and surface normal):
+
+| Hit | Row 1 against the reflection (deg) | Row 1 against world up (deg) | Translation - our hit, along surface normal | along wall normal |
+| ---: | ---: | ---: | ---: | ---: |
+| 1 | 0.22 | 91.0 | -3.491 | -0.301 |
+| 2 | 0.00 | 97.1 | -3.464 | -0.295 |
+| 3 | 0.00 | 91.5 | -3.494 | -0.337 |
+| 4 | 0.44 | 86.6 | -3.500 | -0.303 |
+| 5 | 0.54 | 85.8 | -3.502 | -0.270 |
+| 6 | 0.00 | 86.7 | -3.500 | -0.300 |
+| 7 | 0.00 | 83.5 | -3.512 | -0.303 |
+
+| Row | Read | Confidence |
+| --- | --- | ---: |
+| 0 (`+0xf0`) | `row1 x row2`; the matrix is orthonormal, determinant 1 | 85 |
+| 1 (`+0x100`) | the velocity reflected off the wall, `v - 2 (v.n) n`, unit | 85 |
+| 2 (`+0x110`) | the round's surface normal (`+0x180`), dot `1.0000` with it: the static read's `r29 + 0x20` is the floor record's vector | 85 |
+| translation | `3.5` below the hit along that normal, so on the road, not at the round's ride height | 85 |
+| the `-0.3` along the wall normal | our hit point against the original's; not explained. Statically the translation is `hit + n + k * V` (`0x00122d9c`), so the original's own hit sits about `1.3` short of ours | 50 |
+
+Ours: `EventKind::RoundWall` carries `spawn = hit - 3.5 * surface normal` and `rebound`, and
+`oag_raceplay::detonator_fx` plays the effect at `spawn` and turns its frame's `+Y` along `rebound`. Row 0
+and row 2 are not set: every emitter of this effect that reads the frame draws its azimuth uniformly about
+`+Y`. The `-0.3` is not applied. Test:
+`tests::detonator_fx::an_hd_detonator_race_plays_the_discs_effects_for_each_event` (the seven segments above;
+red with the frame left world-up, with the rebound wrong, or with either sprite list dropped).
+
+**The pictures.** The emitters were always the disc's `.pob` (five emitters). What stood in was their look:
+the effect was in neither `oag_hd::effects` list, so all five drew the procedural profile and its three class-6
+streaks drew as procedural strips. It is now in `SPRITES` and `FAR_BARS` (both are needed: a sprite list alone
+leaves the three streaks procedural). All five sprites ship under `/data/psys/tex/`; the copies in `DATA00`,
+`DATA02`, `DATA03` and `DATA06` decode to identical top-level pixels. `EXTENTS` is not listed (spawn radii
+0.1 to 0.8 units, unmatched). Compared by eye with the original's frames at the same craft position (ours with
+the original's matrices replayed at their game times): both show the arcing blue ribbon, the white dashes along
+the rebound and the small flash. Not tick-matched and not camera-matched, so size and brightness are not
+measured, and by eye ours is fainter (60 for "the same elements"). **Open:** at the grab's own game time one of
+the two frames of ours shows no spark where the original shows the arcs; they appear 11 to 33 ticks later. Either
+the earlier hits sit behind ours' closer chase camera or ours' particles run late; not settled.
+
+**2048 / Omega, the spark.** Both ship `WO_CANNON_SPARKS_DETONATOR.POB` and parse it
+(`psys_2048_ground_truth.rs`, `psys_omega_ground_truth.rs`), and both spawn it with HD's fourcc `0x42444f52` in
+the same frame. 2048 (`vita-2048-eu-v104` `FUN_8120058c`): row 1 `v - 2 (v.n) n`, row 2 the negated surface
+record vector `+0x20`, translation probed from `hit + n + 5 V` down to the floor. Omega (`ps4-omega-eu`
+`FUN_013644c0`, the one function referencing the string; `0x01391b30`, cited above as its update, decompiles as
+`TrackStartup_Load` in that program): `flags |= 0x14`, the same reflection and surface vector, the same spawn.
+Static, 70. **Checked, applies, not wired**: neither title's effect table answers
+`Trigger::DetonatorCannonSparks`, their contact and hit laws being unread (`docs/formats/pob.md`).
 
 **2048 / Omega.** The half turn: **checked, applies; wired as HD's** (`round_matrix` is title-agnostic). Both ship
 the same model with the same extent along `+Z` (`psp2_material_dump` with `DECL_SUB=0`: 2048 `-2..30`, Omega

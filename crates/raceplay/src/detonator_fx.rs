@@ -212,7 +212,17 @@ impl RaceView {
             let Some(effect) = effect_for(*kind).and_then(|t| self.handles.get(t).cloned()) else {
                 continue;
             };
-            self.stage.play(&effect, *at, 1.0);
+            match *kind {
+                // The one effect of these spawned with a frame, not at a point.
+                EventKind::RoundWall { spawn, rebound, .. } => {
+                    if let Some(playing) = self.stage.play(&effect, spawn, 1.0) {
+                        self.stage.orient_surface(playing, rebound);
+                    }
+                }
+                _ => {
+                    self.stage.play(&effect, *at, 1.0);
+                }
+            }
         }
     }
 }
