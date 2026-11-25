@@ -2,7 +2,7 @@
 status: measure
 titles: [hd, 2048, omega]
 updated: 2026-11-25
-summary: "graphics.reflection_resolution is wired and measured on desktop; S21 numbers for five HD circuits and the Android default are open"
+summary: "graphics.reflection_resolution is wired and measured on desktop; S21 numbers for five HD circuits are open; the default stays original everywhere"
 categories: [rendering]
 size: S (30)
 difficulty: easy (30)
@@ -19,8 +19,8 @@ The default is `original` everywhere, byte-identical on desktop. The only phone 
 
 1. **S21 frame time per circuit, `original` against `scaled` at render scale 25.** Vineta K (640x360 glass, 160x90 scaled), Moa Therma and Ubermall (960x540 sea
    reflection, 240x135 scaled; reflected chunks drawn), Chenghou and Modesto (the same target holding the sky alone). The sea circuits' cost on the phone is unmeasured.
-2. **Whether Android defaults a phone to `scaled`.** The maintainer decides after item 1. Visual cost: a coarser view through the glass and in the sea.
-3. **A 2048 or Omega circuit under `scaled`, disc-backed.** The same call site and law, no disc test loads one.
+2. **Decided, not open:** the default is `original` on every platform (hardware, not platform, sets what a player picks); no Android-only default. The phone numbers only
+   tell a player what `scaled` buys on a phone. Visual cost: a coarser view through the glass and in the sea.
 
 ## Next Steps
 
@@ -63,4 +63,4 @@ Per circuit, on the HD track select (a tap on a hex moves the cursor and does no
 
 The launch file only sets `OAG_*` variables, so the loader report line (`the glass and sea target is WxH at render scale 25`, `debug` level) is out of reach
 there; the arm shows in the `screencap` (the glass and the sea are visibly coarser under `scaled`) and in the frame time. Read the median `frame_ms` and `gpu_ms` of the racing
-seconds of each log's `--frame-log` lines (the first 15 s are the flyby and the countdown). Add the per-circuit milliseconds to the water page's table, then ask the maintainer about the Android default. Delete this thread when item 2 is answered.
+seconds of each log's `--frame-log` lines (the first 15 s are the flyby and the countdown). Add the per-circuit milliseconds to the water page's table and delete this thread when item 1 is done.

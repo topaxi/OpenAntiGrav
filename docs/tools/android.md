@@ -854,7 +854,7 @@ Per pass, menu route (racing), one run each, about 120 frame-log seconds per arm
 On the flyby (`--race`), the same switches read glass 42.5 / 26.8, adverts 42.4 / 35.5, bloom 36.4 / 29.7, `hud` 36.8 / 32.0, `composite` 39.9 / 34.6
 and `resolve` 45.2 / 41.8 ms: the flyby's frame is lighter, so the same passes are a larger share of it. Only the glass target holds its cost while racing.
 The glass target's size is now a setting, `graphics.reflection_resolution` (`original`, the default, or `scaled`, the target at the render scale:
-Vineta K's 640x360 becomes 160x90 at render scale 25); no phone number for it yet and the Android default stays `original` until the maintainer says otherwise
+Vineta K's 640x360 becomes 160x90 at render scale 25); no phone number for it yet; the default is `original` on every platform, and a player picks `scaled` for their hardware
 ([water.md](../rendering/water.md), "The reflection target's resolution").
 The racing frame thread is about 23 ms (ticks 5.6, scene recording 8.3, `submit` 9.1, the 10 minute run's racing seconds 20 to 110).
 A 20 s `simpleperf` of a racing frame thread: `Race::tick` 25 % (of it the audio mixer 6.8 % under `--no-audio`, `RaceView::capture_poses` 6 %,

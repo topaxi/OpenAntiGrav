@@ -988,8 +988,8 @@ size the race loaded with. Under `scaled` below scale 100 the shot's `[render]` 
 `reflection_render_scale` (the load-time percent), and `--from-png` reads it, with `reflection_resolution`,
 through the hidden `--reflection-render-scale`, so the re-render sizes the target alike.
 
-**Open: the Android default.** The default is `original` everywhere. Whether the Android build should
-default a phone to `scaled` is the maintainer's call, to be made after the phone numbers.
+**The default is `original` on every platform** (maintainer's decision). What a setting costs depends on the
+hardware, not the platform, so Android gets no cheaper default; a player picks `scaled` for their own hardware.
 
 **2048 and Omega.** **Ported**: the same call site and law, with their own disc-backed rows
 (`reflection_resolution_ground_truth`: Vineta K on the 2048 package and on Omega, `original` and `scaled`
