@@ -14,7 +14,10 @@
 //! vertices are about its own hinge; `mesh::rcs::psp2::build` bakes them
 //! through the node's bind matrix and records that matrix as `Flap::hinge`.
 //! Dropping that leaves every craft with no flaps, which nothing else would
-//! notice - a missing flap draws perfectly well.
+//! notice - a missing flap draws perfectly well. The hull's `.vex` authors the
+//! stowed hinge, which `Model::seat_flaps_on_vex` puts the flaps on: every
+//! node matrix agrees with it within a degree but Omega's shared Zone hull's,
+//! which holds its flaps 45 degrees open.
 
 use oag_core::math::Vec3;
 use oag_mesh::mesh::{Model, rcs::psp2};
@@ -23,6 +26,34 @@ fn build(blob: &[u8]) -> Model {
     psp2::build("hull", blob, None, &mut |_| None)
         .expect("builds")
         .0
+}
+
+/// The hull at `path` as the race loads it: its flaps seated on the `.vex` beside it.
+fn seated(archive: &mut oag_assets::psarc::Archive, path: &str, blob: &[u8]) -> Option<Model> {
+    let vex = ["Ship.vex", "ship.vex"]
+        .iter()
+        .find_map(|name| archive.read_path(&path.replace("ship.rcsmodel", name)).ok())?;
+    let mut model = build(blob);
+    assert_eq!(
+        model.seat_flaps_on_vex(&vex),
+        2,
+        "{path}: both sides in the .vex"
+    );
+    Some(model)
+}
+
+/// The angle between two hinges' third axes, in degrees.
+fn off(a: &Model, b: &Model, side: usize) -> f32 {
+    let axis = |m: &Model| {
+        m.airbrakes[side]
+            .as_ref()
+            .expect("a flap")
+            .hinge
+            .z_axis
+            .truncate()
+            .normalize()
+    };
+    axis(a).dot(axis(b)).clamp(-1.0, 1.0).acos().to_degrees()
 }
 
 /// Both flaps of `model`, each raised and flared outward by a positive swing.
@@ -92,6 +123,7 @@ fn every_2048_craft_has_two_flaps_that_rise_and_flare_outward() {
         "piranha",
         "qirex",
         "triakis",
+        "zone",
     ] {
         paths.push(format!("data/art/published/hdships/{team}/ship.rcsmodel"));
     }
@@ -103,7 +135,18 @@ fn every_2048_craft_has_two_flaps_that_rise_and_flare_outward() {
             continue;
         };
         seen += 1;
-        check(&path, &build(&blob), &mut bad);
+        let Some(model) = seated(&mut archive, &path, &blob) else {
+            bad.push(format!("{path}: no .vex beside it"));
+            continue;
+        };
+        for side in 0..2 {
+            let turned = off(&build(&blob), &model, side);
+            assert!(
+                turned < 1.0,
+                "{path}: the node poses side {side} {turned} degrees off"
+            );
+        }
+        check(&path, &model, &mut bad);
     }
     assert!(seen > 0);
     assert!(bad.is_empty(), "{bad:#?}");
@@ -133,13 +176,32 @@ fn every_omega_hull_has_two_flaps_that_rise_and_flare_outward() {
         "piranha",
         "qirex",
         "triakis",
+        "zone",
     ] {
         let path = format!("data/art/published/hdships/{team}/ship.rcsmodel");
         let Ok(blob) = archive.read_path(&path) else {
             continue;
         };
         seen += 1;
-        check(&path, &build(&blob), &mut bad);
+        let Some(model) = seated(&mut archive, &path, &blob) else {
+            bad.push(format!("{path}: no .vex beside it"));
+            continue;
+        };
+        for side in 0..2 {
+            let turned = off(&build(&blob), &model, side);
+            if team == "zone" {
+                assert!(
+                    turned > 40.0,
+                    "{path}: the Zone node poses side {side} {turned} degrees"
+                );
+            } else {
+                assert!(
+                    turned < 1.0,
+                    "{path}: the node poses side {side} {turned} degrees off"
+                );
+            }
+        }
+        check(&path, &model, &mut bad);
     }
     assert!(seen > 0, "no Omega hull found in data01.psarc");
     assert!(bad.is_empty(), "{bad:#?}");

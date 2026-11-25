@@ -542,7 +542,10 @@ fn one(
                     mesh::rcs::psp2::build(&hull_name, &geometry, None, &mut |path| {
                         textures.read(archives, path)
                     })
-                    .map(|(model, built)| (model, built.describe()))
+                    .map(|(mut model, built)| {
+                        model.seat_flaps_on_vex(&blob);
+                        (model, built.describe())
+                    })
                 } else {
                     mesh::rcs::build(
                         &hull_name,
