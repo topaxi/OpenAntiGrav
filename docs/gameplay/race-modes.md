@@ -1055,8 +1055,8 @@ to 6, one game-minute each: 7.20 with the steering, 5.48 without).
 Novice race on Vineta K (Venom, target 200) ended when its leading opponent was on lap 10, nine
 laps done. That is one race, so n = 1, and nothing of the original's Skilled or Elite is
 measured. `oag_raceplay::score_pace` holds ours near it. Its terms apply only where the race's
-Eliminator is won on points, so a kill Eliminator (Pulse, 2048, Omega) and every other mode run as
-before:
+Eliminator is won on points (HD, 2048, Omega), so a kill Eliminator (Pulse, Pure) and every other
+mode run as before. **The pace was tuned on HD alone**; 2048 and Omega take it unmeasured.
 
 | Term | What it does | Why |
 | --- | --- | --- |

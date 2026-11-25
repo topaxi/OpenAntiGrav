@@ -140,7 +140,8 @@ the name. Next: a frame burst across one of the person's hits, reading `hud+0x3d
 `oag_title::Title::eliminator` states the rule; `oag_raceplay::score_law` resolves it once at load
 into a plain `oag_race::ScoreLaw` on the race's setup, and nothing during a race reads a title. The
 HUD follows that value too (`Readout::score_rows`), so the rule is free to move off the title later.
-A Racebox target is the TARGET row's pick, one of the steps of `<Slider name="Eliminations">` off
+On HD and Omega a Racebox target is the TARGET row's pick, one of the steps of
+`<Slider name="Eliminations">` off
 `DATA00` (`minSlide` 200, `maxSlide` 600, `incSlide` 20: 21 values, read by
 `oag_tables::race_setup::slider`, never a const), else the slider's `minSlide`; a campaign cell's is
 its `NitroElim*` number for the rung. Both ride `Options::eliminator_score_target`. The row is
@@ -173,25 +174,36 @@ in.
 
 ## Other titles
 
-- **2048:** the results table: **checked, differs.** Its executable carries no `%s - %s: %d %s: %d`
-  string (`search_strings` on the v1.04 eboot finds none) and its summaries are the touch
-  screens'. The score law: **checked, applies, not wired.** The executable names `IG_HUD_TARGET`, `ScoreFeedBack%d`,
-  `MPWeaponIcon%d`, `%s ( %d )` and the three score scales, and its `WeaponAIStats2048.xml` carries
-  the row. Whether its awards are HD's is unread: the writer of its score was not looked for, and
-  its Elimination campaign objective reads kills (`crates/2048/src/campaign.rs`). The Racebox
-  TARGET row: **checked, differs.** The disc authors no Racebox (its RACEBOX tile is this build's own,
-  `docs/formats/2048-frontend.md`), so there is no slider to read, and `oag_2048::TITLE` ends an
-  Eliminator on kills (inherited), so the row is dropped there.
-- **Omega:** the results table: **checked, applies, not wired.** The same format string and
-  `ER_DEATHS` sit together at `0x018241f9`/`0x018241ef`, beside its `Grid%d.%d`; its front end does
-  not load the screen yet (`docs/ui/endrace-screens.md`). The score law: **checked, applies, not
-  wired.** The same strings, including the row's two-space
-  `%s  ( %d )` (`FUN_0125e9b0`). Its named `weaponaistats.xml` has no `<EliminatorAIStats>` row and
-  its loader defaults every scale to `1.0`, so an opponent there would score flat if the law holds.
-  The Racebox TARGET row: **checked, differs, not wired.** Omega's `racebox_definition.xml` (`DATA09`)
-  authors an `Eliminations` slider of its own, `minSlide` 50, `maxSlide` 600, `incSlide` 25, not
-  HD's 200 to 600 by 20 (`selection_screens_ground_truth::omega_authors_its_own_eliminations_slider_but_races_on_kills`).
-  `oag_omega::TITLE` ends an Eliminator on kills (inherited, its score law unmeasured), so the row
-  follows the rule and stays off Omega until the awards are read there; the slider is ready to feed it.
+- **2048:** the score law: **ported** (2026-11-25, `/2048/eboot-vita-2048-eu-v104.elf`, confidence
+  85, static). `Pilot_TakeDamage` (`0x811c4a06`) in mode `8` with source `2` adds
+  `damage * 0.1 * scale` to the pilot's score at `+0x65c4` (`0x811c4d28`); a kill adds `20 * scale`
+  (`0x811c51ee`, `0x811c526a`) and counts at `+0x65c0`; a lap adds `5 * scale` (`0x811c3be6`); a
+  death takes `min(score, 5)` (`0x811c72c2`, `0x811c7a2a`, `0x811c634e`). An opponent (role
+  `+0x58dc == 2`) takes a scale off the difficulty table; the loader is `0x811d73f0`, and which of
+  the two tables a race reads (`+0x114b4` or `+0x11b30`, picked through `0x81000930`) is not
+  confirmed. The 2048 HD and Fury campaign cells author the `NitroElim*` targets HD's do and now
+  race to them.
+- **2048's targets:** the Elimination manager's constructor (`0x812be628`) writes `200` at `+0x424`,
+  the default `oag_2048::TITLE` states. `0x812bf3f0` replaces it from the event's first objective
+  when that is a `BEAT_VALUE` (type `2`). The disc authors no Racebox, so there is no slider and no
+  `TARGET` row. Native campaign events: [2048-campaign.md](../../../formats/2048-campaign.md),
+  "The objective law".
+- **2048's HUD:** **checked, differs, not wired** (confidence 80, static). Its bind
+  (`0x81191b9c`) takes `Score`, `ScoreTxt` (`IG_HUD_SCORE`, or `IG_HUD_KILLS` for a kill
+  objective), hides `PositionTxt`, and hides `TimeLimitParent` where there is no limit. Its update
+  (`0x811921f2`) writes `Score` as `"%d/%d"` of score over target, and the rows as `"%s (%d)"`,
+  the person's green (`0xff30ff30`) at scale `0.6` against `0.5`. Ours draws score rows there with
+  HD's spacing, leaves `Score` empty and shows `POS` and `TIME`. The HD and Fury layouts
+  (`*_HUD_HD.xml`) take their target line at `PositionTxt2`, which `0x81158d88` writes as
+  `"%s (%d)"`.
+- **2048's results table:** **checked, differs.** Its executable carries no
+  `%s - %s: %d %s: %d` string, and its summaries are the touch screens'.
+- **Omega:** the score law: **ported** (the same awards, read on its 1.07 patch,
+  [ps4-omega-eu/eliminator.md](../ps4-omega-eu/eliminator.md)). The Racebox TARGET row: **ported**,
+  off Omega's own slider, `50` to `600` by `25`
+  (`selection_screens_ground_truth::the_target_row_offers_the_steps_of_omegas_own_eliminations_slider`).
+  The results table: **checked, applies, not wired.** The same format string and `ER_DEATHS` sit
+  together at `0x018241f9`/`0x018241ef`, beside its `Grid%d.%d`; its front end does not load the
+  screen yet (`docs/ui/endrace-screens.md`).
 - **Fury against the base game:** the `<EliminatorAIStats>` row is in `DATA00`'s copy alone
   ([race-modes.md](../../../gameplay/race-modes.md)). `DATA02`'s Racebox has no Eliminator.

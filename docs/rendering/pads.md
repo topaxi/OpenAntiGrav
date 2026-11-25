@@ -120,10 +120,52 @@ lines are Write Color Buffers off, resolution scale 150, so brightness is not co
 authored cyan and `SpeedupPad_Importer`'s slot 3 has no colour logic; ours already
 draws the authored value.
 
-**2048 and Omega: not checkable here.** Omega reads through 2048's `.rcsmodel`
-readers, but neither title's weapon-pad object has been decompiled and no
-Omega emulator exists in this toolchain, so whether either overwrites the
-constant is unknown. Both keep `Authored`, which is what they drew before.
+**2048 and Omega: ported**, with a colour per class of pad - next section.
+
+## 2048 and Omega
+
+Both executables overwrite the bar colour per frame, as HD does, and add two colours to HD's red.
+2026-11-25, static, 2048 v1.04 (`/2048/eboot-vita-2048-eu-v104.elf`) and Omega's 1.07 patch.
+
+**Which colour a pad takes** is its node name, tested in this order: holds `offensive` (so
+`elim_offensive` too) takes yellow, else `defensive` takes green, else red. 2048's circuits name
+their pads `wohdtrack_weapon_pad_{offensive,defensive,elim_offensive,elim_defensive}_N`; the
+HD-lineage circuits' `weapon_pad_*` take neither word and stay red. No test on the race's mode:
+the pads light the same in every mode. Classifier: 2048 `0x8129e91c`, Omega `0x0177c3b0`.
+Confidence 90.
+
+**The tables**, six RGB keys each, the same values on both:
+
+| Class | Keys 0-2 (3-5 repeat them) | 2048 | Omega |
+| --- | --- | --- | --- |
+| red | `(512,16,0)`, `(256,0,0)`, `(64,0,0)` | `0x815249ac` | `0x018a47c0` |
+| yellow | `(1952,696,48)`, `(976,348,24)`, `(244,87,6)` | `0x815249f4` | `0x018a4810` |
+| green | `(0,1072,0)`, `(0,536,0)`, `(0,134,0)` | `0x81524a3c` | `0x018a4860` |
+
+The position advances `3` keys a second, the interpolated key is scaled by `1/255`, and a pad
+cooling down holds `(0.025, 0, 0.01)`: HD's three constants (2048: update at `0x8129ea08`, vectors
+written by the static initialiser at `0x8129f0e6`; Omega: `0x0177bf90`). Confidence 90.
+
+**The shader term** is `W_Cycle * Texture2.a`, added after the light. `Texture2` is the pad
+material's `_ne` or `norm` picture (sampler `0xa2d555b9`), whose alpha is the bar shapes.
+
+- Omega, `data/environments2048/altima/materials/weapon_pads.rcsmaterial` in `DATA04`, the
+  ambient-lit pixel program at `0x2e44` (`gcn_dump`): `rgb = Texture1 * constantAmbientColour +
+  Texture2.a * W_Cycle`, then fog. Confidence 90.
+- 2048: all `243` weapon-pad fragment programs in the Vita packages that declare `W_Cycle` hold
+  `mad.f16 pa8.xyzw, pa2.wwww, sa0.xyzw, pa0.xyzw` (`Texture2.a * W_Cycle + light`). Confidence 92.
+
+**What ours does.** `oag_mesh::mesh::rcs::psp2` draws the term through the emissive-add path and
+gives each class of pad its own glow entry
+(`circuit_pads::PadBars`), because a circuit's pads are drawn with its road and the glow table
+holds 64 entries. `oag_raceplay` rewrites those three entries a frame
+(`oag_title::weapon_pad::WeaponPadGlow::ByClass`).
+`psp2_circuit_pads_ground_truth` asserts every weapon-pad triangle, and no other, draws from the
+entry of the class its name gives.
+
+**Open:** each pad's own start phase (the original seeds it from the object's address) and the
+cooling colour on a collected pad. Both need a glow entry per pad, which the 64-entry table does
+not hold.
 
 ## A speed pad is never recoloured, on any title
 
@@ -951,7 +993,7 @@ not a pad question.
 chunks, and a speed pad has no per-node state to key (`SpeedupPad_Importer` slot 3
 carries no colour logic). Replacing it by the position match would add a
 position-dependent rule the original does not state for a result that cannot differ;
-it is left as it is. **2048/Omega: not checkable here.** The probe reads HD's `.vex`
+it is left as it is. **2048/Omega: not checkable here** for speed pads. The probe reads HD's `.vex`
 pad classes and their `.rcsmodel`; neither title's pad objects have been decompiled
 (`docs/formats/omega-status.md`), so whether their pad nodes resolve is unmeasured.
 
