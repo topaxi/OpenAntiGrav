@@ -169,6 +169,31 @@ list's own count. `oag_race::Mode::weapons_enabled` is the port, and
 `oag_raceplay::Race::start` drops the volumes rather than testing the mode per
 tick, which is the same layer the original decides it at.
 
+### A weapons-off race draws no weapon pad (2048's container)
+
+The rule is the mode's (and the RACE page's WEAPONS row), on every title; only
+the drawing differs by container. Pulse, Pure and HD name their weapon pads as
+`.vex` nodes, so the scene drops the weapon pad model. **2048's and Omega's
+`.rcsmodel` name no pad class**: the weapon pads are submeshes of the world
+geometry, and until the loader left them out, both titles drew them in Zone,
+time trial and speed lap. `oag_mesh::mesh::rcs::psp2::circuit_pads::HidePads`
+is the choice (`load::geometry::hidden_pads`): `Weapon` with weapons off,
+`All` where a race draws its own pad model (Detonator).
+
+A weapon pad is a submesh on a shape named `weapon_pad`, or on
+`weapon_pads.rcsmaterial` unless the shape is named `speedup_pad`. The shape
+wins because Omega's `zone_1` to `zone_4` draw their **speed** pads on
+`weapon_pads.rcsmaterial`. A census of every `track*.rcsmodel` of Omega and the
+2048 base package found no other case (Omega Vineta K's 7 weapon pad submeshes
+match its 7 trigger volumes). Ground truth:
+`crates/mesh/tests/psp2_circuit_pads_ground_truth.rs`,
+`crates/raceplay/tests/zone_weapon_pads_ground_truth.rs`.
+
+Neither 2048's nor Omega's executable was read for this: the rule is
+**inherited** from Pulse and HD by lineage, and the Omega Zone frame of the
+native port shows no weapon pad. 2048 and Omega share the container, so both
+are **ported**.
+
 ### The free Turbo, and how the second record was found
 
 `MSC_EVENT_TT` and `MSC_EVENT_SL` both read *"You will be given a free turbo

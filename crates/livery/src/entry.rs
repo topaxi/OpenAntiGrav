@@ -356,7 +356,7 @@ pub fn scene_model_requesting(
             None,
             &mut |path| read(archives, path),
             reading.water,
-            false,
+            mesh::rcs::psp2::circuit_pads::HidePads::None,
         )
         .with_context(|| format!("decoding the model {entry}"))?;
         report.push(format!("{entry}: {}", built.describe()));
