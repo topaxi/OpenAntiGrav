@@ -361,6 +361,19 @@ the inner one and turns the ball white, but it breaks every circuit, so it is no
 the normal, `w = 255`). So ours' relief drops the map's `x` and `y`; only `z` and the alpha reach the rim. It changes the hubs,
 not the flat body.
 
+**Wired** (2026-11-25, `det-mine-eye-centre` send-back; confidence 85). The mine's chunks are inline: they declare no
+layout, so `Mesh::tangents` (declaration only) gave nothing. `Mesh::inline_tangents` reads the four bytes after the packed
+normal (`+10`, the offset the live arrays state) when every vertex there decodes to a unit vector perpendicular to its own
+normal, and only a surface whose material draws through the mine rim program asks (`mine_rim::tangents`), so no other
+inline chunk changes. Every football and spikes vertex now carries it
+(`hd_emissive_glow_ground_truth::the_mine_models_carry_their_authored_tangent`; 0 of 240 and 0 of 630 before). On the
+near-mine grab (lap clock 2.68 s, envelopes pinned) the ball's dark centre is gone: the hubs ring as the original's do and
+the core (a 100 x 90 box on the near ball) reads mean 143.0 to 157.5 against the original's 188.0; a 200 x 180 box around it
+90.2 to 95.8 against 118.8 (mean abs difference 66.7 both, limited by the grab's alignment). Pairs not worse: `mines-ahead`
+13.73 to 13.62, `pad` 7.68 to 7.64, `cannon-volley` 14.18 to 14.17. **Still open:** ours' body stays darker than the
+original's white (the A/B above puts the original's body rim near 0.4 to 0.7); the next read is `f[TC1]` itself (Open,
+below).
+
 **A live A/B says the white is this program, at a rim well above 0** (confidence 80). Same state, lap clock 2.5 s: the mine's
 brightness factor `K[0x3c]` (`0x008c1a18`, read `2.0`) written to `0.0` while paused, the game run 0.6 s, grabbed, then
 written back and run 0.6 s again. With `MineBrightness` 0 (so `p = 5`) the near ball's body turns **dark with bright
