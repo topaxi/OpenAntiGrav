@@ -305,11 +305,11 @@ The step: twelve stopped grabs at frames 3 to 8 after a press, one per circuit s
 (`--menu-picker-step-seconds`, the circuit's `NN_Track` id read off the `circuits:` loader line: the forward list is
 `01 08 03 04 02 06 05 07 17 19 21 23`, not index + 1), grid region mean grey 13.73 without the slide to 6.50 with it (every
 trial improves; frame 8 is the snap, 5.13 to 4.30 there). The lag is a frame or so loose between grabs. The input cooldown is
-wired as `Picker::step_gate` (`a_direction_inside_the_cooldown_of_the_last_one_taken_is_dropped`): the pad's four directions
+wired as `Picker::step_gate` (12 whole frames) (`a_direction_inside_the_cooldown_of_the_last_one_taken_is_dropped`): the pad's four directions
 on a grid of rows are taken only 0.2 s after the last one taken. RAM: `right` held for 1.1 s stepped at 0.05, 0.56 and 0.88 s,
 so the input layer's own repeat (about 0.5 s then 0.3 s) is a separate floor over the 0.2 s one.
 
-**Not wired, in the box:** the `>>>` glyph's scroll and hide-while-cooling, the fill (0.87 of `HD_Blue`: the original draws
+**Not wired, in the box:** the ring counter's persistence across visits in live play (a new `Picker` starts its clock at 0 on every visit, so only stills pinned with `--menu-ring-seconds` carry the original's count; the turntable restarts the same way; carrying one f32 in the session needs an offset rather than a pin), the `>>>` glyph's scroll and hide-while-cooling, the fill (0.87 of `HD_Blue`: the original draws
 `Hexagon_HD_Faded.gtf`, ours `Hexagon_HD.gtf`, 149 against 172 on both Ship and Track Select), the cells' edge fade.
 
 ## Ready to wire

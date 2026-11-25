@@ -221,3 +221,21 @@ fn a_leading_still_matches_the_live_slide_tick_for_tick() {
         );
     }
 }
+
+/// A finger's pan rests the grid with no slide, and a pad step after it is still a leading one: the
+/// pan must not turn the step frame's tick off.
+#[test]
+fn a_pad_step_after_a_pan_keeps_its_leading_frame() {
+    let mut slide = Slide::at_rest(2).leading();
+    slide.rest_on(3, 1);
+    slide.tick(DT, 4, 12);
+    assert!(
+        (slide.progress() - 1.0 / 6.0).abs() < 1e-4,
+        "{}",
+        slide.progress()
+    );
+    ticks(&mut slide, 4, 4);
+    assert!(slide.moving(), "frame 4 is the last one moving");
+    ticks(&mut slide, 1, 4);
+    assert!(!slide.moving(), "frame 5 is the snap, as without the pan");
+}

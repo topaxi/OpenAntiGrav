@@ -237,9 +237,10 @@ def main():
             class StoppedClock:
                 """What the stopped game holds: the angle and the pulse phase."""
                 def seconds(self):
-                    return (turntable_angle(), hex_widget.phase())
-            (angle, phase), after = fc.grab_paused(StoppedClock(), lambda: walk.grab(png, w, h), GDB_PORT)
-            ring = {"read": phase, "stopped": after == (angle, phase), "state": hex_widget.state()}
+                    state = hex_widget.state()
+                    return (turntable_angle(), state["phase"], tuple(sorted(state.items())))
+            (angle, phase, state), after = fc.grab_paused(StoppedClock(), lambda: walk.grab(png, w, h), GDB_PORT)
+            ring = {"read": phase, "stopped": after == (angle, phase, state), "state": dict(state)}
         elif item["id"] in CARD_CLOCKED:
             card_clock = card_clock or fc.Clock(mem)
             before, after = fc.grab_paused(card_clock, lambda: walk.grab(png, w, h), GDB_PORT)

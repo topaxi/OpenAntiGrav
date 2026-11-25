@@ -115,7 +115,9 @@ impl Slide {
     /// (a finger's pan), keeping the parity those steps leave.
     pub fn rest_on(&mut self, shown: usize, steps: usize) {
         let parity = self.parity ^ (steps % 2 == 1);
+        let lead = self.lead;
         *self = Self::at_rest(shown).on_row(self.row);
+        self.lead = lead;
         self.parity = parity;
         self.prev_parity = parity;
     }

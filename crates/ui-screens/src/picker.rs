@@ -40,12 +40,12 @@ pub mod pointer;
 pub mod slideshow;
 mod split;
 
-/// How long a grid of rows ignores the pad after it takes a direction: `TrackHexSelection_Update`
-/// sets its input counter to -0.2 on every direction it takes and takes none while it is negative
+/// How long (0.2 s, 12 frames) a grid of rows ignores the pad after it takes a direction:
+/// `TrackHexSelection_Update` sets its input counter to -0.2 on every direction it takes and takes none while it is negative
 /// (`docs/ghidra/functions/ps3-hdfury-eu/ship-select-ring.md`, "Track Select"). RAM: held for a
 /// second, `right` stepped at 0.05, 0.56 and 0.88 s, so it is a floor under the input layer's
 /// own repeat and not its rate.
-const STEP_COOLDOWN_SECONDS: f32 = 0.2;
+const STEP_COOLDOWN_FRAMES: u32 = 12;
 
 /// The grid the selection screens are authored in on the PSP, which every
 /// number this module carries of its own was read against. A PS2 layout is
@@ -204,9 +204,9 @@ pub struct Picker {
     text_seconds: Option<f32>,
     /// A still's pin of the hex ring's pulse clock ([`Self::set_ring_seconds`]).
     ring_seconds: Option<f32>,
-    /// The input cooldown of a grid of rows (`TrackHexSelection + 0x14c`): ticks up by `dt`, and a
-    /// direction is taken only at or above 0.0, which takes it to `-STEP_COOLDOWN_SECONDS`.
-    step_gate: f32,
+    /// The input cooldown of a grid of rows (`TrackHexSelection + 0x14c`) in 60 Hz frames left: a
+    /// direction is taken only at 0, which sets it to [`STEP_COOLDOWN_FRAMES`].
+    step_gate: u32,
     /// Seconds since the selection last moved - the slideshow's clock,
     /// which the original restarts on every selection (`TrackSelection_ApplySelection`
     /// transitions the new circuit's own state machine to `Info` afresh).
@@ -328,7 +328,7 @@ impl Picker {
             seconds: 0.0,
             text_seconds: None,
             ring_seconds: None,
-            step_gate: 0.0,
+            step_gate: 0,
             since_selection: 0.0,
             slide: hd::slide::Slide::at_rest(index),
             entry: EntryClock::default(),
@@ -402,7 +402,8 @@ impl Picker {
         self.across = true;
         self.columns = columns;
         let (column, _, row) = self.slide_axis();
-        self.slide = hd::slide::Slide::at_rest(column).on_row(row).leading();
+        let slide = hd::slide::Slide::at_rest(column).on_row(row);
+        self.slide = if columns > 0 { slide.leading() } else { slide };
         self
     }
 
@@ -503,7 +504,8 @@ impl Picker {
 
     /// Pins the hex ring's pulse apart from [`Self::seconds`]: the ring's phase is a counter of the
     /// widget's own updates (`HexSelection + 0xe0`), which the original never resets between
-    /// visits, so a pair script pins it to what it read (`None` follows the screen's clock).
+    /// visits, so a pair script pins it to what it read (`None` follows the screen's clock, which
+    /// a new picker starts at 0: live play does not carry the count across visits).
     pub fn set_ring_seconds(&mut self, seconds: Option<f32>) {
         self.ring_seconds = seconds.map(|seconds| seconds.max(0.0));
     }
@@ -555,7 +557,9 @@ impl Picker {
         let (column, count, row) = self.slide_axis();
         self.slide.follow_row(row);
         self.slide.tick(dt, column, count);
-        self.step_gate = (self.step_gate + dt).min(1.0);
+        self.step_gate = self
+            .step_gate
+            .saturating_sub((dt * 60.0).round().max(0.0) as u32);
         self.entry.tick(dt);
         self.scroll.tick(dt, &pointer::hex_extent());
     }
@@ -644,7 +648,7 @@ impl Picker {
             (next_variant, 1, true),
             (previous_variant, -1, true),
         ] {
-            if !input.take(button) || (self.columns > 0 && self.step_gate < 0.0) {
+            if !input.take(button) || (self.columns > 0 && self.step_gate > 0) {
                 continue;
             }
             let moved = if vertical {
@@ -653,7 +657,7 @@ impl Picker {
                 self.step_entry(step)
             };
             if self.columns > 0 && moved.is_some() {
-                self.step_gate = -STEP_COOLDOWN_SECONDS;
+                self.step_gate = STEP_COOLDOWN_FRAMES;
             }
             out.extend(moved);
         }

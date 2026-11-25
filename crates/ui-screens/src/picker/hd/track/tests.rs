@@ -214,7 +214,8 @@ fn right_wraps_along_the_row_and_up_down_switch_direction() {
 
 /// `TrackHexSelection_Update` takes a direction only while its input counter is at or above 0.0 and
 /// sets it to -0.2 when it does: a second direction inside 0.2 s of a taken one is dropped, not
-/// deferred, and any of the four directions starts the cooldown. This fails if the gate is dropped.
+/// deferred, and any of the four directions starts the cooldown (12 frames, counted in whole frames).
+/// This fails if the gate is dropped.
 #[test]
 fn a_direction_inside_the_cooldown_of_the_last_one_taken_is_dropped() {
     let mut picker = grid();
@@ -753,4 +754,21 @@ fn the_rings_pulse_follows_its_own_clock() {
         oag_ui::screen::argb_to_rgba(hex::pulse_argb(blue, 0.585))
     );
     assert_ne!(colour(&picker), unpinned);
+}
+
+/// A list (no rows) draws no leading slide and has no cooldown: `with_rows(0)` keeps both off.
+#[test]
+fn a_list_without_rows_neither_leads_nor_cools() {
+    let entries = ["a", "b", "c"]
+        .iter()
+        .map(|id| circuit(id, false))
+        .collect();
+    let mut picker = Picker::new(Kind::Track, entries, None, None).with_rows(0);
+    assert_eq!(press(&mut picker, Button::Right), vec![Event::Moved]);
+    assert_eq!(press(&mut picker, Button::Right), vec![Event::Moved]);
+    picker.tick(1.0 / 60.0);
+    assert!(
+        picker.slide().progress() < 1e-4,
+        "no step frame tick on a list"
+    );
 }

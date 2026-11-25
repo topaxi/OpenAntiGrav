@@ -151,7 +151,7 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
 - Track Select **hex grid slide, half-row phase, ring ease and ring clock LANDED 2026-11-25 (`hd-front-end-ranked`)**: pair
   `hd/menu-track-select` ring band 27.4 to 2.9, ring box 19.7 to 14.3, grid region 3.99 to 3.68 (twin 3.98 to 3.67); the
   captures now read the widget's pulse counter and the turntable angle in one stopped grab and the angle takes the picture's
-  3.5 frame lag (model region 5.6 to 4.4 and 7.2 to 3.6 on two captures). Open there: the `>>>` direction glyph (the
+  3.5 frame lag (model region 5.6 to 4.4 and 7.2 to 3.6 on two captures). Open there: the ring counter and the turntable angle persist across visits in the original, ours restart at 0 per visit in live play (only stills carry the count; an offset in the session's front-end state would carry it), the `>>>` direction glyph (the
   input cooldown counter's scroll, `int(c * 4) << 3` px, hidden while cooling), the hex fill (the original draws
   `Hexagon_HD_Faded.gtf`: 149 against ours 172 on Ship and Track Select, a 0.87 factor on the centre cells), a step pair on the
   compare page (`rpcs3-hd-track-step.py capture`; the forward list is `01 08 03 04 02 06 05 07 17 19 21 23`), and a live Omega read.
