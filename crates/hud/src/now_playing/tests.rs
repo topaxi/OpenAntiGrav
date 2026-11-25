@@ -200,3 +200,159 @@ fn a_bar_texture_the_sheet_lacks_is_left_out_and_the_text_stays() {
     assert!(frame.sprites.is_empty(), "no stand-in bar");
     assert_eq!(frame.small_text.len(), 1);
 }
+
+const LINES_LAYOUT: &str = r#"<Screen name="InGame">
+  <Text name="InGameArtistText">
+    <Values idstring="Artist" font="HUDSmall" scale="1.0" align="left" x="80" y="240" color="0xFFFFFFFF"></Values>
+  </Text>
+  <Text name="InGameTrackText">
+    <Values idstring="Track" font="HUDSmall" scale="1.0" align="left" x="80" y="250" color="0xFFFFFFFF"></Values>
+  </Text>
+</Screen>"#;
+
+fn lines_authored() -> NowPlaying {
+    NowPlaying {
+        show: oag_title::now_playing::Show::Lines {
+            widgets: &["InGameArtistText", "InGameTrackText"],
+            hold_updates: 3,
+        },
+        ticks_per_update: 2,
+        scroll_step: 0,
+        ..oag_pulse::NOW_PLAYING
+    }
+}
+
+#[test]
+fn plain_lines_read_each_widgets_own_place() {
+    let geometry = geometry(LINES_LAYOUT, &lines_authored()).expect("the widgets");
+    assert_eq!(geometry.origin_x, 80.0);
+    assert_eq!(geometry.text_y, 240.0);
+    assert_eq!(geometry.later_rows_y, [250.0]);
+    assert_eq!(geometry.bar[2], 0.0, "no bar");
+    let missing = r#"<Screen name="InGame"></Screen>"#;
+    assert!(geometry_of(missing).is_none(), "a widget the layout lacks");
+}
+
+fn geometry_of(xml: &str) -> Option<crate::now_playing::Geometry> {
+    geometry(xml, &lines_authored())
+}
+
+/// Two ticks make one update; the lines fade in by 5 an update (52 updates, the first of which
+/// is past 255), hold still for the authored updates, fade out, and draw no bar.
+#[test]
+fn plain_lines_fade_in_hold_still_and_fade_out_on_two_tick_updates() {
+    let authored = lines_authored();
+    let mut display = Display::new(
+        geometry(LINES_LAYOUT, &authored).expect("widgets"),
+        &authored,
+    );
+    display.show_lines(vec!["Artist".to_string(), "Song".to_string()], 40.0);
+    display.step();
+    assert_eq!(
+        display.marquee().expect("up").color[3],
+        0.0,
+        "half an update"
+    );
+    display.step();
+    assert!((display.marquee().expect("up").color[3] - 5.0 / 255.0).abs() < 1e-6);
+    for _ in 0..(2 * 50) {
+        display.step();
+    }
+    let full = display.marquee().expect("up");
+    assert!((full.color[3] - 1.0).abs() < 1e-6, "{}", full.color[3]);
+    assert_eq!(full.x, 80.0, "nothing scrolls");
+    let rows: Vec<(&str, f32)> = full.lines.iter().map(|l| (l.text.as_str(), l.y)).collect();
+    assert_eq!(rows, [("Artist", 240.0), ("Song", 250.0)]);
+    for _ in 0..(2 * 3) {
+        display.step();
+    }
+    assert!(
+        (display.marquee().expect("up").color[3] - 1.0).abs() < 1e-6,
+        "still held after the clamping update and two of the three held updates"
+    );
+    for _ in 0..(2 * 4) {
+        display.step();
+    }
+    assert!(display.marquee().expect("up").color[3] < 1.0, "fading out");
+    for _ in 0..(2 * 60) {
+        display.step();
+    }
+    assert!(display.marquee().is_none(), "gone after the fade out");
+
+    let mut frame = Frame::default();
+    display.show_lines(vec!["A".to_string(), "B".to_string()], 10.0);
+    display.step();
+    append(
+        &mut frame,
+        &display.marquee().expect("up"),
+        [0.0, 0.0, 0.0, 1.0],
+        &crate::sprite::Sheet::default(),
+    );
+    assert!(frame.sprites.is_empty(), "no bar drawn");
+    assert_eq!(frame.small_text.len(), 2, "one text per line");
+}
+
+/// What a marquee title (Pulse, HD, Omega, 2048) draws is the bar's fill and one left-aligned
+/// text on the item's text line, as before plain-lines displays existed; an empty line draws
+/// nothing.
+#[test]
+fn a_marquee_still_draws_its_bar_and_one_text_exactly() {
+    let mut display = display();
+    display.show("Artist - Song".to_string(), 80.0);
+    for _ in 0..10 {
+        display.step();
+    }
+    let marquee = display.marquee().expect("up");
+    assert_eq!(marquee.lines.len(), 1);
+    let mut frame = Frame::default();
+    append(
+        &mut frame,
+        &marquee,
+        [0.0, 0.0, 0.0, 1.0],
+        &crate::sprite::Sheet::default(),
+    );
+    assert_eq!(
+        frame.sprites,
+        [Draw::Fill {
+            rect: [130.0, 247.0, 150.0, 20.0],
+            color: [0.0, 0.0, 0.0, 10.0 / 255.0],
+        }]
+    );
+    assert_eq!(
+        frame.small_text,
+        [Draw::Text {
+            x: 280.0 - 10.0,
+            y: 252.0,
+            scale: 1.0,
+            color: [1.0, 1.0, 1.0, 50.0 / 255.0],
+            border: Some([0.0, 0.0, 0.0, 1.0]),
+            align: Align::Left,
+            text: "Artist - Song".to_string(),
+            wrap_width: None,
+        }]
+    );
+
+    let authored = lines_authored();
+    let mut lines = Display::new(
+        geometry(LINES_LAYOUT, &authored).expect("widgets"),
+        &authored,
+    );
+    lines.show_lines(vec![String::new(), "Song".to_string()], 10.0);
+    lines.step();
+    lines.step();
+    let mut frame = Frame::default();
+    append(
+        &mut frame,
+        &lines.marquee().expect("up"),
+        [0.0, 0.0, 0.0, 1.0],
+        &crate::sprite::Sheet::default(),
+    );
+    assert_eq!(
+        frame.small_text.len(),
+        1,
+        "the empty artist row draws nothing"
+    );
+    assert!(
+        matches!(&frame.small_text[0], Draw::Text { y, text, .. } if *y == 250.0 && text == "Song")
+    );
+}
