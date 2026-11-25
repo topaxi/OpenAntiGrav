@@ -1,7 +1,7 @@
 ---
 status: ready-to-wire
 titles: [hd, 2048, omega]
-updated: 2026-11-24
+updated: 2026-11-25
 summary: "Detonator: all 15 phases in; open: Omega EndRace Menu, 2048 Results, medal tiers, radial bloom, floor gain vs bands"
 categories: [rendering]
 ---
@@ -224,7 +224,8 @@ Law: `detonator-cannon.md` ("What the simulation needs"). Decisions already made
 
   Also from the page: the reload gauge `(1 - lockout/total) * 15` that `Detonator_UpdateHud`
   computes feeds `0x0029d578`, a shader constant of the craft's own
-  `detonator_bulletgaugesegments` material (an ammo gauge on the hull, 55), not a HUD widget; the
+  `detonator_bulletgaugesegments` material, not a HUD widget (**wired 2026-11-25, `det-ammo-gauge`**:
+  `detonator-ammo-gauge.md`; 2048 and Omega ship the material, programs unread, not wired); the
   HUD's `PulseBullets` reads `15` through the whole reload lockout. Open for this phase: the
   `EmpBarEffect` shader constants, the bullet icons' per-state art (`0x0007f0a0`), and what
   `Detonator_UpdateHud` raises into the generic message lines.
@@ -272,6 +273,12 @@ placement RNG cannot match the original's `Libc_Rand` (a departure, documented).
 - The cannon, the EMP fire and the EMP charge all key on `primary_slot()` (`cannon_handed(slot)`); `detonator_ground_truth::an_hd_detonator_cannon_and_emp_work_off_the_primary_slot`.
 
 ## Open
+
+- **Mine look (`det-mine-lit`)**: the normal map is read now (the chunk has one coordinate set), so hubs and holes show.
+  Open: (1) a pair's mines stay dark because the envelope has no history under raw bands below 0.3; carrying each mine's
+  `m+0xf4`/`m+0xf8` out of the original's RAM (`ship/mines[].address`) into a flag that seeds `MineEnvelopes` needs an
+  RPCS3 read; (2) with the envelope high, the ball's centre is dark in ours and bright in the original (eye-vector space,
+  `detonator-mine-material.md`, "Wired").
 
 **What remains open for Detonator (2026-11-23, after phase 15).** Phases 1-15 are in; what a player still
 misses is, by title. *All three:* the medal tier colours (the tiers draw one grey), the bomb flash writer
@@ -332,7 +339,8 @@ original frame to compare. The detail is below.
      `cannon_flash_left`/`right` locators, which the simulation fires from too
      (`load::muzzle::cannon_flash`).
   Open: the substitution table's reader, the race-side write of `ship+0x6298`, the
-  `Charge1`/`Charge2` block writer (`Ship_BindDetonatorHullParams`), the mine's music-driven
+  wiring of `Charge1`/`Charge2` (read 2026-11-25 on `detonator-ammo-gauge.md`: lit at EMP ready and
+  full; the fuselage `rich_iridescent` material that reads them is unwired), the mine's music-driven
   binds. `detonator_pickup` and `detonator_mine_explosion_kaleidoscopic` ship, but no loader was
   found (70, negative).
 

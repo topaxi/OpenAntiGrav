@@ -198,6 +198,12 @@ pub const PROGRAM_BOMB_TINT: f32 = 24.0;
 /// rewritten per instance each frame. See `super::rcs::electricity`.
 pub const PROGRAM_ELECTRICITY: f32 = 25.0;
 
+/// [`Emissive::program`]'s mode for HD's Detonator cannon gauge (`detonator_bulletgaugesegments`):
+/// unlit, `B * C * B.r + A * (1 - B.r)` with `B` the picture at `v + 0.5 * F` and `A` the picture
+/// unshifted, `C` the entry's tint (`StandardColour`) and `F` its offset (`StandardBullets`). The
+/// tint and offset are rewritten per frame. See `super::rcs::bullet_gauge`.
+pub const PROGRAM_BULLET_GAUGE: f32 = 27.0;
+
 /// The second entry of an [`PROGRAM_ELECTRICITY`] material: tint `(PitchVolume, BassHit,
 /// TrebleHit)`, offset `PitchOffset`.
 pub const PROGRAM_ELECTRICITY_AUDIO: f32 = 26.0;

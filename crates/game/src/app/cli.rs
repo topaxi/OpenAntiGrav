@@ -712,6 +712,16 @@ pub(crate) struct Cli {
     )]
     pub(crate) detonator_mines: Option<MinePositions>,
 
+    /// Comparison input: hold each `--detonator-mines` mine's music envelope at the original's
+    /// (`S,T;...`: `m+0xf4` and `m+0xf8`, same order), ours having no history of the music.
+    #[arg(
+        long,
+        value_name = "S,T;...",
+        value_parser = parse_mine_envelopes,
+        requires = "detonator_mines"
+    )]
+    pub(crate) detonator_mine_envelopes: Option<MineEnvelopes>,
+
     /// Comparison input: start the Detonator EMP at this many charges (the gauge they give), as
     /// the original's charge was written for the capture it is compared with.
     #[arg(long, value_name = "N")]
@@ -726,10 +736,10 @@ pub(crate) struct Cli {
     /// Replaces the live spectrum the way `--zone-spectrum-test` does, with
     /// the original's levels instead of a ramp.
     #[arg(
-        long,
-        value_name = "B0,...,B15",
-        value_parser = crate::race_capture::spectrum::parse_bands
-    )]
+    long,
+    value_name = "B0,...,B15",
+    value_parser = crate::race_capture::spectrum::parse_bands
+)]
     pub(crate) zone_bands: Option<crate::race_capture::spectrum::Bands>,
 
     /// The sixteen raw band levels (`+0x32b8` of the stage block) the Detonator mine's
@@ -1478,6 +1488,25 @@ impl Cli {
 /// The positions of `--detonator-mines`, one value to clap (a bare `Vec` would read as repeated values).
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct MinePositions(pub(crate) Vec<oag_core::math::Vec3>);
+
+/// The envelopes of `--detonator-mine-envelopes`, one value to clap.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct MineEnvelopes(pub(crate) Vec<(f32, f32)>);
+
+fn parse_mine_envelopes(text: &str) -> Result<MineEnvelopes, String> {
+    let number = |n: &str| {
+        n.trim()
+            .parse::<f32>()
+            .map_err(|_| format!("`{n}` is not a number"))
+    };
+    text.split(';')
+        .map(|pair| match pair.split_once(',') {
+            Some((s, t)) => Ok((number(s)?, number(t)?)),
+            None => Err(format!("`{pair}` is not S,T")),
+        })
+        .collect::<Result<Vec<_>, String>>()
+        .map(MineEnvelopes)
+}
 
 fn parse_detonator_mines(text: &str) -> Result<MinePositions, String> {
     text.split(';')

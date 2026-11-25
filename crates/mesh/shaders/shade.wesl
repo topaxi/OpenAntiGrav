@@ -2302,8 +2302,9 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
     // unlit rim, `rim^(4 sat(1 - B) + 1) / (1 - 0.9 C)` per channel, `B` the entry's offset
     // (`MineBrightness`) and `C` its tint (`MineColour`), read off the program's own microcode
     // (`docs/ghidra/functions/ps3-hdfury-eu/detonator-mine-material.md`, "The mine's fragment
-    // program"). The map (the program's unit 0) is the third binding, at the second coordinate set
-    // (`TC3`), put through the chunk's tangent frame as a hull's is; the program dots a
+    // program"). The map (the program's unit 0) is the third binding, at the chunk's one
+    // coordinate set (`TC3`; the mine's vertices declare no second set), put through the chunk's
+    // tangent frame as a hull's is; the program dots a
     // tangent-space eye vector with it, which is the same angle in the world frame. Its alpha is
     // the program's output alpha: both mine models are cutouts (state word 62), so the draw's alpha
     // test cuts the lattice's holes. The fogged variant the race resolves ends in `/2`
@@ -2347,7 +2348,7 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
     var mine_normal = n;
     var mine_alpha = 1.0;
     if mine_rim_on {
-        let mine_map = material_sample(MATERIAL_PAD_MASK, in.lightmap_texcoord.xy);
+        let mine_map = material_sample(MATERIAL_PAD_MASK, in.texcoord);
         mine_normal = hull_normal(mine_map, n, in.tangent);
         mine_alpha = mine_map.a;
     }
@@ -2372,6 +2373,20 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
             min(scene.light.output_scale * glow_tint_offset.rgb * glow_tint_offset.w, vec3<f32>(HALF_MAX)),
             1.0,
         );
+    }
+    // **HD's Detonator cannon gauge** (`Emissive::program` mode 27, `oag_mesh::mesh::rcs::bullet_gauge`):
+    // the segment picture at `v + 0.5 * F`, `F` the entry's offset (`StandardBullets`), coloured by
+    // its tint (`StandardColour`) where it is white, and the picture unshifted (`PowerBullets` is 0,
+    // `PowerColour` white) where it is not. Unlit, through the fogged programs' `/2`
+    // (`docs/ghidra/functions/ps3-hdfury-eu/detonator-ammo-gauge.md`, "The segment program").
+    if glow_program > 26.5 && glow_program < 27.5 {
+        let gauge = material_sample(
+            MATERIAL_ALBEDO,
+            vec2<f32>(in.texcoord.x, in.texcoord.y + 0.5 * glow_tint_offset.w),
+        ).rgb;
+        let power = material_sample(MATERIAL_ALBEDO, in.texcoord.xy).rgb;
+        let segments = gauge * glow_tint_offset.rgb * gauge.r + power * (1.0 - gauge.r);
+        return vec4<f32>(min(scene.light.output_scale * segments, vec3<f32>(HALF_MAX)), 1.0);
     }
     if !(rim_glow_on || rim_edge_on) {
         // **Only where the colour returned is still the generic combine's**, which is

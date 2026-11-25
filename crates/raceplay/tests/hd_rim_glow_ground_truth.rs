@@ -474,3 +474,26 @@ fn the_bomb_body_and_equalisers_earn_their_tint_program() {
         );
     }
 }
+
+/// The Detonator hull's `detonator_bulletgaugesegments` declares `StandardBullets` in its vertex
+/// programs and `StandardColour`, `PowerBullets` and `PowerColour` in its fragment ones
+/// (`detonator-ammo-gauge.md`, "The segment program"): it, and nothing else on the hull, earns a
+/// `PROGRAM_BULLET_GAUGE` entry its slot names, holding the bind-time block (full, red), never the
+/// material's authored `StandardColour`.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn the_detonator_hull_gauge_earns_its_segment_program() {
+    let Some(image) = image() else { return };
+    let model = build(&image, "/data/ships/detonator/ship.vex");
+    let gauges = model
+        .emissive
+        .iter()
+        .filter(|e| e.program[0] == mesh::PROGRAM_BULLET_GAUGE)
+        .count();
+    assert_eq!(gauges, 1, "one gauge material on the hull");
+    let (row, named) = program_row(&model, mesh::PROGRAM_BULLET_GAUGE).expect("a gauge entry");
+    assert!(named, "no slot names row {row}");
+    let entry = model.emissive[row - 1];
+    assert_eq!(entry.tint, [1.0, 0.0, 0.0]);
+    assert_eq!(entry.offset, 1.0);
+}

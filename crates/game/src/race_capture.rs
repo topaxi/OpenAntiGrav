@@ -281,6 +281,9 @@ pub struct CaptureOptions {
     /// `--detonator-mines`: the original's mine positions, laid on ours' nearest survey lanes in place of
     /// the seeded opening layout ([`oag_raceplay::RaceSim::carry_detonator_mines`]).
     pub detonator_mines: Option<Vec<oag_core::math::Vec3>>,
+    /// `--detonator-mine-envelopes`: the football's and spikes' envelope of each `detonator_mines` position, in its
+    /// order, held as the original read them ([`oag_raceplay::Race::pin_mine_envelopes`]).
+    pub detonator_mine_envelopes: Option<Vec<(f32, f32)>>,
     /// `--detonator-emp-charge` ([`oag_raceplay::RaceSim::charge_detonator_emp`]).
     pub detonator_emp_charge: Option<u32>,
     /// `--pose-spark`: contact sparks the original threw before the frame, thrown that long
@@ -500,7 +503,16 @@ pub fn capture(
         race.warm_up_contact_sparks(velocities, &options.pose_sparks);
     }
     if let Some(mines) = &options.detonator_mines {
-        let dropped = race.core.sim.carry_detonator_mines(mines);
+        let lanes = race.core.sim.carry_detonator_mines(mines);
+        if let Some(envelopes) = &options.detonator_mine_envelopes {
+            race.pin_mine_envelopes(
+                lanes
+                    .iter()
+                    .zip(envelopes)
+                    .filter_map(|(lane, &envelope)| lane.map(|lane| (lane, envelope))),
+            );
+        }
+        let dropped = lanes.iter().filter(|lane| lane.is_none()).count();
         if dropped > 0 {
             warn!(
                 "--detonator-mines: {dropped} of {} positions have no survey lane near them",

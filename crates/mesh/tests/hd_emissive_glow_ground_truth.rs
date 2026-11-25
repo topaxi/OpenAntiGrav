@@ -362,3 +362,60 @@ fn moa_therma_marks_the_zone_plain_chunks_and_only_them() {
         );
     }
 }
+
+/// The Detonator mine's normal map reaches the draw: the football is not a smooth disc.
+///
+/// The mine's vertices declare one coordinate set, so the program's `TC3` is the diffuse set
+/// (`detonator-mine-material.md`, "The mine's fragment program"). A shader that sampled the
+/// lightmap set, which the chunk does not carry, read one texel everywhere and drew a smooth
+/// sphere with no relief and no cut-out holes. At `MineBrightness` 1 the rim is wide, so the
+/// relief is the lit disc's luminance varying across it: the share of pixels in the disc that
+/// differ from their neighbour by more than a smooth gradient does is the measure.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn the_mine_football_shows_its_normal_map_relief() {
+    let Some(image) = image() else { return };
+    let Some(mut model) = build(
+        &image,
+        "DATA00.PSARC",
+        "/data/weapons/mine_rita_football.vex",
+    ) else {
+        return;
+    };
+    for entry in &mut model.emissive {
+        if entry.program[0] == mesh::PROGRAM_MINE_RIM {
+            entry.offset = 1.0;
+            entry.tint = [0.478, 0.098, 1.0];
+        }
+    }
+    let (w, h) = (320usize, 320usize);
+    let pixels = oag_mesh::mesh_render::capture_pixels_from(
+        &model,
+        w as u32,
+        h as u32,
+        0.0,
+        0.0,
+        oag_mesh::mesh_render::Anisotropy::default(),
+        0.0,
+    )
+    .expect("the offscreen capture runs");
+    let luma = |x: usize, y: usize| {
+        let p = &pixels[(y * w + x) * 4..][..3];
+        f32::from(p[0]) + f32::from(p[1]) + f32::from(p[2])
+    };
+    // The inner half of the frame is inside the ball; count luminance steps between
+    // neighbours that a smooth shaded sphere does not make.
+    let mut steps = 0usize;
+    for y in h / 4..3 * h / 4 {
+        for x in w / 4..3 * w / 4 {
+            if (luma(x, y) - luma(x + 1, y)).abs() > 40.0 {
+                steps += 1;
+            }
+        }
+    }
+    println!("{steps} relief steps in the football's inner half");
+    assert!(
+        steps > 400,
+        "{steps} luminance steps: the football draws as a smooth sphere, its normal map is not read"
+    );
+}

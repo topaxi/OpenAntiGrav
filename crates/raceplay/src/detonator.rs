@@ -326,18 +326,19 @@ impl crate::sim::RaceSim {
     /// Puts the opening stage's mines where the original's were, all live, in place of the seeded layout
     /// (`--detonator-mines`): each position is snapped to the free lane of ours' survey nearest to it
     /// across the section (the offset along the section's up axis is the mine's hover height and is not
-    /// compared). The stage is laid first so the bomb and the stage counter are the race's own. Returns how
-    /// many positions had no lane within [`SNAP_RADIUS`] across and [`LIFT_TOLERANCE`] of the mine's height, or
-    /// a lane another carried mine or the bomb already holds, and were dropped. Nothing happens off Detonator.
+    /// compared). The stage is laid first so the bomb and the stage counter are the race's own. Returns
+    /// each position's lane as (survey entry, lane), `None` for a position with no lane within [`SNAP_RADIUS`]
+    /// across and [`LIFT_TOLERANCE`] of the mine's height, or on a lane another carried mine or the bomb already
+    /// holds (dropped). Nothing happens off Detonator (every position is `None`).
     ///
     /// A comparison against the original carries its mines this way: the placer's `Libc_Rand` stream is not
     /// carried, and the original numbers its entries from the player's start cursor where ours starts at the
     /// spline's origin (7 apart on Talon's Junction), so a mine's own entry number does not transfer; its
     /// position does (`docs/tools/compare-page.md`, "Detonator pairs").
-    pub fn carry_detonator_mines(&mut self, positions: &[Vec3]) -> usize {
+    pub fn carry_detonator_mines(&mut self, positions: &[Vec3]) -> Vec<Option<(u16, i8)>> {
         use oag_weapons::detonator::{MAX_MINES, MINE_LIFT, Placed};
         let Some(detonator) = self.detonator.clone() else {
-            return 0;
+            return vec![None; positions.len()];
         };
         if self.world.detonator.stages_laid == 0 {
             let _ = oag_weapons::detonator::place_stage(
@@ -351,7 +352,7 @@ impl crate::sim::RaceSim {
         let lane_width = detonator.layout.values.distance_offset_between_mines;
         let bombs: Vec<Placed> = self.world.detonator.live_bombs().to_vec();
         let mut laid: Vec<Placed> = Vec::new();
-        let mut dropped = 0;
+        let mut lanes: Vec<Option<(u16, i8)>> = Vec::with_capacity(positions.len());
         for &position in positions {
             let mut best: Option<(f32, Placed)> = None;
             for (index, entry) in detonator.survey.entries.iter().enumerate() {
@@ -394,8 +395,9 @@ impl crate::sim::RaceSim {
                             .any(|b| (b.entry, b.lane) == (placed.entry, placed.lane)) =>
                 {
                     laid.push(placed);
+                    lanes.push(Some((placed.entry, placed.lane)));
                 }
-                _ => dropped += 1,
+                _ => lanes.push(None),
             }
         }
         let field = &mut self.world.detonator;
@@ -403,7 +405,7 @@ impl crate::sim::RaceSim {
             *slot = *placed;
         }
         field.live_mines = laid.len() as u16;
-        dropped
+        lanes
     }
 
     /// Lays the stages the player has reached: the opening one on the first tick, then one per

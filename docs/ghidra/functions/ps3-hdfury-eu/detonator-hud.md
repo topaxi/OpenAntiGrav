@@ -109,7 +109,8 @@ computes does **not** feed a widget in this controller. It is passed with the "l
 `0x0029d578` (`count, flag`), which stores `count * k` (`DAT_008b2e70`) into a shader constant block
 at `PTR_DAT_008b2e60+0x24` and a mask vector at `+0x30`: the ship's own
 `detonator_bulletgaugesegments` material (DATA00 `/data/materials/ships/`), i.e. an ammo gauge drawn
-on the craft model, not on the HUD (hypothesis, 55: the constant block's owner is unread).
+on the craft model, not on the HUD. Read, confirmed live and wired on
+[detonator-ammo-gauge.md](detonator-ammo-gauge.md) (`0x0029d578` is `DetonatorGauge_SetBullets`, 88).
 
 ### `0x00080830` (EMP half), `f1 = dt`
 
@@ -256,7 +257,8 @@ its base package ships. Each title's `Detonator_HUD` entry name is therefore its
 - The `EmpBarEffect` shader constants (`Colour`, `EMP`, `Speed`, `Brightness`, `EMP_Rays`) and the
   colour table at `0x00765b38`: the writes after `0x00082600`.
 - The bullet icons' per-state art (`0x0007f0a0`) and what `clip+0x80..0xb8` are.
-- The constant block `0x0029d578` writes (the ship's bullet gauge) and whether it is drawn.
+- ~~The constant block `0x0029d578` writes (the ship's bullet gauge) and whether it is drawn.~~
+  Read and wired: [detonator-ammo-gauge.md](detonator-ammo-gauge.md).
 - Message 8's icon on HD and the directional arrows' use (above), and the `.bss` tenth row.
 - What the generic fragments (`HUD_info_text`, `HUD_time_diff`, `HUD_ready_go`) show in Detonator: generic binders (`Hud_BindWidgets` and its siblings, see [hud-sight.md](hud-sight.md), [hud-message-triggers.md](hud-message-triggers.md)); what `Detonator_UpdateHud` writes into the message word at `*(hud+0x40)+0xf4` is unread (recipe: scan `0x67120`-`0x67d00` for a store at disp `0xf4`).
 - The writer of the 15 words at `clip+0x80`.

@@ -10,6 +10,7 @@ use log::{debug, warn};
 
 mod absorb_overlay;
 mod absorb_shell;
+mod ammo_gauge;
 mod beam;
 pub(crate) mod behind_glass;
 mod bloom;

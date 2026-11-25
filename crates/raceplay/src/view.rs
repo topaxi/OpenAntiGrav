@@ -445,6 +445,9 @@ pub struct RaceView {
     pub(super) hd_missile_blast: bool,
     /// `options::ViewSetup::detonator_cannon_lights`.
     pub(super) detonator_cannon_lights: bool,
+    /// `options::ViewSetup::detonator_ammo_gauge`, and what the gauge showed last frame.
+    pub(super) detonator_ammo_gauge: Option<oag_title::DetonatorAmmoGauge>,
+    pub(super) ammo_gauge_shown: std::sync::Mutex<Option<crate::ammo_gauge::Shown>>,
     /// The stage's generator, deliberately **not** `world.rng` - see
     /// [`Self::exhaust_rng`].
     pub(super) stage_rng: Rng,
@@ -551,4 +554,7 @@ pub struct RaceView {
     /// [`crate::scene`]'s `write_detonator_looks`, read by [`Race::mine_model_matrices`]: one source for the
     /// draw, the shadows and the blur's previous pose.
     pub(super) mine_sizes: std::sync::Mutex<std::collections::BTreeMap<(u16, i8), (f32, f32)>>,
+    /// Laid mines whose music envelope a comparison holds at the original's read (`--detonator-mine-envelopes`),
+    /// by survey entry and lane: the football's `s` and the spikes' `t`.
+    pub(super) mine_pins: std::sync::Mutex<std::collections::BTreeMap<(u16, i8), (f32, f32)>>,
 }
