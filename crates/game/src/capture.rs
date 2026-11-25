@@ -580,6 +580,7 @@ pub fn run(
                 detonator_mines: None,
                 detonator_mine_envelopes: None,
                 detonator_emp_charge: None,
+                detonator_gauge_speed: None,
                 pose_sparks: Vec::new(),
                 presented: options.presented.then_some(crate::race_capture::Presented {
                     render_scale: render_profile.render_scale,

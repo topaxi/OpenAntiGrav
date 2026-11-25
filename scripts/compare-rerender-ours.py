@@ -91,6 +91,11 @@ def rerender(pj, binary):
             and orig.get("race_clock_s") is not None and rec["profile"] == "pulse-psp":
         flags[flags.index("--world-clock-offset") + 1] = "%.3f" % (orig["world_clock_offset_s"] + orig["race_clock_s"])
     flags = ps2_world_clock_flags(rec, flags)
+    # A Detonator pair holds ours' craft at rest (`--pose-hold-ticks`), where the cannon gauge's speed gate never opens and the
+    # gauge stays the bind's red; pairs recorded before `--detonator-gauge-speed` carry the original's speed in `ship.vel`.
+    vel = (orig.get("ship") or {}).get("vel")
+    if "--pose-hold-ticks" in flags and "--detonator-gauge-speed" not in flags and vel:
+        flags += ["--detonator-gauge-speed", "%.3f" % sum(c * c for c in vel) ** 0.5]
     # Any pair whose record holds the offset it was made with (`ours.world_clock_offset_s`) but whose flags lost it keeps the
     # original's scenery phase on a re-render.
     recorded = (rec.get("ours") or {}).get("world_clock_offset_s")

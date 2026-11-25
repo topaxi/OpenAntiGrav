@@ -162,8 +162,25 @@ the table's `+0x1bc`/`+0x1c0` (`minNumPadsToCollectEMP` 4, `maxNumPadsToCollectE
 `1.0` (TOC `-0x49c4`), caps the result at `1.0` (`fsel`, `0x000eb498`-`0x000eb4a8`) and passes it
 (`0x000eb4b0`). So **Charge1 lights once the EMP is ready and Charge2 once it is full**: the same
 thresholds as the HUD's `EmpReady` and the `EMPFULL` cue. **62** on the channel law, **70** on `v`
-(static; `0x002a3718`'s body is unread, and no capture ran). The fuselage's `rich_iridescent`
-material and the strip and wing-edge glow it drives are not wired.
+(static; `0x002a3718`'s body is unread, and no capture ran).
+
+**Which material reads them: the two plasma shells, not the fuselage** (`det-hull-charge`, 2026-11-25;
+a scan of every `.rcsmaterial` in `DATA00` and `DATA02` for the two hashes `~crc32("Charge1")`
+`0x927fb6c5` and `~crc32("Charge2")` `0x0b76e77f`). Neither `detonator_ship_rich_iridescent` nor
+`detonator_ship_dg_iridescent` declares either, in any parameter table. Only
+`detonator_shield_plasma` (`Charge1`) and `detonator_shield_plasma1` (`Charge2`) do, and
+`ship.rcsmodel` lists both. Their fragment programs (`scripts/ps3-microcode.py fp-file`, every
+block) end with `MOV H0.w, <Charge>` and no other alpha writer, with the colour `tex(uv + noise) +
+fresnel * (0.062, 0.745, 1)`: **the shell's alpha is the charge** (90). Blend `SrcAlpha, One`
+(`lineage_blend.rs`'s PSP2 table carries the same pair). So the lit blue lines on the wings are the
+EMP's charge indicator: dark at EMP not ready, `Charge1` once ready, `Charge2` added once full.
+**The reset at `0x00107f20`** stores the channels' rates, `1.3` and `1.6` a second
+(`0x008a9840`, `0x008a9844`), and the targets are the constants at `0x008a9838` (`1.0`) and
+`0x008a983c` (`0.0`) (read from the executable's memory, 85).
+
+Still unread: `0x002a3718`'s body, so whether `v` is `0` at exactly `n = lo` (ours reads the HUD's
+`gauge`, which is `0` there, so the strip stays dark at the ready count and lights one charge later),
+and a live capture of the block at the three states (the RPCS3 instance was held by another lane).
 
 ## Wired
 
@@ -183,13 +200,24 @@ not read.
 A seek in a replay viewer forgets the held gauge (`Race::restore_for_viewing`), so a seek to the
 grid draws the bind state. A Restart Race loads the race again.
 
-**A pose-held comparison pair shows the grid state.** `--pose-hold` puts ours' craft at rest, so
-its speed never passes the gate and the gauge stays full and red where the original's moving craft
-shows blue. It is the law doing what it should on a craft at rest, not a pair to read the gauge off.
-The frames that show it are a free race (`--race --mode detonator`, an `--input-script` holding
-SQUARE).
+**A pose-held comparison pair carries the original's speed.** `--pose-hold` puts ours' craft at rest,
+so its speed never passes the gate and the gauge stayed full and red where the original's moving craft
+shows blue. `--detonator-gauge-speed S` (`oag_raceplay::Race::pin_ammo_gauge_speed`) makes the gate read
+`S`, the original's speed at the frame; `rpcs3-hd-pair.py` writes it from the recorded `ship.vel`, and
+`compare-rerender-ours.py` adds it to a stored Detonator pair that lacks it. Normal play never sets
+it. Ours' gauge then steps from its own clip, which the pair's input script reproduces. On the three
+stored pairs the gauge turns blue as in the original's frame; the whole-frame metric moves by under 0.01
+(`pad` mean grey 7.64 to 7.63, RMSE 0.1209 to 0.1191; `mines-ahead` 13.70 to 13.70, 0.1705 to 0.1693;
+`cannon-volley` 14.16 to 14.15, 0.1724 to 0.1714).
 
 ## 2048 and Omega
+
+**`Charge1`/`Charge2`: checked, applies, not wired.** Omega's `data00.psarc` ships
+`detonator_shield_plasma` and `detonator_shield_plasma1` (and `_1`, `_2` copies) with the same two
+hashes in the parameter tables (little-endian, seven occurrences each; the other material of the pair
+carries none), so the law and the materials are HD's. Omega draws through the PSP2/GNM programs,
+which `mesh::rcs::hull_charge` does not touch, and `Detonator::hull_charge` is `None` there, so
+the shells draw at the material's authored alpha. 2048 ships no Detonator mode. Left to a thread.
 
 **Checked, applies, not wired.** Both ship the material: 2048's `data00.psarc` carries 17 entries
 (`Data/materials/Ships/detonator_bulletgaugesegments.rcsmaterial`, `_1`, `_2`, the

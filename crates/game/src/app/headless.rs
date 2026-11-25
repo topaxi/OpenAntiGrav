@@ -939,13 +939,14 @@ pub(crate) fn race_launch(
                     || cli.placement.pose.is_some(),
                 field_lean: field_lean(cli)?,
                 field_warmup: field_warmup_velocities(cli)?,
-                detonator_mines: cli.race_debug.detonator_mines.as_ref().map(|m| m.0.clone()),
+                detonator_mines: cli.detonator.mines.as_ref().map(|m| m.0.clone()),
                 detonator_mine_envelopes: cli
-                    .race_debug
-                    .detonator_mine_envelopes
+                    .detonator
+                    .mine_envelopes
                     .as_ref()
                     .map(|m| m.0.clone()),
-                detonator_emp_charge: cli.race_debug.detonator_emp_charge,
+                detonator_emp_charge: cli.detonator.emp_charge,
+                detonator_gauge_speed: cli.detonator.gauge_speed,
                 pose_sparks: pose_sparks(cli)?,
                 // A photo is drawn through the presentation chain, at the output's size and
                 // before the grade, as the session reads it back: no brightness, gamma or

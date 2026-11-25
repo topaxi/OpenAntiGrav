@@ -255,6 +255,7 @@ impl super::Scene {
         );
         self.write_detonator_looks(race, queue, seconds, bomb_matrices.len());
         self.write_ammo_gauge(race, queue);
+        self.write_hull_charge(race, queue, seconds);
         self.write_detonator_parts(
             (race, &race.mine_spike_matrices(), &bomb_matrices),
             prev,

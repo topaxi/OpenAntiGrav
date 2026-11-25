@@ -175,6 +175,7 @@ mod cutout;
 mod damage_lights;
 mod electricity;
 mod holo_billboard;
+mod hull_charge;
 mod hull_normal;
 mod isolate;
 mod light_cone;
@@ -985,7 +986,8 @@ fn build_with_options(
                     None => (texcoords, lightmap_texcoords, texcoords2, vertex_light),
                 };
                 let tangents = if surface.tangent.carried() {
-                    mesh.tangents(model_blob, submesh, stride).ok().flatten()
+                    let inline = mine_rim::draws_mine_rim(surface.roles, &out.emissive);
+                    mine_rim::tangents(inline, mesh, model_blob, submesh, stride)
                 } else {
                     None
                 };

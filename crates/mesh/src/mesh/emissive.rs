@@ -204,6 +204,13 @@ pub const PROGRAM_ELECTRICITY: f32 = 25.0;
 /// tint and offset are rewritten per frame. See `super::rcs::bullet_gauge`.
 pub const PROGRAM_BULLET_GAUGE: f32 = 27.0;
 
+/// [`Emissive::program`]'s modes for HD's Detonator plasma shells (`detonator_shield_plasma`,
+/// `detonator_shield_plasma1`): the draw's alpha times the entry's offset, `Charge1` and `Charge2`.
+/// The offset is rewritten per frame. See `super::rcs::hull_charge`.
+pub const PROGRAM_HULL_CHARGE_1: f32 = 28.0;
+/// See [`PROGRAM_HULL_CHARGE_1`].
+pub const PROGRAM_HULL_CHARGE_2: f32 = 29.0;
+
 /// The second entry of an [`PROGRAM_ELECTRICITY`] material: tint `(PitchVolume, BassHit,
 /// TrebleHit)`, offset `PitchOffset`.
 pub const PROGRAM_ELECTRICITY_AUDIO: f32 = 26.0;

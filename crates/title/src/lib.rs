@@ -106,11 +106,11 @@ pub use race::sound::{
 };
 pub use race::{
     CircuitBanks, CountdownEvent, CountdownVoice, Crossfade, Detonator, DetonatorAmmoGauge,
-    DetonatorCraft, DetonatorLayouts, DetonatorObjects, DetonatorPads, DetonatorVoices,
-    GuestRoster, RaceDefaults, SequenceTick, SoundBanks, SpeedClasses, StartCue, TeamVariant,
-    TeamVariants, TrackBanks, VariantJoin, VrBanks, WwiseBank, WwiseCue, WwiseCues, WwiseState,
-    WwiseTeamSwitch, ZoneAnnouncer, ZoneCircuit, ZoneClassAnnouncer, ZoneClassTone, ZoneCraft,
-    ZoneFallback, ZoneFrame, ZonePalette, ZoneStageTextures, ZoneStages, ZoneTeamStep,
+    DetonatorCraft, DetonatorHullCharge, DetonatorLayouts, DetonatorObjects, DetonatorPads,
+    DetonatorVoices, GuestRoster, RaceDefaults, SequenceTick, SoundBanks, SpeedClasses, StartCue,
+    TeamVariant, TeamVariants, TrackBanks, VariantJoin, VrBanks, WwiseBank, WwiseCue, WwiseCues,
+    WwiseState, WwiseTeamSwitch, ZoneAnnouncer, ZoneCircuit, ZoneClassAnnouncer, ZoneClassTone,
+    ZoneCraft, ZoneFallback, ZoneFrame, ZonePalette, ZoneStageTextures, ZoneStages, ZoneTeamStep,
     ZoneTransition,
 };
 pub use touch::{TouchButton, TouchFrontEnd};

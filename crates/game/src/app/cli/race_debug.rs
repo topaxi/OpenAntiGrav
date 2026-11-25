@@ -1,7 +1,5 @@
 //! Development and comparison switches for a race.
 
-use super::detonator::{MineEnvelopes, MinePositions, parse_detonator_mines, parse_mine_envelopes};
-
 /// Development and comparison switches for a race.
 #[derive(clap::Args, Debug)]
 pub(crate) struct RaceDebugArgs {
@@ -54,31 +52,6 @@ pub(crate) struct RaceDebugArgs {
     /// `crate::race_capture::spectrum::ZoneFeed`'s own doc comment.
     #[arg(long, conflicts_with = "zone_bands")]
     pub(crate) zone_spectrum_test: bool,
-
-    /// Comparison input: lay the Detonator opening stage's mines at these world positions
-    /// (`X,Y,Z;X,Y,Z;...`, the original's mine objects read in the frame's pause), each on the
-    /// survey lane nearest to it, in place of the seeded layout.
-    #[arg(
-        long,
-        value_name = "X,Y,Z;...",
-        value_parser = parse_detonator_mines
-    )]
-    pub(crate) detonator_mines: Option<MinePositions>,
-
-    /// Comparison input: hold each `--detonator-mines` mine's music envelope at the original's
-    /// (`S,T;...`: `m+0xf4` and `m+0xf8`, same order), ours having no history of the music.
-    #[arg(
-        long,
-        value_name = "S,T;...",
-        value_parser = parse_mine_envelopes,
-        requires = "detonator_mines"
-    )]
-    pub(crate) detonator_mine_envelopes: Option<MineEnvelopes>,
-
-    /// Comparison input: start the Detonator EMP at this many charges (the gauge they give), as
-    /// the original's charge was written for the capture it is compared with.
-    #[arg(long, value_name = "N")]
-    pub(crate) detonator_emp_charge: Option<u32>,
 
     /// Comparison input: draw the Zone and Detonator music-driven look from these
     /// sixteen held band levels, read off the original at the frame being compared

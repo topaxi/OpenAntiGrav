@@ -21,7 +21,7 @@ pub(crate) mod benchmark;
 mod boot;
 mod capture;
 mod capture_view;
-mod detonator;
+pub(crate) mod detonator;
 mod diagnostics;
 pub(crate) mod extra;
 mod fury;
@@ -158,6 +158,8 @@ pub(crate) struct Cli {
     pub(crate) race_setup: race_setup::RaceSetupArgs,
     #[command(flatten)]
     pub(crate) race_debug: race_debug::RaceDebugArgs,
+    #[command(flatten)]
+    pub(crate) detonator: detonator::DetonatorArgs,
 
     #[command(flatten)]
     pub(crate) driver: extra::DriverArgs,

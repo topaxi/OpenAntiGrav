@@ -227,31 +227,27 @@ fn fly_and_advance(race: &mut Race) {
     race.view.advance_destroy_camera(&race.core);
 }
 
-/// HD's Zone end takes the orbit, not a station: the eye starts where the chase rig was, far out, and
-/// comes in toward the orbit, and the field narrows to about 30 degrees at 2.5 s.
+/// HD's Zone end takes the orbit, not a station: the eye is `5 + dist` from the craft on every frame
+/// (the render camera, read on RPCS3), so 5.5 at the cut and farther as the radius opens, and the field
+/// narrows to about 30 degrees at 2.5 s.
 #[test]
-fn hd_zone_end_is_the_orbit_coming_in_from_the_chase_eye() {
+fn hd_zone_end_is_the_close_orbit_five_beyond_its_radius() {
     let mut race = hd_zone_race_at(0.0);
-    let chase = eye(&race);
     set_player(&mut race, CraftState::Destroyed);
     let craft = race.core.sim.world.ships[0].physics.body.position;
     let camera = race.view.destroy_camera_now().expect("the orbit");
     assert_eq!(camera.basis, Basis::LookAt);
     let start = camera.eye.distance(craft);
-    assert!(start > 8.0, "starts {start} off the craft");
-    assert!(
-        (start - chase.distance(craft)).abs() < 0.5,
-        "chase eye was {}",
-        chase.distance(craft)
-    );
+    assert!((start - 5.5).abs() < 0.01, "starts {start} off the craft");
     for _ in 0..60 {
         race.view.advance_destroy_camera(&race.core);
     }
     let camera = race.view.destroy_camera_now().expect("the orbit");
+    let expect = 5.0 + 5.0 - 4.5 * 0.98_f32.powi(60);
     assert!(
-        camera.eye.distance(craft) < start - 1.5,
-        "a second on it is {} out, from {start}",
-        camera.eye.distance(craft)
+        (camera.eye.distance(camera.focus) - expect).abs() < 0.05,
+        "a second on it is {} from the focus, want {expect}",
+        camera.eye.distance(camera.focus)
     );
     for _ in 0..90 {
         race.view.advance_destroy_camera(&race.core);
@@ -265,9 +261,9 @@ fn hd_zone_end_is_the_orbit_coming_in_from_the_chase_eye() {
 }
 
 /// The craft is drawn for the first 2.5 s of the orbit (the shell, state 5): the eye is never inside
-/// its box (grown by the 1.0 near plane) then, at rest or flying at the speeds of a Zone (93 units a
-/// second read on RPCS3). Ours sat 0.5 off the craft at the cut, inside a hull 13 long
-/// (`destroy-camera.md`, "Measured on RPCS3").
+/// its box then, at rest or flying at the speeds of a Zone (93 units a second read on RPCS3), with no
+/// push-out: the read law's `5 + dist` already stands outside the hull (`destroy-camera.md`, "The orbit
+/// eye").
 #[test]
 fn hd_zone_end_orbit_never_puts_the_eye_inside_the_hull() {
     for speed in [0.0, 19.0, 93.0, 240.0] {
@@ -289,12 +285,11 @@ fn hd_zone_end_orbit_never_puts_the_eye_inside_the_hull() {
     }
 }
 
-/// A death in the cockpit view cuts from the chase rig's eye, not the cockpit's, which is bolted to the
-/// hull a few units from the craft's centre.
+/// The orbit reads no previous eye (`0x000ae6c0`), so a death in the cockpit view takes the same orbit as
+/// one in the chase view, not one started from the hull-bolted cockpit eye.
 #[test]
-fn a_zone_death_in_the_cockpit_view_starts_from_the_chase_rig() {
+fn a_zone_death_in_the_cockpit_view_takes_the_same_orbit() {
     let mut race = hd_zone_race_at(0.0);
-    let chase = eye(&race);
     race.view.internal_params.length = 3.0;
     race.view.internal_params.height = 0.0;
     race.set_camera_view(oag_display::display::CameraView::Internal);
@@ -310,11 +305,7 @@ fn a_zone_death_in_the_cockpit_view_starts_from_the_chase_rig() {
         .expect("the orbit")
         .eye
         .distance(craft);
-    assert!(
-        start > 8.0,
-        "started {start} off the craft, the chase eye was {}",
-        chase.distance(craft)
-    );
+    assert!((start - 5.5).abs() < 0.01, "started {start} off the craft");
 }
 
 /// A seek in a Zone replay puts the wreck hundreds of units from where the chase rig last was; the orbit

@@ -133,3 +133,29 @@ pub(super) fn mine_rim(
     }
     maps
 }
+
+/// Whether a surface's packed word names a [`PROGRAM_MINE_RIM`] entry of `table`.
+pub(super) fn draws_mine_rim(roles: u32, table: &[Emissive]) -> bool {
+    let index = slots::material_index(roles) as usize;
+    index > 0
+        && table
+            .get(index - 1)
+            .is_some_and(|entry| entry.program[0] == PROGRAM_MINE_RIM)
+}
+
+/// A chunk's authored tangent: the declared one, or on a mine surface the inline one at `+10`,
+/// which the mine's vertex program reads (`docs/ghidra/functions/ps3-hdfury-eu/detonator-mine-material.md`,
+/// "The lit draw, read live"). The mine's chunks declare no layout.
+pub(super) fn tangents(
+    mine: bool,
+    mesh: &rcsmodel::Mesh,
+    data: &[u8],
+    submesh: &rcsmodel::SubMesh,
+    stride: usize,
+) -> Option<Vec<[u8; 4]>> {
+    let declared = mesh.tangents(data, submesh, stride).ok().flatten();
+    if declared.is_some() || !mine {
+        return declared;
+    }
+    mesh.inline_tangents(data, submesh, stride).ok().flatten()
+}
