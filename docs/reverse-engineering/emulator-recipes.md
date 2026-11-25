@@ -314,3 +314,11 @@ Everything under `data/saves/` is game-derived and gitignored; members reach it 
 ## Waiting correctly
 
 See `.claude/skills/oag-drive/member-rules.md`, "Waiting on an emulator capture".
+
+## Member setup facts
+
+What a drive member needs before its first capture (`.claude/skills/oag-drive/member-rules.md` points here):
+
+- PPSSPP returns zeroed framebuffers unless its config has `[Graphics] SoftwareRenderer = True` (`scripts/ppsspp-start.sh` sets it; a hand-written config must).
+- RPCS3 comparison frames need `Write Color Buffers: true` in the private `config.yml` **and** in `custom_configs/config_BCES00664.yml` (off, the original reads about 1.74x too bright).
+- `rpcs3-drive.py serve` needs a short `XDG_CACHE_HOME` (for example `/tmp/oag-<lane>-cache`; a longer one fails with `AF_UNIX path too long`) and its `uv` run with `UV_CACHE_DIR=~/.cache/uv UV_OFFLINE=1`.
