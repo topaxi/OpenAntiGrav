@@ -208,6 +208,12 @@ impl IntroCamera {
         self.rule.effects_fade_in.is_some()
     }
 
+    /// Whether only a skip ends this flyby: its animation repeats until someone presses.
+    #[must_use]
+    pub fn ends_only_by_skip(&self) -> bool {
+        self.rule.ending.value == Ending::OnlyBySkip
+    }
+
     /// Whether the flyby is on screen.
     #[must_use]
     pub fn playing(&self) -> bool {
@@ -364,6 +370,16 @@ impl Race {
             .intro
             .as_mut()
             .map_or_else(Vec::new, |intro| std::mem::take(&mut intro.cues))
+    }
+
+    /// Whether the flyby is one nothing but a skip ends (HD's repeats until a press), so a run
+    /// with nobody to press would wait on it for ever.
+    #[must_use]
+    pub fn intro_ends_only_by_skip(&self) -> bool {
+        self.view
+            .intro
+            .as_ref()
+            .is_some_and(IntroCamera::ends_only_by_skip)
     }
 
     /// A pointer press on the flyby: skips it as a held Cross does, as soon as the lock lifts.

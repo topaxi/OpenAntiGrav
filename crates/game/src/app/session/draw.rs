@@ -1042,7 +1042,7 @@ impl Session {
         // The network block, only in a network race. `Dev` shows it; `draw_list` gates.
         let net_readout = self
             .net
-            .as_ref()
+            .as_deref()
             .and_then(crate::net_play::NetPlay::readout);
         // The simulation mods block, only in a modded race.
         let mods_readout = match &self.stage {

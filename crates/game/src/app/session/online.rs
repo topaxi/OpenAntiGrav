@@ -1307,7 +1307,7 @@ impl Session {
             self.online_leave_screens_for_hub();
         }
         if let Some(net) = launch {
-            self.net = Some(net);
+            self.net = Some(Box::new(net));
             if let Stage::Menu(stage) = &mut self.stage {
                 stage.lan = None;
             }

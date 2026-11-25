@@ -170,6 +170,16 @@ impl Output {
         }
     }
 
+    /// A null mixer for a run with no device: `silent` makes it mix nothing
+    /// ([`Mixer::set_silent`]), for a run no one hears and nothing reads, which still needs its
+    /// voices to start and end. A dump wants the mix, so it is not silent.
+    #[must_use]
+    pub fn headless(sample_rate: u32, silent: bool) -> Self {
+        let output = Self::null(sample_rate);
+        output.with_mixer(|mixer| mixer.set_silent(silent));
+        output
+    }
+
     /// Pauses or restarts the device's stream, for a window that is not on
     /// screen (Android `Suspended`, a minimised desktop window).
     ///
@@ -449,6 +459,15 @@ impl Output {
                 mixer.set_binaural(built);
             }
         });
+    }
+
+    /// Moves the mixer on one tick and keeps no samples ([`Mixer::advance_tick`]): what a null
+    /// backend does each simulation tick that no dump reads. Nothing with a device attached,
+    /// whose callback drains the mixer.
+    pub fn advance_tick(&self, tick_hz: u32) {
+        if !self.is_streaming() {
+            self.with_mixer(|mixer| mixer.advance_tick(tick_hz));
+        }
     }
 
     /// Renders one tick's audio into `out`, for the offline dump.

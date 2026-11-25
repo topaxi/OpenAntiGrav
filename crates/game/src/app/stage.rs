@@ -391,7 +391,7 @@ impl Stage {
     #[inline(never)]
     pub(crate) fn race(
         gpu: &Gpu,
-        loaded: race::Loaded,
+        loaded: Box<race::Loaded>,
         size: (u32, u32),
         anisotropy: Anisotropy,
         settings: &settings::Settings,
@@ -414,9 +414,8 @@ impl Stage {
         // above it (`docs/tools/android.md`, "The stack"). Every `--race` builds on a stack
         // sized for that, so no platform runs a path another one does not.
         let handles = gpu.handles();
-        // Boxed so the closure, and the copies of it the thread's start makes, carry a pointer
-        // rather than the 62 KB it points at.
-        let loaded = Box::new(loaded);
+        // Boxed all the way from `App::race`, so neither this frame, the closure nor the
+        // copies of it the thread's start makes carry the 62 KB it points at.
         let build = || {
             Self::build_race_stage(
                 &handles,

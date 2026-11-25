@@ -84,19 +84,16 @@ manifest and `cache/<image>` rows in `just push-data`.
   (checked, applies to every title, no per-title wiring).
 - **The `--race` stack overflow** (`docs/tools/android.md`, "The stack"): the scene
   builds on a 16 MiB thread and the launch frames end before the loop; verified on the
-  host with a 2 MiB main stack, on the S21 per the doc. Still open: `App::open_with`
-  (356 KiB) builds the `Session` literal in its own frame before boxing it, and
-  `Session` holds a 57 KB and a 43 KB overlay by value. Boxing those and building the
-  `Session` in place would put every frame on the `android_main` thread under 64 KiB.
-  Measure with `python3 scripts/check-android-stack.py <unstripped liboag_android.so>
-  --all --top 20`.
-  About 0.4 MB of frames sit above the shaders compiled under `open_with` on the 2 MiB
-  `android_main` thread, so it is safe today (the S21 finishes Pulse and HD on both
-  routes). `Stage::race` is 60.1 KiB against `check-android-stack.py`'s 64 KiB limit: an
-  unrelated change can fail an APK build, so either give it a per-function limit or
-  shrink it (the thread-start closure copies are the rest of its frame). The check turns
-  red only in `build-apk.sh` (`just apk`, `just deploy android`, a `v*` tag or a manual
-  release run), not in the gate.
+  host with a 2 MiB main stack, on the S21 per the doc. `Session`'s five big fields and
+  `App::race`'s `Loaded` travel boxed: `App::open_with` is 144.1 KiB (356.1 before) and
+  `Stage::race` 0.8 KiB (60.1), and `check-android-stack.py` keeps `open_with` under 160 KiB
+  and `Stage::race` under 64 KiB, so an unrelated change can no longer fail an APK build
+  at the margin. Still open: the remaining 144 KiB of `open_with` (the front end's first
+  stage and the shaders compiled under it, not read); about 0.4 MB of frames sit above it
+  on the 2 MiB `android_main` thread, so it is safe today (the S21 races Pulse and HD on
+  both routes). Measure with `python3 scripts/check-android-stack.py <unstripped
+  liboag_android.so> --all --top 20`. The check turns red only in `build-apk.sh`
+  (`just apk`, `just deploy android`, a `v*` tag or a manual release run), not in the gate.
 
 ## Next Steps
 

@@ -435,7 +435,7 @@ impl Session {
         self.pending_event = None;
         self.pending_card = None;
         let mode = options.mode;
-        self.watching = Some(watching);
+        self.watching = Some(Box::new(watching));
         self.start_race_loading(options, mode, None, false)
             .map_err(|e| {
                 self.watching = None;

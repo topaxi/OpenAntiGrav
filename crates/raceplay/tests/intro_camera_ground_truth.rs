@@ -61,6 +61,10 @@ fn the_flyby_runs_its_course_and_leaves_the_world_alone() {
         "before it begins the race draws as always"
     );
     assert!(race.begin_intro());
+    assert!(
+        !race.intro_ends_only_by_skip(),
+        "Pulse's flyby ends at its AnimEnd, so no run needs a skip pressed for it"
+    );
     assert!(!race.hud_shown());
     let before = race.core.sim.state_hash();
     let mut ticks = 0u32;

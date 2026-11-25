@@ -9,7 +9,7 @@ impl Session {
     pub(crate) fn reconnect_screen(&self, grid: (f32, f32)) -> Vec<Draw> {
         let Some(seconds) = self
             .net
-            .as_ref()
+            .as_deref()
             .and_then(crate::net_play::NetPlay::reconnect_seconds_left)
         else {
             return Vec::new();
@@ -31,7 +31,7 @@ impl Session {
 
     /// BACK while reconnecting leaves the race at once; whether it did.
     pub(crate) fn give_up_reconnecting(&mut self) -> bool {
-        match self.net.as_ref() {
+        match self.net.as_deref() {
             Some(net) if net.reconnecting() => {
                 net.give_up();
                 true

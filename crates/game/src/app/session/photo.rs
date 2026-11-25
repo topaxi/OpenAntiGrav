@@ -231,7 +231,7 @@ impl super::Session {
             self.gestures.release_all();
         }
         let language = self.settings.language.as_deref();
-        self.photo = Some(Open {
+        self.photo = Some(Box::new(Open {
             origin,
             message: None,
             announced: None,
@@ -246,7 +246,7 @@ impl super::Session {
             asked,
             resume_viewer: false,
             play_latched: false,
-        });
+        }));
     }
 
     /// Whether the race is stepping between ticks: not frozen by the pause and not held by the

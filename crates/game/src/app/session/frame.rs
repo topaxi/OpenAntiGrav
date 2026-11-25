@@ -1006,7 +1006,10 @@ impl Session {
                     if !self.no_intro && self.net.is_none() && stage.race.intro_to_play() =>
                 {
                     stage.race.begin_intro();
-                    if pointer.clicked {
+                    // `--autopilot` flies the craft for nobody to hold Cross: it presses the
+                    // skip of a flyby that only a skip ends, or a launch-file run on HD never
+                    // leaves the camera tour.
+                    if pointer.clicked || (self.autopilot && stage.race.intro_ends_only_by_skip()) {
                         stage.race.skip_intro();
                     }
                     stage.race.tick_intro(&inputs);
@@ -1066,7 +1069,7 @@ impl Session {
                     );
                     // A server that ends a race nobody had finished (the host left, a link
                     // died) leaves a frozen world: after a second of it, back to the menus.
-                    match self.net.as_ref().and_then(crate::net_play::NetPlay::over) {
+                    match self.net.as_deref().and_then(crate::net_play::NetPlay::over) {
                         Some(why) if !stage.race.core.sim.finished() => {
                             self.net_over_ticks += 1;
                             if self.net_over_ticks == NET_OVER_TICKS {

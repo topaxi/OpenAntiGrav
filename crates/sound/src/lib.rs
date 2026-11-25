@@ -687,7 +687,7 @@ impl Audio {
     /// zero, and the dump would be silence next to audible audio.
     ///
     /// `no_audio` (`--no-audio`) forces the same null backend with nothing
-    /// collected. A `--screenshot --until` run with a real device is
+    /// collected, and with no dump mixing nothing ([`Output::headless`]). A `--screenshot --until` run with a real device is
     /// "audio-clocked" per ADR-0019 and finishes before the movie does, so a
     /// late frame's target is never reached; the null backend puts it on the
     /// tick-clocked fallback (see [`Self::movie_playhead`]), as a machine with
@@ -701,7 +701,7 @@ impl Audio {
         no_audio: bool,
     ) -> Self {
         let output = if dump.is_some() || no_audio {
-            Output::null(DUMP_SAMPLE_RATE)
+            Output::headless(DUMP_SAMPLE_RATE, dump.is_none())
         } else {
             Output::open_or_null(tap, buffer)
         };
@@ -1059,7 +1059,7 @@ impl Audio {
         if let Some(dump) = &mut self.dump {
             self.output.render_tick(TICK_HZ, &mut dump.samples);
         } else if !self.output.is_streaming() {
-            self.output.render_tick(TICK_HZ, &mut Vec::new());
+            self.output.advance_tick(TICK_HZ);
         }
     }
 

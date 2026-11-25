@@ -95,6 +95,23 @@ fn it_loops_until_a_press_and_a_held_cross_alone_does_not_skip_it() {
     assert_eq!(race.core.sim.world.tick, 0);
 }
 
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn it_is_the_kind_only_a_skip_ends_and_a_skip_request_alone_ends_it() {
+    let Some((mut race, _)) = started(TRACK) else {
+        return;
+    };
+    assert!(race.begin_intro());
+    assert!(
+        race.intro_ends_only_by_skip(),
+        "the session presses the skip of this kind for `--autopilot`"
+    );
+    // The request is what the session raises: no button is held at any tick.
+    race.skip_intro();
+    race.tick_intro(&PlayerInputs::none());
+    assert!(!race.view_state().in_intro(), "a skip request ends it");
+}
+
 /// The file the loader reports flying for `mode` on `track`: the entry name after
 /// `pre-race flyby: ` on the line that reads it (`None` when no line does).
 fn flown(track: &str, mode: oag_race::Mode) -> Option<Option<String>> {
