@@ -204,6 +204,16 @@ newlines or `;`, and a word with spaces is quoted (`select "TRACK TITLE"`). `--s
 sends the state lines to a file, stderr otherwise. `--drive` needs one disc image (`--source`, or one on the search path) and refuses `--race`, `--screenshot`, `--dry-run` and `--launcher`. Run it with a profile of its own
 (`XDG_CONFIG_HOME` and friends): the menus save settings as a window does.
 
+**A run that looks at the picture and has nobody to hear it** passes `--no-audio` (a null output)
+and, beside it, two switches that stop the work behind the sound: `--no-soundtrack` reads and
+decodes no music (the front end's loop and the race songs; a PS2 song is 35 MiB of PCM off the
+CHD, an Omega one an ATRAC9 decode) and skips the scan of the other discs and folders the MUSIC
+page lists; `--no-effects` reads no sound bank for a race (no effect, engine or voice cue, no
+announcer, no countdown, and none of their load report lines). Sound effects, speech and movie
+sound otherwise go on. A test that reads now-playing, the MUSIC page or an `sfx:` report line
+leaves its switch off. Both are restart-safe arguments (`restartable_args`). The same switch on
+`oag_raceplay::Options` is `no_effects`, and on `oag_sound::Audio` `set_soundtrack`.
+
 A drive counts ticks, but a step that waits (`until`, `select` on a row not there yet, a page
 transition) spends a number of them that depends on how fast the machine ran. The menus'
 backdrop (the movie and the Fury cloud's clip) does not advance on those waiting frames, so
