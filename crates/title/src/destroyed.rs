@@ -67,8 +67,8 @@ pub struct ZoneEnd {
     /// The Zone ship directory's debris model, relative to the hull's own directory.
     pub debris: &'static str,
     /// Whether the player's camera is the close orbit of `Camera_UpdateOrbitView` (mode 2) while
-    /// the end plays (row Z2a to Z2f in `destroy-camera.md`). HD's is read; Omega's enter writes
-    /// the same constants and 2048's twin calls its own orbit enter, so both inherit it.
+    /// the end plays (rows Z2a to Z2f in `destroy-camera.md`). The same law is read on 2048 and
+    /// Omega (`destroy-camera.md`, "The orbit on 2048 and Omega").
     pub orbit_camera: bool,
     /// The title's `shipdestroy`, played at the blast (row Z5) after every other cue is stopped.
     /// `None` where the event is not resolved: the Zone end is then silent.
@@ -237,8 +237,8 @@ impl DestroyCamera {
         ..Self::HD
     };
 
-    /// Omega's mode 9: 2048's, with HD's substep constant. **Chosen, not measured**: Omega's view
-    /// dispatcher `0x01383a10` is unread, so its substep constant is not.
+    /// Omega's mode 9: 2048's, with HD's substep constant. **Chosen, not measured**: cases 9 to 11
+    /// of Omega's view dispatcher `0x01383a10` are unread, so its substep constant is not.
     pub const OMEGA: Self = Self {
         substeps_per_second: Some(6000.0),
         origin: crate::effects::Origin::InheritedFrom("Wipeout HD"),

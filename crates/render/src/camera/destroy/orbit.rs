@@ -1,4 +1,6 @@
-//! HD's Zone end camera: a close orbit round the craft (mode 2, `Camera_UpdateOrbitView`).
+//! The Zone end camera of HD, 2048 and Omega: a close orbit round the craft (mode 2,
+//! `Camera_UpdateOrbitView`), the same law on all three (`destroy-camera.md`, "The orbit on 2048 and
+//! Omega").
 //!
 //! The law is `docs/ghidra/functions/ps3-hdfury-eu/destroy-camera.md`, rows Z2a to Z2f. For 2.5 s
 //! the eye spins fast and tight at a narrowing field, then drifts slowly at the normal one until
