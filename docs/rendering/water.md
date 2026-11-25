@@ -994,8 +994,9 @@ and `1/1` give:
 
 A discrete desktop GPU spends a tenth of a millisecond on the target; the whole race pass is about 480 us
 there. The setting exists for a phone: the S21 pays 10.6 ms for the Vineta K glass at render scale 25
-(`docs/tools/android.md`, "Where an HD frame goes on the S21"). Phone numbers for `half` and `quarter` on each
-circuit are open.
+(`docs/tools/android.md`, "Where an HD frame goes on the S21"). Measured on the S21 at render scale 25, Vineta K,
+`quarter` takes the median frame from 41.9 to 24.9 ms (23.5 to 37.9 fps; `docs/tools/android.md`, "What `quarter` buys on Vineta K");
+`half` and the sea circuits are open.
 
 **The default is `original` on every platform** (maintainer's decision). What a setting costs depends on the
 hardware, not the platform, so Android gets no cheaper default; a player picks `half` or `quarter` for their

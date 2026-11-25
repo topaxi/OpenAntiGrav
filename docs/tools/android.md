@@ -879,11 +879,36 @@ Per pass, menu route (racing), one run each, about 120 frame-log seconds per arm
 On the flyby (`--race`), the same switches read glass 42.5 / 26.8, adverts 42.4 / 35.5, bloom 36.4 / 29.7, `hud` 36.8 / 32.0, `composite` 39.9 / 34.6
 and `resolve` 45.2 / 41.8 ms: the flyby's frame is lighter, so the same passes are a larger share of it. Only the glass target holds its cost while racing.
 The glass target's size is now a setting, `graphics.reflection_resolution` (`original`, the default, `half` or `quarter` of the original's size per axis, whatever the render scale:
-Vineta K's 640x360 becomes 320x180 or 160x90); no phone number for it yet; the default is `original` on every platform, and a player picks `half` or `quarter` for their hardware
-([water.md](../rendering/water.md), "The reflection target's resolution").
+Vineta K's 640x360 becomes 320x180 or 160x90); the default is `original` on every platform, and a player picks `half` or `quarter` for their hardware
+([water.md](../rendering/water.md), "The reflection target's resolution"). The phone numbers are under "What `quarter` buys on Vineta K" below.
 The racing frame thread is about 23 ms (ticks 5.6, scene recording 8.3, `submit` 9.1, the 10 minute run's racing seconds 20 to 110).
 A 20 s `simpleperf` of a racing frame thread: `Race::tick` 25 % (of it the audio mixer 6.8 % under `--no-audio`, mixing nothing since the bullet above, `RaceView::capture_poses` 6 %,
 the particle systems about 10 %, opponents 4.6 %), `CommandEncoder::finish` 23 %, `Scene::prepare_view` 23 %; Mali's backend thread is 37 % of the app's samples.
+
+**What `quarter` buys on Vineta K** (`graphics.reflection_resolution`, `--reflection-resolution`). Release build of main `da2268e`
+(`OAG_APK_DEV_CLI=1 OAG_APK_PROFILEABLE=1 just apk`), HD/Fury on the S21, **render scale 25** (476x270 scene), `--no-audio`, default settings otherwise, media volume 0, the
+launch file's `--race --track /data/environments/01_vineta_k/track.vex --autopilot --seed 1 --no-intro --frame-log`: Vineta K **forward**, three laps, the race ends 1:37 game time after the start
+(the earlier tables are the menu route's reversed circuit). The launch file's `--race` takes the circuit from `[race] track`, which on a profile written for Pulse names Talon's
+Junction; `--benchmark` also takes it from there on the phone, so pass `--track`. Each arm starts after the phone cooled to AP 32.0 C and skin 31.5 to 31.7 C (AP climbs to 45 to 52 C within
+20 s of any arm, so skin is the temperature that carries over), in the order `original`, `quarter`, `quarter`, `original`. The window is racing seconds 10 to 100 of the `--frame-log` (90 lines,
+one per second: `frame_ms` is that second's mean, so the median and p95 are over the 90 per-second means, and `p99` is the median of each second's own p99). The loader report confirms the arm
+(`the glass and sea target is 160x90 at reflection resolution quarter (the original's is 640x360)`).
+
+| Arm (start AP / skin C) | Frame ms median / p95 | fps (median / of the mean) | p99 ms (median of seconds) | seconds over 33.3 ms | scene `gpu_ms` / `present_ms` (median) |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `original` 1 (32.0 / 31.5) | 39.4 / 48.3 | 25.4 / 25.6 | 54.3 | 75 of 90 | 9.5 / 24.2 |
+| `quarter` 1 (32.1 / 31.5) | 25.1 / 36.6 | 39.8 / 37.9 | 34.6 | 7 of 90 | 9.4 / 13.4 |
+| `quarter` 2 (32.0 / 31.7) | 24.9 / 35.8 | 40.2 / 37.8 | 35.5 | 7 of 90 | 9.4 / 14.5 |
+| `original` 2 (32.0 / 31.6) | 45.4 / 60.2 | 22.0 / 21.8 | 63.5 | 82 of 90 | 11.6 / 27.3 |
+| **`original`, the two pooled** | **41.9 / 55.5** | **23.5** (mean) | | | |
+| **`quarter`, the two pooled** | **24.9 / 35.8** | **37.9** (mean) | | | |
+
+`quarter` takes the median frame from 41.9 to 24.9 ms (-17.0 ms, against 10.6 ms the one-pass toggle read, "Per pass" above) and the mean rate from 23.5 to 37.9 fps. The two `quarter`
+arms agree within 0.2 ms; the two `original` arms differ by 6 ms (39.4 and 45.4) at the same start temperature, so the delta is -14.3 to -20.5 ms depending on which `original` arm it is read
+against, and either way larger than the glass pass's own 10.6 ms: the scene `gpu_ms` moves little (9.5 to 11.6 against 9.4), the rest shows in the frame thread's wait on the present (24 to 27 against 13 to 14 ms; why the toggle read 10.6 ms and this reads 17 is not settled). **`quarter` alone reaches 30 fps on average (37.9) and in 83 of 90 seconds; it does not hold it in every second**:
+the seven seconds over 33.3 ms (peak 38.9 ms, 25.7 fps) fall in one slow stretch of each lap, where the frame time climbs from 24 to 37 ms (not tied to the glass: `original` has the same stretch, higher), and p95 is 35.8 ms. `original` is over 33.3 ms in 75 to 82 seconds of 90. One more run of each arm
+(60 s each, no figures taken from them, a `screencap` every 12 s) shows the same ship positions in both: the glass in the tunnel is visibly coarser under `quarter` (a 160x90 target stretched over the
+view) and the rest of the picture is unchanged. Moa Therma (the sea), Ubermall, Chenghou, Modesto and `half` are not measured.
 
 **Measured and dropped** (same method, one run each unless said):
 
