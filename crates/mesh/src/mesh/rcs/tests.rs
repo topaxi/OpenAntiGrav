@@ -128,6 +128,7 @@ fn the_report_names_both_kinds_of_absence() {
         electricity_bound: 0,
         electricity_unread: 0,
         bomb_tint_bound: 0,
+        bullet_gauge_bound: 0,
         mag_wave_bound: 0,
         mag_wave_unread: 0,
         chevron_pulse_bound: 0,
