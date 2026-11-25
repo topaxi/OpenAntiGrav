@@ -248,6 +248,8 @@ pub const TITLE: &Title = &Title {
         launch_normal_is_track_up: oag_title::pre_race::Sourced::measured(true),
         // Pulse's arms are measured; this title's own are unread.
         floor_arms_steer_to_ride_point: oag_title::pre_race::Sourced::chosen(false),
+        // Pure's law alone: this title's `Rocket_Update` and `Plasma_Update` are unread.
+        floor_arms_ride_launch_normal: oag_title::pre_race::Sourced::chosen(false),
         // HD's law, inherited through Omega: 2048's `Plasma_Launch` caller is unread.
         plasma_release_at_display_scale: oag_title::pre_race::Sourced::inherited(
             false,

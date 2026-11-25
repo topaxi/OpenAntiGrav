@@ -707,6 +707,9 @@ pub struct SimSetup {
     /// Whether the projectiles' floor arms are Pulse's decompiled laws,
     /// `oag_title::weapons::Weapons::floor_arms_steer_to_ride_point`.
     pub floor_arms_steer_to_ride_point: bool,
+    /// Whether the Rocket and Plasma sweep first and ride the normal they were launched with,
+    /// `oag_title::weapons::Weapons::floor_arms_ride_launch_normal`.
+    pub floor_arms_ride_launch_normal: bool,
     /// Whether a Plasma bolt leaves at the craft's display scale,
     /// `oag_title::weapons::Weapons::plasma_release_at_display_scale`.
     pub plasma_release_at_display_scale: bool,

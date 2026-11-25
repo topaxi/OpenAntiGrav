@@ -463,10 +463,13 @@ impl RaceSim {
     }
 
     /// How this title's projectiles write their velocity on a floor,
-    /// `oag_title::weapons::Weapons::floor_arms_steer_to_ride_point`.
+    /// `oag_title::weapons::Weapons::floor_arms_ride_launch_normal` and
+    /// `floor_arms_steer_to_ride_point`.
     #[must_use]
     pub fn floor_arms(&self) -> oag_weapons::projectile::FloorArms {
-        if self.floor_arms_steer_to_ride_point {
+        if self.floor_arms_ride_launch_normal {
+            oag_weapons::projectile::FloorArms::LaunchNormal
+        } else if self.floor_arms_steer_to_ride_point {
             oag_weapons::projectile::FloorArms::SteerToRidePoint
         } else {
             oag_weapons::projectile::FloorArms::ParallelToFloor

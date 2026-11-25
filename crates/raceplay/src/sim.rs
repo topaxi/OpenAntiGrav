@@ -459,6 +459,9 @@ pub struct RaceSim {
     /// Whether the projectiles' floor arms are Pulse's decompiled laws - see
     /// [`SimSetup::floor_arms_steer_to_ride_point`].
     pub(super) floor_arms_steer_to_ride_point: bool,
+    /// Whether the Rocket and Plasma ride their launch normal - see
+    /// [`SimSetup::floor_arms_ride_launch_normal`].
+    pub(super) floor_arms_ride_launch_normal: bool,
     /// Whether a Plasma bolt leaves at the craft's display scale - see
     /// [`SimSetup::plasma_release_at_display_scale`].
     pub(super) plasma_release_at_display_scale: bool,

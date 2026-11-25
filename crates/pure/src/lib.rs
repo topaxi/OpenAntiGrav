@@ -167,16 +167,20 @@ pub const TITLE: &Title = &Title {
         // Pulse's law, inherited: Pure's pad grant is unread.
         autopilot_pad_grants: oag_title::pre_race::Sourced::inherited(false, "Wipeout Pulse"),
         pads_stamp_in_eliminator: oag_title::pre_race::Sourced::inherited(true, "Wipeout Pulse"),
-        launch_normal_is_track_up: oag_title::pre_race::Sourced::inherited(true, "Wipeout Pulse"),
+        // `Rocket_Init`, `Plasma_Launch` and `Missile_Init` store the launch matrix's up row, the
+        // craft's, not a located track record (`psp-pure-usa/floor-follow.md`).
+        launch_normal_is_track_up: oag_title::pre_race::Sourced::measured(false),
+        // The Missile's arms, inherited: Pure's `Missile_Update` is unread. The Rocket and the
+        // Plasma take `floor_arms_ride_launch_normal`.
         floor_arms_steer_to_ride_point: oag_title::pre_race::Sourced::inherited(
             true,
             "Wipeout Pulse",
         ),
-        // Pulse's law, inherited: Pure's `Plasma_Launch` caller is unread.
-        plasma_release_at_display_scale: oag_title::pre_race::Sourced::inherited(
-            true,
-            "Wipeout Pulse",
-        ),
+        // Read and measured live on PPSSPP (`psp-pure-usa/floor-follow.md`).
+        floor_arms_ride_launch_normal: oag_title::pre_race::Sourced::measured(true),
+        // Measured live: a bolt flies 187.5 units/s until its first ride, then 250
+        // (`psp-pure-usa/floor-follow.md`).
+        plasma_release_at_display_scale: oag_title::pre_race::Sourced::measured(true),
         // Pulse's raycast, gate and box; a box hit runs no arm (`psp-pure-usa/own-craft-box.md`).
         own_craft_box_hides_track: oag_title::pre_race::Sourced::measured(
             oag_title::weapons::OwnCraftBox::Holds,
