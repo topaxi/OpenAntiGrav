@@ -1,6 +1,8 @@
 //! `psp2::build_circuit`'s `HidePads` leaves a circuit's own pad submeshes out, and only those:
 //! `All` drops exactly the triangles on a pad material or a `speedup_pad`/`weapon_pad` shape,
-//! `Weapon` exactly the weapon pads' share, and `None` draws the whole file.
+//! `Weapon` exactly the weapon pads' share, and `None` draws the whole file. The pads, and only
+//! they, are marked to keep their own program in a Zone race
+//! (`docs/ghidra/functions/ps3-hdfury-eu/zone-plain-chunks.md`, "2048 and Omega").
 //!
 //! **`#[ignore]`d and never run in CI.** It needs game content; run with `just test-data`.
 //!
@@ -12,6 +14,7 @@
 use std::path::Path;
 
 use oag_mesh::mesh::rcs::psp2::{self, circuit_pads::HidePads};
+use oag_mesh::mesh::slots;
 
 const OMEGA: [&str; 9] = [
     "ps4/omega-eu/uroot/data00.psarc",
@@ -58,13 +61,27 @@ fn check(
         )
         .expect("builds")
     };
-    let (_, kept) = build(HidePads::None, read);
+    let (whole, kept) = build(HidePads::None, read);
     let (_, hidden) = build(HidePads::All, read);
     let (_, unarmed) = build(HidePads::Weapon, read);
     assert_eq!(
         kept.triangles - hidden.triangles,
         pads,
         "{name}: exactly the pad triangles go"
+    );
+    // A pad's vertices say so, and no other vertex does: a Zone race draws them on their own
+    // program instead of the Zone surface (`slots::ZONE_PLAIN`).
+    let plain = whole
+        .indices
+        .chunks_exact(3)
+        .filter(|t| {
+            t.iter()
+                .all(|&i| whole.vertices[i as usize].slots & slots::ZONE_PLAIN != 0)
+        })
+        .count();
+    assert_eq!(
+        plain, pads,
+        "{name}: the pads, and only they, are Zone-plain"
     );
     assert_eq!(
         kept.triangles - unarmed.triangles,

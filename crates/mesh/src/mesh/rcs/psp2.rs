@@ -529,6 +529,14 @@ fn build_scanned(
         } else {
             role
         };
+        // A Zone race draws a pad on its own program, not the Zone surface, as HD's render
+        // flags make it (`docs/ghidra/functions/ps3-hdfury-eu/zone-plain-chunks.md`, "2048 and
+        // Omega": this container has no such flag, so the pad is the shape or material).
+        let role = if circuit_pads::is_circuit_pad(&decoded, submesh) {
+            role | crate::mesh::slots::ZONE_PLAIN
+        } else {
+            role
+        };
         // A Zone material's surface is `Zone_Colour * (ambient + sun * max(N.L, 0) +
         // Emissive)` under fog (its unlightmapped fragment programs,
         // `docs/formats/2048-material-params.md`, "The Zone surface"), with the
