@@ -1,0 +1,91 @@
+//! `OAG_SKIP_PASSES`: leave named passes out of the frame, to measure what each costs
+//! where no profiler sees inside the GPU (a phone: `docs/tools/android.md`, "Where an HD
+//! frame goes on the S21").
+//!
+//! A measuring switch, not a setting: while a pass is left out the picture is wrong. Unset,
+//! [`skipped`] is `false` for every name and nothing changes.
+//!
+//! `OAG_SKIP_PASSES=hud,glass` leaves those passes out of every frame.
+//! `OAG_SKIP_PASSES_TOGGLE=10` leaves them out only in every other 10 second window (the
+//! odd ones, counted from the first call), so one run carries both arms side by side and a
+//! phone's temperature, which moves a whole run by half, moves both alike.
+//! `scripts/android-skip-windows.py` splits a `--frame-log` by window.
+
+use std::sync::OnceLock;
+
+/// The names a call site asks about. Anything else in the variable is reported once.
+pub const NAMES: [&str; 6] = ["hud", "bloom", "adverts", "glass", "resolve", "composite"];
+
+struct Switch {
+    names: Vec<String>,
+    period: Option<f32>,
+    #[cfg(not(target_arch = "wasm32"))]
+    start: std::time::Instant,
+}
+
+fn switch() -> &'static Switch {
+    static SWITCH: OnceLock<Switch> = OnceLock::new();
+    SWITCH.get_or_init(|| {
+        let names: Vec<String> = std::env::var("OAG_SKIP_PASSES")
+            .map(|v| {
+                v.split(',')
+                    .map(str::trim)
+                    .filter(|n| !n.is_empty())
+                    .map(str::to_owned)
+                    .collect()
+            })
+            .unwrap_or_default();
+        let period = std::env::var("OAG_SKIP_PASSES_TOGGLE")
+            .ok()
+            .and_then(|v| v.trim().parse::<f32>().ok())
+            .filter(|p| *p > 0.0);
+        if !names.is_empty() {
+            let unknown: Vec<&String> = names
+                .iter()
+                .filter(|n| !NAMES.contains(&n.as_str()))
+                .collect();
+            // Stderr rather than a log line: this crate logs nothing, and the phone's
+            // `RustStdoutStderr` tag carries it beside the `--frame-log` lines.
+            eprintln!(
+                "OAG_SKIP_PASSES: {names:?} left out {}; unknown names {unknown:?} (known: {NAMES:?})",
+                period.map_or("every frame".to_owned(), |p| {
+                    format!("in every other {p} s window from now, the odd ones")
+                }),
+            );
+        }
+        Switch {
+            names,
+            period,
+            #[cfg(not(target_arch = "wasm32"))]
+            start: std::time::Instant::now(),
+        }
+    })
+}
+
+/// Whether `OAG_SKIP_PASSES` leaves `name` out of this frame.
+#[must_use]
+pub fn skipped(name: &str) -> bool {
+    let switch = switch();
+    if !switch.names.iter().any(|n| n == name) {
+        return false;
+    }
+    match switch.period {
+        // The browser build has no monotonic clock here; a toggle there leaves the pass
+        // out throughout.
+        #[cfg(not(target_arch = "wasm32"))]
+        Some(period) => ((switch.start.elapsed().as_secs_f32() / period) as u64) % 2 == 1,
+        _ => true,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    /// Unset, nothing is left out: the frame a run without the variable draws is the
+    /// frame it always drew. (The test runner sets no `OAG_SKIP_PASSES`.)
+    #[test]
+    fn with_the_variable_unset_no_pass_is_left_out() {
+        for name in super::NAMES {
+            assert!(!super::skipped(name), "{name}");
+        }
+    }
+}

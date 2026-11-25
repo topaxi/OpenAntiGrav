@@ -73,6 +73,9 @@ fi
 # perf-test app scripts/android-race-phases.sh drives with --seed.
 features=android,extensions
 [ -z "${OAG_APK_DEV_CLI:-}" ] || features+=,dev-cli
+# OAG_APK_FEATURES=a,b adds oag-game features to a measuring build, e.g. perf-probe for
+# OAG_RENDER_GPU_BENCH's per-pass GPU spans on a phone (docs/tools/android.md). A shipped app has none.
+[ -z "${OAG_APK_FEATURES:-}" ] || features+=",$OAG_APK_FEATURES"
 # OAG_APK_PROFILEABLE=1 marks the app profileable by the shell user, which is what lets
 # simpleperf attach to a release build on a user-build phone (docs/tools/android.md,
 # "Performance on the Galaxy S21"). A shipped app is not.

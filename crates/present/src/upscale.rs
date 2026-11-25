@@ -428,6 +428,9 @@ impl Framebuffer {
         temporal: Option<Temporal<'_>>,
         upscale_timestamps: Option<fsr3::ChainTimestamps<'_>>,
     ) -> bool {
+        if oag_gpu::skip::skipped("resolve") {
+            return false;
+        }
         let output_size = (rect.2 as u32, rect.3 as u32);
         // **The extent, not the allocation**: every pass below is asking
         // "what was drawn", and since ADR-0037 the texture can be larger than
@@ -827,6 +830,9 @@ impl Framebuffer {
         surface: &wgpu::TextureView,
         frame: Composite,
     ) {
+        if oag_gpu::skip::skipped("composite") {
+            return;
+        }
         // Never a decode. The target is `self.format`, which ADR-0020 forces
         // non-sRGB at every real call site, and it is read through an ordinary
         // view rather than the perceptual twin an upscaler wants - so the bytes
