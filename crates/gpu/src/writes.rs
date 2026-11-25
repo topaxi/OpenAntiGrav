@@ -45,6 +45,10 @@ impl Writes for wgpu::Queue {
         if crate::skip::writes_frozen() {
             return;
         }
+        if crate::skip::named("writes-same") {
+            held_write(self, buffer, offset, data);
+            return;
+        }
         wgpu::Queue::write_buffer(self, buffer, offset, data);
     }
 
@@ -60,6 +64,31 @@ impl Writes for wgpu::Queue {
         }
         wgpu::Queue::write_texture(self, texture, data, data_layout, size);
     }
+}
+
+/// `writes-same` ([`crate::skip`]): inside a window, each buffer range is written with the
+/// bytes it was first given in that window; outside, as given, and the held bytes are let go.
+fn held_write(
+    queue: &wgpu::Queue,
+    buffer: &wgpu::Buffer,
+    offset: wgpu::BufferAddress,
+    data: &[u8],
+) {
+    type Held = std::collections::HashMap<(wgpu::Buffer, wgpu::BufferAddress, usize), Vec<u8>>;
+    static HELD: std::sync::Mutex<Option<Held>> = std::sync::Mutex::new(None);
+    let mut held = HELD
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if !crate::skip::writes_replayed() {
+        *held = None;
+        wgpu::Queue::write_buffer(queue, buffer, offset, data);
+        return;
+    }
+    let bytes = held
+        .get_or_insert_with(Default::default)
+        .entry((buffer.clone(), offset, data.len()))
+        .or_insert_with(|| data.to_vec());
+    wgpu::Queue::write_buffer(queue, buffer, offset, bytes);
 }
 
 enum Target {

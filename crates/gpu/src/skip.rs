@@ -16,11 +16,18 @@
 //! `extra-passes` adds [`EXTRA_PASSES`] one-pixel clear passes to the frame
 //! (`docs/tools/android.md`, "What a render pass costs").
 //!
+//! Three names look inside the scene pass: `track-plain` and `track-rich` leave out the
+//! shading half of a prepassed circuit's draws that name no material row and that name one
+//! (its depth half stays), and `mips` binds every material texture from two mip levels down
+//! (`docs/tools/android.md`, "Inside the scene pass").
+//!
 //! `writes` drops every [`crate::writes::Writes`] write made on the queue itself once a race
 //! has drawn its first frame ([`arm_writes`]), so the frame's upload copies leave the
 //! submission and every buffer keeps what it last held: whether frame N's copies wait on
 //! frame N-1 (`docs/tools/android.md`, "Freezing the frame's writes"). A load's writes are
-//! never dropped.
+//! never dropped. `writes-same` is its control: every write is still made, but with the bytes
+//! that buffer range was given when the window began, so the picture freezes as under
+//! `writes` while every copy, and every hazard it carries, stays in the submission.
 //!
 //! With a toggle period set, every change of window prints one line to stderr
 //! (`OAG_SKIP_PASSES: window N on|off`), which a phone's Perfetto trace carries with its own
@@ -30,7 +37,7 @@ use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 /// The names a call site asks about. Anything else in the variable is reported once.
-pub const NAMES: [&str; 9] = [
+pub const NAMES: [&str; 13] = [
     "hud",
     "bloom",
     "adverts",
@@ -40,6 +47,10 @@ pub const NAMES: [&str; 9] = [
     "advert-draws",
     "extra-passes",
     "writes",
+    "writes-same",
+    "track-plain",
+    "track-rich",
+    "mips",
 ];
 
 /// How many one-pixel passes `extra-passes` adds to a frame.
@@ -139,6 +150,13 @@ pub fn writes_frozen() -> bool {
     WRITES_ARMED.load(Ordering::Relaxed) && skipped("writes")
 }
 
+/// Whether `writes-same` replays held bytes for a write made now: named, armed and in an odd
+/// window.
+#[must_use]
+pub fn writes_replayed() -> bool {
+    WRITES_ARMED.load(Ordering::Relaxed) && skipped("writes-same")
+}
+
 /// Whether `OAG_SKIP_PASSES` leaves `name` out of this frame.
 #[must_use]
 pub fn skipped(name: &str) -> bool {
@@ -181,5 +199,6 @@ mod tests {
         }
         super::arm_writes();
         assert!(!super::writes_frozen());
+        assert!(!super::writes_replayed());
     }
 }
