@@ -463,7 +463,12 @@ fn a_round_turns_with_the_slope_it_rides() {
     let mut field = Field::new();
     tick(&mut field, FIRE, &ship, &slope);
     tick(&mut field, IDLE, &ship, &slope);
-    let round = field.cannon.rounds.iter().find(|r| r.live).expect("in flight");
+    let round = field
+        .cannon
+        .rounds
+        .iter()
+        .find(|r| r.live)
+        .expect("in flight");
     assert!(
         round.vel.dot(round.normal).abs() < 1e-3,
         "velocity stays in the surface plane: {:?}",
@@ -481,17 +486,35 @@ fn a_round_is_still_drawn_along_its_incoming_heading_on_the_tick_it_bounces() {
     let mut bounced = None;
     for _ in 0..12 {
         tick(&mut field, IDLE, &ship, &wall_at_fifty);
-        if let Some(r) = field.cannon.rounds.iter().find(|r| r.live && r.rebounds == 0) {
+        if let Some(r) = field
+            .cannon
+            .rounds
+            .iter()
+            .find(|r| r.live && r.rebounds == 0)
+        {
             bounced = Some(*r);
             break;
         }
     }
     let round = bounced.expect("bounced");
     assert!(round.vel.z < 0.0, "reflected: {:?}", round.vel);
-    assert!(round.heading.z > 0.9, "heading is the incoming one: {:?}", round.heading);
+    assert!(
+        round.heading.z > 0.9,
+        "heading is the incoming one: {:?}",
+        round.heading
+    );
     tick(&mut field, IDLE, &ship, &|_, _| Sweep::None);
-    let next = field.cannon.rounds.iter().find(|r| r.live).expect("flying back");
-    assert!(next.heading.z < -0.9, "then the reflected one: {:?}", next.heading);
+    let next = field
+        .cannon
+        .rounds
+        .iter()
+        .find(|r| r.live)
+        .expect("flying back");
+    assert!(
+        next.heading.z < -0.9,
+        "then the reflected one: {:?}",
+        next.heading
+    );
 }
 
 fn wall_at_fifty(from: Vec3, to: Vec3) -> Sweep {

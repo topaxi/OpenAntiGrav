@@ -66,8 +66,14 @@ fn a_round_is_drawn_nose_along_its_velocity_as_a_rotation_at_its_position() {
     };
     let m = round_matrix(&round);
     assert_eq!(m.w_axis.truncate(), round.pos);
-    assert!((m.z_axis.truncate() - Vec3::Z * 0.75).length() < 1e-6, "nose, scaled");
-    assert!((m.y_axis.truncate() - Vec3::Y * 0.75).length() < 1e-6, "up, scaled");
+    assert!(
+        (m.z_axis.truncate() - Vec3::Z * 0.75).length() < 1e-6,
+        "nose, scaled"
+    );
+    assert!(
+        (m.y_axis.truncate() - Vec3::Y * 0.75).length() < 1e-6,
+        "up, scaled"
+    );
     assert!(
         (m.determinant() - 0.75_f32.powi(3)).abs() < 1e-5,
         "a scaled rotation, not a mirror"
@@ -88,7 +94,10 @@ fn a_young_round_is_half_as_long_and_grows_over_a_tenth_of_a_second() {
     assert!((at(0.0).z_axis.length() - 0.375).abs() < 1e-6);
     assert!((at(0.05).z_axis.length() - 0.5625).abs() < 1e-6);
     assert!((at(0.2).z_axis.length() - 0.75).abs() < 1e-6);
-    assert!((at(0.0).x_axis.length() - 0.75).abs() < 1e-6, "width is not grown");
+    assert!(
+        (at(0.0).x_axis.length() - 0.75).abs() < 1e-6,
+        "width is not grown"
+    );
 }
 
 #[test]
