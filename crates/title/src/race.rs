@@ -658,6 +658,9 @@ pub struct DetonatorAmmoGauge {
 pub struct DetonatorHullCharge {
     /// Per second, `Charge1` then `Charge2`.
     pub rates: [f32; 2],
+    /// `v` at the EMP's ready count: the charge is mapped from `ready_level` there to `1` at the
+    /// full count, so the first shell lights at the ready count itself.
+    pub ready_level: f32,
 }
 
 /// What Detonator's pads do (`docs/ghidra/functions/ps3-hdfury-eu/detonator-emp.md`, "Pads

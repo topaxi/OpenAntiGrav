@@ -1878,9 +1878,10 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
     // `authored`'s ambient/prelit/sun sum, so running both would shade it
     // twice.
     var shaded_or_sheen = select(shaded, sheen, ramp_sheen);
-    // A lightmapped glass chunk in a Zone race keeps the grid as its coverage (the sheen's alpha is
-    // the grid), where the grid is bound beside the atlas; only the sheen's colour is dropped.
-    if ramp_sheen_bit && !ramp_sheen && sheen_lightmapped {
+    // A glass chunk in a Zone race keeps the grid as its coverage, vertex-lit or lightmapped: every
+    // Zone block of the family that is not a `ShadowToAlpha` redraw ends `MOV H0.w, <grid>.x`
+    // (`docs/formats/rcsmaterial.md`, "The Zone glass program"). Only the sheen's colour is dropped.
+    if ramp_sheen_bit && !ramp_sheen {
         shaded_or_sheen.a = sheen.a;
     }
     // **The magstrip floor's own combine** (`slots::MAG_LOOP`), traced in

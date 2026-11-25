@@ -66,7 +66,25 @@ pub struct Entry {
 /// The lap's entries in driving order. Track data, not world state.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Survey {
-    /// One per section.
+    /// One per section of the ring, the route a lap drives. Placement and every ring walk read
+    /// only these.
+    pub entries: Vec<Entry>,
+    /// The alternate paths off the ring, which only the EMP wave's fork walks.
+    pub branches: Vec<SurveyBranch>,
+}
+
+/// One alternate path off the ring, measured like the ring.
+///
+/// Nothing is laid on it: `Detonator_PlaceStageObjects`' fork walk is unread
+/// (`docs/ghidra/functions/ps3-hdfury-eu/detonator-placement.md`). An object put on one is
+/// addressed by [`Survey::branch_entry`]'s index, which [`Survey::point`] reads.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct SurveyBranch {
+    /// The ring entry the front steps onto at the split.
+    pub split: u16,
+    /// The ring entry the branch rejoins at.
+    pub merge: u16,
+    /// The branch's entries in driving order.
     pub entries: Vec<Entry>,
 }
 
@@ -96,11 +114,41 @@ pub struct Placed {
 }
 
 impl Survey {
+    /// The entry at `index`: the ring's, then each branch's in order.
+    #[must_use]
+    pub fn entry(&self, index: usize) -> Option<&Entry> {
+        let Some(mut at) = index.checked_sub(self.entries.len()) else {
+            return self.entries.get(index);
+        };
+        for branch in &self.branches {
+            if at < branch.entries.len() {
+                return branch.entries.get(at);
+            }
+            at -= branch.entries.len();
+        }
+        None
+    }
+
+    /// The index [`Self::entry`] and [`Placed::entry`] address entry `offset` of branch
+    /// `branch` by.
+    #[must_use]
+    pub fn branch_entry(&self, branch: usize, offset: usize) -> Option<usize> {
+        let b = self.branches.get(branch)?;
+        if offset >= b.entries.len() {
+            return None;
+        }
+        let before: usize = self.branches[..branch]
+            .iter()
+            .map(|b| b.entries.len())
+            .sum();
+        Some(self.entries.len() + before + offset)
+    }
+
     /// Where `placed` sits and the section's up axis there, or `None` for an entry the survey
     /// does not hold. `lane_width` is `DistanceOffsetBetweenMines`.
     #[must_use]
     pub fn point(&self, placed: &Placed, lane_width: f32) -> Option<(Vec3, Vec3)> {
-        let entry = self.entries.get(usize::from(placed.entry))?;
+        let entry = self.entry(usize::from(placed.entry))?;
         Some((
             entry.centre + entry.lateral * (lane_width * f32::from(placed.lane)),
             entry.up,

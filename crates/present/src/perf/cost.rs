@@ -117,7 +117,9 @@ pub struct GpuCost {
     pub reflection: Option<&'static str>,
 }
 
-/// Rows under this many milliseconds are left off the overlay (and kept in the frame log).
+/// Pass rows under this many milliseconds are left off the overlay (and kept in the frame log).
+/// The overlay compares a pass's mean over the frames it ran in, so a pass that has not run in
+/// the window is under it and hidden.
 const HIDE_BELOW_MS: f32 = 0.1;
 
 impl GpuCost {
@@ -152,7 +154,7 @@ impl GpuCost {
         if let Some(upscale) = self.upscale_presented {
             rows.push(format!("FSR3 OUT {:.2} MS", upscale * 1000.0));
         }
-        for (name, seconds) in self.passes.ordered() {
+        for (name, seconds) in self.passes.ordered_when_run() {
             if seconds * 1000.0 >= HIDE_BELOW_MS {
                 match self.reflection.filter(|_| name == "GLASS") {
                     Some(step) => rows.push(format!(

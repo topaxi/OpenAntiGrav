@@ -443,9 +443,12 @@ pub const ZONE_STAGE_TEXTURES: &oag_title::ZoneStageTextures = &oag_title::ZoneS
 };
 
 /// `Ship_UpdateDetonatorHullParams`'s reset (`0x00107f20`) stores `1.3` and `1.6` (`0x008a9840`,
-/// `0x008a9844`) as the two channels' rates.
-pub const DETONATOR_HULL_CHARGE: oag_title::DetonatorHullCharge =
-    oag_title::DetonatorHullCharge { rates: [1.3, 1.6] };
+/// `0x008a9844`) as the two channels' rates. The craft update maps the EMP's charge to `v` through
+/// `0x002a3718` from `0.2` (the constant `0x008a8db4`, TOC `-0x4724`) at the ready count to `1`.
+pub const DETONATOR_HULL_CHARGE: oag_title::DetonatorHullCharge = oag_title::DetonatorHullCharge {
+    rates: [1.3, 1.6],
+    ready_level: 0.2,
+};
 
 /// HD's Detonator cannon gauge: `Detonator_UpdateHud` (`0x00067120`) passes the clip, or
 /// `trunc((1 - lockout / lockout_total) * 15)` while a reload locks the cannon, to `0x0029d578`,

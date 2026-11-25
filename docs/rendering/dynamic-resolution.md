@@ -247,8 +247,14 @@ target), `ADVERT CARDS`, `DISTORT`, `SHADOW MAP`, `SELF SHADOW`, `OCCLUSION`,
 glow mask, the menus, this overlay). **On HD the grade and encode are the last
 pass of `BLOOM`'s chain**, so they are in `BLOOM` and have no row of their own
 (one attribution per pass). Passes that share a label (the shadow map is one pass per layer)
-are summed, a pass that did not run in a frame costs that frame zero, and a
-row under 0.1 ms is left off the overlay and kept in the frame log. A pass
+are summed. Each row has two means over the last 120 frames. **The overlay shows the mean
+over only the frames the pass ran in**, so a pass that runs a second in every few (the HD zoom
+ring, the photo effects, the glass outside the tunnel) reads its cost and not a fraction of it;
+a row appears while the pass ran in the window and that mean is at least 0.1 ms, and goes
+when no frame of the window ran it. `OTHER` and the frame log's `pass_ms` use the **per-frame**
+mean, a pass that did not run in a frame costing that frame zero, so `frame - timed` stays
+honest (`perf::PassRows::total` against `ordered_when_run`). A row under 0.1 ms is left off the
+overlay and kept in the frame log. A pass
 recorded on another thread (each view of a split screen) is not timed, so a
 **split screen shows no per-pass rows**, and neither does a race with further
 windows. `OTHER` subtracts all of them, hidden rows included.

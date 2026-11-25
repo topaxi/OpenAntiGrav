@@ -2287,6 +2287,57 @@ Zone floor's alpha (`@0x82 MOV H0.w`, a literal the decoder prints as 0) means a
 `no_zone_variant_of_a_facing_ramp_material_samples_the_ramp`;
 [detonator-look.md](../ghidra/functions/ps3-hdfury-eu/detonator-look.md), "Track fog and the glass floor").
 
+## The Zone glass program (2026-11-25, `det-zone-glass-reflection`)
+
+**Read** with `scripts/ps3-microcode.py fp-file` on `etched_glass_tech.rcsmaterial` (Talon's Junction, `DATA00`), `etched_glass`
+(Modesto Heights) and `etched_glass_amph` (The Amphiseum). Their Zone variants are the blocks that sample the zone textures
+(`0xd5e000d1`, `0x1f6f85a3`): ten per material (`etched_glass_tech` blocks 10 to 19). Block 10 (`@0x7b30`, vertex-lit) reads:
+
+```text
+N = normalize(TC0.w, TC1.w, TC2.w)          V = normalize(TC2.xyz)
+light = TC0.xyz + 0x81db67ea + sat(N.sun 0x02df31e5) * 0x2dba643d           @0x09..@0x18
+rim = 1 - |V.N|                                                               @0x12
+surface = zoneTex(uv' ) * zoneEffect + zoneBase * rim^5 + zoneBaseAlt * rim^10   @0x19..@0x33
+glow = sat(2 |N.y| - 1) * (1 - depth) * zoneEffect.w * lookup(unit 3 -> unit 4)  @0x37..@0x45
+r = reflect(V, N); uv = (0.25 + ..., 0.5 + 0.5 r.y)                          @0x0c..@0x35  (the hull's dual-paraboloid address)
+R = paraboloidReflectionTex(uv) * iblScalePower; R = lerp(R, luma * ibl, ibl.w) @0x3c..@0x4c
+grid = Texture1(TC4).x                                                        @0x50
+rgb = (fog(light * surface + glow + grid * 0x5e5b1937 * R) + TC1.xyz) / 2      @0x51..@0x5a
+alpha = grid                                                                  @0x54
+```
+
+**Coverage, confidence 80.** Every Zone block of the three materials that is not a `ShadowToAlpha` redraw (6 per material; the
+redraws declare `shadowMapTex` `0x730df9ee` and write `1 - shadow`) takes its output alpha from the `Texture1` grid's own unit.
+Census: `hd_zone_wave_census_ground_truth::the_glass_floors_zone_variants_take_the_grid_as_their_alpha` (`output_texels()[3]`
+against the declared unit, all 30 Zone blocks). Two independent readings agree: the census and the hand read above. Not
+confirmed live. **Wired:** `shade.wesl` keeps the sheen's alpha (the decoded grid red) on a glass chunk in Zone, vertex-lit as well
+as lightmapped. Until then only the lightmapped one did, and Talon's vertex-lit floor drew opaque in Zone. Test:
+`hd_shadowed_track_redraw::a_vertex_lit_glass_floor_keeps_its_grid_coverage_in_zone` (blended over black, the Zone colour under
+a grid of red 96 is the full-grid colour times `decode(96)`; red without the change).
+
+**The reflection term, read and not drawn.** Every Zone block samples `paraboloidReflectionTex` (the circuit's sky,
+`mesh::sky_paraboloid`) under the weight `0x5e5b1937` and the engine's `iblScalePower` (`0x7480de6d`). The two families
+gate it differently. On `etched_glass_tech` and `etched_glass` the weight multiplies the grid's red
+(`MUL H0.w, H1.xxxx, {w}`, block 10 `@0x51`). On `etched_glass_amph` it multiplies the reflection alone (`MAD H2.xyz, H6, {w}, H2`,
+block 10 `@0x50`), and four of its Zone blocks declare no `Texture1` at all. **The tint is unread for scenery in a Zone frame.**
+The hulls' value is `(2 * Track.Base Colour Highlight, 1)` ([zone-hull-light.md](../ghidra/functions/ps3-hdfury-eu/zone-hull-light.md)),
+`(0.314, 0, 0, 1)` at Detonator stage 1. But scenery glass on Moa Therma read `(1, 1, 1, 0)` in the same frame where hulls read
+`(4, 4, 4, 0)` ([hd-track-tone.md](../rendering/hd-track-tone.md)), so the hull's value is not the glass's. Nothing is drawn for
+the term. **To close it:** one draw-hook read (`scripts/rpcs3_draw_hook.py`) of this program's constants on a Detonator Talon's
+state: the 4 floats patched from `0x7480de6d` (block 10's `@0x44`, `@0x4a`, `@0x4d`) and the weight `0x5e5b1937`.
+
+**Numbers** (`detonator-talons-mines-ahead`, box `x1170..1300 y375..465`: 80 % glass by an `OAG_SKIP_MATERIAL=etched_glass_tech`
+diff, the mine's halo outside it; mean absolute grey difference against the original): **9.89 to 9.23**. Mean RGB in the box: ours
+`(57.2, 11.7, 8.2)` to `(39.4, 8.7, 6.3)`, the original `(46.4, 12.6, 8.7)`. Whole pairs (mean grey): `pad` 7.62 to 7.61,
+`mines-ahead` 13.60 to 13.62, `cannon-volley` 14.15 to 14.18. All of the two pairs' loss sits in two 160x120 cells around the
+mine and the structure under the glass (`x960 y360`, `x1120 y480`). There the original draws the large lit mine, and ours draws the
+structure behind the now-translucent glass brighter than the original's. `talons` (Time Trial, no Zone grade) is
+pixel-identical.
+
+**2048 and Omega: checked, differs.** Neither ships an `etched_glass*` material (see the 2026-10 note above and
+[2048-material-params.md](2048-material-params.md): Altima's `track_a_glass_etched` is a texture drawn by
+`fc01_emissive_alpha_emistint`, which has no Zone variant family), and no file under the extracted Omega tree names one.
+
 ## Talon's race-pair road decals: the teal fill is the wave's phase, and the engine `time` at the capture is unread (2026-10-27, `hd-talons-road-decals`)
 
 **Claim (not met, cause found):** on `hd-race/talons-pack` the large arrow and strip panels on the road draw as filled

@@ -293,7 +293,7 @@ fn the_residual_subtracts_every_pass_hidden_or_shown() {
 }
 
 /// A frame the pass did not run in records zero for it, so a pass that runs every other frame
-/// reads as half its cost, and a load drops what came before it.
+/// reads as half its cost **per frame**, and a load drops what came before it.
 #[test]
 fn a_pass_that_did_not_run_costs_the_frame_nothing() {
     let mut costs = PassCosts::new();
@@ -366,6 +366,103 @@ fn every_stamped_label_has_a_row() {
         let name = rows.ordered()[0].0.to_string();
         assert_ne!(name, label, "`{label}` has no row in perf/passes.rs's ROWS");
     }
+}
+
+/// A pass that runs on some frames only: the overlay row is its mean over the frames it ran in,
+/// the per-frame mean (the frame log's and `OTHER`'s) stays diluted by the frames it did not.
+#[test]
+fn an_intermittent_pass_shows_its_mean_when_it_ran() {
+    let mut costs = PassCosts::new();
+    let mut ran = 0;
+    for frame in 1..=120_u64 {
+        if frame % 5 < 3 {
+            ran += 1;
+            costs.record_frame(frame, &[("hd zoom", 0.002), ("hud and ui", 0.001)]);
+        } else {
+            costs.record_frame(frame, &[("hud and ui", 0.001)]);
+        }
+    }
+    assert_eq!(ran, 72);
+    let cost = GpuCost {
+        scene: Some(0.004),
+        passes: costs.rows(),
+        ..Default::default()
+    };
+    let overlay = cost.rows(10.0);
+    assert!(
+        overlay.contains(&"HD ZOOM 2.00 MS".to_string()),
+        "72 of 120 frames at 2.0 ms shows 2.0 ms: {overlay:?}"
+    );
+    assert!(
+        overlay.contains(&"HUD AND UI 1.00 MS".to_string()),
+        "{overlay:?}"
+    );
+    let per_frame = costs.rows().ordered();
+    assert_eq!(per_frame[0].0, "HD ZOOM");
+    assert!(
+        (per_frame[0].1 - 0.001_2).abs() < 1e-6,
+        "the frame log's mean still counts the frames without it: {per_frame:?}"
+    );
+    // OTHER takes off the per-frame mean (1.2 + 1.0), not the 2.0 the row shows.
+    assert!((cost.residual_ms(10.0).unwrap() - (10.0 - 4.0 - 1.2 - 1.0)).abs() < 1e-3);
+}
+
+/// A pass that ran only a few frames ago is drawn for as long as it is in the window, at its
+/// own cost; once the window holds none of its frames it is hidden, and stays in the frame log.
+#[test]
+fn a_pass_that_has_not_run_in_the_window_is_hidden() {
+    let mut costs = PassCosts::new();
+    costs.record_frame(1, &[("glass", 0.003), ("hud and ui", 0.001)]);
+    for frame in 2..=120_u64 {
+        costs.record_frame(frame, &[("hud and ui", 0.001)]);
+    }
+    let shown = |costs: &PassCosts| {
+        GpuCost {
+            scene: Some(0.004),
+            passes: costs.rows(),
+            ..Default::default()
+        }
+        .rows(10.0)
+    };
+    assert!(
+        shown(&costs).contains(&"GLASS 3.00 MS".to_string()),
+        "its one frame is still in the 120: {:?}",
+        shown(&costs)
+    );
+    costs.record_frame(121, &[("hud and ui", 0.001)]);
+    let overlay = shown(&costs);
+    assert!(
+        !overlay.iter().any(|row| row.starts_with("GLASS")),
+        "no frame of the window ran it: {overlay:?}"
+    );
+    assert!(
+        overlay.contains(&"HUD AND UI 1.00 MS".to_string()),
+        "{overlay:?}"
+    );
+    assert_eq!(
+        costs.rows().ordered()[0].0,
+        "GLASS",
+        "the frame log keeps the row"
+    );
+}
+
+/// Two labels of one row are one row: a frame either ran it or did not, and the lanes add.
+#[test]
+fn the_labels_of_one_row_share_their_frames_when_run() {
+    let mut costs = PassCosts::new();
+    costs.record_frame(1, &[("bloom bright", 0.001), ("bloom blur x", 0.002)]);
+    costs.record_frame(2, &[("bloom bright", 0.001)]);
+    costs.record_frame(3, &[]);
+    costs.record_frame(4, &[("bloom bright", 0.001), ("bloom blur x", 0.002)]);
+    let rows = costs.rows();
+    let when_run = rows.ordered_when_run();
+    assert_eq!(when_run.len(), 1, "{when_run:?}");
+    assert_eq!(when_run[0].0, "PSP BLOOM");
+    assert!(
+        (when_run[0].1 - 0.007 / 3.0).abs() < 1e-6,
+        "3 frames ran it, 3 + 1 + 3 ms between them: {when_run:?}"
+    );
+    assert!((rows.total() - 0.007 / 4.0).abs() < 1e-6);
 }
 
 /// The `GLASS` row names the step the target is drawn at (REFLECTION RESOLUTION, or the step

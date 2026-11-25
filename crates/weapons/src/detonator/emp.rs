@@ -25,8 +25,13 @@
 //!   operands are small integers, exact in `f32`, so the two agree on every `n` the HUD can
 //!   reach (the page's live table, `0..39`).
 //! - A bomb the wave takes sets nothing off: `BombManager_DestroyAtLane`'s chain is unread.
-//! - No fork: the survey is one route, so the wave never splits where the original's would
-//!   (`EMP_SweepSections`' `REP2` branch).
+//! - **The fork**: `EMP_SweepSections` is the Repulser's wave stepper cloned, so a front that
+//!   steps onto a split spawns a second wave on the alternate path (its `REP2` branch,
+//!   `detonator-emp.md`, "The code is the Repulser's wave"). Ours follows `Repulser_AdvanceWave`'s
+//!   shape ([`Fork`]): one fork a wave, born as the front steps onto the split entry, walking the
+//!   branch `speed` entries a tick and then the ring on from its merge, sharing the wave's age
+//!   and lifetime. Nothing is laid on a branch, so the fork clears what a test puts there. **Not
+//!   wired**: the launch-time fork for a craft already on a branch (`EMP_ForkAtJunction`, 60).
 
 use oag_tables::detonator_layout::Scoring;
 
@@ -96,6 +101,45 @@ pub struct Wave {
     pub lifetime: f32,
     /// Seconds since launch (`emp+0x158`).
     pub age: f32,
+    /// Whether the wave has forked: once a wave, as the Repulser's `+0x25c`.
+    pub forked: bool,
+    /// The second front, meaningful while [`Self::forked`].
+    pub fork: Fork,
+}
+
+/// The wave's second front on an alternate path.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Fork {
+    /// Which [`Survey::branches`] entry it was born on.
+    pub branch: u8,
+    /// Whether it has rejoined the ring: [`Self::at`] is then a ring entry.
+    pub on_ring: bool,
+    /// The entry it stands on: an offset into its branch, or a ring entry.
+    pub at: u16,
+}
+
+impl Fork {
+    /// Steps once and returns the [`Survey::entry`] index it lands on, or `None` for a branch
+    /// the survey does not hold.
+    fn step(&mut self, survey: &Survey) -> Option<usize> {
+        let total = survey.entries.len();
+        let branch = survey.branches.get(usize::from(self.branch))?;
+        if total == 0 {
+            return None;
+        }
+        if self.on_ring {
+            self.at = u16::try_from((usize::from(self.at) + 1) % total).ok()?;
+            return Some(usize::from(self.at));
+        }
+        let next = usize::from(self.at) + 1;
+        if next < branch.entries.len() {
+            self.at = u16::try_from(next).ok()?;
+            return survey.branch_entry(usize::from(self.branch), next);
+        }
+        self.on_ring = true;
+        self.at = branch.merge % u16::try_from(total).ok()?;
+        Some(usize::from(self.at))
+    }
 }
 
 /// The EMP's state: the charge, the gauge, the cue latches and the wave.
@@ -137,6 +181,12 @@ impl Emp {
                 front: 0,
                 lifetime: 0.0,
                 age: 0.0,
+                forked: false,
+                fork: Fork {
+                    branch: 0,
+                    on_ring: false,
+                    at: 0,
+                },
             },
         }
     }
@@ -226,6 +276,7 @@ pub fn fire(field: &mut Field, survey: &Survey, config: &Config, from: u16) -> V
             front: 0,
             lifetime: extent,
             age: 0.0,
+            ..Wave::default()
         };
     }
     emp.charge = 0;
@@ -244,7 +295,8 @@ pub fn fire(field: &mut Field, survey: &Survey, config: &Config, from: u16) -> V
 /// the entry it stands on and steps `speed` entries on, and the wave ends once the age has
 /// reached its lifetime. Every mine and bomb on a cleared entry goes, scored with `<Emp>` (a mine
 /// laid this stage `new_mine_score`, a dark one `old_mine_score`, a bomb `bomb_score`); the mines
-/// count into the destroyed count.
+/// count into the destroyed count. A front that steps onto a branch's split entry forks (see
+/// [`Fork`]), and the fork clears what it walks too.
 pub fn step_wave(field: &mut Field, survey: &Survey, config: &Config, dt: f32) -> Vec<Event> {
     let mut events = Vec::new();
     let total = survey.entries.len();
@@ -260,10 +312,62 @@ pub fn step_wave(field: &mut Field, survey: &Survey, config: &Config, dt: f32) -
     if wave.age >= wave.lifetime {
         wave.live = false;
     }
-    for step in first..(first + steps).min(total) {
-        clear_entry(field, survey, config, (from + step) % total, &mut events);
+    let last = first + steps;
+    if field.emp.wave.forked {
+        for _ in 0..steps {
+            let Some(entry) = field.emp.wave.fork.step(survey) else {
+                break;
+            };
+            clear_entry(field, survey, config, entry, &mut events);
+        }
+    }
+    for step in first..last.min(total) {
+        let entry = (from + step) % total;
+        clear_entry(field, survey, config, entry, &mut events);
+        let wave = &mut field.emp.wave;
+        if wave.forked || step == 0 {
+            continue;
+        }
+        let Some(branch) = survey
+            .branches
+            .iter()
+            .position(|b| usize::from(b.split) == entry && !b.entries.is_empty())
+        else {
+            continue;
+        };
+        let Ok(branch_id) = u8::try_from(branch) else {
+            continue;
+        };
+        wave.forked = true;
+        wave.fork = Fork {
+            branch: branch_id,
+            on_ring: false,
+            at: 0,
+        };
+        if let Some(first_entry) = survey.branch_entry(branch, 0) {
+            clear_entry(field, survey, config, first_entry, &mut events);
+        }
+        for _ in step + 1..last {
+            let Some(entry) = field.emp.wave.fork.step(survey) else {
+                break;
+            };
+            clear_entry(field, survey, config, entry, &mut events);
+        }
     }
     events
+}
+
+/// The [`Survey::entry`] index the wave's second front stands on, or `None` before it forks and
+/// once the wave has ended.
+#[must_use]
+pub fn fork_entry(wave: &Wave, survey: &Survey) -> Option<usize> {
+    if !wave.live || !wave.forked {
+        return None;
+    }
+    if wave.fork.on_ring {
+        return Some(usize::from(wave.fork.at));
+    }
+    survey.branch_entry(usize::from(wave.fork.branch), usize::from(wave.fork.at))
 }
 
 /// The survey entry the wave's front stands on, or `None` with no wave in flight.

@@ -126,6 +126,44 @@ it is full. Neither hull material declares them: the two plasma shells in the sa
 cannon clip is **not** it: the clip drives the separate `detonator_bulletgaugesegments` block. The hull's materials carry
 these names hashed (no plain string in any `detonator_*.rcsmaterial`).
 
+### Read live: `Charge1` and `Charge2` against the EMP charge
+
+`0x002a3718` is a four-instruction lerp: `f1 = (x - lo) / (hi - lo) * (out1 - out0) + out0`, called
+at `0x000eb48c` with `x = n` (`rm+0x2dd8`), `lo = 4`, `hi = 8` (`table+0x1bc`/`+0x1c0`), `out0 = 0.2`
+(the constant at `0x008a8db4`, TOC `-0x4724`, read from the executable) and `out1 = 1.0`. The
+caller returns `v = 0` for `n < lo` and caps the lerp at `1`. So `v = 0.2` at `n = lo`:
+`Ship_UpdateDetonatorHullParams` sees `v > 0` and sets `Charge1`'s target to `1` at the ready
+count itself, and `Charge2`'s at `n = hi` (`v = 1`).
+
+Live on RPCS3 (EU `BCES00664`, save state `hd-detonator-talons-feisar-grid`, restored and started, `n`
+(`rm+0x2dd8`) written through the GDB stub with the game running on, the block at `0x00992f40` read
+paused once both channels stopped moving; HUD gauge `ship+0x7da0` read beside it, one boot, the
+settled values repeated over two to three reads each):
+
+| n | gauge (`ship+0x7da0`) | `Charge1` (`+0x10`) | `Charge2` (`+0x14`) | ours before | ours after |
+| ---: | ---: | ---: | ---: | --- | --- |
+| 3 | 0 | 0 | 0 | 0, 0 | 0, 0 |
+| 4 (`lo`) | 0 | **1.0** (0.944 on the first read, rising) | 0 | **0, 0** | 1, 0 |
+| 5 | 0 | 1.0 | 0 | 1, 0 | 1, 0 |
+| 8 (`hi`) | 0 | 1.0 | 1.0 (0.966 on the first read, rising) | 1, 1 | 1, 1 |
+
+(The gauge column is `0` because only `n` was written; the game recomputes the gauge on a pad
+pickup. The hull does not read it either way: `Charge1` rose at `n = 4` with the gauge at `0`.)
+Ours read the HUD gauge as `v`, which is `0` at `n = 4`, so the shells lit one charge late at the
+ready count; the fix reads `n` and maps it as the original does (`oag_raceplay::hull_charge::level`,
+`DetonatorHullCharge::ready_level = 0.2`). The first read after each write caught a channel mid-ramp (`0.944`, `0.966`) and the next read the settled `1.0`: a ramp, not a step (the write time was not logged, so the rates `1.3` and `1.6` a second are not re-measured here).
+
+Frames, the craft's wings at `n = 3, 4, 5, 8` (the original above, ours below, different cameras
+and poses): the original's wing strips are dark at 3, lit at 4 and 5, brighter at 8; ours now
+follow the same steps. **Confidence 90** (live read of the block at the four counts, one boot; the
+lerp read in the decompile and its constant in memory). `n` was written, not earned by pads: the
+pickup path that steps `n` is [detonator-emp.md](detonator-emp.md).
+
+**2048 / Omega:** unchanged: *checked, applies, not wired*. Omega ships the same two plasma
+materials and the same two hashes; its reader does not bind them and `Detonator::hull_charge`
+is `None` there, so this read gives a wired Omega the ready level (`0.2`) to carry, nothing more.
+2048 has no Detonator mode.
+
 ### Which craft entry, and so which livery
 
 `ship+0x6298` holds a `PI_TeamModel`. Every team in `DATA00`'s
