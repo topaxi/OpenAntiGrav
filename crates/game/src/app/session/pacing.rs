@@ -192,7 +192,7 @@ impl Session {
 
     /// What the rows that follow the output's rate draw for that value: the rate
     /// it resolves to now, as `(setting, value, label)`.
-    fn rate_labels(&self) -> [(&'static str, &'static str, String); 4] {
+    pub(super) fn rate_labels(&self) -> [(&'static str, &'static str, String); 4] {
         let strings = oag_ui::strings::project_table(self.settings.language.as_deref());
         let hz = (self.display.hz().unwrap_or(Target::FOLLOW_FALLBACK_HZ)).to_string();
         let say = |id: &str, english: &str| strings.get_or_fallback(id, english).replace("%s", &hz);

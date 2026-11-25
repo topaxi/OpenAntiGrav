@@ -656,6 +656,8 @@ impl Session {
             shell.title,
             shell.platform,
         );
+        // The rows that follow the screen's refresh rate are labelled with the rate they resolve to.
+        let relabels = self.rate_labels();
         DETAIL_KEYS
             .iter()
             .filter_map(|key| {
@@ -674,14 +676,14 @@ impl Session {
                     .iter()
                     .flat_map(|page| page.entries.iter())
                     .find(|entry| entry.setting() == Some(key))?;
-                let shown = match entry {
-                    oag_ui::menu::Entry::Choice { values, .. } => values
-                        .iter()
-                        .find(|choice| choice.value == value)
-                        .map_or(value, |choice| choice.label.clone()),
-                    _ => value,
+                let values = match entry {
+                    oag_ui::menu::Entry::Choice { values, .. } => values.as_slice(),
+                    _ => &[],
                 };
-                Some((entry.label().to_string(), shown))
+                Some((
+                    entry.label().to_string(),
+                    shown_value(key, value, values, &relabels),
+                ))
             })
             .collect()
     }
@@ -874,6 +876,26 @@ const DETAIL_KEYS: [&str; 18] = [
     "graphics.target_fps",
 ];
 
+/// The words the settings page shows for `value` of the row `key`: the label of the choice it is,
+/// or the rate the value follows (`relabels`, as `Session::rate_labels` has them), or the value.
+fn shown_value(
+    key: &str,
+    value: String,
+    values: &[oag_ui::menu::Choice],
+    relabels: &[(&str, &str, String)],
+) -> String {
+    if let Some((_, _, label)) = relabels
+        .iter()
+        .find(|(setting, token, _)| *setting == key && *token == value)
+    {
+        return label.clone();
+    }
+    values
+        .iter()
+        .find(|choice| choice.value == value)
+        .map_or(value, |choice| choice.label.clone())
+}
+
 /// Whether `listing` is a mod of the player's that is on and opened: one a run with mods loads.
 fn is_loaded_mod(listing: &crate::mods::Listing) -> bool {
     !listing.builtin && listing.error.is_none() && listing.enabled == Some(true)
@@ -911,5 +933,37 @@ fn write_result(report: &Report) -> Option<String> {
             warn!("could not write the benchmark result: {error}");
             None
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn choice(value: &str, label: &str) -> oag_ui::menu::Choice {
+        oag_ui::menu::Choice {
+            value: value.into(),
+            label: label.into(),
+            unavailable: None,
+        }
+    }
+
+    /// DETAILS and the copied text say what the settings page says, never the stored token.
+    #[test]
+    fn a_detail_reads_as_the_settings_page_draws_it() {
+        let values = [choice("off", "OFF"), choice("refresh_rate", "refresh_rate")];
+        let relabels = [(
+            "display.frame_limit",
+            "refresh_rate",
+            "REFRESH RATE (144)".to_string(),
+        )];
+        let shown = |key: &str, value: &str| shown_value(key, value.into(), &values, &relabels);
+        assert_eq!(
+            shown("display.frame_limit", "refresh_rate"),
+            "REFRESH RATE (144)"
+        );
+        assert_eq!(shown("display.frame_limit", "off"), "OFF");
+        assert_eq!(shown("graphics.target_fps", "refresh_rate"), "refresh_rate");
+        assert_eq!(shown("display.frame_limit", "240"), "240");
     }
 }

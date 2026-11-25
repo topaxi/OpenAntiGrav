@@ -42,10 +42,13 @@ the simulation modules and the mods' effects, shaders and sounds (`find_extensio
 packs (`find_texture_packs`) and the player's override directory
 (`Options::no_overrides`, which mounts only this project's own fallback layer). The mods still
 list on the MODS page and the built-in `oag-extras` is not a mod for this purpose (it adds menu
-rows, not race content); the official `oag.*` mods are mods and load under MODS ON. The rumble
-patterns' and the wingtip lender's own source opens (haptics and one effect's borrowed textures)
-are outside the guard, so a rumble override there still answers (**not guarded, checked in the
-code, not measured**).
+rows, not race content); the official `oag.*` mods are mods and load under MODS ON.
+
+The wingtip contrails' lender disc opens through the same override rule
+(`Options::override_bases`), and the rumble library is read out of the race's own archives, so
+neither lets an override of the player's in (the rumble override in the test's override directory
+answers with mods on and stays silent with them off). The rumble probe in
+`crates/game/src/rumble.rs` is a development tool and not a race.
 
 The result's `run` object records `mods` (`"off"` or `[{id, version, hash}]`; `hash` is the
 SHA-256 of the mod's simulation module, empty for a mod with none), `vsync_requested`,
@@ -247,7 +250,9 @@ checks each value against the page.
   untouched run's flyby length, final tick, state hash, frame count and `settings.toml`.
   `a_benchmark_with_its_mods_off_loads_no_extension_and_no_override`,
   `the_options_page_reaches_the_run_and_saves_nothing` and
-  `the_mods_row_is_left_out_while_no_mod_is_enabled`: BENCHMARK OPTIONS.
+  `the_mods_row_is_left_out_while_no_mod_is_enabled`: BENCHMARK OPTIONS. Unit tests hold the page in
+  every title's menu tree (`every_titles_tree_holds_the_benchmark_options_page`) and the PRESET,
+  VSYNC and FRAME LIMIT rows to the shipped preset names and the display page's values.
   `the_stats_screen_swaps_to_details_and_answers_a_copy`: DETAILS and COPY through the real
   `Session`, by screenshots. The unit tests in `benchmark::text` hold the verdict thresholds, the
   frame-limit line, the copied text and that no internal name (`_Track`, `track.vex`) is shown.
