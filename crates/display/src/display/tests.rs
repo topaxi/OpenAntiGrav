@@ -690,10 +690,10 @@ fn reflection_resolution_round_trips_and_defaults_to_the_originals() {
         assert_eq!(value.name().parse::<ReflectionResolution>(), Ok(value));
     }
     assert_eq!(
-        "SCALED".parse::<ReflectionResolution>(),
-        Ok(ReflectionResolution::Scaled)
+        "QUARTER".parse::<ReflectionResolution>(),
+        Ok(ReflectionResolution::Quarter)
     );
-    assert!("half".parse::<ReflectionResolution>().is_err());
+    assert!("scaled".parse::<ReflectionResolution>().is_err());
     assert_eq!(
         ReflectionResolution::default(),
         ReflectionResolution::Original
@@ -701,29 +701,23 @@ fn reflection_resolution_round_trips_and_defaults_to_the_originals() {
 }
 
 #[test]
-fn the_scaled_reflection_target_follows_the_render_scale_and_never_exceeds_the_originals() {
-    let scale = |percent: u32| Scale::try_from(percent).expect("an offered scale");
+fn half_and_quarter_take_a_fixed_fraction_of_the_originals_size_per_axis() {
     let glass = (640, 360);
     let sea = (960, 540);
-    for percent in [25, 33, 50, 100, 200] {
-        assert_eq!(
-            ReflectionResolution::Original.size(glass, scale(percent)),
-            glass,
-            "original at {percent}"
-        );
-    }
-    let scaled = ReflectionResolution::Scaled;
-    assert_eq!(scaled.size(glass, scale(100)), glass);
-    assert_eq!(scaled.size(sea, scale(100)), sea);
-    assert_eq!(scaled.size(glass, scale(50)), (320, 180));
-    assert_eq!(scaled.size(sea, scale(50)), (480, 270));
-    assert_eq!(scaled.size(glass, scale(25)), (160, 90));
-    assert_eq!(scaled.size(sea, scale(25)), (240, 135));
-    assert_eq!(scaled.size(glass, scale(33)), (211, 119));
-    assert_eq!(scaled.size(glass, scale(150)), glass, "capped above 100");
-    assert_eq!(
-        scaled.size((1, 1), scale(25)),
-        (1, 1),
-        "an axis keeps a texel"
-    );
+    assert_eq!(ReflectionResolution::Original.size(glass), glass);
+    assert_eq!(ReflectionResolution::Original.size(sea), sea);
+    assert_eq!(ReflectionResolution::Half.size(glass), (320, 180));
+    assert_eq!(ReflectionResolution::Half.size(sea), (480, 270));
+    assert_eq!(ReflectionResolution::Quarter.size(glass), (160, 90));
+    assert_eq!(ReflectionResolution::Quarter.size(sea), (240, 135));
+}
+
+#[test]
+fn an_odd_size_rounds_down_and_an_axis_keeps_a_texel() {
+    assert_eq!(ReflectionResolution::Half.size((641, 361)), (320, 180));
+    assert_eq!(ReflectionResolution::Quarter.size((643, 363)), (160, 90));
+    assert_eq!(ReflectionResolution::Half.size((1, 1)), (1, 1));
+    assert_eq!(ReflectionResolution::Quarter.size((3, 2)), (1, 1));
+    assert_eq!(ReflectionResolution::Quarter.size((4, 7)), (1, 1));
+    assert_eq!(ReflectionResolution::Quarter.size((8, 5)), (2, 1));
 }

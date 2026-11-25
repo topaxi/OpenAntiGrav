@@ -21,10 +21,12 @@ fn read(path: &Path) -> Result<shot_meta::Found> {
 }
 
 /// What photo mode does to a frame whatever the settings say: it draws every section the
-/// circuit's visibility sets would cull, at the output's size with no upscaler, and none of the
-/// game's own motion blur (a flag the person gave stands).
+/// circuit's visibility sets would cull, at the output's size with no upscaler, the glass and
+/// sea target at the original's size, and none of the game's own motion blur (a flag the person
+/// gave stands).
 fn draw_as_photo_mode(cli: &mut Cli) {
     cli.pvs = Some(false);
+    cli.reflection_resolution = Some(oag_display::display::ReflectionResolution::Original);
     cli.photo_profile = true;
     cli.blur
         .motion_blur
@@ -45,17 +47,6 @@ fn draw_as_the_photo_was(meta: &shot_meta::Meta, cli: &mut Cli) {
     {
         cli.render_scale = Some(percent.max(100));
     }
-    if let Some(resolution) = render
-        .get("reflection_resolution")
-        .and_then(toml::Value::as_str)
-        .and_then(|text| text.parse().ok())
-    {
-        cli.reflection_resolution = Some(resolution);
-    }
-    cli.reflection_render_scale = render
-        .get("reflection_render_scale")
-        .and_then(toml::Value::as_integer)
-        .and_then(|percent| u32::try_from(percent).ok());
     if let Some(reconstruction) = render
         .get("reconstruction")
         .and_then(toml::Value::as_str)
@@ -270,24 +261,24 @@ mod tests {
     }
 
     #[test]
-    fn a_photo_sizes_its_glass_target_from_the_scale_the_race_was_loaded_at() {
+    fn a_photo_is_drawn_again_with_the_glass_target_at_the_originals_size() {
         use oag_display::display::ReflectionResolution;
-        let meta = shot_meta::Meta {
-            render: Some(toml::toml! {
-                render_scale = 100
-                reflection_resolution = "scaled"
-                reflection_render_scale = 50
-            }),
-            ..shot_meta::Meta::default()
-        };
-        let mut cli = Cli::try_parse_from(["oag-game"]).expect("parses");
-        draw_as_the_photo_was(&meta, &mut cli);
+        let mut cli = Cli::try_parse_from(["oag-game", "--reflection-resolution", "quarter"])
+            .expect("parses");
+        draw_as_photo_mode(&mut cli);
         assert_eq!(
             cli.reflection_resolution,
-            Some(ReflectionResolution::Scaled)
+            Some(ReflectionResolution::Original)
         );
-        assert_eq!(cli.reflection_render_scale, Some(50));
-        assert_eq!(cli.render_scale, Some(100));
+        let mut profile = crate::settings::RenderProfile {
+            reflection_resolution: ReflectionResolution::Quarter,
+            ..Default::default()
+        };
+        cli.apply_render_overrides(&mut profile, None);
+        assert_eq!(
+            profile.reflection_resolution,
+            ReflectionResolution::Original
+        );
     }
 
     #[test]

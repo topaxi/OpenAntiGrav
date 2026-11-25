@@ -497,6 +497,13 @@ impl Session {
                     // And the SCREEN SIZE row.
                     hud.set_safe_area(self.settings.graphics.hud_safe_area);
                 }
+                // The glass and sea target at the profile's fraction, which a photo's frame
+                // draws at the original's size (`RenderProfile::for_a_photo`).
+                stage.scene.set_reflection_resolution(
+                    &self.gpu.device,
+                    &self.gpu.queue,
+                    render_profile.reflection_resolution,
+                );
                 stage.scene.set_blur_resolution(blur_resolution);
                 stage.scene.set_band_levels(spectrum);
                 let stats = stage.render(

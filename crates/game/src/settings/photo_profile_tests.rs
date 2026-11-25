@@ -83,3 +83,22 @@ fn a_gamescope_default_scale_is_redrawn() {
     assert!(unchosen.photo_differs((3840.0, 2160.0), true));
     assert!(!unchosen.photo_differs((3840.0, 2160.0), false));
 }
+
+#[test]
+fn a_photo_draws_the_glass_and_sea_target_at_the_originals_size() {
+    use oag_display::display::ReflectionResolution;
+    let mut quarter = profile(100, Reconstruction::Off);
+    assert!(!quarter.photo_differs(RECT, false));
+    quarter.reflection_resolution = ReflectionResolution::Quarter;
+    assert!(
+        quarter.photo_differs(RECT, false),
+        "a smaller target is redrawn"
+    );
+    for resolution in ReflectionResolution::ALL {
+        quarter.reflection_resolution = resolution;
+        assert_eq!(
+            quarter.for_a_photo().reflection_resolution,
+            ReflectionResolution::Original
+        );
+    }
+}

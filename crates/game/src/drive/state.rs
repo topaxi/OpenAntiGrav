@@ -171,6 +171,11 @@ pub struct State {
     /// is open.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub photo_job: Option<String>,
+    /// The glass and sea target's size as `WxH` on `stage=race`, on a circuit that draws one: a
+    /// photo mode shot draws it at the original's size and the frame after puts the player's
+    /// back.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub glass_target: Option<String>,
     /// The replay viewer while a recording is being watched on `stage=race`: `opening`,
     /// `playing`, `paused`, `ended` or `stopped` (the build stops matching the recording).
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -272,6 +277,7 @@ impl State {
             "photo" => one(self.photo.clone()),
             "photo_fx" => one(self.photo_fx.clone()),
             "photo_job" => one(self.photo_job.clone()),
+            "glass_target" => one(self.glass_target.clone()),
             "replay" => one(self.replay.clone()),
             "replay_at" => one(self.replay_at.clone()),
             "replay_follow" => one(self.replay_follow.clone()),
@@ -342,6 +348,7 @@ impl State {
                 | "photo"
                 | "photo_fx"
                 | "photo_job"
+                | "glass_target"
                 | "replay"
                 | "replay_at"
                 | "replay_follow"

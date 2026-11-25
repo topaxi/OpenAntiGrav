@@ -255,7 +255,7 @@ pub fn upload_sky_probe(
 }
 
 /// What [`resources`] builds.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(super) struct Resources {
     pub view: wgpu::TextureView,
     pub sampler: wgpu::Sampler,

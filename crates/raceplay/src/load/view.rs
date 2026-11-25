@@ -251,22 +251,16 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
         hides_circuit_pads,
         &mut report,
     );
-    // The target's size is the original's, or that size at the render scale
+    // The target's size is the original's, or a fraction of it
     // (`graphics.reflection_resolution`); a circuit with no target has nothing to resize.
     if !behind_glass.groups.is_empty() || behind_glass.mirror.is_some() {
-        let original = behind_glass.size;
-        behind_glass.size = options
-            .reflection_resolution
-            .size(original, options.render_scale);
-        if behind_glass.size != original {
+        behind_glass.resolution = options.reflection_resolution;
+        let (original, size) = (behind_glass.size, behind_glass.drawn_size());
+        if size != original {
             report.push(format!(
-                "{track}: the glass and sea target is {}x{} at render scale {} (the original's \
-                 is {}x{})",
-                behind_glass.size.0,
-                behind_glass.size.1,
-                options.render_scale.percent(),
-                original.0,
-                original.1
+                "{track}: the glass and sea target is {}x{} at reflection resolution {} (the \
+                 original's is {}x{})",
+                size.0, size.1, options.reflection_resolution, original.0, original.1
             ));
         }
     }

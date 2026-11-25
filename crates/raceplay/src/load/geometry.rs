@@ -172,6 +172,7 @@ pub(super) fn track_model(
                             size: mesh::rcs::psp2::refraction_only::target_size(
                                 oag_rcs::rcsmodel::psp2::is_ps4(geometry),
                             ),
+                            resolution: Default::default(),
                         };
                     }
                     // 2048 and Omega take the cull bit alone: the rest of the
@@ -240,6 +241,7 @@ pub(super) fn track_model(
                                 crate::BehindGlassModels::default().size
                             },
                             mirror,
+                            resolution: Default::default(),
                         },
                     )
                 }

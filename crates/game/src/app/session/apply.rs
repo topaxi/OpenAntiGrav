@@ -665,7 +665,9 @@ impl Session {
                     return;
                 }
             },
-            // Read when the next race loads its circuit: the target's size is set there.
+            // Applied by the next frame of the race on screen, which rebuilds the target at the
+            // new size (`oag_raceplay::Scene::set_reflection_resolution`); the next race loads
+            // at it too.
             "graphics.reflection_resolution" => {
                 match text.parse::<display::ReflectionResolution>() {
                     Ok(resolution) => {

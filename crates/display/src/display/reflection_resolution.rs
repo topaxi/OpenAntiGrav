@@ -2,24 +2,25 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::Scale;
-
 /// How many texels the target a race draws ahead of the main view gets, on a title that draws
 /// one: Wipeout HD's behind-the-glass target (Vineta K's tunnel glass) and its planar sea
 /// reflection (Moa Therma, Ubermall), 2048's and Omega's refraction target.
 ///
 /// The original keeps the target at a fixed size whatever the window's: 640x360 for the glass
 /// and 960x540 for the sea on HD (`docs/rendering/water.md`, "The planar reflection, drawn").
-/// `Scaled` sizes it from the render scale instead, so a lowered render scale shrinks the
-/// target too, at the cost of a coarser picture through the glass and in the sea.
+/// `Half` and `Quarter` take a fixed fraction of that size on each axis, whatever the render
+/// scale, so the cost saved and the coarser picture through the glass and in the sea are the
+/// same on every machine.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
 pub enum ReflectionResolution {
     /// The original's fixed size.
     #[default]
     Original,
-    /// The original's size times the render scale, capped at the original's size.
-    Scaled,
+    /// Half the original's size on each axis.
+    Half,
+    /// A quarter of the original's size on each axis.
+    Quarter,
 }
 
 impl ReflectionResolution {
@@ -28,30 +29,33 @@ impl ReflectionResolution {
     pub fn name(self) -> &'static str {
         match self {
             Self::Original => "original",
-            Self::Scaled => "scaled",
+            Self::Half => "half",
+            Self::Quarter => "quarter",
         }
     }
 
     /// Every value, in menu order.
-    pub const ALL: [Self; 2] = [Self::Original, Self::Scaled];
+    pub const ALL: [Self; 3] = [Self::Original, Self::Half, Self::Quarter];
 
-    /// The target's size in texels when the original's is `original` and the player renders at
-    /// `scale`.
-    ///
-    /// `Scaled` multiplies each axis by the scale's factor, rounded, and never goes above
-    /// `original`: a render scale over 100 buys no sharper glass than the original's, so the
-    /// setting only ever saves cost. Each axis is at least one texel. A function of the scale
-    /// alone, not of the window, so a race at one scale builds the same target on every machine.
+    /// How many times smaller than the original's each axis is.
     #[must_use]
-    pub fn size(self, original: (u32, u32), scale: Scale) -> (u32, u32) {
+    pub fn divisor(self) -> u32 {
         match self {
-            Self::Original => original,
-            Self::Scaled => {
-                let factor = scale.factor().min(1.0);
-                let axis = |texels: u32| ((texels as f32 * factor).round() as u32).max(1);
-                (axis(original.0), axis(original.1))
-            }
+            Self::Original => 1,
+            Self::Half => 2,
+            Self::Quarter => 4,
         }
+    }
+
+    /// The target's size in texels when the original's is `original`.
+    ///
+    /// Each axis is the original's divided by [`Self::divisor`], rounded down, and at least one
+    /// texel. A function of the original's size alone, not of the window or the render scale, so
+    /// a race builds the same target on every machine.
+    #[must_use]
+    pub fn size(self, original: (u32, u32)) -> (u32, u32) {
+        let axis = |texels: u32| (texels / self.divisor()).max(1);
+        (axis(original.0), axis(original.1))
     }
 }
 
@@ -63,7 +67,7 @@ impl std::str::FromStr for ReflectionResolution {
             .into_iter()
             .find(|value| value.name().eq_ignore_ascii_case(text))
             .ok_or_else(|| {
-                format!("{text:?} is not a reflection resolution; try original or scaled")
+                format!("{text:?} is not a reflection resolution; try original, half or quarter")
             })
     }
 }
