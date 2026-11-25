@@ -1163,3 +1163,11 @@ the craft's position (measured on Pulse only). **Unread.**
 **Lineage.** 2048 and Omega: inherited from HD, set `false`. Neither title's fire path was read,
 and neither was run (no memory readout on Omega; 2048 not run).
 
+**2048's Bridge race.** With the inherited value, `vita_2048_original_ai_ground_truth`'s Bridge
+event (`2048 - Event 2-1`, the field firing, the player parked) missed its 300 s limit
+unperturbed. Over the nine `perturb::BOUND_OFFSETS` times the five `perturb::GATE` scales it
+misses in 5 of 45 runs at the class speed and 2 of 45 with 2048 flipped back to the hold, every
+miss a field still on lap 3 at 300 s, and a finished race ends at 270 to 280 s. The two rates are
+too close to tell apart on 45 runs. The test is judged as Tower's is: two of the five `GATE`
+scales must finish.
+
