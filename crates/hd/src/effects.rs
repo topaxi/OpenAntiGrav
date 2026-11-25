@@ -194,6 +194,8 @@ const TEMPLATES: &[&str] = &[
 /// filament-ring atlas the colour ramp is authored against (`weapons.md`,
 /// "The Missile's red rings"), the ship explosion, whose root's black colour ramp is a blend
 /// weight, not a colour (`ship-destroy.md`, "`colour_mode` 3 is a blend toward the scene light"),
+/// the two trail hits, whose colour lives in the sprite (the red variant's ramp is near white,
+/// `engine-trail.md`, "The red variant's colour is in its sprites"),
 /// and the Plasma's five, paired against the
 /// original phase by phase (`plasma.md`, "The pairs"). Every other HD effect
 /// still draws the procedural profile until a matched capture says its sprite
@@ -206,6 +208,7 @@ const SPRITES: &[&str] = &[
     engine_effects::DETONATOR_EMP_EFFECT,
     engine_effects::MISSILE_FLARE_EFFECT,
     engine_effects::TRAIL_HITSHIP_EFFECT,
+    engine_effects::TRAIL_HITSHIP_RED_EFFECT,
     engine_effects::PLASMA_FLARE_EFFECT,
     engine_effects::PLASMA_CHARGING_EFFECT,
     engine_effects::PLASMA_LAUNCH_EFFECT,

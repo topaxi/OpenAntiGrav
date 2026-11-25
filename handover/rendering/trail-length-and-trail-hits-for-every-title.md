@@ -1,7 +1,7 @@
 ---
 status: measure
 titles: [pulse, pure, hd, 2048, omega]
-updated: 2026-11-13
+updated: 2026-11-25
 summary: "HD burst wired, lilac gone; white nose glow needs a rival ahead, burst vs rival flare unseparated; HD-length trails blocked"
 ---
 
@@ -31,8 +31,9 @@ effects.
   `wingtip` locators drive two ribbons while a speed pad or turbo acts. Its own thread:
   `hd-wingtip-vortices-are-recovered-and-not-drawn.md`.
 - **Still open on the burst:** `CORE_IMPACT`'s atlas frame (drawn on its spawn frame), the render
-  state `record+0xca4`, `WO_TRAIL_HITSHIP_RED`'s sprites (unlisted), and the placement (the
-  simulation's). A re-shot pair after any of them.
+  state `record+0xca4`, and the placement (the simulation's). The red variant plays its own sprites
+  but has no pair against the original (a Fury craft tucked in a rival's ribbon is not captured).
+  A re-shot pair after any of them.
 - **Trail length.** Pulse and Pure get a setting that lengthens their engine trails to HD's
   length (54 samples, `engine-trail.md`, "The tuning file is the parameter block"). It waits
   until the burst matches the original. The Pulse and Pure hit test runs against their
@@ -49,10 +50,10 @@ effects.
   2. The burst's look mends with the draw above.
   3. A Pulse or Pure race on a machine with no HD, 2048 or Omega source plays nothing, by
      design.
-  4. The lent burst is the blue variant only, redrawn in the Pulse or Pure ribbon's hue
-     (`docs/formats/pulse-absent-effects.md`, "Trail-hit burst colour"); the PSP change is small
-     (6 % of the burst's pixels) because HD's burst vertices already point that way; the PS2's
-     pink-white ribbon moves a third. Open: summed-layer violet or the outer layer's blue.
+  4. The lent burst is the blue variant only, its sprites redrawn in the ribbon's summed-layer hue
+     (`docs/formats/pulse-absent-effects.md`, "Trail-hit burst colour"). On the PSP and Pure that is
+     violet (about 269 degrees), between the original's thin rival trail (293) and its near wide
+     one (250); the maintainer's eye on it is the check left. PS2 matches its original.
   5. The stage holds 64 effects and a trail hit is expendable, so it no longer evicts a
      detonation or an absorb burst; the lent burst fires every other tick
      (`docs/formats/pulse-absent-effects.md`, "Trail-hit burst budget"). Unmeasured: a rocket

@@ -1006,9 +1006,8 @@ impl RaceView {
                 // trail holds about thirty instances at the every-tick rate, and
                 // a detonation or pickup burst must not lose its slot to them.
                 let velocity = core.sim.world.ships[intruder].physics.body.linear_velocity;
-                let tint = self.trail_hit_tint();
                 self.stage
-                    .play_carried_expendable(&effect, point, 1.0, velocity, tint);
+                    .play_carried_expendable(&effect, point, 1.0, velocity);
             }
         }
     }
@@ -1080,29 +1079,8 @@ impl RaceView {
         let Some(effect) = self.handles.get(trigger).cloned() else {
             return;
         };
-        self.stage.play_carried_expendable(
-            &effect,
-            probe,
-            1.0,
-            body.linear_velocity,
-            self.trail_hit_tint(),
-        );
-    }
-
-    /// The hue of the burst a craft raises inside a rival's trail, when the burst is lent.
-    ///
-    /// **A derivation, not a measurement.** Wipeout HD picks its burst by the ribbon's owner:
-    /// the blue one in a blue ribbon, the red one in a red ribbon (`advance_trail_hits`). A
-    /// burst lent to Pulse or Pure is HD's blue, which is no colour of those titles' ribbons,
-    /// so it is redrawn in the hue the owner's ribbon shows and keeps its own brightness. Their
-    /// ribbon is one colour law for every craft ([`exhaust::TrailLaw::ribbon_colour`], which
-    /// differs between the PSP and the PS2), so the owner does not change the answer. A burst
-    /// the title authors is never tinted. See `docs/formats/pulse-absent-effects.md`,
-    /// "Trail-hit burst colour".
-    fn trail_hit_tint(&self) -> Option<psys::Tint> {
-        self.handles
-            .is_lent(Trigger::TrailHitship)
-            .then(|| psys::Tint::towards(self.trail_law().ribbon_colour()))
+        self.stage
+            .play_carried_expendable(&effect, probe, 1.0, body.linear_velocity);
     }
 
     /// Whether this race tests for trail hits: HD's tube (HD, 2048 and Omega), or a burst lent to
@@ -1244,11 +1222,7 @@ impl RaceView {
     /// law when the title's `ps2_trail` rule applies to the disc's platform.
     #[must_use]
     pub fn trail_law(&self) -> exhaust::TrailLaw {
-        if self.ps2_trail {
-            exhaust::TrailLaw::Baked
-        } else {
-            exhaust::TrailLaw::Ramped
-        }
+        exhaust::TrailLaw::for_ps2(self.ps2_trail)
     }
 
     /// Advances every craft's shield shell, and starts the fade on the tick its

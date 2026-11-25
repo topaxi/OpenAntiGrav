@@ -28,16 +28,19 @@ pub const ROCKET_SHOTS: usize = crate::counts::MAX_ROCKETS as usize;
 /// rocket hit spends"). Tested after the tick, strictly greater.
 pub const LIFETIME_SECONDS: f32 = 5.0;
 
-/// How much slower than the class a rocket leaves, until its first surface hit.
+/// How much slower than the class a rocket leaves, until its first surface hit, on a title
+/// whose `Rocket_Init` takes the display matrix ([`super::LaunchScale::DisplayScaled`]).
 ///
-/// **Measured 2026-10-01, confidence 88** (Pulse PSP on PPSSPP, Venom, six rockets
-/// over two runs): the first four updates read 166.67 units/s, 0.75 x `venomspeed`
-/// 800 km/h / 3.6. `Rocket_Init` copies the craft's display matrix, carrying
-/// `g_craft_scale` (0.75), and scales its direction row by `SpeedForClass / 3.6`;
-/// the first surface-probe hit in `Rocket_Update` renormalises to the class speed
-/// (the divide at `0x0885d6c8`), 222.22 units/s. `launchSpeed` plays no part. Why
-/// the step lands on the fourth update was not separated from the age. Venom only;
-/// Flash, Rapier and Phantom not run. See `rocket-visuals.md`, 2026-10-01 section.
+/// **Measured on Pulse PSP, confidence 88** (PPSSPP, Venom, six rockets over two runs):
+/// the first four updates read 166.67 units/s, 0.75 x `venomspeed` 800 km/h / 3.6.
+/// `Rocket_Init` copies the craft's display matrix, carrying `g_craft_scale` (0.75), and
+/// scales its direction row by `SpeedForClass / 3.6`; the first surface-probe hit in
+/// `Rocket_Update` renormalises to the class speed (the divide at `0x0885d6c8`), 222.22
+/// units/s. `launchSpeed` plays no part. Why the step lands on the fourth update was not
+/// separated from the age. Venom only; Flash, Rapier and Phantom not run. See
+/// `rocket-visuals.md`, 2026-10-01 section. Pure's does the same
+/// (`docs/ghidra/functions/psp-pure-usa/floor-follow.md`, "Watched live"). HD's does not
+/// (`docs/ghidra/functions/ps3-hdfury-eu/plasma.md`, "The Rocket's launch scale").
 ///
 /// It is [`oag_physics::hover::TARGET_GLOBAL_SCALE`], the same global.
 pub const LAUNCH_SPEED_SCALE: f32 = oag_physics::hover::TARGET_GLOBAL_SCALE;
@@ -81,14 +84,12 @@ impl core::ops::Deref for Volley {
 ///   `Rocket_Update` probe reads the spawn at `124.5, -47.9, -196.9` against the
 ///   body's `124.5, -47.9, -197.0`. An earlier forward push by the hull extent was
 ///   this engine's. [`super::nearest_hit`] excludes the owner already.
-/// - **The speed is 0.75 x the class speed at launch, then the class's alone,
-///   measured 2026-10-01** (Pulse PSP on PPSSPP, Venom, Time Trial on Talon's
-///   Junction): the probe reads 222.22 units/s, `venomspeed` 800 km/h / 3.6, held.
-///   This took `class + launchSpeed` (277.78) before; `launchSpeed` plays no part
-///   in `Rocket_Init` or `Rocket_Update` and what it is for on a Rocket is not
-///   found. Pulse PSP only: HD and Pure author the attribute and were not probed.
-///   The craft's velocity is not inherited. See [`LAUNCH_SPEED_SCALE`] and
-///   `rocket-visuals.md`, 2026-10-01 section.
+/// - **The speed is `scale` x the class speed at launch, then the class's alone.** Pulse
+///   PSP's probe reads 166.67 and then 222.22 units/s, `venomspeed` 800 km/h / 3.6
+///   (`rocket-visuals.md`, 2026-10-01 section); HD holds 222.22 from the first update.
+///   `launchSpeed` plays no part in Pulse's `Rocket_Init` or `Rocket_Update` and what it
+///   is for on a Rocket is not found. The craft's velocity is not inherited. See
+///   [`LAUNCH_SPEED_SCALE`].
 ///
 /// # The authored speeds are km/h, not units per second
 ///
@@ -100,13 +101,19 @@ impl core::ops::Deref for Volley {
 /// The conversion is at the call site, not in [`RocketStats::speed_for`],
 /// mirroring the original.
 #[must_use]
-pub fn launch(state: &ShipState, stats: &RocketStats, class: &str, count: u8) -> Option<Volley> {
+pub fn launch(
+    state: &ShipState,
+    stats: &RocketStats,
+    class: &str,
+    count: u8,
+    scale: super::LaunchScale,
+) -> Option<Volley> {
     let forward = state.body.forward();
     let up = state.body.up();
     // The craft's own position, shared by all three (`Rocket_Init` places the
     // rocket where it is handed).
     let origin = state.body.position;
-    let speed = stats.speed_for_named(class)? / KMH_PER_UNIT_PER_SECOND * LAUNCH_SPEED_SCALE;
+    let speed = stats.speed_for_named(class)? / KMH_PER_UNIT_PER_SECOND * scale.scale();
 
     // The original's order. A zero `spread` collapses all three onto one ray: a
     // file authoring no fan, not a broken weapon.
@@ -129,7 +136,7 @@ pub fn launch(state: &ShipState, stats: &RocketStats, class: &str, count: u8) ->
 /// Puts a volley in the air, each rocket carrying the class speed it is
 /// renormalised to on its first surface hit.
 ///
-/// [`launch`] leaves at [`LAUNCH_SPEED_SCALE`] x the class speed; the class speed
+/// [`launch`] leaves at `scale` x the class speed; the class speed
 /// rides in [`super::Projectile::launch_speed_kmh`] (see
 /// [`super::Projectiles::advance`]'s Rocket arm). One entry point for both halves,
 /// so dropping either fails a test. Each rocket rides `normal` until its first
@@ -140,6 +147,10 @@ pub fn launch(state: &ShipState, stats: &RocketStats, class: &str, count: u8) ->
 ///
 /// Returns how many left, or `None` where the table authors no speed for this
 /// race's class.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the facts of one press and the title's launch scale, passed as the pool and the craft are"
+)]
 pub fn fire(
     projectiles: &mut super::Projectiles,
     state: &ShipState,
@@ -148,9 +159,10 @@ pub fn fire(
     owner: u8,
     count: u8,
     normal: Vec3,
+    scale: super::LaunchScale,
 ) -> Option<usize> {
     let class_kmh = stats.speed_for_named(class)?;
-    let shots = launch(state, stats, class, count)?;
+    let shots = launch(state, stats, class, count, scale)?;
     let mut fired = 0;
     for &(position, velocity) in &*shots {
         if projectiles.spawn_riding(

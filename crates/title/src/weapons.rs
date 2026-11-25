@@ -131,6 +131,17 @@ pub struct Weapons {
     /// 210.8 km/h off a 200 km/h release, Venom's ramp with no hold
     /// (`docs/ghidra/functions/ps3-hdfury-eu/plasma.md`, "Measured live").
     pub plasma_release_at_display_scale: crate::pre_race::Sourced<bool>,
+    /// Whether a Rocket leaves at the craft's display scale (`true`, 0.75 x its class speed
+    /// until its first floor ride) or at its class speed (`false`).
+    ///
+    /// Pulse's and Pure's `Rocket_Init` take the matrix with the scale in it: Pulse's first
+    /// updates read 166.67 units/s and Pure's 208.3 before the class speed
+    /// (`docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`,
+    /// `docs/ghidra/functions/psp-pure-usa/floor-follow.md`). HD's fire path orthonormalises
+    /// the matrix before `Rocket_Init` reads it, and its rockets hold 222.22 units/s, Venom's
+    /// class speed, from the first update (`docs/ghidra/functions/ps3-hdfury-eu/plasma.md`,
+    /// "The Rocket's launch scale").
+    pub rocket_launch_at_display_scale: crate::pre_race::Sourced<bool>,
     /// Whether the firing craft's own box collider hides the track from a projectile's surface
     /// probe, and what a probe that meets it does. See [`OwnCraftBox`].
     pub own_craft_box_hides_track: crate::pre_race::Sourced<OwnCraftBox>,

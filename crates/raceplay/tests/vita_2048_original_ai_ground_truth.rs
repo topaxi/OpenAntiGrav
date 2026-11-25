@@ -345,7 +345,17 @@ macro_rules! circuit {
     };
 }
 
-/// Tower is judged on a majority of [`crate::perturb::GATE`]: the field is held back by the
+/// Judges a race on [`crate::perturb::GATE`] where its finish time sits close to the limit: at
+/// least two of the five scales must finish.
+fn fly_on_the_gate(event: &str, respawns: u32) {
+    let finished = crate::perturb::GATE
+        .iter()
+        .filter(|offset| std::panic::catch_unwind(|| fly_at(event, respawns, **offset)).is_ok())
+        .count();
+    assert!(finished >= 2, "{event}: {finished} of 5 scales finished");
+}
+
+/// Tower is judged on [`fly_on_the_gate`]: the field is held back by the
 /// parked player, so its finish time is bimodal (277 s or past the 300 s limit) and flips with any
 /// nudge. Measured 2026-10-26 over the nine `OAG_PERTURB` scales: 1 of 9 runs missed the limit
 /// with the 2048 grid hover off, 2 of 9 (the unperturbed one among them) with it on, and the
@@ -357,14 +367,18 @@ macro_rules! circuit {
 #[test]
 #[ignore = "needs the extracted package under data/extracted/vita/"]
 fn the_field_finishes_tower() {
-    let finished = crate::perturb::GATE
-        .iter()
-        .filter(|offset| std::panic::catch_unwind(|| fly_at("2048 - Event 1", 0, **offset)).is_ok())
-        .count();
-    assert!(finished >= 2, "Tower: {finished} of 5 scales finished");
+    fly_on_the_gate("2048 - Event 1", 0);
+}
+
+/// Bridge is judged the same way: a finished race ends 270 to 280 s into the 300 s limit, and
+/// 5 of 45 perturbed runs miss it (`docs/ghidra/functions/ps3-hdfury-eu/plasma.md`, "The
+/// Rocket's launch scale").
+#[test]
+#[ignore = "needs the extracted package under data/extracted/vita/"]
+fn the_field_finishes_bridge() {
+    fly_on_the_gate("2048 - Event 2-1", 0);
 }
 circuit!(the_field_finishes_mall, "2048 - Event 2", 0);
-circuit!(the_field_finishes_bridge, "2048 - Event 2-1", 0);
 circuit!(the_field_finishes_square, "2048 - Event 4", 0);
 // One respawn since the Turbo's running laws (2026-10-20): in the unperturbed run slot 5 respawns once
 // after 23 wall-contact ticks. Park fails 1 of 9 perturbations either way (laws off at

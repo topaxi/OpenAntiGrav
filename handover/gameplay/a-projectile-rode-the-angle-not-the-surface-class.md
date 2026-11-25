@@ -2,7 +2,7 @@
 status: re-first
 titles: [all]
 updated: 2026-11-25
-summary: "HD floor arm measured and wired (parallel turn); open: HD Rocket 0.75 launch hold, Plasma probe window, Shuriken, Omega Sol Ace reset loop"
+summary: "HD floor arm and launch speed wired; open: HD volley launch points, Plasma probe window, Shuriken, Omega Sol Ace reset loop"
 difficulty: medium (35)
 ---
 
@@ -52,9 +52,12 @@ nothing on the title axis; the gameplay determinism reference did not move.
   turned parallel to the floor, not steered at the ride point, and the Plasma's ramp is read at
   `age + dt` ([plasma.md](../../docs/ghidra/functions/ps3-hdfury-eu/plasma.md), "On Moa Therma's
   bank"). Still open from that run:
-  - **HD's Rockets fly 222.2 units/s from the first frame**, Venom's class speed with no 0.75
-    launch hold, but `rocket::launch` applies `LAUNCH_SPEED_SCALE` on every title. Ready to wire
-    behind a title field, the way `plasma_release_at_display_scale` is. Size S.
+  - **HD's volley may not leave from one point.** In the bank capture one rocket's first record
+    steps back about 6.5 units further along the heading than the other two (or it had one more
+    update); ours launches all three from the craft's position, measured on Pulse only
+    ([plasma.md](../../docs/ghidra/functions/ps3-hdfury-eu/plasma.md), "The Rocket's launch
+    scale"). The caller of the fire path at `0x0014b188` builds the position and is unread
+    statically.
   - **The Plasma's probe window.** HD's bolt already rides on the frame 1/30 s after release;
     ours skips the probe for 0.04 s (`UNMEASURED_PLASMA_PROBE_WINDOW`, chosen). A 60 Hz capture
     of the first three ticks would settle it.

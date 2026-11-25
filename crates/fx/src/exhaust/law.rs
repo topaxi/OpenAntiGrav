@@ -19,6 +19,13 @@ pub enum TrailLaw {
 }
 
 impl TrailLaw {
+    /// The law a race draws: [`Self::Baked`] where the title takes the PS2's trail
+    /// (`oag_title::Looks::ps2_trail`), [`Self::Ramped`] otherwise.
+    #[must_use]
+    pub fn for_ps2(ps2_trail: bool) -> Self {
+        if ps2_trail { Self::Baked } else { Self::Ramped }
+    }
+
     /// The first layer this law submits.
     #[must_use]
     pub const fn first_layer(self) -> usize {
@@ -28,17 +35,24 @@ impl TrailLaw {
         }
     }
 
-    /// The colour the ribbon shows where its layers overlap, from the layers this law draws:
-    /// the sum of their authored colours, since the three are drawn additively
-    /// ([`super::LAYER_COLOUR`]). Only the hue is a ribbon's own; its brightness is the grey
-    /// ramp's, so this is not a vertex colour. The PSP's outer layer is deep blue and the
-    /// whole sums violet; the PS2 leaves that layer out and the sum is pink-white.
+    /// The mean colour this law's ribbon adds over its own footprint, for a ribbon texture whose
+    /// mean colour is `texel`: each submitted layer's authored colour ([`super::LAYER_COLOUR`])
+    /// times the texel and the layer's ramp at full intensity, weighted by the width it covers
+    /// ([`super::LAYER_WIDTH`]), and summed, since the layers blend additively. Only the hue is
+    /// a ribbon's own; its brightness follows the intensity, so this is not a vertex colour. The
+    /// PSP's wide deep-blue layer makes it violet; the PS2 leaves that layer out and it is
+    /// pink-magenta (`docs/formats/pulse-absent-effects.md`, "Trail-hit burst colour").
     #[must_use]
-    pub fn ribbon_colour(self) -> [f32; 3] {
+    pub fn ribbon_colour(self, texel: [f32; 3]) -> [f32; 3] {
+        let ramps = match self {
+            Self::Ramped => super::layer_alphas_at(1.0),
+            Self::Baked => [PS2_GS_COLOUR_SCALE; super::LAYERS],
+        };
         let mut sum = [0.0; 3];
-        for colour in &super::LAYER_COLOUR[self.first_layer()..] {
-            for (total, channel) in sum.iter_mut().zip(colour) {
-                *total += channel;
+        for (layer, ramp) in ramps.iter().enumerate().skip(self.first_layer()) {
+            let covered = ramp * super::LAYER_WIDTH[layer];
+            for (c, total) in sum.iter_mut().enumerate() {
+                *total += super::LAYER_COLOUR[layer][c] * texel[c] * covered;
             }
         }
         sum

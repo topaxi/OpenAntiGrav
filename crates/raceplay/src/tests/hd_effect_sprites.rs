@@ -28,6 +28,7 @@ fn only_hd_lists_effects_whose_gtf_sprites_play() {
             oag_title::engine_effects::DETONATOR_EMP_EFFECT,
             oag_title::engine_effects::MISSILE_FLARE_EFFECT,
             oag_title::engine_effects::TRAIL_HITSHIP_EFFECT,
+            oag_title::engine_effects::TRAIL_HITSHIP_RED_EFFECT,
             oag_title::engine_effects::PLASMA_FLARE_EFFECT,
             oag_title::engine_effects::PLASMA_CHARGING_EFFECT,
             oag_title::engine_effects::PLASMA_LAUNCH_EFFECT,

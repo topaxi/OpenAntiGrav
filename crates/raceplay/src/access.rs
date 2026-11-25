@@ -12,6 +12,15 @@ use super::*;
 /// riding one of Pulse's recorded bolts, so a tick of rounding cannot move it.
 const UNMEASURED_PLASMA_PROBE_WINDOW: f32 = 0.04;
 
+/// The launch scale a title's `*_at_display_scale` field picks.
+fn launch_scale(at_display_scale: bool) -> oag_weapons::projectile::LaunchScale {
+    if at_display_scale {
+        oag_weapons::projectile::LaunchScale::DisplayScaled
+    } else {
+        oag_weapons::projectile::LaunchScale::Unscaled
+    }
+}
+
 /// The flight's probe rule for a title's own-craft box. A title that has not measured it keeps a
 /// Plasma off the probe for [`UNMEASURED_PLASMA_PROBE_WINDOW`] seconds (chosen).
 #[must_use]
@@ -476,15 +485,18 @@ impl RaceSim {
         }
     }
 
+    /// How fast this title's Rocket leaves the craft,
+    /// `oag_title::weapons::Weapons::rocket_launch_at_display_scale`.
+    #[must_use]
+    pub fn rocket_release(&self) -> oag_weapons::projectile::LaunchScale {
+        launch_scale(self.rocket_launch_at_display_scale)
+    }
+
     /// How fast this title's Plasma bolt leaves the craft's weapon node,
     /// `oag_title::weapons::Weapons::plasma_release_at_display_scale`.
     #[must_use]
-    pub fn plasma_release(&self) -> oag_weapons::projectile::PlasmaRelease {
-        if self.plasma_release_at_display_scale {
-            oag_weapons::projectile::PlasmaRelease::DisplayScaled
-        } else {
-            oag_weapons::projectile::PlasmaRelease::Unscaled
-        }
+    pub fn plasma_release(&self) -> oag_weapons::projectile::LaunchScale {
+        launch_scale(self.plasma_release_at_display_scale)
     }
 
     /// How a projectile's first probes treat the firing craft,
