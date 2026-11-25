@@ -91,7 +91,7 @@ fn shaded(commands: &[Command], text: &'static str) -> Source {
 }
 
 /// A race with the mod's shader, sending `commands` every tick, its chase camera settled.
-fn race(commands: &[Command]) -> Race {
+pub(super) fn race(commands: &[Command]) -> Race {
     race_with(commands, GOOD)
 }
 

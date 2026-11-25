@@ -160,3 +160,23 @@ fn a_split_frame_encodes_every_card() {
     );
     assert_eq!(scene.adverts_encoded(), 2, "once per frame, both cards");
 }
+
+/// A mod shader attached (one that could ask for a portal view) does not stop a one-view frame
+/// culling: a portal may show a card stale or blank, which is accepted. Fails if the cull is
+/// gated on there being no mod shader.
+#[cfg(feature = "extensions")]
+#[test]
+fn a_frame_with_a_mod_shader_still_encodes_only_the_cards_it_shows() {
+    let Some(gpu) = test_gpu() else {
+        return;
+    };
+    let race = super::portal_view::race(&[]);
+    let scene = scene(&gpu.0, &gpu.1, &race);
+    scene.attach_mod_shaders(&gpu.0, &gpu.1, race.mod_shaders());
+    assert!(scene.has_mod_shaders(), "the shader is attached");
+    assert_eq!(
+        one_view(&gpu, &scene, &race, true),
+        1,
+        "the card ahead only"
+    );
+}
