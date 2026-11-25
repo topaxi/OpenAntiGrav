@@ -598,3 +598,115 @@ fn the_brackets_wait_their_delays_from_the_pages_entry() {
         "a circuit step re-arms no bracket"
     );
 }
+
+const DT: f32 = 1.0 / 60.0;
+
+fn ring_rect(draws: &[Draw]) -> Option<([f32; 4], [f32; 4])> {
+    draws.iter().rev().find_map(|d| match d {
+        Draw::Sprite { rect, color, .. } if rect[2] == 92.0 && rect[3] == 80.0 => {
+            Some((*rect, *color))
+        }
+        _ => None,
+    })
+}
+
+/// `TrackHexSelection_Update` steps the lattice with `HexSelection_Step` as Team Selection does
+/// (`ship-select-ring.md`, "Track Select") and runs the widget's update in the same frame: the
+/// first frame is a sixth of a pitch in (RAM: timer 0.0833), the columns slide left linearly, and
+/// the fifth frame is the snap with the next circuit in the centre. A stopped grab's lattice stood
+/// 11.3 px left where RAM said the fourth frame, three frames of picture lag. This fails if the
+/// grid is drawn without the picker's slide.
+#[test]
+fn a_circuit_step_slides_the_lattice_a_pitch_and_snaps_on_the_fifth_frame() {
+    let first_x = |picker: &Picker| match grid_draws(picker)
+        .iter()
+        .find(|d| matches!(d, Draw::Sprite { .. }))
+    {
+        Some(Draw::Sprite { rect, .. }) => rect[0],
+        _ => panic!("the grid draws a hexagon"),
+    };
+    let mut picker = grid();
+    picker.tick(DT);
+    let rest = first_x(&picker);
+    press(&mut picker, Button::Right);
+    picker.tick(DT);
+    assert!(
+        (first_x(&picker) - (rest - 12.0)).abs() < 0.01,
+        "frame 0 is a sixth of a pitch: {}",
+        first_x(&picker) - rest
+    );
+    for _ in 0..3 {
+        picker.tick(DT);
+    }
+    assert!(
+        (first_x(&picker) - (rest - 48.0)).abs() < 0.01,
+        "frame 3 is four sixths: {}",
+        first_x(&picker) - rest
+    );
+    picker.tick(DT);
+    assert!((first_x(&picker) - (rest - 60.0)).abs() < 0.01, "frame 4");
+    picker.tick(DT);
+    assert_eq!(first_x(&picker), rest, "frame 5: back in the slots");
+    assert_eq!(
+        picker.slide().shown(),
+        1,
+        "with the next circuit in the centre"
+    );
+}
+
+/// Each step flips which columns sit a half row low, so the lattice follows the circuit's index
+/// (RAM: `+0xb4` was 0, 1, 0, 1 at circuits 0 to 3), and the ring, fixed on the centre column,
+/// sits half a row lower on an odd one.
+#[test]
+fn the_lattice_and_the_ring_follow_the_circuits_index() {
+    let ring_y = |picker: &Picker| ring_rect(&grid_draws(picker)).expect("the ring").0[1];
+    let even = grid();
+    let odd = Picker::new(Kind::Track, grid().entries().to_vec(), Some("b"), None).with_rows(3);
+    assert!((ring_y(&odd) - ring_y(&even) - hex::HALF_ROW).abs() < 0.01);
+}
+
+/// Moving to the other direction's row writes the ring's target and leaves it where it was: it
+/// closes half the distance on every update (`HexSelection_Update`), so it sits half a row off
+/// after the press's own tick and a quarter after the next.
+#[test]
+fn the_ring_eases_to_the_other_row_by_halves() {
+    let ring_y = |picker: &Picker| ring_rect(&grid_draws(picker)).expect("the ring").0[1];
+    let mut picker = grid();
+    picker.tick(DT);
+    let top = ring_y(&picker);
+    press(&mut picker, Button::Down);
+    picker.tick(DT);
+    assert!(
+        (ring_y(&picker) - (top + 41.5)).abs() < 0.01,
+        "half of 83 left after one update: {}",
+        ring_y(&picker) - top
+    );
+    picker.tick(DT);
+    assert!((ring_y(&picker) - (top + 62.25)).abs() < 0.01);
+    for _ in 0..20 {
+        picker.tick(DT);
+    }
+    assert!((ring_y(&picker) - (top + 83.0)).abs() < 0.01, "arrived");
+}
+
+/// The ring's pulse is the widget's own counter, which a pair script pins to the phase it read
+/// out of RAM: white to `HD_Blue` over a third of a second. This fails if the grid draws the
+/// screen's clock, or the pin is dropped.
+#[test]
+fn the_rings_pulse_follows_its_own_clock() {
+    let blue = 0xffac_0717;
+    let colour = |picker: &Picker| ring_rect(&grid_draws(picker)).expect("the ring").1;
+    let mut picker = grid();
+    picker.tick(5.0);
+    assert_eq!(
+        colour(&picker),
+        oag_ui::screen::argb_to_rgba(hex::pulse_argb(blue, hex::pulse_phase(5.0)))
+    );
+    let unpinned = colour(&picker);
+    picker.set_ring_seconds(Some(0.195));
+    assert_eq!(
+        colour(&picker),
+        oag_ui::screen::argb_to_rgba(hex::pulse_argb(blue, 0.585))
+    );
+    assert_ne!(colour(&picker), unpinned);
+}

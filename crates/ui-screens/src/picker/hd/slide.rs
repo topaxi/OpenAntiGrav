@@ -3,11 +3,14 @@
 //! `docs/ghidra/functions/ps3-hdfury-eu/ship-select-ring.md`, "The lattice slide" and "The ring's
 //! position". A step sets a 0.1 s timer; while it runs every column moves one pitch toward the
 //! step's side, linearly, and the cells keep the previous window's content. When it ends the
-//! columns snap back to their slots with the new window. A selection that moves while a slide runs
-//! is not lost: the screen compares its focused entry with the one last stepped to every frame, so
-//! the step fires on the first frame after the timer reaches 0. The ring eases half way to its
-//! target on every update, so a step that flips the centre column's half-row leaves it
-//! 42 units off, halving each tick.
+//! columns snap back to their slots with the new window. On Team Selection a selection that moves
+//! while a slide runs is not lost: the screen compares its focused entry with the one last stepped
+//! to every frame, so the step fires on the first frame after the timer reaches 0. Track Select's
+//! `TrackHexSelection_Update` steps on the press itself, gated by a 0.2 s input cooldown longer
+//! than the slide, so no press lands mid-slide and the same code serves both. The ring eases half
+//! way to its target on every update, so a step that flips the centre column's half-row leaves it
+//! 42 units off, halving each tick; a move to the other row of a two-row grid (`SetRow`) leaves it
+//! a whole row off.
 
 /// How long one step's slide takes.
 pub const SLIDE_SECONDS: f32 = 0.1;
@@ -39,6 +42,13 @@ pub struct Slide {
     parity: bool,
     /// The parity before the running step.
     prev_parity: bool,
+    /// The row the ring's target is on, for a grid of more than one row.
+    row: usize,
+    /// Whether the widget's own update runs after the step within the same frame, so the step's
+    /// frame has already moved the columns one tick (`TrackHexSelection_Update` calls
+    /// `HexSelection_Step` and then `HexSelection_Update`; Team Selection's screen steps after
+    /// its widget has updated, so its step frame has not).
+    lead: bool,
 }
 
 impl Slide {
@@ -54,19 +64,49 @@ impl Slide {
             ring: 0.0,
             parity,
             prev_parity: parity,
+            row: 0,
+            lead: false,
+        }
+    }
+
+    /// The same grid with its update running right after each step, see the `lead` field: the step's
+    /// own frame is one tick in (a still's `age` counts from that frame's start).
+    #[must_use]
+    pub fn leading(mut self) -> Self {
+        self.lead = true;
+        self
+    }
+
+    /// The same grid with the ring's target on `row`.
+    #[must_use]
+    pub fn on_row(mut self, row: usize) -> Self {
+        self.row = row;
+        self
+    }
+
+    /// Moves the ring's target to `row`: the ring stays where it was drawn and eases half way to
+    /// the new row on every tick (`SetRow` writes the target, `Update` eases to it).
+    pub fn follow_row(&mut self, row: usize) {
+        if row != self.row {
+            self.ring +=
+                (self.row as f32 - row as f32) * super::hex::PITCH[1] / super::hex::HALF_ROW;
+            self.row = row;
         }
     }
 
     /// A grid `age` seconds into a forward step onto `shown` of `count` entries, for a still.
     #[must_use]
-    pub fn stepped(shown: usize, count: usize, age: f32) -> Self {
+    pub fn stepped(shown: usize, count: usize, age: f32, lead: bool) -> Self {
         let mut out = Self::at_rest(shown);
+        out.lead = lead;
         if count > 1 {
             let from = (shown + count - 1) % count;
             out = Self::at_rest(from);
+            out.lead = lead;
             out.begin(from, shown, count);
-            out.age = age;
-            out.ring *= RING_EASE.powi((age * 60.0).floor().max(0.0) as i32);
+            let ticks = (age * 60.0).floor().max(0.0) as i32 + i32::from(lead);
+            out.age = age + if lead { 1.0 / 60.0 } else { 0.0 };
+            out.ring *= RING_EASE.powi(ticks);
         }
         out
     }
@@ -75,7 +115,7 @@ impl Slide {
     /// (a finger's pan), keeping the parity those steps leave.
     pub fn rest_on(&mut self, shown: usize, steps: usize) {
         let parity = self.parity ^ (steps % 2 == 1);
-        *self = Self::at_rest(shown);
+        *self = Self::at_rest(shown).on_row(self.row);
         self.parity = parity;
         self.prev_parity = parity;
     }
@@ -109,12 +149,14 @@ impl Slide {
         let whole = (frames + 1e-3).floor();
         let part = (frames - whole).max(0.0);
         let ease = RING_EASE.powi(whole as i32) * (1.0 - (1.0 - RING_EASE) * part);
-        if self.moving() {
-            self.age += dt;
-            self.ring *= ease;
-        } else if target != self.shown && count > 1 {
+        let begun = !self.moving() && target != self.shown && count > 1;
+        if begun {
             self.begin(self.shown, target, count);
-        } else {
+        }
+        if !begun || self.lead {
+            if self.moving() {
+                self.age += dt;
+            }
             self.ring *= ease;
         }
     }

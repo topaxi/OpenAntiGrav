@@ -320,6 +320,7 @@ pub(crate) fn run_windowless(
                 menu_movie_frame: cli.menu_args.menu_movie_frame,
                 menu_ticker: cli.menu_args.menu_ticker.clone(),
                 menu_title_seconds: cli.menu_args.menu_title_seconds,
+                menu_ring_seconds: cli.menu_args.menu_ring_seconds,
                 menu_focus_level: cli.menu_args.menu_focus_level,
                 menu_prompt: cli.menu_args.menu_prompt.clone(),
                 presented: cli.presented,

@@ -539,7 +539,7 @@ pub(super) fn draw(
                 row,
                 low: slide.ring_offset(),
             }),
-            picker.seconds(),
+            picker.ring_seconds(),
         ),
         &face,
         sprites,

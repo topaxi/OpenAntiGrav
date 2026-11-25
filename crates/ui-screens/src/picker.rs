@@ -195,6 +195,8 @@ pub struct Picker {
     /// Where the glow ladder of the panel's `pulse="true"` texts stands when it is not
     /// [`Self::seconds`] ([`Self::set_text_seconds`]).
     text_seconds: Option<f32>,
+    /// A still's pin of the hex ring's pulse clock ([`Self::set_ring_seconds`]).
+    ring_seconds: Option<f32>,
     /// Seconds since the selection last moved - the slideshow's clock,
     /// which the original restarts on every selection (`TrackSelection_ApplySelection`
     /// transitions the new circuit's own state machine to `Info` afresh).
@@ -315,6 +317,7 @@ impl Picker {
             variant: 0,
             seconds: 0.0,
             text_seconds: None,
+            ring_seconds: None,
             since_selection: 0.0,
             slide: hd::slide::Slide::at_rest(index),
             entry: EntryClock::default(),
@@ -387,7 +390,23 @@ impl Picker {
     pub fn with_rows(mut self, columns: usize) -> Self {
         self.across = true;
         self.columns = columns;
+        let (column, _, row) = self.slide_axis();
+        self.slide = hd::slide::Slide::at_rest(column).on_row(row).leading();
         self
+    }
+
+    /// What the hex grid's slide follows: `(column, columns, row)`. A list of teams is one row
+    /// of its own entries; a grid of rows steps along the selected row and moves the ring between
+    /// rows without sliding the lattice (`TrackHexSelection_Update` steps on the column only).
+    fn slide_axis(&self) -> (usize, usize, usize) {
+        match self.columns {
+            0 => (self.index, self.entries.len(), 0),
+            width => (
+                self.index % width,
+                width.min(self.entries.len()),
+                self.index / width,
+            ),
+        }
     }
 
     /// How many entries one row of [`Self::with_rows`] holds; `0` for a list.
@@ -464,6 +483,20 @@ impl Picker {
         self.text_seconds = seconds.map(|seconds| seconds.max(0.0));
     }
 
+    /// Seconds on the hex ring's pulse clock: [`Self::seconds`] unless a still pins it
+    /// ([`Self::set_ring_seconds`]).
+    #[must_use]
+    pub fn ring_seconds(&self) -> f32 {
+        self.ring_seconds.unwrap_or(self.seconds)
+    }
+
+    /// Pins the hex ring's pulse apart from [`Self::seconds`]: the ring's phase is a counter of the
+    /// widget's own updates (`HexSelection + 0xe0`), which the original never resets between
+    /// visits, so a pair script pins it to what it read (`None` follows the screen's clock).
+    pub fn set_ring_seconds(&mut self, seconds: Option<f32>) {
+        self.ring_seconds = seconds.map(|seconds| seconds.max(0.0));
+    }
+
     /// Seconds since the selection last moved, or since the screen opened.
     /// See [`slideshow::Slideshow::at`].
     #[must_use]
@@ -499,14 +532,18 @@ impl Picker {
     /// slide is then that far into a forward step onto the selected entry.
     pub fn set_since_selection(&mut self, seconds: f32) {
         self.since_selection = seconds;
-        self.slide = hd::slide::Slide::stepped(self.index, self.entries.len(), seconds);
+        let (column, count, row) = self.slide_axis();
+        self.slide =
+            hd::slide::Slide::stepped(column, count, seconds, self.columns > 0).on_row(row);
     }
 
     /// Advances the screen's own clock by one fixed tick.
     pub fn tick(&mut self, dt: f32) {
         self.seconds += dt;
         self.since_selection += dt;
-        self.slide.tick(dt, self.index, self.entries.len());
+        let (column, count, row) = self.slide_axis();
+        self.slide.follow_row(row);
+        self.slide.tick(dt, column, count);
         self.entry.tick(dt);
         self.scroll.tick(dt, &pointer::hex_extent());
     }

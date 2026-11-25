@@ -373,7 +373,7 @@ impl Picker {
         }
         // The pan already showed these columns moving: the grid rests on the new selection.
         if !out.is_empty() {
-            self.slide.rest_on(self.index, out.len());
+            self.slide.rest_on(self.slide_axis().0, out.len());
         }
         out
     }
