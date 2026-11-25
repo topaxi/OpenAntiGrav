@@ -285,14 +285,16 @@ pixels (RMSE, mean luma, near-white share) at matched ages.
 
 | Billboard quads | Live | Nearer than 1 unit | Largest half height / depth | On cap 0.5 |
 | --- | --- | --- | --- | --- |
-| Original, hits 1 and 2, every particle quad of the frames after the shot | 6,874 | 0 (nearest 1.037) | 2.000 (below) | 146 |
-| Original, hit 3, the same | 3,879 | 0 (nearest 1.217) | 2.000 | 115 |
+| Original, hits 1 and 2, every particle quad of the 8 dumped frames after the shot | 6,874 | 0 (nearest 1.037) | 2.000 (below) | 146 |
+| Original, hit 3, its 5 dumped frames | 3,879 | 0 (nearest 1.217) | 2.000 | 115 |
 | Ours, law, the blast alone | 1,171 | 0 (nearest 1.020) | 1.000 | 128 |
 | Ours, law off | 2,453 | 42 (nearest 0.002) | 188 | 1 |
 
-The cull and the cap are seen live on a near CraftBlast, not only on the player's own effects
-(confidence 95). The fade was not separated. The ours rows are the arm with the blast carried
-to the struck craft (below).
+The cull and the cap hold on the particles of a near craft hit, not only on the player's own
+effects (confidence 85). The original's rows are not separated by effect: they hold every
+particle in the frame, the struck craft's own sparks and smoke included, where our rows are the
+blast alone (the no-blast render's quads removed). The fade was not separated. The ours rows
+are the arm with the blast carried to the struck craft (below).
 
 ### The picture
 
@@ -308,8 +310,11 @@ original's own is 27 to 70 % in these frames. The box is the central 1152x756.
 | The same, law off | 109.2 | 114.2 | 22.5 % |
 | No blast at all | 133.9 | 144.1 | 3.5 % |
 
-- The law is the closer arm in 2 of 10 frames as shipped and 0 of 10 with sprites and carry.
-  With ours drawn 4 ticks younger, 1 of 10 and 0 of 10. **The pixel falsifier fired.**
+- **Neither arm is within noise**: all four sit at 109 to 131, against 68 to 76 for the original
+  against itself (below).
+- **The falsifier fired too.** The law is the closer arm in 2 of 10 frames as shipped and 0 of
+  10 with sprites and carry; with ours drawn 4 ticks younger, 1 of 10 and 0 of 10. The gap, 10
+  to 15, has a steady sign and is small against what separates either arm from the original.
 - For scale: ours against the original before the shot is 52 and 60. The original against
   itself (hit 1 against hit 2, same age, so the camera differs too) is 68 to 76 up to 0.23 s
   and 99 to 132 after.
