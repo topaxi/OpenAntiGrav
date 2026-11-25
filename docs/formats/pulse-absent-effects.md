@@ -244,7 +244,7 @@ it, on the compare-page frames under `data/reference/compare-page/`.
   (150, 164), 9 pixels wide, against the road 12 to 17 pixels to each side, pixels with a channel
   at 250 or above or under 10 levels over the road dropped (144 pixels).
 
-| frame | ribbon (added RGB) | chroma direction | HSV hue |
+| frame | ribbon (added RGB) | chroma direction | hue |
 | --- | --- | --- | --- |
 | Pulse PS2, PCSX2 original, 4 circuits | `(51..58, 24..29, 44..49)` | (0.80..0.84, -0.30..-0.29, 0.45..0.52) | pink-magenta |
 | Pulse PS2, ours | `(65..76, 30..42, 57..68)` | (0.78..0.80, -0.29, 0.52..0.56) | pink-magenta |
