@@ -239,7 +239,7 @@ impl ChdSource {
         #[cfg(not(target_arch = "wasm32"))]
         let stamp = pool::Identity::of(&file, &path);
         #[cfg(not(target_arch = "wasm32"))]
-        if let Some(source) = stamp.and_then(|stamp| pool::take(&path, stamp)) {
+        if let Some(source) = stamp.as_ref().and_then(|stamp| pool::take(&path, stamp)) {
             return Ok(source);
         }
         Self::open_file(
