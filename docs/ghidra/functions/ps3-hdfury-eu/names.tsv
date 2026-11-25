@@ -1235,3 +1235,8 @@
 0x0028c570	function	Random_RangeInt	78	ship-collision-fx.md
 0x000cae68	function	PlayerStatus_ApplyCameraOption	72	particle-triggers.md
 0x003b22a0	function	FunkLayer_DrawRadialBloom	72	zone-frame.md
+# 2026-11-25 det-mine-branch-placement: the track cursor step and the fork walk's tests (detonator-placement.md)
+0x000a54b8	function	Track_StepCursor	80	detonator-placement.md
+0x000a5278	function	Track_SpanIndex	85	detonator-placement.md
+0x000a5290	function	Track_SpansAreNeighbours	65	detonator-placement.md
+0x000a96d8	function	Track_FindSiblingSection	62	detonator-placement.md
