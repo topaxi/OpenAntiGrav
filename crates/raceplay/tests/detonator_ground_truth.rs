@@ -240,9 +240,11 @@ fn assert_the_opening_stage_and_the_stage_cap(loaded: &race::Loaded) -> u16 {
 }
 
 /// A title's Detonator craft flies the auto-speed (the ramp full by GO, the stage-1 target `34`),
-/// and over a lap on the autopilot its speed pads either charge the EMP and never boost
-/// (`charges`) or keep their race boost and charge nothing (2048, whose pad arms are unread).
-fn assert_auto_speed_and_pads(loaded: &race::Loaded, charges: bool) {
+/// and over a lap on the autopilot its speed pads charge the EMP and never boost; stood on a
+/// speed pad by hand, the tick of entry charges once and leaves no boost timer. `line_crosses_a_pad`
+/// is `false` where the autopilot's line misses every pad (2048's `zone_1`: none of its seven
+/// entered over a 2120-tick lap), so the lap charges nothing there.
+fn assert_auto_speed_and_pads(loaded: &race::Loaded, line_crosses_a_pad: bool) {
     let mut race = race::Race::start(
         loaded.setup.clone(),
         loaded.view.clone(),
@@ -266,13 +268,13 @@ fn assert_auto_speed_and_pads(loaded: &race::Loaded, charges: bool) {
     }
     let charge = race.core.sim.world.detonator.emp.charge;
     println!("charge after a lap {charge}, a pad boosted: {boosted}");
-    if charges {
-        assert!(charge > 0, "a lap's speed pads charge the EMP");
-        assert!(!boosted, "and never boost");
-    } else {
-        assert_eq!(charge, 0, "the pads charge nothing");
-    }
-    // Stood on a speed pad by hand: the one tick of entry either charges or boosts.
+    assert_eq!(
+        charge > 0,
+        line_crosses_a_pad,
+        "a lap's speed pads charge the EMP"
+    );
+    assert!(!boosted, "and never boost");
+    // Stood on a speed pad by hand: the one tick of entry charges.
     race.core.sim.set_autopilot(false);
     let pad = loaded
         .setup
@@ -284,16 +286,54 @@ fn assert_auto_speed_and_pads(loaded: &race::Loaded, charges: bool) {
     race.tick(&PlayerInputs::none());
     let ship = &race.core.sim.world.ships[0].physics;
     let after = race.core.sim.world.detonator.emp.charge;
-    if charges {
-        assert_eq!(
-            (after, ship.pad_timer),
-            (charge + 1, 0.0),
-            "a charge, no boost"
-        );
-    } else {
-        assert_eq!(after, 0, "2048's pad charges nothing");
-        assert!(ship.pad_timer > 0.0, "and keeps its race boost");
-    }
+    assert_eq!(
+        (after, ship.pad_timer),
+        (charge + 1, 0.0),
+        "a charge, no boost"
+    );
+}
+
+/// A weapon pad, flown by the player: one charge and no pickup; the same pad again charges
+/// nothing until another pad or a crossing, a second pad charges again (`Ship_TestWeaponPad`'s
+/// mode-14 arm, the pad latched against the last one taken).
+fn assert_weapon_pads_charge(race: &mut race::Race, weapon_pads: &[oag_vex::pads::PadVolume]) {
+    race.core.sim.set_autopilot(false);
+    assert!(weapon_pads.len() >= 2, "the circuit has weapon pads");
+    let visit = |race: &mut race::Race, at: Option<[f32; 3]>| {
+        let ship = &mut race.core.sim.world.ships[0].physics;
+        if let Some(at) = at {
+            ship.body.position = oag_core::math::Vec3::from_array(at);
+        } else {
+            ship.body.position += ship.body.orientation * oag_core::math::Vec3::new(0.0, 40.0, 0.0);
+        }
+        ship.body.linear_velocity = oag_core::math::Vec3::ZERO;
+        race.tick(&PlayerInputs::none());
+        dodge(race);
+        race.core.sim.world.detonator.emp.charge
+    };
+    let first = weapon_pads[0].centre();
+    // A first hop to above the pad: the jump from wherever the craft stood sweeps across the
+    // track and may cross a speed pad, and it is the tick the autopilot hands back.
+    // The pad's memory is then cleared as a start-line crossing clears it.
+    visit(race, Some(first));
+    visit(race, None);
+    race.core.sim.world.detonator.emp.weapon_pad = None;
+    let before = race.core.sim.world.detonator.emp.charge;
+    let got = visit(race, Some(first));
+    assert_eq!(got, before + 1, "a weapon pad charges");
+    assert!(
+        race.core.sim.world.ships[0].pickup.is_empty(),
+        "and hands nothing out"
+    );
+    assert_eq!(visit(race, None), before + 1);
+    assert_eq!(
+        visit(race, Some(first)),
+        before + 1,
+        "the same pad again: nothing"
+    );
+    let second = weapon_pads[1].centre();
+    assert_eq!(visit(race, Some(second)), before + 2, "another pad charges");
+    assert!(race.core.sim.world.ships[0].pickup.is_empty());
 }
 
 /// 2048 on one of HD's ported Zone circuits: its own circuit table is absent, so the HD/Fury
@@ -350,12 +390,100 @@ fn a_2048_detonator_race_on_zone_1_takes_the_hd_fury_dlc3_table() {
     assert_the_opening_stage_and_the_stage_cap(&loaded);
     assert_auto_speed_and_pads(&loaded, false);
     assert_the_pad_is_red_squares_on_a_slab_that_rests(&loaded);
-    assert_the_circuits_own_pads_are_left_out(&options, &loaded);
+    let plain = assert_the_circuits_own_pads_are_left_out(&options, &loaded);
+    assert_a_single_race_speed_pad_still_boosts(&plain);
+}
+
+/// **2048's pads charge** (`docs/ghidra/functions/vita-2048-eu-v104/detonator-pads.md`): on its
+/// HD-pack Vineta K, a lap on the autopilot charges the EMP from the speed pads with no boost, a
+/// weapon pad charges as HD's does, and 2048's own Detonator table counts the pads
+/// (`minNumPadsToCollectEMP`/`maxNumPadsToCollectEMP`, stored at `+0x234`/`+0x238` by
+/// `FUN_8100f7c2` and read there by the charge, `FUN_8117e9c2`): the EMP is ready at the first
+/// count and not one before.
+#[test]
+#[ignore = "needs the unpacked 2048 packages in data/extracted/"]
+fn a_2048_detonator_pad_charges_the_emp_and_gives_no_boost_or_pickup() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../data/extracted/vita/PCSF00007");
+    if !path.join("dlc1").exists() {
+        assert!(
+            std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
+            "OAG_REQUIRE_GAME_DATA is set but {} is missing",
+            path.display()
+        );
+        return;
+    }
+    let loaded = race::load(&race::Options {
+        no_effects: true,
+        source: path.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::Detonator,
+        track: Some(r"Data\art\published\DLC1\environments\Vineta_K\track.vex".to_string()),
+        ..race::Options::default()
+    })
+    .expect("loading a 2048 Detonator race on Vineta K");
+    assert_auto_speed_and_pads(&loaded, true);
+    let mut race = race::Race::start(
+        loaded.setup.clone(),
+        loaded.view.clone(),
+        loaded.modules.clone(),
+    );
+    let emp = race
+        .core
+        .sim
+        .weapon_stats()
+        .and_then(|stats| stats.detonator())
+        .and_then(|detonator| detonator.emp)
+        .expect("2048's Detonator table has an EMP block");
+    let (lo, hi) = (
+        emp.min_num_pads_to_collect.expect("a ready count"),
+        emp.max_num_pads_to_collect.expect("a full count"),
+    );
+    assert_eq!((lo, hi), (4.0, 8.0), "the counts 2048 reads");
+    start_racing(&mut race);
+    for n in [3, 4] {
+        race.core.sim.world.detonator.emp.charge = n;
+        assert_eq!(
+            race.core.sim.detonator_emp(),
+            Some((n, n >= 4)),
+            "ready at {n}"
+        );
+    }
+    race.core.sim.world.detonator.emp.charge = 0;
+    let weapon_pads = loaded.setup.weapon_pads.clone();
+    assert_weapon_pads_charge(&mut race, &weapon_pads);
+}
+
+/// Outside Detonator the same circuit's speed pad keeps its race boost: the charge is the mode-14
+/// arm alone (`FUN_811ccdf4`).
+fn assert_a_single_race_speed_pad_still_boosts(plain: &race::Loaded) {
+    let mut race = race::Race::start(
+        plain.setup.clone(),
+        plain.view.clone(),
+        plain.modules.clone(),
+    );
+    start_racing(&mut race);
+    let pad = plain
+        .setup
+        .speedup_pads
+        .first()
+        .expect("the circuit has speed pads");
+    let ship = &mut race.core.sim.world.ships[0].physics;
+    ship.body.position = oag_core::math::Vec3::from_array(pad.centre());
+    race.tick(&PlayerInputs::none());
+    assert!(
+        race.core.sim.world.ships[0].physics.pad_timer > 0.0,
+        "a single race's speed pad boosts"
+    );
+    assert_eq!(race.core.sim.world.detonator.emp.charge, 0);
 }
 
 /// The same circuit in a single race draws the circuit's own pads; the Detonator race's track
 /// model holds fewer triangles (`psp2::build_circuit`'s `hide_pads`).
-fn assert_the_circuits_own_pads_are_left_out(options: &race::Options, loaded: &race::Loaded) {
+fn assert_the_circuits_own_pads_are_left_out(
+    options: &race::Options,
+    loaded: &race::Loaded,
+) -> race::Loaded {
     let plain = race::load(&race::Options {
         no_effects: true,
         mode: oag_race::Mode::SingleRace,
@@ -370,6 +498,7 @@ fn assert_the_circuits_own_pads_are_left_out(options: &race::Options, loaded: &r
         with > without,
         "the Detonator race's track holds {without} triangles against {with} in a single race"
     );
+    plain
 }
 
 /// The Detonator pad on the 2048 lineage: the `_ne` mask rides the third binding and the glow
@@ -468,6 +597,13 @@ fn an_omega_detonator_race_runs_fourteen_stages_on_hd_furys_grade() {
     assert_the_cannon_fires(&loaded);
     assert_the_opening_stage_and_the_stage_cap(&loaded);
     assert_auto_speed_and_pads(&loaded, true);
+    let mut race = race::Race::start(
+        loaded.setup.clone(),
+        loaded.view.clone(),
+        loaded.modules.clone(),
+    );
+    start_racing(&mut race);
+    assert_weapon_pads_charge(&mut race, &loaded.setup.weapon_pads);
     assert_the_pad_is_red_squares_on_a_slab_that_rests(&loaded);
     assert_the_circuits_own_pads_are_left_out(&options, &loaded);
 }
@@ -758,43 +894,7 @@ fn an_hd_detonator_pad_charges_the_emp_and_gives_no_boost_or_pickup() {
     assert_eq!(n, last);
     assert_eq!(ready, n >= 4);
 
-    // A weapon pad, flown by the player: one charge and no pickup; the same pad again charges
-    // nothing until another pad or a crossing, a second pad charges again.
-    race.core.sim.set_autopilot(false);
-    assert!(weapon_pads.len() >= 2, "the circuit has weapon pads");
-    let visit = |race: &mut race::Race, at: Option<[f32; 3]>| {
-        let ship = &mut race.core.sim.world.ships[0].physics;
-        if let Some(at) = at {
-            ship.body.position = oag_core::math::Vec3::from_array(at);
-        } else {
-            ship.body.position += ship.body.orientation * oag_core::math::Vec3::new(0.0, 40.0, 0.0);
-        }
-        ship.body.linear_velocity = oag_core::math::Vec3::ZERO;
-        race.tick(&PlayerInputs::none());
-        dodge(race);
-        race.core.sim.world.detonator.emp.charge
-    };
-    let before = race.core.sim.world.detonator.emp.charge;
-    let first = weapon_pads[0].centre();
-    let got = visit(&mut race, Some(first));
-    assert_eq!(got, before + 1, "a weapon pad charges");
-    assert!(
-        race.core.sim.world.ships[0].pickup.is_empty(),
-        "and hands nothing out"
-    );
-    assert_eq!(visit(&mut race, None), before + 1);
-    assert_eq!(
-        visit(&mut race, Some(first)),
-        before + 1,
-        "the same pad again: nothing"
-    );
-    let second = weapon_pads[1].centre();
-    assert_eq!(
-        visit(&mut race, Some(second)),
-        before + 2,
-        "another pad charges"
-    );
-    assert!(race.core.sim.world.ships[0].pickup.is_empty());
+    assert_weapon_pads_charge(&mut race, &weapon_pads);
 }
 
 /// Slot 0's pad with L1 (the EMP button) pressed this tick.

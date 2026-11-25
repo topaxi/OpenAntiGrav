@@ -171,11 +171,10 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
         craft: Some(DETONATOR_CRAFT),
         handling: Some(DETONATOR_HANDLING),
         objects: Some(DETONATOR_OBJECTS),
-        // The speed-pad arm is read in `FUN_0133fff0` (`detonator-emp.md`, "2048 and Omega");
-        // the weapon-pad arm is not, so HD's is **inherited**.
+        // Both pad arms are read (`detonator-emp.md`, "2048 and Omega").
         pads: oag_title::DetonatorPads {
             speed_pad_charges: oag_title::pre_race::Sourced::measured(true),
-            weapon_pad_charges: oag_title::pre_race::Sourced::inherited(true, "Wipeout HD"),
+            weapon_pad_charges: oag_title::pre_race::Sourced::measured(true),
             replaces_circuit_pads: oag_title::pre_race::Sourced::measured(true),
         },
         // Omega plays Wwise events in place of named cues; the EMP's are not located.
