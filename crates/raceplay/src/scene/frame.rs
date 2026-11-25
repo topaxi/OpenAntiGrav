@@ -645,13 +645,24 @@ impl Scene {
             // The cards draw into textures of their own with passes of their own, on the
             // queue itself: frame work, which the first view of a split does, and the first
             // view's writes are never kept for later (`Scene::render_slots`).
+            // Only a whole picture knows every view that samples the cards this frame: a split's
+            // later views and a later window read what the first left. A portal view reads last
+            // frame's cards and may show a card stale or blank, which is accepted
+            // (`docs/rendering/frame-thread-cpu.md`, "Advert cards: drawn only when shown").
+            let seen = (self.layer.get() == Layer::Whole).then(|| crate::adverts::Seen {
+                track: &self.track,
+                sections: self.visibility.as_ref().map(|v| &v.sections),
+                set: visible_set.as_ref(),
+                chunks: chunk_set.as_ref(),
+                frustum: frustum.as_ref(),
+            });
             crate::adverts::render(
                 &self.adverts,
                 uploads.queue(),
                 encoder,
                 seconds,
-                race,
-                anim_seconds,
+                (race, anim_seconds),
+                seen,
             );
             self.frame_work.update(|w| super::FrameWork {
                 advert_cards: w.advert_cards + 1,

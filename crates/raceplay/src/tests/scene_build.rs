@@ -179,6 +179,32 @@ pub(super) fn scene_over_post(
     omega_tonemap: Option<oag_post::omega_tonemap::Params>,
     wo_composite: Option<oag_post::wo_composite::Params>,
 ) -> Scene {
+    let post = (hd_bloom, omega_tonemap, wo_composite);
+    scene_with_billboards(
+        device,
+        queue,
+        track,
+        liveries,
+        msaa,
+        post,
+        Default::default(),
+    )
+}
+
+/// [`scene_over_post`] with the circuit's billboards: what the track's placeholder quads show.
+pub(super) fn scene_with_billboards(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    track: Model,
+    liveries: &[Livery],
+    msaa: oag_display::display::Msaa,
+    (hd_bloom, omega_tonemap, wo_composite): (
+        Option<oag_post::hd_bloom::Params>,
+        Option<oag_post::omega_tonemap::Params>,
+        Option<oag_post::wo_composite::Params>,
+    ),
+    billboards: crate::adverts::Billboards,
+) -> Scene {
     Scene::new(
         device,
         queue,
@@ -188,7 +214,7 @@ pub(super) fn scene_over_post(
         None,
         None,
         None,
-        Default::default(),
+        billboards,
         true,
         Some(triangle()),
         Some(triangle()),

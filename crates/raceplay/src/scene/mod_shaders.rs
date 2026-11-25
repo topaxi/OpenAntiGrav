@@ -34,6 +34,12 @@ impl Scene {
         });
     }
 
+    /// Whether the race's shaders are attached.
+    #[cfg(all(test, feature = "extensions"))]
+    pub(crate) fn has_mod_shaders(&self) -> bool {
+        self.mod_shaders.borrow().is_some()
+    }
+
     /// Writes the view's surfaces, fill and scalars.
     pub(super) fn upload_mod_shaders(
         &self,

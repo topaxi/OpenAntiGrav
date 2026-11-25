@@ -10,11 +10,28 @@
 //! odd ones, counted from the first call), so one run carries both arms side by side and a
 //! phone's temperature, which moves a whole run by half, moves both alike.
 //! `scripts/android-skip-windows.py` splits a `--frame-log` by window.
+//!
+//! Two names price a render pass rather than leave one out: `advert-draws` keeps the
+//! advert cards' passes and clears and drops their draws (pixels against passes), and
+//! `extra-passes` adds [`EXTRA_PASSES`] one-pixel clear passes to the frame
+//! (`docs/tools/android.md`, "What a render pass costs").
 
 use std::sync::OnceLock;
 
 /// The names a call site asks about. Anything else in the variable is reported once.
-pub const NAMES: [&str; 6] = ["hud", "bloom", "adverts", "glass", "resolve", "composite"];
+pub const NAMES: [&str; 8] = [
+    "hud",
+    "bloom",
+    "adverts",
+    "glass",
+    "resolve",
+    "composite",
+    "advert-draws",
+    "extra-passes",
+];
+
+/// How many one-pixel passes `extra-passes` adds to a frame.
+pub const EXTRA_PASSES: usize = 16;
 
 struct Switch {
     names: Vec<String>,
@@ -62,6 +79,40 @@ fn switch() -> &'static Switch {
     })
 }
 
+/// Whether `OAG_SKIP_PASSES` names `name` at all, toggled or not: what a caller asks before
+/// it builds something only that arm uses.
+#[must_use]
+pub fn named(name: &str) -> bool {
+    switch().names.iter().any(|n| n == name)
+}
+
+/// Records [`EXTRA_PASSES`] passes that each clear `target` (a one-pixel texture the
+/// caller built because [`named`] said `extra-passes`) while `extra-passes` is on.
+pub fn extra_passes(encoder: &mut wgpu::CommandEncoder, target: Option<&wgpu::TextureView>) {
+    let Some(target) = target else { return };
+    if !skipped("extra-passes") {
+        return;
+    }
+    for _ in 0..EXTRA_PASSES {
+        encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("extra pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: target,
+                depth_slice: None,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
+    }
+}
+
 /// Whether `OAG_SKIP_PASSES` leaves `name` out of this frame.
 #[must_use]
 pub fn skipped(name: &str) -> bool {
@@ -86,6 +137,7 @@ mod tests {
     fn with_the_variable_unset_no_pass_is_left_out() {
         for name in super::NAMES {
             assert!(!super::skipped(name), "{name}");
+            assert!(!super::named(name), "{name}");
         }
     }
 }

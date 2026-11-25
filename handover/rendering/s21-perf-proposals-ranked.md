@@ -2,7 +2,7 @@
 status: measure
 titles: [hd, pulse]
 updated: 2026-11-25
-summary: "S21 HD: ranked perf plan. Pass count and Mali's backend thread look like the limit, not GPU compute; run the pass-cost toggle first"
+summary: "S21 HD: ranked perf plan. Cards culled (landed), pass price measured, ladder fold parked, one-pass present dropped; next: freeze-writes, Mali shader"
 categories: [rendering, tooling]
 size: L (40)
 difficulty: medium (40)
@@ -56,21 +56,25 @@ scene is 1.5 ms. Every "fidelity none" item passes the byte-identity or pair che
 
 **Do now**
 
-1. **Draw an advert card only on frames where a view samples it** (`crates/raceplay/src/adverts.rs`,
-   `scene/frame.rs`). Test each card's placeholder draws against the PVS and frustum of the main and
-   behind-the-glass views; draw all cards when there is more than one view. A card is a pure
-   function of the scenery clock and is cleared on each draw, so the picture is identical by
-   construction. S21 -1.5 to -2.3 ms, RDNA -0.1 ms, Radeon 610M -1.0 to -1.3 ms; 5 h; confidence 60.
-2. **Fewer small passes** (`crates/post/src/hd_bloom.rs`). Fold the luminance ladder's seven to nine
-   halvings into 8x8-box passes (same mean of the same texels, a third of the passes); build the
-   cards and the glass target without the velocity output they discard. S21 -0.8 to -1.8 ms, RDNA
-   -0.05 ms; 8 h; fidelity none intended, the ladder's rounding must be checked against the HD
-   pairs; confidence 45.
-3. **One presentation-size pass** (`crates/present/src/upscale.rs`, `crates/game/src/render.rs`).
-   The upscale, the HUD (drawn with a `Load` of 2.5 M pixels) and the composite are three full-size
-   passes. The earlier single-run attempt read slower while the toggles price the three at 13.5 ms
-   on the flyby: re-measure in one run before believing either. S21 -1.0 to -2.5 ms, RDNA -0.03 ms;
-   3 h to re-measure, 6 h to land; fidelity none; confidence 35.
+1. ~~Draw an advert card only on frames where a view samples it~~ **landed** (`s21-passes`):
+   S21 -4.2 and -5.6 ms in-run, Deck -0.4 to -0.8 ms, host -4.8 % user instructions, picture
+   byte-identical (`docs/rendering/frame-thread-cpu.md`, "Advert cards: drawn only when shown").
+   Culls with a mod shader attached too (Pulse's official `slipstream`); a portal view may show a
+   card stale or blank, accepted by the maintainer.
+2. **Fewer small passes.** A render pass costs 0.14 to 0.41 ms on the S21, about 0.015 to 0.03 ms
+   on the Deck (`docs/tools/android.md`, "What a render pass costs").
+   - **The bloom ladder fold is parked** on branch `bloom-ladder-fold-parked` (maintainer: the
+     ladder is the original's own 256x256 R16F halving chain): it saves about 1.1 ms on the S21
+     (two in-run toggles; 2.2 ms on a third) and moves 1-2/255 on up to 7.7 % of pixels in 12 of
+     16 HD pairs. A version replaying the halvings with half-precision rounding in one pass was
+     not byte-identical either.
+   - **Velocity-less cards and glass: not worth it.** With the cards culled, leaving every card
+     out reads 28.9 against 28.3 ms on the S21 (noise), which bounds what their velocity
+     attachment can cost; the glass target at quarter is about 14 k pixels.
+3. ~~One presentation-size pass~~ **measured and dropped**: drawing the resolve, HUD and blooms
+   straight onto the surface (composite skipped, neutral grade, no filter) read slower on the S21
+   in both in-run toggles, 26.0 against 26.8 ms and 26.9 against 28.2 ms
+   (`docs/tools/android.md`, "What a render pass costs").
 4. **Stop frame N's buffer writes waiting on frame N-1** (`crates/gpu/src/writes.rs`). wgpu replays
    every `write_buffer` as a copy at the head of the submission, into buffers the previous frame's
    last passes still read; on a deferred-job driver that can hold the whole frame back. A ring of
@@ -99,20 +103,14 @@ glass target when no glass shows, a third swapchain image, a portrait or pre-rot
 
 ## Next Steps
 
-1. **The pass-cost toggle, about 1 hour on the phone.** Three runs with the skip-toggle protocol
-   (`docs/tools/android.md`, "Where an HD frame goes on the S21"): `adverts` as it is; a new skip
-   name that keeps the eight card passes and their clears and drops the draws; a new one that adds
-   16 one-pixel clear passes at the head of the frame. It gives ms per pass and says whether the
-   cards cost pixels or passes, which sizes items 1, 2, 3 and 8.
-2. **The card census, desktop only.** Count per frame of one autopilot lap how many cards have a
-   placeholder draw that survives the PVS and frustum (Vineta K, Anulpha, Moa Therma). Above 5 of 8
-   on average, item 1 moves to "later".
-3. **Freeze-writes.** A toggle that drops every `Writes::write_buffer` and `write_texture` while it
+1. ~~The pass-cost toggle~~ and ~~the card census~~: done (`s21-passes`), numbers in
+   `docs/tools/android.md` ("What a render pass costs") and `docs/rendering/frame-thread-cpu.md`.
+2. **Freeze-writes.** A toggle that drops every `Writes::write_buffer` and `write_texture` while it
    is on, under the fence-timeline capture (`scripts/android-fence-timeline.py`): if the present
    returns before the previous fence while frozen, item 4 is real; if nothing moves, close it.
-4. Log one timestamp pair from the first pass's begin to the last pass's end as its own frame-log
+3. Log one timestamp pair from the first pass's begin to the last pass's end as its own frame-log
    field, so the rows' sum has a denominator.
-5. Repeat the cool and warm baselines three times each and regress the frame on the GPU and A78
+4. Repeat the cool and warm baselines three times each and regress the frame on the GPU and A78
    clocks `scripts/android-perf-poll.sh` already logs, to firm up finding 1.
-6. When a finding above is confirmed by a run, write it into `docs/tools/android.md` with its
+5. When a finding above is confirmed by a run, write it into `docs/tools/android.md` with its
    command; this thread is the only place findings 1, 2, 3 and 7 are written down today.
