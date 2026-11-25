@@ -229,10 +229,14 @@ fn timeline(image: &str, mode: oag_race::Mode, class: &str) -> Option<Vec<Beat>>
         beats.push(Beat {
             go,
             sounding: audio.playhead_race().is_some(),
-            shown: race
-                .readout()
-                .now_playing
-                .map(|marquee| marquee.lines[0].text.clone()),
+            shown: race.readout().now_playing.map(|marquee| {
+                marquee
+                    .lines
+                    .iter()
+                    .map(|line| line.text.as_str())
+                    .collect::<Vec<_>>()
+                    .join(" - ")
+            }),
         });
     }
     Some(beats)
