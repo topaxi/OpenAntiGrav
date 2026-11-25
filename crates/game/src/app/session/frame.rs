@@ -450,6 +450,7 @@ impl Session {
             if matches!(self.stage, Stage::Race(_))
                 && self.photo.is_none()
                 && !self.in_demo()
+                && !self.on_benchmark()
                 && self.controls.buttons().is_pressed(Button::Select)
             {
                 self.controls.buttons_mut().consume_press(Button::Select);
@@ -1018,13 +1019,22 @@ impl Session {
                     if !self.no_intro && self.net.is_none() && stage.race.intro_to_play() =>
                 {
                     stage.race.begin_intro();
-                    // `--autopilot` flies the craft for nobody to hold Cross: it presses the
-                    // skip of a flyby that only a skip ends, or a launch-file run on HD never
-                    // leaves the camera tour.
-                    if pointer.clicked || (self.autopilot && stage.race.intro_ends_only_by_skip()) {
-                        stage.race.skip_intro();
+                    if stage.benchmark.is_some() {
+                        // No press or click shortens a benchmark's flyby.
+                        stage
+                            .race
+                            .tick_intro_unattended(crate::benchmark::plan::SKIP_ONLY_FLYBY_TICKS);
+                    } else {
+                        // `--autopilot` flies the craft for nobody to hold Cross: it presses the
+                        // skip of a flyby that only a skip ends, or a launch-file run on HD never
+                        // leaves the camera tour.
+                        if pointer.clicked
+                            || (self.autopilot && stage.race.intro_ends_only_by_skip())
+                        {
+                            stage.race.skip_intro();
+                        }
+                        stage.race.tick_intro(&inputs);
                     }
-                    stage.race.tick_intro(&inputs);
                     crate::sound::intro_cues(&mut self.audio, &mut stage.race);
                     // The held craft's engines at idle sound under the flyby from the camera it
                     // draws from, through the effects fade, on a title whose rule has one.

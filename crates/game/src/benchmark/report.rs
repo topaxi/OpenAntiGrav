@@ -237,6 +237,7 @@ impl Report {
             "final_state_hash",
             json_string(&format!("{:016x}", self.ending.state_hash)),
         );
+        put("flyby_ticks", self.ending.flyby_ticks.to_string());
         put("frames", self.frames.len().to_string());
         put(
             "warmup_frames_excluded",
