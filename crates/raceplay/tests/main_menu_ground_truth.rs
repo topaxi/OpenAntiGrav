@@ -154,13 +154,13 @@ fn pulses_ps2_main_menu_has_split_rows_that_multiplayer_replaces() {
     let from_disc: Vec<&str> = ps2.iter().filter_map(|id| opens(id)).collect();
     assert_eq!(
         from_disc,
-        ["campaign", "racebox", "options"],
+        ["campaign", "racebox", "options", "extras"],
         "what the PS2 disc's own rows build here, the split rows opening nothing of theirs"
     );
     let built: Vec<&str> = menu.built(false).collect();
     assert_eq!(
         built,
-        ["campaign", "racebox", "multiplayer", "options"],
+        ["campaign", "racebox", "multiplayer", "options", "extras"],
         "and MULTIPLAYER stands where the PSP's FE_MP does"
     );
 }

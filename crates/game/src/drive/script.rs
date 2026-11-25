@@ -169,6 +169,10 @@ pub enum Step {
     },
     /// The Escape key, which a button tap does not reach.
     Escape,
+    /// The Android system Back (`Session::back`): escape that never quits.
+    Back,
+    /// The window lost focus (alt-tab, the Steam overlay).
+    Away,
     /// A key no button is bound to went down: somebody is at the machine.
     Key,
     /// The mouse moved to this window pixel.
@@ -221,6 +225,8 @@ impl std::fmt::Display for Step {
             Self::Hold { buttons, ticks } => write!(f, "hold {buttons:?} {ticks}"),
             Self::Pad { pad, ticks } => write!(f, "pad {pad:?} {ticks}"),
             Self::Escape => f.write_str("escape"),
+            Self::Back => f.write_str("back"),
+            Self::Away => f.write_str("away"),
             Self::Key => f.write_str("key"),
             Self::Mouse { x, y } => write!(f, "mouse {x} {y}"),
             Self::Click => f.write_str("click"),
@@ -508,6 +514,8 @@ impl Script {
                 _ => return Err("drop takes one path".into()),
             },
             "escape" if words.is_empty() => Step::Escape,
+            "back" if words.is_empty() => Step::Back,
+            "away" if words.is_empty() => Step::Away,
             "key" if words.is_empty() => Step::Key,
             "draw" if words.is_empty() => Step::Draw,
             "click" if words.is_empty() => Step::Click,

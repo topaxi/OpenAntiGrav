@@ -322,6 +322,11 @@ pub(crate) struct Gpu {
 }
 
 impl Gpu {
+    /// The adapter this session draws with, as wgpu describes it.
+    pub(crate) fn adapter_info(&self) -> wgpu::AdapterInfo {
+        self.adapter.get_info()
+    }
+
     /// The adapter this session draws with, as a screenshot's text names it.
     pub(crate) fn describe(&self) -> crate::shot_meta::Gpu {
         let info = self.adapter.get_info();

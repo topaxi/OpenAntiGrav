@@ -215,6 +215,10 @@ pub struct State {
     /// (`session::demo`); absent in every other race.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub demo: Option<String>,
+    /// `loading` while the in-game benchmark's race loads, `running` while it is flown and
+    /// `stats` once its stats screen is up (`session::benchmark`); absent otherwise.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub benchmark: Option<String>,
     /// `on` or `off`: whether the race on screen draws its HUD, on `stage=race`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hud: Option<String>,
@@ -279,6 +283,7 @@ impl State {
             "notice" => one(self.notice.clone()),
             "endrace" => one(self.endrace.clone()),
             "demo" => one(self.demo.clone()),
+            "benchmark" => one(self.benchmark.clone()),
             "hud" => one(self.hud.clone()),
             "humans" => one(self.humans.map(|humans| humans.to_string())),
             "hints" => self
@@ -349,6 +354,7 @@ impl State {
                 | "notice"
                 | "endrace"
                 | "demo"
+                | "benchmark"
                 | "hud"
                 | "humans"
                 | "hints"

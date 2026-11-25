@@ -27,7 +27,7 @@
 //! at once and neither can a player watching one screen ever tell that a
 //! *different* screen forgot.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, HashMap};
 
 use crate::language::StringTable;
 use oag_core::buttons::button_from_name;
@@ -481,39 +481,11 @@ impl Definition {
     }
 
     fn check_reachable(&self) -> Result<(), Error> {
-        let mut seen = BTreeSet::new();
-        let mut stack = vec![self.root];
-        // A mod's settings page, which the MODS page's SETTINGS row opens.
-        stack.extend(
-            (self.mod_settings.values())
-                .filter_map(|id| self.pages.iter().position(|page| &page.id == id)),
-        );
-        while let Some(page) = stack.pop() {
-            if !seen.insert(page) {
-                continue;
-            }
-            for entry in &self.pages[page].entries {
-                match entry {
-                    Entry::Submenu { target, .. } => stack.push(*target),
-                    // A page the game pushes itself once an action has done its work.
-                    Entry::Run { action, .. } => {
-                        if let Some(id) = action.opens_page()
-                            && let Some(at) = self.pages.iter().position(|page| page.id == id)
-                        {
-                            stack.push(at);
-                        }
-                    }
-                    _ => {}
-                }
-            }
+        let seen = self.reachable_pages();
+        match (self.pages.iter().enumerate()).find(|(at, _)| !seen.contains(at)) {
+            Some((_, page)) => Err(Error::Unreachable(page.id.clone())),
+            None => Ok(()),
         }
-
-        for (index, page) in self.pages.iter().enumerate() {
-            if !seen.contains(&index) {
-                return Err(Error::Unreachable(page.id.clone()));
-            }
-        }
-        Ok(())
     }
 
     /// The page with this id.

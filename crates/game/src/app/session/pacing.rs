@@ -29,7 +29,7 @@ impl Session {
     /// value and not the other two - `off` and `smooth` both leave the loop
     /// free to run ahead, and under `smooth` the limit is the only thing
     /// stopping the GPU rendering frames that are then discarded.
-    fn frame_period(&self) -> Option<std::time::Duration> {
+    pub(super) fn frame_period(&self) -> Option<std::time::Duration> {
         // A wallpaper's own cap holds under every VSYNC value: a desktop background is drawn at
         // its rate or not at all.
         if let Some(limit) = self.demo.limit {

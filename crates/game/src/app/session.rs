@@ -28,6 +28,7 @@ pub(crate) mod endrace;
 // `Session::escape` and `Session::resume_race` - split out of `menus.rs`
 // under the 1,000-line rule; see `escape.rs`'s own doc for why this pair is
 // the seam.
+mod benchmark;
 mod demo;
 mod device_lost;
 mod escape;
@@ -52,6 +53,7 @@ mod reconnect;
 pub(crate) mod replays;
 mod rumble;
 mod shot_open;
+pub(crate) use benchmark::State as BenchmarkState;
 pub(crate) use demo::State as DemoState;
 pub(crate) use load_probe::LoadProbe;
 pub(crate) use mods_page::Rebuilt;
@@ -391,6 +393,8 @@ pub(crate) struct Session {
     pub(crate) watching: Option<Box<replays::Watching>>,
     /// The attract demo's idle count, chain and the demo being loaded (`session::demo`).
     pub(crate) demo: demo::State,
+    /// The in-game benchmark's launch and what to restore after it (`session::benchmark`).
+    pub(crate) benchmark: benchmark::State,
     /// The replay viewer while a recording is being watched (`session::replays`).
     pub(crate) viewer: Option<replays::Active>,
     /// The line over the screen that says why a dropped screenshot did not open
@@ -969,6 +973,8 @@ pub(crate) struct Shell {
     pub(crate) zone_tracks: Vec<(catalogue::Track, String)>,
     /// What the title's `DemoConfig.xml` authors for its attract demo (`session::demo`).
     pub(crate) demo_config: Option<oag_tables::demo_config::DemoConfig>,
+    /// The title's benchmark presets (`session::benchmark`).
+    pub(crate) benchmark_presets: Option<crate::benchmark::presets::Presets>,
     /// Every team, valued by its id and labelled off the disc's string table.
     ///
     /// A pack's teams are in here too, and indistinguishable from the disc's -
@@ -1187,6 +1193,7 @@ impl Shell {
                 })
                 .collect(),
             demo_config: boot_shell.demo_config.clone(),
+            benchmark_presets: boot_shell.benchmark_presets.clone(),
             zone_tracks: boot_shell
                 .zone_tracks
                 .iter()

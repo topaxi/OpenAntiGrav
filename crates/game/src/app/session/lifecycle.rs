@@ -100,7 +100,10 @@ impl Session {
             && self.net.is_none()
             && self.photo.is_none()
             // A demo is never paused for losing focus: a wallpaper is never focused.
-            && !self.in_demo();
+            && !self.in_demo()
+            // A benchmark is flown to its end, and its stats screen read: losing focus is no
+            // reason to abandon a run half-restored.
+            && !self.on_benchmark();
         let pause = decide(
             away,
             self.settings.display.pause_on_focus_loss,

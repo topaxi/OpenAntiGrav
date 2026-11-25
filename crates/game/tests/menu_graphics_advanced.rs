@@ -5,7 +5,7 @@
 use oag_gameplay::input::{Button, Input};
 use oag_ui::menu::*;
 
-const TOP: [&str; 11] = [
+const TOP: [&str; 12] = [
     "graphics.renderer",
     "graphics.render_scale",
     "graphics.target_fps",
@@ -15,6 +15,7 @@ const TOP: [&str; 11] = [
     "graphics.msaa",
     "graphics.anisotropy",
     "graphics.camera_view",
+    "action:benchmark",
     "submenu:graphics_advanced",
     "back",
 ];
@@ -31,6 +32,7 @@ fn rows(definition: &Definition, id: &str) -> Vec<String> {
         .map(|entry| match entry {
             Entry::Submenu { target, .. } => format!("submenu:{}", definition.pages[*target].id),
             Entry::Back { .. } => "back".to_string(),
+            Entry::Run { action, .. } => format!("action:{}", action.name()),
             other => other.setting().expect("a setting row").to_string(),
         })
         .collect()

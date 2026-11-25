@@ -300,6 +300,15 @@ impl Driver {
                 self.session.escape();
                 self.frame(None)?;
             }
+            Step::Back => {
+                self.session.back();
+                self.frame(None)?;
+            }
+            Step::Away => {
+                self.session
+                    .window_away(crate::app::session::lifecycle::Away::FocusLost);
+                self.frame(None)?;
+            }
             Step::Key => {
                 self.session.demo.key = true;
                 self.frame(None)?;
@@ -615,6 +624,7 @@ fn state_of(session: &mut Session) -> State {
         Stage::Loading(_) if session.demo.loading.is_some() => Some("loading".to_string()),
         _ => None,
     };
+    state.benchmark = session.benchmark_phase().map(str::to_string);
     state
 }
 

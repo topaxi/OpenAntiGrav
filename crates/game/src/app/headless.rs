@@ -1022,6 +1022,8 @@ pub(crate) fn race_launch(
         measure_race_load: None,
         demo: None,
         demo_limit: None,
+        benchmark: None,
+        benchmark_ticks: None,
         replay_png: None,
         give,
         // A network race starts on the server's clock: no flyby to wait through.

@@ -1,7 +1,8 @@
 # Whole-race rendering benchmark
 
 One fixed race per title, drawn frame by frame with no window, every frame
-measured. [`OAG_RENDER_BENCH`/`OAG_RENDER_GPU_BENCH`](../rendering/frame-audit.md)
+measured. (The same race flown in the window, for players, is the
+[in-game benchmark](in-game-benchmark.md).) [`OAG_RENDER_BENCH`/`OAG_RENDER_GPU_BENCH`](../rendering/frame-audit.md)
 re-draw **one** captured tick; this plays a whole race, so a corner that is
 slow on lap 2 shows up where one frame never would.
 

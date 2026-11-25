@@ -573,6 +573,8 @@ impl Session {
             }
             // The pause menu's PHOTO MODE row (`session::photo`).
             menu::MenuEvent::Fired(menu::Action::PhotoMode) => self.open_photo_from_menu(),
+            // The extras' BENCHMARK row and the graphics page's RUN BENCHMARK (`session::benchmark`).
+            menu::MenuEvent::Fired(menu::Action::Benchmark) => self.start_benchmark_from_menu(),
             // The pause menu's RESTART RACE and QUIT RACE rows (`session::pause_menu`).
             menu::MenuEvent::Fired(menu::Action::RestartRace) => self.restart_parked_race(),
             menu::MenuEvent::Fired(menu::Action::QuitRace) => self.quit_parked_race(),
@@ -1039,6 +1041,7 @@ impl Session {
         // PHOTO MODE is a row of the pause menu: there while a race with one view is held
         // behind the menus, and on no other page of the front end.
         model.offer(menu::Action::PhotoMode, self.photo_available());
+        model.offer(menu::Action::Benchmark, !self.race_is_parked_behind_menus());
         // EXPORT is a row of the REPLAYS page on a phone, which has a Downloads folder to give.
         model.offer(menu::Action::ExportReplay, oag_mobile::export::available());
         // Just the first frame's own value - `MenuStage::render` refreshes

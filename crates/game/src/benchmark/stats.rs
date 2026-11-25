@@ -4,7 +4,7 @@
 
 /// One metric over a run: how many samples and where they sit.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub(super) struct Summary {
+pub struct Summary {
     pub count: usize,
     pub min: f64,
     pub mean: f64,
@@ -20,7 +20,7 @@ pub(super) struct Summary {
 /// really happened - a p99 of 2,000 frames is the 1,980th-slowest frame.
 ///
 /// `None` for an empty slice.
-pub(super) fn percentile(sorted: &[f64], p: f64) -> Option<f64> {
+pub fn percentile(sorted: &[f64], p: f64) -> Option<f64> {
     if sorted.is_empty() {
         return None;
     }
@@ -36,7 +36,7 @@ pub(super) fn percentile(sorted: &[f64], p: f64) -> Option<f64> {
 
 /// Summarises the finite samples of `values`; a missing reading (`NaN`) is
 /// skipped, not counted as zero. `None` when nothing is left.
-pub(super) fn summarise(values: &[f64]) -> Option<Summary> {
+pub fn summarise(values: &[f64]) -> Option<Summary> {
     let mut sorted: Vec<f64> = values.iter().copied().filter(|v| v.is_finite()).collect();
     if sorted.is_empty() {
         return None;
@@ -57,7 +57,7 @@ pub(super) fn summarise(values: &[f64]) -> Option<Summary> {
 
 impl Summary {
     /// `{"count": .., "min": .., ...}`, numbers to a tenth of a unit.
-    pub(super) fn json(&self) -> String {
+    pub fn json(&self) -> String {
         format!(
             "{{\"count\": {}, \"min\": {:.1}, \"mean\": {:.1}, \"p50\": {:.1}, \"p95\": {:.1}, \"p99\": {:.1}, \"max\": {:.1}}}",
             self.count, self.min, self.mean, self.p50, self.p95, self.p99, self.max
@@ -65,8 +65,38 @@ impl Summary {
     }
 }
 
+/// The frame rate of the slowest `percent` of `frame_us` (microseconds per frame): a thousand
+/// milliseconds over the mean frame time of the slowest `ceil(percent / 100 * n)` frames, at
+/// least one. The "1 % low" is `low_fps(.., 1.0)` and the "0.1 % low" `low_fps(.., 0.1)`.
+///
+/// A mean over the tail rather than the percentile frame itself, so a single 200 ms hitch moves
+/// the 0.1 % low of a long run where a nearest-rank p99.9 would step over it.
+///
+/// `None` when no frame has a finite, positive time.
+pub fn low_fps(frame_us: &[f64], percent: f64) -> Option<f64> {
+    let mut sorted: Vec<f64> = frame_us
+        .iter()
+        .copied()
+        .filter(|v| v.is_finite() && *v > 0.0)
+        .collect();
+    if sorted.is_empty() {
+        return None;
+    }
+    sorted.sort_by(|a, b| b.total_cmp(a));
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        clippy::cast_precision_loss,
+        reason = "a count within a slice length"
+    )]
+    let tail = ((percent / 100.0 * sorted.len() as f64).ceil() as usize).clamp(1, sorted.len());
+    #[expect(clippy::cast_precision_loss, reason = "a sample count")]
+    let mean = sorted[..tail].iter().sum::<f64>() / tail as f64;
+    Some(1e6 / mean)
+}
+
 /// `text` as a JSON string literal, quotes included.
-pub(super) fn json_string(text: &str) -> String {
+pub fn json_string(text: &str) -> String {
     let mut out = String::with_capacity(text.len() + 2);
     out.push('"');
     for c in text.chars() {
@@ -123,6 +153,19 @@ mod tests {
         let text = summarise(&[1.0, 2.0, 3.0]).unwrap().json();
         assert!(text.starts_with("{\"count\": 3,"));
         assert!(text.contains("\"p99\": 3.0"));
+    }
+
+    #[test]
+    fn a_low_is_the_rate_of_the_slowest_tail() {
+        // 1,000 frames at 10 ms with ten at 50 ms: the slowest 1 % is those ten.
+        let mut frames = vec![10_000.0; 990];
+        frames.extend([50_000.0; 10]);
+        assert_eq!(low_fps(&frames, 1.0), Some(20.0));
+        // The slowest 0.1 % is one frame, ceil(1.0), the worst of them.
+        frames[0] = 100_000.0;
+        assert_eq!(low_fps(&frames, 0.1), Some(10.0));
+        assert_eq!(low_fps(&[], 1.0), None);
+        assert_eq!(low_fps(&[f64::NAN, 0.0], 1.0), None);
     }
 
     #[test]

@@ -1,0 +1,42 @@
+# The settings presets of the in-game benchmark on this title (`oag-game --benchmark --preset NAME`).
+# Read through the fallback asset layer; a file of the same name in overrides/<title>/Data/XML/
+# replaces this one. A preset sets the graphics settings it names and nothing else; the run
+# applies them in memory and never writes them to settings.toml. Shape: schemas/v1/benchmark-presets.tosd.
+
+toml-schema = { location = "https://oag.topaxi.com/mods/schemas/v1/benchmark-presets.tosd", version = "1.0.0" }
+
+[[preset]]
+name = "low"
+summary = "Half resolution, blob shadows, no anisotropic filtering"
+render_scale = "50"
+msaa = "off"
+shadows = "blob"
+motion_blur = "off"
+anisotropy = "off"
+model_detail = "original"
+texture_detail = "original"
+weather = "original"
+
+[[preset]]
+name = "medium"
+summary = "Full resolution, the disc's own shadows, 4x anisotropic filtering"
+render_scale = "100"
+msaa = "off"
+shadows = "original"
+motion_blur = "off"
+anisotropy = "4x"
+model_detail = "original"
+texture_detail = "original"
+weather = "original"
+
+[[preset]]
+name = "high"
+summary = "Full resolution, mapped shadows, 4x MSAA, motion blur, extended model and texture detail"
+render_scale = "100"
+msaa = "4x"
+shadows = "mapped"
+motion_blur = "medium"
+anisotropy = "16x"
+model_detail = "high"
+texture_detail = "high"
+weather = "enhanced"

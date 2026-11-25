@@ -176,7 +176,8 @@ fn the_extras_alone_give_each_title_its_own_main_menu() {
             "RECORDS",
             "MODS",
             "QUIT",
-            "PHOTO MODE"
+            "PHOTO MODE",
+            "EXTRAS"
         ]
     );
     assert_eq!(
@@ -188,6 +189,7 @@ fn the_extras_alone_give_each_title_its_own_main_menu() {
             "MULTIPLAYER",
             "OPTIONS",
             "MODS",
+            "BENCHMARK",
             "QUIT",
             "PHOTO MODE",
             "RECORDS"

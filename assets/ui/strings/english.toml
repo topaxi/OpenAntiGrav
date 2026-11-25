@@ -658,6 +658,14 @@ OAG_OPTIONS_PLAYER_TAG = { text = "PLAYER TAG", human = false }
 OAG_PLAYER_NAME_TITLE = { text = "ENTER YOUR NAME", human = false }
 OAG_PLAYER_TAG_TITLE = { text = "ENTER YOUR TAG", human = false }
 
+# The BENCHMARK row and the graphics page's RUN BENCHMARK row. Ours, in no original.
+OAG_MENU_EXTRAS = { text = "EXTRAS", human = false }
+OAG_MENU_EXTRAS_SUBTITLE = { text = "What this project adds: the benchmark", human = false }
+OAG_MENU_BENCHMARK = { text = "BENCHMARK", human = false }
+OAG_MENU_BENCHMARK_SUBTITLE = { text = "Fly one fixed race and read the frame rate, the lows and the frame times", human = false }
+OAG_GRAPHICS_RUN_BENCHMARK = { text = "RUN BENCHMARK", human = false }
+OAG_GRAPHICS_RUN_BENCHMARK_SUBTITLE = { text = "Fly one fixed race with these settings and read the frame rate", human = false }
+
 # The REPLAYS page and the replay viewer (ADR-0087). Ours, in no original.
 OAG_MENU_REPLAYS = { text = "REPLAYS", human = false }
 OAG_MENU_REPLAYS_SUBTITLE = { text = "Watch, keep or delete the races you have recorded", human = false }
