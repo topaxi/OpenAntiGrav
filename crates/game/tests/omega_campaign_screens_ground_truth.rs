@@ -727,6 +727,13 @@ fn omega_track_select_still(omega: &std::path::Path, tag: &str, flags: &[&str]) 
     rgba
 }
 
+/// Pixels of two RGBA stills that differ by more than 40 in a channel.
+fn differing_pixels(a: &[u8], b: &[u8]) -> usize {
+    (0..a.len() / 4)
+        .filter(|at| (0..3).any(|c| a[at * 4 + c].abs_diff(b[at * 4 + c]) > 40))
+        .count()
+}
+
 /// Omega's `TrackHexSelection` is the same class and update as HD's (`FUN_015298d0` in the v107
 /// eboot, `ship-select-ring.md`, "Omega"): a circuit step slides its lattice and the ring pulses
 /// on a clock a still can pin. This fails if Omega's Track Select is drawn without the picker's
@@ -740,21 +747,13 @@ fn omegas_track_grid_slides_on_a_step_and_pulses_on_its_own_clock() {
     let rest = omega_track_select_still(&omega, "rest", &[]);
     let stepped =
         omega_track_select_still(&omega, "stepped", &["--menu-picker-step-seconds", "0.05"]);
-    let moved = rest
-        .chunks_exact(4)
-        .zip(stepped.chunks_exact(4))
-        .filter(|(a, b)| (0..3).any(|c| a[c].abs_diff(b[c]) > 40))
-        .count();
+    let moved = differing_pixels(&rest, &stepped);
     assert!(
         moved > 2000,
         "three frames into a step the lattice has moved: {moved} pixels"
     );
     let white = omega_track_select_still(&omega, "white", &["--menu-ring-seconds", "0"]);
     let late = omega_track_select_still(&omega, "late", &["--menu-ring-seconds", "0.5"]);
-    let pulse = white
-        .chunks_exact(4)
-        .zip(late.chunks_exact(4))
-        .filter(|(a, b)| (0..3).any(|c| a[c].abs_diff(b[c]) > 40))
-        .count();
+    let pulse = differing_pixels(&white, &late);
     assert!(pulse > 100, "the ring's pulse moves {pulse} pixels");
 }
