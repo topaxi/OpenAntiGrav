@@ -1,8 +1,8 @@
 ---
 status: measure
 titles: [hd, omega, 2048]
-updated: 2026-11-25
-summary: "Near particle law is wired; owed: a close-range original frame, Deck numbers, the 1.7 ms at 1080p; two settings await the maintainer"
+updated: 2026-11-26
+summary: "Near particle law is wired; owed: Deck numbers, the 1.7 ms at 1080p, two reads; two settings await the maintainer"
 size: M (50)
 difficulty: medium (55)
 ---
@@ -25,11 +25,6 @@ reaches.
 
 ### Owed measurements
 
-- **A matched original frame of a blast at close range.** The live capture that proved the law
-  had its blasts 70 to 350 units away, so the proof is on the player's own near effects. A pair
-  with the camera inside a CraftBlast is the picture check: fire at `GO` with a rival directly
-  ahead and teleport forward (`rpcs3-hd-weapon.py --teleport-back` with a negative distance), or
-  use the missile film's pose.
 - **The Deck** at 3840x2160, 1920x1080 and 1280x800 (vsync off, no frame limit): the
   reproduction's `gpu_scene_us` over ticks 760 to 789, before and after the law. Not run.
   The fragment `discard` of particle-fill.md's "Measured and dropped" belongs to the same visit.
@@ -44,6 +39,5 @@ reaches.
 
 ## Next Steps
 
-1. Shoot the close-range pair and judge the wired picture against it.
-2. Run the Deck numbers before and after.
-3. Put items 2 and 3 to the maintainer as settings once the Deck numbers are in.
+1. Run the Deck numbers before and after.
+2. Put items 2 and 3 to the maintainer as settings once the Deck numbers are in.

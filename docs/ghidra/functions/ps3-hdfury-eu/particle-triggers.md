@@ -238,7 +238,10 @@ PS2 renders at four ticks across a rocket burst are byte-identical to main.
 from its table slot, so what selects lit is not found, and nothing says whether any
 declares `fogFactors` or a light. Unread; nothing was tinted. (2) HD's own frame-advance
 law and the flipbook direction (see above). (3) The pose: ours hits a far wall. (4) The
-craft hit (`WO_ROCKET_EXPLO`) was not captured. Omega and 2048: **checked, applies,
+craft hit (`WO_ROCKET_EXPLO`) was captured 2026-11-26 and still draws the procedural profile in
+ours, which is one reason its picture does not match
+([particle-fill.md](../../../rendering/particle-fill.md), "Against the original at a near
+blast"). Omega and 2048: **checked, applies,
 not wired** - both author their own `WO_ROCKET_EXPLO` (`psys_omega_ground_truth.rs`)
 and already read their sprites.
 

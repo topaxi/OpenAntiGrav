@@ -252,8 +252,118 @@ No comparison pair moves: all 79 HD, Omega and 2048 pairs (the Detonator ones in
 re-rendered on scratch copies with the build before and the build with the law, are
 byte-identical. None has a particle the law touches in frame.
 
+## Against the original at a near blast
+
+2026-11-26, `blast-capture`. **Verdict: ours does not match the original's picture of a near
+craft blast, and by pixels it is further from it with the law than without.** The law itself is
+the original's, read on the blast's own vertices. The difference comes from what ours does not
+draw.
+
+### Capture
+
+RPCS3 0.0.43-20574, HD EU, Talon's Junction, Racebox Single Race, Venom, weapons on, Feisar.
+`scripts/rpcs3-hd-rocket-film.py` holds the player 12 units behind the nearest rival (AG
+Systems), fires a Rocket, reads the hit off the rival's shield (140 to 130, 9 or 10 game
+frames after the press) and keeps frames 0 to 0.55 s after it, with the camera, every craft's pose and the
+particle vertex buffers. Three hits, from three restores of one save state:
+`data/reference/hd-capture/rocket-craft-hit/hit1`, `hit2`, `hit3`. At 0.18 s the eye is 3.5 to
+3.8 units from the hit point.
+
+```sh
+scripts/emu-restore-state.sh <lane> data/saves/hd-fury/hd-racebox-talons-venom-weapons-grid-rpcs3-20574.SAVESTAT.zst --no-gdb
+OAG_RPCS3_ATTACH=1 OAG_RPCS3_NO_GDB=1 uv run --with evdev python3 scripts/rpcs3-hd-rocket-film.py --out <dir>
+scripts/hd-particle-quads.py <dir>
+```
+
+**Ours** was drawn by a throwaway patch, not kept: `WO_ROCKET_EXPLO` played 2.5 units under
+the hit point and aged `60 * age` ticks, every craft posed from the capture (`--field-from`,
+`--ticks 0`), the camera the original's own. The law was switched off by the same patch. The
+claim was to be falsified if the original was closer to ours without the law than with it, by
+pixels (RMSE, mean luma, near-white share) at matched ages.
+
+### The law is on the blast
+
+| Billboard quads | Live | Nearer than 1 unit | Largest half height / depth | On cap 0.5 |
+| --- | --- | --- | --- | --- |
+| Original, hits 1 and 2, every particle quad of the frames after the shot | 6,874 | 0 (nearest 1.037) | 2.000 (below) | 146 |
+| Original, hit 3, the same | 3,879 | 0 (nearest 1.217) | 2.000 | 115 |
+| Ours, law, the blast alone | 1,171 | 0 (nearest 1.020) | 1.000 | 128 |
+| Ours, law off | 2,453 | 42 (nearest 0.002) | 188 | 1 |
+
+The cull and the cap are seen live on a near CraftBlast, not only on the player's own effects
+(confidence 95). The fade was not separated. The ours rows are the arm with the blast carried
+to the struck craft (below).
+
+### The picture
+
+Whole-frame RMSE against the original (0 to 255), the mean of ten frames: hits 1 and 2 at
+0.1, 0.18, 0.23, 0.3 and 0.4 s. "Near-white" is the share of pixels with luma over 235; the
+original's own is 27 to 70 % in these frames. The box is the central 1152x756.
+
+| Ours | RMSE | RMSE, box | Near-white |
+| --- | --- | --- | --- |
+| As it ships, law | 130.9 | 139.2 | 4.5 % |
+| As it ships, law off | 120.7 | 125.5 | 8.0 % |
+| Sprites on, blast carried with the craft, law | 123.9 | 128.6 | 10.5 % |
+| The same, law off | 109.2 | 114.2 | 22.5 % |
+| No blast at all | 133.9 | 144.1 | 3.5 % |
+
+- The law is the closer arm in 2 of 10 frames as shipped and 0 of 10 with sprites and carry.
+  With ours drawn 4 ticks younger, 1 of 10 and 0 of 10. **The pixel falsifier fired.**
+- For scale: ours against the original before the shot is 52 and 60. The original against
+  itself (hit 1 against hit 2, same age, so the camera differs too) is 68 to 76 up to 0.23 s
+  and 99 to 132 after.
+- Screen fill from the dumped quads, the eight frames of hits 1 and 2 with a full dump: the
+  original 74 screens; ours carried 16 with the law and 35 without; ours static 7 and 26.
+  At the two heaviest frames, 12.3 against 4.6 and 11.4 (0.18 s), 19.7 against 5.1 and 14.1
+  (0.23 s). The original's lists hold 3 to 4 times our live quads; they also hold whatever else
+  the shot threw, which the patch did not inject, so this is not a per-effect count.
+- With the blast placed whole at the struck craft's current position, law and law-off draw the
+  same fill: at that distance nothing is capped. A frame like that cannot test the law.
+
+So removing the law brings ours nearer only because it adds white to a picture that is far too
+dark. It is not evidence that the original lacks the law, which its vertices carry. It does
+mean the "bounded cloud, track and craft readable" of "What the law does to ours" above
+describes ours, not the original: the original's frame is mostly white from 0.1 to 0.3 s.
+
+### Why ours differs
+
+1. **The blast travels with the struck craft; ours stays at the hit point** (confidence 85).
+   Centroid of the original's large particles (half height over 2):
+
+   | Hit, age | Craft moved | From the craft | From the hit point |
+   | --- | --- | --- | --- |
+   | 1, 0.18 s | 23.9 | 6.1 | 18.5 |
+   | 2, 0.23 s | 29.0 | 9.6 | 19.4 |
+   | 2, 0.40 s | 49.6 | 16.0 | 34.3 |
+   | 3, 0.23 s | 32.0 | 11.3 | 21.5 |
+   | 3, 0.40 s | 54.7 | 19.1 | 36.9 |
+
+   The cloud lags the craft, as an effect whose emitters ride it and leave their smoke behind
+   would. In ours the hit point is behind the camera after about 0.2 s, so the player flies
+   through the blast and past it. What the original's spawn call attaches to is not read.
+2. **Our `WO_ROCKET_EXPLO` plays no sprites**: it is not in HD's `Effects::sprites`, so every
+   particle is the procedural white profile. With them on, ours is a textured fireball of the
+   same family. One sheet, `FIREBALL_TUMULT`'s, does not fit our sprite sheet.
+3. **The original washes the whole frame, HUD included, yellow to white.** Its particle lists
+   hold single-quad additive draws with a 64x64 texture whose half height is exactly twice
+   their depth, which covers the screen. All three hits have them in frames from the hit to
+   0.23 s, none before the shot or from 0.3 s on. That they are the wash is not shown, and
+   their source is not identified. Ours draws no screen flash on HD.
+4. **Streaks.** In the carried arm, 25 of our 1,055 quads whose corners differ in depth (our
+   streaks) are nearer than 1 unit, with the law on or off: it does not touch streaks. The original's dumped lists hold only screen-facing quads,
+   so where its `.pob` streaks are drawn is not known, and no comparison was made.
+
+The picture lag under `SIGSTOP` was not measured: the frame on screen can trail guest memory by
+a few ticks. The vertex buffers, camera and poses are from one stop. Ours does not vary with
+`--seed`, so it has no noise floor of its own.
+
+**Cross-title.** Omega and 2048 author their own `WO_ROCKET_EXPLO` and run the same law.
+Whether their blast travels with the craft or plays sprites is not checkable here: no memory
+readout of Omega, and 2048 was not captured.
+
 ## What is left
 
-The picture has no matched original frame from close range yet, and neither the Deck nor the
-scene-width throttle has been measured. The ranked plan for the other two ideas is in the
-handover thread.
+Neither the Deck nor the scene-width throttle has been measured. The close-range picture
+differs for the four reasons above. The ranked plan for the other two ideas is in the handover
+thread.
