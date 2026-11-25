@@ -80,13 +80,16 @@ pub(super) fn is_bound(roles: u32, table: &[Emissive]) -> bool {
         .is_some_and(|entry| entry.program[0] == PROGRAM_CANNON_BOLT)
 }
 
+/// One coordinate pair per vertex.
+type Coordinates = Vec<[f32; 2]>;
+
 /// `(texcoords, lightmap_texcoords)` of a bolt chunk: `uv1` (unit 0's) and `uv0` (unit 1's), or
 /// `None` for a chunk not bound to this program.
 pub(super) fn route(
     roles: u32,
     table: &[Emissive],
     (mesh, model_blob, submesh, stride): (&rcsmodel::Mesh, &[u8], &rcsmodel::SubMesh, usize),
-) -> Option<(Vec<[f32; 2]>, Vec<[f32; 2]>)> {
+) -> Option<(Coordinates, Coordinates)> {
     if !is_bound(roles, table) {
         return None;
     }

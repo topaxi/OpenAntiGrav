@@ -213,6 +213,9 @@ impl Mesh {
     }
 }
 
+/// `(uv0, uv1)`, one pair each per vertex: see [`Mesh::inline_uv_pairs`].
+type UvPairs = (Vec<[f32; 2]>, Vec<[f32; 2]>);
+
 impl Mesh {
     /// The two coordinate pairs an inline stride-18 vertex ends in, `(+0x0a, +0x0e)`: the four
     /// halves of one `float4` attribute that `hd_detonator_cannonbolt_halo`'s vertex program
@@ -231,7 +234,7 @@ impl Mesh {
         data: &[u8],
         submesh: &SubMesh,
         stride: usize,
-    ) -> Result<(Vec<[f32; 2]>, Vec<[f32; 2]>)> {
+    ) -> Result<UvPairs> {
         if self.decl.is_some() || stride != STRIDE {
             return Err(Error::UnknownChunkLayout { got: 0x05, at: 0 });
         }

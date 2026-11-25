@@ -20,6 +20,9 @@ use oag_raceplay as race;
 
 const TRACK: &str = r"Data\Environments\Talons_Junction\track.vex";
 
+/// `(ticks of ours after the start, position, up row, forward row)`.
+type Sample = (u32, [f32; 3], [f32; 3], [f32; 3]);
+
 /// The original's round at age `0.0333`: position, up row (= surface normal), velocity.
 const START: ([f32; 3], [f32; 3], [f32; 3]) = (
     [-259.55, -73.597, 55.526],
@@ -30,7 +33,7 @@ const START: ([f32; 3], [f32; 3], [f32; 3]) = (
 /// `(ticks of ours after the start, position, up row, forward row)` read off the original at
 /// ages `0.2`, `0.3667` (climbing), `0.4667` (vertical), `0.6`, `0.7333` (inverted) and `0.8667`
 /// (coming down), before its side-wall rebound at `0.9`.
-const ALONG: [(u32, [f32; 3], [f32; 3], [f32; 3]); 6] = [
+const ALONG: [Sample; 6] = [
     (
         10,
         [-340.708, -61.757, 56.81],
