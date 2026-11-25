@@ -2415,6 +2415,12 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
             let overcast = vec3<f32>(luma * SKY_OVERCAST_LUMA) + SKY_OVERCAST_TINT;
             return vec4<f32>(mix(composed.rgb, overcast, uniforms.sky_grey), composed.a);
         }
+        // **HD's Detonator plasma shells** (`Emissive::program` modes 28 and 29,
+        // `oag_mesh::mesh::rcs::hull_charge`): the program's alpha is `MOV H0.w, Charge`, so the
+        // draw's alpha is the entry's offset (`Charge1`, `Charge2`).
+        if glow_program > 27.5 && glow_program < 29.5 {
+            return vec4<f32>(composed.rgb, glow_tint_offset.w);
+        }
         return composed;
     }
     let rim_noise = textureSample(

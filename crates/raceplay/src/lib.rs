@@ -253,6 +253,8 @@ mod hit_sparks;
 #[cfg(feature = "view")]
 mod hud;
 #[cfg(feature = "view")]
+mod hull_charge;
+#[cfg(feature = "view")]
 pub mod hull_gather;
 #[cfg(feature = "view")]
 mod hull_shake;

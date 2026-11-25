@@ -86,6 +86,7 @@ impl Race {
             // The cannon gauge holds its value below the speed gate; a seek must not carry a
             // later moment's gauge onto a slower craft (`crate::ammo_gauge`).
             *crate::drawable::lock(&self.view.ammo_gauge_shown) = None;
+            *crate::drawable::lock(&self.view.hull_charge_shown) = None;
             self.settle_poses();
         }
     }

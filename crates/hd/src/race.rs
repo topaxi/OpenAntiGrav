@@ -442,6 +442,11 @@ pub const ZONE_STAGE_TEXTURES: &oag_title::ZoneStageTextures = &oag_title::ZoneS
     stages: 15,
 };
 
+/// `Ship_UpdateDetonatorHullParams`'s reset (`0x00107f20`) stores `1.3` and `1.6` (`0x008a9840`,
+/// `0x008a9844`) as the two channels' rates.
+pub const DETONATOR_HULL_CHARGE: oag_title::DetonatorHullCharge =
+    oag_title::DetonatorHullCharge { rates: [1.3, 1.6] };
+
 /// HD's Detonator cannon gauge: `Detonator_UpdateHud` (`0x00067120`) passes the clip, or
 /// `trunc((1 - lockout / lockout_total) * 15)` while a reload locks the cannon, to `0x0029d578`,
 /// which writes `count / 15` (`0x3d888889`) and blue `(0, 0.1, 1)` or red `(1, 0, 0)`; the hull's bind
@@ -481,6 +486,7 @@ pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
     }),
     cannon_lights: true,
     ammo_gauge: Some(DETONATOR_AMMO_GAUGE),
+    hull_charge: Some(DETONATOR_HULL_CHARGE),
     camera_scale: 0.7,
     // A live Detonator frame's hull world matrix in the push buffer, rows of length 0.630 (`0.7 * 0.9`).
     hull_scale: Some(0.63),

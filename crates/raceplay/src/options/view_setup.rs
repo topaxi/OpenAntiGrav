@@ -75,6 +75,8 @@ pub struct ViewSetup {
     pub detonator_cannon_lights: bool,
     /// The craft's cannon gauge in a Detonator race: `Detonator::ammo_gauge`, `None` off Detonator.
     pub detonator_ammo_gauge: Option<oag_title::DetonatorAmmoGauge>,
+    /// The craft's plasma shells in a Detonator race: `Detonator::hull_charge`, `None` off Detonator.
+    pub detonator_hull_charge: Option<oag_title::DetonatorHullCharge>,
     /// Whether a laid Mine and Bomb take Pulse's own measured poses - the
     /// Mine spun and scaled by `Mine_PoseNode`, the Bomb squared to the world
     /// by `Bomb_Init` - rather than the frozen craft pose. A title fact:
@@ -345,6 +347,7 @@ impl ViewSetup {
             hd_missile_blast: false,
             detonator_cannon_lights: false,
             detonator_ammo_gauge: None,
+            detonator_hull_charge: None,
             pulse_laid_pose: false,
             laid_pose_scaled: false,
             screen_flash: false,

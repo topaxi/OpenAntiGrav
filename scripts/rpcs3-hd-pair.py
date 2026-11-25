@@ -244,7 +244,14 @@ def detonator_inputs(pair, out, ship, clock):
     pair.caveat("Detonator: ours' craft is held at rest on the original's pose after every tick (`--pose-hold-ticks`): it never flies into a "
                 "mine, its exhaust is cold, and a round leaves at 500 units/s, "
                 "not 500 + 3.6 x the craft's speed")
-    return ["--input-script", path]
+    flags = ["--input-script", path]
+    vel = ship.get("vel")
+    if vel:
+        speed = sum(c * c for c in vel) ** 0.5
+        flags += ["--detonator-gauge-speed", "%.3f" % speed]
+        pair.caveat("Detonator: the cannon gauge's speed gate reads the original's speed at the frame (`--detonator-gauge-speed`, "
+                    "%.1f): ours' craft is held at rest, where the gauge never updates and stays the bind's full red" % speed)
+    return flags
 
 
 def main():

@@ -837,6 +837,11 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
             .detonator
             .and_then(|detonator| detonator.ammo_gauge)
             .filter(|_| options.mode == Mode::Detonator),
+        detonator_hull_charge: craft_title
+            .race
+            .detonator
+            .and_then(|detonator| detonator.hull_charge)
+            .filter(|_| options.mode == Mode::Detonator),
         pulse_laid_pose: craft_title.looks.laid_pose.applies_everywhere(),
         laid_pose_scaled: craft_title.looks.laid_pose_scaled.applies_everywhere(),
         screen_flash: extents,

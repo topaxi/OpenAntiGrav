@@ -175,6 +175,7 @@ mod cutout;
 mod damage_lights;
 mod electricity;
 mod holo_billboard;
+mod hull_charge;
 mod hull_normal;
 mod isolate;
 mod light_cone;
