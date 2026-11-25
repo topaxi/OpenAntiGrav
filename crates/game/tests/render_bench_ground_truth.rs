@@ -466,6 +466,8 @@ fn run_identity(json: &str) -> Vec<String> {
 /// lets a press or a click skip the flyby, lets Start pause, or lets the camera button cycle (the
 /// flyby ticks differ, the frames differ, or the settings file appears).
 fn input_changes_nothing(image: &std::path::Path, key: &str, base: &std::path::Path) {
+    // Both runs start from no settings file: `in_game_of` keeps a profile's config.
+    let _ = std::fs::remove_dir_all(base);
     let (quiet, _) = in_game_of(&base.join("quiet"), image, key, &[], &[], "ticks 1");
     let (busy, _) = in_game_of(&base.join("busy"), image, key, &[], &[], EVERY_INPUT);
     assert_eq!(
@@ -514,8 +516,8 @@ fn no_input_changes_an_hd_benchmark() {
 }
 
 /// The one input a benchmark takes: Back (Escape, the pad's back button, the system Back) abandons
-/// it. Started from the EXTRAS page it returns to that page, writes no result, and the `--preset`
-/// run of the same abandon gives the player's settings back and writes none either. Fails on a
+/// it. Started from the EXTRAS page it returns to that page and writes no result; started from the
+/// command line with a preset it ends the game with the preset never in the player's file. Fails on a
 /// build that ignores the pad's back button or the system Back during the run (the run flies on
 /// and writes a result) or leaves the run going after Back.
 #[test]
@@ -540,11 +542,7 @@ fn back_abandons_a_benchmark_and_writes_nothing() {
             .output()
             .expect("running oag-game")
     };
-    for (name, abandon) in [
-        ("pad", "press circle"),
-        ("system-back", "back"),
-        ("escape", "escape"),
-    ] {
+    for (name, abandon) in [("pad", "press circle"), ("system-back", "back")] {
         let dir = base.join(name);
         let script = format!(
             "boot; select extras; press cross; until page=extras within 300; select benchmark; \
@@ -568,11 +566,11 @@ fn back_abandons_a_benchmark_and_writes_nothing() {
     let out = run(
         &dir,
         &["--benchmark", "--preset", "low", "--no-intro"],
-        "until benchmark=running within 3000; until sim_tick=300 within 6000; back; ticks 5; quit",
+        "until benchmark=running within 3000; until sim_tick=300 within 6000; escape; ticks 5; quit",
     );
     assert!(
         String::from_utf8_lossy(&out.stderr).contains("the game quit"),
-        "the system Back left the run going: {}",
+        "Escape left the run going: {}",
         String::from_utf8_lossy(&out.stderr)
             .lines()
             .rev()

@@ -168,7 +168,7 @@ checks each value against the page.
 - `render_bench_ground_truth::no_input_changes_a_pulse_benchmark` and `..._an_hd_benchmark`: a run
   with every input spent (held CROSS, click, SELECT, START, a stick, focus loss, a key) has the
   untouched run's flyby length, final tick, state hash, frame count and `settings.toml`.
-  `back_abandons_a_benchmark_and_writes_nothing`: Back by pad, system Back and Escape.
+  `back_abandons_a_benchmark_and_writes_nothing`: Back by the pad and the system Back from the EXTRAS page, Escape from the command line.
 - Unit tests in `crates/game/src/benchmark/` for the lows, the figures, the JSON keys `compare`
   reads, the screen's hit rectangles and layout, the presets, and the command line.
 - `scripts/bench-render.py selftest` covers the in-game/offscreen warning.
