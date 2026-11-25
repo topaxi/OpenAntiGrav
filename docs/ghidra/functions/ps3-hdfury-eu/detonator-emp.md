@@ -548,9 +548,19 @@ Confidence **80** (HD instructions read; two further builds agree). Wired in
 `the_main_fronts_merge_releases_the_fork_and_a_later_split_forks_again`,
 `a_launch_beside_the_far_half_walks_nothing_until_the_merge`.
 
-**On the disc.** On the three forked circuits the two routes lie within 10 units for the first
-sections after the split and the last before the merge (the first about 35, by section centres, on
-`zone_3`, `05_ubermall` and `15_anulpha_pass`), so a launch there forks from either route.
+**On the disc.** Where a launch forks, on this engine's survey (section positions, 10 units), as
+ring entries; branch offsets are the same stretches seen from the branch:
+
+| Circuit | Forward fork (after the split) | Motionless fork (before the merge) |
+| --- | --- | --- |
+| `zone_3` | ring 9 to 21 (branch 0 to 12) | ring 522 to 564 (branch 513 to 555) |
+| `05_ubermall` | ring 0 to 54 (branch 0 to 54) | ring 165 to 209 (branch 165 to 209) |
+| `05_ubermall` reversed | ring 0 to 44 (branch 0 to 44) | ring 155 to 209 (branch 155 to 209) |
+| `15_anulpha_pass` | ring 0 to 31 (branch 0 to 31) | ring 270 to 294 (branch 266 to 290) |
+
+Where the two routes run within about a unit of each other (`05_ubermall`), `firer_entry` may put
+a craft standing on the ring onto the branch's path; either way both fronts exist and the same
+objects are cleared.
 
 **Ring launches are unchanged except within those stretches.** There, a ring launch beside the
 split now has a second front on the branch at once, and one beside the merge has a motionless
@@ -572,7 +582,7 @@ route, which the fork covers); the survey holds each section's partner within re
 (`SurveyBranch::{to_primary, from_primary}`, measured section position to section position, as the
 placer's route comparison does). A launch on a branch walks the branch, then the ring from the
 merge. A launch away from any split's two stretches is unchanged: the state hashes of two stand-fired ring EMPs
-(`detonator_ground_truth`'s `emp_from_a_stand`) are identical to the build without the change.
+(`detonator_ground_truth`'s `emp_from_a_stand`) are identical to the build without any of this section's changes, record lookup included.
 
 Ours chosen: the fork born at launch clears the entry it stands on on the first tick, as the main
 front does (the original's launch call kills nothing).
