@@ -277,8 +277,14 @@ placement RNG cannot match the original's `Libc_Rand` (a departure, documented).
 - **Mine look (`det-mine-lit`)**: the normal map is read now (the chunk has one coordinate set), so hubs and holes show.
   Open: (1) a pair's mines stay dark because the envelope has no history under raw bands below 0.3; carrying each mine's
   `m+0xf4`/`m+0xf8` out of the original's RAM (`ship/mines[].address`) into a flag that seeds `MineEnvelopes` needs an
-  RPCS3 read; (2) with the envelope high, the ball's centre is dark in ours and bright in the original (eye-vector space,
-  `detonator-mine-material.md`, "Wired").
+  RPCS3 read; (2) with the envelope high, the ball's centre is dark in ours and bright in the original. **Not the eye**
+  (`det-mine-eye-centre`, `detonator-mine-material.md`, "The lit draw, read live"): the lit pass is block `#15` and `c[209]`
+  is the world camera, as ours feeds; the program, vertex decode, map, alpha test and cull all match, and the formula gives
+  dark there in RPCS3's own shaders. A live A/B (`K[0x3c]` 0) turns the original's body dark with bright rings, so its
+  body rim is about 0.4-0.7, not 0: its tangent-space `V` is off-normal. Next: patch the football's fragment program in
+  VRAM to output `normalize(f[TC1])` and grab; then the vertex fetch (`0x1738` base offset, `CMP` scale).
+  (3) ~~Ours builds the football and spikes with no tangent~~: wired (`Mesh::inline_tangents`, `+10`); the dark centre is
+  gone, ours' core 143 -> 157.5 against the original's 188, so the body is still darker than the original's white.
 
 **What remains open for Detonator (2026-11-23, after phase 15).** Phases 1-15 are in; what a player still
 misses is, by title. *All three:* the medal tier colours (the tiers draw one grey), the bomb flash writer
