@@ -497,11 +497,27 @@ fn no_title_labels_a_present_effect_chosen_and_the_others_are_measured_or_inheri
         ) if n == oag_2048::TITLE.name || n == oag_omega::TITLE.name => Some("Wipeout HD"),
         _ => None,
     };
+    // Pulse ships no Detonator: which of its effects answers the mode's triggers is this
+    // project's pick (`docs/gameplay/detonator-pulse.md`), the one chosen label allowed.
+    let chosen = |title: &Title, trigger: Trigger| {
+        title.name == oag_pulse::TITLE.name
+            && matches!(
+                trigger,
+                Trigger::DetonatorMineExploDead
+                    | Trigger::DetonatorMineExplo
+                    | Trigger::DetonatorBombExplo
+                    | Trigger::DetonatorCannonSparks
+                    | Trigger::DetonatorEmp
+            )
+    };
     for title in ALL {
         for trigger in OWN {
             if let Some(spec) = title.effect_on(trigger) {
-                let want =
-                    inherited(title, trigger).map_or(Origin::Measured, Origin::InheritedFrom);
+                let want = if chosen(title, trigger) {
+                    Origin::Chosen
+                } else {
+                    inherited(title, trigger).map_or(Origin::Measured, Origin::InheritedFrom)
+                };
                 assert_eq!(spec.origin, want, "{} {trigger:?}", title.name);
             }
         }
