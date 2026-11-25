@@ -248,6 +248,7 @@ impl Maps {
         };
         self.staged.stage(layer, matrix * caster.model);
         self.drawn[layer] = caster.ranges.len();
+        let stamp = oag_gpu::timing::stamp("self shadow");
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("self shadow map"),
             color_attachments: &[],
@@ -259,7 +260,7 @@ impl Maps {
                 }),
                 stencil_ops: None,
             }),
-            timestamp_writes: None,
+            timestamp_writes: stamp.as_ref().map(oag_gpu::timing::Stamp::render_writes),
             occlusion_query_set: None,
             multiview_mask: None,
         });
@@ -288,6 +289,7 @@ impl Maps {
             return;
         };
         self.drawn[layer] = 0;
+        let stamp = oag_gpu::timing::stamp("self shadow");
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("self shadow map clear"),
             color_attachments: &[],
@@ -299,7 +301,7 @@ impl Maps {
                 }),
                 stencil_ops: None,
             }),
-            timestamp_writes: None,
+            timestamp_writes: stamp.as_ref().map(oag_gpu::timing::Stamp::render_writes),
             occlusion_query_set: None,
             multiview_mask: None,
         });

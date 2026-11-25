@@ -1000,6 +1000,7 @@ impl Framebuffer {
         source: Option<&wgpu::BindGroup>,
         clear: bool,
     ) {
+        let stamp = oag_gpu::timing::stamp("blit");
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("upscale"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -1016,7 +1017,7 @@ impl Framebuffer {
                 },
             })],
             depth_stencil_attachment: None,
-            timestamp_writes: None,
+            timestamp_writes: stamp.as_ref().map(oag_gpu::timing::Stamp::render_writes),
             occlusion_query_set: None,
             multiview_mask: None,
         });

@@ -259,9 +259,10 @@ impl ProbeBlend {
             }
         }
         queue.write_buffer(&self.jobs, 0, &bytes[..jobs.len() * JOB_BYTES]);
+        let stamp = oag_gpu::timing::stamp("probe blend");
         let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: Some("environment probe blend"),
-            timestamp_writes: None,
+            timestamp_writes: stamp.as_ref().map(oag_gpu::timing::Stamp::compute_writes),
         });
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, &self.bind, &[]);

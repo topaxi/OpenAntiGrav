@@ -120,6 +120,7 @@ pub(crate) fn draw_with(
     rect: (u32, u32),
     vertices: u32,
 ) {
+    let stamp = oag_gpu::timing::stamp(label);
     let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
         label: Some(label),
         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -132,7 +133,7 @@ pub(crate) fn draw_with(
             },
         })],
         depth_stencil_attachment: None,
-        timestamp_writes: None,
+        timestamp_writes: stamp.as_ref().map(oag_gpu::timing::Stamp::render_writes),
         occlusion_query_set: None,
         multiview_mask: None,
     });
@@ -152,6 +153,7 @@ pub(crate) fn clear(
     label: &'static str,
     target: &wgpu::TextureView,
 ) {
+    let stamp = oag_gpu::timing::stamp(label);
     let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
         label: Some(label),
         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -164,7 +166,7 @@ pub(crate) fn clear(
             },
         })],
         depth_stencil_attachment: None,
-        timestamp_writes: None,
+        timestamp_writes: stamp.as_ref().map(oag_gpu::timing::Stamp::render_writes),
         occlusion_query_set: None,
         multiview_mask: None,
     });

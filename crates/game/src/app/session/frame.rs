@@ -254,6 +254,7 @@ impl Session {
             self.hd_bloom_cost.stalled(self.frame_index);
             self.upscale_cost.stalled(self.frame_index);
             self.upscale_presented_cost.stalled(self.frame_index);
+            self.pass_costs.stalled(self.frame_index);
             // The two wall-clock meters, on the same guard and for the same
             // reason: a 300 ms track build recorded as this frame's CPU cost
             // would sit in the `CPU` row for the two seconds a player is most

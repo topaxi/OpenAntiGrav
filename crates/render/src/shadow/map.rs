@@ -869,6 +869,7 @@ impl Map {
             }
             queue.write_buffer(&self.uniforms, UNIFORM_STRIDE * first as u64, bytes);
         }
+        let stamp = oag_gpu::timing::stamp("shadow map");
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("shadow depth map"),
             color_attachments: &[],
@@ -880,7 +881,7 @@ impl Map {
                 }),
                 stencil_ops: None,
             }),
-            timestamp_writes: None,
+            timestamp_writes: stamp.as_ref().map(oag_gpu::timing::Stamp::render_writes),
             occlusion_query_set: None,
             multiview_mask: None,
         });
@@ -982,6 +983,7 @@ impl Map {
                 bytemuck::cast_slice(&mvp.to_cols_array()),
             );
         }
+        let stamp = oag_gpu::timing::stamp("shadow map");
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("shadow map atlas"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -994,7 +996,7 @@ impl Map {
                 },
             })],
             depth_stencil_attachment: None,
-            timestamp_writes: None,
+            timestamp_writes: stamp.as_ref().map(oag_gpu::timing::Stamp::render_writes),
             occlusion_query_set: None,
             multiview_mask: None,
         });

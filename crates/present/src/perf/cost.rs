@@ -49,6 +49,8 @@
 //! made of. See `crates/present/src/drs/residual.rs`, which spells out the same
 //! contamination from the controller's side.
 
+use super::passes::PassRows;
+
 /// What the GPU spent on the passes this build actually times, in seconds.
 ///
 /// **The frame-time panel cannot answer this on its own.** `Meter` measures
@@ -60,7 +62,7 @@
 /// say what the frame-time panel alone cannot: how much of a frame is
 /// accounted for and how much is not.
 ///
-/// Four numbers rather than one because they answer different questions and a
+/// Five numbers and the per-pass rows rather than one because they answer different questions and a
 /// render scale moves them in different directions: lowering it makes the
 /// scene pass, the motion-blur chain and the HD bloom chain cheaper and gives
 /// the temporal resolve *more* to reconstruct, and the upscale chain runs
@@ -96,7 +98,23 @@ pub struct GpuCost {
     /// The half of the chain a lower render scale does not make cheaper, which
     /// is why it is the only part in [`crate::drs::Cost::fixed`].
     pub upscale_presented: Option<f32>,
+    /// Every separately-encoded pass timed under a label of its own: the glass and sea target,
+    /// the shadow passes, the probe blend, the post passes and the HUD
+    /// ([`oag_gpu::timing::stamp`]). Empty on a device that cannot be asked, and on a frame
+    /// that has not come back yet.
+    ///
+    /// **Each is a pass of its own, never inside one of the spans above**: a pass with a
+    /// timestamp pair of its own is not also inside `SCENE`'s (the scene pass is one render
+    /// pass) nor between the first and last pass of `BLOOM`, `BLUR` or `FSR3` (their chains
+    /// encode only their own passes), so subtracting these as well from the frame counts
+    /// nothing twice. They are **not** part of what the dynamic-resolution controller is fed:
+    /// [`crate::drs::Cost`] stays the five readings above, so the controller sees the numbers
+    /// it always saw and only the overlay's `OTHER` is smaller.
+    pub passes: PassRows,
 }
+
+/// Rows under this many milliseconds are left off the overlay (and kept in the frame log).
+const HIDE_BELOW_MS: f32 = 0.1;
 
 impl GpuCost {
     /// One row per reading that has come back, each labelled and in
@@ -129,6 +147,11 @@ impl GpuCost {
         }
         if let Some(upscale) = self.upscale_presented {
             rows.push(format!("FSR3 OUT {:.2} MS", upscale * 1000.0));
+        }
+        for (name, seconds) in self.passes.ordered() {
+            if seconds * 1000.0 >= HIDE_BELOW_MS {
+                rows.push(format!("{name} {:.2} MS", seconds * 1000.0));
+            }
         }
         if let Some(residual) = self.residual_ms(frame_ms) {
             rows.push(format!("OTHER {residual:.1} MS"));
@@ -175,7 +198,8 @@ impl GpuCost {
             + self.blur.unwrap_or(0.0)
             + self.bloom.unwrap_or(0.0)
             + self.upscale.unwrap_or(0.0)
-            + self.upscale_presented.unwrap_or(0.0))
+            + self.upscale_presented.unwrap_or(0.0)
+            + self.passes.total())
             * 1000.0;
         Some(frame_ms - timed_ms)
     }

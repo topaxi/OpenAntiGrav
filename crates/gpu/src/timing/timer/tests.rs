@@ -443,12 +443,7 @@ fn labelled_passes_come_back_under_their_own_frames_labels() {
         seen.sort_unstable();
         assert_eq!(
             seen,
-            [
-                (21, "glass"),
-                (21, "shadow"),
-                (22, "hud"),
-                (23, "glass"),
-            ],
+            [(21, "glass"), (21, "shadow"), (22, "hud"), (23, "glass"),],
             "{}: frame 23's `shadow` lost a pass to the full slot and must report nothing, and \
              frame 24 stamped nothing and must report nothing",
             info.name

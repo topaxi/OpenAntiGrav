@@ -189,3 +189,92 @@ fn a_frame_a_window_never_comes_back_for_is_given_up_on() {
     );
     assert!(!ahead.contains_key(&10));
 }
+
+fn reading(frame: u64, label: &'static str, seconds: f32) -> oag_gpu::timing::PassReading {
+    oag_gpu::timing::PassReading {
+        frame,
+        label,
+        seconds,
+    }
+}
+
+/// A drained set is recorded a whole frame at a time, so a label absent from a frame costs it
+/// nothing, and frames up to a stall are dropped.
+#[test]
+fn drained_pass_readings_are_recorded_a_frame_at_a_time_and_a_stall_drops_its_frames() {
+    let mut costs = perf::PassCosts::new();
+    record_passes(
+        &mut costs,
+        &[
+            reading(2, "glass", 0.500),
+            reading(4, "glass", 0.002),
+            reading(4, "hud and ui", 0.001),
+            reading(5, "glass", 0.004),
+        ],
+        3,
+    );
+    let rows = costs.rows().ordered();
+    assert_eq!(rows.len(), 2, "{rows:?}");
+    assert_eq!(rows[0].0, "GLASS");
+    assert!(
+        (rows[0].1 - 0.003).abs() < 1e-6,
+        "frame 2 is at or before the stall and frames 4 and 5 average: {rows:?}"
+    );
+    assert_eq!(rows[1].0, "HUD AND UI");
+    assert!(
+        (rows[1].1 - 0.000_5).abs() < 1e-6,
+        "frame 5 had no HUD reading and so cost the frame nothing: {rows:?}"
+    );
+}
+
+/// What the resolution controller is fed does not depend on the labelled passes, and the overlay's
+/// `OTHER` is exactly the controller's own `frame - cost` reading less them.
+///
+/// The controller learns its reserve from `frame - cost.total()` where `cost` is
+/// [`assemble`]'s; the overlay prints `GpuCost::residual_ms`. The two definitions agreeing but
+/// for the passes is what keeps "OTHER is what the controller's reserve is made of" true: a pass
+/// moved into [`assemble`] (the controller's cost) or out of the overlay's subtraction breaks it.
+#[test]
+fn the_overlays_other_is_the_controllers_reading_less_the_labelled_passes() {
+    let (scene, blur, bloom) = (0.004_f32, 0.001_f32, 0.002_f32);
+    let upscale = (0.003_f32, 0.000_5_f32);
+    let cost = assemble(scene, Some(blur), Some(bloom), Some(upscale), ALL).expect("measured");
+    let frame_ms = 16.0_f32;
+    let controllers_reading_ms = frame_ms - cost.total() * 1000.0;
+
+    let mut passes = perf::PassRows::default();
+    for (label, seconds) in [
+        ("glass", 0.000_6),
+        ("shadow map", 0.001_4),
+        ("hud and ui", 0.000_8),
+    ] {
+        passes.add(label, seconds);
+    }
+    let overlay = perf::GpuCost {
+        scene: Some(scene),
+        blur: Some(blur),
+        bloom: Some(bloom),
+        upscale: Some(upscale.0),
+        upscale_presented: Some(upscale.1),
+        passes,
+    };
+    let other_ms = overlay.residual_ms(frame_ms).expect("measured");
+    assert!(
+        (other_ms + passes.total() * 1000.0 - controllers_reading_ms).abs() < 1e-3,
+        "OTHER {other_ms} + passes {} != the controller's reading {controllers_reading_ms}",
+        passes.total() * 1000.0
+    );
+    // And with the passes gone the overlay is the controller's reading, which is what it was.
+    let without = perf::GpuCost {
+        passes: perf::PassRows::default(),
+        ..overlay
+    };
+    assert!(
+        (without.residual_ms(frame_ms).expect("measured") - controllers_reading_ms).abs() < 1e-3
+    );
+    // The cost the controller is fed is the same function of the five readings with or without.
+    assert_eq!(
+        cost,
+        assemble(scene, Some(blur), Some(bloom), Some(upscale), ALL).expect("measured")
+    );
+}

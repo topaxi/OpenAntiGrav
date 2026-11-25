@@ -15,7 +15,7 @@
 
 use crate::settings;
 use log::{debug, trace, warn};
-use oag_present::drs;
+use oag_present::{drs, perf};
 
 use crate::app::stage::Stage;
 
@@ -504,6 +504,7 @@ impl Session {
             }
             readings
         };
+        self.read_pass_stamps();
         let scene_readings = drain(&mut self.pass_timer, &self.gpu.device);
         let blur_readings = drain(&mut self.blur_timer, &self.gpu.device);
         let hd_bloom_readings = drain(&mut self.hd_bloom_timer, &self.gpu.device);
@@ -587,6 +588,18 @@ impl Session {
             );
         }
         self.feed_windows(render_profile, frame_seconds, drs_limits);
+    }
+
+    /// What the labelled passes cost, drained into the overlay's and the frame log's means.
+    ///
+    /// **Not an input to the controller**: nothing here reaches [`assemble`] or `drs::Cost`, so
+    /// the resolution controller is fed what it was before these rows existed.
+    fn read_pass_stamps(&mut self) {
+        let Some(timer) = self.pass_stamps.as_mut() else {
+            return;
+        };
+        timer.drain_labelled(&self.gpu.device, &mut self.pass_scratch);
+        record_passes(&mut self.pass_costs, &self.pass_scratch, self.stall_frame);
     }
 
     /// One scene reading into the controller, with the other rings' readings
@@ -847,6 +860,32 @@ impl Session {
             }
             _ => true,
         }
+    }
+}
+
+/// A drained set of labelled readings into `costs`, one whole frame at a time and oldest first,
+/// dropping every frame up to `stall_frame` (a load, not a cost) and any non-positive reading.
+pub(crate) fn record_passes(
+    costs: &mut perf::PassCosts,
+    readings: &[oag_gpu::timing::PassReading],
+    stall_frame: u64,
+) {
+    let mut start = 0;
+    while start < readings.len() {
+        let frame = readings[start].frame;
+        let end = readings[start..]
+            .iter()
+            .position(|reading| reading.frame != frame)
+            .map_or(readings.len(), |offset| start + offset);
+        if frame > stall_frame {
+            let frame_readings: Vec<(&'static str, f32)> = readings[start..end]
+                .iter()
+                .filter(|reading| reading.seconds > 0.0)
+                .map(|reading| (reading.label, reading.seconds))
+                .collect();
+            costs.record_frame(frame, &frame_readings);
+        }
+        start = end;
     }
 }
 
