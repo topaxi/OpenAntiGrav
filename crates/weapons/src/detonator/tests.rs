@@ -349,3 +349,33 @@ fn a_mine_stands_its_lift_above_its_lane_point_and_a_bomb_on_it() {
         "the lift is the measured 3.0, along up"
     );
 }
+
+/// A lap array that runs the ring's first half, then a branch, lays only on its own entries:
+/// the ring's second half takes nothing and the branch does, at their survey indices.
+#[test]
+fn placement_lays_into_the_lap_array_and_onto_its_branch_entries() {
+    let mut survey = lap(300, 7);
+    let branch = lap(100, 7).entries;
+    survey.branches.push(SurveyBranch {
+        split: 150,
+        merge: 0,
+        entries: branch,
+    });
+    survey.lap = (0..150u16).chain(300..400).collect();
+    let layout = layout();
+    let mut field = Field::new();
+    let mut rng = Rng::new(7);
+    for old in 0..2 {
+        place_stage(&mut field, &survey, &layout, &mut rng, old);
+    }
+    let entries: Vec<u16> = field.live_mines().iter().map(|m| m.entry).collect();
+    assert!(!entries.is_empty());
+    assert!(
+        entries.iter().all(|&e| !(150..300).contains(&e)),
+        "only the lap array's entries: {entries:?}"
+    );
+    assert!(entries.iter().any(|&e| e >= 300), "the branch takes mines");
+    for mine in field.live_mines() {
+        assert!(survey.point(mine, 3.5).is_some());
+    }
+}

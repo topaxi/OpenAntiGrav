@@ -35,3 +35,13 @@ endings.
 **Checked, applies, not wired.** Structural (strides, constants, call shape), not read line by
 line: the loaders, the spawn's body and the pool sizes are not read here. The `_q` on the spawn
 follows from its confidence: it is named from the call count alone.
+
+## The fork walk (2026-11-25, `det-mine-branch-placement`)
+
+The step `0x81214f6a` is called 12 times; selector `2` at `0x8117d058`, `3` at `0x8117d6fa` and
+`1` at `0x8117d366` and `0x8117d9c8` match HD's fork walk
+([ps3-hdfury-eu/detonator-placement.md](../ps3-hdfury-eu/detonator-placement.md#the-fork-walk)).
+The filter between them was not read line by line. **Ported**: 2048's Detonator races run the
+same survey builder, `tests::mine_branch::a_2048_forked_circuit_lays_mines_on_its_branch`
+(DLC1 `zone_3`). Confidence 65.
+

@@ -160,9 +160,8 @@ Builds a per-race array of *track entries*, one per spline section of the lap, a
   equals the start's again (`0x00065bac`-`0x00065c00`; the count starts at `1`, `0x00065ba8`).
   Allocate `count*48` (`0x00065c40`), clear it, walk again storing each cursor in the entry
   (`+0x0c..+0x18`, `0x00065cb8`-`0x00065d98`). When the step returns `1` (a route fork) the
-  block `0x0006675c`-`0x00066b38` walks the fork with selectors `1`/`2`/`3` and the tests
-  `0x000a96d8`, `0x000a5278`, `0x000a5290`; **fork handling is unread** (open: nothing is laid on an alternate path in ours; the EMP wave's fork already clears a mine put there, `detonator-emp.md`, "The fork, wired"). Confidence for a
-  single-route lap: **72**.
+  block `0x0006675c`-`0x00066b38` walks the fork with selectors `2`, `3` then `1`: read
+  2026-11-25, see [The fork walk](#the-fork-walk). Confidence for a single-route lap: **72**.
 - **Per entry** (`0x00065e64`-`0x00066078`), with `sec = entry+0x18` (the cursor's section
   pointer) whose vectors `+0x00` (position), `+0x10`, `+0x20`, `+0x30` and floats `+0x44`,
   `+0x48` are read:
@@ -202,6 +201,125 @@ collision return codes is not.
 Entry layout (48 bytes): `+0x00` u8 lane count, `+0x04` lane array (int per lane: `3` free,
 `0` blocked or a mine, `1` a bomb), `+0x08` u8 usable, `+0x0c..+0x18` the track cursor,
 `+0x20` vec4 centre.
+
+### The fork walk
+
+2026-11-25, `det-mine-branch-placement`, static. Read off `llvm-objdump -d --mattr=+altivec,+vsx` over `0x00065b38`-`0x00066c60` (both walks)
+and the helpers' own extents. Nothing here ran on the console.
+
+**The cursor and its step.** A track cursor is four words: track, span index, section index in
+the span, section pointer (sections `0x70` bytes). A span record is 32 bytes at
+`*(*(track+4)+0x10) + span*0x20`: `+0x00` section count, `+0x08` section array, `+0x0c` its
+in-link, `+0x10` its out-link. A link holds `+0x04` (non-zero: a merge), `+0x08` and `+0x0c`
+(the successors; `+0x0c` set: a split).
+
+`Track_StepCursor(cursor, &n, selector)` (`0x000a54b8`, decompiled whole) moves `n` sections and
+writes back the steps left. At the end of a span it reads the out-link:
+
+| Out-link | Selector | Result |
+| --- | --- | --- |
+| merge (`+0x04 != 0`) | not `1` | stop on the span's last section, return `2`, `n` left |
+| split (`+0x0c` set) | `0` or `1` | stop on the span's last section, return `1`, `n` left |
+| split | `2` | take `+0x08` and go on |
+| split | `3` | take `+0x0c` and go on |
+| single successor | `0`, `1`, `2` | take `+0x08` and go on (`3` would take the empty `+0x0c`; the placer never passes it there) |
+
+After the first span change the selector is reset to `0`. Return `0` with `n = 0` is a full
+step. Confidence **80**.
+
+**The walk.** Both passes step with `n = 1` and count or store a section only when `n` came back
+`0`, so a stop (`1` or `2`) stores nothing. At a split (return `1`, `0x00065bdc` counting,
+`0x00065d50` storing):
+
+1. **Primary route** (`0x00066774`-`0x000667f0` counting, `0x0006630c`-`0x000663c0` storing):
+   a copy of the cursor steps once with selector `2` onto `+0x08`, **unstored**, then with `0`,
+   storing every section, until a step returns `2` at the merge.
+2. **Alternate route** (`0x000667f4`-`0x00066af8`, `0x000663c4`-`0x00066710`): a copy of the
+   split cursor steps once with selector `3` onto `+0x0c`, **unstored**, then with `0`. Each
+   section is stored only when all three hold:
+   - `Track_FindSiblingSection` (`0x000a96d8`) finds the sibling span (the in-link's other
+     successor, else the out-link's other predecessor) and looks up the sibling's section nearest
+     this one through `0x000a8b20` (`f1 = 500.0`, TOC `0x008a7dd4`, which `0x000a8b20` only passes
+     to its own recursive call at `0x000a9448`). A miss leaves a null section pointer.
+   - `Track_SpansAreNeighbours` (`0x000a5290`) finds the sibling's span index among this span's
+     neighbour list (count `track+0x0c+4*span`, list `track+0x4c+0x10*span`).
+   - **They are clear of each other**: `|cA - cB| > hA + hB`, with `c = pos - v30*w44 +
+     v30*0.5*(w44 + w48)` and `h = |v30 * 0.5*(w44 + w48)|` per section (`sec+0x00`, `+0x30`,
+     `+0x44`, `+0x48`; the vector block `0x00066530`-`0x000666bc`, `fcmpu` at `0x000666b8`). So
+     where the alternate still overlaps the primary (near the split and the merge) it adds
+     nothing.
+3. **Past the merge** (`0x00066afc`, `0x00066714`): the main cursor takes the alternate copy's
+   place and steps with selector `1`, which passes the merge; that section is stored as usual
+   (`0x00065be0` / `0x00065d54`). The walk ends back on the start section as before.
+
+**The answers.**
+
+- **Which branch sections enter, and in what order**: the lap array runs `...before the split`,
+  the primary route without its first section, the alternate's clear sections without its first,
+  then on from the merge. Confidence **75** for the order and the dropped first sections (both
+  passes agree, read at instruction level), **65** for the alternate's filter (the clearance test
+  is read; the sibling lookup `0x000a8b20` is a grid-cached nearest-span search Ghidra truncates on
+  bad instruction data, and the neighbour list is not checked on a circuit).
+- **The per-stage budget**: unchanged. `MineCountStage` is a count; branch entries only lengthen
+  the array, which moves `chunk`, every `% total` draw, the jump blank (the next 19 entries in
+  array order, so a jump at the primary route's end blanks the alternate's head) and the start
+  zone (every entry within 150 of entry 0, alternate included). Confidence **82**, as step 2.
+- **How the selector is chosen**: it is not drawn. A fixed `2`, `3`, `1` per split, so the
+  `Libc_Rand` draw count is the same as a single route's.
+
+**Ours** (`oag_raceplay::detonator::survey`, `oag_weapons::detonator::Survey::lap`): the ring is
+the primary chain (`next[0]`), a `Course` branch the alternate (`next[1]`), so selector `2` is our
+ring and `3` our branch, taking the runtime link's `+0x08`/`+0x0c` to be the file junction's
+`next[0]`/`next[1]` in order (not checked against the loader; confidence 65). `Survey::lap` holds the array as survey indices; `place_stage`, the
+spawn's cluster run and the `--detonator-mines` snap read it, and `Placed::entry` stays a survey
+index. The sibling search is the nearest ring section on the primary path at the split, the
+neighbour test taken as always true. A merge at our ring's entry 0 (zone_3) closes the lap there;
+any other fork that wraps our spline origin would be left to the ring (none ships). Our ring still
+starts at the spline origin, not the start cursor (`detonator-mine.md`, "Placement is
+deterministic from the state"), so absolute entry numbers differ from the original's as they did.
+
+| Circuit (HD) | Ring | Alternate sections | Enter the lap | Objects on the branch, 14 stages, seed `0x5eed` |
+| --- | ---: | ---: | ---: | ---: |
+| `zone_3` | 565 | 556 | 469 | 794 of 1862 |
+| `05_ubermall` (both directions) | 796 | 210 | 82 | 159 of 1863 (156 of 1865 reversed) |
+| `15_anulpha_pass` | 855 | 291 | 198 | 278 of 1864 |
+
+Unforked circuits place bit-identically: `tests::mine_branch::an_unforked_circuit_places_as_the_ring_alone_did`
+pins Talon's Junction's 1870 objects of fourteen stages from seed `0x5eed` to the hash taken
+before the change. `a_forked_circuit_lays_mines_on_its_branch` fails without `Survey::lap`
+(nothing on any branch). Unit: `detonator::tests::placement_lays_into_the_lap_array_and_onto_its_branch_entries`.
+
+**Omega: ported.** `FUN_012a2300` carries the same fork walk: selectors `2`, `3`, `1` at
+`0x012a2613`, `0x012a2691`, `0x012a2976` (counting) and `0x012a2b92`, `0x012a2c41`, `0x012a2f69`
+(storing), the unstored first step on each route, the sibling lookup (`0x013819b0`), the
+neighbour list inlined (`+0x28` count, `+0x68` list, `0x012a27a1`-`0x012a27db`) and the clearance
+compare (`vucomiss` at `0x012a293a`, `jbe` skip). Ours runs the same builder on Omega's circuits:
+`an_omega_forked_circuit_lays_mines_on_its_branch` (`05_ubermall`, `15_anulpha_pass`; Omega's
+`zone_3` decodes to no triangles). **2048: ported.** `FUN_8117cf22` calls its step (`0x81214f6a`,
+12 calls) with selector `2` at `0x8117d058`, `3` at `0x8117d6fa` and `1` at `0x8117d366` and
+`0x8117d9c8`; the filter between them was not read line by line. Ours runs the same builder on
+2048's Detonator races: `a_2048_forked_circuit_lays_mines_on_its_branch` (HD's `zone_3` as the
+DLC1 pack ships it: the same 565-entry ring, 469 alternate entries in the lap; `zone_1` has no
+fork; 2048's own circuits were not censused).
+
+**Open: a live read.** The filter sits at 65 until a run shows it. On a forked circuit, read
+`rm+0x6de4c` (the entry count) after race start: ours is `1033` on `zone_3`, `877` on
+`05_ubermall`, `1052` on `15_anulpha_pass` (`565`, `796`, `855` ring only), possibly one more on
+the original if its walk stores the start section at both ends. One count settles the order and
+the filter together; the entries at `*(rm+0x6de50)` (48 bytes, cursor at `+0x0c`) show which
+alternate sections entered.
+
+| Address | Name | Confidence |
+| --- | --- | ---: |
+| `0x000a54b8` | `Track_StepCursor` | 80 |
+| `0x000a5278` | `Track_SpanIndex` | 85 |
+| `0x000a5290` | `Track_SpansAreNeighbours` | 65 |
+| `0x000a96d8` | `Track_FindSiblingSection` | 62 |
+
+`0x000a5278` is `(spanPtr - *(*(track+4)+0x10)) >> 5`. `0x000a8b20` stays unnamed: its cache-miss
+path (`0x000a8ddc`-`0x000a8fb4`) keeps the three spans nearest a 64-unit grid cell (`25000.0`
+offset, `1/64` scale at `0x008a7dc0`/`0x008a7dcc`), which reads as a nearest-section search, but
+Ghidra cuts it short and the read is partial (confidence 50).
 
 ### 2. How many pattern groups (`0x000655e8`-`0x000656c4`)
 
@@ -324,8 +442,7 @@ values, the 200 mine pool and the "target total" meaning of the stage counts. `L
 sequence is the PS3's and is not reproduced: the draws go through the seeded `Rng`, in the same
 order (one draw per group attempt, two per top-up or bomb attempt).
 
-**Unread, each a named gap**: what the collision return codes `0`/`2`/`4`/`5` mean; the fork
-walk; `sec+0x40` and `sec+0x60`; what the mine init and bomb vcall do with the matrix's fixed
+**Unread, each a named gap**: what the collision return codes `0`/`2`/`4`/`5` mean; `sec+0x40` and `sec+0x60`; what the mine init and bomb vcall do with the matrix's fixed
 rows, `v10*100` and those two values; `angleUp`/`angleRight` (parsed, never passed to
 `SpawnObject`; another reader of the group array was not searched for, confidence 70 that they
 are unused). `0x0012ae38`, `0x0012ae10`, mine slot `+0x3c`, how a mine or bomb leaves its pool

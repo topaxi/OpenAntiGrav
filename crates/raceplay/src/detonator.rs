@@ -68,7 +68,8 @@ const LIFT_TOLERANCE: f32 = 1.5;
 const USABLE_WIDTH: f32 = 0.9;
 
 /// The survey of the lap, one entry per control point in driving order, and of each alternate
-/// path `course` branches onto.
+/// path `course` branches onto, with the lap array placement lays into
+/// (`docs/ghidra/functions/ps3-hdfury-eu/detonator-placement.md`, "The fork walk").
 #[must_use]
 pub(crate) fn survey(
     spline: &Spline,
@@ -78,42 +79,135 @@ pub(crate) fn survey(
     values: &GamePlayValues,
 ) -> Survey {
     let lane_width = values.distance_offset_between_mines;
-    let mut entries = measure(spline, order, collision, lane_width);
-    blank_jumps(&mut entries, values.num_steps_to_ignore_after_jump);
-    if let Some(first) = entries.first().map(|e| e.position) {
-        for entry in &mut entries {
+    let mut all = measure(spline, order, collision, lane_width);
+    let ring = all.len();
+    let mut branches = Vec::new();
+    let mut forks = Vec::new();
+    for branch in course.into_iter().flat_map(Course::branches) {
+        let along: Vec<u32> = (0..spline.len() as u32)
+            .filter(|&index| spline.path_of(index as usize) == Some(branch.path))
+            .collect();
+        let measured = measure(spline, &along, collision, lane_width);
+        let at = |ring_index: usize| {
+            u16::try_from(ring_index / Spline::STEPS_PER_SEGMENT)
+                .ok()
+                .filter(|&e| usize::from(e) < ring)
+        };
+        let (Some(split), Some(merge)) = (at(branch.split), at(branch.merge)) else {
+            continue;
+        };
+        if measured.is_empty() {
+            continue;
+        }
+        let first = all.len();
+        let primary = all[usize::from(split)].path;
+        let kept = separated(&all[..ring], primary, &measured);
+        forks.push(Fork {
+            split: usize::from(split),
+            merge: usize::from(merge),
+            alternate: kept.into_iter().map(|k| first + k).collect(),
+        });
+        branches.push((split, merge, measured.len()));
+        all.extend(measured);
+    }
+    let lap = lap_order(ring, &mut forks);
+    blank_jumps(&mut all, &lap, values.num_steps_to_ignore_after_jump);
+    if let Some(first) = all.first().map(|e| e.position) {
+        for entry in &mut all {
             if (entry.position - first).length() <= START_ZONE {
                 entry.entry.usable = false;
             }
         }
     }
-    let ring = entries.len();
-    let branches = course
+    let mut entries = all.into_iter().map(|e| e.entry);
+    let ring_entries: Vec<Entry> = entries.by_ref().take(ring).collect();
+    let branches = branches
         .into_iter()
-        .flat_map(Course::branches)
-        .filter_map(|branch| {
-            let along: Vec<u32> = (0..spline.len() as u32)
-                .filter(|&index| spline.path_of(index as usize) == Some(branch.path))
-                .collect();
-            let mut measured = measure(spline, &along, collision, lane_width);
-            blank_jumps(&mut measured, values.num_steps_to_ignore_after_jump);
-            let at = |ring_index: usize| {
-                u16::try_from(ring_index / Spline::STEPS_PER_SEGMENT)
-                    .ok()
-                    .filter(|&e| usize::from(e) < ring)
-            };
-            Some(SurveyBranch {
-                split: at(branch.split)?,
-                merge: at(branch.merge)?,
-                entries: measured.into_iter().map(|e| e.entry).collect(),
-            })
+        .map(|(split, merge, len)| SurveyBranch {
+            split,
+            merge,
+            entries: entries.by_ref().take(len).collect(),
         })
-        .filter(|branch| !branch.entries.is_empty())
         .collect();
+    let lap = if lap.iter().copied().eq(0..ring) {
+        Vec::new()
+    } else {
+        lap.into_iter()
+            .filter_map(|index| u16::try_from(index).ok())
+            .collect()
+    };
     Survey {
-        entries: entries.into_iter().map(|e| e.entry).collect(),
+        entries: ring_entries,
         branches,
+        lap,
     }
+}
+
+/// One fork as the lap array takes it: the ring entries where the routes part and meet again,
+/// and the survey indices of the alternate's sections that enter.
+struct Fork {
+    split: usize,
+    merge: usize,
+    alternate: Vec<usize>,
+}
+
+/// The lap array in the original's walk order. At each fork the walk steps onto the primary
+/// route with selector `2` and stores every section after the first up to the merge, steps
+/// onto the alternate with selector `3` and stores its separated sections after the first,
+/// then passes the merge with selector `1`; the first section past the merge is stored as
+/// usual (`0x0006675c`-`0x00066b38` counting, `0x00066300`-`0x00066758` storing). A merge at
+/// the ring's first entry closes the lap there; a fork that otherwise wraps the spline's origin
+/// is left to the ring.
+fn lap_order(ring: usize, forks: &mut [Fork]) -> Vec<usize> {
+    for fork in forks.iter_mut() {
+        if fork.merge == 0 {
+            fork.merge = ring;
+        }
+    }
+    forks.sort_by_key(|f| f.split);
+    let mut lap = Vec::with_capacity(ring);
+    let mut next = 0usize;
+    for fork in forks.iter() {
+        if fork.split < next || fork.split >= fork.merge || fork.merge > ring {
+            continue;
+        }
+        lap.extend(next..fork.split);
+        lap.extend(fork.split + 1..fork.merge);
+        lap.extend(fork.alternate.iter().copied());
+        next = fork.merge;
+    }
+    lap.extend(next..ring);
+    lap
+}
+
+/// Which of an alternate route's sections enter the lap array: from the second on, those whose
+/// lane centre lies further from the nearest section of the primary route than the two
+/// sections' half-widths together, so where the routes still overlap nothing is stored twice.
+///
+/// `0x00066430`-`0x000666c0`: `0x000a96d8` finds the section of the sibling span nearest the
+/// alternate's, `0x000a5290` checks the two spans are listed as neighbours (taken as always
+/// here), and the vector block compares `|cA - cB|` against `hA + hB`, with
+/// `c = pos - v30 * w44 + v30 * 0.5 * (w44 + w48)` and `h = |v30 * 0.5 * (w44 + w48)|`.
+fn separated(ring: &[Measured], primary: Option<u16>, alternate: &[Measured]) -> Vec<usize> {
+    let sibling: Vec<&Measured> = ring.iter().filter(|m| m.path == primary).collect();
+    alternate
+        .iter()
+        .enumerate()
+        .skip(1)
+        .filter(|(_, b)| {
+            sibling
+                .iter()
+                .min_by(|x, y| {
+                    let dx = (x.position - b.position).length();
+                    let dy = (y.position - b.position).length();
+                    dx.total_cmp(&dy)
+                })
+                .is_some_and(|a| {
+                    (a.lane_centre - b.lane_centre).length() > a.half_span + b.half_span
+                })
+        })
+        .map(|(k, _)| k)
+        .collect()
 }
 
 /// One entry per control point of `order`, which walks whole paths.
@@ -140,21 +234,36 @@ fn measure(
         let Some(sample) = spline.sample(index as usize) else {
             continue;
         };
-        entries.push(entry(sample, collision, lane_width));
+        entries.push(entry(sample, this, collision, lane_width));
     }
     entries
 }
 
-/// An entry and the section position it was measured at.
+/// An entry and the section it was measured at.
 struct Measured {
     entry: Entry,
     position: Vec3,
+    /// The path the section lies on.
+    path: Option<u16>,
+    /// The section's centre between its spline widths, unclamped by any probe.
+    lane_centre: Vec3,
+    /// Half the section's spline width along its lateral axis as the track authors it.
+    half_span: f32,
     /// The centre probe found no ground: this entry starts a jump gap.
     jump: bool,
 }
 
-fn entry(sample: &oag_vex::track::Sample, collision: &CollisionWorld, lane_width: f32) -> Measured {
+fn entry(
+    sample: &oag_vex::track::Sample,
+    path: Option<u16>,
+    collision: &CollisionWorld,
+    lane_width: f32,
+) -> Measured {
     let position = Vec3::from_array(sample.pos);
+    let raw_lateral = Vec3::from_array(sample.lateral);
+    let half = 0.5 * (sample.half_width_left + sample.half_width_right);
+    let lane_centre = position - raw_lateral * sample.half_width_left + raw_lateral * half;
+    let half_span = (raw_lateral * half).length();
     let up = -Vec3::from_array(sample.down).normalize_or_zero();
     let lateral = Vec3::from_array(sample.lateral).normalize_or_zero();
     let start = position + up;
@@ -204,15 +313,19 @@ fn entry(sample: &oag_vex::track::Sample, collision: &CollisionWorld, lane_width
             up,
         },
         position,
+        path,
+        lane_centre,
+        half_span,
         jump: usable && !ground(centre),
     }
 }
 
-/// A centre with no ground under it blanks that entry and the ones after it.
-fn blank_jumps(entries: &mut [Measured], steps: i32) {
+/// A centre with no ground under it blanks that entry and the ones after it in the lap array.
+fn blank_jumps(entries: &mut [Measured], lap: &[usize], steps: i32) {
     let span = usize::try_from(steps.max(1)).unwrap_or(1);
     let mut blank_until = 0usize;
-    for (index, measured) in entries.iter_mut().enumerate() {
+    for (index, &at) in lap.iter().enumerate() {
+        let measured = &mut entries[at];
         if measured.jump {
             blank_until = blank_until.max(index + span);
         }
@@ -240,12 +353,12 @@ impl crate::sim::RaceSim {
         let mine = self.world.detonator.live_mines().get(index)?;
         let lane = detonator.layout.values.distance_offset_between_mines;
         let (at, up) = detonator.survey.mine_point(mine, lane)?;
-        let entries = &detonator.survey.entries;
+        let survey = &detonator.survey;
         let here = usize::from(mine.entry);
-        let (from, to) = if here + 1 < entries.len() {
-            (entries[here].centre, entries[here + 1].centre)
-        } else {
-            (entries[here - 1].centre, entries[here].centre)
+        let centre = |index: usize| survey.entry(index).map(|e| e.centre);
+        let (from, to) = match (centre(here), centre(here + 1)) {
+            (Some(from), Some(to)) => (from, to),
+            _ => (centre(here.checked_sub(1)?)?, centre(here)?),
         };
         let forward = (to - from).normalize_or_zero();
         Some((at - forward * distance, forward, up))
@@ -393,7 +506,8 @@ impl crate::sim::RaceSim {
         let mut lanes: Vec<Option<(u16, i8)>> = Vec::with_capacity(positions.len());
         for &position in positions {
             let mut best: Option<(f32, Placed)> = None;
-            for (index, entry) in detonator.survey.entries.iter().enumerate() {
+            let survey = &detonator.survey;
+            for (index, entry) in (0..survey.lap_len()).filter_map(|at| survey.lap_entry(at)) {
                 if !entry.usable {
                     continue;
                 }
