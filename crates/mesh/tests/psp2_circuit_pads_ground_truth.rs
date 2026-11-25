@@ -73,7 +73,9 @@ fn check(
     // program instead of the Zone surface (`slots::ZONE_PLAIN`).
     let plain = whole
         .indices
-        .chunks_exact(3)
+        .as_chunks::<3>()
+        .0
+        .iter()
         .filter(|t| {
             t.iter()
                 .all(|&i| whole.vertices[i as usize].slots & slots::ZONE_PLAIN != 0)
