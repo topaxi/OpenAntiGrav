@@ -166,11 +166,19 @@ impl Projectiles {
                     ))
                 })
             } else if kind == Weapon::Plasma {
+                // Under the parallel turn the bolt moves this tick on the velocity the last
+                // tick wrote, so the ramp is read at the age after this tick's step: HD's
+                // `Plasma_Update` adds `dt` to the age before it reads the speed
+                // (`docs/ghidra/functions/ps3-hdfury-eu/plasma.md`, "On Moa Therma's bank").
+                let ramp_age = match floor_arms {
+                    FloorArms::ParallelToFloor => age + dt,
+                    FloorArms::SteerToRidePoint => age,
+                };
                 plasma.and_then(|stats| {
                     Some(missile::speed_kmh(
                         projectile.launch_speed_kmh,
                         stats.speed_for_named(class)?,
-                        age,
+                        ramp_age,
                     ))
                 })
             } else if kind == Weapon::Rocket && projectile.launch_speed_kmh > 0.0 {
