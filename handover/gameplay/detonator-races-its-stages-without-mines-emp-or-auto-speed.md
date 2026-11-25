@@ -412,8 +412,9 @@ original frame to compare. The detail is below.
 - **EMP: wired** (`det-emp-wire`, `detonator-emp.md` "Wired"). ~~The wave's reach and speed, the kill's
   effect and sound~~: read live and drawn on HD (`det-emp-look-re`, 2026-11-24, `detonator-emp.md`
   "What HD draws for a fired EMP": one survey entry a tick for `extent` seconds, `WO_QUAKE_DETONATOR`
-  on the front with a `(0, 5, 10)` light; the stepper is the Repulser's, copied). Open: ours leaves
-  faint particle rows on the road the original does not show (same page, "The frames"); the fork
+  on the front with a `(0, 5, 10)` light; the stepper is the Repulser's, copied). The particle rows
+  were `SPARKS` without their noise force, fixed (same page, "The grey rows were sparks that
+  never moved"); 13 other HD emitters author that force, unlisted. Open: the fork
   (`REP2`) and `~MAGPULSETRAVEL` unwired; 2048 and Omega checked, applies, not wired. Still open:
   whether the wave hurts the player,
   `EmpBarEffect` (an `<ImageModel>` the HUD layout reader does not model; the gauge is exposed),

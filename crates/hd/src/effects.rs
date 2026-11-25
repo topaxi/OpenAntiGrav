@@ -146,16 +146,25 @@ pub const EFFECTS: &Effects = &{
     effects.extents = EXTENTS;
     effects.far_bars = FAR_BARS;
     effects.templates = TEMPLATES;
+    effects.turbulence = TURBULENCE;
     effects
 };
 
+/// The effects whose particles feel their noise force: the Detonator EMP's wave, whose
+/// `SPARKS` author no speed and move by it alone
+/// (`docs/ghidra/functions/ps3-hdfury-eu/detonator-emp.md`, "The grey rows were sparks that
+/// never moved").
+const TURBULENCE: &[&str] = &[engine_effects::DETONATOR_EMP_EFFECT];
+
 /// The effects whose class-6 particles draw as HD's view-space bar: the engine's two
-/// trail hits, and the Plasma's five, whose lightning is that class. Paired against the
+/// trail hits, the Detonator EMP's sparks (`docs/ghidra/functions/ps3-hdfury-eu/detonator-emp.md`,
+/// "The grey rows were sparks that never moved"), and the Plasma's five, whose lightning is that class. Paired against the
 /// original phase by phase: with the bar the launch's and the blast's white blobs are
 /// lightning (`docs/ghidra/functions/ps3-hdfury-eu/plasma.md`, "The pairs").
 const FAR_BARS: &[&str] = &[
     engine_effects::TRAIL_HITSHIP_EFFECT,
     engine_effects::TRAIL_HITSHIP_RED_EFFECT,
+    engine_effects::DETONATOR_EMP_EFFECT,
     engine_effects::PLASMA_FLARE_EFFECT,
     engine_effects::PLASMA_CHARGING_EFFECT,
     engine_effects::PLASMA_LAUNCH_EFFECT,

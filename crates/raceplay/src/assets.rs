@@ -124,6 +124,9 @@ pub(super) fn listed_particle_effect(
             templates: effects.templates.contains(&name),
         },
     )?;
+    if effects.turbulence.contains(&name) {
+        effect.with_turbulence();
+    }
     effect.with_colour_law(match walk {
         oag_title::ColourWalk::Forward => psys::ColourLaw::Forward,
         oag_title::ColourWalk::Reversed => psys::ColourLaw::Reversed,

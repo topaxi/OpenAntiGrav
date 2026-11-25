@@ -1223,3 +1223,4 @@
 0x0013b5e8	function	EMP_ForkAtJunction	60	detonator-emp.md
 0x0013b220	function	EMP_Construct	80	detonator-emp.md
 0x0013ae68	function	EMP_ResetWave	70	detonator-emp.md
+0x0027e118	function	Modifier_NoiseForce	72	detonator-emp.md

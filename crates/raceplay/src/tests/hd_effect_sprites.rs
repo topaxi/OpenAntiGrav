@@ -241,8 +241,8 @@ fn trail_hit_burst(listed: bool) -> Option<oag_fx::psys::Effect> {
 }
 
 /// HD, 2048 and Omega list the trail-hit burst for HD's class-6 bar draw, and HD the
-/// Plasma's five effects, whose lightning is that class; a per-effect choice, not a
-/// title-wide one.
+/// EMP's sparks and the Plasma's five effects, whose lightning is that class; a per-effect
+/// choice, not a title-wide one.
 #[test]
 fn hd_2048_and_omega_list_the_trail_hit_burst_for_the_far_bar_draw_and_hd_its_plasma() {
     use oag_title::engine_effects as n;
@@ -259,6 +259,7 @@ fn hd_2048_and_omega_list_the_trail_hit_burst_for_the_far_bar_draw_and_hd_its_pl
         [
             n::TRAIL_HITSHIP_EFFECT,
             n::TRAIL_HITSHIP_RED_EFFECT,
+            n::DETONATOR_EMP_EFFECT,
             n::PLASMA_FLARE_EFFECT,
             n::PLASMA_CHARGING_EFFECT,
             n::PLASMA_LAUNCH_EFFECT,
@@ -304,4 +305,50 @@ fn the_trail_hit_burst_loads_as_far_bars_when_listed_and_procedural_when_not() {
             .iter()
             .all(|e| e.streak == StreakDraw::Procedural && e.sprite.is_none())
     );
+}
+
+/// The EMP's `SPARKS` author no speed and move only by their noise force (modifier type
+/// `0x11`): HD lists the effect, so it loads with the force on and the sparks drawn as HD's
+/// bar; without the list the force stays off (`ps3-hdfury-eu/detonator-emp.md`, "The grey
+/// rows were sparks that never moved").
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn the_emp_sparks_feel_their_noise_force_only_where_the_title_lists_it() {
+    use oag_fx::psys::streak::StreakDraw;
+    let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let mut archives = oag_hd::open(&image.display().to_string()).expect("HD opens");
+    let title: &Title = oag_hd::TITLE;
+    let name = oag_title::engine_effects::DETONATOR_EMP_EFFECT;
+    let dir = title.race.effect_dir_for("track");
+    let load = |archives: &mut oag_assets::Archives, effects: &oag_title::Effects| {
+        crate::assets::listed_particle_effect(
+            archives,
+            dir,
+            effects,
+            name,
+            false,
+            title.effects.colour_walk,
+        )
+        .expect("the effect loads")
+        .0
+    };
+    let listed = load(&mut archives, &title.effects);
+    assert_eq!(oag_hd::TITLE.effects.turbulence, [name]);
+    let sparks = listed
+        .emitters
+        .iter()
+        .find(|e| e.name == "SPARKS")
+        .expect("the wave carries SPARKS");
+    assert_eq!(sparks.speed_per_tick, (0.0, 0.0));
+    let force = sparks.turbulence.expect("SPARKS authors modifier 0x11");
+    assert!(force.on);
+    assert_eq!(force.frequency, [0.3, 0.1, 0.3]);
+    assert_eq!(force.amplitude, [0.1, 0.1, 0.1]);
+    assert!(force.timed && !force.on_position);
+    assert_eq!(sparks.streak, StreakDraw::FarBar { aspect: 1.0 });
+    let mut unlisted_effects = title.effects.clone();
+    unlisted_effects.turbulence = &[];
+    assert!(!load(&mut archives, &unlisted_effects).has_turbulence());
 }

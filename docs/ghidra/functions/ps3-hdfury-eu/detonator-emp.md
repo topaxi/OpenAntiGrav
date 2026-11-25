@@ -399,18 +399,60 @@ mine debris falling, score `1050`. Ours, the same frame counts after an L1 press
 `--detonator-emp-charge 12`: the same blue wall and cyan wash at 8; at 24, 45 and 67 the wall
 runs on and the mines behind it go. The wave itself agrees per frame: the original's front covered
 about 143 units in its first 24 frames (`(466.3, -30.4, -67.2)` to `(570.8, -17.3, 29.7)`), ours
-24 survey entries of about 6 units. The gap between the craft and the wave differs: the emulator
-ran at ~35 fps, so its craft covered more road per frame, and ours fired 28 ticks after GO, still
-on the auto-speed ramp. **What differs:** ours leaves rows of soft grey half-domes on the road
-along the wave's path, one row per tick; the original's road between the craft and the wave is
-clean at the same frame count. Not explained: the root emitter loops (`0x02500099`, bit `0x1`) and
-is world-space (no `0x2`) with a 50-tick life, so the file itself leaves particles behind; the
-other four world-space emitters are `0x84104205`, `0x8010020d`, `0x86000005`, `0x80000001`; the
-extent spread is not the cause (switched off, the frame is the same). Whether the shared particle
-player does the same for the Quake's wave (same root flags) was not checked: no Quake frame was taken.
+24 survey entries of about 6 units. Equal frame counts are equal game time: the poll's wave age
+and race clock step `1/60` a frame (`0.0167` after the first), however slowly the emulator ran in
+wall time. The gap between the craft and the wave differs because ours fired 28 ticks after GO,
+still on the auto-speed ramp. **What differed:** ours left rows of soft grey half-domes on the road
+along the wave's path; the original's road behind the wave is clean. Found 2026-11-25, next
+section.
 
 Before this section, main drew nothing for the wave (`EmpLaunch` played no effect) and swept a
 chosen `40 * extent` entries over `wave_time`.
+
+## The grey rows were sparks that never moved (2026-11-25)
+
+**Cause (confidence 80).** `SPARKS` (`0x80000001`: looping, world-space, class 6) authors speed
+`(0, 0)`, 8 particles a tick, a 137-tick life and one modifier, type `0x11`. That modifier is a
+Perlin-noise force on the velocity ([particle-noise-force.md](../psp-pulse-usa/particle-noise-force.md),
+`Modifier_NoiseForce`); it is the only thing that moves these sparks. Our player applied drag and
+the weather box and skipped every other modifier type, so each spark sat where it was born for
+137 ticks, drawn as a zero-length streak: a row of grey half-domes per tick along the path.
+
+How it was found: one render per emitter muted, then one per emitter kept alone (a scratch
+switch, not committed), road region of the 24-frame shot, mean grey: all muted `13.5`, root
+`WO_QUAKE_DETONATOR` alone `22.0`, `SPARKS` alone `17.3`, the rest `13.3` to `13.6`. The rows are
+`SPARKS`'; the root adds the soft wash under them. Then `pob` dumps of the record's flags and
+modifier list (`kind 17`, params `0.3, 0.1, 0.3, 1.0, 0.1, 0.1, 0.1, 0, 0`).
+
+**HD has the same law.** `0x0027e118` (`Modifier_NoiseForce`, 72: Ghidra cuts the body at
+`0x0027e193`, `llvm-objdump` reads on) loads the same two offset vectors through its TOC
+(`0x008b28f0` to `0x0079b490`: `135.13, -123.45, 12.39` and `3931.49, 11241.24, -141.89`), takes
+the doubled points (`fadds x, x, x`) before the timed branch, and calls the noise (`0x0027dbc0`)
+six times in pairs. Omega (`eboot.bin` file `0x800db0`) and 2048 (`eboot.elf` file `0x29b47c`) carry the same
+constants once each: checked, applies, not wired (neither title's EMP wave is wired, see "2048 and
+Omega"); their functions are unread beyond the constants. Not live: no capture reads a spark's velocity.
+
+**Wired.** `oag_fx::psys::turbulence` (the law, Perlin's `noise3` on a seeded table, the
+particle system's own seconds clock) applies it for an effect a title lists:
+`oag_title::Effects::turbulence`, HD `[WO_QUAKE_DETONATOR]`. The other 13 HD emitters that author
+it (census on the Pulse page: the mine and bomb explosions, the trail hits, the rocket's trail,
+`WO_PLASMA_FLASH` and others) are not listed: each changes a picture a pair covers and is a
+decision against its own capture. The EMP's sparks also draw as HD's mode-5 bar
+(`Effects::far_bars`, [engine-trail.md](engine-trail.md), "The class-6 draw law"): with their
+velocity they are streaks, and against the procedural profile's soft blotches the bar's thin
+streaks are nearer the original's white-blue spikes at the front.
+
+**Frames** (scratch, read by eye): at 45 and 67 frames the road behind the wave is clean, as in
+the original; at 24 a few streaks remain between the craft and the front, which ours sees from
+further back than the original does (the craft gap above). The front's size and brightness are
+not compared at 24 to 67 for the same reason: the original's craft is right behind the wall, ours
+is far back. At 8 frames both are the same blue wall across the road. Still differs: the
+original's spikes are denser at the front and bluer; ours are fewer and whiter. Not chased.
+
+Tests: `oag-fx` `psys::turbulence::tests` (a zero-speed emitter drifts only with the force on: red
+without the integrate hook) and `oag-raceplay`
+`hd_effect_sprites::the_emp_sparks_feel_their_noise_force_only_where_the_title_lists_it` (disc).
+Pairs: `pad` 8.17 to 8.17, `mines-ahead` 14.65 to 14.65.
 
 ## Wired: the look (2026-11-24)
 
@@ -479,6 +521,7 @@ Regression pairs, re-rendered: `pad` 8.17 (8.17 before), `mines-ahead` 14.65 (14
 | `0x0013b5e8` | `EMP_ForkAtJunction` | 60 |
 | `0x0013b220` | `EMP_Construct` | 80 |
 | `0x0013ae68` | `EMP_ResetWave` | 70 |
+| `0x0027e118` | `Modifier_NoiseForce` | 72 |
 
 `EMP_SweepSections` rises from 62: its caller is read (`EMP_UpdateWave` and `EMP_Launch`'s tail
 call) and live it steps one point a frame. `EMP_ForkAtJunction` is named for its Repulser twin and

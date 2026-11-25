@@ -1535,3 +1535,7 @@
 0x088b528c	function	MenuWidget_StepCursor	85	music-list.md
 0x08ab0628	data	g_game_paused	85	music-list.md
 0x088a9ba4	function	ListWidget_ShadeArrows	85	music-list.md
+# 2026-11-25, det-emp-look-re: modifier type 0x11, the particle noise force, and Perlin noise3 (particle-noise-force.md).
+0x088fab50	function	Modifier_NoiseForce	80	particle-noise-force.md
+0x088f2be4	function	Perlin_Noise3	88	particle-noise-force.md
+0x088f2604	function	Perlin_InitTables	85	particle-noise-force.md
