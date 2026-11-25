@@ -664,7 +664,9 @@ mod tests {
         // screen prints, padded.
         // +32: `Field::emp` and `Field::ramp`, Detonator's EMP charge, gauge, cue latches and
         // wave, and the auto-speed ramp.
-        const LIMIT: usize = 23_368;
+        // +8: `Wave::{forked, fork}`, the EMP wave's second front (a branch, a ring flag and an
+        // entry), padded.
+        const LIMIT: usize = 23_376;
         let size = std::mem::size_of::<World>();
         assert!(
             size <= LIMIT,
