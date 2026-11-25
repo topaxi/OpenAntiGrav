@@ -30,6 +30,24 @@ fn only_hd_2048_and_omega_run_the_near_law() {
     }
 }
 
+/// Split screen: the law's eye is the view being drawn, not the player's.
+#[test]
+fn each_split_view_gives_the_law_its_own_eye() {
+    let mut race = race_with_a_grid();
+    for _ in 0..30 {
+        race.tick(&oag_gameplay::PlayerInputs::none());
+    }
+    let eye = |race: &Race| race.near_cull().near.expect("an eye").eye;
+    let own = eye(&race);
+    assert_eq!(race.set_viewport_count(4), 4);
+    race.view.set_viewpoint(&race.core, 2);
+    let other = eye(&race);
+    assert_eq!(other, race.view.camera_position(&race.core));
+    assert!((other - own).length() > 0.1, "{other} against {own}");
+    race.view.reset_viewpoint();
+    assert_eq!(eye(&race), own);
+}
+
 fn race_on(image: &str) -> Option<Race> {
     let image = oag_testdata::exact(image)?;
     let loaded = crate::load(&crate::Options {
