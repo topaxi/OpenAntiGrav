@@ -210,11 +210,63 @@ Row 1 decides how much of the `mines-ahead` and `cannon-volley` gap is real: re-
   `electric_visualiser.rcsmodel` in `data00` under both folders builds with the ring bound
   (`both_omega_visualiser_models_bind_the_electricity_program`). `oag_omega::race::DETONATOR_OBJECTS` names HD's entry.
   Frame: ours on Omega's Tech De Ra, Detonator, a laid mine with its violet ring.
-- **2048: checked, applies, not wired.** 2048 has the Detonator mode (mode `0xe`, `vita-2048-eu-v104/detonator-hull.md`) and
-  ships the same model and material, but the material is GXP and **its pixel program is not HD's listing**: the USSE
-  program (`vita-usse.py disasm <data.psarc:/materials/electricity> 1`, 48 primary instructions) carries three texture
-  fetches where Omega's GCN has five, so the taps are packed differently. Not read to the end, so
-  `DetonatorObjects::mine_visualiser` stays `None` there and the loader says so.
+- **2048: ported** (2026-11-25, `det-visualiser-2048`). The ring is drawn by 2048's own USSE program on its
+  Detonator mines, through the same `oag_mesh::mesh::rcs::psp2` (`electricity`) plan as Omega's; HD and Omega unchanged.
+  **The program, read** (`vita-usse.py disasm <data.psarc:Weapons/Materials/electricity> 1`, fragment program #1, 48
+  primary words; `vita-gxp.py dump` for its interface). It has **five** fetches, not three: the fragment input records
+  name two **prefetched** texels of `Bass_Treble_Hits` (resource 2), at interpolant 2 (`pa4`, two words of `f16`) and
+  interpolant 3 (`pa8..pa11`, four words of `f32`), so only three `smp` words are in the code. Uniforms are `sa` words by
+  their `resource` (`time` `sa0`, `Tempo` `sa1`, `MasterVolume` `sa2`, `PitchOffset` `sa3`, `PitchVolume` `sa4`,
+  `ElectricityColour` `sa6`, `FacingPower` `sa8`, `fogColour` `sa10`); the literals and the dependent samplers sit in
+  container 19, whose base is `sa12`: literal records 10, 11, 12 are `sa22` (`f16` 0.5), `sa23` (`f32` 0.3) and `sa24`
+  (`f16` 2.0); the dependent-sampler table (`+0x84`, four records a sampler, `resource * 4 + k` low, `sa` offset high) puts
+  `Electricity` (0) at `sa14` and `Pitch` (1) at `sa18`. On 2,577 of 2,577 fragment programs of `data.psarc`'s materials that
+  carry the table, every record names a declared sampler and every `smp` reads a word it lists. Word by word:
+
+  ```text
+   3  smp2d  pa8 = Pitch(uv1.x, PitchOffset)           ; 1-2: pa8 = pa12 (uv1.x), pa9 = sa3
+   4  mul.f16 pa4.x = n0.r * n0.r                       ; the bass tap, squared
+   9-16  N = normalize(interp 1.xyz), V = normalize(interp 0.xyz)
+  17-21  q = exp2(log2|N.V| * FacingPower)              ; pa8.z
+  22  mul.f16 = pit.r * pit.r                           ; the pitch tap, squared
+  24  add.f32 pa6 = time + uv1.y
+  25-26  s = n1.a + pa6 + n0.r^2                        ; n1 = pa11, the f32 texel's alpha, unsquared
+  27  pa13 = Tempo s
+  28  smp2d.f32 pa0..3 = Electricity(uv1.x, Tempo s)    ; its alpha is pa3
+  30-31  d = uvd.a - n0 - n1
+  32-33  m = (pit^2 PitchVolume + d) MasterVolume
+  34  mad.f32 pa0 = m * sa23 (0.3) + pa6                ; uv1.y + time + 0.3 m
+  35  add.f32 pa13 = -time + pa0                        ; uv1.y + 0.3 m
+  36  smp2d.f16 pa0 = Electricity(uv1.x, uv1.y + 0.3 m)
+  38  mul.f16 c = rgb * rgb                             ; the colour tap, squared
+  39-40  c *= VertexColour1.w; pa4 = 2 E c              ; sa12 = 2 E, sa6 = 2 (1 - E) (secondary)
+  41-44  over = c - 0.5 < 0 ? 2 E c : 1 - 2 (1 - E)(1 - c)
+  45-46  rgb = fog + fogvis (over q - fog)              ; the scene's own fog replaces this
+  47  alpha = VertexColour1.w q
+  ```
+
+  **HD's law instruction for instruction, with the three colour-bearing taps squared in code** (the bass tap's red, the
+  pitch tap's red, the colour tap's rgb; the two alpha taps are not), where HD leaves the decode to its units' gamma
+  nibbles. The vertex program (#0, 35 words) hands over interpolant 0 = `(eye - position, VertexColour1.w)`, 1 =
+  `(N, fog visibility)`, 2 = `Uv1_Uv2.zw` minus `(0, BassHit)`, 3 = `Uv3.xy` minus `(0, TrebleHit)`, 4 = `Uv1_Uv2.xy`:
+  HD's routing. The other five fragment programs of a file (#2, #4, #9, #11, #13) differ only in register allocation and
+  an `f16` normalize. Wired: `oag_rcs::gxp::electricity` reads the taps by sampler table, the shift by data flow (the
+  colour tap's `v` is an `add` of `-time` to an `f32` `mad` of a literal, whose addend is an `add` of `time`) and the
+  squares; the second glow-table entry's scale carries the squares to `shade.wesl` (mode 25), which squares the bass and
+  pitch taps, the colour tap's square being 2048's own `decode`. The Vita model routes `VertexColour1` through its own
+  array (`vita_vertex_colour1`). **Confidence 80** (read end to end; no live Vita read of the ring). Census:
+  `electricity.rcsmaterial` under `data/Weapons/` and `data/Weapons2048/` in `data.psarc`, `data1.psarc` and `data2.psarc`,
+  EU and USA: twelve files, 72 fragment programs, every one read with the shift 0.3 and the squares
+  (`gxp_electricity_ground_truth`); `electric_visualiser.rcsmodel` ships in the base `data.psarc` alone (both folders) and
+  builds with the ring bound, its declaration carrying every attribute the vertex programs read (`position`, `normal`,
+  `VertexColour1`, `Uv3`, `Uv1_Uv2`; `both_2048_visualiser_models_bind_the_electricity_program`). `oag_2048::race::DETONATOR_OBJECTS`
+  names HD's entry. Frame: ours on Altima, Detonator, three mines laid ahead (`--detonator-mines`), tick 320: a faint
+  pale lavender ring, two thin concentric bands round each mine, absent with the title data reverted. Against HD's (a
+  ragged violet band at the disc's rim) and Omega's (small saturated violet circles on its red Zone grade) it is paler and
+  more transparent; the music bands are held at 0 here as on Omega.
+- **Omega against 2048, the squares: checked, differs.** Omega's GCN program (`Shdr @0xf84`) feeds its `r` tap
+  (`image_sample ... dmask:0x1` at `0x16c`) and its `rgb` tap (`0x1f0`) straight into multiplies: no square in code, its
+  decode is the texture unit's (`srgb_texels`). The rest of the law is shared.
 
 ## Still open
 
@@ -225,7 +277,7 @@ Row 1 decides how much of the `mines-ahead` and `cannon-volley` gap is real: re-
 
 ## Lineage (2048 and Omega)
 
-- **2048 v1.04: checked, applies, not wired.** `data.psarc` ships `data/Weapons/` and `data/Weapons2048/`
+- **2048 v1.04: ported** (the visualiser ring; "The visualiser, wired"). The mine parts: `data.psarc` ships `data/Weapons/` and `data/Weapons2048/`
   `Mine_Rita_Football`, `Mine_Rita_Spikes`, `Electric_Visualiser` (`.vex` and `.rcsmodel`) with
   `Detonator_Mine_Normal_Alpha.rcsmaterial` and `electricity.rcsmaterial`, the same three parts and materials as HD;
   `eboot.elf` names `mine_rita_football`, `mine_rita_spikes`, `Electric_Visualiser`. The function bodies were not read.
