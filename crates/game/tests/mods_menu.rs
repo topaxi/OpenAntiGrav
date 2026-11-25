@@ -175,6 +175,7 @@ fn the_extras_alone_give_each_title_its_own_main_menu() {
             "OPTIONS",
             "RECORDS",
             "MODS",
+            "BENCHMARK",
             "QUIT",
             "PHOTO MODE"
         ]
@@ -188,6 +189,7 @@ fn the_extras_alone_give_each_title_its_own_main_menu() {
             "MULTIPLAYER",
             "OPTIONS",
             "MODS",
+            "BENCHMARK",
             "QUIT",
             "PHOTO MODE",
             "RECORDS"

@@ -83,6 +83,7 @@ fn only_the_focused_rows_attached_rows_are_drawn_below_it() {
             "MULTIPLAYER",
             "OPTIONS",
             "MODS",
+            "BENCHMARK",
             "QUIT",
             "RECORDS"
         ]
@@ -108,7 +109,10 @@ fn the_pad_steps_the_top_level_left_and_right_and_a_family_up_and_down() {
     press(&mut menu, &[Button::Down]);
     assert_eq!(id(&menu), "mods");
     press(&mut menu, &[Button::Down]);
+    assert_eq!(id(&menu), "benchmark");
+    press(&mut menu, &[Button::Down]);
     assert_eq!(id(&menu), "quit");
+    press(&mut menu, &[Button::Up]);
     press(&mut menu, &[Button::Up]);
     press(&mut menu, &[Button::Up]);
     press(&mut menu, &[Button::Up]);
@@ -286,6 +290,7 @@ fn a_column_title_or_no_reveal_flag_draws_every_row_in_order() {
             "MULTIPLAYER",
             "OPTIONS",
             "MODS",
+            "BENCHMARK",
             "QUIT",
             "RECORDS"
         ]
