@@ -607,6 +607,8 @@ pub struct Detonator {
     /// list: read on HD (`PulseBullet`'s render queue, `detonator-cannon.md`, "The cannon's three
     /// point lights"); 2048's and Omega's queues are unread.
     pub cannon_lights: bool,
+    /// The cannon gauge on the craft's back, or `None` where a title's law is not read.
+    pub ammo_gauge: Option<DetonatorAmmoGauge>,
     /// The handling file a Detonator race flies in place of the team's, or `None` where a
     /// title's is not located.
     pub handling: Option<crate::zone_handling::ZoneHandling>,
@@ -625,6 +627,24 @@ pub struct Detonator {
     /// as a campaign race's score passes the cell's targets. Where it is `false` the layout's
     /// widgets are dropped.
     pub shows_medals: crate::pre_race::Sourced<bool>,
+}
+
+/// What drives the Detonator craft's cannon gauge, the hull's `detonator_bulletgaugesegments`
+/// segments: `Detonator_UpdateHud` writes a fill and a colour into the material's constant block
+/// while the craft is faster than [`Self::speed_gate`]
+/// (`docs/ghidra/functions/ps3-hdfury-eu/detonator-ammo-gauge.md`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DetonatorAmmoGauge {
+    /// The count a full gauge shows: the fill is the clip (or the reload's refill) over this.
+    pub rounds: f32,
+    /// The colour while the cannon can fire.
+    pub ready: [f32; 3],
+    /// The colour during a reload lockout, while the refill climbs.
+    pub locked: [f32; 3],
+    /// The colour and fill the block holds from the hull's bind until the first update.
+    pub bind: ([f32; 3], f32),
+    /// The craft speed the update needs to exceed; at or below it the gauge holds what it showed.
+    pub speed_gate: f32,
 }
 
 /// What Detonator's pads do (`docs/ghidra/functions/ps3-hdfury-eu/detonator-emp.md`, "Pads

@@ -442,6 +442,19 @@ pub const ZONE_STAGE_TEXTURES: &oag_title::ZoneStageTextures = &oag_title::ZoneS
     stages: 15,
 };
 
+/// HD's Detonator cannon gauge: `Detonator_UpdateHud` (`0x00067120`) passes the clip, or
+/// `trunc((1 - lockout / lockout_total) * 15)` while a reload locks the cannon, to `0x0029d578`,
+/// which writes `count / 15` (`0x3d888889`) and blue `(0, 0.1, 1)` or red `(1, 0, 0)`; the hull's bind
+/// (`0x0029d458`) leaves a full red gauge, and the update runs while the craft is faster than `10`
+/// (`docs/ghidra/functions/ps3-hdfury-eu/detonator-ammo-gauge.md`).
+pub const DETONATOR_AMMO_GAUGE: oag_title::DetonatorAmmoGauge = oag_title::DetonatorAmmoGauge {
+    rounds: 15.0,
+    ready: [0.0, 0.1, 1.0],
+    locked: [1.0, 0.0, 0.0],
+    bind: ([1.0, 0.0, 0.0], 1.0),
+    speed_gate: 10.0,
+};
+
 /// Wipeout HD/Fury's Detonator: its grade table, its DLC3 revision on the four Zone
 /// circuits, its two fifteen-entry texture sets (`DATA00.PSARC`) and its `0.7` camera.
 ///
@@ -467,6 +480,7 @@ pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
         stages: 15,
     }),
     cannon_lights: true,
+    ammo_gauge: Some(DETONATOR_AMMO_GAUGE),
     camera_scale: 0.7,
     // A live Detonator frame's hull world matrix in the push buffer, rows of length 0.630 (`0.7 * 0.9`).
     hull_scale: Some(0.63),

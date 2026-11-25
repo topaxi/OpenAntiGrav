@@ -344,6 +344,14 @@ pub(super) fn material_setup(
         &mut emissive,
         report,
     );
+    super::bullet_gauge::bullet_gauge(
+        model,
+        &material_variants,
+        textures,
+        &mut material_slots,
+        &mut emissive,
+        report,
+    );
     // Water reads its picture as a normal map and has none to paint.
     // Its taps bind the normal map third and `water_noref`'s second map fourth.
     let water = super::water::water(

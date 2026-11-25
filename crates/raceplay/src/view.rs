@@ -445,6 +445,9 @@ pub struct RaceView {
     pub(super) hd_missile_blast: bool,
     /// `options::ViewSetup::detonator_cannon_lights`.
     pub(super) detonator_cannon_lights: bool,
+    /// `options::ViewSetup::detonator_ammo_gauge`, and what the gauge showed last frame.
+    pub(super) detonator_ammo_gauge: Option<oag_title::DetonatorAmmoGauge>,
+    pub(super) ammo_gauge_shown: std::sync::Mutex<Option<crate::ammo_gauge::Shown>>,
     /// The stage's generator, deliberately **not** `world.rng` - see
     /// [`Self::exhaust_rng`].
     pub(super) stage_rng: Rng,

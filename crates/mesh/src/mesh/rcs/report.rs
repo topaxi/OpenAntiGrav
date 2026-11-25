@@ -263,6 +263,8 @@ pub struct Report {
     /// Detonator bomb materials drawn as their colour times their brightness - see
     /// `super::bomb_tint`.
     pub bomb_tint_bound: usize,
+    /// Detonator cannon-gauge materials given their segment program. See `super::bullet_gauge`.
+    pub bullet_gauge_bound: usize,
     /// Magstrip materials whose emissive picture and wave were bound - see
     /// `super::mag_wave`.
     pub mag_wave_bound: usize,
@@ -566,6 +568,9 @@ impl Report {
             n => format!(
                 ", {n} Detonator bomb material(s) drawn as their colour times their brightness (the flash `b+0x154` has no recovered writer: brightness stays at its resting value)"
             ),
+        } + &match self.bullet_gauge_bound {
+            0 => String::new(),
+            n => format!(", {n} Detonator cannon-gauge material(s) drawn as their segments"),
         } + &match self.mag_wave_bound {
             0 => String::new(),
             n => format!(", {n} magstrip material(s) with their scrolling wave bound"),

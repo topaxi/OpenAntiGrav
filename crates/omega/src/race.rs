@@ -159,6 +159,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
         }),
         stage_textures: None,
         cannon_lights: false,
+        ammo_gauge: None,
         camera_scale: 0.7,
         hull_scale: None,
         layouts: Some(oag_title::DetonatorLayouts {

@@ -2373,6 +2373,20 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
             1.0,
         );
     }
+    // **HD's Detonator cannon gauge** (`Emissive::program` mode 27, `oag_mesh::mesh::rcs::bullet_gauge`):
+    // the segment picture at `v + 0.5 * F`, `F` the entry's offset (`StandardBullets`), coloured by
+    // its tint (`StandardColour`) where it is white, and the picture unshifted (`PowerBullets` is 0,
+    // `PowerColour` white) where it is not. Unlit, through the fogged programs' `/2`
+    // (`docs/ghidra/functions/ps3-hdfury-eu/detonator-ammo-gauge.md`, "The segment program").
+    if glow_program > 26.5 && glow_program < 27.5 {
+        let gauge = material_sample(
+            MATERIAL_ALBEDO,
+            vec2<f32>(in.texcoord.x, in.texcoord.y + 0.5 * glow_tint_offset.w),
+        ).rgb;
+        let power = material_sample(MATERIAL_ALBEDO, in.texcoord.xy).rgb;
+        let segments = gauge * glow_tint_offset.rgb * gauge.r + power * (1.0 - gauge.r);
+        return vec4<f32>(min(scene.light.output_scale * segments, vec3<f32>(HALF_MAX)), 1.0);
+    }
     if !(rim_glow_on || rim_edge_on) {
         // **Only where the colour returned is still the generic combine's**, which is
         // what `sun_removed` was computed against. The facing-ramp sheen, the magstrip
