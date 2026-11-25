@@ -411,6 +411,41 @@ rival at 1.0 s are the rival's damage and the red tiles on its hull the shield-h
 contact spark (row 1 has no frame yet). To photograph a contact the player must be held at a hull
 width or less (`--back 3`), which this lane did not run.
 
+### A posed pair for the hit, built and scored, not adopted
+
+`scripts/hd-hit-posed-pair.py --film DIR --team T` renders ours on the film's frames: craft 0 is
+posed on the struck rival (`--pose-from` a one-row trace with the film's rows and position, held at
+rest every tick by `--pose-hold-ticks`), the camera is the film's pushbuffer camera (the trace's
+camera columns carry the world axes as columns, `oag_trace::replay::camera_orientation_of`),
+`--force-shield` puts the rival at 89 % and `--force-hit` lands the hit, and the run goes on to
+the frame's pool age. The track, the camera and the red pad tiles under the rival line up to the
+pixel; the box score is over 360x280 centred on the rival's projection. Frames with a pushbuffer
+camera only (`a0500`, `a0600`, `a0670`, `a1000`, `a1500`, `a2000`; a frame with none is skipped,
+never borrowed). Team Piranha, a guess (the film does not record the rival's team; its hull is red
+and white):
+
+| Window | Frame (age) | Mean abs. difference over the box | Bright pixels, original / ours |
+| --- | --- | --- | --- |
+| 0.5 to 0.75 s | `a0500` (0.50) | 40.9 | 3092 / 764 |
+| | `a0600` (0.65) | 42.6 | 1202 / 264 |
+| | `a0670` (0.70) | 23.2 | 605 / 18 |
+| 1.0 to 2.0 s | `a1000` (1.02) | 17.0 | 299 / 881 (ours: the hull's gloss) |
+| | `a1500`, `a2000` | not scored: the rival is out of the frame (box off the picture) | - |
+
+**It does not score honestly, so it is not adopted as a compare pair.** Three things the number
+does not separate: (1) the rival's team is unknown (ours' hull is the wrong livery); (2) ours
+draws the hull a little above and short of the original's (the film's pose is the body's, the
+frame draws the hull a tick or two behind it, `docs/tools/compare-page.md`, "The skew is the
+pause"), which the pair's own tick-lag refusal would catch and this script does not apply; (3)
+ours draws **no visible hit sparks or smoke** at the matched age while the original shows orange
+embers around the hull at 0.5 to 1.0 s (the bright-pixel counts), but ours' hull is held at rest
+every tick, so the smoke's carried velocity (row 7) and the sparks' drift are not exercised: the
+absence is a property of the pose hold as much as of the effect. Neither window therefore
+judges rows 1, 6 and 7. The 1.0 to 2.0 s window has one valid frame, because the hulls never
+touch (above). Next: a team read (RAM, the rival's `+0x7d2c` variant and team words), the tick-lag
+fix, a rival that flies (a second ship in ours placed at the film's pose and velocity with the
+field warm-up, `--field-from --field-warmup`, so its smoke carries).
+
 ### A CRITICAL rival could not be framed
 
 `--rival-shield S` (new) writes the rival's shield (`ship + 0x5fa0`) before the shot. The
