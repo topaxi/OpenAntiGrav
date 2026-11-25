@@ -53,6 +53,7 @@ mod reconnect;
 pub(crate) mod replays;
 mod rumble;
 mod shot_open;
+mod shoulder;
 pub(crate) use benchmark::State as BenchmarkState;
 pub(crate) use demo::State as DemoState;
 pub(crate) use load_probe::LoadProbe;

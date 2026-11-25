@@ -174,6 +174,10 @@ pub struct TriggerConfig {
     /// Held clamped to [`CURVE_RANGE`] by [`Self::with_curve`], which is the
     /// only way in from outside.
     curve: f32,
+    /// Whether the L1 shoulder is the race's flip or EMP button and no airbrake: it then raises
+    /// [`Button::Flip`] alone, so a pulled L2 is the only thing that raises [`Button::L`] and the
+    /// left airbrake (`oag_raceplay::RaceSim::l1_is_flip`). Clear, L1 raises both.
+    pub l1_is_flip: bool,
 }
 
 impl Default for TriggerConfig {
@@ -181,6 +185,7 @@ impl Default for TriggerConfig {
         Self {
             mode: TriggerMode::default(),
             curve: 1.0,
+            l1_is_flip: false,
         }
     }
 }
@@ -254,11 +259,15 @@ pub fn map_button(pad: gilrs::Button) -> Option<Button> {
     })
 }
 
-/// The abstract bits `pad` raises: L1 is the left airbrake and also the Eliminator flip, and a
-/// race with a flip reads it as the flip alone (`oag_gameplay::input::InputSnapshot::shoulder_flips`).
-fn bits_of(pad: gilrs::Button, button: Button) -> u32 {
+/// The abstract bits `pad` raises: L1 is the left airbrake and also the Eliminator flip, and in a
+/// race where it is the flip ([`TriggerConfig::l1_is_flip`]) it is the flip alone.
+pub(crate) fn bits_of(pad: gilrs::Button, button: Button, l1_is_flip: bool) -> u32 {
     if pad == gilrs::Button::LeftTrigger {
-        button.bit() | Button::Flip.bit()
+        if l1_is_flip {
+            Button::Flip.bit()
+        } else {
+            button.bit() | Button::Flip.bit()
+        }
     } else {
         button.bit()
     }
@@ -843,6 +852,12 @@ impl Pad {
         self.triggers = self.triggers.with_curve(curve);
     }
 
+    /// Whether L1 is the race's flip or EMP button and not an airbrake. See
+    /// [`TriggerConfig::l1_is_flip`].
+    pub fn set_l1_is_flip(&mut self, l1_is_flip: bool) {
+        self.triggers.l1_is_flip = l1_is_flip;
+    }
+
     /// How the triggers are being read right now.
     #[must_use]
     pub fn triggers(&self) -> TriggerConfig {
@@ -951,7 +966,8 @@ impl Pad {
                     }
                 }
                 if let gilrs::EventType::ButtonPressed(button, _) = event.event
-                    && let Some(bit) = map_button(button).map(|mapped| bits_of(button, mapped))
+                    && let Some(bit) = map_button(button)
+                        .map(|mapped| bits_of(button, mapped, self.triggers.l1_is_flip))
                     && is_real_pad(&gilrs.gamepad(event.id))
                 {
                     match self.presses.iter_mut().find(|(id, _)| *id == event.id) {
@@ -983,7 +999,7 @@ impl Pad {
                     if pad.is_pressed(bound_button)
                         && let Some(button) = map_button(bound_button)
                     {
-                        reading.buttons |= bits_of(bound_button, button);
+                        reading.buttons |= bits_of(bound_button, button, triggers.l1_is_flip);
                     }
                 }
                 let pushed = pad.value(gilrs::Axis::LeftStickX).abs() > ACTIVITY_STICK

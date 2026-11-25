@@ -750,6 +750,12 @@ impl Controls {
         self.pad.set_trigger_mode(mode);
     }
 
+    /// Whether the pad's L1 is the race's flip or EMP button and not an airbrake. See
+    /// [`Pad::set_l1_is_flip`].
+    pub fn set_l1_is_flip(&mut self, l1_is_flip: bool) {
+        self.pad.set_l1_is_flip(l1_is_flip);
+    }
+
     /// Sets the pad's trigger response curve. See [`Pad::set_trigger_curve`].
     pub fn set_trigger_curve(&mut self, curve: f32) {
         self.pad.set_trigger_curve(curve);

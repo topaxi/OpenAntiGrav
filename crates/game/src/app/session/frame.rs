@@ -329,6 +329,8 @@ impl Session {
                 self.controls.let_go_extra_seats();
             }
             let roles = self.roles();
+            let l1_is_flip = self.l1_is_flip();
+            self.controls.set_l1_is_flip(l1_is_flip);
             let inputs = self.controls.player_snapshots();
             // Taken every tick so a press made while paused or in a menu is spent there, and
             // acted on only by the unpaused race arm below.

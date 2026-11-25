@@ -175,11 +175,10 @@ findings; the fix is a snapshot that carries the two shoulders separately
 rather than one `Button::L` plus one axis, which is an `oag-input`/replay-format
 decision, not a one-line change.
 
-**Status: not fixed, design written.** The fix as suggested here (a snapshot
-carrying both shoulders) reaches `oag-gameplay`, `oag-input`, `oag-replay` and
-`oag-net`'s wire. A narrower route exists upstream of the snapshot: the pad
-resolve raises `Flip` for L1 without `L` or the airbrake in a flip race, so the
-snapshot keeps its shape. Untested; the design and its open checks are written up as an open thread.
+**Status: fixed.** The narrower route was taken: the pad resolve raises `Flip` for L1 without
+`L` or the airbrake in a flip race (`TriggerConfig::l1_is_flip`, set from `RaceSim::l1_is_flip`),
+the snapshot keeps its shape, and `InputSnapshot::shoulder_flips` is gone because nothing is left
+for it to clear. `oag-replay` and the wire are unchanged.
 
 ### G5 - `World::person_flown` flies the primary slot with no craft check
 
