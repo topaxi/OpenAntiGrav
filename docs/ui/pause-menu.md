@@ -1,9 +1,9 @@
 # The pause menu
 
 What each title's own pause screen is, and what this build does (2026-11-07, lanes `pause-menu`,
-`pause-menu-2`, `pause-menu-3`, `pause-menu-omega` and `pause-menu-pure`). Scores follow the [rubric](../reverse-engineering/confidence-rubric.md). **Pulse, HD, Fury, Omega and
-Pure are wired; 2048 is not** (see [Other titles](#other-titles)): there, pausing still opens the
-front end's main page over the parked race, as before.
+`pause-menu-2`, `pause-menu-3`, `pause-menu-omega` and `pause-menu-pure`; 2026-11-25, `pause-menu-per-mode`).
+Scores follow the [rubric](../reverse-engineering/confidence-rubric.md). **Pulse, HD, Fury, Omega, Pure and
+2048 are wired** (see [2048](#2048) and [Other titles](#other-titles)).
 
 ## Pulse
 
@@ -353,8 +353,13 @@ Residuals:
 - The marker arrow blinks off in the frames taken; the list step arrows were not compared.
 - The Fury style's red is Omega's own; the pause frames have no second style to switch to.
 
-**A 2048 finding is checked against Omega, and the reverse**: Omega's binder reads the same mode ids as HD's, so
-this table is the model for 2048's `InGame_Definition.xml` (Vita), which is not wired.
+**A 2048 finding is checked against Omega, and the reverse: checked, differs** (2026-11-25). Omega's binder reads
+the same mode ids as HD's, but 2048's pause screens are not that file's widgets (see [2048](#2048)): Omega ships
+2048's `vita/vita_InGame_Definition.xml` in `data00`, `data08` and `data09` and its `skin.xml` loads it, but as a
+3,193-byte stub holding the in-race `InGame2048` screen alone, whose redirect names a `ChoosePauseMenu` the file does
+not hold. None of 2048's pause screens is in Omega
+(`main_menu_ground_truth::omegas_copy_of_2048s_ingame_file_holds_none_of_its_pause_screens`), so Omega's pause stays
+HD's `Block` and `List` file.
 
 Tests: the rows per screen against all three archives' copies and the equality with HD's less the row
 (`main_menu_ground_truth::omegas_pause_screens_are_hds_without_the_invites_row_in_every_archive`); the mode
@@ -450,9 +455,93 @@ the table (`oag_pure::pause_menu::tests`); the draw and the pointer
 (`oag_ui_screens::pause::tests::menu_widget`); the game driving a real race (`pause_menu_ground_truth::pure_screens`:
 the rows per mode, START, CIRCLE, RESTART, QUIT and PHOTO MODE by pad).
 
+## 2048
+
+**Wired** (`Title::pause_menu` is `oag_2048::pause_menu::PAUSE_MENU`). The screens are in
+`Data\Plugins\Frontend\NEWGUI\InGame_Definition.xml` (36 screens). **They are not HD's and Omega's `Block` and
+`List` widgets: checked, differs.** Each is a page of `<TouchButton>` icon tiles, the file's touch idiom
+([`2048-frontend.md`](../formats/2048-frontend.md)), nested in `PauseMenuTop` (a `BackendController` and a
+`SceneBlur`), with a confirm screen nested in it for each tile that destroys the race:
+
+| Screen | Tiles (the widget's `idstring`, else its `name`) | Opened by |
+| --- | --- | --- |
+| `PauseMenuRace` | `IG_PAUSE_OPT`, `MSC_PHOTO_PHOTOMODE`, `quitButton`, `restartButton`, `continueButton` | the redirect's default: Single Race, Time Trial, Head to Head, Zone, Detonator |
+| `PauseMenuTournament` | `IG_PAUSE_OPT`, `MSC_PHOTO_PHOTOMODE`, `quitButton`, `continueButton` (no restart) | mode 4 |
+| `PauseMenuSpeed` (in `PauseMenuSpeedTop`) | `IG_PAUSE_OPT`, `MSC_PHOTO_PHOTOMODE`, `CHOOSE_GHOST`, `quitButton` (END SESSION's icon), `restartButton`, `continueButton` | mode 10 |
+
+`PauseMenuOnline`, `PauseMenuPSNDEMO` and the demo screens are a network race's and a retail demo's, never opened here.
+**Which mode opens which** is the executable's:
+[`PauseMenu_BindRedirectForMode`](../ghidra/functions/vita-2048-eu-v104/pause-menu.md) (`0x8112e050`, 80), the
+same switch on the same mode ids as HD's (**ported**, 80). `QUIT` and `RESTART` open `PauseQuitConfirm`/
+`PauseRetryConfirm` (`TournamentPauseQuitConfirm`, `SpeedPauseQuitConfirm`/`SpeedPauseRetryConfirm`): a dimming
+(`0x30000000`), a white panel, the tile's icon, `FE_QUIT`/`FE_RETRY`/`IG_PAUSE_ENDSES`, `FE_ARE_YOU_SURE` and a tick
+tile (the action) and a cross tile (`PreviousScreen`). **The three copies of the file**: the v1.04 patch's
+(43,418 bytes, served ahead of the base) holds all of this; the base package's (40,167 bytes) has no
+`PauseMenuTournament` and no `TournamentPauseQuitConfirm` and reads the same in the screens it has. The files in
+Omega and `LegacyInGame_Definition.xml` (`Race End Photo`, `Race End Alone`: the race's end, not a pause) are not
+this.
+
+### What the original draws
+
+One Vita3K frame, a race event on Vineta K in the default screen
+(`data/reference/2048-circuit-names/vineta-k-pause.png`, 960 by 544; the frame the circuit-names lane kept):
+
+- **The tiles are the authored boxes** at `(92, 145)` and `(250, 145)`, 95 square, and `(560, 430)`, `(690, 430)`,
+  `(820, 430)`, 120 by 95, in `Blue2048` (`0xff19295d`), each with its icon centred at the texture's own size; the
+  header is a `Blue2048` 70 square at `(15, 15)` with the white pause icon, `GAME PAUSED` in `Blue2048` at `(105, 30)`
+  and a 405 by 5 rule under it, over a white panel (`0x50ffffff`, `(0, 15, 960, 510)`).
+- **`smalltext="true"` labels** under the two upper tiles: `OPTIONS` caps `110` to `168` by `253` to `264`,
+  `PHOTO MODE` `254` to `339`: 11 units tall with the cap line 13 under the tile, against the regular label's 16 and
+  18 (`oag_ui::frontend::label_under_tile`, `SMALL_LABEL_RATIO`; confidence 80, one frame, two labels).
+- **The scene is blurred** (`SceneBlur`), and **an event card** stands at `(416, 87)` to `(940, 420)` (`VINETA K`,
+  `TARGET (NOVICE)`, three medals and the page dots): the screen's `<Callout CurGameMode="true">` at `(198, -5)`,
+  the same card the campaign map opens, whose layout is native code (`docs/formats/2048-frontend.md`, the event card).
+- No cursor: the original's touch tiles answer touch only.
+
+### What ours does
+
+The page is the disc's own screen: `oag_ui_screens::pause::PauseScreen::read_touch` reads the screen and the screens
+it is nested in (the panel, the heading and the icon are `PauseMenuTop`'s children or the parent's; `PauseMenuSpeed`
+stands in `PauseMenuSpeedTop`), and draws one box and icon per tile through the same touch idiom the front end's tiles
+use (`oag_ui::frontend::label_under_tile`). Rows are keyed by the widget's `idstring`, else its `name`, else (the
+confirm screens' tick and cross) its `redirect` (`PauseRow::disc_id`; an icon-only tile is worded by the HD pause
+strings 2048 also ships, `PauseRow::word`). Pad (UP and DOWN in the file's order, CROSS), pointer and touch
+(`oag_ui_screens::pause::regions`, a tap is a click) drive the same menu rows as on the other titles: START and
+CONTINUE resume, RESTART loads the race again, QUIT leaves it; PHOTO MODE is the disc's own tile. **QUIT and
+RESTART ask first** (`PauseRow::confirm`, `Definition` pages `pause_confirm:<screen>`): the page they ask on stays
+drawn under the dimming, a tap on the tick does the action, a tap on the cross or CIRCLE goes back. The leaving page
+of any transition is the disc's screen too now (it faded as the front end's list before).
+
+- **GHOST** (`CHOOSE_GHOST`, Speed Lap) opens a four-entry touch list of which ghost to race (none, my best, a
+  friend's, the world's): `builds: None`, so its tile is not drawn and the page names it in the load report
+  (`pause screen ...: not built`). Nothing here is behind two of the entries (online ghosts).
+- **OPTIONS** opens this build's OPTIONS page, as on HD; the disc's is the touch `pause_options` tree
+  (`InGame_PauseOptions.xml`: camera, audio, controls, pilot assist as touch lists and sliders). **Chosen.**
+- **The scene blur and the event card (`Callout CurGameMode`) are not drawn**: the blur is not in this build's
+  front end, and the card is native code whose layout is unlocated (open). The scene under the panel is sharp.
+- **The pad cursor** fills the focused tile in `Orange2048`, the tile's own pressed colour: this build's own, as on
+  the front end's grids (`oag_ui::frontend::touch` module doc); a confirm screen opens on its cross, not where its
+  cursor was left. **Chosen.** UP and DOWN walk the tiles in the file's order, not by position.
+- **The HUD under the panel** is off, **inherited from Omega** (`hud_under_scrim`); the Vita frame was taken on the
+  campaign's pause with the HUD hidden by its own card, so this is not measured. **The slide-in transitions**
+  (`transition`, `delay` on every widget) are not played.
+- Words are the disc's: `GAME PAUSED`, `OPTIONS`, `PHOTO MODE`, `QUIT`/`RETRY`, `Are you sure?`.
+
+Measured against the Vita frame (`GAME PAUSED` caps `105` to `346` by `40` to `67` against ours `105.7` to `347.7`
+by `40.7` to `66.7`; the OPTIONS label `109.3` to `168` by `253.7` to `263.7` against `110` to `168` by `253` to `264`;
+ours is the first event of the campaign, not Vineta K, so the card and the scene differ).
+
+Tests: the rows against the file in every copy and the Omega stub
+(`main_menu_ground_truth::y2048s_pause_screens_are_touch_pages_tile_for_tile_in_the_served_copy`,
+`omegas_copy_of_2048s_ingame_file_holds_none_of_its_pause_screens`); the mode-to-screen table
+(`oag_2048::pause_menu::tests`); the draw and the confirm page (`oag_ui_screens::pause::tests::touch_tiles`); the
+rows, words, icons and boxes per mode off the disc
+(`pause_menu_ground_truth::y2048_screens::every_mode_reads_words_and_draws_its_tiles_with_their_icons_off_the_disc`);
+the game driving the first event: START, QUIT and RESTART asking, a tap on a tile
+(`pause_menu_ground_truth::y2048_screens`).
+
 ## Other titles
 
-Not wired: **2048** (`InGame_Definition.xml`, 36 screens, and `LegacyInGame_Definition.xml`; Vita, a
-binder of its own). A 2048 finding is checked against Omega and the reverse: Omega's binder above reads the
-same ids, so 2048's is the first thing to compare. Pure's screens share nothing with 2048's or Omega's (a
-`<Menu>` of entries on a band, not `Block` widgets), so Pure's finding is **checked, differs** against both.
+Nothing is unwired. Pure's screens share nothing with 2048's or Omega's (a `<Menu>` of entries on a band, not
+`Block` or `<TouchButton>` widgets), so Pure's finding is **checked, differs** against both; 2048's are touch
+tiles, **checked, differs** against HD and Omega (see [2048](#2048)).

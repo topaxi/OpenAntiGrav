@@ -485,6 +485,7 @@ fn tile_draw(
             words.clone(),
             argb_to_rgba(ink.rest),
             button.string_width_limit,
+            button.small_text,
         ));
     }
 }

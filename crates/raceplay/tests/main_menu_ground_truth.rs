@@ -1050,7 +1050,9 @@ fn has_screen(node: &Node, screen: &str) -> bool {
 fn y2048s_pause_screens_are_touch_pages_tile_for_tile_in_the_served_copy() {
     const NAME: &str = r"data\plugins\frontend\NEWGUI\InGame_Definition.xml";
     const PATCH_ONLY: [&str; 2] = ["PauseMenuTournament", "TournamentPauseQuitConfirm"];
-    let pause = oag_2048::TITLE.pause_menu.expect("2048 authors pause screens");
+    let pause = oag_2048::TITLE
+        .pause_menu
+        .expect("2048 authors pause screens");
     let mut packages = 0;
     for package in ["PCSF00007", "PCSA00015"] {
         let Some(source) = oag_testdata::exact(&format!("data/extracted/vita/{package}")) else {
@@ -1058,13 +1060,21 @@ fn y2048s_pause_screens_are_touch_pages_tile_for_tile_in_the_served_copy() {
         };
         let mut archives = oag_2048::open(&source.display().to_string()).expect("opening 2048");
         let served = read(&mut archives, NAME);
-        check_touch_pause(pause, &served, &format!("{package}: the file the game reads"), true);
+        check_touch_pause(
+            pause,
+            &served,
+            &format!("{package}: the file the game reads"),
+            true,
+        );
         let all = copies(&mut archives, NAME);
         assert_eq!(all.len(), 2, "{package}: the patch's copy and the base's");
         let (label, base) = all.first().expect("the base package's copy");
         assert!(label.ends_with("data.psarc"), "{label}");
         for name in PATCH_ONLY {
-            assert!(!has_screen(base, name), "{package}: the base package has {name}");
+            assert!(
+                !has_screen(base, name),
+                "{package}: the base package has {name}"
+            );
         }
         check_touch_pause(pause, base, &format!("{package}: the base copy"), false);
         packages += 1;
@@ -1106,13 +1116,19 @@ fn omegas_copy_of_2048s_ingame_file_holds_none_of_its_pause_screens() {
     let Some(source) = oag_testdata::exact("data/extracted/ps4") else {
         return;
     };
-    let pause = oag_2048::TITLE.pause_menu.expect("2048 authors pause screens");
+    let pause = oag_2048::TITLE
+        .pause_menu
+        .expect("2048 authors pause screens");
     let mut archives = oag_omega::open(&source.display().to_string()).expect("opening Omega");
     let all = copies(
         &mut archives,
         r"Data\Plugins\Frontend\Gui\vita\vita_InGame_Definition.xml",
     );
-    assert!(all.len() >= 3, "{:?}", all.iter().map(|c| &c.0).collect::<Vec<_>>());
+    assert!(
+        all.len() >= 3,
+        "{:?}",
+        all.iter().map(|c| &c.0).collect::<Vec<_>>()
+    );
     fn screens(node: &Node, out: &mut Vec<String>) {
         if node.name.eq_ignore_ascii_case("Screen")
             && let Some(name) = node.attr("name")

@@ -1016,7 +1016,11 @@ mod y2048_screens {
             .iter()
             .map(|row| row["id"].as_str().unwrap_or_default())
             .collect();
-        assert_eq!(ids, ["pause_quit", "pause_resume"], "the tick, then the cross");
+        assert_eq!(
+            ids,
+            ["pause_quit", "pause_resume"],
+            "the tick, then the cross"
+        );
     }
 
     /// RESTART asks too, and its tick loads the race again from the grid; a tap on the CONTINUE tile
@@ -1058,5 +1062,86 @@ mod y2048_screens {
             ticks.last().copied().unwrap_or(0) > 100,
             "the race went on from where it stood: {ticks:?}"
         );
+    }
+
+    /// Every screen of the table reads off the real file, every word the rows and the heading need
+    /// resolves, and each mode's page draws one tile box per row it has with the icon found on the
+    /// menus' sheet: a Time Trial and the default modes OPTIONS, PHOTO MODE, QUIT, RESTART and
+    /// CONTINUE; a Tournament no RESTART; a Speed Lap its GHOST tile left undrawn (nothing here is
+    /// behind it) and its own END SESSION.
+    #[test]
+    #[ignore = "needs the extracted 2048 package in data/extracted/vita/PCSF00007"]
+    fn every_mode_reads_words_and_draws_its_tiles_with_their_icons_off_the_disc() {
+        use oag_game::boot;
+        use oag_ui::menu::{Definition, Menu};
+        use oag_ui_screens::pause::draw_list;
+
+        let Some(source) = y2048() else {
+            return;
+        };
+        let (shell, _archives, title) = boot::load_shell(&boot::Options {
+            language: Some("English".to_string()),
+            source: source.display().to_string(),
+            dlc: Vec::new(),
+            leg: oag_ui::frontend::Leg::LogoFmv,
+            movie: None,
+            cache: std::env::temp_dir().join("oag-2048-pause-ground-truth"),
+            audio_cache: oag_source::cache::default_audio_cache_dir(),
+            extent: oag_game::movie::Extent::Frames(oag_game::INTRO_FRAMES_NEEDED),
+            no_video: true,
+            refresh_video: false,
+            prefer_av1_cache: false,
+            find_texture_packs: None,
+        })
+        .expect("the shell");
+        let table = title.pause_menu.expect("2048 authors pause screens");
+        let names: Vec<&str> = shell
+            .pause_screens
+            .screens
+            .iter()
+            .map(|screen| screen.name())
+            .collect();
+        let wanted: Vec<&str> = table.screens.iter().map(|screen| screen.name).collect();
+        assert_eq!(names, wanted, "every screen of the table read");
+        let skin = oag_ui::menu::Skin::new(shell.menu_skin, shell.space, shell.font.line_height);
+        let words = &shell.pause_screens.strings;
+        let sprites = |src: &str| shell.sprites.get(src);
+        for (mode, screen, tiles, unbuilt) in [
+            ("time_trial", "PauseMenuRace", 5, Vec::<&str>::new()),
+            ("single_race", "PauseMenuRace", 5, Vec::new()),
+            ("tournament", "PauseMenuTournament", 4, Vec::new()),
+            ("speed_lap", "PauseMenuSpeed", 5, vec!["CHOOSE_GHOST"]),
+        ] {
+            let mut definition = Definition::built_in(&shell.strings).expect("the built-in menu");
+            let built = definition.open_on_pause_screen(table, mode, words);
+            assert_eq!(built.screen, screen, "{mode}");
+            assert_eq!(built.unbuilt, unbuilt, "{mode}");
+            assert!(built.unworded.is_empty(), "{mode}: {:?}", built.unworded);
+            let mut menu = Menu::new(definition);
+            // A race is held, so PHOTO MODE is on offer.
+            menu.offer(oag_ui::menu::Action::PhotoMode, true);
+            let read = shell
+                .pause_screens
+                .screens
+                .iter()
+                .find(|read| read.name() == screen)
+                .expect(screen);
+            for src in read.sprite_srcs() {
+                assert!(sprites(src).is_some(), "{mode}: {src} is on the sheet");
+            }
+            let drawn = draw_list(read, table, &menu, &skin, &Default::default(), &sprites);
+            let boxes = drawn
+                .body
+                .iter()
+                .filter(|draw| matches!(draw, oag_ui::frontend::Draw::Fill { .. }))
+                .count();
+            assert_eq!(boxes, tiles, "{mode}: one box per tile this build has");
+            let icons = drawn
+                .body
+                .iter()
+                .filter(|draw| matches!(draw, oag_ui::frontend::Draw::Sprite { .. }))
+                .count();
+            assert_eq!(icons, tiles, "{mode}: and its icon in each");
+        }
     }
 }

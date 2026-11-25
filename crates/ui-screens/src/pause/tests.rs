@@ -654,6 +654,27 @@ mod touch_tiles {
         assert_eq!(words, ["OPTIONS"]);
     }
 
+    /// `smalltext="true"` is the small label: 0.655 of the regular size, its cap line 13 under the
+    /// box (measured on a Vita3K frame, `docs/ui/pause-menu.md`, "2048").
+    #[test]
+    fn a_small_label_stands_under_its_tile_at_the_measured_size_and_gap() {
+        let layers = draw(&read("PauseRace"), &menu());
+        let Some(Draw::Text { x, y, scale, .. }) = layers
+            .body
+            .iter()
+            .find(|draw| matches!(draw, Draw::Text { text, .. } if text == "OPTIONS"))
+        else {
+            panic!("the label");
+        };
+        let scale_want = 16.0 / 27.0 * 0.655;
+        assert!((scale - scale_want).abs() < 1e-4, "{scale}");
+        assert_eq!(*x, 92.0 + 95.0 / 2.0, "centred on the tile");
+        assert!(
+            (y - (145.0 + 95.0 + 13.0 - 10.0 * scale_want)).abs() < 1e-3,
+            "{y}"
+        );
+    }
+
     /// The panel, icon and heading are the nested-in screen's, behind the tiles.
     #[test]
     fn the_panel_and_heading_of_the_screen_it_is_nested_in_draw_behind_it() {
@@ -736,13 +757,21 @@ mod touch_tiles {
         assert_eq!(text_at(&layers.chrome, "QUIT"), Some((480.0, 158.0)));
 
         press(&mut menu, Button::Circle);
-        assert_eq!(menu.page().id, PAUSE_PAGE, "back from the question is the pause page");
+        assert_eq!(
+            menu.page().id,
+            PAUSE_PAGE,
+            "back from the question is the pause page"
+        );
 
         while menu.selected() != quit {
             press(&mut menu, Button::Down);
         }
         press(&mut menu, Button::Cross);
-        assert_eq!(menu.selected(), 1, "it opens on the cross again, not where it was left");
+        assert_eq!(
+            menu.selected(),
+            1,
+            "it opens on the cross again, not where it was left"
+        );
         press(&mut menu, Button::Up);
         let events = press(&mut menu, Button::Cross);
         assert_eq!(

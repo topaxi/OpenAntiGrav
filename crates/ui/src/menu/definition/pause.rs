@@ -189,7 +189,9 @@ impl Definition {
                 continue;
             };
             match action {
-                PauseAction::Resume => push_row(page, row_id(PauseAction::Resume), Entry::Back { label }),
+                PauseAction::Resume => {
+                    push_row(page, row_id(PauseAction::Resume), Entry::Back { label })
+                }
                 PauseAction::Options => {
                     let Some(target) = options else {
                         built.unbuilt.push(row.disc_id);
@@ -240,11 +242,9 @@ impl Definition {
                         ),
                     );
                 }
-                PauseAction::Inert => push_row(
-                    page,
-                    row_id(PauseAction::Inert),
-                    Entry::Inert { label },
-                ),
+                PauseAction::Inert => {
+                    push_row(page, row_id(PauseAction::Inert), Entry::Inert { label })
+                }
                 PauseAction::Restart | PauseAction::Quit => {
                     let (id, act) = if action == PauseAction::Restart {
                         (row_id(PauseAction::Restart), Action::RestartRace)
@@ -290,7 +290,6 @@ impl Definition {
         self.pages.push(page);
         self.pages.len() - 1
     }
-
 }
 
 fn push_row(page: &mut Page, id: &str, entry: Entry) {
