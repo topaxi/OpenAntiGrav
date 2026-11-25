@@ -292,6 +292,16 @@ hubs, screws and holes (`hd_emissive_glow_ground_truth::the_mine_football_shows_
 in the ball's inner half against 145 for the smooth one). Pair `mines-ahead` mean grey 13.74 -> 13.73, `pad` 7.68 and
 `cannon-volley` 14.18 unchanged: the pairs feed raw bands under 0.3, so ours' envelope never attacks and `MineBrightness`
 stays 0 (a thin `rim^5` edge); the original's `s` carries history ("not done" below), so its mines are lit.
+**The envelope history is carried in a pair** (`det-mine-lit`, second grab, RPCS3 lap clock 2.68 s, 80 mines): `s` read
+`0.0` to `0.95` (the near three `0.57, 0.46, 0.57`, spikes `t` `0.53, 0.86, 0.48`), `--detonator-mine-envelopes`
+([compare-page.md](../../../tools/compare-page.md), "Detonator pairs") holds them, and ours' near mines draw as lit, spiked balls of the
+original's size: whole-frame mean grey 14.76 to 14.29, rmse 0.177 to 0.171.
+**Read this session, the dark centre is not the formula** (confidence 85): the vertex block `#1` (the lit pass's) writes
+`TC1 = (R0.T, R0.B, R0.N)` with `R0 = c[209] - pos` and the fragment program normalises it (`DIVSQ`), as read above; the map's
+flat base is `(0.5, 0.5, 1)` (BC3 block `0x841f`, alpha `ff`), so a flat area facing the eye is `rim` 0 in the program as read. The
+original's ball is white there, so **`c[209]` is not the model-space eye the port builds** (suspect: the world camera, not
+transformed by the mine's inverse matrix); the value is not in the push-buffer regions dumped, so settling it needs a live read of
+`c[209]` at the mine's draw (a breakpoint at `0x001399a4` for the matrix, then the draw). Open.
 **Still unlike the original** with the envelope forced high (raw bands 0.8): the ball's centre is dark in ours (`N.V` near 1
 there) and bright in the original; the eye-vector space is the suspect (chosen below), unread.
 

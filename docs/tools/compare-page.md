@@ -2869,6 +2869,14 @@ no lane, or whose lane another carried mine or the bomb holds, is dropped with a
 ours at the spline's origin, 7 entries apart on Talon's Junction. The flag is in `ours.flags`, so `compare-rerender-ours.py` replays
 it. A shot without mines (an older record) keeps ours' seeded layout and the pair says so.
 
+**The mines' music envelopes** (`det-mine-lit`): the same read keeps each mine's football `s` (`+0xf4`) and spikes `t` (`+0xf8`) in
+`ship.mines[].football_s`/`spikes_t`, and `rpcs3-hd-pair.py` gives ours `--detonator-mine-envelopes "S,T;S,T;..."` in the
+`--detonator-mines` order. A carried live mine draws from its pin and does not step (`Race::pin_mine_envelopes`). Without it ours'
+envelope has no history of the music before the frame, and quiet raw bands (all under 0.3) never attack it: the mine stays at
+`MineBrightness` 0, a thin dark ring, where the original's `s` is about 0.5. A shot taken before this change has no envelopes
+and runs as it did. One grab at lap 2.68 s, ours before and after the pins: mean grey 14.76 to 14.29; the near mines go from dark
+rings to lit, spiked balls at the original's size.
+
 **Evidence the carry is exact** (`detonator_ground_truth::carried_mines_stand_where_the_originals_objects_stood`, disc-backed): 80
 objects, identical (position to the bit) at lap 2.7 and 3.4 s and across three boots of the same save state, so the layout is
 deterministic from the state and one read stands for every frame of it; all 80 snap to a lane within 0.47 units across the
