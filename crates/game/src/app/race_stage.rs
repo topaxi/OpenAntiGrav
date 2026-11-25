@@ -704,6 +704,9 @@ impl RaceStage {
         viewport: (f32, f32, f32, f32),
         target_size: (u32, u32),
     ) {
+        if oag_gpu::skip::skipped("hud") {
+            return;
+        }
         if self.draw_end_screens(gpu, encoder, view, viewport, target_size) {
             return;
         }

@@ -827,6 +827,51 @@ adb shell /data/local/tmp/simpleperf record --app org.openantigrav.game -e cpu-c
 `target/aarch64-linux-android/dist/examples/liboag_android.so` at the on-device path names the Rust frames.
 The `--frame-log` lines reach logcat as tag `oag`; `--measure-race-load`'s lines come out under `RustStdoutStderr`.
 
+### Where an HD frame goes on the S21
+
+Measured 2026-11-24/25 on the same phone, release builds of main `f928359` plus `OAG_SKIP_PASSES` (`oag_gpu::skip`), HD/Fury at
+**render scale 25** (476x270 scene, 2320x1080 surface), Vineta K, `--autopilot --seed 1`, `--no-audio`. Two findings decide how to measure here:
+
+- **The one-tick GPU bench misleads on Mali.** `OAG_RENDER_GPU_BENCH` (an `OAG_APK_FEATURES=perf-probe` build) submits a frame and waits
+  for it, so the GPU idles between runs and its clock falls; its marks inside a pass read nearly zero on a tiler (the binning, not the shading,
+  lands between them), and it put the advert cards and the glass target at nothing. Its whole-frame figure did show a floor that does not fall
+  with the pixels (238x135 to 1906x1080: 49, 49 and 35 ms outside the race pass and the bloom), and three switches it did settle: the depth
+  prepass **pays** here too (off: race pass 14 to 27.5 ms), binding arrays help (`OAG_BINDLESS=0`: 58.5 to 67 ms), and the shadow passes cost nothing (`--shadows off`: 67.6 against 67.6 ms).
+- **What does work is leaving one pass out every other 10 s of one live run** (`OAG_SKIP_PASSES=<name>` and `OAG_SKIP_PASSES_TOGGLE=10` as launch-file
+  lines; `scripts/android-skip-windows.py` splits the `--frame-log` by arm). Both arms see the same temperature, which moves a whole run by half.
+- **Measure on the menu route.** On this build the launch file's `--race` on the phone stays in the pre-race flyby: a 20 s `simpleperf` of it has no
+  `Race::tick` sample, the screen shows the flyby camera with no HUD, and `frame-phases` reads ticks 0.2 ms. Its 30 fps is a flyby's. The menu route
+  (Racebox single race, which loads `track_reversed.vex`, so the tables above this section are Vineta K **reversed**) races: ticks 5 to 11 ms, `Race::tick` 25 % of the frame thread.
+
+Per pass, menu route (racing), one run each, about 120 frame-log seconds per arm, drawn against left out:
+
+| Pass left out | Frame ms, drawn / left out | fps median | What it is |
+| --- | ---: | ---: | --- |
+| `glass` | 50.4 / 39.8 | 19.8 / 25.6 | Vineta K's behind-the-glass target: 640x360 whatever the render scale (1.8 times the 476x270 scene), the glass chunks drawn again with no prepass, every frame |
+| `adverts` | 55.5 / 54.2 | 18.6 / 19.1 | eight advert cards at 512x256, redrawn every frame: inside the noise |
+| `bloom` | 41.8 / 43.8 | 23.9 / 22.5 | HD's bloom chain: no gain |
+
+On the flyby (`--race`), the same switches read glass 42.5 / 26.8, adverts 42.4 / 35.5, bloom 36.4 / 29.7, `hud` 36.8 / 32.0, `composite` 39.9 / 34.6
+and `resolve` 45.2 / 41.8 ms: the flyby's frame is lighter, so the same passes are a larger share of it. Only the glass target holds its cost while racing.
+The racing frame thread is about 23 ms (ticks 5.6, scene recording 8.3, `submit` 9.1, the 10 minute run's racing seconds 20 to 110).
+A 20 s `simpleperf` of a racing frame thread: `Race::tick` 25 % (of it the audio mixer 6.8 % under `--no-audio`, `RaceView::capture_poses` 6 %,
+the particle systems about 10 %, opponents 4.6 %), `CommandEncoder::finish` 23 %, `Scene::prepare_view` 23 %; Mali's backend thread is 37 % of the app's samples.
+
+**Measured and dropped** (same method, one run each unless said):
+
+- **Drawing the resolve and the HUD straight onto the surface** when the composite would only copy (brightness and gamma 100, no screen filter):
+  byte-identical by construction and by a readback test, and **slower** on the flyby, 38.7 against 34.6 ms. The surface image is then needed from the first pass of the frame on rather than the last.
+- **Skipping the glass target on frames that show no glass draw** (`slots::REFRACTION`): byte-identical (26 of 26 desktop frames), but the glass draws pass the PVS and the
+  frustum on most of the lap, so it fired on 2 of 26 sampled frames and moved nothing on the phone (measured on the flyby).
+- **A depth prepass for the glass target's chunks**: 31.4 against 33.7 ms mean frame (30.4 against 30.2 fps, two runs from skin 29 to 30 C), inside the noise, and not exact: each of the
+  target's two fog groups runs its own prepass, so a depth tie between them shades the other group (1 pixel, 1 level, in 2 of 26 target dumps).
+- **A portrait surface** (`screenOrientation="portrait"`, a measuring build): SurfaceFlinger composites the landscape app with the GPU
+  (`dumpsys SurfaceFlinger`: `composition=CLIENT`, `bufferTransform=ROT_90`, because `wgpu-hal` sets `preTransform` to `IDENTITY`); a portrait buffer
+  goes to the display hardware (`DEVICE`), and the frame did not move (30.0 against 29.1 fps median). No wgpu issue or PR asks for pre-rotation.
+
+**Against the 30 fps claim** (menu route, render scale 25, `frame_limit = "30"`, 10 minutes from AP 34 C, three races): racing seconds median 17.0 fps
+(first minute 21.1, last five minutes 16.3); the Perfetto window (75 s, 1,509 frames) has a median frame of 48.2 ms, p99 85.7 ms, and 95.8 % of frames over 33.3 ms.
+
 ### Against the S24
 
 This page held no S24 frame-time table before this one. What exists is [`frame-thread-cpu.md`](../rendering/frame-thread-cpu.md)
