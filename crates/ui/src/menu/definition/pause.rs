@@ -16,7 +16,7 @@ pub const UNBUILT_ROW: &str = "pause_unbuilt";
 
 /// The id of the page that asks "are you sure" for the pause screen's confirm screen `screen`.
 #[must_use]
-pub fn confirm_page_id(screen: &str) -> String {
+fn confirm_page_id(screen: &str) -> String {
     format!("{CONFIRM_PAGE_PREFIX}{screen}")
 }
 

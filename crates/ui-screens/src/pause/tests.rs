@@ -726,7 +726,7 @@ mod touch_tiles {
         press(&mut menu, Button::Cross);
         assert_eq!(
             menu.page().id,
-            oag_ui::menu::confirm_page_id("QuitConfirm"),
+            format!("{}QuitConfirm", oag_ui::menu::CONFIRM_PAGE_PREFIX),
             "QUIT opens the confirm page, it does not quit"
         );
         let ids: Vec<_> = menu
