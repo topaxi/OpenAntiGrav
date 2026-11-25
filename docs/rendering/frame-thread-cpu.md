@@ -2602,6 +2602,7 @@ portal shader on Pulse; without mods Pulse culls (0 of 5 drawn at tick 1500).
 | Steam Deck 1280x800 | 6.97 ms | 6.45 ms | offscreen race bench, 3000 ticks, frame p50, mean of three runs (CPU p50 5.86 to 5.33 ms) |
 | Steam Deck 1920x1080 | 8.99 ms | 8.61 ms | same (CPU 6.58 to 5.92 ms) |
 | Steam Deck 3840x2160 | 20.95 ms | 20.13 ms | same |
+| RX 7800 XT (this workstation) | 70.62 G instructions | 67.23 G instructions | `perf stat -e instructions:u`, 2000 ticks of the offscreen race bench, three runs each, spread under 0.07 % (-4.8 %); frame times there are 1.4 to 1.6 ms and were not resolved at load 10 to 50 |
 
 On the S21 that is 36 to 43 fps (run 1) and 27 to 30 fps (run 2, warmer). Leaving all eight cards out
 saves 5.1 ms there, and keeping their passes and clears while dropping their draws saves nothing
