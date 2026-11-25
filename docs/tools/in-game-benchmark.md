@@ -1,6 +1,6 @@
 # In-game benchmark
 
-One fixed race per title, flown in the window with the player's own settings (or a named preset),
+One fixed race per title, flown in the window with the player's own settings (or a named preset and the run's own vsync and frame limit),
 ending on a stats screen and a result file that `just bench-compare` reads. It is the player-facing
 half of the [whole-race render bench](render-bench.md): that one draws offscreen and measures the
 renderer; this one draws through the window, so a frame is the interval between two presents under
@@ -10,9 +10,52 @@ the player's present mode, and the same figures come out of a desktop, a Steam D
 
 | From | How | BACK on the stats screen |
 | --- | --- | --- |
-| The command line | `oag-game --benchmark [title] [--preset NAME]` | quits |
-| The menus | Pulse: EXTRAS (its disc's own `FE_EXTRAS` row, last in the disc's order) opens an EXTRAS page of ours holding BENCHMARK. Every other title: BENCHMARK, the row the built-in `oag-extras` mod adds after OPTIONS (`assets/mods/oag-extras/menu.toml`; on a flat main menu it draws inline after OPTIONS) | the page it was fired from |
+| The command line | `oag-game --benchmark [title] [--preset NAME] [--benchmark-mods on\|off] [--benchmark-vsync MODE] [--benchmark-frame-limit LIMIT]` | quits |
+| The menus (both rows open BENCHMARK OPTIONS first) | Pulse: EXTRAS (its disc's own `FE_EXTRAS` row, last in the disc's order) opens an EXTRAS page of ours holding BENCHMARK. Every other title: BENCHMARK, the row the built-in `oag-extras` mod adds after OPTIONS (`assets/mods/oag-extras/menu.toml`; on a flat main menu it draws inline after OPTIONS) | the page it was fired from |
 | The graphics page | RUN BENCHMARK, before ADVANCED (`assets/ui/menu.toml`): change a setting, run, change it again | the graphics page |
+
+## Benchmark options
+
+BENCHMARK and RUN BENCHMARK open a BENCHMARK OPTIONS page (`assets/ui/menu.toml`, page
+`benchmark_options`; pad, pointer and touch like every page) before the run, with START BENCHMARK
+and BACK. Its rows are **this run's own**: they start from the player's current settings every
+time the page opens, are held by the session (`Session::apply_setting`'s `benchmark.` keys) and are
+never written, so `settings.toml`, which holds the `[mods]` switches and the `[mod_settings]`
+tables, is byte for byte what it was after any run
+(`render_bench_ground_truth::the_options_page_reaches_the_run_and_saves_nothing`).
+
+| Row | Values | Default | Reaches the run as |
+| --- | --- | --- | --- |
+| MODS | off, on | off; the row is left out while no mod of the player's is enabled (`Menu::offer_choice`) | `--benchmark-mods` |
+| VSYNC | the display page's: off, on, smooth | the player's | `--benchmark-vsync`; the surface is reconfigured for the run and again when it ends |
+| FRAME LIMIT | the display page's list (greyed under vsync on, as there) | the player's | `--benchmark-frame-limit` |
+| PRESET | YOUR SETTINGS, low, medium, high | YOUR SETTINGS | `--preset` |
+
+On the command line the options page is skipped and the flags are the rows; `--benchmark-vsync`
+and `--benchmark-frame-limit` are benchmark-scoped (the game has no persisting `--vsync`). On
+Android the launch file takes them one argument per line like `--preset`. BACK on the stats screen
+returns to the page the BENCHMARK row was on, not the options page; firing the row again reopens
+it, and RUN AGAIN repeats the run with the same options.
+
+**MODS OFF is the game as shipped.** `plan::without_mods` clears every door a mod comes in by:
+the simulation modules and the mods' effects, shaders and sounds (`find_extensions`), the texture
+packs (`find_texture_packs`) and the player's override directory
+(`Options::no_overrides`, which mounts only this project's own fallback layer). The mods still
+list on the MODS page and the built-in `oag-extras` is not a mod for this purpose (it adds menu
+rows, not race content); the official `oag.*` mods are mods and load under MODS ON.
+
+The wingtip contrails' lender disc opens through the same override rule
+(`Options::override_bases`), and the rumble library is read out of the race's own archives, so
+neither lets an override of the player's in (the rumble override in the test's override directory
+answers with mods on and stays silent with them off). The rumble probe in
+`crates/game/src/rumble.rs` is a development tool and not a race.
+
+The result's `run` object records `mods` (`"off"` or `[{id, version, hash}]`; `hash` is the
+SHA-256 of the mod's simulation module, empty for a mod with none), `vsync_requested`,
+`present_mode` (the surface's `wgpu` present mode) and `frame_limit` (as configured, a rate,
+`unlimited` or `refresh_rate`), and `command` repeats the flags. `just bench-compare` warns when
+two results differ in any of them (`mods differ`, `vsync differs`, `present mode differs`,
+`frame limit differs`).
 
 `title` is a disc image or folder like any first argument, or a title's short name (`pulse`,
 `pure`, `hd`, `2048`, `omega`) for the first playable disc of that title on the search path. On
@@ -40,6 +83,8 @@ holding the pad. While the run is up (the flyby, the countdown and the race, not
 | START | nothing: no pause, no pause menu, no photo mode |
 | SELECT (the camera cycle) | nothing: the camera does not change and `settings.toml` is not written |
 | Sticks, triggers, face buttons | nothing: the autopilot replaces the player's snapshot outright (`RaceSim::set_autopilot`), so no pad reaches the craft |
+| F11 (fullscreen) | nothing while the run loads or flies: a new output size would move every figure after it (`window::fullscreen_may_change`); the stats screen takes it again |
+| Touch on the racing overlay | nothing: the overlay is not drawn or read in a benchmark (`touch::overlay_reads_fingers`) |
 | Losing focus | nothing: it neither pauses nor abandons the run (`Session::window_away`) |
 | Back | abandons the run, as above |
 
@@ -108,6 +153,41 @@ paces), the screen says so on its own line and the file has `limiter_binds: true
 `frame_limit` to unlimited to measure the machine. The refresh budget (`over the budget`) is the
 display's, and under vsync on most "over" frames are missed refreshes.
 
+## Reading the screen
+
+The stats screen is for a player, not an engineer. It leads with a **verdict**, then plain lines,
+and keeps the engineer's numbers behind DETAILS (`benchmark::text` holds every word, each through
+a string id; `benchmark::screen` draws them):
+
+| Line | Says |
+| --- | --- |
+| SMOOTH, MOSTLY SMOOTH or CHOPPY, with the average FPS and the screen's refresh rate | the share of counted frames that took longer than one screen refresh (the frames over the budget below): up to 1 % is SMOOTH, up to 5 % MOSTLY SMOOTH, more CHOPPY (`report::SMOOTH_SHARE`, `MOSTLY_SMOOTH_SHARE`; **chosen, not measured**) |
+| Slowest moments: N FPS (worst 1 in 100 frames) | the 1 % low |
+| Stutters: N of M frames took longer than one screen refresh | the frames over the budget |
+| Your frame limit (N FPS) capped this result. Turn FRAME LIMIT off in BENCHMARK OPTIONS ... | only when the average sits on the limit in force (`limiter_binds`) |
+| Mods: none, or Mods: N loaded | the run's MODS row |
+
+The heading line names the game, the circuit as the track select names it (never the archive's
+`16_Track`) and the preset. The buttons are DETAILS (and SUMMARY to come back), COPY TO CLIPBOARD,
+BACK and RUN AGAIN; the pad walks them with left, right, up and down, and a click or a tap presses
+one. DETAILS lists the numbers of the table below, the screen refresh and where it came from, the
+settings under the menu's own row names and values (read out of the menu tree, so a name edited
+there is edited here), then the mods, the device, the GPU with its driver and the build version.
+
+**COPY TO CLIPBOARD** puts the same text on the clipboard in the same order: the game, circuit and
+preset, the plain lines, a blank line, then DETAILS (`text::copy_text`, pinned line for line by
+`the_copied_text_is_pinned_line_for_line`). The button shows COPIED for two seconds, or COULD NOT
+COPY. It is on the screen where the platform can write a clipboard and left off where it cannot:
+
+| Platform | Write | How |
+| --- | --- | --- |
+| Linux, Windows, macOS | yes | `arboard` (`app::clipboard::write`); the clipboard object is kept for the life of the process because X11 and Wayland serve the text from the process that owns it |
+| Android | yes | `oag_mobile::clipboard`, the activity's `ClipboardManager` through JNI, on any thread; type-checked for `aarch64-linux-android`, **not run on a phone** |
+| Web | yes | `navigator.clipboard.writeText` through `js_sys`, which needs a secure page and the click that asked; the promise is not awaited, so a later permission refusal is not shown; type-checked for `wasm32`, **not run in a browser** |
+| iOS | no | no JNI-like shim; the button is left off (`clipboard::CAN_WRITE`) |
+
+Run on Linux under Xvfb, the clipboard held the text above after the press (`xclip -o`).
+
 ## The result file
 
 `<data dir>/oag/bench/run-<unix seconds>/<title key>.json` and `.csv` (`pulse`, `pure`, `hd`,
@@ -168,6 +248,14 @@ checks each value against the page.
 - `render_bench_ground_truth::no_input_changes_a_pulse_benchmark` and `..._an_hd_benchmark`: a run
   with every input spent (held CROSS, click, SELECT, START, a stick, focus loss, a key) has the
   untouched run's flyby length, final tick, state hash, frame count and `settings.toml`.
+  `a_benchmark_with_its_mods_off_loads_no_extension_and_no_override`,
+  `the_options_page_reaches_the_run_and_saves_nothing` and
+  `the_mods_row_is_left_out_while_no_mod_is_enabled`: BENCHMARK OPTIONS. Unit tests hold the page in
+  every title's menu tree (`every_titles_tree_holds_the_benchmark_options_page`) and the PRESET,
+  VSYNC and FRAME LIMIT rows to the shipped preset names and the display page's values.
+  `the_stats_screen_swaps_to_details_and_answers_a_copy`: DETAILS and COPY through the real
+  `Session`, by screenshots. The unit tests in `benchmark::text` hold the verdict thresholds, the
+  frame-limit line, the copied text and that no internal name (`_Track`, `track.vex`) is shown.
   `back_abandons_a_benchmark_and_writes_nothing`: Back by the pad and the system Back from the EXTRAS page, Escape from the command line.
 - Unit tests in `crates/game/src/benchmark/` for the lows, the figures, the JSON keys `compare`
   reads, the screen's hit rectangles and layout, the presets, and the command line.

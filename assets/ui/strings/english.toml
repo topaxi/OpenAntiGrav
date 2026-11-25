@@ -665,6 +665,51 @@ OAG_MENU_BENCHMARK = { text = "BENCHMARK", human = false }
 OAG_MENU_BENCHMARK_SUBTITLE = { text = "Fly one fixed race and read the frame rate, the lows and the frame times", human = false }
 OAG_GRAPHICS_RUN_BENCHMARK = { text = "RUN BENCHMARK", human = false }
 OAG_GRAPHICS_RUN_BENCHMARK_SUBTITLE = { text = "Fly one fixed race with these settings and read the frame rate", human = false }
+OAG_BENCH_OPTIONS_TITLE = { text = "BENCHMARK OPTIONS", human = false }
+OAG_BENCH_MODS = { text = "MODS", human = false }
+OAG_BENCH_MODS_SUBTITLE = { text = "OFF runs the game as shipped, so results compare across machines", human = false }
+OAG_BENCH_PRESET = { text = "PRESET", human = false }
+OAG_BENCH_PRESET_SETTINGS = { text = "YOUR SETTINGS", human = false }
+OAG_BENCH_START = { text = "START BENCHMARK", human = false }
+OAG_BENCH_COMPLETE = { text = "BENCHMARK COMPLETE", human = false }
+OAG_BENCH_PRESET_NAMED = { text = "PRESET %s", human = false }
+OAG_BENCH_VERDICT_SMOOTH = { text = "SMOOTH", human = false }
+OAG_BENCH_VERDICT_MOSTLY_SMOOTH = { text = "MOSTLY SMOOTH", human = false }
+OAG_BENCH_VERDICT_CHOPPY = { text = "CHOPPY", human = false }
+OAG_BENCH_VERDICT = { text = "%s: %s FPS ON AVERAGE, ON A %s HZ SCREEN", human = false }
+OAG_BENCH_SLOWEST = { text = "Slowest moments: %s FPS (worst 1 in 100 frames)", human = false }
+OAG_BENCH_STUTTERS = { text = "Stutters: %s of %s frames took longer than one screen refresh", human = false }
+OAG_BENCH_CAPPED = { text = "Your frame limit (%s FPS) capped this result. Turn FRAME LIMIT off in BENCHMARK OPTIONS to see how fast your hardware can go.", human = false }
+OAG_BENCH_MODS_NONE = { text = "Mods: none", human = false }
+OAG_BENCH_MODS_LOADED = { text = "Mods: %s loaded", human = false }
+OAG_BENCH_TOO_SHORT = { text = "The race ended before enough frames were drawn", human = false }
+OAG_BENCH_DETAILS = { text = "DETAILS", human = false }
+OAG_BENCH_SUMMARY = { text = "SUMMARY", human = false }
+OAG_BENCH_COPY = { text = "COPY TO CLIPBOARD", human = false }
+OAG_BENCH_COPIED = { text = "COPIED", human = false }
+OAG_BENCH_COPY_FAILED = { text = "COULD NOT COPY", human = false }
+OAG_BENCH_AGAIN = { text = "RUN AGAIN", human = false }
+OAG_BENCH_SAVED = { text = "SAVED %s", human = false }
+OAG_BENCH_D_AVERAGE = { text = "AVERAGE FPS", human = false }
+OAG_BENCH_D_LOW_1 = { text = "1% LOW FPS", human = false }
+OAG_BENCH_D_LOW_01 = { text = "0.1% LOW FPS", human = false }
+OAG_BENCH_D_LOW_01_NA = { text = "N/A UNDER %s FRAMES", human = false }
+OAG_BENCH_D_MEDIAN = { text = "FRAME TIME MEDIAN", human = false }
+OAG_BENCH_D_P95 = { text = "FRAME TIME P95", human = false }
+OAG_BENCH_D_P99 = { text = "FRAME TIME P99", human = false }
+OAG_BENCH_D_WORST = { text = "FRAME TIME WORST", human = false }
+OAG_BENCH_D_OVER = { text = "FRAMES OVER %s MS", human = false }
+OAG_BENCH_D_OVER_OF = { text = "%s OF %s", human = false }
+OAG_BENCH_D_REFRESH = { text = "SCREEN REFRESH", human = false }
+OAG_BENCH_D_REFRESH_DISPLAY = { text = "%s HZ", human = false }
+OAG_BENCH_D_REFRESH_ASSUMED = { text = "%s HZ (ASSUMED)", human = false }
+OAG_BENCH_D_MODS = { text = "MODS", human = false }
+OAG_BENCH_D_MODS_OFF = { text = "OFF", human = false }
+OAG_BENCH_D_DEVICE = { text = "DEVICE", human = false }
+OAG_BENCH_D_GPU = { text = "GPU", human = false }
+OAG_BENCH_D_BUILD = { text = "BUILD", human = false }
+OAG_BENCH_D_TITLE = { text = "GAME", human = false }
+OAG_BENCH_D_CIRCUIT = { text = "CIRCUIT", human = false }
 
 # The REPLAYS page and the replay viewer (ADR-0087). Ours, in no original.
 OAG_MENU_REPLAYS = { text = "REPLAYS", human = false }

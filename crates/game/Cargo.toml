@@ -154,7 +154,7 @@ oag-video = { workspace = true, features = ["av1"] }
 wasm-bindgen = "0.2.130"
 wasm-bindgen-futures = "0.4.80"
 js-sys = "0.3.107"
-web-sys = { version = "0.3.107", features = ["console", "Window", "Document", "Element", "HtmlCanvasElement", "Storage"] }
+web-sys = { version = "0.3.107", features = ["console", "Window", "Document", "Element", "HtmlCanvasElement", "Navigator", "Storage"] }
 
 [features]
 # Only the web build turns this on (`just web`): the `oag_web` example below,

@@ -421,6 +421,51 @@ OAG_MENU_BENCHMARK = { text = "BENCHMARK", human = false }
 OAG_MENU_BENCHMARK_SUBTITLE = { text = "Corra uma prova fixa e veja a taxa de quadros, as mínimas e os tempos de quadro", human = false }
 OAG_GRAPHICS_RUN_BENCHMARK = { text = "EXECUTAR BENCHMARK", human = false }
 OAG_GRAPHICS_RUN_BENCHMARK_SUBTITLE = { text = "Corra uma prova fixa com estas configurações e veja a taxa de quadros", human = false }
+OAG_BENCH_OPTIONS_TITLE = { text = "OPÇÕES DO BENCHMARK", human = false }
+OAG_BENCH_MODS = { text = "MODS", human = false }
+OAG_BENCH_MODS_SUBTITLE = { text = "DESLIGADO executa o jogo como distribuído, para que os resultados sejam comparáveis entre máquinas", human = false }
+OAG_BENCH_PRESET = { text = "PREDEFINIÇÃO", human = false }
+OAG_BENCH_PRESET_SETTINGS = { text = "SUAS CONFIGURAÇÕES", human = false }
+OAG_BENCH_START = { text = "INICIAR BENCHMARK", human = false }
+OAG_BENCH_COMPLETE = { text = "BENCHMARK CONCLUÍDO", human = false }
+OAG_BENCH_PRESET_NAMED = { text = "PREDEFINIÇÃO %s", human = false }
+OAG_BENCH_VERDICT_SMOOTH = { text = "FLUIDO", human = false }
+OAG_BENCH_VERDICT_MOSTLY_SMOOTH = { text = "QUASE FLUIDO", human = false }
+OAG_BENCH_VERDICT_CHOPPY = { text = "COM TRAVADAS", human = false }
+OAG_BENCH_VERDICT = { text = "%s: %s FPS EM MÉDIA, EM UMA TELA DE %s HZ", human = false }
+OAG_BENCH_SLOWEST = { text = "Momentos mais lentos: %s FPS (os piores 1 em 100 quadros)", human = false }
+OAG_BENCH_STUTTERS = { text = "Travadas: %s de %s quadros levaram mais que uma atualização da tela", human = false }
+OAG_BENCH_CAPPED = { text = "Seu limite de quadros (%s FPS) limitou este resultado. Desligue LIMITE DE QUADROS nas OPÇÕES DO BENCHMARK para ver a velocidade máxima do seu hardware.", human = false }
+OAG_BENCH_MODS_NONE = { text = "Mods: nenhum", human = false }
+OAG_BENCH_MODS_LOADED = { text = "Mods: %s carregados", human = false }
+OAG_BENCH_TOO_SHORT = { text = "A corrida terminou antes de quadros suficientes serem desenhados", human = false }
+OAG_BENCH_DETAILS = { text = "DETALHES", human = false }
+OAG_BENCH_SUMMARY = { text = "RESUMO", human = false }
+OAG_BENCH_COPY = { text = "COPIAR PARA A ÁREA DE TRANSFERÊNCIA", human = false }
+OAG_BENCH_COPIED = { text = "COPIADO", human = false }
+OAG_BENCH_COPY_FAILED = { text = "NÃO FOI POSSÍVEL COPIAR", human = false }
+OAG_BENCH_AGAIN = { text = "EXECUTAR DE NOVO", human = false }
+OAG_BENCH_SAVED = { text = "SALVO %s", human = false }
+OAG_BENCH_D_AVERAGE = { text = "FPS MÉDIO", human = false }
+OAG_BENCH_D_LOW_1 = { text = "FPS MÍNIMO 1%", human = false }
+OAG_BENCH_D_LOW_01 = { text = "FPS MÍNIMO 0,1%", human = false }
+OAG_BENCH_D_LOW_01_NA = { text = "INDISPONÍVEL COM MENOS DE %s QUADROS", human = false }
+OAG_BENCH_D_MEDIAN = { text = "TEMPO DE QUADRO MEDIANO", human = false }
+OAG_BENCH_D_P95 = { text = "TEMPO DE QUADRO P95", human = false }
+OAG_BENCH_D_P99 = { text = "TEMPO DE QUADRO P99", human = false }
+OAG_BENCH_D_WORST = { text = "PIOR TEMPO DE QUADRO", human = false }
+OAG_BENCH_D_OVER = { text = "QUADROS ACIMA DE %s MS", human = false }
+OAG_BENCH_D_OVER_OF = { text = "%s DE %s", human = false }
+OAG_BENCH_D_REFRESH = { text = "ATUALIZAÇÃO DA TELA", human = false }
+OAG_BENCH_D_REFRESH_DISPLAY = { text = "%s HZ", human = false }
+OAG_BENCH_D_REFRESH_ASSUMED = { text = "%s HZ (SUPOSTO)", human = false }
+OAG_BENCH_D_MODS = { text = "MODS", human = false }
+OAG_BENCH_D_MODS_OFF = { text = "DESLIGADO", human = false }
+OAG_BENCH_D_DEVICE = { text = "DISPOSITIVO", human = false }
+OAG_BENCH_D_GPU = { text = "GPU", human = false }
+OAG_BENCH_D_BUILD = { text = "VERSÃO", human = false }
+OAG_BENCH_D_TITLE = { text = "JOGO", human = false }
+OAG_BENCH_D_CIRCUIT = { text = "CIRCUITO", human = false }
 OAG_MENU_REPLAYS = { text = "REPLAYS", human = false }
 OAG_MENU_REPLAYS_SUBTITLE = { text = "Assista, guarde ou apague as corridas que você gravou", human = false }
 OAG_REPLAYS_PAGE_TITLE = { text = "REPLAYS", human = false }

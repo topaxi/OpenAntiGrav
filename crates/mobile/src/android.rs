@@ -161,6 +161,74 @@ pub(crate) fn export(
     })
 }
 
+/// Puts `text` on the activity's clipboard as plain text.
+///
+/// Runs on whichever thread calls it: the JVM the activity started is attached for the call.
+pub(crate) fn copy(text: &str) -> Result<(), crate::export::Error> {
+    use crate::export::Error;
+    let app = APP
+        .get()
+        .ok_or(Error::Unsupported("the activity is not up"))?;
+    let vm = jni::JavaVM::singleton().map_err(|e| Error::System(e.to_string()))?;
+    let activity = app.activity_as_ptr();
+    vm.attach_current_thread(|env| {
+        let outcome = clipboard_set(env, activity, text);
+        if env.exception_check() {
+            env.exception_describe();
+            env.exception_clear();
+        }
+        outcome
+    })
+}
+
+#[allow(unsafe_code)] // wrapping the activity's raw reference, see below
+fn clipboard_set(
+    env: &mut jni::Env,
+    activity: *mut std::ffi::c_void,
+    text: &str,
+) -> Result<(), crate::export::Error> {
+    use crate::export::Error;
+    use jni::objects::{JObject, JValue};
+    use jni::{jni_sig, jni_str};
+    use std::mem::ManuallyDrop;
+
+    let sys = |e: jni::errors::Error| Error::System(e.to_string());
+    // SAFETY: the activity's JNI global reference, owned by `android-activity` for as long as
+    // the app runs; `ManuallyDrop` keeps this wrapper from deleting a reference it does not own.
+    let activity = ManuallyDrop::new(unsafe { JObject::from_raw(env, activity.cast()) });
+    let service = env.new_string("clipboard").map_err(sys)?;
+    let manager = env
+        .call_method(
+            &*activity,
+            jni_str!("getSystemService"),
+            jni_sig!("(Ljava/lang/String;)Ljava/lang/Object;"),
+            &[JValue::from(&service)],
+        )
+        .and_then(|v| v.l())
+        .map_err(sys)?;
+    let label = env.new_string("OpenAntiGrav").map_err(sys)?;
+    let body = env.new_string(text).map_err(sys)?;
+    let clip = env
+        .call_static_method(
+            jni_str!("android/content/ClipData"),
+            jni_str!("newPlainText"),
+            jni_sig!(
+                "(Ljava/lang/CharSequence;Ljava/lang/CharSequence;)Landroid/content/ClipData;"
+            ),
+            &[JValue::from(&label), JValue::from(&body)],
+        )
+        .and_then(|v| v.l())
+        .map_err(sys)?;
+    env.call_method(
+        &manager,
+        jni_str!("setPrimaryClip"),
+        jni_sig!("(Landroid/content/ClipData;)V"),
+        &[JValue::from(&clip)],
+    )
+    .map_err(sys)?;
+    Ok(())
+}
+
 fn put_string(
     env: &mut jni::Env,
     values: &jni::objects::JObject,

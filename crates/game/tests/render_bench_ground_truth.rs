@@ -274,7 +274,8 @@ fn the_benchmark_row_is_on_pulses_extras_page_and_returns_to_it() {
         .arg("--drive")
         .arg(
             "boot; select extras; press cross; until page=extras within 300; \
-             select benchmark; press cross; until benchmark=stats within 3000; press cross; \
+             select benchmark; press cross; until page=benchmark_options within 300; \
+             select benchmark_start; press cross; until benchmark=stats within 3000; press cross; \
              until stage=menu within 600; expect page=extras; quit",
         )
         .env("XDG_CONFIG_HOME", dir.join("config"))
@@ -546,6 +547,7 @@ fn back_abandons_a_benchmark_and_writes_nothing() {
         let dir = base.join(name);
         let script = format!(
             "boot; select extras; press cross; until page=extras within 300; select benchmark; \
+             press cross; until page=benchmark_options within 300; select benchmark_start; \
              press cross; until benchmark=running within 3000; until sim_tick=300 within 6000; \
              {abandon}; until stage=menu within 600; expect page=extras; quit"
         );
@@ -582,4 +584,324 @@ fn back_abandons_a_benchmark_and_writes_nothing() {
     let settings =
         std::fs::read_to_string(dir.join("config/oag/settings.toml")).unwrap_or_default();
     assert!(!settings.contains("render_scale = 50"), "{settings}");
+}
+
+/// A directory of mods holding the repository's Energy Turbo example (a simulation module the
+/// race announces when it loads), and a directory of overrides holding one rumble pattern the
+/// race reads out of the override layer; both under `base`. `None` where the example's module is
+/// not built.
+fn mods_and_override(base: &std::path::Path) -> Option<(std::path::PathBuf, std::path::PathBuf)> {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let example = root.join("assets/mods/examples/energy-turbo");
+    if !example.join("ext/energy_turbo.wasm").exists() {
+        return None;
+    }
+    let (mods, overrides) = (base.join("mods"), base.join("overrides"));
+    let pattern_dir = overrides.join("wipeout-pulse/Data/XML/Rumble");
+    let mod_dir = mods.join("energy-turbo");
+    for dir in [&pattern_dir, &mod_dir] {
+        let _ = std::fs::remove_dir_all(dir);
+        std::fs::create_dir_all(dir).expect("a temp directory");
+    }
+    std::fs::copy(
+        root.join("assets/fallback/Data/XML/Rumble/pad_speed.toml"),
+        pattern_dir.join("pad_speed.toml"),
+    )
+    .expect("the fallback's pad pattern");
+    for file in ["oag-mod.toml", "ext/energy_turbo.wasm"] {
+        let to = mod_dir.join(file);
+        std::fs::create_dir_all(to.parent().unwrap()).unwrap();
+        std::fs::copy(example.join(file), to).expect("the example mod's file");
+    }
+    // The rest of the example (effects, icons) is read when the manifest names it.
+    for dir in ["fx", "icons"] {
+        if example.join(dir).is_dir() {
+            copy_tree(&example.join(dir), &mod_dir.join(dir));
+        }
+    }
+    Some((mods, overrides))
+}
+
+fn copy_tree(from: &std::path::Path, to: &std::path::Path) {
+    std::fs::create_dir_all(to).expect("a temp directory");
+    for entry in std::fs::read_dir(from).expect("a directory").flatten() {
+        let target = to.join(entry.file_name());
+        if entry.path().is_dir() {
+            copy_tree(&entry.path(), &target);
+        } else {
+            std::fs::copy(entry.path(), target).expect("a file");
+        }
+    }
+}
+
+const OVERRIDE_LINE: &str = "pad_speed.toml answered by the player's override";
+const EXTENSION_LINE: &str = "simulation module loaded";
+
+/// A benchmark with its mods off loads no extension and none of the player's override files, and
+/// one with them on loads both and names them in its result. Fails on a build that drops the
+/// guard (`benchmark::plan::without_mods`): the off run's log then names the module and the
+/// override, and its result lists the mod.
+#[test]
+#[ignore = "needs data/images/pulse-psp-eu.chd, the examples submodule and a GPU"]
+fn a_benchmark_with_its_mods_off_loads_no_extension_and_no_override() {
+    let Some(image) = oag_testdata::image("data/images/pulse-psp-eu.chd") else {
+        return;
+    };
+    let base = std::env::temp_dir().join("oag-in-game-benchmark-mods-ground-truth");
+    let Some((mods, overrides)) = mods_and_override(&base) else {
+        return;
+    };
+    let run = |name: &str, flag: &[&str]| -> (String, String) {
+        let dir = base.join(name);
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("a temp directory");
+        let out = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
+            .arg(&image)
+            .args(["--no-audio", "--no-intro", "--benchmark", "--ticks"])
+            .arg(TICKS.to_string())
+            .args(flag)
+            .arg("--drive")
+            .arg("until benchmark=stats within 6000; quit")
+            .env("XDG_CONFIG_HOME", dir.join("config"))
+            .env("XDG_STATE_HOME", dir.join("state"))
+            .env("XDG_DATA_HOME", dir.join("data"))
+            .env("OAG_MODS", &mods)
+            .env("OAG_OVERRIDES", &overrides)
+            .env("RUST_LOG", "debug")
+            .output()
+            .expect("running oag-game");
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let runs: Vec<_> = std::fs::read_dir(dir.join("data/oag/bench"))
+            .expect("a result")
+            .flatten()
+            .collect();
+        let json = std::fs::read_to_string(runs[0].path().join("pulse.json")).unwrap();
+        (json, String::from_utf8_lossy(&out.stderr).into_owned())
+    };
+    let (on_json, on_log) = run("on", &["--benchmark-mods", "on"]);
+    assert!(
+        on_log.contains(EXTENSION_LINE),
+        "the control run loaded no module"
+    );
+    assert!(
+        on_log.contains(OVERRIDE_LINE),
+        "the control run read no override"
+    );
+    assert!(
+        on_json.contains("\"id\": \"oag.energy-turbo\""),
+        "{on_json}"
+    );
+
+    let (off_json, off_log) = run("off", &[]);
+    assert!(
+        !off_log.contains(EXTENSION_LINE),
+        "a module loaded with mods off"
+    );
+    assert!(
+        !off_log.contains(OVERRIDE_LINE),
+        "an override was read with mods off"
+    );
+    assert!(off_json.contains("\"mods\": \"off\""), "{off_json}");
+}
+
+/// BENCHMARK OPTIONS: every row reaches the run and nothing reaches the player's files. A run
+/// started from the page with MODS on, VSYNC smooth, a 120 frame limit and the low preset says
+/// all four in its result, flies the plain run's untouched settings back (`settings.toml`, which
+/// holds the `[mods]` switches and the `[mod_settings]` tables, is byte for byte what it was) and
+/// returns to the page the row was on. Fails on a build whose rows are not applied, or are
+/// saved.
+#[test]
+#[ignore = "needs data/images/pulse-psp-eu.chd, the examples submodule and a GPU"]
+fn the_options_page_reaches_the_run_and_saves_nothing() {
+    let Some(image) = oag_testdata::image("data/images/pulse-psp-eu.chd") else {
+        return;
+    };
+    let base = std::env::temp_dir().join("oag-in-game-benchmark-options-ground-truth");
+    let Some((mods, overrides)) = mods_and_override(&base) else {
+        return;
+    };
+    let dir = base.join("menu");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("a temp directory");
+    let run = |script: &str, mods: &std::path::Path| {
+        let out = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
+            .arg(&image)
+            .args(["--no-audio", "--no-intro", "--ticks"])
+            .arg(TICKS.to_string())
+            .arg("--drive")
+            .arg(script)
+            .env("XDG_CONFIG_HOME", dir.join("config"))
+            .env("XDG_STATE_HOME", dir.join("state"))
+            .env("XDG_DATA_HOME", dir.join("data"))
+            .env("OAG_MODS", mods)
+            .env("OAG_OVERRIDES", &overrides)
+            .env("RUST_LOG", "debug")
+            .output()
+            .expect("running oag-game");
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        String::from_utf8_lossy(&out.stderr).into_owned()
+    };
+    // The player's file, written by an earlier run, with a frame limit and a vsync the options
+    // are not.
+    run(
+        "boot; select options; press cross; until page=options; select DISPLAY; press cross; \
+         until page=display; set display.vsync=off; set display.frame_limit=240; quit",
+        &mods,
+    );
+    let settings = dir.join("config/oag/settings.toml");
+    let before = std::fs::read_to_string(&settings).expect("the player's settings.toml");
+    assert!(before.contains("frame_limit = \"240\""), "{before}");
+
+    let log = run(
+        "boot; select extras; press cross; until page=extras within 300; select benchmark; \
+         press cross; until page=benchmark_options within 300; set benchmark.mods=on; \
+         set benchmark.vsync=smooth; set benchmark.frame_limit=120; set benchmark.preset=low; \
+         select benchmark_start; press cross; until benchmark=stats within 6000; press cross; \
+         until stage=menu within 600; expect page=extras; quit",
+        &mods,
+    );
+    assert!(log.contains(EXTENSION_LINE), "MODS on loaded no module");
+    let runs: Vec<_> = std::fs::read_dir(dir.join("data/oag/bench"))
+        .expect("a result")
+        .flatten()
+        .collect();
+    assert_eq!(runs.len(), 1, "one run");
+    let json = std::fs::read_to_string(runs[0].path().join("pulse.json")).unwrap();
+    assert!(
+        json.contains("\"id\": \"oag.energy-turbo\""),
+        "MODS: {json}"
+    );
+    assert!(
+        json.contains("\"vsync_requested\": \"smooth\""),
+        "VSYNC: {json}"
+    );
+    assert!(
+        json.contains("\"frame_limit\": \"120\""),
+        "FRAME LIMIT: {json}"
+    );
+    assert!(json.contains("\"preset\": \"low\""), "PRESET: {json}");
+    assert!(json.contains("\"render_scale\": \"50%\""), "PRESET: {json}");
+    assert_eq!(
+        std::fs::read_to_string(&settings).expect("settings.toml is still there"),
+        before,
+        "an option reached the player's settings"
+    );
+}
+
+/// MODS is not on the page while no mod is enabled: a row with nothing to choose is left out.
+#[test]
+#[ignore = "needs data/images/pulse-psp-eu.chd and a GPU"]
+fn the_mods_row_is_left_out_while_no_mod_is_enabled() {
+    let Some(image) = oag_testdata::image("data/images/pulse-psp-eu.chd") else {
+        return;
+    };
+    let base = std::env::temp_dir().join("oag-in-game-benchmark-no-mods-ground-truth");
+    let _ = std::fs::remove_dir_all(&base);
+    let empty = base.join("mods");
+    std::fs::create_dir_all(&empty).expect("a temp directory");
+    let log = base.join("state.jsonl");
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
+        .arg(&image)
+        .args(["--no-audio", "--no-intro", "--state-log"])
+        .arg(&log)
+        .arg("--drive")
+        .arg(
+            "boot; select extras; press cross; until page=extras within 300; select benchmark; \
+             press cross; until page=benchmark_options within 300; draw; quit",
+        )
+        .env("XDG_CONFIG_HOME", base.join("config"))
+        .env("XDG_STATE_HOME", base.join("state"))
+        .env("XDG_DATA_HOME", base.join("data"))
+        .env("OAG_MODS", &empty)
+        .output()
+        .expect("running oag-game");
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let last = std::fs::read_to_string(&log)
+        .expect("a state log")
+        .lines()
+        .last()
+        .expect("a state line")
+        .to_string();
+    let state: serde_json::Value = serde_json::from_str(&last).unwrap();
+    let labels: Vec<String> = state["screen"]["rows"]
+        .as_array()
+        .expect("rows")
+        .iter()
+        .filter_map(|row| row["label"].as_str().map(str::to_string))
+        .collect();
+    assert!(labels.iter().any(|l| l == "START BENCHMARK"), "{labels:?}");
+    assert!(labels.iter().any(|l| l == "VSYNC"), "{labels:?}");
+    assert!(!labels.iter().any(|l| l == "MODS"), "{labels:?}");
+}
+
+/// The stats screen's DETAILS swaps its plain lines for the full numbers, back again, and COPY TO
+/// CLIPBOARD answers with a label of its own (COPIED, or COULD NOT COPY where the machine has no
+/// clipboard to write). The race behind the panel is frozen, so a screen that does not change
+/// between the steps has dropped the action. Fails on a build whose DETAILS or COPY does nothing.
+#[test]
+#[ignore = "needs data/images/pulse-psp-eu.chd and a GPU"]
+fn the_stats_screen_swaps_to_details_and_answers_a_copy() {
+    let Some(image) = oag_testdata::image("data/images/pulse-psp-eu.chd") else {
+        return;
+    };
+    let dir = std::env::temp_dir().join("oag-in-game-benchmark-stats-ground-truth");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("a temp directory");
+    let shot = |name: &str| dir.join(format!("{name}.png"));
+    // The focus moves with the presses, so each action is compared with the screen the same focus
+    // gave just before it.
+    let script = format!(
+        "until benchmark=stats within 6000; press left; press left; ticks 3; screenshot {}; \
+         press cross; ticks 3; screenshot {}; press cross; ticks 3; screenshot {}; press right; \
+         ticks 3; screenshot {}; press cross; ticks 3; screenshot {}; quit",
+        shot("focused").display(),
+        shot("details").display(),
+        shot("summary-again").display(),
+        shot("copy-focused").display(),
+        shot("copied").display(),
+    );
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
+        .arg(&image)
+        .args(["--no-audio", "--no-intro", "--benchmark", "--ticks"])
+        .arg(TICKS.to_string())
+        .arg("--drive")
+        .arg(script)
+        .env("XDG_CONFIG_HOME", dir.join("config"))
+        .env("XDG_STATE_HOME", dir.join("state"))
+        .env("XDG_DATA_HOME", dir.join("data"))
+        .env_remove("DISPLAY")
+        .env_remove("WAYLAND_DISPLAY")
+        .output()
+        .expect("running oag-game");
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let read = |name: &str| std::fs::read(shot(name)).expect("a screenshot");
+    // Compared as booleans: a failed `assert_eq!` would print two PNGs.
+    assert!(
+        read("focused") != read("details"),
+        "DETAILS changed nothing"
+    );
+    assert!(
+        read("focused") == read("summary-again"),
+        "SUMMARY did not come back to the plain lines"
+    );
+    assert!(
+        read("copy-focused") != read("copied"),
+        "COPY answered nothing"
+    );
 }

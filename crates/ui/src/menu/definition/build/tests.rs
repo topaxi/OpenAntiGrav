@@ -160,6 +160,23 @@ fn pulses_extras_row_opens_a_page_holding_benchmark_and_a_title_without_one_has_
     }
 }
 
+/// BENCHMARK and RUN BENCHMARK open the options page, so every title's tree must hold it with its
+/// START row: a tree without it would start the run with no page.
+#[test]
+fn every_titles_tree_holds_the_benchmark_options_page() {
+    for title in [
+        oag_pulse::TITLE,
+        oag_pure::TITLE,
+        oag_hd::TITLE,
+        oag_omega::TITLE,
+        oag_2048::TITLE,
+    ] {
+        let actions = page_actions(title, "benchmark_options")
+            .unwrap_or_else(|| panic!("{} has no benchmark_options page", title.name));
+        assert_eq!(actions, ["benchmark_start"], "{}", title.name);
+    }
+}
+
 #[test]
 fn no_title_keeps_every_vanilla_row_and_the_extras_around_them() {
     assert_eq!(

@@ -193,6 +193,7 @@ impl Pending {
             recorded_mods: None,
             // Filled at launch (`crate::texture_pack::attach`), from the packs on then.
             find_texture_packs: None,
+            no_overrides: false,
             // Passed straight through like `track` above, `None` included:
             // `race::load` resolves an unnamed team from the title it opened,
             // which is the only place the title is known. See

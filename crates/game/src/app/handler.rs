@@ -1019,7 +1019,9 @@ impl ApplicationHandler for App {
                     event.state == ElementState::Pressed,
                     event.repeat,
                 ) {
-                    session.toggle_window_fullscreen(id);
+                    if crate::app::window::fullscreen_may_change(session.benchmark_running()) {
+                        session.toggle_window_fullscreen(id);
+                    }
                     return;
                 }
                 // **`repeat` matters now that escape navigates.** winit resends

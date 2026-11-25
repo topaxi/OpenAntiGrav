@@ -32,6 +32,27 @@ pub fn adapter_json(adapter: &wgpu::AdapterInfo, gpu_timestamps: bool) -> String
     )
 }
 
+/// The `mods` field of the result: `"off"`, or the loaded mods as `[{id, version, hash}]`.
+#[must_use]
+pub fn mods_json(mods: Option<&[super::ModLoaded]>) -> String {
+    let Some(mods) = mods else {
+        return json_string("off");
+    };
+    let list = mods
+        .iter()
+        .map(|m| {
+            format!(
+                "{{\"id\": {}, \"version\": {}, \"hash\": {}}}",
+                json_string(&m.id),
+                json_string(&m.version),
+                json_string(&m.hash)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!("[{list}]")
+}
+
 /// How this binary was built, as the result files say it.
 #[must_use]
 pub fn build_label() -> String {
@@ -67,12 +88,27 @@ pub struct Context {
     pub device: String,
     /// The settings that change what a frame costs, in the order the screen lists them.
     pub settings: Vec<(String, String)>,
+    /// The same settings with the menu's own row names and values, for the screen and the copied
+    /// text.
+    pub details: Vec<(String, String)>,
+    /// The circuit as the track select names it; `None` where the run knows no such name.
+    pub track_name: Option<String>,
+    /// The build's version string.
+    pub build_version: &'static str,
     /// The refresh rate the budget is read against, and what it came from.
     pub refresh: (f64, &'static str),
     /// The rate the frame limiter holds the loop to, where one is in force.
     pub frame_limit_hz: Option<f64>,
     /// The preset the run drew with; `None` is the player's own settings.
     pub preset: Option<String>,
+    /// The mods that loaded with the run; `None` is a run without any.
+    pub mods: Option<Vec<super::ModLoaded>>,
+    /// The vsync mode the run asked for (`off`, `on`, `smooth`).
+    pub vsync: String,
+    /// The present mode the surface was configured with.
+    pub present_mode: String,
+    /// The frame limit the run was configured with (`unlimited`, `240`, `refresh_rate`).
+    pub frame_limit: String,
     /// Where the benchmark was started from: `cli`, `extras` or `graphics`.
     pub origin: &'static str,
     /// The flags that start the same benchmark again.
@@ -129,11 +165,49 @@ pub struct Figures {
     pub limited_by: Option<f64>,
 }
 
+/// How a run reads to a player, from the share of counted frames that missed one screen refresh.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Verdict {
+    /// At most [`SMOOTH_SHARE`] of the frames missed a refresh.
+    Smooth,
+    /// At most [`MOSTLY_SMOOTH_SHARE`] did.
+    MostlySmooth,
+    /// More than that.
+    Choppy,
+}
+
+/// The largest share of missed refreshes a SMOOTH run has: 1 %.
+pub const SMOOTH_SHARE: f64 = 0.01;
+
+/// The largest share a MOSTLY SMOOTH run has: 5 %.
+pub const MOSTLY_SMOOTH_SHARE: f64 = 0.05;
+
 /// Counted frames below which the 0.1 % low is only the worst frame.
 pub const LOW_01_FRAMES: usize = 1000;
 
 /// An average this close under the frame limit (or over it) is the limiter's.
 const LIMITER_BINDS: f64 = 0.9;
+
+impl Figures {
+    /// The share of counted frames that took longer than one screen refresh.
+    #[must_use]
+    pub fn stutter_share(&self) -> f64 {
+        self.over_budget as f64 / self.counted.max(1) as f64
+    }
+
+    /// How the run reads: see [`Verdict`].
+    #[must_use]
+    pub fn verdict(&self) -> Verdict {
+        let share = self.stutter_share();
+        if share <= SMOOTH_SHARE {
+            Verdict::Smooth
+        } else if share <= MOSTLY_SMOOTH_SHARE {
+            Verdict::MostlySmooth
+        } else {
+            Verdict::Choppy
+        }
+    }
+}
 
 impl Report {
     /// The frames after the countdown: the craft is released and the race is what is drawn.
@@ -250,7 +324,7 @@ impl Report {
         put(
             "run",
             format!(
-                "{{\"kind\": \"in_game\", \"title_key\": {}, \"track\": {}, \"case\": \"1\", \"preset\": {}, \"origin\": {}, \"command\": [{}]}}",
+                "{{\"kind\": \"in_game\", \"title_key\": {}, \"track\": {}, \"case\": \"1\", \"preset\": {}, \"origin\": {}, \"mods\": {}, \"vsync_requested\": {}, \"present_mode\": {}, \"frame_limit\": {}, \"command\": [{}]}}",
                 json_string(c.title),
                 c.track
                     .as_deref()
@@ -259,6 +333,10 @@ impl Report {
                     .as_deref()
                     .map_or_else(|| "null".to_string(), json_string),
                 json_string(c.origin),
+                mods_json(c.mods.as_deref()),
+                json_string(&c.vsync),
+                json_string(&c.present_mode),
+                json_string(&c.frame_limit),
                 c.command
                     .iter()
                     .map(|flag| json_string(flag))
@@ -313,4 +391,4 @@ impl Report {
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;

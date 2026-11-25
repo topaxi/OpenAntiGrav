@@ -285,4 +285,41 @@ mod tests {
             }
         }
     }
+
+    /// The BENCHMARK OPTIONS page's PRESET row offers YOUR SETTINGS and exactly the names every
+    /// title's shipped file has: a name the row offered and a title lacked would start nothing.
+    /// Its VSYNC and FRAME LIMIT rows offer what the display page's do.
+    #[test]
+    fn the_options_page_offers_the_presets_every_title_ships_and_the_display_pages_values() {
+        let menu: toml::Value =
+            toml::from_str(include_str!("../../../../assets/ui/menu.toml")).unwrap();
+        let mut rows = Vec::new();
+        offered(&menu, &mut rows);
+        let values = |setting: &str| {
+            rows.iter()
+                .find(|(row, _)| row == setting)
+                .unwrap_or_else(|| panic!("no row {setting}"))
+                .1
+                .clone()
+        };
+        for (title, text) in SHIPPED {
+            let names: Vec<String> = Presets::parse(text)
+                .unwrap()
+                .names()
+                .into_iter()
+                .map(str::to_string)
+                .collect();
+            assert_eq!(
+                values("benchmark.preset")[1..],
+                names[..],
+                "{title}: the PRESET row and the file disagree"
+            );
+        }
+        assert_eq!(values("benchmark.preset")[0], "settings");
+        assert_eq!(values("benchmark.vsync"), values("display.vsync"));
+        assert_eq!(
+            values("benchmark.frame_limit"),
+            values("display.frame_limit")
+        );
+    }
 }

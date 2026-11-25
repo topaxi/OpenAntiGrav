@@ -17,6 +17,30 @@ pub(crate) struct BenchmarkArgs {
     /// own graphics settings. Nothing is written back to your settings.
     #[arg(long, value_name = "NAME", requires = "benchmark")]
     pub(crate) preset: Option<String>,
+
+    /// With `--benchmark`: `on` loads the mods you have enabled with the run (extensions, mod
+    /// effects, shaders, texture packs, your override files); `off` (the default) runs the
+    /// game as shipped, so results compare across machines. The result file records which.
+    #[arg(long, value_name = "on|off", requires = "benchmark", default_value = "off", action = clap::ArgAction::Set, value_parser = parse_on_off)]
+    pub(crate) benchmark_mods: bool,
+
+    /// With `--benchmark`: run with this vsync mode (`off`, `on`, `smooth`) instead of yours.
+    /// Not saved.
+    #[arg(long, value_name = "MODE", requires = "benchmark", value_parser = |text: &str| text.parse::<oag_present::perf::Vsync>())]
+    pub(crate) benchmark_vsync: Option<oag_present::perf::Vsync>,
+
+    /// With `--benchmark`: run with this frame limit (`unlimited`, `refresh_rate` or frames per
+    /// second) instead of yours. Not saved.
+    #[arg(long, value_name = "LIMIT", requires = "benchmark", value_parser = |text: &str| text.parse::<oag_present::perf::FrameLimit>())]
+    pub(crate) benchmark_frame_limit: Option<oag_present::perf::FrameLimit>,
+}
+
+fn parse_on_off(text: &str) -> Result<bool, String> {
+    match text {
+        "on" => Ok(true),
+        "off" => Ok(false),
+        other => Err(format!("expected on or off, not {other:?}")),
+    }
 }
 
 impl BenchmarkArgs {
@@ -24,6 +48,9 @@ impl BenchmarkArgs {
     pub(crate) fn request(&self) -> Option<crate::benchmark::Request> {
         self.benchmark.then(|| crate::benchmark::Request {
             preset: self.preset.clone(),
+            mods: self.benchmark_mods,
+            vsync: self.benchmark_vsync,
+            frame_limit: self.benchmark_frame_limit,
         })
     }
 }
@@ -79,7 +106,8 @@ mod tests {
         assert_eq!(
             cli.benchmark.request(),
             Some(crate::benchmark::Request {
-                preset: Some("low".into())
+                preset: Some("low".into()),
+                ..Default::default()
             })
         );
         assert_eq!(parse(&["x.chd"]).unwrap().benchmark.request(), None);
@@ -93,10 +121,37 @@ mod tests {
     }
 
     #[test]
+    fn the_run_options_reach_the_request_and_default_to_the_players() {
+        let request = parse(&["--benchmark"])
+            .unwrap()
+            .benchmark
+            .request()
+            .unwrap();
+        assert_eq!(request, crate::benchmark::Request::default());
+        assert!(!request.mods);
+        let cli = parse(&[
+            "--benchmark",
+            "--benchmark-mods",
+            "on",
+            "--benchmark-vsync",
+            "smooth",
+            "--benchmark-frame-limit",
+            "120",
+        ])
+        .unwrap();
+        let request = cli.benchmark.request().unwrap();
+        assert!(request.mods);
+        assert_eq!(request.vsync, Some(oag_present::perf::Vsync::Smooth));
+        assert_eq!(request.frame_limit, Some("120".parse().unwrap()));
+        assert!(parse(&["--benchmark", "--benchmark-mods", "maybe"]).is_err());
+        assert!(parse(&["--benchmark-mods", "on"]).is_err());
+    }
+
+    #[test]
     fn a_path_or_another_word_is_left_alone() {
         let benchmark = BenchmarkArgs {
             benchmark: true,
-            preset: None,
+            ..Default::default()
         };
         for word in ["data/images/pulse-psp-eu.chd", "somewhere", "Cargo.toml"] {
             let mut source = Some(word.to_string());
