@@ -105,10 +105,10 @@ pub struct Weapons {
     /// write `(ride point - start) / dt` raw, so the blade's speed drifts and a rocket landing on a
     /// ramp face can leave it upward; its `Plasma_Update` sweep arm only moves
     /// (`docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`, "By-catch in the flight arms",
-    /// and `shuriken.md`, `missile.md`, `plasma.md`). HD, 2048 and Omega keep the parallel turn:
-    /// their own `Rocket_Update`, `Missile_Update` and `Shuriken_Update` arms are unread, and HD's
-    /// `Plasma_Update` is its own function with a ride height of 4.0
-    /// (`docs/ghidra/functions/ps3-hdfury-eu/plasma.md`).
+    /// and `shuriken.md`, `missile.md`, `plasma.md`). HD turns the Plasma's and the Rockets' velocity parallel to
+    /// the floor instead, measured live on Moa Therma's bank, where steering at the ride point slid
+    /// both off the bank (`docs/ghidra/functions/ps3-hdfury-eu/plasma.md`, "On Moa Therma's
+    /// bank"); 2048 and Omega inherit it.
     pub floor_arms_steer_to_ride_point: crate::pre_race::Sourced<bool>,
     /// Whether a Plasma bolt leaves at the craft's display scale (`true`, 0.75 x its release
     /// speed until its first floor ride) or at its release speed (`false`).

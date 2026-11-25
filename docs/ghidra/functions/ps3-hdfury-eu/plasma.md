@@ -985,10 +985,131 @@ In the order a player notices them; each with what is known of its cause.
    value, not read on the sphere's draw. Two RSX dump attempts never caught the draw
    (`scripts/rpcs3-hd-whiteout.py --fire-state 7 --behind --delay 1.25 --want-mats DIR
    --want-name plasmasphere_glow`).
-6. **The flight past one second.** On the banked climb ours bends with the road; the original's holds
-   its heading and meets the right-hand wall at age 2.24 s. Ours drifts 1.4 degrees off the craft's
-   heading where the original's drifts 0.6, so the yawed shot's wall point is 12.2 short at 132.
-   `Plasma_Update` (`0x0011fc88`) is read; HD's floor arms are `ParallelToFloor` (chosen,
-   `floor_arms_steer_to_ride_point`), the likely cause, unread on HD.
+6. ~~**The flight past one second.**~~ Closed 2026-11-25 by the parallel turn ("On Moa Therma's
+   bank"): the straight bolt now ends at age 2.20 s against the original's 2.24 (the steer gave
+   2.58), and the yawed shot meets the wall 0.5 from the original's point at 0.95 s (the steer: 11
+   short).
 7. **The Plasma's lights**: the wind-up's two descriptors, the release candidate and the blast's two
    are unwired.
+
+## 2026-11-25: On Moa Therma's bank
+
+Lane `floor-followers`. The maintainer saw our HD Plasma "fall off the Moa Therma (horizontal)
+looping, into the water". The "loop" is HD Moa Therma's (`/data/environments/03_track`) long
+banked helix. In spline samples 533 to 1565 the track's up is below `y = 0.5`, and it reaches
+`y = 0.031` (88 degrees) at sample 928. No sample is inverted.
+
+### The shot
+
+The craft is posed on the racing line of sample 493, 3 units up:
+`(-173.336, 22.446, -321.501)`, forward `(0.91059, 0.05145, 0.41009)`, up
+`(0.24577, 0.73033, -0.63736)`, 140 units/s. It is re-placed every frame until the shot flies,
+then fired with player input. Ours and the original use the same pose.
+
+The original: RPCS3 on the EU disc, a cold boot walked into Racebox Single Race (weapons On,
+Venom, Moa Therma, Feisar). The pose is written into the rigid body each frame
+(`scripts/rpcs3_place.py`'s `write_pose`), the pickup state is written into the craft's slot,
+and triangle fires. The game is stepped one frame at a time off the lap clock (1/30 s frames on
+this host). Every projectile object is read each frame.
+
+### The objects, read live
+
+| Weapon (state) | Objects | Position | Velocity | Previous |
+| --- | --- | --- | --- | --- |
+| Plasma (7) | the manager's 16 slots at `+0x84` (manager vtable `0x00864698`) | `+0xa0` | `+0xf0` | `+0x100` |
+| Rocket (0) | 48 objects, vtable `0x00863e38` (TOC `0x008ad4d8 - 0xcef*4`, `Rocket_Construct`) | `+0xd0` | `+0xe0` | `+0xf0` |
+| Missile (1) | 16 objects at the `MissileManager`'s `+0x84` (vtable `0x00863d18`; manager vtable `0x00864530`) | `+0xa0` | `+0xb0` | `+0xc0` |
+
+Also on the Plasma: `+0x4c` holds the release km/h (691.84 on a craft written at 140 units/s
+plus `launchSpeed`), and `+0x110` holds the carried normal.
+
+### What each one does
+
+- **Plasma: rides the whole bank.** It leaves at age 0 from `(-165.3, 23.2, -318.1)` with the
+  carried normal `(0.25, 0.71, -0.66)`; ours charges at the same normal. It then rides 3.92 to
+  4.06 above the floor on every frame: our collision finds the floor 3.9997 to 4.0113 under it
+  along the spline's up. It drifts right across the bank, from lateral -1.1 to +29.2. It ends at
+  age 1.86 s at `(227.3, 87.8, -315.7)`, sample 774, at the right edge. **Its velocity is
+  perpendicular to the carried normal on every frame after the first** (`v . n` reads `0.00`
+  at 194 to 236 units/s), and each frame's step lies along the stored velocity (cosine 0.9983
+  to 1.0000). Its heading turns only as the floor turns. Confidence **92** (with the Talon's Junction capture below) for "HD's Plasma
+  floor arm turns the velocity parallel to the floor": two runtime captures (46 frames here, 133
+  ticks on Talon's Junction), one binary.
+- **Rocket: rides it too.** All three ride 3.00 above the floor in our collision, with the
+  velocity perpendicular to the floor normal (`v . n / |v|` = 0.000 on every frame). They hold
+  222.2 units/s from the first frame, which is Venom's class speed with no 0.75 launch hold.
+  The straight one ends near sample 766, at lateral 34.6 on the right edge; the right-hand one
+  reaches `(257.7, 72.9, -336.6)`. All three pass sample 668. Confidence **88** for the same
+  law on the Rocket.
+- **Missile: rides it, then bounces between the walls past sample 790,** as ours does. Ours
+  already used the parallel turn for it.
+- **Shuriken: not checkable in this race.** No object has the vtable at TOC
+  `0x008ad4d8 - 0x833*4` (`0x00864bf8`, read off `Shuriken.cpp`'s constructor `0x00158d18`),
+  and pickup states 3, 6 and 10 create none.
+
+### Ours before the change
+
+Ours steered the Plasma and the Rocket at the ride point on every title,
+`velocity = normalize(ride point - start) * speed`, which is Pulse's law. On the bank that
+turned the heading downhill. The first ride lifted the bolt from 2.4 to 4.0 in one 1/60 s tick,
+a 26 degree kick toward the normal, and the bolt then slid left across the bank:
+
+- From the pose above, it was at lateral -14.9 by sample 543. It crossed the left edge
+  (lateral -43.8 against a 25 half-width) at sample 587, where there is no wall, and fell for
+  300 ticks to `y = -600`: the maintainer's "into the water".
+- The rockets hit the bank's lower wall by sample 558.
+- Fired along the craft's own flight on the autopilot, 92 of 97 bolts ended on the bank's
+  lower wall.
+
+The floor arms of the travel sweep made no difference: steer and parallel arms gave the same
+path to the tick.
+
+### The law, wired
+
+Under `FloorArms::ParallelToFloor` (HD measured; 2048 and Omega inherit it), the probe's floor
+arm turns the Rocket's and the Plasma's velocity parallel to the floor, as it already did the
+Missile's. Pulse keeps its steer.
+
+The Plasma's speed ramp is then read at `age + dt`. The bolt moves this tick on the velocity the
+last tick wrote, and HD's `Plasma_Update` adds `dt` to the age before reading the speed (the
+pseudocode above). Read at `age`, the bolt flew 139.70 units by age 0.992 s on Talon's
+Junction against the original's 142.61. Read at `age + dt`, it flies 6.44, 23.90, 64.97 and
+142.69 at the four recorded ages, against 6.38, 23.84, 64.91 and 142.61
+(`crates/raceplay/tests/hd_plasma_flight_ground_truth.rs`).
+
+From the bank pose, ours now ends the bolt at `(230.8, 88.3, -317.6)`, lateral 29.3, 113 ticks
+after release (original: `(227.3, 87.8, -315.7)`, lateral 29.2, age 1.86 s). Every rocket now
+passes sample 668. Pinned by `crates/raceplay/tests/hd_bank_floor_ground_truth.rs`.
+
+### Static read, and what is open
+
+- **`Rocket_Update` (`0x00123fb0`) does not decompile.** Its body stops at a call to
+  `0x00126c38`, which Ghidra had marked non-returning. The flag is cleared, but the body was not
+  re-disassembled, so the arm is unread statically.
+- **The pseudocode above writes `velocity = dir * speed` after the ride**, where `dir` is the
+  normalized ride step. Live, the velocity is the floor-parallel one, so `dir` is that
+  projection. The PPC permutes were not re-read.
+- **A second capture agrees.** The Talon's Junction shots above already read the floor follower as
+  `v' = normalize(v - (v.n')n') * speed`, exact over 133 ticks ("Measured live"); this engine had
+  not wired it. With it, the straight shot ends at age 2.20 s (original 2.24) and the yawed shot
+  0.5 from the original's wall point (`hd_plasma_flight_ground_truth.rs`). With both captures the
+  Plasma law is confidence **92**.
+- **Not measured:** the Plasma's first probe (live, the frame 1/30 s after release already
+  rides, inside our 0.04 s window); the sweep arm; the 2048 and Omega flights (no memory
+  readout on Omega; 2048 not run).
+
+**Lineage.** 2048 and Omega: **checked, applies, wired by inheritance**. Both titles set
+`floor_arms_steer_to_ride_point` to `false`, inherited from HD. Omega's `Plasma_Update` is the
+same `Plasma.cpp` family (see [`ps4-omega-eu/plasma.md`](../ps4-omega-eu/plasma.md)), but its
+flight was not measured live.
+
+Reproduce ours with `crates/raceplay/tests/loop_floor_trace.rs`
+(`OAG_LOOP_TRACE=hd:/data/environments/03_track/track.vex:plasma`), and the original with
+`scripts/rpcs3-hd-bank-shot.py` (its docstring has the three commands) on a race walked with
+`OAG_WEAPONS_ON=1 scripts/emu-hd-race-walk.sh <lane> 2` with the GDB stub kept on (circuit index 2 is
+Moa Therma). Two traps on the way:
+
+- The two Moa Therma Time Trial save states do not load on RPCS3 build 20574 ("savestate not
+  compatible"), so the run starts from a cold boot.
+- A GDB port whose stub (`port + 1000`) is reset by another client 0.85 s after it opens kills the
+  serve. Pick another port.
