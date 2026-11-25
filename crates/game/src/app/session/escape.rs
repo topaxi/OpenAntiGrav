@@ -175,6 +175,11 @@ impl Session {
     /// the race and opens the menus, and backing out of them resumes it.
     pub(crate) fn back(&mut self) {
         debug!("system back");
+        // A benchmark ends through its own screen or Escape, which say where they leave to;
+        // this one would restore the player's settings and leave the run going.
+        if self.on_benchmark() {
+            return;
+        }
         let was_quitting = self.quit;
         self.escape();
         self.quit = was_quitting;
@@ -209,6 +214,11 @@ impl Session {
         // An attract demo is left, not parked: a wallpaper quits instead.
         if self.in_demo() {
             self.escape_demo();
+            return;
+        }
+        // A benchmark is left, not parked: the stats screen's BACK, or no result.
+        if self.in_benchmark() || self.on_benchmark_screen() {
+            self.escape_benchmark();
             return;
         }
         // Photo mode is a level of its own: escape leaves it, back to the race it holds, and

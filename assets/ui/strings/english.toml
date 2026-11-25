@@ -278,6 +278,7 @@ OAG_GRAPHICS_SHADOWS = { text = "SHADOWS", human = false }
 OAG_GRAPHICS_SHADOW_RESOLUTION = { text = "SHADOW RESOLUTION", human = false }
 OAG_GRAPHICS_SCENE_PRECISION = { text = "SCENE PRECISION", human = false }
 OAG_GRAPHICS_CIRCUIT_LIGHTING = { text = "CIRCUIT LIGHTING", human = false }
+OAG_GRAPHICS_REFLECTION_RESOLUTION = { text = "REFLECTION RESOLUTION", human = false }
 OAG_GRAPHICS_WATER = { text = "WATER", human = false }
 OAG_GRAPHICS_MODEL_DETAIL = { text = "MODEL DETAIL", human = false }
 OAG_GRAPHICS_TEXTURE_DETAIL = { text = "TEXTURE DETAIL", human = false }
@@ -656,6 +657,14 @@ OAG_OPTIONS_PLAYER_NAME = { text = "PLAYER NAME", human = false }
 OAG_OPTIONS_PLAYER_TAG = { text = "PLAYER TAG", human = false }
 OAG_PLAYER_NAME_TITLE = { text = "ENTER YOUR NAME", human = false }
 OAG_PLAYER_TAG_TITLE = { text = "ENTER YOUR TAG", human = false }
+
+# The BENCHMARK row and the graphics page's RUN BENCHMARK row. Ours, in no original.
+OAG_MENU_EXTRAS = { text = "EXTRAS", human = false }
+OAG_MENU_EXTRAS_SUBTITLE = { text = "What this project adds: the benchmark", human = false }
+OAG_MENU_BENCHMARK = { text = "BENCHMARK", human = false }
+OAG_MENU_BENCHMARK_SUBTITLE = { text = "Fly one fixed race and read the frame rate, the lows and the frame times", human = false }
+OAG_GRAPHICS_RUN_BENCHMARK = { text = "RUN BENCHMARK", human = false }
+OAG_GRAPHICS_RUN_BENCHMARK_SUBTITLE = { text = "Fly one fixed race with these settings and read the frame rate", human = false }
 
 # The REPLAYS page and the replay viewer (ADR-0087). Ours, in no original.
 OAG_MENU_REPLAYS = { text = "REPLAYS", human = false }

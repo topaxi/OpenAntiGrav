@@ -111,9 +111,11 @@ pub(super) fn reflected_scene(scene: &mesh_render::Scene) -> mesh_render::Scene 
 /// the circuit's alternate fog pair.
 #[derive(Debug)]
 pub struct BehindGlassModels {
-    /// The target's size in pixels: HD's [`SIZE`], or the psp2 titles' own
+    /// The original's target size in pixels: HD's [`SIZE`], or the psp2 titles' own
     /// (`oag_mesh::mesh::rcs::psp2::refraction_only::target_size`).
     pub size: (u32, u32),
+    /// The fraction of [`Self::size`] the target is drawn at (`graphics.reflection_resolution`).
+    pub resolution: oag_display::display::ReflectionResolution,
     /// The two fog groups, both `None` on every circuit but Vineta K.
     pub groups: oag_mesh::mesh::rcs::BehindGlass,
     /// `Fog.Alternate Fog Color` / `Alternate Fog Density`, read only when a
@@ -124,10 +126,19 @@ pub struct BehindGlassModels {
     pub mirror: Option<Mirror>,
 }
 
+impl BehindGlassModels {
+    /// The size the target is drawn at: [`Self::size`] at [`Self::resolution`].
+    #[must_use]
+    pub fn drawn_size(&self) -> (u32, u32) {
+        self.resolution.size(self.size)
+    }
+}
+
 impl Default for BehindGlassModels {
     fn default() -> Self {
         Self {
             size: SIZE,
+            resolution: oag_display::display::ReflectionResolution::Original,
             groups: oag_mesh::mesh::rcs::BehindGlass::default(),
             alternate_fog: None,
             mirror: None,
@@ -138,6 +149,9 @@ impl Default for BehindGlassModels {
 /// The target and what draws into it.
 #[derive(Debug)]
 pub(super) struct Target {
+    /// The original's size, which a photo draws at.
+    original: (u32, u32),
+    /// The size the colour texture and the attachments have now.
     size: (u32, u32),
     texture: wgpu::Texture,
     colour: wgpu::TextureView,
@@ -163,9 +177,17 @@ fn colour_texture(
     if models.groups.is_empty() && models.mirror.is_none() {
         return None;
     }
-    let texture = device.create_texture(&wgpu::TextureDescriptor {
+    Some(colour_texture_of(device, models.drawn_size(), format))
+}
+
+fn colour_texture_of(
+    device: &wgpu::Device,
+    size: (u32, u32),
+    format: wgpu::TextureFormat,
+) -> wgpu::Texture {
+    device.create_texture(&wgpu::TextureDescriptor {
         label: Some("behind the glass"),
-        size: extent(models.size),
+        size: extent(size),
         mip_level_count: 1,
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
@@ -174,8 +196,32 @@ fn colour_texture(
             | wgpu::TextureUsages::TEXTURE_BINDING
             | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
-    });
-    Some(texture)
+    })
+}
+
+/// The depth and velocity attachments the target's passes draw with, `size` wide.
+fn attachments(device: &wgpu::Device, size: (u32, u32)) -> (wgpu::TextureView, wgpu::TextureView) {
+    let target = |label: &str, format| {
+        device
+            .create_texture(&wgpu::TextureDescriptor {
+                label: Some(label),
+                size: extent(size),
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                view_formats: &[],
+            })
+            .create_view(&wgpu::TextureViewDescriptor::default())
+    };
+    (
+        target("behind the glass depth", mesh_render::DEPTH_FORMAT),
+        target(
+            "behind the glass velocity",
+            oag_gpu::formats::VELOCITY_FORMAT,
+        ),
+    )
 }
 
 fn extent(size: (u32, u32)) -> wgpu::Extent3d {
@@ -232,6 +278,21 @@ impl Target {
         &self.colour
     }
 
+    /// Makes the colour texture and the attachments `size` wide, which a bind group over
+    /// [`Self::colour`] must then be rebuilt for. Returns whether anything changed. The
+    /// drawables are size-independent: a pass takes its viewport from its attachments.
+    fn resize(&mut self, device: &wgpu::Device, size: (u32, u32)) -> bool {
+        if size == self.size {
+            return false;
+        }
+        let texture = colour_texture_of(device, size, self.texture.format());
+        self.colour = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        self.texture = texture;
+        (self.depth, self.velocity) = attachments(device, size);
+        self.size = size;
+        true
+    }
+
     /// Builds the drawables that fill `texture`.
     #[allow(clippy::too_many_arguments)]
     fn new(
@@ -246,25 +307,7 @@ impl Target {
         zone_art: &mesh_render::zone::StageArt,
         shadow_maps: mesh_render::ShadowMaps<'_>,
     ) -> Result<Self> {
-        let target = |label: &str, format| {
-            device
-                .create_texture(&wgpu::TextureDescriptor {
-                    label: Some(label),
-                    size: extent(models.size),
-                    mip_level_count: 1,
-                    sample_count: 1,
-                    dimension: wgpu::TextureDimension::D2,
-                    format,
-                    usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-                    view_formats: &[],
-                })
-                .create_view(&wgpu::TextureViewDescriptor::default())
-        };
-        let depth = target("behind the glass depth", mesh_render::DEPTH_FORMAT);
-        let velocity = target(
-            "behind the glass velocity",
-            oag_gpu::formats::VELOCITY_FORMAT,
-        );
+        let (depth, velocity) = attachments(device, models.drawn_size());
         // Single-sided, as every chunk draw into the original's target is
         // (`oag_mesh::mesh::rcs::build_scene_views`): its eye sits inside
         // shells authored to be seen from outside. The sky is two-sided, as
@@ -302,13 +345,16 @@ impl Target {
                 cull_all,
             )
         };
+        let size = models.drawn_size();
         let BehindGlassModels {
-            size,
+            size: original,
+            resolution: _,
             groups,
             alternate_fog,
             mirror,
         } = models;
         Ok(Self {
+            original,
             size,
             colour: texture.create_view(&wgpu::TextureViewDescriptor::default()),
             texture,
@@ -548,6 +594,37 @@ impl Scene {
         // tower's top); the visible set stays. How the original culls its reflect list
         // is unread, so this is chosen, not measured.
         target.render(encoder, block, set, None, None, above)
+    }
+
+    /// Draws the circuit's glass and sea target at `resolution` of the original's size from the
+    /// next frame on, and rebinds the circuit's drawable to it; a circuit with no target, and a
+    /// target already that size, do nothing. Called every frame with the frame's profile, so a
+    /// photo (which draws the original's size) and the frame after it (which goes back) cost one
+    /// rebuild each.
+    pub fn set_reflection_resolution(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        resolution: oag_display::display::ReflectionResolution,
+    ) {
+        let Some(target) = self.behind_glass.as_mut() else {
+            return;
+        };
+        if !target.resize(device, resolution.size(target.original)) {
+            return;
+        }
+        let stage = self
+            .zone_grade
+            .as_ref()
+            .map(crate::zone_grade::ZoneGrade::stage_art_pair);
+        self.track
+            .rebind_behind_glass(device, queue, target.colour(), stage.as_ref());
+    }
+
+    /// The glass and sea target's size in texels now, or `None` on a circuit with no target.
+    #[must_use]
+    pub fn reflection_target_size(&self) -> Option<(u32, u32)> {
+        self.behind_glass.as_ref().map(|target| target.size)
     }
 
     /// The matrix the circuit's screen-space target is read through (`scene.refraction`):

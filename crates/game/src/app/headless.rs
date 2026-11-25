@@ -664,17 +664,25 @@ pub(crate) fn race_launch(
         blurred,
     } = route;
     options.water = crate::water_setting::for_source(settings, &options.source);
+    // Opening the source to find its profile costs a disc read: only when a row has no flag.
+    let needs_profile = cli.shadow_resolution.is_none()
+        || cli.circuit_lighting.is_none()
+        || cli.reflection_resolution.is_none()
+        || cli.scene_precision.is_none();
+    let source_profile = needs_profile
+        .then(|| crate::water_setting::profile_for_source(settings, &options.source))
+        .flatten();
     options.shadow_resolution = cli.shadow_resolution.unwrap_or_else(|| {
-        crate::water_setting::profile_for_source(settings, &options.source)
-            .map_or_else(Default::default, |profile| profile.shadow_resolution)
+        source_profile.map_or_else(Default::default, |profile| profile.shadow_resolution)
     });
     options.circuit_lighting = cli.circuit_lighting.unwrap_or_else(|| {
-        crate::water_setting::profile_for_source(settings, &options.source)
-            .map_or_else(Default::default, |profile| profile.circuit_lighting)
+        source_profile.map_or_else(Default::default, |profile| profile.circuit_lighting)
+    });
+    options.reflection_resolution = cli.reflection_resolution.unwrap_or_else(|| {
+        source_profile.map_or_else(Default::default, |profile| profile.reflection_resolution)
     });
     options.scene_precision = cli.scene_precision.unwrap_or_else(|| {
-        crate::water_setting::profile_for_source(settings, &options.source)
-            .map_or_else(Default::default, |profile| profile.scene_precision)
+        source_profile.map_or_else(Default::default, |profile| profile.scene_precision)
     });
     // `--event` resolves a Wipeout 2048 campaign event onto `options` before
     // loading - see `race::load_event`'s own doc comment for what it
@@ -1006,6 +1014,8 @@ pub(crate) fn race_launch(
         measure_race_load: None,
         demo: None,
         demo_limit: None,
+        benchmark: None,
+        benchmark_ticks: None,
         replay_png: None,
         give,
         // A network race starts on the server's clock: no flyby to wait through.
@@ -1028,7 +1038,7 @@ pub(crate) fn race_launch(
         windows_fullscreen: cli.driver.windows_fullscreen,
         split_cut: cli.driver.cut(),
         anim_seconds: cli.anim_seconds,
-        race: Some(loaded),
+        race: Some(Box::new(loaded)),
         race_options: Some(options),
         trace: cli.trace,
         log_every: cli.log_every,

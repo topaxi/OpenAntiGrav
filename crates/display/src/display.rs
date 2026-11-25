@@ -43,6 +43,7 @@ mod motion_blur;
 mod msaa;
 pub mod presets;
 mod reconstruction;
+mod reflection_resolution;
 mod scene_precision;
 mod scenery_sort;
 mod screen_filter;
@@ -55,7 +56,8 @@ mod weather;
 
 pub use {
     aspect::Aspect, circuit_lighting::CircuitLighting, dynamic_hud::DynamicHud, hud_scale::*,
-    motion_blur::*, msaa::Msaa, reconstruction::Reconstruction, scene_precision::ScenePrecision,
+    motion_blur::*, msaa::Msaa, reconstruction::Reconstruction,
+    reflection_resolution::ReflectionResolution, scene_precision::ScenePrecision,
     scenery_sort::ScenerySort, screen_filter::FilterStrength, shadow_resolution::ShadowResolution,
     shadows::Shadows, trail_length::TrailLength, trail_order::TrailOrder, water::Water,
     weather::Weather,

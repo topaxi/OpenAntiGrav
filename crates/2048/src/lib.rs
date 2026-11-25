@@ -64,6 +64,7 @@ pub mod frontend;
 pub mod hud;
 pub mod loading;
 pub mod main_menu;
+pub mod pause_menu;
 pub mod race;
 pub mod tips;
 
@@ -308,6 +309,12 @@ pub const TITLE: &Title = &Title {
             on: oag_title::Platforms::Any,
             origin: oag_title::Origin::InheritedFrom("Wipeout HD"),
         },
+        // The refraction target the tunnel glass samples is drawn ahead of the main view:
+        // 2048 (`docs/ghidra/functions/vita-2048-eu-v104/refraction-pass.md`).
+        screen_space_target: oag_title::Rule {
+            on: oag_title::Platforms::Any,
+            origin: oag_title::Origin::Measured,
+        },
         // `Ship_SelectWreckModel` twin, called in `Ship_SetState` case 4
         // (`ship-destroy.md`, row 1); every ship directory ships its own `shipwreck.vex`.
         hull_wreck: oag_title::Rule {
@@ -324,7 +331,7 @@ pub const TITLE: &Title = &Title {
     // No campaign layout read (2048's campaign is its own event map): the
     // load path that reaches this falls through to Pulse's reader and refuses.
     main_menu: main_menu::MAIN_MENU,
-    pause_menu: None,
+    pause_menu: Some(pause_menu::PAUSE_MENU),
     campaign: &oag_title::Campaign {
         dialect: oag_title::CampaignDialect::Pulse,
         definition_entry: None,

@@ -300,6 +300,15 @@ impl Driver {
                 self.session.escape();
                 self.frame(None)?;
             }
+            Step::Back => {
+                self.session.back();
+                self.frame(None)?;
+            }
+            Step::Away => {
+                self.session
+                    .window_away(crate::app::session::lifecycle::Away::FocusLost);
+                self.frame(None)?;
+            }
             Step::Key => {
                 self.session.demo.key = true;
                 self.frame(None)?;
@@ -591,6 +600,10 @@ fn state_of(session: &mut Session) -> State {
         state.photo = Some(session.photo_lens_name().to_string());
         state.photo_fx = session.photo_fx_name();
         state.photo_job = session.photo_fx_name().map(|_| session.photo_job_name());
+        state.glass_target = stage
+            .scene
+            .reflection_target_size()
+            .map(|(width, height)| format!("{width}x{height}"));
         state.endrace = stage
             .endrace
             .as_ref()
@@ -615,6 +628,7 @@ fn state_of(session: &mut Session) -> State {
         Stage::Loading(_) if session.demo.loading.is_some() => Some("loading".to_string()),
         _ => None,
     };
+    state.benchmark = session.benchmark_phase().map(str::to_string);
     state
 }
 

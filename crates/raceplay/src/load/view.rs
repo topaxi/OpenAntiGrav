@@ -238,7 +238,7 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
     // race as none at all - the derived ribbon - and Wipeout 2048 made the
     // distinction matter: it ships one beside every circuit, in a container
     // that is not HD's, and that used to stop the race. The report says which.
-    let (rcs_model, behind_glass) = geometry::track_model(
+    let (rcs_model, mut behind_glass) = geometry::track_model(
         &mut archives,
         &track,
         &track_blob,
@@ -251,6 +251,19 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
         hides_circuit_pads,
         &mut report,
     );
+    // The target's size is the original's, or a fraction of it
+    // (`graphics.reflection_resolution`); a circuit with no target has nothing to resize.
+    if !behind_glass.groups.is_empty() || behind_glass.mirror.is_some() {
+        behind_glass.resolution = options.reflection_resolution;
+        let (original, size) = (behind_glass.size, behind_glass.drawn_size());
+        if size != original {
+            report.push(format!(
+                "{track}: the glass and sea target is {}x{} at reflection resolution {} (the \
+                 original's is {}x{})",
+                size.0, size.1, options.reflection_resolution, original.0, original.1
+            ));
+        }
+    }
     stages::checkpoint()?;
     let ribbon = options.ribbon
         || drawn.is_some()

@@ -30,8 +30,13 @@ pub enum PauseAction {
     /// The on/off list for Pilot Assist (`FE_PILOT_ASSIST`): `controls.pilot_assist`, on being
     /// the level HD flies with.
     PilotAssist,
-    /// The on/off list for the ghost ship (`FE_GHOST`): `display.ghost_ship_visible`.
+    /// The on/off list for the ghost ship (`FE_GHOST`): `display.ghost_ship_visible`; on a row
+    /// that [`PauseRow::opens`] a screen, the tile that opens it.
     Ghost,
+    /// A touch list of which ghost to race (2048's `GhostOption2048`): NONE and MY BEST are
+    /// `display.ghost_ship_visible` off and on, and the entries past them (a friend's and the
+    /// world's, which need the online service) are drawn and cannot be chosen.
+    GhostList,
     /// Drawn dimmed and skipped by the cursor, doing nothing (`ONL_VIEW_INV`: PSN's invites,
     /// which the original greys offline).
     Inert,
@@ -44,10 +49,18 @@ pub enum PauseAction {
 /// One row of a pause screen.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PauseRow {
-    /// The `idstring` the disc spells.
+    /// The `idstring` the disc spells; for an icon-only widget that has none (2048's `quitButton`),
+    /// the widget's `name`.
     pub disc_id: &'static str,
+    /// The disc string the row is worded by: [`Self::disc_id`], or for a widget with no
+    /// `idstring` the id of a string the page labels it with.
+    pub word: &'static str,
     /// What the row does here, or `None` where this build has nothing behind it.
     pub builds: Option<PauseAction>,
+    /// The screen of [`PauseMenu::screens`] the row opens as a page of its own: for a QUIT or
+    /// RESTART row the "are you sure" it asks on before it acts (2048's `PauseQuitConfirm`), for
+    /// a [`PauseAction::Ghost`] tile the list of ghosts. `None` for a row that acts at once.
+    pub opens: Option<&'static str>,
 }
 
 /// One authored pause screen.
@@ -74,6 +87,23 @@ pub struct PauseLayout {
     /// How a screen that authors one `<Menu>` of entries, rather than a widget per row, lays
     /// its rows out. `None` for a title whose screens are `Block` and `List` widgets.
     pub menu_rows: Option<PauseMenuRows>,
+    /// How a screen of `<TouchButton>` tiles takes its colours. `None` for a title whose screens
+    /// are `Block`, `List` or `Menu` widgets.
+    pub touch: Option<PauseTouch>,
+}
+
+/// The skin globals a touch pause screen's tiles are filled with: Wipeout 2048's tile is its
+/// `Blue2048` box and the pad's cursor fills the tile the pointer would be pressing in
+/// `Orange2048` (`oag_ui::frontend::Frontend::draw_tile`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PauseTouch {
+    /// The global the resting tile and the heading's colour come from.
+    pub tile: &'static str,
+    /// The global the tile with the pad cursor is filled with.
+    pub cursor: &'static str,
+    /// The global a list entry that cannot be chosen is filled with (`Grey2048`, the palette's
+    /// inactive colour).
+    pub inactive: &'static str,
 }
 
 /// The two numbers a `<Menu>` widget does not author: how far apart its rows stand and how
@@ -180,5 +210,36 @@ impl PauseMenu {
 /// A [`PauseRow`], for a title package's table.
 #[must_use]
 pub const fn row(disc_id: &'static str, builds: Option<PauseAction>) -> PauseRow {
-    PauseRow { disc_id, builds }
+    PauseRow {
+        disc_id,
+        word: disc_id,
+        builds,
+        opens: None,
+    }
+}
+
+/// A [`PauseRow`] for an icon-only widget the disc names by `widget` and words by `word`.
+#[must_use]
+pub const fn named(
+    widget: &'static str,
+    word: &'static str,
+    builds: Option<PauseAction>,
+) -> PauseRow {
+    PauseRow {
+        disc_id: widget,
+        word,
+        builds,
+        opens: None,
+    }
+}
+
+impl PauseRow {
+    /// This row opening `screen` as a page of its own.
+    #[must_use]
+    pub const fn opening(self, screen: &'static str) -> Self {
+        Self {
+            opens: Some(screen),
+            ..self
+        }
+    }
 }

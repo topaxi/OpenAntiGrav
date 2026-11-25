@@ -98,6 +98,7 @@ pub use menu::{
 pub use oag_disc::Platform;
 pub use pause_menu::{
     PauseAction, PauseLayout, PauseMenu, PauseMenuRows, PauseMusicList, PauseRow, PauseScreen,
+    PauseTouch,
 };
 pub use pressing::{Pressing, Pressings};
 pub use race::sound::{

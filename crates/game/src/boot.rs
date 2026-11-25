@@ -218,6 +218,8 @@ pub struct Shell {
     pub zone_tracks: Vec<oag_raceplay::catalogue::Track>,
     /// What the title's own `DemoConfig.xml` authors for its attract demo, when it ships one.
     pub demo_config: Option<oag_tables::demo_config::DemoConfig>,
+    /// The title's benchmark presets (`crate::benchmark::presets`), when its file reads.
+    pub benchmark_presets: Option<crate::benchmark::presets::Presets>,
     /// The chosen language's string-table entry, when it names one.
     ///
     /// Carried because the loading screen needs the *other copies* of it: two
@@ -639,6 +641,7 @@ pub fn load_shell(
     let tracks = load_tracks(&mut archives, definition, &documents, &mut report);
     let zone_tracks = load_zone_tracks(&mut archives, title.race.zone, &documents, &mut report);
     let demo_config = demo_config::load(&mut archives, title, &mut report);
+    let benchmark_presets = crate::benchmark::presets::load(&mut archives, title, &mut report);
     let teams = load_teams(
         &mut archives,
         title.race,
@@ -706,6 +709,8 @@ pub fn load_shell(
         block_textures.extend(tiers2048::card_textures(&tiers));
         block_textures.extend(tip_textures.iter().map(String::as_str));
     }
+    let pause_textures = screens::pause_textures(&mut archives, title, &screens.globals);
+    block_textures.extend(pause_textures.iter().map(String::as_str));
     let logos = screens::team_logos(team_box.is_some(), &teams);
     block_textures.extend(logos.iter().map(String::as_str));
     let emblems = screens::track_emblems(track_box.is_some(), &tracks);
@@ -912,6 +917,19 @@ pub fn load_shell(
         space,
         &mut report,
     );
+    let on_sheet = pause_screens
+        .screens
+        .iter()
+        .flat_map(oag_ui_screens::pause::PauseScreen::sprite_srcs)
+        .collect::<std::collections::BTreeSet<_>>();
+    for src in on_sheet
+        .into_iter()
+        .filter(|src| sprites.get(src).is_none())
+    {
+        report.push(format!(
+            "pause screen image {src}: not on the sprite sheet, its tile is drawn as a bare box"
+        ));
+    }
     // See [`screens::read_ticker`]'s own doc.
     let mut ticker = read_ticker(skin_xml.as_deref(), &screens.globals);
     if let Some(ticker) = ticker.as_mut() {
@@ -954,6 +972,7 @@ pub fn load_shell(
             tracks,
             zone_tracks,
             demo_config,
+            benchmark_presets,
             circuit_names,
             teams,
             model_gate,
@@ -1139,6 +1158,7 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
         tracks,
         zone_tracks: _,
         demo_config: _,
+        benchmark_presets: _,
         circuit_names,
         teams,
         model_gate: _,

@@ -21,7 +21,7 @@ pub const MAIN_MENU: &MainMenu = &MainMenu {
         original("FE_WIPEOUT_DOT_COM", None),
         original("FE_PROFILE", None),
         original("FE_OPT_PLUS", Some("options")),
-        original("FE_EXTRAS", None),
+        original("FE_EXTRAS", Some("extras")),
     ],
     multiplayer: Some(MainRow {
         label: Wording {

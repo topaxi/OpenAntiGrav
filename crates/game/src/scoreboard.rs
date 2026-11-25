@@ -485,6 +485,7 @@ fn craft_label(row: &Row, several_people: bool) -> String {
 pub struct Overlay {
     renderer: crate::render::Renderer,
     line_height: f32,
+    char_width: f32,
 }
 
 impl std::fmt::Debug for Overlay {
@@ -507,6 +508,8 @@ impl Overlay {
         format: wgpu::TextureFormat,
         assets: &oag_hud::Assets,
     ) -> anyhow::Result<Self> {
+        let sample = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        let char_width = oag_ui::font::measure(&assets.small_font, sample) / sample.len() as f32;
         let renderer = crate::render::Renderer::new(
             device,
             queue,
@@ -518,6 +521,7 @@ impl Overlay {
         Ok(Self {
             renderer,
             line_height: assets.small_font.line_height,
+            char_width,
         })
     }
 
@@ -538,7 +542,33 @@ impl Overlay {
         viewport: (f32, f32, f32, f32),
     ) {
         let list = draw_list(board, self.line_height, personal_best);
+        self.draw_list(device, queue, encoder, view, &list, viewport);
+    }
+
+    /// The font's line height, which a panel built for [`Self::draw_list`] spaces itself by.
+    #[must_use]
+    pub fn line_height(&self) -> f32 {
+        self.line_height
+    }
+
+    /// The mean width of a capital or a digit in the font, at text scale one.
+    #[must_use]
+    pub fn char_width(&self) -> f32 {
+        self.char_width
+    }
+
+    /// Draws any panel's list over the frame: the renderer is this overlay's, the list is the
+    /// caller's (the benchmark's stats screen is one).
+    pub fn draw_list(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+        list: &[Draw],
+        viewport: (f32, f32, f32, f32),
+    ) {
         self.renderer
-            .overlay(device, queue, encoder, view, &list, viewport);
+            .overlay(device, queue, encoder, view, list, viewport);
     }
 }

@@ -115,8 +115,9 @@ fn shelf() -> std::sync::MutexGuard<'static, Shelf<Identity, Idle>> {
 }
 
 /// An idle source opened on the file of this identity, now for `path`.
-pub(super) fn take(path: &Path, id: Identity) -> Option<ChdSource> {
-    let idle = shelf().take(&id)?;
+/// Borrows `id`: off Unix it holds a `PathBuf` and is not `Copy`, and the caller still needs it.
+pub(super) fn take(path: &Path, id: &Identity) -> Option<ChdSource> {
+    let idle = shelf().take(id)?;
     Some(ChdSource {
         chd: Some(idle.chd),
         path: path.to_path_buf(),
@@ -126,7 +127,9 @@ pub(super) fn take(path: &Path, id: Identity) -> Option<ChdSource> {
         hunk_buf: idle.hunk_buf,
         compressed_buf: idle.compressed_buf,
         cached_hunk: idle.cached_hunk,
-        stamp: Some(id),
+        // Off Unix `Identity` holds a `PathBuf`, so this clone is not a copy there.
+        #[allow(clippy::clone_on_copy)]
+        stamp: Some(id.clone()),
     })
 }
 

@@ -12,7 +12,9 @@ use oag_mesh::mesh_render::Anisotropy;
 
 use crate::app::args::DEFAULT_SIZE;
 
+pub(crate) mod benchmark;
 pub(crate) mod detonator;
+
 pub(crate) mod extra;
 mod render_overrides;
 
@@ -484,6 +486,10 @@ pub(crate) struct Cli {
     /// `--demo`, `--wallpaper` - see [`extra::DemoArgs`].
     #[command(flatten)]
     pub(crate) demo: extra::DemoArgs,
+
+    /// `--benchmark`, `--preset` - see [`benchmark::BenchmarkArgs`].
+    #[command(flatten)]
+    pub(crate) benchmark: benchmark::BenchmarkArgs,
 
     /// Show the language picker even when a language is already chosen.
     ///
@@ -1021,6 +1027,15 @@ pub(crate) struct Cli {
     /// only. See docs/rendering/hires-gpu-levers.md, "The circuit lighting rung".
     #[arg(long)]
     pub(crate) circuit_lighting: Option<oag_display::display::CircuitLighting>,
+
+    /// How many texels the screen-space glass and sea target gets: original (the original's
+    /// fixed size), half or quarter (that fraction of it on each axis, whatever the render
+    /// scale).
+    ///
+    /// Overrides `[render_profiles.<title>] reflection_resolution` for every title, for this
+    /// run only. See docs/rendering/water.md, "The reflection target's resolution".
+    #[arg(long)]
+    pub(crate) reflection_resolution: Option<oag_display::display::ReflectionResolution>,
 
     /// Which screen filter draws the finished frame: `off`, a built-in such
     /// as `psp-3000` or `crt-interlaced`, or the stem of a `.wgsl` file in

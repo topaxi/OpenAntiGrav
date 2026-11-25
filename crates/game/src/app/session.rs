@@ -28,6 +28,7 @@ pub(crate) mod endrace;
 // `Session::escape` and `Session::resume_race` - split out of `menus.rs`
 // under the 1,000-line rule; see `escape.rs`'s own doc for why this pair is
 // the seam.
+mod benchmark;
 mod demo;
 mod device_lost;
 mod escape;
@@ -52,6 +53,8 @@ mod reconnect;
 pub(crate) mod replays;
 mod rumble;
 mod shot_open;
+mod shoulder;
+pub(crate) use benchmark::State as BenchmarkState;
 pub(crate) use demo::State as DemoState;
 pub(crate) use load_probe::LoadProbe;
 pub(crate) use mods_page::Rebuilt;
@@ -126,7 +129,7 @@ pub(crate) struct Session {
     /// belongs to the run rather than to whatever is on screen, so a race
     /// starting does not restart the music. Stepped from inside the fixed
     /// timestep and never from the frame - see [`oag_sound::Audio::tick`].
-    pub(crate) audio: oag_sound::Audio,
+    pub(crate) audio: Box<oag_sound::Audio>,
     /// Which Pulse releases this machine has. See [`App::music_discs`].
     pub(crate) music_discs: oag_sound::MusicDiscs,
     /// What the MUSIC page's rows were last made from. See `music_pool_page`.
@@ -354,7 +357,7 @@ pub(crate) struct Session {
     ///
     /// A renderer of its own because a race has none: `race::Scene` draws
     /// meshes and knows nothing about text.
-    pub(crate) overlay: Renderer,
+    pub(crate) overlay: Box<Renderer>,
     /// The cursor's own sprite, on `overlay`'s sheet - see
     /// `crate::cursor`. Rebuilt whenever the title changes, which is
     /// once: the chooser's own until a disc is picked, the title's after.
@@ -379,7 +382,7 @@ pub(crate) struct Session {
     pub(crate) pause: crate::pause::State,
     /// Photo mode while it is open: the race stands still and the camera is the player's
     /// (`session::photo`).
-    pub(crate) photo: Option<photo::Open>,
+    pub(crate) photo: Option<Box<photo::Open>>,
     /// The recorded races the REPLAYS page lists, read each time the menus open
     /// (`session::replays`).
     pub(crate) replay_list: Vec<crate::replays::Entry>,
@@ -388,9 +391,11 @@ pub(crate) struct Session {
     pub(crate) replay_refused: std::collections::BTreeMap<std::path::PathBuf, String>,
     /// A recording WATCH asked to open, from the launch to the race's hand-over
     /// (`session::replays`).
-    pub(crate) watching: Option<replays::Watching>,
+    pub(crate) watching: Option<Box<replays::Watching>>,
     /// The attract demo's idle count, chain and the demo being loaded (`session::demo`).
     pub(crate) demo: demo::State,
+    /// The in-game benchmark's launch and what to restore after it (`session::benchmark`).
+    pub(crate) benchmark: benchmark::State,
     /// The replay viewer while a recording is being watched (`session::replays`).
     pub(crate) viewer: Option<replays::Active>,
     /// The line over the screen that says why a dropped screenshot did not open
@@ -461,7 +466,7 @@ pub(crate) struct Session {
     pub(crate) dev_clock: crate::app::session::devrun::Clock,
     /// `--connect`: the race is stepped through the server's protocol instead of
     /// `Race::tick`. See `crate::net_play`.
-    pub(crate) net: Option<crate::net_play::NetPlay>,
+    pub(crate) net: Option<Box<crate::net_play::NetPlay>>,
     /// `--net-bot`, carried so a LAN race started from the menus is flown by the driver too.
     #[cfg_attr(
         target_arch = "wasm32",
@@ -965,6 +970,8 @@ pub(crate) struct Shell {
     pub(crate) zone_tracks: Vec<(catalogue::Track, String)>,
     /// What the title's `DemoConfig.xml` authors for its attract demo (`session::demo`).
     pub(crate) demo_config: Option<oag_tables::demo_config::DemoConfig>,
+    /// The title's benchmark presets (`session::benchmark`).
+    pub(crate) benchmark_presets: Option<crate::benchmark::presets::Presets>,
     /// Every team, valued by its id and labelled off the disc's string table.
     ///
     /// A pack's teams are in here too, and indistinguishable from the disc's -
@@ -1183,6 +1190,7 @@ impl Shell {
                 })
                 .collect(),
             demo_config: boot_shell.demo_config.clone(),
+            benchmark_presets: boot_shell.benchmark_presets.clone(),
             zone_tracks: boot_shell
                 .zone_tracks
                 .iter()

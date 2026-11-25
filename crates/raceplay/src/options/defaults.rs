@@ -30,6 +30,7 @@ impl Default for Options {
             shadow_resolution: oag_display::display::ShadowResolution::default(),
             scene_precision: oag_display::display::ScenePrecision::default(),
             circuit_lighting: oag_display::display::CircuitLighting::default(),
+            reflection_resolution: oag_display::display::ReflectionResolution::default(),
             team: None,
             hull_variant: None,
             skin: None,

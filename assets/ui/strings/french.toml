@@ -229,6 +229,7 @@ OAG_GRAPHICS_SHADOWS = { text = "OMBRES", human = false }
 OAG_GRAPHICS_SHADOW_RESOLUTION = { text = "RÉSOLUTION DES OMBRES", human = false }
 OAG_GRAPHICS_SCENE_PRECISION = { text = "PRÉCISION DE LA SCÈNE", human = false }
 OAG_GRAPHICS_CIRCUIT_LIGHTING = { text = "ÉCLAIRAGE DU CIRCUIT", human = false }
+OAG_GRAPHICS_REFLECTION_RESOLUTION = { text = "RÉSOLUTION DES REFLETS", human = false }
 OAG_GRAPHICS_WATER = { text = "EAU", human = false }
 OAG_GRAPHICS_ANISOTROPIC_FILTERING = { text = "FILTRAGE ANISOTROPE", human = false }
 OAG_GRAPHICS_CAMERA_VIEW = { text = "VUE DE LA CAMÉRA", human = false }
@@ -589,6 +590,13 @@ ids = [
     "OAG_PHOTO_LOOK",
     "OAG_PHOTO_MOVE",
     # The REPLAYS page and the replay viewer (ADR-0087); no translation pass yet.
+    # The BENCHMARK rows; no translation pass yet.
+    "OAG_MENU_EXTRAS",
+    "OAG_MENU_EXTRAS_SUBTITLE",
+    "OAG_MENU_BENCHMARK",
+    "OAG_MENU_BENCHMARK_SUBTITLE",
+    "OAG_GRAPHICS_RUN_BENCHMARK",
+    "OAG_GRAPHICS_RUN_BENCHMARK_SUBTITLE",
     "OAG_MENU_REPLAYS",
     "OAG_MENU_REPLAYS_SUBTITLE",
     "OAG_REPLAYS_PAGE_TITLE",

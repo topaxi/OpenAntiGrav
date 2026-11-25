@@ -131,6 +131,10 @@ pub struct Options {
     /// surfaces compute, read when the scene is built. See
     /// [`oag_display::display::CircuitLighting`].
     pub circuit_lighting: oag_display::display::CircuitLighting,
+    /// The player's `graphics.reflection_resolution`: how many texels the screen-space glass and
+    /// sea target gets, read when the circuit loads. See
+    /// [`oag_display::display::ReflectionResolution`].
+    pub reflection_resolution: oag_display::display::ReflectionResolution,
     /// Team id, which selects both the handling stats and the model, or `None`
     /// for the source's own.
     ///

@@ -231,6 +231,9 @@ def compare_pair(a, b):
             warnings.append(f"{key} differs: {a.get(key)} vs {b.get(key)}")
     if a.get("run", {}).get("case", "1") != b.get("run", {}).get("case", "1"):
         warnings.append(f"view case differs: {a.get('run', {}).get('case', '1')} vs {b.get('run', {}).get('case', '1')}")
+    kind_a, kind_b = a.get("run", {}).get("kind", "offscreen"), b.get("run", {}).get("kind", "offscreen")
+    if kind_a != kind_b:
+        warnings.append(f"run kind differs: {kind_a} vs {kind_b} (an in-game frame is the interval between two presents, under the player's present mode; an offscreen frame has no idle between frames)")
     if a.get("run", {}).get("track") != b.get("run", {}).get("track"):
         warnings.append(f"track differs: {a.get('run', {}).get('track')} vs {b.get('run', {}).get('track')}")
     if a["adapter"]["name"] != b["adapter"]["name"] or a["adapter"]["driver_info"] != b["adapter"]["driver_info"]:
@@ -312,6 +315,16 @@ def cmd_selftest(_):
             self.assertIn("gpu_view1_us", text)
             right["run"] = {"case": "2v"}
             self.assertIn("view case differs", compare_pair(left, right))
+
+        def test_an_in_game_result_is_told_from_an_offscreen_one(self):
+            offscreen, in_game = self.result(100.0), self.result(100.0)
+            in_game["run"] = {"kind": "in_game", "case": "1"}
+            in_game["metrics"] = {"frame_us": offscreen["metrics"]["frame_us"]}
+            text = compare_pair(offscreen, in_game)
+            self.assertIn("run kind differs: offscreen vs in_game", text)
+            self.assertIn("not timed in one of the runs", text)
+            self.assertNotIn("the race itself differs", text)
+            self.assertNotIn("run kind differs", compare_pair(in_game, in_game))
 
         def test_a_different_race_is_flagged(self):
             text = compare_pair(self.result(100.0), self.result(100.0, tick=101))

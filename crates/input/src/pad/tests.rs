@@ -478,3 +478,44 @@ fn the_human_count_is_held_to_the_grid() {
     assert_eq!(Seated::seated(99).humans(), Some(oag_gameplay::MAX_PLAYERS));
     assert_eq!(Seated::default().humans(), None);
 }
+
+/// What L1 and a half-pulled L2 read as together, with the pad's own bits for L1 under `config`.
+fn l1_with_l2_at(raw: f32, config: TriggerConfig) -> PadState {
+    resolve(
+        Reading {
+            buttons: bits_of(gilrs::Button::LeftTrigger, Button::L, config.l1_is_flip),
+            brake: raw,
+            ..Reading::default()
+        },
+        config,
+    )
+}
+
+#[test]
+fn l1_as_the_flip_leaves_the_l2_airbrake_alone() {
+    let config = TriggerConfig {
+        l1_is_flip: true,
+        ..TriggerConfig::default()
+    };
+    let state = l1_with_l2_at(0.6, config);
+    assert!(state.held & Button::Flip.bit() != 0);
+    assert!(
+        state.held & Button::L.bit() != 0,
+        "L comes from the trigger alone"
+    );
+    assert_eq!(state.airbrake_left, pull(0.6), "L1 pulled the axis to full");
+    assert_eq!(state.digital & Button::L.bit(), 0, "L1 raised L");
+
+    let rested = l1_with_l2_at(0.0, config);
+    assert!(rested.held & Button::Flip.bit() != 0);
+    assert_eq!(rested.held & Button::L.bit(), 0);
+    assert_eq!(rested.airbrake_left, 0.0);
+}
+
+#[test]
+fn l1_is_both_the_airbrake_and_the_flip_where_the_race_has_no_flip() {
+    let state = l1_with_l2_at(0.6, TriggerConfig::default());
+    assert!(state.held & Button::Flip.bit() != 0);
+    assert!(state.held & Button::L.bit() != 0);
+    assert_eq!(state.airbrake_left, 1.0);
+}

@@ -171,6 +171,11 @@ pub struct State {
     /// is open.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub photo_job: Option<String>,
+    /// The glass and sea target's size as `WxH` on `stage=race`, on a circuit that draws one: a
+    /// photo mode shot draws it at the original's size and the frame after puts the player's
+    /// back.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub glass_target: Option<String>,
     /// The replay viewer while a recording is being watched on `stage=race`: `opening`,
     /// `playing`, `paused`, `ended` or `stopped` (the build stops matching the recording).
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -215,6 +220,10 @@ pub struct State {
     /// (`session::demo`); absent in every other race.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub demo: Option<String>,
+    /// `loading` while the in-game benchmark's race loads, `running` while it is flown and
+    /// `stats` once its stats screen is up (`session::benchmark`); absent otherwise.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub benchmark: Option<String>,
     /// `on` or `off`: whether the race on screen draws its HUD, on `stage=race`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hud: Option<String>,
@@ -272,6 +281,7 @@ impl State {
             "photo" => one(self.photo.clone()),
             "photo_fx" => one(self.photo_fx.clone()),
             "photo_job" => one(self.photo_job.clone()),
+            "glass_target" => one(self.glass_target.clone()),
             "replay" => one(self.replay.clone()),
             "replay_at" => one(self.replay_at.clone()),
             "replay_follow" => one(self.replay_follow.clone()),
@@ -279,6 +289,7 @@ impl State {
             "notice" => one(self.notice.clone()),
             "endrace" => one(self.endrace.clone()),
             "demo" => one(self.demo.clone()),
+            "benchmark" => one(self.benchmark.clone()),
             "hud" => one(self.hud.clone()),
             "humans" => one(self.humans.map(|humans| humans.to_string())),
             "hints" => self
@@ -342,6 +353,7 @@ impl State {
                 | "photo"
                 | "photo_fx"
                 | "photo_job"
+                | "glass_target"
                 | "replay"
                 | "replay_at"
                 | "replay_follow"
@@ -349,6 +361,7 @@ impl State {
                 | "notice"
                 | "endrace"
                 | "demo"
+                | "benchmark"
                 | "hud"
                 | "humans"
                 | "hints"

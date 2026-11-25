@@ -217,21 +217,24 @@ read with `scripts/check-android-stack.py`, KiB):
 
 | Function | Before | After | Where it runs |
 | --- | --- | --- | --- |
-| `app::run` / `app::launch` | 469.8 | 314.0 (`launch`, gone before the loop) | `android_main` thread, transient |
-| `headless::run_race` / `race_launch` | 532.2 | 376.2 (gone before the loop) | transient |
+| `app::run` / `app::launch` | 469.8 | 253.8 (`launch`, gone before the loop) | `android_main` thread, transient |
+| `headless::run_race` / `race_launch` | 532.2 | 308.2 (gone before the loop) | transient |
 | `run_window` (the loop) | inside `run` | 1.6 | `android_main` thread, resident |
 | winit `run_app` closure | 156.1 | 2.7 | resident |
-| `Stage::race` | 308.1 | 60.1 | `android_main` thread, while it waits |
+| `Stage::race` | 308.1 | 0.8 | `android_main` thread, while it waits |
 | `build_race_stage` | inside `Stage::race` | 308.1 | the 16 MiB thread |
 | `Scene::new` | 168.2 | 168.2 | the 16 MiB thread |
-| `App::open_with` | 376.1 | 356.1 | `android_main` thread (`Session` is built here) |
+| `App::open_with` | 376.1 | 144.1 | `android_main` thread (`Session` is built here) |
 | `BuildWorker::spawn` | 188.0 | 64.0 | `android_main` thread |
 
-`open_with` is still large: it builds the `Session` literal before boxing it, and the
-shaders compiled under it (the overlay's, the present pipeline's) run on the
-`android_main` thread with about 0.4 MB of frames above them, where the menu route
-before this change ran them under `launch`'s 470 KB as well. Shrinking `Session`
-itself (its overlay and panel fields are 57 KB and 43 KB) is open.
+`open_with` went from 356.1 to 144.1 KiB and `Stage::race` from 60.1 to 0.8 KiB (same `dist` build, read
+with `scripts/check-android-stack.py`, before and after the change below). `Session` was 160 KB, and five of its fields were 120 KB of
+that, held by value: `photo` (39.6 KB), `net` (33.6), `audio` (20.1), `overlay` (14.0) and `watching` (12.3). They are `Box`ed now
+(`Option<Box<_>>` where they were an `Option`), so the literal `open_with` builds before it boxes the `Session` is a quarter of its size.
+`App::race` holds the race's `Loaded` (62.9 KB) boxed and `Stage::race` takes it boxed, which took its by-value copy out of
+both frames. Nothing is `unsafe`. The remaining 144 KiB is the front end's first stage and the shaders compiled under `open_with`; which of
+the stage values (`MenuStage` 34.6 KB, `LoadingStage` 24.8 KB, `FrontendStage` 19.9 KB by `-Zprint-type-sizes`) sit in the frame is not read.
+`check-android-stack.py` keeps `open_with` under 160 KiB (`RESIDENT_CEILINGS`) and `Stage::race` under 64 KiB; the 356.1 KiB library fails it.
 
 **On the S21** (Galaxy S21, Android 14, the `dist` APK of this change, media volume 0,
 `--no-audio`, `--autopilot`, `--frame-log`, default settings): the launch-file
@@ -839,9 +842,15 @@ Measured 2026-11-24/25 on the same phone, release builds of main `f928359` plus 
   prepass **pays** here too (off: race pass 14 to 27.5 ms), binding arrays help (`OAG_BINDLESS=0`: 58.5 to 67 ms), and the shadow passes cost nothing (`--shadows off`: 67.6 against 67.6 ms).
 - **What does work is leaving one pass out every other 10 s of one live run** (`OAG_SKIP_PASSES=<name>` and `OAG_SKIP_PASSES_TOGGLE=10` as launch-file
   lines; `scripts/android-skip-windows.py` splits the `--frame-log` by arm). Both arms see the same temperature, which moves a whole run by half.
-- **Measure on the menu route.** On this build the launch file's `--race` on the phone stays in the pre-race flyby: a 20 s `simpleperf` of it has no
-  `Race::tick` sample, the screen shows the flyby camera with no HUD, and `frame-phases` reads ticks 0.2 ms. Its 30 fps is a flyby's. The menu route
-  (Racebox single race, which loads `track_reversed.vex`, so the tables above this section are Vineta K **reversed**) races: ticks 5 to 11 ms, `Race::tick` 25 % of the frame thread.
+- **`--race` on HD stood in the pre-race flyby, and now races.** HD's flyby repeats until a press (`Ending::OnlyBySkip`, measured on RPCS3,
+  `docs/gameplay/race-intro.md`, "Other titles"), and a launch-file run has nobody to press: a 20 s `simpleperf` of it had no `Race::tick` sample, the screen showed the flyby
+  camera with no HUD, and `frame-phases` read ticks 0.2 ms (the "30 fps at scale 25" was a flyby's). It is not Android: a windowed desktop `--race` on HD waits the same way.
+  Pulse's flyby ends on its own after its `AnimEnd`, so Pulse's `--race` was always racing (a ticks reading of 0.2 to 0.7 ms does not tell its flyby from racing: read the
+  log's `pre-race flyby: ends after N tick(s)` with `OAG_LOG_FILE_FILTER=warn,oag=debug` as a launch-file line, which writes `files/state/oag/logs/oag-game.log`, and a screencap).
+  `--autopilot` now presses the skip of a flyby only a press ends, as a held Cross would; `--no-intro` drops every flyby. Measured on the S21 (the `dist` APK of this change, `--no-audio`,
+  `--autopilot --seed 1`): HD Vineta K `pre-race flyby: ends after 1 tick(s)` and the HUD with lap and position on screen; Pulse (Talon's Junction) `ends after 1529 tick(s)` and the
+  HUD with the lap clock. The menu route (Racebox, Single Race, taps as above) also reaches `stage=race` with the HUD on both. Tests: `an_hd_race_under_autopilot_leaves_the_flyby`
+  (`drive_ground_truth`) fails when the skip is dropped. The menu route, which loads `track_reversed.vex`, is the route the tables above this section were measured on (Vineta K **reversed**): ticks 5 to 11 ms, `Race::tick` 25 % of the frame thread.
 
 Per pass, menu route (racing), one run each, about 120 frame-log seconds per arm, drawn against left out:
 
@@ -851,10 +860,29 @@ Per pass, menu route (racing), one run each, about 120 frame-log seconds per arm
 | `adverts` | 55.5 / 54.2 | 18.6 / 19.1 | eight advert cards at 512x256, redrawn every frame: inside the noise |
 | `bloom` | 41.8 / 43.8 | 23.9 / 22.5 | HD's bloom chain: no gain |
 
+- **The audio mixer under `--no-audio` no longer mixes.** The 6.8 % of the racing frame thread was `Mixer::render` summing the voices of a mixer nobody hears: a null
+  backend renders each tick and drops it so that voices end, free their slots and the race song advances. `Audio::open` now makes a `--no-audio` run's mixer silent when
+  there is no `--dump-audio` (`Output::headless`, `Mixer::set_silent`): `Mixer::advance_tick` moves every voice on through the same `voice_gate` the mixer uses (delay,
+  release, loop, end) and writes no samples and no buffer; a voice that cannot end or wrap this tick only adds its step. With a convolver loaded, with a dump, or with a
+  device it renders in full, and a machine with no device and no `--no-audio` renders and drops as before. Measured with a 20 s `simpleperf` of the racing `android_main`
+  thread (default settings, `--autopilot --seed 1`, share of all samples, the A-only build against this change's):
+
+  | Race | `Audio::tick` before | after | `Mixer::render` before | `advance_voices` after | `android_main` share before / after |
+  | --- | ---: | ---: | ---: | ---: | ---: |
+  | HD Vineta K | 6.37 % | 0.44 % | 6.28 % | 0.40 % | 61.4 % / 56.6 % |
+  | Pulse Talon's Junction | 0.53 % | 0.09 % | 0.49 % | 0.06 % | not read |
+
+  So the mixer does not mix, but its voice bookkeeping still runs (0.4 % on HD, 0.06 % on Pulse): "no work per frame" is false as worded and 94 % of it is gone on HD.
+  Desktop, HD `--race --no-audio --screenshot --ticks 3600` (dev profile, `perf stat -e instructions:u`, three runs each, spread under 0.1 %): 45.65 G user instructions on main's mixer, 38.41 G on this one (-15.9 %).
+  Desktop, `--dump-audio` of 600 ticks of a race on Pulse and on HD: the WAV is byte-identical between main's mixer and this one (the audible path went through the same `voice_gate`),
+  and `--race --screenshot` with and without `--no-audio` is byte-identical between the two builds.
 On the flyby (`--race`), the same switches read glass 42.5 / 26.8, adverts 42.4 / 35.5, bloom 36.4 / 29.7, `hud` 36.8 / 32.0, `composite` 39.9 / 34.6
 and `resolve` 45.2 / 41.8 ms: the flyby's frame is lighter, so the same passes are a larger share of it. Only the glass target holds its cost while racing.
+The glass target's size is now a setting, `graphics.reflection_resolution` (`original`, the default, `half` or `quarter` of the original's size per axis, whatever the render scale:
+Vineta K's 640x360 becomes 320x180 or 160x90); no phone number for it yet; the default is `original` on every platform, and a player picks `half` or `quarter` for their hardware
+([water.md](../rendering/water.md), "The reflection target's resolution").
 The racing frame thread is about 23 ms (ticks 5.6, scene recording 8.3, `submit` 9.1, the 10 minute run's racing seconds 20 to 110).
-A 20 s `simpleperf` of a racing frame thread: `Race::tick` 25 % (of it the audio mixer 6.8 % under `--no-audio`, `RaceView::capture_poses` 6 %,
+A 20 s `simpleperf` of a racing frame thread: `Race::tick` 25 % (of it the audio mixer 6.8 % under `--no-audio`, mixing nothing since the bullet above, `RaceView::capture_poses` 6 %,
 the particle systems about 10 %, opponents 4.6 %), `CommandEncoder::finish` 23 %, `Scene::prepare_view` 23 %; Mali's backend thread is 37 % of the app's samples.
 
 **Measured and dropped** (same method, one run each unless said):

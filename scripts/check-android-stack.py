@@ -66,6 +66,10 @@ RESIDENT = (
     r"EventLoop<\(\)>>::run_app<oag_game::app::handler::App>::\{closure#0\} as core::ops::function::FnMut",
     r"^<oag_game::app::stage::Stage>::race(::<.*>)?$",
 )
+# Resident, with a ceiling of its own: `App::open_with` builds the session and the front end's
+# first stage on the `android_main` thread, so its frame is a margin to keep and not one to
+# bring under `--max-frame`.
+RESIDENT_CEILINGS = ((r"^<oag_game::app::handler::App>::open_with$", 160 * 1024),)
 # Resident too, but the optimiser may fold them into their caller, so a missing one is not a failure.
 RESIDENT_IF_PRESENT = (r"^oag_game::app::run$",)
 
@@ -166,7 +170,12 @@ def main() -> int:
         return 2
     checked: list[tuple[int, str]] = []
     status = 0
-    for pattern, required in [(p, True) for p in RESIDENT] + [(p, False) for p in RESIDENT_IF_PRESENT]:
+    ceilings: dict[str, int] = {}
+    for pattern, required in (
+        [(p, True) for p in RESIDENT]
+        + [(p, True) for p, _ in RESIDENT_CEILINGS]
+        + [(p, False) for p in RESIDENT_IF_PRESENT]
+    ):
         hits = [(size, name) for name, size in every if re.search(pattern, name)]
         if required and not hits and not args.all:
             print(f"MISSING: no function matches {pattern}", file=sys.stderr)
@@ -176,14 +185,18 @@ def main() -> int:
                 print(f"NO PROLOGUE: no stack reservation found in {name}", file=sys.stderr)
                 status = 1
         checked += hits
+        for pattern_ceiling, ceiling in RESIDENT_CEILINGS:
+            if pattern_ceiling == pattern:
+                ceilings.update({name: ceiling for _, name in hits})
     if args.all:
         checked = [(size, name) for name, size in every]
     listed = [(size, name) for name, size in every if not args.match or re.search(args.match, name)]
     for size, name in sorted(listed, reverse=True)[: args.top]:
         print(f"{size / 1024:9.1f} KiB  {name[:150]}")
-    over = [(size, name) for size, name in checked if size > args.max_frame]
+    over = [(size, name) for size, name in checked if size > ceilings.get(name, args.max_frame)]
     for size, name in sorted(over, reverse=True):
-        print(f"OVER {args.max_frame // 1024} KiB: {size / 1024:.1f} KiB  {name[:150]}", file=sys.stderr)
+        limit = ceilings.get(name, args.max_frame)
+        print(f"OVER {limit // 1024} KiB: {size / 1024:.1f} KiB  {name[:150]}", file=sys.stderr)
     print(f"{len(every)} functions read, {len(checked)} checked, {len(over)} over {args.max_frame // 1024} KiB")
     return 1 if over else status
 

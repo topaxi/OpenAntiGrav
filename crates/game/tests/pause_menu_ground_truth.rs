@@ -942,3 +942,319 @@ mod pure_screens {
         );
     }
 }
+
+/// Wipeout 2048's pause screens are its own touch pages (`docs/ui/pause-menu.md`, "2048"): the
+/// front end's `boot` launches the campaign map's first event, a Time Trial, so the screen is the
+/// binder's default `PauseMenuRace`. The window is 1440 by 816 over the 960 by 544 grid, so a
+/// grid point is a tap at one and a half times its place.
+mod y2048_screens {
+    use super::*;
+
+    fn y2048() -> Option<std::path::PathBuf> {
+        oag_testdata::exact("data/extracted/vita/PCSF00007")
+    }
+
+    fn run_2048(tag: &str, script: &str) -> Run {
+        let source = y2048().expect("the caller checks first");
+        run_on(&source, &format!("y2048-{tag}"), script)
+    }
+
+    /// To the race and the pause screen, five ticks in.
+    const PAUSED: &str = "boot; ticks 100; press start; until stage=menu; expect page=pause; \
+        ticks 5; ";
+
+    /// The tile rows of `PauseMenuRace`, in the file's order: OPTIONS, PHOTO MODE (the disc's tile),
+    /// then the three icon-only tiles. QUIT and RESTART ask first, so they open a page.
+    fn the_rows() -> Vec<(String, String)> {
+        pairs(&[
+            ("OPTIONS", "submenu"),
+            ("PHOTO MODE", "photo_mode"),
+            ("QUIT RACE", "submenu"),
+            ("RESTART RACE", "submenu"),
+            ("CONTINUE", "back"),
+        ])
+    }
+
+    fn last_page(run: &Run) -> String {
+        run.states
+            .last()
+            .and_then(|state| state["screen"]["id"].as_str())
+            .unwrap_or_default()
+            .to_string()
+    }
+
+    /// START opens the tile page and its rows are the disc's tiles; QUIT, by pad and by a tap on its
+    /// tile, asks first, on the way back; CIRCLE and the cross tile go back to the page; UP and
+    /// the tick leave for the main page.
+    #[test]
+    #[ignore = "needs the extracted 2048 package in data/extracted/vita/PCSF00007"]
+    fn a_time_trial_pauses_into_the_tile_page_and_quit_asks_before_it_leaves() {
+        if y2048().is_none() {
+            return;
+        }
+        let opened = run_2048("rows", PAUSED);
+        assert_eq!(rows(&opened), the_rows());
+
+        let asked = run_2048(
+            "quit",
+            &format!(
+                "{PAUSED} select pause_quit; press cross; ticks 60; \
+                 expect page=pause_screen:PauseQuitConfirm; press circle; ticks 60; \
+                 expect page=pause; touch tap 930 716; ticks 60; \
+                 expect page=pause_screen:PauseQuitConfirm; press cross; ticks 60; \
+                 expect page=pause; select pause_quit; press cross; ticks 60; \
+                 expect page=pause_screen:PauseQuitConfirm; press up; press cross; ticks 60; \
+                 expect page=main"
+            ),
+        );
+        assert_eq!(last_page(&asked), "main");
+        let confirm = on_page(&asked, "pause_screen:PauseQuitConfirm");
+        let state = confirm.first().expect("the question was on screen");
+        let ids: Vec<&str> = state["screen"]["rows"]
+            .as_array()
+            .expect("rows")
+            .iter()
+            .map(|row| row["id"].as_str().unwrap_or_default())
+            .collect();
+        assert_eq!(
+            ids,
+            ["pause_quit", "pause_resume"],
+            "the tick, then the cross"
+        );
+    }
+
+    /// RESTART asks too, and its tick loads the race again from the grid; a tap on the CONTINUE tile
+    /// resumes the race where it stood.
+    #[test]
+    #[ignore = "needs the extracted 2048 package in data/extracted/vita/PCSF00007"]
+    fn restart_asks_and_a_tap_on_the_tick_tile_resumes() {
+        if y2048().is_none() {
+            return;
+        }
+        let restart = run_2048(
+            "restart",
+            &format!(
+                "{PAUSED} select pause_restart; press cross; ticks 30; \
+                 expect page=pause_screen:PauseRetryConfirm; press up; press cross; \
+                 until stage=race within 4000; ticks 20"
+            ),
+        );
+        let sims: Vec<u64> = restart
+            .states
+            .iter()
+            .filter_map(|state| state.get("sim_tick")?.as_u64())
+            .collect();
+        assert!(
+            sims.last().copied().unwrap_or(u64::MAX) < 100,
+            "the tick loads the race again: {sims:?}"
+        );
+
+        let resumed = run_2048(
+            "resume",
+            &format!("{PAUSED} touch tap 1320 716; until stage=race within 200; ticks 10"),
+        );
+        let ticks: Vec<u64> = resumed
+            .states
+            .iter()
+            .filter_map(|state| state.get("sim_tick")?.as_u64())
+            .collect();
+        assert!(
+            ticks.last().copied().unwrap_or(0) > 100,
+            "the race went on from where it stood: {ticks:?}"
+        );
+    }
+
+    /// Every screen of the table reads off the real file, every word the rows and the heading need
+    /// resolves, and each mode's page draws one tile box per row it has with the icon found on the
+    /// menus' sheet: a Time Trial and the default modes OPTIONS, PHOTO MODE, QUIT, RESTART and
+    /// CONTINUE; a Tournament no RESTART; a Speed Lap its GHOST tile and its own END SESSION. The
+    /// Speed Lap's GHOST tile opens the four-entry list: NONE and MY BEST are the two values of
+    /// `display.ghost_ship_visible`, the friend's and the world's are drawn and answer nothing.
+    #[test]
+    #[ignore = "needs the extracted 2048 package in data/extracted/vita/PCSF00007"]
+    fn every_mode_reads_words_and_draws_its_tiles_with_their_icons_off_the_disc() {
+        use oag_game::boot;
+        use oag_ui::menu::{Definition, Menu};
+        use oag_ui_screens::pause::draw_list;
+
+        let Some(source) = y2048() else {
+            return;
+        };
+        let (shell, _archives, title) = boot::load_shell(&boot::Options {
+            language: Some("English".to_string()),
+            source: source.display().to_string(),
+            dlc: Vec::new(),
+            leg: oag_ui::frontend::Leg::LogoFmv,
+            movie: None,
+            cache: std::env::temp_dir().join("oag-2048-pause-ground-truth"),
+            audio_cache: oag_source::cache::default_audio_cache_dir(),
+            extent: oag_game::movie::Extent::Frames(oag_game::INTRO_FRAMES_NEEDED),
+            no_video: true,
+            refresh_video: false,
+            prefer_av1_cache: false,
+            find_texture_packs: None,
+        })
+        .expect("the shell");
+        let table = title.pause_menu.expect("2048 authors pause screens");
+        let names: Vec<&str> = shell
+            .pause_screens
+            .screens
+            .iter()
+            .map(|screen| screen.name())
+            .collect();
+        let wanted: Vec<&str> = table.screens.iter().map(|screen| screen.name).collect();
+        assert_eq!(names, wanted, "every screen of the table read");
+        let skin = oag_ui::menu::Skin::new(shell.menu_skin, shell.space, shell.font.line_height);
+        let words = &shell.pause_screens.strings;
+        let sprites = |src: &str| shell.sprites.get(src);
+        for (mode, screen, tiles, unbuilt) in [
+            ("time_trial", "PauseMenuRace", 5, Vec::<&str>::new()),
+            ("single_race", "PauseMenuRace", 5, Vec::new()),
+            ("tournament", "PauseMenuTournament", 4, Vec::new()),
+            ("speed_lap", "PauseMenuSpeed", 6, Vec::new()),
+        ] {
+            let mut definition = Definition::built_in(&shell.strings).expect("the built-in menu");
+            let built = definition.open_on_pause_screen(table, mode, words);
+            assert_eq!(built.screen, screen, "{mode}");
+            assert_eq!(built.unbuilt, unbuilt, "{mode}");
+            assert!(built.unworded.is_empty(), "{mode}: {:?}", built.unworded);
+            let mut menu = Menu::new(definition);
+            // A race is held, so PHOTO MODE is on offer.
+            menu.offer(oag_ui::menu::Action::PhotoMode, true);
+            let read = shell
+                .pause_screens
+                .screens
+                .iter()
+                .find(|read| read.name() == screen)
+                .expect(screen);
+            for src in read.sprite_srcs() {
+                assert!(sprites(src).is_some(), "{mode}: {src} is on the sheet");
+            }
+            let drawn = draw_list(read, table, &menu, &skin, &Default::default(), &sprites);
+            let boxes = drawn
+                .body
+                .iter()
+                .filter(|draw| matches!(draw, oag_ui::frontend::Draw::Fill { .. }))
+                .count();
+            assert_eq!(boxes, tiles, "{mode}: one box per tile this build has");
+            let icons = drawn
+                .body
+                .iter()
+                .filter(|draw| matches!(draw, oag_ui::frontend::Draw::Sprite { .. }))
+                .count();
+            assert_eq!(icons, tiles, "{mode}: and its icon in each");
+        }
+        ghost_list_off_the_disc(&shell, table, &skin);
+    }
+
+    fn ghost_list_off_the_disc(
+        shell: &oag_game::boot::Shell,
+        table: &'static oag_title::PauseMenu,
+        skin: &oag_ui::menu::Skin,
+    ) {
+        use oag_core::buttons::{Button, Input};
+        use oag_ui::menu::{Definition, Menu, MenuEvent, Value, pointer::Part};
+        use oag_ui_screens::pause::{draw_list, regions};
+
+        let words = &shell.pause_screens.strings;
+        let sprites = |src: &str| shell.sprites.get(src);
+        let mut definition = Definition::built_in(&shell.strings).expect("the built-in menu");
+        definition.open_on_pause_screen(table, "speed_lap", words);
+        let mut menu = Menu::new(definition);
+        menu.offer(oag_ui::menu::Action::PhotoMode, true);
+        menu.seed("display.ghost_ship_visible", &Value::Text("on".into()));
+        let press = |menu: &mut Menu, button: Button| {
+            let mut input = Input::new();
+            input.begin_frame(1 << button.index());
+            menu.update(&mut input)
+        };
+        let ghost = menu
+            .page()
+            .row_with_id("pause_ghost")
+            .expect("a GHOST tile");
+        while menu.selected() != ghost {
+            press(&mut menu, Button::Down);
+        }
+        press(&mut menu, Button::Cross);
+        assert_eq!(menu.page().id, "pause_screen:PauseMenuGhost");
+        assert_eq!(
+            menu.page().meta[menu.selected()].id.as_deref(),
+            Some("pause_ghost_list")
+        );
+        let read = shell
+            .pause_screens
+            .screens
+            .iter()
+            .find(|read| read.name() == "PauseMenuGhost")
+            .expect("the ghost screen");
+        for src in read.sprite_srcs() {
+            assert!(sprites(src).is_some(), "{src} is on the sheet");
+        }
+        let drawn = draw_list(read, table, &menu, skin, &Default::default(), &sprites);
+        let texts: Vec<&str> = drawn
+            .body
+            .iter()
+            .filter_map(|draw| match draw {
+                oag_ui::frontend::Draw::Text { text, .. } => Some(text.as_str()),
+                _ => None,
+            })
+            .collect();
+        for id in [
+            "GHOST_NONE",
+            "GHOST_MY_BEST",
+            "GHOST_FRIEND_CHALLENGE",
+            "GHOST_GLOBAL_CHALLENGE",
+        ] {
+            let said = words.get(id).unwrap_or_else(|| panic!("{id} has words"));
+            assert!(
+                texts.contains(&said),
+                "{id} ({said}) under its entry: {texts:?}"
+            );
+        }
+        let values: Vec<usize> = regions(read, table, &menu, skin)
+            .iter()
+            .filter_map(|region| match region.part {
+                Part::Value(at) => Some(at),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(values, [0, 1], "NONE and MY BEST can be chosen");
+        let off = press(&mut menu, Button::Left);
+        assert_eq!(
+            off,
+            [MenuEvent::Changed {
+                setting: "display.ghost_ship_visible".into(),
+                value: Value::Text("off".into())
+            }]
+        );
+    }
+
+    /// The pad walks the tiles (RIGHT and LEFT by where they are, UP and DOWN in the file's order),
+    /// CIRCLE on the root does nothing (`backward="none"`), and START resumes the race
+    /// (`forward="start"`).
+    #[test]
+    #[ignore = "needs the extracted 2048 package in data/extracted/vita/PCSF00007"]
+    fn the_pad_walks_the_tiles_by_position_and_start_resumes() {
+        if y2048().is_none() {
+            return;
+        }
+        let run = run_2048(
+            "pad",
+            &format!(
+                "{PAUSED} expect focus=pause_options; press right; ticks 3; \
+                 expect focus=photo_mode; press down; ticks 3; \
+                 expect focus=pause_quit; press right; ticks 3; \
+                 expect focus=pause_restart; press right; ticks 3; \
+                 expect focus=pause_resume; press right; ticks 3; \
+                 expect focus=pause_resume; press up; ticks 3; \
+                 expect focus=pause_restart; press circle; ticks 5; expect page=pause; \
+                 press start; until stage=race within 200; ticks 10"
+            ),
+        );
+        assert_eq!(
+            run.states.last().expect("a state")["stage"],
+            "race",
+            "START resumed the race"
+        );
+    }
+}

@@ -21,7 +21,7 @@ pub struct RowMeta {
 }
 
 /// One page: a title and its rows.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct Page {
     /// The id a `submenu` entry names.
     pub id: String,
@@ -41,6 +41,10 @@ pub struct Page {
     /// Rows [`Menu::supply`](super::Menu::supply) took out because their source
     /// offers nothing to choose, waiting to come back. See `hide.rs`.
     pub(super) parked: Vec<super::hide::Parked>,
+    /// The id of the row the cursor is put on each time the page is entered, over wherever it
+    /// was left: a page that asks "are you sure" opens on the way back, a screen of tiles on
+    /// the list it was opened for. `None` leaves the cursor where it was.
+    pub opens_on: Option<String>,
 }
 
 impl Page {
@@ -63,6 +67,7 @@ impl Page {
             subtitles,
             meta,
             parked: Vec::new(),
+            opens_on: None,
         }
     }
 

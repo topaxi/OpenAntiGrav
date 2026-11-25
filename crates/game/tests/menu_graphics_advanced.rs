@@ -5,7 +5,7 @@
 use oag_gameplay::input::{Button, Input};
 use oag_ui::menu::*;
 
-const TOP: [&str; 11] = [
+const TOP: [&str; 12] = [
     "graphics.renderer",
     "graphics.render_scale",
     "graphics.target_fps",
@@ -15,6 +15,7 @@ const TOP: [&str; 11] = [
     "graphics.msaa",
     "graphics.anisotropy",
     "graphics.camera_view",
+    "action:benchmark",
     "submenu:graphics_advanced",
     "back",
 ];
@@ -31,6 +32,7 @@ fn rows(definition: &Definition, id: &str) -> Vec<String> {
         .map(|entry| match entry {
             Entry::Submenu { target, .. } => format!("submenu:{}", definition.pages[*target].id),
             Entry::Back { .. } => "back".to_string(),
+            Entry::Run { action, .. } => format!("action:{}", action.name()),
             other => other.setting().expect("a setting row").to_string(),
         })
         .collect()
@@ -42,6 +44,7 @@ fn advanced(
     trail_hits: bool,
     encoded: bool,
     materials: bool,
+    glass_target: bool,
 ) -> Vec<&'static str> {
     // WINGTIP CONTRAILS is on the titles with no `wingtip` class of their own: the PSP pair, as
     // TRAIL ORDER and BOOST ZOOM are.
@@ -59,6 +62,10 @@ fn advanced(
     // CIRCUIT LIGHTING is on the titles whose circuits are shaded from their own materials.
     if materials {
         rows.push("graphics.circuit_lighting");
+    }
+    // REFLECTION RESOLUTION is on the titles that draw a screen-space glass or sea target.
+    if glass_target {
+        rows.push("graphics.reflection_resolution");
     }
     rows.extend([
         "graphics.water",
@@ -104,6 +111,7 @@ fn the_graphics_page_keeps_the_original_and_performance_rows_and_opens_advanced(
         definition.drop_unavailable_trail_hits(title);
         definition.drop_unavailable_scene_precision(title);
         definition.drop_unavailable_circuit_lighting(title);
+        definition.drop_unavailable_reflection_resolution(title);
         definition.drop_unavailable_wingtip_contrails(title);
         definition.drop_unavailable_own_shield(title);
         definition.drop_unavailable_own_rockets(title);
@@ -130,6 +138,7 @@ fn advanced_holds_the_look_extras_and_the_mixed_rows_in_order() {
         definition.drop_unavailable_trail_hits(title);
         definition.drop_unavailable_scene_precision(title);
         definition.drop_unavailable_circuit_lighting(title);
+        definition.drop_unavailable_reflection_resolution(title);
         definition.drop_unavailable_wingtip_contrails(title);
         definition.drop_unavailable_own_shield(title);
         definition.drop_unavailable_own_rockets(title);
@@ -145,6 +154,7 @@ fn advanced_holds_the_look_extras_and_the_mixed_rows_in_order() {
                 trail_hits,
                 title.looks.blends_encoded.applies_everywhere(),
                 title.looks.material_render_state.applies_everywhere(),
+                title.looks.screen_space_target.applies_everywhere(),
             ),
             "{}",
             title.name
@@ -225,4 +235,28 @@ fn frame_limit_ends_with_refresh_rate_and_shows_the_live_rate() {
                 && values.last().is_some_and(|v| v.value == "refresh_rate" && v.label == "REFRESH RATE (144)"))
     });
     assert!(found);
+}
+
+/// REFLECTION RESOLUTION is offered by the titles that draw the glass or sea target (HD, 2048,
+/// Omega) and dropped by the two that never do.
+#[test]
+fn the_reflection_resolution_row_is_on_the_titles_with_a_glass_target() {
+    for (title, shown) in [
+        (oag_pulse::TITLE, false),
+        (oag_pure::TITLE, false),
+        (oag_hd::TITLE, true),
+        (oag_omega::TITLE, true),
+        (oag_2048::TITLE, true),
+    ] {
+        let mut definition = built_in();
+        definition.drop_unavailable_reflection_resolution(title);
+        assert_eq!(
+            rows(&definition, "graphics_advanced")
+                .iter()
+                .any(|row| row == "graphics.reflection_resolution"),
+            shown,
+            "{}",
+            title.name
+        );
+    }
 }

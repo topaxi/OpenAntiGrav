@@ -58,6 +58,10 @@ pub(crate) struct App {
     pub(crate) demo: Option<bool>,
     /// `--wallpaper-fps`, when the run is a wallpaper.
     pub(crate) demo_limit: Option<oag_present::perf::FrameLimit>,
+    /// `--benchmark`: what the run asks for. See `session::benchmark`.
+    pub(crate) benchmark: Option<crate::benchmark::Request>,
+    /// `--ticks`: where a benchmark is stopped, when it is given (a short run for a test).
+    pub(crate) benchmark_ticks: Option<u32>,
     /// `--replay-png`: the screenshot to open in the viewer once the main menu is up.
     pub(crate) replay_png: Option<std::path::PathBuf>,
     /// `--give`, resolved to a weapon at startup. See the CLI field.
@@ -102,7 +106,7 @@ pub(crate) struct App {
     /// `--camera-jitter`, carried to the session. See `Session::camera_jitter`.
     pub(crate) camera_jitter: bool,
     /// A race loaded before the window opened, which is what `--race` does.
-    pub(crate) race: Option<race::Loaded>,
+    pub(crate) race: Option<Box<race::Loaded>>,
     /// What a race started from `Launch Game` is flown on.
     ///
     /// `None` while the chooser is up: its `source` field is the one thing a
@@ -492,7 +496,7 @@ impl App {
             pointer: crate::app::pointer::Window::default(),
             touch_overlay: crate::app::touch::Overlay::default(),
             gestures: oag_input::gesture::Gestures::new((1.0, 1.0)),
-            audio,
+            audio: Box::new(audio),
             music_discs: self.music_discs.clone(),
             music_pool_seen: String::new(),
             music_place,
@@ -531,7 +535,7 @@ impl App {
             frame_index: 0,
             stall_frame: 0,
             memory: perf::memory::Probe::new(),
-            overlay,
+            overlay: Box::new(overlay),
             cursor_sheet,
             cursor_title: None,
             stalled: true,
@@ -542,6 +546,10 @@ impl App {
             replay_refused: std::collections::BTreeMap::new(),
             watching: None,
             demo: crate::app::session::DemoState::with_cli(self.demo, self.demo_limit),
+            benchmark: crate::app::session::BenchmarkState::with_cli(
+                self.benchmark.clone(),
+                self.benchmark_ticks,
+            ),
             viewer: None,
             notice: None,
             shot_cli: self.replay_png.clone(),
@@ -566,7 +574,7 @@ impl App {
             original_menu: self.original_menu,
             dev: std::mem::take(&mut self.dev),
             dev_clock: crate::app::session::devrun::Clock::default(),
-            net: self.net.take(),
+            net: self.net.take().map(Box::new),
             net_bot: self.net_bot,
             net_over_ticks: 0,
             prompt: crate::prompts::PromptState {

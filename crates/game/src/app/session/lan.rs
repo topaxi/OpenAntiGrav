@@ -565,7 +565,7 @@ impl Session {
                 match own.poll() {
                     Ok(Some(net)) => {
                         // The host's welcome has come: START was pressed and the race loaded.
-                        self.net = Some(net);
+                        self.net = Some(Box::new(net));
                         self.lan = Some(Lan {
                             step: Step::Lobby {
                                 hosted,
@@ -662,7 +662,7 @@ impl Session {
                         self.back_to_browse(browser, &format!("{e:#}"));
                         return;
                     }
-                    self.net = Some(net);
+                    self.net = Some(Box::new(net));
                     self.lan = Some(Lan {
                         step: Step::Waiting {
                             browser,

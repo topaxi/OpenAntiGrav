@@ -78,6 +78,30 @@ fn drive_run(
     args: &[&str],
     soundtrack: bool,
 ) -> Run {
+    drive_flags(
+        image,
+        tag,
+        script,
+        tracks,
+        env,
+        args,
+        &["--no-audio", "--no-effects", "--no-intro"],
+        soundtrack,
+    )
+}
+
+/// [`drive_run`] with the game's own base `flags`, for a run that leaves the pre-race flyby in.
+#[allow(clippy::too_many_arguments)]
+fn drive_flags(
+    image: &Path,
+    tag: &str,
+    script: &str,
+    tracks: Option<&Path>,
+    env: &[(&str, &str)],
+    args: &[&str],
+    flags: &[&str],
+    soundtrack: bool,
+) -> Run {
     let scratch = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("drive-{tag}"));
     let _ = std::fs::remove_dir_all(&scratch);
     std::fs::create_dir_all(&scratch).expect("a scratch directory");
@@ -85,13 +109,8 @@ fn drive_run(
     let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"));
     command
         .arg(image)
-        .args([
-            "--no-audio",
-            "--no-effects",
-            "--no-intro",
-            "--drive",
-            script,
-        ])
+        .args(flags)
+        .args(["--drive", script])
         .args(args)
         .arg("--state-log")
         .arg(&log)
@@ -308,6 +327,58 @@ fn a_race_box_race_runs_the_simulation_mods_only_with_the_extensions_feature() {
             "a build without the feature says so"
         );
     }
+}
+
+/// The HD race the flyby tests start, run for 300 frames with `args`: the race's tick count.
+/// The flyby is left in (no `--no-intro`).
+fn hd_flyby_ticks(tag: &str, args: &[&str]) -> Option<u64> {
+    let image = hd()?;
+    let script = "boot; select racebox; press cross; until page=race; \
+         select launch_race; press cross; \
+         until screen=picker; press cross; \
+         until screen.id=ship-select; press cross; \
+         until stage=race within 3000; ticks 300";
+    let run = drive_flags(
+        &image,
+        tag,
+        script,
+        None,
+        &[],
+        args,
+        &["--no-audio", "--no-effects"],
+        false,
+    );
+    assert!(run.output.status.success(), "{}", run.why_not_success());
+    assert_eq!(text(run.last(), &["stage"]), Some("race"), "{}", run.last());
+    Some(run.last()["sim_tick"].as_u64().unwrap_or(0))
+}
+
+/// HD's pre-race flyby repeats until a press, so a run with nobody to press it stood on the
+/// camera tour for ever. `--autopilot` presses the skip: the race's world ticks within a few
+/// hundred frames of the race's start.
+#[test]
+#[ignore = "needs an HD disc image in data/images/"]
+fn an_hd_race_under_autopilot_leaves_the_flyby() {
+    let Some(ticks) = hd_flyby_ticks("hd-flyby-autopilot", &["--autopilot"]) else {
+        return;
+    };
+    assert!(
+        ticks > 100,
+        "the autopilot's skip ends the flyby: {ticks} ticks"
+    );
+}
+
+/// The other half: without the flag nothing presses, and the flyby holds the world at its first tick.
+#[test]
+#[ignore = "needs an HD disc image in data/images/"]
+fn an_hd_race_with_nobody_to_press_stays_in_the_flyby() {
+    let Some(ticks) = hd_flyby_ticks("hd-flyby-held", &[]) else {
+        return;
+    };
+    assert_eq!(
+        ticks, 0,
+        "nothing presses: the world stands at its first tick"
+    );
 }
 
 /// The process does not exit under a GPU worker: the race's EndRace prefetch is held up for three

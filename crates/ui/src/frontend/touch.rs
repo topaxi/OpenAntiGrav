@@ -98,6 +98,13 @@ fn is_tick_sized(rect: [f32; 4]) -> bool {
 /// constant here: it is the face's own 37-unit line height at
 /// [`LABEL_SCALE`], which the renderer's wrapping already steps by.
 const LABEL_GAP: f32 = 18.0;
+/// What a `smalltext="true"` tile's label measures against the others' size, and how far under
+/// the tile its cap line stands. **Measured**, one Vita3K frame of 2048's pause screen, the
+/// OPTIONS and PHOTO MODE tiles (95 wide): the caps are 11 units tall and 58 and 85 wide
+/// (`OPTIONS`, `PHOTO MODE`) where this build's regular label draws 16 tall and 89 and 129 wide
+/// (0.65 to 0.69), the cap line 13 under the tile's bottom edge against 18. Confidence 80.
+pub(super) const SMALL_LABEL_RATIO: f32 = 0.655;
+pub(super) const SMALL_LABEL_GAP: f32 = 13.0;
 /// The label's scale against the `Default` face. `NEOSANS_BOLD_LARGE.fnt`
 /// is 37 units tall per line; the capture's label caps are 16 units and its
 /// header caps (`scale="1.0"`, the same face) 27, so the label draws at
@@ -110,6 +117,35 @@ const CAPITAL_WIDTH: f32 = 12.4;
 /// How far above the cap line the `Default` face's pen sits at scale 1:
 /// the header's own `y="30"` puts its caps at 40 on the capture. Measured.
 pub(super) const PEN_ABOVE_CAPS: f32 = 10.0;
+
+/// A tile's label under its box: centred on the tile, the cap line [`LABEL_GAP`] below its
+/// bottom edge, wrapped at `wrap`, in `color`. The one place the touch idiom's label sits, for
+/// every screen that draws `<TouchButton>` tiles. A `small` label (`smalltext="true"`) is
+/// [`SMALL_LABEL_RATIO`] of the size and [`SMALL_LABEL_GAP`] below.
+#[must_use]
+pub fn label_under_tile(
+    rect: [f32; 4],
+    text: String,
+    color: [f32; 4],
+    wrap: Option<f32>,
+    small: bool,
+) -> Draw {
+    let (scale, gap) = if small {
+        (LABEL_SCALE * SMALL_LABEL_RATIO, SMALL_LABEL_GAP)
+    } else {
+        (LABEL_SCALE, LABEL_GAP)
+    };
+    Draw::Text {
+        x: rect[0] + rect[2] * 0.5,
+        y: rect[1] + rect[3] + gap - PEN_ABOVE_CAPS * scale,
+        scale,
+        color,
+        border: None,
+        align: Align::Centre,
+        text,
+        wrap_width: wrap,
+    }
+}
 
 /// What a confirmed tap asked the composition root for - see
 /// [`Frontend::launch`].
@@ -796,10 +832,14 @@ impl Frontend {
         } else {
             // `Blue2048` under a `Grey2048` tile too: the capture's
             // ONLINE CAMPAIGN and CROSS-PLAY labels are the enabled tiles' navy.
-            (
-                rect[1] + rect[3] + LABEL_GAP - PEN_ABOVE_CAPS * LABEL_SCALE,
+            out.push(label_under_tile(
+                rect,
+                label.clone(),
                 self.global_colour("Blue2048"),
-            )
+                tile.wrap,
+                false,
+            ));
+            return;
         };
         out.push(Draw::Text {
             x: rect[0] + rect[2] * 0.5,

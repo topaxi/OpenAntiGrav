@@ -116,6 +116,10 @@ pub enum Action {
     /// (`oag_game::app::session::ffmpeg`). On the page only where a build exists for this OS and
     /// the player has none of their own.
     FetchFfmpeg,
+    /// The BENCHMARK row (the extras' OPTIONS page) and the graphics page's RUN BENCHMARK row:
+    /// flies the benchmark race and shows its stats (`oag_game::benchmark`). Both fire this; the
+    /// page it fired from is where the stats screen's BACK returns to.
+    Benchmark,
 }
 
 impl Action {
@@ -150,6 +154,7 @@ impl Action {
             Self::DeleteReplay => "delete_replay",
             Self::OpenModSettings => "open_mod_settings",
             Self::FetchFfmpeg => "fetch_ffmpeg",
+            Self::Benchmark => "benchmark",
         }
     }
 
@@ -195,13 +200,14 @@ impl Action {
             "delete_replay" => Some(Self::DeleteReplay),
             "open_mod_settings" => Some(Self::OpenModSettings),
             "fetch_ffmpeg" => Some(Self::FetchFfmpeg),
+            "benchmark" => Some(Self::Benchmark),
             _ => None,
         }
     }
 
     /// Every action, for error messages and for the integrity check.
     #[must_use]
-    pub fn all() -> [Self; 27] {
+    pub fn all() -> [Self; 28] {
         [
             Self::LaunchRace,
             Self::Quit,
@@ -230,6 +236,7 @@ impl Action {
             Self::DeleteReplay,
             Self::OpenModSettings,
             Self::FetchFfmpeg,
+            Self::Benchmark,
         ]
     }
 }

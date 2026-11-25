@@ -614,22 +614,24 @@ mod flip {
     }
 
     #[test]
-    fn the_left_shoulder_flips_and_does_not_brake_where_the_flip_is_armed() {
-        let shoulder = || {
+    fn l1_is_the_flip_and_l2_stays_the_left_airbrake_where_the_flip_is_armed() {
+        let snapshot = |airbrake_left: f32| {
             let mut buttons = Input::EMPTY;
             buttons.begin_frame(Button::L.bit() | Button::Flip.bit());
             PlayerInputs::single(InputSnapshot {
                 buttons,
-                airbrake_left: 1.0,
+                airbrake_left,
                 ..InputSnapshot::EMPTY
             })
         };
         let mut armed = racing(LAW);
-        let controls = armed.core.sim.player_controls(0, shoulder().get(0));
-        assert_eq!(controls.airbrake_left, 0.0);
+        assert!(armed.core.sim.l1_is_flip());
+        let controls = armed.core.sim.player_controls(0, snapshot(0.6).get(0));
+        assert_eq!(controls.airbrake_left, 0.6);
         let mut plain = racing(None);
-        let controls = plain.core.sim.player_controls(0, shoulder().get(0));
-        assert_eq!(controls.airbrake_left, 1.0);
+        assert!(!plain.core.sim.l1_is_flip());
+        let controls = plain.core.sim.player_controls(0, snapshot(0.6).get(0));
+        assert_eq!(controls.airbrake_left, 0.6);
     }
 }
 

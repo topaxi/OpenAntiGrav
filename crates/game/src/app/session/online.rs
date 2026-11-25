@@ -1307,7 +1307,7 @@ impl Session {
             self.online_leave_screens_for_hub();
         }
         if let Some(net) = launch {
-            self.net = Some(net);
+            self.net = Some(Box::new(net));
             if let Stage::Menu(stage) = &mut self.stage {
                 stage.lan = None;
             }
@@ -1417,7 +1417,7 @@ impl Session {
             name: online.name.clone(),
             host_port: self.settings.online.host_port,
         };
-        if let Err(e) = crate::settings::save(&self.settings) {
+        if let Err(e) = self.save_settings() {
             warn!("online: cannot remember the lobby: {e:#}");
         }
         if let Stage::Menu(stage) = &mut self.stage {

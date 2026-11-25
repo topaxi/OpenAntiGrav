@@ -99,7 +99,7 @@ impl Session {
             "mod {id}: turned {} on the MODS page",
             if on { "on" } else { "off" }
         );
-        if let Err(e) = crate::settings::save(&self.settings) {
+        if let Err(e) = self.save_settings() {
             error!("could not save settings: {e:#}");
         }
         if texture_pack {

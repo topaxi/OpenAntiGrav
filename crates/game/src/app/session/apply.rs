@@ -66,7 +66,7 @@ impl Session {
                     &menu::Value::Text(display::WindowMode::Windowed.to_string()),
                 );
             }
-            if let Err(e) = settings::save(&self.settings) {
+            if let Err(e) = self.save_settings() {
                 error!("could not save settings: {e:#}");
             }
         }
@@ -665,6 +665,22 @@ impl Session {
                     return;
                 }
             },
+            // Applied by the next frame of the race on screen, which rebuilds the target at the
+            // new size (`oag_raceplay::Scene::set_reflection_resolution`); the next race loads
+            // at it too.
+            "graphics.reflection_resolution" => {
+                match text.parse::<display::ReflectionResolution>() {
+                    Ok(resolution) => {
+                        if let Some(profile) = self.render_profile_mut() {
+                            profile.reflection_resolution = resolution;
+                        }
+                    }
+                    Err(e) => {
+                        warn!("ignoring {setting} = {text:?}: {e}");
+                        return;
+                    }
+                }
+            }
             // Read when the next race loads its circuit: the water families
             // are classified into their material slots there
             // (`oag_mesh::mesh::WaterLaw`).
@@ -1046,7 +1062,7 @@ impl Session {
             }
         }
         self.resupply_queries(Some(setting));
-        if let Err(e) = settings::save(&self.settings) {
+        if let Err(e) = self.save_settings() {
             error!("could not save settings: {e:#}");
         }
     }
@@ -1076,7 +1092,7 @@ impl Session {
         // Nothing re-seeds the menu here: `settings::menu_seeds` reads
         // `self.settings` when the page opens, so the `CAMERA VIEW` row already
         // opens on whatever the player last flew with.
-        if let Err(e) = settings::save(&self.settings) {
+        if let Err(e) = self.save_settings() {
             error!("could not save settings: {e:#}");
         }
     }
@@ -1133,7 +1149,7 @@ impl Session {
         self.controls.bindings_mut().rebind(button, name);
         self.settings.controls.bindings = self.controls.bindings().to_pairs();
         self.awaiting_binding = None;
-        if let Err(e) = settings::save(&self.settings) {
+        if let Err(e) = self.save_settings() {
             error!("could not save settings: {e:#}");
         }
     }

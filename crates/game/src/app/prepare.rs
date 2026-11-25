@@ -179,6 +179,7 @@ impl Pending {
             shadow_resolution: oag_display::display::ShadowResolution::default(),
             scene_precision: oag_display::display::ScenePrecision::default(),
             circuit_lighting: oag_display::display::CircuitLighting::default(),
+            reflection_resolution: oag_display::display::ReflectionResolution::default(),
             foreign_track: self
                 .foreign_entry
                 .as_ref()

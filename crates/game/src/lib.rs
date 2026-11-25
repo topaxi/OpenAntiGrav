@@ -27,6 +27,7 @@
 pub mod adapter;
 pub mod ai_choice;
 pub mod app;
+pub mod benchmark;
 pub mod boot;
 pub mod campaign;
 pub mod capture;

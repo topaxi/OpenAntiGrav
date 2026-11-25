@@ -935,6 +935,78 @@ compare-page race pairs are pixel-identical (0 pixels differ): Pulse PSP `talons
 Moa Therma, Ubermall, Chenghou and Modesto included: none of their poses frames the sea). The target
 is built only on an HD circuit whose sea draws under `original`, and the sea is the only reader.
 
+### The reflection target's resolution (2026-11-25, `glass-target-scale`, `reflection-res-fractions`)
+
+**What it is.** The row REFLECTION RESOLUTION, `[render_profiles.<title>] reflection_resolution`,
+`--reflection-resolution` (`oag_display::display::ReflectionResolution`). It sizes the one screen-space
+target a circuit's glass or sea reads: HD's behind-the-glass target (Vineta K, 640 x 360) and its planar sea
+reflection (Moa Therma and Ubermall draw reflected chunks, Chenghou and Modesto hold the sky alone;
+960 x 540), and 2048's and Omega's refraction target (`psp2::refraction_only::target_size`, 480 x 272 and
+960 x 540). `original` is the default and keeps those fixed sizes. `half` and `quarter` take that fraction
+of each axis, rounded down, at least one texel, whatever the render scale: a function of the original's size
+alone, so a race builds the same target on every machine and neither the render scale nor dynamic resolution
+moves it. (An earlier `scaled` value sized it from the render scale; it is gone, with no alias: a settings
+file that still says `scaled` loads with the default for that one key and a warning, the rest of the file
+kept.) Chosen, not measured: the original's target is half its 1280x720 output per axis whatever the player
+does, so `half` and `quarter` are departures for speed, with a coarser view through the glass and in the sea.
+The row is dropped where no target is drawn (`oag_title::Looks::screen_space_target`: Pulse and Pure).
+
+**Where.** `oag_raceplay::load::view` hands `BehindGlassModels::resolution` the profile's value right after
+`geometry::track_model` returns, so all three branches (HD glass, HD sea, psp2) share it, and a circuit with
+no target has nothing to resize. `BehindGlassModels::size` stays the original's. The loader report says the
+drawn size when it differs. The race on screen follows the row from the next frame:
+`Scene::set_reflection_resolution`, called every frame with the frame's profile, makes the target's colour,
+depth and velocity textures the new size and rebuilds the one bind group that reads it (the circuit's own
+drawable; `RebindResources::set_behind_glass`, the Zone stage rebind's mechanism), and does nothing while
+the size is unchanged.
+
+**Photos.** A photo-mode shot always draws the glass and sea target at the original's size, whatever the race
+plays with: `RenderProfile::for_a_photo` sets `reflection_resolution` to `original`, and `photo_differs`
+counts a smaller target as a reason to redraw. The frame the shot is drawn in rebuilds the target at the
+original's size and the frame after puts the player's back, so play continues unchanged. The shot's
+`[render]` text says `original`, and `--from-png` draws at the original's size
+(`photo_mode_ground_truth::reflection_shot`: the drive log's `glass_target` goes 160x90, 640x360, 160x90 on
+Vineta K under `quarter` and 240x135, 960x540, 240x135 on Moa Therma, and the shot is the shot taken under
+`original`, to one level of one channel on Moa Therma and to the bit on Vineta K).
+
+**Byte identity under the default.** HD Vineta K (the pose of `hd_behind_glass_frame_ground_truth`) and Moa
+Therma (the race's start camera), 960x544, `--render-scale 100`, `--screen-filter off --motion-blur off
+--msaa off`: the whole PNG of the parent commit (`b1871712c`) and of this change has the same SHA-256 in both
+frames. `quarter` on the same frames moves the tunnel glass's picture and nothing else (looked at: the
+view through the glass is softer, the circuit's own surfaces are as before).
+
+**Sizes** (`reflection_resolution_ground_truth`, one load per test): HD Vineta K 640 x 360 `original`,
+320 x 180 `half`, 160 x 90 `quarter`; HD Moa Therma 960 x 540, 480 x 270, 240 x 135; 2048's Vineta K target
+480 x 272, 240 x 136, 120 x 68; Omega's 960 x 540, 480 x 270, 240 x 135. Odd sizes round down and an axis
+keeps a texel (unit tests in `oag-display`).
+
+**GPU cost on a desktop** (`OAG_RENDER_GPU_BENCH=200`, the `behind the glass` span, 1920x1080, RX 7800 XT
+(RADV), tick 240 on Vineta K and 572 on Moa Therma, two runs each, medians; load average 7 to 30 from other
+members). Measured under the retired `scaled` at render scale 50 and 100, which gave the same sizes `half`
+and `1/1` give:
+
+| Circuit | Size | Target | Span, two runs |
+| --- | --- | --- | ---: |
+| Vineta K | 640 x 360 | `original` | 115.6 / 115.8 us |
+| Vineta K | 320 x 180 | `half` | 66.2 / 66.6 us (73,396 fragments) |
+| Moa Therma | 960 x 540 | `original` | 126.1 / 124.7 us |
+| Moa Therma | 480 x 270 | `half` | 109.2 / 109.0 us |
+
+A discrete desktop GPU spends a tenth of a millisecond on the target; the whole race pass is about 480 us
+there. The setting exists for a phone: the S21 pays 10.6 ms for the Vineta K glass at render scale 25
+(`docs/tools/android.md`, "Where an HD frame goes on the S21"). Phone numbers for `half` and `quarter` on each
+circuit are open.
+
+**The default is `original` on every platform** (maintainer's decision). What a setting costs depends on the
+hardware, not the platform, so Android gets no cheaper default; a player picks `half` or `quarter` for their
+own hardware.
+
+**2048 and Omega.** **Ported**: the same call site, law and photo rule, with their own disc-backed rows
+(`reflection_resolution_ground_truth`: Vineta K on the 2048 package and on Omega, all three values). Their
+targets are the refraction target only; the planar sea reflection is HD's. The photo rule is the shared
+`RenderProfile::for_a_photo`, so it holds on both; the drive-log photo test runs on HD, whose disc is the one
+the test spawns.
+
 ## Enhanced: this project's own water on Pulse and Pure
 
 2026-11-17, lane `water-enhanced`. **Chosen, not measured, everywhere but the shape of the
@@ -1054,6 +1126,7 @@ frame of Omega's own sea was taken (shadPS4 was not run in this lane).
 | Amphiseum `water` | not checked (the Vita's Amphiseum shows no water material by name) | checked, differs (cube probe) | drawn (`mesh::rcs::water`) |
 | Vineta K scroll table | checked, differs (`dc_seawater`) | checked, applies (`water_test_2_castnoshipshadows`), `water_noref` replaced by `temp_water`, not wired | drawn (`mesh::rcs::water`) |
 | `enhanced` (own generated map, Pulse and Pure only) | checked, differs: nothing is offered (`Title::water.enhanced` empty); its seas are drawn through `psp2`, no `.vex` batches | checked, differs: same, and Omega's own law is the planned one | not applicable (HD's `original` is the law `enhanced` follows) |
+| Target resolution row (`graphics.reflection_resolution`) | **ported**: its refraction target, 480x272 original, 240x136 half and 120x68 quarter (Vineta K, disc-backed) | **ported**: 960x540, 480x270 and 240x135 (Vineta K, disc-backed) | measured and drawn here (glass 640x360, sea 960x540) |
 | Pulse caustic pass | not applicable | not applicable | HD ships `data/tex/caustics/` and `wo_underwater_godrays.pob`; consumer not looked for |
 
 ## Open
@@ -1063,7 +1136,7 @@ frame of Omega's own sea was taken (shadPS4 was not run in this lane).
    read off live frames", with the recipe for these). The planar reflection is drawn
    ("The planar reflection, drawn"); left from it: who fills the reflect list and how it is
    culled, the refract job's content below `h` on a sea circuit, the 5-6-5 quantisation, and the
-   target's frame cost at 800p, 1080p and 4K (not measured).
+   target's frame cost at 800p and 4K (1080p on a desktop: "The reflection target's resolution").
 2. Vostok Reef on PCSX2 or PPSSPP (with the download pack): a frame of the
    caustic pass to compare against ours (batch state `0x202`'s blend is read: additive by alpha).
 4. Omega: what `reflectProject` holds (the program hands it `eye - P`), `distortion`, and the

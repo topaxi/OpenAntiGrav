@@ -26,7 +26,8 @@ impl Session {
             return;
         };
         // A wallpaper takes no input, so a prompt over it would stand there for good.
-        if self.demo.cli == Some(true) {
+        // A benchmark from the command line asks nothing first: it is on its way to a race.
+        if self.demo.cli == Some(true) || self.benchmark.cli.is_some() {
             return;
         }
         let ask = player::what_to_ask(
@@ -140,7 +141,7 @@ impl Session {
             Purpose::PlayerTag if self.settings.player.set_tag(text) => {}
             _ => return,
         }
-        if let Err(e) = crate::settings::save(&self.settings) {
+        if let Err(e) = self.save_settings() {
             warn!("cannot remember the player name: {e:#}");
         }
         if let Stage::Menu(stage) = &mut self.stage {

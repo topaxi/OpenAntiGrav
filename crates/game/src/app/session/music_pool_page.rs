@@ -55,7 +55,7 @@ impl Session {
         );
         pool.set_enabled(id, on);
         self.settings.audio.music_switches = pool.switches();
-        if let Err(e) = crate::settings::save(&self.settings) {
+        if let Err(e) = self.save_settings() {
             error!("could not save settings: {e:#}");
         }
         self.audio.music_pool_changed();

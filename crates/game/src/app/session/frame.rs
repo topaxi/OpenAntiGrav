@@ -5,7 +5,7 @@
 use anyhow::Result;
 use log::{debug, error, warn};
 
-use crate::{records, report, settings};
+use crate::{records, report};
 use oag_display::display;
 use oag_display::space::Space;
 use oag_gameplay::input::Button;
@@ -98,7 +98,7 @@ impl Session {
             && self.settings.language.as_deref() != Some(language)
         {
             self.settings.language = Some(language.to_string());
-            if let Err(e) = settings::save(&self.settings) {
+            if let Err(e) = self.save_settings() {
                 warn!("could not save the chosen language: {e:#}");
             }
         }
@@ -112,7 +112,7 @@ impl Session {
             && matches!(&self.stage, Stage::Frontend(stage)
                 // `--measure-race-load` times the race path, not the boot
                 // sequence, and skips straight past it.
-                if stage.frontend.is_finished() || self.load_probe.is_some() || self.demo.cli.is_some())
+                if stage.frontend.is_finished() || self.load_probe.is_some() || self.demo.cli.is_some() || self.benchmark.cli.is_some())
         {
             self.launched = true;
             debug!("{}: opening the menus", frontend::states::LAUNCH_GAME);
@@ -283,6 +283,7 @@ impl Session {
             u64::try_from(elapsed.as_nanos()).unwrap_or(u64::MAX)
         };
         let steps = self.clock.advance(nanos);
+        self.record_benchmark_frame(frame_seconds, steps);
         let dt = f64::from(self.clock.rate().dt());
 
         // Before the snapshot below, because it is what makes the snapshot
@@ -328,6 +329,8 @@ impl Session {
                 self.controls.let_go_extra_seats();
             }
             let roles = self.roles();
+            let l1_is_flip = self.l1_is_flip();
+            self.controls.set_l1_is_flip(l1_is_flip);
             let inputs = self.controls.player_snapshots();
             // Taken every tick so a press made while paused or in a menu is spent there, and
             // acted on only by the unpaused race arm below.
@@ -365,6 +368,11 @@ impl Session {
             // stage's own tick so the press that ends a demo is not also read by the menu it
             // returns to.
             if self.tick_demo(&pointer) {
+                break;
+            }
+            // The in-game benchmark: its launch from the command line, its race's end on the
+            // tick it happened, and its stats screen's input.
+            if self.tick_benchmark(&pointer, rect, roles.back) {
                 break;
             }
             // A click on a key or button hint is that button's press, ahead of what is under it.
@@ -470,6 +478,7 @@ impl Session {
             // rule: a mouse cannot lift player 2's pause inside their timeout.
             if self.photo.is_none()
                 && !self.in_demo()
+                && !self.in_benchmark()
                 && matches!(&self.stage, Stage::Race(stage) if !stage.race.core.sim.finished())
             {
                 let paused = matches!(self.pause, crate::pause::State::Paused { .. });
@@ -522,6 +531,7 @@ impl Session {
             // **A rising edge**, so the thrust the player was holding as they
             // crossed the line cannot dismiss the board they have not read yet.
             if self.photo.is_none()
+                && !self.on_benchmark_screen()
                 && matches!(&self.stage, Stage::Race(stage)
                 if crate::app::race_stage::endrace::results_table_takes_confirm(
                     stage.race.core.sim.finished(),
@@ -547,6 +557,8 @@ impl Session {
                 break;
             }
             self.poll_online();
+            // A benchmark that ended on the tick cap stands still under its stats screen.
+            let benchmark_screen = self.on_benchmark_screen();
             match &mut self.stage {
                 // Photo mode: the race does not tick, whatever state it is in (running, or
                 // finished with the end screens behind). The audio is not simulation state, so
@@ -620,7 +632,7 @@ impl Session {
                         stage.renderer.set_inset(scale);
                         if self.settings.graphics.hud_safe_area != Some(percent) {
                             self.settings.graphics.hud_safe_area = Some(percent);
-                            if let Err(e) = settings::save(&self.settings) {
+                            if let Err(e) = self.benchmark.save(&self.settings) {
                                 warn!("could not save the screen size: {e:#}");
                             }
                         }
@@ -778,7 +790,7 @@ impl Session {
                     // `back` and `open` both change the page, and a jump
                     // between two pages at the same depth is still a change.
                     let before = stage.menu.page().id.clone();
-                    let leaving = menu::draw_list(
+                    let mut leaving = menu::draw_list(
                         &stage.menu,
                         &stage.skin,
                         &|button| self.controls.bound_keys(button),
@@ -791,6 +803,15 @@ impl Session {
                         // the outgoing half of the tween flashes it back on.
                         self.suspended_race.is_some(),
                     );
+                    // The page being left is the disc's own screen where it is one of tiles:
+                    // the other titles' pause lists have always faded as the front end's.
+                    let tiles = stage
+                        .pause_screen_on_page()
+                        .is_some_and(|screen| screen.is_tiles());
+                    if let Some(drawn) = stage.pause_draw().filter(|_| tiles) {
+                        leaving.chrome = drawn.chrome;
+                        leaving.body = drawn.body;
+                    }
                     // Off the raw `Input`, ahead of `Menu::update` - see
                     // `Session::maybe_begin_binding`'s own doc comment for why
                     // it takes its fields apart rather than borrowing `self`.
@@ -836,6 +857,8 @@ impl Session {
                     {
                         Vec::new()
                     } else {
+                        stage.pad_cursor = !self.pointer.pointer_spoke_last();
+                        stage.step_pause_tiles(self.controls.buttons_mut());
                         let mut events = stage.menu.update(self.controls.buttons_mut());
                         events.extend(pointer::menu_pointer(
                             stage,
@@ -886,7 +909,7 @@ impl Session {
                     // match ends) - `EndRace Menu`'s own rows need a real
                     // hit-test, which a synthesised Cross press on every
                     // click would fight with.
-                    if stage.endrace.is_none() {
+                    if stage.endrace.is_none() && stage.benchmark.is_none() {
                         pointer::press_for_click(&mut self.controls, &pointer);
                         // A click in any further window of a multi-window race is the same press.
                         for (seat, _) in &seat_pointers {
@@ -967,7 +990,7 @@ impl Session {
                         self.tick_endrace(&grid);
                     }
                 }
-                Stage::Race(stage) if self.pause.frozen() => {
+                Stage::Race(stage) if self.pause.frozen() || benchmark_screen => {
                     // A paused race reads circle as "back to the menus";
                     // the secondary button is circle everywhere else on
                     // screen, so it is here too. Not through the resume
@@ -995,7 +1018,10 @@ impl Session {
                     if !self.no_intro && self.net.is_none() && stage.race.intro_to_play() =>
                 {
                     stage.race.begin_intro();
-                    if pointer.clicked {
+                    // `--autopilot` flies the craft for nobody to hold Cross: it presses the
+                    // skip of a flyby that only a skip ends, or a launch-file run on HD never
+                    // leaves the camera tour.
+                    if pointer.clicked || (self.autopilot && stage.race.intro_ends_only_by_skip()) {
                         stage.race.skip_intro();
                     }
                     stage.race.tick_intro(&inputs);
@@ -1055,7 +1081,7 @@ impl Session {
                     );
                     // A server that ends a race nobody had finished (the host left, a link
                     // died) leaves a frozen world: after a second of it, back to the menus.
-                    match self.net.as_ref().and_then(crate::net_play::NetPlay::over) {
+                    match self.net.as_deref().and_then(crate::net_play::NetPlay::over) {
                         Some(why) if !stage.race.core.sim.finished() => {
                             self.net_over_ticks += 1;
                             if self.net_over_ticks == NET_OVER_TICKS {

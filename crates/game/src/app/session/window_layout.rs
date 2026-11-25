@@ -269,7 +269,7 @@ impl Session {
                 self.seed_display_row("display.monitor", text);
             }
         }
-        if let Err(e) = crate::settings::save(&self.settings) {
+        if let Err(e) = self.save_settings() {
             log::error!("could not save settings: {e:#}");
         }
     }

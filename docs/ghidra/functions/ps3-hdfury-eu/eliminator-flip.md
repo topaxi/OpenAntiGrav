@@ -170,9 +170,22 @@ format moves and a replay without the move reads as before; the flip enters the 
 craft has flipped.
 
 - L1 on a pad raises both `L` and `Flip`, because our pad's shoulders are the airbrakes on every other
-  title. Where the race has a flip, `InputSnapshot::shoulder_flips` reads the press as the flip
-  alone. `F` on a keyboard, and a row in the bindings page. **Chosen, not measured:** the key.
-  Touch has no flip button.
+  title. Where the race has a flip or an armed Detonator EMP (`RaceSim::l1_is_flip`), the composition
+  root sets `oag_input::pad::TriggerConfig::l1_is_flip` each tick and L1 raises `Flip` alone, so `L`
+  and the left airbrake axis come from L2 only. The sim reads the snapshot as it comes. `F` on a
+  keyboard is `Flip` alone and Q stays the airbrake, so the keyboard needs no flag. **Chosen, not
+  measured:** the key. Touch has no flip button, and Android's L1 key is `L` alone: neither raises
+  `Flip`, so the flag changes nothing there. HD Eliminator and Detonator and Omega's Detonator
+  (its EMP) set the flag (`hd_flip_ground_truth`, `detonator_ground_truth`); Omega and 2048 have no
+  Eliminator flip wired (`eliminator_flip: None`), so their L1 stays an airbrake. The flag is held
+  off in photo mode, the replay viewer and a finished race, which page on L1.
+  Every `Flip` producer raises it alone under the flag: pad L1 (`bits_of`) and the keyboard's `F`;
+  touch and Android raise none. Host and client share the sim, so the network needs nothing more.
+  A replay recorded before this change from an HD flip race holds `L | Flip` for L1 and now replays
+  with L1 braking; pre-release, so no version bump.
+  Two keys held on purpose: a keyboard's `Q` and `F` together brake and flip. The host does not
+  normalise a client's snapshot, so a client sending `L | Flip` for L1 (an older build) would
+  brake; same-build play is unaffected.
 - The lean is `ShipState::steer_lean_follower`, HD's `craft+0x6a58` follower.
 - The race line's marker turns on `RaceSim::facing_back`, the test `wrong_way_kill` runs. The original's
   frames of a flip show no `WRONG WAY`, so a race with a flip draws none; the rumble is untouched.
@@ -183,8 +196,9 @@ craft has flipped.
   engine HD already has. **Ours stops about `0.2 s` later than the original.** The first quarter
   second agrees; below `40` the original brakes harder. Unread, and it may be a `1/30` against `1/60`
   integration difference or a drag term at low speed.
-- **Known cost:** L1 down reads the whole left airbrake axis as zero, so a player holding L2 loses
-  that brake for the ticks L1 is down. Our snapshot cannot tell the two apart.
+- L1 down no longer touches the left airbrake: a player holding L2 keeps that brake while L1 flips,
+  as the original's separate inputs do (`pad::tests::l1_as_the_flip_leaves_the_l2_airbrake_alone`,
+  `tests::eliminator::flip::l1_is_the_flip_and_l2_stays_the_left_airbrake_where_the_flip_is_armed`).
 
 **The AI's flip is not wired.** Its chain is read above, but it needs the weapon AI's per-weapon
 range tests and a fire on the far side of the turn. On ours the absorb gate on the facing byte stays

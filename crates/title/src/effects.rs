@@ -1006,6 +1006,11 @@ pub struct Looks {
     /// (`docs/ghidra/functions/ps3-hdfury-eu/menu-backdrop.md`, "A race's final
     /// composite is the same quad").
     pub final_composite_half_texel: Rule,
+    /// The race draws a screen-space target ahead of the main view that a circuit's glass or
+    /// sea reads: HD's behind-the-glass target (Vineta K's tunnel glass) and its planar sea
+    /// reflection, and 2048's and Omega's refraction target. Offers the player's
+    /// `graphics.reflection_resolution` row; a title without the target drops it.
+    pub screen_space_target: Rule,
     /// The race frame ends in the `wo_*` post chain: the scene lit in the
     /// gamma-2 space its programs square a texel into, a quarter-resolution
     /// gate and two diagonal blurs, and `wo_composite_nocc_fp` at an exposure
@@ -1091,6 +1096,7 @@ impl Looks {
             blends_encoded: Rule::UNREAD,
             texels_srgb: Rule::UNREAD,
             final_composite_half_texel: Rule::UNREAD,
+            screen_space_target: Rule::UNREAD,
             wo_composite: Rule::UNREAD,
             sky_brightness: Rule::UNREAD,
         }

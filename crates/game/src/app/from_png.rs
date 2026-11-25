@@ -21,10 +21,12 @@ fn read(path: &Path) -> Result<shot_meta::Found> {
 }
 
 /// What photo mode does to a frame whatever the settings say: it draws every section the
-/// circuit's visibility sets would cull, at the output's size with no upscaler, and none of the
-/// game's own motion blur (a flag the person gave stands).
+/// circuit's visibility sets would cull, at the output's size with no upscaler, the glass and
+/// sea target at the original's size, and none of the game's own motion blur (a flag the person
+/// gave stands).
 fn draw_as_photo_mode(cli: &mut Cli) {
     cli.pvs = Some(false);
+    cli.reflection_resolution = Some(oag_display::display::ReflectionResolution::Original);
     cli.photo_profile = true;
     cli.blur
         .motion_blur
@@ -256,6 +258,27 @@ mod tests {
         cli.apply_render_overrides(&mut profile, Some(Scale::HALF));
         assert_eq!(profile.scale_for((1920.0, 1080.0), false), Scale::FULL);
         assert_eq!(profile.reconstruction, Reconstruction::Off);
+    }
+
+    #[test]
+    fn a_photo_is_drawn_again_with_the_glass_target_at_the_originals_size() {
+        use oag_display::display::ReflectionResolution;
+        let mut cli = Cli::try_parse_from(["oag-game", "--reflection-resolution", "quarter"])
+            .expect("parses");
+        draw_as_photo_mode(&mut cli);
+        assert_eq!(
+            cli.reflection_resolution,
+            Some(ReflectionResolution::Original)
+        );
+        let mut profile = crate::settings::RenderProfile {
+            reflection_resolution: ReflectionResolution::Quarter,
+            ..Default::default()
+        };
+        cli.apply_render_overrides(&mut profile, None);
+        assert_eq!(
+            profile.reflection_resolution,
+            ReflectionResolution::Original
+        );
     }
 
     #[test]
