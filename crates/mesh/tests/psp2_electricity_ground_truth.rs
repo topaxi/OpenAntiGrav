@@ -110,6 +110,17 @@ fn binds_the_ring(archives: &mut [oag_assets::psarc::Archive], path: &str, squar
         "squared taps: {path}"
     );
     assert_eq!(model.vertices.len(), 132, "{path}");
+    let decoded = oag_rcs::rcsmodel::psp2::parse(&blob).expect("parses");
+    let [submesh] = decoded.submeshes.as_slice() else {
+        panic!("{path}: one submesh");
+    };
+    let uv3 = if submesh.uv3_texcoords.is_empty() {
+        &submesh.texcoords
+    } else {
+        &submesh.uv3_texcoords
+    };
+    let routed: Vec<[f32; 2]> = model.vertices.iter().map(|v| v.texcoord).collect();
+    assert_eq!(&routed, uv3, "the bass and treble pair is Uv3: {path}");
     let alphas: Vec<f32> = model.vertices.iter().map(|v| v.sun_mask).collect();
     assert!(
         alphas.contains(&0.0) && alphas.contains(&1.0),
@@ -146,11 +157,21 @@ fn declares_what_the_vertex_programs_read(archives: &mut [oag_assets::psarc::Arc
     let blob = read(archives, path);
     let model = oag_rcs::rcsmodel::psp2::parse(&blob).expect("parses");
     let cpu = model.sections.first().expect("a CPU section");
-    let declared: Vec<u32> =
-        oag_rcs::rcsmodel::psp2::vertex_decl::find_by_header(&blob[cpu.at..cpu.at + cpu.len])
-            .into_values()
-            .flat_map(|d| d.attributes.into_iter().map(|a| a.name_hash))
-            .collect();
+    let declarations =
+        oag_rcs::rcsmodel::psp2::vertex_decl::find_by_header(&blob[cpu.at..cpu.at + cpu.len]);
+    let declared: Vec<u32> = declarations
+        .values()
+        .flat_map(|d| d.attributes.iter().map(|a| a.name_hash))
+        .collect();
+    // 2048's declaration names `Uv1` too, at `Uv1_Uv2`'s second pair: the ring reads `Uv3` by its
+    // own hash, not through the diffuse pick.
+    for submesh in &model.submeshes {
+        assert_eq!(
+            submesh.uv3_texcoords.len(),
+            submesh.positions.len(),
+            "{path}: Uv3"
+        );
+    }
     let material = model
         .materials
         .iter()

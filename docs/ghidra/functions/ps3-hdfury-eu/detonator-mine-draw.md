@@ -249,7 +249,8 @@ Row 1 decides how much of the `mines-ahead` and `cannon-volley` gap is real: re-
   pitch tap's red, the colour tap's rgb; the two alpha taps are not), where HD leaves the decode to its units' gamma
   nibbles. The vertex program (#0, 35 words) hands over interpolant 0 = `(eye - position, VertexColour1.w)`, 1 =
   `(N, fog visibility)`, 2 = `Uv1_Uv2.zw` minus `(0, BassHit)`, 3 = `Uv3.xy` minus `(0, TrebleHit)`, 4 = `Uv1_Uv2.xy`:
-  HD's routing. The other five fragment programs of a file (#2, #4, #9, #11, #13) differ only in register allocation and
+  HD's routing. The model's declaration also names `Uv1` and `Uv2` at `Uv1_Uv2`'s second pair (`vertex_decl::UV1_UV2_HASH`), so
+  the ring reads `Uv3` by its own hash (`SubMesh::uv3_texcoords`); today the diffuse pick holds the same values. The other five fragment programs of a file (#2, #4, #9, #11, #13) differ only in register allocation and
   an `f16` normalize. Wired: `oag_rcs::gxp::electricity` reads the taps by sampler table, the shift by data flow (the
   colour tap's `v` is an `add` of `-time` to an `f32` `mad` of a literal, whose addend is an `add` of `time`) and the
   squares; the second glow-table entry's scale carries the squares to `shade.wesl` (mode 25), which squares the bass and
@@ -257,13 +258,13 @@ Row 1 decides how much of the `mines-ahead` and `cannon-volley` gap is real: re-
   array (`vita_vertex_colour1`). **Confidence 80** (read end to end; no live Vita read of the ring). Census:
   `electricity.rcsmaterial` under `data/Weapons/` and `data/Weapons2048/` in `data.psarc`, `data1.psarc` and `data2.psarc`,
   EU and USA: twelve files, 72 fragment programs, every one read with the shift 0.3 and the squares
-  (`gxp_electricity_ground_truth`); `electric_visualiser.rcsmodel` ships in the base `data.psarc` alone (both folders) and
+  (`gxp_electricity_ground_truth`); `dlc1.psarc` and `dlc2.psarc` ship none (`vita-gxp.py list`, both regions); `electric_visualiser.rcsmodel` ships in the base `data.psarc` alone (both folders) and
   builds with the ring bound, its declaration carrying every attribute the vertex programs read (`position`, `normal`,
   `VertexColour1`, `Uv3`, `Uv1_Uv2`; `both_2048_visualiser_models_bind_the_electricity_program`). `oag_2048::race::DETONATOR_OBJECTS`
   names HD's entry. Frame: ours on Altima, Detonator, three mines laid ahead (`--detonator-mines`), tick 320: a faint
   pale lavender ring, two thin concentric bands round each mine, absent with the title data reverted. Against HD's (a
   ragged violet band at the disc's rim) and Omega's (small saturated violet circles on its red Zone grade) it is paler and
-  more transparent; the music bands are held at 0 here as on Omega.
+  more transparent; the capture runs with `--no-audio`, so the frame's band levels are 0.
 - **Omega against 2048, the squares: checked, differs.** Omega's GCN program (`Shdr @0xf84`) feeds its `r` tap
   (`image_sample ... dmask:0x1` at `0x16c`) and its `rgb` tap (`0x1f0`) straight into multiplies: no square in code, its
   decode is the texture unit's (`srgb_texels`). The rest of the law is shared.

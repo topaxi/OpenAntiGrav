@@ -162,11 +162,21 @@ fn vertex_colour1(submesh: &SubMesh) -> &[[u8; 4]] {
     }
 }
 
+/// `Uv3`, the bass and treble pair: its own array where the declaration names it (2048's also
+/// names a `Uv1`, which is `Uv1_Uv2`'s second pair), else the diffuse pick.
+fn pair(submesh: &SubMesh) -> &[[f32; 2]] {
+    if submesh.uv3_texcoords.is_empty() {
+        &submesh.texcoords
+    } else {
+        &submesh.uv3_texcoords
+    }
+}
+
 /// Whether a submesh carries every attribute the ring's vertex program reads.
 fn routable(submesh: &SubMesh) -> bool {
     let n = submesh.positions.len();
     n > 0
-        && submesh.texcoords.len() == n
+        && pair(submesh).len() == n
         && submesh.packed_texcoords.len() == n
         && vertex_colour1(submesh).len() == n
 }
@@ -188,7 +198,7 @@ pub(super) fn vertex(
     let &[a, b, c, d] = submesh.packed_texcoords.get(i)?;
     let &[.., alpha] = vertex_colour1(submesh).get(i)?;
     Some((
-        *submesh.texcoords.get(i)?,
+        *pair(submesh).get(i)?,
         [a, b],
         [c, d],
         f32::from(alpha) / 255.0,
