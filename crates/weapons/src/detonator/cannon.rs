@@ -94,10 +94,14 @@ pub struct Round {
     pub prev: Vec3,
     /// Velocity.
     pub vel: Vec3,
-    /// The up the round keeps its heading perpendicular to; the craft's at launch.
-    pub up: Vec3,
-    /// The surface normal the track probe follows.
+    /// The surface normal the track probe follows. It is also the round's up: the heading is kept
+    /// perpendicular to it, so a round turns with the surface it rides
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/detonator-cannon.md`, "The round, polled live").
     pub normal: Vec3,
+    /// The unit heading the round is drawn along: the velocity flattened against `normal` before this
+    /// tick's wall test, so on a bounce tick it is still the incoming heading and the reflected one
+    /// shows from the next tick.
+    pub heading: Vec3,
     /// Seconds since launch.
     pub age: f32,
     /// Wall reflections left.
@@ -112,8 +116,8 @@ impl Round {
         pos: Vec3::ZERO,
         prev: Vec3::ZERO,
         vel: Vec3::ZERO,
-        up: Vec3::ZERO,
         normal: Vec3::ZERO,
+        heading: Vec3::ZERO,
         age: 0.0,
         rebounds: 0,
         slot: 0,
@@ -435,8 +439,8 @@ fn fire_volley<S: Craft>(cannon: &mut Cannon, config: &Config, ship: &S) -> bool
             pos: muzzle,
             prev: muzzle,
             vel: forward * speed,
-            up,
             normal: up,
+            heading: forward,
             age: 0.0,
             rebounds: config.rebounds,
             slot: entry as u8,
@@ -462,7 +466,8 @@ fn update_round(
     round.pos = next;
 
     let heading = round.vel.normalize_or_zero();
-    let flat = (heading - round.up * heading.dot(round.up)).normalize_or_zero();
+    let flat = (heading - round.normal * heading.dot(round.normal)).normalize_or_zero();
+    round.heading = flat;
     round.vel = flat * SPEED;
 
     if let Sweep::Wall { point, normal } = sweep(round.prev, round.pos) {
