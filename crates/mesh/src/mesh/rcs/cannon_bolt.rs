@@ -19,7 +19,8 @@
 //! ```
 //!
 //! Matched by what the program declares and the literals it authors, never by the material's
-//! name. [`PROGRAM_CANNON_BOLT`] draws it; the entry's offset is `fB`.
+//! name. [`PROGRAM_CANNON_BOLT`] draws it; the entry's offset is `fB` and its tint the
+//! program's. 2048's and Omega's programs are `super::psp2`'s `cannon_bolt`.
 
 use std::sync::Arc;
 
@@ -149,7 +150,7 @@ pub(super) fn cannon_bolt(
             continue;
         }
         table.push(Emissive {
-            tint: [0.0; 3],
+            tint: [LITERALS[6][1], LITERALS[6][2], LITERALS[6][3]],
             offset: fresnel,
             scale: 0.0,
             rate: 0.0,

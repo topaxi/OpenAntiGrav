@@ -44,6 +44,7 @@ use oag_rcs::rcsmodel::psp2::lighting_only;
 
 mod alpha_emissive;
 mod alpha_product;
+mod cannon_bolt;
 mod chevron;
 mod crowd;
 mod crowd_rigs;
@@ -380,6 +381,14 @@ fn build_scanned(
     // The Detonator mine's visualiser ring (`electricity.rcsmaterial`) rides them too.
     electricity::plan(
         &decoded,
+        (&mut twin, &mut glow.emissive),
+        &mut *textures,
+        &mut report,
+    );
+    // The Detonator cannon's bolt rides them too.
+    cannon_bolt::plan(
+        &decoded,
+        ps4,
         (&mut twin, &mut glow.emissive),
         &mut *textures,
         &mut report,
@@ -807,7 +816,8 @@ fn build_scanned(
                 None => (colour, sun_mask, lightmap_texcoord, texcoord2),
             };
             // The visualiser ring's vertices carry `Uv3`, `uv1`, `uv2` and `VertexColour1.w`.
-            let ring = electricity::vertex(twin_here, &model.emissive, submesh, i);
+            let ring = electricity::vertex(twin_here, &model.emissive, submesh, i)
+                .or_else(|| cannon_bolt::vertex(twin_here, &model.emissive, submesh, i));
             let (texcoord, lightmap_texcoord, texcoord2, sun_mask) =
                 ring.unwrap_or((texcoord, lightmap_texcoord, texcoord2, sun_mask));
             // `rt_icetunnel` weights its grab by the baked colour's red (`refraction::is_ice`).
