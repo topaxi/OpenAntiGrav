@@ -1462,20 +1462,15 @@ pub(crate) struct MinePositions(pub(crate) Vec<oag_core::math::Vec3>);
 pub(crate) struct MineEnvelopes(pub(crate) Vec<(f32, f32)>);
 
 fn parse_mine_envelopes(text: &str) -> Result<MineEnvelopes, String> {
+    let number = |n: &str| {
+        n.trim()
+            .parse::<f32>()
+            .map_err(|_| format!("`{n}` is not a number"))
+    };
     text.split(';')
-        .map(|pair| {
-            let parts = pair
-                .split(',')
-                .map(|n| {
-                    n.trim()
-                        .parse::<f32>()
-                        .map_err(|_| format!("`{n}` is not a number"))
-                })
-                .collect::<Result<Vec<f32>, String>>()?;
-            match parts[..] {
-                [s, t] => Ok((s, t)),
-                _ => Err(format!("`{pair}` is not S,T")),
-            }
+        .map(|pair| match pair.split_once(',') {
+            Some((s, t)) => Ok((number(s)?, number(t)?)),
+            None => Err(format!("`{pair}` is not S,T")),
         })
         .collect::<Result<Vec<_>, String>>()
         .map(MineEnvelopes)
