@@ -15,11 +15,22 @@
 //! advert cards' passes and clears and drops their draws (pixels against passes), and
 //! `extra-passes` adds [`EXTRA_PASSES`] one-pixel clear passes to the frame
 //! (`docs/tools/android.md`, "What a render pass costs").
+//!
+//! `writes` drops every [`crate::writes::Writes`] write made on the queue itself once a race
+//! has drawn its first frame ([`arm_writes`]), so the frame's upload copies leave the
+//! submission and every buffer keeps what it last held: whether frame N's copies wait on
+//! frame N-1 (`docs/tools/android.md`, "Freezing the frame's writes"). A load's writes are
+//! never dropped.
+//!
+//! With a toggle period set, every change of window prints one line to stderr
+//! (`OAG_SKIP_PASSES: window N on|off`), which a phone's Perfetto trace carries with its own
+//! timestamps under `android.log`, so a GPU timeline splits by arm.
 
 use std::sync::OnceLock;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 /// The names a call site asks about. Anything else in the variable is reported once.
-pub const NAMES: [&str; 8] = [
+pub const NAMES: [&str; 9] = [
     "hud",
     "bloom",
     "adverts",
@@ -28,6 +39,7 @@ pub const NAMES: [&str; 8] = [
     "composite",
     "advert-draws",
     "extra-passes",
+    "writes",
 ];
 
 /// How many one-pixel passes `extra-passes` adds to a frame.
@@ -113,6 +125,20 @@ pub fn extra_passes(encoder: &mut wgpu::CommandEncoder, target: Option<&wgpu::Te
     }
 }
 
+static WRITES_ARMED: AtomicBool = AtomicBool::new(false);
+
+/// Lets `writes` drop the queue's writes from now on: the race stage calls it every frame it
+/// draws, so nothing a load uploads is ever dropped.
+pub fn arm_writes() {
+    WRITES_ARMED.store(true, Ordering::Relaxed);
+}
+
+/// Whether `writes` drops a write made now: named, armed and in an odd window.
+#[must_use]
+pub fn writes_frozen() -> bool {
+    WRITES_ARMED.load(Ordering::Relaxed) && skipped("writes")
+}
+
 /// Whether `OAG_SKIP_PASSES` leaves `name` out of this frame.
 #[must_use]
 pub fn skipped(name: &str) -> bool {
@@ -124,8 +150,22 @@ pub fn skipped(name: &str) -> bool {
         // The browser build has no monotonic clock here; a toggle there leaves the pass
         // out throughout.
         #[cfg(not(target_arch = "wasm32"))]
-        Some(period) => ((switch.start.elapsed().as_secs_f32() / period) as u64) % 2 == 1,
+        Some(period) => {
+            let window = (switch.start.elapsed().as_secs_f32() / period) as u64;
+            announce(window);
+            window % 2 == 1
+        }
         _ => true,
+    }
+}
+
+/// Prints the window a toggle run has entered, once per window.
+#[cfg(not(target_arch = "wasm32"))]
+fn announce(window: u64) {
+    static LAST: AtomicU64 = AtomicU64::new(u64::MAX);
+    if LAST.swap(window, Ordering::Relaxed) != window {
+        let arm = if window % 2 == 1 { "on" } else { "off" };
+        eprintln!("OAG_SKIP_PASSES: window {window} {arm}");
     }
 }
 
@@ -139,5 +179,7 @@ mod tests {
             assert!(!super::skipped(name), "{name}");
             assert!(!super::named(name), "{name}");
         }
+        super::arm_writes();
+        assert!(!super::writes_frozen());
     }
 }

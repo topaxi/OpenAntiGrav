@@ -42,6 +42,9 @@ pub trait Writes {
 
 impl Writes for wgpu::Queue {
     fn write_buffer(&self, buffer: &wgpu::Buffer, offset: wgpu::BufferAddress, data: &[u8]) {
+        if crate::skip::writes_frozen() {
+            return;
+        }
         wgpu::Queue::write_buffer(self, buffer, offset, data);
     }
 
@@ -52,6 +55,9 @@ impl Writes for wgpu::Queue {
         data_layout: wgpu::TexelCopyBufferLayout,
         size: wgpu::Extent3d,
     ) {
+        if crate::skip::writes_frozen() {
+            return;
+        }
         wgpu::Queue::write_texture(self, texture, data, data_layout, size);
     }
 }
