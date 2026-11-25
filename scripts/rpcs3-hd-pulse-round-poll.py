@@ -84,6 +84,9 @@ def main():
                     help="x,y,z,ux,uy,uz,fx,fy,fz,speed: put the craft there before firing (`rpcs3_place.write_pose`, "
                          "right = up x forward); the round's floor probe only finds collision near the craft, so a "
                          "round meant for a loop is fired from the loop's foot")
+    ap.add_argument("--grab-ages", default="",
+                    help="comma-separated ages (s) of the first round fired at which to pause and grab the frame "
+                         "(`grab_with_clock`, `<out>/grab-<age>.png`) with that round's sample beside it")
     ap.add_argument("--poll-seconds", type=float, default=2.0)
     ap.add_argument("--pre-wait", type=float, default=30.0)
     ap.add_argument("--fire-button", default="triangle")
@@ -152,6 +155,9 @@ def main():
         samples = []
         turned = 0
         placed = []
+        grab_ages = sorted(float(a) for a in args.grab_ages.split(",") if a)
+        first = []
+        grabs = []
         gdb.resume()
         session.pad.set(args.fire_button, True)
         t0 = time.time()
@@ -194,13 +200,24 @@ def main():
                     row["redirected_to"] = v
                 row.update(t=round(now, 4), lap=lap, addr=addr)
                 samples.append(row)
+                if not first and age < 0.07:
+                    first.append(addr)
+                if first and addr == first[0] and grab_ages and age >= grab_ages[0]:
+                    while grab_ages and age >= grab_ages[0]:
+                        grab_ages.pop(0)
+                    gdb.pause()
+                    blob = read(addr, SPAN)
+                    path = out / ("grab-%.3f.png" % age)
+                    drive.grab_with_clock(path, trim=True)
+                    grabs.append({"image": path.name, "round": decode(blob)})
+                    gdb.resume()
         if not released:
             session.pad.set(args.fire_button, False)
         gdb.pause()
         final = place.read_pose(gdb, body)
         gdb.resume()
         (out / "poll.json").write_text(json.dumps({"pool": pool, "start_pose": pose, "end_pose": final,
-                                                    "yaw_deg": args.yaw_deg, "placed": placed,
+                                                    "yaw_deg": args.yaw_deg, "placed": placed, "grabs": grabs,
                                                     "samples": samples}) + "\n")
         print("done: %d samples, %d distinct rounds" % (len(samples), len({s["addr"] for s in samples})), flush=True)
 
