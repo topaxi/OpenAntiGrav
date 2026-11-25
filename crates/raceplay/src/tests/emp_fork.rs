@@ -391,3 +391,62 @@ fn an_hd_emp_fired_beside_the_merge_never_forks_again() {
     );
     assert_eq!(field.live_mines, 1, "the branch is left alone");
 }
+
+/// **Omega runs the same law** (its sweep `0x0133c600` carries the same launch fork): on its
+/// re-shipped forked circuits a branch launch clears the branch's mine and one beside the split
+/// forks at once.
+#[test]
+#[ignore = "needs data/images/omega-ps4-eu.pkg"]
+fn an_omega_emp_fired_on_or_beside_a_branch_follows_it() {
+    let Some(image) = oag_testdata::image("omega-ps4-eu.pkg") else {
+        return;
+    };
+    for track in [
+        r"Data\Environments\05_ubermall\track.vex",
+        r"Data\Environments\15_anulpha_pass\track.vex",
+    ] {
+        let load = || {
+            let loaded = crate::load(&crate::Options {
+                source: image.display().to_string(),
+                class: "VENOM".to_string(),
+                mode: Mode::Detonator,
+                track: Some(track.to_string()),
+                no_effects: true,
+                ..crate::Options::default()
+            })
+            .expect("loading an Omega Detonator race");
+            Race::start(loaded.setup, loaded.view, loaded.modules)
+        };
+        let mut race = load();
+        let survey = race
+            .core
+            .sim
+            .detonator
+            .as_ref()
+            .expect("Detonator")
+            .survey
+            .clone();
+        let k = clear_of_the_ring(&survey);
+        let from = survey.branch_entry(0, k).expect("a branch entry");
+        let ahead = survey.branch_entry(0, k + 40).expect("a branch entry");
+        fire_from(&mut race, from, &[mine_at(ahead)], 130);
+        let field = &race.core.sim.world.detonator;
+        assert_eq!(usize::from(field.emp.wave.from), from, "{track}");
+        assert!(
+            field.live_mines().is_empty(),
+            "{track}: the branch's mine goes"
+        );
+
+        let mut race = load();
+        let split = usize::from(survey.branches[0].split);
+        let beside = (split + 5) % survey.entries.len();
+        let other = survey.branch_entry(0, 15).expect("a branch entry");
+        fire_from(&mut race, beside, &[mine_at(other)], 0);
+        assert!(race.core.sim.world.detonator.emp.wave.forked, "{track}");
+        fire_ticks(&mut race, 40);
+        assert!(
+            race.core.sim.world.detonator.live_mines().is_empty(),
+            "{track}"
+        );
+    }
+}
