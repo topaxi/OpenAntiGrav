@@ -285,7 +285,16 @@ impl Menu {
 
         match entry {
             Entry::Submenu { target, .. } => {
-                self.stack.push(*target);
+                let target = *target;
+                // A page that asks "are you sure" opens on its way back, whichever row the
+                // cursor was left on: a second press of the key that opened it cancels.
+                let asks = self.definition.pages[target]
+                    .id
+                    .starts_with(super::CONFIRM_PAGE_PREFIX);
+                if asks {
+                    self.cursor[target] = self.definition.pages[target].entries.len() - 1;
+                }
+                self.stack.push(target);
                 self.snap_focus();
                 self.nav.push(Nav::Accept);
                 Vec::new()

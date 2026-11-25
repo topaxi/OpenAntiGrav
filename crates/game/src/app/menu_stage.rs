@@ -24,6 +24,8 @@ pub(crate) use screens::PAUSE_OVERLAY;
 /// the title's table that says which row each widget is.
 pub(crate) struct PauseView {
     pub(crate) screen: oag_ui_screens::pause::PauseScreen,
+    /// The screens its QUIT and RESTART rows ask on first, where the title authors them.
+    pub(crate) confirms: Vec<oag_ui_screens::pause::PauseScreen>,
     pub(crate) table: &'static oag_title::PauseMenu,
     /// Where the screen's textures sit on the menus' sprite sheet.
     pub(crate) sprites: Vec<(String, oag_ui::frontend::Placed)>,
@@ -263,10 +265,40 @@ pub(crate) fn menu_playhead(
 }
 
 impl MenuStage {
-    /// Whether the page on screen is the pause page of a tree that opened on it, drawn from the
-    /// disc's own screen.
+    /// Whether the page on screen is the pause page of a tree that opened on it, or the page one of
+    /// its rows asks on, drawn from the disc's own screen.
     pub(crate) fn on_pause_page(&self) -> bool {
-        self.pause_view.is_some() && self.menu.page().id == menu::PAUSE_PAGE
+        self.pause_screen_on_page().is_some()
+    }
+
+    /// The page on screen drawn from the disc's own pause or confirm screen, when it is one.
+    pub(crate) fn pause_draw(&self) -> Option<menu::Layers> {
+        let (view, screen) = (self.pause_view.as_ref()?, self.pause_screen_on_page()?);
+        Some(oag_ui_screens::pause::draw_list(
+            screen,
+            view.table,
+            &self.menu,
+            &self.skin,
+            &self.frame,
+            &|src| {
+                view.sprites
+                    .iter()
+                    .find(|(path, _)| path == src)
+                    .map(|(_, placed)| *placed)
+            },
+        ))
+    }
+
+    /// The disc's screen the page on screen is drawn from: the pause screen, or the confirm screen
+    /// the page of one of its rows stands for.
+    pub(crate) fn pause_screen_on_page(&self) -> Option<&oag_ui_screens::pause::PauseScreen> {
+        let view = self.pause_view.as_ref()?;
+        let id = self.menu.page().id.as_str();
+        if id == menu::PAUSE_PAGE {
+            return Some(&view.screen);
+        }
+        let name = id.strip_prefix(menu::CONFIRM_PAGE_PREFIX)?;
+        view.confirms.iter().find(|screen| screen.name() == name)
     }
 
     /// Advances the backdrop by one tick.
@@ -957,20 +989,7 @@ impl MenuStage {
             frozen_race,
         );
         // The pause screen is the disc's own widgets where the title carries them.
-        if let Some(view) = self.pause_view.as_ref().filter(|_| self.on_pause_page()) {
-            let drawn = oag_ui_screens::pause::draw_list(
-                &view.screen,
-                view.table,
-                &self.menu,
-                &self.skin,
-                &self.frame,
-                &|src| {
-                    view.sprites
-                        .iter()
-                        .find(|(path, _)| path == src)
-                        .map(|(_, placed)| *placed)
-                },
-            );
+        if let Some(drawn) = self.pause_draw() {
             arriving.chrome = drawn.chrome;
             arriving.body = drawn.body;
         }

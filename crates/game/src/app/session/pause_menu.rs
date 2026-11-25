@@ -56,19 +56,31 @@ impl Session {
         let shell = self.shell.as_ref()?;
         let table = shell.title.pause_menu?;
         let stage = self.pausing_race()?;
-        let name = table.screen_for(pause_mode(stage)).name;
-        let screen = shell
-            .pause_screens
-            .screens
+        let authored = table.screen_for(pause_mode(stage));
+        let find = |name: &str| {
+            shell
+                .pause_screens
+                .screens
+                .iter()
+                .find(|screen| screen.name() == name)
+        };
+        let screen = find(authored.name)?.clone();
+        let confirms: Vec<_> = authored
+            .rows
             .iter()
-            .find(|screen| screen.name() == name)?
-            .clone();
-        let sprites = screen
-            .sprite_srcs()
+            .filter_map(|row| row.confirm)
+            .filter_map(|name| Some(find(name)?.clone()))
+            .collect();
+        let sprites = std::iter::once(&screen)
+            .chain(&confirms)
+            .flat_map(oag_ui_screens::pause::PauseScreen::sprite_srcs)
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
             .filter_map(|src| Some((src.to_string(), shell.sprites.get(src)?)))
             .collect();
         Some(crate::app::menu_stage::PauseView {
             screen,
+            confirms,
             table,
             sprites,
         })

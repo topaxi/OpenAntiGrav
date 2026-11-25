@@ -44,10 +44,17 @@ pub enum PauseAction {
 /// One row of a pause screen.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PauseRow {
-    /// The `idstring` the disc spells.
+    /// The `idstring` the disc spells; for an icon-only widget that has none (2048's `quitButton`),
+    /// the widget's `name`.
     pub disc_id: &'static str,
+    /// The disc string the row is worded by: [`Self::disc_id`], or for a widget with no
+    /// `idstring` the id of a string the page labels it with.
+    pub word: &'static str,
     /// What the row does here, or `None` where this build has nothing behind it.
     pub builds: Option<PauseAction>,
+    /// The screen of [`PauseMenu::screens`] a QUIT or RESTART row asks "are you sure" on before it
+    /// acts (2048's `PauseQuitConfirm`), or `None` for a row that acts at once.
+    pub confirm: Option<&'static str>,
 }
 
 /// One authored pause screen.
@@ -74,6 +81,20 @@ pub struct PauseLayout {
     /// How a screen that authors one `<Menu>` of entries, rather than a widget per row, lays
     /// its rows out. `None` for a title whose screens are `Block` and `List` widgets.
     pub menu_rows: Option<PauseMenuRows>,
+    /// How a screen of `<TouchButton>` tiles takes its colours. `None` for a title whose screens
+    /// are `Block`, `List` or `Menu` widgets.
+    pub touch: Option<PauseTouch>,
+}
+
+/// The skin globals a touch pause screen's tiles are filled with: Wipeout 2048's tile is its
+/// `Blue2048` box and the pad's cursor fills the tile the pointer would be pressing in
+/// `Orange2048` (`oag_ui::frontend::Frontend::draw_tile`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PauseTouch {
+    /// The global the resting tile and the heading's colour come from.
+    pub tile: &'static str,
+    /// The global the tile with the pad cursor is filled with.
+    pub cursor: &'static str,
 }
 
 /// The two numbers a `<Menu>` widget does not author: how far apart its rows stand and how
@@ -180,5 +201,36 @@ impl PauseMenu {
 /// A [`PauseRow`], for a title package's table.
 #[must_use]
 pub const fn row(disc_id: &'static str, builds: Option<PauseAction>) -> PauseRow {
-    PauseRow { disc_id, builds }
+    PauseRow {
+        disc_id,
+        word: disc_id,
+        builds,
+        confirm: None,
+    }
+}
+
+/// A [`PauseRow`] for an icon-only widget the disc names by `widget` and words by `word`.
+#[must_use]
+pub const fn named(
+    widget: &'static str,
+    word: &'static str,
+    builds: Option<PauseAction>,
+) -> PauseRow {
+    PauseRow {
+        disc_id: widget,
+        word,
+        builds,
+        confirm: None,
+    }
+}
+
+impl PauseRow {
+    /// This row asking on `screen` before it acts.
+    #[must_use]
+    pub const fn confirmed_on(self, screen: &'static str) -> Self {
+        Self {
+            confirm: Some(screen),
+            ..self
+        }
+    }
 }

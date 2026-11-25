@@ -567,7 +567,8 @@ mod expand;
 pub use expand::RowItem;
 mod definition;
 pub use definition::{
-    Added, Definition, Error, For, ModMenu, PAUSE_PAGE, PHOTO_ROW, Pause, pause_row_id,
+    Added, CONFIRM_PAGE_PREFIX, Definition, Error, For, ModMenu, PAUSE_PAGE, PHOTO_ROW, Pause,
+    confirm_page_id, pause_row_id,
 };
 
 /// What the menus did on a tick, for the composition root to act on.

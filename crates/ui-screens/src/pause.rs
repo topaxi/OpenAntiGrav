@@ -2,7 +2,8 @@
 //! widgets at their authored positions, the title and its arrow, and the shared chrome screen's
 //! two rules and footer (`InGame Main Menu` on HD, `oag_title::PauseLayout`). A screen that
 //! authors one `<Menu>` instead (Pure's band of centred rows) draws every row of the page down
-//! that widget.
+//! that widget, and a screen of `<TouchButton>` tiles (Wipeout 2048's) draws one box and icon per
+//! tile, the pad's cursor filling the tile it is on.
 //!
 //! The rows' behaviour is the menu's (`oag_ui::menu::Menu`, built by
 //! `Definition::open_on_pause_screen`); this draws them. A widget finds its row by the disc
@@ -14,12 +15,15 @@
 //! (`oag_ui::menu::block`); a list row is `List_Item`'s two boxes and step arrows with the same
 //! numbers the front end's settings rows use ([`oag_title::ListBlocks`]).
 
-use oag_title::{PauseAction, PauseMenu};
-use oag_ui::frontend::{Draw, Placed};
+use oag_title::{PauseAction, PauseMenu, PauseTouch};
+use oag_ui::frontend::{Draw, Placed, label_under_tile};
 use oag_ui::language::StringTable;
 use oag_ui::menu::pointer::{Part, Region};
 use oag_ui::menu::{Entry, Frame, Layers, Menu, Skin, block, pause_row_id};
-use oag_ui::screen::{BlockWidget, ListWidget, Screens, Text, argb_to_rgba};
+use oag_ui::screen::{
+    BlockWidget, ListWidget, Screens, Text, TouchButton, argb_to_rgba, parse_argb,
+};
+use oag_ui::state_machine::SEPARATOR;
 
 use crate::campaign::Layout;
 use crate::campaign::draw::{fill_draw, image_draw, text_draw};
@@ -50,7 +54,18 @@ const INERT_FILL_ALPHA: f32 = 0.65;
 #[derive(Debug, Clone)]
 pub struct PauseScreen {
     screen: Layout,
-    chrome: Option<Layout>,
+    /// The screens drawn behind this one, outermost first: the shared chrome screen, or for a
+    /// screen of tiles the screens it is nested in.
+    chrome: Vec<Layout>,
+    /// The tile and cursor fills of a screen of `<TouchButton>` tiles.
+    tiles: Option<TileInk>,
+}
+
+/// What a tile is filled with, as `ARGB`: at rest, and with the pad's cursor on it.
+#[derive(Debug, Clone, Copy)]
+struct TileInk {
+    rest: u32,
+    cursor: u32,
 }
 
 impl PauseScreen {
@@ -71,9 +86,53 @@ impl PauseScreen {
         Some(Self {
             screen: read(name)?,
             chrome: match chrome {
-                Some(chrome) => Some(read(chrome)?),
-                None => None,
+                Some(chrome) => vec![read(chrome)?],
+                None => Vec::new(),
             },
+            tiles: None,
+        })
+    }
+
+    /// A screen of `<TouchButton>` tiles: the screen called `name` and, as its chrome, the screens
+    /// it is nested in (2048's `PauseMenuSpeed` stands in `PauseMenuSpeedTop`, which authors the
+    /// panel and the heading; a confirm screen stands in the page it asks on). Every tile's
+    /// `idstring` is resolved through `strings` to the words under it. `None` when the file lacks
+    /// the screen or a colour global.
+    #[must_use]
+    pub fn read_touch(
+        screens: &Screens,
+        name: &str,
+        touch: PauseTouch,
+        strings: &StringTable,
+        faces: FaceScales,
+        grid: [f32; 2],
+    ) -> Option<Self> {
+        let colour = |global: &str| {
+            screens
+                .resolve(&format!("FEGlobals->{global}"))
+                .and_then(parse_argb)
+        };
+        let read =
+            |screen: &str| Layout::read_authored(screens, screen, strings, faces, grid, grid);
+        let path = &screens.by_name(name)?.path;
+        let mut names: Vec<&str> = path.split(SEPARATOR).collect();
+        names.pop();
+        let mut chrome: Vec<Layout> = names.into_iter().filter_map(read).collect();
+        let mut screen = read(name)?;
+        for layout in chrome.iter_mut().chain(std::iter::once(&mut screen)) {
+            for button in &mut layout.screen.touch_buttons {
+                if let Some(words) = button.idstring.as_deref().and_then(|id| strings.get(id)) {
+                    button.string = Some(words.to_string());
+                }
+            }
+        }
+        Some(Self {
+            screen,
+            chrome,
+            tiles: Some(TileInk {
+                rest: colour(touch.tile)?,
+                cursor: colour(touch.cursor)?,
+            }),
         })
     }
 
@@ -85,8 +144,19 @@ impl PauseScreen {
 
     /// The texture paths the screen and its chrome draw, for the caller to place on its sheet.
     pub fn sprite_srcs(&self) -> impl Iterator<Item = &str> {
-        self.layouts()
-            .flat_map(|layout| layout.screen.images.iter().map(|image| image.src.as_str()))
+        self.layouts().flat_map(|layout| {
+            let icons = layout
+                .screen
+                .touch_buttons
+                .iter()
+                .filter_map(|button| button.src.as_deref());
+            layout
+                .screen
+                .images
+                .iter()
+                .map(|image| image.src.as_str())
+                .chain(icons)
+        })
     }
 
     /// The chrome screen, when there is one, then the screen itself: the order they draw in.
@@ -112,6 +182,106 @@ impl PauseScreen {
     }
 }
 
+/// The texts of `layout` that are not a widget's label, as the chrome draws them.
+fn text_draws(layout: &Layout, skin: &Skin, out: &mut Vec<Draw>) {
+    let (_, _, title_scale) = skin.title_at();
+    for text in &layout.screen.texts {
+        if layout
+            .screen
+            .blocks
+            .iter()
+            .any(|b| b.name == text.name && b.name.is_some())
+            || layout
+                .screen
+                .lists
+                .iter()
+                .any(|l| l.name == text.name && l.name.is_some())
+        {
+            continue;
+        }
+        let Some(content) = text.string.as_deref() else {
+            continue;
+        };
+        if text.font.eq_ignore_ascii_case("title") {
+            out.push(Draw::title(
+                skin.title_font(),
+                text.x,
+                text.y,
+                title_scale * text.scale,
+                argb_to_rgba(text.color),
+                content.to_string(),
+            ));
+        } else {
+            out.push(text_draw(text, content, layout));
+        }
+    }
+}
+
+/// The key a `<TouchButton>` is found by in the title's table: its `idstring`, else its `name`,
+/// else (a confirm screen's tick and cross, which author neither) its `redirect`.
+fn tile_key(button: &TouchButton) -> Option<&str> {
+    button
+        .idstring
+        .as_deref()
+        .or(button.name.as_deref())
+        .or(button.redirect.as_deref())
+}
+
+/// A screen of tiles as a draw list: each screen it is nested in with the tiles of that screen
+/// at rest (the page a confirm screen asks on stays drawn under its dimming), then its own panel,
+/// words and icon, then its tiles with the pad's cursor on the focused one.
+fn touch_draw_list(
+    screen: &PauseScreen,
+    table: &PauseMenu,
+    menu: &Menu,
+    skin: &Skin,
+    sprites: &dyn Fn(&str) -> Option<Placed>,
+) -> Layers {
+    let mut chrome = Vec::new();
+    for layout in screen.layouts() {
+        for fill in &layout.screen.fills {
+            chrome.push(fill_draw(fill));
+        }
+        for image in &layout.screen.images {
+            if let Some(placed) = sprites(&image.src) {
+                chrome.push(image_draw(image, placed));
+            }
+        }
+        text_draws(layout, skin, &mut chrome);
+        if std::ptr::eq(layout, &screen.screen) {
+            continue;
+        }
+        let Some(behind) = table.screen(&layout.screen.name) else {
+            continue;
+        };
+        for button in &layout.screen.touch_buttons {
+            if tile_key(button)
+                .and_then(|key| behind.rows.iter().find(|row| row.disc_id == key))
+                .is_some_and(|row| row.builds.is_some())
+            {
+                tile_draw(screen, button, false, sprites, &mut chrome);
+            }
+        }
+    }
+    let mut body = Vec::new();
+    for placed in rows(screen, table, menu) {
+        if let Kind::Tile(button) = placed.kind {
+            tile_draw(
+                screen,
+                button,
+                placed.row == menu.selected(),
+                sprites,
+                &mut body,
+            );
+        }
+    }
+    Layers {
+        chrome,
+        body,
+        ..Layers::default()
+    }
+}
+
 /// One of the screen's rows with its menu row index.
 struct Row<'a> {
     row: usize,
@@ -123,6 +293,7 @@ enum Kind<'a> {
     List(&'a ListWidget),
     /// Row `n` of the screen's `<Menu>`, counting from its first.
     Menu(usize),
+    Tile(&'a TouchButton),
 }
 
 /// Every widget of `screen` that has a row on the page, in the screen's own order, with that
@@ -141,14 +312,29 @@ fn rows<'a>(screen: &'a PauseScreen, table: &PauseMenu, menu: &Menu) -> Vec<Row<
             })
             .collect();
     }
-    let row_for = |text: &Text| -> Option<usize> {
-        let id = text.idstring.as_deref()?;
+    let row_of = |id: &str| -> Option<usize> {
         let action: PauseAction = disc.rows.iter().find(|row| row.disc_id == id)?.builds?;
         let wanted = pause_row_id(action);
         page.meta
             .iter()
             .position(|meta| meta.id.as_deref() == Some(wanted))
     };
+    if screen.tiles.is_some() {
+        return screen
+            .screen
+            .screen
+            .touch_buttons
+            .iter()
+            .filter_map(|button| {
+                let key = tile_key(button)?;
+                Some(Row {
+                    row: row_of(key)?,
+                    kind: Kind::Tile(button),
+                })
+            })
+            .collect();
+    }
+    let row_for = |text: &Text| -> Option<usize> { row_of(text.idstring.as_deref()?) };
     let mut out = Vec::new();
     for block in screen.blocks() {
         if let Some(text) = screen.label_of(block.name.as_deref())
@@ -197,6 +383,9 @@ pub fn draw_list(
     frame: &Frame,
     sprites: &dyn Fn(&str) -> Option<Placed>,
 ) -> Layers {
+    if screen.tiles.is_some() {
+        return touch_draw_list(screen, table, menu, skin, sprites);
+    }
     let mut layers = Layers::default();
     let mut chrome = Vec::new();
     for layout in screen.layouts() {
@@ -209,38 +398,8 @@ pub fn draw_list(
             }
         }
     }
-    let (_, _, title_scale) = skin.title_at();
     for layout in screen.layouts() {
-        for text in &layout.screen.texts {
-            if layout
-                .screen
-                .blocks
-                .iter()
-                .any(|b| b.name == text.name && b.name.is_some())
-                || layout
-                    .screen
-                    .lists
-                    .iter()
-                    .any(|l| l.name == text.name && l.name.is_some())
-            {
-                continue;
-            }
-            let Some(content) = text.string.as_deref() else {
-                continue;
-            };
-            if text.font.eq_ignore_ascii_case("title") {
-                chrome.push(Draw::title(
-                    skin.title_font(),
-                    text.x,
-                    text.y,
-                    title_scale * text.scale,
-                    argb_to_rgba(text.color),
-                    content.to_string(),
-                ));
-            } else {
-                chrome.push(text_draw(text, content, layout));
-            }
-        }
+        text_draws(layout, skin, &mut chrome);
     }
     layers.chrome = chrome;
 
@@ -266,6 +425,7 @@ pub fn draw_list(
                     body.push(draw);
                 }
             }
+            Kind::Tile(_) => {}
             Kind::List(widget) => {
                 if let Some(numbers) = numbers {
                     list_draw(
@@ -284,6 +444,49 @@ pub fn draw_list(
     }
     layers.body = body;
     layers
+}
+
+/// One `<TouchButton>` as the touch front end draws a tile: its box filled with the tile colour
+/// (the cursor's while the pad is on it), the icon at the texture's own size centred in it, and
+/// for a tile that authors an `idstring` its words under the box in the tile colour.
+fn tile_draw(
+    screen: &PauseScreen,
+    button: &TouchButton,
+    selected: bool,
+    sprites: &dyn Fn(&str) -> Option<Placed>,
+    out: &mut Vec<Draw>,
+) {
+    let Some(ink) = screen.tiles else {
+        return;
+    };
+    let rect = [button.x, button.y, button.width, button.height];
+    out.push(Draw::Fill {
+        rect,
+        color: argb_to_rgba(if selected { ink.cursor } else { ink.rest }),
+    });
+    if let Some(placed) = button.src.as_deref().and_then(sprites) {
+        let (w, h) = (placed.width as f32, placed.height as f32);
+        out.push(Draw::Sprite {
+            rect: [
+                rect[0] + (rect[2] - w) * 0.5,
+                rect[1] + (rect[3] - h) * 0.5,
+                w,
+                h,
+            ],
+            uv: placed.sheet_rect([0.0, 0.0, w, h]),
+            color: argb_to_rgba(button.color),
+        });
+    }
+    if button.idstring.is_some()
+        && let Some(words) = &button.string
+    {
+        out.push(label_under_tile(
+            rect,
+            words.clone(),
+            argb_to_rgba(ink.rest),
+            button.string_width_limit,
+        ));
+    }
 }
 
 /// The line `n` of a `<Menu>` screen's rows: centred on the widget's `x`, the first row's middle
@@ -523,6 +726,11 @@ pub fn regions(screen: &PauseScreen, table: &PauseMenu, menu: &Menu, skin: &Skin
                     widget.width + focus * block::FOCUS_GROWTH,
                     widget.height,
                 ],
+            }),
+            Kind::Tile(button) => out.push(Region {
+                row: placed.row,
+                part: Part::Row,
+                rect: [button.x, button.y, button.width, button.height],
             }),
             Kind::Menu(n) => {
                 let (Some(widget), Some(rows)) = (

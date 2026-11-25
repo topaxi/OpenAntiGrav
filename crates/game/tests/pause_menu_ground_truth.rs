@@ -942,3 +942,121 @@ mod pure_screens {
         );
     }
 }
+
+/// Wipeout 2048's pause screens are its own touch pages (`docs/ui/pause-menu.md`, "2048"): the
+/// front end's `boot` launches the campaign map's first event, a Time Trial, so the screen is the
+/// binder's default `PauseMenuRace`. The window is 1440 by 816 over the 960 by 544 grid, so a
+/// grid point is a tap at one and a half times its place.
+mod y2048_screens {
+    use super::*;
+
+    fn y2048() -> Option<std::path::PathBuf> {
+        oag_testdata::exact("data/extracted/vita/PCSF00007")
+    }
+
+    fn run_2048(tag: &str, script: &str) -> Run {
+        let source = y2048().expect("the caller checks first");
+        run_on(&source, &format!("y2048-{tag}"), script)
+    }
+
+    /// To the race and the pause screen, five ticks in.
+    const PAUSED: &str = "boot; ticks 100; press start; until stage=menu; expect page=pause; \
+        ticks 5; ";
+
+    /// The tile rows of `PauseMenuRace`, in the file's order: OPTIONS, PHOTO MODE (the disc's tile),
+    /// then the three icon-only tiles. QUIT and RESTART ask first, so they open a page.
+    fn the_rows() -> Vec<(String, String)> {
+        pairs(&[
+            ("OPTIONS", "submenu"),
+            ("PHOTO MODE", "photo_mode"),
+            ("QUIT RACE", "submenu"),
+            ("RESTART RACE", "submenu"),
+            ("CONTINUE", "back"),
+        ])
+    }
+
+    fn last_page(run: &Run) -> String {
+        run.states
+            .last()
+            .and_then(|state| state["screen"]["id"].as_str())
+            .unwrap_or_default()
+            .to_string()
+    }
+
+    /// START opens the tile page and its rows are the disc's tiles; QUIT, by pad and by a tap on its
+    /// tile, asks first, on the way back; CIRCLE and the cross tile go back to the page; UP and
+    /// the tick leave for the main page.
+    #[test]
+    #[ignore = "needs the extracted 2048 package in data/extracted/vita/PCSF00007"]
+    fn a_time_trial_pauses_into_the_tile_page_and_quit_asks_before_it_leaves() {
+        if y2048().is_none() {
+            return;
+        }
+        let opened = run_2048("rows", PAUSED);
+        assert_eq!(rows(&opened), the_rows());
+
+        let asked = run_2048(
+            "quit",
+            &format!(
+                "{PAUSED} select pause_quit; press cross; ticks 60; \
+                 expect page=pause_confirm:PauseQuitConfirm; press circle; ticks 60; \
+                 expect page=pause; touch tap 930 716; ticks 60; \
+                 expect page=pause_confirm:PauseQuitConfirm; press cross; ticks 60; \
+                 expect page=pause; select pause_quit; press cross; ticks 60; \
+                 expect page=pause_confirm:PauseQuitConfirm; press up; press cross; ticks 60; \
+                 expect page=main"
+            ),
+        );
+        assert_eq!(last_page(&asked), "main");
+        let confirm = on_page(&asked, "pause_confirm:PauseQuitConfirm");
+        let state = confirm.first().expect("the question was on screen");
+        let ids: Vec<&str> = state["screen"]["rows"]
+            .as_array()
+            .expect("rows")
+            .iter()
+            .map(|row| row["id"].as_str().unwrap_or_default())
+            .collect();
+        assert_eq!(ids, ["pause_quit", "pause_resume"], "the tick, then the cross");
+    }
+
+    /// RESTART asks too, and its tick loads the race again from the grid; a tap on the CONTINUE tile
+    /// resumes the race where it stood.
+    #[test]
+    #[ignore = "needs the extracted 2048 package in data/extracted/vita/PCSF00007"]
+    fn restart_asks_and_a_tap_on_the_tick_tile_resumes() {
+        if y2048().is_none() {
+            return;
+        }
+        let restart = run_2048(
+            "restart",
+            &format!(
+                "{PAUSED} select pause_restart; press cross; ticks 30; \
+                 expect page=pause_confirm:PauseRetryConfirm; press up; press cross; \
+                 until stage=race within 4000; ticks 20"
+            ),
+        );
+        let sims: Vec<u64> = restart
+            .states
+            .iter()
+            .filter_map(|state| state.get("sim_tick")?.as_u64())
+            .collect();
+        assert!(
+            sims.last().copied().unwrap_or(u64::MAX) < 100,
+            "the tick loads the race again: {sims:?}"
+        );
+
+        let resumed = run_2048(
+            "resume",
+            &format!("{PAUSED} touch tap 1320 716; until stage=race within 200; ticks 10"),
+        );
+        let ticks: Vec<u64> = resumed
+            .states
+            .iter()
+            .filter_map(|state| state.get("sim_tick")?.as_u64())
+            .collect();
+        assert!(
+            ticks.last().copied().unwrap_or(0) > 100,
+            "the race went on from where it stood: {ticks:?}"
+        );
+    }
+}

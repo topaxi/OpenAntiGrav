@@ -132,7 +132,9 @@ mod build;
 mod mod_setting;
 mod pause;
 pub use build::{Added, For, ModMenu};
-pub use pause::{PAUSE_PAGE, PHOTO_ROW, Pause, row_id as pause_row_id};
+pub use pause::{
+    CONFIRM_PAGE_PREFIX, PAUSE_PAGE, PHOTO_ROW, Pause, confirm_page_id, row_id as pause_row_id,
+};
 
 impl From<&raw::Launch> for LaunchInputs {
     fn from(keys: &raw::Launch) -> Self {

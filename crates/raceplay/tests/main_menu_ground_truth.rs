@@ -991,3 +991,144 @@ fn omegas_pause_screens_are_hds_without_the_invites_row_in_every_archive() {
     }
     assert_eq!(pause.by_mode, hd.by_mode, "the same mode switch");
 }
+
+/// The key of every `<TouchButton>` of the screen `screen`, in document order, not counting those
+/// of the screens nested in it: the widget's `idstring`, else its `name`, else its `redirect`
+/// (a confirm screen's tick and cross author neither).
+fn touch_keys(root: &Node, screen: &str) -> Vec<String> {
+    fn find<'a>(node: &'a Node, screen: &str) -> Option<&'a Node> {
+        if node.name.eq_ignore_ascii_case("Screen") && node.attr("name") == Some(screen) {
+            return Some(node);
+        }
+        node.children.iter().find_map(|child| find(child, screen))
+    }
+    fn collect(node: &Node, out: &mut Vec<String>) {
+        for child in &node.children {
+            if child.name.eq_ignore_ascii_case("Screen") {
+                continue;
+            }
+            if child.name.eq_ignore_ascii_case("TouchButton") {
+                let key = child
+                    .children
+                    .iter()
+                    .find(|values| values.name.eq_ignore_ascii_case("Values"))
+                    .and_then(|values| values.attr("idstring"))
+                    .or_else(|| child.attr("name"))
+                    .or_else(|| {
+                        child
+                            .children
+                            .iter()
+                            .find(|values| values.name.eq_ignore_ascii_case("Values"))
+                            .and_then(|values| values.attr("redirect"))
+                    });
+                out.push(key.unwrap_or_default().to_string());
+            }
+            collect(child, out);
+        }
+    }
+    let node = find(root, screen).unwrap_or_else(|| panic!("no screen {screen:?}"));
+    let mut out = Vec::new();
+    collect(node, &mut out);
+    out
+}
+
+fn has_screen(node: &Node, screen: &str) -> bool {
+    (node.name.eq_ignore_ascii_case("Screen") && node.attr("name") == Some(screen))
+        || node.children.iter().any(|child| has_screen(child, screen))
+}
+
+/// Wipeout 2048's pause screens are pages of `<TouchButton>` icon tiles, not HD's and Omega's
+/// `Block` and `List` widgets: **checked, differs**. In the file the game reads (the v1.04 patch's
+/// copy, served ahead of the base package's) the three screens a mode opens and the five confirm
+/// screens their QUIT and RESTART tiles ask on are tile for tile the table's, in the file's order,
+/// on both territories' packages, and the pause redirect's default is the page the table names.
+/// The base package's own copy has no `PauseMenuTournament` and no `TournamentPauseQuitConfirm`
+/// (the patch adds them) and the screens it does have read the same. Which mode opens which is the
+/// executable's (`FUN_8112e050`), `oag_2048::pause_menu::tests`.
+#[test]
+#[ignore = "needs the extracted 2048 packages in data/extracted/vita/"]
+fn y2048s_pause_screens_are_touch_pages_tile_for_tile_in_the_served_copy() {
+    const NAME: &str = r"data\plugins\frontend\NEWGUI\InGame_Definition.xml";
+    const PATCH_ONLY: [&str; 2] = ["PauseMenuTournament", "TournamentPauseQuitConfirm"];
+    let pause = oag_2048::TITLE.pause_menu.expect("2048 authors pause screens");
+    let mut packages = 0;
+    for package in ["PCSF00007", "PCSA00015"] {
+        let Some(source) = oag_testdata::exact(&format!("data/extracted/vita/{package}")) else {
+            continue;
+        };
+        let mut archives = oag_2048::open(&source.display().to_string()).expect("opening 2048");
+        let served = read(&mut archives, NAME);
+        check_touch_pause(pause, &served, &format!("{package}: the file the game reads"), true);
+        let all = copies(&mut archives, NAME);
+        assert_eq!(all.len(), 2, "{package}: the patch's copy and the base's");
+        let (label, base) = all.first().expect("the base package's copy");
+        assert!(label.ends_with("data.psarc"), "{label}");
+        for name in PATCH_ONLY {
+            assert!(!has_screen(base, name), "{package}: the base package has {name}");
+        }
+        check_touch_pause(pause, base, &format!("{package}: the base copy"), false);
+        packages += 1;
+    }
+    assert!(packages > 0, "no 2048 package was read");
+}
+
+/// Every screen of `pause` that `root` has reads tile for tile as the table; with `all`, every
+/// screen is there and the redirect's default is the table's.
+fn check_touch_pause(pause: &oag_title::PauseMenu, root: &Node, what: &str, all: bool) {
+    for screen in pause.screens {
+        if !all && !has_screen(root, screen.name) {
+            continue;
+        }
+        let rows: Vec<&str> = screen.rows.iter().map(|row| row.disc_id).collect();
+        assert_eq!(
+            touch_keys(root, screen.name),
+            rows,
+            "{what}: {:?} against `Title::pause_menu`",
+            screen.name
+        );
+    }
+    if all {
+        assert_eq!(
+            default_goto(root, "PauseMenuRedirect").as_deref(),
+            Some(pause.default_screen),
+            "{what}: the screen the pause redirect opens by default"
+        );
+    }
+}
+
+/// Omega ships 2048's `vita/vita_InGame_Definition.xml` too (`data00`, `data08`, `data09`) and its
+/// `skin.xml` loads it, but as a stub: the in-race `InGame2048` screen alone, whose redirect names a
+/// `ChoosePauseMenu` the file does not hold. None of 2048's pause screens is in it, so Omega's
+/// pause is HD's `Block` and `List` file and the 2048 table is **checked, differs** for Omega.
+#[test]
+#[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
+fn omegas_copy_of_2048s_ingame_file_holds_none_of_its_pause_screens() {
+    let Some(source) = oag_testdata::exact("data/extracted/ps4") else {
+        return;
+    };
+    let pause = oag_2048::TITLE.pause_menu.expect("2048 authors pause screens");
+    let mut archives = oag_omega::open(&source.display().to_string()).expect("opening Omega");
+    let all = copies(
+        &mut archives,
+        r"Data\Plugins\Frontend\Gui\vita\vita_InGame_Definition.xml",
+    );
+    assert!(all.len() >= 3, "{:?}", all.iter().map(|c| &c.0).collect::<Vec<_>>());
+    fn screens(node: &Node, out: &mut Vec<String>) {
+        if node.name.eq_ignore_ascii_case("Screen")
+            && let Some(name) = node.attr("name")
+        {
+            out.push(name.to_string());
+        }
+        for child in &node.children {
+            screens(child, out);
+        }
+    }
+    for (label, root) in &all {
+        let mut names = Vec::new();
+        screens(root, &mut names);
+        assert_eq!(names, ["InGame2048"], "{label}");
+        for screen in pause.screens {
+            assert!(!names.iter().any(|name| name == screen.name), "{label}");
+        }
+    }
+}

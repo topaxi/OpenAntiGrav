@@ -64,6 +64,7 @@ pub mod frontend;
 pub mod hud;
 pub mod loading;
 pub mod main_menu;
+pub mod pause_menu;
 pub mod race;
 pub mod tips;
 
@@ -324,7 +325,7 @@ pub const TITLE: &Title = &Title {
     // No campaign layout read (2048's campaign is its own event map): the
     // load path that reaches this falls through to Pulse's reader and refuses.
     main_menu: main_menu::MAIN_MENU,
-    pause_menu: None,
+    pause_menu: Some(pause_menu::PAUSE_MENU),
     campaign: &oag_title::Campaign {
         dialect: oag_title::CampaignDialect::Pulse,
         definition_entry: None,

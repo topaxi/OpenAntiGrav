@@ -111,6 +111,23 @@ const CAPITAL_WIDTH: f32 = 12.4;
 /// the header's own `y="30"` puts its caps at 40 on the capture. Measured.
 pub(super) const PEN_ABOVE_CAPS: f32 = 10.0;
 
+/// A tile's label under its box: centred on the tile, the cap line [`LABEL_GAP`] below its
+/// bottom edge, wrapped at `wrap`, in `color`. The one place the touch idiom's label sits, for
+/// every screen that draws `<TouchButton>` tiles.
+#[must_use]
+pub fn label_under_tile(rect: [f32; 4], text: String, color: [f32; 4], wrap: Option<f32>) -> Draw {
+    Draw::Text {
+        x: rect[0] + rect[2] * 0.5,
+        y: rect[1] + rect[3] + LABEL_GAP - PEN_ABOVE_CAPS * LABEL_SCALE,
+        scale: LABEL_SCALE,
+        color,
+        border: None,
+        align: Align::Centre,
+        text,
+        wrap_width: wrap,
+    }
+}
+
 /// What a confirmed tap asked the composition root for - see
 /// [`Frontend::launch`].
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -796,10 +813,13 @@ impl Frontend {
         } else {
             // `Blue2048` under a `Grey2048` tile too: the capture's
             // ONLINE CAMPAIGN and CROSS-PLAY labels are the enabled tiles' navy.
-            (
-                rect[1] + rect[3] + LABEL_GAP - PEN_ABOVE_CAPS * LABEL_SCALE,
+            out.push(label_under_tile(
+                rect,
+                label.clone(),
                 self.global_colour("Blue2048"),
-            )
+                tile.wrap,
+            ));
+            return;
         };
         out.push(Draw::Text {
             x: rect[0] + rect[2] * 0.5,

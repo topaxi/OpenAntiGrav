@@ -136,7 +136,7 @@ use oag_pure::frontend::states as pure_states;
 pub use options2048::{OptionDefaults, ScreenSize};
 pub use team::team_grid_textures;
 pub use team_info::{TeamRating, team_info_textures};
-pub use touch::{EXTRA_TILES, ExtraTile, Launch, TouchState};
+pub use touch::{EXTRA_TILES, ExtraTile, Launch, TouchState, label_under_tile};
 
 /// How long `Developer Publisher Screen` takes, as the reel's own length.
 ///

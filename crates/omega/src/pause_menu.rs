@@ -97,6 +97,7 @@ pub const PAUSE_MENU: &PauseMenu = &PauseMenu {
         chrome: Some("InGame Main Menu"),
         grid: [1920, 1080],
         menu_rows: None,
+        touch: None,
     }),
     hud_under_scrim: false,
     song_line_under_scrim: true,
