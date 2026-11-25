@@ -111,7 +111,7 @@ then pulls back to a slow drift at a normal field while the debris flies.
 
 **2048 against HD: checked, differs** (the mode numbers and the hold mode).
 
-**Omega against 2048: ported** (wired 2026-11-23, see "Wired"; the view dispatcher `0x01383a10` stays unread). Same update, same mode set, same timer, plus
+**Omega against 2048: ported** (wired 2026-11-23, see "Wired"; cases 9 to 11 of the view dispatcher `0x01383a10` stay unread; its case 2 is read, see "The orbit on 2048 and Omega"). Same update, same mode set, same timer, plus
 one Omega-only fallback.
 
 | Row | 2048 v1.04 | Omega | Against HD |
@@ -119,7 +119,7 @@ one Omega-only fallback.
 | W1 enter | `Camera_SetMode` `0x8121963a` case 9: field `+0x270 = 35.0` | `Camera_SetMode` `0x01382720` case 9: field `+0x468 = 35.0` | HD mode 8, same value |
 | W2 framing | `Camera_FramingFov` `0x81218576`: `2 atan(0.5 field / d) x 180/pi`, `65.0` with no station, eye at station `+0x108` | inline in `Camera_Update` `0x01381c70` (`atan(...) x 114.59155`), eye at station `+0xe0` | the same law |
 | W3 subject | `Camera_SetSubject` `0x8121a156`: station from `ship+0x6fa4` else the pick (`0x812199c0`, unread); `fov0 = framing + rand(-10, 20)` at least `3.0`; sets mode 11 (HD 10) | the pick `0x013836a0` (unread) | the same; 2048's own-station path also copies the rates unrandomised |
-| W4 view | `Camera_UpdateSpectatorView` `0x81218638`: `trunc(dt x 5999.9995)` substeps, focus frozen in state 6, `z.y x max(1 - fov x 0.008, 0.4)`, field x 1.5 on the same two flags | the view dispatcher `0x01383a10`, unread | the same law (D5 to D7) |
+| W4 view | `Camera_UpdateSpectatorView` `0x81218638`: `trunc(dt x 5999.9995)` substeps, focus frozen in state 6, `z.y x max(1 - fov x 0.008, 0.4)`, field x 1.5 on the same two flags | cases 9 to 11 of the view dispatcher `0x01383a10`, unread | the same law (D5 to D7) |
 | W5 wobble | `Camera_UpdateView` `0x8121888a`: modes 9 to 11, `0.015 x distance` and three noise calls on `cam+0x1f4`, `+0x204`, `+0x214` (Ghidra drops the noise return, so its listing shows `d x d x 0.015`: not the law) | not read | the same as D5 |
 | W6 8 s clock | the update at `0x81219c3c` (not a function in Ghidra): `cam+0x48 > 8.0`, gate byte `+0x274`, `>= 2.0`, `Camera_SetMode(cam, 0)` | `Camera_Update` `0x01381c70`: `cam+0x84 > 8.0`, Zone family `0x8181 >> (mode - 6)` plus an online check, gate byte `+0x46c`, `Camera_SetMode(cam, 0)` | H1 |
 | W7 re-pick | not read | `d^2 >= 3600`, random among aims within 60 | D8 |
@@ -146,8 +146,8 @@ camera's subject sits in states 5, 6 and 8, so W8 holds the view still until the
 - **The camera clock** (H1): free-running from the race's first tick, reset at 8 s as the original's does in mode 0; what starts the original's clock (`0x000ab2d8`) is unread, so the phase at the blast, and so how long the station view lasts (0 to 8 s), is ours.
 - **The hand-back subject** (H1, Open 2): the player's own wreck, as read for a single player; `RaceManager+0xe8` is unread.
 - **The orbit's first entry** (Z2a, Open 3): the spin direction is fixed positive (read positive on Vineta K), the eye direction is the craft's rear axis turned by `Ry(yaw) Rx(-0.7 + pitch)` (which row of the composed matrix the original takes is unread), the up is the craft's.
-- **The hold view** (W8, Open 4): eye frozen at the chase camera's at the hand-back (or at the cut with no station), look-at the craft plus `7.5 x` its velocity as the sim holds it, field 65; the track-section tie `0x8121476a` is unread and left out. Omega's substep constant is HD's (view `0x01383a10` unread). 2048's pick `0x812199c0` is unread: 2048 takes Omega's no-station fallback.
-- **2048's Zone end** inherits HD's orbit (its twin calls `0x81218cd8`, unread); Omega's enter writes the same constants.
+- **The hold view** (W8, Open 4): eye frozen at the chase camera's at the hand-back (or at the cut with no station), look-at the craft plus `7.5 x` its velocity as the sim holds it, field 65; the track-section tie `0x8121476a` is unread and left out. Omega's substep constant is HD's (cases 9 to 11 of the view `0x01383a10` unread). 2048's pick `0x812199c0` is unread: 2048 takes Omega's no-station fallback.
+- **2048's and Omega's Zone end** run HD's orbit; the law is read on both ("The orbit on 2048 and Omega").
 
 Not run against the original: RPCS3 belonged to another lane, so there is no live pair; frames are ours, judged against the law, not a capture.
 
@@ -201,7 +201,7 @@ So Z2b to Z2e hold as written (confidence 85 now, from 62 to 65). What the page'
 
 **What still differs in the frames.** Ours draws the white shell's wire from the first frame; the original shows the textured craft at 0.25 and 0.53 s and the wire from about 1 s (Z8's `1 - max(0.4 timer, 0)` animation time, or its material, not ported that way). At 1.0 s ours is closer than the original's 1.0 s because of the frame rate above, not a law.
 
-**2048 and Omega.** Both inherit `ZoneEnd::orbit_camera`, so the fix applies to them by construction. **Checked, applies, not measured live** (no emulator for either here): Omega's enter (`0x01382720` case 2) is read to write `0.5` on both paths, the same constant HD's read branch shows, and HD's live eye contradicts it, so either Omega's first entry differs from the read or the same unread branch carries the chase eye in. 2048's twin `0x8121963a` is read to write the same constants. A live pair needs Omega on shadPS4 or 2048 on Vita3K.
+**2048 and Omega.** Superseded: see "The orbit on 2048 and Omega" (2026-11-25).
 
 ## Ready to wire (before 2026-11-23)
 
@@ -247,6 +247,11 @@ Twins named here (rows in each binary's `names.tsv`):
 | 2048 v1.04 | `0x81217616` | `Camera_UpdateHoldView` | 55 | mode 8's view: fixed eye, look-at with a `7.5 x` velocity lead, field `65.0` or `97.5` |
 | Omega | `0x01382720` | `Camera_SetMode` | 82 | the same pair of switches on `+0x74`/`+0x7c`; case 9 `35.0`, cases 10 and 11 `10 + 7r` and `40 + 10r`, case 2 the orbit enter with HD's constants, case 8 `0x013832f0` |
 | Omega | `0x01381c70` | `Camera_Update` | 78 | the 8 s clock `+0x84`, the 60-unit re-pick, the framing start, and the mode 0 to 8 and 8 to 0 switches (W6 to W8) |
+| Omega | `0x01383a10` | `Camera_UpdateView` | 80 | the dispatcher: three noise channels on `+0x3d4/+0x3e4/+0x3f4` for modes 9 to 11, then a switch on `+0x74` whose case 2 is the orbit view |
+| Omega | `0x01388d70` | `Camera_Construct` | 80 | field `+0x468 = 60.0`, the class focus rates at `+0x464`, the noise channels, `+0x604 = 5.0` |
+| 2048 v1.04 | `0x812156a0` | `Camera_Construct` | 82 | field `+0x270 = 60.0`, rate `0.06`, the class focus rates at `+0x26c`, the noise channels, `+0x3e4 = 5.0` |
+| 2048 v1.04 | `0x81217ff4` | `Camera_UpdateOrbitView` | 84 | case 2 of `Camera_UpdateView` `0x8121888a`: the yaw, pitch, focus, dist and field laws of HD's `0x000ae6c0` |
+| 2048 v1.04 | `0x81218cd8` | `Camera_EnterOrbitView` | 82 | mode 2's enter, called by `Camera_SetMode`: `"AI track data"`, dist `0.5`, target `4.0`, rate `0.02`, field `65.0` |
 
 Already named ([hull-shake.md](hull-shake.md)), and read whole again here for Z2d: `Matrix_RotationY` `0x006ca868` (`m0 = m10 = cos`, `m8 = sin`, `m2 = -sin`) and `Matrix_RotationX` `0x006ca948` (`m5 = m10 = cos`, `m6 = sin`, `m9 = -sin`), each reached through an import stub (`0x006776f8`, `0x00677708`).
 
@@ -264,7 +269,7 @@ Not renamed: `0x000ab2d8` (a second constructor-shaped writer of `+0x4c`/`+0x28c
 3. **The orbit's first entry** (Z2a): `0x000a97f0` from the disassembly (Ghidra truncates it),
    which sets the spin direction byte `+0x3ac`; and which row of the composed matrix is the eye
    direction (Z2d).
-4. **Omega's view** `0x01383a10` and mode 8's enter `0x013832f0`; 2048's pick `0x812199c0`.
+4. **Cases 9 to 11 of Omega's view** `0x01383a10` (the station view and its substep constant) and mode 8's enter `0x013832f0`; 2048's pick `0x812199c0`.
 5. **A live read** (all rows; RPCS3 was another lane's here). Recipe: a Racebox race on
    Talon's Junction with weapons on, the player's shield written to `0.05` (`ship+0x5fa0`);
    break on `Camera_SetMode` (`0x000abc20`) with `r4 == 8`. From there, log per frame
@@ -285,7 +290,7 @@ Static, from the disassembly of `Camera_UpdateOrbitView_q` (`0x000ae6c0`, Ghidra
 | Smoothing | **None in this function.** It reads no previous eye: the only eases are focus (0.6, `0x000ae7e8`-`0x000ae7fc`), `dist` (`+0x240`), field (`+0x234`) and yaw/pitch. The code after the dispatch (`0x000b0268`-`0x000b03a0`) only inverts the matrix; `0x000a3328`/`0x000a3340` are a two-word camera-id setter; `0x000a97f0` is a wrapper over `0x000a8b20` (the "AI track data" lookup, an out vector and a bool), not an eye. | as listed | 75 (negative) |
 | Cockpit view | The orbit depends on the craft's body matrix and the object's own state only; nothing in `0x000ae6c0` or `0x000aa090` reads the chase or cockpit eye. A cut from the cockpit view therefore enters the same orbit as one from an external view. What the cut shows on its first frame is the live question below. | `0x000aa090`, `0x000ae6c0` | 60 |
 
-**Resolved by a live read of the render camera (2026-11-25).** `scripts/rpcs3-hd-zone-orbit-camera.py` now logs, beside the object's rows, the render camera's matrix at `*0x987884 + 0x40` (the pointer the view code loads through `0x008a7f38`). The matrix is the view matrix as the post-dispatch code leaves it: its rotation rows are the camera basis and its row 3 is the **negated eye** (`eye = -row3`; checked: the eye is 7 units from the craft at the cut, where `R^T` or `R` applied to it gives hundreds). Over a 7 s run (240 rows, cut to state 6, `cap1`) the render camera's eye is **`5.0 + dist` from the object's focus on every row**, to 0.01: 5.83 at 0.13 s (`dist` 0.83), 7.68 at 0.98 s (2.68), 9.12 at 2.43 s (4.12), then 8.98 .. 8.05 with state 6 as `dist` settles toward 3 (3.98 .. 3.05). There is no eye smoothing. A second run (`--eye-probe`, 1.53 s) put the render eye at 8.32 from the focus (`5 + 3.32`), and the direction from the focus, `(0.79, 0.09, -0.60)`, matches `-X l0 + Y l1 - Z l2` of the body rows with `l = Ry(yaw) Rx(-0.7 + pitch) (0,0,1)` to 0.012 (HD's body Z is forward and X left, so that is ours `orientation * l`, and Z2d's `Ry(pi)` is the body's handedness). Confidence **90** for the length law, **80** for the direction (one frame).
+**Resolved by a live read of the render camera (2026-11-25).** `scripts/rpcs3-hd-zone-orbit-camera.py` now logs, beside the object's rows, the render camera's matrix at `*0x987884 + 0x40` (the pointer the view code loads through `0x008a7f38`). The matrix is the view matrix as the post-dispatch code leaves it: its rotation rows are the camera basis and its row 3 is the **negated eye** (`eye = -row3`; checked: the eye is 7 units from the craft at the cut, where `R^T` or `R` applied to it gives hundreds). Over a 7 s run (240 rows, cut to state 6, `cap1`) the render camera's eye is **`5.0 + dist` from the object's focus on every row**, to 0.01: 5.83 at 0.13 s (`dist` 0.83), 7.68 at 0.98 s (2.68), 9.12 at 2.43 s (4.12), then 8.98 .. 8.05 with state 6 as `dist` settles toward 3 (3.98 .. 3.05). There is no eye smoothing. A second run (`--eye-probe`, 1.53 s) put the render eye at 8.32 from the focus (`5 + 3.32`), and the direction from the focus, `(0.79, 0.09, -0.60)`, matches `-X l0 + Y l1 - Z l2` of the body rows with `l = Ry(yaw) Rx(-0.7 + pitch) (0,0,1)` to 0.012 (HD's body Z is forward and X left, so that is ours `orientation * l`, and Z2d's `Ry(pi)` is the body's handedness). Confidence **95** for the length law ("History"), **80** for the direction (one frame).
 
 **Why the earlier eye looked far and shrinking.** The pushbuffer scan reads eyes a frame or more old and measures them against the craft's *present* position, and the craft flies about 3 units a frame: at 1.53 s the pushbuffer's nearest eye was 9.66 from the craft where the render camera's, read in the same pause, was 8.54. The 13.88 "at the cut" is the chase camera's eye of the frame before the mode changed (state 4 row). The fit `5 + 8.88 x 0.98^n` and the "0.01 low-pass" were artefacts of that, and the `5` in it was `cam+0x3b4`. So the fitted ease (45) is **withdrawn**, not refined.
 
@@ -293,4 +298,30 @@ Static, from the disassembly of `Camera_UpdateOrbitView_q` (`0x000ae6c0`, Ghidra
 
 **Ours (`oag_render::camera::destroy::orbit::Orbit`, 2026-11-25).** `eye = focus + dir x (EYE_STANDOFF + dist)` with `EYE_STANDOFF = 5.0`, no offset state. **`ORBIT_CLEARANCE` is removed**: with the read law the eye is at least 5.5 from the focus and never inside the hull's box at rest or at 19, 93 and 240 units a second (`hd_zone_end_orbit_never_puts_the_eye_inside_the_hull`, without the push-out). The hull test and a new law test (`the_eye_is_five_beyond_the_radius_from_the_focus_on_every_frame`, `hd_zone_end_is_the_close_orbit_five_beyond_its_radius`) fail with the 0.01 fit (13.9 at the cut). **Chosen, not measured:** the per-frame eases run at our 60 Hz tick, as for the rest of the camera (the console's own frame rate was 28 to 30 on RPCS3), so `dist` opens about twice as fast in seconds.
 
-**2048 and Omega.** Omega's enter writes the same block constants as HD's (Z2a); whether its view adds a constant standoff is unread (`0x01383a10`), so **not checkable here** until that view is read; ours does not run the orbit for Omega or 2048 (their Zone end is a different mode).
+**2048 and Omega.** Read and **ported**: the next section.
+
+## The orbit on 2048 and Omega (2026-11-25, `zone-orbit-omega-read`)
+
+**Answer.** Both run HD's orbit: the same eye `focus + K x v + dist x unit(v)` with `K = 5.0`, the same constants, no eye smoothing. **Ported**: `ZoneEnd::VITA` and `HD_SILENT` take `..Self::HD`, so ours already runs `orbit_camera` with `EYE_STANDOFF = 5.0` on both, and `a_zone_end_is_the_close_orbit_five_beyond_its_radius_on_hd_2048_and_omega` (`crates/raceplay/src/tests/destroy_camera_titles.rs`) holds it for the three titles' data. Static only (no Vita3K or shadPS4 run), so capped below 85.
+
+The cut into mode 2 at the Zone end was already read on both ([zone-destroy.md](zone-destroy.md), row Z2). Omega's `0x01383a10` is the view dispatcher (`Camera_UpdateView`: the three noise channels on `+0x3d4/+0x3e4/+0x3f4` for modes 9 to 11, then a switch on `cam+0x74`), not the orbit view alone; the orbit is its `case 2`.
+
+| What | HD | 2048 v1.04 (`Camera_UpdateOrbitView` `0x81217ff4`) | Omega (`case 2` of `0x01383a10`) | Conf. (2048 / Omega) |
+| --- | --- | --- | --- | ---: |
+| Eye | `focus + K v + dist unit(v)`, `v` row 2 of the composed matrix | `vld1.32 {d2[]}` from `cam+0x3e4` at `0x8121839e`, `vmla.f32 q6,q8,d2[0]` at `0x812183ae` onto the focus `cam+0x3c0`, then `+ unit(v) x dist` (`0x8121843a`) | `eye = row x cam+0x604 + focus + unit(row) x dist`, `row` the third matrix row at `0x01a164a0` | 84 / 82 |
+| `K` | `cam+0x3b4 = 5.0`, constructors only | `cam+0x3e4`, written once, `vstr.32` at `0x8121590e` in the constructor `0x812156a0` from `0x815202ec` = `5.0`; no `str`, `str.w` or `add`-based store in the camera code | `cam+0x604`, written once, `MOV qword [RBX+0x604], 0x40a00000` at `0x01389098` in the constructor `0x01388d70`; no other store in the camera code reaches it | 84 / 82 |
+| Smoothing | none | none: the view reads no previous eye; the code after the switch only inverts the matrix | none, same | 80 / 78 |
+| Focus ease | `0.6` a frame | `0x81520318` = `0.6` | literal `0.6` | 84 / 82 |
+| Yaw rate | `(9t + 1)`, then `0.5`, times `+-0.1` | `0x81520320` = `9.0`, `0x815202e8` = `1.0`, `0x8152031c` = `0.5`, `0x81520304` = `2.5` | literals `9.0`, `1.0`, `0.5`, `2.5`, `+-0.1` on `cam+0x5fc` | 84 / 82 |
+| Pitch rate | `0.35`, first 2.5 s | `0x81520324` = `0.35` | literal `0.35` | 84 / 82 |
+| Turn | `Ry(pi) Ry(yaw) Rx(-0.7) Rx(pitch)` on the body | `0x81520328` = `-0.7`, `pi` built at `0x81218114` | constants `pi` (`0x017ed700`) and `-0.7` (`0x017ed790`) | 75 / 65 |
+| Targets and rates | dist `5.0` then `3.0` at `0.02`; field `20` then `65` at `0.01` | `0x8152030c`/`0x81520314`, `0x81520308`/`0x81520310` | literals, and `+0x424` = `0.02`, `+0x418` = `0.01` set by the enter | 84 / 82 |
+| Enter (dist `0.5`, target `4.0`, field `65`) | Z2a | `Camera_EnterOrbitView` `0x81218cd8` | `Camera_SetMode` case 2 (`0x01382720`) | 84 / 82 |
+
+The turn's multiplication order was not re-derived on Omega (the sin and cos are inlined), hence 65; the direction's live check is HD's alone.
+
+One ordering detail, **not wired**: in both twins `dist` eases toward the target written on the previous frame (`4.0` on the first, from the enter) and the pitch steps after the eye is built, where ours uses this frame's target and steps pitch first. HD's order is unread. It is a one-frame difference.
+
+## History
+
+- 2026-11-25: HD's length law (`eye = focus + (5 + dist) x unit(v)`) raised from 90 to 95: the live render camera read, plus the same code in 2048 and Omega. The direction stays at 80.

@@ -443,3 +443,7 @@
 0x811ccdf4	function	Craft_ApplySpeedPad	80	detonator-pads.md
 0x811c9c7a	function	Ship_TestWeaponPad	75	detonator-pads.md
 0x8100f7c2	function	WeaponStats_ParseEmp	70	detonator-pads.md
+# 2026-11-25 zone-orbit-omega-read: the Zone end orbit's twins (../ps3-hdfury-eu/destroy-camera.md)
+0x812156a0	function	Camera_Construct	82	../ps3-hdfury-eu/destroy-camera.md
+0x81217ff4	function	Camera_UpdateOrbitView	84	../ps3-hdfury-eu/destroy-camera.md
+0x81218cd8	function	Camera_EnterOrbitView	82	../ps3-hdfury-eu/destroy-camera.md

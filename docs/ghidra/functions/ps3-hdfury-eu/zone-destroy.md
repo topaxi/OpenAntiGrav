@@ -113,7 +113,7 @@ the drawing are `oag_raceplay::zone_end` and `scene/zone_end.rs`. Test: `tests/z
 | Row | State | Notes |
 | --- | --- | --- |
 | Z1 | wired | state 4 is one tick; the HUD hides at the blast (`Race::hud_shown`); the camera prologue is today's destroy camera, **inherited** (see Z2) |
-| Z2 | inherited | camera mode 2's per-frame law is read ([destroy-camera.md](destroy-camera.md), Z2a to Z2f) and not wired: the existing destroy camera runs, as for every title |
+| Z2 | wired | camera mode 2's orbit ([destroy-camera.md](destroy-camera.md), Z2a to Z2f and "The orbit on 2048 and Omega") on HD, 2048 and Omega (`ZoneEnd::orbit_camera`) |
 | Z3 | wired | no blast, plume, node sparks, wash or shake in a Zone end (`craft_flash`), no wreck model (the Zone `shipwreck.vex` is built and not drawn) |
 | Z4 | not wired | the rumble is the ordinary destroyed rumble, unchanged |
 | Z5 | wired on HD and 2048 | `shipdestroy` once on the blast (`Cue::ShipDestroy`, `ZoneEnd::cue`): HD from `env0_zone.bnk` (Ps3 tick), 2048 from its hashed `env0_zone.bnk` (Vita tick; resolves to one timeline of 6 voices, `zone_craft_ground_truth`). No other cue plays in a Zone end, `~BLOWUP` included. "After every other cue is stopped" is **not** wired: ours stops none. Omega: silent, its Wwise event is unread |

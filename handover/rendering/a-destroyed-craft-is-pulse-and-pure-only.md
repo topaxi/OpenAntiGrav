@@ -1,7 +1,7 @@
 ---
 status: ready-to-wire
 titles: [hd, 2048, omega, pulse]
-updated: 2026-11-24
+updated: 2026-11-25
 summary: "Destroyed craft wired on all titles; Zone end wired on HD, 2048, Omega; open: camera wiring, collider, Pure diffs, Zone look and velocity, Omega sound"
 ---
 
@@ -124,5 +124,5 @@ craft (wreck model, explosion, smoke, the states a wreck goes through), as Pulse
    collider read), row 5 (wire `destroy-camera.md`'s "Ready to wire" table onto `oag_render::camera::destroy`: per-title stations, substep easing, random rate factors, wobble, the 8 s hand-back), a frame pair against RPCS3 once a build boots the HD states.
 2. ~~2048/Omega wired~~ (above). Left there: sound (`hd-wreck-sound` did HD; 2048's banks and Omega's Wwise events are unread), mode 9's view (read, `destroy-camera.md`: HD's mode 8 plus the hold mode 8 rule, W8).
 3. Zone (item 4): ~~read~~ ~~wired on HD, 2048 and Omega~~. Left: a frame pair of a Zone end against
-   RPCS3 with the page's read recipe (the debris velocity, the shell's look and camera mode 2 are
-   chosen or inherited until then), 2048's and Omega's `shipdestroy`.
+   RPCS3 with the page's read recipe (the debris velocity and the shell's look are chosen or inherited
+   until then; camera mode 2's orbit is read on HD, 2048 and Omega), 2048's and Omega's `shipdestroy`.
