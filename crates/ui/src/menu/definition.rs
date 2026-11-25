@@ -480,45 +480,12 @@ impl Definition {
         Ok(())
     }
 
-    /// The pages the root page, a mod settings page or an action that pushes a page reaches.
-    fn reachable_pages(&self) -> BTreeSet<usize> {
-        let mut seen = BTreeSet::new();
-        let mut stack = vec![self.root];
-        // A mod's settings page, which the MODS page's SETTINGS row opens.
-        stack.extend(
-            (self.mod_settings.values())
-                .filter_map(|id| self.pages.iter().position(|page| &page.id == id)),
-        );
-        while let Some(page) = stack.pop() {
-            if !seen.insert(page) {
-                continue;
-            }
-            for entry in &self.pages[page].entries {
-                match entry {
-                    Entry::Submenu { target, .. } => stack.push(*target),
-                    // A page the game pushes itself once an action has done its work.
-                    Entry::Run { action, .. } => {
-                        if let Some(id) = action.opens_page()
-                            && let Some(at) = self.pages.iter().position(|page| page.id == id)
-                        {
-                            stack.push(at);
-                        }
-                    }
-                    _ => {}
-                }
-            }
-        }
-        seen
-    }
-
     fn check_reachable(&self) -> Result<(), Error> {
         let seen = self.reachable_pages();
-        for (index, page) in self.pages.iter().enumerate() {
-            if !seen.contains(&index) {
-                return Err(Error::Unreachable(page.id.clone()));
-            }
+        match (self.pages.iter().enumerate()).find(|(at, _)| !seen.contains(at)) {
+            Some((_, page)) => Err(Error::Unreachable(page.id.clone())),
+            None => Ok(()),
         }
-        Ok(())
     }
 
     /// The page with this id.

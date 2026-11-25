@@ -332,6 +332,37 @@ impl Definition {
         Ok(())
     }
 
+    /// The pages the root, a mod's settings page or an action that pushes a page reaches.
+    pub(super) fn reachable_pages(&self) -> BTreeSet<usize> {
+        let mut seen = BTreeSet::new();
+        let mut stack = vec![self.root];
+        // A mod's settings page, which the MODS page's SETTINGS row opens.
+        stack.extend(
+            (self.mod_settings.values())
+                .filter_map(|id| self.pages.iter().position(|page| &page.id == id)),
+        );
+        while let Some(page) = stack.pop() {
+            if !seen.insert(page) {
+                continue;
+            }
+            for entry in &self.pages[page].entries {
+                match entry {
+                    Entry::Submenu { target, .. } => stack.push(*target),
+                    // A page the game pushes itself once an action has done its work.
+                    Entry::Run { action, .. } => {
+                        if let Some(id) = action.opens_page()
+                            && let Some(at) = self.pages.iter().position(|page| page.id == id)
+                        {
+                            stack.push(at);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        seen
+    }
+
     /// Keeps the main-page rows the title's own menu opens, in the disc's order.
     fn keep_title_rows(&mut self, target: For<'_>) -> Result<(), Error> {
         let root = self.root;
