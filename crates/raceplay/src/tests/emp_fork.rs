@@ -414,13 +414,13 @@ fn an_hd_emp_fired_beside_the_merge_stands_still_until_it() {
     assert!(field.live_mines().is_empty(), "the branch's mine goes");
 }
 
-/// **The other route's record, on the disc.** `05_ubermall`'s branch sections 26 to 68 hold no
-/// record of their own: a branch launch past the fork's reach walks them and takes the primary
-/// route's mine instead.
+/// **The other route's record, on the disc.** `15_anulpha_pass`'s branch sections 27 to 48 hold
+/// no record of their own and lie out of the launch fork's reach from offset 40: a branch launch
+/// there walks them and takes the primary route's mine instead.
 #[test]
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
 fn an_hd_front_on_a_section_with_no_record_takes_the_other_routes() {
-    let Some(mut race) = start(r"Data\Environments\05_ubermall\track.vex") else {
+    let Some(mut race) = start(r"Data\Environments\15_anulpha_pass\track.vex") else {
         return;
     };
     let survey = race
@@ -432,11 +432,16 @@ fn an_hd_front_on_a_section_with_no_record_takes_the_other_routes() {
         .survey
         .clone();
     let from = survey.branch_entry(0, 40).expect("a branch entry");
-    assert!(!survey.has_record(survey.branch_entry(0, 50).expect("a branch entry")));
-    let primary = survey.sibling(survey.branch_entry(0, 50).expect("a branch entry"));
-    let primary = primary.expect("a partner");
+    let hole = survey.branch_entry(0, 45).expect("a branch entry");
+    assert!(!survey.has_record(hole));
+    let primary = survey.sibling(hole).expect("a partner");
     assert!(survey.has_record(primary), "the primary route holds it");
-    fire_from(&mut race, from, &[mine_at(primary)], 20);
+    fire_from(&mut race, from, &[mine_at(primary)], 0);
+    assert!(
+        !race.core.sim.world.detonator.emp.wave.forked,
+        "out of reach"
+    );
+    fire_ticks(&mut race, 12);
     assert!(race.core.sim.world.detonator.live_mines().is_empty());
 }
 
