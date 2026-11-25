@@ -481,6 +481,8 @@ pub struct Mixer {
     /// Output samples the sum drove past full scale, for the same reason
     /// [`Self::starved`] is counted. See [`Self::render`].
     clipped: u64,
+    /// See [`Mixer::set_silent`].
+    silent: bool,
     /// The master limiter that runs after the sum.
     limiter: Limiter,
     /// Whether the limiter runs; see [`Self::set_limiting`].
@@ -518,6 +520,7 @@ impl Mixer {
             generation: 0,
             starved: 0,
             clipped: 0,
+            silent: false,
             limiter: Limiter::new(sample_rate.max(1)),
             limiting: true,
             tick_frame_remainder: 0,
@@ -1010,6 +1013,11 @@ impl Mixer {
     /// what the limiter saw.
     pub fn render(&mut self, out: &mut [f32]) {
         out.fill(0.0);
+        if self.silent && self.binaural.is_none() {
+            self.music_tap.clear();
+            self.advance_voices(out.len() / CHANNELS);
+            return;
+        }
         self.music_tap.clear();
         self.music_tap.resize(out.len() / CHANNELS, 0.0);
         let master = self.master_gain * self.master_trim;
@@ -1103,39 +1111,23 @@ impl Mixer {
             // shorter than the fade is shortened rather than swallowed.
             let closing = (f64::from(RELEASE_FRAMES) * step.abs()).min(frames as f64 / 4.0);
             let mut delay = voice.delay;
-            for (at, chunk) in out.as_chunks_mut::<CHANNELS>().0.iter_mut().enumerate() {
-                if delay > 0 {
-                    delay -= 1;
-                    continue;
-                }
+            'frames: for (at, chunk) in out.as_chunks_mut::<CHANNELS>().0.iter_mut().enumerate() {
                 let mut ended = false;
                 'frame: {
-                    if frames == 0 {
-                        ended = true;
-                        break 'frame;
-                    }
-                    let fade = match release {
-                        None => 1.0,
-                        Some(0) => {
+                    let fade = match voice_gate(
+                        &mut delay,
+                        &mut release,
+                        &mut voice.position,
+                        frames,
+                        voice.looping,
+                    ) {
+                        Gate::Waiting => continue 'frames,
+                        Gate::Ended => {
                             ended = true;
                             break 'frame;
                         }
-                        Some(left) => {
-                            release = Some(left - 1);
-                            left as f32 / RELEASE_FRAMES as f32
-                        }
+                        Gate::Sounding { fade } => fade,
                     };
-                    if voice.position >= frames as f64 {
-                        if voice.looping {
-                            // Modulo rather than reset: at a step above one frame
-                            // the overshoot is real time, and dropping it makes a
-                            // looped bed drift slow.
-                            voice.position %= frames as f64;
-                        } else {
-                            ended = true;
-                            break 'frame;
-                        }
-                    }
 
                     let index = voice.position as usize;
                     let frac = (voice.position - index as f64) as f32;
@@ -1262,6 +1254,60 @@ impl Mixer {
         }
     }
 
+    /// Moves every voice on by `frames` output frames without mixing any of them: the same
+    /// delay, release, loop and end bookkeeping as [`Self::render`] (one [`voice_gate`]), so a
+    /// voice ends and frees its slot on the frame it would have been heard to.
+    fn advance_voices(&mut self, frames: usize) {
+        let rate = f64::from(self.sample_rate);
+        for voice in &mut self.voices {
+            let (Some(sound), Some(_)) = (&voice.sound, voice.bus) else {
+                continue;
+            };
+            let step = f64::from(sound.sample_rate()) / rate * f64::from(voice.pitch);
+            let source_frames = sound.frames();
+            let (mut delay, mut release) = (voice.delay, voice.release);
+            let mut finished = false;
+            for _ in 0..frames {
+                match voice_gate(
+                    &mut delay,
+                    &mut release,
+                    &mut voice.position,
+                    source_frames,
+                    voice.looping,
+                ) {
+                    Gate::Waiting => {}
+                    Gate::Ended => {
+                        finished = true;
+                        break;
+                    }
+                    Gate::Sounding { .. } => voice.position += step,
+                }
+            }
+            if finished {
+                *voice = Voice::default();
+            } else {
+                voice.release = release;
+                voice.delay = delay;
+            }
+        }
+    }
+
+    /// Whether [`Self::render`] leaves the signal out and only moves the voices
+    /// ([`Self::set_silent`]).
+    #[must_use]
+    pub fn is_silent(&self) -> bool {
+        self.silent
+    }
+
+    /// Makes [`Self::render`] and [`Self::render_tick`] move the voices on and write zeroes, mixing
+    /// nothing. For an output no one hears and nothing reads (`--no-audio` with no dump): the
+    /// voice state the game polls (a song ending, a freed slot) advances as it would, the
+    /// per-sample mixing, filters and limiter are skipped. A mixer with a convolver loaded
+    /// still renders in full, because a voice's tail there is part of when it ends.
+    pub fn set_silent(&mut self, silent: bool) {
+        self.silent = silent;
+    }
+
     /// Renders exactly one simulation tick's worth of audio, appending to
     /// `out`.
     ///
@@ -1280,6 +1326,53 @@ impl Mixer {
         self.render(&mut out[at..]);
         frames
     }
+}
+
+/// What a voice does on its next output frame.
+enum Gate {
+    /// Its start is still delayed ([`Mixer::delay_start`]).
+    Waiting,
+    /// It has ended: its sound ran out, or its release did.
+    Ended,
+    /// It sounds, with the release fade's level.
+    Sounding { fade: f32 },
+}
+
+/// The per-frame bookkeeping of one voice, shared by mixing and by [`Mixer::set_silent`]'s
+/// advance so the two end a voice on the same frame. `position` is moved only by the loop's
+/// wrap; the caller adds the step once it has used the frame.
+fn voice_gate(
+    delay: &mut u32,
+    release: &mut Option<u32>,
+    position: &mut f64,
+    frames: usize,
+    looping: bool,
+) -> Gate {
+    if *delay > 0 {
+        *delay -= 1;
+        return Gate::Waiting;
+    }
+    if frames == 0 {
+        return Gate::Ended;
+    }
+    let fade = match *release {
+        None => 1.0,
+        Some(0) => return Gate::Ended,
+        Some(left) => {
+            *release = Some(left - 1);
+            left as f32 / RELEASE_FRAMES as f32
+        }
+    };
+    if *position >= frames as f64 {
+        if looping {
+            // Modulo rather than reset: at a step above one frame the overshoot is real
+            // time, and dropping it makes a looped bed drift slow.
+            *position %= frames as f64;
+        } else {
+            return Gate::Ended;
+        }
+    }
+    Gate::Sounding { fade }
 }
 
 /// Low-pass coefficient and gain for a voice `front` of the listener under

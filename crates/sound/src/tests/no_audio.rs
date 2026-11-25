@@ -80,3 +80,29 @@ fn no_audio_retires_a_voice_when_its_sound_ends_and_frees_its_slot() {
         "the next voice finds a slot"
     );
 }
+
+/// `--no-audio` mixes nothing: no one hears it and nothing reads it. A dump needs the samples,
+/// and a machine with no device still renders its ticks as it always has.
+#[test]
+fn no_audio_leaves_the_mixer_silent_unless_a_dump_reads_it() {
+    let silent = |no_audio: bool, dump: Option<std::path::PathBuf>| {
+        Audio::open(
+            &crate::settings::Settings::default(),
+            dump,
+            None,
+            oag_audio::MIN_BUFFER,
+            no_audio,
+        )
+        .output()
+        .with_mixer(|mixer| mixer.is_silent())
+    };
+    assert!(silent(true, None), "--no-audio mixes nothing");
+    assert!(
+        !silent(
+            true,
+            Some(std::env::temp_dir().join("oag-no-audio-dump.wav"))
+        ),
+        "a dump reads the mix"
+    );
+    assert!(!silent(false, None), "no device alone still renders");
+}

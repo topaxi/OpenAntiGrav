@@ -976,3 +976,60 @@ fn rear_occlusion_cost_per_voice() {
         );
     }
 }
+
+/// A mix of one-shots, loops, delayed starts, a stopped voice's release and an off-rate pitch,
+/// played into two mixers for many ticks.
+fn busy_mixer(silent: bool) -> (Mixer, Vec<VoiceId>) {
+    let mut mixer = bare(48_000);
+    mixer.set_silent(silent);
+    let mut ids = Vec::new();
+    for (frames, rate, pitch, looping, delay, bus) in [
+        (3_000, 44_100, 1.0, false, 0.0, Bus::Sfx),
+        (9_001, 48_000, 1.3, false, 0.0, Bus::Sfx),
+        (700, 22_050, 1.0, true, 0.0, Bus::Sfx),
+        (20_000, 44_100, 0.7, false, 0.004, Bus::Music),
+        (50_000, 48_000, 1.0, false, 0.02, Bus::Speech),
+        (0, 48_000, 1.0, false, 0.0, Bus::Sfx),
+    ] {
+        let mut play = Play::once(tone(frames, 2, rate), bus);
+        play.pitch = pitch;
+        play.looping = looping;
+        let id = mixer.play(play).expect("a free slot");
+        if delay > 0.0 {
+            mixer.delay_start(id, delay);
+        }
+        ids.push(id);
+    }
+    mixer.stop(ids[2]);
+    (mixer, ids)
+}
+
+#[test]
+fn a_silent_mixer_moves_every_voice_as_a_rendering_one_does() {
+    let (mut heard, ids) = busy_mixer(false);
+    let (mut silent, _) = busy_mixer(true);
+    let (mut out, mut none) = (Vec::new(), Vec::new());
+    for tick in 0..120 {
+        out.clear();
+        none.clear();
+        heard.render_tick(60, &mut out);
+        silent.render_tick(60, &mut none);
+        assert_eq!(out.len(), none.len(), "tick {tick}: the same frames");
+        assert!(none.iter().all(|s| *s == 0.0), "tick {tick}: nothing mixed");
+        assert_eq!(heard.active_voices(), silent.active_voices(), "tick {tick}");
+        for &id in &ids {
+            assert_eq!(heard.is_playing(id), silent.is_playing(id), "tick {tick}");
+            assert_eq!(heard.position(id), silent.position(id), "tick {tick}");
+        }
+    }
+    assert!(heard.active_voices() < ids.len(), "some voices ended");
+    assert_eq!(silent.clipped(), 0);
+}
+
+#[test]
+fn a_mixer_that_is_not_silent_still_mixes() {
+    let (mut heard, _) = busy_mixer(false);
+    let mut out = Vec::new();
+    heard.render_tick(60, &mut out);
+    assert!(out.iter().any(|s| *s != 0.0));
+}

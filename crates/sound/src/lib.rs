@@ -683,7 +683,8 @@ impl Audio {
     /// zero, and the dump would be silence next to audible audio.
     ///
     /// `no_audio` (`--no-audio`) forces the same null backend with nothing
-    /// collected. A `--screenshot --until` run with a real device is
+    /// collected, and with no dump the mixer does not mix at all
+    /// ([`oag_audio::mixer::Mixer::set_silent`]). A `--screenshot --until` run with a real device is
     /// "audio-clocked" per ADR-0019 and finishes before the movie does, so a
     /// late frame's target is never reached; the null backend puts it on the
     /// tick-clocked fallback (see [`Self::movie_playhead`]), as a machine with
@@ -701,6 +702,11 @@ impl Audio {
         } else {
             Output::open_or_null(tap, buffer)
         };
+        // Nothing hears or reads this mixer (`--no-audio` with no dump): its ticks move the
+        // voices and mix none of them, which `no_audio_retires_a_voice_...` still sees.
+        if no_audio && dump.is_none() {
+            output.with_mixer(|mixer| mixer.set_silent(true));
+        }
         if let Some(name) = output.device_name() {
             info!("audio: {name} at {} Hz", output.sample_rate());
         }
