@@ -427,6 +427,29 @@ next update (278 against 299 units/s at update 52 without the law) and ends it o
 ways. The Missile's per-update errors and the Rocket's ramp-face exit (`(-65.0, 155.6, -7.1)`) were not
 kept as recorded states, so those two arms are unit-tested only, not disc-backed.
 
+### Pure's own law, and Pulse on its steepest bank (2026-11-25, lane `psp-floor-law`)
+
+**Pure is not Pulse.** Its `Rocket_Update` and `Plasma_Update` run the travel sweep first, then
+probe and ride along the normal the projectile was launched with (the craft's up row, 0.75 long)
+and never change it; a miss falls along world down for both. `FloorArms::LaunchNormal`
+(`Weapons::floor_arms_ride_launch_normal`, Pure measured) runs that for the Rocket and the Plasma;
+Pure's Missile keeps Pulse's arms (its update unread). Evidence, ten live flights and the chained
+test: [floor-follow.md](../ghidra/functions/psp-pure-usa/floor-follow.md).
+
+| Arm | `LaunchNormal` (Pure Rocket, Plasma) |
+| --- | --- |
+| order | sweep, then probe |
+| sweep, floor | move to `hit + hit_normal * 3`, nothing else |
+| probe | 9 along the carried normal |
+| probe, floor | steer to `hit + carried * 2.25` (Rocket) or `* 4.5` (Plasma), rescaled to the pinned speed; the normal is kept |
+| probe, nothing | `velocity.y -= 50 dt` |
+
+**Pulse, re-checked live on Moa Therma's 85.8 degree helix**, the steepest bank of its twelve
+circuits: three Rockets and a Plasma chained from the original's update-1 state stay within 0.002
+(Rockets) and 0.44 (Plasma) units of it and end at the cage on its update; the parallel turn misses
+by 15 to 21 units ([rocket-visuals.md](../ghidra/functions/psp-pulse-usa/rocket-visuals.md#2026-11-25-pulse-on-the-steepest-bank-psp-floor-law)).
+Test: [projectile_bank_ground_truth.rs](../../crates/raceplay/tests/projectile_bank_ground_truth.rs).
+
 ### Wired: the own-craft box (2026-11-13, lane `pulse-own-craft-box`)
 
 `Weapons::own_craft_box_hides_track` (Pulse measured `true`; Pure, HD, 2048 and Omega chosen `false`)

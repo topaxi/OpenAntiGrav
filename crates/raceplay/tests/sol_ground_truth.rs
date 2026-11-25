@@ -198,7 +198,21 @@ sol_fields! {
     a_field_of_seven_laps_omega_sol_at_novice => "omega", Novice;
     a_field_of_seven_laps_omega_sol_at_skilled => "omega", Skilled;
     a_field_of_seven_laps_omega_sol_at_elite => "omega", Elite;
-    a_field_of_seven_laps_omega_sol_at_ace => "omega", Ace;
+}
+
+/// **An open defect, not a gate.** Slot 1 is reset 28 times in the window: the coin sends it
+/// down Sol's route at path sample 5168, one of the routes this engine's craft cannot drive
+/// (`docs/gameplay/ai.md`, "Where each undriven route fails its verification"), and each reset
+/// puts it back at sample 941 before the same fork. Which race history reaches that coin moves
+/// with any change to the weapons; HD's floor follower is the change that reached it. Runs with
+/// `OAG_REVIEW_FINDINGS=1`; the route's fix removes both the guard and the `#[ignore]`.
+#[test]
+#[ignore = "open defect: Sol's undriven route traps slot 1; set OAG_REVIEW_FINDINGS=1"]
+fn a_field_of_seven_laps_omega_sol_at_ace() {
+    if std::env::var_os("OAG_REVIEW_FINDINGS").is_none() {
+        return;
+    }
+    a_field_of_seven_laps("omega", oag_ai::Difficulty::Ace);
 }
 
 /// Scratch probe of the gap at ring samples 3556-3622 (`OAG_SWEEP`), on

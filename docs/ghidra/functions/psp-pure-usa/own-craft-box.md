@@ -73,6 +73,8 @@ else if (hit.kind == 1) {
 // hit.kind == 3 (a box): no arm runs; the velocity is unchanged this update
 ```
 
+**Correction 2026-11-25** ([floor-follow.md](floor-follow.md)): in the Rocket's and the Plasma's probe arm `normal` above is the *carried* normal, not the hit's, and it is never updated; the travel sweep runs first.
+
 Read in all three: `Rocket_Update` (`if (local_4b8 == 1) ...` with no `else`), `Plasma_Update`
 (the same), `Missile_Update` (`if (local_a38 != 1) goto ...` past both arms). So on Pure the firing
 craft's box hides the track exactly where it does on Pulse, but the projectile coasts through those

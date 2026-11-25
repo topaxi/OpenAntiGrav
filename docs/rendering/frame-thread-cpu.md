@@ -2562,3 +2562,57 @@ OAG_RENDER_PERF=1 OAG_RENDER_BENCH=50 target/release/oag-game data/images/pulse-
 # Frame time: the same with OAG_RENDER_BENCH=300 under taskset -c 4, OAG_RENDER_PERF unset,
 # binaries round-robin; read "bench Scene::render CPU" and "bench render_viewports CPU".
 ```
+
+## Advert cards: drawn only when shown (2026-11-25, `s21-passes`)
+
+**What changed.** A circuit's advert cards (eight 512x256 targets on HD, five 128x128 on Pulse) were
+drawn every frame whether or not a view could see them. A card is a function of the scenery clock
+alone, and each draw clears its target and rewrites everything the card's drawable reads (its
+animation tables, its node animation, the gantry card's hidden panels; its camera uniforms never
+change). So a card no view samples this frame can be left out, and the frame a view shows it again
+draws it whole: the picture is the one drawing every card every frame gives. The originals redraw every
+card every frame (Pulse: a GE dump, `docs/ghidra/functions/psp-pulse-usa/billboards.md`; HD:
+`Billboard_UpdateAndRender`, `docs/ghidra/functions/ps3-hdfury-eu/billboards.md`); leaving out work
+nobody sees does not change what is drawn.
+
+**The rule** (`oag_raceplay::adverts::Seen`, `Cards::render`): each card keeps the track draws that
+sample it (`Cards::bind_into`, from the placeholder slots it is bound to). On a one-view frame
+(`Layer::Whole`), a card is encoded only when one of those draws passes the scene
+pass's own PVS, chunk and frustum tests (`Drawable::may_draw`, the same `visible` the scene pass calls
+with the same arguments). The level of detail and the hidden panels are not asked, so the test is a
+superset of what the pass draws. Every other frame draws every card: a split's first view and a
+shared window do the frame's work for views they have not culled. **A portal view** (a mod's
+`engine_texture`, `scene/portal_view.rs`) reads last frame's cards without culling them for itself, so
+a card it shows may be stale or blank: accepted (maintainer, 2026-11-25), and the cull holds with a mod
+shader attached. The glass and sea target draws drawables of its own that are never bound to a card.
+
+**Cards shown per frame** (a whole autopilot race, `--seed 1`, HD, census of the culled set):
+Vineta K 1.75 of 8 on average (none on 37 % of frames), Anulpha Pass 3.15 of 7, Ubermall 0.42 of 2.
+
+**Same picture.** `--screenshot` culled against every card (the second arm a diagnostic build drawing
+every card), 1280x720, compared with `cmp`: HD Vineta K and Anulpha Pass at ticks 700, 1500, 2600,
+3900 and 5200, Omega (default circuit) at 240 and 1500, 2048 at 240 and 1500: all byte-identical,
+with 0 to 3 cards drawn in the culled arm. Pulse PSP at ticks 120, 240 (the countdown: the gantry
+card, slot 8, is the one drawn), 1500 and 3000 and Pulse PS2 at 240 and 1500, with no mods installed:
+identical, with 0 or 1 of 5 cards drawn. (A first version culled nothing while a mod shader was
+attached, which the official `slipstream` mod does on Pulse; no portal view is drawn in a race
+without one, so these frames are the same either way.)
+
+**What it buys** (HD Vineta K forward, `--autopilot --seed 1`, `--no-audio`):
+
+| Machine | Every card | Culled | Method |
+| --- | ---: | ---: | --- |
+| Galaxy S21, render scale 25, REFLECTION RESOLUTION `auto` | 27.9 / 38.5 ms | 23.7 / 32.9 ms | two runs, one APK, the two arms in alternating 10 s windows (`OAG_SKIP_PASSES_TOGGLE=10`, racing seconds 15 on), start AP 30.2 and 33.0 C |
+| Steam Deck 1280x800 | 6.97 ms | 6.45 ms | offscreen race bench, 3000 ticks, frame p50, mean of three runs (CPU p50 5.86 to 5.33 ms) |
+| Steam Deck 1920x1080 | 8.99 ms | 8.61 ms | same (CPU 6.58 to 5.92 ms) |
+| Steam Deck 3840x2160 | 20.95 ms | 20.13 ms | same |
+| Desktop, RX 7800 XT (RADV) | 70.62 G instructions | 67.23 G instructions | `perf stat -e instructions:u`, 2000 ticks of the offscreen race bench, three runs each, spread under 0.07 % (-4.8 %); frame times there are 1.4 to 1.6 ms and were not resolved at load 10 to 50 |
+
+On the S21 that is 36 to 43 fps (run 1) and 27 to 30 fps (run 2, warmer). Leaving all eight cards out
+saves 5.1 ms there, and keeping their passes and clears while dropping their draws saves nothing
+(`docs/tools/android.md`, "What a render pass costs"): on Mali the cards cost their eight targets'
+clears and stores, not their shading, so a card not drawn is nearly its whole cost.
+
+Tests: `tests::advert_views::one_view_encodes_only_the_cards_it_shows` (a card behind the camera is not
+encoded; with frustum culling off it is), `a_split_frame_encodes_every_card` and
+`a_frame_with_a_mod_shader_still_encodes_only_the_cards_it_shows`.

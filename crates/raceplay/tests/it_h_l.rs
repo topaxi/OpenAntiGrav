@@ -19,6 +19,7 @@ mod perturb;
 
 mod hd_ai_craft_laws_ground_truth;
 mod hd_air_pose_walk;
+mod hd_bank_floor_ground_truth;
 mod hd_chenghou_jumps_sweep;
 mod hd_eliminator_hud_ground_truth;
 mod hd_engine_flare_ground_truth;
@@ -66,6 +67,7 @@ mod leach_pool_ground_truth;
 mod leach_tube_ground_truth;
 mod livery_ground_truth;
 mod lock_sight_ground_truth;
+mod loop_floor_trace;
 
 /// A `tests/*.rs` file missing from every `tests/it*.rs` listing compiles into
 /// nothing, and its tests stop running without a word.

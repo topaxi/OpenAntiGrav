@@ -119,7 +119,7 @@ impl Cards {
         seconds: f32,
     ) -> Vec<(u32, (u32, u32), Vec<u8>)> {
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-        self.render(queue, &mut encoder, seconds, &|_| seconds);
+        self.render(queue, &mut encoder, seconds, &|_| seconds, None);
         let buffers: Vec<wgpu::Buffer> = self
             .cards
             .iter()

@@ -245,8 +245,13 @@ pub const TITLE: &Title = &Title {
         // Read statically off this title's own `Plasma_Init`, confidence 80; its Rocket, Missile
         // and Shuriken inits are not located and take HD's (`ps3-hdfury-eu/projectile-launch-normal.md`).
         launch_normal_is_track_up: oag_title::pre_race::Sourced::measured(true),
-        // Pulse's arms are measured; this title's own are unread.
-        floor_arms_steer_to_ride_point: oag_title::pre_race::Sourced::chosen(false),
+        // HD's parallel turn, measured live on HD; this title's own flight is unread.
+        floor_arms_steer_to_ride_point: oag_title::pre_race::Sourced::inherited(
+            false,
+            "Wipeout HD",
+        ),
+        // HD's law, inherited: this title's `Rocket_Update` and `Plasma_Update` are unread.
+        floor_arms_ride_launch_normal: oag_title::pre_race::Sourced::inherited(false, "Wipeout HD"),
         // HD's law, inherited: Omega's `Plasma_Launch` (`0x0135d5d0`) takes the node matrix as
         // HD's does; whether the walker orthonormalises it is unread (`ps4-omega-eu/plasma.md`).
         plasma_release_at_display_scale: oag_title::pre_race::Sourced::inherited(

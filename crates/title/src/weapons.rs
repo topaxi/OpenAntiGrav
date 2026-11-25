@@ -105,11 +105,23 @@ pub struct Weapons {
     /// write `(ride point - start) / dt` raw, so the blade's speed drifts and a rocket landing on a
     /// ramp face can leave it upward; its `Plasma_Update` sweep arm only moves
     /// (`docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`, "By-catch in the flight arms",
-    /// and `shuriken.md`, `missile.md`, `plasma.md`). HD, 2048 and Omega keep the parallel turn:
-    /// their own `Rocket_Update`, `Missile_Update` and `Shuriken_Update` arms are unread, and HD's
-    /// `Plasma_Update` is its own function with a ride height of 4.0
-    /// (`docs/ghidra/functions/ps3-hdfury-eu/plasma.md`).
+    /// and `shuriken.md`, `missile.md`, `plasma.md`). HD turns the Plasma's and the Rockets' velocity parallel to
+    /// the floor instead, measured live on Moa Therma's bank, where steering at the ride point slid
+    /// both off the bank (`docs/ghidra/functions/ps3-hdfury-eu/plasma.md`, "On Moa Therma's
+    /// bank"); 2048 and Omega inherit it.
     pub floor_arms_steer_to_ride_point: crate::pre_race::Sourced<bool>,
+    /// Whether the Rocket and the Plasma sweep first and then probe and ride along the normal
+    /// they were launched with, never changing it (`true`, Pure), instead of adopting each
+    /// floor's normal (`false`).
+    ///
+    /// Pure's `Rocket_Update` (`0x0885f28c`) and `Plasma_Update` (`0x0885e348`) write their
+    /// carried normal nowhere; it is the launch matrix's up row, length 0.75, so the probe reaches
+    /// 9 and the rides sit 2.25 and 4.5 along it. Watched live on PPSSPP over a floor 15 degrees
+    /// off it (`docs/ghidra/functions/psp-pure-usa/floor-follow.md`). Pulse adopts the floor's
+    /// normal on every ride, chained on Moa Therma's 85 degree helix
+    /// (`docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`, "Pulse on the steepest bank"), and
+    /// HD's parallel turn follows each floor (`docs/ghidra/functions/ps3-hdfury-eu/plasma.md`).
+    pub floor_arms_ride_launch_normal: crate::pre_race::Sourced<bool>,
     /// Whether a Plasma bolt leaves at the craft's display scale (`true`, 0.75 x its release
     /// speed until its first floor ride) or at its release speed (`false`).
     ///
