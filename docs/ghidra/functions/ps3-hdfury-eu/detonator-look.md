@@ -122,8 +122,9 @@ Wired 2026-11-22 (`det-look`); the three steps below are code, each with a test 
 3. **Bloom arm.** `bloom::for_mode` runs `ZoneFrame` for Detonator when `ZoneFrame::detonator_arm` (HD): feedback, both sizes,
    frame exponent and alpha contribution taken, the circuit's frame contribution and adaption boost kept. Test:
    `bloom::tests::a_detonator_race_takes_the_table_but_keeps_the_circuits_gain` (a circuit whose every value differs from the
-   table's). **Not wired: the radial bloom** (`0.1` / `0.1` / `0.6`, enabled): `oag-post` has no radial pass, so Zone's `0.04`
-   is equally absent.
+   table's). **The radial bloom** (`0.1` / `0.1` / `0.6`, enabled) draws nothing in a running round: its strength
+   is `1.0` only while the craft is out of the race ([zone-frame.md](zone-frame.md), "The radial pass", 78), so its absence
+   in ours matches a racing frame.
 
 Result on the three Detonator pairs (Talon's Junction, Feisar; the upper band is `x 200..900, y 60..300`; original `(17..18, 10..13, 10..24)`):
 
@@ -368,8 +369,8 @@ difference was shading, not a node the original hides (nothing in the mode `0xe`
    `ramp_sheen` is now off with `zone_program`, as the magstrip wave is. Confidence 80 (census over the material's blocks:
    `hd_zone_wave_census_ground_truth::no_zone_variant_of_a_facing_ramp_material_samples_the_ramp`). **Since 2026-11-25** the
    vertex-lit glass keeps its grid coverage in Zone, as every non-redraw Zone block writes it; the paraboloid reflection is read
-   and not drawn, because the Zone scenery tint `iblScalePower` is unread ([rcsmaterial.md](../../../formats/rcsmaterial.md),
-   "The Zone glass program").
+   and not drawn: the tint is read live as `(1, 1, 1, 0)` with weight 1, but drawing it with those values moves the mines-ahead glass box
+   9.23 to 20.55 ([rcsmaterial.md](../../../formats/rcsmaterial.md), "The Zone glass program").
 
 **Numbers** (`mines-ahead`, the pair's own mean grey, lower is better): whole frame 14.65 to 13.74; far-curve box
 `x1000..1500 y250..520` mean absolute grey difference against the original 29.1 to 19.4 (whole frame by the same measure 15.5

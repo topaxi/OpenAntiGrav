@@ -866,3 +866,35 @@ the third light's live trigger.
   and base) for the `[2.7, 5.0, 70.0, 1.0]` constants block found nothing, as the table may be literals
   there. The point lights are HD-only in this engine (`Detonator::cannon_lights` is `true` on HD alone; the
   trail flag is true on 2048 and Omega too, so it is not the gate), so 2048 and Omega draw the roll and no light; whether theirs submit one is unread.
+
+## The round, polled live (2026-11-25, `det-cannon-ricochet`)
+
+Method: RPCS3 restored from `hd-detonator-talons-feisar-grid`, the cannon held, every `PulseBullet` of the pool
+(vtable `0x00863d98`, 30 objects) read through `/proc/<pid>/mem` without pausing (`scripts/rpcs3-hd-pulse-round-poll.py`);
+for the bounce, each new round's velocity was turned 60 degrees left or right (only `+0xd0` written) to send it at a side
+wall. One boot, 179 in-flight samples, rounds of three volleys; the game steps `dt = 1/30`.
+
+| Quantity | Read | Confidence |
+| --- | --- | ---: |
+| Step | `500 / 30 = 16.67` units a tick, velocity constant on open ground, no gravity | 85 |
+| `+0x150` (up row) | equals `+0x180` (surface normal) in every sample, within `3e-5`, also when the normal changes (floor hit): **the up row is the normal**, not the muzzle matrix's up | 85 |
+| Velocity | `\|v\| = 500` within `1e-4`, perpendicular to the **current** normal (`v.n` under 0.01 of 500, nonzero only on a tick that bounced or was written): flattened against the normal each tick | 85 |
+| Rows | `fwd` perpendicular to up within `1e-7`, `right = up x fwd` within `5e-8`; `fwd` is the velocity direction, except on a bounce tick | 85 |
+| Bounce | `+0x12c` 1 to 0, velocity reflected, speed 500; the rows show the incoming heading on that tick and the reflected one the next (4 of 179 samples) | 80 |
+| Second wall | flags `0x15` (`0x14 | 1`), the round is retired | 75 |
+
+So the static reading above ("no writer of `+0x150` found; the up row looks like the launch matrix's") is corrected: the
+up row follows the surface normal, and with it the flattening of the heading, so a round turns with a slope. Ours
+flattened against the launch normal, so a round fired on the flat and ridden up an incline kept a horizontal heading;
+now `Round::normal` is the up, and `Round::heading` carries the drawn forward row.
+
+**The round's draw** (`0x00122098`, bolt branch `0x1221b4`, read): rows `+0x140/+0x150/+0x160` are turned half a turn
+about the up row (`0x00677688`, angle pi), the width rows scaled by `0.75` (`0x008c1870 +0x28`), the forward row by
+`0.75 * (0.5 + 0.5 * min(age / 0.1, 1))` (`+0x24` = 0.1), placed at `+0x170`. Static, 75; not yet watched live.
+Wired: scale and growth, `oag_raceplay::detonator_fx::round_matrix`. **Open:** the half turn is not applied (ours
+faces along forward already, unchecked), and the look differs: from behind, the original's bolt is a wide translucent
+blue ring stack (about 100 px at 1080p, lap 2.000 of the `cannon-volley` capture), ours a narrow white teardrop (about
+40 px). Why is not found (model axes, material or the turn), so the bolt's shape is **not matched**.
+
+**2048 / Omega:** checked, applies for the law (their `PulseBullet` updates probe 9.0 and ride 3.5 as above; the up-row
+rule was not re-read there); not wired separately (shared code). The draw read is HD's.

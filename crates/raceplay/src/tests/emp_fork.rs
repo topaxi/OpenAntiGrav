@@ -8,7 +8,7 @@ use oag_weapons::detonator::{Placed, Survey};
 
 /// Every HD circuit file whose `WO Track` has a junction with an alternate successor
 /// (`Course::branches`), measured on `hdfury-ps3-eu-dec.iso`.
-const FORKED: [&str; 4] = [
+pub(super) const FORKED: [&str; 4] = [
     r"Data\Environments\zone_3\track.vex",
     r"Data\Environments\05_ubermall\track.vex",
     r"Data\Environments\05_ubermall\track_reversed.vex",

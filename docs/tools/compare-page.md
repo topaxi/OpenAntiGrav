@@ -2614,6 +2614,19 @@ manifests are developer material, not a publishing set.
 
 What differs, by region and size: the Detonator thread's "Render accuracy" section.
 
+### A Detonator pair grabbed in the volley (`cannon-volley-hot`, 2026-11-25, `det-volley-pair`)
+
+`hd/detonator-talons-cannon-volley-hot` sits beside `cannon-volley` (grabbed 0.75 s after its volley, so no wash). `rpcs3-hd-detonator-shots.py --fire-clock 1.84 --fire-pause 0.18 --shot 1.841` keeps the fire button held (harness `triangle`, the game's use button) and pauses 0.18 lap s later, so the frame is mid-volley: lap clock 2.067, press at 1.867, ammo 14, rounds in flight, muzzle flash on the hull. Needs the `-late` state (the plain grid state gives no scenery world clock). Frames: `--fire-pause 0.12` (clock 2.000) showed nothing yet and the same boot's next frame (2.050) showed the volley: the press takes 2 to 4 ticks to reach the game and the picture lags the RAM by 2 to 4 more, so 0.18 is the shortest that lands in the flash. One boot (confidence 70 for the numbers).
+
+Top-left quarter mean RGB (x0..960, y0..540), original / ours, same binary (the old pair re-rendered):
+
+| Pair | Original | Ours | Whole frame mean grey, rmse |
+| --- | --- | --- | --- |
+| `cannon-volley` (after the volley) | `(20.3, 10.0, 13.7)` | `(17.6, 7.6, 10.0)` | 14.18, 0.172 (stored 15.14) |
+| `cannon-volley-hot` (in the volley) | `(17.6, 9.1, 23.7)` | `(18.6, 10.5, 25.0)` | 11.47, 0.139 |
+
+Ours shows the blue wash where the original does (top-left blue 25.0 against 23.7; top-right `(24.4, 13.4, 26.6)` against `(25.9, 12.8, 26.7)`). Ours' round hit a mine (score 0000100, ammo 13) where the original's did not (0000000, ammo 14); mines in the two are ours' seeded plus carried ones. 2048 and Omega: not applicable, an HD pair.
+
 ### The hull's frame pose in a Detonator pair (2026-11-23, `det-camera`)
 
 **Report (maintainer, from the pairs):** "ours' shots use the wrong camera setting/distance, the original is 'close', ours is 'far'."

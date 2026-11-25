@@ -69,6 +69,7 @@ mod extension_odds;
 mod extension_replay;
 mod grid_flaps;
 mod hand_back;
+mod mine_branch;
 
 #[cfg(feature = "extensions")]
 mod extension_picks;

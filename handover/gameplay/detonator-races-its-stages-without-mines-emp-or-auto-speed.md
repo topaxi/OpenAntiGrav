@@ -418,7 +418,7 @@ original frame to compare. The detail is below.
   generic XML) and `oag_title::Detonator` entry names; Phase 5 the `DetonatorField` (200-mine
   pool) and the placer on the seeded `Rng`. Still unread: the collision return codes the lap
   survey tests (`0/2/4/5/127`; a stand-in "lane free when the downward probe hits track" is
-  needed and must say so), the route-fork walk, what the mine/bomb inits do with the matrix and
+  needed and must say so), ~~the route-fork walk~~ (read and wired 2026-11-25, `detonator-placement.md` "The fork walk"; open: a live read of the lap array on a forked circuit), what the mine/bomb inits do with the matrix and
   `sec+0x40`/`+0x60`, how a mine or bomb leaves its pool (the bomb pool is 2 and the spawn does
   not check it), `0x0012ae38`/`0x0012ae10`/mine vslot `+0x3c`. Models: see the hull bullet
   above (`DetonatorMine_Construct` `0x0013a7d8`, `DetonatorBomb_Construct`); effects `WO_BOMB_EXPLO_DETONATOR`,

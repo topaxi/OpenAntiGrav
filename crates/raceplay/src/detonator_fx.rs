@@ -4,8 +4,8 @@
 //!
 //! Evidence: `docs/ghidra/functions/ps3-hdfury-eu/detonator-cannon.md`, `detonator-mine.md` and
 //! `detonator-bomb.md`. The round's draw (`0x00121e68`) only pushes and pops a matrix, so the
-//! round's own placement is **chosen, not measured**: its model rides its position, its nose
-//! along its velocity and its up along the craft's up at launch. The flash is re-placed at the
+//! round's own placement is read in its render queue (`0x00122098`): the rows of `PulseBullet_Update`,
+//! scaled (see [`round_matrix`]). The flash is re-placed at the
 //! firing craft's locator for the round's first [`FLASH_WINDOW_SECONDS`] and rolled every tick as
 //! `PulseBullet_Update` rolls it, and `PulseBullet`'s render queue's point lights ride it
 //! (`detonator-cannon.md`, "The flash's per-tick roll").
@@ -21,20 +21,42 @@ use oag_weapons::detonator::{Event, EventKind};
 
 use super::*;
 
-/// The pose of one round: nose along its velocity, up along its launch up, at its position.
-/// `side = up x forward` and `up = forward x side` keep it a rotation.
+/// The bolt's scale on every axis (`0x008c1870 +0x28`).
+const BOLT_SCALE: f32 = 0.75;
+/// The seconds over which the bolt's length grows (`0x008c1870 +0x24`).
+const BOLT_GROW_SECONDS: f32 = 0.1;
+
+/// The pose of one round, as `PulseBullet`'s render queue (`0x00122098`) builds it
+/// (`docs/ghidra/functions/ps3-hdfury-eu/detonator-cannon.md`, "The round's draw"): the rows are
+/// `right = up x forward`, `up` the surface normal and `forward` the heading flattened against it,
+/// all scaled by `0.75`, the forward row by `0.5 + 0.5 * min(age / 0.1, 1)` as well, at the round's
+/// position. The original also turns the rows half a turn about `up`; this engine's model axes
+/// already face along `forward`.
 pub(crate) fn round_matrix(round: &Round) -> Mat4 {
-    let forward = round.vel.normalize_or_zero();
-    let reference = [round.up, Vec3::Y, Vec3::Z]
-        .into_iter()
-        .find(|axis| axis.cross(forward).length_squared() > 1e-6)
-        .unwrap_or(Vec3::X);
-    let side = reference.cross(forward).normalize_or_zero();
+    let up = round.normal.normalize_or_zero();
+    let heading = if round.heading == Vec3::ZERO {
+        round.vel.normalize_or_zero()
+    } else {
+        round.heading
+    };
+    let forward = (heading - up * heading.dot(up)).normalize_or_zero();
+    let (up, forward) = if forward == Vec3::ZERO || up == Vec3::ZERO {
+        let forward = round.vel.normalize_or_zero();
+        let reference = [Vec3::Y, Vec3::Z]
+            .into_iter()
+            .find(|axis| axis.cross(forward).length_squared() > 1e-6)
+            .unwrap_or(Vec3::X);
+        (reference, forward)
+    } else {
+        (up, forward)
+    };
+    let side = up.cross(forward).normalize_or_zero();
     let up = forward.cross(side);
+    let grow = 0.5 + 0.5 * (round.age / BOLT_GROW_SECONDS).clamp(0.0, 1.0);
     Mat4::from_cols(
-        side.extend(0.0),
-        up.extend(0.0),
-        forward.extend(0.0),
+        (side * BOLT_SCALE).extend(0.0),
+        (up * BOLT_SCALE).extend(0.0),
+        (forward * (BOLT_SCALE * grow)).extend(0.0),
         round.pos.extend(1.0),
     )
 }

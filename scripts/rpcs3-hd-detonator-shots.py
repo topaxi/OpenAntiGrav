@@ -174,6 +174,11 @@ def main():
     ap.add_argument("--fire-button", default="triangle",
                     help="the pad button held for --fire-clock (the button that fires the cannon in the original is measured here, "
                          "not assumed: SQUARE changed the camera view)")
+    ap.add_argument("--fire-pause", type=float, metavar="LAP_S",
+                    help="with --fire-clock: keep the button held and pause at the first stop LAP_S of lap clock after the press, "
+                         "and keep the next --shot frames there (a frame in the volley itself, rounds in flight); the button is "
+                         "released after that stop. The press takes 2 to 4 ticks to reach the game and the picture lags the RAM "
+                         "by 2 to 4 more, so a frame in the volley needs 0.1 or more")
     ap.add_argument("--fire-hold", type=float, default=0.5, help="wall seconds SQUARE is held (a loaded host drops a short press)")
     ap.add_argument("--reload-clock", type=float, help="tap CIRCLE (reload) at this lap clock")
     ap.add_argument("--steer", metavar="LAP_CLOCK,WALL_HOLD,X", action="append", default=[],
@@ -215,6 +220,7 @@ def main():
             sys.exit("the race never started")
         stops = []
         fire = None
+        held_button = None
         events = [[t, "shot"] for t in args.shot]
         if args.fire_clock is not None:
             events.append([args.fire_clock, "fire"])
@@ -228,6 +234,22 @@ def main():
         events.sort(key=lambda e: e[0])
         for at, kind, *rest in events:
             now = run_until(gdb, ship, at, kind)
+            if kind == "fire" and args.fire_pause is not None:
+                before = now
+                gdb.resume()
+                session.pad.set(args.fire_button, True)
+                for _ in range(400):
+                    time.sleep(0.03)
+                    gdb.pause()
+                    after = race_clock(gdb, ship)
+                    if after >= before + args.fire_pause:
+                        break
+                    gdb.resume()
+                fire = {"press_clock_before_s": before, "press_clock_after_s": after, "hold_lap_s": args.fire_pause,
+                        "button": args.fire_button, "held_at_frame": True}
+                held_button = args.fire_button
+                print("fire: lap clock %.3f before, paused at %.3f with the button held" % (before, after), flush=True)
+                continue
             if kind == "fire":
                 before = now
                 gdb.resume()
@@ -288,6 +310,9 @@ def main():
             gdb.pause()
             second = observe(session, gdb, ship, body, out, stem + "b", args.flush)
             stops.append((stem, first, second))
+            if held_button is not None:
+                session.pad.set(held_button, False)
+                held_button = None
             gdb.resume()
         picks = []
         for stem, first, second in stops:

@@ -445,6 +445,78 @@ fn a_round_rides_above_the_floor_it_finds() {
     assert_eq!(round.pos.y, 3.5);
 }
 
+#[test]
+fn a_round_turns_with_the_slope_it_rides() {
+    // A floor tilted 30 degrees about X: its normal leans back, so the heading must follow it.
+    let tilt = Vec3::new(0.0, 0.866_025_4, -0.5);
+    let slope = move |from: Vec3, to: Vec3| {
+        if to.y < from.y {
+            Sweep::Floor {
+                point: Vec3::new(from.x, from.y - 4.0, from.z),
+                normal: tilt,
+            }
+        } else {
+            Sweep::None
+        }
+    };
+    let ship = craft();
+    let mut field = Field::new();
+    tick(&mut field, FIRE, &ship, &slope);
+    tick(&mut field, IDLE, &ship, &slope);
+    let round = field
+        .cannon
+        .rounds
+        .iter()
+        .find(|r| r.live)
+        .expect("in flight");
+    assert!(
+        round.vel.dot(round.normal).abs() < 1e-3,
+        "velocity stays in the surface plane: {:?}",
+        round.vel
+    );
+    assert!(round.vel.y > 100.0, "climbing the slope: {:?}", round.vel);
+    assert!((round.vel.length() - 500.0).abs() < 1e-2);
+}
+
+#[test]
+fn a_round_is_still_drawn_along_its_incoming_heading_on_the_tick_it_bounces() {
+    let ship = craft();
+    let mut field = Field::new();
+    tick(&mut field, FIRE, &ship, &wall_at_fifty);
+    let mut bounced = None;
+    for _ in 0..12 {
+        tick(&mut field, IDLE, &ship, &wall_at_fifty);
+        if let Some(r) = field
+            .cannon
+            .rounds
+            .iter()
+            .find(|r| r.live && r.rebounds == 0)
+        {
+            bounced = Some(*r);
+            break;
+        }
+    }
+    let round = bounced.expect("bounced");
+    assert!(round.vel.z < 0.0, "reflected: {:?}", round.vel);
+    assert!(
+        round.heading.z > 0.9,
+        "heading is the incoming one: {:?}",
+        round.heading
+    );
+    tick(&mut field, IDLE, &ship, &|_, _| Sweep::None);
+    let next = field
+        .cannon
+        .rounds
+        .iter()
+        .find(|r| r.live)
+        .expect("flying back");
+    assert!(
+        next.heading.z < -0.9,
+        "then the reflected one: {:?}",
+        next.heading
+    );
+}
+
 fn wall_at_fifty(from: Vec3, to: Vec3) -> Sweep {
     if (from.z - 50.0) * (to.z - 50.0) < 0.0 {
         Sweep::Wall {
