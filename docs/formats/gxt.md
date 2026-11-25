@@ -178,11 +178,11 @@ but a level narrower or shorter than that **stores only its own words**: a 4x128
 words (256 bytes), one wide, in Morton order over `1 x 32`, and the decode wraps them to the
 missing columns. Reading it as if padded to two words wide takes every second word and zeros
 for the rest. 35 `.gxt` of the EU packages have such a base level (4x128, 128x1, 4x4, ...).
-Of the 20 with a same-named HD `.gtf`, **all 20 move toward HD's art** with the wrapped
-reading (mean absolute difference over RGBA of 255): `hd_detonator_cannonbolt_glow` 103.6 to
-1.5, `animgradient_pingpong` 125.6 to 1.4, `thickline_hardedged` 116.9 to 2.7. Some stay far
-(`vr_fxgrid1` 92.8, `bg_gradient` 41.7), which may be different art under one name; the 15
-with no HD twin have no oracle. Test:
+20 of the 35 share a name with an HD `.gtf`, 17 distinct names. **17 names measured, one copy
+each; all 17 move toward HD's art** with the wrapped reading (mean absolute difference over RGBA
+of 255): `hd_detonator_cannonbolt_glow` 103.6 to 1.5, `animgradient_pingpong` 125.6 to 1.4,
+`thickline_hardedged` 116.9 to 2.7. Some stay far (`vr_fxgrid1` 92.8, `bg_gradient` 41.7), which
+may be different art under one name; the 15 with no HD twin have no oracle. Test:
 `gxt_ground_truth::the_pvrtc_decode_agrees_with_wipeout_hd_s_own_copy_of_the_same_art`.
 
 ### Wipeout HD decodes the same art, and this agrees with it
