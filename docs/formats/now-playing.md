@@ -9,7 +9,7 @@ by `crates/game/tests/now_playing_ground_truth.rs` (`just test-data`).
 | Pulse (PSP) | `InGame_Definition.xml`, `item InGameMusicDisplay` | `PI_Music` `Artist` and `name` | **read**, [Pulse page](../ghidra/functions/psp-pulse-usa/now-playing.md) | wired, measured |
 | HD / Fury | `ingame_definition.xml`, the same item with a textured bar | `PI_Music` `Artist` and `name` | **read**, [HD page](../ghidra/functions/ps3-hdfury-eu/now-playing.md): Pulse's law | wired, measured |
 | Omega | `data00.psarc`'s `ingame_definition.xml`: HD's item | `PI_Music` `Artist` and `name` | inherited from HD | wired, inherited |
-| Pure | none authored | its own `PI_Music` | inherited from Pulse | wired, **borrowed**, chosen not measured |
+| Pure | `InGame_Definition.xml`'s `InGame` screen: three `Text` widgets, no bar, no scroll ([Pure's own music text](#pures-own-music-text)); ours still draws Pulse's marquee | its own `PI_Music` `Artist`, `name` and `Label` | fade step Pulse's, hold measured once | **not wired**: ours draws the borrowed marquee, which the original does not |
 | 2048 | none authored | its own `PI_Music` `Artist` and the language table's `MT_nn` title | inherited from HD | wired, **borrowed**, chosen not measured |
 
 The title's row is `oag_title::Music::now_playing` (`oag_title::now_playing::NowPlaying`):
@@ -140,10 +140,12 @@ has no such row.
 
 ## The borrowed titles
 
-**Pure** (checked 2026-10-26): its `BOOT.BIN` has no `InGameMusic` string (Pulse's has) and its
-`InGame_Definition.xml` holds no such item. `assets/fallback/Data/XML/NowPlaying_Pure.xml` is
+**Pure** (checked 2026-10-26, **corrected 2026-11-25**): its `BOOT.BIN` has no `InGameMusic` string (Pulse's has) and its
+`InGame_Definition.xml` holds no `InGameMusicDisplay` item; that check looked for Pulse's item and missed what the screen does carry, three
+plain `Text` widgets ([below](#pures-own-music-text)). `assets/fallback/Data/XML/NowPlaying_Pure.xml` is
 this project's own file carrying Pulse's numbers, in the fallback layer (it answers a name no
-disc holds). The bar sits over the craft's exhaust on Pure's chase view: placement is Pulse's.
+disc holds), and what it draws is **not** what the original draws: a translucent bar with the song scrolling through it at the foot of
+the frame, over the craft's exhaust and ground shadow on Pure's chase view, where the original draws two plain lines of text at the left.
 
 **2048** (checked 2026-10-26, base package and the 1.04 patch): the executable looks the three
 widgets up (`InGameMusicDisplay`, `InGameMusicText`, `InGameMusicBG`) but no layout file holds
@@ -151,6 +153,47 @@ the item, so the original shows no song. `assets/fallback/Data/XML/NowPlaying_20
 item halved to the Vita's 960x544 grid with a plain translucent bar and a text size picked to sit
 in it. 2048's `PI_Music` nodes are named `01`..`11`; the title is the second line of the language
 table's `MT_01` (`title_key`), the same two-line text HD's `title_is_id` branch looks up.
+
+## Pure's own music text
+
+Read 2026-11-25 (`pure-classic-vr-set`): the USA disc's `Data\Plugins\PI001\GUI\InGame_Definition.xml` (`FE.wad` and `Data.wad` hold the same
+bytes, `oag-wad cat --expand`), screen `InGame`, under the comment `Music info text`:
+
+| Widget | `idstring` | Font, scale, align | `x`, `y` (480x272 grid) |
+| --- | --- | --- | --- |
+| `InGameArtistText` | `Artist` | `HUDSmall`, 1.0, left | 80, 240 |
+| `InGameTrackText` | `Track` | `HUDSmall`, 1.0, left | 80, 250 |
+| `InGameLabelText` | `Label` | `HUDSmall`, 1.0, left | 80, 260 |
+
+The strings are `Definition.xml`'s `PI_Music` nodes: `name` (`Kinection`, `Onyx`, `Room 2`...) is the track, `Artist` the artist (`Cosmos`,
+`CoLD SToRAGE`, `Jay TripWire`...), `Label` a record label (`Frost Byte Records`, empty for `Kinection`). What the original draws, in 12
+race frames, 10 of them showing the text with 6 different songs (`data/reference/compare-page/pure-psp/*/theirs.png`, USA disc): **two lines**, the artist over the track, upper case in
+`HUDSmall`, left edge at `x 80`, no bar behind them; the label line never shows (`Onyx`'s `Frost Byte Records` is absent in the frame that
+shows `COLD STORAGE / ONYX`). Ours draws the one-line `ARTIST - TRACK` marquee (`COLD STORAGE - ONYX`) in a dark bar at `x 130..280`.
+
+**Its life, measured** on Karbonis (the song `Cosmos / Kinection`) and Sebenco Climb in a private PPSSPP 1.20.4 (software renderer), stepping a loaded
+state frame by frame and grabbing the 480x272 window at chosen race clocks (`launch-grade a0 + 0x130`, GO at 0). The text's peak grey,
+against the 100 of the road behind it on Karbonis:
+
+| Race clock (s) | 1.6 to 6.0 | 7.00 | 7.25 | 7.50 | 7.75 | 8.00 | 8.25 | 8.50 and later |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Peak grey | 230 to 243 | 220 | 195 | 175 | 153 | 134 | 114 | 100 (gone) |
+
+A straight line of about 80 grey a second from full at about 6.7 s to gone at about 8.5 s: 1.8 s, which is 51 frames at 30 a second times
+Pulse's 5 of 255 per step (`fade_step`, above), so **the fade step is Pulse's**. The fade-in on Sebenco Climb reads peak 163, 174, 189, 205, 227, 242
+at 0.83, 1.00, 1.20, 1.40, 1.60, 1.80 s (the road behind it is brighter and moving there): the same slope, from zero at about GO, full at about
+1.8 s. So the display is: on at GO, fade in 1.8 s, hold about 4.9 s, fade out 1.8 s, nothing scrolls; in frames at race clock 16.7 and 17.8 s (Vineta,
+Modesto) it is gone. Confidence **70** for the layout and the strings (the disc authors them and 8 frames show the result), **60** for the
+timing (one song per end of the life, 0.25 s resolution, the hold's start and end each read once; whether the display times from GO or from the song's
+start is not separated, because every state's song started at the grid). The song a state plays differs per state; the original's choice of
+song is not read here.
+
+**Effect on the comparison.** Ours' bar is the largest piece of the Classic pairs' hull box's "original brighter" (`docs/tools/compare-page.md`, "The
+Classic hull"): pasting the original's pixels over ours in the bar's left part and the original's text box lowers the whole-frame mean grey by 0.4 to
+0.7 on every Pure race pair whose original shows the text. **Wiring** is the display, a title-data row (a static three-widget text display: where, fonts, the two
+strings, the fade step, the hold) instead of Pulse's bar, and `NowPlaying_Pure.xml` retired for the disc's own widgets: ready to wire, not wired by the
+lane that read it. Whether Pulse's, HD's, 2048's or Omega's `InGame` screens carry the same three widgets beside their `InGameMusicDisplay` was not checked
+(the Pulse and HD pages above read the item, not the screen's other `Text` widgets).
 
 ## Lineage check, recorded
 
