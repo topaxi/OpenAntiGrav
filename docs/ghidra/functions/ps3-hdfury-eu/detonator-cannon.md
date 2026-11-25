@@ -1018,7 +1018,7 @@ update. **Confidence 80.**
 | Effect | mode `0xe`: `WO_CANNON_SPARKS_DETONATOR`, else `WO_CANNON_SPARKS`, fourcc `0x42444f52` | the same |
 | Row 1 | `v - 2(v.n)n` | the same |
 | Row 2 | the negated surface record vector `+0x20` (`V`) | the same |
-| Translation | probe from `hit + n + 5V`; on surface types 2, 3, 10, 11, 12 the probe's hit minus `n`, else the wall hit | the same |
+| Translation | probe from the hit toward `hit + n + 5V`; on surface types 2, 3, 10, 11, 12 the probe's hit minus `n`, else the wall hit | the same |
 
 So the spark fires **only on the death on the last wall**, as HD's does, in HD's frame, with the
 translation probed down to the floor. A flag the caller passes (`param_4`/`param_3`) gates the
