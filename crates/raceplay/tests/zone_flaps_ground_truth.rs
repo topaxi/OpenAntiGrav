@@ -96,3 +96,29 @@ fn omega_zone_flaps_fold_after_the_start_and_rest_on_the_hull() {
         check(&source, true);
     }
 }
+
+/// The same hull built as a front-end model (`oag_livery::entry::ps3_scene_model`, what the
+/// menus draw) rests the same way.
+#[test]
+#[ignore = "needs data/extracted/ps4"]
+fn omega_zone_hull_rests_on_the_hull_as_a_menu_model() {
+    let Some(source) = oag_testdata::exact("data/extracted/ps4") else {
+        return;
+    };
+    let mut archives = oag_omega::open(&source.display().to_string()).expect("opening Omega");
+    let entry = r"Data\art\published\hdships\Zone\Ship.vex";
+    let blob = archives.read_name(entry).expect("the Zone hull");
+    let (model, _) =
+        oag_livery::entry::ps3_scene_model(&mut archives, entry, &blob, None, &mut Vec::new())
+            .expect("the Zone hull builds");
+    for flap in model.airbrakes.iter() {
+        let axis = flap
+            .as_ref()
+            .expect("a flap")
+            .hinge
+            .z_axis
+            .truncate()
+            .normalize();
+        assert!(axis.z < -0.99, "the stowed hinge points aft, not {axis:?}");
+    }
+}
