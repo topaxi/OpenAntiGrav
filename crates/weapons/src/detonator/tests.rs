@@ -360,6 +360,9 @@ fn placement_lays_into_the_lap_array_and_onto_its_branch_entries() {
         split: 150,
         merge: 0,
         entries: branch,
+        path: 1,
+        to_primary: Vec::new(),
+        from_primary: Vec::new(),
     });
     survey.lap = (0..150u16).chain(300..400).collect();
     let layout = layout();
