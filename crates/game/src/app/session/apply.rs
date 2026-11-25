@@ -1046,6 +1046,10 @@ impl Session {
             }
         }
         self.resupply_queries(Some(setting));
+        // A benchmark preset is in memory only: the player's file is theirs.
+        if self.benchmark.holds_settings() {
+            return;
+        }
         if let Err(e) = settings::save(&self.settings) {
             error!("could not save settings: {e:#}");
         }

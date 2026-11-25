@@ -9,6 +9,7 @@
 //! autopilot with a clock beside it.
 
 pub mod plan;
+pub mod presets;
 pub mod recorder;
 pub mod report;
 pub mod screen;

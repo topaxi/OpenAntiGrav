@@ -200,6 +200,7 @@ impl Session {
             // `oag_2048::race::DEFAULTS.zone` and
             // `crate::app::session::Shell::tracks_for`.
             demo_config: None,
+            benchmark_presets: None,
             zone_tracks: tracks.clone(),
             tracks,
             teams: team_choices,

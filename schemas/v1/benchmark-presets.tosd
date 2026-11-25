@@ -1,0 +1,88 @@
+# The settings presets of the in-game benchmark on one title: a name and the graphics settings it
+# sets, by the key the graphics page uses (crates/game/src/benchmark/presets.rs,
+# docs/tools/in-game-benchmark.md). A key that is not listed here is refused by the loader and
+# by this schema; whether a value is one the setting takes is the loader's, which reads it as the
+# graphics page does and says what it ignored.
+
+[toml-schema]
+version = "1.0.0"
+
+[types.toml-schema-reference]
+type = "table"
+
+[types.toml-schema-reference.location]
+type = "string"
+pattern = "/v1/benchmark-presets[.]tosd$"
+
+[types.toml-schema-reference.version]
+type = "string"
+allowedvalues = ["1.0.0"]
+
+[types.preset]
+type = "table"
+
+[types.preset.name]
+type = "string"
+minlength = 1
+
+[types.preset.summary]
+type = "string"
+optional = true
+
+[types.preset.render_scale]
+type = "string"
+optional = true
+
+[types.preset.msaa]
+type = "string"
+optional = true
+
+[types.preset.shadows]
+type = "string"
+optional = true
+
+[types.preset.motion_blur]
+type = "string"
+optional = true
+
+[types.preset.motion_blur_resolution]
+type = "string"
+optional = true
+
+[types.preset.anisotropy]
+type = "string"
+optional = true
+
+[types.preset.model_detail]
+type = "string"
+optional = true
+
+[types.preset.texture_detail]
+type = "string"
+optional = true
+
+[types.preset.trail_order]
+type = "string"
+optional = true
+
+[types.preset.scenery_sort]
+type = "string"
+optional = true
+
+[types.preset.trail_length]
+type = "string"
+optional = true
+
+[types.preset.weather]
+type = "string"
+optional = true
+
+[elements]
+
+[elements.toml-schema]
+type = "types.toml-schema-reference"
+optional = true
+
+[elements.preset]
+type = "array"
+itemtype = "types.preset"

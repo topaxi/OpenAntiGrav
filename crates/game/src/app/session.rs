@@ -969,6 +969,8 @@ pub(crate) struct Shell {
     pub(crate) zone_tracks: Vec<(catalogue::Track, String)>,
     /// What the title's `DemoConfig.xml` authors for its attract demo (`session::demo`).
     pub(crate) demo_config: Option<oag_tables::demo_config::DemoConfig>,
+    /// The title's benchmark presets (`session::benchmark`).
+    pub(crate) benchmark_presets: Option<crate::benchmark::presets::Presets>,
     /// Every team, valued by its id and labelled off the disc's string table.
     ///
     /// A pack's teams are in here too, and indistinguishable from the disc's -
@@ -1187,6 +1189,7 @@ impl Shell {
                 })
                 .collect(),
             demo_config: boot_shell.demo_config.clone(),
+            benchmark_presets: boot_shell.benchmark_presets.clone(),
             zone_tracks: boot_shell
                 .zone_tracks
                 .iter()

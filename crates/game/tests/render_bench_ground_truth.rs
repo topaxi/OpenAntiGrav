@@ -160,31 +160,27 @@ fn a_split_race_is_benched_per_view_and_the_cut_does_not_change_the_race() {
     );
 }
 
-/// The in-game benchmark (`--benchmark`, driven with no window through the same `Session` a
-/// window runs) ends its race on the state the offscreen bench ends the same race on, writes a
-/// result file `bench-render.py compare` reads, and raises its stats screen. Fails on a build
-/// that drops the benchmark's launch, its pinned race, its end-of-race hook or its screen: no
-/// file, a different hash, or no `stats` phase to wait for.
-#[test]
-#[ignore = "needs data/images/pulse-psp-eu.chd and a GPU"]
-fn the_in_game_benchmark_flies_the_race_the_offscreen_bench_does() {
-    let Some(image) = oag_testdata::image("data/images/pulse-psp-eu.chd") else {
-        return;
-    };
-    let base = std::env::temp_dir().join("oag-in-game-benchmark-ground-truth");
-    let (offscreen, _) = bench(&base.join("offscreen"), &image);
-
-    let dir = base.join("in-game");
-    std::fs::create_dir_all(&dir).expect("a temp directory");
+/// Flies the in-game benchmark (`--benchmark`, driven with no window through the same `Session` a
+/// window runs) for `TICKS` ticks in `dir` with `extra` flags, and returns its result file and the
+/// path of the stats screen it drew.
+fn in_game(
+    dir: &std::path::Path,
+    image: &std::path::Path,
+    extra: &[&str],
+) -> (String, std::path::PathBuf) {
+    // A fresh run directory: an earlier run's result would be a second one.
+    let _ = std::fs::remove_dir_all(dir.join("data"));
+    std::fs::create_dir_all(dir).expect("a temp directory");
     let shot = dir.join("stats.png");
     let script = format!(
         "until benchmark=stats within 3000; screenshot {}; quit",
         shot.display()
     );
     let out = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
-        .arg(&image)
+        .arg(image)
         .args(["--no-audio", "--no-intro", "--benchmark", "--ticks"])
         .arg(TICKS.to_string())
+        .args(extra)
         .arg("--drive")
         .arg(&script)
         .env("XDG_CONFIG_HOME", dir.join("config"))
@@ -204,6 +200,23 @@ fn the_in_game_benchmark_flies_the_race_the_offscreen_bench_does() {
     assert_eq!(runs.len(), 1, "one run");
     let json = std::fs::read_to_string(runs[0].path().join("pulse.json"))
         .expect("the result file is named for the title");
+    (json, shot)
+}
+
+/// The in-game benchmark ends its race on the state the offscreen bench ends the same race on,
+/// writes a result file `bench-render.py compare` reads, and raises its stats screen. Fails on a
+/// build that drops the benchmark's launch, its pinned race, its end-of-race hook or its screen:
+/// no file, a different hash, or no `stats` phase to wait for.
+#[test]
+#[ignore = "needs data/images/pulse-psp-eu.chd and a GPU"]
+fn the_in_game_benchmark_flies_the_race_the_offscreen_bench_does() {
+    let Some(image) = oag_testdata::image("data/images/pulse-psp-eu.chd") else {
+        return;
+    };
+    let base = std::env::temp_dir().join("oag-in-game-benchmark-ground-truth");
+    let (offscreen, _) = bench(&base.join("offscreen"), &image);
+    let (json, shot) = in_game(&base.join("in-game"), &image, &[]);
+
     assert_eq!(field(&json, "final_tick"), TICKS.to_string());
     assert_eq!(field(&json, "finished"), "false");
     assert_eq!(
@@ -216,5 +229,37 @@ fn the_in_game_benchmark_flies_the_race_the_offscreen_bench_does() {
     assert!(
         std::fs::metadata(&shot).is_ok_and(|meta| meta.len() > 1000),
         "the stats screen was drawn"
+    );
+}
+
+/// A preset changes what a frame costs and never the race, and never the player's own settings
+/// file: the run with `--preset low` says it drew at half resolution and ends on the plain run's
+/// state hash, and no `settings.toml` of the player's holds the preset's values. Fails on a build
+/// that drops the preset (the settings are the player's), applies it to the race (another hash)
+/// or saves it (a file with the preset's shadows).
+#[test]
+#[ignore = "needs data/images/pulse-psp-eu.chd and a GPU"]
+fn a_preset_changes_the_picture_and_not_the_race_or_the_players_settings() {
+    let Some(image) = oag_testdata::image("data/images/pulse-psp-eu.chd") else {
+        return;
+    };
+    let base = std::env::temp_dir().join("oag-in-game-benchmark-preset-ground-truth");
+    let (plain, _) = in_game(&base.join("plain"), &image, &[]);
+    let low_dir = base.join("low");
+    let (low, _) = in_game(&low_dir, &image, &["--preset", "low"]);
+
+    assert_eq!(
+        field(&low, "final_state_hash"),
+        field(&plain, "final_state_hash"),
+        "a preset is not a different race"
+    );
+    assert!(low.contains("\"render_scale\": \"50%\""), "{low}");
+    assert!(low.contains("\"shadows\": \"Blob\""), "{low}");
+    assert!(low.contains("\"preset\": \"low\""), "{low}");
+    assert!(plain.contains("\"preset\": null"), "{plain}");
+    let saved = std::fs::read_to_string(low_dir.join("config/oag/settings.toml")).unwrap_or_default();
+    assert!(
+        !saved.contains("blob"),
+        "the preset's shadows reached settings.toml"
     );
 }

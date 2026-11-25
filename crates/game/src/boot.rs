@@ -218,6 +218,8 @@ pub struct Shell {
     pub zone_tracks: Vec<oag_raceplay::catalogue::Track>,
     /// What the title's own `DemoConfig.xml` authors for its attract demo, when it ships one.
     pub demo_config: Option<oag_tables::demo_config::DemoConfig>,
+    /// The title's benchmark presets (`crate::benchmark::presets`), when its file reads.
+    pub benchmark_presets: Option<crate::benchmark::presets::Presets>,
     /// The chosen language's string-table entry, when it names one.
     ///
     /// Carried because the loading screen needs the *other copies* of it: two
@@ -639,6 +641,7 @@ pub fn load_shell(
     let tracks = load_tracks(&mut archives, definition, &documents, &mut report);
     let zone_tracks = load_zone_tracks(&mut archives, title.race.zone, &documents, &mut report);
     let demo_config = demo_config::load(&mut archives, title, &mut report);
+    let benchmark_presets = crate::benchmark::presets::load(&mut archives, title, &mut report);
     let teams = load_teams(
         &mut archives,
         title.race,
@@ -954,6 +957,7 @@ pub fn load_shell(
             tracks,
             zone_tracks,
             demo_config,
+            benchmark_presets,
             circuit_names,
             teams,
             model_gate,
@@ -1139,6 +1143,7 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
         tracks,
         zone_tracks: _,
         demo_config: _,
+        benchmark_presets: _,
         circuit_names,
         teams,
         model_gate: _,

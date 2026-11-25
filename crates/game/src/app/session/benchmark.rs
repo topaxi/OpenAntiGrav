@@ -45,10 +45,20 @@ struct Launch {
 struct Saved {
     race_options: Option<oag_raceplay::Options>,
     autopilot: bool,
+    /// The settings as the player has them, put back when a preset was applied over them.
+    settings: Option<crate::settings::Settings>,
     trail: Vec<oag_ui::menu::Spot>,
 }
 
 impl State {
+    /// Whether a preset's settings are in effect, so nothing is written to `settings.toml` until
+    /// the player's own are back.
+    pub(crate) fn holds_settings(&self) -> bool {
+        self.saved
+            .as_ref()
+            .is_some_and(|saved| saved.settings.is_some())
+    }
+
     /// The benchmark the race being built is, if one is being launched: handed to the stage.
     pub(crate) fn take_launch(&mut self) -> Option<Live> {
         let launch = self.launching.take()?;
@@ -119,6 +129,18 @@ impl Session {
             return false;
         };
         plan::pin(&mut options);
+        let preset_settings = match preset.as_deref() {
+            None => None,
+            Some(name) => match self.benchmark_preset(name) {
+                Ok(settings) => Some(settings),
+                Err(why) => {
+                    log::error!("{why}");
+                    self.benchmark.cli = None;
+                    self.quit |= origin == Origin::Cli;
+                    return false;
+                }
+            },
+        };
         let trail = match &self.stage {
             Stage::Menu(stage) => stage.menu.trail(),
             _ => Vec::new(),
@@ -129,8 +151,15 @@ impl Session {
             self.benchmark.saved = Some(Saved {
                 race_options: player,
                 autopilot: self.autopilot,
+                settings: preset_settings.is_some().then(|| self.settings.clone()),
                 trail,
             });
+        }
+        for (key, value) in preset_settings.into_iter().flatten() {
+            self.apply_setting(
+                &format!("graphics.{key}"),
+                &oag_ui::menu::Value::Text(value),
+            );
         }
         self.autopilot = true;
         self.autopilot_pilot = None;
@@ -157,11 +186,29 @@ impl Session {
         }
     }
 
-    /// Puts the player's own options and autopilot flag back.
+    /// The settings the preset `name` sets, or why there is no such preset.
+    fn benchmark_preset(&self, name: &str) -> Result<Vec<(String, String)>, String> {
+        let presets = self
+            .shell
+            .as_ref()
+            .and_then(|shell| shell.benchmark_presets.as_ref());
+        match presets.and_then(|presets| presets.get(name)) {
+            Some(preset) => Ok(preset.settings.clone()),
+            None => Err(format!(
+                "no benchmark preset called {name:?} for this title; there are: {}",
+                presets.map_or_else(|| "none".to_string(), |p| p.names().join(", "))
+            )),
+        }
+    }
+
+    /// Puts the player's own options, autopilot flag and (after a preset) settings back.
     fn restore_benchmark_player(&mut self) {
         if let Some(saved) = self.benchmark.saved.take() {
             self.race_options = saved.race_options;
             self.autopilot = saved.autopilot;
+            if let Some(settings) = saved.settings {
+                self.settings = settings;
+            }
         }
     }
 

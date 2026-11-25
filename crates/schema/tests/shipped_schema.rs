@@ -55,6 +55,26 @@ fn shipped() -> Vec<(&'static str, &'static str)> {
             "replay-header",
         ),
         (
+            "assets/fallback/Data/XML/BenchmarkPresets_Pulse.toml",
+            "benchmark-presets",
+        ),
+        (
+            "assets/fallback/Data/XML/BenchmarkPresets_Pure.toml",
+            "benchmark-presets",
+        ),
+        (
+            "assets/fallback/Data/XML/BenchmarkPresets_HD.toml",
+            "benchmark-presets",
+        ),
+        (
+            "assets/fallback/Data/XML/BenchmarkPresets_2048.toml",
+            "benchmark-presets",
+        ),
+        (
+            "assets/fallback/Data/XML/BenchmarkPresets_Omega.toml",
+            "benchmark-presets",
+        ),
+        (
             "assets/fallback/Data/XML/SplitHud_Pulse.toml",
             "screen-layout",
         ),

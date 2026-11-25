@@ -180,6 +180,26 @@ pub fn fallback_layer() -> Layer {
         include_bytes!("../../../assets/fallback/Data/XML/NowPlaying_Pure.xml"),
     );
     layer.insert_bytes(
+        "Data\\XML\\BenchmarkPresets_Pulse.toml",
+        include_bytes!("../../../assets/fallback/Data/XML/BenchmarkPresets_Pulse.toml"),
+    );
+    layer.insert_bytes(
+        "Data\\XML\\BenchmarkPresets_Pure.toml",
+        include_bytes!("../../../assets/fallback/Data/XML/BenchmarkPresets_Pure.toml"),
+    );
+    layer.insert_bytes(
+        "Data\\XML\\BenchmarkPresets_HD.toml",
+        include_bytes!("../../../assets/fallback/Data/XML/BenchmarkPresets_HD.toml"),
+    );
+    layer.insert_bytes(
+        "Data\\XML\\BenchmarkPresets_2048.toml",
+        include_bytes!("../../../assets/fallback/Data/XML/BenchmarkPresets_2048.toml"),
+    );
+    layer.insert_bytes(
+        "Data\\XML\\BenchmarkPresets_Omega.toml",
+        include_bytes!("../../../assets/fallback/Data/XML/BenchmarkPresets_Omega.toml"),
+    );
+    layer.insert_bytes(
         "Data\\XML\\SplitHud_Pulse.toml",
         include_bytes!("../../../assets/fallback/Data/XML/SplitHud_Pulse.toml"),
     );
