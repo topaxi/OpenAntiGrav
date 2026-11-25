@@ -1,6 +1,6 @@
 use super::*;
 
-fn context() -> Context {
+pub(crate) fn context() -> Context {
     Context {
         title: "Pulse",
         track: Some("16_Track".into()),
@@ -11,6 +11,9 @@ fn context() -> Context {
         driver: "d".into(),
         device: "linux x86_64".into(),
         settings: vec![("size".into(), "1280x720".into())],
+        details: vec![("RENDER SCALE".into(), "100".into())],
+        track_name: Some("Vineta K".into()),
+        build_version: "test",
         refresh: (60.0, "display"),
         frame_limit_hz: None,
         preset: None,
@@ -28,7 +31,7 @@ fn context() -> Context {
     }
 }
 
-fn report(frame_us: impl Iterator<Item = f64>) -> Report {
+pub(crate) fn report(frame_us: impl Iterator<Item = f64>) -> Report {
     Report {
         context: context(),
         frames: frame_us
@@ -51,7 +54,7 @@ fn report(frame_us: impl Iterator<Item = f64>) -> Report {
 
 /// Frames drawn before the craft is released: one tick each, so tick `COUNTDOWN_TICKS` is the
 /// first raced frame.
-const COUNTDOWN_FRAMES: usize = COUNTDOWN_TICKS as usize - 1;
+pub(crate) const COUNTDOWN_FRAMES: usize = COUNTDOWN_TICKS as usize - 1;
 
 #[test]
 fn figures_skip_the_countdown_and_count_the_budget() {

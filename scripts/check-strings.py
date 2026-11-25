@@ -115,6 +115,7 @@ STRING_CONSUMERS = [
     "crates/game/src/app/session/campaign.rs",
     "crates/game/src/campaign/pure_list.rs",
     "crates/game/src/mods.rs",
+    "crates/game/src/benchmark/text.rs",
     "crates/game/src/campaign/editor.rs",
     "crates/game/src/app/session/campaign_editor.rs",
     "crates/game/src/replays/page.rs",

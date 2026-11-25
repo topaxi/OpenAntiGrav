@@ -205,6 +205,7 @@ impl Session {
             matches!(&self.stage, Stage::Race(stage) if !stage.race.core.sim.finished()),
             self.photo.is_some(),
             self.viewer.is_some(),
+            self.on_benchmark(),
         )
     }
 
@@ -215,13 +216,15 @@ impl Session {
 }
 
 /// Whether the racing overlay is on duty: a race that has not finished, with neither photo
-/// mode nor the replay viewer over it.
+/// mode nor the replay viewer over it, and not a benchmark (its race flies on the autopilot, so
+/// the overlay's buttons would be inert).
 pub(crate) const fn overlay_reads_fingers(
     racing: bool,
     photo_open: bool,
     viewer_open: bool,
+    benchmark: bool,
 ) -> bool {
-    racing && !photo_open && !viewer_open
+    racing && !photo_open && !viewer_open && !benchmark
 }
 
 #[cfg(test)]
@@ -275,10 +278,11 @@ mod tests {
 
     #[test]
     fn the_overlay_reads_fingers_only_over_a_bare_race() {
-        assert!(super::overlay_reads_fingers(true, false, false));
-        assert!(!super::overlay_reads_fingers(false, false, false));
-        assert!(!super::overlay_reads_fingers(true, true, false));
-        assert!(!super::overlay_reads_fingers(true, false, true));
-        assert!(!super::overlay_reads_fingers(true, true, true));
+        assert!(super::overlay_reads_fingers(true, false, false, false));
+        assert!(!super::overlay_reads_fingers(false, false, false, false));
+        assert!(!super::overlay_reads_fingers(true, true, false, false));
+        assert!(!super::overlay_reads_fingers(true, false, true, false));
+        assert!(!super::overlay_reads_fingers(true, true, true, false));
+        assert!(!super::overlay_reads_fingers(true, false, false, true));
     }
 }

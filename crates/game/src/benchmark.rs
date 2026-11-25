@@ -14,6 +14,7 @@ pub mod recorder;
 pub mod report;
 pub mod screen;
 pub mod stats;
+pub mod text;
 
 pub use recorder::Recorder;
 pub use report::{Context, Report};
@@ -148,7 +149,16 @@ pub struct Done {
     pub focus: Choice,
     /// Where the result file went.
     pub saved: Option<String>,
+    /// The project's strings in the player's language, which the screen draws its words from.
+    pub strings: oag_ui::language::StringTable,
+    /// What the screen shows besides the report.
+    pub view: screen::View,
+    /// Ticks the COPIED (or COULD NOT COPY) label stays on its button.
+    pub copied_ticks: u32,
 }
+
+/// Ticks a copy's answer stays on the button: two seconds.
+pub const COPIED_TICKS: u32 = 120;
 
 /// A benchmark race, from its first frame to its stats screen. Lives on the race stage, so it
 /// ends with the race.

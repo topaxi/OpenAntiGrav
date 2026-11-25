@@ -132,6 +132,12 @@ impl Session {
             if stage.benchmark.as_ref().is_some_and(|live| live.done.is_none()))
     }
 
+    /// Whether a benchmark is loading or running: the window and the output stay as they are
+    /// until its figures are in.
+    pub(crate) fn benchmark_running(&self) -> bool {
+        matches!(self.benchmark_phase(), Some("loading" | "running"))
+    }
+
     /// Whether the stats screen is up.
     pub(crate) fn on_benchmark_screen(&self) -> bool {
         matches!(&self.stage, Stage::Race(stage)
@@ -462,6 +468,7 @@ impl Session {
         rect: (f32, f32, f32, f32),
         back: Button,
     ) -> bool {
+        self.age_copy_label();
         let grid = super::pointer::in_grid(*pointer, oag_display::space::Space::PSP, rect, 1.0);
         let buttons = self.controls.buttons_mut();
         let mut chosen = None;
@@ -470,7 +477,8 @@ impl Session {
             buttons.consume_press(press);
             pressed
         };
-        let moved = take(Button::Left) | take(Button::Right);
+        let forward = take(Button::Right) | take(Button::Down);
+        let backward = take(Button::Left) | take(Button::Up);
         let confirmed = take(Button::Cross) | take(Button::Start);
         let left_back = take(back);
         let Stage::Race(stage) = &mut self.stage else {
@@ -479,11 +487,9 @@ impl Session {
         let Some(done) = stage.benchmark.as_mut().and_then(|live| live.done.as_mut()) else {
             return false;
         };
-        if moved {
-            done.focus = match done.focus {
-                Choice::Back => Choice::Again,
-                Choice::Again => Choice::Back,
-            };
+        let can_copy = done.view.can_copy;
+        if forward || backward {
+            done.focus = screen::step(done.focus, forward && !backward, can_copy);
         }
         if confirmed {
             chosen = Some(done.focus);
@@ -493,11 +499,22 @@ impl Session {
         }
         if grid.clicked
             && let Some((x, y)) = grid.at
-            && let Some(choice) = screen::hit(x, y)
+            && let Some(choice) = screen::hit(x, y, can_copy)
         {
             chosen = Some(choice);
         }
+        if let Some(choice) = chosen {
+            done.focus = choice;
+        }
         match chosen {
+            Some(Choice::Details) => {
+                done.view.details = !done.view.details;
+                false
+            }
+            Some(Choice::Copy) => {
+                self.copy_benchmark_result();
+                false
+            }
             Some(Choice::Back) => {
                 self.leave_benchmark();
                 true
@@ -507,6 +524,38 @@ impl Session {
                 self.launch_benchmark(origin, request, Some(cap))
             }
             None => false,
+        }
+    }
+
+    /// COPY TO CLIPBOARD: puts the result's text on the clipboard and shows how it went.
+    fn copy_benchmark_result(&mut self) {
+        let Stage::Race(stage) = &mut self.stage else {
+            return;
+        };
+        let Some(done) = stage.benchmark.as_mut().and_then(|live| live.done.as_mut()) else {
+            return;
+        };
+        let strings = &done.strings;
+        let say = |id: &str, english: &str| strings.get_or_fallback(id, english).to_string();
+        let text = benchmark::text::copy_text(&done.report, &say);
+        let copied = crate::app::clipboard::write(&text);
+        debug!("benchmark result copied to the clipboard: {copied}");
+        done.view.copied = Some(copied);
+        done.copied_ticks = benchmark::COPIED_TICKS;
+    }
+
+    /// Takes the COPIED label off its button once its ticks have run out.
+    fn age_copy_label(&mut self) {
+        let Stage::Race(stage) = &mut self.stage else {
+            return;
+        };
+        if let Some(done) = stage.benchmark.as_mut().and_then(|live| live.done.as_mut())
+            && done.copied_ticks > 0
+        {
+            done.copied_ticks -= 1;
+            if done.copied_ticks == 0 {
+                done.view.copied = None;
+            }
         }
     }
 
@@ -583,8 +632,58 @@ impl Session {
                 report,
                 focus: Choice::Back,
                 saved,
+                strings: oag_ui::strings::project_table(self.settings.language.as_deref()),
+                view: screen::View {
+                    can_copy: crate::app::clipboard::CAN_WRITE,
+                    ..screen::View::default()
+                },
+                copied_ticks: 0,
             });
         }
+    }
+
+    /// [`DETAIL_KEYS`] as `(row name, value)` in the words the settings pages show: the row's own
+    /// label and the label of the value the row is on, read out of the menu tree the player
+    /// browses, so a name edited there is edited here.
+    fn benchmark_details(&self) -> Vec<(String, String)> {
+        let Some(shell) = self.shell.as_ref() else {
+            return Vec::new();
+        };
+        let rect = self.scene_rect(self.gpu.output.size());
+        let seeds = crate::settings::menu_seeds(
+            &self.settings,
+            self.anisotropy,
+            shell.title,
+            shell.platform,
+        );
+        DETAIL_KEYS
+            .iter()
+            .filter_map(|key| {
+                let value = if *key == "graphics.render_scale" {
+                    self.render_scale_for(rect).to_string()
+                } else {
+                    seeds
+                        .iter()
+                        .find(|(seeded, _)| seeded == key)?
+                        .1
+                        .to_string()
+                };
+                let entry = shell
+                    .definition
+                    .pages
+                    .iter()
+                    .flat_map(|page| page.entries.iter())
+                    .find(|entry| entry.setting() == Some(key))?;
+                let shown = match entry {
+                    oag_ui::menu::Entry::Choice { values, .. } => values
+                        .iter()
+                        .find(|choice| choice.value == value)
+                        .map_or(value, |choice| choice.label.clone()),
+                    _ => value,
+                };
+                Some((entry.label().to_string(), shown))
+            })
+            .collect()
     }
 
     fn benchmark_report(&self) -> Option<Report> {
@@ -710,6 +809,15 @@ impl Session {
         let context = benchmark::Context {
             title: title.name,
             track: Some(format!("{}: {}", title.name, stage.circuit)),
+            track_name: self.shell.as_ref().and_then(|shell| {
+                shell
+                    .tracks
+                    .iter()
+                    .find(|(track, _)| track.entry_name() == stage.circuit)
+                    .map(|(_, name)| name.clone())
+            }),
+            details: self.benchmark_details(),
+            build_version: oag_net::BUILD_VERSION,
             mode: world.mode().name(),
             laps_target: world.laps_target(),
             adapter: benchmark::report::adapter_json(&info, false),
@@ -742,6 +850,29 @@ impl Session {
         })
     }
 }
+
+/// The settings that change what a frame costs, by the menu's own setting keys, in the order the
+/// stats screen's DETAILS lists them.
+const DETAIL_KEYS: [&str; 18] = [
+    "graphics.render_scale",
+    "graphics.reconstruction",
+    "graphics.msaa",
+    "graphics.shadows",
+    "graphics.motion_blur",
+    "graphics.motion_blur_resolution",
+    "graphics.anisotropy",
+    "graphics.model_detail",
+    "graphics.texture_detail",
+    "graphics.trail_order",
+    "graphics.scenery_sort",
+    "graphics.trail_length",
+    "graphics.weather",
+    "graphics.camera_view",
+    "graphics.fov",
+    "display.vsync",
+    "display.frame_limit",
+    "graphics.target_fps",
+];
 
 /// Whether `listing` is a mod of the player's that is on and opened: one a run with mods loads.
 fn is_loaded_mod(listing: &crate::mods::Listing) -> bool {

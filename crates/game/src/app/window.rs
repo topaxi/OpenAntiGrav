@@ -243,6 +243,12 @@ pub(crate) fn is_fullscreen_key(key: &winit::keyboard::Key, pressed: bool, repea
     pressed && !repeat && *key == winit::keyboard::Key::Named(winit::keyboard::NamedKey::F11)
 }
 
+/// Whether F11 may change the window: not while a benchmark is loading or running, where a new
+/// output size would move every figure measured after it (`docs/tools/in-game-benchmark.md`).
+pub(crate) const fn fullscreen_may_change(benchmark_running: bool) -> bool {
+    !benchmark_running
+}
+
 /// Flips `window` between borderless fullscreen on its current monitor and windowed.
 ///
 /// A windowed window is fixed size (min = max, the float signal, see [`attributes`]) and winit
@@ -755,6 +761,12 @@ mod tests {
         let on = toggled_fullscreen(None, None);
         assert!(matches!(on, Some(Fullscreen::Borderless(None))));
         assert!(toggled_fullscreen(on, None).is_none());
+    }
+
+    #[test]
+    fn f11_is_ignored_while_a_benchmark_runs() {
+        assert!(fullscreen_may_change(false));
+        assert!(!fullscreen_may_change(true));
     }
 
     #[test]

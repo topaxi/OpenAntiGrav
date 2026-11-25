@@ -845,3 +845,57 @@ fn the_mods_row_is_left_out_while_no_mod_is_enabled() {
     assert!(labels.iter().any(|l| l == "VSYNC"), "{labels:?}");
     assert!(!labels.iter().any(|l| l == "MODS"), "{labels:?}");
 }
+
+/// The stats screen's DETAILS swaps its plain lines for the full numbers, back again, and COPY TO
+/// CLIPBOARD answers with a label of its own (COPIED, or COULD NOT COPY where the machine has no
+/// clipboard to write). The race behind the panel is frozen, so a screen that does not change
+/// between the steps has dropped the action. Fails on a build whose DETAILS or COPY does nothing.
+#[test]
+#[ignore = "needs data/images/pulse-psp-eu.chd and a GPU"]
+fn the_stats_screen_swaps_to_details_and_answers_a_copy() {
+    let Some(image) = oag_testdata::image("data/images/pulse-psp-eu.chd") else {
+        return;
+    };
+    let dir = std::env::temp_dir().join("oag-in-game-benchmark-stats-ground-truth");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("a temp directory");
+    let shot = |name: &str| dir.join(format!("{name}.png"));
+    let script = format!(
+        "until benchmark=stats within 6000; screenshot {}; press left; press left; press cross; \
+         ticks 3; screenshot {}; press cross; ticks 3; screenshot {}; press right; press cross; \
+         ticks 3; screenshot {}; quit",
+        shot("summary").display(),
+        shot("details").display(),
+        shot("summary-again").display(),
+        shot("copied").display(),
+    );
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
+        .arg(&image)
+        .args(["--no-audio", "--no-intro", "--benchmark", "--ticks"])
+        .arg(TICKS.to_string())
+        .arg("--drive")
+        .arg(script)
+        .env("XDG_CONFIG_HOME", dir.join("config"))
+        .env("XDG_STATE_HOME", dir.join("state"))
+        .env("XDG_DATA_HOME", dir.join("data"))
+        .env_remove("DISPLAY")
+        .env_remove("WAYLAND_DISPLAY")
+        .output()
+        .expect("running oag-game");
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let read = |name: &str| std::fs::read(shot(name)).expect("a screenshot");
+    // Compared as booleans: a failed `assert_eq!` would print two PNGs.
+    assert!(
+        read("summary") != read("details"),
+        "DETAILS changed nothing"
+    );
+    assert!(
+        read("details") != read("summary-again"),
+        "SUMMARY did not come back to the plain lines"
+    );
+    assert!(read("summary") != read("copied"), "COPY answered nothing");
+}
