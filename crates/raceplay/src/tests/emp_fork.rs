@@ -29,15 +29,18 @@ fn start(track: &str) -> Option<Race> {
     Some(Race::start(loaded.setup, loaded.view, loaded.modules))
 }
 
+/// The first branch section from offset `k` on that placement lays into.
+fn laid_branch(survey: &Survey, k: usize) -> usize {
+    (k..survey.branches[0].entries.len())
+        .filter_map(|k| survey.branch_entry(0, k))
+        .find(|&i| survey.has_record(i))
+        .expect("a laid branch section")
+}
+
 fn laid(survey: &Survey, branch_offset: usize, ring: usize) -> [Placed; 2] {
     [
         Placed {
-            entry: u16::try_from(
-                survey
-                    .branch_entry(0, branch_offset)
-                    .expect("a branch entry"),
-            )
-            .expect("fits"),
+            entry: u16::try_from(laid_branch(survey, branch_offset)).expect("fits"),
             lane: 0,
             live: false,
         },
@@ -206,10 +209,15 @@ fn mine_at(entry: usize) -> Placed {
 /// apart), with 60 more entries of branch ahead.
 fn clear_of_the_ring(survey: &Survey) -> usize {
     let branch = &survey.branches[0];
+    let total = survey.entries.len();
     (0..branch.entries.len() - 60)
         .find(|&k| {
             let at = branch.entries[k].centre;
-            branch.to_primary[k].is_none()
+            let ahead = survey.branch_entry(0, k + 40);
+            let beside = (usize::from(branch.split) + k + 40) % total;
+            branch.to_primary[k].is_none_or(|p| !p.near)
+                && ahead.is_some_and(|i| survey.has_record(i))
+                && survey.has_record(beside)
                 && survey
                     .entries
                     .iter()
@@ -289,14 +297,22 @@ fn an_hd_emp_fired_beside_the_other_route_forks_at_launch() {
                 }
             };
             let from = route(5, on_branch);
-            let other = route(15, !on_branch);
+            // Past where the two overlap, where each route's sections hold their own records.
+            let other = if on_branch {
+                (90..)
+                    .map(|o| route(o, false))
+                    .find(|&i| survey.has_record(i))
+                    .expect("a laid ring section")
+            } else {
+                laid_branch(&survey, 90)
+            };
             fire_from(&mut race, from, &[mine_at(other)], 0);
             let field = &race.core.sim.world.detonator;
             assert!(
                 field.emp.wave.forked,
                 "{track} on_branch={on_branch}: forked at launch"
             );
-            fire_ticks(&mut race, 40);
+            fire_ticks(&mut race, 120);
             assert!(
                 race.core.sim.world.detonator.live_mines().is_empty(),
                 "{track} on_branch={on_branch}: the other route's mine goes"
@@ -341,7 +357,7 @@ fn an_hd_ring_launch_away_from_a_split_is_unchanged() {
         });
         let mut mines = vec![mine_at((from + 40) % total)];
         if !survey.branches.is_empty() {
-            mines.push(mine_at(survey.branch_entry(0, 50).expect("a branch entry")));
+            mines.push(mine_at(laid_branch(&survey, 50)));
         }
         fire_from(&mut race, from, &mines, 130);
         let field = &race.core.sim.world.detonator;
@@ -398,29 +414,71 @@ fn an_hd_emp_fired_beside_the_merge_stands_still_until_it() {
     assert!(field.live_mines().is_empty(), "the branch's mine goes");
 }
 
-/// **Omega runs the same law** (its sweep `0x0133c600` carries the same launch fork): on its
-/// re-shipped forked circuits a branch launch clears the branch's mine and one beside the split
-/// forks at once.
+/// **The other route's record, on the disc.** `05_ubermall`'s branch sections 26 to 68 hold no
+/// record of their own: a branch launch past the fork's reach walks them and takes the primary
+/// route's mine instead.
 #[test]
-#[ignore = "needs data/images/omega-ps4-eu.pkg"]
-fn an_omega_emp_fired_on_or_beside_a_branch_follows_it() {
-    let Some(image) = oag_testdata::image("omega-ps4-eu.pkg") else {
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn an_hd_front_on_a_section_with_no_record_takes_the_other_routes() {
+    let Some(mut race) = start(r"Data\Environments\05_ubermall\track.vex") else {
         return;
     };
-    for track in [
-        r"Data\Environments\05_ubermall\track.vex",
-        r"Data\Environments\15_anulpha_pass\track.vex",
-    ] {
+    let survey = race
+        .core
+        .sim
+        .detonator
+        .as_ref()
+        .expect("Detonator")
+        .survey
+        .clone();
+    let from = survey.branch_entry(0, 40).expect("a branch entry");
+    assert!(!survey.has_record(survey.branch_entry(0, 50).expect("a branch entry")));
+    let primary = survey.sibling(survey.branch_entry(0, 50).expect("a branch entry"));
+    let primary = primary.expect("a partner");
+    assert!(survey.has_record(primary), "the primary route holds it");
+    fire_from(&mut race, from, &[mine_at(primary)], 20);
+    assert!(race.core.sim.world.detonator.live_mines().is_empty());
+}
+
+/// **A ring launch the lookup changes.** On `05_ubermall` a ring wave launched on entries 31 to 44
+/// or 54 reaches ring sections past its own front, through the branch fork's records
+/// (`detonator-emp.md`, "The other route's record"): from entry 31 it takes entry 157.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn an_hd_ring_wave_through_the_fork_reaches_a_few_sections_further() {
+    let Some(mut race) = start(r"Data\Environments\05_ubermall\track.vex") else {
+        return;
+    };
+    let detonator = race.core.sim.detonator.as_ref().expect("Detonator");
+    let survey = detonator.survey.clone();
+    let config = detonator.emp.expect("an EMP");
+    let field = &mut race.core.sim.world.detonator;
+    field.mines[0] = mine_at(157);
+    field.live_mines = 1;
+    field.live_bombs = 0;
+    field.emp.charge = config.hi;
+    field.emp.gauge = 1.0;
+    fire(field, &survey, &config, 31);
+    for _ in 0..130 {
+        step_wave(field, &survey, &config, 1.0 / 60.0);
+    }
+    assert!(field.live_mines().is_empty());
+}
+
+/// A branch launch clears the branch's mine and a ring launch beside the split forks at once and
+/// clears it too, on `source`'s `tracks`.
+fn the_law_holds_on(source: &str, tracks: &[&str]) {
+    for track in tracks {
         let load = || {
             let loaded = crate::load(&crate::Options {
-                source: image.display().to_string(),
+                source: source.to_string(),
                 class: "VENOM".to_string(),
                 mode: Mode::Detonator,
-                track: Some(track.to_string()),
+                track: Some((*track).to_string()),
                 no_effects: true,
                 ..crate::Options::default()
             })
-            .expect("loading an Omega Detonator race");
+            .expect("loading a Detonator race");
             Race::start(loaded.setup, loaded.view, loaded.modules)
         };
         let mut race = load();
@@ -446,13 +504,50 @@ fn an_omega_emp_fired_on_or_beside_a_branch_follows_it() {
         let mut race = load();
         let split = usize::from(survey.branches[0].split);
         let beside = (split + 5) % survey.entries.len();
-        let other = survey.branch_entry(0, 15).expect("a branch entry");
+        let other = laid_branch(&survey, 90);
         fire_from(&mut race, beside, &[mine_at(other)], 0);
         assert!(race.core.sim.world.detonator.emp.wave.forked, "{track}");
-        fire_ticks(&mut race, 40);
+        fire_ticks(&mut race, 120);
         assert!(
             race.core.sim.world.detonator.live_mines().is_empty(),
             "{track}"
         );
     }
+}
+
+/// **Omega runs the same law** (its sweep `0x0133c600` carries the same launch fork).
+#[test]
+#[ignore = "needs data/images/omega-ps4-eu.pkg"]
+fn an_omega_emp_fired_on_or_beside_a_branch_follows_it() {
+    let Some(image) = oag_testdata::image("omega-ps4-eu.pkg") else {
+        return;
+    };
+    the_law_holds_on(
+        &image.display().to_string(),
+        &[
+            r"Data\Environments\05_ubermall\track.vex",
+            r"Data\Environments\15_anulpha_pass\track.vex",
+        ],
+    );
+}
+
+/// **2048 runs the same law** (`FUN_811e7c68`, `FUN_811e7dd6`), on HD's `zone_3` as 2048's DLC1
+/// pack ships it. Its pads do not charge the EMP yet, so the charge is set by the test.
+#[test]
+#[ignore = "needs the unpacked 2048 packages in data/extracted/"]
+fn a_2048_emp_fired_on_or_beside_a_branch_follows_it() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../data/extracted/vita/PCSF00007");
+    if !path.join("patch-v104").exists() {
+        assert!(
+            std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
+            "OAG_REQUIRE_GAME_DATA is set but {} is missing",
+            path.display()
+        );
+        return;
+    }
+    the_law_holds_on(
+        &path.display().to_string(),
+        &[r"data\art\published\DLC1\environments\zone_3\track.vex"],
+    );
 }
