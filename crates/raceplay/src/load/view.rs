@@ -630,15 +630,24 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
             Err(why) => report.push(format!("{why} - {name} will not be drawn")),
         }
     }
-    // Lent before the mods' effects, so no mod sprite moves; a no-op unless `graphics.trail_hits`.
-    let ps2_trail = title.looks.ps2_trail.applies(archives.layout.platform);
-    let lent_trail_hit = trail_hits::lend(
-        options,
+    // The ribbon's texture is a title axis, not a constant: Pulse and Pure name
+    // one, HD authors a template whose material names its own - craft content,
+    // hence `craft_title`. See `oag_title::exhaust::Exhaust`.
+    let (noise, trail_blend, trail_shape) = assets::trail_texture(
+        craft_of(&mut craft, &mut archives),
         craft_title,
-        oag_fx::exhaust::TrailLaw::for_ps2(ps2_trail),
-        &mut effects,
         &mut report,
     );
+    // Lent before the mods' effects, so no mod sprite moves; a no-op unless `graphics.trail_hits`.
+    // Redrawn in the colour of this race's own ribbon, texture and layer law.
+    let ps2_trail = title.looks.ps2_trail.applies(archives.layout.platform);
+    let ribbon_hue = oag_fx::exhaust::TrailLaw::for_ps2(ps2_trail).ribbon_colour(
+        noise
+            .as_ref()
+            .map_or([1.0; 3], oag_fx::exhaust::FlareTexture::mean_rgb),
+    );
+    let lent_trail_hit =
+        trail_hits::lend(options, craft_title, ribbon_hue, &mut effects, &mut report);
     let mods = mod_assets::ModAssets::new(&extension_sources, title, options);
     let (mod_shaders, mod_effects) =
         mods.shaders_and_effects(&mut archives, &mut effects, &mut report);
@@ -676,14 +685,6 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
         &mut report,
     );
 
-    // The ribbon's texture is a title axis, not a constant: Pulse and Pure name
-    // one, HD authors a template whose material names its own - craft content,
-    // hence `craft_title`. See `oag_title::exhaust::Exhaust`.
-    let (noise, trail_blend, trail_shape) = assets::trail_texture(
-        craft_of(&mut craft, &mut archives),
-        craft_title,
-        &mut report,
-    );
     if trail_shape.is_some() {
         report.push(
             "the ribbon's geometry is HD's own, measured from the running game: a 54-sample \
