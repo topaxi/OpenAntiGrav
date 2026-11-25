@@ -522,7 +522,7 @@ What a player gets from it in the original:
 | Draws its effect | yes: `WO_QUAKE_DETONATOR` `EMP2` attached by pointer to `emp+0xb0`, which holds the identity matrix, so at the world origin; its extent co-factor is never set | 80 read, not seen |
 | Draws its light | yes: `EMP_DrawLights` adds a light at `emp+0xe0` (that matrix's translation, the origin) while `emp+0x60` holds the handle | 75 read, not seen |
 | Clears anything | no: the launch call's init branch kills nothing and the sweep never recurses into it | 80 read |
-| Visible to the player | little or none: it is at the world origin, not on the road ahead, and lasts until the main front's merge, under 25 or so frames | 50, inferred from the geometry |
+| Visible to the player | maybe, as a distant puff: the world origin is 116 to 250 units from the nearest road section of the three forked circuits, so its 50-unit light cannot reach the road, but the particles can be seen if the view points that way; it lasts until the main front's merge, under 25 or so frames | light 75, particles 40, inferred from the geometry |
 
 Ours draws neither effect nor light for it, a departure: a stationary second front at an
 arbitrary point is a rendering defect of the original.
@@ -554,7 +554,7 @@ sections after the split and the last before the merge (the first about 35, by s
 
 **Ring launches are unchanged except within those stretches.** There, a ring launch beside the
 split now has a second front on the branch at once, and one beside the merge has a motionless
-second front until the main front reaches the merge. On `zone_3`, whose merge is nine ring entries
+second front until the main front reaches the merge. The record lookup ("The other route's record") changes a few more on `05_ubermall`. On `zone_3`, whose merge is nine ring entries
 before its split, such a wave still forks at the split afterwards. Pinned by
 `tests::emp_fork::an_hd_emp_fired_beside_the_other_route_forks_at_launch` and
 `an_hd_emp_fired_beside_the_merge_stands_still_until_it`.
@@ -577,12 +577,7 @@ merge. A launch away from any split's two stretches is unchanged: the state hash
 Ours chosen: the fork born at launch clears the entry it stands on on the first tick, as the main
 front does (the original's launch call kills nothing).
 
-**Open.** `EMP_SweepSections` also reaches the other route per point: when the front's own point
-has no placement record, it looks up the sibling's nearest point (`Track_FindSiblingSection`, no
-distance test) and destroys that record's lanes (`0x0013baa4`-`0x0013bb2c`; 2048 and Omega the
-same). Unwired: it would clear the other route's mines from a front that never forks, on a ring
-launch too. Whether an empty section keeps a record is unread (it decides how often it runs).
-Confidence 65.
+The sweep also reaches the other route per point: "The other route's record".
 
 **Tests.** `emp::tests::a_launch_on_a_branch_walks_the_branch_then_the_ring`,
 `a_launch_beside_the_other_route_forks_onto_it`,
@@ -593,12 +588,54 @@ Confidence 65.
 `an_hd_emp_fired_beside_the_merge_stands_still_until_it`,
 `an_hd_ring_launch_away_from_a_split_is_unchanged`.
 
-**2048 and Omega.** 2048: checked, applies, not wired (same fork, `FUN_811e7c68`; its EMP never
-charges in ours, `oag_title::Detonator::pads`). **Omega: ported**: its EMP is armed and runs this
-module, its `05_ubermall` and `15_anulpha_pass` ship the split, and
-`tests::emp_fork::an_omega_emp_fired_on_or_beside_a_branch_follows_it` holds the branch launch and
-the launch fork there. Omega's `0x0133c600` is the **EMP's** sweep (it spawns
-`WO_QUAKE_DETONATOR` with `EMP2`), which closes the 50 below (80).
+**2048 and Omega.** Both **ported**: the fork, the merge arm and the record lookup below are the
+shared `emp` module, and both builds carry the same code (2048 `FUN_811e7c68`, `FUN_811e7dd6`;
+Omega `0x0133c600`). Tests: `tests::emp_fork::a_2048_emp_fired_on_or_beside_a_branch_follows_it`
+(HD's `zone_3` as 2048's DLC1 pack ships it) and
+`an_omega_emp_fired_on_or_beside_a_branch_follows_it` (`05_ubermall`, `15_anulpha_pass`).
+**2048's pads still never charge the EMP** (`oag_title::Detonator::pads` false: its pad arms are
+unread), so no player fires one there; the tests set the charge. Omega's `0x0133c600` is the
+**EMP's** sweep (it spawns `WO_QUAKE_DETONATOR` with `EMP2`), which closes the 50 below (80).
+
+## The other route's record (2026-11-25)
+
+Static, HD `0x0013ba44`-`0x0013bb2c`, and the same in 2048 `FUN_811e7dd6` and Omega `0x0133c600`.
+
+**The records are the placement entry array** (`*(rm+0x6de50)`, count `rm+0x6de4c`, 48 bytes,
+[detonator-placement.md](detonator-placement.md)): one per section its walk stored, `+0x08` usable,
+`+0x18` the section. The sweep matches a record only when it is usable **and** its section is the
+point's (`lbz r0,8(r29)` at `0x0013ba80`, `lwz r0,0x18(r29)` compare). So a section the walk did
+not store (an alternate section not separated from the primary route, the split's first primary
+section) or marked unusable (jump gap, start zone, over 20 lanes) has no record.
+
+```text
+point = the section the front stands on
+if a usable record has point:  destroy every lane of that record
+else:
+    sibling = Track_FindSiblingSection(point)     ; no distance test (search 500.0)
+    if sibling and a usable record has sibling:   destroy every lane of that record
+```
+
+An emptied record stays a record: destroying its mines changes lanes, not the entry, so it never
+reaches across. Confidence **80** (HD instructions; two builds agree; not seen live).
+
+**On the discs.** Only branch sections reach across. On every forked circuit, no primary-route
+section that lacks a record has a partner holding one, so a ring front never uses it; a branch
+front does, on `zone_3` over offsets 19 to 28 and 498 to 531, `05_ubermall` 26 to 68 and 151 to
+209 (reversed 26 to 58 and 141 to 209), `15_anulpha_pass` 27 to 48, 71 to 72 and 235 to 290.
+
+**Which ring launches change** (every ring entry of the four forked files fired at gauge `1`,
+with and without the lookup, comparing what each wave clears): only **`05_ubermall` forward, ring
+entries 31 to 44 and 54, and reversed, 21 to 32**, each clearing up to three more ring sections at
+the far end of its wave's reach (the branch fork's partners run ahead of the main front); none
+clears fewer. `zone_3` and `15_anulpha_pass` ring launches clear the same set.
+
+**Wired.** `emp::sweep_entry` with `Survey::has_record` (`usable` and in `Survey::lap`) and
+`Survey::sibling` (the partner the survey holds per section, searched to 500.0). Tests:
+`emp::tests::a_point_with_no_record_takes_the_other_routes_record`,
+`a_point_with_a_record_leaves_the_other_route_alone`, and disc
+`tests::emp_fork::an_hd_front_on_a_section_with_no_record_takes_the_other_routes`,
+`an_hd_ring_wave_through_the_fork_reaches_a_few_sections_further`.
 
 ### 2048 and Omega
 
