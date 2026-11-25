@@ -372,7 +372,9 @@ the core (a 100 x 90 box on the near ball) reads mean 143.0 to 157.5 against the
 90.2 to 95.8 against 118.8 (mean abs difference 66.7 both, limited by the grab's alignment). Pairs not worse: `mines-ahead`
 13.73 to 13.62, `pad` 7.68 to 7.64, `cannon-volley` 14.18 to 14.17. **Still open:** ours' body stays darker than the
 original's white (the A/B above puts the original's body rim near 0.4 to 0.7); the next read is `f[TC1]` itself (Open,
-below).
+below). **2048 and Omega: checked, differs.** The inline read is HD's container
+only: a `psp2` chunk declares its tangent and `rcsmodel::psp2::unpack_tangent` already decodes it; their mine rim draw itself
+is not wired (`det-mine-lit`: "checked, applies, not wired").
 
 **A live A/B says the white is this program, at a rim well above 0** (confidence 80). Same state, lap clock 2.5 s: the mine's
 brightness factor `K[0x3c]` (`0x008c1a18`, read `2.0`) written to `0.0` while paused, the game run 0.6 s, grabbed, then
