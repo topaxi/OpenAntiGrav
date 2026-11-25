@@ -75,15 +75,18 @@ mod tests {
         assert_eq!(alive, [0, 1, 3, 6]);
     }
 
-    /// Plain ignition keeps the authored count, and re-igniting resets a scaled system.
+    /// Plain ignition keeps the authored count, and igniting again resets a scaled system.
     #[test]
     fn ignition_without_a_scale_keeps_the_authored_count() {
         let effect = three_a_tick();
         let mut system = System::new();
         system.ignite_counting(&effect, Vec3::ZERO, 2.0);
+        assert_eq!(system.count_scale(), 2.0);
         system.ignite(&effect, Vec3::ZERO, 1.0);
         assert_eq!(system.count_scale(), 1.0);
-        run(&mut system, &effect, 1, &mut Rng::new(1));
-        assert_eq!(system.alive_count(), 3);
+        let mut plain = System::new();
+        plain.ignite(&effect, Vec3::ZERO, 1.0);
+        run(&mut plain, &effect, 1, &mut Rng::new(1));
+        assert_eq!(plain.alive_count(), 3);
     }
 }
