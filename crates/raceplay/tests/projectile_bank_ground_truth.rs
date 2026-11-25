@@ -1,6 +1,7 @@
 //! On Pulse's steepest bank a Rocket and a Plasma bolt ride the floor to the collision cage, update
-//! for update as the original's do, under Pulse's floor arms (`FloorArms::SteerToRidePoint`), and
-//! not under the parallel turn HD's arms take.
+//! for update as the original's do, under Pulse's floor arms (`FloorArms::SteerToRidePoint`). A
+//! parallel turn of the Rocket's and Plasma's probe arm (HD's) missed the same flights by 15 to 21
+//! units when applied for a run (`rocket-visuals.md`, "Pulse on the steepest bank").
 //!
 //! **`#[ignore]`d and never run in CI**: needs `data/images/pulse-psp-usa.chd` and
 //! `data/images/pure-psp-usa.chd`.

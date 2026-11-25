@@ -100,8 +100,13 @@ Unit tests on a flat floor with a 15 degree carried normal:
   normal may move; the Missile keeps Pulse's arms (inherited).
 - Pure's steepest bank: the census tool (`oag-trace track`) refuses a Pure image; the 15 degree
   floor is the steepest these shots met.
-- Whether `Rocket_FireVolley`'s matrix is the body's or a hull node's: decompile only. Either way
-  it is the craft's, not the located track's (which ours on Pulse takes from the spline).
+- Which craft frame the launch matrix is. Its rows are 0.75 long, so it is a scaled display matrix,
+  not the orthonormal physics body, and a display matrix carries the visual lean in turns. Every
+  shot here was fired on a straight, where the body's up, the display's up and the track's up agree,
+  so "the craft's up" is measured only where the three coincide; ours seeds the body's up. Next: fire
+  mid-turn and compare `+0xd0` against the body rows (`body+0x30` pose) and ours' lean
+  (`scripts/psp-lean-display.py`). Three inits agree it is not a located track record, so
+  `launch_normal_is_track_up` stays measured `false`.
 
 ## Cross-title
 

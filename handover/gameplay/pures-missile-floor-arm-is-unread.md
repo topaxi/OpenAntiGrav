@@ -2,7 +2,7 @@
 status: re-first
 titles: [pure]
 updated: 2026-11-25
-summary: "Pure's Rocket and Plasma floor law is measured and wired; its Missile still runs Pulse's arms, its own Missile_Update unread"
+summary: "Pure's Rocket and Plasma floor law is wired; its Missile keeps Pulse's arms, and a launch mid-turn (display lean) is unmeasured"
 ---
 
 # Pure's Missile floor arm is unread
@@ -19,6 +19,9 @@ Pure flyer keeps Pulse's arms through `FloorArms::for_other_weapons`.
 - A Pure volley fired at Vineta K's first corner never hit the floor (`v0 = 0` on every probe, the
   rockets fell to y -532). The craft had stopped against the corner's wall; whether the volley left
   the floor ahead or the probe misses there for another reason is not separated.
+- Pure's launch normal is the launch matrix's up row, 0.75 long: a scaled display matrix, which may
+  carry the craft's visual lean. All shots were on straights, where it equals the body's up that ours
+  seeds; a fire mid-turn is unmeasured (compare `+0xd0` with the body rows and our lean).
 - Pure's steepest bank is not censused: `oag-trace track` refuses a Pure image. The 15 degree floor
   on Sebenco Climb is the steepest a shot met.
 
