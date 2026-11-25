@@ -1,8 +1,12 @@
-//! `electricity.rcsmaterial` on Omega: the Detonator mine's `Electric_Visualiser`, HD's program.
+//! `electricity.rcsmaterial` on Omega and 2048: the Detonator mine's `Electric_Visualiser`, HD's
+//! program.
 //!
-//! The pixel program is HD's arithmetic (`oag_rcs::gcn::electricity` reads its shape: two taps of
-//! the bass and treble picture, one of the pitch picture, two of the electricity picture, the
-//! colour tap's `0.3` shift read off the code), with the pictures named by sampler. The draw is
+//! The pixel program is HD's arithmetic, read off Omega's GCN code (`oag_rcs::gcn::electricity`)
+//! or 2048's USSE code (`oag_rcs::gxp::electricity`): two taps of the bass and treble picture,
+//! one of the pitch picture, two of the electricity picture, the colour tap's `0.3` shift read
+//! off the code, with the pictures named by sampler. 2048's program squares the bass tap's and
+//! the pitch tap's red itself; the second glow-table entry's scale says so (`1.0`), and the colour
+//! tap's square is the scene's own decode on 2048. The draw is
 //! `super::super::electricity`'s: the material's three pictures ride the bindings
 //! [`super::twin_blend`] gives a material (the bass and treble picture the diffuse, the pitch
 //! picture the second, the electricity picture the third), and two consecutive glow-table entries
@@ -45,7 +49,7 @@ fn is_electricity(material: &Material) -> bool {
 }
 
 /// The two glow-table entries from the material's authored values.
-fn entries(material: &Material) -> Option<[Emissive; 2]> {
+fn entries(material: &Material, squared_taps: bool) -> Option<[Emissive; 2]> {
     let value = |name: &str| {
         material
             .param(name_hash(name))
@@ -70,7 +74,7 @@ fn entries(material: &Material) -> Option<[Emissive; 2]> {
                 value(TREBLE_HIT).unwrap_or(0.0),
             ],
             offset: value(PITCH_OFFSET)?,
-            scale: 0.0,
+            scale: if squared_taps { 1.0 } else { 0.0 },
             rate: 0.0,
             program: [PROGRAM_ELECTRICITY_AUDIO, 0.0],
         },
@@ -92,7 +96,10 @@ pub(super) fn plan(
         }
         let read = (|| {
             let file = textures(&material.name)?;
-            oag_rcs::gcn::electricity(&file)?;
+            let squared_taps = match oag_rcs::gcn::electricity(&file) {
+                Some(_) => false,
+                None => oag_rcs::gxp::electricity::electricity(&file)?.squared_taps,
+            };
             let readable = decoded
                 .submeshes
                 .iter()
@@ -111,7 +118,11 @@ pub(super) fn plan(
                 picture_memo::picture(path, textures, report)
             };
             let pictures = (picture(pitch)?, picture(uv_dist)?, picture(bass_treble)?);
-            Some((bass_treble.to_string(), pictures, entries(material)?))
+            Some((
+                bass_treble.to_string(),
+                pictures,
+                entries(material, squared_taps)?,
+            ))
         })();
         let Some((first, (second, wipe, _), pair)) = read else {
             report.electricity_unread += 1;
@@ -141,13 +152,23 @@ pub(super) fn plan(
     }
 }
 
+/// `VertexColour1`, whose alpha is the ring's: the Vita's own array where the declaration names it
+/// there, else the PS4's.
+fn vertex_colour1(submesh: &SubMesh) -> &[[u8; 4]] {
+    if submesh.vita_vertex_colour1.is_empty() {
+        &submesh.colours
+    } else {
+        &submesh.vita_vertex_colour1
+    }
+}
+
 /// Whether a submesh carries every attribute the ring's vertex program reads.
 fn routable(submesh: &SubMesh) -> bool {
     let n = submesh.positions.len();
     n > 0
         && submesh.texcoords.len() == n
         && submesh.packed_texcoords.len() == n
-        && submesh.colours.len() == n
+        && vertex_colour1(submesh).len() == n
 }
 
 /// `(texcoord, lightmap_texcoord, texcoord2, sun_mask)`.
@@ -165,7 +186,7 @@ pub(super) fn vertex(
     let slot = usize::try_from(twin?.slot).ok()?.checked_sub(1)?;
     (emissive.get(slot)?.program[0] == PROGRAM_ELECTRICITY).then_some(())?;
     let &[a, b, c, d] = submesh.packed_texcoords.get(i)?;
-    let &[.., alpha] = submesh.colours.get(i)?;
+    let &[.., alpha] = vertex_colour1(submesh).get(i)?;
     Some((
         *submesh.texcoords.get(i)?,
         [a, b],
