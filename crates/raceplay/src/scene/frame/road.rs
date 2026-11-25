@@ -71,16 +71,13 @@ impl Scene {
         if let oag_title::weapon_pad::WeaponPadGlow::ByClass(classes) =
             race.core.sim.weapon_pad_glow
         {
-            use oag_mesh::mesh::rcs::psp2::circuit_pads::PadClass;
-            for class in PadClass::ALL {
-                let cycle = match class {
-                    PadClass::Offensive => classes.offensive,
-                    PadClass::Defensive => classes.defensive,
-                    PadClass::Other => classes.other,
-                };
+            // Both lists run offensive, defensive, other.
+            for (program, cycle) in oag_mesh::mesh::PROGRAM_PAD_BARS
+                .into_iter()
+                .zip(classes.in_order())
+            {
                 let colour = cycle.colour(seconds.max(0.0) * cycle.keys_per_second);
-                self.track
-                    .write_program_glow(queue, class.program(), colour, 0.0);
+                self.track.write_program_glow(queue, program, colour, 0.0);
             }
         }
         if let Some(weapon_pads) = &self.weapon_pads {

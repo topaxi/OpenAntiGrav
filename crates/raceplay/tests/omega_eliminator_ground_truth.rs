@@ -47,6 +47,11 @@ fn an_omega_eliminator_is_won_on_a_score_off_its_own_slider() {
     // `Eliminations` slider's `minSlide` in `DATA09`'s `racebox_definition.xml`.
     assert_eq!(loaded.setup.eliminator_kill_target, Some(50));
 
+    // The pads cycle by class: yellow, green and red.
+    assert_eq!(
+        loaded.setup.weapon_pad_glow,
+        &oag_title::weapon_pad::WeaponPadGlow::ByClass(oag_title::weapon_pad::ClassCycles::LINEAGE)
+    );
     let context = loaded.hud.context().expect("Omega's layout parses");
     let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
     race.tick(&PlayerInputs::none());

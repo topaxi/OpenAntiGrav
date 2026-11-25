@@ -16,6 +16,14 @@ fn press_flip() -> PlayerInputs {
     })
 }
 
+/// The pads cycle by class: yellow, green and red (`docs/rendering/pads.md`, "2048 and Omega").
+fn check_pads(setup: &oag_raceplay::SimSetup) {
+    assert_eq!(
+        setup.weapon_pad_glow,
+        &oag_title::weapon_pad::WeaponPadGlow::ByClass(oag_title::weapon_pad::ClassCycles::LINEAGE)
+    );
+}
+
 /// `Auricom2048`'s prototype authors `eliminator_flip_time="0.5"`, so the half turn is thirty
 /// ticks, not the default twelve.
 #[test]
@@ -34,6 +42,7 @@ fn a_2048_craft_turns_over_its_own_flip_time() {
         ..oag_raceplay::Options::default()
     })
     .expect("loading a 2048 Eliminator");
+    check_pads(&loaded.setup);
     let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
     assert!(race.core.sim.l1_is_flip(), "2048's L1 is the flip");
     for _ in 0..60 * 6 {

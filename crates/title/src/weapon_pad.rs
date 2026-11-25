@@ -43,6 +43,13 @@ pub struct ClassCycles {
 }
 
 impl ClassCycles {
+    /// The three cycles as offensive, defensive, other: the order a loader numbers its per-class
+    /// glow entries in.
+    #[must_use]
+    pub const fn in_order(&self) -> [Cycle; 3] {
+        [self.offensive, self.defensive, self.other]
+    }
+
     /// What both executables hold, each read in its own (`docs/rendering/pads.md`,
     /// "2048 and Omega"): yellow, green and HD's red, three keys a second, `1/255`.
     pub const LINEAGE: Self = Self {
@@ -145,6 +152,20 @@ mod tests {
         scale: 1.0 / 255.0,
         cooling: [0.025, 0.0, 0.01],
     };
+
+    #[test]
+    fn the_lineage_classes_start_yellow_green_and_red() {
+        let first = ClassCycles::LINEAGE.in_order().map(|c| c.colour(0.0));
+        let key = |v: [f32; 3]| v.map(|x| x * (1.0 / 255.0));
+        assert_eq!(
+            first,
+            [
+                key([1952.0, 696.0, 48.0]),
+                key([0.0, 1072.0, 0.0]),
+                key([512.0, 16.0, 0.0]),
+            ]
+        );
+    }
 
     #[test]
     fn a_whole_position_is_its_keyframe_scaled() {
