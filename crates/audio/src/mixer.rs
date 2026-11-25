@@ -1265,6 +1265,18 @@ impl Mixer {
             };
             let step = f64::from(sound.sample_rate()) / rate * f64::from(voice.pitch);
             let source_frames = sound.frames();
+            // A sounding voice that cannot reach its end or its wrap within this tick only
+            // moves: the same additions, none of the checks.
+            if voice.delay == 0
+                && voice.release.is_none()
+                && step >= 0.0
+                && voice.position + step * ((frames + 1) as f64) < source_frames as f64
+            {
+                for _ in 0..frames {
+                    voice.position += step;
+                }
+                continue;
+            }
             let (mut delay, mut release) = (voice.delay, voice.release);
             let mut finished = false;
             for _ in 0..frames {
