@@ -90,11 +90,30 @@ pub fn title_key(title_name: &str) -> String {
         .to_string()
 }
 
-/// What a command line asks the benchmark for.
+/// What one benchmark run is asked for: the command line's flags, or the BENCHMARK OPTIONS page's
+/// rows. Never saved: a run applies it in memory and puts the player's settings back.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Request {
     /// The preset to draw with; `None` is the player's own settings.
     pub preset: Option<String>,
+    /// Whether the player's mods load with the run. Off by default, so two machines' results
+    /// are one workload.
+    pub mods: bool,
+    /// The vsync mode for the run; `None` keeps the player's.
+    pub vsync: Option<oag_present::perf::Vsync>,
+    /// The frame limit for the run; `None` keeps the player's.
+    pub frame_limit: Option<oag_present::perf::FrameLimit>,
+}
+
+/// A mod that loaded with a run, as the result file names it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModLoaded {
+    /// The mod's id.
+    pub id: String,
+    /// The mod's release.
+    pub version: String,
+    /// SHA-256 of its simulation module; empty for a mod that has none.
+    pub hash: String,
 }
 
 /// Where the benchmark was started from, and so where the stats screen's BACK leaves to.
@@ -137,8 +156,8 @@ pub struct Done {
 pub struct Live {
     /// Where it was started from.
     pub origin: Origin,
-    /// The preset it draws with.
-    pub preset: Option<String>,
+    /// What it was asked for: the preset, the mods, the vsync and the frame limit.
+    pub request: Request,
     /// The tick the race is stopped at when nobody has crossed the line.
     pub tick_cap: u32,
     /// The frames so far.

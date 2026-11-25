@@ -21,6 +21,7 @@ impl Default for Options {
             find_extensions: None,
             recorded_mods: None,
             find_texture_packs: None,
+            no_overrides: false,
             boost_zoom: None,
             trail_hits: TrailHits::Off,
             wingtip_contrails: WingtipContrails::Off,

@@ -168,6 +168,76 @@ kind = "back"
 label = "BACK"
 string_id = "OAG_MENU_BACK"
 
+# BENCHMARK and RUN BENCHMARK open this page before every run (`docs/tools/in-game-benchmark.md`).
+# Its rows are this run's own: they start from the player's current settings, change nothing the
+# player has saved, and are forgotten when the page is left. The `benchmark.` keys are held by the
+# session (`Session::apply_setting`), not by `settings.toml`. MODS is left out of the page while no
+# mod is enabled; its list, like FRAME LIMIT's, is the display page's own.
+[[page]]
+id = "benchmark_options"
+title = "BENCHMARK OPTIONS"
+title_string_id = "OAG_BENCH_OPTIONS_TITLE"
+
+[[page.entry]]
+kind = "choice"
+label = "MODS"
+string_id = "OAG_BENCH_MODS"
+setting = "benchmark.mods"
+values = ["off", "on"]
+subtitle = "OFF runs the game as shipped, so results compare across machines"
+subtitle_string_id = "OAG_BENCH_MODS_SUBTITLE"
+
+[[page.entry]]
+kind = "choice"
+label = "VSYNC"
+string_id = "OAG_DISPLAY_VSYNC"
+setting = "benchmark.vsync"
+values = ["off", "on", "smooth"]
+
+[[page.entry]]
+kind = "choice"
+label = "FRAME LIMIT"
+string_id = "OAG_DISPLAY_FRAME_LIMIT"
+setting = "benchmark.frame_limit"
+disabled_by = { setting = "benchmark.vsync", value = "on" }
+values = [
+    "unlimited",
+    "30",
+    "60",
+    "70",
+    "72",
+    "75",
+    "90",
+    "100",
+    "120",
+    "144",
+    "165",
+    "240",
+    "360",
+    "480",
+    "1000",
+    "refresh_rate",
+]
+
+[[page.entry]]
+kind = "choice"
+label = "PRESET"
+string_id = "OAG_BENCH_PRESET"
+setting = "benchmark.preset"
+values = ["settings", "low", "medium", "high"]
+
+[[page.entry]]
+id = "benchmark_start"
+kind = "action"
+label = "START BENCHMARK"
+string_id = "OAG_BENCH_START"
+action = "benchmark_start"
+
+[[page.entry]]
+kind = "back"
+label = "BACK"
+string_id = "OAG_MENU_BACK"
+
 [[page]]
 id = "multiplayer"
 title = "MULTIPLAYER"

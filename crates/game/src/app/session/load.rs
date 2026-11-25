@@ -574,6 +574,9 @@ impl Session {
             );
         }
         crate::texture_pack::attach(&mut options, &self.settings.mods);
+        if self.benchmark.runs_without_mods() {
+            crate::benchmark::plan::without_mods(&mut options);
+        }
         if !options.demo {
             self.seat_the_windows(&mut options);
         }

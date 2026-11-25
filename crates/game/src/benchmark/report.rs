@@ -32,6 +32,27 @@ pub fn adapter_json(adapter: &wgpu::AdapterInfo, gpu_timestamps: bool) -> String
     )
 }
 
+/// The `mods` field of the result: `"off"`, or the loaded mods as `[{id, version, hash}]`.
+#[must_use]
+pub fn mods_json(mods: Option<&[super::ModLoaded]>) -> String {
+    let Some(mods) = mods else {
+        return json_string("off");
+    };
+    let list = mods
+        .iter()
+        .map(|m| {
+            format!(
+                "{{\"id\": {}, \"version\": {}, \"hash\": {}}}",
+                json_string(&m.id),
+                json_string(&m.version),
+                json_string(&m.hash)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!("[{list}]")
+}
+
 /// How this binary was built, as the result files say it.
 #[must_use]
 pub fn build_label() -> String {
@@ -73,6 +94,14 @@ pub struct Context {
     pub frame_limit_hz: Option<f64>,
     /// The preset the run drew with; `None` is the player's own settings.
     pub preset: Option<String>,
+    /// The mods that loaded with the run; `None` is a run without any.
+    pub mods: Option<Vec<super::ModLoaded>>,
+    /// The vsync mode the run asked for (`off`, `on`, `smooth`).
+    pub vsync: String,
+    /// The present mode the surface was configured with.
+    pub present_mode: String,
+    /// The frame limit the run was configured with (`unlimited`, `240`, `refresh_rate`).
+    pub frame_limit: String,
     /// Where the benchmark was started from: `cli`, `extras` or `graphics`.
     pub origin: &'static str,
     /// The flags that start the same benchmark again.
@@ -250,7 +279,7 @@ impl Report {
         put(
             "run",
             format!(
-                "{{\"kind\": \"in_game\", \"title_key\": {}, \"track\": {}, \"case\": \"1\", \"preset\": {}, \"origin\": {}, \"command\": [{}]}}",
+                "{{\"kind\": \"in_game\", \"title_key\": {}, \"track\": {}, \"case\": \"1\", \"preset\": {}, \"origin\": {}, \"mods\": {}, \"vsync_requested\": {}, \"present_mode\": {}, \"frame_limit\": {}, \"command\": [{}]}}",
                 json_string(c.title),
                 c.track
                     .as_deref()
@@ -259,6 +288,10 @@ impl Report {
                     .as_deref()
                     .map_or_else(|| "null".to_string(), json_string),
                 json_string(c.origin),
+                mods_json(c.mods.as_deref()),
+                json_string(&c.vsync),
+                json_string(&c.present_mode),
+                json_string(&c.frame_limit),
                 c.command
                     .iter()
                     .map(|flag| json_string(flag))

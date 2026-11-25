@@ -421,6 +421,12 @@ OAG_MENU_BENCHMARK = { text = "BENCHMARK", human = false }
 OAG_MENU_BENCHMARK_SUBTITLE = { text = "Corra uma prova fixa e veja a taxa de quadros, as mínimas e os tempos de quadro", human = false }
 OAG_GRAPHICS_RUN_BENCHMARK = { text = "EXECUTAR BENCHMARK", human = false }
 OAG_GRAPHICS_RUN_BENCHMARK_SUBTITLE = { text = "Corra uma prova fixa com estas configurações e veja a taxa de quadros", human = false }
+OAG_BENCH_OPTIONS_TITLE = { text = "OPÇÕES DO BENCHMARK", human = false }
+OAG_BENCH_MODS = { text = "MODS", human = false }
+OAG_BENCH_MODS_SUBTITLE = { text = "DESLIGADO executa o jogo como distribuído, para que os resultados sejam comparáveis entre máquinas", human = false }
+OAG_BENCH_PRESET = { text = "PREDEFINIÇÃO", human = false }
+OAG_BENCH_PRESET_SETTINGS = { text = "SUAS CONFIGURAÇÕES", human = false }
+OAG_BENCH_START = { text = "INICIAR BENCHMARK", human = false }
 OAG_MENU_REPLAYS = { text = "REPLAYS", human = false }
 OAG_MENU_REPLAYS_SUBTITLE = { text = "Assista, guarde ou apague as corridas que você gravou", human = false }
 OAG_REPLAYS_PAGE_TITLE = { text = "REPLAYS", human = false }

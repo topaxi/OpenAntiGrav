@@ -1044,6 +1044,13 @@ impl Session {
             }
             // The REPLAY row moves the detail lines; nothing is stored.
             crate::replays::page::SELECTED => return,
+            // The BENCHMARK OPTIONS rows: this run's own, held by the session and never saved.
+            other if other.starts_with("benchmark.") => {
+                if !self.apply_benchmark_option(other, &text) {
+                    warn!("nothing applies {other}");
+                }
+                return;
+            }
             // Saved by the switch itself, into `[mods] disabled`, and rebuilt live.
             crate::mods::ENABLED => {
                 self.switch_selected_mod(text == "on");

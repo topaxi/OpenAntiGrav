@@ -665,6 +665,12 @@ OAG_MENU_BENCHMARK = { text = "BENCHMARK", human = false }
 OAG_MENU_BENCHMARK_SUBTITLE = { text = "Fly one fixed race and read the frame rate, the lows and the frame times", human = false }
 OAG_GRAPHICS_RUN_BENCHMARK = { text = "RUN BENCHMARK", human = false }
 OAG_GRAPHICS_RUN_BENCHMARK_SUBTITLE = { text = "Fly one fixed race with these settings and read the frame rate", human = false }
+OAG_BENCH_OPTIONS_TITLE = { text = "BENCHMARK OPTIONS", human = false }
+OAG_BENCH_MODS = { text = "MODS", human = false }
+OAG_BENCH_MODS_SUBTITLE = { text = "OFF runs the game as shipped, so results compare across machines", human = false }
+OAG_BENCH_PRESET = { text = "PRESET", human = false }
+OAG_BENCH_PRESET_SETTINGS = { text = "YOUR SETTINGS", human = false }
+OAG_BENCH_START = { text = "START BENCHMARK", human = false }
 
 # The REPLAYS page and the replay viewer (ADR-0087). Ours, in no original.
 OAG_MENU_REPLAYS = { text = "REPLAYS", human = false }

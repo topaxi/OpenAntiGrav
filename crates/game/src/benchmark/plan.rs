@@ -66,9 +66,39 @@ pub fn pin(options: &mut Options) {
     options.demo = false;
 }
 
+/// Takes out of `options` everything of the player's that is not the game as shipped: the mods'
+/// simulation modules, effects, shaders and sounds, texture packs, and the override directory
+/// mounted ahead of the disc. A benchmark with its mods off flies the same race and draws the
+/// same frames on every machine (`docs/tools/in-game-benchmark.md`).
+pub fn without_mods(options: &mut Options) {
+    options.extensions = Vec::new();
+    options.find_extensions = None;
+    options.recorded_mods = None;
+    options.find_texture_packs = None;
+    options.no_overrides = true;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_run_without_mods_clears_every_door_a_mod_comes_in_by() {
+        let mut options = Options {
+            find_extensions: Some(oag_raceplay::extensions::Finder(std::sync::Arc::new(
+                || Ok(Vec::new()),
+            ))),
+            find_texture_packs: Some(oag_raceplay::texture_pack::Finder(std::sync::Arc::new(
+                |_, _| Vec::new(),
+            ))),
+            ..Options::default()
+        };
+        without_mods(&mut options);
+        assert!(options.find_extensions.is_none());
+        assert!(options.extensions.is_empty());
+        assert!(options.find_texture_packs.is_none());
+        assert!(options.no_overrides);
+    }
 
     /// `scripts/bench-render.py` is the offscreen bench's race; it must say what this says.
     #[test]

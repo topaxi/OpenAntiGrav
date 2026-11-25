@@ -57,8 +57,29 @@ pub struct Opened {
 ///
 /// Propagates [`oag_pulse::open_with_packs`] and [`oag_pure::open_with_packs`].
 pub fn open_source(source: &str, packs: Vec<Pack>, pure_packs: Vec<Pack>) -> Result<Opened> {
+    open_source_in(
+        source,
+        packs,
+        pure_packs,
+        &crate::layers::overrides_search_path(),
+    )
+}
+
+/// [`open_source`] with the player's override directories looked for in `overrides` alone: an
+/// empty list mounts only the fallback layer, which is this project's own art (a benchmark that
+/// runs without the player's files).
+///
+/// # Errors
+///
+/// As [`open_source`].
+pub fn open_source_in(
+    source: &str,
+    packs: Vec<Pack>,
+    pure_packs: Vec<Pack>,
+    overrides: &[std::path::PathBuf],
+) -> Result<Opened> {
     let mut opened = open_unlayered(source, packs, pure_packs)?;
-    opened.archives = crate::layers::mount(opened.archives, opened.title);
+    opened.archives = crate::layers::mount_in(opened.archives, opened.title, overrides);
     Ok(opened)
 }
 

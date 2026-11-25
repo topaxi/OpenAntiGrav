@@ -78,6 +78,18 @@ impl Menu {
         }
     }
 
+    /// Whether the choice rows that edit `setting` are on their pages or parked: a row with
+    /// nothing to choose (MODS with no mod enabled) is left out, as [`Self::offer`] leaves out
+    /// an action that is not on offer.
+    pub fn offer_choice(&mut self, setting: &str, offered: bool) {
+        let edits = |entry: &Entry| matches!(entry, Entry::Choice { setting: edited, .. } if edited == setting);
+        if offered {
+            self.unhide_where(edits);
+        } else {
+            self.hide_where(edits);
+        }
+    }
+
     /// Takes out of every page the rows `matches` names.
     fn hide_where(&mut self, matches: impl Fn(&Entry) -> bool) {
         for index in 0..self.definition.pages.len() {

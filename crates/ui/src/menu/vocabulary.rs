@@ -117,9 +117,13 @@ pub enum Action {
     /// the player has none of their own.
     FetchFfmpeg,
     /// The BENCHMARK row (the extras' OPTIONS page) and the graphics page's RUN BENCHMARK row:
-    /// flies the benchmark race and shows its stats (`oag_game::benchmark`). Both fire this; the
-    /// page it fired from is where the stats screen's BACK returns to.
+    /// opens the BENCHMARK OPTIONS page, whose START BENCHMARK row ([`Self::BenchmarkStart`])
+    /// flies the benchmark race and shows its stats (`oag_game::benchmark`). The page the stats
+    /// screen's BACK returns to is the options page, over the page it was fired from.
     Benchmark,
+    /// The BENCHMARK OPTIONS page's START BENCHMARK row: flies the benchmark with the page's
+    /// rows. [`Self::Benchmark`] only opens that page.
+    BenchmarkStart,
 }
 
 impl Action {
@@ -155,6 +159,7 @@ impl Action {
             Self::OpenModSettings => "open_mod_settings",
             Self::FetchFfmpeg => "fetch_ffmpeg",
             Self::Benchmark => "benchmark",
+            Self::BenchmarkStart => "benchmark_start",
         }
     }
 
@@ -165,6 +170,7 @@ impl Action {
     pub fn opens_page(self) -> Option<&'static str> {
         match self {
             Self::OpenOnline => Some("online"),
+            Self::Benchmark => Some("benchmark_options"),
             _ => None,
         }
     }
@@ -201,13 +207,14 @@ impl Action {
             "open_mod_settings" => Some(Self::OpenModSettings),
             "fetch_ffmpeg" => Some(Self::FetchFfmpeg),
             "benchmark" => Some(Self::Benchmark),
+            "benchmark_start" => Some(Self::BenchmarkStart),
             _ => None,
         }
     }
 
     /// Every action, for error messages and for the integrity check.
     #[must_use]
-    pub fn all() -> [Self; 28] {
+    pub fn all() -> [Self; 29] {
         [
             Self::LaunchRace,
             Self::Quit,
@@ -237,6 +244,7 @@ impl Action {
             Self::OpenModSettings,
             Self::FetchFfmpeg,
             Self::Benchmark,
+            Self::BenchmarkStart,
         ]
     }
 }

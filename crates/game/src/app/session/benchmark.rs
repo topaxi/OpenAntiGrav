@@ -14,13 +14,16 @@ use log::{debug, info, warn};
 
 use crate::benchmark::recorder::Ending;
 use crate::benchmark::screen::{self, Choice};
-use crate::benchmark::{self, Done, Live, Origin, Recorder, Report, Request, plan};
+use crate::benchmark::{self, Done, Live, ModLoaded, Origin, Recorder, Report, Request, plan};
 use oag_gameplay::input::Button;
 use oag_ui::pointer::Pointer;
 
 use crate::app::stage::Stage;
 
 use super::Session;
+
+/// The BENCHMARK OPTIONS page's id in `assets/ui/menu.toml`.
+const OPTIONS_PAGE: &str = "benchmark_options";
 
 /// What the session keeps of the benchmark between ticks.
 #[derive(Default)]
@@ -30,6 +33,8 @@ pub(crate) struct State {
     /// `--ticks` with `--benchmark`: where every benchmark of this run stops, menu launches
     /// included (a short run for a test).
     tick_cap: Option<u32>,
+    /// The BENCHMARK OPTIONS page's rows: what START BENCHMARK launches with.
+    pub(crate) page: Request,
     /// The launch, from the call to the race's hand-over.
     launching: Option<Launch>,
     /// What the player had, set aside while a benchmark's stand in its place.
@@ -38,7 +43,7 @@ pub(crate) struct State {
 
 struct Launch {
     origin: Origin,
-    preset: Option<String>,
+    request: Request,
     tick_cap: u32,
 }
 
@@ -56,22 +61,21 @@ struct Saved {
     race_options: Option<oag_raceplay::Options>,
     autopilot: bool,
     pinned: Pinned,
-    /// The settings as the player has them, put back when a preset was applied over them.
-    settings: Option<crate::settings::Settings>,
+    /// The settings as the player has them, put back when the run ends: a run's preset, vsync and
+    /// frame limit are applied over them in memory.
+    settings: crate::settings::Settings,
     trail: Vec<oag_ui::menu::Spot>,
 }
 
 impl State {
-    /// Whether a preset's settings are in effect, so nothing is written to `settings.toml` until
-    /// the player's own are back.
+    /// Whether a benchmark's settings are in effect, so nothing is written to `settings.toml`
+    /// until the player's own are back.
     pub(crate) fn holds_settings(&self) -> bool {
-        self.saved
-            .as_ref()
-            .is_some_and(|saved| saved.settings.is_some())
+        self.saved.is_some()
     }
 
-    /// Writes `settings` to `settings.toml`, except while a preset is in effect: the preset is in
-    /// memory only and the player's file is theirs.
+    /// Writes `settings` to `settings.toml`, except while a benchmark is in effect: its settings
+    /// are in memory only and the player's file is theirs.
     pub(crate) fn save(&self, settings: &crate::settings::Settings) -> anyhow::Result<()> {
         if self.holds_settings() {
             return Ok(());
@@ -79,12 +83,19 @@ impl State {
         crate::settings::save(settings)
     }
 
+    /// Whether the race being launched is a benchmark that loads none of the player's mods.
+    pub(crate) fn runs_without_mods(&self) -> bool {
+        self.launching
+            .as_ref()
+            .is_some_and(|launch| !launch.request.mods)
+    }
+
     /// The benchmark the race being built is, if one is being launched: handed to the stage.
     pub(crate) fn take_launch(&mut self) -> Option<Live> {
         let launch = self.launching.take()?;
         Some(Live {
             origin: launch.origin,
-            preset: launch.preset,
+            request: launch.request,
             tick_cap: launch.tick_cap,
             recorder: Recorder::begin(crate::benchmark::load_average()),
             done: None,
@@ -142,14 +153,84 @@ impl Session {
         }
     }
 
-    /// A BENCHMARK or RUN BENCHMARK row was fired: starts the benchmark with the player's own
-    /// settings, and remembers the page it came from for the stats screen's BACK.
+    /// A BENCHMARK or RUN BENCHMARK row was fired: opens the BENCHMARK OPTIONS page, its rows
+    /// starting from the player's own settings. A menu tree without the page starts the
+    /// benchmark with those settings outright.
+    pub(crate) fn open_benchmark_options(&mut self) {
+        self.benchmark.page = Request {
+            preset: None,
+            mods: false,
+            vsync: Some(self.settings.display.vsync),
+            frame_limit: Some(self.settings.display.frame_limit),
+        };
+        let mods_on_offer = self.benchmark_mods_on_offer();
+        let page = self.benchmark.page.clone();
+        let Stage::Menu(stage) = &mut self.stage else {
+            return;
+        };
+        let menu = &mut stage.menu;
+        menu.seed("benchmark.mods", &oag_ui::menu::Value::Text("off".into()));
+        menu.seed(
+            "benchmark.vsync",
+            &oag_ui::menu::Value::Text(page.vsync.unwrap_or_default().to_string()),
+        );
+        menu.seed(
+            "benchmark.frame_limit",
+            &oag_ui::menu::Value::Text(page.frame_limit.unwrap_or_default().to_string()),
+        );
+        menu.seed(
+            "benchmark.preset",
+            &oag_ui::menu::Value::Text("settings".into()),
+        );
+        menu.offer_choice("benchmark.mods", mods_on_offer);
+        if !menu.push(OPTIONS_PAGE) {
+            self.start_benchmark_from_menu();
+        }
+    }
+
+    /// START BENCHMARK, or the menu without the options page: starts the benchmark the page's
+    /// rows ask for, and remembers the page it came from for the stats screen's BACK.
     pub(crate) fn start_benchmark_from_menu(&mut self) {
         let origin = match &self.stage {
-            Stage::Menu(stage) if stage.menu.page().id == "graphics" => Origin::Graphics,
+            Stage::Menu(stage)
+                if stage
+                    .menu
+                    .trail()
+                    .iter()
+                    .any(|spot| spot.page == "graphics") =>
+            {
+                Origin::Graphics
+            }
             _ => Origin::Extras,
         };
-        self.launch_benchmark(origin, None, None);
+        let request = std::mem::take(&mut self.benchmark.page);
+        self.launch_benchmark(origin, request, None);
+    }
+
+    /// Whether any mod of the player's is on, so MODS has something to choose.
+    fn benchmark_mods_on_offer(&self) -> bool {
+        self.shell
+            .as_ref()
+            .is_some_and(|shell| shell.mods.iter().any(|listing| is_loaded_mod(listing)))
+    }
+
+    /// The BENCHMARK OPTIONS rows' own keys: held for the run, never saved.
+    pub(crate) fn apply_benchmark_option(&mut self, setting: &str, text: &str) -> bool {
+        let page = &mut self.benchmark.page;
+        match setting {
+            "benchmark.mods" => page.mods = text == "on",
+            "benchmark.vsync" => match text.parse() {
+                Ok(vsync) => page.vsync = Some(vsync),
+                Err(why) => warn!("ignoring {setting} = {text:?}: {why}"),
+            },
+            "benchmark.frame_limit" => match text.parse() {
+                Ok(limit) => page.frame_limit = Some(limit),
+                Err(why) => warn!("ignoring {setting} = {text:?}: {why}"),
+            },
+            "benchmark.preset" => page.preset = (text != "settings").then(|| text.to_string()),
+            _ => return false,
+        }
+        true
     }
 
     /// Starts a benchmark from `origin` with the preset the request names. Returns whether the
@@ -157,7 +238,7 @@ impl Session {
     pub(crate) fn launch_benchmark(
         &mut self,
         origin: Origin,
-        preset: Option<String>,
+        request: Request,
         tick_cap: Option<u32>,
     ) -> bool {
         let Some(mut options) = self.race_options.clone() else {
@@ -165,7 +246,7 @@ impl Session {
             return false;
         };
         plan::pin(&mut options);
-        let preset_settings = match preset.as_deref() {
+        let preset_settings = match request.preset.as_deref() {
             None => None,
             Some(name) => match self.benchmark_preset(name) {
                 Ok(settings) => Some(settings),
@@ -177,8 +258,15 @@ impl Session {
                 }
             },
         };
+        // The page BACK returns to is the one the benchmark row was fired from; the options page
+        // is reopened by firing the row again.
         let trail = match &self.stage {
-            Stage::Menu(stage) => stage.menu.trail(),
+            Stage::Menu(stage) => stage
+                .menu
+                .trail()
+                .into_iter()
+                .filter(|spot| spot.page != OPTIONS_PAGE)
+                .collect(),
             _ => Vec::new(),
         };
         let player = self.race_options.replace(options);
@@ -195,7 +283,7 @@ impl Session {
                     campaign_difficulty: self.campaign_difficulty.take(),
                     campaign_ai_skill_scale: self.campaign_ai_skill_scale.take(),
                 },
-                settings: preset_settings.is_some().then(|| self.settings.clone()),
+                settings: self.settings.clone(),
                 trail,
             });
         }
@@ -203,6 +291,21 @@ impl Session {
             self.apply_setting(
                 &format!("graphics.{key}"),
                 &oag_ui::menu::Value::Text(value),
+            );
+        }
+        if let Some(vsync) = request.vsync.filter(|v| *v != self.settings.display.vsync) {
+            self.apply_setting(
+                "display.vsync",
+                &oag_ui::menu::Value::Text(vsync.to_string()),
+            );
+        }
+        if let Some(limit) = request
+            .frame_limit
+            .filter(|l| *l != self.settings.display.frame_limit)
+        {
+            self.apply_setting(
+                "display.frame_limit",
+                &oag_ui::menu::Value::Text(limit.to_string()),
             );
         }
         self.autopilot = true;
@@ -214,7 +317,7 @@ impl Session {
         self.campaign_ai_skill_scale = None;
         self.benchmark.launching = Some(Launch {
             origin,
-            preset,
+            request,
             tick_cap: tick_cap
                 .or(self.benchmark.tick_cap)
                 .unwrap_or(plan::TICK_CAP),
@@ -274,11 +377,15 @@ impl Session {
             self.campaign_custom = pinned.campaign_custom;
             self.campaign_difficulty = pinned.campaign_difficulty;
             self.campaign_ai_skill_scale = pinned.campaign_ai_skill_scale;
-            if let Some(settings) = saved.settings {
-                self.settings = settings;
-                // The one preset key with a runtime field of its own beside the setting.
-                self.anisotropy = self.settings.graphics.anisotropy;
-            }
+            self.settings = saved.settings;
+            // The one preset key with a runtime field of its own beside the setting.
+            self.anisotropy = self.settings.graphics.anisotropy;
+            // The surface was configured for the run's vsync.
+            self.gpu
+                .output
+                .set_vsync(&self.gpu.device, self.settings.display.vsync);
+            self.display.reset();
+            self.stalled = true;
         }
     }
 
@@ -314,7 +421,7 @@ impl Session {
             && self.attract_eligible()
         {
             let request = self.benchmark.cli.take().unwrap_or_default();
-            return self.launch_benchmark(Origin::Cli, request.preset, None);
+            return self.launch_benchmark(Origin::Cli, request, None);
         }
         // The run's one input: BACK abandons it.
         if self.in_benchmark() && self.controls.take_presses(back) != 0 {
@@ -396,8 +503,8 @@ impl Session {
                 true
             }
             Some(Choice::Again) => {
-                let (origin, preset, cap) = self.benchmark_run();
-                self.launch_benchmark(origin, preset, Some(cap))
+                let (origin, request, cap) = self.benchmark_run();
+                self.launch_benchmark(origin, request, Some(cap))
             }
             None => false,
         }
@@ -413,16 +520,14 @@ impl Session {
         }
     }
 
-    /// What to launch again: where it started from, the preset and the tick cap.
-    fn benchmark_run(&self) -> (Origin, Option<String>, u32) {
+    /// What to launch again: where it started from, what it was asked for and the tick cap.
+    fn benchmark_run(&self) -> (Origin, Request, u32) {
         match &self.stage {
-            Stage::Race(stage) => stage
-                .benchmark
-                .as_ref()
-                .map_or((Origin::Extras, None, plan::TICK_CAP), |live| {
-                    (live.origin, live.preset.clone(), live.tick_cap)
-                }),
-            _ => (Origin::Extras, None, plan::TICK_CAP),
+            Stage::Race(stage) => stage.benchmark.as_ref().map_or_else(
+                || (Origin::Extras, Request::default(), plan::TICK_CAP),
+                |live| (live.origin, live.request.clone(), live.tick_cap),
+            ),
+            _ => (Origin::Extras, Request::default(), plan::TICK_CAP),
         }
     }
 
@@ -577,10 +682,31 @@ impl Session {
             .hz()
             .map_or((60.0, "assumed"), |hz| (f64::from(hz), "display"));
         let mut command = vec!["--benchmark".to_string()];
-        if let Some(preset) = &live.preset {
+        if let Some(preset) = &live.request.preset {
             command.push("--preset".to_string());
             command.push(preset.clone());
         }
+        command.push("--benchmark-mods".to_string());
+        command.push(if live.request.mods { "on" } else { "off" }.to_string());
+        let mods = live.request.mods.then(|| {
+            let used = world_mods_used(stage);
+            self.shell
+                .as_ref()
+                .map(|shell| shell.mods.as_slice())
+                .unwrap_or_default()
+                .iter()
+                .filter(|listing| is_loaded_mod(listing))
+                .map(|listing| ModLoaded {
+                    id: listing.id.clone(),
+                    version: listing.version.clone(),
+                    hash: used
+                        .iter()
+                        .find(|used| used.id == listing.id)
+                        .map(|used| used.sha256.clone())
+                        .unwrap_or_default(),
+                })
+                .collect()
+        });
         let context = benchmark::Context {
             title: title.name,
             track: Some(format!("{}: {}", title.name, stage.circuit)),
@@ -593,7 +719,11 @@ impl Session {
             settings,
             refresh,
             frame_limit_hz: self.frame_period().map(|period| 1.0 / period.as_secs_f64()),
-            preset: live.preset.clone(),
+            preset: live.request.preset.clone(),
+            mods,
+            vsync: self.settings.display.vsync.to_string(),
+            present_mode: format!("{:?}", config.present_mode),
+            frame_limit: self.settings.display.frame_limit.to_string(),
             origin: live.origin.name(),
             command,
             load: (
@@ -611,6 +741,16 @@ impl Session {
             ending,
         })
     }
+}
+
+/// Whether `listing` is a mod of the player's that is on and opened: one a run with mods loads.
+fn is_loaded_mod(listing: &crate::mods::Listing) -> bool {
+    !listing.builtin && listing.error.is_none() && listing.enabled == Some(true)
+}
+
+/// The simulation modules the race on `stage` ran.
+fn world_mods_used(stage: &crate::app::race_stage::RaceStage) -> Vec<oag_replay::header::ModUse> {
+    stage.race.core.sim.mods_used().to_vec()
 }
 
 /// A percentage type's debug text (`Scale(100)`) as the number it carries (`100%`); anything
