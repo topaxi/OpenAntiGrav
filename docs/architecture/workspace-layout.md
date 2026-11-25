@@ -1698,4 +1698,29 @@ Measured 2026-11-25 (Ryzen 9 7900), by user instructions per test as in the sect
 
 **Why the ATRAC9 change moves no sample.** Every output word is the same IEEE `f64` operation in the same order (no fused multiply-add, no reassociation); `imdct::tests` runs the indexed LibAtrac9 loops beside the fast ones over random frames of 64, 128 and 256 samples and compares every output and overlap word by bit pattern, and the 2,626-file PCM hash above agrees before and after each step.
 
-Measured and not done: a Pulse PS2 game process spends 57 % of its instructions in `lzma_rust2` (the music threads, `race-music` and `menu-music`, and `boot-media`, read the soundtrack out of the CHD); the three PS2 photo-mode and footer-hint tests are 110 to 124 G each, and `--no-audio` does not stop it, because the music state machine is what the `now_playing` tests read.
+Measured and not done there, done in the next section: a Pulse PS2 game process spends 57 % of its instructions in `lzma_rust2` (the music threads, `race-music` and `menu-music`, and `boot-media`, read the soundtrack out of the CHD); `--no-audio` did not stop it, because the music state machine is what the `now_playing` tests read.
+
+### Runs that look at the picture read no music and no sound bank
+
+Measured 2026-11-25 (Ryzen 9 7900), as in the section above (per-test user instructions from a nextest target runner, full `test-data`, under the gate lock). `main` at `b1c6fe46e` against the branch:
+
+| `just test-data --full` | tests | summed CPU-s | summed user instructions | load (start, end) |
+| --- | --- | --- | --- | --- |
+| `main` at `b1c6fe46e` | 14,050 | 6,983 | 59,677 G | 40, 42 |
+| this change | 14,051 (one new test) | 6,604 (-5.4 %) | **55,389 G (-7.2 %)** | 33, 32 |
+
+The control, 2,151 tests whose instruction count moved by under 0.5 %, reads 44,316 G before and 44,319 G after (CPU-s 0.979x); 342 tests moved, 4,292 G between them. Every test passes with its assertions unchanged.
+
+**What it was.** `--no-audio` is a null output and nothing more: a game process under it still read and decoded the front end's loop and a race song on two worker threads, scanned every other disc and folder for the MUSIC page's pool, and decoded the race's sound banks. In a profile of one Omega pause-menu test the music threads were 41 % of the samples and a Pulse PS2 footer-hint test spent 54 % of its instructions in `lzma_rust2` on `race-music`, `menu-music` and `boot-media` (a PS2 song is 35 MiB of PCM read out of the CHD). `--no-audio` could not simply stop that: the now-playing, MUSIC-page and `sfx:` report tests read the state the decode produces.
+
+**What changed.** Two switches, each one a test opts into. `--no-soundtrack` (`oag_sound::Audio::set_soundtrack`) makes `start_music`, `start_race_music` and the race launch's `race_music_fetch` read nothing, keeps HD's mix tables, and skips the pool scan. `--no-effects` (`oag_raceplay::Options::no_effects`) makes `banks_and_announcers` return empty banks, so no effect, voice, announcer or countdown cue decodes and the report carries none of their lines. Both are restart-safe arguments. The `oag-game`-spawning test files that read none of that pass both (55 files; `drive_ground_truth`'s MUSIC-page test keeps its soundtrack); the twelve files that read an `sfx:` line or a held voice (`sfx`, `sfx_weapon`, `countdown_voice`, `lap_messages`, `flyby_voice`, `wreck_voice`, `hd_destroyed_sound`, `omega_held_loops`, `medal_message`, `magstrip_wire_2048`, `magstrip_wire_hd`, `replay_audio`) keep `--no-effects` off, the music-reading ones (`now_playing`, `music_resume`, `omega_music`) are untouched, and so are `boot`, `render_bench` and `vita_2048_boot`. `trackfile`, `detonator` (its stage-table test reads `sfx:` lines and keeps them), `start_gantry_clock_inherit`, `hud_style` and `projectile_tilt` set `no_effects` on their view loads.
+
+| Step | Saving |
+| --- | --- |
+| `--no-soundtrack` on the game-spawning tests (footer-hint, campaign-cursor, pause-menu families first: 87 tests 3,768 to 2,734 G once the race launch's fetch is gated too) | 1,829 G over the 2,366 `oag-game` tests |
+| `--no-effects` on the same tests, the pool scan, and the one `--race` test that had missed the switch | 1,702 G more (`oag-game` 18,312 to 14,781 G in all) |
+| `--no-effects` on the five view-loading `oag-raceplay` families, and on the demo tests | about 500 G (90 tests, 3,074 to 2,551 G) |
+
+Not changed: the `oag-game` tests that read the music state, the Omega `.wem` and GNF decode floors, and the mixer's per-tick work under a null output (another lane's).
+
+**Measured and not done.** A decoded-hunk or decoded-track cache for the CHD (the three PS2 music reads would share it): a test run starts each process cold, so it would save nothing in the suite and add cross-test state. `boot-media`'s CHD reads for the boot movies (20 % of a PS2 footer-hint test) are the movie bytes themselves.
