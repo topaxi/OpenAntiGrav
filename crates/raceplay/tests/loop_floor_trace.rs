@@ -225,9 +225,7 @@ fn describe(race: &race::Race, tick: u32, slot: usize, p: &Projectile) -> String
 }
 
 fn out_path(name: &str) -> String {
-    std::env::var("OAG_LOOP_TRACE_OUT").unwrap_or_else(|_| {
-        format!("/home/topaxi/projects/OpenAntiGrav/data/scratch/floor-followers/{name}")
-    })
+    std::env::var("OAG_LOOP_TRACE_OUT").unwrap_or_else(|_| format!("/tmp/oag-loop-trace-{name}"))
 }
 
 #[test]
@@ -458,9 +456,7 @@ fn census_of_shots_along_a_bank() {
                     )
                     .unwrap();
                     *ends.entry(end).or_default() += 1;
-                    *by_bucket
-                        .entry((shot.sample / 100 * 100, end))
-                        .or_default() += 1;
+                    *by_bucket.entry((shot.sample / 100 * 100, end)).or_default() += 1;
                     shots[slot] = None;
                 }
                 (None, false) => {}
@@ -469,7 +465,12 @@ fn census_of_shots_along_a_bank() {
     }
     writeln!(log, "# ends: {ends:?}").unwrap();
     for ((bucket, end), n) in &by_bucket {
-        writeln!(log, "# from samples {bucket}..{}: {end:?} x{n}", bucket + 99).unwrap();
+        writeln!(
+            log,
+            "# from samples {bucket}..{}: {end:?} x{n}",
+            bucket + 99
+        )
+        .unwrap();
     }
     let out = out_path(&format!("census-{}.log", spec.rsplit(':').next().unwrap()));
     std::fs::write(&out, &log).expect("writing the log");
@@ -492,7 +493,11 @@ fn locate_recorded_points() {
         let v: Vec<f32> = xyz.split(',').map(|s| s.trim().parse().unwrap()).collect();
         let at = Vec3::new(v[0], v[1], v[2]);
         let (i, lat, h, hwl, hwr, up) = locate(&race, at);
-        let floor = race.core.sim.collision().raycast(Ray::new(at, -up, 20.0), None, false);
+        let floor = race
+            .core
+            .sim
+            .collision()
+            .raycast(Ray::new(at, -up, 20.0), None, false);
         println!(
             "{tag} ({:.1},{:.1},{:.1}) near={i} lat={lat:.1}/(-{hwl:.1},{hwr:.1}) h={h:.2} floor={:?}",
             at.x,
@@ -547,7 +552,11 @@ fn fly_the_released_bolt_with_chosen_arms() {
         input = Some(snap.buttons);
         race.tick(&PlayerInputs::single(snap));
         let slots = &race.core.sim.world.projectiles.slots;
-        if tick > 2 && slots.iter().any(|p| p.kind == Some(weapon) && p.charge <= 0.0) {
+        if tick > 2
+            && slots
+                .iter()
+                .any(|p| p.kind == Some(weapon) && p.charge <= 0.0)
+        {
             break;
         }
         place(&mut race);
