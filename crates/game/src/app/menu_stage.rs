@@ -91,6 +91,8 @@ pub(crate) struct MenuStage {
     /// The pause screen as the disc lays it out, when the title has it and the tree opened on
     /// the pause page: drawn in place of the front end's list on that page.
     pub(crate) pause_view: Option<PauseView>,
+    /// Whether the pad, not a pointer, spoke last: a pause screen of tiles shows its cursor then.
+    pub(crate) pad_cursor: bool,
     /// The value marquee's clock: which row it is timing, and for how long.
     pub(crate) marquee: marquee::Timer,
     /// The modal prompt on screen, if one is: an on-screen keyboard or a
@@ -274,7 +276,7 @@ impl MenuStage {
     /// The page on screen drawn from the disc's own pause or confirm screen, when it is one.
     pub(crate) fn pause_draw(&self) -> Option<menu::Layers> {
         let (view, screen) = (self.pause_view.as_ref()?, self.pause_screen_on_page()?);
-        Some(oag_ui_screens::pause::draw_list(
+        Some(oag_ui_screens::pause::draw_list_for(
             screen,
             view.table,
             &self.menu,
@@ -286,7 +288,35 @@ impl MenuStage {
                     .find(|(path, _)| path == src)
                     .map(|(_, placed)| *placed)
             },
+            self.pad_cursor,
         ))
+    }
+
+    /// On a pause screen of tiles the pad's LEFT and RIGHT move the cursor to the tile that way
+    /// along its row; UP and DOWN stay the menu's, walking every tile in the file's order, which is
+    /// what keeps every tile reachable and a drive's `select` working. The buttons are taken so the
+    /// menu does not step as well.
+    pub(crate) fn step_pause_tiles(&mut self, input: &mut oag_core::buttons::Input) {
+        use oag_core::buttons::Button;
+        use oag_ui::menu::nav::Dir;
+        for (button, dir) in [(Button::Left, Dir::Left), (Button::Right, Dir::Right)] {
+            if self
+                .pause_screen_on_page()
+                .is_none_or(|screen| !screen.is_tiles())
+            {
+                return;
+            }
+            if input.take(button)
+                && let Some(row) = self.tile_toward(dir)
+            {
+                self.menu.move_to_row(row);
+            }
+        }
+    }
+
+    fn tile_toward(&self, dir: oag_ui::menu::nav::Dir) -> Option<usize> {
+        let (view, screen) = (self.pause_view.as_ref()?, self.pause_screen_on_page()?);
+        oag_ui_screens::pause::tile_neighbour(screen, view.table, &self.menu, &self.skin, dir)
     }
 
     /// The disc's screen the page on screen is drawn from: the pause screen, or the confirm screen

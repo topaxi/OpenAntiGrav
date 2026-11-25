@@ -475,6 +475,7 @@ mod touch_tiles {
     use oag_core::buttons::{Button, Input};
     use oag_title::{PauseLayout, PauseTouch, pause_menu::named};
     use oag_ui::menu::PAUSE_PAGE;
+    use oag_ui::menu::nav::Dir;
 
     const XML: &str = r#"
 <Screen name="PauseTop">
@@ -639,6 +640,22 @@ mod touch_tiles {
         assert_eq!(icons.len(), 3);
     }
 
+    /// A pointer over the tiles leaves them all at rest: the cursor fill is the pad's.
+    #[test]
+    fn a_pointer_in_use_shows_no_cursor_on_the_tiles() {
+        let layers = draw_list_for(
+            &read("PauseRace"),
+            TABLE,
+            &menu(),
+            &skin(),
+            &frame(),
+            &sprite,
+            false,
+        );
+        let blue = argb_to_rgba(BLUE);
+        assert!(fills(&layers.body).iter().all(|(_, color)| *color == blue));
+    }
+
     /// A tile that authors an `idstring` carries its words under the box; an icon-only tile none.
     #[test]
     fn only_a_tile_with_an_idstring_carries_words_under_it() {
@@ -779,6 +796,41 @@ mod touch_tiles {
             [oag_ui::menu::MenuEvent::Fired(Action::QuitRace)],
             "the tick quits"
         );
+    }
+
+    /// The pad moves between tiles by where they are: DOWN from OPTIONS to the tile under it, RIGHT
+    /// along the foot row, nothing past an edge.
+    #[test]
+    fn the_pad_steps_between_tiles_by_position() {
+        let screen = read("PauseRace");
+        let mut menu = menu();
+        let row_of = |menu: &Menu, id: &str| {
+            menu.page()
+                .meta
+                .iter()
+                .position(|meta| meta.id.as_deref() == Some(id))
+                .expect(id)
+        };
+        let (options, quit, resume) = (
+            row_of(&menu, "pause_options"),
+            row_of(&menu, "pause_quit"),
+            row_of(&menu, "pause_resume"),
+        );
+        let go = |menu: &Menu, dir| tile_neighbour(&screen, TABLE, menu, &skin(), dir);
+        assert_eq!(menu.selected(), options);
+        assert_eq!(go(&menu, Dir::Left), None);
+        assert_eq!(go(&menu, Dir::Up), None);
+        assert_eq!(
+            go(&menu, Dir::Down),
+            Some(quit),
+            "no GHOST tile here, so the foot row"
+        );
+        menu.move_to_row(quit);
+        assert_eq!(go(&menu, Dir::Right), Some(resume));
+        assert_eq!(go(&menu, Dir::Up), Some(options));
+        menu.move_to_row(resume);
+        assert_eq!(go(&menu, Dir::Right), None);
+        assert_eq!(go(&menu, Dir::Left), Some(quit));
     }
 
     /// Every texture the screen and the screens around and in it name is asked for.

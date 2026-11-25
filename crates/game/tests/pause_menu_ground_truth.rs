@@ -1144,4 +1144,33 @@ mod y2048_screens {
             assert_eq!(icons, tiles, "{mode}: and its icon in each");
         }
     }
+
+    /// The pad walks the tiles (RIGHT and LEFT by where they are, UP and DOWN in the file's order),
+    /// CIRCLE on the root does nothing (`backward="none"`), and START resumes the race
+    /// (`forward="start"`).
+    #[test]
+    #[ignore = "needs the extracted 2048 package in data/extracted/vita/PCSF00007"]
+    fn the_pad_walks_the_tiles_by_position_and_start_resumes() {
+        if y2048().is_none() {
+            return;
+        }
+        let run = run_2048(
+            "pad",
+            &format!(
+                "{PAUSED} expect focus=pause_options; press right; ticks 3; \
+                 expect focus=photo_mode; press down; ticks 3; \
+                 expect focus=pause_quit; press right; ticks 3; \
+                 expect focus=pause_restart; press right; ticks 3; \
+                 expect focus=pause_resume; press right; ticks 3; \
+                 expect focus=pause_resume; press up; ticks 3; \
+                 expect focus=pause_restart; press circle; ticks 5; expect page=pause; \
+                 press start; until stage=race within 200; ticks 10"
+            ),
+        );
+        assert_eq!(
+            run.states.last().expect("a state")["stage"],
+            "race",
+            "START resumed the race"
+        );
+    }
 }

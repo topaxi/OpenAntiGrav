@@ -18,6 +18,7 @@
 use oag_title::{PauseAction, PauseMenu, PauseTouch};
 use oag_ui::frontend::{Draw, Placed, label_under_tile};
 use oag_ui::language::StringTable;
+use oag_ui::menu::nav::Dir;
 use oag_ui::menu::pointer::{Part, Region};
 use oag_ui::menu::{Entry, Frame, Layers, Menu, Skin, block, pause_row_id};
 use oag_ui::screen::{
@@ -136,6 +137,12 @@ impl PauseScreen {
         })
     }
 
+    /// Whether the screen is a page of `<TouchButton>` tiles.
+    #[must_use]
+    pub fn is_tiles(&self) -> bool {
+        self.tiles.is_some()
+    }
+
     /// The screen's name.
     #[must_use]
     pub fn name(&self) -> &str {
@@ -236,6 +243,7 @@ fn touch_draw_list(
     menu: &Menu,
     skin: &Skin,
     sprites: &dyn Fn(&str) -> Option<Placed>,
+    pad_cursor: bool,
 ) -> Layers {
     let mut chrome = Vec::new();
     for layout in screen.layouts() {
@@ -269,7 +277,7 @@ fn touch_draw_list(
             tile_draw(
                 screen,
                 button,
-                placed.row == menu.selected(),
+                pad_cursor && placed.row == menu.selected(),
                 sprites,
                 &mut body,
             );
@@ -383,8 +391,24 @@ pub fn draw_list(
     frame: &Frame,
     sprites: &dyn Fn(&str) -> Option<Placed>,
 ) -> Layers {
+    draw_list_for(screen, table, menu, skin, frame, sprites, true)
+}
+
+/// [`draw_list`] with the pad's cursor shown or not: a screen of tiles fills the focused tile
+/// only while the pad is the device in use, as the front end's touch grids do, so a pointer
+/// that is moving over the tiles leaves them all at rest.
+#[must_use]
+pub fn draw_list_for(
+    screen: &PauseScreen,
+    table: &PauseMenu,
+    menu: &Menu,
+    skin: &Skin,
+    frame: &Frame,
+    sprites: &dyn Fn(&str) -> Option<Placed>,
+    pad_cursor: bool,
+) -> Layers {
     if screen.tiles.is_some() {
-        return touch_draw_list(screen, table, menu, skin, sprites);
+        return touch_draw_list(screen, table, menu, skin, sprites, pad_cursor);
     }
     let mut layers = Layers::default();
     let mut chrome = Vec::new();
@@ -703,6 +727,38 @@ fn list_rects(widget: &ListWidget, list: &oag_title::ListBlocks, focus: f32) -> 
         [widget.x, widget.y, list.label_width, list.height],
         [value_x, widget.y, value_width, list.height],
     ]
+}
+
+/// The row a pad's `direction` moves the cursor to on a screen of tiles: the nearest tile whose
+/// centre lies that way, favouring the one in line. The game asks it for LEFT and RIGHT. `None` at an edge (the cursor stays) and on
+/// a screen that is not tiles. **Chosen**: the original's tiles answer touch only.
+#[must_use]
+pub fn tile_neighbour(
+    screen: &PauseScreen,
+    table: &PauseMenu,
+    menu: &Menu,
+    skin: &Skin,
+    direction: Dir,
+) -> Option<usize> {
+    screen.tiles?;
+    let tiles = regions(screen, table, menu, skin);
+    let centre = |rect: [f32; 4]| (rect[0] + rect[2] * 0.5, rect[1] + rect[3] * 0.5);
+    let (fx, fy) = centre(tiles.iter().find(|tile| tile.row == menu.selected())?.rect);
+    tiles
+        .iter()
+        .filter(|tile| tile.row != menu.selected())
+        .filter_map(|tile| {
+            let (x, y) = centre(tile.rect);
+            let (along, across) = match direction {
+                Dir::Right => (x - fx, y - fy),
+                Dir::Left => (fx - x, y - fy),
+                Dir::Down => (y - fy, x - fx),
+                Dir::Up => (fy - y, x - fx),
+            };
+            (along > 1.0).then_some((tile.row, along + 3.0 * across.abs()))
+        })
+        .min_by(|a, b| a.1.total_cmp(&b.1))
+        .map(|(row, _)| row)
 }
 
 /// The rects a pointer can land on, for the rows the screen draws: a block's box at its resting

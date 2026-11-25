@@ -519,9 +519,15 @@ of any transition is the disc's screen too now (it faded as the front end's list
   (`InGame_PauseOptions.xml`: camera, audio, controls, pilot assist as touch lists and sliders). **Chosen.**
 - **The scene blur and the event card (`Callout CurGameMode`) are not drawn**: the blur is not in this build's
   front end, and the card is native code whose layout is unlocated (open). The scene under the panel is sharp.
-- **The pad cursor** fills the focused tile in `Orange2048`, the tile's own pressed colour: this build's own, as on
-  the front end's grids (`oag_ui::frontend::touch` module doc); a confirm screen opens on its cross, not where its
-  cursor was left. **Chosen.** UP and DOWN walk the tiles in the file's order, not by position.
+- **Pad and keyboard** (**chosen**: the original's tiles answer touch only, `docs/ghidra/functions/vita-2048-eu-v104/pad-focus.md`:
+  no `TouchButton` reads a pad; the pause screens author `forward="start"` and `backward="none"`, so START resumes
+  and CIRCLE does nothing on the root, both as here, 85). UP and DOWN walk every tile in the file's order (so every
+  tile is reachable and a drive's `select` works), LEFT and RIGHT move along a row by position
+  (`oag_ui_screens::pause::tile_neighbour`), CROSS or ENTER activates, CIRCLE or ESCAPE backs out of a confirm screen
+  (ESCAPE on the root resumes, as on every title), START resumes. The cursor fills the focused tile in `Orange2048`,
+  the tile's own pressed colour, **only while the pad spoke last** (`draw_list_for`): a mouse or finger over the tiles
+  leaves them at rest, as on the front end's touch grids, and a click or tap is the tile's press. A confirm screen opens
+  on its cross, not where its cursor was left. Test: `pause_menu_ground_truth::y2048_screens::the_pad_walks_the_tiles_by_position_and_start_resumes`.
 - **The HUD under the panel** is off, **inherited from Omega** (`hud_under_scrim`); the Vita frame was taken on the
   campaign's pause with the HUD hidden by its own card, so this is not measured. **The slide-in transitions**
   (`transition`, `delay` on every widget) are not played.

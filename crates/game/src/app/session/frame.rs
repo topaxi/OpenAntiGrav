@@ -841,6 +841,8 @@ impl Session {
                     {
                         Vec::new()
                     } else {
+                        stage.pad_cursor = !self.pointer.pointer_spoke_last();
+                        stage.step_pause_tiles(self.controls.buttons_mut());
                         let mut events = stage.menu.update(self.controls.buttons_mut());
                         events.extend(pointer::menu_pointer(
                             stage,

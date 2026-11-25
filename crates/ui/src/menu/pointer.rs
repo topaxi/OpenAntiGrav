@@ -349,6 +349,13 @@ impl Menu {
         self.cursor[page] = row;
         self.scroll[page] = self.scroll();
     }
+
+    /// Moves the cursor of the page on screen to `row`, with the sound of a step, for a page
+    /// whose rows are laid out in two dimensions and stepped by position rather than by index.
+    pub fn move_to_row(&mut self, row: usize) {
+        let page = self.current();
+        self.move_cursor(page, row);
+    }
 }
 
 /// A finger's scroll of a long page: the [`Kinetic`] model in rows, and
