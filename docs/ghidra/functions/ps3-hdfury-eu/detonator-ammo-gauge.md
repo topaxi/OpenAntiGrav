@@ -115,8 +115,8 @@ The hull's gauge chunks author `uvA == uvB`: each segment spans `v` over one thi
 `detonator_bullet_segments.gtf` (32x1024) is two flat halves, one white and one black. In the
 original a full gauge (`StandardBullets = 1`) lights every segment and an empty one none, so the
 shift `v + 0.5 * fill` carries the front `count` segments onto the white half, and `A` (unshifted)
-reads the black half: an unlit segment is black. Ours draws the same with no flip
-(`oag_mesh::mesh::rcs::bullet_gauge`). **85** on the program, **90** on what it shows.
+reads the black half: an unlit segment is black. In ours the same shift shows the same front
+segments (`oag_mesh::mesh::rcs::bullet_gauge`, frames below). **85** on the program, **90** on what it shows.
 
 ## Live (RPCS3, 2026-11-25)
 
@@ -152,10 +152,18 @@ Read for the old D5 question on [detonator-hull.md](detonator-hull.md). The bloc
 when `v >= 1.0`; `+0x24` (Charge1) `1.0` and `+0x30` (Charge2) `0.0` when `0 < v < 1`; both
 `0.0` otherwise (`0x00107ef8`-`0x00107f18`). Each channel moves toward its target by `rate * dt`
 and clamps. The block then gets the colour in `+0`, Charge1 in `+0x10` and Charge2 in `+0x14`
-(`0x00107dc0`-`0x00107e78`). Callers: `0x000eb4b0` (`v = fsel(f1' - f31, f31, f1')` around a
-`0x002a3718` result) and `0x000ed4b4` (`v` a TOC constant). **62**: the channel law is read; what
-`v` is (the EMP gauge is the obvious candidate) is **not**, and no capture ran. The fuselage's
-`rich_iridescent` material and the strip and wing-edge glow it drives are not wired.
+(`0x00107dc0`-`0x00107e78`).
+
+**`v` is the EMP charge.** Both callers sit in one craft update, behind `game+0xe0 == 14`
+(`0x000eb404`). It reads `n = rm+0x2dd8` (the EMP charge, [detonator-emp.md](detonator-emp.md)) and
+the table's `+0x1bc`/`+0x1c0` (`minNumPadsToCollectEMP` 4, `maxNumPadsToCollectEMP` 8,
+`0x000eb414`-`0x000eb43c`). Below the minimum it branches to `0x000ed494`, which passes `v = 0.0`
+(TOC `-0x49d8` = `0x00000000`). Otherwise it maps `n` through `0x002a3718` with the two bounds and
+`1.0` (TOC `-0x49c4`), caps the result at `1.0` (`fsel`, `0x000eb498`-`0x000eb4a8`) and passes it
+(`0x000eb4b0`). So **Charge1 lights once the EMP is ready and Charge2 once it is full**: the same
+thresholds as the HUD's `EmpReady` and the `EMPFULL` cue. **62** on the channel law, **70** on `v`
+(static; `0x002a3718`'s body is unread, and no capture ran). The fuselage's `rich_iridescent`
+material and the strip and wing-edge glow it drives are not wired.
 
 ## Wired
 
@@ -166,6 +174,14 @@ player's speed, and the scene writes it into the player's hull glow table
 (`PROGRAM_BULLET_GAUGE`). `oag_mesh::mesh::rcs::bullet_gauge` gives the material its entry by what
 its programs declare. Tests: `oag_raceplay::ammo_gauge::tests` (the law, with the live words) and
 `hd_rim_glow_ground_truth::the_detonator_hull_gauge_earns_its_segment_program` (the disc's hull).
+
+**Colour.** A lit segment's mean over the blue-dominant pixels: the original
+(`detonator-talons-cannon-volley`, `theirs.png`, 1920x1080, colour buffers written) `(1, 93, 219)`;
+ours in a free race at 15 and at 6 `(2, 78, 224)` and `(2, 77, 220)`. Green reads 15 lower, cause
+not read.
+
+A seek in a replay viewer forgets the held gauge (`Race::restore_for_viewing`), so a seek to the
+grid draws the bind state. A Restart Race loads the race again.
 
 **A pose-held comparison pair shows the grid state.** `--pose-hold` puts ours' craft at rest, so
 its speed never passes the gate and the gauge stays full and red where the original's moving craft

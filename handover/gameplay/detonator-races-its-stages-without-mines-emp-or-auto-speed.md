@@ -333,8 +333,8 @@ original frame to compare. The detail is below.
      `cannon_flash_left`/`right` locators, which the simulation fires from too
      (`load::muzzle::cannon_flash`).
   Open: the substitution table's reader, the race-side write of `ship+0x6298`, the
-  input `v` of the `Charge1`/`Charge2` writer (`Ship_UpdateDetonatorHullParams` `0x00107c28`, read
-  2026-11-25 on `detonator-ammo-gauge.md`; callers `0x000eb4b0`/`0x000ed4b4`), the mine's music-driven
+  wiring of `Charge1`/`Charge2` (read 2026-11-25 on `detonator-ammo-gauge.md`: lit at EMP ready and
+  full; the fuselage `rich_iridescent` material that reads them is unwired), the mine's music-driven
   binds. `detonator_pickup` and `detonator_mine_explosion_kaleidoscopic` ship, but no loader was
   found (70, negative).
 

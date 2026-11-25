@@ -115,6 +115,19 @@ mod tests {
         assert_eq!(start.fill, 0.0);
     }
 
+    /// A seek back to the grid draws the bind state, not the gauge the race had reached.
+    #[test]
+    fn a_seek_forgets_the_held_gauge() {
+        let mut race = crate::tests::race_with_a_grid();
+        let snapshot = race.core.sim.clone();
+        *crate::drawable::lock(&race.view.ammo_gauge_shown) = Some(Shown {
+            colour: HD.ready,
+            fill: 0.4,
+        });
+        race.restore_for_viewing(&snapshot);
+        assert!(crate::drawable::lock(&race.view.ammo_gauge_shown).is_none());
+    }
+
     /// Below the gate the block holds what the last update wrote.
     #[test]
     fn a_slow_craft_freezes_the_gauge() {
