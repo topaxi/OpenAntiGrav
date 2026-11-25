@@ -238,6 +238,13 @@ pub const LAYER_START: [f32; LAYERS] = [0.0, 0.25, 0.5];
 /// because a "tidied" constant is a different constant.
 pub const LAYER_GAIN: [f32; LAYERS] = [1.0, 1.33, 2.0];
 
+/// Each layer's ramp at `intensity` ([`Exhaust::layer_alphas`]).
+fn layer_alphas_at(intensity: f32) -> [f32; LAYERS] {
+    std::array::from_fn(|n| {
+        ((intensity - LAYER_START[n]) * LAYER_GAIN[n] * LAYER_ALPHA_SCALE).clamp(0.0, 1.0)
+    })
+}
+
 /// Speed to km/h. The original multiplies by this before every speed test.
 ///
 /// Re-exported from [`oag_core::math`] rather than defined here: the same
@@ -720,12 +727,7 @@ impl Exhaust {
     /// climbs at [`LAYER_GAIN`]`[n]` so all three saturate together at `1.0`.
     #[must_use]
     pub fn layer_alphas(&self) -> [f32; LAYERS] {
-        let mut out = [0.0; LAYERS];
-        for (n, slot) in out.iter_mut().enumerate() {
-            *slot = ((self.intensity - LAYER_START[n]) * LAYER_GAIN[n] * LAYER_ALPHA_SCALE)
-                .clamp(0.0, 1.0);
-        }
-        out
+        layer_alphas_at(self.intensity)
     }
 
     /// The flare's vertices: **one** quad, as `ExhaustFlare_Draw` draws it.

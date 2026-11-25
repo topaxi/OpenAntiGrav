@@ -1142,6 +1142,32 @@ both before the sprite listing; not re-shot after it.
 - **Neither 2048's nor Omega's original fires the burst at all.** See "The burst
   on every title" below.
 
+## The red variant's colour is in its sprites (2026-11-25, `trail-hit-colour`)
+
+Maintainer report: a Fury craft's trail is red, its trail hits were white. The cause was ours:
+`oag_title::Effects::sprites` listed `WO_TRAIL_HITSHIP` and not `_RED`, so the red variant drew
+with the procedural white profile.
+
+The redness is not in the colour table. Read off `DATA06` (the only archive with the file),
+both emitters of each system, and the textures they name:
+
+| system / emitter | colour table (start, middle, end) | sprite |
+| --- | --- | --- |
+| `WO_TRAIL_HITSHIP` / same | `255,255,255` `202,110,255` `190,95,255` | `blue_glow2` |
+| `WO_TRAIL_HITSHIP` / `CORE_IMPACT` | `255,255,255` `102,126,252` `113,95,255` | `trailhit_core_4x2` |
+| `WO_TRAIL_HITSHIP_RED` / same | `255,255,255` `255,206,205` `255,159,156` | `red_glow` |
+| `WO_TRAIL_HITSHIP_RED` / `CORE_IMPACT` | `255,255,255` `255,201,192` `255,149,131` | `trailhit_core_4x2_red` |
+
+Listing the variant (`crates/hd/src/effects.rs`) makes the burst on `--race --team assegai_c1
+--trail-sparks` red; the classic team's stays blue
+(`hd_engine_flare_ground_truth`, "the trail-hit bursts are their ribbons' colours": reverting the
+list turns it red). **Not paired against the original's red burst**: the trigger needs a Fury
+craft tucked in a rival's ribbon, which no capture here holds.
+
+**2048 and Omega: ported by their own sprites.** Both ship `_RED`, `red_glow` and
+`trailhit_core_4x2_red` (`.gxt`, `.gnf`) and load sprites without a list, so both red emitters
+read 2 sprites on each (loader report, 2026-11-25).
+
 ## The burst on every title (`graphics.trail_hits`)
 
 2026-11-09. Which title plays the burst, and from what, read off the loader report of

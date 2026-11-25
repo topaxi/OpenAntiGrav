@@ -853,3 +853,44 @@ fn moving_a_ribbon_rigidly_turns_its_samples_about_the_pivot() {
         "{tail:?}"
     );
 }
+
+/// The ribbon's mean colour is each submitted layer's authored colour, times the texture's, over
+/// the width it covers: the PSP's wide deep-blue layer makes it violet (hue near 269 degrees), the
+/// PS2 leaves that layer out and it is pink-magenta (near 312). A coloured texture multiplies in.
+#[test]
+fn the_ribbon_colour_weights_each_layer_by_its_width_and_the_texture() {
+    let direction = |c: [f32; 3]| {
+        let y = c[0] * 0.2126 + c[1] * 0.7152 + c[2] * 0.0722;
+        let d = [c[0] - y, c[1] - y, c[2] - y];
+        let n = d.iter().map(|v| v * v).sum::<f32>().sqrt();
+        d.map(|v| v / n)
+    };
+    for (law, want) in [
+        (TrailLaw::Ramped, [0.345, -0.195, 0.918]),
+        (TrailLaw::Baked, [0.775, -0.287, 0.563]),
+    ] {
+        let got = direction(law.ribbon_colour([1.0; 3]));
+        assert!(
+            (0..3).all(|c| (got[c] - want[c]).abs() < 2e-3),
+            "{law:?}: {got:?}"
+        );
+        let grey = direction(law.ribbon_colour([0.325; 3]));
+        assert!(
+            (0..3).all(|c| (grey[c] - got[c]).abs() < 1e-5),
+            "a grey texture adds no hue"
+        );
+    }
+    let red = TrailLaw::Ramped.ribbon_colour([1.0, 0.0, 0.0]);
+    assert!(red[0] > 0.0 && red[1] == 0.0 && red[2] == 0.0, "{red:?}");
+}
+
+/// The mean is over the covered texels: a transparent one adds no colour.
+#[test]
+fn the_ribbon_textures_mean_is_weighted_by_alpha() {
+    let texture = FlareTexture {
+        width: 2,
+        height: 1,
+        rgba: vec![255, 0, 0, 255, 0, 255, 0, 0],
+    };
+    assert_eq!(texture.mean_rgb(), [1.0, 0.0, 0.0]);
+}

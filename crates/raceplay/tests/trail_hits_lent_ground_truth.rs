@@ -15,10 +15,15 @@
 use oag_raceplay as race;
 
 const PULSE: &str = "data/images/pulse-psp-eu.chd";
+const PS2: &str = "data/images/pulse-ps2-eu.chd";
 const HD: &str = "data/images/hdfury-ps3-eu-dec.iso";
 
 fn load(trail_hits: race::TrailHits) -> Option<race::Loaded> {
-    let pulse = oag_testdata::image(PULSE)?;
+    load_from(PULSE, trail_hits)
+}
+
+fn load_from(source: &str, trail_hits: race::TrailHits) -> Option<race::Loaded> {
+    let pulse = oag_testdata::image(source)?;
     let loaded = race::load(&race::Options {
         source: pulse.display().to_string(),
         mode: oag_race::Mode::SingleRace,
@@ -57,6 +62,18 @@ fn tucked_in_a_rivals_trail(loaded: race::Loaded) -> race::Race {
     race
 }
 
+/// The PS2 leaves the ribbon's deep blue layer out, so its burst is pink-magenta where the PSP's
+/// is violet.
+#[test]
+#[ignore = "needs data/images/pulse-ps2-eu.chd and data/images/hdfury-ps3-eu-dec.iso"]
+fn trail_hits_lent_on_the_ps2_takes_its_own_ribbons_hue() {
+    let Some(on) = lent_from_hd() else { return };
+    let Some(loaded) = load_from(PS2, on) else {
+        return;
+    };
+    assert_burst_is_in_the_ribbons_hue(&loaded, PS2_RIBBON);
+}
+
 #[test]
 #[ignore = "needs data/images/pulse-psp-eu.chd and data/images/hdfury-ps3-eu-dec.iso"]
 fn trail_hits_lent_on_pulse_a_craft_tucked_in_a_rivals_trail_plays_hds_burst() {
@@ -70,12 +87,12 @@ fn trail_hits_lent_on_pulse_a_craft_tucked_in_a_rivals_trail_plays_hds_burst() {
     );
     let lent = line("trail hits: ").expect("the report names the lending");
     assert!(lent.contains("Wipeout HD"), "{lent}");
+    assert_burst_is_in_the_ribbons_hue(&loaded, PSP_RIBBON);
     let race = tucked_in_a_rivals_trail(loaded);
     assert!(
         race.stage().playing_count() > 0,
         "a craft eight units inside a rival's ribbon played no burst"
     );
-    assert_burst_is_in_the_ribbons_hue(&race);
 }
 
 /// The unit chroma (colour minus its Rec. 709 luma) of `rgb`, and its length.
@@ -86,29 +103,49 @@ fn chroma(rgb: [f32; 3]) -> ([f32; 3], f32) {
     (c.map(|v| v / length.max(1e-9)), length)
 }
 
-/// **The lent burst is drawn in the colour of the Pulse ribbon it was struck in**, not HD's blue:
-/// every coloured vertex of the real `WO_TRAIL_HITSHIP` points the way the PSP ribbon's summed
-/// layers do (`docs/formats/pulse-absent-effects.md`, "Trail-hit burst colour").
-fn assert_burst_is_in_the_ribbons_hue(race: &race::Race) {
-    let (additive, alpha) = race
-        .stage()
-        .vertices(oag_core::math::Vec3::X, oag_core::math::Vec3::Y);
-    let (target, _) = chroma(oag_fx::exhaust::TrailLaw::Ramped.ribbon_colour());
-    let mut coloured = 0;
-    for vertex in additive.iter().chain(alpha.iter()) {
-        let (direction, length) = chroma([vertex.colour[0], vertex.colour[1], vertex.colour[2]]);
-        if length < 0.02 {
-            continue;
+/// The chroma direction of the colour the PSP's ribbon adds over its footprint, violet, and the
+/// PS2's, pink-magenta: the disc's grey ribbon texture times each submitted layer's colour over
+/// its width (`docs/formats/pulse-absent-effects.md`, "Trail-hit burst colour").
+const PSP_RIBBON: [f32; 3] = [0.345, -0.195, 0.918];
+const PS2_RIBBON: [f32; 3] = [0.775, -0.287, 0.563];
+
+/// **The lent burst is drawn in the colour of the ribbon it was struck in, not HD's cyan-blue**:
+/// every emitter of the real `WO_TRAIL_HITSHIP`, sprite times colour table, points the way the
+/// platform's ribbon does. The vertex colour alone does not say what is drawn: the sprite texel
+/// multiplies it.
+fn assert_burst_is_in_the_ribbons_hue(loaded: &race::Loaded, target: [f32; 3]) {
+    let effect = loaded
+        .view
+        .handles
+        .get(oag_title::Trigger::TrailHitship)
+        .expect("the lent burst is loaded");
+    assert!(!effect.emitters.is_empty());
+    for emitter in &effect.emitters {
+        let sprite = emitter.sprite.as_ref().expect("HD authors both sprites");
+        let (mut texel, mut weight) = ([0.0f32; 3], 0.0f32);
+        for t in sprite.rgba.as_chunks::<4>().0 {
+            let alpha = f32::from(t[3]);
+            for c in 0..3 {
+                texel[c] += f32::from(t[c]) * alpha;
+            }
+            weight += alpha;
         }
-        coloured += 1;
+        let mut table = [0.0f32; 3];
+        for entry in emitter.palette.iter() {
+            for c in 0..3 {
+                table[c] += entry[c];
+            }
+        }
+        let drawn = std::array::from_fn(|c| texel[c] / weight.max(1.0) * table[c] / 256.0 / 255.0);
+        let (direction, length) = chroma(drawn);
+        assert!(length > 0.01, "{}: drawn grey {drawn:?}", emitter.name);
         let dot: f32 = (0..3).map(|c| direction[c] * target[c]).sum();
         assert!(
             dot > 0.999,
-            "{:?} is not the ribbon's hue (dot {dot})",
-            vertex.colour
+            "{}: drawn {drawn:?} is not the ribbon's hue (dot {dot})",
+            emitter.name
         );
     }
-    assert!(coloured > 0, "the burst drew no coloured vertex to judge");
 }
 
 #[test]
