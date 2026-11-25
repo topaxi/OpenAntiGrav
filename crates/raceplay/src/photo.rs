@@ -30,6 +30,7 @@
 use super::*;
 
 pub mod effects;
+mod effects_memory;
 pub mod mount;
 pub mod rewind;
 pub mod shot;

@@ -9,7 +9,7 @@
 use super::*;
 
 /// The release effects still emitting, and which bolts have already left.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct PlasmaLaunch {
     /// Per projectile slot: the Plasma in it has been released.
     released: [bool; oag_weapons::projectile::MAX_PROJECTILES],

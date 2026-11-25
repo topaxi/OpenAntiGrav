@@ -442,6 +442,23 @@ replays (`oag_raceplay::photo::shot::Shot`). `a_motion_blur_shot_smears_what_it_
 checks the blurred shot holds the plain shot's HUD glyphs and no high-contrast pixel outside the
 HUD differs from the blurred shot without one.
 
+**A blurred shot puts the particles and every effect back too.** The ticks it replays emit, age and
+re-seed everything the race draws as an effect: the particle stage and its generator, the spark
+systems and every handle they hold into the stage (collision, damage, weapon and floor sparks, the
+flares, absorb bursts, plasma launch, quake, EMP, repulser and leach), the scenery effects with their
+own pool and generator, the smoke, trails and blasts, the exhausts (HD's flame, sprite, light jitter
+and their generators included) and the wreck and debris effects. The shot keeps them at its tick as it
+does the HUD and puts them back at the end (`photo::effects_memory`). **Every field of the view is
+named there as restored or live, with no `..`**, so a field added to the view does not compile until
+it is sorted; the test then holds the sort to the behaviour. Without it a shot left the next shot
+(and the race) other sparks than it found: with the collision spark's particle count wired
+(`ship-collision-fx.md`, "slot 5 is the particle count") the two blurred shots of the ground-truth
+test differed by two spark streaks outside the HUD. Tests:
+`a_blurred_shot_leaves_every_view_field_but_the_cameras_as_it_found_it` (red by name with a field
+moved from restored to live: shown for `projectile_flare` held across the replay) and
+`a_blurred_shot_leaves_the_particles_as_they_stood_at_the_shot`. Not shown red, because the fixture
+race has none of it in play: a rocket, an absorb, the HD exhaust.
+
 Motion blur (track and ship), accumulated depth of field and a rewind, on the titles whose originals
 have the first two (`oag_title::photo::Accumulation`: HD and 2048) and on every title for the rewind
 ([ADR-0087](../architecture/adr/0087-a-replay-and-photo-mode-share-one-timeline.md), stage 6;

@@ -326,9 +326,9 @@ it stops it (`0x000ed0cc`), then clears the byte. The same block decays the cont
   in the instance's scale block slot 5, and the instance carries the craft's velocity over 60.
   Wired (`oag_fx::sparks::attached_strength`) where the effect is authored looping, the craft's
   velocity carried; Pulse and Pure keep `severity`. The wall record's `p` is the frame's largest
-  contact impulse (`WallResponse::impulse_largest`, what the sound law reads). **Chosen, not
-  measured:** that slot 5 is the particle system's severity (the field Pulse's `2x + 0.4` writes);
-  what `0x002846d0` does with slot 5 is unread.
+  contact impulse (`WallResponse::impulse_largest`, what the sound law reads). That slot 5 is
+  the particle system's *severity* was a stand-in and is wrong: read 2026-11-25, slot 5 is the
+  emission **count** multiple ("2026-11-25: slot 5 is the particle count", below).
 - **RPCS3**: see [particle-triggers.md](particle-triggers.md), "2026-11-15: the damage smoke
   re-read, and a film of a hit", for the frames where two hulls touch.
 
@@ -412,3 +412,68 @@ it stops it (`0x000ed0cc`), then clears the byte. The same block decays the cont
 counts a pair contact as a contact. Test `a_pair_contact_starts_and_ends_the_attached_spark`.
 Burst-effect titles (Pulse, Pure) are untouched by the gate. 2048 and Omega: checked, applies,
 not wired.
+
+## 2026-11-25: slot 5 is the particle count
+
+Lane `hd-contact-sparks`. `0x002846d0` and its reader of instance `+0x44` close the open item
+"what slot 5 does": the scale block's slot 5 is how many particles an emission throws.
+
+**The block's destination.** `0x002846d0(instance, &block)` (named `ParticleInstance_SetScaleBlock`)
+copies the block's eight floats to instance `+0x30..+0x4c`, so slot `k` lands at `+0x30 + 4k`
+(slot 4 `+0x40`, slot 5 `+0x44`, slot 7 `+0x4c`), then derives `+0x64..+0x7c` from the
+emitter record: `+0x64/+0x68/+0x6c` = slot 1 x slot 3 x `+0x54` x the record's extents
+(`+0x34/+0x38/+0x40`), `+0x70/+0x74` = slot 3 x slot 0 x `+0x50` x the record's speeds
+(`+0x48/+0x4c`), `+0x78` = gravity x slot 3, `+0x7c` = rate (`+0x4cc`) x `+0x48` (slot 2). It
+walks the instance's children (`+0x24`) and siblings (`+0x1b0`) and gives each the same block
+(`0x002849bc`, `0x002849d4`, the recursion is the function's own calls). Slot 5 is stored and
+used by none of that arithmetic. Confidence 85 (disassembly read in full).
+
+**The reader.** `ParticleInstance_UpdateEmission` (`0x002869b0`, the per-instance emitter tick,
+named from this reading) is the only reader of `+0x44` in the particle code's range
+(`0x00280000`..`0x0028c000`: a scan for `lfs`/`lwz` with displacement `0x44` finds `0x00286b04`
+here and the block reader `0x00280cd0`). Its emission loop, per emission:
+
+```text
+interval = instance[+0x40] * Random_RangeInt(record[+0x64], record[+0x68])     0x00286ab8..
+count    = instance[+0x44] * Random_RangeInt(record[+0x6c], record[+0x70])     0x00286b04..
+n        = ceil(count)         (x + 2^52 - 2^52 rounds to nearest; +1 when that rounded below x:
+                                the doubles at 0x008b29c8 / 0x008b29d0 are -2^52 / +2^52)
+if n + live(+0x150) <= record[+0xa0]: spawn n particles (0x00281788)
+```
+
+`Random_RangeInt` (`0x0028c570`) is the uniform integer in `[lo, hi]` off the system's generator
+(`Random_RangeFloat`'s sibling at `0x0028c660`). The record's `+0x64..+0x70` are the authored
+interval and per-emission count (`pob.md`, `interval_ticks` and `per_emission`), so **slot 4
+scales the time between emissions and slot 5 the particles per emission**. Slot 5 = 0 throws
+nothing (the emission still counts, and `+0xc` is decremented); any positive slot 5 throws at
+least one particle. Confidence 78: two readers agree on the field (the writer `0x002846d0` and
+this loop), the cap and the rounding are read at instruction level; **not run** (a live A/B of
+instance `+0x44` on a running spark is the way to move it past 80).
+
+**What it changes here.** `ShipCollisionFx_Trigger` kinds 0 and 3 write `min(speed * 0.0125, 1)
++ intensity` (`0..2`, zero under `0.1`) into slot 5 and nothing else, so the attached spark's
+strength is a **count multiple at neutral severity**, not a severity. Wired:
+`oag_fx::psys::System::ignite_counting` and `Stage::set_count_scale`
+(`crates/fx/src/psys/counted.rs`) throw `ceil(count_scale * drawn count)` per emission;
+`contact_fx.rs` (seat, wall and pair) and `field_sparks.rs` (opponents) pass
+`sparks::attached_strength` there and leave severity `1.0`. Tests
+`the_count_scale_multiplies_each_emissions_particles_and_rounds_up`,
+`ignition_without_a_scale_keeps_the_authored_count` (fx) and
+`the_seats_attached_spark_plays_at_the_attached_strength` (raceplay, red with the count dropped:
+it asserts `count_scale == law`, `scale == 1.0`). Pulse's burst (`sparks::severity`) is untouched.
+The original rewrites the block each frame a record asks; ours writes it when the contact starts
+and holds it (unchanged from row 1).
+
+**Lineage.** 2048 and Omega: checked the writer only. Omega's `ShipCollisionFx_Trigger` kinds 0
+and 3 share one body as HD's do (`../ps4-omega-eu/ship-collision-fx.md`), so the block write is
+there; the emission loop's `+0x44` consumer was not located on either, so the count law is
+**not checked** there and the wiring stays HD's (the title carrying the looping effect). Weapon
+lineage: not a weapon change.
+
+## Names applied (2026-11-25)
+
+| Address | Name | Confidence | Evidence |
+| --- | --- | --- | --- |
+| `0x002846d0` | `ParticleInstance_SetScaleBlock` | 80 | stores the block to instance `+0x30..+0x4c`, re-derives `+0x64..+0x7c`, recurses over children and siblings (read in full) |
+| `0x002869b0` | `ParticleInstance_UpdateEmission` | 72 | the emission loop reading `+0x40`/`+0x44` against the record's interval and count ranges, the live cap and the spawn call; named from the loop, the caller chain not walked |
+| `0x0028c570` | `Random_RangeInt` | 78 | uniform integer in `[lo, hi]` off the system's generator, called twice per emission with the record's `+0x64/+0x68` and `+0x6c/+0x70` |

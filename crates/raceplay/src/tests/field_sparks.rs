@@ -80,6 +80,16 @@ fn an_opponent_pair_contact_within_a_hundred_units_of_the_view_throws_the_spark(
         "a closing pair is above the cutoff, got {strength}"
     );
     assert!(strength <= 2.0);
+    assert_ne!(
+        strength, 1.0,
+        "the held spark plays at the law's count multiple, not the default"
+    );
+    let playing = race.view.field_sparks.held_for_tests(1).expect("held");
+    assert_eq!(
+        race.view.stage.scale(playing),
+        Some(1.0),
+        "the multiple is the particle count's, the drawn size is not scaled"
+    );
 
     let mut far = field_race(&looping());
     let eye = settled_eye(&mut far);
@@ -151,7 +161,8 @@ fn a_burst_effect_leaves_the_opponents_and_the_seats_law_alone() {
 }
 
 /// **The seat's attached spark follows HD's law, not Pulse's**: its speed term and the wall
-/// record's impulse, with the craft's velocity carried.
+/// record's impulse scale the particle count of each emission (severity stays neutral), with
+/// the craft's velocity carried.
 #[test]
 fn the_seats_attached_spark_plays_at_the_attached_strength() {
     let setup = setup_with(
@@ -171,8 +182,9 @@ fn the_seats_attached_spark_plays_at_the_attached_strength() {
         .linear_velocity
         .length();
     let law = oag_fx::sparks::attached_strength(speed, evaluated.wall.impulse_largest);
-    assert_eq!(race.sparks().scale(), law);
-    assert_ne!(law, oag_fx::sparks::severity(evaluated.wall.impact_speed));
+    assert_eq!(race.sparks().count_scale(), law);
+    assert_eq!(race.sparks().scale(), 1.0);
+    assert_ne!(law, 1.0, "a neutral law would pass with the count dropped");
 }
 
 /// **An opponent's wall contact within 100 units of the view starts its own spark, one past 100
