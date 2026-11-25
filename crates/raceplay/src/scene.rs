@@ -730,7 +730,7 @@ impl Scene {
             sky_probe: sky_probe.as_ref(),
         };
         crate::stages::checkpoint()?;
-        let behind_glass = behind_glass::Target::build(
+        let mut behind_glass = behind_glass::Target::build(
             device,
             queue,
             behind_glass,
@@ -834,6 +834,9 @@ impl Scene {
             mesh_render::Velocity::Gated,
             true,
         )?;
+        if let Some(target) = behind_glass.as_mut() {
+            target.set_readers(&track);
+        }
         crate::stages::checkpoint()?;
         let zone_equaliser = crate::zone_equaliser::bind_into(
             device,
