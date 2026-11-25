@@ -320,6 +320,7 @@ pub(crate) fn run_windowless(
                 menu_movie_frame: cli.menu_args.menu_movie_frame,
                 menu_ticker: cli.menu_args.menu_ticker.clone(),
                 menu_title_seconds: cli.menu_args.menu_title_seconds,
+                menu_ring_seconds: cli.menu_args.menu_ring_seconds,
                 menu_focus_level: cli.menu_args.menu_focus_level,
                 menu_prompt: cli.menu_args.menu_prompt.clone(),
                 presented: cli.presented,
@@ -920,6 +921,7 @@ pub(crate) fn race_launch(
                 field_lean: field_lean(cli)?,
                 field_warmup: field_warmup_velocities(cli)?,
                 detonator_mines: cli.detonator_mines.as_ref().map(|m| m.0.clone()),
+                detonator_emp_charge: cli.detonator_emp_charge,
                 pose_sparks: pose_sparks(cli)?,
                 // A photo is drawn through the presentation chain, at the output's size and
                 // before the grade, as the session reads it back: no brightness, gamma or

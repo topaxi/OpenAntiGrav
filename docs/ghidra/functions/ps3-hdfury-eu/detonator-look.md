@@ -341,6 +341,62 @@ Two materials looked wrong against the `pad` pair (original: grey slab with whit
   is gated by the same byte is unread (its Zone sky draw is unread, [zone-sky.md](zone-sky.md)), and there is no
   Detonator frame pair of 2048 to read it from.
 
+## Track fog and the glass floor (2026-11-24, `det-mines-ahead-structure`)
+
+**The question.** On `detonator-talons-mines-ahead` ours drew grey-green road panels and unfogged walls at the far curve. The
+original does not lack them: brightened, its far curve shows the same panels and arcs, dark, under an orange-red fog. So the
+difference was shading, not a node the original hides (nothing in the mode `0xe` loops, a stage set or the PVS removes it).
+
+**Two causes, both the original's own rule.**
+
+1. **A track chunk takes the stage's Track fog.** The fog pick at the head of the draw loop reads the chunk's flag bit 0 (the
+   Track bit, `oag_rcs::rcsmodel::Mesh::is_track`) in a Zone-family frame and binds the Track buffer
+   (`Scene_GetZoneTrackFog`; live `fogColour` values on [zone-plain-chunks.md](zone-plain-chunks.md), "The fog pick",
+   confidence 80). Detonator stage 1 authors `Lighting.Track Fog colour` `1.8 0.141176 0.007059` and `density` `0.0015`, and
+   its primary `Fog density` is `0`, so a scene chunk is unfogged and a track chunk (road, walls) orange-red. Ours fogged every
+   chunk with the primary pair. Now `oag_mesh::mesh_render::TrackFog` (`Scene::track_fog`) carries the stage's pair and
+   `fog.wesl`'s `fogged` takes it on `slots::ZONE_TRACK` chunks, `ZoneGrade::track_fog` reading it from the palette
+   (`StagePalette::track_fog_colour`/`track_fog_density`). The pick is Title data (`oag_title::ZoneFrame::track_fog`, HD only): 2048 and Omega read the same
+   HD tables for their HD-lineage circuits but mark a chunk track by a shape-name rule (`psp2::is_track_shape`) with no measured fog pick, so
+   they keep the primary fog until measured.
+2. **The glass floor's Zone variants run no facing-ramp sheen.** The grey-green panels are `etched_glass_tech`
+   (slot 417, flags `0x1`, Track). The material ships ten Zone variants (fragment blocks 10 to 19, those declaring
+   `zoneColourTint`); none samples the facing ramp `0x94b2b285` that the sheen combine
+   ([rcsmaterial.md](../../../formats/rcsmaterial.md), "Talon's Junction's missing floor is a glass floor") is built on, and they
+   sample the Zone textures (`0xd5e000d1`, `0x1f6f85a3`) instead. A lightmapped glass chunk (Tech de Ra, the Amphiseum) keeps the grid as its coverage in Zone; only the sheen's colour is dropped. The census covers every material
+   with a ramp-sampling variant and Zone variants (`no_zone_variant_of_a_facing_ramp_material_samples_the_ramp`: `etched_glass_tech`, `etched_glass_amph`, `etched_glass`). Ours ran the sheen over the Zone surface. `shade.wesl`'s
+   `ramp_sheen` is now off with `zone_program`, as the magstrip wave is. Confidence 80 (census over the material's blocks:
+   `hd_zone_wave_census_ground_truth::no_zone_variant_of_a_facing_ramp_material_samples_the_ramp`; the Zone variant's own
+   grid term and paraboloid reflection are still not drawn).
+
+**Numbers** (`mines-ahead`, the pair's own mean grey, lower is better): whole frame 14.65 to 13.74; far-curve box
+`x1000..1500 y250..520` mean absolute grey difference against the original 29.1 to 19.4 (whole frame by the same measure 15.5
+to 14.6). `pad` 8.17 to 7.68, `cannon-volley` 15.00 to 14.18. Track Fog alone took `mines-ahead` to 14.41; the glass gate the
+rest. `talons` (a Time Trial race, no Zone grade) re-renders at 3.32 to 3.31 on the recorded value (no Zone stage, so neither
+change reaches it: `track_fog.authored` is `0` and `zone_program` is `0`). `zone-vineta-k-z5` 6.55 to 6.28 (a Zone race: the
+same two rules apply there).
+
+**The "8 low" was the mine, not the glass (2026-11-25, `det-glass-box-colour`, confidence 90).** The box `x1000..1500 y250..520`
+holds a mine at its bottom-left (`x1000..1130, y400..520`, 14 % of the box): the original draws it pale violet and lit, ours a
+black sphere with a ring (`det-colour-re`'s mine colour bind, below). Per channel, mean RGB, ours against the original:
+
+| Region | Ours | Original |
+| --- | --- | --- |
+| whole box | `(47.4, 21.6, 23.8)` | `(53.1, 29.0, 31.4)` |
+| box without the mine | `(44.4, 21.8, 22.3)` | `(43.8, 21.4, 20.5)` |
+| the same, top 90 rows (buildings) also dropped | `(63.8, 28.0, 29.1)` | `(67.2, 31.8, 30.6)` |
+| orange road pixels (`R > 120`) | `(168.5, 113.0, 112.7)` | `(181.0, 115.5, 115.3)` |
+
+Without the mine the box is within 0.6, 0.4 and 1.8 grey of the original per channel (within 3.8 on the panels alone), so no term
+of the glass floor is short: not the Track Fog colour or density, not the grade's ambient, not the glass base. The strip's
+sRGB decode ([zone-vis-gamma.md](zone-vis-gamma.md)) is not needed to close this box, so it stays unwired (not run against it). No code changed. A mine inside the box is what any later colour read of it must mask.
+
+**Still open.** The far curve's panels are dim in the original and in ours now; the mid-distance red is closer. Which of `Fog`, `Alt Fog` (flag bit 5) and
+`Track Fog` a given draw takes is read for the track bit only. **2048 and Omega:** checked, applies, not wired (gated off by Title data above): 2048's
+tables author `Fog.Track Fog Colour` (density in the fourth lane, `key::TRACK_FOG_COLOUR_2048`) and ship the same
+`etched_glass_tech`-style materials in the HD lineage, but their per-chunk Track bit is the chosen shape-name rule and no 2048
+or Omega Detonator frame of the original exists to measure against.
+
 ## Confidence
 
 | Claim | Evidence | Confidence |

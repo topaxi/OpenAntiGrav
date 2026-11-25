@@ -42,7 +42,14 @@ fn capture(image: &Path, scratch: &Path, name: &str, blur: &str, forced: Forced<
     let mut command = Command::new(env!("CARGO_BIN_EXE_oag-game"));
     command
         .arg(image)
-        .args(["--race", "--no-audio", "--size", "480x272"])
+        .args([
+            "--race",
+            "--no-audio",
+            "--no-soundtrack",
+            "--no-effects",
+            "--size",
+            "480x272",
+        ])
         .args(["--render-scale", "100", "--msaa", "off"])
         .args(["--screen-filter", "off", "--anisotropy", "off"])
         .args(["--motion-blur", blur, "--ticks", "121"])

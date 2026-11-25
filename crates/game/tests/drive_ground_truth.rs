@@ -64,6 +64,20 @@ fn drive_args(
     env: &[(&str, &str)],
     args: &[&str],
 ) -> Run {
+    drive_run(image, tag, script, tracks, env, args, false)
+}
+
+/// [`drive_args`], with the soundtrack read when `soundtrack` is set: the MUSIC page lists what
+/// the pool scan found, which a run with no soundtrack never starts.
+fn drive_run(
+    image: &Path,
+    tag: &str,
+    script: &str,
+    tracks: Option<&Path>,
+    env: &[(&str, &str)],
+    args: &[&str],
+    soundtrack: bool,
+) -> Run {
     drive_flags(
         image,
         tag,
@@ -71,11 +85,12 @@ fn drive_args(
         tracks,
         env,
         args,
-        &["--no-audio", "--no-intro"],
+        &["--no-audio", "--no-effects", "--no-intro"],
+        soundtrack,
     )
 }
 
-/// [`drive_args`] with the game's own base `flags`, for a run that leaves the pre-race flyby in.
+/// [`drive_run`] with the game's own base `flags`, for a run that leaves the pre-race flyby in.
 fn drive_flags(
     image: &Path,
     tag: &str,
@@ -84,6 +99,7 @@ fn drive_flags(
     env: &[(&str, &str)],
     args: &[&str],
     flags: &[&str],
+    soundtrack: bool,
 ) -> Run {
     let scratch = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("drive-{tag}"));
     let _ = std::fs::remove_dir_all(&scratch);
@@ -106,6 +122,9 @@ fn drive_flags(
         // No display: the run must not need one.
         .env_remove("WAYLAND_DISPLAY")
         .env_remove("DISPLAY");
+    if !soundtrack {
+        command.arg("--no-soundtrack");
+    }
     command.envs(env.iter().copied());
     match tracks {
         Some(dir) => command.env("OAG_TRACKS", dir),
@@ -318,7 +337,16 @@ fn hd_flyby_ticks(tag: &str, args: &[&str]) -> Option<u64> {
          until screen=picker; press cross; \
          until screen.id=ship-select; press cross; \
          until stage=race within 3000; ticks 300";
-    let run = drive_flags(&image, tag, script, None, &[], args, &["--no-audio"]);
+    let run = drive_flags(
+        &image,
+        tag,
+        script,
+        None,
+        &[],
+        args,
+        &["--no-audio", "--no-effects"],
+        false,
+    );
     assert!(run.output.status.success(), "{}", run.why_not_success());
     assert_eq!(text(run.last(), &["stage"]), Some("race"), "{}", run.last());
     Some(run.last()["sim_tick"].as_u64().unwrap_or(0))
@@ -878,7 +906,7 @@ fn the_music_page_saves_its_switches() {
         return;
     };
     let booted = "disc:wipeout-pulse:psp";
-    let run = drive(
+    let run = drive_run(
         &image,
         "music-switch",
         &format!(
@@ -889,6 +917,9 @@ fn the_music_page_saves_its_switches() {
              press circle; until page=audio; ticks 5"
         ),
         None,
+        &[],
+        &[],
+        true,
     );
     assert!(run.output.status.success(), "{}", run.stderr());
     let saved = std::fs::read_to_string(

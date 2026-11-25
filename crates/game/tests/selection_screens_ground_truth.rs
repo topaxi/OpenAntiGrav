@@ -979,6 +979,10 @@ fn hd_reads_its_own_track_creation() {
     assert_eq!(extra.model.map(|model| model.origin), Some([1308.0, 440.0]));
     let grid = extra.hex_grid.expect("TrackHexSelection");
     assert_eq!((grid.columns, grid.rows), (9, 2));
+    assert!(
+        grid.phase_by_entry,
+        "the grid's half rows follow the circuit's index, as RAM's +0xb4 does"
+    );
     assert_eq!(extra.row_labels, ["PERSONAL", "FRIENDS", "GLOBAL"]);
     assert!(
         track.screen.texts.iter().all(|text| !text

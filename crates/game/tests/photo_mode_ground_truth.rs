@@ -116,7 +116,15 @@ fn drive_binary_in(
     let output = command
         .arg(image)
         // One seed, or each launch deals its own weapons and the two races differ from tick 1.
-        .args(["--no-audio", "--no-intro", "--seed", "7", "--drive"])
+        .args([
+            "--no-audio",
+            "--no-soundtrack",
+            "--no-effects",
+            "--no-intro",
+            "--seed",
+            "7",
+            "--drive",
+        ])
         .arg(script.replace("SHOTS", &shots.display().to_string()))
         .args(args)
         .arg("--state-log")

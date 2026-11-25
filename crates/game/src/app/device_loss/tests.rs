@@ -120,6 +120,7 @@ fn a_game_started_the_way_a_player_starts_it_may_restart() {
         &[][..],
         &["pulse.chd"],
         &["--source", "pulse.chd", "--no-audio"],
+        &["pulse.chd", "--no-soundtrack", "--no-effects"],
         &["--source=pulse.chd", "--dlc", "pack", "--no-intro"],
         &["pulse.chd", "--launcher", "--pick-language"],
         &["pulse.chd", "--script", "45:lose-device"],

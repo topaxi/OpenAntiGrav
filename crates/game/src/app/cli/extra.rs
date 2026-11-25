@@ -195,6 +195,16 @@ pub(crate) struct MenuArgs {
     #[arg(long, value_name = "SECONDS")]
     pub(crate) menu_title_seconds: Option<f32>,
 
+    /// With `--menu-page ship-select`/`track-select` on HD/Fury or Omega, where the hex grid's ring
+    /// pulse stands, in seconds of the widget's own clock (the phase runs 3 a second and wraps at
+    /// 2), where it is not `--menu-picker-seconds`: `HexSelection` counts its own updates from
+    /// its first build and the original never resets the count between visits
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/ship-select-ring.md`, "The pulse's zero point"), so a
+    /// pair script reads the phase out of RAM at the grab and passes it. `None` follows
+    /// `--menu-picker-seconds`.
+    #[arg(long, value_name = "SECONDS")]
+    pub(crate) menu_ring_seconds: Option<f32>,
+
     /// With `--menu-page`, where the focused row's colour pulse stands, `0` at the unselected ink
     /// and `1` at the peak: a still has no clock, so the pulse rests at `0`, and a pair script reads
     /// the level the original's frame caught off the focused row's own ink. `None` rests at `0`.

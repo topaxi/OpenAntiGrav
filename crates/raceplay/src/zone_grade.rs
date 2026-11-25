@@ -226,6 +226,8 @@ pub struct ZoneGrade {
     /// The near plane the visualiser glow's depth factor is built from; `0.0` keeps the
     /// renderer's own window depth. See [`Self::with_glow_window_near`].
     glow_window_near: f32,
+    /// Whether a track chunk takes the stage's Track fog ([`oag_title::ZoneFrame::track_fog`]).
+    track_fog: bool,
 }
 
 impl ZoneGrade {
@@ -255,6 +257,7 @@ impl ZoneGrade {
             arena: false,
             stage_lit: false,
             glow_window_near: 0.0,
+            track_fog: false,
             hull_probe_tint_scale: None,
         })
     }
@@ -295,6 +298,13 @@ impl ZoneGrade {
     #[must_use]
     pub fn with_stage_light(mut self, stage_lit: bool) -> Self {
         self.stage_lit = stage_lit;
+        self
+    }
+
+    /// Whether a track chunk takes the stage's Track fog ([`oag_title::ZoneFrame::track_fog`]).
+    #[must_use]
+    pub fn with_track_fog(mut self, on: bool) -> Self {
+        self.track_fog = on;
         self
     }
 
@@ -777,6 +787,22 @@ impl ZoneGrade {
             return Some(mesh_render::Fog::off());
         }
         Some(mesh_render::Fog::authored_exp2(colour, density))
+    }
+
+    /// The Track fog this stage authors, taken by a track-flagged chunk
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/zone-plain-chunks.md`, "The fog pick").
+    /// [`mesh_render::TrackFog::NONE`] where the table names none (2048's blocks are
+    /// not read), so those chunks keep [`Self::fog`].
+    #[must_use]
+    pub fn track_fog(&self) -> mesh_render::TrackFog {
+        if !self.track_fog {
+            return mesh_render::TrackFog::NONE;
+        }
+        let palette = self.palette();
+        match (palette.track_fog_colour, palette.track_fog_density) {
+            (Some(colour), Some(density)) => mesh_render::TrackFog::authored(colour, density),
+            _ => mesh_render::TrackFog::NONE,
+        }
     }
 
     /// The circuit's light rig with this stage's colour terms laid over it.

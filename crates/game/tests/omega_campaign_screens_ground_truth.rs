@@ -577,6 +577,8 @@ fn the_campaign_select_frame_shows_the_2048_banner() {
         .arg(&omega)
         .args([
             "--no-audio",
+            "--no-soundtrack",
+            "--no-effects",
             "--size",
             "1920x1080",
             "--menu-page",
@@ -694,4 +696,66 @@ fn omegas_footer_prompts_flow_to_where_the_original_draws_them() {
             "{got} against the frame's {want}: {xs:?}"
         );
     }
+}
+
+/// Omega's Track Select still, `flags` added, as RGBA.
+fn omega_track_select_still(omega: &std::path::Path, tag: &str, flags: &[&str]) -> Vec<u8> {
+    let dir = std::env::temp_dir().join(format!("oag-omega-track-hex-ground-truth-{tag}"));
+    std::fs::create_dir_all(&dir).expect("a temp directory");
+    let out = dir.join("track-select.png");
+    let status = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
+        .arg(omega)
+        .args([
+            "--no-audio",
+            "--size",
+            "1920x1080",
+            "--menu-page",
+            "track-select",
+            "--no-hull-shake",
+        ])
+        .args(flags)
+        .arg("--screenshot")
+        .arg(&out)
+        .env("XDG_CONFIG_HOME", dir.join("config"))
+        .env("XDG_STATE_HOME", dir.join("state"))
+        .env("XDG_DATA_HOME", dir.join("data"))
+        .status()
+        .expect("running oag-game");
+    assert!(status.success(), "oag-game --menu-page track-select");
+    let (_, _, rgba) = crate::omega_menu_backdrop_ground_truth::decode_stored_png(
+        &std::fs::read(&out).expect("the screenshot"),
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+    rgba
+}
+
+/// Pixels of two RGBA stills that differ by more than 40 in a channel.
+fn differing_pixels(a: &[u8], b: &[u8]) -> usize {
+    (0..a.len() / 4)
+        .filter(|at| (0..3).any(|c| a[at * 4 + c].abs_diff(b[at * 4 + c]) > 40))
+        .count()
+}
+
+/// Omega's `TrackHexSelection` is the same class and update as HD's (`FUN_015298d0` in the v107
+/// eboot, `ship-select-ring.md`, "Omega"): a circuit step slides its lattice and the ring pulses
+/// on a clock a still can pin. This fails if Omega's Track Select is drawn without the picker's
+/// slide or ignores `--menu-ring-seconds`: the stills would be identical.
+#[test]
+#[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
+fn omegas_track_grid_slides_on_a_step_and_pulses_on_its_own_clock() {
+    let Some(omega) = oag_testdata::exact("data/extracted/ps4") else {
+        return;
+    };
+    let rest = omega_track_select_still(&omega, "rest", &[]);
+    let stepped =
+        omega_track_select_still(&omega, "stepped", &["--menu-picker-step-seconds", "0.05"]);
+    let moved = differing_pixels(&rest, &stepped);
+    assert!(
+        moved > 2000,
+        "three frames into a step the lattice has moved: {moved} pixels"
+    );
+    let white = omega_track_select_still(&omega, "white", &["--menu-ring-seconds", "0"]);
+    let late = omega_track_select_still(&omega, "late", &["--menu-ring-seconds", "0.5"]);
+    let pulse = differing_pixels(&white, &late);
+    assert!(pulse > 100, "the ring's pulse moves {pulse} pixels");
 }

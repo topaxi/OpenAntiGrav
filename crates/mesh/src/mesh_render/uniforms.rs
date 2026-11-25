@@ -973,6 +973,45 @@ pub struct Scene {
     /// where the sea keeps its sky stand-in. `zw` unused. See
     /// `docs/rendering/water.md`, "The planar reflection, drawn".
     pub sea_reflection: [f32; 4],
+    /// The stage's Track fog, for a track chunk ([`TrackFog::NONE`] where none).
+    pub track_fog: TrackFog,
+}
+
+/// The Zone stage's `Lighting.Track Fog colour` and `density`, taken by a track-flagged chunk in
+/// place of [`Fog`] (`docs/ghidra/functions/ps3-hdfury-eu/zone-plain-chunks.md`, "The fog pick").
+/// The curve is HD's `exp(-(density * view_depth)^2)`.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct TrackFog {
+    /// Fog colour, as the stage authors it.
+    pub colour: [f32; 3],
+    /// The fog coefficient.
+    pub density: f32,
+    /// `1.0` where the stage authors a Track fog, `0.0` where track chunks keep [`Fog`].
+    pub authored: f32,
+    /// Pads the block to 32 bytes.
+    pub pad: [f32; 3],
+}
+
+impl TrackFog {
+    /// No Track fog authored: track chunks take the scene's [`Fog`].
+    pub const NONE: Self = Self {
+        colour: [0.0; 3],
+        density: 0.0,
+        authored: 0.0,
+        pad: [0.0; 3],
+    };
+
+    /// The stage's Track fog.
+    #[must_use]
+    pub const fn authored(colour: [f32; 3], density: f32) -> Self {
+        Self {
+            colour,
+            density,
+            authored: 1.0,
+            pad: [0.0; 3],
+        }
+    }
 }
 
 /// One frame of the Quake wave, in the four registers Wipeout HD's `StaticQuake`
@@ -1031,6 +1070,7 @@ impl Scene {
             refraction: Mat4::IDENTITY.to_cols_array_2d(),
             quake: QuakeWave::off(),
             sea_reflection: [0.0; 4],
+            track_fog: TrackFog::NONE,
         }
     }
 }

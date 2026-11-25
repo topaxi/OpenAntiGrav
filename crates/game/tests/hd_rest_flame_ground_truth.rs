@@ -16,7 +16,15 @@ fn draws(skip: Option<&str>) -> Option<u64> {
     let scratch = std::env::temp_dir().join("oag-hd-rest-flame");
     let mut run = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"));
     run.arg(&image)
-        .args(["--race", "--no-audio", "--no-intro", "--team", "harimau"])
+        .args([
+            "--race",
+            "--no-audio",
+            "--no-soundtrack",
+            "--no-effects",
+            "--no-intro",
+            "--team",
+            "harimau",
+        ])
         .args(["--size", "480x272", "--ticks", "5"])
         .arg("--screenshot")
         .arg(scratch.join("frame.png"))

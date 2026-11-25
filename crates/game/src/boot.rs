@@ -706,6 +706,8 @@ pub fn load_shell(
         block_textures.extend(tiers2048::card_textures(&tiers));
         block_textures.extend(tip_textures.iter().map(String::as_str));
     }
+    let pause_textures = screens::pause_textures(&mut archives, title, &screens.globals);
+    block_textures.extend(pause_textures.iter().map(String::as_str));
     let logos = screens::team_logos(team_box.is_some(), &teams);
     block_textures.extend(logos.iter().map(String::as_str));
     let emblems = screens::track_emblems(track_box.is_some(), &tracks);
@@ -912,6 +914,19 @@ pub fn load_shell(
         space,
         &mut report,
     );
+    let on_sheet = pause_screens
+        .screens
+        .iter()
+        .flat_map(oag_ui_screens::pause::PauseScreen::sprite_srcs)
+        .collect::<std::collections::BTreeSet<_>>();
+    for src in on_sheet
+        .into_iter()
+        .filter(|src| sprites.get(src).is_none())
+    {
+        report.push(format!(
+            "pause screen image {src}: not on the sprite sheet, its tile is drawn as a bare box"
+        ));
+    }
     // See [`screens::read_ticker`]'s own doc.
     let mut ticker = read_ticker(skin_xml.as_deref(), &screens.globals);
     if let Some(ticker) = ticker.as_mut() {

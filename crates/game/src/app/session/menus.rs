@@ -337,6 +337,7 @@ impl Session {
                 ticker_elapsed: 0.0,
                 pause_scrim: pause_scrim.map(oag_ui::screen::argb_to_rgba),
                 pause_view,
+                pad_cursor: true,
                 marquee: marquee::Timer::default(),
                 // Opening the menus is not a page change: the front end's own
                 // hand-off already had its moment, and starting a transition

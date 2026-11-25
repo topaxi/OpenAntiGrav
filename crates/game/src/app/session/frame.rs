@@ -778,7 +778,7 @@ impl Session {
                     // `back` and `open` both change the page, and a jump
                     // between two pages at the same depth is still a change.
                     let before = stage.menu.page().id.clone();
-                    let leaving = menu::draw_list(
+                    let mut leaving = menu::draw_list(
                         &stage.menu,
                         &stage.skin,
                         &|button| self.controls.bound_keys(button),
@@ -791,6 +791,15 @@ impl Session {
                         // the outgoing half of the tween flashes it back on.
                         self.suspended_race.is_some(),
                     );
+                    // The page being left is the disc's own screen where it is one of tiles:
+                    // the other titles' pause lists have always faded as the front end's.
+                    let tiles = stage
+                        .pause_screen_on_page()
+                        .is_some_and(|screen| screen.is_tiles());
+                    if let Some(drawn) = stage.pause_draw().filter(|_| tiles) {
+                        leaving.chrome = drawn.chrome;
+                        leaving.body = drawn.body;
+                    }
                     // Off the raw `Input`, ahead of `Menu::update` - see
                     // `Session::maybe_begin_binding`'s own doc comment for why
                     // it takes its fields apart rather than borrowing `self`.
@@ -836,6 +845,8 @@ impl Session {
                     {
                         Vec::new()
                     } else {
+                        stage.pad_cursor = !self.pointer.pointer_spoke_last();
+                        stage.step_pause_tiles(self.controls.buttons_mut());
                         let mut events = stage.menu.update(self.controls.buttons_mut());
                         events.extend(pointer::menu_pointer(
                             stage,

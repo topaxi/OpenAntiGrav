@@ -18,7 +18,16 @@ fn seat_rows(mode: &str, extra: &[&str]) -> Option<Vec<usize>> {
     std::fs::create_dir_all(&dir).expect("a temp directory");
     let out = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
         .arg(image)
-        .args(["--no-audio", "--race", "--mode", mode, "--class", "venom"])
+        .args([
+            "--no-audio",
+            "--no-soundtrack",
+            "--no-effects",
+            "--race",
+            "--mode",
+            mode,
+            "--class",
+            "venom",
+        ])
         .args(["--size", "320x180", "--ticks", "2", "--screenshot"])
         .arg(dir.join("grid.png"))
         .args(extra)

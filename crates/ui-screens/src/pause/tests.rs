@@ -319,6 +319,7 @@ mod menu_widget {
                 pitch: 15.0,
                 unfocused_alpha: 0.5,
             }),
+            touch: None,
         }),
         hud_under_scrim: true,
         song_line_under_scrim: true,
@@ -464,5 +465,539 @@ mod menu_widget {
             oag_ui::menu::pointer::hit(&regions, (240.0, 60.0)).is_none(),
             "above the band is no row"
         );
+    }
+}
+
+/// A screen of `<TouchButton>` tiles, as Wipeout 2048's pause screens are: the panel and heading in
+/// the screen it is nested in, the tiles in the screen, a confirm screen nested in that.
+mod touch_tiles {
+    use super::*;
+    use oag_core::buttons::{Button, Input};
+    use oag_title::{PauseLayout, PauseTouch, pause_menu::named};
+    use oag_ui::menu::PAUSE_PAGE;
+    use oag_ui::menu::nav::Dir;
+
+    const XML: &str = r#"
+<Screen name="PauseTop">
+<Image><Values x="0" y="15" width="960" height="510" Color="0x50ffffff"></Values></Image>
+<Image><Values x="15" y="15" width="70" height="70" src="Data\FE\NewImages\Icon_pause_pausemenu.gtf"></Values></Image>
+<Text><Values idstring="IG_PAUSE_GPAUSED" font="default" x="105" y="30" color="FEGlobals->Blue2048"></Values></Text>
+<Screen name="PauseRace" type="Settings">
+<TouchButton><Values idstring="IG_PAUSE_OPT" x="92" y="145" width="95" height="95" smallText="true" src="Data\FE\NewImages\Icon_options_pausemenu.gtf"></Values></TouchButton>
+<TouchButton name="ghostButton"><Values idstring="CHOOSE_GHOST" x="92" y="275" width="95" height="95" src="Data\FE\NewImages\speedlap_ghost_icon.gtf"></Values></TouchButton>
+<TouchButton name="quitButton"><Values redirect="QuitConfirm" x="560" y="430" width="120" height="95" Src="Data\FE\NewImages\Icon_Exit.gtf"></Values></TouchButton>
+<TouchButton name="continueButton"><Values redirect="Race" x="820" y="430" width="120" height="95" Src="Data\FE\NewImages\Icon_Tick.gtf"></Values></TouchButton>
+<Screen name="PauseGhost" type="Ghost">
+<TouchButton><Values idstring="IG_PAUSE_OPT" x="92" y="145" width="95" height="95" src="Data\FE\NewImages\Icon_options_pausemenu.gtf"></Values></TouchButton>
+<TouchButton><Values idstring="CHOOSE_GHOST" x="92" y="275" width="95" height="95" src="Data\FE\NewImages\speedlap_ghost_icon.gtf"></Values></TouchButton>
+<Touchlist name="GhostOption2048" default="GHOST_MY_BEST"><Values string="GhostOption" x="430" y="145" width="510" height="225"></Values>
+<Entry idstring="GHOST_NONE" src="Data\FE\NewImages\speedlap_NO_ghost.gtf"></Entry>
+<Entry idstring="GHOST_MY_BEST" src="Data\FE\NewImages\speedlap_my_best.gtf"></Entry>
+<Entry idstring="GHOST_FRIEND_CHALLENGE" src="Data\FE\NewImages\speedlap_friends_ghost.gtf"></Entry>
+<Entry idstring="GHOST_GLOBAL_CHALLENGE" src="Data\FE\NewImages\speedlap_global_ghost.gtf"></Entry>
+</Touchlist>
+<TouchButton name="continueButton"><Values redirect="PauseRace" x="820" y="430" width="120" height="95" Src="Data\FE\NewImages\Icon_Tick.gtf"></Values></TouchButton>
+</Screen>
+<Screen name="QuitConfirm">
+<Image><Values x="0" y="0" width="960" height="544" color="0x30000000"></Values></Image>
+<Text><Values idstring="FE_QUIT" font="default" x="480" y="158" align="centre"></Values></Text>
+<TouchButton><Values redirect="Kill" x="341" y="265" width="122" height="96" Src="Data\FE\NewImages\Icon_Tick.gtf"></Values></TouchButton>
+<TouchButton><Values redirect="PreviousScreen" x="497" y="265" width="122" height="96" Src="Data\FE\NewImages\callout\cross.gtf"></Values></TouchButton>
+</Screen>
+</Screen>
+</Screen>
+"#;
+
+    const BLUE: u32 = 0xff19_295d;
+    const ORANGE: u32 = 0xffdd_580b;
+
+    const TABLE: &PauseMenu = &PauseMenu {
+        heading: "IG_PAUSE_GPAUSED",
+        screens: &[
+            Screen {
+                name: "PauseRace",
+                rows: &[
+                    row("IG_PAUSE_OPT", Some(A::Options)),
+                    row("CHOOSE_GHOST", None),
+                    named("quitButton", "IG_PAUSE_QUIT", Some(A::Quit)).opening("QuitConfirm"),
+                    named("continueButton", "IG_PAUSE_CONT", Some(A::Resume)),
+                ],
+            },
+            Screen {
+                name: "QuitConfirm",
+                rows: &[
+                    named("Kill", "FE_QUIT", Some(A::Quit)),
+                    named("PreviousScreen", "FE_CANCEL", Some(A::Resume)),
+                ],
+            },
+        ],
+        default_screen: "PauseRace",
+        by_mode: &[],
+        scrim_argb: 0,
+        layout: Some(PauseLayout {
+            definition: "InGame_Definition.xml",
+            chrome: None,
+            grid: [960, 544],
+            menu_rows: None,
+            touch: Some(PauseTouch {
+                tile: "Blue2048",
+                cursor: "Orange2048",
+                inactive: "Grey2048",
+            }),
+        }),
+        hud_under_scrim: false,
+        song_line_under_scrim: true,
+        offers_photo: false,
+        music_list: None,
+        music_list_ps2: None,
+        origin: Origin::Measured,
+    };
+
+    const GHOST_TABLE: &PauseMenu = &PauseMenu {
+        screens: &[
+            Screen {
+                name: "PauseRace",
+                rows: &[
+                    row("IG_PAUSE_OPT", Some(A::Options)),
+                    row("CHOOSE_GHOST", Some(A::Ghost)).opening("PauseGhost"),
+                    named("continueButton", "IG_PAUSE_CONT", Some(A::Resume)),
+                ],
+            },
+            Screen {
+                name: "PauseGhost",
+                rows: &[
+                    row("IG_PAUSE_OPT", Some(A::Options)),
+                    row("CHOOSE_GHOST", Some(A::Inert)),
+                    named("GhostOption2048", "CHOOSE_GHOST", Some(A::GhostList)),
+                    named("continueButton", "IG_PAUSE_CONT", Some(A::Resume)),
+                ],
+            },
+        ],
+        ..*TABLE
+    };
+
+    fn words() -> StringTable {
+        StringTable::from_xml(
+            r#"<Strings>
+<Entry ID="IG_PAUSE_GPAUSED" String="GAME PAUSED"></Entry>
+<Entry ID="IG_PAUSE_OPT" String="OPTIONS"></Entry>
+<Entry ID="CHOOSE_GHOST" String="GHOST"></Entry>
+<Entry ID="IG_PAUSE_QUIT" String="QUIT RACE"></Entry>
+<Entry ID="IG_PAUSE_CONT" String="CONTINUE"></Entry>
+<Entry ID="FE_QUIT" String="QUIT"></Entry>
+<Entry ID="FE_CANCEL" String="CANCEL"></Entry>
+<Entry ID="GHOST_NONE" String="NO GHOST"></Entry>
+<Entry ID="GHOST_MY_BEST" String="MY BEST"></Entry>
+<Entry ID="GHOST_FRIEND_CHALLENGE" String="FRIEND"></Entry>
+<Entry ID="GHOST_GLOBAL_CHALLENGE" String="WORLD"></Entry>
+</Strings>"#,
+        )
+    }
+
+    fn read(name: &str) -> PauseScreen {
+        let globals = [
+            ("Blue2048", "0xff19295d"),
+            ("Orange2048", "0xffdd580b"),
+            ("Grey2048", "0xff808080"),
+        ];
+        let screens = Screens::from_xml_with_fallback_globals(XML, &globals);
+        PauseScreen::read_touch(
+            &screens,
+            name,
+            TABLE.layout.and_then(|layout| layout.touch).expect("tiles"),
+            &words(),
+            FaceScales::default(),
+            [960.0, 544.0],
+        )
+        .expect("the screen is in the fixture")
+    }
+
+    fn menu() -> Menu {
+        let mut definition =
+            Definition::built_in(&StringTable::default()).expect("the built-in menu");
+        definition.open_on_pause_screen(TABLE, "single_race", &words());
+        let mut menu = Menu::new(definition);
+        menu.set_visible_rows(12);
+        menu
+    }
+
+    fn press(menu: &mut Menu, button: Button) -> Vec<oag_ui::menu::MenuEvent> {
+        let mut input = Input::new();
+        input.begin_frame(1 << button.index());
+        menu.update(&mut input)
+    }
+
+    fn sprite(_: &str) -> Option<Sprite> {
+        Some(Sprite {
+            x: 0,
+            y: 0,
+            width: 40,
+            height: 30,
+            quad_extent: None,
+            quad_centre: None,
+            blend: None,
+            scale: [1.0, 1.0],
+        })
+    }
+
+    fn draw(screen: &PauseScreen, menu: &Menu) -> Layers {
+        draw_list(screen, TABLE, menu, &skin(), &frame(), &sprite)
+    }
+
+    fn fills(draws: &[Draw]) -> Vec<([f32; 4], [f32; 4])> {
+        draws
+            .iter()
+            .filter_map(|draw| match draw {
+                Draw::Fill { rect, color } => Some((*rect, *color)),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Each tile of a screen that has a row is a box at its authored rectangle in the tile colour,
+    /// the pad's cursor filling the focused one, with its icon at the texture's own size centred
+    /// in it; the tile whose row this build has nothing behind draws nothing.
+    #[test]
+    fn a_tile_is_a_box_and_its_centred_icon_and_the_cursor_fills_the_focused_one() {
+        let layers = draw(&read("PauseRace"), &menu());
+        let blue = argb_to_rgba(BLUE);
+        let orange = argb_to_rgba(ORANGE);
+        assert_eq!(
+            fills(&layers.body),
+            [
+                ([92.0, 145.0, 95.0, 95.0], orange),
+                ([560.0, 430.0, 120.0, 95.0], blue),
+                ([820.0, 430.0, 120.0, 95.0], blue),
+            ],
+            "no tile for GHOST, which this build has no row for; the first row has the cursor"
+        );
+        let icons: Vec<[f32; 4]> = layers
+            .body
+            .iter()
+            .filter_map(|draw| match draw {
+                Draw::Sprite { rect, .. } => Some(*rect),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(icons[0], [92.0 + 27.5, 145.0 + 32.5, 40.0, 30.0]);
+        assert_eq!(icons.len(), 3);
+    }
+
+    /// A pointer over the tiles leaves them all at rest: the cursor fill is the pad's.
+    #[test]
+    fn a_pointer_in_use_shows_no_cursor_on_the_tiles() {
+        let layers = draw_list_for(
+            &read("PauseRace"),
+            TABLE,
+            &menu(),
+            &skin(),
+            &frame(),
+            &sprite,
+            false,
+        );
+        let blue = argb_to_rgba(BLUE);
+        assert!(fills(&layers.body).iter().all(|(_, color)| *color == blue));
+    }
+
+    /// A tile that authors an `idstring` carries its words under the box; an icon-only tile none.
+    #[test]
+    fn only_a_tile_with_an_idstring_carries_words_under_it() {
+        let layers = draw(&read("PauseRace"), &menu());
+        let words: Vec<&str> = layers
+            .body
+            .iter()
+            .filter_map(|draw| match draw {
+                Draw::Text { text, .. } => Some(text.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(words, ["OPTIONS"]);
+    }
+
+    /// `smalltext="true"` is the small label: 0.655 of the regular size, its cap line 13 under the
+    /// box (measured on a Vita3K frame, `docs/ui/pause-menu.md`, "2048").
+    #[test]
+    fn a_small_label_stands_under_its_tile_at_the_measured_size_and_gap() {
+        let layers = draw(&read("PauseRace"), &menu());
+        let Some(Draw::Text { x, y, scale, .. }) = layers
+            .body
+            .iter()
+            .find(|draw| matches!(draw, Draw::Text { text, .. } if text == "OPTIONS"))
+        else {
+            panic!("the label");
+        };
+        let scale_want = 16.0 / 27.0 * 0.655;
+        assert!((scale - scale_want).abs() < 1e-4, "{scale}");
+        assert_eq!(*x, 92.0 + 95.0 / 2.0, "centred on the tile");
+        assert!(
+            (y - (145.0 + 95.0 + 13.0 - 10.0 * scale_want)).abs() < 1e-3,
+            "{y}"
+        );
+    }
+
+    /// The panel, icon and heading are the nested-in screen's, behind the tiles.
+    #[test]
+    fn the_panel_and_heading_of_the_screen_it_is_nested_in_draw_behind_it() {
+        let layers = draw(&read("PauseRace"), &menu());
+        assert_eq!(
+            fills(&layers.chrome),
+            [([0.0, 15.0, 960.0, 510.0], argb_to_rgba(0x50ff_ffff))]
+        );
+        assert_eq!(text_at(&layers.chrome, "GAME PAUSED"), Some((105.0, 30.0)));
+        assert!(
+            layers
+                .chrome
+                .iter()
+                .any(|draw| matches!(draw, Draw::Sprite { rect, .. } if rect[0] == 15.0))
+        );
+    }
+
+    /// A tile is a pointer target at its box, and nothing else is.
+    #[test]
+    fn a_tile_is_a_pointer_target_at_its_authored_box() {
+        let rects: Vec<[f32; 4]> = regions(&read("PauseRace"), TABLE, &menu(), &skin())
+            .into_iter()
+            .map(|region| region.rect)
+            .collect();
+        assert_eq!(
+            rects,
+            [
+                [92.0, 145.0, 95.0, 95.0],
+                [560.0, 430.0, 120.0, 95.0],
+                [820.0, 430.0, 120.0, 95.0],
+            ]
+        );
+    }
+
+    /// QUIT asks first: its row opens the confirm page, whose tick does the quit and whose cross
+    /// goes back; the page it asks on stays drawn under the confirm screen's own dimming and panel.
+    #[test]
+    fn quit_asks_on_the_confirm_screen_over_the_page_it_asks_on() {
+        let mut menu = menu();
+        let quit = menu
+            .page()
+            .meta
+            .iter()
+            .position(|meta| meta.id.as_deref() == Some("pause_quit"))
+            .expect("a QUIT row");
+        while menu.selected() != quit {
+            press(&mut menu, Button::Down);
+        }
+        press(&mut menu, Button::Cross);
+        assert_eq!(
+            menu.page().id,
+            format!("{}QuitConfirm", oag_ui::menu::SCREEN_PAGE_PREFIX),
+            "QUIT opens the confirm page, it does not quit"
+        );
+        let ids: Vec<_> = menu
+            .page()
+            .meta
+            .iter()
+            .map(|meta| meta.id.as_deref())
+            .collect();
+        assert_eq!(ids, [Some("pause_quit"), Some("pause_resume")]);
+
+        let layers = draw(&read("QuitConfirm"), &menu);
+        let behind = fills(&layers.chrome);
+        let blue = argb_to_rgba(BLUE);
+        // The page asked on: its panel, then its tiles at rest, then the dimming over them.
+        assert_eq!(behind[0].0, [0.0, 15.0, 960.0, 510.0]);
+        assert_eq!(behind[1], ([92.0, 145.0, 95.0, 95.0], blue));
+        assert_eq!(behind[2], ([560.0, 430.0, 120.0, 95.0], blue));
+        assert_eq!(behind[3], ([820.0, 430.0, 120.0, 95.0], blue));
+        assert_eq!(behind[4].0, [0.0, 0.0, 960.0, 544.0]);
+        assert_eq!(
+            fills(&layers.body),
+            [
+                ([341.0, 265.0, 122.0, 96.0], blue),
+                ([497.0, 265.0, 122.0, 96.0], argb_to_rgba(ORANGE)),
+            ],
+            "the question opens with the cursor on the way back"
+        );
+        assert_eq!(text_at(&layers.chrome, "QUIT"), Some((480.0, 158.0)));
+
+        press(&mut menu, Button::Circle);
+        assert_eq!(
+            menu.page().id,
+            PAUSE_PAGE,
+            "back from the question is the pause page"
+        );
+
+        while menu.selected() != quit {
+            press(&mut menu, Button::Down);
+        }
+        press(&mut menu, Button::Cross);
+        assert_eq!(
+            menu.selected(),
+            1,
+            "it opens on the cross again, not where it was left"
+        );
+        press(&mut menu, Button::Up);
+        let events = press(&mut menu, Button::Cross);
+        assert_eq!(
+            events,
+            [oag_ui::menu::MenuEvent::Fired(Action::QuitRace)],
+            "the tick quits"
+        );
+    }
+
+    /// The pad moves between tiles by where they are: DOWN from OPTIONS to the tile under it, RIGHT
+    /// along the foot row, nothing past an edge.
+    #[test]
+    fn the_pad_steps_between_tiles_by_position() {
+        let screen = read("PauseRace");
+        let mut menu = menu();
+        let row_of = |menu: &Menu, id: &str| {
+            menu.page()
+                .meta
+                .iter()
+                .position(|meta| meta.id.as_deref() == Some(id))
+                .expect(id)
+        };
+        let (options, quit, resume) = (
+            row_of(&menu, "pause_options"),
+            row_of(&menu, "pause_quit"),
+            row_of(&menu, "pause_resume"),
+        );
+        let go = |menu: &Menu, dir| tile_neighbour(&screen, TABLE, menu, &skin(), dir);
+        assert_eq!(menu.selected(), options);
+        assert_eq!(go(&menu, Dir::Left), None);
+        assert_eq!(go(&menu, Dir::Up), None);
+        assert_eq!(
+            go(&menu, Dir::Down),
+            Some(quit),
+            "no GHOST tile here, so the foot row"
+        );
+        menu.move_to_row(quit);
+        assert_eq!(go(&menu, Dir::Right), Some(resume));
+        assert_eq!(go(&menu, Dir::Up), Some(options));
+        menu.move_to_row(resume);
+        assert_eq!(go(&menu, Dir::Right), None);
+        assert_eq!(go(&menu, Dir::Left), Some(quit));
+    }
+
+    /// Every texture the screen and the screens around and in it name is asked for.
+    #[test]
+    fn every_icon_the_screen_and_its_neighbours_name_is_asked_for() {
+        let screen = read("PauseRace");
+        let mut srcs: Vec<&str> = screen.sprite_srcs().collect();
+        srcs.sort_unstable();
+        srcs.dedup();
+        assert_eq!(
+            srcs,
+            [
+                r"Data\FE\NewImages\Icon_Exit.gtf",
+                r"Data\FE\NewImages\Icon_Tick.gtf",
+                r"Data\FE\NewImages\Icon_options_pausemenu.gtf",
+                r"Data\FE\NewImages\Icon_pause_pausemenu.gtf",
+                r"Data\FE\NewImages\speedlap_ghost_icon.gtf",
+            ]
+        );
+    }
+
+    fn ghost_menu() -> Menu {
+        let mut definition =
+            Definition::built_in(&StringTable::default()).expect("the built-in menu");
+        definition.open_on_pause_screen(GHOST_TABLE, "single_race", &words());
+        let mut menu = Menu::new(definition);
+        menu.set_visible_rows(12);
+        menu.seed(
+            "display.ghost_ship_visible",
+            &oag_ui::menu::Value::Text("on".into()),
+        );
+        menu
+    }
+
+    fn click(at: (f32, f32)) -> oag_ui::pointer::Pointer {
+        oag_ui::pointer::Pointer {
+            at: Some(at),
+            moved: true,
+            clicked: true,
+            ..Default::default()
+        }
+    }
+
+    /// The ghost tile opens the list on its own page, with the cursor on the list: NONE and MY
+    /// BEST are the two values of `display.ghost_ship_visible`, and the friend's and the world's
+    /// are drawn in the inactive colour and are no target.
+    #[test]
+    fn the_ghost_tile_opens_a_list_whose_two_unavailable_entries_cannot_be_chosen() {
+        let mut menu = ghost_menu();
+        let ghost = menu.page().row_with_id("pause_ghost").expect("a ghost row");
+        while menu.selected() != ghost {
+            press(&mut menu, Button::Down);
+        }
+        press(&mut menu, Button::Cross);
+        assert_eq!(
+            menu.page().id,
+            format!("{}PauseGhost", oag_ui::menu::SCREEN_PAGE_PREFIX)
+        );
+        assert_eq!(
+            menu.page().meta[menu.selected()].id.as_deref(),
+            Some("pause_ghost_list"),
+            "it opens on the list"
+        );
+
+        let screen = read("PauseGhost");
+        let layers = draw_list(&screen, GHOST_TABLE, &menu, &skin(), &frame(), &sprite);
+        let colours = fills(&layers.body);
+        let (blue, orange, grey) = (
+            argb_to_rgba(BLUE),
+            argb_to_rgba(ORANGE),
+            argb_to_rgba(0xff80_8080),
+        );
+        let cell = 510.0 / 4.0;
+        let strip = |at: usize| [430.0 + cell * at as f32, 145.0, cell, 225.0];
+        for (at, colour) in [(0, blue), (1, orange), (2, grey), (3, grey)] {
+            assert!(
+                colours.contains(&(strip(at), colour)),
+                "entry {at} in its colour: {colours:?}"
+            );
+        }
+        assert!(
+            colours.contains(&([92.0, 275.0, 95.0, 95.0], orange)),
+            "the ghost tile of the page being drawn is filled in the cursor's colour"
+        );
+
+        let regions = regions(&screen, GHOST_TABLE, &menu, &skin());
+        let values: Vec<_> = regions
+            .iter()
+            .filter_map(|region| match region.part {
+                Part::Value(at) => Some(at),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(values, [0, 1], "two entries have a value to choose");
+
+        let tap = |menu: &mut Menu, at: usize| {
+            let centre = (strip(at)[0] + cell * 0.5, 250.0);
+            menu.pointer(&click(centre), &regions)
+        };
+        assert_eq!(tap(&mut menu, 2), [], "the friend's ghost answers nothing");
+        assert_eq!(tap(&mut menu, 3), [], "the world's neither");
+        assert_eq!(
+            tap(&mut menu, 0),
+            [oag_ui::menu::MenuEvent::Changed {
+                setting: "display.ghost_ship_visible".into(),
+                value: oag_ui::menu::Value::Text("off".into()),
+            }],
+            "a tap on NO GHOST turns the ghost ship off"
+        );
+        assert_eq!(tap(&mut menu, 0), [], "and on the chosen one does nothing");
+        assert_eq!(
+            press(&mut menu, Button::Right),
+            [oag_ui::menu::MenuEvent::Changed {
+                setting: "display.ghost_ship_visible".into(),
+                value: oag_ui::menu::Value::Text("on".into()),
+            }],
+            "the pad steps it back"
+        );
+        assert_eq!(
+            tile_neighbour(&screen, GHOST_TABLE, &menu, &skin(), Dir::Right),
+            None,
+            "LEFT and RIGHT on the list are the menu's, they step it"
+        );
+        press(&mut menu, Button::Circle);
+        assert_eq!(menu.page().id, PAUSE_PAGE, "back leaves the list");
     }
 }

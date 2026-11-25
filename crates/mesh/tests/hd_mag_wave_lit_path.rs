@@ -224,6 +224,70 @@ fn a_zone_race_draws_the_strip_without_its_wave() {
     }
 }
 
+/// The fixture's surface flagged as track, as `mesh::rcs` flags a chunk whose render block's bit 0 is set.
+fn track_model() -> Model {
+    let mut model = model(false);
+    for vertex in &mut model.vertices {
+        vertex.slots |= slots::ZONE_TRACK;
+    }
+    model
+}
+
+/// **A track chunk takes the stage's Track fog in place of the primary fog, and only a track chunk
+/// does** (`docs/ghidra/functions/ps3-hdfury-eu/zone-plain-chunks.md`, "The fog pick"). The scene
+/// carries a dense blue primary fog throughout: a scene chunk is blue, a track chunk is the dense
+/// red Track fog, a track chunk whose stage authors density 0 is unfogged (Sub Venom's road under the
+/// stage's cyan fog), and a track chunk with no Track fog authored keeps the primary.
+#[test]
+fn a_track_chunk_takes_the_stage_track_fog_and_a_scene_chunk_keeps_the_primary() {
+    let instance = wgpu::Instance::default();
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let (device, queue) =
+        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+            .expect("requesting the device");
+    let at = |model: &Model, fog: mesh_render::TrackFog| {
+        let mut scene = Scene::off();
+        scene.light.enabled = 1.0;
+        scene.fog = mesh_render::Fog::authored_exp2([0.0, 0.0, 1.0], 1000.0);
+        scene.fog.camera = [0.0, 0.0, 100.5];
+        scene.zone.enabled = 1.0;
+        scene.track_fog = fog;
+        draw(&device, &queue, model, scene)
+    };
+    let red = mesh_render::TrackFog::authored([1.0, 0.0, 0.0], 1000.0);
+    let primary = at(&model(false), mesh_render::TrackFog::NONE);
+    assert!(
+        primary[2] > 200 && primary[0] < 40,
+        "a scene chunk is the primary fog's blue: {primary:?}"
+    );
+    let fogged = at(&track_model(), red);
+    assert!(
+        fogged[0] > 200 && fogged[2] < 40,
+        "a track chunk is the Track fog's red, not the primary's blue: {fogged:?}"
+    );
+    assert_eq!(
+        at(&model(false), red),
+        primary,
+        "a scene chunk keeps the primary fog"
+    );
+    assert_eq!(
+        at(&track_model(), mesh_render::TrackFog::NONE),
+        primary,
+        "a track chunk with no Track fog authored keeps the primary fog"
+    );
+    let clear = at(
+        &track_model(),
+        mesh_render::TrackFog::authored([0.0; 3], 0.0),
+    );
+    assert!(
+        clear[2] < 40 && clear != primary,
+        "an authored Track fog of density 0 leaves the road unfogged under a dense primary: {clear:?}"
+    );
+}
+
 /// Identity camera and model, so clip space is model space.
 fn uniforms() -> Vec<u8> {
     let identity: [[f32; 4]; 4] = [

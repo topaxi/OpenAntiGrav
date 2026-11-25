@@ -106,3 +106,33 @@ fn no_audio_leaves_the_mixer_silent_unless_a_dump_reads_it() {
     );
     assert!(!silent(false, None), "no device alone still renders");
 }
+
+/// With the soundtrack off a race launch hands no fetch to spawn, so no track is read or decoded;
+/// with it on, an uncached launch gets one.
+#[test]
+fn no_soundtrack_spawns_no_race_music_fetch() {
+    let mut audio = Audio::open(
+        &crate::settings::Settings::default(),
+        None,
+        None,
+        oag_audio::MIN_BUFFER,
+        true,
+    );
+    let discs = MusicDiscs::default();
+    let cache = std::env::temp_dir();
+    assert!(
+        audio
+            .race_music_fetch(&discs, MusicSource::Auto, &cache)
+            .is_some(),
+        "the soundtrack is on by default"
+    );
+    audio.set_soundtrack(false);
+    assert!(
+        audio
+            .race_music_fetch(&discs, MusicSource::Auto, &cache)
+            .is_none()
+    );
+    audio.start_race_music(&discs, MusicSource::Auto, &cache);
+    assert!(audio.race_job.is_none(), "nothing is fetched to start");
+    assert!(audio.race_voice.is_none(), "and nothing plays");
+}

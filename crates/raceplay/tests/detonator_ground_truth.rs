@@ -61,6 +61,12 @@ fn an_hd_detonator_race_loads_its_own_stage_table() {
     );
     assert_eq!(grade.last_stage(), 14);
     assert_eq!(grade.blend().current, 1);
+    // Stage 1's `Lighting.Track Fog colour` and `density`: the orange-red a track chunk is fogged
+    // with (`detonator-look.md`, "What the file says at stage 1").
+    assert_eq!(
+        grade.track_fog(),
+        oag_mesh::mesh_render::TrackFog::authored([1.8, 0.141_176, 0.007_059], 0.001_5)
+    );
     let (decoded, numbered) = grade.stage_art_counts();
     assert_eq!(
         (decoded, numbered),
@@ -305,6 +311,7 @@ fn a_2048_detonator_race_on_zone_1_takes_the_hd_fury_dlc3_table() {
         return;
     }
     let options = race::Options {
+        no_effects: true,
         source: path.display().to_string(),
         class: "VENOM".to_string(),
         mode: oag_race::Mode::Detonator,
@@ -355,6 +362,7 @@ fn a_2048_detonator_race_on_zone_1_takes_the_hd_fury_dlc3_table() {
 /// model holds fewer triangles (`psp2::build_circuit`'s `hide_pads`).
 fn assert_the_circuits_own_pads_are_left_out(options: &race::Options, loaded: &race::Loaded) {
     let plain = race::load(&race::Options {
+        no_effects: true,
         mode: oag_race::Mode::SingleRace,
         ..options.clone()
     })
@@ -427,6 +435,7 @@ fn an_omega_detonator_race_runs_fourteen_stages_on_hd_furys_grade() {
         return;
     };
     let options = race::Options {
+        no_effects: true,
         source: path.display().to_string(),
         class: "VENOM".to_string(),
         mode: oag_race::Mode::Detonator,
@@ -477,6 +486,7 @@ fn an_omega_detonator_race_on_a_2048_circuit_keeps_its_own_colours() {
         return;
     };
     let loaded = race::load(&race::Options {
+        no_effects: true,
         source: path.display().to_string(),
         class: "VENOM".to_string(),
         mode: oag_race::Mode::Detonator,
@@ -952,6 +962,7 @@ fn carried_mines_stand_where_the_originals_objects_stood() {
         return;
     };
     let loaded = race::load(&race::Options {
+        no_effects: true,
         source: path.display().to_string(),
         class: "VENOM".to_string(),
         mode: oag_race::Mode::Detonator,

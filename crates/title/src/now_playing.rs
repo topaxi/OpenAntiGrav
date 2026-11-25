@@ -9,6 +9,28 @@
 use crate::DeclaredTracks;
 use crate::effects::Origin;
 
+/// What a title's layout authors for the song display.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Show {
+    /// A bar with the song scrolling through it (Pulse, HD, Omega, 2048).
+    Marquee {
+        /// The `item` in the layout that groups the display; its `OffsetX`/`OffsetY` place it.
+        item: &'static str,
+        /// The background `Image` widget inside the item.
+        bar: &'static str,
+        /// The scrolling `Text` widget inside the item.
+        text: &'static str,
+    },
+    /// Plain `Text` widgets of the race screen, one per line, in order: the artist, then the
+    /// song. They fade in, hold still and fade out; there is no bar and nothing scrolls.
+    Lines {
+        /// The widgets' names, in the order of the lines.
+        widgets: &'static [&'static str],
+        /// How many updates of the race the lines stay fully shown between the two fades.
+        hold_updates: u16,
+    },
+}
+
 /// How a title shows the playing song.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NowPlaying {
@@ -19,12 +41,8 @@ pub struct NowPlaying {
     pub names: DeclaredTracks,
     /// The front-end XML entry that holds the layout.
     pub layout: &'static str,
-    /// The `item` in the layout that groups the display; its `OffsetX`/`OffsetY` place it.
-    pub item: &'static str,
-    /// The background `Image` widget inside the item.
-    pub bar: &'static str,
-    /// The scrolling `Text` widget inside the item.
-    pub text: &'static str,
+    /// What the layout authors: a bar with scrolling text, or plain lines.
+    pub show: Show,
     /// Where the song's title is in the language's string table, when the `PI_Music` node's own
     /// `name` is only a key into it: `{}` stands for the node's name, so 2048's `MT_{}` reads
     /// `MT_01`, whose text is the artist and the title on two lines. The title is the last line.
@@ -36,6 +54,9 @@ pub struct NowPlaying {
     pub fade_step: u8,
     /// Whole layout units the text moves left on each update of the race.
     pub scroll_step: u8,
+    /// How many of the engine's ticks make one of the original's updates of the race: 2 where
+    /// the original runs at 30 a second and the engine at 60, 1 otherwise.
+    pub ticks_per_update: u8,
     /// Where the behaviour (when it shows, how it fades and scrolls) comes from: read off this
     /// title's executable, inherited from another title's, or chosen. A title that inherits
     /// also borrows its layout, which is then this project's own file in the fallback layer.

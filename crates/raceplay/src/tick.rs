@@ -559,6 +559,7 @@ impl Race {
         #[cfg(feature = "view")]
         if self.draws() {
             self.view.play_detonator_events(&self.core);
+            self.view.advance_emp_visual(&self.core);
         }
         #[cfg(feature = "view")]
         if self.draws() {

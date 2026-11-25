@@ -61,7 +61,15 @@ fn mask_of(image: &Path, scratch: &Path) -> Vec<u8> {
     let out = scratch.join("mask.png");
     let status = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
         .arg(image)
-        .args(["--race", "--no-audio", "--size", "480x272", "--opponents"])
+        .args([
+            "--race",
+            "--no-audio",
+            "--no-soundtrack",
+            "--no-effects",
+            "--size",
+            "480x272",
+            "--opponents",
+        ])
         .args(["--render-scale", "100", "--msaa", "off"])
         .args(["--screen-filter", "off", "--anisotropy", "off"])
         .args(["--motion-blur", "off", "--ticks", "1"])

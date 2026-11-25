@@ -234,6 +234,13 @@ fn the_detonator_lights_are_the_values_the_render_queue_loads() {
     let bolt = detonator_bolt_record(Vec3::new(4.0, 5.0, 6.0));
     assert_eq!(bolt.position, [4.0, 5.0, 6.0, 1.0]);
     assert_eq!(bolt.colour, [0.0, 0.003, 0.03, 70.0]);
+    let emp = detonator_emp_record(Vec3::new(7.0, 8.0, 9.0));
+    assert_eq!(emp.position, [7.0, 8.0, 9.0, 1.0]);
+    assert_eq!(
+        emp.colour,
+        [0.0, 5.0, 10.0, 50.0],
+        "read live at 0x00994490"
+    );
 }
 
 /// A young round lights its muzzle and its flight, an old one only its flight; dropping the wiring

@@ -11,7 +11,16 @@ fn oag_game(image: &Path, scratch: &Path, mode: &str) -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_oag-game"));
     command
         .arg(image)
-        .args(["--race", "--no-audio", "--mode", mode, "--class", "venom"])
+        .args([
+            "--race",
+            "--no-audio",
+            "--no-soundtrack",
+            "--no-effects",
+            "--mode",
+            mode,
+            "--class",
+            "venom",
+        ])
         .args(["--track", r"Data\Environments\09_Track\track.vex"])
         .env("XDG_CONFIG_HOME", scratch.join("config"))
         .env("XDG_DATA_HOME", scratch.join("data"))

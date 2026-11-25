@@ -1074,7 +1074,8 @@ fn a_scaled_honeycomb_shrinks_its_pitch_and_its_cells() {
 
 /// `Team Selection`'s columns alternate their half-row shift with the team's index, not with
 /// their slot in the window: the centre column of an odd team sits half a row (42 units) lower
-/// than an even team's, and the grid `TrackHexSelection` builds keeps the window's slots.
+/// than an even team's, and a grid built by hand keeps the window's slots (`track::read` turns the
+/// index phase on for `TrackHexSelection`'s).
 #[test]
 fn the_team_grids_half_row_follows_the_team_index() {
     let layout = layout();

@@ -64,6 +64,7 @@ pub mod frontend;
 pub mod hud;
 pub mod loading;
 pub mod main_menu;
+pub mod pause_menu;
 pub mod race;
 pub mod tips;
 
@@ -324,7 +325,7 @@ pub const TITLE: &Title = &Title {
     // No campaign layout read (2048's campaign is its own event map): the
     // load path that reaches this falls through to Pulse's reader and refuses.
     main_menu: main_menu::MAIN_MENU,
-    pause_menu: None,
+    pause_menu: Some(pause_menu::PAUSE_MENU),
     campaign: &oag_title::Campaign {
         dialect: oag_title::CampaignDialect::Pulse,
         definition_entry: None,
@@ -511,14 +512,17 @@ pub const NOW_PLAYING: oag_title::now_playing::NowPlaying = oag_title::now_playi
         file: names::MUSIC_TRACK_FILE,
     },
     layout: r"Data\XML\NowPlaying_2048.xml",
-    item: "InGameMusicDisplay",
-    bar: "InGameMusicBG",
-    text: "InGameMusicText",
+    show: oag_title::now_playing::Show::Marquee {
+        item: "InGameMusicDisplay",
+        bar: "InGameMusicBG",
+        text: "InGameMusicText",
+    },
     // The nodes are named `01`..`11`; `MT_01` in the language table is "Artist\nTitle".
     title_key: Some("MT_{}"),
     separator: " - ",
     fade_step: 5,
     scroll_step: 1,
+    ticks_per_update: 1,
     origin: oag_title::effects::Origin::InheritedFrom("Wipeout HD"),
 };
 

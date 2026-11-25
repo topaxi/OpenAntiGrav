@@ -56,7 +56,14 @@ impl Profile {
         let log = self.0.join(log);
         let output = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
             .arg(image)
-            .args(["--no-audio", "--no-intro", "--drive", script])
+            .args([
+                "--no-audio",
+                "--no-soundtrack",
+                "--no-effects",
+                "--no-intro",
+                "--drive",
+                script,
+            ])
             .arg("--state-log")
             .arg(&log)
             .env("XDG_CONFIG_HOME", self.0.join("config"))

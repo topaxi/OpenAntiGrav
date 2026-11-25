@@ -333,7 +333,15 @@ fn capture_of(image: &Path, page: &str, flags: &[&str]) -> oag_texture::replacer
     let out = dir.join("page.png");
     let status = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
         .arg(image)
-        .args(["--no-audio", "--size", "1280x720", "--menu-page", page])
+        .args([
+            "--no-audio",
+            "--no-soundtrack",
+            "--no-effects",
+            "--size",
+            "1280x720",
+            "--menu-page",
+            page,
+        ])
         .args(flags)
         .arg("--screenshot")
         .arg(&out)
