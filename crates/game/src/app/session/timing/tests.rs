@@ -278,3 +278,54 @@ fn the_overlays_other_is_the_controllers_reading_less_the_labelled_passes() {
         assemble(scene, Some(blur), Some(bloom), Some(upscale), ALL).expect("measured")
     );
 }
+
+/// An intermittent pass absent from this frame still leaves `OTHER` the controller's reading less
+/// the passes' **per-frame** mean: the overlay row shows what the pass costs when it runs, and
+/// `OTHER` takes off what it costs a frame on average, so `frame - timed` is not short by the
+/// frames the pass sat out.
+#[test]
+fn an_intermittent_pass_absent_this_frame_leaves_other_on_per_frame_values() {
+    let (scene, blur, bloom) = (0.004_f32, 0.001_f32, 0.002_f32);
+    let upscale = (0.003_f32, 0.000_5_f32);
+    let cost = assemble(scene, Some(blur), Some(bloom), Some(upscale), ALL).expect("measured");
+    let frame_ms = 16.0_f32;
+    let controllers_reading_ms = frame_ms - cost.total() * 1000.0;
+
+    let mut costs = perf::PassCosts::new();
+    let readings: Vec<_> = (1..=120_u64)
+        .flat_map(|frame| {
+            let ran = frame % 4 == 1 && frame < 120;
+            let mut frame_readings = vec![reading(frame, "hud and ui", 0.001)];
+            if ran {
+                frame_readings.push(reading(frame, "hd zoom", 0.004));
+            }
+            frame_readings
+        })
+        .collect();
+    record_passes(&mut costs, &readings, 0);
+    let passes = costs.rows();
+    let overlay = perf::GpuCost {
+        scene: Some(scene),
+        blur: Some(blur),
+        bloom: Some(bloom),
+        upscale: Some(upscale.0),
+        upscale_presented: Some(upscale.1),
+        passes,
+    };
+    let shown = overlay.rows(frame_ms);
+    assert!(
+        shown.contains(&"HD ZOOM 4.00 MS".to_string()),
+        "30 frames of 120 at 4.0 ms shows 4.0: {shown:?}"
+    );
+    let per_frame_ms = passes.total() * 1000.0;
+    assert!(
+        (per_frame_ms - (1.0 + 4.0 * 30.0 / 120.0)).abs() < 1e-3,
+        "{per_frame_ms}"
+    );
+    let other_ms = overlay.residual_ms(frame_ms).expect("measured");
+    assert!(
+        (other_ms + per_frame_ms - controllers_reading_ms).abs() < 1e-3,
+        "OTHER {other_ms} + per-frame passes {per_frame_ms} != the controller's reading \
+         {controllers_reading_ms}"
+    );
+}
