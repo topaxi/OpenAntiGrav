@@ -930,6 +930,69 @@ protocol, two arms each); `half` reads 30.3 ms, and leaving the pass out entirel
 **Against the 30 fps claim** (menu route, render scale 25, `frame_limit = "30"`, 10 minutes from AP 34 C, three races): racing seconds median 17.0 fps
 (first minute 21.1, last five minutes 16.3); the Perfetto window (75 s, 1,509 frames) has a median frame of 48.2 ms, p99 85.7 ms, and 95.8 % of frames over 33.3 ms.
 
+### What the frame thread waits for
+
+Measured 2026-11-25 on the same phone. Release build of main `2d42134` plus the frame log's chain fields (`OAG_APK_DEV_CLI=1 OAG_APK_PROFILEABLE=1 just apk`),
+HD/Fury Vineta K forward, the launch file's `--race --track /data/environments/01_vineta_k/track.vex --autopilot --seed 1 --no-intro --no-audio --frame-log`,
+**render scale 25** (476x270 scene), REFLECTION RESOLUTION `auto` (it settles at `quarter`), every other setting a fresh profile's. Each run starts once the AP sensor reads
+33 C or less; figures are medians over racing seconds 20 to 80. The start state still moves a run by about a third: from AP 27 C the GPU held 858 MHz and the frame read 26.3 ms;
+from AP 33 C it was capped at 403 MHz within a minute and the frame read 34.1 to 34.8 ms.
+
+**The frame thread's phases** (`frame-phases`, the AP 27 C run, ms): ticks 0.62, scene recording 2.34, compose 0.22, overlay 0.09, `submit` 8.11 (wgpu's command encoding at
+`finish` plus `Queue::submit`), readback 0.08, **present 13.98**, total 25.4. The CPU's share of a frame (`cpu_ms - present_ms`) is 11.5 to 12.9 ms across the runs; HD's bloom chain is
+2.8 to 3.1 ms of GPU time a frame (`bloom_ms`, which the frame log now carries; [logging.md](../architecture/logging.md), "The frame-log line").
+
+**`simpleperf` with off-CPU time.** `--trace-offcpu` works on this phone and gives every sample its wall time, so a blocked thread shows where it blocks:
+
+```sh
+adb shell /data/local/tmp/simpleperf record --app org.openantigrav.game -e cpu-clock -f 1000 -g --trace-offcpu --duration 60 -o /data/local/tmp/perf.data
+python3 $ANDROID_HOME/ndk/<ver>/simpleperf/binary_cache_builder.py -i perf.data -lib <dir holding the unstripped liboag_android.so>
+python3 -I scripts/android-simpleperf-phases.py perf.data binary_cache android_main
+```
+
+A 60 s record slows the race (frame 44.4 against 26 to 35 ms), so its shares say where the time goes, not how much there is. The frame thread's wall time:
+
+| Phase | Share of wall time | of it on the CPU |
+| --- | ---: | ---: |
+| `Queue::present` | 65.4 % | 1.5 % |
+| `CommandEncoder::finish` (wgpu-core replays and encodes every pass) | 14.2 % | 13.2 % |
+| draw-list building (`Scene::prepare_view`, `Recorder::record`, `draw_lists`) | 8.1 % | 7.2 % |
+| `Queue::submit` (of it `vkQueueSubmit` into the Mali driver 4.3 %) | 7.3 % | 6.8 % |
+| `Race::tick` | 2.0 % | 1.8 % |
+| HUD, pass recording, everything else | 2.9 % | 2.6 % |
+
+The thread is on the CPU 33 % of the time. Its top functions by own CPU time are `memset` 5.5 % (all of it inside the Mali driver: per-draw command memory, job enqueue,
+command-list reset), `AnimTransform::sample` 2.9 % and `AnimChannel::at` 2.5 % (node animation), and wgpu-core's `register_init_action` 2.9 %, `TextureUsageScope::merge_single` 2.6 % and
+`encode_render_pass` 2.6 %.
+
+**Where the present blocks.** All of the 65 % is one stack: `Queue::present` → `vulkan::driver::QueuePresentKHR` (Android's loader) → `vkQueueSignalReleaseImageANDROID` →
+the Mali driver's `semaphores_to_platform_fence` → `enqueue_base_fence_signal` → `sem_wait`. `get_current_texture` waits 0.07 ms a frame, and no `device.poll(Wait)` or map is on
+the frame thread. Mali's backend thread (`mali-cmar-backe`) spends 82 % of its time off the CPU, mostly in `poll` on the kernel driver: it waits on the GPU, it does not build
+commands for the frame thread to wait on.
+
+**What the wait is for: the previous frame, so the CPU and GPU already overlap.** A Perfetto trace with the `gfx` category (15 s, 384 frames;
+`scripts/android-fence-timeline.py`) pairs each frame's `QueuePresentKHR` with the GPU completion fence `queueBuffer` hands over, which the app's own FenceMonitor thread
+records when it signals. Medians: the present returns **5.3 ms after the previous frame's fence signals**, and the frame's own fence signals **30.3 ms after the present has
+returned** (in 99.7 % of frames it signals after). Fences signal every 35.3 ms and frames come every 36.7 ms. So frame N's GPU work runs while the CPU builds frame N+1, and the frame
+thread waits because the GPU takes as long as the whole frame. The GPU is 81 to 86 % busy over the racing window (`/sys/kernel/gpu/gpu_busy`, which counts every user of the GPU,
+SurfaceFlinger's composition of this landscape surface included). Its timestamps add up to about 15 ms (scene 8.9 to 10.5, glass, adverts, bloom and the rest), half of what the
+fence period says the GPU spends a frame.
+
+**A third swapchain image changes nothing**: `desired_maximum_frame_latency` 3 against the default 2 (Mailbox, fullscreen), from the same start (AP 32.9 C), read 35.0 against
+34.8 ms. Mailbox and 2 frames queued are what the surface runs with by default (`surface: present mode Mailbox (offered [Mailbox, Fifo]), 2 frame(s) queued`).
+
+**The advert cards cost the phone more than their row says.** One run with `OAG_SKIP_PASSES=adverts` and `OAG_SKIP_PASSES_TOGGLE=10` (`scripts/android-skip-windows.py`,
+racing seconds 15 to 100): drawn against left out, frame 28.4 against 25.8 ms (mean of the per-second means), median 35.7 against 40.8 fps, the `frame-phases` total 29.4 against
+25.3 ms (`submit` 9.1 against 8.2, present 16.2 against 13.3). The `ADVERT CARDS` row reads 1.3 to 1.6 ms. The eight cards are 512x256 each whatever the render scale: 1.05 million
+pixels, about eight times the 476x270 scene's, drawn with the circuit's material shaders in eight render passes (95 draws, 7,300 triangles, 1.38 million fragments on a desktop).
+An earlier run of the same toggle with the window edges recovered from the row rather than the switch's own line read 30.9 against 22.8 ms; the edges are less sure there.
+
+**The same row on a desktop is the integrated GPU's.** On this workstation `ADVERT CARDS` reads 1.60 to 1.68 ms on the Ryzen 9 7900's Radeon 610M (2 compute units), where a
+compositor on that GPU puts a default-adapter window, and 0.16 ms (0.02 ms a card) on the Radeon RX 7800 XT at the same 1440x816. On the 610M every card costs 0.16 to 0.30 ms
+whatever its draw count (26 draws 0.16 ms, 3 draws 0.30 ms), the cards with their draws left out and only the clears kept read 0.15 ms for all eight, and the frame goes from about 80
+to about 99 fps without them; anisotropy `off`, `RADV_DEBUG=nodcc` or `nohiz`, and `OAG_BINDLESS=0` move nothing. The single-frame bench on the 7800 XT at 1920x1080 reads 91 us
+for the eight cards' draws and 2.3 us with the clears only. On both GPUs the cost goes with the pixels the cards shade.
+
 ### Against the S24
 
 This page held no S24 frame-time table before this one. What exists is [`frame-thread-cpu.md`](../rendering/frame-thread-cpu.md)
