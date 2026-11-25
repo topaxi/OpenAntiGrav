@@ -471,6 +471,7 @@ impl Target {
         frustum: Option<&Frustum>,
         draw: bool,
     ) -> SceneStats {
+        let stamp = oag_gpu::timing::stamp("glass");
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("behind the glass"),
             color_attachments: &[
@@ -503,7 +504,7 @@ impl Target {
                 }),
                 stencil_ops: None,
             }),
-            timestamp_writes: None,
+            timestamp_writes: stamp.as_ref().map(oag_gpu::timing::Stamp::render_writes),
             occlusion_query_set: None,
             multiview_mask: None,
         });

@@ -832,6 +832,7 @@ impl Fsr3 {
         // An empty render pass is the cheapest wipe available: no pipeline,
         // no draw, just the hardware's fast clear.
         let clear = |encoder: &mut wgpu::CommandEncoder, label, view| {
+            let stamp = oag_gpu::timing::stamp("fsr3 clear");
             encoder
                 .begin_render_pass(&wgpu::RenderPassDescriptor {
                     label: Some(label),
@@ -845,7 +846,7 @@ impl Fsr3 {
                         },
                     })],
                     depth_stencil_attachment: None,
-                    timestamp_writes: None,
+                    timestamp_writes: stamp.as_ref().map(oag_gpu::timing::Stamp::render_writes),
                     occlusion_query_set: None,
                     multiview_mask: None,
                 })

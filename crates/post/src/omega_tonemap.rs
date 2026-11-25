@@ -734,9 +734,10 @@ impl Chain {
             );
         }
         {
+            let stamp = oag_gpu::timing::stamp("omega tonemap");
             let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: Some("omega tonemap coefficients"),
-                timestamp_writes: None,
+                timestamp_writes: stamp.as_ref().map(oag_gpu::timing::Stamp::compute_writes),
             });
             oag_gpu::perfprobe::marks::mark_compute(&mut pass, "omega tonemap coefficients");
             pass.set_pipeline(&self.coefficients);

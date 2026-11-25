@@ -126,7 +126,7 @@ impl Timing {
 }
 
 mod timer;
-pub use timer::{Half, PassTimer, Reading};
+pub use timer::{Half, PassReading, PassTimer, Reading, Stamp, stamp};
 
 #[cfg(test)]
 mod tests;

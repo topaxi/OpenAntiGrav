@@ -332,6 +332,19 @@ impl Session {
         if has_scene && let Some(timer) = self.hd_bloom_timer.as_mut() {
             timer.begin(self.frame_index);
         }
+        // And the ring that times every labelled pass of the frame (`oag_gpu::timing::stamp`),
+        // armed for this thread until `resolve` or `abandon` below. **Not with further windows
+        // open**: their passes are recorded into encoders this one is not submitted after, so
+        // a pair resolved here could be read before its pass has run.
+        if self.screens.is_empty() {
+            if let Some(timer) = self.pass_stamps.as_mut() {
+                timer.begin(self.frame_index);
+            }
+        } else {
+            // No claim, so no readings: what was last measured must not linger in the rows
+            // and in `OTHER`.
+            self.pass_costs.stalled(self.frame_index);
+        }
         // Read before the match, which borrows `self.stage` mutably.
         let pvs_culling = self.pvs_culling();
         // Read before `self.stage` is borrowed mutably below, for the same
@@ -579,6 +592,13 @@ impl Session {
                 };
                 if !timed && let Some(timer) = self.pass_timer.as_mut() {
                     timer.abandon();
+                }
+                // Each view of a split records on a thread of its own, where nothing is armed,
+                // so the glass and shadow passes of a split would be missing from a sum that
+                // still held the HUD's: no per-pass rows while split.
+                if !timed && let Some(timer) = self.pass_stamps.as_mut() {
+                    timer.abandon();
+                    self.pass_costs.stalled(self.frame_index);
                 }
                 (Some(stats), None)
             }
@@ -1091,6 +1111,7 @@ impl Session {
                     .upscale_presented_cost
                     .stats()
                     .map(|s| s.mean_ms / 1000.0),
+                passes: self.pass_costs.rows(),
             },
             // The wall-clock half, and a frame behind for a plainer reason
             // than the GPU readings are: this frame's own duration is not
@@ -1183,6 +1204,9 @@ impl Session {
         // the copy has to follow the pass that wrote the timestamps and
         // precede the submit that runs both.
         if let Some(timer) = self.pass_timer.as_mut() {
+            timer.resolve(&mut encoder);
+        }
+        if let Some(timer) = self.pass_stamps.as_mut() {
             timer.resolve(&mut encoder);
         }
         super::timing::resolve_upscale(

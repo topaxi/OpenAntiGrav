@@ -161,6 +161,9 @@ pub struct Reading<'a> {
     pub render: Option<(u32, u32)>,
     /// How many CPU-governor knobs are held down (0 is full quality).
     pub governor: usize,
+    /// Every separately-encoded pass's GPU time, milliseconds, by the overlay's row name, in
+    /// the overlay's order: the rows `GpuCost::passes` carries, **hidden ones included**.
+    pub passes: &'a [(&'static str, f32)],
 }
 
 /// The line, one `key=value` field after another so a script can split it.
@@ -171,7 +174,7 @@ pub fn format_line(r: &Reading<'_>) -> String {
         .render
         .map_or_else(|| "-".to_string(), |(w, h)| format!("{w}x{h}"));
     format!(
-        "frame-log stage={} fps={:.1} frame_ms={:.2} p99_ms={:.2} cpu_ms={} gpu_ms={} present_ms={} target_hz={} window={}x{} surface={}x{} render={} governor={}",
+        "frame-log stage={} fps={:.1} frame_ms={:.2} p99_ms={:.2} cpu_ms={} gpu_ms={} present_ms={} target_hz={} window={}x{} surface={}x{} render={} governor={} pass_ms={}",
         r.stage,
         r.fps,
         r.frame_ms,
@@ -186,7 +189,21 @@ pub fn format_line(r: &Reading<'_>) -> String {
         r.surface.1,
         render,
         r.governor,
+        pass_field(r.passes),
     )
+}
+
+/// The `pass_ms` value: `-` with no pass timed, else `name:ms` pairs joined by commas, the
+/// name lowercased with `_` for a space so the field has no space to split on.
+fn pass_field(passes: &[(&'static str, f32)]) -> String {
+    if passes.is_empty() {
+        return "-".to_string();
+    }
+    let rows: Vec<String> = passes
+        .iter()
+        .map(|(name, ms)| format!("{}:{ms:.2}", name.to_lowercase().replace(' ', "_")))
+        .collect();
+    rows.join(",")
 }
 
 /// The three switches a run carries.

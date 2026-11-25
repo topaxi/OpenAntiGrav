@@ -217,6 +217,7 @@ impl Pipeline {
         let slot = slot.as_ref().expect("the slot was just made");
         queue.write_buffer(&slot.uniforms, 0, bytemuck::cast_slice(&words));
         let bind_group = &slot.bind_group;
+        let stamp = oag_gpu::timing::stamp("lens flare");
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("lens flare"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -229,7 +230,7 @@ impl Pipeline {
                 },
             })],
             depth_stencil_attachment: None,
-            timestamp_writes: None,
+            timestamp_writes: stamp.as_ref().map(oag_gpu::timing::Stamp::render_writes),
             occlusion_query_set: None,
             multiview_mask: None,
         });

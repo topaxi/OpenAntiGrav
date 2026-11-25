@@ -778,6 +778,7 @@ impl Zoom {
         next: usize,
         bound: &wgpu::BindGroup,
     ) {
+        let stamp = oag_gpu::timing::stamp("hd zoom");
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("hd zoom history"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -790,7 +791,7 @@ impl Zoom {
                 },
             })],
             depth_stencil_attachment: None,
-            timestamp_writes: None,
+            timestamp_writes: stamp.as_ref().map(oag_gpu::timing::Stamp::render_writes),
             occlusion_query_set: None,
             multiview_mask: None,
         });
@@ -844,6 +845,7 @@ impl Zoom {
             0,
             bytemuck::cast_slice(&ring(&self.tuning, frame)),
         );
+        let stamp = oag_gpu::timing::stamp("hd zoom");
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("hd zoom ring"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -856,7 +858,7 @@ impl Zoom {
                 },
             })],
             depth_stencil_attachment: None,
-            timestamp_writes: None,
+            timestamp_writes: stamp.as_ref().map(oag_gpu::timing::Stamp::render_writes),
             occlusion_query_set: None,
             multiview_mask: None,
         });

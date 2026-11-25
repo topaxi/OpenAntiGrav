@@ -7,6 +7,7 @@
 //! `scripts/check-file-size.py`.
 
 use super::*;
+use crate::perf::PassCosts;
 
 /// The GPU cost rows say only what has actually been measured.
 ///
@@ -29,6 +30,7 @@ fn the_gpu_cost_rows_show_only_what_was_measured() {
             bloom: None,
             upscale: None,
             upscale_presented: None,
+            ..Default::default()
         }
         .rows(11.76),
         vec!["SCENE 4.20 MS".to_string(), "OTHER 7.6 MS".to_string()],
@@ -41,6 +43,7 @@ fn the_gpu_cost_rows_show_only_what_was_measured() {
             bloom: Some(0.003_1),
             upscale: Some(0.001_8),
             upscale_presented: None,
+            ..Default::default()
         }
         .rows(11.76),
         vec![
@@ -62,6 +65,7 @@ fn the_gpu_cost_rows_show_only_what_was_measured() {
             bloom: None,
             upscale: Some(0.001_8),
             upscale_presented: Some(0.003_0),
+            ..Default::default()
         }
         .rows(11.76),
         vec![
@@ -80,6 +84,7 @@ fn the_gpu_cost_rows_show_only_what_was_measured() {
             bloom: None,
             upscale: Some(0.001_8),
             upscale_presented: None,
+            ..Default::default()
         }
         .rows(11.76),
         vec!["FSR3 REN 1.80 MS".to_string(), "OTHER 10.0 MS".to_string()]
@@ -95,6 +100,7 @@ fn the_residual_is_the_frame_time_minus_the_gpu_row() {
         bloom: Some(0.003_1),
         upscale: Some(0.002_8),
         upscale_presented: None,
+        ..Default::default()
     };
     // 2.5 + 1.2 + 3.1 + 2.8 = 9.6 ms accounted for out of an 11.76 ms frame.
     assert!((cost.residual_ms(11.76).unwrap() - 2.16).abs() < 1e-4);
@@ -108,6 +114,7 @@ fn the_residual_is_the_frame_time_minus_the_gpu_row() {
         bloom: None,
         upscale: None,
         upscale_presented: None,
+        ..Default::default()
     };
     assert!((partial.residual_ms(11.76).unwrap() - 9.26).abs() < 1e-4);
 
@@ -124,6 +131,7 @@ fn the_residual_is_the_frame_time_minus_the_gpu_row() {
         bloom: None,
         upscale: None,
         upscale_presented: None,
+        ..Default::default()
     };
     assert!(heavy.residual_ms(8.0).unwrap() < 0.0);
 }
@@ -205,4 +213,157 @@ fn a_negative_gap_is_reported_rather_than_clamped() {
         present: None,
     };
     assert!(cost.outside_ms(8.33).expect("measured") < 0.0);
+}
+
+fn passes(rows: &[(&'static str, f32)]) -> PassRows {
+    let mut passes = PassRows::default();
+    for &(label, seconds) in rows {
+        passes.add(label, seconds);
+    }
+    passes
+}
+
+/// The per-pass rows sit after the chains' rows and before `OTHER`, in the table's order whatever
+/// order they were added in, one row to a group of labels, and a row under a tenth of a
+/// millisecond is left off. A label no row claims is drawn under its own text, last.
+#[test]
+fn the_pass_rows_are_ordered_grouped_and_hidden_under_a_tenth_of_a_millisecond() {
+    let cost = GpuCost {
+        scene: Some(0.004),
+        passes: passes(&[
+            ("hud and ui", 0.000_6),
+            ("bloom composite", 0.000_2),
+            ("bloom bright", 0.000_3),
+            ("ps2 bloom composite", 0.000_4),
+            ("shadow map", 0.000_05),
+            ("glass", 0.000_55),
+            ("mystery pass", 0.000_2),
+        ]),
+        ..Default::default()
+    };
+    assert_eq!(
+        cost.rows(10.0),
+        vec![
+            "SCENE 4.00 MS".to_string(),
+            "GLASS 0.55 MS".to_string(),
+            "PS2 BLOOM 0.40 MS".to_string(),
+            "PSP BLOOM 0.50 MS".to_string(),
+            "HUD AND UI 0.60 MS".to_string(),
+            "mystery pass 0.20 MS".to_string(),
+            "OTHER 3.7 MS".to_string(),
+        ],
+        "shadow map is 0.05 ms and hidden here; the PSP bloom's two labels are one row"
+    );
+}
+
+/// `OTHER` is the frame less **every** timed pass, the hidden rows included: hiding a row on the
+/// overlay must not hand its time back to `OTHER`.
+#[test]
+fn the_residual_subtracts_every_pass_hidden_or_shown() {
+    let timed = GpuCost {
+        scene: Some(0.004),
+        passes: PassRows::default(),
+        ..Default::default()
+    };
+    let with_passes = GpuCost {
+        passes: passes(&[
+            ("glass", 0.000_5),
+            ("shadow map", 0.000_05),
+            ("smaa", 0.000_45),
+        ]),
+        ..timed
+    };
+    let before = timed.residual_ms(10.0).expect("measured");
+    let after = with_passes.residual_ms(10.0).expect("measured");
+    assert!((before - 6.0).abs() < 1e-4, "{before}");
+    assert!(
+        (after - 5.0).abs() < 1e-4,
+        "frame 10 - scene 4 - passes 1.0 = 5.0, got {after}"
+    );
+    assert_eq!(
+        GpuCost {
+            passes: passes(&[("hud and ui", 0.001)]),
+            ..Default::default()
+        }
+        .residual_ms(10.0),
+        None,
+        "a pass reading alone (a menu frame) does not start an OTHER row: it stays the \
+         scene-and-chains residual the controller's own reading is defined on"
+    );
+}
+
+/// A frame the pass did not run in records zero for it, so a pass that runs every other frame
+/// reads as half its cost, and a load drops what came before it.
+#[test]
+fn a_pass_that_did_not_run_costs_the_frame_nothing() {
+    let mut costs = PassCosts::new();
+    costs.record_frame(1, &[("glass", 0.002), ("hud and ui", 0.001)]);
+    costs.record_frame(2, &[("hud and ui", 0.001)]);
+    let rows = costs.rows().ordered();
+    assert_eq!(rows[0].0, "GLASS");
+    assert!((rows[0].1 - 0.001).abs() < 1e-6, "{rows:?}");
+    assert!((rows[1].1 - 0.001).abs() < 1e-6, "{rows:?}");
+    costs.stalled(2);
+    costs.record_frame(2, &[("glass", 9.0)]);
+    assert!(
+        costs.rows().is_empty(),
+        "a reading from the stalled frame is refused"
+    );
+    costs.record_frame(3, &[("glass", 0.002)]);
+    assert!((costs.rows().total() - 0.002).abs() < 1e-6);
+}
+
+/// Every label a pass site stamps, or hands the shared pass helper, belongs to a named row: one
+/// that did not would be drawn under its lowercase label, and `MAX_ROWS` would be spent on it.
+///
+/// Reads the sources: a label is a string literal at the site, and this is the one place that
+/// can see all of them. The helper-fed labels (`pass::draw` and friends) are listed by hand
+/// because their literal sits a call away from the stamp.
+#[test]
+fn every_stamped_label_has_a_row() {
+    let crates = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+    let mut labels: Vec<String> = [
+        "bloom bright",
+        "bloom blur x",
+        "bloom composite",
+        "ps2 bloom composite",
+        "wo composite gate",
+        "wo composite blur",
+        "wo composite clear",
+        "omega tonemap luma",
+        "omega tonemap halve",
+        "omega tonemap apply",
+        "omega tonemap clear",
+        "omega bloom bright",
+    ]
+    .map(String::from)
+    .to_vec();
+    let mut stack = vec![crates];
+    while let Some(dir) = stack.pop() {
+        for entry in std::fs::read_dir(&dir).expect("a crate directory") {
+            let path = entry.expect("an entry").path();
+            if path.is_dir() {
+                if path.file_name().is_some_and(|name| name != "target") {
+                    stack.push(path);
+                }
+            } else if path.extension().is_some_and(|ext| ext == "rs")
+                && !path.to_string_lossy().contains("tests")
+                && let Ok(text) = std::fs::read_to_string(&path)
+            {
+                for part in text.split("timing::stamp(\"").skip(1) {
+                    labels.push(part.split('"').next().expect("a closing quote").to_string());
+                }
+            }
+        }
+    }
+    assert!(
+        labels.len() > 30,
+        "found only {labels:?}: the scan stopped matching"
+    );
+    for label in labels {
+        let mut rows = PassRows::default();
+        rows.add(Box::leak(label.clone().into_boxed_str()), 0.001);
+        let name = rows.ordered()[0].0.to_string();
+        assert_ne!(name, label, "`{label}` has no row in perf/passes.rs's ROWS");
+    }
 }
