@@ -51,7 +51,9 @@ use super::patience::Patience;
 pub const OVER: f32 = 1.1;
 
 /// The glass pass's share of the frame above which giving a step up is worth the coarser view.
-pub const SHARE: f32 = 0.15;
+/// Under the S21's `half` share on Vineta K (4.9 ms of a 30.3 ms frame, 16 %), so a frame that
+/// still misses at half goes on to quarter rather than hovering at the edge of the threshold.
+pub const SHARE: f32 = 0.10;
 
 /// The glass pass's cost under which it is never stepped down, whatever its share.
 pub const FLOOR_SECONDS: f32 = 0.001;
