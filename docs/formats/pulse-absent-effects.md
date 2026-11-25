@@ -235,25 +235,38 @@ chroma direction (-0.30, -0.01, 0.95), a cyan-blue, whatever the platform's ribb
    hue; the PSP and PS2 laws differ. Render side only: no simulation state.
 
 **Ribbon colour on screen.** The ribbon's added colour, a ribbon pixel minus the road beside
-it, on the compare-page frames under `data/reference/compare-page/`. PS2: `pulse-ps2`
-(`talons-junction-white`, `moa-therma-white`, `vertica-white`, `gemini-dam-white`, 1280x720),
-columns 628 to 652 over rows 665 to 715 against the mean of columns 598 to 613 and 668 to 683.
-PSP: `pulse-psp-race/talons-alongside` (480x272), pixels (178, 189) against (165, 202) and
-(187, 196) against (176, 208).
+it, on the compare-page frames under `data/reference/compare-page/`.
 
-| frame | ribbon (added RGB) | chroma direction |
+- PS2: `pulse-ps2` (`talons-junction-white`, `moa-therma-white`, `vertica-white`,
+  `gemini-dam-white`, 1280x720), columns 628 to 652 over rows 665 to 715 against the mean of
+  columns 598 to 613 and 668 to 683.
+- PSP: `pulse-psp-race/talons-alongside` (480x272), the player's ribbon from (184, 197) to
+  (150, 164), 9 pixels wide, against the road 12 to 17 pixels to each side, pixels with a channel
+  at 250 or above or under 10 levels over the road dropped (144 pixels).
+
+| frame | ribbon (added RGB) | chroma direction | HSV hue |
+| --- | --- | --- | --- |
+| Pulse PS2, PCSX2 original, 4 circuits | `(51..58, 24..29, 44..49)` | (0.80..0.84, -0.30..-0.29, 0.45..0.52) | pink-magenta |
+| Pulse PS2, ours | `(65..76, 30..42, 57..68)` | (0.78..0.80, -0.29, 0.52..0.56) | pink-magenta |
+| Pulse PSP, PPSSPP original | `(47, 36, 94)` | (0.09, -0.13, 0.99) | about 250 degrees |
+| Pulse PSP, ours | `(43, 32, 92)` | (0.09, -0.13, 0.99) | about 250 degrees |
+
+**PS2 matches the summed layers. The PSP does not**, and that is the one open judgement here.
+
+| PSP burst hue | chroma direction | HSV hue |
 | --- | --- | --- |
-| Pulse PS2, PCSX2 original, nozzle stub, 4 circuits at the grid | `(51..58, 24..29, 44..49)` | (0.80..0.84, -0.30..-0.29, 0.45..0.52) |
-| Pulse PS2, ours, the same 4 | `(65..76, 30..42, 57..68)` | (0.78..0.80, -0.29, 0.52..0.56) |
-| Pulse PSP, PPSSPP original, player's ribbon, Talon's Junction | `(93, 79, 198)`, `(85, 51, 156)` | (0.02..0.21, -0.16..-0.11, 0.96..0.99) |
-| Pulse PSP, ours, the same two points | `(101, 87, 219)`, `(106, 72, 169)` | (0.01..0.23, -0.16..-0.10, 0.96..0.99) |
+| before (HD's sprites) | (-0.30, -0.01, 0.95) | about 226 degrees, blue |
+| the ribbon, measured | (0.09, -0.13, 0.99) | about 250 degrees, blue-violet |
+| after (summed layers) | (0.44, -0.22, 0.87) | about 276 degrees, purple |
 
-**PS2 matches the summed layers; the PSP reads bluer than them.** The PSP's outer deep-blue
-layer is the widest (`LAYER_WIDTH`), so the faded strip a sample lands on is mostly it, and the
-core near the nozzle saturates to white. The maintainer calls the PSP trail purple and called a
-blue burst wrong, so the target stays the summed layers, not the outer layer. **Pure**: draws
-Pulse's ribbon law and the same constants; its stills hold no extended ribbon, so it is not
-measured separately.
+The burst is as far from the measured mean as it was, on the purple side of it. The target stays
+the summed layers because it is computed from the authored colours, the maintainer calls the
+trail purple and the burst that was blue wrong, and close to the nozzle the original's ribbon
+shows a purple band between a deep-blue fringe and a pink-white core
+(`talons-alongside-airbrakes`). The measured mean is the other candidate; it is a number read off
+one frame. Weighting the layers by their widths (`LAYER_WIDTH`) gives (0.35, -0.19, 0.92), which
+does not reach it either. **Pure** draws Pulse's ribbon law and the same constants; its stills
+hold no extended ribbon, so it is not measured separately.
 
 **Result**, Pulse PSP EU, PS2 EU and Pure PSP EU, `--race --seed 7 --trail-sparks --hold cross
 --ticks 200`, HD as lender. The burst's added colour against the setting-off frame, pixels moved
