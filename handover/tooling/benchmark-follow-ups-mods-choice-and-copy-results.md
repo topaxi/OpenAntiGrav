@@ -2,13 +2,13 @@
 status: ready-to-wire
 titles: [pulse, pure, hd, 2048, omega]
 updated: 2026-11-25
-summary: "The in-game benchmark loads the player's mods; offer a vanilla run and a with-mods run, and record which in the result"
+summary: "Benchmark follow-ups: a vanilla or with-mods run recorded in the result, and COPY TO CLIPBOARD on the stats screen"
 categories: [frontend]
 size: S (40)
 difficulty: easy (40)
 ---
 
-# A benchmark run does not say whether mods load
+# Benchmark follow-ups: the mods choice and copying the results
 
 ## Open
 
@@ -20,6 +20,19 @@ The maintainer wants two kinds of run:
 - **With mods:** the player's enabled mods, so a player or a mod author can see what their mods cost.
 
 ## Next Steps
+
+Start only after `benchmark-no-input` (benchmark input: abort only) has merged; both touch the stats screen.
+
+**A. Copy to clipboard (maintainer, 2026-11-25).** The stats screen gets a COPY TO CLIPBOARD action beside BACK and RUN AGAIN, with pointer and touch support, a `string_id` and English text.
+- What it copies: a plain-text summary a player can paste into a forum or issue: title, track, average FPS, 1 % and 0.1 % lows, median, P95, P99, worst, frames over budget, the settings summary, the mods line (below), device, GPU, driver, build version.
+- `crates/game/src/app/clipboard.rs` only reads today (`read`), so add a write on every target: desktop (the crate it already uses), Android and the web build. Where a platform cannot write, hide the action rather than offer one that fails.
+- A short "Copied" confirmation on the screen.
+- Tests:
+  - the text formatter, with a unit test pinning its exact lines;
+  - the action's presence or absence per platform.
+
+**B. The mods choice:**
+
 
 1. Decide the shape of the choice, recommended default first:
    - A `--benchmark-mods vanilla|enabled` CLI option (default `vanilla`), plus the same choice on the BENCHMARK and RUN BENCHMARK entry points. A preset in the benchmark preset TOML (`schemas/v1`) may also set it.
