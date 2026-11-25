@@ -58,6 +58,9 @@ pub(crate) struct RaceStage {
     /// escaped race any other way. See `Session::frame`'s finish-transition
     /// arm and `Session::escape`, the only two readers.
     pub(crate) result_key: crate::records::Key,
+    /// The archive entry of the circuit the race loaded, as the loader names it
+    /// (`oag_raceplay::Loaded::circuit`).
+    pub(crate) circuit: String,
     /// What the HUD's `RECORD` readout counts down to: the stored best under
     /// [`Self::result_key`] as it stood at load, and the track's authored
     /// time. `None` for a mode with no such readout and whenever the track's
@@ -206,6 +209,10 @@ pub(crate) struct RaceStage {
     /// Set when this race is an attract demo: every craft is flown by the AI, nothing it does is
     /// a result, a ghost or a recording, and it is never parked behind the menus.
     pub(crate) demo: Option<crate::demo::Run>,
+    /// Set when this race is the in-game benchmark: its frames are timed, nothing it does is a
+    /// result, a ghost or a recording, and its end raises the stats screen
+    /// (`session::benchmark`).
+    pub(crate) benchmark: Option<Box<crate::benchmark::Live>>,
 }
 
 impl Drop for RaceStage {
@@ -767,6 +774,17 @@ impl RaceStage {
         viewport: (f32, f32, f32, f32),
         target_size: (u32, u32),
     ) -> bool {
+        if let Some(done) = self.benchmark.as_ref().and_then(|live| live.done.as_ref()) {
+            let list = crate::benchmark::screen::draw_list(
+                &done.report,
+                self.scoreboard.line_height(),
+                done.focus,
+                done.saved.as_deref(),
+            );
+            self.scoreboard
+                .draw_list(gpu.device(), gpu.queue(), encoder, view, &list, viewport);
+            return true;
+        }
         if let Some(endrace) = &mut self.endrace {
             endrace.draw(
                 gpu.device(),

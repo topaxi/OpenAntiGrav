@@ -803,6 +803,12 @@ impl Session {
                 // `self.campaign_cell` empty for whatever races next.
                 race_stage.campaign_cell = self.campaign_cell.take();
                 race_stage.campaign_custom = self.campaign_custom.take();
+                // The benchmark: its race, timed. Nothing it does is a result or a ghost.
+                if let Some(live) = self.benchmark.take_launch() {
+                    race_stage.benchmark = Some(Box::new(live));
+                    race_stage.result_saved = true;
+                    race_stage.race.set_ghost_visible(false);
+                }
                 // A LAN race is the host's: its start state is what this machine proves
                 // before it says it is ready, and its AI, seats and views are the server's
                 // (`NetPlay::begin_join`), so none of the local launch below applies.
@@ -977,7 +983,10 @@ impl Session {
                     race_stage.race.core.begin_speed_plans();
                     // After everything above that writes to the race, so the recording's
                     // tick-zero hash is the one a rebuild from its header must reproduce.
-                    if self.settings.replay.record && crate::replays::WRITES {
+                    if self.settings.replay.record
+                        && crate::replays::WRITES
+                        && race_stage.benchmark.is_none()
+                    {
                         race_stage.arm_auto_replay();
                     }
                 }

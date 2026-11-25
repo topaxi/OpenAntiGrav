@@ -112,7 +112,7 @@ impl Session {
             && matches!(&self.stage, Stage::Frontend(stage)
                 // `--measure-race-load` times the race path, not the boot
                 // sequence, and skips straight past it.
-                if stage.frontend.is_finished() || self.load_probe.is_some() || self.demo.cli.is_some())
+                if stage.frontend.is_finished() || self.load_probe.is_some() || self.demo.cli.is_some() || self.benchmark.cli.is_some())
         {
             self.launched = true;
             debug!("{}: opening the menus", frontend::states::LAUNCH_GAME);
@@ -283,6 +283,7 @@ impl Session {
             u64::try_from(elapsed.as_nanos()).unwrap_or(u64::MAX)
         };
         let steps = self.clock.advance(nanos);
+        self.record_benchmark_frame(frame_seconds, u32::try_from(steps).unwrap_or(u32::MAX));
         let dt = f64::from(self.clock.rate().dt());
 
         // Before the snapshot below, because it is what makes the snapshot
@@ -365,6 +366,11 @@ impl Session {
             // stage's own tick so the press that ends a demo is not also read by the menu it
             // returns to.
             if self.tick_demo(&pointer) {
+                break;
+            }
+            // The in-game benchmark: its launch from the command line, its race's end on the
+            // tick it happened, and its stats screen's input.
+            if self.tick_benchmark(&pointer, rect, roles.back) {
                 break;
             }
             // A click on a key or button hint is that button's press, ahead of what is under it.
@@ -470,6 +476,7 @@ impl Session {
             // rule: a mouse cannot lift player 2's pause inside their timeout.
             if self.photo.is_none()
                 && !self.in_demo()
+                && !self.in_benchmark()
                 && matches!(&self.stage, Stage::Race(stage) if !stage.race.core.sim.finished())
             {
                 let paused = matches!(self.pause, crate::pause::State::Paused { .. });
@@ -522,6 +529,7 @@ impl Session {
             // **A rising edge**, so the thrust the player was holding as they
             // crossed the line cannot dismiss the board they have not read yet.
             if self.photo.is_none()
+                && !self.on_benchmark_screen()
                 && matches!(&self.stage, Stage::Race(stage)
                 if crate::app::race_stage::endrace::results_table_takes_confirm(
                     stage.race.core.sim.finished(),
@@ -547,6 +555,8 @@ impl Session {
                 break;
             }
             self.poll_online();
+            // A benchmark that ended on the tick cap stands still under its stats screen.
+            let benchmark_screen = self.on_benchmark_screen();
             match &mut self.stage {
                 // Photo mode: the race does not tick, whatever state it is in (running, or
                 // finished with the end screens behind). The audio is not simulation state, so
@@ -886,7 +896,7 @@ impl Session {
                     // match ends) - `EndRace Menu`'s own rows need a real
                     // hit-test, which a synthesised Cross press on every
                     // click would fight with.
-                    if stage.endrace.is_none() {
+                    if stage.endrace.is_none() && stage.benchmark.is_none() {
                         pointer::press_for_click(&mut self.controls, &pointer);
                         // A click in any further window of a multi-window race is the same press.
                         for (seat, _) in &seat_pointers {
@@ -967,7 +977,7 @@ impl Session {
                         self.tick_endrace(&grid);
                     }
                 }
-                Stage::Race(stage) if self.pause.frozen() => {
+                Stage::Race(stage) if self.pause.frozen() || benchmark_screen => {
                     // A paused race reads circle as "back to the menus";
                     // the secondary button is circle everywhere else on
                     // screen, so it is here too. Not through the resume

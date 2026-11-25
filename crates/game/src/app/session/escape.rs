@@ -211,6 +211,11 @@ impl Session {
             self.escape_demo();
             return;
         }
+        // A benchmark is left, not parked: the stats screen's BACK, or no result.
+        if self.in_benchmark() || self.on_benchmark_screen() {
+            self.escape_benchmark();
+            return;
+        }
         // Photo mode is a level of its own: escape leaves it, back to the race it holds, and
         // goes no further. **Chosen, not measured.**
         if self.photo.is_some() {

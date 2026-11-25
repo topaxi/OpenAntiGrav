@@ -538,7 +538,27 @@ impl Overlay {
         viewport: (f32, f32, f32, f32),
     ) {
         let list = draw_list(board, self.line_height, personal_best);
+        self.draw_list(device, queue, encoder, view, &list, viewport);
+    }
+
+    /// The font's line height, which a panel built for [`Self::draw_list`] spaces itself by.
+    #[must_use]
+    pub fn line_height(&self) -> f32 {
+        self.line_height
+    }
+
+    /// Draws any panel's list over the frame: the renderer is this overlay's, the list is the
+    /// caller's (the benchmark's stats screen is one).
+    pub fn draw_list(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+        list: &[Draw],
+        viewport: (f32, f32, f32, f32),
+    ) {
         self.renderer
-            .overlay(device, queue, encoder, view, &list, viewport);
+            .overlay(device, queue, encoder, view, list, viewport);
     }
 }

@@ -857,6 +857,7 @@ fn launch(mut cli: Cli) -> Result<Launch> {
         measure_race_load: cli.measure.measure_race_load,
         demo: cli.demo.mode(),
         demo_limit: cli.demo.limit(),
+        benchmark: cli.benchmark.request(cli.ticks),
         replay_png: cli.shot.replay_png.clone(),
         give,
         no_intro: cli.intro.no_intro,

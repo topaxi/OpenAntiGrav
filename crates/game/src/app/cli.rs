@@ -12,6 +12,7 @@ use oag_mesh::mesh_render::Anisotropy;
 
 use crate::app::args::DEFAULT_SIZE;
 
+pub(crate) mod benchmark;
 pub(crate) mod extra;
 mod render_overrides;
 
@@ -468,6 +469,10 @@ pub(crate) struct Cli {
     /// `--demo`, `--wallpaper` - see [`extra::DemoArgs`].
     #[command(flatten)]
     pub(crate) demo: extra::DemoArgs,
+
+    /// `--benchmark`, `--preset` - see [`benchmark::BenchmarkArgs`].
+    #[command(flatten)]
+    pub(crate) benchmark: benchmark::BenchmarkArgs,
 
     /// Show the language picker even when a language is already chosen.
     ///

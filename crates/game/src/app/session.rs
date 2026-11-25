@@ -28,6 +28,7 @@ pub(crate) mod endrace;
 // `Session::escape` and `Session::resume_race` - split out of `menus.rs`
 // under the 1,000-line rule; see `escape.rs`'s own doc for why this pair is
 // the seam.
+mod benchmark;
 mod demo;
 mod device_lost;
 mod escape;
@@ -52,6 +53,7 @@ mod reconnect;
 pub(crate) mod replays;
 mod rumble;
 mod shot_open;
+pub(crate) use benchmark::State as BenchmarkState;
 pub(crate) use demo::State as DemoState;
 pub(crate) use load_probe::LoadProbe;
 pub(crate) use mods_page::Rebuilt;
@@ -391,6 +393,8 @@ pub(crate) struct Session {
     pub(crate) watching: Option<replays::Watching>,
     /// The attract demo's idle count, chain and the demo being loaded (`session::demo`).
     pub(crate) demo: demo::State,
+    /// The in-game benchmark's launch and what to restore after it (`session::benchmark`).
+    pub(crate) benchmark: benchmark::State,
     /// The replay viewer while a recording is being watched (`session::replays`).
     pub(crate) viewer: Option<replays::Active>,
     /// The line over the screen that says why a dropped screenshot did not open

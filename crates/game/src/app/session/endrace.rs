@@ -39,7 +39,7 @@ impl Session {
             return;
         };
         // A demo that finishes is over: no results, no end-of-race voice.
-        if stage.demo.is_some() {
+        if stage.demo.is_some() || stage.benchmark.is_some() {
             return;
         }
         if !stage.race.core.sim.finished() || stage.endrace.is_some() || stage.endrace_unavailable {

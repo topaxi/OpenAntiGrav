@@ -47,9 +47,8 @@ use web_time::Instant;
 use super::{CaptureOptions, HeldButtons, advance_one_tick, spectrum};
 use oag_gpu::timing::{Half, PassTimer, Reading};
 use oag_raceplay::{Race, Scene};
-use stats::{Summary, json_string, summarise};
+use crate::benchmark::stats::{Summary, json_string, summarise};
 
-mod stats;
 
 /// The environment variable that turns the bench on: the output path without
 /// its extension.
@@ -145,21 +144,6 @@ impl Frame {
     }
 }
 
-fn load_average() -> String {
-    std::fs::read_to_string("/proc/loadavg")
-        .ok()
-        .and_then(|text| {
-            let mut fields = text.split_whitespace();
-            Some(format!(
-                "{} {} {}",
-                fields.next()?,
-                fields.next()?,
-                fields.next()?
-            ))
-        })
-        .unwrap_or_else(|| "unavailable".to_string())
-}
-
 /// Runs the race to its end, draws every frame, and writes the result files.
 ///
 /// # Errors
@@ -197,7 +181,7 @@ pub(super) fn run(stem: &std::path::Path, rig: Rig<'_>) -> Result<()> {
     let mut gpu: Vec<Vec<f64>> = Vec::new();
     let mut frames: Vec<Frame> = Vec::new();
     let mut in_flight: VecDeque<wgpu::SubmissionIndex> = VecDeque::new();
-    let load_start = load_average();
+    let load_start = crate::benchmark::load_average();
     let begun = Instant::now();
     let mut previous: Option<Instant> = None;
     let mut finished = false;
@@ -346,7 +330,7 @@ pub(super) fn run(stem: &std::path::Path, rig: Rig<'_>) -> Result<()> {
         frame.gpu.clone_from(readings);
     }
     let wall = begun.elapsed().as_secs_f64();
-    let load_end = load_average();
+    let load_end = crate::benchmark::load_average();
 
     let csv = csv(&frames);
     let facts = Facts {
@@ -534,29 +518,10 @@ fn json(frames: &[Frame], facts: &Facts<'_>) -> String {
     put("format", "1".to_string());
     put("title", json_string(facts.title));
     put("git_hash", json_string(oag_net::GIT_HASH));
-    put(
-        "build",
-        json_string(&format!(
-            "{}, perf-probe {}",
-            if cfg!(debug_assertions) {
-                "debug assertions on"
-            } else {
-                "release"
-            },
-            cfg!(feature = "perf-probe")
-        )),
-    );
+    put("build", json_string(&crate::benchmark::report::build_label()));
     put(
         "adapter",
-        format!(
-            "{{\"name\": {}, \"type\": {}, \"backend\": {}, \"driver\": {}, \"driver_info\": {}, \"gpu_timestamps\": {}}}",
-            json_string(&a.name),
-            json_string(&format!("{:?}", a.device_type)),
-            json_string(&format!("{:?}", a.backend)),
-            json_string(&a.driver),
-            json_string(&a.driver_info),
-            facts.timestamps
-        ),
+        crate::benchmark::report::adapter_json(a, facts.timestamps),
     );
     put(
         "settings",

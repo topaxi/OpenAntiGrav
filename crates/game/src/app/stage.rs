@@ -742,6 +742,7 @@ impl Stage {
             resume_go: String::new(),
             track_panel,
             demo_overlay,
+            circuit: circuit.clone(),
             result_key,
             record_target,
             personal_best: None,
@@ -781,6 +782,7 @@ impl Stage {
             auto_replay: false,
             watching: false,
             demo: None,
+            benchmark: None,
         }))
     }
 }
