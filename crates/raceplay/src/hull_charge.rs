@@ -46,6 +46,23 @@ impl Shown {
     }
 }
 
+/// The `v` the craft update hands `Ship_UpdateDetonatorHullParams`: `0` below the ready count `lo`,
+/// else the charge mapped linearly from `law.ready_level` at `lo` to `1` at `hi` and held there
+/// (`0x000eb414`-`0x000eb4b0`, `0x002a3718`). The HUD's gauge is `0` at `lo`, so reading it
+/// lights the first shell one charge late.
+#[must_use]
+pub fn level(law: &DetonatorHullCharge, n: u32, lo: u32, hi: u32) -> f32 {
+    if n < lo {
+        return 0.0;
+    }
+    let span = hi.saturating_sub(lo);
+    if span == 0 {
+        return 1.0;
+    }
+    let t = (n - lo) as f32 / span as f32;
+    (law.ready_level + (1.0 - law.ready_level) * t).min(1.0)
+}
+
 /// The targets for the EMP's charge `v`: both `1` at `v >= 1`, `Charge1` alone over `0`, neither
 /// otherwise (`0x00107ef8`-`0x00107f18`).
 fn target(v: f32) -> (f32, f32) {
@@ -63,7 +80,8 @@ impl crate::Race {
     /// none. Steps what the last frame left; the first frame starts settled.
     pub(crate) fn hull_charge(&self, seconds: f32) -> Option<Shown> {
         let law = self.view.detonator_hull_charge?;
-        let v = self.core.sim.detonator_emp_gauge()?;
+        let (n, lo, hi) = self.core.sim.detonator_emp_counts()?;
+        let v = level(&law, n, lo, hi);
         let mut held = crate::drawable::lock(&self.view.hull_charge_shown);
         let shown = match *held {
             Some(shown) => shown.step(&law, v, seconds),
@@ -91,6 +109,29 @@ mod tests {
             (1.0, [1.0, 1.0]),
         ] {
             assert_eq!(Shown::settled(v, 0.0).charge, expect, "v {v}");
+        }
+    }
+
+    /// The ready count itself lights the first shell and only the full count the second; below
+    /// the ready count neither shows (read live on RPCS3: `n` 3 `(0, 0)`, 4 `(1, 0)`, 5 `(1, 0)`,
+    /// 8 `(1, 1)` with the disc's `4` and `8`). The HUD gauge, `0` at `n = 4`, would leave the
+    /// first shell dark there.
+    #[test]
+    fn the_first_shell_lights_at_the_ready_count_itself() {
+        for (n, expect) in [
+            (0, [0.0, 0.0]),
+            (3, [0.0, 0.0]),
+            (4, [1.0, 0.0]),
+            (5, [1.0, 0.0]),
+            (7, [1.0, 0.0]),
+            (8, [1.0, 1.0]),
+            (12, [1.0, 1.0]),
+        ] {
+            assert_eq!(
+                Shown::settled(level(&HD, n, 4, 8), 0.0).charge,
+                expect,
+                "n {n}"
+            );
         }
     }
 

@@ -682,6 +682,14 @@ impl crate::sim::RaceSim {
         Some(self.world.detonator.emp.gauge)
     }
 
+    /// The EMP's charge with its ready and full counts, or `None` off Detonator or without the
+    /// table: what the hull's plasma shells map (`hull_charge`).
+    #[must_use]
+    pub fn detonator_emp_counts(&self) -> Option<(u32, u32, u32)> {
+        let config = self.detonator.as_ref()?.emp.as_ref()?;
+        Some((self.world.detonator.emp.charge, config.lo, config.hi))
+    }
+
     /// The stage the HUD counts: stages laid, which is `1` at the opening stage and one more per
     /// lap up to the fourteenth (`detonator-hud.md`, "The stage counter"), or `None` off
     /// Detonator.
