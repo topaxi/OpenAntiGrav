@@ -1234,3 +1234,4 @@
 0x002869b0	function	ParticleInstance_UpdateEmission	72	ship-collision-fx.md
 0x0028c570	function	Random_RangeInt	78	ship-collision-fx.md
 0x000cae68	function	PlayerStatus_ApplyCameraOption	72	particle-triggers.md
+0x003b22a0	function	FunkLayer_DrawRadialBloom	72	zone-frame.md

@@ -271,11 +271,13 @@ makes a shared HD caller likely and a start-boost trigger plausible, but that is
   draws it: its two handles (`FunkLayer+0xa0`, `+0xa4`) are read only as the early-out test at
   the top of `FUN_003b4690` (if either is null, return). **Confidence 80.**
 - **`FunkLayerBloomRadial_fp`** (`0x92d000`) is a 14-tap radial blur toward `screenOrigin`
-  with weights summing to 10.4, and the runner binds only the radial *gate* (`+0xc4`), never
-  the blur (`+0xbc` and `+0xc0` are not bound anywhere in `FUN_003b4690`). The radial branch is
-  gated by `Radial bloom Enabled`, `0` on every circuit but `zone_1`, so it could not appear on
-  Talon's. Its strength term looks like a view-direction dot product cubed, a sun glare, but
-  the AltiVec decompile does not read cleanly: **below 70, not named.**
+  with weights summing to 10.4. The runner binds the radial gate (`+0xc4`) itself and the blur
+  (`+0xbc`, `+0xc0`) through its callee `FunkLayer_DrawRadialBloom` (`0x003b22a0`), so "never
+  bound" held for `FUN_003b4690`'s own body only. The branch is gated by `Radial bloom Enabled`,
+  `0` on every circuit but `zone_1`, and by a strength above zero: a sun glare (the view
+  direction's dot with the sun, cubed) outside a Zone frame, and in a Zone or Detonator race a
+  float that is `1.0` only while the craft is out of the race. Read in
+  [zone-frame.md](zone-frame.md), "The radial pass".
 - **`FunkLayerDof*`, `Copy*`** ran in no race frame. DoF is not chased here.
 
 ## Port

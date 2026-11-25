@@ -105,7 +105,8 @@ original's floor: its red is 5.1 to 9.5 where the strip's decoded red (`14 * L`)
    (`0x0a30`/`0x0a20` lane 2) at the race's scene pass. A doubled linear glow is about 1.33 times brighter
    after the encode: it would close part, not all, of the gap.
 2. **A band-independent floor term**: the original's floor red (5-9) is not the strip. The Track Fog lerp
-   (`1.8 0.141 0.007`) and the Detonator bloom arm (radial `0.1`, unwired in ours) are the named candidates.
+   (`1.8 0.141 0.007`) is the named candidate; the Detonator arm's radial bloom is not (it draws only behind a craft out of
+   the race, [zone-frame.md](zone-frame.md), "The radial pass").
 3. **Live confirmation of this page**: one RPCS3 frame dump in a Detonator race (`scripts/rpcs3_draw_hook.py`),
    the track-surface draw's unit that binds `*(0x00c7dfb0 + 0x32b0)`'s offset: its `SET_TEXTURE_ADDRESS` should
    read `0x60730303`.
