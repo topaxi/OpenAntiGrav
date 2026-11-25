@@ -31,7 +31,8 @@
 //! the cut, the hand-back to the chase camera on the camera's own 8 s clock, and on 2048 and
 //! Omega the hold view after it. Their stations are the `Camera` nodes of the circuit's
 //! `track.vex`, read whether or not the title draws the circuit's effects. A Zone end whose
-//! [`oag_title::destroyed::ZoneEnd::orbit_camera`] is set is the close orbit instead.
+//! [`oag_title::destroyed::ZoneEnd::orbit_camera`] is set is the orbit round the craft instead, from the
+//! chase eye in.
 //!
 //! **Chosen, not measured:**
 //!
@@ -81,7 +82,43 @@ impl Default for DestroyCamera {
     }
 }
 
+/// How far outside the hull's box the Zone end orbit's eye is kept while the craft is drawn: the near
+/// plane (`1.0`), so no face of the hull is cut away in front of the lens. **Chosen, not measured**: it
+/// is a departure, the eased eye passes through the hull's side near 1.8 s on a settled chase rig and
+/// the original's own frames (28 frames a second on RPCS3) never did.
+const ORBIT_CLEARANCE: Vec3 = Vec3::splat(1.0);
+
+/// `eye` pushed out along its line from the craft's centre to the surface of the box `half` around it,
+/// when it is inside.
+fn outside_the_hull(eye: Vec3, centre: Vec3, orientation: Quat, half: Vec3) -> Vec3 {
+    let local = orientation.inverse() * (eye - centre);
+    let fit = |l: f32, h: f32| {
+        if l.abs() < f32::EPSILON {
+            f32::INFINITY
+        } else {
+            h / l.abs()
+        }
+    };
+    let reach = fit(local.x, half.x)
+        .min(fit(local.y, half.y))
+        .min(fit(local.z, half.z));
+    if reach > 1.0 && reach.is_finite() {
+        centre + orientation * (local * reach)
+    } else {
+        eye
+    }
+}
+
 impl DestroyCamera {
+    /// Forgets the cut, so the next tick the player is out cuts again from where the chase rig is.
+    pub(super) fn restart(&mut self) {
+        self.active = None;
+        self.orbit = None;
+        self.hold_eye = None;
+        self.released = false;
+        self.held = false;
+    }
+
     pub(super) fn new(stations: Vec<Station>, focus_rate: f32) -> Self {
         Self {
             stations,
@@ -171,6 +208,11 @@ impl RaceView {
             oag_physics::CraftState::Destroyed | oag_physics::CraftState::Eliminated
         );
         let mut cuts = 0;
+        // The chase rig's own eye, whatever view the player was in: the cockpit's is bolted to the hull.
+        let orbit_cut_from = (out && orbits && self.destroy_camera.orbit.is_none()).then(|| {
+            self.camera
+                .eye(self.camera_target(core), &self.chase_params)
+        });
         let camera = &mut self.destroy_camera;
         camera.clock += dt;
         let handback_due = law
@@ -191,17 +233,24 @@ impl RaceView {
             return;
         }
         if orbits {
-            let orbit = match &mut camera.orbit {
-                Some(orbit) => {
-                    orbit.advance(dt, subject);
+            let orbit = match (&mut camera.orbit, orbit_cut_from) {
+                (Some(orbit), _) => {
+                    orbit.advance(dt, subject, ship.physics.body.orientation);
                     *orbit
                 }
-                None => {
+                (None, chase) => {
                     cuts += 1;
-                    *camera.orbit.insert(Orbit::start(subject))
+                    let chase = chase.unwrap_or(subject);
+                    *camera.orbit.insert(Orbit::start(subject, chase))
                 }
             };
-            camera.active = Some(orbit.pose(ship.physics.body.orientation));
+            let mut pose = orbit.pose(ship.physics.body.orientation);
+            if orbit.t < oag_render::camera::destroy::orbit::FAST_SECS {
+                let half =
+                    oag_physics::pair::half_extents(&ship.handling.dimensions) + ORBIT_CLEARANCE;
+                pose.eye = outside_the_hull(pose.eye, subject, ship.physics.body.orientation, half);
+            }
+            camera.active = Some(pose);
             camera.cuts = camera.cuts.wrapping_add(cuts);
             return;
         }

@@ -185,7 +185,8 @@ pub const HULL_SCALE: f32 = 0.75;
 
 /// `<Misc width height length>` as half-extents on those axes, scaled by
 /// [`HULL_SCALE`].
-fn half_extents(size: &Dimensions) -> Vec3 {
+#[must_use]
+pub fn half_extents(size: &Dimensions) -> Vec3 {
     Vec3::new(size.width, size.height, size.length) * (0.5 * HULL_SCALE)
 }
 

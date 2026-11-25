@@ -96,7 +96,7 @@ an **orbit**. The per-frame law is `Camera_UpdateOrbitView_q` (`0x000ae6c0`, dis
 
 | Row | What | Law (HD) | Address | Conf. |
 | --- | --- | --- | --- | ---: |
-| Z2a | **Enter** | `cam+0x48 &= ~2`. Focus `cam+0x390` = the craft's body position. Yaw `+0x2a4` = pitch `+0x2a0` = 0, clock `+0x2c4 = +0x3a0` (a resume time). If `+0x3a0 > 0`: yaw and pitch from `+0x3a4`/`+0x3a8`, field `+0x288 = 35.0`, view field `+0x22c = +0x230 = 65.0`, field rate `+0x234 = 0.01`, distance `+0x238 = 0.5`, distance target `+0x23c = 4.0`, distance rate `+0x240 = 0.02` (block `+0x0..+0xc`). Otherwise it looks up `"AI track data"` within `10000.0` through `0x000a97f0`. Ghidra marks that function no-return, and it is unread. Omega's enter (`0x01382720` case 2) writes the same `35.0`, `4.0`, `65/65`, `0.01`, `0.5`, `0.02` on **both** paths, and picks the spin direction `+0x5fc` from the track's direction at the craft, or at random. HD's first-entry branch is very likely the same. | `0x000aa090`; Omega `0x01382720` | 65 |
+| Z2a | **Enter** | `cam+0x48 &= ~2`. Focus `cam+0x390` = the craft's body position. Yaw `+0x2a4` = pitch `+0x2a0` = 0, clock `+0x2c4 = +0x3a0` (a resume time). If `+0x3a0 > 0`: yaw and pitch from `+0x3a4`/`+0x3a8`, field `+0x288 = 35.0`, view field `+0x22c = +0x230 = 65.0`, field rate `+0x234 = 0.01`, distance `+0x238 = 0.5`, distance target `+0x23c = 4.0`, distance rate `+0x240 = 0.02` (block `+0x0..+0xc`). Otherwise it looks up `"AI track data"` within `10000.0` through `0x000a97f0`. Ghidra marks that function no-return, and it is unread. Omega's enter (`0x01382720` case 2) writes the same `35.0`, `4.0`, `65/65`, `0.01`, `0.5`, `0.02` on **both** paths, and picks the spin direction `+0x5fc` from the track's direction at the craft, or at random. **Read live on HD (2026-11-24, "Measured on RPCS3"): the object's `+0x238` does start at about `0.5`** (0.83 at its fourth frame), `+0x23c` = 5.0, `+0x240` = 0.02, `+0x234` = 0.01, `+0x288` = 35.0, `+0x3ac` = 1 (spin positive); the eye that reaches the screen is nevertheless far at the cut (below). | `0x000aa090`; Omega `0x01382720` | 85 (the object's values, read live); the eye's ease: fitted, 45 |
 | Z2b | **Spin** | Clock `t += dt`. Yaw `+= dt x s x k`, wrapped to `2 pi`, with `s = 9 t + 1` for `t < 2.5` (block `+0x14`, `+0x18`, `+0x1c`) and `0.5` after (`+0x20`), and `k = +0.1` if the byte `+0x3ac` is set, else `-0.1`. The yaw rate climbs from 0.1 to 2.35 rad/s over the first 2.5 s, then drops to 0.05 rad/s. For `t < 2.5` the pitch `+0x2a0` also turns, at `0.35` rad/s (block `+0x34`). | `0x000ae710`-`0x000ae7c4`, `0x000aede0`-`0x000aee08` | 65 |
 | Z2c | **Look-at** | `focus += (craft - focus) x 0.6` per frame (block `+0x24`). | `0x000ae7c8`-`0x000ae7fc` | 70 |
 | Z2d | **Eye** | `R = Ry(pi) . Ry(yaw) . Rx(-0.7) . Rx(pitch)` (block `+0x28` = `-0.7` rad), applied on the craft's body rotation. `Matrix_RotationY` (`0x006ca868`) and `Matrix_RotationX` (`0x006ca948`), both read whole. Eye = `focus + normalize(row) x dist`, where the row is the composed matrix's row the code takes at `0x000aebd8`; which row that is, is read from register flow only (55). | `0x000ae800`-`0x000aec50` | 60 |
@@ -145,18 +145,70 @@ camera's subject sits in states 5, 6 and 8, so W8 holds the view still until the
 - **No look-at wobble** (D5, Open 1): the noise's time source and tables are unread, so the look-at is the craft itself.
 - **The camera clock** (H1): free-running from the race's first tick, reset at 8 s as the original's does in mode 0; what starts the original's clock (`0x000ab2d8`) is unread, so the phase at the blast, and so how long the station view lasts (0 to 8 s), is ours.
 - **The hand-back subject** (H1, Open 2): the player's own wreck, as read for a single player; `RaceManager+0xe8` is unread.
-- **The orbit's first entry** (Z2a, Open 3): the spin direction is fixed positive, the eye direction is the craft's rear axis turned by `Ry(yaw) Rx(-0.7 + pitch)` (which row of the composed matrix the original takes is unread), the up is the craft's.
+- **The orbit's first entry** (Z2a, Open 3): the eye starts at the chase eye and eases to the orbit at a fitted 0.01 a frame ("Measured on RPCS3"), the spin direction is fixed positive (read positive on Vineta K), the eye direction is the craft's rear axis turned by `Ry(yaw) Rx(-0.7 + pitch)` (which row of the composed matrix the original takes is unread), the up is the craft's.
 - **The hold view** (W8, Open 4): eye frozen at the chase camera's at the hand-back (or at the cut with no station), look-at the craft plus `7.5 x` its velocity as the sim holds it, field 65; the track-section tie `0x8121476a` is unread and left out. Omega's substep constant is HD's (view `0x01383a10` unread). 2048's pick `0x812199c0` is unread: 2048 takes Omega's no-station fallback.
 - **2048's Zone end** inherits HD's orbit (its twin calls `0x81218cd8`, unread); Omega's enter writes the same constants.
 
 Not run against the original: RPCS3 belonged to another lane, so there is no live pair; frames are ours, judged against the law, not a capture.
+
+## Measured on RPCS3: the Zone end orbit (2026-11-24, `zone-orbit-clip`)
+
+**Question.** Does our Zone end orbit ever put the eye inside the hull (`destroy-cameras-wire` saw it 0.5 off the craft at the cut and about 2.5 out at 0.5 s, inside a hull 13 units long)? **Falsifier written first:** an eye distance from the craft near 0.5 to 2.5 at the cut and 0.5 s, or the original's frames showing the craft from inside, would say the original does the same. Neither happened.
+
+**Method.** RPCS3 0.0.43-20574 (own config copy, Null audio, Xvfb `:93`), HD EU, Racebox Zone on the first circuit (Vineta K), Feisar, a saved state at the grid. `scripts/emu-hd-zone-walk.sh` builds the grid, `scripts/emu-save-state.sh` saves it, `scripts/emu-restore-state.sh` restores it with the GDB stub, `scripts/rpcs3-hd-zone-end-orbit.py` does the rest: taps START RACE, at speed writes the player's shield `ship+0x5fa0` to 0, polls `ship+0x5fa4` for state 4, pauses at once and steps the game with resume/pause chosen from the craft's age `ship+0x6a30` (`+= dt`, it agreed with the world clock to 3 ms over 0.48 s). At each pause: a frame through `grab_with_clock` after 2.5 s for the RSX to present, and the pushbuffer camera (`ps3_pose.pick_camera`'s candidates; a candidate is the camera where its eye is unique to the shot). The distance is the eye to the craft's body position (`body+0x200`).
+
+**Frames** (run 1, ages since the blast `0.00 0.25 0.53 0.98 1.60 2.52`; paired with ours at ticks 400+15, 30, 60, 150 of `--mode zone --force-wreck 400:0`, 960x540):
+
+| Age since the blast | What the original shows |
+| --- | --- |
+| 0.25 s | The chase view still: the textured craft from behind and above, whole in the frame, the track around it |
+| 0.53 s | The same view turned a little, the craft still whole and textured |
+| 0.98 s | The craft seen whole from outside at an angle, under a wireframe shell, the circuit visible |
+| 2.52 s | The wire shell filling the middle of the frame from outside, the eye below it, no circuit |
+| 3.9 and 5.6 s | Debris flung around the eye (state 6: the craft is gone) |
+
+**Distances** (run 2, same state, same circuit; the blast eye was 13.87 in run 1 and 13.88 in run 2, to the digit):
+
+| Age (s) | State | Eye to craft | `5 + 8.88 x 0.98^n` at n frames |
+| ---: | ---: | ---: | --- |
+| 0.00 | 4 | 13.88 | n = 0: 13.88 |
+| 1.37 | 5 | 9.12 | n = 38 |
+| 1.55 | 5 | 8.91 | n = 41 |
+| 2.50 | 5 | 6.96 (and 9.43, a second unique eye) | n = 75 |
+| 3.85 | 6 | 8.17 | the craft is no longer drawn |
+
+The object's clock steps 1/30 s a row: RPCS3 runs the game at about 28 to 30 frames a second here, and the per-frame eases (0.02, 0.01, 0.6) are therefore half as fast per second as on a console at 60, which is what our 60 Hz tick gives. **Z2e's "per frame, not `dt`-scaled" is confirmed** by the object's own `dist` (0.83 at the fourth frame is `5 - 4.5 x 0.98^4`).
+
+**The object, read per frame** (second pass, same state; `scripts/rpcs3-hd-zone-orbit-camera.py`). The camera object was found at `0x306efe90` by pausing at the blast and scanning for its rates (`+0x234` = 0.01, `+0x240` = 0.02, mode `+0x40` = 2); rows are one per game frame (the clock `+0x2c4` steps 1/30 s, RPCS3's rate here), 210 rows to 7 s:
+
+| Field | Read | Law (Z2) |
+| --- | --- | --- |
+| mode `+0x40`, field `+0x288`, spin byte `+0x3ac` | 2, 35.0, 1 | 2, 35.0, positive: **confirmed** (this circuit; Omega picks it by track or at random) |
+| `+0x238` dist | 0.83 at clock 0.133 (4th frame), 1.99 at 0.65, 3.14 at 1.45, 4.03 at 2.50, then 3.87 .. 3.07 at 2.76 .. 6.98 | `0.5 -> 5.0` at 0.02 a frame to 2.5 s, then toward 3.0: **confirmed**; targets `+0x23c` read 5.00 then 3.00, rate `+0x240` 0.020 |
+| `+0x22c` fov | 63.2 at 0.133, 53.96 at 0.92, 41.4 at 2.50, then up: 58.99 at 6.98 | `65 -> 20` then `-> 65` at 0.01 a frame (targets `+0x230` 20.0 then 65.0, rate `+0x234` 0.010): **confirmed** |
+| `+0x2a4` yaw | 3.027 at 2.50 s, then 3.251 at 6.98 | `0.1 (9t + 1)` for 2.5 s integrates to 3.06, then 0.05 rad/s (0.224 / 4.48 s): **confirmed** |
+| `+0x2a0` pitch | 0.864 at 2.50, then constant | `0.35 t` for 2.5 s: **confirmed** (0.875) |
+| `+0x390` focus | the craft's position within 1.3 units at 0.07 s, 0.5 at 1.8 s, exact from 3.5 s | `0.6` a frame to the craft: **confirmed** (the craft's own motion at 70 units/s is the residue) |
+| state `+0x5fa4` | 5 to 2.50 s, 6 after, mode stays 2 | Z2f: **confirmed** |
+
+So Z2b to Z2e hold as written (confidence 85 now, from 62 to 65). What the page's law did not say is why the eye on the screen is far: the pushbuffer eye is 13.9 from the craft at the cut and 9.1, 8.9 and 7.0 out at 1.4, 1.6 and 2.5 s, while the object's `dist` is 0.5, 3.1, 3.3 and 4.0. The eye is in no field of the object's first `0x800` bytes (no vec3 there follows it; the two vec3s `+0x250`/`+0x260` hold the craft's position at the blast and stay put). The modelled orbit eye `focus + dir * dist` points the same way as the read eye (behind and above, about 20 degrees apart); only the length differs. A low-pass on the eye's offset from the focus, `off += (dir * dist - off) * 0.01` a frame from the chase eye's offset, run over the read rows, gives 10.2, 9.6, 9.2 and 6.3 against the read 10 to 11, 9.1, 8.9 and 7.0 at 0.6, 1.37, 1.55 and 2.5 s (rates 0.005, 0.015 and 0.02 give 12.8 / 11.5 / 11.3 / 9.4, 8.1 / 7.5 / 4.1 and 6.8 / 6.2 / 2.6). That is the ease ours uses.
+
+**The cause.** Ours placed the eye `focus + dir * dist` with `dist` starting at 0.5, so the eye sat 0.5 off the craft at the cut and 2.5 out at 0.5 s, inside the hull; the original's eye is carried in from the chase eye and is outside throughout. Confidence **85** for the object's law, **45** for the eye's ease (a fit to four distances, one circuit, one speed, one rate tried to two digits; the code that makes it is unread, the start branch `0x000a97f0` too).
+
+**The fix** (`oag_render::camera::destroy::orbit::Orbit`): `dist` starts at 0.5 as read, and the eye's offset from the focus starts at the chase eye's offset and eases toward `dir * dist` at **0.01 a frame**. **Chosen, not measured:** that ease (above) and its start being the chase eye's offset; the eye direction's row (Z2d, 55); the hull box in the test (`5.5 x 3.5 x 13` scaled by `HULL_SCALE`, a Pulse-sized fixture, not HD's `<Misc>`). The test `hd_zone_end_orbit_never_puts_the_eye_inside_the_hull` fails without the fix (tick 0, the eye on the craft) and passes with it; `oag_physics::pair::half_extents` is now public for it. The first pass's "start at the chase distance and ease `dist` in at 0.02" fitted three distances by coincidence of rate and was replaced by this once the object's own `dist` was read.
+
+**Review follow-ups (2026-11-24).** (1) The cut latches the chase rig's own eye (`Chase::eye`), not `tick_view_unshaken`, which is the cockpit's bolted eye in the cockpit view; what the original does when the player dies in the cockpit view is **not read** (the capture was in an external view). (2) A seek (`restore_for_viewing`) snaps the chase rig to the restored craft and restarts the destroy camera, so the orbit does not start hundreds of units out; in live play the rig's eye is one tick old at the cut. (3) Tests run on HD's 8.7-unit Close rig (the fixture's 4.1 made the first test a tautology) and on a craft flying at 0, 19, 93 and 240 units/s. **A departure the tests found:** with the eased eye on HD's rig the eye passes through the hull's box near 1.8 s (stationary craft), so while the craft is drawn (first 2.5 s) the eye is pushed out to the box's surface plus the 1.0 near plane (`ORBIT_CLEARANCE`, **chosen, not measured**; the original's own 28 frames-a-second frames never showed it, and a console at 60 Hz was not read). The eye's ease is also kept at or beyond the orbit radius.
+
+**What still differs in the frames.** Ours draws the white shell's wire from the first frame; the original shows the textured craft at 0.25 and 0.53 s and the wire from about 1 s (Z8's `1 - max(0.4 timer, 0)` animation time, or its material, not ported that way). At 1.0 s ours is closer than the original's 1.0 s because of the frame rate above, not a law.
+
+**2048 and Omega.** Both inherit `ZoneEnd::orbit_camera`, so the fix applies to them by construction. **Checked, applies, not measured live** (no emulator for either here): Omega's enter (`0x01382720` case 2) is read to write `0.5` on both paths, the same constant HD's read branch shows, and HD's live eye contradicts it, so either Omega's first entry differs from the read or the same unread branch carries the chase eye in. 2048's twin `0x8121963a` is read to write the same constants. A live pair needs Omega on shadPS4 or 2048 on Vita3K.
 
 ## Ready to wire (before 2026-11-23)
 
 | Title | Mode | Eye | Look-at | Field | Motion | Hands back | Conf. |
 | --- | --- | --- | --- | --- | --- | --- | ---: |
 | HD | 8 | the circuit's `Camera` node whose aim is nearest the wreck (D1, D2) | the wreck + `0.015 d` noise wobble, frozen in state 6 (D5) | `2 atan(17.5 / d)` target, from `framing(60) + rand(-10, 20)` (D3) | eased in `trunc(6000 dt)` substeps at `0.06 x rand(0.5, 2)` and class rate `x rand(0.5, 1)` (D4, D6) | the 8 s camera clock, 0 to 8 s after the cut, to the chase camera on the player's own wreck in single player (H1); the race end does not cut (H3) | 70 |
-| HD Zone | 2 | orbit `dist` 0.5 -> 5 -> 3 units off the craft, `Ry(pi) Ry(yaw) Rx(-0.7) Rx(pitch)` on the body (Z2d) | the craft, `0.6` per frame (Z2c) | 65 -> 20 (2.5 s) -> 65, `0.01` per frame (Z2e) | yaw `+-0.1 (9t + 1)` rad/s for 2.5 s, then `+-0.05`; pitch `0.35` rad/s for 2.5 s (Z2b) | results at 5.5 s (Z2f) | 62 |
+| HD Zone | 2 | orbit `dist` 0.5 -> 5 -> 3 (read live), the eye carried in from the chase eye at a fitted 0.01 a frame, `Ry(pi) Ry(yaw) Rx(-0.7) Rx(pitch)` on the body (Z2d) | the craft, `0.6` per frame (Z2c) | 65 -> 20 (2.5 s) -> 65, `0.01` per frame (Z2e) | yaw `+-0.1 (9t + 1)` rad/s for 2.5 s, then `+-0.05`; pitch `0.35` rad/s for 2.5 s (Z2b) | results at 5.5 s (Z2f) | 62 |
 | 2048 | 9 | as HD mode 8 | as HD | as HD | as HD | the 8 s clock to chase (subject as HD's H1); then hold mode 8 while the chase subject is wrecked or resetting (W6, W8) | 70 |
 | Omega | 9 | as 2048 | as 2048 (view not read: W4, W5) | as 2048 | as 2048 | as 2048 (W6, W8) | 68 |
 
@@ -220,4 +272,4 @@ Not renamed: `0x000ab2d8` (a second constructor-shaped writer of `+0x4c`/`+0x28c
    `+0x250`/`+0x260`/`+0x270`, and the craft's `+0x5fa4`. Rows D3, D4 and D6 predict the
    field's first steps; H1 predicts the frame mode 0 returns, at the camera clock's next 8 s.
    For Z2, the same in a Zone race with `r4 == 2`, logging `+0x2a4`, `+0x2a0`, `+0x238`,
-   `+0x22c` and `+0x2c4`.
+   `+0x22c` and `+0x2c4`. **Z2's eye distance was read live 2026-11-24** ("Measured on RPCS3: the Zone end orbit"); the camera object itself was not found (the `+0x1f0` target scan matched no object with a mode field of 2), so yaw, pitch, field and clock are unread live, and mode 8's rows are still unread.

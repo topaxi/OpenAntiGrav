@@ -76,6 +76,13 @@ impl Race {
             self.core.outcome.results = None;
             self.core.outcome.wreck_ended_tick = None;
             self.view.restores = self.view.restores.wrapping_add(1);
+            // The chase rig is sprung from the tick it was last advanced at, and a seek puts the craft
+            // anywhere; the destroy camera latches the rig's eye when it cuts, so both start over.
+            self.view.camera = oag_render::camera::chase::Chase::snapped(
+                self.view.camera_target(&self.core),
+                &self.view.chase_params,
+            );
+            self.view.destroy_camera.restart();
             self.settle_poses();
         }
     }
