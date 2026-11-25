@@ -213,9 +213,23 @@ fn record(title: &str) -> Option<(race::Race, Replay, oag_replay::ShotRecord)> {
 /// reader's own), applying the recorded events between the same two ticks, and checks every
 /// stored hash.
 fn verify(title: &str, replay: &Replay) -> Result<u64, oag_replay::Desync> {
-    let source = source(title).expect("source present");
-    let mut race = race::rebuild(&replay.header, &source.display().to_string())
-        .unwrap_or_else(|e| panic!("{title}: rebuilding from the header: {e:#}"));
+    verify_on(title, replay, true)
+}
+
+/// [`verify`] for a replay that has to be refused: the simulation half rebuilds it and the
+/// desync is the state's, so the whole load is not paid again.
+fn desyncs(title: &str, replay: &Replay) -> Result<u64, oag_replay::Desync> {
+    verify_on(title, replay, false)
+}
+
+fn verify_on(title: &str, replay: &Replay, whole: bool) -> Result<u64, oag_replay::Desync> {
+    let source = source(title).expect("source present").display().to_string();
+    let mut race = if whole {
+        race::rebuild(&replay.header, &source)
+    } else {
+        rebuild_sim(&replay.header, &source)
+    }
+    .unwrap_or_else(|e| panic!("{title}: rebuilding from the header: {e:#}"));
     Verifier::run(replay, race.core.sim.state_hash(), |events, inputs| {
         for event in events {
             race.core
@@ -370,7 +384,7 @@ fn tamper(title: &str, mut replay: Replay) {
     let index = usize::try_from(tick).expect("fits");
     let snapshot = &mut replay.inputs[0][index];
     snapshot.stick_x = if snapshot.stick_x > 0.0 { -1.0 } else { 1.0 };
-    let desync = verify(title, &replay).expect_err("a changed stick must desync");
+    let desync = desyncs(title, &replay).expect_err("a changed stick must desync");
     println!(
         "{title}: tampered tick {tick}, desync reported at {}",
         desync.tick
@@ -658,7 +672,7 @@ fn mid_race_events(title: &str) {
         stripped
             .events
             .retain(|e| keep.is_some_and(|kind| e.kind() == Some(kind)));
-        let desync = verify(title, &stripped)
+        let desync = desyncs(title, &stripped)
             .expect_err(&format!("{title}: a replay without {dropped} must desync"));
         println!("{title}: without {dropped}, desync at {}", desync.tick);
     }
