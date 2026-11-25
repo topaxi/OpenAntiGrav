@@ -271,18 +271,36 @@ fill it costs).
 `PartRender_FlushDraws` and `PartRender_QueueDraw` (engine-trail.md, 70 each) are confirmed by
 the live frames' state on every point this page lists. Their rows are left as that page set them.
 
+## Wired
+
+2026-11-25. `oag_fx::psys`'s `near` module runs the three rules on every billboard of an effect
+the title's data puts under the law (`oag_title::Effects::near_law`: HD, 2048 and Omega,
+**measured**; Pulse and Pure none). The cap is the emitter's own `+0xc80`, read by `oag-pob`
+([pob.md](../../../formats/pob.md)). Which parts of ours it reaches and does not:
+
+- Billboards (render modes 1 to 4), the heat-haze quads and the quads a mod's shader draws.
+  Streaks (modes 5 and 6) are left as they are.
+- The collision sparks, the race's effect stage and the scenery stage. **Not** the weather field
+  and the lens glass: no title with the law authors weather.
+- The effects loaded from the title's own files. A mod's parametric effect, and a burst lent to a
+  title without the law (the trail hit), carry none.
+- Sprite templates cull and fade; a template record is not an emitter and has no `+0xc80`, so it
+  has no cap. That the original's template draw goes through the same routine is not read.
+- **Chosen, not measured:** the depth is taken where the particle is drawn between two simulation
+  ticks, since ours draws at display rate and the originals at one position a frame.
+
 ## Cross-title
 
-- **Omega: checked, applies, not wired.** Its `Particle_PushQuadBatch` carries the same cull,
-  fade and cap (above), and its effect files carry `+0xc80`
-  ([heat-haze.md](../ps4-omega-eu/heat-haze.md) reads 1.0 on the haze emitters). Its draw passes
+- **Omega: ported.** Its `Particle_PushQuadBatch` carries the same cull, fade and cap (above),
+  and its billboard emitters author `+0xc80`
+  (`crates/fx/tests/psys_omega_ground_truth.rs`). Omega's one extra term, the sphere fade behind
+  `instance + 0x71` (radius 290), is not wired: what sets the flag is unread. Its draw passes
   differ from HD's (`Particle_DrawBatchesForPass`: passes 8, 9, 10); whether one of them is a
   reduced target was not read.
-- **2048: not read.** A scan of its executable (patch 1.04) for the float `-1/3` or `1/3` as a
-  literal found neither, which says little: the routine may build the constant another way. Its
-  effect files are Omega's lineage. Reading its quad builder is open.
-- **Pulse, Pure (PSP, PS2): not read here.** Their records end at `0x9b8`, before `+0xc80`, so
-  the cap as a field does not exist there. Whether their builder has a near rule is open.
+- **2048: ported.** Both its quad builders carry the law
+  ([particle-near-law.md](../vita-2048-eu-v104/particle-near-law.md)).
+- **Pulse, Pure (PSP, PS2): not checked.** Their records end at `0x9b8`, before `+0xc80`, so the
+  cap as a field does not exist there. Whether their builder has a near rule is open.
 
 ## Reproducing
 
@@ -308,7 +326,9 @@ particle spans (array draws) need this extra step.
 
 ## Open
 
+- A matched original frame with the camera inside a CraftBlast: the picture check of the wired
+  law.
 - A real PS3's frame at a near blast: how far the width level moves, and whether it holds 60.
 - What modes 1 and 2 of `+0xc8c` did where they were live, if any build has them.
-- Omega's passes 8 to 10 by target size; 2048's and the PSP builds' quad builders.
+- Omega's passes 8 to 10 by target size; the PSP builds' quad builders.
 - `0x1fec`, one enable the flush sets to 1, was not identified.
