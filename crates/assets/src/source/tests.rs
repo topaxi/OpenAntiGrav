@@ -162,6 +162,7 @@ const TITLE: &Title = &Title {
         floor_arms_steer_to_ride_point: oag_title::pre_race::Sourced::chosen(false),
         floor_arms_ride_launch_normal: oag_title::pre_race::Sourced::chosen(false),
         plasma_release_at_display_scale: oag_title::pre_race::Sourced::chosen(true),
+        rocket_launch_at_display_scale: oag_title::pre_race::Sourced::chosen(true),
         own_craft_box_hides_track: oag_title::pre_race::Sourced::chosen(
             oag_title::weapons::OwnCraftBox::PlasmaWindow,
         ),

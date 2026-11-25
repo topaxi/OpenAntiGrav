@@ -33,9 +33,13 @@ fn start() -> Option<race::Race> {
     Some(race::Race::start(loaded.setup, loaded.view, loaded.modules))
 }
 
+/// Venom's authored Rocket speed on HD, 800 km/h, as units per second.
+const ROCKET_CLASS_SPEED: f32 = 800.0 / 3.6;
+
 /// Where one shot went: per slot, the furthest spline sample it reached while within the
-/// track's edges, and where it ended.
+/// track's edges, where it ended and how far its first tick took it from the launch point.
 struct Path {
+    first_steps: Vec<f32>,
     furthest: Vec<usize>,
     ends: Vec<Vec3>,
     left_the_track: bool,
@@ -54,6 +58,7 @@ fn fire_onto_the_bank(mut race: race::Race, weapon: Weapon) -> Path {
     let mut seen: Vec<Option<(usize, Vec3)>> =
         vec![None; race.core.sim.world.projectiles.slots.len()];
     let mut furthest = vec![0; seen.len()];
+    let mut first_step: Vec<Option<f32>> = vec![None; seen.len()];
     let mut left_the_track = false;
     for tick in 0..400 {
         let fire = tick == 2;
@@ -87,6 +92,7 @@ fn fire_onto_the_bank(mut race: race::Race, weapon: Weapon) -> Path {
                 left_the_track = true;
             }
             furthest[slot] = furthest[slot].max(index);
+            first_step[slot].get_or_insert((p.position - pose.position).length());
             seen[slot] = Some((index, p.position));
         }
         if tick > 10 && slots.iter().all(|p| p.kind != Some(weapon)) {
@@ -95,6 +101,7 @@ fn fire_onto_the_bank(mut race: race::Race, weapon: Weapon) -> Path {
     }
     let fired: Vec<usize> = (0..seen.len()).filter(|&i| seen[i].is_some()).collect();
     Path {
+        first_steps: fired.iter().map(|&i| first_step[i].unwrap()).collect(),
         furthest: fired.iter().map(|&i| furthest[i]).collect(),
         ends: fired.iter().map(|&i| seen[i].unwrap().1).collect(),
         left_the_track,
@@ -121,12 +128,27 @@ fn an_hd_plasma_rides_moa_thermas_bank_to_where_the_originals_ended() {
     );
 }
 
+/// HD orthonormalises the launch matrix, so a Rocket leaves at the class speed with no 0.75
+/// launch hold: the original's first update moved 222.22 units/s
+/// (`docs/ghidra/functions/ps3-hdfury-eu/plasma.md`, "The Rocket's launch scale").
+fn the_first_tick_is_a_class_speed_step(path: &Path) {
+    let expected = ROCKET_CLASS_SPEED / 60.0;
+    for step in &path.first_steps {
+        assert!(
+            (step - expected).abs() < 0.1,
+            "a rocket's first tick took it {step} units, wanted {expected} ({:?})",
+            path.first_steps
+        );
+    }
+}
+
 #[test]
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
 fn hd_rockets_ride_moa_thermas_bank_past_sample_668() {
     let Some(race) = start() else { return };
     let path = fire_onto_the_bank(race, Weapon::Rocket);
     assert_eq!(path.ends.len(), 3, "a volley of three");
+    the_first_tick_is_a_class_speed_step(&path);
     for (furthest, end) in path.furthest.iter().zip(&path.ends) {
         assert!(
             *furthest >= 668,

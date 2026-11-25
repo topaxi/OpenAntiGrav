@@ -373,6 +373,7 @@ fn setup(handling: Handling) -> SimSetup {
         floor_arms_steer_to_ride_point: true,
         floor_arms_ride_launch_normal: false,
         plasma_release_at_display_scale: true,
+        rocket_launch_at_display_scale: true,
         own_craft_box_hides_track: oag_title::weapons::OwnCraftBox::Falls,
         reset_triggers: oag_race::recovery::ResetTriggers::PULSE,
         contact_cues: oag_title::contact_cue::ContactCues::Rearmed,

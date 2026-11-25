@@ -93,6 +93,7 @@ fn a_volley_from_the_originals_pose_is_laid_at_the_craft_and_cruises_at_the_clas
         0,
         world.ships[0].weapon_counts.rockets,
         world.ships[0].launch_normal(),
+        race.core.sim.rocket_release(),
     )
     .expect("Venom is authored");
     assert_eq!(fired, projectile::ROCKET_SHOTS);
