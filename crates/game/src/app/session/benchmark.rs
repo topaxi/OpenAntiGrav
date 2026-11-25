@@ -546,7 +546,7 @@ fn write_result(report: &Report) -> Option<String> {
         std::fs::create_dir_all(&dir)?;
         let json = dir.join(format!("{key}.json"));
         crate::profile::write(&json, report.json())?;
-        crate::profile::write(&dir.join(format!("{key}.csv")), report.csv())?;
+        crate::profile::write(dir.join(format!("{key}.csv")), report.csv())?;
         Ok(json.display().to_string())
     };
     match write() {

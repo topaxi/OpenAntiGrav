@@ -283,7 +283,7 @@ impl Session {
             u64::try_from(elapsed.as_nanos()).unwrap_or(u64::MAX)
         };
         let steps = self.clock.advance(nanos);
-        self.record_benchmark_frame(frame_seconds, u32::try_from(steps).unwrap_or(u32::MAX));
+        self.record_benchmark_frame(frame_seconds, steps);
         let dt = f64::from(self.clock.rate().dt());
 
         // Before the snapshot below, because it is what makes the snapshot
