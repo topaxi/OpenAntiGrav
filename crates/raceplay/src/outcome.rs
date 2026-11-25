@@ -30,6 +30,7 @@ pub struct Outcome {
     /// The team id each slot flies - [`SimSetup::slot_teams`](crate::SimSetup::slot_teams).
     pub(crate) slot_teams: Vec<String>,
     /// The same by the string table's key - [`SimSetup::row_teams`](crate::SimSetup::row_teams).
+    #[cfg_attr(not(feature = "view"), allow(dead_code))]
     pub(crate) row_teams: Vec<String>,
     /// The results table, taken on the tick the race reached its finish
     /// condition, and `None` before that.
