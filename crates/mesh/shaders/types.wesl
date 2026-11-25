@@ -236,6 +236,19 @@ struct Scene {
     // `mesh_render::Scene::sea_reflection`: `x` the sea's `distortion`, `y` 1.0 where the planar
     // reflection target is bound in `behind_glass_tex` through `refraction`.
     sea_reflection: vec4<f32>,
+    // `mesh_render::Scene::track_fog`.
+    track_fog: TrackFog,
+};
+
+// The stage's `Lighting.Track Fog colour` and `density`, for a track chunk. `authored` is 0.0
+// where the file names none, which every draw outside a Zone-family race holds.
+struct TrackFog {
+    colour: vec3<f32>,
+    density: f32,
+    authored: f32,
+    pad0: f32,
+    pad1: f32,
+    pad2: f32,
 };
 
 // One craft's map on the road: world to its orthographic sun view, and where

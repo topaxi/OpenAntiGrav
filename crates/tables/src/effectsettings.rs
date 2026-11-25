@@ -250,6 +250,8 @@ impl EffectSettings {
             fog_density: self
                 .stage_scalar(stage, key::FOG_DENSITY)
                 .or_else(|| self.stage_fourth(stage, key::ENVIRONMENT_FOG_COLOUR_2048)),
+            track_fog_colour: self.stage_rgb(stage, key::TRACK_FOG_COLOUR),
+            track_fog_density: self.stage_scalar(stage, key::TRACK_FOG_DENSITY),
             sun_colour: self.stage_rgb(stage, key::SUN_COLOUR),
             ambient_colour: self.stage_rgb(stage, key::AMBIENT_COLOUR),
             prelit_scale: self.stage_rgb(stage, key::PRELIT_SCALE),
@@ -456,6 +458,10 @@ pub mod key {
     /// The coefficient of the `exp(-(density * depth)^2)` curve `.envsettings`'
     /// `Fog.Fog Density` also feeds.
     pub const FOG_DENSITY: &str = "Lighting.Fog density";
+    /// The fog a track-flagged chunk takes in place of [`FOG_COLOUR`]. Four floats.
+    pub const TRACK_FOG_COLOUR: &str = "Lighting.Track Fog colour";
+    /// The coefficient of the same curve for [`TRACK_FOG_COLOUR`].
+    pub const TRACK_FOG_DENSITY: &str = "Lighting.Track Fog density";
     /// Four floats, alpha authored `0`. **No `Sun direction` key exists**, so a
     /// stage can tint a rig, never aim one.
     pub const SUN_COLOUR: &str = "Lighting.Sun colour";
@@ -570,6 +576,10 @@ pub struct StagePalette {
     pub fog_colour: Option<[f32; 3]>,
     /// [`key::FOG_DENSITY`].
     pub fog_density: Option<f32>,
+    /// [`key::TRACK_FOG_COLOUR`], alpha dropped.
+    pub track_fog_colour: Option<[f32; 3]>,
+    /// [`key::TRACK_FOG_DENSITY`].
+    pub track_fog_density: Option<f32>,
     /// [`key::SUN_COLOUR`], alpha dropped.
     pub sun_colour: Option<[f32; 3]>,
     /// [`key::AMBIENT_COLOUR`], alpha dropped.
@@ -696,6 +706,12 @@ impl StagePalette {
             fog_density: fade_field(self.fog_density, previous.fog_density, |c, p| {
                 fade_scalar(c, p, weight)
             }),
+            track_fog_colour: fade_field(self.track_fog_colour, previous.track_fog_colour, fade3),
+            track_fog_density: fade_field(
+                self.track_fog_density,
+                previous.track_fog_density,
+                |c, p| fade_scalar(c, p, weight),
+            ),
             sun_colour: fade_field(self.sun_colour, previous.sun_colour, fade3),
             ambient_colour: fade_field(self.ambient_colour, previous.ambient_colour, fade3),
             prelit_scale: fade_field(self.prelit_scale, previous.prelit_scale, fade3),

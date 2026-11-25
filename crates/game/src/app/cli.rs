@@ -712,6 +712,11 @@ pub(crate) struct Cli {
     )]
     pub(crate) detonator_mines: Option<MinePositions>,
 
+    /// Comparison input: start the Detonator EMP at this many charges (the gauge they give), as
+    /// the original's charge was written for the capture it is compared with.
+    #[arg(long, value_name = "N")]
+    pub(crate) detonator_emp_charge: Option<u32>,
+
     /// Comparison input: draw the Zone and Detonator music-driven look from these
     /// sixteen held band levels, read off the original at the frame being compared
     /// (`+0x32f8` of its Environment stage block, comma-separated).

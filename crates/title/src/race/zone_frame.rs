@@ -45,6 +45,11 @@ pub struct ZoneFrame {
     /// contribution and skips those two
     /// (`docs/ghidra/functions/ps3-hdfury-eu/zone-frame.md`).
     pub detonator_arm: bool,
+    /// A track-flagged chunk takes the stage's `Lighting.Track Fog` in place of its primary fog
+    /// (`Scene_GetZoneTrackFog`, `docs/ghidra/functions/ps3-hdfury-eu/zone-plain-chunks.md`,
+    /// "The fog pick"). Read on HD's own executable only; 2048 and Omega mark a chunk track by
+    /// a shape-name rule and have no measured fog pick.
+    pub track_fog: bool,
     /// The original's GL near plane in a Zone circuit race, which the visualiser glow's
     /// `1 - windowDepth` factor is `near / viewDepth` of (`0.0`: use this renderer's own window
     /// depth). Read off the projection recorded in the pairs' `original.camera.view_proj`.

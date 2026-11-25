@@ -11,7 +11,7 @@ fn config() -> Config {
         hi: 8,
         min_distance: 0.25,
         max_distance: 2.0,
-        wave_time: 1.0,
+        speed: 1,
         lane_width: 3.5,
         scoring: Scoring {
             emp_new_mine_score: 50,
@@ -108,7 +108,7 @@ fn firing_resets_the_charge_and_the_latches_rearm_below_lo() {
     assert_eq!(fired[0].kind, EventKind::EmpLaunch);
     assert_eq!((field.emp.charge, field.emp.gauge), (0, 0.0));
     assert!(field.emp.wave.live);
-    assert_eq!(field.emp.wave.reach, 2.0 * SECTIONS_PER_EXTENT);
+    assert_eq!(field.emp.wave.lifetime, 2.0, "extent at a full gauge");
     assert_eq!(field.cannon.clip, 0, "the cannon is untouched");
     assert!(charge(&mut field, 3).is_empty());
     assert_eq!(charge(&mut field, 1), [EventKind::EmpReady], "re-armed");
@@ -120,7 +120,7 @@ fn the_extent_follows_the_gauge() {
     let mut field = Field::new();
     charge(&mut field, 4);
     fire(&mut field, &survey, &config(), 0);
-    assert_eq!(field.emp.wave.reach, 0.25 * SECTIONS_PER_EXTENT);
+    assert_eq!(field.emp.wave.lifetime, 0.25, "extent at an empty gauge");
 }
 
 fn mine(entry: u16, live: bool) -> Placed {
@@ -159,14 +159,17 @@ fn the_wave_clears_what_lies_ahead_and_scores_the_emp_values() {
     fire(&mut field, &survey, &config(), 10);
 
     let mut kinds = Vec::new();
-    for _ in 0..120 {
+    for _ in 0..130 {
         kinds.extend(
             step_wave(&mut field, &survey, &config(), 1.0 / 60.0)
                 .into_iter()
                 .map(|e| e.kind),
         );
     }
-    assert!(!field.emp.wave.live, "the wave ends after wave_time");
+    assert!(
+        !field.emp.wave.live,
+        "the wave ends once its age reaches the extent"
+    );
     assert_eq!(field.cannon.score, 100 + 25 + 25 + 50 + 1000);
     assert_eq!(
         field.cannon.destroyed_mines,
@@ -188,7 +191,7 @@ fn the_wave_clears_what_lies_ahead_and_scores_the_emp_values() {
 }
 
 #[test]
-fn the_wave_runs_over_wave_time_not_at_once() {
+fn the_wave_runs_over_its_lifetime_not_at_once() {
     let survey = lap(200);
     let mut field = Field::new();
     field.mines[0] = mine(80, false);
@@ -200,6 +203,39 @@ fn the_wave_runs_over_wave_time_not_at_once() {
         field.live_mines, 1,
         "the front has not reached entry 80 yet"
     );
+}
+
+/// `EMP_UpdateWave`: one entry a tick (`speed = 1`) for `extent` seconds. At an empty gauge
+/// (`0.25` s, fifteen ticks) the front clears the fifteen entries from where it was fired and
+/// no further; at a full gauge (`2.0` s) it runs about 120.
+#[test]
+fn the_wave_steps_one_entry_a_tick_for_extent_seconds() {
+    let run = |charges: u32, mines: &[u16]| {
+        let survey = lap(400);
+        let mut field = Field::new();
+        for (index, &entry) in mines.iter().enumerate() {
+            field.mines[index] = mine(entry, false);
+        }
+        field.live_mines = mines.len() as u16;
+        charge(&mut field, charges);
+        fire(&mut field, &survey, &config(), 10);
+        let mut ticks = 0;
+        while field.emp.wave.live {
+            let before = field.emp.wave.front;
+            step_wave(&mut field, &survey, &config(), 1.0 / 60.0);
+            assert_eq!(field.emp.wave.front, before + 1, "one entry a tick");
+            ticks += 1;
+        }
+        let mut left: Vec<u16> = field.live_mines().iter().map(|m| m.entry).collect();
+        left.sort_unstable();
+        (ticks, left)
+    };
+    let (ticks, left) = run(4, &[24, 25, 26]);
+    assert_eq!(ticks, 15, "0.25 s at 60 Hz");
+    assert_eq!(left, [25, 26], "entries 10 to 24 cleared, 25 not reached");
+    let (ticks, left) = run(8, &[128, 140]);
+    assert!((120..=121).contains(&ticks), "2.0 s at 60 Hz: {ticks}");
+    assert_eq!(left, [140]);
 }
 
 #[test]

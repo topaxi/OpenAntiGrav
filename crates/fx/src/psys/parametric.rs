@@ -368,6 +368,7 @@ fn build(
         },
         drag_per_tick: Vec3::splat(drag),
         gravity_per_tick2: finite(e.gravity, "gravity")?,
+        turbulence: None,
         live_cap: e.live_cap,
         size,
         alpha,

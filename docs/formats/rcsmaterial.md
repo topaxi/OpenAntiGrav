@@ -2282,6 +2282,11 @@ frame at the lead's matched pose is byte-identical before and after. Test:
 Zone variant's own grid-alpha glow term and paraboloid reflection are not drawn (as off Zone); whether the
 Zone floor's alpha (`@0x82 MOV H0.w`, a literal the decoder prints as 0) means anything for a blended pass.
 
+**In a Zone race the sheen is not run.** `etched_glass_tech`'s ten Zone variants (blocks 10 to 19) sample no facing ramp, so
+`ramp_sheen` is off when the Zone surface is (`shade.wesl`; `hd_zone_wave_census_ground_truth`,
+`no_zone_variant_of_a_facing_ramp_material_samples_the_ramp`;
+[detonator-look.md](../ghidra/functions/ps3-hdfury-eu/detonator-look.md), "Track fog and the glass floor").
+
 ## Talon's race-pair road decals: the teal fill is the wave's phase, and the engine `time` at the capture is unread (2026-10-27, `hd-talons-road-decals`)
 
 **Claim (not met, cause found):** on `hd-race/talons-pack` the large arrow and strip panels on the road draw as filled

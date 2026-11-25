@@ -517,6 +517,10 @@ impl Scene {
             refraction: self.target_projection(section_view).to_cols_array_2d(),
             quake: race.quake_wave(),
             sea_reflection: self.sea_reflection(),
+            track_fog: self
+                .zone_grade
+                .as_ref()
+                .map_or(mesh_render::TrackFog::NONE, |grade| grade.track_fog()),
         };
         // The visualiser's own tints - the stage's `EQ colour tint` for the bars and its
         // `EQ analogue colour tint` for the smooth slots, or `None` where the file authors

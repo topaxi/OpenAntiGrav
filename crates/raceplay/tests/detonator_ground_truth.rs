@@ -61,6 +61,12 @@ fn an_hd_detonator_race_loads_its_own_stage_table() {
     );
     assert_eq!(grade.last_stage(), 14);
     assert_eq!(grade.blend().current, 1);
+    // Stage 1's `Lighting.Track Fog colour` and `density`: the orange-red a track chunk is fogged
+    // with (`detonator-look.md`, "What the file says at stage 1").
+    assert_eq!(
+        grade.track_fog(),
+        oag_mesh::mesh_render::TrackFog::authored([1.8, 0.141_176, 0.007_059], 0.001_5)
+    );
     let (decoded, numbered) = grade.stage_art_counts();
     assert_eq!(
         (decoded, numbered),

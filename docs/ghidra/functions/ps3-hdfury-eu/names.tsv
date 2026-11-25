@@ -1142,7 +1142,7 @@
 0x0012a3e8	function	WeaponManager_RollPickup	75	detonator-emp.md
 0x00112730	function	EMPManager_Fire	72	detonator-emp.md
 0x0013c430	function	EMP_Launch	68	detonator-emp.md
-0x0013b930	function	EMP_SweepSections	62	detonator-emp.md
+0x0013b930	function	EMP_SweepSections	75	detonator-emp.md
 # Detonator end-of-race screen (2026-11-22, det-end-re). Static only.
 0x002234b0	function	EndRaceResults_FillDetonatorRows	80	detonator-endrace.md
 0x0022bdb8	function	EndRaceResults_ShowRecordNotice	72	detonator-endrace.md
@@ -1216,3 +1216,11 @@
 0x001b2a48	function	HexSelection_Destroy	70	ship-select-ring.md
 0x002096f0	function	TrackHexSelection_Update	85	ship-select-ring.md
 0x00200498	function	Colour_LerpArgb	85	ship-select-ring.md
+0x00112e50	function	EMPManager_Update	78	detonator-emp.md
+0x0013c320	function	EMP_UpdateWave	85	detonator-emp.md
+0x0013afe8	function	EMP_SpawnLaunchEffect	82	detonator-emp.md
+0x0013b300	function	EMP_DrawLights	82	detonator-emp.md
+0x0013b5e8	function	EMP_ForkAtJunction	60	detonator-emp.md
+0x0013b220	function	EMP_Construct	80	detonator-emp.md
+0x0013ae68	function	EMP_ResetWave	70	detonator-emp.md
+0x0027e118	function	Modifier_NoiseForce	72	detonator-emp.md

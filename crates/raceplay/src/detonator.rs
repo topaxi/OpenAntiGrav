@@ -284,13 +284,19 @@ impl crate::sim::RaceSim {
                     self.cues
                         .push(CueEvent::at_point(Cue::CannonHitWall, event.at));
                 }
+                // An EMP'd mine and bomb go off through the same `DetonatorMine_Explode` and bomb
+                // update as a shot one (`detonator-mine.md`, `detonator-bomb.md`).
                 EventKind::MineTouched
                 | EventKind::MineShot { .. }
-                | EventKind::MineChained { .. } => {
+                | EventKind::MineChained { .. }
+                | EventKind::MineEmped { .. } => {
                     self.cues
                         .push(CueEvent::at_point(Cue::MineExplosion, event.at));
                 }
-                EventKind::BombTouched | EventKind::BombShot | EventKind::BombReplaced => {
+                EventKind::BombTouched
+                | EventKind::BombShot
+                | EventKind::BombReplaced
+                | EventKind::BombEmped => {
                     self.cues
                         .push(CueEvent::at_point(Cue::BombExplosion, event.at));
                 }
@@ -298,10 +304,23 @@ impl crate::sim::RaceSim {
                 EventKind::EmpFull => self.cues.push(CueEvent::new(Cue::EmpFull, 0)),
                 // `EMP_Launch` plays `QUAKELAUNCH` on the firing ship's emitter.
                 EventKind::EmpLaunch => self.cues.push(CueEvent::new(Cue::QuakeLaunch, 0)),
-                // The kill's sound is unread (`detonator-emp.md`, "Open").
-                EventKind::MineEmped { .. } | EventKind::BombEmped => {}
             }
         }
+    }
+
+    /// Sets the EMP's charge to `n` and its gauge to what `n` charges give (`--detonator-emp-charge`):
+    /// a comparison's stand-in for the pads the original collected, as the live runs on
+    /// `docs/ghidra/functions/ps3-hdfury-eu/detonator-emp.md` write `rm+0x2dd8`. Returns whether the
+    /// race runs an EMP.
+    pub fn charge_detonator_emp(&mut self, n: u32) -> bool {
+        let Some(config) = self.detonator.as_ref().and_then(|d| d.emp) else {
+            return false;
+        };
+        let emp = &mut self.world.detonator.emp;
+        emp.armed = true;
+        emp.charge = n;
+        emp.gauge = oag_weapons::detonator::emp::gauge(n, config.lo, config.hi);
+        true
     }
 
     /// Puts the opening stage's mines where the original's were, all live, in place of the seeded layout

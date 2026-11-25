@@ -13,7 +13,7 @@ const ALL: [&Title; 5] = [
 ];
 
 /// The triggers a title answers for itself; the rest are the engine's.
-const OWN: [Trigger; 25] = [
+const OWN: [Trigger; 26] = [
     Trigger::PlasmaCharging,
     Trigger::PlasmaLaunch,
     Trigger::BombGlow,
@@ -39,6 +39,7 @@ const OWN: [Trigger; 25] = [
     Trigger::DetonatorMineExplo,
     Trigger::DetonatorBombExplo,
     Trigger::DetonatorCannonSparks,
+    Trigger::DetonatorEmp,
 ];
 
 /// The engine triggers whose effect neither 2048 nor Omega authors
@@ -166,6 +167,7 @@ fn each_trigger_is_answered_by_exactly_the_titles_that_read_it() {
         Trigger::DetonatorMineExplo,
         Trigger::DetonatorBombExplo,
         Trigger::DetonatorCannonSparks,
+        Trigger::DetonatorEmp,
     ] {
         assert_eq!(
             has(detonator),
@@ -409,8 +411,8 @@ fn a_race_loads_each_name_of_its_own_table_once_and_the_superset_covers_every_ti
     // `WO_SHIP_COLL_SPARK_NODAMAGE`, the collision cage's contact spark; 47 with Pure's three
     // big-blast names; 50 with Pure's Bomb glow and Disruptor head and explosion; 51 with its
     // Disruptor launch; 53 with HD's Plasma wind-up and release; 54 with HD's death plume; 58 with
-    // HD's four Detonator names; 59 with HD's thrown-piece fire.
-    assert_eq!(crate::RACE_EFFECTS.len(), 59);
+    // HD's four Detonator names; 59 with HD's thrown-piece fire; 60 with HD's EMP wave.
+    assert_eq!(crate::RACE_EFFECTS.len(), 60);
 }
 
 #[test]

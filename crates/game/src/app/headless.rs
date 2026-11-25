@@ -921,6 +921,7 @@ pub(crate) fn race_launch(
                 field_lean: field_lean(cli)?,
                 field_warmup: field_warmup_velocities(cli)?,
                 detonator_mines: cli.detonator_mines.as_ref().map(|m| m.0.clone()),
+                detonator_emp_charge: cli.detonator_emp_charge,
                 pose_sparks: pose_sparks(cli)?,
                 // A photo is drawn through the presentation chain, at the output's size and
                 // before the grade, as the session reads it back: no brightness, gamma or

@@ -275,7 +275,7 @@ placement RNG cannot match the original's `Libc_Rand` (a departure, documented).
 
 **What remains open for Detonator (2026-11-23, after phase 15).** Phases 1-15 are in; what a player still
 misses is, by title. *All three:* the medal tier colours (the tiers draw one grey), the bomb flash writer
-(`b+0x154`, unread: brightness stays `0.2`/`0.8`), the EMP wave's reach (chosen) and the radial bloom
+(`b+0x154`, unread: brightness stays `0.2`/`0.8`), ~~the EMP wave's reach (chosen)~~ (read and drawn on HD, `det-emp-look-re`) and the radial bloom
 (`oag-post` has no pass, Zone included), the floor spectrum feed (the pairs stay black under `--no-audio`), the
 hull strip and wreck. *HD:* the new-record banner (needs the best-score table `0x0001ef28` and a store).
 *Omega:* the end-race screen (its `endrace_entry` is `None`, wiring HD's reader leaves `EndRace Menu` with no
@@ -409,8 +409,14 @@ original frame to compare. The detail is below.
   above (`DetonatorMine_Construct` `0x0013a7d8`, `DetonatorBomb_Construct`); effects `WO_BOMB_EXPLO_DETONATOR`,
   `WO_MINE_EXPLO_DETONATOR[_DEAD]`, `WO_CANNON_SPARKS_DETONATOR` (2048 `data2.psarc`), whose
   triggers need the hit read first.
-- **EMP: wired** (`det-emp-wire`, `detonator-emp.md` "Wired"). Open: the wave's reach and speed
-  (chosen; recipe on the page), the kill's effect and sound, whether the wave hurts the player,
+- **EMP: wired** (`det-emp-wire`, `detonator-emp.md` "Wired"). ~~The wave's reach and speed, the kill's
+  effect and sound~~: read live and drawn on HD (`det-emp-look-re`, 2026-11-24, `detonator-emp.md`
+  "What HD draws for a fired EMP": one survey entry a tick for `extent` seconds, `WO_QUAKE_DETONATOR`
+  on the front with a `(0, 5, 10)` light; the stepper is the Repulser's, copied). The particle rows
+  were `SPARKS` without their noise force, fixed (same page, "The grey rows were sparks that
+  never moved"); 13 other HD emitters author that force, unlisted. Open: the fork
+  (`REP2`) and `~MAGPULSETRAVEL` unwired; 2048 and Omega checked, applies, not wired. Still open:
+  whether the wave hurts the player,
   `EmpBarEffect` (an `<ImageModel>` the HUD layout reader does not model; the gauge is exposed),
   the ready pulse and post-fire flash on `EmpReady`, 2048's
   pad arms (unread: its pads keep boost and pickup, so its EMP never charges) and its
@@ -522,6 +528,12 @@ Ours' blue is still about 1.7 to 2.3 times the original's (a constant of about 2
 `zone-shader.md`). Where the rest of the mean grey sits (6 x 8 grid, signed ours minus original, any pair): the mid-distance red band (ours 30 to 55
 darker: the Track Fog `1.8 0.141 0.007` is not drawn), the upper right (ours 15 to 40 brighter), the floor (ours 10 to 20 brighter, now about 5 to 10),
 the mines and pad. Ours' floor also carries more red than the original's (box A red 9.8 against 5.1).
+
+**Track fog and the glass floor, wired (2026-11-24, `det-mines-ahead-structure`).** The mid-distance red band's cause is wired: a track chunk
+takes the stage's Track Fog (`mesh_render::TrackFog`), and `etched_glass_tech`'s Zone variants run no facing-ramp sheen (the "grey-green
+structure" on `mines-ahead` was this glass floor, present in the original, dark). `mines-ahead` 14.65 to 13.74, `pad` 8.17 to 7.68,
+`cannon-volley` 15.00 to 14.18; evidence on `detonator-look.md`, "Track fog and the glass floor". The far-curve box's "8 low" (`det-glass-box-colour`, 2026-11-25) is the
+mine drawn black in ours and pale violet in the original: without it the box is within 1.8 grey per channel (`detonator-look.md`, "The \"8 low\" was the mine"); the mine's lit look is `det-colour`'s. Open: the Zone variant's grid and paraboloid reflection; 2048/Omega Track fog (checked, applies, not wired: no original frame).
 
 **The vis texel's gamma flag, read (2026-11-23, `det-floor-gain-re`, `docs/ghidra/functions/ps3-hdfury-eu/zone-vis-gamma.md`).** `zoneTexVis`'s address
 word is `0x60730303` (gamma nibble 7, confidence 75): the original sRGB-decodes the strip, ours samples it raw into the linear sum. Applied alone (scratch,
