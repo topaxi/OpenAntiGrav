@@ -59,7 +59,7 @@ PPSSPP v1.20.4, `pure-psp-usa.chd` (state serial `UCUS98612_2.00`), the Time Tri
 `data/saves/pure-psp/` (Vector, Feisar), cross held, the weapon given by writing its id into the
 holder's `+0x1d8` and the fire byte (`scripts/psp-pure-weapon-fire.py`'s method), then a break at each
 `Rocket_Update` or `Plasma_Update` entry reading the entity, and at the probe's return reading `v0`,
-the hit kind and the hit normal. Pure updates 30 times a second here (`dt` 0.0334).
+the hit kind and the hit normal. Pure updates 30 times a second here (`dt` 0.0334). The entity log is `scripts/psp-pure-projectile-log.py`.
 
 | Shot | Flights | Carried normal | What it shows |
 | --- | --- | --- | --- |

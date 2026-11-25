@@ -15,7 +15,7 @@ Pure flyer keeps Pulse's arms through `FloorArms::for_other_weapons`.
 
 - Pure's `Missile_Update` (`0x0885cf30`): it stores `+0xd0` at `0x0885d410`, so unlike the Rocket's
   its carried normal may move. Read its two raycasts and floor arms the way `floor-follow.md` reads
-  the Rocket's; one live PPSSPP flight settles it (weapon id 2 in `pure_floor_probe`'s method).
+  the Rocket's; one live PPSSPP flight settles it (weapon id 2 with `scripts/psp-pure-projectile-log.py` after adding its offsets).
 - A Pure volley fired at Vineta K's first corner never hit the floor (`v0 = 0` on every probe, the
   rockets fell to y -532). The craft had stopped against the corner's wall; whether the volley left
   the floor ahead or the probe misses there for another reason is not separated.
