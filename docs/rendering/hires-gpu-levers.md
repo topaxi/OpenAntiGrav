@@ -1521,8 +1521,10 @@ remains for this method.
 
 **Picture.** `--screenshot` at 960x540, ticks 400 and 1,500, a binary from the commit and one with
 it reverted, `cmp` equal on HD Vineta K, Ubermall, Chenghou Project, Anulpha Pass, Sebenco Climb
-and `03_track`, on Omega and 2048 (default circuits, whose snow and rock are kinds 21 and 22) and
-on Pulse at 1,500: 19 pairs, all byte-identical.
+and `03_track`, on Omega's and 2048's default circuits and on Pulse at 1,500 (single races), and in
+Zone (`--mode zone`) on HD, Omega and 2048 at ticks 600 and 2,000 and an HD time trial at 1,500,
+where the zone-set tests run: 26 pairs, all byte-identical. 2048 and Omega: checked, applies (the
+shader and the specialisation are shared), byte-identical shots; no test of their own.
 
 **Galaxy S21** (HD Vineta K forward, render scale 25, REFLECTION RESOLUTION `auto`, `--autopilot
 --seed 1`, 10 s in-run toggles from a diagnostic build, not in the tree, whose odd windows shade

@@ -1066,6 +1066,10 @@ covers them. Three arms, each left out in the odd windows once the race has draw
 | `writes-dummy` 1 | 30.9 / 26.3 | 27.8 / 24.0 | 2.5 / 1.9 |
 | `writes-dummy` 2 | 30.2 / 25.2 | 27.0 / 22.0 | 2.4 / 1.6 |
 
+Reproduce: `OAG_SKIP_PASSES=<arm>` and `OAG_SKIP_PASSES_TOGGLE=10` as launch-file lines, a Perfetto trace from
+`scripts/android-perf-trace.cfg` (which carries the `android.log` source), then
+`uv run --with perfetto --with pandas python3 -I scripts/android-fence-timeline.py TRACE --by-window`.
+
 **Verdict.** Freezing the writes takes 8.3 to 9.3 ms off the frame and as much off the GPU's own fence period, and the present
 then returns as the previous fence signals. About half of that, 4.6 to 5.8 ms, is the frozen picture itself (`writes-same`
 and `writes-dummy` freeze the same picture and keep it). The other half, about 3.5 to 4.7 ms, comes with the copies, and it
@@ -1090,8 +1094,10 @@ every material texture two mip levels down (a measure of texture bandwidth again
 | `track-rich` | 33.5 / 29.2 | 11.1 / 5.6 |
 | `mips` | 33.1 / 31.5 | 11.3 / 10.5 |
 
-So the rich tenth of the circuit costs half of the scene pass on this GPU, the plain nine tenths under a millisecond, and texture
-bandwidth little. Arm's offline compiler (`malioc` 2026.5, Mali-G78 r1p1, a model of driver r51p0 where the phone runs r38p0) on
+One run each. By the scene pass's own timestamps the rich tenth of the circuit costs half of the pass and the plain nine tenths
+0.8 ms; by the frame the two read 4.3 and 3.5 ms, and on this GPU a pass's own timestamps read well under what leaving it out
+saves (every skip toggle so far reads 2 to 6 times its row), so the plain half is not cheap on the frame's reading. Texture
+bandwidth (`mips`) reads 1.6 ms of frame and 0.8 ms of pass. Arm's offline compiler (`malioc` 2026.5, Mali-G78 r1p1, a model of driver r51p0 where the phone runs r38p0) on
 the circuit's own specialised pipelines (naga 30.0.2 to SPIR-V with wgpu-hal's Vulkan options) says why: the rich shader uses
 all 64 work registers at 50 % occupancy and spills 512 bytes of stack, load/store bound (155 load/store cycles summed over every
 path, against 72 arithmetic), where the plain one spills 64 bytes and is arithmetic bound at about 15 cycles. Stubbing one

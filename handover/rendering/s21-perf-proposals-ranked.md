@@ -92,11 +92,14 @@ scene is 1.5 ms. Every "fidelity none" item passes the byte-identity or pair che
      against `writes-same` first on whatever lands.
 5. ~~Measure the track's shading on Mali~~ **measured, one fix landed** (`s21-shading`): the rich
    tenth of the circuit's draws costs half the scene pass (`track-rich` 11.1 to 5.6 ms of scene
-   GPU), the plain nine tenths under 1 ms, texture bandwidth little (`mips` 0.8 ms). `malioc`: the
+   GPU, 4.3 ms of frame); the plain nine tenths read 0.8 ms of pass but 3.5 ms of frame, and
+   texture bandwidth (`mips`) 0.8 and 1.6 ms. One run each; the frame reading is the safer one.
+   `circuit_lighting = simplified` (plain surfaces only) is unmeasured on the S21, bounded by about
+   3.5 ms of frame. `malioc`: the
    rich shader spilled 512 bytes of stack at 64 registers and 50 % occupancy. Folding the row kinds
    a circuit's table lacks (`program_codes`, `rate_codes`) took it to 304 bytes: S21 scene GPU -2.4
    to -3.0 ms and fence period -3.2 to -3.7 ms in-run, frame -0.6 to -1.6 ms; Deck -8 % (1080p) and
-   -10 % (4K); byte-identical on 19 shots across HD, Omega, 2048 and Pulse
+   -10 % (4K); byte-identical on 26 shots across HD, Omega, 2048 and Pulse, Zone included
    (`docs/rendering/hires-gpu-levers.md`, "A circuit's row kinds fold where its table has none").
    **Still open**: 304 bytes of stack remain (208 with every kind folded); the rest of the spill is
    the uber-shader's live state. A `malioc` bisect over `lit_colour`'s blocks (the scratch method:
