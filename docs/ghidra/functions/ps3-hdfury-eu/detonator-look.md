@@ -122,8 +122,9 @@ Wired 2026-11-22 (`det-look`); the three steps below are code, each with a test 
 3. **Bloom arm.** `bloom::for_mode` runs `ZoneFrame` for Detonator when `ZoneFrame::detonator_arm` (HD): feedback, both sizes,
    frame exponent and alpha contribution taken, the circuit's frame contribution and adaption boost kept. Test:
    `bloom::tests::a_detonator_race_takes_the_table_but_keeps_the_circuits_gain` (a circuit whose every value differs from the
-   table's). **Not wired: the radial bloom** (`0.1` / `0.1` / `0.6`, enabled): `oag-post` has no radial pass, so Zone's `0.04`
-   is equally absent.
+   table's). **The radial bloom** (`0.1` / `0.1` / `0.6`, enabled) draws nothing in a running round: its strength
+   is `1.0` only while the craft is out of the race ([zone-frame.md](zone-frame.md), "The radial pass", 78), so its absence
+   in ours matches a racing frame.
 
 Result on the three Detonator pairs (Talon's Junction, Feisar; the upper band is `x 200..900, y 60..300`; original `(17..18, 10..13, 10..24)`):
 

@@ -185,6 +185,155 @@ where the law predicts about green 138 and blue 166 from Sub Venom's bytes, and
 `(4, 126, 146)` are those values through the resolve above. Confidence 90 for
 the band law (the static read and the live scene target at three probes).
 
+## The radial pass: drawn only behind a craft out of the race
+
+Read 2026-11-25 (`det-radial-bloom`), static, `llvm-objdump` of `EBOOT.elf` and
+`scripts/ps3-microcode.py`. **The question:** does a Zone or Detonator frame
+draw the radial bloom the block enables (`+0x558 = 1`), and with what law?
+**The answer:** the pass exists and its programs decode, but its strength is a
+per-viewport float that is `0` in every racing frame. It turns on only while
+the viewport's craft is out of the race (the Zone or Detonator end), so no
+frame of a running Zone or Detonator race has it. Confidence **78**: one
+static path, read end to end, plus the live samples above, which saw the
+racing branch's `+0x560 = 0.04` in all 39 racing samples, and a countdown draw
+list with no `RadialGate` draw.
+
+### Where it runs
+
+`FunkLayer_RunBloomChain` (`0x003b4690`) tests the block's enabled byte
+(`lbz r0, 0x558(r3)` at `0x003b61f4`, `bf` to `0x003b6ed8`). That arm reads
+the distance scale (`lfs f31, 0x564` at `0x003b6ee0`) and falls back to the
+ordinary gate at `0x003b6208` unless all three of these hold:
+
+- `f24 > 0`, at `0x003b6edc`. `f24` is the runner's sixth float argument
+  (`fmr f24, f6` at `0x003b46c4`).
+- `0x003c7dd8()` returns 0.
+- `0x003c81a0()` returns 0.
+
+When all three hold, it draws the following and then rejoins the ordinary
+gate path at `0x003b6208`:
+
+1. **The radial gate.** It runs `RadialGate_fp` (`0x0092ce80`) through
+   `FunkLayer + 0xc4` with the vec4 `(0, [+0x560], [+0x55c], 1.0)`, built at
+   `0x003b6f10`..`0x003b6f34`. The fragment program decodes to:
+
+   ```text
+   L    = dot(tex.rgb, (0.9, 1.77, 0.33))
+   out  = tex.rgb * (contribution * L^exponent) * (1 - 1.0 * tex.a),  alpha 1
+   ```
+
+2. **Two passes through `FunkLayer + 0xa8`.** Not decoded here.
+3. **The radial blur.** `FUN_003b22a0` (named below) is called at
+   `0x003b72c8` with these arguments:
+   - `f1`: the distance scale;
+   - `f2`, `f3`: the screen origin in pixels (`width * u`, `height * v`);
+   - `f4`: the strength.
+
+   It returns at once unless `f4 > 0` (`0x003b22a8`), and the strength enters
+   no other arithmetic there. It binds `FunkLayer + 0xc0` / `+ 0xbc`
+   (`FunkLayerBloomRadial_fp` `0x0092d000` and `_vp` `0x0092eb80`) and passes
+   the distance scale as the `distanceScalar` vec4's `x` (`stfs f31` at
+   `0x003b25b4`). It then binds `FunkLayer + 0xb0`, the composite, which is
+   unread. The blur's fragment program takes 14 taps along the ray from the
+   pixel toward `screenOrigin`:
+   - the step is `(screenOrigin - pos) * distanceScalar * uvScale`, its `y`
+     flipped;
+   - the taps sit at the step's multiples `0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6,
+     0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3`;
+   - the tap weights are `1, 1, 1, 1, 1, 1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4,
+     0.3, 0.2`;
+   - the sum is scaled by `0.0961538` (`1 / 10.4`), with alpha 1.
+
+   The vertex program passes `uv = (pos - c210) * c211 + c210`.
+
+### Where the strength and the origin come from
+
+The runner's caller, `FUN_003e29e0`, the function before `Render_FinishFrame`,
+fills them at `0x003e2c3c`..`0x003e2fa0`. The path depends on
+`g_ZoneEffectsActive` (`0x00d45f84`):
+
+- **Outside a Zone frame** the strength is a sun glare: `d = dot(normalize(-[block
+  + 0x580]), camera forward)`, cubed when positive, and the origin is the
+  sun's projected screen point. Since `+0x558` is `0` on every circuit but
+  `zone_1` (renderer.md, "Is HD's glare under-reproduced?"), the runner never
+  reaches the arm there.
+- **In a Zone frame** the origin is the screen centre `(0.5, 0.5)`; in mode 13
+  (Zone Battle) it is `(0.5, 0.25)` or `(0.5, 0.75)` by viewport
+  (`0x003e3098`..`0x003e30cc`, `0x003e323c`). Both origins reach `0x003e2f88`.
+  There the strength is `H[vp] + 0x30`, with `H = 0x008c2cb8` (two 56-byte
+  entries) and `vp = max(*0x008c1430, 0)` (`lfsx f28` at `0x003e2fa0`).
+
+`H[e] + 0x30` has two writers in `Scene_PrepareFrame`:
+
+| site | what | when |
+| --- | --- | --- |
+| `0x003aec98` | `H[e] + 0x30 *= g_ZoneBloomTable[+0x24]` (`0.5`) | every frame, in the Zone arm (mode 6) |
+| `0x003ada58` | `H[e] + 0x30 = 1.0` | every frame the viewport's craft is out of the race, in modes 6 and 14 |
+
+The second site is reached only through `0x003ad984`..`0x003ad9a8`, which
+needs all of the following:
+
+- `*0x009384e1 == 0`, which it is live;
+- mode 6 or 14;
+- bit `0x1000` of the craft's `+0x6a64` (`rlwinm r11, r26, 20, 31, 31`).
+
+`r26` is loaded at `0x003ad888` from the craft that `0x0067a528(RaceManager,
+index, 1)` returns, with the index taken from `+0x6284` of `RaceManager +
+0x13e8` or of a viewport's subject. Bit `0x1000` is the out-of-race bit
+([ship-destroy.md](ship-destroy.md) row 8; [destroy-camera.md](destroy-camera.md)
+H1). Without the bit, `0x003ae9d4` writes `H[e] + 0x34 = 1.0` and leaves
+`+0x30` alone. The `.data` image holds `0.0` at `+0x30` in both entries.
+
+So in a running race `+0x30` is `0`, or a remnant halving toward `0`, and the
+arm's `f24 > 0` test fails. The writer list in
+[zone-effectsettings-loader.md](zone-effectsettings-loader.md) says it may miss
+computed-index writers, so this is not an exhaustive census. One read of
+`0x008c2ce8` through a Detonator round and a destroy would settle it.
+
+### The end ramp
+
+While the craft is out, the same branch rewrites the radial set every frame
+(`0x003ad9d4`..`0x003ada80`, `0x003aed3c`). The ramp runs on
+`r = clamp(t * 0.4, 0, 2)`, where `t` is the craft's time in its state
+(`craft + 0x6a88`, [ship-destroy.md](ship-destroy.md)). The getter is
+`0x000d1c78`: `lfs 0x6a88`, times `0.4`, clamped to `[0, 2]`.
+
+| field | `r <= 1` | `r > 1` |
+| --- | --- | --- |
+| `+0x560` contribution | `0.06 r` (`T[0x40]`) | `1.0` |
+| `+0x55c` exponent | `0.1` (`T[0x44]`) | `0.1` |
+| `+0x564` distance scale | `0.7 r` (`T[0x48]`) | `0.7` |
+| `H[e] + 0x30` strength | `1.0` | `1.0` |
+
+For `r > 1` the branch also writes `(1 - r) * 0.22 + 0.2 + 0.06` (`T[0x38]`,
+`T[0x3c]`) to `+0x7d1c` of the object `r31` holds, a fade whose consumer is
+unread. It also calls `0x0042a568` with `T[0x4c]` (`0.5`) and writes the
+result to `+0x5b0`. So the radial pass is the end sequence's whiteout:
+- a centred streak for 2.5 s (`r` from 0 to 1, contribution to `0.06`,
+  reach to `0.7`);
+- then a contribution of `1.0`.
+
+The rest of `g_ZoneBloomTable`, beyond the table above:
+
+| `0x008c2ae0 +` | value | goes to |
+| --- | ---: | --- |
+| `0x24` | `0.5` | `H[e] + 0x30`'s halving each Zone frame |
+| `0x38`, `0x3c` | `0.22`, `0.2` | the `r > 1` fade at `+0x7d1c` |
+| `0x40` | `0.06` | the end ramp's contribution |
+| `0x44` | `0.1` | the end ramp's exponent |
+| `0x48` | `0.7` | the end ramp's distance scale |
+| `0x4c` | `0.5` | the argument to `0x0042a568` |
+
+### What it means for the port
+
+- No running Zone or Detonator frame has the pass, so wiring it into the race
+  frame would add a picture the original does not draw.
+- The `cannon-volley` and `mines-ahead` pairs are mid-round frames, so the pass
+  cannot move them.
+- Its one place is the end sequence (`oag_raceplay`'s `zone_end`).
+- The composite at `FunkLayer + 0xb0` and the two `+0xa8` passes would need
+  reading first.
+
 ## The port
 
 - **Light**: `oag_title::ZoneFrame::lit_by_stage_alone`, carried to the mesh
@@ -220,12 +369,14 @@ after.
 - **A pulse in a Zone race.** The feedback buffer is also the zoom ring's
   history target; ours resolves against the frame's own quarter-res scene, so
   a damage pulse's history is not in the feedback term. Unmeasured.
-- **Radial bloom.** Enabled in a Zone race with contribution `0.04`; this
-  port has no radial pass (renderer.md, "Is HD's glare under-reproduced?"; the
-  block's `+0x558`..`+0x570`).
+- **Radial bloom.** Read (above, "The radial pass"): it draws only behind a
+  craft out of the race, so ours, drawing none, already matches a racing frame. Unwired for the
+  end sequence; the `+0xa8` passes and the `+0xb0` composite are unread, and
+  the strength `H[e] + 0x30` is not yet read live.
 - **Detonator.** Its arm keeps the circuit's frame contribution and adaption
   boost and takes the rest; static only. Applied since 2026-11-22
-  (`ZoneFrame::detonator_arm`, `bloom::for_mode`), without the radial set. Zone Battle (mode 13) takes the common tail, the Zone values but
+  (`ZoneFrame::detonator_arm`, `bloom::for_mode`), without the radial set,
+  which a running Detonator round does not draw (above). Zone Battle (mode 13) takes the common tail, the Zone values but
   radial contribution `0.1`; not wired.
 - **The hull.** Read in [zone-hull-light.md](zone-hull-light.md): the `+0x4b0`
   byte does not reach the hull (no hull draw reads it); its probe tint is twice the
@@ -251,6 +402,14 @@ after.
   `omega/zone-vineta-k-z5` and `2048-vita/zone-dlc-vineta-k-z5` render
   pixel-identical to the build before, and the two pairs on 2048's own
   circuits keep their scores (69.25, 112.95).
+
+- **The radial pass: checked, differs.** Neither executable ships
+  `FunkLayerBloomRadial`, `RadialGate` or an `HDR and Bloom.Radial bloom *`
+  key (`strings` over Omega's merged `eboot.bin` and 2048's v1.04
+  `eboot.elf`, 2026-11-25). Both carry `%s.Radial Bloom Intensity`, an
+  effectsettings key ([zone-effectsettings-loader.md](zone-effectsettings-loader.md),
+  `+0x188` on HD) that is not among the inputs read above; its consumer is
+  unread in both.
 
 ## Reproduce
 
@@ -287,3 +446,9 @@ pause is the picture to measure against.
   frame exponent `0.1`, the alpha contribution `1.0`, the adaption boost
   `5.0`, the frame contribution `0.5` and the radial set. Read at instruction
   level and matched against the live block in 61 samples.
+- `FunkLayer_DrawRadialBloom` (`0x003b22a0`, function, 72) - the radial
+  blur of the bloom chain: returns unless its strength `f4 > 0`, binds
+  `FunkLayerBloomRadial_vp/_fp` (`FunkLayer + 0xbc`/`+ 0xc0`) with the
+  distance scale `f1` and the origin `f2, f3` in pixels, then the composite
+  at `+ 0xb0`. Called once, from `FunkLayer_RunBloomChain`'s radial arm at
+  `0x003b72c8`. Static only ("The radial pass").
