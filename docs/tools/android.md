@@ -849,7 +849,7 @@ Measured 2026-11-24/25 on the same phone, release builds of main `f928359` plus 
   log's `pre-race flyby: ends after N tick(s)` with `OAG_LOG_FILE_FILTER=warn,oag=debug` as a launch-file line, which writes `files/state/oag/logs/oag-game.log`, and a screencap).
   `--autopilot` now presses the skip of a flyby only a press ends, as a held Cross would; `--no-intro` drops every flyby. Measured on the S21 (the `dist` APK of this change, `--no-audio`,
   `--autopilot --seed 1`): HD Vineta K `pre-race flyby: ends after 1 tick(s)` and the HUD with lap and position on screen; Pulse (Talon's Junction) `ends after 1529 tick(s)` and the
-  HUD with the lap clock. The menu route (Racebox, Single Race, taps as above) also reaches `stage=race` with the HUD on both. Tests: `an_hd_race_under_autopilot_leaves_the_flyby_and_one_without_stays_in_it`
+  HUD with the lap clock. The menu route (Racebox, Single Race, taps as above) also reaches `stage=race` with the HUD on both. Tests: `an_hd_race_under_autopilot_leaves_the_flyby`
   (`drive_ground_truth`) fails when the skip is dropped. The menu route, which loads `track_reversed.vex`, is the route the tables above this section were measured on (Vineta K **reversed**): ticks 5 to 11 ms, `Race::tick` 25 % of the frame thread.
 
 Per pass, menu route (racing), one run each, about 120 frame-log seconds per arm, drawn against left out:
@@ -873,6 +873,7 @@ Per pass, menu route (racing), one run each, about 120 frame-log seconds per arm
   | Pulse Talon's Junction | 0.53 % | 0.09 % | 0.49 % | 0.06 % | not read |
 
   So the mixer does not mix, but its voice bookkeeping still runs (0.4 % on HD, 0.06 % on Pulse): "no work per frame" is false as worded and 94 % of it is gone on HD.
+  Desktop, HD `--race --no-audio --screenshot --ticks 3600` (dev profile, `perf stat -e instructions:u`, three runs each, spread under 0.1 %): 45.65 G user instructions on main's mixer, 38.41 G on this one (-15.9 %).
   Desktop, `--dump-audio` of 600 ticks of a race on Pulse and on HD: the WAV is byte-identical between main's mixer and this one (the audible path went through the same `voice_gate`),
   and `--race --screenshot` with and without `--no-audio` is byte-identical between the two builds.
 On the flyby (`--race`), the same switches read glass 42.5 / 26.8, adverts 42.4 / 35.5, bloom 36.4 / 29.7, `hud` 36.8 / 32.0, `composite` 39.9 / 34.6

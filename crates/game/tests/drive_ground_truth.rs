@@ -309,33 +309,46 @@ fn a_race_box_race_runs_the_simulation_mods_only_with_the_extensions_feature() {
     }
 }
 
-/// HD's pre-race flyby repeats until a press, so a run with nobody to press it stood on the
-/// camera tour for ever. `--autopilot` presses the skip: the race's world ticks within a few
-/// hundred frames of the green light's turn, and without the flag it has not moved at all.
-#[test]
-#[ignore = "needs an HD disc image in data/images/"]
-fn an_hd_race_under_autopilot_leaves_the_flyby_and_one_without_stays_in_it() {
-    let Some(image) = hd() else {
-        return;
-    };
+/// The HD race the flyby tests start, run for 300 frames with `args`: the race's tick count.
+/// The flyby is left in (no `--no-intro`).
+fn hd_flyby_ticks(tag: &str, args: &[&str]) -> Option<u64> {
+    let image = hd()?;
     let script = "boot; select racebox; press cross; until page=race; \
          select launch_race; press cross; \
          until screen=picker; press cross; \
          until screen.id=ship-select; press cross; \
          until stage=race within 3000; ticks 300";
-    let ticks = |tag: &str, args: &[&str]| {
-        let run = drive_flags(&image, tag, script, None, &[], args, &["--no-audio"]);
-        assert!(run.output.status.success(), "{}", run.why_not_success());
-        run.last()["sim_tick"].as_u64().unwrap_or(0)
+    let run = drive_flags(&image, tag, script, None, &[], args, &["--no-audio"]);
+    assert!(run.output.status.success(), "{}", run.why_not_success());
+    assert_eq!(text(run.last(), &["stage"]), Some("race"), "{}", run.last());
+    Some(run.last()["sim_tick"].as_u64().unwrap_or(0))
+}
+
+/// HD's pre-race flyby repeats until a press, so a run with nobody to press it stood on the
+/// camera tour for ever. `--autopilot` presses the skip: the race's world ticks within a few
+/// hundred frames of the race's start.
+#[test]
+#[ignore = "needs an HD disc image in data/images/"]
+fn an_hd_race_under_autopilot_leaves_the_flyby() {
+    let Some(ticks) = hd_flyby_ticks("hd-flyby-autopilot", &["--autopilot"]) else {
+        return;
     };
     assert!(
-        ticks("hd-flyby-autopilot", &["--autopilot"]) > 100,
-        "the autopilot's skip ends the flyby"
+        ticks > 100,
+        "the autopilot's skip ends the flyby: {ticks} ticks"
     );
+}
+
+/// The other half: without the flag nothing presses, and the flyby holds the world at its first tick.
+#[test]
+#[ignore = "needs an HD disc image in data/images/"]
+fn an_hd_race_with_nobody_to_press_stays_in_the_flyby() {
+    let Some(ticks) = hd_flyby_ticks("hd-flyby-held", &[]) else {
+        return;
+    };
     assert_eq!(
-        ticks("hd-flyby-held", &[]),
-        0,
-        "nothing presses: the flyby holds the world at its first tick"
+        ticks, 0,
+        "nothing presses: the world stands at its first tick"
     );
 }
 
