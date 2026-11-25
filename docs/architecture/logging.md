@@ -148,7 +148,7 @@ not touch them. Runtime chatter belongs on the logger.
 `--frame-log` (or `OAG_FRAME_LOG`) prints one `info` line a second, `key=value` fields split on
 spaces (`crates/game/src/devrun.rs`, `format_line`): `stage`, `fps`, `frame_ms`, `p99_ms`,
 `cpu_ms`, `gpu_ms` (the scene pass alone), `present_ms`, `target_hz`, `window`, `surface`,
-`render`, `governor`, and last `pass_ms`. **New fields are only ever appended**, because the
+`render`, `governor`, `pass_ms`, and last `reflection`. **New fields are only ever appended**, because the
 Android scripts read the earlier ones by name.
 
 `pass_ms` is `-` until a pass has come back, else every separately-encoded pass's mean GPU time in
@@ -156,6 +156,9 @@ milliseconds as comma-joined `name:ms` pairs in the overlay's row order, the nam
 `_` for a space: `pass_ms=glass:2.97,shadow_map:2.36,self_shadow:1.77,occlusion:4.23,probe_blend:0.15,hd_zoom:0.50,blit:3.61,hud_and_ui:1.42`.
 Rows the overlay hides under 0.1 ms are kept here. The rows and what they time are in
 [dynamic-resolution.md](../rendering/dynamic-resolution.md), "Every other pass has a row of its own".
+`reflection` is the step the glass and sea target is drawn at (`original`, `half` or `quarter`, the
+step REFLECTION RESOLUTION `auto` is at), `-` in a race or stage with no such target; the overlay's
+`GLASS` row names the same step.
 
 ## Getting the rest back
 

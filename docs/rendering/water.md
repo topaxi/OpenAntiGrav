@@ -942,7 +942,8 @@ is built only on an HD circuit whose sea draws under `original`, and the sea is 
 target a circuit's glass or sea reads: HD's behind-the-glass target (Vineta K, 640 x 360) and its planar sea
 reflection (Moa Therma and Ubermall draw reflected chunks, Chenghou and Modesto hold the sky alone;
 960 x 540), and 2048's and Omega's refraction target (`psp2::refraction_only::target_size`, 480 x 272 and
-960 x 540). `original` is the default and keeps those fixed sizes. `half` and `quarter` take that fraction
+960 x 540). `auto` is the default since 2026-11-25 (below, "REFLECTION RESOLUTION `auto`"); `original`
+keeps those fixed sizes. `half` and `quarter` take that fraction
 of each axis, rounded down, at least one texel, whatever the render scale: a function of the original's size
 alone, so a race builds the same target on every machine and neither the render scale nor dynamic resolution
 moves it. (An earlier `scaled` value sized it from the render scale; it is gone, with no alias: a settings
@@ -954,16 +955,27 @@ The row is dropped where no target is drawn (`oag_title::Looks::screen_space_tar
 **Where.** `oag_raceplay::load::view` hands `BehindGlassModels::resolution` the profile's value right after
 `geometry::track_model` returns, so all three branches (HD glass, HD sea, psp2) share it, and a circuit with
 no target has nothing to resize. `BehindGlassModels::size` stays the original's. The loader report says the
-drawn size when it differs. The race on screen follows the row from the next frame:
-`Scene::set_reflection_resolution`, called every frame with the frame's profile, makes the target's colour,
-depth and velocity textures the new size and rebuilds the one bind group that reads it (the circuit's own
-drawable; `RebindResources::set_behind_glass`, the Zone stage rebind's mechanism), and does nothing while
-the size is unchanged.
+drawn size when it differs, and under `auto` whether anything times the pass to step it by. **The texture is
+always the original's size and a step is a rectangle of it** (since 2026-11-25, `auto-reflection`), the way
+dynamic resolution varies a viewport and not an allocation (ADR-0037): `Scene::set_reflection_resolution`,
+called every frame with the frame's step, sets the rectangle the target's pass draws into from the top-left
+corner (viewport and scissor), and nothing is reallocated or rebound. The readers fold the rectangle into the
+matrix they already take (`scene.refraction`: `x' = f x + (f - 1) w`, `y' = f y + (1 - f) w`, `f` the
+rectangle's share of the texture per axis, `behind_glass::rect_mapping`) and clamp the lookup half a texel
+inside it (`scene.sea_reflection.zw`, `uv_limit`), in `refraction.wesl` (HD's tunnel glass, Omega's ice
+tunnel) and `shade.wesl` (the sea). A lookup then lands on the same texel centres, and a lookup past the
+rectangle on the same edge texels, as a texture of the rectangle's size with the sampler's edge clamp
+(`a_quarter_rectangle_reads_what_a_quarter_size_target_holds`, for all three steps of the glass's, the sea's
+and the psp2 target's sizes). The pass still clears the whole texture, so a texel outside the rectangle is
+black and never read. Before this change a size change made new textures and rebuilt the circuit drawable's
+bind group (`RebindResources::set_behind_glass`, now gone).
 
 **Photos.** A photo-mode shot always draws the glass and sea target at the original's size, whatever the race
 plays with: `RenderProfile::for_a_photo` sets `reflection_resolution` to `original`, and `photo_differs`
-counts a smaller target as a reason to redraw. The frame the shot is drawn in rebuilds the target at the
-original's size and the frame after puts the player's back, so play continues unchanged. The shot's
+counts a target drawn smaller now (a fixed `half` or `quarter`, or the step `auto` is at) as a reason to
+redraw. The frame the shot is drawn in draws the full rectangle and the frame after puts the player's step
+back, so play continues unchanged; under `auto` the shot's frame is not fed to the rung (it is drawn at another
+step than the rung's, `session::timing::reflection_reading`). The shot's
 `[render]` text says `original`, and `--from-png` draws at the original's size
 (`photo_mode_ground_truth::reflection_shot`: the drive log's `glass_target` goes 160x90, 640x360, 160x90 on
 Vineta K under `quarter` and 240x135, 960x540, 240x135 on Moa Therma, and the shot is the shot taken under
