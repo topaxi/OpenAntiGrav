@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-25
-summary: "Suite -16.9 %, -10.1 %, -7.2 % instructions: decoders, sim-only loads, no music or sound bank unless read. Open: libc copies, Omega inflate, SIMD IMDCT"
+summary: "Suite -16.9 %, -10.1 %, -7.2 % instructions: decoders, sim-only loads, no music or sound bank unless read. Open: libc copies, inflate, IMDCT SIMD"
 difficulty: medium (35)
 ---
 
