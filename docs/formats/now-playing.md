@@ -9,7 +9,7 @@ by `crates/game/tests/now_playing_ground_truth.rs` (`just test-data`).
 | Pulse (PSP) | `InGame_Definition.xml`, `item InGameMusicDisplay` | `PI_Music` `Artist` and `name` | **read**, [Pulse page](../ghidra/functions/psp-pulse-usa/now-playing.md) | wired, measured |
 | HD / Fury | `ingame_definition.xml`, the same item with a textured bar | `PI_Music` `Artist` and `name` | **read**, [HD page](../ghidra/functions/ps3-hdfury-eu/now-playing.md): Pulse's law | wired, measured |
 | Omega | `data00.psarc`'s `ingame_definition.xml`: HD's item | `PI_Music` `Artist` and `name` | inherited from HD | wired, inherited |
-| Pure | `InGame_Definition.xml`'s `InGame` screen: three `Text` widgets, no bar, no scroll ([Pure's own music text](#pures-own-music-text)); ours still draws Pulse's marquee | its own `PI_Music` `Artist`, `name` and `Label` | fade step Pulse's, hold measured once | **not wired**: ours draws the borrowed marquee, which the original does not |
+| Pure | `InGame_Definition.xml`'s `InGame` screen: three `Text` widgets, no bar, no scroll ([Pure's own music text](#pures-own-music-text)) | its own `PI_Music` `Artist` and `name` (the `Label` never shows) | fade step Pulse's, hold measured once | wired (`Show::Lines`), layout and strings read off the disc |
 | 2048 | none authored | its own `PI_Music` `Artist` and the language table's `MT_nn` title | inherited from HD | wired, **borrowed**, chosen not measured |
 
 The title's row is `oag_title::Music::now_playing` (`oag_title::now_playing::NowPlaying`):
@@ -18,7 +18,7 @@ where the layout is, which widgets, the separator, the step sizes, and an `Origi
 
 ## How it works here
 
-A translucent bar with `Artist - song` in the `HUDSmall` face scrolling left through it.
+A translucent bar with `Artist - song` in the `HUDSmall` face scrolling left through it. **Pure's is the other shape** (`Show::Lines`): the artist over the song as two still lines with no bar ([Pure's own music text](#pures-own-music-text)).
 
 1. **Geometry** is read off the layout at race load (`oag_hud::now_playing::geometry`): the
    item's offset, the bar (a fill, or a texture such as HD's `HUD_Components.gtf`), the text's
@@ -142,10 +142,8 @@ has no such row.
 
 **Pure** (checked 2026-10-26, **corrected 2026-11-25**): its `BOOT.BIN` has no `InGameMusic` string (Pulse's has) and its
 `InGame_Definition.xml` holds no `InGameMusicDisplay` item; that check looked for Pulse's item and missed what the screen does carry, three
-plain `Text` widgets ([below](#pures-own-music-text)). `assets/fallback/Data/XML/NowPlaying_Pure.xml` is
-this project's own file carrying Pulse's numbers, in the fallback layer (it answers a name no
-disc holds), and what it draws is **not** what the original draws: a translucent bar with the song scrolling through it at the foot of
-the frame, over the craft's exhaust and ground shadow on Pure's chase view, where the original draws two plain lines of text at the left.
+plain `Text` widgets ([below](#pures-own-music-text)). Ours drew Pulse's bar and scroll from a fallback file of its own until
+2026-11-25; it now draws the disc's widgets and the file is gone.
 
 **2048** (checked 2026-10-26, base package and the 1.04 patch): the executable looks the three
 widgets up (`InGameMusicDisplay`, `InGameMusicText`, `InGameMusicBG`) but no layout file holds
@@ -188,12 +186,9 @@ timing (seen once: one song per end of the life, 0.25 s resolution, the hold's s
 start is not separated, because every state's song started at the grid). The song a state plays differs per state; the original's choice of
 song is not read here.
 
-**Effect on the comparison.** Ours' bar is the largest piece of the Classic pairs' hull box's "original brighter" (`docs/tools/compare-page.md`, "The
+**Effect on the comparison.** Before it was wired, ours' bar was the largest piece of the Classic pairs' hull box's "original brighter" (`docs/tools/compare-page.md`, "The
 Classic hull"): pasting the original's pixels over ours in the bar's left part and the original's text box lowers the whole-frame mean absolute RGB-channel difference by 0.4 to
-0.7 on every Pure race pair whose original shows the text (the page's own Gray score reads about the same; not recomputed). **Wiring** is the display, a title-data row (a static three-widget text display: where, fonts, the two
-strings, the fade step, the hold) instead of Pulse's bar, and `NowPlaying_Pure.xml` retired for the disc's own widgets: ready to wire, not wired by the
-lane that read it. Whether Pulse's, HD's, 2048's or Omega's `InGame` screens carry the same three widgets beside their `InGameMusicDisplay` was not checked
-(the Pulse and HD pages above read the item, not the screen's other `Text` widgets).
+0.7 on every Pure race pair whose original shows the text (the page's own Gray score reads about the same; not recomputed). **Wired 2026-11-25** (`pure-classic-vr-set`): `oag_title::now_playing::Show::Lines` names the two widgets and the hold (150 updates), `NowPlaying::ticks_per_update` is 2 on Pure (the original updates at 30 a second, the engine at 60), `oag_hud::now_playing::Display` fades the lines in by `fade_step`, holds and fades them out, and `NowPlaying_Pure.xml` is gone. The hull box (`188..300 x 172..272`) mean absolute grey difference, stored pair to re-rendered: Karbonis 11.24 -> 5.39, Mandrashee 8.44 -> 6.04, Manor Top 8.21 -> 5.52, Sagarmartha 25.40 -> 24.78; the pairs' mean grey 4.20 -> 3.74, 6.73 -> 6.48, 6.24 -> 5.89, 9.06 -> 9.18. The other Pure race pairs: Sinucit 14.71 -> 14.05, Citta Nuova 6.83 -> 6.51, Sebenco Climb 14.01 -> 13.72, Sol 2 9.23 -> 9.02, Blue Ridge 6.51 -> 6.57, Chenghou 6.43 -> 6.63; Modesto, Vineta (the original's text is gone by then) and the two Zone pairs are unchanged to the printed digit. The three that rose (Sagarmartha, Blue Ridge, Chenghou) are pairs whose original plays another song than ours' first soundtrack entry: the words differ, and two lines of wrong words cost more than the removed bar gained; Sinucit, whose original plays ours' song (`COLD STORAGE / ONYX`), gains most. Ours' song is not the original's: a pair needs the original's song pinned (`--hud-song`, which needs `--hud-state`), not done here. Whether Pulse's, HD's, 2048's or Omega's `InGame` screens carry the same three widgets beside their `InGameMusicDisplay` was not checked (the Pulse and HD pages above read the item, not the screen's other `Text` widgets).
 
 ## Lineage check, recorded
 

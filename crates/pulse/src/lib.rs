@@ -269,13 +269,16 @@ pub const NOW_PLAYING: oag_title::now_playing::NowPlaying = oag_title::now_playi
         file: "music.at3",
     },
     layout: names::INGAME_DEFINITION,
-    item: "InGameMusicDisplay",
-    bar: "InGameMusicBG",
-    text: "InGameMusicText",
+    show: oag_title::now_playing::Show::Marquee {
+        item: "InGameMusicDisplay",
+        bar: "InGameMusicBG",
+        text: "InGameMusicText",
+    },
     title_key: None,
     separator: " - ",
     fade_step: 5,
     scroll_step: 1,
+    ticks_per_update: 1,
     origin: oag_title::effects::Origin::Measured,
 };
 

@@ -511,14 +511,17 @@ pub const NOW_PLAYING: oag_title::now_playing::NowPlaying = oag_title::now_playi
         file: names::MUSIC_TRACK_FILE,
     },
     layout: r"Data\XML\NowPlaying_2048.xml",
-    item: "InGameMusicDisplay",
-    bar: "InGameMusicBG",
-    text: "InGameMusicText",
+    show: oag_title::now_playing::Show::Marquee {
+        item: "InGameMusicDisplay",
+        bar: "InGameMusicBG",
+        text: "InGameMusicText",
+    },
     // The nodes are named `01`..`11`; `MT_01` in the language table is "Artist\nTitle".
     title_key: Some("MT_{}"),
     separator: " - ",
     fade_step: 5,
     scroll_step: 1,
+    ticks_per_update: 1,
     origin: oag_title::effects::Origin::InheritedFrom("Wipeout HD"),
 };
 

@@ -364,25 +364,28 @@ pub const MUSIC: &oag_title::Music = &oag_title::Music {
     ),
 };
 
-/// The race screen's now-playing marquee. **Borrowed from Pulse, chosen not measured**: Pure's
-/// executable has no `InGameMusic` widget and its `InGame_Definition.xml` authors no such item
-/// (checked 2026-10-26, `docs/formats/now-playing.md`), so the layout is this project's own file
-/// in the fallback layer, carrying Pulse's numbers, and the fade and scroll are Pulse's law. The
-/// names are Pure's own `PI_Music` nodes, the declaration its soundtrack is already read from.
+/// The race screen's song display: two plain lines, the artist over the song, at the left of the
+/// foot of the frame. The disc authors the widgets (`InGameArtistText` and `InGameTrackText` of
+/// the `InGame` screen in `InGame_Definition.xml`; a third, `InGameLabelText`, never shows), the
+/// names are Pure's own `PI_Music` nodes. They fade in at 5 of 255 an update of the original's 30
+/// a second, hold 150 updates and fade out. Layout and strings are read off the disc; the hold is
+/// measured once (`docs/formats/now-playing.md`, "Pure's own music text").
 pub const NOW_PLAYING: oag_title::now_playing::NowPlaying = oag_title::now_playing::NowPlaying {
     names: oag_title::DeclaredTracks {
         declared_in: names::GAME_PLUGIN_DEFINITION,
         file: names::MUSIC_TRACK_FILE,
     },
-    layout: r"Data\XML\NowPlaying_Pure.xml",
-    item: "InGameMusicDisplay",
-    bar: "InGameMusicBG",
-    text: "InGameMusicText",
+    layout: r"Data\Plugins\PI001\GUI\InGame_Definition.xml",
+    show: oag_title::now_playing::Show::Lines {
+        widgets: &["InGameArtistText", "InGameTrackText"],
+        hold_updates: 150,
+    },
     title_key: None,
     separator: " - ",
     fade_step: 5,
-    scroll_step: 1,
-    origin: oag_title::effects::Origin::InheritedFrom("Wipeout Pulse"),
+    scroll_step: 0,
+    ticks_per_update: 2,
+    origin: oag_title::effects::Origin::Measured,
 };
 
 /// Pure's front end: the layout its own `Skin.xml` authors and the boot chain a

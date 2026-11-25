@@ -13,7 +13,7 @@
 //! bar, which a placement that drops a draw whose origin is off the screen would cut early.
 
 use oag_tables::fexml::{Node, parse};
-use oag_title::now_playing::NowPlaying;
+use oag_title::now_playing::{NowPlaying, Show};
 use oag_ui::frontend::{Align, Draw};
 use oag_ui::screen::{argb_to_rgba, parse_argb};
 
@@ -37,6 +37,9 @@ pub struct Geometry {
     pub item_x: f32,
     /// The text's top edge.
     pub text_y: f32,
+    /// The top edge of each line after the first, for a display of plain lines
+    /// ([`Show::Lines`]); empty for a marquee.
+    pub later_rows_y: Vec<f32>,
     /// The text's authored size.
     pub scale: f32,
     /// The text's authored colour, `0xAARRGGBB`.
@@ -75,7 +78,15 @@ fn find<'a>(
 #[must_use]
 pub fn geometry(xml: &str, authored: &NowPlaying) -> Option<Geometry> {
     let root = parse(xml);
-    let (item, viewport) = find(&root, authored.item, None)?;
+    let Show::Marquee {
+        item: item_name,
+        bar: bar_name,
+        text: text_name,
+    } = authored.show
+    else {
+        return line_geometry(xml, authored);
+    };
+    let (item, viewport) = find(&root, item_name, None)?;
     let item_x = number(item, "OffsetX").unwrap_or(0.0);
     let item_y = number(item, "OffsetY").unwrap_or(0.0);
     let widget = |name: &str| {
@@ -84,8 +95,8 @@ pub fn geometry(xml: &str, authored: &NowPlaying) -> Option<Geometry> {
             .chain(nested_children(item))
             .find(|child| child.attr("name") == Some(name))
     };
-    let bar = widget(authored.bar)?;
-    let text = widget(authored.text)?;
+    let bar = widget(bar_name)?;
+    let text = widget(text_name)?;
     // Pulse's viewport holds the item, so its numbers are the grid's; HD's is a child of the
     // item, so its `x` is from the item's corner and the text clips inside the bar.
     let nested = item
@@ -130,6 +141,7 @@ pub fn geometry(xml: &str, authored: &NowPlaying) -> Option<Geometry> {
         origin_x: item_x + number(text, "x").unwrap_or(0.0),
         item_x,
         text_y: item_y + number(text, "y").unwrap_or(0.0),
+        later_rows_y: Vec::new(),
         scale: number(text, "scale").unwrap_or(1.0),
         text_argb: text
             .value("color")
@@ -139,12 +151,54 @@ pub fn geometry(xml: &str, authored: &NowPlaying) -> Option<Geometry> {
     })
 }
 
+fn find_text<'a>(node: &'a Node, name: &str) -> Option<&'a Node> {
+    if node.attr("name") == Some(name) && node.name.eq_ignore_ascii_case("Text") {
+        return Some(node);
+    }
+    node.children
+        .iter()
+        .find_map(|child| find_text(child, name))
+}
+
+/// The geometry of a display of plain lines ([`Show::Lines`]): each named `Text` widget of the
+/// layout, wherever it stands, gives a line's left edge and top. The first sets the size and
+/// colour. There is no bar, and no clip.
+fn line_geometry(xml: &str, authored: &NowPlaying) -> Option<Geometry> {
+    let Show::Lines { widgets, .. } = authored.show else {
+        return None;
+    };
+    let root = parse(xml);
+    let nodes = widgets
+        .iter()
+        .map(|name| find_text(&root, name))
+        .collect::<Option<Vec<_>>>()?;
+    let first = nodes.first()?;
+    Some(Geometry {
+        bar: [0.0; 4],
+        bar_argb: 0,
+        bar_art: None,
+        origin_x: number(first, "x").unwrap_or(0.0),
+        item_x: 0.0,
+        text_y: number(first, "y").unwrap_or(0.0),
+        later_rows_y: nodes[1..]
+            .iter()
+            .map(|node| number(node, "y").unwrap_or(0.0))
+            .collect(),
+        scale: number(first, "scale").unwrap_or(1.0),
+        text_argb: first
+            .value("color")
+            .and_then(parse_argb)
+            .unwrap_or(0xFFFF_FFFF),
+        clip: [-1.0e9, -1.0e9, 2.0e9, 2.0e9],
+    })
+}
+
 /// Where the animation is, in the executable's own states.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Phase {
     /// Fading in while scrolling.
     Entering,
-    /// Fully shown and scrolling.
+    /// Fully shown and scrolling, or holding still ([`Show::Lines`]).
     Scrolling,
     /// Fading out.
     Leaving,
@@ -160,7 +214,14 @@ pub struct Display {
     fade_step: i32,
     scroll_step: f32,
     phase: Phase,
-    text: String,
+    /// How many updates a plain-lines display holds, `None` for a marquee, which leaves when
+    /// its text has run off the bar.
+    hold: Option<u16>,
+    hold_left: u16,
+    /// Engine ticks to one update of the original's race, and how many have passed in this one.
+    ticks_per_update: u8,
+    ticks: u8,
+    lines: Vec<String>,
     width: f32,
     text_alpha: i32,
     bar_alpha: i32,
@@ -177,7 +238,14 @@ impl Display {
             fade_step: i32::from(authored.fade_step),
             scroll_step: f32::from(authored.scroll_step),
             phase: Phase::Off,
-            text: String::new(),
+            hold: match authored.show {
+                Show::Lines { hold_updates, .. } => Some(hold_updates),
+                Show::Marquee { .. } => None,
+            },
+            hold_left: 0,
+            ticks_per_update: authored.ticks_per_update.max(1),
+            ticks: 0,
+            lines: Vec::new(),
             width: 0.0,
             text_alpha: 0,
             bar_alpha: 0,
@@ -187,7 +255,13 @@ impl Display {
 
     /// A song has started: shows `text`, `width` units wide, from the start.
     pub fn show(&mut self, text: String, width: f32) {
-        self.text = text;
+        self.show_lines(vec![text], width);
+    }
+
+    /// A song has started: shows `lines`, one under another, the longest `width` units wide.
+    pub fn show_lines(&mut self, lines: Vec<String>, width: f32) {
+        self.lines = lines;
+        self.ticks = 0;
         self.width = width;
         self.text_alpha = 0;
         self.bar_alpha = 0;
@@ -221,6 +295,11 @@ impl Display {
     /// `step`, so it climbs more slowly and is cut off where the text stops fading in; the
     /// executable leaves it at whatever it reached for the scroll.
     pub fn step(&mut self) {
+        self.ticks += 1;
+        if self.ticks < self.ticks_per_update {
+            return;
+        }
+        self.ticks = 0;
         let authored = i32::try_from(self.geometry.bar_argb >> 24).unwrap_or(255);
         // `(int)((float)authored * 0.00390625 * (float)step)`, as the executable computes it.
         let bar_step = (authored as f32 * 0.003_906_25 * self.fade_step as f32) as i32;
@@ -231,13 +310,20 @@ impl Display {
                 if self.text_alpha > 255 {
                     self.text_alpha = 255;
                     self.phase = Phase::Scrolling;
+                    self.hold_left = self.hold.unwrap_or(0);
                 }
                 self.bar_alpha = self.bar_alpha.min(authored);
                 self.x -= self.scroll_step;
             }
             Phase::Scrolling => {
                 self.x -= self.scroll_step;
-                if self.x <= -self.width {
+                let done = if self.hold.is_some() {
+                    self.hold_left = self.hold_left.saturating_sub(1);
+                    self.hold_left == 0
+                } else {
+                    self.x <= -self.width
+                };
+                if done {
                     self.phase = Phase::Leaving;
                 }
             }
@@ -268,9 +354,23 @@ impl Display {
             bar: geometry.bar,
             bar_color: bar,
             bar_art: geometry.bar_art.clone(),
-            text: self.text.clone(),
+            lines: self
+                .lines
+                .iter()
+                .enumerate()
+                .map(|(row, text)| Line {
+                    text: text.clone(),
+                    y: match row {
+                        0 => geometry.text_y,
+                        _ => geometry
+                            .later_rows_y
+                            .get(row - 1)
+                            .copied()
+                            .unwrap_or(geometry.text_y),
+                    },
+                })
+                .collect(),
             x: geometry.item_x + self.x,
-            y: geometry.text_y,
             scale: geometry.scale,
             color,
             clip: geometry.clip,
@@ -288,18 +388,25 @@ pub struct Marquee {
     pub bar_color: [f32; 4],
     /// The bar's texture and source rectangle, when it has one ([`Geometry::bar_art`]).
     pub bar_art: Option<(String, [f32; 4])>,
-    /// The song: `Artist - name`.
-    pub text: String,
+    /// The song: `Artist - name` on one line of a marquee, the artist over the name on plain lines.
+    pub lines: Vec<Line>,
     /// The text's left edge.
     pub x: f32,
-    /// The text's top edge.
-    pub y: f32,
     /// The text's size.
     pub scale: f32,
     /// The text's colour with the fade applied.
     pub color: [f32; 4],
     /// What the text is clipped to: `[x, y, width, height]`.
     pub clip: [f32; 4],
+}
+
+/// One line of the display.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Line {
+    /// The words.
+    pub text: String,
+    /// The line's top edge.
+    pub y: f32,
 }
 
 impl Marquee {
@@ -319,7 +426,14 @@ impl Marquee {
         Self {
             bar: moved(self.bar),
             x: self.x * at.scale + at.offset[0],
-            y: self.y * at.scale + at.offset[1],
+            lines: self
+                .lines
+                .iter()
+                .map(|line| Line {
+                    text: line.text.clone(),
+                    y: line.y * at.scale + at.offset[1],
+                })
+                .collect(),
             scale: self.scale * at.scale,
             clip: moved(self.clip),
             ..self.clone()
@@ -343,6 +457,8 @@ pub fn append(
         });
     }
     match &marquee.bar_art {
+        // Plain lines author no bar.
+        None if marquee.bar[2] <= 0.0 => {}
         None => frame.sprites.push(Draw::Fill {
             rect: marquee.bar,
             color: marquee.bar_color,
@@ -368,16 +484,18 @@ pub fn append(
             frame.skin_text.len(),
         ],
     });
-    frame.small_text.push(Draw::Text {
-        x: marquee.x,
-        y: marquee.y,
-        scale: marquee.scale,
-        color: marquee.color,
-        border: Some(border),
-        align: Align::Left,
-        text: marquee.text.clone(),
-        wrap_width: None,
-    });
+    for line in &marquee.lines {
+        frame.small_text.push(Draw::Text {
+            x: marquee.x,
+            y: line.y,
+            scale: marquee.scale,
+            color: marquee.color,
+            border: Some(border),
+            align: Align::Left,
+            text: line.text.clone(),
+            wrap_width: None,
+        });
+    }
 }
 
 #[cfg(test)]
