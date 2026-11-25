@@ -1,16 +1,20 @@
-//! `psp2::build_circuit`'s `hide_pads` leaves a circuit's own pad submeshes out, and only those:
-//! the triangles drawn fall by exactly the triangles on a pad material or a `speedup_pad`/`weapon_pad`
-//! shape, and a build without it draws the whole file.
+//! `psp2::build_circuit`'s `HidePads` leaves a circuit's own pad submeshes out, and only those:
+//! `All` drops exactly the triangles on a pad material or a `speedup_pad`/`weapon_pad` shape,
+//! `Weapon` exactly the weapon pads' share, and `None` draws the whole file. The pads, and only
+//! they, are marked to keep their own program in a Zone race
+//! (`docs/ghidra/functions/ps3-hdfury-eu/zone-plain-chunks.md`, "2048 and Omega").
 //!
 //! **`#[ignore]`d and never run in CI.** It needs game content; run with `just test-data`.
 //!
-//! Detonator draws its own `Detonator_Pad` in their place
-//! (`docs/ghidra/functions/ps3-hdfury-eu/detonator-hull.md`, "Pads"). Remove the skip in
+//! Detonator draws its own `Detonator_Pad` in place of both
+//! (`docs/ghidra/functions/ps3-hdfury-eu/detonator-hull.md`, "Pads"); a weapons-off race drops
+//! the weapon pads alone (`docs/gameplay/pickups.md`). Remove the skip in
 //! `psp2::build_scanned` and every difference here reads zero.
 
 use std::path::Path;
 
-use oag_mesh::mesh::rcs::psp2;
+use oag_mesh::mesh::rcs::psp2::{self, circuit_pads::HidePads};
+use oag_mesh::mesh::slots;
 
 const OMEGA: [&str; 9] = [
     "ps4/omega-eu/uroot/data00.psarc",
@@ -24,23 +28,26 @@ const OMEGA: [&str; 9] = [
     "ps4/omega-eu-patch/uroot/data09.psarc",
 ];
 
-/// `(file's triangles, pad triangles)` per circuit, counted once by summing the file's submeshes
-/// by their raw material and shape names, and written down here so the test does not rely on the
-/// predicate it checks.
+/// `(file's triangles, pad triangles, weapon pad triangles)` per circuit, counted once by summing
+/// the file's submeshes by their raw material and shape names, and written down here so the test
+/// does not rely on the predicates it checks.
 /// Talons Junction on Omega: 4527 `weapon_pads` triangles and 5382 on `speedup_pad_*` shapes
 /// that wear the start-line material.
-const TALONS: (usize, usize) = (1_067_844, 9909);
+const TALONS: (usize, usize, usize) = (1_067_844, 9909, 4527);
 /// Arena (2048's circuit on Omega): `speed_pads` 4095 and `weapon_pads` 22022.
-const ARENA: (usize, usize) = (3_331_753, 26_117);
+const ARENA: (usize, usize, usize) = (3_331_753, 26_117, 22_022);
 /// Altima on the Vita.
-const ALTIMA: (usize, usize) = (419_023, 18_389);
+const ALTIMA: (usize, usize, usize) = (419_023, 18_389, 14_762);
+/// Omega's `zone_2`: its 5382 pad triangles are speed pads drawn on `weapon_pads.rcsmaterial`,
+/// and it has no weapon pad.
+const ZONE_2: (usize, usize, usize) = (0, 5382, 0);
 
-/// Builds `blob` both ways: the hidden build loses exactly `pads` triangles and keeps every
-/// other submesh of the file (the start line, the walls).
+/// Builds `blob` all three ways: each hidden build loses exactly its pads and keeps every other
+/// submesh of the file (the start line, the walls).
 fn check(
     name: &str,
     blob: &[u8],
-    (all, pads): (usize, usize),
+    (all, pads, weapon): (usize, usize, usize),
     read: &mut dyn FnMut(&str) -> Option<Vec<u8>>,
 ) {
     let build = |hide, read: &mut dyn FnMut(&str) -> Option<Vec<u8>>| {
@@ -54,23 +61,47 @@ fn check(
         )
         .expect("builds")
     };
-    let (_, kept) = build(false, read);
-    let (_, hidden) = build(true, read);
+    let (whole, kept) = build(HidePads::None, read);
+    let (_, hidden) = build(HidePads::All, read);
+    let (_, unarmed) = build(HidePads::Weapon, read);
     assert_eq!(
         kept.triangles - hidden.triangles,
         pads,
         "{name}: exactly the pad triangles go"
     );
+    // A pad's vertices say so, and no other vertex does: a Zone race draws them on their own
+    // program instead of the Zone surface (`slots::ZONE_PLAIN`).
+    let plain = whole
+        .indices
+        .as_chunks::<3>()
+        .0
+        .iter()
+        .filter(|t| {
+            t.iter()
+                .all(|&i| whole.vertices[i as usize].slots & slots::ZONE_PLAIN != 0)
+        })
+        .count();
+    assert_eq!(
+        plain, pads,
+        "{name}: the pads, and only they, are Zone-plain"
+    );
+    assert_eq!(
+        kept.triangles - unarmed.triangles,
+        weapon,
+        "{name}: weapons off drops exactly the weapon pads"
+    );
     // The builder also draws what the file does not hold (Omega's crowd rigs), so a plain build
     // has at least the file's triangles and the hidden one at least the file's non-pad ones.
-    assert!(
-        kept.triangles >= all,
-        "{name}: a plain build draws the whole file"
-    );
-    assert!(
-        hidden.triangles >= all - pads,
-        "{name}: the rest of the circuit stays"
-    );
+    if all > 0 {
+        assert!(
+            kept.triangles >= all,
+            "{name}: a plain build draws the whole file"
+        );
+        assert!(
+            hidden.triangles >= all - pads,
+            "{name}: the rest of the circuit stays"
+        );
+    }
 }
 
 #[test]
@@ -97,6 +128,7 @@ fn omegas_circuits_drop_exactly_their_pad_triangles() {
             TALONS,
         ),
         ("Data/environments2048/arena/track.final.rcsmodel", ARENA),
+        ("Data/environments/zone_2/track.rcsmodel", ZONE_2),
     ] {
         let at = (0..archives.len())
             .find(|&i| archives[i].contains(path))

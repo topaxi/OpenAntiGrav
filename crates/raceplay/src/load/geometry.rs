@@ -5,6 +5,7 @@
 //! absent, one that will not decode, and one in a container this build reads
 //! are three outcomes with one fallback between them.
 
+use oag_mesh::mesh::rcs::psp2::circuit_pads::HidePads;
 use oag_mesh::mesh::rcs::siblings::{Siblings, Spelling};
 use oag_mesh::mesh::{self, Model};
 
@@ -61,6 +62,19 @@ pub(super) fn with_batch_cull(
     model
 }
 
+/// Which of the circuit's own pads a race leaves out: both where it draws its own pad model in
+/// their place, the weapon pads where weapons are off for the mode or the event
+/// (`oag_race::Mode::weapons_enabled`), else none.
+pub(super) fn hidden_pads(replaced: bool, weapons_on: bool) -> HidePads {
+    if replaced {
+        HidePads::All
+    } else if weapons_on {
+        HidePads::None
+    } else {
+        HidePads::Weapon
+    }
+}
+
 /// The circuit's authored geometry, or `None` when the caller should draw the
 /// derived ribbon instead.
 ///
@@ -88,9 +102,10 @@ pub(super) fn with_batch_cull(
 /// keep the `wohdmeshrefract` meshes in the main view and draw no refraction target
 /// (`psp2::refraction_only`).
 ///
-/// `hide_pads` leaves the circuit's own pad chunks out of the world-space pass, for a race
-/// that draws its own pad model in their place (`mesh::rcs::build_scene_views`, and
-/// `mesh::rcs::psp2::build_circuit` for 2048 and Omega).
+/// `hide_pads` leaves circuit pads out of the world-space pass. 2048's and Omega's containers
+/// hold both pad classes there, so this is also where a weapons-off race drops their weapon pads
+/// (`mesh::rcs::psp2::circuit_pads::HidePads`); HD's weapon pads are a model of their own
+/// (`pads::ps3_pad_models`), so only `All` reaches `mesh::rcs::build_scene_views`.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn track_model(
     archives: &mut oag_assets::Archives,
@@ -102,7 +117,7 @@ pub(super) fn track_model(
     zone: bool,
     store: oag_gpu::formats::SceneStore,
     water: oag_display::display::Water,
-    hide_pads: bool,
+    hide_pads: HidePads,
     report: &mut Vec<String>,
 ) -> (Option<Model>, crate::BehindGlassModels) {
     let none = crate::BehindGlassModels::default;
@@ -138,6 +153,11 @@ pub(super) fn track_model(
             ) {
                 Ok((mut model, built)) => {
                     report.push(format!("{track}: {}", built.describe()));
+                    if hide_pads == HidePads::Weapon {
+                        report.push(format!(
+                            "{track}: weapons are off, the circuit's own weapon pads are not drawn"
+                        ));
+                    }
                     // 2048 and Omega draw a mesh named `wohdmeshrefract` only into their
                     // refraction target, never the main view, outside Zone mode
                     // (`psp2::refraction_only`); the target gets those meshes.
@@ -200,7 +220,7 @@ pub(super) fn track_model(
                 &mut crate::stages::reader(archives),
                 store,
                 water,
-                hide_pads,
+                hide_pads == HidePads::All,
             );
             match built {
                 Ok((model, mut groups, built)) => {

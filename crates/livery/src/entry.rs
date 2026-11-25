@@ -348,17 +348,19 @@ pub fn scene_model_requesting(
         reads.read(archives, path)
     };
     // 2048's and Omega's container is a different file under the same extension and needs no
-    // `.vex` at all (`oag_mesh::mesh::rcs::psp2`).
+    // `.vex` to be read (`oag_mesh::mesh::rcs::psp2`); a hull's flap hinges are the `.vex`'s.
     let mut model = if mesh::rcs::psp2::is_psp2(&geometry) {
-        let (model, built) = mesh::rcs::psp2::build_circuit(
+        let (mut model, built) = mesh::rcs::psp2::build_circuit(
             entry,
             &geometry,
             None,
             &mut |path| read(archives, path),
             reading.water,
-            false,
+            mesh::rcs::psp2::circuit_pads::HidePads::None,
         )
         .with_context(|| format!("decoding the model {entry}"))?;
+        // A hull's flaps; no other model names an `Airbrake`.
+        model.seat_flaps_on_vex(blob);
         report.push(format!("{entry}: {}", built.describe()));
         model
     } else {

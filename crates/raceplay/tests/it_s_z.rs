@@ -112,4 +112,6 @@ fn every_test_file_is_listed() {
     }
 }
 
+mod zone_flaps_ground_truth;
+mod zone_weapon_pads_ground_truth;
 mod zz_contact_sweep;

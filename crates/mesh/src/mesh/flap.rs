@@ -71,15 +71,7 @@ impl Flap {
         let Some(hinge) = nodes[brake].parent else {
             return;
         };
-        // A Maya namespace (`andy_ship:AirBrake_left`, PS2's Triakis race hull) is not part of
-        // the side.
-        let name = nodes[brake].name.as_deref().unwrap_or_default();
-        let name = name.rsplit(':').next().unwrap_or(name);
-        let side = if name.eq_ignore_ascii_case("Airbrake_Left") {
-            0
-        } else if name.eq_ignore_ascii_case("Airbrake_Right") {
-            1
-        } else {
+        let Some(side) = side_of(&nodes[brake]) else {
             return;
         };
         Self::record(
@@ -191,6 +183,24 @@ impl Flap {
         }
         self.hinge = hinge;
     }
+
+    /// Moves this flap's vertices from the hinge they were baked about onto `hinge`, which
+    /// becomes the one a swing turns about. Positions, normals and tangents are carried.
+    fn rehinge(&mut self, vertices: &mut [GpuVertex], hinge: Mat4) {
+        let carry = hinge * self.hinge.inverse();
+        let span = self.vertices.start as usize..self.vertices.end as usize;
+        for v in vertices.get_mut(span).into_iter().flatten() {
+            *v = moved(&carry, v);
+            if v.tangent != 0 {
+                let [x, y, z, w] = v.tangent.to_le_bytes();
+                let unit = |b: u8| f32::from(b) / 255.0 * 2.0 - 1.0;
+                let turned = carry.transform_vector3(Vec3::new(unit(x), unit(y), unit(z)));
+                let byte = |c: f32| ((c * 0.5 + 0.5) * 255.0).round().clamp(0.0, 255.0) as u8;
+                v.tangent = u32::from_le_bytes([byte(turned.x), byte(turned.y), byte(turned.z), w]);
+            }
+        }
+        self.hinge = hinge;
+    }
 }
 
 impl super::Model {
@@ -228,6 +238,53 @@ impl super::Model {
             seated += 1;
         }
         seated
+    }
+
+    /// Puts each flap on the hinge the hull's own `.vex` authors, carrying its vertices with it,
+    /// and says how many sides it found (`0` to `2`).
+    ///
+    /// 2048's and Omega's `.rcsmodel` poses each flap node where the artists' scene happened to
+    /// hold it, and the `.vex` locator under the `Airbrake` is the stowed hinge, as on HD
+    /// ([`Flap::collect`]). Every hull agrees within a degree but Omega's shared Zone hull,
+    /// whose nodes are pitched 45 degrees out: without this its flaps stay raised for the whole
+    /// race (`docs/physics/grid-state.md`, "The Zone hull's flaps"). A side either file lacks is
+    /// left as it is.
+    pub fn seat_flaps_on_vex(&mut self, vex_blob: &[u8]) -> usize {
+        let (Ok(nodes), Ok(classes)) = (vex::nodes(vex_blob), vex::classes_of(vex_blob)) else {
+            return 0;
+        };
+        // World matrices, not [`vex::anim_anchors`]: the locator is an `Anim Transform`, which
+        // anchoring leaves unbaked, and these vertices are already baked into model space.
+        let world = vex::world_transforms(vex_blob, &nodes);
+        let mut seated = 0;
+        for brake in &nodes {
+            if Some(brake.class_id) != classes.airbrake {
+                continue;
+            }
+            let (Some(side), Some(hinge)) = (side_of(brake), brake.parent) else {
+                continue;
+            };
+            let Some(flap) = &mut self.airbrakes[side] else {
+                continue;
+            };
+            flap.rehinge(&mut self.vertices, Mat4::from_cols_array(&world[hinge]));
+            seated += 1;
+        }
+        seated
+    }
+}
+
+/// Which side an `Airbrake` node is, by the artists' own name. A Maya namespace
+/// (`andy_ship:AirBrake_left`, PS2's Triakis race hull) is not part of the side.
+fn side_of(brake: &vex::Node) -> Option<usize> {
+    let name = brake.name.as_deref().unwrap_or_default();
+    let name = name.rsplit(':').next().unwrap_or(name);
+    if name.eq_ignore_ascii_case("Airbrake_Left") {
+        Some(0)
+    } else if name.eq_ignore_ascii_case("Airbrake_Right") {
+        Some(1)
+    } else {
+        None
     }
 }
 

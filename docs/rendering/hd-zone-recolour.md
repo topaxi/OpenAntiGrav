@@ -237,10 +237,13 @@ light-grey plate with a dark outline and cyan tiles the original shows.
 Evidence, the per-material census and the 2048/Omega check:
 [zone-plain-chunks.md](../ghidra/functions/ps3-hdfury-eu/zone-plain-chunks.md).
 
-**Not wired.** This port still sends flagged chunks through the Zone surface
-(the pad draws as road, with a white bar), and its stand-in for the start
-gantry's card (`oag_mesh::mesh::ZONE_EXEMPT_RATE`, chosen) is probably this
-same flag, unchecked.
+**Wired** (`slots::ZONE_PLAIN`): HD's flagged chunks off the render flags, and
+the pads of 2048's container (Omega's and 2048's HD-lineage circuits,
+inherited from HD) off the pad's material or shape name; see
+[zone-plain-chunks.md](../ghidra/functions/ps3-hdfury-eu/zone-plain-chunks.md),
+"2048 and Omega". The stand-in for the start gantry's card
+(`oag_mesh::mesh::ZONE_EXEMPT_RATE`, chosen) is probably the bit-11 flag,
+unchecked.
 
 ## The Zone surface's light, and the frame's post chain (2026-11-19, `zone-grade-sky`)
 
