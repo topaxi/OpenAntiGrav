@@ -470,12 +470,12 @@ Not wired: the travel cue `~MAGPULSETRAVEL`. The launch-time fork is wired below
 
 The fork is reachable on HD: a census of every HD circuit's `WO Track` (`oag_vex::track::from_vex`, 2026-11-24) finds one alternate successor on `zone_3`, `05_ubermall` (both directions) and `15_anulpha_pass` (forward), none on the other 24 files; `Course::branches` agrees (zone_3 one branch of 556 entries leaving at ring entry 9 and rejoining at 0; 05_ubermall one of 210, 0 to 210, both directions; 15_anulpha_pass forward one of 291, 0 to 295; every other file none).
 
-- **Law (chosen shape, the Repulser's).** `EMP_SweepSections` is `Repulser_AdvanceWave` cloned, so the wave follows `oag_weapons::projectile::repulser::fork`'s shape: a front that steps onto a branch's split entry forks once per wave (the Repulser's `+0x25c`), the second front walks the branch `speed` entries a tick, then the ring on from the merge, and ends with the wave (shared age and lifetime). It is born as the ring front clears the split entry and clears branch entry 0 that tick; a wave launched on the split entry itself never forks (the Repulser's `gap == 0`). `emp::Fork`, `emp::fork_entry`. Confidence 60: the clone is read (the block, the `REP2` fourcc), the stepping details are the Repulser's by analogy and no live fork was captured.
+- **Law (chosen shape, the Repulser's).** `EMP_SweepSections` is `Repulser_AdvanceWave` cloned, so the wave follows `oag_weapons::projectile::repulser::fork`'s shape: a front that steps onto a branch's split entry forks once per wave (the Repulser's `+0x25c`), the second front walks the branch `speed` entries a tick, then the ring on from the merge, and ends with the wave (shared age and lifetime). It is born as the ring front clears the split entry and clears branch entry 0 that tick; a wave launched on the split entry itself does not fork on the step (the Repulser's `gap == 0`); the launch-time fork covers it. `emp::Fork`, `emp::fork_entry`. Confidence 60: the clone is read (the block, the `REP2` fourcc), the stepping details are the Repulser's by analogy and no live fork was captured.
 - **Survey.** `Survey::branches` carries each `Course::branches` entry, measured like the ring (`oag_raceplay::detonator::survey`, the branch path's control points, every fourth sample); split and merge are ring entries (`sample / 4`). On the three circuits the branch's first entry sits 0.0 units from the ring's split entry and its last 7.9 to 8.0 from the merge entry. ~~**Nothing is laid on a branch**: the placement's own fork walk is unread~~ (2026-11-25: read and wired, [detonator-placement.md](detonator-placement.md#the-fork-walk); `place_stage` and the `--detonator-mines` snap now read `Survey::lap`, which holds the branch's clear sections). A mine put on a branch (a test does) is addressed by `Survey::branch_entry`'s index, one space with the ring's after it, and the fork clears it.
 - **Hash.** `Wave` gains `forked` and `fork`; `write_emp` writes the fork only while forked, so an unforked wave hashes as it did.
 - **Look.** A second `WO_QUAKE_DETONATOR` and a second `(0, 5, 10)` light ride the fork's front (`RaceView::emp_fork_effect`); the original's `EMP_DrawLights` adds the fork's light at `emp+0xe0` when `emp+0x60` is set. Both go with the wave. Frames: ours on `05_ubermall` from above at 90 and 105 ticks after the launch, one blue front on each arm of the split, the score up from the kills.
 - **Tests.** `emp::tests::a_wave_that_crosses_a_split_clears_both_branches` (fails without the fork: the branch's mines stay), `without_the_fork_the_branch_is_left_alone`, `a_wave_that_never_steps_onto_the_split_does_not_fork`, `the_fork_walks_its_branch_then_the_ring_and_ends_with_the_wave`; disc: `tests::emp_fork::an_hd_emp_wave_forks_at_the_split_and_clears_both_routes` (the four forked files, mines on the branch and on the ring past the split die, two effects while forked) and `an_hd_circuit_without_a_split_never_forks_its_wave`.
-- **2048 and Omega.** 2048: checked, applies, not wired (`REP2` at `0x811e804c` in the same sweep; its EMP never charges in ours). Omega: checked, applies, not wired: `eboot.bin` carries one recursive sweep function with the `REP2` fourcc (`0x0133c600`, immediate at `0x0133ce36`, unnamed; the EMP's, "The launch-time fork").
+- **2048 and Omega.** 2048: checked, applies, not wired (`REP2` at `0x811e804c` in the same sweep; its EMP never charges in ours). Omega: `eboot.bin` carries one recursive sweep function with the `REP2` fourcc (`0x0133c600`, immediate at `0x0133ce36`, unnamed; the EMP's, "The launch-time fork"), and Omega's EMP runs the shared module.
 
 Tests: `emp::tests::the_wave_steps_one_entry_a_tick_for_extent_seconds` (15 entries at gauge `0`,
 120 at `1`), `tests::detonator_fx::an_hd_emp_wave_carries_the_discs_effect_on_its_front_until_it_ends`
@@ -561,11 +561,11 @@ Confidence 65.
 `an_hd_ring_launch_away_from_a_split_is_unchanged`.
 
 **2048 and Omega.** 2048: checked, applies, not wired (same fork, `FUN_811e7c68`; its EMP never
-charges in ours). Omega: the same sweep runs the same code and its law is wired by this engine's
-shared `emp` module (`oag_title::Detonator` arms Omega's EMP), with no Omega circuit in this
-engine shipping a split measured here, so no Omega test or frame: not checkable on a disc test
-without a forked Omega circuit. Omega's `0x0133c600` is the **EMP's** sweep (it spawns
-`WO_QUAKE_DETONATOR` with `EMP2`), which closes the 50 above (80).
+charges in ours, `oag_title::Detonator::pads`). **Omega: ported**: its EMP is armed and runs this
+module, its `05_ubermall` and `15_anulpha_pass` ship the split, and
+`tests::emp_fork::an_omega_emp_fired_on_or_beside_a_branch_follows_it` holds the branch launch and
+the launch fork there. Omega's `0x0133c600` is the **EMP's** sweep (it spawns
+`WO_QUAKE_DETONATOR` with `EMP2`), which closes the 50 below (80).
 
 ### 2048 and Omega
 

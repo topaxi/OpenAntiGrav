@@ -429,8 +429,8 @@ original frame to compare. The detail is below.
   "What HD draws for a fired EMP": one survey entry a tick for `extent` seconds, `WO_QUAKE_DETONATOR`
   on the front with a `(0, 5, 10)` light; the stepper is the Repulser's, copied). The particle rows
   were `SPARKS` without their noise force, fixed (same page, "The grey rows were sparks that
-  never moved"); 13 other HD emitters author that force, unlisted. Open: the fork
-  (`REP2`) and `~MAGPULSETRAVEL` unwired; 2048 and Omega checked, applies, not wired. Still open:
+  never moved"); 13 other HD emitters author that force, unlisted. The in-run fork and the launch-time fork are wired (`detonator-emp.md`, "The launch-time fork"). Open: `~MAGPULSETRAVEL` unwired; the sweep's sibling-route lookup on a point with no
+  placement record is read (65) and unwired; 2048 and Omega checked, applies, not wired. Still open:
   whether the wave hurts the player,
   `EmpBarEffect` (an `<ImageModel>` the HUD layout reader does not model; the gauge is exposed),
   the ready pulse and post-fire flash on `EmpReady`, 2048's
