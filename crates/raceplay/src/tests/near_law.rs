@@ -31,7 +31,7 @@ fn only_hd_2048_and_omega_run_the_near_law() {
 }
 
 fn race_on(image: &str) -> Option<Race> {
-    let image = oag_testdata::image(image)?;
+    let image = oag_testdata::exact(image)?;
     let loaded = crate::load(&crate::Options {
         source: image.display().to_string(),
         class: "VENOM".to_string(),
@@ -118,6 +118,38 @@ fn hds_craft_blast_near_the_camera_is_capped_by_its_depth() {
             "a quad past its cap: {reach} at {depth}"
         );
     }
+}
+
+/// The same on 2048's and Omega's own loads: their craft blast carries the law and an authored
+/// cap.
+fn craft_blast_loads_under_the_law(source: &str) {
+    let Some(race) = race_on(source) else {
+        return;
+    };
+    let blast = race
+        .view
+        .handles
+        .get(Trigger::CraftBlast)
+        .expect("the title loads its craft blast");
+    assert_eq!(blast.near, Some(ONE_TO_FOUR));
+    assert!(
+        blast
+            .emitters
+            .iter()
+            .any(|e| e.near_cap.is_some_and(|cap| cap > 0.0 && cap <= 4.0))
+    );
+}
+
+#[test]
+#[ignore = "needs data/extracted/vita/PCSF00007"]
+fn the_2048_craft_blast_loads_under_the_near_law() {
+    craft_blast_loads_under_the_law("data/extracted/vita/PCSF00007");
+}
+
+#[test]
+#[ignore = "needs data/images/omega-ps4-eu.pkg"]
+fn the_omega_craft_blast_loads_under_the_near_law() {
+    craft_blast_loads_under_the_law("data/images/omega-ps4-eu.pkg");
 }
 
 /// Pulse's effects carry no law.
