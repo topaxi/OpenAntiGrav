@@ -67,6 +67,7 @@ fn frame(source: &Path, scratch: &Path, name: &str, mode: &str, stowed: bool) ->
             "--race",
             "--no-audio",
             "--no-soundtrack",
+            "--no-effects",
             "--size",
             "720x408",
         ])

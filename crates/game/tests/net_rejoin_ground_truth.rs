@@ -180,7 +180,13 @@ impl Lab {
             Command::new(env!("CARGO_BIN_EXE_oag-game"))
                 .envs(env.iter().copied())
                 .arg(&self.image)
-                .args(["--no-audio", "--no-soundtrack", "--no-intro", "--net-bot"])
+                .args([
+                    "--no-audio",
+                    "--no-soundtrack",
+                    "--no-effects",
+                    "--no-intro",
+                    "--net-bot",
+                ])
                 .args(args)
                 .env("XDG_CONFIG_HOME", profile.join("config"))
                 .env("XDG_DATA_HOME", profile.join("data"))

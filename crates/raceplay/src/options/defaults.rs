@@ -64,6 +64,7 @@ impl Default for Options {
             zone_stage: None,
             exposure_hold: None,
             ribbon: false,
+            no_effects: false,
             collision: false,
             opponents: false,
             views: 1,

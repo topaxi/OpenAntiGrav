@@ -101,6 +101,7 @@ fn run(image: &Path, scratch: &Path) -> (Vec<u8>, Vec<u8>) {
         .args([
             "--no-audio",
             "--no-soundtrack",
+            "--no-effects",
             "--size",
             "480x272",
             "--render-scale",

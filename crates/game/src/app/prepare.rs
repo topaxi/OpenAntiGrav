@@ -266,6 +266,7 @@ impl Pending {
             hull_wreck: !self.cli.wreck.no_hull_wreck,
             track_shine: !self.cli.no_track_shine,
             ribbon: self.cli.ribbon,
+            no_effects: self.cli.no_effects,
             collision: self.cli.collision,
             // **From the settings here, not only in the menu path.** `--race`
             // bypasses the menus entirely, and a difficulty wired only into
@@ -337,11 +338,15 @@ impl Pending {
         let reader: std::sync::Arc<dyn oag_sound::folders::Reader> = std::sync::Arc::new(
             oag_sound::folders::Disk::cached_in(oag_source::cache::default_audio_cache_dir()),
         );
-        discs.start_pool(
-            &self.settings.audio.music_switches,
-            &self.settings.audio.music_folders,
-            &reader,
-        );
+        // With no soundtrack nothing plays from the pool, so its scan of every other disc and
+        // folder has nothing to serve.
+        if !self.cli.no_soundtrack {
+            discs.start_pool(
+                &self.settings.audio.music_switches,
+                &self.settings.audio.music_folders,
+                &reader,
+            );
+        }
         discs
     }
 

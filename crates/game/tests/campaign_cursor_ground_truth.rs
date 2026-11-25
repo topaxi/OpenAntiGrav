@@ -59,6 +59,7 @@ impl Profile {
             .args([
                 "--no-audio",
                 "--no-soundtrack",
+                "--no-effects",
                 "--no-intro",
                 "--drive",
                 script,

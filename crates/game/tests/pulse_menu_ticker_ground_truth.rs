@@ -477,6 +477,7 @@ fn campaign_still(image: &std::path::Path, page: &str, pin: Option<&str>, tag: &
         .args([
             "--no-audio",
             "--no-soundtrack",
+            "--no-effects",
             "--size",
             "960x544",
             "--menu-page",
@@ -570,6 +571,7 @@ fn menu_page_still(
         .args([
             "--no-audio",
             "--no-soundtrack",
+            "--no-effects",
             "--size",
             "480x272",
             "--menu-page",

@@ -65,6 +65,7 @@ fn mask_of(image: &Path, scratch: &Path) -> Vec<u8> {
             "--race",
             "--no-audio",
             "--no-soundtrack",
+            "--no-effects",
             "--size",
             "480x272",
             "--opponents",

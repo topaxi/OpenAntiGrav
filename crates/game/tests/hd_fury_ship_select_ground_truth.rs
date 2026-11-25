@@ -336,6 +336,7 @@ fn capture_of(image: &Path, page: &str, flags: &[&str]) -> oag_texture::replacer
         .args([
             "--no-audio",
             "--no-soundtrack",
+            "--no-effects",
             "--size",
             "1280x720",
             "--menu-page",

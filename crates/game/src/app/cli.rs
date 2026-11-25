@@ -262,6 +262,13 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) no_soundtrack: bool,
 
+    /// Read no sound bank for a race: no effect, engine or voice cue is decoded, so none plays
+    /// and the load report carries no line about them. The soundtrack is `--no-soundtrack`'s.
+    /// For a run that looks at the picture; a decode that nobody hears is most of a race load's
+    /// sound work (ATRAC9 on Omega, ADPCM on Pulse).
+    #[arg(long)]
+    pub(crate) no_effects: bool,
+
     /// Ours: offer every circuit in the Race Box, whatever is cleared (`crate::unlock`).
     #[arg(long)]
     pub(crate) unlock_all: bool,

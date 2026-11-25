@@ -61,6 +61,7 @@ fn the_dark_hull_panels_lose_the_constant_ambient_blue_cast() {
             "100",
             "--no-audio",
             "--no-soundtrack",
+            "--no-effects",
             "--size",
             "1920x1080",
         ])

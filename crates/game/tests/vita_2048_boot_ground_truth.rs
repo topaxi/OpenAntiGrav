@@ -508,6 +508,7 @@ fn the_opening_view_renders_the_prism_the_rings_and_no_prism_for_an_unreached_ev
         .args([
             "--no-audio",
             "--no-soundtrack",
+            "--no-effects",
             "--no-video",
             "--size",
             "960x544",
@@ -1150,6 +1151,7 @@ fn the_select_team_capture_draws_the_hull_at_the_widgets_origin() {
             "40",
             "--no-audio",
             "--no-soundtrack",
+            "--no-effects",
             "--no-video",
             "--size",
             "960x544",
@@ -1203,6 +1205,7 @@ fn the_title_capture_settles_on_the_logo_and_the_prompt() {
             "400",
             "--no-audio",
             "--no-soundtrack",
+            "--no-effects",
             "--no-video",
             "--size",
             "960x544",

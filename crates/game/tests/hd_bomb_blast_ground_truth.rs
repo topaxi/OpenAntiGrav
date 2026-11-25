@@ -83,6 +83,7 @@ fn frame_of(ticks: u32) -> Option<Vec<[u8; 3]>> {
             "--race",
             "--no-audio",
             "--no-soundtrack",
+            "--no-effects",
             "--size",
             "960x544",
             "--opponents",

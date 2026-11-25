@@ -21,6 +21,7 @@ fn seat_rows(mode: &str, extra: &[&str]) -> Option<Vec<usize>> {
         .args([
             "--no-audio",
             "--no-soundtrack",
+            "--no-effects",
             "--race",
             "--mode",
             mode,

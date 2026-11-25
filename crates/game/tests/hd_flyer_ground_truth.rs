@@ -422,6 +422,7 @@ fn the_cell_page_card_is_exposed_and_bloomed_by_the_front_ends_chain() {
         .args([
             "--no-audio",
             "--no-soundtrack",
+            "--no-effects",
             "--size",
             "960x540",
             "--menu-page",
@@ -749,6 +750,7 @@ fn grid_select_still(image: &std::path::Path, seconds: Option<&str>) -> Vec<u8> 
     command.arg(image).args([
         "--no-audio",
         "--no-soundtrack",
+        "--no-effects",
         "--size",
         "960x540",
         "--menu-page",

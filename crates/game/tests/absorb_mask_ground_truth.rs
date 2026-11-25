@@ -76,6 +76,7 @@ fn mask_of(image: &Path, scratch: &Path, absorb: bool, ticks: u32) -> Vec<u8> {
             "venom",
             "--no-audio",
             "--no-soundtrack",
+            "--no-effects",
             "--size",
             "480x272",
         ])

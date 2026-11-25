@@ -275,6 +275,7 @@ fn menu_page(source: &std::path::Path, anim_seconds: &str, name: &str) -> (usize
         .args([
             "--no-audio",
             "--no-soundtrack",
+            "--no-effects",
             "--size",
             "640x360",
             "--menu-page",

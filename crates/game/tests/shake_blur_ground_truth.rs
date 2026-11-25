@@ -46,6 +46,7 @@ fn capture(image: &Path, scratch: &Path, name: &str, blur: &str, forced: Forced<
             "--race",
             "--no-audio",
             "--no-soundtrack",
+            "--no-effects",
             "--size",
             "480x272",
         ])

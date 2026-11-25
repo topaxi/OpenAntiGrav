@@ -34,6 +34,7 @@ fn capture(image: &Path, scratch: &Path, detail: Option<&str>) -> Vec<u8> {
             "--race",
             "--no-audio",
             "--no-soundtrack",
+            "--no-effects",
             "--size",
             "480x272",
         ])

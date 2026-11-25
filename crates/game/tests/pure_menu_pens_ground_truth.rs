@@ -91,6 +91,7 @@ fn title_still(image: &Path, scratch: &Path) -> Vec<u8> {
         .args([
             "--no-audio",
             "--no-soundtrack",
+            "--no-effects",
             "--size",
             "480x272",
             "--screen",
@@ -150,6 +151,7 @@ fn still(image: &Path, scratch: &Path) -> Vec<u8> {
         .args([
             "--no-audio",
             "--no-soundtrack",
+            "--no-effects",
             "--size",
             "480x272",
             "--menu-page",

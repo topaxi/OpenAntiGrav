@@ -119,6 +119,7 @@ fn drive_binary_in(
         .args([
             "--no-audio",
             "--no-soundtrack",
+            "--no-effects",
             "--no-intro",
             "--seed",
             "7",

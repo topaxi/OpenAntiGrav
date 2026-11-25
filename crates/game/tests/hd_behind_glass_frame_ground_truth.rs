@@ -79,6 +79,7 @@ fn the_ceiling_panes_show_the_teal_behind_the_glass() {
             "--race",
             "--no-audio",
             "--no-soundtrack",
+            "--no-effects",
             "--size",
             "960x544",
         ])

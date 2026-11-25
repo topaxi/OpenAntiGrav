@@ -99,6 +99,7 @@ fn noise_bands(ticks: u32) -> Option<[f32; 7]> {
             "--race",
             "--no-audio",
             "--no-soundtrack",
+            "--no-effects",
             "--size",
             "480x272",
             "--opponents",

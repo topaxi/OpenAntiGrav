@@ -100,6 +100,7 @@ fn frame_with(
             "--race",
             "--no-audio",
             "--no-soundtrack",
+            "--no-effects",
             "--mode",
             "single_race",
             "--autopilot",

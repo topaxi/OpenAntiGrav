@@ -64,6 +64,7 @@ fn frame_in(image: &Path, scratch: &Path, name: &str, mode: &str, extra: &[&str]
             "--race",
             "--no-audio",
             "--no-soundtrack",
+            "--no-effects",
             "--size",
             "480x272",
         ])
@@ -176,6 +177,7 @@ fn absorb_frame(image: &Path, scratch: &Path, name: &str, ticks: u32, absorb: bo
             "--race",
             "--no-audio",
             "--no-soundtrack",
+            "--no-effects",
             "--size",
             "480x272",
         ])

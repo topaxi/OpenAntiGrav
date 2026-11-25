@@ -81,6 +81,7 @@ fn frame_of(image: &Path, scratch: &Path, fire: bool) -> Vec<[u8; 3]> {
             "--race",
             "--no-audio",
             "--no-soundtrack",
+            "--no-effects",
             "--size",
             &format!("{}x{}", SIZE.0, SIZE.1),
         ])

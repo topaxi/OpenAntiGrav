@@ -38,6 +38,7 @@ fn held_shot(image: &Path, track: &str, name: &str, alpha: &str) -> Vec<u8> {
             "--race",
             "--no-audio",
             "--no-soundtrack",
+            "--no-effects",
             "--size",
             "960x544",
         ])

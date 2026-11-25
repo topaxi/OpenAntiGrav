@@ -246,6 +246,7 @@ fn head_to_head_refuses_three_people_by_name() {
             .args([
                 "--no-audio",
                 "--no-soundtrack",
+                "--no-effects",
                 "--race",
                 "--mode",
                 "head_to_head",

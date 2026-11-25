@@ -174,10 +174,11 @@ fn clear_marker_in(dir: &std::path::Path) {
 /// `--connect`, `--online`), overwrite a file (`--dump-audio`, `--tap-audio`, `--screenshot`), or
 /// run a measurement. One such argument and the game does not restart.
 pub(crate) fn restartable_args(args: &[std::ffi::OsString]) -> bool {
-    const BARE: [&str; 7] = [
+    const BARE: [&str; 8] = [
         "--launcher",
         "--no-audio",
         "--no-soundtrack",
+        "--no-effects",
         "--no-intro",
         "--no-video",
         "--original-menu",

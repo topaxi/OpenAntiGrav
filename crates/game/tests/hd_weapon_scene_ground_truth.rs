@@ -85,6 +85,7 @@ fn frame_of(weapon: &str, ticks: u32, pose: Option<&str>) -> Option<Vec<[u8; 3]>
             "--race",
             "--no-audio",
             "--no-soundtrack",
+            "--no-effects",
             "--size",
             "960x544",
         ])
@@ -324,6 +325,7 @@ fn detonator_volley_frame(weapon_lights: bool) -> Option<Vec<[u8; 3]>> {
             "--race",
             "--no-audio",
             "--no-soundtrack",
+            "--no-effects",
             "--size",
             "960x544",
         ])

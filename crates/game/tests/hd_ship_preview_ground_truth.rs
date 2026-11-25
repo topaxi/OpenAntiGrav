@@ -424,6 +424,7 @@ fn ship_select_still(
         .args([
             "--no-audio",
             "--no-soundtrack",
+            "--no-effects",
             "--size",
             "1920x1080",
             "--menu-page",
@@ -586,6 +587,7 @@ fn the_live_screen_draws_the_hull_where_the_fit_rests_it() {
         .args([
             "--no-audio",
             "--no-soundtrack",
+            "--no-effects",
             "--no-intro",
             "--drive",
             &script,
@@ -842,6 +844,7 @@ fn ship_selects_hull_is_as_bright_as_the_original_on_both_paths() {
         .args([
             "--no-audio",
             "--no-soundtrack",
+            "--no-effects",
             "--no-intro",
             "--drive",
             &script,
@@ -1106,6 +1109,7 @@ fn ship_select_entry_still(
         .args([
             "--no-audio",
             "--no-soundtrack",
+            "--no-effects",
             "--size",
             "1920x1080",
             "--menu-page",

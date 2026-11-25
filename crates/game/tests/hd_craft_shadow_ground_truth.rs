@@ -75,6 +75,7 @@ fn frame_of(image: &Path, scratch: &Path, shadows: &str, resolution: &str) -> Ve
             "--opponents",
             "--no-audio",
             "--no-soundtrack",
+            "--no-effects",
             "--team",
             "FEISAR",
         ])

@@ -88,6 +88,7 @@ fn frame_of(image: &Path, scratch: &Path, locked: bool) -> Vec<u8> {
             "--opponents",
             "--no-audio",
             "--no-soundtrack",
+            "--no-effects",
             "--size",
             "960x544",
         ])

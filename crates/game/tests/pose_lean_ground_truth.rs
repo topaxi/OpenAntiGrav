@@ -15,6 +15,7 @@ fn oag_game(image: &Path, scratch: &Path, mode: &str) -> Command {
             "--race",
             "--no-audio",
             "--no-soundtrack",
+            "--no-effects",
             "--mode",
             mode,
             "--class",

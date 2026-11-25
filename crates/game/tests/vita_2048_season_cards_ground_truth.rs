@@ -182,6 +182,7 @@ fn the_season_2048_card_is_drawn_on_the_map() {
         .args([
             "--no-audio",
             "--no-soundtrack",
+            "--no-effects",
             "--no-video",
             "--size",
             "960x544",

@@ -58,6 +58,7 @@ fn shot(
             "--race",
             "--no-audio",
             "--no-soundtrack",
+            "--no-effects",
             "--size",
             "3360x1440",
         ])

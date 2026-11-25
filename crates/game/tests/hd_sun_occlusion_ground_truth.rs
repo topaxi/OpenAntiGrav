@@ -56,6 +56,7 @@ fn occlusion_map(scratch: &Path) -> Option<Vec<u8>> {
             "--race",
             "--no-audio",
             "--no-soundtrack",
+            "--no-effects",
             "--no-intro",
             "--team",
             "harimau",

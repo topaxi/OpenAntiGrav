@@ -53,6 +53,7 @@ impl Profile {
             .args([
                 "--no-audio",
                 "--no-soundtrack",
+                "--no-effects",
                 "--no-intro",
                 "--seed",
                 "7",
@@ -454,6 +455,7 @@ fn a_race_a_capture_builds_leaves_no_replay() {
         .args([
             "--no-audio",
             "--no-soundtrack",
+            "--no-effects",
             "--race",
             "--mode",
             "single_race",
@@ -749,6 +751,7 @@ impl Profile {
             .args([
                 "--no-audio",
                 "--no-soundtrack",
+                "--no-effects",
                 "--race",
                 "--size",
                 "320x180",

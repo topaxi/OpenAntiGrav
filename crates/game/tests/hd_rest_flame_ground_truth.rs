@@ -20,6 +20,7 @@ fn draws(skip: Option<&str>) -> Option<u64> {
             "--race",
             "--no-audio",
             "--no-soundtrack",
+            "--no-effects",
             "--no-intro",
             "--team",
             "harimau",

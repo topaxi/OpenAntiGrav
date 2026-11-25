@@ -379,6 +379,11 @@ pub struct Options {
     /// whether the ship is where the physics thinks it is. Default is off, which
     /// means a race draws the map.
     pub ribbon: bool,
+    /// Read no sound bank for the race: the effect, engine and voice cues, the announcers and
+    /// the countdown are never decoded, so none plays and the load reports none of them. The
+    /// soundtrack is [`oag_sound::Audio::set_soundtrack`]'s, not this. For a run that is
+    /// looking at the picture and has no one to hear it.
+    pub no_effects: bool,
     /// Overlay the collision soup - the geometry the physics world is actually
     /// made of - the same view `oag-view --collision` draws, wireframe and
     /// Cage-excluded, on top of whichever track model was chosen above.

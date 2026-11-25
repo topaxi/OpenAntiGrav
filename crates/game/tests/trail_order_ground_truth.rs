@@ -45,6 +45,7 @@ fn capture_with(image: &Path, scratch: &Path, flag: Option<[&str; 2]>) -> Vec<u8
             "--race",
             "--no-audio",
             "--no-soundtrack",
+            "--no-effects",
             "--size",
             "480x272",
         ])
@@ -140,6 +141,7 @@ fn a_bush_hides_the_speed_pad_behind_it_under_both_trail_orders() {
                 "--race",
                 "--no-audio",
                 "--no-soundtrack",
+                "--no-effects",
                 "--size",
                 "960x544",
             ])
@@ -195,6 +197,7 @@ fn the_debug_tint_repaints_the_blended_list_and_off_is_the_plain_frame() {
                 "--race",
                 "--no-audio",
                 "--no-soundtrack",
+                "--no-effects",
                 "--size",
                 "480x272",
             ])

@@ -86,6 +86,7 @@ fn frame(image: &Path, scratch: &Path, name: &str, mine: bool, clock: &str) -> V
             "--race",
             "--no-audio",
             "--no-soundtrack",
+            "--no-effects",
             "--size",
             "480x272",
         ])
