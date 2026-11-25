@@ -170,7 +170,8 @@ tick 420).
 
 Against the originals (2026-11-26, 24 Omega and 16 2048 race pairs, the pad term on and off in one
 tree): mean grey improves on 13 and holds on 27, RMSE improves on 14 and worsens on none, edge
-correlation dips by under `0.0001` on 6. **Open:** in the `omega/arena-2048` pair the original (the
+correlation dips by under `0.0001` on 6. The `omega/chenghou-project` original shows a red pad on
+the grid, where ours drew it grey without the term and draws it red with it. **Open:** in the `omega/arena-2048` pair the original (the
 `wipeout_pc` port, on the grid before GO) shows road paint where ours draws two weapon pads, with or
 without the term. Why it draws none there is unread.
 
