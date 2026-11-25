@@ -191,6 +191,12 @@ impl Session {
                 governor: self.governor.level(),
                 passes: &passes,
                 reflection,
+                chains: devrun::Chains {
+                    bloom_ms: ms(self.hd_bloom_cost.stats()),
+                    blur_ms: ms(self.blur_cost.stats()),
+                    upscale_ms: ms(self.upscale_cost.stats()),
+                    upscale_presented_ms: ms(self.upscale_presented_cost.stats()),
+                },
             })
         );
     }

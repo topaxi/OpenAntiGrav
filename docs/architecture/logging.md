@@ -148,8 +148,12 @@ not touch them. Runtime chatter belongs on the logger.
 `--frame-log` (or `OAG_FRAME_LOG`) prints one `info` line a second, `key=value` fields split on
 spaces (`crates/game/src/devrun.rs`, `format_line`): `stage`, `fps`, `frame_ms`, `p99_ms`,
 `cpu_ms`, `gpu_ms` (the scene pass alone), `present_ms`, `target_hz`, `window`, `surface`,
-`render`, `governor`, `pass_ms`, and last `reflection`. **New fields are only ever appended**, because the
-Android scripts read the earlier ones by name.
+`render`, `governor`, `pass_ms`, `reflection`, and last the four chains timed apart from the scene
+pass and the labelled passes: `bloom_ms` (HD/Fury's bloom chain), `blur_ms` (the motion blur),
+`upscale_ms` and `upscale_presented_ms` (FSR 3's render- and presentation-resolution halves), each
+the overlay's mean of the same reading and `-` until it has one (a title or setting that draws no such
+chain never has). With them the line carries every GPU timer the game keeps. **New fields are only
+ever appended**, because the Android scripts read the earlier ones by name.
 
 `pass_ms` is `-` until a pass has come back, else every separately-encoded pass's mean GPU time over
 the last 120 frames, a frame the pass did not run in counting zero (the overlay shows the mean over
