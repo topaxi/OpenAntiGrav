@@ -22,7 +22,7 @@ use super::*;
 pub const COCKPIT_HIT_SEED: u64 = 0x5_9a_2b_05;
 
 /// The node, its generator and the noise it is drawn from.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(super) struct CockpitHit {
     node: oag_fx::cockpit_hit::Node,
     rng: Rng,

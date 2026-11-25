@@ -7,7 +7,9 @@
 //! **Every field of [`RaceView`] is named below**, as restored or as live, and the destructure has
 //! no `..`: a field added to the view does not compile until it is sorted into one list. Restored
 //! is any state a tick advances that is drawn as an effect, or holds a handle into one that is.
-//! Live is configuration, the camera and everything the shot or the session manages itself.
+//! Live is configuration, the camera and everything the shot or the session manages itself:
+//! `incoming_raises` is the HUD's (`HudMemory` in `shot.rs` keeps it with the rest of the HUD's
+//! state), and `hull_shake` and `boost_kick` ride the camera.
 
 use super::*;
 
@@ -45,7 +47,7 @@ macro_rules! sort_fields {
 
 sort_fields! {
     restored: [
-        stage, stage_rng, surfaces, scenery_fx,
+        shield, cockpit_hit, stage, stage_rng, surfaces, scenery_fx,
         contact, pair_contacts, field_sparks, floor_sparks, hit_sparks, damage_fx,
         exhaust, exhaust_rng, hd_trail, hd_trail_red, hd_flame, hd_sprite,
         trail_inside, trail_hit_rest, engine_light_jitter, engine_light_rng,
@@ -66,8 +68,8 @@ sort_fields! {
         hd_trail_active, spectates_from_start, photo, picture, restores, chase_params, chase_far, chase_close,
         viewpoints, internal_params, zoom, zoom_borrowed, ps2_trail, hd_plasma_blast,
         plasma_blast_law, disruptor_halo_law, disruptor_craft_law, pulse_laid_pose,
-        laid_pose_scaled, destroy_camera, absorb_burst, absorb_anchors, cockpit_hit, hull_reach,
-        trail_sparks, campaign_event, medal_targets, shield, shield_was_up, huds, pair_spoil,
+        laid_pose_scaled, destroy_camera, absorb_burst, absorb_anchors, hull_reach,
+        trail_sparks, campaign_event, medal_targets, shield_was_up, huds, pair_spoil,
         split_gap, incoming_raises, nozzles, nozzle_axes, engine_lights, spu_vertex_lights,
         hull_points, hd_weapon_lights, spark_anchors, collision_fx, effects, handles,
         hd_bomb_blast, bomb_shockwave_fades, hd_missile_blast, detonator_cannon_lights,
