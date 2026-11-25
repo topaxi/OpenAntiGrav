@@ -9,7 +9,7 @@ by `crates/game/tests/now_playing_ground_truth.rs` (`just test-data`).
 | Pulse (PSP) | `InGame_Definition.xml`, `item InGameMusicDisplay` | `PI_Music` `Artist` and `name` | **read**, [Pulse page](../ghidra/functions/psp-pulse-usa/now-playing.md) | wired, measured |
 | HD / Fury | `ingame_definition.xml`, the same item with a textured bar | `PI_Music` `Artist` and `name` | **read**, [HD page](../ghidra/functions/ps3-hdfury-eu/now-playing.md): Pulse's law | wired, measured |
 | Omega | `data00.psarc`'s `ingame_definition.xml`: HD's item | `PI_Music` `Artist` and `name` | inherited from HD | wired, inherited |
-| Pure | `InGame_Definition.xml`'s `InGame` screen: three `Text` widgets, no bar, no scroll ([Pure's own music text](#pures-own-music-text)) | its own `PI_Music` `Artist` and `name` (the `Label` never shows) | fade step Pulse's, hold measured once | wired (`Show::Lines`), layout and strings read off the disc |
+| Pure | `InGame_Definition.xml`'s `InGame` screen: three `Text` widgets, no bar, no scroll ([Pure's own music text](#pures-own-music-text)) | its own `PI_Music` `Artist` and `name` (the `Label` never shows) | **read**, [Pure page](../ghidra/functions/psp-pure-usa/now-playing.md): fade 5 of 255, hold 5.0 s | wired (`Show::Lines`), measured |
 | 2048 | none authored | its own `PI_Music` `Artist` and the language table's `MT_nn` title | inherited from HD | wired, **borrowed**, chosen not measured |
 
 The title's row is `oag_title::Music::now_playing` (`oag_title::now_playing::NowPlaying`):
@@ -177,14 +177,7 @@ against the 100 of the road behind it on Karbonis:
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | Peak grey | 230 to 243 | 220 | 195 | 175 | 153 | 134 | 114 | 100 (gone) |
 
-A straight line of about 80 grey a second from full at about 6.7 s to gone at about 8.5 s: about 1.8 s at 0.25 s sampling, consistent with 51 frames
-at 30 a second times Pulse's 5 of 255 per step (1.70 s; `fade_step`, above), so **the fade step is probably Pulse's**. The fade-in on Sebenco Climb reads peak 163, 174, 189, 205, 227, 242
-at 0.83, 1.00, 1.20, 1.40, 1.60, 1.80 s (the road behind it is brighter and moving there): the same slope, from zero at about GO, full at about
-1.8 s. So the display is: on at GO, fade in 1.8 s, hold about 4.9 s, fade out 1.8 s, nothing scrolls; in frames at race clock 16.7 and 17.8 s (Vineta,
-Modesto) it is gone (what happens at a song change is not measured). Confidence **80** for the layout and the strings (the disc authors them and 10 frames show the result), **60** for the
-timing (seen once: one song per end of the life, 0.25 s resolution, the hold's start and end each read once; whether the display times from GO or from the song's
-start is not separated, because every state's song started at the grid). The song a state plays differs per state; the original's choice of
-song is not read here.
+A straight line of about 80 grey a second from full at about 6.7 s to gone at about 8.5 s: about 1.8 s at 0.25 s sampling, which is 5 of 255 per update at 30 updates a second (52 updates). A second state (Mandrashee, `Elite Force / Cross The Line`) reads full at 6.75 s, 217 of 240 peak at 7.0 s, half gone by 7.5 s, faint at 8.25 s and gone by 9.0 s. The fade-in on Sebenco Climb reads peak 163, 174, 189, 205, 227, 242 at 0.83, 1.00, 1.20, 1.40, 1.60, 1.80 s (the road behind it is brighter and moving there): the same slope, from zero at about GO to full at about 1.8 s. **The executable settles the numbers** ([Pure page](../ghidra/functions/psp-pure-usa/now-playing.md), confidence 85): alpha steps 5 per update, up to 255, then a **5.0 s hold** timed in accumulated frame time, then 5 per update down; the frames agree (1.7 + 5.0 = 6.7 s). **A song change** shows the text again with the same fade and hold, because the function that starts each track calls the show function (read, confidence 80; not watched, the frames stop inside the first song). The display is: on at the song's start, fade in 1.7 s, hold 5.0 s, fade out 1.7 s, nothing scrolls; in the frames at race clock 16.7 and 17.8 s (Vineta, Modesto) it is gone. Confidence **85** for the layout, the strings and the timing. The song a state plays differs per state; the original's choice of song (sequential, previous or random, by a flag) is not read here.
 
 **Effect on the comparison.** Before it was wired, ours' bar was the largest piece of the Classic pairs' hull box's "original brighter" (`docs/tools/compare-page.md`, "The
 Classic hull"): pasting the original's pixels over ours in the bar's left part and the original's text box lowers the whole-frame mean absolute RGB-channel difference by 0.4 to

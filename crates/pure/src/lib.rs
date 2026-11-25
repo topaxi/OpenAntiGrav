@@ -368,8 +368,9 @@ pub const MUSIC: &oag_title::Music = &oag_title::Music {
 /// foot of the frame. The disc authors the widgets (`InGameArtistText` and `InGameTrackText` of
 /// the `InGame` screen in `InGame_Definition.xml`; a third, `InGameLabelText`, never shows), the
 /// names are Pure's own `PI_Music` nodes. They fade in at 5 of 255 an update of the original's 30
-/// a second, hold 150 updates and fade out. Layout and strings are read off the disc; the hold is
-/// measured once (`docs/formats/now-playing.md`, "Pure's own music text").
+/// a second, hold 5.0 s (150 updates) and fade out; each track the music manager starts shows it again.
+/// Layout and strings are read off the disc, the timing off the executable
+/// (`docs/ghidra/functions/psp-pure-usa/now-playing.md`).
 pub const NOW_PLAYING: oag_title::now_playing::NowPlaying = oag_title::now_playing::NowPlaying {
     names: oag_title::DeclaredTracks {
         declared_in: names::GAME_PLUGIN_DEFINITION,
