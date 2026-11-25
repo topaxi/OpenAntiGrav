@@ -449,6 +449,15 @@ const EFFECTS: oag_title::Effects = {
         // locators on every hull and authors both effect files, and its executable carries
         // the same strings. The trigger sites are unread here
         // (`docs/gameplay/weapon-lineage.md`).
+        // The Detonator cannon round's wall death: this title's own `PulseBullet` update spawns
+        // it on the last wall only, in HD's frame (`FUN_013644c0`).
+        .with(
+            Trigger::DetonatorCannonSparks,
+            EffectSpec::new(
+                engine_effects::DETONATOR_CANNON_SPARKS_EFFECT,
+                Origin::Measured,
+            ),
+        )
         .with(
             Trigger::ShieldAbsorb,
             EffectSpec::new(
@@ -482,6 +491,12 @@ const EFFECTS: oag_title::Effects = {
                 Origin::InheritedFrom("Wipeout HD"),
             ),
         );
+    // Its three class-6 streaks draw as HD's view-space bar, as HD's list does.
+    effects.far_bars = &[
+        engine_effects::TRAIL_HITSHIP_EFFECT,
+        engine_effects::TRAIL_HITSHIP_RED_EFFECT,
+        engine_effects::DETONATOR_CANNON_SPARKS_EFFECT,
+    ];
     effects.scenery = &[oag_title::engine_effects::MODESTO_STEAM_EFFECT];
     effects.colour_walk_in = &[(r"Data\particles2048", oag_title::ColourWalk::Reversed)];
     effects
