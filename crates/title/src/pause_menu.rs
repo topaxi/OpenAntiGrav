@@ -30,8 +30,13 @@ pub enum PauseAction {
     /// The on/off list for Pilot Assist (`FE_PILOT_ASSIST`): `controls.pilot_assist`, on being
     /// the level HD flies with.
     PilotAssist,
-    /// The on/off list for the ghost ship (`FE_GHOST`): `display.ghost_ship_visible`.
+    /// The on/off list for the ghost ship (`FE_GHOST`): `display.ghost_ship_visible`; on a row
+    /// that [`PauseRow::opens`] a screen, the tile that opens it.
     Ghost,
+    /// A touch list of which ghost to race (2048's `GhostOption2048`): NONE and MY BEST are
+    /// `display.ghost_ship_visible` off and on, and the entries past them (a friend's and the
+    /// world's, which need the online service) are drawn and cannot be chosen.
+    GhostList,
     /// Drawn dimmed and skipped by the cursor, doing nothing (`ONL_VIEW_INV`: PSN's invites,
     /// which the original greys offline).
     Inert,
@@ -52,9 +57,10 @@ pub struct PauseRow {
     pub word: &'static str,
     /// What the row does here, or `None` where this build has nothing behind it.
     pub builds: Option<PauseAction>,
-    /// The screen of [`PauseMenu::screens`] a QUIT or RESTART row asks "are you sure" on before it
-    /// acts (2048's `PauseQuitConfirm`), or `None` for a row that acts at once.
-    pub confirm: Option<&'static str>,
+    /// The screen of [`PauseMenu::screens`] the row opens as a page of its own: for a QUIT or
+    /// RESTART row the "are you sure" it asks on before it acts (2048's `PauseQuitConfirm`), for
+    /// a [`PauseAction::Ghost`] tile the list of ghosts. `None` for a row that acts at once.
+    pub opens: Option<&'static str>,
 }
 
 /// One authored pause screen.
@@ -95,6 +101,9 @@ pub struct PauseTouch {
     pub tile: &'static str,
     /// The global the tile with the pad cursor is filled with.
     pub cursor: &'static str,
+    /// The global a list entry that cannot be chosen is filled with (`Grey2048`, the palette's
+    /// inactive colour).
+    pub inactive: &'static str,
 }
 
 /// The two numbers a `<Menu>` widget does not author: how far apart its rows stand and how
@@ -205,7 +214,7 @@ pub const fn row(disc_id: &'static str, builds: Option<PauseAction>) -> PauseRow
         disc_id,
         word: disc_id,
         builds,
-        confirm: None,
+        opens: None,
     }
 }
 
@@ -220,16 +229,16 @@ pub const fn named(
         disc_id: widget,
         word,
         builds,
-        confirm: None,
+        opens: None,
     }
 }
 
 impl PauseRow {
-    /// This row asking on `screen` before it acts.
+    /// This row opening `screen` as a page of its own.
     #[must_use]
-    pub const fn confirmed_on(self, screen: &'static str) -> Self {
+    pub const fn opening(self, screen: &'static str) -> Self {
         Self {
-            confirm: Some(screen),
+            opens: Some(screen),
             ..self
         }
     }

@@ -508,13 +508,23 @@ confirm screens' tick and cross) its `redirect` (`PauseRow::disc_id`; an icon-on
 strings 2048 also ships, `PauseRow::word`). Pad (UP and DOWN in the file's order, CROSS), pointer and touch
 (`oag_ui_screens::pause::regions`, a tap is a click) drive the same menu rows as on the other titles: START and
 CONTINUE resume, RESTART loads the race again, QUIT leaves it; PHOTO MODE is the disc's own tile. **QUIT and
-RESTART ask first** (`PauseRow::confirm`, `Definition` pages `pause_confirm:<screen>`): the page they ask on stays
-drawn under the dimming, a tap on the tick does the action, a tap on the cross or CIRCLE goes back. The leaving page
-of any transition is the disc's screen too now (it faded as the front end's list before).
+RESTART ask first** (`PauseRow::opens`, `Definition` pages `pause_screen:<screen>`, opening on the way back,
+`Page::opens_on`): the page they ask on stays drawn under the dimming, a tap on the tick does the action, a tap on the
+cross or CIRCLE goes back. The page being left in a transition is the disc's screen on 2048 (it faded as the front
+end's list, ghosting for about 25 ticks); the other titles' transitions are unchanged.
 
-- **GHOST** (`CHOOSE_GHOST`, Speed Lap) opens a four-entry touch list of which ghost to race (none, my best, a
-  friend's, the world's): `builds: None`, so its tile is not drawn and the page names it in the load report
-  (`pause screen ...: not built`). Nothing here is behind two of the entries (online ghosts).
+- **GHOST** (`CHOOSE_GHOST`, Speed Lap) opens `PauseMenuGhost`, a sibling screen: the OPTIONS and PHOTO MODE tiles
+  again, the ghost tile in `Orange2048` (the page you are on: the disc authors `Colour="FEGlobals->Orange2048"`), a
+  `Touchlist` `GhostOption2048` at (430, 145) 510 by 225 with four entries (`GHOST_NONE`, `GHOST_MY_BEST`,
+  `GHOST_FRIEND_CHALLENGE`, `GHOST_GLOBAL_CHALLENGE`, each with an icon) and a tick back to `PauseMenuSpeed`. **Built**:
+  NONE and MY BEST are `display.ghost_ship_visible` off and on (one `Choice` row, `pause_ghost_list`; a tap on an entry
+  is `Part::Value(i)`, LEFT and RIGHT step it, CIRCLE or the tick go back); the friend's and the world's ghost need
+  the online service this build has not, so they are **drawn in `Grey2048` and answer nothing** (the disc authors
+  no disabled look for a list entry, so the grey, **chosen**, is the palette's own inactive colour, as the options
+  sliders use it). The chosen entry is filled in `Orange2048` and the others in `Blue2048`; the strip spaces its four
+  entries evenly across the authored rect (**chosen**: no entry authors its own, as on the front end's touch lists).
+  The page was drawn from the disc's strings and icons (`every_mode_reads_words_and_draws_its_tiles_...`) and not
+  pictured: no headless route reaches a Speed Lap pause on 2048 and the Vita has no frame of it here.
 - **OPTIONS** opens this build's OPTIONS page, as on HD; the disc's is the touch `pause_options` tree
   (`InGame_PauseOptions.xml`: camera, audio, controls, pilot assist as touch lists and sliders). **Chosen.**
 - **The scene blur and the event card (`Callout CurGameMode`) are not drawn**: the blur is not in this build's
@@ -523,7 +533,8 @@ of any transition is the disc's screen too now (it faded as the front end's list
   no `TouchButton` reads a pad; the pause screens author `forward="start"` and `backward="none"`, so START resumes
   and CIRCLE does nothing on the root, both as here, 85). UP and DOWN walk every tile in the file's order (so every
   tile is reachable and a drive's `select` works), LEFT and RIGHT move along a row by position
-  (`oag_ui_screens::pause::tile_neighbour`), CROSS or ENTER activates, CIRCLE or ESCAPE backs out of a confirm screen
+  (`oag_ui_screens::pause::tile_neighbour`; a press with no tile that way, and on a list row where they step the
+  value, stays the menu's: `MenuStage::step_pause_tiles` takes a button only when it moves), CROSS or ENTER activates, CIRCLE or ESCAPE backs out of a confirm screen
   (ESCAPE on the root resumes, as on every title), START resumes. The cursor fills the focused tile in `Orange2048`,
   the tile's own pressed colour, **only while the pad spoke last** (`draw_list_for`): a mouse or finger over the tiles
   leaves them at rest, as on the front end's touch grids, and a click or tap is the tile's press. A confirm screen opens

@@ -65,14 +65,14 @@ impl Session {
                 .find(|screen| screen.name() == name)
         };
         let screen = find(authored.name)?.clone();
-        let confirms: Vec<_> = authored
+        let opened: Vec<_> = authored
             .rows
             .iter()
-            .filter_map(|row| row.confirm)
+            .filter_map(|row| row.opens)
             .filter_map(|name| Some(find(name)?.clone()))
             .collect();
         let sprites = std::iter::once(&screen)
-            .chain(&confirms)
+            .chain(&opened)
             .flat_map(oag_ui_screens::pause::PauseScreen::sprite_srcs)
             .collect::<std::collections::BTreeSet<_>>()
             .into_iter()
@@ -80,7 +80,7 @@ impl Session {
             .collect();
         Some(crate::app::menu_stage::PauseView {
             screen,
-            confirms,
+            opened,
             table,
             sprites,
         })

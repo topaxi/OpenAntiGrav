@@ -567,7 +567,7 @@ mod expand;
 pub use expand::RowItem;
 mod definition;
 pub use definition::{
-    Added, CONFIRM_PAGE_PREFIX, Definition, Error, For, ModMenu, PAUSE_PAGE, PHOTO_ROW, Pause,
+    Added, Definition, Error, For, ModMenu, PAUSE_PAGE, PHOTO_ROW, Pause, SCREEN_PAGE_PREFIX,
     pause_row_id,
 };
 

@@ -37,8 +37,9 @@ pause screen where one applies). Online pause stays the maintainer's decision
   (`PauseMenuRace`, `PauseMenuTournament`, `PauseMenuSpeed`), **not** HD's and Omega's widgets (checked, differs;
   Omega's copy of the file is a stub), drawn by `oag_ui_screens::pause::PauseScreen::read_touch`; QUIT and RESTART
   ask on the disc's confirm screens; pad and tap drive it. Open: the `SceneBlur` and the event card (`Callout
-  CurGameMode`, native layout) the original draws are not drawn; the Speed Lap `CHOOSE_GHOST` tile (a four-entry
-  touch list, two online) is not built; OPTIONS opens this build's page, the disc's is the touch `pause_options`
+  CurGameMode`, native layout) the original draws are not drawn; the Speed Lap `CHOOSE_GHOST` tile opens `PauseMenuGhost`
+  (NONE and MY BEST are `display.ghost_ship_visible`, the two online entries drawn grey and unselectable; layout
+  chosen, not pictured); OPTIONS opens this build's page, the disc's is the touch `pause_options`
   tree; the Speed Lap and Tournament pages are tested by their tiles but were not walked live (the first campaign
   event is a Time Trial and `--race` has no `--drive`); the binder's default arm (an event object of ordinal 3 with
   no laps opens `PauseMenuSpeed`) is read, not walked.

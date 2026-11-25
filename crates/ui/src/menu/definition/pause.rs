@@ -14,14 +14,9 @@ pub const PAUSE_PAGE: &str = "pause";
 /// ([`Definition::open_on_pause_screen_as_authored`]).
 pub const UNBUILT_ROW: &str = "pause_unbuilt";
 
-/// The id of the page that asks "are you sure" for the pause screen's confirm screen `screen`.
-#[must_use]
-fn confirm_page_id(screen: &str) -> String {
-    format!("{CONFIRM_PAGE_PREFIX}{screen}")
-}
-
-/// What [`confirm_page_id`] puts before a screen's name.
-pub const CONFIRM_PAGE_PREFIX: &str = "pause_confirm:";
+/// What the id of a page built from a screen a pause row opens (a confirm screen, the ghost
+/// list) starts with, before the screen's name.
+pub const SCREEN_PAGE_PREFIX: &str = "pause_screen:";
 
 /// The row id of the project's PHOTO MODE row, on the pause page and where the extras attach it.
 pub const PHOTO_ROW: &str = "photo_mode";
@@ -37,6 +32,7 @@ pub fn row_id(action: PauseAction) -> &'static str {
         PauseAction::Photo => PHOTO_ROW,
         PauseAction::PilotAssist => "pause_pilot_assist",
         PauseAction::Ghost => "pause_ghost",
+        PauseAction::GhostList => "pause_ghost_list",
         PauseAction::Inert => "pause_inert",
         PauseAction::Restart => "pause_restart",
         PauseAction::Quit => "pause_quit",
@@ -101,12 +97,14 @@ impl Definition {
             subtitles: Vec::new(),
             meta: Vec::new(),
             parked: Vec::new(),
+            opens_on: None,
         };
         let mut built = Pause {
             screen: screen.name,
             unbuilt: Vec::new(),
             unworded: Vec::new(),
         };
+        let before = self.pages.len();
         let has_photo = self.build_rows(
             pause,
             screen.rows,
@@ -139,7 +137,7 @@ impl Definition {
                 },
             );
         }
-        for other in &mut self.pages {
+        for other in &mut self.pages[..before] {
             other.retain_rows(|entry| {
                 !matches!(
                     entry,
@@ -151,6 +149,12 @@ impl Definition {
             });
         }
         self.root = self.pages.len();
+        for (entry, meta) in page.entries.iter_mut().zip(&page.meta) {
+            if let (Entry::Submenu { target, .. }, Some(UNBUILT_ROW)) = (entry, meta.id.as_deref())
+            {
+                *target = self.root;
+            }
+        }
         self.pages.push(page);
         built
     }
@@ -171,8 +175,9 @@ impl Definition {
             let Some(action) = row.builds else {
                 built.unbuilt.push(row.disc_id);
                 if draw_unbuilt && let Some(label) = strings.get(row.word) {
-                    // Opens the page it is on: a still never activates a row.
-                    let target = self.pages.len();
+                    // Opens the page it is on (patched once it has an index): a still never
+                    // activates a row.
+                    let target = usize::MAX;
                     push_row(
                         page,
                         UNBUILT_ROW,
@@ -231,6 +236,15 @@ impl Definition {
                     );
                 }
                 PauseAction::Ghost => {
+                    if let Some(opened) = row.opens.and_then(|name| pause.screen(name)) {
+                        let target = self.screen_page(pause, opened, strings, built);
+                        push_row(
+                            page,
+                            row_id(PauseAction::Ghost),
+                            Entry::Submenu { label, target },
+                        );
+                        continue;
+                    }
                     let (on, off) = (on_off(strings, "FE_ON"), on_off(strings, "FE_OFF"));
                     push_row(
                         page,
@@ -239,6 +253,23 @@ impl Definition {
                             label,
                             "display.ghost_ship_visible",
                             [("off", off), ("on", on)],
+                        ),
+                    );
+                }
+                PauseAction::GhostList => {
+                    let (Some(none), Some(best)) =
+                        (strings.get("GHOST_NONE"), strings.get("GHOST_MY_BEST"))
+                    else {
+                        built.unworded.push(row.disc_id);
+                        continue;
+                    };
+                    push_row(
+                        page,
+                        row_id(PauseAction::GhostList),
+                        list(
+                            label,
+                            "display.ghost_ship_visible",
+                            [("off", none.to_string()), ("on", best.to_string())],
                         ),
                     );
                 }
@@ -251,9 +282,9 @@ impl Definition {
                     } else {
                         (row_id(PauseAction::Quit), Action::QuitRace)
                     };
-                    let entry = match row.confirm.and_then(|name| pause.screen(name)) {
-                        Some(confirm) => {
-                            let target = self.confirm_page(pause, confirm, strings);
+                    let entry = match row.opens.and_then(|name| pause.screen(name)) {
+                        Some(opened) => {
+                            let target = self.screen_page(pause, opened, strings, built);
                             Entry::Submenu { label, target }
                         }
                         None => run(label, act),
@@ -265,28 +296,45 @@ impl Definition {
         has_photo
     }
 
-    /// The page a QUIT or RESTART row asks on: `confirm`'s rows, the action first and the way back
-    /// second, behind the id [`confirm_page_id`] gives the screen. Returns its index.
-    fn confirm_page(
+    /// The page of a screen a row opens: `opened`'s rows, behind the id [`SCREEN_PAGE_PREFIX`]
+    /// gives the screen. It opens on its way back, the row that resumes (a confirm screen: a second
+    /// press of the key that opened it cancels), or on its list. A word the screen lacks is
+    /// reported in `built` as on the pause page. Returns the page's index.
+    fn screen_page(
         &mut self,
         pause: &PauseMenu,
-        confirm: &PauseScreen,
+        opened: &PauseScreen,
         strings: &StringTable,
+        built: &mut Pause,
     ) -> usize {
         let mut page = Page {
-            id: confirm_page_id(confirm.name),
+            id: format!("{SCREEN_PAGE_PREFIX}{}", opened.name),
             title: strings.get(pause.heading).unwrap_or_default().to_string(),
             entries: Vec::new(),
             subtitles: Vec::new(),
             meta: Vec::new(),
             parked: Vec::new(),
+            opens_on: None,
         };
-        let mut built = Pause {
-            screen: confirm.name,
-            unbuilt: Vec::new(),
-            unworded: Vec::new(),
-        };
-        self.build_rows(pause, confirm.rows, strings, false, &mut page, &mut built);
+        self.build_rows(pause, opened.rows, strings, false, &mut page, built);
+        // The way back is never dropped for want of its words: a page that asks must always have
+        // the row to cancel on, so it takes the fallback words and the gap is reported.
+        let back = row_id(PauseAction::Resume);
+        if opened
+            .rows
+            .iter()
+            .any(|row| row.builds == Some(PauseAction::Resume))
+            && page.row_with_id(back).is_none()
+        {
+            let label = strings.get_or_fallback("FE_CANCEL", "CANCEL").to_string();
+            push_row(&mut page, back, Entry::Back { label });
+        }
+        let list = row_id(PauseAction::GhostList);
+        page.opens_on = Some(if page.row_with_id(list).is_some() {
+            list.to_string()
+        } else {
+            row_id(PauseAction::Resume).to_string()
+        });
         self.pages.push(page);
         self.pages.len() - 1
     }

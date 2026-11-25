@@ -791,8 +791,12 @@ impl Session {
                         // the outgoing half of the tween flashes it back on.
                         self.suspended_race.is_some(),
                     );
-                    // The page being left is the disc's own screen where it is one.
-                    if let Some(drawn) = stage.pause_draw() {
+                    // The page being left is the disc's own screen where it is one of tiles:
+                    // the other titles' pause lists have always faded as the front end's.
+                    let tiles = stage
+                        .pause_screen_on_page()
+                        .is_some_and(|screen| screen.is_tiles());
+                    if let Some(drawn) = stage.pause_draw().filter(|_| tiles) {
                         leaving.chrome = drawn.chrome;
                         leaving.body = drawn.body;
                     }

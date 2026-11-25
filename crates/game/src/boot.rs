@@ -914,6 +914,19 @@ pub fn load_shell(
         space,
         &mut report,
     );
+    let on_sheet = pause_screens
+        .screens
+        .iter()
+        .flat_map(oag_ui_screens::pause::PauseScreen::sprite_srcs)
+        .collect::<std::collections::BTreeSet<_>>();
+    for src in on_sheet
+        .into_iter()
+        .filter(|src| sprites.get(src).is_none())
+    {
+        report.push(format!(
+            "pause screen image {src}: not on the sprite sheet, its tile is drawn as a bare box"
+        ));
+    }
     // See [`screens::read_ticker`]'s own doc.
     let mut ticker = read_ticker(skin_xml.as_deref(), &screens.globals);
     if let Some(ticker) = ticker.as_mut() {

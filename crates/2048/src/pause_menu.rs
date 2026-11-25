@@ -3,7 +3,7 @@
 
 use oag_title::{
     Origin,
-    PauseAction::{Options, Photo, Quit, Restart, Resume},
+    PauseAction::{Ghost, GhostList, Inert, Options, Photo, Quit, Restart, Resume},
     PauseLayout, PauseMenu, PauseScreen, PauseTouch,
     pause_menu::{named, row},
 };
@@ -23,8 +23,9 @@ use oag_title::{
 ///
 /// `IG_PAUSE_OPT` opens this build's OPTIONS page (the disc's is the touch `pause_options` tree).
 /// The icon-only tiles are worded by the HD pause strings `2048` also ships, for the page's rows
-/// and the pad's focus; the tile draws its icon alone. `CHOOSE_GHOST` opens a four-entry touch
-/// list of which ghost to race; nothing here builds it.
+/// and the pad's focus; the tile draws its icon alone. `CHOOSE_GHOST` opens `PauseMenuGhost`,
+/// a sibling screen that repeats the tiles with the ghost tile filled in the cursor's colour and
+/// adds a four-entry touch list (NONE, MY BEST, a friend's, the world's) and a tick back.
 pub const PAUSE_MENU: &PauseMenu = &PauseMenu {
     heading: "IG_PAUSE_GPAUSED",
     screens: &[
@@ -33,9 +34,8 @@ pub const PAUSE_MENU: &PauseMenu = &PauseMenu {
             rows: &[
                 row("IG_PAUSE_OPT", Some(Options)),
                 row("MSC_PHOTO_PHOTOMODE", Some(Photo)),
-                named("quitButton", "IG_PAUSE_QUIT", Some(Quit)).confirmed_on("PauseQuitConfirm"),
-                named("restartButton", "IG_PAUSE_REST", Some(Restart))
-                    .confirmed_on("PauseRetryConfirm"),
+                named("quitButton", "IG_PAUSE_QUIT", Some(Quit)).opening("PauseQuitConfirm"),
+                named("restartButton", "IG_PAUSE_REST", Some(Restart)).opening("PauseRetryConfirm"),
                 named("continueButton", "IG_PAUSE_CONT", Some(Resume)),
             ],
         },
@@ -45,7 +45,7 @@ pub const PAUSE_MENU: &PauseMenu = &PauseMenu {
                 row("IG_PAUSE_OPT", Some(Options)),
                 row("MSC_PHOTO_PHOTOMODE", Some(Photo)),
                 named("quitButton", "IG_PAUSE_QUIT", Some(Quit))
-                    .confirmed_on("TournamentPauseQuitConfirm"),
+                    .opening("TournamentPauseQuitConfirm"),
                 named("continueButton", "IG_PAUSE_CONT", Some(Resume)),
             ],
         },
@@ -54,11 +54,20 @@ pub const PAUSE_MENU: &PauseMenu = &PauseMenu {
             rows: &[
                 row("IG_PAUSE_OPT", Some(Options)),
                 row("MSC_PHOTO_PHOTOMODE", Some(Photo)),
-                row("CHOOSE_GHOST", None),
-                named("quitButton", "IG_PAUSE_ENDSES", Some(Quit))
-                    .confirmed_on("SpeedPauseQuitConfirm"),
+                row("CHOOSE_GHOST", Some(Ghost)).opening("PauseMenuGhost"),
+                named("quitButton", "IG_PAUSE_ENDSES", Some(Quit)).opening("SpeedPauseQuitConfirm"),
                 named("restartButton", "IG_PAUSE_REST", Some(Restart))
-                    .confirmed_on("SpeedPauseRetryConfirm"),
+                    .opening("SpeedPauseRetryConfirm"),
+                named("continueButton", "IG_PAUSE_CONT", Some(Resume)),
+            ],
+        },
+        PauseScreen {
+            name: "PauseMenuGhost",
+            rows: &[
+                row("IG_PAUSE_OPT", Some(Options)),
+                row("MSC_PHOTO_PHOTOMODE", Some(Photo)),
+                row("CHOOSE_GHOST", Some(Inert)),
+                named("GhostOption2048", "CHOOSE_GHOST", Some(GhostList)),
                 named("continueButton", "IG_PAUSE_CONT", Some(Resume)),
             ],
         },
@@ -112,6 +121,7 @@ pub const PAUSE_MENU: &PauseMenu = &PauseMenu {
         touch: Some(PauseTouch {
             tile: "Blue2048",
             cursor: "Orange2048",
+            inactive: "Grey2048",
         }),
     }),
     hud_under_scrim: false,
@@ -136,18 +146,26 @@ mod tests {
         }
     }
 
-    /// Every confirm screen a row names is a screen of the table, and the screen's own two tiles
-    /// are the action and the way back.
+    /// Every screen a row opens is a screen of the table. A confirm screen's own two tiles are
+    /// the action and the way back; the ghost screen's list is the one a mode that has the ghost
+    /// tile offers.
     #[test]
-    fn every_confirm_screen_a_row_names_is_in_the_table() {
-        use oag_title::PauseAction::Resume;
+    fn every_screen_a_row_opens_is_in_the_table() {
+        use oag_title::PauseAction::{Ghost, GhostList, Resume};
         for screen in PAUSE_MENU.screens {
             for row in screen.rows {
-                let Some(name) = row.confirm else { continue };
-                let confirm = PAUSE_MENU.screen(name).expect(name);
-                assert_eq!(confirm.rows.len(), 2, "{name}");
-                assert_eq!(confirm.rows[0].builds, row.builds, "{name}");
-                assert_eq!(confirm.rows[1].builds, Some(Resume), "{name}");
+                let Some(name) = row.opens else { continue };
+                let opened = PAUSE_MENU.screen(name).expect(name);
+                if row.builds == Some(Ghost) {
+                    assert!(
+                        opened.rows.iter().any(|row| row.builds == Some(GhostList)),
+                        "{name}"
+                    );
+                    continue;
+                }
+                assert_eq!(opened.rows.len(), 2, "{name}");
+                assert_eq!(opened.rows[0].builds, row.builds, "{name}");
+                assert_eq!(opened.rows[1].builds, Some(Resume), "{name}");
             }
         }
     }

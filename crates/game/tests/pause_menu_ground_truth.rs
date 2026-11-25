@@ -999,16 +999,16 @@ mod y2048_screens {
             "quit",
             &format!(
                 "{PAUSED} select pause_quit; press cross; ticks 60; \
-                 expect page=pause_confirm:PauseQuitConfirm; press circle; ticks 60; \
+                 expect page=pause_screen:PauseQuitConfirm; press circle; ticks 60; \
                  expect page=pause; touch tap 930 716; ticks 60; \
-                 expect page=pause_confirm:PauseQuitConfirm; press cross; ticks 60; \
+                 expect page=pause_screen:PauseQuitConfirm; press cross; ticks 60; \
                  expect page=pause; select pause_quit; press cross; ticks 60; \
-                 expect page=pause_confirm:PauseQuitConfirm; press up; press cross; ticks 60; \
+                 expect page=pause_screen:PauseQuitConfirm; press up; press cross; ticks 60; \
                  expect page=main"
             ),
         );
         assert_eq!(last_page(&asked), "main");
-        let confirm = on_page(&asked, "pause_confirm:PauseQuitConfirm");
+        let confirm = on_page(&asked, "pause_screen:PauseQuitConfirm");
         let state = confirm.first().expect("the question was on screen");
         let ids: Vec<&str> = state["screen"]["rows"]
             .as_array()
@@ -1035,7 +1035,7 @@ mod y2048_screens {
             "restart",
             &format!(
                 "{PAUSED} select pause_restart; press cross; ticks 30; \
-                 expect page=pause_confirm:PauseRetryConfirm; press up; press cross; \
+                 expect page=pause_screen:PauseRetryConfirm; press up; press cross; \
                  until stage=race within 4000; ticks 20"
             ),
         );
@@ -1067,8 +1067,9 @@ mod y2048_screens {
     /// Every screen of the table reads off the real file, every word the rows and the heading need
     /// resolves, and each mode's page draws one tile box per row it has with the icon found on the
     /// menus' sheet: a Time Trial and the default modes OPTIONS, PHOTO MODE, QUIT, RESTART and
-    /// CONTINUE; a Tournament no RESTART; a Speed Lap its GHOST tile left undrawn (nothing here is
-    /// behind it) and its own END SESSION.
+    /// CONTINUE; a Tournament no RESTART; a Speed Lap its GHOST tile and its own END SESSION. The
+    /// Speed Lap's GHOST tile opens the four-entry list: NONE and MY BEST are the two values of
+    /// `display.ghost_ship_visible`, the friend's and the world's are drawn and answer nothing.
     #[test]
     #[ignore = "needs the extracted 2048 package in data/extracted/vita/PCSF00007"]
     fn every_mode_reads_words_and_draws_its_tiles_with_their_icons_off_the_disc() {
@@ -1110,7 +1111,7 @@ mod y2048_screens {
             ("time_trial", "PauseMenuRace", 5, Vec::<&str>::new()),
             ("single_race", "PauseMenuRace", 5, Vec::new()),
             ("tournament", "PauseMenuTournament", 4, Vec::new()),
-            ("speed_lap", "PauseMenuSpeed", 5, vec!["CHOOSE_GHOST"]),
+            ("speed_lap", "PauseMenuSpeed", 6, Vec::new()),
         ] {
             let mut definition = Definition::built_in(&shell.strings).expect("the built-in menu");
             let built = definition.open_on_pause_screen(table, mode, words);
@@ -1143,6 +1144,89 @@ mod y2048_screens {
                 .count();
             assert_eq!(icons, tiles, "{mode}: and its icon in each");
         }
+        ghost_list_off_the_disc(&shell, table, &skin);
+    }
+
+    fn ghost_list_off_the_disc(
+        shell: &oag_game::boot::Shell,
+        table: &'static oag_title::PauseMenu,
+        skin: &oag_ui::menu::Skin,
+    ) {
+        use oag_core::buttons::{Button, Input};
+        use oag_ui::menu::{Definition, Menu, MenuEvent, Value, pointer::Part};
+        use oag_ui_screens::pause::{draw_list, regions};
+
+        let words = &shell.pause_screens.strings;
+        let sprites = |src: &str| shell.sprites.get(src);
+        let mut definition = Definition::built_in(&shell.strings).expect("the built-in menu");
+        definition.open_on_pause_screen(table, "speed_lap", words);
+        let mut menu = Menu::new(definition);
+        menu.offer(oag_ui::menu::Action::PhotoMode, true);
+        menu.seed("display.ghost_ship_visible", &Value::Text("on".into()));
+        let press = |menu: &mut Menu, button: Button| {
+            let mut input = Input::new();
+            input.begin_frame(1 << button.index());
+            menu.update(&mut input)
+        };
+        let ghost = menu
+            .page()
+            .row_with_id("pause_ghost")
+            .expect("a GHOST tile");
+        while menu.selected() != ghost {
+            press(&mut menu, Button::Down);
+        }
+        press(&mut menu, Button::Cross);
+        assert_eq!(menu.page().id, "pause_screen:PauseMenuGhost");
+        assert_eq!(
+            menu.page().meta[menu.selected()].id.as_deref(),
+            Some("pause_ghost_list")
+        );
+        let read = shell
+            .pause_screens
+            .screens
+            .iter()
+            .find(|read| read.name() == "PauseMenuGhost")
+            .expect("the ghost screen");
+        for src in read.sprite_srcs() {
+            assert!(sprites(src).is_some(), "{src} is on the sheet");
+        }
+        let drawn = draw_list(read, table, &menu, skin, &Default::default(), &sprites);
+        let texts: Vec<&str> = drawn
+            .body
+            .iter()
+            .filter_map(|draw| match draw {
+                oag_ui::frontend::Draw::Text { text, .. } => Some(text.as_str()),
+                _ => None,
+            })
+            .collect();
+        for id in [
+            "GHOST_NONE",
+            "GHOST_MY_BEST",
+            "GHOST_FRIEND_CHALLENGE",
+            "GHOST_GLOBAL_CHALLENGE",
+        ] {
+            let said = words.get(id).unwrap_or_else(|| panic!("{id} has words"));
+            assert!(
+                texts.contains(&said),
+                "{id} ({said}) under its entry: {texts:?}"
+            );
+        }
+        let values: Vec<usize> = regions(read, table, &menu, skin)
+            .iter()
+            .filter_map(|region| match region.part {
+                Part::Value(at) => Some(at),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(values, [0, 1], "NONE and MY BEST can be chosen");
+        let off = press(&mut menu, Button::Left);
+        assert_eq!(
+            off,
+            [MenuEvent::Changed {
+                setting: "display.ghost_ship_visible".into(),
+                value: Value::Text("off".into())
+            }]
+        );
     }
 
     /// The pad walks the tiles (RIGHT and LEFT by where they are, UP and DOWN in the file's order),

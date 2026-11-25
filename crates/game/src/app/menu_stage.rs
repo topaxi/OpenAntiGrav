@@ -24,8 +24,9 @@ pub(crate) use screens::PAUSE_OVERLAY;
 /// the title's table that says which row each widget is.
 pub(crate) struct PauseView {
     pub(crate) screen: oag_ui_screens::pause::PauseScreen,
-    /// The screens its QUIT and RESTART rows ask on first, where the title authors them.
-    pub(crate) confirms: Vec<oag_ui_screens::pause::PauseScreen>,
+    /// The screens its rows open as pages of their own (the QUIT and RESTART rows' confirm
+    /// screens, the ghost list), where the title authors them.
+    pub(crate) opened: Vec<oag_ui_screens::pause::PauseScreen>,
     pub(crate) table: &'static oag_title::PauseMenu,
     /// Where the screen's textures sit on the menus' sprite sheet.
     pub(crate) sprites: Vec<(String, oag_ui::frontend::Placed)>,
@@ -294,21 +295,17 @@ impl MenuStage {
 
     /// On a pause screen of tiles the pad's LEFT and RIGHT move the cursor to the tile that way
     /// along its row; UP and DOWN stay the menu's, walking every tile in the file's order, which is
-    /// what keeps every tile reachable and a drive's `select` working. The buttons are taken so the
-    /// menu does not step as well.
+    /// what keeps every tile reachable and a drive's `select` working. A press is taken only when a
+    /// tile lies that way, so at an edge it stays the menu's.
     pub(crate) fn step_pause_tiles(&mut self, input: &mut oag_core::buttons::Input) {
         use oag_core::buttons::Button;
         use oag_ui::menu::nav::Dir;
         for (button, dir) in [(Button::Left, Dir::Left), (Button::Right, Dir::Right)] {
-            if self
-                .pause_screen_on_page()
-                .is_none_or(|screen| !screen.is_tiles())
-            {
-                return;
+            if !input.is_pressed(button) {
+                continue;
             }
-            if input.take(button)
-                && let Some(row) = self.tile_toward(dir)
-            {
+            if let Some(row) = self.tile_toward(dir) {
+                input.consume_press(button);
                 self.menu.move_to_row(row);
             }
         }
@@ -327,8 +324,8 @@ impl MenuStage {
         if id == menu::PAUSE_PAGE {
             return Some(&view.screen);
         }
-        let name = id.strip_prefix(menu::CONFIRM_PAGE_PREFIX)?;
-        view.confirms.iter().find(|screen| screen.name() == name)
+        let name = id.strip_prefix(menu::SCREEN_PAGE_PREFIX)?;
+        view.opened.iter().find(|screen| screen.name() == name)
     }
 
     /// Advances the backdrop by one tick.

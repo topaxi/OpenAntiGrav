@@ -71,6 +71,8 @@ pub enum Part {
     /// The reset mark on the selected row: put its value back on the default. Only laid
     /// out on a row that is off its default, so a tap on it always does something.
     Reset,
+    /// One entry of a list drawn as a strip of tiles: the row's value of that index.
+    Value(usize),
     /// The pause screen's music list's back arrow ([`super::music_list`]).
     MusicBack,
     /// Its forward arrow.
@@ -136,6 +138,7 @@ pub fn hit(regions: &[Region], at: (f32, f32)) -> Option<Region> {
             Part::StepBack
             | Part::StepForward
             | Part::Reset
+            | Part::Value(_)
             | Part::MusicBack
             | Part::MusicForward
             | Part::MusicRow => 1,
@@ -209,6 +212,7 @@ impl Menu {
                 Part::Row => out.extend(self.activate()),
                 Part::StepBack => out.extend(self.adjust(-1)),
                 Part::StepForward => out.extend(self.adjust(1)),
+                Part::Value(at) => out.extend(self.choose(at)),
                 Part::Reset => out.extend(self.reset()),
                 Part::MusicBack => {
                     self.step_music(-1);

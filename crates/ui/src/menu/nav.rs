@@ -126,6 +126,36 @@ impl Menu {
         }
     }
 
+    /// Sets the selected row's value to its `at`th, for a list drawn as a strip of tiles where a
+    /// tap names the entry. Nothing on a disabled row, one that is not a list, past its end or
+    /// already there.
+    pub(super) fn choose(&mut self, at: usize) -> Option<MenuEvent> {
+        if self.selected_is_disabled() {
+            return None;
+        }
+        let page = self.current();
+        let row = self.cursor[page];
+        let Entry::Choice {
+            setting,
+            values,
+            current,
+            ..
+        } = self.definition.pages[page].entries.get_mut(row)?
+        else {
+            return None;
+        };
+        if at >= values.len() || at == *current {
+            return None;
+        }
+        let dir = if at > *current { Dir::Right } else { Dir::Left };
+        *current = at;
+        self.nav.push(Nav::Stepped(Some(dir)));
+        Some(MenuEvent::Changed {
+            setting: setting.clone(),
+            value: Value::Text(values[at].value.clone()),
+        })
+    }
+
     /// Records what `setting` is set to on a fresh install, for [`Self::reset`] to go back to.
     ///
     /// Supplied by whoever owns the settings, next to [`Self::seed`] and from the same
@@ -286,13 +316,15 @@ impl Menu {
         match entry {
             Entry::Submenu { target, .. } => {
                 let target = *target;
-                // A page that asks "are you sure" opens on its way back, whichever row the
-                // cursor was left on: a second press of the key that opened it cancels.
-                let asks = self.definition.pages[target]
-                    .id
-                    .starts_with(super::CONFIRM_PAGE_PREFIX);
-                if asks {
-                    self.cursor[target] = self.definition.pages[target].entries.len() - 1;
+                // A page that names its row opens on it, whichever row the cursor was left on:
+                // one that asks "are you sure" opens on the way back, so a second press of the
+                // key that opened it cancels.
+                if let Some(row) = self.definition.pages[target]
+                    .opens_on
+                    .as_deref()
+                    .and_then(|id| self.definition.pages[target].row_with_id(id))
+                {
+                    self.cursor[target] = row;
                 }
                 self.stack.push(target);
                 self.snap_focus();

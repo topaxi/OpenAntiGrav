@@ -132,7 +132,7 @@ mod build;
 mod mod_setting;
 mod pause;
 pub use build::{Added, For, ModMenu};
-pub use pause::{CONFIRM_PAGE_PREFIX, PAUSE_PAGE, PHOTO_ROW, Pause, row_id as pause_row_id};
+pub use pause::{PAUSE_PAGE, PHOTO_ROW, Pause, SCREEN_PAGE_PREFIX, row_id as pause_row_id};
 
 impl From<&raw::Launch> for LaunchInputs {
     fn from(keys: &raw::Launch) -> Self {
@@ -376,6 +376,7 @@ impl Definition {
                 subtitles,
                 meta,
                 parked: Vec::new(),
+                opens_on: None,
             });
         }
 
@@ -956,6 +957,7 @@ impl Definition {
                 parent: None,
             }],
             parked: Vec::new(),
+            opens_on: None,
         };
         for (key, name, description) in rows {
             picker.entries.push(Entry::Run {

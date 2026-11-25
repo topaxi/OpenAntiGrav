@@ -828,6 +828,11 @@ pub(super) fn pause_textures(
     else {
         return Vec::new();
     };
+    // Only a screen of tiles carries icons of its own; the other titles' pause screens draw
+    // from the sheet their menus already have.
+    if layout.touch.is_none() {
+        return Vec::new();
+    }
     let Ok(xml) = archives
         .read_name(layout.definition)
         .map_err(|e| e.to_string())
@@ -860,7 +865,18 @@ pub(super) fn pause_textures(
             .touch_buttons
             .iter()
             .filter_map(|button| button.src.as_ref());
-        for src in screen.images.iter().map(|image| &image.src).chain(icons) {
+        let strips = screen
+            .touch_lists
+            .iter()
+            .flat_map(|list| &list.entries)
+            .filter_map(|entry| entry.src.as_ref());
+        for src in screen
+            .images
+            .iter()
+            .map(|image| &image.src)
+            .chain(icons)
+            .chain(strips)
+        {
             if !out.contains(src) {
                 out.push(src.clone());
             }

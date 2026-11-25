@@ -22,7 +22,7 @@ use oag_ui::menu::nav::Dir;
 use oag_ui::menu::pointer::{Part, Region};
 use oag_ui::menu::{Entry, Frame, Layers, Menu, Skin, block, pause_row_id};
 use oag_ui::screen::{
-    BlockWidget, ListWidget, Screens, Text, TouchButton, argb_to_rgba, parse_argb,
+    BlockWidget, ListWidget, Screens, Text, TouchButton, TouchList, argb_to_rgba, parse_argb,
 };
 use oag_ui::state_machine::SEPARATOR;
 
@@ -67,6 +67,8 @@ pub struct PauseScreen {
 struct TileInk {
     rest: u32,
     cursor: u32,
+    /// A list entry that cannot be chosen.
+    inactive: u32,
 }
 
 impl PauseScreen {
@@ -126,6 +128,18 @@ impl PauseScreen {
                     button.string = Some(words.to_string());
                 }
             }
+            // A list entry's words go in its `value`, the literal the entry carries beside its
+            // label, as a tile's go in `string`.
+            for entry in layout
+                .screen
+                .touch_lists
+                .iter_mut()
+                .flat_map(|list| &mut list.entries)
+            {
+                if let Some(words) = entry.idstring.as_deref().and_then(|id| strings.get(id)) {
+                    entry.value = Some(words.to_string());
+                }
+            }
         }
         Some(Self {
             screen,
@@ -133,6 +147,7 @@ impl PauseScreen {
             tiles: Some(TileInk {
                 rest: colour(touch.tile)?,
                 cursor: colour(touch.cursor)?,
+                inactive: colour(touch.inactive)?,
             }),
         })
     }
@@ -156,7 +171,15 @@ impl PauseScreen {
                 .screen
                 .touch_buttons
                 .iter()
-                .filter_map(|button| button.src.as_deref());
+                .filter_map(|button| button.src.as_deref())
+                .chain(
+                    layout
+                        .screen
+                        .touch_lists
+                        .iter()
+                        .flat_map(|list| &list.entries)
+                        .filter_map(|entry| entry.src.as_deref()),
+                );
             layout
                 .screen
                 .images
@@ -273,14 +296,20 @@ fn touch_draw_list(
     }
     let mut body = Vec::new();
     for placed in rows(screen, table, menu) {
-        if let Kind::Tile(button) = placed.kind {
-            tile_draw(
+        let entry = &menu.page().entries[placed.row];
+        match placed.kind {
+            // A tile for the page being drawn is filled in the cursor's colour, as the disc
+            // authors it (`Colour="FEGlobals->Orange2048"`).
+            Kind::Tile(button) => tile_draw(
                 screen,
                 button,
-                pad_cursor && placed.row == menu.selected(),
+                matches!(entry, Entry::Inert { .. })
+                    || (pad_cursor && placed.row == menu.selected()),
                 sprites,
                 &mut body,
-            );
+            ),
+            Kind::Strip(list) => strip_draw(screen, list, entry, sprites, &mut body),
+            _ => {}
         }
     }
     Layers {
@@ -302,6 +331,8 @@ enum Kind<'a> {
     /// Row `n` of the screen's `<Menu>`, counting from its first.
     Menu(usize),
     Tile(&'a TouchButton),
+    /// A `<Touchlist>`: one row whose values are the entries.
+    Strip(&'a TouchList),
 }
 
 /// Every widget of `screen` that has a row on the page, in the screen's own order, with that
@@ -328,7 +359,7 @@ fn rows<'a>(screen: &'a PauseScreen, table: &PauseMenu, menu: &Menu) -> Vec<Row<
             .position(|meta| meta.id.as_deref() == Some(wanted))
     };
     if screen.tiles.is_some() {
-        return screen
+        let tiles = screen
             .screen
             .screen
             .touch_buttons
@@ -339,8 +370,14 @@ fn rows<'a>(screen: &'a PauseScreen, table: &PauseMenu, menu: &Menu) -> Vec<Row<
                     row: row_of(key)?,
                     kind: Kind::Tile(button),
                 })
+            });
+        let strips = screen.screen.screen.touch_lists.iter().filter_map(|list| {
+            Some(Row {
+                row: row_of(list.name.as_deref()?)?,
+                kind: Kind::Strip(list),
             })
-            .collect();
+        });
+        return tiles.chain(strips).collect();
     }
     let row_for = |text: &Text| -> Option<usize> { row_of(text.idstring.as_deref()?) };
     let mut out = Vec::new();
@@ -449,7 +486,7 @@ pub fn draw_list_for(
                     body.push(draw);
                 }
             }
-            Kind::Tile(_) => {}
+            Kind::Tile(_) | Kind::Strip(_) => {}
             Kind::List(widget) => {
                 if let Some(numbers) = numbers {
                     list_draw(
@@ -511,6 +548,71 @@ fn tile_draw(
             button.string_width_limit,
             button.small_text,
         ));
+    }
+}
+
+/// A `<Touchlist>` as a strip of tiles: its entries side by side across its authored rect, each
+/// with its icon and its words, the chosen one filled in the cursor's colour and an entry the row
+/// has no value for (a friend's ghost, the world's: they need the online service) in the
+/// inactive colour. **Chosen**: the widget authors one rect for the whole strip and no entry's
+/// own, nor a disabled look; the same spacing the front end's touch lists use.
+fn strip_draw(
+    screen: &PauseScreen,
+    list: &TouchList,
+    entry: &Entry,
+    sprites: &dyn Fn(&str) -> Option<Placed>,
+    out: &mut Vec<Draw>,
+) {
+    let Some(ink) = screen.tiles else {
+        return;
+    };
+    let count = list.entries.len().max(1) as f32;
+    let chosen = match entry {
+        Entry::Choice {
+            current, values, ..
+        } if *current < values.len() => Some(*current),
+        _ => None,
+    };
+    let selectable = match entry {
+        Entry::Choice { values, .. } => values.len(),
+        _ => 0,
+    };
+    for (i, item) in list.entries.iter().enumerate() {
+        let cell = list.width / count;
+        let rect = [list.x + cell * i as f32, list.y, cell, list.height];
+        let ink = if Some(i) == chosen {
+            ink.cursor
+        } else if i < selectable {
+            ink.rest
+        } else {
+            ink.inactive
+        };
+        out.push(Draw::Fill {
+            rect,
+            color: argb_to_rgba(ink),
+        });
+        if let Some(placed) = item.src.as_deref().and_then(sprites) {
+            let (w, h) = (placed.width as f32, placed.height as f32);
+            out.push(Draw::Sprite {
+                rect: [
+                    rect[0] + (rect[2] - w) * 0.5,
+                    rect[1] + (rect[3] - h) * 0.5,
+                    w,
+                    h,
+                ],
+                uv: placed.sheet_rect([0.0, 0.0, w, h]),
+                color: [1.0; 4],
+            });
+        }
+        if let Some(words) = &item.value {
+            out.push(label_under_tile(
+                rect,
+                words.clone(),
+                argb_to_rgba(screen.tiles.map_or(0, |ink| ink.rest)),
+                Some(cell),
+                true,
+            ));
+        }
     }
 }
 
@@ -741,6 +843,13 @@ pub fn tile_neighbour(
     direction: Dir,
 ) -> Option<usize> {
     screen.tiles?;
+    // LEFT and RIGHT on a list's row step its value, which the menu does.
+    if matches!(
+        menu.page().entries.get(menu.selected()),
+        Some(Entry::Choice { .. })
+    ) {
+        return None;
+    }
     let tiles = regions(screen, table, menu, skin);
     let centre = |rect: [f32; 4]| (rect[0] + rect[2] * 0.5, rect[1] + rect[3] * 0.5);
     let (fx, fy) = centre(tiles.iter().find(|tile| tile.row == menu.selected())?.rect);
@@ -789,6 +898,21 @@ pub fn regions(screen: &PauseScreen, table: &PauseMenu, menu: &Menu, skin: &Skin
                 part: Part::Row,
                 rect: [button.x, button.y, button.width, button.height],
             }),
+            Kind::Strip(list) => {
+                let count = list.entries.len().max(1) as f32;
+                let selectable = match entry {
+                    Entry::Choice { values, .. } => values.len(),
+                    _ => 0,
+                };
+                for at in 0..selectable.min(list.entries.len()) {
+                    let cell = list.width / count;
+                    out.push(Region {
+                        row: placed.row,
+                        part: Part::Value(at),
+                        rect: [list.x + cell * at as f32, list.y, cell, list.height],
+                    });
+                }
+            }
             Kind::Menu(n) => {
                 let (Some(widget), Some(rows)) = (
                     screen.screen.screen.menu.as_ref(),
