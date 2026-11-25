@@ -79,7 +79,15 @@ fn frame_of(ticks: u32) -> Option<Vec<[u8; 3]>> {
     std::fs::write(&script, "390 cross\n1 cross square\n400 cross\n").expect("the input script");
     let status = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
         .arg(image)
-        .args(["--race", "--no-audio", "--size", "960x544", "--opponents"])
+        .args([
+            "--race",
+            "--no-audio",
+            "--no-soundtrack",
+            "--no-effects",
+            "--size",
+            "960x544",
+            "--opponents",
+        ])
         .args(["--render-scale", "100", "--msaa", "off"])
         .args(["--screen-filter", "off", "--anisotropy", "off"])
         // The fireball's own alpha test is what the white count reads; the

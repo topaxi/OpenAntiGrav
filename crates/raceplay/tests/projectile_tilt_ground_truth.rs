@@ -78,6 +78,7 @@ struct Ride {
 fn start(image: &str, track: &str) -> Option<race::Race> {
     let image = oag_testdata::image(image)?;
     let mut loaded = race::load(&race::Options {
+        no_effects: true,
         source: image.display().to_string(),
         track: Some(track.to_string()),
         class: "VENOM".to_string(),

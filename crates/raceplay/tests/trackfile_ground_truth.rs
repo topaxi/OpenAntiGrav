@@ -56,6 +56,7 @@ mod art_proof;
 
 fn options(image: &str, track: &str) -> race::Options {
     race::Options {
+        no_effects: true,
         source: image.to_string(),
         track: Some(track.to_string()),
         class: "VENOM".to_string(),
@@ -338,6 +339,7 @@ fn a_lone_craft_races_a_disc_circuit_and_its_exported_file_identically() {
                 );
             }
             let time_trial = race::load(&race::Options {
+                no_effects: true,
                 mode: oag_race::Mode::TimeTrial,
                 ..o.clone()
             })
@@ -464,6 +466,7 @@ fn lions_den_races_the_same_converted_as_loaded_directly() {
 
     let start = |track: std::path::PathBuf| {
         let o = race::Options {
+            no_effects: true,
             source: image.display().to_string(),
             class: "VENOM".to_string(),
             mode: oag_race::Mode::SingleRace,
@@ -515,6 +518,7 @@ fn lone_craft_gets_round(file: &str, id: &str, title: &str, art: &[&str]) {
         .join("../trackfile/tests/fixtures")
         .join(file);
     let o = race::Options {
+        no_effects: true,
         source: image.display().to_string(),
         class: "VENOM".to_string(),
         mode: oag_race::Mode::SingleRace,
@@ -648,6 +652,7 @@ fn a_track_file_loads_on_the_disc_it_borrows_from_and_where_its_author_offers_it
     let options = |source: &std::path::Path,
                    craft: Option<&std::path::Path>,
                    track: &std::path::Path| race::Options {
+        no_effects: true,
         source: source.display().to_string(),
         craft_source: craft.map(|c| c.display().to_string()),
         class: "VENOM".to_string(),
@@ -769,6 +774,7 @@ fn the_other_titles_default_circuits_round_trip_too() {
             continue;
         };
         let o = race::Options {
+            no_effects: true,
             source: path.display().to_string(),
             ..race::Options::default()
         };
@@ -785,6 +791,7 @@ fn the_other_titles_default_circuits_round_trip_too() {
 /// A track file's Zone race: `mode = Zone` on `file` against `source`.
 fn zone_options(source: &std::path::Path, file: &std::path::Path) -> race::Options {
     race::Options {
+        no_effects: true,
         source: source.display().to_string(),
         class: "VENOM".to_string(),
         mode: oag_race::Mode::Zone,
@@ -954,6 +961,7 @@ fn a_track_file_with_pad_volumes_and_no_plate_draws_the_hosts_pads() {
         .join("../trackfile/tests/fixtures/oval.track.toml");
     let load = |mode| {
         race::load(&race::Options {
+            no_effects: true,
             source: image.display().to_string(),
             class: "VENOM".to_string(),
             mode,

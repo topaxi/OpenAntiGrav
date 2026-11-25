@@ -623,6 +623,7 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
         options.mode,
         vr_fx,
         slot_teams,
+        options.no_effects,
         &mut report,
     );
     mods.sounds(&mut sounds, &mut report);

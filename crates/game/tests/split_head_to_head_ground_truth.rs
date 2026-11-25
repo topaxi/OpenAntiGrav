@@ -243,7 +243,14 @@ fn each_window_draws_its_own_persons_gap() {
 fn head_to_head_refuses_three_people_by_name() {
     for seats in [["--players", "3"], ["--window-seats", "1,2"]] {
         let out = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
-            .args(["--no-audio", "--race", "--mode", "head_to_head"])
+            .args([
+                "--no-audio",
+                "--no-soundtrack",
+                "--no-effects",
+                "--race",
+                "--mode",
+                "head_to_head",
+            ])
             .args(seats)
             .output()
             .expect("running oag-game");

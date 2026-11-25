@@ -423,6 +423,8 @@ fn ship_select_still(
         .arg(image)
         .args([
             "--no-audio",
+            "--no-soundtrack",
+            "--no-effects",
             "--size",
             "1920x1080",
             "--menu-page",
@@ -582,7 +584,14 @@ fn the_live_screen_draws_the_hull_where_the_fit_rests_it() {
     );
     let status = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
         .arg(&image)
-        .args(["--no-audio", "--no-intro", "--drive", &script])
+        .args([
+            "--no-audio",
+            "--no-soundtrack",
+            "--no-effects",
+            "--no-intro",
+            "--drive",
+            &script,
+        ])
         .env("XDG_CONFIG_HOME", dir.join("config"))
         .env("XDG_STATE_HOME", dir.join("state"))
         .env("XDG_DATA_HOME", dir.join("data"))
@@ -832,7 +841,14 @@ fn ship_selects_hull_is_as_bright_as_the_original_on_both_paths() {
     );
     let status = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
         .arg(&image)
-        .args(["--no-audio", "--no-intro", "--drive", &script])
+        .args([
+            "--no-audio",
+            "--no-soundtrack",
+            "--no-effects",
+            "--no-intro",
+            "--drive",
+            &script,
+        ])
         .env("XDG_CONFIG_HOME", dir.join("config"))
         .env("XDG_STATE_HOME", dir.join("state"))
         .env("XDG_DATA_HOME", dir.join("data"))
@@ -1092,6 +1108,8 @@ fn ship_select_entry_still(
         .arg(image)
         .args([
             "--no-audio",
+            "--no-soundtrack",
+            "--no-effects",
             "--size",
             "1920x1080",
             "--menu-page",

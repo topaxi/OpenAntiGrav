@@ -577,6 +577,8 @@ fn the_campaign_select_frame_shows_the_2048_banner() {
         .arg(&omega)
         .args([
             "--no-audio",
+            "--no-soundtrack",
+            "--no-effects",
             "--size",
             "1920x1080",
             "--menu-page",

@@ -34,7 +34,14 @@ fn held_shot(image: &Path, track: &str, name: &str, alpha: &str) -> Vec<u8> {
     let out = dir.join(format!("{alpha}.png"));
     let run = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
         .arg(image)
-        .args(["--race", "--no-audio", "--size", "960x544"])
+        .args([
+            "--race",
+            "--no-audio",
+            "--no-soundtrack",
+            "--no-effects",
+            "--size",
+            "960x544",
+        ])
         .args(["--track", track, "--ticks", "0", "--intro-ticks", "5"])
         .args(["--draw-alpha", alpha])
         .arg("--screenshot")

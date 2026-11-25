@@ -27,6 +27,8 @@ fn capture(
         .arg(image)
         .args([
             "--no-audio",
+            "--no-soundtrack",
+            "--no-effects",
             "--race",
             "--mode",
             "single_race",

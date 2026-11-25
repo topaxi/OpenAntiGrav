@@ -64,6 +64,20 @@ fn drive_args(
     env: &[(&str, &str)],
     args: &[&str],
 ) -> Run {
+    drive_run(image, tag, script, tracks, env, args, false)
+}
+
+/// [`drive_args`], with the soundtrack read when `soundtrack` is set: the MUSIC page lists what
+/// the pool scan found, which a run with no soundtrack never starts.
+fn drive_run(
+    image: &Path,
+    tag: &str,
+    script: &str,
+    tracks: Option<&Path>,
+    env: &[(&str, &str)],
+    args: &[&str],
+    soundtrack: bool,
+) -> Run {
     let scratch = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("drive-{tag}"));
     let _ = std::fs::remove_dir_all(&scratch);
     std::fs::create_dir_all(&scratch).expect("a scratch directory");
@@ -71,7 +85,13 @@ fn drive_args(
     let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"));
     command
         .arg(image)
-        .args(["--no-audio", "--no-intro", "--drive", script])
+        .args([
+            "--no-audio",
+            "--no-effects",
+            "--no-intro",
+            "--drive",
+            script,
+        ])
         .args(args)
         .arg("--state-log")
         .arg(&log)
@@ -84,6 +104,9 @@ fn drive_args(
         // No display: the run must not need one.
         .env_remove("WAYLAND_DISPLAY")
         .env_remove("DISPLAY");
+    if !soundtrack {
+        command.arg("--no-soundtrack");
+    }
     command.envs(env.iter().copied());
     match tracks {
         Some(dir) => command.env("OAG_TRACKS", dir),
@@ -813,7 +836,7 @@ fn the_music_page_saves_its_switches() {
         return;
     };
     let booted = "disc:wipeout-pulse:psp";
-    let run = drive(
+    let run = drive_run(
         &image,
         "music-switch",
         &format!(
@@ -824,6 +847,9 @@ fn the_music_page_saves_its_switches() {
              press circle; until page=audio; ticks 5"
         ),
         None,
+        &[],
+        &[],
+        true,
     );
     assert!(run.output.status.success(), "{}", run.stderr());
     let saved = std::fs::read_to_string(

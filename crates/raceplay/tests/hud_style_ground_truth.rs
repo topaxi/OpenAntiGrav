@@ -38,6 +38,7 @@ fn load(title: &Title, style: Option<&str>, views: u8) -> Option<race::Loaded> {
     };
     Some(
         race::load(&race::Options {
+            no_effects: true,
             source: source.display().to_string(),
             class: "VENOM".to_string(),
             mode: oag_race::Mode::SingleRace,
