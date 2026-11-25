@@ -7,7 +7,7 @@
 Starts the race, writes the player's shield to 0, pauses at the blast, resumes a few frames until the game has
 entered mode 2, pauses again and scans guest memory for the camera object by its orbit rates (`+0x234` = 0.01,
 `+0x240` = 0.02, a mode word `+0x40` = 2). Then it runs free and samples the object's block `+0x200..+0x3c0`
-as fast as the socket allows, keeping one row per change of the clock `+0x2c4`. Writes `block0.hex` (the first
+as fast as the socket allows, keeping one row per change of the clock `+0x2c4`. Each row also carries `rcam`, the render camera's 4x4 at `*0x987884 + 0x40` (row 3 is the eye the orbit view writes, `0x000ae6c0`). Writes `block0.hex` (the first
 whole block) and `rows.json`. `docs/ghidra/functions/ps3-hdfury-eu/destroy-camera.md`, "Measured on RPCS3".
 """
 import argparse, importlib.util, json, re, struct, sys, time
@@ -74,7 +74,9 @@ def main():
                 row = {k: struct.unpack_from(">f", blk, o - 0x200)[0] for k, o in FIELDS.items()}
                 row["mode"] = u32(cam + 0x40); row["state"] = struct.unpack(">i", rd(player + 0x5FA4, 4))[0]
                 row["focus"] = struct.unpack_from(">3f", blk, 0x390 - 0x200); row["b3ac"] = blk[0x3AC - 0x200]
-                row["craft"] = struct.unpack(">3f", rd(body + 0x200, 12)); row["wall"] = time.time(); row["blk"] = blk.hex(); row["full"] = full.hex()
+                row["craft"] = struct.unpack(">3f", rd(body + 0x200, 12))
+                render = u32(0x987884)
+                row["render"] = render; row["rcam"] = struct.unpack(">16f", rd(render + 0x40, 64)) if render else None; row["wall"] = time.time(); row["blk"] = blk.hex(); row["full"] = full.hex()
                 if row["clock"] != last:
                     rows.append(row); last = row["clock"]
                 if row["clock"] > args.secs or row["mode"] != 2: break
@@ -88,6 +90,8 @@ def main():
                     craft = struct.unpack(">3f", rd(body + 0x200, 12))
                     eyes = {c[3] for c in cands if sum((a - b) ** 2 for a, b in zip(c[3], craft)) ** 0.5 < 30 and c[2] < 1e-3}
                     print("clock %.3f craft %s eyes %s cam %#x" % (row["clock"], craft, eyes, cam), flush=True)
+                    rm = struct.unpack(">16f", rd(row["render"] + 0x40, 64)); reye = tuple(-v for v in rm[12:15])
+                    print("  render camera eye %s: %.2f from the craft, %.2f from the focus" % ([round(v, 2) for v in reye], sum((a - b) ** 2 for a, b in zip(reye, craft)) ** 0.5, sum((a - b) ** 2 for a, b in zip(reye, row["focus"])) ** 0.5), flush=True)
                     print("  body rows %s" % [struct.unpack(">3f", rd(body + o, 12)) for o in (0x1D0, 0x1E0, 0x1F0)], flush=True)
                     print("  cam %s" % {k: row[k] for k in ("yaw", "pitch", "dist", "fov", "clock")}, "focus", row["focus"], flush=True)
                     for eye in []:
