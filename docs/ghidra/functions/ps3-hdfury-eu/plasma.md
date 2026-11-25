@@ -985,11 +985,10 @@ In the order a player notices them; each with what is known of its cause.
    value, not read on the sphere's draw. Two RSX dump attempts never caught the draw
    (`scripts/rpcs3-hd-whiteout.py --fire-state 7 --behind --delay 1.25 --want-mats DIR
    --want-name plasmasphere_glow`).
-6. **The flight past one second.** On the banked climb ours bends with the road; the original's holds
-   its heading and meets the right-hand wall at age 2.24 s. Ours drifts 1.4 degrees off the craft's
-   heading where the original's drifts 0.6, so the yawed shot's wall point is 12.2 short at 132.
-   `Plasma_Update` (`0x0011fc88`) is read; HD's floor arms are `ParallelToFloor` (chosen,
-   `floor_arms_steer_to_ride_point`), the likely cause, unread on HD.
+6. ~~**The flight past one second.**~~ Closed 2026-11-25 by the parallel turn ("On Moa Therma's
+   bank"): the straight bolt now ends at age 2.20 s against the original's 2.24 (the steer gave
+   2.58), and the yawed shot meets the wall 0.5 from the original's point at 0.95 s (the steer: 11
+   short).
 7. **The Plasma's lights**: the wind-up's two descriptors, the release candidate and the blast's two
    are unwired.
 
@@ -1033,9 +1032,9 @@ plus `launchSpeed`), and `+0x110` holds the carried normal.
   age 1.86 s at `(227.3, 87.8, -315.7)`, sample 774, at the right edge. **Its velocity is
   perpendicular to the carried normal on every frame after the first** (`v . n` reads `0.00`
   at 194 to 236 units/s), and each frame's step lies along the stored velocity (cosine 0.9983
-  to 1.0000). Its heading turns only as the floor turns. Confidence **90** for "HD's Plasma
-  floor arm turns the velocity parallel to the floor": one runtime trace, 46 frames, one
-  binary.
+  to 1.0000). Its heading turns only as the floor turns. Confidence **92** (with the Talon's Junction capture below) for "HD's Plasma
+  floor arm turns the velocity parallel to the floor": two runtime captures (46 frames here, 133
+  ticks on Talon's Junction), one binary.
 - **Rocket: rides it too.** All three ride 3.00 above the floor in our collision, with the
   velocity perpendicular to the floor normal (`v . n / |v|` = 0.000 on every frame). They hold
   222.2 units/s from the first frame, which is Venom's class speed with no 0.75 launch hold.
@@ -1090,6 +1089,11 @@ passes sample 668. Pinned by `crates/raceplay/tests/hd_bank_floor_ground_truth.r
 - **The pseudocode above writes `velocity = dir * speed` after the ride**, where `dir` is the
   normalized ride step. Live, the velocity is the floor-parallel one, so `dir` is that
   projection. The PPC permutes were not re-read.
+- **A second capture agrees.** The Talon's Junction shots above already read the floor follower as
+  `v' = normalize(v - (v.n')n') * speed`, exact over 133 ticks ("Measured live"); this engine had
+  not wired it. With it, the straight shot ends at age 2.20 s (original 2.24) and the yawed shot
+  0.5 from the original's wall point (`hd_plasma_flight_ground_truth.rs`). With both captures the
+  Plasma law is confidence **92**.
 - **Not measured:** the Plasma's first probe (live, the frame 1/30 s after release already
   rides, inside our 0.04 s window); the sweep arm; the 2048 and Omega flights (no memory
   readout on Omega; 2048 not run).

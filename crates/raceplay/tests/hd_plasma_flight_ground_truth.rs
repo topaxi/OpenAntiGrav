@@ -11,9 +11,9 @@
 //! live". Two shots: one down the grid, one with the craft turned ten degrees so the bolt
 //! meets the left wall 130 units out.
 //!
-//! **What is not asserted.** Past a second of flight, on the banked climb after the grid,
-//! this engine's bolt bends with the road where the original's holds its heading and ends
-//! on the right-hand wall at age 2.24 s; the same page, "Open", has both tracks.
+//! Past the first second the straight shot's bolt climbs the bank after the grid and ends on
+//! the right-hand wall at age 2.24 s; the floor follower is the parallel turn, so ours holds
+//! the heading there too (`plasma.md`, "On Moa Therma's bank").
 
 use oag_core::math::Vec3;
 use oag_gameplay::PlayerInputs;
@@ -42,6 +42,9 @@ const ORIGINAL_FLOWN: [(f32, f32); 4] = [
 /// over its own `dt` (the original's `dt` runs 0.016 to 0.0173 s): Venom's ramp
 /// `(1 - age) * 200 + age * 850` from the first tick, with no hold at a lower speed.
 const ORIGINAL_FIRST_TICKS_KMH: [f32; 4] = [212.9, 211.2, 221.6, 229.5];
+
+/// The flight age at which the original's straight bolt met the climb's right-hand wall.
+const ORIGINAL_STRAIGHT_END: f32 = 2.24;
 
 /// Where and at what flight age the original's bolt met the wall.
 const ORIGINAL_WALL: ([f32; 3], f32) = ([1.4376, -50.3203, -207.0496], 0.95);
@@ -208,11 +211,11 @@ fn a_bolt_aimed_at_a_wall_ends_near_the_originals_wall_point() {
     );
     let end = positions[last].expect("just found");
     let (wall, age) = ORIGINAL_WALL;
-    // 12.2 as measured: this engine's bolt drifts 1.4 degrees off the craft's heading
-    // on the way where the original's drifts 0.6, so it meets the wall two ticks sooner.
+    // 0.5 as measured with the parallel turn; steering at the ride point drifted the bolt
+    // 1.4 degrees off the heading and met the wall 11 short.
     let miss = (end - Vec3::from(wall)).length();
     assert!(
-        miss < 15.0,
+        miss < 2.0,
         "the bolt ended at {end:?}, {miss:.1} from the original's wall point {wall:?}"
     );
     #[expect(clippy::cast_precision_loss, reason = "a tick count under 200")]
@@ -220,5 +223,25 @@ fn a_bolt_aimed_at_a_wall_ends_near_the_originals_wall_point() {
     assert!(
         (ended_at - age).abs() < 0.1,
         "the bolt ended {ended_at:.3} s after its release, the original's {age:.2} s"
+    );
+}
+
+/// The straight shot's bolt rides the banked climb after the grid and ends on the right-hand
+/// wall at age 2.24 s, as the original's did; steering at the ride point carried it to 2.58 s.
+#[test]
+#[ignore = "needs a disc image"]
+fn the_straight_bolt_ends_on_the_climbs_wall_when_the_originals_did() {
+    let Some((positions, _)) = fly(STRAIGHT, 400) else {
+        return;
+    };
+    let last = positions
+        .iter()
+        .rposition(Option::is_some)
+        .expect("the bolt flew");
+    #[expect(clippy::cast_precision_loss, reason = "a tick count under 400")]
+    let ended_at = (last - RELEASE) as f32 / 60.0;
+    assert!(
+        (ended_at - ORIGINAL_STRAIGHT_END).abs() < 0.1,
+        "the bolt ended {ended_at:.3} s after its release, the original's {ORIGINAL_STRAIGHT_END} s"
     );
 }
