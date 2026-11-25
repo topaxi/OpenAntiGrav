@@ -274,6 +274,13 @@ placement RNG cannot match the original's `Libc_Rand` (a departure, documented).
 
 ## Open
 
+- **Cannon bolt (`det-cannon-bolt-look`)**: the bolt's program and the half turn are wired on HD and the loop ride is
+  confirmed live (`detonator-cannon.md`, "The bolt's look and the loop"). Open: (1) the spark's frame is read statically
+  only (55: faces the rebound direction); read the spawn's `r6` live at `0x00123338` (interpreter breakpoint) before
+  orienting ours'; (2) the bolt's GXP (2048) and GCN (Omega) programs are unread, so those titles draw it through the
+  generic path (Omega binds the ring strip as diffuse); (3) the 0.05 to 4.8 unit sideways drift through the loop, 60 Hz
+  against 30 Hz suspected; (4) no side-on capture of the original's bolt.
+
 - **Mine look (`det-mine-lit`)**: the normal map is read now (the chunk has one coordinate set), so hubs and holes show.
   Open: (1) a pair's mines stay dark because the envelope has no history under raw bands below 0.3; carrying each mine's
   `m+0xf4`/`m+0xf8` out of the original's RAM (`ship/mines[].address`) into a flag that seeds `MineEnvelopes` needs an
