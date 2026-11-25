@@ -1717,9 +1717,11 @@ The control, 2,151 tests whose instruction count moved by under 0.5 %, reads 44,
 
 | Step | Saving |
 | --- | --- |
-| `--no-soundtrack` on the game-spawning tests (footer-hint, campaign-cursor, pause-menu families first: 87 tests 3,768 to 2,734 G once the race launch's fetch is gated too) | 1,829 G over the 2,366 `oag-game` tests |
-| `--no-effects` on the same tests, the pool scan, and the one `--race` test that had missed the switch | 1,702 G more (`oag-game` 18,312 to 14,781 G in all) |
-| `--no-effects` on the five view-loading `oag-raceplay` families, and on the demo tests | about 500 G (90 tests, 3,074 to 2,551 G) |
+| `--no-soundtrack` on the game-spawning tests (footer-hint, campaign-cursor and pause-menu families: 87 tests 3,768 to 2,734 G once the race launch's fetch is gated too, against gate-walltime-10's run) | 1,940 G over the 2,366 `oag-game` tests (18,312 to 16,372 G) |
+| `--no-effects` on the same tests, the pool scan, and the one `--race` test that had missed the switch | 1,591 G more (`oag-game` 18,312 to 14,781 G in all, 3,531 G) |
+| `--no-effects` on the five view-loading `oag-raceplay` families, and on the demo tests | 523 G (90 tests, 3,074 to 2,551 G; the demo tests are in this row and in the `oag-game` rows) |
+
+The rows sum to 4,054 G against the 4,288 G measured over the suite; the roughly 234 G left over is the tests outside those A/B sets that moved (the 342 moved tests include the `oag-net` and sound unit tests) and run-to-run drift (the `net_hosted` server build varies between runs), not a further change. All three rows are against the `b1c6fe46e` baseline run.
 
 Not changed: the `oag-game` tests that read the music state, the Omega `.wem` and GNF decode floors, and the mixer's per-tick work under a null output (another lane's).
 
