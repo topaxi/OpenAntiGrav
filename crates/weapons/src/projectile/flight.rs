@@ -7,8 +7,8 @@
 use super::{
     FALL_ACCELERATION, FloorArms, Impact, KMH_PER_UNIT_PER_SECOND, MAX_FLIGHT_SECONDS,
     MAX_PROJECTILES, OwnCraftProbe, PlasmaRelease, Projectile, Projectiles, RIDE_HEIGHT,
-    SURFACE_PROBE_LENGTH, SweepHit, TriggerRadii, cannon, disruptor, mine, missile, nearest_hit,
-    own_box_blocks, plasma, rocket, shuriken,
+    SURFACE_PROBE_LENGTH, SweepHit, TriggerRadii, cannon, disruptor, launch_normal, mine, missile,
+    nearest_hit, own_box_blocks, plasma, rocket, shuriken,
 };
 use crate::Craft;
 use oag_core::math::Vec3;
@@ -170,8 +170,9 @@ impl Projectiles {
                 // tick wrote, so the ramp is read at the age after this tick's step: HD's
                 // `Plasma_Update` adds `dt` to the age before it reads the speed
                 // (`docs/ghidra/functions/ps3-hdfury-eu/plasma.md`, "On Moa Therma's bank").
+                // Pure's `Plasma_Update` ages first too (`+0x58 += dt` at `0x0885e380`).
                 let ramp_age = match floor_arms {
-                    FloorArms::ParallelToFloor => age + dt,
+                    FloorArms::ParallelToFloor | FloorArms::LaunchNormal => age + dt,
                     FloorArms::SteerToRidePoint => age,
                 };
                 plasma.and_then(|stats| {
@@ -193,6 +194,24 @@ impl Projectiles {
             };
 
             let from = projectile.position;
+            if floor_arms == FloorArms::LaunchNormal
+                && matches!(kind, Weapon::Rocket | Weapon::Plasma)
+            {
+                let box_holds = matches!(
+                    own_craft,
+                    OwnCraftProbe::CraftBox | OwnCraftProbe::CraftBoxHolds
+                );
+                impacts[index] = launch_normal::advance(
+                    projectile, kind, from, dt, raycaster, ships, box_holds, pinned_kmh,
+                );
+                if impacts[index].is_some() {
+                    *projectile = Projectile::default();
+                } else {
+                    impacts[index] = expire(projectile, kind, guided, dt);
+                }
+                continue;
+            }
+            let floor_arms = floor_arms.for_other_weapons();
             let mut to = from + projectile.velocity * dt;
             // The Plasma's `g_ride_height` is not the Rocket's literal `3.0`; see
             // [`plasma::RIDE_HEIGHT`].
@@ -464,7 +483,8 @@ impl Projectiles {
                 {
                     projectile.position = hit.point + hit.normal * ride_height;
                     match floor_arms {
-                        FloorArms::SteerToRidePoint => {
+                        // `LaunchNormal` is mapped away above, before the probe.
+                        FloorArms::SteerToRidePoint | FloorArms::LaunchNormal => {
                             if matches!(kind, Weapon::Rocket | Weapon::Shuriken) {
                                 projectile.surface = hit.normal;
                                 projectile.velocity = (projectile.position - from) / dt;
@@ -559,78 +579,7 @@ impl Projectiles {
                 );
             }
 
-            projectile.lifetime -= dt;
-
-            // A missile that hit nothing goes off where it is: the pool's second
-            // pass tests `3.0 < age` after the move (see
-            // [`missile::SELF_DETONATE_SECONDS`]), strictly greater. `blast:
-            // false`, see [`Impact::blast`].
-            if guided && MAX_FLIGHT_SECONDS - projectile.lifetime > missile::SELF_DETONATE_SECONDS {
-                impacts[index] = Some(Impact {
-                    point: projectile.position,
-                    kind,
-                    owner: projectile.owner,
-                    struck: None,
-                    blast: false,
-                    effect: None,
-                });
-                *projectile = Projectile::default();
-                continue;
-            }
-
-            // A rocket that hit nothing is reaped at five seconds, a Cannon round
-            // at one, silently: `RocketPool_Update` tests `5.0 < age` and
-            // `CannonPool_Update` `1.0 < age`, retiring through the wall-hit
-            // teardown with no explosion or blast. See
-            // [`rocket::LIFETIME_SECONDS`] and [`cannon::LIFETIME_SECONDS`].
-            let own_lifetime = match kind {
-                Weapon::Rocket => Some(rocket::LIFETIME_SECONDS),
-                Weapon::Cannon => Some(cannon::LIFETIME_SECONDS),
-                _ => None,
-            };
-            if own_lifetime.is_some_and(|limit| MAX_FLIGHT_SECONDS - projectile.lifetime > limit) {
-                *projectile = Projectile::default();
-                continue;
-            }
-
-            if projectile.lifetime <= 0.0 {
-                // The Plasma alone detonates here, a recovered negative:
-                // `Plasmas_Update` (`0x0886b490`) sets the same destroy bit at
-                // `10.0 < age` as a wall, feeding the identical teardown
-                // (`Psys_Release_q`, `Plasma_SpawnDetonation` `0x0886ac88`
-                // `WO_PLASMA_FLASH`, `PLASMAHITWALL`). Read at instruction level
-                // 2026-09-16, it touches no craft's shield or `entity+0x110`, and
-                // `Weapon_PostBlastImpulse` (`0x0886794c`) has one caller
-                // (`FUN_08867b50`, the Mine's, by `get_xrefs_to`). So `blast: false`;
-                // see `Impact::blast` and `docs/ghidra/functions/psp-pulse-usa/plasma.md`
-                // ("What is not verified") for the tension with the wall-hit
-                // branch's `blast: true`, carried forward.
-                //
-                // The Shuriken's fuse is the same shape (read 2026-09-30):
-                // `ShurikenPool_Update` (`0x0886ff38`) sets the destroy bit at
-                // `fuse < age`; teardown `FUN_08870c78` plays `WO_SHURIKEN_EXPIRE`
-                // and `ScreenFlash_Start(0)` and spends no damage.
-                if matches!(kind, Weapon::Plasma | Weapon::Shuriken) {
-                    impacts[index] = Some(Impact {
-                        point: projectile.position,
-                        kind,
-                        owner: projectile.owner,
-                        struck: None,
-                        blast: false,
-                        effect: None,
-                    });
-                    *projectile = Projectile::default();
-                    continue;
-                }
-
-                // Reaped, not detonated: nothing was struck. The cap is ours, that
-                // there is one is not: `RocketPool_Update` reaps at `5.0 < age`
-                // with no explosion (the Rocket and Cannon take that branch above
-                // and never reach this). A missile detonated above. A mine or bomb
-                // never gets here: its `timetodie` running out is a detonation
-                // handled in [`advance_laid`].
-                *projectile = Projectile::default();
-            }
+            impacts[index] = expire(projectile, kind, guided, dt);
         }
 
         self.sweep_rockets_through_laid(&starts, trigger_radii, &mut impacts);
@@ -682,4 +631,83 @@ impl Projectiles {
             }
         }
     }
+}
+
+/// Ages a projectile that flew this update and ends it where its own clock says: the
+/// Missile's self-detonation, the Rocket's and the Cannon's silent reap, the Plasma's and the
+/// Shuriken's expiry. The impact, if one is reported.
+fn expire(projectile: &mut Projectile, kind: Weapon, guided: bool, dt: f32) -> Option<Impact> {
+    projectile.lifetime -= dt;
+
+    // A missile that hit nothing goes off where it is: the pool's second
+    // pass tests `3.0 < age` after the move (see
+    // [`missile::SELF_DETONATE_SECONDS`]), strictly greater. `blast:
+    // false`, see [`Impact::blast`].
+    if guided && MAX_FLIGHT_SECONDS - projectile.lifetime > missile::SELF_DETONATE_SECONDS {
+        let impact = Impact {
+            point: projectile.position,
+            kind,
+            owner: projectile.owner,
+            struck: None,
+            blast: false,
+            effect: None,
+        };
+        *projectile = Projectile::default();
+        return Some(impact);
+    }
+
+    // A rocket that hit nothing is reaped at five seconds, a Cannon round
+    // at one, silently: `RocketPool_Update` tests `5.0 < age` and
+    // `CannonPool_Update` `1.0 < age`, retiring through the wall-hit
+    // teardown with no explosion or blast. See
+    // [`rocket::LIFETIME_SECONDS`] and [`cannon::LIFETIME_SECONDS`].
+    let own_lifetime = match kind {
+        Weapon::Rocket => Some(rocket::LIFETIME_SECONDS),
+        Weapon::Cannon => Some(cannon::LIFETIME_SECONDS),
+        _ => None,
+    };
+    if own_lifetime.is_some_and(|limit| MAX_FLIGHT_SECONDS - projectile.lifetime > limit) {
+        *projectile = Projectile::default();
+        return None;
+    }
+
+    if projectile.lifetime <= 0.0 {
+        // The Plasma alone detonates here, a recovered negative:
+        // `Plasmas_Update` (`0x0886b490`) sets the same destroy bit at
+        // `10.0 < age` as a wall, feeding the identical teardown
+        // (`Psys_Release_q`, `Plasma_SpawnDetonation` `0x0886ac88`
+        // `WO_PLASMA_FLASH`, `PLASMAHITWALL`). Read at instruction level
+        // 2026-09-16, it touches no craft's shield or `entity+0x110`, and
+        // `Weapon_PostBlastImpulse` (`0x0886794c`) has one caller
+        // (`FUN_08867b50`, the Mine's, by `get_xrefs_to`). So `blast: false`;
+        // see `Impact::blast` and `docs/ghidra/functions/psp-pulse-usa/plasma.md`
+        // ("What is not verified") for the tension with the wall-hit
+        // branch's `blast: true`, carried forward.
+        //
+        // The Shuriken's fuse is the same shape (read 2026-09-30):
+        // `ShurikenPool_Update` (`0x0886ff38`) sets the destroy bit at
+        // `fuse < age`; teardown `FUN_08870c78` plays `WO_SHURIKEN_EXPIRE`
+        // and `ScreenFlash_Start(0)` and spends no damage.
+        if matches!(kind, Weapon::Plasma | Weapon::Shuriken) {
+            let impact = Impact {
+                point: projectile.position,
+                kind,
+                owner: projectile.owner,
+                struck: None,
+                blast: false,
+                effect: None,
+            };
+            *projectile = Projectile::default();
+            return Some(impact);
+        }
+
+        // Reaped, not detonated: nothing was struck. The cap is ours, that
+        // there is one is not: `RocketPool_Update` reaps at `5.0 < age`
+        // with no explosion (the Rocket and Cannon take that branch above
+        // and never reach this). A missile detonated above. A mine or bomb
+        // never gets here: its `timetodie` running out is a detonation
+        // handled in [`mine::advance_laid`].
+        *projectile = Projectile::default();
+    }
+    None
 }

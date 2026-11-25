@@ -250,6 +250,8 @@ pub const TITLE: &Title = &Title {
             false,
             "Wipeout HD",
         ),
+        // HD's law, inherited: this title's `Rocket_Update` and `Plasma_Update` are unread.
+        floor_arms_ride_launch_normal: oag_title::pre_race::Sourced::inherited(false, "Wipeout HD"),
         // HD's law, inherited: Omega's `Plasma_Launch` (`0x0135d5d0`) takes the node matrix as
         // HD's does; whether the walker orthonormalises it is unread (`ps4-omega-eu/plasma.md`).
         plasma_release_at_display_scale: oag_title::pre_race::Sourced::inherited(

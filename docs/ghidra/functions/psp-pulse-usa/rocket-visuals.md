@@ -1662,3 +1662,52 @@ for their Rocket, Missile and Shuriken arms: unread, named in the thread).
 
 History: `Collision_SweepSegment` 85 (2026-09-13, mesh path read, second query inherited at 55) to
 92 (2026-11-11, second query decompiled and reproduced live; one binary).
+
+## 2026-11-25: Pulse on the steepest bank (psp-floor-law)
+
+Maintainer's question: do Pure, Pulse and HD differ in how Rockets and Plasma bolts follow the
+floor, "double check on Pulse as well, to be sure". This section is Pulse's part; Pure's is
+[`psp-pure-usa/floor-follow.md`](../psp-pure-usa/floor-follow.md), HD's
+[`ps3-hdfury-eu/plasma.md`](../ps3-hdfury-eu/plasma.md).
+
+**The steepest bank.** The roll of every Pulse circuit's spline (`asin |lateral.y|` over
+`oag-trace track` on `pulse-psp-usa.chd`, all twelve circuits): Moa Therma (`03`) reaches **85.8
+degrees** at sample 996 and holds 80 to 86 from sample 600 to 1,500; the next steepest are `14`
+(35.1), `05` (34.6), `02` (30.9) and `16` (30.0). The carried normals in the captures below read 84
+to 86 degrees off world up.
+
+**Did the 2,302 probes include it?** Yes, as box probes: the own-craft-box replay ("The own-craft
+box is a rotated frame" above) covered the mag strip. Those captures tested where the craft's box
+hides the floor, one probe at a time, not a flight chained under the floor law; and the 2026-11-11
+Plasma on the same helix (weapon-bank-follow) was re-seeded from the original's state every update.
+Neither is a chained comparison, so it was run here.
+
+**Capture.** PPSSPP v1.20.4 software, `time-trial-moa-therma-white-venom-grid.ppst`, the craft flown
+to the fire point by the original's Autopilot (the claim is the projectile's law, not the craft's),
+`scripts/psp-projectile-sweeps.py --box --rows-out`: one Plasma fired at spline sample 760 (released
+60 frames later, near 845) and one Rocket volley fired at 845. Every probe of every update returned
+`3` (mag floor) until the last, `4` (outside the cage):
+
+| Flight | Updates | Ends |
+| --- | ---: | --- |
+| Plasma | 47 | probe `4`, its mesh point `(337.066, 128.954, -570.552)` |
+| Rocket 1 | 58 | probe `4`, `(329.985, 134.228, -580.010)` |
+| Rocket 2 | 69 | probe `4`, `(304.260, 134.887, -615.154)` |
+| Rocket 3 | 49 | probe `4`, `(343.053, 132.491, -547.001)` |
+
+**Ours, chained.** Each flight is seeded from the original's state at update 1 (position, velocity,
+carried normal, age) and stepped on the original's own `dt` through Pulse's collision mesh and cage,
+so the firing pose is the original's exactly (stricter than holding the craft on a pose in both).
+
+| Floor arm | Rockets: worst error, end | Plasma: worst error, end |
+| --- | --- | --- |
+| Pulse's (`SteerToRidePoint`) | 0.0017, 0.0002, 0.0004 units; updates 58, 69, 49 at the original's points | 0.44 units (the last update); update 47 at its point |
+| the parallel turn (HD's, `floor-followers`' probe arm applied for the run) | 18.0, 20.9, 15.2 units; updates 77, never, 65 | 20.0 units; update 67 |
+
+**Law, confidence 92** (decompile, plus four chained flights on the steepest bank to under 0.002
+unit for the Rockets): on Pulse the Rocket and the Plasma stay on the 85 degree bank and end at the
+cage on the original's update, and the floor arm that does it is the steer to the ride point along
+the floor's own normal. So Pulse and HD differ: HD's velocity is parallel to the floor each frame.
+Test: `crates/raceplay/tests/projectile_bank_ground_truth.rs` (`the_rockets_ride_the_helix_to_the_cage`,
+`the_plasma_rides_the_helix_to_the_cage`); it goes red when the Rocket's and Plasma's probe arm
+stops steering.

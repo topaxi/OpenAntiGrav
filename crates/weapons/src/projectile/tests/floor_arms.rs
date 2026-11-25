@@ -231,3 +231,132 @@ fn a_missile_sweep_floor_arm_only_moves_on_every_title() {
         assert_eq!(after.surface, Vec3::X);
     }
 }
+
+/// Pure's carried normal, 15 degrees off the floor's (the Sebenco Climb shot,
+/// `docs/ghidra/functions/psp-pure-usa/floor-follow.md`).
+fn tilted() -> Vec3 {
+    let angle = 15.0_f32.to_radians();
+    Vec3::new(angle.sin(), angle.cos(), 0.0)
+}
+
+#[test]
+fn under_the_launch_normal_a_rocket_and_a_plasma_ride_along_their_own_normal() {
+    let surface = tilted();
+    for (kind, ride) in [(Weapon::Rocket, 2.25), (Weapon::Plasma, 4.5)] {
+        let velocity = Vec3::new(300.0, 0.0, 0.0);
+        let after = once(kind, FloorArms::LaunchNormal, ABOVE, velocity, surface);
+        // The probe leaves `(5, 4.5, 0)` along `-surface` and meets `y = 0`; the ride point is
+        // `ride` along the carried normal from there, and the step to it is written raw.
+        let to = ABOVE + velocity * DT;
+        let hit = to - surface * (to.y / surface.y);
+        let point = hit + surface * ride;
+        assert!(near(after.position, point), "{kind:?} {:?}", after.position);
+        assert!(
+            near(after.velocity, (point - ABOVE) / DT),
+            "{kind:?} {:?}",
+            after.velocity
+        );
+        assert!(near(after.surface, surface), "{kind:?} {:?}", after.surface);
+
+        // Pulse's arm adopts the floor's normal and rides 3 (4 for the Plasma) straight above it.
+        let pulse = once(kind, FloorArms::SteerToRidePoint, ABOVE, velocity, surface);
+        assert!(near(pulse.surface, Vec3::Y), "{kind:?} {:?}", pulse.surface);
+        assert!(
+            (pulse.position - after.position).length() > 0.3,
+            "{kind:?}: {:?} against {:?}",
+            pulse.position,
+            after.position
+        );
+    }
+}
+
+#[test]
+fn under_the_launch_normal_the_travel_sweep_runs_before_the_probe() {
+    // The step crosses the floor at `(1.5, 0, 0)`: the sweep pushes the end to `(1.5, 3, 0)`
+    // along the hit's normal, the probe from there finds the floor and the Rocket rides 2.25
+    // above it. Probing first, from below the floor, Pulse's falls and lands on the sweep's
+    // `(1.5, 3, 0)` instead.
+    let after = once(
+        Weapon::Rocket,
+        FloorArms::LaunchNormal,
+        CROSSING,
+        CROSSING_VELOCITY,
+        Vec3::Y,
+    );
+    assert!(
+        near(after.position, Vec3::new(1.5, 2.25, 0.0)),
+        "{:?}",
+        after.position
+    );
+    assert!(near(after.surface, Vec3::Y), "{:?}", after.surface);
+    let pulse = once(
+        Weapon::Rocket,
+        FloorArms::SteerToRidePoint,
+        CROSSING,
+        CROSSING_VELOCITY,
+        Vec3::Y,
+    );
+    assert!(
+        near(pulse.position, Vec3::new(1.5, 3.0, 0.0)),
+        "{:?}",
+        pulse.position
+    );
+}
+
+#[test]
+fn under_the_launch_normal_a_plasma_with_nothing_below_falls_along_world_down() {
+    let surface = tilted();
+    let velocity = Vec3::new(300.0, 0.0, 0.0);
+    let high = Vec3::new(0.0, 40.0, 0.0);
+    let after = once(
+        Weapon::Plasma,
+        FloorArms::LaunchNormal,
+        high,
+        velocity,
+        surface,
+    );
+    assert!(
+        near(
+            after.velocity,
+            velocity - Vec3::Y * (FALL_ACCELERATION * DT)
+        ),
+        "{:?}",
+        after.velocity
+    );
+    let pulse = once(
+        Weapon::Plasma,
+        FloorArms::SteerToRidePoint,
+        high,
+        velocity,
+        surface,
+    );
+    assert!(
+        near(
+            pulse.velocity,
+            velocity - surface * (FALL_ACCELERATION * DT)
+        ),
+        "{:?}",
+        pulse.velocity
+    );
+}
+
+#[test]
+fn under_the_launch_normal_a_missile_keeps_pulses_arms() {
+    let velocity = Vec3::new(100.0, 0.0, 0.0);
+    let pure = once(
+        Weapon::Missile,
+        FloorArms::LaunchNormal,
+        ABOVE,
+        velocity,
+        Vec3::Y,
+    );
+    let pulse = once(
+        Weapon::Missile,
+        FloorArms::SteerToRidePoint,
+        ABOVE,
+        velocity,
+        Vec3::Y,
+    );
+    assert_eq!(pure.position, pulse.position);
+    assert_eq!(pure.velocity, pulse.velocity);
+}

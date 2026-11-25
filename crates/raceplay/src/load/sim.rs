@@ -550,6 +550,7 @@ pub fn load_sim(options: &Options) -> Result<SimLoad> {
         autopilot_pad_grants: title.weapons.autopilot_pad_grants.value,
         launch_normal_is_track_up: title.weapons.launch_normal_is_track_up.value,
         floor_arms_steer_to_ride_point: title.weapons.floor_arms_steer_to_ride_point.value,
+        floor_arms_ride_launch_normal: title.weapons.floor_arms_ride_launch_normal.value,
         plasma_release_at_display_scale: title.weapons.plasma_release_at_display_scale.value,
         own_craft_box_hides_track: title.weapons.own_craft_box_hides_track.value,
         reset_triggers: crate::respawn::reset_triggers_for(&title.reset_enables),

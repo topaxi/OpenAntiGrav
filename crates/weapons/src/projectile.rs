@@ -57,6 +57,7 @@ pub mod disruptor;
 mod flight;
 mod geometry;
 mod hit;
+pub mod launch_normal;
 pub mod leach_beam;
 pub mod mine;
 pub mod missile;
@@ -553,6 +554,21 @@ pub enum FloorArms {
     /// (`docs/ghidra/functions/ps3-hdfury-eu/plasma.md`, "On Moa Therma's bank"). HD's sweep arm
     /// is unread (chosen).
     ParallelToFloor,
+    /// Pure's: the Rocket and the Plasma sweep first, then probe and ride along the normal they
+    /// were launched with, which they never change ([`launch_normal`]). Every other weapon
+    /// takes [`Self::SteerToRidePoint`]'s arms (Pure's `Missile_Update` is unread).
+    LaunchNormal,
+}
+
+impl FloorArms {
+    /// The arms a weapon without its own law here takes.
+    #[must_use]
+    pub fn for_other_weapons(self) -> Self {
+        match self {
+            Self::LaunchNormal => Self::SteerToRidePoint,
+            arms => arms,
+        }
+    }
 }
 
 /// How fast a Plasma bolt leaves the craft's weapon node, until its first floor ride.

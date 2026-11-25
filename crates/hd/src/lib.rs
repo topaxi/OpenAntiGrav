@@ -280,6 +280,9 @@ pub const TITLE: &Title = &Title {
         // The Plasma's and Rockets' floor arm turns the velocity parallel to the floor, measured
         // live on Moa Therma's bank (`ps3-hdfury-eu/plasma.md`, "On Moa Therma's bank").
         floor_arms_steer_to_ride_point: oag_title::pre_race::Sourced::measured(false),
+        // The parallel turn follows each floor, measured live on Moa Therma's bank
+        // (`ps3-hdfury-eu/plasma.md`, "On Moa Therma's bank").
+        floor_arms_ride_launch_normal: oag_title::pre_race::Sourced::measured(false),
         // Read statically off `Plasma_Launch` (`0x0011f810`) and measured live on RPCS3:
         // `ps3-hdfury-eu/plasma.md`, "Measured live".
         plasma_release_at_display_scale: oag_title::pre_race::Sourced::measured(false),
