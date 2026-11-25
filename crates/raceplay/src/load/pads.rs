@@ -43,3 +43,58 @@ pub(super) fn ps3_pad_models(
 
     Ok((pad_model, weapon_pad_model))
 }
+
+/// A Detonator race's pads on a title that ships no Detonator pad model
+/// (`oag_title::DetonatorPads::circuit_weapon_pad_key`): the race circuit's own first
+/// `Weapon Pad`, drawn once at each of `places` and held at key `key` of the weapon pad's
+/// ready cycle (`oag_render::weapon_pad::READY_KEYFRAMES`). The race circuit is `track`'s
+/// race twin where the title derives one (a Zone circuit authors speed pads alone), else
+/// `track` itself. `None`, with a report line, where nothing is placed or nothing builds.
+pub(super) fn circuit_weapon_pads(
+    archives: &mut oag_assets::Archives,
+    title: &oag_title::Title,
+    track: &str,
+    places: &[[f32; 16]],
+    key: usize,
+    report: &mut Vec<String>,
+) -> Option<mesh::Model> {
+    let donor = title
+        .race
+        .zone
+        .race_of(track)
+        .unwrap_or_else(|| track.to_string());
+    let colour = oag_render::weapon_pad::READY_KEYFRAMES.get(key)?;
+    let blob = match archives.read_name(&donor) {
+        Ok(blob) => blob,
+        Err(e) => {
+            report.push(format!("Detonator pads: {donor}: {e}; no pad is drawn"));
+            return None;
+        }
+    };
+    let mut model = mesh::build_weapon_pads_placed(&donor, &blob, None, places).ok()?;
+    if !model.textures.is_empty()
+        && model.textures.iter().all(Option::is_none)
+        && let Some(external) = ps2_texture_set(archives, &donor)
+    {
+        model = mesh::build_weapon_pads_placed(&donor, &blob, Some(&external), places).ok()?;
+    }
+    if model.indices.is_empty() {
+        report.push(format!(
+            "Detonator pads: {donor} authors no Weapon Pad; no pad is drawn"
+        ));
+        return None;
+    }
+    for vertex in &mut model.vertices {
+        vertex.colour = [
+            colour[0] / 255.0,
+            colour[1] / 255.0,
+            colour[2] / 255.0,
+            vertex.colour[3],
+        ];
+    }
+    report.push(format!(
+        "Detonator pads: {} pad(s) carry {donor}'s weapon pad, held at its ready cycle's key {key}",
+        model.node_vertex_ranges.len()
+    ));
+    Some(model)
+}

@@ -84,7 +84,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // `None` on the same terms as the table above: Pulse ships no Zone
     // effectSettings and no located Zone sky.
     zone_sky: None,
-    detonator: None,
+    detonator: Some(DETONATOR),
     // Pulse authors one roster and no *second directory* for any team in it.
     team_variants: None,
     guest_roster: None,
@@ -107,6 +107,42 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
         names: oag_title::SpeedClasses::PULSE_LADDER,
         union_only: &[],
     }),
+};
+
+/// Detonator on Pulse, which ships no such mode: HD's law on Pulse's own Zone circuits, Mine,
+/// Bomb and Cannon (`docs/gameplay/detonator-pulse.md`). What Pulse has no data for (the layout,
+/// the EMP, the cannon's Detonator attributes) is this project's own file in the fallback
+/// layer; the pad look is the circuit's own weapon pad, held at its cycle's red key.
+pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
+    palette: None,
+    fallback_palette: None,
+    stage_textures: None,
+    fallback_stage_textures: None,
+    camera_scale: 0.75,
+    hull_scale: None,
+    layouts: Some(oag_title::DetonatorLayouts {
+        pattern_file: r"Data\XML\DetonatorLayouts_Pulse\PatternFile.xml",
+        gameplay_values: r"Data\XML\DetonatorLayouts_Pulse\GamePlayValues.xml",
+        scoring: r"Data\XML\DetonatorLayouts_Pulse\DetonatorScoring.xml",
+    }),
+    craft: None,
+    cannon_lights: false,
+    ammo_gauge: None,
+    hull_charge: None,
+    handling: None,
+    objects: None,
+    pads: oag_title::DetonatorPads {
+        speed_pad_charges: oag_title::pre_race::Sourced::chosen(true),
+        weapon_pad_charges: oag_title::pre_race::Sourced::chosen(true),
+        replaces_circuit_pads: oag_title::pre_race::Sourced::chosen(true),
+        // `READY_KEYFRAMES[0]`, the red one (`docs/rendering/pads.md`).
+        circuit_weapon_pad_key: Some(0),
+    },
+    races_zone_circuit: true,
+    weapons_supplement: Some(r"Data\XML\DetonatorLayouts_Pulse\WeaponStats_Detonator.xml"),
+    voices: None,
+    binds_emp_ready: oag_title::pre_race::Sourced::chosen(false),
+    shows_medals: oag_title::pre_race::Sourced::chosen(false),
 };
 
 /// Pulse's Zone milestone announcer.

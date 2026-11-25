@@ -620,6 +620,15 @@ pub struct Detonator {
     pub objects: Option<DetonatorObjects>,
     /// What a speed pad and a weapon pad do in Detonator.
     pub pads: DetonatorPads,
+    /// Whether a Detonator race flies the Zone variant of the picked circuit
+    /// ([`RaceDefaults::zone`]) rather than the race circuit itself.
+    pub races_zone_circuit: bool,
+    /// A table read beside the race's own weapon table that authors only Detonator's blocks
+    /// (`Global`, `EMP`, and the Cannon's and Bomb's Detonator attributes), for a title that
+    /// ships no Detonator weapon table: the race table's Mine, Bomb and Cannon stand, and this
+    /// adds what the mode reads beyond them. `None` where the title's own Detonator table
+    /// carries them.
+    pub weapons_supplement: Option<&'static str>,
     /// The EMP's two announcer lines and the bank that holds them, or `None` where a title's
     /// are not located.
     pub voices: Option<DetonatorVoices>,
@@ -677,6 +686,10 @@ pub struct DetonatorPads {
     /// `WorldManager_Construct` deletes the circuit's pad importers before it loads
     /// `padReplacement` and the `Detonator_Pad` model.
     pub replaces_circuit_pads: crate::pre_race::Sourced<bool>,
+    /// For a title that ships no Detonator pad model: every pad is drawn as the race circuit's
+    /// own first `Weapon Pad`, held at this key of the weapon pad's ready cycle, in place of the
+    /// circuit's own pads. `None` where [`DetonatorObjects::pad`] carries the model.
+    pub circuit_weapon_pad_key: Option<usize>,
 }
 
 /// The EMP's announcer lines: `Detonator_UpdateRace` raises `EMPREADY` and `EMPFULL` through

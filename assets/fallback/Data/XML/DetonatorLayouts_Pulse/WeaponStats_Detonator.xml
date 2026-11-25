@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<!-- Detonator on Wipeout Pulse: only the blocks the mode reads beyond Pulse's own race weapon
+     table (whose Mine, Bomb and Cannon stand); this project's own values, chosen, not measured
+     (docs/gameplay/detonator-pulse.md). Read by oag_tables::weapons::detonator_supplement. -->
+<WeaponStats>
+	<Weapon type="Global"><Stats energy_recharge_per_stage="5"/></Weapon>
+	<Weapon type="Mine"><Stats velocity_reduction="0.5"/></Weapon>
+	<Weapon type="Cannon"><Stats num_rebounds="1"/></Weapon>
+	<Weapon type="Bomb"><Stats number_of_shots_to_destroy="3"/></Weapon>
+	<Weapon type="EMP"><Stats wave_time="2" speed="3" minNumPadsToCollectEMP="3" maxNumPadsToCollectEMP="6" minDistance="1" maxDistance="3"/></Weapon>
+</WeaponStats>

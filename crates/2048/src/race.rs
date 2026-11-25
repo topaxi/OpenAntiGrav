@@ -511,7 +511,10 @@ pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
         speed_pad_charges: oag_title::pre_race::Sourced::measured(true),
         weapon_pad_charges: oag_title::pre_race::Sourced::measured(true),
         replaces_circuit_pads: oag_title::pre_race::Sourced::measured(true),
+        circuit_weapon_pad_key: None,
     },
+    races_zone_circuit: false,
+    weapons_supplement: None,
     // 2048's cue names are hashed and its Detonator speech bank is not located.
     voices: None,
     // Its skin binds `EmpCharge`/`EmpFull`; the executable has no `EmpReady` string

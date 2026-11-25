@@ -507,7 +507,10 @@ pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
         speed_pad_charges: oag_title::pre_race::Sourced::measured(true),
         weapon_pad_charges: oag_title::pre_race::Sourced::measured(true),
         replaces_circuit_pads: oag_title::pre_race::Sourced::measured(true),
+        circuit_weapon_pad_key: None,
     },
+    races_zone_circuit: false,
+    weapons_supplement: None,
     // The two names are in `speech_det.bnk` (`DATA00`) and in no other speech bank on the disc;
     // which bank the mode opens is not read, the census places them.
     voices: Some(oag_title::DetonatorVoices {

@@ -1100,3 +1100,109 @@ fn carried_mines_stand_where_the_originals_objects_stood() {
     assert_eq!(lanes.iter().filter(|lane| lane.is_none()).count(), 2);
     assert_eq!(race.core.sim.world.detonator.live_mines, 1);
 }
+
+/// **Detonator on Pulse**, which ships no such mode (`docs/gameplay/detonator-pulse.md`): the race
+/// flies the picked circuit's Zone twin, lays Pulse's own Mine and Bomb from this project's
+/// layout, and every speed pad (a Zone circuit authors no weapon pad) is drawn as the race
+/// circuit's weapon pad held red, charging the EMP and giving no boost.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_pulse_detonator_race_lays_pulse_mines_on_a_zone_circuit_with_red_charging_pads() {
+    let Some(path) = oag_testdata::image("data/images/pulse-psp-usa.chd") else {
+        return;
+    };
+    let loaded = race::load(&race::Options {
+        no_effects: true,
+        source: path.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::Detonator,
+        ..race::Options::default()
+    })
+    .expect("loading a Pulse Detonator race");
+    let report = loaded.report.join("\n");
+    assert!(
+        report.contains(r"zone: Data\Environments\16_Track\track.vex -> Data\Environments\16_Track\zone_track.vex"),
+        "the Zone twin is flown:\n{report}"
+    );
+    assert!(
+        report.contains(r"DetonatorLayouts_Pulse\PatternFile.xml: 6 pattern group(s)"),
+        "this project's layout is read:\n{report}"
+    );
+    assert!(
+        report.contains(r"WeaponStats_Detonator.xml: Detonator's own blocks beside the race table (EMP authored)"),
+        "the EMP block is read beside Pulse's own table:\n{report}"
+    );
+    // Pulse's own Mine body rides the mine pool: no Detonator object model is named.
+    assert!(loaded.mine_model.is_some(), "Pulse_Mine.vex loads");
+    assert!(loaded.bomb_blast_models.detonator.pad.is_none());
+    // The pads: none of the circuit's own, every speed pad carrying the race circuit's weapon pad.
+    assert!(
+        loaded.setup.weapon_pads.is_empty(),
+        "a Zone circuit authors no weapon pad"
+    );
+    let speed_pads = loaded.setup.speedup_pads.len();
+    assert!(speed_pads > 0);
+    assert!(
+        report.contains(&format!(
+            r"Detonator pads: {speed_pads} pad(s) carry Data\Environments\16_Track\track.vex's weapon pad"
+        )),
+        "every speed pad carries the weapon pad:\n{report}"
+    );
+    assert!(loaded.weapon_pad_model.is_none());
+    let pads = loaded.pad_model.as_ref().expect("the pad model");
+    assert_eq!(pads.node_vertex_ranges.len(), speed_pads);
+    assert!(
+        pads.vertices
+            .iter()
+            .all(|v| v.colour[0] > 0.79 && v.colour[1] < 0.41 && v.colour[2] < 0.41),
+        "held at the ready cycle's red key"
+    );
+
+    let mut race = race::Race::start(
+        loaded.setup.clone(),
+        loaded.view.clone(),
+        loaded.modules.clone(),
+    );
+    assert_eq!(race.core.sim.world.race[0].laps_target, Some(14));
+    race.core.sim.set_autopilot(true);
+    race.tick(&PlayerInputs::none());
+    let first = race.core.sim.world.detonator;
+    assert_eq!(first.stages_laid, 1, "the opening stage is laid");
+    assert!(
+        (15..=30).contains(&first.live_mines),
+        "stage 1 aims for 30: {}",
+        first.live_mines
+    );
+    // Stood on a speed pad: a charge and no boost, ready at this project's count of 3.
+    start_racing(&mut race);
+    // Three pads apart from each other: two side by side are one entry.
+    let mut apart: Vec<[f32; 3]> = Vec::new();
+    for pad in &loaded.setup.speedup_pads {
+        let c = pad.centre();
+        let far = |o: &[f32; 3]| (0..3).map(|i| (c[i] - o[i]).powi(2)).sum::<f32>() > 50.0 * 50.0;
+        if apart.iter().all(far) {
+            apart.push(c);
+        }
+    }
+    assert!(apart.len() >= 3, "three pads apart: {apart:?}");
+    for (n, &pad) in apart.iter().take(3).enumerate() {
+        race.core.sim.set_autopilot(false);
+        let ship = &mut race.core.sim.world.ships[0].physics;
+        ship.body.position = oag_core::math::Vec3::from_array(pad);
+        race.tick(&PlayerInputs::none());
+        assert_eq!(
+            race.core.sim.world.ships[0].physics.pad_timer, 0.0,
+            "no boost"
+        );
+        println!(
+            "pad {n} at {pad:?}: charge {}",
+            race.core.sim.world.detonator.emp.charge
+        );
+        dodge(&mut race);
+    }
+    assert_eq!(
+        race.core.sim.detonator_emp(),
+        Some((3, true)),
+        "three pads ready the EMP"
+    );
+}
