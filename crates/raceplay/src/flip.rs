@@ -26,7 +26,14 @@ impl RaceSim {
             }
             let pressed = inputs.get(slot).buttons.is_pressed(Button::Flip);
             let may_flip = racing && self.may_use_pickup(slot);
-            let physics = &mut self.world.ships[slot].physics;
+            let ship = &mut self.world.ships[slot];
+            // The craft's own file wins over the title's default.
+            let law = ship
+                .handling
+                .eliminator_flip_time
+                .filter(|seconds| *seconds > 0.0)
+                .map_or(law, |seconds| oag_physics::flip::FlipLaw { seconds });
+            let physics = &mut ship.physics;
             if pressed && may_flip {
                 let lean = physics.steer_lean_follower;
                 physics.flip.start(law, &physics.body, lean);

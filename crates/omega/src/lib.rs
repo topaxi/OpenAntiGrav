@@ -94,9 +94,12 @@ pub const TITLE: &Title = &Title {
             race_setup: r"Data\Plugins\Frontend\Gui\racebox_definition.xml",
         }),
     ),
-    // The executable has it, off `<Misc eliminator_flip_time>` per craft and class; not wired
+    // Read in this title's own executable: `pi` over the craft's `<Misc eliminator_flip_time>`,
+    // `0.2` where the file authors none
     // (`docs/ghidra/functions/ps3-hdfury-eu/eliminator-flip.md`, "Per title").
-    eliminator_flip: oag_title::pre_race::Sourced::chosen(None),
+    eliminator_flip: oag_title::pre_race::Sourced::measured(Some(
+        oag_title::eliminator::FlipRule { seconds: 0.2 },
+    )),
     teams: race::TEAM_IDENTITIES,
     loyalty: Some(oag_title::loyalty::LoyaltyEarning {
         law: oag_title::loyalty::LoyaltyLaw::Hd,

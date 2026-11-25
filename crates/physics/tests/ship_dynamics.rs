@@ -56,6 +56,7 @@ fn flat_floor(surface: Surface) -> CollisionWorld {
 /// `-0.01`. See `oag_physics::params`. **Not values from any ship.**
 fn fixture() -> Handling {
     Handling {
+        eliminator_flip_time: None,
         airbrake: Airbrake {
             // XML 20, 100.
             amount: 0.002,

@@ -16,7 +16,8 @@ pub enum EliminatorRule {
 /// `docs/ghidra/functions/ps3-hdfury-eu/eliminator-flip.md`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct FlipRule {
-    /// How long the half turn takes, seconds.
+    /// How long the half turn takes, seconds, for a craft whose handling file authors no
+    /// `eliminator_flip_time` of its own.
     pub seconds: f32,
 }
 

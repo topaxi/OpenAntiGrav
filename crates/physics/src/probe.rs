@@ -122,6 +122,7 @@ pub fn corridor() -> CollisionWorld {
 #[must_use]
 pub fn handling() -> Handling {
     Handling {
+        eliminator_flip_time: None,
         airbrake: Airbrake {
             amount: 0.002,
             drag: 5.0,
