@@ -166,18 +166,19 @@ fn resolve(options: &Options, event_name: &str) -> Result<(Options, EventPlan)> 
         )
     })?;
 
-    let mode_name = oag_2048::campaign::engine_mode(&event).ok_or_else(|| {
-        anyhow::anyhow!(
-            "{event_name:?} is a {:?} event, and this engine has no mode for that kind yet",
-            event.kind
-        )
-    })?;
+    let (mode_name, score_target) =
+        oag_2048::campaign::race_terms(&doc, &event).ok_or_else(|| {
+            anyhow::anyhow!(
+                "{event_name:?} is a {:?} event, and this engine has no mode for that kind yet",
+                event.kind
+            )
+        })?;
     let mode = Mode::from_name(mode_name)
         .ok_or_else(|| anyhow::anyhow!("oag_2048::campaign::engine_mode returned {mode_name:?}, which oag_race::Mode does not recognise"))?;
 
     let mut resolved = options.clone();
     resolved.mode = mode;
-    resolved.eliminator_score_target = oag_2048::campaign::elimination_score_target(&doc, &event);
+    resolved.eliminator_score_target = score_target;
     // The campaign's own controller flies every class its event authors.
     resolved.no_driver_for_class = false;
 

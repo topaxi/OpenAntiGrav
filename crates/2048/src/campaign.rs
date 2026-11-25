@@ -681,6 +681,16 @@ pub struct EventOutcome {
     pub score: u32,
 }
 
+/// What an event sets on its race before the load: [`engine_mode`]'s token and
+/// [`elimination_score_target`]. `None` for an event this engine has no mode for.
+#[must_use]
+pub fn race_terms(document: &Document, event: &Event) -> Option<(&'static str, Option<u32>)> {
+    Some((
+        engine_mode(event)?,
+        elimination_score_target(document, event),
+    ))
+}
+
 /// The score an Elimination event's race ends on: its elite bar, else its pass bar, when it is
 /// a [`objective_type::BEAT_VALUE`]. `None` for every other event, whose race takes the title's
 /// default.
@@ -688,8 +698,7 @@ pub struct EventOutcome {
 /// **Chosen, not measured:** the elite bar, so both bars are in reach. The executable moves the
 /// target its HUD shows from the pass value to the elite one once the pass is met
 /// (`docs/formats/2048-campaign.md`, "The objective law"); its end test is unread.
-#[must_use]
-pub fn elimination_score_target(document: &Document, event: &Event) -> Option<u32> {
+fn elimination_score_target(document: &Document, event: &Event) -> Option<u32> {
     if event.kind != EventKind::Elimination {
         return None;
     }
