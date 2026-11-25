@@ -301,9 +301,76 @@ original's size: whole-frame mean grey 14.76 to 14.29, rmse 0.177 to 0.171.
 flat base is `(0.5, 0.5, 1)` (BC3 block `0x841f`, alpha `ff`), so a flat area facing the eye is `rim` 0 in the program as read. The
 original's ball is white there, so **`c[209]` is not the model-space eye the port builds** (suspect: the world camera, not
 transformed by the mine's inverse matrix); the value is not in the push-buffer regions dumped, so settling it needs a live read of
-`c[209]` at the mine's draw (a breakpoint at `0x001399a4` for the matrix, then the draw). Open.
+`c[209]` at the mine's draw (a breakpoint at `0x001399a4` for the matrix, then the draw). **Superseded** by "The lit draw, read
+live" below: the race runs block `#15`, not `#1`, and `c[209]` is the world camera, which is what the port feeds.
 **Still unlike the original** with the envelope forced high (raw bands 0.8): the ball's centre is dark in ours (`N.V` near 1
-there) and bright in the original; the eye-vector space is the suspect (chosen below), unread.
+there) and bright in the original; the eye-vector space was the suspect; it is ruled out below, and the cause stays open.
+
+### The lit draw, read live: `c[209]` is the world camera (2026-11-25, `det-mine-eye-centre`)
+
+**Method.** RPCS3 restored from `hd-detonator-talons-feisar-grid-late`, driven to lap clock 2.733 s (80 mines laid), paused,
+and the whole command ring dumped (`scripts/hd-draw-dump.py` with `HOOK_RING_ONLY=1`, `RING_DUMP=0x40000000:0x120000`: 464
+draws). Every `TRANSFORM_CONSTANT_LOAD` and vertex-program upload was replayed per draw. A draw is the mine's when its
+uploaded vertex code is a byte run of `detonator_mine_normal_alpha.rcsmaterial` and its unit 0 is the football's or the
+spikes' `_n` map. A second dump with the fragment programs (`HOOK_LIGHT=1`), RPCS3's own decompiled shaders
+(`Log shader programs: true`) and a GDB read of the bound VRAM were taken in the same session.
+
+**What the lit pass runs** (confidence 90). The 40 mine draws on the scene target `0x1920000` (football then spikes, per mine,
+then the visualiser) run **vertex block `#15`** (`@0x5150`, code at file offset `0x5200`), not `#1`. Its table puts
+`world` (`0xc588eebc`) at `c256` and `viewProj` at `c260`:
+
+```text
+R0 = v[0] * c[210] + c[211]                 ; positionScale, positionBias
+R5 = world * R0                             ; world position
+N' = world3x3 * v[1]   T' = world3x3 * (2 v[2] - 1)   B' = cross(N', T') * (2 v[2].w - 1)
+V  = c[209] - R5                            ; c[209] = c465 = eyePositionWorldSpace
+o[TC1] = (V.T', V.B', V.N')   o[POS] = viewProj * R5
+```
+
+Blocks `#1` and `#0` (`c256` = `viewProj`, no world) drew nothing lit in this frame: `#0` matched only orthographic passes
+(`c259.w = 1`, `w` constant).
+
+**`c[209]` at the draw** (confidence 90). `c465 = (202.888, -41.344, -194.880)` on every mine draw of the frame. Pushed through
+the same draw's `c260..c263` it lands on clip `(0, 0, -0.954, 0)`, `w = 0` to the printed digit: it is the eye of the frame's own
+view-projection. The RAM rig eye after the pause read `(210.11, -41.01, -194.65)`, about 7 units ahead, the 2-tick pause skew.
+`c256..c259` on the football draw is the mine's own world matrix: translation `(211.8179, -43.3238, -199.5839)`, the RAM
+position of mine 0 to the digit, columns of length 1.69 (the football scale), determinant `+4.83` (no reflection). The mine's
+`c260` equals the circuits' `c256` element for element. **So `c[209]` is the world camera, the vector is formed in world space,
+and the port's `normalize(scene.fog.camera - in.world)` against a world normal is the same angle.** The brief's suspect
+(an untransformed world eye against a model-space position) is false.
+
+**Everything else the facing surface reads matches the read formula** (each confidence 85 or more):
+
+| Input | Live read | Port |
+| --- | --- | --- |
+| Fragment program | the fogged program as read above, constants `C = (0.478, 0.098, 1.0)`, `B = 1.157` (so `p = 1`), fog density 0; RPCS3's decompiled GLSL is the same instruction for instruction | mode 23 |
+| Vertex decode | position `S32K x3` at `+0`, normal `CMP` (11:11:10) at `+6`, tangent `UB x4` at `+10`, uv `SF x2` at `+14`, stride 18; RPCS3's `CMP` fetch is the same 11:11:10 split | `rcsmodel::unpack_normal` |
+| Normal map | unit 0 VRAM `0x0cb0e480` byte-identical to `mine_rita_football_n_1024x1024.gtf` at six offsets; remap `0xaae4` (identity), unsigned; the body is `(128, 127, 255)` on 816,206 of 1,048,576 texels | same file |
+| Alpha test | `GREATER 0x7f` | `GREATER 0.5` |
+| Cull | enabled, `BACK`, front `CCW`, window `0x1438`: the same class as the 396 circuit draws of the frame | `cull_as_authored` (state 62) |
+
+**The football is two coincident shells** (240 vertices, 232 triangles, the live buffer and ours agree vertex for vertex): 116
+triangles wound outward with outward normals and 116 wound inward with inward normals. In the frame's window space every
+triangle facing the eye is counter-clockwise and kept, and every kept triangle but 12 at the silhouette has its vertex normal
+toward the eye. So the program as read gives `rim` near 0 at the facing centre: dark, in RPCS3's own shader too. **The
+original's white facing body is not explained by any input read here.** Ours keeps the same shells (a `Face::Front` probe keeps
+the inner one and turns the ball white, but it breaks every circuit, so it is not the law).
+
+**A separate defect found on the way** (confidence 90): ours builds the football and the spikes with **no tangent at all** (0 of
+240 and 0 of 630 vertices non-zero), where the live buffer carries the `UB x4` tangent at `+10` (unit vectors perpendicular to
+the normal, `w = 255`). So ours' relief drops the map's `x` and `y`; only `z` and the alpha reach the rim. It changes the hubs,
+not the flat body.
+
+**Open** (next address to try): a live A/B on the original, not more reading. Clear bit 4 of the football material's state
+word in RAM (both shells drawn) or patch the football's fragment constants in VRAM, grab, and see whether the white moves.
+The draws after the mine that could whiten the ball are unread: the visualiser (additive, `SRC_COLOR, ONE`, depth test, no
+write) and the post chain, which reads the scene's alpha as the glow mask while the mine's draws write no alpha (colour mask
+`0x00010101`).
+
+**2048 and Omega: checked, nothing to port.** The finding is that the eye is world space, which the port already feeds to
+every title; both later titles name the same `eyePositionWorldSpace` uniform in world space ([gxp.md](../../../formats/gxp.md),
+[gcn.md](../../../formats/gcn.md)). Their mine programs and a live value are not checkable here (no memory readout on Vita3K or
+shadPS4), and the white centre is open on HD itself.
 
 **Chosen, not measured:** the normal is the map through the chunk's tangent frame in the world frame
 (the program dots a tangent-space `V`; the angle is the same); a divisor at or below zero draws
