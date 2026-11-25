@@ -161,7 +161,7 @@ Builds a per-race array of *track entries*, one per spline section of the lap, a
   Allocate `count*48` (`0x00065c40`), clear it, walk again storing each cursor in the entry
   (`+0x0c..+0x18`, `0x00065cb8`-`0x00065d98`). When the step returns `1` (a route fork) the
   block `0x0006675c`-`0x00066b38` walks the fork with selectors `1`/`2`/`3` and the tests
-  `0x000a96d8`, `0x000a5278`, `0x000a5290`; **fork handling is unread**. Confidence for a
+  `0x000a96d8`, `0x000a5278`, `0x000a5290`; **fork handling is unread** (open: nothing is laid on an alternate path in ours; the EMP wave's fork already clears a mine put there, `detonator-emp.md`, "The fork, wired"). Confidence for a
   single-route lap: **72**.
 - **Per entry** (`0x00065e64`-`0x00066078`), with `sec = entry+0x18` (the cursor's section
   pointer) whose vectors `+0x00` (position), `+0x10`, `+0x20`, `+0x30` and floats `+0x44`,

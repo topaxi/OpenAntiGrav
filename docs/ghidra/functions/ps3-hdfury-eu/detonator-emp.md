@@ -464,7 +464,7 @@ Pairs: `pad` 8.17 to 8.17, `mines-ahead` 14.65 to 14.65.
 | The kills | `MineEmped` plays the mine explosion by liveness, `BombEmped` the bomb's; `MINEEXPL`/`BOMBEXPL` with them |
 | Captures | `--detonator-emp-charge N` (`oag-game`) starts the race at `N` charges; the shots script's `--emp-charge`, `--emp-poll` |
 
-Not wired: the travel cue `~MAGPULSETRAVEL`, and the launch-time fork (`EMP_ForkAtJunction`, 60, a craft already on a branch when it fires: ours starts from the ring-nearest entry).
+Not wired: the travel cue `~MAGPULSETRAVEL`, and the launch-time fork (`EMP_ForkAtJunction`, confidence 60, never seen to run; a craft already on a branch when it fires: ours starts from the ring-nearest entry).
 
 ### The fork, wired (2026-11-25)
 
