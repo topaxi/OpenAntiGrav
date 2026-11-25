@@ -419,3 +419,28 @@ fn the_mine_football_shows_its_normal_map_relief() {
         "{steps} luminance steps: the football draws as a smooth sphere, its normal map is not read"
     );
 }
+
+/// The Detonator mine's chunks declare no layout, and their vertex program reads a tangent at
+/// `+10` (`detonator-mine-material.md`, "The lit draw, read live"): every vertex of the football
+/// and the spikes carries it, so the rim program's tangent frame is the authored one.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn the_mine_models_carry_their_authored_tangent() {
+    let Some(image) = image() else { return };
+    for path in [
+        "/data/weapons/mine_rita_football.vex",
+        "/data/weapons/mine_rita_spikes.vex",
+    ] {
+        let Some(model) = build(&image, "DATA00.PSARC", path) else {
+            return;
+        };
+        let carried = model.vertices.iter().filter(|v| v.tangent != 0).count();
+        assert!(!model.vertices.is_empty(), "{path} built no vertices");
+        assert_eq!(
+            carried,
+            model.vertices.len(),
+            "{path}: {carried} of {} vertices carry a tangent",
+            model.vertices.len()
+        );
+    }
+}
