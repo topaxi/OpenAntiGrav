@@ -1027,7 +1027,11 @@ The same arms elsewhere (offscreen race bench, 3000 ticks of Vineta K, frame p50
 | --- | ---: | ---: |
 | Steam Deck, 1280x800 | +0.22 to +0.24 ms frame, +0.28 to +0.35 ms CPU | about 0.015 ms |
 | Steam Deck, 1920x1080 and 3840x2160 | -0.1 to +1.0 ms frame (noise), +0.49 to +0.55 ms CPU | about 0.03 ms CPU |
-| RX 7800 XT (this workstation) | not resolved: the whole frame is 1.4 to 1.6 ms and the machine was at load 10 to 51 | |
+| Desktop, RX 7800 XT (RADV) | not resolved: the whole frame is 1.4 to 1.6 ms and the machine was at load 10 to 51 | |
+
+The cards on the Deck (same bench): drawing all eight against leaving them out costs 0.84 ms at 1280x800, 0.65 ms at
+1920x1080 and 0.60 ms at 3840x2160 (three runs of every card against two of none). The Deck's `advert-draws` arm ran on a
+build that already culls the cards to the view, so it does not price "the draws of all eight".
 
 **One presentation pass, measured and dropped.** Drawing the resolve, the HUD and the blooms straight onto the
 surface and leaving the composite out (a diagnostic arm, only where that is the same picture: grade neutral, no
