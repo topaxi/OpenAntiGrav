@@ -277,8 +277,13 @@ placement RNG cannot match the original's `Libc_Rand` (a departure, documented).
 - **Mine look (`det-mine-lit`)**: the normal map is read now (the chunk has one coordinate set), so hubs and holes show.
   Open: (1) a pair's mines stay dark because the envelope has no history under raw bands below 0.3; carrying each mine's
   `m+0xf4`/`m+0xf8` out of the original's RAM (`ship/mines[].address`) into a flag that seeds `MineEnvelopes` needs an
-  RPCS3 read; (2) with the envelope high, the ball's centre is dark in ours and bright in the original (eye-vector space,
-  `detonator-mine-material.md`, "Wired").
+  RPCS3 read; (2) with the envelope high, the ball's centre is dark in ours and bright in the original. **Not the eye**
+  (`det-mine-eye-centre`, `detonator-mine-material.md`, "The lit draw, read live"): the lit pass is block `#15` and `c[209]`
+  is the world camera, as ours feeds; the program, vertex decode, map, alpha test and cull all match, and the formula gives
+  dark there in RPCS3's own shaders. Next: a live A/B (clear the football material's cull bit or patch its fragment
+  constants in RAM/VRAM, grab) and the draws after it (visualiser, the alpha-keyed glow chain; the mine writes no alpha).
+  (3) Ours builds the football and spikes with no tangent (0 of 240 / 630), the live buffer has one at `+10`: wire it
+  (relief `x`/`y` lost).
 
 **What remains open for Detonator (2026-11-23, after phase 15).** Phases 1-15 are in; what a player still
 misses is, by title. *All three:* the medal tier colours (the tiers draw one grey), the bomb flash writer
