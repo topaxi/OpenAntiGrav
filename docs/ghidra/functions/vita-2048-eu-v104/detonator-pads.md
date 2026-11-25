@@ -73,15 +73,14 @@ play `WEAPONPICKUP` (string `0x814a6418`) for a pilot. Every other mode goes to 
 award. Confidence **75**: the charge arm read instruction by instruction; the award skip read from
 the disassembly only, its `slot+0x208` gate unread.
 
-`ship+0x6f80` is written in three places: here, at construction, and in `Pilot_UpdateLapProgress`
-(`str r1, [r5, r0]` with `r1 = 0` at `0x811c2f96`, the same block that zeroes
-`craft+0x5e0`). That block runs when `r6 != 0` (`0x811c2f64`); `r6` is the byte stored at
+`ship+0x6f80` is cleared in `Pilot_UpdateLapProgress` (`str r1, [r5, r0]` with `r1 = 0` at
+`0x811c2f96`, the same block that zeroes `craft+0x5e0`). Six other sites load the offset and were
+not opened: `0x810bea8a`, `0x811853ba`, `0x811b9d58`, `0x811c907a`, `0x8127bdda`, `0x8129a630`. That block runs when `r6 != 0` (`0x811c2f64`); `r6` is the byte stored at
 `pilot+0x5620` just before. It reads as the line-crossed flag but was not traced to its writer,
 hence **65** for "again after the next lap".
 
 The same function also ORs in a debug path (`FUN_8123221e(&DAT_818bbf88)` then
-`FUN_81232582`) that can raise the pickup without a pad. It is unread; it never fires in a race
-without that input.
+`FUN_81232582`) that can raise the pickup without a pad. It is unread.
 
 ## The counts: `WeaponStats_ParseEmp` (`0x8100f7c2`)
 
