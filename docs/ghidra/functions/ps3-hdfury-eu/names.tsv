@@ -1240,3 +1240,11 @@
 0x000a5278	function	Track_SpanIndex	85	detonator-placement.md
 0x000a5290	function	Track_SpansAreNeighbours	65	detonator-placement.md
 0x000a96d8	function	Track_FindSiblingSection	62	detonator-placement.md
+0x006af030	function	ParticleRenderNode_Enqueue	85	particle-render.md
+0x006af000	function	ParticleRenderNode_Draw	82	particle-render.md
+0x00869a80	data	ParticleRenderNode_Vtable	80	particle-render.md
+0x003af240	function	Render_BindSceneTargets	78	particle-render.md
+0x003de2b8	function	Render_GetSceneColourTarget	85	particle-render.md
+0x003de2f8	function	Render_GetSceneDepthTarget	72	particle-render.md
+0x00c81b8c	data	g_SceneDepthTargets	72	particle-render.md
+0x008c2670	data	Psys_ResolutionModeDistances	65	particle-render.md

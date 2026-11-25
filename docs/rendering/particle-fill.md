@@ -106,8 +106,105 @@ at ticks 905 and 945 (3840x2160). The state hash is unchanged.
   noise. The result is inconclusive, not a no. It is worth re-measuring on a bandwidth-bound GPU
   (the Deck at 4K).
 
+## The overdraw is not all authored: the original shrinks, fades and drops near particles
+
+2026-11-25, `particle-fill-fable`. The section this replaces said the live overdraw was the
+effects as the disc authors them. That was wrong for the case that costs most. HD's particle
+vertex builder applies three rules to every billboard, by its view depth, that ours does not
+([particle-render.md](../ghidra/functions/ps3-hdfury-eu/particle-render.md) has the code, Omega's
+twin and the live vertices):
+
+1. **Cull**: nearer than 1 unit, not drawn.
+2. **Fade**: alpha times `(depth - 1) / 3` between depth 1 and 4.
+3. **Cap**: size at most `depth * cap`, the emitter's float `+0xc80`. The CraftBlast smoke
+   authors 0.5 on six of its emitters and 1.0 on two, against sizes of 4 to 11 units, so its
+   smoke is capped whenever it is nearer than 8 to 22 units.
+
+So a blast the camera flies into is the case the original treats, and ours draws it untreated.
+
+### What the law does to ours, measured
+
+A throwaway patch (not kept) read `+0xc80` into the emitter and applied the three rules in
+`psys::layers::extend_layer` to billboards, with the view matrix's z row handed in from
+`Scene::upload_particles`, each rule switched by an environment variable. The same hunk summed
+each quad's on-screen area after clipping to the frustum, in full screens. Same reproduction as
+above; the run's state hash at tick 800 is `62b06c2ee353b11d` on this main (the craft hit moved
+with the Rocket's launch speed since the first section's numbers, the worst frame is still tick
+775) and is the same with the law on, since the law is drawing only.
+
+| Tick | Additive, as now | Alpha-over, as now | Additive, law | Alpha-over, law | Cap alone (additive + over) | Cull alone |
+| --- | --- | --- | --- | --- | --- | --- |
+| 771 | 4.24 | 9.98 | 3.34 | 9.50 | 12.84 | 14.22 |
+| 772 | 5.84 | 14.54 | 3.73 | 13.11 | 16.86 | 20.36 |
+| 773 | 7.86 | 20.80 | 3.47 | 17.02 | 20.49 | 28.66 |
+| 774 | 9.75 | 30.07 | 2.48 | 17.94 | 20.56 | 39.69 |
+| 775 | 11.01 | 41.69 | 1.05 | 13.74 | 16.79 | 50.70 |
+| 776 | 4.89 | 46.46 | 0.29 | 7.97 | 15.62 | 43.99 |
+| 777 | 1.41 | 25.11 | 0.41 | 4.11 | 15.52 | 15.52 |
+
+The worst frame falls from 52.7 screens to 14.8, and the worst frame with the law (tick 774) is
+20.4 screens: **the peak is 2.6 times lower**. The cap does nearly all of it. The cull's own
+effect on fill is small, but it removes most of the list: at tick 775, 3,890 alpha-over quads
+become 285, because the smoke of earlier blasts behind the camera is no longer built. The fade
+moves no fill; it is what the player sees.
+
+GPU scene time over ticks 760 to 789, six interleaved pairs each, RX 7800 XT, RADV, load 47 to 60
+with other members' work on the same card (the card ran in two speed regimes; the pairs agree
+inside each):
+
+| Size | Mean, as now | Mean, law | Worst frame, as now | Worst frame, law |
+| --- | --- | --- | --- | --- |
+| 3840x2160 | 3.71 ms (2.49 to 3.76) | 3.12 ms (1.95 to 3.14) | 9.65 ms (5.90 to 9.74) | 5.28 ms (3.18 to 5.41) |
+| 1920x1080 | 1.53 ms | 1.46 ms | 3.29 ms | 3.15 ms |
+
+At 3840x2160 that is -45 % at the worst frame and -16 % over the window. At 1920x1080 the worst
+frame barely moves (-4 %), and that is a finding of its own: ticks 770 to 774 cost the same with
+and without the law (3.26 ms at tick 774 both ways, against 0.75 ms before the hit) while their
+fill halves, and only ticks 775 to 777 fall (3.29 to 2.68, 2.67 to 1.99, 1.57 to 1.33 ms). About
+1.7 ms of a hit frame at 1080p on this card does not scale with resolution or with covered
+area. It was not profiled.
+
+**The picture.** At tick 775 ours is white from edge to edge. With the law the blast is a
+bounded cloud around the struck craft, the track and the craft stay readable, and the smoke
+nearest the camera is thin. At tick 773 the fireball is about two thirds as wide. This is a
+fidelity change before it is a speed one, and it has no matched original frame yet: the live
+capture that proved the law had its blasts 70 to 350 units away.
+
+### How the PS3 affords the rest
+
+- **It draws fewer pixels.** The scene target is 1280x720 with 2x MSAA, or at 1080p
+  `1920 - 20 * level` by 1080 with no MSAA: 1.40 to 2.07 megapixels against 8.29 at 3840x2160.
+  Particles go into that target and nowhere else.
+- **It narrows the frame under load.** The width level steps one notch (20 pixels, 1 %) a
+  frame while the RSX's frame takes 16.1 ms or more
+  ([scene-width-throttle.md](../ghidra/functions/ps3-hdfury-eu/scene-width-throttle.md)). A nine
+  frame blast can shed 9 % that way; a sustained load reaches -32 %.
+- **It has no reduced-resolution particle buffer.** The effect files author a per-distance
+  resolution mode and the executable computes it, but the flush binds the scene's own targets
+  whatever the mode (particle-render.md).
+
+Put together: our worst frame blends 52.7 screens of 8.29 megapixels, 437 million fragments. The
+same frame under the law at 1300x1080 is 20.4 screens of 1.40, 29 million: fifteen times fewer.
+What a real console does at such a frame (how far the width falls, whether it holds 60) is not
+measured.
+
+### Our draw path against the original's
+
+| | Original (HD, PS3) | Ours, HD defaults | Verdict |
+| --- | --- | --- | --- |
+| Target | The scene target, `A8R8G8B8`, 8 bit | The scene target, `Rgba8Unorm` (`scene_precision = "original"`) | same |
+| MSAA on it | none at 1080p, 2x at 720p | off (`msaa = "off"`) | same |
+| Depth | test `LEQUAL`, no write | test `Less`, no write | same in effect |
+| Blend | `(SA, 1)` and `(SA, 1-SA)`, alpha kept | the same two | same |
+| Sort | none: one run in submission order | none | same |
+| Extra attachment | none | the velocity target, write-masked, when motion blur is on | ours only, no fill of its own |
+| Near particles | cull, fade, cap | none | **ours draws more** |
+| Particles behind the camera | not built | built, uploaded, clipped | ours wastes vertices, not fill |
+| Resolution | 1.4 to 2.07 megapixels, dynamic width | the output's, fixed (`render_scale = 100`, `target_fps = "off"`) | the player's choice |
+
+Counts, sizes and lifetimes are the disc's in both: ours plays the same records, and no
+difference was found there. The law above is the difference.
+
 ## What is left
 
-The live overdraw is authored: the CraftBlast smoke's own sizes, counts and colour tables
-(`Trigger::CraftBlast`). Particles stay as the disc authors them. What could still cut it
-changes the picture, or needs a measurement first. These are listed in the handover thread.
+The near-camera law is recovered and not wired. The ranked plan is in the handover thread.
