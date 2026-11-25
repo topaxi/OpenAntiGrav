@@ -2319,12 +2319,37 @@ a grid of red 96 is the full-grid colour times `decode(96)`; red without the cha
 `mesh::sky_paraboloid`) under the weight `0x5e5b1937` and the engine's `iblScalePower` (`0x7480de6d`). The two families
 gate it differently. On `etched_glass_tech` and `etched_glass` the weight multiplies the grid's red
 (`MUL H0.w, H1.xxxx, {w}`, block 10 `@0x51`). On `etched_glass_amph` it multiplies the reflection alone (`MAD H2.xyz, H6, {w}, H2`,
-block 10 `@0x50`), and four of its Zone blocks declare no `Texture1` at all. **The tint is unread for scenery in a Zone frame.**
+block 10 `@0x50`), and four of its Zone blocks declare no `Texture1` at all. **The tint, unread when this section was first written, is read live below.**
 The hulls' value is `(2 * Track.Base Colour Highlight, 1)` ([zone-hull-light.md](../ghidra/functions/ps3-hdfury-eu/zone-hull-light.md)),
 `(0.314, 0, 0, 1)` at Detonator stage 1. But scenery glass on Moa Therma read `(1, 1, 1, 0)` in the same frame where hulls read
-`(4, 4, 4, 0)` ([hd-track-tone.md](../rendering/hd-track-tone.md)), so the hull's value is not the glass's. Nothing is drawn for
-the term. **To close it:** one draw-hook read (`scripts/rpcs3_draw_hook.py`) of this program's constants on a Detonator Talon's
-state: the 4 floats patched from `0x7480de6d` (block 10's `@0x44`, `@0x4a`, `@0x4d`) and the weight `0x5e5b1937`.
+`(4, 4, 4, 0)` ([hd-track-tone.md](../rendering/hd-track-tone.md)), so the hull's value is not the glass's. The draw-hook read of the constants it asked for is the next paragraph.
+
+**The tint and weight, read live (2026-11-25, `det-zone-glass-tint`, confidence 85).** RPCS3, two boots (restores of
+`hd-detonator-talons-feisar-grid` and `-grid-late`, Detonator on Talon's Junction, Feisar), one frame each, `hd-draw-dump.py` with
+`HOOK_LIGHT=1 HOOK_FP_LEN=0x800`, the live fragment program matched to `etched_glass_tech` by opcode stream
+(`rsx-fp-match-material.py`), its patched constants read with `ps3-fp-live.py`:
+
+| read | block | `iblScalePower` `0x7480de6d` (slots) | weight `0x5e5b1937` (slot) |
+| --- | --- | --- | --- |
+| grid state, draw 527 (1767 indices, blend on) | #15 (`@0xa470`, lightmapped) | `(1, 1, 1, 0)` (`0x4d`, `0x4f`, `0x51`) | `(1, 0, 0, 0)` (`0x6f`, `MUL H0.x, grid, {1}`) |
+| late state, draw 236 (924 indices, blend on) | #10 (`@0x7b30`, vertex-lit) | `(1, 1, 1, 0)` (`0x44`, `0x4a`, `0x4d`) | `(1, 0, 0, 0)` (`0x52`) |
+
+So the program adds `grid * sky(reflect)` unscaled and un-desaturated (`.w` 0): the scenery glass's tint, as on Moa Therma, not the hull's
+stage-driven `(0.314, 0, 0, 1)`. Unit 1 of both draws is a 512x256 `A8R8G8B8` target (rect `0x02000100`, format `0x00018529`, local
+offset `0x054c0000`), the circuit's `paraboloidReflectionTex` ([hd-track-tone.md](../rendering/hd-track-tone.md), "What
+`paraboloidReflectionTex` is"); read through the GDB stub on both states it holds the same daytime sky (mean `(40, 64, 64)`), the cube's bytes,
+not a Zone-graded one. Dumps and the map: lane scratch only.
+
+**Drawn with those values, it makes the picture worse; not wired.** `shade.wesl` given `grid_linear * 1 * sky(reflect(-V, N))` inside the
+Zone glass arm's `lit_linear` (the `zone_glow_term` slot, ahead of the fog, `output_scale` applied), a test that failed without it (a full-grid
+Zone glass chunk with a grey sky bound draws brighter than with none), and the three Detonator pairs re-rendered: `mines-ahead` box
+`x1170..1300 y375..465` **9.23 to 20.55** mean abs grey (ours `(39.4, 8.7, 6.3)` to `(51.7, 31.0, 28.5)`, the original `(46.4, 12.6, 8.7)`), whole pair
+14.43 to 14.72, `pad` 8.47 to 8.54, `cannon-volley` 15.06 to 15.30 (against the previous lane's own renders). The crops show the grid's lines
+reflecting a grey-teal sky in ours where the original's are dark brown: the original shows essentially no sky on that glass although its
+program multiplies by 1. Reversing the normal changes nothing (`reflect(I, -N)` equals `reflect(I, N)`). The causes not yet separated: the draw the
+pairs show runs another program than the two read (the matcher found one glass draw per frame, in a grid-state frame, not a pair's moment), the
+program's `fog` factor or `TC1` term hides it in a way ours does not, or our grid sample is brighter than the original's. **Open: one A/B inside the
+original** (patch the weight slot of the live program to 0 through GDB and grab the same paused frame twice) says whether the term shows at all.
 
 **Numbers** (`detonator-talons-mines-ahead`, box `x1170..1300 y375..465`: 80 % glass by an `OAG_SKIP_MATERIAL=etched_glass_tech`
 diff, the mine's halo outside it; mean absolute grey difference against the original): **9.89 to 9.23**. Mean RGB in the box: ours
