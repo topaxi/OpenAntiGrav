@@ -2,9 +2,9 @@
 status: ready-to-wire
 titles: [pulse, pure, hd, 2048, omega]
 updated: 2026-11-25
-summary: "Benchmark follow-ups: a plain-language stats screen with DETAILS, COPY TO CLIPBOARD, and a vanilla or with-mods run recorded in the result"
+summary: "Benchmark follow-ups: uncapped runs (mailbox), a plain-language stats screen, COPY TO CLIPBOARD, vanilla or with-mods runs"
 categories: [frontend]
-size: S (40)
+size: M (40)
 difficulty: easy (40)
 ---
 
@@ -21,7 +21,7 @@ The maintainer wants two kinds of run:
 
 ## Next Steps
 
-Do A, C and B as one lane (all three touch the stats screen). Start only after `benchmark-no-input` (benchmark input: abort only) has merged; both touch the stats screen.
+Do D, C, A and B as one lane, in that order (all touch the benchmark run or its stats screen). Start only after `benchmark-no-input` (benchmark input: abort only) has merged; both touch the stats screen.
 
 **A. Copy to clipboard (maintainer, 2026-11-25).** The stats screen gets a COPY TO CLIPBOARD action beside BACK and RUN AGAIN, with pointer and touch support, a `string_id` and English text.
 - What it copies: a plain-text summary a player can paste into a forum or issue: title, track, average FPS, 1 % and 0.1 % lows, median, P95, P99, worst, frames over budget, the settings summary, the mods line (below), device, GPU, driver, build version.
@@ -51,6 +51,17 @@ Rework it:
   - the verdict thresholds;
   - the frame-limit line appears only when the limit binds;
   - no internal name (`_Track`, `track.vex`) reaches the screen.
+
+**D. Benchmarks run uncapped (maintainer, 2026-11-25: "without a frame limiter, either vsync off or mailbox; mailbox by default, but may be challenged").**
+- **For the benchmark's run only:** the frame limit is off, and the present mode is Mailbox. Fall back to Immediate (vsync off, may tear) where the surface lacks Mailbox (common on Android Mali), and to FIFO only where neither exists, with the "capped" line shown. The player's own settings are restored afterwards, untouched.
+- **Record the present mode actually used**, not the one requested, in the result JSON and on DETAILS. Some drivers throttle Mailbox to the refresh rate anyway: if the average sits within 2 % of the refresh rate under Mailbox, say so ("your driver may be holding this at the refresh rate").
+- **A preset may override this** (a "what I play with" preset keeping the player's vsync and limit), named as such on the screen.
+- **The verdict (C)** still judges against the screen's refresh rate, so an uncapped 200 FPS run on a 60 Hz screen reads SMOOTH.
+- **Phones:** uncapped runs heat up faster. Record the run length and the start and end temperatures where the platform exposes them (Android thermal service); otherwise leave them out.
+- **Tests:**
+  - present-mode selection per supported list, as a pure function;
+  - the frame limit off during the run and restored after it;
+  - the recorded mode equals the surface's configured one.
 
 **B. The mods choice:**
 
