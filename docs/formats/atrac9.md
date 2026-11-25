@@ -140,7 +140,7 @@ were identical; every Omega stream of four channels or more was refused.
 
 The vendored crate stays a separate package with its own `MIT` manifest and
 LibAtrac9's licence beside it (`vendor/atrac9dec/LICENSE-LibAtrac9`). The fixes
-are upstreamable; no upstream contact was made from this project.
+are upstreamable; no upstream contact was made from this project. `gh search issues` and `gh search prs` on `claimore22/atrac9dec` return nothing, and on `Thealexbarney/LibAtrac9` nothing about speed or floating-point rounding (the open "Fixed-point version", #7, is a different decoder).
 
 ## Conformance
 
