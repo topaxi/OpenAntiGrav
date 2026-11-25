@@ -64,6 +64,27 @@ fn drive_args(
     env: &[(&str, &str)],
     args: &[&str],
 ) -> Run {
+    drive_flags(
+        image,
+        tag,
+        script,
+        tracks,
+        env,
+        args,
+        &["--no-audio", "--no-intro"],
+    )
+}
+
+/// [`drive_args`] with the game's own base `flags`, for a run that leaves the pre-race flyby in.
+fn drive_flags(
+    image: &Path,
+    tag: &str,
+    script: &str,
+    tracks: Option<&Path>,
+    env: &[(&str, &str)],
+    args: &[&str],
+    flags: &[&str],
+) -> Run {
     let scratch = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("drive-{tag}"));
     let _ = std::fs::remove_dir_all(&scratch);
     std::fs::create_dir_all(&scratch).expect("a scratch directory");
@@ -71,7 +92,8 @@ fn drive_args(
     let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"));
     command
         .arg(image)
-        .args(["--no-audio", "--no-intro", "--drive", script])
+        .args(flags)
+        .args(["--drive", script])
         .args(args)
         .arg("--state-log")
         .arg(&log)
@@ -285,6 +307,36 @@ fn a_race_box_race_runs_the_simulation_mods_only_with_the_extensions_feature() {
             "a build without the feature says so"
         );
     }
+}
+
+/// HD's pre-race flyby repeats until a press, so a run with nobody to press it stood on the
+/// camera tour for ever. `--autopilot` presses the skip: the race's world ticks within a few
+/// hundred frames of the green light's turn, and without the flag it has not moved at all.
+#[test]
+#[ignore = "needs an HD disc image in data/images/"]
+fn an_hd_race_under_autopilot_leaves_the_flyby_and_one_without_stays_in_it() {
+    let Some(image) = hd() else {
+        return;
+    };
+    let script = "boot; select racebox; press cross; until page=race; \
+         select launch_race; press cross; \
+         until screen=picker; press cross; \
+         until screen.id=ship-select; press cross; \
+         until stage=race within 3000; ticks 300";
+    let ticks = |tag: &str, args: &[&str]| {
+        let run = drive_flags(&image, tag, script, None, &[], args, &["--no-audio"]);
+        assert!(run.output.status.success(), "{}", run.why_not_success());
+        run.last()["sim_tick"].as_u64().unwrap_or(0)
+    };
+    assert!(
+        ticks("hd-flyby-autopilot", &["--autopilot"]) > 100,
+        "the autopilot's skip ends the flyby"
+    );
+    assert_eq!(
+        ticks("hd-flyby-held", &[]),
+        0,
+        "nothing presses: the flyby holds the world at its first tick"
+    );
 }
 
 /// The process does not exit under a GPU worker: the race's EndRace prefetch is held up for three
