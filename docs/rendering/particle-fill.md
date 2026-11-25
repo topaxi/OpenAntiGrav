@@ -80,12 +80,22 @@ skip and probe patch, which does CPU-side work only), window ticks 760 to 789:
 
 That is -6 % over the window and -15 % at the worst frame (4K). The card ran slower in this
 session than in the skip table above (other members' gates, load 40 to 50), but each run of a
-pair sat within 0.05 ms of the others. The CPU columns were too loaded to read.
+pair sat within 0.05 ms of the others. The CPU columns were too loaded to read. The rows above
+are the first cut, which also dropped additive quads of colour 0. The landed alpha-only rule was
+measured against a baseline built from main, at load 23:
+
+| Circuit, size | Window | GPU scene mean before | after | GPU scene max before | after |
+| --- | --- | --- | --- | --- | --- |
+| Talon's Junction (HD), 3840x2160 | ticks 760 to 789 | 2.40 ms | 2.22 ms | 6.58 ms | 5.00 ms |
+| Mallavol (Fury, `zone_2`), 3840x2160, load 32 to 36 | ticks 890 to 959 | 3.67, 3.68 ms | 3.61, 3.61 ms | 5.07, 5.03 ms | 5.05, 4.95 ms |
+
+Mallavol's run is the same script with `--track /data/environments/zone_2/track.vex`. Its hits
+land further from the camera, so less of the fill is fading smoke.
 
 **Identity:** screenshots at ticks 768, 774 and 777, at 1920x1080 and 3840x2160, are
 byte-identical before and after (`cmp`). So are Pulse's at ticks 700, 720 and 740 after its own
-craft hits (gamma target, sampled-sprite path, `pulse-psp-eu.chd`, same script). The state hash
-is unchanged.
+craft hits (gamma target, sampled-sprite path, `pulse-psp-eu.chd`, same script), and Mallavol's
+at ticks 905 and 945 (3840x2160). The state hash is unchanged.
 
 ## Measured and dropped
 
