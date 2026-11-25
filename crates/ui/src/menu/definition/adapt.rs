@@ -1,6 +1,5 @@
-//! The tree adapted to the booted title and to the build: rows a title has no use for dropped,
-//! a row relabelled or renamed, the campaign picker added. Each runs once, before the first
-//! frame, so no row vanishes while a player looks at it.
+//! A menu tree adjusted for the booted title and the build: rows a title has no use for
+//! dropped, rows relabelled or renamed, the campaign picker added.
 
 use super::{Action, Definition, Entry, Page, RowMeta, StringTable};
 use crate::menu::{

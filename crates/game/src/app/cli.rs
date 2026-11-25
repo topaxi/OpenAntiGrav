@@ -7,10 +7,9 @@
 //! `*Args` struct (`boot`, `loading`, `audio`, `capture`, `race_setup`,
 //! `render`, `placement`, `hud` and the others below), so two flags added
 //! for different areas never edit the same lines. [`Cli`] holds the groups
-//! and the few flags that belong to none. A group is flattened in the place
-//! its flags used to stand, so `--help` lists them in the order they are
-//! declared here; a flag's name, and the id other flags `requires` it by, is
-//! its field's name.
+//! and the few flags that belong to none. A group is flattened at its position
+//! in [`Cli`], so `--help` lists the flags in declaration order; a flag's name,
+//! and the id other flags `requires` it by, is its field's name.
 
 use clap::Parser;
 

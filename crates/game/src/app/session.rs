@@ -40,9 +40,6 @@ pub(crate) mod frame_timing;
 mod hints;
 mod hosted_map;
 mod join;
-mod language;
-mod launch2048;
-mod launch_keys;
 // The browser build takes the module named below instead (`lan_web.rs`,
 // `online_web.rs`): a different file under the same module name, which only
 // `#[path]` expresses.
@@ -51,6 +48,9 @@ mod lan;
 #[cfg(target_arch = "wasm32")]
 #[path = "session/lan_web.rs"]
 mod lan;
+mod language;
+mod launch2048;
+mod launch_keys;
 pub(crate) mod lifecycle;
 mod load;
 mod load_probe;
