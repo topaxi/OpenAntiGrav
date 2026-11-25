@@ -955,8 +955,9 @@ the disc's emitters (`docs/formats/pob.md`), so turning it would orient a stand-
 spawned instance's matrix (a breakpoint at `0x00123338` under the interpreter, `r6`), and whether the disc's
 `WO_CANNON_SPARKS_DETONATOR` emitters are directional.
 
-**2048 / Omega.** The half turn: **ported**, title-agnostic, and both ship the same model with the same `z -2..30`
-extent (2048's declaration read; Omega's material and counts equal). The program: **checked, applies, not wired**
+**2048 / Omega.** The half turn: **checked, applies; wired as HD's** (`round_matrix` is title-agnostic). Both ship
+the same model with the same extent along `+Z` (`psp2_material_dump` with `DECL_SUB=0`: 2048 `-2..30`, Omega
+`-1.80..30.50`); their own render-queue turn is unread. The program: **checked, applies, not wired**
 (their GXP and GCN programs are unread; see the rendering page). The loop law: not re-read live on either (no 2048 or
 Omega memory poll); their `PulseBullet` updates probe and ride as HD's (above).
 

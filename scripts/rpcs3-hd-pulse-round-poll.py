@@ -12,7 +12,7 @@ START RACE until the lap clock runs, runs to `--fire-clock`, pauses and turns th
 (`rpcs3_place.write_pose`: forward `cos f + sin r`, speed kept), then holds the use button and reads the whole
 round pool through `/proc/<pid>/mem` as fast as Python goes. The pool is every object whose first word is the
 `PulseBullet` vtable (`0x00863d98`, `docs/ghidra/functions/ps3-hdfury-eu/detonator-cannon.md`). A sample of a round
-is kept whenever its age (`+0x4c`) changed (`--place` first puts one round anywhere, e.g. at the foot of a loop): `+0x40` flags, `+0x12c` rebounds left, `+0xd0` velocity, `+0xe0` prev,
+is kept whenever its age (`+0x4c`) changed (`--craft-at` first sets the craft, e.g. at the foot of a loop; `--place` writes one round, which rides only near the craft): `+0x40` flags, `+0x12c` rebounds left, `+0xd0` velocity, `+0xe0` prev,
 the rows `+0x140` right, `+0x150` up, `+0x160` forward, `+0x170` position, `+0x180` surface normal. Writes
 `<out>/poll.json`.
 """
@@ -78,7 +78,8 @@ def main():
     ap.add_argument("--place", default="",
                     help="x,y,z,nx,ny,nz,fx,fy,fz: put the first round fired (under 0.07 s old) at the point with that "
                          "surface normal (also its up row) and a velocity of 500 along the direction; writes +0x170, "
-                         "+0xe0, +0x150, +0x180 and +0xd0, so a round can be sent through a loop the craft is not on")
+                         "+0xe0, +0x150, +0x180 and +0xd0. The round's floor probe only finds collision near the craft: placed "
+                         "700 units away it flew straight; use --craft-at to fire from where the round should ride")
     ap.add_argument("--craft-at", default="",
                     help="x,y,z,ux,uy,uz,fx,fy,fz,speed: put the craft there before firing (`rpcs3_place.write_pose`, "
                          "right = up x forward); the round's floor probe only finds collision near the craft, so a "

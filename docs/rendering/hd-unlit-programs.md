@@ -559,7 +559,7 @@ The bolt's pose (the half turn that makes the streak trail the round) is on
 `data/weapons/detonator_cannonbolt.rcsmodel` and `weapons2048/`, Omega `data00.psarc` both
 directories): the same 288 triangles, the same two samplers on `.gxt`/`.gnf` copies of the two
 pictures, `fresnelBase` `0.49874`, state 121 (`0x79`), and on 2048 the same split attribute
-(`Uv1_Uv2`, four halves, `psp2_material_dump` with `DECL_SUB=0`) and the same `z -2..30` box.
+(`Uv1_Uv2`, four halves, `psp2_material_dump` with `DECL_SUB=0`) and the same extent along `+Z` (2048 `-2..30`, Omega `-1.80..30.50`).
 Their programs are GXP and GCN, which this matcher does not read; ours draws them through the
 generic psp2 path, which on Omega picks the ring strip as the diffuse. Wiring them means reading
 each program and matching it, which this lane did not do.
