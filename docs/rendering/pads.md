@@ -168,6 +168,12 @@ The term is the material's, so it also lights the speed pads Omega's `zone_2` dr
 black without it. HD's `zone_2` in ours shows the same pad with lit cyan bars (2026-11-26, both at
 tick 420).
 
+Against the originals (2026-11-26, 24 Omega and 16 2048 race pairs, the pad term on and off in one
+tree): mean grey improves on 13 and holds on 27, RMSE improves on 14 and worsens on none, edge
+correlation dips by under `0.0001` on 6. **Open:** in the `omega/arena-2048` pair the original (the
+`wipeout_pc` port, on the grid before GO) shows road paint where ours draws two weapon pads, with or
+without the term. Why it draws none there is unread.
+
 **Open:** each pad's own start phase (the original seeds it from the object's address) and the
 cooling colour on a collected pad. Both need a glow entry per pad, which the 64-entry table does
 not hold.

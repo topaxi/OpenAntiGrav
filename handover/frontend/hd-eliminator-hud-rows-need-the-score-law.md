@@ -20,6 +20,8 @@ summary: "HD, Omega and 2048 Eliminators are won on score and drawn by their own
 - **2048's event end test.** Ours ends an Elimination event on the elite score (chosen); the
   executable's tiered target state and end test are unread (`docs/formats/2048-campaign.md`, "The
   objective law"). Which events are tiered also decides whether the rows show at all.
+- **Weapon pads the original does not show.** On the `omega/arena-2048` pair's grid the original
+  shows road paint where ours draws two pads (`docs/rendering/pads.md`, "2048 and Omega").
 - **Omega's own writer of the 2048-era elimination HUD** is unread; ours runs 2048's law there.
 - **2048's HD and Fury cells** write the target line `"%s (%d)"`; ours writes HD's `"%s ( %d )"`.
   Their row format is unread.
