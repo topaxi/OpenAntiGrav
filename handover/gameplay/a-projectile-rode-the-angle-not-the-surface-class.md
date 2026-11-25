@@ -53,8 +53,8 @@ nothing on the title axis; the gameplay determinism reference did not move.
   `age + dt` ([plasma.md](../../docs/ghidra/functions/ps3-hdfury-eu/plasma.md), "On Moa Therma's
   bank"). Still open from that run:
   - **HD's volley may not leave from one point.** In the bank capture one rocket's first record
-    steps back about 6 units further along the heading than the other two; ours launches all three
-    from the craft's position, measured on Pulse only
+    steps back about 6.5 units further along the heading than the other two (or it had one more
+    update); ours launches all three from the craft's position, measured on Pulse only
     ([plasma.md](../../docs/ghidra/functions/ps3-hdfury-eu/plasma.md), "The Rocket's launch
     scale"). The caller of the fire path at `0x0014b188` builds the position and is unread
     statically.

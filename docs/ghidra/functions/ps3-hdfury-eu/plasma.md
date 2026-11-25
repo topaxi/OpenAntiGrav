@@ -1137,7 +1137,8 @@ So the velocity is a unit vector times the class speed from the spawn.
 
 **Live** (the capture of "On Moa Therma's bank"): all three rockets read `|v|` = 222.16 on their
 first record, and the first recorded step (`previous` to position, one 0.0333 s update) is 7.46,
-7.43 and 7.04 units. A rocket held at 0.75 would step 5.6.
+7.43 and 7.04 units. A rocket held at 0.75 would step 5.6, if it moved at the velocity it was born
+with (`Rocket_Update` is unread).
 
 **Wired** as `Weapons::rocket_launch_at_display_scale` (HD measured `false`, Pulse and Pure
 measured `true`). Ours moved each rocket 2.78 units on its first 1/60 s tick and now moves it
@@ -1153,12 +1154,17 @@ bank, mean distance from each original rocket's points to our path, in capture s
 | at the class speed | 3.71 | 1.29 | 4.04 |
 | at the class speed, launch point shifted -2 to +6 units along the heading (eight runs) | 1.69 to 4.12 | 0.49 to 1.47 | 2.96 to 4.40 |
 
-The fix reads further at the unshifted pose, inside the spread a shift of the launch point gives,
-and the original's launch points are not known to better than that: its three first records step
-back to `(-164.39, 23.72, -318.20)`, `(-169.95, 21.78, -321.34)` and
-`(-170.95, 23.78, -319.44)` against a posed craft at `(-173.34, 22.45, -321.50)`. The first sits
-about 6 units further along the heading than the other two, where ours launches all three from
-the craft's position (measured on Pulse only). **Unread.**
+The fix reads further at the unshifted pose, inside the spread a shift of the launch point gives.
+The original's launch point is not known to better than that: the capture writes the pose at
+`(-173.34, 22.45, -321.50)`, runs one frame and then reads, and the craft reads back at
+`(-168.84, 23.40, -320.25)`, one 1/30 s frame at 140 units/s (4.7 units) further on, so the shot
+left from somewhere in that frame of travel.
+
+The three first records also do not step back to one point: `(-164.39, 23.72, -318.20)`,
+`(-169.95, 21.78, -321.34)` and `(-170.95, 23.78, -319.44)`. The first sits about 6.5 units further
+along the heading than the other two. Whether HD launches that rocket from another point or had
+updated it once more before the first record is **unread**; ours launches all three from the
+craft's position (measured on Pulse only).
 
 **Lineage.** 2048 and Omega: inherited from HD, set `false`. Neither title's fire path was read,
 and neither was run (no memory readout on Omega; 2048 not run).
