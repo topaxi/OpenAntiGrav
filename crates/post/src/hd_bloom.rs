@@ -606,14 +606,15 @@ impl Chain {
             None,
             read.downsample_constants(),
         );
+        let block = [("reduce_block", f64::from(REDUCE_BLOCK))];
         let reduce_first = pipeline(
             "hd bloom reduce first",
             "fs_reduce_first",
             SCENE_FORMAT,
             None,
-            &[],
+            &block,
         );
-        let reduce = pipeline("hd bloom reduce", "fs_reduce", SCENE_FORMAT, None, &[]);
+        let reduce = pipeline("hd bloom reduce", "fs_reduce", SCENE_FORMAT, None, &block);
         let adapt = pipeline("hd bloom adapt", "fs_adapt", SCENE_FORMAT, None, &[]);
         let adapt_jump = pipeline(
             "hd bloom adapt jump",
@@ -775,16 +776,14 @@ impl Chain {
         // The vertical blur's own target, so `quarter_a` still holds the quarter-res
         // scene when the resolve reads it as its feedback buffer.
         let quarter_c = Target::new(device, "hd bloom quarter c", quarter);
-        // The luminance reduction: keep halving from the quarter buffer to a
-        // single pixel, the same iterated halving FUN_003b4690 runs before
-        // its readback.
-        let mut reductions = Vec::new();
-        let (mut w, mut h) = quarter;
-        while (w > 1 && h > 1) || reductions.is_empty() {
-            w = w.div_ceil(2);
-            h = h.div_ceil(2);
-            reductions.push((Target::new(device, "hd bloom reduce", (w, h)), (w, h)));
-        }
+        // The luminance reduction: the mean of the quarter buffer, which
+        // FUN_003b4690 reads back after halving it to a single pixel. Here each
+        // step takes a `REDUCE_BLOCK` square until the level is at most
+        // `ADAPT_READS` a side, and the adaptation averages what is left.
+        let reductions: Vec<_> = reduction_levels(quarter)
+            .into_iter()
+            .map(|level| (Target::new(device, "hd bloom reduce", level), level))
+            .collect();
 
         let constants = |label: &str| {
             oag_gpu::init_buffer::init(
@@ -1245,6 +1244,26 @@ fn bind_group(
 /// The same fraction at every level, rounded and floored at one texel: the
 /// ladder ends at a 1x1 mean, and a level that rounded to zero would be a pass
 /// that drew nothing into the texture the next one reads.
+/// The side of the square one luminance-reduction step averages.
+const REDUCE_BLOCK: u32 = 8;
+
+/// The side under which the adaptation reads a level whole instead of reducing it again.
+const ADAPT_READS: u32 = 16;
+
+/// The luminance reduction's levels below a `quarter` buffer: at least one step (the
+/// first encodes), then steps of [`REDUCE_BLOCK`] until both sides are at most
+/// [`ADAPT_READS`].
+fn reduction_levels(quarter: (u32, u32)) -> Vec<(u32, u32)> {
+    let mut levels = Vec::new();
+    let (mut w, mut h) = quarter;
+    while w > ADAPT_READS || h > ADAPT_READS || levels.is_empty() {
+        w = w.div_ceil(REDUCE_BLOCK);
+        h = h.div_ceil(REDUCE_BLOCK);
+        levels.push((w, h));
+    }
+    levels
+}
+
 fn level_viewport(level: (u32, u32), viewport: (u32, u32), scene: (u32, u32)) -> (u32, u32) {
     let axis = |size: u32, drawn: u32, whole: u32| {
         if drawn >= whole || whole == 0 {

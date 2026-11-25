@@ -1008,3 +1008,15 @@ fn the_8bit_scene_resolves_as_the_float_one() {
         SCENE_FORMAT
     );
 }
+
+/// The reduction takes 8x8 steps down to a level the adaptation reads whole: one pass for
+/// the S21's 119x68 quarter buffer (render scale 25 on a 2320x1080 panel) where halving
+/// took seven, two for a 1080p frame's 480x270 where it took nine, and always one, because
+/// the first step is the one that encodes. Fails if the ladder goes back to halving.
+#[test]
+fn the_reduction_takes_eight_by_eight_steps_to_what_the_adaptation_reads() {
+    assert_eq!(reduction_levels((119, 68)), [(15, 9)]);
+    assert_eq!(reduction_levels((480, 270)), [(60, 34), (8, 5)]);
+    assert_eq!(reduction_levels((960, 540)), [(120, 68), (15, 9)]);
+    assert_eq!(reduction_levels((3, 2)), [(1, 1)]);
+}

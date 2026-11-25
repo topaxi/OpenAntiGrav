@@ -204,13 +204,20 @@ fn scene_tap(texel: vec4<f32>) -> vec4<f32> {
 // picture, so the half-empty last texel of an odd level weighs what it covers.
 // `first` is the step that reads the scene's quarter-res copy, whose alpha is
 // the glow mask and not a coverage: every texel there weighs 1.
+//
+// **One step takes a `reduce_block` square, not 2x2**: a coverage-weighted mean
+// of an 8x8 block is the mean of the same covered texels as three nested 2x2
+// steps, in a third of the passes (the levels round differently in their last
+// bits; docs/rendering/hd-track-tone.md, "The ladder in 8x8 steps").
+override reduce_block: i32 = 2;
+
 fn reduce_sum(pixel: vec2<i32>, first: bool) -> vec4<f32> {
     let dims = vec2<f32>(textureDimensions(source_tex));
     let last = vec2<i32>(max(round(dims * constants.uv_scale), vec2<f32>(1.0))) - vec2<i32>(1);
     var rgb = vec3<f32>(0.0);
     var weight = 0.0;
-    for (var k = 0; k < 4; k = k + 1) {
-        let at = pixel * 2 + vec2<i32>(k & 1, k >> 1);
+    for (var k = 0; k < reduce_block * reduce_block; k = k + 1) {
+        let at = pixel * reduce_block + vec2<i32>(k % reduce_block, k / reduce_block);
         if (at.x <= last.x && at.y <= last.y) {
             let texel = textureLoad(source_tex, at, 0);
             var share = texel.a;
@@ -227,7 +234,7 @@ fn reduce_sum(pixel: vec2<i32>, first: bool) -> vec4<f32> {
             weight = weight + share;
         }
     }
-    return vec4<f32>(rgb / max(weight, 1e-6), weight * 0.25);
+    return vec4<f32>(rgb / max(weight, 1e-6), weight / f32(reduce_block * reduce_block));
 }
 
 @fragment

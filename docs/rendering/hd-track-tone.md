@@ -2478,3 +2478,40 @@ Queen's Mall 50.62 to 50.22, Sebenco Climb 40.20 to 39.72, Sol 2 33.17 to 33.05,
 32.57 to 32.26, Amphiseum 56.55 to 56.03, Ubermall 21.14 to 21.14, Vineta K 29.22 to 28.84: none
 rises. Every 2048-vita pair is unchanged (2048: checked, differs, above).
 
+
+## The ladder in 8x8 steps (2026-11-25, `s21-passes`): parked, not on `main`
+
+**Why parked:** the luminance ladder is the original's own chain, halving a 256x256 `R16F`
+buffer step by step before its readback (`FUN_003b4690`), and the maintainer keeps that chain as
+it is. This branch only records what folding it would buy.
+
+**The change.** Each reduction pass takes an 8x8 block, a coverage-weighted mean of the same covered
+texels as three nested 2x2 halvings. Passes continue until the level is at most 16 texels a side,
+and the adaptation averages that level whole. On the S21's 119x68 quarter buffer (render scale 25)
+that is one reduce pass instead of seven; at 1080p, two instead of nine. The intermediate levels
+are no longer stored, so they no longer round to half precision.
+
+**Picture.** Ours re-rendered on the 16 HD race pairs (copies, `compare-rerender-ours`'s
+`rerender`, the debug build before and after):
+- 4 are byte-identical.
+- 12 move 1 or 2 levels of 255 on 0.15 % to 7.7 % of their pixels (Zone Vineta K 7.7 %,
+  Anulpha Pass 5.9 %, The Amphiseum 5.9 %, Vineta K 4.8 %).
+- RMSE against the original moves by at most 5e-5 (signs mixed) and mean grey by at most 0.02, under
+  the page's repeat noise of 0.001 and 0.4 (`docs/tools/compare-page.md`, "Repeat noise").
+
+A second version kept the ladder's own levels, three halvings to a pass, and rounded each level it
+holds in registers to half precision by hand. It was not byte-identical either (the same 12 pairs
+differ), so the GPU's own conversion on store does not match that rounding.
+
+**What it saves**, measured with a diagnostic toggle that puts the seven halving passes back on top
+of the fold. The "off" arm therefore has one pass more than the plain ladder, so the saving reads
+up to one pass high.
+
+| Machine | Ladder | Fold | Method |
+| --- | ---: | ---: | --- |
+| Galaxy S21 (render scale 25, Vineta K) | 30.1 / 28.2 ms | 29.0 / 27.1 ms | two runs, the two arms in alternating 10 s windows of one run (a third run read 31.8 against 29.6) |
+| Steam Deck 1280x800 | 6.66 ms (CPU 5.40, GPU 3.34) | 6.59 ms (CPU 5.27, GPU 3.28) | offscreen race bench, 3000 ticks, frame p50, mean of three runs each |
+| RX 7800 XT 1280x720 | GPU 0.506 ms | GPU 0.483 ms | `just bench-render hd`, six runs each, interleaved, gpu p50 (frame p50 not resolved at load 18 to 50) |
+
+So about 1.1 ms a frame on the S21 (0.14 to 0.41 ms a pass there), 0.07 ms on the Deck, and nothing
+measurable on a desktop GPU.
