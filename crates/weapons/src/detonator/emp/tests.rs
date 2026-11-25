@@ -384,12 +384,12 @@ fn the_fork_walks_its_branch_then_the_ring_and_ends_with_the_wave() {
 fn forked_lap_with_overlap() -> Survey {
     let mut survey = forked_lap();
     let branch = &mut survey.branches[0];
-    let near = |o: usize| o < 4 || o >= 16;
+    let near = |o: usize| !(4..16).contains(&o);
     branch.to_primary = (0..20)
         .map(|k| near(k).then_some(50 + k as u16 * 2))
         .collect();
     branch.from_primary = (0..40)
-        .map(|o| (o < 4 || o >= 36).then_some(o as u16 / 2))
+        .map(|o| (!(4..36).contains(&o)).then_some(o as u16 / 2))
         .collect();
     survey
 }

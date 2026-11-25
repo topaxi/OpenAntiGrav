@@ -178,7 +178,7 @@ fn fire_from(race: &mut Race, entry: usize, mines: &[Placed], ticks: usize) {
         .expect("an EMP");
     let field = &mut race.core.sim.world.detonator;
     field.live_bombs = 0;
-    field.live_mines = u16::try_from(mines.len()).expect("fits").into();
+    field.live_mines = u16::try_from(mines.len()).expect("fits");
     field.mines[..mines.len()].copy_from_slice(mines);
     field.emp.charge = config.hi;
     field.emp.gauge = 1.0;
