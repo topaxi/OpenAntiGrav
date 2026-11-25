@@ -277,23 +277,30 @@ def main():
 
         want = list(ages)
         last = None
-        for _ in range(600):
-            age = pool_age()
-            if last is not None:
-                steps.append({"dt_age": age - last, "age": age})
-            last = age
-            while want and age >= want[0] - 1e-6:
-                photograph("a%04d" % round(want[0] * 1000), "target %.3f" % want.pop(0))
+        try:
+            for _ in range(600):
                 age = pool_age()
-            if not want:
-                break
-            if args.hold_after_hit:
-                place.write_pose(gdb, body, tuple(held["pos"]), [tuple(x) for x in held["rows"]], 0.0)
-                gdb.write(body + place.B_VELOCITY, struct.pack(">3f", 0.0, 0.0, 0.0))
-            step(False)
-            print("age %.4f" % pool_age(), flush=True)
+                if last is not None:
+                    steps.append({"dt_age": age - last, "age": age})
+                last = age
+                while want and age >= want[0] - 1e-6:
+                    photograph("a%04d" % round(want[0] * 1000), "target %.3f" % want.pop(0))
+                    age = pool_age()
+                if not want:
+                    break
+                if args.hold_after_hit:
+                    place.write_pose(gdb, body, tuple(held["pos"]), [tuple(x) for x in held["rows"]], 0.0)
+                    gdb.write(body + place.B_VELOCITY, struct.pack(">3f", 0.0, 0.0, 0.0))
+                step(False)
+                print("age %.4f" % pool_age(), flush=True)
+        except (TimeoutError, OSError) as err:
+            # The frames already taken keep their records: the camera pick below needs only them.
+            print("stopped early (%s), keeping %d frame(s)" % (err, len(shots)), flush=True)
         session.pad.set("cross", False)
-        gdb.resume()
+        try:
+            gdb.resume()
+        except (TimeoutError, OSError):
+            pass
     picks = ps3_pose.pick_camera([c for _, _, c, _, _ in shots])
     for (stem, shot, _, pose, note), (camera, reason, count) in zip(shots, picks):
         record = drive.describe(camera, reason, count, drive.track_name(), shot, None, None, pose)
