@@ -58,12 +58,14 @@ fn the_line_carries_every_field_and_dashes_what_was_not_read() {
         governor: 0,
         passes: &[],
         reflection: None,
+        chains: Chains::default(),
     });
     assert!(line.starts_with("frame-log stage=menu:window-layout fps=59.9"));
     assert!(line.contains("gpu_ms=- "));
     assert!(
         line.contains(
-            "window=3840x2160 surface=3840x2160 render=- governor=0 pass_ms=- reflection=-"
+            "window=3840x2160 surface=3840x2160 render=- governor=0 pass_ms=- reflection=- \
+             bloom_ms=- blur_ms=- upscale_ms=- upscale_presented_ms=-"
         )
     );
 }
@@ -89,12 +91,48 @@ fn the_pass_field_lists_every_timed_pass_after_the_old_fields() {
         governor: 0,
         passes: &[("SHADOW MAP", 1.234), ("HUD AND UI", 0.05)],
         reflection: Some("quarter"),
+        chains: Chains::default(),
     });
     assert!(
-        line.ends_with(" governor=0 pass_ms=shadow_map:1.23,hud_and_ui:0.05 reflection=quarter"),
+        line.contains(" governor=0 pass_ms=shadow_map:1.23,hud_and_ui:0.05 reflection=quarter "),
         "{line}"
     );
     assert!(line.contains(" gpu_ms=4.00 "), "{line}");
+}
+
+/// The chains timed apart from the scene pass (HD/Fury's bloom, the motion blur, FSR 3's two
+/// halves) are appended after `reflection`, so every field a script read before keeps its place.
+#[test]
+fn the_chains_come_last_and_leave_the_old_fields_in_place() {
+    let line = format_line(&Reading {
+        stage: "race",
+        fps: 30.0,
+        frame_ms: 33.3,
+        p99_ms: 40.0,
+        cpu_ms: Some(20.0),
+        gpu_ms: Some(9.5),
+        present_ms: Some(13.0),
+        target_hz: 240,
+        window: (2320, 1080),
+        surface: (2320, 1080),
+        render: Some((476, 270)),
+        governor: 0,
+        passes: &[("GLASS", 1.5)],
+        reflection: Some("quarter"),
+        chains: Chains {
+            bloom_ms: Some(2.345),
+            blur_ms: None,
+            upscale_ms: Some(0.5),
+            upscale_presented_ms: Some(0.25),
+        },
+    });
+    assert!(
+        line.ends_with(
+            " pass_ms=glass:1.50 reflection=quarter bloom_ms=2.35 blur_ms=- upscale_ms=0.50 \
+             upscale_presented_ms=0.25"
+        ),
+        "{line}"
+    );
 }
 
 #[test]

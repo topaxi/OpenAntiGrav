@@ -167,6 +167,23 @@ pub struct Reading<'a> {
     /// The step the glass and sea target is drawn at (`graphics.reflection_resolution`, the
     /// step `auto` is at), or `None` when no target is drawn.
     pub reflection: Option<&'static str>,
+    /// The GPU chains timed apart from the scene pass and the labelled passes, milliseconds,
+    /// each `None` until its first reading: HD/Fury's bloom, the motion blur, and the FSR 3
+    /// chain at the render and at the presentation resolution (`perf::GpuCost`'s fields).
+    pub chains: Chains,
+}
+
+/// See [`Reading::chains`].
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct Chains {
+    /// HD/Fury's bloom chain.
+    pub bloom_ms: Option<f32>,
+    /// The motion blur chain.
+    pub blur_ms: Option<f32>,
+    /// The FSR 3 chain's render-resolution half.
+    pub upscale_ms: Option<f32>,
+    /// The FSR 3 chain's presentation-resolution half.
+    pub upscale_presented_ms: Option<f32>,
 }
 
 /// The line, one `key=value` field after another so a script can split it.
@@ -177,7 +194,7 @@ pub fn format_line(r: &Reading<'_>) -> String {
         .render
         .map_or_else(|| "-".to_string(), |(w, h)| format!("{w}x{h}"));
     format!(
-        "frame-log stage={} fps={:.1} frame_ms={:.2} p99_ms={:.2} cpu_ms={} gpu_ms={} present_ms={} target_hz={} window={}x{} surface={}x{} render={} governor={} pass_ms={} reflection={}",
+        "frame-log stage={} fps={:.1} frame_ms={:.2} p99_ms={:.2} cpu_ms={} gpu_ms={} present_ms={} target_hz={} window={}x{} surface={}x{} render={} governor={} pass_ms={} reflection={} bloom_ms={} blur_ms={} upscale_ms={} upscale_presented_ms={}",
         r.stage,
         r.fps,
         r.frame_ms,
@@ -194,6 +211,10 @@ pub fn format_line(r: &Reading<'_>) -> String {
         r.governor,
         pass_field(r.passes),
         r.reflection.unwrap_or("-"),
+        ms(r.chains.bloom_ms),
+        ms(r.chains.blur_ms),
+        ms(r.chains.upscale_ms),
+        ms(r.chains.upscale_presented_ms),
     )
 }
 
