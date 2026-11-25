@@ -80,6 +80,8 @@ holding the pad. While the run is up (the flyby, the countdown and the race, not
 | START | nothing: no pause, no pause menu, no photo mode |
 | SELECT (the camera cycle) | nothing: the camera does not change and `settings.toml` is not written |
 | Sticks, triggers, face buttons | nothing: the autopilot replaces the player's snapshot outright (`RaceSim::set_autopilot`), so no pad reaches the craft |
+| F11 (fullscreen) | nothing while the run loads or flies: a new output size would move every figure after it (`window::fullscreen_may_change`); the stats screen takes it again |
+| Touch on the racing overlay | nothing: the overlay is not drawn or read in a benchmark (`touch::overlay_reads_fingers`) |
 | Losing focus | nothing: it neither pauses nor abandons the run (`Session::window_away`) |
 | Back | abandons the run, as above |
 
@@ -148,6 +150,41 @@ paces), the screen says so on its own line and the file has `limiter_binds: true
 `frame_limit` to unlimited to measure the machine. The refresh budget (`over the budget`) is the
 display's, and under vsync on most "over" frames are missed refreshes.
 
+## Reading the screen
+
+The stats screen is for a player, not an engineer. It leads with a **verdict**, then plain lines,
+and keeps the engineer's numbers behind DETAILS (`benchmark::text` holds every word, each through
+a string id; `benchmark::screen` draws them):
+
+| Line | Says |
+| --- | --- |
+| SMOOTH, MOSTLY SMOOTH or CHOPPY, with the average FPS and the screen's refresh rate | the share of counted frames that took longer than one screen refresh (the frames over the budget below): up to 1 % is SMOOTH, up to 5 % MOSTLY SMOOTH, more CHOPPY (`report::SMOOTH_SHARE`, `MOSTLY_SMOOTH_SHARE`; **chosen, not measured**) |
+| Slowest moments: N FPS (worst 1 in 100 frames) | the 1 % low |
+| Stutters: N of M frames took longer than one screen refresh | the frames over the budget |
+| Your frame limit (N FPS) capped this result. Turn FRAME LIMIT off in BENCHMARK OPTIONS ... | only when the average sits on the limit in force (`limiter_binds`) |
+| Mods: none, or Mods: N loaded | the run's MODS row |
+
+The heading line names the game, the circuit as the track select names it (never the archive's
+`16_Track`) and the preset. The buttons are DETAILS (and SUMMARY to come back), COPY TO CLIPBOARD,
+BACK and RUN AGAIN; the pad walks them with left, right, up and down, and a click or a tap presses
+one. DETAILS lists the numbers of the table below, the screen refresh and where it came from, the
+settings under the menu's own row names and values (read out of the menu tree, so a name edited
+there is edited here), then the mods, the device, the GPU with its driver and the build version.
+
+**COPY TO CLIPBOARD** puts the same text on the clipboard in the same order: the game, circuit and
+preset, the plain lines, a blank line, then DETAILS (`text::copy_text`, pinned line for line by
+`the_copied_text_is_pinned_line_for_line`). The button shows COPIED for two seconds, or COULD NOT
+COPY. It is on the screen where the platform can write a clipboard and left off where it cannot:
+
+| Platform | Write | How |
+| --- | --- | --- |
+| Linux, Windows, macOS | yes | `arboard` (`app::clipboard::write`); the clipboard object is kept for the life of the process because X11 and Wayland serve the text from the process that owns it |
+| Android | yes | `oag_mobile::clipboard`, the activity's `ClipboardManager` through JNI, on any thread; type-checked for `aarch64-linux-android`, **not run on a phone** |
+| Web | yes | `navigator.clipboard.writeText` through `js_sys`, which needs a secure page and the click that asked; the promise is not awaited, so a later permission refusal is not shown; type-checked for `wasm32`, **not run in a browser** |
+| iOS | no | no JNI-like shim; the button is left off (`clipboard::CAN_WRITE`) |
+
+Run on Linux under Xvfb, the clipboard held the text above after the press (`xclip -o`).
+
 ## The result file
 
 `<data dir>/oag/bench/run-<unix seconds>/<title key>.json` and `.csv` (`pulse`, `pure`, `hd`,
@@ -211,6 +248,9 @@ checks each value against the page.
   `a_benchmark_with_its_mods_off_loads_no_extension_and_no_override`,
   `the_options_page_reaches_the_run_and_saves_nothing` and
   `the_mods_row_is_left_out_while_no_mod_is_enabled`: BENCHMARK OPTIONS.
+  `the_stats_screen_swaps_to_details_and_answers_a_copy`: DETAILS and COPY through the real
+  `Session`, by screenshots. The unit tests in `benchmark::text` hold the verdict thresholds, the
+  frame-limit line, the copied text and that no internal name (`_Track`, `track.vex`) is shown.
   `back_abandons_a_benchmark_and_writes_nothing`: Back by the pad and the system Back from the EXTRAS page, Escape from the command line.
 - Unit tests in `crates/game/src/benchmark/` for the lows, the figures, the JSON keys `compare`
   reads, the screen's hit rectangles and layout, the presets, and the command line.
