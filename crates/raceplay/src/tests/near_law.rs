@@ -97,7 +97,9 @@ fn hds_craft_blast_near_the_camera_is_capped_by_its_depth() {
     // of half size `depth` reaches `depth * sqrt(2)` to its corners.
     let widest = |quads: &[GpuVertex]| {
         quads
-            .chunks_exact(6)
+            .as_chunks::<6>()
+            .0
+            .iter()
             .map(|quad| {
                 let (depth, reach) = depth_and_reach(quad, eye, forward);
                 reach / depth.max(1e-3)
@@ -110,7 +112,7 @@ fn hds_craft_blast_near_the_camera_is_capped_by_its_depth() {
         widest(&authored)
     );
     assert!(!lawful.is_empty(), "the smoke beyond the cull still draws");
-    for quad in lawful.chunks_exact(6) {
+    for quad in lawful.as_chunks::<6>().0 {
         let (depth, reach) = depth_and_reach(quad, eye, forward);
         assert!(depth >= 1.0 - 1e-3, "a quad nearer than the cull: {depth}");
         assert!(
