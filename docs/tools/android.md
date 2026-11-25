@@ -997,6 +997,45 @@ to about 99 fps without them; anisotropy `off`, `RADV_DEBUG=nodcc` or `nohiz`, a
 for the eight cards' draws and 2.3 us with the clears only. That is consistent with the cost being the pixels the cards shade (the clears are cheap, and the 7800 XT with
 30 times the 610M's compute units is about 16 times faster on them); not checked are the cards' texture sizes, formats and mips (on Mali HD's DXT textures are decoded to RGBA8).
 
+### What a render pass costs
+
+Measured 2026-11-25 (`s21-passes`) on the same phone with the skip-toggle protocol above: release `dist` APK
+(`OAG_APK_DEV_CLI=1 OAG_APK_PROFILEABLE=1 just apk --arm64-only`), HD/Fury Vineta K forward, render scale 25, REFLECTION
+RESOLUTION `auto`, `--autopilot --seed 1 --no-audio --no-intro --frame-log --race --track /data/environments/01_vineta_k/track.vex`,
+each run started at AP 33 C or less, `OAG_SKIP_PASSES=<name>` and `OAG_SKIP_PASSES_TOGGLE=10` as launch-file lines, split with
+`python3 -I scripts/android-skip-windows.py LOGCAT 10` (racing seconds 15 on). Two names exist only to price a pass
+(`oag_gpu::skip`): `extra-passes` adds 16 one-pixel clear passes to the frame, `advert-draws` keeps the eight advert
+card passes and their clears and drops their draws.
+
+| Arm (on in the odd windows) | Frame ms, off / on | What it says |
+| --- | ---: | --- |
+| `extra-passes`, run 1 | 33.9 / 36.1 | 16 empty passes cost 2.2 ms: 0.14 ms a pass |
+| `extra-passes`, run 2 | 31.3 / 37.9 | 6.6 ms: 0.41 ms a pass. `submit` grows 1.3 to 1.5 ms both times, the rest is present wait |
+| `adverts` (all eight cards out, every card drawn) | 35.8 / 30.7 | the cards cost 5.1 ms |
+| `advert-draws` | 34.7 / 36.3 | dropping only their draws saves nothing (inside the noise) |
+| `adverts`, with the cards culled to the view | 28.9 / 28.3 | what is left of the cards after culling: inside the noise |
+
+So **a render pass costs 0.14 to 0.41 ms on the S21**, and the advert cards cost their eight 512x256 targets' clears
+and stores, not their shading: on Mali the pixels a pass shades are not the price, the pass and its attachments are.
+Two runs of the same arm differ by up to 3x, so read one toggle run to a factor of two. The cards are now drawn
+only when a view shows them ([frame-thread-cpu.md](../rendering/frame-thread-cpu.md), "Advert cards: drawn only
+when shown"), measured there at -4.2 and -5.6 ms on this phone.
+
+The same arms elsewhere (offscreen race bench, 3000 ticks of Vineta K, frame p50):
+
+| Machine | 16 extra passes | Per pass |
+| --- | ---: | ---: |
+| Steam Deck, 1280x800 | +0.22 to +0.24 ms frame, +0.28 to +0.35 ms CPU | about 0.015 ms |
+| Steam Deck, 1920x1080 and 3840x2160 | -0.1 to +1.0 ms frame (noise), +0.49 to +0.55 ms CPU | about 0.03 ms CPU |
+| RX 7800 XT (this workstation) | not resolved: the whole frame is 1.4 to 1.6 ms and the machine was at load 10 to 51 | |
+
+**One presentation pass, measured and dropped.** Drawing the resolve, the HUD and the blooms straight onto the
+surface and leaving the composite out (a diagnostic arm, only where that is the same picture: grade neutral, no
+screen filter, no FSR 3, one view, no photo) read **slower** in both toggle runs: 26.0 against 26.8 ms and 26.9
+against 28.2 ms (three passes against two). The earlier single-run reading (38.7 against 34.6 ms, slower) holds.
+The grade and the screen filter apply to the HUD too (`oag_present::upscale`, module doc), so a merged pass could
+only ever be the same picture at a neutral grade with no filter.
+
 ### Against the S24
 
 This page held no S24 frame-time table before this one. What exists is [`frame-thread-cpu.md`](../rendering/frame-thread-cpu.md)
