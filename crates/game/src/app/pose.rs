@@ -299,11 +299,17 @@ pub(crate) fn parse_head_to_head(text: &str) -> Result<race::CaptureHeadToHead> 
 /// requires `--hud-state`, and `--hud-state` requires `--screenshot` (`Cli::hud_state`), so a
 /// `Some` only comes out of a capture run.
 pub(crate) fn capture_hud(cli: &Cli) -> Result<Option<race::CaptureHud>> {
-    let mut hud_state = cli.hud_state.as_deref().map(parse_hud_state).transpose()?;
+    let mut hud_state = cli
+        .hud
+        .hud_state
+        .as_deref()
+        .map(parse_hud_state)
+        .transpose()?;
     if let Some(hud) = hud_state.as_mut() {
-        hud.boost_phase = cli.hud_boost_phase;
-        hud.autopilot_seconds = cli.hud_autopilot;
+        hud.boost_phase = cli.hud.hud_boost_phase;
+        hud.autopilot_seconds = cli.hud.hud_autopilot;
         hud.held_pickup = cli
+            .hud
             .hud_pickup
             .as_deref()
             .map(|name| {
@@ -312,16 +318,18 @@ pub(crate) fn capture_hud(cli: &Cli) -> Result<Option<race::CaptureHud>> {
             })
             .transpose()?;
         hud.shield_flash = cli
+            .hud
             .hud_shield_flash
             .as_deref()
             .map(parse_shield_flash)
             .transpose()?;
-        hud.song = cli.hud_song.clone().map(|title| race::CaptureSong {
-            artist: cli.hud_song_artist.clone(),
+        hud.song = cli.hud.hud_song.clone().map(|title| race::CaptureSong {
+            artist: cli.hud.hud_song_artist.clone(),
             title,
-            ticks: cli.hud_song_ticks.unwrap_or(60),
+            ticks: cli.hud.hud_song_ticks.unwrap_or(60),
         });
         hud.head_to_head = cli
+            .hud
             .hud_head_to_head
             .as_deref()
             .map(parse_head_to_head)

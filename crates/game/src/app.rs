@@ -126,6 +126,7 @@ fn attach_log_file(cli: &Cli, settings: &settings::Settings) {
         return;
     };
     let source = cli
+        .boot
         .source
         .clone()
         .or_else(|| std::env::var("OAG_IMAGE").ok())
@@ -199,7 +200,7 @@ fn new_event_loop() -> Result<EventLoop<()>> {
 
 /// The command line, run: to the end when nothing needs a window, otherwise as far as the window.
 fn run(mut cli: Cli) -> Result<()> {
-    cli::benchmark::resolve_title(&cli.benchmark, &mut cli.source)?;
+    cli::benchmark::resolve_title(&cli.benchmark, &mut cli.boot.source)?;
     match launch(cli)? {
         Launch::Done => Ok(()),
         Launch::Window(window) => run_window(*window),
@@ -284,14 +285,14 @@ fn launch(mut cli: Cli) -> Result<Launch> {
         use_pinned: settings.ffmpeg.use_pinned,
         root: Some(oag_source::cache::default_ffmpeg_dir()),
     });
-    if cli.fetch_ffmpeg {
+    if cli.diagnostics.fetch_ffmpeg {
         return crate::ffmpeg_cli::run(
             &oag_source::cache::default_ffmpeg_dir(),
             settings.ffmpeg.use_pinned,
         )
         .map(|()| Launch::Done);
     }
-    if cli.probe_pad {
+    if cli.diagnostics.probe_pad {
         info!("--probe-pad: printing pad events until stopped; no window opens");
         return oag_input::probe::run(&mut std::io::stdout(), || false)
             .map(|()| Launch::Done)
@@ -301,20 +302,27 @@ fn launch(mut cli: Cli) -> Result<Launch> {
     if let Some(pattern) = &cli.dev.rumble_pattern {
         return crate::rumble::probe(&crate::rumble::Probe {
             pattern,
-            source: cli.source.as_deref().or(settings.source.image.as_deref()),
+            source: cli
+                .boot
+                .source
+                .as_deref()
+                .or(settings.source.image.as_deref()),
             token: &settings.controls.rumble,
             hold: cli.dev.rumble_hold,
         })
         .map(|()| Launch::Done);
     }
-    let anisotropy = cli.anisotropy.unwrap_or(settings.graphics.anisotropy);
+    let anisotropy = cli
+        .render
+        .anisotropy
+        .unwrap_or(settings.graphics.anisotropy);
     // A CLI render-profile flag overrides *every* title's entry for this run
     // only - never persisted, the same footing `anisotropy` above is already
     // on. There is no title open yet this early, so there is no one title to
     // single out; a flag naming one and not the rest would silently leave the
     // rest of a play session's titles unaffected the moment a different disc
     // is chosen, which is not what typing the flag once means.
-    let render_scale = match cli.render_scale {
+    let render_scale = match cli.render.render_scale {
         Some(percent) => Some(
             oag_display::display::Scale::try_from(percent)
                 .map_err(|why| anyhow::anyhow!("--render-scale {percent}: {why}"))?,
@@ -333,21 +341,21 @@ fn launch(mut cli: Cli) -> Result<Launch> {
     // Wipeout Pure race. This is spell-checking only: whether *this* disc's
     // files author the rung is settled by `race::load`, which names what the
     // file does carry when they do not.
-    let class = cli.class.trim().to_string();
+    let class = cli.race_setup.class.trim().to_string();
     anyhow::ensure!(
         oag_title::SpeedClasses::is_measured_name(&class),
         "{:?} is not a speed class; try {}",
-        cli.class,
+        cli.race_setup.class,
         oag_title::SpeedClasses::MEASURED.join(", ").to_lowercase()
     );
     // Parsed here for the same reason as the speed class: `--race` goes straight
     // to a track, so a misspelled mode has to be a message about the command
     // line rather than a race that quietly runs under different rules.
-    let mode = oag_race::Mode::from_name(&cli.mode).with_context(|| {
+    let mode = oag_race::Mode::from_name(&cli.race_setup.mode).with_context(|| {
         format!(
             "{:?} is not a race mode; try time_trial, speed_lap, zone, single_race, eliminator, \
              head_to_head or detonator",
-            cli.mode
+            cli.race_setup.mode
         )
     })?;
     // Head to Head is two craft, so it seats two people at most. Refused by name here,
@@ -371,7 +379,7 @@ fn launch(mut cli: Cli) -> Result<Launch> {
     // there is no window route that draws a *stated* conversion state, and
     // silently ignoring the flag would look like a screen that does not work.
     ensure!(
-        cli.loading_screen.is_none() || cli.screenshot.is_some(),
+        cli.loading.loading_screen.is_none() || cli.screenshot.is_some(),
         "--loading-screen needs --screenshot: it draws one frame of the loading \
          screen at a stated state. A window shows the real one under --prefetch."
     );
@@ -379,7 +387,7 @@ fn launch(mut cli: Cli) -> Result<Launch> {
     // Refused rather than ignored: the chooser is a screen, and every one of
     // these three routes is defined by not opening a window to show it on.
     ensure!(
-        !cli.launcher || !(cli.race || cli.dry_run || cli.screenshot.is_some()),
+        !cli.boot.launcher || !(cli.race || cli.diagnostics.dry_run || cli.screenshot.is_some()),
         "--launcher needs a window: it is a screen for choosing a disc image, and \
          --race, --dry-run and --screenshot all name their own source and open none. \
          Run it on its own, or name an image directly."
@@ -387,7 +395,7 @@ fn launch(mut cli: Cli) -> Result<Launch> {
 
     // Resolved beside the source below, but it cannot fail: no DLC is the
     // ordinary state of a copy of the game.
-    let dlc = source::resolve_dlc(&cli.dlc, &settings.source.dlc);
+    let dlc = source::resolve_dlc(&cli.race_setup.dlc, &settings.source.dlc);
     crate::unlock::set_unlock_all(cli.unlock_all || settings.dev.unlocks_everything());
 
     // Opened before either way in, because both want sound and neither owns the
@@ -422,12 +430,12 @@ fn launch(mut cli: Cli) -> Result<Launch> {
         });
     let mut audio = oag_sound::Audio::open(
         &settings.audio,
-        cli.dump_audio.clone(),
+        cli.audio.dump_audio.clone(),
         tap.as_ref(),
         buffer,
-        cli.no_audio,
+        cli.audio.no_audio,
     );
-    audio.set_soundtrack(!cli.no_soundtrack);
+    audio.set_soundtrack(!cli.audio.no_soundtrack);
     // The shuffle is presentation randomness: the clock seeds it, the simulation never sees it.
     audio.seed_music_shuffle(
         web_time::SystemTime::now()
@@ -435,22 +443,28 @@ fn launch(mut cli: Cli) -> Result<Launch> {
             .map_or(0, |since| since.as_nanos() as u64),
     );
 
-    let (pose, camera) = match &cli.pose_from {
+    let (pose, camera) = match &cli.placement.pose_from {
         Some(path) => {
-            let (pose, camera) =
-                pose_from_trace(path, cli.pose_tick, cli.no_camera, cli.camera_fov)?;
+            let (pose, camera) = pose_from_trace(
+                path,
+                cli.capture_view.pose_tick,
+                cli.capture_view.no_camera,
+                cli.capture_view.camera_fov,
+            )?;
             (Some(pose), camera)
         }
         // `--camera-pose` is a camera and nothing else, so it composes with
         // `--pose` rather than replacing it: an RPCS3 capture gives the camera
         // exactly and the craft only as whatever the frame shows.
         None => (
-            cli.pose
+            cli.placement
+                .pose
                 .as_deref()
                 .map(parse_pose)
                 .transpose()?
                 .map(|(position, yaw)| race::PoseRequest::SplineAligned { position, yaw }),
-            cli.camera_pose
+            cli.capture_view
+                .camera_pose
                 .as_deref()
                 .map(parse_camera_pose)
                 .transpose()?,
@@ -459,11 +473,16 @@ fn launch(mut cli: Cli) -> Result<Launch> {
     // Applied after either way in, because both can produce a camera and the
     // flag means the same thing to each.
     let camera = camera.map(|camera| race::CameraOverride {
-        fov_deg: cli.camera_fov.or(camera.fov_deg),
+        fov_deg: cli.capture_view.camera_fov.or(camera.fov_deg),
         ..camera
     });
 
-    let field = cli.field_from.as_deref().map(field_from_csv).transpose()?;
+    let field = cli
+        .placement
+        .field_from
+        .as_deref()
+        .map(field_from_csv)
+        .transpose()?;
     // A field file with a slot 0 row carries the player's exact pose, which wins over `--pose`.
     let pose = field
         .as_ref()
@@ -474,7 +493,7 @@ fn launch(mut cli: Cli) -> Result<Launch> {
 
     let hud_state = capture_hud(&cli)?;
 
-    let leg = if cli.reel {
+    let leg = if cli.boot.reel {
         frontend::Leg::DevPubReel
     } else {
         frontend::Leg::LogoFmv
@@ -487,6 +506,7 @@ fn launch(mut cli: Cli) -> Result<Launch> {
     // default circuit raced instead.
     #[cfg(feature = "ballisticng")]
     let workshop_track = cli
+        .race_setup
         .ballisticng_track
         .as_deref()
         .map(|name| {
@@ -507,7 +527,7 @@ fn launch(mut cli: Cli) -> Result<Launch> {
     #[cfg(not(feature = "ballisticng"))]
     let workshop_track: Option<std::path::PathBuf> = None;
     let foreign_entry = workshop_track
-        .or_else(|| cli.track_file.clone())
+        .or_else(|| cli.race_setup.track_file.clone())
         .map(|path| race::foreign::entry(&path))
         .transpose()?;
     let (definition, menu_source) =
@@ -544,8 +564,8 @@ fn launch(mut cli: Cli) -> Result<Launch> {
     // later.
     // `--demo` with no window: `--dry-run` flies demos back to back, `--screenshot` captures the
     // first one's frame through the ordinary race capture. See `docs/ui/attract-demo.md`.
-    if cli.demo.mode().is_some() && (cli.dry_run || cli.screenshot.is_some()) {
-        let source = source::resolve(cli.source.as_deref(), settings.source.image.as_deref())?;
+    if cli.demo.mode().is_some() && (cli.diagnostics.dry_run || cli.screenshot.is_some()) {
+        let source = source::resolve(cli.boot.source.as_deref(), settings.source.image.as_deref())?;
         let music_discs = pending.music_discs(&source);
         let mut options = pending.race_options(&source, Vec::new());
         let catalogue = crate::title_lists::catalogue(&source)?;
@@ -554,11 +574,15 @@ fn launch(mut cli: Cli) -> Result<Launch> {
             .and_then(|mut opened| {
                 crate::boot::demo_config::load(&mut opened.archives, opened.title, &mut Vec::new())
             });
-        let length = if cli.ticks > 0 { cli.ticks } else { u32::MAX };
+        let length = if cli.capture.ticks > 0 {
+            cli.capture.ticks
+        } else {
+            u32::MAX
+        };
         let seed = options.seed.unwrap_or_else(crate::race_seed::fresh);
         let unlocked = crate::unlock::unlock_all();
         let playable = |track: &race::catalogue::Track| unlocked || track.unlock_grid.is_none();
-        if cli.dry_run {
+        if cli.diagnostics.dry_run {
             for (n, report) in crate::demo::chain::run(
                 &options,
                 &catalogue,
@@ -601,7 +625,7 @@ fn launch(mut cli: Cli) -> Result<Launch> {
         // quietly doing nothing. `--race` exists to skip the boot sequence, and
         // hanging its exit on ten minutes of `ffmpeg` would invert the one
         // thing it is for.
-        if cli.prefetch {
+        if cli.boot.prefetch {
             warn!(
                 "--prefetch has no effect with --race: it converts the front end's movies and \
                  sounds, which a race never opens. Run it without --race once."
@@ -610,10 +634,10 @@ fn launch(mut cli: Cli) -> Result<Launch> {
         // Same reasoning one screen along: the loading screen is what a player
         // waits on while that conversion runs, so on a route that does not run
         // it there is nothing for the screen to be about.
-        if cli.loading_screen.is_some() {
+        if cli.loading.loading_screen.is_some() {
             warn!("--loading-screen has no effect with --race; run it without --race.");
         }
-        let source = source::resolve(cli.source.as_deref(), settings.source.image.as_deref())?;
+        let source = source::resolve(cli.boot.source.as_deref(), settings.source.image.as_deref())?;
         let music_discs = pending.music_discs(&source);
         // Joined before the load: the race to load is the server's.
         #[cfg(not(target_arch = "wasm32"))]
@@ -632,10 +656,12 @@ fn launch(mut cli: Cli) -> Result<Launch> {
         // The rules modules of the mods that are on. None in a network race (the host's
         // race runs vanilla, and the lobby's fingerprint leaves the examples out), an
         // original campaign's cell (`--campaign-cell`) or a 2048 event (`--event`).
-        options.campaign = cli.wreck.campaign_cell.is_some() || cli.event.is_some();
+        options.campaign = cli.wreck.campaign_cell.is_some() || cli.race_setup.event.is_some();
         #[cfg(feature = "extensions")]
         {
-            let vanilla = net.is_some() || cli.wreck.campaign_cell.is_some() || cli.event.is_some();
+            let vanilla = net.is_some()
+                || cli.wreck.campaign_cell.is_some()
+                || cli.race_setup.event.is_some();
             crate::mod_extensions::attach(
                 &mut options,
                 &settings.mods,
@@ -669,8 +695,8 @@ fn launch(mut cli: Cli) -> Result<Launch> {
     // Every leg with no window loads the whole boot here and now, blocking, and
     // then leaves. Only a window has anywhere to *show* a wait, so only a
     // window earns the machinery below that defers one.
-    if cli.dry_run || cli.screenshot.is_some() {
-        let source = source::resolve(cli.source.as_deref(), settings.source.image.as_deref())?;
+    if cli.diagnostics.dry_run || cli.screenshot.is_some() {
+        let source = source::resolve(cli.boot.source.as_deref(), settings.source.image.as_deref())?;
         let music_discs = pending.music_discs(&source);
         // A `--demo` capture's race is the demo's, so the title's demo screen is read for it; the
         // windowed session's own options never are (a demo's `Session::demo_options` says so).
@@ -694,12 +720,12 @@ fn launch(mut cli: Cli) -> Result<Launch> {
     // `source::explicit` - and only when there is a choice to make. One image
     // is not a choice, and a screen that has to be dismissed before every boot
     // would be a step added to the common case for nothing.
-    let chosen = source::explicit(cli.source.as_deref(), settings.source.image.as_deref())?;
+    let chosen = source::explicit(cli.boot.source.as_deref(), settings.source.image.as_deref())?;
     let launcher = match &chosen {
         // A stated source that is an encrypted image with no key is the one
         // stated source that still gets the screen: the prompt is the fix.
-        Some(source) if !cli.launcher && !launcher::needs_key(source) => None,
-        Some(source) if !cli.launcher => {
+        Some(source) if !cli.boot.launcher && !launcher::needs_key(source) => None,
+        Some(source) if !cli.boot.launcher => {
             let rows = launcher::survey(&[std::path::PathBuf::from(source)]);
             Some(launcher::Launcher::new(rows).with_paste(crate::app::clipboard::AVAILABLE))
         }
@@ -737,7 +763,7 @@ fn launch(mut cli: Cli) -> Result<Launch> {
             let locked = rows
                 .iter()
                 .any(|row| matches!(row.state, launcher::State::NeedsKey));
-            if rows.len() > 1 || (cli.launcher && !rows.is_empty()) || locked {
+            if rows.len() > 1 || (cli.boot.launcher && !rows.is_empty()) || locked {
                 Some(launcher::Launcher::new(rows).with_paste(crate::app::clipboard::AVAILABLE))
             } else if rows.is_empty() && cfg!(target_os = "android") {
                 // A phone has no terminal for `resolve`'s message and its
@@ -837,10 +863,10 @@ fn launch(mut cli: Cli) -> Result<Launch> {
     let split_cut = cli.driver.cut();
     let (boot_overlay, pick_language, autopilot, trace, log_every) = (
         cli.overlay,
-        cli.pick_language,
+        cli.diagnostics.pick_language,
         cli.driver.autopilot,
-        cli.trace,
-        cli.log_every,
+        cli.diagnostics.trace,
+        cli.race_run.log_every,
     );
     let anim_seconds = cli.anim_seconds;
     let settings = settings.clone();
@@ -850,8 +876,8 @@ fn launch(mut cli: Cli) -> Result<Launch> {
     let state_log = cli.dev.state_log.clone();
 
     let app = App {
-        pvs_culling: cli.pvs,
-        camera_jitter: cli.camera_jitter,
+        pvs_culling: cli.render.pvs,
+        camera_jitter: cli.render.camera_jitter,
         boot_shell,
         media,
         boot_overlay,
@@ -860,7 +886,7 @@ fn launch(mut cli: Cli) -> Result<Launch> {
         demo: cli.demo.mode(),
         demo_limit: cli.demo.limit(),
         benchmark: cli.benchmark.request(),
-        benchmark_ticks: (cli.ticks > 0).then_some(cli.ticks),
+        benchmark_ticks: (cli.capture.ticks > 0).then_some(cli.capture.ticks),
         replay_png: cli.shot.replay_png.clone(),
         give,
         no_intro: cli.intro.no_intro,

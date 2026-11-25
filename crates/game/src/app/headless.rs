@@ -55,7 +55,7 @@ pub(crate) fn run_windowless(
     // way: silently not asking is indistinguishable from a broken picker, and
     // silently asking again is indistinguishable from a setting that did not
     // save.
-    match (cli.pick_language, settings.language.as_deref()) {
+    match (cli.diagnostics.pick_language, settings.language.as_deref()) {
         (false, Some(name)) if loaded.frontend.preselect_language(name) => {
             debug!("language {name} from settings, skipping the picker");
         }
@@ -115,7 +115,7 @@ pub(crate) fn run_windowless(
     // `--dry-run --prefetch` is the headless "convert everything and exit" run
     // that fills a cache to copy to a device with no `ffmpeg`; a bare
     // `--dry-run` still leaves before anything is converted.
-    if cli.dry_run && !cli.prefetch {
+    if cli.diagnostics.dry_run && !cli.boot.prefetch {
         return Ok(());
     }
 
@@ -131,17 +131,17 @@ pub(crate) fn run_windowless(
     // the ten minutes - but still ordered, which is the property this comment is
     // actually about: the boot has finished with the cache before the worker
     // touches it either way.
-    let mut prefetch = cli.prefetch.then(|| {
+    let mut prefetch = cli.boot.prefetch.then(|| {
         prefetch::Prefetch::spawn(prefetch::Options {
             source: options.source.clone(),
             movies: options.cache.clone(),
             audio: oag_source::cache::default_audio_cache_dir(),
             dlc: options.dlc.clone(),
-            refresh_video: cli.refresh_video,
+            refresh_video: cli.boot.refresh_video,
         })
     });
 
-    if cli.dry_run {
+    if cli.diagnostics.dry_run {
         if let Some(prefetch) = &mut prefetch {
             prefetch.join();
         }
@@ -160,9 +160,9 @@ pub(crate) fn run_windowless(
     // Before the sequence's own capture, because it is a different picture
     // rather than a variation on that one: it runs no state machine, opens no
     // movie and reaches the GPU through `capture::loading`.
-    if let (Some(path), Some(spec)) = (&cli.screenshot, &cli.loading_screen) {
+    if let (Some(path), Some(spec)) = (&cli.screenshot, &cli.loading.loading_screen) {
         let mut progress = parse_progress(spec)?;
-        let phase = parse_step(cli.loading_step.as_deref())?;
+        let phase = parse_step(cli.loading.loading_step.as_deref())?;
         // A race load counts nothing and names the circuit, which is a shape
         // `--loading-screen DONE/TOTAL` cannot express - see
         // `loading::Phase::Race`. So the counts are dropped and the line the
@@ -177,7 +177,7 @@ pub(crate) fn run_windowless(
             // offers, which is what the window's race load puts on this line
             // (see `Session::launch_race`); a path the catalogue does not know
             // is shown as given.
-            progress.current = cli.track.as_ref().map(|entry| {
+            progress.current = cli.race_setup.track.as_ref().map(|entry| {
                 loaded
                     .tracks
                     .iter()
@@ -195,8 +195,8 @@ pub(crate) fn run_windowless(
                     )
             });
         }
-        progress.load_stage = cli.loading_stage;
-        let card = cli.loading_card.as_deref().and_then(|spec| {
+        progress.load_stage = cli.loading.loading_stage;
+        let card = cli.loading.loading_card.as_deref().and_then(|spec| {
             let (name, page) = match spec.rsplit_once(':') {
                 Some((name, page)) if page.parse::<usize>().is_ok() => {
                     (name, page.parse().unwrap_or(0))
@@ -226,20 +226,21 @@ pub(crate) fn run_windowless(
             &loaded.sprites,
             &capture::LoadingOptions {
                 path: path.clone(),
-                size: parse_size(&cli.size)?,
-                ticks: cli.ticks,
+                size: parse_size(&cli.capture.size)?,
+                ticks: cli.capture.ticks,
                 progress,
                 phase,
-                live: (cli.loading_live && phase == loading::Phase::Race)
+                live: (cli.loading.loading_live && phase == loading::Phase::Race)
                     .then(|| race_options.clone()),
                 mode: (phase == loading::Phase::Race)
                     .then(|| loading::executable_mode(race_options.mode))
                     .flatten(),
                 movies: cli
+                    .boot
                     .cache
                     .clone()
                     .unwrap_or_else(oag_source::cache::default_cache_dir),
-                draw: cli.loading_draw,
+                draw: cli.loading.loading_draw,
                 track: race_options
                     .foreign_track
                     .as_deref()
@@ -284,17 +285,18 @@ pub(crate) fn run_windowless(
                 autopilot_skill: cli.driver.autopilot_skill,
                 ai_choice: cli.driver.ai,
                 path,
-                until: cli.until.clone(),
-                ticks: cli.ticks,
+                until: cli.capture.until.clone(),
+                ticks: cli.capture.ticks,
                 anim_seconds: cli.anim_seconds,
-                fury_path: cli.fury_path,
-                fury_tint: cli.fury_tint,
-                fury_adapted_luma: cli.fury_adapted_luma,
-                camera_jitter: cli.camera_jitter,
-                held: button_mask(cli.hold.as_deref()),
-                pressed: button_mask(cli.press.as_deref()),
-                press_until_reached: cli.press_until_reached,
+                fury_path: cli.fury.fury_path,
+                fury_tint: cli.fury.fury_tint,
+                fury_adapted_luma: cli.fury.fury_adapted_luma,
+                camera_jitter: cli.render.camera_jitter,
+                held: button_mask(cli.capture.hold.as_deref()),
+                pressed: button_mask(cli.capture.press.as_deref()),
+                press_until_reached: cli.capture.press_until_reached,
                 map_presses: cli
+                    .capture
                     .map_presses
                     .as_deref()
                     .map(|list| {
@@ -304,13 +306,13 @@ pub(crate) fn run_windowless(
                     })
                     .unwrap_or_default(),
                 scheme,
-                trace: cli.trace,
+                trace: cli.diagnostics.trace,
                 race: Some(race_options),
-                event: cli.event.clone(),
-                log_every: cli.log_every,
-                size: parse_size(&cli.size)?,
-                screen: cli.screen.clone(),
-                screen_seconds: cli.screen_seconds,
+                event: cli.race_setup.event.clone(),
+                log_every: cli.race_run.log_every,
+                size: parse_size(&cli.capture.size)?,
+                screen: cli.capture.screen.clone(),
+                screen_seconds: cli.capture.screen_seconds,
                 menu_page: cli.menu_args.menu_page.clone(),
                 menu_anim_phase: cli.menu_args.menu_anim_phase,
                 menu_picker_seconds: cli.menu_args.menu_picker_seconds,
@@ -323,7 +325,7 @@ pub(crate) fn run_windowless(
                 menu_ring_seconds: cli.menu_args.menu_ring_seconds,
                 menu_focus_level: cli.menu_args.menu_focus_level,
                 menu_prompt: cli.menu_args.menu_prompt.clone(),
-                presented: cli.presented,
+                presented: cli.capture.presented,
                 // The clone is overridden rather than `settings` itself, so
                 // `--camera-view` reaches the race this capture may hand over to
                 // (`capture::run` builds its `CaptureOptions` from this block)
@@ -333,7 +335,7 @@ pub(crate) fn run_windowless(
                 settings: settings::Settings {
                     graphics: settings::Graphics {
                         camera_view: cli.camera_view.unwrap_or(settings.graphics.camera_view),
-                        pvs_culling: cli.pvs.unwrap_or(settings.graphics.pvs_culling),
+                        pvs_culling: cli.render.pvs.unwrap_or(settings.graphics.pvs_culling),
                         ..settings.graphics.clone()
                     },
                     controls: settings::Controls {
@@ -391,7 +393,7 @@ fn started_race(loaded: race::Loaded, cli: &Cli, scheme: ControlScheme) -> race:
 /// `crate::race_capture::CaptureOptions::input_script` documents its own field: with a
 /// script, the two masks are read only for the ticks past its end.
 ///
-/// **This loop used to read `cli.hold`/`cli.press` unconditionally and never
+/// **This loop used to read `cli.capture.hold`/`cli.capture.press` unconditionally and never
 /// look at `cli.input_script` at all**, so a scripted `--trace-out` run
 /// silently wrote a CSV of a craft sitting still - no error, right row count,
 /// right columns, `throttle`/`steer` zero throughout.
@@ -453,12 +455,13 @@ pub(crate) fn write_trace(
 
     let mut race = started_race(loaded, cli, scheme);
     let start_pose = cli
+        .pose_draw
         .pose_hold
         .then(|| crate::race_capture::pose_hold::StartPose::of(&race));
     // The same warm-up `race_capture::capture` runs, so this row's flare columns are the frame's.
     let warmed_boost = field_warmup_velocities(cli)?
-        .and(cli.pose_boost)
-        .filter(|_| cli.ticks == 0);
+        .and(cli.pose_draw.pose_boost)
+        .filter(|_| cli.capture.ticks == 0);
     if let Some(velocities) = field_warmup_velocities(cli)? {
         race.warm_up_field(
             &velocities,
@@ -526,14 +529,14 @@ pub(crate) fn write_trace(
 
     let dt = oag_core::tick::TickRate::DEFAULT.dt();
     let mut trace = Trace::default();
-    let mut held = race::HeldButtons::new(button_mask(cli.hold.as_deref()));
+    let mut held = race::HeldButtons::new(button_mask(cli.capture.hold.as_deref()));
     let script = crate::app::args::input_script(cli.input_script.as_deref())?;
-    for tick in 0..cli.ticks {
+    for tick in 0..cli.capture.ticks {
         trace.frames.push(frame_of(&race, dt));
         held.advance(
             script.as_ref(),
-            button_mask(cli.press.as_deref()),
-            button_mask(cli.hold.as_deref()),
+            button_mask(cli.capture.press.as_deref()),
+            button_mask(cli.capture.hold.as_deref()),
             tick,
         );
         // One scripted pilot, in whichever slot the world says a person
@@ -544,8 +547,8 @@ pub(crate) fn write_trace(
         inputs.set(race.core.sim.world.primary_slot(), held.snapshot());
         race.tick(&inputs);
     }
-    if let (Some(age), None) = (cli.pose_boost, warmed_boost) {
-        race.force_boost_state(age, cli.pose_intensity, cli.pose_speed);
+    if let (Some(age), None) = (cli.pose_draw.pose_boost, warmed_boost) {
+        race.force_boost_state(age, cli.pose_draw.pose_intensity, cli.pose_draw.pose_speed);
     }
     if let Some(pose) = start_pose {
         pose.restore(&mut race);
@@ -569,7 +572,10 @@ pub(crate) fn write_trace(
 
 /// `--field-warmup`: each craft's captured velocity out of `--field-from`, when both are given.
 fn field_warmup_velocities(cli: &Cli) -> Result<Option<Vec<oag_core::math::Vec3>>> {
-    match (cli.field_warmup, cli.field_from.as_deref()) {
+    match (
+        cli.placement.field_warmup,
+        cli.placement.field_from.as_deref(),
+    ) {
         (true, Some(path)) => Ok(Some(super::pose::field_from_csv(path)?.velocities()?)),
         _ => Ok(None),
     }
@@ -577,7 +583,7 @@ fn field_warmup_velocities(cli: &Cli) -> Result<Option<Vec<oag_core::math::Vec3>
 
 /// `--field-from`'s recorded lean and roll phase per opponent, empty without the flag.
 fn field_lean(cli: &Cli) -> Result<Vec<Option<crate::race_capture::pose_lean::PoseLean>>> {
-    match cli.field_from.as_deref() {
+    match cli.placement.field_from.as_deref() {
         Some(path) => Ok(super::pose::field_from_csv(path)?.leans()),
         None => Ok(Vec::new()),
     }
@@ -585,7 +591,8 @@ fn field_lean(cli: &Cli) -> Result<Vec<Option<crate::race_capture::pose_lean::Po
 
 /// `--pose-spark`: the contact sparks a posed capture throws before its frame.
 fn pose_sparks(cli: &Cli) -> Result<Vec<oag_raceplay::ContactSeed>> {
-    cli.pose_spark
+    cli.placement
+        .pose_spark
         .iter()
         .map(|text| {
             let parts: Vec<&str> = text.split(':').collect();
@@ -608,10 +615,10 @@ fn pose_sparks(cli: &Cli) -> Result<Vec<oag_raceplay::ContactSeed>> {
 
 /// `--pose-lean`: the lean and roll phase of the row `--pose-from` poses from.
 fn pose_lean(cli: &Cli) -> Result<Option<crate::race_capture::pose_lean::PoseLean>> {
-    match (cli.pose_lean, &cli.pose_from) {
+    match (cli.pose_draw.pose_lean, &cli.placement.pose_from) {
         (true, Some(path)) => Ok(Some(crate::race_capture::pose_lean::PoseLean::from_trace(
             path,
-            cli.pose_tick,
+            cli.capture_view.pose_tick,
         )?)),
         _ => Ok(None),
     }
@@ -619,9 +626,12 @@ fn pose_lean(cli: &Cli) -> Result<Option<crate::race_capture::pose_lean::PoseLea
 
 /// `--pose-flaps`: the two air brake levels of the row `--pose-from` poses from.
 fn pose_flaps(cli: &Cli) -> Result<Option<crate::race_capture::pose_flaps::PoseFlaps>> {
-    match (cli.pose_flaps, &cli.pose_from) {
+    match (cli.pose_draw.pose_flaps, &cli.placement.pose_from) {
         (true, Some(path)) => Ok(Some(
-            crate::race_capture::pose_flaps::PoseFlaps::from_trace(path, cli.pose_tick)?,
+            crate::race_capture::pose_flaps::PoseFlaps::from_trace(
+                path,
+                cli.capture_view.pose_tick,
+            )?,
         )),
         _ => Ok(None),
     }
@@ -665,23 +675,23 @@ pub(crate) fn race_launch(
     } = route;
     options.water = crate::water_setting::for_source(settings, &options.source);
     // Opening the source to find its profile costs a disc read: only when a row has no flag.
-    let needs_profile = cli.shadow_resolution.is_none()
-        || cli.circuit_lighting.is_none()
-        || cli.reflection_resolution.is_none()
-        || cli.scene_precision.is_none();
+    let needs_profile = cli.render.shadow_resolution.is_none()
+        || cli.render.circuit_lighting.is_none()
+        || cli.render.reflection_resolution.is_none()
+        || cli.render.scene_precision.is_none();
     let source_profile = needs_profile
         .then(|| crate::water_setting::profile_for_source(settings, &options.source))
         .flatten();
-    options.shadow_resolution = cli.shadow_resolution.unwrap_or_else(|| {
+    options.shadow_resolution = cli.render.shadow_resolution.unwrap_or_else(|| {
         source_profile.map_or_else(Default::default, |profile| profile.shadow_resolution)
     });
-    options.circuit_lighting = cli.circuit_lighting.unwrap_or_else(|| {
+    options.circuit_lighting = cli.render.circuit_lighting.unwrap_or_else(|| {
         source_profile.map_or_else(Default::default, |profile| profile.circuit_lighting)
     });
-    options.reflection_resolution = cli.reflection_resolution.unwrap_or_else(|| {
+    options.reflection_resolution = cli.render.reflection_resolution.unwrap_or_else(|| {
         source_profile.map_or_else(Default::default, |profile| profile.reflection_resolution)
     });
-    options.scene_precision = cli.scene_precision.unwrap_or_else(|| {
+    options.scene_precision = cli.render.scene_precision.unwrap_or_else(|| {
         source_profile.map_or_else(Default::default, |profile| profile.scene_precision)
     });
     // `--event` resolves a Wipeout 2048 campaign event onto `options` before
@@ -693,7 +703,7 @@ pub(crate) fn race_launch(
     // texture as it decodes it instead of holding every one for the scene -
     // `race::TextureSink`. The trace and `--dry-run` routes build no scene,
     // and the window's own device does not exist yet on the windowed route.
-    let gpu = (cli.screenshot.is_some() && cli.trace_out.is_none() && !cli.dry_run)
+    let gpu = (cli.screenshot.is_some() && cli.trace_out.is_none() && !cli.diagnostics.dry_run)
         .then(|| crate::race_capture::gpu::CaptureGpu::request(&settings.graphics.renderer))
         .transpose()?;
     let loaded = {
@@ -701,14 +711,14 @@ pub(crate) fn race_launch(
             .as_ref()
             .map(crate::race_capture::gpu::CaptureGpu::texture_sink);
         let _scope = race::TextureSink::open_if(sink.as_ref());
-        match &cli.event {
+        match &cli.race_setup.event {
             Some(name) => race::load_event(&options, name)?,
             None => race::load(&options)?,
         }
     };
     oag_raceplay::loader_log::lines(&loaded.report);
 
-    if cli.dry_run {
+    if cli.diagnostics.dry_run {
         return Ok(crate::app::Launch::Done);
     }
 
@@ -755,7 +765,7 @@ pub(crate) fn race_launch(
             .get(&settings::profile_key(loaded.title, loaded.platform))
             .cloned()
             .unwrap_or_default();
-        let render_scale = match cli.render_scale {
+        let render_scale = match cli.render.render_scale {
             Some(percent) => Some(
                 oag_display::display::Scale::try_from(percent)
                     .map_err(|why| anyhow::anyhow!("--render-scale {percent}: {why}"))?,
@@ -802,6 +812,7 @@ pub(crate) fn race_launch(
                     restage,
                     render: crate::shot_meta::render_table(&render_profile),
                     picture: cli
+                        .capture_view
                         .picture
                         .as_deref()
                         .map(crate::shot_meta::Picture::from_flag)
@@ -821,9 +832,9 @@ pub(crate) fn race_launch(
                 players: cli.driver.people(),
                 window_layout: cli.driver.window_layout()?,
                 cut: cli.driver.cut(),
-                force_shake: crate::app::args::force_shake(cli.force_shake.as_deref())?,
+                force_shake: crate::app::args::force_shake(cli.race_run.force_shake.as_deref())?,
                 force_boost_kick: crate::app::args::force_boost_kick(
-                    cli.force_boost_kick.as_deref(),
+                    cli.race_run.force_boost_kick.as_deref(),
                 )?,
                 intro_ticks: cli.intro.intro_ticks,
                 music_discs: music_discs.clone(),
@@ -878,19 +889,19 @@ pub(crate) fn race_launch(
                     ..Default::default()
                 },
                 path,
-                ticks: cli.ticks,
-                held: button_mask(cli.hold.as_deref()),
-                pressed: button_mask(cli.press.as_deref()),
+                ticks: cli.capture.ticks,
+                held: button_mask(cli.capture.hold.as_deref()),
+                pressed: button_mask(cli.capture.press.as_deref()),
                 input_script: crate::app::args::input_script(cli.input_script.as_deref())?,
                 scheme,
-                size: parse_size(&cli.size)?,
-                log_every: cli.log_every,
+                size: parse_size(&cli.capture.size)?,
+                log_every: cli.race_run.log_every,
                 aspect: settings.display.aspect,
                 anisotropy,
                 renderer: settings.graphics.renderer.clone(),
                 fov: settings.graphics.fov,
                 frustum_culling: settings.graphics.frustum_culling,
-                pvs_culling: cli.pvs.unwrap_or(settings.graphics.pvs_culling),
+                pvs_culling: cli.render.pvs.unwrap_or(settings.graphics.pvs_culling),
                 anim_seconds: cli.anim_seconds,
                 boost_fov_kick: settings.graphics.boost_fov_kick,
                 camera_view: cli.camera_view.unwrap_or(settings.graphics.camera_view),
@@ -910,46 +921,47 @@ pub(crate) fn race_launch(
                 scenery_sort: render_profile.scenery_sort,
                 trail_length: render_profile.trail_length,
                 weather: render_profile.weather,
-                hull_shake: !cli.no_hull_shake,
-                camera_jitter: cli.camera_jitter,
-                draw_alpha: cli.draw_alpha,
-                pose_boost: cli.pose_boost,
-                pose_intensity: cli.pose_intensity,
-                pose_speed: cli.pose_speed,
+                hull_shake: !cli.render.no_hull_shake,
+                camera_jitter: cli.render.camera_jitter,
+                draw_alpha: cli.render.draw_alpha,
+                pose_boost: cli.pose_draw.pose_boost,
+                pose_intensity: cli.pose_draw.pose_intensity,
+                pose_speed: cli.pose_draw.pose_speed,
                 pose_hold: crate::race_capture::pose_hold::Hold::from_flags(
-                    cli.pose_hold,
-                    cli.pose_hold_ticks,
+                    cli.pose_draw.pose_hold,
+                    cli.pose_draw.pose_hold_ticks,
                 ),
                 pose_lean: pose_lean(cli)?,
                 pose_flaps: pose_flaps(cli)?,
-                stow_grid_flaps: cli.no_grid_flaps
-                    || cli.pose_from.is_some()
-                    || cli.field_from.is_some()
-                    || cli.pose.is_some(),
+                stow_grid_flaps: cli.pose_draw.no_grid_flaps
+                    || cli.placement.pose_from.is_some()
+                    || cli.placement.field_from.is_some()
+                    || cli.placement.pose.is_some(),
                 field_lean: field_lean(cli)?,
                 field_warmup: field_warmup_velocities(cli)?,
-                detonator_mines: cli.detonator_mines.as_ref().map(|m| m.0.clone()),
+                detonator_mines: cli.race_debug.detonator_mines.as_ref().map(|m| m.0.clone()),
                 detonator_mine_envelopes: cli
+                    .race_debug
                     .detonator_mine_envelopes
                     .as_ref()
                     .map(|m| m.0.clone()),
-                detonator_emp_charge: cli.detonator_emp_charge,
+                detonator_emp_charge: cli.race_debug.detonator_emp_charge,
                 pose_sparks: pose_sparks(cli)?,
                 // A photo is drawn through the presentation chain, at the output's size and
                 // before the grade, as the session reads it back: no brightness, gamma or
                 // screen filter of the machine it is drawn on.
-                presented: (cli.presented || cli.photo_profile).then_some(
+                presented: (cli.capture.presented || cli.capture_view.photo_profile).then_some(
                     crate::race_capture::Presented {
                         render_scale: render_profile.render_scale,
                         presentation: oag_present::upscale::Presentation {
                             reconstruction: render_profile.reconstruction,
                             sharpness: render_profile.upscale_sharpness.stops(),
-                            brightness: if cli.photo_profile {
+                            brightness: if cli.capture_view.photo_profile {
                                 Default::default()
                             } else {
                                 settings.display.brightness
                             },
-                            gamma: if cli.photo_profile {
+                            gamma: if cli.capture_view.photo_profile {
                                 Default::default()
                             } else {
                                 settings.display.gamma
@@ -958,9 +970,9 @@ pub(crate) fn race_launch(
                     },
                 ),
                 zone_feed: crate::race_capture::spectrum::ZoneFeed::from_flags(
-                    cli.zone_spectrum_test,
-                    cli.zone_bands,
-                    cli.zone_bands_raw,
+                    cli.race_debug.zone_spectrum_test,
+                    cli.race_debug.zone_bands,
+                    cli.race_debug.zone_bands_raw,
                 ),
                 touch_demo: cli
                     .intro
@@ -974,7 +986,7 @@ pub(crate) fn race_launch(
                 // Resolved here rather than in `crate::race_capture::capture`, which has no
                 // config directory in hand: the same catalogue the window
                 // reads, so a `--presented` capture shows the same preset.
-                screen_filter: if cli.photo_profile {
+                screen_filter: if cli.capture_view.photo_profile {
                     None
                 } else {
                     crate::screen::Catalogue::load(crate::screen::Catalogue::directory())
@@ -1001,8 +1013,8 @@ pub(crate) fn race_launch(
     let race_title = loaded.title;
     let race_platform = loaded.platform;
     let app = App {
-        pvs_culling: cli.pvs,
-        camera_jitter: cli.camera_jitter,
+        pvs_culling: cli.render.pvs,
+        camera_jitter: cli.render.camera_jitter,
         boot_shell: None,
         media: None,
         boot_overlay: false,
@@ -1038,8 +1050,8 @@ pub(crate) fn race_launch(
         anim_seconds: cli.anim_seconds,
         race: Some(Box::new(loaded)),
         race_options: Some(options),
-        trace: cli.trace,
-        log_every: cli.log_every,
+        trace: cli.diagnostics.trace,
+        log_every: cli.race_run.log_every,
         anisotropy,
         scheme,
         settings: settings.clone(),

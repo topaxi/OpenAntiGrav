@@ -75,7 +75,7 @@ mod tests {
     #[test]
     fn a_benchmark_takes_a_title_and_a_preset() {
         let cli = parse(&["--benchmark", "pulse", "--preset", "low"]).unwrap();
-        assert_eq!(cli.source.as_deref(), Some("pulse"));
+        assert_eq!(cli.boot.source.as_deref(), Some("pulse"));
         assert_eq!(
             cli.benchmark.request(),
             Some(crate::benchmark::Request {
