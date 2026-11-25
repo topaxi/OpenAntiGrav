@@ -11,40 +11,25 @@ use crate::Race;
 /// Vertices per particle quad: two triangles, `oag_fx::psys`'s `quad`.
 const QUAD: usize = 6;
 
-/// Which blend a particle list draws with, for [`drop_dead_quads`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Blend {
-    /// `oag_fx::psys::BLEND`: `dst.rgb += src.rgb * src.a`, colour only.
-    Additive,
-    /// `oag_fx::psys::BLEND_ALPHA_OVER`: `src * a + dst * (1 - a)`.
-    Over,
-}
-
-/// Removes, in place and in order, every quad that cannot change a pixel under `blend`.
+/// Removes, in place and in order, every quad whose colour alpha is exactly 0 at all six vertices.
 ///
 /// A rocket that strikes a craft near the camera stacks dozens of screens of particle fill at
 /// full resolution (`docs/rendering/particle-fill.md`), and a fading particle spends the end of
-/// its life at colour alpha exactly zero, still drawn. `psys.wesl` multiplies its output alpha
-/// by the vertex alpha and its output colour by the vertex colour, both interpolated, so a quad
-/// whose six vertices all carry alpha 0 writes `dst` back under either blend, and an additive
-/// quad whose six vertices all carry colour 0 adds 0. Exact zeros only, and all six corners on
-/// one side of the rule: a quad with alpha 0 at one corner and colour 0 at another is lit
-/// between them. Order is kept, because the over blend is not commutative. A list that is not
-/// whole quads is left alone.
-fn drop_dead_quads(vertices: &mut Vec<GpuVertex>, blend: Blend) {
+/// its life at colour alpha exactly 0, still drawn. `psys.wesl` multiplies its output alpha by
+/// the interpolated vertex alpha, so such a quad writes `dst` back under both of its blends (the
+/// additive's `rgb * a`, the over's `a` and `1 - a`) and writes no depth or velocity. One live
+/// corner keeps the quad. Order is kept, because the over blend is not commutative. A list that
+/// is not whole quads is left alone.
+fn drop_dead_quads(vertices: &mut Vec<GpuVertex>) {
     if !vertices.len().is_multiple_of(QUAD) {
         return;
     }
-    let dead = |quad: &[GpuVertex]| {
-        quad.iter().all(|v| v.colour[3] == 0.0)
-            || (blend == Blend::Additive
-                && quad
-                    .iter()
-                    .all(|v| v.colour[0] == 0.0 && v.colour[1] == 0.0 && v.colour[2] == 0.0))
-    };
     let mut kept = 0;
     for start in (0..vertices.len()).step_by(QUAD) {
-        if dead(&vertices[start..start + QUAD]) {
+        if vertices[start..start + QUAD]
+            .iter()
+            .all(|v| v.colour[3] == 0.0)
+        {
             continue;
         }
         vertices.copy_within(start..start + QUAD, kept);
@@ -72,15 +57,15 @@ impl super::super::Scene {
     ) {
         race.extend_spark_vertices(additive, alpha, right, up);
         race.extend_stage_vertices(additive, alpha, right, up);
-        drop_dead_quads(additive, Blend::Additive);
-        drop_dead_quads(alpha, Blend::Over);
+        drop_dead_quads(additive);
+        drop_dead_quads(alpha);
         let mut pipeline = self.sparks.borrow_mut();
         // The effects' own sprites - a no-op after the first frame of a race.
         pipeline.sync_sheet(queue, race.view.effects.sheet());
         pipeline.upload(queue, vp, race.view.draw_alpha(), additive, alpha);
         let mut underlay = Vec::new();
         race.extend_underlay_vertices(&mut underlay, right, up);
-        drop_dead_quads(&mut underlay, Blend::Additive);
+        drop_dead_quads(&mut underlay);
         pipeline.upload_underlay(queue, &underlay);
         let mut distort = Vec::new();
         race.extend_distort_vertices(&mut distort, right, up);
@@ -146,7 +131,7 @@ impl super::super::Scene {
 
 #[cfg(test)]
 mod tests {
-    use super::{Blend, GpuVertex, QUAD, drop_dead_quads};
+    use super::{GpuVertex, QUAD, drop_dead_quads};
 
     /// One quad whose six corners all carry `colour`, tagged by `x` so order can be read back.
     fn quad(x: f32, colour: [f32; 4]) -> [GpuVertex; QUAD] {
@@ -162,50 +147,34 @@ mod tests {
     }
 
     #[test]
-    fn a_quad_that_cannot_change_a_pixel_is_dropped_and_the_rest_keep_their_order() {
-        let mut additive: Vec<GpuVertex> = [
+    fn a_quad_with_alpha_zero_is_dropped_and_the_rest_keep_their_order() {
+        let mut vertices: Vec<GpuVertex> = [
             quad(1.0, [1.0, 0.5, 0.2, 0.8]),
             quad(2.0, [1.0, 0.5, 0.2, 0.0]),
+            // Black smoke with alpha darkens what is behind it under the over blend.
             quad(3.0, [0.0, 0.0, 0.0, 0.7]),
-            quad(4.0, [0.3, 0.3, 0.3, 0.1]),
+            quad(4.0, [1.0, 1.0, 1.0, 0.0]),
+            quad(5.0, [0.3, 0.3, 0.3, 0.1]),
         ]
         .concat();
-        drop_dead_quads(&mut additive, Blend::Additive);
-        assert_eq!(tags(&additive), [1.0, 4.0]);
-
-        // Black smoke with alpha darkens what is behind it under the over blend: kept.
-        let mut over: Vec<GpuVertex> = [
-            quad(1.0, [0.0, 0.0, 0.0, 0.7]),
-            quad(2.0, [1.0, 1.0, 1.0, 0.0]),
-            quad(3.0, [0.5, 0.5, 0.5, 0.5]),
-        ]
-        .concat();
-        drop_dead_quads(&mut over, Blend::Over);
-        assert_eq!(tags(&over), [1.0, 3.0]);
+        drop_dead_quads(&mut vertices);
+        assert_eq!(tags(&vertices), [1.0, 3.0, 5.0]);
     }
 
     #[test]
-    fn a_quad_dead_only_corner_by_corner_is_kept() {
-        // Alpha 0 at one corner and colour 0 at the others: lit in between.
-        let mut mixed = quad(1.0, [0.0, 0.0, 0.0, 0.9]);
-        mixed[0].colour = [1.0, 1.0, 1.0, 0.0];
-        let mut additive = mixed.to_vec();
-        drop_dead_quads(&mut additive, Blend::Additive);
-        assert_eq!(tags(&additive), [1.0]);
-
-        // One live corner keeps the whole quad.
+    fn one_live_corner_keeps_the_quad() {
         let mut fading = quad(2.0, [1.0, 1.0, 1.0, 0.0]);
         fading[5].colour[3] = 0.25;
-        let mut over = fading.to_vec();
-        drop_dead_quads(&mut over, Blend::Over);
-        assert_eq!(tags(&over), [2.0]);
+        let mut vertices = fading.to_vec();
+        drop_dead_quads(&mut vertices);
+        assert_eq!(tags(&vertices), [2.0]);
     }
 
     #[test]
     fn a_list_that_is_not_whole_quads_is_left_alone() {
         let mut ragged = quad(1.0, [1.0, 1.0, 1.0, 0.0]).to_vec();
         ragged.pop();
-        drop_dead_quads(&mut ragged, Blend::Additive);
+        drop_dead_quads(&mut ragged);
         assert_eq!(ragged.len(), QUAD - 1);
     }
 }

@@ -62,17 +62,16 @@ and bandwidth, so the same frame there is several times longer.
 ## What changed
 
 `drop_dead_quads` (`crates/raceplay/src/scene/frame/particles.rs`) removes a quad from the
-additive, alpha-over and underlay lists before upload, when it cannot change a pixel:
+additive, alpha-over and underlay lists before upload when all six of its vertices have colour
+alpha exactly 0. `psys.wesl` multiplies its output alpha by the interpolated vertex alpha, and
+the pipelines write neither depth nor velocity. Such a quad therefore leaves the target exactly
+as it was under both blends: the additive's `rgb * a` and the over's `a` and `1 - a`. Order is
+kept, because the over blend is not commutative. (An additive quad with colour 0 at every vertex
+would add 0 too, since every target path maps 0 to 0. No frame here had one, so the rule was
+left out.)
 
-- all six vertices have colour alpha 0, under either blend;
-- all six vertices have colour 0, under the additive blend only (black smoke with alpha still
-  darkens under the over blend).
-
-`psys.wesl` multiplies its output by the interpolated vertex colour and alpha, and the pipelines
-write neither depth nor velocity. A dropped quad therefore left the target exactly as it was.
-Order is kept, because the over blend is not commutative.
-
-Before and after, same binary otherwise, A and B runs interleaved, window ticks 760 to 789:
+Before and after, A and B runs interleaved (the before binary also carried the throwaway
+skip and probe patch, which does CPU-side work only), window ticks 760 to 789:
 
 | Size | Load | GPU scene mean before | after | GPU scene max before | after |
 | --- | --- | --- | --- | --- | --- |
@@ -93,7 +92,9 @@ is unchanged.
 - **A fragment `discard` where the particle's output alpha is exactly 0** (the corners outside
   the procedural profile's circle, a sprite's clear texels). Byte-identical, but against the
   cull alone at 4K it read 3.66, 3.65 and 3.65 ms against 3.71, 3.72 and 3.62 ms (load 79 to 95).
-  That is inside the spread, so it was not kept.
+  At that load, with the GPU shared with other members' gate tests, it did not show beyond
+  noise. The result is inconclusive, not a no. It is worth re-measuring on a bandwidth-bound GPU
+  (the Deck at 4K).
 
 ## What is left
 
