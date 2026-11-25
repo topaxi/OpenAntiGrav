@@ -248,7 +248,7 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
         options.mode == Mode::Zone,
         store,
         options.water,
-        hides_circuit_pads,
+        geometry::hidden_pads(hides_circuit_pads, options.weapons_on()),
         &mut report,
     );
     // The target's size is the original's, or a fraction of it

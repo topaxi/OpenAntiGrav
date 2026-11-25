@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
-titles: [hd]
-updated: 2026-11-16
-summary: "HD Zone plain chunks (flags 0x0e00) wired 2026-11-16; open: Track fog, gantry card stand-in, weapon pads, unflagged-surface lightmap"
+titles: [hd, omega, 2048]
+updated: 2026-11-25
+summary: "HD Zone plain chunks wired, 2048/Omega pads inherit it; open: Track fog, gantry card stand-in, unflagged-surface lightmap"
 ---
 
 # HD's Zone speed pads keep their authored plate in the original; ours paints them road-teal with a white bar
@@ -61,14 +61,14 @@ lights the chunk `ambient + sat(N.L) * sun`. Tests and the pad-plate numbers are
 - The start gantry's card (`ZONE_EXEMPT_RATE`, chosen): `sign_emissive_glow`
   has 54 bit-11 chunks, so the stand-in is probably this flag. Check the
   gantry's quad chunk's flags and retire the stand-in if so.
-- Weapon pads in a Zone race: bit 10 chunks are scrubbed from the PVS when
+- HD's weapon pads in a Zone race: bit 10 chunks are scrubbed from the PVS when
   `gameState+0x18` is zero (meaning unread); the WEAPONS OFF frames showed
-  speed pads only. Whether ours draws weapon pads in a weapons-off Zone race
-  is not looked at.
-- Omega's HD-lineage circuits in Zone: not checked (program selection there
-  is unread, and ours draws no Zone grade on Omega). 2048 and Omega's
-  2048-lineage circuits: checked, differs (`trackZone` authors textured pad
-  materials); a 2048 Zone pad frame of ours has not been looked at.
+  speed pads only. Ours draws none: HD's weapon pad model is gated by the mode,
+  and 2048's and Omega's are dropped by the loader (`docs/gameplay/pickups.md`,
+  "A weapons-off race draws no weapon pad", 2026-11-25).
+- Omega's and 2048's HD-lineage circuits in Zone: their pads now keep their own
+  program, inherited from HD (2026-11-25, `zone-plain-chunks.md`, "2048 and
+  Omega"); which program Omega's executable runs for them is unread.
 - Bit 11's authored meaning; a later stage's frame with a non-zero sun.
 
 ## Next Steps

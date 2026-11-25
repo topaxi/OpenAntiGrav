@@ -33,6 +33,7 @@
 use anyhow::Result;
 use oag_display::display::Water;
 
+use circuit_pads::HidePads;
 use oag_core::math::{Mat4, Vec3};
 use oag_rcs::rcsmodel::psp2;
 
@@ -45,6 +46,7 @@ use oag_rcs::rcsmodel::psp2::lighting_only;
 mod alpha_emissive;
 mod alpha_product;
 mod chevron;
+pub mod circuit_pads;
 mod crowd;
 mod crowd_rigs;
 mod emissive_add;
@@ -179,15 +181,22 @@ pub fn build(
     animation: Option<&Animation>,
     textures: Textures<'_>,
 ) -> Result<(Model, Report)> {
-    build_circuit(label, model_blob, animation, textures, Water::Off, false)
+    build_circuit(
+        label,
+        model_blob,
+        animation,
+        textures,
+        Water::Off,
+        HidePads::None,
+    )
 }
 
 /// [`build`] for a race's circuit, under the player's water setting. 2048's own seas
 /// (`psp2::water`) draw their scrolled normal map under `original` and stay the flat colour
 /// under any other value.
 ///
-/// `hide_pads` leaves out every pad submesh ([`is_circuit_pad`]), for a race that draws its own
-/// pad model in their place; a hidden submesh keeps its empty draw.
+/// `hide_pads` says which of the circuit's own pad submeshes are left out
+/// ([`circuit_pads::HidePads`]).
 ///
 /// # Errors
 ///
@@ -198,7 +207,7 @@ pub fn build_circuit(
     animation: Option<&Animation>,
     textures: Textures<'_>,
     water: Water,
-    hide_pads: bool,
+    hide_pads: HidePads,
 ) -> Result<(Model, Report)> {
     build_planned(
         label,
@@ -208,43 +217,6 @@ pub fn build_circuit(
         textures,
         (water, hide_pads),
     )
-}
-
-/// Whether a material file is one of the circuit's own pads: `weapon_pads`, `speed_pads` or
-/// `speedup_material`, whatever the case or separator, with or without the PS4 Pro `_1`/`_2`
-/// suffix.
-fn is_circuit_pad_material(name: &str) -> bool {
-    let leaf = name
-        .rsplit(['/', '\\'])
-        .next()
-        .unwrap_or(name)
-        .to_ascii_lowercase();
-    let stem = leaf.trim_suffix(".rcsmaterial");
-    let stem = stem
-        .strip_suffix("_1")
-        .or_else(|| stem.strip_suffix("_2"))
-        .unwrap_or(stem);
-    matches!(stem, "weapon_pads" | "speed_pads" | "speedup_material")
-}
-
-/// Whether a submesh is one of the circuit's own pads: on a pad material
-/// ([`is_circuit_pad_material`]), or a shape the artists named `speedup_pad` or `weapon_pad`
-/// (Omega's HD-lineage circuits draw a speed pad on `diffuse_normal_specular_emmissive`, the
-/// start-line material, under a shape of that name).
-#[must_use]
-pub fn is_circuit_pad(decoded: &psp2::Model, submesh: &psp2::SubMesh) -> bool {
-    let on_pad_material = submesh
-        .material
-        .and_then(|m| decoded.materials.get(m))
-        .is_some_and(|m| is_circuit_pad_material(&m.name));
-    let pad_shape = submesh
-        .mesh
-        .and_then(|m| decoded.scene.meshes.get(m))
-        .is_some_and(|m| {
-            let name = m.name.to_ascii_lowercase();
-            name.contains("speedup_pad") || name.contains("weapon_pad")
-        });
-    on_pad_material || pad_shape
 }
 
 /// [`build`], with the motion taken from the `.vex` the model was exported
@@ -266,7 +238,7 @@ pub fn build_with_vex(
         &|scene| placement::plan_from_vex(scene, vex_blob),
         None,
         textures,
-        (Water::Off, false),
+        (Water::Off, HidePads::None),
     )
 }
 
@@ -292,7 +264,7 @@ pub fn build_billboard(
         &|scene| placement::plan_from_vex(scene, vex_blob),
         Some(vex_blob),
         textures,
-        (Water::Off, false),
+        (Water::Off, HidePads::None),
     )
 }
 
@@ -317,7 +289,7 @@ fn build_planned(
     planner: &dyn Fn(&psp2::nodes::Scene) -> placement::Plan,
     billboard_vex: Option<&[u8]>,
     textures: Textures<'_>,
-    (water, hide_pads): (Water, bool),
+    (water, hide_pads): (Water, HidePads),
 ) -> Result<(Model, Report)> {
     // The planners below each read a PS4 material file's programs; decode each file once.
     // And they share their pictures: a texture two planners bind is read and decoded once.
@@ -341,7 +313,7 @@ fn build_scanned(
     planner: &dyn Fn(&psp2::nodes::Scene) -> placement::Plan,
     billboard_vex: Option<&[u8]>,
     textures: Textures<'_>,
-    (water, hide_pads): (Water, bool),
+    (water, hide_pads): (Water, HidePads),
 ) -> Result<(Model, Report)> {
     let mut decoded = psp2::parse(model_blob)
         .map_err(|e| anyhow::anyhow!("{label}: the .rcsmodel beside it: {e}"))?;
@@ -513,7 +485,7 @@ fn build_scanned(
                 .mesh
                 .and_then(|m| decoded.scene.meshes.get(m))
                 .is_some_and(|m| m.is_crowd_entity());
-        let circuit_pad = hide_pads && is_circuit_pad(&decoded, submesh);
+        let circuit_pad = hide_pads.hides(&decoded, submesh);
         place.hidden |= filtered || crowd_entity || circuit_pad;
         report.node_bound += usize::from(submesh.node.is_some());
         report.moving += usize::from(place.xform != 0);
@@ -554,6 +526,14 @@ fn build_scanned(
         report.track_shape_submeshes += usize::from(on_track && !place.hidden);
         let role = if on_track {
             role | crate::mesh::slots::ZONE_TRACK
+        } else {
+            role
+        };
+        // A Zone race draws a pad on its own program, not the Zone surface, as HD's render
+        // flags make it (`docs/ghidra/functions/ps3-hdfury-eu/zone-plain-chunks.md`, "2048 and
+        // Omega": this container has no such flag, so the pad is the shape or material).
+        let role = if circuit_pads::is_circuit_pad(&decoded, submesh) {
+            role | crate::mesh::slots::ZONE_PLAIN
         } else {
             role
         };
@@ -1373,30 +1353,4 @@ fn finish_bounds(model: &mut Model) {
         })
         .fold(0.0f32, f32::max)
         .sqrt();
-}
-
-#[cfg(test)]
-mod pad_name_tests {
-    use super::is_circuit_pad_material;
-
-    #[test]
-    fn pad_materials_match_in_any_case_separator_and_suffix() {
-        for name in [
-            "data/environments/x/materials/weapon_pads.rcsmaterial",
-            "Data\\Environments2048\\x\\Materials\\Speed_Pads.rcsmaterial",
-            "materials/Speedup_Material.rcsmaterial",
-            "materials/weapon_pads_1.rcsmaterial",
-            "materials/WEAPON_PADS_2.rcsmaterial",
-        ] {
-            assert!(is_circuit_pad_material(name), "{name}");
-        }
-        for name in [
-            "materials/diffuse_normal_specular_emmissive.rcsmaterial",
-            "materials/diffuse_normal_specular_emmissive_alpha.rcsmaterial",
-            "materials/chevron_facing_material.rcsmaterial",
-            "materials/speed_pads_extra.rcsmaterial",
-        ] {
-            assert!(!is_circuit_pad_material(name), "{name}");
-        }
-    }
 }

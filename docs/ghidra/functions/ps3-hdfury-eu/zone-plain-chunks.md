@@ -250,19 +250,18 @@ permutation-word mechanism is not in Omega's executable: `strings` over its
 page describes is HD's render-block halfword, which only the PS3 model
 carries.
 
-**Checked, inert (2026-11-16): Omega's HD-lineage circuits in Zone.** One Omega Zone frame of Tech
-de Ra (`--mode zone`, 1280x720, tick 5) and one of the 2048-lineage `bridge` are byte-identical
-before and after `slots::ZONE_PLAIN`: `zone_on` is 0 there. The flag is carried by the PS3 `.rcsmodel`
-reader only.
-
-**Was not checked: Omega's HD-lineage circuits in Zone.** Omega re-ships Moa
-Therma with `Speedup_Material*.rcsmaterial` and the `zoneModeTrack<n>`
-textures, and its executable names `zoneColourTint` and `zoneTexInner`, so it
-has an HD-shaped Zone surface for those circuits. How it selects a pad's
-program there is unread (a different material container), there is no live
-Omega value, and this port draws no Zone grade on Omega today
-(`zone_palette: None`), so nothing of ours can be wrong there yet. Open with
-Omega's Zone wiring.
+**Ported (2026-11-25, `omega-zone-fixes`): HD-lineage circuits on 2048's container.** Omega's
+HD-lineage circuits (and 2048's DLC1 ones) take HD's Zone surface, so their speed pads were drawn as
+road with a white bar, the HD defect above (seen in play on Omega; posed frames of Vineta K at
+`--pose=-797.5,-142,272.4`, Omega and 2048 DLC1). The container has no render-block bits, so the
+loader marks each of the circuit's own pad submeshes `slots::ZONE_PLAIN` (`mesh::rcs::psp2`,
+the pad rule of `docs/gameplay/pickups.md`, "A weapons-off race draws no weapon pad"). Which program
+Omega's executable runs for them is unread (a different material container) and no live Omega
+value exists: **inherited from HD** by lineage, no confidence of its own. The wired weapon pads are
+moot in play, since a Zone race draws none. 2048-native circuits (`altima` on both titles) are
+pixel-identical: their pads draw no Zone surface to begin with. HD's bit 11 (signs and screens) has
+no counterpart on this container and stays unmarked. Ground truth:
+`crates/mesh/tests/psp2_circuit_pads_ground_truth.rs`.
 
 ## Reproduce
 
