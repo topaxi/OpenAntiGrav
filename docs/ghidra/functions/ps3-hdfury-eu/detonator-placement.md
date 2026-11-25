@@ -202,9 +202,9 @@ Entry layout (48 bytes): `+0x00` u8 lane count, `+0x04` lane array (int per lane
 `0` blocked or a mine, `1` a bomb), `+0x08` u8 usable, `+0x0c..+0x18` the track cursor,
 `+0x20` vec4 centre.
 
-### The fork walk (2026-11-25, `det-mine-branch-placement`, static)
+### The fork walk
 
-Read off `llvm-objdump -d --mattr=+altivec,+vsx` over `0x00065b38`-`0x00066c60` (both walks)
+2026-11-25, `det-mine-branch-placement`, static. Read off `llvm-objdump -d --mattr=+altivec,+vsx` over `0x00065b38`-`0x00066c60` (both walks)
 and the helpers' own extents. Nothing here ran on the console.
 
 **The cursor and its step.** A track cursor is four words: track, span index, section index in
