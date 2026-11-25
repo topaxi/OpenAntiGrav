@@ -334,7 +334,7 @@ fn the_emp_sparks_feel_their_noise_force_only_where_the_title_lists_it() {
         .expect("the effect loads")
         .0
     };
-    let listed = load(&mut archives, &title.effects);
+    let listed = load(&mut archives, title.effects);
     assert_eq!(oag_hd::TITLE.effects.turbulence, [name]);
     let sparks = listed
         .emitters
@@ -348,7 +348,7 @@ fn the_emp_sparks_feel_their_noise_force_only_where_the_title_lists_it() {
     assert_eq!(force.amplitude, [0.1, 0.1, 0.1]);
     assert!(force.timed && !force.on_position);
     assert_eq!(sparks.streak, StreakDraw::FarBar { aspect: 1.0 });
-    let mut unlisted_effects = title.effects.clone();
+    let mut unlisted_effects = *title.effects;
     unlisted_effects.turbulence = &[];
     assert!(!load(&mut archives, &unlisted_effects).has_turbulence());
 }
