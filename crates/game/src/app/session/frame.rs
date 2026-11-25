@@ -995,7 +995,10 @@ impl Session {
                     if !self.no_intro && self.net.is_none() && stage.race.intro_to_play() =>
                 {
                     stage.race.begin_intro();
-                    if pointer.clicked {
+                    // `--autopilot` flies the craft for nobody to hold Cross: it presses the
+                    // skip of a flyby that only a skip ends, or a launch-file run on HD never
+                    // leaves the camera tour.
+                    if pointer.clicked || (self.autopilot && stage.race.intro_ends_only_by_skip()) {
                         stage.race.skip_intro();
                     }
                     stage.race.tick_intro(&inputs);
