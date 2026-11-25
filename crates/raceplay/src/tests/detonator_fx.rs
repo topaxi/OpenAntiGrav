@@ -59,17 +59,49 @@ fn a_round_is_drawn_nose_along_its_velocity_as_a_rotation_at_its_position() {
         live: true,
         pos: Vec3::new(1.0, 2.0, 3.0),
         vel: Vec3::new(0.0, 0.0, 500.0),
-        up: Vec3::Y,
+        normal: Vec3::Y,
+        heading: Vec3::Z,
+        age: 1.0,
         ..Round::default()
     };
     let m = round_matrix(&round);
     assert_eq!(m.w_axis.truncate(), round.pos);
-    assert!((m.z_axis.truncate() - Vec3::Z).length() < 1e-6, "nose");
-    assert!((m.y_axis.truncate() - Vec3::Y).length() < 1e-6, "up");
+    assert!((m.z_axis.truncate() - Vec3::Z * 0.75).length() < 1e-6, "nose, scaled");
+    assert!((m.y_axis.truncate() - Vec3::Y * 0.75).length() < 1e-6, "up, scaled");
     assert!(
-        (m.determinant() - 1.0).abs() < 1e-5,
-        "a rotation, not a mirror"
+        (m.determinant() - 0.75_f32.powi(3)).abs() < 1e-5,
+        "a scaled rotation, not a mirror"
     );
+}
+
+#[test]
+fn a_young_round_is_half_as_long_and_grows_over_a_tenth_of_a_second() {
+    let at = |age: f32| {
+        round_matrix(&Round {
+            live: true,
+            normal: Vec3::Y,
+            heading: Vec3::Z,
+            age,
+            ..Round::default()
+        })
+    };
+    assert!((at(0.0).z_axis.length() - 0.375).abs() < 1e-6);
+    assert!((at(0.05).z_axis.length() - 0.5625).abs() < 1e-6);
+    assert!((at(0.2).z_axis.length() - 0.75).abs() < 1e-6);
+    assert!((at(0.0).x_axis.length() - 0.75).abs() < 1e-6, "width is not grown");
+}
+
+#[test]
+fn a_round_is_drawn_along_its_heading_and_up_its_surface_normal_not_its_velocity() {
+    let round = Round {
+        live: true,
+        vel: Vec3::new(500.0, 0.0, 0.0),
+        heading: Vec3::Z,
+        normal: Vec3::Y,
+        age: 1.0,
+        ..Round::default()
+    };
+    assert!((round_matrix(&round).z_axis.truncate().normalize() - Vec3::Z).length() < 1e-6);
 }
 
 #[test]
@@ -77,10 +109,10 @@ fn a_round_flying_straight_up_the_launch_up_is_still_a_rotation() {
     let round = Round {
         live: true,
         vel: Vec3::new(0.0, 500.0, 0.0),
-        up: Vec3::Y,
+        normal: Vec3::Y,
         ..Round::default()
     };
-    assert!((round_matrix(&round).determinant() - 1.0).abs() < 1e-5);
+    assert!((round_matrix(&round).determinant() - 0.75_f32.powi(3) * 0.5).abs() < 1e-5);
 }
 
 /// **The disc's own effects play for what a tick did.** An HD Detonator race resolves all four

@@ -257,8 +257,8 @@ fn write_cannon(hasher: &mut StateHasher, cannon: &oag_weapons::detonator::canno
             pos,
             prev,
             vel,
-            up,
             normal,
+            heading,
             age,
             rebounds,
             slot,
@@ -266,8 +266,8 @@ fn write_cannon(hasher: &mut StateHasher, cannon: &oag_weapons::detonator::canno
         hasher.write_vec3(*pos);
         hasher.write_vec3(*prev);
         hasher.write_vec3(*vel);
-        hasher.write_vec3(*up);
         hasher.write_vec3(*normal);
+        hasher.write_vec3(*heading);
         hasher.write_f32(*age);
         hasher.write_u8(*rebounds);
         hasher.write_u8(*slot);
