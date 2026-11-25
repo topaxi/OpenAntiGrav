@@ -375,8 +375,7 @@ impl Definition {
                 entries,
                 subtitles,
                 meta,
-                parked: Vec::new(),
-                opens_on: None,
+                ..Page::default()
             });
         }
 
@@ -956,8 +955,7 @@ impl Definition {
                 id: Some(ORIGINAL_CAMPAIGN_ROW.to_string()),
                 parent: None,
             }],
-            parked: Vec::new(),
-            opens_on: None,
+            ..Page::default()
         };
         for (key, name, description) in rows {
             picker.entries.push(Entry::Run {

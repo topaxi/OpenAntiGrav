@@ -21,7 +21,7 @@ pub struct RowMeta {
 }
 
 /// One page: a title and its rows.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct Page {
     /// The id a `submenu` entry names.
     pub id: String,
