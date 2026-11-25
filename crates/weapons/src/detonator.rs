@@ -651,10 +651,17 @@ pub enum EventKind {
     BombShot,
     /// The stage step set a bomb off harmlessly before laying the new one.
     BombReplaced,
-    /// A cannon round died on a wall, the wall's unit normal.
+    /// A cannon round died on a wall, the wall's unit normal, and the frame the original
+    /// spawns its spark in (`docs/ghidra/functions/ps3-hdfury-eu/detonator-cannon.md`,
+    /// "The spark's matrix, read live").
     RoundWall {
         /// The wall's unit normal.
         normal: Vec3,
+        /// Where the spark spawns: the hit lowered onto the road, `3.5` along the round's
+        /// surface normal.
+        spawn: Vec3,
+        /// The spark's frame `+Y`: the round's velocity reflected off the wall, unit length.
+        rebound: Vec3,
     },
     /// The cannon fired a volley, at the craft that fired it.
     Volley,
