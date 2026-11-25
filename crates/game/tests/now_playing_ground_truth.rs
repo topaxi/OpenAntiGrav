@@ -396,6 +396,12 @@ fn pure_shows_the_artist_over_the_song_as_plain_lines_that_fade_hold_and_leave()
         .expect("listing")
         .expect("a PSP disc");
     assert_eq!(entries.len(), 19);
+    assert!(
+        names
+            .iter()
+            .all(|name| name.as_ref().is_some_and(|n| n.artist.is_some())),
+        "every soundtrack entry has an artist"
+    );
     let name = names.into_iter().next().flatten().expect("a first name");
     let artist = name.artist.clone().expect("an artist");
     let title = name.title.clone();

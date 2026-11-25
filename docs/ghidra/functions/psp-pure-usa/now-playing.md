@@ -21,4 +21,7 @@ by address only, so there is no `names.tsv` row.
 - **Song change:** every track the music manager starts calls the show function again, so the text returns with the same fade and hold for each song (read, not watched: the frames stop at the first song).
 - The label widget is set to a constant, not to the node's label string: the original never shows the label (the frames show two lines).
 
+- **Layout ancestry** (checked 2026-11-25 in the extracted `InGame_Definition.xml`): the widgets' ancestors are `Screen name="InGame Screens"` and `Screen name="InGame"`, both with no `Values`, so the authored `x 80`, `y 240/250` are the screen's own (480x272) coordinates with no parent offset; the pair frames put the text at those rows to the pixel.
+- **No artist:** `0x0882fbec` copies the node's artist string into its widget whatever it holds, so a track with no artist leaves the artist line empty and the title stays on the track line (`y 250`). Ours does the same (confidence 80, read, not watched). A disc track nothing names reads its number through the string table on the track line, as Pulse's marquee does (**chosen, not measured**).
+
 Not read: what `_DAT_00288eec + 0x40` is called (the show function runs only while it is 1 or 2, and `0x0882fbec` sets it 3 when no track exists), and the other caller condition `DAT_002884b3 != 0 || _DAT_00053534 != 2`.

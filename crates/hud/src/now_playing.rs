@@ -484,7 +484,7 @@ pub fn append(
             frame.skin_text.len(),
         ],
     });
-    for line in &marquee.lines {
+    for line in marquee.lines.iter().filter(|line| !line.text.is_empty()) {
         frame.small_text.push(Draw::Text {
             x: marquee.x,
             y: line.y,

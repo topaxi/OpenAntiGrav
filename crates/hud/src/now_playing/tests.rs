@@ -291,3 +291,68 @@ fn plain_lines_fade_in_hold_still_and_fade_out_on_two_tick_updates() {
     assert!(frame.sprites.is_empty(), "no bar drawn");
     assert_eq!(frame.small_text.len(), 2, "one text per line");
 }
+
+/// What a marquee title (Pulse, HD, Omega, 2048) draws is the bar's fill and one left-aligned
+/// text on the item's text line, as before plain-lines displays existed; an empty line draws
+/// nothing.
+#[test]
+fn a_marquee_still_draws_its_bar_and_one_text_exactly() {
+    let mut display = display();
+    display.show("Artist - Song".to_string(), 80.0);
+    for _ in 0..10 {
+        display.step();
+    }
+    let marquee = display.marquee().expect("up");
+    assert_eq!(marquee.lines.len(), 1);
+    let mut frame = Frame::default();
+    append(
+        &mut frame,
+        &marquee,
+        [0.0, 0.0, 0.0, 1.0],
+        &crate::sprite::Sheet::default(),
+    );
+    assert_eq!(
+        frame.sprites,
+        [Draw::Fill {
+            rect: [130.0, 247.0, 150.0, 20.0],
+            color: [0.0, 0.0, 0.0, 10.0 / 255.0],
+        }]
+    );
+    assert_eq!(
+        frame.small_text,
+        [Draw::Text {
+            x: 280.0 - 10.0,
+            y: 252.0,
+            scale: 1.0,
+            color: [1.0, 1.0, 1.0, 50.0 / 255.0],
+            border: Some([0.0, 0.0, 0.0, 1.0]),
+            align: Align::Left,
+            text: "Artist - Song".to_string(),
+            wrap_width: None,
+        }]
+    );
+
+    let authored = lines_authored();
+    let mut lines = Display::new(
+        geometry(LINES_LAYOUT, &authored).expect("widgets"),
+        &authored,
+    );
+    lines.show_lines(vec![String::new(), "Song".to_string()], 10.0);
+    lines.step();
+    lines.step();
+    let mut frame = Frame::default();
+    append(
+        &mut frame,
+        &lines.marquee().expect("up"),
+        [0.0, 0.0, 0.0, 1.0],
+        &crate::sprite::Sheet::default(),
+    );
+    assert_eq!(
+        frame.small_text.len(),
+        1,
+        "the empty artist row draws nothing"
+    );
+    assert!(
+        matches!(&frame.small_text[0], Draw::Text { y, text, .. } if *y == 250.0 && text == "Song")
+    );
+}

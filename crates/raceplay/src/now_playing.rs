@@ -143,12 +143,12 @@ impl View {
     fn show(&mut self, song: &oag_sound::NowPlaying) {
         if self.lines {
             if let Some(name) = song.name.as_ref() {
-                let lines: Vec<String> = name
-                    .artist
-                    .iter()
-                    .cloned()
-                    .chain([name.title.clone()])
-                    .collect();
+                // The original copies the artist string into its widget whatever it holds, so a
+                // song with no artist leaves the artist row empty and the song on the track row.
+                let lines = vec![
+                    name.artist.clone().unwrap_or_default(),
+                    song_title(&self.strings, self.title_key, self.played, song, name),
+                ];
                 let widest = lines
                     .iter()
                     .map(|line| oag_ui::font::measure(&self.font, line))
@@ -177,8 +177,23 @@ fn song_text(
     song: &oag_sound::NowPlaying,
 ) -> Option<String> {
     let name = song.name.as_ref()?;
+    let title = song_title(strings, title_key, played, song, name);
+    Some(match &name.artist {
+        Some(artist) => format!("{artist}{separator}{title}"),
+        None => title,
+    })
+}
+
+/// The song's own title as the display words it: see [`song_text`].
+fn song_title(
+    strings: &oag_ui::language::StringTable,
+    title_key: Option<&str>,
+    played: &str,
+    song: &oag_sound::NowPlaying,
+    name: &oag_sound::SongName,
+) -> String {
     let own = song.author == Some(played);
-    let title = match (song.track, title_key) {
+    match (song.track, title_key) {
         (Some(number), _) => strings.get("OAG_HUD_TRACK_N").map_or_else(
             || name.title.clone(),
             |text| text.replace("{}", &number.to_string()),
@@ -188,11 +203,7 @@ fn song_text(
             .and_then(|text| text.lines().last())
             .map_or_else(|| name.title.clone(), str::to_string),
         (None, _) => name.title.clone(),
-    };
-    Some(match &name.artist {
-        Some(artist) => format!("{artist}{separator}{title}"),
-        None => title,
-    })
+    }
 }
 
 impl Race {
@@ -333,6 +344,20 @@ Keyed Title"></Entry>
             "another title's name is shown as it is"
         );
         assert_eq!(text(song("01", None, None)).as_deref(), Some("Artist - 01"));
+    }
+
+    /// A plain-lines title (Pure) words a numbered disc track through the same string row, and a
+    /// song with no artist keeps its title for the second row.
+    #[test]
+    fn the_title_of_a_numbered_track_is_worded_by_the_table_on_plain_lines_too() {
+        let named = song("Track 3", None, Some(3));
+        let name = named.name.as_ref().expect("a name");
+        let mut german = StringTable::from_xml("");
+        german.merge([("OAG_HUD_TRACK_N".to_string(), "Titel {}".to_string())].into());
+        assert_eq!(
+            super::song_title(&german, None, "Wipeout Pure", &named, name),
+            "Titel 3"
+        );
     }
 
     #[test]
