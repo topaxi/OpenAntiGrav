@@ -66,6 +66,7 @@ mod leach_pool_ground_truth;
 mod leach_tube_ground_truth;
 mod livery_ground_truth;
 mod lock_sight_ground_truth;
+mod loop_floor_trace;
 
 /// A `tests/*.rs` file missing from every `tests/it*.rs` listing compiles into
 /// nothing, and its tests stop running without a word.

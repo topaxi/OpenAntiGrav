@@ -316,8 +316,10 @@ impl Projectiles {
                         missile::speed_units_on_surface,
                     );
                     let steers = match kind {
-                        Weapon::Rocket | Weapon::Plasma => true,
-                        Weapon::Missile => floor_arms == FloorArms::SteerToRidePoint,
+                        Weapon::Rocket => true,
+                        Weapon::Missile | Weapon::Plasma => {
+                            floor_arms == FloorArms::SteerToRidePoint
+                        }
                         _ => false,
                     };
                     if steers {
