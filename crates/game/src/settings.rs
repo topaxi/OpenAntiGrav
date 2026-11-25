@@ -1431,6 +1431,8 @@ pub fn save(settings: &Settings) -> Result<()> {
 mod tests;
 
 #[cfg(test)]
+mod reflection_resolution_tests;
+#[cfg(test)]
 mod shadow_resolution_tests;
 #[cfg(test)]
 mod water_tests;
