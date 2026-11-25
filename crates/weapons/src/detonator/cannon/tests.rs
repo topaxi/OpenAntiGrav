@@ -19,6 +19,7 @@ fn lap() -> Survey {
                 up: Vec3::Y,
             })
             .collect(),
+        ..Survey::default()
     }
 }
 

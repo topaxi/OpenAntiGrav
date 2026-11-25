@@ -28,6 +28,7 @@ fn survey_of(collision: &CollisionWorld) -> oag_weapons::detonator::Survey {
     crate::detonator::survey(
         &spline,
         &order,
+        None,
         collision,
         &oag_tables::detonator_layout::GamePlayValues::default(),
     )

@@ -22,9 +22,10 @@ use std::sync::Arc;
 
 use oag_core::math::Vec3;
 use oag_physics::{CollisionWorld, Ray, Raycaster, Surface};
+use oag_race::Course;
 use oag_tables::detonator_layout::GamePlayValues;
 use oag_weapons::detonator::cannon::Sweep;
-use oag_weapons::detonator::{Entry, Layout, MAX_LANES, Survey};
+use oag_weapons::detonator::{Entry, Layout, MAX_LANES, Survey, SurveyBranch};
 
 use crate::spline::Spline;
 
@@ -66,15 +67,62 @@ const LIFT_TOLERANCE: f32 = 1.5;
 /// The share of the measured width the lanes fan across.
 const USABLE_WIDTH: f32 = 0.9;
 
-/// The survey of the lap, one entry per control point in driving order.
+/// The survey of the lap, one entry per control point in driving order, and of each alternate
+/// path `course` branches onto.
 #[must_use]
 pub(crate) fn survey(
     spline: &Spline,
     order: &[u32],
+    course: Option<&Course>,
     collision: &CollisionWorld,
     values: &GamePlayValues,
 ) -> Survey {
     let lane_width = values.distance_offset_between_mines;
+    let mut entries = measure(spline, order, collision, lane_width);
+    blank_jumps(&mut entries, values.num_steps_to_ignore_after_jump);
+    if let Some(first) = entries.first().map(|e| e.position) {
+        for entry in &mut entries {
+            if (entry.position - first).length() <= START_ZONE {
+                entry.entry.usable = false;
+            }
+        }
+    }
+    let ring = entries.len();
+    let branches = course
+        .into_iter()
+        .flat_map(Course::branches)
+        .filter_map(|branch| {
+            let along: Vec<u32> = (0..spline.len() as u32)
+                .filter(|&index| spline.path_of(index as usize) == Some(branch.path))
+                .collect();
+            let mut measured = measure(spline, &along, collision, lane_width);
+            blank_jumps(&mut measured, values.num_steps_to_ignore_after_jump);
+            let at = |ring_index: usize| {
+                u16::try_from(ring_index / Spline::STEPS_PER_SEGMENT)
+                    .ok()
+                    .filter(|&e| usize::from(e) < ring)
+            };
+            Some(SurveyBranch {
+                split: at(branch.split)?,
+                merge: at(branch.merge)?,
+                entries: measured.into_iter().map(|e| e.entry).collect(),
+            })
+        })
+        .filter(|branch| !branch.entries.is_empty())
+        .collect();
+    Survey {
+        entries: entries.into_iter().map(|e| e.entry).collect(),
+        branches,
+    }
+}
+
+/// One entry per control point of `order`, which walks whole paths.
+fn measure(
+    spline: &Spline,
+    order: &[u32],
+    collision: &CollisionWorld,
+    lane_width: f32,
+) -> Vec<Measured> {
     let mut entries = Vec::new();
     let mut path = None;
     let mut within = 0usize;
@@ -94,17 +142,7 @@ pub(crate) fn survey(
         };
         entries.push(entry(sample, collision, lane_width));
     }
-    blank_jumps(&mut entries, values.num_steps_to_ignore_after_jump);
-    if let Some(first) = entries.first().map(|e| e.position) {
-        for entry in &mut entries {
-            if (entry.position - first).length() <= START_ZONE {
-                entry.entry.usable = false;
-            }
-        }
-    }
-    Survey {
-        entries: entries.into_iter().map(|e| e.entry).collect(),
-    }
+    entries
 }
 
 /// An entry and the section position it was measured at.

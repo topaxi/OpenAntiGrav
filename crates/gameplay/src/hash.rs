@@ -186,12 +186,19 @@ fn write_emp(hasher: &mut StateHasher, emp: &oag_weapons::detonator::emp::Emp) {
         front,
         lifetime,
         age,
+        forked,
+        fork,
     } = wave;
     if *live {
         hasher.write_u32(u32::from(*from));
         hasher.write_u32(u32::from(*front));
         hasher.write_f32(*lifetime);
         hasher.write_f32(*age);
+        // Only a forked wave writes its second front: an unforked wave hashes as it always did.
+        if *forked {
+            hasher.write_u32(u32::from(fork.branch) | u32::from(fork.on_ring) << 8);
+            hasher.write_u32(u32::from(fork.at));
+        }
     }
 }
 

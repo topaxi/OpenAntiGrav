@@ -13,6 +13,9 @@ use oag_vex::track::AiTrack;
 /// One alternate path, and where it meets the ring at either end.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Branch {
+    /// The alternate path's index in the track file, the id [`super::Course::path_of`] and a
+    /// spline built from the same file give its samples.
+    pub path: u16,
     /// The ring index of the first sample after the split, on the primary path:
     /// a forward wave that steps onto it from before crosses the split.
     pub split: usize,
@@ -122,7 +125,11 @@ pub(super) fn branches(ai: &AiTrack, first: &[Option<usize>]) -> Vec<Branch> {
         if samples.is_empty() {
             continue;
         }
+        let Ok(path_id) = u16::try_from(alternate) else {
+            continue;
+        };
         out.push(Branch {
+            path: path_id,
             split,
             merge,
             centres: samples.iter().map(|s| s.centre).collect(),

@@ -197,6 +197,7 @@ fn an_hd_emp_wave_carries_the_discs_effect_on_its_front_until_it_ends() {
         front: 0,
         lifetime: 0.25,
         age: 0.0,
+        ..oag_weapons::detonator::emp::Wave::default()
     };
     race.view.spu_vertex_lights = true;
     race.view.hd_trail_active = true;
