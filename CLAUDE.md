@@ -30,6 +30,7 @@ just lead-test-data [-n M]   # the lead's full test-data as M (4) slices, each u
 just gate-affected / test-data-affected   # same checks in full, only the tests the branch can reach (scripts/affected.py); a drive member's gate
 scripts/gate-run.sh RECIPE   # a gate recipe under the shared gate lock, prebuilt while it waits (docs/architecture/gate-wall-time.md); never inside `flock`
 just check-docs   # internal links in docs/ (not CLAUDE.md, .claude/ or HANDOVER.md)
+just check-deps | check-unused-deps (cargo shear) | check-determinism | check-size | check-comment-history   # the rules below
 just check-names | check-handover | check-schemas | check-weapon-lineage | check-guests   # `check-guests --strict` (the gate) fails a stale ext/*.wasm; `just rebuild-guests` regenerates
 just check-status # status.md's RE-coverage table matches names.tsv; `just gen-status` regenerates it
 just check-title-branching | check-title-reach   # ratchets: per-title behaviour is `Title` data (ADR-0058), and generic crates reach a title only through `oag_title::Title`
@@ -121,21 +122,7 @@ in and emits a state snapshot out; drawing, audio, windowing and file I/O are
 outside it. That keeps it testable without a GPU and comparable against a trace
 from the original.
 
-```
-                         oag-core
-                            |
-        +-------------------+--------------------+
-        |                   |                    |
-    oag-disc            (physics/ai/            oag-render
-        |                weapons/race,             |
-   oag-formats           M4/M5 crates)         oag-audio/input
-        |                     |                    |
-    oag-assets                |                    |
-        |                     |                    |
-        +----------> oag-gameplay <---------------+
-                            |
-                        oag-game
-```
+Layering: everything depends on `oag-core`; the disc/format/asset chain (`oag-disc`, `oag-formats`, `oag-assets`, the title packages) and the simulation crates (physics, ai, weapons, race) meet in `oag-gameplay`, which depends on no render, audio or input crate (rule 1); `oag-game` is the composition root that joins everything (diagram: `docs/architecture/workspace-layout.md`, "Dependency rules").
 
 Crates (`crates/<name>`; full table and reasoning:
 [`docs/architecture/workspace-layout.md`](docs/architecture/workspace-layout.md)).

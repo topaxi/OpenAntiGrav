@@ -95,14 +95,14 @@ Spawn every member as a named member (no `isolation` flag) of an agent type unde
 
 | agent | model / effort | use for |
 | --- | --- | --- |
-| `oag-re` | opus / high | recovering behaviour from an executable in Ghidra: decompile, name, verify live, evidence pages |
-| `oag-wire` | sonnet / xhigh | ready-to-wire threads: the RE is done, wire it so a player sees or hears it |
-| `oag-format` | sonnet / xhigh | a file family to decode: census, reader, every-file ground truth, format page |
-| `oag-capture` | sonnet / high | a question only the running original can answer: PPSSPP, PCSX2 or RPCS3 measurement |
-| `oag-docs` | sonnet / medium | docs and handover audits with no code logic change; `model: haiku` (0.5 slot) only for mechanical sweeps (link fixes, index cleanup) |
-| `oag-scout` | haiku / high | read-only opportunity sweeps (render performance, allocations): a ranked, measurable list in a handover thread, advisor-checked; no code, no builds, **0 slots** |
-| `oag-compact` | sonnet / high | the standing comment compact lane: one crate per member, sequential, comments only; the lead runs `strip_rs_comments.py` (beside this skill) before every compact merge |
-| `oag-perf` | opus / high | a measured speed, memory or size win with before and after |
+| `oag-re` | opus / high | recovering behaviour from an executable in Ghidra |
+| `oag-wire` | sonnet / xhigh | ready-to-wire threads: the RE is done |
+| `oag-format` | sonnet / xhigh | a file family to decode: reader, every-file ground truth, format page |
+| `oag-capture` | sonnet / high | a question only the running original can answer |
+| `oag-docs` | sonnet / medium | docs and handover audits, no code logic; `model: haiku` (0.5 slot) only for mechanical sweeps |
+| `oag-scout` | haiku / high | read-only opportunity sweeps: a ranked, measurable list in a handover thread; no code, no builds, **0 slots** |
+| `oag-compact` | sonnet / high | the standing comment compact lane: one crate per member, comments only; the lead runs `strip_rs_comments.py` (beside this skill) before every compact merge |
+| `oag-perf` | opus / high | a measured speed, memory or size win, before and after |
 
 Pick by the lane's **main output**, not its subject (mostly wiring with one small decompile is `oag-wire`). Overriding `model` at spawn works (say so in the report). Sonnet at xhigh is the default workhorse (maintainer). AI-behaviour and physics lanes run on opus.
 
