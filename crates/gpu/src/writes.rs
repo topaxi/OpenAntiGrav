@@ -45,13 +45,16 @@ impl Writes for wgpu::Queue {
         if crate::skip::writes_frozen() {
             return;
         }
-        if let Some(device) = crate::skip::writes_dummy_device() {
-            dummy_write(device, self, buffer, offset, data);
-            return;
-        }
-        if crate::skip::named("writes-same") {
-            held_write(self, buffer, offset, data);
-            return;
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            if let Some(device) = crate::skip::writes_dummy_device() {
+                dummy_write(device, self, buffer, offset, data);
+                return;
+            }
+            if crate::skip::named("writes-same") {
+                held_write(self, buffer, offset, data);
+                return;
+            }
         }
         wgpu::Queue::write_buffer(self, buffer, offset, data);
     }
@@ -70,6 +73,7 @@ impl Writes for wgpu::Queue {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// `writes-same` ([`crate::skip`]): inside a window, each buffer range is written with the
 /// bytes it was first given in that window; outside, as given, and the held bytes are let go.
 fn held_write(
@@ -95,6 +99,7 @@ fn held_write(
     wgpu::Queue::write_buffer(queue, buffer, offset, bytes);
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// `writes-dummy` ([`crate::skip`]): the write copied into a scratch buffer of its own (one per
 /// buffer range, kept), which no pass reads.
 fn dummy_write(

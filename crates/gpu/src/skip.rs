@@ -37,7 +37,7 @@
 //! timestamps under `android.log`, so a GPU timeline splits by arm.
 
 use std::sync::OnceLock;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 /// The names a call site asks about. Anything else in the variable is reported once.
 pub const NAMES: [&str; 14] = [
@@ -141,12 +141,18 @@ pub fn extra_passes(encoder: &mut wgpu::CommandEncoder, target: Option<&wgpu::Te
 }
 
 static WRITES_ARMED: AtomicBool = AtomicBool::new(false);
+// A wgpu handle is not `Sync` in the browser build, which has no toggle clock either: the two
+// arms that hold one are native only.
+#[cfg(not(target_arch = "wasm32"))]
 static DEVICE: OnceLock<wgpu::Device> = OnceLock::new();
 
 /// Lets `writes` drop the queue's writes from now on: the race stage calls it every frame it
 /// draws, so nothing a load uploads is ever dropped. `device` is where `writes-dummy` makes its
 /// scratch buffers.
 pub fn arm_writes(device: &wgpu::Device) {
+    #[cfg(target_arch = "wasm32")]
+    let _ = device;
+    #[cfg(not(target_arch = "wasm32"))]
     if named("writes-dummy") {
         DEVICE.get_or_init(|| device.clone());
     }
@@ -154,6 +160,7 @@ pub fn arm_writes(device: &wgpu::Device) {
 }
 
 /// The device `writes-dummy` makes its scratch buffers on, once armed and in an odd window.
+#[cfg(not(target_arch = "wasm32"))]
 #[must_use]
 pub fn writes_dummy_device() -> Option<&'static wgpu::Device> {
     (WRITES_ARMED.load(Ordering::Relaxed) && skipped("writes-dummy"))
@@ -197,7 +204,7 @@ pub fn skipped(name: &str) -> bool {
 /// Prints the window a toggle run has entered, once per window.
 #[cfg(not(target_arch = "wasm32"))]
 fn announce(window: u64) {
-    static LAST: AtomicU64 = AtomicU64::new(u64::MAX);
+    static LAST: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(u64::MAX);
     if LAST.swap(window, Ordering::Relaxed) != window {
         let arm = if window % 2 == 1 { "on" } else { "off" };
         eprintln!("OAG_SKIP_PASSES: window {window} {arm}");
