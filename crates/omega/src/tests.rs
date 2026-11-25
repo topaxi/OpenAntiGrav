@@ -108,6 +108,25 @@ fn omega_draws_hds_always_on_widgets() {
     assert!(TITLE.hud_art.always_on.contains(&"LapPanel2"));
 }
 
+/// Omega and 2048 run HD's measured sight update by lineage (`oag_hd::hud::LIVE_SIGHT`): without
+/// it their reticle chased an on-screen target at a quarter of HD's rate and the LeachBeam fell
+/// back to the Missile's law.
+#[test]
+fn omega_and_2048_reticles_run_hds_live_sight() {
+    for art in [TITLE.hud_art, oag_2048::TITLE.hud_art] {
+        assert_eq!(
+            art.sights.chase_gain(),
+            oag_hd::TITLE.hud_art.sights.chase_gain()
+        );
+        assert!(art.sights.runs_leach_law());
+        assert!(matches!(
+            art.sights,
+            oag_title::hud::Sights::Concentric { live: Some(live), .. }
+                if *live == oag_hd::hud::LIVE_SIGHT
+        ));
+    }
+}
+
 /// Omega carries HD's grid hover, so its craft is held low on the grid and released after GO.
 /// Dropping the `launch_hover` wiring from `race.rs` leaves a craft that floats at its race height.
 #[test]

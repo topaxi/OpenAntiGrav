@@ -234,6 +234,15 @@ pub const PICKUP_COLOURS: [Option<u32>; 14] = {
 /// The pickup fade's timer rate. HD's `Hud_UpdatePickupBar` (`0x0008df30`) scales `dt` by the float at `0x008a776c`, `0x3fc00000` = `1.5`; the cap `0.5`, the icon gate `0.4`, the hold threshold `0.1` and the fade-out's `(2 - 2T) * 1.5` are read in the executable and followed live on RPCS3 (`docs/ghidra/functions/ps3-hdfury-eu/hd-pickup-table.md`, "The fade constants").
 pub const PICKUP_FADE_RATE_PERCENT: u16 = 150;
 
+/// What HD's own sight update does at run time, measured live
+/// (`docs/ghidra/functions/ps3-hdfury-eu/hud-sight.md`, "Measured live"). 2048 and Omega
+/// author the same reticle widgets and inherit it by lineage until their own executables are read.
+pub const LIVE_SIGHT: oag_title::hud::LiveSight = oag_title::hud::LiveSight {
+    missile_extent_unit: 30.0 / 2.65625,
+    leach_extent_unit: 30.0 / 3.40909,
+    chase_gain: 4.0,
+};
+
 /// How HD's HUD sprites reach the screen, as [`oag_title::Title::hud_art`]
 /// carries it.
 ///
@@ -295,11 +304,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
             "LeachBeamSightMiddle",
             "LeachBeamSightInner",
         ]),
-        live: Some(oag_title::hud::LiveSight {
-            missile_extent_unit: 30.0 / 2.65625,
-            leach_extent_unit: 30.0 / 3.40909,
-            chase_gain: 4.0,
-        }),
+        live: Some(LIVE_SIGHT),
     },
     // **Not Pulse's substitution.** HD's `PickupBackground` is a hexagon
     // *outline* rather than a filled white one, so the icon on it is visible in

@@ -174,7 +174,9 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
             "LeachBeamSightMiddle",
             "LeachBeamSightInner",
         ]),
-        live: None,
+        // Inherited from HD by lineage: the same reticle widgets, and its own sight update
+        // not read yet (`oag_hd::hud::LIVE_SIGHT`).
+        live: Some(oag_hd::hud::LIVE_SIGHT),
     },
     // `None` is "draw what the layout authors", which is the conservative
     // answer for a title whose pickup backdrop colour nothing has measured -
