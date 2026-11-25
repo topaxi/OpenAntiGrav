@@ -52,7 +52,14 @@ fn occlusion_map(scratch: &Path) -> Option<Vec<u8>> {
     let dump = scratch.join("occlusion.png");
     let out = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
         .arg(&image)
-        .args(["--race", "--no-audio", "--no-intro", "--team", "harimau"])
+        .args([
+            "--race",
+            "--no-audio",
+            "--no-soundtrack",
+            "--no-intro",
+            "--team",
+            "harimau",
+        ])
         .args(["--size", "480x272", "--ticks", "5"])
         .arg("--screenshot")
         .arg(scratch.join("frame.png"))

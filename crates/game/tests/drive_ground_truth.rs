@@ -71,7 +71,13 @@ fn drive_args(
     let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"));
     command
         .arg(image)
-        .args(["--no-audio", "--no-intro", "--drive", script])
+        .args([
+            "--no-audio",
+            "--no-soundtrack",
+            "--no-intro",
+            "--drive",
+            script,
+        ])
         .args(args)
         .arg("--state-log")
         .arg(&log)

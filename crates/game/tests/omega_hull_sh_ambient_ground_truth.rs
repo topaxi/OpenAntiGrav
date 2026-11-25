@@ -56,7 +56,14 @@ fn the_dark_hull_panels_lose_the_constant_ambient_blue_cast() {
             "--track",
             r"Data\Environments\modesto_heights\track.vex",
         ])
-        .args(["--ticks", "100", "--no-audio", "--size", "1920x1080"])
+        .args([
+            "--ticks",
+            "100",
+            "--no-audio",
+            "--no-soundtrack",
+            "--size",
+            "1920x1080",
+        ])
         .args([
             "--render-scale",
             "100",

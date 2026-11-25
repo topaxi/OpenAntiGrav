@@ -99,6 +99,7 @@ fn frame_with(
         .args([
             "--race",
             "--no-audio",
+            "--no-soundtrack",
             "--mode",
             "single_race",
             "--autopilot",

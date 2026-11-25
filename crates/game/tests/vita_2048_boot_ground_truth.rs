@@ -505,7 +505,13 @@ fn the_opening_view_renders_the_prism_the_rings_and_no_prism_for_an_unreached_ev
             "--ticks",
             "1",
         ])
-        .args(["--no-audio", "--no-video", "--size", "960x544"])
+        .args([
+            "--no-audio",
+            "--no-soundtrack",
+            "--no-video",
+            "--size",
+            "960x544",
+        ])
         .arg("--screenshot")
         .arg(&out)
         .env("XDG_CONFIG_HOME", scratch.join("config"))
@@ -1143,6 +1149,7 @@ fn the_select_team_capture_draws_the_hull_at_the_widgets_origin() {
             "--ticks",
             "40",
             "--no-audio",
+            "--no-soundtrack",
             "--no-video",
             "--size",
             "960x544",
@@ -1195,6 +1202,7 @@ fn the_title_capture_settles_on_the_logo_and_the_prompt() {
             "--ticks",
             "400",
             "--no-audio",
+            "--no-soundtrack",
             "--no-video",
             "--size",
             "960x544",

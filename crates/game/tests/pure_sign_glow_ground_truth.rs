@@ -98,7 +98,14 @@ fn run(image: &Path, scratch: &Path) -> (Vec<u8>, Vec<u8>) {
             "--ticks",
             "1339",
         ])
-        .args(["--no-audio", "--size", "480x272", "--render-scale", "100"])
+        .args([
+            "--no-audio",
+            "--no-soundtrack",
+            "--size",
+            "480x272",
+            "--render-scale",
+            "100",
+        ])
         .args([
             "--reconstruction",
             "off",

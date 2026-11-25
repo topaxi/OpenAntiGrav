@@ -254,6 +254,14 @@ pub(crate) struct Cli {
     #[arg(long, conflicts_with_all = ["dump_audio", "tap_audio"])]
     pub(crate) no_audio: bool,
 
+    /// Play without the soundtrack: the front end's loop and the race songs are never read or
+    /// decoded, so nothing of them is ever playing (no now-playing line, no spectrum). Effects,
+    /// speech and movie sound go on, and so does HD's authored mix. A PS2 song is 35 MiB of PCM
+    /// off the disc and an Omega one an ATRAC9 decode, so this also spares a slow machine that
+    /// work when the music is not wanted.
+    #[arg(long)]
+    pub(crate) no_soundtrack: bool,
+
     /// Ours: offer every circuit in the Race Box, whatever is cleared (`crate::unlock`).
     #[arg(long)]
     pub(crate) unlock_all: bool,

@@ -68,7 +68,14 @@ fn mask_of(image: &Path, scratch: &Path, give: Option<&str>, name: &str) -> Vec<
     command
         .arg(image)
         .args(["--race", "--mode", "time_trial", "--team", "Assegai"])
-        .args(["--class", "venom", "--no-audio", "--size", "480x272"])
+        .args([
+            "--class",
+            "venom",
+            "--no-audio",
+            "--no-soundtrack",
+            "--size",
+            "480x272",
+        ])
         .args(["--track", r"Data\Environments\16_Track\track.vex"])
         .args(["--render-scale", "100", "--msaa", "off"])
         .args(["--screen-filter", "off", "--anisotropy", "off"])

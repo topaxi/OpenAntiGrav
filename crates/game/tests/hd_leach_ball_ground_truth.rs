@@ -83,7 +83,14 @@ fn frame_of(image: &Path, scratch: &Path, locked: bool) -> Vec<u8> {
     let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"));
     command
         .arg(image)
-        .args(["--race", "--opponents", "--no-audio", "--size", "960x544"])
+        .args([
+            "--race",
+            "--opponents",
+            "--no-audio",
+            "--no-soundtrack",
+            "--size",
+            "960x544",
+        ])
         .args(["--render-scale", "100", "--msaa", "off"])
         .args(["--screen-filter", "off", "--anisotropy", "off"])
         .args(["--motion-blur", "off", "--ticks", "280"])

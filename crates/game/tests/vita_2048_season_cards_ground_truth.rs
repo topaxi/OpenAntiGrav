@@ -179,7 +179,13 @@ fn the_season_2048_card_is_drawn_on_the_map() {
             "--ticks",
             "1",
         ])
-        .args(["--no-audio", "--no-video", "--size", "960x544"])
+        .args([
+            "--no-audio",
+            "--no-soundtrack",
+            "--no-video",
+            "--size",
+            "960x544",
+        ])
         .arg("--screenshot")
         .arg(&out)
         .env("XDG_CONFIG_HOME", scratch.join("config"))

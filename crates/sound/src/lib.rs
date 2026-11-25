@@ -518,6 +518,10 @@ pub struct Audio {
     /// a source with no decodable music leaves `music` `None`: guarding on it
     /// alone would re-read the disc and re-run `ffmpeg` sixty times a second.
     music_attempted: bool,
+    /// Whether the soundtrack is read and played at all: `false` leaves the front end and the
+    /// races with no music and reads no track, while effects, speech and movie sound go on
+    /// ([`Audio::set_soundtrack`]).
+    soundtrack: bool,
     /// Which release the playing music came off, when it is one of the sixteen
     /// soundtrack tracks.
     ///
@@ -721,6 +725,7 @@ impl Audio {
             }),
             music: None,
             music_attempted: false,
+            soundtrack: true,
             music_from: None,
             held: Vec::new(),
             movie: None,
@@ -749,6 +754,14 @@ impl Audio {
         };
         audio.apply(settings);
         audio
+    }
+
+    /// Switches the soundtrack off (or back on): with `false`, [`Self::start_music`] and
+    /// [`Self::start_race_music`] read nothing and start nothing, so no track is read or decoded
+    /// and no song is ever playing. Effects, speech, movie sound and HD's authored mix are
+    /// unaffected. Set it before either start.
+    pub fn set_soundtrack(&mut self, on: bool) {
+        self.soundtrack = on;
     }
 
     /// Applies every persisted volume to the buses.
@@ -848,6 +861,9 @@ impl Audio {
     pub fn start_race_music(&mut self, discs: &MusicDiscs, choice: MusicSource, cache_dir: &Path) {
         self.stop_music_voices();
         self.race_context = Some((discs.clone(), choice, cache_dir.to_path_buf()));
+        if !self.soundtrack {
+            return;
+        }
         // A fetch still in flight from before (a race left and resumed before
         // its track landed) is the same track; it lands into this race.
         if self.race_job.is_some() {

@@ -60,7 +60,13 @@ fn frame_in(image: &Path, scratch: &Path, name: &str, mode: &str, extra: &[&str]
     let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"));
     command
         .arg(image)
-        .args(["--race", "--no-audio", "--size", "480x272"])
+        .args([
+            "--race",
+            "--no-audio",
+            "--no-soundtrack",
+            "--size",
+            "480x272",
+        ])
         .args([
             "--render-scale",
             "100",
@@ -166,7 +172,13 @@ fn absorb_frame(image: &Path, scratch: &Path, name: &str, ticks: u32, absorb: bo
     let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"));
     command
         .arg(image)
-        .args(["--race", "--no-audio", "--size", "480x272"])
+        .args([
+            "--race",
+            "--no-audio",
+            "--no-soundtrack",
+            "--size",
+            "480x272",
+        ])
         .args([
             "--render-scale",
             "100",

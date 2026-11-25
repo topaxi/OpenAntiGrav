@@ -95,7 +95,14 @@ fn noise_bands(ticks: u32) -> Option<[f32; 7]> {
     let out = scratch.join("frame.png");
     let status = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
         .arg(image)
-        .args(["--race", "--no-audio", "--size", "480x272", "--opponents"])
+        .args([
+            "--race",
+            "--no-audio",
+            "--no-soundtrack",
+            "--size",
+            "480x272",
+            "--opponents",
+        ])
         .args(["--camera-view", "internal", "--render-scale", "100"])
         .args([
             "--msaa",

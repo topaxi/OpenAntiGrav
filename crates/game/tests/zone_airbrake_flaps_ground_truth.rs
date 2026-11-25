@@ -63,7 +63,13 @@ fn frame(source: &Path, scratch: &Path, name: &str, mode: &str, stowed: bool) ->
     let out = scratch.join(format!("{name}.png"));
     let run = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
         .arg(source)
-        .args(["--race", "--no-audio", "--size", "720x408"])
+        .args([
+            "--race",
+            "--no-audio",
+            "--no-soundtrack",
+            "--size",
+            "720x408",
+        ])
         .args(["--render-scale", "100", "--msaa", "off"])
         .args(["--screen-filter", "off", "--anisotropy", "off"])
         .args(["--motion-blur", "off", "--scheme", "novice"])

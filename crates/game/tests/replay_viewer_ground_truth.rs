@@ -50,7 +50,14 @@ impl Profile {
         let _ = std::fs::remove_file(&log);
         let output = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
             .arg(image)
-            .args(["--no-audio", "--no-intro", "--seed", "7", "--drive"])
+            .args([
+                "--no-audio",
+                "--no-soundtrack",
+                "--no-intro",
+                "--seed",
+                "7",
+                "--drive",
+            ])
             .arg(script.replace("DIR", &self.dir.display().to_string()))
             .args(args)
             .arg("--state-log")
@@ -446,6 +453,7 @@ fn a_race_a_capture_builds_leaves_no_replay() {
         .arg(&image)
         .args([
             "--no-audio",
+            "--no-soundtrack",
             "--race",
             "--mode",
             "single_race",
@@ -738,7 +746,14 @@ impl Profile {
         let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"));
         command
             .arg(image)
-            .args(["--no-audio", "--race", "--size", "320x180", "--screenshot"])
+            .args([
+                "--no-audio",
+                "--no-soundtrack",
+                "--race",
+                "--size",
+                "320x180",
+                "--screenshot",
+            ])
             .arg(&shot)
             .args(args)
             .env("XDG_CONFIG_HOME", self.dir.join("config"))

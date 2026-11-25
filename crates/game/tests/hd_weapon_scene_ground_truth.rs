@@ -81,7 +81,13 @@ fn frame_of(weapon: &str, ticks: u32, pose: Option<&str>) -> Option<Vec<[u8; 3]>
     let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"));
     command
         .arg(image)
-        .args(["--race", "--no-audio", "--size", "960x544"])
+        .args([
+            "--race",
+            "--no-audio",
+            "--no-soundtrack",
+            "--size",
+            "960x544",
+        ])
         .args(["--render-scale", "100", "--msaa", "off"])
         .args(["--screen-filter", "off", "--anisotropy", "off"])
         .args(["--motion-blur", "off", "--shadows", "off"])
@@ -314,7 +320,13 @@ fn detonator_volley_frame(weapon_lights: bool) -> Option<Vec<[u8; 3]>> {
     let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"));
     command
         .arg(image)
-        .args(["--race", "--no-audio", "--size", "960x544"])
+        .args([
+            "--race",
+            "--no-audio",
+            "--no-soundtrack",
+            "--size",
+            "960x544",
+        ])
         .args(["--track", r"Data\Environments\Talons_Junction\track.vex"])
         .args(["--team", "FEISAR", "--mode", "detonator"])
         .args(["--render-scale", "100", "--msaa", "off"])

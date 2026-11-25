@@ -54,7 +54,13 @@ fn shot(
     let mut command = Command::new(env!("CARGO_BIN_EXE_oag-game"));
     command
         .arg(image)
-        .args(["--race", "--no-audio", "--size", "3360x1440"])
+        .args([
+            "--race",
+            "--no-audio",
+            "--no-soundtrack",
+            "--size",
+            "3360x1440",
+        ])
         .args([
             "--render-scale",
             "100",

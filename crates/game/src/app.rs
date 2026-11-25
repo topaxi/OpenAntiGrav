@@ -426,6 +426,7 @@ fn launch(mut cli: Cli) -> Result<Launch> {
         buffer,
         cli.no_audio,
     );
+    audio.set_soundtrack(!cli.no_soundtrack);
     // The shuffle is presentation randomness: the clock seeds it, the simulation never sees it.
     audio.seed_music_shuffle(
         web_time::SystemTime::now()

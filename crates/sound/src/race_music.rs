@@ -610,7 +610,8 @@ impl Audio {
     /// is already decoded in [`Self::race_cache`].
     ///
     /// A `None` costs the launch no thread and no decode: the hand-off's
-    /// [`Self::start_race_music`] applies the cached track on the spot. The pick
+    /// [`Self::start_race_music`] applies the cached track on the spot, or starts nothing when
+    /// the soundtrack is off ([`Self::set_soundtrack`]). The pick
     /// it asks for again names the same track, because only a pick with no saved
     /// place can hit, and `race_music_pick` hands a saved place out once, so a
     /// pick that carried one is a miss and keeps it.
@@ -620,6 +621,9 @@ impl Audio {
         choice: MusicSource,
         cache_dir: &Path,
     ) -> Option<MusicFetchWorker> {
+        if !self.soundtrack {
+            return None;
+        }
         let pick = self.race_music_pick();
         if self.cached_race_track(discs, choice, &pick).is_some() {
             return None;

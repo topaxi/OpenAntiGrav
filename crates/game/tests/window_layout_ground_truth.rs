@@ -18,6 +18,7 @@ fn still(image: &Path, page: &str, name: &str) -> Vec<u8> {
         .arg(image)
         .args([
             "--no-audio",
+            "--no-soundtrack",
             "--size",
             "640x360",
             "--menu-page",

@@ -28,7 +28,7 @@ pub(super) fn from_png(
         .arg("--screenshot")
         .arg(out)
         .arg(image)
-        .arg("--no-audio")
+        .args(["--no-audio", "--no-soundtrack"])
         .args(flags)
         .env("XDG_CONFIG_HOME", run.dir.join("config"))
         .env("XDG_DATA_HOME", run.dir.join("data"))

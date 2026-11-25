@@ -118,6 +118,7 @@ fn frame(mods: &Path, scratch: &Path, ticks: u32) -> (usize, Vec<[u8; 3]>) {
             "single_race",
             "--opponents",
             "--no-audio",
+            "--no-soundtrack",
         ])
         .arg("--track-file")
         .arg(mods.join("hillside/tracks/hillside.track.toml"))

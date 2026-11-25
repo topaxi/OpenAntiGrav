@@ -20,6 +20,7 @@ fn run(image: &Path, scratch: &Path, hold: bool) -> ((f64, [f64; 3]), (f64, [f64
         .args([
             "--race",
             "--no-audio",
+            "--no-soundtrack",
             "--mode",
             "time_trial",
             "--class",
