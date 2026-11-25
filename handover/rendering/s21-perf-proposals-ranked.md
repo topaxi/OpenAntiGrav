@@ -59,9 +59,8 @@ scene is 1.5 ms. Every "fidelity none" item passes the byte-identity or pair che
 1. ~~Draw an advert card only on frames where a view samples it~~ **landed** (`s21-passes`):
    S21 -4.2 and -5.6 ms in-run, Deck -0.4 to -0.8 ms, host -4.8 % user instructions, picture
    byte-identical (`docs/rendering/frame-thread-cpu.md`, "Advert cards: drawn only when shown").
-   **Open:** Pulse culls nothing while the official `slipstream` mod is installed (it attaches a
-   portal shader, and a portal view reads last frame's cards). A rule that culls until a portal is
-   actually requested would bring it to Pulse; a portal's first frame is the case to prove.
+   Culls with a mod shader attached too (Pulse's official `slipstream`); a portal view may show a
+   card stale or blank, accepted by the maintainer.
 2. **Fewer small passes.** A render pass costs 0.14 to 0.41 ms on the S21, about 0.015 to 0.03 ms
    on the Deck (`docs/tools/android.md`, "What a render pass costs").
    - **The bloom ladder fold is parked** on branch `bloom-ladder-fold-parked` (maintainer: the
@@ -106,13 +105,12 @@ glass target when no glass shows, a third swapchain image, a portrait or pre-rot
 
 1. ~~The pass-cost toggle~~ and ~~the card census~~: done (`s21-passes`), numbers in
    `docs/tools/android.md` ("What a render pass costs") and `docs/rendering/frame-thread-cpu.md`.
-2. Pulse with `slipstream` installed: cull the cards until a portal view is requested (item 1).
-3. **Freeze-writes.** A toggle that drops every `Writes::write_buffer` and `write_texture` while it
+2. **Freeze-writes.** A toggle that drops every `Writes::write_buffer` and `write_texture` while it
    is on, under the fence-timeline capture (`scripts/android-fence-timeline.py`): if the present
    returns before the previous fence while frozen, item 4 is real; if nothing moves, close it.
-4. Log one timestamp pair from the first pass's begin to the last pass's end as its own frame-log
+3. Log one timestamp pair from the first pass's begin to the last pass's end as its own frame-log
    field, so the rows' sum has a denominator.
-5. Repeat the cool and warm baselines three times each and regress the frame on the GPU and A78
+4. Repeat the cool and warm baselines three times each and regress the frame on the GPU and A78
    clocks `scripts/android-perf-poll.sh` already logs, to firm up finding 1.
-6. When a finding above is confirmed by a run, write it into `docs/tools/android.md` with its
+5. When a finding above is confirmed by a run, write it into `docs/tools/android.md` with its
    command; this thread is the only place findings 1, 2, 3 and 7 are written down today.

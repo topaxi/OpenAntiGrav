@@ -2577,12 +2577,14 @@ nobody sees does not change what is drawn.
 
 **The rule** (`oag_raceplay::adverts::Seen`, `Cards::render`): each card keeps the track draws that
 sample it (`Cards::bind_into`, from the placeholder slots it is bound to). On a one-view frame
-(`Layer::Whole`) with no mod shader, a card is encoded only when one of those draws passes the scene
+(`Layer::Whole`), a card is encoded only when one of those draws passes the scene
 pass's own PVS, chunk and frustum tests (`Drawable::may_draw`, the same `visible` the scene pass calls
 with the same arguments). The level of detail and the hidden panels are not asked, so the test is a
 superset of what the pass draws. Every other frame draws every card: a split's first view and a
-shared window do the frame's work for views they have not culled, and a portal view reads last
-frame's cards. The glass and sea target draws drawables of its own that are never bound to a card.
+shared window do the frame's work for views they have not culled. **A portal view** (a mod's
+`engine_texture`, `scene/portal_view.rs`) reads last frame's cards without culling them for itself, so
+a card it shows may be stale or blank: accepted (maintainer, 2026-11-25), and the cull holds with a mod
+shader attached. The glass and sea target draws drawables of its own that are never bound to a card.
 
 **Cards shown per frame** (a whole autopilot race, `--seed 1`, HD, census of the culled set):
 Vineta K 1.75 of 8 on average (none on 37 % of frames), Anulpha Pass 3.15 of 7, Ubermall 0.42 of 2.
@@ -2592,8 +2594,9 @@ every card), 1280x720, compared with `cmp`: HD Vineta K and Anulpha Pass at tick
 3900 and 5200, Omega (default circuit) at 240 and 1500, 2048 at 240 and 1500: all byte-identical,
 with 0 to 3 cards drawn in the culled arm. Pulse PSP at ticks 120, 240 (the countdown: the gantry
 card, slot 8, is the one drawn), 1500 and 3000 and Pulse PS2 at 240 and 1500, with no mods installed:
-identical, with 0 or 1 of 5 cards drawn. **With the official `slipstream` mod installed nothing is
-culled on Pulse**, because it attaches a portal shader there.
+identical, with 0 or 1 of 5 cards drawn. (A first version culled nothing while a mod shader was
+attached, which the official `slipstream` mod does on Pulse; no portal view is drawn in a race
+without one, so these frames are the same either way.)
 
 **What it buys** (HD Vineta K forward, `--autopilot --seed 1`, `--no-audio`):
 
@@ -2611,4 +2614,5 @@ saves 5.1 ms there, and keeping their passes and clears while dropping their dra
 clears and stores, not their shading, so a card not drawn is nearly its whole cost.
 
 Tests: `tests::advert_views::one_view_encodes_only_the_cards_it_shows` (a card behind the camera is not
-encoded; with frustum culling off it is) and `a_split_frame_encodes_every_card`.
+encoded; with frustum culling off it is), `a_split_frame_encodes_every_card` and
+`a_frame_with_a_mod_shader_still_encodes_only_the_cards_it_shows`.
