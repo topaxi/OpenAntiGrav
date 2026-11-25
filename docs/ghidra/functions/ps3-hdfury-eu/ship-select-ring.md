@@ -298,13 +298,19 @@ re-captured with the ring phase read, ours drawn with the base binary and the sa
 27.4 to 2.9 mean grey, the ring box (460, 480, 560, 560) 19.7 to 14.3, the grid region (180, 440, 860, 720) 3.99 to 3.68; a
 second capture of the same state (ring phase 1.78 against 0.59 in the first) read 26.99 to 2.06, 19.61 to 14.15 and 3.98 to
 3.67, so the re-capture noise is under 0.15. The stills at circuit 0 are byte-identical to the base binary's with the flag
-absent, and every adopted HD and Omega menu pair (campaign, grid, cell, ship, track) re-renders byte-identical. The step:
-six stopped grabs at even circuits (the odd ones were drawn at the wrong circuit, the idx + 1 guess of the `NN_Track` id is
-not the list order) with ours at the picture's own progress (read off the red column's shift): the grid region 10.96 to 5.69.
+absent, and every adopted HD and Omega menu pair (campaign, grid, cell, ship, track) re-renders byte-identical (the other pairs
+were not re-captured: their pages draw none of this). With the fly-by frame fitted (`compare-menu-movie-phase.py`, frame 442) the
+whole frame reads 4.08 (base binary, same original) to 3.77; the adopted pair before this lane read 4.35 on an older capture.
+The step: twelve stopped grabs at frames 3 to 8 after a press, one per circuit step 1 to 11 and 0, ours drawn at RAM frame less 3
+(`--menu-picker-step-seconds`, the circuit's `NN_Track` id read off the `circuits:` loader line: the forward list is
+`01 08 03 04 02 06 05 07 17 19 21 23`, not index + 1), grid region mean grey 13.73 without the slide to 6.50 with it (every
+trial improves; frame 8 is the snap, 5.13 to 4.30 there). The lag is a frame or so loose between grabs. The input cooldown is
+wired as `Picker::step_gate` (`a_direction_inside_the_cooldown_of_the_last_one_taken_is_dropped`): the pad's four directions
+on a grid of rows are taken only 0.2 s after the last one taken. RAM: `right` held for 1.1 s stepped at 0.05, 0.56 and 0.88 s,
+so the input layer's own repeat (about 0.5 s then 0.3 s) is a separate floor over the 0.2 s one.
 
-**Not wired, in the box:** the `>>>` glyph's scroll and hide-while-cooling (needs the 0.2 s cooldown too), the held
-direction's repeat (ours steps on every press), the fill (0.87 of `HD_Blue`: the original draws `Hexagon_HD_Faded.gtf`, ours
-`Hexagon_HD.gtf`, 149 against 172 on both Ship and Track Select), the cells' edge fade.
+**Not wired, in the box:** the `>>>` glyph's scroll and hide-while-cooling, the fill (0.87 of `HD_Blue`: the original draws
+`Hexagon_HD_Faded.gtf`, ours `Hexagon_HD.gtf`, 149 against 172 on both Ship and Track Select), the cells' edge fade.
 
 ## Ready to wire
 
@@ -331,7 +337,7 @@ cells' fade toward the edges (`_SetCell`: per-vertex lerp `HexColFade` to `HexCo
 
 ## Omega
 
-**Track Select: ported.** `/omega` `eboot-ps4-omega-eu-v107.bin` registers `TrackHexSelection` at `FUN_0152bab0` (the string at
+**Track Select: ported** (test `omega_campaign_screens_ground_truth::omegas_track_grid_slides_on_a_step_and_pulses_on_its_own_clock`). `/omega` `eboot-ps4-omega-eu-v107.bin` registers `TrackHexSelection` at `FUN_0152bab0` (the string at
 `0x0188547f`, vtable `0x01989fd8`), slot 3 is `FUN_015298d0`: the same update as HD's `0x002096f0` instruction for instruction as far
 as read: the counter at `+0x200` (clamped to 0 above 1.0), `0xbe4ccccd` (-0.2) stored after a press, the refill (`FUN_0152b650`) when
 `+0x174 - dt <= 0` and `+0x1a1` is set, `FUN_0145b490` (the step: 0.1 stored to `+0x174` as `0x3dcccccd`, the parity byte `+0x130`

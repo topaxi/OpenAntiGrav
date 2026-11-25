@@ -40,6 +40,13 @@ pub mod pointer;
 pub mod slideshow;
 mod split;
 
+/// How long a grid of rows ignores the pad after it takes a direction: `TrackHexSelection_Update`
+/// sets its input counter to -0.2 on every direction it takes and takes none while it is negative
+/// (`docs/ghidra/functions/ps3-hdfury-eu/ship-select-ring.md`, "Track Select"). RAM: held for a
+/// second, `right` stepped at 0.05, 0.56 and 0.88 s, so it is a floor under the input layer's
+/// own repeat and not its rate.
+const STEP_COOLDOWN_SECONDS: f32 = 0.2;
+
 /// The grid the selection screens are authored in on the PSP, which every
 /// number this module carries of its own was read against. A PS2 layout is
 /// the same screens scaled onto its 640x448 grid, so a constant measured
@@ -197,6 +204,9 @@ pub struct Picker {
     text_seconds: Option<f32>,
     /// A still's pin of the hex ring's pulse clock ([`Self::set_ring_seconds`]).
     ring_seconds: Option<f32>,
+    /// The input cooldown of a grid of rows (`TrackHexSelection + 0x14c`): ticks up by `dt`, and a
+    /// direction is taken only at or above 0.0, which takes it to `-STEP_COOLDOWN_SECONDS`.
+    step_gate: f32,
     /// Seconds since the selection last moved - the slideshow's clock,
     /// which the original restarts on every selection (`TrackSelection_ApplySelection`
     /// transitions the new circuit's own state machine to `Info` afresh).
@@ -318,6 +328,7 @@ impl Picker {
             seconds: 0.0,
             text_seconds: None,
             ring_seconds: None,
+            step_gate: 0.0,
             since_selection: 0.0,
             slide: hd::slide::Slide::at_rest(index),
             entry: EntryClock::default(),
@@ -544,6 +555,7 @@ impl Picker {
         let (column, count, row) = self.slide_axis();
         self.slide.follow_row(row);
         self.slide.tick(dt, column, count);
+        self.step_gate = (self.step_gate + dt).min(1.0);
         self.entry.tick(dt);
         self.scroll.tick(dt, &pointer::hex_extent());
     }
@@ -626,17 +638,24 @@ impl Picker {
         } else {
             (Button::Down, Button::Up, Button::Right, Button::Left)
         };
-        if input.take(next) {
-            out.extend(self.step_entry(1));
-        }
-        if input.take(previous) {
-            out.extend(self.step_entry(-1));
-        }
-        if input.take(next_variant) {
-            out.extend(self.step_vertical(1));
-        }
-        if input.take(previous_variant) {
-            out.extend(self.step_vertical(-1));
+        for (button, step, vertical) in [
+            (next, 1, false),
+            (previous, -1, false),
+            (next_variant, 1, true),
+            (previous_variant, -1, true),
+        ] {
+            if !input.take(button) || (self.columns > 0 && self.step_gate < 0.0) {
+                continue;
+            }
+            let moved = if vertical {
+                self.step_vertical(step)
+            } else {
+                self.step_entry(step)
+            };
+            if self.columns > 0 && moved.is_some() {
+                self.step_gate = -STEP_COOLDOWN_SECONDS;
+            }
+            out.extend(moved);
         }
         // A pad step interrupts a fling; a coast's own steps come after.
         if !out.is_empty() {

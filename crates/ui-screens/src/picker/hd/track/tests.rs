@@ -179,10 +179,18 @@ fn grid() -> Picker {
     Picker::new(Kind::Track, entries, Some("a"), None).with_rows(3)
 }
 
+/// Lets the grid's input cooldown run out: more than 0.2 s of ticks.
+fn rest(picker: &mut Picker) {
+    for _ in 0..13 {
+        picker.tick(1.0 / 60.0);
+    }
+}
+
 #[test]
 fn right_wraps_along_the_row_and_up_down_switch_direction() {
     let mut picker = grid();
     for expected in [1, 2, 0] {
+        rest(&mut picker);
         assert_eq!(press(&mut picker, Button::Right), vec![Event::Moved]);
         assert_eq!(
             picker.index(),
@@ -190,14 +198,50 @@ fn right_wraps_along_the_row_and_up_down_switch_direction() {
             "twelve presses in the original, three here"
         );
     }
+    rest(&mut picker);
     assert_eq!(press(&mut picker, Button::Left), vec![Event::Moved]);
     assert_eq!(picker.index(), 2, "left wraps the other way");
+    rest(&mut picker);
     assert_eq!(press(&mut picker, Button::Down), vec![Event::Moved]);
     assert_eq!(picker.index(), 5, "same circuit, the reverse row");
+    rest(&mut picker);
     assert_eq!(press(&mut picker, Button::Right), vec![Event::Moved]);
     assert_eq!(picker.index(), 3, "still on the reverse row");
+    rest(&mut picker);
     assert_eq!(press(&mut picker, Button::Up), vec![Event::Moved]);
     assert_eq!(picker.index(), 0);
+}
+
+/// `TrackHexSelection_Update` takes a direction only while its input counter is at or above 0.0 and
+/// sets it to -0.2 when it does: a second direction inside 0.2 s of a taken one is dropped, not
+/// deferred, and any of the four directions starts the cooldown. This fails if the gate is dropped.
+#[test]
+fn a_direction_inside_the_cooldown_of_the_last_one_taken_is_dropped() {
+    let mut picker = grid();
+    assert_eq!(press(&mut picker, Button::Right), vec![Event::Moved]);
+    assert!(
+        press(&mut picker, Button::Right).is_empty(),
+        "the same frame"
+    );
+    for _ in 0..11 {
+        picker.tick(1.0 / 60.0);
+    }
+    assert!(
+        press(&mut picker, Button::Right).is_empty(),
+        "11 frames in: still cooling"
+    );
+    assert!(press(&mut picker, Button::Down).is_empty(), "the rows too");
+    assert_eq!(picker.index(), 1);
+    for _ in 0..2 {
+        picker.tick(1.0 / 60.0);
+    }
+    assert_eq!(press(&mut picker, Button::Down), vec![Event::Moved]);
+    assert_eq!(
+        picker.index(),
+        4,
+        "a vertical step is taken after it and cools too"
+    );
+    assert!(press(&mut picker, Button::Right).is_empty());
 }
 
 #[test]
