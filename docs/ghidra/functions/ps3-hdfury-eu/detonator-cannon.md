@@ -952,8 +952,10 @@ into the second row (`r1 + 0xf0`, `0x00122cb8`); a second vector orthogonalised 
 source of the second vector (`r29 + r24`) and the exact translation are not traced, nothing was watched live. Ours plays
 the effect at the hit point with no orientation (`play_detonator_events`), from the engine's own profile rather than
 the disc's emitters (`docs/formats/pob.md`), so turning it would orient a stand-in. **Open**: a live read of the
-spawned instance's matrix (a breakpoint at `0x00123338` under the interpreter, `r6`), and whether the disc's
-`WO_CANNON_SPARKS_DETONATOR` emitters are directional.
+spawned instance's matrix (a breakpoint at `0x00123338` under the interpreter, `r6`; one attempt on 2026-11-25 failed
+before reaching it: the interpreter serve restored, then timed out on its first GDB exchange and exited), and whether
+the disc's `WO_CANNON_SPARKS_DETONATOR` emitters are directional. Also not captured: camera-matched frames of the
+original at a bounce and on the loop (a yawed craft's chase camera lags it and the bolts leave the view).
 
 **2048 / Omega.** The half turn: **checked, applies; wired as HD's** (`round_matrix` is title-agnostic). Both ship
 the same model with the same extent along `+Z` (`psp2_material_dump` with `DECL_SUB=0`: 2048 `-2..30`, Omega
