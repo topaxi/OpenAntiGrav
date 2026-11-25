@@ -93,6 +93,22 @@ pub(super) struct PlayerStep {
 }
 
 impl RaceSim {
+    /// Whether the left shoulder is this race's flip or EMP button rather than an airbrake.
+    ///
+    /// HD binds the flip to L1 and the airbrakes to L2 and R2
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/eliminator-flip.md`), and Detonator's L1 is the EMP.
+    /// The composition root hands this to `oag_input::Controls::set_l1_is_flip`, so the pad
+    /// raises `Button::Flip` alone for L1 and the snapshot reaches the sim already split: L2's
+    /// airbrake is not read as L1's.
+    #[must_use]
+    pub fn l1_is_flip(&self) -> bool {
+        self.flip_law.is_some()
+            || self
+                .detonator
+                .as_ref()
+                .is_some_and(|detonator| detonator.emp.is_some())
+    }
+
     /// What slot `slot` asks of its craft this tick: the snapshot mapped
     /// through the control scheme, or the driver's answer when the craft is
     /// being flown for the player, then the finish line's cap, a Disruptor's
@@ -111,17 +127,7 @@ impl RaceSim {
             self.autopilot_controls(slot)
         } else {
             self.release_autopilot(slot);
-            // Detonator's L1 is the EMP button, so it reads as that alone, as the flip's does.
-            let emp_on_l1 = self
-                .detonator
-                .as_ref()
-                .is_some_and(|detonator| detonator.emp.is_some());
-            let snapshot = if self.flip_law.is_some() || emp_on_l1 {
-                snapshot.shoulder_flips()
-            } else {
-                *snapshot
-            };
-            ship_controls(&snapshot, self.scheme)
+            ship_controls(snapshot, self.scheme)
         };
         // Past the line the original's own law sets the pace - see
         // `race::finished_thrust`.

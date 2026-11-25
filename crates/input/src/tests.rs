@@ -770,3 +770,32 @@ fn a_button_is_the_button_the_device_pressed() {
     assert!(controls.buttons().is_pressed(Button::Circle));
     assert!(!controls.buttons().is_pressed(Button::Triangle));
 }
+
+/// An L1 press while L2 is held is the flip's edge and no new `L` edge: with L1 the flip, `L`
+/// comes from the trigger alone, so the sideshift the shoulder counts is not asked for twice.
+#[test]
+fn an_l1_press_over_a_held_l2_makes_a_flip_edge_and_no_l_edge() {
+    let mut config = pad::TriggerConfig::default();
+    config.l1_is_flip = true;
+    let l1 = pad::bits_of(gilrs::Button::LeftTrigger, Button::L, config.l1_is_flip);
+    let tick = |buttons: u32| {
+        pad::resolve(
+            Reading {
+                buttons,
+                brake: 0.6,
+                ..Reading::default()
+            },
+            config,
+        )
+    };
+    let mut controls = Controls::without_pad();
+    let first = controls.merge_one(tick(0));
+    assert!(first.buttons.is_pressed(Button::L));
+    let second = controls.merge_one(tick(l1));
+    assert!(second.buttons.is_pressed(Button::Flip));
+    assert!(second.buttons.is_held(Button::L));
+    assert!(
+        !second.buttons.is_pressed(Button::L),
+        "the L1 press made an L edge"
+    );
+}
