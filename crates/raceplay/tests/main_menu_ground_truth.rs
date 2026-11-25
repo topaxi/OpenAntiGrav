@@ -1023,6 +1023,9 @@ fn touch_keys(root: &Node, screen: &str) -> Vec<String> {
                     });
                 out.push(key.unwrap_or_default().to_string());
             }
+            if child.name.eq_ignore_ascii_case("Touchlist") {
+                out.push(child.attr("name").unwrap_or_default().to_string());
+            }
             collect(child, out);
         }
     }
