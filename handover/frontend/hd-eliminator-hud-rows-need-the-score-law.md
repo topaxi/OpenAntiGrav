@@ -1,7 +1,7 @@
 ---
 status: re-first
 titles: [hd, omega, 2048]
-updated: 2026-11-25
+updated: 2026-11-26
 summary: "HD, Omega and 2048 Eliminators are won on score and drawn by their own layouts; per-pad cycle, 2048 end test, ScoreFeedBack open"
 ---
 
@@ -21,6 +21,8 @@ summary: "HD, Omega and 2048 Eliminators are won on score and drawn by their own
   executable's tiered target state and end test are unread (`docs/formats/2048-campaign.md`, "The
   objective law"). Which events are tiered also decides whether the rows show at all.
 - **Omega's own writer of the 2048-era elimination HUD** is unread; ours runs 2048's law there.
+- **2048's HD and Fury cells** write the target line `"%s (%d)"`; ours writes HD's `"%s ( %d )"`.
+  Their row format is unread.
 - **2048's opponent scale table:** which of the two the race reads is unconfirmed; ours takes the
   loaded `WeaponAIStats` row.
 - **Pace on 2048 and Omega** is HD's, tuned on HD alone.

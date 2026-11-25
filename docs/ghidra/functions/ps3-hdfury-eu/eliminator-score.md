@@ -199,7 +199,8 @@ in.
   the value the race ends on; which events are tiered is unread. The `Position` value is not drawn
   either: the mode's HUD flags (`0x10a93`) leave out the position bit (confidence 65). The HD and
   Fury layouts (`*_HUD_HD.xml`) take their target line at `PositionTxt2`, which `0x81158d88` writes
-  as `"%s (%d)"`.
+  as `"%s (%d)"`. **Checked, differs, not wired:** ours writes HD's `"%s ( %d )"` there on every
+  title.
 - **2048's results table:** **checked, differs.** Its executable carries no
   `%s - %s: %d %s: %d` string, and its summaries are the touch screens'.
 - **Omega:** the score law: **ported** (the same awards, read on its 1.07 patch,

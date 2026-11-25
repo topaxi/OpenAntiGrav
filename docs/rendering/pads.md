@@ -163,6 +163,11 @@ holds 64 entries. `oag_raceplay` rewrites those three entries a frame
 `psp2_circuit_pads_ground_truth` asserts every weapon-pad triangle, and no other, draws from the
 entry of the class its name gives.
 
+The term is the material's, so it also lights the speed pads Omega's `zone_2` draws on
+`weapon_pads.rcsmaterial`, from the material's authored `W_Cycle` (no class entry): their bars were
+black without it. HD's `zone_2` in ours shows the same pad with lit cyan bars (2026-11-26, both at
+tick 420).
+
 **Open:** each pad's own start phase (the original seeds it from the object's address) and the
 cooling colour on a collected pad. Both need a glow entry per pad, which the 64-entry table does
 not hold.
