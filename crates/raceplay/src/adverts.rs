@@ -246,6 +246,8 @@ pub(super) struct Cards {
     uniform_writes: std::cell::Cell<usize>,
     depth: wgpu::TextureView,
     velocity: wgpu::TextureView,
+    /// The one-pixel target of `OAG_SKIP_PASSES=extra-passes`, built only when it is named.
+    pass_probe: Option<wgpu::TextureView>,
 }
 
 impl std::fmt::Debug for Cards {
@@ -330,6 +332,24 @@ impl Cards {
             oag_gpu::formats::VELOCITY_FORMAT,
             wgpu::TextureUsages::RENDER_ATTACHMENT,
         );
+        let pass_probe = oag_gpu::skip::named("extra-passes").then(|| {
+            device
+                .create_texture(&wgpu::TextureDescriptor {
+                    label: Some("extra pass"),
+                    size: wgpu::Extent3d {
+                        width: 1,
+                        height: 1,
+                        depth_or_array_layers: 1,
+                    },
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    dimension: wgpu::TextureDimension::D2,
+                    format: FORMAT,
+                    usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                    view_formats: &[],
+                })
+                .create_view(&wgpu::TextureViewDescriptor::default())
+        });
         let mut gpu = Vec::with_capacity(cards.len());
         for card in cards {
             let drawable = Drawable::new(
@@ -387,6 +407,7 @@ impl Cards {
             uniform_writes: std::cell::Cell::new(0),
             depth,
             velocity,
+            pass_probe,
         })
     }
 
@@ -440,6 +461,8 @@ impl Cards {
         // A card is drawn into its own texture, outside any view: its matrices go straight to
         // its own buffer.
         let queue = &Uploads::immediate(queue);
+        oag_gpu::skip::extra_passes(encoder, self.pass_probe.as_ref());
+        let draws = !oag_gpu::skip::skipped("advert-draws");
         for card in &self.cards {
             let seconds = card.timeline.as_ref().map_or(seconds, |timeline| {
                 timeline.apply(&card.drawable, gantry_clock(timeline))
@@ -497,8 +520,10 @@ impl Cards {
                 multiview_mask: None,
             });
             oag_gpu::perfprobe::marks::mark(&mut pass, "advert card");
-            card.drawable
-                .draw(&mut pass, ViewBlock::NONE, None, None, None, None);
+            if draws {
+                card.drawable
+                    .draw(&mut pass, ViewBlock::NONE, None, None, None, None);
+            }
             oag_gpu::perfprobe::marks::close(&mut pass);
         }
     }
