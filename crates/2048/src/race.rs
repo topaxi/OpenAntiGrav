@@ -505,12 +505,11 @@ pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
     craft: Some(DETONATOR_CRAFT),
     handling: Some(DETONATOR_HANDLING),
     objects: Some(DETONATOR_OBJECTS),
-    // 2048's pad arms are unread (`detonator-emp.md`, "2048 and Omega": the gauge is read, the
-    // pads, fire and wave are not), so its pads keep their race behaviour and its EMP never
-    // charges.
+    // Both pad arms are HD's: a speed pad charges in place of its boost, a weapon pad charges
+    // in place of its pickup (`docs/ghidra/functions/vita-2048-eu-v104/detonator-pads.md`).
     pads: oag_title::DetonatorPads {
-        speed_pad_charges: oag_title::pre_race::Sourced::chosen(false),
-        weapon_pad_charges: oag_title::pre_race::Sourced::chosen(false),
+        speed_pad_charges: oag_title::pre_race::Sourced::measured(true),
+        weapon_pad_charges: oag_title::pre_race::Sourced::measured(true),
         replaces_circuit_pads: oag_title::pre_race::Sourced::measured(true),
     },
     // 2048's cue names are hashed and its Detonator speech bank is not located.
