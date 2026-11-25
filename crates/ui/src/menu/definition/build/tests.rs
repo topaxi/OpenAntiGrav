@@ -59,7 +59,9 @@ fn every_title_shows_its_own_top_level_and_the_extras_attach_where_they_say() {
     // Pulse and Pure draw an attached row inline: the order is the list. Each shows MULTIPLAYER
     // where its own disc has its multiplayer entry (Pulse's `FE_MP` after the race box, Pure's
     // `Multiplayer` after `Single Player`, with RACEBOX from the extras in between: the same list).
-    let pulse = [
+    // Pulse's disc has an EXTRAS row, whose page holds BENCHMARK; Pure has none, so BENCHMARK
+    // hangs off OPTIONS there.
+    let pure = [
         "campaign",
         "racebox",
         "racebox>replays",
@@ -71,8 +73,14 @@ fn every_title_shows_its_own_top_level_and_the_extras_attach_where_they_say() {
         "options>quit",
         "photo_mode",
     ];
+    let pulse: Vec<&str> = pure
+        .iter()
+        .copied()
+        .filter(|row| *row != "options>benchmark")
+        .chain(["extras"])
+        .collect();
     assert_eq!(main_rows(Some(oag_pulse::TITLE), HEADER).unwrap(), pulse);
-    assert_eq!(main_rows(Some(oag_pure::TITLE), HEADER).unwrap(), pulse);
+    assert_eq!(main_rows(Some(oag_pure::TITLE), HEADER).unwrap(), pure);
     // HD and Omega open on RECORDS themselves, so it is no one's child.
     let hd = [
         "campaign",
@@ -106,6 +114,52 @@ fn every_title_shows_its_own_top_level_and_the_extras_attach_where_they_say() {
     );
 }
 
+/// The page of this id in the tree built for `title`, and the actions it runs.
+fn page_actions(title: &oag_title::Title, page: &str) -> Option<Vec<String>> {
+    let extras = extras();
+    let english = english();
+    let (tree, _) = Definition::build(
+        crate::menu::BUILT_IN,
+        &english,
+        &english,
+        Some(For {
+            title,
+            platform: oag_assets::Platform::Psp,
+            updated: false,
+        }),
+        &[ModMenu {
+            id: "oag.extras",
+            text: &extras,
+        }],
+    )
+    .unwrap();
+    tree.page(page).map(|page| {
+        page.entries
+            .iter()
+            .filter_map(|entry| match entry {
+                Entry::Run { action, .. } => Some(action.name().to_string()),
+                _ => None,
+            })
+            .collect()
+    })
+}
+
+#[test]
+fn pulses_extras_row_opens_a_page_holding_benchmark_and_a_title_without_one_has_no_such_page() {
+    assert_eq!(
+        page_actions(oag_pulse::TITLE, "extras"),
+        Some(vec!["benchmark".to_string()])
+    );
+    for title in [
+        oag_pure::TITLE,
+        oag_hd::TITLE,
+        oag_omega::TITLE,
+        oag_2048::TITLE,
+    ] {
+        assert_eq!(page_actions(title, "extras"), None, "{}", title.name);
+    }
+}
+
 #[test]
 fn no_title_keeps_every_vanilla_row_and_the_extras_around_them() {
     assert_eq!(
@@ -117,10 +171,10 @@ fn no_title_keeps_every_vanilla_row_and_the_extras_around_them() {
             "racebox>replays",
             "options",
             "options>mods",
-            "options>benchmark",
             "options>quit",
             "photo_mode",
-            "records"
+            "records",
+            "extras"
         ]
     );
 }

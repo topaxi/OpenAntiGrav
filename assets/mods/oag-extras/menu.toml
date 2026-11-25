@@ -113,9 +113,12 @@ subtitle_string_id = "OAG_MENU_PHOTO_MODE_SUBTITLE"
 
 # BENCHMARK flies one fixed race per title and reads the frame rate back (`docs/tools/in-game-benchmark.md`).
 # The graphics page has a RUN BENCHMARK row too, so settings can be changed and measured without
-# leaving it. Chosen, not measured.
+# leaving it. A title whose own main menu has an EXTRAS row (Wipeout Pulse's `FE_EXTRAS`) keeps
+# the vanilla EXTRAS page (`assets/ui/menu.toml`), which holds a row of this id, so this row is
+# skipped there (`only_if_missing`); every other title shows it after OPTIONS. Chosen, not measured.
 [[entry]]
 id = "benchmark"
+only_if_missing = true
 parent = "options"
 kind = "action"
 label = "BENCHMARK"

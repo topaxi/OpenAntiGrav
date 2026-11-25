@@ -11,7 +11,7 @@ the player's present mode, and the same figures come out of a desktop, a Steam D
 | From | How | BACK on the stats screen |
 | --- | --- | --- |
 | The command line | `oag-game --benchmark [title] [--preset NAME]` | quits |
-| The menus | BENCHMARK, the row the built-in `oag-extras` mod adds after OPTIONS (`assets/mods/oag-extras/menu.toml`; on a flat main menu it draws inline after OPTIONS) | the page it was fired from |
+| The menus | Pulse: EXTRAS (its disc's own `FE_EXTRAS` row, last in the disc's order) opens an EXTRAS page of ours holding BENCHMARK. Every other title: BENCHMARK, the row the built-in `oag-extras` mod adds after OPTIONS (`assets/mods/oag-extras/menu.toml`; on a flat main menu it draws inline after OPTIONS) | the page it was fired from |
 | The graphics page | RUN BENCHMARK, before ADVANCED (`assets/ui/menu.toml`): change a setting, run, change it again | the graphics page |
 
 `title` is a disc image or folder like any first argument, or a title's short name (`pulse`,
@@ -125,5 +125,11 @@ checks each value against the page.
 
 The Steam Deck and a phone were not run for this page: the code path is the window's on every
 platform (the launch file hands `--benchmark` to the same parser), but no result from either is
-in the record. The EXTRAS row of Pulse's own main menu (`FE_EXTRAS`, nothing built behind it)
-holds no BENCHMARK: the row sits after OPTIONS on every title instead.
+in the record.
+
+`FE_EXTRAS` outside Pulse: HD's, Omega's and Pure's main menus author no such row
+(`crates/raceplay/tests/main_menu_ground_truth.rs` reads each list back), so they keep BENCHMARK
+after OPTIONS. 2048's touch grid has an `FE_EXTRAS` tile (manual, credits) that is not wired to
+BENCHMARK. The EXTRAS page is ours: the tree drops it on a title whose main menu has no EXTRAS row
+(`Definition::build`), and the Pulse and Pure main-menu compare pairs re-render byte-identical
+because they draw the disc's own rows.

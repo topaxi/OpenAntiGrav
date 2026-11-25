@@ -10,10 +10,11 @@
 //! OPTIONS where the original has none) arrive the same way, from the built-in
 //! `oag-extras`. ADR-0066 has the model.
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 
 use serde::Deserialize;
 
+use super::super::Entry;
 use super::{
     Definition, Error, Page, RowMeta, StringTable, raw, resolve, resolve_subtitle, resolved,
 };
@@ -161,6 +162,7 @@ impl Definition {
             .iter()
             .filter_map(|meta| meta.id.clone())
             .collect();
+        let vanilla_reach = tree.reachable_pages();
         if let Some(target) = title {
             tree.keep_title_rows(target)?;
         }
@@ -171,9 +173,13 @@ impl Definition {
             .enumerate()
             .map(|(i, page)| (page.id.clone(), i))
             .collect();
-        let mut owners: HashMap<String, String> = tree.pages[root]
-            .meta
+        let shown = tree.reachable_pages();
+        let mut owners: HashMap<String, String> = tree
+            .pages
             .iter()
+            .enumerate()
+            .filter(|(at, _)| shown.contains(at))
+            .flat_map(|(_, page)| page.meta.iter())
             .filter_map(|meta| meta.id.clone())
             .map(|id| (id, "the vanilla menu".to_string()))
             .collect();
@@ -222,6 +228,7 @@ impl Definition {
             }
             report.push(done);
         }
+        tree.drop_pages_only_a_dropped_row_opened(&vanilla_reach);
         tree.check().map_err(|e| match e {
             Error::Unreachable(id) => match id.split_once('/') {
                 Some((owner, short)) => fault(
@@ -347,6 +354,37 @@ impl Definition {
         reorder(&mut page.subtitles, &order);
         reorder(&mut page.meta, &order);
         Ok(())
+    }
+
+    /// Removes the pages `reached` (before the title's rows were kept) that no row, a mod's
+    /// included, reaches now: a title without an EXTRAS row has no EXTRAS page either. A page
+    /// that was unreachable to begin with stays, for [`Definition::check`] to name.
+    fn drop_pages_only_a_dropped_row_opened(&mut self, reached: &BTreeSet<usize>) {
+        let still = self.reachable_pages();
+        let mut at = vec![None; self.pages.len()];
+        let mut kept = 0;
+        for (old, slot) in at.iter_mut().enumerate() {
+            if still.contains(&old) || !reached.contains(&old) {
+                *slot = Some(kept);
+                kept += 1;
+            }
+        }
+        if kept == self.pages.len() {
+            return;
+        }
+        let mut old = 0;
+        self.pages.retain(|_| {
+            old += 1;
+            at[old - 1].is_some()
+        });
+        self.root = at[self.root].unwrap_or(0);
+        for page in &mut self.pages {
+            for entry in &mut page.entries {
+                if let Entry::Submenu { target, .. } = entry {
+                    *target = at[*target].unwrap_or(0);
+                }
+            }
+        }
     }
 
     #[allow(

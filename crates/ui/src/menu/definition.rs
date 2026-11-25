@@ -480,7 +480,8 @@ impl Definition {
         Ok(())
     }
 
-    fn check_reachable(&self) -> Result<(), Error> {
+    /// The pages the root page, a mod settings page or an action that pushes a page reaches.
+    fn reachable_pages(&self) -> BTreeSet<usize> {
         let mut seen = BTreeSet::new();
         let mut stack = vec![self.root];
         // A mod's settings page, which the MODS page's SETTINGS row opens.
@@ -507,7 +508,11 @@ impl Definition {
                 }
             }
         }
+        seen
+    }
 
+    fn check_reachable(&self) -> Result<(), Error> {
+        let seen = self.reachable_pages();
         for (index, page) in self.pages.iter().enumerate() {
             if !seen.contains(&index) {
                 return Err(Error::Unreachable(page.id.clone()));

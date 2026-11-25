@@ -235,6 +235,52 @@ fn the_in_game_benchmark_flies_the_race_the_offscreen_bench_does() {
     );
 }
 
+/// Pulse's EXTRAS row opens a page of ours holding BENCHMARK, which flies the same race the
+/// offscreen bench does and returns to that page. Fails on a build that leaves `FE_EXTRAS`
+/// unwired, drops the EXTRAS page, or sends the stats screen's BACK anywhere else.
+#[test]
+#[ignore = "needs data/images/pulse-psp-eu.chd and a GPU"]
+fn the_benchmark_row_is_on_pulses_extras_page_and_returns_to_it() {
+    let Some(image) = oag_testdata::image("data/images/pulse-psp-eu.chd") else {
+        return;
+    };
+    let base = std::env::temp_dir().join("oag-in-game-benchmark-extras-ground-truth");
+    let (offscreen, _) = bench(&base.join("offscreen"), &image);
+    let dir = base.join("menu");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("a temp directory");
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
+        .arg(&image)
+        .args(["--no-audio", "--no-intro", "--ticks"])
+        .arg(TICKS.to_string())
+        .arg("--drive")
+        .arg(
+            "boot; select extras; press cross; until page=extras within 300; \
+             select benchmark; press cross; until benchmark=stats within 3000; press cross; \
+             until stage=menu within 600; expect page=extras; quit",
+        )
+        .env("XDG_CONFIG_HOME", dir.join("config"))
+        .env("XDG_STATE_HOME", dir.join("state"))
+        .env("XDG_DATA_HOME", dir.join("data"))
+        .output()
+        .expect("running oag-game");
+    assert!(
+        out.status.success(),
+        "oag-game: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let runs: Vec<_> = std::fs::read_dir(dir.join("data/oag/bench"))
+        .expect("the benchmark wrote a run directory")
+        .flatten()
+        .collect();
+    assert_eq!(runs.len(), 1, "one run");
+    let json = std::fs::read_to_string(runs[0].path().join("pulse.json")).expect("a result file");
+    assert_eq!(
+        field(&json, "final_state_hash"),
+        field(&offscreen, "final_state_hash")
+    );
+}
+
 /// A preset changes what a frame costs and never the race, and never the player's own settings
 /// file: the run with `--preset low` says it drew at half resolution and ends on the plain run's
 /// state hash, and no `settings.toml` of the player's holds the preset's values. Fails on a build

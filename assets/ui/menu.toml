@@ -135,6 +135,39 @@ target = "records"
 subtitle = "Your best times and scores, by track and class"
 subtitle_string_id = "OAG_MENU_RECORDS_SUBTITLE"
 
+# EXTRAS is a row Wipeout Pulse's own main menu has (`FE_EXTRAS`) and nothing was built behind.
+# The page behind it is ours and holds what this project adds that is not a setting: BENCHMARK for
+# now. A title whose main menu has no such row gets BENCHMARK from the built-in `oag-extras` mod
+# instead (its row takes this row's id, so it is skipped where this one is built). Chosen, not
+# measured.
+[[page.entry]]
+id = "extras"
+kind = "submenu"
+label = "EXTRAS"
+string_id = "OAG_MENU_EXTRAS"
+target = "extras"
+subtitle = "What this project adds: the benchmark"
+subtitle_string_id = "OAG_MENU_EXTRAS_SUBTITLE"
+
+[[page]]
+id = "extras"
+title = "EXTRAS"
+title_string_id = "OAG_MENU_EXTRAS"
+
+[[page.entry]]
+id = "benchmark"
+kind = "action"
+label = "BENCHMARK"
+string_id = "OAG_MENU_BENCHMARK"
+action = "benchmark"
+subtitle = "Fly one fixed race and read the frame rate, the lows and the frame times"
+subtitle_string_id = "OAG_MENU_BENCHMARK_SUBTITLE"
+
+[[page.entry]]
+kind = "back"
+label = "BACK"
+string_id = "OAG_MENU_BACK"
+
 [[page]]
 id = "multiplayer"
 title = "MULTIPLAYER"
