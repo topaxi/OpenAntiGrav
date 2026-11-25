@@ -436,10 +436,6 @@ pub(crate) struct Session {
     /// which source is precisely what has not been decided yet. See
     /// [`Session::finish_launcher`].
     pub(crate) race_options: Option<race::Options>,
-    /// The render scale the race on screen was loaded at, which `reflection_resolution`
-    /// `scaled` sized its glass and sea target from. A photo redraws the scene at a higher
-    /// scale but keeps that target, so its metadata names this scale.
-    pub(crate) loaded_render_scale: Option<oag_display::display::Scale>,
     /// The track the command line named (`--ballisticng-track`/`--track-file`), which
     /// every launch that does not pick its own sets on `race_options`; a CUSTOM
     /// a two-title race sets its file there instead, and RACE AGAIN keeps whatever was

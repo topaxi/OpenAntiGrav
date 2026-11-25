@@ -568,6 +568,26 @@ impl Drawable {
             mesh_render::zone::rebind(device, queue, &self.fog, &self.zone_rebind, stage);
     }
 
+    /// Rebuilds bind group 2 over a new behind-the-glass target: `stage` is the Zone stage the
+    /// group shows now, or `None` for the circuit's own. The group is built over the buffer
+    /// this drawable reads its scene block from now, which [`Self::share_scene`] may have
+    /// moved. Everything else it draws with is untouched.
+    pub(super) fn rebind_behind_glass(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        glass: &wgpu::TextureView,
+        stage: Option<&mesh_render::zone::StageArt>,
+    ) {
+        let mut kept = (*self.zone_rebind).clone();
+        kept.set_behind_glass(glass.clone());
+        self.fog_bind = match stage {
+            Some(stage) => mesh_render::zone::rebind(device, queue, &self.fog, &kept, stage),
+            None => mesh_render::zone::rebind_buffer(&self.fog, device, &kept),
+        };
+        self.zone_rebind = std::sync::Arc::new(kept);
+    }
+
     /// Tells a gated drawable whether this frame's draws write the velocity buffer:
     /// `false` swaps in the pipelines with the write masked (see
     /// [`mesh_render::Velocity::Gated`]); a drawable that is not gated ignores it.

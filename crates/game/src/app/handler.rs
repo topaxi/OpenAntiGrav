@@ -566,7 +566,6 @@ impl App {
                 .as_ref()
                 .and_then(|options| options.foreign_track.clone()),
             race_options: self.race_options.clone(),
-            loaded_render_scale: None,
             pending: self.pending.take(),
             trace: self.trace,
             log_every: self.log_every,

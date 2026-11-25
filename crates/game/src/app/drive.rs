@@ -600,6 +600,10 @@ fn state_of(session: &mut Session) -> State {
         state.photo = Some(session.photo_lens_name().to_string());
         state.photo_fx = session.photo_fx_name();
         state.photo_job = session.photo_fx_name().map(|_| session.photo_job_name());
+        state.glass_target = stage
+            .scene
+            .reflection_target_size()
+            .map(|(width, height)| format!("{width}x{height}"));
         state.endrace = stage
             .endrace
             .as_ref()

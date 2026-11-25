@@ -456,10 +456,13 @@ impl RenderProfile {
     /// above 100 is the player's own supersampling, which costs nothing more, and stays) and no
     /// upscaler, so the picture does not depend on how the player trades quality for speed while
     /// playing. The anti-aliasing the profile asks for stays: MSAA, and FXAA or SMAA where they
-    /// are the reconstruction. A profile that already draws that way draws the same picture.
+    /// are the reconstruction. The glass and sea target is the original's size, whatever
+    /// `reflection_resolution` the player plays with. A profile that already draws that way
+    /// draws the same picture.
     #[must_use]
     pub fn for_a_photo(&self) -> Self {
         let mut photo = self.clone();
+        photo.reflection_resolution = oag_display::display::ReflectionResolution::Original;
         let percent = u32::from(self.render_scale).max(100);
         photo.render_scale = oag_display::display::Scale::try_from(percent).unwrap_or_default();
         photo.render_scale_chosen = true;
@@ -470,10 +473,20 @@ impl RenderProfile {
     }
 
     /// Whether [`Self::for_a_photo`] draws a different picture than this profile does, for a
-    /// scene rectangle of `rect_pixels` (see [`Self::scale_for`]).
+    /// scene rectangle of `rect_pixels` (see [`Self::scale_for`]). `glass_target` is whether the
+    /// circuit draws a glass or sea target: a smaller one is a reason to redraw only there.
     #[must_use]
-    pub fn photo_differs(&self, rect_pixels: (f32, f32), gamescope: bool) -> bool {
-        u32::from(self.scale_for(rect_pixels, gamescope)) < 100 || self.reconstruction.is_upscaler()
+    pub fn photo_differs(
+        &self,
+        rect_pixels: (f32, f32),
+        gamescope: bool,
+        glass_target: bool,
+    ) -> bool {
+        u32::from(self.scale_for(rect_pixels, gamescope)) < 100
+            || self.reconstruction.is_upscaler()
+            || (glass_target
+                && self.reflection_resolution
+                    != oag_display::display::ReflectionResolution::Original)
     }
 }
 

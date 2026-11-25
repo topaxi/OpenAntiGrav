@@ -19,32 +19,6 @@ pub(crate) struct Pending {
     pub(crate) record: Option<Box<ShotRecord>>,
 }
 
-/// A photo's `[render]` table is the profile it was redrawn with, at the output's size; its glass
-/// and sea target (`reflection_resolution` `scaled`) was sized when the race loaded, from the
-/// player's own scale. Records that scale as `reflection_render_scale` when the two differ, so
-/// `--from-png` sizes the target alike. Absent (and the text unchanged) under `original`.
-pub(crate) fn note_reflection_scale(
-    table: &mut toml::Table,
-    loaded: Option<oag_display::display::Scale>,
-) {
-    let scaled = table
-        .get("reflection_resolution")
-        .and_then(toml::Value::as_str)
-        == Some("scaled");
-    let drawn = table
-        .get("render_scale")
-        .and_then(toml::Value::as_integer)
-        .and_then(|percent| u32::try_from(percent).ok());
-    if let (true, Some(loaded), Some(drawn)) = (scaled, loaded, drawn)
-        && loaded.percent() != drawn
-    {
-        table.insert(
-            "reflection_render_scale".to_string(),
-            toml::Value::Integer(i64::from(loaded.percent())),
-        );
-    }
-}
-
 impl Pending {
     /// Writes `pixels` to `path` with this description, the size filled in.
     pub(crate) fn write(
@@ -166,12 +140,6 @@ impl Session {
             .and_then(|value| match value {
                 toml::Value::Table(table) => Some(table),
                 _ => None,
-            })
-            .map(|mut table| {
-                if redrawn {
-                    note_reflection_scale(&mut table, self.loaded_render_scale);
-                }
-                table
             });
         let mods = shell
             .mods
@@ -222,42 +190,5 @@ impl Session {
             meta: Box::new(meta),
             record: record.map(Box::new),
         })
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use oag_display::display::Scale;
-
-    fn table(resolution: &str, drawn: i64) -> toml::Table {
-        toml::toml! {
-            reflection_resolution = resolution
-            render_scale = drawn
-        }
-    }
-
-    #[test]
-    fn a_scaled_target_loaded_below_the_photos_scale_names_the_scale_it_was_loaded_at() {
-        let mut text = table("scaled", 100);
-        note_reflection_scale(&mut text, Some(Scale::HALF));
-        assert_eq!(
-            text.get("reflection_render_scale")
-                .and_then(toml::Value::as_integer),
-            Some(50)
-        );
-    }
-
-    #[test]
-    fn the_text_is_unchanged_where_the_target_does_not_depend_on_the_scale() {
-        for (mut text, loaded) in [
-            (table("original", 100), Some(Scale::HALF)),
-            (table("scaled", 100), Some(Scale::FULL)),
-            (table("scaled", 100), None),
-        ] {
-            let before = text.clone();
-            note_reflection_scale(&mut text, loaded);
-            assert_eq!(text, before);
-        }
     }
 }

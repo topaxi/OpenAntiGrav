@@ -407,7 +407,7 @@ pub(super) fn resources(
 /// Every field here stays private regardless: nothing outside this module
 /// constructs one, reads one apart, or has anywhere to get one besides
 /// [`scene_bind_group`]'s own return value.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RebindResources {
     layout: wgpu::BindGroupLayout,
     sampler: wgpu::Sampler,
@@ -418,6 +418,15 @@ pub struct RebindResources {
     /// The two stage arrays the group was first built with, for [`rebind_buffer`]: a drawable
     /// moved onto a shared buffer straight after it is built keeps the stage it was given.
     stage: [wgpu::TextureView; 2],
+}
+
+impl RebindResources {
+    /// Points the group at a new behind-the-glass target, for the next [`rebind`] or
+    /// [`rebind_buffer`]. The target's texture is re-made when its size changes; a bind group
+    /// names a view, so the group is built again over the new one.
+    pub fn set_behind_glass(&mut self, view: wgpu::TextureView) {
+        self.shadow.behind_glass_view = view;
+    }
 }
 
 /// Bind group 2 itself, from the stage's two arrays and everything

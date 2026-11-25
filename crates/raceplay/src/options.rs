@@ -135,9 +135,6 @@ pub struct Options {
     /// sea target gets, read when the circuit loads. See
     /// [`oag_display::display::ReflectionResolution`].
     pub reflection_resolution: oag_display::display::ReflectionResolution,
-    /// The player's `graphics.render_scale`, which `reflection_resolution` `scaled` sizes the
-    /// target from. Read only there.
-    pub render_scale: oag_display::display::Scale,
     /// Team id, which selects both the handling stats and the model, or `None`
     /// for the source's own.
     ///

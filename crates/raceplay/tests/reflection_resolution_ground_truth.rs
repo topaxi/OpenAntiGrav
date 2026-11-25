@@ -11,12 +11,12 @@
 //!
 //! HD's Vineta K tunnel glass reads the behind-the-glass target (640x360) and Moa Therma's sea
 //! the planar reflection target (960x540); 2048's Vineta K reads the refraction target at
-//! 480x272 and Omega's at 960x540. `original` keeps those sizes at every render scale; `scaled`
-//! gives the original's size at 100 and half of it per axis at 50. Drop the load's resize
-//! (`load::view`) and every `scaled` row at 50 fails; resize without the value and the
-//! `original` rows at 50 fail. One load per test, so the matrix is the test axis.
+//! 480x272 and Omega's at 960x540. `original` keeps those sizes, `half` and `quarter` take that
+//! fraction of each axis. The load has no render scale to read, so the size cannot follow it.
+//! Drop the load's `resolution` (`load::view`) and every `half` and `quarter` row fails. One
+//! load per test, so the matrix is the test axis.
 
-use oag_display::display::{ReflectionResolution, Scale};
+use oag_display::display::ReflectionResolution;
 use oag_raceplay as race;
 
 const VINETA_K: &str = "/data/environments/01_vineta_k/track.vex";
@@ -27,27 +27,21 @@ const OMEGA: &str = "data/extracted/ps4";
 const VINETA_K_ON_2048: &str = r"Data\art\published\DLC1\environments\Vineta_K\track.vex";
 const VINETA_K_ON_OMEGA: &str = r"Data\environments\01_vineta_k\track.vex";
 
-fn hd_target_size(
-    track: &str,
-    resolution: ReflectionResolution,
-    percent: u32,
-) -> Option<(u32, u32)> {
+fn hd_target_size(track: &str, resolution: ReflectionResolution) -> Option<(u32, u32)> {
     let image = oag_testdata::image("hdfury-ps3-eu-dec.iso")?;
-    target_size(&image, track, resolution, percent)
+    target_size(&image, track, resolution)
 }
 
 fn target_size(
     source: &std::path::Path,
     track: &str,
     resolution: ReflectionResolution,
-    percent: u32,
 ) -> Option<(u32, u32)> {
     let loaded = race::load(&race::Options {
         source: source.display().to_string(),
         class: "VENOM".to_string(),
         track: Some(track.to_string()),
         reflection_resolution: resolution,
-        render_scale: Scale::try_from(percent).expect("an offered render scale"),
         ..race::Options::default()
     })
     .unwrap_or_else(|why| panic!("loading {track}: {why:#}"));
@@ -56,15 +50,15 @@ fn target_size(
         !behind.groups.is_empty() || behind.mirror.is_some(),
         "{track} builds a target"
     );
-    Some(behind.size)
+    Some(behind.drawn_size())
 }
 
 macro_rules! sizes {
-    ($($name:ident: $track:ident, $resolution:ident, $percent:literal => ($w:literal, $h:literal);)*) => {$(
+    ($($name:ident: $track:ident, $resolution:ident => ($w:literal, $h:literal);)*) => {$(
         #[test]
         #[ignore = "needs a decrypted PS3 disc image in data/images"]
         fn $name() {
-            if let Some(size) = hd_target_size($track, ReflectionResolution::$resolution, $percent) {
+            if let Some(size) = hd_target_size($track, ReflectionResolution::$resolution) {
                 assert_eq!(size, ($w, $h));
             }
         }
@@ -72,33 +66,33 @@ macro_rules! sizes {
 }
 
 sizes! {
-    vineta_k_original_at_100: VINETA_K, Original, 100 => (640, 360);
-    vineta_k_original_at_50: VINETA_K, Original, 50 => (640, 360);
-    vineta_k_scaled_at_100: VINETA_K, Scaled, 100 => (640, 360);
-    vineta_k_scaled_at_50: VINETA_K, Scaled, 50 => (320, 180);
-    moa_therma_original_at_100: MOA_THERMA, Original, 100 => (960, 540);
-    moa_therma_original_at_50: MOA_THERMA, Original, 50 => (960, 540);
-    moa_therma_scaled_at_100: MOA_THERMA, Scaled, 100 => (960, 540);
-    moa_therma_scaled_at_50: MOA_THERMA, Scaled, 50 => (480, 270);
+    vineta_k_original: VINETA_K, Original => (640, 360);
+    vineta_k_half: VINETA_K, Half => (320, 180);
+    vineta_k_quarter: VINETA_K, Quarter => (160, 90);
+    moa_therma_original: MOA_THERMA, Original => (960, 540);
+    moa_therma_half: MOA_THERMA, Half => (480, 270);
+    moa_therma_quarter: MOA_THERMA, Quarter => (240, 135);
 }
 
 macro_rules! psp2_sizes {
-    ($($name:ident: $source:ident, $track:ident, $resolution:ident, $percent:literal => ($w:literal, $h:literal);)*) => {$(
+    ($($name:ident: $source:ident, $track:ident, $resolution:ident => ($w:literal, $h:literal);)*) => {$(
         #[test]
         #[ignore = "needs the extracted 2048 and Omega packages in data/extracted"]
         fn $name() {
             let Some(source) = oag_testdata::exact($source) else {
                 return;
             };
-            let size = target_size(&source, $track, ReflectionResolution::$resolution, $percent);
+            let size = target_size(&source, $track, ReflectionResolution::$resolution);
             assert_eq!(size, Some(($w, $h)));
         }
     )*};
 }
 
 psp2_sizes! {
-    vita_2048_vineta_k_original_at_50: VITA_2048, VINETA_K_ON_2048, Original, 50 => (480, 272);
-    vita_2048_vineta_k_scaled_at_50: VITA_2048, VINETA_K_ON_2048, Scaled, 50 => (240, 136);
-    omega_vineta_k_original_at_50: OMEGA, VINETA_K_ON_OMEGA, Original, 50 => (960, 540);
-    omega_vineta_k_scaled_at_50: OMEGA, VINETA_K_ON_OMEGA, Scaled, 50 => (480, 270);
+    vita_2048_vineta_k_original: VITA_2048, VINETA_K_ON_2048, Original => (480, 272);
+    vita_2048_vineta_k_half: VITA_2048, VINETA_K_ON_2048, Half => (240, 136);
+    vita_2048_vineta_k_quarter: VITA_2048, VINETA_K_ON_2048, Quarter => (120, 68);
+    omega_vineta_k_original: OMEGA, VINETA_K_ON_OMEGA, Original => (960, 540);
+    omega_vineta_k_half: OMEGA, VINETA_K_ON_OMEGA, Half => (480, 270);
+    omega_vineta_k_quarter: OMEGA, VINETA_K_ON_OMEGA, Quarter => (240, 135);
 }

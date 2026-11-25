@@ -1052,18 +1052,13 @@ pub(crate) struct Cli {
     pub(crate) circuit_lighting: Option<oag_display::display::CircuitLighting>,
 
     /// How many texels the screen-space glass and sea target gets: original (the original's
-    /// fixed size) or scaled (that size times the render scale, never above it).
+    /// fixed size), half or quarter (that fraction of it on each axis, whatever the render
+    /// scale).
     ///
     /// Overrides `[render_profiles.<title>] reflection_resolution` for every title, for this
     /// run only. See docs/rendering/water.md, "The reflection target's resolution".
     #[arg(long)]
     pub(crate) reflection_resolution: Option<oag_display::display::ReflectionResolution>,
-
-    /// The render scale, in percent, that `--reflection-resolution scaled` sizes the glass and
-    /// sea target from, when it is not `--render-scale`. A re-rendered photo sets it: the photo
-    /// was drawn at the output's size but its target was loaded at the player's own scale.
-    #[arg(long, hide = true)]
-    pub(crate) reflection_render_scale: Option<u32>,
 
     /// Which screen filter draws the finished frame: `off`, a built-in such
     /// as `psp-3000` or `crt-interlaced`, or the stem of a `.wgsl` file in

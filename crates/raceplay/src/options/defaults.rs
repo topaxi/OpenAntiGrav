@@ -31,7 +31,6 @@ impl Default for Options {
             scene_precision: oag_display::display::ScenePrecision::default(),
             circuit_lighting: oag_display::display::CircuitLighting::default(),
             reflection_resolution: oag_display::display::ReflectionResolution::default(),
-            render_scale: oag_display::display::Scale::FULL,
             team: None,
             hull_variant: None,
             skin: None,
