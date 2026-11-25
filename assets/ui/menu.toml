@@ -426,7 +426,7 @@ string_id = "OAG_RACE_WEAPONS"
 setting = "race.weapons"
 values_from = "weapons"
 pinned = [
-    { setting = "race.mode", values = ["time_trial", "speed_lap", "zone", "head_to_head"], shows = "Off" },
+    { setting = "race.mode", values = ["time_trial", "speed_lap", "zone", "head_to_head", "detonator"], shows = "Off" },
     { setting = "race.mode", value = "eliminator", shows = "On" },
 ]
 
@@ -436,7 +436,7 @@ label = "AI DIFFICULTY"
 string_id = "OAG_RACE_AI_DIFFICULTY"
 setting = "ai.difficulty"
 values = ["novice", "skilled", "elite", "ace"]
-disabled_by = { setting = "race.mode", values = ["time_trial", "speed_lap", "zone", "head_to_head"] }
+disabled_by = { setting = "race.mode", values = ["time_trial", "speed_lap", "zone", "head_to_head", "detonator"] }
 
 # The race box's `KILLS` row: the values are the disc's own `Eliminations` list
 # (`oag_game::boot::screens::read_race_setup`); a title that reads none has the
@@ -450,7 +450,7 @@ label = "KILLS"
 string_id = "OAG_RACE_KILLS"
 setting = "race.kill_target"
 values_from = "kill_targets"
-disabled_by = { setting = "race.mode", values = ["time_trial", "speed_lap", "zone", "single_race", "head_to_head"] }
+disabled_by = { setting = "race.mode", values = ["time_trial", "speed_lap", "zone", "single_race", "head_to_head", "detonator"] }
 
 # The race box's `TARGET` row, HD's Eliminator score target: the values are the steps of the
 # disc's own `Eliminations` slider (`oag_game::boot::RaceSetup::score_targets`, `200` to `600`
@@ -462,7 +462,7 @@ label = "TARGET"
 string_id = "OAG_RACE_TARGET"
 setting = "race.score_target"
 values_from = "score_targets"
-disabled_by = { setting = "race.mode", values = ["time_trial", "speed_lap", "zone", "single_race", "head_to_head"] }
+disabled_by = { setting = "race.mode", values = ["time_trial", "speed_lap", "zone", "single_race", "head_to_head", "detonator"] }
 
 # Live in Zone too: every craft flies the one Zone hull, but the team is the one the race and
 # its loyalty credit use, and on some titles the paint on that hull

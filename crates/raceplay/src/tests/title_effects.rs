@@ -161,7 +161,8 @@ fn each_trigger_is_answered_by_exactly_the_titles_that_read_it() {
     }
     // Detonator's mine, bomb and cannon-wall effects: `DetonatorMine_Explode`,
     // `DetonatorBombBlast_Start` and `PulseBullet_Update` name them on HD; 2048 and Omega ship
-    // the files and are "checked, applies, not wired".
+    // the files and are "checked, applies, not wired". Pulse answers them with its own nearest
+    // effects, chosen (`docs/gameplay/detonator-pulse.md`).
     for detonator in [
         Trigger::DetonatorMineExploDead,
         Trigger::DetonatorMineExplo,
@@ -171,7 +172,7 @@ fn each_trigger_is_answered_by_exactly_the_titles_that_read_it() {
     ] {
         assert_eq!(
             has(detonator),
-            [false, false, true, false, false],
+            [true, false, true, false, false],
             "{detonator:?}"
         );
     }
