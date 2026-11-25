@@ -4969,7 +4969,15 @@ hold 24 `Tournament` cells in the archive read, none walked).
    shaded circuit model landed 2026-10-09, `hd-track-model`.)* Layout and
    records table match; the moving fly-by
    picture landed 2026-11-19 (`hd-track-flyby`; it moves: 17 % of the window's pixels differ across 1.5 s). Ours
-   also draws the hex window's stills as nothing (`no slideshow chain`).
+   also draws the hex window's stills as nothing (`no slideshow chain`). **The hex grid's slide, half-row phase, ring ease and
+   ring clock landed 2026-11-25 (`hd-front-end-ranked`)**: `TrackHexSelection_Update` runs `HexSelection`'s step and update in
+   one frame (a sixth of a pitch on the step frame, snap on the fifth), steps at most once per 0.2 s, keeps its half-row phase
+   by the circuit's index, eases the ring half way to the other direction's row each frame, and pulses the ring on a counter that
+   is never reset between visits (`docs/ghidra/functions/ps3-hdfury-eu/ship-select-ring.md`, "Track Select"). The pair
+   `hd/menu-track-select`: the ring's band 27.4 to 2.9 mean grey, the ring box 19.7 to 14.3, the grid region 3.99 to 3.68
+   (twin capture 3.98 to 3.67). Open: the `>>>` glyph's scroll, the held direction's repeat, the fill (0.87 of `HD_Blue`, the
+   `Faded` art; 149 against 172 on Ship and Track Select), and the odd circuits' step pictures against ours (the `NN_Track` id
+   of list index 1, 3, ... is not index + 1).
 8. **Loading, EndRace.** Not re-paired: ours on software Vulkan sat on Ship
    Select for 32 s without reaching a load. See the `hd-loading-screen` and
    `lane-hd-endrace` captures.

@@ -1214,5 +1214,5 @@
 0x001b0c28	function	HexSelection_SetCell	70	ship-select-ring.md
 0x001b0320	function	HexSelection_ClearCell	70	ship-select-ring.md
 0x001b2a48	function	HexSelection_Destroy	70	ship-select-ring.md
-0x002096f0	function	TrackHexSelection_Update	70	ship-select-ring.md
+0x002096f0	function	TrackHexSelection_Update	85	ship-select-ring.md
 0x00200498	function	Colour_LerpArgb	85	ship-select-ring.md

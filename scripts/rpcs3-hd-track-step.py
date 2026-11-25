@@ -9,8 +9,9 @@
 
 `capture` presses `right`, stops the game once the slide's timer says the step has run the aimed number of game frames, reads the
 widget in the stop, grabs the window through `grab_with_clock` and resumes: `<out>/NN.png` and `NN.json`. The slide timer is the
-frame counter: `HexSelection_Step` sets it to 0.1 and the same update takes one frame off, so game frame `k` after the step reads
-`0.1 - (k + 1) / 60` (`ship-select-ring.md`, "The lattice slide"); the columns then stand at `i * 72 + dir * (1 - 10 t) * 72`. The
+frame counter while it runs: `HexSelection_Step` sets it to 0.1 and the same update takes one frame off, so game frame `k` after
+the step reads `0.1 - (k + 1) / 60` (`ship-select-ring.md`, "The lattice slide"); the columns then stand at
+`i * 72 + dir * (1 - 10 t) * 72`. Frames after the slide ends are counted by the pulse counter (0.05 a frame). The
 Fury backdrop is hidden for the run (`hd_fury_backdrop.py`), as the rest pair does.
 """
 import argparse
@@ -43,6 +44,13 @@ def frame_of(timer):
     return int(round((SLIDE_S - timer) / FRAME_S - 1))
 
 
+def frame_since(first, state):
+    """The game frame of `state`: the frame the slide timer first gave, plus the frames the pulse counter (0.05 a frame, the
+    widget's own update count) has advanced since, so frames after the slide's end are counted too."""
+    k, phase = first
+    return k + int(round(((state["phase"] - phase) % hth.PHASE_PERIOD) / hth.PHASE_PER_FRAME))
+
+
 def cmd_capture(args):
     info = drive.live_session()
     if info is None:
@@ -73,16 +81,18 @@ def cmd_capture(args):
             presser = threading.Thread(target=lambda: pad.press(args.button, 0.15))
             t0 = time.time()
             presser.start()
-            frame = None
+            frame = first = None
             while time.time() - t0 < 4.0:
                 state = widget.state()
                 frame = frame_of(state["slide_timer"])
-                if frame is not None and frame >= aim - args.lead:
+                if frame is not None and first is None:
+                    first = (frame, state["phase"])
+                if first is not None and (frame_since(first, state) or 0) >= aim - args.lead:
                     break
             dbg.pause()
             post = widget.state()
             presser.join()
-            if frame is None:
+            if first is None:
                 dbg.resume()
                 dbg.close()
                 trials.append({"n": n, "aim": aim, "failed": "the slide never ran"})
@@ -93,7 +103,7 @@ def cmd_capture(args):
             again = widget.state()
             dbg.resume()
             dbg.close()
-            record = {"n": n, "aim": aim, "frame": frame_of(post["slide_timer"]), "before": before, "after": post,
+            record = {"n": n, "aim": aim, "frame": frame_since(first, post), "before": before, "after": post,
                       "still": again["slide_timer"] == post["slide_timer"] and again["phase"] == post["phase"], "png": png.name}
             (out / ("%02d.json" % n)).write_text(json.dumps(record, indent=1) + "\n")
             trials.append(record)
