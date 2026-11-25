@@ -329,9 +329,14 @@ impl Session {
             }
             let roles = self.roles();
             // Where the race has a flip or an EMP on L1, the pad reads that shoulder as the
-            // button alone and L2 stays the left airbrake.
-            let l1_is_flip =
-                matches!(&self.stage, Stage::Race(stage) if stage.race.core.sim.l1_is_flip());
+            // button alone and L2 stays the left airbrake. Only for a race somebody is flying:
+            // photo mode and the replay viewer page on L1, and the finished race has no flip.
+            let l1_is_flip = self.photo.is_none()
+                && self.viewer.is_none()
+                && matches!(
+                    &self.stage,
+                    Stage::Race(stage) if !stage.race.core.sim.finished() && stage.race.core.sim.l1_is_flip()
+                );
             self.controls.set_l1_is_flip(l1_is_flip);
             let inputs = self.controls.player_snapshots();
             // Taken every tick so a press made while paused or in a menu is spent there, and

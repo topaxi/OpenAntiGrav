@@ -95,6 +95,7 @@ fn an_hd_detonator_race_steps_a_stage_per_lap_and_ends_at_fifteen() {
         return;
     };
     let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
+    assert!(race.core.sim.l1_is_flip(), "HD's L1 is the EMP");
     // The player flies their own racing line (`RaceSim::set_autopilot`); the rules are the race's.
     race.core.sim.set_autopilot(true);
     assert_eq!(
@@ -319,19 +320,13 @@ fn a_2048_detonator_race_on_zone_1_takes_the_hd_fury_dlc3_table() {
         ..race::Options::default()
     };
     let loaded = race::load(&options).expect("loading a 2048 Detonator race");
-    assert_eq!(
-        race::Race::start(
-            loaded.setup.clone(),
-            loaded.view.clone(),
-            loaded.modules.clone()
-        )
-        .core
-        .sim
-        .world
-        .race[0]
-            .laps_target,
-        Some(14)
+    let race = race::Race::start(
+        loaded.setup.clone(),
+        loaded.view.clone(),
+        loaded.modules.clone(),
     );
+    assert_eq!(race.core.sim.world.race[0].laps_target, Some(14));
+    assert!(race.core.sim.l1_is_flip(), "Omega's L1 is the EMP");
     let grade = loaded.zone_grade.as_ref().expect("a grade");
     assert!(
         grade

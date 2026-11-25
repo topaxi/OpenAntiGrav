@@ -175,7 +175,10 @@ craft has flipped.
   and the left airbrake axis come from L2 only. The sim reads the snapshot as it comes. `F` on a
   keyboard is `Flip` alone and Q stays the airbrake, so the keyboard needs no flag. **Chosen, not
   measured:** the key. Touch has no flip button, and Android's L1 key is `L` alone: neither raises
-  `Flip`, so the flag changes nothing there.
+  `Flip`, so the flag changes nothing there. HD Eliminator and Detonator and Omega's Detonator
+  (its EMP) set the flag (`hd_flip_ground_truth`, `detonator_ground_truth`); Omega and 2048 have no
+  Eliminator flip wired (`eliminator_flip: None`), so their L1 stays an airbrake. The flag is held
+  off in photo mode, the replay viewer and a finished race, which page on L1.
 - The lean is `ShipState::steer_lean_follower`, HD's `craft+0x6a58` follower.
 - The race line's marker turns on `RaceSim::facing_back`, the test `wrong_way_kill` runs. The original's
   frames of a flip show no `WRONG WAY`, so a race with a flip draws none; the rumble is untouched.
