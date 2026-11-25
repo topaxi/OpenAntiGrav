@@ -2,7 +2,7 @@
 status: measure
 titles: [hd, pulse]
 updated: 2026-11-25
-summary: "S21 HD: ranked perf plan. Cards culled and row kinds folded (landed); freeze-writes says the ~95 per-write copies cost 3.5-4.7 ms (fewer writes, or wgpu #10319); ASTC measured, opt-in open"
+summary: "S21 HD perf plan: cards culled, row kinds folded (landed); per-write copies cost 3.5-4.7 ms (fewer writes or wgpu #10319); ASTC opt-in open"
 categories: [rendering, tooling]
 size: L (40)
 difficulty: medium (40)
