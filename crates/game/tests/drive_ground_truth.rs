@@ -91,6 +91,7 @@ fn drive_run(
 }
 
 /// [`drive_run`] with the game's own base `flags`, for a run that leaves the pre-race flyby in.
+#[allow(clippy::too_many_arguments)]
 fn drive_flags(
     image: &Path,
     tag: &str,
