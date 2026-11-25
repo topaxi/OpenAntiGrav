@@ -1104,4 +1104,12 @@ same `Plasma.cpp` family (see [`ps4-omega-eu/plasma.md`](../ps4-omega-eu/plasma.
 flight was not measured live.
 
 Reproduce ours with `crates/raceplay/tests/loop_floor_trace.rs`
-(`OAG_LOOP_TRACE=hd:/data/environments/03_track/track.vex:plasma`).
+(`OAG_LOOP_TRACE=hd:/data/environments/03_track/track.vex:plasma`), and the original with
+`scripts/rpcs3-hd-bank-shot.py` (its docstring has the three commands) on a race walked with
+`OAG_WEAPONS_ON=1 scripts/emu-hd-race-walk.sh <lane> 2` with the GDB stub kept on (circuit index 2 is
+Moa Therma). Two traps on the way:
+
+- The two Moa Therma Time Trial save states do not load on RPCS3 build 20574 ("savestate not
+  compatible"), so the run starts from a cold boot.
+- A GDB port whose stub (`port + 1000`) is reset by another client 0.85 s after it opens kills the
+  serve. Pick another port.
