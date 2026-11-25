@@ -65,7 +65,7 @@ pub(super) fn attach_rule(
 }
 
 /// The effects one seat's wall hits raise.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(super) struct ContactFx {
     /// The seat's camera shake, armed by a hard wall hit. Render-only, for
     /// the same reason [`RaceView::camera`] is - see

@@ -442,6 +442,15 @@ replays (`oag_raceplay::photo::shot::Shot`). `a_motion_blur_shot_smears_what_it_
 checks the blurred shot holds the plain shot's HUD glyphs and no high-contrast pixel outside the
 HUD differs from the blurred shot without one.
 
+**A blurred shot puts the particles back too.** The ticks it replays emit and age the particle
+stage, its generator and the spark systems that hold handles into it (collision, damage, weapon
+and floor sparks, the exhausts, wreck and debris effects), so the shot keeps them at its tick as it
+does the HUD (`EffectsMemory`) and puts them back at the end. Without it a shot left the next shot
+(and the race) other sparks than it found: with the collision spark's particle count wired
+(`ship-collision-fx.md`, "slot 5 is the particle count") the two blurred shots of the ground-truth
+test differed by two spark streaks outside the HUD. Test:
+`a_blurred_shot_leaves_the_particles_as_they_stood_at_the_shot` (red with the restore dropped).
+
 Motion blur (track and ship), accumulated depth of field and a rewind, on the titles whose originals
 have the first two (`oag_title::photo::Accumulation`: HD and 2048) and on every title for the rewind
 ([ADR-0087](../architecture/adr/0087-a-replay-and-photo-mode-share-one-timeline.md), stage 6;

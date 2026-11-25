@@ -874,3 +874,57 @@ fn a_blurred_shot_leaves_the_huds_state_as_it_stood_at_the_shot() {
     );
     assert_eq!(format!("{:?}", race.view.huds), before);
 }
+
+/// Runs one blurred shot over the race at `LIVE` the way the session does, start to finish.
+fn take_blurred_shot(race: &mut Race, keeper: &mut Keeper, rewind: &mut Rewind) {
+    let plan = Plan::new(
+        race.photo().expect("open"),
+        LIVE,
+        rewind.resimulates(),
+        drawn(race),
+    )
+    .expect("blur");
+    let mut shot = Shot::start(plan, Some(Mover { rewind, keeper }), race);
+    while !shot.done() {
+        shot.prepare(Some(Mover { rewind, keeper }), race);
+        shot.advance();
+    }
+    shot.finish(Some(Mover { rewind, keeper }), race);
+}
+
+/// Fails if the ticks a blurred shot replays leave the particle stage and its generator where
+/// they ran them to: two identical shots at one tick are then different pictures (sparks that
+/// were alive at the tick are aged out, or new ones are in), and so is the race the player
+/// returns to.
+#[test]
+fn a_blurred_shot_leaves_the_particles_as_they_stood_at_the_shot() {
+    let (mut race, mut keeper, _) = driven();
+    open(&mut race);
+    blur(&mut race, 1, 100);
+    let blob = super::respawn::one_emitter_pob("WO_SHIP_COLL_SPARK_NODAMAGE", 0);
+    let effect = std::sync::Arc::new(
+        oag_fx::psys::Effect::parse(&blob, oag_fx::psys::ColourScale::Full)
+            .expect("the hand-laid effect parses"),
+    );
+    let at = race.core.sim.world.ships[race.core.player_slot()]
+        .physics
+        .body
+        .position;
+    race.view.stage.play(&effect, at, 1.0).expect("a slot");
+    let state = |race: &Race| format!("{:?} {:?}", race.view.stage, race.view.stage_rng);
+    let before = state(&race);
+    let mut rewind = Rewind::begin(&mut keeper, &mut race).expect("running");
+
+    take_blurred_shot(&mut race, &mut keeper, &mut rewind);
+    let first = state(&race);
+    take_blurred_shot(&mut race, &mut keeper, &mut rewind);
+    assert_eq!(
+        first, before,
+        "the shot left the particles aged by its ticks"
+    );
+    assert_eq!(
+        state(&race),
+        first,
+        "a second identical shot found other particles"
+    );
+}

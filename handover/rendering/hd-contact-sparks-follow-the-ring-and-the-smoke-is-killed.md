@@ -70,16 +70,8 @@ Rows 1 to 8 landed (2026-11-17 and 2026-11-25). What is open, in order:
    `--force-hit`, `--camera-pose` from the film's pushbuffer camera (frames with a camera only) and
    score a box over the struck rival. Ours cannot throw the attached spark or the damage smoke in
    a posed capture (no ticks run), so the pair needs a scenario that ticks.
-2. **Photo mode and particle state** (blocks this branch's merge): with slot 5 wired as the particle
-   count (full-size sparks), `photo_mode_ground_truth::a_motion_blur_shot_smears_what_it_should_and_any_input_abandons_it`
-   fails `stray 30` (two spark streaks at x 557-568, y 733-738 in the ship blur shot with the HUD, absent
-   from the one without) and its HUD glyph count moves 12894 to 12903. Main's fx and raceplay pass; the
-   floor ride reverted still fails; a count scale forced to 0 passes. Sparks smaller than before had hidden
-   that the shots do not put the particle stage, the spark system and the stage RNG back between shots.
-   Fix: snapshot and restore them per shot, with a test that two identical shots at one tick are
-   byte-identical.
-3. **A CRITICAL rival frame**: `rpcs3-hd-missile-film.py --rival-shield S` destroyed the rival at
+2. **A CRITICAL rival frame**: `rpcs3-hd-missile-film.py --rival-shield S` destroyed the rival at
    S = 30, 50, 54 and left it MODERATE at 75; try the shield written after the hit, or a weaker
    weapon.
-4. **Lineage**: locate 2048's `Ship_SpawnContactFx` twin and read Omega's stack arguments at
+3. **Lineage**: locate 2048's `Ship_SpawnContactFx` twin and read Omega's stack arguments at
    `0x01723ae0`; the slot 5 count consumer on both.
