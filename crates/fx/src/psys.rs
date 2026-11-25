@@ -634,7 +634,9 @@ pub struct System {
     /// The original's severity: multiplies ejection speed and drawn size,
     /// never particle counts.
     scale: f32,
-    count_scale: f32, // see `System::ignite_counting`
+    /// The multiple of each emission's particle count, `1.0` unless ignited with
+    /// [`System::ignite_counting`] - see [`System::emission_count`].
+    count_scale: f32,
     /// The instance's extent co-factor, `+0x2c` - `1.0` unless a caller
     /// stretches it, which only the Quake does. See [`spawn`].
     extent_scale: f32,

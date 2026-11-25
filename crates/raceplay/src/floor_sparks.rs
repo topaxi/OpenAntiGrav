@@ -82,10 +82,6 @@ pub(super) fn not_racing_record(
     )
 }
 
-/// One craft's frictionless records of this tick, already placed: where each spark spawns (the
-/// locator nearest the record, at the pose the record was made in) and where the craft was, for
-/// the reach test. Placed when noted because a reset plane's record teleports the craft the same
-/// tick.
 /// How many floor sparks ride their locators at once.
 const MAX_RIDING: usize = 32;
 
@@ -98,6 +94,10 @@ struct Riding {
     anchor: Vec3,
 }
 
+/// One craft's frictionless records of this tick, already placed: where each spark spawns (the
+/// locator nearest the record, in the craft's model space) and where the craft was, for the
+/// reach test. Placed when noted because a reset plane's record teleports the craft the same
+/// tick.
 #[derive(Debug, Clone, Copy, Default)]
 struct Hits {
     /// The locators nearest the records, in the craft's model space.
@@ -163,7 +163,6 @@ impl Race {
         self.view.floor_sparks.noted
     }
 
-    /// How many frictionless sparks have ever started, for tests.
     /// Where every floor spark riding a craft sits now, for tests.
     #[doc(hidden)]
     #[must_use]
@@ -176,6 +175,7 @@ impl Race {
             .collect()
     }
 
+    /// How many frictionless sparks have ever started, for tests.
     #[doc(hidden)]
     #[must_use]
     pub fn floor_sparks_started_for_tests(&self) -> u32 {
@@ -200,6 +200,10 @@ impl RaceView {
             }
         });
         let hits = std::mem::take(&mut self.floor_sparks.hits);
+        if hits.iter().all(|hits| hits.count == 0) {
+            self.floor_sparks.riding = riding;
+            return;
+        }
         let effect = self.handles.get(Trigger::CollisionSparkNoDamage).cloned();
         let eyes = self.view_eyes(core);
         for (slot, hits) in hits.iter().enumerate() {

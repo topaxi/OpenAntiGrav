@@ -38,6 +38,13 @@ impl System {
 }
 
 impl Stage {
+    /// The particle-count multiple an attached instance plays at. `None` on a stale handle.
+    #[must_use]
+    pub fn count_scale(&self, playing: Playing) -> Option<f32> {
+        self.instance(playing)
+            .map(|instance| instance.system.count_scale())
+    }
+
     /// Sets an attached instance's particle-count multiple - see [`System::ignite_counting`].
     ///
     /// A no-op on a stale handle.

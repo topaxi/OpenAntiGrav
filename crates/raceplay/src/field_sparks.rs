@@ -55,10 +55,16 @@ impl Default for FieldSparks {
 }
 
 impl FieldSparks {
-    /// The strength `slot`'s held spark plays at, `None` when it holds none.
+    /// The particle-count multiple `slot`'s held spark plays at, `None` when it holds none.
     #[cfg(test)]
     pub(super) fn strength_of(&self, stage: &psys::Stage, slot: usize) -> Option<f32> {
-        self.held[slot].and_then(|held| stage.scale(held.playing))
+        self.held[slot].and_then(|held| stage.count_scale(held.playing))
+    }
+
+    /// The instance `slot`'s held spark plays in.
+    #[cfg(test)]
+    pub(super) fn held_for_tests(&self, slot: usize) -> Option<psys::Playing> {
+        self.held[slot].map(|held| held.playing)
     }
 }
 

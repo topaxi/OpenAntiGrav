@@ -928,3 +928,73 @@ fn a_blurred_shot_leaves_the_particles_as_they_stood_at_the_shot() {
         "a second identical shot found other particles"
     );
 }
+
+/// Every field of the view, as the pretty `Debug` text names it.
+fn view_fields(race: &Race) -> Vec<(String, String)> {
+    let text = format!("{:#?}", race.view);
+    let mut fields: Vec<(String, String)> = Vec::new();
+    for line in text.lines().skip(1) {
+        let name = line
+            .strip_prefix("    ")
+            .filter(|rest| !rest.starts_with(' '))
+            .and_then(|rest| rest.split_once(": "))
+            .map(|(name, _)| name.to_string());
+        match (name, fields.last_mut()) {
+            (Some(name), _) => fields.push((name, line.to_string())),
+            (None, Some((_, body))) => {
+                body.push('\n');
+                body.push_str(line);
+            }
+            (None, None) => {}
+        }
+    }
+    fields
+}
+
+/// The fields a blurred shot may leave other than it found them: the camera side, which the shot
+/// repositions on the race it ends at (`Race::photo_repose`), and the reticle that follows it.
+/// Every other field of the view is a particle, effect or configuration, and holds.
+const MOVED_BY_THE_SHOT: [&str; 4] = ["camera", "poses", "destroy_camera", "sight"];
+
+/// Fails if a blurred shot leaves any field of the view but the camera's other than it found it,
+/// with a handle into the stage held in `projectile_flare` as the case that crosses the ticks the
+/// shot replays: they detach it, and the restored stage holds it again. A field the memory does
+/// not restore shows up here by name. A new field of the view does not compile until
+/// `photo::effects_memory` sorts it as restored or live; this test then holds it to that.
+#[test]
+fn a_blurred_shot_leaves_every_view_field_but_the_cameras_as_it_found_it() {
+    let (mut race, mut keeper, _) = driven();
+    open(&mut race);
+    blur(&mut race, 1, 100);
+    let blob = super::respawn::one_emitter_pob("WO_SHIP_COLL_SPARK_NODAMAGE", 0);
+    let effect = std::sync::Arc::new(
+        oag_fx::psys::Effect::parse(&blob, oag_fx::psys::ColourScale::Full)
+            .expect("the hand-laid effect parses"),
+    );
+    let at = race.core.sim.world.ships[race.core.player_slot()]
+        .physics
+        .body
+        .position;
+    let flare = race
+        .view
+        .stage
+        .play_riding(&effect, at, 1.0)
+        .expect("a slot");
+    race.view.projectile_flare[0] = Some(flare);
+    let mut rewind = Rewind::begin(&mut keeper, &mut race).expect("running");
+    let before = view_fields(&race);
+    take_blurred_shot(&mut race, &mut keeper, &mut rewind);
+    let after = view_fields(&race);
+    assert_eq!(before.len(), after.len());
+    let moved: Vec<&str> = before
+        .iter()
+        .zip(&after)
+        .filter(|((_, a), (_, b))| a != b)
+        .map(|((name, _), _)| name.as_str())
+        .filter(|name| !MOVED_BY_THE_SHOT.contains(name))
+        .collect();
+    assert!(
+        moved.is_empty(),
+        "the shot left these fields changed: {moved:?}"
+    );
+}

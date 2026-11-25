@@ -80,6 +80,16 @@ fn an_opponent_pair_contact_within_a_hundred_units_of_the_view_throws_the_spark(
         "a closing pair is above the cutoff, got {strength}"
     );
     assert!(strength <= 2.0);
+    assert_ne!(
+        strength, 1.0,
+        "the held spark plays at the law's count multiple, not the default"
+    );
+    let playing = race.view.field_sparks.held_for_tests(1).expect("held");
+    assert_eq!(
+        race.view.stage.scale(playing),
+        Some(1.0),
+        "the multiple is the particle count's, the drawn size is not scaled"
+    );
 
     let mut far = field_race(&looping());
     let eye = settled_eye(&mut far);

@@ -263,7 +263,7 @@ pub struct Shot {
     hud: Option<HudMemory>,
     /// The particles and what feeds them at the shot's tick: the ticks a blur replays emit and age
     /// them, so without this a shot leaves the next one (and the race) other sparks than it found.
-    effects: Option<Box<EffectsMemory>>,
+    effects: Option<super::effects_memory::EffectsMemory>,
 }
 
 /// The state the HUD keeps between ticks, as the race on screen has it: every slot's bars,
@@ -297,73 +297,15 @@ impl HudMemory {
     }
 }
 
-/// The view's particle state, as the race on screen has it: the stage and its generator, the
-/// collision, damage and weapon spark systems that hold handles into the stage, the exhausts
-/// and the other effects a replayed tick advances.
-#[derive(Debug)]
-struct EffectsMemory {
-    stage: oag_fx::psys::Stage,
-    stage_rng: oag_core::rng::Rng,
-    contact: crate::contact_fx::ContactFx,
-    field_sparks: crate::field_sparks::FieldSparks,
-    floor_sparks: crate::floor_sparks::FloorSparks,
-    hit_sparks: crate::hit_sparks::HitSparks,
-    damage_fx: crate::damage_fx::DamageFx,
-    exhaust: [oag_fx::exhaust::Exhaust; oag_gameplay::MAX_SHIPS],
-    exhaust_rng: [oag_core::rng::Rng; oag_gameplay::MAX_SHIPS],
-    hd_trail: [oag_fx::exhaust::hd::Tube; oag_gameplay::MAX_SHIPS],
-    craft_flashes: crate::craft_flash::CraftFlashes,
-    zone_end: crate::zone_end::ZoneEndFx,
-    ship_debris: crate::ship_debris::ShipDebrisFx,
-    wreck_fx: crate::wreck_fx::WreckFx,
-}
-
-impl EffectsMemory {
-    fn of(race: &Race) -> Box<Self> {
-        let view = &race.view;
-        Box::new(Self {
-            stage: view.stage.clone(),
-            stage_rng: view.stage_rng.clone(),
-            contact: view.contact.clone(),
-            field_sparks: view.field_sparks.clone(),
-            floor_sparks: view.floor_sparks.clone(),
-            hit_sparks: view.hit_sparks.clone(),
-            damage_fx: view.damage_fx.clone(),
-            exhaust: view.exhaust,
-            exhaust_rng: view.exhaust_rng.clone(),
-            hd_trail: view.hd_trail,
-            craft_flashes: view.craft_flashes.clone(),
-            zone_end: view.zone_end.clone(),
-            ship_debris: view.ship_debris.clone(),
-            wreck_fx: view.wreck_fx.clone(),
-        })
-    }
-
-    fn put_back(self: Box<Self>, race: &mut Race) {
-        let view = &mut race.view;
-        view.stage = self.stage;
-        view.stage_rng = self.stage_rng;
-        view.contact = self.contact;
-        view.field_sparks = self.field_sparks;
-        view.floor_sparks = self.floor_sparks;
-        view.hit_sparks = self.hit_sparks;
-        view.damage_fx = self.damage_fx;
-        view.exhaust = self.exhaust;
-        view.exhaust_rng = self.exhaust_rng;
-        view.hd_trail = self.hd_trail;
-        view.craft_flashes = self.craft_flashes;
-        view.zone_end = self.zone_end;
-        view.ship_debris = self.ship_debris;
-        view.wreck_fx = self.wreck_fx;
-    }
-}
-
 impl Shot {
     /// Begins `plan` on the race `rewind` is moving: stands it at the shot's tick, and for a ship
     /// blur takes the camera there to hold.
     pub fn start(plan: Plan, mover: Option<Mover<'_>>, race: &mut Race) -> Self {
         let hud = plan.blur.is_some().then(|| HudMemory::of(race));
-        let effects = plan.blur.is_some().then(|| EffectsMemory::of(race));
+        let effects = plan
+            .blur
+            .is_some()
+            .then(|| super::effects_memory::remember(&race.view));
         if let Some(Mover { rewind, keeper }) = mover
             && plan.blur.is_some()
         {
@@ -445,7 +387,7 @@ impl Shot {
             hud.put_back(race);
         }
         if let Some(effects) = self.effects {
-            effects.put_back(race);
+            effects.put_back(&mut race.view);
         }
         race.photo_set_shift(None);
         race.photo_repose();
