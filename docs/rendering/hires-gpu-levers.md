@@ -1484,3 +1484,70 @@ sizes; `RADV_DEBUG=shaderstats` beside it for the hull pipelines' VGPRs.
   as the circuit's plain half has, is untried.
 - The hull's depth prepass and overdraw: bounded by the constant-colour arm at about 20 % of the
   span; not worth a pass of its own on these numbers.
+
+## A circuit's row kinds fold where its table has none (2026-11-25, `s21-shading`)
+
+The rich half of a circuit (the draws that name an emissive row) still compiled every row kind
+the shader knows: snow, rock, water, panels, tarmac, twin and blend layers, overlays, lightning,
+cells, the crowd, the zone sets, panes, probes, the sky. Each is a test on the row's program
+(`scale.z`) or rate (`scale.y`) against a whole number, read from a uniform buffer, so no driver
+could drop one. "Cut 2" above (the `programs_present` override for the rich pipelines) was the
+coarse form of this and was not built.
+
+**Cut.** Two overrides, `program_codes` and `rate_codes` (`bindings.wesl`), set only on a prepassed
+model (a circuit, whose pipelines are its own): bit `k` where some row of its table as uploaded
+(`Emissives::of`) has a program or a rate nearest `k`, bit 31 for every value from 30.5 up
+(`mesh_render::specialise::row_codes`). Every kind test goes through `program_in`, `rate_in` or
+`rate_from`, which AND the bit of the codes they test with the range test they replace. A row's own
+bit is always set, so every test reads as it did; a kind no row carries is a constant `false`.
+Nothing rewrites the `scale` lanes after the upload (the pad cycle and the program glow write
+`tint_offset` alone). The race's distinct pipelines stay at 95 (HD Vineta K).
+
+**Mali-G78 offline compiler** (Arm's `malioc` 2026.5, driver model r51p0; the S21 runs r38p0), the
+composed `mesh_bindless.wgsl` through naga 30.0.2 to SPIR-V with wgpu-hal's Vulkan options (index,
+buffer and image bounds `Restrict`, loop bounding), Vineta K's own override values. Vineta K's
+table holds programs 0, 1, 12 and 17 and rates 0, 1 and 9; 90 % of its 2.47 M indices name no row:
+
+| Vineta K pipeline | stack before | after | load/store cycles (all paths) before | after |
+|---|---:|---:|---:|---:|
+| rich opaque (`fs_main_velocity`) | 512 B | 304 B | 155 | 84 |
+| rich alpha test | 512 B | 288 B | 148 | 83 |
+| rich blended | 432 B | 240 B | 136 | 82 |
+| plain opaque (unchanged) | 64 B | 64 B | 10.8 | 10.8 |
+
+All are at 64 work registers and 50 % occupancy before and after; the stack is where the spill
+went. With every kind test forced false the rich shader still keeps 208 B, which bounds what
+remains for this method.
+
+**Picture.** `--screenshot` at 960x540, ticks 400 and 1,500, a binary from the commit and one with
+it reverted, `cmp` equal on HD Vineta K, Ubermall, Chenghou Project, Anulpha Pass, Sebenco Climb
+and `03_track`, on Omega and 2048 (default circuits, whose snow and rock are kinds 21 and 22) and
+on Pulse at 1,500: 19 pairs, all byte-identical.
+
+**Galaxy S21** (HD Vineta K forward, render scale 25, REFLECTION RESOLUTION `auto`, `--autopilot
+--seed 1`, 10 s in-run toggles from a diagnostic build, not in the tree, whose odd windows shade
+the rich half through a second, unmasked pipeline; `docs/tools/android.md`, "Inside the scene
+pass"):
+
+| Run (start AP C) | Frame ms, masked / unmasked | Scene GPU ms | GPU fence period ms |
+|---|---:|---:|---:|
+| 1 (32.1) | 28.7 / 30.3 | 7.8 / 10.8 | 26.7 / 30.4 |
+| 2 (33.0) | 32.1 / 32.7 | 9.0 / 11.4 | 27.9 / 31.1 |
+
+The GPU's frame shortens by 3.2 to 3.7 ms; the frame the player sees by 0.6 to 1.6 ms, because the
+frame thread's own work and the per-write copies keep it waiting (`docs/tools/android.md`,
+"Freezing the frame's writes").
+
+**Steam Deck** (an AppImage of the same diagnostic build, `OAG_RENDER_BENCH_RACE`, HD Vineta K,
+3,000 ticks, `--autopilot --seed 1`, two rounds in alternating order, load 0.5 to 1.0), p50 us:
+
+| Size | frame, masked / unmasked | GPU | `scene` |
+|---|---:|---:|---:|
+| 1280x800 | 5,813 and 5,703 / 5,712 and 5,712 | 3,533 and 3,465 / 3,545 and 3,539 | 3,106 and 3,049 / 3,141 and 3,139 |
+| 1920x1080 | 6,398 and 6,405 / 6,963 and 6,958 | 4,687 and 4,714 / 5,155 and 5,145 | 4,010 and 4,038 / 4,482 and 4,477 |
+| 3840x2160 | 14,820 and 15,175 / 16,753 and 16,758 | 13,209 and 13,244 / 15,144 and 15,154 | 11,047 and 11,082 / 13,042 and 13,042 |
+
+So -8 % at 1080p and -10 % at 4K in the frame, flat at 800p. **Desktop** (RX 7800 XT, `just
+bench-render hd` through `scripts/bench-render.py run hd --binary`, two rounds, load 34 to 54): GPU
+p50 566 and 560 us masked against 606 and 602 unmasked (-7 %); the CPU columns are not readable at
+that load.

@@ -2,7 +2,7 @@
 status: measure
 titles: [hd, pulse]
 updated: 2026-11-25
-summary: "S21 HD: ranked perf plan. Cards culled (landed), pass price measured, ladder fold parked, one-pass present dropped; next: freeze-writes, Mali shader"
+summary: "S21 HD: ranked perf plan. Cards culled and row kinds folded (landed); freeze-writes says the ~95 per-write copies cost 3.5-4.7 ms (fewer writes, or wgpu #10319); ASTC measured, opt-in open"
 categories: [rendering, tooling]
 size: L (40)
 difficulty: medium (40)
@@ -75,15 +75,32 @@ scene is 1.5 ms. Every "fidelity none" item passes the byte-identity or pair che
    straight onto the surface (composite skipped, neutral grade, no filter) read slower on the S21
    in both in-run toggles, 26.0 against 26.8 ms and 26.9 against 28.2 ms
    (`docs/tools/android.md`, "What a render pass costs").
-4. **Stop frame N's buffer writes waiting on frame N-1** (`crates/gpu/src/writes.rs`). wgpu replays
-   every `write_buffer` as a copy at the head of the submission, into buffers the previous frame's
-   last passes still read; on a deferred-job driver that can hold the whole frame back. A ring of
-   destination buffers removes it. Only after the freeze-writes experiment below. S21 0 to -4 ms,
-   RDNA 0; 3 h experiment, 16 h to land; fidelity none; confidence 35.
-5. **Measure the track's shading on Mali** (`crates/mesh/shaders/`). Arm's offline compiler on the
-   circuit's specialised fragment shader, a toggle that drops the top two mips of the decoded
-   textures (memory against arithmetic in one run), and one stub toggle per lighting term. S21 -3 to
-   -5 ms possible, RDNA -0.1 ms; 8 h to diagnose; confidence 25.
+4. **Fewer per-frame writes** (re-scoped by `s21-shading`). Freezing every write takes 8.3 to 9.3 ms
+   off the frame; keeping the copies with a frozen picture (`writes-same`, `writes-dummy`) keeps 3.5
+   to 4.7 ms of it, the same whether the copies land in buffers the previous frame reads or in
+   scratch buffers nothing reads (`docs/tools/android.md`, "Freezing the frame's writes"). So frame
+   N's copies do not wait on frame N-1; **a ring of destination buffers would not help and is not
+   built**. The cost is about 95 barrier-plus-copy pairs a frame, which wgpu-core 30.0.2 records per
+   `write_buffer` (gfx-rs/wgpu#6673). Two ways out:
+   - **wgpu with #10319** (one barrier for the first write of each resource in a submission; merged
+     2026-10-25, after 30.0.2; 3 of its 13 hunks do not apply to 30.0.2). A backport for one
+     measuring APK: 3 h; the upgrade itself waits on the next wgpu release. Copies stay.
+   - **One write a frame**: the per-frame uniforms (camera, node and texture animations, shadow
+     maps, particles, ribbons) into one buffer read at offsets. Removes the copies too. S21 0 to
+     -4 ms, RDNA 0; 16 to 24 h (about twenty writers in `oag-render`, `oag-mesh`, `oag-fx`,
+     `oag-raceplay`); fidelity none; confidence 45. Measure with `OAG_SKIP_PASSES=writes-dummy`
+     against `writes-same` first on whatever lands.
+5. ~~Measure the track's shading on Mali~~ **measured, one fix landed** (`s21-shading`): the rich
+   tenth of the circuit's draws costs half the scene pass (`track-rich` 11.1 to 5.6 ms of scene
+   GPU), the plain nine tenths under 1 ms, texture bandwidth little (`mips` 0.8 ms). `malioc`: the
+   rich shader spilled 512 bytes of stack at 64 registers and 50 % occupancy. Folding the row kinds
+   a circuit's table lacks (`program_codes`, `rate_codes`) took it to 304 bytes: S21 scene GPU -2.4
+   to -3.0 ms and fence period -3.2 to -3.7 ms in-run, frame -0.6 to -1.6 ms; Deck -8 % (1080p) and
+   -10 % (4K); byte-identical on 19 shots across HD, Omega, 2048 and Pulse
+   (`docs/rendering/hires-gpu-levers.md`, "A circuit's row kinds fold where its table has none").
+   **Still open**: 304 bytes of stack remain (208 with every kind folded); the rest of the spill is
+   the uber-shader's live state. A `malioc` bisect over `lit_colour`'s blocks (the scratch method:
+   stub a function, re-run `malioc --core Mali-G78`) is the next read; 4 h; confidence 30.
 
 **Later**
 
@@ -95,8 +112,13 @@ scene is 1.5 ms. Every "fidelity none" item passes the byte-identity or pair che
    their pixels turn out to matter on Mali; setting-gated; 4 h.
 9. Race pass: store velocity and depth only when a pass reads them: -0.5 to -1.0 ms at render scale
    100 on the S21, nothing at 25; 5 h.
-10. ASTC where the device has no BC: frame gain unknown until item 5; GPU memory 2.96 GB to about
-    0.6 GB ([texture-compression-only-covers-bc-astc-is-the.md](texture-compression-only-covers-bc-astc-is-the.md)).
+10. ASTC where the device has no BC: **measured** (`s21-shading`, a void-extent arm of the right
+    size and rate, two runs each): S21 frame -1.1 to -1.8 ms, scene GPU -1.4 ms, p99 47-49 to 41-42
+    ms, GPU memory of the process 2.62-2.66 to 1.50-1.59 GB. A real `astcenc -medium` encode of
+    Vineta K's 341 textures is lossy (median 56 dB, 12 % of texels off by more than 2 levels), so it
+    can only land as an opt-in setting with an `original` default, its encode cached off the render
+    thread ([texture-compression-only-covers-bc-astc-is-the.md](texture-compression-only-covers-bc-astc-is-the.md)).
+    16 to 24 h (encoder in the Android build, cache, setting, menu row); maintainer's call.
 
 Not proposed, each already measured: dropping the depth prepass on a tiler (it pays), skipping the
 glass target when no glass shows, a third swapchain image, a portrait or pre-rotated surface.
@@ -105,9 +127,7 @@ glass target when no glass shows, a third swapchain image, a portrait or pre-rot
 
 1. ~~The pass-cost toggle~~ and ~~the card census~~: done (`s21-passes`), numbers in
    `docs/tools/android.md` ("What a render pass costs") and `docs/rendering/frame-thread-cpu.md`.
-2. **Freeze-writes.** A toggle that drops every `Writes::write_buffer` and `write_texture` while it
-   is on, under the fence-timeline capture (`scripts/android-fence-timeline.py`): if the present
-   returns before the previous fence while frozen, item 4 is real; if nothing moves, close it.
+2. ~~Freeze-writes~~: done (`s21-shading`), item 4 re-scoped above.
 3. Log one timestamp pair from the first pass's begin to the last pass's end as its own frame-log
    field, so the rows' sum has a denominator.
 4. Repeat the cool and warm baselines three times each and regress the frame on the GPU and A78
