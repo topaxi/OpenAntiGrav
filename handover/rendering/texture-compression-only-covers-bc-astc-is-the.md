@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [all]
-updated: 2026-09-25
-summary: "ASTC encoder not wired: Apple Silicon takes the CPU-decode fallback; pick astcenc or a Rust encoder and a cache"
+updated: 2026-11-25
+summary: "ASTC not wired; measured on the S21 (-1.1 GB GPU memory, -1.1 to -1.8 ms) and lossy (astcenc -medium 56 dB median): opt-in only, encoder + cache open"
 difficulty: hard (40)
 ---
 
@@ -43,6 +43,19 @@ project already produces. ASTC encoding is comparatively expensive (block
 search, not a fixed unpack), so unlike BC this is not a free branch in the
 existing upload path; it wants doing at asset-cook time, not per-frame, and
 probably not even per-process-startup for anything but small/dev iteration.
+
+## Measured on a Galaxy S21 (2026-11-25, `s21-shading`)
+
+The phone (Mali-G78) has no `TEXTURE_COMPRESSION_BC`, so HD's DXT textures go up as RGBA8:
+2.62 to 2.66 GB of GPU memory in an HD Vineta K race. A diagnostic arm (not in the tree) that
+uploaded each decoded texture as ASTC 4x4 void-extent blocks (right size and rate, not the
+picture) read 1.50 to 1.59 GB, frame -1.1 to -1.8 ms, scene pass -1.4 ms, two runs each
+(`docs/tools/android.md`, "Inside the scene pass"). Arm's `astcenc` 5.7.1 at `-medium` on the
+341 textures of Vineta K's circuit: median 56.2 dB, worst 39.6 dB, 12 % of texels off by more
+than 2 levels, 15 s of encoding on 24 host threads. Lossy, so an opt-in setting with an `original`
+default, encoded once and cached off the render thread; the phone needs the encoder in its build
+(astcenc is C++, `ctt-astcenc`/`dashpack-astcenc-sys` vendor it) or a cache cooked elsewhere.
+Estimate 16 to 24 h; confidence 35.
 
 ## Open
 

@@ -226,6 +226,9 @@ pub struct Bindless {
     materials: Vec<Material>,
     used: Vec<bool>,
     group: wgpu::BindGroup,
+    /// The same group with every view two mip levels down, built only for
+    /// `OAG_SKIP_PASSES=mips` (`oag_gpu::skip`).
+    low_mips: Option<wgpu::BindGroup>,
     rows: Vec<Row>,
     elements: usize,
 }
@@ -237,7 +240,7 @@ impl Bindless {
     /// reads slot 0's row.
     #[must_use]
     pub fn new(device: &wgpu::Device, used: Vec<bool>, materials: Vec<Material>) -> Option<Self> {
-        let Some((group, rows, elements)) = group(device, &materials, &used) else {
+        let Some((group, low_mips, rows, elements)) = group(device, &materials, &used) else {
             log::debug!(
                 "bindless: {} material slots name more than {CAPACITY} textures or \
                  {SAMPLERS} samplers: per-slot groups",
@@ -249,6 +252,7 @@ impl Bindless {
             materials,
             used,
             group,
+            low_mips,
             rows,
             elements,
         })
@@ -258,7 +262,10 @@ impl Bindless {
     #[must_use]
     pub fn group(&self) -> &wgpu::BindGroup {
         oag_gpu::perfprobe::array_bind(self.elements);
-        &self.group
+        match &self.low_mips {
+            Some(low) if oag_gpu::skip::skipped("mips") => low,
+            _ => &self.group,
+        }
     }
 
     /// Slot `slot`'s row as the immediates a draw of it pushes, at offset 0. Callers
@@ -278,8 +285,9 @@ impl Bindless {
         }
         let previous = std::mem::replace(&mut self.materials[slot], material);
         match group(device, &self.materials, &self.used) {
-            Some((group, rows, elements)) => {
-                (self.group, self.rows, self.elements) = (group, rows, elements);
+            Some((group, low_mips, rows, elements)) => {
+                (self.group, self.low_mips, self.rows, self.elements) =
+                    (group, low_mips, rows, elements);
             }
             None => {
                 log::warn!("bindless: slot {slot}'s new material does not fit; kept the old");
@@ -287,6 +295,24 @@ impl Bindless {
             }
         }
     }
+}
+
+/// `view`'s texture from two mip levels down, where it has more than two and is one 2D layer;
+/// `view` itself otherwise. A measuring arm's (`OAG_SKIP_PASSES=mips`).
+fn two_mips_down(view: &wgpu::TextureView) -> wgpu::TextureView {
+    let texture = view.texture();
+    if texture.mip_level_count() <= 2
+        || texture.dimension() != wgpu::TextureDimension::D2
+        || texture.depth_or_array_layers() != 1
+    {
+        return view.clone();
+    }
+    texture.create_view(&wgpu::TextureViewDescriptor {
+        label: Some("material, two mips down"),
+        dimension: Some(wgpu::TextureViewDimension::D2),
+        base_mip_level: 2,
+        ..Default::default()
+    })
 }
 
 /// The distinct items of `all`, in first-seen order, and each item's index among them.
@@ -341,7 +367,7 @@ fn group(
     device: &wgpu::Device,
     materials: &[Material],
     used: &[bool],
-) -> Option<(wgpu::BindGroup, Vec<Row>, usize)> {
+) -> Option<(wgpu::BindGroup, Option<wgpu::BindGroup>, Vec<Row>, usize)> {
     let kept: Vec<&Material> = materials
         .iter()
         .zip(used.iter().chain(std::iter::repeat(&true)))
@@ -391,21 +417,28 @@ fn group(
         white.get_or_insert(row);
         rows.push(row);
     }
-    let group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("material arrays"),
-        layout: &layout(device),
-        entries: &[
-            wgpu::BindGroupEntry {
-                binding: 0,
-                resource: wgpu::BindingResource::TextureViewArray(&views),
-            },
-            wgpu::BindGroupEntry {
-                binding: 1,
-                resource: wgpu::BindingResource::SamplerArray(&samplers),
-            },
-        ],
+    let arrays = |views: &[&wgpu::TextureView]| {
+        device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("material arrays"),
+            layout: &layout(device),
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureViewArray(views),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::SamplerArray(&samplers),
+                },
+            ],
+        })
+    };
+    let group = arrays(&views);
+    let low_mips = oag_gpu::skip::named("mips").then(|| {
+        let low: Vec<wgpu::TextureView> = views.iter().map(|view| two_mips_down(view)).collect();
+        arrays(&low.iter().collect::<Vec<_>>())
     });
-    Some((group, rows, views.len() + samplers.len()))
+    Some((group, low_mips, rows, views.len() + samplers.len()))
 }
 
 #[cfg(test)]

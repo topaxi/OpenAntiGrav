@@ -104,6 +104,30 @@ pub(super) fn programs_present(model: &Model) -> bool {
         .any(|row| row[2] != 0.0 || row[3] != 0.0)
 }
 
+/// The values of `bindings.wesl`'s `program_codes` and `rate_codes` overrides for `model`: bit
+/// `k` where a row of its table as uploaded (`Emissives::of`) has a program (`scale.z`) or a rate
+/// (`scale.y`) nearest `k`, bit 31 for any from 30.5 up. Every kind test on a row asks the bit of
+/// the code it tests and a row's own bit is always set, so the masks draw the same picture as all
+/// bits; a kind no row carries compiles out. Nothing rewrites those lanes after the upload
+/// ([`programs_present`]).
+pub(super) fn row_codes(model: &Model) -> (u32, u32) {
+    super::Emissives::of(model)
+        .scale
+        .iter()
+        .fold((0, 0), |(programs, rates), row| {
+            (programs | code_bit(row[2]), rates | code_bit(row[1]))
+        })
+}
+
+/// The bit of the code nearest `value` (`program_in`'s and `rate_in`'s ranges), 31 for any from
+/// 30.5 up; none for a value no test takes (below -0.5, or not a number).
+fn code_bit(value: f32) -> u32 {
+    if value.is_nan() || value <= -0.5 {
+        return 0;
+    }
+    1 << ((value + 0.5).floor() as u32).min(31)
+}
+
 /// Whether every vertex of `model` has `lit` exactly 1.0: under a rig that is on, each pixel of
 /// every one of its draws then weighs the rig's result at one ([`plain_is_lit`] for a whole model).
 pub(super) fn every_vertex_lit(model: &Model) -> bool {
@@ -268,6 +292,25 @@ mod tests {
         }
         assert!(!glow_reads_second(0.5));
         assert!(!glow_reads_second(0.0));
+    }
+
+    /// Each row's program and rate set the bit of the code a test in `bindings.wesl` would see
+    /// them as: the nearest whole number, every value from 30.5 up as 31, and row 0's zeros.
+    #[test]
+    fn a_table_sets_the_bit_of_each_code_its_rows_carry() {
+        let mut model = Model::none("circuit");
+        assert_eq!(row_codes(&model), (1, 1));
+        let row = |rate: f32, program: f32| crate::mesh::Emissive {
+            rate,
+            ..glow([program, 0.0])
+        };
+        model.emissive = vec![row(9.0, 12.0), row(1.0, 17.2), row(40.0, 0.6)];
+        let (programs, rates) = row_codes(&model);
+        assert_eq!(programs, 1 | 1 << 12 | 1 << 17 | 1 << 1);
+        assert_eq!(rates, 1 | 1 << 9 | 1 << 1 | 1 << 31);
+        assert_eq!(code_bit(-0.6), 0);
+        assert_eq!(code_bit(f32::NAN), 0);
+        assert_eq!(code_bit(2.49), 1 << 2);
     }
 
     #[test]
