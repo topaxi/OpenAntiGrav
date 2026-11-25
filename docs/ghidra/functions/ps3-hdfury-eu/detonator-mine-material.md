@@ -231,7 +231,7 @@ brightness words (constants resolved, flash writer unread), 66 for equaliser `Br
 read with `scripts/ps3-microcode.py fp-file`. The race's lit pass resolves the fogged variant at
 `@0x1a30` (static class, feature `0xfb61d927`); its unfogged twin (`@0x15d0`) is the same program
 without the closing fog lerp. One sampler, unit 0, `0xc78c9866`: the model's `_n` map, read as a
-tangent-space normal (`TEX R0, f[TC3]`, then `* 2 - 1`), `TC3` the second coordinate set. Writing
+tangent-space normal (`TEX R0, f[TC3]`, then `* 2 - 1`), `TC3` the program's fourth coordinate interpolator. Writing
 `C` for `MineColour`, `B` for `MineBrightness`, `V` for the normalised tangent-space eye vector
 (`f[TC1]`) and `N` for the map's normal:
 
@@ -283,6 +283,17 @@ the frame's sixteen band levels: the football band is **chosen** from the same k
 (`PROGRAM_BOMB_TINT`, mode 24, **chosen, not measured**: the rest of the bomb programs is unread),
 with the stage's inner colour on the body and the outer on the equalisers, brightness `0.2` and
 `0.8` for a flash of `0`.
+
+**Which coordinate set the map reads** (`det-mine-lit`, 2026-11-25; confidence 85): the mine's `.rcsmodel` chunks declare **no
+`lightmapUV` and no `Uv2`**, only the diffuse set, so `TC3` is that set. The wiring first sampled `lightmap_texcoord`, which
+the chunk does not carry (zero), so every pixel read one texel: a flat normal and a flat alpha, a smooth sphere with no hubs
+and no cut-out holes even at full brightness. `shade.wesl` now samples `in.texcoord`; with the map live the football shows its
+hubs, screws and holes (`hd_emissive_glow_ground_truth::the_mine_football_shows_its_normal_map_relief`: 623 luminance steps
+in the ball's inner half against 145 for the smooth one). Pair `mines-ahead` mean grey 13.74 -> 13.73, `pad` 7.68 and
+`cannon-volley` 14.18 unchanged: the pairs feed raw bands under 0.3, so ours' envelope never attacks and `MineBrightness`
+stays 0 (a thin `rim^5` edge); the original's `s` carries history ("not done" below), so its mines are lit.
+**Still unlike the original** with the envelope forced high (raw bands 0.8): the ball's centre is dark in ours (`N.V` near 1
+there) and bright in the original; the eye-vector space is the suspect (chosen below), unread.
 
 **Chosen, not measured:** the normal is the map through the chunk's tangent frame in the world frame
 (the program dots a tangent-space `V`; the angle is the same); a divisor at or below zero draws
@@ -374,7 +385,7 @@ dark: [detonator-mine-draw.md](detonator-mine-draw.md). That is also the reader 
 
 ## Lineage (2048 and Omega)
 
-- **2048 v1.04: checked, applies, not wired.** `eboot.elf` carries the plain strings `MineColour`,
+- **2048 v1.04: checked, applies, not wired.** (the mine models' vertex declaration, and so the coordinate set the map reads, is not read there.) `eboot.elf` carries the plain strings `MineColour`,
   `MineBrightness`, `BombColour`, `BombEQColour`, `ElectricityColour` and the four
   `Detonator ... Colour` keys (one hit each, `grep -c`). The per-stage values are HD's: 2048 ships
   `data/ZoneEnvironmentHDFury/DetonatorModeHDFury.effectSettings` in `data2.psarc`, **byte-identical**
