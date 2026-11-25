@@ -1,0 +1,136 @@
+//! The near-camera law reaches a race's particles: the load puts it on a title's effects and
+//! the frame's build reads the camera (`docs/ghidra/functions/ps3-hdfury-eu/particle-render.md`).
+
+use super::*;
+use oag_fx::psys::{Cull, NearLaw};
+use oag_mesh::mesh::GpuVertex;
+use oag_title::{Origin, Trigger};
+
+const ONE_TO_FOUR: NearLaw = NearLaw {
+    cull_depth: 1.0,
+    fade_depth: 4.0,
+};
+
+/// HD's, 2048's and Omega's builders run it, each read in its own executable; Pulse's and
+/// Pure's are unread.
+#[test]
+fn only_hd_2048_and_omega_run_the_near_law() {
+    for title in [oag_hd::TITLE, oag_2048::TITLE, oag_omega::TITLE] {
+        let law = title.effects.near_law.expect(title.name);
+        assert_eq!(
+            (law.cull_depth, law.fade_depth),
+            (1.0, 4.0),
+            "{}",
+            title.name
+        );
+        assert_eq!(law.origin, Origin::Measured, "{}", title.name);
+    }
+    for title in [oag_pulse::TITLE, oag_pure::TITLE] {
+        assert!(title.effects.near_law.is_none(), "{}", title.name);
+    }
+}
+
+fn race_on(image: &str) -> Option<Race> {
+    let image = oag_testdata::image(image)?;
+    let loaded = crate::load(&crate::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: Mode::TimeTrial,
+        ..crate::Options::default()
+    })
+    .expect("loading the race");
+    let mut race = Race::start(loaded.setup, loaded.view, loaded.modules);
+    race.tick(&oag_gameplay::PlayerInputs::none());
+    Some(race)
+}
+
+/// A quad's centre depth along `forward` from `eye`, and its farthest corner from that centre.
+fn depth_and_reach(quad: &[GpuVertex], eye: Vec3, forward: Vec3) -> (f32, f32) {
+    let centre = quad.iter().map(|v| Vec3::from(v.position)).sum::<Vec3>() / quad.len() as f32;
+    let reach = quad
+        .iter()
+        .map(|v| (Vec3::from(v.position) - centre).length())
+        .fold(0.0, f32::max);
+    ((centre - eye).dot(forward), reach)
+}
+
+/// HD's Rocket blast on a craft, played three units ahead of the lens: the frame's build drops,
+/// and caps, the smoke the file alone would draw several times its own distance wide.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn hds_craft_blast_near_the_camera_is_capped_by_its_depth() {
+    let Some(mut race) = race_on("data/images/hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let blast = race
+        .view
+        .handles
+        .get(Trigger::CraftBlast)
+        .cloned()
+        .expect("HD loads its craft blast");
+    assert_eq!(blast.near, Some(ONE_TO_FOUR));
+    assert_eq!(blast.emitters[0].near_cap, Some(0.5));
+
+    let frame = race.view.camera_frame(&race.core);
+    let (eye, forward) = (frame.position, -frame.back);
+    race.view
+        .stage
+        .play(&blast, eye + forward * 3.0, 1.0)
+        .expect("a free instance");
+    for _ in 0..8 {
+        race.view
+            .stage
+            .advance(1.0 / 60.0, &mut race.view.stage_rng);
+    }
+    let view = race.view.view(&race.core);
+    let right = Vec3::new(view.x_axis.x, view.y_axis.x, view.z_axis.x);
+    let up = Vec3::new(view.x_axis.y, view.y_axis.y, view.z_axis.y);
+
+    let (mut additive, mut lawful) = (Vec::new(), Vec::new());
+    race.extend_stage_vertices(&mut additive, &mut lawful, right, up);
+    let (mut other, mut authored) = (Vec::new(), Vec::new());
+    race.view
+        .stage
+        .extend_vertices(&mut other, &mut authored, right, up, Cull::NONE);
+
+    // Every alpha-over emitter of the blast is a billboard capped at its depth or less; a square
+    // of half size `depth` reaches `depth * sqrt(2)` to its corners.
+    let widest = |quads: &[GpuVertex]| {
+        quads
+            .chunks_exact(6)
+            .map(|quad| {
+                let (depth, reach) = depth_and_reach(quad, eye, forward);
+                reach / depth.max(1e-3)
+            })
+            .fold(0.0, f32::max)
+    };
+    assert!(
+        widest(&authored) > 2.0,
+        "the blast fills the lens as authored: {}",
+        widest(&authored)
+    );
+    assert!(!lawful.is_empty(), "the smoke beyond the cull still draws");
+    for quad in lawful.chunks_exact(6) {
+        let (depth, reach) = depth_and_reach(quad, eye, forward);
+        assert!(depth >= 1.0 - 1e-3, "a quad nearer than the cull: {depth}");
+        assert!(
+            reach <= depth * 1.5,
+            "a quad past its cap: {reach} at {depth}"
+        );
+    }
+}
+
+/// Pulse's effects carry no law.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn pulses_effects_load_without_the_near_law() {
+    let Some(race) = race_on("data/images/pulse-psp-eu.chd") else {
+        return;
+    };
+    let blast = race
+        .view
+        .handles
+        .get(Trigger::CraftBlast)
+        .expect("Pulse loads its craft blast");
+    assert_eq!(blast.near, None);
+}
