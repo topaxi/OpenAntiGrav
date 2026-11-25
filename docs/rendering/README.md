@@ -87,6 +87,10 @@
   `track solid, shaded` HD -17.6 %, 2048 -23.3 %, Omega -24.6 %) and the
   `graphics.circuit_lighting` rung, which buys about 5 % of render scale - see
   [`hires-gpu-levers.md`](hires-gpu-levers.md)
+- **A Rocket hit near the camera is particle fill** (2026-11-25): about 51 screens of blended
+  particles at the worst frame of a double craft hit, GPU-bound and sustained, not a hitch; quads
+  whose colour alpha is exactly 0 are dropped before upload (4K worst frame -15 %, byte-identical);
+  the rest is the authored smoke - see [`particle-fill.md`](particle-fill.md)
 - **Where the frame thread's CPU goes** (2026-10-21): `--frame-log` prints a per-phase line; a
   paused race costs nearly what a racing one does, about half of it in wgpu's submit, and two
   redundant per-frame uploads were removed (byte-identical) - see
