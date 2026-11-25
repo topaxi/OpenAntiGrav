@@ -555,6 +555,13 @@ impl Definition {
         }
     }
 
+    /// Drops every row that edits `setting`, on every page.
+    fn drop_setting_row(&mut self, setting: &str) {
+        for page in &mut self.pages {
+            page.retain_rows(|entry| entry.setting() != Some(setting));
+        }
+    }
+
     /// Drops the BOOST ZOOM row on a title that cannot borrow HD's ring
     /// (`oag_title::race::RaceDefaults::borrows_zoom_ring`): HD draws its own, always,
     /// and 2048 and Omega are unread. Dropped for the reason
@@ -564,9 +571,7 @@ impl Definition {
         if title.race.borrows_zoom_ring {
             return;
         }
-        for page in &mut self.pages {
-            page.retain_rows(|entry| entry.setting() != Some("graphics.boost_zoom"));
-        }
+        self.drop_setting_row("graphics.boost_zoom");
     }
 
     /// Drops the SCENE PRECISION row on a title whose scene does not store encoded values
@@ -577,9 +582,7 @@ impl Definition {
         if title.looks.blends_encoded.applies_everywhere() {
             return;
         }
-        for page in &mut self.pages {
-            page.retain_rows(|entry| entry.setting() != Some("graphics.scene_precision"));
-        }
+        self.drop_setting_row("graphics.scene_precision");
     }
 
     /// Drops the CIRCUIT LIGHTING row on a title whose circuits are not shaded from their own
@@ -590,9 +593,17 @@ impl Definition {
         if title.looks.material_render_state.applies_everywhere() {
             return;
         }
-        for page in &mut self.pages {
-            page.retain_rows(|entry| entry.setting() != Some("graphics.circuit_lighting"));
+        self.drop_setting_row("graphics.circuit_lighting");
+    }
+
+    /// Drops the REFLECTION RESOLUTION row on a title that draws no screen-space glass or sea
+    /// target (`oag_title::Looks::screen_space_target`): Pulse and Pure, so the row would change
+    /// nothing. Same once-before-read timing as [`Self::drop_unavailable_boost_zoom`].
+    pub fn drop_unavailable_reflection_resolution(&mut self, title: &oag_title::Title) {
+        if title.looks.screen_space_target.applies_everywhere() {
+            return;
         }
+        self.drop_setting_row("graphics.reflection_resolution");
     }
 
     /// Drops the TRAIL HITS row on a title whose original plays the trail-hit burst by itself
@@ -603,9 +614,7 @@ impl Definition {
         if !title.effects.plays_trail_hits_natively() {
             return;
         }
-        for page in &mut self.pages {
-            page.retain_rows(|entry| entry.setting() != Some("graphics.trail_hits"));
-        }
+        self.drop_setting_row("graphics.trail_hits");
     }
 
     /// Drops the WINGTIP CONTRAILS row on a title that carries them itself
@@ -615,9 +624,7 @@ impl Definition {
         if title.wingtip.is_none() {
             return;
         }
-        for page in &mut self.pages {
-            page.retain_rows(|entry| entry.setting() != Some("graphics.wingtip_contrails"));
-        }
+        self.drop_setting_row("graphics.wingtip_contrails");
     }
 
     /// Drops the OWN SHIELD row on a title whose original draws the HD-style shield itself
@@ -627,9 +634,7 @@ impl Definition {
         if title.looks.own_shield.applies_everywhere() {
             return;
         }
-        for page in &mut self.pages {
-            page.retain_rows(|entry| entry.setting() != Some("graphics.own_shield"));
-        }
+        self.drop_setting_row("graphics.own_shield");
     }
 
     /// Drops the OWN ROCKETS row on a title it is not offered on
@@ -639,9 +644,7 @@ impl Definition {
         if title.looks.own_rockets.applies_everywhere() {
             return;
         }
-        for page in &mut self.pages {
-            page.retain_rows(|entry| entry.setting() != Some("graphics.own_rockets"));
-        }
+        self.drop_setting_row("graphics.own_rockets");
     }
 
     /// Drops the HUD STYLE row on a title whose disc authors no `HUD Style` list
@@ -651,9 +654,7 @@ impl Definition {
         if !title.hud.skins.is_empty() {
             return;
         }
-        for page in &mut self.pages {
-            page.retain_rows(|entry| entry.setting() != Some("display.hud_style"));
-        }
+        self.drop_setting_row("display.hud_style");
     }
 
     /// Narrows the DYNAMIC HUD row to `default` and `concave` on a title whose options list no
@@ -721,9 +722,7 @@ impl Definition {
         if title.exhaust.is_psp_preset() {
             return;
         }
-        for page in &mut self.pages {
-            page.retain_rows(|entry| entry.setting() != Some("graphics.trail_order"));
-        }
+        self.drop_setting_row("graphics.trail_order");
     }
 
     /// Drops the SCENERY SORT row on a title whose circuit is not the PSP preset's: HD/Fury
@@ -733,9 +732,7 @@ impl Definition {
         if title.exhaust.is_psp_preset() {
             return;
         }
-        for page in &mut self.pages {
-            page.retain_rows(|entry| entry.setting() != Some("graphics.scenery_sort"));
-        }
+        self.drop_setting_row("graphics.scenery_sort");
     }
 
     /// Drops the TRAIL LENGTH row on a title whose engine ribbon is not the PSP preset: HD/Fury
@@ -745,9 +742,7 @@ impl Definition {
         if title.exhaust.is_psp_preset() {
             return;
         }
-        for page in &mut self.pages {
-            page.retain_rows(|entry| entry.setting() != Some("graphics.trail_length"));
-        }
+        self.drop_setting_row("graphics.trail_length");
     }
 
     /// Drops the WEATHER row on a title whose weather is not played
@@ -757,9 +752,7 @@ impl Definition {
         if title.weather.is_played() {
             return;
         }
-        for page in &mut self.pages {
-            page.retain_rows(|entry| entry.setting() != Some("graphics.weather"));
-        }
+        self.drop_setting_row("graphics.weather");
     }
 
     /// Drops the RUMBLE row's `original` value on a title whose original plays

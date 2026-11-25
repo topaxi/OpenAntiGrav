@@ -1197,6 +1197,10 @@ pub fn menu_seeds(
         ),
         ("graphics.water", text(&profile.water.to_string())),
         (
+            "graphics.reflection_resolution",
+            text(&profile.reflection_resolution.to_string()),
+        ),
+        (
             "graphics.model_detail",
             text(&profile.model_detail.to_string()),
         ),

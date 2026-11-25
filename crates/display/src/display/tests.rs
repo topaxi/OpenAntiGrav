@@ -683,3 +683,46 @@ fn circuit_lighting_round_trips_and_defaults_to_the_originals() {
     assert_eq!(CircuitLighting::default(), CircuitLighting::Original);
     assert!(!CircuitLighting::Original.is_simplified());
 }
+
+#[test]
+fn reflection_resolution_round_trips_and_defaults_to_the_originals() {
+    for value in ReflectionResolution::ALL {
+        assert_eq!(value.name().parse::<ReflectionResolution>(), Ok(value));
+    }
+    assert_eq!(
+        "SCALED".parse::<ReflectionResolution>(),
+        Ok(ReflectionResolution::Scaled)
+    );
+    assert!("half".parse::<ReflectionResolution>().is_err());
+    assert_eq!(
+        ReflectionResolution::default(),
+        ReflectionResolution::Original
+    );
+}
+
+#[test]
+fn the_scaled_reflection_target_follows_the_render_scale_and_never_exceeds_the_originals() {
+    let scale = |percent: u32| Scale::try_from(percent).expect("an offered scale");
+    let glass = (640, 360);
+    let sea = (960, 540);
+    for percent in [25, 33, 50, 100, 200] {
+        assert_eq!(
+            ReflectionResolution::Original.size(glass, scale(percent)),
+            glass,
+            "original at {percent}"
+        );
+    }
+    let scaled = ReflectionResolution::Scaled;
+    assert_eq!(scaled.size(glass, scale(100)), glass);
+    assert_eq!(scaled.size(sea, scale(100)), sea);
+    assert_eq!(scaled.size(glass, scale(50)), (320, 180));
+    assert_eq!(scaled.size(sea, scale(50)), (480, 270));
+    assert_eq!(scaled.size(glass, scale(25)), (160, 90));
+    assert_eq!(scaled.size(glass, scale(33)), (211, 119));
+    assert_eq!(scaled.size(glass, scale(150)), glass, "capped above 100");
+    assert_eq!(
+        scaled.size((1, 1), scale(25)),
+        (1, 1),
+        "an axis keeps a texel"
+    );
+}

@@ -672,6 +672,18 @@ pub(crate) fn race_launch(
         crate::water_setting::profile_for_source(settings, &options.source)
             .map_or_else(Default::default, |profile| profile.circuit_lighting)
     });
+    options.reflection_resolution = cli.reflection_resolution.unwrap_or_else(|| {
+        crate::water_setting::profile_for_source(settings, &options.source)
+            .map_or_else(Default::default, |profile| profile.reflection_resolution)
+    });
+    options.render_scale = match cli.render_scale {
+        Some(percent) => oag_display::display::Scale::try_from(percent)
+            .map_err(|why| anyhow::anyhow!("--render-scale {percent}: {why}"))?,
+        None => crate::water_setting::profile_for_source(settings, &options.source)
+            .map_or(oag_display::display::Scale::FULL, |profile| {
+                profile.render_scale
+            }),
+    };
     options.scene_precision = cli.scene_precision.unwrap_or_else(|| {
         crate::water_setting::profile_for_source(settings, &options.source)
             .map_or_else(Default::default, |profile| profile.scene_precision)

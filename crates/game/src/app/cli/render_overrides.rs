@@ -52,6 +52,9 @@ impl Cli {
         if let Some(lighting) = self.circuit_lighting {
             profile.circuit_lighting = lighting;
         }
+        if let Some(resolution) = self.reflection_resolution {
+            profile.reflection_resolution = resolution;
+        }
         if let Some(screen_filter) = &self.screen_filter {
             profile.screen_filter = screen_filter.clone();
         }

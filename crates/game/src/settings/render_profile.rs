@@ -351,6 +351,13 @@ pub struct RenderProfile {
     /// [`oag_display::display::CircuitLighting`].
     #[serde(default)]
     pub circuit_lighting: oag_display::display::CircuitLighting,
+    /// How many texels the screen-space glass and sea target gets: `original` (the default, the
+    /// original's fixed size) or `scaled` (that size times `render_scale`, never above it).
+    /// Read when a race loads its circuit. A title that draws no such target drops the row
+    /// (`oag_title::Looks::screen_space_target`). See
+    /// [`oag_display::display::ReflectionResolution`].
+    #[serde(default)]
+    pub reflection_resolution: oag_display::display::ReflectionResolution,
 }
 
 impl RenderProfile {
@@ -534,6 +541,7 @@ impl Default for RenderProfile {
             shadow_resolution: oag_display::display::ShadowResolution::default(),
             scene_precision: oag_display::display::ScenePrecision::default(),
             circuit_lighting: oag_display::display::CircuitLighting::default(),
+            reflection_resolution: oag_display::display::ReflectionResolution::default(),
         }
     }
 }
@@ -565,7 +573,7 @@ pub(super) fn ensure_known_titles(settings: &mut Settings) {
 /// hold", because the struct answers that. What needs it is the sweep that
 /// checks every menu seed lands in a table the settings file actually writes.
 #[cfg(test)]
-pub(super) const PROFILE_KEYS: [&str; 22] = [
+pub(super) const PROFILE_KEYS: [&str; 23] = [
     "render_scale",
     "render_scale_chosen",
     "target_fps",
@@ -588,6 +596,7 @@ pub(super) const PROFILE_KEYS: [&str; 22] = [
     "shadow_resolution",
     "scene_precision",
     "circuit_lighting",
+    "reflection_resolution",
 ];
 
 /// The keys that used to live flat in `[graphics]` and now live in one

@@ -1348,6 +1348,22 @@ string_id = "OAG_GRAPHICS_CIRCUIT_LIGHTING"
 setting = "graphics.circuit_lighting"
 values = ["original", "simplified"]
 
+# How many texels the screen-space target gets that a circuit's glass or sea reads:
+# Wipeout HD's behind-the-glass target (Vineta K's tunnel glass) and its planar sea
+# reflection (Moa Therma, Ubermall), 2048's and Omega's refraction target. `original`
+# is the default and the original's fixed size (640x360 for the glass, 960x540 for
+# the sea). `scaled` is that size times the render scale, never above it, so a lowered
+# render scale shrinks the target too: cheaper, with a coarser view through the glass
+# and in the sea. Only a title that draws the target has a choice; the row is dropped
+# elsewhere (`Definition::drop_unavailable_reflection_resolution`). Read when a race
+# loads its circuit. See `docs/rendering/water.md`, "The reflection target's resolution".
+[[page.entry]]
+kind = "choice"
+label = "REFLECTION RESOLUTION"
+string_id = "OAG_GRAPHICS_REFLECTION_RESOLUTION"
+setting = "graphics.reflection_resolution"
+values = ["original", "scaled"]
+
 
 # Which law draws a sea, a lake or a pool: `off` is the surface's constant
 # colour or texture, lit, with no wave normal, scroll or reflection; `original`

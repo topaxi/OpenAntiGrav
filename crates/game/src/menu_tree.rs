@@ -96,6 +96,7 @@ pub fn finish_definition(
     // And the CIRCUIT LIGHTING row, where the circuits are shaded from their own materials:
     // HD, 2048, Omega.
     definition.drop_unavailable_circuit_lighting(title);
+    definition.drop_unavailable_reflection_resolution(title);
     definition.drop_unavailable_wingtip_contrails(title);
     // And the OWN SHIELD row, where the original draws a shield of its own look: HD, 2048, Omega.
     definition.drop_unavailable_own_shield(title);
