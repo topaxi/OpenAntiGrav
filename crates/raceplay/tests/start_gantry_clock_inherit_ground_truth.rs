@@ -112,6 +112,7 @@ fn hds_go_lights_on_the_release_and_pulses_in_the_originals_phase() {
         return;
     };
     let loaded = race::load(&race::Options {
+        no_effects: true,
         source: image.display().to_string(),
         track: Some("/data/environments/talons_junction/track.vex".to_string()),
         ..race::Options::default()
@@ -195,6 +196,7 @@ fn hds_clock_is_found_on_the_loader_path_a_race_really_takes() {
     .expect("requesting the device");
     let loaded = LoadWorker::spawn(
         race::Options {
+            no_effects: true,
             source: image.display().to_string(),
             track: Some("/data/environments/talons_junction/track.vex".to_string()),
             ..race::Options::default()
@@ -216,6 +218,7 @@ fn hds_clock_is_found_on_the_loader_path_a_race_really_takes() {
 
 fn loaded_report(source: &str, track: Option<&str>) -> Vec<String> {
     race::load(&race::Options {
+        no_effects: true,
         source: source.to_string(),
         track: track.map(str::to_string),
         ..race::Options::default()
@@ -260,6 +263,7 @@ fn no_surface(source: &str, track: Option<&str>) {
 /// change over the countdown.
 fn curve_board_counts_down(source: &str, track: Option<&str>) {
     let loaded = race::load(&race::Options {
+        no_effects: true,
         source: source.to_string(),
         track: track.map(str::to_string),
         ..race::Options::default()

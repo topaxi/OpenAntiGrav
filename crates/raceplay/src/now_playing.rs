@@ -5,13 +5,14 @@
 //! the two `Race` methods that drive it - [`Race::note_song`] when the music starts a song and
 //! the step inside the tick. Display state, out of the hash, like the HUD's other bars.
 //!
-//! Wired for **Pulse** (PSP) only so far; a title whose [`oag_title::Music::now_playing`] is
-//! `None` gets no [`View`], and a layout or font that will not read leaves it out with a line in
-//! the load report. Nothing stands in. See `docs/formats/now-playing.md`.
+//! A title whose [`oag_title::Music::now_playing`] is `None` gets no [`View`], and a layout or
+//! font that will not read leaves it out with a line in the load report. Nothing stands in. See
+//! `docs/formats/now-playing.md`.
 
 #[cfg(feature = "view")]
 use crate::RaceView;
 use oag_hud::now_playing::{Display, geometry};
+use oag_title::now_playing::Show;
 
 use crate::Race;
 
@@ -26,6 +27,8 @@ pub struct View {
     title_key: Option<&'static str>,
     /// The title being played: the only author whose names the string table can hold a key for.
     played: &'static str,
+    /// Whether the display is plain lines, the artist over the song ([`oag_title::now_playing::Show::Lines`]).
+    lines: bool,
     serial: u32,
     /// Whether the title's options can switch the HUD off ([`oag_title::HudArt::dynamic_hud`]).
     gated: bool,
@@ -62,17 +65,25 @@ impl View {
         };
         let Some(geometry) = geometry(&xml, &authored) else {
             report.push(format!(
-                "now playing: {} has no {}; no display",
-                authored.layout, authored.item
+                "now playing: {} does not hold {:?}; no display",
+                authored.layout, authored.show
             ));
             return None;
         };
+        let lines = matches!(authored.show, Show::Lines { .. });
         report.push(format!(
-            "now playing: {} bar {:?}, text from x {} clipped to {:?} ({})",
-            authored.item,
-            geometry.bar,
-            geometry.origin_x,
-            geometry.clip,
+            "now playing: {} ({})",
+            if lines {
+                format!(
+                    "lines from x {}, y {} then {:?}",
+                    geometry.origin_x, geometry.text_y, geometry.later_rows_y
+                )
+            } else {
+                format!(
+                    "bar {:?}, text from x {} clipped to {:?}",
+                    geometry.bar, geometry.origin_x, geometry.clip
+                )
+            },
             match authored.origin {
                 oag_title::effects::Origin::Measured => "measured".to_string(),
                 oag_title::effects::Origin::InheritedFrom(title) =>
@@ -87,6 +98,7 @@ impl View {
             strings: hud.strings.clone(),
             title_key: authored.title_key,
             played: title.name,
+            lines,
             serial: 0,
             gated: title.hud_art.dynamic_hud.is_some(),
             hud_shown: true,
@@ -129,7 +141,22 @@ impl View {
 
     /// Starts the marquee on `song`'s name; nothing for a song nothing names.
     fn show(&mut self, song: &oag_sound::NowPlaying) {
-        if let Some(text) = self.text(song) {
+        if self.lines {
+            if let Some(name) = song.name.as_ref() {
+                // The original copies the artist string into its widget whatever it holds, so a
+                // song with no artist leaves the artist row empty and the song on the track row.
+                let lines = vec![
+                    name.artist.clone().unwrap_or_default(),
+                    song_title(&self.strings, self.title_key, self.played, song, name),
+                ];
+                let widest = lines
+                    .iter()
+                    .map(|line| oag_ui::font::measure(&self.font, line))
+                    .fold(0.0, f32::max);
+                self.display
+                    .show_lines(lines, widest * self.display.scale());
+            }
+        } else if let Some(text) = self.text(song) {
             let width = oag_ui::font::measure(&self.font, &text) * self.display.scale();
             self.display.show(text, width);
         }
@@ -150,8 +177,23 @@ fn song_text(
     song: &oag_sound::NowPlaying,
 ) -> Option<String> {
     let name = song.name.as_ref()?;
+    let title = song_title(strings, title_key, played, song, name);
+    Some(match &name.artist {
+        Some(artist) => format!("{artist}{separator}{title}"),
+        None => title,
+    })
+}
+
+/// The song's own title as the display words it: see [`song_text`].
+fn song_title(
+    strings: &oag_ui::language::StringTable,
+    title_key: Option<&str>,
+    played: &str,
+    song: &oag_sound::NowPlaying,
+    name: &oag_sound::SongName,
+) -> String {
     let own = song.author == Some(played);
-    let title = match (song.track, title_key) {
+    match (song.track, title_key) {
         (Some(number), _) => strings.get("OAG_HUD_TRACK_N").map_or_else(
             || name.title.clone(),
             |text| text.replace("{}", &number.to_string()),
@@ -161,11 +203,7 @@ fn song_text(
             .and_then(|text| text.lines().last())
             .map_or_else(|| name.title.clone(), str::to_string),
         (None, _) => name.title.clone(),
-    };
-    Some(match &name.artist {
-        Some(artist) => format!("{artist}{separator}{title}"),
-        None => title,
-    })
+    }
 }
 
 impl Race {
@@ -306,6 +344,20 @@ Keyed Title"></Entry>
             "another title's name is shown as it is"
         );
         assert_eq!(text(song("01", None, None)).as_deref(), Some("Artist - 01"));
+    }
+
+    /// A plain-lines title (Pure) words a numbered disc track through the same string row, and a
+    /// song with no artist keeps its title for the second row.
+    #[test]
+    fn the_title_of_a_numbered_track_is_worded_by_the_table_on_plain_lines_too() {
+        let named = song("Track 3", None, Some(3));
+        let name = named.name.as_ref().expect("a name");
+        let mut german = StringTable::from_xml("");
+        german.merge([("OAG_HUD_TRACK_N".to_string(), "Titel {}".to_string())].into());
+        assert_eq!(
+            super::song_title(&german, None, "Wipeout Pure", &named, name),
+            "Titel 3"
+        );
     }
 
     #[test]

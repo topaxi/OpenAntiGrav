@@ -587,6 +587,55 @@ impl Audio {
         self.settle_if_dumping();
     }
 
+    /// Starts (or resumes) the race playlist, stopping the menu voice first.
+    ///
+    /// **Authored, not recovered** (see [`Self::race_voice`]). Cycles the booted
+    /// disc's soundtrack order instead of the menu's fixed [`MUSIC_TRACK`]. The
+    /// first call picks a track via [`Self::race_music_pick`]; later ones
+    /// continue from [`Self::pause_race_music`]'s position, as
+    /// [`Self::race_index`] and [`Self::race_position`] are never reset here.
+    ///
+    /// **Reads nothing on the calling thread.** The track already decoded (a
+    /// resume from the menus) starts at once; any other is fetched by a
+    /// [`MusicFetchWorker`] and starts on the [`Self::tick`] it lands. On the
+    /// Steam Deck the synchronous version spent 305 ms listing HD's soundtrack
+    /// and 416 ms decoding a track on this thread.
+    ///
+    /// Never fatal, like [`Self::start_music`].
+    pub fn start_race_music(&mut self, discs: &MusicDiscs, choice: MusicSource, cache_dir: &Path) {
+        self.stop_music_voices();
+        self.race_context = Some((discs.clone(), choice, cache_dir.to_path_buf()));
+        if !self.soundtrack {
+            return;
+        }
+        // A fetch still in flight from before (a race left and resumed before
+        // its track landed) is the same track; it lands into this race.
+        if self.race_job.is_some() {
+            self.poll_race_job();
+            self.settle_if_dumping();
+            return;
+        }
+        let pick = self.race_music_pick();
+        if let Some((index, loaded)) = self.cached_race_track(discs, choice, &pick) {
+            self.set_race_index(index);
+            let seek = (self.race_position > 0.0).then_some(self.race_position);
+            self.apply_fetched_race_track(index, Ok(Some(loaded)), seek);
+            if self.race_voice.is_some() {
+                self.race_position = 0.0;
+            }
+            return;
+        }
+        self.race_job = Some(MusicFetchWorker::spawn(
+            discs.clone(),
+            choice,
+            cache_dir.to_path_buf(),
+            pick,
+            "race-music",
+        ));
+        self.poll_race_job();
+        self.settle_if_dumping();
+    }
+
     /// Which track the next race's music means, without reading anything.
     ///
     /// The track the playlist is on once one has played (with the place
@@ -610,7 +659,8 @@ impl Audio {
     /// is already decoded in [`Self::race_cache`].
     ///
     /// A `None` costs the launch no thread and no decode: the hand-off's
-    /// [`Self::start_race_music`] applies the cached track on the spot. The pick
+    /// [`Self::start_race_music`] applies the cached track on the spot, or starts nothing when
+    /// the soundtrack is off ([`Self::set_soundtrack`]). The pick
     /// it asks for again names the same track, because only a pick with no saved
     /// place can hit, and `race_music_pick` hands a saved place out once, so a
     /// pick that carried one is a miss and keeps it.
@@ -620,6 +670,9 @@ impl Audio {
         choice: MusicSource,
         cache_dir: &Path,
     ) -> Option<MusicFetchWorker> {
+        if !self.soundtrack {
+            return None;
+        }
         let pick = self.race_music_pick();
         if self.cached_race_track(discs, choice, &pick).is_some() {
             return None;

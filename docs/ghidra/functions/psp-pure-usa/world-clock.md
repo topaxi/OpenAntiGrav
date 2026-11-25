@@ -114,7 +114,41 @@ Regions on the 480x272 frame, each pasted from the original over ours with the m
 | Pair | Largest region | Share of error, of area | Cause |
 | --- | --- | ---: | --- |
 | `sinucit` (14.74) | upper scene, sky and buildings | 38.9 %, of 43.7 % | low frequency: a flat lift, ours darker by +11 grey (blurred difference 12.6 of 13.9); the weather mist and rain, unclocked. Ours' upper scene reads 78.2 at tick 2 and 75.4 at tick 398 on the same scenery phase, so ours' mist also thins under cover over the run (a lead: the original's opacity is not read). Advert screens above the road: 4.9 % on 3.2 % of the frame (23 billboard-slot draws suppressed, `pure-weather.md`) |
-| `sebenco-climb` (13.99) | upper scene | 36.8 %, of 46.9 % | low frequency 8.8 of 10.9, signed +4.8: the snow mist again. The densest box is the bottom-left HUD line (12.4 % on 5.3 %: the original prints `COSMOS KINECTION`, ours `COLD STORAGE`), out of scope; then the hull box (12.9 % on 8.6 %, original brighter by +15, the known hull lead) |
+| `sebenco-climb` (13.99) | upper scene | 36.8 %, of 46.9 % | low frequency 8.8 of 10.9, signed +4.8: the snow mist again. The densest box is the bottom-left HUD line (12.4 % on 5.3 %: the original prints `COSMOS KINECTION`, ours `COLD STORAGE`), out of scope; then the hull box (12.9 % on 8.6 %, original brighter by +15, the known hull lead; the bottom-left line is the original's two-line music text, see [now-playing.md](../../../formats/now-playing.md), "Pure's own music text") |
 | `sol-2` (9.37) | steam plume, `270,50 to 480,150` | 29.6 %, of 16.1 % | the original's cloud is denser and larger, covering the Harimau sign; ours' is thinner and sits lower. A particle phase, no world clock reaches it |
 
 No code changed: none of the three regions is a disc value ours reads wrong that a test can prove.
+
+## All twelve Pure race pairs carry the clock (checked 2026-11-25)
+
+`pure-classic-vr-set` was briefed that eight Pure race pairs had no world clock. They had: every `pair.json` under `data/reference/compare-page/pure-psp/`
+that is a race (twelve) records `original.world_clock_offset_s` and `ours.world_clock_offset_s`, and each `ours.flags` carries `--world-clock-offset`
+(`pure-world-clock` and `pure-modesto-hull`, 2026-11-24). Mean grey, no clock to the clock to the pair as stored at main `41d94285f`:
+
+| Pair | No clock | Clock read | Stored now |
+| --- | ---: | ---: | ---: |
+| `karbonis` | 9.32 | 4.31 | 4.20 |
+| `mandrashee` | 12.09 | 6.86 | 6.73 |
+| `manor-top` | 13.75 | 6.36 | 6.24 |
+| `sagarmartha` | 9.12 | 9.04 | 9.06 |
+| `modesto` | 6.19 | 4.38 | 4.16 |
+| `blue-ridge` | 7.23 | 6.56 | 6.51 |
+| `chenghou` | 7.63 | 6.63 | 6.43 |
+| `citta-nuova` | 8.77 | 7.12 | 6.83 |
+| `sebenco-climb` | 15.56 | 13.99 | 14.01 |
+| `sinucit` | 15.43 | 14.74 | 14.71 |
+| `sol-2` | 10.27 | 9.37 | 9.23 |
+| `vineta` | 7.37 | 6.33 | 6.04 |
+
+The last column moves with ours' later renderer changes (version-4 texture levels, the Selector and menu work), not with the clock; the gain
+from the clock is the middle column against the first (Sagarmartha's 0.08 is the hull's 4 px shift swamping the scenery). Every one of the eight
+non-Classic pairs dropped by more than the 0.3 re-capture noise: 0.67 to 1.65 grey on seven, and 1.81 on Modesto, whose re-capture also carried the
+texture-level fix (`hull-shine.md`).
+
+**A second boot, 2026-11-25** (private PPSSPP 1.20.4, software renderer, USA image, a fresh process per state; the state loaded twice per boot):
+Karbonis reads world clock 11.577 s at the first `Ship_UpdateCraft` stop and `launch-grade a0 + 0x130` race clock 1.5349 s, identical on both
+loads of both boots, so the world-minus-race offset is 10.0421 s against the stored pair's 10.0418 (0.0003 s apart); Sebenco Climb reads 10.908 and
+0.8676 s, offset 10.0404 against the stored 10.0409. The stored pairs' own stop reads one frame earlier in both (Karbonis race clock 1.5016 s):
+the documented one-frame variation of a load, which the offset is immune to. Two boots on two states: confidence **80** that the offset is
+repeatable to a frame. A world clock read after the emulator has been stepped for minutes is not the state's: one session that stepped a loaded
+Karbonis frame by frame for 560 s read 260 s afterwards (the clock runs on, 0.0333 s a frame); read it straight after a load.

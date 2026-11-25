@@ -474,7 +474,15 @@ fn campaign_still(image: &std::path::Path, page: &str, pin: Option<&str>, tag: &
     let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"));
     command
         .arg(image)
-        .args(["--no-audio", "--size", "960x544", "--menu-page", page])
+        .args([
+            "--no-audio",
+            "--no-soundtrack",
+            "--no-effects",
+            "--size",
+            "960x544",
+            "--menu-page",
+            page,
+        ])
         .env("XDG_CONFIG_HOME", dir.join("config"))
         .env("XDG_STATE_HOME", dir.join("state"))
         .env("XDG_DATA_HOME", dir.join("data"));
@@ -560,7 +568,15 @@ fn menu_page_still(
     let out = dir.join("still.png");
     let status = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
         .arg(image)
-        .args(["--no-audio", "--size", "480x272", "--menu-page", page])
+        .args([
+            "--no-audio",
+            "--no-soundtrack",
+            "--no-effects",
+            "--size",
+            "480x272",
+            "--menu-page",
+            page,
+        ])
         .args(args)
         .arg("--screenshot")
         .arg(&out)

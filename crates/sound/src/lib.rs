@@ -518,6 +518,10 @@ pub struct Audio {
     /// a source with no decodable music leaves `music` `None`: guarding on it
     /// alone would re-read the disc and re-run `ffmpeg` sixty times a second.
     music_attempted: bool,
+    /// Whether the soundtrack is read and played at all: `false` leaves the front end and the
+    /// races with no music and reads no track, while effects, speech and movie sound go on
+    /// ([`Audio::set_soundtrack`]).
+    soundtrack: bool,
     /// Which release the playing music came off, when it is one of the sixteen
     /// soundtrack tracks.
     ///
@@ -721,6 +725,7 @@ impl Audio {
             }),
             music: None,
             music_attempted: false,
+            soundtrack: true,
             music_from: None,
             held: Vec::new(),
             movie: None,
@@ -749,6 +754,14 @@ impl Audio {
         };
         audio.apply(settings);
         audio
+    }
+
+    /// Switches the soundtrack off (or back on): with `false`, [`Self::start_music`] and
+    /// [`Self::start_race_music`] read nothing and start nothing, so no track is read or decoded
+    /// and no song is ever playing. Effects, speech, movie sound and HD's authored mix are
+    /// unaffected. Set it before either start.
+    pub fn set_soundtrack(&mut self, on: bool) {
+        self.soundtrack = on;
     }
 
     /// Applies every persisted volume to the buses.
@@ -828,52 +841,6 @@ impl Audio {
     #[must_use]
     pub fn output(&self) -> &Output {
         &self.output
-    }
-
-    /// Starts (or resumes) the race playlist, stopping the menu voice first.
-    ///
-    /// **Authored, not recovered** (see [`Self::race_voice`]). Cycles the booted
-    /// disc's soundtrack order instead of the menu's fixed [`MUSIC_TRACK`]. The
-    /// first call picks a track via [`Self::race_music_pick`]; later ones
-    /// continue from [`Self::pause_race_music`]'s position, as
-    /// [`Self::race_index`] and [`Self::race_position`] are never reset here.
-    ///
-    /// **Reads nothing on the calling thread.** The track already decoded (a
-    /// resume from the menus) starts at once; any other is fetched by a
-    /// [`MusicFetchWorker`] and starts on the [`Self::tick`] it lands. On the
-    /// Steam Deck the synchronous version spent 305 ms listing HD's soundtrack
-    /// and 416 ms decoding a track on this thread.
-    ///
-    /// Never fatal, like [`Self::start_music`].
-    pub fn start_race_music(&mut self, discs: &MusicDiscs, choice: MusicSource, cache_dir: &Path) {
-        self.stop_music_voices();
-        self.race_context = Some((discs.clone(), choice, cache_dir.to_path_buf()));
-        // A fetch still in flight from before (a race left and resumed before
-        // its track landed) is the same track; it lands into this race.
-        if self.race_job.is_some() {
-            self.poll_race_job();
-            self.settle_if_dumping();
-            return;
-        }
-        let pick = self.race_music_pick();
-        if let Some((index, loaded)) = self.cached_race_track(discs, choice, &pick) {
-            self.set_race_index(index);
-            let seek = (self.race_position > 0.0).then_some(self.race_position);
-            self.apply_fetched_race_track(index, Ok(Some(loaded)), seek);
-            if self.race_voice.is_some() {
-                self.race_position = 0.0;
-            }
-            return;
-        }
-        self.race_job = Some(MusicFetchWorker::spawn(
-            discs.clone(),
-            choice,
-            cache_dir.to_path_buf(),
-            pick,
-            "race-music",
-        ));
-        self.poll_race_job();
-        self.settle_if_dumping();
     }
 
     /// How many tracks the **booted** disc's soundtrack lists, or `0` when it

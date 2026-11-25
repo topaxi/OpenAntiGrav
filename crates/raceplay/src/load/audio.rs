@@ -14,12 +14,17 @@ pub(super) fn banks_and_announcers(
     mode: Mode,
     vr_fx: bool,
     slot_teams: &[String],
+    no_effects: bool,
     report: &mut Vec<String>,
 ) -> (
     oag_sound::sfx::Banks,
     oag_sound::sfx::Announcer,
     oag_sound::sfx::ClassAnnouncer,
 ) {
+    // Nothing is read, so nothing decodes and nothing is reported: the race has no cue to play.
+    if no_effects {
+        return Default::default();
+    }
     let (race, lap_hud, destroyed) = (title.race, title.hud_art.lap_hud, title.destroyed.value);
     // Adding a cue is adding its name and its trigger, never a loader. Zone
     // races read `ship_zone.bnk` instead of `ship.bnk` - a different bank

@@ -41,7 +41,14 @@ fn capture_with(image: &Path, scratch: &Path, flag: Option<[&str; 2]>) -> Vec<u8
     let mut command = Command::new(env!("CARGO_BIN_EXE_oag-game"));
     command
         .arg(image)
-        .args(["--race", "--no-audio", "--size", "480x272"])
+        .args([
+            "--race",
+            "--no-audio",
+            "--no-soundtrack",
+            "--no-effects",
+            "--size",
+            "480x272",
+        ])
         .args([
             "--render-scale",
             "100",
@@ -130,7 +137,14 @@ fn a_bush_hides_the_speed_pad_behind_it_under_both_trail_orders() {
         let out = scratch.join(format!("pad-{order}.png"));
         let status = Command::new(env!("CARGO_BIN_EXE_oag-game"))
             .arg(&image)
-            .args(["--race", "--no-audio", "--size", "960x544"])
+            .args([
+                "--race",
+                "--no-audio",
+                "--no-soundtrack",
+                "--no-effects",
+                "--size",
+                "960x544",
+            ])
             .args([
                 "--render-scale",
                 "100",
@@ -179,7 +193,14 @@ fn the_debug_tint_repaints_the_blended_list_and_off_is_the_plain_frame() {
         let mut command = Command::new(env!("CARGO_BIN_EXE_oag-game"));
         command
             .arg(&image)
-            .args(["--race", "--no-audio", "--size", "480x272"])
+            .args([
+                "--race",
+                "--no-audio",
+                "--no-soundtrack",
+                "--no-effects",
+                "--size",
+                "480x272",
+            ])
             .args([
                 "--render-scale",
                 "100",

@@ -89,7 +89,13 @@ fn run_with(
     .unwrap();
     let run = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
         .arg(image)
-        .args(["--race", "--autopilot", "--no-audio"])
+        .args([
+            "--race",
+            "--autopilot",
+            "--no-audio",
+            "--no-soundtrack",
+            "--no-effects",
+        ])
         .args(["--size", &format!("{WIDTH}x{HEIGHT}")])
         .args(["--ticks", &ticks.to_string()])
         .arg("--screenshot")

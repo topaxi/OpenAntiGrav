@@ -153,7 +153,15 @@ fn the_headless_demo_run_chains_demos_with_nobody_in_them() {
     std::fs::create_dir_all(&scratch).expect("a scratch directory");
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
         .arg(&image)
-        .args(["--no-audio", "--demo", "--dry-run", "--ticks", "700"])
+        .args([
+            "--no-audio",
+            "--no-soundtrack",
+            "--no-effects",
+            "--demo",
+            "--dry-run",
+            "--ticks",
+            "700",
+        ])
         .env("XDG_CONFIG_HOME", scratch.join("config"))
         .env("XDG_DATA_HOME", scratch.join("data"))
         .env("XDG_STATE_HOME", scratch.join("state"))
@@ -202,6 +210,8 @@ fn a_wallpaper_on_three_outputs_shows_three_cameras() {
         .arg(&image)
         .args([
             "--no-audio",
+            "--no-soundtrack",
+            "--no-effects",
             "--wallpaper",
             "--windows",
             "3",

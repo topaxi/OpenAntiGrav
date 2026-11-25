@@ -131,7 +131,7 @@ fn pulse_shows_the_song_from_the_green_light_and_takes_it_down_again() {
     let marquee_at = |tick: usize| shown[tick].1.clone().expect("up");
     let early = marquee_at(first + 10);
     let later = marquee_at(first + 100);
-    assert_eq!(early.text, text);
+    assert_eq!(early.lines[0].text, text);
     assert!(early.color[3] < later.color[3], "fading in");
     assert!(later.x < early.x, "scrolling left");
     assert!(
@@ -229,7 +229,14 @@ fn timeline(image: &str, mode: oag_race::Mode, class: &str) -> Option<Vec<Beat>>
         beats.push(Beat {
             go,
             sounding: audio.playhead_race().is_some(),
-            shown: race.readout().now_playing.map(|marquee| marquee.text),
+            shown: race.readout().now_playing.map(|marquee| {
+                marquee
+                    .lines
+                    .iter()
+                    .map(|line| line.text.as_str())
+                    .collect::<Vec<_>>()
+                    .join(" - ")
+            }),
         });
     }
     Some(beats)
@@ -372,11 +379,13 @@ fn a_title_that_starts_its_song_at_load_has_it_from_the_first_step() {
     assert!(race.readout().now_playing.is_some(), "and shown with it");
 }
 
-/// Pure authors no display, so it borrows Pulse's through the fallback layer; its own
-/// `PI_Music` nodes name the songs. Shown with the song, as Pulse's is.
+/// Pure's `InGame` screen authors two plain `Text` widgets for the song (`InGameArtistText` at
+/// `x 80, y 240`, `InGameTrackText` at `y 250`) and no bar: the artist over the song, faded in
+/// over 51 updates of the original's 30 a second, held 150 and faded out. Its own `PI_Music`
+/// nodes name the songs.
 #[test]
 #[ignore = "needs data/images/pure-psp-eu.chd"]
-fn pure_borrows_pulses_display_and_names_its_own_songs() {
+fn pure_shows_the_artist_over_the_song_as_plain_lines_that_fade_hold_and_leave() {
     use oag_gameplay::PlayerInputs;
 
     let Some(source) = oag_testdata::image("data/images/pure-psp-eu.chd") else {
@@ -390,10 +399,12 @@ fn pure_borrows_pulses_display_and_names_its_own_songs() {
     assert!(
         names
             .iter()
-            .all(|name| name.as_ref().is_some_and(|n| n.artist.is_some()))
+            .all(|name| name.as_ref().is_some_and(|n| n.artist.is_some())),
+        "every soundtrack entry has an artist"
     );
     let name = names.into_iter().next().flatten().expect("a first name");
-    let text = name.text(" - ");
+    let artist = name.artist.clone().expect("an artist");
+    let title = name.title.clone();
 
     let loaded = oag_raceplay::load(&oag_raceplay::Options {
         source,
@@ -405,9 +416,8 @@ fn pure_borrows_pulses_display_and_names_its_own_songs() {
         loaded
             .report
             .iter()
-            .any(|line| line.starts_with("now playing:")
-                && line.contains("borrowed from Wipeout Pulse")),
-        "the load says it is borrowed: {:?}",
+            .any(|line| line.starts_with("now playing: lines from x 80, y 240 then [250.0]")),
+        "the load reads the disc's widgets: {:?}",
         loaded
             .report
             .iter()
@@ -422,12 +432,29 @@ fn pure_borrows_pulses_display_and_names_its_own_songs() {
         author: Some(oag_pulse::TITLE.name),
         track: None,
     }));
-    let mut shown = None;
-    for _ in 0..400 {
+    let mut alpha = Vec::new();
+    for _ in 0..560 {
         race.tick(&PlayerInputs::none());
-        shown = shown.or_else(|| race.readout().now_playing.map(|marquee| marquee.text));
+        alpha.push(race.readout().now_playing.map(|marquee| {
+            assert_eq!(marquee.bar[2], 0.0, "no bar");
+            assert_eq!(marquee.x, 80.0);
+            let rows: Vec<(&str, f32)> = marquee
+                .lines
+                .iter()
+                .map(|line| (line.text.as_str(), line.y))
+                .collect();
+            assert_eq!(rows, [(artist.as_str(), 240.0), (title.as_str(), 250.0)]);
+            marquee.color[3]
+        }));
     }
-    assert_eq!(shown, Some(text));
+    assert!(alpha[0].is_some_and(|a| a < 0.1), "fading in from nothing");
+    assert!(
+        alpha[130].is_some_and(|a| (a - 1.0).abs() < 1e-6),
+        "full after 51 updates of 2 ticks"
+    );
+    assert!(alpha[390].is_some_and(|a| (a - 1.0).abs() < 1e-6), "held");
+    assert!(alpha[450].is_some_and(|a| a < 1.0), "fading out");
+    assert!(alpha[559].is_none(), "gone");
 }
 
 /// A race of `image` with its first soundtrack entry's name, for the `Dynamic HUD` tests.
@@ -544,8 +571,8 @@ fn a_split_screen_shows_no_song_display() {
     assert!(race.readout().now_playing.is_some(), "and back to one view");
 }
 
-/// The setting is read only by a title whose options list it: Pure borrows Pulse's marquee and
-/// has no `Dynamic HUD` list, so `off` leaves its song up.
+/// The setting is read only by a title whose options list it: Pure has no `Dynamic HUD` list, so
+/// `off` leaves its song up.
 #[test]
 #[ignore = "needs data/images/pure-psp-eu.chd"]
 fn a_title_without_the_option_ignores_the_dynamic_hud_choice() {
@@ -626,7 +653,7 @@ fn hd_shows_its_own_item_with_the_bar_art_from_its_sheet() {
         shown = shown.or_else(|| race.readout().now_playing);
     }
     let marquee = shown.expect("shown");
-    assert_eq!(marquee.text, text);
+    assert_eq!(marquee.lines[0].text, text);
     let mut frame = oag_hud::Frame::default();
     oag_hud::now_playing::append(&mut frame, &marquee, [0.0, 0.0, 0.0, 1.0], &sheet);
     assert_eq!(
@@ -690,7 +717,7 @@ fn omega_shows_hds_item_and_names_its_twenty_eight_songs() {
         shown = shown.or_else(|| race.readout().now_playing);
     }
     let marquee = shown.expect("shown");
-    assert_eq!(marquee.text, text);
+    assert_eq!(marquee.lines[0].text, text);
     let mut frame = oag_hud::Frame::default();
     oag_hud::now_playing::append(&mut frame, &marquee, [0.0, 0.0, 0.0, 1.0], &sheet);
     assert_eq!(frame.sprites.len(), 1, "the bar's texture is in the sheet");
@@ -744,7 +771,11 @@ fn the_2048_borrows_hds_display_and_names_its_own_songs() {
     let mut shown = None;
     for _ in 0..400 {
         race.tick(&PlayerInputs::none());
-        shown = shown.or_else(|| race.readout().now_playing.map(|marquee| marquee.text));
+        shown = shown.or_else(|| {
+            race.readout()
+                .now_playing
+                .map(|marquee| marquee.lines[0].text.clone())
+        });
     }
     // The node is named `01`; the title is the second line of the language table's `MT_01`.
     let shown = shown.expect("shown");

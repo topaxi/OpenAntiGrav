@@ -272,7 +272,15 @@ fn menu_page(source: &std::path::Path, anim_seconds: &str, name: &str) -> (usize
     let out = std::env::temp_dir().join(format!("oag-omega-backdrop-{name}.png"));
     let status = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
         .arg(source)
-        .args(["--no-audio", "--size", "640x360", "--menu-page", "main"])
+        .args([
+            "--no-audio",
+            "--no-soundtrack",
+            "--no-effects",
+            "--size",
+            "640x360",
+            "--menu-page",
+            "main",
+        ])
         .args(["--anim-seconds", anim_seconds, "--screenshot"])
         .arg(&out)
         .env(

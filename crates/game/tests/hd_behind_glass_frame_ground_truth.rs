@@ -75,7 +75,14 @@ fn the_ceiling_panes_show_the_teal_behind_the_glass() {
     let out = scratch.join("frame.png");
     let status = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
         .arg(image)
-        .args(["--race", "--no-audio", "--size", "960x544"])
+        .args([
+            "--race",
+            "--no-audio",
+            "--no-soundtrack",
+            "--no-effects",
+            "--size",
+            "960x544",
+        ])
         .args(["--track", r"Data\Environments\01_Vineta_K\track.vex"])
         .args(["--team", "feisar_c1", "--variant", "concept1"])
         .args(["--render-scale", "100", "--msaa", "off"])

@@ -70,7 +70,15 @@ fn frame_of(image: &Path, scratch: &Path, shadows: &str, resolution: &str) -> Ve
     let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"));
     command
         .arg(image)
-        .args(["--race", "--opponents", "--no-audio", "--team", "FEISAR"])
+        .args([
+            "--race",
+            "--opponents",
+            "--no-audio",
+            "--no-soundtrack",
+            "--no-effects",
+            "--team",
+            "FEISAR",
+        ])
         .args(["--track", "Data\\Environments\\Talons_Junction\\track.vex"])
         .arg(
             "--camera-pose=-143.567421,-48.459354,-175.132351,0.994815,-0.101594,-0.004697,\

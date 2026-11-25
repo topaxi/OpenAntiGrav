@@ -31,7 +31,9 @@ impl std::fmt::Debug for MenuJob {
 
 impl MenuJob {
     /// Reads the mix tables and the menu's music for `discs` in the background.
-    fn spawn(discs: MusicDiscs, choice: MusicSource, cache_dir: PathBuf) -> Self {
+    ///
+    /// Without `soundtrack` it reads the mix tables alone: no loop to decode and no spectrum.
+    fn spawn(discs: MusicDiscs, choice: MusicSource, cache_dir: PathBuf, soundtrack: bool) -> Self {
         Self(oag_thread::Task::spawn("menu-music", move || {
             discs.wait_surveyed();
             let maps = match discs.booted() {
@@ -44,12 +46,14 @@ impl MenuJob {
             // `fetch_track` and is stamped with its release; the PSP's is loaded
             // unstamped, and `music_from` staying `None` is the scoping rule.
             let loaded = match discs.booted() {
+                _ if !soundtrack => Ok(None),
                 Some(Platform::Ps2) => {
                     race_music::fetch_track(&discs, choice, &cache_dir, MUSIC_TRACK)
                 }
                 _ => front_end_music(&discs, &cache_dir),
             };
             let spectrum = match discs.pick(MusicSource::Auto) {
+                _ if !soundtrack => Ok(None),
                 Some((source, _)) if discs.booted() != Some(Platform::Ps2) => {
                     library::load_front_end_spectrum(discs.library, source)
                 }
@@ -133,6 +137,7 @@ impl Audio {
             discs.clone(),
             choice,
             cache_dir.to_path_buf(),
+            self.soundtrack,
         ));
         self.poll_menu_job();
         self.settle_if_dumping();
@@ -192,6 +197,7 @@ impl Audio {
                 self.music_from = self.music.and(loaded.from);
                 debug!("audio: music {}, {seconds:.1} s, looping", loaded.what);
             }
+            Ok(None) if !self.soundtrack => {}
             Ok(None) => warn!("audio: this source carries no music this can play"),
             Err(error) => race_music::warn_no_music("no music", &error),
         }
