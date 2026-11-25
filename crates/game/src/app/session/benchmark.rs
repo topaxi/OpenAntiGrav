@@ -97,10 +97,13 @@ impl Session {
     /// Where the benchmark is, for a script that waits on it: `loading`, `running` or `stats`.
     pub(crate) fn benchmark_phase(&self) -> Option<&'static str> {
         match &self.stage {
-            Stage::Race(stage) => stage
-                .benchmark
-                .as_ref()
-                .map(|live| if live.done.is_some() { "stats" } else { "running" }),
+            Stage::Race(stage) => stage.benchmark.as_ref().map(|live| {
+                if live.done.is_some() {
+                    "stats"
+                } else {
+                    "running"
+                }
+            }),
             Stage::Loading(_) if self.benchmark.launching.is_some() => Some("loading"),
             _ => None,
         }
@@ -171,7 +174,9 @@ impl Session {
         self.benchmark.launching = Some(Launch {
             origin,
             preset,
-            tick_cap: tick_cap.or(self.benchmark.tick_cap).unwrap_or(plan::TICK_CAP),
+            tick_cap: tick_cap
+                .or(self.benchmark.tick_cap)
+                .unwrap_or(plan::TICK_CAP),
         });
         info!("starting the benchmark");
         match self.launch_race() {
@@ -339,10 +344,12 @@ impl Session {
     /// What to launch again: where it started from, the preset and the tick cap.
     fn benchmark_run(&self) -> (Origin, Option<String>, u32) {
         match &self.stage {
-            Stage::Race(stage) => stage.benchmark.as_ref().map_or(
-                (Origin::Extras, None, plan::TICK_CAP),
-                |live| (live.origin, live.preset.clone(), live.tick_cap),
-            ),
+            Stage::Race(stage) => stage
+                .benchmark
+                .as_ref()
+                .map_or((Origin::Extras, None, plan::TICK_CAP), |live| {
+                    (live.origin, live.preset.clone(), live.tick_cap)
+                }),
             _ => (Origin::Extras, None, plan::TICK_CAP),
         }
     }
@@ -413,28 +420,70 @@ impl Session {
         let profile = self.render_profile();
         let config = &self.gpu.output.config;
         let mut settings = vec![
-            ("size".to_string(), format!("{}x{}", config.width, config.height)),
+            (
+                "size".to_string(),
+                format!("{}x{}", config.width, config.height),
+            ),
             ("present".to_string(), format!("{:?}", config.present_mode)),
-            ("render_scale".to_string(), plain(&format!("{:?}", profile.render_scale))),
-            ("upscaler".to_string(), format!("{:?}", profile.reconstruction)),
+            (
+                "render_scale".to_string(),
+                plain(&format!("{:?}", profile.render_scale)),
+            ),
+            (
+                "upscaler".to_string(),
+                format!("{:?}", profile.reconstruction),
+            ),
             ("msaa".to_string(), format!("{:?}", profile.msaa)),
             ("shadows".to_string(), format!("{:?}", profile.shadows)),
-            ("motion_blur".to_string(), format!("{:?}", profile.motion_blur)),
+            (
+                "motion_blur".to_string(),
+                format!("{:?}", profile.motion_blur),
+            ),
             (
                 "motion_blur_resolution".to_string(),
                 profile.motion_blur_resolution.name().to_string(),
             ),
-            ("anisotropy".to_string(), format!("{:?}", self.settings.graphics.anisotropy)),
-            ("model_detail".to_string(), format!("{:?}", profile.model_detail)),
-            ("texture_detail".to_string(), format!("{:?}", profile.texture_detail)),
-            ("trail_order".to_string(), format!("{:?}", profile.trail_order)),
-            ("scenery_sort".to_string(), format!("{:?}", profile.scenery_sort)),
-            ("trail_length".to_string(), format!("{:?}", profile.trail_length)),
+            (
+                "anisotropy".to_string(),
+                format!("{:?}", self.settings.graphics.anisotropy),
+            ),
+            (
+                "model_detail".to_string(),
+                format!("{:?}", profile.model_detail),
+            ),
+            (
+                "texture_detail".to_string(),
+                format!("{:?}", profile.texture_detail),
+            ),
+            (
+                "trail_order".to_string(),
+                format!("{:?}", profile.trail_order),
+            ),
+            (
+                "scenery_sort".to_string(),
+                format!("{:?}", profile.scenery_sort),
+            ),
+            (
+                "trail_length".to_string(),
+                format!("{:?}", profile.trail_length),
+            ),
             ("weather".to_string(), format!("{:?}", profile.weather)),
-            ("frustum_culling".to_string(), format!("{:?}", self.settings.graphics.frustum_culling)),
-            ("pvs_culling".to_string(), format!("{:?}", self.settings.graphics.pvs_culling)),
-            ("camera_view".to_string(), format!("{:?}", self.settings.graphics.camera_view)),
-            ("fov".to_string(), plain(&format!("{:?}", self.settings.graphics.fov))),
+            (
+                "frustum_culling".to_string(),
+                format!("{:?}", self.settings.graphics.frustum_culling),
+            ),
+            (
+                "pvs_culling".to_string(),
+                format!("{:?}", self.settings.graphics.pvs_culling),
+            ),
+            (
+                "camera_view".to_string(),
+                format!("{:?}", self.settings.graphics.camera_view),
+            ),
+            (
+                "fov".to_string(),
+                plain(&format!("{:?}", self.settings.graphics.fov)),
+            ),
             ("autopilot".to_string(), "true".to_string()),
         ];
         settings.retain(|(_, value)| !value.is_empty());
@@ -462,7 +511,10 @@ impl Session {
             preset: live.preset.clone(),
             origin: live.origin.name(),
             command,
-            load: (live.recorder.load_start().to_string(), benchmark::load_average()),
+            load: (
+                live.recorder.load_start().to_string(),
+                benchmark::load_average(),
+            ),
             git_hash: oag_net::GIT_HASH,
             wall_seconds: live.recorder.wall_seconds(),
             people: 1,

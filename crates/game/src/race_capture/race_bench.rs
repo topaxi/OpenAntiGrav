@@ -45,10 +45,9 @@ use std::path::PathBuf;
 use web_time::Instant;
 
 use super::{CaptureOptions, HeldButtons, advance_one_tick, spectrum};
+use crate::benchmark::stats::{Summary, json_string, summarise};
 use oag_gpu::timing::{Half, PassTimer, Reading};
 use oag_raceplay::{Race, Scene};
-use crate::benchmark::stats::{Summary, json_string, summarise};
-
 
 /// The environment variable that turns the bench on: the output path without
 /// its extension.
@@ -518,7 +517,10 @@ fn json(frames: &[Frame], facts: &Facts<'_>) -> String {
     put("format", "1".to_string());
     put("title", json_string(facts.title));
     put("git_hash", json_string(oag_net::GIT_HASH));
-    put("build", json_string(&crate::benchmark::report::build_label()));
+    put(
+        "build",
+        json_string(&crate::benchmark::report::build_label()),
+    );
     put(
         "adapter",
         crate::benchmark::report::adapter_json(a, facts.timestamps),

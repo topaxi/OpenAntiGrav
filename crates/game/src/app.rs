@@ -198,7 +198,8 @@ fn new_event_loop() -> Result<EventLoop<()>> {
 }
 
 /// The command line, run: to the end when nothing needs a window, otherwise as far as the window.
-fn run(cli: Cli) -> Result<()> {
+fn run(mut cli: Cli) -> Result<()> {
+    cli::benchmark::resolve_title(&cli.benchmark, &mut cli.source)?;
     match launch(cli)? {
         Launch::Done => Ok(()),
         Launch::Window(window) => run_window(*window),

@@ -74,9 +74,15 @@ mod tests {
             .and_then(|rest| rest.split(']').next())
             .expect("COMMON table");
         assert!(common.contains("\"--mode\", \"single_race\""), "{common}");
-        assert!(common.contains(&format!("\"--seed\", \"{SEED}\"")), "{common}");
+        assert!(
+            common.contains(&format!("\"--seed\", \"{SEED}\"")),
+            "{common}"
+        );
         assert!(common.contains("\"--autopilot\""), "{common}");
-        assert!(!common.contains("--class"), "the script takes the CLI's class default");
+        assert!(
+            !common.contains("--class"),
+            "the script takes the CLI's class default"
+        );
         assert!(
             script.contains(&format!("TICK_CAP = {TICK_CAP}")),
             "tick cap"

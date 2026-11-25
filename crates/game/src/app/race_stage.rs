@@ -778,6 +778,7 @@ impl RaceStage {
             let list = crate::benchmark::screen::draw_list(
                 &done.report,
                 self.scoreboard.line_height(),
+                self.scoreboard.char_width(),
                 done.focus,
                 done.saved.as_deref(),
             );

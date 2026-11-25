@@ -58,7 +58,11 @@ fn figures_skip_the_warm_up_and_count_the_budget() {
 
 #[test]
 fn a_run_shorter_than_the_warm_up_has_no_figures() {
-    assert!(report(std::iter::repeat_n(16_700.0, 10)).figures().is_none());
+    assert!(
+        report(std::iter::repeat_n(16_700.0, 10))
+            .figures()
+            .is_none()
+    );
 }
 
 #[test]

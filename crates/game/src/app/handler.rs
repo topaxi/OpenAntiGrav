@@ -546,7 +546,10 @@ impl App {
             replay_refused: std::collections::BTreeMap::new(),
             watching: None,
             demo: crate::app::session::DemoState::with_cli(self.demo, self.demo_limit),
-            benchmark: crate::app::session::BenchmarkState::with_cli(self.benchmark.clone(), self.benchmark_ticks),
+            benchmark: crate::app::session::BenchmarkState::with_cli(
+                self.benchmark.clone(),
+                self.benchmark_ticks,
+            ),
             viewer: None,
             notice: None,
             shot_cli: self.replay_png.clone(),

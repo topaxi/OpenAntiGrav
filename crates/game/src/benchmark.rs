@@ -15,7 +15,6 @@ pub mod report;
 pub mod screen;
 pub mod stats;
 
-
 pub use recorder::Recorder;
 pub use report::{Context, Report};
 use screen::Choice;
@@ -52,12 +51,14 @@ pub fn load_average() -> String {
 /// processor model (where the OS names one).
 #[must_use]
 pub fn device_label() -> String {
-    let cpu = std::fs::read_to_string("/proc/cpuinfo").ok().and_then(|text| {
-        text.lines()
-            .find(|line| line.starts_with("model name") || line.starts_with("Hardware"))
-            .and_then(|line| line.split_once(':'))
-            .map(|(_, name)| name.trim().to_string())
-    });
+    let cpu = std::fs::read_to_string("/proc/cpuinfo")
+        .ok()
+        .and_then(|text| {
+            text.lines()
+                .find(|line| line.starts_with("model name") || line.starts_with("Hardware"))
+                .and_then(|line| line.split_once(':'))
+                .map(|(_, name)| name.trim().to_string())
+        });
     match cpu {
         Some(cpu) => format!("{} {}, {cpu}", std::env::consts::OS, std::env::consts::ARCH),
         None => format!("{} {}", std::env::consts::OS, std::env::consts::ARCH),
@@ -73,6 +74,9 @@ pub fn run_id() -> String {
         .map_or(0, |since| since.as_secs());
     format!("run-{seconds}")
 }
+
+/// The short names of the titles, as `title_key` gives them.
+pub const TITLE_KEYS: [&str; 5] = ["pulse", "pure", "hd", "2048", "omega"];
 
 /// The short name `scripts/bench-render.py` files a title's result under (`pulse`, `pure`, `hd`,
 /// `2048`, `omega`), so two runs' directories line up by file name.

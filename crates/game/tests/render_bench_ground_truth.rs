@@ -225,7 +225,10 @@ fn the_in_game_benchmark_flies_the_race_the_offscreen_bench_does() {
         "the window flies the race the offscreen bench flies"
     );
     assert!(json.contains("\"kind\": \"in_game\""), "{json}");
-    assert!(json.contains("\"frame_us\": {\"count\":"), "the frame metric");
+    assert!(
+        json.contains("\"frame_us\": {\"count\":"),
+        "the frame metric"
+    );
     assert!(
         std::fs::metadata(&shot).is_ok_and(|meta| meta.len() > 1000),
         "the stats screen was drawn"
@@ -257,7 +260,8 @@ fn a_preset_changes_the_picture_and_not_the_race_or_the_players_settings() {
     assert!(low.contains("\"shadows\": \"Blob\""), "{low}");
     assert!(low.contains("\"preset\": \"low\""), "{low}");
     assert!(plain.contains("\"preset\": null"), "{plain}");
-    let saved = std::fs::read_to_string(low_dir.join("config/oag/settings.toml")).unwrap_or_default();
+    let saved =
+        std::fs::read_to_string(low_dir.join("config/oag/settings.toml")).unwrap_or_default();
     assert!(
         !saved.contains("blob"),
         "the preset's shadows reached settings.toml"

@@ -31,7 +31,10 @@ pub const KEYS: &[&str] = &[
 /// The file a title's presets are in.
 #[must_use]
 pub fn file_name(title_key: &str) -> String {
-    format!("Data\\XML\\BenchmarkPresets_{}.toml", title_key.to_uppercase_first())
+    format!(
+        "Data\\XML\\BenchmarkPresets_{}.toml",
+        title_key.to_uppercase_first()
+    )
 }
 
 trait UppercaseFirst {
@@ -131,7 +134,10 @@ impl Presets {
     /// The names, for a message that says what there is.
     #[must_use]
     pub fn names(&self) -> Vec<&str> {
-        self.presets.iter().map(|preset| preset.name.as_str()).collect()
+        self.presets
+            .iter()
+            .map(|preset| preset.name.as_str())
+            .collect()
     }
 }
 
@@ -185,7 +191,10 @@ mod tests {
         assert_eq!(low.summary, "cheap");
         assert_eq!(
             low.settings,
-            [("msaa".into(), "off".into()), ("render_scale".into(), "50".into())]
+            [
+                ("msaa".into(), "off".into()),
+                ("render_scale".into(), "50".into())
+            ]
         );
         assert!(presets.get("high").is_none());
     }
@@ -201,5 +210,79 @@ mod tests {
     fn the_file_is_named_for_the_title() {
         assert_eq!(file_name("pulse"), "Data\\XML\\BenchmarkPresets_Pulse.toml");
         assert_eq!(file_name("2048"), "Data\\XML\\BenchmarkPresets_2048.toml");
+    }
+
+    const SHIPPED: [(&str, &str); 5] = [
+        (
+            "pulse",
+            include_str!("../../../../assets/fallback/Data/XML/BenchmarkPresets_Pulse.toml"),
+        ),
+        (
+            "pure",
+            include_str!("../../../../assets/fallback/Data/XML/BenchmarkPresets_Pure.toml"),
+        ),
+        (
+            "hd",
+            include_str!("../../../../assets/fallback/Data/XML/BenchmarkPresets_HD.toml"),
+        ),
+        (
+            "2048",
+            include_str!("../../../../assets/fallback/Data/XML/BenchmarkPresets_2048.toml"),
+        ),
+        (
+            "omega",
+            include_str!("../../../../assets/fallback/Data/XML/BenchmarkPresets_Omega.toml"),
+        ),
+    ];
+
+    /// Every `setting = ".."` row of the menu definition with the values it offers.
+    fn offered(value: &toml::Value, out: &mut Vec<(String, Vec<String>)>) {
+        match value {
+            toml::Value::Table(table) => {
+                if let (Some(toml::Value::String(setting)), Some(toml::Value::Array(values))) =
+                    (table.get("setting"), table.get("values"))
+                {
+                    out.push((
+                        setting.clone(),
+                        values
+                            .iter()
+                            .filter_map(|v| v.as_str().map(str::to_string))
+                            .collect(),
+                    ));
+                }
+                table.values().for_each(|inner| offered(inner, out));
+            }
+            toml::Value::Array(items) => items.iter().for_each(|inner| offered(inner, out)),
+            _ => {}
+        }
+    }
+
+    /// Each shipped file reads, has the three presets, and sets only values the graphics page
+    /// offers for that setting, so a preset never names a value `apply_setting` would refuse.
+    #[test]
+    fn the_shipped_presets_set_values_the_graphics_page_offers() {
+        let menu: toml::Value =
+            toml::from_str(include_str!("../../../../assets/ui/menu.toml")).unwrap();
+        let mut rows = Vec::new();
+        offered(&menu, &mut rows);
+        for (title, text) in SHIPPED {
+            let presets = Presets::parse(text).unwrap_or_else(|why| panic!("{title}: {why}"));
+            assert_eq!(presets.names(), ["low", "medium", "high"], "{title}");
+            for preset in &presets.presets {
+                for (key, value) in &preset.settings {
+                    let setting = format!("graphics.{key}");
+                    let values = rows
+                        .iter()
+                        .find(|(row, _)| *row == setting)
+                        .unwrap_or_else(|| panic!("{title}: no row {setting}"));
+                    assert!(
+                        values.1.contains(value),
+                        "{title} {}: {setting} = {value:?}, the page offers {:?}",
+                        preset.name,
+                        values.1
+                    );
+                }
+            }
+        }
     }
 }

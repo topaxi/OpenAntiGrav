@@ -78,17 +78,30 @@ fn track_label(track: &str) -> String {
 
 /// The last three components of a path: `bench/run-1795576464/pulse.json`.
 fn short_path(path: &str) -> String {
-    let parts: Vec<&str> = path.split(['\\', '/']).filter(|part| !part.is_empty()).collect();
+    let parts: Vec<&str> = path
+        .split(['\\', '/'])
+        .filter(|part| !part.is_empty())
+        .collect();
     parts[parts.len().saturating_sub(3)..].join("/")
 }
 
-/// Characters a line of the panel holds at text scale one: measured against the Pulse HUD face
-/// at the panel's width.
-const WIDTH_AT_ONE: f32 = 52.0;
+/// The width the panel's text runs across, in grid units.
+const INNER_WIDTH: f32 = PANEL_W - 2.0 * PAD - 12.0;
+
+/// How many characters of `char_width` a line holds at text `scale`.
+fn chars_per_line(char_width: f32, scale: f32) -> usize {
+    (INNER_WIDTH / (char_width.max(1.0) * scale)) as usize
+}
 
 /// The draw list of the screen for `report`, with `focus` on a button.
 #[must_use]
-pub fn draw_list(report: &Report, line_height: f32, focus: Choice, saved: Option<&str>) -> Vec<Draw> {
+pub fn draw_list(
+    report: &Report,
+    line_height: f32,
+    char_width: f32,
+    focus: Choice,
+    saved: Option<&str>,
+) -> Vec<Draw> {
     let context = &report.context;
     let figures = report.figures();
     // Rows the panel owes, in lines: heading, circuit line, the figures (or one sentence), the
@@ -96,10 +109,11 @@ pub fn draw_list(report: &Report, line_height: f32, focus: Choice, saved: Option
     // above the buttons.
     let base = (line_height + 2.0).max(10.0);
     let rows = if figures.is_some() { 9.5 } else { 2.5 };
-    let wrapped = |scale: f32| settings_lines(&context.settings, (WIDTH_AT_ONE / scale) as usize).len();
+    let wrapped =
+        |scale: f32| settings_lines(&context.settings, chars_per_line(char_width, scale)).len();
     let lines_at = |scale: f32| 2.7 + rows + wrapped(scale) as f32 + 0.5 + 3.0;
     let mut scale = 1.0_f32;
-    while scale > 0.45 && lines_at(scale) * base * scale > 232.0 - PANEL_Y {
+    while scale > 0.1 && lines_at(scale) * base * scale > 232.0 - PANEL_Y {
         scale -= 0.05;
     }
     let line = base * scale;
@@ -130,12 +144,18 @@ pub fn draw_list(report: &Report, line_height: f32, focus: Choice, saved: Option
         "{}  {}  {}",
         context.title.to_uppercase(),
         track_label(context.track.as_deref().unwrap_or("")).to_uppercase(),
-        context
-            .preset
-            .as_deref()
-            .map_or_else(|| "YOUR SETTINGS".to_string(), |name| format!("PRESET {}", name.to_uppercase())),
+        context.preset.as_deref().map_or_else(
+            || "YOUR SETTINGS".to_string(),
+            |name| format!("PRESET {}", name.to_uppercase())
+        ),
     );
-    out.push(text(PANEL_X + PANEL_W / 2.0, y, Align::Centre, CAPTION, head));
+    out.push(text(
+        PANEL_X + PANEL_W / 2.0,
+        y,
+        Align::Centre,
+        CAPTION,
+        head,
+    ));
     y += line * 1.4;
 
     let left = PANEL_X + PAD + 6.0;
@@ -163,7 +183,12 @@ pub fn draw_list(report: &Report, line_height: f32, focus: Choice, saved: Option
         y += line;
         row(&mut out, y, "0.1% LOW FPS", format!("{low_01:.1}"));
         y += line;
-        row(&mut out, y, "FRAME TIME MEDIAN", format!("{median_ms:.2} MS"));
+        row(
+            &mut out,
+            y,
+            "FRAME TIME MEDIAN",
+            format!("{median_ms:.2} MS"),
+        );
         y += line;
         row(&mut out, y, "FRAME TIME P95", format!("{p95_ms:.2} MS"));
         y += line;
@@ -188,7 +213,7 @@ pub fn draw_list(report: &Report, line_height: f32, focus: Choice, saved: Option
         ));
         y += line * 1.5;
     }
-    for settings in settings_lines(&context.settings, (WIDTH_AT_ONE / scale) as usize) {
+    for settings in settings_lines(&context.settings, chars_per_line(char_width, scale)) {
         out.push(text(left, y, Align::Left, CAPTION, settings));
         y += line;
     }
@@ -201,16 +226,32 @@ pub fn draw_list(report: &Report, line_height: f32, focus: Choice, saved: Option
         format!("{} ({})", context.adapter_name, context.driver).to_uppercase(),
     ));
     y += line;
-    out.push(text(left, y, Align::Left, CAPTION, context.device.to_uppercase()));
+    out.push(text(
+        left,
+        y,
+        Align::Left,
+        CAPTION,
+        context.device.to_uppercase(),
+    ));
     y += line;
     if let Some(saved) = saved {
-        out.push(text(left, y, Align::Left, CAPTION, format!("SAVED {}", short_path(saved)).to_uppercase()));
+        out.push(text(
+            left,
+            y,
+            Align::Left,
+            CAPTION,
+            format!("SAVED {}", short_path(saved)).to_uppercase(),
+        ));
     }
     for (choice, label) in [(Choice::Back, "BACK"), (Choice::Again, "RUN AGAIN")] {
         let rect = button_rect(choice);
         out.push(Draw::Fill {
             rect,
-            color: if choice == focus { BUTTON_FOCUSED } else { BUTTON },
+            color: if choice == focus {
+                BUTTON_FOCUSED
+            } else {
+                BUTTON
+            },
         });
         out.push(text(
             rect[0] + rect[2] / 2.0,

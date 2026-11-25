@@ -14,6 +14,7 @@
 | [frame comparison](frame-compare.md) | **working** | One frame of the original and one of ours from the same captured state: teleport, capture, render, diff |
 | [compare page](compare-page.md) | **working** | A static page of original-vs-ours screenshot pairs for human review: split slider, onion skin, side by side, difference; per-title capture recipes and status; a locked `publish-compare` (`just compare-page`) |
 | [render bench](render-bench.md) | **working** | A whole race per title, drawn frame by frame headless, with per-frame CPU, GPU and pipelined frame time, percentiles, a reproducible result file and a comparison command (`just bench-render`, `just bench-compare`) |
+| [in-game benchmark](in-game-benchmark.md) | **working** | The same fixed race flown in the window with the player's settings or a named preset, ending on a stats screen (average FPS, 1 % and 0.1 % lows, frame-time median, P95, P99, worst, frames over the refresh budget, settings, device) and a result file `just bench-compare` reads (`oag-game --benchmark`, BENCHMARK, the graphics page's RUN BENCHMARK) |
 | [texture packs](texture-packs.md) | **working** (fetch and deploy; not drawn yet) | Fetch the PPSSPP texture packs for Pulse and Pure at a pinned commit, link them into a PPSSPP install, carry them to a Deck or phone |
 | [RPCS3 harness](../reverse-engineering/rpcs3-debugger.md) | **working** | Boot, drive and observe a PS3 title under RPCS3: headless boot, `TTY.log`, the GDB stub, and the two input gates that fail silently |
 

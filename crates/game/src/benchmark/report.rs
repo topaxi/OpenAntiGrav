@@ -166,7 +166,11 @@ impl Report {
     pub fn csv(&self) -> String {
         let mut out = String::from("frame,lap,ticks,frame_us\n");
         for (index, frame) in self.frames.iter().enumerate() {
-            let _ = writeln!(out, "{index},{},{},{:.1}", frame.lap, frame.ticks, frame.frame_us);
+            let _ = writeln!(
+                out,
+                "{index},{},{},{:.1}",
+                frame.lap, frame.ticks, frame.frame_us
+            );
         }
         out
     }
@@ -254,10 +258,7 @@ impl Report {
             .summary()
             .as_ref()
             .map_or_else(|| "null".to_string(), Summary::json);
-        put(
-            "metrics",
-            format!("{{\n    \"frame_us\": {metric}\n  }}"),
-        );
+        put("metrics", format!("{{\n    \"frame_us\": {metric}\n  }}"));
         let last_lap = self.frames.iter().map(|f| f.lap).max().unwrap_or(0);
         let laps = (1..=last_lap)
             .map(|lap| {
@@ -268,7 +269,9 @@ impl Report {
                     .filter(|f| f.lap == lap)
                     .map(|f| f.frame_us)
                     .collect();
-                let line = summarise(&of).as_ref().map_or_else(|| "null".to_string(), Summary::json);
+                let line = summarise(&of)
+                    .as_ref()
+                    .map_or_else(|| "null".to_string(), Summary::json);
                 format!("    {{\"lap\": {lap}, \"frame_us\": {line}}}")
             })
             .collect::<Vec<_>>()
