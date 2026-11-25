@@ -581,6 +581,8 @@ fn the_pvrtc_decode_agrees_with_wipeout_hd_s_own_copy_of_the_same_art() {
 
     let mut matched = Vec::new();
     let mut flipped_scores = Vec::new();
+    // The levels under eight texels, which store only their own words.
+    let mut narrow = BTreeMap::new();
     for (name, entries) in &wanted {
         let Some((width, height, hd)) = truth.get(name) else {
             continue;
@@ -604,6 +606,9 @@ fn the_pvrtc_decode_agrees_with_wipeout_hd_s_own_copy_of_the_same_art() {
             let Ok(rgba) = texture.to_rgba(&blob) else {
                 continue;
             };
+            if *width < 8 || *height < 8 {
+                narrow.insert(name.clone(), rgba_difference(&rgba, hd));
+            }
             matched.push(mean_difference(&rgba, hd));
             flipped_scores.push(mean_difference(
                 &rgba,
@@ -619,6 +624,7 @@ fn the_pvrtc_decode_agrees_with_wipeout_hd_s_own_copy_of_the_same_art() {
         v.sort_by(f64::total_cmp);
         v[v.len() / 2]
     };
+    check_narrow_levels(&narrow);
     let same = median(matched.clone());
     let upside_down = median(flipped_scores);
     println!(
@@ -639,6 +645,32 @@ fn the_pvrtc_decode_agrees_with_wipeout_hd_s_own_copy_of_the_same_art() {
         "HD flipped ({upside_down:.2}) should be far worse than as-decoded ({same:.2}) - \
          if it is not, this pairing is not sensitive to orientation and proves less than it looks"
     );
+}
+
+/// Mean absolute difference over all four channels: a glow strip's picture is its alpha.
+fn rgba_difference(a: &[[u8; 4]], b: &[[u8; 4]]) -> f64 {
+    let sum: u64 = a
+        .iter()
+        .zip(b)
+        .map(|(a, b)| (0..4).map(|c| u64::from(a[c].abs_diff(b[c]))).sum::<u64>())
+        .sum();
+    sum as f64 / (a.len() * 4) as f64
+}
+
+/// A level under eight texels stores only its own words (`docs/formats/gxt.md`). Read as if
+/// padded, these three came out 84 to 130 away from HD's art.
+fn check_narrow_levels(narrow: &BTreeMap<String, f64>) {
+    println!("narrow levels against HD: {narrow:?}");
+    for name in [
+        "hd_detonator_cannonbolt_glow",
+        "animgradient_pingpong",
+        "thickline_hardedged",
+    ] {
+        let score = narrow
+            .get(name)
+            .unwrap_or_else(|| panic!("{name} has an HD twin: {narrow:?}"));
+        assert!(*score < 4.0, "{name}: {score:.2} against HD's own decode");
+    }
 }
 
 /// The seven archives Wipeout HD's disc carries, as

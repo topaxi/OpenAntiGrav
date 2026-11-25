@@ -77,10 +77,12 @@ pub const WORD_SIDE: usize = 4;
 
 /// Smallest surface this codec decodes, in texels, in each direction.
 ///
-/// A word quad needs a 2x2 neighbourhood of words, so a smaller surface cannot
-/// decode. A level below this decodes at this size with absent words read as
-/// zero, then is cropped; 35 of the 10,204 `PVRTII4BPP` textures in the three
-/// EU packages have a base level that needs this.
+/// A word quad needs a 2x2 neighbourhood of words. A level narrower or shorter
+/// than this **stores only its own words** (a 4x128 level is 32 words, one wide,
+/// in Morton order over `1 x 32`); the decode runs at this size with the words
+/// it lacks wrapped from the stored ones, then crops. 35 `.gxt` of the 2048 EU
+/// packages have such a base level (`docs/formats/gxt.md`, "A level under eight
+/// texels stores its own words").
 pub const MIN_SIDE: u32 = 8;
 
 /// One 8-byte word: sixteen 2-bit modulation values, then the colour pair.
@@ -511,8 +513,8 @@ fn smooth_quad(
 /// Decodes one `PVRTII4BPP` surface to straight RGBA8, row-major.
 ///
 /// `data` is the level's texels alone, [`WORD_LEN`] bytes per 4x4 word in
-/// twiddled order. `None` only when the arithmetic overflows; short `data` reads
-/// as zero words, which lets a level below [`MIN_SIDE`] decode.
+/// twiddled order over the level's own words. `None` only when the arithmetic
+/// overflows; short `data` reads as zero words.
 ///
 /// # Panics
 ///
@@ -525,12 +527,21 @@ pub fn decode_ii_4bpp(data: &[u8], width: u32, height: u32) -> Option<Vec<[u8; 4
     let words_y = surface_h / WORD_SIDE;
     let mut surface = vec![[0u8; 4]; surface_w.checked_mul(surface_h)?];
 
-    // Every word, untwiddled and unpacked once, in raster order.
-    let order = Twiddle::new(words_x as u32, words_y as u32);
+    // Every word, untwiddled and unpacked once, in raster order. A level under
+    // `MIN_SIDE` stores fewer words than the decode runs over, and they wrap.
+    let stored = |side: u32, words: usize| {
+        if side < MIN_SIDE {
+            (side as usize).div_ceil(WORD_SIDE).max(1)
+        } else {
+            words
+        }
+    };
+    let (stored_x, stored_y) = (stored(width, words_x), stored(height, words_y));
+    let order = Twiddle::new(stored_x as u32, stored_y as u32);
     let mut words = Vec::with_capacity(words_x * words_y);
     for y in 0..words_y {
         for x in 0..words_x {
-            let at = order.index(x, y) * WORD_LEN;
+            let at = order.index(x % stored_x, y % stored_y) * WORD_LEN;
             words.push(Unpacked::new(match data.get(at..at + WORD_LEN) {
                 Some(bytes) => Word {
                     modulation: u32::from_le_bytes(bytes[0..4].try_into().expect("four bytes")),
