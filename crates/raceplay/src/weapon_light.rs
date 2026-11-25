@@ -115,6 +115,11 @@ const DETONATOR_FLASH_RANGE: f32 = 2.7;
 const DETONATOR_BOLT_COLOUR: [f32; 3] = [0.0, 0.003, 0.03];
 const DETONATOR_BOLT_RANGE: f32 = 70.0;
 const DETONATOR_EXPONENT: f32 = 1.0;
+/// The light on the Detonator EMP's wave: `EMP_DrawLights` (`0x0013b300`) submits the `vec4` at
+/// `0x00994490`, read `(0, 5, 10)` live on RPCS3, range `50` and exponent `1` (`0x008c1a50`,
+/// `0x008c1a54`), at the wave's centre (`detonator-emp.md`, "What HD draws for a fired EMP").
+const DETONATOR_EMP_COLOUR: [f32; 3] = [0.0, 5.0, 10.0];
+const DETONATOR_EMP_RANGE: f32 = 50.0;
 
 fn record(position: Vec3, colour: [f32; 3], range: f32, exponent: f32) -> SpuLight {
     SpuLight {
@@ -187,6 +192,16 @@ pub(crate) fn detonator_bolt_record(position: Vec3) -> SpuLight {
         position,
         DETONATOR_BOLT_COLOUR,
         DETONATOR_BOLT_RANGE,
+        DETONATOR_EXPONENT,
+    )
+}
+
+/// The light on the Detonator EMP's wave.
+pub(crate) fn detonator_emp_record(position: Vec3) -> SpuLight {
+    record(
+        position,
+        DETONATOR_EMP_COLOUR,
+        DETONATOR_EMP_RANGE,
         DETONATOR_EXPONENT,
     )
 }

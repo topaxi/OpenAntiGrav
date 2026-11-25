@@ -200,7 +200,9 @@ then: a wave-height probe at p_m (0x000a8b20 with 100.0, then 0x002d2068 over g_
 - The wave probe at the end runs for every mine every tick; `g_quake` is the Quake's wave state
   ([quake.md](quake.md)). Detonator builds no `QuakeManager` ([weapons.md](weapons.md)); whether
   the EMP drives the same wave (`WO_QUAKE_DETONATOR` is spawned in `EMP.cpp`'s span,
-  [particle-triggers.md](particle-triggers.md)) is unread. Hypothesis, confidence 45.
+  [particle-triggers.md](particle-triggers.md)) is unread. Hypothesis, confidence 45. **Answered
+  2026-11-24: it does not.** No function of `EMP.cpp`'s span loads `g_quake`'s pointer; the EMP walks
+  its own cursor and kills mines through `MineManager_DestroyAtLane` ([detonator-emp.md](detonator-emp.md#the-wave-a-repulser-wave-that-clears-mines)).
 
 ## `MineManager_ApplyBlast(mgr, i, k)` (`0x0011aa88`)
 

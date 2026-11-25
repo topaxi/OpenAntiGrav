@@ -575,6 +575,7 @@ pub fn run(
                 field_lean: Vec::new(),
                 field_warmup: None,
                 detonator_mines: None,
+                detonator_emp_charge: None,
                 pose_sparks: Vec::new(),
                 presented: options.presented.then_some(crate::race_capture::Presented {
                     render_scale: render_profile.render_scale,

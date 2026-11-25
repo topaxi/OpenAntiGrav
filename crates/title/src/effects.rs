@@ -131,6 +131,8 @@ pub enum Trigger {
     DetonatorBombExplo,
     /// Detonator's pulse cannon round dying on a wall.
     DetonatorCannonSparks,
+    /// Detonator's EMP wave, riding its front.
+    DetonatorEmp,
     /// A craft's engine flare.
     EngineFlare,
     /// A craft flying through an engine trail (HD).
@@ -189,7 +191,7 @@ pub enum Trigger {
 
 impl Trigger {
     /// Every trigger, in load order.
-    pub const ALL: [Self; 56] = [
+    pub const ALL: [Self; 57] = [
         Self::CollisionSpark,
         Self::CollisionSparkNoDamage,
         Self::HitSpark,
@@ -221,6 +223,7 @@ impl Trigger {
         Self::DetonatorMineExplo,
         Self::DetonatorBombExplo,
         Self::DetonatorCannonSparks,
+        Self::DetonatorEmp,
         Self::EngineFlare,
         Self::TrailHitship,
         Self::TrailHitshipRed,
@@ -426,6 +429,10 @@ pub struct Effects {
     /// (`docs/ghidra/functions/psp-pure-usa/particle-bars.md`, "The template draw"), but its absorb burst
     /// drew far too bright at 0.75 s with them on, and why is unread.
     pub templates: &'static [&'static str],
+    /// Effects whose emitters' noise force (modifier type `0x11`, `oag_fx::psys::Effect::with_turbulence`)
+    /// is applied. Read on Pulse's PSP executable and HD's alike; an effect not listed keeps its
+    /// particles off it, and wiring one is a decision made per effect against a matched capture.
+    pub turbulence: &'static [&'static str],
     /// How this title's executable reads a `.pob` emitter's colour-mode word (`+0xbc`) over a
     /// particle's life, for every effect it plays (`docs/formats/pob.md`, "The colour table is
     /// RGB-only").
@@ -501,6 +508,7 @@ impl Effects {
         far_bars: &[],
         pool_bars: &[],
         templates: &[],
+        turbulence: &[],
         colour_walk: ColourWalk::Forward,
         colour_walk_in: &[],
         quake_look: QuakeLook::track(Origin::InheritedFrom("Wipeout Pulse")),

@@ -19,7 +19,8 @@ the score record), [detonator-mine.md](detonator-mine.md) (`MineManager_DestroyA
 | Gauge | `craft+0x7da0 = min((n - (hi - lo)) / (hi - lo), 1)` with `lo = 4`, `hi = maxNumPadsToCollectEMP = 8`; `0` below `lo` | 92 (live, every `n` from 0 to 39) |
 | Cues | `EMPREADY` on the first charge at or over `lo`, `EMPFULL` on the first at gauge `1`; both re-arm while under `lo` | 80 |
 | Fire | `controls+0x1c` (the EMP button, **L1** on the default pad) while ready, mode 14 only: launch, then `n = 0`, gauge `0`; the cannon's clip is not refilled | 85 (live) |
-| Wave extent | `minDistance + (maxDistance - minDistance) * gauge` = `0.25 .. 2.0` at gauge `0 .. 1`; unit unread | 70 |
+| Wave extent | `minDistance + (maxDistance - minDistance) * gauge` = `0.25 .. 2.0` at gauge `0 .. 1`: **seconds the wave lives**, while it walks `speed` (`1`) AI-track points a frame, about `6` units each ([below](#the-wave-a-repulser-wave-that-clears-mines)) | 88 (live) |
+| Look | the disc's `WO_QUAKE_DETONATOR` (a blue `WO_QUAKE`) on the wave's front, scaled to the road, and a `(0, 5, 10)` point light; the stepper is the Repulser's, copied ([below](#what-hd-draws-for-a-fired-emp-2026-11-24)) | 85 (live) |
 | Wave kill | every mine and bomb in each track section the wave sweeps, through `MineManager_DestroyAtLane` / `BombManager_DestroyAtLane` (score `DetonatorScoring` `<Emp>`, counted in `rm+0x6de3c`) | 80 (live: 12 mines, `+25` each, over 1.8 s) |
 
 ## The table: `WeaponStats_ParseEmp` (`0x0002bbc8`)
@@ -269,7 +270,7 @@ tick after the cannon; the pad arms are in `oag_raceplay::pads`.
 | Weapon pad | `SimRace::test_weapon_pads` | the race keeps its weapon pads with weapons off where the title's pads charge (`start.rs`); no grant; one charge per pad held in `Emp::weapon_pad`, cleared on every forward crossing (`player_step`); not while this project's autopilot flies the craft (it stands in for the original's Autopilot bit, **chosen**) |
 | Charge, gauge, cues | `emp::step_charge`, `emp::gauge` | the literal law in `f32` (exact on every integer charge the HUD reaches); `Cue::EmpReady`/`EmpFull` loaded from `oag_title::DetonatorVoices` (HD `speech_det.bnk`, the one speech bank that names them) |
 | Fire | `emp::fire` | `Button::Flip` (the pad's L1) as a press edge, **chosen**; gated as the cannon is (a person flying, past the countdown); the charge resets even while a wave runs |
-| Wave | `emp::step_wave` | forward from the craft's nearest survey entry, `extent * SECTIONS_PER_EXTENT` (40, **chosen**) entries over `wave_time`; `<Emp>` scores; mines counted into the destroyed count; a bomb chains nothing; no effect or sound on the kill (both unread) |
+| Wave | `emp::step_wave` | forward from the craft's nearest survey entry; ~~`extent * SECTIONS_PER_EXTENT` (40, chosen) entries over `wave_time`~~ one entry a tick while `age < extent` since 2026-11-24 (below); `<Emp>` scores; mines counted into the destroyed count; a bomb chains nothing |
 | HUD | `oag_hud::detonator` | `Emp_0..7` while the charge is over `i`, `EmpReady` at `lo`; `EmpBarEffect` not drawn (an `<ImageModel>`) |
 | Titles | `oag_title::Detonator::pads` | HD measured; Omega the speed pad measured, the weapon pad inherited from HD; 2048 `false` (its pads keep boost and pickup, so its EMP never charges) |
 
@@ -285,10 +286,207 @@ boosts; 2048: a speed pad charges nothing and keeps its boost. The HUD pips are 
 
 ## Open
 
-- The wave's reach and speed (above), and whether it hurts the player.
+- ~~The wave's reach and speed~~ (read and wired 2026-11-24, below). Whether it hurts the player.
 - Whether the circuit's own pad geometry is drawn at all: four live frames show none (above);
   wired as not drawn at 60.
 - Weapon pads under player input over several laps (one live charge only).
+
+## What HD draws for a fired EMP (2026-11-24)
+
+Lane `det-emp-look-re`. Static on `EBOOT.elf` (`llvm-objdump` over `EMP.cpp`'s span
+`0x0013ae00`-`0x0013c700`, every TOC load resolved with `scripts/ps3-toc.py resolve 0x0013b220`),
+then live on RPCS3 (Talon's Junction Detonator grid state, charge `12` and gauge `1.0` written,
+L1 tapped at lap clock 6.0; `scripts/rpcs3-hd-detonator-shots.py --emp-charge 12 --emp-poll 2.6`,
+103 paused samples of the `EMP` object, and four frames at lap clock 6.3, 6.8, 7.4 and 8.0).
+
+**The answer.** A fired EMP is **the disc's particle system `WO_QUAKE_DETONATOR`** riding a
+matrix that walks the AI track one point per frame. The matrix sits at the midpoint of the
+track's two edges, its `Y` the track's up, and the instance's extent co-factor is the edges'
+distance over `100`. One SPU point light rides the same centre: colour `(0, 5, 10)`, range `50`,
+exponent `1`. No model, ribbon or shader of its own. Confidence **85** (static, plus the live
+step, lifetime and colour below, plus four frames).
+
+### The code is the Repulser's wave, the data is the Quake's
+
+The maintainer asked whether the EMP shares code or data with Eliminator's Repulsor.
+**Shared code by copy, not by call; no shared data.**
+
+- **Code.** `EMP_SweepSections` (`0x0013b930`) is a clone of HD's Repulser wave stepper
+  (`0x00157b20`, the twin of Pulse's `Repulser_AdvanceWave`,
+  [repulser.md](../psp-pulse-usa/repulser.md)). `diff_functions` scores the two `0.53` similar.
+  Both read the AI-track point's two half-widths (`lfs 0x44`, `lfs 0x48`) and average the edges.
+  The fork block is byte for byte the same apart from the effect name: allocate a `0x180`-byte
+  `LinkObj`, spawn by pointer, store the handle, copy the cursor. **The fork's spawn keeps the
+  Repulser's fourcc `REP2`** (`0x32504552`, `lis r5,0x3250; ori r5,r5,0x4552` at `0x0013c16c`),
+  next to the EMP's own `EMP1` (`0x0013afe8`) and `EMP2` (`0x0013b5e8`). The EMP calls nothing
+  in `Repulser.cpp` (`0x00156a80`-`0x00158f00`) or `RepulserManager.cpp`, and loads no `.vex`
+  (`pulse_repulsorwave.vex` is the Repulser's alone, [weapons.md](weapons.md)). What the copy
+  adds: the per-point lookup of the Detonator placement records and the two `DestroyAtLane`
+  calls.
+- **Data.** `WO_QUAKE_DETONATOR` (HD `DATA00.PSARC /data/psys/wo_quake_detonator.pob`) is
+  **`WO_QUAKE` recoloured blue**: the same root (`shape 1`, extent `30.196`, size `3..10`,
+  alpha to `64`) and the same `molten_debris_colliding` and `debris` emitters. Where the Quake has
+  `FIRE_STREAKS` (yellow fireball) and orange `SPARKS`, it has `EXPLOSIONS`
+  (`explosion_fijets_8x8_grey`, colours `(67,167,255)` to `(62,90,255)`), blue `SPARKS`, and an
+  extra `BLUE_GLOWS` (`blue_glow2`, size to `25`, the only local-space emitter, flag `0x2`).
+  The smoke texture is the white variant. It shares **no texture** with `WO_REPULSER`
+  (`pulse_repulsor_sprite1_ADD`) or `WO_REPULSER_BLAST` (`DC_Circle_rich`). The travel cue is
+  `~MAGPULSETRAVEL`, not `~REPULSORTRAVEL`; the launch cue is `QUAKELAUNCH`.
+
+So the play feel (a wall that runs down the track, forks at a split, sweeps what it passes) is
+the Repulser's, and the look is a blue Quake.
+
+### The wave: a Repulser wave that clears mines
+
+`EMPManager_Update` (`0x00112e50`, `EMPManager`'s vtable `0x00863ac0` slot 3) calls, for each
+live `EMP`, `EMP_UpdateWave` (`0x0013c320`), and resets and frees the EMP when it returns `0`:
+
+```text
+EMP_UpdateWave(emp, dt):
+    emp+0x158 += dt                                  ; age, 0x0013c358-0x0013c394
+    emp+0xf0 = emp+0xa0 ; emp+0x100 = emp+0xe0       ; last tick's two wave centres
+    EMP_SweepSections(emp, cursor = emp+0x168, matrix = emp+0x70, handle = emp+0x5c, 0,
+                      emp+0x190, steps = table+0x1b8 /* speed, 1 */, init = 0)
+    travel emitter emp+0x4c
+    return emp+0x158 < emp+0x54                     ; alive while age < extent
+```
+
+`EMP_Launch` arms the same call with `init = 1` (a tail `b 0x0013b930` at `0x0013c5b0`), after
+`EMP_SpawnLaunchEffect` (`0x0013afe8`) copied the firing ship's AI-track cursor
+(`ship+0x7820..+0x782c`) to `emp+0x168` and spawned the effect. `wave_time` (`table+0x1b4`) is
+read nowhere in `EMP.cpp` or `EMPManager.cpp`.
+
+**So `extent` is a lifetime in seconds and `speed` is AI-track points per frame.** Live, every
+sample (confidence **88**):
+
+| Read | Value |
+| --- | --- |
+| `emp+0x54` | `2.0` at gauge `1` (`minDistance + 1.75 * gauge`) |
+| `emp+0x158` | grows by the frame's `dt` (`0.0167`, `0.0167`, `0.026`, `0.033` ... under the emulator's uneven frames) |
+| cursor `emp+0x170` | the point index, `+1` every frame (`74`, `75`, `76`, ...), the point pointer `+0x70` with it (the AI track's stride) |
+| wave centre `emp+0xa0` | `(466.3, -30.4, -67.2)` on the launch frame, 19 units ahead of the craft, then about `6.0` units per frame |
+| end | age `2.0` reached at point `144`: `70` frames at the emulator's ~35 fps |
+
+At HD's 60 frames a second a full EMP walks `120` points, about `720` units at `6` units a point.
+The step is per frame and the lifetime per second, so the reach follows the frame rate; this
+engine's fixed 60 Hz tick is the console's target. This engine's Detonator survey is one entry per
+control point, `862` entries a lap on Talon's Junction, median spacing `5.99` units: the same
+points (`oag_raceplay`'s `survey`).
+
+### What it spawns and how it is posed
+
+| Piece | Where | Read | Confidence |
+| --- | --- | --- | ---: |
+| `WO_QUAKE_DETONATOR`, fourcc `EMP1` | `EMP_SpawnLaunchEffect` `0x0013afe8` | `0x002c9108(obj, name, 'EMP1', emp+0x70, 1, 0)`: attached **by pointer** (`li r7,1`), so flag-`0x2` emitters ride the matrix; handle at `emp+0x5c` | 85 |
+| the same, fourcc `EMP2` | `EMP_ForkAtJunction` `0x0013b5e8` | the launch call's fork (the Repulser's init-tick fork), at `emp+0xb0`, handle `emp+0x60`, cursor to `emp+0x178` | 60 |
+| the same, fourcc `REP2` | inside `EMP_SweepSections`, `0x0013c170` | a fork met while walking: the same matrix, handle and cursor slots | 70 |
+| pose | `EMP_SweepSections`, `0x0013bc00`-`0x0013bf78` | translation = midpoint of `pos -+ lateral * half_width` (`point+0x44`, `+0x48`); then `|edgeA - edgeB| * 0.01` (`0x3c23d70a`) into the instance through `0x002846d0` | 75 |
+| light | `EMP_DrawLights` `0x0013b300` (vtable `0x00864348` slot 5) | `SpuLight_AddCandidate(emp+0xa0, *(vec4 *)0x00994490, 50.0, 1.0)` (`0x008c1a50`); the fork's at `emp+0xe0` when `emp+0x60` is set | 85 |
+| light colour | `0x00994490` | `(0.0, 5.0, 10.0, 10.0)` on every live sample | 88 |
+| kill effects | `MineManager_DestroyAtLane` / `BombManager_DestroyAtLane` | the mine's own `DetonatorMine_Explode` (live mine `WO_MINE_EXPLO_DETONATOR`, dark `_DEAD`, `MINEEXPL`) and the bomb's blast (`WO_BOMB_EXPLO_DETONATOR`, `BOMBEXPL`), [detonator-mine.md](detonator-mine.md), [detonator-bomb.md](detonator-bomb.md) | 70 |
+| reset | `EMP_ResetWave` `0x0013ae68` | both handles released through `0x0027f7b0(mgr, handle, 1)`, the matrices back to identity | 70 |
+
+`EMP_Rays`, the other EMP string, is a parameter of the HUD's `EmpBarEffect`
+(`DetonatorHud_BindEmpWidgets`, [detonator-hud.md](detonator-hud.md)), not a world effect.
+
+### The frames
+
+Original, lap clock (frames after launch): 6.3 s (8): a wall of blue smoke spanning the whole
+road just ahead, the scene around it washed cyan, four mines still glowing inside it. 6.8 s (24):
+the wall about 100 units ahead, still the road's full width. 7.4 s (45): the wall far ahead,
+`+50`/`+100`/`+200` score pops behind it, score `500`. 8.0 s (67): the wave gone over the rise,
+mine debris falling, score `1050`. Ours, the same frame counts after an L1 press with
+`--detonator-emp-charge 12`: the same blue wall and cyan wash at 8; at 24, 45 and 67 the wall
+runs on and the mines behind it go. The wave itself agrees per frame: the original's front covered
+about 143 units in its first 24 frames (`(466.3, -30.4, -67.2)` to `(570.8, -17.3, 29.7)`), ours
+24 survey entries of about 6 units. Equal frame counts are equal game time: the poll's wave age
+and race clock step `1/60` a frame (`0.0167` after the first), however slowly the emulator ran in
+wall time. The gap between the craft and the wave differs because ours fired 28 ticks after GO,
+still on the auto-speed ramp. **What differed:** ours left rows of soft grey half-domes on the road
+along the wave's path; the original's road behind the wave is clean. Found 2026-11-25, next
+section.
+
+Before this section, main drew nothing for the wave (`EmpLaunch` played no effect) and swept a
+chosen `40 * extent` entries over `wave_time`.
+
+## The grey rows were sparks that never moved (2026-11-25)
+
+**Cause (confidence 80).** `SPARKS` (`0x80000001`: looping, world-space, class 6) authors speed
+`(0, 0)`, 8 particles a tick, a 137-tick life and one modifier, type `0x11`. That modifier is a
+Perlin-noise force on the velocity ([particle-noise-force.md](../psp-pulse-usa/particle-noise-force.md),
+`Modifier_NoiseForce`); it is the only thing that moves these sparks. Our player applied drag and
+the weather box and skipped every other modifier type, so each spark sat where it was born for
+137 ticks, drawn as a zero-length streak: a row of grey half-domes per tick along the path.
+
+How it was found: one render per emitter muted, then one per emitter kept alone (a scratch
+switch, not committed), road region of the 24-frame shot, mean grey: all muted `13.5`, root
+`WO_QUAKE_DETONATOR` alone `22.0`, `SPARKS` alone `17.3`, the rest `13.3` to `13.6`. The rows are
+`SPARKS`'; the root adds the soft wash under them. Then `pob` dumps of the record's flags and
+modifier list (`kind 17`, params `0.3, 0.1, 0.3, 1.0, 0.1, 0.1, 0.1, 0, 0`).
+
+**HD has the same law.** `0x0027e118` (`Modifier_NoiseForce`, 72: Ghidra cuts the body at
+`0x0027e193`, `llvm-objdump` reads on) loads the same two offset vectors through its TOC
+(`0x008b28f0` to `0x0079b490`: `135.13, -123.45, 12.39` and `3931.49, 11241.24, -141.89`), takes
+the doubled points (`fadds x, x, x`) before the timed branch, and calls the noise (`0x0027dbc0`)
+six times in pairs. Omega (`eboot.bin` file `0x800db0`) and 2048 (`eboot.elf` file `0x29b47c`) carry the same
+constants once each: checked, applies, not wired (neither title's EMP wave is wired, see "2048 and
+Omega"); their functions are unread beyond the constants. Not live: no capture reads a spark's velocity.
+
+**Wired.** `oag_fx::psys::turbulence` (the law, Perlin's `noise3` on a seeded table, the
+particle system's own seconds clock) applies it for an effect a title lists:
+`oag_title::Effects::turbulence`, HD `[WO_QUAKE_DETONATOR]`. The other 13 HD emitters that author
+it (census on the Pulse page: the mine and bomb explosions, the trail hits, the rocket's trail,
+`WO_PLASMA_FLASH` and others) are not listed: each changes a picture a pair covers and is a
+decision against its own capture. The EMP's sparks also draw as HD's mode-5 bar
+(`Effects::far_bars`, [engine-trail.md](engine-trail.md), "The class-6 draw law"): with their
+velocity they are streaks, and against the procedural profile's soft blotches the bar's thin
+streaks are nearer the original's white-blue spikes at the front.
+
+**Frames** (scratch, read by eye): at 45 and 67 frames the road behind the wave is clean, as in
+the original; at 24 a few streaks remain between the craft and the front, which ours sees from
+further back than the original does (the craft gap above). The front's size and brightness are
+not compared at 24 to 67 for the same reason: the original's craft is right behind the wall, ours
+is far back. At 8 frames both are the same blue wall across the road. Still differs: the
+original's spikes are denser at the front and bluer; ours are fewer and whiter. Not chased.
+
+Tests: `oag-fx` `psys::turbulence::tests` (a zero-speed emitter drifts only with the force on: red
+without the integrate hook) and `oag-raceplay`
+`hd_effect_sprites::the_emp_sparks_feel_their_noise_force_only_where_the_title_lists_it` (disc).
+Pairs: `pad` 8.17 to 8.17, `mines-ahead` 14.65 to 14.65.
+
+## Wired: the look (2026-11-24)
+
+| Piece | Where |
+| --- | --- |
+| The wave's law | `oag_weapons::detonator::emp::step_wave`: `speed` entries a tick while `age < extent`; `extent` is the launch's lifetime. Replaces the chosen `SECTIONS_PER_EXTENT` and `wave_time` share |
+| The effect | `Trigger::DetonatorEmp` (`oag_title::engine_effects::DETONATOR_EMP_EFFECT`, `WO_QUAKE_DETONATOR`), HD's table only; `RaceView::advance_emp_visual` attaches it on the front's midpoint, `Y` the track's up, extent co-factor `width / 100`, its local-space emitters riding; released when the wave ends. In HD's `SPRITES` and `EXTENTS`, as the Quake's wave is |
+| The light | `weapon_light::detonator_emp_record`, `(0, 5, 10)`, `D = 50`, `w = 1` at the effect's anchor, beside the cannon's lights |
+| The kills | `MineEmped` plays the mine explosion by liveness, `BombEmped` the bomb's; `MINEEXPL`/`BOMBEXPL` with them |
+| Captures | `--detonator-emp-charge N` (`oag-game`) starts the race at `N` charges; the shots script's `--emp-charge`, `--emp-poll` |
+
+Not wired: the fork, and the travel cue `~MAGPULSETRAVEL`. The fork is reachable on HD: a census of every HD circuit's `WO Track` (`oag_vex::track::from_vex`, 2026-11-24) finds one alternate successor on `zone_3`, `05_ubermall` (both directions) and `15_anulpha_pass` (forward), none on the other 24 files; this engine's Detonator survey follows one route, so the EMP's wave there never splits.
+
+Tests: `emp::tests::the_wave_steps_one_entry_a_tick_for_extent_seconds` (15 entries at gauge `0`,
+120 at `1`), `tests::detonator_fx::an_hd_emp_wave_carries_the_discs_effect_on_its_front_until_it_ends`
+(the disc's effect rides the front, lights it, and is released with the wave),
+`tests::detonator_fx::each_event_plays_the_effect_the_original_spawns_for_it` (the kill rows),
+`weapon_light::tests::the_detonator_lights_are_the_values_the_render_queue_loads`.
+Regression pairs, re-rendered: `pad` 8.17 (8.17 before), `mines-ahead` 14.65 (14.65).
+
+### 2048 and Omega
+
+- **2048: checked, applies, not wired.** `eboot-vita-2048-eu-v104.elf` names `Backend/Weapons/EMP.cpp`,
+  `WO_QUAKE_DETONATOR` (spawned at three sites, `FUN_811e7c68`, `FUN_811e7dd6`, `FUN_811e841c`,
+  as on HD) and `~MAGPULSETRAVEL`. `FUN_811e7dd6` is the same sweep: the `REP2` fourcc
+  (`0x811e804c`-`0x811e8056`), the half-widths `+0x44`/`+0x48` averaged, and the width times
+  `0x3c23d70a` into the instance (`0x811e83f4`). `data.psarc` ships `WO_QUAKE_DETONATOR` in
+  `data/particles` and `data/particles2048`, emitter for emitter HD's. Not wired: 2048's pads
+  never charge the EMP in this engine (`oag_title::Detonator::pads`), and its effect table
+  answers none of the Detonator triggers.
+- **Omega: checked, applies, not wired.** `eboot.bin` (1.07) names `EMP.cpp`, `EMPManager.cpp`,
+  `WO_QUAKE_DETONATOR` and `_MAGPULSETRAVEL`; `data00.psarc` ships the file in both particle
+  directories with HD's emitters. Its sweep was not read. Not wired: Omega's effect table answers
+  none of the Detonator triggers yet (as for the four explosions, [pob.md](../../../formats/pob.md)).
 
 ## 2048 and Omega
 
@@ -315,7 +513,20 @@ boosts; 2048: a speed pad charges nothing and keeps its boost. The HUD pips are 
 | `0x0012a3e8` | `WeaponManager_RollPickup` | 75 |
 | `0x00112730` | `EMPManager_Fire` | 72 |
 | `0x0013c430` | `EMP_Launch` | 68 |
-| `0x0013b930` | `EMP_SweepSections` | 62 |
+| `0x0013b930` | `EMP_SweepSections` | 75 |
+| `0x00112e50` | `EMPManager_Update` | 78 |
+| `0x0013c320` | `EMP_UpdateWave` | 85 |
+| `0x0013afe8` | `EMP_SpawnLaunchEffect` | 82 |
+| `0x0013b300` | `EMP_DrawLights` | 82 |
+| `0x0013b5e8` | `EMP_ForkAtJunction` | 60 |
+| `0x0013b220` | `EMP_Construct` | 80 |
+| `0x0013ae68` | `EMP_ResetWave` | 70 |
+| `0x0027e118` | `Modifier_NoiseForce` | 72 |
+
+`EMP_SweepSections` rises from 62: its caller is read (`EMP_UpdateWave` and `EMP_Launch`'s tail
+call) and live it steps one point a frame. `EMP_ForkAtJunction` is named for its Repulser twin and
+held under 70 (never seen to run: Talon's Junction forked nowhere in the run). `EMP_Construct`:
+the `"EMP.cpp"` tag at `+0x30`, the vtable `0x00864348`.
 
 Existing names cited: `Craft_ApplySpeedPad` (`0x000eeb70`, 65, [craft-flags.md](craft-flags.md)),
 `Ship_UpdateCannonTrigger` (`0x000e9cd0`, 68), `CannonManager_ArmSlot` (`0x0010f2e8`, 65),
