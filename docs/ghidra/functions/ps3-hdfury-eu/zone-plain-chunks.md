@@ -227,9 +227,10 @@ The earlier state of this section, for the record:
   program (`pow(lightmap) * scale + lightmap.a * N.L * sun`), which with the
   stage's `Sun colour` `0` is dark. The original's Zone frame has no lightmap
   term at all; the pad is lit by `Constant Ambient Colour` alone.
-- Ours fogs every Zone chunk with the stage's primary fog; the original
+- ~~Ours fogs every Zone chunk with the stage's primary fog; the original
   gives a track-flagged chunk the stage's Track fog (zero density at Sub
-  Venom).
+  Venom).~~ Wired (`det-mines-ahead-structure`, `mesh_render::TrackFog`;
+  [detonator-look.md](detonator-look.md), "Track fog and the glass floor").
 
 ## 2048 and Omega
 

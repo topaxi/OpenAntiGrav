@@ -23,9 +23,9 @@ fn opaque_colour(in: VertexOutput, lit_pixel: Lit) -> vec3<f32> {
     let shade_out = shadowed(shaded.rgb, lit_pixel.sun, in.world);
     if (in.slots & SLOT_REFRACTION) == 0u {
         if is_wet_road(in) {
-            return plus_after_fog(fogged(wet_road(shade_out.colour, in), in.world, in.view_depth), shade_out.after_fog);
+            return plus_after_fog(fogged(wet_road(shade_out.colour, in), in.world, in.view_depth, in.slots), shade_out.after_fog);
         }
-        return plus_after_fog(fogged(shade_out.colour, in.world, in.view_depth), shade_out.after_fog);
+        return plus_after_fog(fogged(shade_out.colour, in.world, in.view_depth, in.slots), shade_out.after_fog);
     }
     let lit = shade_out.colour;
     let slot = in.slots >> MATERIAL_SHIFT;
@@ -49,5 +49,5 @@ fn opaque_colour(in: VertexOutput, lit_pixel: Lit) -> vec3<f32> {
     let ndc = clip.xy / max(clip.w, 1e-6);
     let uv = vec2<f32>(0.5 + 0.5 * ndc.x, 0.5 - 0.5 * ndc.y);
     let grab = target_in(textureSampleLevel(behind_glass_tex, shadow_sampler, uv, 0.0).rgb);
-    return plus_after_fog(fogged(lit * tint.w + grab * w, in.world, in.view_depth), shade_out.after_fog);
+    return plus_after_fog(fogged(lit * tint.w + grab * w, in.world, in.view_depth, in.slots), shade_out.after_fog);
 }
