@@ -62,12 +62,10 @@ fn the_line_carries_every_field_and_dashes_what_was_not_read() {
     });
     assert!(line.starts_with("frame-log stage=menu:window-layout fps=59.9"));
     assert!(line.contains("gpu_ms=- "));
-    assert!(
-        line.contains(
-            "window=3840x2160 surface=3840x2160 render=- governor=0 pass_ms=- reflection=- \
+    assert!(line.contains(
+        "window=3840x2160 surface=3840x2160 render=- governor=0 pass_ms=- reflection=- \
              bloom_ms=- blur_ms=- upscale_ms=- upscale_presented_ms=-"
-        )
-    );
+    ));
 }
 
 /// Every timed pass is a `name:ms` pair in one space-free field appended after `governor`, in
