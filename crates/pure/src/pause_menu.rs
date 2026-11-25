@@ -56,6 +56,7 @@ pub const PAUSE_MENU: &PauseMenu = &PauseMenu {
             pitch: 15.0,
             unfocused_alpha: 0.50,
         }),
+        touch: None,
     }),
     hud_under_scrim: true,
     // The music widgets belong to `InGame`, not to the pause screens (`docs/ui/pause-menu.md`, "Pure"): the original's frames show

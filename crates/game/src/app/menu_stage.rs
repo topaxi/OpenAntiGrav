@@ -24,6 +24,9 @@ pub(crate) use screens::PAUSE_OVERLAY;
 /// the title's table that says which row each widget is.
 pub(crate) struct PauseView {
     pub(crate) screen: oag_ui_screens::pause::PauseScreen,
+    /// The screens its rows open as pages of their own (the QUIT and RESTART rows' confirm
+    /// screens, the ghost list), where the title authors them.
+    pub(crate) opened: Vec<oag_ui_screens::pause::PauseScreen>,
     pub(crate) table: &'static oag_title::PauseMenu,
     /// Where the screen's textures sit on the menus' sprite sheet.
     pub(crate) sprites: Vec<(String, oag_ui::frontend::Placed)>,
@@ -89,6 +92,8 @@ pub(crate) struct MenuStage {
     /// The pause screen as the disc lays it out, when the title has it and the tree opened on
     /// the pause page: drawn in place of the front end's list on that page.
     pub(crate) pause_view: Option<PauseView>,
+    /// Whether the pad, not a pointer, spoke last: a pause screen of tiles shows its cursor then.
+    pub(crate) pad_cursor: bool,
     /// The value marquee's clock: which row it is timing, and for how long.
     pub(crate) marquee: marquee::Timer,
     /// The modal prompt on screen, if one is: an on-screen keyboard or a
@@ -263,10 +268,64 @@ pub(crate) fn menu_playhead(
 }
 
 impl MenuStage {
-    /// Whether the page on screen is the pause page of a tree that opened on it, drawn from the
-    /// disc's own screen.
+    /// Whether the page on screen is the pause page of a tree that opened on it, or the page one of
+    /// its rows asks on, drawn from the disc's own screen.
     pub(crate) fn on_pause_page(&self) -> bool {
-        self.pause_view.is_some() && self.menu.page().id == menu::PAUSE_PAGE
+        self.pause_screen_on_page().is_some()
+    }
+
+    /// The page on screen drawn from the disc's own pause or confirm screen, when it is one.
+    pub(crate) fn pause_draw(&self) -> Option<menu::Layers> {
+        let (view, screen) = (self.pause_view.as_ref()?, self.pause_screen_on_page()?);
+        Some(oag_ui_screens::pause::draw_list_for(
+            screen,
+            view.table,
+            &self.menu,
+            &self.skin,
+            &self.frame,
+            &|src| {
+                view.sprites
+                    .iter()
+                    .find(|(path, _)| path == src)
+                    .map(|(_, placed)| *placed)
+            },
+            self.pad_cursor,
+        ))
+    }
+
+    /// On a pause screen of tiles the pad's LEFT and RIGHT move the cursor to the tile that way
+    /// along its row; UP and DOWN stay the menu's, walking every tile in the file's order, which is
+    /// what keeps every tile reachable and a drive's `select` working. A press is taken only when a
+    /// tile lies that way, so at an edge it stays the menu's.
+    pub(crate) fn step_pause_tiles(&mut self, input: &mut oag_core::buttons::Input) {
+        use oag_core::buttons::Button;
+        use oag_ui::menu::nav::Dir;
+        for (button, dir) in [(Button::Left, Dir::Left), (Button::Right, Dir::Right)] {
+            if !input.is_pressed(button) {
+                continue;
+            }
+            if let Some(row) = self.tile_toward(dir) {
+                input.consume_press(button);
+                self.menu.move_to_row(row);
+            }
+        }
+    }
+
+    fn tile_toward(&self, dir: oag_ui::menu::nav::Dir) -> Option<usize> {
+        let (view, screen) = (self.pause_view.as_ref()?, self.pause_screen_on_page()?);
+        oag_ui_screens::pause::tile_neighbour(screen, view.table, &self.menu, &self.skin, dir)
+    }
+
+    /// The disc's screen the page on screen is drawn from: the pause screen, or the confirm screen
+    /// the page of one of its rows stands for.
+    pub(crate) fn pause_screen_on_page(&self) -> Option<&oag_ui_screens::pause::PauseScreen> {
+        let view = self.pause_view.as_ref()?;
+        let id = self.menu.page().id.as_str();
+        if id == menu::PAUSE_PAGE {
+            return Some(&view.screen);
+        }
+        let name = id.strip_prefix(menu::SCREEN_PAGE_PREFIX)?;
+        view.opened.iter().find(|screen| screen.name() == name)
     }
 
     /// Advances the backdrop by one tick.
@@ -957,20 +1016,7 @@ impl MenuStage {
             frozen_race,
         );
         // The pause screen is the disc's own widgets where the title carries them.
-        if let Some(view) = self.pause_view.as_ref().filter(|_| self.on_pause_page()) {
-            let drawn = oag_ui_screens::pause::draw_list(
-                &view.screen,
-                view.table,
-                &self.menu,
-                &self.skin,
-                &self.frame,
-                &|src| {
-                    view.sprites
-                        .iter()
-                        .find(|(path, _)| path == src)
-                        .map(|(_, placed)| *placed)
-                },
-            );
+        if let Some(drawn) = self.pause_draw() {
             arriving.chrome = drawn.chrome;
             arriving.body = drawn.body;
         }

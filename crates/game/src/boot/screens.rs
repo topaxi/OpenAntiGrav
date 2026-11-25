@@ -8,6 +8,7 @@ use anyhow::{Context, Result};
 use oag_tables::fexml;
 use oag_ui::language::StringTable;
 use oag_ui::screen::Screens;
+use oag_ui::state_machine::SEPARATOR;
 
 /// The front-end root's own `Confirm`/`Back` legend, off `skin_xml` -
 /// already-decoded text, the same blob [`super::fury::load`] reads a few
@@ -811,6 +812,79 @@ pub struct PauseScreens {
     pub strings: StringTable,
 }
 
+/// The textures the pause screens of a title that draws them from its definition file name, for
+/// the menus' sheet: every image and tile icon of each screen of [`oag_title::PauseMenu::screens`],
+/// of the screen it is nested in (a touch screen's panel and heading) and of the screens nested in
+/// it (a touch screen's confirm dialogs). Empty when the title names no layout or the file will
+/// not read; [`read_pause_screens`] says why.
+pub(super) fn pause_textures(
+    archives: &mut oag_assets::Archives,
+    title: &'static oag_title::Title,
+    globals: &std::collections::HashMap<String, String>,
+) -> Vec<String> {
+    let Some((table, layout)) = title
+        .pause_menu
+        .and_then(|table| table.layout.map(|layout| (table, layout)))
+    else {
+        return Vec::new();
+    };
+    // Only a screen of tiles carries icons of its own; the other titles' pause screens draw
+    // from the sheet their menus already have.
+    if layout.touch.is_none() {
+        return Vec::new();
+    }
+    let Ok(xml) = archives
+        .read_name(layout.definition)
+        .map_err(|e| e.to_string())
+        .and_then(|blob| oag_ui::xml::expand(&blob).map_err(|e| format!("{e:#}")))
+    else {
+        return Vec::new();
+    };
+    let fallback: Vec<(&str, &str)> = globals
+        .iter()
+        .map(|(key, value)| (key.as_str(), value.as_str()))
+        .collect();
+    let parsed = Screens::from_xml_with_fallback_globals(&xml, &fallback);
+    let wanted: Vec<&str> = parsed
+        .screens
+        .iter()
+        .filter(|screen| table.screens.iter().any(|pause| pause.name == screen.name))
+        .map(|screen| screen.path.as_str())
+        .collect();
+    let under = |outer: &str, inner: &str| inner.starts_with(&format!("{outer}{SEPARATOR}"));
+    let mut out: Vec<String> = Vec::new();
+    for screen in &parsed.screens {
+        let path = screen.path.as_str();
+        if !wanted
+            .iter()
+            .any(|wanted| *wanted == path || under(wanted, path) || under(path, wanted))
+        {
+            continue;
+        }
+        let icons = screen
+            .touch_buttons
+            .iter()
+            .filter_map(|button| button.src.as_ref());
+        let strips = screen
+            .touch_lists
+            .iter()
+            .flat_map(|list| &list.entries)
+            .filter_map(|entry| entry.src.as_ref());
+        for src in screen
+            .images
+            .iter()
+            .map(|image| &image.src)
+            .chain(icons)
+            .chain(strips)
+        {
+            if !out.contains(src) {
+                out.push(src.clone());
+            }
+        }
+    }
+    out
+}
+
 /// The title's pause screens off its definition file: every screen of
 /// [`oag_title::PauseMenu::screens`] with the chrome screen behind it, laid out as the disc
 /// authors them. Empty for a title that names no layout, and for one whose file will not read
@@ -869,14 +943,24 @@ pub(super) fn read_pause_screens(
         .screens
         .iter()
         .filter_map(|screen| {
-            let read = oag_ui_screens::pause::PauseScreen::read(
-                &parsed,
-                screen.name,
-                layout.chrome,
-                &strings,
-                faces,
-                grid,
-            );
+            let read = match layout.touch {
+                Some(touch) => oag_ui_screens::pause::PauseScreen::read_touch(
+                    &parsed,
+                    screen.name,
+                    touch,
+                    &strings,
+                    faces,
+                    grid,
+                ),
+                None => oag_ui_screens::pause::PauseScreen::read(
+                    &parsed,
+                    screen.name,
+                    layout.chrome,
+                    &strings,
+                    faces,
+                    grid,
+                ),
+            };
             if read.is_none() {
                 report.push(format!(
                     "{}: no screen {:?} or {:?}",

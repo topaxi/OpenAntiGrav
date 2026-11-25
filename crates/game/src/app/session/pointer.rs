@@ -107,11 +107,11 @@ pub(super) fn menu_pointer(
     if pointer.is_idle() {
         return Vec::new();
     }
-    let regions = match stage.pause_view.as_ref().filter(|_| stage.on_pause_page()) {
-        Some(view) => {
-            oag_ui_screens::pause::regions(&view.screen, view.table, &stage.menu, &stage.skin)
+    let regions = match (stage.pause_view.as_ref(), stage.pause_screen_on_page()) {
+        (Some(view), Some(screen)) => {
+            oag_ui_screens::pause::regions(screen, view.table, &stage.menu, &stage.skin)
         }
-        None => menu::pointer::regions(
+        _ => menu::pointer::regions(
             &stage.menu,
             &stage.skin,
             &stage.frame,

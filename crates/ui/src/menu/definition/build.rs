@@ -282,6 +282,7 @@ impl Definition {
                 subtitles: Vec::new(),
                 meta: Vec::new(),
                 parked: Vec::new(),
+                opens_on: None,
             });
             done.pages.push(full);
         }

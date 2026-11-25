@@ -56,6 +56,8 @@ pub struct TouchButton {
     /// `StringWidthLimit`: the pixel width the label wraps at. `None` when
     /// the widget does not say, which draws the label on one line.
     pub string_width_limit: Option<f32>,
+    /// `smalltext="true"`: the label is the small one.
+    pub small_text: bool,
     /// Modulating colour as ARGB, white when unstated.
     pub color: u32,
     /// Seconds after the screen appears before the button draws, from
@@ -162,6 +164,7 @@ impl Screens {
             toggle: node.flag("toggle").unwrap_or(false),
             image_size: self.number(node.value("ImageSize")),
             string_width_limit: self.number(node.value("StringWidthLimit")),
+            small_text: node.flag("smalltext").unwrap_or(false),
             color: self
                 .resolve(node.value("color").unwrap_or_default())
                 .and_then(parse_argb)

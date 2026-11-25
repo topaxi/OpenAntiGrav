@@ -1,15 +1,16 @@
 ---
 status: ready-to-wire
 titles: [pulse, hd, omega, 2048, pure]
-updated: 2026-11-24
-summary: "Pulse, HD, Fury, Omega and Pure pause into the disc's own screen per mode; 2048 opens the main page"
+updated: 2026-11-25
+summary: "Pulse, HD, Fury, Omega, Pure and 2048 pause into the disc's own screen per mode"
 ---
 
 # The title's own pause screen
 
 The read and what is built: `docs/ui/pause-menu.md`. The mechanism is `oag_title::Title::pause_menu`
 (a table of `PauseScreen`s, the mode-to-screen map and `PauseAction`s), `oag_ui::menu::Definition::open_on_pause_screen`
-(the page, at the root of the tree over a parked race) and `session::pause_menu` in `oag-game`.
+(the page, at the root of the tree over a parked race, and the confirm pages a QUIT or RESTART row asks on) and
+`session::pause_menu` in `oag-game`.
 
 Claim and oracle (maintainer): pausing a race opens the title's own authored pause screen for its mode,
 drawn off the disc, with rows that work; a title that fails falls through to the main page, never a
@@ -32,9 +33,16 @@ pause screen where one applies). Online pause stays the maintainer's decision
   ours' words are the original's width and start on the original's column (the centred start is the executable's own, `docs/ghidra/functions/psp-pure-usa/menu-text-centring.md`: the band-word box 610 to 240 px over 40 grey; `docs/tools/compare-page.md`, "The rows' rounding, recovered from the executable").
 - **Pulse pause rows bloom** (`Renderer::set_glow_over_scene`, set for a frozen race; `docs/ui/pause-menu.md`). Open: the focused row's stamp phase is unpinned on the drive route, and the PS2's
   texel-alpha bloom over a pause page is unmeasured (`handover/frontend/the-worst-menu-pairs-after-the-pause-glow-and-the-title-faces.md`).
-- **2048: not wired** (`pause_menu: None`). 2048 has `InGame_Definition.xml` (36 screens) and
-  `LegacyInGame_Definition.xml` on Vita, with a binder of its own; Omega's reads the same mode ids as HD's, so
-  compare 2048's against it first. No Vita frame yet. A 2048 finding is checked against Omega and the reverse.
+- **2048: wired** (`oag_2048::pause_menu`, 2026-11-25). Its screens are `<TouchButton>` icon pages
+  (`PauseMenuRace`, `PauseMenuTournament`, `PauseMenuSpeed`), **not** HD's and Omega's widgets (checked, differs;
+  Omega's copy of the file is a stub), drawn by `oag_ui_screens::pause::PauseScreen::read_touch`; QUIT and RESTART
+  ask on the disc's confirm screens; pad and tap drive it. Open: the `SceneBlur` and the event card (`Callout
+  CurGameMode`, native layout) the original draws are not drawn; the Speed Lap `CHOOSE_GHOST` tile opens `PauseMenuGhost`
+  (NONE and MY BEST are `display.ghost_ship_visible`, the two online entries drawn grey and unselectable; layout
+  chosen, not pictured); OPTIONS opens this build's page, the disc's is the touch `pause_options`
+  tree; the Speed Lap and Tournament pages are tested by their tiles but were not walked live (the first campaign
+  event is a Time Trial and `--race` has no `--drive`); the binder's default arm (an event object of ordinal 3 with
+  no laps opens `PauseMenuSpeed`) is read, not walked.
 - **HD, Fury: the FE Style** is the one thing a player in the HD style would see differ: the focused
   row, the opaque blocks and the grey follow `FEGlobals` (`HD_Blue`), and this build serves `DATA00`'s
   Fury palette on every page. The original's pause screen in the Fury style is red (RPCS3, Single Race and
@@ -56,6 +64,7 @@ pause screen where one applies). Online pause stays the maintainer's decision
 
 ## Next Steps
 
-1. 2048 (Vita3K) against Omega: a Vita frame of its pause screen, then its binder and table.
+1. 2048: a Vita3K frame of the Speed Lap and Tournament pages (and the confirm screen), and the event card the
+   pause draws (`CampaignEventCard_Draw`, `docs/ghidra/functions/vita-2048-eu-v104/campaign-event-card.md`).
 2. The front end's FE Style (HD palette: `DATA06`'s `HD_*` globals, opaque blocks, white page) so the HD-style
    pause frames can be matched too.
