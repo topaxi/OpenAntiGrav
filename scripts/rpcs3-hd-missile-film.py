@@ -53,6 +53,7 @@ import rpcs3_hd_field  # noqa: E402
 from rpcs3_debugger import Debugger  # noqa: E402
 
 AUTOPILOT_SLOT = 0x5EDC
+SHIELD = 0x5FA0
 POOL_VTABLE = 0x00864B38
 POOL_COUNT = 0x10C
 POOL_FIRST = 0xCC
@@ -114,8 +115,9 @@ def craft_poses(gdb):
         role = struct.unpack(">I", gdb.read(ship + place.OFF_ROLE, 4))[0]
         body = struct.unpack(">I", gdb.read(ship + place.OFF_BODY, 4))[0]
         pose = place.read_pose(gdb, body)
+        shield = struct.unpack(">f", gdb.read(ship + SHIELD, 4))[0]
         rows.append({"ship": "%08x" % ship, "player": role == 0, "pos": pose["pos"], "rows": pose["rows"],
-                     "vel": pose["vel"]})
+                     "vel": pose["vel"], "shield": shield})
     return rows
 
 
@@ -132,6 +134,9 @@ def main():
     ap.add_argument("--hold-after-hit", action="store_true",
                     help="keep the player at the pose it had at the hit (zero velocity, re-placed before every frame), so "
                          "the eye stays near the blast the way ours' parked scenario's does, instead of flying through it")
+    ap.add_argument("--rival-shield", type=float,
+                    help="write the struck rival's shield pool (`ship + 0x5fa0`) before the shot: under 40 the hit leaves it "
+                         "CRITICAL (`WO_DAMAGE_CRITICAL` and `_MODERATE`), under 70 MODERATE, above it MILD")
     ap.add_argument("--max-frames", type=int, default=900, help="frames to wait for the hit after the press")
     ap.add_argument("--step-timeout", type=float, default=8.0)
     args = ap.parse_args()
@@ -185,6 +190,10 @@ def main():
             sys.exit("no rival ahead of the player")
         _dist, rival, rival_body = best
         print("player ship %#x, rival %#x, clock %.2f" % (ship, rival, mem.f32(ship + LAP_CLOCK)), flush=True)
+        if args.rival_shield is not None:
+            before = struct.unpack(">f", read(rival + SHIELD, 4))[0]
+            gdb.write(rival + SHIELD, struct.pack(">f", args.rival_shield))
+            print("rival shield %.1f -> %.1f" % (before, args.rival_shield), flush=True)
 
         steps = []
 
@@ -277,23 +286,30 @@ def main():
 
         want = list(ages)
         last = None
-        for _ in range(600):
-            age = pool_age()
-            if last is not None:
-                steps.append({"dt_age": age - last, "age": age})
-            last = age
-            while want and age >= want[0] - 1e-6:
-                photograph("a%04d" % round(want[0] * 1000), "target %.3f" % want.pop(0))
+        try:
+            for _ in range(600):
                 age = pool_age()
-            if not want:
-                break
-            if args.hold_after_hit:
-                place.write_pose(gdb, body, tuple(held["pos"]), [tuple(x) for x in held["rows"]], 0.0)
-                gdb.write(body + place.B_VELOCITY, struct.pack(">3f", 0.0, 0.0, 0.0))
-            step(False)
-            print("age %.4f" % pool_age(), flush=True)
+                if last is not None:
+                    steps.append({"dt_age": age - last, "age": age})
+                last = age
+                while want and age >= want[0] - 1e-6:
+                    photograph("a%04d" % round(want[0] * 1000), "target %.3f" % want.pop(0))
+                    age = pool_age()
+                if not want:
+                    break
+                if args.hold_after_hit:
+                    place.write_pose(gdb, body, tuple(held["pos"]), [tuple(x) for x in held["rows"]], 0.0)
+                    gdb.write(body + place.B_VELOCITY, struct.pack(">3f", 0.0, 0.0, 0.0))
+                step(False)
+                print("age %.4f" % pool_age(), flush=True)
+        except (TimeoutError, OSError) as err:
+            # The frames already taken keep their records: the camera pick below needs only them.
+            print("stopped early (%s), keeping %d frame(s)" % (err, len(shots)), flush=True)
         session.pad.set("cross", False)
-        gdb.resume()
+        try:
+            gdb.resume()
+        except (TimeoutError, OSError):
+            pass
     picks = ps3_pose.pick_camera([c for _, _, c, _, _ in shots])
     for (stem, shot, _, pose, note), (camera, reason, count) in zip(shots, picks):
         record = drive.describe(camera, reason, count, drive.track_name(), shot, None, None, pose)

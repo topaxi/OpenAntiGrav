@@ -316,6 +316,11 @@ impl Session {
             let request = self.benchmark.cli.take().unwrap_or_default();
             return self.launch_benchmark(Origin::Cli, request.preset, None);
         }
+        // The run's one input: BACK abandons it.
+        if self.in_benchmark() && self.controls.take_presses(back) != 0 {
+            self.escape_benchmark();
+            return true;
+        }
         let Stage::Race(stage) = &mut self.stage else {
             return false;
         };
@@ -335,6 +340,7 @@ impl Session {
                 tick: world.tick,
                 state_hash: stage.race.core.sim.state_hash(),
                 finished,
+                flyby_ticks: stage.race.intro_ticks(),
             });
             self.finish_benchmark();
         }
@@ -420,7 +426,8 @@ impl Session {
         }
     }
 
-    /// Escape in a benchmark race: it is abandoned, with no result.
+    /// Abandons the benchmark (Escape, the pad's back button, the system Back): the player's
+    /// settings come back and no result is written. The run's only input.
     pub(crate) fn escape_benchmark(&mut self) {
         debug!("benchmark abandoned");
         self.leave_benchmark();

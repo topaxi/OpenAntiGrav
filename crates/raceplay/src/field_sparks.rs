@@ -55,10 +55,16 @@ impl Default for FieldSparks {
 }
 
 impl FieldSparks {
-    /// The strength `slot`'s held spark plays at, `None` when it holds none.
+    /// The particle-count multiple `slot`'s held spark plays at, `None` when it holds none.
     #[cfg(test)]
     pub(super) fn strength_of(&self, stage: &psys::Stage, slot: usize) -> Option<f32> {
-        self.held[slot].and_then(|held| stage.scale(held.playing))
+        self.held[slot].and_then(|held| stage.count_scale(held.playing))
+    }
+
+    /// The instance `slot`'s held spark plays in.
+    #[cfg(test)]
+    pub(super) fn held_for_tests(&self, slot: usize) -> Option<psys::Playing> {
+        self.held[slot].map(|held| held.playing)
     }
 }
 
@@ -142,7 +148,8 @@ impl RaceView {
                     let velocity = ship.physics.body.linear_velocity;
                     let strength = sparks::attached_strength(velocity.length(), impulse);
                     let at = model.transform_point3(anchor);
-                    if let Some(playing) = self.stage.play_riding(effect, at, strength) {
+                    if let Some(playing) = self.stage.play_riding(effect, at, 1.0) {
+                        self.stage.set_count_scale(playing, strength);
                         self.stage.carry(playing, effect, velocity);
                         self.stage.orient(playing, model.transform_vector3(up));
                         self.field_sparks.held[slot] = Some(Held {

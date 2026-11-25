@@ -68,6 +68,10 @@ Rework it:
 
 The detailed mods notes below still apply to the MODS row.
 
+**E. Two input leftovers from the abort-only rule (lead review of `benchmark-no-input`).**
+- F11 still toggles fullscreen during a run, which changes the output size mid-measurement. Ignore it while a benchmark runs (`crates/game/src/app/window.rs`, `is_fullscreen_key`).
+- The touch racing overlay still draws its buttons in a benchmark, though they are inert. Hide it, as photo mode does (`crates/game/src/app/touch.rs`, the overlay's on-duty rule).
+
 **Mods notes (for the MODS row):**
 
 

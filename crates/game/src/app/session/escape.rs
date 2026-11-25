@@ -175,9 +175,10 @@ impl Session {
     /// the race and opens the menus, and backing out of them resumes it.
     pub(crate) fn back(&mut self) {
         debug!("system back");
-        // A benchmark ends through its own screen or Escape, which say where they leave to;
-        // this one would restore the player's settings and leave the run going.
+        // Abandoning a benchmark is its own exit, and a run started on the command line has
+        // nothing behind it, so it ends the process.
         if self.on_benchmark() {
+            self.escape_benchmark();
             return;
         }
         let was_quitting = self.quit;

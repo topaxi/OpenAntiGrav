@@ -28,6 +28,10 @@ pub(super) fn read(
     report: &mut Vec<String>,
 ) -> Option<(GridCamera, &'static oag_title::pre_race::PreRace)> {
     let rule = rule?;
+    // A title's default circuit is named with forward slashes (`/data/environments/<dir>/track.vex`),
+    // a menu's choice with backslashes: both reach the same entries.
+    let track = track.replace('/', "\\");
+    let track = track.trim_start_matches('\\');
     let (directory, file) = track.rsplit_once('\\')?;
     let reversed = file.to_ascii_lowercase().contains("reversed");
     let mut found = None;

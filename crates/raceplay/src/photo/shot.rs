@@ -261,6 +261,9 @@ pub struct Shot {
     /// The HUD's own state at the shot's tick: the ticks a blur replays step it on, and the HUD
     /// drawn over the shot shows the moment the shot is of.
     hud: Option<HudMemory>,
+    /// The particles and what feeds them at the shot's tick: the ticks a blur replays emit and age
+    /// them, so without this a shot leaves the next one (and the race) other sparks than it found.
+    effects: Option<super::effects_memory::EffectsMemory>,
 }
 
 /// The state the HUD keeps between ticks, as the race on screen has it: every slot's bars,
@@ -299,6 +302,10 @@ impl Shot {
     /// blur takes the camera there to hold.
     pub fn start(plan: Plan, mover: Option<Mover<'_>>, race: &mut Race) -> Self {
         let hud = plan.blur.is_some().then(|| HudMemory::of(race));
+        let effects = plan
+            .blur
+            .is_some()
+            .then(|| super::effects_memory::remember(&race.view));
         if let Some(Mover { rewind, keeper }) = mover
             && plan.blur.is_some()
         {
@@ -314,7 +321,12 @@ impl Shot {
                 rewind.seek(keeper, race, plan.tick);
             }
         }
-        Self { plan, next: 0, hud }
+        Self {
+            plan,
+            next: 0,
+            hud,
+            effects,
+        }
     }
 
     /// The plan the shot follows.
@@ -373,6 +385,9 @@ impl Shot {
         }
         if let Some(hud) = self.hud {
             hud.put_back(race);
+        }
+        if let Some(effects) = self.effects {
+            effects.put_back(&mut race.view);
         }
         race.photo_set_shift(None);
         race.photo_repose();

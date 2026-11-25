@@ -634,6 +634,7 @@ pub struct System {
     /// The original's severity: multiplies ejection speed and drawn size,
     /// never particle counts.
     scale: f32,
+    count_scale: f32, // each emission's count multiple, `1.0`: `System::ignite_counting`
     /// The instance's extent co-factor, `+0x2c` - `1.0` unless a caller
     /// stretches it, which only the Quake does. See [`spawn`].
     extent_scale: f32,
@@ -679,6 +680,7 @@ impl System {
             particles: [Particle::DEAD; MAX_PARTICLES],
             emitters: [EmitterState::IDLE; MAX_EMITTER_STATES],
             scale: 1.0,
+            count_scale: 1.0,
             extent_scale: 1.0,
             frame_scale: 1.0,
             ride_scale: 1.0,
@@ -706,6 +708,7 @@ impl System {
     /// that discipline.
     pub fn ignite(&mut self, effect: &Effect, point: Vec3, scale: f32) {
         self.scale = scale;
+        self.count_scale = 1.0;
         self.anchor = point;
         for &root in effect.roots() {
             let spec = &effect.emitters[root];
@@ -848,7 +851,7 @@ impl System {
                 // struct by hand can, and a hung frame is a bad way to find
                 // out.
                 state.until_next += random_range(rng, spec.interval_ticks).max(1.0);
-                let count = random_range(rng, spec.per_emission) as usize;
+                let count = self.emission_count(random_range(rng, spec.per_emission));
                 if spec.live_cap > 0 && self.live_for(spec_index) + count > spec.live_cap {
                     continue;
                 }
@@ -1465,6 +1468,7 @@ impl Stage {
     }
 }
 
+mod counted;
 mod direction;
 mod expendable;
 mod sample;

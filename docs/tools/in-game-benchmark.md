@@ -22,10 +22,42 @@ its name on two more. The result is in the app's `files/data/oag/bench/` (`adb p
 stops the race at tick N and the result says `finished: false`; it is for a short test run, not
 for results (`--ticks` under 272 ends inside the countdown and has no figures).
 
-Escape during the race abandons it with no result. The race cannot be paused: a pause would be a
-frame time. Losing focus does not pause or abandon it either, and neither does the Android system
-Back, in the race or on the stats screen (there BACK is the button). RUN BENCHMARK is not offered
-over a race parked behind the menus: it would replace that race.
+Back during the run abandons it: Escape, the pad's back button (CIRCLE by default) and the
+Android system Back all end it the same way. The player's settings come back, **no result file is
+written**, and a menu launch returns to the page it was started from; a run started on the command
+line has nothing behind it and ends the game. RUN BENCHMARK is not offered over a race parked
+behind the menus: it would replace that race.
+
+## Input
+
+**Nothing the player does changes what a benchmark runs, except Back.** The flyby plays its whole
+length and the race flies on the autopilot, so two runs on one title do the same thing whoever is
+holding the pad. While the run is up (the flyby, the countdown and the race, not the stats screen):
+
+| Input | What it does |
+| --- | --- |
+| A held CROSS, a click or a tap on the flyby | nothing: the flyby ignores them (`Race::tick_intro_unattended`) |
+| START | nothing: no pause, no pause menu, no photo mode |
+| SELECT (the camera cycle) | nothing: the camera does not change and `settings.toml` is not written |
+| Sticks, triggers, face buttons | nothing: the autopilot replaces the player's snapshot outright (`RaceSim::set_autopilot`), so no pad reaches the craft |
+| Losing focus | nothing: it neither pauses nor abandons the run (`Session::window_away`) |
+| Back | abandons the run, as above |
+
+The music buttons are not in the table: they move the soundtrack, which is not what the run
+simulates or draws.
+
+**The flyby.** Pulse's flyby ends by itself after its authored length (17.7 to 27 s), and a
+benchmark plays all of it. HD's flyby (the only other one wired) loops its 173 to 188 s tour until a
+press (`docs/gameplay/race-intro.md`), so waiting for the end is not possible and a full pass
+would put three minutes of unmeasured flyby in front of every run. The run presses for it at a
+fixed tick, `plan::SKIP_ONLY_FLYBY_TICKS` (27 s, the longest flyby Pulse's own circuits end on,
+so a benchmark's flyby is about as long on every title; **chosen, not measured**). The same
+press lands on the same tick every run: an HD result says `flyby_ticks: 1621`. The flyby's
+frames carry no world tick and are in no figure (the world has not started), so the choice moves
+no result, only how long the run takes before the countdown. `--no-intro` is a launch flag, not a
+player's input, and still removes the flyby for a test run (`flyby_ticks: 0`).
+
+The result file's `flyby_ticks` is the flyby's length in ticks, so a skipped flyby shows.
 
 ## The race
 
@@ -133,6 +165,10 @@ checks each value against the page.
   `--benchmark --drive` (the real `Session`, no window) ends on the offscreen bench's hash, writes
   the result file and draws the stats screen.
 - `render_bench_ground_truth::a_preset_changes_the_picture_and_not_the_race_or_the_players_settings`.
+- `render_bench_ground_truth::no_input_changes_a_pulse_benchmark` and `..._an_hd_benchmark`: a run
+  with every input spent (held CROSS, click, SELECT, START, a stick, focus loss, a key) has the
+  untouched run's flyby length, final tick, state hash, frame count and `settings.toml`.
+  `back_abandons_a_benchmark_and_writes_nothing`: Back by the pad and the system Back from the EXTRAS page, Escape from the command line.
 - Unit tests in `crates/game/src/benchmark/` for the lows, the figures, the JSON keys `compare`
   reads, the screen's hit rectangles and layout, the presets, and the command line.
 - `scripts/bench-render.py selftest` covers the in-game/offscreen warning.

@@ -390,6 +390,22 @@ impl Race {
         }
     }
 
+    /// Ticks the flyby has run, whether it is still playing or has ended.
+    #[must_use]
+    pub fn intro_ticks(&self) -> u32 {
+        self.view.intro.as_ref().map_or(0, IntroCamera::ticks)
+    }
+
+    /// One flyby tick that no input can change: nobody's Cross or click skips it, so it plays
+    /// its authored length. A flyby only a skip ends (HD's repeats) is skipped by the run
+    /// itself once it has run `skip_after` ticks, the same tick every time.
+    pub fn tick_intro_unattended(&mut self, skip_after: u32) {
+        if self.intro_ends_only_by_skip() && self.intro_ticks() >= skip_after {
+            self.skip_intro();
+        }
+        self.tick_intro(&PlayerInputs::none());
+    }
+
     /// One flyby tick, in place of [`Race::tick`]. The flyby is skipped while **any person who
     /// flies** (any seat, in any window) holds [`Button::Cross`]: it is one race state, so one
     /// person's skip ends it for everyone (chosen, not measured).

@@ -157,6 +157,12 @@ same `start_grid.vex` shape as 2048's; Omega's HD circuits ship HD's. Neither ti
 watched, so neither is turned on (an unwatched title inherits Pulse's law only where the project
 has decided it should, and here the end rule and skip differ between Pulse and HD).
 
+**HD's default circuit has its flyby** (a window race launched with no `--track`, and so the in-game
+benchmark): the title names its default circuit `/data/environments/<dir>/track.vex`, a menu's choice
+`Data\Environments\<dir>\track.vex`, and the flyby loader read only the second form, so the first
+played none. The loader now takes both (`load/intro.rs`); `in-game-benchmark.md` ("Input") says what a
+benchmark does with a flyby only a press ends.
+
 **HD's numbers.** Measured: plays after the load, loops, no HUD, one press skips. **Chosen, not
 measured**: the field of view (Pulse's `54.309`, the same Maya export, compared by eye against
 the original at matched circuit position and found to frame the same buildings), the hold and the lock

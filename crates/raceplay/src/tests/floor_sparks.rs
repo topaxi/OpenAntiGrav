@@ -312,3 +312,33 @@ fn a_floor_record_of_a_craft_that_is_not_racing_restarts_the_attached_spark() {
         "kind 3 did not restart the attached spark"
     );
 }
+
+/// **The spark rides its locator**: when the craft moves (or is sent elsewhere, as a reset plane
+/// does) the spark moves with it, and it lets go once its emitters have ended. Read live on RPCS3:
+/// the instance's world translation followed the hull through a 17-unit teleport
+/// (`collision-cues.md`, "Does the floor spark ride its locator").
+#[test]
+fn a_floor_spark_rides_its_locator_and_lets_go_when_it_ends() {
+    let mut race = hd_race();
+    let at = race.core.sim.world.ships[0].physics.body.position;
+    throw(&mut race, &floor_records(&[at]));
+    let thrown = race.floor_spark_anchors_for_tests();
+    assert_eq!(thrown.len(), 1);
+
+    let moved = Vec3::new(10.0, 0.0, 25.0);
+    race.core.sim.world.ships[0].physics.body.position += moved;
+    race.view.advance_floor_sparks(&race.core);
+    let followed = race.floor_spark_anchors_for_tests();
+    assert!(
+        (followed[0] - thrown[0] - moved).length() < 1e-3,
+        "left behind: {thrown:?} -> {followed:?}"
+    );
+
+    for _ in 0..30 {
+        race.view
+            .stage
+            .advance(1.0 / 60.0, &mut race.view.stage_rng);
+    }
+    race.view.advance_floor_sparks(&race.core);
+    assert!(race.floor_spark_anchors_for_tests().is_empty());
+}

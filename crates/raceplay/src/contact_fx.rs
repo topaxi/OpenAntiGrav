@@ -65,7 +65,7 @@ pub(super) fn attach_rule(
 }
 
 /// The effects one seat's wall hits raise.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(super) struct ContactFx {
     /// The seat's camera shake, armed by a hard wall hit. Render-only, for
     /// the same reason [`RaceView::camera`] is - see
@@ -236,7 +236,7 @@ impl ContactFx {
             self.anchor_up = Some(up_model);
             if let Some(effect) = effect.as_deref() {
                 let strength = sparks::attached_strength(velocity.length(), pair.impulse);
-                self.sparks.ignite(effect, pair.point, strength);
+                self.sparks.ignite_counting(effect, pair.point, strength);
                 self.sparks.carry(effect, velocity);
             }
             self.ignitions += 1;
@@ -272,7 +272,7 @@ impl ContactFx {
                         velocity.length(),
                         evaluated.wall.impulse_largest,
                     );
-                    self.sparks.ignite(effect, surface, strength);
+                    self.sparks.ignite_counting(effect, surface, strength);
                     self.sparks.carry(effect, velocity);
                 } else {
                     self.sparks.ignite(

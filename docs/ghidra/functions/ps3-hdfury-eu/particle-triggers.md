@@ -356,6 +356,106 @@ started on a spent shield, the original's rule).
 `0x002a0268` was not located (no `-1.5` constant read near either caller), and the trigger is
 HD-gated (`Trigger::DamageMild`).
 
+## 2026-11-25: the camera-mode flags, a second film, and a CRITICAL attempt
+
+Lane `hd-contact-sparks`. Three results: what `ship + 0x5f42` and `+0x5f43` are (they gate the
+smoke's `1.9` term and every collision spark), a Missile film with the hulls apart, and a
+CRITICAL rival that could not be framed.
+
+### `+0x5f42` and `+0x5f43` are the player's view flags
+
+`PlayerStatus_Update` (`0x000cb928`) and `PlayerStatus_ApplyCameraOption` (`0x000cae68`) write
+both bytes of the player's craft (`*(this + 0x44)`) from the view the player's camera is in
+(`*(this + 0x40)`, the camera mode):
+
+| `this + 0x40` | The view (tripod string loaded at the call) | `+0x5f42` | `+0x5f43` | Where |
+| --- | --- | --- | --- | --- |
+| 0 | `local player%d internal tripod` (`0x00781a10`), picked when the player's `CameraP%i` record is `OPT_INT` (`0x007819f0`) | 1 | 0 | `0x000cb1b0`..`0x000cb1c8` |
+| 1 | `local player%d external close tripod` (`0x00781a30`), `OPT_CLOSE` | 0 | 0 | `0x000cb058` |
+| 2 | `...external far tripod` (`0x00781a58`), `OPT_FAR` | 0 | 0 | `0x000cb058` |
+| 3 | `local player%d backward tripod` (`0x00781b20`), the look-back, entered while the pad record's `+0x69` byte is set and the object `*0x009878c4` (TOC `-0x4b50`, beside the camera object `*0x009878c0`) has `+0x34` bit 1 clear (not read further) | 1 | 1 | `0x000cba2c`, `0x000cba30`, `0x000ccd48`; the hull's visible bits `+0x34 & 7` cleared |
+
+The generic write is `0x000cc778`/`0x000cc784`: `+0x5f42 = (mode == 0)`, `+0x5f43 = (mode == 3)`.
+Camera classes' own setters (`0x0003dc7c` and the others in the byte-pair list) clear both.
+**Live, RPCS3 `hd-racebox-talons-venom-weapons-grid`, `scripts/rpcs3-hd-camera-flags.py --hold l3,r3,l1,r1`:**
+all eight craft read `00 00` at `+0x5f42..43` in the chase view; holding **R1** read `01 01` on the
+player's craft only, and `00 00` again on release; L3, R3 and L1 changed nothing. So **`+0x5f43` is
+the look-back view, set on the player's craft alone, and `+0x5f42` is set in the internal view
+and in the look-back** (the internal view itself was not selected live: its half is the static
+table above). Confidence 90 for `+0x5f43`, 85 for `+0x5f42`.
+
+What follows from it:
+
+- **Row 8's `1.9` term** (`0x002a0340`..`0x002a0378`): `+0x5f43` set and the camera object
+  `*0x009878c0` absent or its `+0x34 & 6` clear (the destroy camera sets `6`, ship-destroy.md,
+  row 5). So the smoke anchor moves by `1.9` of the node's Y row **only for the player's own craft
+  while the player looks back**; a rival's `+0x5f43` is never set, so its smoke is the flare node
+  plus `1.5` of its Z row, which is what ours draws. Confidence 85.
+- **The cockpit-view flag of the collision sparks** (`ShipCollisionFx_Trigger`'s first gate,
+  `*(locator + 0xe4) + 0x5f42`): the gate is the internal view or the look-back, on the player's
+  craft only; a rival's is always 0. Confidence 85.
+- **This engine draws neither view** (no internal camera, no look-back), so `+0x5f42` and
+  `+0x5f43` are always 0 for it: nothing to wire, and neither the `1.9` term nor the spark gate
+  changes a frame. A look-back or internal camera added later has to carry both.
+
+### A second Missile film: the hulls never touch
+
+`scripts/rpcs3-hd-missile-film.py --ages 0.5,0.6,0.67,0.75,0.9,1.0,1.17,1.33,1.5,1.7,2.0`
+(RPCS3 0.0.43-20574, the same state, the player held 12 units behind the rival, 1.0 to 2.0 s
+photographed). The player-to-rival distance from the film's own craft poses, per frame:
+`12.0, 13.0, 12.6, 12.0, 11.7, 12.1, 13.3, 14.6, 14.9, 17.5, 24.3, 33.7` at ages
+`0, 0.5, 0.65, 0.7, 0.8, 0.91, 1.02, 1.19, 1.35, 1.51, 1.72, 2.02`. **The hulls never come
+within 11 units of each other**, and POS going 8 to 7 at 1.0 s is a different pass. The "hulls
+touch" window in the first film's table (above) was not reproduced; the orange pieces beside the
+rival at 1.0 s are the rival's damage and the red tiles on its hull the shield-hit flash, not the
+contact spark (row 1 has no frame yet). To photograph a contact the player must be held at a hull
+width or less (`--back 3`), which this lane did not run.
+
+### A posed pair for the hit, built and scored, not adopted
+
+`scripts/hd-hit-posed-pair.py --film DIR --team T` renders ours on the film's frames: craft 0 is
+posed on the struck rival (`--pose-from` a one-row trace with the film's rows and position, held at
+rest every tick by `--pose-hold-ticks`), the camera is the film's pushbuffer camera (the trace's
+camera columns carry the world axes as columns, `oag_trace::replay::camera_orientation_of`),
+`--force-shield` puts the rival at 89 % and `--force-hit` lands the hit, and the run goes on to
+the frame's pool age. The track, the camera and the red pad tiles under the rival line up to the
+pixel; the box score is over 360x280 centred on the rival's projection. Frames with a pushbuffer
+camera only (`a0500`, `a0600`, `a0670`, `a1000`, `a1500`, `a2000`; a frame with none is skipped,
+never borrowed). Team Piranha, a guess (the film does not record the rival's team; its hull is red
+and white):
+
+| Window | Frame (age) | Mean abs. difference over the box | Bright pixels, original / ours |
+| --- | --- | --- | --- |
+| 0.5 to 0.75 s | `a0500` (0.50) | 40.9 | 3092 / 764 |
+| | `a0600` (0.65) | 42.6 | 1202 / 264 |
+| | `a0670` (0.70) | 23.2 | 605 / 18 |
+| 1.0 to 2.0 s | `a1000` (1.02) | 17.0 | 299 / 881 (ours: the hull's gloss) |
+| | `a1500`, `a2000` | not scored: the rival is out of the frame (box off the picture) | - |
+
+**It does not score honestly, so it is not adopted as a compare pair.** Three things the number
+does not separate: (1) the rival's team is unknown (ours' hull is the wrong livery); (2) ours
+draws the hull a little above and short of the original's (the film's pose is the body's, the
+frame draws the hull a tick or two behind it, `docs/tools/compare-page.md`, "The skew is the
+pause"), which the pair's own tick-lag refusal would catch and this script does not apply; (3)
+ours draws **no visible hit sparks or smoke** at the matched age while the original shows orange
+embers around the hull at 0.5 to 1.0 s (the bright-pixel counts), but ours' hull is held at rest
+every tick, so the smoke's carried velocity (row 7) and the sparks' drift are not exercised: the
+absence is a property of the pose hold as much as of the effect. Neither window therefore
+judges rows 1, 6 and 7. The 1.0 to 2.0 s window has one valid frame, because the hulls never
+touch (above). Next: a team read (RAM, the rival's `+0x7d2c` variant and team words), the tick-lag
+fix, a rival that flies (a second ship in ours placed at the film's pose and velocity with the
+field warm-up, `--field-from --field-warmup`, so its smoke carries).
+
+### A CRITICAL rival could not be framed
+
+`--rival-shield S` (new) writes the rival's shield (`ship + 0x5fa0`) before the shot. The
+Missile took a rival poked to 75 down to 59.4 (MODERATE, 15.6 damage), but a rival poked to 30,
+50 and 54 reads `-1.0` from the first frame after the hit and draws the broken hull: the
+Missile destroys it. The anchor's sign (`+1.5` or `-1.5` of the node's Z row) stays at the
+confidence 70 the "smoke's anchor against a frame" section gave it; what makes a hit lethal
+below roughly 55 (against 15.6 above) is unread. Next: poke the shield **after** the hit to 35
+and let `0x002a17e8` run through a second weapon, or hit with a weaker weapon.
+
 ## Names applied
 
 | Address | Name | Confidence | Evidence |
@@ -363,6 +463,7 @@ HD-gated (`Trigger::DamageMild`).
 | `0x000ddd58` | `Ship_Construct` | 80 | vtable, state zero-fill, skin/absorb-shell/engine-light/node loads, the attached wall spark |
 | `0x000dfd90` | `Ship_ConstructAlt` | 65 | the same body with a local copy of `param_6` and a different skin search; it is the twin, not separately identified |
 | `0x002a17e8` | `ShipDamageFx_Update` | 72 | the `WO_DAMAGE_*` state switch, thresholds 70 and 40, and its two callers above |
+| `0x000cae68` | `PlayerStatus_ApplyCameraOption` | 72 | picks the camera mode from the player's `CameraP%i` record (`OPT_INT`, `OPT_CLOSE`, `OPT_FAR`), loads the tripod string and writes `ship + 0x5f42` (1 in the internal view) |
 | `0x000e7760` | `Ship_ApplyDamage` | 65 | the weapon-source damage function that calls it, kind 7 sets the LeachBeam flag; `_q` |
 | `0x000e8de0` | `Ship_ApplyPendingDamage` | 65 | applies the pending amount and calls `0x000e7760`; the network branch calls the smoke itself; `_q` |
 
