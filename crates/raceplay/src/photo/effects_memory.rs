@@ -52,7 +52,7 @@ sort_fields! {
         exhaust, exhaust_rng, hd_trail, hd_trail_red, hd_flame, hd_sprite,
         trail_inside, trail_hit_rest, engine_light_jitter, engine_light_rng,
         engine_flare, projectile_flare, projectile_flare_orbit, plasma_launch,
-        quake_effect, emp_effect, quake_point, quake_surface, repulser_effects, repulser_fields,
+        quake_effect, emp_effect, emp_fork_effect, quake_point, quake_surface, repulser_effects, repulser_fields,
         leach_beam_effect, leach_charge_effect, leach_beam_ribbon, leach_beam_rng,
         leach_ball_elapsed, leach_strip, magstrip_wake, mag_floor_fx,
         rocket_smoke, missile_smoke, wingtip,
