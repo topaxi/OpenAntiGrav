@@ -185,6 +185,12 @@ pub(super) fn menu_page(
         strings,
         "OAG_AUDIO_SPATIAL_AUTO",
     );
+    definition.relabel_choice_from(
+        "graphics.reflection_resolution",
+        "auto",
+        strings,
+        "OAG_GRAPHICS_REFLECTION_AUTO",
+    );
     // A mod campaign's picker, as `crate::prepare` adds it; a cross-disc one
     // is kept here, since a still never races it.
     let installed = loaded.installed_for(title, &|_| true);

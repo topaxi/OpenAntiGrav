@@ -73,8 +73,8 @@ use serde::{Deserialize, Serialize};
 
 pub mod blur;
 mod patience;
-pub mod reflection;
 pub mod policy;
+pub mod reflection;
 pub mod residual;
 
 pub use blur::{MAX_BACKOFF, RESTORE_SECONDS, relapse_frames, restore_frames};

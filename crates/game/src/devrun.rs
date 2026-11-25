@@ -164,6 +164,9 @@ pub struct Reading<'a> {
     /// Every separately-encoded pass's GPU time, milliseconds, by the overlay's row name, in
     /// the overlay's order: the rows `GpuCost::passes` carries, **hidden ones included**.
     pub passes: &'a [(&'static str, f32)],
+    /// The step the glass and sea target is drawn at (`graphics.reflection_resolution`, the
+    /// step `auto` is at), or `None` when no target is drawn.
+    pub reflection: Option<&'static str>,
 }
 
 /// The line, one `key=value` field after another so a script can split it.
@@ -174,7 +177,7 @@ pub fn format_line(r: &Reading<'_>) -> String {
         .render
         .map_or_else(|| "-".to_string(), |(w, h)| format!("{w}x{h}"));
     format!(
-        "frame-log stage={} fps={:.1} frame_ms={:.2} p99_ms={:.2} cpu_ms={} gpu_ms={} present_ms={} target_hz={} window={}x{} surface={}x{} render={} governor={} pass_ms={}",
+        "frame-log stage={} fps={:.1} frame_ms={:.2} p99_ms={:.2} cpu_ms={} gpu_ms={} present_ms={} target_hz={} window={}x{} surface={}x{} render={} governor={} pass_ms={} reflection={}",
         r.stage,
         r.fps,
         r.frame_ms,
@@ -190,6 +193,7 @@ pub fn format_line(r: &Reading<'_>) -> String {
         render,
         r.governor,
         pass_field(r.passes),
+        r.reflection.unwrap_or("-"),
     )
 }
 

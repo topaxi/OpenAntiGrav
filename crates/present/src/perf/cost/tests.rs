@@ -367,3 +367,26 @@ fn every_stamped_label_has_a_row() {
         assert_ne!(name, label, "`{label}` has no row in perf/passes.rs's ROWS");
     }
 }
+
+/// The `GLASS` row names the step the target is drawn at (REFLECTION RESOLUTION, or the step
+/// `auto` is at), and no other row does.
+#[test]
+fn the_glass_row_names_the_reflection_step() {
+    let cost = GpuCost {
+        scene: Some(0.004),
+        passes: passes(&[("glass", 0.002), ("smaa", 0.000_5)]),
+        reflection: Some("quarter"),
+        ..Default::default()
+    };
+    let rows = cost.rows(10.0);
+    assert!(
+        rows.contains(&"GLASS QUARTER 2.00 MS".to_string()),
+        "{rows:?}"
+    );
+    assert!(rows.contains(&"SMAA 0.50 MS".to_string()), "{rows:?}");
+    let none = GpuCost {
+        reflection: None,
+        ..cost
+    };
+    assert!(none.rows(10.0).contains(&"GLASS 2.00 MS".to_string()));
+}

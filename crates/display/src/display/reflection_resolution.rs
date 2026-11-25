@@ -82,7 +82,9 @@ impl std::str::FromStr for ReflectionResolution {
             .into_iter()
             .find(|value| value.name().eq_ignore_ascii_case(text))
             .ok_or_else(|| {
-                format!("{text:?} is not a reflection resolution; try auto, original, half or quarter")
+                format!(
+                    "{text:?} is not a reflection resolution; try auto, original, half or quarter"
+                )
             })
     }
 }

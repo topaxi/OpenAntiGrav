@@ -139,6 +139,12 @@ pub fn finish_definition(
         strings,
         "OAG_AUDIO_SPATIAL_AUTO",
     );
+    definition.relabel_choice_from(
+        "graphics.reflection_resolution",
+        "auto",
+        strings,
+        "OAG_GRAPHICS_REFLECTION_AUTO",
+    );
     // A phone app is left, not quit - see `menu::Definition::drop_quit`.
     if oag_mobile::MOBILE {
         definition.drop_quit();

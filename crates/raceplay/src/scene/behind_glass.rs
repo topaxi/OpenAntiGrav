@@ -659,10 +659,22 @@ pub(super) fn rect_mapping(drawn: (u32, u32), original: (u32, u32)) -> Mat4 {
     let fx = drawn.0 as f32 / original.0.max(1) as f32;
     let fy = drawn.1 as f32 / original.1.max(1) as f32;
     Mat4::from_cols_array(&[
-        fx, 0.0, 0.0, 0.0, //
-        0.0, fy, 0.0, 0.0, //
-        0.0, 0.0, 1.0, 0.0, //
-        fx - 1.0, 1.0 - fy, 0.0, 1.0,
+        fx,
+        0.0,
+        0.0,
+        0.0, //
+        0.0,
+        fy,
+        0.0,
+        0.0, //
+        0.0,
+        0.0,
+        1.0,
+        0.0, //
+        fx - 1.0,
+        1.0 - fy,
+        0.0,
+        1.0,
     ])
 }
 
@@ -745,15 +757,9 @@ impl Scene {
         }
         drop(mapped);
         buffer.unmap();
-        std::fs::write(
-            &dump,
-            oag_texture::png::encode_rgba(size.0, size.1, &rgba),
-        )
-        .map_err(|error| anyhow::anyhow!("writing {dump}: {error}"))?;
-        println!(
-            "wrote {dump} (behind the glass, {}x{})",
-            size.0, size.1
-        );
+        std::fs::write(&dump, oag_texture::png::encode_rgba(size.0, size.1, &rgba))
+            .map_err(|error| anyhow::anyhow!("writing {dump}: {error}"))?;
+        println!("wrote {dump} (behind the glass, {}x{})", size.0, size.1);
         Ok(())
     }
 }
@@ -833,10 +839,7 @@ mod tests {
     /// What `refraction.wesl` and `shade.wesl` do with a clip-space point and the target.
     fn shader_uv(clip: oag_core::math::Vec4, limit: [f32; 2]) -> [f32; 2] {
         let (x, y) = (clip.x / clip.w.max(1e-6), clip.y / clip.w.max(1e-6));
-        [
-            (0.5 + 0.5 * x).min(limit[0]),
-            (0.5 - 0.5 * y).min(limit[1]),
-        ]
+        [(0.5 + 0.5 * x).min(limit[0]), (0.5 - 0.5 * y).min(limit[1])]
     }
 
     /// The sub-viewport reads the same texels a quarter-size allocation would: the rectangle's

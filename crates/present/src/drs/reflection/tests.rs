@@ -26,7 +26,11 @@ impl Machine {
         Reading {
             glass: Some(self.glass[level]),
             gpu: Some(gpu),
-            frame: if self.paced { gpu.max(self.period) } else { gpu },
+            frame: if self.paced {
+                gpu.max(self.period)
+            } else {
+                gpu
+            },
             period: Some(self.period),
         }
     }
@@ -88,7 +92,10 @@ fn a_mali_cost_settles_at_quarter_and_stays() {
         steps,
         [ReflectionResolution::Half, ReflectionResolution::Quarter]
     );
-    assert!(run(&mut rung, MALI, 300.0).is_empty(), "it must not flip back");
+    assert!(
+        run(&mut rung, MALI, 300.0).is_empty(),
+        "it must not flip back"
+    );
     assert_eq!(rung.step(), ReflectionResolution::Quarter);
 }
 
@@ -121,7 +128,10 @@ fn headroom_restores_one_step_at_a_time_after_a_patient_run() {
     };
     // The run is counted in frames of the budget's period (3 s of 120 Hz), as the blur rung's.
     let changes = run(&mut rung, light, 0.5);
-    assert!(changes.is_empty(), "a restore waits for its run: {changes:?}");
+    assert!(
+        changes.is_empty(),
+        "a restore waits for its run: {changes:?}"
+    );
     let changes = run(&mut rung, light, 30.0);
     let steps: Vec<_> = changes.iter().map(|c| c.to).collect();
     assert_eq!(
@@ -199,7 +209,10 @@ fn reflections_reach_quarter_before_the_render_scale_moves() {
         }
     }
     let (quarter_at, fell_at) = (quarter_at.unwrap(), fell_at.unwrap());
-    assert!(quarter_at < fell_at, "quarter at {quarter_at} s, fell at {fell_at} s");
+    assert!(
+        quarter_at < fell_at,
+        "quarter at {quarter_at} s, fell at {fell_at} s"
+    );
 }
 
 #[test]

@@ -79,15 +79,15 @@ fn drawn_remembers_each_frame_and_reads_a_forgotten_one_as_drawn() {
     // Never marked: pessimistic, a skipped frame rather than a free blur.
     assert!(drawn.drawn(12));
     // Overwritten by a frame a whole record later: frame 11 is forgotten, not "not drawn".
-    drawn.mark(11 + Drawn::FRAMES as u64, true);
+    drawn.mark(11 + DRAWN_FRAMES as u64, true);
     assert!(drawn.drawn(11));
     // Blur off for a whole run of frames: every frame a reading can still name reads as not
     // drawn, so blur off never skips a frame.
-    let last = 100 + 3 * Drawn::FRAMES as u64;
+    let last = 100 + 3 * DRAWN_FRAMES as u64;
     for frame in 100..last {
         drawn.mark(frame, false);
     }
-    assert!((last - Drawn::FRAMES as u64..last).all(|frame| !drawn.drawn(frame)));
+    assert!((last - DRAWN_FRAMES as u64..last).all(|frame| !drawn.drawn(frame)));
 }
 
 fn rings() -> Rings {
@@ -257,6 +257,7 @@ fn the_overlays_other_is_the_controllers_reading_less_the_labelled_passes() {
         upscale: Some(upscale.0),
         upscale_presented: Some(upscale.1),
         passes,
+        reflection: None,
     };
     let other_ms = overlay.residual_ms(frame_ms).expect("measured");
     assert!(
@@ -276,5 +277,43 @@ fn the_overlays_other_is_the_controllers_reading_less_the_labelled_passes() {
     assert_eq!(
         cost,
         assemble(scene, Some(blur), Some(bloom), Some(upscale), ALL).expect("measured")
+    );
+}
+
+/// The reflection rung is fed the newest frame drawn at its step that timed a glass pass, with
+/// every labelled pass of that same frame; a frame drawn at another step (one in flight across a
+/// step, a photo's full target) and a frame from before a load are not its readings.
+#[test]
+fn the_reflection_reading_is_the_newest_frame_drawn_at_the_rungs_step() {
+    use oag_display::display::ReflectionResolution;
+    let readings = [
+        reading(40, "glass", 0.009),
+        reading(40, "hud and ui", 0.001),
+        reading(41, "glass", 0.013),
+        reading(41, "shadow map", 0.002),
+        reading(42, "glass", 0.020),
+        reading(42, "hud and ui", 0.001),
+        reading(43, "hud and ui", 0.001),
+    ];
+    let mut drawn: Drawn<Option<ReflectionResolution>> = Drawn::default();
+    drawn.mark(40, Some(ReflectionResolution::Half));
+    drawn.mark(41, Some(ReflectionResolution::Half));
+    drawn.mark(42, Some(ReflectionResolution::Original));
+    drawn.mark(43, Some(ReflectionResolution::Half));
+    let at = |step| move |frame| drawn.get(frame) == Some(Some(step));
+    let (glass, passes) =
+        reflection_reading(&readings, 0, at(ReflectionResolution::Half)).expect("frame 41");
+    assert!((glass - 0.013).abs() < 1e-7 && (passes - 0.015).abs() < 1e-7);
+    let (glass, _) =
+        reflection_reading(&readings, 0, at(ReflectionResolution::Original)).expect("frame 42");
+    assert!((glass - 0.020).abs() < 1e-7);
+    assert_eq!(
+        reflection_reading(&readings, 41, at(ReflectionResolution::Half)),
+        None,
+        "frames up to a load are not readings"
+    );
+    assert_eq!(
+        reflection_reading(&readings, 0, at(ReflectionResolution::Quarter)),
+        None
     );
 }

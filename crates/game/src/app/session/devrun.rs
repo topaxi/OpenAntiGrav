@@ -166,6 +166,7 @@ impl Session {
         }
         let ms = |s: Option<oag_present::perf::Stats>| s.map(|s| s.mean_ms);
         let stage = self.dev_stage_name();
+        let reflection = self.reflection_drawn_name();
         let passes: Vec<(&'static str, f32)> = self
             .pass_costs
             .rows()
@@ -189,6 +190,7 @@ impl Session {
                 render,
                 governor: self.governor.level(),
                 passes: &passes,
+                reflection,
             })
         );
     }
