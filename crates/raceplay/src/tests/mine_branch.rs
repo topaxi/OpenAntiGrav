@@ -150,3 +150,44 @@ fn an_omega_forked_circuit_lays_mines_on_its_branch() {
         assert!(on_branch > 0, "omega {track}: nothing laid on the branch");
     }
 }
+
+/// **2048's placer walks the fork the same way** (`FUN_8117cf22`: its step `0x81214f6a` called
+/// with selectors 2 at `0x8117d058`, 3 at `0x8117d6fa`, 1 at `0x8117d366` and `0x8117d9c8`), and
+/// HD's `zone_3` as 2048's DLC ships it gets branch mines.
+#[test]
+#[ignore = "needs the unpacked 2048 packages in data/extracted/"]
+fn a_2048_forked_circuit_lays_mines_on_its_branch() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../data/extracted/vita/PCSF00007");
+    if !path.join("patch-v104").exists() {
+        assert!(
+            std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
+            "OAG_REQUIRE_GAME_DATA is set but {} is missing",
+            path.display()
+        );
+        return;
+    }
+    let track = r"data\art\published\DLC1\environments\zone_3\track.vex";
+    let loaded = crate::load(&crate::Options {
+        source: path.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: Mode::Detonator,
+        track: Some(track.to_string()),
+        no_effects: true,
+        ..crate::Options::default()
+    })
+    .expect("loading a 2048 Detonator race");
+    let race = Race::start(loaded.setup, loaded.view, loaded.modules);
+    let detonator = race.core.sim.detonator.as_ref().expect("a Detonator race");
+    let ring = detonator.survey.entries.len();
+    let laid = lay_all(&race, 0x5eed);
+    let on_branch = laid
+        .iter()
+        .filter(|&&(_, _, entry, _)| usize::from(entry) >= ring)
+        .count();
+    println!(
+        "2048 {track}: {} objects, {on_branch} on the branch",
+        laid.len()
+    );
+    assert!(on_branch > 0, "2048 {track}: nothing laid on the branch");
+}

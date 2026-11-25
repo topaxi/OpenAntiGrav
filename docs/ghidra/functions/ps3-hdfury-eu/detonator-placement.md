@@ -295,9 +295,19 @@ before the change. `a_forked_circuit_lays_mines_on_its_branch` fails without `Su
 neighbour list inlined (`+0x28` count, `+0x68` list, `0x012a27a1`-`0x012a27db`) and the clearance
 compare (`vucomiss` at `0x012a293a`, `jbe` skip). Ours runs the same builder on Omega's circuits:
 `an_omega_forked_circuit_lays_mines_on_its_branch` (`05_ubermall`, `15_anulpha_pass`; Omega's
-`zone_3` decodes to no triangles). **2048: checked, applies, not wired**: its placer
-(`FUN_8117cf22`) has the same structure (`vita-2048-eu-v104/detonator-placement.md`), but 2048 has
-no Detonator mode to place into; the fork walk inside it was not read line by line.
+`zone_3` decodes to no triangles). **2048: ported.** `FUN_8117cf22` calls its step (`0x81214f6a`,
+12 calls) with selector `2` at `0x8117d058`, `3` at `0x8117d6fa` and `1` at `0x8117d366` and
+`0x8117d9c8`; the filter between them was not read line by line. Ours runs the same builder on
+2048's Detonator races: `a_2048_forked_circuit_lays_mines_on_its_branch` (HD's `zone_3` as the
+DLC1 pack ships it: the same 565-entry ring, 469 alternate entries in the lap; `zone_1` has no
+fork; 2048's own circuits were not censused).
+
+**Open: a live read.** The filter sits at 65 until a run shows it. On a forked circuit, read
+`rm+0x6de4c` (the entry count) after race start: ours is `1033` on `zone_3`, `877` on
+`05_ubermall`, `1052` on `15_anulpha_pass` (`565`, `796`, `855` ring only), possibly one more on
+the original if its walk stores the start section at both ends. One count settles the order and
+the filter together; the entries at `*(rm+0x6de50)` (48 bytes, cursor at `+0x0c`) show which
+alternate sections entered.
 
 | Address | Name | Confidence |
 | --- | --- | ---: |
