@@ -277,10 +277,12 @@ pub const TITLE: &Title = &Title {
         // Read statically off HD's `Rocket_Init` (`0x00124d90`) and its siblings, confidence 86:
         // `ps3-hdfury-eu/projectile-launch-normal.md`.
         launch_normal_is_track_up: oag_title::pre_race::Sourced::measured(true),
-        // Pulse's arms are measured; this title's own are unread.
-        floor_arms_steer_to_ride_point: oag_title::pre_race::Sourced::chosen(false),
-        // Pure's law alone: this title's `Rocket_Update` and `Plasma_Update` are unread.
-        floor_arms_ride_launch_normal: oag_title::pre_race::Sourced::chosen(false),
+        // The Plasma's and Rockets' floor arm turns the velocity parallel to the floor, measured
+        // live on Moa Therma's bank (`ps3-hdfury-eu/plasma.md`, "On Moa Therma's bank").
+        floor_arms_steer_to_ride_point: oag_title::pre_race::Sourced::measured(false),
+        // The parallel turn follows each floor, measured live on Moa Therma's bank
+        // (`ps3-hdfury-eu/plasma.md`, "On Moa Therma's bank").
+        floor_arms_ride_launch_normal: oag_title::pre_race::Sourced::measured(false),
         // Read statically off `Plasma_Launch` (`0x0011f810`) and measured live on RPCS3:
         // `ps3-hdfury-eu/plasma.md`, "Measured live".
         plasma_release_at_display_scale: oag_title::pre_race::Sourced::measured(false),

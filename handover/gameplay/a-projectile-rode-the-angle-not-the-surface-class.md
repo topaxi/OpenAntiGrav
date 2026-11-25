@@ -1,8 +1,8 @@
 ---
 status: re-first
 titles: [all]
-updated: 2026-11-12
-summary: "Launch normal is track up on every title (landed); HD's own projectile update unread; Omega Ubermall misses more often with it"
+updated: 2026-11-25
+summary: "HD floor arm measured and wired (parallel turn); open: HD Rocket 0.75 launch hold, Plasma probe window, Shuriken, Omega Sol Ace reset loop"
 difficulty: medium (35)
 ---
 
@@ -47,8 +47,32 @@ nothing on the title axis; the gameplay determinism reference did not move.
   The next test likely to redden on an unrelated change; if it
   reddens on an unrelated change, judge it on `GATE` the way Amphiseum is
   (`omega_original_ai_ground_truth.rs`), with its own miss rate, rather than re-picking a seed.
-- **HD's own projectile update is unread.** `ps3-hdfury-eu` is imported; the
-  fix is Pulse's model on HD's geometry, which the measurement supports.
+- ~~**HD's own projectile update is unread.**~~ **2026-11-25 (`floor-followers`): its floor arm
+  is measured live** on Moa Therma's bank and wired. The Plasma's and the Rockets' velocity is
+  turned parallel to the floor, not steered at the ride point, and the Plasma's ramp is read at
+  `age + dt` ([plasma.md](../../docs/ghidra/functions/ps3-hdfury-eu/plasma.md), "On Moa Therma's
+  bank"). Still open from that run:
+  - **HD's Rockets fly 222.2 units/s from the first frame**, Venom's class speed with no 0.75
+    launch hold, but `rocket::launch` applies `LAUNCH_SPEED_SCALE` on every title. Ready to wire
+    behind a title field, the way `plasma_release_at_display_scale` is. Size S.
+  - **The Plasma's probe window.** HD's bolt already rides on the frame 1/30 s after release;
+    ours skips the probe for 0.04 s (`UNMEASURED_PLASMA_PROBE_WINDOW`, chosen). A 60 Hz capture
+    of the first three ticks would settle it.
+  - **`Rocket_Update` (`0x00123fb0`) does not decompile.** Its body stops at `0x00126c38`,
+    whose wrong no-return flag was cleared. Re-disassemble it and read the arm statically.
+  - **The Shuriken on HD.** No object with the vtable at TOC `0x008ad4d8 - 0x833*4`
+    (`0x864bf8`) exists in a Single Race, and pickup states 3, 6 and 10 create none. The second
+    TOC (`0x008bd3c4`) was not probed. About 15 min on a live RPCS3 race with
+    `scripts/rpcs3-hd-bank-shot.py`.
+  - **2048 and Omega** inherit the arm from HD. Neither was run live.
+  - **`sol_ground_truth::a_field_of_seven_laps_omega_sol_at_ace` reddens with the new arm.** It
+    is deterministic and ignores `OAG_PERTURB`. Slot 1 falls into a reset zone, is put back at
+    sample 941, takes the path-5168 branch near sample 1289, and is reset to 941 again near 1350,
+    28 times. It holds a Cannon and is never hit. The weapons only changed which race history
+    leads there; the loop is in the respawn's `last_good` on Sol's fork.
+  - The `*_original_ai_ground_truth` noise sweep with the new arm, over
+    `0, +-1e-3, +-1e-4, +-1e-5, +-1e-6`: failing tests `1 0 0 0 1 0 0 0 0`. Ubermall as Phantoms
+    fails unperturbed and `reference_racer_reads_63` at `-1e-4`, both listed as flaky above.
 - **The HD autopilot beaches on Sebenco Climb (t=1560), Chenghou Project,
   Talon's Junction, Amphiseum and Vineta K** within 90 s at VENOM, so a
   full-lap HD volley trace exists only for Sol 2 and Anulpha Pass. Not this

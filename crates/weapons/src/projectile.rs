@@ -548,8 +548,11 @@ pub enum FloorArms {
     /// Plasma's do; the Shuriken's probe arm and the Rocket's and Shuriken's sweep arm write
     /// `(ride point - start) / dt` raw, with no rescale; the Plasma's sweep arm only moves.
     SteerToRidePoint,
-    /// Every arm not already a steer turns the velocity parallel to the floor and keeps its
-    /// length, and the sweep adopts the normal. A title's own arms are unread (chosen).
+    /// Every arm turns the velocity parallel to the floor at the weapon's speed, and the sweep
+    /// adopts the normal. HD's Plasma and Rockets, measured live on Moa Therma's bank: the
+    /// velocity is perpendicular to the carried normal on every frame
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/plasma.md`, "On Moa Therma's bank"). HD's sweep arm
+    /// is unread (chosen).
     ParallelToFloor,
     /// Pure's: the Rocket and the Plasma sweep first, then probe and ride along the normal they
     /// were launched with, which they never change ([`launch_normal`]). Every other weapon
