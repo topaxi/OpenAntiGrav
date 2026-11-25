@@ -15,7 +15,7 @@
 
 use serde_json::Value;
 
-use super::photo_mode_ground_truth::{Run, drive_binary, pulse};
+use super::photo_mode_ground_truth::{Run, drive_binary, drive_binary_with_soundtrack, pulse};
 
 /// To a race of `mode` on the RACE page, 400 ticks in.
 fn to_the_race(mode: &str) -> String {
@@ -148,6 +148,42 @@ fn a_compare_shot_lists_the_game_manual_the_live_pause_leaves_out() {
             "Quit race"
         ]
     );
+}
+
+/// Where the track list's forward arrow is, in window pixels, on the two long pages below: the
+/// PSP's own seven-row Speed Lap screen keeps the list at the disc's `y`, the PS2 drawing the
+/// PSP's six rows on its grid has it under QUIT RACE (`docs/ui/pause-menu.md`, "Pulse"). A
+/// click anywhere else is a click on a row, which does not pick a song.
+#[test]
+#[ignore = "needs disc images in data/images/ and a GPU adapter"]
+fn the_track_list_is_clickable_where_the_page_leaves_room_for_it() {
+    let (Some(psp), Some(ps2)) = (pulse(), oag_testdata::image("pulse-ps2-eu.chd")) else {
+        return;
+    };
+    for (image, mode, tag, at) in [
+        (psp, "speed_lap", "list-psp", "120 666"),
+        (ps2, "time_trial", "list-ps2", "128 579"),
+    ] {
+        let run = drive_binary_with_soundtrack(
+            env!("CARGO_BIN_EXE_oag-game"),
+            &image,
+            &format!("pause-{tag}"),
+            &format!(
+                "{} {OPEN} draw; mouse {at}; click; ticks 5; press start; until stage=race; \
+                 ticks 30",
+                to_the_race(mode)
+            ),
+            &std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("pause-shots"),
+            &["--original-menu"],
+        );
+        assert!(run.status.success(), "{tag}: {}", run.stderr);
+        assert!(
+            run.stderr
+                .contains("pause music list: the race resumes on playlist song "),
+            "{tag}: the click at {at} stepped no song: {}",
+            run.stderr
+        );
+    }
 }
 
 /// Pulse's pause keeps the HUD on screen under the tint, dimmed with the rest: the paused frame's lower-left
