@@ -84,7 +84,7 @@ impl Tint {
     #[must_use]
     pub fn sprite(self, sprite: &Sprite) -> Sprite {
         let mut rgba = sprite.rgba.to_vec();
-        for texel in rgba.chunks_exact_mut(4) {
+        for texel in rgba.as_chunks_mut::<4>().0 {
             let rgb = [texel[0], texel[1], texel[2]].map(|c| f32::from(c) / 255.0);
             for (byte, value) in texel.iter_mut().zip(self.apply_within(rgb, 1.0)) {
                 *byte = (value * 255.0).round().clamp(0.0, 255.0) as u8;
