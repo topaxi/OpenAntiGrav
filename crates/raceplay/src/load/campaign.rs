@@ -177,6 +177,7 @@ fn resolve(options: &Options, event_name: &str) -> Result<(Options, EventPlan)> 
 
     let mut resolved = options.clone();
     resolved.mode = mode;
+    resolved.eliminator_score_target = oag_2048::campaign::elimination_score_target(&doc, &event);
     // The campaign's own controller flies every class its event authors.
     resolved.no_driver_for_class = false;
 

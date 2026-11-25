@@ -7,8 +7,8 @@ pub enum EliminatorRule {
     /// The first craft to a kill target ends it: Pulse
     /// (`docs/ghidra/functions/psp-pulse-usa/eliminator-kill-target.md`).
     Kills,
-    /// The first craft to a score target ends it: HD and Fury
-    /// (`docs/ghidra/functions/ps3-hdfury-eu/eliminator-score.md`).
+    /// The first craft to a score target ends it: HD and Fury, and 2048 and Omega on the same
+    /// awards (`docs/ghidra/functions/ps3-hdfury-eu/eliminator-score.md`, "Other titles").
     Score(ScoreRule),
 }
 
@@ -21,7 +21,7 @@ pub struct FlipRule {
     pub seconds: f32,
 }
 
-/// The awards of a score Eliminator and where a Racebox race's target is authored.
+/// The awards of a score Eliminator and where a Racebox race's target comes from.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ScoreRule {
     /// Points per point of damage dealt.
@@ -32,6 +32,16 @@ pub struct ScoreRule {
     pub lap: f32,
     /// Points a destroyed craft loses, never below zero. Not scaled.
     pub death: f32,
-    /// The definition holding the Racebox slider whose minimum is the target a race starts on.
-    pub race_setup: &'static str,
+    /// The target a race starts on when no event authors one.
+    pub target: ScoreTarget,
+}
+
+/// Where a score Eliminator's target comes from outside an event.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScoreTarget {
+    /// The definition holding the Racebox slider whose minimum is the target, and whose steps
+    /// the `TARGET` row offers.
+    Slider(&'static str),
+    /// The executable's own default, for a title with no such slider.
+    Fixed(u32),
 }

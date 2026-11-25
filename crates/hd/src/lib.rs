@@ -93,7 +93,9 @@ pub const TITLE: &Title = &Title {
             kill: 20.0,
             lap: 5.0,
             death: 5.0,
-            race_setup: r"Data\Plugins\Frontend\Gui\racebox_definition.xml",
+            target: oag_title::eliminator::ScoreTarget::Slider(
+                r"Data\Plugins\Frontend\Gui\racebox_definition.xml",
+            ),
         }),
     ),
     // `docs/ghidra/functions/ps3-hdfury-eu/eliminator-flip.md`: `5 pi` rad/s, read live.

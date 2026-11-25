@@ -91,7 +91,9 @@ pub const TITLE: &Title = &Title {
             kill: 20.0,
             lap: 5.0,
             death: 5.0,
-            race_setup: r"Data\Plugins\Frontend\Gui\racebox_definition.xml",
+            target: oag_title::eliminator::ScoreTarget::Slider(
+                r"Data\Plugins\Frontend\Gui\racebox_definition.xml",
+            ),
         }),
     ),
     // Read in this title's own executable: `pi` over the craft's `<Misc eliminator_flip_time>`,

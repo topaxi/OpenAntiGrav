@@ -676,6 +676,28 @@ pub struct EventOutcome {
     /// Opponent kills scored so far - meaningful only for
     /// [`objective_type::KILLS`], gated on nothing else for the same reason.
     pub kills: u32,
+    /// The Eliminator score so far, whole points: an [`EventKind::Elimination`] event's
+    /// [`objective_type::BEAT_VALUE`] metric.
+    pub score: u32,
+}
+
+/// The score an Elimination event's race ends on: its elite bar, else its pass bar, when it is
+/// a [`objective_type::BEAT_VALUE`]. `None` for every other event, whose race takes the title's
+/// default.
+///
+/// **Chosen, not measured:** the elite bar, so both bars are in reach. The executable moves the
+/// target its HUD shows from the pass value to the elite one once the pass is met
+/// (`docs/formats/2048-campaign.md`, "The objective law"); its end test is unread.
+#[must_use]
+pub fn elimination_score_target(document: &Document, event: &Event) -> Option<u32> {
+    if event.kind != EventKind::Elimination {
+        return None;
+    }
+    let objectives = event_objectives(document, event)?;
+    [objectives.elite, objectives.pass]
+        .into_iter()
+        .find(|rule| rule.objective_type == Some(objective_type::BEAT_VALUE))
+        .and_then(|rule| u32::try_from(rule.target?).ok())
 }
 
 /// Which of an event's own two authored bars an [`EventOutcome`] cleared.
@@ -691,18 +713,10 @@ pub enum Tier {
 /// The best [`Tier`] `outcome` earns against `objectives`'s own pass/elite
 /// rules, or `None` when neither is met.
 ///
-/// **One case never awards a tier at all, on purpose.** An
-/// [`EventKind::Elimination`] event's own [`objective_type::BEAT_VALUE`]
-/// objective (all 15 measured instances, targets `25`-`100`) has no metric
-/// this engine can name with any confidence: `oag_race::Standing::kills`
-/// (the only per-race count 2048's own simulation tracks) never approaches
-/// those numbers in a real match, and nothing else - a damage total, a
-/// points score - is tracked at all. Confidence under 50 for any specific
-/// guess, so none is made; see `docs/formats/2048-campaign.md`'s "what is
-/// not determined" section. An Elimination event still plays and still
-/// unlocks whatever names it as a prerequisite (gated on `finished`, not on
-/// a medal - see `oag_game`'s own unlock-gate evaluator), it simply never
-/// carries a medal.
+/// An [`EventKind::Elimination`] event's [`objective_type::BEAT_VALUE`] is the player's score
+/// at or above the target, whether or not the player finished: the executable's evaluator
+/// compares the pilot's score field with the value (`docs/formats/2048-campaign.md`,
+/// "The objective law").
 #[must_use]
 pub fn evaluate_tier(objectives: &EventObjectives, outcome: &EventOutcome) -> Option<Tier> {
     if objective_met(objectives.kind, objectives.elite, outcome) == Some(true) {
@@ -716,9 +730,7 @@ pub fn evaluate_tier(objectives: &EventObjectives, outcome: &EventOutcome) -> Op
 
 /// `None` means "cannot be graded" (an unfinished attempt against a rule
 /// that needs one, or a rule this function does not know how to read) -
-/// never "failed". [`evaluate_tier`] treats both the same way (no tier),
-/// but keeping them apart here is what let this function's own doc comment
-/// state the Elimination gap as "never guessed" rather than "always fails".
+/// never "failed". [`evaluate_tier`] treats both the same way (no tier).
 fn objective_met(kind: EventKind, rule: ObjectiveRule, outcome: &EventOutcome) -> Option<bool> {
     match rule.objective_type {
         Some(objective_type::FINISH) => Some(outcome.finished),
@@ -737,7 +749,7 @@ fn objective_met(kind: EventKind, rule: ObjectiveRule, outcome: &EventOutcome) -
                 Some(outcome.finish_centiseconds? <= rule.target?)
             }
             EventKind::Zone => Some(i64::from(outcome.zone) >= rule.target?),
-            EventKind::Elimination => None,
+            EventKind::Elimination => Some(i64::from(outcome.score) >= rule.target?),
         },
         Some(_) | None => None,
     }

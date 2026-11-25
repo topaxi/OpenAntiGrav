@@ -92,9 +92,17 @@ pub const TITLE: &Title = &Title {
     front_end: Some(frontend::FRONT_END),
     hud: hud::LAYOUTS,
     hud_art: hud::ART,
-    eliminator: oag_title::pre_race::Sourced::inherited(
-        oag_title::eliminator::EliminatorRule::Kills,
-        "Wipeout Pulse",
+    // HD's awards, read in this title's own executable
+    // (`docs/ghidra/functions/ps3-hdfury-eu/eliminator-score.md`, "Other titles"). There is no
+    // Racebox slider; 200 is what the Elimination manager's constructor writes as its target.
+    eliminator: oag_title::pre_race::Sourced::measured(
+        oag_title::eliminator::EliminatorRule::Score(oag_title::eliminator::ScoreRule {
+            damage: 0.1,
+            kill: 20.0,
+            lap: 5.0,
+            death: 5.0,
+            target: oag_title::eliminator::ScoreTarget::Fixed(200),
+        }),
     ),
     // Read in this title's own executable: `pi` over the craft's `<Misc eliminator_flip_time>`,
     // `0.2` where the file authors none
