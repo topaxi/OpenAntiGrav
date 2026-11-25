@@ -107,6 +107,48 @@ fn flip_ticks(team: Option<&str>) -> Option<u32> {
     Some(ticks)
 }
 
+/// 2048's circuits on Omega take Omega's copy of 2048's layout: the score over the target, and
+/// 2048's rows.
+#[test]
+#[ignore = "needs the extracted package under data/extracted/ps4/"]
+fn an_omega_eliminator_on_a_2048_circuit_heads_its_hud_with_the_score() {
+    let Some(source) = oag_testdata::exact("data/extracted/ps4") else {
+        return;
+    };
+    let loaded = oag_raceplay::load(&oag_raceplay::Options {
+        source: source.display().to_string(),
+        class: "VENOM".to_string(),
+        track: Some(r"Data\Environments2048\altima\track.vex".to_string()),
+        mode: oag_race::Mode::Eliminator,
+        seed: Some(1),
+        no_effects: true,
+        ..oag_raceplay::Options::default()
+    })
+    .expect("loading an Omega Eliminator on Altima");
+    let context = loaded.hud.context().expect("Omega's 2048 layout parses");
+    let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
+    race.tick(&PlayerInputs::none());
+    let list = oag_hud::draw_list(&context, &race.readout());
+    let text: Vec<&str> = list
+        .hud_text
+        .iter()
+        .chain(&list.small_text)
+        .chain(&list.default_text)
+        .chain(&list.skin_text)
+        .filter_map(|draw| match draw {
+            Draw::Text { text, .. } => Some(text.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert!(text.contains(&"0/50"), "the header: {text:?}");
+    let rows = text.iter().filter(|t| t.ends_with(" (0)")).count();
+    assert_eq!(rows, 8, "a row per craft: {text:?}");
+    assert!(
+        !text.iter().any(|t| *t == "POS" || *t == "TIME"),
+        "the bind hides both: {text:?}"
+    );
+}
+
 /// `Auricom2048`'s prototype authors `eliminator_flip_time="0.5"`; the default craft is HD's
 /// lineage and authors none, which leaves the title's 0.2 s.
 #[test]

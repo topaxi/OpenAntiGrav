@@ -465,6 +465,7 @@ pub(crate) fn fixture_view() -> ViewSetup {
         trail_sparks: false,
         request: None,
         campaign_event: false,
+        score_pass: None,
         spark_anchors: Vec::new(),
         // The nearer external view, deliberately a *different* set of round
         // numbers from `chase`: a test that cycles to it and back has to be

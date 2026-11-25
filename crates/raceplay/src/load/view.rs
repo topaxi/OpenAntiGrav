@@ -847,6 +847,7 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
         trail_sparks: options.trail_sparks,
         request: Some(options.replay_setup_on(&track)),
         campaign_event: false,
+        score_pass: None,
         hd_trail: trail_shape.is_some().then_some(hd_trail_red),
         ps2_trail,
         shield_targets: roster::shield_targets(

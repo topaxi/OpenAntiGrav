@@ -22,6 +22,9 @@ pub struct ViewSetup {
     /// reads as "an event object exists" - [`oag_hud::Readout::campaign_event`]. A DLC circuit
     /// raced as the HD or Fury Campaign, or any `--track` race, has none.
     pub campaign_event: bool,
+    /// A campaign event's pass score, where it is below the score the race ends on: the target
+    /// the HUD shows until it is met. Set by [`load_event`](super::load_event).
+    pub score_pass: Option<u32>,
     /// Wipeout HD's trail: `Some` with the per-slot blue-to-red colour mix
     /// when the title authors its ribbon as HD's two-texture template,
     /// `None` on every other source, where the ribbon is the PSP preset.
@@ -319,6 +322,7 @@ impl ViewSetup {
             trail_sparks: false,
             request: None,
             campaign_event: false,
+            score_pass: None,
             hd_trail: None,
             ps2_trail: false,
             // No shield to draw either, and `Palette` has no measured "empty"

@@ -69,7 +69,7 @@ sort_fields! {
         viewpoints, internal_params, zoom, zoom_borrowed, ps2_trail, hd_plasma_blast,
         plasma_blast_law, disruptor_halo_law, disruptor_craft_law, pulse_laid_pose,
         laid_pose_scaled, destroy_camera, absorb_burst, absorb_anchors, hull_reach,
-        trail_sparks, campaign_event, medal_targets, shield_was_up, huds, pair_spoil,
+        trail_sparks, campaign_event, score_pass, medal_targets, shield_was_up, huds, pair_spoil,
         split_gap, incoming_raises, nozzles, nozzle_axes, engine_lights, spu_vertex_lights,
         hull_points, hd_weapon_lights, spark_anchors, collision_fx, effects, handles,
         hd_bomb_blast, bomb_shockwave_fades, hd_missile_blast, detonator_cannon_lights,

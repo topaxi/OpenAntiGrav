@@ -8,6 +8,7 @@
 
 use oag_gameplay::PlayerInputs;
 use oag_gameplay::input::{Button, Input, InputSnapshot};
+use oag_ui::frontend::Draw;
 
 fn press_flip() -> PlayerInputs {
     let mut buttons = Input::EMPTY;
@@ -57,6 +58,57 @@ fn a_2048_elimination_event_races_to_its_elite_score() {
     assert_eq!(
         (objectives.pass.target, objectives.elite.target),
         (Some(50), Some(100))
+    );
+}
+
+/// Everything the HUD writes this frame.
+fn hud_text(context: &oag_hud::Context<'_>, readout: &oag_hud::Readout) -> Vec<String> {
+    let list = oag_hud::draw_list(context, readout);
+    list.hud_text
+        .iter()
+        .chain(&list.small_text)
+        .chain(&list.default_text)
+        .chain(&list.skin_text)
+        .filter_map(|draw| match draw {
+            Draw::Text { text, .. } => Some(text.clone()),
+            _ => None,
+        })
+        .collect()
+}
+
+/// The native layout heads the race with the score over the pass bar, then over the elite one
+/// once the pass is met, with `Name (score)` rows and no `POS` or `TIME`.
+#[test]
+#[ignore = "needs the extracted package under data/extracted/vita/"]
+fn a_2048_elimination_event_heads_its_hud_with_the_score_over_its_bar() {
+    let Some(source) = oag_testdata::exact("data/extracted/vita/PCSF00007") else {
+        return;
+    };
+    let options = oag_raceplay::Options {
+        source: source.display().to_string(),
+        class: "VENOM".to_string(),
+        seed: Some(1),
+        no_effects: true,
+        ..oag_raceplay::Options::default()
+    };
+    let loaded = oag_raceplay::load_event(&options, "2048 - Event 4-2")
+        .expect("loading a 2048 Elimination event");
+    let context = loaded.hud.context().expect("2048's layout parses");
+    let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
+    race.tick(&PlayerInputs::none());
+    let text = hud_text(&context, &race.readout());
+    assert!(text.iter().any(|t| t == "0/50"), "the header: {text:?}");
+    let rows = text.iter().filter(|t| t.ends_with(" (0)")).count();
+    assert_eq!(rows, 8, "a row per craft: {text:?}");
+    assert!(
+        !text.iter().any(|t| t == "POS" || t == "TIME"),
+        "the bind hides both: {text:?}"
+    );
+    race.core.sim.world.ships[0].standing.score = 60.0;
+    let text = hud_text(&context, &race.readout());
+    assert!(
+        text.iter().any(|t| t == "60/100"),
+        "past the pass: {text:?}"
     );
 }
 

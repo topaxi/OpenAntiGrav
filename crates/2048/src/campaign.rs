@@ -681,32 +681,41 @@ pub struct EventOutcome {
     pub score: u32,
 }
 
-/// What an event sets on its race before the load: [`engine_mode`]'s token and
-/// [`elimination_score_target`]. `None` for an event this engine has no mode for.
-#[must_use]
-pub fn race_terms(document: &Document, event: &Event) -> Option<(&'static str, Option<u32>)> {
-    Some((
-        engine_mode(event)?,
-        elimination_score_target(document, event),
-    ))
+/// What an event sets on its race before the load.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RaceTerms {
+    /// [`engine_mode`]'s token.
+    pub mode: &'static str,
+    /// The score an Elimination event's race ends on: its elite bar, else its pass bar, when it
+    /// is a [`objective_type::BEAT_VALUE`]. `None` for every other event, whose race takes the
+    /// title's default.
+    ///
+    /// **Chosen, not measured:** the elite bar, so both bars are in reach. The executable's end
+    /// test is unread (`docs/formats/2048-campaign.md`, "The objective law").
+    pub score_target: Option<u32>,
+    /// The pass bar below [`Self::score_target`]: the target the original's HUD shows first.
+    pub score_pass: Option<u32>,
 }
 
-/// The score an Elimination event's race ends on: its elite bar, else its pass bar, when it is
-/// a [`objective_type::BEAT_VALUE`]. `None` for every other event, whose race takes the title's
-/// default.
-///
-/// **Chosen, not measured:** the elite bar, so both bars are in reach. The executable moves the
-/// target its HUD shows from the pass value to the elite one once the pass is met
-/// (`docs/formats/2048-campaign.md`, "The objective law"); its end test is unread.
-fn elimination_score_target(document: &Document, event: &Event) -> Option<u32> {
-    if event.kind != EventKind::Elimination {
-        return None;
-    }
-    let objectives = event_objectives(document, event)?;
-    [objectives.elite, objectives.pass]
-        .into_iter()
-        .find(|rule| rule.objective_type == Some(objective_type::BEAT_VALUE))
-        .and_then(|rule| u32::try_from(rule.target?).ok())
+/// `event`'s [`RaceTerms`], `None` for an event this engine has no mode for.
+#[must_use]
+pub fn race_terms(document: &Document, event: &Event) -> Option<RaceTerms> {
+    let mode = engine_mode(event)?;
+    let bars = (event.kind == EventKind::Elimination)
+        .then(|| event_objectives(document, event))
+        .flatten();
+    let bar = |rule: ObjectiveRule| {
+        (rule.objective_type == Some(objective_type::BEAT_VALUE))
+            .then_some(rule.target?)
+            .and_then(|target| u32::try_from(target).ok())
+    };
+    let pass = bars.and_then(|objectives| bar(objectives.pass));
+    let score_target = bars.and_then(|objectives| bar(objectives.elite)).or(pass);
+    Some(RaceTerms {
+        mode,
+        score_target,
+        score_pass: pass.filter(|&pass| Some(pass) < score_target),
+    })
 }
 
 /// Which of an event's own two authored bars an [`EventOutcome`] cleared.

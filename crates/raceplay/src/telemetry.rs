@@ -284,7 +284,11 @@ impl Race {
             race_line: self.core.sim.race_line(slot),
             player_tags: self.player_tags_for(slot),
             kill_target: if self.core.sim.world.mode() == oag_race::Mode::Eliminator {
-                self.core.sim.eliminator_kill_target
+                let score = self.core.sim.world.ships[slot].standing.whole_score();
+                self.view
+                    .score_pass
+                    .filter(|&pass| score < pass)
+                    .unwrap_or(self.core.sim.eliminator_kill_target)
             } else {
                 0
             },

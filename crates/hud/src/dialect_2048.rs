@@ -267,8 +267,10 @@ pub(super) fn releasing_icon(
 /// centre on the digits. **Chosen, not measured:** the original measures a string of as many `3`s
 /// as the value has digits, which equals the value's own width only when the font's digits are
 /// one width.
-pub(super) fn text_align(art: &oag_title::HudArt, label: &Label) -> Align {
-    if art.pickup_icon_uv.is_some() && label.name == "Score" && label.align == Align::Left {
+pub(super) fn text_align(art: &oag_title::HudArt, readout: &Readout, label: &Label) -> Align {
+    // A Zone run alone: an Eliminator's `Score` keeps the authored anchor.
+    let zone = art.pickup_icon_uv.is_some() && readout.zone > 0;
+    if zone && label.name == "Score" && label.align == Align::Left {
         Align::Centre
     } else {
         label.align

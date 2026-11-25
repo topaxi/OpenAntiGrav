@@ -84,6 +84,8 @@ use super::*;
 pub fn load_event(options: &Options, event_name: &str) -> Result<Loaded> {
     let (resolved, plan) = resolve(options, event_name)?;
     let mut loaded = load(&resolved)?;
+    #[cfg(feature = "view")]
+    let score_pass = plan.score_pass;
     let progress = plan.apply(&mut loaded.setup, &mut loaded.report, loaded.title);
     // A campaign event is one of the original's CRC-id modes, whose start is
     // `321_NGP` and `Go_NGP` where a named mode's is `ready` and `go`
@@ -98,6 +100,7 @@ pub fn load_event(options: &Options, event_name: &str) -> Result<Loaded> {
     #[cfg(feature = "view")]
     {
         loaded.view.campaign_event = true;
+        loaded.view.score_pass = score_pass;
     }
     loaded.campaign_2048_event = Some(progress);
     Ok(loaded)
@@ -128,6 +131,9 @@ struct EventPlan {
     event: oag_tables::mjolnir::campaign::Event,
     forced_craft: Option<String>,
     restricted: Vec<&'static str>,
+    /// [`oag_2048::campaign::RaceTerms::score_pass`], the HUD's alone.
+    #[cfg_attr(not(feature = "view"), allow(dead_code))]
+    score_pass: Option<u32>,
 }
 
 fn resolve(options: &Options, event_name: &str) -> Result<(Options, EventPlan)> {
@@ -166,19 +172,18 @@ fn resolve(options: &Options, event_name: &str) -> Result<(Options, EventPlan)> 
         )
     })?;
 
-    let (mode_name, score_target) =
-        oag_2048::campaign::race_terms(&doc, &event).ok_or_else(|| {
-            anyhow::anyhow!(
-                "{event_name:?} is a {:?} event, and this engine has no mode for that kind yet",
-                event.kind
-            )
-        })?;
-    let mode = Mode::from_name(mode_name)
-        .ok_or_else(|| anyhow::anyhow!("oag_2048::campaign::engine_mode returned {mode_name:?}, which oag_race::Mode does not recognise"))?;
+    let terms = oag_2048::campaign::race_terms(&doc, &event).ok_or_else(|| {
+        anyhow::anyhow!(
+            "{event_name:?} is a {:?} event, and this engine has no mode for that kind yet",
+            event.kind
+        )
+    })?;
+    let mode = Mode::from_name(terms.mode)
+        .ok_or_else(|| anyhow::anyhow!("oag_2048::campaign::engine_mode returned {:?}, which oag_race::Mode does not recognise", terms.mode))?;
 
     let mut resolved = options.clone();
     resolved.mode = mode;
-    resolved.eliminator_score_target = score_target;
+    resolved.eliminator_score_target = terms.score_target;
     // The campaign's own controller flies every class its event authors.
     resolved.no_driver_for_class = false;
 
@@ -245,6 +250,7 @@ fn resolve(options: &Options, event_name: &str) -> Result<(Options, EventPlan)> 
             event,
             forced_craft,
             restricted,
+            score_pass: terms.score_pass,
         },
     ))
 }
@@ -264,6 +270,7 @@ impl EventPlan {
             event,
             forced_craft,
             restricted,
+            score_pass: _,
         } = self;
         if let Some(forced) = forced_craft {
             report.push(format!("{event_name:?} forces the player craft: {forced}"));
