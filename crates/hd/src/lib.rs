@@ -286,6 +286,9 @@ pub const TITLE: &Title = &Title {
         // Read statically off `Plasma_Launch` (`0x0011f810`) and measured live on RPCS3:
         // `ps3-hdfury-eu/plasma.md`, "Measured live".
         plasma_release_at_display_scale: oag_title::pre_race::Sourced::measured(false),
+        // The fire path orthonormalises the launch matrix, and live the rockets hold the
+        // class speed (`ps3-hdfury-eu/plasma.md`, "The Rocket's launch scale").
+        rocket_launch_at_display_scale: oag_title::pre_race::Sourced::measured(false),
         // A box branch is read, but its surface filter and row sign are open, 65
         // (`ps3-hdfury-eu/own-craft-box.md`).
         own_craft_box_hides_track: oag_title::pre_race::Sourced::chosen(

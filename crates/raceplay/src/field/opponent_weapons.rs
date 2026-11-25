@@ -61,6 +61,7 @@ impl RaceSim {
         else {
             return false;
         };
+        let release = self.rocket_release();
         let ship = &self.world.ships[slot];
         // `None` where the weapon table authors a speed per class and this
         // race's rung is outside them - the shot does not happen rather than
@@ -73,6 +74,7 @@ impl RaceSim {
             slot as u8,
             ship.weapon_counts.rockets,
             ship.launch_normal(),
+            release,
         ) else {
             return false;
         };

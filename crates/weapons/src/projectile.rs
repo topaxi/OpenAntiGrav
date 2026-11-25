@@ -571,26 +571,28 @@ impl FloorArms {
     }
 }
 
-/// How fast a Plasma bolt leaves the craft's weapon node, until its first floor ride.
+/// Whether a projectile leaves with the craft's display scale in its launch matrix, flying
+/// slower than its authored speed until its first floor ride.
 ///
-/// `Weapons::plasma_release_at_display_scale` picks per title.
+/// `Weapons::plasma_release_at_display_scale` picks it per title for the Plasma bolt and
+/// `Weapons::rocket_launch_at_display_scale` for the Rocket.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PlasmaRelease {
-    /// Pulse's: `Plasma_Launch` takes the weapon-node matrix with the craft's display scale
-    /// in it, so the bolt leaves at [`plasma::LAUNCH_SPEED_SCALE`] x its release speed.
+pub enum LaunchScale {
+    /// Pulse's: `Plasma_Launch` and `Rocket_Init` take the matrix with the craft's display
+    /// scale in it, so the shot leaves at [`rocket::LAUNCH_SPEED_SCALE`] x its speed.
     DisplayScaled,
-    /// HD's: the node matrix is orthonormalised before `Plasma_Launch` reads it, so the bolt
-    /// leaves at its release speed, on its ramp from the first tick
-    /// (`docs/ghidra/functions/ps3-hdfury-eu/plasma.md`, "Measured live").
+    /// HD's: the caller orthonormalises the matrix before either reads it, so the shot
+    /// leaves at its speed from the first tick (`docs/ghidra/functions/ps3-hdfury-eu/plasma.md`,
+    /// "Measured live" and "The Rocket's launch scale").
     Unscaled,
 }
 
-impl PlasmaRelease {
-    /// What the release speed is multiplied by.
+impl LaunchScale {
+    /// What the launch speed is multiplied by.
     #[must_use]
     pub fn scale(self) -> f32 {
         match self {
-            Self::DisplayScaled => plasma::LAUNCH_SPEED_SCALE,
+            Self::DisplayScaled => rocket::LAUNCH_SPEED_SCALE,
             Self::Unscaled => 1.0,
         }
     }
@@ -622,7 +624,7 @@ pub fn step<R: Raycaster + ?Sized, S: Craft>(
     class: &str,
     floor_arms: FloorArms,
     own_craft: OwnCraftProbe,
-    plasma_release: PlasmaRelease,
+    plasma_release: LaunchScale,
     push: BlastPush,
     rules: oag_physics::DamageRules,
     hits: &mut [WeaponHit],

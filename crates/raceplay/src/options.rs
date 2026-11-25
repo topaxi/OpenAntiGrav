@@ -713,6 +713,8 @@ pub struct SimSetup {
     /// Whether a Plasma bolt leaves at the craft's display scale,
     /// `oag_title::weapons::Weapons::plasma_release_at_display_scale`.
     pub plasma_release_at_display_scale: bool,
+    /// `oag_title::weapons::Weapons::rocket_launch_at_display_scale`.
+    pub rocket_launch_at_display_scale: bool,
     /// What the firing craft's box does to its projectiles' first probes,
     /// `oag_title::weapons::Weapons::own_craft_box_hides_track`.
     pub own_craft_box_hides_track: oag_title::weapons::OwnCraftBox,

@@ -241,7 +241,7 @@ fn flyer_velocity_after_one_update(
         "VENOM",
         FloorArms::SteerToRidePoint,
         own_craft,
-        PlasmaRelease::DisplayScaled,
+        LaunchScale::DisplayScaled,
     );
     projectiles.slots[0].velocity
 }

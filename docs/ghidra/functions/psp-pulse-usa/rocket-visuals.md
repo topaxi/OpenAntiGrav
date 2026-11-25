@@ -729,7 +729,7 @@ the original's is at z -197.0, which alone moves the detonation by 30 ticks.
 | Law | Source | Ours now |
 | --- | --- | --- |
 | cruise speed is the class's, 222.22 u/s on Venom | live, two probes | `rocket::launch` |
-| launch speed is 0.75 x that until the first surface-probe hit | live (rows 0.7500) | `LAUNCH_SPEED_SCALE`; class speed rides in `Projectile::launch_speed_kmh` |
+| launch speed is 0.75 x that until the first surface-probe hit | live (rows 0.7500) | `LAUNCH_SPEED_SCALE`, on the titles whose `Weapons::rocket_launch_at_display_scale` is set (Pulse, Pure; [HD has no hold](../ps3-hdfury-eu/plasma.md#the-rockets-launch-scale)); class speed rides in `Projectile::launch_speed_kmh` |
 | spawn at the craft's own position | live, to 0.1 unit | `launch` |
 | the stored normal `self+0x100` is seeded from the craft (`-(craft+0xb10)`), the first probe goes along it | decompiled `Rocket_Init`; live rows `(-0.03, 1.0, 0.05)`; `+0xb10` is the located track point's down, not the craft's up ("The launch normal is the track's, not the craft's") | `Projectiles::spawn_riding` seeds `Craft::launch_normal`: `Ship::track_up`, the up of the sample the step located the craft on, else the craft's up |
 | **the probe-hit arm steers toward the ride point** | decompiled `Rocket_Update`, confidence **88** | `flight.rs`, Rocket only |

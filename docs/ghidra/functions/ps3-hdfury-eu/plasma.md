@@ -1113,3 +1113,67 @@ Moa Therma). Two traps on the way:
   compatible"), so the run starts from a cold boot.
 - A GDB port whose stub (`port + 1000`) is reset by another client 0.85 s after it opens kills the
   serve. Pick another port.
+
+## The Rocket's launch scale
+
+HD's Rocket leaves at its class speed, with no 0.75 hold. Pulse's and Pure's `Rocket_Init` take
+the craft's display matrix with `0.75` in it
+([rocket-visuals.md](../psp-pulse-usa/rocket-visuals.md),
+[floor-follow.md](../psp-pure-usa/floor-follow.md)); HD's does not. Confidence **90**: the code
+below and the live records agree.
+
+**Static** (`EBOOT.elf`, disassembled with `llvm-objdump --mattr=+altivec`; neither function
+decompiles cleanly):
+
+- The local fire path starting at `0x0014b188` copies the launch matrix it is handed, normalizes
+  row 0, takes row 0's component out of row 1 and normalizes it, and rebuilds row 2 as their cross
+  product (`vperm` pair at `0x0014b360`..`0x0014b364`). Its `vsel` takes only the `w` lane from the
+  old row 2 (the mask at `0x00769cd0`). The position row is copied. It then calls `Rocket_Init`
+  (`bl` at `0x0014b374`).
+- `Rocket_Init` (`0x00124d90`) writes the velocity `+0xe0 = row2 * speed * k`, `speed` the class
+  speed and `k` the float at `0x008aa184`, `1 / 3.6`.
+
+So the velocity is a unit vector times the class speed from the spawn.
+
+**Live** (the capture of "On Moa Therma's bank"): all three rockets read `|v|` = 222.16 on their
+first record, and the first recorded step (`previous` to position, one 0.0333 s update) is 7.46,
+7.43 and 7.04 units. A rocket held at 0.75 would step 5.6, if it moved at the velocity it was born
+with (`Rocket_Update` is unread).
+
+**Wired** as `Weapons::rocket_launch_at_display_scale` (HD measured `false`, Pulse and Pure
+measured `true`). Ours moved each rocket 2.78 units on its first 1/60 s tick and now moves it
+3.70 (`crates/raceplay/tests/hd_bank_floor_ground_truth.rs`). A rocket that finds no floor to
+ride also keeps the class speed, where it flew at 0.75 until it met one.
+
+**The whole flights cannot rank the two.** Ours against the original's recorded positions on the
+bank, mean distance from each original rocket's points to our path, in capture slot order:
+
+| Ours | Rocket 0 | Rocket 1 | Rocket 2 |
+| --- | --- | --- | --- |
+| with the hold | 1.67 | 0.45 | 3.41 |
+| at the class speed | 3.71 | 1.29 | 4.04 |
+| at the class speed, launch point shifted -2 to +6 units along the heading (eight runs) | 1.69 to 4.12 | 0.49 to 1.47 | 2.96 to 4.40 |
+
+The fix reads further at the unshifted pose, inside the spread a shift of the launch point gives.
+The original's launch point is not known to better than that: the capture writes the pose at
+`(-173.34, 22.45, -321.50)`, runs one frame and then reads, and the craft reads back at
+`(-168.84, 23.40, -320.25)`, one 1/30 s frame at 140 units/s (4.7 units) further on, so the shot
+left from somewhere in that frame of travel.
+
+The three first records also do not step back to one point: `(-164.39, 23.72, -318.20)`,
+`(-169.95, 21.78, -321.34)` and `(-170.95, 23.78, -319.44)`. The first sits about 6.5 units further
+along the heading than the other two. Whether HD launches that rocket from another point or had
+updated it once more before the first record is **unread**; ours launches all three from the
+craft's position (measured on Pulse only).
+
+**Lineage.** 2048 and Omega: inherited from HD, set `false`. Neither title's fire path was read,
+and neither was run (no memory readout on Omega; 2048 not run).
+
+**2048's Bridge race.** With the inherited value, `vita_2048_original_ai_ground_truth`'s Bridge
+event (`2048 - Event 2-1`, the field firing, the player parked) missed its 300 s limit
+unperturbed. Over the nine `perturb::BOUND_OFFSETS` times the five `perturb::GATE` scales it
+misses in 5 of 45 runs at the class speed and 2 of 45 with 2048 flipped back to the hold, every
+miss a field still on lap 3 at 300 s, and a finished race ends at 270 to 280 s. The two rates are
+too close to tell apart on 45 runs. The test is judged as Tower's is: two of the five `GATE`
+scales must finish.
+

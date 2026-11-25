@@ -80,7 +80,8 @@ world (`*(craft+0x2b8)`, `0x09022030`, 86 colliders: 44 of `+0x6c` type `0`, 33 
 and Omega chosen `false`). Ours keeps the carried normal a unit vector and scales the lengths:
 `PROBE_LENGTH` 9, the rides 2.25 and 4.5, the sweep's push-out 3 along the hit normal unscaled.
 Pure's `launch_normal_is_track_up` is now measured `false` (the craft's up) and its
-`plasma_release_at_display_scale` measured `true` (187.5 against 250 live). The Missile keeps
+`plasma_release_at_display_scale` measured `true` (187.5 against 250 live), as is
+`rocket_launch_at_display_scale` (208.3 against 277.8). The Missile keeps
 Pulse's arms (`FloorArms::for_other_weapons`): Pure's `Missile_Update` is unread.
 
 Acceptance, `crates/raceplay/tests/projectile_bank_ground_truth.rs` (chained from the original's

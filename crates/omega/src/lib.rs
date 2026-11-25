@@ -258,6 +258,11 @@ pub const TITLE: &Title = &Title {
             false,
             "Wipeout HD",
         ),
+        // HD's, inherited: Omega's `Rocket_Init` caller is unread.
+        rocket_launch_at_display_scale: oag_title::pre_race::Sourced::inherited(
+            false,
+            "Wipeout HD",
+        ),
         // The projectile query walks track meshes only (`ps4-omega-eu/own-craft-box.md`).
         own_craft_box_hides_track: oag_title::pre_race::Sourced::measured(
             oag_title::weapons::OwnCraftBox::Absent,

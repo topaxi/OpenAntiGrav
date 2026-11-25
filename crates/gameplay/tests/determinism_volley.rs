@@ -67,6 +67,7 @@ fn run_volley(ticks: u32) -> (u64, u64) {
         0,
         projectile::ROCKET_SHOTS as u8,
         world.ships[0].physics.body.up(),
+        oag_weapons::projectile::LaunchScale::DisplayScaled,
     )
     .expect("Pulse's weapon table authors a Venom rocket speed");
     assert_eq!(
@@ -87,7 +88,7 @@ fn run_volley(ticks: u32) -> (u64, u64) {
             "VENOM",
             oag_weapons::projectile::FloorArms::SteerToRidePoint,
             oag_weapons::projectile::OwnCraftProbe::PlasmaWindow(0.04),
-            oag_weapons::projectile::PlasmaRelease::DisplayScaled,
+            oag_weapons::projectile::LaunchScale::DisplayScaled,
             oag_weapons::projectile::BlastPush::Posted,
             DamageRules::default(),
             &mut [],
@@ -356,6 +357,7 @@ fn the_volley_actually_fans() {
         &stats,
         "VENOM",
         projectile::ROCKET_SHOTS as u8,
+        oag_weapons::projectile::LaunchScale::DisplayScaled,
     )
     .expect("Pulse's weapon table authors a Venom rocket speed");
     let directions: Vec<V> = shots.iter().map(|&(_, velocity)| velocity).collect();

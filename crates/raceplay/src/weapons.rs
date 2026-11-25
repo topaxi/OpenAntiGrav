@@ -342,6 +342,7 @@ impl Race {
                         oag_gameplay::cue::Cue::Rocket,
                         slot,
                     ));
+                    let release = self.core.sim.rocket_release();
                     let ship = &self.core.sim.world.ships[slot];
                     // **Three, together, fanned by `<Rocket spread>`** - see
                     // `oag_weapons::projectile::launch` and
@@ -361,6 +362,7 @@ impl Race {
                         slot as u8,
                         ship.weapon_counts.rockets,
                         ship.launch_normal(),
+                        release,
                     ) else {
                         return;
                     };
