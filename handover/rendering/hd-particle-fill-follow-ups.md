@@ -36,8 +36,6 @@ reaches.
 - **About 1.7 ms of a hit frame at 1080p that is not fill.** With and without the law, ticks 770
   to 774 cost about the same (3.26 ms at the worst before, 3.16 after, on an RX 7800 XT).
   Unprofiled: leave the particle draws, the blast's light and the flash out in turn at 1920x1080.
-- **Every HD, 2048 and Omega comparison pair with a near particle moved**: re-render the weapon
-  and blast pairs.
 - **Omega's passes 8 to 10 by target size** (is one of them a reduced particle target), and
   **Omega's sphere fade** behind `instance + 0x71` (radius 290): what sets it. Both are reads.
 - **The PSP builds' builder**: whether Pulse and Pure have a near rule at all.

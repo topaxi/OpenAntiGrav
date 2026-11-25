@@ -248,6 +248,10 @@ capped. Ticks 429 and 540 of the reproduction draw particles and touch none: the
 are byte-identical before and after at 1920x1080 and 3840x2160. Pulse's craft hits (ticks 700,
 720, 740, 1920x1080) are byte-identical, the law being off there.
 
+No comparison pair moves: all 79 HD, Omega and 2048 pairs (the Detonator ones included),
+re-rendered on scratch copies with the build before and the build with the law, are
+byte-identical. None has a particle the law touches in frame.
+
 ## What is left
 
 The picture has no matched original frame from close range yet, and neither the Deck nor the
