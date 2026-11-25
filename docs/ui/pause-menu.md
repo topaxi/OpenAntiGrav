@@ -134,6 +134,18 @@ wired** (the header is the front end's frame bar, static). GAME MANUAL is drawn 
   `oag_pulse::pause_menu::tests::each_pressing_draws_its_own_music_list` and
   `main_menu_ground_truth::pulses_pause_screens_author_the_music_list_the_table_draws`.
 
+  **The row list reaching the disc's `y` (2026-11-25, ours).** The disc authors its screens clear of the list
+  (the PSP's longest, Speed Lap, has seven rows: the seventh's capitals stand on `y = 219`, the list's line
+  starts at 220). This build can draw a longer page than the disc's own (PS2 below), so the list keeps the
+  disc's `y` while the last row on screen has its capitals' baseline above it (`RowInk::baseline`, the foot of
+  `H`: 19 under the pen on the PSP's menu face, 21 on the PS2's; the capitals' full ink reaches 23 with the
+  tail of `Q`, which would move the disc's own screen) and otherwise starts one row pitch and the note gap
+  under the last row. The arrows and their pointer targets follow the line; the rows' do not move. Frames at
+  1440x816 before and after: every PSP page (five, six and seven rows), the PS2's five-row page and Pure and
+  HD are byte-identical; only the PS2 six and seven row `--original-menu` pages changed, where the song name
+  was drawn over QUIT RACE and RESTART RACE. Tests: `oag_ui::menu::tests::music_list` and
+  `pause_menu_ground_truth::the_track_list_is_clickable_where_the_page_leaves_room_for_it`.
+
   **The pair** (`scripts/pulse-pause.drive`, the original's frame from the
   `time-trial-moa-therma-white-venom-grid` state, START, 4 s, clock 0.40.9; ours played to it, the same frame
   for both columns): whole frame **1.56 % to 1.05 %** of pixels over 40 grey (2,033 to 1,371 px, mean grey 4.17 to
@@ -158,7 +170,8 @@ wired** (the header is the front end's frame bar, static). GAME MANUAL is drawn 
   looked up on the boot's unsurveyed fields, not its background survey's answer (`MusicDiscs::counterpart`, shared with
   the now-playing line); now ours shows `BREAK YA SELF (WIPEOUT REMIX)` after RIGHT (the EU disc's song 1). One
   difference stays: the `--original-menu` still draws the PSP's six rows on PS2 (GAME MANUAL, PHOTO
-  MODE), whose QUIT RACE then sits on the music row (the pause table is the PSP's, `pulses_ps2_pause_screens_*`). **Pure: checked, differs.** Its executable has no `MusicList` class (no string) and its `InGame
+  MODE), so the list stands under the sixth (above) rather than at the original's `y` (the pause table is the
+  PSP's, `pulses_ps2_pause_screens_*`). **Pure: checked, differs.** Its executable has no `MusicList` class (no string) and its `InGame
   Pause` screen authors no music widget; `oag_pure`'s table has none.
 
 Tests: the disc's lists per screen and the default, both pressings and PS2

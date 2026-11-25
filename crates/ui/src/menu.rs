@@ -1366,7 +1366,7 @@ pub fn draw_list(
         None => rows::draw(menu, skin, bindings, frame),
     };
     if let Some(art) = &frame.music_list {
-        music_list::draw(menu, skin, art, &mut layers.body);
+        music_list::draw(menu, skin, frame, art, &mut layers.body);
     }
     layers.body.extend(frame.scroll_arrows_for(
         menu.scroll(),
