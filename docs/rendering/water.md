@@ -1008,7 +1008,103 @@ A discrete desktop GPU spends a tenth of a millisecond on the target; the whole 
 there. The setting exists for a phone: the S21 pays 10.6 ms for the Vineta K glass at render scale 25
 (`docs/tools/android.md`, "Where an HD frame goes on the S21"). Measured on the S21 at render scale 25, Vineta K,
 `quarter` takes the median frame from 41.9 to 24.9 ms (23.5 to 37.9 fps; `docs/tools/android.md`, "What `quarter` buys on Vineta K");
-`half` and the sea circuits are open.
+`half` reads 30.3 ms with the glass pass at 4.9 ms by its own timestamps (below); the sea circuits are open.
+
+### REFLECTION RESOLUTION `auto` (2026-11-25, `auto-reflection`)
+
+**What it does.** `auto`, the default, draws the glass and sea target at `original` and steps it to `half`
+and then `quarter` while the target's own timed pass (the overlay's `GLASS` row, `oag_gpu::timing::stamp`)
+is a large share of a frame that misses its budget, and back when there is room. Decided by measured time
+alone, never by platform, so the same rule runs on a desktop and a phone. It is a rung of the resolution
+controller, `oag_present::drs::reflection` (`docs/rendering/dynamic-resolution.md`, "A third output: the
+reflection step"), and only `auto` moves: a fixed `original`, `half` or `quarter` is drawn as chosen. The step
+is a rectangle of the one texture ("Where" above), so a step costs no allocation.
+
+**The policy** (all thresholds **chosen, not measured**, against the runs below):
+
+- **Signals**, once a frame, smoothed over 0.25 s: the glass pass's GPU time on the newest frame drawn at
+  the step in force (per-frame `PassReading`s, credited by the step each frame drew, so a frame in flight
+  across a step or a photo's full-size frame is never counted), the frame's wall clock, and the frame's timed
+  GPU total (the labelled passes plus the controller's `drs::Cost`).
+- **The budget** is the resolution target's period when one runs, else the rate the frame limiter or the
+  output holds the loop to (`refresh::held_hz`, what the CPU governor reads); with neither the rung is inert.
+- **Down** (`original`, then `half`, then `quarter`, never further) after 0.5 s in which the smoothed frame is
+  over 1.1 of the budget (a paced loop reads a hair over its period; a miss is well over), the glass is at
+  least 10 % of that frame (`SHARE`), and the glass costs at least 1 ms (`FLOOR_SECONDS`). Then 1 s with no
+  decision while the times settle at the new size. The share sits under the S21's `half` share (4.9 of 30.3
+  ms, 16 %) so a phone that still misses at half goes on to quarter; the floor keeps a desktop where it is
+  (the RX 7800 XT's target is 0.12 ms, above).
+- **Before the render scale**: while the rung still has a step to give up and wants it, or is settling after
+  one, an overrun holds the extent instead of falling. With the share under the threshold it never holds.
+- **Up**, one step at a time and only with the extent at its ceiling, when the timed GPU frame less the glass
+  now plus the glass one step up (the ratio between the two steps learned at the step down, as the blur rung
+  learns its saving) lands at or under 0.8 of the budget and the wall clock is not over, for the blur rung's
+  3 s of budget frames running, with its relapse backoff (`drs::patience`, shared).
+- **No timestamps** (`Timing::can_time_a_pass` false, no `pass_stamps`): no reading ever comes, so `auto`
+  stays at `original`, and the loader report says so ("nothing times its pass here"). A headless capture never
+  steps either: the rung lives in the windowed frame loop, so `--screenshot` and the ground truths draw
+  `auto` at the original's size.
+- **A new race** starts the rung again from `original` with nothing learned (the governor's
+  title-track-mode combination); a load keeps the step, as the extent keeps its scale.
+
+**Reported** on the overlay's `GLASS` row (`GLASS QUARTER 1.70 MS`), as `reflection=` at the end of the
+`--frame-log` line (`docs/architecture/logging.md`), in the benchmark result's `settings`
+(`"reflection_resolution": "auto, at quarter"`), and as one `debug` line per step.
+
+**Tests** (each broken and seen red): `drs::reflection::tests` (a desktop cost never leaves `original`; a
+0.6 ms target under the floor is kept at an 11 % share; the S21's costs settle at `quarter` and stay; a cost
+that fits one step down stays there over 300 s; headroom restores one step at a time, no sooner than the 3 s
+run; a restore waits for the extent's ceiling; nothing pacing is inert; reflections reach `quarter` before the
+extent falls under a 60 Hz target; a 2 % share leaves the extent loop identical frame by frame, through falls
+and rises), `scene::behind_glass::tests::a_quarter_rectangle_reads_what_a_quarter_size_target_holds`,
+`session::timing::tests::the_reflection_reading_is_the_newest_frame_drawn_at_the_rungs_step`,
+`perf::cost::tests::the_glass_row_names_the_reflection_step`, and
+`photo_profile_tests::a_photo_draws_the_glass_and_sea_target_at_the_originals_size` (a shot redraws for a step
+below `original`, `auto`'s included, and draws `original`). The `drs::tests` controller suite is unchanged
+and passes.
+
+**Desktop, the picture** (release builds, RX 7800 XT, the `hd_behind_glass_frame_ground_truth` pose and Moa
+Therma's start camera, 960x544): the default (`auto`, drawn `original` in a capture) is pixel-identical to
+main's `original` on both; `quarter` through the rectangle differs from main's quarter-size texture in 72 of
+522,240 pixels by one level, on Vineta K's glass, and looks the same (the view through the glass is as soft,
+no bleed at the edges).
+
+**On the S21** (release `dist` APKs, `OAG_APK_DEV_CLI=1 OAG_APK_PROFILEABLE=1 just apk`; HD/Fury, render scale
+25, `--race --track /data/environments/01_vineta_k/track.vex --autopilot --seed 1 --no-intro --frame-log
+--no-audio`, media volume 0, each arm after AP 32.0 C and skin 31.7 C or less, racing seconds 10 to 100 of the
+frame log, as in `docs/tools/android.md`, "What `quarter` buys on Vineta K"; the budget there is the 240 frame
+limit, `target_hz=240`). Main (`740be5cdb`, the quarter-size allocation) first, then this change, each series
+back to back:
+
+| Build | Arm | Frame ms median / p95 | fps (mean) | glass ms (median) | step |
+| --- | --- | ---: | ---: | ---: | --- |
+| main | `original` | 41.5 / 59.9 | 23.4 | 13.32 | |
+| main | `half` | 30.3 / 57.4 | 30.4 | 4.94 | |
+| main | `quarter` 1, 2 | 28.7, 35.0 / 48.4, 53.4 | 32.3, 28.8 | 1.79, 2.00 | |
+| main | pass skipped (`OAG_SKIP_PASSES=glass`) 1, 2 | 34.4, 26.3 / 43.7, 44.2 | 28.5, 34.3 | 0 | |
+| this | `auto` 1, 2 | 27.5, 27.2 / 38.4, 40.9 | 34.8, 34.3 | 1.68, 1.62 | `quarter` |
+| this | `quarter` 1, 2 | 27.2, 28.9 / 36.1, 41.9 | 35.6, 32.1 | 1.58, 1.69 | |
+| this | pass skipped 1, 2 | 35.2, 27.0 / 38.5, 40.9 | 28.6, 34.0 | 0 | |
+
+`auto` settles at `quarter` (frame log: 6 s at `original`, 4 s at `half`, then `quarter` for the rest of the
+144 s run) and matches the fixed `quarter` within the run-to-run spread: 34.6 against 33.9 fps pooled, medians
+27.2 to 27.5 against 27.2 to 28.9 ms. The rectangle costs nothing measurable over the old quarter-size
+allocation (the full texture's clear and store on a tiler): this change's `quarter` arms read 27.2 and 28.9 ms
+against main's 28.7 and 35.0.
+
+**`off` is not added** (the maintainer's bar: about 4 to 5 fps over `quarter` on the S21). Leaving the pass out
+entirely (`OAG_SKIP_PASSES=glass` on top of `quarter`) read 28.5 and 34.3 fps against `quarter`'s 32.3 and
+28.8 on main (+0.9 fps pooled), and 28.6 and 34.0 against 35.6 and 32.1 on this change (-2.5 fps pooled): inside
+the spread both times, and nowhere near 4 fps. At `quarter` the pass is 1.6 to 2.0 ms of a 27 ms frame. One
+oddity, not followed up: the first skipped arm of each series was the slowest of its series (34.4 and 35.2 ms)
+and its scene pass read higher (`gpu_ms` 12.2 to 12.4 against 9 to 10), as if the tunnel glass sampling a
+texture nothing wrote costs the tiler more.
+
+**Lineage.** HD's glass and sea target and 2048's and Omega's refraction target are one `behind_glass::Target`
+with one reader per shader (`refraction.wesl`, `shade.wesl`), so the rectangle and `auto` apply to all three
+titles, **ported** by construction (`reflection_resolution_ground_truth` loads all three; the sampling test
+covers the three sizes). Measured on the phone on HD Vineta K only; Moa Therma's sea and the psp2 titles'
+targets on a phone are open.
 
 **The default is `original` on every platform** (maintainer's decision). What a setting costs depends on the
 hardware, not the platform, so Android gets no cheaper default; a player picks `half` or `quarter` for their
