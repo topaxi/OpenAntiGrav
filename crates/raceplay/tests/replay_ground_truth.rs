@@ -501,6 +501,17 @@ fn recorded_at_tick_zero(
     Some((source, race, replay, launch))
 }
 
+/// [`race::rebuild`] with the simulation half in place of the whole load: the header's launch
+/// options and seats, a [`race::load_sim`] and [`race::replay::start_recorded`] on a headless
+/// view that carries the request. A load of Omega reads 2.3 GB stored and draws nothing the
+/// tick-zero hash reads, so only the first Omega test below pays for the whole one.
+fn rebuild_sim(header: &Header, source: &str) -> anyhow::Result<race::Race> {
+    let options = race::Options::for_replay(header, source)?;
+    let sim = race::load_sim(&options)?;
+    let view = race::ViewSetup::headless_on(&options, &sim.circuit);
+    race::replay::start_recorded(sim.setup, view, sim.modules, header)
+}
+
 /// The rebuild from the file's header alone agrees with the recorded race at tick zero, on the
 /// bytes a file is written as and read back from.
 fn tick_zero(title: &str, mode: oag_race::Mode) {
@@ -521,7 +532,13 @@ fn tick_zero(title: &str, mode: oag_race::Mode) {
     );
     assert_eq!(race::Launch::from_table(&read.header.options), Ok(launch));
 
-    let rebuilt = race::rebuild(&read.header, &source.display().to_string()).expect("rebuilds");
+    let whole = title != "omega" || mode == oag_race::Mode::TimeTrial;
+    let rebuilt = if whole {
+        race::rebuild(&read.header, &source.display().to_string())
+    } else {
+        rebuild_sim(&read.header, &source.display().to_string())
+    }
+    .expect("rebuilds");
     Verifier::new(&read, rebuilt.core.sim.state_hash()).unwrap_or_else(|d| {
         panic!(
             "{title} {}: the rebuild disagrees at tick zero: {d}",
@@ -537,8 +554,12 @@ fn tick_zero(title: &str, mode: oag_race::Mode) {
         let mut swapped = read.clone();
         swapped.header.setup.as_mut().expect("present").mode =
             oag_race::Mode::SingleRace.name().to_string();
-        let rebuilt =
-            race::rebuild(&swapped.header, &source.display().to_string()).expect("rebuilds");
+        let rebuilt = if title == "omega" {
+            rebuild_sim(&swapped.header, &source.display().to_string())
+        } else {
+            race::rebuild(&swapped.header, &source.display().to_string())
+        }
+        .expect("rebuilds");
         let desync = Verifier::new(&swapped, rebuilt.core.sim.state_hash())
             .expect_err("a request naming another mode is another race");
         assert_eq!(desync.tick, 0, "{title}");
