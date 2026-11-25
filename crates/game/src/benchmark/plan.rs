@@ -27,6 +27,11 @@ pub const TICK_CAP: u32 = 40_000;
 /// still, and the first drawn frames pay pipeline and buffer first use.
 pub const COUNTDOWN_TICKS: u64 = oag_race::state::COUNTDOWN_TICKS;
 
+/// Ticks a pre-race flyby that only a press ends (HD's repeats its 173 to 188 s tour for ever)
+/// plays before the run presses for it: 27 s, the longest flyby Pulse's own circuits end on, so
+/// a benchmark's flyby is about as long on every title (`docs/tools/in-game-benchmark.md`).
+pub const SKIP_ONLY_FLYBY_TICKS: u32 = 27 * 60;
+
 /// Sets every option the simulation reads to the benchmark's race, over whatever the front end
 /// had chosen: the title's default circuit and team, a Single Race at the default class and the
 /// default AI difficulty, the field and weapons the mode ships with, one person, no seats picked, no craft

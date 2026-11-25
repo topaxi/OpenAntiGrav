@@ -260,7 +260,7 @@ impl State {
     /// focused row's id, setting and label, so `focus=launch` and `focus="LAUNCH RACE"` both hold.
     ///
     /// Keys: `stage`, `frontend`, `map_event`, `page`, `screen` (the overlay kind, `page` when none),
-    /// `screen.id`, `screen.help` (`open` or `closed`, where the screen has a Help), `title`, `focus`, `opening_reads`, `demo`, `humans`, `hints` (the buttons the hints on screen depict), and `race.title|track|track_file|team|variant|mode|source|craft_source|target`.
+    /// `screen.id`, `screen.help` (`open` or `closed`, where the screen has a Help), `title`, `focus`, `opening_reads`, `demo`, `benchmark`, `sim_tick` (the world's tick, on `stage=race`), `humans`, `hints` (the buttons the hints on screen depict), and `race.title|track|track_file|team|variant|mode|source|craft_source|target`.
     #[must_use]
     pub fn get(&self, key: &str) -> Vec<String> {
         let screen = self.screen.as_ref();
@@ -290,6 +290,7 @@ impl State {
             "endrace" => one(self.endrace.clone()),
             "demo" => one(self.demo.clone()),
             "benchmark" => one(self.benchmark.clone()),
+            "sim_tick" => one(self.sim_tick.map(|tick| tick.to_string())),
             "hud" => one(self.hud.clone()),
             "humans" => one(self.humans.map(|humans| humans.to_string())),
             "hints" => self
@@ -362,6 +363,7 @@ impl State {
                 | "endrace"
                 | "demo"
                 | "benchmark"
+                | "sim_tick"
                 | "hud"
                 | "humans"
                 | "hints"

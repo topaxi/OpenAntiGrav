@@ -29,6 +29,8 @@ pub struct Ending {
     pub state_hash: u64,
     /// The race ended on the player's own crossing (not the tick cap).
     pub finished: bool,
+    /// Ticks the pre-race flyby ran before the world's first.
+    pub flyby_ticks: u32,
 }
 
 /// A run in progress.
@@ -114,12 +116,14 @@ mod tests {
             tick: 10,
             state_hash: 7,
             finished: true,
+            flyby_ticks: 0,
         });
         run.frame(0.5, 3, 1, 301);
         run.end(Ending {
             tick: 99,
             state_hash: 8,
             finished: false,
+            flyby_ticks: 0,
         });
         assert_eq!(run.frames().len(), 1);
         assert_eq!(run.ending().map(|e| e.tick), Some(10));

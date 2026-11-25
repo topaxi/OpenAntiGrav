@@ -40,6 +40,7 @@ fn report(frame_us: impl Iterator<Item = f64>) -> Report {
             tick: 100,
             state_hash: 0xabc,
             finished: true,
+            flyby_ticks: 0,
         },
     }
 }
