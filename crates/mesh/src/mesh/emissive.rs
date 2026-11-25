@@ -211,6 +211,12 @@ pub const PROGRAM_HULL_CHARGE_1: f32 = 28.0;
 /// See [`PROGRAM_HULL_CHARGE_1`].
 pub const PROGRAM_HULL_CHARGE_2: f32 = 29.0;
 
+/// [`Emissive::program`]'s mode for HD's Detonator cannon bolt (`hd_detonator_cannonbolt_halo`):
+/// unlit, the blue picture scrolled at `uv1 + 0.8 noise + 5 time` plus a Fresnel tint, its alpha
+/// five times the picture's times the ring strip's (bound second, at `uv0`). The entry's offset is
+/// the model's `fresnelBase`. See `super::rcs::cannon_bolt`.
+pub const PROGRAM_CANNON_BOLT: f32 = 30.0;
+
 /// The second entry of an [`PROGRAM_ELECTRICITY`] material: tint `(PitchVolume, BassHit,
 /// TrebleHit)`, offset `PitchOffset`.
 pub const PROGRAM_ELECTRICITY_AUDIO: f32 = 26.0;

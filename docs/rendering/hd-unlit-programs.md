@@ -510,6 +510,60 @@ applies, not wired**: `Data/Weapons2048/` carries the same names with its own by
 these effects has been read. The next step for both is the Omega sampler state read off its
 executable (named in the HD fidelity handover thread).
 
+## The Detonator cannon bolt (2026-11-25, `det-cannon-bolt-look`)
+
+`detonator_cannonbolt` (`DATA00`) is one inline stride-18 chunk of 288 triangles and 164
+vertices, a streak about `1.1` wide running from `z = -1.8` to `z = 30.5` along the model's `+Z`
+(the mesh bias `14.34` puts it there), with one material, `hd_detonator_cannonbolt_halo`
+(state `0x79`, blended `SrcAlpha`/`One`, culls). Its two units are
+`hd_detonator_cannonbolt.gtf` (256x256: a horizontal blue band, a cloud in its alpha) and
+`hd_detonator_cannonbolt_glow.gtf` (4x128: white, its alpha **eight rings**, a sawtooth of
+period 16 texels whose peaks climb from 0 to 250 along `v`). The model authors `fresnelBase`
+(`0x743ea80b`) as `0.49874`.
+
+The race resolves `HalfBrightAmbientSunSpot0SVC0` (vertex `@0x1a10`, fragment `@0x1b70`;
+`ps3-sho.py variants`, `ps3-microcode.py fp-file`/`vp-file` on the material). The vertex
+program reads one `float4` attribute (`0x1aefe524`, slot 8) and splits it: `.xy` (`uv0`) to
+`TC0.w`/`TC1.w`, `.zw` (`uv1`) to `TC3`; `TC0.xyz = eye - P`, `TC1.xyz` the normal. In the
+vertex those are the four halves at `+0x0a..+0x12`. The fragment program, instruction by
+instruction:
+
+```text
+rim   = sat(1 - N.V)                                   @0x00-@0x0b, DIVSQ-normalised
+noise = tex0(uv1).a                                    @0x12
+c     = tex0(uv1 + 0.8 noise + 5 time)                 @0x13, @0x1a, @0x23  (both axes)
+F     = fresnelBase + (1 - fresnelBase) rim^5          @0x10, @0x15, @0x19, @0x1c, @0x1f
+ring  = tex1(uv0).a                                    @0x1e
+rgb   = c.rgb + (1 - F)^3 (0.0619202, 0.744629, 1)     @0x25, @0x27, @0x2a, @0x2e
+alpha = 5 c.a ring globalAlphaScaler.y + .x            @0x21, @0x2b, @0x31
+then the fog lerp and /2                               @0x24, @0x28, @0x30
+```
+
+So the ring stack the original shows is the glow strip's alpha along the streak, the blue its
+band picture scrolled five units a second around and along it. Confidence **90** on the
+arithmetic (every literal and patch slot read). **Before**, ours matched none of this: the
+material fell to the lit path, the ring strip was "loaded but not drawn", and the band was read
+at `uv1` alone, a white teardrop.
+
+**Wired**: `oag_mesh::mesh::rcs::cannon_bolt` matches the program by its declared parameters,
+two samplers and its eight literals, binds unit 0 as the albedo and unit 1 second, routes `uv1`
+as the coordinate and `uv0` as the second set (`rcsmodel::Mesh::inline_uv_pairs`), and gives the
+material a `PROGRAM_CANNON_BOLT` glow-table entry holding `fresnelBase`; `shade.wesl` draws the
+lines above. **Chosen, not measured:** the colour tap is sRGB-decoded as the other weapon glows'
+(this draw's unit-0 gamma nibble is unread) and the alpha is held to `1`. Pinned by
+`hd_rim_glow_ground_truth::the_cannon_bolt_earns_its_ring_program_with_both_coordinate_pairs`.
+The bolt's pose (the half turn that makes the streak trail the round) is on
+[detonator-cannon.md](../ghidra/functions/ps3-hdfury-eu/detonator-cannon.md#the-bolts-look-and-the-loop-2026-11-25-det-cannon-bolt-look).
+
+**2048 and Omega: checked, applies, not wired.** Both ship the model and material (2048
+`data/weapons/detonator_cannonbolt.rcsmodel` and `weapons2048/`, Omega `data00.psarc` both
+directories): the same 288 triangles, the same two samplers on `.gxt`/`.gnf` copies of the two
+pictures, `fresnelBase` `0.49874`, state 121 (`0x79`), and on 2048 the same split attribute
+(`Uv1_Uv2`, four halves, `psp2_material_dump` with `DECL_SUB=0`) and the same extent along `+Z` (2048 `-2..30`, Omega `-1.80..30.50`).
+Their programs are GXP and GCN, which this matcher does not read; ours draws them through the
+generic psp2 path, which on Omega picks the ring strip as the diffuse. Wiring them means reading
+each program and matching it, which this lane did not do.
+
 ## Open
 
 - **Not written:** the Repulser field and mag floor. (The Bomb's blast is
