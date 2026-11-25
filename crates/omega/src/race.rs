@@ -170,25 +170,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
         }),
         craft: Some(DETONATOR_CRAFT),
         handling: Some(DETONATOR_HANDLING),
-        // HD's names, as every other Omega weapon body (`crate::weapons`); the pad path is a data
-        // field there, so HD's is **inherited**.
-        objects: Some(oag_title::DetonatorObjects {
-            mine: [
-                r"Data\Weapons\mine_rita_football.vex",
-                r"Data\Weapons\mine_rita_spikes.vex",
-            ],
-            mine_visualiser: None,
-            bomb: [
-                r"Data\Weapons\detonator_bomb_final.vex",
-                r"Data\Weapons\detonator_bomb_final_equalisers.vex",
-                r"Data\Weapons\detonator_bomb_glowedges.vex",
-            ],
-            pad: r"Data\New_Mode_Pads\Detonator_Pad\Detonator_Pad.vex",
-            cannon: [
-                r"Data\Weapons\detonator_cannonbolt.vex",
-                r"Data\Weapons\hd_muzzleflash_detonator.vex",
-            ],
-        }),
+        objects: Some(DETONATOR_OBJECTS),
         // The speed-pad arm is read in `FUN_0133fff0` (`detonator-emp.md`, "2048 and Omega");
         // the weapon-pad arm is not, so HD's is **inherited**.
         pads: oag_title::DetonatorPads {
@@ -212,6 +194,27 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     fresh_team: None,
     fresh_variant: None,
     speed_classes: None,
+};
+
+/// HD's names, as every other Omega weapon body (`crate::weapons`); the pad path is a data
+/// field there, so HD's is **inherited**. The ring names HD's entry: the material's GCN program
+/// reads as HD's (`docs/ghidra/functions/ps4-omega-eu/detonator-hull.md`, "The visualiser").
+pub const DETONATOR_OBJECTS: oag_title::DetonatorObjects = oag_title::DetonatorObjects {
+    mine: [
+        r"Data\Weapons\mine_rita_football.vex",
+        r"Data\Weapons\mine_rita_spikes.vex",
+    ],
+    mine_visualiser: Some(r"Data\Weapons\electric_visualiser.vex"),
+    bomb: [
+        r"Data\Weapons\detonator_bomb_final.vex",
+        r"Data\Weapons\detonator_bomb_final_equalisers.vex",
+        r"Data\Weapons\detonator_bomb_glowedges.vex",
+    ],
+    pad: r"Data\New_Mode_Pads\Detonator_Pad\Detonator_Pad.vex",
+    cannon: [
+        r"Data\Weapons\detonator_cannonbolt.vex",
+        r"Data\Weapons\hd_muzzleflash_detonator.vex",
+    ],
 };
 
 /// Omega's Detonator craft: `hdships\Detonator\Ship.vex` for every team, its livery key

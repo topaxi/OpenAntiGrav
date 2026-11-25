@@ -265,6 +265,8 @@ pub struct Report {
     pub bomb_tint_bound: usize,
     /// Detonator cannon-gauge materials given their segment program. See `super::bullet_gauge`.
     pub bullet_gauge_bound: usize,
+    /// Detonator cannon-bolt materials given their ring program. See `super::cannon_bolt`.
+    pub cannon_bolt_bound: usize,
     /// Detonator plasma-shell materials whose alpha is the hull's charge. See `super::hull_charge`.
     pub hull_charge_bound: usize,
     /// Magstrip materials whose emissive picture and wave were bound - see
@@ -573,6 +575,9 @@ impl Report {
         } + &match self.bullet_gauge_bound {
             0 => String::new(),
             n => format!(", {n} Detonator cannon-gauge material(s) drawn as their segments"),
+        } + &match self.cannon_bolt_bound {
+            0 => String::new(),
+            n => format!(", {n} Detonator cannon-bolt material(s) drawn as their rings"),
         } + &match self.hull_charge_bound {
             0 => String::new(),
             n => format!(", {n} Detonator plasma-shell material(s) drawn at the EMP's charge"),

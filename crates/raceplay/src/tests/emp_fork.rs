@@ -3,6 +3,7 @@
 //! fork").
 
 use super::*;
+use oag_gameplay::PlayerInputs;
 use oag_weapons::detonator::emp::{fire, fork_entry, front_entry, step_wave};
 use oag_weapons::detonator::{Placed, Survey};
 
@@ -28,15 +29,18 @@ fn start(track: &str) -> Option<Race> {
     Some(Race::start(loaded.setup, loaded.view, loaded.modules))
 }
 
+/// The first branch section from offset `k` on that placement lays into.
+fn laid_branch(survey: &Survey, k: usize) -> usize {
+    (k..survey.branches[0].entries.len())
+        .filter_map(|k| survey.branch_entry(0, k))
+        .find(|&i| survey.has_record(i))
+        .expect("a laid branch section")
+}
+
 fn laid(survey: &Survey, branch_offset: usize, ring: usize) -> [Placed; 2] {
     [
         Placed {
-            entry: u16::try_from(
-                survey
-                    .branch_entry(0, branch_offset)
-                    .expect("a branch entry"),
-            )
-            .expect("fits"),
+            entry: u16::try_from(laid_branch(survey, branch_offset)).expect("fits"),
             lane: 0,
             live: false,
         },
@@ -94,7 +98,7 @@ fn an_hd_emp_wave_forks_at_the_split_and_clears_both_routes() {
             field,
             &survey,
             &config,
-            ((split + total - 10) % total) as u16,
+            ((split + total - 8) % total) as u16,
         );
         assert!(field.emp.wave.live, "{track}");
         race.view.spu_vertex_lights = true;
@@ -148,4 +152,422 @@ fn an_hd_circuit_without_a_split_never_forks_its_wave() {
         }
         assert!(!field.emp.wave.forked && !field.emp.wave.live, "{track}");
     }
+}
+
+/// Slot 0 held on `entry` past the countdown, charged full, with the mines given and nothing else
+/// laid, then L1 pressed and `ticks` run, the craft kept on the spot.
+fn fire_from(race: &mut Race, entry: usize, mines: &[Placed], ticks: usize) {
+    while oag_race::RaceState::thrust_gated(race.core.sim.world.tick) {
+        race.tick(&PlayerInputs::none());
+    }
+    let at = {
+        let survey = &race.core.sim.detonator.as_ref().expect("Detonator").survey;
+        survey.entry(entry).expect("an entry").centre
+    };
+    let hold = |race: &mut Race| {
+        let ship = &mut race.core.sim.world.ships[0];
+        ship.physics.body.position = at;
+        ship.physics.body.linear_velocity = oag_core::math::Vec3::ZERO;
+        ship.physics.body.angular_velocity = oag_core::math::Vec3::ZERO;
+        ship.physics.shield = ship.handling.dimensions.shield;
+    };
+    let config = race
+        .core
+        .sim
+        .detonator
+        .as_ref()
+        .expect("Detonator")
+        .emp
+        .expect("an EMP");
+    let field = &mut race.core.sim.world.detonator;
+    field.live_bombs = 0;
+    field.live_mines = u16::try_from(mines.len()).expect("fits");
+    field.mines[..mines.len()].copy_from_slice(mines);
+    field.emp.charge = config.hi;
+    field.emp.gauge = 1.0;
+    hold(race);
+    let mut snapshot = oag_gameplay::InputSnapshot::new();
+    snapshot
+        .buttons
+        .begin_frame(oag_gameplay::input::Button::Flip.bit());
+    race.tick(&PlayerInputs::single(snapshot));
+    for _ in 0..ticks {
+        hold(race);
+        race.tick(&PlayerInputs::none());
+    }
+}
+
+fn mine_at(entry: usize) -> Placed {
+    Placed {
+        entry: u16::try_from(entry).expect("fits"),
+        lane: 0,
+        live: false,
+    }
+}
+
+/// A branch entry well clear of the ring (out of the launch fork's reach, and the road itself
+/// apart), with 60 more entries of branch ahead.
+fn clear_of_the_ring(survey: &Survey) -> usize {
+    let branch = &survey.branches[0];
+    let total = survey.entries.len();
+    (0..branch.entries.len() - 60)
+        .find(|&k| {
+            let at = branch.entries[k].centre;
+            let ahead = survey.branch_entry(0, k + 40);
+            let beside = (usize::from(branch.split) + k + 40) % total;
+            branch.to_primary[k].is_none_or(|p| !p.near)
+                && ahead.is_some_and(|i| survey.has_record(i))
+                && survey.has_record(beside)
+                && survey
+                    .entries
+                    .iter()
+                    .all(|r| (r.centre - at).length() > 20.0)
+        })
+        .expect("the routes part")
+}
+
+/// **A launch on a branch, on the disc.** On each forked circuit, L1 from a branch section past
+/// the overlap starts the wave on the branch and clears the mine laid ahead on it, and leaves the
+/// ring's.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn an_hd_emp_fired_on_a_branch_starts_there_and_clears_its_mines() {
+    for track in FORKED {
+        let Some(mut race) = start(track) else {
+            return;
+        };
+        let survey = race
+            .core
+            .sim
+            .detonator
+            .as_ref()
+            .expect("Detonator")
+            .survey
+            .clone();
+        let k = clear_of_the_ring(&survey);
+        let from = survey.branch_entry(0, k).expect("a branch entry");
+        let ahead = survey.branch_entry(0, k + 40).expect("a branch entry");
+        let ring_beside = (usize::from(survey.branches[0].split) + k + 40) % survey.entries.len();
+        fire_from(
+            &mut race,
+            from,
+            &[mine_at(ahead), mine_at(ring_beside)],
+            130,
+        );
+        let field = &race.core.sim.world.detonator;
+        assert_eq!(usize::from(field.emp.wave.from), from, "{track}");
+        assert!(!field.emp.wave.forked, "{track}");
+        assert_eq!(
+            field
+                .live_mines()
+                .iter()
+                .map(|m| usize::from(m.entry))
+                .collect::<Vec<_>>(),
+            [ring_beside],
+            "{track}: the branch's mine goes, the ring's stays"
+        );
+    }
+}
+
+/// **The launch-time fork on the disc.** L1 on either route a few sections past the split, where
+/// the two still lie within reach, starts a second front on the other and clears both.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn an_hd_emp_fired_beside_the_other_route_forks_at_launch() {
+    for track in FORKED {
+        for on_branch in [false, true] {
+            let Some(mut race) = start(track) else {
+                return;
+            };
+            let survey = race
+                .core
+                .sim
+                .detonator
+                .as_ref()
+                .expect("Detonator")
+                .survey
+                .clone();
+            let split = usize::from(survey.branches[0].split);
+            let total = survey.entries.len();
+            let route = |offset: usize, branch: bool| {
+                if branch {
+                    survey.branch_entry(0, offset).expect("a branch entry")
+                } else {
+                    (split + offset) % total
+                }
+            };
+            let from = route(5, on_branch);
+            // Past where the two overlap, where each route's sections hold their own records.
+            let other = if on_branch {
+                (90..)
+                    .map(|o| route(o, false))
+                    .find(|&i| survey.has_record(i))
+                    .expect("a laid ring section")
+            } else {
+                laid_branch(&survey, 90)
+            };
+            fire_from(&mut race, from, &[mine_at(other)], 0);
+            let field = &race.core.sim.world.detonator;
+            assert!(
+                field.emp.wave.forked,
+                "{track} on_branch={on_branch}: forked at launch"
+            );
+            fire_ticks(&mut race, 120);
+            assert!(
+                race.core.sim.world.detonator.live_mines().is_empty(),
+                "{track} on_branch={on_branch}: the other route's mine goes"
+            );
+        }
+    }
+}
+
+fn fire_ticks(race: &mut Race, ticks: usize) {
+    for _ in 0..ticks {
+        race.tick(&PlayerInputs::none());
+    }
+}
+
+/// **A ring launch away from any split is unchanged**: the wave starts at the ring's nearest
+/// entry, unforked, and takes the ring's mines while the branch's stay. On a circuit with no
+/// split there is nothing else to take.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn an_hd_ring_launch_away_from_a_split_is_unchanged() {
+    for track in [
+        r"Data\Environments\talons_junction\track.vex",
+        r"Data\Environments\zone_3\track.vex",
+        r"Data\Environments\05_ubermall\track.vex",
+    ] {
+        let Some(mut race) = start(track) else {
+            return;
+        };
+        let survey = race
+            .core
+            .sim
+            .detonator
+            .as_ref()
+            .expect("Detonator")
+            .survey
+            .clone();
+        let total = survey.entries.len();
+        // Past every split's primary route, or mid-ring with none.
+        let from = survey.branches.first().map_or(300, |b| {
+            let primary = b.from_primary.len();
+            (usize::from(b.split) + primary + 100) % total
+        });
+        let mut mines = vec![mine_at((from + 40) % total)];
+        if !survey.branches.is_empty() {
+            mines.push(mine_at(laid_branch(&survey, 50)));
+        }
+        fire_from(&mut race, from, &mines, 130);
+        let field = &race.core.sim.world.detonator;
+        let wave = field.emp.wave;
+        assert!(!wave.forked, "{track}");
+        assert!(
+            usize::from(wave.from).abs_diff(from) <= 1,
+            "{track}: from {}",
+            wave.from
+        );
+        assert_eq!(wave.fork, oag_weapons::detonator::emp::Fork::default());
+        assert_eq!(
+            field.live_mines,
+            u16::from(!survey.branches.is_empty()),
+            "{track}"
+        );
+    }
+}
+
+/// **The merge end, the exception to an unchanged ring launch.** On `zone_3` a ring launch near
+/// the end of the primary route lies within reach of the branch on its far half: the second front
+/// is born travelling backward and never moves. The main front's merge releases it, and the split
+/// nine entries on forks the wave as usual.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn an_hd_emp_fired_beside_the_merge_stands_still_until_it() {
+    let Some(race) = start(r"Data\Environments\zone_3\track.vex") else {
+        return;
+    };
+    the_merge_releases_the_stuck_front(race);
+}
+
+/// On a `zone_3` race (split at ring entry 9, merge at 0): a launch three entries short of the
+/// merge leaves a motionless second front until the merge releases it, and the split forks anew.
+fn the_merge_releases_the_stuck_front(mut race: Race) {
+    let survey = race
+        .core
+        .sim
+        .detonator
+        .as_ref()
+        .expect("a Detonator race")
+        .survey
+        .clone();
+    let total = survey.entries.len();
+    assert_eq!(usize::from(survey.branches[0].split), 9);
+    assert_eq!(usize::from(survey.branches[0].merge), 0);
+    let ahead = survey.branch_entry(0, 30).expect("a branch entry");
+    fire_from(&mut race, total - 3, &[mine_at(ahead)], 0);
+    let wave = race.core.sim.world.detonator.emp.wave;
+    assert!(wave.forked);
+    assert_eq!(wave.fork, oag_weapons::detonator::emp::Fork::INERT);
+    fire_ticks(&mut race, 5);
+    assert!(
+        !race.core.sim.world.detonator.emp.wave.forked,
+        "released at the merge"
+    );
+    fire_ticks(&mut race, 60);
+    let field = &race.core.sim.world.detonator;
+    assert!(field.emp.wave.forked, "the split at entry 9 forks");
+    assert!(field.live_mines().is_empty(), "the branch's mine goes");
+}
+
+/// **The other route's record, on the disc.** `15_anulpha_pass`'s branch sections 27 to 48 hold
+/// no record of their own and lie out of the launch fork's reach from offset 40: a branch launch
+/// there walks them and takes the primary route's mine instead.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn an_hd_front_on_a_section_with_no_record_takes_the_other_routes() {
+    let Some(mut race) = start(r"Data\Environments\15_anulpha_pass\track.vex") else {
+        return;
+    };
+    let survey = race
+        .core
+        .sim
+        .detonator
+        .as_ref()
+        .expect("Detonator")
+        .survey
+        .clone();
+    let from = survey.branch_entry(0, 40).expect("a branch entry");
+    let hole = survey.branch_entry(0, 45).expect("a branch entry");
+    assert!(!survey.has_record(hole));
+    let primary = survey.sibling(hole).expect("a partner");
+    assert!(survey.has_record(primary), "the primary route holds it");
+    fire_from(&mut race, from, &[mine_at(primary)], 0);
+    assert!(
+        !race.core.sim.world.detonator.emp.wave.forked,
+        "out of reach"
+    );
+    fire_ticks(&mut race, 12);
+    assert!(race.core.sim.world.detonator.live_mines().is_empty());
+}
+
+/// **A ring launch the lookup changes.** On `05_ubermall` a ring wave launched on entries 31 to 44
+/// or 54 reaches ring sections past its own front, through the branch fork's records
+/// (`detonator-emp.md`, "The other route's record"): from entry 31 it takes entry 157.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn an_hd_ring_wave_through_the_fork_reaches_a_few_sections_further() {
+    let Some(mut race) = start(r"Data\Environments\05_ubermall\track.vex") else {
+        return;
+    };
+    let detonator = race.core.sim.detonator.as_ref().expect("Detonator");
+    let survey = detonator.survey.clone();
+    let config = detonator.emp.expect("an EMP");
+    let field = &mut race.core.sim.world.detonator;
+    field.mines[0] = mine_at(157);
+    field.live_mines = 1;
+    field.live_bombs = 0;
+    field.emp.charge = config.hi;
+    field.emp.gauge = 1.0;
+    fire(field, &survey, &config, 31);
+    for _ in 0..130 {
+        step_wave(field, &survey, &config, 1.0 / 60.0);
+    }
+    assert!(field.live_mines().is_empty());
+}
+
+/// A branch launch clears the branch's mine and a ring launch beside the split forks at once and
+/// clears it too, on `source`'s `tracks`.
+fn the_law_holds_on(source: &str, tracks: &[&str]) {
+    for track in tracks {
+        let load = || {
+            let loaded = crate::load(&crate::Options {
+                source: source.to_string(),
+                class: "VENOM".to_string(),
+                mode: Mode::Detonator,
+                track: Some((*track).to_string()),
+                no_effects: true,
+                ..crate::Options::default()
+            })
+            .expect("loading a Detonator race");
+            Race::start(loaded.setup, loaded.view, loaded.modules)
+        };
+        let mut race = load();
+        let survey = race
+            .core
+            .sim
+            .detonator
+            .as_ref()
+            .expect("Detonator")
+            .survey
+            .clone();
+        let k = clear_of_the_ring(&survey);
+        let from = survey.branch_entry(0, k).expect("a branch entry");
+        let ahead = survey.branch_entry(0, k + 40).expect("a branch entry");
+        fire_from(&mut race, from, &[mine_at(ahead)], 130);
+        let field = &race.core.sim.world.detonator;
+        assert_eq!(usize::from(field.emp.wave.from), from, "{track}");
+        assert!(
+            field.live_mines().is_empty(),
+            "{track}: the branch's mine goes"
+        );
+
+        let mut race = load();
+        let split = usize::from(survey.branches[0].split);
+        let beside = (split + 5) % survey.entries.len();
+        let other = laid_branch(&survey, 90);
+        fire_from(&mut race, beside, &[mine_at(other)], 0);
+        assert!(race.core.sim.world.detonator.emp.wave.forked, "{track}");
+        fire_ticks(&mut race, 120);
+        assert!(
+            race.core.sim.world.detonator.live_mines().is_empty(),
+            "{track}"
+        );
+    }
+}
+
+/// **Omega runs the same law** (its sweep `0x0133c600` carries the same launch fork).
+#[test]
+#[ignore = "needs data/images/omega-ps4-eu.pkg"]
+fn an_omega_emp_fired_on_or_beside_a_branch_follows_it() {
+    let Some(image) = oag_testdata::image("omega-ps4-eu.pkg") else {
+        return;
+    };
+    the_law_holds_on(
+        &image.display().to_string(),
+        &[
+            r"Data\Environments\05_ubermall\track.vex",
+            r"Data\Environments\15_anulpha_pass\track.vex",
+        ],
+    );
+}
+
+/// **2048 runs the same law** (`FUN_811e7c68`, `FUN_811e7dd6`: branch launch, launch fork and the
+/// merge's release), on HD's `zone_3` as 2048's DLC1 pack ships it. Its pads do not charge the EMP yet, so the charge is set by the test.
+#[test]
+#[ignore = "needs the unpacked 2048 packages in data/extracted/"]
+fn a_2048_emp_fired_on_or_beside_a_branch_follows_it() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../data/extracted/vita/PCSF00007");
+    if !path.join("patch-v104").exists() {
+        assert!(
+            std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
+            "OAG_REQUIRE_GAME_DATA is set but {} is missing",
+            path.display()
+        );
+        return;
+    }
+    let source = path.display().to_string();
+    let track = r"data\art\published\DLC1\environments\zone_3\track.vex";
+    the_law_holds_on(&source, &[track]);
+    let loaded = crate::load(&crate::Options {
+        source,
+        class: "VENOM".to_string(),
+        mode: Mode::Detonator,
+        track: Some(track.to_string()),
+        no_effects: true,
+        ..crate::Options::default()
+    })
+    .expect("loading a 2048 Detonator race");
+    the_merge_releases_the_stuck_front(Race::start(loaded.setup, loaded.view, loaded.modules));
 }

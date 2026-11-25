@@ -651,3 +651,57 @@ fn the_crowd_materials_weight_the_normal_maps_z_by_the_eye_vector() {
     assert!(found.pairs > 0 && found.eye == 0, "{found:?}");
     assert!(!found.is_eye());
 }
+
+/// The Detonator mine's visualiser material, every copy Omega ships (`docs/ghidra/functions/
+/// ps4-omega-eu/detonator-hull.md`, "The visualiser"): `weapons/` and `weapons2048/` in the base
+/// `data00` and again in the patch's `data05` and `data08`. Every pixel program that declares
+/// the electricity picture has the program's shape and its colour tap's shift literal is 0.3.
+#[test]
+#[ignore = "needs the Omega extraction"]
+fn every_omega_electricity_material_reads_as_the_visualiser_program() {
+    let copies = [
+        (
+            "omega-eu/uroot/data00.psarc",
+            "Data/weapons/Materials/electricity.rcsmaterial",
+        ),
+        (
+            "omega-eu/uroot/data00.psarc",
+            "Data/weapons2048/Materials/electricity.rcsmaterial",
+        ),
+        (
+            "omega-eu-patch/uroot/data05.psarc",
+            "data/Weapons/Materials/electricity.rcsmaterial",
+        ),
+        (
+            "omega-eu-patch/uroot/data05.psarc",
+            "data/Weapons2048/Materials/electricity.rcsmaterial",
+        ),
+        (
+            "omega-eu-patch/uroot/data08.psarc",
+            "data/Weapons/Materials/electricity.rcsmaterial",
+        ),
+        (
+            "omega-eu-patch/uroot/data08.psarc",
+            "data/Weapons2048/Materials/electricity.rcsmaterial",
+        ),
+    ];
+    let mut declaring = 0;
+    for (archive, entry) in copies {
+        let Some(path) = path(archive) else {
+            return;
+        };
+        let mut archive = oag_assets::psarc::Archive::open_file(&path).expect("the archive opens");
+        let bytes = archive.read_path(entry).expect("the material reads");
+        let read = gcn::electricity(&bytes).unwrap_or_else(|| panic!("{entry}: not the program"));
+        assert_eq!(read.colour_tap_shift, 0.3, "{entry}");
+        declaring += gcn::scan(&bytes)
+            .iter()
+            .filter_map(|(_, p)| p.as_ref().ok())
+            .filter(|p| p.electricity().is_some())
+            .count();
+    }
+    assert_eq!(
+        declaring, 12,
+        "two pixel variants (plain, one vertex light) in each of six files"
+    );
+}

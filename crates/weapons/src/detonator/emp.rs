@@ -25,13 +25,15 @@
 //!   operands are small integers, exact in `f32`, so the two agree on every `n` the HUD can
 //!   reach (the page's live table, `0..39`).
 //! - A bomb the wave takes sets nothing off: `BombManager_DestroyAtLane`'s chain is unread.
-//! - **The fork**: `EMP_SweepSections` is the Repulser's wave stepper cloned, so a front that
-//!   steps onto a split spawns a second wave on the alternate path (its `REP2` branch,
-//!   `detonator-emp.md`, "The code is the Repulser's wave"). Ours follows `Repulser_AdvanceWave`'s
-//!   shape ([`Fork`]): one fork a wave, born as the front steps onto the split entry, walking the
-//!   branch `speed` entries a tick and then the ring on from its merge, sharing the wave's age
-//!   and lifetime. Nothing is laid on a branch, so the fork clears what a test puts there. **Not
-//!   wired**: the launch-time fork for a craft already on a branch (`EMP_ForkAtJunction`, 60).
+//! - **The forks**: `EMP_SweepSections` is the Repulser's wave stepper cloned, so a front that
+//!   steps onto a split spawns a second wave on the alternate path (its `REP2` branch), one at a
+//!   time. Ours follows `Repulser_AdvanceWave`'s shape ([`Fork`]), sharing the wave's age and
+//!   lifetime. A front stepping off a merge releases it. `EMP_ForkAtJunction` adds the
+//!   launch-time one ([`launch_fork`]): a craft within [`SIBLING_REACH`] of the other route at a
+//!   split gets a second front there at once, and one born on the far half of that route never
+//!   moves (`detonator-emp.md`, "The launch-time fork").
+//! - **The other route's record**: a front on a point with no usable placement record destroys
+//!   the lanes at the other route's nearest point instead (`sweep_entry`).
 
 use oag_tables::detonator_layout::Scoring;
 
@@ -44,6 +46,10 @@ const RAMP_RATE: f32 = 0.769_230_8;
 const RAMP_DEAD: f32 = 0.1;
 /// `1 / 0.9` (`0x3f8e38e4`).
 const RAMP_SCALE: f32 = 1.111_111_2;
+
+/// How near the other route's point must be to the firer's for `EMP_ForkAtJunction` to start a
+/// second front on it: `dist^2 < 100.0` (`0x00784c80`).
+pub const SIBLING_REACH: f32 = 10.0;
 
 /// What the EMP reads of the title's tables.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -93,15 +99,16 @@ impl Config {
 pub struct Wave {
     /// Whether a wave is running (`EMPManager`'s one at a time).
     pub live: bool,
-    /// The survey entry it started from.
+    /// The [`Survey::entry`] index it started from: the ring's, or a branch's.
     pub from: u16,
-    /// Entries the front has stepped so far; it stands on `from + front`.
+    /// Entries the front has stepped so far; it stands that many on from [`Self::from`].
     pub front: u16,
     /// Seconds it lives, the launch's `extent` (`emp+0x54`).
     pub lifetime: f32,
     /// Seconds since launch (`emp+0x158`).
     pub age: f32,
-    /// Whether the wave has forked: once a wave, as the Repulser's `+0x25c`.
+    /// Whether a second front is out (`emp+0x188`): one at a time, until a front reaches a
+    /// merge.
     pub forked: bool,
     /// The second front, meaningful while [`Self::forked`].
     pub fork: Fork,
@@ -119,6 +126,27 @@ pub struct Fork {
 }
 
 impl Fork {
+    /// The [`Self::branch`] of a launch fork born on the far half of the other route: the
+    /// original only advances a second front travelling its own way, so it walks nothing
+    /// (`0x0013bb54`) until the main front's merge releases it. The original leaves its effect
+    /// and light at the world origin meanwhile; ours draws neither, a departure.
+    pub const INERT: Self = Self {
+        branch: u8::MAX,
+        on_ring: false,
+        at: 0,
+    };
+
+    /// The [`Survey::entry`] index it stands on, or `None` for one that walks nothing.
+    fn standing(&self, survey: &Survey) -> Option<usize> {
+        if self.branch == Self::INERT.branch {
+            return None;
+        }
+        if self.on_ring {
+            return Some(usize::from(self.at));
+        }
+        survey.branch_entry(usize::from(self.branch), usize::from(self.at))
+    }
+
     /// Steps once and returns the [`Survey::entry`] index it lands on, or `None` for a branch
     /// the survey does not hold.
     fn step(&mut self, survey: &Survey) -> Option<usize> {
@@ -258,6 +286,110 @@ pub fn step_charge(field: &mut Field, config: &Config) -> Vec<Event> {
     events
 }
 
+/// The entry `offset` on from the launch entry `from`: round the ring, or along a branch and on
+/// round the ring from its merge.
+fn route_entry(survey: &Survey, from: usize, offset: usize) -> Option<usize> {
+    let total = survey.entries.len();
+    if from < total {
+        return Some((from + offset) % total);
+    }
+    let (branch, at) = survey.branch_of(from)?;
+    let mut cursor = Fork {
+        branch: u8::try_from(branch).ok()?,
+        on_ring: false,
+        at: u16::try_from(at).ok()?,
+    };
+    let mut entry = from;
+    for _ in 0..offset {
+        entry = cursor.step(survey)?;
+    }
+    Some(entry)
+}
+
+/// Whether `entry` is the last of a route that ends in a merge: a branch's last, or the ring's
+/// just short of a branch's rejoin. A front stepping off it releases the second front
+/// (`0x0013c014`-`0x0013c040`, `detonator-emp.md`, "The launch-time fork").
+fn ends_at_merge(survey: &Survey, entry: usize) -> bool {
+    if let Some((branch, at)) = survey.branch_of(entry) {
+        return at + 1 == survey.branches[branch].entries.len();
+    }
+    let total = survey.entries.len();
+    survey
+        .branches
+        .iter()
+        .any(|b| total > 0 && (entry + 1) % total == usize::from(b.merge))
+}
+
+/// Drops the second front, as the original releases its effect and clears its fork flag.
+fn release_fork(wave: &mut Wave) {
+    wave.forked = false;
+    wave.fork = Fork::default();
+}
+
+/// Steps the second front `steps` entries, clearing each, and releases it once it has stepped
+/// off a merge: it clears the first entry past and goes.
+fn advance_fork(
+    field: &mut Field,
+    survey: &Survey,
+    config: &Config,
+    steps: usize,
+    events: &mut Vec<Event>,
+) {
+    for _ in 0..steps {
+        let leaves = field
+            .emp
+            .wave
+            .fork
+            .standing(survey)
+            .is_some_and(|e| ends_at_merge(survey, e));
+        let Some(entry) = field.emp.wave.fork.step(survey) else {
+            break;
+        };
+        sweep_entry(field, survey, config, entry, events);
+        if leaves {
+            release_fork(&mut field.emp.wave);
+            break;
+        }
+    }
+}
+
+/// `EMP_ForkAtJunction` (`0x0013b5e8`), the launch call's fork: a firer on one route of a split,
+/// within [`SIBLING_REACH`] of the other, starts a second front on that other route's nearest
+/// point. On the far half of it (`point > count / 2`) the front travels backward, which the EMP's
+/// forward-only update never advances.
+#[must_use]
+pub fn launch_fork(survey: &Survey, from: usize) -> Option<Fork> {
+    let total = survey.entries.len();
+    let born = |offset: usize, count: usize, fork: Fork| {
+        Some(if offset > count / 2 {
+            Fork::INERT
+        } else {
+            fork
+        })
+    };
+    if let Some((branch, at)) = survey.branch_of(from) {
+        let b = &survey.branches[branch];
+        let partner = (*b.to_primary.get(at)?).filter(|p| p.near)?;
+        let offset = (usize::from(partner.at) + total - usize::from(b.split)) % total;
+        let fork = Fork {
+            branch: u8::try_from(branch).ok()?,
+            on_ring: true,
+            at: partner.at,
+        };
+        return born(offset, b.from_primary.len(), fork);
+    }
+    survey.branches.iter().enumerate().find_map(|(branch, b)| {
+        let offset = (from + total).checked_sub(usize::from(b.split))? % total.max(1);
+        let partner = (*b.from_primary.get(offset)?).filter(|p| p.near)?;
+        let fork = Fork {
+            branch: u8::try_from(branch).ok()?,
+            on_ring: false,
+            at: partner.at,
+        };
+        born(usize::from(partner.at), b.entries.len(), fork)
+    })
+}
+
 /// The EMP button, ready: launch a wave from survey entry `from` with
 /// `extent = minDistance + (maxDistance - minDistance) * gauge`, then `n = 0` and gauge `0`.
 /// A wave already in flight keeps running and the charge is spent anyway, as
@@ -270,20 +402,21 @@ pub fn fire(field: &mut Field, survey: &Survey, config: &Config, from: u16) -> V
     }
     let extent = config.min_distance + (config.max_distance - config.min_distance) * emp.gauge;
     if !emp.wave.live {
+        let fork = launch_fork(survey, usize::from(from));
         emp.wave = Wave {
             live: true,
             from,
             front: 0,
             lifetime: extent,
             age: 0.0,
-            ..Wave::default()
+            forked: fork.is_some(),
+            fork: fork.unwrap_or_default(),
         };
     }
     emp.charge = 0;
     emp.gauge = 0.0;
     let at = survey
-        .entries
-        .get(usize::from(from))
+        .entry(usize::from(from))
         .map_or(oag_core::math::Vec3::ZERO, |e| e.centre);
     vec![Event {
         kind: EventKind::EmpLaunch,
@@ -313,17 +446,28 @@ pub fn step_wave(field: &mut Field, survey: &Survey, config: &Config, dt: f32) -
         wave.live = false;
     }
     let last = first + steps;
+    // The main front moves first in the original, so a merge it steps off takes the second front
+    // before that one moves this tick.
+    let main_merges = (first.max(1)..last)
+        .any(|step| route_entry(survey, from, step - 1).is_some_and(|e| ends_at_merge(survey, e)));
+    if main_merges {
+        release_fork(&mut field.emp.wave);
+    }
     if field.emp.wave.forked {
-        for _ in 0..steps {
-            let Some(entry) = field.emp.wave.fork.step(survey) else {
-                break;
-            };
-            clear_entry(field, survey, config, entry, &mut events);
+        if first == 0 {
+            // A launch fork stands on its point at birth, cleared as the front's start is.
+            if let Some(entry) = field.emp.wave.fork.standing(survey) {
+                sweep_entry(field, survey, config, entry, &mut events);
+            }
+        } else {
+            advance_fork(field, survey, config, steps, &mut events);
         }
     }
     for step in first..last.min(total) {
-        let entry = (from + step) % total;
-        clear_entry(field, survey, config, entry, &mut events);
+        let Some(entry) = route_entry(survey, from, step) else {
+            break;
+        };
+        sweep_entry(field, survey, config, entry, &mut events);
         let wave = &mut field.emp.wave;
         if wave.forked || step == 0 {
             continue;
@@ -345,36 +489,51 @@ pub fn step_wave(field: &mut Field, survey: &Survey, config: &Config, dt: f32) -
             at: 0,
         };
         if let Some(first_entry) = survey.branch_entry(branch, 0) {
-            clear_entry(field, survey, config, first_entry, &mut events);
+            sweep_entry(field, survey, config, first_entry, &mut events);
         }
-        for _ in step + 1..last {
-            let Some(entry) = field.emp.wave.fork.step(survey) else {
-                break;
-            };
-            clear_entry(field, survey, config, entry, &mut events);
-        }
+        advance_fork(field, survey, config, last - step - 1, &mut events);
     }
     events
 }
 
-/// The [`Survey::entry`] index the wave's second front stands on, or `None` before it forks and
-/// once the wave has ended.
+/// The [`Survey::entry`] index the wave's second front stands on, or `None` before it forks,
+/// once the wave has ended and for one that walks nothing.
 #[must_use]
 pub fn fork_entry(wave: &Wave, survey: &Survey) -> Option<usize> {
     if !wave.live || !wave.forked {
         return None;
     }
-    if wave.fork.on_ring {
-        return Some(usize::from(wave.fork.at));
-    }
-    survey.branch_entry(usize::from(wave.fork.branch), usize::from(wave.fork.at))
+    wave.fork.standing(survey)
 }
 
 /// The survey entry the wave's front stands on, or `None` with no wave in flight.
 #[must_use]
 pub fn front_entry(wave: &Wave, survey: &Survey) -> Option<usize> {
-    let total = survey.entries.len();
-    (wave.live && total > 0).then(|| (usize::from(wave.from) + usize::from(wave.front)) % total)
+    if !wave.live || survey.entries.is_empty() {
+        return None;
+    }
+    route_entry(survey, usize::from(wave.from), usize::from(wave.front))
+}
+
+/// What a front does on the point it reaches (`EMP_SweepSections`): destroys the lanes of the
+/// point's own placement record, or, with none, those of the record at the other route's nearest
+/// point (`0x0013baa4`-`0x0013bb2c`, `detonator-emp.md`, "The other route's record").
+fn sweep_entry(
+    field: &mut Field,
+    survey: &Survey,
+    config: &Config,
+    entry: usize,
+    events: &mut Vec<Event>,
+) {
+    let target = if survey.has_record(entry) {
+        entry
+    } else {
+        match survey.sibling(entry).filter(|&s| survey.has_record(s)) {
+            Some(sibling) => sibling,
+            None => return,
+        }
+    };
+    clear_entry(field, survey, config, target, events);
 }
 
 fn clear_entry(

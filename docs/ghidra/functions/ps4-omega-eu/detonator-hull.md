@@ -46,7 +46,13 @@ The v1.07 strings `mine_rita_football.vex`/`mine_rita_spikes.vex`/`Electric_Visu
 (referenced from `0x01364870`), `detonator_bomb_final.vex` and `_final_equalisers`/`_glowedges`
 (from `0x0135f380`), and `detonator_cannonbolt.vex`/`hd_muzzleflash_detonator.vex` (from
 `0x0135a740`) are HD's names. The models ship in `data00.psarc` under `weapons/` and `weapons2048/`.
-**Ported**: `oag_omega::race::DETONATOR.objects` names HD's entries and the test resolves each.
+**Ported**: `oag_omega::race::DETONATOR_OBJECTS` names HD's entries and the test resolves each.
+
+**The visualiser: ported** (2026-11-25). `Data/weapons/electric_visualiser.rcsmodel` (and `weapons2048/`) is a 132-vertex
+disc of radius 2.447 in its own XY plane, stride 32: `Uv3`, `Uv1_Uv2` and `VertexColour1` are in its declaration. Its
+material's GCN pixel program is HD's visualiser law with the pictures named by sampler
+([detonator-mine-draw.md](../ps3-hdfury-eu/detonator-mine-draw.md), "The visualiser, wired"). `oag_omega::race::DETONATOR_OBJECTS`
+names `Data\Weapons\electric_visualiser.vex`; the ring draws on a laid mine. **80.**
 
 **Pad: checked, differs.** v1.07 has no `Detonator_Pad` string. In mode `0xe`, the world loader
 (`0x013c47f0`) formats `"%s.vex"`/`"%s.rcsmodel"` over a path held at `DAT_020128f8 + 0x288`, a data

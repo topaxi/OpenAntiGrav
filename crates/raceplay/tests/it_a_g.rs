@@ -64,6 +64,7 @@ mod destroy_camera_ground_truth;
 mod detonator_ground_truth;
 mod detonator_hud_ground_truth;
 mod detonator_hull_ground_truth;
+mod detonator_loop_ground_truth;
 mod difficulty_ground_truth;
 mod eliminator_finish_ground_truth;
 mod eliminator_pad_stamp_ground_truth;

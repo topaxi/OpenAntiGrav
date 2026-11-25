@@ -395,8 +395,14 @@ pub fn step_cannon<S: Craft>(
         }
         let wall = update_round(&mut field.cannon.rounds[index], dt, sweep);
         if let Some((at, normal)) = wall {
+            let round = &field.cannon.rounds[index];
             events.push(Event {
-                kind: EventKind::RoundWall { normal },
+                kind: EventKind::RoundWall {
+                    normal,
+                    spawn: at - round.normal * RIDE,
+                    rebound: (round.vel - normal * (2.0 * round.vel.dot(normal)))
+                        .normalize_or_zero(),
+                },
                 at,
             });
         }

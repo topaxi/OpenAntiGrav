@@ -170,6 +170,7 @@ mod alpha_emissive;
 mod billboard_glass;
 mod bomb_tint;
 pub mod bullet_gauge;
+pub mod cannon_bolt;
 mod chevron_pulse;
 mod cutout;
 mod damage_lights;
@@ -984,6 +985,15 @@ fn build_with_options(
                         (Some(pair), Some(uv1), Some(uv2), Some(light))
                     }
                     None => (texcoords, lightmap_texcoords, texcoords2, vertex_light),
+                };
+                // The cannon bolt's program reads both pairs of its one `float4` attribute.
+                let (texcoords, lightmap_texcoords) = match cannon_bolt::route(
+                    surface.roles,
+                    &out.emissive,
+                    (mesh, model_blob, submesh, stride),
+                ) {
+                    Some((uv1, uv0)) => (Some(uv1), Some(uv0)),
+                    None => (texcoords, lightmap_texcoords),
                 };
                 let tangents = if surface.tangent.carried() {
                     let inline = mine_rim::draws_mine_rim(surface.roles, &out.emissive);
