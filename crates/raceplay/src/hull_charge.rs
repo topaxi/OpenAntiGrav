@@ -127,7 +127,11 @@ mod tests {
             (8, [1.0, 1.0]),
             (12, [1.0, 1.0]),
         ] {
-            assert_eq!(Shown::settled(level(&HD, n, 4, 8), 0.0).charge, expect, "n {n}");
+            assert_eq!(
+                Shown::settled(level(&HD, n, 4, 8), 0.0).charge,
+                expect,
+                "n {n}"
+            );
         }
     }
 
