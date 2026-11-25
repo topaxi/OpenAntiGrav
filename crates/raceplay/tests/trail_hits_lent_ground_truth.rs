@@ -119,7 +119,7 @@ fn assert_burst_is_in_the_ribbons_hue(loaded: &race::Loaded, law: oag_fx::exhaus
     for emitter in &effect.emitters {
         let sprite = emitter.sprite.as_ref().expect("HD authors both sprites");
         let (mut texel, mut weight) = ([0.0f32; 3], 0.0f32);
-        for t in sprite.rgba.chunks_exact(4) {
+        for t in sprite.rgba.as_chunks::<4>().0 {
             let alpha = f32::from(t[3]);
             for c in 0..3 {
                 texel[c] += f32::from(t[c]) * alpha;

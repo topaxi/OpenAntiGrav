@@ -598,7 +598,7 @@ fn drawn_colour(
     sprite: &oag_fx::psys::sprite::Sprite,
 ) -> [f32; 3] {
     let (mut texel, mut weight) = ([0.0f32; 3], 0.0f32);
-    for t in sprite.rgba.chunks_exact(4) {
+    for t in sprite.rgba.as_chunks::<4>().0 {
         let a = f32::from(t[3]);
         for c in 0..3 {
             texel[c] += f32::from(t[c]) * a;
