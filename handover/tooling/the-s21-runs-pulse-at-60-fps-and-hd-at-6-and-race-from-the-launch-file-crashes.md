@@ -2,7 +2,7 @@
 status: measure
 titles: [all]
 updated: 2026-11-25
-summary: "S21: HD at scale 25 races at 17 fps (CPU 23 ms, glass target 11 ms); --race stays in the flyby on the phone; mixer runs under --no-audio"
+summary: "S21: HD at scale 25 races at 17 fps (CPU 23 ms, glass target 11 ms); --race now races (autopilot skips the flyby); --no-audio mixer idle"
 categories: [rendering]
 size: L (50)
 difficulty: medium (50)
@@ -18,12 +18,12 @@ HD defaults at 7.5 fps from a cold start and 5.9 from a warm one (median frame 1
 
 Ranked by the frame-time win expected on this phone. Each names the evidence and the command that would show the number move.
 
-0. **The launch file's `--race` on the phone never leaves the pre-race flyby** (main `f928359`, HD Vineta K both directions): `simpleperf` has no
-   `Race::tick`, `frame-phases` ticks 0.2 ms, the screen is the flyby camera with no HUD. Phone measurements must use the menu route until it is fixed.
-   Measure: `--race --frame-log` on the phone, then `adb exec-out screencap -p` after 60 s and a `frame-phases` `ticks` above 1 ms.
+0. ~~**The launch file's `--race` on the phone never leaves the pre-race flyby.**~~ Fixed: HD's flyby only ends on a press (`Ending::OnlyBySkip`), and `--autopilot` now presses it
+   (`docs/tools/android.md`, "Where an HD frame goes on the S21"): HD `ends after 1 tick(s)`, HUD on screen; Pulse's flyby ends by itself (1529 ticks) and always raced. A phone measurement may use `--race --autopilot` on both titles.
+   Read a run with `OAG_LOG_FILE_FILTER=warn,oag=debug` (launch-file line) and the log's `pre-race flyby: ends after N tick(s)`; `frame-phases` ticks do not tell Pulse's flyby from racing.
 0a. **HD racing at render scale 25 is CPU and GPU both** (`docs/tools/android.md`, "Where an HD frame goes on the S21"): frame thread about 23 ms
    (ticks 5.6, scene 8.3, submit 9.1), frame 47 to 62 ms. Per pass with `OAG_SKIP_PASSES` while racing: the glass target 10.6 ms; adverts and bloom inside the noise.
-   A `simpleperf` of the frame thread: the audio mixer runs under `--no-audio` (6.8 %), `RaceView::capture_poses` 6 %, particles about 10 %; each a candidate for an exact CPU cut.
+   A `simpleperf` of the frame thread: ~~the audio mixer runs under `--no-audio` (6.8 %)~~ (fixed: 0.44 % of samples on HD, 0.09 % on Pulse, voice bookkeeping only), `RaceView::capture_poses` 6 %, particles about 10 %; each a candidate for an exact CPU cut.
    Measure: the same 20 s `simpleperf --app` on a menu-route race and the `frame-phases` `ticks`.
    Picture-changing proposal for the maintainer: the glass target sized off the render scale (the original's is half its 1280x720 output per axis), up to 10.6 ms on Vineta K only.
 1. **HD's phone default is a render scale the phone cannot draw.** Scene pass 114 ms at 1906x1080, 41 ms at render scale 50, 14 ms at scale 25 (fps 5.5, 10.6, 16.1, warm starts).
@@ -55,7 +55,7 @@ Ranked by the frame-time win expected on this phone. Each names the evidence and
 
 ## Next Steps
 
-0. Fix item 0, then profile item 0a's frame thread for exact CPU cuts (the mixer under `--no-audio` first); the glass-target proposal is the maintainer's.
+0. Profile item 0a's frame thread for the next exact CPU cut (`capture_poses`, particles); the glass-target proposal is the maintainer's.
 1. Item 1 first: a phone default for HD's render scale, then the same A/B table.
 2. A simpleperf profile of HD at scale 25 (`docs/tools/android.md`, "Reproducing it") to size item 3.
 3. Re-run the phase script on both phones (item 7 is fixed), with `--no-audio` added.

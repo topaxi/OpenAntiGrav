@@ -460,6 +460,11 @@ pub(crate) struct DriverArgs {
     ///
     /// The capture stops on the tick the race ends, so a `--ticks` past the
     /// flag lands on the board rather than overshooting it.
+    ///
+    /// In a window it also presses the skip of a pre-race flyby that only a
+    /// press ends (HD's repeats until one), as a hand holding Cross would;
+    /// a flyby that ends by itself (Pulse's) still plays out. `--no-intro`
+    /// drops every flyby.
     #[arg(long)]
     pub(crate) autopilot: bool,
 
