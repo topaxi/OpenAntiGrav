@@ -12,7 +12,7 @@
 
 use std::sync::Arc;
 
-use oag_fx::psys;
+use oag_fx::{exhaust::TrailLaw, psys};
 use oag_title::Trigger;
 
 use super::{Options, assets};
@@ -20,9 +20,15 @@ use crate::TrailHits;
 
 /// The lent effect, placed in `effects` (so its sprites join the shared sheet), or `None` when
 /// the setting is off, the craft's title plays its own, or no source supplies one.
+///
+/// It is redrawn in the hue of the ribbon `law` draws, at its own brightness
+/// (`docs/formats/pulse-absent-effects.md`, "Trail-hit burst colour"): HD authors its burst in
+/// the colour of HD's ribbon, and the sprites carry it. A burst the title authors never comes
+/// through here, so it is drawn as authored.
 pub(super) fn lend(
     options: &Options,
     craft_title: &oag_title::Title,
+    law: TrailLaw,
     effects: &mut psys::Library,
     report: &mut Vec<String>,
 ) -> Option<Arc<psys::Effect>> {
@@ -70,7 +76,10 @@ pub(super) fn lend(
     match loaded {
         Ok((effect, note)) => {
             report.push(note);
-            effects.insert(name, effect);
+            effects.insert(
+                name,
+                effect.recoloured(psys::Tint::towards(law.ribbon_colour())),
+            );
             report.push(format!(
                 "trail hits: {name} read off {}, played for a craft flying in a rival's trail; an \
                  enhancement of this project's, {} authors no such burst",
@@ -121,6 +130,7 @@ mod tests {
         let lent = lend(
             &Options::default(),
             oag_pulse::TITLE,
+            TrailLaw::Ramped,
             &mut effects,
             &mut report,
         );
@@ -132,7 +142,13 @@ mod tests {
     fn on_with_no_source_lends_nothing_and_the_report_says_why() {
         for title in [oag_pulse::TITLE, oag_pure::TITLE] {
             let (mut effects, mut report) = (psys::Library::new(), Vec::new());
-            let lent = lend(&on(None), title, &mut effects, &mut report);
+            let lent = lend(
+                &on(None),
+                title,
+                TrailLaw::Ramped,
+                &mut effects,
+                &mut report,
+            );
             assert!(lent.is_none() && effects.is_empty(), "{}", title.name);
             assert_eq!(report.len(), 1, "{report:?}");
             assert!(
@@ -151,6 +167,7 @@ mod tests {
         let lent = lend(
             &on(Some("does/not/exist.iso")),
             oag_pulse::TITLE,
+            TrailLaw::Ramped,
             &mut effects,
             &mut report,
         );
@@ -210,7 +227,13 @@ mod tests {
     fn a_title_with_its_own_burst_ignores_the_setting() {
         for title in [oag_hd::TITLE, oag_2048::TITLE, oag_omega::TITLE] {
             let (mut effects, mut report) = (psys::Library::new(), Vec::new());
-            let lent = lend(&on(None), title, &mut effects, &mut report);
+            let lent = lend(
+                &on(None),
+                title,
+                TrailLaw::Ramped,
+                &mut effects,
+                &mut report,
+            );
             assert!(lent.is_none() && report.is_empty(), "{}", title.name);
         }
     }

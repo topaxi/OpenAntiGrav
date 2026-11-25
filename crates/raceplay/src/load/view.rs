@@ -631,7 +631,14 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
         }
     }
     // Lent before the mods' effects, so no mod sprite moves; a no-op unless `graphics.trail_hits`.
-    let lent_trail_hit = trail_hits::lend(options, craft_title, &mut effects, &mut report);
+    let ps2_trail = title.looks.ps2_trail.applies(archives.layout.platform);
+    let lent_trail_hit = trail_hits::lend(
+        options,
+        craft_title,
+        oag_fx::exhaust::TrailLaw::for_ps2(ps2_trail),
+        &mut effects,
+        &mut report,
+    );
     let mods = mod_assets::ModAssets::new(&extension_sources, title, options);
     let (mod_shaders, mod_effects) =
         mods.shaders_and_effects(&mut archives, &mut effects, &mut report);
@@ -840,7 +847,7 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
         request: Some(options.replay_setup_on(&track)),
         campaign_event: false,
         hd_trail: trail_shape.is_some().then_some(hd_trail_red),
-        ps2_trail: title.looks.ps2_trail.applies(archives.layout.platform),
+        ps2_trail,
         shield_targets: roster::shield_targets(
             options,
             craft_title,

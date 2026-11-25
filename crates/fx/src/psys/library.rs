@@ -1,7 +1,16 @@
 //! The effects a caller has loaded, by name - split out of `psys.rs`, which
 //! is past the 1,000-line rule and ratcheted.
 
-use super::{Effect, Render, Sheet, StreakDraw};
+use super::{Effect, EmitterSpec, Render, Sheet, StreakDraw};
+
+impl EmitterSpec {
+    /// Whether a quad of this emitter reads its sprite: a streak samples only where its strip is
+    /// read (see [`streak`](super::streak)).
+    #[must_use]
+    pub(super) fn samples_sprite(&self) -> bool {
+        self.render == Render::Billboard || self.streak != StreakDraw::Procedural
+    }
+}
 
 /// The effects a caller has loaded, by name.
 ///
@@ -34,9 +43,7 @@ impl Library {
     /// first; one that does not fit keeps the procedural profile.
     pub fn insert(&mut self, name: &str, mut effect: Effect) {
         for spec in &mut effect.emitters {
-            // A streak samples only where its strip is read - see [`streak`].
-            let sampled = spec.render == Render::Billboard || spec.streak != StreakDraw::Procedural;
-            if let (true, Some(sprite)) = (sampled, &spec.sprite) {
+            if let (true, Some(sprite)) = (spec.samples_sprite(), &spec.sprite) {
                 spec.sheet_rect = self.sheet.place(sprite);
             }
         }

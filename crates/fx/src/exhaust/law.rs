@@ -19,6 +19,13 @@ pub enum TrailLaw {
 }
 
 impl TrailLaw {
+    /// The law a race draws: [`Self::Baked`] where the title takes the PS2's trail
+    /// (`oag_title::Looks::ps2_trail`), [`Self::Ramped`] otherwise.
+    #[must_use]
+    pub fn for_ps2(ps2_trail: bool) -> Self {
+        if ps2_trail { Self::Baked } else { Self::Ramped }
+    }
+
     /// The first layer this law submits.
     #[must_use]
     pub const fn first_layer(self) -> usize {
