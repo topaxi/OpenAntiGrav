@@ -992,7 +992,9 @@ leaves the three streaks procedural). All five sprites ship under `/data/psys/te
 0.1 to 0.8 units, unmatched). Compared by eye with the original's frames at the same craft position (ours with
 the original's matrices replayed at their game times): both show the arcing blue ribbon, the white dashes along
 the rebound and the small flash. Not tick-matched and not camera-matched, so size and brightness are not
-measured (60).
+measured, and by eye ours is fainter (60 for "the same elements"). **Open:** at the grab's own game time one of
+the two frames of ours shows no spark where the original shows the arcs; they appear 11 to 33 ticks later. Either
+the earlier hits sit behind ours' closer chase camera or ours' particles run late; not settled.
 
 **2048 / Omega, the spark.** Both ship `WO_CANNON_SPARKS_DETONATOR.POB` and parse it
 (`psys_2048_ground_truth.rs`, `psys_omega_ground_truth.rs`), and both spawn it with HD's fourcc `0x42444f52` in
