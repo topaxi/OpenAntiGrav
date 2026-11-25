@@ -37,3 +37,11 @@ Start after per-pass timing has merged, so the reflection target's pass has its 
 6. **Phone check:** S21, HD Vineta K, render scale 25 under `auto`. It should settle at quarter and match the fixed quarter's numbers within noise. Desktop: stays original.
 
 The lineage check is HD, 2048 and Omega: each ships the glass/sea target per `docs/rendering/water.md`; say which ones the step applies to.
+
+**7. An `off` value, only if it is worth it (maintainer, 2026-11-25: "add only if significant fps gain (~4-5 fps on S21)").**
+- **Measure first.** On the S21 (HD Vineta K, render scale 25, same protocol as the quarter run in `docs/tools/android.md`), compare `quarter` against the pass skipped (`behind_glass.rs` already has an early exit, `if !draw`).
+- **Add it only if** `off` beats `quarter` by about 4 fps or more on average. Otherwise record the measured numbers in `docs/rendering/water.md` and do not add the value.
+- **If added:**
+  - It is a manual choice only; `auto` never goes below `quarter` (losing the sea mirror changes the look, not just the sharpness).
+  - The glass and sea sample a cheap stand-in (the sky, or the material's own tint), not an empty target.
+  - `string_id` and English text, and a test that the pass is not encoded under `off`.
