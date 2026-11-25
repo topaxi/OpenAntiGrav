@@ -403,6 +403,11 @@ impl Session {
                             .race
                             .set_ghost_visible(self.settings.display.ghost_ship_shown(shell.title));
                     }
+                    parked.scene.set_reflection_resolution(
+                        &self.gpu.device,
+                        &self.gpu.queue,
+                        render_profile.reflection_resolution,
+                    );
                     parked.scene.set_blur_resolution(blur_resolution);
                     parked.scene.set_band_levels(spectrum);
                     parked.render(
