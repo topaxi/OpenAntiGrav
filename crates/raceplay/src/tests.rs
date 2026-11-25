@@ -46,6 +46,7 @@ mod disruptor_craft_fx;
 mod disruptor_launch;
 mod distance_reset;
 mod eliminator;
+mod emp_fork;
 mod energy_bar_delay;
 #[cfg(feature = "extensions")]
 mod extension_admit;

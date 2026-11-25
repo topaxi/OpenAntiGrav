@@ -675,6 +675,7 @@ impl Race {
                 survey: Arc::new(crate::detonator::survey(
                     &spline,
                     &order,
+                    course.as_ref(),
                     &collision,
                     &layout.values,
                 )),
@@ -974,6 +975,7 @@ impl Race {
                 plasma_launch: super::plasma_launch::PlasmaLaunch::new(),
                 quake_effect: None,
                 emp_effect: None,
+                emp_fork_effect: None,
                 repulser_effects: [[None; 4]; oag_weapons::projectile::repulser::POOL_SIZE],
                 repulser_fields: [None; oag_weapons::projectile::repulser::POOL_SIZE],
                 mag_floor_fx: Default::default(),
