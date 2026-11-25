@@ -6,8 +6,8 @@
 //!
 //! The rows are the original's own entity at the entry of every update, recorded from PPSSPP on
 //! Moa Therma White (`03`), whose helix is the largest bank of any Pulse circuit (85.8 degrees at
-//! spline sample 996; 80 to 86 degrees from sample 600 to 1500). One Plasma (released at sample
-//! 845) and one Rocket volley (fired at sample 845), each from the original's Autopilot-flown craft
+//! spline sample 996; 80 to 86 degrees from sample 600 to 1500). One Plasma (fired at sample 760,
+//! released 60 frames later) and one Rocket volley (fired at sample 845), each from the original's Autopilot-flown craft
 //! (`docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`, "Pulse on the steepest bank").
 //! Each flight is seeded from the original's state at update 1 and chained on the original's own
 //! `dt`, so the firing pose is the original's.
