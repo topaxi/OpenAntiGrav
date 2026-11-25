@@ -97,7 +97,7 @@ pub(super) fn plan(
                 .submeshes
                 .iter()
                 .filter(|s| s.material == Some(index))
-                .all(|s| routable(s));
+                .all(routable);
             readable.then_some(())?;
             let sampler = |name: &str| {
                 material
@@ -150,6 +150,9 @@ fn routable(submesh: &SubMesh) -> bool {
         && submesh.colours.len() == n
 }
 
+/// `(texcoord, lightmap_texcoord, texcoord2, sun_mask)`.
+pub(super) type RingVertex = ([f32; 2], [f32; 2], [f32; 2], f32);
+
 /// A vertex of the ring: `(texcoord, lightmap_texcoord, texcoord2, sun_mask)` as the shader reads
 /// them (`Uv3`, `uv1`, `uv2`, `VertexColour1.w`), for a vertex of a material this module
 /// admitted (its first entry is in `emissive` at `slot`).
@@ -158,7 +161,7 @@ pub(super) fn vertex(
     emissive: &[Emissive],
     submesh: &SubMesh,
     i: usize,
-) -> Option<([f32; 2], [f32; 2], [f32; 2], f32)> {
+) -> Option<RingVertex> {
     let slot = usize::try_from(twin?.slot).ok()?.checked_sub(1)?;
     (emissive.get(slot)?.program[0] == PROGRAM_ELECTRICITY).then_some(())?;
     let &[a, b, c, d] = submesh.packed_texcoords.get(i)?;

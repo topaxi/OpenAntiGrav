@@ -69,7 +69,7 @@ fn both_omega_visualiser_models_bind_the_electricity_program() {
         assert_eq!(model.vertices.len(), 132, "{path}");
         let alphas: Vec<f32> = model.vertices.iter().map(|v| v.sun_mask).collect();
         assert!(
-            alphas.iter().any(|&a| a == 0.0) && alphas.iter().any(|&a| a == 1.0),
+            alphas.contains(&0.0) && alphas.contains(&1.0),
             "VertexColour1.w is the ring's alpha: {path}"
         );
         let draw = model
