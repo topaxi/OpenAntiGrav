@@ -139,6 +139,12 @@ pub const PROGRAM_VERTEX_BLEND: f32 = 18.0;
 /// binding's **alpha**, unsquared, times the entry's tint, added like [`PROGRAM_EMISSIVE_ADD`].
 pub const PROGRAM_EMISSIVE_ALPHA_MASK: f32 = 9.0;
 
+/// [`PROGRAM_EMISSIVE_ALPHA_MASK`] for the light bars of one class of 2048's and Omega's own
+/// weapon pads, in [`PadClass`](super::rcs::psp2::circuit_pads::PadClass) order. The shader's
+/// ranged test reads each as the plain mask; the engine rewrites the entry's tint per frame with
+/// the class's colour cycle (`docs/rendering/pads.md`, "2048 and Omega").
+pub const PROGRAM_PAD_BARS: [f32; 3] = [9.1, 9.2, 9.3];
+
 /// [`Emissive::program`]'s mode for 2048's `fc10_Lambert_2UV_Emissive`: the third binding (its
 /// `ReflectMap`) read at `0.5 + 0.5 * R.xy`, `R` the view vector reflected about the world normal,
 /// squared, times the **picture's alpha**, added after the light and before the fog. See

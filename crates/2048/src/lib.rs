@@ -124,7 +124,10 @@ pub const TITLE: &Title = &Title {
         "/data/tex/smoke_trails_frame1_alpha.gxt",
         oag_title::Origin::InheritedFrom("Wipeout HD"),
     )),
-    weapon_pad_glow: &oag_title::weapon_pad::WeaponPadGlow::Authored,
+    // Read in this title's own executable (`docs/rendering/pads.md`, "2048 and Omega").
+    weapon_pad_glow: &oag_title::weapon_pad::WeaponPadGlow::ByClass(
+        oag_title::weapon_pad::ClassCycles::LINEAGE,
+    ),
     flare: &oag_title::flare::Flare::PerTeam(oag_title::flare::Authored {
         stem: "engineflare",
         always: "EF_Main",

@@ -189,6 +189,9 @@ pub struct Report {
     /// Of that family, materials left to the generic reading: no `Texture2Alpha`, no `Constant1`,
     /// or a picture that would not decode.
     pub emissive_add_unread: usize,
+    /// Weapon pad classes left on their material's own entry because the glow table is full:
+    /// their bars keep the authored colour.
+    pub pad_bars_unheld: usize,
     /// Omega's `tarmac_markings_dirt_markingsnormal[_emis]` roads that lay their dirt and
     /// markings pictures over the diffuse (`psp2::tarmac`).
     pub tarmac_materials: usize,
@@ -415,6 +418,14 @@ impl Report {
                 self.emissive_add_materials, self.emissive_add_unread
             )
         };
+        let pad_bars = if self.pad_bars_unheld == 0 {
+            String::new()
+        } else {
+            format!(
+                "; {} weapon pad class(es) with no room in the glow table (authored bar colour)",
+                self.pad_bars_unheld
+            )
+        };
         let tarmac = if self.tarmac_materials + self.tarmac_unread == 0 {
             String::new()
         } else {
@@ -522,7 +533,7 @@ impl Report {
         let hull_colour = self.hull_colour.describe();
         format!(
             "{} triangle(s) over {} submesh(es), {texture}, {} authored \
-             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{placeholders}{zone_colours}{track_shapes}{scrolls}{twins}{holograms}{tangents}{flipped}{lightmaps}{see_through}{nodes}{gnf}{lighting_only}{alpha_product}{flat_constants}{emissive_add}{tarmac}{crowd}{snow}{rock}{vertex_blend}{alpha_emissive}{lightning}{refraction}{uv_keys}{panel}{hull_colour}",
+             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{placeholders}{zone_colours}{track_shapes}{scrolls}{twins}{holograms}{tangents}{flipped}{lightmaps}{see_through}{nodes}{gnf}{lighting_only}{alpha_product}{flat_constants}{emissive_add}{pad_bars}{tarmac}{crowd}{snow}{rock}{vertex_blend}{alpha_emissive}{lightning}{refraction}{uv_keys}{panel}{hull_colour}",
             self.triangles, self.submeshes, self.authored_normals, self.unpaired
         )
     }

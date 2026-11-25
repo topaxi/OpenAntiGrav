@@ -452,6 +452,9 @@ fn build_scanned(
             &mut report,
         )
     };
+    // Weapon pads' bars take an entry per class, so each can be recoloured on its own.
+    let pad_bars =
+        circuit_pads::PadBars::plan(&decoded, &emissive_add, &mut glow.emissive, &mut report);
     model.emissive = glow.emissive.clone();
     model.anim_tracks = glow.tracks.clone();
     let uv_keys = billboard_vex.map_or_else(uv_keys::Plan::default, |vex_blob| {
@@ -803,7 +806,9 @@ fn build_scanned(
                     role | glow.role(submesh.material)
                 } else {
                     role
-                }) | emissive_add.role(submesh.material)
+                }) | pad_bars
+                    .role(&decoded, submesh)
+                    .unwrap_or_else(|| emissive_add.role(submesh.material))
                     | tarmac.role(submesh.material)
                     | crowd.role(submesh.material)
                     | chevron.role(submesh.material)

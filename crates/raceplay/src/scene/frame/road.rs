@@ -66,6 +66,23 @@ impl Scene {
         // Ready-to-collect vs cooling down - see `Drawable::tint_weapon_pads`
         // and `oag_render::weapon_pad` for the recovered mechanism this
         // reproduces. Gameplay state, driven off `seconds` like the scenery.
+        // 2048's and Omega's weapon pads are drawn with their circuit, one glow entry per class
+        // of pad; every pad of a class shares its colour.
+        if let oag_title::weapon_pad::WeaponPadGlow::ByClass(classes) =
+            race.core.sim.weapon_pad_glow
+        {
+            use oag_mesh::mesh::rcs::psp2::circuit_pads::PadClass;
+            for class in PadClass::ALL {
+                let cycle = match class {
+                    PadClass::Offensive => classes.offensive,
+                    PadClass::Defensive => classes.defensive,
+                    PadClass::Other => classes.other,
+                };
+                let colour = cycle.colour(seconds.max(0.0) * cycle.keys_per_second);
+                self.track
+                    .write_program_glow(queue, class.program(), colour, 0.0);
+            }
+        }
         if let Some(weapon_pads) = &self.weapon_pads {
             pads_ready.extend(
                 race.core
@@ -78,7 +95,8 @@ impl Scene {
                 oag_title::weapon_pad::WeaponPadGlow::Cycle(cycle) => {
                     weapon_pads.glow_weapon_pads(queue, seconds, cycle, pads_ready);
                 }
-                oag_title::weapon_pad::WeaponPadGlow::Authored => {
+                oag_title::weapon_pad::WeaponPadGlow::Authored
+                | oag_title::weapon_pad::WeaponPadGlow::ByClass(_) => {
                     weapon_pads.tint_weapon_pads(queue, seconds, pads_ready, recoloured);
                 }
             }

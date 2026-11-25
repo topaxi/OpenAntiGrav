@@ -118,7 +118,10 @@ pub const TITLE: &Title = &Title {
         "/data/tex/smoke_trails_frame1_alpha.gnf",
         oag_title::Origin::InheritedFrom("Wipeout HD"),
     )),
-    weapon_pad_glow: &oag_title::weapon_pad::WeaponPadGlow::Authored,
+    // Read in this title's own executable (`docs/rendering/pads.md`, "2048 and Omega").
+    weapon_pad_glow: &oag_title::weapon_pad::WeaponPadGlow::ByClass(
+        oag_title::weapon_pad::ClassCycles::LINEAGE,
+    ),
     // **Per team, on 2048's shape**: an `EngineFlare.vex` + `.rcsmodel`
     // beside each hull with `EF_Main`/`EF_Boost` groups. The sprite is the
     // executable's own literal `data/Tex/EngineFlare/Engine_Flare_Rich.gnf`.
