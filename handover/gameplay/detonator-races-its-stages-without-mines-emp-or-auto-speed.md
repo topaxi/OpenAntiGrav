@@ -277,9 +277,9 @@ placement RNG cannot match the original's `Libc_Rand` (a departure, documented).
 - **Cannon bolt (`det-cannon-bolt-look`)**: the bolt's program and the half turn are wired on HD and the loop ride is
   confirmed live (`detonator-cannon.md`, "The bolt's look and the loop"). ~~(1) the spark's frame~~ read live and wired (`det-cannon-spark`, `detonator-cannon.md`, "The spark's matrix, read
   live"); left of it: the `-0.3` along the wall normal, size, brightness and timing (a camera-matched pair at a close wall
-  hit: read the view matrix in the death pause, fire ours through the simulation, render with `--camera-pose`), and 2048's and
-  Omega's tables not answering the trigger. Open: (2) the bolt's GXP (2048) and GCN (Omega) programs are unread, so those titles draw it through the
-  generic path (Omega binds the ring strip as diffuse); (3) the 0.05 to 4.8 unit sideways drift through the loop, 60 Hz
+  hit: read the view matrix in the death pause, fire ours through the simulation, render with `--camera-pose`).
+  ~~2048's and Omega's trigger~~ and ~~(2) their bolt programs~~ wired (`det-cannon-bolt-2048-omega`); neither has an
+  original frame. Open: (3) the 0.05 to 4.8 unit sideways drift through the loop, 60 Hz
   against 30 Hz suspected; (4) no side-on capture of the original's bolt.
 
 - **Mine look (`det-mine-lit`)**: the normal map is read now (the chunk has one coordinate set), so hubs and holes show.
@@ -430,8 +430,8 @@ original frame to compare. The detail is below.
   `sec+0x40`/`+0x60`, how a mine or bomb leaves its pool (the bomb pool is 2 and the spawn does
   not check it), `0x0012ae38`/`0x0012ae10`/mine vslot `+0x3c`. Models: see the hull bullet
   above (`DetonatorMine_Construct` `0x0013a7d8`, `DetonatorBomb_Construct`); effects `WO_BOMB_EXPLO_DETONATOR`,
-  `WO_MINE_EXPLO_DETONATOR[_DEAD]`, `WO_CANNON_SPARKS_DETONATOR` (2048 `data2.psarc`), whose
-  triggers need the hit read first.
+  `WO_MINE_EXPLO_DETONATOR[_DEAD]` (2048 `data2.psarc`), whose
+  triggers need the hit read first (the cannon's wall spark is wired on 2048 and Omega).
 - **EMP: wired** (`det-emp-wire`, `detonator-emp.md` "Wired"). ~~The wave's reach and speed, the kill's
   effect and sound~~: read live and drawn on HD (`det-emp-look-re`, 2026-11-24, `detonator-emp.md`
   "What HD draws for a fired EMP": one survey entry a tick for `extent` seconds, `WO_QUAKE_DETONATOR`

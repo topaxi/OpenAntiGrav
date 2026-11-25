@@ -6,7 +6,7 @@
 //! `docs/rendering/hd-unlit-programs.md`, "The Detonator cannon bolt"). The vertex program splits
 //! one `float4` attribute: `.xy` (`uv0`) to `TC0.w`/`TC1.w`, `.zw` (`uv1`) to `TC3`. With `t` the
 //! engine clock, unit 0 `hd_detonator_cannonbolt` (a blue band, a cloud in its alpha), unit 1
-//! `hd_detonator_cannonbolt_glow` (a 4x128 strip whose alpha is eight rings brightening along `v`)
+//! `hd_detonator_cannonbolt_glow` (a 4x128 strip whose alpha is eight rings, brightest at `v = 0`)
 //! and `fB` the model's `fresnelBase`:
 //!
 //! ```text
