@@ -664,8 +664,15 @@ pub(crate) fn race_launch(
         blurred,
     } = route;
     options.water = crate::water_setting::for_source(settings, &options.source);
-    // Opening the source to find its profile costs a disc read, so once for the four rows.
-    let source_profile = crate::water_setting::profile_for_source(settings, &options.source);
+    // Opening the source to find its profile costs a disc read: only when a row has no flag.
+    let needs_profile = cli.shadow_resolution.is_none()
+        || cli.circuit_lighting.is_none()
+        || cli.reflection_resolution.is_none()
+        || cli.render_scale.is_none()
+        || cli.scene_precision.is_none();
+    let source_profile = needs_profile
+        .then(|| crate::water_setting::profile_for_source(settings, &options.source))
+        .flatten();
     options.shadow_resolution = cli.shadow_resolution.unwrap_or_else(|| {
         source_profile.map_or_else(Default::default, |profile| profile.shadow_resolution)
     });
@@ -675,12 +682,14 @@ pub(crate) fn race_launch(
     options.reflection_resolution = cli.reflection_resolution.unwrap_or_else(|| {
         source_profile.map_or_else(Default::default, |profile| profile.reflection_resolution)
     });
-    options.render_scale = match cli.render_scale {
+    let target_percent = cli.reflection_render_scale.or(cli.render_scale);
+    options.render_scale = match target_percent {
         Some(percent) => oag_display::display::Scale::try_from(percent)
             .map_err(|why| anyhow::anyhow!("--render-scale {percent}: {why}"))?,
-        None => source_profile.map_or(oag_display::display::Scale::FULL, |profile| {
-            profile.render_scale
-        }),
+        None => source_profile.map_or(
+            crate::settings::RenderProfile::default().render_scale,
+            |profile| profile.render_scale,
+        ),
     };
     options.scene_precision = cli.scene_precision.unwrap_or_else(|| {
         source_profile.map_or_else(Default::default, |profile| profile.scene_precision)

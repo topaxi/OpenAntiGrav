@@ -1364,7 +1364,6 @@ string_id = "OAG_GRAPHICS_REFLECTION_RESOLUTION"
 setting = "graphics.reflection_resolution"
 values = ["original", "scaled"]
 
-
 # Which law draws a sea, a lake or a pool: `off` is the surface's constant
 # colour or texture, lit, with no wave normal, scroll or reflection; `original`
 # is the title's own law and the default; `enhanced` is this project's own sea,

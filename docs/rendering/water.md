@@ -983,6 +983,11 @@ A discrete desktop GPU spends a tenth of a millisecond on the target; the whole 
 there. The setting exists for a phone: the S21 pays 10.6 ms for the Vineta K glass at render scale 25
 (`docs/tools/android.md`, "Where an HD frame goes on the S21"). Phone numbers for each circuit are open.
 
+**Photos.** A photo redraws the scene at the output's size or more, but its glass and sea target keeps the
+size the race loaded with. Under `scaled` below scale 100 the shot's `[render]` text therefore also carries
+`reflection_render_scale` (the load-time percent), and `--from-png` reads it, with `reflection_resolution`,
+through the hidden `--reflection-render-scale`, so the re-render sizes the target alike.
+
 **Open: the Android default.** The default is `original` everywhere. Whether the Android build should
 default a phone to `scaled` is the maintainer's call, to be made after the phone numbers.
 

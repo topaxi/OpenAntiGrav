@@ -1035,6 +1035,12 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) reflection_resolution: Option<oag_display::display::ReflectionResolution>,
 
+    /// The render scale, in percent, that `--reflection-resolution scaled` sizes the glass and
+    /// sea target from, when it is not `--render-scale`. A re-rendered photo sets it: the photo
+    /// was drawn at the output's size but its target was loaded at the player's own scale.
+    #[arg(long, hide = true)]
+    pub(crate) reflection_render_scale: Option<u32>,
+
     /// Which screen filter draws the finished frame: `off`, a built-in such
     /// as `psp-3000` or `crt-interlaced`, or the stem of a `.wgsl` file in
     /// `<config dir>/oag/shaders/`.
