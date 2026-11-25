@@ -45,6 +45,17 @@ fn draw_as_the_photo_was(meta: &shot_meta::Meta, cli: &mut Cli) {
     {
         cli.render_scale = Some(percent.max(100));
     }
+    if let Some(resolution) = render
+        .get("reflection_resolution")
+        .and_then(toml::Value::as_str)
+        .and_then(|text| text.parse().ok())
+    {
+        cli.reflection_resolution = Some(resolution);
+    }
+    cli.reflection_render_scale = render
+        .get("reflection_render_scale")
+        .and_then(toml::Value::as_integer)
+        .and_then(|percent| u32::try_from(percent).ok());
     if let Some(reconstruction) = render
         .get("reconstruction")
         .and_then(toml::Value::as_str)
@@ -256,6 +267,27 @@ mod tests {
         cli.apply_render_overrides(&mut profile, Some(Scale::HALF));
         assert_eq!(profile.scale_for((1920.0, 1080.0), false), Scale::FULL);
         assert_eq!(profile.reconstruction, Reconstruction::Off);
+    }
+
+    #[test]
+    fn a_photo_sizes_its_glass_target_from_the_scale_the_race_was_loaded_at() {
+        use oag_display::display::ReflectionResolution;
+        let meta = shot_meta::Meta {
+            render: Some(toml::toml! {
+                render_scale = 100
+                reflection_resolution = "scaled"
+                reflection_render_scale = 50
+            }),
+            ..shot_meta::Meta::default()
+        };
+        let mut cli = Cli::try_parse_from(["oag-game"]).expect("parses");
+        draw_as_the_photo_was(&meta, &mut cli);
+        assert_eq!(
+            cli.reflection_resolution,
+            Some(ReflectionResolution::Scaled)
+        );
+        assert_eq!(cli.reflection_render_scale, Some(50));
+        assert_eq!(cli.render_scale, Some(100));
     }
 
     #[test]

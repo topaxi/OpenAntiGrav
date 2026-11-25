@@ -287,6 +287,12 @@ pub const TITLE: &Title = &Title {
             on: oag_title::Platforms::Any,
             origin: oag_title::Origin::InheritedFrom("Wipeout HD"),
         },
+        // The refraction target the tunnel glass samples is drawn ahead of the main view:
+        // Omega (`docs/ghidra/functions/ps4-omega-eu/refraction-pass.md`).
+        screen_space_target: oag_title::Rule {
+            on: oag_title::Platforms::Any,
+            origin: oag_title::Origin::Measured,
+        },
         // The texture unit decodes Omega's sRGB-typed circuit pictures with the sRGB curve
         // (`docs/rendering/hd-track-tone.md`, "Omega's texels decode with the sRGB curve").
         texels_srgb: oag_title::Rule {

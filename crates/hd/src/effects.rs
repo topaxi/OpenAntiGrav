@@ -303,6 +303,14 @@ pub const LOOKS: &Looks = &Looks {
         on: Platforms::Any,
         origin: Origin::Measured,
     },
+    // The behind-the-glass target (640 x 360, Vineta K) and the planar sea reflection
+    // target (960 x 540, Moa Therma, Ubermall) are surfaces the race draws ahead of the main
+    // view, read live on RPCS3: `docs/rendering/water.md`, "The planar reflection", and
+    // `docs/formats/rcsmaterial.md`, "The behind-the-glass target is drawn".
+    screen_space_target: Rule {
+        on: Platforms::Any,
+        origin: Origin::Measured,
+    },
     // The launch boost: HD authors `<StartBoost>`; the grading law is Pulse PSP's, unmeasured on
     // HD (`docs/physics/launch-boost.md`).
     start_boost: Rule {

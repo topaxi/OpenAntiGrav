@@ -244,6 +244,7 @@ pub const LOOKS: &Looks = &Looks {
     blends_encoded: Rule::UNREAD,
     texels_srgb: Rule::UNREAD,
     final_composite_half_texel: Rule::UNREAD,
+    screen_space_target: Rule::UNREAD,
     // Pulse ends its frame in its own bloom (`oag_post::bloom`), not the `wo_*` chain.
     wo_composite: Rule::UNREAD,
     sky_brightness: Rule::UNREAD,

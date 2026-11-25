@@ -206,6 +206,7 @@ OAG_GRAPHICS_SHADOWS = { text = "SOMBRAS", human = false }
 OAG_GRAPHICS_SHADOW_RESOLUTION = { text = "RESOLUÇÃO DAS SOMBRAS", human = false }
 OAG_GRAPHICS_SCENE_PRECISION = { text = "PRECISÃO DA CENA", human = false }
 OAG_GRAPHICS_CIRCUIT_LIGHTING = { text = "ILUMINAÇÃO DO CIRCUITO", human = false }
+OAG_GRAPHICS_REFLECTION_RESOLUTION = { text = "RESOLUÇÃO DOS REFLEXOS", human = false }
 OAG_GRAPHICS_WATER = { text = "ÁGUA", human = false }
 OAG_GRAPHICS_MODEL_DETAIL = { text = "DETALHE DOS MODELOS", human = false }
 OAG_GRAPHICS_TEXTURE_DETAIL = { text = "DETALHE DAS TEXTURAS", human = false }

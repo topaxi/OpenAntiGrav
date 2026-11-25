@@ -530,6 +530,11 @@ impl Session {
         options.shadow_resolution = self.render_profile().shadow_resolution;
         options.scene_precision = self.render_profile().scene_precision;
         options.circuit_lighting = self.render_profile().circuit_lighting;
+        options.reflection_resolution = self.render_profile().reflection_resolution;
+        // The scale the scene is allocated at, gamescope's default included
+        // (`Self::render_scale_for`), which `scaled` sizes the target from.
+        options.render_scale = self.render_scale_for(self.scene_rect(self.gpu.output.size()));
+        self.loaded_render_scale = Some(options.render_scale);
         // And for the WATER row: the profile's choice, resolved against the discs this machine has.
         if let Some(shell) = self.shell.as_ref() {
             options.water = crate::water_setting::resolve(

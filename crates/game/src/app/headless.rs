@@ -664,17 +664,35 @@ pub(crate) fn race_launch(
         blurred,
     } = route;
     options.water = crate::water_setting::for_source(settings, &options.source);
+    // Opening the source to find its profile costs a disc read: only when a row has no flag.
+    let needs_profile = cli.shadow_resolution.is_none()
+        || cli.circuit_lighting.is_none()
+        || cli.reflection_resolution.is_none()
+        || cli.render_scale.is_none()
+        || cli.scene_precision.is_none();
+    let source_profile = needs_profile
+        .then(|| crate::water_setting::profile_for_source(settings, &options.source))
+        .flatten();
     options.shadow_resolution = cli.shadow_resolution.unwrap_or_else(|| {
-        crate::water_setting::profile_for_source(settings, &options.source)
-            .map_or_else(Default::default, |profile| profile.shadow_resolution)
+        source_profile.map_or_else(Default::default, |profile| profile.shadow_resolution)
     });
     options.circuit_lighting = cli.circuit_lighting.unwrap_or_else(|| {
-        crate::water_setting::profile_for_source(settings, &options.source)
-            .map_or_else(Default::default, |profile| profile.circuit_lighting)
+        source_profile.map_or_else(Default::default, |profile| profile.circuit_lighting)
     });
+    options.reflection_resolution = cli.reflection_resolution.unwrap_or_else(|| {
+        source_profile.map_or_else(Default::default, |profile| profile.reflection_resolution)
+    });
+    let target_percent = cli.reflection_render_scale.or(cli.render_scale);
+    options.render_scale = match target_percent {
+        Some(percent) => oag_display::display::Scale::try_from(percent)
+            .map_err(|why| anyhow::anyhow!("--render-scale {percent}: {why}"))?,
+        None => source_profile.map_or(
+            crate::settings::RenderProfile::default().render_scale,
+            |profile| profile.render_scale,
+        ),
+    };
     options.scene_precision = cli.scene_precision.unwrap_or_else(|| {
-        crate::water_setting::profile_for_source(settings, &options.source)
-            .map_or_else(Default::default, |profile| profile.scene_precision)
+        source_profile.map_or_else(Default::default, |profile| profile.scene_precision)
     });
     // `--event` resolves a Wipeout 2048 campaign event onto `options` before
     // loading - see `race::load_event`'s own doc comment for what it

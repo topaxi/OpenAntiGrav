@@ -309,6 +309,12 @@ pub const TITLE: &Title = &Title {
             on: oag_title::Platforms::Any,
             origin: oag_title::Origin::InheritedFrom("Wipeout HD"),
         },
+        // The refraction target the tunnel glass samples is drawn ahead of the main view:
+        // 2048 (`docs/ghidra/functions/vita-2048-eu-v104/refraction-pass.md`).
+        screen_space_target: oag_title::Rule {
+            on: oag_title::Platforms::Any,
+            origin: oag_title::Origin::Measured,
+        },
         // `Ship_SelectWreckModel` twin, called in `Ship_SetState` case 4
         // (`ship-destroy.md`, row 1); every ship directory ships its own `shipwreck.vex`.
         hull_wreck: oag_title::Rule {
