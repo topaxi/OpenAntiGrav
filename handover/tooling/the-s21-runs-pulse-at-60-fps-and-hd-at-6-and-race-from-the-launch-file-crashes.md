@@ -1,8 +1,8 @@
 ---
 status: measure
 titles: [all]
-updated: 2026-11-24
-summary: "S21: Pulse about 60 fps CPU-bound, HD 6 to 8 fps GPU-bound; the launch-file --race overflow is fixed; ranked fixes, none tried"
+updated: 2026-11-25
+summary: "S21: HD at render scale 25 settles at 17 fps; per-pass costs ranked (glass 16 ms, adverts 7, bloom 7, HUD 5); levers left change the picture"
 categories: [rendering]
 size: L (50)
 difficulty: medium (50)
@@ -17,6 +17,20 @@ HD defaults at 7.5 fps from a cold start and 5.9 from a warm one (median frame 1
 ## Open
 
 Ranked by the frame-time win expected on this phone. Each names the evidence and the command that would show the number move.
+
+0. **HD at render scale 25, per pass** (`docs/tools/android.md`, "Where an HD frame goes on the S21"; measured with `OAG_SKIP_PASSES` and
+   `OAG_SKIP_PASSES_TOGGLE=10`, `scripts/android-skip-windows.py`): Vineta K's behind-the-glass target 16 ms of a 42 ms frame, the eight advert
+   cards 7 ms, HD's bloom chain 7 ms, the HUD 5 ms, the composite 5 ms, the resolve 3 ms. A locked 30 needs about half of that frame gone and
+   holds no headroom for the thermal cap (the GPU falls from 858 to about 400 MHz within minutes). Exact (no picture change) levers tried and
+   dropped are in the docs section; what is left changes the picture, so each is a proposal for the maintainer:
+   - the glass target sized off the render scale rather than fixed 640x360 (the original's is half its 1280x720 output in each axis): up to 16 ms, the glass's refraction drawn coarser;
+   - advert cards redrawn at a lower rate, or once when they do not animate: up to 7 ms, the billboards' animation steps;
+   - HD bloom off or at a lower chain length on a phone: up to 7 ms, no glow;
+   - the HUD at half the surface's resolution: up to about 5 ms, a softer HUD.
+   Measure each: a build with the change, the same race, `OAG_SKIP_PASSES` off, `frame_limit = "30"`, 10 minutes, the docs' racing-seconds median and the Perfetto p99.
+0b. **The menu route's race is heavier than the launch-file `--race`'s** (18.0 against 30.8 fps over seconds 20 to 80 from cold starts, ticks 6 to 9 against 0.2 ms a frame,
+   scene recording 8 against 3 to 4 ms). Part is the circuit's direction (the menu route lands on `track_reversed.vex`); the ticks are not explained.
+   Measure: `--race --track 'Data\Environments\01_Vineta_K\track_reversed.vex'` against the menu route, same build, `frame-phases`, then a simpleperf profile of the one with the larger `ticks`.
 
 1. **HD's phone default is a render scale the phone cannot draw.** Scene pass 114 ms at 1906x1080, 41 ms at render scale 50, 14 ms at scale 25 (fps 5.5, 10.6, 16.1, warm starts).
    A mobile default (or dynamic resolution on with a floor of 25 %, where the `minimum_resolution` default is 50) is a 2 to 3 times win for one setting.
@@ -37,12 +51,17 @@ Ranked by the frame-time win expected on this phone. Each names the evidence and
 
 ## Measured and dropped
 
+- HD, render scale 25 (`docs/tools/android.md`, "Where an HD frame goes on the S21"): drawing the resolve and HUD straight onto the surface (slower, 38.7 against 34.6 ms);
+  skipping the glass target on frames with no glass draw (exact, but it fires on 2 of 26 frames); a prepass for the glass target (inside the noise, and not exact);
+  a portrait surface to avoid SurfaceFlinger's GPU composition (no change); the main track's prepass off, `OAG_BINDLESS=0` (both slower). The catch-up cap is already 8 ticks (`oag_core::tick`).
+
 - HD anisotropy `off` (6.0 against 5.5 fps) and shadows `off` (6.1): inside the run-to-run spread, nothing to take out.
 - Pulse at render scale 50: the scene pass halves (4.6 to 2.1 ms) and the frame moves 1 to 2 ms; the three default runs read 68.0, 60.6 and 61.0 fps over their first minute, so 59.9 against 65.8 settled is not a result.
 - Pinning with `taskset`: refused for a release app, see item 6.
 
 ## Next Steps
 
+0. The maintainer picks among item 0's proposals; then measure the chosen ones together against the 30 fps claim (render scale 25 and 50).
 1. Item 1 first: a phone default for HD's render scale, then the same A/B table.
 2. A simpleperf profile of HD at scale 25 (`docs/tools/android.md`, "Reproducing it") to size item 3.
 3. Re-run the phase script on both phones (item 7 is fixed), with `--no-audio` added.
