@@ -2,7 +2,7 @@
 status: measure
 titles: [hd, pulse]
 updated: 2026-11-25
-summary: "S21 HD perf plan: cards culled, row kinds folded (landed); per-write copies cost 3.5-4.7 ms (fewer writes or wgpu #10319); ASTC opt-in open"
+summary: "S21 HD perf plan: cards culled, row kinds folded (landed); wgpu #10319 measured -2.4 to -3.1 ms (ships in wgpu 31); ASTC opt-in open"
 categories: [rendering, tooling]
 size: L (40)
 difficulty: medium (40)
@@ -75,21 +75,32 @@ scene is 1.5 ms. Every "fidelity none" item passes the byte-identity or pair che
    straight onto the surface (composite skipped, neutral grade, no filter) read slower on the S21
    in both in-run toggles, 26.0 against 26.8 ms and 26.9 against 28.2 ms
    (`docs/tools/android.md`, "What a render pass costs").
-4. **Fewer per-frame writes** (re-scoped by `s21-shading`). Freezing every write takes 8.3 to 9.3 ms
-   off the frame; keeping the copies with a frozen picture (`writes-same`, `writes-dummy`) keeps 3.5
-   to 4.7 ms of it, the same whether the copies land in buffers the previous frame reads or in
-   scratch buffers nothing reads (`docs/tools/android.md`, "Freezing the frame's writes"). So frame
-   N's copies do not wait on frame N-1; **a ring of destination buffers would not help and is not
-   built**. The cost is about 95 barrier-plus-copy pairs a frame, which wgpu-core 30.0.2 records per
-   `write_buffer` (gfx-rs/wgpu#6673). Two ways out:
-   - **wgpu with #10319** (one barrier for the first write of each resource in a submission; merged
-     2026-10-25, after 30.0.2; 3 of its 13 hunks do not apply to 30.0.2). A backport for one
-     measuring APK: 3 h; the upgrade itself waits on the next wgpu release. Copies stay.
-   - **One write a frame**: the per-frame uniforms (camera, node and texture animations, shadow
-     maps, particles, ribbons) into one buffer read at offsets. Removes the copies too. S21 0 to
-     -4 ms, RDNA 0; 16 to 24 h (about twenty writers in `oag-render`, `oag-mesh`, `oag-fx`,
-     `oag-raceplay`); fidelity none; confidence 45. Measure with `OAG_SKIP_PASSES=writes-dummy`
-     against `writes-same` first on whatever lands.
+4. **Fewer per-frame writes** (re-scoped by `s21-shading`, measured by `wgpu-write-barriers`). Freezing every write takes
+   8.3 to 9.3 ms off the frame; with a frozen picture the copies still cost 3.5 to 4.7 ms, the same into scratch buffers
+   nothing reads, so a ring of destination buffers would not help and is not built. The cost is the barrier-plus-copy pair
+   wgpu-core 30.0.2 records per `write_buffer` (gfx-rs/wgpu#6673). **gfx-rs/wgpu#10319 backported in a measuring build only**
+   (in-run toggle, three runs): S21 HD frame **-2.4, -2.7, -3.1 ms** (23.9 to 21.5, 28.4 to 25.7, 29.0 to 25.9), `submit` -1.1
+   to -1.3 ms, and the present again returns as the previous fence signals; inline barriers per batch 28 to 3 (about three
+   batches a frame), copies unchanged. **What the copies still cost with it: about 0 ms** (`writes` -4.4 against `writes-same`
+   -4.9 ms on the backport build, A/A control 0.5 ms; one run each). Host picture byte-identical on one RDNA frame, no sync
+   validation run; host bench in `docs/tools/android.md`
+   ("gfx-rs/wgpu#10319 on 30.0.2: what one barrier buys"). Upstream: merged 2026-10-25 on trunk, **not on the `v30` branch**
+   (v30.0.2, 2026-11-12, does not carry it), so it ships in **wgpu 31**; the v31 milestone (due 2026-10-09) has 1 open issue of
+   5. The PR's own Bevy test saw no perf change on a desktop. Options, ranked:
+   - **Take wgpu 31 when it ships (recommended).** Gets the 2.4 to 3.1 ms with no fork. Cost: trunk's CHANGELOG "Unreleased"
+     has six major-change headings; the ones that touch us are new fields on `TextureDescriptor` (215 struct literals in 148
+     files), `TextureViewDescriptor` (22 in 16) and `DeviceDescriptor` (29 in 22), mechanical; and `BufferView`s now blocking
+     unmap (128 `get_mapped_range` calls in 103 files to check), plus naga for `oag-shader-check`. The tree has been on wgpu 30
+     since its first window, so there is no earlier major bump to size from: 8 to 16 h, confidence 35. Re-measure with the
+     `writes-same` toggle against `writes` after.
+   - **Carry the backport as a vendored wgpu-core** until 31: 3 to 4 h (the measuring diff minus its switch and counters,
+     `vendor/wgpu-core` at 2.1 MB of source, a `[patch.crates-io]` row, a `vendor/README.md` entry). Against it: `vendor/` is for
+     small fixes, wgpu-core is the renderer's core, and no synchronisation validation has run (no Khronos layer on the
+     workstation). Worth it only if 31 slips past the next drive that needs the S21 frame.
+   - **One write a frame** (the per-frame uniforms in one buffer read at offsets): 16 to 24 h, confidence 45. **Not worth it
+     with #10319**: the copies it would remove measured at about 0 ms on the S21. Only without wgpu 31 would it pay, and the
+     vendored backport is far cheaper for the same gain.
+
 5. ~~Measure the track's shading on Mali~~ **measured, one fix landed** (`s21-shading`): the rich
    tenth of the circuit's draws costs half the scene pass (`track-rich` 11.1 to 5.6 ms of scene
    GPU, 4.3 ms of frame); the plain nine tenths read 0.8 ms of pass but 3.5 ms of frame, and
