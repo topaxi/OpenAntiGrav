@@ -464,6 +464,13 @@ developer's hostname and username. The project database is a working copy;
 the record of truth is `docs/ghidra/`. See
 [ADR-0005](../architecture/adr/0005-ghidra-conventions.md).
 
+#### TOC traps worth remembering (moved from `HANDOVER.md`)
+
+- **A decompile above the `0x32d5e0` TOC break names the wrong strings**: `Shader_InitEngineParams` (`0x003f1300`) showed sound-bank and `.vex` literals it does not reference ([memory.md](../ghidra/functions/ps3-hdfury-eu/memory.md)). Fixed in place for `ps3-hdfury-eu` on 2026-08-28 (`scripts/import-ps3-eboot.sh --ps3-cspec`; `AssignPs3R2FromOpd.java` runs in the import); a decompile read before that and not re-verified keeps the suspicion. `ps3-toc.py resolve 0x003914b0 -0x6634` must print `Small is  %3.2f MB (%d bytes)`, and its `map` mode is validated against `Collision.cpp`. The bridge refuses `run_ghidra_script`/`run_script_inline` when `GHIDRA_MCP_ALLOW_SCRIPTS` is unset.
+- **`get_xrefs_to` and decompiled symbol names for a TOC-relative load are only as trustworthy as the function's TOC matching the global one.** A `SrcRel` xref landed on `FUN_00550eb4`, which decompiled with `PTR_s_LoadXML_Item_cpp_...` and `strncmp(param_2, "Values", 0xb)`; its real TOC is `0x008bd3c4`, not the global `0x008ad4d8`, and `0xb` is `"Set-Cookie:"`, so it is `CCookie.cpp`. Check `scripts/ps3-toc.py toc <addr>` first (`0x008ad4d8` means trust it) and prefer `ps3-toc.py map` plus raw `inspect_memory_content` reads over `search_strings`/`get_xrefs_to` for an unchecked function.
+- **Even with the TOC fixed, an ELFv1 indirect call breaks constant propagation**: every call through an unknown pointer (`lwz r2,0x4(rX)`, then `std r2`/`ld r2` round-tripping the caller's TOC) makes a later `-0x58xx(r2)` load decompile as an opaque `iStack_NNNN`, hiding a real TOC-relative global behind a fake local (`Environment_LoadStageTextures` `0x003d6dc8`, [zone-effectsettings-loader.md](../ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md)). The tell: `analyze_dataflow` backward from it ends at "function input". Resolve by hand against the function's own TOC; binary-wide.
+- **Proximity to a known-good table is not evidence of relatedness**: a dozen `get_xrefs_to` hits near `008ad9e0`, one word from `LoadXML_Item`'s attribute-name table at `008ad9f0`, were destructors releasing unrelated smart pointers (`008ad9e0` is a pooled-object free-list head); the `.rodata` run at `0078bf00` held the real literals.
+
 ### Vita
 
 All four of WipEout 2048's `eboot.elf` (base + patch v1.04, both regions) import
