@@ -528,47 +528,6 @@ impl Drawable {
         })
     }
 
-    /// The opaque draws (indices into the model's opaque list) whose vertices carry
-    /// `slots::REFRACTION`, the tunnel glass that samples the behind-the-glass target, or
-    /// `None` when such a vertex sits in the cutout or blended list, which
-    /// [`Self::any_opaque_visible`] does not test.
-    pub(super) fn refraction_draws(&self) -> Option<Box<[u32]>> {
-        use oag_mesh::mesh::slots::REFRACTION;
-        let model = &self.model;
-        let reads = |draw: &DrawCall| {
-            model.indices[draw.range.start as usize..draw.range.end as usize]
-                .iter()
-                .any(|&v| model.vertices[v as usize].slots & REFRACTION != 0)
-        };
-        if model.alpha_tested_draws.iter().any(reads) || model.transparent_draws.iter().any(reads) {
-            return None;
-        }
-        Some(
-            (0..model.draws.len() as u32)
-                .filter(|&index| reads(&model.draws[index as usize]))
-                .collect(),
-        )
-    }
-
-    /// Whether any of the opaque draws `indices` passes the culls [`Self::draw_lists`] applies
-    /// to them under these sets: the same `visible` test, with `LodGroup` children and hidden
-    /// panels left out, so it can only answer yes more often than the draw does.
-    pub(super) fn any_opaque_visible(
-        &self,
-        indices: &[u32],
-        sections: Option<&DrawSections>,
-        set: Option<&VisibleSet>,
-        chunks: Option<&ChunkSet>,
-        frustum: Option<&Frustum>,
-    ) -> bool {
-        let opaque = sections.map_or(&[][..], |s| &s.opaque[..]);
-        indices.iter().any(|&index| {
-            self.model.draws.get(index as usize).is_some_and(|draw| {
-                visible(draw, DrawSections::at(opaque, index as usize), set, chunks, frustum)
-            })
-        })
-    }
-
     /// The bytes of vertex data this drawable's model holds.
     #[cfg(test)]
     pub(super) fn model_vertex_bytes(&self) -> usize {

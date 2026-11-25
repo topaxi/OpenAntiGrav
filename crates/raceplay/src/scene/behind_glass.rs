@@ -150,9 +150,6 @@ pub(super) struct Target {
     primary: Option<Drawable>,
     alternate_fog: Option<mesh_render::Fog>,
     mirror: Option<Mirror>,
-    /// The circuit's opaque draws that read this target ([`Drawable::refraction_draws`]),
-    /// so a frame that shows none of them skips the pass; `None` draws it every frame.
-    readers: Option<Box<[u32]>>,
 }
 
 /// The target's colour texture: created ahead of the drawables, because the
@@ -332,19 +329,7 @@ impl Target {
             primary: groups.primary_fog.map(scenery).transpose()?,
             alternate_fog,
             mirror,
-            readers: None,
         })
-    }
-
-    /// Names the circuit's draws that read this target, once the circuit's drawable
-    /// exists (it binds this target's colour, so it is built after it).
-    ///
-    /// Only for the glass target: the planar reflection's reader is the sea
-    /// (`shade.wesl`), which carries no `slots::REFRACTION`, so a mirror keeps `None`.
-    pub(super) fn set_readers(&mut self, track: &Drawable) {
-        if self.mirror.is_none() {
-            self.readers = track.refraction_draws();
-        }
     }
 
     /// Moves every drawable's matrices onto the shared buffer.
@@ -533,22 +518,6 @@ impl Scene {
             return SceneStats::default();
         };
         let Some(mirror) = target.mirror else {
-            // **Unread, so undrawn.** The target is cleared and redrawn every frame it is
-            // drawn, and the tunnel glass (`refraction.wesl`) is the only thing that samples
-            // it, so a frame that culls every glass draw cannot show it: skipping the pass
-            // changes no pixel. It is the costliest pass of a Vineta K frame on a tile-based
-            // GPU (`docs/tools/android.md`, "Performance on the Galaxy S21").
-            if let Some(readers) = &target.readers
-                && !self.track.any_opaque_visible(
-                    readers,
-                    self.visibility.as_ref().map(|v| &v.sections),
-                    set,
-                    chunks,
-                    frustum,
-                )
-            {
-                return SceneStats::default();
-            }
             target.write(
                 queue,
                 (&self.scene_blocks, block),
