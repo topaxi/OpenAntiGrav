@@ -963,9 +963,10 @@ change is identical in all four frames. The PNG's text chunk gains one line (`re
 is pixel-identical to `original`; at 50 it moves 72,348 of 2,089,504 pixel bytes on Vineta K and 145,781
 on Moa Therma, inside the glass and the sea, and nowhere shifted or offset (looked at, both frames).
 
-**Sizes** (`hd_reflection_resolution_ground_truth`, one load per test): Vineta K 640 x 360 under
-`original` at 100 and 50, 640 x 360 `scaled` at 100, 320 x 180 `scaled` at 50; Moa Therma 960 x 540,
-960 x 540, 960 x 540, 480 x 270. At 25: 160 x 90 and 480 x 270 / 240 x 135 (unit test).
+**Sizes** (`reflection_resolution_ground_truth`, one load per test): HD Vineta K 640 x 360 under
+`original` at 100 and 50, 640 x 360 `scaled` at 100, 320 x 180 `scaled` at 50; HD Moa Therma 960 x 540,
+960 x 540, 960 x 540, 480 x 270. 2048's Vineta K target 480 x 272 `original` and 240 x 136 `scaled` at 50;
+Omega's 960 x 540 and 480 x 270. At render scale 25 (unit test): glass 160 x 90, sea 240 x 135.
 
 **GPU cost on a desktop** (`OAG_RENDER_GPU_BENCH=200`, the `behind the glass` span, 1920x1080, RX 7800 XT
 (RADV), tick 240 on Vineta K and 572 on Moa Therma, two runs each, medians; load average 7 to 30 from
@@ -985,9 +986,9 @@ there. The setting exists for a phone: the S21 pays 10.6 ms for the Vineta K gla
 **Open: the Android default.** The default is `original` everywhere. Whether the Android build should
 default a phone to `scaled` is the maintainer's call, to be made after the phone numbers.
 
-**2048 and Omega.** Same call site and law, so checked, applies, wired; the size law is unit-tested and
-the title rule is pinned by the menu test, but no disc-backed test loads a 2048 or Omega circuit under
-`scaled` (HD's two circuits above are the disc-backed rows).
+**2048 and Omega.** **Ported**: the same call site and law, with their own disc-backed rows
+(`reflection_resolution_ground_truth`: Vineta K on the 2048 package and on Omega, `original` and `scaled`
+at 50). Their targets are the refraction target only; the planar sea reflection is HD's.
 
 ## Enhanced: this project's own water on Pulse and Pure
 
@@ -1108,6 +1109,7 @@ frame of Omega's own sea was taken (shadPS4 was not run in this lane).
 | Amphiseum `water` | not checked (the Vita's Amphiseum shows no water material by name) | checked, differs (cube probe) | drawn (`mesh::rcs::water`) |
 | Vineta K scroll table | checked, differs (`dc_seawater`) | checked, applies (`water_test_2_castnoshipshadows`), `water_noref` replaced by `temp_water`, not wired | drawn (`mesh::rcs::water`) |
 | `enhanced` (own generated map, Pulse and Pure only) | checked, differs: nothing is offered (`Title::water.enhanced` empty); its seas are drawn through `psp2`, no `.vex` batches | checked, differs: same, and Omega's own law is the planned one | not applicable (HD's `original` is the law `enhanced` follows) |
+| Target resolution row (`graphics.reflection_resolution`) | **ported**: its refraction target, 480x272 original and 240x136 scaled at 50 (Vineta K, disc-backed) | **ported**: 960x540 and 480x270 (Vineta K, disc-backed) | measured and drawn here (glass 640x360, sea 960x540) |
 | Pulse caustic pass | not applicable | not applicable | HD ships `data/tex/caustics/` and `wo_underwater_godrays.pob`; consumer not looked for |
 
 ## Open

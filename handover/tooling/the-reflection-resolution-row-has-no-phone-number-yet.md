@@ -31,17 +31,25 @@ route; the launch file's `--race` stays in the pre-race flyby on the phone, so m
 
 ```sh
 F=/sdcard/Android/data/org.openantigrav.game/files
+OUT=/tmp/reflection-resolution          # per-arm logcat files; anything outside the checkout
+mkdir -p $OUT
+CIRCUIT=vineta-k                        # one of: vineta-k moa-therma ubermall chenghou modesto
 for ARM in original scaled; do
   printf '%s\n' $F/data/oag/images/hdfury-ps3-eu-dec.iso --no-audio --no-intro --frame-log \
       --autopilot --seed 1 --render-scale 25 --reflection-resolution $ARM > /tmp/args
   adb push /tmp/args $F/oag-args.txt
+  adb logcat -c
   adb shell am start -n org.openantigrav.game/android.app.NativeActivity
-  # menu route: taps in "Reaching a race"; pick the circuit below; let it race 3 minutes
-  adb logcat -v threadtime -s oag RustStdoutStderr > data/scratch/<lane>/$CIRCUIT-$ARM.log
+  # menu route: taps in "Reaching a race", then pick $CIRCUIT on the track select; race 3 minutes
+  sleep 240
+  adb exec-out screencap -p > $OUT/$CIRCUIT-$ARM.png
+  adb logcat -d -v threadtime -s oag RustStdoutStderr > $OUT/$CIRCUIT-$ARM.log
   adb shell am force-stop org.openantigrav.game
 done
-# then the median frame_ms and gpu_ms of the racing seconds of each log's --frame-log lines (the first 15 s are the flyby and the countdown)
 ```
+
+`--reflection-resolution` reaches the menu route's profile (`oag_game::app` applies every render override to every title's
+profile before the menu opens), so the two arms differ in the load's target size and nothing else.
 
 Per circuit, on the HD track select (a tap on a hex moves the cursor and does not confirm; read the name off a `screencap`, then `input keyevent 96` twice):
 
@@ -53,5 +61,6 @@ Per circuit, on the HD track select (a tap on a hex moves the cursor and does no
 | Chenghou | CHENGHOU PROJECT | 240x135 (sky alone) | frame ms only; the sea shows the sky |
 | Modesto | MODESTO HEIGHTS | 240x135 (sky alone) | frame ms only |
 
-The loader report line (`the glass and sea target is WxH at render scale 25`) confirms the arm took effect; it is `debug` level, so run with `RUST_LOG=oag=debug` as an
-`OAG_NAME=value` line if it is needed. Add the per-circuit milliseconds to the water page's table, then ask the maintainer about the Android default. Delete this thread when item 2 is answered.
+The launch file only sets `OAG_*` variables, so the loader report line (`the glass and sea target is WxH at render scale 25`, `debug` level) is out of reach
+there; the arm shows in the `screencap` (the glass and the sea are visibly coarser under `scaled`) and in the frame time. Read the median `frame_ms` and `gpu_ms` of the racing
+seconds of each log's `--frame-log` lines (the first 15 s are the flyby and the countdown). Add the per-circuit milliseconds to the water page's table, then ask the maintainer about the Android default. Delete this thread when item 2 is answered.

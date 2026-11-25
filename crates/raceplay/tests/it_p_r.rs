@@ -47,6 +47,7 @@ mod quiet_replay_ground_truth;
 mod race_finish_ground_truth;
 mod race_load_read_memo_ground_truth;
 mod ram_ground_truth;
+mod reflection_resolution_ground_truth;
 mod replay_ground_truth;
 mod replay_timeline_ground_truth;
 mod repulser_fork_ground_truth;

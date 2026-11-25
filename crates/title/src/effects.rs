@@ -1001,7 +1001,7 @@ pub struct Looks {
     /// The race draws a screen-space target ahead of the main view that a circuit's glass or
     /// sea reads: HD's behind-the-glass target (Vineta K's tunnel glass) and its planar sea
     /// reflection, and 2048's and Omega's refraction target. Offers the player's
-    /// `graphics.glass_target` row; a title without the target drops it.
+    /// `graphics.reflection_resolution` row; a title without the target drops it.
     pub screen_space_target: Rule,
     /// The race frame ends in the `wo_*` post chain: the scene lit in the
     /// gamma-2 space its programs square a texel into, a quarter-resolution

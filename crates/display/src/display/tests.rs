@@ -718,6 +718,7 @@ fn the_scaled_reflection_target_follows_the_render_scale_and_never_exceeds_the_o
     assert_eq!(scaled.size(glass, scale(50)), (320, 180));
     assert_eq!(scaled.size(sea, scale(50)), (480, 270));
     assert_eq!(scaled.size(glass, scale(25)), (160, 90));
+    assert_eq!(scaled.size(sea, scale(25)), (240, 135));
     assert_eq!(scaled.size(glass, scale(33)), (211, 119));
     assert_eq!(scaled.size(glass, scale(150)), glass, "capped above 100");
     assert_eq!(
