@@ -7,8 +7,8 @@
 //! the wreck are unread, so `None`.
 
 use oag_title::{
-    Burst, EffectSpec, Effects, Looks, Origin, Platforms, Rule, ShieldPalette, ShieldPalettes,
-    Trigger, engine_effects,
+    Burst, EffectSpec, Effects, Looks, NearLaw, Origin, Platforms, Rule, ShieldPalette,
+    ShieldPalettes, Trigger, engine_effects,
 };
 
 /// `FUN_000d9398`: six `absorb` locators, three mirrored pairs at `0.0`, `0.2`
@@ -147,6 +147,9 @@ pub const EFFECTS: &Effects = &{
     effects.far_bars = FAR_BARS;
     effects.templates = TEMPLATES;
     effects.turbulence = TURBULENCE;
+    // The `PartRender` SPU job, image `0x0080bb80`;
+    // `docs/ghidra/functions/ps3-hdfury-eu/particle-render.md`.
+    effects.near_law = Some(NearLaw::one_to_four(Origin::Measured));
     effects
 };
 

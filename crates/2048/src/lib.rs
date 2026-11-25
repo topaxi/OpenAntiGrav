@@ -486,6 +486,9 @@ const EFFECTS: oag_title::Effects = {
             ),
         );
     effects.scenery = &[oag_title::engine_effects::MODESTO_STEAM_EFFECT];
+    // `Particle_PushQuadBatch` and its twin
+    // (`docs/ghidra/functions/vita-2048-eu-v104/particle-near-law.md`).
+    effects.near_law = Some(oag_title::NearLaw::one_to_four(Origin::Measured));
     effects
 };
 

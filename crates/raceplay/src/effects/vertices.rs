@@ -21,6 +21,7 @@ impl Race {
         let Some(effect) = self.view.handles.get(Trigger::CollisionSpark) else {
             return;
         };
+        let near = self.near_cull();
         // The player's pool and every other local seat's: world-space particles, drawn in
         // every view.
         let seats = self
@@ -32,7 +33,21 @@ impl Race {
             .map(|fx| &**fx);
         for fx in std::iter::once(&self.view.contact).chain(seats) {
             fx.sparks
-                .extend_vertices(additive, alpha_over, effect, right, up, None);
+                .extend_vertices(additive, alpha_over, effect, right, up, near);
+        }
+    }
+
+    /// The cull of the view being drawn with no guard band: its eye, for the effects under
+    /// the near-camera law (`oag_fx::psys::Effect::near`).
+    pub(crate) fn near_cull(&self) -> psys::Cull<'static> {
+        let camera = self.view.camera_frame(&self.core);
+        psys::Cull {
+            guard: None,
+            near: Some(psys::NearEye {
+                eye: camera.position,
+                forward: -camera.back,
+                draw_alpha: self.view.draw_alpha(),
+            }),
         }
     }
 
@@ -68,13 +83,21 @@ impl Race {
     ) {
         let camera = self.view.camera_frame(&self.core);
         let guard = self.stage_guard_band();
-        self.view
-            .stage
-            .extend_vertices(additive, alpha_over, right, up, guard.as_ref());
+        let near = self.near_cull();
+        self.view.stage.extend_vertices(
+            additive,
+            alpha_over,
+            right,
+            up,
+            psys::Cull {
+                guard: guard.as_ref(),
+                ..near
+            },
+        );
         self.view
             .scenery_fx
             .stage()
-            .extend_vertices(additive, alpha_over, right, up, None);
+            .extend_vertices(additive, alpha_over, right, up, near);
         self.view
             .scenery_fx
             .weather()
@@ -97,9 +120,13 @@ impl Race {
         up: Vec3,
     ) {
         let guard = self.stage_guard_band();
+        let cull = psys::Cull {
+            guard: guard.as_ref(),
+            ..self.near_cull()
+        };
         self.view
             .stage
-            .extend_underlay_vertices(out, right, up, guard.as_ref());
+            .extend_underlay_vertices(out, right, up, cull);
     }
 
     /// The blend class 8 quads (heat haze, shock rings) everything the stage
@@ -111,11 +138,14 @@ impl Race {
         right: Vec3,
         up: Vec3,
     ) {
-        self.view.stage.extend_distort_vertices(out, right, up);
+        let near = self.near_cull();
+        self.view
+            .stage
+            .extend_distort_vertices(out, right, up, near);
         self.view
             .scenery_fx
             .stage()
-            .extend_distort_vertices(out, right, up);
+            .extend_distort_vertices(out, right, up, near);
     }
 }
 

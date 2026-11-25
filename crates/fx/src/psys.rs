@@ -53,12 +53,14 @@ pub mod frames;
 pub mod guard;
 mod layers;
 mod library;
+mod near;
 pub mod parametric;
 mod path;
 pub mod playback;
 mod pre_age;
 pub mod spawn;
 pub mod sprite;
+pub use near::{Cull, NearEye, NearLaw};
 pub use path::{effect_path, effect_path_in};
 pub mod streak;
 
@@ -307,6 +309,8 @@ pub struct EmitterSpec {
     /// [`StreakDraw::FarBar`], whose effect a title lists
     /// (`oag_title::Effects::far_bars`).
     pub colour_scale: f32,
+    /// The near law's size cap, [`pob::Emitter::near_cap`]; read only under [`Effect::near`].
+    pub near_cap: Option<f32>,
     /// A system attached to each particle this emitter spawns, as an index
     /// into [`Effect::emitters`].
     pub particle_child: Option<usize>,
@@ -375,6 +379,9 @@ pub struct Effect {
     pub field: Option<pob::field::FieldBox>,
     /// The root's `+0x98`, how far ahead of the lens a weather effect sits.
     pub view_depth: f32,
+    /// The near-camera law this effect's billboards run under, set by the load for a title
+    /// that has it (`near`).
+    pub near: Option<NearLaw>,
     /// Which emitters start on [`System::ignite`]: the root and its sibling
     /// chain, but not a child, which starts when its parent's particle does.
     roots: Vec<usize>,
@@ -449,6 +456,7 @@ impl Effect {
                 .first()
                 .and_then(|root| system.view_depth(data, root))
                 .unwrap_or(0.0),
+            near: None,
             roots,
             rides_owner_frame: true,
             skipped_templates: 0,
@@ -471,152 +479,6 @@ impl Effect {
     #[must_use]
     pub fn roots(&self) -> &[usize] {
         &self.roots
-    }
-}
-
-impl EmitterSpec {
-    /// How long one instance of this emitter runs, in ticks - infinite
-    /// under [`EmitterSpec::looping`], which is what stops the schedule
-    /// ever expiring on its own.
-    #[must_use]
-    pub fn run_ticks(&self) -> f32 {
-        if self.looping {
-            f32::INFINITY
-        } else {
-            self.duration_ticks
-        }
-    }
-
-    /// Translates one parsed record.
-    fn from_record(
-        record: &pob::Emitter,
-        scale: ColourScale,
-        sprite: Option<Sprite>,
-    ) -> Result<Self, Error> {
-        let emitter = || record.name.clone();
-
-        let render = match record.draw_class() {
-            Some(1..=3) => Render::Billboard,
-            Some(6 | 7) => Render::Streak {
-                from_spawn: record.flags & pob::flags::STREAK_FROM_SPAWN != 0,
-            },
-            _ => {
-                return Err(Error::UnknownDrawClass {
-                    emitter: emitter(),
-                    render_mode: record.render_mode,
-                });
-            }
-        };
-        let blend = match record.blend_class {
-            2 => Blend::Additive,
-            1 | 3 => Blend::AlphaOver,
-            8 => Blend::Distort,
-            other => {
-                return Err(Error::UnknownBlendClass {
-                    emitter: emitter(),
-                    blend_class: other,
-                });
-            }
-        };
-        for channel in [
-            &record.size,
-            &record.alpha,
-            &record.rotation_speed,
-            &record.emission_scale,
-        ] {
-            if let ChannelMode::Unknown(mode) = channel.mode {
-                return Err(Error::UnknownChannelMode {
-                    emitter: emitter(),
-                    mode,
-                });
-            }
-        }
-
-        let jitter = record.cone_degrees.to_radians();
-        let hemisphere = record.shape == 7;
-        let direction = match (record.shape, record.velocity_mode) {
-            (4 | 7, 2) => Direction::Tangent { hemisphere },
-            (4 | 7, _) => Direction::Radial { hemisphere },
-            (_, 1) => Direction::Aimed {
-                elevation: record.elevation,
-                azimuth: record.azimuth,
-                jitter,
-            },
-            _ => Direction::Cone { half_angle: jitter },
-        };
-
-        let mut palette = Box::new([[0.0f32; 4]; 256]);
-        let divisor = scale.divisor();
-        for (out, entry) in palette.iter_mut().zip(record.colours.iter()) {
-            *out = [
-                f32::from(entry[0]) / divisor,
-                f32::from(entry[1]) / divisor,
-                f32::from(entry[2]) / divisor,
-                f32::from(entry[3]) / divisor,
-            ];
-        }
-
-        let drag = record.drag_per_tick().unwrap_or([1.0; 3]);
-        let interval = (
-            record.interval_ticks.0.max(1) as u32,
-            record.interval_ticks.1.max(record.interval_ticks.0).max(1) as u32,
-        );
-        let per_emission = (
-            record.per_emission.0.max(0) as u32,
-            record.per_emission.1.max(record.per_emission.0).max(0) as u32,
-        );
-
-        Ok(Self {
-            name: record.name.clone(),
-            duration_ticks: record.duration_ticks.max(0.0),
-            looping: record.looping(),
-            interval_ticks: interval,
-            per_emission,
-            lifetime_ticks: sample::lifetime_ticks(record),
-            speed_per_tick: record.speed_per_tick,
-            direction,
-            drag_per_tick: Vec3::new(drag[0], drag[1], drag[2]),
-            gravity_per_tick2: if record.gravity_enabled() {
-                record.gravity_per_tick2
-            } else {
-                0.0
-            },
-            turbulence: turbulence::Turbulence::from_record(record),
-            live_cap: record.live_cap.max(0) as usize,
-            size: record.size.clone(),
-            alpha: record.alpha.clone(),
-            colour_divisor: divisor,
-            palette,
-            colour_mode: ColourMode::authored(record.colour_mode),
-            authored_colour_mode: record.colour_mode,
-            render,
-            streak: StreakDraw::of(record.draw_class(), record.aspect),
-            blend,
-            distort_strength: record.distort_strength,
-            colour_scale: record.colour_scale,
-            particle_child: record.particle_child,
-            death_child: record.death_child,
-            spawn_probability: record.child_spawn_probability.clamp(0.0, 1.0),
-            velocity_inherit: record.child_velocity_inherit,
-            spawn: Spawn::of(record),
-            emission_scale: record.emission_scale.clone(),
-            extent_animation: record
-                .attribute_animations
-                .iter()
-                .find(|animation| animation.selector == 2)
-                .map(|animation| animation.channel.clone()),
-            playback: playback::Playback::of(record),
-            sprite,
-            atlas: Atlas::of(record),
-            frames: FrameAdvance::of(record, Atlas::of(record).frames()),
-            sheet_rect: None,
-            short_run: true,
-            under_alpha: false,
-            shader: None,
-            world_space: record.flags & pob::flags::WORLD_SPACE != 0,
-            template: false,
-            rotation: roll::Rotation::of_emitter(record),
-        })
     }
 }
 
@@ -1478,6 +1340,7 @@ pub use pipeline::{BLEND, BLEND_ALPHA_OVER, Drawer, Drawn, MAX_VERTICES, Pipelin
 mod between_ticks;
 mod carried;
 mod particle;
+mod record;
 mod release;
 mod riding;
 mod tint;
