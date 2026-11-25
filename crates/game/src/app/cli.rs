@@ -697,6 +697,18 @@ pub(crate) struct Cli {
     )]
     pub(crate) detonator_mines: Option<MinePositions>,
 
+    /// Comparison input: hold each `--detonator-mines` mine's music envelope at the original's
+    /// (`S,T;S,T;...`, the football's `m+0xf4` and the spikes' `m+0xf8` read in the same pause, in
+    /// the same order), so a mine is drawn as bright as the original's was: ours' envelope has no
+    /// history of the music before the frame.
+    #[arg(
+        long,
+        value_name = "S,T;...",
+        value_parser = parse_mine_envelopes,
+        requires = "detonator_mines"
+    )]
+    pub(crate) detonator_mine_envelopes: Option<MineEnvelopes>,
+
     /// Comparison input: draw the Zone and Detonator music-driven look from these
     /// sixteen held band levels, read off the original at the frame being compared
     /// (`+0x32f8` of its Environment stage block, comma-separated).
@@ -1444,6 +1456,30 @@ impl Cli {
 /// The positions of `--detonator-mines`, one value to clap (a bare `Vec` would read as repeated values).
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct MinePositions(pub(crate) Vec<oag_core::math::Vec3>);
+
+/// The envelopes of `--detonator-mine-envelopes`, one value to clap.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct MineEnvelopes(pub(crate) Vec<(f32, f32)>);
+
+fn parse_mine_envelopes(text: &str) -> Result<MineEnvelopes, String> {
+    text.split(';')
+        .map(|pair| {
+            let parts = pair
+                .split(',')
+                .map(|n| {
+                    n.trim()
+                        .parse::<f32>()
+                        .map_err(|_| format!("`{n}` is not a number"))
+                })
+                .collect::<Result<Vec<f32>, String>>()?;
+            match parts[..] {
+                [s, t] => Ok((s, t)),
+                _ => Err(format!("`{pair}` is not S,T")),
+            }
+        })
+        .collect::<Result<Vec<_>, String>>()
+        .map(MineEnvelopes)
+}
 
 fn parse_detonator_mines(text: &str) -> Result<MinePositions, String> {
     text.split(';')

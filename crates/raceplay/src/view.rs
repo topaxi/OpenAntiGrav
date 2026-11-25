@@ -548,4 +548,7 @@ pub struct RaceView {
     /// [`crate::scene`]'s `write_detonator_looks`, read by [`Race::mine_model_matrices`]: one source for the
     /// draw, the shadows and the blur's previous pose.
     pub(super) mine_sizes: std::sync::Mutex<std::collections::BTreeMap<(u16, i8), (f32, f32)>>,
+    /// Laid mines whose music envelope a comparison holds at the original's read (`--detonator-mine-envelopes`),
+    /// by survey entry and lane: the football's `s` and the spikes' `t`.
+    pub(super) mine_pins: std::sync::Mutex<std::collections::BTreeMap<(u16, i8), (f32, f32)>>,
 }

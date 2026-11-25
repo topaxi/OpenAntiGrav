@@ -178,7 +178,7 @@ MINE_OBJECT_BYTES = 0x170
 
 
 def detonator_mines(m, lo=0x30000000, hi=0x36000000, chunk=0x100000, keep_raw=False):
-    """Every active `DetonatorMine` in the heap: `{address, flags, position, entry, lane, live (the byte at +0x160), age_s}`, read in one pass
+    """Every active `DetonatorMine` in the heap: `{address, flags, position, entry, lane, live (the byte at +0x160), age_s, football_s and spikes_t (the music envelopes `+0xf4` and `+0xf8`)}`, read in one pass
     (`keep_raw` adds the object's bytes as `raw`, hex, for a survey of its other fields)."""
     needle = struct.pack(">I", DETONATOR_MINE_VTABLE)
     found = []
@@ -198,6 +198,8 @@ def detonator_mines(m, lo=0x30000000, hi=0x36000000, chunk=0x100000, keep_raw=Fa
                                   "entry": struct.unpack(">H", o[0xC6:0xC8])[0], "lane": o[0xC8],
                                   "live": o[0x160],
                                   "age_s": struct.unpack(">f", o[0xC0:0xC4])[0],
+                                  "football_s": struct.unpack(">f", o[0xF4:0xF8])[0],
+                                  "spikes_t": struct.unpack(">f", o[0xF8:0xFC])[0],
                                   **({"raw": o.hex()} if keep_raw else {})})
             at = block.find(needle, at + 4)
     return found

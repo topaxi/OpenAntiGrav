@@ -15,10 +15,15 @@ impl super::Scene {
         laid: &[crate::detonator_look::LaidMine],
         seconds: f32,
     ) -> Vec<crate::detonator_look::MineEnvelope> {
-        let envelopes = crate::drawable::lock(&self.bomb_blast.detonator.envelopes).advance(
+        let mut envelopes = crate::drawable::lock(&self.bomb_blast.detonator.envelopes).advance(
             laid,
             &self.band_levels.get(),
             seconds,
+        );
+        crate::detonator_look::hold_pinned(
+            laid,
+            &mut envelopes,
+            &crate::drawable::lock(&race.view.mine_pins),
         );
         let mut sizes = crate::drawable::lock(&race.view.mine_sizes);
         sizes.clear();
