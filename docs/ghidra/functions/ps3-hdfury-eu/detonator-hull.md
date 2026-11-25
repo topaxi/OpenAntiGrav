@@ -116,8 +116,10 @@ global block at `0x00992f40` (TOC `-0x3cb8`):
 - `Charge2` -> `+0x14`.
 
 Its only callers are the two mode-`0xe` sites above (`bl` scan). **72**: the names come from the
-binary, and the call shape is read. The block's writer, so what `Charge1`/`Charge2` animate (the
-cannon clip and the EMP gauge are the obvious candidates), is not read. The hull's materials carry
+binary, and the call shape is read. The block's writer is `Ship_UpdateDetonatorHullParams`
+(`0x00107c28`, 62, [detonator-ammo-gauge.md](detonator-ammo-gauge.md)): `Charge1` goes to `1` while
+its input `v` is over `0`, `Charge2` while `v >= 1`, each smoothed; what `v` is stays unread. The
+cannon clip is **not** it: the clip drives the separate `detonator_bulletgaugesegments` block. The hull's materials carry
 these names hashed (no plain string in any `detonator_*.rcsmaterial`).
 
 ### Which craft entry, and so which livery

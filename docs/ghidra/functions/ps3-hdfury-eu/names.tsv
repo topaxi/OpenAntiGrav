@@ -1224,3 +1224,9 @@
 0x0013b220	function	EMP_Construct	80	detonator-emp.md
 0x0013ae68	function	EMP_ResetWave	70	detonator-emp.md
 0x0027e118	function	Modifier_NoiseForce	72	detonator-emp.md
+# 2026-11-25 det-ammo-gauge: the Detonator craft's cannon gauge and the Charge1/Charge2 writer (detonator-ammo-gauge.md)
+0x0029d578	function	DetonatorGauge_SetBullets	88	detonator-ammo-gauge.md
+0x0029d458	function	DetonatorGauge_BindHull	80	detonator-ammo-gauge.md
+0x0029d658	function	DetonatorGauge_InitBlock	75	detonator-ammo-gauge.md
+0x00ad7740	data	g_DetonatorGaugeBlock	85	detonator-ammo-gauge.md
+0x00107c28	function	Ship_UpdateDetonatorHullParams	62	detonator-ammo-gauge.md
