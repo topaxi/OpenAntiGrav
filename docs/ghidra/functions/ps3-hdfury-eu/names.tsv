@@ -1230,3 +1230,7 @@
 0x0029d658	function	DetonatorGauge_InitBlock	75	detonator-ammo-gauge.md
 0x00ad7740	data	g_DetonatorGaugeBlock	85	detonator-ammo-gauge.md
 0x00107c28	function	Ship_UpdateDetonatorHullParams	62	detonator-ammo-gauge.md
+0x002846d0	function	ParticleInstance_SetScaleBlock	80	ship-collision-fx.md
+0x002869b0	function	ParticleInstance_UpdateEmission	72	ship-collision-fx.md
+0x0028c570	function	Random_RangeInt	78	ship-collision-fx.md
+0x000cae68	function	PlayerStatus_ApplyCameraOption	72	particle-triggers.md

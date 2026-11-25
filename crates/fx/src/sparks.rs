@@ -113,8 +113,9 @@ pub const ATTACHED_CUTOFF: f32 = 0.1;
 /// `docs/ghidra/functions/ps3-hdfury-eu/ship-collision-fx.md`, "kind 0 and kind 3"). Pulse's
 /// burst keeps [`severity`].
 ///
-/// The result goes where [`severity`]'s does, the `scale` of [`crate::psys::System::ignite`].
-/// That the original's scale block slot 5 is that field is **chosen, not measured**.
+/// The result is the scale block's slot 5, the multiple of each emission's particle count
+/// ([`crate::psys::System::ignite_counting`]), not the severity [`severity`] feeds
+/// [`crate::psys::System::ignite`].
 #[must_use]
 pub fn attached_strength(speed: f32, impulse: f32) -> f32 {
     let x = clamped_intensity(speed) + clamped_intensity(impulse);

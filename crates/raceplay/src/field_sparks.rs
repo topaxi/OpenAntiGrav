@@ -142,7 +142,8 @@ impl RaceView {
                     let velocity = ship.physics.body.linear_velocity;
                     let strength = sparks::attached_strength(velocity.length(), impulse);
                     let at = model.transform_point3(anchor);
-                    if let Some(playing) = self.stage.play_riding(effect, at, strength) {
+                    if let Some(playing) = self.stage.play_riding(effect, at, 1.0) {
+                        self.stage.set_count_scale(playing, strength);
                         self.stage.carry(playing, effect, velocity);
                         self.stage.orient(playing, model.transform_vector3(up));
                         self.field_sparks.held[slot] = Some(Held {

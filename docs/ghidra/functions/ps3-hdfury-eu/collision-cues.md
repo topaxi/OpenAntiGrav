@@ -509,8 +509,8 @@ With a null matrix and flags 0, `FUN_002c8c70` gives the node its own matrix, th
 unattached, one-shot instance per record, a child of the nearest of the ten locators
 (`ship + 0x79d0`). It takes no strength (the trigger's `f1` is not read on this path), no
 carried velocity and none of the caller's basis vectors; its lifetime is the effect file's own.
-The gate on `ship + 0x5f42` (read elsewhere as the cockpit view, inferred: its setter is unread,
-[cannon.md](cannon.md)) stops every kind, the attached spark included.
+The gate on `ship + 0x5f42` (the player's internal view or look-back, read 2026-11-25:
+[particle-triggers.md](particle-triggers.md), "the camera-mode flags"; [cannon.md](cannon.md)) stops every kind, the attached spark included.
 
 **One spark per record, whatever the number of views.** The ring walk's view loop
 (`0x000ec3e4`..`0x000ec4a4`) calls `Ship_SpawnContactFx` from `0x000ec9fc` for the first view
@@ -545,8 +545,10 @@ nothing). A frame of only frictionless records counts as touching for the attach
 release rule, for the seat and for the opponents.
 
 - **Chosen, not measured:** the spark stays where it spawned instead of riding its locator (the
-  confidence-60 value above stays open); the eight-record cap; the cockpit-view flag
-  (`ship + 0x5f42`) is not applied.
+  confidence-60 value above stays open); the eight-record cap. The flag `ship + 0x5f42`
+  is read (2026-11-25, [particle-triggers.md](particle-triggers.md), "the camera-mode flags"): the
+  internal view or the look-back of the player's own craft, 0 for every rival; this engine has
+  neither view, so it is always 0 here and the gate changes no frame.
 - **Kind 3** (`NotRacing`) restarts the attached spark from the floor record's point and impulse
   (`floor_sparks::not_racing_record`, handed to `attach_rule` as a pair record, for the seat and
   the opponents; test `a_floor_record_of_a_craft_that_is_not_racing_restarts_the_attached_spark`). "Racing" is state 1: `CraftState::Racing` and off the grid (the countdown is state 0, so a floor record there is kind 3); a state 6 wreck makes none. The spark's place and the reach test are taken when the record is made, because a reset plane's record teleports the craft that tick.

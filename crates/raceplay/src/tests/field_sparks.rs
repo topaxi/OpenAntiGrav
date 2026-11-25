@@ -151,7 +151,8 @@ fn a_burst_effect_leaves_the_opponents_and_the_seats_law_alone() {
 }
 
 /// **The seat's attached spark follows HD's law, not Pulse's**: its speed term and the wall
-/// record's impulse, with the craft's velocity carried.
+/// record's impulse scale the particle count of each emission (severity stays neutral), with
+/// the craft's velocity carried.
 #[test]
 fn the_seats_attached_spark_plays_at_the_attached_strength() {
     let setup = setup_with(
@@ -171,8 +172,9 @@ fn the_seats_attached_spark_plays_at_the_attached_strength() {
         .linear_velocity
         .length();
     let law = oag_fx::sparks::attached_strength(speed, evaluated.wall.impulse_largest);
-    assert_eq!(race.sparks().scale(), law);
-    assert_ne!(law, oag_fx::sparks::severity(evaluated.wall.impact_speed));
+    assert_eq!(race.sparks().count_scale(), law);
+    assert_eq!(race.sparks().scale(), 1.0);
+    assert_ne!(law, 1.0, "a neutral law would pass with the count dropped");
 }
 
 /// **An opponent's wall contact within 100 units of the view starts its own spark, one past 100
