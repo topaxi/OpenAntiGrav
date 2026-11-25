@@ -26,12 +26,12 @@
 //!   reach (the page's live table, `0..39`).
 //! - A bomb the wave takes sets nothing off: `BombManager_DestroyAtLane`'s chain is unread.
 //! - **The forks**: `EMP_SweepSections` is the Repulser's wave stepper cloned, so a front that
-//!   steps onto a split spawns a second wave on the alternate path (its `REP2` branch), once a
-//!   wave. Ours follows `Repulser_AdvanceWave`'s shape ([`Fork`]), sharing the wave's age and
-//!   lifetime. `EMP_ForkAtJunction` adds the launch-time one ([`launch_fork`]): a craft within
-//!   [`SIBLING_REACH`] of the other route at a split gets a second front there at once, and one
-//!   born on the far half of that route never moves (`detonator-emp.md`, "The launch-time
-//!   fork").
+//!   steps onto a split spawns a second wave on the alternate path (its `REP2` branch), one at a
+//!   time. Ours follows `Repulser_AdvanceWave`'s shape ([`Fork`]), sharing the wave's age and
+//!   lifetime. A front stepping off a merge releases it. `EMP_ForkAtJunction` adds the
+//!   launch-time one ([`launch_fork`]): a craft within [`SIBLING_REACH`] of the other route at a
+//!   split gets a second front there at once, and one born on the far half of that route never
+//!   moves (`detonator-emp.md`, "The launch-time fork").
 //! - **Not wired**: the sweep's per-point lookup of the other route's records when the front's
 //!   own point holds none (`detonator-emp.md`, "The launch-time fork", open).
 
@@ -107,7 +107,8 @@ pub struct Wave {
     pub lifetime: f32,
     /// Seconds since launch (`emp+0x158`).
     pub age: f32,
-    /// Whether the wave has forked: once a wave, as the Repulser's `+0x25c`.
+    /// Whether a second front is out (`emp+0x188`): one at a time, until a front reaches a
+    /// merge.
     pub forked: bool,
     /// The second front, meaningful while [`Self::forked`].
     pub fork: Fork,
@@ -126,8 +127,9 @@ pub struct Fork {
 
 impl Fork {
     /// The [`Self::branch`] of a launch fork born on the far half of the other route: the
-    /// original only advances a second front travelling its own way, so it holds the wave's one
-    /// fork and walks nothing (`0x0013bb54`).
+    /// original only advances a second front travelling its own way, so it walks nothing
+    /// (`0x0013bb54`) until the main front's merge releases it. The original leaves its effect
+    /// and light at the world origin meanwhile; ours draws neither, a departure.
     pub const INERT: Self = Self {
         branch: u8::MAX,
         on_ring: false,
@@ -304,6 +306,53 @@ fn route_entry(survey: &Survey, from: usize, offset: usize) -> Option<usize> {
     Some(entry)
 }
 
+/// Whether `entry` is the last of a route that ends in a merge: a branch's last, or the ring's
+/// just short of a branch's rejoin. A front stepping off it releases the second front
+/// (`0x0013c014`-`0x0013c040`, `detonator-emp.md`, "The launch-time fork").
+fn ends_at_merge(survey: &Survey, entry: usize) -> bool {
+    if let Some((branch, at)) = survey.branch_of(entry) {
+        return at + 1 == survey.branches[branch].entries.len();
+    }
+    let total = survey.entries.len();
+    survey
+        .branches
+        .iter()
+        .any(|b| total > 0 && (entry + 1) % total == usize::from(b.merge))
+}
+
+/// Drops the second front, as the original releases its effect and clears its fork flag.
+fn release_fork(wave: &mut Wave) {
+    wave.forked = false;
+    wave.fork = Fork::default();
+}
+
+/// Steps the second front `steps` entries, clearing each, and releases it once it has stepped
+/// off a merge: it clears the first entry past and goes.
+fn advance_fork(
+    field: &mut Field,
+    survey: &Survey,
+    config: &Config,
+    steps: usize,
+    events: &mut Vec<Event>,
+) {
+    for _ in 0..steps {
+        let leaves = field
+            .emp
+            .wave
+            .fork
+            .standing(survey)
+            .is_some_and(|e| ends_at_merge(survey, e));
+        let Some(entry) = field.emp.wave.fork.step(survey) else {
+            break;
+        };
+        clear_entry(field, survey, config, entry, events);
+        if leaves {
+            release_fork(&mut field.emp.wave);
+            break;
+        }
+    }
+}
+
 /// `EMP_ForkAtJunction` (`0x0013b5e8`), the launch call's fork: a firer on one route of a split,
 /// within [`SIBLING_REACH`] of the other, starts a second front on that other route's nearest
 /// point. On the far half of it (`point > count / 2`) the front travels backward, which the EMP's
@@ -397,6 +446,13 @@ pub fn step_wave(field: &mut Field, survey: &Survey, config: &Config, dt: f32) -
         wave.live = false;
     }
     let last = first + steps;
+    // The main front moves first in the original, so a merge it steps off takes the second front
+    // before that one moves this tick.
+    let main_merges = (first.max(1)..last)
+        .any(|step| route_entry(survey, from, step - 1).is_some_and(|e| ends_at_merge(survey, e)));
+    if main_merges {
+        release_fork(&mut field.emp.wave);
+    }
     if field.emp.wave.forked {
         if first == 0 {
             // A launch fork stands on its point at birth, cleared as the front's start is.
@@ -404,12 +460,7 @@ pub fn step_wave(field: &mut Field, survey: &Survey, config: &Config, dt: f32) -
                 clear_entry(field, survey, config, entry, &mut events);
             }
         } else {
-            for _ in 0..steps {
-                let Some(entry) = field.emp.wave.fork.step(survey) else {
-                    break;
-                };
-                clear_entry(field, survey, config, entry, &mut events);
-            }
+            advance_fork(field, survey, config, steps, &mut events);
         }
     }
     for step in first..last.min(total) {
@@ -440,12 +491,7 @@ pub fn step_wave(field: &mut Field, survey: &Survey, config: &Config, dt: f32) -
         if let Some(first_entry) = survey.branch_entry(branch, 0) {
             clear_entry(field, survey, config, first_entry, &mut events);
         }
-        for _ in step + 1..last {
-            let Some(entry) = field.emp.wave.fork.step(survey) else {
-                break;
-            };
-            clear_entry(field, survey, config, entry, &mut events);
-        }
+        advance_fork(field, survey, config, last - step - 1, &mut events);
     }
     events
 }

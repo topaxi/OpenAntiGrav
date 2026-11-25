@@ -300,8 +300,9 @@ fn a_wave_that_crosses_a_split_clears_both_branches() {
     field.live_mines = 4;
     charge(&mut field, 8);
     fire(&mut field, &survey, &config(), 40);
-    run_wave(&mut field, &survey, 125);
+    run_wave(&mut field, &survey, 15);
     assert!(field.emp.wave.forked);
+    run_wave(&mut field, &survey, 110);
     assert_eq!(field.live_mines, 0, "the ring's and the branch's mines");
 }
 
@@ -350,10 +351,10 @@ fn a_wave_that_never_steps_onto_the_split_does_not_fork() {
     );
 }
 
-/// The fork walks the branch one entry a tick, then the ring on from the merge, and ends with
-/// the wave.
+/// The fork walks the branch one entry a tick and is released as it steps off the merge, having
+/// cleared the first entry past it.
 #[test]
-fn the_fork_walks_its_branch_then_the_ring_and_ends_with_the_wave() {
+fn the_fork_walks_its_branch_and_is_released_at_the_merge() {
     let survey = forked_lap();
     let mut field = Field::new();
     charge(&mut field, 8);
@@ -370,13 +371,34 @@ fn the_fork_walks_its_branch_then_the_ring_and_ends_with_the_wave() {
         fork_entry(&field.emp.wave, &survey),
         survey.branch_entry(0, 19)
     );
+    field.mines[0] = mine(90, false);
+    field.live_mines = 1;
     run_wave(&mut field, &survey, 1);
-    assert_eq!(fork_entry(&field.emp.wave, &survey), Some(90), "the merge");
-    run_wave(&mut field, &survey, 5);
-    assert_eq!(fork_entry(&field.emp.wave, &survey), Some(95));
-    run_wave(&mut field, &survey, 120);
-    assert!(!field.emp.wave.live);
+    assert!(!field.emp.wave.forked, "released off the merge");
     assert_eq!(fork_entry(&field.emp.wave, &survey), None);
+    assert_eq!(field.live_mines, 0, "the entry past the merge");
+    assert!(field.emp.wave.live, "the main front runs on");
+}
+
+/// A main front stepping off a merge releases the second front, and a later split forks again.
+#[test]
+fn the_main_fronts_merge_releases_the_fork_and_a_later_split_forks_again() {
+    let mut survey = forked_lap();
+    // The second front is on a long branch, still out when the main front merges at 90.
+    survey.branches[0].entries = (0..80).map(|_| survey.entries[0]).collect();
+    let mut second = survey.branches[0].clone();
+    second.split = 95;
+    survey.branches.push(second);
+    let mut field = Field::new();
+    charge(&mut field, 8);
+    fire(&mut field, &survey, &config(), 40);
+    run_wave(&mut field, &survey, 49);
+    assert!(field.emp.wave.forked, "front at 89, the merge's last entry");
+    run_wave(&mut field, &survey, 2);
+    assert!(!field.emp.wave.forked, "front past the merge");
+    run_wave(&mut field, &survey, 5);
+    assert!(field.emp.wave.forked, "the split at 95");
+    assert_eq!(field.emp.wave.fork.branch, 1);
 }
 
 /// [`forked_lap`] with the two routes within reach of each other over the first and last four
@@ -461,11 +483,10 @@ fn a_launch_beside_the_other_route_forks_onto_it() {
 }
 
 /// A fork born on the far half of the other route travels the other way and is never advanced:
-/// it walks nothing, and it holds the wave's one fork against a later split.
+/// it walks nothing until the main front's merge releases it, and the next split forks as usual.
 #[test]
-fn a_launch_beside_the_far_half_holds_the_fork_and_walks_nothing() {
+fn a_launch_beside_the_far_half_walks_nothing_until_the_merge() {
     let mut survey = forked_lap_with_overlap();
-    // A second split further on that the same wave would otherwise fork at.
     let mut second = survey.branches[0].clone();
     second.split = 95;
     second.to_primary = Vec::new();
@@ -482,10 +503,14 @@ fn a_launch_beside_the_far_half_holds_the_fork_and_walks_nothing() {
     field.live_mines = 1;
     charge(&mut field, 8);
     fire(&mut field, &survey, &config(), 88);
-    assert!(field.emp.wave.forked);
+    run_wave(&mut field, &survey, 2);
+    assert_eq!(field.emp.wave.fork, Fork::INERT);
     assert_eq!(fork_entry(&field.emp.wave, &survey), None);
-    run_wave(&mut field, &survey, 40);
-    assert_eq!(field.live_mines, 1, "no fork at the second split");
+    assert_eq!(field.live_mines, 1);
+    run_wave(&mut field, &survey, 1);
+    assert!(!field.emp.wave.forked, "released at the merge");
+    run_wave(&mut field, &survey, 30);
+    assert_eq!(field.live_mines, 0, "the split at 95 forks");
 }
 
 /// A launch away from the split is as it was: no fork at launch, and nothing out of reach.

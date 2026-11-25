@@ -361,13 +361,13 @@ fn an_hd_ring_launch_away_from_a_split_is_unchanged() {
     }
 }
 
-/// **The merge end.** On `zone_3` a ring launch near the end of the primary route lies within
-/// reach of the branch on its far half: the second front is born travelling backward, which the
-/// EMP never advances, so it holds the wave's one fork and the split nine entries on does not
-/// fork it again.
+/// **The merge end, the exception to an unchanged ring launch.** On `zone_3` a ring launch near
+/// the end of the primary route lies within reach of the branch on its far half: the second front
+/// is born travelling backward and never moves. The main front's merge releases it, and the split
+/// nine entries on forks the wave as usual.
 #[test]
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
-fn an_hd_emp_fired_beside_the_merge_never_forks_again() {
+fn an_hd_emp_fired_beside_the_merge_stands_still_until_it() {
     let Some(mut race) = start(r"Data\Environments\zone_3\track.vex") else {
         return;
     };
@@ -376,20 +376,26 @@ fn an_hd_emp_fired_beside_the_merge_never_forks_again() {
         .sim
         .detonator
         .as_ref()
-        .expect("Detonator")
+        .expect("a Detonator race")
         .survey
         .clone();
     let total = survey.entries.len();
-    let from = total - 3;
+    assert_eq!(usize::from(survey.branches[0].split), 9);
+    assert_eq!(usize::from(survey.branches[0].merge), 0);
     let ahead = survey.branch_entry(0, 30).expect("a branch entry");
-    fire_from(&mut race, from, &[mine_at(ahead)], 130);
-    let field = &race.core.sim.world.detonator;
-    assert!(field.emp.wave.forked);
-    assert_eq!(
-        field.emp.wave.fork,
-        oag_weapons::detonator::emp::Fork::INERT
+    fire_from(&mut race, total - 3, &[mine_at(ahead)], 0);
+    let wave = race.core.sim.world.detonator.emp.wave;
+    assert!(wave.forked);
+    assert_eq!(wave.fork, oag_weapons::detonator::emp::Fork::INERT);
+    fire_ticks(&mut race, 5);
+    assert!(
+        !race.core.sim.world.detonator.emp.wave.forked,
+        "released at the merge"
     );
-    assert_eq!(field.live_mines, 1, "the branch is left alone");
+    fire_ticks(&mut race, 60);
+    let field = &race.core.sim.world.detonator;
+    assert!(field.emp.wave.forked, "the split at entry 9 forks");
+    assert!(field.live_mines().is_empty(), "the branch's mine goes");
 }
 
 /// **Omega runs the same law** (its sweep `0x0133c600` carries the same launch fork): on its
