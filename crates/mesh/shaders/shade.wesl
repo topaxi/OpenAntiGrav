@@ -2389,6 +2389,36 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
         let segments = gauge * glow_tint_offset.rgb * gauge.r + power * (1.0 - gauge.r);
         return vec4<f32>(min(scene.light.output_scale * segments, vec3<f32>(HALF_MAX)), 1.0);
     }
+    // **HD's Detonator cannon bolt** (`Emissive::program` mode 30, `oag_mesh::mesh::rcs::cannon_bolt`,
+    // block `@0x1b70`; docs/rendering/hd-unlit-programs.md, "The Detonator cannon bolt"):
+    //
+    //     noise = tex0(uv1).a;  c = tex0(uv1 + 0.8 noise + 5 t)     uv1 is `texcoord`
+    //     ring  = tex1(uv0).a                                       uv0 is `lightmap_texcoord.xy`
+    //     F     = fB + (1 - fB) sat(1 - N.V)^5                      fB the entry's offset
+    //     out   = (c.rgb + (1 - F)^3 (0.0619202, 0.744629, 1), 5 c.a ring)
+    //
+    // Unlit, through the fogged programs' `/2`; the fog is the caller's. Blended `SrcAlpha`/`One` by
+    // the material's state. The colour tap is decoded as the other weapon glows' (chosen, not
+    // measured: this draw's unit-0 gamma nibble is unread), and the alpha is held to `1` as the
+    // 8-bit target would hold it (chosen, not measured).
+    if glow_program > 29.5 && glow_program < 30.5 {
+        let bolt_noise = material_sample(MATERIAL_ALBEDO, in.texcoord).a;
+        let bolt_tap = material_sample(
+            MATERIAL_ALBEDO,
+            in.texcoord + vec2<f32>(0.8 * bolt_noise + 5.0 * scene.time.x),
+        );
+        let bolt_c = mix(bolt_tap.rgb, decode(bolt_tap.rgb), encoded_out * linear_out);
+        let bolt_ring = material_sample(MATERIAL_LIGHTMAP, in.lightmap_texcoord.xy).a;
+        let bolt_rim = clamp(1.0 - dot(to_eye, n), 0.0, 1.0);
+        let bolt_rim_5 = bolt_rim * bolt_rim * bolt_rim * bolt_rim * bolt_rim;
+        let bolt_base = glow_tint_offset.w;
+        let bolt_keep = clamp(1.0 - (bolt_base + (1.0 - bolt_base) * bolt_rim_5), 0.0, 1.0);
+        let bolt_rgb = bolt_c + bolt_keep * bolt_keep * bolt_keep * vec3<f32>(0.0619202, 0.744629, 1.0);
+        return vec4<f32>(
+            min(scene.light.output_scale * bolt_rgb, vec3<f32>(HALF_MAX)),
+            min(5.0 * bolt_tap.a * bolt_ring, 1.0),
+        );
+    }
     if !(rim_glow_on || rim_edge_on) {
         // **Only where the colour returned is still the generic combine's**, which is
         // what `sun_removed` was computed against. The facing-ramp sheen, the magstrip

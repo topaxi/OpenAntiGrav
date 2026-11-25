@@ -30,8 +30,9 @@ const BOLT_GROW_SECONDS: f32 = 0.1;
 /// (`docs/ghidra/functions/ps3-hdfury-eu/detonator-cannon.md`, "The round's draw"): the rows are
 /// `right = up x forward`, `up` the surface normal and `forward` the heading flattened against it,
 /// all scaled by `0.75`, the forward row by `0.5 + 0.5 * min(age / 0.1, 1)` as well, at the round's
-/// position. The original also turns the rows half a turn about `up`; this engine's model axes
-/// already face along `forward`.
+/// position, and turned half a turn about `up` (`0x00677688`, angle pi): the model's `+Z`, along
+/// which `detonator_cannonbolt` runs from `-1.8` to `30.5`, points back along the heading, so the
+/// streak trails the round.
 pub(crate) fn round_matrix(round: &Round) -> Mat4 {
     let up = round.normal.normalize_or_zero();
     let heading = if round.heading == Vec3::ZERO {
@@ -54,9 +55,9 @@ pub(crate) fn round_matrix(round: &Round) -> Mat4 {
     let up = forward.cross(side);
     let grow = 0.5 + 0.5 * (round.age / BOLT_GROW_SECONDS).clamp(0.0, 1.0);
     Mat4::from_cols(
-        (side * BOLT_SCALE).extend(0.0),
+        (-side * BOLT_SCALE).extend(0.0),
         (up * BOLT_SCALE).extend(0.0),
-        (forward * (BOLT_SCALE * grow)).extend(0.0),
+        (-forward * (BOLT_SCALE * grow)).extend(0.0),
         round.pos.extend(1.0),
     )
 }

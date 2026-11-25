@@ -352,6 +352,15 @@ pub(super) fn material_setup(
         &mut emissive,
         report,
     );
+    super::cannon_bolt::cannon_bolt(
+        model,
+        &material_variants,
+        textures,
+        &mut material_slots,
+        (&mut skins, &mut seconds),
+        &mut emissive,
+        report,
+    );
     super::hull_charge::hull_charge(
         model,
         &material_variants,

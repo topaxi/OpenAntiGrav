@@ -53,8 +53,10 @@ fn each_event_plays_the_effect_the_original_spawns_for_it() {
     }
 }
 
+/// The render queue turns the rows half a turn about up (`0x00677688`, pi): the model's `+Z`, the
+/// streak's length, points back along the heading and its `+X` to the round's left-hand side.
 #[test]
-fn a_round_is_drawn_nose_along_its_velocity_as_a_rotation_at_its_position() {
+fn a_round_is_drawn_turned_half_about_up_so_the_streak_trails_it() {
     let round = Round {
         live: true,
         pos: Vec3::new(1.0, 2.0, 3.0),
@@ -67,8 +69,12 @@ fn a_round_is_drawn_nose_along_its_velocity_as_a_rotation_at_its_position() {
     let m = round_matrix(&round);
     assert_eq!(m.w_axis.truncate(), round.pos);
     assert!(
-        (m.z_axis.truncate() - Vec3::Z * 0.75).length() < 1e-6,
-        "nose, scaled"
+        (m.z_axis.truncate() + Vec3::Z * 0.75).length() < 1e-6,
+        "the model's +Z back along the heading, scaled"
+    );
+    assert!(
+        (m.x_axis.truncate() + Vec3::X * 0.75).length() < 1e-6,
+        "right = up x forward, turned"
     );
     assert!(
         (m.y_axis.truncate() - Vec3::Y * 0.75).length() < 1e-6,
@@ -110,7 +116,7 @@ fn a_round_is_drawn_along_its_heading_and_up_its_surface_normal_not_its_velocity
         age: 1.0,
         ..Round::default()
     };
-    assert!((round_matrix(&round).z_axis.truncate().normalize() - Vec3::Z).length() < 1e-6);
+    assert!((round_matrix(&round).z_axis.truncate().normalize() + Vec3::Z).length() < 1e-6);
 }
 
 #[test]

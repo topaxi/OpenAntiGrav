@@ -212,3 +212,32 @@ impl Mesh {
             .collect())
     }
 }
+
+impl Mesh {
+    /// The two coordinate pairs an inline stride-18 vertex ends in, `(+0x0a, +0x0e)`: the four
+    /// halves of one `float4` attribute that `hd_detonator_cannonbolt_halo`'s vertex program
+    /// splits, `.xy` to `TC0.w`/`TC1.w` and `.zw` to `TC3`
+    /// (`docs/rendering/hd-unlit-programs.md`, "The Detonator cannon bolt").
+    ///
+    /// **Read only for a chunk whose program says so.** [`Self::texcoords`] answers the tail pair
+    /// on such a chunk, which is the second of these.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::UnknownChunkLayout`] for a described chunk or another stride, and
+    /// [`Error::OutOfBounds`] when the buffer leaves the file.
+    pub fn inline_uv_pairs(
+        &self,
+        data: &[u8],
+        submesh: &SubMesh,
+        stride: usize,
+    ) -> Result<(Vec<[f32; 2]>, Vec<[f32; 2]>)> {
+        if self.decl.is_some() || stride != STRIDE {
+            return Err(Error::UnknownChunkLayout { got: 0x05, at: 0 });
+        }
+        Ok((
+            self.coords_at(data, submesh, stride, OFFSET, TexcoordFormat::Half)?,
+            self.coords_at(data, submesh, stride, OFFSET + 4, TexcoordFormat::Half)?,
+        ))
+    }
+}
