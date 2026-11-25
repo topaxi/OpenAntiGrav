@@ -82,9 +82,17 @@ pub const TITLE: &Title = &Title {
     front_end: Some(frontend::FRONT_END),
     hud: hud::LAYOUTS,
     hud_art: hud::ART,
-    eliminator: oag_title::pre_race::Sourced::inherited(
-        oag_title::eliminator::EliminatorRule::Kills,
-        "Wipeout Pulse",
+    // Read out of Omega's own damage, destroy and lap code, the same four numbers as HD's
+    // (`docs/ghidra/functions/ps4-omega-eu/eliminator.md`). Its `racebox_definition.xml` authors
+    // its own slider, 50 to 600 by 25.
+    eliminator: oag_title::pre_race::Sourced::measured(
+        oag_title::eliminator::EliminatorRule::Score(oag_title::eliminator::ScoreRule {
+            damage: 0.1,
+            kill: 20.0,
+            lap: 5.0,
+            death: 5.0,
+            race_setup: r"Data\Plugins\Frontend\Gui\racebox_definition.xml",
+        }),
     ),
     // The executable has it, off `<Misc eliminator_flip_time>` per craft and class; not wired
     // (`docs/ghidra/functions/ps3-hdfury-eu/eliminator-flip.md`, "Per title").
