@@ -818,6 +818,7 @@ impl Session {
         self.governor_gpu = Some(cost.total());
         self.governor_gpu_at = self.frame_index;
         let shed = self.drs.blur_shed();
+        let probing = self.drs.probing();
         let timed = whole_frame_cost(cost, self.pass_sum, drs_limits);
         if let Some(extent) = self.drs.record(timed, frame_seconds, drs_limits) {
             // **The reserve is printed beside the costs**, because
@@ -855,6 +856,17 @@ impl Session {
                 self.drs.scale() * 100.0,
                 drs_limits.ceiling().0,
                 drs_limits.ceiling().1,
+            );
+        }
+        // One line per probe rise begun and ended (ADR-0096), so a run can count them.
+        if self.drs.probing() != probing {
+            debug!(
+                "dynamic resolution: probe {} at {:.0}% of {}x{} - scalable {:.3} ms",
+                if probing { "ended" } else { "began" },
+                self.drs.scale() * 100.0,
+                drs_limits.ceiling().0,
+                drs_limits.ceiling().1,
+                cost.scalable * 1000.0,
             );
         }
         // Said once per spell rather than per frame - see
