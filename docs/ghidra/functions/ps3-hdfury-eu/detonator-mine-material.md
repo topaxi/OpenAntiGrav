@@ -391,6 +391,65 @@ compare with the port's tangent-space `V`. If it is off-normal, the next suspect
 ONE`) and the post chain's alpha-keyed glow are ruled out as the source of the white by the A/B (they do not read
 `MineBrightness`).
 
+### The white is before post, and the program as read reproduces it (2026-11-26, `det-mine-body-white`)
+
+**Method.** RPCS3, state `hd-detonator-talons-feisar-grid-late`, lap clock 2.3 to 5.6 s. The fogged program's **source copy** is
+in RSX-mapped main memory: the material file is loaded whole at `0x43a48700` this boot, so its four lit variants (code at file offsets
+`0x1ad0`, `0x2060`, `0x2880`, `0x3130`) sit at `0x43a4a1d0` and on. Each frame the game copies the program per mine part into a
+VRAM ring (`0xc1122xxx`, `0xc152xxxx`, then `0xc1170xxx`, `0xc156fxxx`: no copy survives a frame) and patches the constants
+there, so a patch of the ring does nothing and a **patch of the source reaches every mine 3 to 5 frames later** (the shader
+recompiles). The patch replaces slot `0x13`, `MAD R0.xyz, R1, {2, -1}.x, .y` (the map's `* 2 - 1`), with
+`MAD R0.xyz, R1, c.w, c.xyzw` (stored words `0e000400 c8041c9d fe020001 c8020001`, halves swapped), `c = (nx, ny, nz, 0)`, so
+the map is replaced by a constant `N` and `rim = sat(1 - dot(Vn, N))`. `K[0x3c]` (`0x008c1a18`) is held at 20 so every lit mine
+sits at `p = 1`. **The scene target is read through the GDB stub, not `/proc/<pid>/mem`**: the football draws target local
+`0x01920000` (pitch `0x2000`, 1300 x 1080, `A8R8G8B8`; `scripts/rsx-draw-list.py` on a `hd-draw-dump.py` ring), and with `Write
+Color Buffers` on RPCS3 writes it back lazily, so a `/proc` read returns a stale picture of another moment; a stub read row by
+row (`0x1450` bytes a row, about 2 min for the frame) returns the paused frame, the display grab agreeing.
+
+**The target holds encoded colour, and the program is decoded off it to the digit** (confidence 85): on the football's body the
+bytes read `(R, G) = (118, 95)` and `(145, 116)` (`B` 221 and 240); `(x / 255)^2.2` gives linear `R / G = 1.59` and `1.60`, the
+program's `1.75 / 1.1 = 1.59`. On a patched frame the rim decoded off `R` (`R_lin / 0.875`) and off `G` (`G_lin / 0.55`) agree to
+2 % on every ring of every mine read. So **the original's mine body is bright before any post**: rim 0.2 to 0.35 on the body.
+
+**With `N = (0, 0, 1)` (the map flat), the rim near the ball's centre reads 0.1 to 0.35, but that is not an off-normal eye
+vector** (confidence 70). A first reading here took it for one (30 to 50 degrees off-normal); a held-pose read withdrew it. At **one
+pause**, with the patch applied, the frame's ring (`hd-draw-dump.py`, `HOOK_RING_ONLY=1`), every football draw's `c256..c263`,
+`c465..c467` and vertex array, and the scene target were read, and the vertex block `#15` was evaluated per vertex offline
+(`TC1 = (V.T', V.B', V.N')`, `T'`, `N'` through `c256..c258`, `B' = cross(N', T') (2 w - 1)`, `V = c465 - R5`). The projected
+vertices land on the balls in the target (the RSX picture may be a frame older than the ring, a few pixels). Radial profile of the
+nearest clean mine (projected radius 34 px, image 31 px), rim measured against rim predicted from the live constants:
+
+| `r / R` | 0.2 | 0.4 | 0.6 | 0.8 |
+| --- | ---: | ---: | ---: | ---: |
+| measured | 0.24 | 0.29 | 0.47 | 0.68 |
+| program as read, live constants | 0.06 | 0.16 | 0.45 | 0.75 |
+
+The edge agrees; the inner rings are 0.1 to 0.15 high, where the spikes that point at the camera (the same program, so also
+patched flat, and seen side-on: rim near 1) lie over the body. A second boot with the map unpatched gave the same pattern on a
+12 px mine (`0.29, 0.31, 0.55, 0.73` measured, `0.13, 0.13, 0.45, 0.62` predicted with the `_n` map sampled at the vertices'
+UVs, level 3). Two other mines of the first held frame overlap on screen and were not used. **So the program as read, fed the
+live constants, reproduces the original's body to within the spikes' overlap**: the body's whiteness is the program's own output,
+`rim` 0.2 to 0.35 already reading near white after the encode, and no separate input term is missing. `N = (0, 0, 100)` draws the
+bodies black (the white is this program's output); `N = (0, 0, 0)` saturates.
+
+**Ruled out as a difference in the inputs** (each 85): the map's sampling (unit 0 at the football draws, D12e's ring dump: format
+`0x000b8829`, DXT45, 11 levels; address `0x60010101`, gamma nibble 0, no signed remap; remap `0xaae4`; filter `0x02063e80`,
+trilinear, LOD bias `-1.5`, no signed bits; the `_n` mip chain is flat on the body); texture
+coordinate control (`TC1 = 0`, `TC3 = 0`, neither forced 2D); RPCS3's fetch (`RSXVertexFetch.glsl`: `CMP` as `11:11:10` to
+`[-1, 1]`, `UB` as `/255`, the port's `rcsmodel::unpack_normal`); the glow mask (the draw's colour mask is `0x00010101`, alpha off;
+blend off; alpha test `GREATER 0x7f`).
+
+**Still open:** what makes ours darker is then outside the body's program inputs. The `mines-ahead` pair shows the
+original's near mine with long white spikes over the body and a ball about twice ours' on screen, and ours with no spikes visible
+there: the spikes' draw (their own `_n` map, `spikeScale`) and the pair's picture lag ([detonator-mine-draw.md](detonator-mine-draw.md),
+"The displacement") are the next places to measure. The bitangent stretch (`B'` scales with the part's row scale, 75) is part of
+the reading above and is small at the pair's scales.
+
+**Pair** (`mines-ahead`, re-rendered at the merged tree, no change in this lane): whole-frame mean grey 13.62; near ball 60 x 60
+box centred on each image's own ball (theirs at `1060, 520`, ours at `1090, 515`, 1920 x 1080) RGB mean theirs
+`(170, 146, 227)`, ours `(78, 41, 84)`. The post chain is not the gap: `oag_post::hd_bloom` already adapts on the encoded mean
+([hd-track-tone.md](../../../rendering/hd-track-tone.md)), and the original is bright before it.
+
 **2048 and Omega: not checkable** for this finding: it is a live constant of HD's draw, and the cause of the white body is
 open on HD itself, so there is nothing yet to compare. Their mine programs are unread; both name the same world-space
 `eyePositionWorldSpace` uniform ([gxp.md](../../../formats/gxp.md), [gcn.md](../../../formats/gcn.md)), which the port already

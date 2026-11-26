@@ -290,8 +290,11 @@ placement RNG cannot match the original's `Libc_Rand` (a departure, documented).
   (`det-mine-eye-centre`, `detonator-mine-material.md`, "The lit draw, read live"): the lit pass is block `#15` and `c[209]`
   is the world camera, as ours feeds; the program, vertex decode, map, alpha test and cull all match, and the formula gives
   dark there in RPCS3's own shaders. A live A/B (`K[0x3c]` 0) turns the original's body dark with bright rings, so its
-  body rim is about 0.4-0.7, not 0: its tangent-space `V` is off-normal. Next: patch the football's fragment program in
-  VRAM to output `normalize(f[TC1])` and grab; then the vertex fetch (`0x1738` base offset, `CMP` scale).
+  body rim is about 0.4-0.7, not 0: its tangent-space `V` is off-normal. ~~Next: patch the football's fragment program in
+  VRAM to output `normalize(f[TC1])`~~ done (`det-mine-body-white`, 2026-11-26, "The white is before post, and the program as read
+  reproduces it"): read at one held pose, the program fed the frame's live constants matches the original's body rim at the edge
+  and is 0.1-0.15 high inside, where the camera-facing spikes overlap; no input term is missing. Next: ours' spikes (none visible
+  on the `mines-ahead` near mine, long and white in the original) and the pair's picture lag (ours' ball half the size).
   (3) ~~Ours builds the football and spikes with no tangent~~: wired (`Mesh::inline_tangents`, `+10`); the dark centre is
   gone, ours' core 143 -> 157.5 against the original's 188, so the body is still darker than the original's white.
 
