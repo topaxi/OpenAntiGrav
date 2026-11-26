@@ -219,7 +219,13 @@ def mine_flags(pair, ship):
     pair.caveat("Detonator mines: the original's %d mine objects were read in the pause (track entry, lane, position) and ours lays each on its "
                 "survey lane nearest that position (`--detonator-mines`); its bomb and any mine laid later are ours" % len(mines))
     flags = ["--detonator-mines", ";".join("%.3f,%.3f,%.3f" % tuple(m["position"]) for m in mines)]
-    if all(m.get("football_s") is not None for m in mines):
+    # Without the envelopes ours' near mines draw dark, unspiked and about half the original's size: quiet raw bands never
+    # attack an envelope with no history (`docs/ghidra/functions/ps3-hdfury-eu/detonator-mine-draw.md`, "The spikes in a pair").
+    carried = all(m.get("football_s") is not None and m.get("spikes_t") is not None for m in mines)
+    pair.check("each live mine's music envelope was read", carried or not any(m["live"] for m in mines),
+               "football s and spikes t of %d mines" % len(mines) if carried
+               else "a shot record without `football_s`/`spikes_t`: re-grab it with `rpcs3-hd-detonator-shots.py`")
+    if carried:
         flags += ["--detonator-mine-envelopes", ";".join("%.4f,%.4f" % (m["football_s"], m["spikes_t"]) for m in mines)]
         pair.caveat("each mine's music envelope (`+0xf4`, `+0xf8`) was read in the same pause and ours holds it (`--detonator-mine-envelopes`): "
                     "ours' own has no history of the music before the frame")
