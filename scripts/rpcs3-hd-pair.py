@@ -331,7 +331,7 @@ def detonator_inputs(pair, out, ship, clock):
     lines = ce.detonator_input_lines(fire, GO_TICK)
     pair.rec["original"]["detonator"] = {"fire": fire, "lap_clock_s": clock}
     if fire:
-        held = int(lines[1].split()[0])
+        held = sum(int(line.split()[0]) for line in lines if line.endswith("square"))
         pair.rec["ours"]["detonator"] = {"fire_tick_from": int(lines[0].split()[0]), "fire_ticks_held": held,
                                          "button": "square (ours; the original's cannon fired on %s)" % fire.get("button")}
     path = out / "ours.inputs"
@@ -343,6 +343,10 @@ def detonator_inputs(pair, out, ship, clock):
                 "mine, its exhaust is cold, and a round leaves at 500 units/s, "
                 "not 500 + 3.6 x the craft's speed")
     flags = ["--input-script", path]
+    if fire and fire.get("volley_clocks_s"):
+        pair.caveat("each volley is placed so ours' round has the original's age (lap clock less the round's age: first at %.3f s, "
+                    "%.1f ticks after the harness sent the press; the game's own frame that fired it is up to a few ticks later)"
+                    % (fire["first_launch_clock_s"], fire["volley_after_send_ticks"]))
     vel = ship.get("vel")
     if vel:
         speed = sum(c * c for c in vel) ** 0.5

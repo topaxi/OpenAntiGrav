@@ -156,7 +156,8 @@ thirty-round pool. `rounds` counts volleys, not rounds. The volley skips silentl
 rounds are still in flight (with a 1 s life and one volley per 0.1 s this cannot happen at the
 disc's values). Confidence **78** for the trigger, **75** for the volley.
 
-`rm+0x6de44` counts the ticks the trigger was held with a loaded, ready cannon: it is the
+`rm+0x6de44` counts the game frames (1 or 2 ticks each) the trigger was held with a loaded, ready
+cannon (live, one RPCS3 boot, 2026-11-26: 0, 2, 4, 5, 6 at lap clock 1.917, 1.950, 2.017, 2.050 and 2.067): it is the
 "has fired" record the *Hold Your Fire* trophy reads (below).
 
 ## The round: `PulseBullet_Fire` and `PulseBullet_Update`

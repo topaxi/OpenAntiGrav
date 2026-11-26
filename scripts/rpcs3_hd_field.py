@@ -188,6 +188,58 @@ def mine_draw_words(o):
     return {name: struct.unpack(">f", o[at:at + 4])[0] for name, at in MINE_DRAW_WORDS}
 
 
+def mine_state(o):
+    """The words of one mine object's bytes `o` that change while it stands: `live`, `age_s`, the two envelopes and the draw words."""
+    return {"live": o[0x160], "age_s": struct.unpack(">f", o[0xC0:0xC4])[0],
+            "football_s": struct.unpack(">f", o[0xF4:0xF8])[0], "spikes_t": struct.unpack(">f", o[0xF8:0xFC])[0],
+            **mine_draw_words(o)}
+
+
+#: `PulseBullet`'s vtable (`0x00863d98`); its age `+0x4c`, flags `+0x40`, launch speed (`500 + 3.6 v`) `+0x124`
+#: (`docs/ghidra/functions/ps3-hdfury-eu/detonator-cannon.md`, "The round").
+PULSE_BULLET_VTABLE = 0x00863D98
+PULSE_BULLET_BYTES = 0x1C0
+#: The pickup slot `*(ship+0x5edc)` keeps the clip's volleys left at `+0x164`; the race manager `**0x008a6814`
+#: counts the game frames the trigger was held with a loaded, ready cannon at `+0x6de44`.
+PICKUP_SLOT = 0x5EDC
+CLIP_ROUNDS = 0x164
+RACE_MANAGER = 0x008A6814
+HELD_FRAMES = 0x6DE44
+
+
+def pulse_bullets(m, lo=0x30000000, hi=0x40000000, chunk=0x100000):
+    """The addresses of every `PulseBullet` in the heap (the pool of thirty, live or not)."""
+    needle = struct.pack(">I", PULSE_BULLET_VTABLE)
+    found = []
+    for base in range(lo, hi, chunk):
+        try:
+            block = m.rd(base, chunk)
+        except OSError:
+            continue
+        at = block.find(needle)
+        while at >= 0:
+            if at % 4 == 0:
+                found.append(base + at)
+            at = block.find(needle, at + 4)
+    return sorted(found)
+
+
+def cannon_state(m, ship, pool):
+    """The cannon at one pause: game frames (1 or 2 ticks each) the trigger was held so far, volleys left, and every round with an age under its 1 s life
+    (`{address, age_s, launch_speed, flags, position, prev}`)."""
+    manager = m.u32(m.u32(RACE_MANAGER))
+    rounds = []
+    for address in pool:
+        o = m.rd(address, PULSE_BULLET_BYTES)
+        age = struct.unpack(">f", o[0x4C:0x50])[0]
+        if 0.0 < age < 1.05:
+            rounds.append({"address": address, "age_s": age, "flags": struct.unpack(">I", o[0x40:0x44])[0],
+                           "launch_speed": struct.unpack(">f", o[0x124:0x128])[0],
+                           "position": list(struct.unpack(">3f", o[0x170:0x17C])), "prev": list(struct.unpack(">3f", o[0xE0:0xEC]))})
+    return {"held_frames": m.u32(manager + HELD_FRAMES), "volleys_left": m.u32(m.u32(ship + PICKUP_SLOT) + CLIP_ROUNDS),
+            "rounds": rounds}
+
+
 def detonator_mines(m, lo=0x30000000, hi=0x36000000, chunk=0x100000, keep_raw=False):
     """Every active `DetonatorMine` in the heap: `{address, flags, position, entry, lane, live (the byte at +0x160), age_s, football_s and spikes_t (the music envelopes `+0xf4` and `+0xf8`)}`, read in one pass
     (`keep_raw` adds the object's bytes as `raw`, hex, for a survey of its other fields)."""
@@ -207,11 +259,7 @@ def detonator_mines(m, lo=0x30000000, hi=0x36000000, chunk=0x100000, keep_raw=Fa
                     found.append({"address": base + at, "flags": flags,
                                   "position": list(struct.unpack(">3f", o[0x80:0x8c])),
                                   "entry": struct.unpack(">H", o[0xC6:0xC8])[0], "lane": o[0xC8],
-                                  "live": o[0x160],
-                                  "age_s": struct.unpack(">f", o[0xC0:0xC4])[0],
-                                  "football_s": struct.unpack(">f", o[0xF4:0xF8])[0],
-                                  "spikes_t": struct.unpack(">f", o[0xF8:0xFC])[0],
-                                  **mine_draw_words(o),
+                                  **mine_state(o),
                                   **({"raw": o.hex()} if keep_raw else {})})
             at = block.find(needle, at + 4)
     return found

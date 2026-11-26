@@ -295,8 +295,8 @@ placement RNG cannot match the original's `Libc_Rand` (a departure, documented).
   reproduces it"): read at one held pose, the program fed the frame's live constants matches the original's body rim at the edge
   and is 0.1-0.15 high inside, where the camera-facing spikes overlap; no input term is missing. ~~Next: ours' spikes~~ done
   (`det-mine-spikes`, `detonator-mine-draw.md`, "The spikes in a pair"): the old `mines-ahead` pair carried no envelopes;
-  re-grabbed with them, ours' near mines are lit and spiked at the original's size (same theirs 15.44 -> 13.93). Open: re-grab
-  `cannon-volley` with envelopes (fire so the press lands at 1.87 s, not 2.20); `pad`'s floor is music-lit differently on a re-grab.
+  re-grabbed with them, ours' near mines are lit and spiked at the original's size (same theirs 15.44 -> 13.93). ~~Re-grab
+  `cannon-volley` with envelopes~~ done (`det-cannon-regrab`, 14.32 -> 13.35); `pad`'s floor is music-lit differently on a re-grab.
   The pair now takes each mine's envelope at the picture's tick (`detonator-mine-draw.md`, "The envelope at the picture's
   tick"); near-ball boxes within 20 grey. ~~The mine spin~~ wired (`det-mine-spin`, `detonator-mine-draw.md`, "The spin,
   wired"): `mines-ahead` 13.17 -> 12.51 with the grab's ages pinned. ~~Ours' `PitchVolume` band~~ read
@@ -502,8 +502,11 @@ positions differ by construction (ours places with its own seeded `Rng`), so a m
 **The volley pair split (2026-11-26, `det-cannon-hot-gap`; `docs/tools/compare-page.md`, "The volley pair's difference, split").** Its
 capture state is partly fixed (picture lag off the static scene, ours at the picture's tick, mine ages; 11.47 to 10.32). **Open draw gaps, on every Detonator
 pair:** ~~bright striped grilles ours draws where the original is black~~ (fixed 2026-11-26, `det-dark-scenery`: the `scanlinebillboard` hologram's Zone variants draw the Zone surface, `docs/rendering/hd-zone-recolour.md`, "Holographic billboards in a Zone frame"; -hot 10.32 to 8.96, pad 7.60 to 5.88), the score box's white-striped wings (1.2), HUD digits
-and `1/14` too wide (1.2), hull too bright (0.7). **Open capture state:** input latency before ours' fire (muzzle flash 0.7), the volley
-pair's mine envelopes (no earlier reads in its record).
+and `1/14` too wide (1.2), hull too bright (0.7). ~~Open capture state: input latency before ours' fire, the volley pair's mine
+envelopes~~ carried (`det-cannon-regrab`, "The volley clocks and the picture-clock reads"). **Open from that grab:** ours' mine blast
+draws white puffs and long streaks where the original shows small shards and a `+100` (carrying `cannon-volley`'s destroyed mine takes it
+13.35 -> 14.05, so the mine is not carried); the craft's speed on the rounds is not carried (lowered no pair), and whether ours' round with it
+hits that mine at the original's age (10 ticks) is untested.
 
 **Hull camera and size, re-based (2026-11-23, `det-camera`).** The maintainer's "ours is far, the original is close" was true and the
 camera flags were not the cause: the pair fed the RAM body (2 to 4 ticks ahead of the presented frame) with the push-buffer camera, and
