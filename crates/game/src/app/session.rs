@@ -185,12 +185,16 @@ pub(crate) struct Session {
     /// The ring that times every separately-encoded pass under a label of its own (the glass
     /// target, the shadow passes, the probe blend, the post passes, the HUD): the rows
     /// [`oag_present::perf::GpuCost::passes`] carries. `None` on a device that cannot be asked.
-    /// **Not read by the resolution controller**, which sees the five rings above only.
+    /// The resolution controller's budget loop sees the five rings above only; a title's own
+    /// width throttle adds these ([`timing::whole_frame_cost`]).
     pub(crate) pass_stamps: Option<oag_gpu::timing::PassTimer>,
     /// The means behind [`Self::pass_stamps`]'s rows and the frame log's `pass_ms` field.
     pub(crate) pass_costs: perf::PassCosts,
     /// Readings [`Self::pass_stamps`] last drained, kept to reuse the allocation.
     pub(crate) pass_scratch: Vec<oag_gpu::timing::PassReading>,
+    /// The labelled passes of the newest timed frame, in seconds, for a width throttle's
+    /// whole-frame time.
+    pub(crate) pass_sum: f32,
     /// What FSR 3.1's six **render-resolution** dispatches cost on the GPU, in
     /// the seconds [`Session::scene_cost`] is fed.
     ///

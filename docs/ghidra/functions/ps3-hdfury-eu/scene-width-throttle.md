@@ -218,12 +218,26 @@ These four `stw .., 0x88(r31)` are the only stores to the level found: a scan of
 0 and the `0x437` height test, with the level at `+0xa8` of that build's globals and
 the arrays at `+0x28`. Not run. Confidence 85 that 02.51's law is the same.
 
-**Omega: checked, differs** (confidence 60). Neither `eboot.bin` (base, patch 1.07)
+## Omega and 2048
+
+**Omega: checked, differs** (confidence 65). Neither `eboot.bin` (base, patch 1.07)
 has the two thresholds within `0x2000` bytes of each other as 32-bit immediates
 (`0x3ef0`/`0x3eef` with `0x3cc4`/`0x3cc3`), and neither has the option's string or any
-`Debug.Enable` string. Not watched live: shadPS4 gives no memory readout. Absence of two
-constants is weak evidence (a float compare in milliseconds would not be found this
-way), hence 60. 2048 was not checked.
+`Debug.Enable` string. 2026-11-26, in the 1.07 executable, no `f32` constant is any of
+16.111, 15.555, 16111.0, 15555.0, 29/30, 14/15, 0.016111 or 0.015555 (byte search; the same
+search finds 1/60 at once). Not watched live: shadPS4 gives no memory readout. All of it is
+absence, and a controller with other numbers would pass these searches, hence 65.
+
+**2048: not read.** Its v1.04 executable has the string `Debug.Enable Frame Buffer
+Throttling` (`0x81508be4`), registered inside `FrontendRoot_Construct` (`0x8106322a`, the
+reference at `0x810639aa`) on the byte at `+0x550` of that object, cleared by the same
+constructor, and referenced again inside `Environment_RegisterLightingSchema` (`0x810175fc`,
+at `0x81017d90`). No instruction loads `0x3eef` or `0x7dde` (the 30 Hz
+equivalent) as an immediate. On HD the same option was never connected to the throttle, so the
+string says nothing about the law. The next read is the loads of `+0x550`.
+
+TARGET FPS `original` is therefore offered on HD alone
+([dynamic-resolution.md](../../../rendering/dynamic-resolution.md#a-titles-own-width-throttle)).
 
 ## Reading the width off a frame
 
@@ -272,6 +286,7 @@ loaded (it is set again by the next race set-up and on leaving Photo Mode). As a
 
 ## Open
 
+- 2048's controller, if it has one ("Omega and 2048").
 - A PS3's own behaviour: how often a real console leaves 1920, and on which circuits.
 - The five arrays beside the colour targets, by role.
 - Whether `Debug.Enable Frame Buffer Throttling` reaches a race set-up's argument.

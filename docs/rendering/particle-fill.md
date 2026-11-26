@@ -483,6 +483,8 @@ the original's near-white wash, whose source stays open.
 
 ## What is left
 
-Neither the Deck nor the scene-width throttle has been measured. The close-range picture
+The Deck has not been measured. The scene-width throttle is wired as TARGET FPS `original` and
+measured on the workstation
+([dynamic-resolution.md](dynamic-resolution.md#measured-the-rocket-hit-at-3840x2160)). The close-range picture
 differs for the four reasons above. The ranked plan for the other two ideas is in the handover
 thread.

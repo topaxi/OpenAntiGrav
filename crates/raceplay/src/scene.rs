@@ -466,6 +466,9 @@ pub struct Scene {
     /// `motion_blur_resolution`, handed in before each frame by
     /// [`Scene::set_blur_resolution`].
     blur_half: std::cell::Cell<bool>,
+    /// The share of the full width the viewport keeps while the host squeezes the picture into
+    /// fewer columns ([`Scene::set_squeeze`]). `1.0` when the viewport is the picture.
+    squeeze: std::cell::Cell<f32>,
     /// The audio output's sixteen band levels, raw, as `SoundSystem_GetBandLevel` returns them,
     /// handed in before each frame by [`Scene::set_band_levels`]. Silent until then. Read by the
     /// Detonator mine's envelope ([`crate::detonator_look`]).
@@ -1238,6 +1241,7 @@ impl Scene {
             wo,
             motion_blur,
             blur_half: std::cell::Cell::new(false),
+            squeeze: std::cell::Cell::new(1.0),
             band_levels: std::cell::Cell::new([0.0; 16]),
             velocity,
             histories: (0..motion::HISTORY_COUNT)

@@ -2,7 +2,7 @@
 status: measure
 titles: [hd, omega, 2048]
 updated: 2026-11-26
-summary: "Owed: the craft-blast template cap source and far-hit dome, Deck numbers, 1.7 ms at 1080p; two settings await the maintainer"
+summary: "Owed: the craft-blast template cap source and far-hit dome, Deck numbers, 1.7 ms at 1080p; the half-res particle target awaits the maintainer"
 size: M (50)
 difficulty: medium (55)
 ---
@@ -33,12 +33,16 @@ blast the struck craft's velocity, on HD, 2048 and Omega
   inline twin): radius and strength table unread; it may be HD's consumer of the "Blast push"
   row in `docs/gameplay/weapon-lineage.md`. Simulation, not render: its own lane.
 
-### Two further ideas, as settings
+### Particles into a half-resolution target, composited
 
-| # | Change | Faithful? | Expected | Effort | Confidence |
-| --- | --- | --- | --- | --- | --- |
-| 2 | **HD's width throttle as the `original` value of dynamic resolution**: scene width `1 - level / 96` of the output (1920 to 1300 of 1920), one level a frame, narrower at 16.1 ms of GPU frame or a missed vblank, wider under 15.6 ms | **Yes on HD**, it is `Render_FinishFrame`'s controller. An option, off unless chosen: our default is a fixed scale | up to -32 % of every scene pixel under sustained load; a 9 frame blast sheds at most 9 % | M | 60 on the gain, 90 on the law |
-| 3 | **Particles into a half-resolution target, composited** | **No.** The disc authors a per-distance resolution mode (`+0xc8c`, thresholds 17 and 35) and HD computes it, but its flush ignores it. Opt-in setting, default `original` | about 20 screens of fill become about 5 plus one full-screen composite; estimate 3.2 to about 2 ms at 4K | L | 40; edges where smoke meets hulls need a depth-aware upsample |
+**Not faithful.** The disc authors a per-distance resolution mode (`+0xc8c`, thresholds 17 and
+35) and HD computes it, but its flush ignores it. Would be an opt-in setting, default
+`original`: about 20 screens of fill become about 5 plus one full-screen composite; estimate
+3.2 to about 2 ms at 4K. Effort L, confidence 40; edges where smoke meets hulls need a
+depth-aware upsample.
+
+HD's width throttle, the other idea here, is TARGET FPS `original`
+(`docs/rendering/dynamic-resolution.md`, "A title's own width throttle").
 
 ### Owed measurements
 
@@ -58,6 +62,11 @@ blast the struck craft's velocity, on HD, 2048 and Omega
   `trimmed-sprites-parked`. Measure it again only if the worst frame turns out to be alpha-over
   smoke on another circuit or on the Deck. Command: `OAG_RENDER_BENCH_RACE=<stem>` with the
   reproduction, six interleaved pairs, `gpu_scene_us` over ticks 760 to 789.
+- **TARGET FPS `original` on the Deck**, against the existing loop on the same reproduction;
+  and at 240 Hz on an idle host, where the 2026-11-26 runs moved mostly on late frames.
+- **2048's `Debug.Enable Frame Buffer Throttling`** (byte `+0x550`): read its loads to say
+  whether 2048 has a width or size throttle of its own
+  (`docs/ghidra/functions/ps3-hdfury-eu/scene-width-throttle.md`, "Omega and 2048").
 - **The PSP builds' builder**: whether Pulse and Pure have a near rule at all.
 - **Which render modes 2048's two builders serve**, and whether the original's sprite templates
   go through the same routine (ours cull and fade them, with no cap).
@@ -66,4 +75,4 @@ blast the struck craft's velocity, on HD, 2048 and Omega
 
 1. Adopt the re-rendered rocket-hit pairs, then film the far-hit dome (above).
 3. Run the Deck numbers before and after.
-4. Put items 2 and 3 of the table to the maintainer as settings once the Deck numbers are in.
+4. Put the half-resolution particle target to the maintainer once the Deck numbers are in.
