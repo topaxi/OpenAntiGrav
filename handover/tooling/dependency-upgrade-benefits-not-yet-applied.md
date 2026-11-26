@@ -55,7 +55,8 @@ the numbers below is measured unless it says so.
   smaller and faster build and one `x11rb`; no player-visible change expected.
   Size XL (30), difficulty hard (40): the event-loop and window API changed.
   Wait for the stable release; reopen as an `oag-game` and `oag-view` migration
-  lane then.
+  lane then. It also turns the startup panic on an X server without RandR into an
+  error (`docs/rendering/dynamic-resolution.md`); it does not make one work.
 - **wasmtime 51.0.0 is stable (2026-11-20) and ready to open as a lane.** Ours
   is the exact pin `=50.0.3` on purpose (determinism: fuel, NaN
   canonicalisation, ABI word). Gains: faster compile of host-defined functions

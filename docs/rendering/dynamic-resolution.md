@@ -1119,11 +1119,25 @@ reading is the `X server reports N mHz` debug line.
 
 The failure paths, on a workstation Xvfb (lavapipe):
 
-- **No RandR extension** (`Xvfb -extension RANDR`): the game panics inside winit 0.30.13 before
-  the reader starts (`failed to request XRandR version: UnsupportedExtension`,
-  `platform_impl/linux/x11/xdisplay.rs`). No such session reaches the reader. From the code, a
-  refused request makes a round answer nothing, with no log line, and the thread sleeps its period
-  whatever the answer; that was not run.
+- **No RandR extension**: the game panics inside winit 0.30.13 before the reader starts. No such
+  session reaches the reader. From the code, a refused request would make a round answer nothing,
+  with no log line, and the thread sleeps its period whatever the answer; that was not run. Not
+  supported, and not planned:
+  - *Reproduce*: `Xvfb :N -screen 0 1280x720x24 -extension RANDR`, then `oag-game --no-audio`
+    with `WINIT_UNIX_BACKEND=x11 DISPLAY=:N`. Exit status 101, `failed to request XRandR
+    version: UnsupportedExtension` at `platform_impl/linux/x11/xdisplay.rs:112` (run 2026-11-26).
+  - *Why nothing of ours avoids it* (winit source, read): the panic is in `XConnection::new`,
+    run by the lazy `X11_BACKEND` that `EventLoop::new()` reads, before any window attribute or
+    monitor query exists. `EventLoop::new` has a second `expect` on the same extension
+    (`select_xrandr_input`, `x11/mod.rs`).
+  - *Upstream* (read 2026-11-26): 0.30.13 is the last 0.30 release and the head of `v0.30.x`.
+    `master` and `v0.31.0-beta.4` still require RandR 1.2 and return `ExtensionNotSupported("the
+    X11 backend requires XRandR 1.2 or newer")` instead of panicking. In winit
+    [#1781](https://github.com/rust-windowing/winit/issues/1781), the same defect with an older
+    message, a maintainer answered "winit doesn't support systems without xrandr"
+    ([#576](https://github.com/rust-windowing/winit/issues/576) is the other report).
+  - *On a 0.31 upgrade* (read, not run): `new_event_loop` in `crates/game/src/app.rs` passes the
+    error up, so the game would exit with a logged error in place of the panic.
 - **RandR with a mode that has no timing** (a default Xvfb): no reader log line, no measurable CPU
   time over 59 s, rate unknown. Switching the output to a 90 Hz mode logged 90013 mHz and put
   90 Hz in force; switching back logged nothing and kept 90 Hz. This is the "no answer" path. A
