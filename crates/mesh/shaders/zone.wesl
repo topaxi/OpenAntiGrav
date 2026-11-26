@@ -1,5 +1,6 @@
 // Zone-race track grading: the Zone sets, their sampling and the window glow.
 
+import oag_shaders::colour::{srgb_decode};
 import package::bindings::{scene, zone_nearest_sampler, zone_sampler, zone_scene_tex, zone_tex, zone_vis_sampler, zone_vis_tex};
 import package::types::{ZoneSet};
 
@@ -162,6 +163,13 @@ fn zone_aniso(rim: f32, slots: u32, world: vec3<f32>) -> vec3<f32> {
     return mix(scene.zone.aniso[base + i].rgb, scene.zone.aniso[base + j].rgb, x - f32(i));
 }
 
+// `zone_glow`'s one fetch for the two sums: `linear` goes into the authored linear sum, `gamma`
+// into the stand-in path's gamma sum.
+struct ZoneGlow {
+    linear: vec3<f32>,
+    gamma: vec3<f32>,
+}
+
 // The visualiser glow: `saturate(N.y - 0.5) * (1 - windowDepth) * E.w *
 // zoneTexVis[band].rgb`, read out of the Zone shader's own fragment microcode
 // - `docs/ghidra/functions/ps3-hdfury-eu/zone-shader.md`. Read
@@ -216,7 +224,7 @@ fn zone_aniso(rim: f32, slots: u32, world: vec3<f32>) -> vec3<f32> {
 // early-return that makes the analysis give up, and the band sample and the
 // visualiser lookup keep the neighbours they need.
 @diagnostic(off, derivative_uniformity)
-fn zone_glow(n: vec3<f32>, frag: vec4<f32>, uv: vec2<f32>, slots: u32, world: vec3<f32>) -> vec3<f32> {
+fn zone_glow(n: vec3<f32>, frag: vec4<f32>, uv: vec2<f32>, slots: u32, world: vec3<f32>) -> ZoneGlow {
     let zone_uv = scene.zone.uv_scale * (1.0 - uv);
     // The band comes from whichever stage texture this chunk publishes - the
     // scene set's is alpha 255 everywhere, so a scene chunk indexes the last
@@ -239,8 +247,16 @@ fn zone_glow(n: vec3<f32>, frag: vec4<f32>, uv: vec2<f32>, slots: u32, world: ve
     let depth_term = select(1.0 - frag.z, near * frag.w, near > 0.0);
     let up = clamp(n.y - 0.5, 0.0, 1.0);
     let drive = zone_set(slots, world).effect.w;
-    let visualiser = max(up * depth_term * drive * vis, vec3<f32>(0.0));
+    let gain = up * depth_term * drive;
+    // HD's texture unit decodes the strip's RGB with the sRGB curve (`shape.z`; the
+    // address word's gamma nibble), which the linear sum takes; the stand-in path's gamma
+    // sum is decoded whole afterwards, so it keeps the stored texel.
+    // `docs/ghidra/functions/ps3-hdfury-eu/zone-vis-gamma.md`, "The law".
+    let fetched = select(vis, srgb_decode(vis), scene.zone.shape.z > 0.5);
     let edge = abs(distance(world, scene.zone.origin.xyz) - scene.zone.radius);
     let ring = select(0.0, 5.0 * clamp(1.0 - 0.1 * edge, 0.0, 1.0), scene.zone.radius > 0.0);
-    return visualiser + vec3<f32>(ring);
+    return ZoneGlow(
+        max(gain * fetched, vec3<f32>(0.0)) + vec3<f32>(ring),
+        max(gain * vis, vec3<f32>(0.0)) + vec3<f32>(ring),
+    );
 }

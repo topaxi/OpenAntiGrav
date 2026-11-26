@@ -648,7 +648,9 @@ pub struct Zone {
     /// light (HD/Fury's `Ambient` permutation,
     /// `docs/ghidra/functions/ps3-hdfury-eu/zone-frame.md`, "The Zone surface's light");
     /// `0.0` leaves the chunk its own light. `.y` is the original's near plane for the visualiser
-    /// glow's `1 - windowDepth` factor (`0.0`: this renderer's own window depth). `.z` unused.
+    /// glow's `1 - windowDepth` factor (`0.0`: this renderer's own window depth). `.z` is
+    /// `1.0` where the visualiser strip's RGB is sRGB-decoded on fetch
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/zone-vis-gamma.md`).
     pub shape: [f32; 4],
     /// The four `zoneAnisoPalette` ramps, Scene inner, Scene outer, Track
     /// inner, Track outer: the 17 texels `Environment_BuildAnisoPalette`

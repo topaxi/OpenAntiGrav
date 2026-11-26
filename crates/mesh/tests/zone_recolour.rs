@@ -626,6 +626,56 @@ fn the_visualiser_glow_depth_factor_takes_the_originals_near_plane() {
     }
 }
 
+/// **HD decodes the visualiser strip's RGB with the sRGB curve** (`shape.z`) before it joins
+/// the linear sum. A tint of 128 is `0.502` stored and `0.216` decoded; the glow is
+/// `0.5 * 0.5 * 1.6` of it, which the gamma target encodes by `1/2.2`: `123` stored, `84`
+/// decoded. Dropping the decode gives `123` for both. A smooth-looking constant gain would
+/// not separate them: the two ratios are checked on the same draw.
+#[test]
+fn the_visualiser_strip_is_srgb_decoded_into_the_linear_sum_when_the_zone_says_so() {
+    let instance = wgpu::Instance::default();
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let (device, queue) =
+        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+            .expect("requesting the device");
+    let mut surface = up_facing_model(texture("albedo", [255, 255, 255, 255]));
+    for vertex in &mut surface.vertices {
+        vertex.lit = 1.0;
+        vertex.slots |= slots::EMISSIVE;
+    }
+    let stage = texture("zone stage", [200, 200, 200, 128]);
+    let mut bands = [0.0f32; 16];
+    bands[12] = 1.0;
+    let art = scene_art(&stage);
+    for (decoded, want) in [(0.0, 123u8), (1.0, 84)] {
+        let mut scene = Scene::off();
+        scene.light.enabled = 1.0;
+        scene.zone = scene_zone(ZoneSet {
+            effect: [0.0, 0.0, 0.0, 1.6],
+            base: [0.0; 4],
+            base_alt: [0.0; 4],
+        });
+        scene.zone.shape[2] = decoded;
+        let lit = draw(
+            &device,
+            &queue,
+            &surface,
+            &art,
+            scene,
+            Some((&bands, [128, 128, 128])),
+        );
+        for (channel, got) in [("red", lit[0]), ("green", lit[1]), ("blue", lit[2])] {
+            assert!(
+                got.abs_diff(want) <= 2,
+                "{channel} came out {got} with shape.z {decoded}, want about {want}"
+            );
+        }
+    }
+}
+
 /// **The chunk's own bit picks the publication.** HD publishes the Zone
 /// parameters twice - `zoneModeTrack*` beside the `Track.*` colours and
 /// `zoneMode*` beside the `Scene.*` ones - and selects per chunk on bit 0 of

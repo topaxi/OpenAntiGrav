@@ -1300,6 +1300,7 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
     var zone_linear = vec3<f32>(0.0);
     var zone_gamma = vec3<f32>(0.0);
     var zone_glow_term = vec3<f32>(0.0);
+    var zone_glow_gamma = vec3<f32>(0.0);
     // How much of the albedo the Zone surface replaces: all of it on a circuit,
     // none of it on an arena, where the zone colour is added instead
     // (`zone_add_*`). See `mesh_render::Zone::shape`.
@@ -1333,8 +1334,9 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
         // The visualiser glow - see `zone_glow`. Gated by `enabled` explicitly
         // rather than trusting `effect.w` to be zero off a Zone race, the same
         // belt-and-braces `surface_linear`/`plain` below already take.
-        zone_glow_term =
-            zone_glow(n, in.clip, in.texcoord, in.slots, in.world) * zone_weight;
+        let zone_vis = zone_glow(n, in.clip, in.texcoord, in.slots, in.world);
+        zone_glow_term = zone_vis.linear * zone_weight;
+        zone_glow_gamma = zone_vis.gamma * zone_weight;
     }
 
     // The read specular term: half-vector against the sun, raised to
@@ -1775,13 +1777,11 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
     // The glow is **added after the light**, which is where the microcode puts
     // it: the accumulate reads `H0` once the lightmap and the interpolated
     // term have already multiplied the albedo, so a glow is not itself lit.
-    // The visualiser glow rides here too, undecoded on the same terms
-    // `zone_gamma` already is on this path - it is a shader parameter and
-    // texture-lookup product, not an albedo sample, so it owes no sRGB
-    // decode either way.
+    // The visualiser glow rides here too, with the stored strip texel: where the
+    // original's texture unit decodes it, `decode(plain)` below decodes the sum.
     let plain = (mix(texel.rgb, zone_gamma, zone_weight * zone_replace) + zone_add_gamma * zone_weight)
         * tint * light
-        + glow + zone_glow_term + pad_glow + mag_glow_gamma;
+        + glow + zone_glow_gamma + pad_glow + mag_glow_gamma;
     let plain_rgb = mix(plain, decode(plain), linear_out);
 
     // Vertex colour modulates the texture on all four channels, as the GE's

@@ -56,4 +56,8 @@ pub struct ZoneFrame {
     pub glow_window_near: f32,
     /// The same in a Detonator race, whose camera sits on another field of view.
     pub detonator_glow_window_near: f32,
+    /// The visualiser strip's texture unit decodes its RGB with the sRGB curve, so the
+    /// glow adds the decoded texel to the linear scene
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/zone-vis-gamma.md`, "The law").
+    pub glow_vis_srgb: bool,
 }
