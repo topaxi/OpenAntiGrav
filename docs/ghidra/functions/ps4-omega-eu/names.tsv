@@ -268,3 +268,5 @@
 # 2026-11-23 destroy-cameras-re: the race camera twins of HD's (../ps3-hdfury-eu/destroy-camera.md)
 0x01382720	function	Camera_SetMode	82	../ps3-hdfury-eu/destroy-camera.md
 0x01381c70	function	Camera_Update	78	../ps3-hdfury-eu/destroy-camera.md
+0x0139a6b0	function	Rocket_HitCraft	75	../ps3-hdfury-eu/rocket-craft-blast.md
+0x01728780	function	Psys_SetInheritedVelocity	80	../ps3-hdfury-eu/rocket-craft-blast.md

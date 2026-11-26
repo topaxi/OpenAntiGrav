@@ -1248,3 +1248,8 @@
 0x003de2f8	function	Render_GetSceneDepthTarget	72	particle-render.md
 0x00c81b8c	data	g_SceneDepthTargets	72	particle-render.md
 0x008c2670	data	Psys_ResolutionModeDistances	65	particle-render.md
+0x0014aa88	function	Rocket_HitCraft	72	rocket-craft-blast.md
+0x0014a7d8	function	Rocket_SpawnCraftBlast	85	rocket-craft-blast.md
+0x00283b40	function	Psys_SetInheritedVelocity	82	rocket-craft-blast.md
+0x0027c288	function	Psys_FindInstanceByHandle	80	rocket-craft-blast.md
+0x00149f70	function	Rocket_PushNearbyCraft	60	rocket-craft-blast.md

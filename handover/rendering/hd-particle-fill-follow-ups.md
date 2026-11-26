@@ -2,7 +2,7 @@
 status: measure
 titles: [hd, omega, 2048]
 updated: 2026-11-26
-summary: "Owed: read the Rocket blast attach and screen wash, Deck numbers, 1.7 ms at 1080p; two settings await the maintainer"
+summary: "Owed: the Rocket craft-hit screen wash (A/B capture), Deck numbers, 1.7 ms at 1080p; two settings await the maintainer"
 size: M (50)
 difficulty: medium (55)
 ---
@@ -16,26 +16,24 @@ reaches.
 
 ## Open
 
-### The Rocket's craft hit: two reads before anything is wired
+### The Rocket's craft hit: the screen wash
 
-The sprites are wired; the capture's other two differences are not
-(`docs/rendering/particle-fill.md`, "Why ours differs", 1 and 3).
+What the blast rides is read and wired (2026-11-26): the spawn copies a point and hands the
+blast the struck craft's velocity, on HD, 2048 and Omega
+(`docs/ghidra/functions/ps3-hdfury-eu/rocket-craft-blast.md`). Left:
 
-- **What the blast rides.** The original's cloud travels with the struck craft and lags it
-  (table under reason 1); ours is a burst at the hit point. Read the `WO_ROCKET_EXPLO` spawn at
-  `0x0014a7d8` in `/hdfury/EBOOT-ps3-hdfury-eu.elf`: which transform pointer `param_2` is at the
-  craft-hit call site (find its callers: `renderer.md` says it has more than one), whether the
-  spawn keeps that pointer (an attached instance) or copies it once, which emitters follow and
-  which stay in the world, and what happens to it when the craft is destroyed. Then check the
-  Missile's craft hit and the Pulse PSP twin (`Rocket_SpawnCraftExplosion_q`, `0x0886ed34`,
-  already drops the blast 2.5 under the craft).
-- **The screen wash.** All three filmed hits hold single-quad additive draws with a 64x64
-  texture whose half height is exactly twice their view depth, from the hit to 0.23 s. Find
-  their source: which effect or system builds a screen-facing quad sized `2 * depth`, which
-  texture it binds, its colour over age, and whether it is the Rocket's or any near blast's.
-  Starting points: the same spawn's neighbours, and the particle builder
-  (`docs/ghidra/functions/ps3-hdfury-eu/particle-render.md`). That these quads are the wash
-  is itself unproven: the first check is a capture with their draw skipped.
+- **The screen wash.** The full-screen single quads (half height = 2 x depth) are square,
+  opaque, warm white to yellow, and sit 2 to 12 units from the spawn point while the struck
+  craft is 13 to 30 units on, in all three filmed hits. So they are not the travelling
+  particles. Candidates, none above 45: `FIRESPIKES` (64x64 additive, cap 2.0, life 11 +- 6
+  ticks, but a from-spawn streak emitting 5 a tick), or something drawn for the spawn's point
+  light (`D = 100`, colour `(7, 5, 1)`, `0x006778c8` called at `0x0014aa34`). Decide by a
+  capture with one removed: zero `FIRESPIKES`' emission count in memory, or `nop` the
+  `bl 0x006778c8`, film hit 2 with `scripts/rpcs3-hd-rocket-film.py` and see which kills the
+  quads. Then read its law and wire it.
+- **The blast's push on nearby craft** (`Rocket_PushNearbyCraft_q`, `0x00149f70`, and Omega's
+  inline twin): radius and strength table unread; it may be HD's consumer of the "Blast push"
+  row in `docs/gameplay/weapon-lineage.md`. Simulation, not render: its own lane.
 
 ### Two further ideas, as settings
 
@@ -60,8 +58,7 @@ The sprites are wired; the capture's other two differences are not
 
 ## Next Steps
 
-1. Read what the `WO_ROCKET_EXPLO` spawn at `0x0014a7d8` rides ("What the blast rides").
-2. Find the source of the screen-sized additive quads ("The screen wash"), and confirm they are
-   the wash by capturing with their draw skipped.
+1. Capture the two A/B arms in "The screen wash" and wire whichever removes the quads.
+2. Re-render `hd-rocket-craft-hit-0100` and `-0233` once the wash is wired.
 3. Run the Deck numbers before and after.
 4. Put items 2 and 3 of the table to the maintainer as settings once the Deck numbers are in.

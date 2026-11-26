@@ -442,3 +442,5 @@
 0x8112e050	function	PauseMenu_BindRedirectForMode	80	pause-menu.md
 0x8128ceca	function	Particle_PushScaledQuadBatch	75	particle-near-law.md
 0x8128e100	function	Particle_PushQuadBatch	75	particle-near-law.md
+0x81206928	function	Rocket_SpawnCraftBlast	80	../ps3-hdfury-eu/rocket-craft-blast.md
+0x812aa644	function	Psys_SetInheritedVelocity	80	../ps3-hdfury-eu/rocket-craft-blast.md
