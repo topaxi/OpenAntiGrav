@@ -2,7 +2,7 @@
 status: measure
 titles: [hd, omega, 2048]
 updated: 2026-11-26
-summary: "Owed: the craft-blast template cap source and far-hit dome, Deck 4K hit still 64 ms worst, 1.7 ms at 1080p; the half-res particle target awaits the maintainer"
+summary: "Owed: blast template cap source, far-hit dome, Deck 4K hit still 64 ms worst, 1.7 ms at 1080p; half-res particle target awaits the maintainer"
 size: M (50)
 difficulty: medium (55)
 ---
