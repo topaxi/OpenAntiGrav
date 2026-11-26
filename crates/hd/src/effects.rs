@@ -199,13 +199,16 @@ const TEMPLATES: &[&str] = &[
 /// weight, not a colour (`ship-destroy.md`, "`colour_mode` 3 is a blend toward the scene light"),
 /// the two trail hits, whose colour lives in the sprite (the red variant's ramp is near white,
 /// `engine-trail.md`, "The red variant's colour is in its sprites"),
-/// and the Plasma's five, paired against the
-/// original phase by phase (`plasma.md`, "The pairs"). Every other HD effect
+/// the Plasma's five, paired against the
+/// original phase by phase (`plasma.md`, "The pairs"), and the Rocket's craft
+/// hit, filmed against the original (`docs/rendering/particle-fill.md`,
+/// "Against the original at a near blast"). Every other HD effect
 /// still draws the procedural profile until a matched capture says its sprite
 /// reads right.
 const SPRITES: &[&str] = &[
     engine_effects::DETONATOR_CANNON_SPARKS_EFFECT,
     engine_effects::TRACK_BLAST_EFFECT,
+    engine_effects::CRAFT_BLAST_EFFECT,
     engine_effects::EXPLOSION_EFFECT,
     engine_effects::QUAKE_EFFECT,
     engine_effects::DETONATOR_EMP_EFFECT,
