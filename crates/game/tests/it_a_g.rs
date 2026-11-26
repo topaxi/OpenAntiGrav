@@ -18,6 +18,7 @@
 mod absorb_mask_ground_truth;
 mod ai_speed_plan_sweep;
 mod astc_quality_ground_truth;
+mod benchmark_stats_ground_truth;
 mod bomb_orbit_ground_truth;
 mod boot_ground_truth;
 mod boot_legal_wrap_ground_truth;

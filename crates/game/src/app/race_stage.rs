@@ -782,8 +782,7 @@ impl RaceStage {
                 |id: &str, english: &str| done.strings.get_or_fallback(id, english).to_string();
             let list = crate::benchmark::screen::draw_list(
                 &done.report,
-                self.scoreboard.line_height(),
-                self.scoreboard.char_width(),
+                self.scoreboard.face(),
                 done.focus,
                 done.saved.as_deref(),
                 &say,
