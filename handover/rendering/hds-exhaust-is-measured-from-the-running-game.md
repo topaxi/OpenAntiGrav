@@ -12,10 +12,10 @@ summary: "HD exhaust: read the flame rim eye the console is handed (ours is the 
 ## Open (trimmed 2026-09-04 - three of the four original items are settled, not just narrowed)
 
 - **2026-11-26 (`own-shield-camera`): the flame rim's eye is the world origin, and supplying it makes the rest flame
-  worse.** The one-line fix (the eye in `flame_scene`, commit `0c86ed0ed`, reverted) brightens ours away from the
-  original on every HD rest-flame pair, so something else in the flame is wrong too. Next: read the eye constant the
-  console hands the flame's vertex program (RPCS3, a flame draw), then re-apply. Numbers on engine-flare.md,
-  "Our rim's eye".
+  worse.** The one-line fix (`fog.camera = eye` in `flame_scene`, commit `0c86ed0ed`, reverted) brightens ours away
+  from the original on every HD rest-flame pair, so something else in the flame is wrong too. Next: read the vertex
+  program, `c[209]` and the `c256-c258` matrix of a live flame draw (RPCS3), then re-apply. Numbers on
+  engine-flare.md, "Our rim's eye".
 `engine-trail.md` kept moving after this file's 2026-08-24 snapshot and was
 never folded back; its later sessions already close three of the four items
 below. Do not requote this file - `engine-trail.md`'s "Open, in rough order

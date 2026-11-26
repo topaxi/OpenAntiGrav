@@ -272,8 +272,9 @@ supplied). The same defect was fixed for the weapon bodies
 ([hd-unlit-programs.md](../../../rendering/hd-unlit-programs.md), "Weapon scene blocks") and for this project's own
 shield ([own-shield.md](../../../rendering/own-shield.md)).
 
-**Putting the view's eye there makes the rest flame worse, so it is not wired.** Commit `0c86ed0ed` did it and the
-next commit reverts it. All 172 comparison pairs were re-rendered on copies with the build before and after: 150 are
+**Putting the view's eye there makes the rest flame worse, so it is not wired.** The change tried: `flame_scene`
+(`crates/raceplay/src/scene/frame.rs`) gets `fog: Fog { camera: eye, ..Fog::off() }` (commit `0c86ed0ed`, reverted by
+the commit after it). All 172 comparison pairs were re-rendered on copies with the build before and after: 150 are
 byte-identical (every 2048, Omega, Pulse, Pulse PS2 and Pure pair, and 9 of HD's), 22 HD pairs move. "Error in them" is
 the mean absolute RGB difference (0 to 255) from the original over the pixels the change moved; the other columns are
 the page's whole-frame scores. On every grid pair with the craft at rest the error rises and ours gets brighter than
@@ -306,9 +307,11 @@ the original, a dim deep blue; the Zone pair, the Detonator pad and mines pairs 
 
 With the true view angle a face turned to the camera has `rim` near 0, so `alpha` is near its 1.1 maximum; from the
 origin `rim` was larger and the plume dimmer. So something else in our flame is wrong and the origin eye hides part of
-it. Unverified candidate: the program dots an untransformed normal and position against `eyePositionWorldSpace`, so if
-the console is handed a world-space eye for a model-space flame, its angle is not the view angle either. A live read of
-that vertex constant on a flame draw would settle it ([rpcs3-capture.md](../../../reverse-engineering/rpcs3-capture.md)).
+it. What is not settled is the space the console's program subtracts in. Block #1's listing above applies no world
+matrix to position or normal before `c[209] - position`, while [engine-trail.md](engine-trail.md), "The flare's draw
+state, read live", records both world-space vertices and a per-draw matrix at `c256-c258`. A live read of the flame
+draw's vertex program, `c[209]` and that matrix would settle it
+([rpcs3-capture.md](../../../reverse-engineering/rpcs3-capture.md)).
 
 The disc shield shells and cockpit spheres read the same block and are unaffected: with the eye supplied to them alone,
 18 frames (HD, Omega, 2048, Pulse, Pulse PS2, Pure; chase at ticks 400 and 600, cockpit at 400) are byte-identical.
