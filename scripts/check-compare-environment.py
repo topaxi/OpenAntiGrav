@@ -284,6 +284,51 @@ def check_detonator_mine_envelopes():
     far.rec["original"]["presented_lag"] = {"picture_total_ticks": 6.0}
     flags = hd_pair.mine_flags(far, {"mines": [ram], "race_clock_s": 2.7, "mine_reads": reads[2:]})
     assert flags[flags.index("--detonator-mine-envelopes") + 1] == "0.2500,1.0000", flags
+    # No read at the picture's clock: the pause's age is moved back by the measured lag; with no measured lag it is kept.
+    aged = dict(ram, age_s=55.0)
+    late = Pair()
+    late.rec["original"]["presented_lag"] = {"picture_total_ticks": 7.5}
+    flags = hd_pair.mine_flags(late, {"mines": [aged], "race_clock_s": 2.7})
+    assert flags[flags.index("--detonator-mine-ages") + 1] == "54.8750", flags
+    unfitted = Pair()
+    flags = hd_pair.mine_flags(unfitted, {"mines": [aged], "race_clock_s": 2.7})
+    assert flags[flags.index("--detonator-mine-ages") + 1] == "55.0000", flags
+
+
+def check_detonator_picture_tick(root):
+    """A Detonator pair whose picture lag was measured runs ours to the picture's tick (rounds, mine hits, score, ammo), on
+    the first render and on every re-render; the static-scene fit takes only a sharp, interior peak."""
+    sys.path.insert(0, str(HERE))
+    import hd_picture_lag
+    # lap clock 2.0667 s, picture 7.5 ticks older than RAM: 124 - 7.5 ticks after GO, not the HUD clock's 3
+    assert ce.picture_tick(272, 2.0666661262512207, 7.5) == 388
+    peak = {0.0: 0.44, 1.0: 0.45, 2.0: 0.44, 3.0: 0.50, 3.5: 0.59, 4.0: 0.55, 5.0: 0.38, 6.0: 0.35}
+    assert hd_picture_lag.pick_static(peak) == (3.5, None)
+    assert hd_picture_lag.pick_static({0.0: 0.38, 1.0: 0.36, 3.0: 0.30, 6.0: 0.12})[0] is None  # at the end
+    assert hd_picture_lag.pick_static({0.0: 0.50, 2.0: 0.52, 3.0: 0.53, 6.0: 0.51})[0] is None  # flat
+
+    spec = importlib.util.spec_from_file_location("compare_rerender_ours", HERE / "compare-rerender-ours.py")
+    rerender = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(rerender)
+    fake = root / "fake-oag-game"
+    fake.write_text('#!/bin/sh\nwhile [ "$1" != --screenshot ]; do shift; done\ncp "%s" "$2"\n' % (root / "pair" / "theirs.png"))
+    fake.chmod(0o755)
+    (root / "pair").mkdir()
+    subprocess.run(["magick", "-size", "48x27", "xc:gray30", str(root / "pair" / "theirs.png")], check=True)
+
+    def ticks_after(lag):
+        rec = {"profile": "hd-fury", "output": [48, 27], "kind": "race",
+               "original": {"race_clock_s": 2.0666661262512207, "gantry_seconds": 7.45,
+                            "presented_lag": dict({"hud_clock_ticks": 3}, **lag)},
+               "ours": {"ticks": 393, "flags": ["--race", "--pose-hold-ticks", "--gantry-seconds", "7.400", "--ticks", "393"]}}
+        (root / "pair" / "pair.json").write_text(json.dumps(rec))
+        result = rerender.rerender(root / "pair" / "pair.json", fake)
+        assert result.startswith("ok"), result
+        flags = json.loads((root / "pair" / "pair.json").read_text())["ours"]["flags"]
+        return flags[flags.index("--ticks") + 1], flags[flags.index("--gantry-seconds") + 1]
+
+    assert ticks_after({"picture_total_ticks": 7.5}) == ("388", "%.6f" % (7.45 - 7.5 / 60))
+    assert ticks_after({}) == ("393", "%.6f" % (7.45 - 3 / 60))
 
 
 def main():
@@ -331,6 +376,8 @@ def main():
     with tempfile.TemporaryDirectory() as t:
         check_anisotropy(Path(t))
     check_detonator_mine_envelopes()
+    with tempfile.TemporaryDirectory() as t:
+        check_detonator_picture_tick(Path(t))
     print("compare environment: round trip ok")
 
 
