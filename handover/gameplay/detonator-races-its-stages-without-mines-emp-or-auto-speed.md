@@ -299,8 +299,12 @@ placement RNG cannot match the original's `Libc_Rand` (a departure, documented).
   `cannon-volley` with envelopes (fire so the press lands at 1.87 s, not 2.20); `pad`'s floor is music-lit differently on a re-grab.
   The pair now takes each mine's envelope at the picture's tick (`detonator-mine-draw.md`, "The envelope at the picture's
   tick"); near-ball boxes within 20 grey. ~~The mine spin~~ wired (`det-mine-spin`, `detonator-mine-draw.md`, "The spin,
-  wired"): `mines-ahead` 13.17 -> 12.51 with the grab's ages pinned. Next: ours' `PitchVolume` band (0.03 against the
-  original's 0.32 on one frame); the spin on 2048 and Omega (their animate functions are not located).
+  wired"): `mines-ahead` 13.17 -> 12.51 with the grab's ages pinned. ~~Ours' `PitchVolume` band~~ read
+  (`det-mine-pitch-volume`, `detonator-mine-material.md`, "The visualiser's level"): both volumes are one whole-spectrum
+  level `L` (`clamp01(5 L)`, `clamp(L, 0, 0.4)`); a wiring (commit `5fac71320`, reverted) gave `mines-ahead` 12.51 -> 12.52
+  and `cannon-volley-hot` +0.04, so not kept. `PitchVolume` is worth 0.01 grey; `MasterVolume` 0.25. To land it: re-grab
+  `cannon-volley-hot` with the volume words so no pair falls back to `L = 0`. Next: the spin on 2048 and Omega (their
+  animate functions are not located); the ring's own radius.
   (3) ~~Ours builds the football and spikes with no tangent~~: wired (`Mesh::inline_tangents`, `+10`); the dark centre is
   gone, ours' core 143 -> 157.5 against the original's 188, so the body is still darker than the original's white.
 
