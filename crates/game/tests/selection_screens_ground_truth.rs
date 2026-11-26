@@ -1127,10 +1127,32 @@ fn omega_reads_its_own_team_selection() {
     assert_eq!([model.rot_x, model.rot_y], pose.rotation);
     let grid = extra.hex.expect("the honeycomb");
     assert_eq!((grid.columns, grid.rows, grid.scale), (5, 9, 0.8));
-    // Its cursor ring pulses through the red its update computes inline (`ship-select-ring.md`,
-    // "Omega"), and the selected column is `HD_Blue` of its own colour template, the same red.
+    // Its cursor ring pulses through the red its update computes inline, and its `_SetCell` writes
+    // `0xff808080` over the selected column of both grids where HD's looks up `HD_Blue`
+    // (`ship-select-ring.md`, "Omega").
     assert_eq!(grid.ring_peak, Some(0xffee_0707));
-    assert_eq!(grid.selected_column, 0xffee_0707);
+    assert_eq!(grid.selected_column, 0xff80_8080);
+    let creation = shell
+        .track_select
+        .as_ref()
+        .and_then(|layout| layout.hd_track.as_deref())
+        .expect("Track Creation");
+    let circuits = creation.hex_grid.expect("Track Creation's grid");
+    assert_eq!(circuits.selected_column, 0xff80_8080);
+    // Omega's white front end takes the last four frames of the direction glyph's strip.
+    assert!(!creation.fury_style);
+    let glyph = oag_ui_screens::picker::hd::track::DIRECTION_SRC;
+    assert!(shell.sprites.get(glyph).is_some(), "{glyph}");
+    // The cell art is the faded hexagon, as the 1x file this build loads has it.
+    let art = shell
+        .sprites
+        .get(oag_ui_screens::picker::hd::hex::HEX_SRC)
+        .expect("the cell art");
+    let alpha = shell
+        .sprites
+        .alpha_at(art, 37.0 / 128.0, 0.5)
+        .expect("inside the sheet");
+    assert_eq!((alpha * 255.0).round(), 215.0);
     // The nineteen declared teams are all offered: the twelve HD-era, the two Tigrons and
     // the five 2048-era, whose `Logo.gtf` sits under their own `Ships\<Team>` directory.
     assert_eq!(shell.teams.len(), 19);

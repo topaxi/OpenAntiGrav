@@ -420,7 +420,7 @@ inside `FUN_0142c7f0`, a menu-list update, so they belong to another Omega build
 **Team Selection** copy in v107 was not located again.
 
 **The cells and the glyph: ported, one value differs** (v107, `/omega/eboot-ps4-omega-eu-v107.bin`; test
-`omega_campaign_screens_ground_truth::omegas_hex_grids_fill_the_selected_column_grey`). `FUN_0145a380`
+`selection_screens_ground_truth::omega_reads_its_own_team_selection`). `FUN_0145a380`
 (`_Build`) loads `Hexagon_HD_Faded.2x.gtf`, `hexlock_HD.2x.gtf` and `Hexagon_HD_THICK_OUT.2x.gtf` on the
 same quad, 92 x 80 times the widget's `Scale`, which scales the 72, 83 and 42 pitches too. `FUN_0145af70`
 (`_SetCell`) has the same ramp and vertex order, but **writes `0xff808080` over the selected column's
