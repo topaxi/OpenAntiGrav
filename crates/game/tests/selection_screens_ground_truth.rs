@@ -1007,7 +1007,10 @@ fn hd_reads_its_own_track_creation() {
     // The grid names no art: the hexagon, the ring and every circuit's white
     // icon must be on the sheet, or the live screen draws an empty grid while
     // a stubbed unit test passes.
+    // The Fury front end takes the first four frames of the direction glyph's strip.
+    assert!(extra.fury_style);
     for src in [
+        oag_ui_screens::picker::hd::track::DIRECTION_SRC,
         oag_ui_screens::picker::hd::hex::HEX_SRC,
         oag_ui_screens::picker::hd::hex::THICK_OUT_SRC,
         oag_ui_screens::campaign::hd::cell_brackets::SRC,

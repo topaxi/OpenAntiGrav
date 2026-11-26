@@ -404,6 +404,28 @@ pub fn pulse_phase(seconds: f32) -> f32 {
     }
 }
 
+/// Where the cursor ring stands: the centre column, on `cursor`'s row and the half row that
+/// column sits at.
+pub(super) fn ring_centre(
+    grid: &HexGrid,
+    selected: usize,
+    slide: Option<&Slide>,
+    cursor: Cursor,
+) -> (f32, f32) {
+    let parity = match (grid.phase_by_entry, slide) {
+        (false, _) => 0.0,
+        (true, None) => (selected % 2) as f32,
+        (true, Some(slide)) => f32::from(u8::from(slide.ring_target_low())),
+    };
+    let centre = (grid.columns / 2) as f32;
+    (
+        grid.origin[0] + centre * PITCH[0] * grid.scale,
+        grid.origin[1]
+            + cursor.row as f32 * PITCH[1] * grid.scale
+            + (parity + cursor.low) * HALF_ROW * grid.scale,
+    )
+}
+
 /// The grid's draws, behind-to-front per cell: the hexagon, then its face; then the cursor ring
 /// once on `cursor`'s row of the centre column, over every cell, as one quad of
 /// `Hexagon_HD_THICK_OUT.gtf` pulsing with `seconds` (`phase` of the widget's own clock).
@@ -481,18 +503,7 @@ pub(super) fn draw_cells(
     if let (Some(cursor), Some(peak), Some(placed)) =
         (cursor, grid.ring_peak, sprites(THICK_OUT_SRC))
     {
-        let parity = match (grid.phase_by_entry, slide) {
-            (false, _) => 0.0,
-            (true, None) => (selected % 2) as f32,
-            (true, Some(slide)) => f32::from(u8::from(slide.ring_target_low())),
-        };
-        let centre = (grid.columns / 2) as f32;
-        let (cx, cy) = (
-            grid.origin[0] + centre * PITCH[0] * grid.scale,
-            grid.origin[1]
-                + cursor.row as f32 * PITCH[1] * grid.scale
-                + (parity + cursor.low) * HALF_ROW * grid.scale,
-        );
+        let (cx, cy) = ring_centre(grid, selected, slide, cursor);
         let [w, h] = QUAD.map(|side| side * grid.scale);
         out.push(Draw::Sprite {
             rect: [cx - w * 0.5, cy - h * 0.5, w, h],

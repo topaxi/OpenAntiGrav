@@ -790,14 +790,18 @@ fn omegas_hex_grids_fill_the_selected_column_grey() {
         .and_then(|layout| layout.hd.as_deref())
         .and_then(|screen| screen.hex)
         .expect("Team Selection's grid");
-    let track = shell
+    let screen = shell
         .track_select
         .as_ref()
         .and_then(|layout| layout.hd_track.as_deref())
-        .and_then(|screen| screen.hex_grid)
-        .expect("Track Creation's grid");
+        .expect("Track Creation");
+    let track = screen.hex_grid.expect("Track Creation's grid");
     assert_eq!(team.selected_column, 0xff80_8080);
     assert_eq!(track.selected_column, 0xff80_8080);
+    // Omega's white front end takes the last four frames of the direction glyph's strip.
+    assert!(!screen.fury_style);
+    let glyph = oag_ui_screens::picker::hd::track::DIRECTION_SRC;
+    assert!(shell.sprites.get(glyph).is_some(), "{glyph}");
     let src = oag_ui_screens::picker::hd::hex::HEX_SRC;
     let art = shell.sprites.get(src).expect("the cell art");
     let alpha = shell

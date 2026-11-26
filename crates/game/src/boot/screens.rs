@@ -189,7 +189,8 @@ pub(super) fn track_emblems(
         })
         .collect();
     // `TrackHexSelection` names no art either: the same hexagon and cursor
-    // ring as `Team Selection`'s grid.
+    // ring as `Team Selection`'s grid, and its own direction glyph.
+    out.push(oag_ui_screens::picker::hd::track::DIRECTION_SRC.to_string());
     out.push(oag_ui_screens::picker::hd::hex::HEX_SRC.to_string());
     out.push(oag_ui_screens::picker::hd::hex::THICK_OUT_SRC.to_string());
     out.push(oag_ui_screens::campaign::hd::cell_brackets::SRC.to_string());
