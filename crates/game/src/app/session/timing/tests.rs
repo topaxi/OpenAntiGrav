@@ -379,6 +379,14 @@ fn the_original_target_is_a_width_throttle_only_where_the_title_has_one() {
     let spec = hd.width().expect("HD has a width throttle");
     assert_eq!(spec.threshold_hz(), 120);
     assert_eq!(hd.floor(), (2600, 2160));
+    // The title's own two durations, at the rate they are authored against.
+    let at_60 = original_limits(Some(oag_hd::TITLE), ceiling, Some(60));
+    let mut drs = drs::Controller::new();
+    for (gpu, level) in [(0.016_112_5, 1), (0.015_556_5, 1), (0.015_555_5, 0)] {
+        drs.record(cost(gpu, 0.0), None, at_60);
+        drs.finish_frame(None, at_60);
+        assert_eq!(drs.width_level(), level, "{gpu} s");
+    }
     for title in [
         Some(oag_pulse::TITLE),
         Some(oag_pure::TITLE),
