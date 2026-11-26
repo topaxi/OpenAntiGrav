@@ -17,8 +17,9 @@
 //! opponent's beam destroys the firer depends on every line in the field, which
 //! any handling change moves. HD's four-point hover once left the firer drained
 //! on the first lap and parked, and the count below measured that, not a floor. On every tick a projectile is
-//! in the air the test casts the original's own probe, the weapon's own reach (`6.0` for the Rocket, `12.0` for the
-//! rest) along `-surface` from the projectile, and asks two things of the floor it finds:
+//! in the air the test casts the original's own probe, the title's own reach for the weapon
+//! (Pulse: `6.0` for the Rocket, `12.0` for the rest; HD: `6.0` for the Rocket, Missile and
+//! Plasma) along `-surface` from the projectile, and asks two things of the floor it finds:
 //!
 //! - the carried normal agrees with the floor's (angle, degrees), and
 //! - the projectile sits near [`RIDE_HEIGHT`] above it.
@@ -155,11 +156,7 @@ fn ride(title: (&str, &str), weapon: Weapon, ticks: u32) -> Option<Ride> {
             }
             // Counted before any `continue` below: a miss is still an update.
             flown += 1;
-            let reach = if weapon == Weapon::Rocket {
-                oag_weapons::projectile::SURFACE_PROBE_LENGTH
-            } else {
-                oag_weapons::projectile::missile::SURFACE_PROBE_LENGTH
-            };
+            let reach = race.core.sim.flight_laws().probes.for_weapon(weapon);
             let ship = &race.core.sim.world.ships[0];
             let was_hidden = std::mem::replace(
                 &mut hidden,
