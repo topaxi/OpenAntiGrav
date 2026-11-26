@@ -2,7 +2,7 @@
 status: measure
 titles: [hd, omega, 2048]
 updated: 2026-11-26
-summary: "Owed: films of HD explosions and streaks, Rocket blast gaps, cap source, first-wave cloud covers the craft on the near pairs; half-res parked"
+summary: "Owed: films of HD explosions and streaks, Rocket blast gaps, cap source, near pairs' field rewind to adopt; half-res parked"
 size: M (50)
 difficulty: medium (55)
 ---
@@ -41,15 +41,17 @@ blast the struck craft's velocity, on HD, 2048 and Omega
 - **The far Rocket blast with the film's velocity is still not the original's**
   (`particle-fill.md`, "The pose throws the far blast at the camera"): the cloud is smaller,
   `trail` reads as smooth white lobes, and the grey smoke streaming toward the camera is missing.
-- **The near pairs (`hit2`) pose at the film's two points and ticks (`--force-rocket-hit-at`), and
-  ours is no closer for it** (`particle-fill.md`, "The volley posed at its two points"): the
-  0.1 s pair is further, the 0.233 s pair is not separable. P1 is about 5.5 units in front of the
-  drawn craft along the view axis, so ours' first-wave cloud covers it; the original's, born at the
-  same point, does not. Next: compare the two clouds at 6 ticks (travel under the carried velocity,
-  size, opacity, then draw order against the hull), then re-score. Why the original's second wave
-  arrives later is unread.
-- **Lead, not checked: the HD blast lags the struck craft by 2 ticks** (same section): position
-  copy, template clock or ring lag.
+- **The near pairs: their `field.csv` is 2 ticks ahead of their picture; the move is the lead's to adopt**
+  (`particle-fill.md`, "The first wave and the drawn hull"). It was never the cloud: the film pairs
+  fed ours the RAM poses, and the frame draws every craft 2 ticks back. That also explains the blast's
+  "2-tick lag". `compare_env.py film-pair-field` moves a pair's field to the frame's instant. Adopted,
+  0100 reads 53.96 (from 65.75) and 0233 50.36 (from 62.86), on their current flags. Still open:
+  - 0233's craft stays hidden under white on every arm, against the original's yellow-tinted
+    craft in plain view;
+  - the two-wave pose is still not the best on 0233 (+1.09 +/- 3.64);
+  - the wash quads are cut by the track where the original's cover the frame (hard edges on the
+    floor);
+  - why the original's second wave arrives later is unread.
 - **Lead, not checked: the far pairs may be posed on the second wave's blast.** Their wash quad
   is 2 ticks old at 0.1 s and 10 at 0.233 s (`particle-fill.md`, "Posing a far hit"), so born about
   4 ticks after the first shield drop; `far1`'s and `far3`'s shields fall again between 0.05 and

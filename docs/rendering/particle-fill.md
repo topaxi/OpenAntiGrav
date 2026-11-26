@@ -986,13 +986,80 @@ error; negative is closer to the original.
   craft, which the original's frame shows clear of the cloud. Along the view axis the drawn craft
   (`field.csv` row 0; `--field-from` wins over `--pose`) is 15.9 units out, P1 is 10.4 and P2 21.2.
   So the first wave stands about 5.5 units in front of the craft and covers it, and the second
-  stands behind it: alone it leaves the craft in view and draws as a hard-edged white sheet. The
-  open question is why the original's 6-tick-old first-wave cloud, born at the same point, does
-  not cover its craft. How far ours has travelled, its size and opacity, and its draw order
-  against the hull are not investigated.
+  stands behind it: alone it leaves the craft in view and draws as a hard-edged white sheet. Why
+  the original's cloud does not cover its craft is answered below ("The first wave and the drawn
+  hull"): the original draws its craft 2 ticks further back, in front of the cloud.
 - The first-wave-only row is not a pose: it leaves out two of the three Rockets.
 
 **2048 and Omega: not checked** (the numbers are HD's; the flag itself is title-agnostic).
+
+### The first wave and the drawn hull
+
+2026-11-26. **The first wave's cloud is not what covers the craft. The pairs draw the craft in the
+wrong place.** `field.csv` is the RAM pose read in the pause, 2 whole ticks ahead of the push-buffer
+frame that both the picture and the camera come from. The original draws its craft at view depth
+11.6, against our 15.9. P1 is at 10.36, and the cloud is carried forward past the craft. So the
+original's craft stands in front of nearly all of the cloud, and ours stands behind it. This is the
+pause skew in [compare-page.md](../tools/compare-page.md), "The skew is the pause, not the
+original's draw order" (confidence 90 there), now measured on these frames (confidence 90).
+
+**The read.** Walk `hit2`'s command stream for frame `a0100` and take the vertex constants each
+draw loads. The player's hull matrix (rotation rows scaled 0.75, which are the RAM rows) is loaded
+by draws 96 to 125 at `(526.054, -25.561, -33.823)`. The RAM body is
+`(529.363, -25.017, -30.999)` with velocity `(98.31, 16.65, 86.59)`: 2.02, 1.95 and 1.95 ticks
+back on the three axes, 0.069 units off the velocity line. `a0233` gives 2 ticks, 0.068 off. The
+far films' player is held at rest (0.35 units a second), so nothing is measurable there, and their
+field is unchanged.
+
+The dump also holds the next frame's push buffer, under construction at `0x40496000`, with the
+hull 1 tick back. A scan of raw memory finds that one first, because it is nearer the body. Only
+the walked stream's matrix is the picture's. Rendered at rewinds of 1, 2 and 3 ticks, the hull is
+the original's size and place only at 2: 1 is small, high and yellow under the cloud, and 3 is too
+large.
+
+**Ruled out first.**
+
+- **Draw order.** The particle run is draws 507 to 586 of 660, after the hull's, with depth test
+  on and no depth write, the same as ours.
+- **The cloud's emitters.** Leaving out `WO_ROCKET_EXPLO` emitters 0, 1, 4, 7 and 9 freed our
+  craft, but mean grey stayed at 67.24 (from 67.10). Leaving out the yellow wash (emitter 12)
+  made it worse, at 73.21.
+- **Size and travel.** Matched per emitter against the original's draws 62 to 79, our
+  quads' half sizes and depths agree. Only the newest particle of each root differs: ours is born
+  at the spawn point, the original's one tick on.
+
+**The tool.** `python3 scripts/compare_env.py film-pair-field FILM STEM PAIR_DIR` reads the hull
+off the frame's walked stream and checks the skew with `ps3_pose.whole_ticks`, which refuses a
+non-whole skew. It moves every craft in `field.csv` back that many ticks of its own velocity and
+records `original.presented_lag.craft_ticks` in `pair.json`. A player at rest reads 0. Its
+selftest runs under `just check-pair-provenance`.
+
+**The pairs.** Mean grey on the own seed, rendered twice byte-identical. "Seeds" is the
+difference paired against current+stored over `--stage-seed 1..8`. Negative is closer.
+
+| Pair | Flags, field | Own seed | Seeds, mean grey | Seeds, RMSE |
+| --- | --- | --- | --- | --- |
+| 0100 | current, stored | 65.75 | | |
+| 0100 | current, rewound | **53.96** | -11.65 +/- 0.03, 8 of 8 | -10.98 +/- 0.08 |
+| 0100 | two waves, stored | 67.10 | +1.34 +/- 0.08, 0 of 8 | +2.09 +/- 0.09 |
+| 0100 | two waves, rewound | 64.39 | -0.64 +/- 0.14, 7 of 8 | -0.34 +/- 0.13 |
+| 0233 | current, stored | 62.86 | | |
+| 0233 | current, rewound | **50.36** | -11.48 +/- 5.30, 7 of 8 | -10.64 +/- 4.92 |
+| 0233 | two waves, stored | 61.54 | -3.11 +/- 2.21, 6 of 8 | +1.48 +/- 1.92 |
+| 0233 | two waves, rewound | 90.03 | +1.09 +/- 3.64, 2 of 8 | +4.51 +/- 3.25 |
+
+The far pairs (`rocket-craft-far-hit-0100`, `-0233`) are unchanged at 12.91 and 45.99.
+
+- **0100, current flags with the rewound field.** By eye this is the closest our frame has been:
+  the craft is the original's size and place with the cloud behind it.
+- **0233.** It improves on every seed metric. By eye our craft is still lost under white, where
+  the original's is tinted yellow and in plain view.
+- **The two-wave pose.** Rewound, it beats the stored current flags on 0100 but not the rewound
+  current flags. Its two washes are cut by the track floor into hard edges, while the original's
+  cover the frame. That is not read.
+
+**2048 and Omega: not checked.** The brief says "Scope: HD only", and the skew is an RPCS3 pause
+property.
 
 ## Per effect: what fills the heavy frames
 
