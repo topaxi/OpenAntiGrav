@@ -460,6 +460,7 @@ def main():
         check_anisotropy(Path(t))
     check_detonator_mine_envelopes()
     check_hd_flame_clock()
+    check_hd_hull()
     check_detonator_volley_ticks()
     with tempfile.TemporaryDirectory() as t:
         check_detonator_picture_tick(Path(t))
