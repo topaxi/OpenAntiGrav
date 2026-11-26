@@ -46,9 +46,11 @@ pub struct NearEye {
 /// neither.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Cull<'a> {
-    /// The PSP GE's screen-range cull ([`super::guard`]).
+    /// The camera, for the Pulse PSP strips that are built screen-parallel
+    /// ([`super::streak`]).
     pub guard: Option<&'a GuardBand>,
-    /// The eye the near law reads, for the effects that carry it.
+    /// The eye the near laws read, for the effects that carry one ([`Effect::near`],
+    /// [`super::guard`]).
     pub near: Option<NearEye>,
 }
 
@@ -61,7 +63,7 @@ impl Cull<'_> {
 }
 
 impl NearEye {
-    fn depth(&self, particle: &Particle) -> f32 {
+    pub(super) fn depth(&self, particle: &Particle) -> f32 {
         let drawn = particle.position + particle.shift() * (self.draw_alpha - 1.0);
         (drawn - self.eye).dot(self.forward)
     }

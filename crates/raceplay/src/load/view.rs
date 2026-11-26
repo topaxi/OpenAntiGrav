@@ -603,6 +603,10 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
     let absorb_anchors = super::absorb::anchors(absorb_burst, &liveries);
     let mut effects = psys::Library::new();
     let particle_laws = title.looks.particle_laws.applies(archives.layout.platform);
+    let psp_clip = title
+        .looks
+        .psp_particle_clip
+        .applies(archives.layout.platform);
     let circuit_weather = vex_geometry
         && title
             .looks
@@ -632,6 +636,9 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
                         fade_depth: law.fade_depth,
                         template_cap: law.template_cap.map(|(cap, _)| cap),
                     });
+                }
+                if psp_clip {
+                    effect.with_psp_clip();
                 }
                 report.push(note);
                 effects.insert(name, effect);
