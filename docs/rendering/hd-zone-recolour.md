@@ -436,9 +436,9 @@ on Omega and a Zone race on Pulse.
 Zone is the arm that leaves full size, the same direction as the report, and the fix does not
 move it by more than the runs differ from each other. A scalable cost 25 to 30 % higher puts a
 controller at about 0.88 to 0.9 of the scale when the time trial sits exactly at its budget, not at
-0.75. On the Deck itself it settles at about 0.80 at 3840x2160; the extra depth may be the GPU
-clock falling under the controller, not confirmed
-([dynamic-resolution.md](dynamic-resolution.md#on-the-steam-deck-hd-zone-against-a-time-trial)).
+0.75. On the Deck itself it settles at about 0.80 at 3840x2160; the extra depth is the GPU
+clock falling under the controller (with the clock pinned it settles at 0.96)
+([dynamic-resolution.md](dynamic-resolution.md#why-the-4k-settle-is-so-deep-the-gpu-clock-falls-with-the-scale)).
 
 **Not measured, and open:** what a separate Zone program for the circuit would save. The Deck and
 sound are measured
