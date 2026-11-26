@@ -501,8 +501,8 @@ positions differ by construction (ours places with its own seeded `Rng`), so a m
 
 **The volley pair split (2026-11-26, `det-cannon-hot-gap`; `docs/tools/compare-page.md`, "The volley pair's difference, split").** Its
 capture state is partly fixed (picture lag off the static scene, ours at the picture's tick, mine ages; 11.47 to 10.32). **Open draw gaps, on every Detonator
-pair:** ~~bright striped grilles ours draws where the original is black~~ (fixed 2026-11-26, `det-dark-scenery`: the `scanlinebillboard` hologram's Zone variants draw the Zone surface, `docs/rendering/hd-zone-recolour.md`, "Holographic billboards in a Zone frame"; -hot 10.32 to 8.96, pad 7.60 to 5.88), the score box's white-striped wings (1.2), HUD digits
-and `1/14` too wide (1.2), hull too bright (0.7). ~~Open capture state: input latency before ours' fire, the volley pair's mine
+pair:** ~~bright striped grilles ours draws where the original is black~~ (fixed 2026-11-26, `det-dark-scenery`: the `scanlinebillboard` hologram's Zone variants draw the Zone surface, `docs/rendering/hd-zone-recolour.md`, "Holographic billboards in a Zone frame"; -hot 10.32 to 8.96, pad 7.60 to 5.88), ~~the score box's white-striped wings (1.2), HUD digits
+and `1/14` too wide (1.2)~~ (fixed, `det-hud-score-box`: `docs/formats/hd-hud.md`, "Detonator's score box" and "Text scales on two axes"), hull too bright (0.7). ~~Open capture state: input latency before ours' fire, the volley pair's mine
 envelopes~~ carried (`det-cannon-regrab`, "The volley clocks and the picture-clock reads"). **Open from that grab:** ~~ours' mine blast
 draws white puffs where the original shows small shards~~ (2026-11-26, `det-mine-blast`: the mine effects draw their disc sprites, the
 `Debris` atlas is the shards, `detonator-mine.md`, "The shards, against the original"). Still open there: the destroyed mine is not

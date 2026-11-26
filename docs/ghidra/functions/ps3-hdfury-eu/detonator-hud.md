@@ -322,7 +322,7 @@ which stands a race on a known cannon and compares the drawn texts exactly.
 | `Bullet00`..`14` | drawn while `index < clip`; a spent icon is hidden | **chosen:** the per-state art (`0x0007f0a0`) is unread, 55 |
 | `Multi00`..`14` | `Multi(14-i)` drawn once volley `i` hit; a streak award recolours the last 5/10/15 pips ending at the latest hit volley to `0xff00eeff` | recolour range 60 (read from the `Hud_RaiseChainBonus` description, not the pip loop); an unlit pip is hidden, **chosen** |
 | `PulseBonus` | the award's `HUD_CHAIN_n` text and amount (`STREAK_*` of the cannon law), held 2.0 s, faded over 1.0 s | **HD's language table has no `HUD_CHAIN_n`**: the line draws nothing there and the loader report names the ids; Omega's reads `5 CHAIN` |
-| `ShieldBarText`, `DamageBar`, `DamageBarBg` | the generic shield readout; white in Detonator (the original's mode-14 test, `hud-readouts.md`) | |
+| `ShieldBarText`, `DamageBar`, `DamageBarBg` | the generic shield readout; white in Detonator (the original's mode-14 test, `hud-readouts.md`) | `DamageBar` is the score box's white stripes, cropped by the shield (`docs/formats/hd-hud.md`, "Detonator's score box") |
 | `DetonatorStageParent`, `BulletBack`, `EMPBack` | static art, always on | `EMPBack` is the plate the EMP pips sit on |
 | `Emp_0`..`Emp_7`, `EmpReady` | the EMP charge (`RaceSim::detonator_emp`) | a pip drawn while the charge is over its index (vertex colour `0` draws nothing), `EmpReady` once the charge reaches `minNumPadsToCollectEMP`; the post-fire flash and the ready pulse (`+0x168`, `+0x174`) are not modelled |
 

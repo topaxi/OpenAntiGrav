@@ -171,8 +171,11 @@ pub struct Label {
     /// Which disc font.
     pub font: Font,
     /// Scale multiplier on the font's own cell. Ranges 0.5 to 1.5 in the shipped
-    /// layouts.
+    /// layouts. The vertical axis where `ScaleX`/`ScaleY` author the two apart.
     pub scale: f32,
+    /// The horizontal scale over [`Self::scale`]: `ScaleX / ScaleY`, `1.0` for a widget that
+    /// scales both alike (`docs/formats/hd-hud.md`, "Text scales on two axes").
+    pub stretch: f32,
     /// Text colour, resolved.
     pub color: [f32; 4],
     /// The `BorderColor`, when the widget has one.
