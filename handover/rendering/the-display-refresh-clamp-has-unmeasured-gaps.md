@@ -2,7 +2,7 @@
 status: blocked-hardware
 titles: [all]
 updated: 2026-11-26
-summary: "ADR-0084's refresh clamp: the Deck test (dock, undock, pacing, QAM limit, width baseline), Windows/macOS poll cost, Wayland mode change"
+summary: "ADR-0084's refresh clamp: the Deck test (dock, undock, pacing, QAM limit, width baseline), a Steam launch after an undock, the winit panic without RandR, Windows/macOS poll cost, Wayland mode change"
 categories: [rendering]
 size: S (60)
 difficulty: easy (70)
