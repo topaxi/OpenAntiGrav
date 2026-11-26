@@ -242,6 +242,12 @@ impl std::fmt::Debug for Renderer {
 }
 
 impl Renderer {
+    /// The face this renderer sets text in.
+    #[must_use]
+    pub fn face(&self) -> &Atlas {
+        &self.atlas
+    }
+
     /// Tells the renderer which grid the draw lists it is given are in.
     ///
     /// Set from the front end's own [`Space`] whenever a stage draws a source's
