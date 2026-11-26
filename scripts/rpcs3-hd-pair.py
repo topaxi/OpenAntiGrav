@@ -34,6 +34,7 @@ MAIN = Path("/home/topaxi/projects/OpenAntiGrav")
 sys.path.insert(0, str(HERE))
 import compare_env as ce  # noqa: E402
 import compare_provenance as cp  # noqa: E402
+from rpcs3_hd_field import MINE_DRAW_WORDS  # noqa: E402
 
 #: Our race's tick at which the race clock leaves 0: `oag_race::COUNTDOWN_TICKS`, read from ours by `compare_env.go_tick` (one
 #: length for every title today; it was a hard-coded 276 here until 2026-10-21, 4 ticks late).
@@ -203,6 +204,39 @@ def zone_band_flags(pair, ship):
     return ["--zone-bands", csv(bands["held"]), "--zone-bands-raw", csv(bands["raw"])]
 
 
+#: How far a mine read's RAM clock may sit from the picture's clock and still stand for it: an envelope steps once a tick.
+PICTURE_READ_TOLERANCE_TICKS = 1.5
+
+
+def picture_read(pair, ship):
+    """Each mine's draw words (by object address) from the shot's read nearest the picture's clock, `{}` when none is near.
+
+    The picture is `picture_total_ticks` older than the RAM read of its own pause, and a mine's envelope steps once a tick, so
+    an attack between the two (every spike `t` 0.57 -> 1.0 in one tick, `detonator-mine-draw.md`, "The envelope at the
+    picture's tick") would put the RAM's envelope on a picture drawn before it. Records which read stood for the picture."""
+    reads = ship.get("mine_reads") or []
+    total = (pair.rec["original"].get("presented_lag") or {}).get("picture_total_ticks")
+    det = pair.rec["original"].setdefault("detonator", {})
+    if not reads or total is None:
+        det["mine_read"] = {"source": "the pause's own read: %s" % ("no earlier reads in the shot record" if not reads
+                                                                    else "the picture's lag was not fitted")}
+        return {}
+    at = ship["race_clock_s"] - total / 60.0
+    read = min(reads, key=lambda r: abs(r["race_clock_s"] - at))
+    off = (read["race_clock_s"] - at) * 60.0
+    near = abs(off) <= PICTURE_READ_TOLERANCE_TICKS
+    det["mine_read"] = {"picture_clock_s": at, "read_clock_s": read["race_clock_s"], "ticks_off": off,
+                        "source": "the read nearest the picture's clock" if near else
+                                  "the pause's own read: no read within %.1f ticks of the picture's clock" % PICTURE_READ_TOLERANCE_TICKS}
+    if not near:
+        pair.caveat("no mine read lies within %.1f ticks of the picture's clock (%.3f s, nearest %.3f s): the mines' envelopes are the "
+                    "pause's own, %.1f ticks newer than the picture" % (PICTURE_READ_TOLERANCE_TICKS, at, read["race_clock_s"], total))
+        return {}
+    pair.caveat("each mine's envelope and draw words are the read at %.3f s, %.1f ticks from the picture's clock %.3f s (the pause's own "
+                "RAM is %.1f ticks newer than the picture)" % (read["race_clock_s"], off, at, total))
+    return read["mines"]
+
+
 def mine_flags(pair, ship):
     """The original's laid mines (`rpcs3_hd_field.detonator_mines`, read in the pause) as ours' `--detonator-mines`.
 
@@ -213,9 +247,12 @@ def mine_flags(pair, ship):
     if not mines:
         pair.caveat("no mine objects were read at the pause: ours lays its own seeded mine layout")
         return []
+    at_picture = picture_read(pair, ship)
+    mines = [dict(m, **at_picture.get(str(m.get("address")), {})) for m in mines]
     pair.rec["original"]["detonator"]["mines"] = [
         {"entry": m["entry"], "lane": m["lane"], "position": m["position"], "live": bool(m["live"]),
-         "football_s": m.get("football_s"), "spikes_t": m.get("spikes_t")} for m in mines]
+         "football_s": m.get("football_s"), "spikes_t": m.get("spikes_t"),
+         **{name: m[name] for name, _ in MINE_DRAW_WORDS if name in m}} for m in mines]
     pair.caveat("Detonator mines: the original's %d mine objects were read in the pause (track entry, lane, position) and ours lays each on its "
                 "survey lane nearest that position (`--detonator-mines`); its bomb and any mine laid later are ours" % len(mines))
     flags = ["--detonator-mines", ";".join("%.3f,%.3f,%.3f" % tuple(m["position"]) for m in mines)]
