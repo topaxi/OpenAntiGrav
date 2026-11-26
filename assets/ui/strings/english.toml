@@ -283,6 +283,7 @@ OAG_GRAPHICS_REFLECTION_AUTO = { text = "AUTO", human = false }
 OAG_GRAPHICS_WATER = { text = "WATER", human = false }
 OAG_GRAPHICS_MODEL_DETAIL = { text = "MODEL DETAIL", human = false }
 OAG_GRAPHICS_TEXTURE_DETAIL = { text = "TEXTURE DETAIL", human = false }
+OAG_GRAPHICS_TEXTURE_COMPRESSION = { text = "TEXTURE COMPRESSION", human = false }
 OAG_GRAPHICS_TRAIL_ORDER = { text = "TRAIL ORDER", human = false }
 OAG_GRAPHICS_SCENERY_SORT = { text = "SCENERY SORT", human = false }
 OAG_GRAPHICS_TRAIL_LENGTH = { text = "TRAIL LENGTH", human = false }

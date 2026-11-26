@@ -27,6 +27,12 @@ serde.workspace = true
 log.workspace = true
 pollster.workspace = true
 
+# The opt-in ASTC re-encode's cache (`mesh_render::astc`); the encoder itself is injected by
+# `oag-game`, so this crate links no C++.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+sha2 = "0.11"
+oag-io.workspace = true
+
 [build-dependencies]
 oag-shader-check.workspace = true
 

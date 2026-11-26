@@ -717,6 +717,17 @@ impl Session {
                     return;
                 }
             },
+            "graphics.texture_compression" => match text.parse::<display::TextureCompression>() {
+                // Read by the next race load's texture uploads.
+                Ok(compression) => {
+                    self.settings.graphics.texture_compression = compression;
+                    crate::texture_cache::apply(compression);
+                }
+                Err(e) => {
+                    warn!("ignoring {setting} = {text:?}: {e}");
+                    return;
+                }
+            },
             "graphics.fov" => match text.parse::<display::Fov>() {
                 // Applied by the next frame the race draws, which builds its
                 // projection from this every time. Nothing else uses it: the

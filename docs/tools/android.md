@@ -1195,8 +1195,9 @@ medians of the per-second `--frame-log` lines; memory from Perfetto's `android.g
 The picture of a real encode, offline: Arm's `astcenc` 5.7.1 (`-medium`, 4x4) round trip of the 341 textures Vineta K's circuit
 uses (`just export-host-textures`, 61.3 M texels) against our RGBA decode: median 56.2 dB (RGB PSNR), texel-weighted mean 53.4 dB,
 worst 39.6 dB, 12.0 % of texels off by more than 2 levels in some channel, largest error 54 levels. 15 s of encoding on 24 host
-threads for one circuit. ASTC is therefore a lossy opt-in at best, with its encode cached off the render thread
-(the plan is in the texture-compression handover thread).
+threads for one circuit. ASTC is therefore a lossy opt-in at best, with its encode cached off the render thread:
+that is the TEXTURE COMPRESSION row, measured with the real encode in
+[texture-compression.md](../rendering/texture-compression.md).
 
 ### Against the S24
 

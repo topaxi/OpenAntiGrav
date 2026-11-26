@@ -26,8 +26,8 @@ summary: "macOS app never run on a Mac (the maintainer has none); first job run,
 - **Nightly signs?** `macos` failed `codesign` on every nightly from 2026-11-11 (the `slipstream` mod under `Contents/MacOS`); the mods now stage under `Contents/Resources/mods` (`docs/tools/packaging.md`, "Official mods"). Unverified on macOS until a nightly's `macos` job passes.
 - **Signing hook** (`OAG_MAC_SIGN`, rcodesign) is unused and unexercised.
 - **iOS** has its own thread: `tooling/the-ios-app-type-checks-and-has-never-been-built-or-run.md`.
-- **Texture compression** covers BC and ASTC only; see
-  `rendering/texture-compression-only-covers-bc-astc-is-the.md`.
+- **Texture compression**: an Apple Silicon Mac samples BC, so the disc's blocks go up as
+  they are (`docs/rendering/texture-compression.md`).
 
 ## Next Steps
 

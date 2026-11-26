@@ -580,6 +580,15 @@ pub struct Graphics {
     /// `docs/formats/hd-hud.md`.
     #[serde(default)]
     pub hud_safe_area: Option<u8>,
+    /// What a disc's BC texture becomes on a device that cannot sample BC: `original`
+    /// (decoded to RGBA8) or `astc` (re-encoded as ASTC 4x4 into the texture cache).
+    ///
+    /// **Inert on a device with BC**, and its row is shown only on one that lacks BC and
+    /// samples ASTC (`oag_mesh::mesh_render::astc::offered`). Read by the next race load.
+    /// See [`oag_display::display::TextureCompression`] and
+    /// `docs/rendering/texture-compression.md`.
+    #[serde(default)]
+    pub texture_compression: oag_display::display::TextureCompression,
     /// Whether the track's draw calls are tested against the camera's view
     /// frustum before being submitted, skipping the ones entirely outside it.
     ///
@@ -755,6 +764,7 @@ impl Default for Graphics {
             perf_overlay: oag_present::perf::Overlay::default(),
             hud_scale: oag_display::display::HudScale::default(),
             hud_safe_area: None,
+            texture_compression: oag_display::display::TextureCompression::default(),
             frustum_culling: default_frustum_culling(),
             pvs_culling: default_pvs_culling(),
             boost_fov_kick: default_boost_fov_kick(),
@@ -1227,6 +1237,10 @@ pub fn menu_seeds(
         ),
         ("graphics.anisotropy", text(&anisotropy.to_string())),
         ("graphics.fov", text(&settings.graphics.fov.to_string())),
+        (
+            "graphics.texture_compression",
+            text(&settings.graphics.texture_compression.to_string()),
+        ),
         (
             "graphics.perf_overlay",
             text(&settings.graphics.perf_overlay.to_string()),

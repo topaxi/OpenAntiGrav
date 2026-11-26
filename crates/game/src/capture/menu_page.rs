@@ -170,6 +170,7 @@ pub(super) fn menu_page(
     definition.drop_unavailable_scene_precision(title);
     definition.drop_unavailable_circuit_lighting(title);
     definition.drop_unavailable_reflection_resolution(title);
+    crate::texture_cache::trim_row(&mut definition, crate::texture_cache::offered());
     definition.drop_unavailable_scenery_sort(title);
     definition.drop_unavailable_trail_length(title);
     definition.drop_unavailable_weather(title);

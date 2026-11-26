@@ -2,7 +2,7 @@
 status: measure
 titles: [hd, pulse]
 updated: 2026-11-25
-summary: "S21 HD perf plan: cards culled, row kinds folded (landed); wgpu #10319 measured -2.4 to -3.1 ms (ships in wgpu 31); ASTC opt-in open"
+summary: "S21 HD perf plan: cards culled, row kinds folded (landed); wgpu #10319 measured -2.4 to -3.1 ms (ships in wgpu 31); ASTC opt-in landed"
 categories: [rendering, tooling]
 size: L (40)
 difficulty: medium (40)
@@ -126,13 +126,9 @@ scene is 1.5 ms. Every "fidelity none" item passes the byte-identity or pair che
    their pixels turn out to matter on Mali; setting-gated; 4 h.
 9. Race pass: store velocity and depth only when a pass reads them: -0.5 to -1.0 ms at render scale
    100 on the S21, nothing at 25; 5 h.
-10. ASTC where the device has no BC: **measured** (`s21-shading`, a void-extent arm of the right
-    size and rate, two runs each): S21 frame -1.1 to -1.8 ms, scene GPU -1.4 ms, p99 47-49 to 41-42
-    ms, GPU memory of the process 2.62-2.66 to 1.50-1.59 GB. A real `astcenc -medium` encode of
-    Vineta K's 341 textures is lossy (median 56 dB, 12 % of texels off by more than 2 levels), so it
-    can only land as an opt-in setting with an `original` default, its encode cached off the render
-    thread ([texture-compression-only-covers-bc-astc-is-the.md](texture-compression-only-covers-bc-astc-is-the.md)).
-    16 to 24 h (encoder in the Android build, cache, setting, menu row); maintainer's call.
+10. ~~ASTC where the device has no BC~~: **landed** (`astc-optin`) as the opt-in TEXTURE COMPRESSION
+    row (`astc`, default `original`), encoded by astcenc `medium` into an on-disk cache on a background
+    thread; S21 numbers with the real encode in `docs/rendering/texture-compression.md`.
 
 Not proposed, each already measured: dropping the depth prepass on a tiler (it pays), skipping the
 glass target when no glass shows, a third swapchain image, a portrait or pre-rotated surface.
