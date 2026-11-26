@@ -1,8 +1,8 @@
 ---
-status: measure
+status: ready-to-wire
 titles: [hd, omega, 2048]
 updated: 2026-11-26
-summary: "HD flipbooks advance, ours holds frame 0 (ready); owed: template cap source, flare .gtf rows, Deck 4K hit; half-res target awaits maintainer"
+summary: "Ready: 31 unsprited HD effects, over-life flipbooks. Owed: cap source, flare .gtf rows, Deck 4K hit; half-res awaits maintainer"
 size: M (50)
 difficulty: medium (55)
 ---
@@ -51,6 +51,52 @@ blast the struck craft's velocity, on HD, 2048 and Omega
 - **A posed blast carries our opponent's velocity, not the original's**, so travelling fireballs
   do not match in a pair. A flag that writes the struck craft's velocity at the forced hit would
   take that out of the metric.
+
+### Ready to wire: 31 HD effects load and draw no sprite of their own
+
+Census over the disc (every effect HD's loader loads that is not in `oag_hd`'s `SPRITES`): 89
+emitter and template texture references, and **every one exists as `/data/psys/tex/<stem>.gtf`
+and decodes**. We draw them with the procedural profile (`docs/formats/pob.md`, "play the
+data"). The Detonator Mine and Bomb explosions' `Debris_DetonatorMines`, `Debris_LightBarrier`
+and `explosion_fijets_8x8_grey_gaseous` were seen bound by the original
+(`docs/rendering/particle-fill.md`, "Every effect that loads a sprite").
+
+To wire: add the effect to `SPRITES` (`crates/hd/src/effects.rs`), then pair it: each one
+changes what a race draws. Weapons first (Missile, Mine, Bomb, Detonator rows).
+
+| Effect | `.gtf` stems referenced |
+| --- | --- |
+| `WO_SHIP_COLL_SPARK_DAMAGE` | `quakesmoke32x32`, `spark_mblurred_grey`, `spark_mblurred` |
+| `WO_SHIP_COLL_SPARK_NODAMAGE` | `spark_mblurred_grey`, `yellow_glow`, `spark_mblurred` |
+| `WO_ROCKET_FLARE` | `DC_Flare_rich`, `fireball_1024x512_yellow`, `spark_mblurred`, `smoke_anim_8x4` |
+| `WO_SHURIKEN_HEAD` | `shuriken_trail_anim` |
+| `WO_SHURIKEN_TRAIL` | `shuriken_trail_anim` |
+| `WO_SHURIKEN_BOUNCE` | `pointglow`, `DC_Flare_rich`, `DC_Circle` |
+| `WO_SHURIKEN_EXPIRE` | `pointglow`, `DC_Flare_rich`, `shuriken_trail_anim` |
+| `WO_MISSILE_EXPLO` | `molten_debris_64x64`, `missile_shockring_original_HD_new` |
+| `WO_MISSILE_BOUNCE` | `spark_mblurred`, `molten_debris_64x64` |
+| `WO_MINE_EXPLO` | `smoke_anim_8x4`, `debris006_128x128x4`, `explosion_01_blurred_yellow_streaks_128x128`, `DC_Circle_rich_anim_4x2`, `spark_mblurred_grey` |
+| `WO_BOMB_SMOKERING` | `debris006_128x128x4`, `DC_Flare_D`, `spark_mblurred`, `smoke_anim_8x4` |
+| `WO_BOMB_RAYS` | `bomb_spike` |
+| `WO_CANNON_SPARKS` | `smoke_anim_8x4`, `explosion_01_blurred_yellow_streaks_128x128`, `spark_mblurred`, `molten_debris_64x64`, `explosion_fijets_8x8` |
+| `WO_MINE_EXPLO_DETONATOR_DEAD` | `Debris_DetonatorMines`, `explosion_01_blurred_white_streaks_128x128`, `spark_mblurred_grey` |
+| `WO_MINE_EXPLO_DETONATOR` | `glow_white`, `DC_Flare_D`, `spark_mblurred_grey`, `Debris_DetonatorMines`, `explosion_01_blurred_white_streaks_128x128`, `explosion_fijets_8x8_grey_gaseous` |
+| `WO_BOMB_EXPLO_DETONATOR` | `glow_white`, `DC_Flare_D`, `spark_mblurred_grey`, `Debris_LightBarrier`, `explosion_01_blurred_white_streaks_128x128` |
+| `WO_REPULSER_BLAST` | `DC_Circle_rich` |
+| `WO_REPULSER` | `pulse_repulsor_sprite1_ADD`, `psysed_default_glow` |
+| `WO_LEACHBEAM_ENERGY` | `plasma_glare_ADD` |
+| `WO_LEACHBEAM_CHARGING` | `spark_mblurred_grey` |
+| `WO_LEACHBEAM_ABSORB` | `spark_mblurred_grey` |
+| `WO_SHIP_SPARK_DAMAGE_WEAPON` | `yellow_glow`, `spark_mblurred` |
+| `WO_WEAPON_ABSORB` | `HD_electric_arc_8x8`, `DC_Flare_A_blurred_bright`, `particl3_blue` |
+| `WO_SHIP_SPARK_DAMAGE_LEACHBEAM` | `spark_mblurred_grey`, `blue_glow2`, `vandergraf_balls_1024x512` |
+| `WO_SHIP_DEATH_DAMAGE_PLUME` | `muzzle_flare_pSprite_64x64_ADD`, `smoke_new4_8x4`, `spark_mblurred`, `fireball_1024x512_yellow` |
+| `WO_DEBRIS_FIRE` | `muzzle_flare_pSprite_64x64_ADD`, `smoke_new4_8x4`, `spark_mblurred`, `fireball_1024x512_yellow` |
+| `WO_DAMAGE_MILD` | `muzzle_flare_pSprite_64x64_ADD`, `spark_mblurred` |
+| `WO_DAMAGE_MODERATE` | `muzzle_flare_pSprite_64x64_ADD`, `spark_mblurred`, `smoke_anim_8x4` |
+| `WO_DAMAGE_CRITICAL` | `fireball_1024x512_yellow` |
+| `WO_BLUE_WELDER` | `blue_glow2`, `disruptor_spark` |
+| `WO_MODESTO_STEAM_A` | `quakesmoke32x32` |
 
 ### Particles into a half-resolution target, composited
 
