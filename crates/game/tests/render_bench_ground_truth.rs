@@ -551,7 +551,7 @@ fn back_abandons_a_benchmark_and_writes_nothing() {
              press cross; until page=benchmark_options within 300; select benchmark_start; \
              press cross; until benchmark=running within 3000; until sim_tick=300 within 6000; \
              {abandon}; until stage=menu within 600; expect page=extras; expect root=main; \
-             back; until page=main within 300; ticks 10; back; ticks 30; \
+             back; until page=main within 300; expect rows!=photo_mode; ticks 10; back; ticks 30; \
              expect stage=menu; expect page=main; quit"
         );
         let out = run(&dir, &[], &script);

@@ -264,7 +264,7 @@ impl State {
     /// focused row's id, setting and label, so `focus=launch` and `focus="LAUNCH RACE"` both hold.
     ///
     /// Keys: `stage`, `frontend`, `map_event`, `page`, `screen` (the overlay kind, `page` when none),
-    /// `screen.id`, `screen.help` (`open` or `closed`, where the screen has a Help), `title`, `focus`, `opening_reads`, `demo`, `benchmark`, `root` (the menu tree's root page, on `stage=menu`), `sim_tick` (the world's tick, on `stage=race`), `humans`, `hints` (the buttons the hints on screen depict), and `race.title|track|track_file|team|variant|mode|source|craft_source|target`.
+    /// `screen.id`, `screen.help` (`open` or `closed`, where the screen has a Help), `title`, `focus`, `opening_reads`, `demo`, `benchmark`, `root` (the menu tree's root page, on `stage=menu`), `rows` (the label, id and action of every row on screen, so `rows!=photo_mode` asserts an absent row), `sim_tick` (the world's tick, on `stage=race`), `humans`, `hints` (the buttons the hints on screen depict), and `race.title|track|track_file|team|variant|mode|source|craft_source|target`.
     #[must_use]
     pub fn get(&self, key: &str) -> Vec<String> {
         let screen = self.screen.as_ref();
@@ -303,6 +303,12 @@ impl State {
                 .iter()
                 .flat_map(|names| names.split(','))
                 .map(str::to_string)
+                .collect(),
+            "rows" => screen
+                .into_iter()
+                .flat_map(|s| &s.rows)
+                .flat_map(|row| [Some(row.label.clone()), row.id.clone(), row.action.clone()])
+                .flatten()
                 .collect(),
             "focus" => screen
                 .and_then(|s| s.focus.as_ref())
@@ -369,6 +375,7 @@ impl State {
                 | "demo"
                 | "benchmark"
                 | "root"
+                | "rows"
                 | "sim_tick"
                 | "hud"
                 | "humans"

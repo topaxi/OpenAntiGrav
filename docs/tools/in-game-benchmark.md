@@ -70,7 +70,7 @@ Android system Back all end it the same way. The player's settings come back, **
 written**, and a menu launch returns to the page it was started from; a run started on the command
 line has nothing behind it and ends the game. A benchmark's race is never held, finished or not:
 it is not parked behind the menus (`Session::open_menus`) and they are not built as a pause menu
-over it (`Session::pausing_race`). RUN BENCHMARK is not offered over a race parked
+over it (`Session::pausing_race`), with no PHOTO MODE row (`Session::photo_available`). RUN BENCHMARK is not offered over a race parked
 behind the menus: it would replace that race.
 
 ## Input
