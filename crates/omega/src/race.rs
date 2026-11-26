@@ -159,6 +159,8 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
         }),
         stage_textures: None,
         cannon_lights: false,
+        // `0x0133c150`, the EMP vtable's slot 5.
+        emp_light: true,
         ammo_gauge: None,
         hull_charge: None,
         camera_scale: 0.7,

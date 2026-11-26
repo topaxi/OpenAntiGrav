@@ -159,14 +159,13 @@ fn each_trigger_is_answered_by_exactly_the_titles_that_read_it() {
             "{plasma:?}"
         );
     }
-    // Detonator's mine, bomb and EMP effects: `DetonatorMine_Explode` and
+    // Detonator's mine and bomb effects: `DetonatorMine_Explode` and
     // `DetonatorBombBlast_Start` name them on HD; 2048 and Omega ship the files and are
     // "checked, applies, not wired".
     for detonator in [
         Trigger::DetonatorMineExploDead,
         Trigger::DetonatorMineExplo,
         Trigger::DetonatorBombExplo,
-        Trigger::DetonatorEmp,
     ] {
         assert_eq!(
             has(detonator),
@@ -174,6 +173,8 @@ fn each_trigger_is_answered_by_exactly_the_titles_that_read_it() {
             "{detonator:?}"
         );
     }
+    // The EMP's wave: HD's, 2048's and Omega's own EMP launches spawn `WO_QUAKE_DETONATOR`.
+    assert_eq!(has(Trigger::DetonatorEmp), [false, false, true, true, true]);
     // The cannon's wall spark: HD's, 2048's and Omega's own `PulseBullet` updates spawn it.
     assert_eq!(
         has(Trigger::DetonatorCannonSparks),

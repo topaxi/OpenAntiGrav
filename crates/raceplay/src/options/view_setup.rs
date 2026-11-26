@@ -76,6 +76,8 @@ pub struct ViewSetup {
     pub hd_missile_blast: bool,
     /// Whether the Detonator cannon submits its point lights: `Detonator::cannon_lights`.
     pub detonator_cannon_lights: bool,
+    /// Whether the EMP wave submits its point light: `Detonator::emp_light`.
+    pub detonator_emp_light: bool,
     /// The craft's cannon gauge in a Detonator race: `Detonator::ammo_gauge`, `None` off Detonator.
     pub detonator_ammo_gauge: Option<oag_title::DetonatorAmmoGauge>,
     /// The craft's plasma shells in a Detonator race: `Detonator::hull_charge`, `None` off Detonator.
@@ -353,6 +355,7 @@ impl ViewSetup {
             bomb_shockwave_fades: false,
             hd_missile_blast: false,
             detonator_cannon_lights: false,
+            detonator_emp_light: false,
             detonator_ammo_gauge: None,
             detonator_hull_charge: None,
             pulse_laid_pose: false,
