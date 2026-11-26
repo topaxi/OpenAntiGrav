@@ -275,7 +275,7 @@ impl Track {
 
     /// Whether `entry` addresses [`Self::entry_name`]'s file, whichever spelling it is in: a
     /// title's default circuit need not be written as its plugin definition writes `location`
-    /// (`docs/tools/in-game-benchmark.md`, "The stats screen").
+    /// (`docs/tools/in-game-benchmark.md`, "Reading the screen").
     #[must_use]
     pub fn addresses(&self, entry: &str) -> bool {
         paths_match(&self.entry_name(), entry)

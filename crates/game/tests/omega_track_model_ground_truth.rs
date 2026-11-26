@@ -144,4 +144,27 @@ fn every_circuit_a_menu_reaches_has_a_name_not_an_id() {
     assert_eq!(name("altima").as_deref(), Some("ALTIMA"));
     assert_eq!(name("arena").as_deref(), Some("ROCKWAY STADIUM"));
     assert_eq!(name("tower").as_deref(), Some("EMPIRE CLIMB"));
+    the_benchmark_heading_names_the_default_circuit(&shell);
+}
+
+/// The benchmark races Omega's default circuit, which its definition spells with other capitals,
+/// and its stats screen still names it.
+fn the_benchmark_heading_names_the_default_circuit(shell: &oag_game::boot::Shell) {
+    let listed: Vec<_> = shell
+        .tracks
+        .iter()
+        .map(|track| {
+            let label = oag_raceplay::catalogue::label(
+                track,
+                &shell.circuit_names,
+                &shell.strings,
+                &shell.tracks,
+            );
+            (track.clone(), label)
+        })
+        .collect();
+    assert_eq!(
+        oag_game::benchmark::circuit_name(&listed, oag_omega::race::DEFAULTS.track).as_deref(),
+        Some("TECH DE RA")
+    );
 }
