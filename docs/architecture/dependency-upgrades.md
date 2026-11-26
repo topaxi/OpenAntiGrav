@@ -579,5 +579,5 @@ variants that recurred; the third was seen once, on 30.0.2.
 
 One windowed run (trunk, 3840x2160) ended with `free(): corrupted unsorted chunks` and SIGABRT after the result file
 was written, while the harness was killing the session. The core is `/usr/bin/gamescope`'s own, not `oag-game`'s.
-Over all windowed teardowns that is 1 of 18 for trunk and 0 of 19 for 30.0.2; 8 further short runs per build did not
-repeat it. Not attributed to either.
+1 of 18 windowed runs on trunk and 0 of 19 on 30.0.2 ended this way, counting 8 short 3840x2160 runs per build
+repeated to provoke it. Not attributed to either.
