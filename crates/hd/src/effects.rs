@@ -163,6 +163,9 @@ pub const EFFECTS: &Effects = &{
     // `docs/ghidra/functions/ps3-hdfury-eu/particle-render.md`, "The per-particle size
     // multiplier".
     effects.size_ramps = Some(Origin::Measured);
+    // `DetonatorMine_Explode` (`0x00138e58`), `0x00139028`-`0x00139194`;
+    // `docs/ghidra/functions/ps3-hdfury-eu/detonator-mine.md`, "The blast's colour".
+    effects.mine_blast_recolour = Some(Origin::Measured);
     effects
 };
 

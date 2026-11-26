@@ -155,6 +155,7 @@ fn an_hd_detonator_race_plays_the_discs_effects_for_each_event() {
     let mut race = Race::start(loaded.setup, loaded.view, loaded.modules);
     check_the_wall_spark_is_the_discs_pictures(&race);
     check_a_shot_mine_throws_the_discs_shards(&race);
+    check_a_live_mine_blast_takes_the_stage_colour(&mut race);
     let at = Vec3::new(1.0, 2.0, 3.0);
     let spawn = Vec3::new(4.0, 5.0, 6.0);
     for (kind, trigger) in [
@@ -282,6 +283,41 @@ fn check_a_shot_mine_throws_the_discs_shards(race: &Race) {
     assert!(debris.atlas.random_frame);
     assert_eq!(debris.per_emission, (50, 50));
     assert_eq!(debris.blend, Blend::AlphaOver);
+}
+
+/// **A live mine's blast is drawn in one colour from the stage's mine colour:** on the opening
+/// stage (`1`, `Sub Venom`, mine colour `122 25 255` in `detonatormode.effectsettings`) every
+/// emitter's table is the one entry `DetonatorMine_Explode` writes, `200 163 255`, and a shot live
+/// mine plays that recoloured blast (`docs/ghidra/functions/ps3-hdfury-eu/detonator-mine.md`,
+/// "The blast's colour").
+fn check_a_live_mine_blast_takes_the_stage_colour(race: &mut Race) {
+    let blast = race
+        .view
+        .mine_blasts
+        .get(1)
+        .cloned()
+        .flatten()
+        .expect("stage 1 authors a mine colour, so the blast is recoloured");
+    assert_eq!(blast.emitters.len(), 6);
+    let want = [200.0 / 255.0, 163.0 / 255.0, 1.0];
+    for spec in &blast.emitters {
+        assert!(
+            spec.palette.iter().all(|entry| entry[..3] == want),
+            "{} is drawn in the stage's blast colour",
+            spec.name
+        );
+    }
+    let at = Vec3::new(7.0, 8.0, 9.0);
+    race.core.sim.detonator_events = vec![oag_weapons::detonator::Event {
+        kind: EventKind::MineShot { live: true },
+        at,
+    }];
+    race.view.play_detonator_events(&race.core);
+    assert_eq!(
+        race.view.stage.frames_of(&blast).len(),
+        1,
+        "a shot live mine on the opening stage plays the recoloured blast"
+    );
 }
 
 /// **The spark is drawn from the disc's pictures, not a procedural stand-in:** the effect the
