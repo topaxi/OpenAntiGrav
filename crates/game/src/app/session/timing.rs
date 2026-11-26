@@ -1016,8 +1016,12 @@ pub(crate) fn reflection_reading(
     Some((glass, passes))
 }
 
-/// Every labelled pass's seconds of the newest frame in `readings` after `stall_frame`, or
-/// `None` with no such frame.
+/// The stamped passes encoded inside a timed chain: HD's bloom chain runs its zoom ring between
+/// its first and last pass, so its time is already in the chain's own reading.
+const INSIDE_A_CHAIN: [&str; 1] = ["hd zoom"];
+
+/// Every labelled pass's seconds of the newest frame in `readings` after `stall_frame` that no
+/// chain's reading holds already, or `None` with no such frame.
 pub(crate) fn newest_pass_sum(
     readings: &[oag_gpu::timing::PassReading],
     stall_frame: u64,
@@ -1029,7 +1033,7 @@ pub(crate) fn newest_pass_sum(
         .max()?;
     let sum = readings
         .iter()
-        .filter(|reading| reading.frame == newest)
+        .filter(|reading| reading.frame == newest && !INSIDE_A_CHAIN.contains(&reading.label))
         .map(|reading| reading.seconds.max(0.0))
         .sum();
     Some(sum)
