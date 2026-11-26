@@ -157,13 +157,19 @@ pub(crate) fn display_rate()
         .attach_current_thread(|env| own_activity(env, activity))
         .map_err(|e| Error::System(e.to_string()))?;
     Ok(move || {
-        vm.attach_current_thread(|env| {
-            let outcome = display_refresh_rate(env, &activity);
-            if env.exception_check() {
-                env.exception_clear();
-            }
-            outcome.map_err(|e| Error::System(e.to_string()))
-        })
+        // The attachment names the thread: unnamed, ART renames it `Thread-N` in every profile.
+        let named = || jni::AttachConfig::default().thread_name(jni::jni_str!("android-refresh"));
+        vm.attach_current_thread_with_config(
+            named,
+            Some(jni::DEFAULT_LOCAL_FRAME_CAPACITY),
+            |env| {
+                let outcome = display_refresh_rate(env, &activity);
+                if env.exception_check() {
+                    env.exception_clear();
+                }
+                outcome.map_err(|e| Error::System(e.to_string()))
+            },
+        )
     })
 }
 
