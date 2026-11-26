@@ -305,6 +305,7 @@ mod player_tags;
 mod portal_view;
 mod reconcile;
 pub mod replay;
+#[cfg(feature = "view")]
 mod repulser_field;
 mod respawn;
 mod results;
