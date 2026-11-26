@@ -130,7 +130,12 @@ pub fn error(source: &[u8], decoded: &[u8]) -> Error {
     let mut squared = 0u64;
     let mut max = 0u8;
     let mut over = 0usize;
-    for (a, b) in source.chunks_exact(4).zip(decoded.chunks_exact(4)) {
+    for (a, b) in source
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .zip(decoded.as_chunks::<4>().0)
+    {
         let mut texel_max = 0u8;
         for (x, y) in a.iter().zip(b) {
             let d = x.abs_diff(*y);

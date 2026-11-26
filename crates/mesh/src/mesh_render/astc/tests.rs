@@ -34,7 +34,13 @@ fn inputs(source: &[u8]) -> KeyInputs<'_> {
 /// see which texels reached it.
 fn fake_encode(width: u32, height: u32, rgba: &[u8]) -> Option<Vec<u8>> {
     let texels = (width * height) as usize;
-    let mean = rgba.chunks_exact(4).map(|t| u64::from(t[0])).sum::<u64>() / texels.max(1) as u64;
+    let mean = rgba
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|t| u64::from(t[0]))
+        .sum::<u64>()
+        / texels.max(1) as u64;
     Some(vec![mean as u8; level_len(width, height)])
 }
 
