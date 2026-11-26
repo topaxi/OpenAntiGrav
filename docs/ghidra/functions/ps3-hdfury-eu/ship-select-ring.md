@@ -41,10 +41,12 @@ same pulse, ease and slide**: read in full and measured live on 2026-11-25, see 
 | `0x001b10f8` | `HexSelection_Update` | 85 |
 | `0x001b09b8` | `HexSelection_Step` | 85 |
 | `0x001b0920` | `HexSelection_SetRow` | 75 |
-| `0x001b0c28` | `HexSelection_SetCell` | 70 |
+| `0x001b0c28` | `HexSelection_SetCell` | 85 |
 | `0x001b0320` | `HexSelection_ClearCell` | 70 |
 | `0x001b2a48` | `HexSelection_Destroy` | 70 |
 | `0x002096f0` | `TrackHexSelection_Update` | 85 |
+| `0x0020a3a0` | `TrackHexSelection_Build` | 80 |
+| `0x002092a8` | `TrackHexSelection_Refill` | 80 |
 | `0x00200498` | `Colour_LerpArgb` | 85 |
 
 Scores: decompilation unambiguous, two call sites (the Team screen and `TrackHexSelection`) and Omega's
@@ -81,10 +83,52 @@ only as far as the colours.
 `SelectedLockColFade`, `HexCol`, `HexColFade` (TOC `-0x64..-0x50`). **`SelectedColumnCol` is not a key**:
 the XML's `0x64ff0000` is dead. The selected column's fill is `HD_Blue` (`+0x104`), which the Fury archive
 serves as `0xffac0717` (172, 7, 23) and the HD style as `0xff8ac0ca` (teal) ([hd-frontend.md](../../../formats/hd-frontend.md)).
-The settled frame's centre cell reads (151, 6, 20) ([campaign-screens.md](../../../ui/campaign-screens.md),
-"The `NAVIGATE TEAM` honeycomb"): 0.88, 0.86, 0.87 of `HD_Blue` on the three channels, one common
-factor (the `Faded` art's coverage, unread), where `0x64ff0000` drawn twice cannot give a green or blue
+The settled frame's centre cell reads (149, 6, 20): `HD_Blue` times 221/255, the alpha inside
+`Hexagon_HD_Faded.gtf` (see "The cells"), where `0x64ff0000` drawn twice cannot give a green or blue
 term at all.
+
+## The cells
+
+Each cell is three `Image` children on one 92 x 80 quad: the hexagon (`+0xa4`, `Faded`, UV 74 x 64 of
+the 128 x 64 art), the picture (the ship thumbnail or circuit icon) and the lock (`+0xa8`,
+`hexlock_HD.gtf`, UV 75 x 64). `Hexagon_HD_Faded.gtf` (`DATA06.PSARC`) is `Hexagon_HD.gtf`'s shape
+at alpha **221 of 255** inside (read off the decoded texture; `Hexagon_HD.gtf` is 255). `_Build`
+loads it unconditionally: there is no front-end-style branch.
+
+`HexSelection_SetCell` (`0x001b0c28`) colours a cell by its widget column `i`, with
+`cc = int((Columns - 1) * 0.5)`:
+
+```
+i == cc            hex = HD_Blue (+0x104), lock = SelectedLockCol, picture = white
+i == Columns       spare column: picture 0x12000000; hex and lock keep _Build's *Fade colours
+otherwise          i < cc:  a = i / cc,              b = (i + 1) / cc
+                   i > cc:  a = 1 - (i - cc - 1) / cc, b = 1 - (i - cc) / cc
+                   hex     = lerp(t, HexColFade, HexCol)                  t = a, a, b, b over the vertices
+                   lock    = lerp(t, SelectedLockColFade, SelectedLockCol)
+                   picture = lerp(t, 0x12000000, 0x64000000)
+```
+
+The `(a, a, b, b)` vertex order is left pair, right pair: `a` and `b` are continuous across
+neighbouring columns only that way (0, 0.5, 1 | centre | 1, 0.5, 0 on five columns). So the fill is
+one linear ramp across the widget, `HexCol` at the selected column's edges and `HexColFade` at the
+outer ones. Confidence 90 for the hexagon's colour: the code, Omega's copy, and the frames. With the
+art's 221/255 it gives cell centres of 38.1 and 27.2 one and two columns out on Team Selection
+(measured 38.5 and 27.5) and 40.8, 35.3, 29.9 and 24.4 on Track Select's nine columns (measured 41,
+35, 30, 24), and the eight flat patches sampled on `hd/menu-ship-select` come out equal to the
+original's pixel or one level off. `HexCol`, `HexColFade`, `SelectedLockCol` and
+`SelectedLockColFade` default to `0x64808080`, `0x32808080`, `0xff808080`, `0xff161616`
+(Track Select authors none).
+
+**The picture's quad on Track Select is 50 x 50 over 256 x 256 texels**: both `_SetCell` call sites
+of `TrackHexSelection` pass those (`0x00209a34..` and `TrackHexSelection_Refill`, TOC `0x23dc` = 50.0,
+`0x23e0` = 256.0), and the frame agrees (Vineta K's sails span 194 of 256 texels, 37.9 units, 36.4 px
+at Safe Area 96, measured 36). Confidence 90.
+
+**Wired** (`oag_ui_screens::picker::hd::hex`, both grids): the `Faded` art, the 92 x 80 quad over
+74 x 64 texels, the hexagon's ramp (`edge_share`), `HD_Blue` once, Track Select's 50 unit icon.
+**Read, not wired**: the lock's own art and ramp (ours draws `Padlock.gtf` at 0.44 with a fitted
+flat fade), and the picture's colour. Ours draws no picture behind a locked cell, where the original
+draws the ship silhouette under the padlock, and ghosts an open row's picture at a flat 0.35.
 
 ## The ring
 
@@ -223,7 +267,7 @@ Selection (HD, Fury and Omega through the same code) and, where marked, Track Se
 - **Left as read, not wired**: the refill frame on Team Selection (the snap and the refill land on
   one tick here; Track Select's is read and one frame, below), the pulse's zero point on Team
   Selection (the clock starts with the picker, not the page's entry; Track Select's is measured,
-  below), the cells' edge-fade corners, the ring's ease on a model-row change on Team Selection
+  below), the ring's ease on a model-row change on Team Selection
   (`_SetRow` also writes the ring target; wired on Track Select), Omega's `Scale="0.8"` against the
   72-unit pitch, and a held direction's input repeat.
 - **Compare pairs** (the pair as recorded against the worktree's binary, `--menu-page ship-select`,
@@ -251,8 +295,8 @@ the live object in RPCS3 (found by its vtable word; `Columns` 9, `Rows` 2, 12 en
   is set to 0.0. A press (left, right, up, down) is accepted only when the counter is at or above 0.0 and sets it to **-0.2**.
   So a direction steps at most once every 0.2 s: the slide's 0.1 s is shorter, so **no press ever lands mid-slide and there is
   no deferral** (`_Step`'s `timer == 0` parity guard is never false here either). Read live: a press moved the counter from
-  1.0 down to -0.131 and it climbed 0.0167 a frame. The scrolling `>>>` glyph is the same counter (`int(+0x14c * 4) << 3`
-  pixels, `0x240c` = 4.0, plus 32.0 when the front end is not Fury, `0x2410`), hidden while it is negative: **not wired**.
+  1.0 down to -0.131 and it climbed 0.0167 a frame. The scrolling `>>>` glyph is the same counter ("The direction
+  glyph", below).
 - **Up and down** (pad words 0 and 1) only change `+0x110`, set the ring target through `HexSelection_SetRow` (`0x001b0920`) and
   turn the glyph by pi (`0x23cc` = 3.14159) on the reverse row; the lattice does not move. **Left and right** (words 2 and 3)
   move `+0x11c` by one, wrapping at `+0x120`, and call `HexSelection_Step(+0x118, +0x11c)` at `0x002099ec`. The class's own
@@ -309,8 +353,34 @@ wired as `Picker::step_gate` (12 whole frames) (`a_direction_inside_the_cooldown
 on a grid of rows are taken only 0.2 s after the last one taken. RAM: `right` held for 1.1 s stepped at 0.05, 0.56 and 0.88 s,
 so the input layer's own repeat (about 0.5 s then 0.3 s) is a separate floor over the 0.2 s one.
 
-**Not wired, in the box:** the ring counter's persistence across visits in live play (a new `Picker` starts its clock at 0 on every visit, so only stills pinned with `--menu-ring-seconds` carry the original's count; the turntable restarts the same way; carrying one f32 in the session needs an offset rather than a pin), the `>>>` glyph's scroll and hide-while-cooling, the fill (0.87 of `HD_Blue`: the original draws
-`Hexagon_HD_Faded.gtf`, ours `Hexagon_HD.gtf`, 149 against 172 on both Ship and Track Select), the cells' edge fade.
+**Not wired, in the box:** the ring counter's persistence across visits in live play (a new `Picker` starts its clock at 0 on every visit, so only stills pinned with `--menu-ring-seconds` carry the original's count; the turntable and the glyph's counter restart the same way; carrying one f32 in the session needs an offset rather than a pin).
+
+### The direction glyph
+
+`TrackHexSelection_Build` (`0x0020a3a0`) makes one `Image` child (`+0x148`, z + 40) on
+`Data\FE\Images\TrackDirectionSheet.gtf` (TOC `0x2430`; 32 x 64 texels, eight 32 x 8 frames of four
+arrows, one arrow tinted, the tint walking left to right; frames 0 to 3 in the Fury red, 4 to 7 in the
+HD teal, red again in Omega's own copy). Quad **40 x 10** (`+0xac`, `+0xb0`), UV window 32 x 8, white.
+The end of `TrackHexSelection_Update` (`0x00209b88..0x00209cc0`) drives it:
+
+- **Frame**: texel row `int(c * 4) * 8`, plus 32 when `FrontEnd_IsFuryStyle` is false, `c` the counter
+  at `+0x14c`. So one style's four frames in a second.
+- **Hidden** while `c < 0` (the 0.2 s after an accepted press) and on a locked circuit.
+- **Position**: the ring's x, and the ring's y plus **24** (TOC `0x2414`), so it follows the ring's ease.
+- **Turned by pi** (`+300`) on the reverse row.
+
+Confidence 90: the code on two titles, and the frames (HD's glyph sits and measures where the law puts
+it; `hd/menu-track-select`'s glyph box goes 39.7 to 0.19 mean grey). **Wired**
+(`oag_ui_screens::picker::hd::track::direction_frame`); `c` is the time since the picker's last move
+less the 0.2 s, or the screen's own clock before any move. **Chosen, not measured**: that origin (the
+original carries `c` across visits, and the pair script does not read it, so which arrow is tinted in a
+still is the clock's luck: HD's pair matches, Omega's is one arrow off).
+
+**The key repeat is not read.** `TrackHexSelection_Update` asks the pad through `FUN_006770c8(pad, n)`;
+what a held direction does is that call's producer plus the 0.2 s above. One observation (`right` held
+1.1 s stepped at 0.05, 0.56 and 0.88 s) is not enough to set an initial delay and a period. Recipe:
+decompile `0x006770c8` and the writer of the bits it reads for the two constants; check them by holding
+`right` for 3 s on RPCS3 and logging every change of `+0x11c` with `scripts/hd_track_hex.py`.
 
 ## Ready to wire
 
@@ -331,9 +401,7 @@ hex box on k04, k06, k08, k10 at 16.8, 21.5, 22.6, 14.1 against a floor near 4).
 | Widget constants | pitch 72, row 83, half row 42, cell 92 x 80 | 72.2, 82.8, 41.4 measured off one frame | 85 |
 
 The ready-to-wire laws need no fitting: every number above is a literal or an authored value. The
-cells' fade toward the edges (`_SetCell`: per-vertex lerp `HexColFade` to `HexCol` and
-`SelectedLockColFade` to `SelectedLockCol` by column distance `i / cc`, icons `0x12000000` to
-`0x64000000`) is read but its vertex order (which pair of corners gets which end) is not; 60.
+cells' colours are under "The cells" above.
 
 ## Omega
 
@@ -350,6 +418,18 @@ region, and the adopted `omega/menu-track-select` is byte-identical. The address
 (`FUN_0142ea90`, `FUN_0142caa0`, `FUN_0142f0a0`) do not start those functions in `eboot-ps4-omega-eu-v107.bin`: `0x0142caa0` falls
 inside `FUN_0142c7f0`, a menu-list update, so they belong to another Omega build and the v107 ones are the ones above; the
 **Team Selection** copy in v107 was not located again.
+
+**The cells and the glyph: ported, one value differs** (v107, `/omega/eboot-ps4-omega-eu-v107.bin`; test
+`omega_campaign_screens_ground_truth::omegas_hex_grids_fill_the_selected_column_grey`). `FUN_0145a380`
+(`_Build`) loads `Hexagon_HD_Faded.2x.gtf`, `hexlock_HD.2x.gtf` and `Hexagon_HD_THICK_OUT.2x.gtf` on the
+same quad, 92 x 80 times the widget's `Scale`, which scales the 72, 83 and 42 pitches too. `FUN_0145af70`
+(`_SetCell`) has the same ramp and vertex order, but **writes `0xff808080` over the selected column's
+hexagon** where HD looks up `HD_Blue`, and both shadPS4 frames show that grey column
+(`FrontEnd::hex_selected_fill`; `omega/menu-ship-select` 20.09 to 19.30). Its Faded art is alpha 215.
+`FUN_0152add0` and `FUN_015298d0` carry the direction glyph with the same sheet, frame rule, 24 unit
+drop and pi turn; the glyph measures 38 x 9.75 px on the 1:1 frame, so `Scale` does not apply to it.
+**2048: checked, applies, not wired**: its executable names the same four textures; its Team
+Selection is drawn by 2048's own path here.
 
 **Wired (slide, step, ease, ring: `shipselect-ring-wire`); checked, differs (ring colour).** Read in
 `/omega/eboot-ps4-omega-eu.bin` (the `eboot.bin` in the shared Ghidra project; addresses are this build's:
@@ -381,5 +461,5 @@ Next: the registration that uses `0x8109a0ec`, its vtable's slot 3, and the cons
   (`*(+0xc8)[i] + 0x40`), against the frame the refill (`0x0025604c`) runs.
 - The pulse's absolute phase at page entry (it starts at 0 at construction; when the screen constructs
   it relative to the page entry is unread).
-- `_SetCell`'s vertex order for the fade, and the meaning of its stack byte at `0x87` (the icon is drawn
-  `0x64000000`, a black silhouette, when it is set: likely "locked").
+- `_SetCell`'s stack byte at `0x87` is the cell's locked flag (`TrackHexSelection_Refill` passes the
+  per-circuit byte `_Build` computes); what unlocks a Team Selection row is `team-selection-loyalty.md`'s.
