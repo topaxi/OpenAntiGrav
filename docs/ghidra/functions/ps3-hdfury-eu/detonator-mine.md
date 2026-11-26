@@ -289,14 +289,60 @@ A mine a craft runs into plays `WO_MINE_EXPLO_DETONATOR_DEAD` (the contact darke
 a mine a cannon round hits, or a destroyed bomb's chain reaction sets off, plays
 `WO_MINE_EXPLO_DETONATOR` while it was laid this stage and `_DEAD` after
 (`oag_weapons::detonator::EventKind`, `oag_raceplay::detonator_fx::effect_for`). The disc's own
-`.pob`, from the engine's procedural profile: HD's sprite sheets for these two are not listed (no
-matched capture of the original). Chosen: a shot mine explodes the tick it is hit (the original
+`.pob` with its own sprites since 2026-11-26 (the shards, below). Chosen: a shot mine explodes the tick it is hit (the original
 the next), the effect plays whether or not the mine is in view, and the recolour toward white
 (`lerp(c, 255, 0.8)`, 55) is not applied. `MINEEXPL` plays with it, at volume 1.0 where the mine was (`Cue::MineExplosion`, see
 [detonator-cannon.md](detonator-cannon.md), "Drawn and heard"). Test:
 `tests::detonator_fx::an_hd_detonator_race_plays_the_discs_effects_for_each_event`.
 **2048/Omega: checked, applies, not wired** - the effects ship and parse
 (`psys_2048_ground_truth.rs`, `psys_omega_ground_truth.rs`); the contact law is not read there.
+
+## The shards, against the original (2026-11-26, `det-mine-blast`)
+
+**Claim checked:** the original's frame of a mine a cannon round destroyed (the `cannon-volley` pair, Talon's Junction,
+RPCS3 boot `cv1` of `det-cannon-regrab`) shows small glass shards, a dim pink puff and a `+100`; ours drew white puffs
+and long dotted streaks. **The shards are the disc's**: `wo_mine_explo_detonator.pob` (`DATA00` `/data/psys/`) has six
+emitters, and its `Debris` is 50 alpha-over billboards, life `152 +- 54` ticks, radial at `1.31 +- 0.76` units a tick,
+gravity `0.01`, size `0.3` to `0.8`, picking a random frame of a 512 x 512, 4 x 4 atlas of glass triangles. The other
+five: the root (3 additive glows, size 7.5 shrinking to 0 over `74 +- 15` ticks, each with a `Trail_Ribbon` child),
+`streaks_fat` (10 additive streaks, `12 +- 3` ticks), `sparks` (10 thin streaks, `113 +- 29` ticks) and `Explosion_Core`
+(3 additive billboards off a 1024 x 1024, 8 x 8 smoke atlas, 43 ticks). `_DEAD` has three: the same debris as its root,
+and black `streaks_fat` and `sparks`. Every emitter's `.gtf` decodes. Confidence **85** that `Debris` is what the frame
+shows (the atlas's shapes and the shards' size and spread on the frame agree; one frame).
+
+**Wired:** both mine effects are in HD's sprite list (`oag_hd` `SPRITES`), so ours draws the disc's pictures where it
+drew the procedural profile. Test: `check_a_shot_mine_throws_the_discs_shards` in
+`tests::detonator_fx::an_hd_detonator_race_plays_the_discs_effects_for_each_event`.
+
+**The blast's age.** In the original the round (fired at lap 1.917 s) retired at age 10 ticks (`cannon-samples.json`
+of the grab: `flags 5` from lap 2.083 s), and the picture is 6.35 ticks older than the 2.65 s pause, so the blast is
+about 27 ticks old in the frame. Ours' round, fired from the craft held at the picture's pose, hits that mine 1 tick
+after the volley (tick 389 of 425), so ours' blast is 36 ticks old. Putting the round back where the original's moving
+craft fired it (`102.26` units/s times its age, and `3.6 v` on the launch tick) makes ours hit at tick 396, 29 ticks
+before the picture.
+
+**Mean grey on `cannon-volley`** (published 11.89, the destroyed mine not carried):
+
+| Ours | mean grey |
+| --- | ---: |
+| the destroyed mine carried (position, words and age from the grab), procedural pictures | 12.70 |
+| the same, the disc's sprites | 12.53 |
+| the same, and the round carried back by the craft's speed | 13.75 |
+
+So the sprites lower the carried pair by 0.17, but the pair with the destroyed mine stays above the published 11.89,
+and the speed carry raises it: the younger blast shows more of what ours still draws wrong. What is left:
+
+- **The root's three glows and their `Trail_Ribbon`s.** Ours draws each glow as a large white disc and each ribbon as a
+  chain of dots (the ribbon's particles have speed 0, a `Streak { from_spawn }` of zero length per tick). The original's
+  frame shows neither the discs nor the dots, only a few thin lines. Unread: how HD draws a speed-0 streak child, and
+  whether the root's glow is drawn at all.
+- **`Explosion_Core`.** The original's is a dim, translucent pink smoke; ours is near-white. The recolour below writes
+  256 words of a table that `0x0027c288` returns from two runtime globals (TOC `-0x2bac`, `-0x2ba8`, both in `.bss`),
+  each `lerp(c, 255, 0.8)` per channel with `c` the colour `0x00677cf8` returns for the player craft's `+0x6284`, then
+  `0x002834f8` uploads it. Which table that is (an emitter's palette or a texture) is not read; confidence 55 as before.
+- **The `+100`**: a HUD widget, not an effect ([detonator-hud.md](detonator-hud.md), "The floating score").
+
+The destroyed mine is therefore **not carried** in the published pair, and the craft-speed carry is not kept.
 
 ## Live and dark mines
 

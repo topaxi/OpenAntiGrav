@@ -1266,3 +1266,4 @@
 0x0002d6a8	function	WeaponStats_ParseMissile	75	rocket-craft-blast.md
 0x00146470	function	Plasma_PushNearbyCraft	80	rocket-craft-blast.md
 0x00142258	function	Missile_PushNearbyCraft	75	rocket-craft-blast.md
+0x0008caf0	function	Hud_UpdateScoreFeedback	72	detonator-hud.md

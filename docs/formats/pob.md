@@ -1082,8 +1082,9 @@ only when the object is in some view's potentially-visible set.
 **Wired on HD, 2026-11-22**: all four names are `Trigger::DetonatorMineExploDead`,
 `DetonatorMineExplo`, `DetonatorBombExplo` and `DetonatorCannonSparks` in HD's effect table, fired
 off the tick's `oag_weapons::detonator::Event` list (`oag_raceplay::detonator_fx`). The two mine
-effects and the bomb's play their disc emitters with procedural pictures: none is in HD's
-`SPRITES`, `EXTENTS` or `TEMPLATES` lists (no matched capture of the original to decide it), and the
+effects play their disc sprites since 2026-11-26 (the live one's `Debris` is the glass shards of the
+original's frame, [detonator-mine.md](../ghidra/functions/ps3-hdfury-eu/detonator-mine.md#the-shards-against-the-original-2026-11-26-det-mine-blast));
+the bomb's plays its disc emitters with procedural pictures (no matched capture), and the
 mine's recolour toward white is not applied. The cannon's wall spark draws its disc sprites and its
 bars since 2026-11-25, spawned in the original's frame
 ([detonator-cannon.md](../ghidra/functions/ps3-hdfury-eu/detonator-cannon.md#the-sparks-matrix-read-live-2026-11-25-det-cannon-spark)). 2048 and Omega: all four ship and parse (`psys_2048_ground_truth.rs`,
