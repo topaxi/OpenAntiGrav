@@ -1269,3 +1269,6 @@
 0x00146470	function	Plasma_PushNearbyCraft	80	rocket-craft-blast.md
 0x00142258	function	Missile_PushNearbyCraft	75	rocket-craft-blast.md
 0x0008caf0	function	Hud_UpdateScoreFeedback	72	detonator-hud.md
+0x002834f8	function	Psys_CopyPaletteToTree	85	detonator-mine.md
+0x0027f610	function	Psys_CreateInstance	70	detonator-mine.md
+0x00ad5fd4	data	Psys_LastRootHandle	75	detonator-mine.md

@@ -506,11 +506,14 @@ and `1/14` too wide (1.2), hull too bright (0.7). ~~Open capture state: input la
 envelopes~~ carried (`det-cannon-regrab`, "The volley clocks and the picture-clock reads"). **Open from that grab:** ~~ours' mine blast
 draws white puffs where the original shows small shards~~ (2026-11-26, `det-mine-blast`: the mine effects draw their disc sprites, the
 `Debris` atlas is the shards, `detonator-mine.md`, "The shards, against the original"). Still open there: the destroyed mine is not
-carried, because with it the pair reads 12.53 against the published 11.89. Three draw gaps remain in ours' blast: the root's three large
-white glows and their `Trail_Ribbon` dot chains (the original shows a few thin lines; drawing them as HD's far bar made it 12.92), the
-`Explosion_Core` near-white where the original's is dim pink (the recolour's table is unread, 55), and the `+100` (read, not drawn: the next
-bullet). The craft-speed carry on the rounds is right physics: put back by `v` times their age, ours hits the mine at round age 8 against
-the original's 10 (without the carry, 1). But it raised the carried pair to 13.75, because the younger blast shows more of those gaps. Re-try it once
+carried, because with it the pair reads 12.12 against the published 11.89 (after `det-mine-blast-glow`). ~~The core near-white where
+the original's is dim pink~~ (2026-11-26, `det-mine-blast-glow`: the whole live blast takes the stage's mine colour, read 85 and wired,
+`detonator-mine.md`, "The blast's colour"; carried pair 12.31 to 12.12). The root's glows cost nothing in that frame (muted: 12.12).
+**What is left is the `Trail_Ribbon` dot chains** (muted: 11.83, under the published): ours draws each speed-0 ribbon particle as a dot,
+the original shows a few thin lines; the far bar (12.41) and the root's noise force (12.15) are both worse. Next: one RPCS3 capture of the
+blast's particle quads a few ticks after a hit, and who reads the child instance's `+0x130`/`+0x140` (same page, "The ribbon, open").
+And the `+100` (read, not drawn: the next bullet). The craft-speed carry on the rounds is right physics: put back by `v` times their age, ours hits the mine at round age 8 against
+the original's 10 (without the carry, 1). But it raised the carried pair to 13.75 (12.98 with the recolour), because the younger blast shows more of those gaps. Re-try it once
 the glows are right; it is about 40 lines in `oag_raceplay::detonator` behind a `--detonator-cannon-craft-speed` flag.
 
 **Hull camera and size, re-based (2026-11-23, `det-camera`).** The maintainer's "ours is far, the original is close" was true and the

@@ -1086,7 +1086,8 @@ effects and the bomb's draw their disc sprites on their camera-facing emitters s
 ([particle-fill.md](../rendering/particle-fill.md#which-effects-draw-a-sprite)); the live mine's `Debris`
 is the glass shards of the original's frame
 ([detonator-mine.md](../ghidra/functions/ps3-hdfury-eu/detonator-mine.md#the-shards-against-the-original-2026-11-26-det-mine-blast)),
-and the mine's recolour toward white is not applied. The cannon's wall spark draws its disc sprites and its
+and a live mine's blast takes the stage's mine colour on every emitter since 2026-11-26
+([detonator-mine.md](../ghidra/functions/ps3-hdfury-eu/detonator-mine.md#the-blasts-colour-2026-11-26-det-mine-blast-glow)). The cannon's wall spark draws its disc sprites and its
 bars since 2026-11-25, spawned in the original's frame
 ([detonator-cannon.md](../ghidra/functions/ps3-hdfury-eu/detonator-cannon.md#the-sparks-matrix-read-live-2026-11-25-det-cannon-spark)). 2048 and Omega: all four ship and parse (`psys_2048_ground_truth.rs`,
 `psys_omega_ground_truth.rs`). The cannon's wall spark is **ported** (2026-11-25,
