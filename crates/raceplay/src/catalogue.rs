@@ -348,11 +348,7 @@ pub fn tracks_named(definition_xml: &str, names: &[&str]) -> Vec<Track> {
     collect(&root, None, &mut all);
     names
         .iter()
-        .filter_map(|&name| {
-            all.iter()
-                .find(|track| track.addresses(name))
-                .cloned()
-        })
+        .filter_map(|&name| all.iter().find(|track| track.addresses(name)).cloned())
         .collect()
 }
 

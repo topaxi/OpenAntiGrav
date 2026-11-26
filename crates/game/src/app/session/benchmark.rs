@@ -622,11 +622,17 @@ impl Session {
         if let Stage::Race(stage) = &mut self.stage
             && let Some(live) = stage.benchmark.as_mut()
         {
+            let strings = oag_ui::strings::project_table(self.settings.language.as_deref());
+            let say = |id: &str, english: &str| strings.get_or_fallback(id, english).to_string();
+            debug!(
+                "benchmark heading: {}",
+                benchmark::text::head(&report, &say)
+            );
             live.done = Some(Done {
                 report,
                 focus: Choice::Back,
                 saved,
-                strings: oag_ui::strings::project_table(self.settings.language.as_deref()),
+                strings,
                 view: screen::View {
                     can_copy: crate::app::clipboard::CAN_WRITE,
                     ..screen::View::default()
