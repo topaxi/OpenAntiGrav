@@ -341,7 +341,8 @@ and the speed carry raises it: the younger blast shows more of what ours still d
   thin lines, but brighter and more of them than the original's, and the carried pair goes 12.53 to 12.92: not kept.
 - **`Explosion_Core`.** The original's is a dim, translucent pink smoke; ours was near-white. **Read and wired
   2026-11-26**: the whole blast is recoloured from the stage's mine colour ("The blast's colour" below).
-- **The `+100`**: a HUD widget, not an effect ([detonator-hud.md](detonator-hud.md), "The floating score").
+- **The `+100`**: a HUD widget, not an effect, drawn since 2026-11-27
+  ([detonator-hud.md](detonator-hud.md), "The floating score").
 
 The destroyed mine is therefore **not carried** in the published pair, and the craft-speed carry is not kept.
 
