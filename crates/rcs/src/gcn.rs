@@ -44,6 +44,7 @@
 //! [`Error`] in [`Program::reflection`], not a refused program. The layout and
 //! its census are on `docs/formats/gcn.md`; the instruction set is [`isa`].
 
+mod cannon_bolt;
 mod electricity;
 mod factor;
 mod frame;
@@ -55,6 +56,7 @@ mod sample;
 mod sea;
 mod texcoord;
 
+pub use cannon_bolt::{LIGHTNING_TEXTURE, RING_TEXTURE, cannon_bolt};
 pub use electricity::{
     BASS_TREBLE_TEXTURE, ELECTRICITY_TEXTURE, ElectricityRead, PITCH_TEXTURE, electricity,
 };

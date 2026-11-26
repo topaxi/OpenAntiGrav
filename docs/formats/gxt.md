@@ -171,6 +171,20 @@ an emulator that runs real Vita titles through it, which is the same class of
 external corroboration the twiddle finding below rests on. The 92 is not the
 reference's, though; it is what was measured here against it.
 
+### A level under eight texels stores its own words
+
+**Confidence 90.** A word quad needs 2x2 words, so the decode runs over at least 8x8 texels,
+but a level narrower or shorter than that **stores only its own words**: a 4x128 level is 32
+words (256 bytes), one wide, in Morton order over `1 x 32`, and the decode wraps them to the
+missing columns. Reading it as if padded to two words wide takes every second word and zeros
+for the rest. 35 `.gxt` of the EU packages have such a base level (4x128, 128x1, 4x4, ...).
+20 of the 35 share a name with an HD `.gtf`, 17 distinct names. **17 names measured, one copy
+each; all 17 move toward HD's art** with the wrapped reading (mean absolute difference over RGBA
+of 255): `hd_detonator_cannonbolt_glow` 103.6 to 1.5, `animgradient_pingpong` 125.6 to 1.4,
+`thickline_hardedged` 116.9 to 2.7. Some stay far (`vr_fxgrid1` 92.8, `bg_gradient` 41.7), which
+may be different art under one name; the 15 with no HD twin have no oracle. Test:
+`gxt_ground_truth::the_pvrtc_decode_agrees_with_wipeout_hd_s_own_copy_of_the_same_art`.
+
 ### Wipeout HD decodes the same art, and this agrees with it
 
 **The strongest evidence this decode has**, and it exists because 2048's DLC

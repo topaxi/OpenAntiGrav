@@ -31,8 +31,7 @@
 //! the cut, the hand-back to the chase camera on the camera's own 8 s clock, and on 2048 and
 //! Omega the hold view after it. Their stations are the `Camera` nodes of the circuit's
 //! `track.vex`, read whether or not the title draws the circuit's effects. A Zone end whose
-//! [`oag_title::destroyed::ZoneEnd::orbit_camera`] is set is the orbit round the craft instead, from the
-//! chase eye in.
+//! [`oag_title::destroyed::ZoneEnd::orbit_camera`] is set is the orbit round the craft instead.
 //!
 //! **Chosen, not measured:**
 //!

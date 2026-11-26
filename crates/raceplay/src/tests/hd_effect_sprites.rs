@@ -243,16 +243,20 @@ fn trail_hit_burst(listed: bool) -> Option<oag_fx::psys::Effect> {
     Some(effect)
 }
 
-/// HD, 2048 and Omega list the trail-hit burst for HD's class-6 bar draw, and HD the
-/// Detonator wall spark's three streaks, the EMP's sparks and the Plasma's five effects, whose lightning is that class; a per-effect
-/// choice, not a title-wide one.
+/// HD, 2048 and Omega list the trail-hit burst and the Detonator wall spark's three streaks
+/// for HD's class-6 bar draw, and HD the EMP's sparks and the Plasma's five effects, whose
+/// lightning is that class; a per-effect choice, not a title-wide one.
 #[test]
 fn hd_2048_and_omega_list_the_trail_hit_burst_for_the_far_bar_draw_and_hd_its_plasma() {
     use oag_title::engine_effects as n;
     for title in [oag_2048::TITLE, oag_omega::TITLE] {
         assert_eq!(
             title.effects.far_bars,
-            [n::TRAIL_HITSHIP_EFFECT, n::TRAIL_HITSHIP_RED_EFFECT],
+            [
+                n::TRAIL_HITSHIP_EFFECT,
+                n::TRAIL_HITSHIP_RED_EFFECT,
+                n::DETONATOR_CANNON_SPARKS_EFFECT,
+            ],
             "{}",
             title.name
         );

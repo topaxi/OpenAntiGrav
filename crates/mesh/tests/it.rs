@@ -90,6 +90,7 @@ mod own_shield_lit_path;
 mod psp2_airbrake_flaps_ground_truth;
 mod psp2_alpha_emissive_ground_truth;
 mod psp2_backface_cull_ground_truth;
+mod psp2_cannon_bolt_ground_truth;
 mod psp2_circuit_pads_ground_truth;
 mod psp2_electricity_ground_truth;
 mod psp2_glow_ground_truth;

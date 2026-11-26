@@ -462,6 +462,9 @@ pub struct SubMesh {
     /// record's own declaration; empty where it names none. A non-finite value is replaced by the
     /// origin.
     pub packed_texcoords: Vec<[f32; 4]>,
+    /// The `Uv3` half pair ([`vertex_decl::UV3_HASH`]), one per vertex, from the record's own
+    /// declaration; empty where it names none. A non-finite value is replaced by the origin.
+    pub uv3_texcoords: Vec<[f32; 2]>,
     /// `uvMarkings`, one per vertex: the road's decal atlas pair
     /// ([`vertex_decl::VertexDecl::markings_texcoord`]). Empty unless the record's own
     /// declaration names it and `uv1_uvDirt` both (Omega's `tarmac_*` roads). A non-finite value
@@ -988,6 +991,24 @@ fn one(
             });
         }
     }
+    let mut uv3_texcoords = Vec::new();
+    if let Some(off) = own
+        .and_then(|decl| decl.attribute(vertex_decl::UV3_HASH))
+        .filter(|attr| attr.components == 2 && attr.gxm_type == half_type)
+        .map(|attr| usize::from(attr.offset))
+        && stride >= off + 4
+    {
+        uv3_texcoords.reserve_exact(vertex_count);
+        for v in 0..vertex_count {
+            let at = vertex_at + v * stride + off;
+            let pair = unpack_texcoord([file[at], file[at + 1], file[at + 2], file[at + 3]]);
+            uv3_texcoords.push(if pair.iter().all(|c| c.is_finite()) {
+                pair
+            } else {
+                [0.0; 2]
+            });
+        }
+    }
     let mut tangents = Vec::new();
     // The Vita's type is `5`; the PS4's is `0xe` (four signed bytes, `w` exactly +-127), and a
     // PS4 declaration is only sound through the record's own pointer.
@@ -1090,6 +1111,7 @@ fn one(
         lightmap_texcoords,
         bars_blend_texcoords,
         packed_texcoords,
+        uv3_texcoords,
         markings_texcoords,
         dirt_texcoords,
         non_finite_texcoords,

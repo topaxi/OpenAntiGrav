@@ -29,7 +29,7 @@ evidence), then start at "Next Steps".
 | 8b-RE | RE: own hull, own handling file, own mine/bomb/pad models (`detonator-hull.md`) | done | `bed94feed` |
 | 8b | Wire the hull, handling, mine, bomb and pad models | done (wreck and death shell open); mine and bomb colour binds wired (`det-colour`) | `4f4b70173` |
 | 9 | Wire the cannon, score, destroyed count and percentage | simulation done; rounds, flash, explosion effects and the cannon's cues drawn on HD; the HUD is row 12's, no end screen | `59215fc52`, the `det-fx` commits |
-| 10 | EMP: RE (pads, charge flag writer, `EMPManager`) then wire | done on HD and Omega (`detonator-emp.md`, "Wired"); the wave's reach is chosen (`emp::SECTIONS_PER_EXTENT`); 2048's pads unread, so its EMP never charges | `det-emp-wire` |
+| 10 | EMP: RE (pads, charge flag writer, `EMPManager`) then wire | done on HD and Omega (`detonator-emp.md`, "Wired"); the wave's reach is chosen (`emp::SECTIONS_PER_EXTENT`); 2048's pads read and wired 2026-11-25 (`vita-2048-eu-v104/detonator-pads.md`) | `det-emp-wire` |
 | 11 | Auto-speed: RE Detonator's engine branch, then wire | done on HD, 2048, Omega (`detonator-speed.md`, "Wired"), ramp included | `det-emp-wire` |
 | 12 | Detonator HUD (`detonator_hud.xml`, `hud_detonatorweapons.xml`, `detonator_warnings.xml`) | wired on HD, Omega and 2048, the EMP pips and `EmpReady` included; the three medal models draw on HD and Omega (`det-medals`, 2026-11-23; 2048 left); open: their tier colour, `EmpBarEffect`, 2048's `EmpCharge`/`EmpFull`, bomb-ahead, score feedback (below) | `det-medals` |
 | 13 | End screen proper (stage, mines, bombs, three chain counts, score, new-record banner) | HD wired (`det-end`, `detonator-endrace.md`, "Wired"): the six rows and the score line, live; open: the new-record banner, Omega (no EndRace screens on main) and 2048 (its four-row list has no page to draw on) | `det-end` |
@@ -277,9 +277,9 @@ placement RNG cannot match the original's `Libc_Rand` (a departure, documented).
 - **Cannon bolt (`det-cannon-bolt-look`)**: the bolt's program and the half turn are wired on HD and the loop ride is
   confirmed live (`detonator-cannon.md`, "The bolt's look and the loop"). ~~(1) the spark's frame~~ read live and wired (`det-cannon-spark`, `detonator-cannon.md`, "The spark's matrix, read
   live"); left of it: the `-0.3` along the wall normal, size, brightness and timing (a camera-matched pair at a close wall
-  hit: read the view matrix in the death pause, fire ours through the simulation, render with `--camera-pose`), and 2048's and
-  Omega's tables not answering the trigger. Open: (2) the bolt's GXP (2048) and GCN (Omega) programs are unread, so those titles draw it through the
-  generic path (Omega binds the ring strip as diffuse); (3) the 0.05 to 4.8 unit sideways drift through the loop, 60 Hz
+  hit: read the view matrix in the death pause, fire ours through the simulation, render with `--camera-pose`).
+  ~~2048's and Omega's trigger~~ and ~~(2) their bolt programs~~ wired (`det-cannon-bolt-2048-omega`); neither has an
+  original frame. Open: (3) the 0.05 to 4.8 unit sideways drift through the loop, 60 Hz
   against 30 Hz suspected; (4) no side-on capture of the original's bolt.
 
 - **Mine look (`det-mine-lit`)**: the normal map is read now (the chunk has one coordinate set), so hubs and holes show.
@@ -430,14 +430,14 @@ original frame to compare. The detail is below.
   `sec+0x40`/`+0x60`, how a mine or bomb leaves its pool (the bomb pool is 2 and the spawn does
   not check it), `0x0012ae38`/`0x0012ae10`/mine vslot `+0x3c`. Models: see the hull bullet
   above (`DetonatorMine_Construct` `0x0013a7d8`, `DetonatorBomb_Construct`); effects `WO_BOMB_EXPLO_DETONATOR`,
-  `WO_MINE_EXPLO_DETONATOR[_DEAD]`, `WO_CANNON_SPARKS_DETONATOR` (2048 `data2.psarc`), whose
-  triggers need the hit read first.
+  `WO_MINE_EXPLO_DETONATOR[_DEAD]` (2048 `data2.psarc`), whose
+  triggers need the hit read first (the cannon's wall spark is wired on 2048 and Omega).
 - **EMP: wired** (`det-emp-wire`, `detonator-emp.md` "Wired"). ~~The wave's reach and speed, the kill's
   effect and sound~~: read live and drawn on HD (`det-emp-look-re`, 2026-11-24, `detonator-emp.md`
   "What HD draws for a fired EMP": one survey entry a tick for `extent` seconds, `WO_QUAKE_DETONATOR`
   on the front with a `(0, 5, 10)` light; the stepper is the Repulser's, copied). The particle rows
   were `SPARKS` without their noise force, fixed (same page, "The grey rows were sparks that
-  never moved"); 13 other HD emitters author that force, unlisted. The in-run fork and the launch-time fork are wired (`detonator-emp.md`, "The launch-time fork"). The other route's record lookup is wired. Open: 2048's pad arms (so no player fires its EMP); `~MAGPULSETRAVEL` unwired; 2048 and Omega checked, applies, not wired. Still open:
+  never moved"); 13 other HD emitters author that force, unlisted. The in-run fork and the launch-time fork are wired (`detonator-emp.md`, "The launch-time fork"). The other route's record lookup is wired. Open: `~MAGPULSETRAVEL` unwired; 2048 and Omega checked, applies, not wired. Still open:
   whether the wave hurts the player,
   `EmpBarEffect` (an `<ImageModel>` the HUD layout reader does not model; the gauge is exposed),
   the ready pulse and post-fire flash on `EmpReady`, 2048's
@@ -698,5 +698,6 @@ not known. Read `FUN_812b0880` before mapping the board to `Mode::Eliminator` on
 ring is posed camera-facing and drawn with `electricity.rcsmaterial`'s own program. Published pairs (no picture-lag fit): `pad` 8.82 -> 8.82,
 `mines-ahead` 16.38 -> 16.40, `cannon-volley` 15.32 -> 15.33; middle-right cell MAD 36.79 -> 36.87 and 26.42 -> 26.46: the ring lands on the wrong pixels
 because ours' near mines are not where the picture has them (re-grab the pairs with the fitted lag, then re-measure). The original's ring is two smooth
-circles; ours a ragged band at the disc's rim: the ring's clock `t`, the unread level readers and the roll are the candidates. **Omega draws it too (2026-11-25, `det-visualiser-2048-omega`;** its GCN program is HD's law, `detonator-mine-draw.md`). **Open:** 2048 (GXP
-program not HD's listing: 3 texture fetches against Omega's 5, unread, ring not drawn); the original's ring look against ours on a lag-fitted pair.
+circles; ours a ragged band at the disc's rim: the ring's clock `t`, the unread level readers and the roll are the candidates. **Omega draws it too (2026-11-25, `det-visualiser-2048-omega`;** its GCN program is HD's law, `detonator-mine-draw.md`). **2048 draws it too (2026-11-25,
+`det-visualiser-2048`):** its USSE program is HD's law with two prefetched taps (five fetches, not three) and the colour-bearing taps squared
+in code (`detonator-mine-draw.md`). **Open:** the original's ring look against ours on a lag-fitted pair (HD; no 2048 or Omega capture of the ring).

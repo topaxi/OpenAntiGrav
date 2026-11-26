@@ -996,18 +996,38 @@ measured, and by eye ours is fainter (60 for "the same elements"). **Open:** at 
 the two frames of ours shows no spark where the original shows the arcs; they appear 11 to 33 ticks later. Either
 the earlier hits sit behind ours' closer chase camera or ours' particles run late; not settled.
 
-**2048 / Omega, the spark.** Both ship `WO_CANNON_SPARKS_DETONATOR.POB` and parse it
-(`psys_2048_ground_truth.rs`, `psys_omega_ground_truth.rs`), and both spawn it with HD's fourcc `0x42444f52` in
-the same frame. 2048 (`vita-2048-eu-v104` `FUN_8120058c`): row 1 `v - 2 (v.n) n`, row 2 the negated surface
-record vector `+0x20`, translation probed from `hit + n + 5 V` down to the floor. Omega (`ps4-omega-eu`
-`FUN_013644c0`, the one function referencing the string; `0x01391b30`, cited above as its update, decompiles as
-`TrackStartup_Load` in that program): `flags |= 0x14`, the same reflection and surface vector, the same spawn.
-Static, 70. **Checked, applies, not wired**: neither title's effect table answers
-`Trigger::DetonatorCannonSparks`, their contact and hit laws being unread (`docs/formats/pob.md`).
+**2048 / Omega, the spark: ported** (2026-11-25). See "The spark on 2048 and Omega" below.
 
 **2048 / Omega.** The half turn: **checked, applies; wired as HD's** (`round_matrix` is title-agnostic). Both ship
 the same model with the same extent along `+Z` (`psp2_material_dump` with `DECL_SUB=0`: 2048 `-2..30`, Omega
-`-1.80..30.50`); their own render-queue turn is unread. The program: **checked, applies, not wired**
-(their GXP and GCN programs are unread; see the rendering page). The loop law: not re-read live on either (no 2048 or
+`-1.80..30.50`); their own render-queue turn is unread. The program: **differs in the tint and the colour tap;
+ported** ([hd-unlit-programs.md](../../../rendering/hd-unlit-programs.md#the-detonator-cannon-bolt-on-2048-and-omega-2026-11-25-det-cannon-bolt-2048-omega)). The loop law: not re-read live on either (no 2048 or
 Omega memory poll); their `PulseBullet` updates probe and ride as HD's (above).
 
+
+## The spark on 2048 and Omega (2026-11-25, `det-cannon-bolt-2048-omega`)
+
+Static, 2048 v1.04 `FUN_8120058c` and Omega v1.00 `FUN_013644c0`, each title's `PulseBullet`
+update. **Confidence 80.**
+
+| | 2048 | Omega |
+| --- | --- | --- |
+| Wall codes that take the wall branch | 5, 6, 8 | 5, 6, 8 (mask `0x160`) |
+| Rebounds left: counter | `+0x128`, decrement, reflect `v - 2(v.n)n`, return | `+0x188`, the same |
+| Last wall | `flags \|= 0x14` | `flags \|= 0x14` (`+0x74`) |
+| Effect | mode `0xe`: `WO_CANNON_SPARKS_DETONATOR`, else `WO_CANNON_SPARKS`, fourcc `0x42444f52` | the same |
+| Row 1 | `v - 2(v.n)n` | the same |
+| Row 2 | the negated surface record vector `+0x20` (`V`) | the same |
+| Translation | probe from the hit toward `hit + n + 5V`; on surface types 2, 3, 10, 11, 12 the probe's hit minus `n`, else the wall hit | the same |
+
+So the spark fires **only on the death on the last wall**, as HD's does, in HD's frame, with the
+translation probed down to the floor. A flag the caller passes (`param_4`/`param_3`) gates the
+spawn; its source is unread. Both are **ported**: each table answers
+`Trigger::DetonatorCannonSparks` (`Origin::Measured`) and lists the effect in `far_bars` for
+its class-6 streaks (HD's law; Omega's own pusher has the same mode-5 bar, 2048's is unread,
+[engine-trail.md](engine-trail.md)). The five sprites read from each title's own files. Ours
+spawns at HD's measured point (`hit - 3.5` along the surface normal) on all three; the live
+offset is not measured on either. Tests:
+`tests::detonator_fx::{a_2048,an_omega}_wall_death_plays_the_discs_spark` (red without the
+trigger, and without the far bar). By eye, a camera beside a hit on each: a blue ring or flash,
+white dashes along the rebound, green debris. No original frame of either title to compare.

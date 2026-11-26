@@ -2334,16 +2334,20 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
     // after it carries `(PitchVolume, BassHit, TrebleHit)` and `PitchOffset`. The colour is the
     // overlay blend of the lightning against `ElectricityColour`, times `|N.V|^P`. The colour tap
     // is decoded (chosen, not measured: the unit's gamma nibble is unread). See the module's doc
-    // for the program's instructions.
+    // for the program's instructions. 2048's program squares the bass tap's and the pitch tap's
+    // red itself (the next entry's scale is 1, `oag_rcs::gxp::electricity`).
     let electric_entry_on = program_in(row_scale.z, 25u, 25u);
     if electric_entry_on {
         let audio = emissive_tint(((in.slots >> 24u) & 63u) + 1u);
+        let squared_taps = emissive_scale(((in.slots >> 24u) & 63u) + 1u).x > 0.5;
         let alpha_v = sun_mask;
-        let n0 = material_sample(MATERIAL_ALBEDO, vec2<f32>(in.lightmap_texcoord.z, in.lightmap_texcoord.w - audio.y)).x;
+        let n0_texel = material_sample(MATERIAL_ALBEDO, vec2<f32>(in.lightmap_texcoord.z, in.lightmap_texcoord.w - audio.y)).x;
+        let n0 = select(n0_texel, n0_texel * n0_texel, squared_taps);
         let n1 = material_sample(MATERIAL_ALBEDO, vec2<f32>(in.texcoord.x, in.texcoord.y - audio.z)).w;
         let s = in.lightmap_texcoord.y + scene.time.x + n0 + n1;
         let d = material_sample(MATERIAL_PAD_MASK, vec2<f32>(in.lightmap_texcoord.x, row_scale.x * s)).w - n0 - n1;
-        let pitch = material_sample(MATERIAL_LIGHTMAP, vec2<f32>(in.lightmap_texcoord.x, audio.w)).x;
+        let pitch_texel = material_sample(MATERIAL_LIGHTMAP, vec2<f32>(in.lightmap_texcoord.x, audio.w)).x;
+        let pitch = select(pitch_texel, pitch_texel * pitch_texel, squared_taps);
         let m = (pitch * audio.x + d) * row_tint.w;
         let lightning = decode(material_sample(
             MATERIAL_PAD_MASK,
@@ -2410,23 +2414,26 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
     //     F     = fB + (1 - fB) sat(1 - N.V)^5                      fB the entry's offset
     //     out   = (c.rgb + (1 - F)^3 (0.0619202, 0.744629, 1), 5 c.a ring)
     //
-    // Unlit, through the fogged programs' `/2`; the fog is the caller's. Blended `SrcAlpha`/`One` by
-    // the material's state. The colour tap is decoded as the other weapon glows' (chosen, not
-    // measured: this draw's unit-0 gamma nibble is unread), and the alpha is held to `1` as the
-    // 8-bit target would hold it (chosen, not measured).
+    // Unlit, through the fogged programs' `/2` (`output_scale`, 1 on 2048 and Omega, whose
+    // programs end without it); the fog is the caller's. Blended `SrcAlpha`/`One` by the material's
+    // state. The tint is the title's own, in the entry. The entry's `program[1]` is 1 on 2048 and
+    // Omega, whose colour tap is read as decoded (2048's program squares it, Omega's picture is
+    // sRGB-typed). On HD it is decoded as the other weapon glows' (chosen, not measured: this
+    // draw's unit-0 gamma nibble is unread). The alpha is held to `1` as an 8-bit target would
+    // hold it (chosen, not measured).
     if glow_program > 29.5 && glow_program < 30.5 {
         let bolt_noise = material_sample(MATERIAL_ALBEDO, in.texcoord).a;
         let bolt_tap = material_sample(
             MATERIAL_ALBEDO,
             in.texcoord + vec2<f32>(0.8 * bolt_noise + 5.0 * scene.time.x),
         );
-        let bolt_c = mix(bolt_tap.rgb, decode(bolt_tap.rgb), encoded_out * linear_out);
+        let bolt_c = mix(bolt_tap.rgb, decode(bolt_tap.rgb), max(encoded_out, row_scale.w) * linear_out);
         let bolt_ring = material_sample(MATERIAL_LIGHTMAP, in.lightmap_texcoord.xy).a;
         let bolt_rim = clamp(1.0 - dot(to_eye, n), 0.0, 1.0);
         let bolt_rim_5 = bolt_rim * bolt_rim * bolt_rim * bolt_rim * bolt_rim;
         let bolt_base = glow_tint_offset.w;
         let bolt_keep = clamp(1.0 - (bolt_base + (1.0 - bolt_base) * bolt_rim_5), 0.0, 1.0);
-        let bolt_rgb = bolt_c + bolt_keep * bolt_keep * bolt_keep * vec3<f32>(0.0619202, 0.744629, 1.0);
+        let bolt_rgb = bolt_c + bolt_keep * bolt_keep * bolt_keep * glow_tint_offset.rgb;
         return vec4<f32>(
             min(scene.light.output_scale * bolt_rgb, vec3<f32>(HALF_MAX)),
             min(5.0 * bolt_tap.a * bolt_ring, 1.0),

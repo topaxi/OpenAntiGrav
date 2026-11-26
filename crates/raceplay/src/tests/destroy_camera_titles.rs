@@ -202,7 +202,12 @@ fn omega_holds_like_vita() {
 /// HD's Zone race with its Close rig at HD's 8.7 units (`camera.md`) rather than the fixture's 4.1, on
 /// a craft that flies at `speed` along its own nose, the chase rig settled behind it.
 fn hd_zone_race_at(speed: f32) -> Race {
-    let mut race = super::zone_end::zone_race(DestroyedCraft::HD);
+    zone_race_at(DestroyedCraft::HD, speed)
+}
+
+/// [`hd_zone_race_at`] with another title's destroyed-craft sequence.
+fn zone_race_at(destroyed: DestroyedCraft, speed: f32) -> Race {
+    let mut race = super::zone_end::zone_race(destroyed);
     race.view.destroy_camera = DestroyCamera::new(vec![near_station()], 0.4);
     race.core.sim.world.ships[0].handling.dimensions = oag_physics::params::Dimensions {
         width: 5.5,
@@ -227,12 +232,23 @@ fn fly_and_advance(race: &mut Race) {
     race.view.advance_destroy_camera(&race.core);
 }
 
-/// HD's Zone end takes the orbit, not a station: the eye is `5 + dist` from the craft on every frame
-/// (the render camera, read on RPCS3), so 5.5 at the cut and farther as the radius opens, and the field
-/// narrows to about 30 degrees at 2.5 s.
+/// The Zone end takes the orbit, not a station: the eye is `5 + dist` from the craft on every frame
+/// (HD's render camera read on RPCS3; the same `cam+0x3b4 = 5.0` law read in 2048's and Omega's
+/// code), so 5.5 at the cut and farther as the radius opens, and the field narrows to about 30
+/// degrees at 2.5 s.
 #[test]
-fn hd_zone_end_is_the_close_orbit_five_beyond_its_radius() {
-    let mut race = hd_zone_race_at(0.0);
+fn a_zone_end_is_the_close_orbit_five_beyond_its_radius_on_hd_2048_and_omega() {
+    for destroyed in [
+        DestroyedCraft::HD,
+        DestroyedCraft::HD_VITA,
+        DestroyedCraft::HD_BLOWUP,
+    ] {
+        assert_zone_end_orbit(destroyed);
+    }
+}
+
+fn assert_zone_end_orbit(destroyed: DestroyedCraft) {
+    let mut race = zone_race_at(destroyed, 0.0);
     set_player(&mut race, CraftState::Destroyed);
     let craft = race.core.sim.world.ships[0].physics.body.position;
     let camera = race.view.destroy_camera_now().expect("the orbit");

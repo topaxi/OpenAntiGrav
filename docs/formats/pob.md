@@ -1087,8 +1087,10 @@ effects and the bomb's play their disc emitters with procedural pictures: none i
 mine's recolour toward white is not applied. The cannon's wall spark draws its disc sprites and its
 bars since 2026-11-25, spawned in the original's frame
 ([detonator-cannon.md](../ghidra/functions/ps3-hdfury-eu/detonator-cannon.md#the-sparks-matrix-read-live-2026-11-25-det-cannon-spark)). 2048 and Omega: all four ship and parse (`psys_2048_ground_truth.rs`,
-`psys_omega_ground_truth.rs`), **checked, applies, not wired** - their tables do not answer the
-triggers yet, because the contact and hit laws are not read on either.
+`psys_omega_ground_truth.rs`). The cannon's wall spark is **ported** (2026-11-25,
+[detonator-cannon.md](../ghidra/functions/ps3-hdfury-eu/detonator-cannon.md#the-spark-on-2048-and-omega-2026-11-25-det-cannon-bolt-2048-omega)).
+The two mine effects and the bomb's are **checked, applies, not wired**: their tables do not
+answer those triggers, the mine and bomb contact laws being unread on either.
 `WO_QUAKE_DETONATOR` is the EMP's wave, read and wired on HD since 2026-11-24 ([detonator-emp.md](../ghidra/functions/ps3-hdfury-eu/detonator-emp.md#what-hd-draws-for-a-fired-emp-2026-11-24)); `_TRAILS` is named nowhere in `EMP.cpp`'s span and stays unread. All three systems above ship on 2048 (`data.psarc`, `data/particles/` and
 `data/particles2048/`) and Omega (`data00.psarc`), and both executables name them; 2048's mine
 explode picks between the two mine systems with HD's shape and fourcc (`0x811e6f3a`), Omega's
