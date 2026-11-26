@@ -156,7 +156,7 @@ pub(super) fn advance_one_tick(
                 "--force-rocket-hit: no Rocket in flight from another craft yet, or slot {slot} is not racing (pass --opponents)"
             );
         } else if let Some(velocity) = options.force_rocket_hit_velocity {
-            race.core.sim.force_craft_velocity(slot, velocity);
+            race.force_struck_velocity(slot, velocity);
         }
     }
     if let Some((at, slot)) = options.force_quake

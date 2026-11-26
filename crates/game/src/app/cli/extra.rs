@@ -373,9 +373,9 @@ pub(crate) struct WreckArgs {
     pub(crate) force_rocket_hit: Option<String>,
 
     /// With `--force-rocket-hit`, give the struck craft this velocity as it is put on the Rocket,
-    /// in world units a second. The craft blast carries the struck craft's own velocity, so a
+    /// in world units a second. The craft blast carries the struck craft's velocity, so a
     /// comparison with a capture needs the captured craft's. See
-    /// [`oag_raceplay::RaceSim::force_craft_velocity`]. Dev only.
+    /// [`oag_raceplay::Race::force_struck_velocity`]. Dev only.
     #[cfg(feature = "dev-cli")]
     #[arg(
         long,

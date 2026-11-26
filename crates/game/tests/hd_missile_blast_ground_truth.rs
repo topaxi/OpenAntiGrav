@@ -411,7 +411,7 @@ fn force_rocket_hit_blows_a_rocket_on_the_named_craft_at_its_tick() {
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso and a GPU adapter"]
 fn force_rocket_hit_velocity_moves_what_the_forced_hit_draws() {
     let own = rocket_frame(true, None).expect("image");
-    let thrown = rocket_frame(true, Some("0,300,0")).expect("image");
+    let thrown = rocket_frame(true, Some("-300,0,0")).expect("image");
     let changed = own
         .iter()
         .zip(&thrown)
