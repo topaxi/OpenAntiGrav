@@ -771,7 +771,7 @@ fn a_zone_race_draws_the_ladder_and_numbers_it_from_the_current_zone() {
         .hud_text
         .iter()
         .chain(&frame.small_text)
-        .filter_map(|draw| match draw {
+        .filter_map(|draw| match draw.unstretched() {
             oag_ui::frontend::Draw::Text { text, .. } => Some(text.clone()),
             _ => None,
         })

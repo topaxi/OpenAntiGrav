@@ -380,6 +380,16 @@ pub enum Draw {
 }
 
 impl Draw {
+    /// The draw a [`Self::Stretched`] wraps, `self` otherwise: what a reader of a list's text
+    /// matches on.
+    #[must_use]
+    pub fn unstretched(&self) -> &Self {
+        match self {
+            Self::Stretched { text, .. } => text,
+            other => other,
+        }
+    }
+
     /// `self` stretched horizontally by `x_scale` about its `x`: itself when `x_scale` is one.
     #[must_use]
     pub fn stretched(self, x_scale: f32) -> Self {
