@@ -199,6 +199,27 @@ alpha does.
 - `0x0136ef30`'s model slot, the second draw routine, and the Omega 1.07 addresses.
 
 
+## The lattice scrolls
+
+2026-11-26, lane `shield-anim`. **The shader-side shield terms had never moved in a
+race**: the shell and cockpit drawables kept a scene block nothing wrote, so
+`scene.time` was zero, and the `2048_shipshield_old` lightning wired earlier drew
+one frozen frame. They now read the clocked flame block (HD page, "The lattice
+scrolls"). Also read and wired now:
+
+- **`hd_shipshield_old`** (`Data/weapons/vr_shield_cockpit`): its unlit pixel
+  program is the shell's, instruction for instruction (89, `3.0`, `0.8`,
+  `0.16`, alpha `dmask:0x8`), so the sphere carries the same lightning layer and
+  diffuse alpha.
+- **`2048_Magnetic_Shield`** vertex program: `Uv1.u += time * Speed_multiplier`
+  (`s_buffer_load_dwordx2` of `time, Speed_multiplier`, `v_mac_f32 v8, s0, v11`),
+  wired as the plain scroll track. No race of ours flies a 2048 craft on Omega
+  with a mode `>= 0x17`, but the craft's own shell carries it either way.
+- **The Vita agrees** (its own page, "The lattice scrolls"). Its program squares
+  the lightning tap; the PS4's program does not, and whether its `cf_plasma` is
+  sampled through an sRGB view is not read, so our Omega lightning stays the raw
+  tap.
+
 ## Wired (lane `omega-2048-shield-wire`)
 
 - `oag_livery::shield` builds the shell through `psp2::build` and reads `ShieldColour` with `oag_rcs::rcsmodel::psp2` (a missing fourth component reads `0.0`, unread; the cockpit floor below makes it moot). Ground truth: `crates/raceplay/tests/omega_2048_shield_colour_ground_truth.rs` (every one of 13 teams' colours and a built shell).
@@ -223,7 +244,7 @@ Wired (lane `omega-shield-lightning`): the alpha channel of the first (`slots::a
 
 **Not wired / open:** `constantAmbientColour` (the program multiplies the diffuse colour by it; the scene's value is not read here, so the multiplier is the implicit 1), the lit variants' `liveLighting0` and `shCoeffs` terms (the shell takes the unlit reading), and Zone's `zonebattle_shield` program (unread; no lightning is drawn for it). The picture reads as blue-white crackle over the hull with a faint hexagon lattice, not HD's glassy hexagon shell; the dimness of the lattice is the unread ambient factor until a live Omega capture says otherwise (wipeout_pc is the Omega race original, `docs/reverse-engineering/`).
 
-**2048/Omega cross-check (read through `oag_2048::open` and `read_name`, 2026-11-03):** the Vita base package ships `data/art/published/ships/materials/2048_shipshield_old.rcsmaterial` (31,040 bytes) and every HD-derived team's `hdships/<team>/shipshield.rcsmodel` uses it (all teams but Zone, whose shell is `zonebattle_shield`); `ships/<team>2048/<n>/shipshield.rcsmodel` use `2048_magnetic_shield`. **Checked, applies, not wired:** same material name and shell geometry on the Vita, but its program is a `.gxp` nobody here has read for the Lightning literals, and the builder gates the layer on the PS4 container (`ps4`), so a Vita `hdships` shell still draws the diffuse alone. The 2048 magnetic shell is unchanged (the ground truth asserts no entry on it).
+**2048/Omega cross-check (read through `oag_2048::open` and `read_name`, 2026-11-03; superseded by "The lattice scrolls" above, which reads the Vita program):** the Vita base package ships `data/art/published/ships/materials/2048_shipshield_old.rcsmaterial` (31,040 bytes) and every HD-derived team's `hdships/<team>/shipshield.rcsmodel` uses it (all teams but Zone, whose shell is `zonebattle_shield`); `ships/<team>2048/<n>/shipshield.rcsmodel` use `2048_magnetic_shield`. **Checked, applies, not wired:** same material name and shell geometry on the Vita, but its program is a `.gxp` nobody here has read for the Lightning literals, and the builder gates the layer on the PS4 container (`ps4`), so a Vita `hdships` shell still draws the diffuse alone. The 2048 magnetic shell is unchanged (the ground truth asserts no entry on it).
 
 **Open from the lane:** the lightning term is added after the shader's fog (the program fogs the sum), so it escapes fog at distance; and the Omega-side look is unjudged against an original frame (a wipeout_pc capture with a raised shield, which the maintainer launches, would settle brightness, the pair assignment and `constantAmbientColour`).
 

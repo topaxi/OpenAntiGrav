@@ -503,6 +503,63 @@ line `shipshield.vex: its .rcsmodel does not build`), so there is no shell to
 tint. Both stay on the inherited palette until the Vita/PS4 shell build and the
 value decode land.
 
+## The lattice scrolls
+
+2026-11-26, lane `shield-anim`. The shell and the cockpit sphere both use
+`data/materials/ships/hexagonalshield_rich.rcsmaterial` (every team, cockpit
+included; the one exception is below). Its fragment program samples the one
+texture **twice**, read with `scripts/ps3-microcode.py fp-file` (confidence
+**90**: static, but the same literal in all 25 variants that read the clock and
+the same law as the 2048 and Omega recompiles; no RPCS3 frame of a raised
+shield was compared):
+
+```text
+unlit block #1 (0x3450), the shape every colour-writing variant repeats:
+@0x00  MOV R0.y, f[TC0].w          // u  (vertex program: o[TC0].w = Uv1.x)
+@0x01  MOV R1.w, {time}            // parameter 0x906b67ba
+@0x06  TEX H2.w, R0.zwzz           // alpha at (u, v)
+@0x08  MAD R0.z, R1.w, 3, R0.y     // u + 3 * time
+@0x0b  TEX H0.xyz, R0.zwzz         // colour at (u + 3 * time, v)
+@0x0c  MUL H0.xyz, H0, ShieldColour
+@0x0e  MUL H1.w, H2, ShieldColour  // alpha: tex.a * ShieldColour.a
+@0x10  MUL H0.w, H0, H1            // times VertexColour1.w
+@0x11  MUL H0.xyz, H0, constantAmbientColour
+```
+
+The shell's texture (`<team>/livery1/shieldhexagonal_alpha.gtf`, 256 x 128)
+holds **the hexagon lattice in alpha and five brightness bands in RGB** (white to
+black, left to right). So the lattice stands still and a highlight sweeps through
+it, three texture widths a second (one wrap every third of a second). The
+cockpit sphere's `data/weapons/textures/shieldhexagonal_alpha_internal.gtf` uses
+the same material. `time` is the engine clock
+([rcsmaterial.md](../../../formats/rcsmaterial.md), "A surface scrolls off an
+engine `time`").
+
+**Wired** (`oag_mesh::mesh::rcs::shield_scroll`): the rate is followed through
+the program's data flow (`oag_rcs::rcsmaterial::fragment::Program::clock_scroll_rate`:
+the `time` patch, a `MAD` by an unpatched literal, a texture read of that lane as
+`u`), never typed. It rides the glow table as `PROGRAM_SHIELD_LIGHTNING` with a
+zero lightning weight. Unwired from the same program: `constantAmbientColour`,
+the lit variants' light terms and the fog (our shell reads `Scene::off`).
+
+**It had never moved for a second reason.** The shield shell and cockpit sphere
+kept their own scene block, which nothing wrote, so `scene.time` stood at zero in
+every title's shader-side shield term, including the Omega lightning already
+wired. They now read the flame block (`Scene::off` plus the race's animation
+clock, `Race::world_clock_seconds`: tick-driven, never the wall clock).
+Pinned by `raceplay::tests::scene_blocks::the_shield_shell_and_sphere_read_the_clocked_block`,
+`raceplay::hd_shield_colour_ground_truth`, `rcs::rcsmaterial_ground_truth::the_shield_shell_material_scrolls_its_colour_at_three_a_second`
+and `game::shield_shell_scroll_ground_truth`.
+
+**Zone differs.** Our archive order loads `DATA00`'s Zone shell, whose material is
+`zonebattle_shield` (two textures, a plasma), not `hexagonalshield_rich`. Its
+program is unread and nothing scrolls it. Plain Zone raises no shield and Zone
+Battle has no `Mode` here, so no race of ours shows it.
+
+**2048 and Omega: ported** (their own recompiles of the same tap, plus a
+lightning layer: [Vita](../vita-2048-eu-v104/shield.md),
+[PS4](../ps4-omega-eu/shield.md), "The lattice scrolls").
+
 ## History
 
 - 2026-09-16: page created. `Shield.cpp`'s constructor, activate, update, hit
@@ -513,5 +570,6 @@ value decode land.
   Pulse's white pending the real call site). Ported behind a
   `oag_render::shield::Palette` selected by title in
   `crates/raceplay/src/load.rs`.
+- 2026-11-26: `shield-anim`. The lattice's colour scroll read off `hexagonalshield_rich` and wired; the shell's clock bug fixed.
 - 2026-11-03: `hd-shield-wire`. Per-team target wired on HD; Omega and 2048 checked.
 - 2026-11-03: `hd-shield-read`. Target colour read (per-team `ShieldColour` material parameter), `Activate`'s prototype corrected, live RPCS3 shield object read.

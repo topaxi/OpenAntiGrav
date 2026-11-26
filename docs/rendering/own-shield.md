@@ -69,6 +69,9 @@ file with `[graphics] own_shield = true` for "on".
 
 ## Open
 
+- **The clock terms (shimmer, travelling band) moved for the first time on 2026-11-26**: the shield drawables read no clock before ([HD shield page](../ghidra/functions/ps3-hdfury-eu/shield.md), "The lattice scrolls"). With the setting off nothing changed.
+- **The rim and facet terms read the eye from the origin**: `own_shield.wesl` builds its view direction from `scene.fog.camera`, and the block the shell reads is `Scene::off` (camera `(0, 0, 0)`), before and after that fix. The silhouette line and facet shading are therefore judged from the wrong eye.
+
 - A live hit's colour flash is the palette's; a brighter hit flare in the shader is a possible follow-up.
 - **The cockpit sphere was not seen.** In a headless `--camera-view internal` capture the frames with the setting on and
   off are byte-identical at ticks 345, so neither the disc's sphere nor ours showed anything there; the sphere's
