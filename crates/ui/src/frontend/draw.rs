@@ -331,8 +331,8 @@ pub enum Draw {
     /// A [`Self::Text`] whose horizontal scale differs from its vertical one, as a layout's
     /// `ScaleX`/`ScaleY` author it (`docs/formats/hd-hud.md`, "Text scales on two axes"): the
     /// glyph quads of `text`, whose own `scale` is the vertical one, are scaled by `x_scale`
-    /// about its `x`. A variant for the reason [`Self::ChamferedFill`] is one: only two
-    /// shipped widgets need it. Built with [`Self::stretched`].
+    /// about its `x`. A variant for the reason [`Self::ChamferedFill`] is one: only the
+    /// Detonator and Zone scores author the two axes apart. Built with [`Self::stretched`].
     Stretched {
         /// Horizontal scale over vertical scale.
         x_scale: f32,

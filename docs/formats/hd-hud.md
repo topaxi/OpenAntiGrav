@@ -1040,8 +1040,9 @@ are where it looks on the disc's own layouts.
 - **The colour is white in five modes.** A byte `Hud_BindWidgets` sets from
   the mode id picks white over blue in modes 8, 13, 14, 20 and 21 - Eliminator
   (single and multiplayer), Detonator and two unassigned ids. This build
-  races Eliminator, where the readout draws white; its `DamageBar` is a
-  different image from its `DamageBarBg`, so no fill is found and none drawn.
+  races Eliminator, where the readout draws white; its `DamageBar` is another
+  rectangle of its `DamageBarBg`'s sheet, the white stripes ("Detonator's score
+  box" below).
 - **The arcs are shown and hidden, never tinted.** `Hud_UpdateLapCounter`
   (`0x00096ef0`) shows `LapBar_k` while `k >= laps - lap`, and
   `Hud_UpdatePositionCounter` (`0x00096088`) shows `PosBar_k` while
@@ -1645,7 +1646,9 @@ about its anchor. Confidence 90, read off the file and checked against frames of
 against 139 (0.79) and 45 against 57 high, the ammo `14` 57 px wide against 62 (0.91); Zone's score
 digits are about 85 px high, 1.5 times Detonator's 55, where ours were 52 and are now 78. Still
 open on Zone: `Score` is `align="left"` and ours starts it at the box's middle, while the original's
-reads centred there (not read; present before this change).
+reads centred there (not read; present before this change). Ours therefore ends near the right
+bracket: a four-digit score clears it in a render, and a five-digit one would likely touch it
+(extrapolated from the digit width, not rendered).
 
 ## Detonator's score box (`det-hud-score-box`, 2026-11-26)
 
@@ -1675,12 +1678,17 @@ whole-frame column differs from the pair scorer's (which also fell on all four).
 remaining digit error is the original reading `100` and ours `0` (capture state). Both end-screen
 pairs are unchanged.
 
-**2048 and Omega.** Omega's `Detonator_HUD.xml` is HD's byte for byte apart from line endings, and
-its shield rules are HD's, so both changes apply to its HD mode through the shared reader (checked,
-applies; no Omega frame was rendered or compared). Vita 2048's `Detonator_HUD.xml` and
-`Zone_HUD.xml` author the same score scales, so the reader applies there too, unverified on screen;
-2048 has no shield runtime, so no fill. Omega's `2048_hud` Detonator layouts author uniform scales
-only.
+**2048 and Omega: both changes are live there through the shared reader, unverified on screen.**
+Omega's `Detonator_HUD.xml` is HD's byte for byte apart from line endings and its shield rules are
+HD's, so its HD mode now draws the Detonator and Eliminator stripes (and Duel's) and the stretched
+Detonator and Zone scores. Vita 2048's `Detonator_HUD.xml` and `Zone_HUD.xml` author the same score
+scales, so those two widgets draw stretched there wherever that layout is loaded; 2048 has no shield
+runtime, so no fill. Omega's `2048_hud` Detonator layouts author uniform scales only.
+
+Compared: Omega's `zone-vineta-k-z5` pair, whose original is a PS4 frame, has its `5911` 180 px
+wide and about 88 high; ours was 142 x 54 and is now 180 x 92 (mean grey 69.72 -> 69.53). Omega's
+other Zone pair (`zone-capital-reach-2048-z5`) and both Vita 2048 Zone pairs render
+pixel-identically before and after. No Omega Detonator or Eliminator frame was compared.
 
 ## See also
 
