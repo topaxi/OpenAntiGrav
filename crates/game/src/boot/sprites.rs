@@ -53,6 +53,13 @@ pub(super) fn block_art(
     let fury = fury_style(screens);
     let cursor = sprites.get(blocks.cursor_texture);
     let arrow = sprites.get(blocks.arrow_texture);
+    let marker = sprites.get(blocks.unselectable_arrow_texture);
+    if marker.is_none() {
+        report.push(format!(
+            "menu blocks: {} did not decode, so unselectable blocks carry no marker",
+            blocks.unselectable_arrow_texture
+        ));
+    }
     report.push(format!(
         "menu blocks: {} style, fill swatch alpha {fill_alpha:.3} then {solid_alpha:.3}, underline {}, arrows {}",
         if fury { "Fury" } else { "HD" },
@@ -73,6 +80,7 @@ pub(super) fn block_art(
         solid_alpha,
         cursor,
         arrow,
+        marker,
         fury,
     })
 }

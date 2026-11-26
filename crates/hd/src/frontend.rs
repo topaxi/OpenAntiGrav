@@ -258,6 +258,7 @@ pub const MENU_BLOCKS: oag_title::MenuBlocks = oag_title::MenuBlocks {
     frame_texture: names::MENU_BLOCK_FRAME,
     cursor_texture: names::MENU_STRIP_CURSOR,
     arrow_texture: names::MENU_LIST_ARROW,
+    unselectable_arrow_texture: names::MENU_UNSELECTABLE_ARROW,
     strip: oag_title::StripBlocks {
         // `HorizMenu_Construct`, `0x001b47c8`: `+0xe0 = 298.0`, the field
         // `HorizMenu_ParseXml` fills from `ItemWidth`.
@@ -739,6 +740,10 @@ pub mod names {
     /// 32x32 DXT texture in `DATA02`, drawn mirrored for the left one.
     /// `List_Construct`'s TOC slot `0x4cc`.
     pub const MENU_LIST_ARROW: &str = r"Data\FE\Images\HD_options_arrow.gtf";
+
+    /// An unselectable `<Block>`'s marker (`docs/ghidra/functions/ps3-hdfury-eu/menu-blocks.md`,
+    /// "An unselectable block's marker").
+    pub const MENU_UNSELECTABLE_ARROW: &str = r"Data\FE\Images\NonSelectable_Arrow_HD.gtf";
 
     /// The logo reel, as `DATA06`'s `skin.xml` spells it.
     ///

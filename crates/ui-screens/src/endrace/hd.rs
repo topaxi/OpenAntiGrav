@@ -928,6 +928,10 @@ const LABEL_INSET: (f32, f32) = (40.0, 3.0);
 /// `X + 8` (`0x008ac554`), `Y + 4` (`0x008ac588`).
 const ARROW_OFFSET: (f32, f32) = (8.0, 4.0);
 const ARROW_SIZE: f32 = 32.0;
+/// Where an unselectable Block's marker sits, `(17, 13)` (`0x008ac594`, `0x008ac5e0`), and its
+/// size, `16` square (`0x0018bdf0`).
+const MARKER_OFFSET: (f32, f32) = (17.0, 13.0);
+const MARKER_SIZE: f32 = 16.0;
 
 /// One `<Block>` as `Block_Render` draws it: the box, then the arrow on a
 /// focused selectable block while its blink is lit, then the label.
@@ -982,6 +986,21 @@ fn block_draw(
                 color: argb_to_rgba(tint),
             });
         }
+    }
+    if !block.selectable
+        && let Some(art) = frame.blocks
+        && let (Some(tint), Some(marker)) = (block.arrow_color, art.marker)
+    {
+        out.push(Draw::Sprite {
+            rect: [
+                block.x + MARKER_OFFSET.0,
+                block.y + MARKER_OFFSET.1,
+                MARKER_SIZE,
+                MARKER_SIZE,
+            ],
+            uv: marker.sheet_rect([0.0, 0.0, marker.width as f32, marker.height as f32]),
+            color: argb_to_rgba(tint),
+        });
     }
     if let Some((text, content)) = label {
         let mut positioned = text.clone();
