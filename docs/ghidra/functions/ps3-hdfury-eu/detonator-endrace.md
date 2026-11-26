@@ -210,9 +210,8 @@ Feisar), run to `EndRace Results`; each death **forced** by writing the shield (
   (**5.4 s** of game time, about ±0.7 s at the poll period). Between them the craft glows, then
   bursts into the particle cloud, and the panel wipes in.
 
-**Differences left in ours** (named, not fixed): the HD FE style's colours, the small triangle on
-the unselectable blocks, and the destroyed craft's glow and burst on black
-([endrace-screens.md](../../../ui/endrace-screens.md), "HD's text, glyph and frame against the
+**Differences left in ours** (named, not fixed): the HD FE style's colours and the destroyed
+craft's glow and burst on black ([endrace-screens.md](../../../ui/endrace-screens.md), "HD's text, glyph and frame against the
 original"). The text sizes, the `CONFIRM` glyph and the frame are fixed there.
 
 ## The wait before the results

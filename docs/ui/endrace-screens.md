@@ -162,7 +162,7 @@ finished one print the same rows; the stage row is the scoreboard's laps complet
 `4 / 14` (`hd_endrace_ground_truth::a_detonator_run_destroyed_in_stage_five_draws_four_of_fourteen_and_its_session_rows`).
 The loyalty block beside it draws as on every HD mode and pays on the same laps. The record notice
 (`RecordNotifyBlock`) and the `MiniText` captions draw, checked against two RPCS3 frames; the
-differences left (the HD style, the small block marker, the destruction's look) are listed under
+differences left (the HD style, the destruction's look) are listed under
 "HD's text, glyph and frame against the original" and in
 [detonator-endrace.md](../ghidra/functions/ps3-hdfury-eu/detonator-endrace.md#checked-against-the-original-2026-11-26-rpcs3).
 **Omega** carries the same filler and ids but keeps the built-in scoreboard (no `EndRace` screens
@@ -173,7 +173,7 @@ wired); **2048** has a four-row list on a `Results` page this build does not dra
 
 Measured on the 2026-11-26 RPCS3 Detonator frames (`data/reference/compare-page/hd/detonator-talons-endrace-*`
 in the compare repository) and on the HD Eliminator frame (`data/reference/hd-eliminator-score/results.png`);
-three faults on every HD `EndRace` screen:
+four faults on every HD `EndRace` screen:
 
 | Fault | Cause | Fix |
 | --- | --- | --- |
@@ -195,15 +195,18 @@ record `10.52 -> 8.38`, no-record `10.87 -> 8.88`.
   globals, so the blocks and highlight are red and the captions light grey. It is the FE Style
   setting ([hd-frontend.md](../formats/hd-frontend.md), "The FE Style switch is live"), not the end
   screen: a Fury-style player sees red here.
-- **A small white triangle** before `LOYALTY`, `TOTAL`, the record notice and the column heads (the
-  original's unselectable `<Block>`s). `Block_MakeSelectable`'s arrow is the selectable one only
-  ([menu-blocks.md](../ghidra/functions/ps3-hdfury-eu/menu-blocks.md)); what draws this one is
-  unread.
 - **Team badges** on the field grid (`Gridi.{row}`), as before.
 - **The background.** Behind the Detonator panel the original shows the destroyed craft's particle
-  burst on black; ours shows the race scene, the wreck and its HD explosion. The Eliminator frame
-  shows the race behind the panel, so the black is the Detonator end's own effect, not a backdrop
-  of the screen. It is unread.
+  burst on black; ours shows the race scene round the wreck. The camera is the same (mode 2's orbit,
+  wired below), and the HD Eliminator frame shows the race behind its panel, so the black and the
+  burst are the Detonator end's own effect, unread.
+
+**Also wired for the same frames:** the small white triangle before `LOYALTY`, `TOTAL`, the record
+notice and the column heads is an unselectable `<Block>`'s static marker
+([menu-blocks.md](../ghidra/functions/ps3-hdfury-eu/menu-blocks.md), "An unselectable block's
+marker"); and the results open 5.5 s after the blast with the camera orbiting the wreck
+([detonator-endrace.md](../ghidra/functions/ps3-hdfury-eu/detonator-endrace.md), "The wait before
+the results").
 
 ### `EndRace Results`, on an Eliminator race and a Zone run: their own tables
 
