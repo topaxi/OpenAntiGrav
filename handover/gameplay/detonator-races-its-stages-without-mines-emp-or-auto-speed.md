@@ -295,12 +295,20 @@ placement RNG cannot match the original's `Libc_Rand` (a departure, documented).
   reproduces it"): read at one held pose, the program fed the frame's live constants matches the original's body rim at the edge
   and is 0.1-0.15 high inside, where the camera-facing spikes overlap; no input term is missing. ~~Next: ours' spikes~~ done
   (`det-mine-spikes`, `detonator-mine-draw.md`, "The spikes in a pair"): the old `mines-ahead` pair carried no envelopes;
-  re-grabbed with them, ours' near mines are lit and spiked at the original's size (same theirs 15.44 -> 13.93). Open: re-grab
-  `cannon-volley` with envelopes (fire so the press lands at 1.87 s, not 2.20); `pad`'s floor is music-lit differently on a re-grab.
+  re-grabbed with them, ours' near mines are lit and spiked at the original's size (same theirs 15.44 -> 13.93). ~~Re-grab
+  `cannon-volley` with envelopes~~ done (`det-cannon-regrab`, 14.32 -> 13.35); `pad`'s floor is music-lit differently on a re-grab.
   The pair now takes each mine's envelope at the picture's tick (`detonator-mine-draw.md`, "The envelope at the picture's
   tick"); near-ball boxes within 20 grey. ~~The mine spin~~ wired (`det-mine-spin`, `detonator-mine-draw.md`, "The spin,
-  wired"): `mines-ahead` 13.17 -> 12.51 with the grab's ages pinned. Next: ours' `PitchVolume` band (0.03 against the
-  original's 0.32 on one frame); the spin on 2048 and Omega (their animate functions are not located).
+  wired"): `mines-ahead` 13.17 -> 12.51 with the grab's ages pinned. ~~Ours' `PitchVolume` band~~ read
+  (`det-mine-pitch-volume`, `detonator-mine-material.md`, "The visualiser's level"): both volumes are one whole-spectrum
+  level `L` (`clamp01(5 L)`, `clamp(L, 0, 0.4)`); a wiring (commit `5fac71320`, reverted) gave `mines-ahead` 12.51 -> 12.52
+  and `cannon-volley-hot` +0.04, so not kept. `PitchVolume` is worth 0.01 grey; `MasterVolume` 0.25. To land it: re-grab
+  `cannon-volley-hot` with the volume words so no pair falls back to `L = 0`. Next: the spin on 2048 and Omega (their
+  animate functions are not located). ~~The ring's own radius~~ measured (`det-mine-ring-radius`,
+  `detonator-mine-draw.md`, "The ring's radius"): ours already draws it at the original's (57.5 against 55.5 px on the middle
+  near mine; the side mines on the law's 74 and 60 px circles in both frames), and the three near mines' boxes carry 2.49 of
+  `mines-ahead`'s 12.5. ~~The upper-right scenery~~ fixed (`det-dark-scenery`: Talon's `scanlinebillboard`
+  hologram drew its advert in a Zone frame; `mines-ahead` 12.46 to 10.63). Next for that pair: the score panel (2.10, HUD).
   (3) ~~Ours builds the football and spikes with no tangent~~: wired (`Mesh::inline_tangents`, `+10`); the dark centre is
   gone, ours' core 143 -> 157.5 against the original's 188, so the body is still darker than the original's white.
 
@@ -490,6 +498,15 @@ positions differ by construction (ours places with its own seeded `Rng`), so a m
 | 7 | Hull | 6.6 % | 0.25-0.29 | 1.6-1.9 | Pose agrees (0.000 units, 0.9 degrees). Original: dark gunmetal body, blue strip lit, cyan wing edges. Ours was a pale silver body with white wing edges. **Cause read and fixed (90, `det-hull-look`, `detonator-look.md`, "The hull's paint"): `emissive` added the hull's second texture as a glow** (`detonator_stripe.gtf`, a facing ramp, on the panels; `detonator_ao.gtf`, the picture itself, on the body), and the panels' iridescent overlay `2 * Colour * AO * stripe(N.V)` is now drawn (`mesh::rcs::hull_overlay`, 85). Side-panel box mean RGB ours `(109.4, 97.4, 98.1)` to `(67.7, 50.1, 50.6)` (`(54.1, 30.9, 32.0)` with the glow refusal alone), original `(60.5, 44.2, 44.5)`; ours is now 6 grey above it, cause open; the other HD pairs unchanged. **Still open:** the fuselage's own overlay (`rich_iridescent`, the iridescence ramp at another coordinate), and the lit blue strip and cyan wing edges (the `Charge1`/`Charge2` block's writer, `detonator-hull.md`). **Cockpit glass fixed (2026-11-24, `det-pad-glass`):** `emissive_constant` (state `0x39`, `SrcAlpha`/`One`) drew black in Detonator's rig; drawn unlit the dome box reads (25, 56, 74) against the original's (34, 70, 91), lit (6, 0, 6) (55, chosen from the frame). The blue segmented gauge on the back is not this lane. |
 | 8 | HUD score panel | 5.7 % | 0.46-0.59 | 2.6-3.4 | The numbers, layout and clip pips agree; the translucent red panel in ours lets the bright sky through (the "red translucent layer"), the original's panel sits on a dark scene. Mostly row 1 bleeding through, not a HUD error; panel alpha not separately measured. |
 | 9 | HUD stage, energy, clip | 8 % | 0.05-0.14 | under 1 | Close: `1/14`, `100` (both, with ours held at rest) and the `15`/`12` clip match, including the clip falling to 12 after three volleys; the score reads 0 in the original and 100 in ours after its round hit a mine, ours' mines being elsewhere. |
+
+**The volley pair split (2026-11-26, `det-cannon-hot-gap`; `docs/tools/compare-page.md`, "The volley pair's difference, split").** Its
+capture state is partly fixed (picture lag off the static scene, ours at the picture's tick, mine ages; 11.47 to 10.32). **Open draw gaps, on every Detonator
+pair:** ~~bright striped grilles ours draws where the original is black~~ (fixed 2026-11-26, `det-dark-scenery`: the `scanlinebillboard` hologram's Zone variants draw the Zone surface, `docs/rendering/hd-zone-recolour.md`, "Holographic billboards in a Zone frame"; -hot 10.32 to 8.96, pad 7.60 to 5.88), the score box's white-striped wings (1.2), HUD digits
+and `1/14` too wide (1.2), hull too bright (0.7). ~~Open capture state: input latency before ours' fire, the volley pair's mine
+envelopes~~ carried (`det-cannon-regrab`, "The volley clocks and the picture-clock reads"). **Open from that grab:** ours' mine blast
+draws white puffs and long streaks where the original shows small shards and a `+100` (carrying `cannon-volley`'s destroyed mine takes it
+13.35 -> 14.05, so the mine is not carried); the craft's speed on the rounds is not carried (lowered no pair), and whether ours' round with it
+hits that mine at the original's age (10 ticks) is untested.
 
 **Hull camera and size, re-based (2026-11-23, `det-camera`).** The maintainer's "ours is far, the original is close" was true and the
 camera flags were not the cause: the pair fed the RAM body (2 to 4 ticks ahead of the presented frame) with the push-buffer camera, and

@@ -67,9 +67,21 @@ def platform(key):
 def detonator_input_lines(fire, go_tick_):
     """The lines of a Detonator pair's `ours.inputs`: idle through the countdown and up to the original's press, SQUARE (ours'
     cannon button) over the window the original's button was held, idle after; `fire` is `original.detonator.fire` of
-    `pair.json` (`None` for a pair with no shot)."""
+    `pair.json` (`None` for a pair with no shot).
+
+    Where the rounds' ages gave each volley's tick (`volley_clocks_s`) ours holds SQUARE for that one tick per volley and
+    lets go between: a release zeroes ours' trigger, so the next press fires on its own tick. The original's frames are
+    one or two ticks long, so its volleys are not spaced as a held trigger's are at 60 Hz."""
     if not fire:
         return ["%d none" % (go_tick_ + 1)]
+    volleys = fire.get("volley_clocks_s")
+    if volleys:
+        lines, at = [], 0
+        for clock in volleys:
+            tick = go_tick_ + round(clock * 60)
+            lines += ["%d none" % (tick - at), "1 square"]
+            at = tick + 1
+        return lines + ["1 none"]
     before = round(fire["press_clock_before_s"] * 60)
     held = max(1, round((fire["press_clock_after_s"] - fire["press_clock_before_s"]) * 60))
     return ["%d none" % (go_tick_ + before), "%d square" % held, "1 none"]
@@ -219,6 +231,33 @@ def gantry_pin(gantry_s, lag_ticks):
     original had not yet drawn. `None` (no windowed node: the board is gone) stays `None`.
     """
     return None if gantry_s is None else gantry_s - lag_ticks / 60
+
+
+def picture_tick(go_tick_, clock_s, total_lag_ticks):
+    """Ours' tick for a picture that is `total_lag_ticks` older than the RAM read at lap clock `clock_s`: a Detonator pair
+    whose lag was measured runs its rounds, mine hits, score and ammo to the picture's moment, not the HUD clock's."""
+    return go_tick_ + round(clock_s * 60 - total_lag_ticks)
+
+
+def detonator_picture_flags(rec, flags, go_tick_):
+    """`flags` with `--ticks` and the gantry pin at the picture's moment, for a Detonator pair whose lag was measured
+    (`original.presented_lag.picture_total_ticks`); any other pair's flags unchanged. Records ours' tick and clock."""
+    orig = rec.get("original") or {}
+    total = (orig.get("presented_lag") or {}).get("picture_total_ticks")
+    clock = orig.get("race_clock_s")
+    if "--pose-hold-ticks" not in flags or total is None or clock is None:
+        return flags
+    flags = list(flags)
+    ticks = picture_tick(go_tick_, clock, total)
+    rec["ours"]["ticks"] = ticks
+    rec["ours"]["race_clock_s"] = (ticks - go_tick_) / 60
+    if "--ticks" in flags:
+        flags[flags.index("--ticks") + 1] = str(ticks)
+    else:
+        flags += ["--ticks", str(ticks)]
+    if "--gantry-seconds" in flags and orig.get("gantry_seconds") is not None:
+        flags[flags.index("--gantry-seconds") + 1] = "%.6f" % gantry_pin(orig["gantry_seconds"], total)
+    return flags
 
 
 def tenths_matched_ticks(clock):

@@ -122,6 +122,7 @@ def rerender(pj, binary):
     lag = (orig.get("presented_lag") or {}).get("hud_clock_ticks")
     if rec["profile"] == "hd-fury" and "--gantry-seconds" in flags and orig.get("gantry_seconds") is not None and lag is not None:
         flags[flags.index("--gantry-seconds") + 1] = "%.6f" % ce.gantry_pin(orig["gantry_seconds"], lag)
+    flags = ce.detonator_picture_flags(rec, flags, ce.go_tick())
     plat = ce.platform(rec["profile"])
     flags = ce.profile_anisotropy_flags(flags, plat, rec.get("kind"))
     flags = ce.profile_pilot_assist_flags(flags, plat, rec.get("kind"))
