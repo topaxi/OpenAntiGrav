@@ -22,7 +22,7 @@ it falls behind because those roots author a drag of 0.92 a tick.
 | `0x0014a7d8` | `Rocket_SpawnCraftBlast` | 80 | spawns `WO_ROCKET_EXPLO` (tag `ROEX`) at a copied matrix, hands it the struck craft's velocity, submits a point light |
 | `0x00283b40` | `Psys_SetInheritedVelocity` | 82 | stores a vector at instance `+0x160` and recurses into `+0x24` and `+0x1b4` |
 | `0x0027c288` | `Psys_FindInstanceByHandle` | 80 | the handle table on `*(manager) + 0x468c` (key mod table size, stride 12, match on `+4`) |
-| `0x00149f70` | `Rocket_PushNearbyCraft_q` | 60 | for each other racer within a radius, adds `normalize(d) * (1 - |d| / radius) * strength` to the racer's `+0x110` |
+| `0x00149f70` | `Rocket_PushNearbyCraft` | 82 | for every racer but the firer within Rocket `blastradius` of the hit, adds `normalize(d) * (1 - |d| / blastradius) * blastforce` to its slot's pending impulse `+0x110` ([below](#the-push-2026-11-26-projectile-leftovers)) |
 | `0x00287168` | `Psys_PrepareInstance_q` | 62 | walks the record's sprite template list (gate `+0x9a4`, list `+0x9a8`) and makes a `0xa0`-byte particle for each |
 | `0x0028bb18` | `Psys_InitTemplateParticle_q` | 55 | initialises one template's particle from its record |
 
@@ -261,6 +261,153 @@ loads by `the_2048_craft_blast_loads_under_the_near_law` and
 ## Open
 
 - Where HD's template cap of 2.0 is read (above, "The cap").
-- `Rocket_PushNearbyCraft_q`'s radius and strength table (`*(TOC -0x2568) + 4 * *(... + 0xc)`,
-  fields `+0x20` and `+0x24`), and whether `+0x110` is the pending impulse Pulse's blasts post
-  ([weapon-lineage.md](../../../gameplay/weapon-lineage.md), "Blast push").
+- Which point of the craft the slot's `+0x50` is (the push's origin): Pulse's `T+0x50` is the
+  nose, 4.875 ahead; HD's is taken to be the same point (below, "Open from the push").
+- Omega's and 2048's own drains (below, "The other titles").
+
+## The push (2026-11-26, `projectile-leftovers`)
+
+Read in `llvm-objdump -d --mattr=+altivec,+vsx` over the decrypted `EBOOT.elf` (Ghidra stops at
+the Cell `lvlx` at `0x00149fa8`), TOC `0x008ad4d8` for every function here
+(`scripts/ps3-toc.py toc`: "exact"), strings resolved with `scripts/ps3-toc.py resolve`.
+
+**The law (confidence 82).** A Rocket's craft hit posts, for every racer but the firer,
+
+```text
+d = slot+0x50 - P                          ; P = rocket+0xf0
+if |d| < Rocket.blastradius:
+    slot+0x110 += (d / |d|) * (1 - |d| / Rocket.blastradius) * Rocket.blastforce
+```
+
+and once a tick the craft's drain spends `slot+0x110`:
+
+```text
+if slot+0x110 != 0:
+    if !(slot+0x200 & 0x10):                      ; the running Shield
+        p    = slot+0x110
+        side = body+0x1d0                         ; basis row 0, the right row
+        p    = side * (dot(side, p) >= 0 ? |p| : -|p|)
+        Body_ApplyImpulseAtPoint(body, body+0x200, p, 0)   ; at the centre: v += p * invMass
+        craft+0x2d8 += 0.5                        ; the stun
+    slot+0x110 = 0
+```
+
+`slot` is the craft's pickup slot (`*(ship+0x5edc)`, the object the Mine's and the Bomb's pushes
+write, [detonator-mine.md](detonator-mine.md), [detonator-bomb.md](detonator-bomb.md)), `body`
+its rigid body (`*(ship+0x6944)`), `craft` its engine object (`*(ship+0x5fac)`). So
+**`+0x110` is a pending impulse, not a velocity**, and HD spends it as Pulse's
+`Ship_ApplyCollisionImpulse` does (magnitude kept, a sign, one axis, `0.5` s of stun, nothing
+under a Shield), **along the craft's side axis, not its forward axis.**
+
+### `Rocket_PushNearbyCraft` (`0x00149f70`), 82
+
+```text
+00149f70  lwz  r9,-0x2578(r2) ; lwz r10,0(r9)    racer count, *0x00936fe8
+00149f80  lwz  r12,-0x2568(r2)                   stats sets, *0x009389a4
+00149fa0  lwz  r0,0xc(r12)                       the race's set index
+0014a008  lwzx r8,r12,r0                         Rocket record of that set
+00149fe8  cmpw cr7,r5,r10 ... bt 30,skip         r5 = firer: skipped
+0014a014  lvx  v11,r11,r6                        r6 = 0x50: slot+0x50
+0014a01c  vsubfp v11,v11,v0                      minus *r4, the point
+0014a034  vrsqrtefp ... vmaddfp                  one Newton step (0.5 at TOC -0x256c)
+0014a064  lfs  f0,0x20(r8) ; fcmpu ; bf 28,skip  |d| < blastradius
+0014a074  lfs  f13,0x24(r8)                      blastforce
+0014a078  fdivs ; fsubs f0,f11,f0 ; fmuls        (1.0 - |d| / R) * S (1.0 at TOC -0x2570)
+0014a0a0  vmaddfp v0,v13,v0,v1 ; stvx v0,0,r9    slot+0x110 += dir * that
+```
+
+The record's fields are named by `WeaponStats_ParseRocket` (`0x0002d9f8`, the `Rocket` branch
+of the stats walker `0x0002fab0`): `damage +0x08`, `venomspeed`..`phantomspeed +0x0c..+0x18`,
+`launchspeed +0x1c`, **`blastradius +0x20`**, **`blastforce +0x24`**, `spread +0x28`,
+`absorb +0x2c`, `slowdown_time +0x30`. `Rocket_HitCraft` reads the same record's `+0x08` as the
+struck craft's damage and `+0x30` as its slowdown, two more readers that agree on the layout.
+
+The call (`0x0014ac54`-`0x0014ac74`) passes `P` from `0x00123c80(rocket, &a, &b)`, which copies
+`rocket+0x90` and `rocket+0xf0`; `b`, the argument, is `+0xf0`, the rocket's previous position in
+the live table of [plasma.md](plasma.md) ("The objects, read live"). `r5` is `rocket+0x44`, the
+firer's index: **the firer is skipped and the struck craft is pushed**, the shape of Pulse's
+`Rocket_ApplyBlastForce` (`oag_weapons::projectile::blast`'s `blast_direct_hit`).
+
+**Every race blast is this function.** The same instructions, with only the record offsets
+changed, are the Plasma's `Plasma_PushNearbyCraft` (`0x00146470`, `+0xc4`/`+0xc8`, the
+Plasma's `blastradius`/`blastforce` in [plasma.md](plasma.md)'s parser table) and the Missile's
+`Missile_PushNearbyCraft` (`0x00142258`, in `MissileManager`'s span, `+0x4c`/`+0x50`, named
+`blastradius`/`blastforce` by `WeaponStats_ParseMissile` at `0x0002d6a8`). The Detonator Bomb's
+(`0x0012e598`) and Mine's (`0x0011aa88`) pushes write the same slot by the same falloff. So one
+switch for the title is faithful: `oag_title::weapons::Weapons::blast_push`.
+
+### `Ship_ApplyPendingImpulse` (`0x000d8a28`), 80
+
+```text
+000d8a38  lwz  r5,0x5edc(r3)                     the slot; none: return
+000d8a4c  li r9,0x110 ; lvx v13,r10,r9            pending; each of x, y, z tested against 0
+000d8a64  lwz r0,0x200(r10) ; rlwinm 0x10         the running Shield
+000d8acc  lwz r3,0x6944(r31)                     the body
+000d8ad4  vmaddfp ... vrsqrtefp ... (1.0, 0.5 at TOC -0x49c4, -0x49d4)   |p|
+000d8b34  lvx  v12,r9,r0                         r0 = 0x1d0: body row 0
+000d8b38  ... vcmpgefp. dot(row0, p) >= 0        sign
+000d8b70  vmaddfp v0,v12,v0,v9 ; stvx            p = row0 * (+-|p|)
+000d8b8c  bl   0x000f6348                        Body_ApplyImpulseAtPoint(body, r4, p, 0)
+000d8ba0  lfs f0,0x2d8(r9) ; fadds 0.5 ; stfs    *(ship+0x5fac)+0x2d8 += 0.5
+000d8a74  ... stvx (zero) to slot+0x110          consumed either way
+```
+
+The one caller (`0x000ead98`) passes `r4 = body+0x200`, the body's position
+([physics.md](physics.md), "The body's pose fields"), so the lever arm is zero and only
+`v += p * invMass` acts ([wall-response.md](wall-response.md), `Body_ApplyImpulseAtPoint`).
+Body row 0 is `cross(row1, row2)`, the right row ([rpcs3-capture.md](../../../reverse-engineering/rpcs3-capture.md),
+the pose fields; `wall-response.md` reads it as the right row too). `craft+0x2d8` is the stun:
+`Craft_ApplyLateralGrip` returns while it is positive ([hover-four-point.md](hover-four-point.md)),
+and [craft-flags.md](craft-flags.md) reads it as `stunned`. The caller skips the drain when the
+craft's state word is `2` (`0x000ead88`); that state is not named here.
+
+**Why 82 and 80, not higher.** Decompilation only, with consistent readers: three parsers' names
+agree with three push clones and with `Rocket_HitCraft`'s own reads, and the drain is the only
+reader of `slot+0x110` found among the 170 loads of `ship+0x5edc`. No breakpoint watched it
+run. The cheapest proof is one RPCS3 break at `0x000d8b8c` in the weapons-grid state of
+[particle-fill.md](../../../rendering/particle-fill.md), reading `slot+0x110` against body `+0x1d0`.
+
+### Against ours
+
+Pulse's law (`oag_physics::wall::post_blast_impulse` and `apply_pending_impulse`) is the same
+posting, the same falloff, the same skip of the firer, the same shield gate and stun. **The
+drain's axis differs**: ours projected onto `body.forward()`. HD's is the side row.
+
+**Pulse may have the same axis.** Pulse's `Ship_ApplyCollisionImpulse` projects onto the first
+row of `*(entity+0x794)` ([contact-response.md](../psp-pulse-usa/contact-response.md)), and
+[camera.md](../psp-pulse-usa/camera.md) reads that matrix's rows as **left, up, forward**
+(confidence 93). If both pages name the same object, Pulse's drain is a sideways push too, and
+ours is wrong on Pulse. Not changed here: open in the projectiles thread.
+
+Wired as `oag_physics::laws::Laws::pending_impulse_on_side` (`CraftLaws` per title: HD
+measured, 2048 and Omega inherited from HD, Pure and Pulse `false`), and HD's `blast_push`
+`Posted` (measured). The posting point is ours' nose point (`oag_physics::wall::nose_point`,
+Pulse's 4.875): HD's slot `+0x50` is taken to be the same point, as its `+0x90` is the centre
+`Rocket_HitCraft` spawns the blast at and Pulse's `T` object has the nose at `+0x50` and the
+centre at `+0x90` (confidence 60 for the point, open). Tests:
+`oag_physics` `wall::impulse::tests::on_side_a_pending_impulse_pushes_along_the_side_axis`,
+`oag_raceplay` `launch_hover::tests::the_blast_drain_axis_follows_the_title` and
+`tests::blast_push::hds_posted_blast_shoves_the_player_sideways` (HD's title data against
+Pulse's: reverting HD's `blast_push`, the laws mapping or the axis choice each turns it red).
+
+What the HD field felt before and after (2026-11-26, `OAG_REQUIRE_GAME_DATA=1`): the novice Score
+Eliminator pace test (`hd_eliminator_hud_ground_truth`), which went red when Pulse's forward
+drain was tried on HD, stays green; `hd_original_ai_ground_truth`,
+`omega_original_ai_ground_truth` and `vita_2048_original_ai_ground_truth` stay green.
+
+### The other titles
+
+- **Omega: checked, applies (posting), drain inherited.** `Rocket_HitCraft` (`0x0139a6b0`) ends in
+  the same loop: for every racer but the firer (`*(rocket + 0x78)`), `d = slot+0x50 - rocket+0x130`,
+  `|d| < record+0x24`, `slot+0x120 += normalize(d) * (1 - |d| / record+0x24) * record+0x28`. The
+  pending slot moved to `+0x120`. Its drain was not found (no reader of `slot+0x120` with a `0.5`
+  add among `VUCOMISS`/`VMOVUPS` loads of `+0x120`), so the side axis and the stun are
+  inherited from HD.
+- **2048: not checkable in this lane's time**, inherited from HD through Omega: its Rocket hit
+  (`Rocket_SpawnCraftBlast` `0x81206928`'s caller) was not read for the push.
+- **Fury** shares HD's executable.
+
+### Open from the push
+
+- The point at slot `+0x50` (nose or centre) and a live run of the drain (above).
+- Omega's and 2048's own drains.
