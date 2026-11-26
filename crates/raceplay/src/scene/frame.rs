@@ -713,7 +713,7 @@ impl Scene {
         // than the race clock these lists ride.
         // The flame surfaces' block: see `flame_scene`.
         oag_gpu::perfprobe::mark("ship-anims");
-        let flame_scene = super::scene_blocks::flame_scene(&scene, seconds);
+        let flame_scene = super::scene_blocks::flame_scene(&scene, eye.to_array(), seconds);
         self.write_scene_blocks(queue, block, &scene, &ship_scene, &flame_scene);
 
         // The sky rides with the eye. Translating it to the camera is what makes

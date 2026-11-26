@@ -69,21 +69,16 @@ impl Scene {
             drawable.share_scene(device, blocks, SceneKind::Flame);
         }
         // The shield shell and cockpit sphere scroll on the shader's clock (`PROGRAM_SHIELD_LIGHTNING`,
-        // `own_shield.wesl`). Their drawables' own block stays `Scene::off` with `time` at zero, so
-        // the disc's read the flame's: `Scene::off` plus the clock, and nothing else moves. Our
-        // own shield also needs the eye, so it reads a block of its own that adds only that.
+        // `own_shield.wesl`), and our own shield also reads the eye. Their drawables' own block stays
+        // `Scene::off` with `time` at zero, so they read the flame's: `Scene::off` plus the clock and
+        // the eye.
         for drawable in self
             .shield
             .iter_mut()
             .chain([&mut self.shield_cockpit])
             .flatten()
         {
-            let kind = if drawable.is_own_shield() {
-                SceneKind::OwnShield
-            } else {
-                SceneKind::Flame
-            };
-            drawable.share_scene(device, blocks, kind);
+            drawable.share_scene(device, blocks, SceneKind::Flame);
         }
         for spike in self.flare_spikes.iter_mut().flatten() {
             spike.drawable.share_scene(device, blocks, SceneKind::Flame);
@@ -197,41 +192,30 @@ impl Scene {
             block,
             [circuit, ship, &shine::shine_scene(ship), flame],
         );
-        self.scene_blocks.write(
-            queue,
-            block,
-            SceneKind::OwnShield,
-            &own_shield_scene(ship, flame),
-        );
-    }
-}
-
-/// Our own shield's block: the flame surfaces' with the view's eye, which the craft's carries.
-/// Fog and shadow stay off, as on the flame's, so the entry points leave the shell's colour
-/// as `own_shield.wesl` returns it.
-fn own_shield_scene(ship: &mesh_render::Scene, flame: &mesh_render::Scene) -> mesh_render::Scene {
-    mesh_render::Scene {
-        fog: mesh_render::Fog {
-            camera: ship.fog.camera,
-            ..flame.fog
-        },
-        ..*flame
     }
 }
 
 /// The flame surfaces' block (flares, boost plumes, flare spikes, and the shield shells and
-/// cockpit sphere that share it): `Scene::off` plus the clock and the title's output scale,
-/// taken from the circuit's `scene`.
+/// cockpit sphere that share it): `Scene::off` plus the clock, the view's eye and the title's
+/// output scale, taken from the circuit's `scene`.
 ///
-/// HD's live flame program closes its colour on `MAD /2`
-/// (`docs/ghidra/functions/ps3-hdfury-eu/engine-flare.md`, "The live fragment program is block
-/// #2"), which is `Light::output_scale` (0.5 on HD, 1.0 on every other title). No other draw on
-/// this block reads the scale. The program also fogs the colour with the circuit's fog, which
-/// at chase distance is a factor of 1 to four places; the block keeps fog off, so the shields
-/// sharing it are not fogged on a guess.
-pub(super) fn flame_scene(scene: &mesh_render::Scene, seconds: f32) -> mesh_render::Scene {
+/// HD's live flame program measures its rim from the camera's world position
+/// (`docs/ghidra/functions/ps3-hdfury-eu/engine-flare.md`, "The live vertex program") and closes
+/// its colour on `MAD /2` ("The live fragment program is block #2"), which is `Light::output_scale` (0.5 on HD, 1.0 on every other title).
+/// No other draw on this block reads the scale. The program also fogs the colour with the
+/// circuit's fog, which at chase distance is a factor of 1 to four places; the block keeps fog
+/// off, so the shields sharing it are not fogged on a guess.
+pub(super) fn flame_scene(
+    scene: &mesh_render::Scene,
+    eye: [f32; 3],
+    seconds: f32,
+) -> mesh_render::Scene {
     let off = mesh_render::Scene::off();
     mesh_render::Scene {
+        fog: mesh_render::Fog {
+            camera: eye,
+            ..mesh_render::Fog::off()
+        },
         time: [seconds; 4],
         light: off.light.with_output_scale(scene.light.output_scale),
         ..off
