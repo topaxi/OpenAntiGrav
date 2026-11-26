@@ -19,6 +19,30 @@ pub(crate) const AVAILABLE: bool = cfg!(not(any(
     target_arch = "wasm32"
 )));
 
+/// How a write went, once the platform knows: at once on a desktop and a phone, when the
+/// browser's promise settles on the web.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct Outcome(std::sync::Arc<std::sync::OnceLock<bool>>);
+
+impl Outcome {
+    /// A write whose result is already known.
+    pub(crate) fn known(took: bool) -> Self {
+        let outcome = Self::default();
+        outcome.settle(took);
+        outcome
+    }
+
+    /// Records the answer. The first one stands.
+    pub(crate) fn settle(&self, took: bool) {
+        let _ = self.0.set(took);
+    }
+
+    /// Whether the system took the text, or `None` while it has not said.
+    pub(crate) fn get(&self) -> Option<bool> {
+        self.0.get().copied()
+    }
+}
+
 static CTRL: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// Records whether a Control key is down, from the window's modifier events.
@@ -43,12 +67,12 @@ pub(crate) fn read() -> Option<String> {
     None
 }
 
-/// Puts `text` on the clipboard as plain text, and says whether the system took it.
+/// Puts `text` on the clipboard as plain text; the [`Outcome`] says whether the system took it.
 ///
 /// The desktop's clipboard object is kept for the life of the process: on Linux the text is served
 /// by the process that owns the selection, so a clipboard dropped at once would paste nothing.
 #[cfg(not(any(target_os = "android", target_os = "ios", target_arch = "wasm32")))]
-pub(crate) fn write(text: &str) -> bool {
+pub(crate) fn write(text: &str) -> Outcome {
     static HELD: std::sync::Mutex<Option<arboard::Clipboard>> = std::sync::Mutex::new(None);
     let mut held = HELD
         .lock()
@@ -56,45 +80,61 @@ pub(crate) fn write(text: &str) -> bool {
     if held.is_none() {
         *held = arboard::Clipboard::new().ok();
     }
-    held.as_mut()
-        .is_some_and(|clipboard| clipboard.set_text(text.to_owned()).is_ok())
+    Outcome::known(
+        held.as_mut()
+            .is_some_and(|clipboard| clipboard.set_text(text.to_owned()).is_ok()),
+    )
 }
 
 /// See the module doc.
 #[cfg(target_os = "android")]
-pub(crate) fn write(text: &str) -> bool {
-    oag_mobile::clipboard::write(text).is_ok()
+pub(crate) fn write(text: &str) -> Outcome {
+    Outcome::known(oag_mobile::clipboard::write(text).is_ok())
 }
 
-/// The browser's `navigator.clipboard.writeText`, which needs a secure page and the click that
-/// asked for it. Called through `js_sys` because `web-sys`'s clipboard is behind an unstable
-/// cfg. The promise is not awaited: a refusal after the call (permission) is not seen here.
+/// The browser's `navigator.clipboard.writeText`, which needs a secure page and may need the
+/// click that asked. Called through `js_sys` because `web-sys`'s clipboard is behind an unstable
+/// cfg. The answer is the promise's: a refusal (permission, no gesture) settles as not taken.
 #[cfg(target_arch = "wasm32")]
-pub(crate) fn write(text: &str) -> bool {
+pub(crate) fn write(text: &str) -> Outcome {
+    let Some(promise) = write_promise(text) else {
+        return Outcome::known(false);
+    };
+    let outcome = Outcome::default();
+    let settled = outcome.clone();
+    wasm_bindgen_futures::spawn_local(async move {
+        let result = wasm_bindgen_futures::JsFuture::from(promise).await;
+        if let Err(why) = &result {
+            log::warn!("the browser refused the clipboard write: {why:?}");
+        }
+        settled.settle(result.is_ok());
+    });
+    outcome
+}
+
+/// `writeText`'s promise, or `None` where the page has no clipboard or the call threw.
+#[cfg(target_arch = "wasm32")]
+fn write_promise(text: &str) -> Option<js_sys::Promise> {
     use wasm_bindgen::JsCast;
-    let Some(window) = web_sys::window() else {
-        return false;
-    };
-    let navigator = window.navigator();
-    let Ok(clipboard) = js_sys::Reflect::get(&navigator, &"clipboard".into()) else {
-        return false;
-    };
+    let navigator = web_sys::window()?.navigator();
+    let clipboard = js_sys::Reflect::get(&navigator, &"clipboard".into()).ok()?;
     if clipboard.is_undefined() || clipboard.is_null() {
-        return false;
+        return None;
     }
-    let Ok(function) = js_sys::Reflect::get(&clipboard, &"writeText".into()) else {
-        return false;
-    };
-    function
+    js_sys::Reflect::get(&clipboard, &"writeText".into())
+        .ok()?
         .dyn_into::<js_sys::Function>()
-        .and_then(|function| function.call1(&clipboard, &text.into()))
-        .is_ok()
+        .ok()?
+        .call1(&clipboard, &text.into())
+        .ok()?
+        .dyn_into::<js_sys::Promise>()
+        .ok()
 }
 
 /// See the module doc.
 #[cfg(target_os = "ios")]
-pub(crate) fn write(_text: &str) -> bool {
-    false
+pub(crate) fn write(_text: &str) -> Outcome {
+    Outcome::known(false)
 }
 
 #[cfg(test)]
