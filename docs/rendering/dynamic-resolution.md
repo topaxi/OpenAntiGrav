@@ -1006,7 +1006,8 @@ battery that may be the better trade for a player.
 
 #### What a rise rule that survives this needs
 
-Not implemented, and none of it measured:
+Written before the probe rise was built; what was built is in
+[The probe rise](#the-probe-rise) below:
 
 - **The rise is the stuck half, not the budget.** In two traced unpinned Zone runs the residual
   stayed between 2.3 and its opening 3.33 ms of the 16.67 ms period, so it had not tightened the
@@ -1029,6 +1030,41 @@ Not implemented, and none of it measured:
   more size changes per minute, and no change on a GPU that holds its clock.
 - **TARGET FPS `original`** also steps on a GPU duration
   ("A title's own width throttle"). Whether a falling clock holds it down too is unmeasured.
+
+### The probe rise
+
+[ADR-0096](../architecture/adr/0096-dynamic-resolution-probes-a-rise-a-falling-clock-hides.md),
+`oag_present::drs::probe`. After `HOLD_SECONDS` (4 s) below the ceiling with every reading quiet
+(at or under the deadband's top, a wall-clock frame no longer than `LATE_PERIODS` (1.25) periods,
+no step), the controller steps up one grid point on trial. For `RAMP_SECONDS` only a late frame
+moves the scale; then it samples the scalable cost for `SAMPLE_SECONDS` and keeps the step only if
+the mean is at or under `KEEP_SHARE` (0.92) of the pre-step cost times `(next / here)^2` and at or
+under the deadband's top. A reverted probe doubles the next hold, up to 128 s; a kept one clears
+the backoff. `RISE_PATIENCE` and the overshoot guard are unchanged on the normal rise.
+
+Why the keep test is a ratio and not "no late frame": under smooth vsync and a limiter a GPU-bound
+frame shows as a slightly long interval, not a doubled one, so a late-frame test alone keeps
+almost every probe. A GPU at a steady clock pays the full `(next / here)^2` for a step (the Deck's
+race pass pinned: 0.99 to 1.00 of its full-size cost times the scale squared), a governor that
+raises its clock pays about `1 / (next / here)^2` of it (0.886 to 0.905).
+
+**The governor's ramp.** PENDING: the Deck's clock was pinned during the first half of this lane.
+
+**A GPU at a steady clock does not move.** The Deck with its clock pinned at 1600 MHz is one, so
+the same 4K Zone race as above ran with and without the probe (`432db773b` against `a051cfef3`,
+70 s, sound on, Deck load 1.3 to 2.3):
+
+| Pinned, Zone 3840x2160 | settled scale (second half), per run | size changes a minute | probes |
+| --- | --- | --- | --- |
+| Before | 0.966, 0.963 | 32, 34 | |
+| After | 0.963, 0.965, 0.960 | 32, 28, 32 | one a run (0.90 to 0.95), all three reverted, 0.09, 0.6 and 1.0 s after the step |
+
+**The workstation never reaches the probe.** HD Zone at 3840x2160 under the Deck's settings on
+the RX 7800 XT, in a headless gamescope at 60 Hz: the race pass is 1.3 ms, so the scale holds 1.00
+with and without the probe (one run each, workstation load 47 to 64, which made the loop CPU
+bound); at the ceiling there is nothing to probe.
+
+**On the Deck, unpinned.** PENDING.
 
 ## On the Steam Deck: TARGET FPS `original` against the budget loop
 
