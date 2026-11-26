@@ -423,12 +423,18 @@ impl Layout {
     }
 
     fn label_from(&mut self, node: &Node, offset_x: f32, offset_y: f32) -> Option<Label> {
+        // `ScaleX`/`ScaleY` per axis, each falling back to the uniform `scale`; no shipped widget
+        // authors both spellings.
+        let uniform = number(&self.constants, node.value("scale")).unwrap_or(1.0);
+        let scale = number(&self.constants, node.value("ScaleY")).unwrap_or(uniform);
+        let scale_x = number(&self.constants, node.value("ScaleX")).unwrap_or(uniform);
         Some(Label {
             name: anonymous_or(node),
             x: offset_x + number(&self.constants, node.value("x")).unwrap_or(0.0),
             y: offset_y + number(&self.constants, node.value("y")).unwrap_or(0.0),
             font: node.value("font").map(Font::parse).unwrap_or_default(),
-            scale: number(&self.constants, node.value("scale")).unwrap_or(1.0),
+            scale,
+            stretch: if scale > 0.0 { scale_x / scale } else { 1.0 },
             color: colour(&self.constants, node.value("Color")),
             border: node
                 .value("BorderColor")

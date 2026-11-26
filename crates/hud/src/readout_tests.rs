@@ -163,6 +163,7 @@ fn a_bottom_anchored_label_is_lifted_by_its_own_line_height() {
         y: 37.0,
         font: Font::Hud,
         scale: 1.0,
+        stretch: 1.0,
         color: [1.0; 4],
         border: None,
         align: Align::Left,
@@ -565,5 +566,41 @@ fn a_best_lap_in_centiseconds_prints_as_stored() {
     assert_eq!(
         crate::format_lap_time(3380, crate::Precision::Hundredths),
         "0.56.33"
+    );
+}
+
+/// `ScaleX`/`ScaleY` read per axis, and a widget that authors the two apart draws stretched:
+/// `Detonator_HUD.xml`'s score is `0.9` across and `1.0` up.
+#[test]
+fn a_per_axis_text_scale_draws_stretched() {
+    let layout = Layout::from_xml(
+        r#"<Screen><Text name="DetonatorScore">
+             <Values ScaleX="0.9" ScaleY="1.0" font="HUD" x="10" y="10"/>
+           </Text>
+           <Text name="DetonatorStage">
+             <Values ScaleX="0.8" ScaleY="0.8" font="HUD" x="10" y="40"/>
+           </Text></Screen>"#,
+    );
+    let score = layout.label("DetonatorScore").expect("authored");
+    assert_eq!((score.scale, score.stretch), (1.0, 0.9));
+    let stage = layout.label("DetonatorStage").expect("authored");
+    assert_eq!((stage.scale, stage.stretch), (0.8, 1.0));
+    let readout = Readout {
+        detonator: Some(crate::Detonator::default()),
+        ..Readout::blank()
+    };
+    let strings = strings();
+    let frame = draw_list(&context(&layout, &strings), &readout);
+    let stretched = frame
+        .hud_text
+        .iter()
+        .filter(|draw| matches!(draw, Draw::Stretched { x_scale, .. } if *x_scale == 0.9))
+        .count();
+    assert!(stretched >= 1, "{:?}", frame.hud_text);
+    assert!(
+        frame
+            .hud_text
+            .iter()
+            .any(|draw| matches!(draw, Draw::Text { scale, .. } if *scale == 0.8))
     );
 }

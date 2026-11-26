@@ -114,6 +114,7 @@ fn dimmed(draw: &Draw, copies: u32) -> Draw {
             *color = alpha(*color);
             *border = border.map(alpha);
         }
+        Draw::Stretched { text, .. } => **text = dimmed(text, copies),
         _ => {}
     }
     out
@@ -138,6 +139,7 @@ fn anchor(draw: &Draw, centres: &[[f32; 2]]) -> Option<[f32; 2]> {
             )
         }
         Draw::Text { x, y, .. } => Some([*x, *y]),
+        Draw::Stretched { text, .. } => anchor(text, centres),
         _ => None,
     }
 }
@@ -155,6 +157,7 @@ fn moved(draw: &Draw, by: [f32; 2]) -> Draw {
             *x += by[0];
             *y += by[1];
         }
+        Draw::Stretched { text, .. } => **text = moved(text, by),
         _ => {}
     }
     out

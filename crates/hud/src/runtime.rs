@@ -141,10 +141,10 @@ pub(super) fn tinted(cx: &Context<'_>, readout: &Readout, sprite: &Sprite) -> Op
 /// `arcade_hud.xml` composes two widgets by that name - the hexagon's own,
 /// and an unrelated pickup-bar piece - and the original's name lookup
 /// (`0x0067e6d0`) was not read far enough to say which it binds. The one
-/// taken here is the one sharing its background's texture and source
-/// rectangle, which is the hexagon's; three frames of the running original
-/// show that hexagon filled blue, which a bound pickup piece would have left
-/// in its authored red.
+/// taken here shares its background's texture, preferring the same source
+/// rectangle (the hexagon's). `Detonator_HUD.xml`'s one authors the white
+/// stripes at another rectangle of the same sheet
+/// (`docs/formats/hd-hud.md`, "Detonator's score box").
 pub(super) fn shield_fill(
     cx: &Context<'_>,
     readout: &Readout,
@@ -154,9 +154,15 @@ pub(super) fn shield_fill(
     if background.name != shield.background {
         return None;
     }
-    let fill = cx.layout.sprites.iter().find(|sprite| {
-        sprite.name == shield.fill && sprite.src == background.src && sprite.uv == background.uv
-    })?;
+    let candidates = || {
+        cx.layout
+            .sprites
+            .iter()
+            .filter(|sprite| sprite.name == shield.fill && sprite.src == background.src)
+    };
+    let fill = candidates()
+        .find(|sprite| sprite.uv == background.uv)
+        .or_else(|| candidates().next())?;
     let fraction = percent(readout) * 0.01;
     if fraction <= 0.0 {
         return None;

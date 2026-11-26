@@ -1284,8 +1284,8 @@ fn list(cx: &Context<'_>, readout: &Readout, sight: Sight) -> Frame {
             Font::Skin => &mut frame.skin_text,
             Font::Hud => &mut frame.hud_text,
         };
-        list.extend(shadow);
-        list.push(draw);
+        list.extend(shadow.map(|draw| draw.stretched(label.stretch)));
+        list.push(draw.stretched(label.stretch));
     }
 
     // The whole HUD, sprites and text alike, slides with the drawn lean on the titles that

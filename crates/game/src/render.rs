@@ -801,11 +801,18 @@ impl Renderer {
                 }
                 segments.push((self.quads.len() as u32, rect));
             }
+            // A stretched text is laid out as its text, then its quads are scaled about its anchor.
+            let (draw, stretch) = match draw {
+                Draw::Stretched { x_scale, text } => (text.as_ref(), Some(*x_scale)),
+                other => (other, None),
+            };
             let quads_before = self.quads.len();
             if warp_end.is_none() && warp.as_ref().is_some_and(|w| index >= w.until) {
                 warp_end = Some(quads_before);
             }
             match draw {
+                // Unwrapped above.
+                Draw::Stretched { .. } => {}
                 Draw::GlowStamp { rect, value } => stamps.push(glow::Stamp::Value(*rect, *value)),
                 Draw::GlowTexel => stamps.extend(
                     self.quads[last_sprite.clone()]
@@ -1041,6 +1048,9 @@ impl Renderer {
                             .push_text(slot, *x, *y, *scale, *color, border, *align, text, bounds),
                     }
                 }
+            }
+            if let (Some(k), Draw::Text { x, .. }) = (stretch, draw) {
+                text::stretch_quads(&mut self.quads[quads_before..], *x, k);
             }
             if matches!(draw, Draw::Text { .. } | Draw::FacedText { .. }) {
                 last_text = quads_before..self.quads.len();

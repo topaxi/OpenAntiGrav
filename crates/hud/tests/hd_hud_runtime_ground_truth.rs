@@ -35,14 +35,11 @@ const DEFAULT_SKIN: &[&str] = &[
 
 /// `(root, DamageBar widgets, of which share DamageBarBg's source rectangle)`.
 ///
-/// **One fill per layout that has a hexagon, whichever way the name is
-/// repeated.** `arcade_hud.xml` composes two `DamageBar`s (the hexagon's own
-/// and a pickup-bar piece), and `runtime::shield_fill` takes the one sharing
-/// its background's texture and source rectangle. That rule has to pick
-/// exactly one wherever a hexagon is drawn, and it picks none on the three
-/// layouts whose `DamageBar` is a different image from its background -
-/// Eliminator's, Detonator's and Duel's, where the fill is left undrawn
-/// rather than guessed at. Measured 2026-09-23.
+/// `arcade_hud.xml` composes two `DamageBar`s (the hexagon's own and a
+/// pickup-bar piece), and `runtime::shield_fill` takes the one sharing its
+/// background's texture, preferring the same source rectangle. Eliminator's,
+/// Detonator's and Duel's one `DamageBar` is another rectangle of the same
+/// sheet: Detonator's is the score box's white stripes. Measured 2026-09-23.
 const FILLS: &[(&str, usize, usize)] = &[
     ("/data/xml/arcade_hud.xml", 2, 1),
     ("/data/xml/elimination_hud.xml", 1, 0),
@@ -77,6 +74,62 @@ fn one_damage_bar_shares_its_background_s_source_rectangle() {
         measured.push((root, fills.len(), matching));
     }
     assert_eq!(measured, FILLS);
+}
+
+/// The stripes the layout authors are where the fill goes: one `DamageBar` on
+/// its background's sheet, at another rectangle, in the three layouts whose
+/// bar is not their background's own image.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_striped_fill_shares_its_background_s_sheet() {
+    let Some(mut archives) = open() else {
+        return;
+    };
+    let shield = oag_hd::hud::RUNTIME.shield;
+    for (root, uv) in [
+        ("/data/xml/elimination_hud.xml", [0.0, 135.0, 344.0, 115.0]),
+        ("/data/xml/detonator_hud.xml", [0.0, 790.0, 553.0, 200.0]),
+        (
+            "/data/xml/duel_hud/duel_hud.xml",
+            [0.0, 728.0, 480.0, 200.0],
+        ),
+    ] {
+        let layout = composed(&mut archives, root).layout;
+        let background = layout.sprite(shield.background).expect("a hexagon");
+        let fills: Vec<&hud::Sprite> = layout
+            .sprites
+            .iter()
+            .filter(|s| s.name == shield.fill && s.src == background.src)
+            .collect();
+        assert_eq!(fills.len(), 1, "{root}");
+        assert_eq!(fills[0].uv, uv, "{root}");
+    }
+}
+
+/// `Detonator_HUD.xml` scales its score and stage on two axes: the score is
+/// narrower than it is tall, the stage 0.8 on both.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn detonator_s_text_scales_are_read_per_axis() {
+    let Some(mut archives) = open() else {
+        return;
+    };
+    let layout = composed(&mut archives, "/data/xml/detonator_hud.xml").layout;
+    let scales = |name: &str| {
+        let label = layout.label(name).expect("authored");
+        (label.scale * label.stretch, label.scale)
+    };
+    for (name, expected) in [
+        ("DetonatorScore", (0.9, 1.0)),
+        ("DetonatorStage", (0.8, 0.8)),
+        ("PulseBullets", (0.9, 0.9)),
+    ] {
+        let (x, y) = scales(name);
+        assert!(
+            (x - expected.0).abs() < 1e-6 && (y - expected.1).abs() < 1e-6,
+            "{name}: {x} x {y}"
+        );
+    }
 }
 
 /// Every segment either arc names is authored, in every default-skin layout
