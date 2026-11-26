@@ -293,8 +293,10 @@ placement RNG cannot match the original's `Libc_Rand` (a departure, documented).
   body rim is about 0.4-0.7, not 0: its tangent-space `V` is off-normal. ~~Next: patch the football's fragment program in
   VRAM to output `normalize(f[TC1])`~~ done (`det-mine-body-white`, 2026-11-26, "The white is before post, and the program as read
   reproduces it"): read at one held pose, the program fed the frame's live constants matches the original's body rim at the edge
-  and is 0.1-0.15 high inside, where the camera-facing spikes overlap; no input term is missing. Next: ours' spikes (none visible
-  on the `mines-ahead` near mine, long and white in the original) and the pair's picture lag (ours' ball half the size).
+  and is 0.1-0.15 high inside, where the camera-facing spikes overlap; no input term is missing. ~~Next: ours' spikes~~ done
+  (`det-mine-spikes`, `detonator-mine-draw.md`, "The spikes in a pair"): the old `mines-ahead` pair carried no envelopes;
+  re-grabbed with them, ours' near mines are lit and spiked at the original's size (same theirs 15.44 -> 13.93). Open: re-grab
+  `cannon-volley` with envelopes (fire so the press lands at 1.87 s, not 2.20); `pad`'s floor is music-lit differently on a re-grab.
   (3) ~~Ours builds the football and spikes with no tangent~~: wired (`Mesh::inline_tangents`, `+10`); the dark centre is
   gone, ours' core 143 -> 157.5 against the original's 188, so the body is still darker than the original's white.
 
