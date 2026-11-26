@@ -189,7 +189,7 @@ fn predict(race: &race::Race) -> [Option<Impact>; MAX_PROJECTILES] {
         cage,
         race.core.sim.weapon_stats(),
         "VENOM",
-        race.core.sim.floor_arms(),
+        race.core.sim.flight_laws(),
         race.core.sim.own_craft_probe(),
         race.core.sim.plasma_release(),
         oag_weapons::projectile::BlastPush::Posted,
@@ -574,7 +574,10 @@ fn fly_the_released_bolt_with_chosen_arms() {
             None,
             race.core.sim.weapon_stats(),
             "VENOM",
-            arms,
+            oag_weapons::projectile::FlightLaws {
+                floor_arms: arms,
+                ..race.core.sim.flight_laws()
+            },
             race.core.sim.own_craft_probe(),
             race.core.sim.plasma_release(),
             oag_weapons::projectile::BlastPush::Posted,

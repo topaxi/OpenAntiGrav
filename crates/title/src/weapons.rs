@@ -145,6 +145,10 @@ pub struct Weapons {
     /// Whether the firing craft's own box collider hides the track from a projectile's surface
     /// probe, and what a probe that meets it does. See [`OwnCraftBox`].
     pub own_craft_box_hides_track: crate::pre_race::Sourced<OwnCraftBox>,
+    /// How far each flyer's surface probe reaches. See [`ProbeLengths`].
+    pub surface_probe_lengths: crate::pre_race::Sourced<ProbeLengths>,
+    /// What a Rocket does on an update its surface probe finds nothing. See [`RocketOpenAir`].
+    pub rocket_open_air: crate::pre_race::Sourced<RocketOpenAir>,
     /// Which terms of `WeaponAi_DecideFireOrAbsorb` the title's opponents roll
     /// by, on the [`Self::ai`] odds.
     pub opponent_fire: crate::pre_race::Sourced<OpponentFire>,
@@ -255,6 +259,52 @@ pub enum LeachDrain {
     /// (`docs/ghidra/functions/ps3-hdfury-eu/weapons.md`, confidence 80). See
     /// `oag_weapons::projectile::leach_beam::trip`.
     PerTrip,
+}
+
+/// How far along its carried normal each flyer's surface probe reaches, in world units.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ProbeLengths {
+    /// The Rocket's.
+    pub rocket: f32,
+    /// The Missile's.
+    pub missile: f32,
+    /// The Plasma bolt's.
+    pub plasma: f32,
+    /// The Shuriken's.
+    pub shuriken: f32,
+}
+
+impl ProbeLengths {
+    /// Pulse's: `Rocket_Update` casts `6.0`; `Missile_Update`, `Plasma_Update` and
+    /// `Shuriken_Update` `12.0`.
+    pub const PULSE: Self = Self {
+        rocket: 6.0,
+        missile: 12.0,
+        plasma: 12.0,
+        shuriken: 12.0,
+    };
+    /// HD's Rocket, Missile and Plasma, `6.0` live
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/own-craft-box.md`, "Measured live"). The Shuriken's
+    /// is unmeasured and takes Pulse's.
+    pub const HD: Self = Self {
+        rocket: 6.0,
+        missile: 6.0,
+        plasma: 6.0,
+        shuriken: 12.0,
+    };
+}
+
+/// What a Rocket does on an update its surface probe finds nothing: open air, or the firer's own
+/// box where [`OwnCraftBox::Falls`] hides the track.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RocketOpenAir {
+    /// It falls, `velocity.y -= 50 * dt`: Pulse's `Rocket_Update`
+    /// (`docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`).
+    Falls,
+    /// It does not fall: the velocity turns parallel to the carried normal at the class speed, as
+    /// on a floor, and the normal is kept. HD's `Rocket_Update`
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/own-craft-box.md`, "The Rocket on `0x7f`").
+    TurnsAlongNormal,
 }
 
 /// What the firing craft's own box does to its projectiles' surface probes.

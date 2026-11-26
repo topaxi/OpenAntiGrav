@@ -721,6 +721,10 @@ pub struct SimSetup {
     /// What the firing craft's box does to its projectiles' first probes,
     /// `oag_title::weapons::Weapons::own_craft_box_hides_track`.
     pub own_craft_box_hides_track: oag_title::weapons::OwnCraftBox,
+    /// `oag_title::weapons::Weapons::surface_probe_lengths`.
+    pub surface_probe_lengths: oag_title::weapons::ProbeLengths,
+    /// `oag_title::weapons::Weapons::rocket_open_air`.
+    pub rocket_open_air: oag_title::weapons::RocketOpenAir,
     /// Which ways a craft is put back are on, and the numbers they fire on:
     /// `oag_race::recovery::ResetTriggers::PULSE` with the title's
     /// `oag_title::Title::reset_enables` applied.

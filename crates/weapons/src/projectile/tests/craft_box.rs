@@ -21,7 +21,7 @@ fn venom() -> Dimensions {
 }
 
 /// A body whose recorded rows are `(-right, up, forward)` (`Basis::LeftUpForward`).
-fn body_from_rows(rows: [[f32; 3]; 3], position: Vec3) -> Body {
+pub(super) fn body_from_rows(rows: [[f32; 3]; 3], position: Vec3) -> Body {
     let left = Vec3::from(rows[0]);
     let up = Vec3::from(rows[1]);
     let forward = Vec3::from(rows[2]);

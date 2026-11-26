@@ -286,6 +286,16 @@ pub const TITLE: &Title = &Title {
         own_craft_box_hides_track: oag_title::pre_race::Sourced::measured(
             oag_title::weapons::OwnCraftBox::Absent,
         ),
+        // Pulse's, inherited: not read here, and HD's `6.0` lengths are not carried over.
+        surface_probe_lengths: oag_title::pre_race::Sourced::inherited(
+            oag_title::weapons::ProbeLengths::PULSE,
+            "Wipeout Pulse",
+        ),
+        // Pulse's, inherited: this title's `Rocket_Update` open-air arm is unread.
+        rocket_open_air: oag_title::pre_race::Sourced::inherited(
+            oag_title::weapons::RocketOpenAir::Falls,
+            "Wipeout Pulse",
+        ),
         // Measured: 2048's `WeaponAi_DecideFireOrAbsorb` equals Omega's law
         // (`vita-2048-eu-v104/weapon-ai-fire.md`).
         opponent_fire: oag_title::pre_race::Sourced::measured(

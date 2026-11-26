@@ -228,7 +228,7 @@ impl Race {
         // against. See `RaceView::before_projectile_step`.
         #[cfg(feature = "view")]
         let before = self.view.before_projectile_step(&self.core.sim.world);
-        let floor_arms = self.core.sim.floor_arms();
+        let laws = self.core.sim.flight_laws();
         let own_craft = self.core.sim.own_craft_probe();
         let plasma_release = self.core.sim.plasma_release();
         let impacts = oag_weapons::projectile::step(
@@ -243,7 +243,7 @@ impl Race {
                 .map(|cage| cage as &dyn oag_physics::cage::Containment),
             self.core.sim.weapons.as_deref(),
             &self.core.sim.class,
-            floor_arms,
+            laws,
             own_craft,
             plasma_release,
             match self.core.sim.blast_push {
