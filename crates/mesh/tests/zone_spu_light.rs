@@ -405,6 +405,55 @@ fn a_black_zone_surface_turns_the_lights_colour_and_a_plain_chunk_multiplies_it(
     assert_near(pixel[2], 0, "no marker", pixel);
 }
 
+/// A circuit built against the stage light (`zone_stage_light`) draws what the uniform-driven Zone
+/// branches draw: a chunk on its Zone program, a plain chunk, and an emissive plain chunk, each
+/// under a sun, an ambient and an SPU light. The three expected pixels differ from one another, so
+/// a build that lights one kind as another fails.
+#[test]
+fn the_stage_light_pipeline_draws_what_the_zone_branches_draw() {
+    let instance = wgpu::Instance::default();
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let (device, queue) =
+        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+            .expect("requesting the device");
+    let art = stage_art(&texture("grey stage", [128, 128, 128, 255]));
+    let mut lit = scene(&[LIGHT]);
+    lit.fog.enabled = 0.0;
+    lit.light = mesh_render::Light::authored(
+        [0.0, 0.0, 1.0],
+        [0.4, 0.2, 0.1],
+        [0.2, 0.3, 0.4],
+        [1.0; 3],
+        [1.0; 3],
+        0.0,
+    )
+    .with_output_scale(OUTPUT_SCALE);
+
+    let kinds = [
+        ("a Zone chunk", slots::DEFAULT),
+        ("a plain chunk", slots::DEFAULT | slots::ZONE_PLAIN),
+        (
+            "an emissive plain chunk",
+            slots::DEFAULT | slots::ZONE_PLAIN | slots::EMISSIVE,
+        ),
+    ];
+    let mut seen = Vec::new();
+    for (what, bits) in kinds {
+        let quad = model([200, 200, 200, 255], bits);
+        let uniform = draw_built(&device, &queue, &quad, &art, lit, None, true, false);
+        let built = draw_built(&device, &queue, &quad, &art, lit, None, true, true);
+        assert_eq!(built, uniform, "{what}");
+        assert!(
+            !seen.contains(&built),
+            "{what} reads like another kind: {built:?}"
+        );
+        seen.push(built);
+    }
+}
+
 /// The centre texel of the quad drawn into HD's race target, with a craft's coverage map of
 /// `coverage` everywhere when one is given.
 fn draw(
@@ -415,6 +464,26 @@ fn draw(
     scene: Scene,
     coverage: Option<u8>,
 ) -> [u8; 4] {
+    draw_built(device, queue, model, stage, scene, coverage, false, false)
+}
+
+/// [`draw`] with the build told it is a circuit's (`prepass`) and, with `stage_light`, built in a
+/// scope whose race lights it by the stage alone (`BuildCacheScope::zone_stage_light`).
+#[allow(clippy::too_many_arguments)]
+fn draw_built(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    model: &Model,
+    stage: &zone::StageArt,
+    scene: Scene,
+    coverage: Option<u8>,
+    prepass: bool,
+    stage_light: bool,
+) -> [u8; 4] {
+    let scope = stage_light.then(mesh_render::BuildCacheScope::open);
+    if let Some(scope) = &scope {
+        scope.zone_stage_light(true);
+    }
     let coverage_view = coverage.map(|value| {
         let extent = wgpu::Extent3d {
             width: 4,
@@ -462,7 +531,7 @@ fn draw(
         },
         ShadowReceiver::Both,
         mesh_render::Texcoords::Interleaved,
-        false,
+        prepass,
         false,
         false,
         false,

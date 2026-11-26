@@ -2,7 +2,7 @@
 //! `shade.wesl` none of them takes. Everything here keeps the picture exact: the values are
 //! supersets of what the vertices carry, and a read they rule out is a read of zero.
 
-use crate::mesh::{Model, slots};
+use crate::mesh::{Model, PROGRAM_BILLBOARD, PROGRAM_WATER, slots};
 
 /// The `slots` bits of a vertex's index into [`Model::emissive`].
 const MATERIAL_BITS: u32 = slots::MATERIAL_MASK << slots::MATERIAL_SHIFT;
@@ -77,6 +77,42 @@ pub(super) fn reads_second(
                 .iter()
                 .any(|&index| glow_reads_second(model.vertices[index as usize].glow))
         })
+}
+
+/// The constants a `build` takes from the open scope for `model`: the scope's own, and
+/// `zone_stage_light` for a circuit (`prepass`) of a race whose frame lights it by the stage,
+/// where [`zone_light_exact`].
+pub(super) fn scope_constants_for(model: &Model, prepass: bool) -> Vec<(&'static str, f64)> {
+    let mut constants = super::pipeline_cache::scope_constants();
+    if prepass && super::pipeline_cache::scope_zone_stage_light() && zone_light_exact(model) {
+        constants.push(("zone_stage_light", 1.0));
+    }
+    constants
+}
+
+/// Whether `shade.wesl`'s `zone_stage_light` draws every vertex of `model` as the Zone branches
+/// it replaces do. It gives each chunk the stage's light, and an emissive plain chunk
+/// (`ZONE_PLAIN` with `EMISSIVE`) the `1.0` and no sun its own program leaves: so no such vertex
+/// may be one an earlier branch relights (the billboard and water programs, and `water_test_2`'s
+/// bit).
+pub(super) fn zone_light_exact(model: &Model) -> bool {
+    let rows = super::Emissives::of(model);
+    model
+        .vertices
+        .iter()
+        .all(|vertex| vertex_keeps_own_light(vertex.slots, &rows))
+}
+
+/// [`zone_light_exact`] for one vertex's `slots`, `rows` the model's emissive table.
+fn vertex_keeps_own_light(carried: u32, rows: &super::Emissives) -> bool {
+    let plain_emissive = slots::ZONE_PLAIN | slots::EMISSIVE;
+    if carried & plain_emissive != plain_emissive {
+        return true;
+    }
+    let row = (carried >> slots::MATERIAL_SHIFT) & slots::MATERIAL_MASK;
+    let program = rows.scale[row as usize][2];
+    let relit = |code: f32| (program - code).abs() < 0.5;
+    carried & slots::ICE == 0 && !relit(PROGRAM_BILLBOARD) && !relit(PROGRAM_WATER)
 }
 
 /// Whether any vertex of `model` carries a tangent (`GpuVertex::tangent`'s `xyz` bytes not all
@@ -230,6 +266,25 @@ fn split_plain(carried: impl Iterator<Item = u32>) -> Option<PlainDraws> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_stage_light_refuses_a_plain_emissive_vertex_an_earlier_branch_relights() {
+        let plain_emissive = slots::ZONE_PLAIN | slots::EMISSIVE;
+        let row = 1 << slots::MATERIAL_SHIFT;
+        let exact = |carried: u32, program: f32| {
+            let mut rows = super::super::Emissives::default();
+            rows.scale[1][2] = program;
+            vertex_keeps_own_light(carried, &rows)
+        };
+        assert!(exact(plain_emissive, 0.0));
+        assert!(exact(plain_emissive | row, 12.0));
+        assert!(!exact(plain_emissive | row, PROGRAM_BILLBOARD));
+        assert!(!exact(plain_emissive | row, PROGRAM_WATER));
+        assert!(!exact(plain_emissive | slots::ICE, 0.0));
+        // Only an emissive plain chunk takes neither Zone branch.
+        assert!(exact(slots::ZONE_PLAIN | row, PROGRAM_BILLBOARD));
+        assert!(exact(slots::EMISSIVE | row, PROGRAM_WATER));
+    }
 
     #[test]
     fn a_model_naming_no_row_folds_the_table_and_keeps_the_rest_of_its_bits() {
