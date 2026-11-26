@@ -2,7 +2,7 @@
 status: measure
 titles: [hd, omega, 2048]
 updated: 2026-11-26
-summary: "Owed: films of HD explosions and streaks, Rocket blast gaps, cap source, near-pair struck velocity; half-res parked"
+summary: "Owed: films of HD explosions and streaks, Rocket blast gaps, cap source, forced-hit spawn point and volley; half-res parked"
 size: M (50)
 difficulty: medium (55)
 ---
@@ -41,12 +41,18 @@ blast the struck craft's velocity, on HD, 2048 and Omega
 - **The far Rocket blast with the film's velocity is still not the original's**
   (`particle-fill.md`, "The pose throws the far blast at the camera"): the cloud is smaller,
   `trail` reads as smooth white lobes, and the grey smoke streaming toward the camera is missing.
-- **Near pairs (`rocket-craft-hit-0100`, `-0233`): spawn tick and struck velocity unchecked.**
-  `--force-rocket-hit 711:7` was never compared with the original's spawn point (the far films put
-  the wash quad in world space: view position through the frame's camera; the same on `hit2` says
-  where ours should stand), and ours hands the blast our own opponent's velocity. `hit2`'s
-  `struck_pose.vel` is `(89.31, 13.92, 96.76)`; pose it with `--force-rocket-hit-velocity` once the
-  spawn point is right.
+- **The near pairs (`hit2`) cannot be posed fully with flags** (`particle-fill.md`, "Posing the
+  near hits"). Two engine-side gaps, both `--force-rocket-hit` aids:
+  - **Where ours spawns**: the player is held at each frame's own pose and the Rocket leaves from
+    there, so P1 is out of reach and the 0.233 s pair gets no nearer than 16 units. Wants a spawn
+    point for the forced hit, or a hold at the hit pose until the shot and at the frame's pose for
+    the picture. The 0.233 s pair keeps its old flags until then.
+  - **The volley**: the original lands one Rocket, then two 5 to 6 ticks later; ours lands three
+    on one tick. Why the original's pair arrives later is unread.
+- **Lead, not checked: the HD blast lags the struck craft by 2 ticks** (same section): position
+  copy, template clock or ring lag.
+- **Lead, not checked: the far films' wash quad "younger than its label"** (2 ticks at 0.1 s, 10 at
+  0.233 s) may be two different waves: `far1`'s shield falls to 120 and `far3`'s to 110 by 0.1 s.
 - **Lead, not checked: the tick that lands a forced Rocket hit adds about 20 units a second upward
   to the struck craft** (set `y` 11, read 31 at the blast). The HD films' struck craft show no such
   jump, comparing frames 8 to 23 ticks apart. Whether it is the Rocket's impulse or our hover after

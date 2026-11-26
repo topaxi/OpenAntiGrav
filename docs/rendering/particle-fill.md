@@ -841,18 +841,105 @@ two far pairs read 66.50 and 33.60, against 64.71 and 34.06 without velocity or 
 
 **The picture is still not the original's.** The cloud is smaller, `trail` reads as smooth white
 lobes, and the grey smoke streaming toward the camera is missing (pixels with every channel over
-235 at 0.233 s: 5.9 % against 11.1 %). The near pairs were not tried: neither their spawn tick nor
-their struck velocity was checked against the original's.
+235 at 0.233 s: 5.9 % against 11.1 %). The near pairs are posed below ("Posing the near hits").
 
 ### Posing a far hit
 
 `--force-rocket-hit TICK:SLOT` moves the craft onto the Rocket in flight, so the tick sets where
 the blast stands: the 0.233 s film's hit is `--force-rocket-hit 717:7` after the shot at 709
-(spawn 1.1 units from the original's wash quad; 716 is 4.0 short). The 12-unit pairs use 711,
-which was not checked against the original's spawn point. The ring's wash quad is a few ticks
+(spawn 1.1 units from the original's wash quad; 716 is 4.0 short). The 12-unit pairs are below
+("Posing the near hits"). The ring's wash quad is a few ticks
 younger than the film's labelled age (2 ticks at 0.1 s, 10 at 0.233 s, read off its colour and
 size), so the far pairs render ours at the quad's age. The struck craft's velocity is posed by
 `--force-rocket-hit-velocity` ("The pose throws the far blast at the camera").
+
+### Posing the near hits
+
+2026-11-26. The near pairs (`rocket-craft-hit-0100`, `-0233`) are the film `hit2`. **The original
+puts its blasts at two points; ours cannot be put on both, and on the 0.233 s pair on neither.**
+
+**Where the original's stand** (confidence 90). Method: the world centroid of every capped single
+additive quad of a frame (the draws `scripts/hd-particle-quads.py` reads), through that frame's
+camera. Every such quad of `hit1`, `hit2` and `hit3` stands on one of two points per film, each
+the same in every frame that has it:
+
+| Film | P1 (first wave) | P2 (second wave) | Struck craft's shield |
+| --- | --- | --- | --- |
+| hit1 | (489.92, -31.00, -63.88) | (498.51, -30.69, -56.60) | 140, 130, then 110 between 0.05 and 0.1 s |
+| hit2 | (525.15, -28.26, -34.80) | (533.12, -27.12, -27.35) | 140, 130, then 110 between 0.05 and 0.1 s |
+| hit3 | (493.56, -30.99, -51.43) | (504.80, -30.18, -42.51) | 140, 130, then 110 between 0.1 and 0.183 s |
+
+- **The volley is three blasts in two waves** (confidence 85). P2 carries twice P1's template
+  quads (2 yellow and 4 white against 1 and 2) and the shield falls 10, then 20: one Rocket
+  hits, then the other two together 5 to 6 ticks later. Why the pair arrives later is unread.
+- **Each site is where the struck craft was about 2 ticks before the blast was born**
+  (confidence 90). The birth tick comes from `glow_longer`'s colour (blue 105 falling to 21 over
+  30 ticks); the position from the struck craft's recorded poses, dropped 2.5:
+
+  | Film, site | Craft stood there at tick | Distance off | Blast born at tick |
+  | --- | --- | --- | --- |
+  | hit1 P1, P2 | -1.0, 4.0 | 0.30, 0.05 | 0.9, 6.0 |
+  | hit2 P1, P2 | -2.0, 3.0 | 0.29, 0.01 | -0.1, 4.9 |
+  | hit3 P1, P2 | -1.0, 5.0 | 0.30, 0.02 | 1.0, 6.9 |
+
+  Ticks count from the film's first frame with the shield down (`hit.json`). A negative tick is
+  that pose stepped back by its velocity. The lag's cause is unread (an old position copy, a late
+  template clock or the ring trailing guest memory).
+
+**Ours.** The pairs hold the player at `field.csv` row 0, each film frame's own pose (the
+`--pose` flag in the same pair loses to `--field-from`), and the Rocket leaves from there. All
+three of our Rockets strike on the forced tick at one point. Read with a throwaway print of each
+blast's position, the earliest possible tick being 709:
+
+| Pair | Forced tick | Our spawn | From P1 | From P2 |
+| --- | --- | --- | --- | --- |
+| 0100 | 709 | (532.19, -27.74, -28.48) | 9.5 | 1.6 |
+| 0100 | 710 | (534.93, -27.32, -26.04) | 13.2 | 2.2 |
+| 0100 | 711 (was) | (537.65, -26.92, -23.61) | 16.8 | 5.9 |
+| 0233 | 709 | (545.23, -25.81, -16.91) | 27.0 | 16.0 |
+| 0233 | 711 (was) | (550.71, -25.00, -12.02) | 34.4 | 23.4 |
+
+The velocity the blast was handed without the flag is our struck opponent's,
+`(-104, -11, -37)`, back toward the camera. The film's is `(89.31, 13.92, 96.76)` (`hit.json`
+`struck_pose.vel`).
+
+**The pairs.** `overlap.mean_grey` first (the page's number), then whole-frame RMSE in levels of
+255; "seeds" is the mean over `--stage-seed 1..8`, the difference paired against the current
+flags with its standard error. Ages count from our spawn: 716 minus 710 is 6 ticks. "P2 age" is
+the second wave's age (1 tick at 0.1 s, 9 at 0.233 s), "label" the film frame's (6 and 14).
+Wherever `--ticks` moves, `--world-clock-offset` moves by the same time the other way, so the
+scenery stays in phase. The film velocity in these rows is `89.31,13.92,96.76`.
+
+| Pair and flags (tick / `--ticks`) | mean_grey, own seed | RMSE, own seed | mean_grey, seeds | Paired difference |
+| --- | --- | --- | --- | --- |
+| 0100 current (711 / 718) | 72.13 | 93.11 | 72.17 | |
+| 0100 film velocity (711 / 718) | 74.11 | 94.28 | 74.19 | +2.03 +/- 0.33 |
+| 0100 P2 age, with or without velocity (709 / 711) | 76.75 | 98.06 | 76.72 | +4.56 +/- 0.33 |
+| **0100 label age, film velocity (709 / 716)** | **65.75** | **88.15** | **65.74** | **-6.42 +/- 0.33** |
+| 0100 label age, no velocity (709 / 716) | 59.74 | 87.01 | not run | |
+| 0233 current (711 / 726) | 62.86 | 96.52 | 74.16 (63.5 to 85.5) | |
+| 0233 film velocity (711 / 726) | 102.94 | 127.82 | 102.97 | +28.81 +/- 2.84 |
+| 0233 P2 age, no velocity (709 / 719) | 56.16 | 93.03 | 63.34 | -10.82 +/- 4.16 |
+| 0233 P2 age, film velocity (709 / 719) | 90.04 | 117.02 | 89.99 | +15.82 +/- 2.86 |
+| 0233 label age, film velocity (709 / 724) | 87.03 | 114.58 | 86.91 | +12.75 +/- 2.86 |
+
+Every row's own seed rendered twice byte-identical.
+
+- **0100 takes the 709 / 716 pose with the film velocity.** It is the second wave's place at
+  the first wave's age: three blasts at one point cannot stand in for both waves. With the
+  velocity written to six decimals (`89.309692,13.924740,96.755127`) it reads 65.75 twice.
+  Without the velocity it reads lower still, because our opponent's backward velocity brings the
+  cloud to the camera.
+- **0233 keeps its flags.** The original's eye there is about 6.8 units from P2 and ours cannot
+  spawn nearer than 16. Its current score is flattered by the wrong velocity carrying the cloud
+  into the eye (and by its seed: 62.86 sits at the low end of its spread); the film's velocity
+  carries it away. The rows without the velocity flag score better for that reason and are not
+  posed.
+- **Not reachable with flags**: P1 on either pair (it is behind the held player's Rocket), and
+  the 1 then 2 volley. Holding the player at the hit pose means editing `field.csv`, which also
+  moves the drawn craft off the original's frame.
+
+**2048 and Omega: not checked** (an HD measurement; neither was filmed).
 
 ## Per effect: what fills the heavy frames
 
