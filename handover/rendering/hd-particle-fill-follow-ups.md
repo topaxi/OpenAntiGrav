@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [hd, omega, 2048]
 updated: 2026-11-26
-summary: "Ready: 31 unsprited HD effects. Owed: trail size, 2048/Omega flipbooks, cap source, Deck 4K hit; half-res awaits maintainer"
+summary: "Ready: 31 unsprited HD effects, size multiplier. Owed: 2048/Omega flipbooks, cap source, Deck 4K hit; half-res awaits maintainer"
 size: M (50)
 difficulty: medium (55)
 ---
@@ -38,12 +38,12 @@ blast the struck craft's velocity, on HD, 2048 and Omega
   `oag_raceplay::assets::decode_texture` (flare and trail art) and `load/caustic.rs`. Compare each
   with its draw's `v` in a command ring before touching it; a radially symmetric sprite shows
   nothing either way.
-- **The Rocket blast's `trail` quads are about 1.5 times the original's half size**
-  (`particle-fill.md`, "The pairs with the advance in, and the oversize trail"). It costs
-  `rocket-craft-far-hit-0233` 2.8 RMSE since the flipbooks advance. Read why the original's grow
-  from 2.2 by 0.09 a tick where the file's size channel gives 3.5: HD's baked channel track
-  (`record+0xc70`, slopes `+0xa70`) or the child spawn is the place to look. Then check whether
-  other emitters differ the same way.
+- **Ready to wire after one read: HD's per-particle size multiplier**
+  (`particle-render.md`, "The per-particle size multiplier"). 58 of 241 emitters author it and
+  ours applies none; it is why the Rocket blast's `trail` draws 1.5 times too large, which costs
+  `rocket-craft-far-hit-0233` 2.8 RMSE since the flipbooks advance. To read: what
+  `instance+0x14c` holds (the `trail` fit assumes the emitter's run fraction), and what
+  `+0xc84` means to the mode 5 and distortion readers that also take it. Then a pair sweep.
 - **Flipbooks on 2048 and Omega are not wired** (`particle-render.md`, "The atlas frame"): 2048's
   update wraps at the frame count with no hold; Omega carries that and HD's. Their spawn frames
   and which reader serves which directory are unread.

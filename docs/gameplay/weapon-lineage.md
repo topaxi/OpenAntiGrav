@@ -344,8 +344,8 @@ The Mine, Bomb, Missile explosion and Detonator Mine and Bomb explosions load no
 emitter's rate, spawn inside an authored range and hold on an authored frame (M, executable and
 films; wired, `oag_title::Effects::flipbooks`,
 [particle-render.md](../ghidra/functions/ps3-hdfury-eu/particle-render.md#the-atlas-frame)).
-2048: A, differs (wraps at the frame count, no hold), not wired. Omega: A, carries both HD's and
-2048's update, not wired.
+2048: A, differs (wraps at the frame count, no hold), not wired. Omega: A, carries both HD's
+update (applies, not wired) and 2048's (differs).
 
 | Weapon | Pulse | Pure | HD / Fury | 2048 | Omega |
 | --- | --- | --- | --- | --- | --- |

@@ -728,8 +728,8 @@ The far hit at 0.233 s is **worse by 2.8**, paired by seed (about three standard
   the area at spawn. Both draw them white, opaque and alpha over.
 - Falsifier: a scratch build holding `trail`'s half size to the original's growth reads 69.2 on
   the far pair (seeds 1-8, from 73.2), and 109.3 and 93.6 on the near pairs, still better than
-  before. Why the original's quads grow like that when the file's size channel does not is not
-  read; nothing was changed.
+  before. The mechanism is HD's per-particle size multiplier, which `trail` authors as
+  `0.2` to `1` (`particle-render.md`, "The per-particle size multiplier"); not wired.
 
 ### Posing a far hit
 

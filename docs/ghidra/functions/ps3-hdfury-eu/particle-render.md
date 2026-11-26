@@ -284,8 +284,8 @@ hold names one frame twice (`hd = lo`) and every range ends inside its grid
 - **Hold:** on `explosion_fijets_8x8_grey_gaseous` (`Explosion_Core`, `explosion_fijets`) a
   particle on the last cell stayed there 107 times and never wrapped; looping sheets wrapped
   (`Debris_LightBarrier` 374 of 374).
-- **Spawn range:** no quad of that texture read a cell below 23 over 267 quads, where its two
-  emitters author `[20, 63]` and `[23, 43]`.
+- **Spawn range:** no quad of that texture read a cell below 23 over 267 quads, where the one
+  emitter that binds it (`Explosion_Core`) authors `[20, 63]`.
 - **Over life:** the ages in [particle-fill.md](../../../rendering/particle-fill.md#hd-advances-its-flipbooks-from-the-authored-top-left).
 
 **Not exercised:** Pulse stops the advance of an emitter with a periodic keyframed channel; no
@@ -300,11 +300,38 @@ HD flipbook with a frame rate authors one, so what HD does there was not read.
 not read. Confidence 65 (static; the runtime record's channel offsets are assumed from the
 code's shape). Not wired.
 
-**Omega: checked, split.** `FUN_01724c00` (v1.07) is HD's step, hold and wrap, with the hold
-bytes at runtime `+0xc97`/`+0xc9c`: **checked, applies, not wired** (which file bytes those are,
-and its prologue and spawn, are unread). `FUN_01728ae0` is 2048's (wraps at `count`, no
-hold): **checked, differs**. Which reader serves which effect directory was not
-read. Confidence 60.
+**Omega** carries two readers. `FUN_01724c00` (v1.07) is HD's step, hold and wrap, with the
+hold bytes at runtime `+0xc97`/`+0xc9c`: **checked, applies, not wired** (which file bytes those
+are, and its prologue and spawn, are unread). `FUN_01728ae0` is 2048's (wraps at `count`, no
+hold): **checked, differs**. Which reader serves which effect directory was not read.
+Confidence 60.
+
+## The per-particle size multiplier (read, not wired)
+
+`Psys_InitParticle` (`0x00289890`) stores a multiplier at particle `+0x10`, and the drawn size
+is the size channel times it (the init's store to `+0x70`, and `0x0028d058`-`0x0028d07c` in the
+update, which also multiplies by `ctx+0x6ac`). With `lo = record+0xc84`, `hi = record+0xc88`:
+
+```text
+flags & 0x20000000 && flags & 0x4000 ? m = (1.0 - a) * (hi - lo) + lo       1.0 = *0x008b296c
+                                       a = flags & 0x10000 ? instance+0x14c : parent particle +0x90
+                                     : m = rand(lo, hi)
+```
+
+Static read, confidence 75. **What `instance+0x14c` holds is not read.**
+
+**It accounts for the Rocket blast's `trail`** (confidence 65). `trail` (flags `0x2401420c`,
+all three bits) authors `lo = 0.2`, `hi = 1`. With `a` taken as the emitter's run fraction over
+its 25 ticks, the predicted half size per sheet cell is 2.18 at cell 3 and 3.57 at cell 14
+against the film's 2.35 and 3.57 (rms 0.24 over cells 3 to 14; the size channel alone is 0.67
+out). Ours draws the channel unscaled.
+
+**On the disc:** 58 of 241 emitters (by file and name, `DATA00`, `02`, `03`, `06`) author bounds
+other than `(1, 1)`, `0.7, 1.3` the commonest; 8 take the age branch. Ours applies none.
+
+**Open overlap:** `oag_pob` reads `+0xc84` as `colour_scale` on render mode 5 and as
+`distort_strength` on blend class 8. By this read the same word is also the multiplier's lower
+bound (`SPARKS` of the craft blast: `0.7, 1.3`). Not resolved here.
 
 ## Names
 
