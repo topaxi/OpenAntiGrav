@@ -411,7 +411,9 @@ still open, most player-visible first:
   "near the eye").
 - **Open (2026-11-26): the original's Quake template draws nothing, ours does.** Recorded
   frames 2, 4 and 6 ticks after a standing Quake have its template quad out of range; removing
-  it changes no pixel, while ours washes the screen white from it. `TEMPLATE_GUARDED`
+  it changes no pixel. Ours still draws the template, and its first frames are a white wash;
+  how much of that wash is the template is not isolated (a 2026-10-06 A/B moved 0.18 of the
+  frame at tick 303 when it was dropped). `TEMPLATE_GUARDED`
   (`oag_fx::psys::guard`) still holds templates other than `WO_REPULSER`'s out of the drop.
   Next: pair ours with and without the template against the original's frames at those ticks,
   then drop the gate (same section, "The Quake's template").
