@@ -596,7 +596,8 @@ Pinned by the disc check `check_the_hemisphere_sits_in_the_top_half` (HD, 2048 a
 
 ### Against the original
 
-Every HD comparison pair was rendered with the build before and after: 23 of 26 did not move a
+Every HD pair of the comparison page was rendered with the build before and after (the 26 of
+`hd` and the one of `hd-race`, which moved by 0.10 at the same score): of the 26, 23 did not move a
 pixel, the Detonator cannon volley moved by 0.56 RMSE at the same score (44.03), and the two
 Rocket pairs improved. RMSE against the original, in levels of 255; "dome" is the box
 `200..1720 x 0..560` above the player's craft; seeds are `--stage-seed 1..4`, paired:
@@ -611,6 +612,13 @@ Rocket pairs improved. RMSE against the original, in levels of 255; "dome" is th
 The 0.233 s pairs swing by 10 and more with the blast's random arrangement; three of the near
 pair's four seeds improved and one got worse (94.0 to 109.1). The far pair at 0.1 s is the white
 flash filling the frame on both sides and says nothing about the half disc.
+
+**Moved and not measured against the original:** every other HD weapon effect's sprites turned
+too, and the flipbooks count their rows from the other end. The Plasma blast shows it (our
+frame at tick 447 of `a_plasma_explosions_sphere_fades_with_its_age`: 9,974 violet pixels in
+its box before, 10,800 after); the Missile's, the Mine's, the Bomb's, the Quake's and the
+Detonator's effects are in the same position. They rest on the shared quad builder's `v`
+(read here) and the frame order at confidence 80, with no original frame of theirs beside ours.
 
 ### Posing a far hit
 

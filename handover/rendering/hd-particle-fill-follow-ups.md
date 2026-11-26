@@ -38,6 +38,9 @@ blast the struck craft's velocity, on HD, 2048 and Omega
   `oag_raceplay::assets::decode_texture` (flare and trail art) and `load/caustic.rs`. Compare each
   with its draw's `v` in a command ring before touching it; a radially symmetric sprite shows
   nothing either way.
+- **Every HD `.gtf` particle effect moved with the turn; only the Rocket's craft blast was
+  compared with the original.** The Plasma, Missile, Mine, Bomb, Quake and Detonator effects
+  want one film each beside ours, flipbook frame order first (confidence 80).
 - **The 12-unit pairs' hit tick (`--force-rocket-hit 711:7`) was never checked against the
   original's spawn point.** The far films put the wash quad in world space (view position through
   the frame's camera); the same on `hit2` says where ours should stand.
