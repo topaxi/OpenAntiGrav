@@ -25,6 +25,16 @@ pub(crate) struct DetonatorArgs {
     )]
     pub(crate) mine_envelopes: Option<MineEnvelopes>,
 
+    /// Comparison input: hold each `--detonator-mines` mine's age at the original's (`A;...`, seconds,
+    /// `m+0xc0`; same order), which turns it about its up axis. Ours' own count from its laying.
+    #[arg(
+        long = "detonator-mine-ages",
+        value_name = "A;...",
+        value_parser = parse_mine_ages,
+        requires = "mines"
+    )]
+    pub(crate) mine_ages: Option<MineAges>,
+
     /// Comparison input: start the Detonator EMP at this many charges (the gauge they give), as
     /// the original's charge was written for the capture it is compared with.
     #[arg(long = "detonator-emp-charge", value_name = "N")]
@@ -45,6 +55,21 @@ pub(crate) struct MinePositions(pub(crate) Vec<oag_core::math::Vec3>);
 /// The envelopes of `--detonator-mine-envelopes`, one value to clap.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct MineEnvelopes(pub(crate) Vec<(f32, f32, f32)>);
+
+/// The ages of `--detonator-mine-ages`, one value to clap.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct MineAges(pub(crate) Vec<f32>);
+
+fn parse_mine_ages(text: &str) -> Result<MineAges, String> {
+    text.split(';')
+        .map(|n| {
+            n.trim()
+                .parse::<f32>()
+                .map_err(|_| format!("`{n}` is not a number"))
+        })
+        .collect::<Result<Vec<_>, String>>()
+        .map(MineAges)
+}
 
 fn parse_mine_envelopes(text: &str) -> Result<MineEnvelopes, String> {
     let number = |n: &str| {
@@ -94,5 +119,14 @@ mod tests {
         );
         assert!(parse_mine_envelopes("0.5").is_err());
         assert!(parse_mine_envelopes("0.5,1,2,3").is_err());
+    }
+
+    #[test]
+    fn mine_ages_are_one_number_a_mine() {
+        assert_eq!(
+            parse_mine_ages("55.7002;55.7002"),
+            Ok(MineAges(vec![55.7002, 55.7002]))
+        );
+        assert!(parse_mine_ages("55.7,1").is_err());
     }
 }

@@ -286,8 +286,11 @@ pub struct CaptureOptions {
     /// the seeded opening layout ([`oag_raceplay::RaceSim::carry_detonator_mines`]).
     pub detonator_mines: Option<Vec<oag_core::math::Vec3>>,
     /// `--detonator-mine-envelopes`: the football's and spikes' envelope and the visualiser's `PitchOffset` of each
-    /// `detonator_mines` position, in its order, held as the original read them ([`oag_raceplay::Race::pin_mine_envelopes`]).
+    /// `detonator_mines` position, in its order, held as the original read them ([`oag_raceplay::Race::pin_mines`]).
     pub detonator_mine_envelopes: Option<Vec<(f32, f32, f32)>>,
+    /// `--detonator-mine-ages`: the age of each `detonator_mines` position's mine, in its order, held as the original
+    /// read it ([`oag_raceplay::Race::pin_mines`]).
+    pub detonator_mine_ages: Option<Vec<f32>>,
     /// `--detonator-emp-charge` ([`oag_raceplay::RaceSim::charge_detonator_emp`]).
     pub detonator_emp_charge: Option<u32>,
     /// `--detonator-gauge-speed` ([`oag_raceplay::Race::pin_ammo_gauge_speed`]).
@@ -513,14 +516,20 @@ pub fn capture(
     }
     if let Some(mines) = &options.detonator_mines {
         let lanes = race.core.sim.carry_detonator_mines(mines);
-        if let Some(envelopes) = &options.detonator_mine_envelopes {
-            race.pin_mine_envelopes(
-                lanes
-                    .iter()
-                    .zip(envelopes)
-                    .filter_map(|(lane, &envelope)| lane.map(|lane| (lane, envelope))),
-            );
-        }
+        race.pin_mines(lanes.iter().enumerate().filter_map(|(at, lane)| {
+            let pin = oag_raceplay::MinePin {
+                envelope: options
+                    .detonator_mine_envelopes
+                    .as_ref()
+                    .and_then(|envelopes| envelopes.get(at).copied()),
+                age: options
+                    .detonator_mine_ages
+                    .as_ref()
+                    .and_then(|ages| ages.get(at).copied()),
+            };
+            lane.filter(|_| pin != oag_raceplay::MinePin::default())
+                .map(|lane| (lane, pin))
+        }));
         let dropped = lanes.iter().filter(|lane| lane.is_none()).count();
         if dropped > 0 {
             warn!(

@@ -895,6 +895,11 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
                 .race
                 .detonator
                 .is_some_and(|detonator| detonator.emp_light),
+        detonator_mine_spin: craft_title
+            .race
+            .detonator
+            .filter(|_| options.mode == Mode::Detonator)
+            .and_then(|detonator| detonator.mine_spin),
         detonator_ammo_gauge: craft_title
             .race
             .detonator

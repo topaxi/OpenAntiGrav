@@ -611,6 +611,12 @@ pub struct Detonator {
     /// HD's, 2048's and Omega's `EMP_DrawLights` all read
     /// (`detonator-emp.md`, "2048 and Omega draw it").
     pub emp_light: bool,
+    /// How fast a laid mine turns about its up axis, radians per second of the mine's age: its
+    /// football and spikes are drawn on the world axes turned by `rate * age`, not on a frame
+    /// built on the up axis. `None` where a title's mine animation is unread, and the mine keeps
+    /// an upright, unturned frame (`docs/ghidra/functions/ps3-hdfury-eu/detonator-mine-draw.md`,
+    /// "The spin").
+    pub mine_spin: Option<f32>,
     /// The cannon gauge on the craft's back, or `None` where a title's law is not read.
     pub ammo_gauge: Option<DetonatorAmmoGauge>,
     /// The plasma shells on the craft's wings that the EMP's charge lights, or `None` where a
