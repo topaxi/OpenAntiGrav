@@ -1,7 +1,7 @@
 ---
 status: ready-to-wire
 titles: [hd, 2048, omega]
-updated: 2026-11-25
+updated: 2026-11-26
 summary: "Detonator: all 15 phases in; open: Omega EndRace Menu, 2048 Results, medal tiers, radial bloom, floor gain vs bands"
 categories: [rendering]
 ---
@@ -437,7 +437,7 @@ original frame to compare. The detail is below.
   "What HD draws for a fired EMP": one survey entry a tick for `extent` seconds, `WO_QUAKE_DETONATOR`
   on the front with a `(0, 5, 10)` light; the stepper is the Repulser's, copied). The particle rows
   were `SPARKS` without their noise force, fixed (same page, "The grey rows were sparks that
-  never moved"); 13 other HD emitters author that force, unlisted. The in-run fork and the launch-time fork are wired (`detonator-emp.md`, "The launch-time fork"). The other route's record lookup is wired. Open: `~MAGPULSETRAVEL` unwired; 2048 and Omega checked, applies, not wired. Still open:
+  never moved"); 13 other HD emitters author that force, unlisted. The in-run fork and the launch-time fork are wired (`detonator-emp.md`, "The launch-time fork"). The other route's record lookup is wired. Open: `~MAGPULSETRAVEL` unwired (all three titles). 2048 and Omega draw the wave and submit its light since 2026-11-26 (`detonator-emp.md`, "2048 and Omega draw it"); **open: the light changes no scenery pixels in ours on either** - read each title's Zone shader combine (GCN, GXP) for the vertex or per-draw light, then wire (HD's `lit_by_stage_alone` is HD-only, do not just turn it on). Their mine and bomb explosions are still unwired, so the wave's kills pop nothing there. Still open:
   whether the wave hurts the player,
   `EmpBarEffect` (an `<ImageModel>` the HUD layout reader does not model; the gauge is exposed),
   the ready pulse and post-fire flash on `EmpReady`, 2048's

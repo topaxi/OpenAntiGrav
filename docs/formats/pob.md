@@ -1091,10 +1091,10 @@ bars since 2026-11-25, spawned in the original's frame
 [detonator-cannon.md](../ghidra/functions/ps3-hdfury-eu/detonator-cannon.md#the-spark-on-2048-and-omega-2026-11-25-det-cannon-bolt-2048-omega)).
 The two mine effects and the bomb's are **checked, applies, not wired**: their tables do not
 answer those triggers, the mine and bomb contact laws being unread on either.
-`WO_QUAKE_DETONATOR` is the EMP's wave, read and wired on HD since 2026-11-24 ([detonator-emp.md](../ghidra/functions/ps3-hdfury-eu/detonator-emp.md#what-hd-draws-for-a-fired-emp-2026-11-24)); `_TRAILS` is named nowhere in `EMP.cpp`'s span and stays unread. All three systems above ship on 2048 (`data.psarc`, `data/particles/` and
+`WO_QUAKE_DETONATOR` is the EMP's wave, read and wired on HD since 2026-11-24 ([detonator-emp.md](../ghidra/functions/ps3-hdfury-eu/detonator-emp.md#what-hd-draws-for-a-fired-emp-2026-11-24)) and **ported** to 2048 and Omega on 2026-11-26 (the same file, [detonator-emp.md](../ghidra/functions/ps3-hdfury-eu/detonator-emp.md#2048-and-omega-draw-it-2026-11-26)); `_TRAILS` is named nowhere in `EMP.cpp`'s span and stays unread. All three systems above ship on 2048 (`data.psarc`, `data/particles/` and
 `data/particles2048/`) and Omega (`data00.psarc`), and both executables name them; 2048's mine
 explode picks between the two mine systems with HD's shape and fourcc (`0x811e6f3a`), Omega's
-with a hashed name (`0x0133ad5f`). **Checked, applies; wired on HD below.**
+with a hashed name (`0x0133ad5f`). **Checked, applies; wired on HD below** (the EMP's also on 2048 and Omega).
 
 ### HD names its own texture the same way Pulse does, and 80 of 82 resolve to a shipped `.gtf` - 2026-09-17
 
