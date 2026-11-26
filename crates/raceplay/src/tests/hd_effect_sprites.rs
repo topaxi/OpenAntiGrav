@@ -22,6 +22,8 @@ fn only_hd_lists_effects_whose_gtf_sprites_play() {
         oag_hd::TITLE.effects.sprites,
         [
             oag_title::engine_effects::DETONATOR_CANNON_SPARKS_EFFECT,
+            oag_title::engine_effects::DETONATOR_MINE_EXPLO_EFFECT,
+            oag_title::engine_effects::DETONATOR_MINE_EXPLO_DEAD_EFFECT,
             oag_title::engine_effects::TRACK_BLAST_EFFECT,
             oag_title::engine_effects::CRAFT_BLAST_EFFECT,
             oag_title::engine_effects::EXPLOSION_EFFECT,
