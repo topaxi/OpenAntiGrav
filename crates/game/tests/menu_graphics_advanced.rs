@@ -71,6 +71,8 @@ fn advanced(
         "graphics.water",
         "graphics.model_detail",
         "graphics.texture_detail",
+        // Kept while no device has said whether it takes ASTC (`oag_game::texture_cache`).
+        "graphics.texture_compression",
     ]);
     if pulse_like {
         rows.push("graphics.trail_order");

@@ -81,6 +81,10 @@ features=android,extensions
 # "Performance on the Galaxy S21"). A shipped app is not.
 profileable=""
 [ -z "${OAG_APK_PROFILEABLE:-}" ] || profileable='<profileable android:shell="true" />'
+# The ASTC encoder is C++ (`ctt-astcenc`, built by `cc`), and `cc` links Android's
+# libc++_shared.so by default, which the APK does not carry: the app then fails to load.
+# Linked statically instead (docs/rendering/texture-compression.md, "The encoder").
+export CXXSTDLIB_aarch64_linux_android=c++_static CXXSTDLIB_x86_64_linux_android=c++_static
 cargo ndk "${ndk_targets[@]}" -P "$api" build -p oag-game --example oag_android --no-default-features --features "$features" "${cargo_profile[@]}"
 so="$root/target/aarch64-linux-android/$profile/examples/liboag_android.so"
 # The frames under `android_main` (2 MiB, not ours to size): docs/tools/android.md, "The stack".
