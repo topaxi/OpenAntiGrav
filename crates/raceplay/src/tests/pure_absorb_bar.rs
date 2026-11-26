@@ -62,11 +62,13 @@ fn absorb_burst(title: &Title, load: Load) -> Option<oag_fx::psys::Effect> {
             ABSORB_EFFECT,
             false,
             title.effects.colour_walk,
+            title.effects.flipbooks.is_some(),
         ),
         Load::Plain => kept(Kept::NONE),
         Load::WithTemplates => kept(Kept {
             bar: KeptBar::Mean,
             templates: true,
+            flipbooks: false,
         }),
     }
     .expect("the burst loads");

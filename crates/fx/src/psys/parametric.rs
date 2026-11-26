@@ -386,6 +386,8 @@ fn build(
         distort_strength: 0.0,
         colour_scale: 1.0,
         near_cap: None,
+        authored_frame_range: None,
+        frame_range: None,
         particle_child: None,
         death_child: None,
         spawn_probability: 1.0,

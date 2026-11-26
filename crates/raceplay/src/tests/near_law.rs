@@ -215,6 +215,16 @@ fn craft_blast_loads_under_the_law(source: &str, track: Option<&str>, want: &[&s
         .map(|spec| spec.name.as_str())
         .collect();
     assert_eq!(playing, want, "{source}");
+    // 2048's and Omega's own updates are not wired: every particle keeps its spawn frame.
+    for spec in &blast.emitters {
+        assert_eq!(
+            spec.frames,
+            oag_fx::psys::frames::FrameAdvance::Still,
+            "{source} {}",
+            spec.name
+        );
+        assert_eq!(spec.frame_range, None, "{source} {}", spec.name);
+    }
     assert!(
         blast
             .emitters

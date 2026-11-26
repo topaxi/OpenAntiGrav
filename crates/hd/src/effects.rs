@@ -156,6 +156,9 @@ pub const EFFECTS: &Effects = &{
     // `Rocket_SpawnCraftBlast` (`0x0014a7d8`), `0x0014a970`-`0x0014a98c`;
     // `docs/ghidra/functions/ps3-hdfury-eu/rocket-craft-blast.md`.
     effects.craft_blast_carry = Some(Origin::Measured);
+    // `Psys_UpdateParticles` (`0x0028cc10`), `0x0028d0f0`-`0x0028d1bc`;
+    // `docs/ghidra/functions/ps3-hdfury-eu/particle-render.md`, "The atlas frame".
+    effects.flipbooks = Some(Origin::Measured);
     effects
 };
 

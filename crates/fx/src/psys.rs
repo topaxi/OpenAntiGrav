@@ -321,6 +321,12 @@ pub struct EmitterSpec {
     pub colour_scale: f32,
     /// The near law's size cap, [`pob::Emitter::near_cap`]; read only under [`Effect::near`].
     pub near_cap: Option<f32>,
+    /// [`pob::Emitter::frame_range`] as the record holds it; played only through
+    /// [`Self::frame_range`].
+    pub authored_frame_range: Option<pob::FrameRange>,
+    /// The spawn and hold frames this emitter plays, `None` unless the effect is loaded with
+    /// [`streak::Kept::flipbooks`].
+    pub frame_range: Option<pob::FrameRange>,
     /// A system attached to each particle this emitter spawns, as an index
     /// into [`Effect::emitters`].
     pub particle_child: Option<usize>,
@@ -795,7 +801,9 @@ impl System {
                 particle.roll = rotation.advance(particle, before, after, dt_ticks);
             }
             let frames = spec.atlas.frames();
-            spec.frames.step(particle, before, after, dt_ticks, frames);
+            let hold = spec.frame_range.map(|range| range.hold);
+            spec.frames
+                .step(particle, before, after, dt_ticks, frames, hold);
             let last_tick = if spec.short_run && spec.template {
                 dt
             } else {

@@ -93,7 +93,8 @@ impl Effect {
     /// `docs/ghidra/functions/psp-pure-usa/particle-bars.md`), and the sprite templates play when
     /// [`Kept::templates`] is set. Per effect, for the ones a title lists
     /// (`oag_title::Effects::{far_bars, pool_bars, templates}`): each law was read on a named
-    /// effect alone.
+    /// effect alone. [`Kept::flipbooks`] is the title's rather than an effect's
+    /// (`oag_title::Effects::flipbooks`): one update function runs every emitter's.
     pub fn without_pulse_psp_draw_but(&mut self, kept: Kept) {
         self.reset_pulse_psp_draw(kept);
     }
@@ -107,7 +108,12 @@ impl Effect {
                 (StreakDraw::Bar { aspect }, KeptBar::Mean) => StreakDraw::Bar { aspect },
                 _ => StreakDraw::Procedural,
             };
-            spec.frames = super::FrameAdvance::Still;
+            if kept.flipbooks {
+                spec.frame_range = spec.authored_frame_range;
+            } else {
+                spec.frames = super::FrameAdvance::Still;
+                spec.frame_range = None;
+            }
             spec.short_run = false;
         }
         if !kept.templates {
@@ -125,6 +131,9 @@ pub struct Kept {
     pub bar: KeptBar,
     /// The sprite templates, played with their own roll and stretch.
     pub templates: bool,
+    /// The flipbook advance ([`super::frames`]), with the record's spawn range and hold:
+    /// `oag_title::Effects::flipbooks`.
+    pub flipbooks: bool,
 }
 
 impl Kept {
@@ -132,6 +141,7 @@ impl Kept {
     pub const NONE: Self = Self {
         bar: KeptBar::No,
         templates: false,
+        flipbooks: false,
     };
 
     /// Only the class-6 bar `bar` names.
@@ -140,6 +150,7 @@ impl Kept {
         Self {
             bar,
             templates: false,
+            flipbooks: false,
         }
     }
 }
