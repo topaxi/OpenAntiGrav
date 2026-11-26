@@ -2,7 +2,7 @@
 status: measure
 titles: [hd, omega, 2048]
 updated: 2026-11-26
-summary: "Owed: the craft-blast template cap source and far-hit dome, Deck numbers, 1.7 ms at 1080p; the half-res particle target awaits the maintainer"
+summary: "Owed: the craft-blast template cap source and far-hit dome, Deck 4K hit still 64 ms worst, 1.7 ms at 1080p; the half-res particle target awaits the maintainer"
 size: M (50)
 difficulty: medium (55)
 ---
@@ -46,9 +46,12 @@ HD's width throttle, the other idea here, is TARGET FPS `original`
 
 ### Owed measurements
 
-- **The Deck** at 3840x2160, 1920x1080 and 1280x800 (vsync off, no frame limit): the
-  reproduction's `gpu_scene_us` over ticks 760 to 789, before and after the law. Not run.
-  The fragment `discard` of particle-fill.md's "Measured and dropped" belongs to the same visit.
+- **The Deck is measured** (`docs/rendering/particle-fill.md`, "On the Steam Deck"): the craft
+  hit's worst frame at 3840x2160 went from 108.5 to 63.5 ms (`d66a52ae6`), still far over 16.7.
+  Open there:
+  - the blasts at ticks 726 and 756 (79 and 75 ms), which no change reached;
+  - tick 784, now 51 ms against 43 before the blast carry and sprites ("What fills tick 784" below);
+  - the fragment `discard` of "Measured and dropped", not run on the Deck.
 - **About 1.7 ms of a hit frame at 1080p that is not fill.** With and without the law, ticks 770
   to 774 cost about the same (3.26 ms at the worst before, 3.16 after, on an RX 7800 XT).
   Unprofiled: leave the particle draws, the blast's light and the flash out in turn at 1920x1080.
@@ -74,5 +77,5 @@ HD's width throttle, the other idea here, is TARGET FPS `original`
 ## Next Steps
 
 1. Adopt the re-rendered rocket-hit pairs, then film the far-hit dome (above).
-3. Run the Deck numbers before and after.
-4. Put the half-resolution particle target to the maintainer once the Deck numbers are in.
+3. Split the fill of ticks 726 and 784 per effect on the Deck's 3840x2160 run.
+4. Put the half-resolution particle target to the maintainer, with the Deck numbers.

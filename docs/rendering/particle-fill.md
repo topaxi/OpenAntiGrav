@@ -97,6 +97,83 @@ byte-identical before and after (`cmp`). So are Pulse's at ticks 700, 720 and 74
 craft hits (gamma target, sampled-sprite path, `pulse-psp-eu.chd`, same script), and Mallavol's
 at ticks 905 and 945 (3840x2160). The state hash is unchanged.
 
+## On the Steam Deck
+
+2026-11-26, a Steam Deck OLED on AC power, RADV VANGOGH. The reproduction above (`fire.txt`),
+offscreen race bench with an audio stream running, four builds: `d66a52ae6` (with the craft
+blast's sprite templates drawn); `790ad033b` (without them); `259948344`, which already drops dead quads but has no near
+law, no `WO_ROCKET_EXPLO` sprites and no blast carry; and `0d662907c` (`e12903bfc^1`), before all of those. Each is the portable
+container build with `--features extensions,dev-cli` (`--give` needs `dev-cli`). `d66a52ae6` was measured
+in a second session, interleaved with `790ad033b`, which repeated there within the spread. The settings
+file holds only the reporter's HD render profile (`scene_precision = "float"`,
+`shadow_resolution = "ultra"`, `circuit_lighting = "simplified"`, FXAA, motion blur off), so the
+race is the one described above: the state hash at tick 800 is `62b06c2ee353b11d` on all four
+builds, as on the workstation. Three interleaved rounds, medians over the rounds; the rounds
+spread by about 2 ms at most. `--force-rocket-hit` was not used: it does not exist in the older builds.
+
+`frame_us` of the bench (pipelined, no vsync, scene and bloom only, no FXAA or HUD pass), in
+milliseconds.
+
+**The craft hit, ticks 760 to 789** (30 frames, so p99 is the worst frame):
+
+| Size, build | mean | p95 | worst | frames over 33.3 ms | over 16.7 ms |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 3840x2160 `0d662907c` | 48.3 | 103.6 | 108.5 | 20 | 30 |
+| 3840x2160 `259948344` | 45.9 | 91.9 | 97.0 | 18 | 30 |
+| 3840x2160 `790ad033b` | 30.5 | 54.2 | 63.9 | 8 | 30 |
+| 3840x2160 `d66a52ae6` | 31.6 | 54.1 | 63.5 | 8 | 30 |
+| 1920x1080 `0d662907c` | 22.4 | 53.6 | 55.1 | 6 | 16 |
+| 1920x1080 `259948344` | 21.4 | 49.7 | 52.9 | 6 | 16 |
+| 1920x1080 `790ad033b` | 12.2 | 21.6 | 28.5 | 0 | 5 |
+| 1920x1080 `d66a52ae6` | 12.4 | 21.7 | 29.2 | 0 | 5 |
+| 1280x800 `0d662907c` | 15.7 | 37.8 | 41.3 | 3 | 7 |
+| 1280x800 `259948344` | 14.9 | 36.2 | 38.5 | 3 | 7 |
+| 1280x800 `790ad033b` | 8.9 | 13.1 | 17.0 | 0 | 1 |
+| 1280x800 `d66a52ae6` | 9.0 | 13.3 | 16.9 | 0 | 1 |
+
+**The whole barrage, ticks 700 to 829** (130 frames, four blasts):
+
+| Size, build | mean | p99 | worst | frames over 33.3 ms | over 16.7 ms |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 3840x2160 `0d662907c` | 35.5 | 103.6 | 108.5 | 59 | 122 |
+| 3840x2160 `259948344` | 34.8 | 91.9 | 97.0 | 57 | 122 |
+| 3840x2160 `790ad033b` | 31.2 | 74.9 | 78.2 | 45 | 119 |
+| 3840x2160 `d66a52ae6` | 31.6 | 74.7 | 78.7 | 45 | 121 |
+| 1920x1080 `0d662907c` | 16.0 | 53.6 | 55.1 | 8 | 51 |
+| 1920x1080 `259948344` | 15.9 | 49.7 | 52.9 | 8 | 51 |
+| 1920x1080 `790ad033b` | 13.5 | 34.0 | 37.4 | 2 | 37 |
+| 1920x1080 `d66a52ae6` | 13.5 | 34.2 | 37.1 | 2 | 39 |
+| 1280x800 `0d662907c` | 11.5 | 37.8 | 41.3 | 3 | 12 |
+| 1280x800 `259948344` | 11.5 | 36.2 | 38.5 | 3 | 12 |
+| 1280x800 `790ad033b` | 9.5 | 19.8 | 21.1 | 0 | 5 |
+| 1280x800 `d66a52ae6` | 9.6 | 20.3 | 20.9 | 0 | 5 |
+
+What it says:
+
+- **The craft hit is much cheaper**: at 3840x2160 the worst frame falls from 108.5 to 63.5 ms,
+  at 1280x800 from 41.3 to 16.9 ms (`0d662907c` to `d66a52ae6`). In the frames themselves, at tick 774 `0d662907c` is white
+  from edge to edge and `790ad033b` shows fireballs around the struck craft.
+- **At 3840x2160 it is still not fixed.** 121 of the 130 barrage frames are over 16.7 ms on
+  `d66a52ae6` (the whole hit window, 30 of 30). A dynamic resolution target would shed pixels here; the
+  bench has none.
+- **The worst barrage frames are blasts these changes did not reach**: ticks 726 and 756
+  cost 78 to 79 and 75 ms on the two newest builds, and 80 and 74 to 75 ms on the older ones.
+- **Tick 784 got heavier**: 51 ms on `790ad033b` and `d66a52ae6` against 43 on `0d662907c` at
+  3840x2160, and the window's worst is now tick 786. That is the frame the blast carry and the sprites changed
+  ("Measured and dropped", "Carried with the struck craft").
+- **The sprite templates add nothing measurable** here: `d66a52ae6` is within the spread of
+  `790ad033b` at every size (they draw: tick 765 shows the yellow wash, a flat-bottomed band
+  across the middle of the frame).
+- At 1280x800 the offscreen runs leave the GPU partly idle and clocked down (median 1040 MHz on
+  `790ad033b`, 1134 on `0d662907c`), so those rows understate the gain if anything. At the larger
+  sizes it ran at 1600 MHz.
+
+**A second race, the reporter's whole settings file** (Ace AI, Veteran controls, so a different
+race, hash `f2263f07316b7041` at tick 830 on all three builds): the four blasts land on the
+track wall instead of a craft. Ticks 700 to 829, worst frame at 3840x2160: 92.7, 87.9 and
+57.8 ms for `0d662907c`, `259948344` and `790ad033b`, 59, 59 and 38 frames over 33.3 ms; at
+1280x800: 31.5, 27.6 and 14.8 ms.
+
 ## Measured and dropped
 
 - **A fragment `discard` where the particle's output alpha is exactly 0** (the corners outside
@@ -483,7 +560,7 @@ the original's near-white wash, whose source stays open.
 
 ## What is left
 
-The Deck has not been measured. The scene-width throttle is wired as TARGET FPS `original` and
+The Deck is measured ("On the Steam Deck"). The scene-width throttle is wired as TARGET FPS `original` and
 measured on the workstation
 ([dynamic-resolution.md](dynamic-resolution.md#measured-the-rocket-hit-at-3840x2160)). The close-range picture
 differs for the four reasons above. The ranked plan for the other two ideas is in the handover
