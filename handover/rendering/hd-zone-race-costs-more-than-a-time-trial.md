@@ -46,9 +46,24 @@ Measurements, the cause and the landed part:
 
 ## Next Steps
 
-0. Open, not scheduled (the maintainer keeps the Deck docked): the undocked clock park. Recipe:
-   [dynamic-resolution.md](../../docs/rendering/dynamic-resolution.md), "Open: the undocked clock
-   park".
+0. Open, not scheduled (the maintainer keeps the Deck docked): the undocked clock park. About
+   8 minutes, Deck undocked and on AC. Build "no probe" from main and "probe" from
+   `drs-probe-parked` with main merged in (touch the differing files if the two share a target
+   directory). Run each under `~/oag-perf/deck-run.sh`, order probe, no probe, no probe, probe,
+   on a copy of the player's settings with `pause_on_focus_loss = false`:
+
+   ```sh
+   [ "$(cat /sys/class/drm/card0-DP-3/status)" = disconnected ] || exit 3
+   [ "$(cat /sys/class/drm/card0/device/power_dpm_force_performance_level)" = auto ] || exit 3
+   RUST_LOG=info,oag_game::app::session::timing=trace \
+   gamescope --backend headless -W 3840 -H 2160 -w 3840 -h 2160 -r 60 -- \
+     oag-game <hd iso> --race --no-intro --autopilot --frame-log --mode zone \
+     --track /data/environments/04_chenghou_project/track.vex --script 70:quit
+   ```
+
+   Stamp each stderr line with `$EPOCHREALTIME`, and beside it sample at 20 Hz what
+   [dynamic-resolution.md](../../docs/rendering/dynamic-resolution.md) lists under "Method"; what to
+   read from the parked samples is under "Open: the undocked clock park" there.
 1. To get past 0.90 (undocked only): sample `pp_power_profile_mode` and the CPU clock beside the GPU clock in one
    unpinned 4K Zone run (the commands in "The probe rise") and find what holds 1040 MHz.
 2. Read one Chenghou Zone fragment program end to end for a specular term
