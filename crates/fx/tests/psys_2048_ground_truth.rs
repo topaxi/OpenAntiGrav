@@ -200,6 +200,13 @@ fn every_emitter_names_a_sprite_that_ships_and_decodes() {
             .unwrap_or_else(|e| panic!("{name}: {e}"));
         assert!(Sprite::from_gxt(&blob).is_some(), "{name}: does not decode");
     }
+    let blob = archive
+        .read_path("data/particles2048/tex/yellow_glow_hemi.gxt")
+        .expect("2048 ships HD's hemisphere");
+    crate::psys_ground_truth::check_the_hemisphere_sits_in_the_top_half(
+        "2048 .gxt",
+        &Sprite::from_gxt(&blob).expect("decodes"),
+    );
 }
 
 /// Detonator's four effects ship in the base archive and parse: "checked, applies" for the names
