@@ -565,6 +565,8 @@ fn state_of(session: &mut Session) -> State {
         }
         Stage::Menu(stage) => {
             state.page = Some(stage.menu.page().id.clone());
+            let tree = stage.menu.definition();
+            state.root = Some(tree.pages[tree.root].id.clone());
             state.screen = Some(screen(stage));
             let landed = session.opening_reads_landed();
             state.opening_reads = Some(if landed { "landed" } else { "reading" }.to_string());

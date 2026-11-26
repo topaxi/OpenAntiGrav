@@ -311,12 +311,22 @@ pub fn details(report: &Report, s: Say<'_>) -> Details {
         },
     )];
     machine.push((say(s, words::DEVICE, &[]), c.device.clone()));
-    machine.push((
-        say(s, words::GPU, &[]),
-        format!("{} ({})", c.adapter_name, c.driver),
-    ));
+    if let Some(gpu) = gpu_line(&c.adapter_name, &c.driver) {
+        machine.push((say(s, words::GPU, &[]), gpu));
+    }
     machine.push((say(s, words::BUILD, &[]), c.build_version.to_string()));
     Details { rows, machine }
+}
+
+/// The adapter with its driver in brackets, as far as the platform names them: a browser names
+/// neither, and some drivers only repeat the adapter's name.
+fn gpu_line(adapter: &str, driver: &str) -> Option<String> {
+    match (adapter, driver) {
+        ("", "") => None,
+        ("", only) | (only, "") => Some(only.to_string()),
+        (adapter, driver) if adapter == driver => Some(adapter.to_string()),
+        (adapter, driver) => Some(format!("{adapter} ({driver})")),
+    }
 }
 
 /// The text COPY TO CLIPBOARD puts on the clipboard: what a player pastes into a forum post or an

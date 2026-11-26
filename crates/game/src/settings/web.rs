@@ -59,8 +59,10 @@ pub fn render_target(
 /// The rows the web build drops from the options pages: the browser surface
 /// only offers `Fifo`, so VSYNC has nothing to choose, and a page has no
 /// monitor to pick.
-pub const HIDDEN_ROWS: [&str; 3] = [
+pub const HIDDEN_ROWS: [&str; 4] = [
     "display.vsync",
+    // BENCHMARK OPTIONS' own VSYNC row.
+    "benchmark.vsync",
     "display.monitor",
     "display.fullscreen_resolution",
 ];
