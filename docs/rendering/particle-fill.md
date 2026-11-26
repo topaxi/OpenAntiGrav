@@ -642,7 +642,9 @@ arrangement. The sheet grows from 3076 to 3590 rows of 4096 on Talon's Junction 
 distinct sprites); nothing is dropped. Disc check: `every_hd_sprite_is_on_the_sheet_and_the_weapon_blasts_draw_theirs`
 (`crates/raceplay/tests/particle_sheet_ground_truth.rs`).
 
-**Against the original.** None of the 21 has a matched capture of its own. The HD comparison pairs
+**Against the original.** None of the 21 has a matched capture of its own (the original was seen
+walking the sheets of the Detonator Mine and Bomb explosions,
+[particle-render.md](../ghidra/functions/ps3-hdfury-eu/particle-render.md), "The atlas frame"). The HD comparison pairs
 (31, `hd` and `hd-race`) were re-rendered before and after; the build is byte-deterministic (two
 runs of each side identical), 26 pairs did not move a pixel and 5 did: the four Rocket hits and the
 Detonator cannon volley (`WO_ROCKET_FLARE` is the only new effect in the 0.233 s near hit). The new listing deals the blast

@@ -222,9 +222,9 @@ const TEMPLATES: &[&str] = &[
 /// rings"), the ship explosion (`ship-destroy.md`, "`colour_mode` 3 is a blend toward the
 /// scene light"), the two trail hits (`engine-trail.md`, "The red variant's colour is in its
 /// sprites") and the Plasma's five (`plasma.md`, "The pairs"). The Detonator Mine and Bomb
-/// explosions' sprites were seen bound by the original, their picture not paired. **Every
-/// other entry is unpaired**: it draws the sprite its own emitter names, and no capture of the
-/// original has judged the result.
+/// explosions' sheets were seen walking in the original (`particle-render.md`, "The atlas
+/// frame"), their picture not paired. **Every other entry is unpaired**: it draws the sprite
+/// its own emitter names, and no capture of the original has judged the result.
 const SPRITES: &[&str] = &[
     engine_effects::DETONATOR_CANNON_SPARKS_EFFECT,
     engine_effects::TRACK_BLAST_EFFECT,
