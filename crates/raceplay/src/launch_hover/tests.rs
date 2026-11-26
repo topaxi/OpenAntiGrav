@@ -194,16 +194,16 @@ fn the_one_sided_wall_contact_follows_the_title() {
     assert!(!physics_laws(None).wall_one_sided);
 }
 
-/// HD drains a blast's pending impulse along the craft's side axis; Pure and Pulse drain along
-/// forward, and 2048 and Omega keep forward until their own drains are read
+/// Pulse and HD drain a blast's pending impulse along the craft's side axis, Pure inheriting
+/// Pulse's; 2048 and Omega keep forward until their own drains are read
 /// (`oag_physics::laws::Laws::pending_impulse_on_side`).
 #[test]
 fn the_blast_drain_axis_follows_the_title() {
     assert!(physics_laws(Some(&oag_hd::race::CRAFT_LAWS)).pending_impulse_on_side);
     assert!(!physics_laws(Some(&oag_omega::race::CRAFT_LAWS)).pending_impulse_on_side);
     assert!(!physics_laws(Some(&oag_2048::race::CRAFT_LAWS)).pending_impulse_on_side);
-    assert!(!physics_laws(Some(&oag_pure::race::CRAFT_LAWS)).pending_impulse_on_side);
-    assert!(!physics_laws(None).pending_impulse_on_side);
+    assert!(physics_laws(Some(&oag_pure::race::CRAFT_LAWS)).pending_impulse_on_side);
+    assert!(physics_laws(None).pending_impulse_on_side);
 }
 
 /// HD's measured steer-away torque reaches the physics' laws, as do Omega's and 2048's own reads;

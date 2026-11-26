@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [pulse]
 updated: 2026-11-26
-summary: "Cage, launch normal, floor arms, own box, HD blast push wired; open: Pulse drain axis, HD box, opponent box, travel sweep, HD floor arms"
+summary: "Cage, launch normal, floor arms, own box, HD blast push wired; open: HD box, opponent box, travel sweep, HD floor arms"
 size: S (50)
 difficulty: medium (55)
 ---
@@ -48,40 +48,12 @@ was not measured.
    checked by `scripts/psp-craft-box-replay.py`). Keep them where a reap does not delete them, e.g.
    `data/traces/pulse-own-craft-box/` in the main checkout (the replay script's docstring names it).
    Until then the test is the page's seven records (`projectile/tests/craft_box.rs`).
-8. **Pulse's blast drain may push sideways, not forward** (2026-11-26, `projectile-leftovers`).
-   HD's drain `Ship_ApplyPendingImpulse` (`0x000d8a28`) projects the pending blast impulse onto
-   body row 0, the side row, and HD is wired that way (`Laws::pending_impulse_on_side`,
-   [rocket-craft-blast.md](../../docs/ghidra/functions/ps3-hdfury-eu/rocket-craft-blast.md#against-ours)).
-   Pulse's `Ship_ApplyCollisionImpulse` (`0x0883f274`) projects onto the first row of
-   `*(entity+0x794)`, which `camera.md` reads as the **left** row (93); ours drains along
-   `forward()`. Settle first that the two pages name the same object (`entity` against `craft`),
-   then, if they do, set `pending_impulse_on_side` for Pulse (left or right only flips the axis's
-   own sign, which the sign rule cancels), with a PPSSPP break at `0x0883f3e0` reading the
-   pending vector and the node's rows. Pure inherits Pulse. Estimate: one read plus one capture,
-   1 to 2 hours.
-
-   **What the Pulse lane captures** (lead's call: a live measurement before Pulse moves):
-   - State: `data/saves/pulse-psp/race-platinum-white-single-grid.ppst` (a Single Race grid with
-     rivals ahead). Fire a Rocket from the parked grid into the rival ahead with
-     `scripts/psp-projectile-sweeps.py --player-fire-frame 120 --no-thrust rocket` (usage in its
-     docstring); any blast on any craft will do, since the drain is weapon-blind.
-   - Break at `Ship_ApplyCollisionImpulse` (`0x0883f274`), and only act on a hit whose pending
-     vector `*(*(a0+0x4c)+0x110)` is non-zero. Read:
-     - that pending vector;
-     - the three rows of `*(a0+0x794)` at `+0x00`, `+0x10` and `+0x20`;
-     - the body velocity `*(a0+0x794)+0x140`.
-   - Step to the `jal Body_ApplyImpulseAtPoint` at `0x0883f3e0` and read the vector `a2` points
-     at: the projected impulse, already overwritten in place.
-   - **Decision:**
-     - If `a2` is parallel to row 0 (`|dot| = |p|`, near zero against row 2), the drain is the
-       side axis: set `pending_impulse_on_side` for Pulse.
-     - If it is parallel to row 2, ours is right and only `camera.md`'s row naming needs a
-       note.
-     - Corroboration: the velocity at `+0x140` one tick later moves by `a2 / mass` along that row.
-   - Take two hits, on two craft or at two headings, so that one of them has the blast off both
-     axes.
-   - Then flip Pulse (and Pure, inherited) and run Pulse's gates: the lone-craft gate,
-     `race_ground_truth`, and the Pulse field and eliminator tests. Also open from the HD push: whether HD's slot `+0x50` is the nose (60), and
+8. ~~**Pulse's blast drain may push sideways, not forward**~~ **Landed 2026-11-26
+   (`pulse-blast-push-axis`)**: measured live, 11 drains on two PPSSPP boots, every velocity
+   change on the left row with the pending vector's full length (92,
+   [contact-response.md](../../docs/ghidra/functions/psp-pulse-usa/contact-response.md#the-drain-pushes-along-the-side-row-measured-2026-11-26));
+   `Laws::PULSE` sets `pending_impulse_on_side`, Pure inherits. `scripts/psp-pending-drain.py`
+   reproduces the capture. Also open from the HD push: whether HD's slot `+0x50` is the nose (60), and
    Omega's and 2048's own drains: HD's law inherited reddens `omega_event_xp_ground_truth` and
    `sol_ground_truth::a_field_of_seven_laps_2048_sol_at_ace`, so both keep the immediate push
    (chosen) until their drains are read (Omega `Rocket_HitCraft` `0x0139a6b0` posts into
