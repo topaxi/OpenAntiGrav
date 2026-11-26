@@ -1142,8 +1142,8 @@ dropped lines the late counts are 2 to 5 for "after" and 2 to 4 for "before".
 
 **Verdict: the probe does not cause the time trial's late seconds** (confidence **85**). The ranges
 overlap (after 8 and 15, before 23 and 13), and across all five "after" runs, the three earlier ones
-included (15, 22 and 21 lines against 9, 14 and 13), no probe began after the 8 dropped lines. After
-its early revert a loop at the power limit did not hold the 4 s of quiet a probe waits for again.
+included (15, 22 and 21 lines against 9, 14 and 13), no probe began after the 8 dropped lines. A
+loop at the power limit seldom holds the 4 s of quiet a probe waits for.
 
 Not covered: the same time trial undocked, and Zone's park with throttle bits and the profile
 sampled, which needs the Deck undocked.
