@@ -570,7 +570,10 @@ def main():
     pair.rec["ours"].update({"mode": mode, "team": args.team, "variant": args.variant, "flags": [str(c) for c in base[2:]],
                              "pose_arg": pose, "camera_pose": numbers, "yaw_agreement": agree})
     pair.rec["original"]["camera"] = camera
-    pair.rec["original"]["ship"] = ship
+    # The shot's every mine read and each object's bytes stay in the shot record: the pair keeps the read it used
+    # (`original.detonator.mine_read`, `original.detonator.mines`).
+    pair.rec["original"]["ship"] = dict(ship, mine_reads=len(ship.get("mine_reads") or []),
+                                        mines=[{k: v for k, v in m.items() if k != "raw"} for m in ship.get("mines") or []])
     # A craft resting after GO turns, in the original as in ours (bank-to-yaw, docs/physics/grid-state.md), and the
     # original's pose has already turned for the clock it was read at. Running that clock again from it turned ours
     # twice, so `--pose-hold` puts the craft back on the fed pose for the frame and the last trace row; the clock,

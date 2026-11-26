@@ -297,6 +297,9 @@ placement RNG cannot match the original's `Libc_Rand` (a departure, documented).
   (`det-mine-spikes`, `detonator-mine-draw.md`, "The spikes in a pair"): the old `mines-ahead` pair carried no envelopes;
   re-grabbed with them, ours' near mines are lit and spiked at the original's size (same theirs 15.44 -> 13.93). Open: re-grab
   `cannon-volley` with envelopes (fire so the press lands at 1.87 s, not 2.20); `pad`'s floor is music-lit differently on a re-grab.
+  The pair now takes each mine's envelope at the picture's tick (`detonator-mine-draw.md`, "The envelope at the picture's
+  tick"); near-ball boxes within 20 grey. Next: the mine spin `R(up, 4 * age)` from world axes (read, not wired: ours keeps
+  no mine age), and ours' `PitchVolume` band (0.03 against the original's 0.32 on one frame).
   (3) ~~Ours builds the football and spikes with no tangent~~: wired (`Mesh::inline_tangents`, `+10`); the dark centre is
   gone, ours' core 143 -> 157.5 against the original's 188, so the body is still darker than the original's white.
 
