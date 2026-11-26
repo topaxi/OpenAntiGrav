@@ -74,7 +74,7 @@ Unpinned, 3840x2160, 60 Hz, three interleaved runs each (`docs/rendering/dynamic
 "The probe rise"): Zone settles at 0.90 (0.895 to 0.906) against 0.84 (0.831 to 0.863), with no
 more size changes a minute (8 to 17 against 15 to 19) and no second whose p99 passed 20.8 ms in
 either. The GPU clock's median rises from about 1040 to about 1400 MHz, and its power from about
-8 to about 11 W. The time trial does not move (0.98 both). 1920x1080 and 1280x800 stay at 1.00
+8 to about 11 W. The time trial's scale does not move (0.98 both); it had more seconds with a p99 over 20.8 ms after (15 to 22) than before (9 to 14), unresolved: the worst run fired no probe. 1920x1080 and 1280x800 stay at 1.00
 with no probe. With the clock pinned at 1600 MHz (a steady clock), Zone settles at 0.96 with and
 without the probe; every probe there reverted.
 

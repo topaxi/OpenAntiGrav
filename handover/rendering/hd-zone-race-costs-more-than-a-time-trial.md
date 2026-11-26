@@ -23,6 +23,8 @@ Measurements, the cause and the landed part:
   11 W) is the maintainer's call.
 - **The time trial at 4K loses frames on the Deck** (58 to 191 a minute on both binaries, 2026-11-26),
   GPU bound at the top clock with the scale at 0.98. Not seen on the earlier day (0.93 then).
+  Seconds with a p99 over 20.8 ms were 9 to 14 before the probe and 15 to 22 after; the worst
+  run fired no probe. Settle it with 2+2 time trials in reversed order (after first).
 - **The reporter's setup is not known.** At 1280x800 and 1920x1080 both modes hold 100 %, so the
   75 % seen was a larger output or a lower clock than here. A time trial "at 100 %" was not
   reproduced at 4K (0.93).

@@ -1114,8 +1114,11 @@ power the medians over the race.
 - **The time trial does not move.** Its clock is already at the top (1570 MHz), so 2 probes fired
   in three runs, both reverted on a late frame. Its lost frames are high on both binaries, and
   higher than the same time trial on an earlier day (0.93 then, 0.98 now): the time trial at 4K is
-  GPU bound at the top clock, which the probe does not cause. The difference between the arms is
-  inside their own spread (58 to 148 before, 88 to 191 after; three runs each).
+  GPU bound at the top clock. Lost frames overlap between the arms (58 to 148 before, 88 to 191
+  after), but seconds with a p99 over 20.8 ms do not (9, 14, 13 before; 15, 22, 21 after). The
+  probe is an unlikely cause: the worst run (22 such seconds) fired no probe, and with no trial
+  running the controller does what it did before. Run order or heat is not ruled out (the arms
+  alternated, before first); unresolved.
 - **1920x1080 and 1280x800** (Zone, one run each, 60 and 90 Hz): 1.00 before and after, no probe,
   no size change, no lost frame.
 - The first probe build (0.5 s ramp, `8dc1a3d29`), three Zone runs: 0.826, 0.916, 0.865.
