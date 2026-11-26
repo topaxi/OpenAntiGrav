@@ -2627,6 +2627,56 @@ Top-left quarter mean RGB (x0..960, y0..540), original / ours, same binary (the 
 
 Ours shows the blue wash where the original does (top-left blue 25.0 against 23.7; top-right `(24.4, 13.4, 26.6)` against `(25.9, 12.8, 26.7)`). Ours' round hit a mine (score 0000100, ammo 13) where the original's did not (0000000, ammo 14); mines in the two are ours' seeded plus carried ones. 2048 and Omega: not applicable, an HD pair.
 
+### The volley pair's difference, split (2026-11-26, `det-cannon-hot-gap`)
+
+`cannon-volley-hot` read 11.47 mean grey, with ours' score at 100 and ammo 13 against the original's 0 and 14, ours' round having hit a mine. The
+cause was the capture state, not the layout (the 80 mines are the original's): ours ran to the HUD clock's tick (`T - 3`) with the camera at the push
+buffer's frame, while the picture was about `T - 7.5`. At `T - 3` ours had fired its second volley and its first had reached a mine; at the picture's
+tick it has fired once and hit nothing.
+
+**The picture's lag without mines** (`hd_picture_lag.static_fit`). The mine fit needs two mines 8 to 50 units ahead; this frame's nearest are 74
+to 81. The fallback renders ours with camera and craft `k` ticks behind the push buffer along the camera's own velocity (`ship.rig_eye`), at the
+picture's tick, and takes the `k` whose edges (below the top 380 rows, less HUD, hull and bright blobs) correlate best with the original's. It
+takes only an interior peak that beats every lag 1.5 ticks away by 0.05, and needs the scenery's animation clock (the floor dashes run on it).
+
+| Grab (skew) | Mine fit `k` | Static `k` |
+| --- | --- | --- |
+| `mines-ahead` (2) | 3.06 | about 2.8 (offset sweep around the fit) |
+| `det-pair-lag` `b7/01` (2) | 3.95 | 3.50 |
+| `det-regrab-fitted` `h5` (4) | 2.15 | 1.75 |
+| `det-mine-spikes` `shots3/01` (4) | 2.33 | 1.75 |
+| `det-mine-spin` `shots6/00` (2) | 3.93 | refused: the best score is at the end of the range |
+| `det-volley-pair` `shots2/00` (4, no world clock) | 2.94 | 0.50, why the clock is now required |
+
+So it reads 0.25 to 0.6 ticks low where it agrees, and can fail. On `cannon-volley-hot` it gives 3.50 (score 0.54 against 0.43 to 0.47 at
+0 to 2); the pad's white walls, an independent object, put it between 3.5 and 4.25 (right edge at x 1526, 1514 against the original's 1516;
+1584 unshifted). Confidence 70 for 3.5 to 4, seen on one grab. "The picture is at `T - 6`" (next section but two) would give `k = 2` here and is
+refused by both readings; this stop followed a fire hold, whose many short stops that section found to fit no single value.
+
+**Ours' tick is the picture's** (`compare_env.picture_tick`, `GO + round(60 T - skew - k)`, and the gantry pin with it) wherever the lag was
+measured, by mines or static scene, on the first render and on every re-render (`compare-rerender-ours.py`). A pair with no measured lag keeps
+the HUD clock's `T - 3`.
+
+| Pair (same `theirs.png`) | Before | After |
+| --- | --- | --- |
+| `cannon-volley-hot` | 11.47 | 10.31 (lag 3.5 static, tick 393 to 388) |
+| `mines-ahead` (before the mine spin) | 13.17 | 13.13 (tick 429 to 427) |
+| `cannon-volley`, `pad` (no measured lag) | 14.32, 7.61 | unchanged |
+
+**What is left on `cannon-volley-hot`** (grey = that box's share of the 10.31 whole-frame mean; boxes are `x0, y0, x1, y1`):
+
+| Gap | Box | Grey | Also on | Kind, confidence |
+| --- | --- | --- | --- | --- |
+| Striped metal grilles ours draws bright where the original's frame is near black (ours +22 to +37) | `215,0,520,150` and `1030,150,1360,305` | 0.95 + 0.92 | `pad` (both), `mines-ahead` and `cannon-volley` (the second) | draw, 90; cause unread (a material the Detonator stage darkens, 40) |
+| The score box's side wings are white-striped in the original, solid red in ours | `690,40,830,235` and `1090,40,1230,235` | 0.48 + 0.69 | all four | draw, 90 |
+| Score digits and `1/14` about 1.1 to 1.25 times the original's width | `790,100,1135,180` and `85,60,320,225` | 0.79 + 0.38 | all four | draw, 85; font scale or spacing unread |
+| Hull brighter than the original (ours +7) | `825,720,1100,980` | 0.74 | all four (+5 to +8) | draw, 80 (the fuselage overlay is already open) |
+| Muzzle flashes smaller and dimmer (ours -44) | `825,620,1100,720` | 0.70 | firing frame only | capture state, 55: ours presses with no input latency, so its flash is older than the original's |
+| Near floor right of the hull (ours +4) | `1120,640,1920,850` | 0.48 | all four (+2 to +5) | draw or band timing, 50 |
+
+Not carried, so not judged here: the mines' envelopes are the pause's (this record has no earlier reads), 7.5 ticks newer than the picture; the
+craft is held at rest, so a round leaves at 500 units/s instead of 500 + 3.6 x the craft's speed; the track-name ticker's scroll is wall-clock.
+
 ### The hull's frame pose in a Detonator pair (2026-11-23, `det-camera`)
 
 **Report (maintainer, from the pairs):** "ours' shots use the wrong camera setting/distance, the original is 'close', ours is 'far'."
@@ -2794,10 +2844,10 @@ recipe that gave 6.0 on every grab is the first stop of a boot or stops 16 or mo
 frame and fits `k` = ticks behind the push buffer's camera with the camera moving at its own velocity (`rpcs3-hd-detonator-shots.py` now records the camera
 rig's eye in RAM, `ship.rig_eye`: the push buffer's eye is the same rig `skew` ticks earlier, so `(rig_eye - eye) / skew` is the camera's velocity,
 the craft's speed but not its direction). Mines nearer than 8 or farther than 50 units are not used, a mine whose own best `k` leaves 8 px is dropped, two
-must remain and agree to 1 tick; otherwise the pair says "not corrected" and keeps the push buffer's frame (`original.presented_lag.picture`,
-a caveat). A fit moves ours' camera and craft back `k` ticks of that velocity (the hull keeps its place in the frame) and records
-`original.presented_lag.picture_ticks`, `picture_total_ticks` (skew + k) and `picture_fit` (per mine). `--picture-lag off` is the old behaviour.
-The bands, the gantry clock and the world clock stay RAM's.
+must remain and agree to 1 tick; otherwise the static scene is tried (`static_fit`, "The volley pair's difference, split"), and a pair that fits
+neither says "not corrected" and keeps the push buffer's frame (`original.presented_lag.picture`, a caveat). A fit moves ours' camera and craft back `k` ticks of that velocity (the hull keeps its place in the frame) and records
+`original.presented_lag.picture_ticks`, `picture_total_ticks` (skew + k), `picture_basis` and `picture_fit` (per mine) or `picture_static_fit`.
+`--picture-lag off` keeps the push buffer's frame. Ours' tick and gantry pin are the picture's. The bands stay RAM's.
 
 Mean grey (the page's score, 0 to 255) and RMSE of ours against the original, `off` then `fit`, on pairs made from fresh grabs on the
 `hd-detonator-talons-feisar-grid-late` state (all but the second-boot mines pair are `REFUSED` by the heading check, 1.04 to 1.71 degrees against 1.00,
