@@ -109,10 +109,16 @@ Rocket's).
 
 ### One-live exclusions
 
-Both draws also drop a weapon from the total, and from the walk, while enough of it is live: the
-LeachBeam while the count at `*(TOC-0x30e0)` is non-zero, the Quake while `*(TOC-0x30dc)` is, and
-the Cannon while `*(TOC-0x30d8)` is 2 or more. What those three counts are is **not read**
-(confidence 55 that they count live instances), and this project does not apply them.
+Both draws also drop a weapon from the total, and from the walk, while the race already has enough
+of it. Confidence **85** for the three rules, each writer read at instruction level; no live run.
+
+| Excluded | While | Set | Released |
+| --- | --- | --- | --- |
+| LeachBeam | the word at `0x009943a0` (`*(TOC-0x30e0)`) is non-zero: one is held or running in the race | `1` by the draw's arm call (`0x0013ca60`), `2` by `LeachBeamManager_Fire`, both through the setter `0x0012d820` | `0` through the same setter when the beam ends, and when the held one is given up in `Ship_UpdatePickup_q` (`0x000e9b7c`) |
+| Quake | the word at `0x009943a4` (`*(TOC-0x30dc)`) is non-zero, the same | `1` by the arm call (`0x00147ce0`), `2` by `QuakeManager_Fire`, through `0x0012d8c8` | `0` through the same setter, and at `0x000e9b8c` |
+| Cannon | the count at `0x00993d80` (`*(TOC-0x30d8)`) is 2 or more | `+1` by the arm call (`0x0010f2e8`) | `-1` when the clip empties (`0x000e9cd0`) and when the held one is given up (`0x000e95f8`) |
+
+All three count from the grant, not from the shot. This project applies none of them.
 
 ## Names
 
