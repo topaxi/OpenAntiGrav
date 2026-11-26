@@ -528,6 +528,7 @@ pub fn run(
                 force_bomb_trip: None,
                 force_missile_hit: None,
                 force_rocket_hit: None,
+                force_rocket_hit_velocity: None,
                 force_quake: None,
                 remote_correction: None,
                 net: None,

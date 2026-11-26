@@ -337,10 +337,28 @@ sprite templates meet the GE drop on `WO_REPULSER` alone. Pulse PS2 **I:Pulse PS
 for the near tests, the squares' fade factor **I:Pulse** ([particle-bars.md](../ghidra/functions/psp-pure-usa/particle-bars.md#near-the-eye-2026-11-26)),
 **I:Pulse** for the GE drop.
 
-HD's particle sprites are `.gtf` entries with bottom-up rows, and every HD effect draws them
-turned top-down since 2026-11-26 (M, against a far Rocket hit on RPCS3,
-[particle-fill.md](../rendering/particle-fill.md#hds-particle-sprites-are-bottom-up)). 2048's
+HD's particle sprites are `.gtf` entries with bottom-up rows, and every HD effect that loads one
+draws it turned top-down since 2026-11-26 (M, against a far Rocket hit on RPCS3,
+[particle-fill.md](../rendering/particle-fill.md#hds-particle-sprites-are-bottom-up); the same
+handedness read off the Rocket, Plasma, Missile, Quake and Detonator draws,
+[the command ring](../rendering/particle-fill.md#every-effect-that-loads-a-sprite-read-off-the-command-ring)).
+The Mine, Bomb, Missile explosion and Detonator Mine and Bomb explosions load none. 2048's
 `.gxt` and Omega's `.gnf` are top-down already: checked, differs.
+
+**Flipbooks.** Cell 0 is the authored top-left. HD and Fury advance them over life or at the
+emitter's rate, spawn inside an authored range and hold on an authored frame (M, executable and
+films; wired, `oag_title::Effects::flipbooks`,
+[particle-render.md](../ghidra/functions/ps3-hdfury-eu/particle-render.md#the-atlas-frame)).
+2048: A, differs (wraps at the frame count, no hold), not wired. Omega: A, carries both HD's
+update (applies, not wired) and 2048's (differs).
+
+**Particle size over the emitter's run.** HD and Fury scale each particle between two authored
+bounds by when in the run it was born; the Rocket craft blast's `trail`, the ship explosion's
+trails and the Nitro death ribbon author it (M, executable; one film, of `trail`; wired,
+`oag_title::Effects::size_ramps`,
+[particle-render.md](../ghidra/functions/ps3-hdfury-eu/particle-render.md#the-per-particle-size-multiplier)).
+The parent-age and random forms of the same multiplier are not wired. 2048 and Omega: A, the
+init carries it (applies, not wired).
 
 | Weapon | Pulse | Pure | HD / Fury | 2048 | Omega |
 | --- | --- | --- | --- | --- | --- |

@@ -1,8 +1,8 @@
 ---
-status: measure
+status: ready-to-wire
 titles: [hd, omega, 2048]
 updated: 2026-11-26
-summary: "Blast fill is the disc's own; half-res target parked by the maintainer. Owed: streak film, template cap source, flare rows, 1.7 ms at 1080p"
+summary: "Ready: 31 unsprited HD effects. Owed: streak film, Rocket blast gaps, cap source, near-pair struck velocity; half-res parked"
 size: M (50)
 difficulty: medium (55)
 ---
@@ -38,15 +38,78 @@ blast the struck craft's velocity, on HD, 2048 and Omega
   `oag_raceplay::assets::decode_texture` (flare and trail art) and `load/caustic.rs`. Compare each
   with its draw's `v` in a command ring before touching it; a radially symmetric sprite shows
   nothing either way.
-- **Every HD `.gtf` particle effect moved with the turn; only the Rocket's craft blast was
-  compared with the original.** The Plasma, Missile, Mine, Bomb, Quake and Detonator effects
-  want one film each beside ours, flipbook frame order first (confidence 80).
-- **The 12-unit pairs' hit tick (`--force-rocket-hit 711:7`) was never checked against the
-  original's spawn point.** The far films put the wash quad in world space (view position through
-  the frame's camera); the same on `hit2` says where ours should stand.
-- **A posed blast carries our opponent's velocity, not the original's**, so travelling fireballs
-  do not match in a pair. A flag that writes the struck craft's velocity at the forced hit would
-  take that out of the metric.
+- **The far Rocket blast with the film's velocity is still not the original's**
+  (`particle-fill.md`, "The pose throws the far blast at the camera"): the cloud is smaller,
+  `trail` reads as smooth white lobes, and the grey smoke streaming toward the camera is missing.
+- **Near pairs (`rocket-craft-hit-0100`, `-0233`): spawn tick and struck velocity unchecked.**
+  `--force-rocket-hit 711:7` was never compared with the original's spawn point (the far films put
+  the wash quad in world space: view position through the frame's camera; the same on `hit2` says
+  where ours should stand), and ours hands the blast our own opponent's velocity. `hit2`'s
+  `struck_pose.vel` is `(89.31, 13.92, 96.76)`; pose it with `--force-rocket-hit-velocity` once the
+  spawn point is right.
+- **Lead, not checked: the tick that lands a forced Rocket hit adds about 20 units a second upward
+  to the struck craft** (set `y` 11, read 31 at the blast). The HD films' struck craft show no such
+  jump, comparing frames 8 to 23 ticks apart. Whether it is the Rocket's impulse or our hover after
+  the craft is moved onto the Rocket was not separated; only the first would matter in a race.
+- **The size multiplier's other arms** (`particle-render.md`, "The per-particle size
+  multiplier"): the parent-age arm (`TRAIL_SMOKE`, `plasma_goo_trail`, `SPARK_TRAILS`) and the
+  random arm (most of 58 emitters; it adds a draw to the effect's generator). The run arm is
+  wired.
+- **Lead, not checked: HD's streak colour gain may be the size lower bound.** Ours dims the
+  far-bar effects' class 6 streaks by `+0xc84` (`StreakDraw::colour_gain`, e.g. `0.7` on
+  `WO_TRAIL_HITSHIP`), a reading taken from Omega, whose layout has a separate word there. HD's
+  init reads `+0xc84` as the multiplier's lower bound. Check: does HD's `PartRender` draw read it?
+- **Size multiplier and spawn range on 2048 and Omega: they apply, not wired.** Both inits carry
+  HD's law; Omega's record offsets are 8 bytes later and `oag_pob` reads HD's
+  (`particle-render.md`, "The atlas frame"). To read first: what their instance fraction holds.
+- **Flipbook advance on 2048 and Omega is not wired**: 2048's update wraps at the frame count with
+  no hold; Omega carries that one and HD's, and which serves which directory is unread.
+
+### Ready to wire: 31 HD effects load and draw no sprite of their own
+
+Census over the disc (every effect HD's loader loads that is not in `oag_hd`'s `SPRITES`): 89
+emitter and template texture references, and **every one exists as `/data/psys/tex/<stem>.gtf`
+and decodes**. We draw them with the procedural profile (`docs/formats/pob.md`, "play the
+data"). The Detonator Mine and Bomb explosions' `Debris_DetonatorMines`, `Debris_LightBarrier`
+and `explosion_fijets_8x8_grey_gaseous` were seen bound by the original
+(`docs/rendering/particle-fill.md`, "Every effect that loads a sprite").
+
+To wire: add the effect to `SPRITES` (`crates/hd/src/effects.rs`), then pair it: each one
+changes what a race draws. Weapons first (Missile, Mine, Bomb, Detonator rows).
+
+| Effect | `.gtf` stems referenced |
+| --- | --- |
+| `WO_SHIP_COLL_SPARK_DAMAGE` | `quakesmoke32x32`, `spark_mblurred_grey`, `spark_mblurred` |
+| `WO_SHIP_COLL_SPARK_NODAMAGE` | `spark_mblurred_grey`, `yellow_glow`, `spark_mblurred` |
+| `WO_ROCKET_FLARE` | `DC_Flare_rich`, `fireball_1024x512_yellow`, `spark_mblurred`, `smoke_anim_8x4` |
+| `WO_SHURIKEN_HEAD` | `shuriken_trail_anim` |
+| `WO_SHURIKEN_TRAIL` | `shuriken_trail_anim` |
+| `WO_SHURIKEN_BOUNCE` | `pointglow`, `DC_Flare_rich`, `DC_Circle` |
+| `WO_SHURIKEN_EXPIRE` | `pointglow`, `DC_Flare_rich`, `shuriken_trail_anim` |
+| `WO_MISSILE_EXPLO` | `molten_debris_64x64`, `missile_shockring_original_HD_new` |
+| `WO_MISSILE_BOUNCE` | `spark_mblurred`, `molten_debris_64x64` |
+| `WO_MINE_EXPLO` | `smoke_anim_8x4`, `debris006_128x128x4`, `explosion_01_blurred_yellow_streaks_128x128`, `DC_Circle_rich_anim_4x2`, `spark_mblurred_grey` |
+| `WO_BOMB_SMOKERING` | `debris006_128x128x4`, `DC_Flare_D`, `spark_mblurred`, `smoke_anim_8x4` |
+| `WO_BOMB_RAYS` | `bomb_spike` |
+| `WO_CANNON_SPARKS` | `smoke_anim_8x4`, `explosion_01_blurred_yellow_streaks_128x128`, `spark_mblurred`, `molten_debris_64x64`, `explosion_fijets_8x8` |
+| `WO_MINE_EXPLO_DETONATOR_DEAD` | `Debris_DetonatorMines`, `explosion_01_blurred_white_streaks_128x128`, `spark_mblurred_grey` |
+| `WO_MINE_EXPLO_DETONATOR` | `glow_white`, `DC_Flare_D`, `spark_mblurred_grey`, `Debris_DetonatorMines`, `explosion_01_blurred_white_streaks_128x128`, `explosion_fijets_8x8_grey_gaseous` |
+| `WO_BOMB_EXPLO_DETONATOR` | `glow_white`, `DC_Flare_D`, `spark_mblurred_grey`, `Debris_LightBarrier`, `explosion_01_blurred_white_streaks_128x128` |
+| `WO_REPULSER_BLAST` | `DC_Circle_rich` |
+| `WO_REPULSER` | `pulse_repulsor_sprite1_ADD`, `psysed_default_glow` |
+| `WO_LEACHBEAM_ENERGY` | `plasma_glare_ADD` |
+| `WO_LEACHBEAM_CHARGING` | `spark_mblurred_grey` |
+| `WO_LEACHBEAM_ABSORB` | `spark_mblurred_grey` |
+| `WO_SHIP_SPARK_DAMAGE_WEAPON` | `yellow_glow`, `spark_mblurred` |
+| `WO_WEAPON_ABSORB` | `HD_electric_arc_8x8`, `DC_Flare_A_blurred_bright`, `particl3_blue` |
+| `WO_SHIP_SPARK_DAMAGE_LEACHBEAM` | `spark_mblurred_grey`, `blue_glow2`, `vandergraf_balls_1024x512` |
+| `WO_SHIP_DEATH_DAMAGE_PLUME` | `muzzle_flare_pSprite_64x64_ADD`, `smoke_new4_8x4`, `spark_mblurred`, `fireball_1024x512_yellow` |
+| `WO_DEBRIS_FIRE` | `muzzle_flare_pSprite_64x64_ADD`, `smoke_new4_8x4`, `spark_mblurred`, `fireball_1024x512_yellow` |
+| `WO_DAMAGE_MILD` | `muzzle_flare_pSprite_64x64_ADD`, `spark_mblurred` |
+| `WO_DAMAGE_MODERATE` | `muzzle_flare_pSprite_64x64_ADD`, `spark_mblurred`, `smoke_anim_8x4` |
+| `WO_DAMAGE_CRITICAL` | `fireball_1024x512_yellow` |
+| `WO_BLUE_WELDER` | `blue_glow2`, `disruptor_spark` |
+| `WO_MODESTO_STEAM_A` | `quakesmoke32x32` |
 
 ### Particles into a half-resolution target, composited
 

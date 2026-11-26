@@ -341,11 +341,12 @@ const FORCED_BLAST_PIXELS: usize = 10_000;
 
 /// Talon's Junction, the player firing one volley of Rockets, with or without
 /// `--force-rocket-hit` putting rival 1 on one of them after tick 289.
-fn rocket_frame(forced: bool) -> Option<Vec<[u8; 3]>> {
+fn rocket_frame(forced: bool, velocity: Option<&str>) -> Option<Vec<[u8; 3]>> {
     let image = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso")?;
     let scratch = std::env::temp_dir().join(format!(
-        "oag-hd-rocket-blast-{}-{forced}",
-        std::process::id()
+        "oag-hd-rocket-blast-{}-{forced}-{}",
+        std::process::id(),
+        velocity.is_some()
     ));
     std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
     let out = scratch.join("frame.png");
@@ -360,6 +361,9 @@ fn rocket_frame(forced: bool) -> Option<Vec<[u8; 3]>> {
         .args(["--motion-blur", "off", "--ticks", "296", "--give", "rocket"]);
     if forced {
         game.args(["--force-rocket-hit", "289:1"]);
+    }
+    if let Some(velocity) = velocity {
+        game.args(["--force-rocket-hit-velocity", velocity]);
     }
     let status = game
         .arg("--input-script")
@@ -382,8 +386,8 @@ fn rocket_frame(forced: bool) -> Option<Vec<[u8; 3]>> {
 #[test]
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso and a GPU adapter"]
 fn force_rocket_hit_blows_a_rocket_on_the_named_craft_at_its_tick() {
-    let forced = rocket_frame(true).expect("image");
-    let free = rocket_frame(false).expect("image");
+    let forced = rocket_frame(true, None).expect("image");
+    let free = rocket_frame(false, None).expect("image");
     let changed = forced
         .iter()
         .zip(&free)
@@ -397,5 +401,25 @@ fn force_rocket_hit_blows_a_rocket_on_the_named_craft_at_its_tick() {
     assert!(
         changed > FORCED_BLAST_PIXELS,
         "no blast from the forced hit: {changed} pixels changed"
+    );
+}
+
+/// The velocity flag reaches the craft the forced hit strikes: the blast that carries it, and the
+/// craft itself, stand elsewhere 7 ticks later. The two runs differ in nothing else.
+#[cfg(feature = "dev-cli")]
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso and a GPU adapter"]
+fn force_rocket_hit_velocity_moves_what_the_forced_hit_draws() {
+    let own = rocket_frame(true, None).expect("image");
+    let thrown = rocket_frame(true, Some("-300,0,0")).expect("image");
+    let changed = own
+        .iter()
+        .zip(&thrown)
+        .filter(|(a, b)| a.iter().zip(b.iter()).any(|(x, y)| x.abs_diff(*y) > 64))
+        .count();
+    println!("at tick 296: {changed} pixels changed by the velocity");
+    assert!(
+        changed > FORCED_BLAST_PIXELS,
+        "the velocity changed only {changed} pixels"
     );
 }

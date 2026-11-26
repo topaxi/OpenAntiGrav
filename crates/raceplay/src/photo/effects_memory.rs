@@ -68,7 +68,7 @@ sort_fields! {
         hd_trail_active, spectates_from_start, photo, picture, restores, chase_params, chase_far, chase_close,
         viewpoints, internal_params, zoom, zoom_borrowed, ps2_trail, hd_plasma_blast,
         plasma_blast_law, disruptor_halo_law, disruptor_craft_law, pulse_laid_pose,
-        laid_pose_scaled, craft_blast_carry, destroy_camera, absorb_burst, absorb_anchors, hull_reach,
+        laid_pose_scaled, craft_blast_carry, forced_blast_velocity, destroy_camera, absorb_burst, absorb_anchors, hull_reach,
         trail_sparks, campaign_event, score_pass, medal_targets, shield_was_up, huds, pair_spoil,
         split_gap, incoming_raises, nozzles, nozzle_axes, engine_lights, spu_vertex_lights,
         hull_points, hd_weapon_lights, spark_anchors, collision_fx, effects, handles,

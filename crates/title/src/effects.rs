@@ -392,11 +392,10 @@ pub struct Effects {
     /// Effects whose own sprites are read from the title's separate texture
     /// entries, where the sprite source is not the `.pob` itself: HD's
     /// `/data/psys/tex/<stem>.gtf`, named by each emitter's authored path.
-    /// A listed effect draws each particle on its spawn frame: its sprites are
-    /// flipbooks, and HD's own frame advance (and which cell is frame 0) is
-    /// unread. An effect not listed keeps the procedural profile for every emitter, so
-    /// wiring one is a decision made per effect against a matched capture,
-    /// never by extension to the rest of the title's `.pob` files.
+    /// A listed effect's sprites are flipbooks, walked under [`Self::flipbooks`]. An
+    /// effect not listed keeps the procedural profile for every emitter, so wiring one is
+    /// a decision made per effect against a matched capture, never by extension to the
+    /// rest of the title's `.pob` files.
     pub sprites: &'static [&'static str],
     /// Effects whose line, rectangle, box and ring emitters place a particle
     /// by the emitter extent law on a source that is not Pulse on the PSP,
@@ -458,6 +457,17 @@ pub struct Effects {
     /// `Rocket_SpawnCraftExplosion_q` writes no velocity) or is unread. See
     /// `docs/ghidra/functions/ps3-hdfury-eu/rocket-craft-blast.md`.
     pub craft_blast_carry: Option<Origin>,
+    /// Whether the original's particle update walks its flipbooks: Pulse's frame advance,
+    /// plus the emitter record's own spawn range and hold frame
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/particle-render.md`, "The atlas frame"). `None`
+    /// on a title whose update is unread: every particle keeps its spawn frame, drawn from the
+    /// whole grid.
+    pub flipbooks: Option<Origin>,
+    /// Whether the original's particle init scales a particle by the record's own multiplier,
+    /// ramped over the emitter's run (`oag_pob::flags::SIZE_RAMP_OVER_RUN`;
+    /// `docs/ghidra/functions/ps3-hdfury-eu/particle-render.md`, "The per-particle size
+    /// multiplier"). `None` on a title whose init is unread: the size channel alone.
+    pub size_ramps: Option<Origin>,
 }
 
 /// A billboard nearer than `cull_depth` world units along the view draws nothing, and one
@@ -559,6 +569,8 @@ impl Effects {
         trail_hits_native: false,
         near_law: None,
         craft_blast_carry: None,
+        flipbooks: None,
+        size_ramps: None,
     };
 
     /// The entry for `trigger`.

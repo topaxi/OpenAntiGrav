@@ -526,11 +526,46 @@ fn a_development_build_accepts_seed_and_give() {
     assert_eq!(cli.give(), Some("rocket"));
 }
 
+#[cfg(feature = "dev-cli")]
+#[test]
+fn a_development_build_reads_the_struck_crafts_velocity() {
+    let cli = Cli::try_parse_from([
+        "oag-game",
+        "--race",
+        "--force-rocket-hit",
+        "717:7",
+        "--force-rocket-hit-velocity",
+        "-88.5,11,55.25",
+    ])
+    .expect("a negative component parses");
+    assert_eq!(
+        crate::app::args::velocity(cli.force_rocket_hit_velocity()).expect("three numbers"),
+        Some(oag_core::math::Vec3::new(-88.5, 11.0, 55.25))
+    );
+    for bad in ["88,11", "88,11,55,0", "88,x,55", "88,NaN,55"] {
+        assert!(crate::app::args::velocity(Some(bad)).is_err(), "{bad}");
+    }
+    assert!(
+        Cli::try_parse_from(["oag-game", "--race", "--force-rocket-hit-velocity", "1,2,3"])
+            .is_err(),
+        "the velocity needs a forced hit to apply to"
+    );
+}
+
 #[cfg(not(feature = "dev-cli"))]
 #[test]
 fn a_release_build_rejects_seed_and_give() {
-    for flag in [["--seed", "7"], ["--give", "rocket"]] {
-        let error = Cli::try_parse_from(["oag-game", "--race", flag[0], flag[1]])
+    for flag in [
+        vec!["--seed", "7"],
+        vec!["--give", "rocket"],
+        vec![
+            "--force-rocket-hit",
+            "9:1",
+            "--force-rocket-hit-velocity",
+            "1,2,3",
+        ],
+    ] {
+        let error = Cli::try_parse_from(["oag-game", "--race"].into_iter().chain(flag.clone()))
             .expect_err("a build without dev-cli has no such flag");
         assert_eq!(
             error.kind(),

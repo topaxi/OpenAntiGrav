@@ -67,3 +67,11 @@ pub const REPEAT_COUNT: u32 = 0x80_0000;
 pub const STREAK_FROM_SPAWN: u32 = 0x200_0000;
 /// Each particle takes a random sprite-atlas frame.
 pub const RANDOM_ATLAS_FRAME: u32 = 0x400_0000;
+/// Both bits set: HD takes each particle's size multiplier from a ramp over
+/// [`Emitter::size_span`] and not from a random draw inside it
+/// (`docs/ghidra/functions/ps3-hdfury-eu/particle-render.md`, "The per-particle size
+/// multiplier"). Read in HD's executable alone.
+pub const SIZE_RAMP: u32 = 0x2000_4000;
+/// With [`SIZE_RAMP`]: the ramp runs over the emitter's own run, and over the parent
+/// particle's life when clear.
+pub const SIZE_RAMP_OVER_RUN: u32 = 0x1_0000;

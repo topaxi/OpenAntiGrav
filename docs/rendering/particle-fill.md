@@ -588,12 +588,9 @@ below it with its flat edge on top.
 `oag_fx::psys::sprite::Sprite` is documented top-down, but `Sprite::from_gtf` kept the file's
 rows. 2048's `.gxt` and Omega's `.gnf` of the same `yellow_glow_hemi` store the half disc in the
 upper rows: **2048 and Omega: checked, differs** (their files are top-down and load as they
-should). PSP and PS2 sprites come from top-down containers. The flip reaches every HD `.gtf`
-particle sprite, flipbook atlases included: in the same dumps the young white particles sample
-the last eighth of GPU memory (`v` 0.875 to 1.0, the top row of the authored sheet) and older
-ones sample rows toward `v = 0`, so frame rows counted from the top are the original's order
-(read off a few quads, confidence 80). Ours had been counting each HD flipbook's rows from the
-bottom of the authored sheet.
+should). PSP and PS2 sprites come from top-down containers. The flip reaches every `.gtf`
+sprite HD's particle effects load (`oag_title::Effects::sprites`), flipbook atlases included.
+Which way each effect samples them, and which cell a flipbook starts on, are read below.
 
 Pinned by the disc check `check_the_hemisphere_sits_in_the_top_half` (HD, 2048 and Omega).
 
@@ -616,12 +613,179 @@ The 0.233 s pairs swing by 10 and more with the blast's random arrangement; thre
 pair's four seeds improved and one got worse (94.0 to 109.1). The far pair at 0.1 s is the white
 flash filling the frame on both sides and says nothing about the half disc.
 
-**Moved and not measured against the original:** every other HD weapon effect's sprites turned
-too, and the flipbooks count their rows from the other end. The Plasma blast shows it (our
-frame at tick 447 of `a_plasma_explosions_sphere_fades_with_its_age`: 9,974 violet pixels in
-its box before, 10,800 after); the Missile's, the Mine's, the Bomb's, the Quake's and the
-Detonator's effects are in the same position. They rest on the shared quad builder's `v`
-(read here) and the frame order at confidence 80, with no original frame of theirs beside ours.
+### Every effect that loads a sprite, read off the command ring
+
+2026-11-26, RPCS3 0.0.43-20574, HD EU, Talon's Junction. `scripts/rpcs3-hd-particle-ring.py` fires a
+weapon and keeps the command ring and the bound textures frame by frame;
+`scripts/hd-particle-uv.py` reads every particle quad's view-space corners and `uv`, and names each
+texture by finding its dumped bytes in the disc's `/data/psys/tex/*.gtf`.
+
+```sh
+scripts/rpcs3-hd-particle-ring.py --out FILM --state 7 --back 30 --window 0.25,0.9   # on a weapons-on grid
+scripts/psarc.py extract IMAGE:PS3_GAME/USRDIR/DATA02.PSARC GTF /data/psys/tex/       # and DATA00, 03, 06
+scripts/hd-particle-uv.py --gtf GTF --per-frame FILM
+```
+
+Films: `data/reference/hd-capture/particle-uv/` (`rocket1`, `plasma1`, `plasma2`, `missile2`,
+`quake1`, `quake2`, `emp1`, `cannon1`). The two Rocket films of the section above,
+`data/reference/hd-capture/rocket-craft-hit/far1` and `far3`, carry no textures: read them with
+`--textures data/reference/hd-capture/particle-uv/rocket1/tex/textures.json`.
+
+**Which effects can have moved.** Only those whose sprites ours loads: the Rocket's two blasts, the
+ship explosion, the Missile's head, the five Plasma effects, the Quake, the two trail hits, and the
+Detonator's cannon spark and EMP. The Mine, Bomb, Missile explosion and Detonator Mine and Bomb
+explosions load no `.gtf` (no `sprite(s) read` on their line of the loader report) and draw the
+procedural profile, so the flip could not reach them.
+
+**Handedness.** The sign of the determinant of `d(view xy) / d(uv)` says whether a quad shows its
+picture mirrored, whatever its roll. The reference is `yellow_glow_hemi`, whose orientation is
+settled above (`u` right, stored row 0 on the bottom edge), and ours builds every billboard, rolled
+quad, template and strip with that handedness. Confidence 94.
+
+| Weapon fired | Particle quads read, same sign as the reference | opposite sign |
+| --- | --- | --- |
+| Rocket craft hit (three films, two boots) | 9,565 | 2 |
+| Plasma (two films) | 9,789 | 0 |
+| Missile (one film) | 7,722 | 0 |
+| Quake (two films) | 10,294 | 0 |
+| Detonator EMP (one film) | 21,458 | 0 |
+| Detonator cannon (one film) | 133,436 | 180 (0.13 %), nearly all `spark_mblurred_grey`, a symmetric sprite; cause not read |
+
+The counts are every particle quad in the frames, the effects' own and whatever else was in view.
+Missile and Detonator are seen once. The Detonator save state is refused by this RPCS3 build, so its
+grid was reached by walking Racebox from a cold boot (RACE TYPE Detonator, Talon's Junction); the EMP
+was fired with `--button l1 --emp-charge 12 --press-frames 18`, the cannon with `--press-frames 90`.
+
+**Strips (render mode 5 and 6): which end is which.** For a stretched quad whose long axis carries
+`v`, the end farther from its texture's own centre in that frame, larger `v` against smaller `v`:
+`explosion_01_blurred_64x64_ADD` 83 against 5, `..._yellow_streaks_upsidedown` 19 against 1,
+`..._yellow_streaks_128x128` 192 against 4, `..._white_streaks_128x128` 80 against 6,
+`fireball_1024x512_yellow` 101 against 0. So an outward streak leads with the authored top, as
+ours' bar does (the particle's position takes the top row). The Plasma wind-up runs the other way,
+7 against 192 and 45 against 1,559 on the two films (`glow_cleanedges_plasma`), 0 against 33 and
+0 against 287 (`plasma_forks`), and its two emitters
+author a negative speed (-0.50 and -0.48 units a tick): they fly inward. Confidence 90.
+
+Ours samples no sprite at all on the strips of the Rocket's blasts, the Missile head, the Quake and
+the ship explosion (`Effects::far_bars` does not list them), so this reaches the Plasma, the trail
+hits and the two Detonator effects.
+
+### HD advances its flipbooks, from the authored top-left
+
+The four emitters of `WO_ROCKET_EXPLO` that are not random and spread their sheet over their life
+(flag `0x40`; authored lifetime 64 ticks) give the order directly. Highest cell read per frame,
+numbered row-major from the authored top-left, in the two films of "The original draws a
+flat-bottomed dome too":
+
+| Age since the hit | 0.05 s | 0.1 s | 0.167 s | 0.233 s | 0.4 s | 0.55 s |
+| --- | --- | --- | --- | --- | --- | --- |
+| Age in ticks | 3 | 6 | 10 | 14 | 24 | 33 |
+| 8x8 sheets (`smoke_tumult`, `explosion_tumult`, `explosion_BURN_L`) | 2 | 5 | 10 | 13 | 23 | 32 |
+| 8x4 sheet (`smoke_BLUCLD`) | 1 | 2 | 5 | 6 | 11 | 16 |
+
+Cell numbering from the top-left is therefore right (confidence 94): numbered from the first stored
+row the same cells would run backwards, 58 down to 24. The values are Pulse's over-life law,
+`floor(age / lifetime * (frames - 0.02))` (`oag_fx::psys::frames`), to within a tick (confidence 90
+for the over-life law).
+The 8x8 rows alone would not say which law this is: 64 frames over 64 ticks is also one frame a
+tick. The 8x4 sheet reads about half the age, which is the over-life spread; its emitter's
+frame-rate channel (a constant 1) would have given the age itself.
+
+**Ours does this on HD and Fury** (`oag_title::Effects::flipbooks`), with the rate law, the
+authored spawn range and the hold frame, all read in the executable and checked against the same
+films ([particle-render.md](../ghidra/functions/ps3-hdfury-eu/particle-render.md#the-atlas-frame)).
+Before, every HD particle stayed on its spawn frame, so the Rocket craft blast's four layers
+above stayed on the tiny seed of the explosion.
+
+**2048 and Omega: the sheets are the same, their updates differ.** All 17 flipbook sheets HD's
+listed effects name ship in both as `.gxt` and `.gnf`, and each matches HD's turned sheet
+(correlation 0.99 to 1.00; the same sheet turned again gives -0.11 to 0.89). **Flip: checked,
+differs** (their files are already top-down). **Advance: not wired**; the outcome per reader is
+in [particle-render.md](../ghidra/functions/ps3-hdfury-eu/particle-render.md#the-atlas-frame).
+
+### The pairs with the advance in, and the oversize trail
+
+All 31 HD `pair.json` pairs under `compare-page`, rendered with the builds either side of the
+change: 27 byte-identical, the four Rocket craft-hit pairs moved. Whole-frame RMSE against the
+original, mean over particle-stage seeds (`--stage-seed`), levels of 255:
+
+| Pair | Seeds | Before | After | Seed spread (after) |
+| --- | --- | --- | --- | --- |
+| `rocket-craft-hit-0233` | 1-8 | 113.6 | 106.5 | 83.1 to 120.2 |
+| `rocket-craft-hit-0100` | 1-8 | 94.8 | 93.1 | 92.0 to 94.4 |
+| `rocket-craft-far-hit-0100` | 1-6 | 34.9 | 34.9 | 33.9 to 35.5 |
+| `rocket-craft-far-hit-0233` | 1-24 | 69.2 | 72.0 | 60.9 to 85.4 |
+
+The far hit at 0.233 s is **worse by 2.8**, paired by seed (about three standard errors).
+
+- It is the spawn range alone: with the advance and the hold but a full-grid spawn it is back to
+  69.2 (seeds 1-8). The same range is what gains on the near pairs (without it
+  `rocket-craft-hit-0233` reads 112.9 and `-0100` 94.5).
+- The range is what the original does. `trail`'s sheet `smoke_new4_8x4` (only `trail` binds it)
+  reads cells 1 to 17 at 0.233 s and up to 27 at 0.4 s on the far film `far3`: `[0, 3]` plus the
+  age. A full-grid spawn would read up to 31. Those first two rows are solid white and
+  yellow-white fireballs; before, ours drew mostly the dim later cells.
+- **Our `trail` quads are too large**, which the dim cells hid. The original's half size on that
+  frame (depth 33 to 84 units, so no near cap) is 2.35 at cells 3 and 4 and 3.57 at cell 14,
+  about `2.2 + 0.09 * cell`; ours is the size channel's 3.5 to 3.8 over the same ages, 2.2 times
+  the area at spawn. Both draw them white, opaque and alpha over.
+- Falsifier: a scratch build holding `trail`'s half size to the original's growth reads 69.2 on
+  the far pair (seeds 1-8, from 73.2), and 109.3 and 93.6 on the near pairs, still better than
+  before. The mechanism is HD's per-particle size multiplier
+  ([particle-render.md](../ghidra/functions/ps3-hdfury-eu/particle-render.md#the-per-particle-size-multiplier)).
+
+### With the size multiplier wired
+
+Same 31 pairs, 27 byte-identical. Means over the same seeds; "before" has neither change:
+
+| Pair | Before | Advance | Advance and multiplier | Paired, multiplier build minus before |
+| --- | --- | --- | --- | --- |
+| `rocket-craft-hit-0233` | 113.6 | 106.5 | 109.2 | -4.3 +/- 3.2 |
+| `rocket-craft-hit-0100` | 94.8 | 93.1 | 93.3 | -1.5 +/- 0.4 |
+| `rocket-craft-far-hit-0100` | 34.9 | 34.9 | 34.9 | 0.0 |
+| `rocket-craft-far-hit-0233` | 69.15 | 71.95 | 69.32 | +0.17 +/- 0.68 |
+
+At the compare page's own seed `far-hit-0233` reads 64.71 before and 65.49 after. **The far
+picture still shows a flat white cloud** a good deal larger than the original's, which the
+multiplier does not remove: its cause is the pose, below.
+
+### The pose throws the far blast at the camera
+
+`trail` is the child of `FIRE_TRAILS_ONEQUAD`, whose pieces inherit the struck craft's velocity
+([rocket-craft-blast.md](../ghidra/functions/ps3-hdfury-eu/rocket-craft-blast.md)). Each far
+pair's `field.csv` puts the struck craft on its film frame's pose at the start of our run, and it
+then drives more than 700 ticks under our driver before the forced hit. So it moves at
+`(-128, -15, -46)` units per second when hit in the 0.233 s pair, where the film recorded
+`(88, 11, 55)`. Ours therefore come toward the eye: the `trail` quads' median view depth is 32
+against the original's 51, about 2.6 times the area on screen. It is not a particle law.
+
+`--force-rocket-hit-velocity VX,VY,VZ` (builds with `dev-cli`) gives the struck craft a velocity
+as the hit is forced, and its craft blast carries exactly that. Exactly, because the tick that
+lands the hit changes the craft's own before the blast reads it: set to `(88, 11, 55)`, it read
+`(89, 31, 56)` there.
+
+**The film's value** is `88.067871,11.234680,55.156158`: the struck craft's body velocity
+(`ship + 0x6944`, then `+0x190`, the vector `Rocket_SpawnCraftBlast` reads) in
+`rocket-craft-hit/far3`, `hit.json` `struck_pose.vel`, read at the first stepped frame with its
+shield down (140 to 130), the hit both far pairs show. It is read after that frame ran, so what
+the spawn read may differ by a frame's change.
+
+With it, whole-frame RMSE (`rocket-craft-far-hit-0233` over stage seeds 1-24, `-0100` over 1-6;
+every build in a row given the same velocity):
+
+| Pair | Neither change | Advance | Advance and multiplier | The same pair without the velocity, neither change |
+| --- | --- | --- | --- | --- |
+| `rocket-craft-far-hit-0233` | 67.44 | 66.94 | 67.19 | 69.15 |
+| `rocket-craft-far-hit-0100` | 34.40 | 34.40 | 34.40 | 34.89 |
+
+At 0.233 s both changes together are 0.25 +/- 0.04 better than neither (19 of 24 seeds), and the
+multiplier gives back 0.26 of what the advance alone gains. At the compare page's own seed the
+two far pairs read 66.50 and 33.60, against 64.71 and 34.06 without velocity or either change.
+
+**The picture is still not the original's.** The cloud is smaller, `trail` reads as smooth white
+lobes, and the grey smoke streaming toward the camera is missing (pixels with every channel over
+235 at 0.233 s: 5.9 % against 11.1 %). The near pairs were not tried: neither their spawn tick nor
+their struck velocity was checked against the original's.
 
 ### Posing a far hit
 
@@ -630,8 +794,8 @@ the blast stands: the 0.233 s film's hit is `--force-rocket-hit 717:7` after the
 (spawn 1.1 units from the original's wash quad; 716 is 4.0 short). The 12-unit pairs use 711,
 which was not checked against the original's spawn point. The ring's wash quad is a few ticks
 younger than the film's labelled age (2 ticks at 0.1 s, 10 at 0.233 s, read off its colour and
-size), so the far pairs render ours at the quad's age. Ours' struck craft keeps our own opponent's
-velocity, so the travelling fireballs do not match.
+size), so the far pairs render ours at the quad's age. The struck craft's velocity is posed by
+`--force-rocket-hit-velocity` ("The pose throws the far blast at the camera").
 
 ## Per effect: what fills the heavy frames
 

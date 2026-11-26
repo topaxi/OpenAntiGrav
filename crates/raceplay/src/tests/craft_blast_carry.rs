@@ -57,6 +57,38 @@ fn the_craft_blast_takes_the_struck_crafts_velocity() {
     );
 }
 
+/// `--force-rocket-hit-velocity`: the struck craft takes the velocity, and its craft blast carries
+/// exactly it even after the craft's own has changed again, as it does in the tick that lands the
+/// hit. Other craft keep their own, and a craft that is not racing is left alone.
+#[test]
+fn a_forced_velocity_is_what_the_craft_blast_takes() {
+    let mut race = race_with_a_grid();
+    race.view.craft_blast_carry = true;
+    let velocity = Vec3::new(-3.0, 40.0, 7.0);
+    let carried = |race: &Race, slot| {
+        race.view
+            .craft_blast_velocity(&race.core, Trigger::CraftBlast, Some(slot))
+    };
+    race.force_struck_velocity(1, velocity);
+    assert_eq!(
+        race.core.sim.world.ships[1].physics.body.linear_velocity,
+        velocity
+    );
+    race.core.sim.world.ships[1].physics.body.linear_velocity = Vec3::new(1.0, 2.0, 3.0);
+    assert_eq!(carried(&race, 1), Some(velocity));
+    let other = Vec3::new(9.0, 0.0, 0.0);
+    race.core.sim.world.ships[2].physics.body.linear_velocity = other;
+    assert_eq!(carried(&race, 2), Some(other));
+
+    race.core.sim.world.ships[2].active = false;
+    race.force_struck_velocity(2, velocity);
+    assert_eq!(
+        race.core.sim.world.ships[2].physics.body.linear_velocity,
+        other
+    );
+    assert_eq!(carried(&race, 1), Some(velocity), "slot 1's is kept");
+}
+
 /// On HD the blast's cloud travels with the craft it struck while its emitters stay where it
 /// was spawned: 20 ticks after a forced hit on a racing rival, the cloud's centre has moved
 /// along that craft's heading by a good share of the craft's own travel.
