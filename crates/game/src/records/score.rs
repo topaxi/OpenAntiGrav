@@ -21,11 +21,20 @@ impl Store {
             .unwrap_or(0)
     }
 
-    /// Judges `score` against the standing best, then keeps it on `key`'s row when `keep` (an
-    /// unofficial run shows its notice and keeps nothing). Called before the race is folded in.
+    /// Judges `score` against the standing best, then keeps it on `key`'s row. Called before the
+    /// race is folded in. A run that is not `keep` (an unofficial one) sets no record: its notice
+    /// is the standing best, so it never announces a record the next run does not find (chosen,
+    /// not measured).
     pub fn judge_score(&mut self, key: &Key, score: u32, keep: bool) -> ScoreRecord {
-        let notice = ScoreRecord::judge(score, self.best_score(key));
-        if keep && notice.new {
+        let best = self.best_score(key);
+        if !keep {
+            return ScoreRecord {
+                new: false,
+                value: best,
+            };
+        }
+        let notice = ScoreRecord::judge(score, best);
+        if notice.new {
             let at = match self.records.iter().position(|row| row.key() == *key) {
                 Some(at) => at,
                 None => {
@@ -100,9 +109,16 @@ mod tests {
     }
 
     #[test]
-    fn an_unofficial_run_shows_its_notice_and_keeps_nothing() {
+    fn an_unofficial_run_sets_no_record_and_shows_the_standing_best() {
         let mut store = Store::default();
-        assert!(store.judge_score(&key("17_Track", "venom"), 900, false).new);
-        assert_eq!(store.best_score(&key("17_Track", "venom")), 0);
+        store.judge_score(&key("17_Track", "venom"), 100, true);
+        assert_eq!(
+            store.judge_score(&key("17_Track", "venom"), 900, false),
+            ScoreRecord {
+                new: false,
+                value: 100
+            }
+        );
+        assert_eq!(store.best_score(&key("17_Track", "venom")), 100);
     }
 }

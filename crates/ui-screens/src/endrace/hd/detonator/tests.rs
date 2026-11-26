@@ -305,7 +305,10 @@ fn a_new_record_draws_the_blue_box_and_the_new_score_record_text() {
     let draws = draw(Some(beaten), &strings(true));
     assert!(text_at(&draws, "NEW SCORE RECORD 5600").is_some());
     let colours = box_colours(beaten);
-    assert!(colours.iter().all(|c| *c == [0, 0, 255]), "blue: {colours:?}");
+    assert!(
+        colours.iter().all(|c| *c == [0, 0, 255]),
+        "blue: {colours:?}"
+    );
 }
 
 #[test]
