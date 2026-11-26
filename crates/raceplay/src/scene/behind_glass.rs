@@ -204,6 +204,7 @@ fn colour_texture_of(
             | wgpu::TextureUsages::TEXTURE_BINDING
             | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     })
 }
 
@@ -220,6 +221,7 @@ fn attachments(device: &wgpu::Device, size: (u32, u32)) -> (wgpu::TextureView, w
                 format,
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
                 view_formats: &[],
+                texture_binding_view_dimension: None,
             })
             .create_view(&wgpu::TextureViewDescriptor::default())
     };

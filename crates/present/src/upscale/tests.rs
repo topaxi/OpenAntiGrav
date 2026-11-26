@@ -61,6 +61,7 @@ fn both_paths(format: wgpu::TextureFormat, input: [f64; 3]) -> Option<([u8; 4], 
             format,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
         let surface_view = surface.create_view(&Default::default());
         let readback = device.create_buffer(&wgpu::BufferDescriptor {
@@ -116,7 +117,7 @@ fn both_paths(format: wgpu::TextureFormat, input: [f64; 3]) -> Option<([u8; 4], 
             &queue,
             Brightness::NEUTRAL,
             Gamma::NEUTRAL,
-            source.is_some() && format.is_srgb(),
+            source.is_some() && format.has_srgb_suffix(),
         );
         framebuffer.present(
             &mut encoder,
@@ -259,6 +260,7 @@ fn graded(input: [f32; 4], brightness: Brightness, gamma: Gamma) -> Option<[u8; 
         format,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let surface_view = surface.create_view(&Default::default());
     let readback = device.create_buffer(&wgpu::BufferDescriptor {

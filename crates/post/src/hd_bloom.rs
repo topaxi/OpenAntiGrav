@@ -327,6 +327,7 @@ impl Target {
                     wgpu::TextureUsages::empty()
                 },
             view_formats,
+            texture_binding_view_dimension: None,
         });
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
         Self { texture, view }

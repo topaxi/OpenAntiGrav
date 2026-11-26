@@ -1,7 +1,6 @@
 //! The race stage: a loaded track, and the scene that draws it.
 
 use crate::medal_watch::ticks_to_centiseconds;
-use log::warn;
 use oag_display::display;
 use oag_present::upscale;
 use oag_raceplay as race;
@@ -1091,11 +1090,14 @@ impl RaceStage {
         // rather than only its format. See this function's own doc.
         self.draw_hud(gpu, &mut encoder, target, viewport, target_size);
         gpu.queue().submit(Some(encoder.finish()));
+        // WebGPU cannot block on a submit (`PollType::Wait` is always `CantWait` there), so the
+        // browser's driver compiles in the background as it always did.
+        #[cfg(not(target_arch = "wasm32"))]
         if let Err(e) = gpu.device().poll(wgpu::PollType::wait_indefinitely()) {
             // Not fatal: the worst outcome is the compile this call exists to
             // avoid happening on the first real frame instead, exactly as it
             // did before this existed.
-            warn!("could not wait for the race scene's warmup submit: {e}");
+            log::warn!("could not wait for the race scene's warmup submit: {e}");
         }
     }
 }

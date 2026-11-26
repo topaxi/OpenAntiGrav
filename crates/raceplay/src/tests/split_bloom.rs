@@ -23,6 +23,7 @@ fn target(device: &wgpu::Device) -> wgpu::TextureView {
                 | wgpu::TextureUsages::TEXTURE_BINDING
                 | wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         })
         .create_view(&Default::default())
 }

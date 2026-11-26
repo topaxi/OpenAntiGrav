@@ -180,6 +180,7 @@ fn time_a_pass(adapter: &wgpu::Adapter, name: &str) {
         format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let view = target.create_view(&Default::default());
 
@@ -400,6 +401,7 @@ fn labelled_passes_come_back_under_their_own_frames_labels() {
             format: wgpu::TextureFormat::Rgba8Unorm,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
         let view = target.create_view(&Default::default());
         // Frame 21: shadow twice, glass. Frame 22: hud alone. Frame 23: four passes of two

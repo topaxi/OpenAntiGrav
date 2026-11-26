@@ -70,6 +70,7 @@ fn the_bind_groups_are_built_once_and_not_once_a_frame() {
                 format,
                 usage,
                 view_formats: &[],
+                texture_binding_view_dimension: None,
             })
             .create_view(&Default::default())
     };

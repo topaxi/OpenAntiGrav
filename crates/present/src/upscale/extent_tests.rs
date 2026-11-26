@@ -119,6 +119,7 @@ fn blit_a_short_extent(source: Source) -> Option<[[u8; 4]; 4]> {
         format,
         usage: wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::TEXTURE_BINDING,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     queue.write_texture(
         green.as_image_copy(),
@@ -150,6 +151,7 @@ fn blit_a_short_extent(source: Source) -> Option<[[u8; 4]; 4]> {
         format,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let surface_view = surface.create_view(&Default::default());
     let row = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;

@@ -164,6 +164,7 @@ impl Distort {
                     format: FORMAT,
                     usage,
                     view_formats: &[],
+                    texture_binding_view_dimension: None,
                 })
             };
             let resolved_texture = texture(

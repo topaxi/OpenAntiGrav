@@ -111,6 +111,7 @@ fn the_bloom_adds_what_the_recovered_passes_say_it_adds() {
             | wgpu::TextureUsages::COPY_DST
             | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let pixels = scene_pixels();
     queue.write_texture(

@@ -106,6 +106,7 @@ fn a_translucent_fill_blends_over_whatever_load_kept() {
         format,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let view = target.create_view(&Default::default());
     let readback = device.create_buffer(&wgpu::BufferDescriptor {
@@ -380,6 +381,7 @@ fn an_outlined_font_draws_its_body_alpha_over_its_outline_alpha() {
         format,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let view = target.create_view(&Default::default());
     let readback = device.create_buffer(&wgpu::BufferDescriptor {
@@ -529,6 +531,7 @@ fn a_translucent_fill_under_an_outlined_font_is_drawn_once() {
         format,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let view = target.create_view(&Default::default());
     let readback = device.create_buffer(&wgpu::BufferDescriptor {
@@ -1025,6 +1028,7 @@ fn the_quad_list_survives_into_the_next_frame() {
         format,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let view = target.create_view(&Default::default());
     let list: Vec<Draw> = (0..40)
@@ -1108,6 +1112,7 @@ fn a_warp_bends_its_draws_cuts_its_bars_and_is_spent() {
         format,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let view = target.create_view(&Default::default());
     let bar = [304.0, 240.0, 140.0, 8.0];

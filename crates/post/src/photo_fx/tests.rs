@@ -142,6 +142,7 @@ fn fixture(d: &Device, left: f32, right: f32) -> Fixture {
             | wgpu::TextureUsages::COPY_DST
             | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let mut pixels = Vec::new();
     for _ in 0..SIZE {
@@ -169,6 +170,7 @@ fn fixture(d: &Device, left: f32, right: f32) -> Fixture {
         format: wgpu::TextureFormat::R32Float,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let mut values = Vec::new();
     for _ in 0..SIZE {
@@ -430,6 +432,7 @@ fn the_middle_row_at_1080(
             | wgpu::TextureUsages::COPY_DST
             | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let pixels: Vec<u8> = (0..h)
         .flat_map(|_| (0..w).flat_map(|x| [shade(x); 4]))
@@ -450,6 +453,7 @@ fn the_middle_row_at_1080(
         format: wgpu::TextureFormat::R32Float,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let depths: Vec<f32> = (0..h)
         .flat_map(|_| (0..w).map(|x| z_of(distance(x))))

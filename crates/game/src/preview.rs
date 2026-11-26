@@ -900,6 +900,7 @@ impl Preview {
                 format: DEPTH_FORMAT,
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
                 view_formats: &[],
+                texture_binding_view_dimension: None,
             });
             self.depth = Some((
                 texture.create_view(&wgpu::TextureViewDescriptor::default()),
