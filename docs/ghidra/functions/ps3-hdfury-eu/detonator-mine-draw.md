@@ -358,7 +358,7 @@ Two boots of `hd-detonator-talons-feisar-grid-late`, `rpcs3-hd-detonator-shots.p
   `MasterVolume` read `1.0` and `PitchVolume` `0.32` at the picture's read where ours' band reading gives `1.0` and `0.03`:
   ours' chosen band 1 for `PitchVolume` is off on this frame; not wired (one frame).
 
-### The spin, read (not wired)
+### The spin, read
 
 `DetonatorMine_AnimateToMusic` (`0x0013969c`-`0x001396ec`): `phase m+0x150 = 4.0 * m+0xc0` (`K` at TOC `-0x2bcc`, `4.0`),
 wrapped by `2 pi` (`-0x2bd4`) against `pi` (`-0x2bd8`). `m+0xc0` is the mine's age ([detonator-mine.md](detonator-mine.md)).
@@ -369,12 +369,53 @@ the stub's `r2 += 0xfeec`) takes `angle = (int)(phase * 2^24/pi)` sign-extended 
 `(xz (1-c) - y s, yz (1-c) + x s, z^2 (1-c) + c)`, the axis `(x, y, z)` = `m+0xe0` (live: the object's up row). So a mine's
 basis is the world axes turned about its up by `4 * age` radians, not a frame built on its up; translation `m+0x80`.
 Confidence 75 (read end to end; the phase reproduced from the live age; the rows' sense in the row-vector convention not
-checked against a frame). Ours draws no spin and an up-aligned frame (`detonator_matrix`), and tracks no mine age: wiring it
-needs the age (state ours does not keep) and a pair pin for it.
+checked against a frame; settled below). Wired in "The spin, wired".
+
+## The spin, wired (2026-11-26, `det-mine-spin`)
+
+**Claim:** ours' HD Detonator mines turn about their up axis at 4 rad/s of the mine's own age, from world axes, as the original
+does; the `mines-ahead` pair carries the grab's mine ages, and its mean grey drops. **True.**
+
+- **The law** (`oag_raceplay::detonator_look`, `spin_phase` and `spun_basis`): `phase = (4 age) mod 2 pi`, and the football and
+  spikes are drawn on the world axes turned about the mine's survey up by it, the scale applied after. The original's rows are the
+  model's axes, so each row is a column in ours; about `+Y` row 0 is `(c, 0, s)`, a turn of `-phase` in ours' right-handed sense.
+  Dark mines turn too (the dark branch builds the same rotation, `0x00139bf8`). The rate is `Title` data,
+  `oag_title::Detonator::mine_spin`: `Some(4.0)` on HD, `None` on 2048 and Omega (below), where the mine keeps its upright frame.
+- **The age is view state**, not `World` state: `MineEnvelopes` records the race clock a mine is first seen at, and the age is
+  the clock since. `DetonatorMine_Place` zeroes `m+0xc0` and `BaseMine_Update` steps it ([detonator-mine.md](detonator-mine.md));
+  the simulation reads no age, so nothing enters the state hash. Ours' own age counts from ours' laying, so it cannot reproduce the
+  original's: every mine of the grab is 53.1 s older than the lap clock (age 55.70 at lap 2.583, the grid wait included), and only
+  a pin matches it.
+- **The pin.** `--detonator-mine-ages "A;A;..."` holds each carried mine's age (live or dark) in `--detonator-mines` order;
+  `rpcs3-hd-pair.py` records `age_s` per mine in `original.detonator.mines[]` from the same read as the envelope, the one nearest
+  the picture's clock. On `mines-ahead` that is lap 2.583, age 55.7002 on all 80 mines (phase 2.89); the pause's read is lap
+  2.667, age 55.7836 (phase 3.22), 19 degrees on.
+- **The sense, checked against a frame.** Same `theirs.png`, ours rendered with each choice (whole-frame mean grey, page scorer):
+
+  | Ours | Mean grey |
+  | --- | ---: |
+  | no spin, upright frame | 13.17 |
+  | `-phase` (the rows as read), the picture's age 55.7002 | **12.51** |
+  | `+phase`, same age | 13.16 |
+  | `-phase`, the pause's age 55.7836 | 13.01 |
+  | `-phase`, ours' own age (from ours' laying) | 12.97 |
+
+  Only the read sense at the picture's age moves the frame; by eye (crop 780..1300, 330..690) both near mines then show the
+  original's face pattern and spike layout. The middle mine's centre, radial means and white share in the first 10 px ring:
+  original 181 grey / 22 %, ours before 135 / 7 %, after 165 / 18 %. The rows' sense is **confidence 80** now (read end to end,
+  and one frame picks it over its mirror by 0.65 grey).
+- **The other pairs** carry no ages (older shot records) and run ours' own: `pad` 7.61 -> 7.61, `cannon-volley` 14.32 -> 14.32,
+  `cannon-volley-hot` 11.47 -> 11.48.
+- **Tests:** `detonator_look::tests::a_mines_basis_is_the_world_axes_turned_about_its_up_by_the_originals_rows` (the sense and the
+  world-axes start), `a_mine_turns_four_radians_a_second_of_its_age_and_the_live_phase_reproduces`,
+  `a_mines_age_counts_from_its_laying_and_a_pin_holds_it_live_or_dark`; disc-backed
+  `tests::detonator_craft::an_hd_mine_turns_about_its_up_by_four_times_its_age`; the pair's age from the picture's read in
+  `check-compare-environment.py` (`check_detonator_mine_envelopes`).
 
 ## Still open
 
-- `0x006ca538`'s stores (whether the object's basis survives the spin) and the writer of the axis `m+0xe0`.
+- The writer of the spin axis `m+0xe0` (ours takes the survey's up; live it read as the object's up row).
+- `+0xfc = +0xc0 * k` in `DetonatorMine_Update` ([detonator-mine.md](detonator-mine.md)): a second turn word, its reader unread.
 - The eye behind `0x00987884+0x70` (the visualiser's camera), read to its writer.
 - The ring's own radius inside `Electric_Visualiser` (HD's material program is read: "The visualiser, wired").
 - A live read of the mine's submitted matrix (`0x001399a4`, `r4`) would lift rows 3 and 4 above 80.
@@ -385,8 +426,12 @@ needs the age (state ours does not keep) and a pair pin for it.
   `Mine_Rita_Football`, `Mine_Rita_Spikes`, `Electric_Visualiser` (`.vex` and `.rcsmodel`) with
   `Detonator_Mine_Normal_Alpha.rcsmaterial` and `electricity.rcsmaterial`, the same three parts and materials as HD;
   `eboot.elf` names `mine_rita_football`, `mine_rita_spikes`, `Electric_Visualiser`. The function bodies were not read.
+  **The spin: not checkable** yet: 2048's mine animate function is not located, and no 2048 Detonator pair reads a mine's age;
+  `Detonator::mine_spin` is `None` there, so its mines keep the upright frame (2026-11-26, `det-mine-spin`).
 - **Omega: checked, differs.** `data00.psarc` ships the same three models plus parts HD has not:
   `Detonator_Mine_Platonic_A`/`_B`/`_C`, `Detonator_Mine_Glow_Sprite`, `Detonator_Mine_Explosion_Kaleidoscopic`, the
   textures `detonator_mine_glow_red`, `detonator_mine_panel_black`, and the spikes get their own
   `Detonator_Mine_Spikes{,_1,_2}.rcsmaterial` beside `Detonator_Mine_Normal_Alpha{,_1,_2}` (also in `data05` and
   `data08`). `eboot.bin` names the three HD models too. Which parts Omega's mine draws is not read.
+  **The spin: not checkable** yet: Omega's mine animate function is not located and no Omega mine object has been read live;
+  `mine_spin` is `None` (2026-11-26, `det-mine-spin`).
