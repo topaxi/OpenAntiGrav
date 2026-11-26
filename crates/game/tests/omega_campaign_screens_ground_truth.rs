@@ -759,3 +759,50 @@ fn omegas_track_grid_slides_on_a_step_and_pulses_on_its_own_clock() {
     let pulse = differing_pixels(&white, &late);
     assert!(pulse > 100, "the ring's pulse moves {pulse} pixels");
 }
+
+/// Omega's `_SetCell` writes `0xff808080` over the selected column of both its hexagon grids, where
+/// HD's looks up `HD_Blue` (`ship-select-ring.md`, "Omega"); its cell art is the faded hexagon too.
+/// Dropping the title's `hex_selected_fill` leaves both columns the red of the colour template.
+#[test]
+#[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
+fn omegas_hex_grids_fill_the_selected_column_grey() {
+    let Some(omega) = oag_testdata::exact("data/extracted/ps4") else {
+        return;
+    };
+    let options = oag_game::boot::Options {
+        language: None,
+        source: omega.display().to_string(),
+        dlc: Vec::new(),
+        leg: oag_ui::frontend::Leg::LogoFmv,
+        movie: None,
+        cache: std::env::temp_dir().join("oag-omega-hex-fill-ground-truth"),
+        audio_cache: oag_source::cache::default_audio_cache_dir(),
+        extent: oag_game::movie::Extent::Frames(1),
+        no_video: true,
+        refresh_video: false,
+        prefer_av1_cache: false,
+        find_texture_packs: None,
+    };
+    let (shell, ..) = oag_game::boot::load_shell(&options).expect("omega boots");
+    let team = shell
+        .ship_select
+        .as_ref()
+        .and_then(|layout| layout.hd.as_deref())
+        .and_then(|screen| screen.hex)
+        .expect("Team Selection's grid");
+    let track = shell
+        .track_select
+        .as_ref()
+        .and_then(|layout| layout.hd_track.as_deref())
+        .and_then(|screen| screen.hex_grid)
+        .expect("Track Creation's grid");
+    assert_eq!(team.selected_column, 0xff80_8080);
+    assert_eq!(track.selected_column, 0xff80_8080);
+    let src = oag_ui_screens::picker::hd::hex::HEX_SRC;
+    let art = shell.sprites.get(src).expect("the cell art");
+    let alpha = shell
+        .sprites
+        .alpha_at(art, 37.0 / 128.0, 0.5)
+        .expect("inside the sheet");
+    assert_eq!((alpha * 255.0).round(), 215.0);
+}

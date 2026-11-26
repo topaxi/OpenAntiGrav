@@ -915,6 +915,14 @@ fn hd_reads_its_own_team_selection() {
     for src in [HEX_SRC, LOCK_SRC, THICK_OUT_SRC] {
         assert!(shell.sprites.get(src).is_some(), "{src}");
     }
+    // The cell art is the faded hexagon, alpha 221 inside: the original's selected column reads
+    // `HD_Blue` times that (149 of 172 on red), which the opaque `Hexagon_HD.gtf` does not.
+    let art = shell.sprites.get(HEX_SRC).expect("the cell art");
+    let alpha = shell
+        .sprites
+        .alpha_at(art, 37.0 / 128.0, 0.5)
+        .expect("inside the sheet");
+    assert_eq!((alpha * 255.0).round(), 221.0);
     let classic = shell
         .sprites
         .get(r"Data\Ships\Feisar\FE\thumb0.gtf")

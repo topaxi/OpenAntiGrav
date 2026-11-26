@@ -418,7 +418,7 @@ pub(super) fn selection_layouts(
 ) {
     let borrows_ps2_split = front_end.is_some_and(|front_end| front_end.borrows_ps2_split_screens);
     let ship_pose = front_end.and_then(|front_end| front_end.ship_preview_pose);
-    let hex_fade = front_end.and_then(|front_end| front_end.team_hex_fade);
+    let hex_fill = front_end.and_then(|front_end| front_end.hex_selected_fill);
     let hex_ring = front_end.and_then(|front_end| front_end.team_hex_ring_peak);
     let track_labels = front_end.map_or(&[][..], |front_end| front_end.track_label_overrides);
     let faces = oag_ui_screens::picker::FaceScales {
@@ -460,6 +460,17 @@ pub(super) fn selection_layouts(
                 faces,
                 grid,
             )
+            .map(|mut layout| {
+                if let Some(fill) = hex_fill
+                    && let Some(grid) = layout
+                        .hd_track
+                        .as_mut()
+                        .and_then(|screen| screen.hex_grid.as_mut())
+                {
+                    grid.selected_column = fill;
+                }
+                layout
+            })
         });
     let ship_select = race_box
         .and_then(|included| {
@@ -507,7 +518,9 @@ pub(super) fn selection_layouts(
                     model.zoom = pose.zoom;
                 }
                 if let Some(grid) = layout.hd.as_mut().and_then(|screen| screen.hex.as_mut()) {
-                    grid.fade = hex_fade;
+                    if let Some(fill) = hex_fill {
+                        grid.selected_column = fill;
+                    }
                     if let Some(peak) = hex_ring {
                         grid.ring_peak = Some(peak);
                     }

@@ -356,7 +356,11 @@ fn the_grid_puts_a_circuit_in_each_hexagon_and_red_on_the_chosen_column() {
         .iter()
         .filter(|d| matches!(d, Draw::Sprite { .. }))
         .count();
-    assert_eq!(sprites, 18 + 18 + 1);
+    let shaded = draws
+        .iter()
+        .filter(|d| matches!(d, Draw::GradientSprite { .. }))
+        .count();
+    assert_eq!((sprites, shaded), (2 + 18 + 1, 16));
     let red = draws
         .iter()
         .filter(|d| matches!(d, Draw::Sprite { color, .. } if *color == oag_ui::screen::argb_to_rgba(0xffac_0717)))

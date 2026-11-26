@@ -357,7 +357,9 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
         ps4: true,
         tone: None,
     }),
-    team_hex_fade: None,
+    // `FUN_0145af70`, the widget's `_SetCell`, writes `0xff808080` over the selected column
+    // (`docs/ghidra/functions/ps3-hdfury-eu/ship-select-ring.md`, "Omega").
+    hex_selected_fill: Some(0xff80_8080),
     // The ring's update computes white to this red to black inline, not a lookup of `HD_Blue`
     // (`FUN_0142caa0`, `docs/ghidra/functions/ps3-hdfury-eu/ship-select-ring.md`, "Omega").
     team_hex_ring_peak: Some(0xffee_0707),
