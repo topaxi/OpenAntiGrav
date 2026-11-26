@@ -2648,10 +2648,12 @@ takes only an interior peak that beats every lag 1.5 ticks away by 0.05, and nee
 | `det-mine-spin` `shots6/00` (2) | 3.93 | refused: the best score is at the end of the range |
 | `det-volley-pair` `shots2/00` (4, no world clock) | 2.94 | 0.50, why the clock is now required |
 
-So it reads 0.25 to 0.6 ticks low where it agrees, and can fail. On `cannon-volley-hot` it gives 3.50 (score 0.54 against 0.43 to 0.47 at
+So it reads 0.25 to 0.6 ticks low where it agrees, and can fail. On the first `cannon-volley-hot` grab it gave 3.50 (score 0.54 against 0.43 to 0.47 at
 0 to 2); the pad's white walls, an independent object, put it between 3.5 and 4.25 (right edge at x 1526, 1514 against the original's 1516;
 1584 unshifted). Confidence 70 for 3.5 to 4, seen on one grab. "The picture is at `T - 6`" (next section but two) would give `k = 2` here and is
 refused by both readings; this stop followed a fire hold, whose many short stops that section found to fit no single value.
+**Two later grabs of the same stop read 1.75** (peaks 0.633 at 1.75 ticks, skew 4, so 5.75 behind RAM, agreeing with the mine fit's 6.0): the 3.50
+was one grab, and the current pair carries 1.75 (next section).
 
 **Ours' tick is the picture's** (`compare_env.picture_tick`, `GO + round(60 T - skew - k)`, and the gantry pin with it) wherever the lag was
 measured, by mines or static scene, on the first render and on every re-render (`compare-rerender-ours.py`). A pair with no measured lag keeps
@@ -2662,7 +2664,7 @@ the HUD clock's `T - 3`.
 | `cannon-volley-hot` | 11.47 | 10.32 (lag 3.5 static, tick 393 to 388, mine ages carried) |
 | `mines-ahead` (before the mine spin) | 13.17 | 13.13 (tick 429 to 427) |
 | `mines-ahead` (with the mine spin and ages, `main` `68bfc33`'s build) | 12.51 | 12.46 (tick 429 to 427) |
-| `cannon-volley`, `pad` (no measured lag) | 14.32, 7.61 | unchanged |
+| `cannon-volley`, `pad` (no measured lag) | 14.32, 7.61 | unchanged (both re-checked 2026-11-26, `det-cannon-regrab`) |
 
 **What is left on `cannon-volley-hot`** (grey = that box's share of the 10.32 whole-frame mean; boxes are `x0, y0, x1, y1`):
 
@@ -2679,8 +2681,49 @@ the HUD clock's `T - 3`.
 running 1:1 with the lap clock): 55.950 - 7.5/60 = 55.825 on all 80 mines (`rpcs3-hd-pair.py`, `mine_flags`). It does not move this frame
 (10.311 with no ages, 10.324 at the picture's, 10.326 at the pause's: the near mines are 74 to 81 units out).
 
-Not carried, so not judged here: the mines' envelopes are the pause's (this record has no earlier reads), 7.5 ticks newer than the picture; the
-craft is held at rest, so a round leaves at 500 units/s instead of 500 + 3.6 x the craft's speed; the track-name ticker's scroll is wall-clock.
+Not carried on that grab: the mines' envelopes were the pause's, 7.5 ticks newer than the picture, and ours fired on the harness's press tick.
+Both are carried since (next section). The craft is held at rest, and the track-name ticker's scroll is wall-clock.
+
+### The volley's press tick and the picture-clock reads (2026-11-26, `det-cannon-regrab`)
+
+**Falsifiers written before the grabs:** a first launch on the harness's press tick would mean there is no press latency; near-mine envelopes at
+the picture's clock equal to the pause's would mean the carry cannot move a frame.
+
+**What the shot script reads now.** At every pause it already takes (it adds none, since a stop 8 or fewer ticks after another reads a different
+lag) it keeps each mine's words and the cannon: the volleys left (`*(ship+0x5edc)+0x164`), the held counter (`**0x008a6814+0x6de44`) and
+every `PulseBullet`'s age (`+0x4c`) and launch speed (`+0x124`) (`scripts/rpcs3_hd_volley.py`). A volley's clock is the lap clock less its
+rounds' age, which is the clock before the frame that fired it. The held counter counts the game's frames, each 1 or 2 ticks, not ticks.
+
+**Press latency** (the first volley's clock less the lap clock the press was sent at), one RPCS3 boot each from
+`hd-detonator-talons-feisar-grid-late`: `-hot` 2.0 and 2.0 ticks, `cannon-volley` 4.0 and 3.0. It is read per grab, not a constant
+(confidence 85: a runtime read, four boots). The second volley of `-hot` is 4 ticks after the first, not 6, because the original's frames
+were 2 ticks long; ours fires each volley on its own tick (`ours.inputs`: one `square` tick per volley, a release between).
+
+**Pairs** (all 80 mines, picture-tick render). Each row is one grab's `theirs.png`; "none" is the same frame with the harness's press window and
+the pause's envelopes. Mean grey, 0 to 255:
+
+| Grab | Picture lag (ticks behind the push buffer) | none | press tick only | envelopes at picture only | both |
+| --- | --- | ---: | ---: | ---: | ---: |
+| `-hot` boot 2 (**published**) | 1.75, static | 10.71 | 10.38 | 10.65 | **10.31** |
+| `-hot` boot 3 | 1.75, static | 9.80 | 9.49 | 9.76 | 9.43 |
+| `cannon-volley` boot 1 (**published**) | 2.35, 3 mines, 4.5 px rms | 13.65 | 13.65 | 13.35 | **13.35** |
+| `cannon-volley` boot 2 | refused: mines disagree by 1.58 ticks, static peak at the range's end | 15.72 | 15.72 | 15.72 | 15.72 |
+
+The columns are measured by removing one carry from the full pair ("press tick only" keeps the press and takes the pause's envelopes).
+The previous published pairs were 10.32 and 14.32 on older `theirs.png`. On `-hot` the muzzle-flash box (`825,620,1100,720`) goes from a signed
+-22.8 grey (ours dimmer) to +6.5 (boot 2) and -33.1 to -2.8 (boot 3); the mean absolute difference there hardly moves (32.5 to 31.9, and 38.0 to
+39.2), because the flash's shape is rolled per tick. The envelope result on `cannon-volley` is seen on one grab.
+
+**Not carried: the craft's speed on the rounds.** The original's round leaves at `500 + 3.6 v` on its launch tick (v read 101.8 to 102.7
+units/s), from a craft that was `v x age` further back than the frame's. A scratch pin doing both moved `-hot`'s rounds (4 ticks old) by about
+a pixel and the pair by +0.01 (10.312 to 10.324, 9.433 to 9.443), and `cannon-volley` by +0.002: the two terms nearly cancel at that age, and
+`cannon-volley`'s rounds are gone before its frame (one retired at age 10 ticks, one on a wall at 34). It lowered no pair and was not kept.
+Whether ours' round then hits the same mine at the same age is not tested.
+
+**Not carried: the mine the original destroyed.** On `cannon-volley` the original scores 0000100 and ours 0000000, because the carried list is
+the mines armed at the pause. Adding that one mine (boot 1) makes ours score 0000100 too, but the frame goes 13.35 to 14.05 (15.78 with the
+speed pin): ours draws its blast as white puffs and long streaks where the original shows small shards and a `+100` (0.40 of the 0.70 added grey
+is above row 450). That is a draw gap in ours' mine blast, open.
 
 ### The hull's frame pose in a Detonator pair (2026-11-23, `det-camera`)
 
