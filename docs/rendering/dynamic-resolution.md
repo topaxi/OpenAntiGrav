@@ -1051,13 +1051,20 @@ raises its clock pays about `1 / (next / here)^2` of it (0.886 to 0.905).
 **The governor's ramp.** PENDING: the Deck's clock was pinned during the first half of this lane.
 
 **A GPU at a steady clock does not move.** The Deck with its clock pinned at 1600 MHz is one, so
-the same 4K Zone race as above ran with and without the probe (`432db773b` against `a051cfef3`,
-70 s, sound on, Deck load 1.3 to 2.3):
+the same 4K Zone race as above ran with and without the probe (`432db773b` against the probe's
+builds, 70 s, sound on, Deck load 1.0 to 2.3):
 
 | Pinned, Zone 3840x2160 | settled scale (second half), per run | size changes a minute | probes |
 | --- | --- | --- | --- |
 | Before | 0.966, 0.963 | 32, 34 | |
-| After | 0.963, 0.965, 0.960 | 32, 28, 32 | one a run (0.90 to 0.95), all three reverted, 0.09, 0.6 and 1.0 s after the step |
+| After (`a051cfef3`) | 0.963, 0.965, 0.960 | 32, 28, 32 | one a run (0.90 to 0.95), all three reverted, 0.09, 0.6 and 1.0 s after the step |
+| After (`8dc1a3d29`) | 0.968, 0.963 | 32, 32 | one a run, both reverted on a late frame 0.12 and 0.15 s after the step |
+
+The first three reverts include the long frame the step itself costs: 29 to 36 ms between frames
+straight after it, at a pinned clock, whatever the scale does next. A late frame inside the step's
+own `COOLDOWN` is therefore not judged (`8dc1a3d29`). The two reverts after that were real: at 0.95
+pinned, the GPU's frame is about the period, and the normal loop itself flips between 0.90 and
+1.00 there.
 
 **The workstation never reaches the probe.** HD Zone at 3840x2160 under the Deck's settings on
 the RX 7800 XT, in a headless gamescope at 60 Hz: the race pass is 1.3 ms, so the scale holds 1.00
