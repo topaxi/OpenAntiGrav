@@ -334,7 +334,6 @@ fn check_a_live_mine_blast_takes_the_stage_colour(race: &mut Race) {
 /// and dim the popup already up (`docs/ghidra/functions/ps3-hdfury-eu/detonator-hud.md`,
 /// "The floating score").
 fn check_a_shot_mine_floats_its_score(race: &mut Race, hud: &oag_hud::Assets) {
-    race.view.score_feedback = Some(Default::default());
     let ahead = race
         .view
         .view(&race.core)
