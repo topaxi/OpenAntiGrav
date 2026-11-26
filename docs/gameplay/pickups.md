@@ -690,6 +690,14 @@ that file's own doc comment) turned out to be a fixture confound - a straggler
 in the blade's path, unrelated to the mode - fixed by disabling the rest of
 the grid before the throw, not by anything about Eliminator's own mechanics.
 
+**HD and Fury are the exception: neither mode hands out either.** Its Eliminator table weighs both
+(Repulser 8, Shuriken 10) and its executable gates them out with a per-mode weapon mask, so an HD
+Eliminator draws eight weapons. A person's roll that lands on one passes to the next enabled weapon
+in HD's order (the Rocket takes both weights, 28 of 90), an AI's leaves them out of the total.
+Evidence and the two draws:
+[pickup-draw.md](../ghidra/functions/ps3-hdfury-eu/pickup-draw.md). Wired as
+`Title::pickup_roster`.
+
 ## What a fired Turbo does
 
 **`T += Engine.turbo`, uncapped.** From `Ship_UpdateEngine` (`0x0884c5c8`), read
