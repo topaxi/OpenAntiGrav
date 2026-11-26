@@ -213,8 +213,8 @@ scrolls"). Also read and wired now:
   diffuse alpha.
 - **`2048_Magnetic_Shield`** vertex program: `Uv1.u += time * Speed_multiplier`
   (`s_buffer_load_dwordx2` of `time, Speed_multiplier`, `v_mac_f32 v8, s0, v11`),
-  wired as the plain scroll track. No race of ours flies a 2048 craft on Omega
-  with a mode `>= 0x17`, but the craft's own shell carries it either way.
+  wired as the plain scroll track; the multiplier is `1.0` here too
+  (`omega_2048_shield_colour_ground_truth::omegas_magnetic_shell_scrolls_its_u_at_the_authored_rate`).
 - **The Vita agrees** (its own page, "The lattice scrolls"). Its program squares
   the lightning tap; the PS4's program does not, and whether its `cf_plasma` is
   sampled through an sRGB view is not read, so our Omega lightning stays the raw

@@ -189,15 +189,11 @@ fn every_2048_hd_content_shell_carries_the_programs_lightning() {
     assert_lightning(cockpit_lightning(&mut archives), "cockpit");
 }
 
-/// The magnetic shell's vertex program adds `time * Speed_multiplier` (`1`) to `u`.
-#[test]
-#[ignore = "needs data/extracted/vita/PCSF00007/base"]
-fn the_2048_magnetic_shell_scrolls_its_u_at_the_authored_rate() {
-    let Some(path) = present("data/extracted/vita/PCSF00007/base") else {
-        return;
-    };
-    let mut archives = oag_2048::open(&path.display().to_string()).expect("2048");
-    let (livery, report) = livery_of(&mut archives, oag_2048::TITLE, r"feisar2048\1");
+/// The magnetic shell's vertex program adds `time * Speed_multiplier` (`1`) to `u`, on the
+/// Vita and on the PS4.
+fn assert_magnetic_scroll(archives: &mut oag_assets::Archives, title: &'static oag_title::Title) {
+    // Capitalised: Omega's directory lookup for the 2048-era craft is by this spelling.
+    let (livery, report) = livery_of(archives, title, r"Feisar2048\1");
     let shell = livery
         .shield
         .as_ref()
@@ -218,6 +214,26 @@ fn the_2048_magnetic_shell_scrolls_its_u_at_the_authored_rate() {
         shell.vertices.iter().any(|v| v.anim != 0),
         "no vertex names the track"
     );
+}
+
+#[test]
+#[ignore = "needs data/extracted/vita/PCSF00007/base"]
+fn the_2048_magnetic_shell_scrolls_its_u_at_the_authored_rate() {
+    let Some(path) = present("data/extracted/vita/PCSF00007/base") else {
+        return;
+    };
+    let mut archives = oag_2048::open(&path.display().to_string()).expect("2048");
+    assert_magnetic_scroll(&mut archives, oag_2048::TITLE);
+}
+
+#[test]
+#[ignore = "needs data/extracted/ps4"]
+fn omegas_magnetic_shell_scrolls_its_u_at_the_authored_rate() {
+    let Some(path) = present("data/extracted/ps4") else {
+        return;
+    };
+    let mut archives = oag_omega::open(&path.display().to_string()).expect("omega");
+    assert_magnetic_scroll(&mut archives, oag_omega::TITLE);
 }
 
 #[test]
