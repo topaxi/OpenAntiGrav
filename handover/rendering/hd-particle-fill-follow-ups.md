@@ -28,7 +28,7 @@ blast the struck craft's velocity, on HD, 2048 and Omega
   - why the 0.233 s pair darkens with the templates on (126.2 to 140.0; the 0.1 s pair improves,
     119.7 to 117.8). Suspected: the extra emitters shift the blast's random stream. Test: render
     the pair with the templates listed but their emission muted, and compare with templates off;
-  - 2048 (its own `BANG_GLOW`) and Omega (which file its hit plays) are not wired.
+  - 2048 and Omega play their own files' templates with HD's trigger and cap by lineage; a capture of either's hit would turn that into a measurement.
 - **The blast's push on nearby craft** (`Rocket_PushNearbyCraft_q`, `0x00149f70`, and Omega's
   inline twin): radius and strength table unread; it may be HD's consumer of the "Blast push"
   row in `docs/gameplay/weapon-lineage.md`. Simulation, not render: its own lane.

@@ -205,7 +205,7 @@ not drawn at a fixed screen size. A template record ends at
 
 `oag_hd` lists the craft blast in `Effects::templates`, so ours plays its three root templates
 (`glow_longer` and both `Glow`s) with its own sprites, and `NearLaw::template_cap` caps a
-template at 2.0 x depth (HD only, measured). Tests:
+template at 2.0 x depth (HD measured; 2048 and Omega inherited, below). Tests:
 `near_law::hds_craft_blast_plays_the_screen_wash_templates` (disc),
 `near::tests::a_template_is_capped_by_the_laws_template_cap`, and the disc check
 `check_hd_craft_blast_templates` in `pob_ground_truth.rs`.
@@ -220,15 +220,22 @@ elsewhere. Not proven.
 
 ### The other titles
 
-- **2048: checked, differs.** Its own `particles2048/WO_ROCKET_EXPLO.pob` (the one its race
-  plays: 3 emitters) carries a different template, `BANG_GLOW` (60 ticks, size 0 to 30,
-  `(255, 221, 0)` at alpha 180). The `particles` copy inherited from HD carries HD's three. Not
-  wired: no capture of 2048's hit, and its template cap is unread.
-- **Omega: checked, applies in part, not wired.** `Data/particles2048/WO_ROCKET_EXPLO.pob`
-  carries HD's `glow_longer` and `Glow`, `Data/particles/` none, in the base archive and the
-  1.07 patch alike. Which file Omega's hit plays, and its template cap, are unread.
+- **2048: ported (inherited trigger).** Its race plays its own
+  `particles2048/WO_ROCKET_EXPLO.pob` (3 emitters), whose template is a different one,
+  `BANG_GLOW` (60 ticks, size 0 to 30, `(255, 221, 0)` at alpha 180), and that is what ours
+  plays. The `particles` copy inherited from HD carries HD's three. That the craft blast plays
+  its templates, and the 2.0 x depth cap, are HD's, taken by lineage (`Origin::InheritedFrom`),
+  not measured on 2048.
+- **Omega: ported (inherited trigger).** Ours reads the effect directory by circuit (a choice,
+  [particle-paths.md](../ps4-omega-eu/particle-paths.md)):
+  `Data/particles2048/WO_ROCKET_EXPLO.pob`, read on a 2048 circuit, carries HD's `glow_longer`
+  and `Glow`, and `Data/particles/`, read elsewhere, none, in the base archive and the 1.07 patch
+  alike. Ours plays each file's own: the two on a 2048 circuit, nothing on an HD circuit. The
+  trigger and the cap are inherited from HD, as on 2048.
 
-Both are pinned by `the_rocket_craft_blast_templates_on_2048_and_omega`.
+The files are pinned by `the_rocket_craft_blast_templates_on_2048_and_omega`; what each title
+loads by `the_2048_craft_blast_loads_under_the_near_law` and
+`the_omega_craft_blast_loads_under_the_near_law` (Altima for the 2048 directory).
 
 ## Open
 
