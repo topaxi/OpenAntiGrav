@@ -140,6 +140,8 @@ fn the_report_names_both_kinds_of_absence() {
         twin_blend_bound: 0,
         twin_blend_other_shape: 0,
         twin_blend_unread: 0,
+        shield_scroll_bound: 0,
+        shield_scroll_unread: 0,
         static_hologram_bound: 0,
         static_hologram_other_shape: 0,
         static_hologram_unread: 0,

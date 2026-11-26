@@ -5,6 +5,9 @@
 //! `docs/ghidra/functions/ps3-hdfury-eu/shield.md` ("The steady-state colour is
 //! read"), read off the disc by walking each shield model's material for
 //! `0xaaf53119`. It lives here and nowhere in the engine.
+//!
+//! Each shell and the cockpit sphere also carry the colour scroll the program's own literal
+//! states, `u + 3 * time` ("The lattice scrolls").
 
 use oag_render::shield::{HD_PALETTE, Palette, ShipShield};
 
@@ -27,6 +30,31 @@ const TABLE: &[(&str, [f32; 4])] = &[
     ("icaras", [0.0, 0.0314, 0.9961, 1.0]),
     ("mirage", [1.0, 0.1142, 1.0, 1.0]),
 ];
+
+/// The shell's glow-table entry: the colour tap moves 3 texture widths a second and carries no
+/// lightning (weight zero).
+fn assert_scrolls(model: Option<&oag_mesh::mesh::Model>, what: &str) {
+    let model = model.unwrap_or_else(|| panic!("{what}: no shell"));
+    let entry = model
+        .emissive
+        .iter()
+        .find(|e| e.program[0] == oag_mesh::mesh::PROGRAM_SHIELD_LIGHTNING)
+        .unwrap_or_else(|| panic!("{what}: the shell does not scroll"));
+    assert_eq!(entry.tint, [0.0, 3.0, 0.0], "{what}: weight, scroll rate");
+}
+
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn hds_cockpit_sphere_scrolls_too() {
+    let Some(path) = oag_testdata::exact("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let mut archives = oag_assets::Archives::open(&path.to_string_lossy(), oag_hd::TITLE)
+        .expect("the archives open");
+    let mut report = Vec::new();
+    let (sphere, _) = oag_livery::cockpit_shield(&mut archives, Default::default(), &mut report);
+    assert_scrolls(sphere.as_ref(), "cockpit");
+}
 
 #[test]
 #[ignore = "needs a decrypted PS3 disc image in data/images"]
@@ -63,6 +91,19 @@ fn every_hd_team_shield_settles_to_its_authored_shield_colour() {
             &mut report,
         )
         .expect("the livery loads");
+        // Zone's shell is another material (`zonebattle_shield`), whose program is unread;
+        // no mode we launch raises it.
+        if *team == "zone" {
+            assert!(
+                liveries[0].shield.as_ref().is_some_and(|m| m
+                    .emissive
+                    .iter()
+                    .all(|e| e.program[0] != oag_mesh::mesh::PROGRAM_SHIELD_LIGHTNING)),
+                "zone: another program"
+            );
+        } else {
+            assert_scrolls(liveries[0].shield.as_ref(), team);
+        }
         let colour = liveries[0]
             .shield_colour
             .unwrap_or_else(|| panic!("{team}: no ShieldColour\n{}", report.join("\n")));

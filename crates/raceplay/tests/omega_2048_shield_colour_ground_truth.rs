@@ -40,13 +40,14 @@ fn present(rel: &str) -> Option<PathBuf> {
     None
 }
 
-fn shield_of(
+/// One team's livery as a single race loads it, and the loader report.
+fn livery_of(
     archives: &mut oag_assets::Archives,
     title: &'static oag_title::Title,
     team: &str,
-) -> (Option<[f32; 4]>, bool, Vec<String>, Option<Lightning>) {
+) -> (oag_livery::Livery, Vec<String>) {
     let mut report = Vec::new();
-    let liveries = oag_livery::load(
+    let mut liveries = oag_livery::load(
         archives,
         std::slice::from_ref(&team.to_string()),
         &oag_livery::LoadContext {
@@ -71,25 +72,52 @@ fn shield_of(
         &mut report,
     )
     .expect("the livery loads");
-    let livery = &liveries[0];
+    (liveries.remove(0), report)
+}
+
+fn shield_of(
+    archives: &mut oag_assets::Archives,
+    title: &'static oag_title::Title,
+    team: &str,
+) -> (Option<[f32; 4]>, bool, Vec<String>, Option<Lightning>) {
+    let (livery, report) = livery_of(archives, title, team);
     let built = livery
         .shield
         .as_ref()
         .is_some_and(|model| !model.indices.is_empty() && model.shield_shell);
-    let lightning = livery.shield.as_ref().and_then(|model| {
-        let entry = model
-            .emissive
-            .iter()
-            .find(|e| e.program[0] == oag_mesh::mesh::PROGRAM_SHIELD_LIGHTNING)?;
-        Some(Lightning {
-            weight: entry.tint[0],
-            diffuse_scroll: entry.tint[1],
-            noise_rate: entry.tint[2],
-            noise_scale: entry.offset,
-            picture: model.pad_masks.iter().any(Option::is_some),
-        })
-    });
+    let lightning = livery.shield.as_ref().and_then(lightning_of);
     (livery.shield_colour, built, report, lightning)
+}
+
+fn lightning_of(model: &oag_mesh::mesh::Model) -> Option<Lightning> {
+    let entry = model
+        .emissive
+        .iter()
+        .find(|e| e.program[0] == oag_mesh::mesh::PROGRAM_SHIELD_LIGHTNING)?;
+    Some(Lightning {
+        weight: entry.tint[0],
+        diffuse_scroll: entry.tint[1],
+        noise_rate: entry.tint[2],
+        noise_scale: entry.offset,
+        picture: model.pad_masks.iter().any(Option::is_some),
+    })
+}
+
+/// The layer's rates are literals of the program on both consoles: `3.0`, `0.8`, `0.16`.
+fn assert_lightning(lightning: Option<Lightning>, what: &str) {
+    let lightning = lightning.unwrap_or_else(|| panic!("{what}: no Lightning layer"));
+    assert!(lightning.picture, "{what}: no lightning picture bound");
+    assert!(lightning.weight > 0.0, "{what}: no lightning weight");
+    assert!((lightning.diffuse_scroll - 3.0).abs() < 1e-6, "{what}: A");
+    assert!((lightning.noise_scale - 0.8).abs() < 1e-6, "{what}: B");
+    assert!((lightning.noise_rate - 0.16).abs() < 1e-6, "{what}: C");
+}
+
+/// The cockpit sphere, `hd_shipshield_old`: the same program as the shell's.
+fn cockpit_lightning(archives: &mut oag_assets::Archives) -> Option<Lightning> {
+    let mut report = Vec::new();
+    let (sphere, _) = oag_livery::cockpit_shield(archives, Default::default(), &mut report);
+    sphere.as_ref().and_then(lightning_of)
 }
 
 /// What a built shell carries of `2048_shipshield_old`'s Lightning layer.
@@ -120,13 +148,7 @@ fn every_omega_team_builds_a_shell_and_settles_to_its_own_colour() {
                 "zone: another program, no Lightning layer"
             );
         } else {
-            let lightning = lightning
-                .unwrap_or_else(|| panic!("{team}: no Lightning layer\n{}", report.join("\n")));
-            assert!(lightning.picture, "{team}: no lightning picture bound");
-            assert!(lightning.weight > 0.0, "{team}: no lightning weight");
-            assert!((lightning.diffuse_scroll - 3.0).abs() < 1e-6, "{team}: A");
-            assert!((lightning.noise_scale - 0.8).abs() < 1e-6, "{team}: B");
-            assert!((lightning.noise_rate - 0.16).abs() < 1e-6, "{team}: C");
+            assert_lightning(lightning, team);
         }
         let colour =
             colour.unwrap_or_else(|| panic!("{team}: no ShieldColour\n{}", report.join("\n")));
@@ -139,6 +161,79 @@ fn every_omega_team_builds_a_shell_and_settles_to_its_own_colour() {
             );
         }
     }
+}
+
+#[test]
+#[ignore = "needs data/extracted/ps4"]
+fn omegas_cockpit_sphere_carries_the_shells_lightning() {
+    let Some(path) = present("data/extracted/ps4") else {
+        return;
+    };
+    let mut archives = oag_omega::open(&path.display().to_string()).expect("omega");
+    assert_lightning(cockpit_lightning(&mut archives), "cockpit");
+}
+
+/// The Vita's own `.gxp` programs state the same literals for the HD-content shells and the
+/// cockpit sphere.
+#[test]
+#[ignore = "needs data/extracted/vita/PCSF00007/base"]
+fn every_2048_hd_content_shell_carries_the_programs_lightning() {
+    let Some(path) = present("data/extracted/vita/PCSF00007/base") else {
+        return;
+    };
+    let mut archives = oag_2048::open(&path.display().to_string()).expect("2048");
+    for team in ["Feisar", "Assegai", "Qirex", "Piranha", "Goteki", "EGX"] {
+        let (_, _, _, lightning) = shield_of(&mut archives, oag_2048::TITLE, team);
+        assert_lightning(lightning, team);
+    }
+    assert_lightning(cockpit_lightning(&mut archives), "cockpit");
+}
+
+/// The magnetic shell's vertex program adds `time * Speed_multiplier` (`1`) to `u`, on the
+/// Vita and on the PS4.
+fn assert_magnetic_scroll(archives: &mut oag_assets::Archives, title: &'static oag_title::Title) {
+    // Capitalised: Omega's directory lookup for the 2048-era craft is by this spelling.
+    let (livery, report) = livery_of(archives, title, r"Feisar2048\1");
+    let shell = livery
+        .shield
+        .as_ref()
+        .unwrap_or_else(|| panic!("a shell\n{}", report.join("\n")));
+    let track = shell
+        .anim_tracks
+        .iter()
+        .find(|t| matches!(t, oag_mesh::mesh::AnimTrack::Scroll(_)))
+        .expect("a scroll track");
+    let (_, early) = track.sample(1000.0);
+    let (_, later) = track.sample(1000.25);
+    assert!(
+        ((later[0] - early[0]).rem_euclid(1.0) - 0.25).abs() < 1e-3,
+        "u moves a quarter in a quarter second: {early:?} {later:?}"
+    );
+    assert!((later[1] - early[1]).abs() < 1e-6, "v stays");
+    assert!(
+        shell.vertices.iter().any(|v| v.anim != 0),
+        "no vertex names the track"
+    );
+}
+
+#[test]
+#[ignore = "needs data/extracted/vita/PCSF00007/base"]
+fn the_2048_magnetic_shell_scrolls_its_u_at_the_authored_rate() {
+    let Some(path) = present("data/extracted/vita/PCSF00007/base") else {
+        return;
+    };
+    let mut archives = oag_2048::open(&path.display().to_string()).expect("2048");
+    assert_magnetic_scroll(&mut archives, oag_2048::TITLE);
+}
+
+#[test]
+#[ignore = "needs data/extracted/ps4"]
+fn omegas_magnetic_shell_scrolls_its_u_at_the_authored_rate() {
+    let Some(path) = present("data/extracted/ps4") else {
+        return;
+    };
+    let mut archives = oag_omega::open(&path.display().to_string()).expect("omega");
+    assert_magnetic_scroll(&mut archives, oag_omega::TITLE);
 }
 
 #[test]

@@ -22,6 +22,7 @@
 use super::Declared;
 
 mod alpha_gate;
+mod clock_scroll;
 mod glow_alpha;
 pub use glow_alpha::Lane;
 mod normal_read;

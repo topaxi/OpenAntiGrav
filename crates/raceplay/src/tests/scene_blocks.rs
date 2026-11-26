@@ -191,3 +191,26 @@ fn the_absorb_shell_reads_the_craft_scene_block() {
     scene.share_scene_blocks_for_tests(&device);
     assert_eq!(scene.shell_scene_kind_for_tests(), Some(SceneKind::Ship));
 }
+
+/// The shield shell's and cockpit sphere's shaders scroll on `scene.time`
+/// (`PROGRAM_SHIELD_LIGHTNING`, `own_shield.wesl`): left on their own block (`Scene::off`) the
+/// clock stands at zero and the lattice never moves. Drop the shield loop in
+/// `share_scene_blocks` and they keep no kind.
+#[test]
+fn the_shield_shell_and_sphere_read_the_clocked_block() {
+    let Some((device, queue)) = test_gpu() else {
+        return;
+    };
+    let mut scene = bare_scene(&device, &queue);
+    scene.give_a_shield_for_tests(&device);
+    assert_eq!(
+        scene.shield_scene_kinds_for_tests(),
+        [None; 2],
+        "fresh copies"
+    );
+    scene.share_scene_blocks_for_tests(&device);
+    assert_eq!(
+        scene.shield_scene_kinds_for_tests(),
+        [Some(SceneKind::Flame); 2]
+    );
+}

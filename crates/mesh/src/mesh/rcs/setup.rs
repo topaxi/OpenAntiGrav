@@ -446,6 +446,14 @@ pub(super) fn material_setup(
         &mut anim_tracks,
         report,
     );
+    super::shield_scroll::shield_scroll(
+        model,
+        &material_variants,
+        textures,
+        &mut material_slots,
+        &mut emissive,
+        report,
+    );
     let (mut fifth_maps, mut sixth_maps) = (snow.rock, snow.rock_normal);
     super::mag_wave::merge(&mut fifth_maps, chevron_emasks);
     super::mag_wave::merge(&mut sixth_maps, chevron_waves);
