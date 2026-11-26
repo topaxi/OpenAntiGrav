@@ -37,6 +37,7 @@ mod hd_opponent_variant_ground_truth;
 mod hd_original_ai_ground_truth;
 mod hd_pad_illumination_ground_truth;
 mod hd_pickup_icon_ground_truth;
+mod hd_pickup_roster_ground_truth;
 mod hd_plasma_flight_ground_truth;
 mod hd_record_target_ground_truth;
 mod hd_rim_glow_ground_truth;

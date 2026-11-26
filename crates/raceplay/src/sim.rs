@@ -581,6 +581,8 @@ pub struct RaceSim {
     /// Restricts what a `Weapon Pad` hands out - see
     /// [`SimSetup::allowed_weapons`]. Empty is no restriction.
     pub(super) allowed_weapons: Arc<[oag_tables::weapons::Weapon]>,
+    /// The title's player roll order - see [`SimSetup::pickup_order`].
+    pub(super) pickup_order: Option<&'static [oag_tables::weapons::Weapon]>,
     /// The speed class, which indexes the pickup odds - see [`SimSetup::class`].
     ///
     /// The disc's own spelling, so a title whose ladder is not Pulse's - Pure,

@@ -115,6 +115,7 @@ mod people_grid;
 mod perfect_start;
 mod photo;
 mod photo_rewind;
+mod pickup_roster;
 #[cfg(feature = "extensions")]
 mod portal_view;
 mod pure_absorb_bar;
@@ -402,6 +403,7 @@ fn setup(handling: Handling) -> SimSetup {
         detonator: None,
         detonator_pads: None,
         allowed_weapons: Vec::new(),
+        pickup_order: None,
         weapon_pad_refresh: 0.0,
         // These tests run on a synthetic straight and want the ordinary
         // spawn and the ordinary chase camera; `--pose` and its camera are

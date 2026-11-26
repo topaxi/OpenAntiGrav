@@ -17,6 +17,7 @@ autotests = false
 # off the disc.
 [dependencies]
 oag-assets.workspace = true
+oag-tables.workspace = true
 oag-title.workspace = true
 
 [dev-dependencies]
@@ -24,7 +25,6 @@ oag-testdata.workspace = true
 oag-rcs.workspace = true
 oag-vex.workspace = true
 oag-texture.workspace = true
-oag-tables.workspace = true
 oag-formats.workspace = true
 oag-pulse.workspace = true
 oag-pure.workspace = true

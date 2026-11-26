@@ -393,16 +393,21 @@ impl SimRace {
             oag_weapons::pickup::Driver::Ai
         };
         let last = self.sim.world.ships[slot].pickup.last;
-        // `None` for every non-2048 race and for a 2048 event whose weapon
-        // set decodes to nothing recognised - the same "empty is no
-        // restriction" reading `SimSetup::allowed_weapons`'s own doc comment
-        // gives. AI slots are gated the same as the player's: which weapons
-        // an event's own `WeaponSetDefinition` allows is stated about the
-        // pads, not about who crosses them - **chosen, not measured**, since
-        // no consumer of this mask has been found in `eboot.elf` to read
-        // otherwise.
+        // The title's pickup roster for this mode, or a 2048 event's weapon set; `None`
+        // with neither - the same "empty is no restriction" reading
+        // `SimSetup::allowed_weapons`'s own doc comment gives. AI slots are gated
+        // the same as the player's: on HD that is read (both draws gate on the
+        // mask); for a 2048 event's `WeaponSetDefinition` it is **chosen, not
+        // measured**, since no consumer of it has been found in `eboot.elf`.
         let allowed = (!self.sim.allowed_weapons.is_empty()).then_some(&*self.sim.allowed_weapons);
-        let drawn = oag_weapons::pickup::draw(&mut self.sim.world.rng, table, who, last, allowed);
+        let drawn = oag_weapons::pickup::draw(
+            &mut self.sim.world.rng,
+            table,
+            who,
+            last,
+            allowed,
+            self.sim.pickup_order,
+        );
         if let Some(weapon) = drawn {
             let pickup = &mut self.sim.world.ships[slot].pickup;
             pickup.grant(weapon);

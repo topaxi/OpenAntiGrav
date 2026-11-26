@@ -73,6 +73,7 @@ pub const TITLE: &Title = &Title {
     // `Texture_LoadEngineFlare` at `0x08a84c80`. Note the directory case
     // differs from the noise map's; the WAD hash is case-insensitive.
     wingtip: None,
+    pickup_roster: None,
     weapon_pad_glow: &oag_title::weapon_pad::WeaponPadGlow::Authored,
     flare: &oag_title::flare::Flare::Sprite(r"Data\Tex\EngineFlare\grabbedEngineFlare128x64x8.mip"),
     // Measured: the six stand-in codepoints and the glyph each draws, read off

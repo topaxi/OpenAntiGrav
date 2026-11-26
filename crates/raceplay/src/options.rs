@@ -792,15 +792,19 @@ pub struct SimSetup {
     /// list, or does not restrict at all when empty - the same "empty is no
     /// override" convention [`Options::grid_teams`] uses.
     ///
-    /// **Nothing sets this except `race::load::campaign::load_event`**, off
-    /// the 2048 campaign event's own `M_WEAPONSET` -
+    /// Set from [`oag_title::Title::pickup_roster`] for the race's mode, then
+    /// replaced by `race::load::campaign::load_event` with a 2048 campaign
+    /// event's own `M_WEAPONSET` -
     /// `oag_tables::mjolnir::campaign::WeaponSet::allowed_weapons`, the bits
     /// that project has pinned at confidence >= 70 (see
     /// `docs/formats/2048-campaign.md`'s "The weapon set gate" section).
-    /// Every non-2048 race, and a 2048 event whose weapon set decodes to
-    /// nothing recognised, draws exactly as it always did - see
+    /// A title with no roster, outside such an event, restricts nothing - see
     /// [`oag_weapons::pickup::draw`]'s own `allowed` parameter.
     pub allowed_weapons: Vec<oag_tables::weapons::Weapon>,
+    /// The order a person's roll passes a disallowed weapon's weight along
+    /// ([`oag_title::pickup_roster::PickupRoster::player_order`]), or `None`
+    /// where the title has no roster.
+    pub pickup_order: Option<&'static [oag_tables::weapons::Weapon]>,
     /// Seconds a weapon pad is inert for after it is crossed, for this race's
     /// speed class.
     ///

@@ -133,6 +133,7 @@ pub const TITLE: &Title = &Title {
         oag_title::Origin::InheritedFrom("Wipeout HD"),
     )),
     // Read in this title's own executable (`docs/rendering/pads.md`, "2048 and Omega").
+    pickup_roster: None,
     weapon_pad_glow: &oag_title::weapon_pad::WeaponPadGlow::ByClass(
         oag_title::weapon_pad::ClassCycles::LINEAGE,
     ),

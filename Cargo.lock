@@ -4139,6 +4139,7 @@ name = "oag-title"
 version = "0.1.0"
 dependencies = [
  "oag-disc",
+ "oag-tables",
 ]
 
 [[package]]

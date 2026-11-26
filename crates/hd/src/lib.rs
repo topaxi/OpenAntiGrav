@@ -63,6 +63,7 @@ pub mod loading;
 pub mod loyalty;
 pub mod main_menu;
 pub mod pause_menu;
+pub mod pickups;
 pub mod pre_race;
 pub mod prompts;
 pub mod psn;
@@ -144,6 +145,7 @@ pub const TITLE: &Title = &Title {
         "/data/tex/smoke_trails_frame1_alpha.gtf",
         oag_title::Origin::Measured,
     )),
+    pickup_roster: Some(oag_title::pre_race::Sourced::measured(pickups::ROSTER)),
     weapon_pad_glow: &oag_title::weapon_pad::WeaponPadGlow::Cycle(oag_title::weapon_pad::Cycle {
         // The 6 keyframes at `0x008c26a0`, 12 bytes each.
         keyframes: &[
