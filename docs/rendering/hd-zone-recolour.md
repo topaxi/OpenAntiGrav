@@ -407,10 +407,11 @@ Race pass before and after, Zone, interleaved runs (median of per-frame times):
 | 7800 XT, 1920x1080 | 350 us | 343 us | 6 of 6 (one a tie) |
 | iGPU, 1280x800 | 6,485 us | 6,168 us | 7 of 8 |
 
-**Picture: unchanged.** 31 frames, before against after, 0 differing pixels: Zone on Chenghou
+**Picture: unchanged.** 32 frames, before against after, 0 differing pixels: Zone on Chenghou
 (ticks 150 to 7,300), Talon's Junction, Vineta K, Anulpha Pass,
 `zone_1` and `zone_4`, a Detonator race, a two-player split, `--circuit-lighting simplified`, an
-HD time trial and single race, and a Zone race on Omega and on Pulse (which never specialise).
+HD time trial and single race, and, on titles that never specialise, a Zone race and a time trial
+on Omega and a Zone race on Pulse.
 
 **Does the difference explain the Deck?** Partly. With dynamic resolution on (iGPU, 1920x1080,
 target 60, two runs of 70 s, before the fix) the time trial held a mean linear scale of 0.998
@@ -420,6 +421,6 @@ exactly at its budget, not at 0.75. What takes the Deck further is not establish
 
 **Not measured, and open:** the Deck itself; a race with sound (the visualiser lookup is then
 rewritten when its texels change, up to 1 KiB per circuit drawable per view); and what a separate
-Zone program for the circuit would save. Dropping the lightmap fetch too measured about 45 us
-more at 4K but moves pixels: our Zone surface still gates its specular by the lightmap's alpha,
-where the original's Zone programs sample no lightmap.
+Zone program for the circuit would save. Dropping the lightmap fetch and the albedo mix as well
+measured about 45 us more at 4K, but skipping the fetch moves pixels: our Zone surface still gates
+its specular by the lightmap's alpha, where the original's Zone programs sample no lightmap.

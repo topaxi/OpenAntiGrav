@@ -17,9 +17,10 @@ Measurements, the cause and the landed part:
   (motion blur, reflection, output size) and whether sound changes it.
 - **Fidelity: Zone specular is gated by the lightmap's alpha.** Our Zone chunks still sample the
   lightmap and their specular reads its alpha; no Zone program on Chenghou declares the lightmap
-  sampler. Visible only at stages with a non-zero sun colour (skipping the fetch moved 164,239
-  pixel-units at tick 1900 of an autopilot run). Whether the original's Zone program has a
-  specular lobe at all is unread.
+  sampler. Skipping the fetch changed the picture at ticks 1900 and 3100 of an autopilot run
+  (ImageMagick `AE` 6,117 and 1,098) and not at tick 700, which fits a term that needs a non-zero
+  stage sun (not isolated). Whether the original's Zone program has a specular lobe at all is
+  unread.
 - **A Zone program of its own for the circuit.** The race pass would be 716 us with the recolour
   compiled out and the throwaway Zone-only ceiling was about 590 us at 4K against 890; reaching
   it means proving every term the original's Zone variant computes.
