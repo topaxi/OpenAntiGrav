@@ -255,7 +255,16 @@ fn assert_zone_end_orbit(destroyed: DestroyedCraft) {
     assert_eq!(camera.basis, Basis::LookAt);
     let start = camera.eye.distance(craft);
     assert!((start - 5.5).abs() < 0.01, "starts {start} off the craft");
-    for _ in 0..60 {
+    // The first frame eases the radius from 0.5 toward the enter's 4.0, not yet toward 5.0
+    // (`destroy-camera.md`, "The orbit on 2048 and Omega").
+    race.view.advance_destroy_camera(&race.core);
+    let camera = race.view.destroy_camera_now().expect("the orbit");
+    let first = camera.eye.distance(camera.focus);
+    assert!(
+        (first - 5.57).abs() < 0.005,
+        "first frame {first} off the focus"
+    );
+    for _ in 0..59 {
         race.view.advance_destroy_camera(&race.core);
     }
     let camera = race.view.destroy_camera_now().expect("the orbit");
