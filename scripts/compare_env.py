@@ -67,9 +67,21 @@ def platform(key):
 def detonator_input_lines(fire, go_tick_):
     """The lines of a Detonator pair's `ours.inputs`: idle through the countdown and up to the original's press, SQUARE (ours'
     cannon button) over the window the original's button was held, idle after; `fire` is `original.detonator.fire` of
-    `pair.json` (`None` for a pair with no shot)."""
+    `pair.json` (`None` for a pair with no shot).
+
+    Where the rounds' ages gave each volley's tick (`volley_clocks_s`) ours holds SQUARE for that one tick per volley and
+    lets go between: a release zeroes ours' trigger, so the next press fires on its own tick. The original's frames are
+    one or two ticks long, so its volleys are not spaced as a held trigger's are at 60 Hz."""
     if not fire:
         return ["%d none" % (go_tick_ + 1)]
+    volleys = fire.get("volley_clocks_s")
+    if volleys:
+        lines, at = [], 0
+        for clock in volleys:
+            tick = go_tick_ + round(clock * 60)
+            lines += ["%d none" % (tick - at), "1 square"]
+            at = tick + 1
+        return lines + ["1 none"]
     before = round(fire["press_clock_before_s"] * 60)
     held = max(1, round((fire["press_clock_after_s"] - fire["press_clock_before_s"]) * 60))
     return ["%d none" % (go_tick_ + before), "%d square" % held, "1 none"]

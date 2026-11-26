@@ -295,6 +295,18 @@ def check_detonator_mine_envelopes():
     assert flags[flags.index("--detonator-mine-ages") + 1] == "55.0000", flags
 
 
+def check_detonator_volley_ticks():
+    """A Detonator pair whose rounds were read presses on each volley's own tick, one tick each with a release between; a
+    record without them (every pair published before) keeps the one held window, since a re-render makes the script again."""
+    sys.path.insert(0, str(HERE))
+    import rpcs3_hd_volley
+    rpcs3_hd_volley.self_test()
+    window = {"press_clock_before_s": 1.8499995, "press_clock_after_s": 2.0499995, "button": "triangle"}
+    assert ce.detonator_input_lines(window, 272) == ["383 none", "12 square", "1 none"]
+    read = dict(window, volley_clocks_s=[1.8833328, 1.9499995])
+    assert ce.detonator_input_lines(read, 272) == ["385 none", "1 square", "3 none", "1 square", "1 none"]
+
+
 def check_detonator_picture_tick(root):
     """A Detonator pair whose picture lag was measured runs ours to the picture's tick (rounds, mine hits, score, ammo), on
     the first render and on every re-render; the static-scene fit takes only a sharp, interior peak."""
@@ -376,6 +388,7 @@ def main():
     with tempfile.TemporaryDirectory() as t:
         check_anisotropy(Path(t))
     check_detonator_mine_envelopes()
+    check_detonator_volley_ticks()
     with tempfile.TemporaryDirectory() as t:
         check_detonator_picture_tick(Path(t))
     print("compare environment: round trip ok")
