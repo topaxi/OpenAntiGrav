@@ -4233,8 +4233,8 @@ Vineta K's own footage to a few grey levels).
   (`ship.vex` + `ship.rcsmodel`) is not reachable from the preview path, so
   the `SHIP MODEL` frame is empty. The biggest thing still missing.
 - **The hex grid** (`HexSelection`): drawn since 2026-10-08, see below.
-- **The bracket corner marks, the padlock, the unlock condition text and
-  the loyalty value** - no unlock or loyalty state is kept.
+- **The unlock condition text** - not drawn. The bracket corner marks, the loyalty value and the
+  honeycomb's padlocks have landed since.
 
 ### The `NAVIGATE TEAM` honeycomb, 2026-10-08 (hd-ship-select)
 

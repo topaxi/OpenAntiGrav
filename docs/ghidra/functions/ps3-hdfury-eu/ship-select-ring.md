@@ -456,8 +456,9 @@ Its `_SetCell` was not re-read for the locked branch. The pair `omega/menu-ship-
 wrong way, 19.30 to 19.45 (hex column box (200, 330, 660, 960) 47.57 to 48.61), while
 `omega/menu-track-select` went 18.54 to 18.47: the frame draws locks near (62, 62, 62) on every
 column, which ours matched before no better than now, and its `Team_Selection_Definition.xml` authors
-the same `SelectedLockCol`/`SelectedLockColFade` as HD. Next: read `FUN_0145af70`'s lock colours
-against `HexSelection_SetCell`'s.
+the same `SelectedLockCol`/`SelectedLockColFade` as HD. That frame's half-row phase is also inverted
+against ours, so its box figures are not cell for cell and do not attribute the 0.15 to colour; the
+dark locks are read by eye. Next: read `FUN_0145af70`'s lock colours against `HexSelection_SetCell`'s.
 
 **Wired (slide, step, ease, ring: `shipselect-ring-wire`); checked, differs (ring colour).** Read in
 `/omega/eboot-ps4-omega-eu.bin` (the `eboot.bin` in the shared Ghidra project; addresses are this build's:
