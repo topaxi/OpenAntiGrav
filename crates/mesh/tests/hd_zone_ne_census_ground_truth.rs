@@ -46,9 +46,12 @@ fn read(blob: &[u8], material: &RcsMaterial, tint: u32) -> Vec<(bool, Option<u32
         .collect()
 }
 
+/// One program as `(instructions, texture fetches, samples the lightmap)`.
+type Cost = (usize, usize, bool);
+
 /// Each class's lit race program of a lightmapped chunk against its Zone one (`ZoneMode`, the
-/// `Ambient` field), as `(instructions, texture fetches, samples the lightmap)`.
-fn zone_against_lit(blob: &[u8], material: &RcsMaterial) -> Vec<[(usize, usize, bool); 2]> {
+/// `Ambient` field), the lit one first.
+fn zone_against_lit(blob: &[u8], material: &RcsMaterial) -> Vec<[Cost; 2]> {
     let lit = Features::from_pass_word(LIT_RACE_PASS | 0b100);
     let zone = Features::from_pass_word(LIT_RACE_PASS | 1 << 8);
     let read = |class: u32, features: Features| {
@@ -81,7 +84,7 @@ fn zone_against_lit(blob: &[u8], material: &RcsMaterial) -> Vec<[(usize, usize, 
 /// Zone race costs"): on Chenghou Project's lightmapped surfaces no Zone program samples the
 /// lightmap or fetches fewer textures than the lit program it replaces, and all but one are
 /// longer.
-fn check_zone_programs_are_no_cheaper(pairs: &[(String, [(usize, usize, bool); 2])]) {
+fn check_zone_programs_are_no_cheaper(pairs: &[(String, [Cost; 2])]) {
     assert!(pairs.len() >= 20, "only {} pairs", pairs.len());
     let mut shorter = Vec::new();
     for (
