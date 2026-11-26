@@ -676,15 +676,17 @@ impl RaceSim {
     }
 
     /// Whether `slot`'s Detonator craft has blown up on a title that plays its end out before the
-    /// results ([`oag_title::destroyed::DestroyedCraft::detonator_results_secs`]).
+    /// results.
     pub(crate) fn detonator_ending(&self, slot: usize) -> bool {
-        self.detonator_results_secs().is_some()
+        self.detonator_end().is_some()
             && self.world.ships[slot].physics.craft_state != oag_physics::CraftState::Racing
     }
 
-    fn detonator_results_secs(&self) -> Option<f32> {
+    /// The end this race plays on a destroyed craft, `None` outside Detonator and on a title
+    /// that ends at once ([`oag_title::destroyed::DestroyedCraft::detonator_end`]).
+    pub(crate) fn detonator_end(&self) -> Option<oag_title::destroyed::DetonatorEnd> {
         (self.world.mode() == Mode::Detonator)
-            .then_some(self.destroyed.detonator_results_secs)
+            .then_some(self.destroyed.detonator_end)
             .flatten()
     }
 
@@ -695,10 +697,11 @@ impl RaceSim {
         if self.zone_end().is_some() {
             return oag_physics::damage::in_state_6(physics, false);
         }
-        self.detonator_results_secs().is_none_or(|results| {
+        self.detonator_end().is_none_or(|end| {
             let sequence = self.destroy_sequence();
             // State 5 counts down from `dwell_secs`, entered `explosion_secs` after the blast.
-            physics.state_timer <= sequence.dwell_secs - (results - sequence.explosion_secs)
+            physics.state_timer
+                <= sequence.dwell_secs - (end.results_secs - sequence.explosion_secs)
         })
     }
 

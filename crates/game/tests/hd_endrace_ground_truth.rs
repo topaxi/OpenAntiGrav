@@ -479,6 +479,12 @@ fn a_detonator_run_destroyed_in_stage_five_draws_four_of_fourteen_and_its_sessio
             blast = Some((race.core.sim.world.tick, race.core.sim.detonator_score()));
             assert!(!race.hud_shown(), "the blast takes the HUD down");
         }
+        if blast.is_some_and(|(at, _)| race.core.sim.world.tick == at + 60) {
+            assert!(
+                race.view_state().orbiting(),
+                "the camera orbits the wreck (mode 2)"
+            );
+        }
     }
     assert!(race.core.sim.finished(), "the wreck ended the race");
     // The finish handler's 1.0 s then 4.5 s before `EndRace Results` (`detonator-endrace.md`).
