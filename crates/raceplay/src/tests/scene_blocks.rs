@@ -1,7 +1,7 @@
 //! The scene blocks every drawable of a kind reads: one write per kind per view, in a region
 //! of the buffer that belongs to that view alone.
 
-use super::scene_build::{bare_scene, test_gpu};
+use super::scene_build::{bare_scene, bare_scene_of, livery, test_gpu};
 use super::*;
 use crate::drawable::SceneKind;
 use oag_display::display::{Fov, Shadows};
@@ -194,8 +194,8 @@ fn the_absorb_shell_reads_the_craft_scene_block() {
 }
 
 /// The shield shell's and cockpit sphere's shaders scroll on `scene.time`
-/// (`PROGRAM_SHIELD_LIGHTNING`, `own_shield.wesl`): left on their own block (`Scene::off`) the
-/// clock stands at zero and the lattice never moves. Drop the shield loop in
+/// (`PROGRAM_SHIELD_LIGHTNING`): left on their own block (`Scene::off`) the clock stands at
+/// zero and the lattice never moves. These are the disc's; our own shield has its own block. Drop the shield loop in
 /// `share_scene_blocks` and they keep no kind.
 #[test]
 fn the_shield_shell_and_sphere_read_the_clocked_block() {
@@ -214,4 +214,54 @@ fn the_shield_shell_and_sphere_read_the_clocked_block() {
         scene.shield_scene_kinds_for_tests(),
         [Some(SceneKind::Flame); 2]
     );
+}
+
+/// Our own shield's rim, facets and silhouette are measured from the eye (`own_shield.wesl`,
+/// `to_eye`), so its block holds the eye of the view being drawn, with the flame block's clock
+/// and no fog. Leave the shell on the flame's block, or drop the camera from
+/// `own_shield_scene`, and the eye read back is the origin.
+#[test]
+fn our_own_shield_reads_each_views_eye() {
+    let Some((device, queue)) = test_gpu() else {
+        return;
+    };
+    let mut own = livery();
+    own.hull.own_shield = true;
+    let mut scene = bare_scene_of(&device, &queue, &[own]);
+    // The shell and sphere are copies of the hull, so they carry its flag.
+    scene.give_a_shield_for_tests(&device);
+    scene.share_scene_blocks_for_tests(&device);
+    assert_eq!(
+        scene.shield_scene_kinds_for_tests(),
+        [Some(SceneKind::OwnShield); 2]
+    );
+    let view = target(&device);
+    let mut race = race_with_a_grid();
+    assert_eq!(race.set_viewport_count(2), 2, "the grid fields two craft");
+    scene.render_viewports(
+        &device,
+        &queue,
+        &view,
+        &race,
+        (0.0, 0.0, 64.0, 64.0),
+        Fov::AUTHORED,
+        true,
+        true,
+        None,
+        Shadows::Off,
+        &[],
+        crate::scene::WindowEffects::default(),
+        &mut [],
+    );
+    for slot in 0..2 {
+        race.view.set_viewpoint(&race.core, slot);
+        let eye = race.view.camera_position(&race.core).to_array();
+        race.view.reset_viewpoint();
+        assert_ne!(eye, [0.0; 3], "view {slot}'s camera is not at the origin");
+        let block = scene.scene_block(&device, &queue, slot, SceneKind::OwnShield);
+        assert_eq!(block.fog.camera, eye, "view {slot}'s own shield");
+        let circuit = scene.scene_block(&device, &queue, slot, SceneKind::Circuit);
+        assert_eq!(block.time, circuit.time, "the lattice's clock");
+        assert_eq!(block.fog.enabled, 0.0, "the shell is not fogged");
+    }
 }
