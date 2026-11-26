@@ -184,7 +184,7 @@ a string id; `benchmark::screen` draws them):
 
 | Line | Says |
 | --- | --- |
-| SMOOTH, MOSTLY SMOOTH or CHOPPY, with the average FPS and the FPS it is judged against | the share of counted frames over the frame budget: up to 1 % is SMOOTH (at 60 FPS one late frame in a second and a half), up to 5 % MOSTLY SMOOTH (three a second), more CHOPPY (`report::SMOOTH_SHARE`, `MOSTLY_SMOOTH_SHARE`; **chosen, not measured**) |
+| SMOOTH, MOSTLY SMOOTH or CHOPPY, with the average FPS and the FPS it is judged against | the share of counted frames over the frame budget: up to 1 % is SMOOTH (at 60 FPS one late frame every 1.7 seconds), up to 5 % MOSTLY SMOOTH (three a second), more CHOPPY (`report::SMOOTH_SHARE`, `MOSTLY_SMOOTH_SHARE`; **chosen, not measured**) |
 | Slowest moments: N FPS (worst 1 in 100 frames) | the 1 % low |
 | Stutters: N of M frames missed the T ms frame budget | the frames over the budget |
 | Your frame limit (N FPS) capped this result. Turn FRAME LIMIT off in BENCHMARK OPTIONS ... | only when the average sits on the limit in force (`limiter_binds`) |
@@ -318,7 +318,8 @@ checks each value against the page.
   every title's menu tree (`every_titles_tree_holds_the_benchmark_options_page`) and the PRESET,
   VSYNC and FRAME LIMIT rows to the shipped preset names and the display page's values.
   The frame budget: `benchmark::report` replays the S24 run, a 120 Hz run with nothing asked
-  for, a vsynced 60 Hz run and a table of which term wins; `the_options_page_reaches_the_run_and_saves_nothing`
+  for, a vsynced 60 Hz run and a table of which term wins; `the_in_game_benchmark_flies_the_race_the_offscreen_bench_does`
+  checks that a frame limit under vsync on is not a term; `the_options_page_reaches_the_run_and_saves_nothing`
   checks that the player's TARGET FPS reaches the result.
   `the_stats_screen_swaps_to_details_and_answers_a_copy`: DETAILS and COPY through the real
   `Session`, by screenshots. The unit tests in `benchmark::text` hold the verdict thresholds, the

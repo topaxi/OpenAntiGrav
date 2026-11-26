@@ -227,8 +227,7 @@ fn with_no_target_and_no_limit_a_120_hz_screen_is_the_budget() {
 fn a_vsynced_60_hz_run_allows_jitter_and_counts_the_missed_refreshes() {
     // Vsync paces the loop itself, so no frame limit is in force: frames land around 16.67 ms
     // and a missed refresh takes two.
-    let mut run = on_screen(60.0, 16.9, 8, 33.3);
-    run.context.vsync = "on".into();
+    let run = on_screen(60.0, 16.9, 8, 33.3);
     let figures = run.figures().unwrap();
     assert_eq!(run.context.budget().from, BudgetFrom::Refresh);
     assert_eq!(figures.over_budget, 8);

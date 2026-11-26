@@ -233,7 +233,15 @@ fn the_in_game_benchmark_flies_the_race_the_offscreen_bench_does() {
     };
     let base = std::env::temp_dir().join("oag-in-game-benchmark-ground-truth");
     let (offscreen, _) = bench(&base.join("offscreen"), &image);
-    let (json, shot) = in_game(&base.join("in-game"), &image, &[], "ticks 1");
+    // A frame limit under vsync on, where the display paces and the limit is not in force.
+    let flags = ["--benchmark-vsync", "on", "--benchmark-frame-limit", "30"];
+    let (json, shot) = in_game(&base.join("in-game"), &image, &flags, "ticks 1");
+    assert!(json.contains("\"frame_limit\": \"30\""), "{json}");
+    assert!(
+        json.contains("\"frame_limit_hz\": null"),
+        "no limit judges a vsynced run: {json}"
+    );
+    assert_eq!(field(&json, "budget_from"), "refresh");
 
     assert_eq!(field(&json, "final_tick"), TICKS.to_string());
     assert_eq!(field(&json, "finished"), "false");

@@ -236,8 +236,8 @@ pub enum Verdict {
     Choppy,
 }
 
-/// The largest share of late frames a SMOOTH run has: 1 %, at 60 FPS one late frame in a second
-/// and a half.
+/// The largest share of late frames a SMOOTH run has: 1 %, at 60 FPS one late frame every 1.7
+/// seconds.
 pub const SMOOTH_SHARE: f64 = 0.01;
 
 /// The largest share a MOSTLY SMOOTH run has: 5 %, at 60 FPS three a second, past which a
