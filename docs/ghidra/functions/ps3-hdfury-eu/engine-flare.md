@@ -262,6 +262,23 @@ scrolling at exactly `Speed` repeats per second reads zero at 0.5 and not at
 same units; that wants the matched-view harness and a recording, and the
 prediction above is what such a recording would falsify.
 
+## Our rim's eye is the world origin (open, 2026-11-26)
+
+The vertex program's `V` is `eyePositionWorldSpace - position`. Ours computes the rim from the scene block's
+`Fog::camera` (`shade.wesl`, `flame_shading`), and the flares, boost plumes and flare spikes read the flame surfaces'
+block (`SceneKind::Flame`), which is `Scene::off` plus the clock: its camera is `(0, 0, 0)`. So `rim`, and through it
+the flame's `alpha`, is measured from the wrong point. The same defect was fixed for the weapon bodies
+([hd-unlit-programs.md](../../../rendering/hd-unlit-programs.md), "Weapon scene blocks") and for this project's own
+shield ([own-shield.md](../../../rendering/own-shield.md)).
+
+Size, measured with a temporary change that wrote the view's eye into the flame block (not committed): HD,
+`--give shield --hold cross --press square`, `960x544`, 392 pixels differ at tick 400 and 166 at tick 600, at most 39
+of 255 on a channel. Two frames of one run at low speed; a boost frame, where the plume is largest, was not measured.
+Confidence 95 that our eye is the origin (code read, and the measured difference), none on how much it matters against
+the original: no comparison pair was re-rendered. Not wired. 2048 and Omega: checked, differs. Their flares take
+`oag_livery::flare`'s `psp2_flare`, which sets no `Flame`, so they are shaded without the rim and the eye does not
+enter; Omega's load report says so for `2048_engine_additive.rcsmaterial`, 2048's is read from the code alone.
+
 ## Blocks #0 and #2, in one line each
 
 `#0` computes the same rim term, writes a black `H0.xyz` and samples nothing -

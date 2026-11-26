@@ -1,8 +1,8 @@
 ---
 status: measure
 titles: [hd]
-updated: 2026-11-01
-summary: "HD exhaust: talons-pack trail whiter and wider than the original's; confirm live what sets craft+0xfc; engine-trail.md lists the rest"
+updated: 2026-11-26
+summary: "HD exhaust: flame rim eye is the world origin (ready to wire); talons-pack trail whiter and wider; confirm live what sets craft+0xfc"
 ---
 
 # HD's exhaust is measured from the running game now: the trail is a 54-sample three-fin tube, the flame breathes with the throttle, and the plume scales rather than blinks
@@ -11,6 +11,10 @@ summary: "HD exhaust: talons-pack trail whiter and wider than the original's; co
 
 ## Open (trimmed 2026-09-04 - three of the four original items are settled, not just narrowed)
 
+- **2026-11-26 (`own-shield-camera`): the flame rim's eye is the world origin.** The flares, boost plumes and spikes
+  read `SceneKind::Flame` (`Scene::off` plus the clock). Wiring: put the view's eye in that block
+  (`crates/raceplay/src/scene/scene_blocks.rs`, `write_scene_blocks`; `own_shield_scene` already builds that value),
+  then re-render the HD pairs that show a flame, a boost frame among them. Numbers on engine-flare.md, "Our rim's eye".
 - **2026-11-01 (`hd-zone-exhaust`): the Zone flame was baked at the team hull's `EF_Main` origin, now the Zone directory's.** See hd-ship-materials.md, "The Zone flame hangs on the Zone hull". Still open: a pose-matched RPCS3 Zone pair (no Zone race state exists; `zone-moa-therma-hd-early` is a results screen), Zone's trail origin at speed, and the HD Zone wreck (the engine light, shield shell and absorb shell now read the Zone directory, `hd-ship-materials.md` "The rest of the Zone livery").
 `engine-trail.md` kept moving after this file's 2026-08-24 snapshot and was
 never folded back; its later sessions already close three of the four items
