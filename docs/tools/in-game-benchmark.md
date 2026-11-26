@@ -68,8 +68,9 @@ for results (`--ticks` under 272 ends inside the countdown and has no figures).
 Back during the run abandons it: Escape, the pad's back button (CIRCLE by default) and the
 Android system Back all end it the same way. The player's settings come back, **no result file is
 written**, and a menu launch returns to the page it was started from; a run started on the command
-line has nothing behind it and ends the game. A benchmark's race is never parked behind the menus,
-finished or not (`Session::open_menus`). RUN BENCHMARK is not offered over a race parked
+line has nothing behind it and ends the game. A benchmark's race is never held, finished or not:
+it is not parked behind the menus (`Session::open_menus`) and they are not built as a pause menu
+over it (`Session::pausing_race`). RUN BENCHMARK is not offered over a race parked
 behind the menus: it would replace that race.
 
 ## Input
@@ -260,7 +261,7 @@ checks each value against the page.
   `the_stats_screen_swaps_to_details_and_answers_a_copy`: DETAILS and COPY through the real
   `Session`, by screenshots. The unit tests in `benchmark::text` hold the verdict thresholds, the
   frame-limit line, the copied text and that no internal name (`_Track`, `track.vex`) is shown.
-  `back_abandons_a_benchmark_and_writes_nothing`: Back by the pad and the system Back from the EXTRAS page, with nothing left parked behind the menus; Escape from the command line.
+  `back_abandons_a_benchmark_and_writes_nothing`: Back by the pad and the system Back from the EXTRAS page, with nothing left parked behind the menus and the main menu, not the pause menu, opened; Escape from the command line.
 - Unit tests in `crates/game/src/benchmark/` for the lows, the figures, the JSON keys `compare`
   reads, the screen's hit rectangles and layout, the presets, and the command line.
 - `scripts/bench-render.py selftest` covers the in-game/offscreen warning.
