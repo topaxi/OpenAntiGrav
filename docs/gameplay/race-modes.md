@@ -1165,6 +1165,23 @@ the median over seeds 1 to 24 (`NOVICE_PACE_SEEDS`). The window stays 6 to 12, a
 original's 9 laps (n = 1, a third either way); 7 sits inside it. Elite keeps seeds 1 to 12 and
 passed unchanged.
 
+**HD's real pickup roster slows ours to a median of 14 laps (2026-11-26, `hd-weapon-roster`).**
+HD never hands out the Repulser or the Shuriken
+([pickup-draw.md](../ghidra/functions/ps3-hdfury-eu/pickup-draw.md)); every figure above this
+paragraph was measured, and the pacing terms tuned, with both in our pool. Vineta K, Venom, the
+leading opponent's completed laps, one tree with the roster and one without it:
+
+| Run | Median | Sorted laps |
+| --- | ---: | --- |
+| Novice, seeds 1-24, Repulser and Shuriken in the pool | 8 | 3, 4, 4, 4, 5, 5, 5, 5, 6, 7, 8, 8, 9, 11, 11, 14, 14, 15, 16, 16, 17, 17, 17, 19 |
+| Novice, seeds 1-24, HD's roster | **14** (two seeds still running at 1,000 s) | 5, 7, 9, 9, 11, 12, 12, 13, 13, 13, 13, 14, 14, 14, 14, 14, 14, 14, 16, 16, 17, 19, 20, 20 |
+| Elite, seeds 1-12, Repulser and Shuriken in the pool | 6 | 1, 3, 3, 3, 4, 6, 6, 7, 8, 8, 9, 11 |
+| Elite, seeds 1-12, HD's roster | 9 | 6, 7, 7, 8, 8, 8, 10, 11, 11, 15, 16, 21 |
+
+The Novice median is 14 with the person's pass-on removed too, so the roster itself moves it, not
+the draw law. The Novice pin's window (6 to 12) is anchored on the original's nine laps and is not
+met. What the terms should be on the right roster is open.
+
 ### Firing on the original's law (2026-10-03)
 
 **Read, then ported.** An opponent now decides when to fire its Rocket, Missile, Plasma,
