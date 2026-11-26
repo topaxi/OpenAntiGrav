@@ -2652,8 +2652,7 @@ So it reads 0.25 to 0.6 ticks low where it agrees, and can fail. On the first `c
 0 to 2); the pad's white walls, an independent object, put it between 3.5 and 4.25 (right edge at x 1526, 1514 against the original's 1516;
 1584 unshifted). Confidence 70 for 3.5 to 4, seen on one grab. "The picture is at `T - 6`" (next section but two) would give `k = 2` here and is
 refused by both readings; this stop followed a fire hold, whose many short stops that section found to fit no single value.
-**Two later grabs of the same stop read 1.75** (peaks 0.633 at 1.75 ticks, skew 4, so 5.75 behind RAM, agreeing with the mine fit's 6.0): the 3.50
-was one grab, and the current pair carries 1.75 (next section).
+**Two later boots of the same stop read 1.75** (peaks at 1.75 ticks, skew 4): the lag varies per grab, and each pair carries its own.
 
 **Ours' tick is the picture's** (`compare_env.picture_tick`, `GO + round(60 T - skew - k)`, and the gantry pin with it) wherever the lag was
 measured, by mines or static scene, on the first render and on every re-render (`compare-rerender-ours.py`). A pair with no measured lag keeps
@@ -2684,7 +2683,7 @@ running 1:1 with the lap clock): 55.950 - 7.5/60 = 55.825 on all 80 mines (`rpcs
 Not carried on that grab: the mines' envelopes were the pause's, 7.5 ticks newer than the picture, and ours fired on the harness's press tick.
 Both are carried since (next section). The craft is held at rest, and the track-name ticker's scroll is wall-clock.
 
-### The volley's press tick and the picture-clock reads (2026-11-26, `det-cannon-regrab`)
+### The volley clocks and the picture-clock reads (2026-11-26, `det-cannon-regrab`)
 
 **Falsifiers written before the grabs:** a first launch on the harness's press tick would mean there is no press latency; near-mine envelopes at
 the picture's clock equal to the pause's would mean the carry cannot move a frame.
@@ -2694,22 +2693,25 @@ lag) it keeps each mine's words and the cannon: the volleys left (`*(ship+0x5edc
 every `PulseBullet`'s age (`+0x4c`) and launch speed (`+0x124`) (`scripts/rpcs3_hd_volley.py`). A volley's clock is the lap clock less its
 rounds' age, which is the clock before the frame that fired it. The held counter counts the game's frames, each 1 or 2 ticks, not ticks.
 
-**Press latency** (the first volley's clock less the lap clock the press was sent at), one RPCS3 boot each from
-`hd-detonator-talons-feisar-grid-late`: `-hot` 2.0 and 2.0 ticks, `cannon-volley` 4.0 and 3.0. It is read per grab, not a constant
-(confidence 85: a runtime read, four boots). The second volley of `-hot` is 4 ticks after the first, not 6, because the original's frames
-were 2 ticks long; ours fires each volley on its own tick (`ours.inputs`: one `square` tick per volley, a release between).
+**The press and the volley clocks**, one RPCS3 boot each from `hd-detonator-talons-feisar-grid-late`. Lap clock less round age put the first
+volley 2.0 and 2.0 ticks after the send on `-hot`, 4.0 and 3.0 on `cannon-volley`. That is not the press latency itself: the pauses show no
+held frame and no round until later. On the second `-hot` boot the counter read 0 and no round lived at 1.917 and the rounds were 4 ticks old
+at 1.950, so the first frame with the trigger held came 4 to 6 ticks after the send; the first `cannon-volley` boot read 0 at 1.917 and a
+6-tick round at 2.017 (send 1.850). The latency is a few ticks and differs by boot (confidence 60). What is carried, and confirmed by the
+frame, is each round's age at the picture. The second volley of `-hot` is 4 ticks after the first, not 6, because the original's frames
+were 2 ticks long; ours fires each volley at its own clock (`ours.inputs`: one `square` tick per volley, a release between).
 
 **Pairs** (all 80 mines, picture-tick render). Each row is one grab's `theirs.png`; "none" is the same frame with the harness's press window and
 the pause's envelopes. Mean grey, 0 to 255:
 
-| Grab | Picture lag (ticks behind the push buffer) | none | press tick only | envelopes at picture only | both |
+| Grab | Picture lag (ticks behind the push buffer) | none | volley clocks only | envelopes at picture only | both |
 | --- | --- | ---: | ---: | ---: | ---: |
 | `-hot` boot 2 (**published**) | 1.75, static | 10.71 | 10.38 | 10.65 | **10.31** |
 | `-hot` boot 3 | 1.75, static | 9.80 | 9.49 | 9.76 | 9.43 |
 | `cannon-volley` boot 1 (**published**) | 2.35, 3 mines, 4.5 px rms | 13.65 | 13.65 | 13.35 | **13.35** |
 | `cannon-volley` boot 2 | refused: mines disagree by 1.58 ticks, static peak at the range's end | 15.72 | 15.72 | 15.72 | 15.72 |
 
-The columns are measured by removing one carry from the full pair ("press tick only" keeps the press and takes the pause's envelopes).
+The columns are measured by removing one carry from the full pair ("volley clocks only" keeps the volleys and takes the pause's envelopes).
 The previous published pairs were 10.32 and 14.32 on older `theirs.png`. On `-hot` the muzzle-flash box (`825,620,1100,720`) goes from a signed
 -22.8 grey (ours dimmer) to +6.5 (boot 2) and -33.1 to -2.8 (boot 3); the mean absolute difference there hardly moves (32.5 to 31.9, and 38.0 to
 39.2), because the flash's shape is rolled per tick. The envelope result on `cannon-volley` is seen on one grab.

@@ -499,7 +499,7 @@ positions differ by construction (ours places with its own seeded `Rng`), so a m
 capture state is partly fixed (picture lag off the static scene, ours at the picture's tick, mine ages; 11.47 to 10.32). **Open draw gaps, on every Detonator
 pair:** bright striped grilles ours draws where the original is black (about 1.9 grey), the score box's white-striped wings (1.2), HUD digits
 and `1/14` too wide (1.2), hull too bright (0.7). ~~Open capture state: input latency before ours' fire, the volley pair's mine
-envelopes~~ carried (`det-cannon-regrab`, "The volley's press tick and the picture-clock reads"). **Open from that grab:** ours' mine blast
+envelopes~~ carried (`det-cannon-regrab`, "The volley clocks and the picture-clock reads"). **Open from that grab:** ours' mine blast
 draws white puffs and long streaks where the original shows small shards and a `+100` (carrying `cannon-volley`'s destroyed mine takes it
 13.35 -> 14.05, so the mine is not carried); the craft's speed on the rounds is not carried (lowered no pair), and whether ours' round with it
 hits that mine at the original's age (10 ticks) is untested.

@@ -344,8 +344,9 @@ def detonator_inputs(pair, out, ship, clock):
                 "not 500 + 3.6 x the craft's speed")
     flags = ["--input-script", path]
     if fire and fire.get("volley_clocks_s"):
-        pair.caveat("each volley is on the tick the original fired it, read off the rounds' ages: the first %.1f ticks after the "
-                    "harness sent the press (lap clock %.3f s)" % (fire["press_latency_ticks"], fire["first_launch_clock_s"]))
+        pair.caveat("each volley is placed so ours' round has the original's age (lap clock less the round's age: first at %.3f s, "
+                    "%.1f ticks after the harness sent the press; the game's own frame that fired it is up to a few ticks later)"
+                    % (fire["first_launch_clock_s"], fire["volley_after_send_ticks"]))
     vel = ship.get("vel")
     if vel:
         speed = sum(c * c for c in vel) ** 0.5

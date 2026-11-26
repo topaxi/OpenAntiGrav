@@ -3,7 +3,7 @@
 The picture is several ticks older than its own pause, and the game sees a pad press ticks after it is sent. So each
 pause keeps the mines' draw words and the cannon's counters and rounds (`rpcs3_hd_field.cannon_state`); a round's
 age gives the lap clock of the tick that fired it, and its launch speed the craft's speed on that tick
-(`docs/tools/compare-page.md`, "The volley's press tick and craft speed"). No pause is added for these reads.
+(`docs/tools/compare-page.md`, "The volley clocks and the picture-clock reads"). No pause is added for these reads.
 """
 
 import rpcs3_hd_field as field
@@ -32,13 +32,14 @@ def launches(samples):
 
 def fire_record(fire, samples):
     """`fire` with what the rounds say: every volley's lap clock (the tick before the frame that fired it, as the round's
-    age counts), the first one's, and the latency from the press the harness sent to it."""
+    age counts), the first one's, and how long after the harness's send it is. That is the press latency only to a few
+    ticks: the pauses bracket the game's first frame with the trigger held later than this clock."""
     volleys = launches(samples)
     out = dict(fire)
     if volleys:
         out["first_launch_clock_s"] = volleys[0][0]
         out["craft_speed"] = volleys[0][1]
-        out["press_latency_ticks"] = (volleys[0][0] - fire["press_clock_before_s"]) * 60
+        out["volley_after_send_ticks"] = (volleys[0][0] - fire["press_clock_before_s"]) * 60
         out["volley_clocks_s"] = [at for at, _ in volleys]
     return out
 
@@ -72,7 +73,7 @@ def self_test():
     assert [round(at, 4) for at, _ in got] == [round(2.0 - 4 / 60, 4), round(2.1 - 4 / 60, 4)], got
     assert abs(got[0][1] - 374 / 3.6) < 1e-9, got
     rec = fire_record({"press_clock_before_s": 1.87}, samples)
-    assert abs(rec["press_latency_ticks"] - (2.0 - 4 / 60 - 1.87) * 60) < 1e-6, rec
+    assert abs(rec["volley_after_send_ticks"] - (2.0 - 4 / 60 - 1.87) * 60) < 1e-6, rec
     assert [round(at, 4) for at in rec["volley_clocks_s"]] == [round(at, 4) for at, _ in got], rec
     assert fire_record({"press_clock_before_s": 1.87}, [sample(1.9, [], 0)]) == {"press_clock_before_s": 1.87}
 
