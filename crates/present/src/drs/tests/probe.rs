@@ -3,7 +3,9 @@
 //! holds its clock.
 
 use super::*;
-use crate::drs::probe::{HOLD_SECONDS, LATE_PERIODS, MAX_BACKOFF, RAMP_SECONDS, SAMPLE_SECONDS};
+use crate::drs::probe::{
+    HOLD_SECONDS, LATE_PERIODS, MAX_BACKOFF, Outcome, RAMP_SECONDS, SAMPLE_SECONDS,
+};
 
 const PERIOD: f32 = 1.0 / 60.0;
 
@@ -200,11 +202,15 @@ fn a_probe_that_only_paid_for_pixels_backs_off() {
     );
 }
 
-/// A late frame on the wall clock reverts a probe at once, ramp or not.
+/// A late frame on the wall clock reverts a probe at once, ramp or not, once the step's own
+/// cooldown has passed.
 #[test]
 fn a_late_frame_ends_a_probe_at_once() {
     let (mut drs, budget) = settled_at_80();
     until_probe(&mut drs, budget * 0.9);
+    for _ in 0..COOLDOWN {
+        drs.record(cost(budget * 0.9), Some(PERIOD), deck_limits());
+    }
     let back = drs.record(
         cost(budget * 0.9),
         Some(PERIOD * (LATE_PERIODS + 0.1)),
@@ -212,6 +218,22 @@ fn a_late_frame_ends_a_probe_at_once() {
     );
     assert_eq!(back, Some(deck_limits().pixels(0.80)));
     assert!(!drs.probing());
+    assert_eq!(drs.probe_outcome(), Some(Outcome::Late));
+}
+
+/// The long frame the step itself costs, inside its cooldown, does not end the probe.
+#[test]
+fn the_steps_own_long_frame_does_not_end_a_probe() {
+    let (mut drs, budget) = settled_at_80();
+    until_probe(&mut drs, budget * 0.9);
+    for _ in 0..COOLDOWN {
+        assert_eq!(
+            drs.record(cost(budget * 0.9), Some(PERIOD * 2.0), deck_limits()),
+            None
+        );
+    }
+    assert!(drs.probing());
+    assert_eq!(drs.scale(), 0.85);
 }
 
 /// During the ramp an over-budget reading does not fall: it was taken at the old clock.

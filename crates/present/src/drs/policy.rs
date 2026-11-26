@@ -548,6 +548,12 @@ impl Controller {
         self.probe.on_trial()
     }
 
+    /// How the last probe rise ended, for the log line that says so.
+    #[must_use]
+    pub fn probe_outcome(&self) -> Option<probe::Outcome> {
+        self.probe.outcome()
+    }
+
     /// The scale in force, as a fraction of the ceiling. For tests and the
     /// log, never for a settings file.
     #[must_use]

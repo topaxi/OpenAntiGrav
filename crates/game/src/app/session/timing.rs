@@ -860,8 +860,19 @@ impl Session {
         }
         // One line per probe rise begun and ended (ADR-0096), so a run can count them.
         if self.drs.probing() != probing {
+            let outcome = match self.drs.probe_outcome() {
+                _ if !probing => String::new(),
+                Some(drs::probe::Outcome::Kept(ratio)) => {
+                    format!(", kept at {ratio:.3} of predicted")
+                }
+                Some(drs::probe::Outcome::Late) => ", reverted on a late frame".to_string(),
+                Some(drs::probe::Outcome::Cost { predicted, budget }) => format!(
+                    ", reverted on cost at {predicted:.3} of predicted, {budget:.3} of budget"
+                ),
+                None => ", abandoned".to_string(),
+            };
             debug!(
-                "dynamic resolution: probe {} at {:.0}% of {}x{} - scalable {:.3} ms",
+                "dynamic resolution: probe {}{outcome} at {:.0}% of {}x{} - scalable {:.3} ms",
                 if probing { "ended" } else { "began" },
                 self.drs.scale() * 100.0,
                 drs_limits.ceiling().0,

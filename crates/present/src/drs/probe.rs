@@ -25,7 +25,7 @@
 //!
 //! Nothing here reads a clock or knows a platform: the same rule runs everywhere.
 
-use super::DEADBAND;
+use super::{COOLDOWN, DEADBAND};
 
 /// How long the scale must sit quiet below the ceiling before a probe, before any backoff.
 ///
@@ -83,6 +83,23 @@ fn frames(seconds: f32, period: f32) -> u32 {
     }
 }
 
+/// How a trial ended, for the log line that says so.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Outcome {
+    /// Kept: the sampled cost over the steady-clock prediction.
+    Kept(f32),
+    /// Reverted on a late frame.
+    Late,
+    /// Reverted on cost: the sampled cost over the steady-clock prediction, and over the
+    /// budget.
+    Cost {
+        /// Sampled cost over the steady-clock prediction.
+        predicted: f32,
+        /// Sampled cost over the scalable budget.
+        budget: f32,
+    },
+}
+
 /// What a trial decided this reading.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Verdict {
@@ -122,6 +139,8 @@ pub(super) struct Probe {
     backoff: u32,
     /// The step on trial, if any.
     trial: Option<Trial>,
+    /// How the last trial ended.
+    outcome: Option<Outcome>,
     /// Never due: the controller without a probe, for the tests that compare against it.
     #[cfg(test)]
     pub(super) off: bool,
@@ -136,6 +155,11 @@ impl Probe {
     /// Whether a step is on trial.
     pub(super) fn on_trial(&self) -> bool {
         self.trial.is_some()
+    }
+
+    /// How the last trial ended, or `None` before the first or after a stall ended one.
+    pub(super) fn outcome(&self) -> Option<Outcome> {
+        self.outcome
     }
 
     /// Counts one acted-on reading toward the hold, or breaks it.
@@ -184,7 +208,10 @@ impl Probe {
 
     /// Feeds one reading to the trial, or `None` when there is none.
     ///
-    /// A late frame reverts at once. Otherwise readings inside the ramp are not judged, and
+    /// A late frame reverts at once, except inside the step's own [`COOLDOWN`]: the step
+    /// itself costs a long frame or two (measured on the Deck with its clock pinned, 29 to
+    /// 36 ms between frames straight after a step), which says nothing about whether the new
+    /// scale fits. Otherwise readings inside the ramp are not judged, and
     /// once the sample is complete the step is kept only if its mean cost is under both
     /// [`KEEP_SHARE`] of the steady-clock prediction and [`DEADBAND`]'s top of `budget`.
     pub(super) fn judge(
@@ -196,8 +223,8 @@ impl Probe {
     ) -> Option<Verdict> {
         let trial = self.trial.as_mut()?;
         trial.elapsed += 1;
-        if late {
-            return Some(self.revert());
+        if late && trial.elapsed > COOLDOWN {
+            return Some(self.revert(Outcome::Late));
         }
         let ramp = frames(RAMP_SECONDS, period);
         if trial.elapsed <= ramp {
@@ -209,17 +236,23 @@ impl Probe {
             return Some(Verdict::Running);
         }
         let measured = (trial.sum / f64::from(trial.count)) as f32;
+        let predicted = measured / trial.expected;
         if measured <= trial.expected * KEEP_SHARE && measured <= budget * DEADBAND.end() {
             self.trial = None;
             self.backoff = 0;
+            self.outcome = Some(Outcome::Kept(predicted));
             Some(Verdict::Kept)
         } else {
-            Some(self.revert())
+            Some(self.revert(Outcome::Cost {
+                predicted,
+                budget: measured / budget,
+            }))
         }
     }
 
     /// Ends the trial as a step that did not hold.
-    fn revert(&mut self) -> Verdict {
+    fn revert(&mut self, outcome: Outcome) -> Verdict {
+        self.outcome = Some(outcome);
         let origin = self.trial.take().map_or(0, |trial| trial.origin);
         self.backoff = (self.backoff + 1).min(MAX_BACKOFF);
         Verdict::Reverted(origin)
@@ -228,7 +261,9 @@ impl Probe {
     /// A stall: the readings in flight describe another picture, so the hold starts again and
     /// a trial ends where it stands without a verdict. The backoff is the machine's and stays.
     pub(super) fn stall(&mut self) {
-        self.trial = None;
+        if self.trial.take().is_some() {
+            self.outcome = None;
+        }
         self.interrupt();
     }
 }
