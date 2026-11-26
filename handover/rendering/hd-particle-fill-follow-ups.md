@@ -2,7 +2,7 @@
 status: measure
 titles: [hd, omega, 2048]
 updated: 2026-11-26
-summary: "Owed: blast template cap source, flare .gtf rows, Deck 4K hit still 64 ms worst, 1.7 ms at 1080p; half-res particle target awaits the maintainer"
+summary: "HD flipbooks advance, ours holds frame 0 (ready); owed: template cap source, flare .gtf rows, Deck 4K hit; half-res target awaits maintainer"
 size: M (50)
 difficulty: medium (55)
 ---
@@ -38,9 +38,14 @@ blast the struck craft's velocity, on HD, 2048 and Omega
   `oag_raceplay::assets::decode_texture` (flare and trail art) and `load/caustic.rs`. Compare each
   with its draw's `v` in a command ring before touching it; a radially symmetric sprite shows
   nothing either way.
-- **Every HD `.gtf` particle effect moved with the turn; only the Rocket's craft blast was
-  compared with the original.** The Plasma, Missile, Mine, Bomb, Quake and Detonator effects
-  want one film each beside ours, flipbook frame order first (confidence 80).
+- **HD advances its flipbooks and ours holds the spawn frame** (`particle-fill.md`, "HD
+  advances its flipbooks"). A non-random emitter stays on cell 0, the explosion's seed, so the
+  Rocket craft blast's four over-life layers and `FIREBALL_ADDITIVE` of the wall and ship blasts
+  draw as dots. Ready to wire: keep `FrameAdvance::OverLife` for HD's listed effects in
+  `without_pulse_psp_draw_but` (a title field, ADR-0058), then re-score the Rocket pairs.
+  `ship-destroy.md` recorded a white blowout when the ship explosion was tried with an advance
+  before the turn: re-judge it. Not read: HD's frame-rate-channel advance and its random spawn
+  frame. 2048 and Omega: same sheets, their advance unread.
 - **The 12-unit pairs' hit tick (`--force-rocket-hit 711:7`) was never checked against the
   original's spawn point.** The far films put the wash quad in world space (view position through
   the frame's camera); the same on `hit2` says where ours should stand.

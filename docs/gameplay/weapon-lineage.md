@@ -332,10 +332,18 @@ to 4, size capped at depth times the emitter's `+0xc80`
 the camera flies into is a bounded cloud. Pulse and Pure: **?**, their builders are unread and
 their blasts draw as authored.
 
-HD's particle sprites are `.gtf` entries with bottom-up rows, and every HD effect draws them
-turned top-down since 2026-11-26 (M, against a far Rocket hit on RPCS3,
-[particle-fill.md](../rendering/particle-fill.md#hds-particle-sprites-are-bottom-up)). 2048's
+HD's particle sprites are `.gtf` entries with bottom-up rows, and every HD effect that loads one
+draws it turned top-down since 2026-11-26 (M, against a far Rocket hit on RPCS3,
+[particle-fill.md](../rendering/particle-fill.md#hds-particle-sprites-are-bottom-up); the same
+handedness read off the Rocket, Plasma, Missile, Quake and Detonator draws,
+[the command ring](../rendering/particle-fill.md#every-effect-that-loads-a-sprite-read-off-the-command-ring)).
+The Mine, Bomb, Missile explosion and Detonator Mine and Bomb explosions load none. 2048's
 `.gxt` and Omega's `.gnf` are top-down already: checked, differs.
+
+**Flipbooks.** HD advances them from the authored top-left (M, over-life emitters of the Rocket
+craft blast); ours holds each particle on its spawn frame, not wired
+([particle-fill.md](../rendering/particle-fill.md#hd-advances-its-flipbooks-from-the-authored-top-left)).
+2048 and Omega: same sheets, their advance not investigated.
 
 | Weapon | Pulse | Pure | HD / Fury | 2048 | Omega |
 | --- | --- | --- | --- | --- | --- |

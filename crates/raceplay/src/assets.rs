@@ -221,7 +221,8 @@ pub(super) fn particle_effect(
     .map_err(|e| format!("{path}: {} bytes, does not parse ({e})", blob.len()))?;
     // Pulse's PSP laws only - see `psys::Effect::without_extents` and
     // `without_pulse_psp_draw`. A listed HD effect draws every particle on its
-    // spawn frame: the flipbook's direction on HD is unread. The extent law
+    // spawn frame, although HD's own flipbooks advance
+    // (`docs/rendering/particle-fill.md`, "HD advances its flipbooks"). The extent law
     // alone is also lifted per effect where a title lists one
     // (`oag_title::Effects::extents`), against a matched capture.
     if !pulse_psp {

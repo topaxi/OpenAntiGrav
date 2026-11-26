@@ -585,12 +585,9 @@ below it with its flat edge on top.
 `oag_fx::psys::sprite::Sprite` is documented top-down, but `Sprite::from_gtf` kept the file's
 rows. 2048's `.gxt` and Omega's `.gnf` of the same `yellow_glow_hemi` store the half disc in the
 upper rows: **2048 and Omega: checked, differs** (their files are top-down and load as they
-should). PSP and PS2 sprites come from top-down containers. The flip reaches every HD `.gtf`
-particle sprite, flipbook atlases included: in the same dumps the young white particles sample
-the last eighth of GPU memory (`v` 0.875 to 1.0, the top row of the authored sheet) and older
-ones sample rows toward `v = 0`, so frame rows counted from the top are the original's order
-(read off a few quads, confidence 80). Ours had been counting each HD flipbook's rows from the
-bottom of the authored sheet.
+should). PSP and PS2 sprites come from top-down containers. The flip reaches every `.gtf`
+sprite HD's particle effects load (`oag_title::Effects::sprites`), flipbook atlases included.
+Which way each effect samples them, and which cell a flipbook starts on, are read below.
 
 Pinned by the disc check `check_the_hemisphere_sits_in_the_top_half` (HD, 2048 and Omega).
 
@@ -613,12 +610,83 @@ The 0.233 s pairs swing by 10 and more with the blast's random arrangement; thre
 pair's four seeds improved and one got worse (94.0 to 109.1). The far pair at 0.1 s is the white
 flash filling the frame on both sides and says nothing about the half disc.
 
-**Moved and not measured against the original:** every other HD weapon effect's sprites turned
-too, and the flipbooks count their rows from the other end. The Plasma blast shows it (our
-frame at tick 447 of `a_plasma_explosions_sphere_fades_with_its_age`: 9,974 violet pixels in
-its box before, 10,800 after); the Missile's, the Mine's, the Bomb's, the Quake's and the
-Detonator's effects are in the same position. They rest on the shared quad builder's `v`
-(read here) and the frame order at confidence 80, with no original frame of theirs beside ours.
+### Every effect that loads a sprite, read off the command ring
+
+2026-11-26, RPCS3 0.0.43-20574, HD EU, Talon's Junction. `scripts/rpcs3-hd-particle-ring.py` fires a
+weapon and keeps the command ring and the bound textures frame by frame;
+`scripts/hd-particle-uv.py` reads every particle quad's view-space corners and `uv`, and names each
+texture by finding its dumped bytes in the disc's `/data/psys/tex/*.gtf`.
+
+```sh
+scripts/rpcs3-hd-particle-ring.py --out FILM --state 7 --back 30 --window 0.25,0.9   # on a weapons-on grid
+scripts/psarc.py extract IMAGE:PS3_GAME/USRDIR/DATA02.PSARC GTF /data/psys/tex/       # and DATA00, 03, 06
+scripts/hd-particle-uv.py --gtf GTF --per-frame FILM
+```
+
+**Which effects can have moved.** Only those whose sprites ours loads: the Rocket's two blasts, the
+ship explosion, the Missile's head, the five Plasma effects, the Quake, the two trail hits, and the
+Detonator's cannon spark and EMP. The Mine, Bomb, Missile explosion and Detonator Mine and Bomb
+explosions load no `.gtf` (no `sprite(s) read` on their line of the loader report) and draw the
+procedural profile, so the flip could not reach them.
+
+**Handedness.** The sign of the determinant of `d(view xy) / d(uv)` says whether a quad shows its
+picture mirrored, whatever its roll. The reference is `yellow_glow_hemi`, whose orientation is
+settled above (`u` right, stored row 0 on the bottom edge), and ours builds every billboard, rolled
+quad, template and strip with that handedness. Confidence 94.
+
+| Weapon fired | Particle quads read, same sign as the reference | opposite sign |
+| --- | --- | --- |
+| Rocket craft hit (three films, two boots) | 9,565 | 2 |
+| Plasma | 1,370 | 0 |
+| Missile | 7,722 | 0 |
+| Quake | 5,355 | 0 |
+| Detonator EMP | 21,458 | 0 |
+| Detonator cannon | 133,436 | 180 (0.13 %), nearly all `spark_mblurred_grey`, a symmetric sprite; cause not read |
+
+The counts are every particle quad in the frames, the effects' own and whatever else was in view.
+
+**Strips (render mode 5 and 6): which end is which.** For a stretched quad whose long axis carries
+`v`, the end farther from its texture's own centre in that frame, larger `v` against smaller `v`:
+`explosion_01_blurred_64x64_ADD` 83 against 5, `..._yellow_streaks_upsidedown` 19 against 1,
+`..._yellow_streaks_128x128` 192 against 4, `..._white_streaks_128x128` 80 against 6,
+`fireball_1024x512_yellow` 101 against 0. So an outward streak leads with the authored top, as
+ours' bar does (the particle's position takes the top row). The Plasma wind-up runs the other way,
+7 against 192 (`glow_cleanedges_plasma`) and 0 against 33 (`plasma_forks`), and its two emitters
+author a negative speed (-0.50 and -0.48 units a tick): they fly inward. Confidence 90.
+
+Ours samples no sprite at all on the strips of the Rocket's blasts, the Missile head, the Quake and
+the ship explosion (`Effects::far_bars` does not list them), so this reaches the Plasma, the trail
+hits and the two Detonator effects.
+
+### HD advances its flipbooks, from the authored top-left
+
+The four emitters of `WO_ROCKET_EXPLO` that are not random and spread their sheet over their life
+(flag `0x40`; authored lifetime 64 ticks) give the order directly. Highest cell read per frame,
+numbered row-major from the authored top-left, in the two films of "The original draws a
+flat-bottomed dome too":
+
+| Age since the hit | 0.05 s | 0.1 s | 0.167 s | 0.233 s | 0.4 s | 0.55 s |
+| --- | --- | --- | --- | --- | --- | --- |
+| Age in ticks | 3 | 6 | 10 | 14 | 24 | 33 |
+| 8x8 sheets (`smoke_tumult`, `explosion_tumult`, `explosion_BURN_L`) | 2 | 5 | 10 | 13 | 23 | 32 |
+| 8x4 sheet (`smoke_BLUCLD`) | 1 | 2 | 5 | 6 | 11 | 16 |
+
+Cell numbering from the top-left is therefore right (confidence 94): numbered from the first stored
+row the same cells would run backwards, 58 down to 24. The values are Pulse's over-life law,
+`floor(age / lifetime * (frames - 0.02))` (`oag_fx::psys::frames`), to within a tick (confidence 90
+for the over-life law; HD's frame-rate-channel advance and its random spawn frame are not read).
+
+**Ours does not do this.** Every source but Pulse on the PSP holds each particle on its spawn frame
+(`Effect::without_pulse_psp_draw_but`), and a non-random emitter spawns on cell 0, the tiny seed of
+the explosion. So the Rocket craft blast's four layers above, and the additive fireball of
+`WO_ROCKET_EXPLO_TRACK` and `WO_SHIP_EXPLOSION`, stay a dot where the original's grows into a full
+fireball. Not wired.
+
+**2048 and Omega: the sheets are the same.** All 17 flipbook sheets HD's listed effects name ship in
+both as `.gxt` and `.gnf`, and each matches HD's turned sheet (correlation 0.99 to 1.00; the same
+sheet turned again gives -0.11 to 0.89). **Flip: checked, differs** (their files are already
+top-down). **Advance: not checked**: our loader holds their frames too, and neither executable's
+own advance has been read.
 
 ### Posing a far hit
 
