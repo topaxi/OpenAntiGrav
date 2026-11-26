@@ -69,16 +69,21 @@ impl Scene {
             drawable.share_scene(device, blocks, SceneKind::Flame);
         }
         // The shield shell and cockpit sphere scroll on the shader's clock (`PROGRAM_SHIELD_LIGHTNING`,
-        // `own_shield.wesl`), and our own shield also reads the eye. Their drawables' own block stays
-        // `Scene::off` with `time` at zero, so they read the flame's: `Scene::off` plus the clock and
-        // the eye.
+        // `own_shield.wesl`). Their drawables' own block stays `Scene::off` with `time` at zero, so
+        // the disc's read the flame's: `Scene::off` plus the clock, and nothing else moves. Our
+        // own shield also needs the eye, so it reads a block of its own that adds only that.
         for drawable in self
             .shield
             .iter_mut()
             .chain([&mut self.shield_cockpit])
             .flatten()
         {
-            drawable.share_scene(device, blocks, SceneKind::Flame);
+            let kind = if drawable.is_own_shield() {
+                SceneKind::OwnShield
+            } else {
+                SceneKind::Flame
+            };
+            drawable.share_scene(device, blocks, kind);
         }
         for spike in self.flare_spikes.iter_mut().flatten() {
             spike.drawable.share_scene(device, blocks, SceneKind::Flame);
@@ -192,6 +197,25 @@ impl Scene {
             block,
             [circuit, ship, &shine::shine_scene(ship), flame],
         );
+        self.scene_blocks.write(
+            queue,
+            block,
+            SceneKind::OwnShield,
+            &own_shield_scene(ship, flame),
+        );
+    }
+}
+
+/// Our own shield's block: the flame surfaces' with the view's eye, which the craft's carries.
+/// Fog and shadow stay off, as on the flame's, so the entry points leave the shell's colour
+/// as `own_shield.wesl` returns it.
+fn own_shield_scene(ship: &mesh_render::Scene, flame: &mesh_render::Scene) -> mesh_render::Scene {
+    mesh_render::Scene {
+        fog: mesh_render::Fog {
+            camera: ship.fog.camera,
+            ..flame.fog
+        },
+        ..*flame
     }
 }
 
@@ -208,14 +232,6 @@ impl Scene {
         let (shell, sphere) = (copy(), copy());
         self.shield = vec![Some(shell)];
         self.shield_cockpit = Some(sphere);
-    }
-
-    /// The kind of scene block slot 0's engine flare reads.
-    pub(crate) fn flare_scene_kind_for_tests(&self) -> Option<SceneKind> {
-        self.flares
-            .first()
-            .and_then(Option::as_ref)
-            .and_then(Drawable::scene_kind_for_tests)
     }
 
     /// The kinds of scene block slot 0's shield shell and the cockpit sphere read.

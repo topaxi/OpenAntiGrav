@@ -34,8 +34,7 @@ pub(crate) enum SceneKind {
     Ship,
     /// The hulls' and the circuit's shine passes: the craft's with the fog colour black.
     Shine,
-    /// The flame surfaces' (flares and boost plumes) and the shields': `Scene::off` plus
-    /// the clock and the view's eye.
+    /// The flame surfaces' (flares and boost plumes): `Scene::off` plus the clock.
     Flame,
     /// The behind-the-glass target's alternate fog, or the planar reflection target's
     /// alternate-fog group (its lights doubled, as [`SceneKind::Reflection`]'s).
@@ -43,10 +42,13 @@ pub(crate) enum SceneKind {
     /// The planar reflection target's primary-fog group: the circuit's scene with the sun
     /// colour and the prelit scale doubled (`scene::behind_glass::reflected_scene`).
     Reflection,
+    /// Our own shield's shell and cockpit sphere (`own_shield.wesl`): the flame surfaces'
+    /// block with the view's eye in it, which the shader's rim, facet and silhouette read.
+    OwnShield,
 }
 
 impl SceneKind {
-    const COUNT: usize = 6;
+    const COUNT: usize = 7;
 
     fn index(self) -> u64 {
         self as u64
