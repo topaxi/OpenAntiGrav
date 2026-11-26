@@ -103,6 +103,8 @@ pub struct RaceView {
     pub(super) world_clock_offset: f32,
     /// See [`crate::Options::gantry_seconds`].
     pub(super) gantry_seconds: Option<f32>,
+    /// See [`crate::Options::flame_seconds`].
+    pub(super) flame_seconds: Option<f32>,
     /// The circuit's pre-race flyby, `None` where it has none or a pose was imposed. See
     /// [`super::intro_camera`].
     pub(super) intro: Option<super::intro_camera::IntroCamera>,

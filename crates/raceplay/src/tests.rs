@@ -535,6 +535,7 @@ pub(crate) fn fixture_view() -> ViewSetup {
         now_playing: None,
         world_clock_offset: 0.0,
         gantry_seconds: None,
+        flame_seconds: None,
         camera_override: None,
         fov_override: None,
         sight: Sighting::default(),

@@ -486,6 +486,12 @@ pub struct Options {
     /// give, so a pair is only comparable when ours shows the phase the original's RAM held. Read
     /// off the gantry node's `+0xc0`, never derived; `None` is every race.
     pub gantry_seconds: Option<f32>,
+    /// The engine flame surfaces' clock in seconds, imposed for the frame. **A capture aid**: HD's
+    /// flame scrolls its noise by `2 * time` against the frame context's boot clock (engine
+    /// parameter slot 0), which no race clock of ours gives, so a still pair matches the noise's
+    /// phase only when ours draws at the clock the original's RAM held. Read off RAM, never
+    /// derived; `None` is every race, where the flame rides the world clock.
+    pub flame_seconds: Option<f32>,
     /// Render from this camera instead of the chase camera.
     ///
     /// The other half of the same capture aid: a ship pose replicates *what*
