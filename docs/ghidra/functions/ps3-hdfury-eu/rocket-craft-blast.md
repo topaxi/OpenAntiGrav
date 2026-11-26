@@ -380,7 +380,7 @@ row of `*(entity+0x794)` ([contact-response.md](../psp-pulse-usa/contact-respons
 ours is wrong on Pulse. Not changed here: open in the projectiles thread.
 
 Wired as `oag_physics::laws::Laws::pending_impulse_on_side` (`CraftLaws` per title: HD
-measured, 2048 and Omega inherited from HD, Pure and Pulse `false`), and HD's `blast_push`
+measured; Pure and Pulse `false`; 2048 and Omega `false`, chosen, below), and HD's `blast_push`
 `Posted` (measured). The posting point is ours' nose point (`oag_physics::wall::nose_point`,
 Pulse's 4.875): HD's slot `+0x50` is taken to be the same point, as its `+0x90` is the centre
 `Rocket_HitCraft` spawns the blast at and Pulse's `T` object has the nose at `+0x50` and the
@@ -397,17 +397,23 @@ drain was tried on HD, stays green; `hd_original_ai_ground_truth`,
 
 ### The other titles
 
-- **Omega: checked, applies (posting), drain inherited.** `Rocket_HitCraft` (`0x0139a6b0`) ends in
+- **Omega: checked, applies (posting), not wired.** `Rocket_HitCraft` (`0x0139a6b0`) ends in
   the same loop: for every racer but the firer (`*(rocket + 0x78)`), `d = slot+0x50 - rocket+0x130`,
   `|d| < record+0x24`, `slot+0x120 += normalize(d) * (1 - |d| / record+0x24) * record+0x28`. The
   pending slot moved to `+0x120`. Its drain was not found (no reader of `slot+0x120` with a `0.5`
-  add among `VUCOMISS`/`VMOVUPS` loads of `+0x120`), so the side axis and the stun are
-  inherited from HD.
-- **2048: not checkable in this lane's time**, inherited from HD through Omega: its Rocket hit
-  (`Rocket_SpawnCraftBlast` `0x81206928`'s caller) was not read for the push.
+  add among `VUCOMISS`/`VMOVUPS` loads of `+0x120`). HD's posted law inherited turned
+  `omega_event_xp_ground_truth::a_finished_omega_event_raises_the_stored_xp_by_the_authored_award`
+  red ("no lap or place award paid"), green again with Omega's old immediate push, so Omega keeps
+  the immediate push (chosen) until its drain is read.
+- **2048: not read, not wired.** Its Rocket hit (`Rocket_SpawnCraftBlast` `0x81206928`'s caller)
+  was not read for the push. HD's law inherited turned
+  `sol_ground_truth::a_field_of_seven_laps_2048_sol_at_ace` red (a craft with no flying lap in
+  12,000 ticks: flying laps `[1, 1, 2, 1, 0, 1, 1]`), green again without it, so 2048 keeps the
+  immediate push (chosen).
 - **Fury** shares HD's executable.
 
 ### Open from the push
 
 - The point at slot `+0x50` (nose or centre) and a live run of the drain (above).
-- Omega's and 2048's own drains.
+- Omega's and 2048's own drains, and why HD's law stalls their fields (a stun per blast is
+  the likely cause: Omega's and 2048's tables or AI fire more blasts, not measured).

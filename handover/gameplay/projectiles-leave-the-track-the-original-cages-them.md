@@ -59,7 +59,10 @@ was not measured.
    own sign, which the sign rule cancels), with a PPSSPP break at `0x0883f3e0` reading the
    pending vector and the node's rows. Pure inherits Pulse. Estimate: one read plus one capture,
    1 to 2 hours. Also open from the HD push: whether HD's slot `+0x50` is the nose (60), and
-   Omega's and 2048's own drains (inherited from HD).
+   Omega's and 2048's own drains: HD's law inherited reddens `omega_event_xp_ground_truth` and
+   `sol_ground_truth::a_field_of_seven_laps_2048_sol_at_ace`, so both keep the immediate push
+   (chosen) until their drains are read (Omega `Rocket_HitCraft` `0x0139a6b0` posts into
+   `+0x120`; find its reader).
 7. **Not measured or not read.**
    - The Missile's travel sweep on code `4` (`flags |= 0x14`, no bounce): decompile only, no capture
      produced it. Fire a Missile across a jump lip (Outpost 7 sample 186) to see it.
