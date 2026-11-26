@@ -2,7 +2,7 @@
 status: measure
 titles: [hd, omega, 2048]
 updated: 2026-11-26
-summary: "Near particle law is wired; owed: Deck numbers, the 1.7 ms at 1080p, two reads; two settings await the maintainer"
+summary: "Owed: read the Rocket blast attach and screen wash, Deck numbers, 1.7 ms at 1080p; two settings await the maintainer"
 size: M (50)
 difficulty: medium (55)
 ---
@@ -15,6 +15,27 @@ and `docs/ghidra/functions/ps3-hdfury-eu/particle-render.md` the law and what of
 reaches.
 
 ## Open
+
+### The Rocket's craft hit: two reads before anything is wired
+
+The sprites are wired; the capture's other two differences are not
+(`docs/rendering/particle-fill.md`, "Why ours differs", 1 and 3).
+
+- **What the blast rides.** The original's cloud travels with the struck craft and lags it
+  (table under reason 1); ours is a burst at the hit point. Read the `WO_ROCKET_EXPLO` spawn at
+  `0x0014a7d8` in `/hdfury/EBOOT-ps3-hdfury-eu.elf`: which transform pointer `param_2` is at the
+  craft-hit call site (find its callers: `renderer.md` says it has more than one), whether the
+  spawn keeps that pointer (an attached instance) or copies it once, which emitters follow and
+  which stay in the world, and what happens to it when the craft is destroyed. Then check the
+  Missile's craft hit and the Pulse PSP twin (`Rocket_SpawnCraftExplosion_q`, `0x0886ed34`,
+  already drops the blast 2.5 under the craft).
+- **The screen wash.** All three filmed hits hold single-quad additive draws with a 64x64
+  texture whose half height is exactly twice their view depth, from the hit to 0.23 s. Find
+  their source: which effect or system builds a screen-facing quad sized `2 * depth`, which
+  texture it binds, its colour over age, and whether it is the Rocket's or any near blast's.
+  Starting points: the same spawn's neighbours, and the particle builder
+  (`docs/ghidra/functions/ps3-hdfury-eu/particle-render.md`). That these quads are the wash
+  is itself unproven: the first check is a capture with their draw skipped.
 
 ### Two further ideas, as settings
 
