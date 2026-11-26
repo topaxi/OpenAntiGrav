@@ -62,10 +62,9 @@ pub fn optional_features(adapter: &wgpu::Adapter) -> wgpu::Features {
 
 /// `TEXTURE_COMPRESSION_ASTC`, **only on an adapter without BC**, for the opt-in
 /// ASTC re-encode (`super::astc`): an adapter with BC keeps the disc's blocks and
-/// asks for exactly what it always did. The web build and an architecture
-/// astcenc does not build for have no encoder, so they never ask.
+/// asks for exactly what it always did. The web build has no cache, so it never asks.
 fn astc_where_no_bc(features: wgpu::Features) -> wgpu::Features {
-    if cfg!(any(target_arch = "x86_64", target_arch = "aarch64"))
+    if cfg!(not(target_arch = "wasm32"))
         && !features.contains(wgpu::Features::TEXTURE_COMPRESSION_BC)
     {
         wgpu::Features::TEXTURE_COMPRESSION_ASTC
@@ -128,7 +127,7 @@ pub fn device_descriptor<'a>(
             adapter.get_info().name
         );
     }
-    #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+    #[cfg(not(target_arch = "wasm32"))]
     super::astc::note_adapter(adapter.features());
     wgpu::DeviceDescriptor {
         label: Some(label),

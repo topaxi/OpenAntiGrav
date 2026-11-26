@@ -1,21 +1,5 @@
 use super::*;
 
-/// An RGBA8 picture ramping red across and green down, opaque.
-fn gradient(width: u32, height: u32) -> Vec<u8> {
-    let mut texels = Vec::with_capacity((width * height * 4) as usize);
-    for y in 0..height {
-        for x in 0..width {
-            texels.extend_from_slice(&[
-                (x * 255 / width.max(2).saturating_sub(1)) as u8,
-                (y * 255 / height.max(2).saturating_sub(1)) as u8,
-                128,
-                255,
-            ]);
-        }
-    }
-    texels
-}
-
 /// BC1 blocks for a `width` by `height` texture, each block its own pair of
 /// endpoints so the picture is not flat.
 fn bc1(width: u32, height: u32) -> Vec<u8> {
@@ -41,9 +25,24 @@ fn inputs(source: &[u8]) -> KeyInputs<'_> {
         height: 16,
         levels: 5,
         block: BLOCK,
-        quality: QUALITY,
+        encoder: FAKE.name,
+        quality: FAKE.quality,
     }
 }
+
+/// An encoder that writes each level as constant blocks of its own mean red, so a test can
+/// see which texels reached it.
+fn fake_encode(width: u32, height: u32, rgba: &[u8]) -> Option<Vec<u8>> {
+    let texels = (width * height) as usize;
+    let mean = rgba.chunks_exact(4).map(|t| u64::from(t[0])).sum::<u64>() / texels.max(1) as u64;
+    Some(vec![mean as u8; level_len(width, height)])
+}
+
+const FAKE: Encoder = Encoder {
+    name: "fake",
+    quality: 1.0,
+    encode: fake_encode,
+};
 
 /// A fresh directory under the system's temporary one, unique to this test process.
 fn scratch(name: &str) -> PathBuf {
@@ -89,6 +88,10 @@ fn the_key_moves_with_every_encoder_setting_and_the_source() {
             ..inputs(&source)
         }),
         Key::of(&KeyInputs {
+            encoder: "another",
+            ..inputs(&source)
+        }),
+        Key::of(&KeyInputs {
             format: BlockFormat::Bc3,
             ..inputs(&source)
         }),
@@ -107,32 +110,6 @@ fn the_key_moves_with_every_encoder_setting_and_the_source() {
         assert_ne!(*key, base, "variant {n} kept the key");
     }
     assert_eq!(base.file_name().len(), 64 + ".astc".len());
-}
-
-#[test]
-fn an_encode_decodes_back_close_to_its_source() {
-    let mut encoder = Encoder::new().expect("astcenc configures");
-    let source = gradient(16, 16);
-    let blocks = encoder.encode(16, 16, &source).expect("encodes");
-    assert_eq!(blocks.len(), level_len(16, 16));
-    let back = encoder.decode(16, 16, &blocks).expect("decodes");
-    let error = error(&source, &back);
-    // Measured, not a byte hash: astcenc's output is ISA-dependent
-    // (`ASTCENC_NO_INVARIANCE`), its quality is not.
-    assert!(
-        error.psnr > 40.0,
-        "a smooth gradient survives 4x4: {error:?}"
-    );
-
-    let flat = vec![90u8; 8 * 8 * 4];
-    let blocks = encoder.encode(8, 8, &flat).expect("encodes");
-    let back = encoder.decode(8, 8, &blocks).expect("decodes");
-    assert_eq!(back, flat, "a constant picture is exact");
-
-    // A level smaller than a block still fills one.
-    let small = gradient(2, 2);
-    let blocks = encoder.encode(2, 2, &small).expect("encodes");
-    assert_eq!(blocks.len(), 16);
 }
 
 #[test]
@@ -173,7 +150,7 @@ fn an_entry_reads_back_only_at_the_sizes_it_was_written_for() {
 #[test]
 fn a_miss_is_queued_encoded_and_found_by_the_next_load() {
     let dir = scratch("fill");
-    let cache = Arc::new(Cache::new(dir.clone()));
+    let cache = Arc::new(Cache::new(dir.clone(), FAKE));
     let source = bc1(16, 16);
     let levels = 5;
     let key = Key::of(&inputs(&source));
@@ -203,31 +180,28 @@ fn a_miss_is_queued_encoded_and_found_by_the_next_load() {
         .expect("the encoder wrote the entry");
     assert_eq!(entry.len(), levels);
 
-    // The entry is the decoded blocks' own box-filtered chain, encoded.
+    // Every level is the decoded blocks' own box-filtered chain, as the RGBA8 upload builds it.
     let rgba = BlockFormat::Bc1
         .decode_level(&source, 16, 16)
         .expect("BC1 decodes")
         .into_flattened();
-    let mut encoder = Encoder::new().expect("astcenc configures");
-    let back = encoder.decode(16, 16, &entry[0]).expect("decodes");
-    let base = error(&rgba, &back);
-    assert!(
-        base.psnr > 30.0,
-        "the base level is the source's picture: {base:?}"
-    );
     let chain = crate::mesh_render::texture::mip_chain(16, 16, &rgba);
-    let back = encoder.decode(2, 2, &entry[3]).expect("decodes");
-    let low = error(&chain[3].2, &back);
-    assert!(low.psnr > 30.0, "a low level is the box filter's: {low:?}");
+    for (level, (width, height, texels)) in chain.iter().take(levels).enumerate() {
+        assert_eq!(
+            entry[level],
+            fake_encode(*width, *height, texels).unwrap(),
+            "level {level}"
+        );
+    }
     let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
 fn the_cache_is_off_until_configured_and_off_again_with_none() {
     let dir = scratch("configure");
-    configure(Some(dir.clone()));
+    configure(Some((dir.clone(), FAKE)));
     let first = ACTIVE.lock().unwrap().clone().expect("on");
-    configure(Some(dir.clone()));
+    configure(Some((dir.clone(), FAKE)));
     let second = ACTIVE.lock().unwrap().clone().expect("still on");
     assert!(
         Arc::ptr_eq(&first, &second),

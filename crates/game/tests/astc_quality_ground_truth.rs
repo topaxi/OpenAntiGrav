@@ -4,8 +4,9 @@
 //! (`docs/rendering/texture-compression.md`, "Choosing the preset").
 //!
 //! A sweep, not a check: `#[ignore]`d and a no-op unless `OAG_SWEEP` is set.
-//! `OAG_SWEEP=1 cargo nextest run -p oag-raceplay --run-ignored only astc_quality --no-capture`.
+//! `OAG_SWEEP=1 cargo nextest run -p oag-game --run-ignored only astc_quality --no-capture`.
 
+use oag_game::texture_cache::astcenc;
 use oag_mesh::mesh::{Model, Texels};
 use oag_mesh::mesh_render::astc;
 use oag_raceplay as race;
@@ -40,7 +41,7 @@ fn sweep(name: &str, options: race::Options, presets: &[(&str, f32)]) {
     let textures = block_textures(&loaded);
     println!("{name}: {} block-compressed textures", textures.len());
     for &(preset, quality) in presets {
-        let mut encoder = astc::Encoder::with_quality(quality).expect("astcenc configures");
+        let mut encoder = astcenc::Encoder::with_quality(quality).expect("astcenc configures");
         let mut psnr = Vec::new();
         let (mut max, mut over, mut texels) = (0u8, 0f64, 0f64);
         let mut seconds = 0.0;
@@ -63,7 +64,7 @@ fn sweep(name: &str, options: race::Options, presets: &[(&str, f32)]) {
             let blocks = encoder.encode(width, height, &rgba).expect("encodes");
             seconds += started.elapsed().as_secs_f64();
             let back = encoder.decode(width, height, &blocks).expect("decodes");
-            let error = astc::error(&rgba, &back);
+            let error = astcenc::error(&rgba, &back);
             psnr.push(error.psnr);
             max = max.max(error.max);
             let n = f64::from(width * height);

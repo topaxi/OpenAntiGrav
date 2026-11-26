@@ -42,8 +42,12 @@ Arm's `astcenc`, vendored and compiled by the [`ctt-astcenc`](https://crates.io/
 crate (0.6.1; the binding is MIT OR Apache-2.0 OR Zlib, astcenc itself Apache-2.0). No binary
 download and no `unsafe` in this tree: the crate builds the C++ with `cc`, selects an ISA variant
 at run time (SSE2/SSE4.1/AVX2, NEON on aarch64) and exposes a safe `compress`. Its build script
-supports x86_64 and aarch64 only, so the dependency and `mesh_render::astc` are compiled for those
-two architectures; the web build and any other target have no encoder and never ask for ASTC.
+supports x86_64 and aarch64 only. **The encoder lives in `oag-game`** (`texture_cache::astcenc`)
+and is injected into `oag_mesh::mesh_render::astc` (`astc::Encoder`, a name, a preset and a function
+per level), which holds the cache and the upload and links no C++: anything that links `oag-mesh`
+without the game, the server in the workspace's unified test build above all, would otherwise need
+the C++ runtime (`server_libs` caught it). The web build has neither; an architecture astcenc does
+not build for has the cache but no encoder, and the setting stays off there.
 On Android, `cc` links the NDK's `libc++_shared.so` for the C++, which the APK did not carry (the
 app failed to load with `dlopen failed: library "libc++_shared.so" not found`); `scripts/build-apk.sh`
 copies it beside `liboag_android.so`. Linking `c++_static` instead left `libc++abi` unresolved.

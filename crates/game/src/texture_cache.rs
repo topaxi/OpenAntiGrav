@@ -8,6 +8,9 @@
 
 use oag_display::display::TextureCompression;
 
+#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+pub mod astcenc;
+
 /// The menu key of the row.
 pub const SETTING: &str = "graphics.texture_compression";
 
@@ -17,7 +20,10 @@ pub fn apply(compression: TextureCompression) {
     #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
     oag_mesh::mesh_render::astc::configure(match compression {
         TextureCompression::Original => None,
-        TextureCompression::Astc => Some(oag_source::cache::default_texture_cache_dir()),
+        TextureCompression::Astc => Some((
+            oag_source::cache::default_texture_cache_dir(),
+            astcenc::encoder(),
+        )),
     });
     #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     let _ = compression;

@@ -85,7 +85,7 @@ pub(crate) use texture_sink::offer as offer_to_texture_sink;
 pub use texture_sink::without_scope as without_texture_sink;
 pub mod zone;
 
-#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+#[cfg(not(target_arch = "wasm32"))]
 pub mod astc;
 mod device;
 pub use device::{device_descriptor, optional_features, required_limits};

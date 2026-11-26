@@ -37,18 +37,23 @@ use crate::mesh::BlockFormat;
 /// power-of-two side, which is every side the discs ship.
 pub const BLOCK: u32 = 4;
 
-/// The astcenc quality preset, on its 0 to 100 scale (`medium` is 60).
-///
-/// Chosen by measurement against `medium` and `thorough` on HD's Vineta K
-/// textures (`docs/rendering/texture-compression.md`, "Choosing the preset").
-pub const QUALITY: f32 = ctt_astcenc::bindings::ASTCENC_PRE_MEDIUM;
+/// What encodes a level: one level of RGBA8 texels (`width` by `height`) to ASTC 4x4
+/// blocks, [`level_len`] bytes. Injected by the caller ([`configure`]), so this crate links no
+/// encoder: `oag_game` brings Arm's astcenc, which is C++, and nothing that links this crate
+/// without the game (the server) has to carry it.
+#[derive(Debug, Clone, Copy)]
+pub struct Encoder {
+    /// The encoder build and preset, part of every key: another encode is another entry.
+    pub name: &'static str,
+    /// The preset on the encoder's own scale, also part of every key.
+    pub quality: f32,
+    /// One level, or `None` if it would not encode.
+    pub encode: fn(u32, u32, &[u8]) -> Option<Vec<u8>>,
+}
 
 /// Bumped when an entry's layout or what it was encoded from changes, so an old
 /// entry is never read as a new one.
 const FORMAT_VERSION: u32 = 1;
-
-/// The encoder build, part of every key: a newer astcenc may encode differently.
-const ENCODER: &str = "ctt-astcenc 0.6.1";
 
 /// What an entry starts with.
 const MAGIC: &[u8; 8] = b"OAGASTC\0";
@@ -98,15 +103,16 @@ pub fn offered() -> Option<bool> {
 /// The cache the setting is on with, `None` while it is `original`.
 static ACTIVE: Mutex<Option<Arc<Cache>>> = Mutex::new(None);
 
-/// Turns the re-encode on with its cache in `dir`, or off with `None`. Read by
-/// the next texture upload, so a change lands on the next race load.
-pub fn configure(dir: Option<PathBuf>) {
+/// Turns the re-encode on with its cache in `dir`, encoding with `encoder`, or off with `None`.
+/// Read by the next texture upload, so a change lands on the next race load.
+pub fn configure(on: Option<(PathBuf, Encoder)>) {
     let mut active = ACTIVE
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
-    match (dir, active.as_ref()) {
-        (Some(dir), Some(cache)) if cache.dir == dir => {}
-        (Some(dir), _) => *active = Some(Arc::new(Cache::new(dir))),
+    match (on, active.as_ref()) {
+        (Some((dir, encoder)), Some(cache))
+            if cache.dir == dir && cache.encoder.name == encoder.name => {}
+        (Some((dir, encoder)), _) => *active = Some(Arc::new(Cache::new(dir, encoder))),
         (None, _) => *active = None,
     }
 }
@@ -171,7 +177,8 @@ pub struct KeyInputs<'a> {
     pub levels: usize,
     /// The ASTC footprint ([`BLOCK`]).
     pub block: u32,
-    /// The preset ([`QUALITY`]).
+    /// The encoder's [`Encoder::name`] and [`Encoder::quality`].
+    pub encoder: &'a str,
     pub quality: f32,
 }
 
@@ -182,7 +189,8 @@ impl Key {
         let mut hash = sha2::Sha256::new();
         hash.update(MAGIC);
         hash.update(FORMAT_VERSION.to_le_bytes());
-        hash.update(ENCODER.as_bytes());
+        hash.update(inputs.encoder.as_bytes());
+        hash.update([0]);
         hash.update(inputs.block.to_le_bytes());
         hash.update(inputs.quality.to_bits().to_le_bytes());
         hash.update([format_tag(inputs.format)]);
@@ -247,6 +255,7 @@ struct Job {
 #[derive(Debug)]
 pub struct Cache {
     dir: PathBuf,
+    encoder: Encoder,
     queue: Mutex<Queue>,
 }
 
@@ -260,9 +269,10 @@ struct Queue {
 }
 
 impl Cache {
-    fn new(dir: PathBuf) -> Self {
+    fn new(dir: PathBuf, encoder: Encoder) -> Self {
         Self {
             dir,
+            encoder,
             queue: Mutex::new(Queue {
                 pending: HashSet::new(),
                 bytes: 0,
@@ -331,7 +341,7 @@ impl Cache {
             }
             let key = job.key;
             let size = job.source.len() as u64;
-            match encode_job(&job) {
+            match encode_job(&job, self.encoder.encode) {
                 Some(entry) => {
                     let path = self.dir.join(key.file_name());
                     if let Err(why) = oag_io::write_bytes(&path, &entry) {
@@ -401,139 +411,21 @@ fn write_entry(levels: &[Vec<u8>]) -> Vec<u8> {
 
 /// Decodes the job's blocks, builds the same box-filtered chain the RGBA8 upload
 /// builds, and encodes every level.
-fn encode_job(job: &Job) -> Option<Vec<u8>> {
+fn encode_job(job: &Job, encode: fn(u32, u32, &[u8]) -> Option<Vec<u8>>) -> Option<Vec<u8>> {
     let rgba: Vec<u8> = job
         .format
         .decode_level(&job.source, job.width, job.height)?
         .into_flattened();
     let mut chain = super::texture::mip_chain(job.width, job.height, &rgba);
     chain.truncate(job.levels);
-    let mut encoder = Encoder::new()?;
     let levels = chain
         .iter()
-        .map(|(width, height, texels)| encoder.encode(*width, *height, texels))
+        .map(|(width, height, texels)| {
+            encode(*width, *height, texels)
+                .filter(|blocks| blocks.len() == level_len(*width, *height))
+        })
         .collect::<Option<Vec<_>>>()?;
     Some(write_entry(&levels))
-}
-
-/// An astcenc context at [`BLOCK`] and [`QUALITY`], linear LDR.
-pub struct Encoder {
-    context: ctt_astcenc::Context,
-}
-
-impl std::fmt::Debug for Encoder {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("Encoder")
-    }
-}
-
-impl Encoder {
-    /// A single-threaded context; `None` if astcenc refuses the configuration.
-    #[must_use]
-    pub fn new() -> Option<Self> {
-        Self::with_quality(QUALITY)
-    }
-
-    /// A context at another preset, for measuring one against [`QUALITY`].
-    #[must_use]
-    pub fn with_quality(quality: f32) -> Option<Self> {
-        let config = ctt_astcenc::config_init(
-            ctt_astcenc::Profile::Ldr,
-            BLOCK,
-            BLOCK,
-            1,
-            ctt_astcenc::Preset::Custom(quality),
-            ctt_astcenc::Flags::empty(),
-        )
-        .map_err(|why| log::warn!("astc: {why}"))
-        .ok()?;
-        let context = ctt_astcenc::Context::new(&config)
-            .map_err(|why| log::warn!("astc: {why}"))
-            .ok()?;
-        Some(Self { context })
-    }
-
-    /// One level of RGBA8 texels as ASTC blocks.
-    pub fn encode(&mut self, width: u32, height: u32, rgba: &[u8]) -> Option<Vec<u8>> {
-        if rgba.len() != (width * height * 4) as usize {
-            return None;
-        }
-        let mut texels = rgba.to_vec();
-        let mut planes = [texels.as_mut_ptr().cast::<std::ffi::c_void>()];
-        let mut image = ctt_astcenc::bindings::astcenc_image {
-            dim_x: width,
-            dim_y: height,
-            dim_z: 1,
-            data_type: ctt_astcenc::bindings::astcenc_type_ASTCENC_TYPE_U8,
-            data: planes.as_mut_ptr(),
-        };
-        let mut out = vec![0u8; level_len(width, height)];
-        let encoded = self
-            .context
-            .compress(&mut image, ctt_astcenc::Swizzle::IDENTITY, &mut out);
-        self.context.compress_reset().ok()?;
-        encoded.map_err(|why| log::warn!("astc: {why}")).ok()?;
-        Some(out)
-    }
-
-    /// ASTC blocks of one level back to RGBA8, as a GPU would sample them.
-    pub fn decode(&mut self, width: u32, height: u32, blocks: &[u8]) -> Option<Vec<u8>> {
-        let mut texels = vec![0u8; (width * height * 4) as usize];
-        let mut planes = [texels.as_mut_ptr().cast::<std::ffi::c_void>()];
-        let mut image = ctt_astcenc::bindings::astcenc_image {
-            dim_x: width,
-            dim_y: height,
-            dim_z: 1,
-            data_type: ctt_astcenc::bindings::astcenc_type_ASTCENC_TYPE_U8,
-            data: planes.as_mut_ptr(),
-        };
-        let decoded = self
-            .context
-            .decompress(blocks, &mut image, ctt_astcenc::Swizzle::IDENTITY);
-        self.context.decompress_reset().ok()?;
-        decoded.ok()?;
-        Some(texels)
-    }
-}
-
-/// How far a decoded encode is from the texels it was encoded from.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Error {
-    /// Peak signal-to-noise ratio over every channel, in dB (infinite for none).
-    pub psnr: f64,
-    /// The largest difference of one channel, in levels of 255.
-    pub max: u8,
-    /// The share of texels with any channel more than 2 levels off.
-    pub over_two: f64,
-}
-
-/// The [`Error`] of `decoded` against `source`, both RGBA8 of the same size.
-#[must_use]
-pub fn error(source: &[u8], decoded: &[u8]) -> Error {
-    let mut squared = 0u64;
-    let mut max = 0u8;
-    let mut over = 0usize;
-    for (a, b) in source.chunks_exact(4).zip(decoded.chunks_exact(4)) {
-        let mut texel_max = 0u8;
-        for (x, y) in a.iter().zip(b) {
-            let d = x.abs_diff(*y);
-            squared += u64::from(d) * u64::from(d);
-            texel_max = texel_max.max(d);
-        }
-        max = max.max(texel_max);
-        over += usize::from(texel_max > 2);
-    }
-    let texels = (source.len() / 4).max(1);
-    let mse = squared as f64 / (texels * 4) as f64;
-    Error {
-        psnr: if mse == 0.0 {
-            f64::INFINITY
-        } else {
-            10.0 * (255.0f64 * 255.0 / mse).log10()
-        },
-        max,
-        over_two: over as f64 / texels as f64,
-    }
 }
 
 /// The view of `levels` (ASTC blocks, base first) as one texture.
@@ -613,7 +505,8 @@ pub(super) fn upload(
         height,
         levels,
         block: BLOCK,
-        quality: QUALITY,
+        encoder: cache.encoder.name,
+        quality: cache.encoder.quality,
     });
     let dims = level_dims(width, height, levels);
     let Some(encoded) = cache.load(&key, &dims) else {

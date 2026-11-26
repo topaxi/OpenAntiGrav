@@ -394,7 +394,7 @@ fn upload_with(
         // The opt-in re-encode: the same picture and chain as below, as ASTC
         // blocks from the cache, when the setting is on and the device takes it
         // (`super::astc`). A miss queues the encode and falls through.
-        #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+        #[cfg(not(target_arch = "wasm32"))]
         if let Some(cache) = super::astc::active(device)
             && let Some(source) = levels.get(skip)
         {

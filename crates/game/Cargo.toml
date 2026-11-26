@@ -150,6 +150,13 @@ oag-video = { workspace = true, features = ["av1"] }
 
 # The browser: wasm-bindgen glue, the WebGPU adapter request (async on the
 # web), and the console as the log sink. See docs/tools/web.md.
+# The opt-in ASTC re-encode's encoder (`texture_cache::astcenc`), injected into
+# `oag_mesh::mesh_render::astc`: Arm's astcenc, vendored and built by `cc` (Apache-2.0; the binding
+# is MIT OR Apache-2.0 OR Zlib). Its build script supports these two architectures only. Here and
+# not in `oag-mesh`, because it links the C++ runtime and the server must not.
+[target.'cfg(any(target_arch = "x86_64", target_arch = "aarch64"))'.dependencies]
+ctt-astcenc = "0.6.1"
+
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = "0.2.130"
 wasm-bindgen-futures = "0.4.80"

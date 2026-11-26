@@ -194,7 +194,7 @@ fn a_block_chain_parks_every_level_and_drains_in_whole_block_rows() {
 
 /// The S21's fallback without its ASTC: a device with neither BC nor ASTC decodes a BC
 /// texture to RGBA8 whether the setting is on or off, and never consults the cache.
-#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+#[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn a_device_without_astc_keeps_its_rgba8_upload_with_the_setting_on() {
     use crate::mesh_render::astc;
@@ -214,7 +214,14 @@ fn a_device_without_astc_keeps_its_rgba8_upload_with_the_setting_on() {
     let off = upload(&device, &queue, &texture, false).expect("fits");
     let dir = std::env::temp_dir().join(format!("oag-astc-inert-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    astc::configure(Some(dir.clone()));
+    astc::configure(Some((
+        dir.clone(),
+        astc::Encoder {
+            name: "fake",
+            quality: 0.0,
+            encode: |width, height, _| Some(vec![0; astc::level_len(width, height)]),
+        },
+    )));
     let on = upload(&device, &queue, &texture, false).expect("fits");
     astc::configure(None);
     for placed in [&off, &on] {
