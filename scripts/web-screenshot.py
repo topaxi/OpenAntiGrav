@@ -435,6 +435,10 @@ def main() -> None:
             else:
                 flags = ["--mute-audio", "--disable-audio-output"] if args.plain else (
                     SOFTWARE_FLAGS[args.software] if args.software else FLAGS)
+                if args.dpr != 1.0:
+                    # Playwright's emulated ratio leaves `devicePixelContentBoxSize`, which
+                    # sizes the canvas, in CSS pixels while pointer positions are scaled.
+                    flags = flags + [f"--force-device-scale-factor={args.dpr:g}"]
                 browser = p.chromium.launch(
                     executable_path=args.chromium, headless=True, args=flags + args.flag,
                 )
