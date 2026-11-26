@@ -787,20 +787,16 @@ fn a_zone_race_draws_the_ladder_and_numbers_it_from_the_current_zone() {
 
     // The current zone and the ten coming up, and what the frame reads beside
     // them.
-    // The score hangs on a string of `3`s: `3333` at ScaleX 1.3 is 259.5 wide in this face,
-    // so a four-digit value starts at 960 - 129.75.
-    let score_x = frame
+    // `3333` at ScaleX 1.3 is 259.5 wide in this face, so a four-digit score starts at
+    // 960 - 129.75. The shadow is drawn first.
+    let mut score_x = frame
         .hud_text
         .iter()
         .filter_map(|draw| match draw.unstretched() {
             oag_ui::frontend::Draw::Text { x, text, .. } if text == "1452" => Some(*x),
             _ => None,
-        })
-        // The shadow is drawn first.
-        .last()
-        .expect("the score is drawn");
-    assert!((score_x - 830.25).abs() < 0.05, "score x {score_x}");
-
+        });
+    assert!((score_x.next_back().expect("a score") - 830.25).abs() < 0.05);
     for expected in ["ZONE", "SUB-VENOM", "1452"] {
         assert!(text.contains(&expected.to_string()), "{expected}: {text:?}");
     }

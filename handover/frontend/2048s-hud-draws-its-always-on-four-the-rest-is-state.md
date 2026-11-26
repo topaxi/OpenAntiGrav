@@ -42,7 +42,7 @@ PSP's grid, twice the size, right-hand column off screen.
   `MPWeaponIcon0`-`7`, bound hidden and shown only while `DAT_8153fd2f & 1` (meaning unread, `FUN_81151f0e`), so a single-player
   Tournament is the Race frame ([race-hud-selection.md](../../docs/ghidra/functions/vita-2048-eu-v104/race-hud-selection.md));
   open: what sets that flag. Zone Battle (no `Mode`). The Race event's `XP` and `OBJECTIVE` lines are done (`Setup::campaign_event`).
-  **Zone `SCORE` value** is centred under `SCORE` since 2026-11-17 (`dialect_2048::text_align`; `FUN_811538c2` centres it on `ScoreTxt`'s x by the width of a same-length string of `3`s; ours centres on the value itself).
+  **Zone `SCORE` value** is centred under `SCORE` since 2026-11-17 (`oag_hud`'s `zone_score`; `FUN_811538c2` centres it on `ScoreTxt`'s x by the width of a same-length string of `3`s; ours centres on the value itself).
 - **Seen in both 2048 pair originals and drawn by no widget of ours:** ~~the white ring round the hull at the grid~~ (the radar,
   `Radar`/`PlayerDot` always on since 2026-11-16, `docs/ghidra/functions/ps4-omega-eu/hud-radar.md`; `RadarDot*` drawn since 2026-11-19 by `oag_hud::radar`) and the
   key-shaped icon left of the speed bar (matched as `PilotAssist`, see below); `TOTAL` ~~reads

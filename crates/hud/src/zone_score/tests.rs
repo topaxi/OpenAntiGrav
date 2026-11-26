@@ -49,7 +49,7 @@ fn placed(art: &'static oag_title::HudArt, readout: &Readout) -> Option<(f32, Al
             }
             _ => None,
         })
-        .last()
+        .next_back()
 }
 
 fn zone(score: i32) -> Readout {

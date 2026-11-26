@@ -1272,3 +1272,4 @@
 0x002834f8	function	Psys_CopyPaletteToTree	85	detonator-mine.md
 0x0027f610	function	Psys_CreateInstance	70	detonator-mine.md
 0x00ad5fd4	data	Psys_LastRootHandle	75	detonator-mine.md
+0x0008ce10	function	Hud_UpdateZoneWidgets	80	zone-score.md

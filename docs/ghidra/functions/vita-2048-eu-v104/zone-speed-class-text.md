@@ -79,8 +79,9 @@ goes into the widget at `hud+0x264` (`Score`), after which: the width of a strin
 has digits is measured (`FUN_8128fdea`; a value of 0 or less measures one character), and while neither `hud+0xa8` nor
 `hud+0xa9` is set the widget's x becomes `getter(hud+0x268)` (vtable `+0x60`, `ScoreTxt`'s x, 480) minus half that width.
 `Zone_HUD_HD.xml` authors `Score` `align="left"` at `x="0"` in `ScoreFrame` (`OffsetX="480"`), under `ScoreTxt` `align="centre"`,
-so the left anchor is a placeholder and the value hangs centred under `SCORE`. Ours: `oag_hud::dialect_2048::text_align`
-draws `Score` centred on a title with the uv-rewrite table. **Chosen, not measured:** we centre on the value's own width, which
+so the left anchor is a placeholder and the value hangs centred under `SCORE`. Ours: `oag_hud`'s `zone_score` module
+draws `Score` centred on a title naming `ZoneScore::CentredOnValue` (HD and Omega measure the same template,
+[zone-score.md](../ps3-hdfury-eu/zone-score.md)). **Chosen, not measured:** we centre on the value's own width, which
 equals the original's `3`-string only while the font's digits share a width. Test:
 `crates/hud/src/state_2048_tests.rs::the_2048_zone_score_value_is_centred_under_its_caption`.
 
