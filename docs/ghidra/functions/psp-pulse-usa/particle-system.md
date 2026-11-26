@@ -1850,7 +1850,8 @@ for particles; the race camera's own near plane is `1.0` (not changed here).
 arrangement and twenty others
 ([repulser_guard_band_ground_truth.rs](../../../../crates/raceplay/tests/repulser_guard_band_ground_truth.rs)).
 Standing Repulser, Rocket, Plasma, weather and collision-spark frames are byte-identical to
-before: what is dropped there is off screen. Frames that move are ones driven through an
+before: what is dropped there is off screen. All 61 race pairs of Pulse PSP (30), Pulse PS2 (17)
+and Pure (14) on the comparison page also render byte-identical on our side. Frames that move are ones driven through an
 effect at speed (a Quake 6 and 10 ticks after the shot, a Missile head).
 
 #### The Quake's template is out of range on the original too
