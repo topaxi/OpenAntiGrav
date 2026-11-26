@@ -97,7 +97,9 @@ pub(super) fn leach_beam_texture(
 #[cfg(feature = "view")]
 /// [`particle_effect`] with the per-effect laws a title lists for `name`
 /// (`oag_title::Effects::{sprites, extents, far_bars, pool_bars, templates}`). `walk` is the
-/// colour walk of the title whose archive `dir` is in, which is not always the one `effects` is.
+/// colour walk and `owner` the effects of the title whose archive `dir` is in, which is not
+/// always the one `effects` is: the particle update's own laws
+/// (`oag_title::Effects::{flipbooks, size_ramps}`) are read from it.
 pub(super) fn listed_particle_effect(
     archives: &mut oag_assets::Archives,
     dir: &str,
@@ -105,6 +107,7 @@ pub(super) fn listed_particle_effect(
     name: &'static str,
     pulse_psp: bool,
     walk: oag_title::ColourWalk,
+    owner: &oag_title::Effects,
 ) -> std::result::Result<(psys::Effect, String), String> {
     let (mut effect, note) = particle_effect(
         archives,
@@ -122,6 +125,8 @@ pub(super) fn listed_particle_effect(
                 psys::streak::KeptBar::No
             },
             templates: effects.templates.contains(&name),
+            flipbooks: owner.flipbooks.is_some(),
+            size_ramps: owner.size_ramps.is_some(),
         },
     )?;
     if effects.turbulence.contains(&name) {
@@ -220,10 +225,9 @@ pub(super) fn particle_effect(
     })
     .map_err(|e| format!("{path}: {} bytes, does not parse ({e})", blob.len()))?;
     // Pulse's PSP laws only - see `psys::Effect::without_extents` and
-    // `without_pulse_psp_draw`. A listed HD effect draws every particle on its
-    // spawn frame: the flipbook's direction on HD is unread. The extent law
-    // alone is also lifted per effect where a title lists one
-    // (`oag_title::Effects::extents`), against a matched capture.
+    // `without_pulse_psp_draw`. The extent law alone is also lifted per effect where a
+    // title lists one (`oag_title::Effects::extents`), against a matched capture, and the
+    // flipbook advance where the title's update walks it (`oag_title::Effects::flipbooks`).
     if !pulse_psp {
         if !extent_law {
             effect.without_extents();

@@ -2,7 +2,7 @@
 status: measure
 titles: [hd, omega, 2048]
 updated: 2026-11-26
-summary: "Blast fill is the disc's own; half-res target parked by the maintainer. Owed: streak film, template cap source, flare rows, 1.7 ms at 1080p"
+summary: "Owed: films of HD explosions and streaks, Rocket blast gaps, cap source, near-pair struck velocity; half-res parked"
 size: M (50)
 difficulty: medium (55)
 ---
@@ -38,15 +38,47 @@ blast the struck craft's velocity, on HD, 2048 and Omega
   `oag_raceplay::assets::decode_texture` (flare and trail art) and `load/caustic.rs`. Compare each
   with its draw's `v` in a command ring before touching it; a radially symmetric sprite shows
   nothing either way.
-- **Every HD `.gtf` particle effect moved with the turn; only the Rocket's craft blast was
-  compared with the original.** The Plasma, Missile, Mine, Bomb, Quake and Detonator effects
-  want one film each beside ours, flipbook frame order first (confidence 80).
-- **The 12-unit pairs' hit tick (`--force-rocket-hit 711:7`) was never checked against the
-  original's spawn point.** The far films put the wash quad in world space (view position through
-  the frame's camera); the same on `hit2` says where ours should stand.
-- **A posed blast carries our opponent's velocity, not the original's**, so travelling fireballs
-  do not match in a pair. A flag that writes the struck craft's velocity at the forced hit would
-  take that out of the metric.
+- **The far Rocket blast with the film's velocity is still not the original's**
+  (`particle-fill.md`, "The pose throws the far blast at the camera"): the cloud is smaller,
+  `trail` reads as smooth white lobes, and the grey smoke streaming toward the camera is missing.
+- **Near pairs (`rocket-craft-hit-0100`, `-0233`): spawn tick and struck velocity unchecked.**
+  `--force-rocket-hit 711:7` was never compared with the original's spawn point (the far films put
+  the wash quad in world space: view position through the frame's camera; the same on `hit2` says
+  where ours should stand), and ours hands the blast our own opponent's velocity. `hit2`'s
+  `struck_pose.vel` is `(89.31, 13.92, 96.76)`; pose it with `--force-rocket-hit-velocity` once the
+  spawn point is right.
+- **Lead, not checked: the tick that lands a forced Rocket hit adds about 20 units a second upward
+  to the struck craft** (set `y` 11, read 31 at the blast). The HD films' struck craft show no such
+  jump, comparing frames 8 to 23 ticks apart. Whether it is the Rocket's impulse or our hover after
+  the craft is moved onto the Rocket was not separated; only the first would matter in a race.
+- **The size multiplier's other arms** (`particle-render.md`, "The per-particle size
+  multiplier"): the parent-age arm (`TRAIL_SMOKE`, `plasma_goo_trail`, `SPARK_TRAILS`) and the
+  random arm (most of 58 emitters; it adds a draw to the effect's generator). The run arm is
+  wired.
+- **Lead, not checked: HD's streak colour gain may be the size lower bound.** Ours dims the
+  far-bar effects' class 6 streaks by `+0xc84` (`StreakDraw::colour_gain`, e.g. `0.7` on
+  `WO_TRAIL_HITSHIP`), a reading taken from Omega, whose layout has a separate word there. HD's
+  init reads `+0xc84` as the multiplier's lower bound. Check: does HD's `PartRender` draw read it?
+- **Size multiplier and spawn range on 2048 and Omega: they apply, not wired.** Both inits carry
+  HD's law; Omega's record offsets are 8 bytes later and `oag_pob` reads HD's
+  (`particle-render.md`, "The atlas frame"). To read first: what their instance fraction holds.
+- **Flipbook advance on 2048 and Omega is not wired**: 2048's update wraps at the frame count with
+  no hold; Omega carries that one and HD's, and which serves which directory is unread.
+
+### HD effect sprites: what is left (21 of 31 listed 2026-11-26)
+
+`docs/rendering/particle-fill.md`, "Which effects draw a sprite" has the list and what was
+measured. Left:
+
+- **No original frame of any of the 21.** The Mine, Bomb and Missile explosion and the three
+  Detonator explosions are the ones a player sees; film one in RPCS3 and pair it
+  (`scripts/rpcs3-hd-particle-ring.py`).
+- **Streak emitters stay procedural**, in the 21 and in the 10 all-streak effects (`WO_BOMB_RAYS`,
+  `WO_REPULSER`, the three LeachBeam effects and the hit spark, the weapon spark, the no-damage
+  spark, `WO_DAMAGE_CRITICAL`, `WO_BLUE_WELDER`). Drawing their sprites is a `FAR_BARS` listing,
+  each wanting an original pair first.
+- **Sprite templates of the new effects stay muted** (`TEMPLATES`): not checked which of them
+  author any.
 
 ### Particles into a half-resolution target, composited
 

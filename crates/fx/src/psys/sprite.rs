@@ -253,16 +253,28 @@ impl Atlas {
 }
 
 impl super::EmitterSpec {
-    /// A new particle's atlas frame: `Psys_RandIntRange(0, frames - 1)`
-    /// under the random-frame flag, frame 0 otherwise - and no draw at all
-    /// unless a sprite is placed, so an effect drawing the procedural
-    /// profile consumes the generator exactly as it did before sprites.
+    /// The frame a particle spawns on: `Psys_RandIntRange` over the grid under the
+    /// random-frame flag, or over [`oag_pob::FrameRange::spawn`] where the emitter plays one;
+    /// without the flag, that range's first frame. Drawn only when a sprite is placed, so an
+    /// effect drawing the procedural profile consumes the generator exactly as it did before
+    /// sprites.
     pub(super) fn random_frame(&self, rng: &mut oag_core::Rng) -> u16 {
-        if self.sheet_rect.is_some() && self.atlas.random_frame && self.atlas.frames() > 1 {
-            super::random_range(rng, (0, u32::from(self.atlas.frames()) - 1)) as u16
-        } else {
-            0
+        if self.sheet_rect.is_none() {
+            return 0;
         }
+        let spawn = self.frame_range.map_or((0, 0), |range| range.spawn);
+        if !self.atlas.random_frame {
+            return u16::from(spawn.0);
+        }
+        if self.atlas.frames() <= 1 {
+            return 0;
+        }
+        let range = if spawn == (0, 0) {
+            (0, u32::from(self.atlas.frames()) - 1)
+        } else {
+            (u32::from(spawn.0), u32::from(spawn.1))
+        };
+        super::random_range(rng, range) as u16
     }
 }
 

@@ -44,9 +44,8 @@ are in `docs/ui/campaign-screens.md`, "The flyer behind `Grid Selection`" and
     this item can move about a third of the hull's share, not the pair.
   - **Ship Select's pair was drawn with every team open, and its honeycomb is not flat.** LANDED 2026-11-18
     (`hd-menu-ship`): the HD menu pair script now locks ours' profile (5.72 to 5.09) and the honeycomb fades with the
-    column's distance, each cell shaded across (`oag_title::HexFade`, 5.09 to 4.55; `campaign-screens.md`, "The
-    honeycomb fades"). Open from the same frame: the selected cell's ring (`200, 92, 102`) and red (149, 6, 20), and
-    the team card's fill, 31 in the original against ours' 50 (alpha about `0x50` against the authored `0x7f`).
+    column's distance, each cell shaded across (the widget's own ramp; `campaign-screens.md`, "The
+    honeycomb fades"). Open from the same frame: the team card's fill, 31 in the original against ours' 50 (alpha about `0x50` against the authored `0x7f`).
     Small (60).
   - Track Select, Racebox and Options: which block their screens load is unread (the loader's other callers).
 - **The card's clock** (2026-11-19, `hd-grid-card-phase`): `--menu-model-seconds` poses the Fury card at the original's clock for a pair, read from RAM

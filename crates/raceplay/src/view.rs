@@ -199,6 +199,9 @@ pub struct RaceView {
     pub(super) screen_flash: Option<oag_fx::flash::ScreenFlash>,
     /// See `options::ViewSetup::craft_blast_carry`.
     pub(super) craft_blast_carry: bool,
+    /// The velocity a craft blast on this slot carries instead of the craft's, see
+    /// [`crate::Race::force_struck_velocity`].
+    pub(super) forced_blast_velocity: Option<(usize, oag_core::math::Vec3)>,
     /// The washes a craft's state edges start - see `race::craft_flash`.
     pub(super) craft_flashes: super::craft_flash::CraftFlashes,
     /// A Zone craft's end: the death shell and the debris - see `race::zone_end`.

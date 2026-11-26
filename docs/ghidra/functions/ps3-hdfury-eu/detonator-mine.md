@@ -289,8 +289,9 @@ A mine a craft runs into plays `WO_MINE_EXPLO_DETONATOR_DEAD` (the contact darke
 a mine a cannon round hits, or a destroyed bomb's chain reaction sets off, plays
 `WO_MINE_EXPLO_DETONATOR` while it was laid this stage and `_DEAD` after
 (`oag_weapons::detonator::EventKind`, `oag_raceplay::detonator_fx::effect_for`). The disc's own
-`.pob`, from the engine's procedural profile: HD's sprite sheets for these two are not listed (no
-matched capture of the original). Chosen: a shot mine explodes the tick it is hit (the original
+`.pob`. Since 2026-11-26 their camera-facing emitters draw the disc's own sprites, their streaks
+the procedural strip, unpaired
+([particle-fill.md](../../../rendering/particle-fill.md#which-effects-draw-a-sprite)). Chosen: a shot mine explodes the tick it is hit (the original
 the next), the effect plays whether or not the mine is in view, and the recolour toward white
 (`lerp(c, 255, 0.8)`, 55) is not applied. `MINEEXPL` plays with it, at volume 1.0 where the mine was (`Cue::MineExplosion`, see
 [detonator-cannon.md](detonator-cannon.md), "Drawn and heard"). Test:

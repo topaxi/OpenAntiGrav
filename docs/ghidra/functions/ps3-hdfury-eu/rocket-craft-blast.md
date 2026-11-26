@@ -371,24 +371,26 @@ run. The cheapest proof is one RPCS3 break at `0x000d8b8c` in the weapons-grid s
 
 Pulse's law (`oag_physics::wall::post_blast_impulse` and `apply_pending_impulse`) is the same
 posting, the same falloff, the same skip of the firer, the same shield gate and stun. **The
-drain's axis differs**: ours projected onto `body.forward()`. HD's is the side row.
+drain's axis** was ours' `body.forward()` on every title; HD's is the side row.
 
-**Pulse may have the same axis.** Pulse's `Ship_ApplyCollisionImpulse` projects onto the first
-row of `*(entity+0x794)` ([contact-response.md](../psp-pulse-usa/contact-response.md)), and
-[camera.md](../psp-pulse-usa/camera.md) reads that matrix's rows as **left, up, forward**
-(confidence 93). If both pages name the same object, Pulse's drain is a sideways push too, and
-ours is wrong on Pulse. Not changed here: open in the projectiles thread.
+**Pulse has the same axis, measured 2026-11-26.** Pulse's `Ship_ApplyCollisionImpulse`
+projects onto row 0 of `*(entity+0x794)`, the left row, and 11 live drains put every velocity
+change on that row with the pending vector's full length
+([contact-response.md](../psp-pulse-usa/contact-response.md#the-drain-pushes-along-the-side-row-measured-2026-11-26),
+92). HD's drain row is the right row, Pulse's the left; the sign rule cancels the difference
+except on an exactly zero dot.
 
-Wired as `oag_physics::laws::Laws::pending_impulse_on_side` (`CraftLaws` per title: HD
-measured; Pure and Pulse `false`; 2048 and Omega `false`, chosen, below), and HD's `blast_push`
-`Posted` (measured). The posting point is ours' nose point (`oag_physics::wall::nose_point`,
-Pulse's 4.875): HD's slot `+0x50` is taken to be the same point, as its `+0x90` is the centre
-`Rocket_HitCraft` spawns the blast at and Pulse's `T` object has the nose at `+0x50` and the
-centre at `+0x90` (confidence 60 for the point, open). Tests:
-`oag_physics` `wall::impulse::tests::on_side_a_pending_impulse_pushes_along_the_side_axis`,
+Wired as `oag_physics::laws::Laws::pending_impulse_on_side` (`CraftLaws` per title: HD and
+Pulse measured, Pure inherited from Pulse; 2048 and Omega `false`, chosen, below), and HD's
+`blast_push` `Posted` (measured). The posting point is ours' nose point
+(`oag_physics::wall::nose_point`, Pulse's 4.875): HD's slot `+0x50` is taken to be the same
+point, as its `+0x90` is the centre `Rocket_HitCraft` spawns the blast at and Pulse's `T`
+object has the nose at `+0x50` and the centre at `+0x90` (confidence 60 for the point, open).
+Tests: `oag_physics` `wall::impulse::tests::on_side_a_pending_impulse_pushes_along_the_side_axis`,
 `oag_raceplay` `launch_hover::tests::the_blast_drain_axis_follows_the_title` and
-`tests::blast_push::hds_posted_blast_shoves_the_player_sideways` (HD's title data against
-Pulse's: reverting HD's `blast_push`, the laws mapping or the axis choice each turns it red).
+`tests::blast_push::a_posted_blast_shoves_the_player_sideways_on_pulse_and_hd` (Pulse's and
+HD's title data against Omega's immediate push: reverting either title's axis, the laws
+mapping or the axis choice turns it red).
 
 What the HD field felt before and after (2026-11-26, `OAG_REQUIRE_GAME_DATA=1`): the novice Score
 Eliminator pace test (`hd_eliminator_hud_ground_truth`), which the lineage page recorded red

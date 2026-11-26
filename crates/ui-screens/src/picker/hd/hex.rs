@@ -5,12 +5,13 @@
 //! `Team_Selection_Definition.xml` authors the grid's shape and colours:
 //! `columns="5" rows="7"`, `HexCol` / `HexColFade` for a cell and its faded
 //! form, and `SelectedLockCol` / `SelectedLockColFade` for a padlock. The art is the
-//! front end's own: `Hexagon_HD.gtf` for a cell, `Hexagon_HD_THICK_OUT.gtf`
-//! for the cursor, `Padlock.gtf` (the `Padlock` image this screen authors,
-//! at 512x512) and each model's `<modellocation>\FE\thumb<LiveryNumber>.gtf`.
-//! The widget class's own constants (pitch 72 by 83, half row 42, the 92x80 quad), the selected
-//! column's `HD_Blue` fill (`SelectedColumnCol` is not a key it reads), the ring's pulse and the
-//! slide on a step are read in
+//! widget class's own: `Hexagon_HD_Faded.gtf` for a cell (alpha 221 of 255) and
+//! `Hexagon_HD_THICK_OUT.gtf` for the cursor; the front end's `Padlock.gtf` (the `Padlock`
+//! image this screen authors, at 512x512) and each model's
+//! `<modellocation>\FE\thumb<LiveryNumber>.gtf` go on top.
+//! The widget class's own constants (pitch 72 by 83, half row 42, the 92x80 quad), the fill's
+//! fade from column to column ([`edge_share`]), the selected column's `HD_Blue` fill
+//! (`SelectedColumnCol` is not a key it reads), the ring's pulse and the slide on a step are read in
 //! `docs/ghidra/functions/ps3-hdfury-eu/ship-select-ring.md`; [`slide`](super::slide) holds the
 //! step's state.
 //!
@@ -39,8 +40,9 @@
 //! row's thumbnail in the neighbouring columns (the frame shows faint ship
 //! silhouettes there; their tint is ours), the pointer targets, and the pulse's zero point (the
 //! widget's clock starts with the picker; when the original builds the widget relative to the page
-//! entry is unread). **Not wired**: the cells' edge-fade corners, the ring's ease on a model-row
-//! change, and Omega's `Scale="0.8"` against the 72-unit pitch.
+//! entry is unread). **Not wired**: the padlock's own art (`hexlock_HD.gtf`) and its colour
+//! running across it, the ship silhouettes the widget draws behind a padlock, and the ring's ease
+//! on a model-row change.
 //!
 //! # Panning under a finger
 //!
@@ -63,20 +65,19 @@ pub(in crate::picker) const PITCH: [f32; 2] = [72.0, 83.0];
 /// literal (`docs/ghidra/functions/ps3-hdfury-eu/ship-select-ring.md`, "Fields").
 pub const HALF_ROW: f32 = 42.0;
 
-/// The cursor ring's quad, `Hexagon_HD_THICK_OUT.gtf`'s 74x64 texel window drawn 92x80 units
-/// (the same quad the widget's cells use), centred on the cell's hexagon.
-const RING_QUAD: [f32; 2] = [92.0, 80.0];
-const RING_TEXELS: [f32; 2] = [74.0, 64.0];
+/// The quad of a cell and of the cursor ring, in units, and the texel window of the 128x64 art
+/// it shows, both centred on the cell.
+const QUAD: [f32; 2] = [92.0, 80.0];
+const QUAD_TEXELS: [f32; 2] = [74.0, 64.0];
 
 /// The pulse's period in seconds: the phase advances 3 a second and wraps at 2.
 pub const PULSE_PERIOD_SECONDS: f32 = 2.0 / 3.0;
 
-/// A cell's art against the authored 72x62 hexagon.
-const HEX_SCALE: f32 = 1.22;
-/// The hexagon's visible centre inside its 128x64 texture, in texels.
-const HEX_CENTRE: [f32; 2] = [37.0, 31.5];
-/// The visible hexagon's size in units: 72x62 at [`HEX_SCALE`].
-const HEX_SIZE: [f32; 2] = [72.0 * HEX_SCALE, 62.0 * HEX_SCALE];
+/// The visible hexagon's size in units: the art's 72x62 texels on [`QUAD`].
+const HEX_SIZE: [f32; 2] = [
+    72.0 * QUAD[0] / QUAD_TEXELS[0],
+    62.0 * QUAD[1] / QUAD_TEXELS[1],
+];
 /// Units per padlock texel, and per thumbnail texel.
 const LOCK_SCALE: f32 = 0.44;
 /// The width of HD's `Padlock.gtf`, in texels, which [`LOCK_SCALE`] was measured on.
@@ -86,7 +87,7 @@ const THUMB_SCALE: f32 = 1.0;
 /// and two columns from the selected one.
 const LOCK_FADE: [f32; 3] = [0.0, 0.2, 0.65];
 
-pub const HEX_SRC: &str = r"Data\FE\Images\Hexagon_HD.gtf";
+pub const HEX_SRC: &str = r"Data\FE\Images\Hexagon_HD_Faded.gtf";
 pub const THICK_OUT_SRC: &str = r"Data\FE\Images\Hexagon_HD_THICK_OUT.gtf";
 pub const LOCK_SRC: &str = r"Data\FE\Images\Padlock.gtf";
 
@@ -119,6 +120,9 @@ pub struct ModelCell {
 }
 
 /// The `<HexSelection>` widget: its place, shape and authored colours.
+///
+/// A cell outside the selected column is `hex_fade` shading to `hex` across its quad, by
+/// [`edge_share`] of each side.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct HexGrid {
     pub origin: [f32; 2],
@@ -130,9 +134,6 @@ pub struct HexGrid {
     pub scale: f32,
     pub hex: u32,
     pub hex_fade: u32,
-    /// How a cell's fill eases from `hex` to `hex_fade` with its column's distance from the
-    /// selected one; `None` for a grid whose cells do not fade.
-    pub fade: Option<oag_title::HexFade>,
     pub selected_column: u32,
     pub selected_lock: u32,
     pub selected_lock_fade: u32,
@@ -162,12 +163,8 @@ pub struct Cell {
     pub weight: f32,
 }
 
-/// The fill and lock colours `Team Selection` authors, for a grid whose own
-/// XML authors none (`TrackHexSelection`): **chosen, not measured** as the
-/// same values, since the frame's red and dim grey read alike on both. The
-/// fade with distance is measured: a settled frame's hexagon fill reads 41,
-/// 35, 30 and 24 one to four columns out, which is `HEX_COL` over black
-/// (50) easing to `HEX_COL_FADE` (25) in four steps; one frame, confidence 60.
+/// The widget class's own defaults, for a grid whose XML authors no colour
+/// (`TrackHexSelection`).
 const HEX_COL: u32 = 0x6480_8080;
 const HEX_COL_FADE: u32 = 0x3280_8080;
 const SELECTED_COL: u32 = 0x64ff_0000;
@@ -185,10 +182,6 @@ impl HexGrid {
             scale: 1.0,
             hex: HEX_COL,
             hex_fade: HEX_COL_FADE,
-            fade: Some(oag_title::HexFade {
-                columns: 4.0,
-                span: None,
-            }),
             selected_column: SELECTED_COL,
             selected_lock: LOCK_COL,
             selected_lock_fade: LOCK_COL_FADE,
@@ -320,30 +313,27 @@ fn lerp_colour(from: u32, to: u32, t: f32) -> [f32; 4] {
     std::array::from_fn(|i| a[i] + (b[i] - a[i]) * t)
 }
 
-/// A cell's hexagon fill: one colour, or - where the fade has a `span` - a colour at each
-/// of the sprite's two edges, so it runs from the value toward the selected column to the
-/// value away from it, as the original's per-vertex colours do. The sprite is the whole 128
-/// texel texture, its visible hexagon centred on [`HEX_CENTRE`].
-fn fill(grid: &HexGrid, cell: &Cell, placed: Placed, rect: [f32; 4]) -> Draw {
-    let Some(fade) = grid.fade else {
-        return sprite(placed, rect, lerp_colour(grid.hex, grid.hex_fade, 0.0));
+/// How much of `HexCol` (against `HexColFade`) a cell's vertex has, `from_middle` columns from the
+/// middle of the selected column, in a grid whose selected column is `centre` columns in: whole at
+/// that column's edges, none at the grid's outer edges and on the spare column of a slide
+/// (`HexSelection_SetCell`, `docs/ghidra/functions/ps3-hdfury-eu/ship-select-ring.md`, "The cells").
+#[must_use]
+pub fn edge_share(centre: usize, from_middle: f32) -> f32 {
+    (1.0 - (from_middle.abs() - 0.5) / centre.max(1) as f32).clamp(0.0, 1.0)
+}
+
+/// A cell's hexagon fill, a colour at each side of its quad: `middle` is where the cell's centre
+/// stands, in columns right of the selected column's.
+fn fill(grid: &HexGrid, middle: f32, placed: Placed, rect: [f32; 4]) -> Draw {
+    let colour_at = |from_middle: f32| {
+        let share = edge_share(grid.columns / 2, from_middle);
+        lerp_colour(grid.hex_fade, grid.hex, share)
     };
-    let colour_at = |columns: f32| {
-        let t = (columns / fade.columns).clamp(0.0, 1.0);
-        lerp_colour(grid.hex, grid.hex_fade, t)
-    };
-    let Some(span) = fade.span else {
-        return sprite(placed, rect, colour_at(cell.distance as f32));
-    };
-    // Columns of fade at a texel `x` right of the centre: it grows away from the selected
-    // column, so rightward on a cell right of it and leftward on one left of it.
-    let away = cell.offset.signum() as f32;
-    let at = |x: f32| colour_at((cell.distance as f32 + away * x / span).max(0.0));
     Draw::GradientSprite {
         rect,
-        uv: placed.sheet_rect([0.0, 0.0, placed.width as f32, placed.height as f32]),
-        left: at(-HEX_CENTRE[0]),
-        right: at(placed.width as f32 - HEX_CENTRE[0]),
+        uv: placed.sheet_rect([0.0, 0.0, QUAD_TEXELS[0], QUAD_TEXELS[1]]),
+        left: colour_at(middle - 0.5),
+        right: colour_at(middle + 0.5),
     }
 }
 
@@ -414,6 +404,28 @@ pub fn pulse_phase(seconds: f32) -> f32 {
     }
 }
 
+/// Where the cursor ring stands: the centre column, on `cursor`'s row and the half row that
+/// column sits at.
+pub(super) fn ring_centre(
+    grid: &HexGrid,
+    selected: usize,
+    slide: Option<&Slide>,
+    cursor: Cursor,
+) -> (f32, f32) {
+    let parity = match (grid.phase_by_entry, slide) {
+        (false, _) => 0.0,
+        (true, None) => (selected % 2) as f32,
+        (true, Some(slide)) => f32::from(u8::from(slide.ring_target_low())),
+    };
+    let centre = (grid.columns / 2) as f32;
+    (
+        grid.origin[0] + centre * PITCH[0] * grid.scale,
+        grid.origin[1]
+            + cursor.row as f32 * PITCH[1] * grid.scale
+            + (parity + cursor.low) * HALF_ROW * grid.scale,
+    )
+}
+
 /// The grid's draws, behind-to-front per cell: the hexagon, then its face; then the cursor ring
 /// once on `cursor`'s row of the centre column, over every cell, as one quad of
 /// `Hexagon_HD_THICK_OUT.gtf` pulsing with `seconds` (`phase` of the widget's own clock).
@@ -429,18 +441,17 @@ pub(super) fn draw_cells(
         let first_draw = out.len();
         let chosen = cell.distance == 0;
         let (cx, cy) = centre(cell.rect);
-        let hex_scale = HEX_SCALE * grid.scale;
         if let Some(placed) = sprites(HEX_SRC) {
-            let rect = [
-                cx - HEX_CENTRE[0] * hex_scale,
-                cy - HEX_CENTRE[1] * hex_scale,
-                placed.width as f32 * hex_scale,
-                placed.height as f32 * hex_scale,
-            ];
+            let [w, h] = QUAD.map(|side| side * grid.scale);
+            let rect = [cx - w * 0.5, cy - h * 0.5, w, h];
             if chosen {
-                out.push(sprite(placed, rect, argb_to_rgba(grid.selected_column)));
+                out.push(Draw::Sprite {
+                    rect,
+                    uv: placed.sheet_rect([0.0, 0.0, QUAD_TEXELS[0], QUAD_TEXELS[1]]),
+                    color: argb_to_rgba(grid.selected_column),
+                });
             } else {
-                out.push(fill(grid, &cell, placed, rect));
+                out.push(fill(grid, cell.offset as f32 + pan, placed, rect));
             }
         }
         match face(&cell) {
@@ -478,8 +489,13 @@ pub(super) fn draw_cells(
         }
         if cell.weight < 1.0 {
             for draw in &mut out[first_draw..] {
-                if let Draw::Sprite { color, .. } = draw {
-                    color[3] *= cell.weight;
+                match draw {
+                    Draw::Sprite { color, .. } => color[3] *= cell.weight,
+                    Draw::GradientSprite { left, right, .. } => {
+                        left[3] *= cell.weight;
+                        right[3] *= cell.weight;
+                    }
+                    _ => {}
                 }
             }
         }
@@ -487,22 +503,11 @@ pub(super) fn draw_cells(
     if let (Some(cursor), Some(peak), Some(placed)) =
         (cursor, grid.ring_peak, sprites(THICK_OUT_SRC))
     {
-        let parity = match (grid.phase_by_entry, slide) {
-            (false, _) => 0.0,
-            (true, None) => (selected % 2) as f32,
-            (true, Some(slide)) => f32::from(u8::from(slide.ring_target_low())),
-        };
-        let centre = (grid.columns / 2) as f32;
-        let (cx, cy) = (
-            grid.origin[0] + centre * PITCH[0] * grid.scale,
-            grid.origin[1]
-                + cursor.row as f32 * PITCH[1] * grid.scale
-                + (parity + cursor.low) * HALF_ROW * grid.scale,
-        );
-        let [w, h] = RING_QUAD.map(|side| side * grid.scale);
+        let (cx, cy) = ring_centre(grid, selected, slide, cursor);
+        let [w, h] = QUAD.map(|side| side * grid.scale);
         out.push(Draw::Sprite {
             rect: [cx - w * 0.5, cy - h * 0.5, w, h],
-            uv: placed.sheet_rect([0.0, 0.0, RING_TEXELS[0], RING_TEXELS[1]]),
+            uv: placed.sheet_rect([0.0, 0.0, QUAD_TEXELS[0], QUAD_TEXELS[1]]),
             color: argb_to_rgba(pulse_argb(peak, pulse_phase(seconds))),
         });
     }

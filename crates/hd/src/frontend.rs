@@ -513,11 +513,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     )),
     borrows_ps2_split_screens: false,
     model_lighting: Some(MODEL_LIGHTING),
-    // Measured on the Fury style, one frame (`docs/ui/campaign-screens.md`, "The honeycomb fades").
-    team_hex_fade: Some(oag_title::HexFade {
-        columns: 2.22,
-        span: Some(109.0),
-    }),
+    hex_selected_fill: None,
     team_hex_ring_peak: None,
 };
 

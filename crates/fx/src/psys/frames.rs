@@ -1,7 +1,7 @@
 //! The sprite-atlas frame advancing over a particle's life.
 //!
-//! Read off Pulse's PSP `BOOT.BIN` on 2026-09-24 (`particle-system.md`, "The
-//! atlas frame advances"):
+//! Read off Pulse's PSP `BOOT.BIN` (`particle-system.md`, "The atlas frame
+//! advances"):
 //!
 //! - `ParticleSystem_CacheModeFlags` (`0x088f4dcc`) turns the advance on for
 //!   an emitter when the frame-rate channel's `hi` (`+0x788`, the `+0x778`
@@ -18,7 +18,12 @@
 //!   at spawn samples it; the baker gives up on every channel of an emitter
 //!   when any keyframed one has a period, leaving the rates zero.
 //!
-//! **Pulse on the PSP only** - see [`super::Effect::without_pulse_psp_draw`].
+//! HD's update runs the same step and adds a hold: past the second byte of
+//! [`oag_pob::FrameRange::hold`] the frame is set to the first, before the wrap
+//! (`docs/ghidra/functions/ps3-hdfury-eu/particle-render.md`, "The atlas frame").
+//!
+//! Played for Pulse on the PSP and for an effect loaded with
+//! [`super::streak::Kept::flipbooks`]; see [`super::Effect::without_pulse_psp_draw`].
 
 use oag_pob::{self as pob, Channel, ChannelMode};
 
@@ -63,7 +68,7 @@ impl FrameAdvance {
     }
 
     /// Advances `particle`'s frame by one step of `dt_ticks`, from normalized
-    /// age `before` to `after`, in a grid of `frames`.
+    /// age `before` to `after`, in a grid of `frames`, holding at `hold`.
     pub(super) fn step(
         &self,
         particle: &mut Particle,
@@ -71,6 +76,7 @@ impl FrameAdvance {
         after: f32,
         dt_ticks: f32,
         frames: u16,
+        hold: Option<(u8, u8)>,
     ) {
         let top = f32::from(frames) - 0.01;
         let mut at = match self {
@@ -78,6 +84,12 @@ impl FrameAdvance {
             Self::OverLife => after * (top - 0.01),
             Self::Rate(channel) => particle.frame_at + rate(channel, before) * dt_ticks,
         };
+        if let Some((to, past)) = hold
+            && (to, past) != (0, 0)
+            && at > f32::from(past)
+        {
+            at = f32::from(to);
+        }
         if at >= top {
             at -= top;
         }

@@ -126,6 +126,18 @@ impl RaceSim {
 }
 
 impl Race {
+    /// Gives the craft a forced hit strikes this velocity, in world units a second, for
+    /// `--force-rocket-hit-velocity`. The craft takes it now, and every craft blast on `slot` from
+    /// here carries exactly it: the tick that lands the hit changes the craft's velocity before the
+    /// blast reads it. A craft that is not racing is left alone. A verification aid and nothing
+    /// else.
+    pub fn force_struck_velocity(&mut self, slot: usize, velocity: oag_core::math::Vec3) {
+        if self.core.sim.ship_active(slot) {
+            self.core.sim.world.ships[slot].physics.body.linear_velocity = velocity;
+            self.view.forced_blast_velocity = Some((slot, velocity));
+        }
+    }
+
     /// Restart the particle stage's random stream from `seed` instead of
     /// [`crate::STAGE_SEED`], so a test can hold a picture over several arrangements of the
     /// same effects rather than the one the fixed seed deals.

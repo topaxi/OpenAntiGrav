@@ -372,6 +372,19 @@ pub(crate) struct WreckArgs {
     #[arg(long, value_name = "TICK:SLOT", requires = "race")]
     pub(crate) force_rocket_hit: Option<String>,
 
+    /// With `--force-rocket-hit`, give the struck craft this velocity as it is put on the Rocket,
+    /// in world units a second. The craft blast carries the struck craft's velocity, so a
+    /// comparison with a capture needs the captured craft's. See
+    /// [`oag_raceplay::Race::force_struck_velocity`]. Dev only.
+    #[cfg(feature = "dev-cli")]
+    #[arg(
+        long,
+        value_name = "VX,VY,VZ",
+        requires = "force_rocket_hit",
+        allow_hyphen_values = true
+    )]
+    pub(crate) force_rocket_hit_velocity: Option<String>,
+
     /// With `--race --screenshot`, launch craft `SLOT`'s Quake so its bump
     /// reaches the player at the end of a tick: `TICK:SLOT`, e.g. `120:1`. The
     /// rival's wave a headless run would otherwise never send, for what a Quake
