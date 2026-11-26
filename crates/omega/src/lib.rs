@@ -82,13 +82,26 @@ pub const TITLE: &Title = &Title {
     front_end: Some(frontend::FRONT_END),
     hud: hud::LAYOUTS,
     hud_art: hud::ART,
-    eliminator: oag_title::pre_race::Sourced::inherited(
-        oag_title::eliminator::EliminatorRule::Kills,
-        "Wipeout Pulse",
+    // Read out of Omega's own damage, destroy and lap code, the same four numbers as HD's
+    // (`docs/ghidra/functions/ps4-omega-eu/eliminator.md`). Its `racebox_definition.xml` authors
+    // its own slider, 50 to 600 by 25.
+    eliminator: oag_title::pre_race::Sourced::measured(
+        oag_title::eliminator::EliminatorRule::Score(oag_title::eliminator::ScoreRule {
+            damage: 0.1,
+            kill: 20.0,
+            lap: 5.0,
+            death: 5.0,
+            target: oag_title::eliminator::ScoreTarget::Slider(
+                r"Data\Plugins\Frontend\Gui\racebox_definition.xml",
+            ),
+        }),
     ),
-    // The executable has it, off `<Misc eliminator_flip_time>` per craft and class; not wired
+    // Read in this title's own executable: `pi` over the craft's `<Misc eliminator_flip_time>`,
+    // `0.2` where the file authors none
     // (`docs/ghidra/functions/ps3-hdfury-eu/eliminator-flip.md`, "Per title").
-    eliminator_flip: oag_title::pre_race::Sourced::chosen(None),
+    eliminator_flip: oag_title::pre_race::Sourced::measured(Some(
+        oag_title::eliminator::FlipRule { seconds: 0.2 },
+    )),
     teams: race::TEAM_IDENTITIES,
     loyalty: Some(oag_title::loyalty::LoyaltyEarning {
         law: oag_title::loyalty::LoyaltyLaw::Hd,
@@ -107,7 +120,10 @@ pub const TITLE: &Title = &Title {
         "/data/tex/smoke_trails_frame1_alpha.gnf",
         oag_title::Origin::InheritedFrom("Wipeout HD"),
     )),
-    weapon_pad_glow: &oag_title::weapon_pad::WeaponPadGlow::Authored,
+    // Read in this title's own executable (`docs/rendering/pads.md`, "2048 and Omega").
+    weapon_pad_glow: &oag_title::weapon_pad::WeaponPadGlow::ByClass(
+        oag_title::weapon_pad::ClassCycles::LINEAGE,
+    ),
     // **Per team, on 2048's shape**: an `EngineFlare.vex` + `.rcsmodel`
     // beside each hull with `EF_Main`/`EF_Boost` groups. The sprite is the
     // executable's own literal `data/Tex/EngineFlare/Engine_Flare_Rich.gnf`.
@@ -255,6 +271,11 @@ pub const TITLE: &Title = &Title {
         // HD's law, inherited: Omega's `Plasma_Launch` (`0x0135d5d0`) takes the node matrix as
         // HD's does; whether the walker orthonormalises it is unread (`ps4-omega-eu/plasma.md`).
         plasma_release_at_display_scale: oag_title::pre_race::Sourced::inherited(
+            false,
+            "Wipeout HD",
+        ),
+        // HD's, inherited: Omega's `Rocket_Init` caller is unread.
+        rocket_launch_at_display_scale: oag_title::pre_race::Sourced::inherited(
             false,
             "Wipeout HD",
         ),
@@ -449,6 +470,21 @@ const EFFECTS: oag_title::Effects = {
         // locators on every hull and authors both effect files, and its executable carries
         // the same strings. The trigger sites are unread here
         // (`docs/gameplay/weapon-lineage.md`).
+        // The Detonator cannon round's wall death: this title's own `PulseBullet` update spawns
+        // it on the last wall only, in HD's frame (`FUN_013644c0`).
+        .with(
+            Trigger::DetonatorCannonSparks,
+            EffectSpec::new(
+                engine_effects::DETONATOR_CANNON_SPARKS_EFFECT,
+                Origin::Measured,
+            ),
+        )
+        // The EMP's wave: `0x0133ec10` spawns it on the front, `EMP1` by pointer, as HD's launch does
+        // (`docs/ghidra/functions/ps3-hdfury-eu/detonator-emp.md`, "2048 and Omega draw it").
+        .with(
+            Trigger::DetonatorEmp,
+            EffectSpec::new(engine_effects::DETONATOR_EMP_EFFECT, Origin::Measured),
+        )
         .with(
             Trigger::ShieldAbsorb,
             EffectSpec::new(
@@ -482,8 +518,24 @@ const EFFECTS: oag_title::Effects = {
                 Origin::InheritedFrom("Wipeout HD"),
             ),
         );
+    // Their class-6 streaks draw as HD's view-space bar, as HD's list does.
+    effects.far_bars = &[
+        engine_effects::TRAIL_HITSHIP_EFFECT,
+        engine_effects::TRAIL_HITSHIP_RED_EFFECT,
+        engine_effects::DETONATOR_CANNON_SPARKS_EFFECT,
+        engine_effects::DETONATOR_EMP_EFFECT,
+    ];
+    // The EMP's wave spreads by the extent law over the road: this title's sweep feeds the
+    // edges' distance over `100` into the instance, as HD's does. Its `SPARKS` author no speed
+    // and move by their noise force alone. Both lists are HD's, paired against HD only.
+    effects.extents = &[engine_effects::DETONATOR_EMP_EFFECT];
+    effects.turbulence = &[engine_effects::DETONATOR_EMP_EFFECT];
     effects.scenery = &[oag_title::engine_effects::MODESTO_STEAM_EFFECT];
     effects.colour_walk_in = &[(r"Data\particles2048", oag_title::ColourWalk::Reversed)];
+    // `Particle_PushQuadBatch` (`docs/ghidra/functions/ps3-hdfury-eu/particle-render.md`).
+    effects.near_law = Some(oag_title::NearLaw::one_to_four(Origin::Measured));
+    // The Rocket's craft-hit spawn, `0x0139a6b0` (`docs/ghidra/functions/ps3-hdfury-eu/rocket-craft-blast.md`).
+    effects.craft_blast_carry = Some(Origin::Measured);
     effects
 };
 

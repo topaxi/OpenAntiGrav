@@ -1,6 +1,7 @@
 //! A pause screen's music list (Pulse's `MusicList`): the race playlist's song titles, the one
 //! shown stepped by LEFT and RIGHT whichever row the cursor is on, drawn under the rows with a
-//! two-half arrow pill before it. Nothing plays while paused; the composition root reads
+//! two-half arrow pill before it. It stands where the disc authors it, unless the page's rows
+//! reach that far down; then it goes under the last row (`docs/ui/pause-menu.md`, "Pulse"). Nothing plays while paused; the composition root reads
 //! [`MusicList::pick`] when the race resumes and starts that song from its beginning
 //! (`docs/ghidra/functions/psp-pulse-usa/music-list.md`).
 //!
@@ -12,7 +13,7 @@ use oag_title::PauseMusicList;
 
 use super::nav::{Dir, Nav};
 use super::pointer::{Part, Region};
-use super::{Menu, Skin};
+use super::{Frame, Menu, Skin, rows};
 use crate::frontend::{Align, Draw, Placed};
 
 /// The song titles, the one playing and the one shown.
@@ -128,10 +129,21 @@ struct Spots {
     arrows: [[f32; 4]; 2],
 }
 
-fn spots(skin: &Skin, spec: &PauseMusicList) -> Spots {
+/// The list's line: the disc's `y`, or under the rows when the last row on screen has not
+/// finished (its capitals' baseline) by then. The disc's own screens are authored clear of it;
+/// a page with more rows than the disc's is not.
+fn line_y(menu: &Menu, skin: &Skin, frame: &Frame, authored: f32) -> f32 {
+    let column = rows::column(menu, skin, frame);
+    match column.last_top() {
+        Some(top) if top + skin.row_baseline() > authored => column.below(skin),
+        _ => authored,
+    }
+}
+
+fn spots(menu: &Menu, skin: &Skin, frame: &Frame, spec: &PauseMusicList) -> Spots {
     let (sx, sy) = skin.theirs_scale();
     let x = skin.menu_x();
-    let y = spec.y * sy;
+    let y = line_y(menu, skin, frame, spec.y * sy);
     let at = |side: usize| {
         let [_, _, w, h] = spec.arrows[side];
         let (dx, dy) = spec.arrow_offset[side];
@@ -185,11 +197,11 @@ impl Menu {
 
 /// The list's draws: the arrow pill, a half dimmed where it points past an end, then the title.
 /// Nothing when the menu has no list on screen.
-pub fn draw(menu: &Menu, skin: &Skin, art: &Art, out: &mut Vec<Draw>) {
+pub fn draw(menu: &Menu, skin: &Skin, frame: &Frame, art: &Art, out: &mut Vec<Draw>) {
     let Some(list) = menu.music_list() else {
         return;
     };
-    let spots = spots(skin, &art.spec);
+    let spots = spots(menu, skin, frame, &art.spec);
     let ink = skin.normal();
     // `ListWidget_ShadeArrows`: a half at the end it points to keeps part of its alpha.
     let shade = |at_end: bool| {
@@ -230,11 +242,17 @@ pub fn draw(menu: &Menu, skin: &Skin, art: &Art, out: &mut Vec<Draw>) {
 /// The list's pointer targets: each arrow half steps its way, and the title steps forward
 /// (**chosen**: the original has no pointer). `row` is the cursor's, so a hover moves nothing.
 #[must_use]
-pub fn regions(menu: &Menu, skin: &Skin, art: &Art, measure: &dyn Fn(&str) -> f32) -> Vec<Region> {
+pub fn regions(
+    menu: &Menu,
+    skin: &Skin,
+    frame: &Frame,
+    art: &Art,
+    measure: &dyn Fn(&str) -> f32,
+) -> Vec<Region> {
     let Some(list) = menu.music_list() else {
         return Vec::new();
     };
-    let spots = spots(skin, &art.spec);
+    let spots = spots(menu, skin, frame, &art.spec);
     let [left, right] = spots.arrows;
     let height = left[3];
     let width = list

@@ -72,6 +72,7 @@ mod grid_flaps;
 mod hand_back;
 mod mine_branch;
 
+mod craft_blast_carry;
 #[cfg(feature = "extensions")]
 mod extension_picks;
 #[cfg(feature = "extensions")]
@@ -108,6 +109,7 @@ mod message_cue;
 mod mode_override;
 mod models;
 mod multiplayer_time_trial;
+mod near_law;
 mod pads;
 mod people_grid;
 mod perfect_start;
@@ -324,6 +326,7 @@ fn setup(handling: Handling) -> SimSetup {
         finished_thrust: None,
         original_tables: None,
         slot_teams: Vec::new(),
+        row_teams: Vec::new(),
         sight: Sighting::default(),
         collision: CollisionWorld::new(),
         handling,
@@ -373,6 +376,7 @@ fn setup(handling: Handling) -> SimSetup {
         floor_arms_steer_to_ride_point: true,
         floor_arms_ride_launch_normal: false,
         plasma_release_at_display_scale: true,
+        rocket_launch_at_display_scale: true,
         own_craft_box_hides_track: oag_title::weapons::OwnCraftBox::Falls,
         reset_triggers: oag_race::recovery::ResetTriggers::PULSE,
         contact_cues: oag_title::contact_cue::ContactCues::Rearmed,
@@ -435,6 +439,7 @@ pub(crate) fn fixture_view() -> ViewSetup {
         hd_bomb_blast: false,
         hd_missile_blast: false,
         detonator_cannon_lights: false,
+        detonator_emp_light: false,
         detonator_ammo_gauge: None,
         detonator_hull_charge: None,
         bomb_shockwave_fades: false,
@@ -442,6 +447,7 @@ pub(crate) fn fixture_view() -> ViewSetup {
         laid_pose_scaled: false,
         screen_flash: false,
         quake_flash: false,
+        craft_blast_carry: false,
         absorb_burst: None,
         absorb_anchors: Vec::new(),
         hit_spark_anchors: Vec::new(),
@@ -463,6 +469,7 @@ pub(crate) fn fixture_view() -> ViewSetup {
         trail_sparks: false,
         request: None,
         campaign_event: false,
+        score_pass: None,
         spark_anchors: Vec::new(),
         // The nearer external view, deliberately a *different* set of round
         // numbers from `chase`: a test that cycles to it and back has to be

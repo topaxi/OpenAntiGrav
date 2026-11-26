@@ -113,6 +113,8 @@ pub struct CaptureOptions {
     pub force_bomb_trip: Option<(u32, usize)>,
     /// `--force-missile-hit TICK:SLOT`.
     pub force_missile_hit: Option<(u32, usize)>,
+    /// `--force-rocket-hit TICK:SLOT`.
+    pub force_rocket_hit: Option<(u32, usize)>,
     /// `--force-quake TICK:SLOT`: see [`SimRace::force_quake`].
     pub force_quake: Option<(u32, usize)>,
     /// `--force-remote-correction`: see [`oag_raceplay::correction::Scene`].

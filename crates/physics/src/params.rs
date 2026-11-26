@@ -360,12 +360,16 @@ pub struct Handling {
     pub steer_lean: SteerLean,
     /// The cockpit camera's steering lean (display only, [`CameraLean`]).
     pub camera_lean: CameraLean,
+    /// The craft's own Eliminator half-turn time, seconds, `None` where its file authors none
+    /// and the race's [`crate::flip::FlipLaw`] applies.
+    pub eliminator_flip_time: Option<f32>,
 }
 
 impl Handling {
     /// Every tunable zero. Not a playable ship: a unit test starts from a known nothing and
     /// sets only the fields it pins, keeping invented constants out of the repository.
     pub const ZERO: Self = Self {
+        eliminator_flip_time: None,
         engine: Engine {
             accelcap: 0.0,
             amount: 0.0,

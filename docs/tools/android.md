@@ -1040,6 +1040,165 @@ against 28.2 ms (three passes against two). The earlier single-run reading (38.7
 The grade and the screen filter apply to the HUD too (`oag_present::upscale`, module doc), so a merged pass could
 only ever be the same picture at a neutral grade with no filter.
 
+### Freezing the frame's writes
+
+Measured 2026-11-25 (`s21-shading`) with the protocol of "What a render pass costs" (release `dist` APK, HD/Fury Vineta K
+forward, render scale 25, REFLECTION RESOLUTION `auto`, 10 s in-run toggles from AP 33 C or less), plus a 60 s Perfetto trace
+from racing second 30 whose `android.log` data source carries the switch's own `OAG_SKIP_PASSES: window N on|off` lines, so the
+fence timeline (`scripts/android-fence-timeline.py`'s pairing of each `QueuePresentKHR` with its GPU completion fence) splits by
+arm. Every per-frame write of an HD race goes through `oag_gpu::writes::Writes` on the queue (a gdb census of
+`wgpu::Queue::write_buffer` callers over 100 against 300 ticks: about 95 writes a frame, all through the trait), so one switch
+covers them. Three arms, each left out in the odd windows once the race has drawn its first frame (`oag_gpu::skip`):
+
+- `writes`: every write dropped. The picture freezes at the window's first frame, so the GPU draws a stale camera.
+- `writes-same`: every write made, with the bytes each buffer range held when the window began. Same frozen picture, every
+  copy and barrier kept.
+- `writes-dummy`: every write copied into a scratch buffer of its own that nothing reads. Same frozen picture, the copies
+  and their barriers kept, no write into a buffer the previous frame's passes read.
+
+| Arm, run | Frame ms, made / arm | Fence period ms, made / arm | Previous fence to present return, ms |
+| --- | ---: | ---: | ---: |
+| `writes` 1 | 28.4 / 19.1 | 29.8 / 18.7 | 2.6 / 0.06 |
+| `writes` 2 | 32.3 / 23.6 | 31.6 / 22.6 | 3.0 / 0.07 |
+| `writes` 3 | 31.6 / 23.3 | 30.8 / 21.8 | 2.7 / 0.07 |
+| `writes-same` 1 | 31.1 / 26.5 | 29.1 / 24.6 | 2.4 / 2.5 |
+| `writes-same` 2 | 33.1 / 27.3 | 28.6 / 22.9 | 2.6 / 2.5 |
+| `writes-dummy` 1 | 30.9 / 26.3 | 27.8 / 24.0 | 2.5 / 1.9 |
+| `writes-dummy` 2 | 30.2 / 25.2 | 27.0 / 22.0 | 2.4 / 1.6 |
+
+Reproduce: `OAG_SKIP_PASSES=<arm>` and `OAG_SKIP_PASSES_TOGGLE=10` as launch-file lines, a Perfetto trace from
+`scripts/android-perf-trace.cfg` (which carries the `android.log` source), then
+`uv run --with perfetto --with pandas python3 -I scripts/android-fence-timeline.py TRACE --by-window`.
+
+**Verdict.** Freezing the writes takes 8.3 to 9.3 ms off the frame and as much off the GPU's own fence period, and the present
+then returns as the previous fence signals. About half of that, 4.6 to 5.8 ms, is the frozen picture itself (`writes-same`
+and `writes-dummy` freeze the same picture and keep it). The other half, about 3.5 to 4.7 ms, comes with the copies, and it
+comes as much with copies into scratch buffers nobody reads as with copies into the buffers the previous frame still reads.
+So **frame N's upload copies do not wait on frame N-1's reads; the cost is the copies and their barriers**: wgpu-core 30.0.2
+records, for every `Queue::write_buffer`, a barrier from the buffer's last use to `COPY_DST` and a copy, at the head of the
+submission (`wgpu-core/src/device/queue.rs`, the write's `transition_buffers` then `copy_buffer_to_buffer`). A ring of destination
+buffers changes neither, so it is not built. Upstream reported the pattern as gfx-rs/wgpu#6673 and fixed it in gfx-rs/wgpu#10319
+("Record 1 barrier for N Queue::write_buffer/texture calls by deferring to submit time", merged 2026-10-25, after 30.0.2's
+branch; a first write per resource per submission only, copies unchanged). Its 13 hunks do not apply to 30.0.2 as they stand
+(3 fail by this count; `git apply --reject` with the paths rewritten rejects 6, see the next section). What would cut the copies is fewer writes: one per-frame buffer that the passes read at offsets (the S21 perf plan's item 4).
+
+### gfx-rs/wgpu#10319 on 30.0.2: what one barrier buys
+
+Measured 2026-11-25 (`wgpu-write-barriers`) with a measuring build only: #10319 backported by hand onto a local copy of
+wgpu-core 30.0.2 through a `[patch.crates-io]` that was never committed. With `git apply --reject`, 6 of the PR's hunks fail
+there (the import list, the new `PendingWrites` methods, a `PendingWrites::clear_buffer` that 30.0.2 does not have, and the
+two in the unmap path), all written by hand; the unmap path keeps 30.0.2's two inline barriers, since it is not per frame. The backport takes a
+runtime switch, so `OAG_SKIP_PASSES=hoist` with `OAG_SKIP_PASSES_TOGGLE=10` turns it on in the odd windows of one run (a batch,
+the writes of one submission, reads the switch when it starts, so none mixes the two ways). Same protocol as above: release
+`dist` APK, HD/Fury Vineta K forward, render scale 25, REFLECTION RESOLUTION `auto`, each run from AP 33 C or less, racing
+seconds 15 on, a 60 s Perfetto trace from racing second 30.
+
+What it changes, counted inside wgpu-core per batch (S21, 120-batch averages): about 28 `write_buffer` calls into about 25
+distinct buffers; 30.0.2 records one `vkCmdPipelineBarrier` before each copy (28 a batch), the backport records 3 inline (the
+writes into a buffer already written in that batch, whose `COPY_DST` to `COPY_DST` barrier must stay between the two copies) and
+one barrier of about 53 entries (every staging buffer and every first destination) in a command buffer ahead of the copies. The
+copies themselves stay. The census prints every 120 batches, about once a second against 35 to 45 frames a second, so a frame
+is about three batches (submissions): about 85 writes a frame, in line with the gdb census's 95. On the desktop's 1280x720 race bench the same count is 65 to 89 writes into 48 to 60 buffers, inline
+barriers 65 to 89 against 17 to 29.
+
+| Run (start AP) | Frame ms, 30.0.2 / #10319 | `submit` phase ms | Present ms | Previous fence to present return, ms |
+| --- | ---: | ---: | ---: | ---: |
+| 1 (29.4) | 23.9 / 21.5 | 6.85 / 5.77 | 13.7 / 11.8 | 2.05 / 0.05 |
+| 2 (33.0) | 28.4 / 25.7 | 7.39 / 6.09 | 17.0 / 14.9 | 2.46 / 0.06 |
+| 3 (33.0) | 29.0 / 25.9 | 7.90 / 6.73 | 16.8 / 14.2 | 2.25 / 0.06 |
+
+So **the backport takes 2.4 to 3.1 ms off the S21's HD frame** (three runs, the same sign every time), 1.1 to 1.3 ms of it on
+the frame thread's `submit` and the rest in the present wait: the present now returns as the previous frame's fence signals,
+as it did with every write frozen (`writes`, above), where with the 30.0.2 barriers kept (`writes-same`, `writes-dummy`) it
+returned 1.6 to 2.5 ms later.
+
+**What remains: nothing measurable.** The same subtraction as above, on the measuring build with the backport on throughout
+(`OAG_WGPU_HOIST=1` plus the `writes` or `writes-same` toggle, one run each), and an A/A control run (the toggle naming no
+arm) for the noise:
+
+| Run, backport on throughout (start AP) | Frame ms, made / arm | Present ms | Previous fence to present return, ms |
+| --- | ---: | ---: | ---: |
+| A/A control (no arm toggled) (27.3) | 20.4 / 19.9 | 9.9 / 9.3 | |
+| `writes` (32.9) | 27.9 / 23.5 | 15.7 / 13.2 | 0.07 / 0.08 |
+| `writes-same` (33.0) | 29.4 / 24.5 | 17.0 / 13.3 | 0.08 / 0.07 |
+
+Dropping every write saves 4.4 ms, keeping every copy with the same frozen picture saves 4.9 ms: what the copies still cost is
+the difference, -0.5 ms, inside the control's 0.5 ms. On 30.0.2 the same pair differed by 3.5 to 4.7 ms. So with #10319 the
+remaining ~85 copies and ~9 inline barriers a frame cost **about 0 ms (within 0.5 ms, one run each)**, and the 4.4 to 4.9 ms
+is the frozen picture itself; fewer writes would buy nothing more on this phone. The fence period in the trace moved both ways (19.6 to 17.5, 21.3 to 21.1, 20.0 to 23.4 ms), with six
+windows a trace; read it as unresolved.
+
+Desktop (RX 7800 XT, RADV, `OAG_WGPU_HOIST=1` turning the backport on for a whole run), no regression:
+
+| Measure | 30.0.2 | #10319 | Command, load |
+| --- | ---: | ---: | --- |
+| Race bench CPU / GPU / frame p50, us | 1123 / 567 / 1302, 1154 / 565 / 1336 | 1180 / 564 / 1369 (a first run read 3671 / 558 / 4337 at load 28: an outlier) | `scripts/bench-render.py run hd --binary <measuring build>`, 7,005 frames, load 22 to 44 |
+| User instructions, G | 83.196, 83.195 | 82.920, 83.068 (-0.2 to -0.3 %) | `perf stat -e instructions:u` over a 3,000-tick `OAG_RENDER_BENCH_RACE` run of Vineta K at 1280x720, load 46 to 50 (cycles at that load are noise) |
+
+The GPU's p50 does not move on RDNA, as the PR's own Bevy test found on a desktop. The picture is byte-identical: a 960x540
+`--screenshot` of HD Vineta K at tick 900 with every batch hoisted and with none, `cmp` equal. That is one frame on RDNA only:
+no Khronos validation layer is installed on the workstation, so no synchronisation validation ran, a missing barrier would not
+necessarily show on RDNA, and the S21's picture during the hoisted windows was not inspected. Upstream reviewed and merged the
+reordering; a build that ships it should take it from a wgpu release.
+
+Reproduce: the backport is not in the tree. Copy wgpu-core 30.0.2 out of the cargo registry, apply the PR's diff
+(`gh pr diff 10319 -R gfx-rs/wgpu`, paths without the `wgpu-core/` prefix) with `git apply --reject`, write the 6 failing
+hunks by hand, add the switch, point a root `[patch.crates-io] wgpu-core` at the copy, and build the APK as above.
+
+### Inside the scene pass
+
+Same protocol, no trace. `track-plain` and `track-rich` leave out the shading half of the circuit's draws that name no
+emissive row (Vineta K: 90 % of its 2.47 M indices) and of those that name one (10 %); the depth prepass stays. `mips` binds
+every material texture two mip levels down (a measure of texture bandwidth against arithmetic).
+
+| Arm | Frame ms, drawn / arm | Scene GPU ms, drawn / arm |
+| --- | ---: | ---: |
+| `track-plain` | 34.7 / 31.2 | 12.0 / 11.2 |
+| `track-rich` | 33.5 / 29.2 | 11.1 / 5.6 |
+| `mips` | 33.1 / 31.5 | 11.3 / 10.5 |
+
+One run each. By the scene pass's own timestamps the rich tenth of the circuit costs half of the pass and the plain nine tenths
+0.8 ms; by the frame the two read 4.3 and 3.5 ms, and on this GPU a pass's own timestamps read well under what leaving it out
+saves (every skip toggle so far reads 2 to 6 times its row), so the plain half is not cheap on the frame's reading. Texture
+bandwidth (`mips`) reads 1.6 ms of frame and 0.8 ms of pass. Arm's offline compiler (`malioc` 2026.5, Mali-G78 r1p1, a model of driver r51p0 where the phone runs r38p0) on
+the circuit's own specialised pipelines (naga 30.0.2 to SPIR-V with wgpu-hal's Vulkan options) says why: the rich shader uses
+all 64 work registers at 50 % occupancy and spills 512 bytes of stack, load/store bound (155 load/store cycles summed over every
+path, against 72 arithmetic), where the plain one spills 64 bytes and is arithmetic bound at about 15 cycles. Stubbing one
+function at a time moves the stack by 16 to 32 bytes each; forcing every row-kind test false takes it to 208 bytes. The fix,
+which keeps the picture byte-identical, is in [hires-gpu-levers.md](../rendering/hires-gpu-levers.md), "A circuit's row kinds
+fold where its table has none". With it, the same toggle (`row-codes`, a diagnostic build whose odd windows shade the rich half
+unmasked):
+
+| Run (start AP C) | Frame ms, masked / unmasked | Scene GPU ms | Fence period ms |
+| --- | ---: | ---: | ---: |
+| 1 (32.1) | 28.7 / 30.3 | 7.8 / 10.8 | 26.7 / 30.4 |
+| 2 (33.0) | 32.1 / 32.7 | 9.0 / 11.4 | 27.9 / 31.1 |
+
+The GPU's frame shortens by 3.2 to 3.7 ms; the frame on the CPU's side moves 0.6 to 1.6 ms, because the frame thread's own
+work (about 11.5 ms) and the copies above keep it waiting.
+
+**HD's textures as ASTC.** The S21 has no `TEXTURE_COMPRESSION_BC`, so HD's DXT textures are decoded to RGBA8. A diagnostic arm
+(`OAG_DIAG_ASTC=1`, not in the tree) uploaded each decoded texture as ASTC 4x4 void-extent blocks, one per 4x4 tile at its average
+colour: the size and bandwidth of real ASTC 4x4 at 8 bits a texel, not its picture, and a constant block may decode cheaper
+than a general one. Separate runs (no in-run toggle: the textures are uploaded once):
+
+| Run (start AP C) | Frame ms | p99 ms (median of seconds) | Scene GPU ms | GPU memory of the process / device |
+| --- | ---: | ---: | ---: | ---: |
+| RGBA8 1 (33.0) | 29.9 | 47.3 | 8.4 | 2.66 / 2.96 GB |
+| ASTC 1 (32.9) | 28.8 | 41.5 | 7.0 | 1.50 / 1.80 GB |
+| RGBA8 2 (33.0) | 30.8 | 48.9 | 8.4 | 2.62 / 2.91 GB |
+| ASTC 2 (33.0) | 29.0 | 42.3 | 6.9 | 1.59 / 1.90 GB |
+
+ASTC saves about 1.1 GB of GPU memory, 1.4 ms of scene pass and 1.1 to 1.8 ms of frame here (racing seconds 15 to 140,
+medians of the per-second `--frame-log` lines; memory from Perfetto's `android.gpu.memory`).
+
+The picture of a real encode, offline: Arm's `astcenc` 5.7.1 (`-medium`, 4x4) round trip of the 341 textures Vineta K's circuit
+uses (`just export-host-textures`, 61.3 M texels) against our RGBA decode: median 56.2 dB (RGB PSNR), texel-weighted mean 53.4 dB,
+worst 39.6 dB, 12.0 % of texels off by more than 2 levels in some channel, largest error 54 levels. 15 s of encoding on 24 host
+threads for one circuit. ASTC is therefore a lossy opt-in at best, with its encode cached off the render thread:
+that is the TEXTURE COMPRESSION row, measured with the real encode in
+[texture-compression.md](../rendering/texture-compression.md).
+
 ### Against the S24
 
 This page held no S24 frame-time table before this one. What exists is [`frame-thread-cpu.md`](../rendering/frame-thread-cpu.md)

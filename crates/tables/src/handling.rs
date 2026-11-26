@@ -840,6 +840,10 @@ pub struct Stats {
     /// `<BespokeStats><Weapons/>`: the craft's rocket and mine counts, when the file authors the
     /// element (2048 and Omega's own five teams).
     pub weapons: Option<Weapons>,
+    /// `<BespokeStats><Misc eliminator_flip_time/>`: how long this craft's Eliminator half turn
+    /// takes, seconds. `None` where the file authors none, which leaves the title's default
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/eliminator-flip.md`, "Per title").
+    pub eliminator_flip_time: Option<f32>,
     /// The `<Class>` blocks, in ladder order, slowest first.
     ///
     /// Look one up with [`Self::class`], which matches on name; indexing by
@@ -970,6 +974,13 @@ fn parse_with(expanded: &str, classless: Option<(&str, Unauthored)>) -> Result<S
             .find_map(|parent| parent.children_named(Weapons::ELEMENT).next())
         {
             Some(node) => Some(Weapons::from_node(node)?),
+            None => None,
+        },
+        eliminator_flip_time: match stats
+            .children_named(Weapons::PARENT)
+            .find_map(|parent| parent.children_named(Misc::ELEMENT).next())
+        {
+            Some(node) => optional_number(node, Misc::ELEMENT, "eliminator_flip_time")?,
             None => None,
         },
         classes: match classless {

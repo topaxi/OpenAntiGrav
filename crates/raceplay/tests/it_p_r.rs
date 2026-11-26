@@ -16,6 +16,7 @@
 #![allow(clippy::needless_range_loop)]
 
 mod in_parallel;
+mod particle_sheet_ground_truth;
 mod perturb;
 mod pickup_icon_ground_truth;
 mod pilot_assist_ground_truth;

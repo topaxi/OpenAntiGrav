@@ -230,8 +230,8 @@ fn an_hd_detonator_race_plays_the_discs_effects_for_each_event() {
 const TALONS: &str = r"Data\Environments\Talons_Junction\track.vex";
 
 /// **The spark is drawn from the disc's pictures, not a procedural stand-in:** the effect the
-/// race loaded is `WO_CANNON_SPARKS_DETONATOR`, every emitter has its `.gtf` placed on the sheet,
-/// and its three class-6 emitters draw as bars.
+/// race loaded is `WO_CANNON_SPARKS_DETONATOR`, every emitter has its picture (`.gtf`, `.gxt` or
+/// `.gnf`) placed on the sheet, and its three class-6 emitters draw as bars.
 fn check_the_wall_spark_is_the_discs_pictures(race: &Race) {
     use oag_fx::psys::{Render, streak::StreakDraw};
     let effect = race
@@ -391,6 +391,15 @@ fn an_hd_emp_wave_carries_the_discs_effect_on_its_front_until_it_ends() {
     })
     .expect("loading an HD Detonator race");
     let mut race = Race::start(loaded.setup, loaded.view, loaded.modules);
+    race.view.spu_vertex_lights = true;
+    race.view.hd_trail_active = true;
+    race.view.detonator_cannon_lights = true;
+    race.set_weapon_lights(true);
+    check_the_wave_is_the_discs_effect(race);
+}
+
+/// A wave fired from a stand on `race`: the effect and the light ride its front and go with it.
+fn check_the_wave_is_the_discs_effect(mut race: Race) {
     assert!(
         race.view.handles.get(Trigger::DetonatorEmp).is_some(),
         "WO_QUAKE_DETONATOR resolves to a loaded effect"
@@ -412,10 +421,6 @@ fn an_hd_emp_wave_carries_the_discs_effect_on_its_front_until_it_ends() {
         age: 0.0,
         ..oag_weapons::detonator::emp::Wave::default()
     };
-    race.view.spu_vertex_lights = true;
-    race.view.hd_trail_active = true;
-    race.view.detonator_cannon_lights = true;
-    race.set_weapon_lights(true);
     let no_rounds = crate::CannonDraw {
         look: None,
         muzzles: Vec::new(),
@@ -467,4 +472,119 @@ fn an_hd_emp_wave_carries_the_discs_effect_on_its_front_until_it_ends() {
         (live[live.len() - 1] - live[0]).length() > 20.0,
         "and moves down the track with it"
     );
+}
+
+/// 2048's and Omega's tables answer the EMP's trigger too: each EMP launch spawns the disc's
+/// `WO_QUAKE_DETONATOR` and each draws the same light (`detonator-emp.md`, "2048 and Omega draw
+/// it"). Nothing is switched on by hand: the light, the trail gate and the effect all come from
+/// the loaded race.
+fn check_the_title_draws_the_emp_wave(source: String, track: Option<&str>) {
+    let loaded = crate::load(&crate::Options {
+        source,
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::Detonator,
+        track: track.map(str::to_string),
+        ..crate::Options::default()
+    })
+    .expect("loading a Detonator race");
+    let race = Race::start(loaded.setup, loaded.view, loaded.modules);
+    let effect = race
+        .view
+        .handles
+        .get(Trigger::DetonatorEmp)
+        .expect("WO_QUAKE_DETONATOR resolves to a loaded effect");
+    assert_eq!(effect.name, oag_title::engine_effects::DETONATOR_EMP_EFFECT);
+    assert!(effect.has_turbulence(), "its sparks feel their noise force");
+    check_the_wave_is_the_discs_effect(race);
+}
+
+#[test]
+#[ignore = "needs the unpacked 2048 packages in data/extracted/"]
+fn a_2048_emp_wave_carries_the_discs_effect_and_light_on_its_front() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../data/extracted/vita/PCSF00007");
+    if !path.join("patch-v104").exists() {
+        assert!(
+            std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
+            "OAG_REQUIRE_GAME_DATA is set but {} is missing",
+            path.display()
+        );
+        return;
+    }
+    check_the_title_draws_the_emp_wave(
+        path.display().to_string(),
+        Some(r"data\art\published\DLC1\environments\zone_1\track.vex"),
+    );
+}
+
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn an_omega_emp_wave_carries_the_discs_effect_and_light_on_its_front() {
+    let Some(path) = oag_testdata::image("data/images/omega-ps4-eu.pkg") else {
+        return;
+    };
+    check_the_title_draws_the_emp_wave(path.display().to_string(), None);
+}
+
+/// 2048's and Omega's tables answer the wall spark's trigger: their own `PulseBullet` updates
+/// spawn it on the last wall only, in HD's frame (`detonator-cannon.md`, "The spark on 2048 and
+/// Omega"). A wall death puts the disc's effect on the stage at the spawn point, facing the
+/// rebound.
+fn check_the_title_plays_the_wall_spark(source: String, track: Option<&str>) {
+    use oag_weapons::detonator::Event;
+    let loaded = crate::load(&crate::Options {
+        source,
+        class: "VENOM".to_string(),
+        mode: Mode::Detonator,
+        track: track.map(str::to_string),
+        ..crate::Options::default()
+    })
+    .expect("loading a Detonator race");
+    let mut race = Race::start(loaded.setup, loaded.view, loaded.modules);
+    check_the_wall_spark_is_the_discs_pictures(&race);
+    let (spawn, rebound) = (Vec3::new(4.0, 5.0, 6.0), Vec3::X);
+    race.core.sim.detonator_events = vec![Event {
+        kind: EventKind::RoundWall {
+            normal: Vec3::Y,
+            spawn,
+            rebound,
+        },
+        at: spawn,
+    }];
+    race.view.play_detonator_events(&race.core);
+    let effect = race
+        .view
+        .handles
+        .get(Trigger::DetonatorCannonSparks)
+        .cloned()
+        .expect("the spark loads");
+    assert_eq!(race.view.stage.frames_of(&effect), [(spawn, rebound)]);
+}
+
+#[test]
+#[ignore = "needs the unpacked 2048 packages in data/extracted/"]
+fn a_2048_wall_death_plays_the_discs_spark() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../data/extracted/vita/PCSF00007");
+    if !path.join("patch-v104").exists() {
+        assert!(
+            std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
+            "OAG_REQUIRE_GAME_DATA is set but {} is missing",
+            path.display()
+        );
+        return;
+    }
+    check_the_title_plays_the_wall_spark(
+        path.display().to_string(),
+        Some(r"data\art\published\DLC1\environments\zone_1\track.vex"),
+    );
+}
+
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn an_omega_wall_death_plays_the_discs_spark() {
+    let Some(path) = oag_testdata::image("data/images/omega-ps4-eu.pkg") else {
+        return;
+    };
+    check_the_title_plays_the_wall_spark(path.display().to_string(), None);
 }

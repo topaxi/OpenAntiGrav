@@ -1,6 +1,6 @@
 // HD's scrolled-tap water (`Emissive::program` mode 17, `oag_mesh::mesh::rcs::water`).
 
-import package::bindings::{emissive_scale, emissive_tint, scene};
+import package::bindings::{emissive_scale, emissive_tint, program_in, scene};
 import package::hull_normal::{hull_normal};
 import package::texture_lod::{MATERIAL_PAD_MASK, material_sample};
 
@@ -8,7 +8,7 @@ import package::texture_lod::{MATERIAL_PAD_MASK, material_sample};
 // 4 `water_noref`, 5 `enhanced`, 6 to 8 2048's own seas, 9 and 10 Omega's reflective sea and
 // its blended edge (`mesh::rcs::psp2::water`); 0 where the entry is not a water entry.
 fn water_kind(entry: u32, row_scale: vec4<f32>) -> f32 {
-    if entry != 0u && row_scale.z > 16.5 && row_scale.z < 17.5 {
+    if entry != 0u && program_in(row_scale.z, 17u, 17u) {
         return row_scale.w;
     }
     return 0.0;

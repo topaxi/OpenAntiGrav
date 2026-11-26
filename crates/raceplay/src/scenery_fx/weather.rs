@@ -560,7 +560,7 @@ impl Weather {
         };
         self.pool
             .in_world(&anchor, effect.view_depth)
-            .extend_vertices(additive, alpha_over, effect, right, up, None);
+            .extend_vertices(additive, alpha_over, effect, right, up, psys::Cull::NONE);
     }
 }
 

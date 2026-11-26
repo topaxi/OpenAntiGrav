@@ -14,7 +14,7 @@ the five title crates (text only, no compiler) and fails when
   bools of `Weapons` (`autopilot_absorb_cancels`, `autopilot_pad_grants`,
   `pads_stamp_in_eliminator`, `launch_normal_is_track_up`,
   `floor_arms_steer_to_ride_point`, `floor_arms_ride_launch_normal`,
-  `plasma_release_at_display_scale`) and the
+  `plasma_release_at_display_scale`, `rocket_launch_at_display_scale`) and the
   `Sourced` count `leach_beams`.
 
 What it does not check, and the page says so: the provenance of a `Weapons`
@@ -58,6 +58,7 @@ EFFECT_ROWS = {
     "effects.detonator_mine_explo": "DetonatorMineExplo",
     "effects.detonator_bomb_explo": "DetonatorBombExplo",
     "effects.detonator_cannon_sparks": "DetonatorCannonSparks",
+    "effects.detonator_emp": "DetonatorEmp",
 }
 
 # Where each title's `Effects` are built. 2048 and Omega build them in lib.rs.
@@ -218,6 +219,7 @@ def code_cells() -> dict[str, dict[str, tuple[str, str | None]]]:
             "floor_arms_steer_to_ride_point",
             "floor_arms_ride_launch_normal",
             "plasma_release_at_display_scale",
+            "rocket_launch_at_display_scale",
         ):
             sourced = re.search(r"Sourced::(\w+)\(\s*(true|false)", weapons[field])
             if sourced is None:

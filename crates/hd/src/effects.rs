@@ -7,8 +7,8 @@
 //! the wreck are unread, so `None`.
 
 use oag_title::{
-    Burst, EffectSpec, Effects, Looks, Origin, Platforms, Rule, ShieldPalette, ShieldPalettes,
-    Trigger, engine_effects,
+    Burst, EffectSpec, Effects, Looks, NearLaw, Origin, Platforms, Rule, ShieldPalette,
+    ShieldPalettes, Trigger, engine_effects,
 };
 
 /// `FUN_000d9398`: six `absorb` locators, three mirrored pairs at `0.0`, `0.2`
@@ -147,6 +147,12 @@ pub const EFFECTS: &Effects = &{
     effects.far_bars = FAR_BARS;
     effects.templates = TEMPLATES;
     effects.turbulence = TURBULENCE;
+    // The `PartRender` SPU job, image `0x0080bb80`;
+    // `docs/ghidra/functions/ps3-hdfury-eu/particle-render.md`.
+    effects.near_law = Some(NearLaw::one_to_four(Origin::Measured));
+    // `Rocket_SpawnCraftBlast` (`0x0014a7d8`), `0x0014a970`-`0x0014a98c`;
+    // `docs/ghidra/functions/ps3-hdfury-eu/rocket-craft-blast.md`.
+    effects.craft_blast_carry = Some(Origin::Measured);
     effects
 };
 
@@ -194,18 +200,24 @@ const TEMPLATES: &[&str] = &[
 /// filament-ring atlas the colour ramp is authored against (`weapons.md`,
 /// "The Missile's red rings"), the ship explosion, whose root's black colour ramp is a blend
 /// weight, not a colour (`ship-destroy.md`, "`colour_mode` 3 is a blend toward the scene light"),
-/// and the Plasma's five, paired against the
-/// original phase by phase (`plasma.md`, "The pairs"). Every other HD effect
+/// the two trail hits, whose colour lives in the sprite (the red variant's ramp is near white,
+/// `engine-trail.md`, "The red variant's colour is in its sprites"),
+/// the Plasma's five, paired against the
+/// original phase by phase (`plasma.md`, "The pairs"), and the Rocket's craft
+/// hit, filmed against the original (`docs/rendering/particle-fill.md`,
+/// "Against the original at a near blast"). Every other HD effect
 /// still draws the procedural profile until a matched capture says its sprite
 /// reads right.
 const SPRITES: &[&str] = &[
     engine_effects::DETONATOR_CANNON_SPARKS_EFFECT,
     engine_effects::TRACK_BLAST_EFFECT,
+    engine_effects::CRAFT_BLAST_EFFECT,
     engine_effects::EXPLOSION_EFFECT,
     engine_effects::QUAKE_EFFECT,
     engine_effects::DETONATOR_EMP_EFFECT,
     engine_effects::MISSILE_FLARE_EFFECT,
     engine_effects::TRAIL_HITSHIP_EFFECT,
+    engine_effects::TRAIL_HITSHIP_RED_EFFECT,
     engine_effects::PLASMA_FLARE_EFFECT,
     engine_effects::PLASMA_CHARGING_EFFECT,
     engine_effects::PLASMA_LAUNCH_EFFECT,

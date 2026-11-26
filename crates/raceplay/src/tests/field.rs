@@ -144,6 +144,23 @@ fn an_opponents_rocket_is_owned_by_the_slot_that_fired_it() {
     }
 }
 
+/// The opponents' fire path takes the same title launch scale as the player's.
+#[test]
+fn an_opponents_rocket_leaves_at_the_titles_launch_scale() {
+    for (at_display_scale, scale) in [(true, 0.75), (false, 1.0)] {
+        let mut race = race_with_a_grid();
+        race.core.sim.weapons = Some(Arc::new(one_rocket_table()));
+        race.core.sim.rocket_launch_at_display_scale = at_display_scale;
+        assert!(race.core.sim.fire_opponent_rocket(3), "nothing was fired");
+        let speed = race.core.sim.world.projectiles.slots[0].velocity.length();
+        let expected = 600.0 * scale / oag_weapons::projectile::KMH_PER_UNIT_PER_SECOND;
+        assert!(
+            (speed - expected).abs() < 1e-2,
+            "at_display_scale {at_display_scale}: {speed}, wanted {expected}"
+        );
+    }
+}
+
 /// `Standing::distance` needs a closed ring to mean anything, and a guessed
 /// gap would put a craft half a lap away in the mirror.
 #[test]

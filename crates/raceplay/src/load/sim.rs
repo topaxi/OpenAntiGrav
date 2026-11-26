@@ -488,6 +488,10 @@ pub fn load_sim(options: &Options) -> Result<SimLoad> {
         laid_from_rear: craft_title.looks.laid_from_rear.applies_everywhere(),
         grid_frame_from_sample: extents,
         slot_teams: slot_teams.clone(),
+        row_teams: slot_teams
+            .iter()
+            .map(|id| craft_title.team_key(id))
+            .collect(),
         sight: super::Sighting::without_view(
             craft_of(&mut craft, &mut archives).layout.platform,
             craft_title,
@@ -552,6 +556,7 @@ pub fn load_sim(options: &Options) -> Result<SimLoad> {
         floor_arms_steer_to_ride_point: title.weapons.floor_arms_steer_to_ride_point.value,
         floor_arms_ride_launch_normal: title.weapons.floor_arms_ride_launch_normal.value,
         plasma_release_at_display_scale: title.weapons.plasma_release_at_display_scale.value,
+        rocket_launch_at_display_scale: title.weapons.rocket_launch_at_display_scale.value,
         own_craft_box_hides_track: title.weapons.own_craft_box_hides_track.value,
         reset_triggers: crate::respawn::reset_triggers_for(&title.reset_enables),
         contact_cues: title.contact_cues,

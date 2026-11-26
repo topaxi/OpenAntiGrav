@@ -55,7 +55,8 @@ pause screen where one applies). Online pause stays the maintainer's decision
   `Tournament Split` and `Zone P1`/`P2` screens are the model (`PauseMenu_BindRedirectForMode` on HD
   picks them per pad); the same drawer (`oag_ui_screens::pause`) takes them.
 - **Pulse `MusicList`**: built (`oag_ui::menu::music_list`, `docs/ui/pause-menu.md`), PSP and PS2 code read. Open,
-  PS2: the `--original-menu` still draws the PSP's six rows on PS2, so its QUIT RACE sits on the music row.
+  PS2: the `--original-menu` still draws the PSP's six rows on PS2 (the PS2's own screen lists four), so the
+  list stands under the sixth rather than at the original's `y`.
 - **Pulse GAME MANUAL, END SESSION (Speed Lap), SKIP (Tournament)**: authored, nothing behind them here.
 - **Pulse Tournament**: the screen is the static reading of the executable (conf 85); not walked live.
 - **ESCAPE** (and the phone Back) resumes: chosen, the original has no such button; CIRCLE on the root does nothing, as on the disc.

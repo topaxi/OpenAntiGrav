@@ -268,3 +268,11 @@
 # 2026-11-23 destroy-cameras-re: the race camera twins of HD's (../ps3-hdfury-eu/destroy-camera.md)
 0x01382720	function	Camera_SetMode	82	../ps3-hdfury-eu/destroy-camera.md
 0x01381c70	function	Camera_Update	78	../ps3-hdfury-eu/destroy-camera.md
+# 2026-11-25 zone-orbit-omega-read: the Zone end orbit's twins (../ps3-hdfury-eu/destroy-camera.md)
+0x01383a10	function	Camera_UpdateView	80	../ps3-hdfury-eu/destroy-camera.md
+0x01388d70	function	Camera_Construct	80	../ps3-hdfury-eu/destroy-camera.md
+
+0x0139a6b0	function	Rocket_HitCraft	75	../ps3-hdfury-eu/rocket-craft-blast.md
+0x01728780	function	Psys_SetInheritedVelocity	80	../ps3-hdfury-eu/rocket-craft-blast.md
+
+0x0133c150	function	EMP_DrawLights	85	../ps3-hdfury-eu/detonator-emp.md

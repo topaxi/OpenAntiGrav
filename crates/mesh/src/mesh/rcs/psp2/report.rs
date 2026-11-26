@@ -122,6 +122,11 @@ pub struct Report {
     /// Of that name, the ones left as the generic reading drew them (the program did not read as
     /// the ring's, a picture or a value was missing, or a submesh lacked a vertex pair).
     pub electricity_unread: usize,
+    /// `HD_Detonator_CannonBolt_Halo` materials (the Detonator cannon's bolt) drawn by their own
+    /// program - see `cannon_bolt`.
+    pub cannon_bolt_materials: usize,
+    /// Materials authoring the bolt's two samplers and `fresnelBase` that did not read.
+    pub cannon_bolt_unread: usize,
     /// Submeshes on a placeholder shader (`fc01_dummy`), drawn as the fog colour - see
     /// [`psp2::material::Material::is_placeholder`].
     pub placeholder_submeshes: usize,
@@ -195,6 +200,9 @@ pub struct Report {
     /// Of that family, materials left to the generic reading: no `Texture2Alpha`, no `Constant1`,
     /// or a picture that would not decode.
     pub emissive_add_unread: usize,
+    /// Weapon pad classes left on their material's own entry because the glow table is full:
+    /// their bars keep the authored colour.
+    pub pad_bars_unheld: usize,
     /// Omega's `tarmac_markings_dirt_markingsnormal[_emis]` roads that lay their dirt and
     /// markings pictures over the diffuse (`psp2::tarmac`).
     pub tarmac_materials: usize,
@@ -234,7 +242,8 @@ pub struct Report {
     /// Of those and the glow-less twin, the materials whose specular term is weighted by their
     /// `SpecularTexture` (bound third) and whose picture is `alpha_emissive`.
     pub alpha_emissive_specular_maps: usize,
-    /// `2048_shipshield_old` shells that draw their Lightning layer (`psp2::shield_lightning`).
+    /// `2048_shipshield_old` and `hd_shipshield_old` shells that draw their Lightning layer
+    /// (`psp2::shield_lightning`).
     pub shield_lightning_materials: usize,
     /// Of that family, shells left to the diffuse alone: no picture, weight or program rates.
     pub shield_lightning_unread: usize,
@@ -305,6 +314,14 @@ impl Report {
             format!(
                 "; {} electricity material(s) drawn by their own program (the GCN or USSE arithmetic read; on GCN the units' gamma inherited from HD), {} left as the generic reading",
                 self.electricity_materials, self.electricity_unread
+            )
+        };
+        let bolts = if self.cannon_bolt_materials + self.cannon_bolt_unread == 0 {
+            String::new()
+        } else {
+            format!(
+                "; {} cannon bolt material(s) drawn by their own program, {} left as the generic reading",
+                self.cannon_bolt_materials, self.cannon_bolt_unread
             )
         };
         let zone_colours = if self.zone_colour_submeshes == 0 {
@@ -429,6 +446,14 @@ impl Report {
                 self.emissive_add_materials, self.emissive_add_unread
             )
         };
+        let pad_bars = if self.pad_bars_unheld == 0 {
+            String::new()
+        } else {
+            format!(
+                "; {} weapon pad class(es) with no room in the glow table (authored bar colour)",
+                self.pad_bars_unheld
+            )
+        };
         let tarmac = if self.tarmac_materials + self.tarmac_unread == 0 {
             String::new()
         } else {
@@ -536,7 +561,7 @@ impl Report {
         let hull_colour = self.hull_colour.describe();
         format!(
             "{} triangle(s) over {} submesh(es), {texture}, {} authored \
-             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{placeholders}{zone_colours}{track_shapes}{scrolls}{twins}{holograms}{electricity}{tangents}{flipped}{lightmaps}{see_through}{nodes}{gnf}{lighting_only}{alpha_product}{flat_constants}{emissive_add}{tarmac}{crowd}{snow}{rock}{vertex_blend}{alpha_emissive}{lightning}{refraction}{uv_keys}{panel}{hull_colour}",
+             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{placeholders}{zone_colours}{track_shapes}{scrolls}{twins}{holograms}{electricity}{bolts}{tangents}{flipped}{lightmaps}{see_through}{nodes}{gnf}{lighting_only}{alpha_product}{flat_constants}{emissive_add}{pad_bars}{tarmac}{crowd}{snow}{rock}{vertex_blend}{alpha_emissive}{lightning}{refraction}{uv_keys}{panel}{hull_colour}",
             self.triangles, self.submeshes, self.authored_normals, self.unpaired
         )
     }

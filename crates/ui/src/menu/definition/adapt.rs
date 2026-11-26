@@ -556,11 +556,14 @@ impl Definition {
                 !matches!(entry.setting(), Some("race.kill_target" | "race.weapons"))
             });
         }
-        // The TARGET row is the score Eliminator's own: a title whose Eliminator ends on kills
-        // has the KILLS row (or none) and no slider to read.
+        // The TARGET row offers a score Eliminator's own slider: a title whose Eliminator ends
+        // on kills has the KILLS row (or none), and a score title with no slider has no steps.
         let scores = matches!(
             title.eliminator.value,
-            oag_title::eliminator::EliminatorRule::Score(_)
+            oag_title::eliminator::EliminatorRule::Score(oag_title::eliminator::ScoreRule {
+                target: oag_title::eliminator::ScoreTarget::Slider(_),
+                ..
+            })
         );
         if !scores && let Some(page) = self.pages.iter_mut().find(|page| page.id == "race") {
             page.retain_rows(|entry| entry.setting() != Some("race.score_target"));

@@ -138,8 +138,17 @@ fn decode_by_quad(data: &[u8], width: u32, height: u32) -> Vec<[u8; 4]> {
     let surface_h = height.max(MIN_SIDE) as usize;
     let (words_x, words_y) = (surface_w / WORD_SIDE, surface_h / WORD_SIDE);
     let mut surface = vec![[0u8; 4]; surface_w * surface_h];
+    let stored = |side: u32, words: usize| {
+        if side < MIN_SIDE {
+            (side as usize).div_ceil(WORD_SIDE).max(1)
+        } else {
+            words
+        }
+    };
+    let (stored_x, stored_y) = (stored(width, words_x), stored(height, words_y));
     let word_at = |x: usize, y: usize| -> Word {
-        let at = twiddle(x as u32, y as u32, words_x as u32, words_y as u32) as usize * WORD_LEN;
+        let (x, y) = (x % stored_x, y % stored_y);
+        let at = twiddle(x as u32, y as u32, stored_x as u32, stored_y as u32) as usize * WORD_LEN;
         let Some(bytes) = data.get(at..at + WORD_LEN) else {
             return Word::default();
         };
@@ -208,4 +217,23 @@ fn random_surfaces_decode_the_same_as_the_word_by_word_path() {
             );
         }
     }
+}
+
+/// A level one word wide holds its words in order down the column: each word's own colour
+/// stands at its own rows. Read as if padded to two words wide, the second and fourth rows
+/// of words would be the third word and a zero one.
+#[test]
+fn a_one_word_wide_level_reads_its_own_words_down_the_column() {
+    let reds = [0u32, 10, 20, 31];
+    let data: Vec<u8> = reds
+        .iter()
+        .flat_map(|&r| word(0x8000_0000 | (r << 10), 0))
+        .collect();
+    let out = decode_ii_4bpp(&data, 4, 16).expect("decodes");
+    let at_centres: Vec<u8> = (0..4).map(|y| out[(y * 4 + 2) * 4 + 2][0]).collect();
+    let alone: Vec<u8> = reds
+        .iter()
+        .map(|&r| decode(0x8000_0000 | (r << 10), 0)[0][0])
+        .collect();
+    assert_eq!(at_centres, alone);
 }

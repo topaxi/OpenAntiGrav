@@ -120,6 +120,9 @@ pub fn finish_definition(
     definition.drop_unavailable_weather(title);
     // And the RUMBLE row's `original` value, where the original plays patterns: HD and Omega.
     definition.drop_unavailable_rumble_original(title);
+    // And the TEXTURE COMPRESSION row, unless the device lacks BC and samples ASTC; kept while
+    // no device exists yet, and trimmed again once one does (`Stage::loading`).
+    crate::texture_cache::trim_row(definition, crate::texture_cache::offered());
     // And the WATER row's borrowed laws, where the lender's disc is absent or is this title.
     crate::water_setting::trim_row(definition, title, present);
     // And the three rows the race box's own screens pick, on a title

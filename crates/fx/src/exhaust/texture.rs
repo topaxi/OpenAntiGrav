@@ -21,6 +21,25 @@ pub struct FlareTexture {
 }
 
 impl FlareTexture {
+    /// The mean colour of the texels, `0..1`, weighted by their alpha. White for a texture with
+    /// no coverage at all, which carries no hue.
+    #[must_use]
+    pub fn mean_rgb(&self) -> [f32; 3] {
+        let (mut sum, mut weight) = ([0.0f32; 3], 0.0f32);
+        for texel in self.rgba.as_chunks::<4>().0 {
+            let alpha = f32::from(texel[3]);
+            for (c, total) in sum.iter_mut().enumerate() {
+                *total += f32::from(texel[c]) * alpha;
+            }
+            weight += alpha;
+        }
+        if weight > 0.0 {
+            sum.map(|c| c / weight / 255.0)
+        } else {
+            [1.0; 3]
+        }
+    }
+
     /// A soft radial glow, for when the disc's own texture is unavailable.
     ///
     /// Used by tests and by the headless capture path. **Not** a silent

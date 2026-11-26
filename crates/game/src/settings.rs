@@ -6,6 +6,12 @@
 //! version never wrote. A CLI flag still wins over whatever is on disk for
 //! that one run; see `--anisotropy` in `app.rs`.
 //!
+//! # Music profiles
+//!
+//! `[music_profiles."<title>"]` is each title's music choice (`music_profile`). It was
+//! one value in `[audio]`, which [`load`] copies into every title's table
+//! (`music_profile::migrate_music_profiles`).
+//!
 //! # Display against graphics against render profiles
 //!
 //! Three tables:
@@ -63,6 +69,7 @@ use oag_mesh::mesh_render::Anisotropy;
 
 mod controls;
 pub mod ffmpeg;
+mod music_profile;
 mod online;
 pub mod platform;
 pub mod player;
@@ -76,6 +83,7 @@ pub use online::Online;
 pub use player::Player;
 pub use race::Race;
 pub mod mod_settings;
+use music_profile::migrate_music_profiles;
 pub use render_profile::{RenderProfile, SCREEN_FILTER_OFF, profile_key};
 use render_profile::{
     ensure_known_titles, migrate_platform_split, migrate_reconstruction_keys,
@@ -124,6 +132,9 @@ pub struct Settings {
     pub render_profiles: BTreeMap<String, RenderProfile>,
     #[serde(default)]
     pub audio: oag_sound::settings::Settings,
+    /// Each title's music choice, keyed by `Title::name` (`music_profile`).
+    #[serde(default)]
+    pub music_profiles: BTreeMap<String, oag_sound::settings::MusicProfile>,
     #[serde(default)]
     pub source: Source,
     #[serde(default)]
@@ -569,6 +580,15 @@ pub struct Graphics {
     /// `docs/formats/hd-hud.md`.
     #[serde(default)]
     pub hud_safe_area: Option<u8>,
+    /// What a disc's BC texture becomes on a device that cannot sample BC: `original`
+    /// (decoded to RGBA8) or `astc` (re-encoded as ASTC 4x4 into the texture cache).
+    ///
+    /// **Inert on a device with BC**, and its row is shown only on one that lacks BC and
+    /// samples ASTC (`oag_mesh::mesh_render::astc::offered`). Read by the next race load.
+    /// See [`oag_display::display::TextureCompression`] and
+    /// `docs/rendering/texture-compression.md`.
+    #[serde(default)]
+    pub texture_compression: oag_display::display::TextureCompression,
     /// Whether the track's draw calls are tested against the camera's view
     /// frustum before being submitted, skipping the ones entirely outside it.
     ///
@@ -744,6 +764,7 @@ impl Default for Graphics {
             perf_overlay: oag_present::perf::Overlay::default(),
             hud_scale: oag_display::display::HudScale::default(),
             hud_safe_area: None,
+            texture_compression: oag_display::display::TextureCompression::default(),
             frustum_culling: default_frustum_culling(),
             pvs_culling: default_pvs_culling(),
             boost_fov_kick: default_boost_fov_kick(),
@@ -1004,6 +1025,7 @@ fn load_from(path: &std::path::Path) -> Result<Settings> {
 
             check_header(path, &table);
             migrate(&mut table);
+            migrate_music_profiles(&mut table);
             migrate_render_profiles(&mut table);
             // After it, not before - see `migrate_reconstruction_keys`.
             migrate_reconstruction_keys(&mut table);
@@ -1216,6 +1238,10 @@ pub fn menu_seeds(
         ("graphics.anisotropy", text(&anisotropy.to_string())),
         ("graphics.fov", text(&settings.graphics.fov.to_string())),
         (
+            "graphics.texture_compression",
+            text(&settings.graphics.texture_compression.to_string()),
+        ),
+        (
             "graphics.perf_overlay",
             text(&settings.graphics.perf_overlay.to_string()),
         ),
@@ -1303,7 +1329,7 @@ pub fn menu_seeds(
         ),
         (
             "audio.music_source",
-            text(&settings.audio.music_source.to_string()),
+            text(&settings.music_source(Some(title)).to_string()),
         ),
         (
             "audio.spatial_audio",
@@ -1451,3 +1477,6 @@ mod menu_back_tests;
 
 #[cfg(test)]
 mod photo_profile_tests;
+
+#[cfg(test)]
+mod seed_key_tests;

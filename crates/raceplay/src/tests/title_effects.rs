@@ -167,8 +167,6 @@ fn each_trigger_is_answered_by_exactly_the_titles_that_read_it() {
         Trigger::DetonatorMineExploDead,
         Trigger::DetonatorMineExplo,
         Trigger::DetonatorBombExplo,
-        Trigger::DetonatorCannonSparks,
-        Trigger::DetonatorEmp,
     ] {
         assert_eq!(
             has(detonator),
@@ -176,6 +174,13 @@ fn each_trigger_is_answered_by_exactly_the_titles_that_read_it() {
             "{detonator:?}"
         );
     }
+    // The EMP's wave: HD's, 2048's and Omega's own EMP launches spawn `WO_QUAKE_DETONATOR`.
+    assert_eq!(has(Trigger::DetonatorEmp), [true, false, true, true, true]);
+    // The cannon's wall spark: HD's, 2048's and Omega's own `PulseBullet` updates spawn it.
+    assert_eq!(
+        has(Trigger::DetonatorCannonSparks),
+        [false, false, true, true, true]
+    );
     // Pure's laid Bomb glow and Disruptor bolt are read on its executable alone.
     for own in [
         Trigger::BombGlow,

@@ -577,7 +577,7 @@ pub struct RaceSetup {
     pub kill_targets: Vec<String>,
     /// The `TARGET` row's values on a title whose Eliminator ends on a score: the
     /// `Eliminations` slider's steps (`200` to `600` by `20` on HD), read off the file the
-    /// score rule names ([`oag_title::eliminator::ScoreRule::race_setup`]). Empty elsewhere.
+    /// score rule names ([`oag_title::eliminator::ScoreTarget::Slider`]). Empty elsewhere.
     pub score_targets: Vec<String>,
     /// The `Weapons` list as `(string id, value)`: `("FE_ON", "On")` then
     /// `("FE_OFF", "Off")` on Pulse. The value is what the original's
@@ -611,8 +611,10 @@ pub(super) fn read_race_setup(
     report: &mut Vec<String>,
 ) -> RaceSetup {
     let mut setup = read_setup_lists(archives, front_end.race_setup, report);
-    if let oag_title::eliminator::EliminatorRule::Score(rule) = title.eliminator.value {
-        setup.score_targets = read_score_targets(archives, rule.race_setup, report);
+    if let oag_title::eliminator::EliminatorRule::Score(rule) = title.eliminator.value
+        && let oag_title::eliminator::ScoreTarget::Slider(path) = rule.target
+    {
+        setup.score_targets = read_score_targets(archives, path, report);
     }
     setup
 }

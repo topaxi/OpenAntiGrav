@@ -85,6 +85,8 @@ pub(crate) use texture_sink::offer as offer_to_texture_sink;
 pub use texture_sink::without_scope as without_texture_sink;
 pub mod zone;
 
+#[cfg(not(target_arch = "wasm32"))]
+pub mod astc;
 mod device;
 pub use device::{device_descriptor, optional_features, required_limits};
 
@@ -479,6 +481,13 @@ pub fn build_with(
     ));
     if !specialise::programs_present(model) {
         constants.push(("programs_present", 0.0));
+    }
+    // Only a circuit's: its pipelines are its own, where a craft's or a weapon's are shared
+    // with every model whose other constants agree.
+    if prepass {
+        let (programs, rates) = specialise::row_codes(model);
+        constants.push(("program_codes", f64::from(programs)));
+        constants.push(("rate_codes", f64::from(rates)));
     }
     constants.extend(pipeline_cache::scope_constants());
     if pipeline_cache::scope_craft() {

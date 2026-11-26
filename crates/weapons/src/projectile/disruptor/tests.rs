@@ -94,7 +94,7 @@ fn tick(
         "VENOM",
         crate::projectile::FloorArms::SteerToRidePoint,
         crate::projectile::OwnCraftProbe::PlasmaWindow(0.04),
-        crate::projectile::PlasmaRelease::DisplayScaled,
+        crate::projectile::LaunchScale::DisplayScaled,
     )[0]
 }
 

@@ -138,25 +138,23 @@ impl RowInk {
     pub fn measure(atlas: &crate::font::Atlas) -> Option<Self> {
         let mut top = u32::MAX;
         let mut bottom = 0;
-        for cell in ('A'..='Z').filter_map(|ch| atlas.cell(ch)) {
-            for row in 0..cell.height {
-                let start = ((cell.y + row) * atlas.width + cell.x) as usize;
-                // `get`, not an index: a glyph box past the atlas's own
-                // pixels is a face's problem to report, not a boot panic.
-                let Some(span) = atlas.coverage.get(start..start + cell.width as usize) else {
-                    continue;
-                };
-                let inked = span.iter().any(|&alpha| alpha > 0);
-                if inked {
-                    top = top.min(row);
-                    bottom = bottom.max(row + 1);
-                }
-            }
+        for (first, end) in ('A'..='Z').filter_map(|ch| glyph_rows(atlas, ch)) {
+            top = top.min(first);
+            bottom = bottom.max(end);
         }
         (bottom > 0).then_some(Self {
             top: top as f32,
             bottom: bottom as f32,
         })
+    }
+
+    /// Where `atlas`'s capitals stand, in layout units below a line's pen at
+    /// scale 1: the foot of its `H`, which is flat. [`Self::bottom`] also
+    /// takes in the tails under the line (`Q`), so it is not this. `None`
+    /// for a face with no inked `H`.
+    #[must_use]
+    pub fn baseline(atlas: &crate::font::Atlas) -> Option<f32> {
+        glyph_rows(atlas, 'H').map(|(_, end)| end as f32 * atlas.texel_scale)
     }
 
     /// The top edge of a band `pitch` tall centred on the ink of a line
@@ -165,6 +163,24 @@ impl RowInk {
     pub fn band_top(self, y: f32, scale: f32, pitch: f32) -> f32 {
         y + (self.top + self.bottom) * 0.5 * scale - pitch * 0.5
     }
+}
+
+/// The first row of `ch`'s cell with any coverage and one past the last, in
+/// the atlas's texels.
+fn glyph_rows(atlas: &crate::font::Atlas, ch: char) -> Option<(u32, u32)> {
+    let cell = atlas.cell(ch)?;
+    let inked = |row: &u32| {
+        let start = ((cell.y + row) * atlas.width + cell.x) as usize;
+        // `get`, not an index: a glyph box past the atlas's own
+        // pixels is a face's problem to report, not a boot panic.
+        atlas
+            .coverage
+            .get(start..start + cell.width as usize)
+            .is_some_and(|span| span.iter().any(|&alpha| alpha > 0))
+    };
+    let first = (0..cell.height).find(inked)?;
+    let last = (0..cell.height).rev().find(inked)?;
+    Some((first, last + 1))
 }
 
 /// Whether `point` lies inside `rect`, which is `[x, y, width, height]` -
@@ -294,6 +310,19 @@ mod tests {
     /// The built-in set's capitals fill their 5x7 box from row 0, so its
     /// band is the box; a face with room above the cap line gets its band
     /// moved down to the cap.
+    /// The baseline is `H`'s foot, not the lowest tail among the capitals, in layout units.
+    #[test]
+    fn the_baseline_is_the_h_and_follows_the_texel_scale() {
+        let atlas = crate::font::Atlas::build();
+        let ink = RowInk::measure(&atlas).expect("the built-in set has ink");
+        let baseline = RowInk::baseline(&atlas).expect("the built-in set has an H");
+        assert!(baseline <= ink.bottom && baseline > ink.top);
+        assert_eq!(
+            RowInk::baseline(&atlas.with_texel_scale(0.5)),
+            Some(baseline * 0.5)
+        );
+    }
+
     #[test]
     fn row_ink_reads_the_capitals_and_centres_the_band_on_them() {
         let ink = RowInk::measure(&crate::font::Atlas::build()).expect("the built-in set has ink");

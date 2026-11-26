@@ -488,6 +488,7 @@ pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
         stages: 15,
     }),
     cannon_lights: true,
+    emp_light: true,
     ammo_gauge: Some(DETONATOR_AMMO_GAUGE),
     hull_charge: Some(DETONATOR_HULL_CHARGE),
     camera_scale: 0.7,

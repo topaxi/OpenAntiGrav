@@ -215,6 +215,11 @@ impl App {
     /// The session on a device that is already up: the second half of [`Self::open`], and what
     /// `--drive` calls with a device that has no window (`crate::app::drive`).
     pub(crate) fn open_with(&mut self, gpu: Gpu) -> Result<Option<Box<Session>>> {
+        // The boot built its menu before this device existed, so the hardware-only rows are
+        // trimmed here, the first moment the device can answer.
+        if let Some(shell) = self.shell.as_mut() {
+            crate::texture_cache::trim_row(&mut shell.definition, crate::texture_cache::offered());
+        }
         // Built before the stage, because a race's depth attachment has to match
         // this rather than the window. On the launcher and boot legs it is too
         // early to know a title to resolve `settings.render_profiles` against,
@@ -317,7 +322,7 @@ impl App {
             crate::sound::hold_race_song(&mut audio, loaded.title);
             audio.start_race_music(
                 &self.music_discs,
-                self.settings.audio.music_source,
+                self.settings.music_source(self.race_title),
                 &oag_source::cache::default_audio_cache_dir(),
             );
             let ai_difficulty = loaded.setup.difficulty;

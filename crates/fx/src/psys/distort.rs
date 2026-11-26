@@ -20,7 +20,7 @@
 use oag_core::math::Vec3;
 use oag_mesh::mesh::GpuVertex;
 
-use super::{Blend, Effect, Render, Stage, System, billboard, channel_sample};
+use super::{Blend, Cull, Effect, Render, Stage, System, billboard, channel_sample, near};
 
 impl System {
     /// This frame's [`Blend::Distort`] quads, appended to `out`.
@@ -30,6 +30,7 @@ impl System {
         effect: &Effect,
         right: Vec3,
         up: Vec3,
+        cull: Cull<'_>,
     ) {
         for particle in &self.particles {
             if !particle.alive() {
@@ -46,6 +47,10 @@ impl System {
             let half = channel_sample(&spec.size, age, particle.size_sample) * particle.scale;
             let alpha =
                 channel_sample(&spec.alpha, age, particle.alpha_sample) / spec.colour_divisor;
+            let Some((half, alpha)) = near::apply(effect, spec, particle, cull.near, half, alpha)
+            else {
+                continue;
+            };
             let k = spec.distort_strength;
             out.extend_from_slice(&billboard(
                 spec,
@@ -63,14 +68,20 @@ impl System {
 
 impl Stage {
     /// Every playing instance's [`Blend::Distort`] quads, appended to `out`.
-    pub fn extend_distort_vertices(&self, out: &mut Vec<GpuVertex>, right: Vec3, up: Vec3) {
+    pub fn extend_distort_vertices(
+        &self,
+        out: &mut Vec<GpuVertex>,
+        right: Vec3,
+        up: Vec3,
+        cull: Cull<'_>,
+    ) {
         for instance in &self.instances {
             let Some(effect) = instance.effect.as_deref() else {
                 continue;
             };
             instance
                 .system
-                .extend_distort_vertices(out, effect, right, up);
+                .extend_distort_vertices(out, effect, right, up, cull);
         }
     }
 }

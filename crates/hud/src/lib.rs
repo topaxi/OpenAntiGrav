@@ -70,6 +70,7 @@ pub mod player_tags;
 pub mod race_line;
 pub mod radar;
 mod runtime;
+mod score_over;
 pub mod score_rows;
 pub mod screen_layout;
 mod shield_bar;

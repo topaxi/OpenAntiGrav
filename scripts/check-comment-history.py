@@ -96,7 +96,7 @@ BASELINE: dict[str, int] = {
     "ui-screens": 45,
     "vex": 2,
     "view": 2,
-    "weapons": 32,
+    "weapons": 30,
 }
 
 URL = re.compile(r"https?://\S+")

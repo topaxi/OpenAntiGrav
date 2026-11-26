@@ -23,8 +23,9 @@ aarch64-apple-ios -p oag-game` passes on Linux; the job has never run (checked w
   CoreAudio session, the Files-app `Documents/data/images` path, the empty launch screen.
 - **Signing**: only the free-Apple-ID/AltStore route is documented; TestFlight needs a
   paid account, a profile and an upload step, none started.
-- **Memory**: no BC on Apple GPUs, so textures take the CPU-decode to RGBA8 path; see
-  `rendering/texture-compression-only-covers-bc-astc-is-the.md`. A phone may not fit a race.
+- **Memory**: no BC on Apple's iOS GPUs, so textures take the CPU-decode to RGBA8 path by
+  default; the opt-in `astc` TEXTURE COMPRESSION row is a quarter of that
+  (`docs/rendering/texture-compression.md`), never run on an iPhone. A phone may not fit a race.
 - **Input**: no gamepad (`gilrs` has no iOS backend), no on-screen keyboard, no
   safe-area insets (notch).
 - **Publishing**: the nightly does not include the `.ipa`; add `ios` to

@@ -8,6 +8,36 @@ use oag_mesh::mesh::GpuVertex;
 
 use crate::Race;
 
+/// Vertices per particle quad: two triangles, `oag_fx::psys`'s `quad`.
+const QUAD: usize = 6;
+
+/// Removes, in place and in order, every quad whose colour alpha is exactly 0 at all six vertices.
+///
+/// A rocket that strikes a craft near the camera stacks dozens of screens of particle fill at
+/// full resolution (`docs/rendering/particle-fill.md`), and a fading particle spends the end of
+/// its life at colour alpha exactly 0, still drawn. `psys.wesl` multiplies its output alpha by
+/// the interpolated vertex alpha, so such a quad writes `dst` back under both of its blends (the
+/// additive's `rgb * a`, the over's `a` and `1 - a`) and writes no depth or velocity. One live
+/// corner keeps the quad. Order is kept, because the over blend is not commutative. A list that
+/// is not whole quads is left alone.
+fn drop_dead_quads(vertices: &mut Vec<GpuVertex>) {
+    if !vertices.len().is_multiple_of(QUAD) {
+        return;
+    }
+    let mut kept = 0;
+    for start in (0..vertices.len()).step_by(QUAD) {
+        if vertices[start..start + QUAD]
+            .iter()
+            .all(|v| v.colour[3] == 0.0)
+        {
+            continue;
+        }
+        vertices.copy_within(start..start + QUAD, kept);
+        kept += QUAD;
+    }
+    vertices.truncate(kept);
+}
+
 impl super::super::Scene {
     /// Gathers and uploads this frame's particle geometry.
     ///
@@ -27,12 +57,15 @@ impl super::super::Scene {
     ) {
         race.extend_spark_vertices(additive, alpha, right, up);
         race.extend_stage_vertices(additive, alpha, right, up);
+        drop_dead_quads(additive);
+        drop_dead_quads(alpha);
         let mut pipeline = self.sparks.borrow_mut();
         // The effects' own sprites - a no-op after the first frame of a race.
         pipeline.sync_sheet(queue, race.view.effects.sheet());
         pipeline.upload(queue, vp, race.view.draw_alpha(), additive, alpha);
         let mut underlay = Vec::new();
         race.extend_underlay_vertices(&mut underlay, right, up);
+        drop_dead_quads(&mut underlay);
         pipeline.upload_underlay(queue, &underlay);
         let mut distort = Vec::new();
         race.extend_distort_vertices(&mut distort, right, up);
@@ -93,5 +126,55 @@ impl super::super::Scene {
             rect,
             offsets,
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{GpuVertex, QUAD, drop_dead_quads};
+
+    /// One quad whose six corners all carry `colour`, tagged by `x` so order can be read back.
+    fn quad(x: f32, colour: [f32; 4]) -> [GpuVertex; QUAD] {
+        [GpuVertex {
+            position: [x, 0.0, 0.0],
+            colour,
+            ..bytemuck::Zeroable::zeroed()
+        }; QUAD]
+    }
+
+    fn tags(vertices: &[GpuVertex]) -> Vec<f32> {
+        vertices.chunks(QUAD).map(|q| q[0].position[0]).collect()
+    }
+
+    #[test]
+    fn a_quad_with_alpha_zero_is_dropped_and_the_rest_keep_their_order() {
+        let mut vertices: Vec<GpuVertex> = [
+            quad(1.0, [1.0, 0.5, 0.2, 0.8]),
+            quad(2.0, [1.0, 0.5, 0.2, 0.0]),
+            // Black smoke with alpha darkens what is behind it under the over blend.
+            quad(3.0, [0.0, 0.0, 0.0, 0.7]),
+            quad(4.0, [1.0, 1.0, 1.0, 0.0]),
+            quad(5.0, [0.3, 0.3, 0.3, 0.1]),
+        ]
+        .concat();
+        drop_dead_quads(&mut vertices);
+        assert_eq!(tags(&vertices), [1.0, 3.0, 5.0]);
+    }
+
+    #[test]
+    fn one_live_corner_keeps_the_quad() {
+        let mut fading = quad(2.0, [1.0, 1.0, 1.0, 0.0]);
+        fading[5].colour[3] = 0.25;
+        let mut vertices = fading.to_vec();
+        drop_dead_quads(&mut vertices);
+        assert_eq!(tags(&vertices), [2.0]);
+    }
+
+    #[test]
+    fn a_list_that_is_not_whole_quads_is_left_alone() {
+        let mut ragged = quad(1.0, [1.0, 1.0, 1.0, 0.0]).to_vec();
+        ragged.pop();
+        drop_dead_quads(&mut ragged);
+        assert_eq!(ragged.len(), QUAD - 1);
     }
 }

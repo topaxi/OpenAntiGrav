@@ -6,7 +6,7 @@
 //! `docs/rendering/hd-unlit-programs.md`, "The Detonator cannon bolt"). The vertex program splits
 //! one `float4` attribute: `.xy` (`uv0`) to `TC0.w`/`TC1.w`, `.zw` (`uv1`) to `TC3`. With `t` the
 //! engine clock, unit 0 `hd_detonator_cannonbolt` (a blue band, a cloud in its alpha), unit 1
-//! `hd_detonator_cannonbolt_glow` (a 4x128 strip whose alpha is eight rings brightening along `v`)
+//! `hd_detonator_cannonbolt_glow` (a 4x128 strip whose alpha is eight rings, brightest at `v = 0`)
 //! and `fB` the model's `fresnelBase`:
 //!
 //! ```text
@@ -19,7 +19,8 @@
 //! ```
 //!
 //! Matched by what the program declares and the literals it authors, never by the material's
-//! name. [`PROGRAM_CANNON_BOLT`] draws it; the entry's offset is `fB`.
+//! name. [`PROGRAM_CANNON_BOLT`] draws it; the entry's offset is `fB` and its tint the
+//! program's. 2048's and Omega's programs are `super::psp2`'s `cannon_bolt`.
 
 use std::sync::Arc;
 
@@ -149,7 +150,7 @@ pub(super) fn cannon_bolt(
             continue;
         }
         table.push(Emissive {
-            tint: [0.0; 3],
+            tint: [LITERALS[6][1], LITERALS[6][2], LITERALS[6][3]],
             offset: fresnel,
             scale: 0.0,
             rate: 0.0,

@@ -23,11 +23,13 @@ fn only_hd_lists_effects_whose_gtf_sprites_play() {
         [
             oag_title::engine_effects::DETONATOR_CANNON_SPARKS_EFFECT,
             oag_title::engine_effects::TRACK_BLAST_EFFECT,
+            oag_title::engine_effects::CRAFT_BLAST_EFFECT,
             oag_title::engine_effects::EXPLOSION_EFFECT,
             oag_title::engine_effects::QUAKE_EFFECT,
             oag_title::engine_effects::DETONATOR_EMP_EFFECT,
             oag_title::engine_effects::MISSILE_FLARE_EFFECT,
             oag_title::engine_effects::TRAIL_HITSHIP_EFFECT,
+            oag_title::engine_effects::TRAIL_HITSHIP_RED_EFFECT,
             oag_title::engine_effects::PLASMA_FLARE_EFFECT,
             oag_title::engine_effects::PLASMA_CHARGING_EFFECT,
             oag_title::engine_effects::PLASMA_LAUNCH_EFFECT,
@@ -41,16 +43,29 @@ fn only_hd_lists_effects_whose_gtf_sprites_play() {
     }
 }
 
-/// Only HD and Pure lift the extent law: both for the Quake's wave, the one effect a
-/// matched capture of the original has shown spreading across the road on each (Pure's
-/// `Quake_Update`, `psp-pure-usa/quake.md`), and HD for the Detonator EMP's wave, its blue
+/// The extent law is lifted per effect. HD and Pure lift it for the Quake's wave, the one effect
+/// a matched capture of the original has shown spreading across the road on each (Pure's
+/// `Quake_Update`, `psp-pure-usa/quake.md`); HD also for the Detonator EMP's wave, its blue
 /// recolour (`ps3-hdfury-eu/detonator-emp.md`, "What HD draws for a fired EMP"), and the
-/// Plasma blast's two lightning effects besides (`ps3-hdfury-eu/plasma.md`, "The pairs").
+/// Plasma blast's two lightning effects (`ps3-hdfury-eu/plasma.md`, "The pairs"). 2048 and Omega
+/// list the EMP's wave alone, as HD's does (`detonator-emp.md`, "2048 and Omega draw it").
 #[test]
-fn only_hd_and_pure_lift_the_extent_law_and_only_for_the_quake_and_hds_plasma_blast() {
+fn the_extent_law_is_lifted_only_for_the_effects_each_title_lists() {
     use oag_title::engine_effects as n;
-    for title in [oag_pulse::TITLE, oag_2048::TITLE, oag_omega::TITLE] {
-        assert!(title.effects.extents.is_empty(), "{}", title.name);
+    assert!(oag_pulse::TITLE.effects.extents.is_empty());
+    for title in [oag_2048::TITLE, oag_omega::TITLE] {
+        assert_eq!(
+            title.effects.extents,
+            [n::DETONATOR_EMP_EFFECT],
+            "{}",
+            title.name
+        );
+        assert_eq!(
+            title.effects.turbulence,
+            [n::DETONATOR_EMP_EFFECT],
+            "{}",
+            title.name
+        );
     }
     assert_eq!(oag_pure::TITLE.effects.extents, [n::QUAKE_EFFECT]);
     assert_eq!(
@@ -62,7 +77,12 @@ fn only_hd_and_pure_lift_the_extent_law_and_only_for_the_quake_and_hds_plasma_bl
             n::PLASMA_LIGHTNING_COLLAPSE_EFFECT,
         ]
     );
-    for title in [oag_hd::TITLE, oag_pure::TITLE] {
+    for title in [
+        oag_hd::TITLE,
+        oag_pure::TITLE,
+        oag_2048::TITLE,
+        oag_omega::TITLE,
+    ] {
         let names = title.effects.names();
         for listed in title.effects.extents {
             assert!(names.contains(listed), "{listed} is loaded by the race");
@@ -241,16 +261,21 @@ fn trail_hit_burst(listed: bool) -> Option<oag_fx::psys::Effect> {
     Some(effect)
 }
 
-/// HD, 2048 and Omega list the trail-hit burst for HD's class-6 bar draw, and HD the
-/// Detonator wall spark's three streaks, the EMP's sparks and the Plasma's five effects, whose lightning is that class; a per-effect
-/// choice, not a title-wide one.
+/// HD, 2048 and Omega list the trail-hit burst, the Detonator wall spark's three streaks and the
+/// EMP's sparks for HD's class-6 bar draw, and HD the Plasma's five effects, whose lightning is
+/// that class; a per-effect choice, not a title-wide one.
 #[test]
 fn hd_2048_and_omega_list_the_trail_hit_burst_for_the_far_bar_draw_and_hd_its_plasma() {
     use oag_title::engine_effects as n;
     for title in [oag_2048::TITLE, oag_omega::TITLE] {
         assert_eq!(
             title.effects.far_bars,
-            [n::TRAIL_HITSHIP_EFFECT, n::TRAIL_HITSHIP_RED_EFFECT],
+            [
+                n::TRAIL_HITSHIP_EFFECT,
+                n::TRAIL_HITSHIP_RED_EFFECT,
+                n::DETONATOR_CANNON_SPARKS_EFFECT,
+                n::DETONATOR_EMP_EFFECT,
+            ],
             "{}",
             title.name
         );
@@ -353,4 +378,71 @@ fn the_emp_sparks_feel_their_noise_force_only_where_the_title_lists_it() {
     let mut unlisted_effects = *title.effects;
     unlisted_effects.turbulence = &[];
     assert!(!load(&mut archives, &unlisted_effects).has_turbulence());
+}
+
+/// A Rocket that reaches a craft plays HD's `WO_ROCKET_EXPLO` with the disc's own
+/// sprites, every one of the twelve on the particle sheet.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn a_forced_rocket_hit_plays_the_craft_blast_with_its_sprites() {
+    use oag_gameplay::input::{Button, Input};
+    use oag_gameplay::{InputSnapshot, PlayerInputs};
+
+    let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let loaded = crate::load(&crate::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::SingleRace,
+        ..crate::Options::default()
+    })
+    .expect("loading an HD race");
+    let mut race = crate::Race::start(loaded.setup, loaded.view, loaded.modules);
+    let held = |before: u32, now: u32| {
+        let mut buttons = Input::new();
+        buttons.begin_frame(before);
+        buttons.begin_frame(now);
+        PlayerInputs::single(InputSnapshot {
+            buttons,
+            ..InputSnapshot::new()
+        })
+    };
+    for _ in 0..oag_race::COUNTDOWN_TICKS + 10 {
+        race.tick(&held(0, 0));
+    }
+    race.core.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Rocket);
+    race.tick(&held(0, Button::Square.bit()));
+    for _ in 0..3 {
+        race.tick(&held(0, 0));
+    }
+    let blast = race
+        .effect_for_tests(oag_title::Trigger::CraftBlast)
+        .expect("HD loads the craft blast");
+    assert_eq!(race.view.stage.alive_of_effect(&blast), 0, "no blast yet");
+    assert_eq!(
+        blast.emitters.len(),
+        12,
+        "WO_ROCKET_EXPLO's twelve emitters"
+    );
+    for spec in &blast.emitters {
+        assert!(spec.sprite.is_some(), "{} has no sprite", spec.name);
+    }
+    assert_eq!(
+        blast.unplaced_sprites().collect::<Vec<_>>(),
+        Vec::<&str>::new()
+    );
+    let before = race.core.sim.world.ships[1].physics.shield;
+    assert!(race.core.sim.force_rocket_hit(1), "a Rocket is in flight");
+    for _ in 0..3 {
+        race.tick(&held(0, 0));
+    }
+    assert!(
+        race.core.sim.world.ships[1].physics.shield < before,
+        "rival 1 took no damage"
+    );
+    assert!(
+        race.view.stage.alive_of_effect(&blast) > 0,
+        "the craft blast is not playing"
+    );
 }

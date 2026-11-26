@@ -11,6 +11,7 @@
 
 mod rcsmodel_common;
 
+mod cannon_bolt_ground_truth;
 mod coverage_ground_truth;
 mod gcn_ground_truth;
 mod gxp_electricity_ground_truth;

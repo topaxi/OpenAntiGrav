@@ -181,6 +181,9 @@ pub const TITLE: &Title = &Title {
         // Measured live: a bolt flies 187.5 units/s until its first ride, then 250
         // (`psp-pure-usa/floor-follow.md`).
         plasma_release_at_display_scale: oag_title::pre_race::Sourced::measured(true),
+        // Measured live: 208.3 units/s until the first ride, then 277.8
+        // (`psp-pure-usa/floor-follow.md`).
+        rocket_launch_at_display_scale: oag_title::pre_race::Sourced::measured(true),
         // Pulse's raycast, gate and box; a box hit runs no arm (`psp-pure-usa/own-craft-box.md`).
         own_craft_box_hides_track: oag_title::pre_race::Sourced::measured(
             oag_title::weapons::OwnCraftBox::Holds,

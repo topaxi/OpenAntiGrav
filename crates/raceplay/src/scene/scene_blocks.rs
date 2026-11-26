@@ -68,6 +68,17 @@ impl Scene {
         for drawable in self.flares.iter_mut().chain(&mut self.boost).flatten() {
             drawable.share_scene(device, blocks, SceneKind::Flame);
         }
+        // The shield shell and cockpit sphere scroll on the shader's clock (`PROGRAM_SHIELD_LIGHTNING`,
+        // `own_shield.wesl`). Their drawables' own block stays `Scene::off` with `time` at zero, so
+        // they read the flame's: `Scene::off` plus the clock, and nothing else moves.
+        for drawable in self
+            .shield
+            .iter_mut()
+            .chain([&mut self.shield_cockpit])
+            .flatten()
+        {
+            drawable.share_scene(device, blocks, SceneKind::Flame);
+        }
         for spike in self.flare_spikes.iter_mut().flatten() {
             spike.drawable.share_scene(device, blocks, SceneKind::Flame);
         }
@@ -185,6 +196,28 @@ impl Scene {
 
 #[cfg(test)]
 impl Scene {
+    /// Gives slot 0 a shield shell and the race a cockpit sphere, each a copy of its hull on a
+    /// block of its own.
+    pub(crate) fn give_a_shield_for_tests(&mut self, device: &wgpu::Device) {
+        let copy = || {
+            let mut shell = self.ships[0].instances(device, 1).remove(0);
+            shell.clear_scene_kind_for_tests();
+            shell
+        };
+        let (shell, sphere) = (copy(), copy());
+        self.shield = vec![Some(shell)];
+        self.shield_cockpit = Some(sphere);
+    }
+
+    /// The kinds of scene block slot 0's shield shell and the cockpit sphere read.
+    pub(crate) fn shield_scene_kinds_for_tests(&self) -> [Option<SceneKind>; 2] {
+        [
+            self.shield.first().and_then(Option::as_ref),
+            self.shield_cockpit.as_ref(),
+        ]
+        .map(|drawable| drawable.and_then(Drawable::scene_kind_for_tests))
+    }
+
     /// Craft `ship`'s matrices as the view following craft `view` wrote them, read back.
     pub(crate) fn ship_matrices(
         &self,

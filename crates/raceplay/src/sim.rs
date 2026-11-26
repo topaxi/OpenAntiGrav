@@ -465,6 +465,8 @@ pub struct RaceSim {
     /// Whether a Plasma bolt leaves at the craft's display scale - see
     /// [`SimSetup::plasma_release_at_display_scale`].
     pub(super) plasma_release_at_display_scale: bool,
+    /// [`SimSetup::rocket_launch_at_display_scale`].
+    pub(super) rocket_launch_at_display_scale: bool,
     /// What the firing craft's box does to its projectiles' first probes - see
     /// [`SimSetup::own_craft_box_hides_track`].
     pub(super) own_craft_box_hides_track: oag_title::weapons::OwnCraftBox,

@@ -51,6 +51,12 @@ pub struct MusicFolder {
     pub enabled: bool,
 }
 
+/// The MUSIC page's switches, by source id.
+pub type Switches = BTreeMap<String, bool>;
+
+/// Each title's [`Switches`], by `Title::name`.
+pub type SwitchesByTitle = BTreeMap<String, Switches>;
+
 /// What a source's row says about it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SourceStatus {
@@ -127,9 +133,12 @@ struct Inner {
     discs_scanned: bool,
     discs_started: bool,
     folders: Vec<Folder>,
-    /// The player's explicit switches, by source id. A source with none is on
-    /// only if it is the booted disc.
-    switches: BTreeMap<String, bool>,
+    /// The player's saved switches, every title's. The booted title's apply; a source with
+    /// none is on only if it is the booted disc.
+    saved: SwitchesByTitle,
+    /// Switches made while this pool has been up, over [`Self::saved`]. A pool serves one
+    /// booted source, so they need no title of their own.
+    made: Switches,
     /// The folders named in settings, with their switches (kept so a scan can
     /// be started once the reader is known).
     named: Vec<MusicFolder>,
@@ -214,11 +223,15 @@ impl Pool {
 
     /// Applies the player's switches and the folders named in settings.
     ///
+    /// Every title's switches are taken: which one applies is the booted title's, which the
+    /// survey may not have named yet.
+    ///
     /// Cheap and never reads the file system: a folder new to the list is only
     /// recorded; [`Self::scan_folders`] starts its scan.
-    pub fn configure(&self, switches: &BTreeMap<String, bool>, folders: &[MusicFolder]) {
+    pub fn configure(&self, switches: &SwitchesByTitle, folders: &[MusicFolder]) {
         self.with(|inner| {
-            inner.switches = switches.clone();
+            inner.saved = switches.clone();
+            inner.made.clear();
             inner.named = folders.to_vec();
         });
         self.bump();
@@ -227,21 +240,34 @@ impl Pool {
     /// Switches one source on or off.
     pub fn set_enabled(&self, id: &str, on: bool) {
         self.with(|inner| {
-            inner.switches.insert(id.to_string(), on);
+            inner.made.insert(id.to_string(), on);
         });
         self.bump();
     }
 
-    /// The switches the player has made, as the settings file keeps them. A source
-    /// not here is on only if it is the booted disc or a folder whose `enabled` is set.
-    #[must_use]
-    pub fn switches(&self) -> BTreeMap<String, bool> {
-        self.with(|inner| inner.switches.clone())
-            .unwrap_or_default()
+    /// The player's explicit switch for `id` under the booted title, if there is one.
+    fn switched_in(inner: &Inner, id: &str) -> Option<bool> {
+        inner.made.get(id).copied().or_else(|| {
+            let title = inner.booted.as_ref()?.title;
+            inner.saved.get(title)?.get(id).copied()
+        })
+    }
+
+    /// Whether the player has switched on another title's disc.
+    fn wants_other_disc(inner: &Inner) -> bool {
+        let saved = inner
+            .booted
+            .as_ref()
+            .and_then(|booted| inner.saved.get(booted.title));
+        saved
+            .into_iter()
+            .flat_map(BTreeMap::keys)
+            .chain(inner.made.keys())
+            .any(|id| id.starts_with("disc:") && Self::switched_in(inner, id) == Some(true))
     }
 
     fn enabled_in(inner: &Inner, id: &str) -> bool {
-        inner.switches.get(id).copied().unwrap_or_else(|| {
+        Self::switched_in(inner, id).unwrap_or_else(|| {
             inner.booted.as_ref().is_some_and(|b| b.id == id)
                 || inner
                     .named
@@ -269,7 +295,7 @@ impl Pool {
                 platform,
                 tracks,
             });
-            inner.switches.insert(id, true);
+            inner.made.insert(id, true);
         });
         self.bump();
     }
@@ -439,10 +465,7 @@ impl Pool {
                 .with(|inner| {
                     let discs = !inner.discs_scanned
                         && inner.discs_started
-                        && inner
-                            .switches
-                            .iter()
-                            .any(|(id, on)| *on && id.starts_with("disc:"));
+                        && Self::wants_other_disc(inner);
                     let folders = inner.folders.iter().any(|folder| {
                         Self::enabled_in(inner, &folder.id)
                             && matches!(folder.scan.status(), folders::Status::Scanning)

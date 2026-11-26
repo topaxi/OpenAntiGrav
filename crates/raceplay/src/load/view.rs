@@ -248,7 +248,7 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
         options.mode == Mode::Zone,
         store,
         options.water,
-        hides_circuit_pads,
+        geometry::hidden_pads(hides_circuit_pads, options.weapons_on()),
         &mut report,
     );
     // The target's size is the original's, or a fraction of it
@@ -631,6 +631,9 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
     for name in craft_title.effects.names_on(archives.layout.platform) {
         let dir = title.race.effect_dir_for(&track);
         let walk = title.effects.colour_walk_for(dir);
+        // The law of the title whose archive the file is in, like the walk: its cap word is
+        // only that title's record's.
+        let near = title.effects.near_law;
         match listed_particle_effect(
             &mut archives,
             dir,
@@ -640,7 +643,13 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
                 || (circuit_weather && oag_title::engine_effects::WEATHER_EFFECTS.contains(&name)),
             walk,
         ) {
-            Ok((effect, note)) => {
+            Ok((mut effect, note)) => {
+                if let Some(law) = near {
+                    effect.with_near_law(psys::NearLaw {
+                        cull_depth: law.cull_depth,
+                        fade_depth: law.fade_depth,
+                    });
+                }
                 report.push(note);
                 effects.insert(name, effect);
                 report.extend(super::assets::sheet_note(name, &effects));
@@ -648,8 +657,24 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
             Err(why) => report.push(format!("{why} - {name} will not be drawn")),
         }
     }
+    // The ribbon's texture is a title axis, not a constant: Pulse and Pure name
+    // one, HD authors a template whose material names its own - craft content,
+    // hence `craft_title`. See `oag_title::exhaust::Exhaust`.
+    let (noise, trail_blend, trail_shape) = assets::trail_texture(
+        craft_of(&mut craft, &mut archives),
+        craft_title,
+        &mut report,
+    );
     // Lent before the mods' effects, so no mod sprite moves; a no-op unless `graphics.trail_hits`.
-    let lent_trail_hit = trail_hits::lend(options, craft_title, &mut effects, &mut report);
+    // Redrawn in the colour of this race's own ribbon, texture and layer law.
+    let ps2_trail = title.looks.ps2_trail.applies(archives.layout.platform);
+    let ribbon_hue = oag_fx::exhaust::TrailLaw::for_ps2(ps2_trail).ribbon_colour(
+        noise
+            .as_ref()
+            .map_or([1.0; 3], oag_fx::exhaust::FlareTexture::mean_rgb),
+    );
+    let lent_trail_hit =
+        trail_hits::lend(options, craft_title, ribbon_hue, &mut effects, &mut report);
     let mods = mod_assets::ModAssets::new(&extension_sources, title, options);
     let (mod_shaders, mod_effects) =
         mods.shaders_and_effects(&mut archives, &mut effects, &mut report);
@@ -687,14 +712,6 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
         &mut report,
     );
 
-    // The ribbon's texture is a title axis, not a constant: Pulse and Pure name
-    // one, HD authors a template whose material names its own - craft content,
-    // hence `craft_title`. See `oag_title::exhaust::Exhaust`.
-    let (noise, trail_blend, trail_shape) = assets::trail_texture(
-        craft_of(&mut craft, &mut archives),
-        craft_title,
-        &mut report,
-    );
     if trail_shape.is_some() {
         report.push(
             "the ribbon's geometry is HD's own, measured from the running game: a 54-sample \
@@ -857,8 +874,9 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
         trail_sparks: options.trail_sparks,
         request: Some(options.replay_setup_on(&track)),
         campaign_event: false,
+        score_pass: None,
         hd_trail: trail_shape.is_some().then_some(hd_trail_red),
-        ps2_trail: title.looks.ps2_trail.applies(archives.layout.platform),
+        ps2_trail,
         shield_targets: roster::shield_targets(
             options,
             craft_title,
@@ -882,6 +900,11 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
                 .race
                 .detonator
                 .is_some_and(|detonator| detonator.cannon_lights),
+        detonator_emp_light: options.mode == Mode::Detonator
+            && craft_title
+                .race
+                .detonator
+                .is_some_and(|detonator| detonator.emp_light),
         detonator_ammo_gauge: craft_title
             .race
             .detonator
@@ -896,6 +919,7 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
         laid_pose_scaled: craft_title.looks.laid_pose_scaled.applies_everywhere(),
         screen_flash: extents,
         quake_flash: craft_title.effects.quake_look.flash,
+        craft_blast_carry: craft_title.effects.craft_blast_carry.is_some(),
         absorb_burst,
         absorb_anchors,
         hit_spark_anchors: super::hit_sparks::anchors(craft_title, &liveries),

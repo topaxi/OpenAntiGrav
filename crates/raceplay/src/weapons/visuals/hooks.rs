@@ -57,6 +57,14 @@ impl RaceSim {
     pub fn force_missile_hit(&mut self, slot: usize) -> bool {
         self.put_craft_on_projectile(oag_tables::weapons::Weapon::Missile, slot)
     }
+
+    /// Puts craft `slot` on the first Rocket another craft owns, for
+    /// `--force-rocket-hit`: as [`Self::force_missile_hit`], so what follows is
+    /// the ordinary craft hit and its explosion. A verification aid and nothing
+    /// else.
+    pub fn force_rocket_hit(&mut self, slot: usize) -> bool {
+        self.put_craft_on_projectile(oag_tables::weapons::Weapon::Rocket, slot)
+    }
 }
 
 impl SimRace {

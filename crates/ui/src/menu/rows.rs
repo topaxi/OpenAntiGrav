@@ -303,10 +303,8 @@ fn draw_text_rows(
     // nothing the player can see.
     let mut noted: Option<String> = None;
     let first = menu.scroll();
-    let mut shown = 0usize;
     for (row, entry) in page.entries.iter().enumerate().skip(first).take(visible) {
         let y = first_row_y + (row - first) as f32 * row_height;
-        shown += 1;
         let selected = row == menu.selected();
 
         // **No fill behind the selected row.** The original marks selection by
@@ -478,7 +476,7 @@ fn draw_text_rows(
     if let Some(message) = noted {
         out.push(Draw::Text {
             x: margin_x - 18.0,
-            y: first_row_y + shown as f32 * row_height + skin.message_gap(),
+            y: column(menu, skin, frame).below(skin),
             scale: row_scale * skin.message_scale(),
             color: WARNING,
             border: None,
@@ -489,6 +487,41 @@ fn draw_text_rows(
     }
 
     out
+}
+
+/// Where [`draw`] lays the rows of the page on screen.
+pub(super) struct Column {
+    first_y: f32,
+    pitch: f32,
+    shown: usize,
+}
+
+impl Column {
+    /// The last row on screen's line top, `None` on a page with no rows.
+    pub(super) fn last_top(&self) -> Option<f32> {
+        let last = self.shown.checked_sub(1)?;
+        Some(self.first_y + last as f32 * self.pitch)
+    }
+
+    /// Where a line that belongs under the rows starts.
+    pub(super) fn below(&self, skin: &Skin) -> f32 {
+        self.first_y + self.shown as f32 * self.pitch + skin.message_gap()
+    }
+}
+
+/// The [`Column`] of `menu`'s page, off the same figures [`draw`] reads.
+pub(super) fn column(menu: &Menu, skin: &Skin, frame: &super::Frame) -> Column {
+    let settings = settings_for(menu, frame);
+    Column {
+        first_y: settings.map_or_else(|| skin.first_row_y(), |layout| layout.first_y),
+        pitch: settings.map_or_else(|| skin.row_pitch(), |layout| layout.pitch),
+        shown: menu
+            .page()
+            .entries
+            .len()
+            .saturating_sub(menu.scroll())
+            .min(menu.visible_rows()),
+    }
 }
 
 /// The settings layout in force for `menu`'s current page, when the page is

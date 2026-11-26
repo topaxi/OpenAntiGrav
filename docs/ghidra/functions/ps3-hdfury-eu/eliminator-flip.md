@@ -162,7 +162,8 @@ No hull-side effect or sound of the flip was looked for.
 
 ## Ours
 
-`oag_title::Title::eliminator_flip` is `0.2 s` on HD and `oag_raceplay::score_law::of` resolves it
+`oag_title::Title::eliminator_flip` is `0.2 s` on HD, 2048 and Omega, the default for a craft whose
+handling file authors no `eliminator_flip_time` (a craft's own wins, `RaceSim::tick_flips`), and `oag_raceplay::score_law::of` resolves it
 once at load into `Setup::flip_law`, `None` outside an Eliminator. `oag_physics::flip` is the turn;
 `RaceSim::tick_flips` starts it on a person's `Button::Flip` press, past the countdown, on a craft in
 the race. `Button::Flip` is bit 10 of the masks a replay and the wire already carry, so neither
@@ -176,8 +177,8 @@ craft has flipped.
   keyboard is `Flip` alone and Q stays the airbrake, so the keyboard needs no flag. **Chosen, not
   measured:** the key. Touch has no flip button, and Android's L1 key is `L` alone: neither raises
   `Flip`, so the flag changes nothing there. HD Eliminator and Detonator and Omega's Detonator
-  (its EMP) set the flag (`hd_flip_ground_truth`, `detonator_ground_truth`); Omega and 2048 have no
-  Eliminator flip wired (`eliminator_flip: None`), so their L1 stays an airbrake. The flag is held
+  (its EMP) set the flag (`hd_flip_ground_truth`, `detonator_ground_truth`), as do Omega's and 2048's
+  Eliminators. The flag is held
   off in photo mode, the replay viewer and a finished race, which page on L1.
   Every `Flip` producer raises it alone under the flag: pad L1 (`bits_of`) and the keyboard's `F`;
   touch and Android raise none. Host and client share the sim, so the network needs nothing more.
@@ -209,7 +210,7 @@ unused for the same reason: no opponent turns round.
 | Title | State | Answer |
 | --- | --- | --- |
 | HD / Fury | one disc, one executable | **wired** |
-| 2048 | **checked, differs, not wired.** `PlayerInput_Update` (`0x811b3072`) has the block: the gate is the mode test **or** the handling table's `race_eliminator_flip` (`handling+0x4b8`, `0x811b363c`), the rate is `pi / handling+0x4b4` (`0x811b36c6..0x811b36e4`), the attribute `eliminator_flip_time` under `<Misc>` (`0x811ab9aa`), default `0.2` (`0x3e4ccccd`, `0x811ab8e4`). So HD's `5 pi` is the default. A second trigger, `input+0x99` with a stick value below `-0.97` (`0x811b369c`), is unread. Confidence 80 |
-| Omega | **checked, differs, not wired.** The same two attributes in its `eboot.bin` (`0x01814b5e`, `0x01814b73`, read by `FUN_012d8e30`), and its `data00.psarc` ships them: on the five `*2048` teams' handling files, class 1 `0.4` on every team, class 3 `0.2`, class 4 `0.2`, Qirex `0.4`, Auricom `0.5`, AG-Systems `race_eliminator_flip="true"`, class 2 unset. Ours has no per-craft value to read them into yet. The reader on Omega's own `PlayerInput_Update` was not opened. Confidence 75 |
+| 2048 | **ported.** `PlayerInput_Update` (`0x811b3072`) has the block: the gate is the mode test **or** the handling table's `race_eliminator_flip` (`handling+0x4b8`, `0x811b363c`), the rate is `pi / handling+0x4b4` (`0x811b36c6..0x811b36e4`), the attribute `eliminator_flip_time` under `<Misc>` (`0x811ab9aa`), default `0.2` (`0x3e4ccccd`, `0x811ab8e4`). Its own craft author the time and a race reads each craft's (`vita_2048_eliminator_ground_truth`, 30 ticks for `0.5`). Confidence 80. **Open:** the flip outside an Eliminator under `race_eliminator_flip`, and a second trigger, `input+0x99` with a stick value below `-0.97` (`0x811b369c`), unread |
+| Omega | **ported.** The reader, the default and the player's rate are the same ([ps4-omega-eu/eliminator.md](../ps4-omega-eu/eliminator.md)), and the `*2048` teams' handling files author the time (`0.2` to `0.5`); `omega_eliminator_ground_truth::an_omega_craft_turns_over_its_own_flip_time`. HD's forty ship files author none (`hd_title_ground_truth`). **Open:** the flip outside an Eliminator (`race_eliminator_flip` and the event object's `+0x21c`), and the opponents' flip |
 | Pulse | **absent.** No flip string, no tunable, no `5 pi` word in the PSP or PS2 executable. The state's ancestor exists: Pulse's `craft+0x1c0 & 0x2000` is this same `dot < -0.4` test, and there it kills the engine (`oag_raceplay::wrong_way_kill`). HD turned the punishment into the move: `CraftLaws::eliminator_wrong_way_kill` is false on HD |
 | Pure | **absent.** The same census on its executable |

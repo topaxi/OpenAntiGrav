@@ -163,7 +163,13 @@ fn an_emitter_with_a_shader_draws_through_it_alone() {
     let (additive, alpha) = system.vertices(&parsed.effect, Vec3::X, Vec3::Y);
     assert!(additive.is_empty() && alpha.is_empty());
     let mut shaded = Vec::new();
-    system.extend_shaded(&mut shaded, &parsed.effect, Vec3::X, Vec3::Y, None);
+    system.extend_shaded(
+        &mut shaded,
+        &parsed.effect,
+        Vec3::X,
+        Vec3::Y,
+        crate::psys::Cull::NONE,
+    );
     assert_eq!(shaded.len(), 1, "every particle on its one list");
     assert_eq!(shaded[0].0, 7);
     assert!(!shaded[0].1.is_empty());

@@ -38,7 +38,7 @@ fn a_plasma_bolt_is_released_riding_the_craft_up_whatever_the_table() {
             "VENOM",
             crate::projectile::FloorArms::SteerToRidePoint,
             crate::projectile::OwnCraftProbe::PlasmaWindow(0.04),
-            crate::projectile::PlasmaRelease::DisplayScaled,
+            crate::projectile::LaunchScale::DisplayScaled,
         );
     }
     let bolt = projectiles.slots[0];
@@ -107,7 +107,7 @@ fn a_plasma_bolt_over_nothing_falls_along_its_carried_normal() {
             "VENOM",
             crate::projectile::FloorArms::SteerToRidePoint,
             crate::projectile::OwnCraftProbe::PlasmaWindow(0.04),
-            crate::projectile::PlasmaRelease::DisplayScaled,
+            crate::projectile::LaunchScale::DisplayScaled,
         );
     };
     for _ in 0..8 {
@@ -147,7 +147,7 @@ fn a_plasma_bolt_is_released_riding_the_located_track_up() {
             "VENOM",
             crate::projectile::FloorArms::SteerToRidePoint,
             crate::projectile::OwnCraftProbe::PlasmaWindow(0.04),
-            crate::projectile::PlasmaRelease::DisplayScaled,
+            crate::projectile::LaunchScale::DisplayScaled,
         );
     }
     let bolt = projectiles.slots[0];

@@ -739,7 +739,7 @@ pub(crate) fn race_launch(
         crate::sound::hold_race_song(&mut audio, loaded.title);
         audio.start_race_music(
             &music_discs,
-            settings.audio.music_source,
+            settings.music_source(Some(loaded.title)),
             &oag_source::cache::default_audio_cache_dir(),
         );
         // The song lands on the tick the worker finishes, which a loop running faster than the
@@ -864,6 +864,10 @@ pub(crate) fn race_launch(
                 force_missile_hit: crate::app::args::force_at_slot(
                     cli.wreck.force_missile_hit.as_deref(),
                     "Missile hit",
+                )?,
+                force_rocket_hit: crate::app::args::force_at_slot(
+                    cli.wreck.force_rocket_hit.as_deref(),
+                    "Rocket hit",
                 )?,
                 force_quake: crate::app::args::force_at_slot(
                     cli.wreck.force_quake.as_deref(),

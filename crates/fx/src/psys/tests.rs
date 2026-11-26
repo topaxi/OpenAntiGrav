@@ -50,6 +50,7 @@ pub(super) fn effect(name: &str, looping: bool, duration_ticks: f32) -> std::syn
             blend: Blend::Additive,
             distort_strength: 0.0,
             colour_scale: 1.0,
+            near_cap: None,
             particle_child: None,
             death_child: None,
             spawn_probability: 1.0,
@@ -72,6 +73,7 @@ pub(super) fn effect(name: &str, looping: bool, duration_ticks: f32) -> std::syn
         roots: vec![0],
         field: None,
         view_depth: 0.0,
+        near: None,
         rides_owner_frame: true,
         skipped_templates: 0,
     })
@@ -1151,7 +1153,7 @@ fn an_underlay_emitter_draws_in_its_own_layer_and_not_with_the_additive_ones() {
         run(&mut system, &effect, 3, &mut rng);
         let (additive, _) = system.vertices(&effect, Vec3::X, Vec3::Y);
         let mut underlay = Vec::new();
-        system.extend_underlay_vertices(&mut underlay, &effect, Vec3::X, Vec3::Y, None);
+        system.extend_underlay_vertices(&mut underlay, &effect, Vec3::X, Vec3::Y, Cull::NONE);
         assert_eq!(!additive.is_empty(), !in_underlay, "{}", effect.name);
         assert_eq!(!underlay.is_empty(), in_underlay, "{}", effect.name);
     }

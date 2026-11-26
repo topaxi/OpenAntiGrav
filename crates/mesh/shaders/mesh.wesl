@@ -6,7 +6,7 @@
 // black.
 
 import package::alpha_test::{alpha_test_ref};
-import package::bindings::{anims, emissive_scale, emissive_tint, node_anims, scene, uniforms};
+import package::bindings::{anims, emissive_scale, emissive_tint, node_anims, program_in, scene, uniforms};
 import package::depth_bias::{biased_clip};
 import package::fog::{fogged, plus_after_fog};
 import package::glow::{stamp_discards, stamp_value, stamped_alpha};
@@ -123,7 +123,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     // 2048's and Omega's centre lane takes the entry without `LIT_ALPHA` (`program[1]` 2).
     if ((in.slots & 2147483648u) != 0u || emissive_scale(chevron_entry).w > 1.5)
         && chevron_entry != 0u
-        && emissive_scale(chevron_entry).z > 2.5 && emissive_scale(chevron_entry).z < 3.5 {
+        && program_in(emissive_scale(chevron_entry).z, 3u, 3u) {
         let row = u32(emissive_tint(chevron_entry).w + 0.5);
         let offset = anims.transform[min(row, 63u)].z;
         out.lightmap_texcoord = vec4<f32>(

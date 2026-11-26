@@ -62,7 +62,8 @@ Craft files get theirs when that format lands.
 `settings.toml` writes the header as the one-line form, after its comment block, and everything
 in the schema is optional because the loader fills a missing key from its default. The schema
 is open on token vocabularies (the loader falls back and warns) and on the keys of the three
-maps (`render_profiles`, `audio.music_switches`, `mod_settings."<mod id>"`); it refuses a key the
+maps (`render_profiles`, `music_profiles` with each title's `music_switches`,
+`mod_settings."<mod id>"`); it refuses a key the
 game does not know. A header naming another kind or major is a warning, not a refusal. The
 `schema` test `settings_schema` writes a fresh file and a fully populated one and validates both.
 

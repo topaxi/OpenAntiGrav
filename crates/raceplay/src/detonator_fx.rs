@@ -131,23 +131,23 @@ impl Race {
             .collect()
     }
 
-    /// The Detonator cannon's point lights, as `PulseBullet`'s render queue (`0x00122098`) submits
-    /// them to `SpuLight_AddCandidate`: a blue light at each muzzle for the round's first
-    /// [`FLASH_WINDOW_SECONDS`] and a faint one on each round in flight; and the EMP wave's,
-    /// at its centre while it runs (`EMP_DrawLights`, `0x0013b300`). Empty under the same
-    /// switches that silence every weapon light ([`Self::hd_weapon_lights`]'s).
+    /// Detonator's point lights: the cannon's, as `PulseBullet`'s render queue (`0x00122098`)
+    /// submits them to `SpuLight_AddCandidate` (a blue light at each muzzle for the round's
+    /// first [`FLASH_WINDOW_SECONDS`] and a faint one on each round in flight), and the EMP
+    /// wave's, at its centre while it runs (`EMP_DrawLights`, `0x0013b300`). Each half is a title
+    /// fact (`Detonator::{cannon_lights, emp_light}`). Empty under the same switches that silence
+    /// every weapon light ([`Self::hd_weapon_lights`]'s).
     #[must_use]
     pub(crate) fn detonator_cannon_lights(&self, draw: &CannonDraw) -> Vec<SpuLight> {
-        if !self.view.detonator_cannon_lights
-            || !self.view.hd_trail_active
-            || !self.view.spu_vertex_lights
-            || !self.view.hd_weapon_lights
+        if !self.view.hd_trail_active || !self.view.spu_vertex_lights || !self.view.hd_weapon_lights
         {
             return Vec::new();
         }
-        let flashes = self
-            .detonator_flash_matrices(draw)
+        let cannon = self.view.detonator_cannon_lights;
+        let flashes = cannon
+            .then(|| self.detonator_flash_matrices(draw))
             .into_iter()
+            .flatten()
             .map(|matrix| weapon_light::detonator_flash_record(matrix.w_axis.truncate()));
         let bolts = self
             .core
@@ -157,11 +157,12 @@ impl Race {
             .cannon
             .rounds
             .iter()
-            .filter(|round| round.live)
+            .filter(|round| cannon && round.live)
             .map(|round| weapon_light::detonator_bolt_record(round.pos));
         let emp = [self.view.emp_effect, self.view.emp_fork_effect]
             .into_iter()
             .flatten()
+            .filter(|_| self.view.detonator_emp_light)
             .filter_map(|playing| self.view.stage.anchor_of(playing))
             .map(weapon_light::detonator_emp_record);
         flashes.chain(bolts).chain(emp).collect()

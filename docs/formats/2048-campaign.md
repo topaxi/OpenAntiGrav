@@ -293,7 +293,7 @@ prerequisite. `oag_ui::frontend::Frontend::refresh_campaign_progress`'s own
 caller decides this by what it feeds the closure - today, `Session::
 finish_loading` feeds exactly `Store::campaign_medal`'s own `best_medal`,
 so a result with no medal at all (the event was left unfinished, or its own
-objective law never grades - see "The objective law" below) does not open
+objective law could not grade - see "The objective law" below) does not open
 anything. No confidence score: this is a design choice on top of a measured
 graph, not a reading of the graph itself.
 
@@ -331,38 +331,17 @@ of the 80 fully-authored events, no exception found either way):
 | --- | --- | --- | --- | --- |
 | `Race` (13 instances, all `GameMode_SpeedLapRace`) | Total race time, in centiseconds | Lower is better (`elite < pass` on all 13) | 80 | `"2048 - Event 3"`: pass `13000` (130 s), elite `11000` (110 s) |
 | `Zone` (10 instances) | The zone counter reached | Higher is better (`elite > pass` on all 10) | 80 | `"Zone Pass"`/`"Zone Elite"`: `10`/`20` |
-| `Elimination` (15 instances) | **Points scored** - the original's own card words it `SCORE %d POINTS` (`FE_SCORE_POINTS`); what earns a point in the sim is not read | Higher is better (`elite > pass` on all 15) | 80 for the wording (2026-09-29: `GameModeObjective_FormatText`'s fall-through for a class with no override, `campaign-event-card.md`); the gameplay metric is still unimplemented |
+| `Elimination` (15 instances) | The player's Eliminator score (`FE_SCORE_POINTS`, `SCORE %d POINTS`): the objective evaluator (`0x812bf0e4`, case `2`) compares `value <= pilot+0x65c4` | Higher is better (`elite > pass` on all 15, targets `15` to `100`) | 90 (2026-11-25, static) |
 
-**Why Elimination's own `BEAT_VALUE` metric is still not graded.** (2026-09-29: the wording says points, above.) Its targets
-run `25`-`100`; `oag_race::Standing::kills` (the only per-race count this
-engine's own Eliminator mode tracks) never approaches those numbers in a
-real match, and nothing else - a damage total, a points score - is tracked
-at all. `evaluate_tier` returns `None` for this one case rather than
-grading against a metric with no evidence behind it - see that function's
-own doc comment. An Elimination event still plays and still unlocks
-whatever names it as a prerequisite once finished; it simply never carries
-a medal on this build, which is an honest, visible gap rather than a wrong
-number.
-
-Two objective instances go unused by any of the 141 event instances this
-pass checked (`"Objective - Finish"`, `"MostDamage"` - the latter authoring
-neither a type nor a target at all) and `"BeatPersonalBestLap"` (type `2`,
-target `0`) is likewise never referenced by a `RACE_A`/`RACE_B`/`ELIM`/`ZONE`
-instance's own `M_PASSOBJECTIVE`/`M_ELITEOBJECTIVE` - three orphaned
-objectives, left unread rather than guessed at.
-
-**`HardcorePass2048` is not a third medal tier.** `NEWGUI/Skin.xml`
-declares three pass-tier colour globals - `Pass2048` (green), `ElitePass2048`
-(yellow) and `HardcorePass2048` (purple) - which reads at first like a
-three-rung ladder. It is not: `M_PSECONDARYOBJECTIVE`/`M_PTERTIARYOBJECTIVE`
-are real field names in the schema (found by grepping every distinct
-`M_*OBJECTIVE*`/`M_*PASS*` field name in the raw file) but appear on **zero**
-of the 141 event instances - measured, not merely unobserved in a sample.
-2048's own authored medal law is genuinely two-tier; `HardcorePass2048`
-most plausibly names a Hardcore *difficulty* flag this pass found no
-authored data for, not a rung this build's own map or persistence ever
-needs to draw. See `oag_ui::frontend::campaign_map`'s own "Progression"
-section for where this lands in the draw code.
+**An Elimination event's race.** What earns a point is HD's law
+([eliminator-score.md](../ghidra/functions/ps3-hdfury-eu/eliminator-score.md), "Other titles").
+`evaluate_tier` grades the score, finished or not. The race ends on the **elite** value
+(`elimination_score_target`), **chosen, not measured**, so both bars are in reach: the manager
+(`0x812bf3f0`) takes its target from the event's first objective block, and in its tiered state
+(`0x812bf28c`) the target its HUD shows moves from the first block's value to the second's once the
+first is met. Which flag puts a race in that state, and the end test, are unread; ours shows the
+pass value until it is met and then the elite one. Omega ships no
+`SP.xml` event campaign, so this does not carry over there.
 
 ## `Data\xml\MP.xml` is not `SP.xml`'s schema
 
@@ -904,8 +883,8 @@ excluded `Shield` and still does, since none of them set bit 4.
 ## What is not determined
 
 - **`GameModeObjective`'s own semantics are mostly resolved - see "The
-  objective law" above.** What remains open there: Elimination's own
-  `BEAT_VALUE` metric (confidence under 50, not guessed), and three
+  objective law" above.** What remains open there: an Elimination event's
+  end test (it ends on the elite score, chosen), and three
   orphaned objective instances (`"Objective - Finish"`, `"MostDamage"`,
   `"BeatPersonalBestLap"`) that no event references at all.
 - **Which `GameMode_*` C++ class each of the four event typedefs

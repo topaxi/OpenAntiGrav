@@ -507,6 +507,7 @@ impl RaceStage {
             }),
             zone: self.race.core.sim.world.primary_race().zone,
             kills: standing.kills,
+            score: standing.score as u32,
         };
         match oag_2048::campaign::evaluate_tier(objectives, &outcome)? {
             oag_2048::campaign::Tier::Elite => Some(crate::records::Medal::Gold),
@@ -711,6 +712,7 @@ impl RaceStage {
         viewport: (f32, f32, f32, f32),
         target_size: (u32, u32),
     ) {
+        oag_gpu::skip::arm_writes(gpu.device());
         if oag_gpu::skip::skipped("hud") {
             return;
         }

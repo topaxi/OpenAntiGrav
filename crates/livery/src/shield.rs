@@ -157,18 +157,18 @@ fn shield_colour_psp2(geometry: &[u8], half: bool) -> Option<[f32; 4]> {
     }
 }
 
-/// Whether a Vita/PS4 shell's material is `2048_shipshield_old`, whose pixel program takes
-/// its output alpha from the diffuse texture's **alpha** channel (`image_sample ... dmask:0x8`)
-/// times `ShieldColour.a` and the vertex alpha; the builder's default reads the red channel,
-/// which on the hexagon atlas is a dim gradient. `2048_Magnetic_Shield` reads red, so it keeps
-/// the default (`docs/ghidra/functions/ps4-omega-eu/shield.md`, "The two shell programs").
+/// Whether a Vita/PS4 shell's material is `2048_shipshield_old` (or the cockpit sphere's
+/// `hd_shipshield_old`, the same program), which takes its output alpha from the diffuse
+/// texture's **alpha** channel (`image_sample ... dmask:0x8`) times `ShieldColour.a` and the
+/// vertex alpha; the builder's default reads the red channel, which on the hexagon atlas is a
+/// dim gradient. `2048_Magnetic_Shield` reads red, so it keeps the default
+/// (`docs/ghidra/functions/ps4-omega-eu/shield.md`, "The two shell programs").
 fn psp2_alpha_from_texture_alpha(geometry: &[u8]) -> bool {
     oag_rcs::rcsmodel::psp2::parse(geometry).is_ok_and(|model| {
         model.materials.iter().any(|material| {
-            material
-                .name
-                .to_ascii_lowercase()
-                .ends_with("2048_shipshield_old.rcsmaterial")
+            let name = material.name.to_ascii_lowercase();
+            name.ends_with("2048_shipshield_old.rcsmaterial")
+                || name.ends_with("hd_shipshield_old.rcsmaterial")
         })
     })
 }

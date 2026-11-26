@@ -252,6 +252,9 @@ pub struct Skin {
     /// screens that step by [`Self::line_height`]. See
     /// [`crate::pointer::RowInk`]; `None` until [`Self::set_row_ink`].
     row_ink: Option<crate::pointer::RowInk>,
+    /// How far below a row's pen the face's capitals stand, in layout units
+    /// at scale 1. `None` until [`Self::set_row_baseline`].
+    row_baseline: Option<f32>,
     /// A free-running clock for [`Self::selected`]'s pulse, advanced by
     /// [`Self::tick_pulse`]. Never reset: the capture that measured Pulse's
     /// period never moved the cursor, so there is no evidence the original
@@ -344,9 +347,23 @@ impl Skin {
             from_theirs: into(skin.space),
             line_height,
             row_ink: None,
+            row_baseline: None,
             pulse_elapsed: 0.0,
             touch_rows: false,
         }
+    }
+
+    /// Records where the rows' face stands its capitals
+    /// ([`crate::pointer::RowInk::baseline`]), measured by the caller that has the atlas.
+    pub fn set_row_baseline(&mut self, baseline: Option<f32>) {
+        self.row_baseline = baseline;
+    }
+
+    /// How far below a row's pen its capitals stand: the measured baseline, or the whole
+    /// line height of a face nothing measured.
+    #[must_use]
+    pub fn row_baseline(&self) -> f32 {
+        self.row_baseline.unwrap_or(self.line_height) * self.skin.menu_scale
     }
 
     /// Records where the face [`Self::line_height`] came off keeps its ink,

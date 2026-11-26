@@ -145,6 +145,43 @@ beside `shipshield.rcsmodel` in every directory above.
 - The two draw routines were read for constants, not traced instruction for instruction.
 
 
+## The lattice scrolls
+
+2026-11-26, lane `shield-anim`. Listed with `scripts/vita-usse.py disasm
+<material> 1`, literal records dumped from the program header. Confidence **85**
+(static; the same constants as the PS4 recompile of the same material, no live
+frame). Three programs animate a shield:
+
+- **`2048_shipshield_old`** (the HD-content shells, `hdships/<team>/shipshield`)
+  and **`hd_shipshield_old`** (the cockpit sphere): the unlit fragment programs
+  of the two are the same instruction for instruction. With `t` the `time`
+  uniform and the literal records at words `10 = 0.8`, `11 = 0.2`, `12 = 3.0`
+  (secondary program: `sa22 = sa22 * t` and `sa10 = sa21 * t`):
+  `diffuse(u + 3 t, v)`; `noise = lightning(u2, 0.8 (v2 + 0.2 t)).a`;
+  `lightning(uv2 + t + noise)`, **squared** (`pa2 = pa0 * pa0`) before
+  `Lightning_RGB_Multiplier`. That is the PS4's law (`B = 0.8`, `C = 0.16`).
+  The alpha tap stays at `(u, v)`; the vertex program sends the first pair of
+  `Uv1_Uv2` to the diffuse and the second to the lightning, as on PS4.
+- **`2048_magnetic_shield`** (2048's own craft, the player's default): the
+  **vertex** program adds `time * Speed_multiplier` to `Uv1.u`
+  (`sa32 = sa34 * sa35`, `add pa4.x, pa4.x, sa32.x`); the multiplier is the
+  material's (`0x68292521`, `1.0`). Its pixel program has no clock.
+
+The lit variants carry the same three literals at other word indices (the
+compiler's order is not stable, as on PS4), so
+`oag_rcs::gxp::lightning_rates` reads the unlit programs' records at the indices
+disassembled above, not by data flow.
+
+**Wired**: `psp2::shield_lightning` admits both lightning materials on the Vita
+(previously PS4 only) and `hd_shipshield_old`, whose alpha now comes from the
+diffuse's alpha as the shell's does; `shade.wesl` squares the lightning tap on
+the gamma-2 scene only. The magnetic shell rides the plain scroll track
+(`AnimTrack::Scroll`). Ground truth: `omega_2048_shield_colour_ground_truth`
+and `game::shield_shell_scroll_ground_truth`. **Open:** the cockpit sphere's
+blend stays the chosen alpha-over (its material has no HD equivalent in the
+lineage blend table), the Vita lit variants and `constantAmbientColour` are
+unread, and no Vita3K frame of a raised shield has judged the brightness.
+
 ## Wired (lane `omega-2048-shield-wire`)
 
 - `oag_livery::shield` builds the shell through `psp2::build` and reads `ShieldColour` with `oag_rcs::rcsmodel::psp2` (a missing fourth component reads `0.0`, unread; the cockpit floor below makes it moot). Ground truth: `crates/raceplay/tests/omega_2048_shield_colour_ground_truth.rs` (every one of 13 teams' colours and a built shell).
@@ -154,4 +191,4 @@ beside `shipshield.rcsmodel` in every directory above.
 
 ## The `2048_Magnetic_Shield` program (read 2026-11-03, PS4 pixel shader, confidence 70)
 
-`ShieldColour` is a 12-byte (three-component) constant in the pixel program's cbuffer: only `.rgb` is loaded. Output RGB is `ShieldColour.rgb * Texture1 * attr0.w * attr2.x`, lerped toward fog; output alpha is `tex.r * attr2.x`, where `attr2.x` is the vertex stream's `VertexColour1.w`. So `ShieldColour.a` never reaches a pixel through this program, and the alpha `0` authored on these shells does not by itself hide them. Drawn on 2048 (HDR cyan `(0, 4.59, 4.59)`, floored to target alpha 1 by the cockpit rule): a cyan lattice around the hull. Not read on the Vita `.gxp` side (`checked, applies, not wired` for the Vita program itself: the same material name and the same constant name).
+`ShieldColour` is a 12-byte (three-component) constant in the pixel program's cbuffer: only `.rgb` is loaded. Output RGB is `ShieldColour.rgb * Texture1 * attr0.w * attr2.x`, lerped toward fog; output alpha is `tex.r * attr2.x`, where `attr2.x` is the vertex stream's `VertexColour1.w`. So `ShieldColour.a` never reaches a pixel through this program, and the alpha `0` authored on these shells does not by itself hide them. Drawn on 2048 (HDR cyan `(0, 4.59, 4.59)`, floored to target alpha 1 by the cockpit rule): a cyan lattice around the hull. The Vita's lightning programs were read 2026-11-26 ("The lattice scrolls"); the magnetic pixel program's alpha-and-colour reading above is the PS4's.

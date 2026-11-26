@@ -127,6 +127,7 @@ pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
     }),
     craft: None,
     cannon_lights: false,
+    emp_light: false,
     ammo_gauge: None,
     hull_charge: None,
     handling: None,

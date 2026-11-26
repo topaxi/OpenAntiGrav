@@ -465,9 +465,13 @@ fn a_fired_mod_effect_leaves_its_craft_along_its_files_axis() {
             race.tick(&PlayerInputs::none());
         }
         let (mut additive, mut alpha) = (Vec::new(), Vec::new());
-        race.view
-            .stage
-            .extend_vertices(&mut additive, &mut alpha, Vec3::X, Vec3::Y, None);
+        race.view.stage.extend_vertices(
+            &mut additive,
+            &mut alpha,
+            Vec3::X,
+            Vec3::Y,
+            oag_fx::psys::Cull::NONE,
+        );
         let all = [additive, alpha].concat();
         assert!(!all.is_empty(), "{axis}: nothing was emitted");
         let moved = all

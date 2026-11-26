@@ -710,7 +710,28 @@ impl RaceView {
         // Neutral severity: the field the collision sparks derive from an
         // impulse is the *hull's*, and nothing on the rocket path has been
         // read as feeding it. See `oag_fx::sparks::severity`.
-        self.stage.play(&effect, at, 1.0)
+        match self.craft_blast_velocity(core, trigger, struck) {
+            Some(velocity) => self.stage.play_carried(&effect, at, 1.0, velocity),
+            None => self.stage.play(&effect, at, 1.0),
+        }
+    }
+
+    /// The velocity a craft blast is handed as it spawns: the struck craft's own, on a title
+    /// whose spawn writes it (`oag_title::Effects::craft_blast_carry`). The blast stays where
+    /// it was spawned; each particle carries this times its emitter's `+0x4d0`, so the cloud
+    /// travels with the craft and, under its drag, falls behind it
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/rocket-craft-blast.md`).
+    pub(crate) fn craft_blast_velocity(
+        &self,
+        core: &SimRace,
+        trigger: Trigger,
+        struck: Option<usize>,
+    ) -> Option<Vec3> {
+        if !self.craft_blast_carry || trigger != Trigger::CraftBlast {
+            return None;
+        }
+        let ship = &core.sim.world.ships[struck?];
+        ship.active.then_some(ship.physics.body.linear_velocity)
     }
 
     /// Which explosion a hit plays and where, or `None` for a weapon with no

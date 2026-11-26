@@ -261,6 +261,7 @@ pub fn handling_for(
 ) -> Option<Handling> {
     let block = stats.class_named(class)?;
     Some(Handling {
+        eliminator_flip_time: stats.eliminator_flip_time,
         speedup_pads: SpeedupPads {
             amount: speedup_pads.amount,
             time: speedup_pads.time,

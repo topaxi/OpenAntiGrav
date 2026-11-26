@@ -1,7 +1,7 @@
 //! The Rocket's launch and its two speeds, as measured on Pulse PSP 2026-10-01.
 
 use super::*;
-use crate::projectile::{Projectiles, TriggerRadii};
+use crate::projectile::{LaunchScale, Projectiles, TriggerRadii};
 use oag_physics::{CollisionWorld, Surface, TriangleSoup};
 
 const DT: f32 = 1.0 / 60.0;
@@ -50,12 +50,29 @@ fn tick(projectiles: &mut Projectiles, world: &CollisionWorld) {
         "VENOM",
         crate::projectile::FloorArms::SteerToRidePoint,
         crate::projectile::OwnCraftProbe::PlasmaWindow(0.04),
-        crate::projectile::PlasmaRelease::DisplayScaled,
+        LaunchScale::DisplayScaled,
     );
 }
 
 /// Venom authors 800 km/h, which is 222.22 units/s; the launch is 0.75 of it.
 const CLASS: f32 = 800.0 / KMH_PER_UNIT_PER_SECOND;
+
+/// A title whose caller orthonormalises the launch matrix (HD) leaves at the class speed.
+#[test]
+fn an_unscaled_launch_leaves_at_the_class_speed() {
+    let state = ShipState::default();
+    for (scale, expected) in [
+        (LaunchScale::Unscaled, CLASS),
+        (LaunchScale::DisplayScaled, CLASS * LAUNCH_SPEED_SCALE),
+    ] {
+        let shots = launch(&state, &stats(), "VENOM", 1, scale).expect("Venom is authored");
+        let speed = shots[0].1.length();
+        assert!(
+            (speed - expected).abs() < 1e-2,
+            "{scale:?}: {speed}, wanted {expected}"
+        );
+    }
+}
 
 /// Out of the surface probe's reach the rocket never renormalises, so it keeps
 /// the launch speed. `launchSpeed="200"` is authored and must play no part.
@@ -70,6 +87,7 @@ fn a_rocket_with_no_floor_in_reach_keeps_the_launch_speed() {
         0,
         ROCKET_SHOTS as u8,
         Vec3::Y,
+        LaunchScale::DisplayScaled,
     )
     .expect("Venom is authored");
     assert_eq!(fired, ROCKET_SHOTS);
@@ -100,6 +118,7 @@ fn the_first_surface_hit_sets_the_class_speed() {
         0,
         ROCKET_SHOTS as u8,
         Vec3::Y,
+        LaunchScale::DisplayScaled,
     )
     .expect("Venom is authored");
     let before = projectiles.slots[0].velocity.length();
@@ -130,6 +149,7 @@ fn a_rocket_is_seeded_with_the_normal_it_is_handed() {
         0,
         ROCKET_SHOTS as u8,
         normal,
+        LaunchScale::DisplayScaled,
     )
     .expect("Venom is authored");
     for slot in &projectiles.slots[..ROCKET_SHOTS] {
@@ -204,7 +224,7 @@ fn the_count_sizes_the_volley() {
     let state = ShipState::default();
     let stats = fanned_stats();
     let sideways = |count: u8| -> Vec<f32> {
-        launch(&state, &stats, "VENOM", count)
+        launch(&state, &stats, "VENOM", count, LaunchScale::DisplayScaled)
             .expect("Venom is authored")
             .iter()
             .map(|&(_, velocity)| velocity.dot(state.body.right()))

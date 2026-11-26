@@ -90,7 +90,9 @@
 //!
 //! Header fields absent from the table above are unread rather than guessed.
 
+pub mod cannon_bolt;
 pub mod electricity;
+mod operands;
 pub mod sampler_use;
 pub mod texcoord_flip;
 
@@ -323,6 +325,9 @@ pub struct Program {
     pub secondary_instructions: u32,
     /// `+0x70`: literal records, 8 bytes each.
     pub literal_count: u32,
+    /// The literal records, `(word index, value bits)`: the word is placed in the secondary
+    /// attribute file at that index (`docs/formats/gxp.md`, "The literal record resolved").
+    pub literals: Vec<(u32, u32)>,
     /// `+0x90`: container records, 8 bytes each.
     pub container_count: u32,
     /// The bindings, in table order.
@@ -527,6 +532,12 @@ impl Program {
             primary_instructions,
             secondary_instructions,
             literal_count,
+            literals: (0..literal_count as usize)
+                .map(|i| {
+                    let at = literal_offset + 8 * i;
+                    (le32(b, at), le32(b, at + 4))
+                })
+                .collect(),
             container_count,
             parameters,
             unaccounted,
@@ -624,6 +635,8 @@ pub fn programs(data: &[u8]) -> Vec<(usize, Result<Program>)> {
     out
 }
 
+mod lightning;
+pub use lightning::lightning_rates;
 pub mod usse;
 
 #[cfg(test)]

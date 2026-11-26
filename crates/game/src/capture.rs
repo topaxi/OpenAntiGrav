@@ -335,7 +335,7 @@ pub fn run(
     if options.screen.is_some() || options.menu_page.is_some() {
         audio.start_music(
             &options.music_discs,
-            options.settings.audio.music_source,
+            options.settings.music_source(Some(title)),
             &oag_source::cache::default_audio_cache_dir(),
         );
     }
@@ -414,7 +414,7 @@ pub fn run(
         if !frontend.is_playing_movie() && pending_sound.is_empty() {
             audio.start_music(
                 &options.music_discs,
-                options.settings.audio.music_source,
+                options.settings.music_source(Some(title)),
                 &oag_source::cache::default_audio_cache_dir(),
             );
         }
@@ -465,7 +465,7 @@ pub fn run(
         crate::sound::hold_race_song(audio, loaded.title);
         audio.start_race_music(
             &options.music_discs,
-            options.settings.audio.music_source,
+            options.settings.music_source(Some(loaded.title)),
             &oag_source::cache::default_audio_cache_dir(),
         );
         // The song lands on the tick the worker finishes, which a loop running faster than the
@@ -527,6 +527,7 @@ pub fn run(
                 leach_path: None,
                 force_bomb_trip: None,
                 force_missile_hit: None,
+                force_rocket_hit: None,
                 force_quake: None,
                 remote_correction: None,
                 net: None,

@@ -6,8 +6,8 @@ use oag_core::math::Vec3;
 use oag_mesh::mesh::GpuVertex;
 
 use super::{
-    Blend, Effect, EmitterSpec, Particle, Render, Stage, System, billboard, channel_sample, guard,
-    streak,
+    Blend, Cull, Effect, EmitterSpec, Particle, Render, Stage, System, billboard, channel_sample,
+    guard, near, streak,
 };
 
 impl System {
@@ -24,7 +24,14 @@ impl System {
     ) -> (Vec<GpuVertex>, Vec<GpuVertex>) {
         let mut additive = Vec::new();
         let mut alpha_over = Vec::new();
-        self.extend_vertices(&mut additive, &mut alpha_over, effect, right, up, None);
+        self.extend_vertices(
+            &mut additive,
+            &mut alpha_over,
+            effect,
+            right,
+            up,
+            Cull::NONE,
+        );
         (additive, alpha_over)
     }
 
@@ -36,15 +43,15 @@ impl System {
         effect: &Effect,
         right: Vec3,
         up: Vec3,
-        guard: Option<&guard::GuardBand>,
+        cull: Cull<'_>,
     ) {
-        self.extend_layer(true, out, &mut Vec::new(), effect, right, up, guard);
+        self.extend_layer(true, out, &mut Vec::new(), effect, right, up, cull);
     }
 
     /// [`Self::vertices`], appended to two lists the caller owns - the
     /// renderer's form (a returned pair per effect allocated 1.99 MB a frame
-    /// with rockets in the air). `guard` is the GE's screen-range cull, or
-    /// `None` for a source it was not measured on.
+    /// with rockets in the air). `cull` is what the view knows that drops or
+    /// reshapes a quad ([`Cull`]).
     pub fn extend_vertices(
         &self,
         additive: &mut Vec<GpuVertex>,
@@ -52,9 +59,9 @@ impl System {
         effect: &Effect,
         right: Vec3,
         up: Vec3,
-        guard: Option<&guard::GuardBand>,
+        cull: Cull<'_>,
     ) {
-        self.extend_layer(false, additive, alpha_over, effect, right, up, guard);
+        self.extend_layer(false, additive, alpha_over, effect, right, up, cull);
     }
 
     /// A particle's age, half size, alpha and palette colour this frame.
@@ -78,7 +85,7 @@ impl System {
         effect: &Effect,
         right: Vec3,
         up: Vec3,
-        guard: Option<&guard::GuardBand>,
+        cull: Cull<'_>,
     ) {
         for particle in &self.particles {
             if !particle.alive() {
@@ -87,9 +94,13 @@ impl System {
             let spec = &effect.emitters[usize::from(particle.spec)];
             let Some(shader) = spec.shader else { continue };
             let (age, half, alpha, colour) = self.look(spec, particle);
+            let Some((half, alpha)) = near::apply(effect, spec, particle, cull.near, half, alpha)
+            else {
+                continue;
+            };
             let rgb = [colour[0], colour[1], colour[2]];
             let corners = billboard(spec, particle, age, half, right, up, rgb, alpha);
-            if guard::drops(guard, &effect.name, spec.template, &corners) {
+            if guard::drops(cull.guard, &effect.name, spec.template, &corners) {
                 continue;
             }
             let place = usize::from(shader);
@@ -109,7 +120,7 @@ impl System {
         effect: &Effect,
         right: Vec3,
         up: Vec3,
-        guard: Option<&guard::GuardBand>,
+        cull: Cull<'_>,
     ) {
         for particle in &self.particles {
             if !particle.alive() {
@@ -139,12 +150,16 @@ impl System {
                     half,
                     [rgb[0], rgb[1], rgb[2], alpha],
                     (right, up),
-                    guard,
+                    cull.guard,
                 );
                 continue;
             }
+            let Some((half, alpha)) = near::apply(effect, spec, particle, cull.near, half, alpha)
+            else {
+                continue;
+            };
             let corners = billboard(spec, particle, age, half, right, up, rgb, alpha);
-            if guard::drops(guard, &effect.name, spec.template, &corners) {
+            if guard::drops(cull.guard, &effect.name, spec.template, &corners) {
                 continue;
             }
             out.extend_from_slice(&corners);
@@ -159,7 +174,7 @@ impl Stage {
     pub fn vertices(&self, right: Vec3, up: Vec3) -> (Vec<GpuVertex>, Vec<GpuVertex>) {
         let mut additive = Vec::new();
         let mut alpha_over = Vec::new();
-        self.extend_vertices(&mut additive, &mut alpha_over, right, up, None);
+        self.extend_vertices(&mut additive, &mut alpha_over, right, up, Cull::NONE);
         (additive, alpha_over)
     }
 
@@ -171,20 +186,15 @@ impl Stage {
         alpha_over: &mut Vec<GpuVertex>,
         right: Vec3,
         up: Vec3,
-        guard: Option<&guard::GuardBand>,
+        cull: Cull<'_>,
     ) {
         for instance in &self.instances {
             let Some(effect) = instance.effect.as_deref() else {
                 continue;
             };
-            let (from_additive, from_alpha) = (additive.len(), alpha_over.len());
             instance
                 .system
-                .extend_vertices(additive, alpha_over, effect, right, up, guard);
-            if let Some(tint) = instance.tint {
-                tint.recolour(additive, from_additive);
-                tint.recolour(alpha_over, from_alpha);
-            }
+                .extend_vertices(additive, alpha_over, effect, right, up, cull);
         }
     }
 
@@ -194,19 +204,13 @@ impl Stage {
         out: &mut Vec<(usize, Vec<GpuVertex>)>,
         right: Vec3,
         up: Vec3,
-        guard: Option<&guard::GuardBand>,
+        cull: Cull<'_>,
     ) {
         for instance in &self.instances {
             let Some(effect) = instance.effect.as_deref() else {
                 continue;
             };
-            let from: Vec<usize> = out.iter().map(|(_, list)| list.len()).collect();
-            instance.system.extend_shaded(out, effect, right, up, guard);
-            if let Some(tint) = instance.tint {
-                for (at, (_, list)) in out.iter_mut().enumerate() {
-                    tint.recolour(list, from.get(at).copied().unwrap_or(0));
-                }
-            }
+            instance.system.extend_shaded(out, effect, right, up, cull);
         }
     }
 
@@ -216,19 +220,15 @@ impl Stage {
         out: &mut Vec<GpuVertex>,
         right: Vec3,
         up: Vec3,
-        guard: Option<&guard::GuardBand>,
+        cull: Cull<'_>,
     ) {
         for instance in &self.instances {
             let Some(effect) = instance.effect.as_deref() else {
                 continue;
             };
-            let from = out.len();
             instance
                 .system
-                .extend_underlay_vertices(out, effect, right, up, guard);
-            if let Some(tint) = instance.tint {
-                tint.recolour(out, from);
-            }
+                .extend_underlay_vertices(out, effect, right, up, cull);
         }
     }
 }

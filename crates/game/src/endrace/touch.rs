@@ -93,8 +93,8 @@ pub enum Standing {
     Time(i64),
     /// The zone counter reached.
     Zone(u16),
-    /// Opponent kills scored.
-    Kills(u32),
+    /// The Eliminator score, whole points.
+    Score(u32),
 }
 
 /// A finished race's facts, as [`summary`] takes them.
@@ -118,7 +118,7 @@ impl Facts {
     ///
     /// **What a mode "comes to" is chosen, not measured**: a place for a race,
     /// the total time for a time trial, the best lap for a speed lap, the zone
-    /// reached, the kills scored.
+    /// reached, the Eliminator score.
     #[must_use]
     pub fn from_race(race: &oag_raceplay::Race, objectives: Option<EventObjectives>) -> Self {
         // The race's own mode, not the menu's: an event launched off the map
@@ -140,7 +140,7 @@ impl Facts {
                     Standing::Time(oag_game_ticks(u64::from(ticks)))
                 }),
             oag_race::Mode::Zone => Standing::Zone(zone),
-            oag_race::Mode::Eliminator => Standing::Kills(standing.kills),
+            oag_race::Mode::Eliminator => Standing::Score(standing.score as u32),
             _ => Standing::Place(place),
         };
         let outcome = oag_2048::campaign::EventOutcome {
@@ -149,6 +149,7 @@ impl Facts {
             finish_centiseconds: finished.then_some(total),
             zone,
             kills: standing.kills,
+            score: standing.score as u32,
         };
         Self {
             mode,
@@ -264,7 +265,7 @@ fn standing_text(strings: &StringTable, standing: Standing) -> String {
         }
         Standing::Time(centiseconds) => clock(centiseconds),
         Standing::Zone(zone) => zone.to_string(),
-        Standing::Kills(kills) => kills.to_string(),
+        Standing::Score(score) => score.to_string(),
     }
 }
 

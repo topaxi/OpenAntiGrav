@@ -59,7 +59,7 @@ today after this change.
 | `WO_SHIP_SPARK_DAMAGE_LEACHBEAM` | a LeachBeam drain's hit (`Ship_Damage`) | **resolved 2026-10-07:** `Ship_ApplyDamage` (`0x000e7760`) sets `object + 0x260` on a kind 7 hit and `0x002a06e0` (also the engine-flare enqueue) clears it and spawns the effect attached at `+0x1c0`, conf 78 | **yes, HD only** (`race::damage_fx`), once per hit |
 | `WO_WEAPON_ABSORB` | `Ship_PlayAbsorbFeedback` | `ShipAbsorbNode_SpawnBurst` `0x002d8d10` (`absorb-feedback.md`) | yes (HD path) |
 | `WO_TRAIL_HITSHIP`, `_RED` | (HD-only) | `0x002d9ec0` (`engine-trail.md`) | yes |
-| `WO_ROCKET_EXPLO` | craft/track hit | `0x0014a7d8` | yes, Pulse-inherited; HD site found; the wall half (`_TRACK`) plays HD's own `.gtf` sprites since 2026-10-08, the craft half still the procedural profile |
+| `WO_ROCKET_EXPLO` | craft/track hit | `0x0014a7d8` | yes, Pulse-inherited; HD site found; the wall half (`_TRACK`) plays HD's own `.gtf` sprites since 2026-10-08, the craft half since 2026-11-26 ([particle-fill.md](../../../rendering/particle-fill.md#with-its-sprites)); the spawn (`Rocket_SpawnCraftBlast`) copies a point and hands the blast the struck craft's velocity, wired 2026-11-26 ([rocket-craft-blast.md](rocket-craft-blast.md)) |
 | `WO_MISSILE_EXPLO` | detonation | `0x00155568` | yes, Pulse-inherited |
 | `WO_MINE_EXPLO` | detonation | `0x00140710` | yes, Pulse-inherited |
 | `WO_SHURIKEN_EXPIRE` | teardown | `0x0014d4f0` | yes, Pulse-inherited |
@@ -238,7 +238,10 @@ PS2 renders at four ticks across a rocket burst are byte-identical to main.
 from its table slot, so what selects lit is not found, and nothing says whether any
 declares `fogFactors` or a light. Unread; nothing was tinted. (2) HD's own frame-advance
 law and the flipbook direction (see above). (3) The pose: ours hits a far wall. (4) The
-craft hit (`WO_ROCKET_EXPLO`) was not captured. Omega and 2048: **checked, applies,
+craft hit (`WO_ROCKET_EXPLO`) was captured 2026-11-26 and still draws the procedural profile in
+ours, which is one reason its picture does not match
+([particle-fill.md](../../../rendering/particle-fill.md), "Against the original at a near
+blast"). Omega and 2048: **checked, applies,
 not wired** - both author their own `WO_ROCKET_EXPLO` (`psys_omega_ground_truth.rs`)
 and already read their sprites.
 

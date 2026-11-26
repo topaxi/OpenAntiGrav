@@ -607,6 +607,10 @@ pub struct Detonator {
     /// list: read on HD (`PulseBullet`'s render queue, `detonator-cannon.md`, "The cannon's three
     /// point lights"); 2048's and Omega's queues are unread.
     pub cannon_lights: bool,
+    /// Whether the EMP wave submits its `(0, 5, 10)` point light, range `50`, at each front:
+    /// HD's, 2048's and Omega's `EMP_DrawLights` all read
+    /// (`detonator-emp.md`, "2048 and Omega draw it").
+    pub emp_light: bool,
     /// The cannon gauge on the craft's back, or `None` where a title's law is not read.
     pub ammo_gauge: Option<DetonatorAmmoGauge>,
     /// The plasma shells on the craft's wings that the EMP's charge lights, or `None` where a

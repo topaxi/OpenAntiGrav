@@ -76,7 +76,30 @@ pub(crate) fn drive_binary(
     shots: &Path,
     args: &[&str],
 ) -> Run {
-    drive_binary_in(binary, image, tag, script, shots, args, false)
+    drive_binary_in(binary, image, tag, script, shots, args, Launch::Quiet)
+}
+
+/// [`drive_binary`] with the soundtrack read, for what shows the playing song, and the debug
+/// lines on stderr.
+pub(crate) fn drive_binary_with_soundtrack(
+    binary: &str,
+    image: &Path,
+    tag: &str,
+    script: &str,
+    shots: &Path,
+    args: &[&str],
+) -> Run {
+    drive_binary_in(binary, image, tag, script, shots, args, Launch::Soundtrack)
+}
+
+/// What [`drive_binary_in`] starts the game with.
+#[derive(PartialEq)]
+enum Launch {
+    /// No soundtrack: the quickest.
+    Quiet,
+    /// As [`Launch::Quiet`] with an empty mods directory.
+    Unmodded,
+    Soundtrack,
 }
 
 /// [`drive_with`] with no simulation mod mounted, so the rewind of a race that must play its
@@ -89,7 +112,7 @@ fn drive_unmodded(image: &Path, tag: &str, script: &str, shots: &Path, args: &[&
         script,
         shots,
         args,
-        true,
+        Launch::Unmodded,
     )
 }
 
@@ -100,26 +123,33 @@ fn drive_binary_in(
     script: &str,
     shots: &Path,
     args: &[&str],
-    unmodded: bool,
+    launch: Launch,
 ) -> Run {
     let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("photo-{tag}"));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("a scratch directory");
     let log = dir.join("state.jsonl");
     let no_mods = dir.join("no-mods");
-    if unmodded {
+    if launch == Launch::Unmodded {
         std::fs::create_dir_all(&no_mods).expect("a scratch directory");
     }
     let mut command = std::process::Command::new(binary);
-    if unmodded {
-        command.env("OAG_MODS", &no_mods);
+    match launch {
+        Launch::Unmodded => {
+            command.env("OAG_MODS", &no_mods).arg("--no-soundtrack");
+        }
+        Launch::Quiet => {
+            command.arg("--no-soundtrack");
+        }
+        Launch::Soundtrack => {
+            command.env("RUST_LOG", "oag_game=debug");
+        }
     }
     let output = command
         .arg(image)
         // One seed, or each launch deals its own weapons and the two races differ from tick 1.
         .args([
             "--no-audio",
-            "--no-soundtrack",
             "--no-effects",
             "--no-intro",
             "--seed",

@@ -359,6 +359,13 @@ pub(crate) struct WreckArgs {
     #[arg(long, value_name = "TICK:SLOT", requires = "race")]
     pub(crate) force_missile_hit: Option<String>,
 
+    /// With `--race --screenshot`, put craft `SLOT` on a Rocket the player has
+    /// fired at the end of a tick: `TICK:SLOT`, e.g. `294:1`. The same aid
+    /// `--force-missile-hit` is, for the Rocket's craft explosion. See
+    /// [`oag_raceplay::RaceSim::force_rocket_hit`].
+    #[arg(long, value_name = "TICK:SLOT", requires = "race")]
+    pub(crate) force_rocket_hit: Option<String>,
+
     /// With `--race --screenshot`, launch craft `SLOT`'s Quake so its bump
     /// reaches the player at the end of a tick: `TICK:SLOT`, e.g. `120:1`. The
     /// rival's wave a headless run would otherwise never send, for what a Quake

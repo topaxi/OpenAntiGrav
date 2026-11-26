@@ -350,7 +350,7 @@ impl Pending {
         // folder has nothing to serve.
         if !self.cli.audio.no_soundtrack {
             discs.start_pool(
-                &self.settings.audio.music_switches,
+                &self.settings.music_switches(),
                 &self.settings.audio.music_folders,
                 &reader,
             );

@@ -5,10 +5,10 @@
 //! under the 1,000-line ratchet.
 
 use super::{
-    FALL_ACCELERATION, FloorArms, Impact, KMH_PER_UNIT_PER_SECOND, MAX_FLIGHT_SECONDS,
-    MAX_PROJECTILES, OwnCraftProbe, PlasmaRelease, Projectile, Projectiles, RIDE_HEIGHT,
-    SURFACE_PROBE_LENGTH, SweepHit, TriggerRadii, cannon, disruptor, launch_normal, mine, missile,
-    nearest_hit, own_box_blocks, plasma, rocket, shuriken,
+    FALL_ACCELERATION, FloorArms, Impact, KMH_PER_UNIT_PER_SECOND, LaunchScale, MAX_FLIGHT_SECONDS,
+    MAX_PROJECTILES, OwnCraftProbe, Projectile, Projectiles, RIDE_HEIGHT, SURFACE_PROBE_LENGTH,
+    SweepHit, TriggerRadii, cannon, disruptor, launch_normal, mine, missile, nearest_hit,
+    own_box_blocks, plasma, rocket, shuriken,
 };
 use crate::Craft;
 use oag_core::math::Vec3;
@@ -34,7 +34,7 @@ impl Projectiles {
     /// `floor_arms` is how the title's weapons write their velocity on a floor
     /// ([`FloorArms`]). `own_craft` is how the first probes treat the firing craft
     /// ([`OwnCraftProbe`]). `plasma_release` is how fast a Plasma bolt leaves the node
-    /// ([`PlasmaRelease`]).
+    /// ([`LaunchScale`]).
     // One table block per weapon that flies at an authored speed, plus the cage and
     // the title's floor arms; a parameter struct is deferred until another asks.
     #[allow(clippy::too_many_arguments)]
@@ -51,7 +51,7 @@ impl Projectiles {
         class: &str,
         floor_arms: FloorArms,
         own_craft: OwnCraftProbe,
-        plasma_release: PlasmaRelease,
+        plasma_release: LaunchScale,
     ) -> [Option<Impact>; MAX_PROJECTILES] {
         let mut impacts = [None; MAX_PROJECTILES];
         // Looked up once: a string match on the class name, the same for every bolt.
@@ -114,7 +114,7 @@ impl Projectiles {
                     // On Pulse the bolt leaves at 0.75 x the release speed and holds it
                     // until its first floor ride, as the Rocket does: `Plasma_Launch`
                     // takes the weapon-node matrix, which carries the craft's display
-                    // scale. HD's node is orthonormalised first. See [`PlasmaRelease`].
+                    // scale. HD's node is orthonormalised first. See [`LaunchScale`].
                     projectile.velocity =
                         heading * (launch_kmh / KMH_PER_UNIT_PER_SECOND * plasma_release.scale());
                 }
@@ -187,7 +187,8 @@ impl Projectiles {
                 // first surface hit: `Rocket_Update` renormalises to
                 // `SpeedForClass / 3.6` on the probe-hit arm only, so this feeds
                 // `speed_units_on_surface` below. The class speed rides in
-                // `launch_speed_kmh`; see [`rocket::LAUNCH_SPEED_SCALE`].
+                // `launch_speed_kmh`; a title that launches unscaled
+                // ([`LaunchScale::Unscaled`]) already flies at it.
                 Some(projectile.launch_speed_kmh)
             } else {
                 None
@@ -248,7 +249,7 @@ impl Projectiles {
             // 200 km/h release (`docs/ghidra/functions/ps3-hdfury-eu/plasma.md`, "Measured
             // live").
             if in_plasma_window
-                && plasma_release == PlasmaRelease::Unscaled
+                && plasma_release == LaunchScale::Unscaled
                 && let Some(kmh) = pinned_kmh
                 && projectile.velocity.length_squared() > 0.0
             {

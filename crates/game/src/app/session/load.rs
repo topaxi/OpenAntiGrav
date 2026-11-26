@@ -698,7 +698,7 @@ impl Session {
         self.resume_race_music();
         let music = self.audio.race_music_fetch(
             &self.music_discs,
-            self.settings.audio.music_source,
+            self.music_source(),
             &oag_source::cache::default_audio_cache_dir(),
         );
         let shell = self.shell.clone().ok_or_else(|| {
@@ -1201,7 +1201,7 @@ impl Session {
             Some(worker) => self.audio.finish_race_music(
                 worker,
                 &self.music_discs,
-                self.settings.audio.music_source,
+                self.music_source(),
                 &oag_source::cache::default_audio_cache_dir(),
             ),
             // No fetch was spawned: `Audio::race_music_fetch` found the track
@@ -1210,7 +1210,7 @@ impl Session {
             // spawns the fetch itself, still off this thread.
             None => self.audio.start_race_music(
                 &self.music_discs,
-                self.settings.audio.music_source,
+                self.music_source(),
                 &oag_source::cache::default_audio_cache_dir(),
             ),
         }
