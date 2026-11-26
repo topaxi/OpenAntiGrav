@@ -111,7 +111,7 @@ pub struct ModelCell {
 /// The `<HexSelection>` widget: its place, shape and authored colours.
 ///
 /// A cell outside the selected column is `hex_fade` shading to `hex` across its quad, by
-/// [`edge_share`] of each side.
+/// [`edge_share`] of each side; its picture and padlock are shaded by the same two shares.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct HexGrid {
     pub origin: [f32; 2],
