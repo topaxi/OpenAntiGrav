@@ -35,6 +35,17 @@ pub(crate) struct DetonatorArgs {
     )]
     pub(crate) mine_ages: Option<MineAges>,
 
+    /// Comparison input: hold each `--detonator-mines` mine's visualiser `MasterVolume` and
+    /// `PitchVolume` at the original's (`M,P;...`, `m+0x104` and `m+0x10c`; same order). Ours' own
+    /// are the music's whole-spectrum level.
+    #[arg(
+        long = "detonator-mine-volumes",
+        value_name = "M,P;...",
+        value_parser = parse_mine_volumes,
+        requires = "mines"
+    )]
+    pub(crate) mine_volumes: Option<MineVolumes>,
+
     /// Comparison input: start the Detonator EMP at this many charges (the gauge they give), as
     /// the original's charge was written for the capture it is compared with.
     #[arg(long = "detonator-emp-charge", value_name = "N")]
@@ -59,6 +70,25 @@ pub(crate) struct MineEnvelopes(pub(crate) Vec<(f32, f32, f32)>);
 /// The ages of `--detonator-mine-ages`, one value to clap.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct MineAges(pub(crate) Vec<f32>);
+
+/// The pairs of `--detonator-mine-volumes`, one value to clap.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct MineVolumes(pub(crate) Vec<(f32, f32)>);
+
+fn parse_mine_volumes(text: &str) -> Result<MineVolumes, String> {
+    let number = |n: &str| {
+        n.trim()
+            .parse::<f32>()
+            .map_err(|_| format!("`{n}` is not a number"))
+    };
+    text.split(';')
+        .map(|mine| match mine.split(',').collect::<Vec<_>>()[..] {
+            [m, p] => Ok((number(m)?, number(p)?)),
+            _ => Err(format!("`{mine}` is not M,P")),
+        })
+        .collect::<Result<Vec<_>, String>>()
+        .map(MineVolumes)
+}
 
 fn parse_mine_ages(text: &str) -> Result<MineAges, String> {
     text.split(';')
@@ -119,6 +149,16 @@ mod tests {
         );
         assert!(parse_mine_envelopes("0.5").is_err());
         assert!(parse_mine_envelopes("0.5,1,2,3").is_err());
+    }
+
+    #[test]
+    fn mine_volumes_are_two_numbers_a_mine() {
+        assert_eq!(
+            parse_mine_volumes("1,0.3154;0.7069,0.1414"),
+            Ok(MineVolumes(vec![(1.0, 0.3154), (0.7069, 0.1414)]))
+        );
+        assert!(parse_mine_volumes("1").is_err());
+        assert!(parse_mine_volumes("1,0.3,8").is_err());
     }
 
     #[test]

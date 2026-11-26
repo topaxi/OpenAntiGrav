@@ -248,6 +248,8 @@ pub(crate) struct Analyzer {
     fft: Fft,
     ranges: [Range; BANDS],
     levels: [f32; BANDS],
+    /// The latest spectrum's [`Analyzer::total`].
+    total: f32,
     /// The last [`FFT_SIZE`] samples, oldest first.
     block: Box<[f32; FFT_SIZE]>,
     /// Samples taken since the last spectrum.
@@ -263,6 +265,7 @@ impl Analyzer {
             fft: Fft::new(),
             ranges: [Range::default(); BANDS],
             levels: [0.0; BANDS],
+            total: 0.0,
             block: Box::new([0.0; FFT_SIZE]),
             since: 0,
             real: Box::new([0.0; FFT_SIZE]),
@@ -298,6 +301,15 @@ impl Analyzer {
         self.levels
     }
 
+    /// The latest spectrum's whole-spectrum level: the sum of all [`HALF`] bins' magnitudes over
+    /// [`FFT_SIZE`], with no range against its own history (what `0x00304cc8` reads off the record
+    /// over bins `0..=511`, `docs/ghidra/functions/ps3-hdfury-eu/detonator-mine-material.md`,
+    /// "The visualiser's level"). Its scale against the original's is chosen, not measured.
+    #[must_use]
+    pub(crate) fn total(&self) -> f32 {
+        self.total
+    }
+
     /// Moves `samples` into the block, no more than a hop's worth.
     fn push(&mut self, samples: &[f32]) {
         self.block.copy_within(samples.len().., 0);
@@ -314,6 +326,9 @@ impl Analyzer {
             &mut self.imaginary,
             &mut self.magnitudes,
         );
+        #[expect(clippy::cast_precision_loss, reason = "FFT_SIZE is 1024, so exact")]
+        let size = FFT_SIZE as f32;
+        self.total = self.magnitudes.iter().sum::<f32>() / size;
         for (band, &(first, last)) in bins.iter().enumerate() {
             let sum: f32 = self.magnitudes[first..=last].iter().sum();
             self.levels[band] = self.ranges[band].level(sum / FFT_SIZE as f32, dt);
@@ -332,13 +347,31 @@ impl Analyzer {
 #[derive(Debug)]
 pub struct Spectrum {
     levels: Mutex<[f32; BANDS]>,
+    /// [`Analyzer::total`]'s bits.
+    total: std::sync::atomic::AtomicU32,
 }
 
 impl Spectrum {
     pub(crate) fn new() -> Self {
         Self {
             levels: Mutex::new([0.0; BANDS]),
+            total: std::sync::atomic::AtomicU32::new(0),
         }
+    }
+
+    /// Publishes one chunk's whole-spectrum level ([`Analyzer::total`]), from the render-ahead
+    /// thread.
+    pub(crate) fn publish_total(&self, total: f32) {
+        self.total
+            .store(total.to_bits(), std::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// The most recent whole-spectrum level: the sum of every bin's magnitude, not ranged
+    /// against its own history like [`Self::levels`]. `0.0` until the first chunk renders.
+    /// The Detonator mine's visualiser reads it (`MasterVolume`, `PitchVolume`).
+    #[must_use]
+    pub fn total(&self) -> f32 {
+        f32::from_bits(self.total.load(std::sync::atomic::Ordering::Relaxed))
     }
 
     /// Publishes one chunk's levels, from the render-ahead thread.

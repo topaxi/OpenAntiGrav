@@ -610,6 +610,13 @@ impl super::Scene {
         self.band_levels.set(levels);
     }
 
+    /// The audio output's whole-spectrum level for the next frame
+    /// (`oag_audio::spectrum::Spectrum::total`), the one level the Detonator mine's visualiser reads.
+    /// View-side, like [`Self::set_band_levels`].
+    pub fn set_music_level(&self, level: f32) {
+        self.music_level.set(level);
+    }
+
     /// Encodes the motion blur over the finished frame, `false` when the
     /// pass is absent or off. `views` are the frame, the velocity attachment
     /// and the depth attachment; `blur` is the tier, its shutter and its tap

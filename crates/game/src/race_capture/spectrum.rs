@@ -60,6 +60,19 @@ impl ZoneFeed {
     }
 }
 
+impl ZoneFeed {
+    /// The whole-spectrum level the Detonator mine's visualiser reads, `live` when the feed is
+    /// [`Self::Live`]. A comparison carries no level ([`Self::Fixed`] holds bands only; a pair pins
+    /// the mines' volumes instead) and the ramp has none, so both read silence.
+    #[must_use]
+    pub fn level(&self, live: impl FnOnce() -> f32) -> f32 {
+        match self {
+            Self::Live => live(),
+            Self::Ramp | Self::Fixed { .. } => 0.0,
+        }
+    }
+}
+
 fn ramp() -> Bands {
     std::array::from_fn(|i| {
         #[expect(clippy::cast_precision_loss, reason = "BANDS is 16, so exact")]
@@ -114,6 +127,11 @@ pub(super) fn feed(
     scene: &oag_raceplay::Scene,
 ) -> Bands {
     scene.set_band_levels(options.zone_feed.raw(|| audio.output().spectrum().levels()));
+    scene.set_music_level(
+        options
+            .zone_feed
+            .level(|| audio.output().spectrum().total()),
+    );
     zone_spectrum(options, audio)
 }
 
