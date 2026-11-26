@@ -381,6 +381,12 @@ fn the_grid_puts_a_circuit_in_each_hexagon_and_red_on_the_chosen_column() {
         .filter(|d| matches!(d, Draw::Sprite { color, .. } if *color == oag_ui::screen::argb_to_rgba(0xffac_0717)))
         .count();
     assert_eq!(red, 2, "both chosen-column hexagons, once each");
+    // Each icon is the widget's 50 unit quad: the test's 128x64 art fits it as 50 by 25.
+    let icons = draws
+        .iter()
+        .filter(|d| matches!(d, Draw::Sprite { rect, .. } if rect[2..] == [50.0, 25.0]))
+        .count();
+    assert_eq!(icons, 18);
 }
 
 /// The `>>>` is a 40x10 quad 24 units under the ring, walking one frame of its strip a quarter
