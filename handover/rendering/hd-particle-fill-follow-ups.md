@@ -47,7 +47,11 @@ blast the struck craft's velocity, on HD, 2048 and Omega
 - **The size multiplier's other arms** (`particle-render.md`, "The per-particle size
   multiplier"): the parent-age arm (`TRAIL_SMOKE`, `plasma_goo_trail`, `SPARK_TRAILS`) and the
   random arm (most of 58 emitters; it adds a draw to the effect's generator). The run arm is
-  wired. Whether HD's renderer also reads `+0xc84` as a colour scale is unread.
+  wired.
+- **Lead, not checked: HD's streak colour gain may be the size lower bound.** Ours dims the
+  far-bar effects' class 6 streaks by `+0xc84` (`StreakDraw::colour_gain`, e.g. `0.7` on
+  `WO_TRAIL_HITSHIP`), a reading taken from Omega, whose layout has a separate word there. HD's
+  init reads `+0xc84` as the multiplier's lower bound. Check: does HD's `PartRender` draw read it?
 - **Size multiplier and spawn range on 2048 and Omega: they apply, not wired.** Both inits carry
   HD's law; Omega's record offsets are 8 bytes later and `oag_pob` reads HD's
   (`particle-render.md`, "The atlas frame"). To read first: what their instance fraction holds.

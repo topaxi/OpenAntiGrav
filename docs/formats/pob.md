@@ -1555,7 +1555,9 @@ HD's per-particle size multiplier runs between these two `f32`s
 confidence 90): `oag_pob::Emitter::size_span`, played by `oag_title::Effects::size_ramps`. 2048
 authors them at the same offsets. **Omega's record has 8 more bytes from `+0xc84`**: the bounds
 are at `+0xc8c`/`+0xc90`, the spawn range at `+0xc95`/`+0xc96`, the hold at `+0xc97`/`+0xc9c`
-(read off `trail` of its `WO_ROCKET_EXPLO`, confidence 85). `size_span` and `frame_range` read
+(read off `trail` of its `WO_ROCKET_EXPLO`; the 31 class 8 emitters of
+[heat-haze.md](../ghidra/functions/ps4-omega-eu/heat-haze.md) also read a lower and an upper
+bound at `+0xc8c`/`+0xc90`, `0.5` or `1.0` and `1.0` to `1.5`; confidence 85). `size_span` and `frame_range` read
 HD's offsets and are wrong on an Omega file; no title plays them there.
 
 ### The sprite templates at `+0x9a4`/`+0x9a8` - 2026-09-30
