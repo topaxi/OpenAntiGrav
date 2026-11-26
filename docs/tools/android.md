@@ -665,11 +665,12 @@ before run that called itself 60. The race itself is bound by the frame's own co
 does not change.
 
 **60 Hz** was not tried as a display setting (that is a system setting of the owner's). It was
-observed from the phone's own switching: returning to the app from the home screen, the panel is
-at 60 for about half a second, `dumpsys` and `getRefreshRate` both read 60 in that window, and
-the next round a second later reads 120. The game follows both ways (`REFRESH RATE (60)` for that
-second), which also drops the measured half of `oag_present::refresh` each time, as any change of
-report does.
+observed from the phone's own switching on returning to the app from the home screen. In one
+return sampled about every half second, the first `dumpsys` sample read 60 and the next, begun
+0.5 s later, 120; the game's reader answered 60 between the starts of those two samples and 120
+at its next round a second later. Other returns logged the same 60 then 120, and the frame limit
+in force under `refresh_rate` went to 60 and back with it. Each such change also drops the
+measured half of `oag_present::refresh`, as any change of report does.
 
 ## Pre-converted caches
 
