@@ -38,12 +38,19 @@ blast the struck craft's velocity, on HD, 2048 and Omega
   `oag_raceplay::assets::decode_texture` (flare and trail art) and `load/caustic.rs`. Compare each
   with its draw's `v` in a command ring before touching it; a radially symmetric sprite shows
   nothing either way.
-- **The far blast's flat white cloud is our pose, not the particles**
-  (`particle-fill.md`, "The pose throws the far blast at the camera"): our struck craft moves at
-  `(-128, -15, -46)` where the film recorded `(88, 11, 55)`. Wanted: a capture flag that writes the
-  struck craft's velocity at the forced hit, the two far pairs re-posed with it, and a look at why
-  our opponent moves backwards there. With the film's velocity `trail` is still smoother and
-  whiter than the original's; that remainder is open.
+- **The far Rocket blast with the film's velocity is still not the original's**
+  (`particle-fill.md`, "The pose throws the far blast at the camera"): the cloud is smaller,
+  `trail` reads as smooth white lobes, and the grey smoke streaming toward the camera is missing.
+- **Near pairs (`rocket-craft-hit-0100`, `-0233`): spawn tick and struck velocity unchecked.**
+  `--force-rocket-hit 711:7` was never compared with the original's spawn point (the far films put
+  the wash quad in world space: view position through the frame's camera; the same on `hit2` says
+  where ours should stand), and ours hands the blast our own opponent's velocity. `hit2`'s
+  `struck_pose.vel` is `(89.31, 13.92, 96.76)`; pose it with `--force-rocket-hit-velocity` once the
+  spawn point is right.
+- **Lead, not checked: the tick that lands a forced Rocket hit adds about 20 units a second upward
+  to the struck craft** (set `y` 11, read 31 at the blast). The HD films' struck craft show no such
+  jump, comparing frames 8 to 23 ticks apart. Whether it is the Rocket's impulse or our hover after
+  the craft is moved onto the Rocket was not separated; only the first would matter in a race.
 - **The size multiplier's other arms** (`particle-render.md`, "The per-particle size
   multiplier"): the parent-age arm (`TRAIL_SMOKE`, `plasma_goo_trail`, `SPARK_TRAILS`) and the
   random arm (most of 58 emitters; it adds a draw to the effect's generator). The run arm is
@@ -57,9 +64,6 @@ blast the struck craft's velocity, on HD, 2048 and Omega
   (`particle-render.md`, "The atlas frame"). To read first: what their instance fraction holds.
 - **Flipbook advance on 2048 and Omega is not wired**: 2048's update wraps at the frame count with
   no hold; Omega carries that one and HD's, and which serves which directory is unread.
-- **The 12-unit pairs' hit tick (`--force-rocket-hit 711:7`) was never checked against the
-  original's spawn point.** The far films put the wash quad in world space (view position through
-  the frame's camera); the same on `hit2` says where ours should stand.
 
 ### Ready to wire: 31 HD effects load and draw no sprite of their own
 

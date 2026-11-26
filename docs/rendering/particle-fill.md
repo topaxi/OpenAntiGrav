@@ -749,19 +749,40 @@ multiplier does not remove: its cause is the pose, below.
 ### The pose throws the far blast at the camera
 
 `trail` is the child of `FIRE_TRAILS_ONEQUAD`, whose pieces inherit the struck craft's velocity
-([rocket-craft-blast.md](../ghidra/functions/ps3-hdfury-eu/rocket-craft-blast.md)). In the far
-pairs' pose our struck craft moves at `(-128, -15, -46)` units per second when it is hit; the
-film recorded `(88, 11, 55)`. Ours therefore come toward the eye: the `trail` quads' median view
-depth is 32 against the original's 51, about 2.6 times the area on screen, and younger puffs are
-nearer where the original's are farther. Why our opponent moves that way in this pose was not
-determined; it is not a particle law.
+([rocket-craft-blast.md](../ghidra/functions/ps3-hdfury-eu/rocket-craft-blast.md)). Each far
+pair's `field.csv` puts the struck craft on its film frame's pose at the start of our run, and it
+then drives more than 700 ticks under our driver before the forced hit. So it moves at
+`(-128, -15, -46)` units per second when hit in the 0.233 s pair, where the film recorded
+`(88, 11, 55)`. Ours therefore come toward the eye: the `trail` quads' median view depth is 32
+against the original's 51, about 2.6 times the area on screen. It is not a particle law.
 
-A scratch build that gave the struck craft the film's velocity at the forced hit (far pair, 24
-seeds, the spawn point checked as below) read 66.74 against 67.04 for the build with neither
-change (-0.30 +/- 0.05, better on 20), and 66.44 with the advance alone. The cloud shrinks to
-about the original's distance; `trail` still reads as smoother white lobes than the original's
-textured cloud (pixels with every channel over 235: 6.4 % against 11.1 %). The near pairs cannot
-take this test: their spawn tick was never checked against the original's.
+`--force-rocket-hit-velocity VX,VY,VZ` (builds with `dev-cli`) gives the struck craft a velocity
+as the hit is forced, and its craft blast carries exactly that. Exactly, because the tick that
+lands the hit changes the craft's own before the blast reads it: set to `(88, 11, 55)`, it read
+`(89, 31, 56)` there.
+
+**The film's value** is `88.067871,11.234680,55.156158`: the struck craft's body velocity
+(`ship + 0x6944`, then `+0x190`, the vector `Rocket_SpawnCraftBlast` reads) in
+`rocket-craft-hit/far3`, `hit.json` `struck_pose.vel`, read at the first stepped frame with its
+shield down (140 to 130), the hit both far pairs show. It is read after that frame ran, so what
+the spawn read may differ by a frame's change.
+
+With it, whole-frame RMSE (`rocket-craft-far-hit-0233` over stage seeds 1-24, `-0100` over 1-6;
+every build in a row given the same velocity):
+
+| Pair | Neither change | Advance | Advance and multiplier | The same pair without the velocity, neither change |
+| --- | --- | --- | --- | --- |
+| `rocket-craft-far-hit-0233` | 67.44 | 66.94 | 67.19 | 69.15 |
+| `rocket-craft-far-hit-0100` | 34.40 | 34.40 | 34.40 | 34.89 |
+
+At 0.233 s both changes together are 0.25 +/- 0.04 better than neither (19 of 24 seeds), and the
+multiplier gives back 0.26 of what the advance alone gains. At the compare page's own seed the
+two far pairs read 66.50 and 33.60, against 64.71 and 34.06 without velocity or either change.
+
+**The picture is still not the original's.** The cloud is smaller, `trail` reads as smooth white
+lobes, and the grey smoke streaming toward the camera is missing (pixels with every channel over
+235 at 0.233 s: 5.9 % against 11.1 %). The near pairs were not tried: neither their spawn tick nor
+their struck velocity was checked against the original's.
 
 ### Posing a far hit
 
@@ -770,8 +791,8 @@ the blast stands: the 0.233 s film's hit is `--force-rocket-hit 717:7` after the
 (spawn 1.1 units from the original's wash quad; 716 is 4.0 short). The 12-unit pairs use 711,
 which was not checked against the original's spawn point. The ring's wash quad is a few ticks
 younger than the film's labelled age (2 ticks at 0.1 s, 10 at 0.233 s, read off its colour and
-size), so the far pairs render ours at the quad's age. Ours' struck craft keeps our own opponent's
-velocity, so the travelling fireballs do not match ("The pose throws the far blast at the camera").
+size), so the far pairs render ours at the quad's age. The struck craft's velocity is posed by
+`--force-rocket-hit-velocity` ("The pose throws the far blast at the camera").
 
 ## What is left
 
