@@ -4435,26 +4435,24 @@ Measured off RPCS3 frame `030-track-settled0.png`
   rows of the selected column are red, the ring sits on the chosen direction's row.
   The two rows are the two directions (forward above, reverse below), as the
   2026-09-29 walk measured.
-- **Colours**: the widget authors none. The red (149,6,20) and dim grey match
-  `Team Selection`'s authored `HexCol`/`SelectedColumnCol` over black, so those
-  values are reused - **chosen, not measured** as a transfer. The dim fill **fades
-  with distance**: 41, 35, 30 and 24 one to four columns out, which is `HexCol`
-  (50) easing to `HexColFade` (25) in four steps (measured, one frame, confidence
-  60; `HexGrid::fade_columns`, 0 on Team Selection, where no fade was measured).
-  The ring is pale pink (221/155/162), a different tint from Team Selection's.
+- **Colours**: the widget authors none, so its class defaults apply (`HexCol` `0x64808080`,
+  `HexColFade` `0x32808080`), with `HD_Blue` on the selected column (Omega: a grey) and the same ramp as
+  `Team Selection`'s over nine columns: 41, 35, 30 and 24 one to four columns out, as measured on one
+  frame (`docs/ghidra/functions/ps3-hdfury-eu/ship-select-ring.md`, "The cells").
 - **The picture in each hexagon** is the circuit's own white icon,
   `<environment>\FE\TrackSelectEmblem_BW.gtf` (the file `Cell Selection`'s `Track
   Emblem` draws, `cell_emblems::track_emblem_src`, shared rather than named twice).
-  White on the selected column, `0,0,0,0.35` over the dim ones; 62 units across
-  (**chosen** from the sails on Vineta K). The match of this file to the frame's
-  pictures is by eye on one frame, not by a table.
+  White on the selected column, `0,0,0,0.35` over the dim ones (**chosen**; the original ramps it,
+  unwired); a 50 unit quad over its 256 texels, the widget's own argument. The match of this file to
+  the frame's pictures is by eye on one frame, not by a table.
 - **Locks**: none. `Gate::read` returns `open()` for HD and the screen filters
   unoffered circuits before the grid exists, so no cell can be locked. Pulse's law,
   unmeasured on HD; nothing is drawn rather than a padlock on a guess.
-- **The direction glyph** under the selected cell's icon and the icon's 50 unit quad are the widget's
-  own (`ship-select-ring.md`, "The direction glyph" and "The cells"); these replace the 62 units and the
-  stepped fade above. On `hd/menu-track-select` the two centre cells go 14.22 to 0.23 mean grey, the
-  glyph box 39.72 to 0.19, the grid region 3.68 to 1.13 and the frame 3.77 to 3.54.
+- **The direction glyph** under the selected cell's icon is the widget's own (`ship-select-ring.md`,
+  "The direction glyph"). On `hd/menu-track-select` the two centre cells go 14.22 to 0.23 mean grey, the
+  glyph box 39.72 to 0.19, the grid region 3.68 to 1.13 and the frame 3.77 to 3.54. The glyph box's
+  figure needs the still's clock to land on the frame the original's frame shows (its counter is not
+  read at the grab); art, quad, place and turn do not.
 - **Pointer**: each hexagon is a target (`What::Cell`, tested as a hexagon), a
   click steps to that circuit and direction and a second click confirms; the old
   top/bottom-half targets on the hex frame go when the grid exists. Pad unchanged.

@@ -425,7 +425,8 @@ inside `FUN_0142c7f0`, a menu-list update, so they belong to another Omega build
 same quad, 92 x 80 times the widget's `Scale`, which scales the 72, 83 and 42 pitches too. `FUN_0145af70`
 (`_SetCell`) has the same ramp and vertex order, but **writes `0xff808080` over the selected column's
 hexagon** where HD looks up `HD_Blue`, and both shadPS4 frames show that grey column
-(`FrontEnd::hex_selected_fill`; `omega/menu-ship-select` 20.09 to 19.30). Its Faded art is alpha 215.
+(`FrontEnd::hex_selected_fill`; `omega/menu-ship-select` 20.09 to 19.30). Its Faded art is alpha 219 in
+the `.2x.gnf` the executable names and 215 in the 1x `.gnf` ours loads.
 `FUN_0152add0` and `FUN_015298d0` carry the direction glyph with the same sheet, frame rule, 24 unit
 drop and pi turn; the glyph measures 38 x 9.75 px on the 1:1 frame, so `Scale` does not apply to it.
 **2048: checked, applies, not wired**: its executable names the same four textures; its Team
