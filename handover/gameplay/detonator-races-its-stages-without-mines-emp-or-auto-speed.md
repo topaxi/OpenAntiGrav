@@ -291,11 +291,10 @@ placement RNG cannot match the original's `Libc_Rand` (a departure, documented).
   is the world camera, as ours feeds; the program, vertex decode, map, alpha test and cull all match, and the formula gives
   dark there in RPCS3's own shaders. A live A/B (`K[0x3c]` 0) turns the original's body dark with bright rings, so its
   body rim is about 0.4-0.7, not 0: its tangent-space `V` is off-normal. ~~Next: patch the football's fragment program in
-  VRAM to output `normalize(f[TC1])`~~ done (`det-mine-body-white`, 2026-11-26, "`f[TC1]` and the map read live"): patching
-  the program's source copy (`N := (0, 0, k)`) shows `TC1` geometric, the map sampled plainly and the fetch standard, so
-  the program's inputs are as read; a small rim already reads white in the original's grab, and a stale pre-bloom target
-  shows dark lit bodies. Next: read the grabbed frame's own scene target before bloom (`hd-draw-dump.py` for the colour
-  offset `0x194` at the football draw); dark bytes there put the gap in the post chain (`oag_post::hd_bloom`).
+  VRAM to output `normalize(f[TC1])`~~ done (`det-mine-body-white`, 2026-11-26, "The white is before post"):
+  the original's body is bright before post (scene target read through the stub, encoded colour decoded to the digit); with the
+  map replaced by `(0, 0, 1)` the rim at the facing centre is 0.11 to 0.35, so `normalize(f[TC1])` is 30 to 50 degrees off-normal
+  there. Next: read which lane at one held pose (patch the source to output it), then `c[209]`/`c[210]`/`c[211]` at the draw.
   (3) ~~Ours builds the football and spikes with no tangent~~: wired (`Mesh::inline_tangents`, `+10`); the dark centre is
   gone, ours' core 143 -> 157.5 against the original's 188, so the body is still darker than the original's white.
 
