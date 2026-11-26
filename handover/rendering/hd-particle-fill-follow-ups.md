@@ -51,8 +51,11 @@ blast the struck craft's velocity, on HD, 2048 and Omega
     on one tick. Why the original's pair arrives later is unread.
 - **Lead, not checked: the HD blast lags the struck craft by 2 ticks** (same section): position
   copy, template clock or ring lag.
-- **Lead, not checked: the far films' wash quad "younger than its label"** (2 ticks at 0.1 s, 10 at
-  0.233 s) may be two different waves: `far1`'s shield falls to 120 and `far3`'s to 110 by 0.1 s.
+- **Lead, not checked: the far pairs may be posed on the second wave's blast.** Their wash quad
+  is 2 ticks old at 0.1 s and 10 at 0.233 s (`particle-fill.md`, "Posing a far hit"), so born about
+  4 ticks after the first shield drop; `far1`'s and `far3`'s shields fall again between 0.05 and
+  0.1 s (to 120 and 110). The far frames' records have no camera here, so their points were not
+  read.
 - **Lead, not checked: the tick that lands a forced Rocket hit adds about 20 units a second upward
   to the struck craft** (set `y` 11, read 31 at the blast). The HD films' struck craft show no such
   jump, comparing frames 8 to 23 ticks apart. Whether it is the Rocket's impulse or our hover after

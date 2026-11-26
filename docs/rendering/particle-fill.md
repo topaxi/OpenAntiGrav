@@ -883,8 +883,10 @@ the same in every frame that has it:
   | hit3 P1, P2 | -1.0, 5.0 | 0.30, 0.02 | 1.0, 6.9 |
 
   Ticks count from the film's first frame with the shield down (`hit.json`). A negative tick is
-  that pose stepped back by its velocity. The lag's cause is unread (an old position copy, a late
-  template clock or the ring trailing guest memory).
+  that pose stepped back by its velocity. The 2-tick lag is measured on the P2 rows, which
+  fall between recorded poses; the P1 rows agree only within that step back (their 0.3 units may
+  be the hit changing the velocity, unread). The lag's cause is unread (an old position copy, a
+  late template clock or the ring trailing guest memory).
 
 **Ours.** The pairs hold the player at `field.csv` row 0, each film frame's own pose (the
 `--pose` flag in the same pair loses to `--field-from`), and the Rocket leaves from there. All
