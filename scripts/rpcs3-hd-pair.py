@@ -34,6 +34,7 @@ MAIN = Path("/home/topaxi/projects/OpenAntiGrav")
 sys.path.insert(0, str(HERE))
 import compare_env as ce  # noqa: E402
 import compare_provenance as cp  # noqa: E402
+from rpcs3_hd_field import MINE_DRAW_WORDS  # noqa: E402
 
 #: Our race's tick at which the race clock leaves 0: `oag_race::COUNTDOWN_TICKS`, read from ours by `compare_env.go_tick` (one
 #: length for every title today; it was a hard-coded 276 here until 2026-10-21, 4 ticks late).
@@ -203,6 +204,39 @@ def zone_band_flags(pair, ship):
     return ["--zone-bands", csv(bands["held"]), "--zone-bands-raw", csv(bands["raw"])]
 
 
+#: How far a mine read's RAM clock may sit from the picture's clock and still stand for it: an envelope steps once a tick.
+PICTURE_READ_TOLERANCE_TICKS = 1.5
+
+
+def picture_read(pair, ship):
+    """Each mine's draw words (by object address) from the shot's read nearest the picture's clock, `{}` when none is near.
+
+    The picture is `picture_total_ticks` older than the RAM read of its own pause, and a mine's envelope steps once a tick, so
+    an attack between the two (every spike `t` 0.57 -> 1.0 in one tick, `detonator-mine-draw.md`, "The envelope at the
+    picture's tick") would put the RAM's envelope on a picture drawn before it. Records which read stood for the picture."""
+    reads = ship.get("mine_reads") or []
+    total = (pair.rec["original"].get("presented_lag") or {}).get("picture_total_ticks")
+    det = pair.rec["original"].setdefault("detonator", {})
+    if not reads or total is None:
+        det["mine_read"] = {"source": "the pause's own read: %s" % ("no earlier reads in the shot record" if not reads
+                                                                    else "the picture's lag was not fitted")}
+        return {}
+    at = ship["race_clock_s"] - total / 60.0
+    read = min(reads, key=lambda r: abs(r["race_clock_s"] - at))
+    off = (read["race_clock_s"] - at) * 60.0
+    near = abs(off) <= PICTURE_READ_TOLERANCE_TICKS
+    det["mine_read"] = {"picture_clock_s": at, "read_clock_s": read["race_clock_s"], "ticks_off": off,
+                        "source": "the read nearest the picture's clock" if near else
+                                  "the pause's own read: no read within %.1f ticks of the picture's clock" % PICTURE_READ_TOLERANCE_TICKS}
+    if not near:
+        pair.caveat("no mine read lies within %.1f ticks of the picture's clock (%.3f s, nearest %.3f s): the mines' envelopes are the "
+                    "pause's own, %.1f ticks newer than the picture" % (PICTURE_READ_TOLERANCE_TICKS, at, read["race_clock_s"], total))
+        return {}
+    pair.caveat("each mine's envelope and draw words are the read at %.3f s, %.1f ticks from the picture's clock %.3f s (the pause's own "
+                "RAM is %.1f ticks newer than the picture)" % (read["race_clock_s"], off, at, total))
+    return read["mines"]
+
+
 def mine_flags(pair, ship):
     """The original's laid mines (`rpcs3_hd_field.detonator_mines`, read in the pause) as ours' `--detonator-mines`.
 
@@ -213,16 +247,28 @@ def mine_flags(pair, ship):
     if not mines:
         pair.caveat("no mine objects were read at the pause: ours lays its own seeded mine layout")
         return []
+    at_picture = picture_read(pair, ship)
+    mines = [dict(m, **at_picture.get(str(m.get("address")), {})) for m in mines]
     pair.rec["original"]["detonator"]["mines"] = [
         {"entry": m["entry"], "lane": m["lane"], "position": m["position"], "live": bool(m["live"]),
-         "football_s": m.get("football_s"), "spikes_t": m.get("spikes_t")} for m in mines]
+         "football_s": m.get("football_s"), "spikes_t": m.get("spikes_t"),
+         **{name: m[name] for name, _ in MINE_DRAW_WORDS if name in m}} for m in mines]
     pair.caveat("Detonator mines: the original's %d mine objects were read in the pause (track entry, lane, position) and ours lays each on its "
                 "survey lane nearest that position (`--detonator-mines`); its bomb and any mine laid later are ours" % len(mines))
     flags = ["--detonator-mines", ";".join("%.3f,%.3f,%.3f" % tuple(m["position"]) for m in mines)]
-    if all(m.get("football_s") is not None for m in mines):
-        flags += ["--detonator-mine-envelopes", ";".join("%.4f,%.4f" % (m["football_s"], m["spikes_t"]) for m in mines)]
-        pair.caveat("each mine's music envelope (`+0xf4`, `+0xf8`) was read in the same pause and ours holds it (`--detonator-mine-envelopes`): "
-                    "ours' own has no history of the music before the frame")
+    # Without the envelopes ours' near mines draw dark, unspiked and about half the original's size: quiet raw bands never
+    # attack an envelope with no history (`docs/ghidra/functions/ps3-hdfury-eu/detonator-mine-draw.md`, "The spikes in a pair").
+    carried = all(m.get("football_s") is not None and m.get("spikes_t") is not None for m in mines)
+    pair.check("each live mine's music envelope was read", carried or not any(m["live"] for m in mines),
+               "football s and spikes t of %d mines" % len(mines) if carried
+               else "a shot record without `football_s`/`spikes_t`: re-grab it with `rpcs3-hd-detonator-shots.py`")
+    if carried:
+        # A third value is the ring's `PitchOffset` (`+0x108`), an accumulator ours has no start for; an older record has none.
+        flags += ["--detonator-mine-envelopes", ";".join(
+            "%.4f,%.4f" % (m["football_s"], m["spikes_t"]) + ("" if m.get("pitch_offset") is None else ",%.4f" % m["pitch_offset"])
+            for m in mines)]
+        pair.caveat("each mine's music envelope (`+0xf4`, `+0xf8`) and, where read, its ring's `PitchOffset` (`+0x108`) are held in ours "
+                    "(`--detonator-mine-envelopes`): ours' own have no history of the music before the frame")
     return flags
 
 
@@ -524,7 +570,10 @@ def main():
     pair.rec["ours"].update({"mode": mode, "team": args.team, "variant": args.variant, "flags": [str(c) for c in base[2:]],
                              "pose_arg": pose, "camera_pose": numbers, "yaw_agreement": agree})
     pair.rec["original"]["camera"] = camera
-    pair.rec["original"]["ship"] = ship
+    # The shot's every mine read and each object's bytes stay in the shot record: the pair keeps the read it used
+    # (`original.detonator.mine_read`, `original.detonator.mines`).
+    pair.rec["original"]["ship"] = dict(ship, mine_reads=len(ship.get("mine_reads") or []),
+                                        mines=[{k: v for k, v in m.items() if k != "raw"} for m in ship.get("mines") or []])
     # A craft resting after GO turns, in the original as in ours (bank-to-yaw, docs/physics/grid-state.md), and the
     # original's pose has already turned for the clock it was read at. Running that clock again from it turned ours
     # twice, so `--pose-hold` puts the craft back on the fed pose for the frame and the last trace row; the clock,

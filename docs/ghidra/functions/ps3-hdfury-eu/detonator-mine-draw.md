@@ -269,6 +269,109 @@ Row 1 decides how much of the `mines-ahead` and `cannon-volley` gap is real: re-
   (`image_sample ... dmask:0x1` at `0x16c`) and its `rgb` tap (`0x1f0`) straight into multiplies: no square in code, its
   decode is the texture unit's (`srgb_texels`). The rest of the law is shared.
 
+## The spikes in a pair (2026-11-26, `det-mine-spikes`)
+
+**Claim:** the `mines-ahead` pair's near mines were dark, about half the original's size and without spikes because the pair
+carried no music envelope, not because ours' spikes draw differently. **True, confidence 75.**
+
+- **The pair was older than the envelope carry.** `hd/detonator-talons-mines-ahead` was made from a shot record without
+  `football_s`/`spikes_t` ([compare-page.md](../../../tools/compare-page.md), "The mines' music envelopes"), so ours ran its own
+  envelopes. Its raw bands 11 to 14 (the spikes') are `0.12` to `0.28` and bands 0 to 3 under `0.23`: no rise of more than
+  `0.3` ever attacks an envelope that starts at `0`, so every mine held `s = t = 0`: football and spikes at scale 1
+  (bounding radii `1.00` and `1.04`, so the spikes sit inside the shell) and `MineBrightness` 0. That is the dark, small,
+  spikeless ball of the old pair.
+- **The original's envelopes at the grab.** Three restores of `hd-detonator-talons-feisar-grid-late` read the near mines at
+  `s` 0.36 to 0.70 and `t` 0.45 to 0.81 (lap 2.68 to 2.73 s), so `spikeScale = clamp(4 t, 1, scale + 0.95)` reaches 1.8 to
+  2.1 against a football scale of 1.0 to 1.6: long spikes, as the original's frame shows.
+- **Same `theirs.png`, ours without then with the envelopes** (whole-frame mean grey, page scorer, this tree's binary):
+
+  | Grab | Without | With |
+  | --- | ---: | ---: |
+  | `mines-ahead` re-grab, lap 2.68 s | 15.44 | 13.93 |
+  | `pad` re-grab, lap 2.05 s (mines 80 units out) | 10.98 | 10.88 |
+  | a cannon volley re-grab, lap 2.63 s (press 2.20 s, mid-blast) | 17.11 | 16.73 |
+
+  By eye on the `mines-ahead` re-grab (crop x 700..1400, y 300..750) ours' two near mines are lit, ringed and spiked, at the
+  original's place and size; ours' spikes read a little longer on the left mine. A placeholder envelope (`0.9, 0.65` on
+  all 80 mines) on the old pair lit them as well but scored 14.85 against 13.62, so the values have to be the original's.
+- **The picture lag is carried, and is not the cause.** Each pair carries its own fitted lag (`original.presented_lag`): 2.03
+  ticks on the old pair (1.2 px rms), 2.33 on the re-grab, and ours' near mines stand within 4 px of the original's centroids
+  on the re-grab. The 3.5 ticks in "The displacement" is a different fit method; the two are not reconciled.
+- **Near-ball 60x60 box, re-grab** (middle mine, centre `1050, 510`, mean RGB): original `(145, 124, 200)`, ours without the
+  envelopes `(158, 132, 233)` (this grab's raw bands are high, so ours' own envelopes attack and over-size every mine), ours
+  with them `(97, 80, 156)`. White pixels (`min > 200`) between 1.2 and 2.0 shell radii: original 1,611, ours with the
+  envelopes 536, without 2,374. With the envelopes the reach and size match by eye, but ours' spikes and body are dimmer
+  (a third of the original's white there, the box 50 grey darker): a brightness gap left open, not a size one.
+- **Residual, open (confidence 50 for the reading below).** The two near mines read `(s, t)` `(0.36, 0.62)` (left) and
+  `(0.37, 0.81)` (middle): the law gives both spike scale 1.95 and football scale 1.0. The original draws the middle one with
+  long spikes and the left one with **short spikes and a larger, brighter body**; ours draws both alike. The picture is about
+  6.3 ticks older than the RAM the envelopes are read from (`picture_total_ticks`). Decay alone, rewound over that skew
+  (`s, t / 0.95^6.3`), would make the body larger and brighter, as seen, but the spikes longer, not shorter; it scores 13.98
+  against 13.93, no better. So the left mine's short spikes need an attack of its `t` inside that window (the picture before
+  the attack), which one RAM read cannot show. ~~Not wired~~: settled below ("The envelope at the picture's tick"): an attack
+  inside the window, read live.
+- **Not tuned.** No spike scale, count or map changed: `spikeScale` is the law above (85), fed the original's `t`.
+  `BassHit`, `TrebleHit` and `PitchOffset` feed the visualiser ring only (`electricity`), not the football or the spikes.
+
+**Wired:** `rpcs3-hd-pair.py` refuses a Detonator shot record with live mines and no envelopes
+(`check-compare-environment.py`, `check_detonator_mine_envelopes`), and `mines-ahead` is re-grabbed with them. `pad` keeps
+its old grab: the re-grab's music-lit floor differs from ours' (10.88 against the old grab's 7.60, a floor gap, not the
+mines) and the envelope moves it 0.1. `cannon-volley` has the same missing envelopes; its re-grab landed 0.33 s late on the
+press, mid-blast, so it is not a like-for-like replacement and the pair is kept.
+
+**2048 and Omega: not checkable.** The fix is HD pair tooling; ours' envelope code is shared and runs on their mines, but no
+memory readout of their mine objects exists (no 2048 or Omega Detonator pair carries envelopes).
+
+## The envelope at the picture's tick (2026-11-26, `det-mine-spikes`)
+
+Two boots of `hd-detonator-talons-feisar-grid-late`, `rpcs3-hd-detonator-shots.py` with three stops each and two reads a stop
+(12 reads, lap 2.533 to 2.750 s; every read keeps each mine's draw words, `rpcs3_hd_field.MINE_DRAW_WORDS`).
+
+- **The envelope steps once a tick.** The left near mine's `s` reads `0.324, 0.307, 0.292` at lap `2.633, 2.650, 2.667`:
+  `x 0.95` a tick exactly. `MineBrightness` (`+0x100`) reads `2 s` and the football scale (`+0xd8`) `clamp(2.3 s, 1, 2.3)` on
+  every read. Confidence 85 (12 reads, the law of [detonator-mine-material.md](detonator-mine-material.md) to four digits).
+- **An attack inside the picture's lag.** At lap 2.667 every near mine's `t` went `0.57 -> 1.0` in one tick (first boot);
+  on the second, the middle mine's `t` reads `0.675` at 2.567 and `1.0` at 2.583. The picture is 5 to 6.3 ticks older than its
+  pause's RAM (`picture_total_ticks`), so a pause's own read can hold an envelope the picture never drew. This is the left
+  mine's short spikes above. Confidence 75.
+- **Wired: the pair takes each mine's draw words from the read nearest the picture's clock** (`rpcs3-hd-pair.py`,
+  `picture_read`, within 1.5 ticks, else the pause's own read with a caveat; `original.detonator.mine_read` records which).
+  `mines-ahead` is re-grabbed so (lap 2.667, picture clock 2.582, read 2.583). Same `theirs.png`, near-ball 60x60 box (left
+  mine / middle mine) and whole frame:
+
+  | Ours fed | Left box | Middle box | Mean grey |
+  | --- | --- | --- | ---: |
+  | original | `(170, 145, 231)` | `(180, 157, 230)` | |
+  | the read at the picture's clock | `(161, 136, 226)` | `(161, 138, 228)` | 13.17 |
+  | the pause's own read | `(120, 101, 186)` | `(139, 118, 202)` | 13.15 |
+
+  White pixels (`min > 200`) in a 160 px box: original 6,686 and 3,798, ours 4,967 and 3,106 at the picture's read, 3,217 and
+  2,027 at the pause's. **Most of the "dimmer bodies and spikes" was the envelope's tick**: brightness is `2 s`, and the
+  pause's read had decayed. The whole frame does not move (13.17 against 13.15): the mines are a small part of it.
+- **Residual: the middle mine's centre**, radial means (original / ours, 10 px rings from the centre): `204/131`, `153/168`,
+  `201/180`, `208/198`; 24 % against 4 % white in the first ring. The left mine is within 10 grey at every radius. A spike
+  pointing at the camera in the original's centre: the spin below, not a brightness term (confidence 55).
+- **The ring's words.** `TrebleHit` (`+0x114`) read `0` on all 12 reads, as ours holds it. `PitchOffset` (`+0x108`) read 8.255 to
+  8.375, rising 0.005 an update; **wired as a pin**: `--detonator-mine-envelopes S,T,P` holds it per mine
+  (`detonator_look::hold_pinned`, `a_pinned_live_mine_holds_the_originals_envelope_whatever_the_bands_are`), and the pair
+  passes it. 13.1715 -> 13.1721: neutral on the frame. Its step's writer (`0x00677538`) is unread, so ours' own stays `0`.
+  `MasterVolume` read `1.0` and `PitchVolume` `0.32` at the picture's read where ours' band reading gives `1.0` and `0.03`:
+  ours' chosen band 1 for `PitchVolume` is off on this frame; not wired (one frame).
+
+### The spin, read (not wired)
+
+`DetonatorMine_AnimateToMusic` (`0x0013969c`-`0x001396ec`): `phase m+0x150 = 4.0 * m+0xc0` (`K` at TOC `-0x2bcc`, `4.0`),
+wrapped by `2 pi` (`-0x2bd4`) against `pi` (`-0x2bd8`). `m+0xc0` is the mine's age ([detonator-mine.md](detonator-mine.md)).
+Live: age 55.7836 on every mine of the grab, phase 3.2228 = `4 * 55.7836 mod 2 pi`. `0x006ca538` (TOC `0x008bd3c4` through
+the stub's `r2 += 0xfeec`) takes `angle = (int)(phase * 2^24/pi)` sign-extended from 25 bits `* pi/2^24` (constants
+`0x4aa2f983`, `0x34490fdb`), so the angle is `phase` itself, and **writes all three rows from scratch**: row 0
+`(x^2 (1-c) + c, xy (1-c) - z s, xz (1-c) + y s)`, row 1 `(xy (1-c) + z s, y^2 (1-c) + c, yz (1-c) - x s)`, row 2
+`(xz (1-c) - y s, yz (1-c) + x s, z^2 (1-c) + c)`, the axis `(x, y, z)` = `m+0xe0` (live: the object's up row). So a mine's
+basis is the world axes turned about its up by `4 * age` radians, not a frame built on its up; translation `m+0x80`.
+Confidence 75 (read end to end; the phase reproduced from the live age; the rows' sense in the row-vector convention not
+checked against a frame). Ours draws no spin and an up-aligned frame (`detonator_matrix`), and tracks no mine age: wiring it
+needs the age (state ours does not keep) and a pair pin for it.
+
 ## Still open
 
 - `0x006ca538`'s stores (whether the object's basis survives the spin) and the writer of the axis `m+0xe0`.
