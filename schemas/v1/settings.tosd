@@ -148,6 +148,10 @@ optional = true
 type = "integer"
 optional = true
 
+[types.graphics.texture_compression]
+type = "string"
+optional = true
+
 [types.graphics.frustum_culling]
 type = "boolean"
 optional = true
