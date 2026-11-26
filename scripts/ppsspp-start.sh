@@ -15,13 +15,14 @@
 # end it; the display goes once it is gone. It is safe to run twice. `start`
 # refuses a lane that is still running, which would overwrite the pid files and
 # leave that instance running for good.
-# `PPSSPP_START_SCRATCH` and `PPSSPP_STOP_WAIT` (tenths of a second) are for
-# `scripts/check-ppsspp-start.sh`.
+# `PPSSPP_START_SCRATCH`, `PPSSPP_STOP_WAIT` (tenths of a second) and
+# `PPSSPP_XVFB_WAIT` (seconds) are for `scripts/check-ppsspp-start.sh`.
 set -euo pipefail
 lane=${1:?lane}
 [[ $lane =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ && $lane != *..* ]] || { echo "ppsspp-start: bad lane name '$lane'" >&2; exit 1; }
 W=${PPSSPP_START_SCRATCH:-/home/topaxi/projects/OpenAntiGrav/data/scratch}/$lane/pp
 stop_wait=${PPSSPP_STOP_WAIT:-100}
+xvfb_wait=${PPSSPP_XVFB_WAIT:-1}
 
 # The pid a pid file records, or failure.
 recorded() {
@@ -127,7 +128,7 @@ cat > "$W/env.sh" <<ENV
 export DISPLAY=127.0.0.1:$disp OAG_PPSSPP_PORT=$port PP_HOME=$W/home
 ENV
 Xvfb ":$disp" -screen 0 1280x800x24 -listen tcp -nolisten unix > "$W/xvfb.log" 2>&1 &
-echo $! > "$W/xvfb.pid"; sleep 1
+echo $! > "$W/xvfb.pid"; sleep "$xvfb_wait"
 (cd "$W"; env -u WAYLAND_DISPLAY DISPLAY=127.0.0.1:$disp HOME="$W/home" \
   XDG_CONFIG_HOME="$W/home/.config" XDG_DATA_HOME="$W/home/.local/share" \
   XDG_CACHE_HOME="$W/home/.cache" SDL_AUDIODRIVER=dummy SDL_VIDEODRIVER=x11 \

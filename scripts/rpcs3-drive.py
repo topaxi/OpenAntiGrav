@@ -23,9 +23,11 @@ seconds, and from there six taps of cross start a race on Talon's Junction.
 
 So the display is not optional and is also not the user's desktop:
 
-    python3 scripts/rpcs3-drive.py display          # start Xvfb :77
+    scripts/emu-env.sh <lane> <display> <gdb-port>   # once
+    source data/scratch/<lane>/env.sh
+    python3 scripts/rpcs3-drive.py display          # start Xvfb :<display>
     uv run --with evdev python3 scripts/rpcs3-drive.py race --drive 20 --shots
-    python3 scripts/rpcs3-drive.py stop             # stop RPCS3 and Xvfb :77
+    python3 scripts/rpcs3-drive.py stop             # stop RPCS3 and that Xvfb
 
 Xvfb is started with `-listen tcp -nolisten unix` and addressed as
 `127.0.0.1:77` deliberately: a sandboxed session may not be able to write

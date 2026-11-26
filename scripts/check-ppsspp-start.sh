@@ -46,6 +46,7 @@ while :; do sleep 0.1; done
 XVFB
 chmod +x "$tmp/bin/PPSSPPSDL" "$tmp/bin/Xvfb"
 export PATH="$tmp/bin:$PATH" STAND_IN_RAN=$tmp/ran PPSSPP_START_SCRATCH=$tmp/scratch PPSSPP_STOP_WAIT=20
+export PPSSPP_XVFB_WAIT=0.1
 unset PPSSPP_EXTRA_INI
 
 fail() { echo "check-ppsspp-start: $*" >&2; [ -z "${out:-}" ] || echo "last output: $out" >&2; exit 1; }

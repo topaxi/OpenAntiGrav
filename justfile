@@ -239,7 +239,7 @@ check-rpcs3-drive-env:
 
 # `scripts/ppsspp-start.sh` against stand-in `PPSSPPSDL` and `Xvfb`: `stop` signals
 # only this lane's recorded processes, kills a PPSSPP that ignores TERM, and can run
-# twice; `start` refuses a running lane. Offline, no build, about fifteen seconds.
+# twice; `start` refuses a running lane. Offline, no build, about six seconds.
 check-ppsspp-start:
     bash scripts/check-ppsspp-start.sh
 
