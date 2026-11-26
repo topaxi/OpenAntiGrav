@@ -289,9 +289,9 @@ pub(crate) const ELECTRICITY_GAIN: f32 = 1.5;
 pub(crate) const DARK_ELECTRICITY: [f32; 3] = [2.0; 3];
 /// `BassHit = clamp(0.25 s, 0, 0.25)`.
 pub(crate) const BASS_HIT_GAIN: f32 = 0.25;
-/// `MasterVolume = clamp01(5 L0)`.
+/// `MasterVolume = clamp01(5 L)` (`K[0x10]`); ours' `L` is band 0.
 pub(crate) const MASTER_VOLUME_GAIN: f32 = 5.0;
-/// `PitchVolume = clamp(L1, 0, 0.4)`.
+/// `PitchVolume = clamp(L, 0, 0.4)` (`K[0x4c]`); ours' `L` is band 1.
 pub(crate) const PITCH_VOLUME_CEILING: f32 = 0.4;
 
 /// The values the visualiser's `electricity` material is drawn with for a frame
@@ -312,7 +312,9 @@ pub(crate) struct VisualiserConstants {
 /// (`detonator-mine-material.md`).
 ///
 /// **`MasterVolume` and `PitchVolume` read band 0 and band 1, chosen, not measured**: the
-/// original's two level readers (`0x304cc8`) are unread. `PitchOffset` is the envelope's: an
+/// original scales one whole-spectrum level both ways (`0x00304cc8`, `detonator-mine-material.md`,
+/// "The visualiser's level", where a wiring of it is measured against the pairs and not kept).
+/// `PitchOffset` is the envelope's: an
 /// accumulator whose step is unread, so only a comparison pin moves it from `0`. `TrebleHit` (a
 /// `.bss` word whose writer is unread) stays `0`, the value every live read showed
 /// (`detonator-mine-draw.md`, "The envelope at the picture's tick").

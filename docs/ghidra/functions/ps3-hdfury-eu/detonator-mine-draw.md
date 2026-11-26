@@ -186,8 +186,9 @@ Row 1 decides how much of the `mines-ahead` and `cannon-volley` gap is real: re-
   `0xac7c75d0` at `+0x0e`, `Uv1_Uv2` at `+0x12`), is a flat disc in its own XY plane, radius 2.45. The lightning ring is the
   texture's, at the disc's rim.
 - **Chosen, not measured:** which model axis takes the camera direction (Z, the disc's normal) and the roll about it (the
-  mine's own up); `MasterVolume` and `PitchVolume` read bands 0 and 1 (the original's level readers at `0x304cc8` are
-  unread); `PitchOffset` and `TrebleHit` stay 0 (accumulator step and `.bss` writer unread); the colour tap is decoded.
+  mine's own up); `MasterVolume` and `PitchVolume` read bands 0 and 1 (the original reads one whole-spectrum level
+  for both, [detonator-mine-material.md](detonator-mine-material.md), "The visualiser's level"; a wiring of it was
+  measured and not kept); `PitchOffset` and `TrebleHit` stay 0 (accumulator step and `.bss` writer unread); the colour tap is decoded.
 - **On the three published Detonator pairs the cell and frame barely move** (pairs as published, no picture-lag fit):
   `pad` 8.82 -> 8.82, `mines-ahead` 16.38 -> 16.40, `cannon-volley` 15.32 -> 15.33 mean grey. Ours' near mines are
   smaller and nearer the screen edge than the original's there (the picture lag the pairs do not carry), so the ring lands
@@ -356,7 +357,9 @@ Two boots of `hd-detonator-talons-feisar-grid-late`, `rpcs3-hd-detonator-shots.p
   (`detonator_look::hold_pinned`, `a_pinned_live_mine_holds_the_originals_envelope_whatever_the_bands_are`), and the pair
   passes it. 13.1715 -> 13.1721: neutral on the frame. Its step's writer (`0x00677538`) is unread, so ours' own stays `0`.
   `MasterVolume` read `1.0` and `PitchVolume` `0.32` at the picture's read where ours' band reading gives `1.0` and `0.03`:
-  ours' chosen band 1 for `PitchVolume` is off on this frame; not wired (one frame).
+  ours' chosen band 1 for `PitchVolume` is off on this frame; not wired (one frame). Read since: both are one level,
+  `clamp01(5 L)` and `clamp(L, 0, 0.4)`, six live reads, and pinning them costs `mines-ahead` 0.01
+  ([detonator-mine-material.md](detonator-mine-material.md), "The visualiser's level").
 
 ### The spin, read
 
