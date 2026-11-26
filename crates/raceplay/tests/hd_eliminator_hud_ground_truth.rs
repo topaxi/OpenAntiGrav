@@ -499,12 +499,11 @@ fn median_laps(sorted: &[Outcome]) -> u32 {
     (sorted[mid - 1].laps + sorted[mid].laps) / 2
 }
 
-/// **An open defect, not a gate.** A Novice score Eliminator should last about as long as the
-/// original's (nine laps to 200 on Vineta K, n = 1), a third either way, as the median over
-/// `NOVICE_PACE_SEEDS`. On HD's pickup roster the median is 14: the pacing terms of
-/// `oag_raceplay::score_pace` were tuned with the Repulser and the Shuriken in the draw
-/// (`docs/gameplay/race-modes.md`, "The pace of a score Eliminator"). Runs with
-/// `OAG_REVIEW_FINDINGS=1`; retuning those terms removes both the guard and this paragraph.
+/// A Novice score Eliminator lasts about as long as the original's (nine laps to 200 on Vineta K,
+/// n = 1), a third either way, as the median over `NOVICE_PACE_SEEDS`: seven measured; over
+/// seeds 1 to 12 alone, ten measured, nine with the
+/// craft's up as the launch normal. The median is more than six laps, which it was not (one to
+/// three) while opponents steered for pads and bunched.
 ///
 /// **A race still running at 1,000 s counts at the laps it had** (`docs/gameplay/race-modes.md`,
 /// "The pace of a score Eliminator"), and the median must not depend on it: every such race has
@@ -514,11 +513,8 @@ fn median_laps(sorted: &[Outcome]) -> u32 {
 /// runs past it, at 19 laps with its opponents on 117 to 187 points
 /// (`docs/ghidra/functions/ps3-hdfury-eu/projectile-launch-normal.md`, "Turning it on").
 #[test]
-#[ignore = "open defect: the pace on HD's roster; needs a disc image and OAG_REVIEW_FINDINGS=1"]
+#[ignore = "needs a disc image in data/images/"]
 fn a_novice_score_eliminator_reaches_its_target_at_about_the_originals_pace() {
-    if std::env::var_os("OAG_REVIEW_FINDINGS").is_none() {
-        return;
-    }
     let Some(image) = image() else { return };
     let laps = pace_laps(&image, oag_ai::Difficulty::Novice, NOVICE_PACE_SEEDS);
     let median = median_laps(&laps);

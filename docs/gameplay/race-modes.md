@@ -1180,8 +1180,7 @@ leading opponent's completed laps, one tree with the roster and one without it:
 
 The Novice median is 14 with the person's pass-on removed too, so the roster itself moves it, not
 the draw law. The Novice pin's window (6 to 12) is anchored on the original's nine laps and is not
-met, so that test runs only with `OAG_REVIEW_FINDINGS=1`. What the terms should be on the right
-roster is open.
+met, so that test is red. What the terms should be on the right roster is open.
 
 ### Firing on the original's law (2026-10-03)
 
