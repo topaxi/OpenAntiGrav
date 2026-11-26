@@ -2,7 +2,7 @@
 status: measure
 titles: [hd]
 updated: 2026-11-27
-summary: "HD exhaust: flame /2, eye and clock wired; 13 cold-boot flame pairs regrabbed, Zone and Detonator pairs left; talons-pack trail whiter and wider; craft+0xfc"
+summary: "HD exhaust: flame /2, eye and clock wired; 13 cold-boot flame pairs regrabbed, Zone left; talons-pack trail whiter and wider; craft+0xfc"
 ---
 
 # HD's exhaust is measured from the running game now: the trail is a 54-sample three-fin tube, the flame breathes with the throttle, and the plume scales rather than blinks
