@@ -305,9 +305,10 @@ placement RNG cannot match the original's `Libc_Rand` (a departure, documented).
   and `cannon-volley-hot` +0.04, so not kept. `PitchVolume` is worth 0.01 grey; `MasterVolume` 0.25. To land it: re-grab
   `cannon-volley-hot` with the volume words so no pair falls back to `L = 0`. Next: the spin on 2048 and Omega (their
   animate functions are not located). ~~The ring's own radius~~ measured (`det-mine-ring-radius`,
-  `detonator-mine-draw.md`, "The ring's radius"): ours already draws it at the original's (57.5 against 55.5 px, 45.5 against
-  45.5 px on the two near mines), and the near mines carry 1.24 of `mines-ahead`'s 12.5. Next for that pair: the overhead
-  structure behind the score panel (`x 720..1440, y 0..180`, 2.78 grey), lit grey in ours and black in the original.
+  `detonator-mine-draw.md`, "The ring's radius"): ours already draws it at the original's (57.5 against 55.5 px on the middle
+  near mine; the side mines on the law's 74 and 60 px circles in both frames), and the three near mines' boxes carry 2.49 of
+  `mines-ahead`'s 12.5. Next for that pair: the upper-right scenery (3.26 grey: an overhead structure lit grey in ours,
+  black in the original) and the score panel (2.10, HUD).
   (3) ~~Ours builds the football and spikes with no tangent~~: wired (`Mesh::inline_tangents`, `+10`); the dark centre is
   gone, ours' core 143 -> 157.5 against the original's 188, so the body is still darker than the original's white.
 

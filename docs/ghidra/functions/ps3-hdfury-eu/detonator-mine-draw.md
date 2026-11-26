@@ -432,25 +432,30 @@ move by it.
   colour tap at `uv1.y + 0.3 m`, also wired; `m` carries the volumes, which a measured re-landing moved by `0.01`
   ([detonator-mine-material.md](detonator-mine-material.md), "The visualiser's level"). Confidence **80** (both programs
   read end to end; the pose's scale at 65, unchanged).
-- **Measured on the pair, two mines.** Same `theirs.png`, ours rendered at `main` (`d28fc9db9`, the spin merge's render
-  unchanged). Violet mask `b > 150, r > 100, b - g > 60, r - g > 30`; the centre searched over +-10 px and the radius over a
-  3 px annulus, the one with the highest violet share kept:
+- **Measured on the pair, three mines.** Same `theirs.png`, ours rendered at `main` (`d28fc9db9`, the spin merge's render
+  unchanged). Each near mine projected with the pair's own `--camera-pose` and `--camera-fov 68.0996` (focal 798 px), its
+  ring scale `1 + 0.4 (football - 1)` from the pair's `football_scale`. Violet mask `b > 150, r > 100, b - g > 60, r - g > 30`;
+  for the middle mine, centre searched over +-10 px and the 3 px annulus with the highest violet share kept:
 
-  | Mine | Original: centre, radius | Ours: centre, radius |
-  | --- | --- | --- |
-  | middle (24.5 units, scale 1.0) | `1049, 507`, 57.5 px | `1045, 501`, 55.5 px |
-  | left | `784, 546`, 45.5 px | `786, 548`, 45.5 px |
+  | Mine | Depth, px a unit, ring scale | Original | Ours |
+  | --- | --- | --- | --- |
+  | middle, projected `1047, 507` | 23.97, 33.3, 1.097 | centre `1049, 507`, radius 57.5 px | `1045, 501`, 55.5 px |
+  | left, projected `758, 536` | 18.10, 44.1, 1.072 | on a 74 px circle, by eye | on the same circle, by eye |
+  | right, projected `1521, 518` | 23.62, 33.8, 1.123 | on a 60 px circle, by eye | on the same circle, by eye |
 
-  The middle mine's radial profile (violet share, 4 px rings from `1045, 507`) peaks at 52 to 56 px in both (0.29 and 0.35).
-  2 px of 57 is 3.5 %, the size of the centre's own residual (ours' centre stands 2 to 6 px off the original's). 57.5 px at 32.7 px a unit
-  is 1.76 units: the lightning band sits at `0.72` of the disc's 2.45-unit bound at scale 1. Confidence **75** that ours'
-  radius is the original's (two mines, one frame; `cannon-volley` and `cannon-volley-hot` have no like-for-like near mine:
-  ours' mines there stand far off, `pad`'s are 80 units out).
-- **Where `mines-ahead`'s gap is** (page scorer's grey difference, 240x180 tiles, share of the whole-frame 12.49): the two
-  near mines' box (`700..1130, 425..620`) carries **1.24**, all of it, rings, bodies and spikes. The top strip
-  `x 720..1440, y 0..180` carries **2.78**: an overhead structure behind the score panel that ours draws lit grey and the
-  original black, plus the panel itself. The right wall at `x 1440..1680, y 360..540` carries 0.98. So no ring change can
-  bring the pair under 10; the scenery above the track is the next lever.
+  The middle mine's radial profile (violet share, 4 px rings) peaks at 56 px in the original (0.34) and 52 px in ours
+  (0.34); 2 px of 57 is 3.5 %. Its ring stands at `57.5 / (33.3 x 1.097) = 1.57` model units, 0.64 of the 2.45-unit bound
+  (the bound is not the rim). That radius predicts 74 px for the left mine and 60 px for the right; circles of those radii on
+  2x crops lie on the ring in both frames (the original's left ring is fainter and more diffuse). On the side mines an
+  annulus fit locks onto the violet body or the spikes in both frames (31 to 34 px, or 52 to 55 px with the centre at the
+  search's edge), so the circle check is the evidence there. Confidence **75** that ours' radius is the original's (three
+  mines, one frame, one by fit and two by eye; `cannon-volley` and `cannon-volley-hot` have no like-for-like near mine,
+  ours' mines there stand far off, and `pad`'s are 80 units out).
+- **Where `mines-ahead`'s gap is** (page scorer's grey difference, share of the whole-frame 12.49): the three near mines'
+  boxes (`650..870 x 420..650`, `960..1135 x 420..600`, `1420..1625 x 420..620`, background included) carry **2.49**
+  (0.82, 0.54, 1.14). The score panel (`700..1225 x 35..240`, HUD) carries **2.10**. The scenery in the upper right
+  (`1100..1920 x 0..400`, the panel left out) carries **3.26**: an overhead structure ours draws lit grey where the
+  original is black, and the violet panels beside it. So no ring change can bring the pair under 10.
 - **Not wired, so no test added.** The ring's scale law is pinned by
   `tests::detonator_craft::a_laid_mines_visualiser_ring_faces_the_camera_and_follows_the_footballs_size`.
   `5fac71320` (the volumes) was not re-landed: the radius is already right, so the brief's condition for it did not hold.
