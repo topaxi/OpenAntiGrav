@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [hd, 2048, omega]
 updated: 2026-11-26
-summary: "Detonator open: HD end-screen delay and text size, Omega EndRace Menu, 2048 Results, medal tiers, radial bloom, floor"
+summary: "Detonator open: wire the floor visualiser sRGB decode, upper-right screen, HD end-screen delay, Omega EndRace Menu, medal tiers"
 categories: [rendering]
 ---
 
@@ -518,6 +518,13 @@ blast's particle quads a few ticks after a hit, and who reads the child instance
 And the `+100` (read, not drawn: the next bullet). The craft-speed carry on the rounds is right physics: put back by `v` times their age, ours hits the mine at round age 8 against
 the original's 10 (without the carry, 1). But it raised the carried pair to 13.75 (12.98 with the recolour), because the younger blast shows more of those gaps. Re-try it once
 the glows are right; it is about 40 lines in `oag_raceplay::detonator` behind a `--detonator-cannon-craft-speed` flag.
+
+**`cannon-volley` split by region (2026-11-26, `det-volley-split`; `docs/tools/compare-page.md`, "The `cannon-volley` difference, split by
+region").** 10.53 = mines 3.11 (audio-driven), floor 2.58, right wall 1.01, upper-right screen 0.94, HUD 0.70, far scenery 0.66, hull 0.58,
+ribbon 0.30, shot-specific rest under 0.2 each. **Next, ready to wire:** the visualiser strip's sRGB decode (`zone-vis-gamma.md`) alone takes
+it to **9.11** on current `main` (all four race pairs fall); scope to HD and check a Zone race. Then read the upper-right screen's grey smear
+(also on `mines-ahead`) and the right wall's missing window lights. This replaces "what is left is the `Trail_Ribbon`" above: the ribbon is
+0.31 of it.
 
 **Hull camera and size, re-based (2026-11-23, `det-camera`).** The maintainer's "ours is far, the original is close" was true and the
 camera flags were not the cause: the pair fed the RAM body (2 to 4 ticks ahead of the presented frame) with the push-buffer camera, and
