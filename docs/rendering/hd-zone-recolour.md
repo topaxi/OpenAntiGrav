@@ -354,7 +354,11 @@ iGPU (2 CU, RDNA2, the closer relative of the Deck's APU), RADV, Mesa 26.3.1, sh
 lanes (load 6 to 45). Autopilot, seed 1, `--no-audio`, default settings.
 
 **Only the race pass grows.** Per-pass GPU time, `--frame-log` in a window under a headless
-weston, means over 40 s:
+weston, means over two runs of 44 s each. Read this table for which passes move, not for absolute
+cost: `frame_limit = "off"` is not a valid value, so both devices ran under the default 240 fps
+limiter, and the 7800 XT, idle for most of each frame, reads well above the offscreen figures
+below (likely down-clocked; clocks not recorded). The rows listed add up to 1.0 ms more in Zone on
+the iGPU: the race pass's 1.5 less what the other passes save.
 
 | ms | 4K, 7800 XT: time trial / Zone | 1280x800, iGPU: time trial / Zone |
 | --- | --- | --- |
@@ -407,6 +411,13 @@ Race pass before and after, Zone, interleaved runs (median of per-frame times):
 | 7800 XT, 1920x1080 | 350 us | 343 us | 6 of 6 (one a tie) |
 | iGPU, 1280x800 | 6,485 us | 6,168 us | 7 of 8 |
 
+One run is `OAG_RENDER_BENCH_RACE=<stem> oag-game <hd iso> --race --mode zone --track
+/data/environments/04_chenghou_project/track.vex --seed 1 --autopilot --no-audio --size <size>
+--ticks <n> --screenshot out.png` (`--mode time_trial` for the reference, `MESA_VK_DEVICE_SELECT`
+to pick the device), reading `gpu_scene_us` from `<stem>.csv` after the first 60 frames. The two
+builds alternate, under the gate lock: 3,600 ticks at 4K (load 12 to 18), 1,800 at 1920x1080
+(load 7) and on the iGPU (load 13).
+
 **Picture: unchanged.** 32 frames, before against after, 0 differing pixels: Zone on Chenghou
 (ticks 150 to 7,300), Talon's Junction, Vineta K, Anulpha Pass,
 `zone_1` and `zone_4`, a Detonator race, a two-player split, `--circuit-lighting simplified`, an
@@ -414,10 +425,18 @@ HD time trial and single race, and, on titles that never specialise, a Zone race
 on Omega and a Zone race on Pulse.
 
 **Does the difference explain the Deck?** Partly. With dynamic resolution on (iGPU, 1920x1080,
-target 60, two runs of 70 s, before the fix) the time trial held a mean linear scale of 0.998
-(2 to 4 seconds of 62 below full) and Zone 0.97 and 0.96 (28 to 32 of 64, lowest 0.85). A scalable
-cost 25 to 30 % higher puts a controller at about 0.88 to 0.9 of the scale when the time trial sits
-exactly at its budget, not at 0.75. What takes the Deck further is not established.
+`target_fps` 60, 70 s runs, load 8 to 37; mean linear scale from the frame log's `render=`):
+
+| Build | time trial | Zone, two runs | Zone seconds below full |
+| --- | ---: | ---: | ---: |
+| an earlier session, before | 0.998, 0.995 | 0.967, 0.959 | 30 and 34 of 66 |
+| before | 1.000 | 0.959, 0.957 | 29 and 32 of 64 |
+| after | 1.000 | 0.962, 0.977 | 33 of 61, 21 of 64 |
+
+Zone is the arm that leaves full size, the same direction as the report, and the fix does not
+move it by more than the runs differ from each other. A scalable cost 25 to 30 % higher puts a
+controller at about 0.88 to 0.9 of the scale when the time trial sits exactly at its budget, not at
+0.75. What takes the Deck further is not established.
 
 **Not measured, and open:** the Deck itself; a race with sound (the visualiser lookup is then
 rewritten when its texels change, up to 1 KiB per circuit drawable per view); and what a separate
