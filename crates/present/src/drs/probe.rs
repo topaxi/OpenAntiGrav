@@ -43,8 +43,10 @@ pub const MAX_BACKOFF: u32 = 5;
 /// How long after the step the trial's readings are not judged: the governor's ramp, during
 /// which the readings are still taken at the old clock and would undo the step.
 ///
-/// Measured on the Steam Deck (`docs/rendering/dynamic-resolution.md`, "The governor's ramp").
-pub const RAMP_SECONDS: f32 = 0.5;
+/// Measured on the Steam Deck at 3840x2160 (`docs/rendering/dynamic-resolution.md`, "The probe
+/// rise"): where the clock rose after a step up, it reached 90 % of its rise in 0.01 to 1.6 s,
+/// and 0.5 s judged most trials half way up.
+pub const RAMP_SECONDS: f32 = 1.5;
 
 /// How long the trial samples its cost once the ramp has passed.
 pub const SAMPLE_SECONDS: f32 = 0.5;
