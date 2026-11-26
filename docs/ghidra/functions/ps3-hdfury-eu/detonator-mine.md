@@ -332,6 +332,7 @@ before the picture.
 | the destroyed mine carried (position `217.595, -44.266, -192.347`, words and age `54.28 s` from the grab's pause read), procedural pictures | 12.70 |
 | the same, the disc's sprites | 12.53 |
 | the same, and the round carried back by the craft's speed | 13.75 |
+| the destroyed mine carried, after the HD weapon explosions' flipbook and size-ramp work (sprites listed, merged 2026-11-26) | 12.31 |
 
 So the sprites lower the carried pair by 0.17, but the pair with the destroyed mine stays above the published 11.89,
 and the speed carry raises it: the younger blast shows more of what ours still draws wrong. What is left:
