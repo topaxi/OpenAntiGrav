@@ -368,6 +368,36 @@ pub(crate) fn remote_correction(
     }))
 }
 
+/// Parses every `--force-rocket-hit-at`'s `TICK:X,Y,Z[:COUNT]`.
+pub(crate) fn rocket_hits_at(
+    texts: &[String],
+) -> Result<Vec<crate::race_capture::tick::ForcedRocketHit>> {
+    texts
+        .iter()
+        .map(|text| {
+            let bad = || {
+                anyhow::anyhow!(
+                    "{text:?} is not a forced Rocket hit; write it as TICK:X,Y,Z[:COUNT], e.g. 709:525,-28,-35:2"
+                )
+            };
+            let mut parts = text.split(':');
+            let (Some(tick), Some(point), count, None) =
+                (parts.next(), parts.next(), parts.next(), parts.next())
+            else {
+                return Err(bad());
+            };
+            let count = count.map_or(Ok(1), |c| c.trim().parse::<usize>());
+            let count = count.ok().filter(|&c| c > 0).ok_or_else(bad)?;
+            let at = velocity(Some(point)).map_err(|_| bad())?.ok_or_else(bad)?;
+            Ok(crate::race_capture::tick::ForcedRocketHit {
+                tick: tick.trim().parse().map_err(|_| bad())?,
+                at,
+                count,
+            })
+        })
+        .collect()
+}
+
 /// Parses `--force-rocket-hit-velocity`'s `VX,VY,VZ`.
 pub(crate) fn velocity(text: Option<&str>) -> Result<Option<oag_core::math::Vec3>> {
     let Some(text) = text else { return Ok(None) };

@@ -937,11 +937,62 @@ Every row's own seed rendered twice byte-identical.
   into the eye (and by its seed: 62.86 sits at the low end of its spread); the film's velocity
   carries it away. The rows without the velocity flag score better for that reason and are not
   posed.
-- **Not reachable with flags**: P1 on either pair (it is behind the held player's Rocket), and
-  the 1 then 2 volley. Holding the player at the hit pose means editing `field.csv`, which also
-  moves the drawn craft off the original's frame.
+- **Not reachable with `--force-rocket-hit`**: P1 on either pair (it is behind the held player's
+  Rocket), and the 1 then 2 volley. `--force-rocket-hit-at` reaches both ("The volley posed at
+  its two points").
 
 **2048 and Omega: not checked** (an HD measurement; neither was filmed).
+
+### The volley posed at its two points
+
+2026-11-26. `--force-rocket-hit-at TICK:X,Y,Z[:COUNT]` (dev only, repeatable) plays `COUNT`
+craft blasts at a world point at the end of a tick and takes as many of the player's Rockets out
+of the air; `--force-rocket-hit-velocity` gives the blasts their velocity. No craft is struck,
+so the struck craft's hit sparks and shield bulge, which a `--force-rocket-hit` frame has, are
+not drawn. It shares the real hit's flash and effect call, and a tick-for-tick test holds it to a real
+forced hit (`crates/raceplay/src/tests/craft_blast_carry.rs`). Each wave of `hit2` is one flag:
+
+```text
+--force-rocket-hit-at 709:525.15,-28.26,-34.80      # 0.1 s pair (--ticks 716): P1, then
+--force-rocket-hit-at 714:533.12,-27.12,-27.35:2    # P2 five ticks later
+--force-rocket-hit-at 711:525.15,-28.26,-34.80      # 0.233 s pair (--ticks 726): P1, then
+--force-rocket-hit-at 716:533.12,-27.12,-27.35:2    # P2
+--force-rocket-hit-velocity=89.309692,13.924740,96.755127
+```
+
+The ticks give each wave the film's age (6 and 1 at 0.1 s, 14 and 9 at 0.233 s), and the pairs
+keep their `--ticks` and `--world-clock-offset`. None of the player's other Rockets hits anything
+between the waves.
+
+`overlap.mean_grey`, then whole-frame RMSE in levels of 255. "Seeds" is the mean over
+`--stage-seed 1..8`, the difference paired by seed against the current flags with its standard
+error; negative is closer to the original.
+
+| Pair and flags | Own seed | Seeds | Paired difference |
+| --- | --- | --- | --- |
+| 0100 current (one point, 709) | 65.75, 88.15 | 65.74, 88.13 | |
+| 0100 two waves, film velocity | 67.10, 90.25 | 67.08, 90.22 | +1.34 +/- 0.08, +2.09 +/- 0.09 |
+| 0100 two waves, no velocity | 67.03, 91.41 | 66.36, 90.71 | +0.62 +/- 0.33, +2.58 +/- 0.16 |
+| 0100 first wave only, film velocity | 61.46, 82.82 | 63.90, 85.32 | -1.84 +/- 0.30, -2.80 +/- 0.29 |
+| 0233 current (one point, 711) | 62.86, 96.52 | 74.16, 108.64 | |
+| 0233 two waves, film velocity | 61.54, 100.01 | 71.05, 110.11 | -3.11 +/- 2.21, +1.48 +/- 1.92 |
+| 0233 two waves, no velocity | 83.14, 119.49 | 79.66, 115.77 | +5.50 +/- 6.01, +7.14 +/- 5.39 |
+| 0233 first wave only, film velocity | 78.15, 114.74 | 89.75, 125.00 | +15.59 +/- 3.25, +16.36 +/- 2.72 |
+
+- **The faithful pose does not bring the 0.1 s pair closer**: it is further on all eight seeds.
+- **At 0.233 s it is not separable from the current flags**: mean grey falls by 1.4 standard
+  errors and RMSE does not fall.
+- **What differs by eye** (0.1 s). Both waves together fill the centre white and hide the held
+  craft, which the original's frame shows clear of the cloud. Along the view axis the drawn craft
+  (`field.csv` row 0; `--field-from` wins over `--pose`) is 15.9 units out, P1 is 10.4 and P2 21.2.
+  So the first wave stands about 5.5 units in front of the craft and covers it, and the second
+  stands behind it: alone it leaves the craft in view and draws as a hard-edged white sheet. The
+  open question is why the original's 6-tick-old first-wave cloud, born at the same point, does
+  not cover its craft. How far ours has travelled, its size and opacity, and its draw order
+  against the hull are not investigated.
+- The first-wave-only row is not a pose: it leaves out two of the three Rockets.
+
+**2048 and Omega: not checked** (the numbers are HD's; the flag itself is title-agnostic).
 
 ## Per effect: what fills the heavy frames
 
