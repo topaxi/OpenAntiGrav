@@ -491,7 +491,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     endrace_style: None,
     borrows_ps2_split_screens: false,
     model_lighting: None,
-    team_hex_fade: None,
+    hex_selected_fill: None,
     team_hex_ring_peak: None,
 };
 
