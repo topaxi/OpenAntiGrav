@@ -68,6 +68,17 @@ impl Scene {
         for drawable in self.flares.iter_mut().chain(&mut self.boost).flatten() {
             drawable.share_scene(device, blocks, SceneKind::Flame);
         }
+        // The shield shell and cockpit sphere scroll on the shader's clock (`PROGRAM_SHIELD_LIGHTNING`,
+        // `own_shield.wesl`). Their drawables' own block stays `Scene::off` with `time` at zero, so
+        // they read the flame's: `Scene::off` plus the clock, and nothing else moves.
+        for drawable in self
+            .shield
+            .iter_mut()
+            .chain([&mut self.shield_cockpit])
+            .flatten()
+        {
+            drawable.share_scene(device, blocks, SceneKind::Flame);
+        }
         for spike in self.flare_spikes.iter_mut().flatten() {
             spike.drawable.share_scene(device, blocks, SceneKind::Flame);
         }

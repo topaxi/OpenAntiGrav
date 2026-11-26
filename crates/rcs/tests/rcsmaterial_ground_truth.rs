@@ -909,3 +909,44 @@ fn the_alpha_lit_reading_reaches_four_families_disc_wide() {
         ]
     );
 }
+
+/// HD's shield shell material scrolls its colour tap at `u + A * time`, `A` a literal of the
+/// program. Every variant that reads the clock agrees; the one variant that does not (the
+/// black pass) scrolls nothing (`docs/ghidra/functions/ps3-hdfury-eu/shield.md`, "The lattice
+/// scrolls").
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn the_shield_shell_material_scrolls_its_colour_at_three_a_second() {
+    let Some(image) = image() else {
+        return;
+    };
+    let path = "/data/materials/ships/hexagonalshield_rich.rcsmaterial";
+    let bytes = ARCHIVES
+        .iter()
+        .find_map(|archive| {
+            let spec = format!("{}:PS3_GAME/USRDIR/{archive}.PSARC", image.display());
+            oag_assets::psarc::Archive::open(&spec)
+                .ok()?
+                .read_path(path)
+                .ok()
+        })
+        .expect("the shield material is on the disc");
+    let parsed = RcsMaterial::parse(&bytes).expect("the variant table reads");
+    let time = 0x906b_67ba;
+    let offsets: BTreeSet<usize> = parsed.variants.iter().map(|v| v.fragment.offset).collect();
+    let (mut scrolling, mut still) = (0, 0);
+    for offset in offsets {
+        let program = fragment::Program::parse(&bytes, offset).expect("the block decodes");
+        let rate = program.clock_scroll_rate(time);
+        if program.declared.parameters.contains(&time) {
+            assert_eq!(rate, Some(3.0), "block {offset:#x} declares the clock");
+            scrolling += 1;
+        } else {
+            assert_eq!(rate, None, "block {offset:#x} declares no clock");
+            still += 1;
+        }
+    }
+    println!("{scrolling} scrolling block(s), {still} without the clock");
+    assert!(scrolling >= 3, "only {scrolling} block(s) read the clock");
+    assert!(still >= 1, "the black pass is gone");
+}

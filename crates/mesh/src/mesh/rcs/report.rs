@@ -298,6 +298,12 @@ pub struct Report {
     /// decode, the rate is not the vertex block's literal, the slot names another family's
     /// glow entry, or the table is full.
     pub twin_blend_unread: usize,
+    /// `hexagonalshield_rich` materials whose colour scroll was bound - see
+    /// `super::shield_scroll`.
+    pub shield_scroll_bound: usize,
+    /// `hexagonalshield_rich` materials whose scroll could not be read or placed (the shell
+    /// stands still).
+    pub shield_scroll_unread: usize,
     /// `dc_hologramwithstatic` materials whose three pictures and rates were bound - see
     /// `super::static_hologram`.
     pub static_hologram_bound: usize,
@@ -621,6 +627,14 @@ impl Report {
             0 => String::new(),
             n => format!(
                 ", {n} twin-blend material(s) whose pictures or rate could not be read (drawn as the generic reading)"
+            ),
+        } + &match self.shield_scroll_bound {
+            0 => String::new(),
+            n => format!(", {n} shield material(s) with the colour scroll bound"),
+        } + &match self.shield_scroll_unread {
+            0 => String::new(),
+            n => format!(
+                ", {n} shield material(s) whose scroll could not be read (they stand still)"
             ),
         } + &match self.static_hologram_bound {
             0 => String::new(),

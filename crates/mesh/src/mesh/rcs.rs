@@ -186,6 +186,7 @@ mod pad_ne;
 mod pads;
 mod picture_tint;
 mod refraction;
+mod shield_scroll;
 mod snow_rock;
 mod static_hologram;
 mod twin_blend;
