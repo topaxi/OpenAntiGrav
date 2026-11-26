@@ -2,7 +2,7 @@
 status: measure
 titles: [hd, omega, 2048]
 updated: 2026-11-26
-summary: "Blast fill is the disc's own: half-res target awaits maintainer. Owed: streak film, template cap source, flare rows, 1.7 ms at 1080p"
+summary: "Blast fill is the disc's own; half-res target parked by the maintainer. Owed: streak film, template cap source, flare rows, 1.7 ms at 1080p"
 size: M (50)
 difficulty: medium (55)
 ---
@@ -49,6 +49,9 @@ blast the struck craft's velocity, on HD, 2048 and Omega
   take that out of the metric.
 
 ### Particles into a half-resolution target, composited
+
+**Parked by the maintainer (2026-11-26)**: particles stay at full resolution; heavy frames are
+left to TARGET FPS `original` and dynamic resolution. Do not reopen without the maintainer.
 
 **Not faithful.** The disc authors a per-distance resolution mode (`+0xc8c`, thresholds 17 and
 35) and HD computes it, but its flush ignores it. Would be an opt-in setting, default
@@ -100,7 +103,4 @@ HD's width throttle, the other idea here, is TARGET FPS `original`
 
 ## Next Steps
 
-1. Adopt the re-rendered rocket-hit and far-hit pairs.
-2. Put the half-resolution particle target to the maintainer, with the per-effect split. The
-   other lever is the output resolution (render scale, TARGET FPS), which already ships.
-3. Film an HD wall hit for the streak quads.
+1. Film an HD wall hit for the streak quads.
