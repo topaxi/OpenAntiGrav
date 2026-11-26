@@ -290,9 +290,8 @@ pub fn step<R: Raycaster + ?Sized>(
     evaluated.wall = wall::resolve(state, handling, env, raycaster);
     // `Ship_ApplyCollisionImpulse`'s port: consumes `state.pending_impulse` every tick, as the
     // original does for `entity->0x4c + 0x110` (`FUN_0883f540`, unconditionally per ship).
-    // Currently a guaranteed no-op, as no producer is ported; see
-    // `crate::wall::apply_pending_impulse`.
-    wall::apply_pending_impulse(state);
+    // The axis it drains along is the title's (`crate::laws::Laws::pending_impulse_on_side`).
+    wall::apply_pending_impulse(state, env.laws.pending_impulse_on_side);
     evaluated.shield = crate::damage::apply_contact(
         state,
         &handling.dimensions,

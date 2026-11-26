@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [pulse]
-updated: 2026-11-13
-summary: "Cage, launch normal, floor arms, own-craft box wired (box per title); open: HD box, opponent box, travel sweep, HD floor arms"
+updated: 2026-11-26
+summary: "Cage, launch normal, floor arms, own box, HD blast push wired; open: Pulse drain axis, HD box, opponent box, travel sweep, HD floor arms"
 size: S (50)
 difficulty: medium (55)
 ---
@@ -48,6 +48,21 @@ was not measured.
    checked by `scripts/psp-craft-box-replay.py`). Keep them where a reap does not delete them, e.g.
    `data/traces/pulse-own-craft-box/` in the main checkout (the replay script's docstring names it).
    Until then the test is the page's seven records (`projectile/tests/craft_box.rs`).
+8. **Pulse's blast drain may push sideways, not forward** (2026-11-26, `projectile-leftovers`).
+   HD's drain `Ship_ApplyPendingImpulse` (`0x000d8a28`) projects the pending blast impulse onto
+   body row 0, the side row, and HD is wired that way (`Laws::pending_impulse_on_side`,
+   [rocket-craft-blast.md](../../docs/ghidra/functions/ps3-hdfury-eu/rocket-craft-blast.md#against-ours)).
+   Pulse's `Ship_ApplyCollisionImpulse` (`0x0883f274`) projects onto the first row of
+   `*(entity+0x794)`, which `camera.md` reads as the **left** row (93); ours drains along
+   `forward()`. Settle first that the two pages name the same object (`entity` against `craft`),
+   then, if they do, set `pending_impulse_on_side` for Pulse (left or right only flips the axis's
+   own sign, which the sign rule cancels), with a PPSSPP break at `0x0883f3e0` reading the
+   pending vector and the node's rows. Pure inherits Pulse. Estimate: one read plus one capture,
+   1 to 2 hours. Also open from the HD push: whether HD's slot `+0x50` is the nose (60), and
+   Omega's and 2048's own drains: HD's law inherited reddens `omega_event_xp_ground_truth` and
+   `sol_ground_truth::a_field_of_seven_laps_2048_sol_at_ace`, so both keep the immediate push
+   (chosen) until their drains are read (Omega `Rocket_HitCraft` `0x0139a6b0` posts into
+   `+0x120`, 2048 `FUN_8120680e` into `+0x110`; find each reader).
 7. **Not measured or not read.**
    - The Missile's travel sweep on code `4` (`flags |= 0x14`, no bounce): decompile only, no capture
      produced it. Fire a Missile across a jump lip (Outpost 7 sample 186) to see it.
