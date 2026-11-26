@@ -311,7 +311,8 @@ pub enum RocketOpenAir {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OwnCraftBox {
     /// The box hides the track from a probe that crosses it first and the probe reads as open
-    /// air, so the projectile falls: Pulse's `Collision_SweepSegment` turns a box hit into
+    /// air, so the projectile takes its open-air arm (a fall, or the title's
+    /// [`RocketOpenAir`]): `Collision_SweepSegment` turns a box hit into
     /// `0x7f` (`docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`, "The own-craft box is a
     /// rotated frame").
     Falls,

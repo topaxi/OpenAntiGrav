@@ -264,7 +264,7 @@ impl Projectiles {
                     false,
                 );
                 // The firing craft's own box hides the track from a probe that crosses it
-                // first: the original's code `0x7f`, a fall. The cage below still asks about
+                // first: the original's code `0x7f`, as open air. The cage below still asks about
                 // the full segment's end, as the original does.
                 let blocked = matches!(
                     own_craft,

@@ -515,5 +515,5 @@ probe: the shorter probe loses the floor more often.
 
 **Lineage.** 2048 and Omega: the box **checked, differs** (absent from their query). Probe lengths:
 Omega's `Plasma_Update` reads `6.0` statically ([plasma.md](../ghidra/functions/ps3-hdfury-eu/plasma.md)),
-**checked, applies, not wired**; the other lengths and both titles' open-air arms are unread, so they
-keep Pulse's values (this lane is HD only).
+**checked, applies, not wired**; the other lengths and both titles' open-air arms are unread. Both
+keep Pulse's values, labelled chosen (this wire is HD only).

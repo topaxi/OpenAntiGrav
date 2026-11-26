@@ -151,6 +151,8 @@ later either. The rocket moves to `from + v * dt` (the sweep's end equals the pr
 - The Plasma's `0x7f` arm is a fall on world Y, static only ([plasma.md](plasma.md)); no box answered
   a Plasma probe. The Missile's `0x7f` arm (`0x11e440`) and the Shuriken's are unread.
 - The probe length of the Shuriken.
+- Not wired: HD re-pins the Rocket to class speed through `0.2777` (222.16 units/s on Venom) where
+  `oag_weapons` divides by `3.6` (222.22).
 - An opponent's box, and the travel sweep's own box meeting (the sweeps `0x124448` and `0x1202d8`
   return `0x7f` off the box and off nothing alike).
 
@@ -168,5 +170,5 @@ Pulse: applies, measured. Pure: applies, differs in consequence
 ([psp-pure-usa/own-craft-box.md](../psp-pure-usa/own-craft-box.md)). 2048 and Omega: **differs**,
 the box is absent from their query ([vita-2048-eu-v104/own-craft-box.md](../vita-2048-eu-v104/own-craft-box.md),
 [ps4-omega-eu/own-craft-box.md](../ps4-omega-eu/own-craft-box.md)), although HD is 2048's engine
-lineage. HD's Plasma probe is `6.0` long ([plasma.md](plasma.md)) where `oag_weapons` uses Pulse's
-`12.0` for every title: a mismatch written down, not wired here.
+lineage. HD's `6.0` Missile and Plasma probes and its Rocket arm are wired for HD alone; Omega's
+`Plasma_Update` reads `6.0` too ([plasma.md](plasma.md)), **checked, applies, not wired**.
