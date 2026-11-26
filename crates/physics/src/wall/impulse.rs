@@ -84,20 +84,29 @@ pub const STUN_PER_CONTACT: f32 = 0.5;
 /// [`post_blast_impulse`] is the producer: every weapon blast posts through it
 /// (`oag_weapons::projectile::blast`). A craft-to-craft contact does not (it arms nothing,
 /// `contact-response.md`, "a craft-to-craft hit arms nothing"), and neither does a wall.
-pub fn apply_pending_impulse(state: &mut ShipState) {
+///
+/// `on_side` projects onto the craft's side axis instead of its forward axis, as Wipeout HD's
+/// drain `0x000d8a28` does (body `+0x1d0`, the right row; the same sign rule, `dot >= 0` keeps
+/// it, so the axis's own sign changes nothing): `crate::laws::Laws::pending_impulse_on_side`,
+/// `docs/ghidra/functions/ps3-hdfury-eu/rocket-craft-blast.md`, "Where the push goes".
+pub fn apply_pending_impulse(state: &mut ShipState, on_side: bool) {
     if state.pending_impulse == Vec3::ZERO {
         return;
     }
 
     if state.shield_pickup_timer <= 0.0 {
         let magnitude = state.pending_impulse.length();
-        let forward = state.body.forward();
-        let sign = if forward.dot(state.pending_impulse) < 0.0 {
+        let axis = if on_side {
+            state.body.right()
+        } else {
+            state.body.forward()
+        };
+        let sign = if axis.dot(state.pending_impulse) < 0.0 {
             -1.0
         } else {
             1.0
         };
-        let impulse = forward * (sign * magnitude);
+        let impulse = axis * (sign * magnitude);
 
         if state.body.mass > 0.0 {
             state.body.linear_velocity += impulse / state.body.mass;
@@ -201,7 +210,7 @@ mod tests {
         let mut state = ShipState::default();
         let before = state;
 
-        apply_pending_impulse(&mut state);
+        apply_pending_impulse(&mut state, false);
 
         assert_eq!(state, before);
     }
@@ -214,7 +223,7 @@ mod tests {
         let mut state = ship();
         state.pending_impulse = Vec3::new(0.0, 0.0, -5.0);
 
-        apply_pending_impulse(&mut state);
+        apply_pending_impulse(&mut state, false);
 
         assert_eq!(state.body.linear_velocity, Vec3::new(0.0, 0.0, -5.0));
         assert_eq!(state.stun_timer, STUN_PER_CONTACT);
@@ -231,7 +240,7 @@ mod tests {
         // Perpendicular to forward (`NEG_Z`), magnitude 5.
         state.pending_impulse = Vec3::new(3.0, 4.0, 0.0);
 
-        apply_pending_impulse(&mut state);
+        apply_pending_impulse(&mut state, false);
 
         // A dot product of exactly zero takes the original's `>= 0.0`
         // branch, the same sign as the aligned case above - so this lands on
@@ -250,9 +259,31 @@ mod tests {
         let mut state = ship();
         state.pending_impulse = Vec3::new(0.0, 0.0, 5.0);
 
-        apply_pending_impulse(&mut state);
+        apply_pending_impulse(&mut state, false);
 
         assert_eq!(state.body.linear_velocity, Vec3::new(0.0, 0.0, 5.0));
+    }
+
+    /// Wipeout HD's drain (`on_side`): the push runs along the craft's side axis with the
+    /// pending vector's magnitude, keeps the sign of `dot(side, pending)`, and still arms the
+    /// stun. A blast square behind the craft (pending along forward) still shoves it sideways,
+    /// as the `dot >= 0` branch takes a zero dot.
+    #[test]
+    fn on_side_a_pending_impulse_pushes_along_the_side_axis() {
+        let mut state = ship();
+        state.pending_impulse = Vec3::new(-3.0, 0.0, -4.0);
+
+        apply_pending_impulse(&mut state, true);
+
+        // `Body::right` is `+X` at the identity orientation; the pending x is negative.
+        assert_eq!(state.body.linear_velocity, Vec3::new(-5.0, 0.0, 0.0));
+        assert_eq!(state.stun_timer, STUN_PER_CONTACT);
+        assert_eq!(state.pending_impulse, Vec3::ZERO);
+
+        let mut behind = ship();
+        behind.pending_impulse = Vec3::new(0.0, 0.0, -5.0);
+        apply_pending_impulse(&mut behind, true);
+        assert_eq!(behind.body.linear_velocity, Vec3::new(5.0, 0.0, 0.0));
     }
 
     /// A running Shield suppresses the push and the stun arm alike, but the
@@ -264,7 +295,7 @@ mod tests {
         state.pending_impulse = Vec3::new(0.0, 0.0, -5.0);
         state.shield_pickup_timer = 1.0;
 
-        apply_pending_impulse(&mut state);
+        apply_pending_impulse(&mut state, false);
 
         assert_eq!(state.body.linear_velocity, Vec3::ZERO);
         assert_eq!(state.stun_timer, 0.0);
@@ -279,7 +310,7 @@ mod tests {
         state.body.mass = 0.0;
         state.pending_impulse = Vec3::new(0.0, 0.0, -5.0);
 
-        apply_pending_impulse(&mut state);
+        apply_pending_impulse(&mut state, false);
 
         assert_eq!(state.body.linear_velocity, Vec3::ZERO);
         // Both other effects are unconditional on mass, only the push is

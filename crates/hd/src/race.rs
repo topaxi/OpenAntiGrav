@@ -489,6 +489,9 @@ pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
     }),
     cannon_lights: true,
     emp_light: true,
+    // `DetonatorMine_AnimateToMusic`'s `phase = 4.0 * age` (TOC `-0x2bcc`), read live
+    // (`detonator-mine-draw.md`, "The spin").
+    mine_spin: Some(4.0),
     ammo_gauge: Some(DETONATOR_AMMO_GAUGE),
     hull_charge: Some(DETONATOR_HULL_CHARGE),
     camera_scale: 0.7,
@@ -1225,6 +1228,7 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     // match the geometry on 16 of 16 hits this way and miss on three with the textbook form
     // (`docs/ghidra/functions/ps3-hdfury-eu/wall-response.md`). Confidence 85.
     wall_point_rate_body_local: oag_title::pre_race::Sourced::measured(true),
+    pending_impulse_on_side: oag_title::pre_race::Sourced::measured(true),
     // `Body_Integrate` (`0x000f6870`) ends its linear update with `v -= v * dt * body+0x4bc`
     // (`0x000f6fd8`-`0x000f6ff8`), and the body initialiser (`0x000f5878`) writes `0.01`
     // (`0x008a92f4`) there. Live under held throttle, one step of ours without it lands

@@ -165,11 +165,15 @@ fn a_pinned_live_mine_holds_the_originals_envelope_whatever_the_bands_are() {
         stepped.iter().all(|e| e.brightness() == 0.0),
         "quiet bands never attack"
     );
+    let pin = |envelope| MinePin {
+        envelope: Some(envelope),
+        age: None,
+    };
     let pins = std::collections::BTreeMap::from([
-        ((5, 0), (0.5886, 0.568, 8.375)),
-        ((7, 0), (0.9, 0.9, 1.0)),
+        ((5, 0), pin((0.5886, 0.568, 8.375))),
+        ((7, 0), pin((0.9, 0.9, 1.0))),
     ]);
-    hold_pinned(&mines, &mut stepped, &pins);
+    hold_pinned(&mines, &mut stepped, &mut [0.0; 3], &pins);
     assert_eq!(stepped[0].brightness(), 2.0 * 0.5886);
     assert_eq!(
         visualiser_constants(true, &stage(), &stepped[0], &quiet).pitch_offset,
@@ -243,4 +247,49 @@ fn a_live_visualiser_takes_the_stage_colour_times_one_and_a_half_and_a_dark_one_
         (dark.master_volume, dark.pitch_volume, dark.bass_hit),
         (0.0, 0.0, 0.0)
     );
+}
+
+#[test]
+fn a_mine_turns_four_radians_a_second_of_its_age_and_the_live_phase_reproduces() {
+    // The grab's live read: age 55.7836 on every mine, `m+0x150` 3.2228.
+    assert!((spin_phase(4.0, 55.7836) - 3.2228).abs() < 1e-3);
+    assert!((spin_phase(4.0, 0.25) - 1.0).abs() < 1e-6);
+    assert!(spin_phase(4.0, 1000.0) < std::f32::consts::TAU);
+}
+
+#[test]
+fn a_mines_basis_is_the_world_axes_turned_about_its_up_by_the_originals_rows() {
+    use oag_core::math::{Mat3, Vec3};
+    let close = |a: Vec3, b: Vec3| (a - b).length() < 1e-5;
+    // About `+Y` the original's row 0 is `(c, 0, s)`: a quarter turn takes the model's X to `+Z`.
+    let quarter = spun_basis(Vec3::Y, std::f32::consts::FRAC_PI_2);
+    assert!(close(quarter.x_axis, Vec3::Z), "{quarter:?}");
+    assert!(close(quarter.y_axis, Vec3::Y));
+    assert!(close(quarter.z_axis, -Vec3::X));
+    // At phase 0 it is the world axes whatever the up axis, not a frame built on it.
+    let tilted = Vec3::new(0.2, 0.9, 0.1).normalize();
+    assert!(spun_basis(tilted, 0.0).abs_diff_eq(Mat3::IDENTITY, 1e-6));
+    // The up axis is the one the turn leaves alone.
+    assert!(close(spun_basis(tilted, 2.0) * tilted, tilted));
+}
+
+#[test]
+fn a_mines_age_counts_from_its_laying_and_a_pin_holds_it_live_or_dark() {
+    let mut envelopes = MineEnvelopes::default();
+    let a = laid(5, 0, true);
+    let dark = laid(6, 1, false);
+    envelopes.advance(&[a], &[0.0; 16], 1.0);
+    envelopes.advance(&[a, dark], &[0.0; 16], 2.0);
+    let mut ages = envelopes.ages(&[a, dark], 3.5);
+    assert_eq!(ages, [2.5, 1.5]);
+    let pins = std::collections::BTreeMap::from([(
+        (6, 1),
+        MinePin {
+            envelope: None,
+            age: Some(55.7002),
+        },
+    )]);
+    let mut stepped = vec![MineEnvelope::default(); 2];
+    hold_pinned(&[a, dark], &mut stepped, &mut ages, &pins);
+    assert_eq!(ages, [2.5, 55.7002], "a dark mine's age is pinned too");
 }

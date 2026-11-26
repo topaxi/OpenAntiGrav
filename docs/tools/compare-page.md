@@ -2942,6 +2942,11 @@ envelope has no history of the music before the frame, and quiet raw bands (all 
 and runs as it did. One grab at lap 2.68 s, ours before and after the pins: mean grey 14.76 to 14.29; the near mines go from dark
 rings to lit, spiked balls at the original's size.
 
+**The mines' ages** (`det-mine-spin`): the same read keeps each mine's age `+0xc0` (`age_s`), and `rpcs3-hd-pair.py` records it in
+`original.detonator.mines[]` and gives ours `--detonator-mine-ages "A;A;..."`, from the same read as the envelopes. A mine turns about
+its up by `4 x age` ([detonator-mine-draw.md](../ghidra/functions/ps3-hdfury-eu/detonator-mine-draw.md#the-spin-wired-2026-11-26-det-mine-spin)),
+and ours' own age counts from ours' laying, 53 s short of the original's on the `mines-ahead` grab. `mines-ahead` 13.17 -> 12.51.
+
 **Evidence the carry is exact** (`detonator_ground_truth::carried_mines_stand_where_the_originals_objects_stood`, disc-backed): 80
 objects, identical (position to the bit) at lap 2.7 and 3.4 s and across three boots of the same save state, so the layout is
 deterministic from the state and one read stands for every frame of it; all 80 snap to a lane within 0.47 units across the

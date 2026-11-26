@@ -495,6 +495,8 @@ pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
     cannon_lights: false,
     // `FUN_811e8650`, the EMP vtable's slot 5.
     emp_light: true,
+    // The mine's animate function is unread (`detonator-mine-draw.md`, "Lineage").
+    mine_spin: None,
     ammo_gauge: None,
     hull_charge: None,
     camera_scale: 0.7,
@@ -728,6 +730,7 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     // The wall resolver crosses the lever arm with the stored body-local rate unrotated
     // (`0x811d3eaa`), where the craft-craft resolver rotates it to world first (`0x811d38f6`).
     wall_point_rate_body_local: oag_title::pre_race::Sourced::measured(true),
+    pending_impulse_on_side: oag_title::pre_race::Sourced::chosen(false),
     body_linear_damping: oag_title::pre_race::Sourced::inherited(0.01, "Wipeout HD"),
     body_angular_damping: oag_title::pre_race::Sourced::inherited(0.01, "Wipeout HD"),
     cage_from_track_header: oag_title::pre_race::Sourced::inherited(false, "Wipeout HD"),

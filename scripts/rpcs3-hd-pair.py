@@ -294,7 +294,7 @@ def mine_flags(pair, ship):
     mines = [dict(m, **at_picture.get(str(m.get("address")), {})) for m in mines]
     pair.rec["original"]["detonator"]["mines"] = [
         {"entry": m["entry"], "lane": m["lane"], "position": m["position"], "live": bool(m["live"]),
-         "football_s": m.get("football_s"), "spikes_t": m.get("spikes_t"),
+         "football_s": m.get("football_s"), "spikes_t": m.get("spikes_t"), "age_s": m.get("age_s"),
          **{name: m[name] for name, _ in MINE_DRAW_WORDS if name in m}} for m in mines]
     pair.caveat("Detonator mines: the original's %d mine objects were read in the pause (track entry, lane, position) and ours lays each on its "
                 "survey lane nearest that position (`--detonator-mines`); its bomb and any mine laid later are ours" % len(mines))
@@ -312,6 +312,10 @@ def mine_flags(pair, ship):
             for m in mines)]
         pair.caveat("each mine's music envelope (`+0xf4`, `+0xf8`) and, where read, its ring's `PitchOffset` (`+0x108`) are held in ours "
                     "(`--detonator-mine-envelopes`): ours' own have no history of the music before the frame")
+    # A mine turns about its up by 4 x its age (`detonator-mine-draw.md`, "The spin"); ours' own age counts from its own laying.
+    if all(m.get("age_s") is not None for m in mines):
+        flags += ["--detonator-mine-ages", ";".join("%.4f" % m["age_s"] for m in mines)]
+        pair.caveat("each mine's age (`+0xc0`), which turns it about its up axis, is held in ours (`--detonator-mine-ages`)")
     return flags
 
 

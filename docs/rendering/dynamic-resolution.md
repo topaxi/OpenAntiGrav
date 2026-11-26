@@ -675,7 +675,8 @@ display clamp is logged once per change at `debug` (`display refresh in force`).
   20 Hz after rounding it is no report. Measured here: Xvfb reports none; a nested headless
   `gamescope -r 60` reports 59855 mHz and names its monitor `gamescope`; a Steam Deck
   docked to a 4K TV in Game Mode reports 59980 mHz, and DRM, gamescope's own mode
-  (`3840x2160@60`) and `xrandr` (59.98 Hz) agree.
+  (`3840x2160@60`) and `xrandr` (59.98 Hz) agree. The Deck's own panel and a leftover docked mode are in
+  ["On the Steam Deck: the refresh the output reports"](#on-the-steam-deck-the-refresh-the-output-reports).
 - *The measurement*, which may raise the report but never lower it (`max`). An interval is
   evidence of the output only under `Fifo` and only if the busy work (`interval - wait +
   gpu`) is at most 40 % of it, so a loop that misses every second vblank cannot read as a
@@ -816,7 +817,8 @@ At 240 Hz (the durations become 4028 and 3889 us) four runs of each arm, ticks 6
 The one `original` run that held its pace (interval mean 4.23 ms against the 4.17 ms period,
 GPU worst 3.4 ms) moved one notch. The other three had interval means of 4.4 to 9.4 ms and
 two of them GPU frames past 4.0 ms, so these runs do not separate the GPU durations from the
-late-frame input at that rate. The Steam Deck was not run.
+late-frame input at that rate. The Steam Deck is measured in
+["On the Steam Deck: TARGET FPS `original` against the budget loop"](#on-the-steam-deck-target-fps-original-against-the-budget-loop).
 
 Frames at level 0 and level 31, the race held on one tick (the grid at tick 200): the same
 framing, craft and HUD, softer horizontally, no stale columns at the right edge.
@@ -981,3 +983,149 @@ milliseconds times megahertz is constant in neither mode. Confidence about **50*
 What would decide it is a run with DRS on and the GPU clock pinned: Steam's quick-access manual
 GPU clock on the Deck, or root writing `power_dpm_force_performance_level`. Not done. The
 unpaced column is not a control by itself, because the residual is learned differently there.
+
+## On the Steam Deck: TARGET FPS `original` against the budget loop
+
+2026-11-26, at `d18b06815`. The question: on a Deck, does TARGET FPS `original` (HD's width
+throttle) hold the Rocket barrage closer to its frame target than TARGET FPS `default`?
+
+**No, at all three sizes.** At 1280x800 and 1920x1080 it is barely different from no dynamic
+resolution at all (means within 0.15 ms, p99 within 1.5 ms). At 3840x2160 it helps, but far less
+than `default` does.
+
+### How it was run
+
+A Steam Deck OLED on AC power at default GPU clocks (1460 to 1515 MHz mean while busy), RADV,
+the portable container build, sound on, one-minute load 0.8 to 3.0. Windowed in a nested
+headless gamescope: `-r 90` at 1280x800 (the panel), `-r 60` at the two TV sizes, which the
+panel cannot show. The controller only runs windowed, and a windowed run has neither an input
+script nor a per-frame record, so both came from a throwaway patch, not kept: it fed the script to
+the race's ticks, wrote one row per presented race frame (tick, wall interval, size drawn, width
+level), saved the surface image at asked ticks and quit at tick 900.
+
+```sh
+gamescope --backend headless -W <w> -H <h> -w <w> -h <h> -r <hz> -- \
+  oag-game <hd iso> --race --no-intro --autopilot --frame-log --mode single_race --seed 1 \
+  --give rocket --log-every 0
+```
+
+The race is the [particle-fill reproduction](particle-fill.md#how-to-reproduce-it) on Talon's
+Junction. Settings: `vsync = "off"`, `frame_limit = "unlimited"`, `aspect = "free"`, and the HD
+render profile of "On the Steam Deck: HD Zone against a time trial" (so `minimum_resolution =
+25`). Three arms, `target_fps` = `"off"`, `"default"`, `"original"`, four rounds each with the
+order rotated. The state hash at tick 800 is `62b06c2ee353b11d` in all 36 runs.
+
+The target period is 11.11 ms at 90 Hz and 16.67 ms at 60 Hz. At 90 Hz the throttle's durations
+scale to about 10.7 and 10.4 ms.
+
+### Frame times
+
+Milliseconds per presented frame, medians over the four rounds. "Worst" is the range of each
+round's slowest frame. "Over" is the share of frames longer than 105 % of the period. "Pixels"
+is the mean share of the full size drawn. A slow arm presents fewer frames over the same ticks
+(at 3840x2160 `off` has 71 in the barrage and 15 in the hit, so its p99 is nearly its worst).
+
+The barrage, ticks 700 to 829:
+
+| Size, `target_fps` | mean | p99 | worst | over | pixels |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 1280x800 `off` | 8.99 | 18.2 | 21.9 to 23.7 | 18 % | 100 % |
+| 1280x800 `default` | 8.41 | 16.6 | 19.3 to 19.6 | 13 % | 73 % |
+| 1280x800 `original` | 8.97 | 18.1 | 20.9 to 23.7 | 18 % | 98 % |
+| 1920x1080 `off` | 11.96 | 30.0 | 32.5 to 38.5 | 16 % | 100 % |
+| 1920x1080 `default` | 10.48 | 26.4 | 28.3 to 37.2 | 12 % | 77 % |
+| 1920x1080 `original` | 11.81 | 28.5 | 32.7 to 37.4 | 16 % | 99 % |
+| 3840x2160 `off` | 30.37 | 63.3 | 62.6 to 73.4 | 95 % | 100 % |
+| 3840x2160 `default` | 11.64 | 29.2 | 30.3 to 43.6 | 14 % | 20 % |
+| 3840x2160 `original` | 24.22 | 55.9 | 56.5 to 73.5 | 66 % | 71 % |
+
+The craft hit, ticks 760 to 789:
+
+| Size, `target_fps` | mean | p99 | worst | over |
+| --- | ---: | ---: | ---: | ---: |
+| 1280x800 `off` | 8.65 | 16.1 | 16.3 to 18.0 | 10 % |
+| 1280x800 `default` | 8.09 | 14.2 | 14.4 to 16.6 | 8 % |
+| 1280x800 `original` | 8.79 | 16.1 | 15.7 to 18.2 | 13 % |
+| 1920x1080 `off` | 12.20 | 26.1 | 27.6 to 29.9 | 10 % |
+| 1920x1080 `default` | 9.80 | 20.8 | 20.5 to 26.0 | 6 % |
+| 1920x1080 `original` | 12.12 | 24.7 | 25.5 to 27.6 | 11 % |
+| 3840x2160 `off` | 33.71 | 61.4 | 57.8 to 66.1 | 100 % |
+| 3840x2160 `default` | 10.68 | 23.5 | 20.3 to 34.8 | 9 % |
+| 3840x2160 `original` | 25.25 | 45.9 | 42.1 to 51.6 | 90 % |
+
+### The size over time
+
+Round 1, the size drawn at the first frame at or past each tick. `original` keeps the full height,
+so only its width is listed.
+
+| Tick | 400 | 700 | 728 | 762 | 776 | 800 | 830 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 800p `default` | 1280x800 | 1152x720 | 896x560 | 832x520 | 1024x640 | 1152x720 | 1088x680 |
+| 800p `original`, width | 1280 | 1200 | 1200 | 1200 | 1280 | 1280 | 1173 |
+| 1080p `default` | 1920x1080 | 1536x864 | 1632x918 | 1344x756 | 1536x864 | 1728x972 | 1440x810 |
+| 1080p `original`, width | 1920 | 1840 | 1840 | 1800 | 1920 | 1920 | 1760 |
+| 4K `default` | 3264x1836 | 1728x972 | 1536x864 | 1152x648 | 1536x864 | 1728x972 | 1728x972 |
+| 4K `original`, width | 3200 | 2840 | 2720 | 2600 | 2600 | 2600 | 2680 |
+
+Why it cannot keep up:
+
+- **It moves one notch a frame and widens as soon as a frame is cheap.** The barrage's long frames
+  come in short runs. At 1280x800 it reaches level 14 at most, at 1920x1080 level 10, and it is
+  back at level 0 between them. It changes width 79 to 80 times (800p) and 55 to 59 times (1080p)
+  in ticks 700 to 829, where `default` changes size 18 to 22 times.
+- **It can give up only 32 % of the pixels.** At 3840x2160 the race does not fit before any
+  Rocket: it is at level 31 by tick 599, so the barrage finds nothing left to take. `default`
+  goes down to 1152x648.
+
+### The picture
+
+One surface image a run, in runs of their own (the readback stalls the frame), at tick 728
+(3840x2160: 730) and 775. A capture lands on the first frame at or past the tick, so some arms
+show a tick one or two later. Compared at 1:1:
+
+- **`original` at 1280x800 (1200x800) and 1920x1080 (1840x1080)** looks the same as full size.
+- **`original` at 3840x2160 (2720x2160)** is slightly softer horizontally only; framing and FOV
+  do not move and no stale column shows.
+- **`default`** is softer on both axes at every size (896x560, 1728x972, 1536x864): slightly at
+  800p and 1080p, plainly at 3840x2160, where diagonal edges stair-step.
+- The HUD is sharp in every arm. The blast cloud differs between images, but the captures differ
+  in tick and in wall-clock phase, so that is not put down to an arm.
+
+Not measured: `vsync` on or a frame limit, the real Game Mode output at the TV sizes, and a
+console.
+
+## On the Steam Deck: the refresh the output reports
+
+2026-11-26, the same Deck and build, after the X11 reader moved onto `oag_thread::Poller`. The
+reading is the `X server reports N mHz` debug line.
+
+| Where | Reading | Rate in force |
+| --- | --- | --- |
+| Live Game Mode, `DISPLAY=:0` (the Steam client's display) | 89887 mHz | 90 Hz, the OLED panel |
+| Live Game Mode, `DISPLAY=:1` (gamescope's second Xwayland) | 59981 mHz at 3840x2160 | 60 Hz |
+| Nested headless gamescope `-r 90`, 12 runs | 89887 mHz | 90 Hz |
+| Nested headless gamescope `-r 60`, 24 runs | 59963 mHz (1920x1080), 59981 mHz (3840x2160) | 60 Hz |
+
+- Each run logged the line once. On the two live displays the `x11-refresh` thread used no
+  measurable CPU time (0 clock ticks over 18 s).
+- **`:1` reported the TV the Deck had been docked to**, although the panel was running at 90 Hz.
+  gamescope's journal shows server #1 last set to 3840x2160@60 while docked, and the undock that
+  morning updated server #0 only. The same journal shows server #1 set to 1280x800@90 on an
+  earlier undocked day. So this reads as a mode gamescope had not refreshed since the undock, and
+  the reader reports what the server says. That Steam games are started on `:1`, and that a launch
+  refreshes the mode, are inferred. **What a game started from Steam reads on an undocked Deck is
+  not measured.**
+- A 60 Hz LCD Deck was not available. Desktop mode needs a session switch and was not tried.
+
+The failure paths, on a workstation Xvfb (lavapipe):
+
+- **No RandR extension** (`Xvfb -extension RANDR`): the game panics inside winit 0.30.13 before
+  the reader starts (`failed to request XRandR version: UnsupportedExtension`,
+  `platform_impl/linux/x11/xdisplay.rs`). No such session reaches the reader. From the code, a
+  refused request makes a round answer nothing, with no log line, and the thread sleeps its period
+  whatever the answer; that was not run.
+- **RandR with a mode that has no timing** (a default Xvfb): no reader log line, no measurable CPU
+  time over 59 s, rate unknown. Switching the output to a 90 Hz mode logged 90013 mHz and put
+  90 Hz in force; switching back logged nothing and kept 90 Hz. This is the "no answer" path. A
+  mode that computes to 0 mHz is pinned by `a_mode_is_its_dot_clock_over_its_scan` and
+  `a_round_with_no_answer_keeps_the_last_one`.

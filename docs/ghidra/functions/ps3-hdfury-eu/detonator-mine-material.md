@@ -145,9 +145,9 @@ spikeScale = clamp(4.0 * t, 1.0, scale + 0.95)           ; spikes size (K[0x30],
 MineBrightness (m+0x100) = s * 2.0                       ; K[0x3c]; 0x00139a80-0x00139aa0
 MineColour football m+0x138.. = spikes m+0x144.. = RGB(stageMineColour) / 255
 ElectricityColour m+0x120..0x128 = RGB(stageMineElectricityColour) / 255 * 1.5   ; K[0x14]
-MasterVolume m+0x104 = clamp01(5.0 * Level0())           ; 0x304cc8, K[0x10]: unread
+MasterVolume m+0x104 = clamp01(5.0 * L)                  ; L = 0x00304cc8(), K[0x10]; see "The visualiser's level"
 BassHit m+0x110 = clamp(s * 0.25, 0, 0.25)               ; K[0x28] = 1.0, K[0x2c] = 0.25
-PitchOffset m+0x108 += step ; PitchVolume m+0x10c = clamp(Level1() * 1.0, 0, 0.4)
+PitchOffset m+0x108 += step ; PitchVolume m+0x10c = clamp(1.0 * L, 0, 0.4)   ; a second call to 0x00304cc8
 Tempo m+0x118 = 1.0 ; TrebleHit m+0x114 = *(0x00994464 + 4)   ; a .bss word, unread
 m+0xd8 = scale
 ```
@@ -529,12 +529,87 @@ programs are unread); the visualiser (`Electric_Visualiser`) is drawn since `det
   (`DetonatorBombBlast_Update`, `0x00136420`, [detonator-bomb.md](detonator-bomb.md)) is the next
   address to try. The writers of the flash `b+0x154` and the phase `b+0x15c` are unread too.
 - **Runtime words:** `*(0x00994464 + 4)` (mine `TrebleHit`), `*(0x00994420 + 0xc)` (bomb
-  equaliser brightness) are `.bss` and read `0` in the file; the level helper `0x00304cc8`
-  (`MasterVolume`, `PitchVolume`) is unread. None of them feeds the football, spikes or bomb
+  equaliser brightness) are `.bss` and read `0` in the file. The level helper `0x00304cc8`
+  (`MasterVolume`, `PitchVolume`) is read: "The visualiser's level". None of them feeds the football, spikes or bomb
   colours, only the visualiser and the equaliser brightness.
 - **A live capture.** Nothing here ran. A read watchpoint on `m+0x100` and `m+0x138` of a laid
   mine in RPCS3 (the football's `MineBrightness` against a known stage colour) would lift the law
   to 85+; `det-pairs` holds the RPCS3 session.
+
+## The visualiser's level (2026-11-26, `det-mine-pitch-volume`)
+
+**`MasterVolume` and `PitchVolume` are one level, not two bands.** `DetonatorMine_AnimateToMusic` calls the same
+reader twice in its live branch and scales the one result two ways:
+
+```text
+0x00139774  bl 0x00304cc8 ; f1 = L
+0x00139788  lfs f0, 0x10(r28)          ; K[0x10] = 5.0   (r28 = TOC -0x2b78 = 0x008c19dc)
+0x00139790  fsel/fsel with f30 = 0.0 (TOC -0x2b70), f29 = 1.0 (TOC -0x2b90)
+0x001397a0  stfs f13, 0x104(r31)       ; MasterVolume = clamp(5 L, 0, 1)
+0x00139ad4  bl 0x00304cc8 ; f1 = L again
+0x00139ae0  lfs f0, 0x48(r28)          ; K[0x48] = 1.0
+0x00139aec  lfs f13, 0x4c(r28)         ; K[0x4c] = 0.4
+0x00139b0c  stfs f12, 0x10c(r31)       ; PitchVolume = clamp(1.0 L, 0, 0.4)
+```
+
+The `.data` words at `0x008c19dc`: `+0x10` `0x40a00000` (5.0), `+0x48` `0x3f800000` (1.0), `+0x4c` `0x3ecccccd` (0.4).
+
+**`SoundSystem_GetSpectrumTotal` (`0x00304cc8`)**, read end to end:
+
+```text
+g   = *(TOC +0x7784)                   ; g_sound_system (0x00b6cc90 live, zone-visualiser.md)
+n   = min(g[0xe8], 6)                  ; li 6 / subfc / subfe / and / add: the byte, capped at 6
+if 0x002f6160():  return **(g + 0x61c) / 2.0    ; TOC +0x77cc = 0x40000000
+else:             return **(g + 0x61c) / (float) n
+```
+
+`g[0xe8]` is the byte [zone-visualiser.md](zone-visualiser.md) reads as the speaker layout (`2` stereo; a channel
+count, capped at 5.1's six). `0x002f6160` tests a flag byte `+0x7c` and a word `== 2` of another object (unread). In
+stereo both branches divide by `2`, so on a stereo capture `L = (record +0x61c)[0] / 2`. Its third caller,
+`0x002faef8`, is a bare thunk. Confidence **85** for the reader and its two uses (read at instruction level, constants
+from the file, the live relation below).
+
+**What `+0x61c` holds is the zone page's reading, confidence 70**: `SoundSystem_InitBandAnalysis` writes a third
+record at `+0x61c` over bins `0..511` ([zone-visualiser.md](zone-visualiser.md), "What a band measures"), the
+sixteen band records' sibling over the whole spectrum. So `L` is the music's whole-spectrum magnitude over the
+channel count, **not ranged** against its own history the way the sixteen bands are. Its absolute scale (the SPU's
+transform's normalisation) is not measured.
+
+**Live** (RPCS3, the `mines-ahead` grab's shot record, `det-mine-spin`; one value for every updated mine of a read):
+
+| Race clock | `PitchVolume` (= `L`) | `MasterVolume` |
+| ---: | ---: | ---: |
+| 2.5333 | 0.1414 | 0.7069 |
+| 2.5500 | 0.1055 | 0.5276 |
+| 2.5667 | 0.1055 | 0.5276 |
+| **2.5833** (the picture's read) | **0.3154** | 1.0 |
+| 2.6667 (the pause) | 0.1074 | 0.5372 |
+| 2.6833 | 0.1263 | 0.6317 |
+
+`MasterVolume = 5 x PitchVolume` at all four unclamped values and `1.0` where `5 L > 1`: one level, two scalings.
+The `0.4` ceiling never binds here (static only). `L` swings threefold between neighbouring reads, so a comparison
+must take the picture's read, never the pause's. Five off-screen mines hold `0.2766` on every read and sixty hold `0`:
+a mine's words move only while it is animated.
+
+**Ours** reads bands 0 and 1 (chosen, not measured), which on `mines-ahead` gives `(1.0, 0.03)` against the original's
+`(1.0, 0.3154)`. A wiring of the law was built and measured, **not kept**: `oag_audio::Spectrum` published the sum of
+all 512 bins' magnitudes over 1024 as ours' `L` (no range; scale chosen: over two seconds of a music WAV it spans
+0.10 to 0.65, median 0.17, the original's order), and `--detonator-mine-volumes M,P;...` pinned each mine's pair from
+the picture's read. Same `theirs.png`, page scorer:
+
+| Pair | Before | After |
+| --- | ---: | ---: |
+| `mines-ahead` | 12.5060 | 12.5155 |
+| `pad` | 7.6074 | 7.6079 |
+| `cannon-volley` | 14.3187 | 14.3187 |
+| `cannon-volley-hot` | 10.3108 | 10.3515 |
+
+On `mines-ahead` the pin moves the near rings from two smooth circles to the original's jagged lightning at the rim
+(crop 780..1300, 330..690: mean absolute difference to theirs 15.732 before, 15.727 after) while the whole frame
+moves `+0.01`. Diagnostics on that pair: both volumes `0` 12.755, bands 0/1 12.506, the pin 12.516, so **`MasterVolume`
+carries 0.25 grey and `PitchVolume` 0.01**. `cannon-volley-hot` carries no volume words, so under a fixed feed ours'
+`L` was 0 and its rings lost the lightning the original and ours' bands both draw. The lane's acceptance rule ("keep
+the change only if mines-ahead drops") rejected it.
 
 ## Correction: the dark branch does not submit the visualiser (2026-11-24, `det-mine-look-re`)
 
@@ -558,3 +633,8 @@ dark: [detonator-mine-draw.md](detonator-mine-draw.md). That is also the reader 
   (`~crc32("MineColour") = 0xd7883cf6`: two little-endian hits; `MineBrightness`: two;
   `BombColour` and `BombBrightness`: one each). So Omega binds the same names, by precomputed hash.
   The Omega function bodies are unread. Not wired.
+- **The visualiser's level** (2026-11-26, `det-mine-pitch-volume`). **2048: not checkable**: its mine animate
+  function is not located and its band source is untraced (NGS audio, [zone-visualiser.md](zone-visualiser.md)).
+  **Omega: checked, differs** in the source: its spectrum comes from CRI's `ACX Spectrum Meter`, not MultiStream's
+  records ([zone-visualiser.md](zone-visualiser.md)), so no `+0x61c` record exists to read; its mine animate function
+  is not located, so whether it reads one whole-spectrum level for both words is unread.

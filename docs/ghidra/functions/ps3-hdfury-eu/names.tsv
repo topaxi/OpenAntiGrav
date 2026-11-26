@@ -215,6 +215,7 @@
 0x0067a7b8	function	SoundSystem_GetBandLevel_Stub	85	zone-visualiser.md
 0x00b6cc90	data	g_sound_system	80	zone-visualiser.md
 0x00304558	function	SoundSystem_GetBandLevel32	84	zone-visualiser.md
+0x00304cc8	function	SoundSystem_GetSpectrumTotal	70	detonator-mine-material.md
 0x00307e78	function	SoundSystem_UpdateBandLevels	86	zone-visualiser.md
 0x00305c20	function	SoundSystem_InitBandAnalysis	72	zone-visualiser.md
 0x00304320	function	SoundSystem_UpdateMeters	76	zone-visualiser.md
@@ -1254,9 +1255,14 @@
 0x0014a7d8	function	Rocket_SpawnCraftBlast	80	rocket-craft-blast.md
 0x00283b40	function	Psys_SetInheritedVelocity	82	rocket-craft-blast.md
 0x0027c288	function	Psys_FindInstanceByHandle	80	rocket-craft-blast.md
-0x00149f70	function	Rocket_PushNearbyCraft	60	rocket-craft-blast.md
+0x00149f70	function	Rocket_PushNearbyCraft	82	rocket-craft-blast.md
 0x00287168	function	Psys_PrepareInstance	62	rocket-craft-blast.md
 0x0028bb18	function	Psys_InitTemplateParticle	55	rocket-craft-blast.md
 0x00068160	function	SPDetonator_Update	80	detonator-endrace.md
 0x000630c8	function	SPDetonator_UpdateFinish	80	detonator-endrace.md
 0x0018bdf0	function	Block_CreateStaticArrow	75	menu-blocks.md
+0x000d8a28	function	Ship_ApplyPendingImpulse	80	rocket-craft-blast.md
+0x0002d9f8	function	WeaponStats_ParseRocket	85	rocket-craft-blast.md
+0x0002d6a8	function	WeaponStats_ParseMissile	75	rocket-craft-blast.md
+0x00146470	function	Plasma_PushNearbyCraft	80	rocket-craft-blast.md
+0x00142258	function	Missile_PushNearbyCraft	75	rocket-craft-blast.md

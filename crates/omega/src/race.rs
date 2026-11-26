@@ -161,6 +161,8 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
         cannon_lights: false,
         // `0x0133c150`, the EMP vtable's slot 5.
         emp_light: true,
+        // The mine's animate function is unread (`detonator-mine-draw.md`, "Lineage").
+        mine_spin: None,
         ammo_gauge: None,
         hull_charge: None,
         camera_scale: 0.7,
@@ -687,6 +689,7 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     wall_one_sided: oag_title::pre_race::Sourced::measured(true),
     wall_steer_away: oag_title::pre_race::Sourced::measured(true),
     wall_point_rate_body_local: oag_title::pre_race::Sourced::measured(true),
+    pending_impulse_on_side: oag_title::pre_race::Sourced::chosen(false),
     // Omega's own: its integrator (`FUN_013463f0`) takes `v * dt * body+0x4b0` off the velocity
     // at `0x013467d9` and reads `body+0x4ac` for the angular twin, and its body constructors
     // store a packed `0.01, 0.01` at `+0x4ac` (`0x012e529b`, `0x01331a26`, `0x0133680e`). Read,

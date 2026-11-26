@@ -272,7 +272,10 @@ pub const TITLE: &Title = &Title {
         ai: Some(r"Data\XML\WeaponAIstats.xml"),
         // Read off HD's own EBOOT: one transfer per ball trip.
         leach_drain: oag_title::weapons::LeachDrain::PerTrip,
-        blast_push: oag_title::pre_race::Sourced::chosen(oag_title::weapons::BlastPush::Immediate),
+        // Read off HD's own EBOOT: every blast posts into the slot's `+0x110` and the craft's
+        // drain pushes along its side axis with the 0.5 s stun
+        // (`docs/ghidra/functions/ps3-hdfury-eu/rocket-craft-blast.md`, "The push").
+        blast_push: oag_title::pre_race::Sourced::measured(oag_title::weapons::BlastPush::Posted),
         // **Chosen, not measured**: HD measures one (`LeachBeamManager_Fire`, `weapon-instance-limits.md`);
         // it takes 2048's and Omega's eight as an intended divergence (maintainer, 2026-10-31).
         leach_beams: oag_title::pre_race::Sourced::chosen(8),

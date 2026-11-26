@@ -2,7 +2,7 @@
 status: measure
 titles: [hd, omega, 2048]
 updated: 2026-11-26
-summary: "Owed: blast template cap source, flare .gtf rows, Deck 4K hit still 64 ms worst, 1.7 ms at 1080p; half-res particle target awaits the maintainer"
+summary: "Blast fill is the disc's own; half-res target parked by the maintainer. Owed: streak film, template cap source, flare rows, 1.7 ms at 1080p"
 size: M (50)
 difficulty: medium (55)
 ---
@@ -50,6 +50,9 @@ blast the struck craft's velocity, on HD, 2048 and Omega
 
 ### Particles into a half-resolution target, composited
 
+**Parked by the maintainer (2026-11-26)**: particles stay at full resolution; heavy frames are
+left to TARGET FPS `original` and dynamic resolution. Do not reopen without the maintainer.
+
 **Not faithful.** The disc authors a per-distance resolution mode (`+0xc8c`, thresholds 17 and
 35) and HD computes it, but its flush ignores it. Would be an opt-in setting, default
 `original`: about 20 screens of fill become about 5 plus one full-screen composite; estimate
@@ -64,24 +67,35 @@ HD's width throttle, the other idea here, is TARGET FPS `original`
 - **The Deck is measured** (`docs/rendering/particle-fill.md`, "On the Steam Deck"): the craft
   hit's worst frame at 3840x2160 went from 108.5 to 63.5 ms (`d66a52ae6`), still far over 16.7.
   Open there:
-  - the blasts at ticks 726 and 756 (79 and 75 ms), which no change reached;
-  - tick 784, now 51 ms against 43 before the blast carry and sprites ("What fills tick 784" below);
+  - the heavy frames are split per effect on the workstation
+    (`particle-fill.md`, "Per effect: what fills the heavy frames"): the GPU work is at ticks
+    724, 754 and 784, particles are about 2.3 of 3.0 ms, and it is the disc's own fill. The
+    quads are the same on the Deck (same state hash); its milliseconds per effect are not
+    measured and need the throwaway skip switch rebuilt;
   - the fragment `discard` of "Measured and dropped", not run on the Deck.
+- **No original frame of a `.pob` streak.** The track blast's `FIRESPIKES` is the largest single
+  fill at ticks 724 and 754 (1.1 of 3.0 ms) and is judged authored from the file and the
+  executable only (confidence 65). Film a wall hit in RPCS3 and find the buffer HD's mode 5
+  quads go to.
+- **`WO_ROCKET_EXPLO_TRACK`, `WO_ROCKET_EXPLO` and `WO_ROCKET_FLARE` are not in HD's
+  `FAR_BARS`** (`crates/hd/src/effects.rs`), so their class-6 emitters draw the procedural strip
+  rather than the read bar with its sprite. A picture gap; fill measured within 9 % under the
+  bar. Wants a pair against the original before listing.
+- **Our 256-particle instance cap** is full on every track blast a few ticks after it starts
+  (`TRAIL_SMOKE`). What the original's pool does there is unread.
 - **About 1.7 ms of a hit frame at 1080p that is not fill.** With and without the law, ticks 770
   to 774 cost about the same (3.26 ms at the worst before, 3.16 after, on an RX 7800 XT).
   Unprofiled: leave the particle draws, the blast's light and the flash out in turn at 1920x1080.
 - **Omega's passes 8 to 10 by target size** (is one of them a reduced particle target), and
   **Omega's sphere fade** behind `instance + 0x71` (radius 290): what sets it. Both are reads.
-- **What fills tick 784, the reproduction's worst frame since the blast carry.** Its additive layer
-  is 5.2 of 14.5 screens and does not shrink when sampled billboards are trimmed to their live
-  texels (`docs/rendering/particle-fill.md`, "Measured and dropped"). Name the emitter: a per-effect
-  fill split of that tick, with the fill probe described there. The trim itself (fill -37 to -59 %
-  on ticks 766 to 781, 4K worst frame -0.13 ms, not byte-identical) is parked on the local branch
-  `trimmed-sprites-parked`. Measure it again only if the worst frame turns out to be alpha-over
-  smoke on another circuit or on the Deck. Command: `OAG_RENDER_BENCH_RACE=<stem>` with the
-  reproduction, six interleaved pairs, `gpu_scene_us` over ticks 760 to 789.
-- **TARGET FPS `original` on the Deck**, against the existing loop on the same reproduction;
-  and at 240 Hz on an idle host, where the 2026-11-26 runs moved mostly on late frames.
+- **The trimmed sampled billboards** (`particle-fill.md`, "Measured and dropped") are parked on
+  the local branch `trimmed-sprites-parked`. Measure again only if the worst frame turns out to
+  be alpha-over smoke on another circuit or on the Deck; on the default circuit the heavy frames
+  are streaks.
+- **TARGET FPS `original` at 240 Hz on an idle host**, where the 2026-11-26 runs moved mostly on
+  late frames. The Deck is measured: `original` does not hold the barrage
+  (`docs/rendering/dynamic-resolution.md`, "On the Steam Deck: TARGET FPS `original` against the
+  budget loop").
 - **2048's `Debug.Enable Frame Buffer Throttling`** (byte `+0x550`): read its loads to say
   whether 2048 has a width or size throttle of its own
   (`docs/ghidra/functions/ps3-hdfury-eu/scene-width-throttle.md`, "Omega and 2048").
@@ -91,6 +105,4 @@ HD's width throttle, the other idea here, is TARGET FPS `original`
 
 ## Next Steps
 
-1. Adopt the re-rendered rocket-hit and far-hit pairs.
-3. Split the fill of ticks 726 and 784 per effect on the Deck's 3840x2160 run.
-4. Put the half-resolution particle target to the maintainer, with the Deck numbers.
+1. Film an HD wall hit for the streak quads.
