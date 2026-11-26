@@ -520,7 +520,8 @@ fn no_input_changes_an_hd_benchmark() {
 /// it. Started from the EXTRAS page it returns to that page and writes no result; started from the
 /// command line with a preset it ends the game with the preset never in the player's file. Fails on a
 /// build that ignores the pad's back button or the system Back during the run (the run flies on
-/// and writes a result) or leaves the run going after Back.
+/// and writes a result), leaves the run going after Back, or keeps the abandoned race parked
+/// behind the menus (the root page is then the pause menu, and Back from it resumes the race).
 #[test]
 #[ignore = "needs data/images/pulse-psp-eu.chd and a GPU"]
 fn back_abandons_a_benchmark_and_writes_nothing() {
@@ -549,7 +550,9 @@ fn back_abandons_a_benchmark_and_writes_nothing() {
             "boot; select extras; press cross; until page=extras within 300; select benchmark; \
              press cross; until page=benchmark_options within 300; select benchmark_start; \
              press cross; until benchmark=running within 3000; until sim_tick=300 within 6000; \
-             {abandon}; until stage=menu within 600; expect page=extras; quit"
+             {abandon}; until stage=menu within 600; expect page=extras; \
+             back; until page=main within 300; ticks 10; back; ticks 30; \
+             expect stage=menu; expect page=main; quit"
         );
         let out = run(&dir, &[], &script);
         assert!(
