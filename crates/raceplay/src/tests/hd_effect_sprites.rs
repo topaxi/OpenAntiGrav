@@ -271,11 +271,15 @@ fn hd_2048_and_omega_list_the_trail_hit_burst_for_the_far_bar_draw_and_hd_its_pl
             n::PLASMA_LIGHTNING_COLLAPSE_EFFECT,
         ]
     );
-    // The head's and the wind-up's sprite templates play; the release's and the blast's
-    // flashes stay muted.
+    // The head's and the wind-up's sprite templates play, and the Rocket craft blast's (its
+    // screen wash); the release's and the blast's flashes stay muted.
     assert_eq!(
         oag_hd::TITLE.effects.templates,
-        [n::PLASMA_FLARE_EFFECT, n::PLASMA_CHARGING_EFFECT]
+        [
+            n::PLASMA_FLARE_EFFECT,
+            n::PLASMA_CHARGING_EFFECT,
+            n::CRAFT_BLAST_EFFECT
+        ]
     );
 }
 
