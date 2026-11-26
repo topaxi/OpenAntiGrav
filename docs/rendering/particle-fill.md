@@ -947,8 +947,9 @@ Every row's own seed rendered twice byte-identical.
 
 2026-11-26. `--force-rocket-hit-at TICK:X,Y,Z[:COUNT]` (dev only, repeatable) plays `COUNT`
 craft blasts at a world point at the end of a tick and takes as many of the player's Rockets out
-of the air; `--force-rocket-hit-velocity` gives the blasts their velocity. No craft is struck.
-It shares the real hit's flash and effect call, and a tick-for-tick test holds it to a real
+of the air; `--force-rocket-hit-velocity` gives the blasts their velocity. No craft is struck,
+so the struck craft's hit sparks and shield bulge, which a `--force-rocket-hit` frame has, are
+not drawn. It shares the real hit's flash and effect call, and a tick-for-tick test holds it to a real
 forced hit (`crates/raceplay/src/tests/craft_blast_carry.rs`). Each wave of `hit2` is one flag:
 
 ```text
@@ -982,11 +983,13 @@ error; negative is closer to the original.
 - **At 0.233 s it is not separable from the current flags**: mean grey falls by 1.4 standard
   errors and RMSE does not fall.
 - **What differs by eye** (0.1 s). Both waves together fill the centre white and hide the held
-  craft, which the original's frame shows in front of the cloud. The first wave alone already
-  covers the craft, although its point is about 8 units beyond it. The second wave alone leaves
-  the craft in view, and its two young blasts draw as a hard-edged white sheet behind it. Why
-  ours covers the craft is not investigated (confidence 60 that it is the drawing and not the
-  pose: the points and ages are the film's own).
+  craft, which the original's frame shows clear of the cloud. Along the view axis the drawn craft
+  (`field.csv` row 0; `--field-from` wins over `--pose`) is 15.9 units out, P1 is 10.4 and P2 21.2.
+  So the first wave stands about 5.5 units in front of the craft and covers it, and the second
+  stands behind it: alone it leaves the craft in view and draws as a hard-edged white sheet. The
+  open question is why the original's 6-tick-old first-wave cloud, born at the same point, does
+  not cover its craft. How far ours has travelled, its size and opacity, and its draw order
+  against the hull are not investigated.
 - The first-wave-only row is not a pose: it leaves out two of the three Rockets.
 
 **2048 and Omega: not checked** (the numbers are HD's; the flag itself is title-agnostic).

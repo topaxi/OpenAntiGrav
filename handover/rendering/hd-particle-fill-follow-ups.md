@@ -2,7 +2,7 @@
 status: measure
 titles: [hd, omega, 2048]
 updated: 2026-11-26
-summary: "Owed: films of HD explosions and streaks, Rocket blast gaps, cap source, blast covers the craft on the near pairs; half-res parked"
+summary: "Owed: films of HD explosions and streaks, Rocket blast gaps, cap source, first-wave cloud covers the craft on the near pairs; half-res parked"
 size: M (50)
 difficulty: medium (55)
 ---
@@ -43,11 +43,11 @@ blast the struck craft's velocity, on HD, 2048 and Omega
   `trail` reads as smooth white lobes, and the grey smoke streaming toward the camera is missing.
 - **The near pairs (`hit2`) pose at the film's two points and ticks (`--force-rocket-hit-at`), and
   ours is no closer for it** (`particle-fill.md`, "The volley posed at its two points"): the
-  0.1 s pair is further, the 0.233 s pair is not separable. In ours the first wave covers the held
-  craft (about 8 units nearer than the blast) and the second wave's young blasts draw as a
-  hard-edged white sheet; the original shows the craft. Next: read what of ours draws over the
-  craft (template depth, size or sort), then re-score. Why the original's second wave arrives
-  later is unread.
+  0.1 s pair is further, the 0.233 s pair is not separable. P1 is about 5.5 units in front of the
+  drawn craft along the view axis, so ours' first-wave cloud covers it; the original's, born at the
+  same point, does not. Next: compare the two clouds at 6 ticks (travel under the carried velocity,
+  size, opacity, then draw order against the hull), then re-score. Why the original's second wave
+  arrives later is unread.
 - **Lead, not checked: the HD blast lags the struck craft by 2 ticks** (same section): position
   copy, template clock or ring lag.
 - **Lead, not checked: the far pairs may be posed on the second wave's blast.** Their wash quad
