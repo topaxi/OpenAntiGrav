@@ -69,7 +69,7 @@ BASELINE: dict[str, int] = {
     "disc": 7,
     "display": 7,
     "formats": 4,
-    "fx": 58,
+    "fx": 57,
     "gameplay": 24,
     "hd": 56,
     "hud": 27,
