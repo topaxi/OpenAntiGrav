@@ -558,6 +558,70 @@ struck craft's speed in our pair run was not read. By eye the fireballs now surr
 craft instead of trailing off to the side. The frame is still far from
 the original's near-white wash, whose source stays open.
 
+## HD's particle sprites are bottom-up
+
+2026-11-26. **HD's `.gtf` particle sprites were drawn upside down; the loader now turns them
+top-down.** Confidence 95. The question was the far hit: a Rocket striking a craft about 30 units
+ahead drew `glow_longer`'s half-disc sprite (`yellow_glow_hemi`) as a dome, and nobody had put it
+beside the original.
+
+**The original draws a flat-bottomed dome too, rising from the blast.** Two films, RPCS3
+0.0.43-20574, HD EU, the weapons-grid save state, `scripts/rpcs3-hd-rocket-film.py --back 30
+--mode hold`, the rival (AG Systems) struck at 30.0 units both times (a third film struck another
+craft and is not used). The wash quad read from the command ring:
+
+| Read | Original | Ours before |
+| --- | --- | --- |
+| Texture | 64x64 DXT45, rows 0 to 31 of GPU memory empty, the half disc in rows 32 to 63 | the same bytes, row for row (mean difference 0.2 of 255) |
+| Which edge samples `v = 0` (row 0) | the quad's bottom edge | the quad's top edge |
+| Half size | 40.0, then 22.12 | the same size curve: 22.16 at the age whose colour the quad carries (10 ticks) |
+| Depth | test `LEQUAL`, no write | test `Less`, no write |
+| Place | a fixed world point (identical at 0.1 and 0.233 s) | the spawn point, held |
+
+So the half disc rises above the blast with its flat edge through the spawn point, and ours hung
+below it with its flat edge on top.
+
+**Why.** A `.gtf`'s rows run bottom-up ([hd-loading.md](../formats/hd-loading.md)), and
+`oag_fx::psys::sprite::Sprite` is documented top-down, but `Sprite::from_gtf` kept the file's
+rows. 2048's `.gxt` and Omega's `.gnf` of the same `yellow_glow_hemi` store the half disc in the
+upper rows: **2048 and Omega: checked, differs** (their files are top-down and load as they
+should). PSP and PS2 sprites come from top-down containers. The flip reaches every HD `.gtf`
+particle sprite, flipbook atlases included: in the same dumps the young white particles sample
+the last eighth of GPU memory (`v` 0.875 to 1.0, the top row of the authored sheet) and older
+ones sample rows toward `v = 0`, so frame rows counted from the top are the original's order
+(read off a few quads, confidence 80). Ours had been counting each HD flipbook's rows from the
+bottom of the authored sheet.
+
+Pinned by the disc check `check_the_hemisphere_sits_in_the_top_half` (HD, 2048 and Omega).
+
+### Against the original
+
+Every HD comparison pair was rendered with the build before and after: 23 of 26 did not move a
+pixel, the Detonator cannon volley moved by 0.56 RMSE at the same score (44.03), and the two
+Rocket pairs improved. RMSE against the original, in levels of 255; "dome" is the box
+`200..1720 x 0..560` above the player's craft; seeds are `--stage-seed 1..4`, paired:
+
+| Pair | Whole, before / after | Dome, before / after | Whole over seeds, before | Whole over seeds, after |
+| --- | --- | --- | --- | --- |
+| rocket-craft-hit 0.1 s | 118.0 / 94.2 | 142.1 / 89.5 | 111.2 to 116.2 | 93.3 to 96.1 |
+| rocket-craft-hit 0.233 s | 125.2 / 123.6 | 143.3 / 122.3 | 94.0 to 126.1 | 104.6 to 113.8 |
+| far hit 0.1 s | 34.3 / 34.1 | 31.1 / 30.1 | 34.4 to 35.0 | 34.0 to 35.2 |
+| far hit 0.233 s | 68.5 / 64.7 | 83.0 / 76.6 | 68.2 to 84.0 | 62.4 to 79.5 |
+
+The 0.233 s pairs swing by 10 and more with the blast's random arrangement; three of the near
+pair's four seeds improved and one got worse (94.0 to 109.1). The far pair at 0.1 s is the white
+flash filling the frame on both sides and says nothing about the half disc.
+
+### Posing a far hit
+
+`--force-rocket-hit TICK:SLOT` moves the craft onto the Rocket in flight, so the tick sets where
+the blast stands: the 0.233 s film's hit is `--force-rocket-hit 717:7` after the shot at 709
+(spawn 1.1 units from the original's wash quad; 716 is 4.0 short). The 12-unit pairs use 711,
+which was not checked against the original's spawn point. The ring's wash quad is a few ticks
+younger than the film's labelled age (2 ticks at 0.1 s, 10 at 0.233 s, read off its colour and
+size), so the far pairs render ours at the quad's age. Ours' struck craft keeps our own opponent's
+velocity, so the travelling fireballs do not match.
+
 ## What is left
 
 The Deck is measured ("On the Steam Deck"). The scene-width throttle is wired as TARGET FPS `original` and
