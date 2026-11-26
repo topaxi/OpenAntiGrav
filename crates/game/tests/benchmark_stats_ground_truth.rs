@@ -149,7 +149,7 @@ fn check(source: &str, title: &'static str) {
         let (x1, y1) = oag_game::render::from_grid(space, viewport, (left + width, top + height));
         let mut lit = 0_usize;
         let mut outside = Vec::new();
-        for (n, rgb) in pixels.chunks_exact(4).enumerate() {
+        for (n, rgb) in pixels.as_chunks::<4>().0.iter().enumerate() {
             if rgb[..3].iter().all(|channel| *channel < 8) {
                 continue;
             }
