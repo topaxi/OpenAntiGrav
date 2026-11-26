@@ -236,6 +236,19 @@ pub const TITLE: &Title = &Title {
         oag_title::rumble::SmallMotor::OnOff,
         oag_title::rumble::Triggers::Hd,
     ),
+    // `Render_FinishFrame`'s controller, confidence 88 for the two inputs and 90 for the step
+    // (`docs/ghidra/functions/ps3-hdfury-eu/scene-width-throttle.md`, "The law"): level 0 to 31,
+    // width `1 - level / 96` of 1920, narrower above 16111 us or a late flip, wider at 15555 us
+    // or less.
+    width_throttle: Some(oag_title::pre_race::Sourced::measured(
+        oag_title::width_throttle::Law {
+            max_level: 31,
+            width_notches: 96,
+            narrow_above_us: 16_111,
+            widen_up_to_us: 15_555,
+            frame_hz: 60,
+        },
+    )),
     // `demo_definition.xml` authors the any-press exit and no timer: the durations are Pulse's. `docs/ui/attract-demo.md`.
     demo: oag_title::demo::Demo::inheriting(
         "Pulse",

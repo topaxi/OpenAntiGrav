@@ -291,6 +291,7 @@ const TITLE: &Title = &Title {
     weather: oag_title::weather::Weather::Unplayed,
     water: oag_title::water::Water::NONE,
     rumble: oag_title::rumble::Rumble::Absent,
+    width_throttle: None,
     demo: oag_title::demo::Demo::PULSE,
 };
 

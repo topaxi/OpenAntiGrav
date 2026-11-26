@@ -119,6 +119,7 @@ pub const TITLE: &Title = &Title {
     },
     // No motors on a PSP (`docs/gameplay/rumble.md`, "Provenance per title").
     rumble: oag_title::rumble::Rumble::Absent,
+    width_throttle: None,
     // Inherited by lineage, `docs/ui/attract-demo.md`.
     demo: oag_title::demo::Demo {
         // `Demo_Definition.xml` is shared verbatim by both discs (`docs/ui/attract-demo.md`).

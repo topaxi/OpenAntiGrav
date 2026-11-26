@@ -219,6 +219,8 @@ pub const TITLE: &Title = &Title {
     },
     // Ships the 69 files and reads none (`docs/gameplay/rumble.md`).
     rumble: oag_title::rumble::Rumble::Absent,
+    // 2048 registers HD's debug option but its controller is unread (`scene-width-throttle.md`).
+    width_throttle: None,
     // Inherited by lineage, but the disc authors the timeouts and the circuit: `DemoConfig.xml`,
     // read at boot over these (`docs/ui/attract-demo.md`).
     demo: oag_title::demo::Demo {

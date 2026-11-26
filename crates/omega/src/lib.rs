@@ -221,6 +221,8 @@ pub const TITLE: &Title = &Title {
         oag_title::rumble::SmallMotor::Sum,
         oag_title::rumble::Triggers::Omega,
     ),
+    // HD's two thresholds are in neither `eboot.bin` (`scene-width-throttle.md`, "Omega").
+    width_throttle: None,
     // Inherited by lineage, but the disc authors the timeouts and the circuit: `DemoConfig.xml`,
     // read at boot over these (`docs/ui/attract-demo.md`).
     demo: oag_title::demo::Demo {

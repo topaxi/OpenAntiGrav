@@ -1051,12 +1051,16 @@ values = ["25", "33", "50", "67", "75", "100", "125", "150", "200"]
 # it to another monitor; it draws as `DEFAULT (<rate>)` (60 when no rate is
 # known). It has no `warn_when` pair below: its rate is the output's own, which
 # `drs::Target::at_most` already holds the controller to.
+# `original` is a title's own width throttle (`oag_title::width_throttle`): the scene's width
+# alone moves, one notch a frame, aimed at the rate the output holds; only a title that has one
+# offers it (`Definition::drop_unavailable_width_throttle`). See
+# `docs/rendering/dynamic-resolution.md`, "A title's own width throttle".
 [[page.entry]]
 kind = "choice"
 label = "TARGET FPS"
 string_id = "OAG_GRAPHICS_TARGET_FPS"
 setting = "graphics.target_fps"
-values = ["off", "30", "60", "90", "100", "120", "144", "default"]
+values = ["off", "original", "30", "60", "90", "100", "120", "144", "default"]
 warn_when = [
     { message = "HELD TO THE FRAME LIMIT, WHICH IS LOWER THAN THIS", all = [
         { setting = "graphics.target_fps", value = "60" },
@@ -1104,7 +1108,8 @@ warn_when = [
 # The lowest the controller may fall to, as a percentage of the aspect
 # rectangle - the same unit and the same list RENDER SCALE uses, so a player
 # can read the two rows against each other. Greyed while TARGET FPS is
-# off, because there is then nothing to bound.
+# off, because there is then nothing to bound, and under `original`, whose floor is the
+# title's own last notch.
 #
 # Warned rather than refused at a floor that is not below the ceiling: the
 # setting is stored and starts working the moment the other row moves, which is
@@ -1119,7 +1124,7 @@ label = "MINIMUM RESOLUTION"
 string_id = "OAG_GRAPHICS_MINIMUM_RESOLUTION"
 setting = "graphics.minimum_resolution"
 values = ["25", "33", "50", "67", "75", "100", "125", "150", "200"]
-disabled_by = { setting = "graphics.target_fps", value = "off" }
+disabled_by = { setting = "graphics.target_fps", values = ["off", "original"] }
 warn_when = [
     { message = "A FLOOR AT OR ABOVE RENDER SCALE LEAVES NOTHING TO MOVE", all = [
         { setting = "graphics.minimum_resolution", value = "25" },
