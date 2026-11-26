@@ -137,6 +137,30 @@ fn a_run_with_mods_names_them_in_the_details() {
     );
 }
 
+/// A browser names neither its adapter nor its driver, and a Mali's driver is its adapter's
+/// name again: the line reads as what is known, never as empty brackets.
+#[test]
+fn the_gpu_line_says_only_what_the_platform_named() {
+    for (adapter, driver, line) in [
+        ("", "", None),
+        ("Mali-G78", "Mali-G78", Some("Mali-G78")),
+        ("Mali-G78", "", Some("Mali-G78")),
+        ("", "Mesa 25", Some("Mesa 25")),
+        ("RX 7800", "Mesa 25", Some("RX 7800 (Mesa 25)")),
+    ] {
+        let mut run = run(0);
+        run.context.adapter_name = adapter.into();
+        run.context.driver = driver.into();
+        let machine = details(&run, &english).machine;
+        let shown = machine.iter().find(|(name, _)| name == "GPU");
+        assert_eq!(
+            shown.map(|(_, value)| value.as_str()),
+            line,
+            "adapter {adapter:?}, driver {driver:?}"
+        );
+    }
+}
+
 #[test]
 fn a_run_too_short_for_figures_says_so() {
     let run = report(std::iter::repeat_n(16_600.0, 5));

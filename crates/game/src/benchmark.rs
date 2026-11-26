@@ -60,10 +60,15 @@ pub fn device_label() -> String {
                 .and_then(|line| line.split_once(':'))
                 .map(|(_, name)| name.trim().to_string())
         });
+    let machine = os_arch(std::env::consts::OS, std::env::consts::ARCH);
     match cpu {
-        Some(cpu) => format!("{} {}, {cpu}", std::env::consts::OS, std::env::consts::ARCH),
-        None => format!("{} {}", std::env::consts::OS, std::env::consts::ARCH),
+        Some(cpu) => format!("{machine}, {cpu}"),
+        None => machine,
     }
+}
+
+fn os_arch(os: &str, arch: &str) -> String {
+    format!("{os} {arch}").trim_start().to_string()
 }
 
 /// A directory name for this run: seconds since the epoch, which sorts and never repeats within
@@ -212,8 +217,15 @@ pub struct Live {
 
 #[cfg(test)]
 mod tests {
-    use super::{COPIED_TICKS, CopyLabel, title_key};
+    use super::{COPIED_TICKS, CopyLabel, os_arch, title_key};
     use crate::app::clipboard::Outcome;
+
+    /// `wasm32` has no operating system name, so the device line starts at the architecture.
+    #[test]
+    fn a_device_with_no_operating_system_name_has_no_leading_space() {
+        assert_eq!(os_arch("", "wasm32"), "wasm32");
+        assert_eq!(os_arch("linux", "x86_64"), "linux x86_64");
+    }
 
     /// The browser answers a write later: until then the button claims nothing, and a refusal
     /// reads as one.
