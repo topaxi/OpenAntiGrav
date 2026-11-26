@@ -216,7 +216,7 @@ Law: `detonator-cannon.md` ("What the simulation needs"). Decisions already made
   | `PulseBonus` | the streak line `HUD_CHAIN_n - amount` (1000/3000/5000), held 2.0 s then faded 1.0 s | `%s - %d` | edge-detect `C.awards` (`first_five`, `second_five`, `ten`, `fifteen` go false to true); the timers are view state | ready (needs the language ids `HUD_CHAIN_5/10/15`) |
   | `DetonatorStage` | HUD stage over 14 | `%d/%d` | `World::detonator.stages_laid.min(14)`: the original's `rm+0x2dee` starts at 1 (the constructors store it) and counts start-line crossings, capped 14 (72) | ready |
   | `DamageBar`, `DamageBarBg`, `ShieldBarText` | energy percent (white in mode 14) | `(int)pct` | the generic shield readout (`oag_hud::shield_bar`, `Readout::shield`) fed with the craft's energy pool | ready once the layout loads |
-  | `ScoreFeedBack0`..`15` | a floating `+N` per score add (`+%3.0f`) | text | **missing**: the sim exposes only the running score; add a per-tick score-add event list (det-fx's per-tick event stream is the natural carrier), or approximate with the score delta | needs an event |
+  | `ScoreFeedBack0`..`15` | a floating `+N` per score add (`+%3.0f`) | text | **missing**; law read 2026-11-26 (`detonator-hud.md`, "The floating score"): the raise names the scored object's position, the text fades by `(1 - dt) * 0.995` per update and rises `5 (1 - alpha/255)` along the camera's row `+0x1e0`, scale 1.2 under 1000 points; wire as 16 view-side slots raised off the per-tick `detonator::Event` list (a shot mine, a bomb, the chain, the EMP), projected through the sight's world-to-screen path (about 1.5 h, sonnet) | ready to wire |
   | `DetonatorGold/Silver/BronzeMedal` | model when the score passes the cell's thresholds | model | `crate::medal_watch::detonator_value` + the cell | wired (`det-medals`); best tier only, chosen |
   | `ForwardWarning*` | bomb-ahead warning, once per stage, 2.0 s | icons | **missing**: `Detonator_IsBombAhead` (500.0 track measure + straight distance, `0xd2a30`/`0x588f0` unread) and the per-stage latch. On HD message 8 selects `ForwardWarningMineIcon`, which `Detonator_warnings.xml` does not author, so HD probably draws no bomb icon (55, `detonator-hud.md`) | needs RE + a capture |
   | `Emp_0`..`7`, `EmpReady`, `EmpBarEffect` | `n = rm+0x2dd8` pips lit while `n > i`, `EmpReady` at `table+0x1bc`, gauge `min(n/8, 1)` | pips | `RaceSim::detonator_emp`, `detonator_emp_gauge` | pips and `EmpReady` wired (HD, Omega); `EmpBarEffect` not drawn (an `<ImageModel>`); 2048's `EmpCharge`/`EmpFull` open |
@@ -503,10 +503,15 @@ positions differ by construction (ours places with its own seeded `Rng`), so a m
 capture state is partly fixed (picture lag off the static scene, ours at the picture's tick, mine ages; 11.47 to 10.32). **Open draw gaps, on every Detonator
 pair:** ~~bright striped grilles ours draws where the original is black~~ (fixed 2026-11-26, `det-dark-scenery`: the `scanlinebillboard` hologram's Zone variants draw the Zone surface, `docs/rendering/hd-zone-recolour.md`, "Holographic billboards in a Zone frame"; -hot 10.32 to 8.96, pad 7.60 to 5.88), the score box's white-striped wings (1.2), HUD digits
 and `1/14` too wide (1.2), hull too bright (0.7). ~~Open capture state: input latency before ours' fire, the volley pair's mine
-envelopes~~ carried (`det-cannon-regrab`, "The volley clocks and the picture-clock reads"). **Open from that grab:** ours' mine blast
-draws white puffs and long streaks where the original shows small shards and a `+100` (carrying `cannon-volley`'s destroyed mine takes it
-13.35 -> 14.05, so the mine is not carried); the craft's speed on the rounds is not carried (lowered no pair), and whether ours' round with it
-hits that mine at the original's age (10 ticks) is untested.
+envelopes~~ carried (`det-cannon-regrab`, "The volley clocks and the picture-clock reads"). **Open from that grab:** ~~ours' mine blast
+draws white puffs where the original shows small shards~~ (2026-11-26, `det-mine-blast`: the mine effects draw their disc sprites, the
+`Debris` atlas is the shards, `detonator-mine.md`, "The shards, against the original"). Still open there: the destroyed mine is not
+carried, because with it the pair reads 12.53 against the published 11.89. Three draw gaps remain in ours' blast: the root's three large
+white glows and their `Trail_Ribbon` dot chains (the original shows a few thin lines; drawing them as HD's far bar made it 12.92), the
+`Explosion_Core` near-white where the original's is dim pink (the recolour's table is unread, 55), and the `+100` (read, not drawn: the next
+bullet). The craft-speed carry on the rounds is right physics: put back by `v` times their age, ours hits the mine at round age 8 against
+the original's 10 (without the carry, 1). But it raised the carried pair to 13.75, because the younger blast shows more of those gaps. Re-try it once
+the glows are right; it is about 40 lines in `oag_raceplay::detonator` behind a `--detonator-cannon-craft-speed` flag.
 
 **Hull camera and size, re-based (2026-11-23, `det-camera`).** The maintainer's "ours is far, the original is close" was true and the
 camera flags were not the cause: the pair fed the RAM body (2 to 4 ticks ahead of the presented frame) with the push-buffer camera, and

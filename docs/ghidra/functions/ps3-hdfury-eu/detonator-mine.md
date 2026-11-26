@@ -300,7 +300,7 @@ the next), the effect plays whether or not the mine is in view, and the recolour
 ## The shards, against the original (2026-11-26, `det-mine-blast`)
 
 **Claim checked:** the original's frame of a mine a cannon round destroyed (the `cannon-volley` pair, Talon's Junction,
-RPCS3 boot `cv1` of `det-cannon-regrab`) shows small glass shards, a dim pink puff and a `+100`; ours drew white puffs
+its published RPCS3 grab) shows small glass shards, a dim pink puff and a `+100`; ours drew white puffs
 and long dotted streaks. **The shards are the disc's**: `wo_mine_explo_detonator.pob` (`DATA00` `/data/psys/`) has six
 emitters, and its `Debris` is 50 alpha-over billboards, life `152 +- 54` ticks, radial at `1.31 +- 0.76` units a tick,
 gravity `0.01`, size `0.3` to `0.8`, picking a random frame of a 512 x 512, 4 x 4 atlas of glass triangles. The other
@@ -314,8 +314,8 @@ shows (the atlas's shapes and the shards' size and spread on the frame agree; on
 drew the procedural profile. Test: `check_a_shot_mine_throws_the_discs_shards` in
 `tests::detonator_fx::an_hd_detonator_race_plays_the_discs_effects_for_each_event`.
 
-**The blast's age.** In the original the round (fired at lap 1.917 s) retired at age 10 ticks (`cannon-samples.json`
-of the grab: `flags 5` from lap 2.083 s), and the picture is 6.35 ticks older than the 2.65 s pause, so the blast is
+**The blast's age.** In the original the round (fired at lap 1.917 s) retired at age 10 ticks (the grab's cannon reads at
+each pause, [compare-page.md](../../../tools/compare-page.md), "The volley clocks": its `flags` read `5` from lap 2.083 s on), and the picture is 6.35 ticks older than the 2.65 s pause, so the blast is
 about 27 ticks old in the frame. Ours' round, fired from the craft held at the picture's pose, hits that mine 1 tick
 after the volley (tick 389 of 425), so ours' blast is 36 ticks old. Putting the round back where the original's moving
 craft fired it (`102.26` units/s times its age, and `3.6 v` on the launch tick) makes ours hit at tick 396, 29 ticks
@@ -325,7 +325,7 @@ before the picture.
 
 | Ours | mean grey |
 | --- | ---: |
-| the destroyed mine carried (position, words and age from the grab), procedural pictures | 12.70 |
+| the destroyed mine carried (position `217.595, -44.266, -192.347`, words and age `54.28 s` from the grab's pause read), procedural pictures | 12.70 |
 | the same, the disc's sprites | 12.53 |
 | the same, and the round carried back by the craft's speed | 13.75 |
 
@@ -335,7 +335,8 @@ and the speed carry raises it: the younger blast shows more of what ours still d
 - **The root's three glows and their `Trail_Ribbon`s.** Ours draws each glow as a large white disc and each ribbon as a
   chain of dots (the ribbon's particles have speed 0, a `Streak { from_spawn }` of zero length per tick). The original's
   frame shows neither the discs nor the dots, only a few thin lines. Unread: how HD draws a speed-0 streak child, and
-  whether the root's glow is drawn at all.
+  whether the root's glow is drawn at all. Drawing the effects' streaks as HD's far bar (`FAR_BARS`) turns the dots into
+  thin lines, but brighter and more of them than the original's, and the carried pair goes 12.53 to 12.92: not kept.
 - **`Explosion_Core`.** The original's is a dim, translucent pink smoke; ours is near-white. The recolour below writes
   256 words of a table that `0x0027c288` returns from two runtime globals (TOC `-0x2bac`, `-0x2ba8`, both in `.bss`),
   each `lerp(c, 255, 0.8)` per channel with `c` the colour `0x00677cf8` returns for the player craft's `+0x6284`, then
@@ -343,6 +344,13 @@ and the speed carry raises it: the younger blast shows more of what ours still d
 - **The `+100`**: a HUD widget, not an effect ([detonator-hud.md](detonator-hud.md), "The floating score").
 
 The destroyed mine is therefore **not carried** in the published pair, and the craft-speed carry is not kept.
+
+**2048 and Omega: checked, applies, not wired** (the brief defers their Detonator lanes). Both mine effects ship with
+HD's emitter trees (the same six and three emitters, counts, blends, classes and lives; the `.pob`s name
+`Tex\Debris_DetonatorMines.tga`), and the shard atlas ships as `data/particles{,2048}/Tex/Debris_DetonatorMines.gxt` in
+2048's `data.psarc` and `.gnf` in Omega's base archive (census run on `psys_2048_ground_truth.rs` and
+`psys_omega_ground_truth.rs`'s archive walks, 2026-11-26). Neither title lists its effects' sprites yet
+(`Effects::sprites` is HD's alone), so wiring them is a decode check of the `.gxt`/`.gnf` atlas plus the list entry.
 
 ## Live and dark mines
 
