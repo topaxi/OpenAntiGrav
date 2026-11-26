@@ -347,9 +347,8 @@ describes ours, not the original: the original's frame is mostly white from 0.1 
    The cloud lags the craft, as an effect whose emitters ride it and leave their smoke behind
    would. In ours the hit point is behind the camera after about 0.2 s, so the player flies
    through the blast and past it. What the original's spawn call attaches to is not read.
-2. **Our `WO_ROCKET_EXPLO` plays no sprites**: it is not in HD's `Effects::sprites`, so every
-   particle is the procedural white profile. With them on, ours is a textured fireball of the
-   same family. One sheet, `FIREBALL_TUMULT`'s, does not fit our sprite sheet.
+2. **Our `WO_ROCKET_EXPLO` played no sprites** (it was not in HD's `Effects::sprites`, so every
+   particle was the procedural white profile). Wired 2026-11-26: "With its sprites" below.
 3. **The original washes the whole frame, HUD included, yellow to white.** Its particle lists
    hold single-quad additive draws with a 64x64 texture whose half height is exactly twice
    their depth, which covers the screen. All three hits have them in frames from the hit to
@@ -364,8 +363,66 @@ a few ticks. The vertex buffers, camera and poses are from one stop. Ours does n
 `--seed`, so it has no noise floor of its own.
 
 **Cross-title.** Omega and 2048 author their own `WO_ROCKET_EXPLO` and run the same law.
-Whether their blast travels with the craft or plays sprites is not checkable here: no memory
-readout of Omega, and 2048 was not captured.
+Their sprites were already read (below). Whether their blast travels with the craft is not
+checkable here: no memory readout of Omega, and 2048 was not captured.
+
+## With its sprites
+
+2026-11-26. `WO_ROCKET_EXPLO` is in HD's `Effects::sprites`: all twelve emitters read their
+`.gtf` and sit on the particle sheet. Fury is the same disc. 2048 (3 emitters, 3 sprites read)
+and Omega (10 emitters, 10 sprites read) read theirs without a list, since `.gxt` and `.gnf`
+load for every effect: **ported**, already
+([particle_sheet_ground_truth.rs](../../crates/raceplay/tests/particle_sheet_ground_truth.rs)).
+
+### The sprite sheet had to pack tighter
+
+With twelve more sprites HD no longer fitted the 4096 sheet: `FIREBALL_TUMULT` was dropped and
+`WO_QUAKE_DETONATOR`'s `EXPLOSIONS`, which fitted before, was pushed off. The packer filled
+rows as tall as their tallest sprite and ran out under 60 % full. It now keeps the free space
+as maximal rectangles and takes the highest, then leftmost, position
+(`oag_fx::psys::sprite`, `packing`). Same sheet size, same padding, nothing dropped on HD,
+2048, Omega (both effect sets), Pulse (PSP and PS2) or Pure; none of the others dropped one
+before either, so the packer draws nothing new there.
+
+A sprite that moves on the sheet can round differently when sampled. Main against this build,
+HD, 1280x720 and the three Detonator comparison pairs: the pairs, a forced Missile hit and a
+Detonator Quake frame (no wave in it) have identical pixels; two frames of a Detonator EMP
+wave differ by 1 or 2 levels of 255 on 246 and 63 pixels, the same on every rerun.
+
+### Against the capture
+
+`--force-rocket-hit TICK:SLOT` puts a craft on a Rocket in flight, as `--force-missile-hit`
+does. The scenario, hit 2's frames at 0.1 and 0.233 s: Talon's Junction, `--field-from` the
+frame's own crafts (without it the opponents are inactive and no hit lands),
+`--give rocket`, an input script of `709 none`, `1 square`, `400 none`,
+`--force-rocket-hit 711:7`, `--ticks 718` or `726`, and the original's camera. Fire at 709 and
+the hit at 711 put the blast about 12 units ahead of the held player, the original's gap at
+the hit.
+
+Where ours' player is held decides where the blast stands, so there are two geometries:
+
+- **Held at the frame's own pose** (the field file's player row). The blast stands ahead of
+  the player, roughly where the original's travelling cloud is. **Chosen**: ours does not
+  carry the blast; this compares the pictures, not the motion.
+- **Held at the original's pose at the hit** (that row replaced by `hit.json`'s
+  `player_pose`). The blast stands at the original hit point, which is where ours' stays.
+
+Whole-frame RMSE against the original, near law on in all, the same build with and without
+the listing. The figure is `compare_env.overlap_score`'s `rmse` times 255, not the script
+behind the ten-frame table above:
+
+| Geometry | Age | Without sprites | With sprites |
+| --- | --- | --- | --- |
+| At the frame's pose | 0.1 s | 120.4 | 121.4 |
+| At the frame's pose | 0.233 s | 146.0 | 129.8 |
+| At the hit point | 0.1 s | 117.0 | 114.0 |
+| At the hit point | 0.233 s | 138.5 | 133.2 |
+
+These are two frames of one hit in a new scenario: they do not compare with the ten-frame
+means above, which came from a throwaway patch. By eye the sprites turn white blobs and soft
+discs into fire and smoke of the original's family; by RMSE three of the four improve and one
+is level. All four stay far from the original, whose frame is washed nearly white
+(reason 3).
 
 ## What is left
 

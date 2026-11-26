@@ -59,7 +59,7 @@ today after this change.
 | `WO_SHIP_SPARK_DAMAGE_LEACHBEAM` | a LeachBeam drain's hit (`Ship_Damage`) | **resolved 2026-10-07:** `Ship_ApplyDamage` (`0x000e7760`) sets `object + 0x260` on a kind 7 hit and `0x002a06e0` (also the engine-flare enqueue) clears it and spawns the effect attached at `+0x1c0`, conf 78 | **yes, HD only** (`race::damage_fx`), once per hit |
 | `WO_WEAPON_ABSORB` | `Ship_PlayAbsorbFeedback` | `ShipAbsorbNode_SpawnBurst` `0x002d8d10` (`absorb-feedback.md`) | yes (HD path) |
 | `WO_TRAIL_HITSHIP`, `_RED` | (HD-only) | `0x002d9ec0` (`engine-trail.md`) | yes |
-| `WO_ROCKET_EXPLO` | craft/track hit | `0x0014a7d8` | yes, Pulse-inherited; HD site found; the wall half (`_TRACK`) plays HD's own `.gtf` sprites since 2026-10-08, the craft half still the procedural profile |
+| `WO_ROCKET_EXPLO` | craft/track hit | `0x0014a7d8` | yes, Pulse-inherited; HD site found; the wall half (`_TRACK`) plays HD's own `.gtf` sprites since 2026-10-08, the craft half since 2026-11-26 ([particle-fill.md](../../../rendering/particle-fill.md#with-its-sprites)); whether the spawn rides the struck craft is unread |
 | `WO_MISSILE_EXPLO` | detonation | `0x00155568` | yes, Pulse-inherited |
 | `WO_MINE_EXPLO` | detonation | `0x00140710` | yes, Pulse-inherited |
 | `WO_SHURIKEN_EXPIRE` | teardown | `0x0014d4f0` | yes, Pulse-inherited |

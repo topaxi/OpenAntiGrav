@@ -333,3 +333,59 @@ fn a_missile_in_flight_draws_its_two_heads() {
         "two heads of 800 triangles each"
     );
 }
+
+/// Bright pixels the forced blast adds at the least, of 522,240. Measured: 25,243
+/// with the flag, 6,669 without.
+const FORCED_BLAST_PIXELS: usize = 10_000;
+
+/// Talon's Junction, the player firing one volley of Rockets, with or without
+/// `--force-rocket-hit` putting rival 1 on one of them after tick 289.
+fn rocket_frame(forced: bool) -> Option<Vec<[u8; 3]>> {
+    let image = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso")?;
+    let scratch = std::env::temp_dir().join(format!(
+        "oag-hd-rocket-blast-{}-{forced}",
+        std::process::id()
+    ));
+    std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
+    let out = scratch.join("frame.png");
+    let script = scratch.join("fire.inputs");
+    std::fs::write(&script, "285 none\n1 square\n400 none\n").expect("the input script");
+    let mut game = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"));
+    game.arg(image)
+        .args(["--race", "--no-audio", "--no-soundtrack", "--no-effects"])
+        .args(["--size", "960x544", "--opponents"])
+        .args(["--render-scale", "100", "--msaa", "off"])
+        .args(["--screen-filter", "off", "--anisotropy", "off"])
+        .args(["--motion-blur", "off", "--ticks", "296", "--give", "rocket"]);
+    if forced {
+        game.args(["--force-rocket-hit", "289:1"]);
+    }
+    let status = game
+        .arg("--input-script")
+        .arg(&script)
+        .arg("--screenshot")
+        .arg(&out)
+        .env("XDG_CONFIG_HOME", scratch.join("config"))
+        .env("XDG_DATA_HOME", scratch.join("data"))
+        .env("XDG_STATE_HOME", scratch.join("state"))
+        .status()
+        .expect("running oag-game");
+    assert!(status.success());
+    let frame = rgb_of(&std::fs::read(&out).expect("the frame"));
+    std::fs::remove_dir_all(&scratch).ok();
+    Some(frame)
+}
+
+/// The flag lands the hit at its tick: 0.1 s later the craft blast fills a part
+/// of the frame that the same volley, left to fly, does not.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso and a GPU adapter"]
+fn force_rocket_hit_blows_a_rocket_on_the_named_craft_at_its_tick() {
+    let forced = count(&rocket_frame(true).expect("image"), bright);
+    let free = count(&rocket_frame(false).expect("image"), bright);
+    println!("bright pixels at tick 296: forced {forced}, left to fly {free}");
+    assert!(
+        forced > free + FORCED_BLAST_PIXELS,
+        "no blast from the forced hit: {forced} against {free}"
+    );
+}
