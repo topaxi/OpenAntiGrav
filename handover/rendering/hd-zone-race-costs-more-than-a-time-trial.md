@@ -2,7 +2,7 @@
 status: measure
 titles: [hd]
 updated: 2026-11-26
-summary: "Probe rise landed (undocked Deck Zone 4K 0.84 -> 0.90); what parks the undocked clock at 1040 MHz is unnamed; TT stutter is not the probe; Zone specular"
+summary: "Probe rise landed (undocked Deck 4K Zone 0.84 -> 0.90); the undocked 1040 MHz park is unnamed; TT stutter is not the probe; Zone specular"
 ---
 
 # An HD Zone race costs more than a time trial on the same circuit
