@@ -1799,8 +1799,7 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
     // `eyePositionWorldSpace - position`, which is only meaningful if the eye
     // reaches it in model space; the angle between the two is the same number
     // under a rigid transform, so it is computed here from the world normal and
-    // the scene block's eye. The flame surfaces' block leaves that eye at the world
-    // origin (`docs/ghidra/functions/ps3-hdfury-eu/engine-flare.md`, "Our rim's eye").
+    // the real camera.
     //
     // **`texel.a` is deliberately absent.** The program's `TEX H0.xyz` writes
     // three components and the fourth is the vertex ramp from the moment

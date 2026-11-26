@@ -711,16 +711,22 @@ impl Scene {
         // by fog either way. Left unfogged rather than guessed. Its animation
         // tables are written below instead, off its own reveal timer rather
         // than the race clock these lists ride.
-        // **The flame surfaces need the clock, and nothing else from `scene`.**
-        // Both a craft's flare and its boost plume draw through `mesh.wgsl`'s
-        // `flame_shading` path, which replaces the lit result outright and
-        // applies no fog - so binding `Scene::off()` plus the clock leaves
-        // their appearance exactly where `mesh_render::build` put it while
-        // giving `flame_speed * scene.time.x` something to advance. Writing
-        // the *scene* here instead would fog and light them, which is the
-        // question the paragraph above says is unrecovered.
+        // **The flame surfaces need the clock and the eye, and nothing else from
+        // `scene`.** Both a craft's flare and its boost plume draw through
+        // `mesh.wgsl`'s `flame_shading` path, which replaces the lit result
+        // outright and applies no fog - so binding `Scene::off()` plus the two
+        // leaves their appearance where `mesh_render::build` put it while
+        // giving `flame_speed * scene.time.x` something to advance and the
+        // flame's rim a view direction. Our own shield (`own_shield.wesl`) reads
+        // this block for the same two. Writing the *scene* here instead would
+        // fog and light them, which is the question the paragraph above says is
+        // unrecovered.
         oag_gpu::perfprobe::mark("ship-anims");
         let flame_scene = mesh_render::Scene {
+            fog: mesh_render::Fog {
+                camera: eye.to_array(),
+                ..mesh_render::Fog::off()
+            },
             time: [seconds; 4],
             ..mesh_render::Scene::off()
         };
