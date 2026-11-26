@@ -1,7 +1,7 @@
 //! The scene blocks every drawable of a kind reads: one write per kind per view, in a region
 //! of the buffer that belongs to that view alone.
 
-use super::scene_build::{bare_scene, bare_scene_of, livery, test_gpu};
+use super::scene_build::{bare_scene, bare_scene_of, livery, test_gpu, triangle};
 use super::*;
 use crate::drawable::SceneKind;
 use oag_display::display::{Fov, Shadows};
@@ -264,4 +264,44 @@ fn our_own_shield_reads_each_views_eye() {
         assert_eq!(block.time, circuit.time, "the lattice's clock");
         assert_eq!(block.fog.enabled, 0.0, "the shell is not fogged");
     }
+}
+
+/// HD's flame program closes its colour on `MAD /2`, which is the circuit's
+/// `Light::output_scale`, so the flame surfaces' block carries it. Drop it from `flame_scene`
+/// and the block reads `Scene::off`'s 1.0 where HD's circuit reads 0.5.
+#[test]
+fn the_flame_surfaces_close_on_the_circuits_output_scale() {
+    let Some((device, queue)) = test_gpu() else {
+        return;
+    };
+    let mut craft = livery();
+    craft.flare = Some(triangle());
+    let mut scene = bare_scene_of(&device, &queue, &[craft]);
+    scene.share_scene_blocks_for_tests(&device);
+    scene.set_output_scale_for_tests(0.5);
+    assert_eq!(scene.flare_scene_kind_for_tests(), Some(SceneKind::Flame));
+    let view = target(&device);
+    let race = race_with_a_grid();
+    scene.render_viewports(
+        &device,
+        &queue,
+        &view,
+        &race,
+        (0.0, 0.0, 64.0, 64.0),
+        Fov::AUTHORED,
+        true,
+        true,
+        None,
+        Shadows::Off,
+        &[],
+        crate::scene::WindowEffects::default(),
+        &mut [],
+    );
+    let flame = scene.scene_block(&device, &queue, 0, SceneKind::Flame);
+    let circuit = scene.scene_block(&device, &queue, 0, SceneKind::Circuit);
+    assert_eq!(circuit.light.output_scale, 0.5, "HD's output scale");
+    assert_eq!(
+        flame.light.output_scale, circuit.light.output_scale,
+        "the flame program's closing `/2`"
+    );
 }

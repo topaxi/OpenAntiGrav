@@ -219,8 +219,32 @@ fn own_shield_scene(ship: &mesh_render::Scene, flame: &mesh_render::Scene) -> me
     }
 }
 
+/// The flame surfaces' block (flares, boost plumes, flare spikes, and the shield shells and
+/// cockpit sphere that share it): `Scene::off` plus the clock and the title's output scale,
+/// taken from the circuit's `scene`.
+///
+/// HD's live flame program closes its colour on `MAD /2`
+/// (`docs/ghidra/functions/ps3-hdfury-eu/engine-flare.md`, "The live fragment program is block
+/// #2"), which is `Light::output_scale` (0.5 on HD, 1.0 on every other title). No other draw on
+/// this block reads the scale. The program also fogs the colour with the circuit's fog, which
+/// at chase distance is a factor of 1 to four places; the block keeps fog off, so the shields
+/// sharing it are not fogged on a guess.
+pub(super) fn flame_scene(scene: &mesh_render::Scene, seconds: f32) -> mesh_render::Scene {
+    let off = mesh_render::Scene::off();
+    mesh_render::Scene {
+        time: [seconds; 4],
+        light: off.light.with_output_scale(scene.light.output_scale),
+        ..off
+    }
+}
+
 #[cfg(test)]
 impl Scene {
+    /// Sets the circuit's light rig's output scale, as HD's loader does (0.5).
+    pub(crate) fn set_output_scale_for_tests(&mut self, output_scale: f32) {
+        self.light = self.light.with_output_scale(output_scale);
+    }
+
     /// Gives slot 0 a shield shell and the race a cockpit sphere, each a copy of its hull on a
     /// block of its own.
     pub(crate) fn give_a_shield_for_tests(&mut self, device: &wgpu::Device) {
@@ -232,6 +256,14 @@ impl Scene {
         let (shell, sphere) = (copy(), copy());
         self.shield = vec![Some(shell)];
         self.shield_cockpit = Some(sphere);
+    }
+
+    /// The kind of scene block slot 0's engine flare reads.
+    pub(crate) fn flare_scene_kind_for_tests(&self) -> Option<SceneKind> {
+        self.flares
+            .first()
+            .and_then(Option::as_ref)
+            .and_then(Drawable::scene_kind_for_tests)
     }
 
     /// The kinds of scene block slot 0's shield shell and the cockpit sphere read.
