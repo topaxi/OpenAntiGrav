@@ -2,7 +2,7 @@
 status: measure
 titles: [hd, omega, 2048]
 updated: 2026-11-26
-summary: "Owed: blast template cap source, far-hit dome, Deck 4K hit still 64 ms worst, 1.7 ms at 1080p; half-res particle target awaits the maintainer"
+summary: "Owed: blast template cap source, flare .gtf rows, Deck 4K hit still 64 ms worst, 1.7 ms at 1080p; half-res particle target awaits the maintainer"
 size: M (50)
 difficulty: medium (55)
 ---
@@ -25,13 +25,28 @@ blast the struck craft's velocity, on HD, 2048 and Omega
 - **The screen wash: named and wired 2026-11-26.** It is the blast's sprite templates
   (`docs/ghidra/functions/ps3-hdfury-eu/rocket-craft-blast.md`, "The screen wash"). Left:
   - where HD reads the template cap of 2.0 (measured on 37 quads, unread);
-  - **the far-hit dome**: a Rocket hit about 30 units ahead now draws `glow_longer`'s hemisphere
-    sprite as a flat-bottomed white dome across the top of the frame. Film a far hit on RPCS3
-    (`scripts/rpcs3-hd-rocket-film.py --back 30`) and compare its wash shape with ours;
   - 2048 and Omega play their own files' templates with HD's trigger and cap by lineage; a capture of either's hit would turn that into a measurement.
 - **The blast's push on nearby craft** (`Rocket_PushNearbyCraft_q`, `0x00149f70`, and Omega's
   inline twin): radius and strength table unread; it may be HD's consumer of the "Blast push"
   row in `docs/gameplay/weapon-lineage.md`. Simulation, not render: its own lane.
+
+### Left by the far-hit lane (the dome is settled: HD's particle sprites were upside down)
+
+`docs/rendering/particle-fill.md`, "HD's particle sprites are bottom-up".
+
+- **Other flat-RGBA `.gtf` readers keep the file's bottom-up rows and were not checked**:
+  `oag_raceplay::assets::decode_texture` (flare and trail art) and `load/caustic.rs`. Compare each
+  with its draw's `v` in a command ring before touching it; a radially symmetric sprite shows
+  nothing either way.
+- **Every HD `.gtf` particle effect moved with the turn; only the Rocket's craft blast was
+  compared with the original.** The Plasma, Missile, Mine, Bomb, Quake and Detonator effects
+  want one film each beside ours, flipbook frame order first (confidence 80).
+- **The 12-unit pairs' hit tick (`--force-rocket-hit 711:7`) was never checked against the
+  original's spawn point.** The far films put the wash quad in world space (view position through
+  the frame's camera); the same on `hit2` says where ours should stand.
+- **A posed blast carries our opponent's velocity, not the original's**, so travelling fireballs
+  do not match in a pair. A flag that writes the struck craft's velocity at the forced hit would
+  take that out of the metric.
 
 ### Particles into a half-resolution target, composited
 
@@ -76,6 +91,6 @@ HD's width throttle, the other idea here, is TARGET FPS `original`
 
 ## Next Steps
 
-1. Adopt the re-rendered rocket-hit pairs, then film the far-hit dome (above).
+1. Adopt the re-rendered rocket-hit and far-hit pairs.
 3. Split the fill of ticks 726 and 784 per effect on the Deck's 3840x2160 run.
 4. Put the half-resolution particle target to the maintainer, with the Deck numbers.

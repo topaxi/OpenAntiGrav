@@ -261,6 +261,13 @@ fn the_explosions_sprites_all_fit_the_sheet() {
         let unplaced: Vec<&str> = placed.unplaced_sprites().collect();
         assert!(unplaced.is_empty(), "{name}: {unplaced:?} did not fit");
     }
+    let blob = archive
+        .read_path("Data/particles/Tex/yellow_glow_hemi.gnf")
+        .expect("Omega ships HD's hemisphere");
+    crate::psys_ground_truth::check_the_hemisphere_sits_in_the_top_half(
+        "Omega .gnf",
+        &Sprite::from_gnf(&blob).expect("decodes"),
+    );
 }
 
 /// The strength each `shockdistort` emitter authors at `+0xc84`, read off both

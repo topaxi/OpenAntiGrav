@@ -211,6 +211,10 @@ stretched 8x8 rule, a vertically symmetric arrow and an icon nothing draws yet.
 The PSP and PS2 paths are untouched: `.mip` and `.pct` go down different
 branches of the same function.
 
+HD's particle sprites are a second consumer that draws top-down:
+`oag_fx::psys::sprite` turns them too
+([particle-fill.md](../rendering/particle-fill.md), "HD's particle sprites are bottom-up").
+
 ## The code kept Pulse's loading plugin and the data was cut
 
 HD's executable still carries the whole of Pulse's loading-plugin machinery.
