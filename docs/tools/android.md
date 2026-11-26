@@ -625,6 +625,51 @@ title was observed on a phone, so there is nothing to match and no confidence sc
   `could not pause` warning), `Occluded` on a desktop (Xvfb has no compositor to send it),
   the S24.
 
+## The display's refresh rate
+
+winit 0.30's Android backend answers `None` for `refresh_rate_millihertz`, so
+`oag_mobile::refresh` asks the activity itself:
+`activity.getWindowManager().getDefaultDisplay().getRefreshRate()` over JNI, once a second on a
+thread of its own (`android-refresh`, the poller the X11 reader also uses, `oag_thread::poller`).
+`getRefreshRate` answers the rate the app's frames are shown at: the active mode's, or the
+system's override for this app. No `DisplayListener` is registered, because it needs a Java
+class and the APK carries none; a change is followed at the next round. Each new surface starts a
+new reader and drops the old one. A failed call keeps the last answer, and before any answer
+there is none, so the game falls back to 60 as it does on a platform that reports nothing.
+
+The value reaches `Host::refresh_millihertz`, so everything the desktop's report feeds reads it
+([dynamic-resolution.md](../rendering/dynamic-resolution.md), "The target is held to the frame
+limiter and to the display"): FRAME LIMIT `refresh_rate`, TARGET FPS `default`, the display
+clamp on dynamic resolution and the CPU governor's period, the overlay's graph scale, the
+labels `REFRESH RATE (N)` and `DEFAULT (N)`, and the benchmark's verdict and `refresh_hz`.
+Nothing is a per-platform default: a fresh profile's frame limit (240) and TARGET FPS (off) are
+unchanged.
+
+**Measured 2026-11-26** on the Galaxy S21 (SM-G991B, Android 14, panel modes 48, 60, 96 and
+120 Hz, the system's adaptive "motion smoothness"), `dist` APKs before (`5893b60d5`) and after
+(`616b21cd3`), Pulse's benchmark on Talon's Junction White, `--no-audio --ticks 1500
+--benchmark-frame-limit refresh_rate` (a capped run, so the FPS compares with nothing but
+itself):
+
+| Run | Result's refresh | Frame limit in force | Budget | Over budget | Average FPS | Frames under 12.5 ms |
+| --- | --- | --- | --- | --- | --- | --- |
+| before, VSYNC on | 60, `assumed` | none | 16.7 ms | 317 of 1330 | 65.0 | 258 |
+| after, VSYNC on | 120, `display` | none | 8.3 ms | 1276 of 1276 | 62.3 | 258 |
+| before, VSYNC off | 60, `assumed` | 60 | 16.7 ms | 536 | 55.1 | 3 |
+| after, VSYNC off | 120, `display` | 120 | 8.3 ms | 1161 of 1161 | 56.7 | 32 |
+
+`dumpsys display` read 120 Hz (`mActiveSfDisplayMode` and `mActiveRenderFrameRate`) in every
+sample of those runs, and the front end then held 120.0 fps with 8.33 ms frames, so the panel
+presents at the rate reported. The race itself is bound by the frame's own cost, which this does
+not change.
+
+**60 Hz** was not tried as a display setting (that is a system setting of the owner's). It was
+observed from the phone's own switching: returning to the app from the home screen, the panel is
+at 60 for about half a second, `dumpsys` and `getRefreshRate` both read 60 in that window, and
+the next round a second later reads 120. The game follows both ways (`REFRESH RATE (60)` for that
+second), which also drops the measured half of `oag_present::refresh` each time, as any change of
+report does.
+
 ## Pre-converted caches
 
 `oag-game --no-audio --dry-run --prefetch <image>` is the headless

@@ -668,8 +668,9 @@ display clamp is logged once per change at `debug` (`display refresh in force`).
 
 - *The report*: the output's refresh, asked again once a second. On X11 (Game Mode
   included) that is RandR, read on a thread of its own, because winit's monitor report
-  freezes after window creation there; elsewhere the current monitor's
-  `refresh_rate_millihertz`. A mode change follows within about two seconds on Xvfb; a real
+  freezes after window creation there; on Android it is the activity's `Display` read over JNI,
+  because winit reports none ([android.md](../tools/android.md), "The display's refresh rate");
+  elsewhere the current monitor's `refresh_rate_millihertz`. A mode change follows within about two seconds on Xvfb; a real
   dock and undock under gamescope has not been run. Believed, gamescope's included; below
   20 Hz after rounding it is no report. Measured here: Xvfb reports none; a nested headless
   `gamescope -r 60` reports 59855 mHz and names its monitor `gamescope`; a Steam Deck
