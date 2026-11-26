@@ -46,6 +46,7 @@ pub(super) fn effect(name: &str, looping: bool, duration_ticks: f32) -> std::syn
             colour_mode: ColourMode::RandomEntry,
             authored_colour_mode: 2,
             render: Render::Billboard,
+            draw_class: guard::DrawClass::Square,
             streak: StreakDraw::Procedural,
             blend: Blend::Additive,
             distort_strength: 0.0,
@@ -74,6 +75,7 @@ pub(super) fn effect(name: &str, looping: bool, duration_ticks: f32) -> std::syn
         field: None,
         view_depth: 0.0,
         near: None,
+        psp_clip: false,
         rides_owner_frame: true,
         skipped_templates: 0,
     })

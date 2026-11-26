@@ -25,13 +25,14 @@ FROM docker.io/library/debian:bookworm-slim
 # ships any of them. libclang-dev is the one build-time-only outlier:
 # `libspa-sys` generates its bindings with bindgen, which needs libclang to
 # parse SPA's headers. Bookworm's PipeWire is 0.3.65, and both sys crates ask
-# for `0.3`/`0.2`, so the frozen version is new enough. No other C dependency
-# exists in the workspace: the CHD reader, the AV1 decoder and wgpu are all
-# Rust.
+# for `0.3`/`0.2`, so the frozen version is new enough. g++ builds the one C++
+# dependency, `ctt-astcenc` (the texture compression encoder in oag-game); the
+# CHD reader, the AV1 decoder and wgpu are all Rust.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates \
         curl \
+        g++ \
         gcc \
         libasound2-dev \
         libc6-dev \

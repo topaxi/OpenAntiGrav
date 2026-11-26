@@ -88,13 +88,53 @@ fn a_player_hosts_a_listed_room_and_a_guest_races_them_to_the_finish() {
         assert!(
             lab.read(who)
                 .contains("the server's board matches this client's"),
-            "{who}'s board is the host's"
+            "{who}'s board is the host's:\n{}",
+            tail(&without_per_second_lines(&lab.read(who)))
         );
     }
     lab.wait("the lobby to be told the result", 20, |lab| {
         lab.read("lobby")
             .contains("host-log: room 1's hosted race is over: every person has finished")
     });
+}
+
+/// A wreck leaves the finisher's own predicted race finished before the server has ended it,
+/// which is not where a client may stop stepping.
+#[test]
+#[ignore = "needs a disc image"]
+fn a_finisher_whose_partner_was_wrecked_still_compares_the_board_with_the_hosts() {
+    let Some(image) = image() else {
+        return;
+    };
+    let lab = Lab::new("hosted-wreck", image, 20_000);
+    // The tests' own build wrecks seat 1 on every peer alike (`oag_net::race::presence`).
+    let wreck = [("OAG_TEST_WRECK", "1")];
+    let mut a = lab.client_env("a", true, &HOST_ARGS, &wreck);
+    lab.wait("the lobby to list the hosted room", 90, |lab| {
+        lab.read("a")
+            .contains("online: room 1 (player-hosted): 1 in it")
+    });
+    let mut b = lab.client_env("b", false, &[], &wreck);
+    for (who, game) in [("a", &mut a), ("b", &mut b)] {
+        let status = game.finish(200);
+        let log = lab.read(who);
+        let shown = tail(&without_per_second_lines(&log)).to_string();
+        assert!(
+            status.is_some_and(|s| s.success()),
+            "{who} ran to the end:\n{shown}"
+        );
+        assert!(
+            log.contains("the server's board matches this client's"),
+            "{who}'s board is the host's:\n{shown}"
+        );
+        // The scenario happened: seat 1 never finished a lap, and seat 0 did.
+        assert!(
+            log.lines()
+                .any(|l| l.contains("slot 1 (person) laps 0 finish tick None")),
+            "{who} saw seat 1 wrecked:\n{shown}"
+        );
+        assert_eq!(lab.progress(who).map(|(_, _, bad)| bad), Some(0), "{who}");
+    }
 }
 
 #[test]
@@ -236,6 +276,15 @@ fn a_host_that_alters_its_race_is_proven_by_the_lobby_and_struck_and_the_guest_i
     let status = b.finish(60);
     assert!(status.is_some(), "the guest's race ended by itself");
     drop(a);
+}
+
+/// `log` without the `net: tick` line printed once a second, which crowds out of a failure
+/// message the lines that say what happened.
+fn without_per_second_lines(log: &str) -> String {
+    log.lines()
+        .filter(|line| !line.starts_with("net: tick "))
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 fn tail(log: &str) -> &str {

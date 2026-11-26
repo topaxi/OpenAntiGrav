@@ -9,7 +9,7 @@ use super::{
     sprite::{Atlas, Sprite},
     streak::StreakDraw,
 };
-use super::{frames::FrameAdvance, playback, roll, turbulence};
+use super::{frames::FrameAdvance, guard::DrawClass, playback, roll, turbulence};
 
 impl EmitterSpec {
     /// How long one instance of this emitter runs, in ticks - infinite
@@ -127,6 +127,7 @@ impl EmitterSpec {
             colour_mode: ColourMode::authored(record.colour_mode),
             authored_colour_mode: record.colour_mode,
             render,
+            draw_class: DrawClass::of(record.draw_class()),
             streak: StreakDraw::of(record.draw_class(), record.aspect),
             blend,
             distort_strength: record.distort_strength,

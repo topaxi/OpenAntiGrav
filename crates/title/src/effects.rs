@@ -944,6 +944,10 @@ pub struct Looks {
     /// `without_extents` and `without_pulse_psp_draw` take them away). Keyed on
     /// the race's own archive.
     pub particle_laws: Rule,
+    /// The PSP's particle near tests by draw class and the GE's drop of a triangle off its
+    /// screen space (`oag_fx::psys::guard`). A title whose billboard builder has its own near
+    /// law ([`Effects::near_law`]) leaves this unread. Keyed on the race's own archive.
+    pub psp_particle_clip: Rule,
     /// The PS2's bloom glow-mask stamp rule. Keyed on the race's own archive.
     pub ps2_glow_mask: Rule,
     /// The PS2's engine trail: the ribbon's baked vertex colours go out as
@@ -1126,6 +1130,7 @@ impl Looks {
             psp_glow_mask: Rule::UNREAD,
             bloom_under_hud: Rule::UNREAD,
             particle_laws: Rule::UNREAD,
+            psp_particle_clip: Rule::UNREAD,
             ps2_glow_mask: Rule::UNREAD,
             ps2_trail: Rule::UNREAD,
             circuit_effects: Rule::UNREAD,

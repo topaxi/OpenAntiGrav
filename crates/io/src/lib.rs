@@ -4,6 +4,7 @@ use std::fs::OpenOptions;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 /// Taken across a write's temp file and rename, so two threads writing one file never share
 /// its temp file.
@@ -50,6 +51,37 @@ pub fn write_private(path: impl AsRef<Path>, contents: impl AsRef<[u8]>) -> io::
     replace(path.as_ref(), contents.as_ref(), Access::OwnerOnly)
 }
 
+/// [`write`] for a derived file two processes may produce at once (an unpacked cache).
+/// The temp file is made in `staging_dir`, which must be on `path`'s file system, under a
+/// name of this process's own, so one writer never truncates or renames another's: a
+/// reader sees no file or a whole one.
+///
+/// A `staging_dir` outside the directory `path` is in keeps half-written files away from
+/// whoever lists that directory.
+///
+/// # Errors
+/// As [`write`].
+pub fn write_shared(
+    path: impl AsRef<Path>,
+    staging_dir: impl AsRef<Path>,
+    contents: impl AsRef<[u8]>,
+) -> io::Result<()> {
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    let path = path.as_ref();
+    let mut name = path.file_name().unwrap_or_default().to_os_string();
+    name.push(format!(
+        ".{}.{}.tmp",
+        std::process::id(),
+        NEXT.fetch_add(1, Ordering::Relaxed)
+    ));
+    publish(
+        &staging_dir.as_ref().join(name),
+        path,
+        contents.as_ref(),
+        Access::Shared,
+    )
+}
+
 /// `path` with `.tmp` appended: `records.toml` stages in `records.toml.tmp`.
 fn staging(path: &Path) -> PathBuf {
     let mut name = path.file_name().unwrap_or_default().to_os_string();
@@ -61,15 +93,19 @@ fn replace(path: &Path, contents: &[u8], access: Access) -> io::Result<()> {
     let _writing = WRITING
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
-    let temp = staging(path);
-    let staged = stage(&temp, contents, access).and_then(|()| commit(&temp, path));
+    publish(&staging(path), path, contents, access)
+}
+
+/// Stages `contents` in `temp` and renames it over `path`.
+fn publish(temp: &Path, path: &Path, contents: &[u8], access: Access) -> io::Result<()> {
+    let staged = stage(temp, contents, access).and_then(|()| commit(temp, path));
     if let Err(why) = staged {
         // A crashed process leaves its temp file; a failed write cleans up after itself.
         #[cfg(any(test, feature = "crash-hook"))]
         if CRASHED.with(|crashed| crashed.replace(false)) {
             return Err(why);
         }
-        let _ = std::fs::remove_file(&temp);
+        let _ = std::fs::remove_file(temp);
         return Err(why);
     }
     Ok(())

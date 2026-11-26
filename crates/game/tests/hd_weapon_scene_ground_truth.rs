@@ -275,32 +275,37 @@ fn a_plasma_explosions_shells_glow_violet_from_the_real_eye() {
 }
 
 /// The sphere's own program fades it: alpha `2 rim^(2 t) sum(c) (1 - 0.585 t)`, `t` the
-/// blast's age, so it is a full marbled ball at first, an outline by half a second and
-/// gone by one, where the lit stand-in drew the same dome until the models hide at 1.3 s
+/// blast's age, so it is a full marbled ball at first and thins to its rim, where the lit
+/// stand-in drew the same dome until the models hide
 /// (`docs/ghidra/functions/ps3-hdfury-eu/plasma.md`, "The blast's three programs").
+/// Both frames are judged while the sphere model is still drawn: a second on it is gone
+/// with or without the fade.
 #[test]
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso and a GPU adapter"]
 fn a_plasma_explosions_sphere_fades_with_its_age() {
     const POSE: &str = "204.94,-19.58,-168.85,0.94,-0.22,-0.28,0.00,1.00,0.00";
     // A box on the sphere's upper left, clear of the striped hoarding behind it.
     const BOX: (usize, usize, usize, usize) = (360, 160, 510, 310);
-    let violet = |frame: &[[u8; 3]]| {
-        count(frame, BOX, |[r, g, b]| {
+    // A box on the sphere's lower body, inside its rim, over the road.
+    const BODY: (usize, usize, usize, usize) = (430, 300, 560, 380);
+    let violet = |frame: &[[u8; 3]], area| {
+        count(frame, area, |[r, g, b]| {
             let (r, g, b) = (i32::from(r), i32::from(g), i32::from(b));
             r - g > 20 && b - g > 20
         })
     };
-    let (Some(young), Some(old)) = (
+    let (Some(young), Some(later)) = (
         frame_of("plasma", 447, Some(POSE)),
-        frame_of("plasma", 497, Some(POSE)),
+        frame_of("plasma", 455, Some(POSE)),
     ) else {
         return;
     };
-    let (young, old) = (violet(&young), violet(&old));
-    println!("violet pixels of the sphere's box: {young} young, {old} a second old");
-    // 9,932 at tick 447 and 675 at 497, of the box's 22,500.
+    let (young, later) = (violet(&young, BOX), violet(&later, BODY));
+    println!("violet pixels: {young} in the young sphere's box, {later} in its body 8 ticks on");
+    // 10,800 of the box's 22,500 at tick 447. 1,238 of the body's 10,400 at tick 455; a
+    // sphere whose alpha does not fall with its age reads 3,238 there.
     assert!(young > 6000, "the young sphere fills its box: {young}");
-    assert!(old < 1500, "the sphere is still a dome a second on: {old}");
+    assert!(later < 2200, "the sphere does not thin as it ages: {later}");
 }
 
 /// Talon's Junction in Detonator mode, Square held for two ticks from tick 385 and the frame at

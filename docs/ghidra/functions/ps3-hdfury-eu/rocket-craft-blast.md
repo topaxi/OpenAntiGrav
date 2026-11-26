@@ -234,6 +234,11 @@ drew before and every other particle lands where it would without templates.
 The 0.233 s pair swings by 14 with the arrangement of the blast alone, so a pair this close to the
 original's white frame measures our random arrangement as much as the wash.
 
+**`glow_longer` is a half disc, and it stands on the blast.** A hit 30 units ahead draws it as a
+flat-bottomed dome on the original too; ours had HD's `.gtf` sprites upside down, which the
+loader now turns ([particle-fill.md](../../../rendering/particle-fill.md), "HD's particle sprites
+are bottom-up"; the pair figures above predate the turn).
+
 ### The other titles
 
 - **2048: ported (inherited trigger).** Its race plays its own
@@ -256,7 +261,6 @@ loads by `the_2048_craft_blast_loads_under_the_near_law` and
 ## Open
 
 - Where HD's template cap of 2.0 is read (above, "The cap").
-- How the wash looks from a far hit: the free volley's hit about 30 units ahead draws `glow_longer`'s hemisphere sprite as a flat-bottomed dome across the top of ours; not filmed on the original at that distance.
 - `Rocket_PushNearbyCraft_q`'s radius and strength table (`*(TOC -0x2568) + 4 * *(... + 0xc)`,
   fields `+0x20` and `+0x24`), and whether `+0x110` is the pending impulse Pulse's blasts post
   ([weapon-lineage.md](../../../gameplay/weapon-lineage.md), "Blast push").

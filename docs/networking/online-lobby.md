@@ -1425,7 +1425,9 @@ the client already measures how long its inputs take to come back confirmed
 
 The test cheats are `oag_net::host::Cheat`, compiled only with `oag-net`'s `test-cheats`
 feature, which only dev-dependencies turn on (`cargo tree -p oag-game -e normal,features -i
-oag-net` shows `client` alone), and armed by `OAG_TEST_CHEAT=speed|forge|seed`.
+oag-net` shows `client` alone), and armed by `OAG_TEST_CHEAT=speed|forge|seed`. The same
+feature carries one staged scenario that is not a cheat: `OAG_TEST_WRECK=<slot>` wrecks that
+seat's craft at the same tick on every peer (`oag_net::race::presence`).
 
 ### Run it locally
 
@@ -1454,6 +1456,15 @@ printed `the lobby closed the room: the host left: a player-hosted race ends wit
 exited. A host whose profile key was in the ban file exited with `the lobby refused: Banned: you
 may not host on this lobby: altered a race`.
 
+**A `--screenshot` race ends on the server's `End`, never on this client's own predicted
+finish** (2026-11-26). With seat 1 wrecked, seat 0's prediction finishes the race at its own
+line with nothing left to run on; the capture loop used to stop stepping the client there, so
+the `End` and its board never arrived and the finisher printed no board line. This was the
+likely cause of the occasional `board is the host's` failure in the gate: forcing the wreck
+reproduces that message every time, and CPU load alone never did in 27 runs. The two failing
+gate runs kept no game logs, so that it was a wreck in them is inferred (65). The windowed
+game steps its client every frame and was not affected.
+
 ### Tests
 
 - `oag-net` `player_host::` (no disc, real sockets): the signed offer whose port answers is
@@ -1472,7 +1483,9 @@ may not host on this lobby: altered a race`.
 - `oag-game` `net_hosted_ground_truth` (`#[ignore]`d, real processes): the three runs above,
   and a host whose game cheats (`OAG_TEST_CHEAT=speed`) reported by the guest, proven by the
   lobby's re-simulation ("after tick 300 the host claimed state ..."), its key given a dated
-  `strike` line and no `key` line (one case bans nobody), and the guest told why, in about 16 s.
+  `strike` line and no `key` line (one case bans nobody), and the guest told why, in about 16 s;
+  and a race whose guest is wrecked (`OAG_TEST_WRECK=1`), where both games still print a board
+  equal to the host's, in about 48 s.
 - `oag-net` `anticheat::` (no disc, real sockets): an altered simulation proven and struck, the
   host free to host again at once; a forged input the host cannot show signed, proven without a
   re-simulation; two proven cases in two lobby runs over one file (a restart between), reported
