@@ -139,7 +139,7 @@ fn a_truncated_member_is_written_again() {
 fn a_reader_of_a_member_never_has_it_rewritten_under_it() {
     use std::io::Read as _;
     let dir = temp_dir("reader");
-    let zip = write_sample(&dir, &[5; 4096]);
+    let zip = write_sample(&dir, &[5; 64]);
     let cache = dir.join("cache");
     let out = ensure_extracted(&zip, &cache, &[]).unwrap();
     let target = out.join("PACK9.edat");
@@ -155,7 +155,7 @@ fn a_reader_of_a_member_never_has_it_rewritten_under_it() {
         seen, b"what the reader opened",
         "the open file is the one it was"
     );
-    assert_eq!(std::fs::read(&target).unwrap(), tiny_wad(&[5; 4096]));
+    assert_eq!(std::fs::read(&target).unwrap(), tiny_wad(&[5; 64]));
     for folder in [&cache, &out] {
         let strays: Vec<_> = std::fs::read_dir(folder)
             .unwrap()
