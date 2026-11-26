@@ -201,6 +201,7 @@ mod tests {
             small_line_height: 10.0,
             default_line_height: 10.0,
             skin_line_height: 10.0,
+            template_digit: None,
             default_border: layout.default_border(),
             tag_label: None,
         };

@@ -83,6 +83,7 @@ mod sway;
 pub mod time_gap;
 mod time_trial_pace;
 mod widget;
+mod zone_score;
 
 pub use assets::{Assets, SplitAssets, split_family};
 pub use compose::{Composed, compose};
@@ -105,6 +106,7 @@ pub use widget::{Fill, Font, ImageModel, Label, Model, Sprite, VertAlign};
 // The two the outline default is built from. Everything else `draw` decides is
 // private to it; `tests` reaches those through `super::draw::*`.
 use draw::{BORDER_CONSTANT, FALLBACK_BORDER};
+pub use zone_score::TemplateDigit;
 
 use oag_ui::frontend::{Align, Draw};
 use oag_ui::screen::argb_to_rgba;

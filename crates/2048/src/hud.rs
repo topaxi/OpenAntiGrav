@@ -201,6 +201,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     pickup_icon_uv: Some(PICKUP_ICON_UV),
     // The class name above `ZONE`, off the zone: see [`ZONE_SPEED_CLASSES`].
     zone_speed_classes: Some(ZONE_SPEED_CLASSES),
+    zone_score: oag_title::ZoneScore::CentredOnValue,
     // **Measured `true`, 2026-09-16.** Every Vita3K race frame reads the
     // shield with a `%` - `100%` on the grid, `99%`/`95%`/`93%` after wall
     // hits, `27%` in Zone - under the silhouette at `EnergyText`'s authored

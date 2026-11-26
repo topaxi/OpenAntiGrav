@@ -155,6 +155,7 @@ fn context_with<'a>(
         small_line_height: 10.0,
         default_line_height: 10.0,
         skin_line_height: 10.0,
+        template_digit: None,
     }
 }
 
@@ -218,6 +219,7 @@ static HD_ART: oag_title::HudArt = oag_title::HudArt {
     time_ladder_captions: None,
     pickup_icon_uv: None,
     zone_speed_classes: None,
+    zone_score: oag_title::ZoneScore::Authored,
     shield_percent: false,
     sub_weapon_line: true,
     speed_full_kmh: 600,
@@ -311,6 +313,7 @@ static HD_LEACH_ART: oag_title::HudArt = oag_title::HudArt {
     time_ladder_captions: None,
     pickup_icon_uv: None,
     zone_speed_classes: None,
+    zone_score: oag_title::ZoneScore::Authored,
     shield_percent: false,
     sub_weapon_line: true,
     speed_full_kmh: 600,
@@ -1037,6 +1040,7 @@ fn an_unread_sight_dialect_draws_nothing() {
         time_ladder_captions: None,
         pickup_icon_uv: None,
         zone_speed_classes: None,
+        zone_score: oag_title::ZoneScore::Authored,
         shield_percent: true,
         sub_weapon_line: true,
         speed_full_kmh: 600,

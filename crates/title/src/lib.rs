@@ -88,7 +88,9 @@ pub use effects::{
     QuakeLook, QuakeUp, Rule, ShieldPalette, ShieldPalettes, Trigger,
 };
 pub use endrace::{EndRaceDialect, EndRaceStyle};
-pub use hud::{BarModels, HudArt, HudLayouts, HudSkin, ResumeCountdown, ZoneSpeedClasses};
+pub use hud::{
+    BarModels, HudArt, HudLayouts, HudSkin, ResumeCountdown, ZoneScore, ZoneSpeedClasses,
+};
 pub use language::LanguageManifest;
 pub use loading::Loading;
 pub use main_menu::{Attached, MainMenu, OriginalRow};

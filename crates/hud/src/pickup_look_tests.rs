@@ -154,6 +154,7 @@ fn a_mod_icon_draws_the_backdrop_and_no_title_icon() {
         small_line_height: 10.0,
         default_line_height: 10.0,
         skin_line_height: 10.0,
+        template_digit: None,
     };
     let shown = shown(Weapon::Extension(ModKind::FIRST), &ext);
     assert_eq!(shown.mod_icon, Some("mod:test/bolt"));
@@ -251,6 +252,7 @@ fn hds_runtime_backdrop_takes_a_mod_pickups_look_through_the_same_fade() {
         small_line_height: 10.0,
         default_line_height: 10.0,
         skin_line_height: 10.0,
+        template_digit: None,
     };
     let mut fade = pickup_fade::Fade::default();
     for _ in 0..60 {
@@ -313,6 +315,7 @@ fn a_padded_icon_draws_its_art_at_native_size_on_the_frame_centre_and_a_big_one_
             small_line_height: 10.0,
             default_line_height: 10.0,
             skin_line_height: 10.0,
+            template_digit: None,
             tag_label: None,
         };
         let Some(Draw::Sprite { rect, .. }) = mod_icon_draw(&cx, "mod:test/glyph", None) else {
@@ -380,6 +383,7 @@ fn a_mod_icon_fills_the_box_the_titles_own_turbo_glyph_fills() {
         small_line_height: 10.0,
         default_line_height: 10.0,
         skin_line_height: 10.0,
+        template_digit: None,
         tag_label: None,
     };
     let Some(Draw::Sprite { rect, .. }) = mod_icon_draw(&cx, "mod:test/glyph", None) else {
@@ -430,6 +434,7 @@ fn on_hd_and_omega_the_mod_icon_is_centred_on_the_always_up_frame() {
         small_line_height: 10.0,
         default_line_height: 10.0,
         skin_line_height: 10.0,
+        template_digit: None,
         tag_label: None,
     };
     let Some(Draw::Sprite { rect, .. }) = mod_icon_draw(&cx, "mod:test/glyph", None) else {

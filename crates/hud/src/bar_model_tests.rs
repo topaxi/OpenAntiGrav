@@ -57,6 +57,7 @@ fn gauge_draws(speed: f32, shield: f32) -> Vec<Draw> {
         small_line_height: 10.0,
         default_line_height: 10.0,
         skin_line_height: 10.0,
+        template_digit: None,
     };
     let readout = Readout {
         speed_kmh: speed,
@@ -112,6 +113,7 @@ fn a_title_with_no_bar_models_draws_no_gauge() {
         small_line_height: 10.0,
         default_line_height: 10.0,
         skin_line_height: 10.0,
+        template_digit: None,
     };
     assert!(bar_model_draws(&cx, &Readout::blank()).is_empty());
 }

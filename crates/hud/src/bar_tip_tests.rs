@@ -70,6 +70,7 @@ fn with_art<R>(art: &oag_title::HudArt, f: impl FnOnce(&Context<'_>) -> R) -> R 
         small_line_height: 10.0,
         default_line_height: 10.0,
         skin_line_height: 10.0,
+        template_digit: None,
     };
     f(&cx)
 }

@@ -117,6 +117,8 @@ const RETRO_ART: oag_title::HudArt = oag_title::HudArt {
     bar_tip: None,
     boost_smear: None,
     absorb_glow: None,
+    // `Score` is authored right-aligned here and the original leaves it where it is.
+    zone_score: oag_title::ZoneScore::Authored,
     ..*ART
 };
 
@@ -166,6 +168,8 @@ pub const ART_2048: &oag_title::HudArt = &oag_title::HudArt {
     total_time_hundredths: true,
     runtime: None,
     assist: None,
+    // Unread for the 2048-lineage layout: drawn as authored.
+    zone_score: oag_title::ZoneScore::Authored,
     ..*ART
 };
 
@@ -392,6 +396,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     time_ladder_captions: None,
     pickup_icon_uv: None,
     zone_speed_classes: Some(ZONE_SPEED_CLASSES),
+    zone_score: oag_title::ZoneScore::CentredOnThrees,
     shield_percent: false,
     sub_weapon_line: true,
     speed_full_kmh: 700,

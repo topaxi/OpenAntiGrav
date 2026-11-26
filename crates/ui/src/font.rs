@@ -1038,8 +1038,13 @@ pub fn measure(atlas: &Atlas, text: &str) -> f32 {
 /// atlas lacks are left out, as [`measure`] leaves them.
 #[must_use]
 pub fn ink_width(atlas: &Atlas, text: &str, scale: f32, snap: bool) -> f32 {
-    let scale = scale * atlas.texel_scale;
     let cells: Vec<Cell> = text.chars().filter_map(|c| atlas.cell(c)).collect();
+    cells_ink_width(&cells, scale * atlas.texel_scale, snap)
+}
+
+/// [`ink_width`] over glyphs already looked up, `scale` in screen units per texel.
+#[must_use]
+pub fn cells_ink_width(cells: &[Cell], scale: f32, snap: bool) -> f32 {
     let (Some(first), Some(last)) = (cells.first(), cells.last()) else {
         return 0.0;
     };

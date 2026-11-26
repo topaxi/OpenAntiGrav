@@ -184,6 +184,7 @@ impl Assets {
             small_line_height: self.small_font.line_height,
             default_line_height: self.default_font.line_height,
             skin_line_height: self.skin_font.line_height,
+            template_digit: super::TemplateDigit::of(&self.font),
         })
     }
 }
