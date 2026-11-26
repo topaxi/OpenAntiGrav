@@ -372,7 +372,7 @@ fn walk(
                     hex_fade: colour("HexColFade").unwrap_or(0x3280_8080),
                     selected_column: 0,
                     selected_lock: colour("SelectedLockCol").unwrap_or(0xff80_8080),
-                    selected_lock_fade: colour("SelectedLockColFade").unwrap_or(0xff24_2424),
+                    selected_lock_fade: colour("SelectedLockColFade").unwrap_or(0xff16_1616),
                     ring_peak: None,
                     phase_by_entry: true,
                 });

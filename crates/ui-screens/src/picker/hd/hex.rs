@@ -5,10 +5,11 @@
 //! `Team_Selection_Definition.xml` authors the grid's shape and colours:
 //! `columns="5" rows="7"`, `HexCol` / `HexColFade` for a cell and its faded
 //! form, and `SelectedLockCol` / `SelectedLockColFade` for a padlock. The art is the
-//! widget class's own: `Hexagon_HD_Faded.gtf` for a cell (alpha 221 of 255) and
-//! `Hexagon_HD_THICK_OUT.gtf` for the cursor; the front end's `Padlock.gtf` (the `Padlock`
-//! image this screen authors, at 512x512) and each model's
-//! `<modellocation>\FE\thumb<LiveryNumber>.gtf` go on top.
+//! widget class's own: `Hexagon_HD_Faded.gtf` for a cell (alpha 221 of 255),
+//! `hexlock_HD.gtf` for a padlock and `Hexagon_HD_THICK_OUT.gtf` for the cursor; each
+//! model's `<modellocation>\FE\thumb<LiveryNumber>.gtf` is the picture, under the
+//! padlock when the model is locked (`docs/ghidra/functions/ps3-hdfury-eu/ship-select-ring.md`,
+//! "The cells").
 //! The widget class's own constants (pitch 72 by 83, half row 42, the 92x80 quad), the fill's
 //! fade from column to column ([`edge_share`]), the selected column's `HD_Blue` fill
 //! (`SelectedColumnCol` is not a key it reads), the ring's pulse and the slide on a step are read in
@@ -29,20 +30,12 @@
 //! # What is measured, and from what
 //!
 //! One settled RPCS3 frame (`BCES-00664`, 2000x1200, Feisar selected,
-//! fresh profile): the hexagon draws at 1.22 times its 72x62 art. The padlock's visible art
-//! (91x129 texels) measures 40x56 units, 0.44 per texel; the thumbnail's
-//! 1.0 per texel. A padlock reads `128` on the selected column (exactly
-//! `SelectedLockCol`), `110` one column out and `68` two out, which is
-//! `SelectedLockColFade` blended in by `0.2` and `0.65`. One frame, so
-//! confidence 70, not higher.
+//! fresh profile): the hexagon draws at 1.22 times its 72x62 art and the thumbnail
+//! at 1.0 per texel.
 //!
-//! **Chosen, not measured**: the ghost of an open
-//! row's thumbnail in the neighbouring columns (the frame shows faint ship
-//! silhouettes there; their tint is ours), the pointer targets, and the pulse's zero point (the
+//! **Chosen, not measured**: the pointer targets, and the pulse's zero point (the
 //! widget's clock starts with the picker; when the original builds the widget relative to the page
-//! entry is unread). **Not wired**: the padlock's own art (`hexlock_HD.gtf`) and its colour
-//! running across it, the ship silhouettes the widget draws behind a padlock, and the ring's ease
-//! on a model-row change.
+//! entry is unread). **Not wired**: the ring's ease on a model-row change.
 //!
 //! # Panning under a finger
 //!
@@ -78,18 +71,14 @@ const HEX_SIZE: [f32; 2] = [
     72.0 * QUAD[0] / QUAD_TEXELS[0],
     62.0 * QUAD[1] / QUAD_TEXELS[1],
 ];
-/// Units per padlock texel, and per thumbnail texel.
-const LOCK_SCALE: f32 = 0.44;
-/// The width of HD's `Padlock.gtf`, in texels, which [`LOCK_SCALE`] was measured on.
-const LOCK_TEXELS: f32 = 256.0;
+/// Units per thumbnail texel.
 const THUMB_SCALE: f32 = 1.0;
-/// How far a padlock's colour has faded toward `SelectedLockColFade` one
-/// and two columns from the selected one.
-const LOCK_FADE: [f32; 3] = [0.0, 0.2, 0.65];
+/// The texel window of `hexlock_HD.gtf`'s 128x64 art that a padlock shows on [`QUAD`].
+const LOCK_QUAD_TEXELS: [f32; 2] = [75.0, 64.0];
 
 pub const HEX_SRC: &str = r"Data\FE\Images\Hexagon_HD_Faded.gtf";
 pub const THICK_OUT_SRC: &str = r"Data\FE\Images\Hexagon_HD_THICK_OUT.gtf";
-pub const LOCK_SRC: &str = r"Data\FE\Images\Padlock.gtf";
+pub const LOCK_SRC: &str = r"Data\FE\Images\hexlock_HD.gtf";
 
 /// The sheet name of a model's own thumbnail.
 #[must_use]
@@ -122,7 +111,7 @@ pub struct ModelCell {
 /// The `<HexSelection>` widget: its place, shape and authored colours.
 ///
 /// A cell outside the selected column is `hex_fade` shading to `hex` across its quad, by
-/// [`edge_share`] of each side.
+/// [`edge_share`] of each side; its picture and padlock are shaded by the same two shares.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct HexGrid {
     pub origin: [f32; 2],
@@ -169,7 +158,13 @@ const HEX_COL: u32 = 0x6480_8080;
 const HEX_COL_FADE: u32 = 0x3280_8080;
 const SELECTED_COL: u32 = 0x64ff_0000;
 const LOCK_COL: u32 = 0xff80_8080;
-const LOCK_COL_FADE: u32 = 0xff24_2424;
+const LOCK_COL_FADE: u32 = 0xff16_1616;
+
+/// A cell's picture where it is not the selected column's open one: black, at this alpha at the
+/// selected column's edges (and on its locked cells) and at [`PICTURE_COL_FADE`]'s at the grid's
+/// outer edges (`HexSelection_SetCell`).
+const PICTURE_COL: u32 = 0x6400_0000;
+const PICTURE_COL_FADE: u32 = 0x1200_0000;
 
 impl HexGrid {
     /// A grid of `columns` by `rows` at `origin` in the colours above.
@@ -322,38 +317,35 @@ pub fn edge_share(centre: usize, from_middle: f32) -> f32 {
     (1.0 - (from_middle.abs() - 0.5) / centre.max(1) as f32).clamp(0.0, 1.0)
 }
 
-/// A cell's hexagon fill, a colour at each side of its quad: `middle` is where the cell's centre
-/// stands, in columns right of the selected column's.
-fn fill(grid: &HexGrid, middle: f32, placed: Placed, rect: [f32; 4]) -> Draw {
+/// The colours a cell's images have at their left and right sides, from `faded` to `full` by
+/// [`edge_share`] of the cell's own two sides: `middle` is where the cell's centre stands, in
+/// columns right of the selected column's. All three images of a cell take the same two shares,
+/// each across its own quad.
+fn ramp(grid: &HexGrid, middle: f32, faded: u32, full: u32) -> ([f32; 4], [f32; 4]) {
     let colour_at = |from_middle: f32| {
         let share = edge_share(grid.columns / 2, from_middle);
-        lerp_colour(grid.hex_fade, grid.hex, share)
+        lerp_colour(faded, full, share)
     };
-    Draw::GradientSprite {
-        rect,
-        uv: placed.sheet_rect([0.0, 0.0, QUAD_TEXELS[0], QUAD_TEXELS[1]]),
-        left: colour_at(middle - 0.5),
-        right: colour_at(middle + 0.5),
-    }
+    (colour_at(middle - 0.5), colour_at(middle + 0.5))
 }
 
-fn sprite(placed: Placed, rect: [f32; 4], color: [f32; 4]) -> Draw {
-    Draw::Sprite {
+/// An image on a cell outside the selected column, shaded across by `colours`.
+fn shaded(rect: [f32; 4], uv: [f32; 4], (left, right): ([f32; 4], [f32; 4])) -> Draw {
+    Draw::GradientSprite {
         rect,
-        uv: placed.sheet_rect([0.0, 0.0, placed.width as f32, placed.height as f32]),
-        color,
+        uv,
+        left,
+        right,
     }
 }
 
 /// What a cell shows on its hexagon.
-#[derive(Debug, Clone, PartialEq)]
-pub(super) enum Face {
-    /// Nothing but the hexagon.
-    Empty,
-    /// The padlock of a cell that cannot be picked.
-    Lock,
-    /// A picture, by sheet name, centred, `size` units across.
-    Art { src: String, size: ArtSize },
+#[derive(Debug, Clone, PartialEq, Default)]
+pub(super) struct Face {
+    /// A picture, by sheet name, centred at its size.
+    pub picture: Option<(String, ArtSize)>,
+    /// Whether the cell cannot be picked: it draws a padlock over its picture.
+    pub locked: bool,
 }
 
 /// How big a cell's picture is drawn.
@@ -451,40 +443,46 @@ pub(super) fn draw_cells(
                     color: argb_to_rgba(grid.selected_column),
                 });
             } else {
-                out.push(fill(grid, cell.offset as f32 + pan, placed, rect));
+                let colours = ramp(grid, cell.offset as f32 + pan, grid.hex_fade, grid.hex);
+                let uv = placed.sheet_rect([0.0, 0.0, QUAD_TEXELS[0], QUAD_TEXELS[1]]);
+                out.push(shaded(rect, uv, colours));
             }
         }
-        match face(&cell) {
-            Face::Empty => {}
-            Face::Art { src, size } => {
-                if let Some(placed) = sprites(&src) {
-                    let scale = match size {
-                        ArtSize::PerTexel(scale) => scale,
-                        ArtSize::Fit(units) => units / placed.width.max(placed.height) as f32,
-                    };
-                    let scale = scale * grid.scale;
-                    let (w, h) = (placed.width as f32 * scale, placed.height as f32 * scale);
-                    let color = if chosen {
-                        [1.0; 4]
-                    } else {
-                        [0.0, 0.0, 0.0, 0.35]
-                    };
-                    out.push(sprite(placed, [cx - w * 0.5, cy - h * 0.5, w, h], color));
-                }
+        let Face { picture, locked } = face(&cell);
+        let middle = cell.offset as f32 + pan;
+        if let Some((src, size)) = picture
+            && let Some(placed) = sprites(&src)
+        {
+            let scale = match size {
+                ArtSize::PerTexel(scale) => scale,
+                ArtSize::Fit(units) => units / placed.width.max(placed.height) as f32,
+            };
+            let scale = scale * grid.scale;
+            let (w, h) = (placed.width as f32 * scale, placed.height as f32 * scale);
+            let rect = [cx - w * 0.5, cy - h * 0.5, w, h];
+            let uv = placed.sheet_rect([0.0, 0.0, placed.width as f32, placed.height as f32]);
+            if chosen {
+                let color = if locked {
+                    argb_to_rgba(PICTURE_COL)
+                } else {
+                    [1.0; 4]
+                };
+                out.push(Draw::Sprite { rect, uv, color });
+            } else {
+                let colours = ramp(grid, middle, PICTURE_COL_FADE, PICTURE_COL);
+                out.push(shaded(rect, uv, colours));
             }
-            Face::Lock => {
-                if let Some(placed) = sprites(LOCK_SRC) {
-                    // `LOCK_SCALE` is per texel of HD's 256-wide padlock; a title that
-                    // ships it larger (Omega's is 512) draws it at the same size.
-                    let lock = LOCK_SCALE * grid.scale * LOCK_TEXELS / placed.width as f32;
-                    let (w, h) = (placed.width as f32 * lock, placed.height as f32 * lock);
-                    let fade = LOCK_FADE[cell.distance.min(LOCK_FADE.len() - 1)];
-                    out.push(sprite(
-                        placed,
-                        [cx - w * 0.5, cy - h * 0.5, w, h],
-                        lerp_colour(grid.selected_lock, grid.selected_lock_fade, fade),
-                    ));
-                }
+        }
+        if locked && let Some(placed) = sprites(LOCK_SRC) {
+            let [w, h] = QUAD.map(|side| side * grid.scale);
+            let rect = [cx - w * 0.5, cy - h * 0.5, w, h];
+            let uv = placed.sheet_rect([0.0, 0.0, LOCK_QUAD_TEXELS[0], LOCK_QUAD_TEXELS[1]]);
+            if chosen {
+                let color = argb_to_rgba(grid.selected_lock);
+                out.push(Draw::Sprite { rect, uv, color });
+            } else {
+                let colours = ramp(grid, middle, grid.selected_lock_fade, grid.selected_lock);
+                out.push(shaded(rect, uv, colours));
             }
         }
         if cell.weight < 1.0 {
@@ -525,11 +523,17 @@ pub(super) fn draw(
         .iter()
         .position(|cell| cell.variant == Some(picker.variant_index()));
     let face = |cell: &Cell| match models_of(picker, cell.entry).get(cell.row) {
-        Some(model) if model.open => model.thumb.clone().map_or(Face::Empty, |src| Face::Art {
-            src,
-            size: ArtSize::PerTexel(THUMB_SCALE),
-        }),
-        _ => Face::Lock,
+        Some(model) => Face {
+            picture: model
+                .thumb
+                .clone()
+                .map(|src| (src, ArtSize::PerTexel(THUMB_SCALE))),
+            locked: !model.open,
+        },
+        None => Face {
+            picture: None,
+            locked: true,
+        },
     };
     draw_cells(
         grid,

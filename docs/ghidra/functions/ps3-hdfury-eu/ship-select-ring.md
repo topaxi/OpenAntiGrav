@@ -99,14 +99,22 @@ loads it unconditionally: there is no front-end-style branch.
 `cc = int((Columns - 1) * 0.5)`:
 
 ```
-i == cc            hex = HD_Blue (+0x104), lock = SelectedLockCol, picture = white
+i == cc            hex = HD_Blue (+0x104), lock = SelectedLockCol,
+                   picture = white, or 0x64000000 when the cell is locked
 i == Columns       spare column: picture 0x12000000; hex and lock keep _Build's *Fade colours
 otherwise          i < cc:  a = i / cc,              b = (i + 1) / cc
                    i > cc:  a = 1 - (i - cc - 1) / cc, b = 1 - (i - cc) / cc
                    hex     = lerp(t, HexColFade, HexCol)                  t = a, a, b, b over the vertices
                    lock    = lerp(t, SelectedLockColFade, SelectedLockCol)
-                   picture = lerp(t, 0x12000000, 0x64000000)
+                   picture = lerp(t, 0x12000000, 0x64000000)            (locked or not)
 ```
+
+**The locked flag** is `_SetCell`'s stack byte at `0x87` (the `in_stack_00000087` test at the
+head of the body). With it clear on the selected column the picture (`+4`) takes `0xffffffff`, with it set it takes
+`0x64000000`; on every other column it is not read. After the colours, the same byte sets the lock
+image's visibility: clear hides it (`flags & ~4`), set gives it the hexagon's own bit 4. So a locked
+cell on the red column is a black silhouette at 100/255 under a flat grey padlock, which is the
+`149 -> 91` step the pair's red cells show (149 x (1 - 100/255) = 91). Confidence 90.
 
 The `(a, a, b, b)` vertex order is left pair, right pair: `a` and `b` are continuous across
 neighbouring columns only that way (0, 0.5, 1 | centre | 1, 0.5, 0 on five columns). So the fill is
@@ -125,10 +133,19 @@ of `TrackHexSelection` pass those (`0x00209a34..` and `TrackHexSelection_Refill`
 at Safe Area 96, measured 36). Confidence 90.
 
 **Wired** (`oag_ui_screens::picker::hd::hex`, both grids): the `Faded` art, the 92 x 80 quad over
-74 x 64 texels, the hexagon's ramp (`edge_share`), `HD_Blue` once, Track Select's 50 unit icon.
-**Read, not wired**: the lock's own art and ramp (ours draws `Padlock.gtf` at 0.44 with a fitted
-flat fade), and the picture's colour. Ours draws no picture behind a locked cell, where the original
-draws the ship silhouette under the padlock, and ghosts an open row's picture at a flat 0.35.
+74 x 64 texels, the hexagon's ramp (`edge_share`), `HD_Blue` once, Track Select's 50 unit icon, and
+the picture and the padlock: every model's picture (locked or not) with the colours above, then
+`hexlock_HD.gtf` (128 x 64, its 35 x 48 texel art centred in the 75 x 64 window) on the same 92 x 80
+quad, flat on the selected column and ramped across the others from `SelectedLockColFade`. The class
+default of that colour, `0xff161616`, is what an unauthored grid takes.
+
+Measured on the pair `hd/menu-ship-select` (mean grey difference, whole frame 2.54 to 2.24; the hex
+column box (255, 360, 625, 960) 3.18 to 0.39; one locked cell each of the selected, next and outer
+columns 4.59, 5.51 and 4.42 to under 0.13) and `hd/menu-track-select` (3.54 to 3.52; the grid box
+(180, 440, 860, 720) 1.13 to 0.95). The icon ramp is Track Select's only change: no circuit locks
+there. Tests: `picker::hd::tests::cells::*`, `picker::hd::track::tests::the_grid_puts_a_circuit_in_each_hexagon_and_red_on_the_chosen_column`
+and `selection_screens_ground_truth::hd_reads_its_own_team_selection` (the art's name and window,
+the colour ends and the silhouettes off the disc's own teams).
 
 ## The ring
 
@@ -432,6 +449,17 @@ drop and pi turn; the glyph measures 38 x 9.75 px on the 1:1 frame, so `Scale` d
 **2048: checked, applies, not wired**: its executable names the same four textures; its Team
 Selection is drawn by 2048's own path here.
 
+**The picture and padlock wiring is inherited by Omega, not read there.** Omega draws through the
+same `hex` module, and its sheet carries the 1x `hexlock_HD` at 128 x 64
+(`selection_screens_ground_truth::omega_reads_its_own_team_selection`), so the 75 x 64 window holds.
+Its `_SetCell` was not re-read for the locked branch. The pair `omega/menu-ship-select` moved the
+wrong way, 19.30 to 19.45 (hex column box (200, 330, 660, 960) 47.57 to 48.61), while
+`omega/menu-track-select` went 18.54 to 18.47: the frame draws locks near (62, 62, 62) on every
+column, which ours matched before no better than now, and its `Team_Selection_Definition.xml` authors
+the same `SelectedLockCol`/`SelectedLockColFade` as HD. That frame's half-row phase is also inverted
+against ours, so its box figures are not cell for cell and do not attribute the 0.15 to colour; the
+dark locks are read by eye. Next: read `FUN_0145af70`'s lock colours against `HexSelection_SetCell`'s.
+
 **Wired (slide, step, ease, ring: `shipselect-ring-wire`); checked, differs (ring colour).** Read in
 `/omega/eboot-ps4-omega-eu.bin` (the `eboot.bin` in the shared Ghidra project; addresses are this build's:
 `0x015a3b80`, the Team Selection fit that [../ps4-omega-eu/team-selection-pose.md](../ps4-omega-eu/team-selection-pose.md)
@@ -462,5 +490,6 @@ Next: the registration that uses `0x8109a0ec`, its vtable's slot 3, and the cons
   (`*(+0xc8)[i] + 0x40`), against the frame the refill (`0x0025604c`) runs.
 - The pulse's absolute phase at page entry (it starts at 0 at construction; when the screen constructs
   it relative to the page entry is unread).
-- `_SetCell`'s stack byte at `0x87` is the cell's locked flag (`TrackHexSelection_Refill` passes the
-  per-circuit byte `_Build` computes); what unlocks a Team Selection row is `team-selection-loyalty.md`'s.
+- `_SetCell`'s stack byte at `0x87` is the cell's locked flag (its effect is under "The cells";
+  `TrackHexSelection_Refill` passes the per-circuit byte `_Build` computes); what unlocks a Team
+  Selection row is `team-selection-loyalty.md`'s.
