@@ -363,7 +363,17 @@ impl Session {
                 .then(|| {
                     crate::results_tables::detonator_results(&stage.race.core.sim, board.as_ref())
                 })
-                .flatten();
+                .flatten()
+                .map(|mut results| {
+                    // A race the save did not judge (a network seat) shows the standing best.
+                    results.record = stage.score_record.unwrap_or_else(|| {
+                        oag_ui_screens::endrace::ScoreRecord::judge(
+                            0,
+                            self.records.best_score(&stage.result_key),
+                        )
+                    });
+                    results
+                });
             ResultsModel::Hd(oag_ui_screens::endrace::FieldResults {
                 detonator,
                 headline: if split {

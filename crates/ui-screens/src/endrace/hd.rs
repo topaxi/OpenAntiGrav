@@ -251,6 +251,15 @@ pub fn hd_results_draw_list(
         out.push(fill_draw(fill));
     }
     for image in &screen.images {
+        // A record notice's logo goes over its box, which is drawn with the texts; only the
+        // Detonator's has one drawn at all.
+        if image
+            .name
+            .as_deref()
+            .is_some_and(|n| n.starts_with("RecLogo"))
+        {
+            continue;
+        }
         // Every image whose texture this pass chose not to load (the
         // ship-badge column, the target/medal art, the record-notify mode
         // icons) is skipped here for free: `sprites` simply has nothing to
@@ -265,7 +274,20 @@ pub fn hd_results_draw_list(
         if let Some(grid) = &detonator
             && DetonatorGrid::owns(name)
         {
-            if let Some((content, x, y)) = grid.cell(name, strings) {
+            if grid.shows_box(name)
+                && let Some(block) = find_block(screen, name)
+            {
+                block_draw(block, None, None, 0.0, frame, layout, &mut out);
+                out.extend(
+                    screen
+                        .images
+                        .iter()
+                        .filter(|image| image.name.as_deref() == Some("RecLogoD"))
+                        .filter_map(|image| Some(image_draw(image, sprites(&image.src)?))),
+                );
+            } else if name == "RecValue" {
+                out.push(text_draw(text, &grid.record_text(strings), layout));
+            } else if let Some((content, x, y)) = grid.cell(name, strings) {
                 let mut positioned = text.clone();
                 (positioned.x, positioned.y) = (x, y);
                 out.push(text_draw(&positioned, &content, layout));
@@ -422,6 +444,23 @@ pub fn hd_results_draw_list(
         let Some(content) = content else { continue };
         out.push(text_draw(text, &content, layout));
     }
+    // The captions. The Target and medal blocks' stay off with their blocks, `RECORD
+    // NOTIFICATION` belongs to the notice only the Detonator draws, and `LOYALTY STATUS` to the
+    // loyalty block.
+    let hidden = |label: &&crate::picker::hd::MiniText| {
+        let is = |id: &str| label.text == strings.get_or_id(id);
+        is("ER_NMA")
+            || is("ER_MEDAL_AWARD")
+            || (is("ER_RECORD_NOT") && model.detonator.is_none())
+            || (is("ER_LOYSTAT") && model.loyalty.is_none())
+    };
+    let labels: Vec<_> = layout
+        .labels
+        .iter()
+        .filter(|label| !hidden(label))
+        .cloned()
+        .collect();
+    crate::picker::hd::draw_labels(&labels, &mut out);
     layers.body = out;
     layers
 }
