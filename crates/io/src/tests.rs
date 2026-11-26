@@ -63,6 +63,33 @@ fn a_failed_rename_keeps_the_old_file_and_removes_the_temp_file() {
     );
 }
 
+/// The other process's half-written temp file, under the fixed name [`write`] would use:
+/// a shared write neither removes it nor renames it into place.
+#[test]
+fn a_shared_write_leaves_another_writers_temp_file_alone() {
+    let dir = scratch("shared");
+    let staging_dir = dir.join("staging");
+    std::fs::create_dir_all(&staging_dir).unwrap();
+    let file = dir.join("pack.wad");
+    std::fs::write(staging(&file), "another's half").unwrap();
+    write_shared(&file, &staging_dir, "whole").expect("writes");
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), "whole");
+    assert_eq!(
+        std::fs::read_to_string(staging(&file)).unwrap(),
+        "another's half"
+    );
+    assert_eq!(std::fs::read_dir(&staging_dir).unwrap().count(), 0);
+}
+
+#[test]
+fn a_shared_write_cut_short_leaves_no_file_where_there_was_none() {
+    let dir = scratch("shared-cut");
+    let file = dir.join("pack.wad");
+    cut_the_next_write_after(3);
+    assert!(write_shared(&file, &dir, "a whole member").is_err());
+    assert!(!file.exists(), "no short file under the real name");
+}
+
 #[test]
 fn a_missing_directory_is_an_error_not_a_creation() {
     let dir = scratch("missing");
