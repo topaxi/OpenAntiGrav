@@ -1848,6 +1848,9 @@ values = ["0", "25", "50", "75", "90", "100"]
 # Changing it **seeks rather than restarts**: the playhead is carried across in
 # seconds, and the two encodes of a track agree in length to 11 ms, so the same
 # offset lands in the same bar. See `crates/sound/src/lib.rs`.
+#
+# Kept per title (`[music_profiles."<title>"] music_source`), as the MUSIC page's
+# switches are; the row's id is a menu name, not the file path.
 [[page.entry]]
 kind = "choice"
 label = "MUSIC SOURCE"
@@ -1913,6 +1916,7 @@ string_id = "OAG_MENU_BACK"
 # One on/off row per soundtrack source this machine can open: the booted disc, the
 # other titles' discs on the search path, and the folders listed in settings.toml
 # under `[audio] music_folders`. The booted disc starts on, everything else off.
+# A switch is kept for the open title alone (`[music_profiles."<title>"]`).
 # The one row below is a template: `oag_game::music_pool::expand` replaces it with a
 # row per source (`oag_ui::menu::Definition::expand_rows`), and with fewer than two
 # sources takes the page and the MUSIC row that opens it out. Adding a folder from

@@ -317,7 +317,7 @@ impl App {
             crate::sound::hold_race_song(&mut audio, loaded.title);
             audio.start_race_music(
                 &self.music_discs,
-                self.settings.audio.music_source,
+                self.settings.music_source(self.race_title),
                 &oag_source::cache::default_audio_cache_dir(),
             );
             let ai_difficulty = loaded.setup.difficulty;

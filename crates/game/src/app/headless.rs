@@ -739,7 +739,7 @@ pub(crate) fn race_launch(
         crate::sound::hold_race_song(&mut audio, loaded.title);
         audio.start_race_music(
             &music_discs,
-            settings.audio.music_source,
+            settings.music_source(Some(loaded.title)),
             &oag_source::cache::default_audio_cache_dir(),
         );
         // The song lands on the tick the worker finishes, which a loop running faster than the

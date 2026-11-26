@@ -60,7 +60,7 @@ impl Session {
         }
     }
 
-    /// The title this session races.
+    /// The title this session races: the open source's.
     pub(super) fn title_raced(&self) -> Option<&'static oag_title::Title> {
         self.shell
             .as_ref()

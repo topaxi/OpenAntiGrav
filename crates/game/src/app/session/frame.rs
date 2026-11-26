@@ -689,7 +689,7 @@ impl Session {
                     if !stage.frontend.is_playing_movie() && stage.pending.is_empty() {
                         self.audio.start_music(
                             &self.music_discs,
-                            self.settings.audio.music_source,
+                            self.music_source(),
                             &oag_source::cache::default_audio_cache_dir(),
                         );
                     }

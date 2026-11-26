@@ -102,7 +102,7 @@ impl Session {
         // its doc comment.
         self.audio.start_race_music(
             &self.music_discs,
-            self.settings.audio.music_source,
+            self.music_source(),
             &oag_source::cache::default_audio_cache_dir(),
         );
         let strings = strings::project_table(self.settings.language.as_deref());

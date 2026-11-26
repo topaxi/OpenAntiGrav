@@ -17,7 +17,8 @@
 //! - **Reporting what a loader did.** [`sfx::Banks`] and [`sfx::TrackEmitters`]
 //!   carry their `report` for the host to send to `oag_raceplay::loader_log`.
 //!
-//! [`settings::Settings`] is the `[audio]` section of the settings file.
+//! [`settings::Settings`] is the `[audio]` section of the settings file and
+//! [`settings::MusicProfile`] one title's `[music_profiles]` table.
 //!
 //! Everything here is driven by the **tick count** only, inside the
 //! fixed-timestep loop (`oag_raceplay::Race::tick`), so a headless
@@ -357,7 +358,7 @@ impl MusicDiscs {
     /// its scan.
     pub fn start_pool(
         &self,
-        switches: &std::collections::BTreeMap<String, bool>,
+        switches: &pool::SwitchesByTitle,
         folders: &[pool::MusicFolder],
         reader: &Arc<dyn folders::Reader>,
     ) {
