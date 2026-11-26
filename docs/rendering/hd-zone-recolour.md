@@ -436,10 +436,14 @@ on Omega and a Zone race on Pulse.
 Zone is the arm that leaves full size, the same direction as the report, and the fix does not
 move it by more than the runs differ from each other. A scalable cost 25 to 30 % higher puts a
 controller at about 0.88 to 0.9 of the scale when the time trial sits exactly at its budget, not at
-0.75. What takes the Deck further is not established.
+0.75. On the Deck itself it settles at about 0.80 at 3840x2160, and the extra depth is the GPU
+clock falling under the controller
+([dynamic-resolution.md](dynamic-resolution.md#on-the-steam-deck-hd-zone-against-a-time-trial)).
 
-**Not measured, and open:** the Deck itself; a race with sound (the visualiser lookup is then
-rewritten when its texels change, up to 1 KiB per circuit drawable per view); and what a separate
-Zone program for the circuit would save. Dropping the lightmap fetch and the albedo mix as well
+**Not measured, and open:** what a separate Zone program for the circuit would save. The Deck and
+sound are measured
+([dynamic-resolution.md](dynamic-resolution.md#on-the-steam-deck-hd-zone-against-a-time-trial)):
+the race pass grows by 1.60 ms there at 3840x2160, and a Zone race without sound settles at the
+same scale. Dropping the lightmap fetch and the albedo mix as well
 measured about 45 us more at 4K, but skipping the fetch moves pixels: our Zone surface still gates
 its specular by the lightmap's alpha, where the original's Zone programs sample no lightmap.

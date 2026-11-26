@@ -2,7 +2,7 @@
 status: measure
 titles: [hd, omega, 2048]
 updated: 2026-11-26
-summary: "Owed: the Rocket craft-hit screen wash (A/B capture), Deck numbers, 1.7 ms at 1080p; two settings await the maintainer"
+summary: "Deck 4K rocket hit still 64 ms worst on main; owed: the screen wash, 1.7 ms at 1080p; two settings await the maintainer"
 size: M (50)
 difficulty: medium (55)
 ---
@@ -44,9 +44,11 @@ blast the struck craft's velocity, on HD, 2048 and Omega
 
 ### Owed measurements
 
-- **The Deck** at 3840x2160, 1920x1080 and 1280x800 (vsync off, no frame limit): the
-  reproduction's `gpu_scene_us` over ticks 760 to 789, before and after the law. Not run.
-  The fragment `discard` of particle-fill.md's "Measured and dropped" belongs to the same visit.
+- **The Deck is measured** (`docs/rendering/particle-fill.md`, "On the Steam Deck"): the craft
+  hit's worst frame at 3840x2160 went from 108.5 to 63.9 ms, still far over 16.7. Open there:
+  - the track-wall blasts at ticks 726 and 756 (78 and 75 ms), which no change reached;
+  - tick 784, now 51 ms against 43 before the blast carry and sprites ("What fills tick 784" below);
+  - the fragment `discard` of "Measured and dropped", not run on the Deck.
 - **About 1.7 ms of a hit frame at 1080p that is not fill.** With and without the law, ticks 770
   to 774 cost about the same (3.26 ms at the worst before, 3.16 after, on an RX 7800 XT).
   Unprofiled: leave the particle draws, the blast's light and the flash out in turn at 1920x1080.
@@ -68,5 +70,5 @@ blast the struck craft's velocity, on HD, 2048 and Omega
 
 1. Capture the two A/B arms in "The screen wash" and wire whichever removes the quads.
 2. Re-render `hd-rocket-craft-hit-0100` and `-0233` once the wash is wired.
-3. Run the Deck numbers before and after.
-4. Put items 2 and 3 of the table to the maintainer as settings once the Deck numbers are in.
+3. Split the fill of ticks 726 and 784 per effect on the Deck's 3840x2160 run.
+4. Put items 2 and 3 of the table to the maintainer as settings, with the Deck numbers.

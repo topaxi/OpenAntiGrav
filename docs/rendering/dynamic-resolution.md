@@ -766,3 +766,103 @@ to the floor. Pins: `oag_present::drs::tests::an_unreachable_target_falls_to_the
 `a_fixed_cost_over_the_period_still_honours_the_minimum_resolution` (floors 25, 33 and 50),
 and `oag_game::settings::tests::a_render_scale_below_100_shrinks_every_title_and_platforms_scene_target`
 (every `(title, platform)` row, and the reported file's shape).
+
+## On the Steam Deck: HD Zone against a time trial
+
+2026-11-26, at `790ad033b` (before TARGET FPS `original` existed). The report: on a Deck, HD's
+Zone race on Chenghou Project settles at about 75 % under dynamic resolution where a time trial
+on the same circuit holds 100 %.
+
+**Verdict: true in direction at 3840x2160, not seen at 1280x800 or 1920x1080.** At 4K, with the
+reporter's own settings, Zone settles at about 0.80 (stepping to 0.75) and a time trial at about
+0.93, not 1.00.
+
+### How it was run
+
+A Steam Deck OLED on AC power, RADV VANGOGH, the portable container build, autopilot, sound on,
+70 s windowed runs inside a nested headless gamescope (the panel itself is 1280x800, so the
+larger sizes cannot be shown on it without a dock; the real Game Mode output was not measured):
+
+```sh
+gamescope --backend headless -W <w> -H <h> -w <w> -h <h> -r <hz> -- \
+  oag-game <hd iso> --race --no-intro --autopilot --frame-log \
+  --track /data/environments/04_chenghou_project/track.vex --mode <zone|time_trial> --script 70:quit
+```
+
+The settings file is a copy of the reporter's, with `pause_on_focus_loss = false`. Its HD profile
+is `scene_precision = "float"`, `circuit_lighting = "simplified"`, `shadow_resolution = "ultra"`,
+`reconstruction = "fxaa"`, `motion_blur = "off"`, `minimum_resolution = 25`,
+`target_fps = "default"`, under `vsync = "smooth"` and `frame_limit = "refresh_rate"`. The arms:
+
+- **paced**: as above.
+- **DRS off, paced**: `target_fps = "off"`.
+- **unpaced**: `vsync = "off"`, `frame_limit = "unlimited"`, with `target_fps` as above or `"off"`.
+
+The refresh was chosen: `-r 90` at 1280x800 (the panel), `-r 60` at the two TV sizes. Scale is
+`render=` over `surface=` in the frame log, per axis; the first 8 lines of each run are left out.
+
+### Settled scale
+
+| Size, target | Time trial, paced | Zone, paced | Time trial, unpaced | Zone, unpaced |
+| --- | ---: | ---: | ---: | ---: |
+| 1280x800, 90 | 1.00 | 1.00 | 1.00 | 1.00 |
+| 1920x1080, 60 | 1.00 | 1.00 | 1.00 | 1.00 |
+| 3840x2160, 60, second half of each run | 0.88 to 0.95 (4 runs, median 0.93) | 0.79 to 0.89 (6 runs, median 0.80) | 0.98 | 0.94 |
+
+The six Zone runs include one 160 s long (0.79, so it does not drift down further with the
+stages) and one with `--no-audio` (0.80): **sound changes nothing**. Frame rate is held at 60 in
+every paced DRS run.
+
+### Per-pass GPU time
+
+DRS off, unpaced, one run each, so the GPU sat at its top clock (about 1600 MHz at the two
+smaller sizes, 1530 MHz at 4K). Milliseconds, time trial then Zone:
+
+| Pass | 1280x800 | 1920x1080 | 3840x2160 |
+| --- | ---: | ---: | ---: |
+| race | 1.65 / 1.87 | 2.46 / 2.86 | 7.15 / 8.75 |
+| HD bloom | 0.68 / 0.67 | 1.22 / 1.14 | 4.30 / 3.92 |
+| glass | 0.18 / 0.22 | 0.18 / 0.21 | 0.18 / 0.22 |
+| advert cards | 0.18 / 0.01 | 0.18 / 0.01 | 0.18 / 0.01 |
+| shadow map and self shadow | 0.17 / 0.20 | 0.17 / 0.20 | 0.17 / 0.20 |
+| FXAA | 0.12 / 0.12 | 0.23 / 0.22 | 0.91 / 0.89 |
+| blit | 0.15 / 0.13 | 0.28 / 0.24 | 1.01 / 0.86 |
+| HUD and UI | 0.09 / 0.06 | 0.17 / 0.10 | 0.66 / 0.37 |
+| occlusion, zoom, probe blend | 0.05 / 0.05 | 0.08 / 0.07 | 0.26 / 0.20 |
+| **all timed** | **3.27 / 3.32** | **4.97 / 5.05** | **14.83 / 15.41** |
+
+A second 4K pair agreed within 0.02 ms on the race pass.
+
+**The race pass is the one that grows**: +1.60 ms at 4K, +0.40 at 1080p, +0.22 at 800p. It is the
+Zone surface, which is mostly faithful ([hd-zone-recolour.md](hd-zone-recolour.md), "What a Zone
+race costs"). What the controller manages (race pass plus bloom) is 12.67 ms against 11.45, 11 %
+more. The budget loop's other costs are smaller in Zone.
+
+### Why the 4K settle is so much deeper than the content
+
+A cost 11 % higher moves a controller's linear scale by about 5 %. The rest is the Deck's clock.
+
+With DRS off under the same pacing, both modes nearly hold 60 at full resolution:
+
+| 3840x2160, paced | fps | mean frame | p99 | median GPU clock |
+| --- | ---: | ---: | ---: | ---: |
+| Time trial, DRS off | 59.8 | 16.73 ms | 17.23 ms | 1536 MHz |
+| Zone, DRS off | 58.8 | 17.03 ms | 18.58 ms | 1574 MHz |
+| Time trial, DRS on | 60.0 | 16.67 ms | 16.85 ms | 1305 MHz |
+| Zone, DRS on | 59.9 | 16.71 ms | 16.87 ms | 1104 MHz |
+
+Time trial fits; Zone misses by little. With DRS on, the controller lowers the scale, the load
+falls, the Deck's governor lowers the clock, and the GPU's timestamps (milliseconds, not cycles)
+grow. Area times clock accounts for the readings: Zone's race pass at full size and 1532 MHz,
+8.75 ms, scaled by `0.822² * 1532 / 1180` gives 7.68 ms against 7.65 measured at the settled
+scale (second run 7.59 against 7.53; time trial within 6 %). The controller then sees the
+reading inside its deadband (0.80 to 0.95 of a 13.33 ms budget, so 10.7 to 12.7 ms; Zone's
+median in a traced run was 11.1) and holds. A rise needs eight readings in a row under 10.7 ms;
+a fall needs one over 12.7 ms. In the traced run the readings at the rises were about 9.6 ms and
+at the falls about 14 ms.
+
+Confidence **70** that the loop is what deepens the settle. The weak part: joining each frame's
+reading to a clock sample taken four times a second shows Zone's full-size-equivalent cost at
+17.0 ms below 1150 MHz against 13.9 above 1450 MHz, but the same join on the time trial is flat
+(13.1 to 14.2 ms, not ordered by clock). The clock was never pinned: that needs root on the Deck.
+The unpaced column is not a control by itself, because the residual is learned differently there.
