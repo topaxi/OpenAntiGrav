@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [hd, omega, 2048]
 updated: 2026-11-26
-summary: "Ready: 31 unsprited HD effects, size multiplier. Owed: 2048/Omega flipbooks, cap source, Deck 4K hit; half-res awaits maintainer"
+summary: "Ready: 31 unsprited HD effects. Owed: far-blast pose velocity, 2048/Omega sizes+flipbooks, cap source; half-res awaits maintainer"
 size: M (50)
 difficulty: medium (55)
 ---
@@ -38,21 +38,24 @@ blast the struck craft's velocity, on HD, 2048 and Omega
   `oag_raceplay::assets::decode_texture` (flare and trail art) and `load/caustic.rs`. Compare each
   with its draw's `v` in a command ring before touching it; a radially symmetric sprite shows
   nothing either way.
-- **Ready to wire after one read: HD's per-particle size multiplier**
-  (`particle-render.md`, "The per-particle size multiplier"). 58 of 241 emitters author it and
-  ours applies none; it is why the Rocket blast's `trail` draws 1.5 times too large, which costs
-  `rocket-craft-far-hit-0233` 2.8 RMSE since the flipbooks advance. To read: what
-  `instance+0x14c` holds (the `trail` fit assumes the emitter's run fraction), and what
-  `+0xc84` means to the mode 5 and distortion readers that also take it. Then a pair sweep.
-- **Flipbooks on 2048 and Omega are not wired** (`particle-render.md`, "The atlas frame"): 2048's
-  update wraps at the frame count with no hold; Omega carries that and HD's. Their spawn frames
-  and which reader serves which directory are unread.
+- **The far blast's flat white cloud is our pose, not the particles**
+  (`particle-fill.md`, "The pose throws the far blast at the camera"): our struck craft moves at
+  `(-128, -15, -46)` where the film recorded `(88, 11, 55)`. Wanted: a capture flag that writes the
+  struck craft's velocity at the forced hit, the two far pairs re-posed with it, and a look at why
+  our opponent moves backwards there. With the film's velocity `trail` is still smoother and
+  whiter than the original's; that remainder is open.
+- **The size multiplier's other arms** (`particle-render.md`, "The per-particle size
+  multiplier"): the parent-age arm (`TRAIL_SMOKE`, `plasma_goo_trail`, `SPARK_TRAILS`) and the
+  random arm (most of 58 emitters; it adds a draw to the effect's generator). The run arm is
+  wired. Whether HD's renderer also reads `+0xc84` as a colour scale is unread.
+- **Size multiplier and spawn range on 2048 and Omega: they apply, not wired.** Both inits carry
+  HD's law; Omega's record offsets are 8 bytes later and `oag_pob` reads HD's
+  (`particle-render.md`, "The atlas frame"). To read first: what their instance fraction holds.
+- **Flipbook advance on 2048 and Omega is not wired**: 2048's update wraps at the frame count with
+  no hold; Omega carries that one and HD's, and which serves which directory is unread.
 - **The 12-unit pairs' hit tick (`--force-rocket-hit 711:7`) was never checked against the
   original's spawn point.** The far films put the wash quad in world space (view position through
   the frame's camera); the same on `hit2` says where ours should stand.
-- **A posed blast carries our opponent's velocity, not the original's**, so travelling fireballs
-  do not match in a pair. A flag that writes the struck craft's velocity at the forced hit would
-  take that out of the metric.
 
 ### Ready to wire: 31 HD effects load and draw no sprite of their own
 

@@ -1548,6 +1548,16 @@ confidence 90):
 offsets belong to something else. `oag_pob::Emitter::frame_range` reads them from any record long
 enough, and only a title that reads them plays them (`oag_title::Effects::flipbooks`).
 
+### The size bounds at `+0xc84`/`+0xc88`
+
+HD's per-particle size multiplier runs between these two `f32`s
+([particle-render.md](../ghidra/functions/ps3-hdfury-eu/particle-render.md#the-per-particle-size-multiplier),
+confidence 90): `oag_pob::Emitter::size_span`, played by `oag_title::Effects::size_ramps`. 2048
+authors them at the same offsets. **Omega's record has 8 more bytes from `+0xc84`**: the bounds
+are at `+0xc8c`/`+0xc90`, the spawn range at `+0xc95`/`+0xc96`, the hold at `+0xc97`/`+0xc9c`
+(read off `trail` of its `WO_ROCKET_EXPLO`, confidence 85). `size_span` and `frame_range` read
+HD's offsets and are wrong on an Omega file; no title plays them there.
+
 ### The sprite templates at `+0x9a4`/`+0x9a8` - 2026-09-30
 
 An emitter can carry **sprite templates**: records the instance turns into one

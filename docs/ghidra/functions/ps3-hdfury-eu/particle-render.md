@@ -294,19 +294,28 @@ HD flipbook with a frame rate authors one, so what HD does there was not read.
 **Wired** for HD and Fury (`oag_title::Effects::flipbooks`, measured):
 `oag_fx::psys::frames` and `EmitterSpec::random_frame`.
 
-**2048: checked, differs.** `Psys_UpdateParticle` (`0x812ab114`, v1.04): over life
-`age * (count - 0.01)` under bit `4` of `record+0x884`; at a rate `frame += rate * dt` and
-`frame -= count` once it reaches `count`, not `count - 0.01`; no hold step. Its spawn frame was
-not read. Confidence 65 (static; the runtime record's channel offsets are assumed from the
-code's shape). Not wired.
+**2048: the update differs, the spawn frame applies.** `Psys_UpdateParticle` (`0x812ab114`,
+v1.04): over life `age * (count - 0.01)` under bit `4` of `record+0x884`; at a rate
+`frame += rate * dt` and `frame -= count` once it reaches `count`, not `count - 0.01`; no hold
+step: **checked, differs**. The particle init (`0x812aa6ac`) draws the spawn frame as HD does
+from `record+0xc8d`/`+0xc8e`: **checked, applies, not wired**. 2048's `trail` authors HD's
+values at HD's offsets (spawn `0, 3`, hold `31, 31`). Confidence 70 (static; the runtime
+record's channel offsets are assumed from the code's shape).
 
 **Omega** carries two readers. `FUN_01724c00` (v1.07) is HD's step, hold and wrap, with the
-hold bytes at runtime `+0xc97`/`+0xc9c`: **checked, applies, not wired** (which file bytes those
-are, and its prologue and spawn, are unread). `FUN_01728ae0` is 2048's (wraps at `count`, no
-hold): **checked, differs**. Which reader serves which effect directory was not read.
-Confidence 60.
+hold bytes at `record+0xc97`/`+0xc9c`: **checked, applies, not wired** (its prologue is
+unread). `FUN_01728ae0` is 2048's (wraps at `count`, no hold): **checked, differs**. Which
+reader serves which effect directory was not read. The particle init (`FUN_01722c10`) draws
+the spawn frame from `record+0xc95`/`+0xc96`: **checked, applies, not wired**.
 
-## The per-particle size multiplier (read, not wired)
+**Omega's record is HD's with 8 bytes added at `+0xc84`.** In the patch's `data05.psarc`, in
+both particle directories, `trail` of `WO_ROCKET_EXPLO` reads `1.0` at `+0xc84`, `0` at
+`+0xc88`, its size bounds `0.2, 1` at `+0xc8c`/`+0xc90`, its spawn range `0, 3` at `+0xc95` and
+its hold `31, 31` at `+0xc97`/`+0xc9c`. `oag_pob::Emitter::{size_span, frame_range}` read HD's
+offsets, so on an Omega file they return other words: wiring either for Omega starts there.
+Nothing plays them today (`oag_title::Effects` leaves both off for Omega). Confidence 85.
+
+## The per-particle size multiplier
 
 `Psys_InitParticle` (`0x00289890`) stores a multiplier at particle `+0x10`, and the drawn size
 is the size channel times it (the init's store to `+0x70`, and `0x0028d058`-`0x0028d07c` in the
@@ -318,20 +327,51 @@ flags & 0x20000000 && flags & 0x4000 ? m = (1.0 - a) * (hi - lo) + lo       1.0 
                                      : m = rand(lo, hi)
 ```
 
-Static read, confidence 75. **What `instance+0x14c` holds is not read.**
+**`instance+0x14c` is the emitter's run fraction.** `FUN_00287168` loads `instance+0x148` with
+the duration (`record+0x24`). The instance update (`FUN_00288d98`), for an emitter without the
+looping flag, stores `1 - instance+0x148 / record+0x24` at `+0x14c`
+(`0x00288fa0`-`0x00288fb8`) before it emits, and takes the instance's `dt` off `+0x148` after
+(`0x00289804`-`0x00289808`). A looping emitter counts `+0x148` up instead and stores
+`+0x148 * *(r2+0x54e4)` (`0x0028987c`-`0x00289888`); that form was not followed. The parent
+particle's `+0x90` is its age fraction (`+0x94 = 1 / life` added per update). Confidence 90.
 
-**It accounts for the Rocket blast's `trail`** (confidence 65). `trail` (flags `0x2401420c`,
-all three bits) authors `lo = 0.2`, `hi = 1`. With `a` taken as the emitter's run fraction over
-its 25 ticks, the predicted half size per sheet cell is 2.18 at cell 3 and 3.57 at cell 14
-against the film's 2.35 and 3.57 (rms 0.24 over cells 3 to 14; the size channel alone is 0.67
-out). Ours draws the channel unscaled.
+So on the run arm a particle born at the start of the run takes `hi` and one born at the end
+takes `lo`.
 
-**On the disc:** 58 of 241 emitters (by file and name, `DATA00`, `02`, `03`, `06`) author bounds
-other than `(1, 1)`, `0.7, 1.3` the commonest; 8 take the age branch. Ours applies none.
+**Runtime** (one film, `rocket-craft-hit/far3`, partly repeated on `hit2`). `trail` (flags
+`0x2401420c`, duration 25, lifetime `201 +/- 49`) authors `lo = 0.2`, `hi = 1`, and its frame is
+its spawn frame in `0..3` plus one per tick, so the smallest quad of a sheet cell dates from a
+known birth. `(3.5 + 4 * age / 201) * (1 - 0.8 * born / 25)` matches the smallest half size per
+cell with rms 0.08, 0.06 and 0.12 at 0.1, 0.233 and 0.4 s; the size channel alone is 0.45, 1.01
+and 1.67 out. On `hit2` the same law is 0.14 out at 0.1 s against 0.52, and looser later (1.17
+against 2.10 at 0.233 s); `far1` and `hit1` gave no rows. Quads above the minimum are the other
+blasts of the same frame.
+
+**Wired** for HD and Fury, the run arm of a non-looping emitter only
+(`oag_title::Effects::size_ramps`, measured; `oag_fx::psys`, `Burst::size`). On the disc that
+arm is `WO_ROCKET_EXPLO/trail` (`0.2, 1`), `WO_SHIP_EXPLOSION/FIRE_ANIMS_TRAILS` (`0.3, 1`) and
+`WO_NITRO_SHIP_DEATH/Trail_Ribbon` (`0, 1`); only the first has a film.
+
+**Open arms** (58 of 241 emitters by file and name, `DATA00`, `02`, `03`, `06`, author bounds
+other than `(1, 1)`; ours plays three):
+
+- **Parent age** (both ramp flags, without `0x10000`): `TRAIL_SMOKE` in the wall blast and the two
+  ship explosion files, `plasma_goo_trail`, `SPARK_TRAILS` of the Quake detonator.
+- **Random** (without both ramp flags, `0.7, 1.3` the commonest): the rest. The original draws a
+  number per particle; wiring it takes an extra draw from the effect's generator, only where
+  `lo != hi`, or every later particle changes.
+
+**2048: checked, applies, not wired.** `0x812aa6ac` carries the same two flags, both arms and
+the same offsets (`record+0xc84`/`+0xc88`; the instance fraction at `instance+0x134`, the
+parent's at `+0x88`), and its `trail` authors `0.2, 1`. What its instance fraction holds was
+not read. **Omega: checked, applies, not wired.** `FUN_01722c10` carries the same, with the
+bounds at `+0xc8c`/`+0xc90` (see "The atlas frame") and the parent fraction at `+0x98`.
+Confidence 70 (static decompile, instance writers unread).
 
 **Open overlap:** `oag_pob` reads `+0xc84` as `colour_scale` on render mode 5 and as
-`distort_strength` on blend class 8. By this read the same word is also the multiplier's lower
-bound (`SPARKS` of the craft blast: `0.7, 1.3`). Not resolved here.
+`distort_strength` on blend class 8. HD's init reads the same word as the multiplier's lower
+bound (`SPARKS` of the craft blast: `0.7, 1.3`), and Omega's layout has a word for each. Whether
+HD's renderer also reads `+0xc84` as a colour scale is open.
 
 ## Names
 

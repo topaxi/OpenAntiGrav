@@ -728,8 +728,40 @@ The far hit at 0.233 s is **worse by 2.8**, paired by seed (about three standard
   the area at spawn. Both draw them white, opaque and alpha over.
 - Falsifier: a scratch build holding `trail`'s half size to the original's growth reads 69.2 on
   the far pair (seeds 1-8, from 73.2), and 109.3 and 93.6 on the near pairs, still better than
-  before. The mechanism is HD's per-particle size multiplier, which `trail` authors as
-  `0.2` to `1` (`particle-render.md`, "The per-particle size multiplier"); not wired.
+  before. The mechanism is HD's per-particle size multiplier
+  ([particle-render.md](../ghidra/functions/ps3-hdfury-eu/particle-render.md#the-per-particle-size-multiplier)).
+
+### With the size multiplier wired
+
+Same 31 pairs, 27 byte-identical. Means over the same seeds; "before" has neither change:
+
+| Pair | Before | Advance | Advance and multiplier | Paired, multiplier build minus before |
+| --- | --- | --- | --- | --- |
+| `rocket-craft-hit-0233` | 113.6 | 106.5 | 109.2 | -4.3 +/- 3.2 |
+| `rocket-craft-hit-0100` | 94.8 | 93.1 | 93.3 | -1.5 +/- 0.4 |
+| `rocket-craft-far-hit-0100` | 34.9 | 34.9 | 34.9 | 0.0 |
+| `rocket-craft-far-hit-0233` | 69.15 | 71.95 | 69.32 | +0.17 +/- 0.68 |
+
+At the compare page's own seed `far-hit-0233` reads 64.71 before and 65.49 after. **The far
+picture still shows a flat white cloud** a good deal larger than the original's, which the
+multiplier does not remove: its cause is the pose, below.
+
+### The pose throws the far blast at the camera
+
+`trail` is the child of `FIRE_TRAILS_ONEQUAD`, whose pieces inherit the struck craft's velocity
+([rocket-craft-blast.md](../ghidra/functions/ps3-hdfury-eu/rocket-craft-blast.md)). In the far
+pairs' pose our struck craft moves at `(-128, -15, -46)` units per second when it is hit; the
+film recorded `(88, 11, 55)`. Ours therefore come toward the eye: the `trail` quads' median view
+depth is 32 against the original's 51, about 2.6 times the area on screen, and younger puffs are
+nearer where the original's are farther. Why our opponent moves that way in this pose was not
+determined; it is not a particle law.
+
+A scratch build that gave the struck craft the film's velocity at the forced hit (far pair, 24
+seeds, the spawn point checked as below) read 66.74 against 67.04 for the build with neither
+change (-0.30 +/- 0.05, better on 20), and 66.44 with the advance alone. The cloud shrinks to
+about the original's distance; `trail` still reads as smoother white lobes than the original's
+textured cloud (pixels with every channel over 235: 6.4 % against 11.1 %). The near pairs cannot
+take this test: their spawn tick was never checked against the original's.
 
 ### Posing a far hit
 
@@ -739,7 +771,7 @@ the blast stands: the 0.233 s film's hit is `--force-rocket-hit 717:7` after the
 which was not checked against the original's spawn point. The ring's wash quad is a few ticks
 younger than the film's labelled age (2 ticks at 0.1 s, 10 at 0.233 s, read off its colour and
 size), so the far pairs render ours at the quad's age. Ours' struck craft keeps our own opponent's
-velocity, so the travelling fireballs do not match.
+velocity, so the travelling fireballs do not match ("The pose throws the far blast at the camera").
 
 ## What is left
 
