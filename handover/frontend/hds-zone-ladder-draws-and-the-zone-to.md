@@ -2,7 +2,7 @@
 status: re-first
 titles: [hd, omega]
 updated: 2026-11-26
-summary: "Speed-class float writer untraced; zone 60 and beyond unproven; Zone Score is placed right of the original"
+summary: "Speed-class float writer untraced; zone 60 and beyond unproven"
 categories: [frontend, rendering]
 ---
 
@@ -77,12 +77,6 @@ fourteen independent agreements between a table in `.data` and a table in an
 asset file.
 
 ## Open
-
-- **Zone `Score` placement.** The layout authors it `align="left"` and ours starts it at screen centre; the original's reads centred
-  (HD and Omega frames). At its authored `1.3 x 1.5` four digits clear the right bracket and **five run over it** (rendered). HD's centring rule is
-  unread; 2048's is read and wired for 2048 alone (`oag_hud::dialect_2048::text_align`): read HD's writer, then carry the rule as
-  title data. Evidence: `docs/formats/hd-hud.md`, "Text scales on two
-  axes".
 
 - **2026-11-15: the class step plays `light_wipe` and the `MR_*` timeline from
   the live banks** (`DATA00`'s `env0_zone.bnk` and `speech_zone.bnk`; the

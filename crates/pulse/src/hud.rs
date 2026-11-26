@@ -100,6 +100,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     pickup_icon_uv: None,
     // Zone's speed-class line, read off `FUN_0881ad10` (`Hud_UpdateZoneSpeedClass`).
     zone_speed_classes: Some(ZONE_SPEED_CLASSES),
+    zone_score: oag_title::ZoneScore::Authored,
     // Pulse's own reference frame reads `100%`. See `oag_title::HudArt::shield_percent`.
     shield_percent: true,
     sub_weapon_line: true,

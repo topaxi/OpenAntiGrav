@@ -700,6 +700,13 @@ fn every_zone_ladder_widget_is_authored_by_the_zone_layouts_alone() {
     );
 }
 
+fn zone_template_digit(archives: &mut oag_assets::Archives) -> oag_hud::TemplateDigit {
+    let font = archives
+        .read_font(r"Data\FE\Fonts\PulseHud.fnt")
+        .expect("the HUD face reads");
+    oag_hud::TemplateDigit::of(&oag_ui::font::Atlas::from_font(&font)).expect("a 3")
+}
+
 /// **The Zone HUD's left-hand ladder, as a frame rather than as a layout.**
 ///
 /// The gap this closes was two-sided and either half alone draws nothing
@@ -755,6 +762,7 @@ fn a_zone_race_draws_the_ladder_and_numbers_it_from_the_current_zone() {
         small_line_height: 34.0,
         default_line_height: 34.0,
         skin_line_height: 34.0,
+        template_digit: Some(zone_template_digit(&mut archives)),
         default_border: layout.default_border(),
         tag_label: None,
     };
@@ -779,6 +787,16 @@ fn a_zone_race_draws_the_ladder_and_numbers_it_from_the_current_zone() {
 
     // The current zone and the ten coming up, and what the frame reads beside
     // them.
+    // `3333` at ScaleX 1.3 is 259.5 wide in this face, so a four-digit score starts at
+    // 960 - 129.75. The shadow is drawn first.
+    let mut score_x = frame
+        .hud_text
+        .iter()
+        .filter_map(|draw| match draw.unstretched() {
+            oag_ui::frontend::Draw::Text { x, text, .. } if text == "1452" => Some(*x),
+            _ => None,
+        });
+    assert!((score_x.next_back().expect("a score") - 830.25).abs() < 0.05);
     for expected in ["ZONE", "SUB-VENOM", "1452"] {
         assert!(text.contains(&expected.to_string()), "{expected}: {text:?}");
     }
@@ -858,6 +876,7 @@ fn the_zone_eight_frame_is_reproduced_row_for_row() {
         small_line_height: 34.0,
         default_line_height: 34.0,
         skin_line_height: 34.0,
+        template_digit: None,
         default_border: layout.default_border(),
         tag_label: None,
     };
@@ -948,6 +967,7 @@ fn the_ladder_before_the_first_zone_is_the_layouts_own_placeholders() {
         small_line_height: 34.0,
         default_line_height: 34.0,
         skin_line_height: 34.0,
+        template_digit: None,
         default_border: layout.default_border(),
         tag_label: None,
     };
@@ -1141,6 +1161,7 @@ fn a_leaning_hd_frame_is_the_still_frame_slid_along_x() {
         small_line_height: 34.0,
         default_line_height: 34.0,
         skin_line_height: 34.0,
+        template_digit: None,
         default_border: layout.default_border(),
         tag_label: None,
     };
@@ -1297,6 +1318,7 @@ fn lit_hud_quads_carry_the_captured_alpha_byte_and_the_outline_and_bars_do_not()
             small_line_height: 34.0,
             default_line_height: 34.0,
             skin_line_height: 34.0,
+            template_digit: None,
             default_border: layout.default_border(),
             tag_label: None,
         };
@@ -1422,6 +1444,7 @@ fn every_lit_text_string_has_a_black_twin_one_unit_up_and_left_drawn_first() {
             small_line_height: 34.0,
             default_line_height: 34.0,
             skin_line_height: 34.0,
+            template_digit: None,
             default_border: layout.default_border(),
             tag_label: None,
         };
