@@ -210,13 +210,18 @@ template at 2.0 x depth (HD measured; 2048 and Omega inherited, below). Tests:
 `near::tests::a_template_is_capped_by_the_laws_template_cap`, and the disc check
 `check_hd_craft_blast_templates` in `pob_ground_truth.rs`.
 
-Pairs (`compare_env.overlap_score` RMSE x 255, same tree, HD's templates off and on): 0.1 s
-119.7 to **117.8**, 0.233 s 126.2 to **140.0**. Split by the original's near-white pixels (luma
-over 235; 36 % and 70 % of the frames): at 0.1 s both parts improve (155.5 to 152.1 and 94.1 to
-93.3). At 0.233 s ours gets darker inside the original's white part (mean 150 to 118). An
-additive glow cannot do that on its own, and no sprite fell off the sheet (15 of 15 read).
-Likely cause: the three extra emitters shift the blast's random stream, so its smoke clouds land
-elsewhere. Not proven.
+Pairs (`compare_env.overlap_score` RMSE x 255, same tree, HD's templates off and on, two
+renders each, identical): 0.1 s 119.7 to **118.0**, 0.233 s 126.2 to **125.2**.
+
+**A template takes nothing from the rest of its effect.** Played first as one more emitter, the
+templates moved the 0.233 s pair to 140.0. With the templates listed but muted it stayed at
+126.2, so the change came from their particles being born. Those particles took draws from the
+instance's shared random stream, which moved every later particle of the blast, and slots from
+a full 256-particle pool, which changed which smoke survived. The original allocates a
+template's particle on its own (`0x00287560`, `0xa0` bytes) outside the emitter pool. Ours now
+keeps eight template slots beside the 256 and seeds each template's draws from its instance and
+emitter (`oag_fx::psys`, `MAX_TEMPLATE_PARTICLES`). With room for the three alone (a 259-slot
+pool) the pair was 125.4, and with both changes 125.2.
 
 ### The other titles
 
@@ -240,7 +245,7 @@ loads by `the_2048_craft_blast_loads_under_the_near_law` and
 ## Open
 
 - Where HD's template cap of 2.0 is read (above, "The cap").
-- Why the 0.233 s pair darkens with the templates on (above, "Wired").
+- How the wash looks from a far hit: the free volley's hit about 30 units ahead draws `glow_longer`'s hemisphere sprite as a flat-bottomed dome across the top of ours; not filmed on the original at that distance.
 - `Rocket_PushNearbyCraft_q`'s radius and strength table (`*(TOC -0x2568) + 4 * *(... + 0xc)`,
   fields `+0x20` and `+0x24`), and whether `+0x110` is the pending impulse Pulse's blasts post
   ([weapon-lineage.md](../../../gameplay/weapon-lineage.md), "Blast push").

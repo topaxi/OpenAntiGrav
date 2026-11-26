@@ -2,7 +2,7 @@
 status: measure
 titles: [hd, omega, 2048]
 updated: 2026-11-26
-summary: "Owed: the craft-blast template cap source and the 0.233 s pair, Deck numbers, 1.7 ms at 1080p; two settings await the maintainer"
+summary: "Owed: the craft-blast template cap source and far-hit dome, Deck numbers, 1.7 ms at 1080p; two settings await the maintainer"
 size: M (50)
 difficulty: medium (55)
 ---
@@ -25,9 +25,9 @@ blast the struck craft's velocity, on HD, 2048 and Omega
 - **The screen wash: named and wired 2026-11-26.** It is the blast's sprite templates
   (`docs/ghidra/functions/ps3-hdfury-eu/rocket-craft-blast.md`, "The screen wash"). Left:
   - where HD reads the template cap of 2.0 (measured on 37 quads, unread);
-  - why the 0.233 s pair darkens with the templates on (126.2 to 140.0; the 0.1 s pair improves,
-    119.7 to 117.8). Suspected: the extra emitters shift the blast's random stream. Test: render
-    the pair with the templates listed but their emission muted, and compare with templates off;
+  - **the far-hit dome**: a Rocket hit about 30 units ahead now draws `glow_longer`'s hemisphere
+    sprite as a flat-bottomed white dome across the top of the frame. Film a far hit on RPCS3
+    (`scripts/rpcs3-hd-rocket-film.py --back 30`) and compare its wash shape with ours;
   - 2048 and Omega play their own files' templates with HD's trigger and cap by lineage; a capture of either's hit would turn that into a measurement.
 - **The blast's push on nearby craft** (`Rocket_PushNearbyCraft_q`, `0x00149f70`, and Omega's
   inline twin): radius and strength table unread; it may be HD's consumer of the "Blast push"
@@ -64,6 +64,6 @@ blast the struck craft's velocity, on HD, 2048 and Omega
 
 ## Next Steps
 
-1. Explain the 0.233 s pair's darkening (the test above), then adopt the re-rendered rocket-hit pairs.
+1. Adopt the re-rendered rocket-hit pairs, then film the far-hit dome (above).
 3. Run the Deck numbers before and after.
 4. Put items 2 and 3 of the table to the maintainer as settings once the Deck numbers are in.
