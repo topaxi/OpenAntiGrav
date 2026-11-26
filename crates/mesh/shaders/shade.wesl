@@ -1797,10 +1797,9 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
     // `rim` is the same angle HD's program computes. The program the console
     // runs takes the position and the normal through the plain model matrix and
     // subtracts the world position from the camera's world position, so `n` and
-    // `to_eye` here are its two vectors. The flame surfaces' block still leaves
-    // that eye at the world origin: the camera's eye widens a colour gap that is
-    // not the rim's (`docs/ghidra/functions/ps3-hdfury-eu/engine-flare.md`, "The
-    // live vertex program" and "Our rim's eye").
+    // `to_eye` here are its two vectors, and the flame surfaces' block carries
+    // the view's eye (`docs/ghidra/functions/ps3-hdfury-eu/engine-flare.md`,
+    // "The live vertex program").
     //
     // **`texel.a` is deliberately absent.** The program's `TEX H0.xyz` writes
     // three components and the fourth is the vertex ramp from the moment
