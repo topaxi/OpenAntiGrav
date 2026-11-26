@@ -52,6 +52,14 @@ blast the struck craft's velocity, on HD, 2048 and Omega
   Unprofiled: leave the particle draws, the blast's light and the flash out in turn at 1920x1080.
 - **Omega's passes 8 to 10 by target size** (is one of them a reduced particle target), and
   **Omega's sphere fade** behind `instance + 0x71` (radius 290): what sets it. Both are reads.
+- **What fills tick 784, the reproduction's worst frame since the blast carry.** Its additive layer
+  is 5.2 of 14.5 screens and does not shrink when sampled billboards are trimmed to their live
+  texels (`docs/rendering/particle-fill.md`, "Measured and dropped"). Name the emitter: a per-effect
+  fill split of that tick, with the fill probe described there. The trim itself (fill -37 to -59 %
+  on ticks 766 to 781, 4K worst frame -0.13 ms, not byte-identical) is parked on the local branch
+  `trimmed-sprites-parked`. Measure it again only if the worst frame turns out to be alpha-over
+  smoke on another circuit or on the Deck. Command: `OAG_RENDER_BENCH_RACE=<stem>` with the
+  reproduction, six interleaved pairs, `gpu_scene_us` over ticks 760 to 789.
 - **The PSP builds' builder**: whether Pulse and Pure have a near rule at all.
 - **Which render modes 2048's two builders serve**, and whether the original's sprite templates
   go through the same routine (ours cull and fade them, with no cap).

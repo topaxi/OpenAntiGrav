@@ -105,6 +105,37 @@ at ticks 905 and 945 (3840x2160). The state hash is unchanged.
   At that load, with the GPU shared with other members' gate tests, it did not show beyond
   noise. The result is inconclusive, not a no. It is worth re-measuring on a bandwidth-bound GPU
   (the Deck at 4K).
+- **Sampled billboards trimmed to their sprite's live texels** (2026-11-26, dropped). Each atlas
+  cell was cut, at load, to the rectangle outside which every bilinear sample reads alpha 0
+  (texel `i` reaches `t` in `[i - 0.5, i + 1.5)`, one mip level, plus a 1-texel margin). The quad
+  was built over that rectangle alone, with its UVs on the same affine map. This was single-sample
+  passes only, and procedural, streak, distort and mod-shaded quads kept the whole quad. HD's
+  craft-blast cells leave a lot to cut: `WO_ROCKET_EXPLO`'s smoke and fire keep 0.40 to 0.77 of
+  the cell under the rectangle and 0.31 to 0.62 under the convex hull. `SHIP_DEBRIS` keeps 0.37.
+  Measured on the reproduction above, whose worst frame is now tick 784, with the blast carried:
+  - **Fill** (in screens, 1920x1080, the probe above, the same binary with the trim on and off):
+    37 to 59 % less over ticks 766 to 781. The peak over ticks 760 to 789 went from 18.0 to 13.2
+    screens. At tick 784, though, the additive layer holds 5.2 of 14.5 screens and the trim
+    leaves it untouched (5.21 against 5.22), so that frame loses only 9 %.
+  - **GPU scene time**, six interleaved pairs against main, RX 7800 XT, RADV, load 47 down to 19:
+
+    | Size | Mean over 760 to 789, main | trimmed | Worst frame, main | trimmed |
+    | --- | --- | --- | --- | --- |
+    | 3840x2160 | 2.90 ms | 2.60 ms | 4.75 ms (4.25 to 4.85) | 4.62 ms |
+    | 1920x1080 | 0.97 ms | 0.91 ms | 1.72 ms | 1.70 ms |
+
+    At 4K, ticks 774 to 782 lost 0.46 to 0.70 ms each (medians), but the worst frame lost 0.13 ms.
+    One trimmed 4K run fell in the card's faster regime (worst 2.75 ms) and is outside the medians.
+  - **Not byte-identical.** Tick 775 at 3840x2160 differs from main on 27,853 pixels: 27,174 by
+    one level and about 600 by 2 to 72. Main against main is identical. With the particle depth
+    test switched to `Always` in both builds, the tail goes and 26,826 pixels differ by exactly
+    one level. So the tail is depth-test flips where a quad meets the track or a craft. The rest
+    is bilinear weight rounding. Both come from the GPU interpolating a different triangle, so a
+    smaller shape on the same plane cannot keep the bytes. A wider margin (8 texels) left the
+    same tail.
+
+  The keep rule was a worst-frame gain of 0.3 ms at 4K and every comparison pair unmoved to three
+  decimals. The worst frame failed it, so the trim was not kept.
 
 ## The overdraw is not all authored: the original shrinks, fades and drops near particles
 
