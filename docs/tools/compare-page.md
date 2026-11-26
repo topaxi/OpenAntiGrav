@@ -378,6 +378,18 @@ The node matrix at `ship+0x40` equals the body on all eight craft on every pause
 
 **Wired for `--detonator` (2026-11-23, `det-camera`, "Detonator pairs: the hull's frame pose") and for the Rocket film pairs (2026-11-26, `compare_env.py film-pair-field`, which reads the hull from the frame's walked command stream; [particle-fill.md](../rendering/particle-fill.md), "The first wave and the drawn hull"); still open for `--field`:** `rpcs3-hd-pair.py --field` should read the player's hull matrix from the push-buffer regions it already dumps, record the whole-tick skew in `pair.json` (`original.presented_lag.craft_ticks`), refuse a pause where it is not within 0.1 of a whole number, and write the field with every craft moved back that many ticks of its own velocity (or take each hull's translation from the push buffer outright). The HUD clock's 3-tick text lag is a separate thing and stays. Until then a moving HD pair is checked with `hd-pair-lag-scan.py`.
 
+**A ringless pair is moved after the fact with `compare_env.py rewind-pair-field <pair-dir> <ticks>` (2026-11-26, `pair-tooling-fixes`).** It moves `field.csv` back the whole ticks the scan picks, records `original.presented_lag.craft_ticks` with the basis (a whole-frame score, not a push-buffer read), replaces the record's claim that the picture needed no correction, and refuses a pair that already records `craft_ticks` (as `film-pair-field` now does too). The camera is not moved. On `hd-race/talons-pack` (current binary, scratch copies, each arm rendered twice with bit-identical results):
+
+| Craft rewind, camera as recorded | mean grey difference | RMSE | edge correlation | hull box grey (`640,330 640x420`, mean absolute RGB) |
+| --- | --- | --- | --- | --- |
+| 0 ticks (stored) | 23.05 | 0.171 | 0.092 | 25.71 |
+| **1 tick** | **22.39** | 0.166 | 0.094 | 21.83 |
+| 2 ticks | 26.21 | 0.191 | 0.089 | 25.86 |
+
+By eye at 1 tick the hull has the original's size and height, where the stored pair's is small and high. Confidence in 1 tick relative to the camera 85: `hd-pair-lag-scan.py`'s RMSE also prefers craft = camera + 1 when the camera is rewound (1:2 over 1:1, 2:3 over 2:2), and the eye to hull distance at 1 tick is 11.6 units, the rig's.
+
+**Open: the camera of this pair may itself be newer than the picture.** Rewinding the camera too scores lower on RMSE and grey (camera 1 craft 2: mean grey 18.78, one render) and goes on falling to camera 2 craft 3 (scan RMSE 0.136 against 0.165 at camera 0 craft 1), while edge correlation falls (0.094 to 0.074). A whole-frame score does not settle it, and no command ring of the frame was kept to read the picture's own matrix. A re-capture that keeps the ring would.
+
 ## Pulse PS2: a race pair for every circuit (2026-11-11, `gallery-pulse-ps2`)
 
 **Claim:** the page carries a Pulse PS2 race pair for every circuit ours can race on the PS2 disc (about 14), up from 1. **True:**
@@ -691,7 +703,8 @@ Menu mean grey 5 to 12 (before 4 to 10) is the same order. Maintainer, 2026-11-1
 as ours also uses the same in the end" - both changes below follow that.
 
 - **Harimau is the standard hull now.** The classic hull (the `down` on Ship Select) is locked on this machine's profile
-  (padlock on the third hex of the column), so the cold-boot walk stops on Team Selection. `compare-rerender-all.py`'s `Rpcs3.TEAMS` is `(9, 0)`;
+  (padlock on the third hex of the column), so the cold-boot walk stops on Team Selection. No press count holds across profiles:
+  the cold boot now steps Ship Select until RAM names the pair's `--team` hull ([rpcs3-capture.md](../reverse-engineering/rpcs3-capture.md), "Picking the hull on Ship Select").
   RAM's team name is `harimau` either way and the pair's own `the player's craft (RAM) is the craft ours draws` check passes. The 12 pairs'
   captions say "Harimau (standard hull)". `talons-assegai-c1` (`(7, 0)`) was already the unlocked hull.
 - **The original's Menu Style must be FURY for a menu or loading pair.** This profile boots the front end in the HD (white) style and ours' `--menu-page`

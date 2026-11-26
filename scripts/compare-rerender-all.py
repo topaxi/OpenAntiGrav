@@ -379,5 +379,27 @@ def main():
     sys.exit(1 if failed else 0)
 
 
+def selftest():
+    """The HD cold boot hands the glass boot the pair's own `--team` hull, and the glass boot steps Ship Select by it."""
+    calls = []
+    real_sh = globals()["sh"]
+    globals()["sh"] = lambda cmd, **_kw: calls.append([str(c) for c in cmd])
+    try:
+        emu = Rpcs3(argparse.Namespace(lane="lane", hd_cold=True), Path("scratch"))
+        emu.env, emu.remap = {}, {}
+        for team in ("harimau", "Assegai_c1"):
+            del calls[:]
+            emu.prepare({"argv": ["rpcs3-hd-pair.py", "--out", "pairs/hd/talons", "--team", team]})
+            assert calls[0][0].endswith("emu-hd-glass-boot.sh") and calls[0][1:] == ["lane", "8", team, "cold-talons"], calls[0]
+    finally:
+        globals()["sh"] = real_sh
+    boot = (HERE / "emu-hd-glass-boot.sh").read_text()
+    assert 'hull=${3:?' in boot and 'rpcs3-hd-ship-step.py select --hull "$hull"' in boot, "the glass boot picks no hull"
+    print("compare-rerender-all selftest ok")
+
+
 if __name__ == "__main__":
-    main()
+    if sys.argv[1:] == ["selftest"]:
+        selftest()
+    else:
+        main()

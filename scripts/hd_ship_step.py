@@ -173,9 +173,9 @@ def step_to_hull(read, press, want, max_presses=80):
     """Press Ship Select until the selected hull is `want` (case-insensitive); returns the buttons pressed.
 
     `read()` returns `(model pointer, hull directory)` and `press(button)` presses and lets the screen settle. The team
-    column first (`right`, then `left`), then that column's rows (`down`, then `up`): the screen opens on an unlocked
-    row and a locked row can carry the same directory name, so the rows below are searched before the rows above. A
-    direction ends when `CLAMP_PRESSES` presses leave the model pointer where it was, or when it comes back to one already
+    column first (`right`, then `left`), then that column's rows (`down`, then `up`). It stops at the first match on the
+    way out from the row the screen opens on, which is unlocked: the locked rows that carry the same directory name lie
+    further out. A direction ends when `CLAMP_PRESSES` presses leave the model pointer where it was, or when it comes back to one already
     passed (the team list wraps). Raises `LookupError` when neither
     direction reaches the hull. A locked row that matches is returned like any other: `cross` does nothing on it, which
     the caller checks."""
@@ -230,8 +230,8 @@ class FakeGrid:
 
 
 def selftest_step_to_hull():
-    """The stepper lands on the unlocked row of the named team from where the screen opens, whatever was dropped, and
-    refuses a hull the grid does not hold."""
+    """The stepper lands on the unlocked row of the named team, whatever was dropped, and refuses a hull the grid does
+    not hold."""
     for want, team, row in (("harimau", "Harimau", 3), ("Harimau_c1", "Harimau", 2), ("Feisar_c1", "Feisar", 2),
                             ("Assegai_c1", "Assegai", 2), ("ag_systems", "AG_Systems", 3), ("Piranha", "piranha", 3)):
         grid = FakeGrid()
