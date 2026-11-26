@@ -290,8 +290,17 @@ placement RNG cannot match the original's `Libc_Rand` (a departure, documented).
   (`det-mine-eye-centre`, `detonator-mine-material.md`, "The lit draw, read live"): the lit pass is block `#15` and `c[209]`
   is the world camera, as ours feeds; the program, vertex decode, map, alpha test and cull all match, and the formula gives
   dark there in RPCS3's own shaders. A live A/B (`K[0x3c]` 0) turns the original's body dark with bright rings, so its
-  body rim is about 0.4-0.7, not 0: its tangent-space `V` is off-normal. Next: patch the football's fragment program in
-  VRAM to output `normalize(f[TC1])` and grab; then the vertex fetch (`0x1738` base offset, `CMP` scale).
+  body rim is about 0.4-0.7, not 0: its tangent-space `V` is off-normal. ~~Next: patch the football's fragment program in
+  VRAM to output `normalize(f[TC1])`~~ done (`det-mine-body-white`, 2026-11-26, "The white is before post, and the program as read
+  reproduces it"): read at one held pose, the program fed the frame's live constants matches the original's body rim at the edge
+  and is 0.1-0.15 high inside, where the camera-facing spikes overlap; no input term is missing. ~~Next: ours' spikes~~ done
+  (`det-mine-spikes`, `detonator-mine-draw.md`, "The spikes in a pair"): the old `mines-ahead` pair carried no envelopes;
+  re-grabbed with them, ours' near mines are lit and spiked at the original's size (same theirs 15.44 -> 13.93). Open: re-grab
+  `cannon-volley` with envelopes (fire so the press lands at 1.87 s, not 2.20); `pad`'s floor is music-lit differently on a re-grab.
+  The pair now takes each mine's envelope at the picture's tick (`detonator-mine-draw.md`, "The envelope at the picture's
+  tick"); near-ball boxes within 20 grey. ~~The mine spin~~ wired (`det-mine-spin`, `detonator-mine-draw.md`, "The spin,
+  wired"): `mines-ahead` 13.17 -> 12.51 with the grab's ages pinned. Next: ours' `PitchVolume` band (0.03 against the
+  original's 0.32 on one frame); the spin on 2048 and Omega (their animate functions are not located).
   (3) ~~Ours builds the football and spikes with no tangent~~: wired (`Mesh::inline_tangents`, `+10`); the dark centre is
   gone, ours' core 143 -> 157.5 against the original's 188, so the body is still darker than the original's white.
 

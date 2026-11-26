@@ -312,7 +312,7 @@ impl Race {
             return Vec::new();
         };
         let lane_width = detonator.layout.values.distance_offset_between_mines;
-        let sizes = crate::drawable::lock(&self.view.mine_sizes);
+        let poses = crate::drawable::lock(&self.view.mine_poses);
         self.core
             .sim
             .world
@@ -321,19 +321,19 @@ impl Race {
             .iter()
             .filter_map(|placed| {
                 let (position, up) = detonator.survey.mine_point(placed, lane_width)?;
-                let football = sizes
+                let football = poses
                     .get(&(placed.entry, placed.lane))
-                    .map_or(1.0, |&(football, _)| football);
+                    .map_or(1.0, |pose| pose.football);
                 let size = visualiser_scale(placed.live, football);
                 Some(camera_facing_matrix(position, up, eye) * Mat4::from_scale(Vec3::splat(size)))
             })
             .collect()
     }
 
-    /// Holds laid mines' music envelopes at the original's read, `(survey entry, lane)` to the
-    /// football's `s` and the spikes' `t` (`--detonator-mine-envelopes`): a live pinned mine draws
-    /// from them and its envelope does not step.
-    pub fn pin_mine_envelopes(&self, pins: impl IntoIterator<Item = ((u16, i8), (f32, f32))>) {
+    /// Holds laid mines at the original's read, `(survey entry, lane)` to the music envelope
+    /// (`--detonator-mine-envelopes`) and the age (`--detonator-mine-ages`) of each: a pinned mine
+    /// draws from them and neither steps.
+    pub fn pin_mines(&self, pins: impl IntoIterator<Item = ((u16, i8), crate::MinePin)>) {
         crate::drawable::lock(&self.view.mine_pins).extend(pins);
     }
 
@@ -374,27 +374,35 @@ impl Race {
             return Vec::new();
         };
         let lane_width = detonator.layout.values.distance_offset_between_mines;
-        let sizes = crate::drawable::lock(&self.view.mine_sizes);
+        let poses = crate::drawable::lock(&self.view.mine_poses);
         laid.iter()
             .filter_map(|placed| {
                 let (position, up) = match kind {
                     Laid::Mines(_) => detonator.survey.mine_point(placed, lane_width),
                     Laid::Bombs => detonator.survey.point(placed, lane_width),
                 }?;
-                let size = match kind {
-                    Laid::Mines(part) => {
-                        let (football, spikes) = sizes
-                            .get(&(placed.entry, placed.lane))
-                            .copied()
-                            .unwrap_or((1.0, 1.0));
-                        match part {
-                            MinePart::Football => football,
-                            MinePart::Spikes => spikes,
-                        }
-                    }
-                    Laid::Bombs => 1.0,
+                let Laid::Mines(part) = kind else {
+                    return Some(detonator_matrix(position, up));
                 };
-                Some(detonator_matrix(position, up) * Mat4::from_scale(Vec3::splat(size)))
+                let pose = poses
+                    .get(&(placed.entry, placed.lane))
+                    .copied()
+                    .unwrap_or_default();
+                let size = match part {
+                    MinePart::Football => pose.football,
+                    MinePart::Spikes => pose.spikes,
+                };
+                let basis = match self.view.detonator_mine_spin {
+                    Some(rate) => {
+                        Mat4::from_translation(position)
+                            * Mat4::from_mat3(crate::detonator_look::spun_basis(
+                                up,
+                                crate::detonator_look::spin_phase(rate, pose.age),
+                            ))
+                    }
+                    None => detonator_matrix(position, up),
+                };
+                Some(basis * Mat4::from_scale(Vec3::splat(size)))
             })
             .collect()
     }
@@ -544,12 +552,6 @@ impl Race {
     }
 }
 
-/// Where a laid Detonator object sits: upright on the section's up axis, at its position.
-///
-/// `Detonator_SpawnObject` hands the mine's init a basis of the world X axis, the section's up
-/// and the world Z axis (`docs/ghidra/functions/ps3-hdfury-eu/detonator-placement.md`); the init
-/// is unread. **Chosen, not measured**: the same axes, orthonormalised about the up axis so a
-/// banked section does not shear the model. The model is `DetonatorObjects`' (`detonator_models`).
 /// Which laid Detonator object a matrix list is for.
 #[derive(Clone, Copy)]
 enum Laid {
@@ -597,6 +599,13 @@ fn camera_facing_matrix(position: Vec3, up: Vec3, eye: Vec3) -> Mat4 {
     )
 }
 
+/// Where a laid Detonator object sits: upright on the section's up axis, at its position. A
+/// title whose mine spin is read draws its mines on [`crate::detonator_look::spun_basis`] instead.
+///
+/// `Detonator_SpawnObject` hands the mine's init a basis of the world X axis, the section's up
+/// and the world Z axis (`docs/ghidra/functions/ps3-hdfury-eu/detonator-placement.md`); the init
+/// is unread. **Chosen, not measured**: the same axes, orthonormalised about the up axis so a
+/// banked section does not shear the model. The model is `DetonatorObjects`' (`detonator_models`).
 fn detonator_matrix(position: Vec3, up: Vec3) -> Mat4 {
     let up = up.normalize_or_zero();
     let up = if up == Vec3::ZERO { Vec3::Y } else { up };

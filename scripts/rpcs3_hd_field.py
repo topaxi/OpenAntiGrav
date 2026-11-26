@@ -177,6 +177,17 @@ DETONATOR_MINE_VTABLE = 0x008642F0
 MINE_OBJECT_BYTES = 0x170
 
 
+#: The words `DetonatorMine_AnimateToMusic` writes for the draw each update, by object offset
+#: (`docs/ghidra/functions/ps3-hdfury-eu/detonator-mine-material.md`, "Live mine").
+MINE_DRAW_WORDS = (("football_scale", 0xD8), ("brightness", 0x100), ("master_volume", 0x104), ("pitch_offset", 0x108),
+                   ("pitch_volume", 0x10C), ("bass_hit", 0x110), ("treble_hit", 0x114), ("tempo", 0x118))
+
+
+def mine_draw_words(o):
+    """The draw words of one mine object's bytes `o`, by name."""
+    return {name: struct.unpack(">f", o[at:at + 4])[0] for name, at in MINE_DRAW_WORDS}
+
+
 def detonator_mines(m, lo=0x30000000, hi=0x36000000, chunk=0x100000, keep_raw=False):
     """Every active `DetonatorMine` in the heap: `{address, flags, position, entry, lane, live (the byte at +0x160), age_s, football_s and spikes_t (the music envelopes `+0xf4` and `+0xf8`)}`, read in one pass
     (`keep_raw` adds the object's bytes as `raw`, hex, for a survey of its other fields)."""
@@ -200,6 +211,7 @@ def detonator_mines(m, lo=0x30000000, hi=0x36000000, chunk=0x100000, keep_raw=Fa
                                   "age_s": struct.unpack(">f", o[0xC0:0xC4])[0],
                                   "football_s": struct.unpack(">f", o[0xF4:0xF8])[0],
                                   "spikes_t": struct.unpack(">f", o[0xF8:0xFC])[0],
+                                  **mine_draw_words(o),
                                   **({"raw": o.hex()} if keep_raw else {})})
             at = block.find(needle, at + 4)
     return found

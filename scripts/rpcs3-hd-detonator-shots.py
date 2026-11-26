@@ -326,8 +326,16 @@ def main():
                 retry = ps3_pose.pick_camera([stop[1][1], other[1][1]])[0]
                 if retry[0] is not None:
                     picks[at] = retry
+        # Every read's mine draw words, by RAM clock: the picture is several ticks older than its own read, so the pair
+        # takes each mine's envelope from the read nearest the picture's clock (`rpcs3-hd-pair.py`, `mine_flags`).
+        mine_reads = sorted(({"race_clock_s": read[2]["race_clock_s"],
+                              "mines": {str(m["address"]): {k: v for k, v in m.items() if k not in ("raw", "position")}
+                                        for m in read[2].get("mines") or []}}
+                             for _, first, second in stops for read in (first, second) if read[2].get("mines")),
+                            key=lambda r: r["race_clock_s"])
         for (stem, first, second), (camera, reason, count) in zip(stops, picks):
             shot, _, pose = first
+            pose["mine_reads"] = mine_reads
             # The next stop's bands, `--interval` of wall time later: how far the held levels move between two reads
             # bounds what the presented frame's age (0 to 3 ticks) can change.
             pose["zone_bands_next_stop"] = dict(second[2]["zone_bands"], race_clock_s=second[2]["race_clock_s"])

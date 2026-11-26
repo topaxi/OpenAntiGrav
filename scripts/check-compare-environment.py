@@ -230,6 +230,62 @@ def check_loading_bar(root):
     assert cm.LOADING_BAR_TICKS_PER_COLUMN == 10 and cm.LOADING_BAR_FIRST_TARGET_COLUMNS == 33
 
 
+def check_detonator_mine_envelopes():
+    """An HD Detonator pair carries every live mine's music envelope into ours (`--detonator-mine-envelopes`), and a shot
+    record without them is refused: ours' envelopes have no history, so its near mines draw dark and unspiked."""
+    spec = importlib.util.spec_from_file_location("rpcs3_hd_pair", HERE / "rpcs3-hd-pair.py")
+    hd_pair = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(hd_pair)
+
+    class Pair:
+        def __init__(self):
+            self.rec = {"original": {"detonator": {}}}
+            self.checks = []
+
+        def caveat(self, _text):
+            pass
+
+        def check(self, name, ok, detail):
+            self.checks.append((name, bool(ok), detail))
+            return ok
+
+    def mine(x, live, s=None, t=None):
+        m = {"flags": 9, "entry": 1, "lane": 0, "position": [x, 0.0, 0.0], "live": live}
+        if s is not None:
+            m.update(football_s=s, spikes_t=t)
+        return m
+
+    read = Pair()
+    flags = hd_pair.mine_flags(read, {"mines": [mine(1.0, 1, 0.5, 0.75), mine(2.0, 0, 0.0, 0.0)]})
+    at = flags.index("--detonator-mine-envelopes")
+    assert flags[at + 1] == "0.5000,0.7500;0.0000,0.0000", flags
+    assert all(ok for _, ok, _ in read.checks), read.checks
+    old = Pair()
+    flags = hd_pair.mine_flags(old, {"mines": [mine(1.0, 1), mine(2.0, 1)]})
+    assert "--detonator-mine-envelopes" not in flags, flags
+    assert [ok for name, ok, _ in old.checks if "envelope" in name] == [False], old.checks
+    dark = Pair()
+    hd_pair.mine_flags(dark, {"mines": [mine(1.0, 0)]})
+    assert all(ok for _, ok, _ in dark.checks), dark.checks
+    # The picture is older than its pause's RAM: each mine takes the read nearest the picture's clock, with its draw words.
+    lagged = Pair()
+    lagged.rec["original"]["presented_lag"] = {"picture_total_ticks": 6.0}
+    ram = dict(mine(1.0, 1, 0.25, 1.0), address=7)
+    reads = [{"race_clock_s": c, "mines": {"7": {"football_s": s, "spikes_t": t, "pitch_offset": 8.25, "age_s": c + 53.0}}}
+             for c, s, t in ((2.55, 0.6, 0.5), (2.6, 0.5, 0.45), (2.7, 0.25, 1.0))]
+    flags = hd_pair.mine_flags(lagged, {"mines": [ram], "race_clock_s": 2.7, "mine_reads": reads})
+    assert flags[flags.index("--detonator-mine-envelopes") + 1] == "0.5000,0.4500,8.2500", flags
+    det = lagged.rec["original"]["detonator"]
+    assert det["mine_read"]["read_clock_s"] == 2.6 and det["mines"][0]["pitch_offset"] == 8.25, det
+    # The age turns the mine: it comes from the same read as the envelope, not the pause's.
+    assert flags[flags.index("--detonator-mine-ages") + 1] == "55.6000", flags
+    assert det["mines"][0]["age_s"] == 55.6, det
+    far = Pair()
+    far.rec["original"]["presented_lag"] = {"picture_total_ticks": 6.0}
+    flags = hd_pair.mine_flags(far, {"mines": [ram], "race_clock_s": 2.7, "mine_reads": reads[2:]})
+    assert flags[flags.index("--detonator-mine-envelopes") + 1] == "0.2500,1.0000", flags
+
+
 def main():
     import tomllib
     with tempfile.TemporaryDirectory() as t:
@@ -274,6 +330,7 @@ def main():
         check_loading_bar(Path(t))
     with tempfile.TemporaryDirectory() as t:
         check_anisotropy(Path(t))
+    check_detonator_mine_envelopes()
     print("compare environment: round trip ok")
 
 

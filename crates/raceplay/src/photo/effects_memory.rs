@@ -73,10 +73,11 @@ sort_fields! {
         split_gap, incoming_raises, nozzles, nozzle_axes, engine_lights, spu_vertex_lights,
         hull_points, hd_weapon_lights, spark_anchors, collision_fx, effects, handles,
         hd_bomb_blast, bomb_shockwave_fades, hd_missile_blast, detonator_cannon_lights, detonator_emp_light,
+        detonator_mine_spin,
         detonator_ammo_gauge, ammo_gauge_shown, ammo_gauge_speed, detonator_hull_charge,
         hull_charge_shown, sounds, track_emitters, announcer,
         class_announcer, rumble, boost_kick, boost_fov_kick, flaps, grid_flaps, flap_phase,
         flap_graphics, sight, sight_screens, sight_state, sight_aim, sight_fov, model_detail,
-        texture_detail, trail_order, scenery_sort, weather, mine_sizes, mine_pins,
+        texture_detail, trail_order, scenery_sort, weather, mine_poses, mine_pins,
     ],
 }

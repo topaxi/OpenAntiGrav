@@ -246,9 +246,10 @@ pub(super) fn capture(
         ),
     };
     let faces = oag_ui_screens::picker::FaceScales {
-        default: menu_font.map_or(
-            oag_ui_screens::picker::FaceScales::default().default,
-            |menu| font.line_height / menu.line_height,
+        default: oag_ui_screens::picker::FaceScales::default_ratio(
+            font.line_height,
+            menu_font.map(|menu| menu.line_height),
+            menu_skin.default_face_is_row_face,
         ),
         ..oag_ui_screens::picker::FaceScales::default()
     };

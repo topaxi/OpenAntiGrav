@@ -71,6 +71,8 @@ pub struct BlockArt {
     /// decoded: `List_Construct`'s `HD_options_arrow.gtf`, a right-pointing
     /// triangle in 32x32.
     pub arrow: Option<Placed>,
+    /// An unselectable block's static marker (`NonSelectable_Arrow_HD.gtf`), when it decoded.
+    pub marker: Option<Placed>,
     /// `FrontEnd_IsFuryStyle`: chamfer the top-left corner and keep the
     /// second fill pass translucent. Its writer is unread, so the caller
     /// decides it off the served archive's own page colour - see

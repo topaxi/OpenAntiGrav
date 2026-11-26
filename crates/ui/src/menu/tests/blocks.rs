@@ -41,6 +41,7 @@ fn art(fury: bool) -> BlockArt {
         solid_alpha: 1.0,
         cursor: Some(placed(64, 32, 16)),
         arrow: Some(placed(96, 32, 32)),
+        marker: None,
         fury,
     }
 }

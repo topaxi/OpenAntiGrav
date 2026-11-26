@@ -1,8 +1,8 @@
 ---
 status: measure
 titles: [hd]
-updated: 2026-11-08
-summary: "Results names every craft, its times refresh live; open: served EndRace copy, badge, Omega on the built-in scoreboard, Podium multiplayer-only"
+updated: 2026-11-26
+summary: "Detonator results match in size, marker, timing and camera; open: HD FE style, destruction burst, served copy, badge, Omega on built-in scoreboard"
 ---
 
 # HD's end screens: read and drawn (Results/Menu/Rewards/Podium); Podium multiplayer-only
@@ -38,6 +38,15 @@ real `Board`, the real disc's `EndRace_Definition.xml`, and
 
 ## Open
 
+- **Detonator end, left after 2026-11-26** (`docs/ui/endrace-screens.md`, "HD's text, glyph and frame
+  against the original"): the HD FE style's colours (a front-end setting, not this screen); the
+  destroyed craft's burst on black behind the panel (the camera and the 5.5 s are wired); the wait
+  when all fourteen stages are cleared (`rm+0x2dc4` unread on that path). Next: read what the
+  Detonator blast draws (`Ship_SetState` case 6, mode 14: `0x001070a8(ship+0x7da4)`,
+  `zone-destroy.md`, "Mode 14 diverges").
+- **Omega**: the face and glyph fixes would apply once Omega draws HD's end screen
+  (`FaceScales::default_ratio` reads `default_face_is_row_face`; its faces are twice the pixel size,
+  not checked against a frame). Checked, applies, not wired.
 - ~~`EndRace Rewards` is read but not drawn.~~ **2026-09-25: settled as
   never entered by the original** (no redirect in any XML of any archive
   names it; the EBOOT has no `EndRace Rewards` type string, no

@@ -320,7 +320,9 @@ The cut into mode 2 at the Zone end was already read on both ([zone-destroy.md](
 
 The turn's multiplication order was not re-derived on Omega (the sin and cos are inlined), hence 65; the direction's live check is HD's alone.
 
-One ordering detail, **not wired**: all three ease `dist` toward the target written on the previous frame (`4.0` on the first, from the enter) and step the pitch after the eye is built (HD: the ease at `0x000aeb70`-`0x000aebd0` reads `+0x23c`, the new targets are stored after the eye at `0x000aecb4`/`0x000aecb8`, the pitch step is at `0x000aede0`; the field does use this frame's target). Ours uses this frame's `dist` target and steps pitch first. HD's live `+0x238` of 0.83 at the fourth frame fits their order. It is a one-frame difference.
+**The update order, wired (2026-11-26).** All three ease `dist` toward the target written on the previous frame (`4.0` on the first, from the enter) and step the pitch after the eye is built (HD: the ease at `0x000aeb70`-`0x000aebd0` reads `+0x23c`, the new targets are stored after the eye at `0x000aecb4`/`0x000aecb8`, the pitch step is at `0x000aede0`; the field does use this frame's target). HD's live `+0x238` of 0.83 at the fourth frame fits that order (`0.8305`; an ease toward 5.0 from the first frame gives 0.849). Ours does the same (`oag_render::camera::destroy::orbit::Orbit`: `dist_target`, and a pitch step held to the next frame), tested by `the_radius_eases_toward_the_target_the_previous_frame_wrote` and `the_pitch_steps_after_the_eye_is_built` (`crates/render/src/camera/destroy/orbit.rs`).
+
+**2048 and Omega: ported.** One `Orbit` serves all three, with no per-title data, and `a_zone_end_is_the_close_orbit_five_beyond_its_radius_on_hd_2048_and_omega` pins the first frame's `5 + 0.57` under each title's data. The Detonator end takes the same orbit (`DetonatorEnd::orbit_camera`).
 
 ## History
 
