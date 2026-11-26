@@ -707,19 +707,30 @@ impl RaceView {
             let ship = &core.sim.world.ships[slot];
             self.spawn_hd_missile_blast(ship.physics.body.position, ship.physics.body.orientation);
         }
-        // Each detonation's own `ScreenFlash_Start`, whether or not its
-        // effect loaded - see [`flash_for`] and `oag_fx::flash`.
-        if let (Some(kind), Some(flash)) =
-            (flash_for(kind, struck.is_some()), &mut self.screen_flash)
-        {
-            #[expect(clippy::cast_precision_loss, reason = "at most a few seconds of ticks")]
-            flash.start_aged(kind, at, age_ticks as f32 * core.sim.dt);
+        let carried = self.craft_blast_velocity(core, trigger, struck);
+        #[expect(clippy::cast_precision_loss, reason = "at most a few seconds of ticks")]
+        let age = age_ticks as f32 * core.sim.dt;
+        self.flash_and_play(flash_for(kind, struck.is_some()), trigger, at, carried, age)
+    }
+
+    /// A detonation's own `ScreenFlash_Start` (whether or not its effect loaded, see
+    /// [`flash_for`] and `oag_fx::flash`) and its effect at `at`, carrying `carried`.
+    pub(crate) fn flash_and_play(
+        &mut self,
+        flash_kind: Option<oag_fx::flash::Kind>,
+        trigger: Trigger,
+        at: Vec3,
+        carried: Option<Vec3>,
+        age_seconds: f32,
+    ) -> Option<psys::Playing> {
+        if let (Some(kind), Some(flash)) = (flash_kind, &mut self.screen_flash) {
+            flash.start_aged(kind, at, age_seconds);
         }
         let effect = self.handles.get(trigger).cloned()?;
         // Neutral severity: the field the collision sparks derive from an
         // impulse is the *hull's*, and nothing on the rocket path has been
         // read as feeding it. See `oag_fx::sparks::severity`.
-        match self.craft_blast_velocity(core, trigger, struck) {
+        match carried {
             Some(velocity) => self.stage.play_carried(&effect, at, 1.0, velocity),
             None => self.stage.play(&effect, at, 1.0),
         }

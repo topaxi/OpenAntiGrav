@@ -262,6 +262,7 @@ pub(crate) struct MenuArgs {
 
 /// Capturing a wrecked craft in a headless `--race --screenshot` run.
 #[derive(clap::Args, Debug)]
+#[command(group(clap::ArgGroup::new("forced_rocket").multiple(true)))]
 pub(crate) struct WreckArgs {
     /// With `--race --screenshot`, put one craft into the destroyed sequence at
     /// the end of a tick: `TICK:SLOT`, e.g. `60:3` and then `--ticks 100` for a
@@ -369,18 +370,38 @@ pub(crate) struct WreckArgs {
     /// fired at the end of a tick: `TICK:SLOT`, e.g. `294:1`. The same aid
     /// `--force-missile-hit` is, for the Rocket's craft explosion. See
     /// [`oag_raceplay::RaceSim::force_rocket_hit`].
-    #[arg(long, value_name = "TICK:SLOT", requires = "race")]
+    #[arg(
+        long,
+        value_name = "TICK:SLOT",
+        requires = "race",
+        group = "forced_rocket"
+    )]
     pub(crate) force_rocket_hit: Option<String>,
 
-    /// With `--force-rocket-hit`, give the struck craft this velocity as it is put on the Rocket,
-    /// in world units a second. The craft blast carries the struck craft's velocity, so a
-    /// comparison with a capture needs the captured craft's. See
-    /// [`oag_raceplay::Race::force_struck_velocity`]. Dev only.
+    /// With `--race --screenshot`, at the end of a tick play `COUNT` Rocket craft blasts (1 by
+    /// default) at a world point and take as many of the player's Rockets out of the air:
+    /// `TICK:X,Y,Z[:COUNT]`, e.g. `709:525.15,-28.26,-34.80`. Repeat it for a volley that lands
+    /// in waves. The blasts stand where a capture of the original put them, which
+    /// `--force-rocket-hit` cannot: it lands every Rocket at one point. No craft is struck. A
+    /// verification aid. See [`oag_raceplay::Race::force_rocket_hit_at`]. Dev only.
+    #[cfg(feature = "dev-cli")]
+    #[arg(
+        long,
+        value_name = "TICK:X,Y,Z[:COUNT]",
+        requires = "race",
+        group = "forced_rocket"
+    )]
+    pub(crate) force_rocket_hit_at: Vec<String>,
+
+    /// With `--force-rocket-hit`, give the struck craft this velocity as it is put on the Rocket;
+    /// with `--force-rocket-hit-at`, have its blasts carry it. In world units a second. The craft
+    /// blast carries the struck craft's velocity, so a comparison with a capture needs the
+    /// captured craft's. See [`oag_raceplay::Race::force_struck_velocity`]. Dev only.
     #[cfg(feature = "dev-cli")]
     #[arg(
         long,
         value_name = "VX,VY,VZ",
-        requires = "force_rocket_hit",
+        requires = "forced_rocket",
         allow_hyphen_values = true
     )]
     pub(crate) force_rocket_hit_velocity: Option<String>,
