@@ -2,7 +2,7 @@
 status: measure
 titles: [hd]
 updated: 2026-11-26
-summary: "DRS rise rule for a falling Deck clock (Zone 4K 0.80, pinned 0.96); Zone specular; a Zone program split"
+summary: "Undocked Deck parks at 1040 MHz in 4K Zone, cause unnamed (docked it does not); probe causes TT stutter: no; Zone specular"
 ---
 
 # An HD Zone race costs more than a time trial on the same circuit
@@ -22,11 +22,11 @@ Measurements, the cause and the landed part:
   steps on a GPU duration: unmeasured on the Deck under a falling clock. The race pass's
   +1.60 ms at 4K is the answered part, and it is faithful.
 - **What parks the undocked Deck at 1040 MHz is still not named.** Not power (about 8 W of 15) and
-  not CPU; the demand governor is a hypothesis (45). Docked, the park does not happen and the 15 W
-  package limit holds the clock instead
+  not CPU; the demand governor is a hypothesis (45). Docked, the park does not happen: the clock sits at
+  or near its ceiling and the 15 W package limit trims the dips
   ([dynamic-resolution.md](../../docs/rendering/dynamic-resolution.md), "On the Steam Deck: what
   holds the clock, and the time trial's late seconds").
-- **Probe causes the 4K time trial's late seconds: no** (confidence 85, docked, same page). The
+- **probe causes TT stutter: no** (confidence 85, 4K, docked, same page). The
   probe rise is on the unmerged branch `drs-probe-parked`; its own time trials were docked and its
   Zone runs undocked, which its notes do not say.
 - **The reporter's setup is not known.** At 1280x800 and 1920x1080 both modes hold 100 %, so the

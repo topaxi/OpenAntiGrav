@@ -1089,14 +1089,15 @@ written to sysfs. Throttle bit names are `smu11_driver_if_vangogh.h`'s.
 The frame log's `p99_ms` covers the last 120 frames, about two seconds, so one late stretch
 usually shows on two lines. Counts of "late seconds" are counts of lines.
 
-### Docked: the 15 W package limit holds the clock
+### Docked: at or near the 1600 MHz ceiling, with the 15 W package limit trimming the dips
 
 Confidence **90**, from the Zone runs of main and of the probe build with the full sampler, and the
 four time trials below:
 
 - Throttle bit `FPPT` was set in 91 to 100 % of samples and `SPPT` in 72 to 94 %. No thermal or
   current bit was ever set. `power1_cap` and `power2_cap` both read 15 W.
-- Socket power stayed at about 14.9 W and the GPU clock moved between about 1480 and 1600 MHz.
+- Socket power stayed at about 14.9 W. The GPU clock's median was 1600 MHz in Zone and about 1576
+  in the time trial, with dips to about 1480. Nothing holds it below its ceiling but those dips.
 - The fastest CPU core read 1400 MHz in the median sample, and the frame log's CPU time was 7 to
   14 ms in the median line.
 - `gpu_busy_percent` read 99 or 100 % in the median sample, while the timed passes summed to about 13.4 ms
@@ -1131,13 +1132,18 @@ Order after, before, before, after (the earlier set ran before first). "Before" 
 | 3 | before | 0.979 | 13 | 7 / 6 | 0 |
 | 4 | after | 0.982 | 15 | 10 / 5 | 0 |
 
-"Near" is within about a second of the line's window. Run 4's one probe fired in the 8 dropped
-lines and reverted after 0.2 s. All four sat at 15 W with `FPPT` set.
+"Near" is within about a second of the line's window. All four sat at 15 W with `FPPT` set.
+
+**The dropped first 8 lines are where the probe does fire**: in 3 of the 5 "after" runs (run 4 and
+two earlier ones), begun about 5 s in and reverted within 0.3 s. The lines it fired on and after
+read over 20.8 ms twice in one run (21.36), once in another (21.08) and not at all in the third,
+and four runs with no probe had a pair of 22.1 to 25.0 ms lines at the same point. Over the 8
+dropped lines the late counts are 2 to 5 for "after" and 2 to 4 for "before".
 
 **Verdict: the probe does not cause the time trial's late seconds** (confidence **85**). The ranges
 overlap (after 8 and 15, before 23 and 13), and across all five "after" runs, the three earlier ones
-included (15, 22 and 21 lines against 9, 14 and 13), no probe began inside a measured window. A loop
-at the top of the clock and the power limit seldom holds the 4 s of quiet a probe waits for.
+included (15, 22 and 21 lines against 9, 14 and 13), no probe began after the 8 dropped lines. After
+its early revert a loop at the power limit did not hold the 4 s of quiet a probe waits for again.
 
 Not covered: the same time trial undocked, and Zone's park with throttle bits and the profile
 sampled, which needs the Deck undocked.
