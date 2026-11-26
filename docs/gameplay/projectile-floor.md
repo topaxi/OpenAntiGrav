@@ -499,15 +499,18 @@ Measured live on RPCS3 (three boots), confidence on the linked page
 | Law | HD | Wired as |
 | --- | --- | --- |
 | the firer's box in a probe | answers `0x7f`, transposed gate (0 of 347 box calls mispredicted) | `Weapons::own_craft_box_hides_track` = `Falls` |
-| probe length | Rocket, Missile, Plasma `6.0` (Shuriken unmeasured, `12.0`) | `Weapons::surface_probe_lengths` = `ProbeLengths::HD` |
+| probe length | Rocket, Missile, Plasma `6.0` (Shuriken `12.0`, static: HD never builds one) | `Weapons::surface_probe_lengths` = `ProbeLengths::HD` |
 | Rocket on `0x7f` (box or open air) | no fall: turns parallel to its carried normal at the class speed | `Weapons::rocket_open_air` = `TurnsAlongNormal` |
 
-The Missile's and Shuriken's `0x7f` arms are unread, so they keep Pulse's fall. The Plasma keeps
+The Missile's `0x7f` arm is a fall on world Y, Pulse's law (23 live updates, confidence 92), and HD
+builds no Shuriken in any mode (88; its dead update reads as a fall too), so neither needs a title
+value ([open-air-arms.md](../ghidra/functions/ps3-hdfury-eu/open-air-arms.md)). This engine still
+hands HD's Eliminator a Shuriken from the authored odds. The Plasma keeps
 Pulse's fall along its carried normal; HD's own reads, statically, as a fall on world Y
 ([plasma.md](../ghidra/functions/ps3-hdfury-eu/plasma.md)), not wired.
 
 Tests: `crates/weapons/src/projectile/tests/hd_box.rs` (three recorded box segments, the recorded
-Rocket update, the Missile's fall, the 6.0 reach), `projectile_cage_ground_truth::
+Rocket update, the recorded Missile fall, the Shuriken's fall, the 6.0 reach), `projectile_cage_ground_truth::
 the_grid_craft_builds_hds_own_box` (HD's `<Misc>` and rows match the original's collider) and
 `projectile_tilt_ground_truth`, which now judges with each title's own reach. On HD's Vineta K that
 judge counts 3,707 Missile and 4,330 Plasma ticks on a floor against 3,872 and 4,483 with the `12.0`
@@ -516,4 +519,6 @@ probe: the shorter probe loses the floor more often.
 **Lineage.** 2048 and Omega: the box **checked, differs** (absent from their query). Probe lengths:
 Omega's `Plasma_Update` reads `6.0` statically ([plasma.md](../ghidra/functions/ps3-hdfury-eu/plasma.md)),
 **checked, applies, not wired**; the other lengths and both titles' open-air arms are unread. Both
-keep Pulse's values, labelled chosen (this wire is HD only).
+keep Pulse's values, labelled chosen (this wire is HD only). Whether they build a Shuriken: 2048
+**checked, applies, not wired** (55), Omega **checked, applies, not wired** (60), both by census
+([open-air-arms.md](../ghidra/functions/ps3-hdfury-eu/open-air-arms.md#cross-title)).
