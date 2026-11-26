@@ -55,6 +55,10 @@ pub const TITLE: &Title = &Title {
     ),
     // No flip in this executable: no `FE_FLIP`, no flip tunable, no `5 pi`.
     eliminator_flip: oag_title::pre_race::Sourced::measured(None),
+    // No score Eliminator: never read.
+    score_pace: oag_title::pre_race::Sourced::chosen(
+        oag_title::eliminator::ScorePaceTerms::WITH_REPULSER_AND_SHURIKEN,
+    ),
     teams: race::TEAM_IDENTITIES,
     loyalty: Some(oag_title::loyalty::LoyaltyEarning {
         law: oag_title::loyalty::LoyaltyLaw::Pulse,

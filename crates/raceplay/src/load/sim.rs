@@ -564,6 +564,7 @@ pub fn load_sim(options: &Options) -> Result<SimLoad> {
         contact_cues: title.contact_cues,
         opponent_fire: title.weapons.opponent_fire.value,
         score_law: rule.law,
+        score_pace_terms: title.score_pace.value,
         flip_law: rule.flip,
         speedup_pads,
         weapon_pads,

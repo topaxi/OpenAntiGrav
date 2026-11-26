@@ -85,6 +85,7 @@ impl Race {
             contact_cues,
             opponent_fire,
             score_law,
+            score_pace_terms,
             flip_law,
             speedup_pads,
             weapon_pads,
@@ -188,7 +189,7 @@ impl Race {
             sight: view_sight,
             track_sections,
         } = view;
-        let score_pace = crate::score_pace::ScorePace::of(score_law, difficulty);
+        let score_pace = crate::score_pace::ScorePace::of(score_law, score_pace_terms, difficulty);
 
         // The mode gate, applied once at construction rather than on every tick,
         // because that is where the original applies it: `World_CollectNodeLists`

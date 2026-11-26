@@ -744,6 +744,9 @@ pub struct SimSetup {
     /// What an Eliminator is won on, `None` for kills: `oag_title::Title::eliminator` with the
     /// opponents' scale resolved for this race's difficulty.
     pub score_law: Option<oag_race::ScoreLaw>,
+    /// How a score Eliminator's opponents spend their weapons:
+    /// `oag_title::Title::score_pace`. Read only where [`Self::score_law`] is `Some`.
+    pub score_pace_terms: oag_title::eliminator::ScorePaceTerms,
     /// The Eliminator flip, `None` outside an Eliminator and on a title without one:
     /// `oag_title::Title::eliminator_flip`.
     pub flip_law: Option<oag_physics::flip::FlipLaw>,

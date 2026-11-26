@@ -148,6 +148,9 @@ pub struct Title {
     pub eliminator: pre_race::Sourced<eliminator::EliminatorRule>,
     /// The Eliminator flip, `None` where the title has none or nobody has wired it.
     pub eliminator_flip: pre_race::Sourced<Option<eliminator::FlipRule>>,
+    /// How a score Eliminator's opponents spend their weapons. See
+    /// [`eliminator::ScorePaceTerms`].
+    pub score_pace: pre_race::Sourced<eliminator::ScorePaceTerms>,
     /// The team ids this title's roster names and the shared identity each is
     /// kept under, for loyalty. See [`team`].
     pub teams: team::Roster,

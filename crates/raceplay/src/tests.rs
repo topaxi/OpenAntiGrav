@@ -386,6 +386,7 @@ fn setup(handling: Handling) -> SimSetup {
         contact_cues: oag_title::contact_cue::ContactCues::Rearmed,
         opponent_fire: oag_title::weapons::OpponentFire::PULSE,
         score_law: None,
+        score_pace_terms: oag_title::eliminator::ScorePaceTerms::WITH_REPULSER_AND_SHURIKEN,
         flip_law: None,
         // A synthetic track authors no pads, which is also what every Pure
         // track does: an empty set is an ordinary state, not a stub.

@@ -102,6 +102,12 @@ pub const TITLE: &Title = &Title {
     eliminator_flip: oag_title::pre_race::Sourced::measured(Some(
         oag_title::eliminator::FlipRule { seconds: 0.2 },
     )),
+    // This title's draw still grants the Repulser and the Shuriken (its roster is unread), so it
+    // keeps the terms tuned with them (`docs/gameplay/race-modes.md`, "The pace of a score
+    // Eliminator").
+    score_pace: oag_title::pre_race::Sourced::chosen(
+        oag_title::eliminator::ScorePaceTerms::WITH_REPULSER_AND_SHURIKEN,
+    ),
     teams: race::TEAM_IDENTITIES,
     loyalty: Some(oag_title::loyalty::LoyaltyEarning {
         law: oag_title::loyalty::LoyaltyLaw::Hd,
