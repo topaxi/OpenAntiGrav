@@ -538,24 +538,18 @@ impl Session {
         let strings = &done.strings;
         let say = |id: &str, english: &str| strings.get_or_fallback(id, english).to_string();
         let text = benchmark::text::copy_text(&done.report, &say);
-        let copied = crate::app::clipboard::write(&text);
-        debug!("benchmark result copied to the clipboard: {copied}");
-        done.view.copied = Some(copied);
-        done.copied_ticks = benchmark::COPIED_TICKS;
+        debug!("benchmark result: asking for a clipboard write");
+        done.copy.start(crate::app::clipboard::write(&text));
+        done.view.copied = done.copy.tick();
     }
 
-    /// Takes the COPIED label off its button once its ticks have run out.
+    /// Puts the write's answer on the button when it arrives, and takes it off in time.
     fn age_copy_label(&mut self) {
         let Stage::Race(stage) = &mut self.stage else {
             return;
         };
-        if let Some(done) = stage.benchmark.as_mut().and_then(|live| live.done.as_mut())
-            && done.copied_ticks > 0
-        {
-            done.copied_ticks -= 1;
-            if done.copied_ticks == 0 {
-                done.view.copied = None;
-            }
+        if let Some(done) = stage.benchmark.as_mut().and_then(|live| live.done.as_mut()) {
+            done.view.copied = done.copy.tick();
         }
     }
 
@@ -637,7 +631,7 @@ impl Session {
                     can_copy: crate::app::clipboard::CAN_WRITE,
                     ..screen::View::default()
                 },
-                copied_ticks: 0,
+                copy: benchmark::CopyLabel::default(),
             });
         }
     }

@@ -41,8 +41,13 @@ impl Session {
         let race = match &self.stage {
             // A demo is not paused into: leaving it is the main menu. Nor is a recording being
             // watched: the viewer's exit lands on REPLAYS and nothing is parked to resume or quit.
+            // Nor is a benchmark: leaving it ends the run, and the menus opened over it are the
+            // main menu's.
             Stage::Race(stage)
-                if !stage.race.core.sim.finished() && stage.demo.is_none() && !stage.watching =>
+                if !stage.race.core.sim.finished()
+                    && stage.demo.is_none()
+                    && stage.benchmark.is_none()
+                    && !stage.watching =>
             {
                 Some(&**stage)
             }

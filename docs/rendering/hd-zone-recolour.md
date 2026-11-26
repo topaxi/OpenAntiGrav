@@ -344,3 +344,102 @@ group's HD law reproduces Omega's road. Omega's GCN surface programs are the unr
 
 **HD is unchanged**: `hd/zone-vineta-k-z5` re-rendered with this change is pixel-identical to main's
 (0 of 2,073,600). The rule lives in the psp2 loader, which HD never takes.
+
+## What a Zone race costs (2026-11-26, `zone-cost`)
+
+**The question.** On a Steam Deck, HD's Zone race on Chenghou Project holds about 75 % under
+dynamic resolution where a time trial on the same circuit holds 100 %. The Deck was unreachable
+for this work, so everything below is the desk machine: an RX 7800 XT and the same CPU's Raphael
+iGPU (2 CU, RDNA2, the closer relative of the Deck's APU), RADV, Mesa 26.3.1, shared with other
+lanes (load 6 to 45). Autopilot, seed 1, `--no-audio`, default settings.
+
+**Only the race pass grows.** Per-pass GPU time, `--frame-log` in a window under a headless
+weston, means over two runs of 44 s each. Read this table for which passes move, not for absolute
+cost: `frame_limit = "off"` is not a valid value, so both devices ran under the default 240 fps
+limiter, and the 7800 XT, idle for most of each frame, reads well above the offscreen figures
+below (likely down-clocked; clocks not recorded). The rows listed add up to 1.0 ms more in Zone on
+the iGPU: the race pass's 1.5 less what the other passes save.
+
+| ms | 4K, 7800 XT: time trial / Zone | 1280x800, iGPU: time trial / Zone |
+| --- | --- | --- |
+| race pass | 1.16 / 1.27 | 5.09 / 6.62 |
+| HD bloom (with the Zone feedback resolve) | 0.30 / 0.28 | 0.58 / 0.63 |
+| advert cards | 0.05 / 0.00 | 0.48 / 0.05 |
+| glass | 0.03 / 0.03 | 0.70 / 0.60 |
+| HUD and UI | 0.08 / 0.04 | 0.24 / 0.14 |
+| shadow map, self shadow | 0.02, 0.01 / the same | 0.07, 0.06 / 0.10, 0.09 |
+
+The offscreen bench (`OAG_RENDER_BENCH_RACE`, 5,400 ticks, two runs within 3 %, 4K) agrees:
+race pass 877 us in Zone, 675 us in the time trial, bloom 200 and 193. Omega's Zone on the same
+circuit reads 730 us (its tone map is not in that bench). At 1920x1080: 365, 335 and 320 us.
+The bloom timer closes on `hd encode`, so the Zone feedback blend and the Zone bloom block are
+inside the flat bloom figure.
+
+**Speed is not it.** The race pass is flat from zone 1 to zone 9 (every 600-tick bucket), no
+stage change shows as a spike, and with `--motion-blur high` the blur costs the same in both
+modes (1,017 and 1,020 us at 4K).
+
+**Inside the race pass it is the Zone surface itself.** Throwaway shader switches at 4K: Zone
+889 us; without the visualiser glow 848; without the stage sample, rim terms and glow 739; with
+the whole recolour compiled out 716, against the time trial's 703. So about 170 us of the
+extra is the work of the first section above, per pixel.
+
+**The original pays more per pixel in Zone too.** On Chenghou's lightmapped surfaces, comparing
+each material's lit race program with its `ZoneMode` one (30 pairs): no Zone program samples the
+lightmap, none fetches fewer textures, and all but `mageffect_modded` are longer
+(`lambert_simple` 27 instructions and 2 fetches against 39 and 3, `diffuse_specular` 43 and 2
+against 50 and 4, `diffuse_normal_specular_emmissive` 50 and 3 against 59 and 5). The flat look
+is the stage texture replacing the albedo, not a cheaper program. This is a count of the
+programs, not a timing of the PS3. Held by
+`crates/mesh/tests/hd_zone_ne_census_ground_truth.rs`.
+
+**What was ours: the light chain.** The circuit's pipelines still computed the lightmap, prelit
+and vertex light chain and then overwrote the result with the stage's ambient and sun, a branch
+on a uniform the driver cannot drop. Where the grade is stage-lit and enabled on every stage it
+can show (`ZoneGrade::lights_every_stage`: HD and Fury), the circuit is now built with
+`zone_stage_light`, which states the light outright. An emissive plain chunk (a pad, a sign)
+takes neither Zone branch, so it is named as the `1.0` and no sun its program leaves, and a model
+where an earlier branch relights such a vertex is not specialised
+(`specialise::zone_light_exact`). All 16 HD circuits and arenas tried, and a Detonator race,
+specialise.
+
+Race pass before and after, Zone, interleaved runs (median of per-frame times):
+
+| Device, size | before | after | pairs where after is faster |
+| --- | ---: | ---: | --- |
+| 7800 XT, 3840x2160 | 870 us | 819 us | 3 of 3 |
+| 7800 XT, 1920x1080 | 350 us | 343 us | 6 of 6 (one a tie) |
+| iGPU, 1280x800 | 6,485 us | 6,168 us | 7 of 8 |
+
+One run is `OAG_RENDER_BENCH_RACE=<stem> oag-game <hd iso> --race --mode zone --track
+/data/environments/04_chenghou_project/track.vex --seed 1 --autopilot --no-audio --size <size>
+--ticks <n> --screenshot out.png` (`--mode time_trial` for the reference, `MESA_VK_DEVICE_SELECT`
+to pick the device), reading `gpu_scene_us` from `<stem>.csv` after the first 60 frames. The two
+builds alternate, under the gate lock: 3,600 ticks at 4K (load 12 to 18), 1,800 at 1920x1080
+(load 7) and on the iGPU (load 13).
+
+**Picture: unchanged.** 32 frames, before against after, 0 differing pixels: Zone on Chenghou
+(ticks 150 to 7,300), Talon's Junction, Vineta K, Anulpha Pass,
+`zone_1` and `zone_4`, a Detonator race, a two-player split, `--circuit-lighting simplified`, an
+HD time trial and single race, and, on titles that never specialise, a Zone race and a time trial
+on Omega and a Zone race on Pulse.
+
+**Does the difference explain the Deck?** Partly. With dynamic resolution on (iGPU, 1920x1080,
+`target_fps` 60, 70 s runs, load 8 to 37; mean linear scale from the frame log's `render=`):
+
+| Build | time trial | Zone, two runs | Zone seconds below full |
+| --- | ---: | ---: | ---: |
+| an earlier session, before | 0.998, 0.995 | 0.967, 0.959 | 30 and 34 of 66 |
+| before | 1.000 | 0.959, 0.957 | 29 and 32 of 64 |
+| after | 1.000 | 0.962, 0.977 | 33 of 61, 21 of 64 |
+
+Zone is the arm that leaves full size, the same direction as the report, and the fix does not
+move it by more than the runs differ from each other. A scalable cost 25 to 30 % higher puts a
+controller at about 0.88 to 0.9 of the scale when the time trial sits exactly at its budget, not at
+0.75. What takes the Deck further is not established.
+
+**Not measured, and open:** the Deck itself; a race with sound (the visualiser lookup is then
+rewritten when its texels change, up to 1 KiB per circuit drawable per view); and what a separate
+Zone program for the circuit would save. Dropping the lightmap fetch and the albedo mix as well
+measured about 45 us more at 4K, but skipping the fetch moves pixels: our Zone surface still gates
+its specular by the lightmap's alpha, where the original's Zone programs sample no lightmap.

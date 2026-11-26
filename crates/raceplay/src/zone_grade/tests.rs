@@ -327,6 +327,27 @@ fn hd_grade() -> ZoneGrade {
     .with_transition(Some(oag_hd::race::ZONE_TRANSITION))
 }
 
+/// A circuit may be built against the stage light only where every stage the grade can show
+/// writes an enabled, stage-lit uniform.
+#[test]
+fn a_grade_lights_every_stage_only_when_no_stage_falls_back_to_off() {
+    let mut lit = hd_grade().with_stage_light(true);
+    assert!(lit.lights_every_stage());
+    for stage in 0..=lit.last_stage() {
+        lit.pin_stage(stage);
+        let uniform = lit.zone_uniform();
+        assert_eq!(
+            (uniform.enabled, uniform.shape[3]),
+            (1.0, 1.0),
+            "stage {stage}"
+        );
+    }
+    assert!(!hd_grade().lights_every_stage(), "no stage light");
+    let mut holed = hd_grade().with_stage_light(true);
+    holed.art[1] = None;
+    assert!(!holed.lights_every_stage(), "a stage with no art");
+}
+
 /// The radius law, against the closed form the two live reads matched:
 /// `r_k = 0.1 + 0.5k + 0.05k(k - 1)`, capped at `20000`.
 #[test]

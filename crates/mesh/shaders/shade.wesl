@@ -14,7 +14,7 @@ import package::own_shield::{own_shield, own_shield_shading};
 import package::panel::{panel_march};
 import package::pad::{pad_normal};
 import oag_shaders::target::{decode, encode, encoded_out, linear_out, square_decode, target_in};
-import package::shading_modes::{colour_is_light, light_rig, lit_by_rig, nova_prelit, nova_vertices, rig_specular, simplified_lighting, tangents_present, zone_race};
+import package::shading_modes::{colour_is_light, light_rig, lit_by_rig, nova_prelit, nova_vertices, rig_specular, simplified_lighting, tangents_present, zone_race, zone_stage_light};
 import package::shadow::{receives_shadow, sun_occlusion};
 import package::water::{enhanced_water, reflective_sea_weight, water_kind, water_normal, water_specular_colour, water_tap_uv};
 import package::texture_lod::{MATERIAL_ALBEDO, MATERIAL_FIFTH_MAP, MATERIAL_LIGHTMAP, MATERIAL_PAD_MASK, MATERIAL_SIXTH_MAP, MATERIAL_WAVE_MAP, material_lod_bias, material_sample, material_sample_grad, sample_at_slope_level, texlod_bias, texlod_slope, uv_gradients};
@@ -677,6 +677,17 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
         if zone_program != 0.0 && scene.zone.shape.w > 0.5 {
             authored = scene.light.ambient + scene.light.sun * ndl;
             sun_light = scene.light.sun * ndl;
+        }
+        // **The two branches above again, unconditionally**, for a pipeline of a race where one
+        // of them always applies (`zone_stage_light`): nothing then depends on the chain before
+        // them, so the driver drops it. An emissive plain chunk takes neither and keeps its
+        // program's `1.0` and no sun, which `specialise::zone_light_exact` has checked is what
+        // the chain gives it (`docs/rendering/hd-zone-recolour.md`, "What a Zone race costs").
+        if zone_stage_light != 0.0 {
+            let own = zone_plain && emissive;
+            let plain_spu = select(vec3<f32>(0.0), spu, zone_plain);
+            authored = select(scene.light.ambient + scene.light.sun * ndl + plain_spu, vec3<f32>(1.0), own);
+            sun_light = select(scene.light.sun * ndl, vec3<f32>(0.0), own);
         }
         // The `_shadow` crowd's sum: no prelit or vertex-light term, the material's `Ambient` added.
         if crowd_lit {

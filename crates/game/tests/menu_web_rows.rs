@@ -50,6 +50,34 @@ fn the_web_and_the_desktop_each_drop_the_rows_they_cannot_have() {
     assert!(has(&desktop, "display.window_size") && has(&desktop, "display.vsync"));
 }
 
+/// BENCHMARK OPTIONS has its own VSYNC row, and a canvas has one present mode there too. Its
+/// FRAME LIMIT names that row in `disabled_by`, so it must not stay greyed once it is gone.
+#[test]
+fn the_web_benchmark_options_offer_no_vsync_and_keep_frame_limit_enabled() {
+    let has = |definition: &Definition, setting: &str| {
+        definition.pages.iter().any(|page| {
+            page.entries
+                .iter()
+                .any(|entry| entry.setting() == Some(setting))
+        })
+    };
+    let mut web = built_in();
+    assert!(has(&web, "benchmark.vsync"), "the desktop page offers it");
+    web.drop_settings(&oag_game::settings::web::HIDDEN_ROWS);
+    assert!(!has(&web, "benchmark.vsync"));
+    let mut menu = Menu::new(web);
+    menu.seed("benchmark.vsync", &Value::Text("on".into()));
+    let frame_limit = menu
+        .definition()
+        .pages
+        .iter()
+        .flat_map(|page| page.entries.iter())
+        .find(|entry| entry.setting() == Some("benchmark.frame_limit"))
+        .expect("the row")
+        .clone();
+    assert!(!menu.is_disabled(&frame_limit));
+}
+
 /// A phone drops the window rows, keeps the resolution row, and the kept row is not greyed by
 /// the dropped WINDOW MODE row it names in `disabled_by`.
 #[test]

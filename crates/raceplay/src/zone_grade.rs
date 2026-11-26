@@ -292,6 +292,22 @@ impl ZoneGrade {
         self
     }
 
+    /// Whether [`Self::zone_uniform`] is enabled and stage-lit on every stage this grade can
+    /// show: the title lights by the stage alone, and every stage up to the last has the
+    /// palette and the track art without which the uniform falls back to off. What a pipeline
+    /// built against the stage light needs for the whole race.
+    #[must_use]
+    pub fn lights_every_stage(&self) -> bool {
+        self.stage_lit
+            && self.table.zone_uv_scale().is_some()
+            && (0..=self.last_stage).all(|stage| {
+                self.table
+                    .stage_palette(stage)
+                    .is_some_and(|palette| palette.track_texture_colour.is_some())
+                    && self.art_at(stage).is_some()
+            })
+    }
+
     /// Whether the title's Zone frame lights every chunk by the stage's ambient and sun
     /// alone, with no lightmap or baked vertex light
     /// ([`oag_title::ZoneFrame::lit_by_stage_alone`]).

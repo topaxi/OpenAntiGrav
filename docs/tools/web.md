@@ -335,10 +335,13 @@ render scale is at its default, 100 (a player cannot tell 100 picked from 100
 untouched, so 100 is the capped value; 125 and up go past 720, 50 and 75 below it, as on a desktop). The options row has no help line to say so, so this page does (`settings::web::render_target`, used by every
 `target_size` caller, width scaled by the same factor): a 1920x1080 surface logs (at `debug`)
 `render target 1271x720 for a 1920x1080 surface`, and the race held 60.4 fps in
-headless Chromium (2026-10-09). The surface is in CSS pixels, not physical ones: at
-`devicePixelRatio` 2 on a 960x544 page the canvas is 960x544 and the target is
-960x544 (measured, `web-screenshot.py --dpr 2`), so the cap binds only on a page
-taller than 720 CSS pixels and a phone never reaches it. Choosing a
+headless Chromium (2026-10-09). The surface is in physical pixels, so a phone does
+reach the cap: with a real `devicePixelRatio` (`web-screenshot.py --dpr`, headless
+Chromium, 2026-11-26) an 844x390 page at 3 has a 2532x1170 canvas and a 960x544
+page at 2 a 1920x1088 one, both drawn at a 1271x720 target. (An earlier reading
+that the surface is in CSS pixels came from Playwright's emulated ratio, which
+leaves the canvas backing at CSS size while pointer positions are scaled, so
+every tap misses. No browser does that.) Choosing a
 render scale other than 100 lifts the cap. At the
 60 limit the game's own overlay (`graphics.perf_overlay = "fps"`) read `60 FPS
 16.7 MS` in a race, and the same at a limit of 120 (the page's animation frames
@@ -451,6 +454,9 @@ forces the in-memory fallback, and the script prints `crossOriginIsolated`.
 to the page the way the mode says ("Disc keys"); `--stalls MS` lists every gap between animation frames longer than `MS` once
 the run ends, timed from the pick, which is the responsiveness number (a
 screenshot waits for a free page thread, so its timestamp hides a stall);
+`--dpr N` is the browser's real device scale factor; `--grant PERMISSION[@T]`
+grants a permission, from the start or at `T` (`clipboard-read` after a COPY
+press reads back what the page wrote with no permission of its own);
 `--swipe X0,Y0,X1,Y1,MS@T` drags one finger over `MS` ms and lifts it, and
 `--tap X,Y@T` taps, both as real touches through Chrome DevTools
 (`Input.dispatchTouchEvent`), which winit reports as `WindowEvent::Touch`;
