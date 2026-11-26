@@ -982,11 +982,11 @@ error; negative is closer to the original.
 - **At 0.233 s it is not separable from the current flags**: mean grey falls by 1.4 standard
   errors and RMSE does not fall.
 - **What differs by eye** (0.1 s). Both waves together fill the centre white and hide the held
-  craft, which the original's frame shows in front of the cloud. Either wave alone shows part of
-  it: the first wave's blast covers the craft too, although its point is about 8 units beyond it;
-  the second's two young blasts draw as a hard-edged white sheet behind it. Why ours covers the
-  craft is not investigated (confidence 60 that it is the drawing and not the pose: the points
-  and ages are the film's own).
+  craft, which the original's frame shows in front of the cloud. The first wave alone already
+  covers the craft, although its point is about 8 units beyond it. The second wave alone leaves
+  the craft in view, and its two young blasts draw as a hard-edged white sheet behind it. Why
+  ours covers the craft is not investigated (confidence 60 that it is the drawing and not the
+  pose: the points and ages are the film's own).
 - The first-wave-only row is not a pose: it leaves out two of the three Rockets.
 
 **2048 and Omega: not checked** (the numbers are HD's; the flag itself is title-agnostic).
