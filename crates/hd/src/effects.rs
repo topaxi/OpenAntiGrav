@@ -151,7 +151,8 @@ pub const EFFECTS: &Effects = &{
     // `docs/ghidra/functions/ps3-hdfury-eu/particle-render.md`.
     // The template cap is measured on the Rocket's craft blast, where it is read is not:
     // `docs/ghidra/functions/ps3-hdfury-eu/rocket-craft-blast.md`, "The screen wash".
-    effects.near_law = Some(NearLaw::one_to_four(Origin::Measured).with_template_cap(2.0));
+    effects.near_law =
+        Some(NearLaw::one_to_four(Origin::Measured).with_template_cap(2.0, Origin::Measured));
     // `Rocket_SpawnCraftBlast` (`0x0014a7d8`), `0x0014a970`-`0x0014a98c`;
     // `docs/ghidra/functions/ps3-hdfury-eu/rocket-craft-blast.md`.
     effects.craft_blast_carry = Some(Origin::Measured);
