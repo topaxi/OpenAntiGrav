@@ -19,7 +19,7 @@
 //!
 //! The reference is PPSSPP's rasteriser, not a PSP. The fixed projection is a standstill race
 //! frame's: Pulse's race camera was not checked for a speed fov. Which sources run this is
-//! `oag_title::RaceLooks::psp_particle_clip`.
+//! `oag_title::Looks::psp_particle_clip`.
 //!
 //! **A sprite template meets the GE drop only on `WO_REPULSER`** ([`TEMPLATE_GUARDED`]):
 //! dropping the Quake's moved its start frame away from the original's, which is a white wash

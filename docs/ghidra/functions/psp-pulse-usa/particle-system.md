@@ -1805,7 +1805,12 @@ bars (vertex type `0x11e`, half width `15.26`, 4x4 atlas cells) with vertices be
 Talon's Junction at 50 and 52 updates after the shot, view depth `2.88` and `1.5`, corners at
 `3001..3103` and `-4313..-6674` px. Those bars lie wholly off screen, so their frames cannot
 say drop from clip. The test is to edit one bar's positions in the recorded frame and replay it
-(`scripts/psp-ge-replay.py`), with PPSSPP 1.20.4's software renderer:
+(`scripts/psp-ge-replay.py`), with PPSSPP 1.20.4's software renderer. The frames are taken with
+`scripts/psp-ge-fire-dump.py` (state `time-trial-talons-venom-grid`; the Repulser is
+`--weapon-bit 0x10000`, the Quake `0x8`), and edited with `scripts/psp-ge-edit-prim.py`: `list`
+names the primitives with a vertex out of range, `show` prints a primitive's vertices, and
+`edit DUMP CI OUT --vertex N=SX,SY --red 0,1,2,3 --solid` writes a variant. The Fort Gale row of
+boot 2 (beyond in y) is `ci 3058`, vertices 0 and 1 moved to `y = 2000`.
 
 - positions are `s16` in the push buffer; the strip's two join vertices repeat the bar's first
   and last and move with them;
@@ -1834,7 +1839,8 @@ PPSSPP's rasteriser, not a PSP; its source states the same rule
 entire prim away").
 
 **The near plane.** The race frame's projection (`m10 = -1.0012`, `m14 = -2.4849`) puts it at
-**1.24** units. A vertex nearer than that is clipped rather than range-tested, so a
+**1.24** units, and depth clamp is on at these draws. With it on, a vertex nearer than that is
+clipped rather than range-tested (PPSSPP's `TransformUnit.cpp`), so a
 screen-parallel particle at or inside 1.24 draws nothing, whatever its class. Ours plays that
 for particles; the race camera's own near plane is `1.0` (not changed here).
 
@@ -1853,7 +1859,8 @@ The 2026-10-06 reading kept templates other than `WO_REPULSER`'s out of the drop
 applying it moved our Quake's first frame, where the original shows a white wash. Recorded
 frames of the original 2, 4 and 6 updates after a standing Quake hold its template quad (vertex
 type `0x19f`, four vertices, depth `17.8` to `26.9`) with vertices out of range in both
-triangles, and **replaying each frame with that quad removed changes no pixel**. So whatever
+triangles, and **replaying each frame with that quad removed changes no pixel**
+(`scripts/psp-ge-replay.py --nop-prims CI:CI:19f`, `CI` from `psp-ge-edit-prim.py list`). So whatever
 washes the original's screen there, it is not that quad. Ours still draws it
 (`TEMPLATE_GUARDED` in `guard.rs` is unchanged): extending the drop to every template needs its
 own comparison of the Quake's first frames.

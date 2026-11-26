@@ -333,7 +333,7 @@ the camera flies into is a bounded cloud. Pulse **M** (`oag_title::Looks::psp_pa
 draws no triangle with a vertex more than 2048 px off the screen centre
 ([particle-system.md](../ghidra/functions/psp-pulse-usa/particle-system.md#2026-11-26-near-the-eye-what-the-psp-does-with-an-emitted-particle));
 sprite templates meet the GE drop on `WO_REPULSER` alone. Pulse PS2 **I:Pulse PSP**. Pure **M**
-for the near tests ([particle-bars.md](../ghidra/functions/psp-pure-usa/particle-bars.md#near-the-eye-2026-11-26)),
+for the near tests, the squares' fade factor **I:Pulse** ([particle-bars.md](../ghidra/functions/psp-pure-usa/particle-bars.md#near-the-eye-2026-11-26)),
 **I:Pulse** for the GE drop.
 
 | Weapon | Pulse | Pure | HD / Fury | 2048 | Omega |
