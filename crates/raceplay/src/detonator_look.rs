@@ -140,13 +140,13 @@ impl MineEnvelope {
     }
 }
 
+/// Pinned mine envelopes by survey entry and lane: the football's `s`, the spikes' `t` and the
+/// visualiser's `PitchOffset` (`--detonator-mine-envelopes`).
+pub(crate) type MinePins = std::collections::BTreeMap<(u16, i8), (f32, f32, f32)>;
+
 /// Replaces the envelope of every live mine in `pins` (by survey entry and lane) with the pinned
 /// football `s`, spikes `t` and `PitchOffset`: a comparison holds a mine at the original's read.
-pub(crate) fn hold_pinned(
-    laid: &[LaidMine],
-    envelopes: &mut [MineEnvelope],
-    pins: &std::collections::BTreeMap<(u16, i8), (f32, f32, f32)>,
-) {
+pub(crate) fn hold_pinned(laid: &[LaidMine], envelopes: &mut [MineEnvelope], pins: &MinePins) {
     for (mine, envelope) in laid.iter().zip(envelopes) {
         if let Some(&(football, spikes, pitch_offset)) =
             pins.get(&(mine.entry, mine.lane)).filter(|_| mine.live)
