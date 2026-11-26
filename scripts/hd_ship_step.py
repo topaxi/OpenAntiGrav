@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """HD/Fury's `Team Selection` screen object in a running RPCS3: find it, read the craft fit's state, count its frames.
 
-    hd_ship_step.py selftest        # the frame counter and the forward law on constructed rows; needs no emulator
+    hd_ship_step.py selftest        # the frame counter, the forward law and the hull stepping on constructed rows; needs no emulator
 
 `TeamSelectionScreen_Update` (`0x00254348`, `docs/ghidra/functions/ps3-hdfury-eu/team-selection-model.md`) keeps the
 craft's fit on the screen object `st`: the depth target `st+0x1014`, the drawn depth `st+0x1020`, the slide targets
@@ -11,14 +11,17 @@ and the drawn depth every time, so **a change of the (target, depth, slide) tupl
 polling in under a millisecond sees every frame, and the count of them since the selection changed is the age of a
 step in game frames, whatever the emulator's speed.
 
+`step_to_hull` drives the screen to a named hull by reading the selected one after every press, never by a press
+count: which row a save opens on, and which rows are locked, differ between profiles
+(`docs/reverse-engineering/rpcs3-capture.md`, "Picking the hull on Ship Select").
+
 The object has no static address and no vtable word that was needed: `find` scans the heap for the word pattern
 (target on the 0.1 grid at or above the floor, drawn depth near it, a model pointer whose length is one of the eight
 the disc authors) and refuses anything but exactly one hit.
 """
+import re
 import struct
 import sys
-
-import numpy as np
 
 GUEST_BASE = 0x300000000
 HEAP = (0x30000000, 0x40000000)
@@ -53,6 +56,8 @@ class Screen:
     @classmethod
     def find(cls, mem):
         """Every address that reads as the screen. Raises unless there is exactly one."""
+        import numpy as np  # the scan alone needs it; the selftest runs without it
+
         hits = []
         for base in range(HEAP[0], HEAP[1], BLOCK):
             try:
@@ -96,7 +101,6 @@ class Screen:
     def model_name(self, model):
         """The `PI_TeamModel`'s hull entry name (`Feisar_c1`), cached by pointer."""
         if model not in self.names:
-            import re
             blob = self.read(model, 0x400)
             hit = re.search(rb"[A-Za-z0-9_]+_[cn]\d", blob)
             self.names[model] = hit.group(0).decode() if hit else None
@@ -155,7 +159,101 @@ def forward(depth, target, frames, step=0.1, ease=0.125):
     return depth, target
 
 
+#: Presses in one direction that leave the selection where it was before the list is taken to end there. The emulator
+#: drops about one press in three, so one unchanged press says nothing.
+CLAMP_PRESSES = 6
+
+
+def team_part(hull):
+    """The team of a hull directory: `ag_systems` for `AG_Systems_c1` and for `AG_Systems`."""
+    return re.sub(r"_[cn]\d$", "", hull.lower())
+
+
+def step_to_hull(read, press, want, max_presses=80):
+    """Press Ship Select until the selected hull is `want` (case-insensitive); returns the buttons pressed.
+
+    `read()` returns `(model pointer, hull directory)` and `press(button)` presses and lets the screen settle. The team
+    column first (`right`, then `left`), then that column's rows (`down`, then `up`): the screen opens on an unlocked
+    row and a locked row can carry the same directory name, so the rows below are searched before the rows above. A
+    direction ends when `CLAMP_PRESSES` presses leave the model pointer where it was, or when it comes back to one already
+    passed (the team list wraps). Raises `LookupError` when neither
+    direction reaches the hull. A locked row that matches is returned like any other: `cross` does nothing on it, which
+    the caller checks."""
+    presses = []
+
+    def search(buttons, found):
+        model, hull = read()
+        for button in buttons:
+            stuck, seen = 0, {model}
+            while not found(hull) and stuck < CLAMP_PRESSES:
+                if len(presses) >= max_presses:
+                    raise LookupError("%d presses on Ship Select without reaching %s (on %s)" % (max_presses, want, hull))
+                press(button)
+                presses.append(button)
+                after, hull = read()
+                if after != model and after in seen:
+                    model = after
+                    break
+                stuck = stuck + 1 if after == model else 0
+                model = after
+                seen.add(after)
+            if found(hull):
+                return
+        raise LookupError("Ship Select has no %s: neither %s reaches it (on %s)" % (want, " nor ".join(buttons), hull))
+
+    search(("right", "left"), lambda hull: team_part(hull) == team_part(want))
+    search(("down", "up"), lambda hull: hull.lower() == want.lower())
+    return presses
+
+
+class FakeGrid:
+    """Ship Select as read on the original: a column per team and the team list wraps, each column a list of rows that
+    clamps at both ends, with the locked rows repeating a directory name, opening on the third row. Every third press is
+    dropped."""
+
+    ROWS = ("%s_c1", "%s_n1", "%s_c1", "%s", "%s", "%s", "%s")
+    TEAMS = ("Feisar", "Qirex", "piranha", "AG_Systems", "Assegai", "Harimau")
+
+    def __init__(self, row=2):
+        self.team, self.row, self.count = 0, row, 0
+
+    def read(self):
+        return (self.team * 16 + self.row, self.ROWS[self.row] % self.TEAMS[self.team])
+
+    def press(self, button):
+        self.count += 1
+        if self.count % 3 == 0:
+            return
+        dt, dr = {"right": (1, 0), "left": (-1, 0), "down": (0, 1), "up": (0, -1)}[button]
+        self.team = (self.team + dt) % len(self.TEAMS)
+        self.row = min(max(self.row + dr, 0), len(self.ROWS) - 1)
+
+
+def selftest_step_to_hull():
+    """The stepper lands on the unlocked row of the named team from where the screen opens, whatever was dropped, and
+    refuses a hull the grid does not hold."""
+    for want, team, row in (("harimau", "Harimau", 3), ("Harimau_c1", "Harimau", 2), ("Feisar_c1", "Feisar", 2),
+                            ("Assegai_c1", "Assegai", 2), ("ag_systems", "AG_Systems", 3), ("Piranha", "piranha", 3)):
+        grid = FakeGrid()
+        step_to_hull(grid.read, grid.press, want)
+        assert (grid.TEAMS[grid.team], grid.row) == (team, row), (want, grid.TEAMS[grid.team], grid.row)
+    # a screen that opens lower finds the unlocked `_c1` row above, not the locked one over it
+    grid = FakeGrid(row=3)
+    step_to_hull(grid.read, grid.press, "feisar_c1")
+    assert grid.row == 2, grid.row
+    for want in ("Nobody", "Harimau_n9"):
+        grid = FakeGrid()
+        try:
+            step_to_hull(grid.read, grid.press, want)
+        except LookupError:
+            pass
+        else:
+            raise AssertionError("%s is not on the grid and must be refused (on %s)" % (want, grid.read()[1]))
+        assert grid.count < 50, "%s refused only after %d presses" % (want, grid.count)
+
+
 def selftest():
+    selftest_step_to_hull()
     c = Counter()
     base = {"sel": 1, "model": 1, "target": 13.6, "depth": 13.647, "slide_target": [1.0, 2.0], "slide": [1.0, 2.0]}
     assert c.feed(base) is None

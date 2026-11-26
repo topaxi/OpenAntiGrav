@@ -4,12 +4,14 @@
     source data/scratch/<lane>/env.sh ; export XDG_CACHE_HOME=/tmp/oag-<lane>-cache
     OAG_COMPARE_PLATFORM=hd-fury python3 scripts/rpcs3-drive.py --image data/images/hdfury-ps3-eu.iso serve   # to Main Menu
     # walk to Ship Select by hand: `right cross right cross cross`
+    uv run --with evdev --with numpy python3 scripts/rpcs3-hd-ship-step.py select --hull harimau   # step to a hull
     OAG_RPCS3_ATTACH=1 uv run --with evdev python3 scripts/emu-run.py -- python3 scripts/rpcs3-hd-ship-step.py timeline \\
         --buttons right,right,left --out data/scratch/<lane>/timeline.json
     OAG_RPCS3_ATTACH=1 uv run --with evdev python3 scripts/emu-run.py -- python3 scripts/rpcs3-hd-ship-step.py capture \\
         --out data/scratch/<lane>/trials --aims 2,3,4,6,8,12,20,30
 
-`timeline` presses buttons and logs, without pausing, every game frame of the screen's fit (`hd_ship_step.py`): the
+`select` presses until the hull RAM names as selected is `--hull` (`hd_ship_step.step_to_hull`) and exits non-zero
+when the screen holds no such hull; `emu-hd-glass-boot.sh` calls it. `timeline` presses buttons and logs, without pausing, every game frame of the screen's fit (`hd_ship_step.py`): the
 selection, the model's name and length, the depth target and drawn depth, both slides and the player's six input
 terms. `capture` presses `right`, stops the game once the frame count since the selection moved reaches an aim, reads the
 state in the stop, grabs the window through `grab_with_clock` and resumes: `<out>/NN.png` and `NN.json` (the frame
@@ -33,6 +35,7 @@ MAIN = Path("/home/topaxi/projects/OpenAntiGrav")
 sys.path.insert(0, str(HERE))
 import hd_fury_backdrop as fb  # noqa: E402
 import hd_ship_step as hs  # noqa: E402
+import rpcs3_hd_field as field  # noqa: E402
 
 drive = importlib.import_module("rpcs3-drive")
 walk = importlib.import_module("rpcs3-hd-menu-walk")
@@ -73,6 +76,36 @@ def attach():
 def described(screen, state):
     name = screen.model_name(state["model"])
     return dict(state, name=name, length=round(screen.length(state["model"]), 3))
+
+
+def attach_when_up(tries=5, wait=2.0):
+    """`attach`, retried while the screen is still sliding in (its scan wants the settled words)."""
+    for left in range(tries - 1, -1, -1):
+        try:
+            return attach()
+        except LookupError:
+            if not left:
+                raise
+            time.sleep(wait)
+
+
+def cmd_select(args):
+    try:
+        pad, mem, screen = attach_when_up()
+        guest = field.Mem(mem)
+
+        def read():
+            model = screen.state()["model"]
+            return model, field.model_hull(guest, model)
+
+        def press(button):
+            pad.press(button, 0.15)
+            time.sleep(args.settle)
+
+        presses = hs.step_to_hull(read, press, args.hull)
+    except LookupError as error:
+        sys.exit("select: %s" % error)
+    print("Ship Select on %s after %d presses (%s)" % (read()[1], len(presses), " ".join(presses) or "none"))
 
 
 def cmd_timeline(args):
@@ -265,6 +298,10 @@ def original_language(config_dir):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
+    s = sub.add_parser("select", help="press until the selected hull RAM names is --hull, or refuse")
+    s.add_argument("--hull", required=True, help="the pair's --team, e.g. harimau or Assegai_c1")
+    s.add_argument("--settle", type=float, default=1.2, help="seconds after a press before the read")
+    s.set_defaults(run=cmd_select)
     t = sub.add_parser("timeline", help="log every game frame of the fit across button presses, unpaused")
     t.add_argument("--buttons", required=True)
     t.add_argument("--out", required=True)

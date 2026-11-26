@@ -104,12 +104,17 @@ def hud(m, record):
             "lap_time": struct.unpack(">f", b[0x30:0x34])[0]}
 
 
-def team_of(m, ship):
-    """`Feisar_c1` out of `Data\\Ships\\Feisar_c1`: the string `*(*(ship+0x6298)+0x1b4)` points at."""
-    holder = m.u32(ship + 0x6298)
-    text = m.u32(holder + 0x1B4) if holder else 0
+def model_hull(m, model):
+    """`Feisar_c1` out of `Data\\Ships\\Feisar_c1`: the string a `PI_TeamModel`'s `+0x1b4` points at. A craft holds its
+    model at `ship+0x6298`, Team Selection the selected one at `+0x194` of its screen object (`hd_ship_step.py`)."""
+    text = m.u32(model + 0x1B4) if model else 0
     raw = m.rd(text, 48).split(b"\0")[0].decode("ascii", "replace") if text else ""
     return raw.replace("/", "\\").rsplit("\\", 1)[-1]
+
+
+def team_of(m, ship):
+    """The hull directory the craft was loaded from (`model_hull` of its `PI_TeamModel`)."""
+    return model_hull(m, m.u32(ship + 0x6298))
 
 
 def field_rows(m):
