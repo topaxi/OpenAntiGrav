@@ -267,19 +267,53 @@ prediction above is what such a recording would falsify.
 The vertex program's `V` is `eyePositionWorldSpace - position`. Ours computes the rim from the scene block's
 `Fog::camera` (`shade.wesl`, `flame_shading`), and the flares, boost plumes and flare spikes read the flame surfaces'
 block (`SceneKind::Flame`), which is `Scene::off` plus the clock: its camera is `(0, 0, 0)`. So `rim`, and through it
-the flame's `alpha`, is measured from the wrong point. The same defect was fixed for the weapon bodies
+the flame's `alpha`, is measured from the wrong point. Confidence 95 (code read, and the picture moves when the eye is
+supplied). The same defect was fixed for the weapon bodies
 ([hd-unlit-programs.md](../../../rendering/hd-unlit-programs.md), "Weapon scene blocks") and for this project's own
 shield ([own-shield.md](../../../rendering/own-shield.md)).
 
-Size, measured with a temporary change that wrote the view's eye into the flame block (not committed): HD,
-`--hold cross` with no shield up, `960x544`, 438 pixels differ at tick 400 (at most 39 of 255 on a channel) and 138 at
-tick 600 (at most 32). The block also feeds the disc shield shells and cockpit spheres, which these frames do not
-show; whether any of their programs reads the eye was not measured. Two frames of one run; a boost frame, where the
-plume is largest, was not measured.
-Confidence 95 that our eye is the origin (code read, and the measured difference), none on how much it matters against
-the original: no comparison pair was re-rendered. Not wired. 2048 and Omega: checked, differs. Their flares take
-`oag_livery::flare`'s `psp2_flare`, which sets no `Flame`, so they are shaded without the rim and the eye does not
-enter; Omega's load report says so for `2048_engine_additive.rcsmaterial`, 2048's is read from the code alone.
+**Putting the view's eye there makes the rest flame worse, so it is not wired.** Commit `0c86ed0ed` did it and the
+next commit reverts it. All 172 comparison pairs were re-rendered on copies with the build before and after: 150 are
+byte-identical (every 2048, Omega, Pulse, Pulse PS2 and Pure pair, and 9 of HD's), 22 HD pairs move. "Error in them" is
+the mean absolute RGB difference (0 to 255) from the original over the pixels the change moved; the other columns are
+the page's whole-frame scores. On every grid pair with the craft at rest the error rises and ours gets brighter than
+the original, a dim deep blue; the Zone pair, the Detonator pad and mines pairs and the far-hit pairs improve.
+
+| pair | pixels moved | error in them | mean grey | rmse | edge |
+| --- | --- | --- | --- | --- | --- |
+| `hd/anulpha-pass` | 3,108 | 16.59 -> 19.84 | 4.224 -> 4.229 | 0.0468 -> 0.0468 | 0.4395 -> 0.4396 |
+| `hd/chenghou-project` | 3,113 | 12.78 -> 20.58 | 2.693 -> 2.703 | 0.0376 -> 0.0378 | 0.3937 -> 0.3938 |
+| `hd/detonator-talons-cannon-volley` | 38,230 | 30.37 -> 30.07 | 14.326 -> 14.321 | 0.1727 -> 0.1727 | 0.1037 -> 0.1044 |
+| `hd/detonator-talons-cannon-volley-hot` | 29,567 | 30.61 -> 30.56 | 11.470 -> 11.468 | 0.1394 -> 0.1394 | 0.1019 -> 0.1016 |
+| `hd/detonator-talons-mines-ahead` | 4,584 | 33.13 -> 31.71 | 13.631 -> 13.627 | 0.1682 -> 0.1682 | 0.1053 -> 0.1055 |
+| `hd/detonator-talons-pad` | 26,178 | 22.27 -> 21.59 | 7.604 -> 7.598 | 0.1190 -> 0.1189 | 0.1804 -> 0.1820 |
+| `hd/metropia` | 2,580 | 17.66 -> 30.86 | 3.469 -> 3.486 | 0.0379 -> 0.0382 | 0.4478 -> 0.4478 |
+| `hd/moa-therma` | 1,375 | 27.61 -> 44.38 | 6.222 -> 6.234 | 0.0570 -> 0.0572 | 0.4520 -> 0.4520 |
+| `hd/modesto-heights` | 1,480 | 22.57 -> 31.00 | 4.763 -> 4.769 | 0.0541 -> 0.0542 | 0.4181 -> 0.4181 |
+| `hd/rocket-craft-far-hit-0100` | 185 | 93.48 -> 90.36 | 12.431 -> 12.430 | 0.1336 -> 0.1336 | 0.2789 -> 0.2789 |
+| `hd/rocket-craft-far-hit-0233` | 188 | 65.87 -> 64.52 | 42.693 -> 42.693 | 0.2538 -> 0.2538 | 0.0521 -> 0.0521 |
+| `hd/rocket-craft-hit-0100` | 46 | 195.51 -> 192.94 | 74.008 -> 74.008 | 0.3694 -> 0.3694 | 0.0122 -> 0.0122 |
+| `hd/sebenco-climb` | 1,523 | 22.35 -> 33.66 | 4.800 -> 4.808 | 0.0531 -> 0.0532 | 0.3947 -> 0.3947 |
+| `hd/sol-2` | 1,421 | 31.01 -> 41.40 | 6.325 -> 6.332 | 0.0674 -> 0.0675 | 0.4310 -> 0.4310 |
+| `hd/talons` | 1,466 | 20.87 -> 26.44 | 3.319 -> 3.324 | 0.0395 -> 0.0395 | 0.4306 -> 0.4306 |
+| `hd/talons-assegai-c1` | 331 | 105.84 -> 102.64 | 4.776 -> 4.775 | 0.0599 -> 0.0599 | 0.4090 -> 0.4091 |
+| `hd/tech-de-ra` | 1,662 | 23.79 -> 26.37 | 4.517 -> 4.520 | 0.0447 -> 0.0447 | 0.4535 -> 0.4535 |
+| `hd/the-amphiseum` | 47,791 | 15.75 -> 16.11 | 6.107 -> 6.116 | 0.0648 -> 0.0649 | 0.4157 -> 0.4157 |
+| `hd/ubermall` | 1,115 | 25.91 -> 34.29 | 4.417 -> 4.422 | 0.0417 -> 0.0417 | 0.4487 -> 0.4487 |
+| `hd/vineta-k` | 35,093 | 4.84 -> 5.86 | 3.221 -> 3.239 | 0.0393 -> 0.0396 | 0.4322 -> 0.4321 |
+| `hd/zone-vineta-k-z5` | 4,444 | 74.02 -> 65.02 | 6.270 -> 6.251 | 0.0764 -> 0.0761 | 0.3010 -> 0.3011 |
+| `hd-race/talons-pack` | 1,918 | 31.24 -> 33.46 | 23.054 -> 23.056 | 0.1711 -> 0.1711 | 0.0916 -> 0.0916 |
+
+With the true view angle a face turned to the camera has `rim` near 0, so `alpha` is near its 1.1 maximum; from the
+origin `rim` was larger and the plume dimmer. So something else in our flame is wrong and the origin eye hides part of
+it. Unverified candidate: the program dots an untransformed normal and position against `eyePositionWorldSpace`, so if
+the console is handed a world-space eye for a model-space flame, its angle is not the view angle either. A live read of
+that vertex constant on a flame draw would settle it ([rpcs3-capture.md](../../../reverse-engineering/rpcs3-capture.md)).
+
+The disc shield shells and cockpit spheres read the same block and are unaffected: with the eye supplied to them alone,
+18 frames (HD, Omega, 2048, Pulse, Pulse PS2, Pure; chase at ticks 400 and 600, cockpit at 400) are byte-identical.
+2048 and Omega flames: checked, differs. Their flares take `oag_livery::flare`'s `psp2_flare`, which sets no `Flame`,
+so they are shaded without the rim; none of their pairs moved.
 
 ## Blocks #0 and #2, in one line each
 
