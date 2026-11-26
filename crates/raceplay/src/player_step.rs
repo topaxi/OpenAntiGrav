@@ -464,10 +464,8 @@ impl RaceSim {
     /// Checked every tick because [`RaceState::eliminate`] is what makes it
     /// idempotent. See the comment at the call for what reaches it.
     pub(super) fn eliminate_if_wrecked(&mut self, slot: usize) -> bool {
-        // A Zone end plays out first: the race is over when state 5 has run to the results'
-        // opening (`zone-destroy.md`, row Z9), which is state 6 here.
-        let played_out = self.zone_end().is_none()
-            || oag_physics::damage::in_state_6(&self.world.ships[slot].physics, false);
+        // A Zone or Detonator end plays out first.
+        let played_out = self.end_played_out(slot);
         self.world.mode() != Mode::Eliminator
             && self.world.ships[slot].physics.craft_state == oag_physics::CraftState::Eliminated
             && played_out
@@ -497,10 +495,11 @@ impl Race {
 
         // A Zone craft that has blown up is out of the race at once: the race manager leaves
         // its racing phase on the blast (`zone-destroy.md`, row Z9), though the results open
-        // only when the end has played out.
-        if self.core.sim.zone_end().is_some()
-            && self.core.sim.world.ships[slot].physics.craft_state
-                != oag_physics::CraftState::Racing
+        // only when the end has played out. A Detonator craft's end is the same.
+        if self.core.sim.detonator_ending(slot)
+            || (self.core.sim.zone_end().is_some()
+                && self.core.sim.world.ships[slot].physics.craft_state
+                    != oag_physics::CraftState::Racing)
         {
             return;
         }

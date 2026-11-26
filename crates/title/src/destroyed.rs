@@ -251,6 +251,11 @@ impl DestroyCamera {
 pub struct DestroyedCraft {
     /// A Zone race's own end, `None` where the Zone craft becomes a wreck (Pulse, Pure).
     pub zone_end: Option<ZoneEnd>,
+    /// How long after a Detonator craft's blast the results open, with the race rules stopped
+    /// and the HUD gone meanwhile (the finish handler's `1.0` s then `4.5` s,
+    /// `docs/ghidra/functions/ps3-hdfury-eu/detonator-endrace.md`, "The wait before the
+    /// results"). `None` ends the race when the explosion is over.
+    pub detonator_results_secs: Option<f32>,
     /// State 4's length: the explosion, before the craft is out of the race.
     pub explosion_secs: f32,
     /// State 5's length: the wreck is solid to other craft for this long, or until it
@@ -287,6 +292,7 @@ impl DestroyedCraft {
     /// solid for `1.5` s, the blast `1.5` s on, the wreck still integrated.
     pub const PULSE: Self = Self {
         zone_end: None,
+        detonator_results_secs: None,
         explosion_secs: 0.5,
         dwell_secs: 1.5,
         settle: None,
@@ -315,6 +321,7 @@ impl DestroyedCraft {
     /// `0.5`) or after `20.0` s, then out of the physics world.
     pub const HD: Self = Self {
         zone_end: Some(ZoneEnd::HD),
+        detonator_results_secs: Some(5.5),
         explosion_secs: 0.3,
         dwell_secs: 20.0,
         settle: Some(Settle {

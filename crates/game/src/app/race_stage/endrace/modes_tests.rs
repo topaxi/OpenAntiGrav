@@ -187,3 +187,15 @@ fn the_session_judges_the_detonator_score_before_saving_and_the_results_take_it(
     let build = include_str!("../../session/endrace.rs");
     assert!(build.contains("results.record = stage.score_record"));
 }
+
+/// The live EndRace renderer is its own: its `default` text must take HD's ratio and it must hold
+/// the `Title` and button faces, or the screen a player sees draws small and without the cross
+/// while the `--menu-page` still looks right.
+#[test]
+fn the_session_builds_the_end_screens_with_hds_faces() {
+    let source = include_str!("../../session/endrace/prefetch.rs");
+    let body = &source[..source.find("#[cfg(test)]").expect("its tests")];
+    assert!(body.contains("FaceScales::default_ratio("));
+    assert!(body.contains("shell.menu_skin.default_face_is_row_face"));
+    assert!(body.contains("prep.install_faces("));
+}

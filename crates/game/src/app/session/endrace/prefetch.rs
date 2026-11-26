@@ -44,6 +44,9 @@ pub(crate) struct EndRacePrepArgs {
     globals: Vec<(String, String)>,
     base_sprites: oag_hud::sprite::Sheet,
     atlas: oag_ui::font::Atlas,
+    skin: &'static oag_title::MenuSkin,
+    title_font: Option<oag_ui::font::Atlas>,
+    buttons_font: Option<oag_ui::font::Atlas>,
     title: &'static oag_title::Title,
     device: wgpu::Device,
     queue: wgpu::Queue,
@@ -128,16 +131,29 @@ impl EndRacePrepArgs {
         if self.leaving() {
             return None;
         }
+        let field = crate::endrace::dialect(self.title) == Some(oag_title::EndRaceDialect::Field);
         match EndRacePrep::build(
             &self.device,
             &self.queue,
             self.format,
             self.anisotropy,
-            self.atlas,
+            self.atlas.clone(),
             screens,
             self.with_trophies,
         ) {
-            Ok(prep) => Some(prep),
+            Ok(mut prep) => {
+                if field {
+                    prep.install_faces(
+                        &self.device,
+                        &self.queue,
+                        self.skin,
+                        &self.atlas,
+                        self.title_font,
+                        self.buttons_font,
+                    );
+                }
+                Some(prep)
+            }
             Err(error) => {
                 warn!("cannot build the EndRace screens' own renderer: {error:#}");
                 None
@@ -163,9 +179,10 @@ impl Session {
             dlc: race_options.dlc.clone(),
             strings: shell.strings.clone(),
             faces: oag_ui_screens::picker::FaceScales {
-                default: shell.menu_font.as_ref().map_or(
-                    oag_ui_screens::picker::FaceScales::default().default,
-                    |menu| shell.font.line_height / menu.line_height,
+                default: oag_ui_screens::picker::FaceScales::default_ratio(
+                    shell.font.line_height,
+                    shell.menu_font.as_ref().map(|menu| menu.line_height),
+                    shell.menu_skin.default_face_is_row_face,
                 ),
                 ..oag_ui_screens::picker::FaceScales::default()
             },
@@ -180,6 +197,9 @@ impl Session {
                 .menu_font
                 .clone()
                 .unwrap_or_else(|| shell.font.clone()),
+            skin: shell.menu_skin,
+            title_font: shell.title_font.clone(),
+            buttons_font: shell.buttons_font.clone(),
             title: shell.title,
             device: self.gpu.device.clone(),
             queue: self.gpu.queue.clone(),
