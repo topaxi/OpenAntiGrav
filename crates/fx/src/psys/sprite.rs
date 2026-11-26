@@ -40,9 +40,11 @@
 //! Every sprite of every loaded effect is packed into one
 //! [`SHEET_SIZE`]-square RGBA8 texture, so the pipeline keeps one bind group
 //! and the two batched draws it always had. The packing is this project's
-//! (shelves, [`PAD`] texels apart), not anything the original does; a sprite
-//! that does not fit is left unplaced and its emitter keeps the procedural
+//! ([`packing`], sprites [`PAD`] texels apart), not anything the original does;
+//! a sprite that does not fit is left unplaced and its emitter keeps the procedural
 //! profile, which [`Sheet::place`] reports by returning `None`.
+
+mod packing;
 
 use std::sync::Arc;
 
@@ -275,15 +277,15 @@ pub fn map_to_cell(corners: &mut [oag_mesh::mesh::GpuVertex], cell: [f32; 4]) {
 #[derive(Debug, Clone, Default)]
 pub struct Sheet {
     /// The rows placed so far, `SHEET_SIZE * 4` bytes each, top row first:
-    /// grown as shelves reach down rather than allocated whole, and shared
+    /// grown as sprites reach down rather than allocated whole, and shared
     /// rather than copied when a [`super::Library`] is cloned. A row below the
     /// last one placed is transparent, as the uploaded texture is before a
     /// sync.
     pixels: Option<Arc<Vec<u8>>>,
     /// Each distinct sprite once, with where it went.
     placed: Vec<(Sprite, [f32; 4])>,
-    /// The open shelf's left edge, top edge and height.
-    shelf: (u32, u32, u32),
+    /// Where the next sprite may go.
+    free: packing::Free,
     /// Bumped on every change to [`Self::pixels`], so an uploader can tell
     /// its copy is stale.
     generation: u64,
@@ -301,15 +303,7 @@ impl Sheet {
             return Some(*rect);
         }
         let (w, h) = (u32::from(sprite.width), u32::from(sprite.height));
-        let (mut x, mut y, mut shelf_height) = self.shelf;
-        if x + w > SHEET_SIZE {
-            x = 0;
-            y += shelf_height + PAD;
-            shelf_height = 0;
-        }
-        if x + w > SHEET_SIZE || y + h > SHEET_SIZE {
-            return None;
-        }
+        let (x, y) = self.free.take(w, h)?;
         let side = SHEET_SIZE as usize;
         let pixels = Arc::make_mut(self.pixels.get_or_insert_with(Arc::default));
         let needed = (y + h) as usize * side * 4;
@@ -329,7 +323,6 @@ impl Sheet {
             (x + w) as f32 / size,
             (y + h) as f32 / size,
         ];
-        self.shelf = (x + w + PAD, y, shelf_height.max(h));
         self.placed.push((sprite.clone(), rect));
         self.generation += 1;
         Some(rect)

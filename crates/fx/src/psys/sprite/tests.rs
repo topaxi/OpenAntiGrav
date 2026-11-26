@@ -102,3 +102,60 @@ fn mapping_a_quad_marks_it_sampled_and_moves_its_uvs() {
     assert_eq!(corners[0].texcoord, [0.75, 1.0]);
     assert_eq!(corners[0].normal[0], 1.0);
 }
+
+/// The sizes Wipeout HD's listed effects ask for, in the order a race loads
+/// them: six 1024x1024 sprites among smaller ones. Rows of one height each ran
+/// out at the fifth of the six, though under 60 % of the sheet was covered.
+const HD_LOAD_ORDER: &[(u16, u16)] = &[
+    (1024, 512),
+    (1024, 1024),
+    (512, 256),
+    (64, 64),
+    (32, 32),
+    (256, 512),
+    (256, 256),
+    (64, 64),
+    (1024, 512),
+    (1024, 1024),
+    (1024, 512),
+    (512, 512),
+    (1024, 1024),
+    (1024, 512),
+    (1024, 1024),
+    (1024, 1024),
+    (64, 64),
+    (64, 64),
+    (64, 128),
+    (64, 64),
+    (64, 64),
+    (256, 256),
+    (256, 256),
+    (1024, 1024),
+    (256, 512),
+    (64, 64),
+    (256, 512),
+    (256, 256),
+    (256, 256),
+];
+
+#[test]
+fn a_mix_of_large_and_small_sprites_all_fit_and_none_overlap() {
+    let mut sheet = Sheet::default();
+    let mut taken: Vec<[u32; 4]> = Vec::new();
+    for (index, &(width, height)) in HD_LOAD_ORDER.iter().enumerate() {
+        let fill = u8::try_from(index + 1).expect("under 255 sprites");
+        let rect = sheet
+            .place(&sprite(width, height, fill))
+            .unwrap_or_else(|| panic!("sprite {index}, {width}x{height}, did not fit"));
+        let x = (rect[0] * SHEET_SIZE as f32) as u32;
+        let y = (rect[1] * SHEET_SIZE as f32) as u32;
+        let (w, h) = (u32::from(width), u32::from(height));
+        assert!(x + w <= SHEET_SIZE && y + h <= SHEET_SIZE, "sprite {index}");
+        for &[ox, oy, ow, oh] in &taken {
+            let apart =
+                x >= ox + ow + PAD || ox >= x + w + PAD || y >= oy + oh + PAD || oy >= y + h + PAD;
+            assert!(apart, "sprite {index} is within {PAD} texels of another");
+        }
+        taken.push([x, y, w, h]);
+    }
+}
