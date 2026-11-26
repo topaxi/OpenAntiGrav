@@ -756,7 +756,9 @@ fn the_options_page_reaches_the_run_and_saves_nothing() {
     // are not.
     run(
         "boot; select options; press cross; until page=options; select DISPLAY; press cross; \
-         until page=display; set display.vsync=off; set display.frame_limit=240; quit",
+         until page=display; set display.vsync=off; set display.frame_limit=240; press circle; \
+         until page=options; select GRAPHICS; press cross; until page=graphics; \
+         set graphics.target_fps=30; quit",
         &mods,
     );
     let settings = dir.join("config/oag/settings.toml");
@@ -789,6 +791,11 @@ fn the_options_page_reaches_the_run_and_saves_nothing() {
     assert!(
         json.contains("\"frame_limit\": \"120\""),
         "FRAME LIMIT: {json}"
+    );
+    // The player's TARGET FPS of 30 is the longest period here, longer than the run's limit.
+    assert!(
+        json.contains("\"budget_ms\": 33.333, \"budget_from\": \"target_fps\""),
+        "TARGET FPS: {json}"
     );
     assert!(json.contains("\"preset\": \"low\""), "PRESET: {json}");
     assert!(json.contains("\"render_scale\": \"50%\""), "PRESET: {json}");
