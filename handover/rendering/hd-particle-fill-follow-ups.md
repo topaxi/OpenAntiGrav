@@ -92,8 +92,10 @@ HD's width throttle, the other idea here, is TARGET FPS `original`
   the local branch `trimmed-sprites-parked`. Measure again only if the worst frame turns out to
   be alpha-over smoke on another circuit or on the Deck; on the default circuit the heavy frames
   are streaks.
-- **TARGET FPS `original` on the Deck**, against the existing loop on the same reproduction;
-  and at 240 Hz on an idle host, where the 2026-11-26 runs moved mostly on late frames.
+- **TARGET FPS `original` at 240 Hz on an idle host**, where the 2026-11-26 runs moved mostly on
+  late frames. The Deck is measured: `original` does not hold the barrage
+  (`docs/rendering/dynamic-resolution.md`, "On the Steam Deck: TARGET FPS `original` against the
+  budget loop").
 - **2048's `Debug.Enable Frame Buffer Throttling`** (byte `+0x550`): read its loads to say
   whether 2048 has a width or size throttle of its own
   (`docs/ghidra/functions/ps3-hdfury-eu/scene-width-throttle.md`, "Omega and 2048").
