@@ -38,6 +38,26 @@ def flame_clock(m):
     return m.f32(ctx + FRAME_CLOCK_OFFSET) if ctx else None
 
 
+#: The options block (`*(*0x008b098c)`); its byte `+0x473` is Pilot Assist, which `Hud_UpdateAssistIndicator` reads every frame
+#: to draw the indicator's bracket under the craft and `Craft_Update` passes on to the craft
+#: (`docs/ghidra/functions/ps3-hdfury-eu/pilot-assist.md`).
+OPTIONS_PP = 0x008B098C
+PILOT_ASSIST_OFFSET = 0x473
+
+
+def pilot_assist_at(m):
+    """The address of the Pilot Assist option byte, or `None` before the options block exists."""
+    holder = m.u32(OPTIONS_PP)
+    opts = m.u32(holder) if holder else 0
+    return opts + PILOT_ASSIST_OFFSET if opts else None
+
+
+def pilot_assist(m):
+    """The Pilot Assist option byte (0 is off), or `None` before the options block exists."""
+    at = pilot_assist_at(m)
+    return m.rd(at, 1)[0] if at is not None else None
+
+
 class Mem:
     """Guest memory through any `seek`/`read`/`write` object (`serve`'s `RemoteMem`, or `/proc/<pid>/mem`)."""
 

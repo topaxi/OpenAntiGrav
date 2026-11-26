@@ -368,6 +368,19 @@ def hull_check(pair, ship, team, live):
     return pair.check_equal("the player's hull (RAM) is the hull ours draws", ram.lower(), team.lower())
 
 
+def pilot_assist_check(pair, ship, profile_value, live):
+    """Refuse a pair whose original draws the Pilot Assist indicator ours is not told to draw, or the reverse. The option is
+    a save setting (`ship.pilot_assist`, the byte read in the capture's pause, 0 is off): a save with it on puts the
+    indicator's bracket under the craft of every race frame. Checked like the hull: a live capture must have read it."""
+    byte = ship.get("pilot_assist")
+    pair.rec["original"]["pilot_assist_byte"] = byte
+    if profile_value is None:
+        return True
+    if byte is None:
+        return pair.check("the original's Pilot Assist option was read from RAM", not live, "no `pilot_assist` in the capture record")
+    return pair.check_equal("the original's Pilot Assist option is ours'", "off" if byte == 0 else "on", profile_value)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--out", type=Path, required=True)
@@ -470,6 +483,8 @@ def main():
                                              record.get("camera_reason")))
     # A field pair checks the same against its field row below; a wrong hull is refused before ours renders.
     if not args.field and not hull_check(pair, ship, args.team, live=not args.json):
+        pair.finish()
+    if not pilot_assist_check(pair, ship, plat["ours"].get("pilot_assist"), live=not args.json):
         pair.finish()
     track = args.track or record.get("track")
     if not track:

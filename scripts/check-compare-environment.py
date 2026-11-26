@@ -252,6 +252,43 @@ def check_hd_hull():
         assert pair.rec["original"]["team"] == ram
 
 
+def check_hd_pilot_assist():
+    """An HD pair refuses an original whose save has Pilot Assist on (the indicator's bracket under the craft) when ours is
+    told off, and the reverse; a live capture without the read is refused, an old `--json` record without it passes."""
+    spec = importlib.util.spec_from_file_location("rpcs3_hd_pair", HERE / "rpcs3-hd-pair.py")
+    hd_pair = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(hd_pair)
+    import rpcs3_hd_field as field
+
+    class Pair:
+        def __init__(self):
+            self.rec = {"original": {}}
+            self.checks = []
+
+        def check(self, name, ok, detail):
+            self.checks.append((name, bool(ok), detail))
+            return ok
+
+        def check_equal(self, name, theirs, ours):
+            return self.check(name, theirs == ours, "%r %r" % (theirs, ours))
+
+    class Mem:
+        def u32(self, addr):
+            return {field.OPTIONS_PP: 0x2000, 0x2000: 0x3000}.get(addr, 0)
+
+        def rd(self, addr, n):
+            return bytes([3 if addr == 0x3000 + 0x473 else 0]) * n
+
+    assert field.pilot_assist(Mem()) == 3
+    assert ce.platform("hd-fury")["ours"]["pilot_assist"] == "off"
+    for byte, profile, live, ok in ((0, "off", True, True), (3, "off", True, False), (1, "on", True, True),
+                                    (0, "on", True, False), (None, "off", True, False), (None, "off", False, True)):
+        pair = Pair()
+        got = hd_pair.pilot_assist_check(pair, {} if byte is None else {"pilot_assist": byte}, profile, live)
+        assert bool(got) == ok and [c[1] for c in pair.checks] == [ok], (byte, profile, live, pair.checks)
+    assert hd_pair.pilot_assist_check(Pair(), {"pilot_assist": 3}, None, True), "a profile without the setting checks nothing"
+
+
 def tomllib_load(path):
     import tomllib
     return tomllib.loads(Path(path).read_text())
@@ -461,6 +498,7 @@ def main():
     check_detonator_mine_envelopes()
     check_hd_flame_clock()
     check_hd_hull()
+    check_hd_pilot_assist()
     check_detonator_volley_ticks()
     with tempfile.TemporaryDirectory() as t:
         check_detonator_picture_tick(Path(t))
