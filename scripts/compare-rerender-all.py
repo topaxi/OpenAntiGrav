@@ -149,13 +149,11 @@ class Rpcs3(Emulator):
         self.env = env
         self.remap = {}
 
-    #: Harimau is the standard hull (no `down`): the classic hull is locked on a fresh profile, and the original and ours only need the same hull.
-    #: Track Select presses from the first circuit, by pair directory (docs/reverse-engineering/rpcs3-capture.md), and Ship Select's
-    #: `right` presses per `--team` (Assegai 7, Harimau 9; `_c1` is the Fury hull, the classic hull is one `down` more).
+    #: Track Select presses from the first circuit, by pair directory (docs/reverse-engineering/rpcs3-capture.md). Ship Select is
+    #: not counted: the cold boot steps it until RAM names the pair's `--team` hull.
     CIRCUITS = {"vineta-k": 0, "anulpha-pass": 1, "moa-therma": 2, "chenghou-project": 3, "metropia": 4, "sebenco-climb": 5,
                 "ubermall": 6, "sol-2": 7, "talons": 8, "talons-assegai-c1": 8, "the-amphiseum": 9, "modesto-heights": 10,
                 "tech-de-ra": 11}
-    TEAMS = {"harimau": (9, 0), "Assegai_c1": (7, 0)}
 
     def prepare(self, rec):
         argv = rec["argv"]
@@ -163,11 +161,10 @@ class Rpcs3(Emulator):
         env.pop("OAG_RPCS3_ATTACH", None)
         pair_dir = Path(argv[argv.index("--out") + 1]).name
         team = argv[argv.index("--team") + 1] if "--team" in argv else ""
-        if "--field" not in argv and self.args.hd_cold and pair_dir in self.CIRCUITS and team in self.TEAMS:
+        if "--field" not in argv and self.args.hd_cold and pair_dir in self.CIRCUITS and team:
             # A restored savestate paints garbage on HD's glass; a cold boot to the same race draws it clean
             # (docs/reverse-engineering/rpcs3-capture.md, 2026-10-21): boot, walk Time Trial, Restart Race.
-            rights, classic = self.TEAMS[team]
-            sh([HERE / "emu-hd-glass-boot.sh", self.args.lane, self.CIRCUITS[pair_dir], rights, classic, "cold-" + pair_dir],
+            sh([HERE / "emu-hd-glass-boot.sh", self.args.lane, self.CIRCUITS[pair_dir], team, "cold-" + pair_dir],
                env=env, timeout=600)
             attach = dict(env, OAG_RPCS3_ATTACH="1")
             sh(["uv", "run", "--with", "evdev", "python3", HERE / "emu-run.py", "--", "python3", "-u", HERE / "rpcs3-drive.py",
@@ -382,5 +379,27 @@ def main():
     sys.exit(1 if failed else 0)
 
 
+def selftest():
+    """The HD cold boot hands the glass boot the pair's own `--team` hull, and the glass boot steps Ship Select by it."""
+    calls = []
+    real_sh = globals()["sh"]
+    globals()["sh"] = lambda cmd, **_kw: calls.append([str(c) for c in cmd])
+    try:
+        emu = Rpcs3(argparse.Namespace(lane="lane", hd_cold=True), Path("scratch"))
+        emu.env, emu.remap = {}, {}
+        for team in ("harimau", "Assegai_c1"):
+            del calls[:]
+            emu.prepare({"argv": ["rpcs3-hd-pair.py", "--out", "pairs/hd/talons", "--team", team]})
+            assert calls[0][0].endswith("emu-hd-glass-boot.sh") and calls[0][1:] == ["lane", "8", team, "cold-talons"], calls[0]
+    finally:
+        globals()["sh"] = real_sh
+    boot = (HERE / "emu-hd-glass-boot.sh").read_text()
+    assert 'hull=${3:?' in boot and 'rpcs3-hd-ship-step.py select --hull "$hull"' in boot, "the glass boot picks no hull"
+    print("compare-rerender-all selftest ok")
+
+
 if __name__ == "__main__":
-    main()
+    if sys.argv[1:] == ["selftest"]:
+        selftest()
+    else:
+        main()
