@@ -104,8 +104,8 @@ fn mapping_a_quad_marks_it_sampled_and_moves_its_uvs() {
 }
 
 /// The sizes Wipeout HD's listed effects ask for, in the order a race loads
-/// them: six 1024x1024 sprites among smaller ones. Rows of one height each ran
-/// out at the fifth of the six, though under 60 % of the sheet was covered.
+/// them: six 1024x1024 sprites among smaller ones, covering under 60 % of the
+/// sheet. Rows as tall as their tallest sprite hold only four of the six.
 const HD_LOAD_ORDER: &[(u16, u16)] = &[
     (1024, 512),
     (1024, 1024),

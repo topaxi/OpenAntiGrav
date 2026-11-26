@@ -60,5 +60,8 @@ The sprites are wired; the capture's other two differences are not
 
 ## Next Steps
 
-1. Run the Deck numbers before and after.
-2. Put items 2 and 3 to the maintainer as settings once the Deck numbers are in.
+1. Read what the `WO_ROCKET_EXPLO` spawn at `0x0014a7d8` rides ("What the blast rides").
+2. Find the source of the screen-sized additive quads ("The screen wash"), and confirm they are
+   the wash by capturing with their draw skipped.
+3. Run the Deck numbers before and after.
+4. Put items 2 and 3 of the table to the maintainer as settings once the Deck numbers are in.

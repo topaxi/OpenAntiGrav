@@ -381,7 +381,8 @@ With twelve more sprites HD no longer fitted the 4096 sheet: `FIREBALL_TUMULT` w
 rows as tall as their tallest sprite and ran out under 60 % full. It now keeps the free space
 as maximal rectangles and takes the highest, then leftmost, position
 (`oag_fx::psys::sprite`, `packing`). Same sheet size, same padding, nothing dropped on HD,
-2048, Omega, Pulse (PSP and PS2) or Pure.
+2048, Omega (both effect sets), Pulse (PSP and PS2) or Pure; none of the others dropped one
+before either, so the packer draws nothing new there.
 
 A sprite that moves on the sheet can round differently when sampled. Main against this build,
 HD, 1280x720 and the three Detonator comparison pairs: the pairs, a forced Missile hit and a
@@ -406,8 +407,9 @@ Where ours' player is held decides where the blast stands, so there are two geom
 - **Held at the original's pose at the hit** (that row replaced by `hit.json`'s
   `player_pose`). The blast stands at the original hit point, which is where ours' stays.
 
-Whole-frame RMSE against the original, 0 to 255, near law on in all, the same build with and
-without the listing:
+Whole-frame RMSE against the original, near law on in all, the same build with and without
+the listing. The figure is `compare_env.overlap_score`'s `rmse` times 255, not the script
+behind the ten-frame table above:
 
 | Geometry | Age | Without sprites | With sprites |
 | --- | --- | --- | --- |

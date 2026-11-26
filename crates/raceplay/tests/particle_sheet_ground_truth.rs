@@ -8,14 +8,16 @@
 
 use oag_raceplay as race;
 
-/// Loads a race on `source` and returns its loader report, checked for dropped
-/// sprites, or `None` where the source is not here.
-fn report(source: &str) -> Option<String> {
+/// Loads a race on `source` (on `track`, else the title's own first circuit) and
+/// returns its loader report, checked for dropped sprites, or `None` where the
+/// source is not here.
+fn report_on(source: &str, track: Option<&str>) -> Option<String> {
     let source = oag_testdata::image(source)?;
     let loaded = race::load(&race::Options {
         source: source.display().to_string(),
         class: "VENOM".to_string(),
         mode: oag_race::Mode::SingleRace,
+        track: track.map(str::to_string),
         ..race::Options::default()
     })
     .expect("loading the race");
@@ -26,6 +28,10 @@ fn report(source: &str) -> Option<String> {
         .collect();
     assert!(dropped.is_empty(), "{dropped:#?}");
     Some(report)
+}
+
+fn report(source: &str) -> Option<String> {
+    report_on(source, None)
 }
 
 /// The loader report's line for `effect`.
@@ -70,6 +76,22 @@ fn every_omega_sprite_is_on_the_sheet() {
     };
     let craft = line(&report, "WO_ROCKET_EXPLO");
     assert!(craft.contains("sprite(s) read"), "{craft}");
+}
+
+/// Omega ships a second effect set for its 2048-era circuits
+/// (`Data\particles2048`), which a race on one of them loads instead.
+#[test]
+#[ignore = "needs data/images/omega-ps4-eu.pkg"]
+fn every_omega_2048_era_sprite_is_on_the_sheet() {
+    let Some(report) = report_on(
+        "data/images/omega-ps4-eu.pkg",
+        Some(r"Data\Environments2048\tower\track.vex"),
+    ) else {
+        return;
+    };
+    // Four emitters here against the other set's two: the 2048-era file.
+    let plasma = line(&report, "WO_PLASMA_LIGHTNING_EXPAND");
+    assert!(plasma.contains("4 emitter(s)"), "{plasma}");
 }
 
 #[test]
