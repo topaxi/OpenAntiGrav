@@ -453,6 +453,8 @@ pub struct RaceView {
     pub(super) detonator_cannon_lights: bool,
     /// `options::ViewSetup::detonator_emp_light`.
     pub(super) detonator_emp_light: bool,
+    /// `options::ViewSetup::detonator_mine_spin`.
+    pub(super) detonator_mine_spin: Option<f32>,
     /// `options::ViewSetup::detonator_ammo_gauge`, and what the gauge showed last frame.
     pub(super) detonator_ammo_gauge: Option<oag_title::DetonatorAmmoGauge>,
     pub(super) ammo_gauge_shown: std::sync::Mutex<Option<crate::ammo_gauge::Shown>>,
@@ -562,12 +564,13 @@ pub struct RaceView {
     /// What the weather adds to the original's. `[render_profiles.<title>] weather`;
     /// see [`Race::set_weather`].
     pub(super) weather: oag_display::display::Weather,
-    /// Each laid Detonator mine's football and spikes size (`m+0xd8` and the spikes' own), by survey entry
-    /// and lane, as the scene last stepped its music envelope. Absent is `1`. Written by
-    /// [`crate::scene`]'s `write_detonator_looks`, read by [`Race::mine_model_matrices`]: one source for the
-    /// draw, the shadows and the blur's previous pose.
-    pub(super) mine_sizes: std::sync::Mutex<std::collections::BTreeMap<(u16, i8), (f32, f32)>>,
-    /// Laid mines whose music envelope a comparison holds at the original's read (`--detonator-mine-envelopes`),
-    /// by survey entry and lane: the football's `s`, the spikes' `t` and the visualiser's `PitchOffset`.
+    /// Each laid Detonator mine's football and spikes size (`m+0xd8` and the spikes' own) and age, by
+    /// survey entry and lane, as the scene last stepped its music envelope. Absent is size `1`, age `0`.
+    /// Written by [`crate::scene`]'s `step_mine_envelopes`, read by [`Race::mine_model_matrices`]: one
+    /// source for the draw, the shadows and the blur's previous pose.
+    pub(super) mine_poses:
+        std::sync::Mutex<std::collections::BTreeMap<(u16, i8), crate::detonator_look::MinePose>>,
+    /// Laid mines a comparison holds at the original's read (`--detonator-mine-envelopes`,
+    /// `--detonator-mine-ages`), by survey entry and lane.
     pub(super) mine_pins: std::sync::Mutex<crate::detonator_look::MinePins>,
 }

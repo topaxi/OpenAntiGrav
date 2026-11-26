@@ -489,6 +489,9 @@ pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
     }),
     cannon_lights: true,
     emp_light: true,
+    // `DetonatorMine_AnimateToMusic`'s `phase = 4.0 * age` (TOC `-0x2bcc`), read live
+    // (`detonator-mine-draw.md`, "The spin").
+    mine_spin: Some(4.0),
     ammo_gauge: Some(DETONATOR_AMMO_GAUGE),
     hull_charge: Some(DETONATOR_HULL_CHARGE),
     camera_scale: 0.7,

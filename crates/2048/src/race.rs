@@ -495,6 +495,8 @@ pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
     cannon_lights: false,
     // `FUN_811e8650`, the EMP vtable's slot 5.
     emp_light: true,
+    // The mine's animate function is unread (`detonator-mine-draw.md`, "Lineage").
+    mine_spin: None,
     ammo_gauge: None,
     hull_charge: None,
     camera_scale: 0.7,
