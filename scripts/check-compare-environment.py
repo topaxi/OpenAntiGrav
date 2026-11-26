@@ -210,6 +210,48 @@ def check_hd_flame_clock():
     assert rro.hd_flame_clock_flags(dict(rec, profile="pulse-psp"), ["--race"]) == ["--race"]
 
 
+def check_hd_hull():
+    """An HD pair refuses an original whose RAM hull is not the one ours draws: a Fury `Harimau_c1` grab with
+    `--team harimau` passed every other parity check. A live capture without the read is refused too; an old `--json`
+    record without it passes."""
+    spec = importlib.util.spec_from_file_location("rpcs3_hd_pair", HERE / "rpcs3-hd-pair.py")
+    hd_pair = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(hd_pair)
+    import rpcs3_hd_field as field
+
+    class Pair:
+        def __init__(self):
+            self.rec = {"original": {}}
+            self.checks = []
+
+        def check(self, name, ok, detail):
+            self.checks.append((name, bool(ok), detail))
+            return ok
+
+        def check_equal(self, name, theirs, ours):
+            return self.check(name, theirs == ours, "%r %r" % (theirs, ours))
+
+    class Mem:
+        def __init__(self, path):
+            self.path = path
+
+        def u32(self, addr):
+            return {0x1000 + 0x6298: 0x2000, 0x2000 + 0x1B4: 0x3000}.get(addr, 0)
+
+        def rd(self, _addr, n):
+            return (self.path.encode() + b"\0" * n)[:n]
+
+    assert field.team_of(Mem("Data\\Ships\\Harimau_c1"), 0x1000) == "Harimau_c1"
+    assert field.team_of(Mem("Data\\Ships\\Harimau"), 0x1000) == "Harimau"
+    for ram, team, live, ok in (("Harimau", "harimau", True, True), ("Harimau_c1", "harimau", True, False),
+                                ("Assegai_c1", "Assegai_c1", True, True), (None, "harimau", True, False),
+                                (None, "harimau", False, True)):
+        pair = Pair()
+        got = hd_pair.hull_check(pair, {} if ram is None else {"team": ram}, team, live)
+        assert bool(got) == ok and [c[1] for c in pair.checks] == [ok], (ram, team, live, pair.checks)
+        assert pair.rec["original"]["team"] == ram
+
+
 def tomllib_load(path):
     import tomllib
     return tomllib.loads(Path(path).read_text())

@@ -356,6 +356,18 @@ def detonator_inputs(pair, out, ship, clock):
     return flags
 
 
+def hull_check(pair, ship, team, live):
+    """Refuse a pair whose original flies another hull than `--team` names. The parity checks pass on a wrong hull (the
+    pose, camera and clocks do not depend on it), so the player's hull directory read in the capture's pause
+    (`ship.team`: `Harimau`, or the Fury `Harimau_c1`) is compared with it. A live capture must have read it; a reused
+    `--json` record made before the field existed is checked only when it holds one."""
+    ram = ship.get("team")
+    pair.rec["original"]["team"] = ram
+    if ram is None:
+        return pair.check("the player's hull was read from RAM", not live, "no `team` in the capture record")
+    return pair.check_equal("the player's hull (RAM) is the hull ours draws", ram.lower(), team.lower())
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--out", type=Path, required=True)
@@ -456,6 +468,9 @@ def main():
     if not camera or not ship:
         sys.exit("capture has no %s (%s)" % ("camera" if not camera else "ship pose",
                                              record.get("camera_reason")))
+    # A field pair checks the same against its field row below; a wrong hull is refused before ours renders.
+    if not args.field and not hull_check(pair, ship, args.team, live=not args.json):
+        pair.finish()
     track = args.track or record.get("track")
     if not track:
         sys.exit("no circuit: the TTY log named none, pass --track")
