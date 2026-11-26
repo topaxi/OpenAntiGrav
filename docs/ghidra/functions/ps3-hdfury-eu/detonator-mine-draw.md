@@ -154,7 +154,8 @@ under the shift; that it is blind is likely but not shown. Which clock the HUD l
 | Spike tips | `34 * spikeScale` px, `spikeScale = min(4 t, scale + 0.95)`, the spikes' bands `11..14` at `0.65` to `0.99`: 64 to 74 px | about 70 px |
 | Visualiser | billboard ring, bounding `80 * (1 + 0.4 (scale - 1))` px | violet ring, about 57 px |
 
-The ring's own radius inside its 2.45-unit bounds is not measured (the model's arcs reach beyond it). Measured by eye on
+The ring's own radius inside its 2.45-unit bounds was not measured here (the model's arcs reach beyond it); it is now,
+and ours matches it ("The ring's radius", below). Measured by eye on
 a 3x crop with rings at 20 to 60 px: shell about 30 px, ring about 57 px, spike tips about 70 px. **So the original's lit
 mine reads about twice ours' because of the ring and the long spikes around a football of ordinary size**, not a bigger
 football (confidence 55: one mine, by eye).
@@ -415,12 +416,58 @@ does; the `mines-ahead` pair carries the grab's mine ages, and its mean grey dro
   `tests::detonator_craft::an_hd_mine_turns_about_its_up_by_four_times_its_age`; the pair's age from the picture's read in
   `check-compare-environment.py` (`check_detonator_mine_envelopes`).
 
+## The ring's radius (2026-11-26, `det-mine-ring-radius`)
+
+**Claim:** the ring's own radius is read from the original, ours draws it there, and the `mines-ahead` pair's mean grey
+drops. **False: ours already draws the ring at the original's radius**, so there is nothing to wire and the pair cannot
+move by it.
+
+- **Nothing in the program sizes the ring beyond the model and the pose.** `electricity.rcsmaterial`'s vertex block #1
+  (`ps3-microcode.py vp-file electricity.rcsmaterial 1`, 15 instructions) builds the position as
+  `R0.xyz = v[0] * c[210] + c[211]` (`MUL` @6, `ADD` @7), `c466`/`c467` being `positionScale`/`positionBias` (`0x9cc5ab3a`,
+  `0xa4972b78`), the model's dequantisation every HD vertex program applies ([renderer.md](renderer.md)), then
+  `o[POS] = R0 * c[0..3]` (@10..@14, the `float4x4` at `c256`). No music term, no volume and no per-instance scale touches
+  the position. So the ring's size is the model's disc times `DetonatorMine_PoseVisualiser`'s `1 + 0.4 (football - 1)` live
+  (`0.9` dark), already wired ("The visualiser, wired"). Where the lightning sits inside the disc is the fragment program's
+  colour tap at `uv1.y + 0.3 m`, also wired; `m` carries the volumes, which a measured re-landing moved by `0.01`
+  ([detonator-mine-material.md](detonator-mine-material.md), "The visualiser's level"). Confidence **80** (both programs
+  read end to end; the pose's scale at 65, unchanged).
+- **Measured on the pair, three mines.** Same `theirs.png`, ours rendered at `main` (`d28fc9db9`, the spin merge's render
+  unchanged). Each near mine projected with the pair's own `--camera-pose` and `--camera-fov 68.0996` (focal 798 px), its
+  ring scale `1 + 0.4 (football - 1)` from the pair's `football_scale`. Violet mask `b > 150, r > 100, b - g > 60, r - g > 30`;
+  for the middle mine, centre searched over +-10 px and the 3 px annulus with the highest violet share kept:
+
+  | Mine | Depth, px a unit, ring scale | Original | Ours |
+  | --- | --- | --- | --- |
+  | middle, projected `1047, 507` | 23.97, 33.3, 1.097 | centre `1049, 507`, radius 57.5 px | `1045, 501`, 55.5 px |
+  | left, projected `758, 536` | 18.10, 44.1, 1.072 | on a 74 px circle, by eye | on the same circle, by eye |
+  | right, projected `1521, 518` | 23.62, 33.8, 1.123 | on a 60 px circle, by eye | on the same circle, by eye |
+
+  The middle mine's radial profile (violet share, 4 px rings) peaks at 56 px in the original (0.34) and 52 px in ours
+  (0.34); 2 px of 57 is 3.5 %. Its ring stands at `57.5 / (33.3 x 1.097) = 1.57` model units, 0.64 of the 2.45-unit bound
+  (the bound is not the rim). That radius predicts 74 px for the left mine and 60 px for the right; circles of those radii on
+  2x crops lie on the ring in both frames (the original's left ring is fainter and more diffuse). On the side mines an
+  annulus fit locks onto the violet body or the spikes in both frames (31 to 34 px, or 52 to 55 px with the centre at the
+  search's edge), so the circle check is the evidence there. Confidence **75** that ours' radius is the original's (three
+  mines, one frame, one by fit and two by eye; `cannon-volley` and `cannon-volley-hot` have no like-for-like near mine,
+  ours' mines there stand far off, and `pad`'s are 80 units out).
+- **Where `mines-ahead`'s gap is** (page scorer's grey difference, share of the whole-frame 12.49): the three near mines'
+  boxes (`650..870 x 420..650`, `960..1135 x 420..600`, `1420..1625 x 420..620`, background included) carry **2.49**
+  (0.82, 0.54, 1.14). The score panel (`700..1225 x 35..240`, HUD) carries **2.10**. The scenery in the upper right
+  (`1100..1920 x 0..400`, the panel left out) carries **3.26**: an overhead structure ours draws lit grey where the
+  original is black, and the violet panels beside it. So no ring change can bring the pair under 10.
+- **Not wired, so no test added.** The ring's scale law is pinned by
+  `tests::detonator_craft::a_laid_mines_visualiser_ring_faces_the_camera_and_follows_the_footballs_size`.
+  `5fac71320` (the volumes) was not re-landed: the radius is already right, so the brief's condition for it did not hold.
+- **Pairs** (this tree, unchanged): `mines-ahead` 12.51, `pad` 7.61, `cannon-volley` 14.32, `cannon-volley-hot` 10.31.
+- **2048 and Omega: not checkable.** Both ship `electric_visualiser` and draw it ("The visualiser, wired"), but no 2048 or
+  Omega Detonator pair has a lit near mine to measure a ring radius on.
+
 ## Still open
 
 - The writer of the spin axis `m+0xe0` (ours takes the survey's up; live it read as the object's up row).
 - `+0xfc = +0xc0 * k` in `DetonatorMine_Update` ([detonator-mine.md](detonator-mine.md)): a second turn word, its reader unread.
 - The eye behind `0x00987884+0x70` (the visualiser's camera), read to its writer.
-- The ring's own radius inside `Electric_Visualiser` (HD's material program is read: "The visualiser, wired").
 - A live read of the mine's submitted matrix (`0x001399a4`, `r4`) would lift rows 3 and 4 above 80.
 
 ## Lineage (2048 and Omega)
