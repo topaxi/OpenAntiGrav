@@ -2711,7 +2711,15 @@ rule; left or right only differs on an exactly zero dot (the original keeps left
 Pure inherits it (`CraftLaws`, labelled inherited from Pulse); Pulse PS2 runs `Laws::PULSE`,
 inherited from PSP, its own drain unread. The test
 `wall::impulse::tests::pulses_drain_reproduces_the_captured_velocity_changes` pins four of
-the rows above (1, 7, 8, 9).
+the rows above (1, 7, 8, 10).
+
+What moved with it: no determinism hash (the gameplay scenario's blast stays pending, as it
+never runs the physics step), and not the lone-craft gate (all twelve circuits clean before
+and after). Three field pins moved and were re-bounded:
+`ai_dekonstruct_black_ground_truth`'s FLASH seed 2 forward (0 to 1, noise not systematic:
+destroyed 184 to 181 over the nine `BOUND_OFFSETS`), Pulse `05_Track`'s pit rescues
+(`arena_beneath_ground_truth`, 2 to 1), and Pure Chenghou Project's respawn bound
+(`pure_original_ai_ground_truth`, 1 to 2, the field still all finishes).
 
 **Reproduce.**
 

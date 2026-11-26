@@ -307,7 +307,7 @@ mod tests {
     /// "The drain pushes along the side row": a Rocket from almost square behind (pending
     /// nearly all forward, `-0.40` on the left row), one from ahead (negative on forward), a
     /// push to the left, and a Plasma. Each comes out the measured velocity under
-    /// [`crate::laws::Laws::PULSE`]'s axis; a forward drain lands 26 units/s off on the first.
+    /// [`crate::laws::Laws::PULSE`]'s axis; a forward drain lands 37 units/s off on the first.
     const PULSE_DRAINS: [Drain; 4] = [
         Drain {
             left: [0.516_615_4, 0.782_307_1, -0.348_000_4],
