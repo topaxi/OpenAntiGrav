@@ -22,8 +22,10 @@ The clamp reads the output's refresh (`oag_present::refresh`; on X11 through Ran
   About 5 minutes with the maintainer's hands: dock, undock, start the build from Steam with
   `RUST_LOG=oag_game=debug` and read the `X server reports N mHz` line. 90 is a pass.
 - An X server without RandR panics inside winit 0.30.13 before the reader starts (`failed to
-  request XRandR version`; no upstream issue found by that text). Low impact: gamescope and a
-  default Xvfb have RandR. A fix is a dependency patch.
+  request XRandR version`). Recorded, not planned: upstream does not support such a server, a fix
+  is a fork, and the maintainer ruled it not worth investment. Gamescope and a default Xvfb have
+  RandR. Evidence: `docs/rendering/dynamic-resolution.md`, "On the Steam Deck: the refresh the
+  output reports", the "No RandR extension" bullet.
 - A real dock and undock on the Deck: launch undocked then dock (expect 60 within about two
   seconds), launch docked then undock (expect back to 90). Headless Xvfb mode changes follow;
   gamescope headless could not change its rate, so the rate change under gamescope is unproven.
