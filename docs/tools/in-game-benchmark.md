@@ -226,10 +226,10 @@ fitted, which is why desktop checks on Pulse did not show it.
   rectangles, which a click or a tap is tested against, do not move.
 
 `screen::misfits` is the check: a string outside the panel, a label outside its button, text over
-the button rows, or two strings drawn over each other. The results table was checked on HD by a
-`--race --autopilot` capture, before (columns running into each other, four rows off the screen) and
-after (all eight rows in the panel); Omega's finished race shows that table in the window too, as it
-has no EndRace screens wired.
+the button rows, or two strings drawn over each other. The results table was checked by
+`--race --autopilot --screenshot` captures: HD before (columns running into each other, four rows
+off the screen) and after (all eight rows in the panel), and Omega after, whose finished race keeps
+this table because it has no EndRace screens wired ([endrace-screens.md](../ui/endrace-screens.md)).
 
 ## The result file
 

@@ -2,7 +2,7 @@
 status: measure
 titles: [all]
 updated: 2026-11-26
-summary: "In-game benchmark: run it on the Deck, full length on the S21, and compare; try a mod-supplied preset file; 2048 EXTRAS tile unwired"
+summary: "In-game benchmark: run it on the Deck, full length on the S21, and compare; try a mod-supplied preset file; 2048 EXTRAS tile unwired; HD and Omega heading names no circuit"
 ---
 
 # The in-game benchmark is wired on every title; no compared Deck or phone result
