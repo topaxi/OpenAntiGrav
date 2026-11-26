@@ -637,13 +637,16 @@ quad, template and strip with that handedness. Confidence 94.
 | Weapon fired | Particle quads read, same sign as the reference | opposite sign |
 | --- | --- | --- |
 | Rocket craft hit (three films, two boots) | 9,565 | 2 |
-| Plasma | 1,370 | 0 |
-| Missile | 7,722 | 0 |
-| Quake | 5,355 | 0 |
-| Detonator EMP | 21,458 | 0 |
-| Detonator cannon | 133,436 | 180 (0.13 %), nearly all `spark_mblurred_grey`, a symmetric sprite; cause not read |
+| Plasma (two films) | 9,789 | 0 |
+| Missile (one film) | 7,722 | 0 |
+| Quake (two films) | 10,294 | 0 |
+| Detonator EMP (one film) | 21,458 | 0 |
+| Detonator cannon (one film) | 133,436 | 180 (0.13 %), nearly all `spark_mblurred_grey`, a symmetric sprite; cause not read |
 
 The counts are every particle quad in the frames, the effects' own and whatever else was in view.
+Missile and Detonator are seen once. The Detonator save state is refused by this RPCS3 build, so its
+grid was reached by walking Racebox from a cold boot (RACE TYPE Detonator, Talon's Junction); the EMP
+was fired with `--button l1 --emp-charge 12 --press-frames 18`, the cannon with `--press-frames 90`.
 
 **Strips (render mode 5 and 6): which end is which.** For a stretched quad whose long axis carries
 `v`, the end farther from its texture's own centre in that frame, larger `v` against smaller `v`:
@@ -651,7 +654,8 @@ The counts are every particle quad in the frames, the effects' own and whatever 
 `..._yellow_streaks_128x128` 192 against 4, `..._white_streaks_128x128` 80 against 6,
 `fireball_1024x512_yellow` 101 against 0. So an outward streak leads with the authored top, as
 ours' bar does (the particle's position takes the top row). The Plasma wind-up runs the other way,
-7 against 192 (`glow_cleanedges_plasma`) and 0 against 33 (`plasma_forks`), and its two emitters
+7 against 192 and 45 against 1,559 on the two films (`glow_cleanedges_plasma`), 0 against 33 and
+0 against 287 (`plasma_forks`), and its two emitters
 author a negative speed (-0.50 and -0.48 units a tick): they fly inward. Confidence 90.
 
 Ours samples no sprite at all on the strips of the Rocket's blasts, the Missile head, the Quake and
