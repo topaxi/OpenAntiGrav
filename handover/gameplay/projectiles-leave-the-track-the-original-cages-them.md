@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [pulse, hd]
 updated: 2026-11-26
-summary: "Cage, launch normal, floor arms, own box (incl. HD) wired; open: HD Missile/Shuriken air arms, opponent box, travel sweep"
+summary: "Cage, launch normal, floor arms, own box and HD air arms wired; open: HD Plasma fall axis, floor arms, opponent box, travel sweep"
 size: S (50)
 difficulty: medium (55)
 ---
@@ -135,9 +135,8 @@ was not measured.
 
 ## Next Steps
 
-1. **HD's remaining open-air arms** (`oag-capture`/`oag-re`; box, probe lengths and the Rocket's
-   no-fall arm are wired, `projectile-floor.md`, "HD's box and open-air Rocket"): the Missile's
-   `0x7f` arm (`0x11e440`), the Shuriken's, and its probe length; the Plasma's fall axis (static:
-   world Y, ours along the normal). Then 2048's and Omega's own probe lengths and Rocket arm
+1. **HD's Plasma fall axis** (static: world Y, ours along the normal; the box, probe lengths,
+   the Rocket's no-fall arm and the Missile's fall are settled, `projectile-floor.md`, "HD's box
+   and open-air Rocket"). Then 2048's and Omega's own probe lengths and Rocket and Missile arms
    (Omega's Plasma reads `6.0`), an opponent's box and the travel sweep (items above).
 2. Read HD's `Rocket_Update`, `Missile_Update` and `Shuriken_Update` floor arms (`ps3-hdfury-eu`); if they match Pulse's, flip `Weapons::floor_arms_steer_to_ride_point` for HD (and Omega, 2048 by lineage).

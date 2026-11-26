@@ -285,7 +285,8 @@ impl ProbeLengths {
     };
     /// HD's Rocket, Missile and Plasma, `6.0` live
     /// (`docs/ghidra/functions/ps3-hdfury-eu/own-craft-box.md`, "Measured live"). The Shuriken's
-    /// is unmeasured and takes Pulse's.
+    /// `12.0` is read from its update, which never runs: HD builds no Shuriken
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/open-air-arms.md`, "HD builds no Shuriken").
     pub const HD: Self = Self {
         rocket: 6.0,
         missile: 6.0,

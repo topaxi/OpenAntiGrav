@@ -149,17 +149,37 @@ fn an_hd_rocket_in_open_air_turns_along_its_carried_normal_and_does_not_fall() {
     );
 }
 
-/// Only the Rocket has the no-fall arm: an HD Missile in open air still falls.
+/// HD's `Missile_Update` on an update its probe found nothing: the velocity read at its probe and
+/// at its sweep. It fell on world Y, not along the carried normal half a degree off it
+/// (`docs/ghidra/functions/ps3-hdfury-eu/open-air-arms.md`, "Measured live").
 #[test]
-fn an_hd_missile_in_open_air_still_falls() {
-    let velocity = once(
-        HD,
-        Weapon::Missile,
-        Vec3::new(0.0, 500.0, 0.0),
-        Vec3::new(0.0, 0.0, -40.0),
-        Vec3::Y,
+fn an_hd_missile_in_open_air_falls_on_world_y_as_recorded() {
+    let before = Vec3::new(64.4875, -2.7333, -2.2110);
+    let normal = Vec3::new(0.003193, 0.999962, -0.008093);
+    let after = Vec3::new(64.4875, -3.5666, -2.2110);
+    let high = Vec3::new(0.0, 500.0, 0.0);
+    let ours = once(HD, Weapon::Missile, high, before, normal);
+    assert!(
+        ours.distance(after) < 0.002,
+        "ours {ours}, original {after}"
     );
-    assert!(velocity.y < -0.5, "{velocity}");
+}
+
+/// HD's `Shuriken_Update` reads as the same fall on world Y. It never runs, as HD builds no
+/// Shuriken, so this holds ours to the static read (`open-air-arms.md`).
+#[test]
+fn an_hd_shuriken_in_open_air_falls_on_world_y() {
+    let before = Vec3::new(0.0, 0.0, -40.0);
+    let banked = Vec3::new(0.6, 0.8, 0.0);
+    let ours = once(
+        HD,
+        Weapon::Shuriken,
+        Vec3::new(0.0, 500.0, 0.0),
+        before,
+        banked,
+    );
+    let fallen = before - Vec3::Y * (FALL_ACCELERATION * DT);
+    assert!(ours.distance(fallen) < 0.002, "ours {ours}, read {fallen}");
 }
 
 /// The Missile and Plasma probe `6.0` on HD and `12.0` on Pulse: eight above the floor, HD's
