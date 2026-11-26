@@ -273,11 +273,6 @@ def mine_flags(pair, ship):
     if all(m.get("age_s") is not None for m in mines):
         flags += ["--detonator-mine-ages", ";".join("%.4f" % m["age_s"] for m in mines)]
         pair.caveat("each mine's age (`+0xc0`), which turns it about its up axis, is held in ours (`--detonator-mine-ages`)")
-    # The ring's `MasterVolume` and `PitchVolume` are one whole-spectrum level that swings threefold between reads
-    # (`detonator-mine-draw.md`, "The visualiser's level, read"); ours has no such level under `--no-audio`.
-    if all(m.get("master_volume") is not None and m.get("pitch_volume") is not None for m in mines):
-        flags += ["--detonator-mine-volumes", ";".join("%.4f,%.4f" % (m["master_volume"], m["pitch_volume"]) for m in mines)]
-        pair.caveat("each mine's ring `MasterVolume` and `PitchVolume` (`+0x104`, `+0x10c`) are held in ours (`--detonator-mine-volumes`)")
     return flags
 
 

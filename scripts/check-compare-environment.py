@@ -270,10 +270,9 @@ def check_detonator_mine_envelopes():
     # The picture is older than its pause's RAM: each mine takes the read nearest the picture's clock, with its draw words.
     lagged = Pair()
     lagged.rec["original"]["presented_lag"] = {"picture_total_ticks": 6.0}
-    ram = dict(mine(1.0, 1, 0.25, 1.0), address=7, master_volume=0.5372, pitch_volume=0.1074)
-    reads = [{"race_clock_s": c, "mines": {"7": {"football_s": s, "spikes_t": t, "pitch_offset": 8.25, "age_s": c + 53.0,
-                                                 "master_volume": min(1.0, 5 * v), "pitch_volume": v}}}
-             for c, s, t, v in ((2.55, 0.6, 0.5, 0.1055), (2.6, 0.5, 0.45, 0.3154), (2.7, 0.25, 1.0, 0.1074))]
+    ram = dict(mine(1.0, 1, 0.25, 1.0), address=7)
+    reads = [{"race_clock_s": c, "mines": {"7": {"football_s": s, "spikes_t": t, "pitch_offset": 8.25, "age_s": c + 53.0}}}
+             for c, s, t in ((2.55, 0.6, 0.5), (2.6, 0.5, 0.45), (2.7, 0.25, 1.0))]
     flags = hd_pair.mine_flags(lagged, {"mines": [ram], "race_clock_s": 2.7, "mine_reads": reads})
     assert flags[flags.index("--detonator-mine-envelopes") + 1] == "0.5000,0.4500,8.2500", flags
     det = lagged.rec["original"]["detonator"]
@@ -281,8 +280,6 @@ def check_detonator_mine_envelopes():
     # The age turns the mine: it comes from the same read as the envelope, not the pause's.
     assert flags[flags.index("--detonator-mine-ages") + 1] == "55.6000", flags
     assert det["mines"][0]["age_s"] == 55.6, det
-    # The ring's two volumes swing threefold between reads: the picture's read, not the pause's.
-    assert flags[flags.index("--detonator-mine-volumes") + 1] == "1.0000,0.3154", flags
     far = Pair()
     far.rec["original"]["presented_lag"] = {"picture_total_ticks": 6.0}
     flags = hd_pair.mine_flags(far, {"mines": [ram], "race_clock_s": 2.7, "mine_reads": reads[2:]})
