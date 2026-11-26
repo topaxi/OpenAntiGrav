@@ -307,8 +307,8 @@ placement RNG cannot match the original's `Libc_Rand` (a departure, documented).
   animate functions are not located). ~~The ring's own radius~~ measured (`det-mine-ring-radius`,
   `detonator-mine-draw.md`, "The ring's radius"): ours already draws it at the original's (57.5 against 55.5 px on the middle
   near mine; the side mines on the law's 74 and 60 px circles in both frames), and the three near mines' boxes carry 2.49 of
-  `mines-ahead`'s 12.5. Next for that pair: the upper-right scenery (3.26 grey: an overhead structure lit grey in ours,
-  black in the original) and the score panel (2.10, HUD).
+  `mines-ahead`'s 12.5. ~~The upper-right scenery~~ fixed (`det-dark-scenery`: Talon's `scanlinebillboard`
+  hologram drew its advert in a Zone frame; `mines-ahead` 12.46 to 10.63). Next for that pair: the score panel (2.10, HUD).
   (3) ~~Ours builds the football and spikes with no tangent~~: wired (`Mesh::inline_tangents`, `+10`); the dark centre is
   gone, ours' core 143 -> 157.5 against the original's 188, so the body is still darker than the original's white.
 
@@ -501,7 +501,7 @@ positions differ by construction (ours places with its own seeded `Rng`), so a m
 
 **The volley pair split (2026-11-26, `det-cannon-hot-gap`; `docs/tools/compare-page.md`, "The volley pair's difference, split").** Its
 capture state is partly fixed (picture lag off the static scene, ours at the picture's tick, mine ages; 11.47 to 10.32). **Open draw gaps, on every Detonator
-pair:** bright striped grilles ours draws where the original is black (about 1.9 grey), the score box's white-striped wings (1.2), HUD digits
+pair:** ~~bright striped grilles ours draws where the original is black~~ (fixed 2026-11-26, `det-dark-scenery`: the `scanlinebillboard` hologram's Zone variants draw the Zone surface, `docs/rendering/hd-zone-recolour.md`, "Holographic billboards in a Zone frame"; -hot 10.32 to 8.96, pad 7.60 to 5.88), the score box's white-striped wings (1.2), HUD digits
 and `1/14` too wide (1.2), hull too bright (0.7). **Open capture state:** input latency before ours' fire (muzzle flash 0.7), the volley
 pair's mine envelopes (no earlier reads in its record).
 
