@@ -44,9 +44,9 @@ download and no `unsafe` in this tree: the crate builds the C++ with `cc`, selec
 at run time (SSE2/SSE4.1/AVX2, NEON on aarch64) and exposes a safe `compress`. Its build script
 supports x86_64 and aarch64 only, so the dependency and `mesh_render::astc` are compiled for those
 two architectures; the web build and any other target have no encoder and never ask for ASTC.
-On Android, `cc` links `libc++_shared.so` for C++ by default, which the APK does not ship (the app
-failed to load with `dlopen failed: library "libc++_shared.so" not found`); `scripts/build-apk.sh`
-sets `CXXSTDLIB_<target>=c++_static` so libc++ is linked into `liboag_android.so`.
+On Android, `cc` links the NDK's `libc++_shared.so` for the C++, which the APK did not carry (the
+app failed to load with `dlopen failed: library "libc++_shared.so" not found`); `scripts/build-apk.sh`
+copies it beside `liboag_android.so`. Linking `c++_static` instead left `libc++abi` unresolved.
 
 - **Block 4x4** (8 bits a texel) by constraint: a compressed texture's base must be a whole number
   of blocks, and 6x6 (3.56 bits) divides no power-of-two side. A base that is not a multiple of 4

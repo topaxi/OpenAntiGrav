@@ -81,10 +81,6 @@ features=android,extensions
 # "Performance on the Galaxy S21"). A shipped app is not.
 profileable=""
 [ -z "${OAG_APK_PROFILEABLE:-}" ] || profileable='<profileable android:shell="true" />'
-# The ASTC encoder is C++ (`ctt-astcenc`, built by `cc`), and `cc` links Android's
-# libc++_shared.so by default, which the APK does not carry: the app then fails to load.
-# Linked statically instead (docs/rendering/texture-compression.md, "The encoder").
-export CXXSTDLIB_aarch64_linux_android=c++_static CXXSTDLIB_x86_64_linux_android=c++_static
 cargo ndk "${ndk_targets[@]}" -P "$api" build -p oag-game --example oag_android --no-default-features --features "$features" "${cargo_profile[@]}"
 so="$root/target/aarch64-linux-android/$profile/examples/liboag_android.so"
 # The frames under `android_main` (2 MiB, not ours to size): docs/tools/android.md, "The stack".
@@ -93,6 +89,13 @@ python3 "$root/scripts/check-android-stack.py" "$so"
 if [ "$x86" = yes ]; then
     "$llvm_strip" --strip-all -o "$stage/lib/x86_64/liboag_android.so" \
         "$root/target/x86_64-linux-android/$profile/examples/liboag_android.so"
+fi
+# The ASTC encoder is C++ (`ctt-astcenc`, built by `cc`), which links the NDK's shared libc++:
+# the app does not load without it beside ours (docs/rendering/texture-compression.md, "The encoder").
+libcxx="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib"
+cp "$libcxx/aarch64-linux-android/libc++_shared.so" "$stage/lib/arm64-v8a/"
+if [ "$x86" = yes ]; then
+    cp "$libcxx/x86_64-linux-android/libc++_shared.so" "$stage/lib/x86_64/"
 fi
 
 # The launcher icon: the same rasteriser the AppImage and the window icon use
@@ -160,7 +163,7 @@ mkdir -p "$flat"
 "$build_tools/aapt2" compile --dir "$res" -o "$flat"
 "$build_tools/aapt2" link -I "$android_jar" --manifest "$stage/AndroidManifest.xml" \
     --min-sdk-version "$api" --target-sdk-version 34 -o "$base" --auto-add-overlay "$flat"/*.flat
-(cd "$stage" && zip -q -r -D "$base" lib/*/liboag_android.so assets)
+(cd "$stage" && zip -q -r -D "$base" lib/*/*.so assets)
 
 aligned="$out/aligned.apk"
 rm -f "$aligned"
