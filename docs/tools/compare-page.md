@@ -3142,6 +3142,8 @@ HD's strip decode ([zone-vis-gamma.md](../ghidra/functions/ps3-hdfury-eu/zone-vi
 | `endrace-norecord` | 8.88, unchanged | 0.097 | | |
 | `endrace-record` | 8.38, unchanged | 0.100 | | |
 
+A Zone race keeps its look: `zone-vineta-k-z5` with no bands renders pixel for pixel the same; with made-up bands
+fed, the near floor (box `1300,950,1600,1030`) goes from `(115, 163, 168)` to `(115, 154, 162)` (original `(128, 139, 140)`).
 The numbers equal the scratch measurement above. Floor crops read at native size: `-hot` matches; the other
 three are now darker than the original's (the second factor stays open).
 

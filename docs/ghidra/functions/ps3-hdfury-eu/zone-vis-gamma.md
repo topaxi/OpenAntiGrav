@@ -133,11 +133,13 @@ near floor darkens.
 
 - **2048, its own `ZoneMode2048` tables: checked, differs.** They author no `EQ` tints, so ours' strip stays
   blank there ([detonator-look.md](detonator-look.md), "Cross-title"); there is nothing for a decode to act on.
-- **2048, HD-lineage circuits: checked, applies, not wired.** Those circuits take HD's own title-wide tables
-  ([zone-environment-fallback.md](../vita-2048-eu-v104/zone-environment-fallback.md)), which do author the tints
-  (on Vineta K, `eq_tints` reads `(1, 216, 255)` in Zone and `(171, 9, 255)` / `(14, 1, 55)` in Detonator), so
-  ours lights their strip, still raw (`oag_2048` carries `zone_frame: None`). Whether 2048's engine decodes its
-  strip is unread: next, its strip's GXM texture and gamma mode in `eboot.elf`.
+- **2048, HD-lineage circuits: the data reaches the strip, the decode is open.** Those circuits take HD's own
+  title-wide tables ([zone-environment-fallback.md](../vita-2048-eu-v104/zone-environment-fallback.md)), which do
+  author the tints (on Vineta K `eq_tints` reads `(1, 216, 255)` in Zone and `(171, 9, 255)` / `(14, 1, 55)` in
+  Detonator), so ours lights their strip and, with `oag_2048` carrying `zone_frame: None` (`shape.z` 0), samples it
+  raw. Whether 2048 decodes it is unread, and its lit programs decode texels in the shader by squaring
+  (`oag-shader-check`'s `square_decode`), so HD's unit-side law is not assumed. Next: whether a `DLC1/environments`
+  program declaring `zoneTexVis` squares that tap (`scripts/vita-usse.py`), and the strip texture's GXM gamma mode.
 - **Omega: checked, applies, not wired.** `FUN_015f4920` (`eboot.bin`, the load that names
   `data/Tex/zoneModeTrack0.gnf`) creates three `256 x 32` textures with GNM data format `0xfac90a` and
   zero-fills them (`0x8000` bytes each). That format word is `8_8_8_8` (surface `0x0a`), channel type `9`

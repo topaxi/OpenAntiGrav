@@ -526,8 +526,8 @@ ribbon 0.30, shot-specific rest under 0.2 each. ~~Next, ready to wire: the visua
 (also on `mines-ahead`) and the right wall's missing window lights. The ribbon is
 0.31 of it. **Open:** (1) the floor is now darker than the original's on three of four pairs (second factor, `zone-vis-gamma.md`,
 "Still unread"); (2) Omega: its `zoneTexVis` is an sRGB texture too, ours draws its strip raw (`oag_omega` has no `ZoneFrame`);
-(3) 2048's HD-lineage circuits author the EQ tints through HD's tables and ours draws the strip raw: read 2048's strip texture
-gamma mode, then port or record differs.
+(3) 2048's HD-lineage circuits author the EQ tints through HD's tables and ours draws the strip raw: read whether their
+Zone GXP squares the `zoneTexVis` tap and the strip's gamma mode (`zone-vis-gamma.md`, "Cross-title"), then port or record differs.
 
 **Hull camera and size, re-based (2026-11-23, `det-camera`).** The maintainer's "ours is far, the original is close" was true and the
 camera flags were not the cause: the pair fed the RAM body (2 to 4 ticks ahead of the presented frame) with the push-buffer camera, and
