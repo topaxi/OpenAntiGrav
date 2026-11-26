@@ -123,6 +123,10 @@ slot at level 1 against level 0.5 differs by the sRGB curve's ratio, not 2. The 
 `shade.wesl` above `plain` ("it is a shader parameter and texture-lookup product ... owes no sRGB decode either
 way") contradicts this page and changes with the wiring.
 
+**Re-measured on the current Detonator pairs (2026-11-26):** the same scratch decode takes `cannon-volley` 10.53 to 9.11, `-hot` 7.70 to
+4.82, `mines-ahead` 9.68 to 9.04 and `pad` 4.44 to 3.24, and RMSE now falls on all four (the rise above was on the older pairs). Numbers and
+floor boxes: [compare-page.md](../../../tools/compare-page.md), "The `cannon-volley` difference, split by region".
+
 ## Cross-title
 
 - **2048: checked, differs.** Its effect-settings tables author no `EQ` tints, so ours' strip stays blank
