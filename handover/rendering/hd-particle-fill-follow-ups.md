@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [hd, omega, 2048]
 updated: 2026-11-26
-summary: "Ready: 31 unsprited HD effects. Owed: far-blast pose velocity, 2048/Omega sizes+flipbooks, cap source; half-res awaits maintainer"
+summary: "Ready: 31 unsprited HD effects. Owed: Rocket blast gaps, 2048/Omega sizes+flipbooks, cap source; half-res awaits maintainer"
 size: M (50)
 difficulty: medium (55)
 ---
