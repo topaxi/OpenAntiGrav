@@ -213,14 +213,16 @@ Feisar), run to `EndRace Results`; each death **forced** by writing the shield (
 **Differences left in ours** (named, not fixed):
 
 - **Timing.** Ours puts the panels up the tick the craft is destroyed (`docs/gameplay/after-the-finish.md`):
-  the 5.4 s, the glow and the particle burst are not played.
+  there is no 5.4 s lead-in. What `Race::tick_cosmetics` shows of the wreck behind the panels after
+  a Detonator end, and how it compares with the glow and particle burst, was not checked.
 - **Text size.** Panel and positions match at the 96 % Safe Area, but the headline is about 0.7x
   and the rows about 0.6x the original's width: the end screens draw `default`-face text as the menu
   face scaled by the line-height ratio, where the campaign screens use the `Default` atlas.
   Every HD end screen is affected.
 - **Style.** The original ran the HD style (white panel, blue boxes); ours has only the served
   Fury globals (`docs/ui/pause-menu.md`, "FE Style").
-- **Background** of the live flow: the race, frozen, with no destruction burst.
+- **Background** of the live flow behind the panel: not photographed (the pair's side of ours is a
+  still).
 - **The `CONFIRM` button glyph** (`font="buttons"`) draws nothing.
 
 ## A destroyed craft and a finished race: the same rows, a record on both
@@ -308,7 +310,7 @@ tested; no screen draws it) and is the `Results` page's, which `docs/ui/endrace-
 | `0x002234b0` | `EndRaceResults_FillDetonatorRows` | 80 |
 | `0x0022bdb8` | `EndRaceResults_ShowRecordNotice` | 90 |
 | `0x0001ef28` | `Profile_FindTrackRecords` | 80 |
-| `0x0032a740` | `Util_Crc32ZeroInit` | 85 |
+| `0x0032a740` | `Crc32_HashStringZeroInit` | 85 |
 
 `0x0005ac00` (the builder) and `0x0005c630` (its thunk with `force = 1`) stay unnamed here: the
 builder's other modes were not traced ([endrace-loyalty.md](endrace-loyalty.md)).

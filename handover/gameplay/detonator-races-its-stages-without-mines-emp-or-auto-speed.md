@@ -240,8 +240,8 @@ Law: `detonator-cannon.md` ("What the simulation needs"). Decisions already made
   **Open:**
   - **Checked against two RPCS3 frames** (`detonator-endrace.md`, "Checked against the original"):
     the record notice, the captions and the kept best score landed; open on HD: the **5.4 s of
-    destruction before the panel** (ours puts it up the tick the craft dies: glow, particle burst,
-    wipe-in), the **end-screen text size** (rows 0.6x, headline 0.7x; the screens draw `default`
+    destruction before the panel** (ours puts it up the tick the craft dies; what plays behind it afterwards is unchecked against
+    the original's glow, particle burst and wipe-in), the **end-screen text size** (rows 0.6x, headline 0.7x; the screens draw `default`
     face as the scaled menu face, the campaign screens use the `Default` atlas), the HD style, the
     `CONFIRM` glyph.
   - **Omega**: same filler (`FUN_0155bc90`) and ids; but Omega's `endrace_entry` is `None` (a finished
