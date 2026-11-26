@@ -79,8 +79,9 @@ asset file.
 ## Open
 
 - **Zone `Score` placement.** The layout authors it `align="left"` and ours starts it at screen centre; the original's reads centred
-  (HD and Omega frames). At its authored `1.3 x 1.5` four digits clear the right bracket and five would likely touch it
-  (extrapolated, not rendered). The runtime rule that centres it is unread. Evidence: `docs/formats/hd-hud.md`, "Text scales on two
+  (HD and Omega frames). At its authored `1.3 x 1.5` four digits clear the right bracket and **five run over it** (rendered). HD's centring rule is
+  unread; 2048's is read and wired for 2048 alone (`oag_hud::dialect_2048::text_align`): read HD's writer, then carry the rule as
+  title data. Evidence: `docs/formats/hd-hud.md`, "Text scales on two
   axes".
 
 - **2026-11-15: the class step plays `light_wipe` and the `MR_*` timeline from

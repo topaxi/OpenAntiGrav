@@ -1646,9 +1646,14 @@ about its anchor. Confidence 90, read off the file and checked against frames of
 against 139 (0.79) and 45 against 57 high, the ammo `14` 57 px wide against 62 (0.91); Zone's score
 digits are about 85 px high, 1.5 times Detonator's 55, where ours were 52 and are now 78. Still
 open on Zone: `Score` is `align="left"` and ours starts it at the box's middle, while the original's
-reads centred there (not read; present before this change). Ours therefore ends near the right
-bracket: a four-digit score clears it in a render, and a five-digit one would likely touch it
-(extrapolated from the digit width, not rendered).
+reads centred there (not read; present before this change). **At the authored scale a five-digit
+score runs over the right bracket** (open): rendered on Vineta K with `--mode zone --hud-state
+1,1,10,10,500,100,0,20,<score>` on a posed craft, `2129` clears it, `12845` crosses it and `123456`
+runs well past. The layout authors no centring. 2048's executable centres this widget at run time
+([zone-speed-class-text.md](../ghidra/functions/vita-2048-eu-v104/zone-speed-class-text.md), "The
+score"), wired for 2048 alone (`oag_hud::dialect_2048::text_align`); HD's writer is unread. A lead,
+not a finding (one four-digit frame each): HD's `1076` and Omega's `5911` both start near x `830`
+although their widths differ, as a centring on a fixed digit width would give.
 
 ## Detonator's score box (`det-hud-score-box`, 2026-11-26)
 
