@@ -14,7 +14,6 @@ cannot read. Orientation is not rewound, so keep the ticks few. This reads the o
 nothing it writes is a pair (the renders go to `<pair-dir>/lag/`).
 """
 import argparse
-import csv
 import json
 import os
 import subprocess
@@ -29,16 +28,6 @@ ROOT = HERE.parent
 MAIN = Path("/home/topaxi/projects/OpenAntiGrav")
 
 
-def rewound_field(rows, ticks):
-    out = []
-    for r in rows:
-        r2 = dict(r)
-        for a in "xyz":
-            r2["pos_" + a] = repr(float(r["pos_" + a]) - float(r["vel_" + a]) * ticks / 60.0)
-        out.append(r2)
-    return out
-
-
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("pair", type=Path)
@@ -49,7 +38,7 @@ def main():
     pair = args.pair.resolve()
     rec = json.loads((pair / "pair.json").read_text())
     flags = list(rec["ours"]["flags"])
-    rows = list(csv.DictReader((pair / "field.csv").open()))
+    rows = ce.read_field_rows(pair / "field.csv")
     player = rows[0]
     vel = [float(player["vel_" + a]) for a in "xyz"]
     i_cam = next(i for i, f in enumerate(flags) if f.startswith("--camera-pose="))
@@ -61,16 +50,15 @@ def main():
         t_cam, t_craft = (float(x) for x in spec.split(":"))
         name = spec.replace(":", "_").replace(".", "p")
         field = pair / "lag" / ("field%s.csv" % name)
-        with field.open("w", newline="") as f:
-            w = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
-            w.writeheader()
-            w.writerows(rewound_field(rows, t_craft))
+        ce.write_field_rows(field, ce.rewound_field_rows(rows, t_craft))
         eye = [c - v * t_cam / 60.0 for c, v in zip(cam[:3], vel)] + cam[3:]
         fl = list(flags)
         fl[i_cam] = "--camera-pose=" + ",".join("%.6f" % x for x in eye)
         fl[fl.index("--field-from") + 1] = str(field)
         png = pair / "lag" / ("ours%s.png" % name)
-        subprocess.run([args.oag_game, args.image, *fl, "--ticks", "0", "--screenshot", str(png)],
+        if "--ticks" not in fl:
+            fl += ["--ticks", "0"]
+        subprocess.run([args.oag_game, args.image, *fl, "--screenshot", str(png)],
                        env=env, capture_output=True, check=True)
         score = ce.overlap_score(pair / "theirs.png", png)
         print("%-8s %-9.4f %-7.3f" % (spec, score.get("edge_ncc", float("nan")), score.get("rmse", float("nan"))))
