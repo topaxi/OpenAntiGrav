@@ -205,7 +205,9 @@ fn in_game_of(
         .env("XDG_CONFIG_HOME", dir.join("config"))
         .env("XDG_STATE_HOME", dir.join("state"))
         .env("XDG_DATA_HOME", dir.join("data"))
-        .env("RUST_LOG", "debug")
+        // The stats heading is a debug line of this one module; all of `debug` is hundreds of
+        // megabytes of shader compiler output.
+        .env("RUST_LOG", "info,oag_game::app::session::benchmark=debug")
         .output()
         .expect("running oag-game");
     let log = String::from_utf8_lossy(&out.stderr).into_owned();
