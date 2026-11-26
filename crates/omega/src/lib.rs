@@ -247,7 +247,12 @@ pub const TITLE: &Title = &Title {
         ai: Some(r"Data\XML\WeaponAIstats.xml"),
         // HD's law, inherited: Omega's own executable is not checkable here.
         leach_drain: oag_title::weapons::LeachDrain::PerTrip,
-        blast_push: oag_title::pre_race::Sourced::chosen(oag_title::weapons::BlastPush::Immediate),
+        // HD's law, inherited: Omega's `Rocket_HitCraft` posts the same falloff into the slot's
+        // `+0x120`; its drain is unread (`rocket-craft-blast.md`, "The other titles").
+        blast_push: oag_title::pre_race::Sourced::inherited(
+            oag_title::weapons::BlastPush::Posted,
+            "HD",
+        ),
         // Measured: eight entries in `LeachBeamManager_Update`'s pool (`weapon-instance-limits.md`).
         leach_beams: oag_title::pre_race::Sourced::measured(8),
         // HD's law, inherited: Omega's own executable is not checkable here.

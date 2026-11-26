@@ -84,6 +84,7 @@ mod tests {
             wall_one_sided: Sourced::chosen(false),
             wall_steer_away: Sourced::chosen(false),
             wall_point_rate_body_local: Sourced::chosen(false),
+            pending_impulse_on_side: Sourced::chosen(false),
             body_linear_damping: Sourced::chosen(0.0),
             body_angular_damping: Sourced::chosen(0.0),
             cage_from_track_header: Sourced::chosen(true),
