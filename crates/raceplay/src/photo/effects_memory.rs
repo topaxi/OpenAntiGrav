@@ -64,7 +64,7 @@ sort_fields! {
         camera_view, camera, camera_jumps, transit_seats, poses, correction, correction_smoothing,
         hull_shake, hull_shake_law, hull_draw_factor, hull_shake_on, camera_shake_on,
         player_tags_on, track_sections, camera_override, fov_override, capture_hud,
-        hud_waits_for_go, now_playing, world_clock_offset, gantry_seconds, intro, finish_camera,
+        hud_waits_for_go, now_playing, world_clock_offset, gantry_seconds, flame_seconds, intro, finish_camera,
         hd_trail_active, spectates_from_start, photo, picture, restores, chase_params, chase_far, chase_close,
         viewpoints, internal_params, zoom, zoom_borrowed, ps2_trail, hd_plasma_blast,
         plasma_blast_law, disruptor_halo_law, disruptor_craft_law, pulse_laid_pose,

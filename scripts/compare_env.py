@@ -235,6 +235,17 @@ def gantry_pin(gantry_s, lag_ticks):
     return None if gantry_s is None else gantry_s - lag_ticks / 60
 
 
+#: How far HD's flame program's `time` lags the frame context clock read in the same pause: the fragment program in the
+#: command ring held 0.0334 s and 0.0167 s less than `+0xc4` on two pauses (`docs/ghidra/functions/ps3-hdfury-eu/engine-flare.md`,
+#: "The flame's clock at a pair's grab"); the mean, so the pin is within 0.009 s (2 % of the noise's 0.5 s period) of either.
+FLAME_CLOCK_LAG_S = 0.025
+
+
+def flame_pin(flame_clock_s):
+    """The `--flame-clock` value for a pair whose original read the frame context clock `flame_clock_s` in its pause."""
+    return None if flame_clock_s is None else flame_clock_s - FLAME_CLOCK_LAG_S
+
+
 def picture_tick(go_tick_, clock_s, total_lag_ticks):
     """Ours' tick for a picture that is `total_lag_ticks` older than the RAM read at lap clock `clock_s`: a Detonator pair
     whose lag was measured runs its rounds, mine hits, score and ammo to the picture's moment, not the HUD clock's."""

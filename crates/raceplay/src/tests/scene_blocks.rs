@@ -305,3 +305,49 @@ fn the_flame_surfaces_close_on_the_circuits_output_scale() {
         "the flame program's closing `/2`"
     );
 }
+
+/// A capture's imposed flame clock (`Options::flame_seconds`, the original's frame context clock at
+/// the grab) reaches the flame surfaces' block and nothing else: the circuit keeps the world
+/// clock. Read the world clock in `flame_scene`'s caller again and the flame block's time is the
+/// circuit's; impose it on the circuit too and the circuit's is the imposed one.
+#[test]
+fn an_imposed_flame_clock_reaches_the_flame_surfaces_alone() {
+    let Some((device, queue)) = test_gpu() else {
+        return;
+    };
+    let mut craft = livery();
+    craft.flare = Some(triangle());
+    let mut scene = bare_scene_of(&device, &queue, &[craft]);
+    scene.share_scene_blocks_for_tests(&device);
+    let view = target(&device);
+    let mut race = race_with_a_grid();
+    let imposed = 122.472_f32;
+    race.view.flame_seconds = Some(imposed);
+    scene.render_viewports(
+        &device,
+        &queue,
+        &view,
+        &race,
+        (0.0, 0.0, 64.0, 64.0),
+        Fov::AUTHORED,
+        true,
+        true,
+        None,
+        Shadows::Off,
+        &[],
+        crate::scene::WindowEffects::default(),
+        &mut [],
+    );
+    let flame = scene.scene_block(&device, &queue, 0, SceneKind::Flame);
+    let circuit = scene.scene_block(&device, &queue, 0, SceneKind::Circuit);
+    assert_eq!(
+        flame.time, [imposed; 4],
+        "the flame rides the imposed clock"
+    );
+    assert_eq!(
+        circuit.time,
+        [race.world_clock_seconds(); 4],
+        "the circuit keeps the world clock"
+    );
+    assert_ne!(flame.time, circuit.time);
+}

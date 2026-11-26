@@ -205,6 +205,13 @@ impl Scene {
 /// No other draw on this block reads the scale. The program also fogs the colour with the
 /// circuit's fog, which at chase distance is a factor of 1 to four places; the block keeps fog
 /// off, so the shields sharing it are not fogged on a guess.
+/// The flame surfaces' clock: a capture's imposed flame clock ([`crate::Options::flame_seconds`],
+/// the original's frame context clock at the grab) or else the world clock every other animation
+/// rides (`docs/ghidra/functions/ps3-hdfury-eu/engine-flare.md`, "The flame's clock at a pair's grab").
+pub(super) fn flame_seconds(imposed: Option<f32>, world: f32) -> f32 {
+    imposed.unwrap_or(world)
+}
+
 pub(super) fn flame_scene(
     scene: &mesh_render::Scene,
     eye: [f32; 3],

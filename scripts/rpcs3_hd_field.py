@@ -8,6 +8,9 @@ Shared by `scripts/rpcs3-hd-race-hunt.py` (finds a mid-pack moment) and `scripts
     ship+0x5fac -> +0x270 the craft's rigid body; body+0x1d0 basis rows, +0x200 position, +0x190 velocity
     ship+0x6298 -> +0x1b4 the team's path string, `Data\\Ships\\<team>_c1`
     ship+0x7014           the craft's running lap clock, seconds
+    *0x00936fd4 + 0xc4    the frame context's boot clock, seconds: engine shader parameter slot 0 (`time`), what the
+                         engine flame's noise scrolls by (docs/ghidra/functions/ps3-hdfury-eu/engine-flare.md,
+                         "The flame's clock at a pair's grab")
     the HUD record       `lap` +0xc, `laps` +0x10, `place` +0x14 (1-based), `speed` +0x0, shield +0x48 and its
                          maximum +0x50 (docs/ghidra/functions/ps3-hdfury-eu/hud-readouts.md); the heap moves boot to
                          boot, so it is found by scanning for those fields
@@ -21,6 +24,18 @@ GUEST = 0x300000000
 CRAFT_ARRAY = 0x0098D7C0
 RECORD_SCAN = (0x30000000, 0x36000000, 0x40000)
 MAX_SHIELD = 140.0
+#: `Render_FrameContextPtr_q`: the frame context the present loop hands the render calls; its `+0xc4` is the boot clock.
+FRAME_CONTEXT_PP = 0x00936FD4
+FRAME_CLOCK_OFFSET = 0xC4
+
+
+def flame_clock(m):
+    """The frame context's boot clock in seconds (engine parameter slot 0), or `None` before the context exists.
+
+    It runs at game time and stops with the emulator; HD's flame program reads it one to two frames behind the PPU.
+    """
+    ctx = m.u32(FRAME_CONTEXT_PP)
+    return m.f32(ctx + FRAME_CLOCK_OFFSET) if ctx else None
 
 
 class Mem:
@@ -313,7 +328,8 @@ CLOCK_SAMPLE = 24
 def world_clock_record(m, cache, grabbed_at=None):
     """The original's world clock for a frame grab, always a dict: the clock, or `null` with a reason.
 
-    `{"world_clock_s", "lap_clock_s", "world_clock_offset_s", "nodes", "total", "reason", "scan"}`. The scenery clock is
+    `{"world_clock_s", "lap_clock_s", "world_clock_offset_s", "nodes", "total", "reason", "scan", "flame_clock_s"}`;
+    `flame_clock_s` (`flame_clock`) is read on every screen, a race or not. The scenery clock is
     only recorded while a race is running: a player craft in the craft array, a lap clock that is a finite non-negative
     number, and scenery nodes whose time and stamp agree. After a race the freed nodes still read plausible, so a
     menu screen with no player craft records `null` and says why. `cache` is a dict the caller keeps between grabs:
@@ -323,7 +339,11 @@ def world_clock_record(m, cache, grabbed_at=None):
     milliseconds of each other, and `paused` is not known here, so a film frame's `world_clock_s` itself is the moment of the read.
     """
     rec = {"world_clock_s": None, "lap_clock_s": None, "world_clock_offset_s": None, "nodes": None, "total": None,
-           "reason": None, "scan": None}
+           "reason": None, "scan": None, "flame_clock_s": None}
+    try:
+        rec["flame_clock_s"] = flame_clock(m)
+    except Exception as error:  # noqa: BLE001 - the flame clock is a bonus beside the scenery clock
+        rec["flame_clock_reason"] = "%s: %s" % (type(error).__name__, error)
     try:
         rows = field_rows(m)
     except Exception as error:  # noqa: BLE001 - a menu has no craft array, which is the answer

@@ -375,6 +375,7 @@ fn every_flag_group_is_flattened_into_the_command() {
         "pose_from",
         "hud_state",
         "world_clock_offset",
+        "flame_clock",
         "pose_boost",
     ] {
         assert!(

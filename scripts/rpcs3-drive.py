@@ -584,7 +584,7 @@ def world_clock_now():
         rec = rpcs3_hd_field.world_clock_record(rpcs3_hd_field.Mem(mem), GRAB["cache"])
     except Exception as error:  # noqa: BLE001 - a missing clock is recorded, not raised
         rec = {"world_clock_s": None, "lap_clock_s": None, "world_clock_offset_s": None, "nodes": None, "total": None,
-               "reason": "clock read failed (%s: %s)" % (type(error).__name__, error), "scan": None}
+               "flame_clock_s": None, "reason": "clock read failed (%s: %s)" % (type(error).__name__, error), "scan": None}
     rec["screen"] = current_screen()
     return rec
 
@@ -1896,6 +1896,8 @@ def cmd_capture(args):
                                                       {"time_s": grab_clock["world_clock_s"], "nodes": grab_clock["nodes"], "total": grab_clock["total"]})
                     except Exception as error:  # noqa: BLE001 - the phase is a bonus
                         print("  %s: no scenery clock (%s)" % (stem, error), flush=True)
+                    # The flame's boot clock in the same pause (`original.flame_clock_s` of the pair, `--flame-clock` of ours).
+                    ship_pose["flame_clock_s"] = None if grab_clock is None else grab_clock.get("flame_clock_s")
                     if args.field:
                         # every craft of the field and the HUD's record, in the same pause (`rpcs3_hd_field`)
                         import rpcs3_hd_field
