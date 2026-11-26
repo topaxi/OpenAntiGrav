@@ -111,6 +111,13 @@ craft. Ours with the law, a forced hit on a rival at about 100 units a second
 The cloud's lag over the craft's travel: original 0.26 and 0.33, ours 0.30 and 0.30. Without
 the carry ours stays at the spawn point: 0.6 units along a craft that moved 34.
 
+**Where each stands** (2026-11-26, three films, confidence 90): the blast's template quads hold
+one world point that equals the struck craft's position, dropped 2.5, about 2 ticks before the
+blast's birth tick (0.01 to 0.30 units off). A Rocket volley lands as two such points, one blast
+and then two together 5 to 6 ticks later
+([particle-fill.md](../../../rendering/particle-fill.md#posing-the-near-hits)). The 2-tick lag's
+cause is unread.
+
 ## The other titles
 
 - **2048: ported.** `Rocket_SpawnCraftBlast` (`0x81206928`, confidence 80) spawns `WO_ROCKET_EXPLO` (tag `ROEX`) with flags `0, 0` at
