@@ -613,6 +613,63 @@ The 0.233 s pairs swing by 10 and more with the blast's random arrangement; thre
 pair's four seeds improved and one got worse (94.0 to 109.1). The far pair at 0.1 s is the white
 flash filling the frame on both sides and says nothing about the half disc.
 
+### Which effects draw a sprite
+
+2026-11-26. HD's loader reads a `.gtf` only for an effect in `oag_hd`'s `SPRITES`
+(`crates/hd/src/effects.rs`). Before this change 14 effects were listed; a census over the disc of
+the 31 others found 89 emitter and template texture references, every one an existing
+`/data/psys/tex/<stem>.gtf` that decodes.
+
+**A listing draws a sprite only on a camera-facing emitter**, or on a streak whose effect is in
+`FAR_BARS` (`EmitterSpec::samples_sprite`); any other streak samples nothing. So of the 31:
+
+- **21 listed**, every camera-facing emitter now drawing its own sprite: `WO_MINE_EXPLO`,
+  `WO_BOMB_SMOKERING`, `WO_MISSILE_EXPLO`, `WO_MISSILE_BOUNCE`, the three Detonator explosions,
+  `WO_ROCKET_FLARE`, `WO_CANNON_SPARKS`, the four Shuriken effects, `WO_REPULSER_BLAST`,
+  `WO_WEAPON_ABSORB`, `WO_SHIP_COLL_SPARK_DAMAGE`, `WO_SHIP_DEATH_DAMAGE_PLUME`,
+  `WO_DEBRIS_FIRE`, `WO_DAMAGE_MILD`, `WO_DAMAGE_MODERATE`, `WO_MODESTO_STEAM_A`.
+- **10 not listed, all-streak**: `WO_BOMB_RAYS`, `WO_REPULSER`, `WO_LEACHBEAM_ENERGY`,
+  `WO_LEACHBEAM_CHARGING`, `WO_LEACHBEAM_ABSORB`, `WO_SHIP_SPARK_DAMAGE_LEACHBEAM`,
+  `WO_SHIP_SPARK_DAMAGE_WEAPON`, `WO_SHIP_COLL_SPARK_NODAMAGE`, `WO_DAMAGE_CRITICAL`,
+  `WO_BLUE_WELDER`.
+
+The streak emitters of the 21 also stay procedural (the Mine's `streaks_fat`, `plasma_core` and
+`sparks`, for instance). Listing one for `FAR_BARS` wants an original pair first.
+
+The listing also gives these effects HD's flipbook walk, and each placed particle draws its spawn
+frame from the stage's generator, so every effect after one in a frame is dealt another
+arrangement. The sheet grows from 3076 to 3590 rows of 4096 on Talon's Junction (31 to 41
+distinct sprites); nothing is dropped. Disc check: `every_hd_sprite_is_on_the_sheet_and_the_weapon_blasts_draw_theirs`
+(`crates/raceplay/tests/particle_sheet_ground_truth.rs`).
+
+**Against the original.** None of the 21 has a matched capture of its own (the original was seen
+walking the sheets of the Detonator Mine and Bomb explosions,
+[particle-render.md](../ghidra/functions/ps3-hdfury-eu/particle-render.md), "The atlas frame"). The HD comparison pairs
+(31, `hd` and `hd-race`) were re-rendered before and after; the build is byte-deterministic (two
+runs of each side identical), 26 pairs did not move a pixel and 5 did: the four Rocket hits and the
+Detonator cannon volley (`WO_ROCKET_FLARE` is the only new effect in the 0.233 s near hit). The new listing deals the blast
+another arrangement (above), so each moved pair was re-rendered over `--stage-seed` values, RMSE
+against the original, mean (standard deviation), before then after:
+
+| Pair | Seeds | Before | After | Difference |
+| --- | --- | --- | --- | --- |
+| rocket-craft-hit-0100 | 30 | 0.3655 (0.0028) | 0.3666 (0.0029) | +0.0011, 1.4 standard errors |
+| rocket-craft-hit-0233 | 30 | 0.4110 (0.0406) | 0.4097 (0.0436) | -0.0013, 0.1 |
+| rocket-craft-far-hit-0100 | 6 | 0.1368 (0.0020) | 0.1353 (0.0027) | -0.0015, 1.1 |
+| rocket-craft-far-hit-0233 | 6 | 0.2974 (0.0238) | 0.2805 (0.0171) | -0.0169, 1.4 |
+| detonator-talons-cannon-volley | 6 | 0.1738 (0.0031) | 0.1725 (0.0012) | -0.0014, 1.0 |
+
+None is worse or better beyond the spread. One seed alone is not a measurement here: at the
+pairs' own seed the 0.1 s far hit reads 0.003 worse and the 0.233 s near hit 0.035 better.
+
+**Our own frames** (HD EU, Talon's Junction, 960x544, not compared with an original). A Mine tripped
+by a rival behind the player: the white soft discs became grey smoke and brown rock debris. A
+Missile hitting the rival ahead, 3 ticks on: the soft white dots became yellow molten debris; from
+about 9 ticks the explosion model and flash fill the frame and the change is under 0.1 % of pixels.
+
+**2048 and Omega: not checked here** (out of this change's scope); they read sprites by platform,
+not by this list.
+
 ### Every effect that loads a sprite, read off the command ring
 
 2026-11-26, RPCS3 0.0.43-20574, HD EU, Talon's Junction. `scripts/rpcs3-hd-particle-ring.py` fires a
@@ -634,8 +691,8 @@ Films: `data/reference/hd-capture/particle-uv/` (`rocket1`, `plasma1`, `plasma2`
 **Which effects can have moved.** Only those whose sprites ours loads: the Rocket's two blasts, the
 ship explosion, the Missile's head, the five Plasma effects, the Quake, the two trail hits, and the
 Detonator's cannon spark and EMP. The Mine, Bomb, Missile explosion and Detonator Mine and Bomb
-explosions load no `.gtf` (no `sprite(s) read` on their line of the loader report) and draw the
-procedural profile, so the flip could not reach them.
+explosions loaded no `.gtf` at the time of these films (they do now, above), so the flip could not
+reach them.
 
 **Handedness.** The sign of the determinant of `d(view xy) / d(uv)` says whether a quad shows its
 picture mirrored, whatever its roll. The reference is `yellow_glow_hemi`, whose orientation is
