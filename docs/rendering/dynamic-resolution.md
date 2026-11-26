@@ -795,15 +795,15 @@ The one narrowing there, four notches, came from frames the loaded host delivere
 **On the iGPU `original` cannot save the frame:** it can give up 32 % of the pixels and no
 height, and the frame needs far more; the existing loop gives up 75 %.
 
-Width traces, `tick:width`:
+Width traces at the turning points, `tick:width`:
 
 | Run | Trace over ticks 740 to 800 |
 | --- | --- |
 | 7800 XT 60, existing b and original b | 3840 at every tick |
-| 7800 XT 60, original a | 3840 to 761, 769:3760, 773:3720, 776 to 786:3840, 792:3800, 799:3680 |
+| 7800 XT 60, original a | 3840 to 761, 766:3800, 771:3680, 776:3840, 789:3760, 792:3800, 799:3680 |
 | iGPU 60, existing a | 1920 at every tick (1080 high) |
 | iGPU 60, original a | 2600 at every tick (2160 high) |
-| 7800 XT 240, original b | 740 to 748:2600, 757:2760, 765:2960, 773:2640, 781:2680, 789:2600, 799:2600 |
+| 7800 XT 240, original b | 2600 to 748, up to 3000 at 766, back to 2600 at 774, then 2600 to 2680 |
 
 At 240 Hz (the durations become 4028 and 3889 us) four runs of each arm, ticks 600 to 799:
 
