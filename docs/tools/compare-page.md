@@ -2668,7 +2668,7 @@ the HUD clock's `T - 3`.
 
 | Gap | Box | Grey | Also on | Kind, confidence |
 | --- | --- | --- | --- | --- |
-| Striped metal grilles ours draws bright where the original's frame is near black (ours +22 to +37) | `215,0,520,150` and `1030,150,1360,305` | 0.95 + 0.92 | `pad` (both), `mines-ahead` and `cannon-volley` (the second) | draw, 90; cause unread (a material the Detonator stage darkens, 40) |
+| Striped metal grilles ours draws bright where the original's frame is near black (ours +22 to +37) | `215,0,520,150` and `1030,150,1360,305` | 0.95 + 0.92 | `pad` (both), `mines-ahead` and `cannon-volley` (the second) | draw, 90; **fixed 2026-11-26**: Talon's `scanlinebillboard` (slot 435), whose Zone variants draw the Zone surface, not the advert ([hd-zone-recolour.md](../rendering/hd-zone-recolour.md), "Holographic billboards in a Zone frame"), 80; -hot 10.32 to 8.96 |
 | The score box's side wings are white-striped in the original, solid red in ours | `690,40,830,235` and `1090,40,1230,235` | 0.48 + 0.69 | all four | draw, 90 |
 | Score digits and `1/14` about 1.1 to 1.25 times the original's width | `790,100,1135,180` and `85,60,320,225` | 0.79 + 0.38 | all four | draw, 85; font scale or spacing unread |
 | Hull brighter than the original (ours +7) | `825,720,1100,980` | 0.74 | all four (+5 to +8) | draw, 80 (the fuselage overlay is already open) |

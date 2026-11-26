@@ -183,6 +183,69 @@ line, which is what settling gives.
   says nothing about the sphere either way, since the two read different
   colour groups of the same stage; only same-class near against far does.
 
+## Holographic billboards in a Zone frame
+
+**Law (confidence 80).** A holographic billboard (`scanlinebillboard`, its `_alphaboost` and
+`_desaturate` siblings, `wes_`/`nr_billboardholographicscanlines`) draws the generic Zone surface in a
+Zone-family frame, not its advert-and-scanline overlay. Its Zone variants sample neither the advert
+(`0x6f469b89`) nor the second layer (`0xdd7ec609`): they run the shape at the top of this page
+(`zoneTex * zoneEffect + rim^10 * base + rim^5 * baseAlt`, lit, fogged, plus the visualiser glow), and
+the scanline texture (`0xfad8b460`) only gives the alpha. The material's blend is `ONE`/`ONE`
+(state `0x3d`, [hd-track-tone.md](hd-track-tone.md), "The discriminating fit"), so in Detonator stage 1,
+whose `Scene.*` colours are black ([detonator-look.md](../ghidra/functions/ps3-hdfury-eu/detonator-look.md),
+"What the file says at stage 1"), the add is close to nothing and the panels read black.
+
+**Evidence.**
+
+- Talon's `scanlinebillboard.rcsmaterial` (`DATA00.PSARC`, `/data/environments/talons_junction/materials/adverts/`),
+  `scripts/ps3-sho.py variants` and `scripts/ps3-microcode.py fp-file`: the plain variants (`HalfBrightAmbientSunSpot0SVC0`,
+  fragment block `0x21a0`, and the `ShadowMap`, `IleLightmap` and `IleVertex` twins) declare the three
+  holographic samplers and run the overlay. Every `ZoneMode` and `ZoneTrans` variant (fragment blocks
+  `0x2ef0`, `0x3410`, `0x3ee0`, `0x4820`, `0x5b00`, `0x64c0`, `0x7740`, `0x8180`) declares
+  `zoneColourTint`, the Zone textures `0xd5e000d1`, `0x00e5b679`, `0x1f6f85a3` and the scanlines alone.
+  Block `0x2ef0`: `TEX H6.xyz, R1.zwzz unit1` (the Zone texture at `zoneColourTint.xy * (1 - uv)`) times
+  `0x5b79f09f`, plus `rim^5 * 0x6f756a07 + rim^10 * 0x1cc42e87`, times the light `TC0 + sun * N.L`, the
+  visualiser tap, the fog lerp, the closing `/2`; `MOV H0.w, H1.zzzz` from `TEX H1.z, R2 unit0`, the
+  scanlines at `0xd09c054d * uv`.
+- Census over all four PS3 archives, `hd_zone_wave_census_ground_truth::no_zone_variant_of_a_holo_billboard_samples_the_advert`:
+  22 holographic materials on Talon's Junction, Tech de Ra, the Amphiseum, Modesto Heights and `02_track`,
+  208 Zone variants, none declaring the advert or the second layer, all declaring the Zone texture.
+- The picture: on every HD Detonator pair the grilles over the track (Talon's slot 435) were ours'
+  brightest scenery where the original is black. With the rule, the `cannon-volley-hot` grille boxes
+  `215,0,520,150` and `1030,150,1360,305` read mean grey 9.4 and 7.7 (were 43.6 and 36.1; the original
+  6.8 and 13.6), and the upper-right overhead structure of `mines-ahead` (`1100..1920 x 0..400`) 16.6
+  (was 28.5, the original 17.7). The second box now reads darker than the original; not tuned.
+
+**Ours.** `shade.wesl` returns the holographic combine only while `zone_program` is 0: in a Zone frame
+the chunk falls through to the generic surface, which the Zone grade replaces. A chunk the Zone race
+draws on its plain program (`slots::ZONE_PLAIN`) keeps the overlay. The slot's role word keeps the
+scanline texture's blue as the alpha (`ALPHA_FROM_SECOND`, channel 2), which is the Zone variant's own
+alpha tap, and clears `ADD_SECOND`, so none of the billboard's repurposed inputs adds light on the
+generic path. Test: `hd_holo_billboard_lit_path::a_zone_frame_draws_the_zone_surface_on_a_billboard_not_the_overlay`
+(a black Scene set draws black; with the gate removed it draws the overlay and fails).
+
+| Pair (whole-frame mean grey) | Before | After |
+| --- | --- | --- |
+| `detonator-talons-cannon-volley-hot` | 10.32 | 8.96 |
+| `detonator-talons-mines-ahead` | 12.46 | 10.63 |
+| `detonator-talons-cannon-volley` | 14.33 | 12.37 |
+| `detonator-talons-pad` | 7.60 | 5.88 |
+| `zone-vineta-k-z5` (no holographic material) | 6.28 | 6.28, byte-identical |
+
+A headless Talon's Junction Zone race at the `pad` pair's camera (stage 0, `Sub Venom`) moves 3,138
+pixels: the two grille panels draw the saturated Zone surface instead of grey scanline stripes on it.
+The same frame in Time Trial is byte-identical. No original Zone frame of Talon's Junction is on the
+compare page, so the plain-Zone picture is by the read, not checked against a capture.
+
+**Open.** The light the generic path applies: the slot carries `NO_AMBIENT | NO_SUN` (the plain
+variants' unlit overlay), where the Zone variant multiplies by `TC0 + sun * N.L`. Invisible in Detonator
+(black Scene colours) and on a saturated Zone panel; not measured.
+
+**2048 and Omega: checked, differs.** Their readers (`psp2`, `gcn`) never bind the holographic shape
+(`slots::HOLO_BILLBOARD` is set only by `mesh::rcs::holo_billboard`), so these materials already draw
+the generic path in every mode and the gate changes nothing there. Whether their own GXP and GCN Zone
+variants drop the advert is unread.
+
 ## Seen, headless
 
 `just play hd --race --mode zone --track /data/environments/talons_junction/track.vex

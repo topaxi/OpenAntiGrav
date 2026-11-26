@@ -198,7 +198,9 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
         let fifth_map = textures[material.fifth_map];
         let sixth_map = textures[material.sixth_map];
     }
-    if (in.slots & 8388608u) != 0u {
+    // A holographic billboard's Zone variants drop the advert and draw the generic Zone surface
+    // (`docs/rendering/hd-zone-recolour.md`, "Holographic billboards in a Zone frame").
+    if (in.slots & 8388608u) != 0u && zone_program == 0.0 {
         return holo_billboard(in);
     }
     // The row of the emissive table this vertex names, read once for every test below.
