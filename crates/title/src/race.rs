@@ -640,6 +640,10 @@ pub struct Detonator {
     /// as a campaign race's score passes the cell's targets. Where it is `false` the layout's
     /// widgets are dropped.
     pub shows_medals: crate::pre_race::Sourced<bool>,
+    /// Whether a score add raises the floating `+N` (`ScoreFeedBack0`-`15`) at the scored object
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/detonator-hud.md`, "The floating score"). Where it
+    /// is `false` the layout's widgets stay empty.
+    pub floats_score: crate::pre_race::Sourced<bool>,
 }
 
 /// What drives the Detonator craft's cannon gauge, the hull's `detonator_bulletgaugesegments`

@@ -524,6 +524,8 @@ pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
     // `Detonator_UpdateHud` (`0x00067120`) compares the cell's thresholds against the score
     // (`detonator-hud.md`, 65).
     shows_medals: oag_title::pre_race::Sourced::measured(true),
+    // `DetonatorScoring_Add*` -> `Hud_RaiseScoreFeedback` (`0x00083ba0`) (`detonator-hud.md`, 72).
+    floats_score: oag_title::pre_race::Sourced::measured(true),
 };
 
 /// HD's Detonator object models (`DetonatorMine_Construct` `0x0013a7d8`,

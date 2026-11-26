@@ -274,6 +274,7 @@ pub fn step_charge(field: &mut Field, config: &Config) -> Vec<Event> {
         events.push(Event {
             kind: EventKind::EmpReady,
             at,
+            points: None,
         });
     }
     if g >= 1.0 && emp.full_armed {
@@ -281,6 +282,7 @@ pub fn step_charge(field: &mut Field, config: &Config) -> Vec<Event> {
         events.push(Event {
             kind: EventKind::EmpFull,
             at,
+            points: None,
         });
     }
     events
@@ -421,6 +423,7 @@ pub fn fire(field: &mut Field, survey: &Survey, config: &Config, from: u16) -> V
     vec![Event {
         kind: EventKind::EmpLaunch,
         at,
+        points: None,
     }]
 }
 
@@ -564,6 +567,7 @@ fn clear_entry(
         events.push(Event {
             kind: EventKind::MineEmped { live: placed.live },
             at,
+            points: Some(points),
         });
         field.remove_mine(i);
     }
@@ -583,6 +587,7 @@ fn clear_entry(
         events.push(Event {
             kind: EventKind::BombEmped,
             at,
+            points: Some(config.scoring.emp_bomb_score),
         });
         field.remove_bomb(i);
     }
