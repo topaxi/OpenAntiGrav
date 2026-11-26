@@ -687,11 +687,13 @@ fn an_hd_detonator_mine_costs_energy_and_destruction_ends_the_race() {
         after.shield
     );
 
-    for _ in 0..200 {
-        let Some(at) = race.core.sim.detonator_mine_position(0) else {
-            break;
-        };
-        race.core.sim.world.ships[LONE].physics.body.position = at;
+    // The blast, then the 5.5 s the end plays before the race is over.
+    for _ in 0..600 {
+        if race.core.sim.world.ships[LONE].physics.craft_state == oag_physics::CraftState::Racing
+            && let Some(at) = race.core.sim.detonator_mine_position(0)
+        {
+            race.core.sim.world.ships[LONE].physics.body.position = at;
+        }
         race.tick(&PlayerInputs::none());
         if race.core.sim.world.race[LONE].finished {
             break;
