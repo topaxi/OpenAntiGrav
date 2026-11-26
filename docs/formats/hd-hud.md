@@ -1631,6 +1631,57 @@ product of two floats neither of which is 0.8 (an alpha of `0.8` could also be `
 slots through `Widget_CreateChildByType` (`0x16aaa8`), or the PPU write-watch on the HUD vertex buffer
 (`scripts/build-rpcs3-watchpoints.sh`), which names the writer in one run and needs RPCS3.
 
+## Text scales on two axes (`det-hud-score-box`, 2026-11-26)
+
+A `<Text>` may author `ScaleX` and `ScaleY` instead of the uniform `scale` (no shipped widget
+authors both spellings), and the HUD reader had read only `scale`, so every such widget drew at 1.
+On HD's disc the attributes appear in `Detonator_HUD.xml`, `HUD_DetonatorWeapons.xml` and the Zone
+layouts only (a scan of every `*hud*` XML in all seven archives); the Zone `Score` is `1.3 x 1.5`,
+`DetonatorScore` `0.9 x 1.0`, `DetonatorStage` `0.8 x 0.8`, `PulseBullets` `0.9 x 0.9`.
+`oag_hud::Label` now carries `scale` (vertical) and `stretch` (`ScaleX / ScaleY`), and a widget whose
+two differ draws as `Draw::Stretched`: the text laid out at the vertical scale, its quads scaled
+about its anchor. Confidence 90, read off the file and checked against frames of the original at
+1920x1080: Detonator's digits span 305 px where ours at 1.0 spanned 340 (0.897), `1/14` 110 px
+against 139 (0.79) and 45 against 57 high, the ammo `14` 57 px wide against 62 (0.91); Zone's score
+digits are about 85 px high, 1.5 times Detonator's 55, where ours were 52 and are now 78. Still
+open on Zone: `Score` is `align="left"` and ours starts it at the box's middle, while the original's
+reads centred there (not read; present before this change).
+
+## Detonator's score box (`det-hud-score-box`, 2026-11-26)
+
+`Detonator_HUD.xml` authors `DamageBarBg` from `detonator_hud2` at `(0, 0)` (the box, with solid
+red wings) and, as its child, `DamageBar` at `(0, 790)`: the wings' white horizontal stripes, drawn
+as the shield fill. The fill lookup had asked for the same source rectangle as the background, so
+Detonator's (and Eliminator's and Duel's, the same shape on `fury_hud` and `nitro_hud`) drew no
+fill. The rule now takes the `DamageBar` on the background's texture, preferring the same rectangle
+(arcade's hexagon, which composes a second, unrelated `DamageBar`). Confidence 90: read off the
+layout, the decoded texture, and the original's frames: Detonator Talon's (four race pairs) and
+Eliminator (a 96 % readout), where the stripes are white as modes 8 and 14 are
+([hud-readouts.md](../ghidra/functions/ps3-hdfury-eu/hud-readouts.md)). Duel's is the same rule with
+no frame; no mode here loads that layout.
+
+Mean grey on the four Detonator race pairs (ours against theirs, before -> after):
+
+| Pair | Wings left / right | Score digits | `1/14` | Whole frame |
+| --- | --- | --- | --- | --- |
+| `mines-ahead` | 36.0 -> 25.0 / 39.4 -> 28.0 | 63.6 -> 16.2 | 14.6 -> 3.7 | 11.48 -> 10.53 |
+| `cannon-volley-hot` | 35.8 -> 10.6 / 38.0 -> 10.5 | 60.2 -> 8.9 | 15.0 -> 2.8 | 10.40 -> 8.97 |
+| `cannon-volley` | 34.0 -> 8.1 / 39.4 -> 11.5 | 70.1 -> 61.8 | 14.2 -> 1.4 | 12.80 -> 11.74 |
+| `pad` | 35.5 -> 10.8 / 37.7 -> 11.0 | 60.0 -> 8.7 | 14.0 -> 1.8 | 6.76 -> 5.35 |
+
+Boxes `x0,y0,x1,y1` at 1920x1080: wings `690,40,830,235` and `1090,40,1230,235`, digits
+`790,100,1135,180`, `1/14` `85,60,320,225`; mean absolute difference of the grey images, so the
+whole-frame column differs from the pair scorer's (which also fell on all four). `cannon-volley`'s
+remaining digit error is the original reading `100` and ours `0` (capture state). Both end-screen
+pairs are unchanged.
+
+**2048 and Omega.** Omega's `Detonator_HUD.xml` is HD's byte for byte apart from line endings, and
+its shield rules are HD's, so both changes apply to its HD mode through the shared reader (checked,
+applies; no Omega frame was rendered or compared). Vita 2048's `Detonator_HUD.xml` and
+`Zone_HUD.xml` author the same score scales, so the reader applies there too, unverified on screen;
+2048 has no shield runtime, so no fill. Omega's `2048_hud` Detonator layouts author uniform scales
+only.
+
 ## See also
 
 - [hd-status](hd-status.md) - the format layer this sits on top of
