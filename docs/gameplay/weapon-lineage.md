@@ -100,7 +100,9 @@ Values: a path is the exact string in the source; `set` is `Some(..)` (or
 | `weapons.floor_arms_ride_launch_normal` | `none` - measured | `set` - measured | `none` - measured | `none` - inherited | `none` - inherited |
 | `weapons.plasma_release_at_display_scale` | `set` - measured | `set` - measured | `none` - measured | `none` - inherited | `none` - inherited |
 | `weapons.rocket_launch_at_display_scale` | `set` - measured | `set` - measured | `none` - measured | `none` - inherited | `none` - inherited |
-| `weapons.own_craft_box_hides_track` | `Falls` - measured | `Holds` - measured | `PlasmaWindow` - chosen | `Absent` - measured | `Absent` - measured |
+| `weapons.own_craft_box_hides_track` | `Falls` - measured | `Holds` - measured | `Falls` - measured | `Absent` - measured | `Absent` - measured |
+| `weapons.surface_probe_lengths` | `PULSE` - measured | `PULSE` - inherited | `HD` - measured | `PULSE` - inherited | `PULSE` - inherited |
+| `weapons.rocket_open_air` | `Falls` - measured | `Falls` - inherited | `TurnsAlongNormal` - measured | `Falls` - inherited | `Falls` - inherited |
 | `weapons.opponent_fire` | `PULSE` - measured | `PULSE` - measured | `HD` - measured | `OMEGA` - measured | `OMEGA` - measured |
 | `weapon_models.rocket` | `set` - measured | `set` - measured | `set` - measured | `none` - unread | `set` - inherited |
 | `weapon_models.mine` | `set` - measured | `set` - measured | `set` - measured | `none` - unread | `set` - inherited |

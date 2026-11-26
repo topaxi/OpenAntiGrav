@@ -248,6 +248,14 @@ def code_cells() -> dict[str, dict[str, tuple[str, str | None]]]:
             raise SystemExit(f"check-weapon-lineage: {title}: `blast_push` is not a `Sourced` BlastPush")
         cells.setdefault("weapons.blast_push", {})[title] = (push.group(2), push.group(1))
 
+        # `Sourced::measured(ProbeLengths::HD)` and `Sourced::measured(RocketOpenAir::Falls)`: the
+        # const or variant is the value.
+        for field, kind in (("surface_probe_lengths", "ProbeLengths"), ("rocket_open_air", "RocketOpenAir")):
+            found = re.search(rf"Sourced::(\w+)\(\s*[\w:]*{kind}::(\w+)", weapons[field])
+            if found is None:
+                raise SystemExit(f"check-weapon-lineage: {title}: `{field}` is not a `Sourced` {kind}")
+            cells.setdefault(f"weapons.{field}", {})[title] = (found.group(2), found.group(1))
+
         models = models_block(title)
         for field, value in models.items():
             if field.startswith("."):

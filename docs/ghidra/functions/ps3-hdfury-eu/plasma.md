@@ -1094,9 +1094,9 @@ passes sample 668. Pinned by `crates/raceplay/tests/hd_bank_floor_ground_truth.r
   not wired it. With it, the straight shot ends at age 2.20 s (original 2.24) and the yawed shot
   0.5 from the original's wall point (`hd_plasma_flight_ground_truth.rs`). With both captures the
   Plasma law is confidence **92**.
-- **Not measured:** the Plasma's first probe (live, the frame 1/30 s after release already
-  rides, inside our 0.04 s window); the sweep arm; the 2048 and Omega flights (no memory
-  readout on Omega; 2048 not run).
+- **Not measured:** the sweep arm; the 2048 and Omega flights (no memory readout on Omega;
+  2048 not run). The first probe is measured since: it rides from the release, with no window
+  ([own-craft-box.md](own-craft-box.md), "Measured live").
 
 **Lineage.** 2048 and Omega: **checked, applies, wired by inheritance**. Both titles set
 `floor_arms_steer_to_ride_point` to `false`, inherited from HD. Omega's `Plasma_Update` is the

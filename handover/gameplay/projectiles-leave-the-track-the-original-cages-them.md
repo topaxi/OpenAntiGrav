@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
-titles: [pulse]
+titles: [pulse, hd]
 updated: 2026-11-26
-summary: "Cage, launch normal, floor arms, own box, HD blast push wired; open: HD box, opponent box, travel sweep, HD floor arms"
+summary: "Cage, launch normal, floor arms, own box (incl. HD) wired; open: HD Missile/Shuriken air arms, opponent box, travel sweep"
 size: S (50)
 difficulty: medium (55)
 ---
@@ -42,7 +42,7 @@ was not measured.
    projectile's cage hit is not drawn.
 3. ~~The first probes of a projectile miss on the firing craft's box collider.~~ **Wired 2026-11-13**
    (lane `pulse-own-craft-box`, see Done). Open from it: the travel sweep's own box meeting (65: same
-   function, no reading of its own), an opponent's box (75), HD's box measured but unwired (Next Steps 1; HD keeps the chosen 0.04 s Plasma window), and the 2,302-probe replay as a Rust test: it cannot be ported until someone re-captures the 56 files
+   function, no reading of its own), an opponent's box (75), HD's box wired (Next Steps 1 for what is left), and the 2,302-probe replay as a Rust test: it cannot be ported until someone re-captures the 56 files
    (the originals were scratch and are gone; `scripts/psp-projectile-sweeps.py --box ... --out FILE`,
    checked by `scripts/psp-craft-box-replay.py`). Keep them where a reap does not delete them, e.g.
    `data/traces/pulse-own-craft-box/` in the main checkout (the replay script's docstring names it).
@@ -135,12 +135,9 @@ was not measured.
 
 ## Next Steps
 
-1. **Wire HD's box and the Rocket's open-air arm** (measured 2026-11-26,
-   [own-craft-box.md](../../docs/ghidra/functions/ps3-hdfury-eu/own-craft-box.md); capture and replay:
-   `scripts/rpcs3-hd-own-box.py`). The box answers with `0x7f` and Pulse's transposed gate, but HD's
-   Rocket on `0x7f` only turns parallel to its carried normal and does not fall, so neither
-   `OwnCraftBox::Falls` (adds a `50 * dt` drop) nor `Holds` (skips the turn) is faithful, and ours
-   already drops every HD rocket off every lip. Probe lengths: Rocket, Plasma, Missile 6.0.
-   Unread: the Plasma's (static: falls on world Y), Missile's and Shuriken's `0x7f` arms, the
-   Shuriken's probe length. Then an opponent's box and the travel sweep (items above).
+1. **HD's remaining open-air arms** (`oag-capture`/`oag-re`; box, probe lengths and the Rocket's
+   no-fall arm are wired, `projectile-floor.md`, "HD's box and open-air Rocket"): the Missile's
+   `0x7f` arm (`0x11e440`), the Shuriken's, and its probe length; the Plasma's fall axis (static:
+   world Y, ours along the normal). Then 2048's and Omega's own probe lengths and Rocket arm
+   (Omega's Plasma reads `6.0`), an opponent's box and the travel sweep (items above).
 2. Read HD's `Rocket_Update`, `Missile_Update` and `Shuriken_Update` floor arms (`ps3-hdfury-eu`); if they match Pulse's, flip `Weapons::floor_arms_steer_to_ride_point` for HD (and Omega, 2048 by lineage).

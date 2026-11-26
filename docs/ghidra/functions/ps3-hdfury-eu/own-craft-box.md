@@ -8,8 +8,9 @@ rotated frame"): does the firing craft's own box hide the track from a projectil
 Rocket does not fall on `0x7f`.** Static read 2026-11-13, measured live on RPCS3 2026-11-26 (three
 boots, "Measured live" below), on `/hdfury/EBOOT-ps3-hdfury-eu.elf`. Confidence: the box answers a
 probe of the firer's own projectile **92**, the transposed gate **92**, the probe lengths (6.0 for
-Rocket, Plasma, Missile) **95**, the Rocket's `0x7f` arm **88** (two boots). The title still reads
-`chosen` (`OwnCraftBox::PlasmaWindow`): nothing is wired yet. The Ghidra GUI decompiles
+Rocket, Plasma, Missile) **95**, the Rocket's `0x7f` arm **88** (two boots). Wired as HD title
+data ([projectile-floor.md](../../../gameplay/projectile-floor.md), "HD's box and open-air Rocket").
+The Ghidra GUI decompiles
 `Collision_MarchSegment` to `halt_baddata` (the `lvlx` trap), so the collision functions were read
 with
 
@@ -145,6 +146,8 @@ later either. The rocket moves to `from + v * dt` (the sweep's end equals the pr
 
 ## What is not read
 
+- The Plasma wired here still falls along its carried normal (Pulse's arm), where its static read is
+  world Y.
 - The Plasma's `0x7f` arm is a fall on world Y, static only ([plasma.md](plasma.md)); no box answered
   a Plasma probe. The Missile's `0x7f` arm (`0x11e440`) and the Shuriken's are unread.
 - The probe length of the Shuriken.
