@@ -1445,6 +1445,12 @@ throughout:
    magnitude and which way it pointed relative to the ship's own forward axis
    survive. "Scales the ship's own forward axis by the impulse magnitude
    rather than using the impulse direction" is exact, not a summary.
+   **Corrected 2026-11-26: the row is the craft's left row, not forward.** The
+   arithmetic above stands; the name does not. `*(entity+0x794)`'s first row is
+   the left row ([`camera.md`](camera.md), 93), and a live capture of 11 drains
+   puts every velocity change on that row
+   ([below](#the-drain-pushes-along-the-side-row-measured-2026-11-26)). Read
+   `forward` in this step as `left`.
 4. **The impulse is applied through `Body_ApplyImpulseAtPoint` (`0x0884d64c`)**
    - the same function [the pair path below](#what-it-does-with-the-impulse)
    uses, called `(body = *(entity+0x794), point = a1, impulse = &pending)`.
@@ -2603,7 +2609,8 @@ accumulates into `pending_impulse`; `oag_weapons::projectile::blast::post_impuls
 helper all of `blast`, `blast_mine_trip` and `blast_direct_hit` call (they carried
 three inline copies of a radial `apply_impulse`). `wall::apply_pending_impulse`, already
 ported, drains it on the craft's next physics step: a push along the craft's own
-forward axis (sign from the vector's side of it, magnitude its length), `+0.5 s` of
+side axis (sign from the vector's side of it, magnitude its length; [measured
+2026-11-26](#the-drain-pushes-along-the-side-row-measured-2026-11-26)), `+0.5 s` of
 stun (no thrust, no lateral grip), and **nothing at all under a running Shield**. That is
 the player-visible change: a hit craft loses its engine for half a second per blast, a
 shielded one is not shoved.
@@ -2637,3 +2644,96 @@ hull-derived); whether the Missile, Rocket and Bomb twins read `T+0x50` (a Ghidr
 `program=` read of each position load settles it); the Shuriken. The collision stun
 is `+0.5 s` per hit and adds, so two blasts in a tick stun for a second: confirmed in
 the consumer's code, not watched in a race.
+
+## The drain pushes along the side row (measured 2026-11-26)
+
+**Claim.** `Ship_ApplyCollisionImpulse` (`0x0883f274`) drains a blast's pending impulse along
+the craft's **left** row (row 0 of `*(entity+0x794)`), keeping the sign of `dot(left, pending)`
+and the pending vector's full length, and applies it at the body's own position. Confidence
+**92**: instruction-level read plus 11 live drains on two PPSSPP boots, at three headings
+of blast and both signs, every one exact to float precision.
+
+**Static read.** At `0x0883f31c`-`0x0883f324` the projection axis is `lv.q 0x0(*(s0+0x794))`,
+the node's first quad; `sv.q C400,0x40(sp)` (`0x0883f334`) keeps the raw pending vector on
+the stack, which nothing later in the function overwrites. The node is the craft matrix
+[`camera.md`](camera.md) reads as rows **left, up, forward**, position (93).
+
+**Same object, checked live.** At every drain `*(entity+0x94)` is the craft,
+`*(craft+0x1c4) == entity`, `*(craft+0x1cc) == *(entity+0x794)`, and the twelve row floats
+of the two pointers are equal. So `camera.md`'s `entity` and this function's `a0` are the
+same object, and its row 0 is this function's projection axis.
+
+**Method.** `scripts/psp-pending-drain.py` against Pulse PSP USA (`UCUS98712`), PPSSPP
+v1.20.4, software renderer, state `race-platinum-white-single-grid.ppst` (Platinum Rush,
+Single Race, the player parked 8th on the grid). The script fires the player's weapon
+N frames after GO by setting its bit in the record's fire word. It then breaks at `0x0883f3e0`,
+the `jal Body_ApplyImpulseAtPoint`, which runs only for a non-zero pending vector with no
+Shield running. There it reads the raw pending vector (`sp+0x40`), the node's rows, position and
+velocity (`+0x140`) and mass (`+0x374`), the point argument (`*a1`), and the record's nose
+and centre points (`T+0x50`, `T+0x90`, `T = *(entity+0x4c)`). It then moves the breakpoint
+to `0x0883f3e8`, after the call, and reads the velocity again, so the change is the call's
+alone. Three runs: Rocket at GO+120 (4 drains), reload, Rocket at GO+60 (4), a fresh PPSSPP
+boot, Plasma at GO+90 (3).
+
+**Forward is row 2, identified without reading the rows' names.** On every drain
+`(T+0x50 - T+0x90) / 4.875` (the nose direction) has dot `1.000` with row 2 and `0.000`
+with rows 0 and 1, and the struck rival (racing ahead of the parked player) has velocity
+`dot(row 2, v) = 74` to `112` units/s against `|v|` within a few units of it.
+
+**Result.** `dv` is velocity after minus before; mass is `1.000` on every craft.
+
+| run | weapon | `pending` on rows 0, 1, 2 | `dv` on rows 0, 1, 2 | `|pending|`, `|dv|` |
+| --- | --- | --- | --- | --- |
+| 1 | Rocket | -0.396, 3.440, 25.922 | -26.152, 0, 0 | 26.152, 26.152 |
+| 1 | Rocket | -2.320, -0.034, 3.727 | -4.390, 0, 0 | 4.390, 4.390 |
+| 1 | Rocket | -2.539, -0.070, 3.498 | -4.323, 0, 0 | 4.323, 4.323 |
+| 1 | Rocket | -1.335, -0.013, 1.956 | -2.368, 0, 0 | 2.368, 2.368 |
+| 2 | Rocket | -3.475, 3.546, 25.618 | -26.095, 0, 0 | 26.095, 26.095 |
+| 2 | Rocket | -3.443, -6.356, 25.908 | -26.897, 0, 0 | 26.897, 26.897 |
+| 2 | Rocket | -3.644, -0.205, -4.085 | -5.478, 0, 0 | 5.478, 5.478 |
+| 2 | Rocket | 45.260, -2.069, 4.484 | 45.529, 0, 0 | 45.529, 45.529 |
+| 3 | Plasma | -13.762, 3.756, 9.108 | -16.925, 0, 0 | 16.925, 16.925 |
+| 3 | Plasma | 0.293, 1.800, 3.948 | 4.349, 0, 0 | 4.349, 4.349 |
+| 3 | Plasma | 0.741, 1.845, 3.621 | 4.131, 0, 0 | 4.131, 4.131 |
+
+Every velocity change lies on row 0 alone, with the pending vector's full length and the sign of
+its row-0 component. That holds even where the blast came almost square from behind (first row:
+`25.9` forward, `-0.40` sideways, a `26` units/s shove to the right) and from ahead (seventh
+row: negative on forward). A forward drain would have put these on row 2; a raw push (`dv =
+pending`) or a plain projection (`dv = (pending . row) row`) would not have had `|dv| =
+|pending|`. The point argument equals the body position on every drain, and in the
+`0x380`-byte node block only the velocity (`+0x140`-`+0x148`) changes across the call: no
+angular term.
+
+**What the port does.** `oag_physics::laws::Laws::PULSE` sets `pending_impulse_on_side`, so
+`oag_physics::wall::apply_pending_impulse` drains along `Body::right()` under the same sign
+rule; left or right only differs on an exactly zero dot (the original keeps left there).
+Pure inherits it (`CraftLaws`, labelled inherited from Pulse); Pulse PS2 runs `Laws::PULSE`,
+inherited from PSP, its own drain unread. The test
+`wall::impulse::tests::pulses_drain_reproduces_the_captured_velocity_changes` pins four of
+the rows above (1, 7, 8, 10).
+
+What moved with it: no determinism hash (the gameplay scenario's blast stays pending, as it
+never runs the physics step), and not the lone-craft gate (all twelve circuits clean before
+and after). Three field pins moved and were re-bounded:
+`ai_dekonstruct_black_ground_truth`'s FLASH seed 2 forward (0 to 1, noise not systematic:
+destroyed 184 to 181 over the nine `BOUND_OFFSETS`), Pulse `05_Track`'s pit rescues
+(`arena_beneath_ground_truth`, 2 to 1), and Pure Chenghou Project's respawn bound
+(`pure_original_ai_ground_truth`, 1 to 2, the field still all finishes).
+
+**Reproduce.**
+
+```sh
+scripts/ppsspp-start.sh <lane> 97 47895 "$PWD/data/images/pulse-psp-usa.chd"
+# then source the env.sh it names, which sets PP_HOME for psp-state.py
+uv run --with websocket-client python3 scripts/psp-state.py --port 47895 load 1 \
+    --file data/saves/pulse-psp/race-platinum-white-single-grid.ppst
+uv run --with websocket-client --with evdev python3 scripts/emu-run.py -- \
+    python3 scripts/psp-pending-drain.py --port 47895 --fire-frame 120 \
+    --weapon rocket --drains 4 --out data/traces/pulse-pending-drain/rocket.json
+```
+
+The image path must be absolute: `ppsspp-start.sh` starts PPSSPP from its own directory. The
+eleven drains above are kept in `data/traces/pulse-pending-drain/` (three JSON files, one per
+run).
+

@@ -2,7 +2,7 @@
 status: measure
 titles: [hd]
 updated: 2026-11-26
-summary: "Deck 4K: DRS settles Zone at 0.80, time trial 0.93; pin the GPU clock to test why. Also Zone specular, a program split"
+summary: "DRS rise rule for a falling Deck clock (Zone 4K 0.80, pinned 0.96); Zone specular; a Zone program split"
 ---
 
 # An HD Zone race costs more than a time trial on the same circuit
@@ -12,17 +12,15 @@ Measurements, the cause and the landed part:
 
 ## Open
 
-- **Ranked first, a hypothesis (confidence 50): dynamic resolution settles low because the
-  Deck's clock falls with it.** At 3840x2160 with the reporter's settings Zone holds about 0.80
-  (time trial 0.93), while with DRS off Zone runs at 58.8 fps at full size. The GPU clock is
-  1104 MHz in the first case and 1574 in the second; the controller would be reading the slower
-  clock's milliseconds as no room to rise. Evidence for and against:
-  [dynamic-resolution.md](../../docs/rendering/dynamic-resolution.md), "On the Steam Deck". The
-  race pass's +1.60 ms at 4K is the answered part, and it is faithful.
-- **Only if the pin confirms it:** probe one step up after a long hold at the target rate and
-  keep it if no frame is late, or judge a rise from late frames as well as GPU milliseconds.
-  Either changes the chosen resolution, so the picture changes. TARGET FPS `original` (HD's
-  width throttle) also steps on a GPU duration: unmeasured on the Deck.
+- **Ranked first: dynamic resolution settles low because the Deck's GPU clock falls with it**
+  (confidence 90). At 3840x2160 unpinned, Zone holds about 0.80 and a time trial 0.93; with the
+  clock pinned at 1600 MHz, 0.96 and 0.99. The cause is measured, the fix is not designed: a rise
+  that GPU milliseconds cannot veto (a probe kept only if no frame is late), which changes the
+  chosen resolution, so the picture changes. It costs power: unpinned DRS drew 3 to 6 W less.
+  Needs and acceptance: [dynamic-resolution.md](../../docs/rendering/dynamic-resolution.md),
+  "What a rise rule that survives this needs". TARGET FPS `original` (HD's width throttle) also
+  steps on a GPU duration: unmeasured on the Deck under a falling clock. The race pass's
+  +1.60 ms at 4K is the answered part, and it is faithful.
 - **The reporter's setup is not known.** At 1280x800 and 1920x1080 both modes hold 100 %, so the
   75 % seen was a larger output or a lower clock than here. A time trial "at 100 %" was not
   reproduced at 4K (0.93).
@@ -38,11 +36,9 @@ Measurements, the cause and the landed part:
 
 ## Next Steps
 
-1. Test the hypothesis: pin the GPU clock with DRS on. Steam's quick-access manual GPU clock
-   (the maintainer's hands) or, with the lead's OK, root writing
-   `/sys/class/drm/card0/device/power_dpm_force_performance_level`. Run the headless gamescope
-   line on the page above at 3840x2160, `-r 60`, both modes, 70 s, pinned high and unpinned.
-   Confirmed if Zone pinned settles near 0.95; refuted if it stays near 0.80.
-2. Only if confirmed: design the rise rule above and measure it the same way.
-3. Read one Chenghou Zone fragment program end to end for a specular term
+1. Maintainer's call first: is a higher resolution worth 3 to 6 W on a Deck? If yes, measure how
+   long the Deck's governor takes to raise the clock after a step up (a DRS-off run alternating a
+   light and a heavy size, sampling `freq1_input`), then design the probe as an ADR and measure it
+   with the reproduction on the page above.
+2. Read one Chenghou Zone fragment program end to end for a specular term
    (`scripts/ps3-microcode.py fp-file`), then decide the lightmap alpha.

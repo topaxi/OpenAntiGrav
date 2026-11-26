@@ -297,6 +297,14 @@ impl Cli {
         None
     }
 
+    /// `--force-rocket-hit-velocity`; always `None` in a build without `dev-cli`.
+    pub(crate) fn force_rocket_hit_velocity(&self) -> Option<&str> {
+        #[cfg(feature = "dev-cli")]
+        return self.wreck.force_rocket_hit_velocity.as_deref();
+        #[cfg(not(feature = "dev-cli"))]
+        None
+    }
+
     /// `--give`; always `None` in a build without `dev-cli`.
     pub(crate) fn give(&self) -> Option<&str> {
         #[cfg(feature = "dev-cli")]

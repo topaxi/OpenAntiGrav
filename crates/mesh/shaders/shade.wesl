@@ -1796,13 +1796,12 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
     // sun, no lightmap and no specular, so lighting the flame and then
     // overwriting it is the honest shape as well as the cheap one.
     //
-    // `rim` is the same angle HD's program computes. Its own vertex program
-    // dots an *untransformed* normal attribute against
-    // `eyePositionWorldSpace - position`, which is only meaningful if the eye
-    // reaches it in model space; the angle between the two is the same number
-    // under a rigid transform, so it is computed here from the world normal and
-    // the scene block's eye. The flame surfaces' block leaves that eye at the world
-    // origin (`docs/ghidra/functions/ps3-hdfury-eu/engine-flare.md`, "Our rim's eye").
+    // `rim` is the same angle HD's program computes. The program the console
+    // runs takes the position and the normal through the plain model matrix and
+    // subtracts the world position from the camera's world position, so `n` and
+    // `to_eye` here are its two vectors, and the flame surfaces' block carries
+    // the view's eye (`docs/ghidra/functions/ps3-hdfury-eu/engine-flare.md`,
+    // "The live vertex program").
     //
     // **`texel.a` is deliberately absent.** The program's `TEX H0.xyz` writes
     // three components and the fourth is the vertex ramp from the moment

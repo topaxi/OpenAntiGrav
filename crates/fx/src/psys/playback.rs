@@ -128,6 +128,8 @@ pub(super) struct Burst {
     pub frame_scale: f32,
     /// The lifetime co-factor, the selector-5 record (`1.0` without one).
     pub lifetime: f32,
+    /// The size multiplier of a particle born now: [`super::EmitterSpec::size_ramp`].
+    pub size: f32,
     /// The ring angle under [`Playback::even_ring`], else `None` (drawn per particle).
     pub phi: Option<f32>,
     /// Added to the particle's spawn position: the sub-frame pull-back.
@@ -199,6 +201,9 @@ impl super::EmitterSpec {
                 * animated(&self.extent_animation),
             frame_scale,
             lifetime: animated(&self.playback.lifetime_animation),
+            size: self
+                .size_ramp
+                .map_or(1.0, |(lo, hi)| lo + (hi - lo) * (1.0 - age)),
             phi: None,
             shift: Vec3::ZERO,
         }

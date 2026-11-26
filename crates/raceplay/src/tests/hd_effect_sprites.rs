@@ -9,6 +9,22 @@ use oag_title::Title;
 use crate::assets::particle_effect;
 
 #[test]
+fn only_hd_walks_its_flipbooks_and_ramps_its_sizes() {
+    let measured = Some(oag_title::Origin::Measured);
+    assert_eq!(oag_hd::TITLE.effects.flipbooks, measured);
+    assert_eq!(oag_hd::TITLE.effects.size_ramps, measured);
+    for title in [
+        oag_pulse::TITLE,
+        oag_pure::TITLE,
+        oag_2048::TITLE,
+        oag_omega::TITLE,
+    ] {
+        assert_eq!(title.effects.flipbooks, None, "{}", title.name);
+        assert_eq!(title.effects.size_ramps, None, "{}", title.name);
+    }
+}
+
+#[test]
 fn only_hd_lists_effects_whose_gtf_sprites_play() {
     for title in [
         oag_pulse::TITLE,
@@ -22,8 +38,6 @@ fn only_hd_lists_effects_whose_gtf_sprites_play() {
         oag_hd::TITLE.effects.sprites,
         [
             oag_title::engine_effects::DETONATOR_CANNON_SPARKS_EFFECT,
-            oag_title::engine_effects::DETONATOR_MINE_EXPLO_EFFECT,
-            oag_title::engine_effects::DETONATOR_MINE_EXPLO_DEAD_EFFECT,
             oag_title::engine_effects::TRACK_BLAST_EFFECT,
             oag_title::engine_effects::CRAFT_BLAST_EFFECT,
             oag_title::engine_effects::EXPLOSION_EFFECT,
@@ -37,6 +51,27 @@ fn only_hd_lists_effects_whose_gtf_sprites_play() {
             oag_title::engine_effects::PLASMA_LAUNCH_EFFECT,
             oag_title::engine_effects::PLASMA_LIGHTNING_EXPAND_EFFECT,
             oag_title::engine_effects::PLASMA_LIGHTNING_COLLAPSE_EFFECT,
+            oag_title::engine_effects::MINE_EXPLO_EFFECT,
+            oag_title::engine_effects::BOMB_SMOKERING_EFFECT,
+            oag_title::engine_effects::MISSILE_EXPLO_EFFECT,
+            oag_title::engine_effects::MISSILE_BOUNCE_EFFECT,
+            oag_title::engine_effects::DETONATOR_MINE_EXPLO_DEAD_EFFECT,
+            oag_title::engine_effects::DETONATOR_MINE_EXPLO_EFFECT,
+            oag_title::engine_effects::DETONATOR_BOMB_EXPLO_EFFECT,
+            oag_title::engine_effects::ROCKET_FLARE_EFFECT,
+            oag_title::engine_effects::CANNON_SPARKS_EFFECT,
+            oag_title::engine_effects::SHURIKEN_FLARE_EFFECT,
+            oag_title::engine_effects::SHURIKEN_TRAIL_EFFECT,
+            oag_title::engine_effects::SHURIKEN_BOUNCE_EFFECT,
+            oag_title::engine_effects::SHURIKEN_EXPIRE_EFFECT,
+            oag_title::engine_effects::REPULSER_BLAST_EFFECT,
+            oag_title::engine_effects::ABSORB_EFFECT,
+            oag_title::engine_effects::COLLISION_SPARK_EFFECT,
+            oag_title::engine_effects::DEATH_PLUME_EFFECT,
+            oag_title::engine_effects::DEBRIS_FIRE_EFFECT,
+            oag_title::engine_effects::DAMAGE_MILD_EFFECT,
+            oag_title::engine_effects::DAMAGE_MODERATE_EFFECT,
+            oag_title::engine_effects::MODESTO_STEAM_EFFECT,
         ]
     );
     let names = oag_hd::TITLE.effects.names();
@@ -129,6 +164,7 @@ fn the_loader_gives_hds_ship_explosion_the_light_blend() {
         oag_title::engine_effects::EXPLOSION_EFFECT,
         false,
         title.effects.colour_walk,
+        title.effects,
     )
     .expect("the effect loads");
     assert_eq!(effect.emitters[0].authored_colour_mode, 3);
@@ -363,6 +399,7 @@ fn the_emp_sparks_feel_their_noise_force_only_where_the_title_lists_it() {
             name,
             false,
             title.effects.colour_walk,
+            title.effects,
         )
         .expect("the effect loads")
         .0
@@ -450,5 +487,35 @@ fn a_forced_rocket_hit_plays_the_craft_blast_with_its_sprites() {
     assert!(
         race.view.stage.alive_of_effect(&blast) > 0,
         "the craft blast is not playing"
+    );
+    check_hds_flipbooks_walk(&race, &blast);
+}
+
+/// HD's update walks its flipbooks: the craft blast's root over its life, the wall blast's
+/// root at its rate from a frame in `0..=10`, held on the last cell
+/// (`docs/ghidra/functions/ps3-hdfury-eu/particle-render.md`, "The atlas frame"). The craft
+/// blast's `trail` alone is also drawn smaller the later in its run a particle is born
+/// ("The per-particle size multiplier").
+fn check_hds_flipbooks_walk(race: &crate::Race, craft: &oag_fx::psys::Effect) {
+    use oag_fx::psys::frames::FrameAdvance;
+    assert_eq!(craft.emitters[0].frames, FrameAdvance::OverLife);
+    let ramped: Vec<_> = craft
+        .emitters
+        .iter()
+        .filter_map(|spec| Some((spec.name.as_str(), spec.size_ramp?)))
+        .collect();
+    assert_eq!(ramped, [("trail", (0.2, 1.0))]);
+    let wall = race
+        .effect_for_tests(oag_title::Trigger::TrackBlast)
+        .expect("HD loads the wall blast");
+    let root = &wall.emitters[0];
+    assert!(
+        matches!(root.frames, FrameAdvance::Rate(_)),
+        "{:?}",
+        root.frames
+    );
+    assert_eq!(
+        root.frame_range.map(|range| (range.spawn, range.hold)),
+        Some(((0, 10), (31, 31)))
     );
 }

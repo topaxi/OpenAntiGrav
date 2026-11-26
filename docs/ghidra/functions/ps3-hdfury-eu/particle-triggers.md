@@ -216,11 +216,9 @@ smoke's colour is mostly the sprite's. Confidence 85.
 **What is wired.** `oag_title::Effects::sprites` lists the HD effects whose `.gtf`
 sprites play; HD lists `WO_ROCKET_EXPLO_TRACK` alone, Pulse, Pure, 2048 and Omega list
 none. `Sprite::from_gtf` is new. Test: `hd_effect_sprites` (nine sprites when listed,
-none when not). **Every particle draws its spawn frame**: HD's frame advance, and which
-cell is frame 0 (top-left, or the bottom row if the exporter flipped the sheet), are
-**unread**. Pulse's advance was tried and dropped: it plays the sheet top-left first,
-which ends on the white cells, and a row-order flip changed the measured ratios by under
-0.02, so the render cannot tell the two apart and nothing was shipped on a guess.
+none when not). Cell 0 is the authored top-left, and ours walks the flipbooks as HD does
+([particle-render.md](particle-render.md#the-atlas-frame)). Without HD's hold frame
+the walk ends on the white cells; this burst's smoke holds on 31.
 
 **Before and after.** Ours at tick 513 onwards (a single square press at tick 420,
 `--camera-view close`, per-pixel against a no-fire render; the burst lands on a far
@@ -236,8 +234,7 @@ PS2 renders at four ticks across a rocket burst are byte-identical to main.
 `0x007a1060/70`, registry slots `0x008b3a34` (normal) and `0x008b3ab8` (lit);
 `psys_normal` is also referenced from `FUN_002c7b30` at `0x002c7ea0`, `psys_lit` only
 from its table slot, so what selects lit is not found, and nothing says whether any
-declares `fogFactors` or a light. Unread; nothing was tinted. (2) HD's own frame-advance
-law and the flipbook direction (see above). (3) The pose: ours hits a far wall. (4) The
+declares `fogFactors` or a light. Unread; nothing was tinted. (2) The pose: ours hits a far wall. (3) The
 craft hit (`WO_ROCKET_EXPLO`) was captured 2026-11-26 and still draws the procedural profile in
 ours, which is one reason its picture does not match
 ([particle-fill.md](../../../rendering/particle-fill.md), "Against the original at a near

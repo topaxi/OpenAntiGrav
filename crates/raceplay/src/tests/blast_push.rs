@@ -57,14 +57,15 @@ fn an_immediate_blast_shoves_the_player_without_a_stun() {
     );
 }
 
-/// HD's law, off HD's own title data: the blast is posted (a stun) and its push drains along
-/// the player's side axis (`oag_physics::laws::Laws::pending_impulse_on_side`), where Pulse's
-/// drain leaves a Rocket from straight behind along forward. Both runs are identical but for
-/// the title's push and physics laws, so the side speed they part by is the blast's. Reverting
-/// HD's `blast_push` to `Immediate`, dropping the field from `launch_hover::physics_laws`, or
-/// the axis choice in `oag_physics::wall::apply_pending_impulse` turns this red.
+/// Pulse's and HD's law, off each title's own data: the blast is posted (a stun) and its push
+/// drains along the player's side axis (`oag_physics::laws::Laws::pending_impulse_on_side`),
+/// so a Rocket from straight behind shoves the craft sideways, not ahead. Omega keeps the
+/// immediate push, which leaves a blast from behind along forward and so no side speed: the
+/// two titles part by the blast's side speed. Reverting Pulse's or HD's
+/// `pending_impulse_on_side`, dropping the field from `launch_hover::physics_laws`, or the
+/// axis choice in `oag_physics::wall::apply_pending_impulse` turns this red.
 #[test]
-fn hds_posted_blast_shoves_the_player_sideways() {
+fn a_posted_blast_shoves_the_player_sideways_on_pulse_and_hd() {
     let side_speed = |title: &oag_title::Title, laws: Option<&oag_title::craft_laws::CraftLaws>| {
         let mut race =
             race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_rocket_table());
@@ -90,13 +91,20 @@ fn hds_posted_blast_shoves_the_player_sideways() {
             physics.shield < before,
             "the rocket never struck the player"
         );
-        assert!(physics.stun_timer > 0.0, "a posted blast armed no stun");
+        if title.weapons.blast_push.value == BlastPush::Posted {
+            assert!(physics.stun_timer > 0.0, "a posted blast armed no stun");
+        }
         physics.body.linear_velocity.dot(physics.body.right()).abs()
     };
     let hd = side_speed(oag_hd::TITLE, Some(&oag_hd::race::CRAFT_LAWS));
     let pulse = side_speed(oag_pulse::TITLE, None);
+    let omega = side_speed(oag_omega::TITLE, Some(&oag_omega::race::CRAFT_LAWS));
     assert!(
-        hd > pulse + 1.0,
-        "HD's side speed {hd} is not the blast's over Pulse's {pulse}"
+        hd > omega + 1.0,
+        "HD's side speed {hd} is not the blast's over Omega's {omega}"
+    );
+    assert!(
+        pulse > omega + 1.0,
+        "Pulse's side speed {pulse} is not the blast's over Omega's {omega}"
     );
 }

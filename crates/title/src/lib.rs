@@ -734,29 +734,16 @@ pub struct FrontEnd {
     /// What lights the 3-D models a front-end screen draws (the craft on Ship Select), or
     /// `None` where the screen lights them with the viewer's rig. See [`ModelLighting`].
     pub model_lighting: Option<ModelLighting>,
-    /// How the `Team Selection` honeycomb's hexagon fill fades with the column's distance from
-    /// the selected one, or `None` where it is drawn flat (a title whose fade is unread). See
-    /// [`HexFade`].
-    pub team_hex_fade: Option<HexFade>,
+    /// The colour (ARGB) the selected column of a `HexSelection` grid (`Team Selection`'s and
+    /// `Track Creation`'s) is filled with, where the title's widget writes its own, or `None` for
+    /// `HD_Blue` of the front end's style. Omega's `_SetCell` carries a grey inline
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/ship-select-ring.md`, "Omega").
+    pub hex_selected_fill: Option<u32>,
     /// The colour (ARGB) the `Team Selection` honeycomb's cursor ring pulses through between white
     /// and black, where the title computes its own, or `None` for `HD_Blue` of the front end's
     /// style. Omega's update carries the red inline
     /// (`docs/ghidra/functions/ps3-hdfury-eu/ship-select-ring.md`, "Omega").
     pub team_hex_ring_peak: Option<u32>,
-}
-
-/// How a front-end hexagon grid fades its fill (`HexCol`) toward `HexColFade` with the
-/// column's distance from the selected column: `t = column distance / columns`, clamped to
-/// `0..=1`, and `fill = lerp(HexCol, HexColFade, t)` (a colour, alpha included).
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct HexFade {
-    /// Columns out at which a cell has faded all the way.
-    pub columns: f32,
-    /// Texels of the hexagon's own sprite per column of fade across it, or `None` where a
-    /// cell is one flat colour. Each cell's fill runs from its centre's value toward the
-    /// selected column on one side to away from it on the other, as the original's per-vertex
-    /// colours do: `column distance = cell distance -/+ texels from the cell's centre / span`.
-    pub span: Option<f32>,
 }
 
 /// The light a front-end screen's models are drawn in: the engine's own light parameters,

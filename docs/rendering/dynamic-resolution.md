@@ -878,8 +878,10 @@ on the same circuit holds 100 %.
 
 **Verdict: true in direction at 3840x2160, not seen at 1280x800 or 1920x1080.** At 4K, with the
 reporter's own settings, Zone settles at about 0.80 (stepping to 0.75) and a time trial at about
-0.93, not 1.00. The pass that grows is the race pass, which is mostly faithful. Why the settle is
-so much deeper than that cost is a hypothesis, not a finding.
+0.93, not 1.00. The pass that grows is the race pass, which is mostly faithful. The settle is so
+much deeper than that cost because the Deck's GPU clock falls with the scale: with the clock pinned
+at its maximum, Zone settles at 0.96 and the time trial at 0.99
+([below](#why-the-4k-settle-is-so-deep-the-gpu-clock-falls-with-the-scale)).
 
 Checked again at `d66a52ae6`, two 4K paced runs each: Zone 0.83 and 0.84, time trial 0.93 and
 0.95 (second half of each run).
@@ -945,44 +947,88 @@ Zone surface, which is mostly faithful ([hd-zone-recolour.md](hd-zone-recolour.m
 race costs"). What the controller manages (race pass plus bloom) is 12.67 ms against 11.45, 11 %
 more. The budget loop's other costs are smaller in Zone.
 
-### A hypothesis for the depth of the 4K settle (unconfirmed)
+### Why the 4K settle is so deep: the GPU clock falls with the scale
 
-A cost 11 % higher moves a controller's linear scale by about 5 %. The rest may be the Deck's
-clock.
+A cost 11 % higher moves a controller's linear scale by about 5 %. The rest is the Deck's clock:
+with DRS on, the controller lowers the scale, the load falls, the Deck's governor lowers the
+clock, the GPU's timestamps (milliseconds, not cycles) grow, and the controller reads them as no
+room to rise. Confidence **90**.
 
-With DRS off under the same pacing, both modes nearly hold 60 at full resolution:
+The clock before the pin, under the same pacing:
 
-| 3840x2160, paced | fps | mean frame | p99 | median GPU clock |
+| 3840x2160, paced, `790ad033b` | fps | mean frame | p99 | median GPU clock |
 | --- | ---: | ---: | ---: | ---: |
 | Time trial, DRS off | 59.8 | 16.73 ms | 17.23 ms | 1536 MHz |
 | Zone, DRS off | 58.8 | 17.03 ms | 18.58 ms | 1574 MHz |
 | Time trial, DRS on | 60.0 | 16.67 ms | 16.85 ms | 1305 MHz |
 | Zone, DRS on | 59.9 | 16.71 ms | 16.87 ms | 1104 MHz |
 
-Time trial fits; Zone misses by little. The hypothesis: with DRS on, the controller lowers the
-scale, the load falls, the Deck's governor lowers the clock, the GPU's timestamps (milliseconds,
-not cycles) grow, and the controller reads them as no room to rise.
+#### With the clock pinned
 
-For it:
+2026-11-26, at `7654d470a`, same Deck, same command and settings file as above at 3840x2160,
+`-r 60`, 70 s, sound on, AC power. The GPU clock was pinned at its maximum in Steam's performance
+settings (`power_dpm_force_performance_level` read `manual`, `pp_od_clk_voltage` SCLK 1600 to
+1600). `hwmon`'s `freq1_input` read 1600 MHz in every sample of every run (two samples a second).
+The memory clock is not part of the pin: it read 800 MHz in most samples, dipping to 600.
 
-- The clock is much lower in the DRS arms than at full size (table above).
-- Area times clock matches the mean readings: Zone's race pass at full size and 1532 MHz,
-  8.75 ms, scaled by `0.822² * 1532 / 1180` gives 7.68 ms against 7.65 measured at the settled
-  scale (second run 7.59 against 7.53; time trial within 6 %). That is consistent with the loop,
-  not a test of it.
-- The controller's deadband is 0.80 to 0.95 of a 13.33 ms budget, so 10.7 to 12.7 ms, and Zone's
-  median reading in a traced run was 11.1 ms: it holds. A rise needs eight readings in a row
-  under 10.7 ms; a fall needs one over 12.7 ms. The readings at the rises were about 9.6 ms and
-  at the falls about 14 ms.
+| 3840x2160, paced, clock pinned | settled scale, per run | median | frame ms, median of per-second means | per-second p99 ms, mean (worst second) | GPU power, median |
+| --- | --- | ---: | ---: | --- | --- |
+| Time trial, DRS on, 3 runs | 0.990, 0.985, 0.987 | **0.99** | 16.67 | 16.87 to 17.02 (19.60) | 15.6 to 16.0 W |
+| Zone, DRS on, 3 runs | 0.974, 0.961, 0.958 | **0.96** | 16.67 | 16.90 to 16.94 (18.78) | 15.6 to 16.1 W |
+| Time trial, DRS off, 1 run | 1.00 | | 16.67 | 17.53 (21.89) | 15.5 W |
+| Zone, DRS off, 1 run | 1.00 | | 16.67 | 18.17 (22.38) | 15.5 W |
 
-Against it, or not shown: each frame's reading was joined to a clock sample taken four times a
-second. Zone's full-size-equivalent cost is 17.0 ms below 1150 MHz against 13.9 above 1450 MHz,
-but the same join on the time trial is flat (13.1 to 14.2 ms, not ordered by clock), and
-milliseconds times megahertz is constant in neither mode. Confidence about **50**.
+The frame columns are statistics of the frame log's one-second lines, not per-frame percentiles.
+The runs alternated between the two modes. Zone still steps to 0.85 or 0.90 over one repeating
+stretch of the autopilot lap and comes back to 1.00, so it follows the load instead of staying
+down.
 
-What would decide it is a run with DRS on and the GPU clock pinned: Steam's quick-access manual
-GPU clock on the Deck, or root writing `power_dpm_force_performance_level`. Not done. The
-unpaced column is not a control by itself, because the residual is learned differently there.
+The build is newer than the unpinned runs', so the DRS-off runs are the bridge: race pass and HD
+bloom cost 8.67 and 3.91 ms in Zone, 7.04 and 4.33 ms in the time trial, against 8.76 and 3.94,
+7.13 and 4.35 at `790ad033b`. The cost at full size did not move. An unpinned run of the same
+binary was not made (the pin was set by hand in Steam and left in place).
+
+**The test that does not depend on any clock reading.** A pass whose cost is per pixel, on a GPU
+at a steady clock, takes its full-size time multiplied by the mean of the scale squared:
+
+| Measured race pass ms over that prediction | Time trial | Zone |
+| --- | --- | --- |
+| Pinned, DRS on (3 runs each; HD bloom the same) | 0.99 | 0.99 to 1.00 |
+| Not pinned, DRS on (4 runs each, `790ad033b` and `d66a52ae6`) | 1.11 to 1.14 | 1.29 to 1.38 |
+
+Unpinned, the GPU took a third longer per pixel in Zone than at full size. Pinned, it did not.
+The unpinned clocks (about 1100 to 1200 MHz in Zone, 1300 in the time trial, against 1540 to
+1575 MHz at full size) give ratios of that size.
+
+**The price of the pin is power.** Unpinned with DRS on, the same `hwmon` reading was 9.6 to
+10.5 W in Zone and 11.5 to 12.6 W in the time trial, so the deeper settle saved 3 to 6 W. On
+battery that may be the better trade for a player.
+
+#### What a rise rule that survives this needs
+
+Not implemented, and none of it measured:
+
+- **The rise is the stuck half, not the budget.** In two traced unpinned Zone runs the residual
+  stayed between 2.3 and its opening 3.33 ms of the 16.67 ms period, so it had not tightened the
+  budget. At the opening residual the budget is 13.3 ms and the deadband 10.7 to 12.7 ms; Zone's
+  median reading in a traced run was 11.1 ms, so it held. A rise needs `RISE_PATIENCE` (8)
+  readings under the deadband.
+- **GPU milliseconds cannot say whether there is room.** `drs.rs` reads no clock by design
+  ("The controller", above), and a clock source is Linux and driver specific. The portable shape is
+  a probe: after a long hold with no late frame, step up one grid point and keep it only if no
+  frame is late. `drs::blur` already restores with a backoff, and `drs::width` already counts a
+  late frame (1.5 periods).
+- **A probe has to outlast the governor's ramp.** The first readings after a step up are taken at
+  the old, low clock, and a fall answers a single reading over budget, so it would undo the probe
+  at once. How long the Deck's governor takes to raise the clock is unmeasured and is the first
+  measurement to take.
+- **Both existing guards stay.** `RISE_PATIENCE` and the overshoot guard stopped a size change
+  loop ("The policy", above); a probe needs its own backoff on top, and a change in the policy
+  needs an ADR (the budget is ADR-0042's).
+- **Acceptance:** unpinned Zone at 3840x2160 settling near 0.96, no more late frames than now, no
+  more size changes per minute, and no change on a GPU that holds its clock.
+- **TARGET FPS `original`** also steps on a GPU duration
+  ("A title's own width throttle"). Whether a falling clock holds it down too is unmeasured.
 
 ## On the Steam Deck: TARGET FPS `original` against the budget loop
 

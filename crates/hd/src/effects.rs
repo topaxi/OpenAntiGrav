@@ -156,6 +156,13 @@ pub const EFFECTS: &Effects = &{
     // `Rocket_SpawnCraftBlast` (`0x0014a7d8`), `0x0014a970`-`0x0014a98c`;
     // `docs/ghidra/functions/ps3-hdfury-eu/rocket-craft-blast.md`.
     effects.craft_blast_carry = Some(Origin::Measured);
+    // `Psys_UpdateParticles` (`0x0028cc10`), `0x0028d0f0`-`0x0028d1bc`;
+    // `docs/ghidra/functions/ps3-hdfury-eu/particle-render.md`, "The atlas frame".
+    effects.flipbooks = Some(Origin::Measured);
+    // `Psys_InitParticle` (`0x00289890`), `0x00289ee8`-`0x00289f10`;
+    // `docs/ghidra/functions/ps3-hdfury-eu/particle-render.md`, "The per-particle size
+    // multiplier".
+    effects.size_ramps = Some(Origin::Measured);
     effects
 };
 
@@ -197,30 +204,29 @@ const TEMPLATES: &[&str] = &[
     engine_effects::CRAFT_BLAST_EFFECT,
 ];
 
-/// The effects whose `.gtf` sprites HD plays: the Detonator cannon's wall spark, whose five
-/// emitters name five entries under `/data/psys/tex/` that all decode (`detonator-cannon.md`,
-/// "The spark's matrix, read live"), the Detonator mine's two explosions, whose live one's
-/// `Debris` atlas is the glass shards the original throws when a round destroys a mine
-/// (`detonator-mine.md`, "The shards, against the original"), the Rocket's wall burst, whose
-/// nine emitters name nine entries under `/data/psys/tex/` that all decode
-/// (`docs/ghidra/functions/ps3-hdfury-eu/particle-triggers.md`, "The Rocket's
-/// smoke"), the Quake's wave and the Detonator EMP's (its blue recolour, paired against the
-/// original, `detonator-emp.md`, "What HD draws"), and the Missile's two heads, whose red
-/// filament-ring atlas the colour ramp is authored against (`weapons.md`,
-/// "The Missile's red rings"), the ship explosion, whose root's black colour ramp is a blend
-/// weight, not a colour (`ship-destroy.md`, "`colour_mode` 3 is a blend toward the scene light"),
-/// the two trail hits, whose colour lives in the sprite (the red variant's ramp is near white,
-/// `engine-trail.md`, "The red variant's colour is in its sprites"),
-/// the Plasma's five, paired against the
-/// original phase by phase (`plasma.md`, "The pairs"), and the Rocket's craft
-/// hit, filmed against the original (`docs/rendering/particle-fill.md`,
-/// "Against the original at a near blast"). Every other HD effect
-/// still draws the procedural profile until a matched capture says its sprite
-/// reads right.
+/// The effects whose `.gtf` sprites HD plays, from `/data/psys/tex/`: every effect this
+/// table loads with a camera-facing emitter or a read bar. The disc names each sprite and
+/// every one decodes (`docs/rendering/particle-fill.md`, "Which effects draw a sprite").
+///
+/// **Not listed: the effects whose every emitter is a streak that [`FAR_BARS`] does not
+/// name.** A procedural strip samples nothing, so listing one changes no pixel: `WO_BOMB_RAYS`,
+/// `WO_REPULSER`, the three LeachBeam effects and its hit spark, the weapon spark, the
+/// no-damage collision spark, `WO_DAMAGE_CRITICAL` and `WO_BLUE_WELDER`. The streak
+/// emitters of a listed effect stay procedural for the same reason.
+///
+/// Paired against the original: the Detonator cannon's wall spark
+/// (`docs/ghidra/functions/ps3-hdfury-eu/detonator-cannon.md`, "The spark's matrix, read
+/// live"), the Rocket's two blasts (`particle-triggers.md`, "The Rocket's smoke";
+/// `particle-fill.md`, "Against the original at a near blast"), the Detonator EMP's wave
+/// (`detonator-emp.md`, "What HD draws"), the Missile's head (`weapons.md`, "The Missile's red
+/// rings"), the ship explosion (`ship-destroy.md`, "`colour_mode` 3 is a blend toward the
+/// scene light"), the two trail hits (`engine-trail.md`, "The red variant's colour is in its
+/// sprites") and the Plasma's five (`plasma.md`, "The pairs"). The Detonator Mine and Bomb
+/// explosions' sheets were seen walking in the original (`particle-render.md`, "The atlas
+/// frame"), their picture not paired. **Every other entry is unpaired**: it draws the sprite
+/// its own emitter names, and no capture of the original has judged the result.
 const SPRITES: &[&str] = &[
     engine_effects::DETONATOR_CANNON_SPARKS_EFFECT,
-    engine_effects::DETONATOR_MINE_EXPLO_EFFECT,
-    engine_effects::DETONATOR_MINE_EXPLO_DEAD_EFFECT,
     engine_effects::TRACK_BLAST_EFFECT,
     engine_effects::CRAFT_BLAST_EFFECT,
     engine_effects::EXPLOSION_EFFECT,
@@ -234,6 +240,27 @@ const SPRITES: &[&str] = &[
     engine_effects::PLASMA_LAUNCH_EFFECT,
     engine_effects::PLASMA_LIGHTNING_EXPAND_EFFECT,
     engine_effects::PLASMA_LIGHTNING_COLLAPSE_EFFECT,
+    engine_effects::MINE_EXPLO_EFFECT,
+    engine_effects::BOMB_SMOKERING_EFFECT,
+    engine_effects::MISSILE_EXPLO_EFFECT,
+    engine_effects::MISSILE_BOUNCE_EFFECT,
+    engine_effects::DETONATOR_MINE_EXPLO_DEAD_EFFECT,
+    engine_effects::DETONATOR_MINE_EXPLO_EFFECT,
+    engine_effects::DETONATOR_BOMB_EXPLO_EFFECT,
+    engine_effects::ROCKET_FLARE_EFFECT,
+    engine_effects::CANNON_SPARKS_EFFECT,
+    engine_effects::SHURIKEN_FLARE_EFFECT,
+    engine_effects::SHURIKEN_TRAIL_EFFECT,
+    engine_effects::SHURIKEN_BOUNCE_EFFECT,
+    engine_effects::SHURIKEN_EXPIRE_EFFECT,
+    engine_effects::REPULSER_BLAST_EFFECT,
+    engine_effects::ABSORB_EFFECT,
+    engine_effects::COLLISION_SPARK_EFFECT,
+    engine_effects::DEATH_PLUME_EFFECT,
+    engine_effects::DEBRIS_FIRE_EFFECT,
+    engine_effects::DAMAGE_MILD_EFFECT,
+    engine_effects::DAMAGE_MODERATE_EFFECT,
+    engine_effects::MODESTO_STEAM_EFFECT,
 ];
 
 /// The effects whose emitters spread by the extent law on HD: the Quake's wave,

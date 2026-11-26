@@ -289,7 +289,10 @@ A mine a craft runs into plays `WO_MINE_EXPLO_DETONATOR_DEAD` (the contact darke
 a mine a cannon round hits, or a destroyed bomb's chain reaction sets off, plays
 `WO_MINE_EXPLO_DETONATOR` while it was laid this stage and `_DEAD` after
 (`oag_weapons::detonator::EventKind`, `oag_raceplay::detonator_fx::effect_for`). The disc's own
-`.pob` with its own sprites since 2026-11-26 (the shards, below). Chosen: a shot mine explodes the tick it is hit (the original
+`.pob`. Since 2026-11-26 their camera-facing emitters draw the disc's own sprites, their streaks
+the procedural strip
+([particle-fill.md](../../../rendering/particle-fill.md#which-effects-draw-a-sprite)); the live one's shards are paired against
+the original's frame below. Chosen: a shot mine explodes the tick it is hit (the original
 the next), the effect plays whether or not the mine is in view, and the recolour toward white
 (`lerp(c, 255, 0.8)`, 55) is not applied. `MINEEXPL` plays with it, at volume 1.0 where the mine was (`Cue::MineExplosion`, see
 [detonator-cannon.md](detonator-cannon.md), "Drawn and heard"). Test:
@@ -310,8 +313,9 @@ five: the root (3 additive glows, size 7.5 shrinking to 0 over `74 +- 15` ticks,
 and black `streaks_fat` and `sparks`. Every emitter's `.gtf` decodes. Confidence **85** that `Debris` is what the frame
 shows (the atlas's shapes and the shards' size and spread on the frame agree; one frame).
 
-**Wired:** both mine effects are in HD's sprite list (`oag_hd` `SPRITES`), so ours draws the disc's pictures where it
-drew the procedural profile. Test: `check_a_shot_mine_throws_the_discs_shards` in
+**Wired:** both mine effects are in HD's sprite list (`oag_hd` `SPRITES`, with HD's other weapon explosions,
+[particle-fill.md](../../../rendering/particle-fill.md#which-effects-draw-a-sprite)), so ours draws the disc's pictures
+where it drew the procedural profile. Test: `check_a_shot_mine_throws_the_discs_shards` in
 `tests::detonator_fx::an_hd_detonator_race_plays_the_discs_effects_for_each_event`.
 
 **The blast's age.** In the original the round (fired at lap 1.917 s) retired at age 10 ticks (the grab's cannon reads at

@@ -1527,8 +1527,8 @@ the pushbuffer: eye, forward, up, fov 60.0006) and lap-clock second (`scripts/hd
   is not a clean metric (the original's frame carries a translucent HUD ring through the box).
 - **What still differs**, named: the two lobes orbit wider in ours (the anchor ellipse `1.5` x `3.0` is
   Pulse's law, the original's is tighter at 0.5 s); the original's long wispy loops from the nose to the
-  missile at 0.8 s are more than the 12-tick particles reach, which is the ribbon below; a listed effect draws
-  each particle on its spawn frame, HD's own flipbook advance still unread (`Effects.sprites`).
+  missile at 0.8 s are more than the 12-tick particles reach, which is the ribbon below. Its
+  flipbooks advance as HD's do ([particle-render.md](particle-render.md#the-atlas-frame)).
 - ~~**Still undrawn: the Missile's smoke ribbon**~~ **drawn since `hd-missile-ribbon`** ("The Missile's ribbons"
   below; it is not pool `+0x74`). The head model keeps its authored size (about 10 px at this distance): in the
   original frames nothing a player sees is that small, and the model's own scale and placement stay

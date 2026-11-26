@@ -739,8 +739,12 @@ impl RaceView {
         if !self.craft_blast_carry || trigger != Trigger::CraftBlast {
             return None;
         }
-        let ship = &core.sim.world.ships[struck?];
-        ship.active.then_some(ship.physics.body.linear_velocity)
+        let slot = struck?;
+        let ship = &core.sim.world.ships[slot];
+        let own = ship.physics.body.linear_velocity;
+        let forced = self.forced_blast_velocity.filter(|&(at, _)| at == slot);
+        ship.active
+            .then_some(forced.map_or(own, |(_, velocity)| velocity))
     }
 
     /// Which explosion a hit plays and where, or `None` for a weapon with no
