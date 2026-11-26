@@ -857,7 +857,13 @@ pub(crate) fn check_the_hemisphere_sits_in_the_top_half(
 ) {
     assert_eq!((sprite.width, sprite.height), (64, 64), "{source}");
     let (upper, lower) = sprite.rgba.split_at(sprite.rgba.len() / 2);
-    let alpha = |half: &[u8]| -> u32 { half.chunks_exact(4).map(|p| u32::from(p[3])).sum() };
+    let alpha = |half: &[u8]| -> u32 {
+        half.as_chunks::<4>()
+            .0
+            .iter()
+            .map(|p| u32::from(p[3]))
+            .sum()
+    };
     assert!(
         alpha(upper) > 5 * alpha(lower),
         "{source}: upper half alpha {}, lower {}",
