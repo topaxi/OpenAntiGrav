@@ -78,6 +78,46 @@ So `TC0` is the **view vector** with `Uv1.x` in its `w`, `TC1` the **world
 normal** with `Uv1.y` in its `w`, and `TC2.w` is the colour set's fourth byte,
 carried through untouched.
 
+### The live vertex program, read off RPCS3 frame dumps (2026-11-26, `hd-flame-rim-capture`)
+
+**The program the console runs is not the listing above.** Rebuilt from the stream's
+`TRANSFORM_PROGRAM` uploads on every flame draw of three existing frame dumps of the original
+(`data/reference/hd-flame-tap/`, the `hd-craft-ibl-probe` frames: `c1`, stem `f`, one craft at rest at Talon's
+Junction's start; `c2`, stem `f`, the same craft at thrust; `d1`, stem `m`, a grid of eight at rest), the same 20 instructions
+each time:
+
+```text
+ 0  MOV o[TC3].yz, v[2].xxyx           <- Uv1
+ 1  MOV R0.w, v[3].wwww                <- VertexColour1.w
+ 2  MUL R1.xyz, v[1].yyyy, c[1].xyzx   \
+ 5  MAD R1.xyz, v[1].xxxx, c[0].xyzx    |  normal through the plain model matrix
+ 9  MAD R1.xyz, v[1].zzzz, c[2].xyzx   /
+ 3  MUL R0.xyz, v[0].xyzx, c[210].xyzx \  position * positionScale + positionBias
+ 4  ADD R0.xyz, R0.xyzx, c[211].xyzx   /
+ 6-8,10                                <- R0 = M * R0 + c[3]: the world position
+11  ADD o[TC1].xyz, R1.xyzx, c[208].xxxx
+12-14,16                               <- clip = viewProj (c[4]..c[7]) * R0
+15  ADD o[TC0].xyz, -R0.xyzx, c[209].xyzx  <- eye - world position
+17  MOV o[TC2], R0
+18  MOV o[POS], R1
+19  MOV o[TC3].x, R1.wwww | END
+```
+
+The program's `c[N]` is the register file's `c[256 + N]`: `c[0..3]` is the per-draw model matrix
+at `c256`-`c259`, `c[4..7]` the view-projection at `c260`-`c263`, `c[208]` is `c464`, `c[209]` is
+`c465`, `c[210]`/`c[211]` are `c466`/`c467` (1/128 and the chunk's bias).
+
+| Finding | Evidence | Confidence |
+| --- | --- | --- |
+| **`E` (`c465`) is the camera's world position.** It equals the camera centre solved from the view-projection (the point whose clip x, y and w are zero) on all 73 flame draws, largest gap 0.00003 units | three dumps: `c1` 5 draws, `c2` 5, `d1` 63 (eight craft, eye 7.5 to 147 units away) | 92 |
+| **`V = E - world position`**: the position is taken through the model matrix before the subtraction, so both are world space | the listing, every flame draw | 92 |
+| **The normal is `M * n` with the plain model matrix**, not its inverse transpose, plus `c464.x`, which is 0 on every draw | the listing; `c464` read per draw | 90 |
+| At rest, the length-scaled draws carry rows (0.75, 0.75, 0.187) and (0.75, 0.75, 0): the hull's 0.75 times (1, 1, 0.25) and (1, 1, 0), which is `hd_flame_transform`'s `EF_Main` and `EF_Boost` at rest. Which draw is which shape is not read here (some `d1` craft carry three zero-length draws) | `c1`; `d1`, every craft | 75 |
+
+Seen on three frames, two at rest (`c1`, `d1`) and one at thrust (`c2`); **no boosting frame was dumped**, so
+boost is covered only by the law (boost moves `M`'s scale, not where `E` comes from). Reproduce:
+`python3 scripts/rsx-flame-eye.py data/reference/hd-flame-tap/c1 f --program`.
+
 ## The fragment program, block #1
 
 ```text
@@ -307,11 +347,25 @@ the original, a dim deep blue; the Zone pair, the Detonator pad and mines pairs 
 
 With the true view angle a face turned to the camera has `rim` near 0, so `alpha` is near its 1.1 maximum; from the
 origin `rim` was larger and the plume dimmer. So something else in our flame is wrong and the origin eye hides part of
-it. What is not settled is the space the console's program subtracts in. Block #1's listing above applies no world
-matrix to position or normal before `c[209] - position`, while [engine-trail.md](engine-trail.md), "The flare's draw
-state, read live", records both world-space vertices and a per-draw matrix at `c256-c258`. A live read of the flame
-draw's vertex program, `c[209]` and that matrix would settle it
-([rpcs3-capture.md](../../../reverse-engineering/rpcs3-capture.md)).
+it.
+
+**The space is settled: it is world space and the eye is the camera** ("The live vertex program" above, confidence
+92). So the view's eye is the right value for `Fog::camera`, and the rest pairs get worse for another reason. Re-applied
+on `hd/talons` and `hd/moa-therma` (2026-11-26), the moved pixels read, mean RGB:
+
+| pair | original | ours, origin eye | ours, camera eye |
+| --- | --- | --- | --- |
+| `hd/talons` | (37, 66, 103) | (33, 74, 113) | (36, 85, 128) |
+| `hd/moa-therma` | (58, 77, 106) | (79, 92, 128) | (95, 115, 159) |
+
+Ours is already brighter and bluer than the original with the origin eye; the camera eye raises `alpha`, as the
+program says it should, and so widens a gap that is not the eye's. On `hd/talons`, read once at 4x, the original's
+nozzle shows a blue left half and a pink right half; ours is one even blue. Whether that is the flame's colour tap
+(its scroll clock, the `(2u, 2v + noise)` displacement, the texel), the spikes or the nozzle behind is not yet shown;
+the colour tap is the first suspect. Ruled out on the way: the rest
+scales (they match), the normal transform (both plain `M`), and an alpha clamp (the original's target is
+`A8R8G8B8`, surface format `0x3148` read off `c1`, so a fixed-point target that should clamp its 1.1 alpha to 1.0,
+inferred, confidence 70; clamping ours to 1.0 moved no pixel of either pair either way).
 
 The disc shield shells and cockpit spheres read the same block and are unaffected: with the eye supplied to them alone,
 18 frames (HD, Omega, 2048, Pulse, Pulse PS2, Pure; chase at ticks 400 and 600, cockpit at 400) are byte-identical.

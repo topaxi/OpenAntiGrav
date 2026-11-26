@@ -2,7 +2,7 @@
 status: measure
 titles: [hd]
 updated: 2026-11-26
-summary: "HD exhaust: read the flame rim eye the console is handed (ours is the origin); talons-pack trail whiter and wider; craft+0xfc"
+summary: "HD exhaust: flame rim eye is the camera (read live), unwired until the rest flame colour gap is found; talons-pack trail whiter and wider; craft+0xfc"
 ---
 
 # HD's exhaust is measured from the running game now: the trail is a 54-sample three-fin tube, the flame breathes with the throttle, and the plume scales rather than blinks
@@ -11,11 +11,20 @@ summary: "HD exhaust: read the flame rim eye the console is handed (ours is the 
 
 ## Open (trimmed 2026-09-04 - three of the four original items are settled, not just narrowed)
 
-- **2026-11-26 (`own-shield-camera`): the flame rim's eye is the world origin, and supplying it makes the rest flame
-  worse.** The one-line fix (`fog.camera = eye` in `flame_scene`, commit `0c86ed0ed`, reverted) brightens ours away
-  from the original on every HD rest-flame pair, so something else in the flame is wrong too. Next: read the vertex
-  program, `c[209]` and the `c256-c258` matrix of a live flame draw (RPCS3), then re-apply. Numbers on
-  engine-flare.md, "Our rim's eye".
+- **2026-11-26 (`own-shield-camera`, then `hd-flame-rim-capture`): the flame rim's eye is the camera, read live, and
+  ours still reads the world origin.** The live vertex program (three RPCS3 dumps, 73 flame draws) takes position and
+  normal through the plain model matrix and subtracts the world position from `c465`, which is the camera centre to
+  0.00003 units (confidence 92). Re-applying `fog.camera = eye` in `flame_scene` (commit `0c86ed0ed`, reverted)
+  still brightens ours away from the original on the rest pairs, because ours is already brighter and bluer with the
+  origin eye: on `hd/talons` (read once) the original's nozzle shows a blue left and pink right half, ours an even
+  blue. **Ready to start (colour gap, no emulator needed first):** (1) `python3 scripts/rsx-flame-eye.py
+  data/reference/hd-flame-tap/c1 f --program` lists the five rest flame draws (518-522); read their fragment programs
+  and constants (`scripts/ps3-fp-live.py`, the `time` constant in particular) against `shade.wesl`'s flame branch;
+  (2) render `hd/talons` from a scratch copy of its pair and crop the nozzle (box `935,802 57x58`) beside the
+  original, with flame, spikes and hull toggled one at a time, to show which layer holds the blue/pink split;
+  (3) fix that layer, then re-apply `0c86ed0ed` (`fog.camera = eye` in `flame_scene`) and re-render the 22 HD pairs
+  listed on engine-flare.md, "Our rim's eye", twice; none may get worse. Still no boosting dump.
+  Numbers on engine-flare.md, "The live vertex program" and "Our rim's eye".
 `engine-trail.md` kept moving after this file's 2026-08-24 snapshot and was
 never folded back; its later sessions already close three of the four items
 below. Do not requote this file - `engine-trail.md`'s "Open, in rough order
