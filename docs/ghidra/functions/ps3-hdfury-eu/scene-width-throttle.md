@@ -229,9 +229,10 @@ search finds 1/60 at once). Not watched live: shadPS4 gives no memory readout. A
 absence, and a controller with other numbers would pass these searches, hence 65.
 
 **2048: not read.** Its v1.04 executable has the string `Debug.Enable Frame Buffer
-Throttling` (`0x81508be4`), registered by `FrontendRoot_Construct` (`0x810639aa`) on the byte
-at `+0x550` of that object, cleared by the same constructor, and by
-`Environment_RegisterLightingSchema`. No instruction loads `0x3eef` or `0x7dde` (the 30 Hz
+Throttling` (`0x81508be4`), registered inside `FrontendRoot_Construct` (`0x8106322a`, the
+reference at `0x810639aa`) on the byte at `+0x550` of that object, cleared by the same
+constructor, and referenced again inside `Environment_RegisterLightingSchema` (`0x810175fc`,
+at `0x81017d90`). No instruction loads `0x3eef` or `0x7dde` (the 30 Hz
 equivalent) as an immediate. On HD the same option was never connected to the throttle, so the
 string says nothing about the law. The next read is the loads of `+0x550`.
 
