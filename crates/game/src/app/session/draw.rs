@@ -27,7 +27,7 @@ use oag_display::display;
 use crate::app::stage::Stage;
 use crate::app::windows;
 
-use super::Session;
+use super::{Session, timing};
 
 impl Session {
     /// Says, once per name, that the profile names a screen filter this
@@ -102,6 +102,14 @@ impl Session {
         // Pulse holds comfortably is not one HD/Fury holds, which is the whole
         // reason those rows are per title.
         let profile = self.render_profile();
+        // The blur rung's ceiling is the player's gather resolution, and
+        // there is nothing to shed with the blur off (ADR-0075).
+        let blur = (profile.motion_blur != display::MotionBlur::Off)
+            .then_some(profile.motion_blur_resolution);
+        if profile.target_fps.is_original() {
+            return timing::original_limits(self.title_raced(), ceiling, self.held_hz())
+                .with_blur(blur);
+        }
         let floor = crate::settings::web::render_target(
             rect,
             profile.minimum_resolution,
@@ -121,12 +129,7 @@ impl Session {
                 &self.display,
             ),
         )
-        // The blur rung's ceiling is the player's gather resolution, and
-        // there is nothing to shed with the blur off (ADR-0075).
-        .with_blur(
-            (profile.motion_blur != display::MotionBlur::Off)
-                .then_some(profile.motion_blur_resolution),
-        )
+        .with_blur(blur)
     }
 
     /// Draws whatever stage is on screen into the image [`Session::frame`]
@@ -278,12 +281,13 @@ impl Session {
         // Photo mode draws at the configured render size, not the dynamic resolution's: a shot is
         // the picture at its best, and the race is not being timed while it stands still.
         let held_full = self.photo.is_some();
-        self.framebuffer
-            .set_extent(if (windowed && !self.drs_runs()) || held_full {
-                own_wanted
-            } else {
-                self.drs.extent(drs_limits)
-            });
+        let (extent, squeeze) = if (windowed && !self.drs_runs()) || held_full {
+            (own_wanted, 1.0)
+        } else {
+            let extent = self.drs.extent(drs_limits);
+            (extent, drs_limits.squeeze(extent))
+        };
+        self.framebuffer.set_extent(extent);
         // The controller's second output, the blur's gather resolution
         // (ADR-0075), re-derived every frame the same way and held to the
         // player's own wherever the extent is held.
@@ -444,6 +448,7 @@ impl Session {
                     }
                     parked.scene.set_reflection_resolution(reflection_step);
                     parked.scene.set_blur_resolution(blur_resolution);
+                    parked.scene.set_squeeze(squeeze);
                     parked.scene.set_band_levels(spectrum);
                     parked.render(
                         &self.gpu,
@@ -547,6 +552,7 @@ impl Session {
                     .then_some(reflection_step),
                 );
                 stage.scene.set_blur_resolution(blur_resolution);
+                stage.scene.set_squeeze(squeeze);
                 stage.scene.set_band_levels(spectrum);
                 let stats = stage.render(
                     &self.gpu,

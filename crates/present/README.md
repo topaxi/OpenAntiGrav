@@ -5,4 +5,5 @@ composite, grade and screen filter, dynamic resolution scaling and the performan
 meter.
 
 Knows no race, menu or settings file; the host passes plain data in. Built on
-`oag-display`, `oag-gpu`, `oag-post` and `oag-ui`.
+`oag-display`, `oag-gpu`, `oag-post`, `oag-ui` and `oag-title` (the types of a title's
+own width throttle).

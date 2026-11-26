@@ -151,7 +151,9 @@ impl Rung {
     /// Whether this frame's limits leave anything to shed: a target running, a
     /// blur drawn, and the player's own choice the full gather.
     pub(super) fn eligible(limits: Limits) -> bool {
-        limits.target().is_on() && limits.blur() == Some(BlurResolution::Full)
+        limits.target().is_on()
+            && limits.width().is_none()
+            && limits.blur() == Some(BlurResolution::Full)
     }
 
     /// The gather resolution to draw at under `limits`.

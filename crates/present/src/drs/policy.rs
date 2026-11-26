@@ -7,7 +7,7 @@
 
 use oag_display::display::BlurResolution;
 
-use super::{Cost, Limits, Residual, blur::Rung, reflection};
+use super::{Cost, Limits, Residual, blur::Rung, reflection, width};
 
 /// The band around the budget in which nothing happens, as a fraction of it.
 ///
@@ -122,6 +122,9 @@ pub struct Controller {
     /// The reflection rung: the step `auto` draws the glass and sea target at - see
     /// [`super::reflection`]. Fed by [`Self::record_reflection`], with or without a target.
     reflection: reflection::Rung,
+    /// The title's own width throttle, driven instead of everything above while
+    /// [`Limits::width`] carries it.
+    width: width::Throttle,
 }
 
 impl Default for Controller {
@@ -142,6 +145,7 @@ impl Controller {
             residual: Residual::new(),
             rung: Rung::default(),
             reflection: reflection::Rung::new(),
+            width: width::Throttle::default(),
         }
     }
 
@@ -188,6 +192,11 @@ impl Controller {
         // Before the early return, so a target turned off clears the rung as
         // a blur turned off does.
         self.rung.begin_frame(limits);
+        // The title's own throttle steps once a frame, at [`Self::finish_frame`].
+        if limits.width().is_some() {
+            self.width.offer(cost.total());
+            return None;
+        }
         let period = limits.target().period()?;
         let scalable = cost.scalable;
         if !scalable.is_finite() || scalable <= 0.0 {
@@ -334,6 +343,25 @@ impl Controller {
         Some(limits.pixels(self.scale()))
     }
 
+    /// Ends a frame under the title's own throttle ([`width::Throttle::step`]) and returns the
+    /// extent when it moved. Nothing under the budget loop, which steps as it records.
+    pub fn finish_frame(
+        &mut self,
+        frame_seconds: Option<f32>,
+        limits: Limits,
+    ) -> Option<(u32, u32)> {
+        let spec = limits.width()?;
+        self.width
+            .step(frame_seconds, spec)
+            .then(|| self.extent(limits))
+    }
+
+    /// Notches the title's own throttle has taken off the width.
+    #[must_use]
+    pub fn width_level(&self) -> u32 {
+        self.width.level()
+    }
+
     /// Whether the target cannot be met at any resolution this controller may
     /// choose.
     ///
@@ -387,6 +415,9 @@ impl Controller {
         self.unreachable = 0;
         self.rung.reset();
         self.reflection.stall();
+        // Back to full width: after a load, a rebuilt surface or a changed row the readings
+        // in flight describe another picture. Long frames narrow it again a notch a frame.
+        self.width = width::Throttle::default();
     }
 
     /// Records one frame into the reflection rung ([`super::reflection`]) and returns its change
@@ -397,7 +428,10 @@ impl Controller {
         reading: reflection::Reading,
         limits: Limits,
     ) -> Option<reflection::Change> {
-        let at_ceiling = !limits.target().is_on() || self.steps == GRID;
+        let at_ceiling = match limits.width() {
+            Some(_) => self.width.level() == 0,
+            None => !limits.target().is_on() || self.steps == GRID,
+        };
         self.reflection.record(reading, at_ceiling)
     }
 
@@ -422,6 +456,10 @@ impl Controller {
     /// [`record`]: Self::record
     #[must_use]
     pub fn extent(&self, limits: Limits) -> (u32, u32) {
+        if let Some(spec) = limits.width() {
+            let ceiling = limits.ceiling();
+            return (spec.width(ceiling.0, self.width.level()), ceiling.1);
+        }
         if !limits.target().is_on() {
             return limits.ceiling();
         }

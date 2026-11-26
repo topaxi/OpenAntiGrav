@@ -76,6 +76,7 @@ pub mod water;
 pub mod weapon_pad;
 pub mod weapons;
 pub mod weather;
+pub mod width_throttle;
 pub mod wingtip;
 pub mod zone_handling;
 pub mod zoom;
@@ -314,6 +315,10 @@ pub struct Title {
     /// Whether the original plays pad patterns, and so whether the RUMBLE
     /// setting offers `original`. See [`rumble::Rumble`].
     pub rumble: rumble::Rumble,
+    /// The original's own throttle on the scene's width, or `None` where it has none or none
+    /// has been read: only then does TARGET FPS offer `original`. See
+    /// [`width_throttle::Law`].
+    pub width_throttle: Option<pre_race::Sourced<width_throttle::Law>>,
     /// The attract demo its main menu starts when left alone. See [`demo::Demo`].
     pub demo: demo::Demo,
 }

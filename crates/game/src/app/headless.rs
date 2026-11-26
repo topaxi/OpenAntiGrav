@@ -881,6 +881,7 @@ pub(crate) fn race_launch(
                     !cli.wreck.no_correction_smoothing,
                 )?,
                 no_weapon_lights: cli.wreck.no_weapon_lights,
+                stage_seed: cli.wreck.stage_seed,
                 force_shield: crate::app::args::force_shield(&cli.wreck.force_shield)?,
                 medals: crate::race_capture::tick::Medals {
                     forced: crate::app::args::force_medal(&cli.wreck.force_medal)?,

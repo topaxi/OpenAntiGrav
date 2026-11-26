@@ -523,6 +523,7 @@ impl App {
             pass_stamps,
             pass_costs: perf::PassCosts::new(),
             pass_scratch: Vec::new(),
+            pass_sum: 0.0,
             upscale_cost: perf::ChainCost::new(),
             upscale_timer,
             upscale_presented_cost: perf::ChainCost::new(),

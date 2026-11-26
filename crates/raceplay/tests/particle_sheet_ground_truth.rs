@@ -44,16 +44,17 @@ fn line<'a>(report: &'a str, effect: &str) -> &'a str {
 }
 
 /// HD (with Fury's content, the same disc): the Rocket's craft hit reads all
-/// twelve of its sprites, and it and the Detonator's waves are all on the sheet.
+/// twelve of its emitters' sprites and its three templates', and it and the Detonator's
+/// waves are all on the sheet.
 #[test]
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
-fn every_hd_sprite_is_on_the_sheet_and_the_craft_blast_reads_twelve() {
+fn every_hd_sprite_is_on_the_sheet_and_the_craft_blast_reads_fifteen() {
     let Some(report) = report("data/images/hdfury-ps3-eu-dec.iso") else {
         return;
     };
     let craft = line(&report, "WO_ROCKET_EXPLO");
     assert!(
-        craft.contains("12 emitter(s)") && craft.ends_with("12 sprite(s) read"),
+        craft.contains("15 emitter(s)") && craft.ends_with("15 sprite(s) read"),
         "{craft}"
     );
 }

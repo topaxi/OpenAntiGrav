@@ -424,10 +424,7 @@ pub struct Effects {
     pub pool_bars: &'static [&'static str],
     /// Effects whose sprite templates (`oag_fx::psys::Effect::add_templates`) play on a source
     /// that is not Pulse on the PSP. An effect not listed keeps its templates muted; wiring one is a
-    /// decision made per effect against a matched capture, never by extension to the title. No title
-    /// lists one yet: Pure's template draw, sampler and initialiser are Pulse's
-    /// (`docs/ghidra/functions/psp-pure-usa/particle-bars.md`, "The template draw"), but its absorb burst
-    /// drew far too bright at 0.75 s with them on, and why is unread.
+    /// decision made per effect against a matched capture, never by extension to the title.
     pub templates: &'static [&'static str],
     /// Effects whose emitters' noise force (modifier type `0x11`, `oag_fx::psys::Effect::with_turbulence`)
     /// is applied. Read on Pulse's PSP executable and HD's alike; an effect not listed keeps its
@@ -471,6 +468,10 @@ pub struct NearLaw {
     pub cull_depth: f32,
     /// Nearer than this, faded.
     pub fade_depth: f32,
+    /// The half size of a sprite template's quad is at most `depth` times this, and where the
+    /// factor came from; `None` draws templates uncapped. A template record has no cap field of
+    /// its own.
+    pub template_cap: Option<(f32, Origin)>,
     /// Where this came from.
     pub origin: Origin,
 }
@@ -482,8 +483,16 @@ impl NearLaw {
         Self {
             cull_depth: 1.0,
             fade_depth: 4.0,
+            template_cap: None,
             origin,
         }
+    }
+
+    /// The same law with sprite templates capped at `cap` times their depth, tagged `origin`.
+    #[must_use]
+    pub const fn with_template_cap(mut self, cap: f32, origin: Origin) -> Self {
+        self.template_cap = Some((cap, origin));
+        self
     }
 }
 

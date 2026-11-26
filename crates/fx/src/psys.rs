@@ -92,6 +92,16 @@ pub const TICK_HZ: f32 = 60.0;
 /// [`expendable_slot`]) rather than being dropped.
 pub const MAX_PARTICLES: usize = 256;
 
+/// Sprite template particles one [`System`] holds beside [`MAX_PARTICLES`]. The original
+/// allocates each template's particle on its own when the instance starts (HD
+/// `Psys_PrepareInstance_q`, `0x00287560`), so a template never takes an emitted particle's
+/// place in a full pool (`docs/ghidra/functions/ps3-hdfury-eu/rocket-craft-blast.md`, "The
+/// screen wash"). Past this many, templates replace each other.
+pub const MAX_TEMPLATE_PARTICLES: usize = 8;
+
+/// Every particle slot of one [`System`]: the emitted pool and the templates' reserve.
+pub const PARTICLE_SLOTS: usize = MAX_PARTICLES + MAX_TEMPLATE_PARTICLES;
+
 /// Emitter states one [`System`] can run at once.
 ///
 /// One per emitter in the effect, plus one per live child instance: a
@@ -491,7 +501,7 @@ impl Effect {
 /// simulation uses them (ADR-0003), though nothing here is hashed.
 #[derive(Debug, Clone, PartialEq)]
 pub struct System {
-    particles: [Particle; MAX_PARTICLES],
+    particles: [Particle; PARTICLE_SLOTS],
     emitters: [EmitterState; MAX_EMITTER_STATES],
     /// The original's severity: multiplies ejection speed and drawn size,
     /// never particle counts.
@@ -539,7 +549,7 @@ impl System {
     #[must_use]
     pub const fn new() -> Self {
         Self {
-            particles: [Particle::DEAD; MAX_PARTICLES],
+            particles: [Particle::DEAD; PARTICLE_SLOTS],
             emitters: [EmitterState::IDLE; MAX_EMITTER_STATES],
             scale: 1.0,
             count_scale: 1.0,
@@ -666,6 +676,7 @@ impl System {
     /// on the *next* `ParticleSystem_Update`.
     fn emit(&mut self, effect: &Effect, dt_ticks: f32, moved: Vec3, rng: &mut Rng) {
         let mut children: Vec<(usize, Vec3, Vec3)> = Vec::new();
+        let mut templates_rng: Option<Rng> = None;
         for index in 0..self.emitters.len() {
             if !self.emitters[index].active {
                 continue;
@@ -695,6 +706,14 @@ impl System {
             let run = spec.run_ticks();
             let burst = spec.burst(self.emitters[index].ticks_left, frame_scale);
             let dt_ticks = dt_ticks * spec.playback.rate;
+            // The templates draw from one copy of the shared stream, taken at the first: each
+            // takes the values it would have taken, and every other particle what it would have
+            // without them.
+            let rng: &mut Rng = if spec.template {
+                templates_rng.get_or_insert_with(|| rng.clone())
+            } else {
+                &mut *rng
+            };
             loop {
                 let state = &mut self.emitters[index];
                 // `short_run`: past the first update, the last tick of a finite run
@@ -865,7 +884,11 @@ impl System {
         if let Some(rotation) = &spec.rotation {
             rotation.start(&mut particle, rng);
         }
-        let slot = expendable_slot(&self.particles);
+        let slot = if spec.template {
+            MAX_PARTICLES + expendable_slot(&self.particles[MAX_PARTICLES..])
+        } else {
+            expendable_slot(&self.particles[..MAX_PARTICLES])
+        };
         self.particles[slot] = particle;
 
         spec.particle_child
@@ -1001,7 +1024,7 @@ impl System {
 /// loaded reached 56. Trail hits are [`Stage::play_expendable`] and take what is
 /// left (up to 112 at once in those runs). The pool is 26,784 bytes an
 /// instance, 1.7 MB in all, and [`pipeline::MAX_VERTICES`] sizes three
-/// 100-byte-vertex buffers at `MAX_INSTANCES * MAX_PARTICLES * 6`, 28.1 MiB on
+/// 100-byte-vertex buffers at `MAX_INSTANCES * PARTICLE_SLOTS * 6`, 29.0 MiB on
 /// the GPU. `docs/formats/pulse-absent-effects.md`, "Trail-hit burst budget".
 pub const MAX_INSTANCES: usize = 64;
 

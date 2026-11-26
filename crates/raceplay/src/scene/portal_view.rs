@@ -108,7 +108,7 @@ impl Scene {
                 return None;
             }
             race.view.set_viewpoint(&race.core, slot);
-            let aspect = rect.2.max(1.0) / rect.3.max(1.0);
+            let aspect = self.view_aspect(rect.2, rect.3);
             let projection = race
                 .view
                 .projection(&race.core, aspect, self.far, settings.fov);

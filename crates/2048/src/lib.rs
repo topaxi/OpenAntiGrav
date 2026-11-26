@@ -219,6 +219,8 @@ pub const TITLE: &Title = &Title {
     },
     // Ships the 69 files and reads none (`docs/gameplay/rumble.md`).
     rumble: oag_title::rumble::Rumble::Absent,
+    // 2048 registers HD's debug option but its controller is unread (`scene-width-throttle.md`).
+    width_throttle: None,
     // Inherited by lineage, but the disc authors the timeouts and the circuit: `DemoConfig.xml`,
     // read at boot over these (`docs/ui/attract-demo.md`).
     demo: oag_title::demo::Demo {
@@ -529,7 +531,14 @@ const EFFECTS: oag_title::Effects = {
     effects.scenery = &[oag_title::engine_effects::MODESTO_STEAM_EFFECT];
     // `Particle_PushQuadBatch` and its twin
     // (`docs/ghidra/functions/vita-2048-eu-v104/particle-near-law.md`).
-    effects.near_law = Some(oag_title::NearLaw::one_to_four(Origin::Measured));
+    // The template cap and the Rocket craft blast's templates follow HD's measurement
+    // (`docs/ghidra/functions/ps3-hdfury-eu/rocket-craft-blast.md`, "The other titles"); the
+    // templates played are 2048's own file's (`BANG_GLOW` in `particles2048`).
+    effects.near_law = Some(
+        oag_title::NearLaw::one_to_four(Origin::Measured)
+            .with_template_cap(2.0, Origin::InheritedFrom("Wipeout HD")),
+    );
+    effects.templates = &[engine_effects::CRAFT_BLAST_EFFECT];
     // The Rocket's craft-hit spawn, `0x81206928` (`docs/ghidra/functions/ps3-hdfury-eu/rocket-craft-blast.md`).
     effects.craft_blast_carry = Some(Origin::Measured);
     effects

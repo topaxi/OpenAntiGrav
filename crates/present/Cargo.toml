@@ -15,6 +15,7 @@ web-time = "1.1.0"
 oag-display.workspace = true
 oag-gpu.workspace = true
 oag-post.workspace = true
+oag-title.workspace = true
 oag-ui.workspace = true
 anyhow.workspace = true
 bytemuck = { workspace = true, features = ["derive"] }

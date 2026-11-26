@@ -343,7 +343,7 @@ impl Scene {
             None => SceneBlocks::view(race.view.viewed_slot(&race.core)),
         };
         let queue = uploads;
-        let aspect = portal.map_or(viewport.2.max(1.0) / viewport.3.max(1.0), |p| p.aspect);
+        let aspect = portal.map_or(self.view_aspect(viewport.2, viewport.3), |p| p.aspect);
         let projection = race.view.projection(&race.core, aspect, self.far, fov);
         let view_projection = projection * race.view.view(&race.core);
         // The previous tick's camera and model matrices, promoted from the
