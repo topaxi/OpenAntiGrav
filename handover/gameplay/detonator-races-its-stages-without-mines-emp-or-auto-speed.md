@@ -496,10 +496,10 @@ positions differ by construction (ours places with its own seeded `Rng`), so a m
 | 9 | HUD stage, energy, clip | 8 % | 0.05-0.14 | under 1 | Close: `1/14`, `100` (both, with ours held at rest) and the `15`/`12` clip match, including the clip falling to 12 after three volleys; the score reads 0 in the original and 100 in ours after its round hit a mine, ours' mines being elsewhere. |
 
 **The volley pair split (2026-11-26, `det-cannon-hot-gap`; `docs/tools/compare-page.md`, "The volley pair's difference, split").** Its
-capture state is fixed (picture lag off the static scene, ours at the picture's tick; 11.47 to 10.31). **Open draw gaps, on every Detonator
+capture state is partly fixed (picture lag off the static scene, ours at the picture's tick, mine ages; 11.47 to 10.32). **Open draw gaps, on every Detonator
 pair:** bright striped grilles ours draws where the original is black (about 1.9 grey), the score box's white-striped wings (1.2), HUD digits
 and `1/14` too wide (1.2), hull too bright (0.7). **Open capture state:** input latency before ours' fire (muzzle flash 0.7), the volley
-pair's mine envelopes (no earlier reads in its record) and ages (`--detonator-mine-ages`).
+pair's mine envelopes (no earlier reads in its record).
 
 **Hull camera and size, re-based (2026-11-23, `det-camera`).** The maintainer's "ours is far, the original is close" was true and the
 camera flags were not the cause: the pair fed the RAM body (2 to 4 ticks ahead of the presented frame) with the push-buffer camera, and

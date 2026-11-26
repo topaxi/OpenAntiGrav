@@ -2659,7 +2659,7 @@ the HUD clock's `T - 3`.
 
 | Pair (same `theirs.png`) | Before | After |
 | --- | --- | --- |
-| `cannon-volley-hot` | 11.47 | 10.31 (lag 3.5 static, tick 393 to 388) |
+| `cannon-volley-hot` | 11.47 | 10.32 (lag 3.5 static, tick 393 to 388, mine ages carried) |
 | `mines-ahead` (before the mine spin) | 13.17 | 13.13 (tick 429 to 427) |
 | `mines-ahead` (with the mine spin and ages, `main` `68bfc33`'s build) | 12.51 | 12.46 (tick 429 to 427) |
 | `cannon-volley`, `pad` (no measured lag) | 14.32, 7.61 | unchanged |
@@ -2674,6 +2674,10 @@ the HUD clock's `T - 3`.
 | Hull brighter than the original (ours +7) | `825,720,1100,980` | 0.74 | all four (+5 to +8) | draw, 80 (the fuselage overlay is already open) |
 | Muzzle flashes smaller and dimmer (ours -44) | `825,620,1100,720` | 0.70 | firing frame only | capture state, 55: ours presses with no input latency, so its flash is older than the original's |
 | Near floor right of the hull (ours +4) | `1120,640,1920,850` | 0.48 | all four (+2 to +5) | draw or band timing, 50 |
+
+**Mine ages.** This record has no read at the picture's clock, so each mine's age is the pause's less the measured lag (the age is a clock
+running 1:1 with the lap clock): 55.950 - 7.5/60 = 55.825 on all 80 mines (`rpcs3-hd-pair.py`, `mine_flags`). It does not move this frame
+(10.311 with no ages, 10.324 at the picture's, 10.326 at the pause's: the near mines are 74 to 81 units out).
 
 Not carried, so not judged here: the mines' envelopes are the pause's (this record has no earlier reads), 7.5 ticks newer than the picture; the
 craft is held at rest, so a round leaves at 500 units/s instead of 500 + 3.6 x the craft's speed; the track-name ticker's scroll is wall-clock.
