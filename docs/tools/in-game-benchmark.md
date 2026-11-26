@@ -193,6 +193,42 @@ the platform can write a clipboard and left off where it cannot:
 
 Run on Linux under Xvfb, the clipboard held the text above after the press (`xclip -o`).
 
+## Fitting the stats screen
+
+The screen, like the finished race's results table (`crate::scoreboard`, which shares its overlay),
+is laid out in the 480x272 grid and letterboxed into the window's aspect rectangle, so it takes the
+same share of the picture on every screen. **Pixel size and density do not enter it**: a phone's
+density changes nothing here.
+
+**What overflowed (2026-11-26).** The text is set in the title's own HUD caption face, and each face
+is authored in its title's grid:
+
+| Title | Grid | Line height | Mean capital advance |
+| --- | --- | --- | --- |
+| Pulse (PSP and PS2) | 480x272, 640x448 | 10 | 6.3, 7.4 |
+| Pure | 480x272 | 12 | 7.0 |
+| HD, Omega | 1920x1080 | 34 | 21 |
+| 2048 (its value face; it names no caption face) | 960x544 | 34 | 25 |
+
+Drawn as they stand into the 480x272 grid, the last two rows are about three times the panel's text:
+on HD, Omega and 2048 the button labels ran over each other and off the panel and the summary ran
+into the saved path, on a desktop at 1440x816 and on a Galaxy S21 at 2400x1080 alike. Pulse and Pure
+fitted, which is why desktop checks on Pulse did not show it.
+
+**The rule**, the same on every platform:
+
+- `scoreboard::panel_face` brings the face into the grid: a line taller than 12 units (Pure's, the
+  tallest of the PSP-grid faces) is scaled down to 12, a smaller one is left alone. The results
+  table draws through the same overlay and had the same defect.
+- The stats screen fits every string to its room by measured width: lines wrap by width, the body
+  shrinks until it ends above the saved path, and a heading, a settings row, the saved path or a
+  button label that is still too wide (a long translation) shrinks on its own. The buttons'
+  rectangles, which a click or a tap is tested against, do not move.
+
+`screen::misfits` is the check: a string outside the panel, a label outside its button, text over
+the button rows, or two strings drawn over each other. A PSP-grid title's DETAILS page was already
+shrunk to about 70 % to fit its rows, and still is.
+
 ## The result file
 
 `<data dir>/oag/bench/run-<unix seconds>/<title key>.json` and `.csv` (`pulse`, `pure`, `hd`,
@@ -264,6 +300,11 @@ checks each value against the page.
   `back_abandons_a_benchmark_and_writes_nothing`: Back by the pad and the system Back from the EXTRAS page, with nothing left parked behind the menus and the main menu, not the pause menu, opened; Escape from the command line.
 - Unit tests in `crates/game/src/benchmark/` for the lows, the figures, the JSON keys `compare`
   reads, the screen's hit rectangles and layout, the presets, and the command line.
+  `every_title_face_fits_both_pages_even_in_a_long_language` runs `screen::misfits` over both pages
+  with each face's measured size and every string doubled.
+- `benchmark_stats_ground_truth` (one test per title): both pages drawn at 2340x1080 through the
+  title's own caption face and the window's overlay, with no misfit and no lit pixel outside the
+  panel.
 - `scripts/bench-render.py selftest` covers the in-game/offscreen warning.
 
 ## Run on a phone and in a browser
@@ -284,6 +325,12 @@ implementation, hence the paste.
 none on Android or the web; the S21's panel ran at 120 Hz during its run. Android now reads the
 display itself ([android.md](android.md), "The display's refresh rate"), so a phone's verdict is
 against its own rate. The web still reports none and says 60 Hz, `assumed`.
+
+**The stats screen's fit.** 2026-11-26, the same S21, `--benchmark` from the launch file, screenshots
+of both pages (`adb exec-out screencap`): before the fix HD's button labels covered each other and
+ran off the panel and its summary ran into the saved path; after it HD and Pulse fit both pages, and
+DETAILS, SUMMARY and BACK answer a tap. Headless on the desktop at 2340x1080, both pages of all six
+titles fit. The Galaxy S24 itself was not run.
 
 ## Not checked
 
