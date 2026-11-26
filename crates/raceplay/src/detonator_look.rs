@@ -105,11 +105,13 @@ impl MineEnvelopes {
     }
 }
 
-/// A mine's two envelopes: the football's `s` (`m+0xf4`) and the spikes' `t` (`m+0xf8`).
+/// A mine's two envelopes, the football's `s` (`m+0xf4`) and the spikes' `t` (`m+0xf8`), and its
+/// visualiser's `PitchOffset` (`m+0x108`), which only a comparison pin sets.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(crate) struct MineEnvelope {
     pub(crate) football: f32,
     pub(crate) spikes: f32,
+    pub(crate) pitch_offset: f32,
 }
 
 impl MineEnvelope {
@@ -139,16 +141,21 @@ impl MineEnvelope {
 }
 
 /// Replaces the envelope of every live mine in `pins` (by survey entry and lane) with the pinned
-/// football `s` and spikes `t`: a comparison holds a mine at the original's read.
+/// football `s`, spikes `t` and `PitchOffset`: a comparison holds a mine at the original's read.
 pub(crate) fn hold_pinned(
     laid: &[LaidMine],
     envelopes: &mut [MineEnvelope],
-    pins: &std::collections::BTreeMap<(u16, i8), (f32, f32)>,
+    pins: &std::collections::BTreeMap<(u16, i8), (f32, f32, f32)>,
 ) {
     for (mine, envelope) in laid.iter().zip(envelopes) {
-        if let Some(&(football, spikes)) = pins.get(&(mine.entry, mine.lane)).filter(|_| mine.live)
+        if let Some(&(football, spikes, pitch_offset)) =
+            pins.get(&(mine.entry, mine.lane)).filter(|_| mine.live)
         {
-            *envelope = MineEnvelope { football, spikes };
+            *envelope = MineEnvelope {
+                football,
+                spikes,
+                pitch_offset,
+            };
         }
     }
 }
@@ -224,8 +231,10 @@ pub(crate) struct VisualiserConstants {
 /// (`detonator-mine-material.md`).
 ///
 /// **`MasterVolume` and `PitchVolume` read band 0 and band 1, chosen, not measured**: the
-/// original's two level readers (`0x304cc8`) are unread. `PitchOffset` (an accumulator whose
-/// step is unread) and `TrebleHit` (a `.bss` word whose writer is unread) stay `0`.
+/// original's two level readers (`0x304cc8`) are unread. `PitchOffset` is the envelope's: an
+/// accumulator whose step is unread, so only a comparison pin moves it from `0`. `TrebleHit` (a
+/// `.bss` word whose writer is unread) stays `0`, the value every live read showed
+/// (`detonator-mine-draw.md`, "The envelope at the picture's tick").
 #[must_use]
 pub(crate) fn visualiser_constants(
     live: bool,
@@ -247,7 +256,7 @@ pub(crate) fn visualiser_constants(
         colour: stage.mine_electricity.map(|c| c * ELECTRICITY_GAIN),
         master_volume: (MASTER_VOLUME_GAIN * band_level(levels, 0)).clamp(0.0, 1.0),
         pitch_volume: band_level(levels, 1).clamp(0.0, PITCH_VOLUME_CEILING),
-        pitch_offset: 0.0,
+        pitch_offset: envelope.pitch_offset,
         bass_hit: (envelope.football * BASS_HIT_GAIN).clamp(0.0, BASS_HIT_GAIN),
         treble_hit: 0.0,
     }

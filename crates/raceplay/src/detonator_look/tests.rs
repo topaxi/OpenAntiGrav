@@ -60,6 +60,7 @@ fn brightness_is_twice_the_football_envelope() {
     let envelope = MineEnvelope {
         football: 0.4,
         spikes: 1.0,
+        ..MineEnvelope::default()
     };
     assert_eq!(envelope.brightness(), 0.8);
 }
@@ -83,6 +84,7 @@ fn a_live_mine_takes_the_stage_colour_and_the_envelope() {
     let envelope = MineEnvelope {
         football: 0.5,
         spikes: 0.0,
+        ..MineEnvelope::default()
     };
     for part in [MinePart::Football, MinePart::Spikes] {
         let c = mine_constants(true, part, &stage(), &envelope);
@@ -96,6 +98,7 @@ fn a_dark_mine_takes_its_literals_whatever_the_stage_and_the_music() {
     let loud = MineEnvelope {
         football: 1.0,
         spikes: 1.0,
+        ..MineEnvelope::default()
     };
     let football = mine_constants(false, MinePart::Football, &stage(), &loud);
     assert_eq!((football.colour, football.brightness), ([2.0; 3], 0.0));
@@ -162,9 +165,17 @@ fn a_pinned_live_mine_holds_the_originals_envelope_whatever_the_bands_are() {
         stepped.iter().all(|e| e.brightness() == 0.0),
         "quiet bands never attack"
     );
-    let pins = std::collections::BTreeMap::from([((5, 0), (0.5886, 0.568)), ((7, 0), (0.9, 0.9))]);
+    let pins = std::collections::BTreeMap::from([
+        ((5, 0), (0.5886, 0.568, 8.375)),
+        ((7, 0), (0.9, 0.9, 1.0)),
+    ]);
     hold_pinned(&mines, &mut stepped, &pins);
     assert_eq!(stepped[0].brightness(), 2.0 * 0.5886);
+    assert_eq!(
+        visualiser_constants(true, &stage(), &stepped[0], &quiet).pitch_offset,
+        8.375,
+        "the pinned PitchOffset reaches the ring"
+    );
     assert_eq!(
         stepped[1],
         MineEnvelope::default(),
@@ -192,6 +203,7 @@ fn the_football_and_spikes_sizes_follow_the_envelopes_the_way_the_original_write
     let held = MineEnvelope {
         football: 0.5886,
         spikes: 0.568,
+        ..MineEnvelope::default()
     };
     assert!((held.football_scale() - 1.3537).abs() < 1e-3);
     assert!(
@@ -205,6 +217,7 @@ fn the_football_and_spikes_sizes_follow_the_envelopes_the_way_the_original_write
     let loud = MineEnvelope {
         football: 1.0,
         spikes: 1.0,
+        ..MineEnvelope::default()
     };
     assert_eq!(loud.football_scale(), 2.3);
     assert!((loud.spike_scale() - 3.25).abs() < 1e-6);

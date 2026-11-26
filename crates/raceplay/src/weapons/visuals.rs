@@ -331,9 +331,12 @@ impl Race {
     }
 
     /// Holds laid mines' music envelopes at the original's read, `(survey entry, lane)` to the
-    /// football's `s` and the spikes' `t` (`--detonator-mine-envelopes`): a live pinned mine draws
-    /// from them and its envelope does not step.
-    pub fn pin_mine_envelopes(&self, pins: impl IntoIterator<Item = ((u16, i8), (f32, f32))>) {
+    /// football's `s`, the spikes' `t` and the visualiser's `PitchOffset` (`--detonator-mine-envelopes`):
+    /// a live pinned mine draws from them and its envelope does not step.
+    pub fn pin_mine_envelopes(
+        &self,
+        pins: impl IntoIterator<Item = ((u16, i8), (f32, f32, f32))>,
+    ) {
         crate::drawable::lock(&self.view.mine_pins).extend(pins);
     }
 

@@ -285,9 +285,9 @@ pub struct CaptureOptions {
     /// `--detonator-mines`: the original's mine positions, laid on ours' nearest survey lanes in place of
     /// the seeded opening layout ([`oag_raceplay::RaceSim::carry_detonator_mines`]).
     pub detonator_mines: Option<Vec<oag_core::math::Vec3>>,
-    /// `--detonator-mine-envelopes`: the football's and spikes' envelope of each `detonator_mines` position, in its
-    /// order, held as the original read them ([`oag_raceplay::Race::pin_mine_envelopes`]).
-    pub detonator_mine_envelopes: Option<Vec<(f32, f32)>>,
+    /// `--detonator-mine-envelopes`: the football's and spikes' envelope and the visualiser's `PitchOffset` of each
+    /// `detonator_mines` position, in its order, held as the original read them ([`oag_raceplay::Race::pin_mine_envelopes`]).
+    pub detonator_mine_envelopes: Option<Vec<(f32, f32, f32)>>,
     /// `--detonator-emp-charge` ([`oag_raceplay::RaceSim::charge_detonator_emp`]).
     pub detonator_emp_charge: Option<u32>,
     /// `--detonator-gauge-speed` ([`oag_raceplay::Race::pin_ammo_gauge_speed`]).

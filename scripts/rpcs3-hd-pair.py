@@ -263,9 +263,12 @@ def mine_flags(pair, ship):
                "football s and spikes t of %d mines" % len(mines) if carried
                else "a shot record without `football_s`/`spikes_t`: re-grab it with `rpcs3-hd-detonator-shots.py`")
     if carried:
-        flags += ["--detonator-mine-envelopes", ";".join("%.4f,%.4f" % (m["football_s"], m["spikes_t"]) for m in mines)]
-        pair.caveat("each mine's music envelope (`+0xf4`, `+0xf8`) was read in the same pause and ours holds it (`--detonator-mine-envelopes`): "
-                    "ours' own has no history of the music before the frame")
+        # A third value is the ring's `PitchOffset` (`+0x108`), an accumulator ours has no start for; an older record has none.
+        flags += ["--detonator-mine-envelopes", ";".join(
+            "%.4f,%.4f" % (m["football_s"], m["spikes_t"]) + ("" if m.get("pitch_offset") is None else ",%.4f" % m["pitch_offset"])
+            for m in mines)]
+        pair.caveat("each mine's music envelope (`+0xf4`, `+0xf8`) and, where read, its ring's `PitchOffset` (`+0x108`) are held in ours "
+                    "(`--detonator-mine-envelopes`): ours' own have no history of the music before the frame")
     return flags
 
 

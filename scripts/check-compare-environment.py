@@ -274,7 +274,7 @@ def check_detonator_mine_envelopes():
     reads = [{"race_clock_s": c, "mines": {"7": {"football_s": s, "spikes_t": t, "pitch_offset": 8.25}}}
              for c, s, t in ((2.55, 0.6, 0.5), (2.6, 0.5, 0.45), (2.7, 0.25, 1.0))]
     flags = hd_pair.mine_flags(lagged, {"mines": [ram], "race_clock_s": 2.7, "mine_reads": reads})
-    assert flags[flags.index("--detonator-mine-envelopes") + 1] == "0.5000,0.4500", flags
+    assert flags[flags.index("--detonator-mine-envelopes") + 1] == "0.5000,0.4500,8.2500", flags
     det = lagged.rec["original"]["detonator"]
     assert det["mine_read"]["read_clock_s"] == 2.6 and det["mines"][0]["pitch_offset"] == 8.25, det
     far = Pair()

@@ -15,10 +15,11 @@ pub(crate) struct DetonatorArgs {
     pub(crate) mines: Option<MinePositions>,
 
     /// Comparison input: hold each `--detonator-mines` mine's music envelope at the original's
-    /// (`S,T;...`: `m+0xf4` and `m+0xf8`, same order), ours having no history of the music.
+    /// (`S,T[,P];...`: `m+0xf4`, `m+0xf8` and the visualiser's `PitchOffset` `m+0x108`, `0` when
+    /// absent; same order), ours having no history of the music.
     #[arg(
         long = "detonator-mine-envelopes",
-        value_name = "S,T;...",
+        value_name = "S,T[,P];...",
         value_parser = parse_mine_envelopes,
         requires = "mines"
     )]
@@ -43,7 +44,7 @@ pub(crate) struct MinePositions(pub(crate) Vec<oag_core::math::Vec3>);
 
 /// The envelopes of `--detonator-mine-envelopes`, one value to clap.
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct MineEnvelopes(pub(crate) Vec<(f32, f32)>);
+pub(crate) struct MineEnvelopes(pub(crate) Vec<(f32, f32, f32)>);
 
 fn parse_mine_envelopes(text: &str) -> Result<MineEnvelopes, String> {
     let number = |n: &str| {
@@ -52,9 +53,10 @@ fn parse_mine_envelopes(text: &str) -> Result<MineEnvelopes, String> {
             .map_err(|_| format!("`{n}` is not a number"))
     };
     text.split(';')
-        .map(|pair| match pair.split_once(',') {
-            Some((s, t)) => Ok((number(s)?, number(t)?)),
-            None => Err(format!("`{pair}` is not S,T")),
+        .map(|mine| match mine.split(',').collect::<Vec<_>>()[..] {
+            [s, t] => Ok((number(s)?, number(t)?, 0.0)),
+            [s, t, p] => Ok((number(s)?, number(t)?, number(p)?)),
+            _ => Err(format!("`{mine}` is not S,T or S,T,P")),
         })
         .collect::<Result<Vec<_>, String>>()
         .map(MineEnvelopes)
@@ -78,4 +80,19 @@ fn parse_detonator_mines(text: &str) -> Result<MinePositions, String> {
         })
         .collect::<Result<Vec<_>, String>>()
         .map(MinePositions)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_mine_envelope_takes_an_optional_pitch_offset() {
+        assert_eq!(
+            parse_mine_envelopes("0.5,0.75;0.25,1,8.375"),
+            Ok(MineEnvelopes(vec![(0.5, 0.75, 0.0), (0.25, 1.0, 8.375)]))
+        );
+        assert!(parse_mine_envelopes("0.5").is_err());
+        assert!(parse_mine_envelopes("0.5,1,2,3").is_err());
+    }
 }
