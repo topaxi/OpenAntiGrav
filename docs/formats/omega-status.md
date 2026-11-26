@@ -1727,6 +1727,9 @@ the player's craft swings, as on Pulse; a rival's flaps stay stowed.
   `Data\particles` and `Data\particles2048` (not `Data\Psys`), with `.gnf`
   sprites; a race reads `particles2048` on an `environments2048` circuit and
   `particles` elsewhere (chosen, not measured - `docs/ghidra/functions/ps4-omega-eu/particle-paths.md`).
+  The Rocket craft blast plays its file's sprite templates (2026-11-26, ported with HD's trigger
+  and 2.0 x depth cap inherited): `glow_longer` and `Glow` from `particles2048`, none from
+  `particles` ([rocket-craft-blast.md](../ghidra/functions/ps3-hdfury-eu/rocket-craft-blast.md#the-other-titles)).
   The blend-class-8 distortion emitter (`shockdistort`) is **drawn** (2026-10-06, `heat-haze-3`): an offset target the Omega tone-map composite resamples the scene by, strength the emitter's own `+0xc84` float (`ghidra/functions/ps4-omega-eu/heat-haze.md`, `pob.md`); the heat-haze set has no trigger yet
   (2026-10-06, `pob.md`): the explosions play their other emitters, and the effects
   Omega never authors are left out of its table. The two HUD-atlas WARN lines are gone (2026-10-06, `omega-hud`: the atlases

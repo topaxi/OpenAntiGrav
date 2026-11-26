@@ -1253,3 +1253,5 @@
 0x00283b40	function	Psys_SetInheritedVelocity	82	rocket-craft-blast.md
 0x0027c288	function	Psys_FindInstanceByHandle	80	rocket-craft-blast.md
 0x00149f70	function	Rocket_PushNearbyCraft	60	rocket-craft-blast.md
+0x00287168	function	Psys_PrepareInstance	62	rocket-craft-blast.md
+0x0028bb18	function	Psys_InitTemplateParticle	55	rocket-craft-blast.md

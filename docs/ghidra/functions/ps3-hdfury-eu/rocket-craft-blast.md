@@ -23,6 +23,8 @@ it falls behind because those roots author a drag of 0.92 a tick.
 | `0x00283b40` | `Psys_SetInheritedVelocity` | 82 | stores a vector at instance `+0x160` and recurses into `+0x24` and `+0x1b4` |
 | `0x0027c288` | `Psys_FindInstanceByHandle` | 80 | the handle table on `*(manager) + 0x468c` (key mod table size, stride 12, match on `+4`) |
 | `0x00149f70` | `Rocket_PushNearbyCraft_q` | 60 | for each other racer within a radius, adds `normalize(d) * (1 - |d| / radius) * strength` to the racer's `+0x110` |
+| `0x00287168` | `Psys_PrepareInstance_q` | 62 | walks the record's sprite template list (gate `+0x9a4`, list `+0x9a8`) and makes a `0xa0`-byte particle for each |
+| `0x0028bb18` | `Psys_InitTemplateParticle_q` | 55 | initialises one template's particle from its record |
 
 ## The spawn copies a point
 
@@ -129,27 +131,132 @@ the carry ours stays at the spawn point: 0.6 units along a craft that moved 34.
 Wired as `oag_title::Effects::craft_blast_carry` (HD, 2048 and Omega `Measured`);
 `RaceView::craft_blast_velocity` hands the struck craft's velocity to `Stage::play_carried`.
 
-## The screen wash: narrowed, not found
+## The screen wash: the blast's sprite templates
 
-The capture's full-screen additive quads (half height exactly twice their depth) were
-re-measured against this spawn's geometry (the films' `hit.json` struck pose, the frames'
-cameras, the pairs' field files for the craft's later position). In all three hits they are:
+2026-11-26, `blast-wash-capture`. **The full-screen wash on a Rocket's craft hit is
+`WO_ROCKET_EXPLO`'s sprite templates: the yellow wash is `glow_longer`, the template on the
+root emitter, and the white flash of the hit frame is a `Glow`, the template on
+`FIRE_TRAILS_ONEQUAD` (and `MOLTEN_DEBRIS`, which authors the same one).** Confidence 85 for
+`glow_longer`, 70 for the `Glow`s. Both are drawn as single additive quads capped at exactly
+twice their depth (measured 2.0, read nowhere).
 
-- one quad per draw, square, colour bytes opaque, warm white to yellow
-  (`(255, 231, 178)` at 0.1 s, about `(255, 233, 91)` to `(255, 224, 79)` later);
-- **near the spawn point** (2.3 to 11.9 units from it) while the struck craft is 13 to 30
-  units on: they do not travel with the cloud.
+A template is one particle an emitter's instance starts with, created whatever the emission
+count says ([pob.md](../../../formats/pob.md), `oag_pob::initial`; read on Pulse first). On HD
+`FUN_00287168` reads the record's gate at `+0x9a4` (`0x00287534`) and its list at `+0x9a8`
+(`0x00287540`), allocates a `0xa0`-byte particle for each record and initialises it through
+`FUN_0028bb18` (`0x0028757c`). That is Pulse's initialiser's shape, so both carry a name at
+`_q` confidence: `Psys_PrepareInstance_q` (62; the function does more than this walk, which is
+all that was read) and `Psys_InitTemplateParticle_q` (55; called once per template record with
+the new particle, the record and the instance, body unread).
 
-So they are not the carried particles of the blast's travelling roots. Candidates left, none
-above 45: `FIRESPIKES` (64x64 additive sprite, near cap 2.0, life 11 +- 6 ticks, which matches
-"gone by 0.3 s", but it emits 5 a tick and is a from-spawn streak, not a square), or something
-drawn for the spawn's point light. **Not wired.** The check that decides it is a capture with
-one candidate removed (the `.pob`'s emission count zeroed in memory, or the `bl 0x006778c8` at
-`0x0014aa34` replaced by a `nop`), filmed with `scripts/rpcs3-hd-rocket-film.py`.
+### What was filmed
+
+RPCS3 0.0.43-20574, HD EU, the weapons-grid save state of
+[particle-fill.md](../../../rendering/particle-fill.md) ("Against the original at a near
+blast"), restored fresh for every film, the Rocket fired 12 units behind AG Systems with
+`scripts/rpcs3-hd-rocket-film.py`. Each arm is a data write before the shot (`--arm`; the PPU
+recompiler ignores writes to code, and RPCS3 applies no `patch.yml` on a save-state restore).
+**Falsifier, written before the films:** a candidate is named only if its arm removes the
+single-quad additive draws with half height = 2 x depth in both of its films, against two
+controls that have them. Frames whose command ring was not caught (every other age) are not
+evidence either way.
+
+| Film | Arm | Struck | Wash quads at the ages with draws |
+| --- | --- | --- | --- |
+| control 1, 2 | none | AG Systems | 1, 2 (0.05, 0.18 s); 3, 2 (0.1, 0.23 s), yellow `(255, 240, 99)` to `(255, 222, 76)` |
+| light off | the blast light's colour zeroed, its fill guard set | AG Systems | 3, 2: same yellows |
+| `FIRESPIKES` off | all three records' per-emission count and live cap zeroed | AG Systems | 1, 3: same yellows |
+| tag caps (2 films) | every loaded record with cap 2.0 retagged 1.1 to 1.6 | AG Systems once, another craft once | still exactly 2.0 |
+| whole tree off | emission zeroed on every `WO_ROCKET_EXPLO` record | another craft | blast's own quads gone (no cap 0.5 quad, alpha-over fill 0.0 to 0.1 screens against 5.8), wash quads still there |
+| both templates off (2 films) | gate `+0x9a4` zeroed on the root and `FIRE_TRAILS_ONEQUAD` | AG Systems | **none**, blast otherwise unchanged (374 and 1,152 quads against 399 and 1,176) |
+| root template off (2 films) | gate zeroed on the root only | AG Systems | **no yellow**; white quads at 1.999 on the hit frame remain |
+| trail template off | gate zeroed on `FIRE_TRAILS_ONEQUAD` only | AG Systems | yellow remains |
+
+- **The light is not it.** `SpuLight_AddCandidate` is a per-vertex sum over geometry
+  ([weapons.md](weapons.md), "Weapon point lights"), so a zero colour adds nothing, the same as
+  removing the call. The quads stayed.
+- **No emitter is it.** The whole-tree arm shows the record writes reach the draw (the blast
+  collapsed), and the wash stayed. No loaded record capped at 2.0 drew it either.
+- **The templates' tables are the wash's colours.** Read off the disc through `oag_pob`, with
+  the bytes the live memory held: `glow_longer` 30 ticks, additive, a keyed size 0 to 40, colours
+  `(255, 245, 105)`, `(255, 240, 99)`, `(255, 227, 83)`, `(255, 210, 62)` over its life; `Glow`
+  3 ticks, size 100, white to `(255, 237, 197)`. Each of the eight non-white colours the 39 quads
+  carry is an entry of `glow_longer`'s table. At these sizes every quad nearer than 20 units is capped, which is why
+  each covers the screen.
+- **Why 85 and 70.** `glow_longer` was removed by its own gate in two films and by both gates
+  in two more, and its colour table matches. The white `Glow` rests on one root-only film that
+  kept it, its table and the 2.0 cap; which of the two identical `Glow`s draws it is not
+  separated.
+
+Raw films: `data/reference/hd-capture/rocket-craft-hit/` holds the earlier hits; this lane's
+arms were not kept. Reproduce with `--arm none`, `--arm templates-off:WO_ROCKET_EXPLO,FIRE_TRAILS_ONEQUAD`
+and `--arm templates-off:WO_ROCKET_EXPLO` on the same state, then count quads with
+`scripts/hd-particle-quads.py` (the `2.0` cap column).
+
+### The cap
+
+Over the ten films, 37 of the 39 single additive quads larger than 1.05 x depth sit at half
+height 1.98 to 2.001 x depth, and the other two are smaller (the lowest 1.707), so they are capped,
+not drawn at a fixed screen size. A template record ends at
+`0x900` and has no `+0xc80`, and retagging the parent emitters' caps did not move them, so the
+2.0 comes from somewhere else in the builder. Unread.
+
+### Wired
+
+`oag_hd` lists the craft blast in `Effects::templates`, so ours plays its three root templates
+(`glow_longer` and both `Glow`s) with its own sprites, and `NearLaw::template_cap` caps a
+template at 2.0 x depth (HD measured; 2048 and Omega inherited, below). Tests:
+`near_law::hds_craft_blast_plays_the_screen_wash_templates` (disc),
+`near::tests::a_template_is_capped_by_the_laws_template_cap`, and the disc check
+`check_hd_craft_blast_templates` in `pob_ground_truth.rs`.
+
+Pairs (`compare_env.overlap_score` RMSE x 255, same tree, HD's templates off and on): 0.1 s
+119.7 to **118.0**, 0.233 s 126.2 to **125.2**.
+
+**A template takes nothing from the rest of its effect.** Played first as one more emitter, the
+templates moved the 0.233 s pair to 140.0. With the templates listed but muted it stayed at
+126.2, so the change came from their particles being born, not from their look. Those particles took draws from the
+instance's shared random stream, which moved every later particle of the blast, and slots from
+a full 256-particle pool, which changed which smoke survived. The original allocates a
+template's particle on its own (`0x00287560`, `0xa0` bytes) outside the emitter pool. Ours now
+keeps eight template slots beside the 256 (`oag_fx::psys`, `MAX_TEMPLATE_PARTICLES`), and a
+tick's templates draw from one copy of the shared stream, so each template keeps the values it
+drew before and every other particle lands where it would without templates.
+
+| Arm (two renders each, identical) | 0.1 s | 0.233 s |
+| --- | --- | --- |
+| templates off | 119.7 | 126.2 |
+| listed, muted | 119.7 | 126.2 |
+| on, shared stream and pool | 117.8 | 140.0 |
+| on, shared stream, template reserve | 116.2 | 138.5 |
+| on, stream copy and template reserve (wired) | 118.0 | 125.2 |
+
+The 0.233 s pair swings by 14 with the arrangement of the blast alone, so a pair this close to the
+original's white frame measures our random arrangement as much as the wash.
+
+### The other titles
+
+- **2048: ported (inherited trigger).** Its race plays its own
+  `particles2048/WO_ROCKET_EXPLO.pob` (3 emitters), whose template is a different one,
+  `BANG_GLOW` (60 ticks, size 0 to 30, `(255, 221, 0)` at alpha 180), and that is what ours
+  plays. The `particles` copy inherited from HD carries HD's three. That the craft blast plays
+  its templates, and the 2.0 x depth cap, are HD's, taken by lineage (`Origin::InheritedFrom`),
+  not measured on 2048.
+- **Omega: ported (inherited trigger).** Ours reads the effect directory by circuit (a choice,
+  [particle-paths.md](../ps4-omega-eu/particle-paths.md)):
+  `Data/particles2048/WO_ROCKET_EXPLO.pob`, read on a 2048 circuit, carries HD's `glow_longer`
+  and `Glow`, and `Data/particles/`, read elsewhere, none, in the base archive and the 1.07 patch
+  alike. Ours plays each file's own: the two on a 2048 circuit, nothing on an HD circuit. The
+  trigger and the cap are inherited from HD, as on 2048.
+
+The files are pinned by `the_rocket_craft_blast_templates_on_2048_and_omega`; what each title
+loads by `the_2048_craft_blast_loads_under_the_near_law` and
+`the_omega_craft_blast_loads_under_the_near_law` (Altima for the 2048 directory).
 
 ## Open
 
-- What draws the near-spawn full-screen quads (above).
+- Where HD's template cap of 2.0 is read (above, "The cap").
+- How the wash looks from a far hit: the free volley's hit about 30 units ahead draws `glow_longer`'s hemisphere sprite as a flat-bottomed dome across the top of ours; not filmed on the original at that distance.
 - `Rocket_PushNearbyCraft_q`'s radius and strength table (`*(TOC -0x2568) + 4 * *(... + 0xc)`,
   fields `+0x20` and `+0x24`), and whether `+0x110` is the pending impulse Pulse's blasts post
   ([weapon-lineage.md](../../../gameplay/weapon-lineage.md), "Blast push").

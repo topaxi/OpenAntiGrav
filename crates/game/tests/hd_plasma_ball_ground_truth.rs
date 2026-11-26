@@ -69,8 +69,8 @@ fn rgb_of(png: &[u8]) -> Vec<[u8; 3]> {
 }
 
 /// Talon's Junction's grid at tick 112, a plasma shot released at tick 100,
-/// or nothing fired.
-fn frame_of(image: &Path, scratch: &Path, fire: bool) -> Vec<[u8; 3]> {
+/// or nothing fired, with the particle stage's stream started from `stage_seed`.
+fn frame_of(image: &Path, scratch: &Path, fire: bool, stage_seed: Option<u64>) -> Vec<[u8; 3]> {
     let out = scratch.join("frame.png");
     let script = scratch.join("fire.inputs");
     std::fs::write(&script, "100 none\n2 square\n1000 none\n").expect("the input script");
@@ -93,6 +93,9 @@ fn frame_of(image: &Path, scratch: &Path, fire: bool) -> Vec<[u8; 3]> {
         .env("XDG_CONFIG_HOME", scratch.join("config"))
         .env("XDG_DATA_HOME", scratch.join("data"))
         .env("XDG_STATE_HOME", scratch.join("state"));
+    if let Some(seed) = stage_seed {
+        command.args(["--stage-seed", &seed.to_string()]);
+    }
     if fire {
         command
             .args(["--give", "plasma", "--input-script"])
@@ -135,32 +138,40 @@ fn the_plasma_bolts_head_has_a_violet_core_not_a_white_disc() {
     };
     let scratch = std::env::temp_dir().join(format!("oag-hd-plasma-ball-{}", std::process::id()));
     std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
-    let fired = frame_of(&image, &scratch, true);
-    let control = frame_of(&image, &scratch, false);
-    std::fs::remove_dir_all(&scratch).ok();
-
-    let (core_violet, core_white) = (count(&fired, INNER, violet), count(&fired, INNER, white));
-    let ball_white = count(&fired, BALL, white);
-    println!(
-        "inner disc: {core_violet} violet, {core_white} white of 400; ball box: {ball_white} white"
-    );
+    let control = frame_of(&image, &scratch, false, None);
     assert_eq!(
         count(&control, BALL, violet) + count(&control, BALL, white),
         0,
         "the control's box holds neither colour: it is the road"
     );
-    // 392 violet and 4 white of the inner disc's 400. A disc shaded with the eye at
-    // the world's origin has `rim` near 1 all over and is white inside too.
-    assert!(
-        core_violet > 300 && core_white < 50,
-        "the bolt's core is not violet: a white disc is the eye read from the origin"
-    );
-    // The head's colour tap is decoded on fetch (unit 0 gamma nibble 7,
-    // `docs/rendering/hd-unlit-programs.md`, "The weapon units, read live"): the rim
-    // whitens 423 pixels of the ball's box decoded and 951 with the tap raw (and the
-    // inner disc reads 216 violet, 106 white).
-    assert!(
-        ball_white < 650,
-        "the bolt's colour tap is read raw, as the console does not: {ball_white}"
-    );
+    // The head's glow sprites (`WO_PLASMA_HEAD`'s templates) draw over the ball from the
+    // stage's random stream, so each claim holds over several arrangements of them.
+    for stage_seed in STAGE_SEEDS {
+        let fired = frame_of(&image, &scratch, true, stage_seed);
+        let (core_violet, core_white) = (count(&fired, INNER, violet), count(&fired, INNER, white));
+        let ball_white = count(&fired, BALL, white);
+        println!(
+            "stage seed {stage_seed:?}: inner disc {core_violet} violet, {core_white} white of 400; ball box {ball_white} white"
+        );
+        // Thirteen arrangements read 270 to 397 violet and 2 to 97 white of the inner
+        // disc's 400. A disc shaded with the eye at the world's origin has `rim` near 1
+        // all over: with the weapon scene left unwritten, five arrangements read 6 to 23
+        // violet and 368 to 392 white.
+        assert!(
+            core_violet > 200 && core_white < 150,
+            "stage seed {stage_seed:?}: the bolt's core is not violet: a white disc is the eye read from the origin"
+        );
+        // The head's colour tap is decoded on fetch (unit 0 gamma nibble 7,
+        // `docs/rendering/hd-unlit-programs.md`, "The weapon units, read live"): the rim
+        // whitens 374 to 501 pixels of the ball's box decoded over thirteen arrangements,
+        // and 951 with the tap raw.
+        assert!(
+            ball_white < 650,
+            "stage seed {stage_seed:?}: the bolt's colour tap is read raw, as the console does not: {ball_white}"
+        );
+    }
+    std::fs::remove_dir_all(&scratch).ok();
 }
+
+/// The fixed stage seed and four others; seed 4 is the worst of thirteen read.
+const STAGE_SEEDS: [Option<u64>; 5] = [None, Some(1), Some(2), Some(3), Some(4)];

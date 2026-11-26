@@ -2,7 +2,7 @@
 status: measure
 titles: [hd, omega, 2048]
 updated: 2026-11-26
-summary: "Owed: the Rocket craft-hit screen wash (A/B capture), Deck numbers, 1.7 ms at 1080p; two settings await the maintainer"
+summary: "Owed: the craft-blast template cap source and far-hit dome, Deck numbers, 1.7 ms at 1080p; two settings await the maintainer"
 size: M (50)
 difficulty: medium (55)
 ---
@@ -22,15 +22,13 @@ What the blast rides is read and wired (2026-11-26): the spawn copies a point an
 blast the struck craft's velocity, on HD, 2048 and Omega
 (`docs/ghidra/functions/ps3-hdfury-eu/rocket-craft-blast.md`). Left:
 
-- **The screen wash.** The full-screen single quads (half height = 2 x depth) are square,
-  opaque, warm white to yellow, and sit 2 to 12 units from the spawn point while the struck
-  craft is 13 to 30 units on, in all three filmed hits. So they are not the travelling
-  particles. Candidates, none above 45: `FIRESPIKES` (64x64 additive, cap 2.0, life 11 +- 6
-  ticks, but a from-spawn streak emitting 5 a tick), or something drawn for the spawn's point
-  light (`D = 100`, colour `(7, 5, 1)`, `0x006778c8` called at `0x0014aa34`). Decide by a
-  capture with one removed: zero `FIRESPIKES`' emission count in memory, or `nop` the
-  `bl 0x006778c8`, film hit 2 with `scripts/rpcs3-hd-rocket-film.py` and see which kills the
-  quads. Then read its law and wire it.
+- **The screen wash: named and wired 2026-11-26.** It is the blast's sprite templates
+  (`docs/ghidra/functions/ps3-hdfury-eu/rocket-craft-blast.md`, "The screen wash"). Left:
+  - where HD reads the template cap of 2.0 (measured on 37 quads, unread);
+  - **the far-hit dome**: a Rocket hit about 30 units ahead now draws `glow_longer`'s hemisphere
+    sprite as a flat-bottomed white dome across the top of the frame. Film a far hit on RPCS3
+    (`scripts/rpcs3-hd-rocket-film.py --back 30`) and compare its wash shape with ours;
+  - 2048 and Omega play their own files' templates with HD's trigger and cap by lineage; a capture of either's hit would turn that into a measurement.
 - **The blast's push on nearby craft** (`Rocket_PushNearbyCraft_q`, `0x00149f70`, and Omega's
   inline twin): radius and strength table unread; it may be HD's consumer of the "Blast push"
   row in `docs/gameplay/weapon-lineage.md`. Simulation, not render: its own lane.
@@ -66,7 +64,6 @@ blast the struck craft's velocity, on HD, 2048 and Omega
 
 ## Next Steps
 
-1. Capture the two A/B arms in "The screen wash" and wire whichever removes the quads.
-2. Re-render `hd-rocket-craft-hit-0100` and `-0233` once the wash is wired.
+1. Adopt the re-rendered rocket-hit pairs, then film the far-hit dome (above).
 3. Run the Deck numbers before and after.
 4. Put items 2 and 3 of the table to the maintainer as settings once the Deck numbers are in.

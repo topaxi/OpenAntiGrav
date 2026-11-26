@@ -390,8 +390,11 @@ describes ours, not the original: the original's frame is mostly white from 0.1 
    their source is not identified. Ours draws no screen flash on HD. Re-measured 2026-11-26:
    square, opaque, warm white to yellow, and 2 to 12 units from the spawn point while the
    struck craft is 13 to 30 units on, so they do not ride with the cloud
-   ([rocket-craft-blast.md](../ghidra/functions/ps3-hdfury-eu/rocket-craft-blast.md), "The
-   screen wash: narrowed, not found").
+   ([rocket-craft-blast.md](../ghidra/functions/ps3-hdfury-eu/rocket-craft-blast.md)).
+   **Named and wired 2026-11-26**: they are the blast's sprite templates, `glow_longer` on the
+   root (the yellow) and the `Glow`s (the white of the hit frame), capped at 2 x depth; zeroing
+   their gate in memory removed them from the original's frame
+   ([rocket-craft-blast.md](../ghidra/functions/ps3-hdfury-eu/rocket-craft-blast.md#the-screen-wash-the-blasts-sprite-templates)).
 4. **Streaks.** In the carried arm, 25 of our 1,055 quads whose corners differ in depth (our
    streaks) are nearer than 1 unit, with the law on or off: it does not touch streaks. The original's dumped lists hold only screen-facing quads,
    so where its `.pob` streaks are drawn is not known, and no comparison was made.

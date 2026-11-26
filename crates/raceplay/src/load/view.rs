@@ -630,6 +630,7 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
                     effect.with_near_law(psys::NearLaw {
                         cull_depth: law.cull_depth,
                         fade_depth: law.fade_depth,
+                        template_cap: law.template_cap.map(|(cap, _)| cap),
                     });
                 }
                 report.push(note);
