@@ -463,7 +463,10 @@ impl Limits {
         let floor = (spec.narrowest(ceiling.0.max(1)), ceiling.1);
         Self {
             width: Some(spec),
-            ..Self::new(ceiling, floor, Target(spec.threshold_hz().min(Target::MAX)))
+            // The rate the loop is paced at, not the one the law's durations are scaled
+            // to: what else reads the target (the reflection rung's budget) is a frame
+            // period, and at a 30 limit that is 1/30.
+            ..Self::new(ceiling, floor, Target(spec.paced_hz().min(Target::MAX)))
         }
     }
 

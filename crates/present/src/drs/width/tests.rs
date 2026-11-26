@@ -92,6 +92,14 @@ fn below_60_hz_the_thresholds_stay_the_originals_and_the_vblank_is_the_paced_one
 }
 
 #[test]
+fn the_target_the_limits_carry_is_the_paced_frame() {
+    let at_30 = Limits::original(UHD, Spec::new(HD, Some(30)));
+    assert_eq!(at_30.target().hz(), Some(30));
+    let at_120 = Limits::original(UHD, Spec::new(HD, Some(120)));
+    assert_eq!(at_120.target().hz(), Some(120));
+}
+
+#[test]
 fn with_no_rate_known_the_laws_own_rate_stands() {
     assert_eq!(Spec::new(HD, None), Spec::new(HD, Some(60)));
 }

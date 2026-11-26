@@ -759,6 +759,9 @@ What follows from it:
   of its movement: a CPU stall counts, as it does on the console.
 - **With no `TIMESTAMP_QUERY` it does nothing.** The late-frame input alone would narrow and
   nothing would ever widen.
+- **FSR 3.1 reads a narrower camera than was drawn.** It derives the aspect from the render
+  size, as upstream does, so under a squeeze its view-space reconstruction is short on x by the
+  squeeze. Not measured; the default reconstruction on HD is off.
 
 Omega's executable has none of it and 2048's was not read
 ([scene-width-throttle.md](../ghidra/functions/ps3-hdfury-eu/scene-width-throttle.md),

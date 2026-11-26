@@ -40,6 +40,12 @@ impl Spec {
         self.threshold_hz
     }
 
+    /// The rate the loop is paced at.
+    #[must_use]
+    pub fn paced_hz(self) -> u32 {
+        self.paced_hz
+    }
+
     /// The width drawn at `level` of a target `ceiling` pixels wide.
     #[must_use]
     pub fn width(self, ceiling: u32, level: u32) -> u32 {
