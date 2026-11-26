@@ -520,5 +520,5 @@ probe: the shorter probe loses the floor more often.
 Omega's `Plasma_Update` reads `6.0` statically ([plasma.md](../ghidra/functions/ps3-hdfury-eu/plasma.md)),
 **checked, applies, not wired**; the other lengths and both titles' open-air arms are unread. Both
 keep Pulse's values, labelled chosen (this wire is HD only). Whether they build a Shuriken: 2048
-**checked, applies, not wired** (55), Omega **not checkable** by the same census
+**checked, applies, not wired** (55), Omega **checked, applies, not wired** (60), both by census
 ([open-air-arms.md](../ghidra/functions/ps3-hdfury-eu/open-air-arms.md#cross-title)).

@@ -50,6 +50,7 @@ units at its first `Missile_Update`) to put it in open air; everything after tha
 scripts/emu-restore-state.sh <lane> data/saves/hd-fury/hd-racebox-talons-venom-weapons-grid-rpcs3-20574.SAVESTAT.zst --interpreter
 OAG_RPCS3_ATTACH=1 uv run --with evdev python3 scripts/rpcs3-hd-own-box.py capture \
     --log-dir <dir> --weapon missile --fires 2 --lift 40 --calls 20 --quiet 10
+python3 scripts/rpcs3-hd-own-box.py fall <dir>/missile.json ...   # the table below
 ```
 
 | Launch of the emulator | Lift | `0x7f` updates compared |
@@ -89,6 +90,12 @@ record above is now pinned
 - `ShurikenManager_Construct` (`0x0014cdf8`, and its twin `0x0014d6b8`) has no caller: no `bl` or
   `b` reaches it, and no word in the image holds its descriptor (`0x008777c0`, `0x00877810`) outside
   the descriptor table itself.
+- Nor is it inlined elsewhere: the manager's vtable (`0x008649a8`, TOC `-0x2494`) is loaded only by
+  the two constructors and by three functions that write it back into a `this` they were handed
+  (`0x0014ca50`, `0x0014e2d8`, `0x0014e448`, destructor-shaped, no allocation); the
+  `ShurikenManager.cpp` tag slot (TOC `-0x2470`) only by the constructors; and the `Shuriken`
+  object constructor `0x00158d18` is called only from them (`0x0014cfac`, `0x0014d86c`;
+  `0x00158e98` by nothing).
 - Live, `*(WeaponManager + 0x80)` read `0` on two restores of the weapons grid.
 
 This explains two earlier observations: no object with `Shuriken.cpp`'s vtable in a race
@@ -121,9 +128,13 @@ not the parallel turn (not followed further).
 ## Cross-title
 
 - **2048: checked, applies, not wired** for "no Shuriken is built" (confidence 55, a census, not a
-  read of its weapon manager). The 1.04 executable's code references 23 of its 27
+  read of its weapon manager). The 1.04 executable's code references 25 of its 29
   `Backend/Weapons/*.cpp` tags through `movw`/`movt`; the four it does not are `Shuriken.cpp`,
   `ShurikenManager.cpp`, `Repulser.cpp` and `RepulserManager.cpp`.
-- **Omega: not checkable by that census.** Its strings carry the Shuriken's cue, icon and rumble
-  names but no `.cpp` tags; its weapon manager's construction was not read.
+- **Omega: checked, applies, not wired** (confidence 60, a census). The 1.07 executable carries a
+  `Backend\Weapons\*Manager.cpp` tag for every manager 2048's code references (Bomb, Cannon, EMP,
+  LeachBeam, LightBarrier, Mine, Missile, Plasma, Quake, Rocket) and none for the Shuriken's or the
+  Repulser's. It also lacks `Bomb.cpp` and `BaseMine.cpp` while throwing bombs, so a missing class
+  tag alone proves nothing there. Shuriken names for the stats parser, effects, cues and rumble are
+  still in it.
 - The Missile's open-air arm on 2048 and Omega: not read; both keep Pulse's fall, as HD does.

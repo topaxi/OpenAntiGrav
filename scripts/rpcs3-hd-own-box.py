@@ -333,6 +333,35 @@ def replay(args):
     return 1 if wrong else 0
 
 
+def fall(args):
+    """The Missile's velocity at its sweep against four laws for the probe that found nothing
+    (`docs/ghidra/functions/ps3-hdfury-eu/open-air-arms.md`, "Measured live")."""
+    vector = lambda call, at: list(struct.unpack_from(">3f", bytes.fromhex(call["object"]), at))
+    errors = {}
+    for path in args.captures:
+        for fire in json.load(open(path)):
+            for probe, sweep in zip(fire["calls"], fire["calls"][1:]):
+                if (probe["caller"], sweep["caller"]) != MISSILE_RETURNS or probe["returned"] != 0x7F:
+                    continue
+                before, after = vector(probe, 0xB0), vector(sweep, 0xB0)
+                normal = vector(probe, 0xD0)
+                speed = math.hypot(*before)
+                dt = math.dist(sweep["start"], sweep["end"]) / speed
+                into = sum(v * n for v, n in zip(before, normal))
+                along = [v - into * n for v, n in zip(before, normal)]
+                laws = {
+                    "fall on world Y": [before[0], before[1] - 50.0 * dt, before[2]],
+                    "fall along the normal": [v - 50.0 * dt * n for v, n in zip(before, normal)],
+                    "unchanged": before,
+                    "parallel turn": [v / math.hypot(*along) * speed for v in along],
+                }
+                for name, predicted in laws.items():
+                    errors.setdefault(name, []).append(math.dist(after, predicted))
+    for name, found in errors.items():
+        print("%-22s %d updates, error %.6f to %.6f" % (name, len(found), min(found), max(found)))
+    return 0 if errors else 1
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     commands = parser.add_subparsers(dest="command", required=True)
@@ -353,10 +382,14 @@ def main():
     r.add_argument("captures", nargs="+")
     r.add_argument("--frame", choices=("cols", "rows"), default="cols")
     r.add_argument("-v", action="store_true")
+    f = commands.add_parser("fall")
+    f.add_argument("captures", nargs="+")
     args = parser.parse_args()
     if args.command == "capture":
         capture(args)
         return 0
+    if args.command == "fall":
+        return fall(args)
     return replay(args)
 
 

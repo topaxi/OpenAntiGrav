@@ -19,7 +19,7 @@ Evidence: [open-air-arms.md](../../docs/ghidra/functions/ps3-hdfury-eu/open-air-
 - The Repulser's manager slot (`WeaponManager + 0x7c`) is zeroed by the same store and read `0` live.
   Whether HD reaches the Repulser another way was not examined.
 - 2048: no code reference to `ShurikenManager.cpp` or `RepulserManager.cpp` (55, a census). Omega:
-  not read.
+  neither manager tag exists (60, a census). Neither title's weapon manager was read.
 
 ## Next Steps
 
