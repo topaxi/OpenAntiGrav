@@ -4,6 +4,8 @@
     python3 scripts/hd_picture_lag.py            # the self test
     python3 scripts/hd_picture_lag.py RECORD.json  # one grab: `rpcs3-hd-detonator-shots.py`'s NN.json with NN.png beside it
 
+A frame whose mines fit no value is measured off the static scene instead (`static_fit`, the pair script's fallback).
+
 A Detonator grab holds three instants (`docs/tools/compare-page.md`, "The presented lag of a Detonator grab"): RAM (the
 pause), the push buffer (the frame the game last handed the RSX: its hull and camera sit `skew` whole ticks behind RAM, 2 or
 4 on a Detonator grab) and the picture (older still). Each laid mine is a static object at a position read from RAM, so the
@@ -113,6 +115,82 @@ def fit(camera, ship, theirs_png, skew):
     out["mines"] = len(kept)
     out["rms_px"] = (sum(p["residual_px"] ** 2 for p in kept) / len(kept)) ** 0.5
     return out
+
+
+#: The static scene's fit: ours is rendered at these camera lags (ticks behind the push buffer), first at the whole
+#: values, then in `STATIC_FINE` steps around the best.
+STATIC_COARSE = range(0, 7)
+STATIC_FINE = 0.25
+#: The best score must beat every score `STATIC_AWAY` ticks or more from it by `STATIC_SHARP`, else the peak says nothing.
+STATIC_AWAY, STATIC_SHARP = 1.5, 0.05
+#: What the score leaves out of a 1920x1080 frame: the HUD, the hull and its plumes, and everything above `STATIC_TOP`
+#: (scenery ours and the original draw differently whatever the camera does). Mines and rounds go by their colour.
+STATIC_BOXES = [(680, 20, 1240, 240), (85, 60, 320, 225), (430, 75, 560, 115), (150, 850, 670, 980), (1250, 850, 1760, 980),
+                (800, 600, 1120, 1000)]
+STATIC_TOP, STATIC_BLOB_REACH = 380, 30
+
+
+def pick_static(curve):
+    """`(ticks, reason)` of a `{lag: score}` curve: the best lag, or `None` with why its peak does not stand."""
+    best = max(curve, key=curve.get)
+    if best <= min(curve) or best >= max(curve):
+        return None, "the static scene's best lag (%.2f ticks) is at the end of the range swept" % best
+    away = [score for k, score in curve.items() if abs(k - best) >= STATIC_AWAY]
+    if not away or curve[best] - max(away) < STATIC_SHARP:
+        return None, "the static scene's peak is flat: %.3f at %.2f ticks, %.3f elsewhere" % (
+            curve[best], best, max(away) if away else float("nan"))
+    return best, None
+
+
+def static_mask(theirs_png):
+    """The pixels the static-scene score reads: the frame less `STATIC_BOXES`, the top band and the bright blobs' surroundings."""
+    import numpy as np
+    blobs = blob_mask(theirs_png)
+    height, width = blobs.shape
+    r = STATIC_BLOB_REACH
+    total = np.zeros((height + 1, width + 1), np.int64)
+    total[1:, 1:] = blobs.cumsum(0).cumsum(1)
+    ys, xs = np.arange(height), np.arange(width)
+    y0, y1 = np.clip(ys - r, 0, height), np.clip(ys + r + 1, 0, height)
+    x0, x1 = np.clip(xs - r, 0, width), np.clip(xs + r + 1, 0, width)
+    near = (total[y1][:, x1] - total[y0][:, x1] - total[y1][:, x0] + total[y0][:, x0]) > 0
+    mask = ~near
+    mask[:STATIC_TOP] = False
+    for bx0, by0, bx1, by1 in STATIC_BOXES:
+        mask[by0:by1, bx0:bx1] = False
+    return mask
+
+
+def edges(path):
+    """Gradient magnitude of a picture's grey, lightly blurred."""
+    import numpy as np
+    from PIL import Image, ImageFilter
+    grey = Image.open(path).convert("L").filter(ImageFilter.GaussianBlur(1.5))
+    gy, gx = np.gradient(np.asarray(grey, float))
+    return np.hypot(gx, gy)
+
+
+def static_fit(theirs_png, render):
+    """The picture's lag off the static scene: `render(k)` is ours' frame (a PNG path) with camera and craft `k` ticks
+    behind the push buffer's, and the lag is the `k` whose edges line up best with the original's (`pick_static`).
+    Returns `{"ticks", "reason", "curve"}`; the camera moves only along its own read velocity, so this is one number."""
+    import numpy as np
+    mask = static_mask(theirs_png)
+    theirs = edges(theirs_png)[mask]
+    curve = {}
+
+    def score(k):
+        if k not in curve:
+            curve[k] = float(np.corrcoef(theirs, edges(render(k))[mask])[0, 1])
+
+    for k in STATIC_COARSE:
+        score(float(k))
+    best = max(curve, key=curve.get)
+    for step in (-3, -2, -1, 1, 2, 3):
+        if STATIC_COARSE[0] <= best + step * STATIC_FINE <= STATIC_COARSE[-1]:
+            score(best + step * STATIC_FINE)
+    ticks, reason = pick_static(curve)
+    return {"ticks": ticks, "reason": reason, "curve": sorted(curve.items())}
 
 
 def self_test():

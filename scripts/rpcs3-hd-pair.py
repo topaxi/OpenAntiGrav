@@ -156,7 +156,7 @@ def frame_pose(pair, ship):
     return list(hull["translation"]), rows, lag
 
 
-def picture_lag(pair, camera, ship, theirs, skew, pos):
+def picture_lag(pair, camera, ship, theirs, skew, pos, mode="fit", render=None):
     """`(pos, eye)` ours is fed: the push buffer's hull and camera moved back the ticks the picture is older than that frame.
 
     The picture RPCS3 shows is older than the push buffer's frame, which is itself `skew` ticks behind RAM (`frame_pose`). The mines
@@ -166,22 +166,65 @@ def picture_lag(pair, camera, ship, theirs, skew, pos):
     fit = hd_picture_lag.fit(camera, ship, theirs, skew)
     lag = pair.rec["original"]["presented_lag"]
     lag["picture_fit"] = fit
-    lag["picture_ticks"] = fit["ticks"]
-    if fit["ticks"] is None:
-        lag["picture"] = "not corrected: " + fit["reason"]
+    k, velocity, basis = fit["ticks"], fit["camera_velocity"], "mines"
+    static = None
+    if mode == "static" or k is None:
+        reason = fit["reason"] or "the static scene was asked for"
+        if velocity is not None and render is not None:
+            static = hd_picture_lag.static_fit(theirs, lambda at: render(at, velocity))
+            lag["picture_static_fit"] = static
+            k, basis = static["ticks"], "static scene"
+            if k is None:
+                reason = "%s; %s" % (reason, static["reason"])
+        else:
+            k = None
+            if velocity is not None:
+                reason += "; no static fit without the scenery's animation clock"
+    if k is None:
+        lag["picture_ticks"] = None
+        lag["picture"] = "not corrected: " + reason
         pair.caveat("the picture's lag behind the push buffer's frame was not fitted (%s): ours is drawn at the push buffer's frame, which is "
-                    "2 to 4 ticks newer than the picture on the Detonator grabs measured" % fit["reason"])
+                    "2 to 4 ticks newer than the picture on the Detonator grabs measured" % reason)
         return pos, list(camera["eye"])
-    k = fit["ticks"]
-    velocity = fit["camera_velocity"]
     shift = [v * k for v in velocity]
+    lag["picture_ticks"] = k
+    lag["picture_basis"] = basis
     lag["picture_total_ticks"] = skew + k
-    lag["picture"] = ("fitted: the picture is %.2f ticks older than the push buffer's camera (%d mines, %.1f px rms) and %.2f older than RAM; ours' camera "
-                      "and craft are moved back that far along the camera's velocity" % (k, fit["mines"], fit["rms_px"], skew + k))
-    pair.check("the picture's lag was fitted from the mines", True, "%.2f ticks behind the push buffer, %d mines, %.1f px rms" % (k, fit["mines"], fit["rms_px"]))
-    pair.caveat("the picture is %.2f ticks older than the push buffer's frame (fitted from %d mines, not a constant: 2 to 4 ticks on the grabs measured); "
-                "ours' camera and craft are moved back that far, the mines' own bands and the gantry clock are RAM's" % (k, fit["mines"]))
+    if basis == "mines":
+        how = "%d mines, %.1f px rms" % (fit["mines"], fit["rms_px"])
+    else:
+        how = "the static scene's edges at their best of %d lags, read 0.25 to 0.6 ticks low where the mines also fit" % len(static["curve"])
+    lag["picture"] = ("fitted: the picture is %.2f ticks older than the push buffer's camera (%s) and %.2f older than RAM; ours' camera "
+                      "and craft are moved back that far along the camera's velocity" % (k, how, skew + k))
+    pair.check("the picture's lag was fitted", True, "%.2f ticks behind the push buffer (%s)" % (k, how))
+    pair.caveat("the picture is %.2f ticks older than the push buffer's frame (fitted from %s, not a constant: 2 to 4 ticks on the grabs "
+                "measured); ours' camera and craft are moved back that far and its tick is the picture's; the music bands are RAM's" % (k, how))
     return [a - b for a, b in zip(pos, shift)], [a - b for a, b in zip(camera["eye"], shift)]
+
+
+def static_renderer(args, camera, ship, skew, pos, rows, track, flags, clock, scratch):
+    """`render(k, velocity)` for `hd_picture_lag.static_fit`: ours' frame with camera and craft `k` ticks behind the push
+    buffer's, at that picture's tick, on the original's mines, with no fire (the score leaves out what moves)."""
+    def render(k, velocity):
+        eye = [a - k * v for a, v in zip(camera["eye"], velocity)]
+        at = [a - k * v for a, v in zip(pos, velocity)]
+        field = scratch / "lag-field.csv"
+        ce.write_field_csv(field, [{"player": True, "team": args.team, "left": rows[0], "up": rows[1], "fwd": rows[2], "pos": at,
+                                    "vel": [0.0, 0.0, 0.0]}], with_player=True)
+        shot = scratch / ("lag-%.2f.png" % k)
+        numbers = ",".join("%.6f" % v for part in (eye, camera["forward"], camera["up"]) for v in part)
+        mines = [m for m in ship.get("mines") or [] if m["flags"] & 9 == 9]
+        extra = ["--detonator-mines", ";".join("%.3f,%.3f,%.3f" % tuple(m["position"]) for m in mines)] if mines else []
+        bands = ship.get("zone_bands")
+        if bands:
+            extra += ["--zone-bands", ",".join("%.6f" % v for v in bands["held"]),
+                      "--zone-bands-raw", ",".join("%.6f" % v for v in bands["raw"])]
+        run([args.oag_game, args.image, "--race", "--track", track, "--team", args.team.upper(), "--camera-pose=" + numbers,
+             "--camera-fov", "%.4f" % camera["fov_y_deg"], *flags, "--mode", "detonator", "--field-from", field, "--pose-hold",
+             "--pose-hold-ticks", *extra, "--ticks", ce.picture_tick(GO_TICK, clock, skew + k), "--screenshot", shot],
+            stdout=subprocess.DEVNULL)
+        return shot
+    return render
 
 
 def zone_band_flags(pair, ship):
@@ -352,10 +395,11 @@ def main():
                          "clock from the grid in `--mode detonator` (its auto-speed, its own mines laid at ITS placement, the original's "
                          "Libc_Rand layout not carried), holds the cannon over the same lap-clock window the original's button was held "
                          "(`ship.fire`), and the craft is put back on the original's pose for the frame (`--pose-hold`)")
-    ap.add_argument("--picture-lag", choices=("fit", "off"), default="fit",
+    ap.add_argument("--picture-lag", choices=("fit", "static", "off"), default="fit",
                     help="with --detonator: `fit` moves ours' camera and craft back the ticks the picture is older than the push buffer's "
-                         "camera, fitted from the mines in the frame (`hd_picture_lag.py`); a frame whose mines fit no value is left "
-                         "uncorrected and says so. `off` leaves ours at the push buffer's frame")
+                         "camera, and runs ours to the picture's tick: fitted from the mines in the frame, else from the static scene "
+                         "(`hd_picture_lag.py`); a frame that fits neither is left uncorrected and says so. `static` uses the static scene "
+                         "only. `off` leaves ours at the push buffer's frame")
     ap.add_argument("--press", default="none",
                     help="the button held while the two frames are taken; `cross` is throttle")
     args = ap.parse_args()
@@ -453,17 +497,32 @@ def main():
         ours_world_offset = offset - GO_TICK / 60 if not (args.field or args.zone) else world["time_s"]
         pair.rec["ours"]["world_clock_offset_s"] = ours_world_offset
     pair.check("the scenery's animation clock was read", world is not None, "%s" % (world,))
-    pair.rec["ours"]["ticks"] = args.ours_ticks
-    pair.rec["ours"]["race_clock_s"] = (args.ours_ticks - GO_TICK) / 60
-    if clock is not None and not args.field and not args.zone:
-        pair.check("race clock phase", abs((args.ours_ticks - GO_TICK) / 60 - (clock - HUD_LAG_TICKS / 60)) <= 0.05,
-                   "original %.2f s on its lap clock, ours %.2f s (ticks %d, GO at tick %d)"
-                   % (clock, (args.ours_ticks - GO_TICK) / 60, args.ours_ticks, GO_TICK))
     shutil_copy(record["screenshot"], out / "theirs.png")
     pair.check_size("original", out / "theirs.png")
     camera_eye = list(camera["eye"])
-    if args.detonator and args.picture_lag == "fit":
-        pos, camera_eye = picture_lag(pair, camera, ship, out / "theirs.png", frame_lag["craft_ticks"], pos)
+    total_lag = None
+    if args.detonator and args.picture_lag != "off":
+        if clock is None:
+            sys.exit("the capture has no race clock (ship.race_clock_s)")
+        lag_flags = ce.ours_flags(plat)
+        lag_flags[lag_flags.index("--size") + 1] = size
+        if ours_world_offset is not None:
+            lag_flags += ["--world-clock-offset", "%.3f" % ours_world_offset]
+        skew = frame_lag["craft_ticks"]
+        # The static scene's floor dashes and billboards run on the world clock: without it the static fit has read 2.4 ticks off.
+        render = None if ours_world_offset is None else static_renderer(args, camera, ship, skew, pos, frame_rows, track,
+                                                                         lag_flags, clock, scratch)
+        pos, camera_eye = picture_lag(pair, camera, ship, out / "theirs.png", skew, pos, args.picture_lag, render)
+        total_lag = pair.rec["original"]["presented_lag"].get("picture_total_ticks")
+        if total_lag is not None:
+            args.ours_ticks = ce.picture_tick(GO_TICK, clock, total_lag)
+    clock_lag = HUD_LAG_TICKS if total_lag is None else total_lag
+    pair.rec["ours"]["ticks"] = args.ours_ticks
+    pair.rec["ours"]["race_clock_s"] = (args.ours_ticks - GO_TICK) / 60
+    if clock is not None and not args.field and not args.zone:
+        pair.check("race clock phase", abs((args.ours_ticks - GO_TICK) / 60 - (clock - clock_lag / 60)) <= 0.05,
+                   "original %.2f s on its lap clock, ours %.2f s (ticks %d, GO at tick %d)"
+                   % (clock, (args.ours_ticks - GO_TICK) / 60, args.ours_ticks, GO_TICK))
     # The width the frame's scene was drawn at (1300 to 1920 on the 1080p path), read off the frame, with the
     # level the game held in the capture's pause beside it (`hd_scene_width`).
     import hd_scene_width
@@ -494,7 +553,7 @@ def main():
     # does not give it, less the presented lag like ours' ticks (`compare_env.gantry_pin`). A board past its windows (the
     # node reads outside every one) keeps ours' own.
     if gantry is not None:
-        flags += ["--gantry-seconds", "%.6f" % ce.gantry_pin(gantry, HUD_LAG_TICKS)]
+        flags += ["--gantry-seconds", "%.6f" % ce.gantry_pin(gantry, clock_lag)]
     if ours_world_offset is not None:
         flags += ["--world-clock-offset", "%.3f" % ours_world_offset]
     field_flags = []
