@@ -949,6 +949,9 @@ more. The budget loop's other costs are smaller in Zone.
 
 ### Why the 4K settle is so deep: the GPU clock falls with the scale
 
+These runs were made with the Deck undocked; docked, the clock does not park
+([below](#on-the-steam-deck-what-holds-the-clock-and-the-time-trials-late-seconds)).
+
 A cost 11 % higher moves a controller's linear scale by about 5 %. The rest is the Deck's clock:
 with DRS on, the controller lowers the scale, the load falls, the Deck's governor lowers the
 clock, the GPU's timestamps (milliseconds, not cycles) grow, and the controller reads them as no
@@ -1029,6 +1032,135 @@ Not implemented, and none of it measured:
   more size changes per minute, and no change on a GPU that holds its clock.
 - **TARGET FPS `original`** also steps on a GPU duration
   ("A title's own width throttle"). Whether a falling clock holds it down too is unmeasured.
+
+## On the Steam Deck: what holds the clock, and the time trial's late seconds
+
+2026-11-26. Two questions left by a trial build of a "probe rise" (a rise that GPU milliseconds
+cannot veto, kept only if no frame is late; the shape under
+["What a rise rule that survives this needs"](#what-a-rise-rule-that-survives-this-needs), on the
+unmerged branch `drs-probe-parked`): what parks the unpinned Deck at 1040 MHz in a 4K Zone race,
+and whether the probe causes the extra late seconds it showed in a 4K time trial.
+
+### The Deck was docked, and that changes the answer
+
+The journal shows the Deck undocked from 07:30:47, then docked to a 4K TV at 18:29:17 (gamescope's
+session selected 3840x2160@60 on `DP-3`). It was still docked during the runs below.
+
+- **Undocked** (07:30 to 18:29): the runs of
+  ["On the Steam Deck: HD Zone against a time trial"](#on-the-steam-deck-hd-zone-against-a-time-trial),
+  its pinned-clock runs included, and the trial build's own Zone and pinned-clock runs.
+- **Docked**: the trial build's six time trials (the first began 6 s before the dock event, still
+  loading) and everything measured below.
+
+Docked, the 1040 MHz park does not happen:
+
+| 3840x2160, 60, `auto` clock, docked | runs | settled scale | GPU clock, median | socket power, median | frame-log lines with p99 over 20.8 ms |
+| --- | ---: | --- | ---: | ---: | --- |
+| Zone, `432db773b` (the build that parked undocked in 3 of 3 runs) | 2 | 0.93, 0.93 | 1600 MHz | 14.9 W | 12, 5 |
+| Zone, main `da0a4e53e` (full sampler) | 2 | 0.93, 0.93 | 1600 MHz | 14.9, 15.0 W | 20, 15 |
+| Zone, main with the probe merged (`e8e7665ff`) | 2 | 0.93, 0.93 | 1600 MHz | 14.9 W | 10, 16 |
+
+Two more Zone runs of main with the older light sampler also read 1600 MHz and 15.0 W (12 and 13
+lines), so the heavier sampler is not what raises the clock.
+
+- **The code is not what changed** (confidence **85**): the same binary parked before and runs at
+  1600 MHz now.
+- **The dock is the likely cause** (confidence **60**): it is the one change found in the journal,
+  but the Deck was not undocked again to reverse it. Why a docked Deck raises the clock is not
+  measured.
+- **Per-pixel GPU cost did not change.** Pass time times the clock, over the share of full size
+  drawn, for `432db773b`: race pass 13.2 to 13.4 kilocycles parked and docked alike, HD bloom 6.0
+  against 6.2. Present-size passes (FXAA, blit, HUD) cost 2.6 against 3.2.
+
+### Method
+
+The command, settings file and build recipe of ["How it was run"](#how-it-was-run), `--mode zone`
+or `time_trial`, 70 s, `vsync = "smooth"`, `frame_limit = "refresh_rate"`, sound on,
+`RUST_LOG=info,oag_game::app::session::timing=trace`. The first 8 frame-log lines are left out. A
+loop beside the game read, at 20 Hz: `gpu_metrics` (v2.4, 168 bytes; current GPU clock at offset
+`0x4c`, socket, CPU, SoC and GPU power at `0x28` to `0x2e`, ASIC throttle bits at `0x6c`),
+`hwmon`'s `freq1_input` and `power1_average`, `gpu_busy_percent`, `pp_dpm_sclk`,
+`pp_power_profile_mode`, `power1_cap`, `power2_cap` and each core's `scaling_cur_freq`. Nothing was
+written to sysfs. Throttle bit names are `smu11_driver_if_vangogh.h`'s.
+
+`power1_average` equalled the socket power field within 1 mW in 16,767 of 16,771 samples, so the
+"GPU power" and "W" readings on this page are **socket power** (the whole APU), not the GPU alone.
+
+The frame log's `p99_ms` covers the last 120 frames, about two seconds, so one late stretch
+usually shows on two lines. Counts of "late seconds" are counts of lines.
+
+### Docked: at or near the 1600 MHz ceiling, with the 15 W package limit trimming the dips
+
+Confidence **90**, from the Zone runs of main and of the probe build with the full sampler, and the
+four time trials below:
+
+- Throttle bit `FPPT` was set in 91 to 100 % of samples and `SPPT` in 72 to 94 %. No thermal or
+  current bit was ever set. `power1_cap` and `power2_cap` both read 15 W.
+- Socket power stayed at about 14.9 W. The GPU clock's median was 1600 MHz in Zone and about 1576
+  in the time trial, with dips to about 1480. Nothing holds it below its ceiling but those dips.
+- The fastest CPU core read 1400 MHz in the median sample, and the frame log's CPU time was 7 to
+  14 ms in the median line.
+- `gpu_busy_percent` read 99 or 100 % in the median sample, while the timed passes summed to about 13.4 ms
+  of 16.7 ms in Zone. What fills the rest is not measured, and the budget loop cannot see it.
+- `pp_power_profile_mode` marks **no** row as active in any sample. In the upstream driver
+  (`vangogh_ppt.c`, v6.16) that is what the boot default, index 0, looks like, which Van Gogh does
+  not list. SteamOS's kernel source was not read.
+
+### The undocked park at 1040 MHz: what it is not
+
+From the trial build's raw Zone samples (clock, busy and power only; no throttle bits):
+
+- **Not a power limit** (confidence **85**): parked samples drew a median 7.6 to 8.5 W, and the same
+  Deck minutes apart ran at up to about 1560 MHz and 13.6 W in a run whose probe held a larger size.
+- **Not CPU bound** (confidence **80**): CPU time was about 5 ms of 16.7, while the timed GPU passes
+  filled 14.8 ms of the frame at 1040 MHz.
+- **Thermal limits and the power profile: not sampled** undocked.
+- What is left is the firmware's own demand governor not raising a GPU whose frames fit.
+  **Hypothesis, confidence 45**: reached by elimination. In support, an idle docked Deck reads a
+  current clock of only 200 or 1040 MHz, so 1040 looks like the level an awake GPU takes before
+  anything asks it to rise.
+
+### The time trial's late seconds are not the probe
+
+Order after, before, before, after (the earlier set ran before first). "Before" is main
+`da0a4e53e`, "after" is that with the probe merged.
+
+| 3840x2160 time trial, docked | build | settled scale | lines with p99 over 20.8 ms | of those near a size change / near nothing | probes inside the window |
+| --- | --- | ---: | ---: | --- | ---: |
+| 1 | after | 0.977 | 8 | 4 / 4 | 0 |
+| 2 | before | 0.982 | 23 | 11 / 12 | 0 |
+| 3 | before | 0.979 | 13 | 7 / 6 | 0 |
+| 4 | after | 0.982 | 15 | 10 / 5 | 0 |
+
+"Near" is within about a second of the line's window. All four sat at 15 W with `FPPT` set.
+
+**The dropped first 8 lines are where the probe does fire**: in 3 of the 5 "after" runs (run 4 and
+two earlier ones), begun about 5 s in and reverted within 0.3 s. The lines it fired on and after
+read over 20.8 ms twice in one run (21.36), once in another (21.08) and not at all in the third,
+and four runs with no probe had a pair of 22.1 to 25.0 ms lines at the same point. Over the 8
+dropped lines the late counts are 2 to 5 for "after" and 2 to 4 for "before".
+
+**Verdict: the probe does not cause the time trial's late seconds** (confidence **85**). The ranges
+overlap (after 8 and 15, before 23 and 13), and across all five "after" runs, the three earlier ones
+included (15, 22 and 21 lines against 9, 14 and 13), no probe began after the 8 dropped lines. A
+loop at the power limit seldom holds the 4 s of quiet a probe waits for.
+
+Not covered: the same time trial undocked.
+
+### Open: the undocked clock park
+
+**What parks an undocked Deck at 1040 MHz is not answered.** The question above is answered for a
+docked Deck only; the maintainer kept it docked. Recipe for a later undocked pass, about 8 minutes:
+
+1. Deck undocked and on AC: `/sys/class/drm/card0-DP-3/status` reads `disconnected` and
+   `power_dpm_force_performance_level` reads `auto`. Check both before each run and stop if not.
+2. Four 70 s runs of the command in ["How it was run"](#how-it-was-run) at 3840x2160, `-r 60`,
+   `--mode zone`, on a copy of the player's settings, in the order probe, no probe, no probe, probe.
+3. Beside each run, sample at 20 Hz everything listed under ["Method"](#method).
+4. In the samples whose current GPU clock is 600 to 1100 MHz, read: the `FPPT`/`SPPT`/thermal
+   throttle bits (any set would name a limit and end the demand-governor hypothesis), socket power
+   against `power1_cap`, the starred row of `pp_power_profile_mode` if any, the temperature, and the
+   share of the frame period the timed passes fill.
 
 ## On the Steam Deck: TARGET FPS `original` against the budget loop
 
