@@ -21,6 +21,12 @@ ln -s "$home/.cache/rpcs3" "$tmp/linked/rpcs3"
 # A dead run's instance lock in the "user's own" cache: what an unguarded `stop` deletes.
 lock=$home/.cache/rpcs3/RPCS3.buf
 touch "$lock"
+# A broken guard must not reach a real display server either: `Xvfb` is a stand-in
+# that exits at once.
+mkdir -p "$tmp/bin"
+printf '#!/bin/sh\nexit 1\n' >"$tmp/bin/Xvfb"
+chmod +x "$tmp/bin/Xvfb"
+export PATH="$tmp/bin:$PATH"
 
 fail() { echo "check-rpcs3-drive-env: $*" >&2; [ -z "${out:-}" ] || echo "last output: $out" >&2; exit 1; }
 # run "VAR=value ..." command... : a clean profile environment, `HOME` private.
