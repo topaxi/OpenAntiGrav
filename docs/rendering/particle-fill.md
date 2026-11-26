@@ -634,6 +634,8 @@ velocity, so the travelling fireballs do not match.
 
 The Deck is measured ("On the Steam Deck"). The scene-width throttle is wired as TARGET FPS `original` and
 measured on the workstation
-([dynamic-resolution.md](dynamic-resolution.md#measured-the-rocket-hit-at-3840x2160)). The close-range picture
-differs for the four reasons above. The ranked plan for the other two ideas is in the handover
+([dynamic-resolution.md](dynamic-resolution.md#measured-the-rocket-hit-at-3840x2160)) and on the Deck, where it
+does not hold the barrage and `default` does better
+([dynamic-resolution.md](dynamic-resolution.md#on-the-steam-deck-target-fps-original-against-the-budget-loop)).
+The close-range picture differs for the four reasons above. The ranked plan for the other two ideas is in the handover
 thread.
