@@ -489,6 +489,8 @@ pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
     }),
     cannon_lights: true,
     emp_light: true,
+    emp_borrows_repulsor: false,
+    ps2_hud: None,
     ammo_gauge: Some(DETONATOR_AMMO_GAUGE),
     hull_charge: Some(DETONATOR_HULL_CHARGE),
     camera_scale: 0.7,

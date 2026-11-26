@@ -204,6 +204,9 @@ impl Race {
     #[must_use]
     pub(crate) fn repulser_field_draws(&self) -> [Option<(Mat4, f32, f32)>; POOL_SIZE] {
         std::array::from_fn(|index| {
+            if index == 0 && self.core.sim.world.repulsers[0].is_none() {
+                return self.emp_repulsor_draw();
+            }
             let field = self.view.repulser_fields[index]?;
             let repulser = self.core.sim.world.repulsers[index]?;
             let firer = self.core.sim.world.ships[repulser.owner as usize]

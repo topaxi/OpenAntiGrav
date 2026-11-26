@@ -92,7 +92,7 @@ pub const EFFECTS: &Effects = &Effects::engine(Origin::Measured)
     )
     .with(
         Trigger::DetonatorEmp,
-        EffectSpec::new(engine_effects::QUAKE_EFFECT, Origin::Chosen),
+        EffectSpec::new(engine_effects::REPULSER_EFFECT, Origin::Chosen),
     );
 
 const PSP: Platforms = Platforms::Only(&[Platform::Psp]);

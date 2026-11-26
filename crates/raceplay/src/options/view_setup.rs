@@ -78,6 +78,11 @@ pub struct ViewSetup {
     pub detonator_cannon_lights: bool,
     /// Whether the EMP wave submits its point light: `Detonator::emp_light`.
     pub detonator_emp_light: bool,
+    /// Whether Detonator's cannon rounds draw as the ordinary Cannon's own: a title whose
+    /// `Detonator` names no `objects`, so ships no round model of its own.
+    pub detonator_rounds_as_cannon: bool,
+    /// Whether the EMP is fired with the Repulsor's opening: `Detonator::emp_borrows_repulsor`.
+    pub detonator_emp_repulsor: bool,
     /// The craft's cannon gauge in a Detonator race: `Detonator::ammo_gauge`, `None` off Detonator.
     pub detonator_ammo_gauge: Option<oag_title::DetonatorAmmoGauge>,
     /// The craft's plasma shells in a Detonator race: `Detonator::hull_charge`, `None` off Detonator.
@@ -356,6 +361,8 @@ impl ViewSetup {
             hd_missile_blast: false,
             detonator_cannon_lights: false,
             detonator_emp_light: false,
+            detonator_emp_repulsor: false,
+            detonator_rounds_as_cannon: false,
             detonator_ammo_gauge: None,
             detonator_hull_charge: None,
             pulse_laid_pose: false,

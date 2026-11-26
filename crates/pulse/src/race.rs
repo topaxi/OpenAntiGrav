@@ -128,6 +128,8 @@ pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
     craft: None,
     cannon_lights: false,
     emp_light: false,
+    emp_borrows_repulsor: true,
+    ps2_hud: Some(crate::hud::layouts::DETONATOR_PS2),
     ammo_gauge: None,
     hull_charge: None,
     handling: None,
@@ -142,7 +144,7 @@ pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
     races_zone_circuit: true,
     weapons_supplement: Some(r"Data\XML\DetonatorLayouts_Pulse\WeaponStats_Detonator.xml"),
     voices: None,
-    binds_emp_ready: oag_title::pre_race::Sourced::chosen(false),
+    binds_emp_ready: oag_title::pre_race::Sourced::chosen(true),
     shows_medals: oag_title::pre_race::Sourced::chosen(false),
 };
 

@@ -54,7 +54,9 @@ impl Race {
     #[must_use]
     pub(crate) fn cannon_model_matrices(&self, draw: &CannonDraw) -> Vec<Mat4> {
         let Some(look) = draw.look else {
-            return self.projectile_model_matrices(oag_tables::weapons::Weapon::Cannon);
+            let mut matrices = self.projectile_model_matrices(oag_tables::weapons::Weapon::Cannon);
+            matrices.extend(self.detonator_cannon_matrices());
+            return matrices;
         };
         let CannonBody::Muzzle { stretch_range } = look.body else {
             return self.projectile_model_matrices(oag_tables::weapons::Weapon::Cannon);
@@ -131,6 +133,15 @@ impl Race {
                 None => geometry::bolt_vertices(prev, curr, right, up),
             });
         }
+        for round in self.detonator_rounds_drawn_as_cannon() {
+            bolt.extend(geometry::bolt_vertices(round.prev, round.pos, right, up));
+            if round.age < geometry::FLASH_WINDOW_SECONDS {
+                let (rotation, half_size, alpha) = random::flash_roll(u32::from(round.slot), tick);
+                flash.extend(geometry::flash_vertices(
+                    round.pos, right, up, half_size, rotation, alpha,
+                ));
+            }
+        }
         for (slot, projectile) in self.core.sim.flashing_cannon_rounds() {
             let (centre, (rotation, half_size, alpha)) = match draw.look {
                 Some(look) => {
@@ -146,6 +157,45 @@ impl Race {
                 centre, right, up, half_size, rotation, alpha,
             ));
         }
+    }
+}
+
+impl Race {
+    /// Detonator's live pulse cannon rounds, on a title that draws them as its own Cannon's
+    /// (`Detonator::objects` names no round model); empty otherwise.
+    pub(crate) fn detonator_rounds_drawn_as_cannon(
+        &self,
+    ) -> impl Iterator<Item = &oag_weapons::detonator::cannon::Round> {
+        let as_cannon = self.view.detonator_rounds_as_cannon;
+        self.core
+            .sim
+            .world
+            .detonator
+            .cannon
+            .rounds
+            .iter()
+            .filter(move |round| as_cannon && round.live)
+    }
+
+    /// One matrix per such round, posed as an ordinary Cannon round's model is: its basis from
+    /// the velocity and the surface normal it rides.
+    fn detonator_cannon_matrices(&self) -> Vec<Mat4> {
+        self.detonator_rounds_drawn_as_cannon()
+            .map(|round| {
+                let projectile = oag_weapons::projectile::Projectile {
+                    kind: Some(oag_tables::weapons::Weapon::Cannon),
+                    position: round.pos,
+                    velocity: round.vel,
+                    surface: round.normal,
+                    ..Default::default()
+                };
+                self.view.projectile_matrix(
+                    oag_tables::weapons::Weapon::Cannon,
+                    usize::from(round.slot),
+                    &projectile,
+                )
+            })
+            .collect()
     }
 }
 

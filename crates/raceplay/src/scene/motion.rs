@@ -148,7 +148,13 @@ impl Snapshot {
             mines: race.mine_model_matrices(),
             mine_spikes: race.mine_spike_matrices(),
             bombs: race.bomb_model_matrices(),
-            cannon_rounds: race.cannon_model_matrices(cannon),
+            // Detonator rounds move too fast and die too often for a slot-indexed previous
+            // pose; they take none.
+            cannon_rounds: if race.view.detonator_rounds_as_cannon {
+                Vec::new()
+            } else {
+                race.cannon_model_matrices(cannon)
+            },
         }
     }
 

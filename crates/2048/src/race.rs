@@ -495,6 +495,8 @@ pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
     cannon_lights: false,
     // `FUN_811e8650`, the EMP vtable's slot 5.
     emp_light: true,
+    emp_borrows_repulsor: false,
+    ps2_hud: None,
     ammo_gauge: None,
     hull_charge: None,
     camera_scale: 0.7,

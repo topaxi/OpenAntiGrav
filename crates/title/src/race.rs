@@ -611,6 +611,14 @@ pub struct Detonator {
     /// HD's, 2048's and Omega's `EMP_DrawLights` all read
     /// (`detonator-emp.md`, "2048 and Omega draw it").
     pub emp_light: bool,
+    /// The Detonator HUD layout a source authored in the PS2's 640x448 grid reads in place of
+    /// the title's own, for a layout of ours whose coordinates are the PSP's. `None` where the
+    /// title's layout serves every source.
+    pub ps2_hud: Option<&'static str>,
+    /// For a title with no EMP of its own: a fired EMP also draws the Repulsor's opening, its
+    /// screen flash, its blast riding the firer and its field ring
+    /// (`docs/gameplay/detonator-pulse.md`, "The EMP").
+    pub emp_borrows_repulsor: bool,
     /// The cannon gauge on the craft's back, or `None` where a title's law is not read.
     pub ammo_gauge: Option<DetonatorAmmoGauge>,
     /// The plasma shells on the craft's wings that the EMP's charge lights, or `None` where a

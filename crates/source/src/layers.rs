@@ -153,6 +153,8 @@ const EMBEDDED: &[(&str, &[u8])] = embedded![
     "Data/XML/BenchmarkPresets_Pulse.toml",
     "Data/XML/BenchmarkPresets_Pure.toml",
     "Data/XML/DetonatorLayouts_Pulse/DetonatorScoring.xml",
+    "Data/XML/DetonatorLayouts_Pulse/Detonator_HUD.xml",
+    "Data/XML/DetonatorLayouts_Pulse/Detonator_HUD_PS2.xml",
     "Data/XML/DetonatorLayouts_Pulse/GamePlayValues.xml",
     "Data/XML/DetonatorLayouts_Pulse/PatternFile.xml",
     "Data/XML/DetonatorLayouts_Pulse/WeaponStats_Detonator.xml",

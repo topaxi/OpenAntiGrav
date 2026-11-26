@@ -399,7 +399,12 @@ fn an_hd_emp_wave_carries_the_discs_effect_on_its_front_until_it_ends() {
 }
 
 /// A wave fired from a stand on `race`: the effect and the light ride its front and go with it.
-fn check_the_wave_is_the_discs_effect(mut race: Race) {
+fn check_the_wave_is_the_discs_effect(race: Race) {
+    check_the_wave_rides(race, true);
+}
+
+/// [`check_the_wave_is_the_discs_effect`] for a title whose wave submits a light, or not.
+fn check_the_wave_rides(mut race: Race, lights_the_wave: bool) {
     assert!(
         race.view.handles.get(Trigger::DetonatorEmp).is_some(),
         "WO_QUAKE_DETONATOR resolves to a loaded effect"
@@ -441,7 +446,7 @@ fn check_the_wave_is_the_discs_effect(mut race: Race) {
             .emp_effect
             .and_then(|p| race.view.stage.anchor_of(p));
         let lights = race.detonator_cannon_lights(&no_rounds);
-        if let Some(at) = anchor {
+        if let Some(at) = anchor.filter(|_| lights_the_wave) {
             assert!(
                 lights
                     .iter()
@@ -455,7 +460,10 @@ fn check_the_wave_is_the_discs_effect(mut race: Race) {
         }
         anchors.push(anchor);
     }
-    assert!(lit >= 10, "the wave was lit for {lit} ticks");
+    assert!(
+        !lights_the_wave || lit >= 10,
+        "the wave was lit for {lit} ticks"
+    );
     let live: Vec<Vec3> = anchors.iter().flatten().copied().collect();
     assert!(live.len() >= 10, "the effect rides the wave: {anchors:?}");
     assert!(
@@ -587,4 +595,99 @@ fn an_omega_wall_death_plays_the_discs_spark() {
         return;
     };
     check_the_title_plays_the_wall_spark(path.display().to_string(), None);
+}
+
+/// A Pulse Detonator race: its title ships no Detonator, so no cannon model, EMP effect or
+/// light of its own.
+fn pulse_race() -> Option<Race> {
+    let image = oag_testdata::image("data/images/pulse-psp-usa.chd")?;
+    let loaded = crate::load(&crate::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: Mode::Detonator,
+        ..crate::Options::default()
+    })
+    .expect("loading a Pulse Detonator race");
+    Some(Race::start(loaded.setup, loaded.view, loaded.modules))
+}
+
+/// **A Pulse Detonator round is drawn as Pulse's own Cannon's**: the Cannon model posed on the
+/// round, its bolt streak and, while young, its flash quad.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn a_pulse_detonator_round_is_drawn_as_the_pulse_cannons_own() {
+    let Some(mut race) = pulse_race() else {
+        return;
+    };
+    let draw = crate::CannonDraw::default();
+    assert!(race.cannon_model_matrices(&draw).is_empty());
+    let at = race.core.sim.world.ships[0].physics.body.position;
+    race.core.sim.world.detonator.cannon.rounds[0] = Round {
+        live: true,
+        pos: at + Vec3::Z * 10.0,
+        prev: at + Vec3::Z * 2.0,
+        vel: Vec3::Z * 500.0,
+        normal: Vec3::Y,
+        age: 0.02,
+        ..Round::default()
+    };
+    let models = race.cannon_model_matrices(&draw);
+    assert_eq!(models.len(), 1, "the round carries the Cannon's model");
+    assert!((models[0].w_axis.truncate() - (at + Vec3::Z * 10.0)).length() < 1e-3);
+    let (mut bolt, mut flash) = (Vec::new(), Vec::new());
+    race.cannon_quad_vertices(&draw, Vec3::X, Vec3::Y, &mut bolt, &mut flash);
+    assert_eq!(bolt.len(), 12, "its bolt streak");
+    assert_eq!(flash.len(), 6, "and its flash while young");
+    race.core.sim.world.detonator.cannon.rounds[0].age = 1.0;
+    let (mut bolt, mut flash) = (Vec::new(), Vec::new());
+    race.cannon_quad_vertices(&draw, Vec3::X, Vec3::Y, &mut bolt, &mut flash);
+    assert_eq!(
+        (bolt.len(), flash.len()),
+        (12, 0),
+        "no flash once it is old"
+    );
+}
+
+/// **A Pulse EMP draws the Repulsor**: `WO_REPULSER` rides the wave front with no light, and
+/// the launch opens the field ring on the firer, with the screen flash, for the Repulsor's life.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn a_pulse_emp_wave_is_the_repulsors_wave_and_opening() {
+    let Some(mut race) = pulse_race() else {
+        return;
+    };
+    let effect = race
+        .view
+        .handles
+        .get(Trigger::DetonatorEmp)
+        .expect("the EMP resolves to a loaded effect");
+    assert_eq!(effect.name, oag_title::engine_effects::REPULSER_EFFECT);
+    assert!(!race.view.detonator_emp_light, "no light is submitted");
+    assert!(race.repulser_field_draws()[0].is_none());
+    race.core
+        .sim
+        .detonator_events
+        .push(oag_weapons::detonator::Event {
+            kind: EventKind::EmpLaunch,
+            at: race.core.sim.world.ships[0].physics.body.position,
+        });
+    race.view.advance_emp_repulsor(&race.core);
+    race.core.sim.detonator_events.clear();
+    let (_, alpha, _) = race.repulser_field_draws()[0].expect("the ring is up at the launch");
+    assert!(alpha > 0.0);
+    let eye = race.view.camera_position(&race.core);
+    let flash = race.view.screen_flash.as_mut().expect("Pulse flashes");
+    flash.advance(race.core.sim.dt, eye);
+    assert!(
+        flash.colour().is_some_and(|c| c[2] > c[0]),
+        "the Repulsor's blue screen flash starts"
+    );
+    for _ in 0..120 {
+        race.view.advance_emp_repulsor(&race.core);
+    }
+    assert!(
+        race.repulser_field_draws()[0].is_none(),
+        "and it is gone after the Repulsor's life"
+    );
+    check_the_wave_rides(race, false);
 }

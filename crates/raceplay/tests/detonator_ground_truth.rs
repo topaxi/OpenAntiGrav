@@ -1227,3 +1227,67 @@ fn a_pulse_detonator_race_lays_pulse_mines_on_a_zone_circuit_with_red_charging_p
         "a volley left the clip"
     );
 }
+
+/// **Pulse's Detonator HUD carries an EMP gauge**: the disc's Time Trial layout plus six pips
+/// of ours, lit one per charge, with the ready mark from the third. The PS2 disc reads the copy
+/// scaled into its own 640x448 grid.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_pulse_detonator_hud_shows_the_emp_gauge_lit_by_the_charge() {
+    for (image, size) in [
+        ("data/images/pulse-psp-usa.chd", (480.0, 272.0)),
+        ("data/images/pulse-ps2-eu.chd", (640.0, 448.0)),
+    ] {
+        let Some(path) = oag_testdata::image(image) else {
+            return;
+        };
+        let loaded = race::load(&race::Options {
+            no_effects: true,
+            source: path.display().to_string(),
+            class: "VENOM".to_string(),
+            mode: oag_race::Mode::Detonator,
+            ..race::Options::default()
+        })
+        .expect("loading a Pulse Detonator race");
+        assert_eq!(loaded.hud.space.size, size, "{image}");
+        let layout = loaded.hud.layout.as_ref().expect("a HUD layout");
+        assert!(
+            layout.sprite("SpeedBarBg").is_some() && layout.sprite("TimeIcon").is_some(),
+            "{image}: the disc's Time Trial layout is pulled in"
+        );
+        for index in 0..6 {
+            let pip = layout
+                .sprite(&format!("Emp_{index}"))
+                .unwrap_or_else(|| panic!("{image}: Emp_{index}"));
+            assert!(
+                oag_hud::inside_screen(pip.rect, size),
+                "{image}: {:?}",
+                pip.rect
+            );
+        }
+        let bar = layout.sprite("SpeedBarBg").expect("checked").rect;
+        let pip = layout.sprite("Emp_0").expect("checked").rect;
+        assert!(
+            pip[1] + pip[3] <= bar[1] && (pip[0] - bar[0]).abs() < 4.0,
+            "{image}: the gauge sits over the speed bar: {pip:?} against {bar:?}"
+        );
+        let context = loaded.hud.context().expect("the layout parses");
+        let drawn = |charge: u32, ready: bool| {
+            let readout = oag_hud::Readout {
+                detonator: Some(oag_hud::Detonator {
+                    emp_charge: charge,
+                    emp_ready: ready,
+                    ..oag_hud::Detonator::default()
+                }),
+                ..oag_hud::Readout::default()
+            };
+            oag_hud::draw_list(&context, &readout).sprites.len()
+        };
+        assert_eq!(
+            drawn(3, true),
+            drawn(0, false) + 4,
+            "{image}: 3 pips and the mark"
+        );
+        assert_eq!(drawn(6, true), drawn(0, false) + 7, "{image}: full");
+    }
+}

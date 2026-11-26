@@ -218,6 +218,8 @@ mod drawable;
 mod effects;
 mod eliminator;
 #[cfg(feature = "view")]
+mod emp_repulsor;
+#[cfg(feature = "view")]
 pub mod engine_light;
 #[cfg(feature = "view")]
 pub mod env_probes;
@@ -303,7 +305,6 @@ mod player_tags;
 mod portal_view;
 mod reconcile;
 pub mod replay;
-#[cfg(feature = "view")]
 mod repulser_field;
 mod respawn;
 mod results;

@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Wipeout Pulse ships no Detonator HUD: its Time Trial layout, pulled from the disc, plus an
+     EMP charge gauge of ours cut from Pulse's own shield bar art (docs/gameplay/detonator-pulse.md,
+     "The gauge"). The PS2 disc's copy: the PSP gauge scaled into its 640x448 grid. Six pips, one per pad charge up to a full EMP; EmpReady marks the third, where
+     the EMP can be fired. -->
+<Screen>
+  <LoadXML>
+    <Values SrcRel="..\TimeTrial_HUD.xml" DirectEmbed="true"></Values>
+  </LoadXML>
+  <Screen name="HUD">
+    <Item OffsetX="400" OffsetY="303">
+      <Text name="EmpLabel">
+        <Values string="EMP" font="HUDSmall" align="right" scale="1.0" x="3" y="10" CalcBlur="1" Color="FEConst->HudColour2" BorderColor="FEConst->HudBGColour"></Values>
+      </Text>
+      <Image name="EmpBack_0">
+        <Values x="8" y="10" width="28" height="20" U="6" V="26" TxtrWidth="21" TxtrHeight="12" CalcBlur="1" Color="FEConst->HudColour3A" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+      </Image>
+      <Image name="EmpBack_1">
+        <Values x="39" y="10" width="28" height="20" U="29" V="26" TxtrWidth="21" TxtrHeight="12" CalcBlur="1" Color="FEConst->HudColour3A" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+      </Image>
+      <Image name="EmpBack_2">
+        <Values x="69" y="10" width="28" height="20" U="52" V="26" TxtrWidth="21" TxtrHeight="12" CalcBlur="1" Color="FEConst->HudColour3A" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+      </Image>
+      <Image name="EmpBack_3">
+        <Values x="100" y="10" width="28" height="20" U="75" V="26" TxtrWidth="21" TxtrHeight="12" CalcBlur="1" Color="FEConst->HudColour3A" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+      </Image>
+      <Image name="EmpBack_4">
+        <Values x="131" y="10" width="28" height="20" U="98" V="26" TxtrWidth="21" TxtrHeight="12" CalcBlur="1" Color="FEConst->HudColour3A" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+      </Image>
+      <Image name="EmpBack_5">
+        <Values x="161" y="10" width="31" height="20" U="123" V="26" TxtrWidth="23" TxtrHeight="12" CalcBlur="1" Color="FEConst->HudColour3A" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+      </Image>
+      <Image name="Emp_0">
+        <Values x="8" y="10" width="28" height="20" U="6" V="26" TxtrWidth="21" TxtrHeight="12" CalcBlur="1" Color="FEConst->HudColour3" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+      </Image>
+      <Image name="Emp_1">
+        <Values x="39" y="10" width="28" height="20" U="29" V="26" TxtrWidth="21" TxtrHeight="12" CalcBlur="1" Color="FEConst->HudColour3" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+      </Image>
+      <Image name="Emp_2">
+        <Values x="69" y="10" width="28" height="20" U="52" V="26" TxtrWidth="21" TxtrHeight="12" CalcBlur="1" Color="FEConst->HudColour3" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+      </Image>
+      <Image name="Emp_3">
+        <Values x="100" y="10" width="28" height="20" U="75" V="26" TxtrWidth="21" TxtrHeight="12" CalcBlur="1" Color="FEConst->HudColour3" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+      </Image>
+      <Image name="Emp_4">
+        <Values x="131" y="10" width="28" height="20" U="98" V="26" TxtrWidth="21" TxtrHeight="12" CalcBlur="1" Color="FEConst->HudColour3" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+      </Image>
+      <Image name="Emp_5">
+        <Values x="161" y="10" width="31" height="20" U="123" V="26" TxtrWidth="23" TxtrHeight="12" CalcBlur="1" Color="FEConst->HudColour3" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+      </Image>
+      <Image name="EmpReady">
+        <Values x="97" y="31" width="12" height="12" U="19" V="87" TxtrWidth="9" TxtrHeight="7" CalcBlur="1" Color="FEConst->HudColour1" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+      </Image>
+    </Item>
+  </Screen>
+</Screen>

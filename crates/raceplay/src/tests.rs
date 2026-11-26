@@ -440,6 +440,8 @@ pub(crate) fn fixture_view() -> ViewSetup {
         hd_missile_blast: false,
         detonator_cannon_lights: false,
         detonator_emp_light: false,
+        detonator_emp_repulsor: false,
+        detonator_rounds_as_cannon: false,
         detonator_ammo_gauge: None,
         detonator_hull_charge: None,
         bomb_shockwave_fades: false,

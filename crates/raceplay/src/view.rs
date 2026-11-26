@@ -453,6 +453,12 @@ pub struct RaceView {
     pub(super) detonator_cannon_lights: bool,
     /// `options::ViewSetup::detonator_emp_light`.
     pub(super) detonator_emp_light: bool,
+    /// `options::ViewSetup::detonator_rounds_as_cannon`.
+    pub(super) detonator_rounds_as_cannon: bool,
+    /// `options::ViewSetup::detonator_emp_repulsor`.
+    pub(super) detonator_emp_repulsor: bool,
+    /// The running borrowed opening, see [`crate::emp_repulsor`].
+    pub(super) emp_repulsor: Option<crate::emp_repulsor::EmpRepulsor>,
     /// `options::ViewSetup::detonator_ammo_gauge`, and what the gauge showed last frame.
     pub(super) detonator_ammo_gauge: Option<oag_title::DetonatorAmmoGauge>,
     pub(super) ammo_gauge_shown: std::sync::Mutex<Option<crate::ammo_gauge::Shown>>,
