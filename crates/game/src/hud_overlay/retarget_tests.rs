@@ -99,6 +99,7 @@ fn a_draw_at_another_size_rasterises_the_vector_icons_again_and_swaps_the_sheet(
         format,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let view = target.create_view(&Default::default());
     let readout = Readout::default();

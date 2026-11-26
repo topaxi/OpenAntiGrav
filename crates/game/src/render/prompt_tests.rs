@@ -47,6 +47,7 @@ fn render_text(substitution: Substitution) -> Option<Vec<u8>> {
         format,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let view = target.create_view(&Default::default());
     let row = (SIDE * 4).next_multiple_of(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT);

@@ -125,6 +125,7 @@ fn target(device: &wgpu::Device, queue: &wgpu::Queue, value: u8) -> wgpu::Textur
         format: FORMAT,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     queue.write_texture(
         texture.as_image_copy(),
@@ -282,6 +283,7 @@ fn draw(
             format,
             usage,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         })
     };
     let colour = make(

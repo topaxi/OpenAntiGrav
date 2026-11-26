@@ -205,6 +205,7 @@ fn pixels(panel: oag_raceplay::track_panel::Assets, progress: Progress) -> Optio
         format,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let view = target.create_view(&Default::default());
     let mut overlay =

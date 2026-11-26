@@ -104,7 +104,7 @@ impl Framebuffer {
             queue,
             Brightness::NEUTRAL,
             Gamma::NEUTRAL,
-            self.format.is_srgb(),
+            self.format.has_srgb_suffix(),
             resolved_source(true, extent, allocation),
         );
         for (index, (group, out)) in drawn.iter().enumerate() {

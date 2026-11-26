@@ -25,6 +25,7 @@ fn drawn(
         format,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let view = target.create_view(&Default::default());
     let row = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;

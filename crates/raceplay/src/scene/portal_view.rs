@@ -72,6 +72,7 @@ impl Target {
                 | wgpu::TextureUsages::TEXTURE_BINDING
                 | motion::readable_in_tests(),
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
         let depth = frame::depth_texture(device, SIZE, sample_count);
         let velocity = motion::velocity_texture(device, SIZE, sample_count);

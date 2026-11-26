@@ -253,6 +253,7 @@ fn an_encoded_texture_write_lands_as_a_queue_write_does() {
                 format,
                 usage: wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::COPY_SRC,
                 view_formats: &[],
+                texture_binding_view_dimension: None,
             })
         };
         let (replayed, encoded) = (texture(), texture());

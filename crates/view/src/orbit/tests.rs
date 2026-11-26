@@ -36,6 +36,7 @@ fn render(model: Model) -> Option<Vec<u8>> {
         format: FORMAT,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let view = colour.create_view(&wgpu::TextureViewDescriptor::default());
     let depth_view = make_depth_view(&device, SIZE, SIZE);

@@ -1172,6 +1172,7 @@ fn draw_frame_scaled(
             format,
             usage,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         })
     };
     let colour = make(

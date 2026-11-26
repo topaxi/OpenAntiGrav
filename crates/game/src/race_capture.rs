@@ -768,6 +768,7 @@ pub fn capture(
             | wgpu::TextureUsages::COPY_DST
             | wgpu::TextureUsages::TEXTURE_BINDING,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let surface = target.create_view(&wgpu::TextureViewDescriptor::default());
     // Where the scene is drawn. Presented, that is an offscreen target at the
@@ -1183,7 +1184,7 @@ pub fn capture(
         //
         // **Every path is `Rgba8Unorm` since ADR-0020** - this capture, a
         // `--presented` capture and the window alike - so `Renderer::new`'s fork of
-        // the sprite sheet's texture format on `format.is_srgb()` now always takes
+        // the sprite sheet's texture format on `format.has_srgb_suffix()` now always takes
         // the raw side, and the HUD's art reaches all three the same way. It used
         // to differ: an ordinary capture was raw while the window and `--presented`
         // were sRGB, which is exactly the disagreement the ADR removed (measured at

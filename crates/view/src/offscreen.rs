@@ -43,6 +43,7 @@ pub fn capture(asset: &Asset, path: &Path) -> Result<()> {
         format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
 
     queue.write_texture(

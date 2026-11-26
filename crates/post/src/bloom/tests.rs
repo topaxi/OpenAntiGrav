@@ -79,6 +79,7 @@ fn mean_delta(rgb: u8, alpha: u8, hud: Option<u8>) -> Option<f32> {
             | wgpu::TextureUsages::COPY_DST
             | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let fill = |rgb: u8, alpha: u8| {
         let texels: Vec<u8> = (0..SIZE.0 * SIZE.1)
@@ -218,6 +219,7 @@ fn halves_delta(origin: f32, through_view: Option<(u32, u32)>) -> Option<(f32, f
             | wgpu::TextureUsages::COPY_DST
             | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let texels: Vec<u8> = (0..SIZE.0 * SIZE.1)
         .flat_map(|i| {
@@ -380,6 +382,7 @@ fn the_bright_group_is_kept_until_the_scene_view_or_the_extent_changes() {
                 usage: wgpu::TextureUsages::TEXTURE_BINDING
                     | wgpu::TextureUsages::RENDER_ATTACHMENT,
                 view_formats: &[],
+                texture_binding_view_dimension: None,
             })
             .create_view(&wgpu::TextureViewDescriptor::default())
     };

@@ -138,6 +138,74 @@ heaps and `Caller::get_module_export`, which `oag-modhost` does not build or cal
 The `PAGEMAP_SCAN` fix does not apply either: wasmtime's default is off
 (`Config::pagemap_scan`, `Enabled::No`) and `build_engine` does not set it.
 
+## Git pins
+
+A dependency comes from crates.io unless a fix we measured is only on its default
+branch. Then it is a git dependency pinned to a full commit SHA (`rev = "..."`,
+never `branch =` or `tag =`), every crate of that project comes from the same
+rev, and it goes back to crates.io in the first release that carries the fix.
+A vendored copy under `vendor/` is for a small fix of ours that upstream lacks,
+not for tracking someone else's unreleased work.
+
+| Dependency | Rev | Why | Back to crates.io |
+| --- | --- | --- | --- |
+| `wgpu`, `naga` (with `wgpu-core`, `wgpu-hal`, `wgpu-types`, `naga-types`, `wgpu-naga-bridge`, `wgpu-sync`, `wgpu-core-deps-*`) | `60cef2be828e03ba54e2e1598001b4625c0c2163` (gfx-rs/wgpu trunk, 2026-11-25) | [gfx-rs/wgpu#10319](https://github.com/gfx-rs/wgpu/pull/10319): one barrier for all of a submission's `write_buffer`/`write_texture` calls instead of one per call. Merged 2026-10-25 on trunk, not on the `v30` branch (30.0.2 lacks it). Measured: "What the wgpu pin measured" below | wgpu 31 (milestone v31, overdue since 2026-10-09). Then `wgpu = "31"`, `naga` the same, re-run the picture check and the S21 run below |
+| `toml-schema` (dev only) | `fa97c07e` | ADR-0064 | the next tagged release |
+
+Both entries are in the root `Cargo.toml` `[workspace.dependencies]`; a member
+takes `naga` with `workspace = true` so `oag-shader-check` validates every shader
+with the compiler the runtime uses (one `naga` in `Cargo.lock`, checked with
+`grep -A2 'name = "naga"' Cargo.lock`).
+
+**What the wgpu pin changed in our code** (trunk "Unreleased" against 30.0.2, read
+in its `CHANGELOG.md` at the pinned rev): `TextureDescriptor` gains
+`texture_binding_view_dimension` (216 literals, all `None`, which keeps the
+inference 30.0.2 did); `TextureFormat::is_srgb` is `has_srgb_suffix`; `Queue::submit`
+returns `Option<SubmissionIndex>`, `None` when the submission never reached the
+driver (`oag_gpu::split_finish` passes it on, and the race benchmark waits on all
+work for a `None`). No `TextureViewDescriptor` or `DeviceDescriptor` literal needed
+the new `swizzle` and `default_queue` fields: every one ends in `..Default::default()`.
+Read and not hit: a `BufferView` now blocks unmap and `destroy` panics while one is
+alive (our views live inside one readback call, and `Device::destroy` is called only by `lose-device`, between frames; `crates/game/src/app/device_loss/tests.rs` passes), a read view of a `MapMode::Write`
+mapping is refused (none: every read view is of a `MAP_READ` buffer),
+`@interpolate(linear)` needs a capability (no shader uses it), and
+`create_shader_module` errors no longer quote the source (nothing parses their text; `web_fault` matches the variant).
+The trunk version string is still `30.0.0`; the rev is the identity.
+
+**What the wgpu pin measured** (2026-11-26, against the 30.0.2 tree it replaced):
+
+- Picture: HD (Vineta K), Pulse and Omega `--race --seed 1 --autopilot --screenshot` at 960x540, ticks 300 and 900, the
+  six frames `cmp`-equal between the two release builds (main against main also equal, so the check can see a change).
+- S21, HD Vineta K: 2.4 to 12.0 ms faster per frame over whole races, three interleaved rounds
+  (`docs/tools/android.md`, "wgpu trunk (the git pin) against 30.0.2").
+- Host (RX 7800 XT, RADV), `just bench-render hd --size WxH --binary <build>`, main then trunk, two rounds each, p50 in us:
+
+| Size, round | CPU 30.0.2 / trunk | GPU | Frame | `tick_us` (no wgpu: the noise control) | Load at start |
+| --- | ---: | ---: | ---: | ---: | --- |
+| 1920x1080, 1 | 1117 / 1146 | 734 / 791 | 1292 / 1320 | 156 / 157 | 8.5 / 8.0 |
+| 1920x1080, 2 | 1149 / 1150 | 753 / 779 | 1327 / 1322 | 157 / 156 | 6.8 / 10.6 |
+| 1920x1080, 3 | 1813 / 1419 | 793 / 793 | 2072 / 1620 | 226 / 183 | 62.4 / 61.8 |
+| 1920x1080, 4 | 1184 / 1278 | 760 / 799 | 1365 / 1468 | 161 / 169 | 5.6 / 13.5 |
+| 3840x2160, 1 | 1128 / 2035 | 1077 / 1538 | 1384 / 2340 | 156 / 226 | 34.7 / 18.7 |
+| 3840x2160, 2 | 1389 / 1144 | 1146 / 1080 | 1596 / 1382 | 182 / 155 | 27.4 / 5.7 |
+
+  The 4K rounds disagree with each other and so does the simulation's own `tick_us` (+44 % and -15 %), which no wgpu
+  change can move: machine state, not the build. Where `tick_us` matches (1080p rounds 1 and 2), frame and CPU are
+  unchanged. GPU p50 at 1080p over the four rounds: 30.0.2 734, 753, 793, 760 us; trunk 791, 779, 793, 799 us, so
+  about 5 % (36 us at the medians) higher on trunk in three rounds and equal in one, inside 30.0.2's own 59 us spread.
+  Small and open; the frame is CPU-bound and does not show it.
+- Builds: Linux (`cargo check --workspace --all-targets`, `just lint`), wasm (`scripts/build-web.sh --check`), Windows
+  (`CARGO_TARGET_DIR=target/win-check cargo check --target x86_64-pc-windows-gnu -p oag-game`), the Android dist APK.
+  Every WESL shader is validated by trunk's `naga` through `oag-shader-check` at build time.
+
+**Upstream reports since #10319** (searched 2026-11-26, `gh search issues --repo
+gfx-rs/wgpu` for regression, Mali, RADV, Intel, Metal and barrier, created after
+2026-10-25): none against the write-barrier change. [#11102](https://github.com/gfx-rs/wgpu/issues/11102)
+(a panic in `PendingWrites::activate` when `begin_encoding` runs out of memory)
+is in the code #10319 touched, but the `unwrap` predates it and needs an
+out-of-memory at that call. #10920 (RADV, binding-array `arrayLength`) and #11115
+(GLES, `PIXEL_UNPACK_BUFFER`) are unrelated to anything we bind.
+
 ## Held back, with the reason
 
 | Dependency | In tree | Newer | Reason |
@@ -147,7 +215,7 @@ The `PAGEMAP_SCAN` fix does not apply either: wasmtime's default is off
 | `generic-array` | 0.14.7 | 0.14.9 | `crypto-common` 0.1.7 requires `=0.14.7`; it arrives through `sha2` 0.10 from `cranelift-codegen`. `cargo update -p generic-array --precise 0.14.9` fails on that bound. **wasmtime 51 does not remove it**: `cranelift-codegen` 0.138.0 (wasmtime 51.0.0's) still requires `sha2 ^0.10.2` (crates.io index) |
 | `winit` | 0.30.13 | 0.31.0-beta.4 | beta (2026-10-24); no stable 0.31 on crates.io; the migration is a thread item |
 | `rustls` | 0.23.46 | 0.24.0-dev.2 | a development pre-release |
-| `toml-schema` (git) | rev `fa97c07e` | trunk is newer | pinned at the newest tagged release, `rust-v1.0.0-rc.2` (2026-08-20), by ADR-0064; trunk past it is untagged |
+| `toml-schema` (git) | rev `fa97c07e` | trunk is newer | pinned at the newest tagged release, `rust-v1.0.0-rc.2` (2026-08-20), by ADR-0064; trunk past it is untagged ("Git pins" above) |
 | Rust toolchain | 1.99.0 | 1.99.1 | `rust-toolchain.toml` pins deliberately ("bump deliberately, not as a side effect"); a patch bump is the maintainer's call, not this lane's |
 | GitHub Actions | `checkout` 7, `upload-artifact` 7, `download-artifact` 8, `setup-python` 7, `rust-cache` 2, `wrangler-action` 4, `setup-chrome` 2 | the same majors | already at each action's newest major; `dependabot.yml` keeps them. Not verified by running CI (CI is never pushed to from a lane) |
 
@@ -356,7 +424,8 @@ takes `nix` 0.32 and `cfg-expr` 0.20 moves its `target-lexicon` pin.
 
 **wgpu-hal did not move** (30.0.2 before and after), so the parked
 `gate-walltime-8` branch, which vendors `wgpu-hal` 30.0.2 under
-`[patch.crates-io]`, does not have to re-vendor.
+`[patch.crates-io]`, does not have to re-vendor. (Since the git pin, "Git pins"
+above, it does: a `[patch.crates-io]` row no longer reaches a git dependency.)
 
 **Guests.** `assets/mods/examples` and `assets/mods/official` build their
 `guest/` crates as separate workspaces, but each depends on `oag-ext` alone
@@ -415,7 +484,7 @@ row; "unreleased" is the dependency's default branch only.
 
 | Dependency | We have | Newest | What the newest release added |
 | --- | --- | --- | --- |
-| `wgpu`, `naga` | 30.0.2 | 30.0.2 (31 unreleased) | 30.0.2: Metal sRGB wide-gamut fix and the Bt2100 colour space crash fix, texture id leak on an empty surface acquire, mapped-buffer use after free on device loss. 30.0.0 headline: `SurfaceColorSpace` and `display_hdr_info`, optional vertex buffer slots, integer shader I/O needs an explicit `@interpolate(flat)`, `Queue::present`, `BufferSlice` may be empty. Unreleased 31: `TEXTURE_COMPONENT_SWIZZLE`, `DeviceDescriptor::default_queue`, `BufferView` blocks `unmap`/`destroy` (a panic if one is alive), `Queue::submit` returns `Option<SubmissionIndex>`, `Features::UNRESTRICTED_BYTES_PER_ROW`, `Queue::present_with_damage`, `TextureFormat::is_srgb` renamed `has_srgb_suffix`, `ShaderStages` and `BufferUsages` split types. A 31 migration reads every `get_mapped_range` holder in `crates/gpu`, `crates/mesh` and `crates/view` for a view kept across `submit` or `poll` |
+| `wgpu`, `naga` | trunk `60cef2be828e` (git pin, "Git pins") | 30.0.2 (31 unreleased) | 30.0.2: Metal sRGB wide-gamut fix and the Bt2100 colour space crash fix, texture id leak on an empty surface acquire, mapped-buffer use after free on device loss. 30.0.0 headline: `SurfaceColorSpace` and `display_hdr_info`, optional vertex buffer slots, integer shader I/O needs an explicit `@interpolate(flat)`, `Queue::present`, `BufferSlice` may be empty. Unreleased 31: `TEXTURE_COMPONENT_SWIZZLE`, `DeviceDescriptor::default_queue`, `BufferView` blocks `unmap`/`destroy` (a panic if one is alive), `Queue::submit` returns `Option<SubmissionIndex>`, `Features::UNRESTRICTED_BYTES_PER_ROW`, `Queue::present_with_damage`, `TextureFormat::is_srgb` renamed `has_srgb_suffix`, `ShaderStages` and `BufferUsages` split types. A 31 migration reads every `get_mapped_range` holder in `crates/gpu`, `crates/mesh` and `crates/view` for a view kept across `submit` or `poll` |
 | `winit` | 0.30.13 | 0.30.13 (0.31.0-beta.4) | 0.30.13 is the March 2026 maintenance release. beta.4: clipboard and primary-selection data transfer, `ScrollSource`, IME and Wayland fixes, `winit-core` drops `url` |
 | `cpal` | 0.18.2 | 0.18.2 (0.19 unreleased) | 0.18.2: xruns as `ErrorKind::Xrun` on AAudio, CoreAudio, PipeWire and WASAPI capture, monotonic timestamps across device changes, PipeWire streams no longer start before `play()`, rtkit burst-limit and real-time promotion fixes. 0.18.0: `StreamTrait::now`/`buffer_size`, `realtime` without D-Bus, more `ErrorKind` variants. Unreleased: `CallbackInfo::xrun`, graceful `stop`, duplex streams, `play` renamed `start` |
 | `wasmtime` | 51.0.0 | 51.0.0 | applied, see ranked row 2 |
@@ -454,7 +523,7 @@ Every other direct dependency is at its newest stable release: `aes` 0.9.4,
 `thiserror` 2.0.21, `tokio` 1.54.1, `toml` 1.2.2, `toml_edit` 0.25.20, `ureq`
 3.5.2, `url` 2.5.9, `wasm-bindgen` 0.2.130, `wasm-bindgen-futures` 0.4.80, `wat`
 1.263.0, `wayland-backend` 0.3.17, `wayland-client` 0.31.15, `wayland-protocols`
-0.32.13, `web-sys` 0.3.107, `web-time` 1.1.0, `wesl` 0.6.0, `wgpu` 30.0.2,
+0.32.13, `web-sys` 0.3.107, `web-time` 1.1.0, `wesl` 0.6.0, `wgpu` (git pin, "Git pins"),
 `x11rb` 0.14.0, `zip` 9.8.2. The build-only and wasm32-only entries are among
 them (`oag-shader-check`'s `naga` and `wesl`; `js-sys`, `web-sys` and
 `wasm-bindgen*` for the web build). A transitive second copy of a direct

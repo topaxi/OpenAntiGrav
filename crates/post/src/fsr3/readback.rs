@@ -167,6 +167,7 @@ impl Scene {
                 format,
                 usage,
                 view_formats: &[],
+                texture_binding_view_dimension: None,
             })
         };
         let depth_texture = make(
