@@ -454,6 +454,13 @@ pub struct Effects {
     /// is unread: its particles draw as authored. The size cap that goes with it is each `.pob`
     /// emitter's own (`+0xc80`). See `docs/ghidra/functions/ps3-hdfury-eu/particle-render.md`.
     pub near_law: Option<NearLaw>,
+    /// Whether a Rocket's craft blast ([`Trigger::CraftBlast`]) is handed the struck craft's
+    /// velocity as it spawns, so every particle it emits carries that velocity times its own
+    /// emitter's `+0x4d0`. The blast is not parented: its emitters stay where it was spawned.
+    /// `None` on a title whose spawn hands it none (Pulse on the PSP, whose
+    /// `Rocket_SpawnCraftExplosion_q` writes no velocity) or is unread. See
+    /// `docs/ghidra/functions/ps3-hdfury-eu/rocket-craft-blast.md`.
+    pub craft_blast_carry: Option<Origin>,
 }
 
 /// A billboard nearer than `cull_depth` world units along the view draws nothing, and one
@@ -542,6 +549,7 @@ impl Effects {
         quake_look: QuakeLook::track(Origin::InheritedFrom("Wipeout Pulse")),
         trail_hits_native: false,
         near_law: None,
+        craft_blast_carry: None,
     };
 
     /// The entry for `trigger`.

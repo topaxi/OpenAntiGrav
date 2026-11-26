@@ -150,6 +150,9 @@ pub const EFFECTS: &Effects = &{
     // The `PartRender` SPU job, image `0x0080bb80`;
     // `docs/ghidra/functions/ps3-hdfury-eu/particle-render.md`.
     effects.near_law = Some(NearLaw::one_to_four(Origin::Measured));
+    // `Rocket_SpawnCraftBlast` (`0x0014a7d8`), `0x0014a970`-`0x0014a98c`;
+    // `docs/ghidra/functions/ps3-hdfury-eu/rocket-craft-blast.md`.
+    effects.craft_blast_carry = Some(Origin::Measured);
     effects
 };
 

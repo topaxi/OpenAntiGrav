@@ -503,6 +503,8 @@ const EFFECTS: oag_title::Effects = {
     // `Particle_PushQuadBatch` and its twin
     // (`docs/ghidra/functions/vita-2048-eu-v104/particle-near-law.md`).
     effects.near_law = Some(oag_title::NearLaw::one_to_four(Origin::Measured));
+    // The Rocket's craft-hit spawn, `0x81206928` (`docs/ghidra/functions/ps3-hdfury-eu/rocket-craft-blast.md`).
+    effects.craft_blast_carry = Some(Origin::Measured);
     effects
 };
 

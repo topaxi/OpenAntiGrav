@@ -507,6 +507,8 @@ const EFFECTS: oag_title::Effects = {
     effects.colour_walk_in = &[(r"Data\particles2048", oag_title::ColourWalk::Reversed)];
     // `Particle_PushQuadBatch` (`docs/ghidra/functions/ps3-hdfury-eu/particle-render.md`).
     effects.near_law = Some(oag_title::NearLaw::one_to_four(Origin::Measured));
+    // The Rocket's craft-hit spawn, `0x0139a6b0` (`docs/ghidra/functions/ps3-hdfury-eu/rocket-craft-blast.md`).
+    effects.craft_blast_carry = Some(Origin::Measured);
     effects
 };
 

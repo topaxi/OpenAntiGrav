@@ -75,6 +75,28 @@ impl Stage {
             .collect()
     }
 
+    /// The mean position of every live particle of every instance playing `effect`, by
+    /// identity, or `None` when none is alive: where its cloud is.
+    #[must_use]
+    pub fn centroid_of_effect(&self, effect: &std::sync::Arc<super::Effect>) -> Option<Vec3> {
+        let (sum, count) = self
+            .instances
+            .iter()
+            .filter(|instance| {
+                instance
+                    .effect
+                    .as_ref()
+                    .is_some_and(|held| std::sync::Arc::ptr_eq(held, effect))
+            })
+            .flat_map(|instance| instance.system.particles.iter())
+            .filter(|particle| particle.life > 0.0)
+            .fold((Vec3::ZERO, 0u32), |(sum, count), particle| {
+                (sum + particle.position, count + 1)
+            });
+        #[expect(clippy::cast_precision_loss, reason = "a few thousand particles")]
+        (count > 0).then(|| sum / count as f32)
+    }
+
     /// Ends an attached instance outright: its emitters stop and every
     /// particle it holds goes with it, at once.
     ///

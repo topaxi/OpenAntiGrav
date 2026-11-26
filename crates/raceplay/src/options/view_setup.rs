@@ -96,6 +96,9 @@ pub struct ViewSetup {
     /// of its other detonations' flashes but whose own wave is read
     /// (`oag_title::QuakeLook::flash`). Ignored with [`Self::screen_flash`].
     pub quake_flash: bool,
+    /// Whether a Rocket's craft blast carries the struck craft's velocity
+    /// (`oag_title::Effects::craft_blast_carry`).
+    pub craft_blast_carry: bool,
     /// How this title staggers `WO_WEAPON_ABSORB` over a hull, or `None` on a
     /// title whose absorb path is unread. See `race::absorb`.
     pub absorb_burst: Option<oag_title::Burst>,
@@ -356,6 +359,7 @@ impl ViewSetup {
             laid_pose_scaled: false,
             screen_flash: false,
             quake_flash: false,
+            craft_blast_carry: false,
             absorb_burst: None,
             absorb_anchors: Vec::new(),
             hit_spark_anchors: Vec::new(),
