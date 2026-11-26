@@ -148,6 +148,14 @@ pub(super) fn advance_one_tick(
             "--force-missile-hit: no Missile in flight from another craft yet, or slot {slot} is not racing (pass --opponents)"
         );
     }
+    if let Some((at, slot)) = options.force_rocket_hit
+        && at == tick
+        && !race.core.sim.force_rocket_hit(slot)
+    {
+        log::warn!(
+            "--force-rocket-hit: no Rocket in flight from another craft yet, or slot {slot} is not racing (pass --opponents)"
+        );
+    }
     if let Some((at, slot)) = options.force_quake
         && at == tick
         && !race.core.force_quake(slot)
