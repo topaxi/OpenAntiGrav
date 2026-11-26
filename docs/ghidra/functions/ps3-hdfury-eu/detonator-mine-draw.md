@@ -294,8 +294,22 @@ carried no music envelope, not because ours' spikes draw differently. **True, co
   By eye on the `mines-ahead` re-grab (crop x 700..1400, y 300..750) ours' two near mines are lit, ringed and spiked, at the
   original's place and size; ours' spikes read a little longer on the left mine. A placeholder envelope (`0.9, 0.65` on
   all 80 mines) on the old pair lit them as well but scored 14.85 against 13.62, so the values have to be the original's.
-- **The picture lag is carried, and is not the cause.** The old pair's lag fit was 2.03 ticks (1.2 px rms), the re-grab's 2.33;
-  the 3.5 ticks in "The displacement" came from a fit before the pair tooling carried the lag.
+- **The picture lag is carried, and is not the cause.** Each pair carries its own fitted lag (`original.presented_lag`): 2.03
+  ticks on the old pair (1.2 px rms), 2.33 on the re-grab, and ours' near mines stand within 4 px of the original's centroids
+  on the re-grab. The 3.5 ticks in "The displacement" is a different fit method; the two are not reconciled.
+- **Near-ball 60x60 box, re-grab** (middle mine, centre `1050, 510`, mean RGB): original `(145, 124, 200)`, ours without the
+  envelopes `(158, 132, 233)` (this grab's raw bands are high, so ours' own envelopes attack and over-size every mine), ours
+  with them `(97, 80, 156)`. White pixels (`min > 200`) between 1.2 and 2.0 shell radii: original 1,611, ours with the
+  envelopes 536, without 2,374. With the envelopes the reach and size match by eye, but ours' spikes and body are dimmer
+  (a third of the original's white there, the box 50 grey darker): a brightness gap left open, not a size one.
+- **Residual, open (confidence 50 for the reading below).** The two near mines read `(s, t)` `(0.36, 0.62)` (left) and
+  `(0.37, 0.81)` (middle): the law gives both spike scale 1.95 and football scale 1.0. The original draws the middle one with
+  long spikes and the left one with **short spikes and a larger, brighter body**; ours draws both alike. The picture is about
+  6.3 ticks older than the RAM the envelopes are read from (`picture_total_ticks`). Decay alone, rewound over that skew
+  (`s, t / 0.95^6.3`), would make the body larger and brighter, as seen, but the spikes longer, not shorter; it scores 13.98
+  against 13.93, no better. So the left mine's short spikes need an attack of its `t` inside that window (the picture before
+  the attack), which one RAM read cannot show. Not wired: a pair-tooling limit unless a read of the envelope a few ticks
+  before the grab says otherwise.
 - **Not tuned.** No spike scale, count or map changed: `spikeScale` is the law above (85), fed the original's `t`.
   `BassHit`, `TrebleHit` and `PitchOffset` feed the visualiser ring only (`electricity`), not the football or the spikes.
 
