@@ -391,6 +391,58 @@ compare with the port's tangent-space `V`. If it is off-normal, the next suspect
 ONE`) and the post chain's alpha-keyed glow are ruled out as the source of the white by the A/B (they do not read
 `MineBrightness`).
 
+### `f[TC1]` and the map read live: the program's inputs are as read (2026-11-26, `det-mine-body-white`)
+
+**Method.** RPCS3, state `hd-detonator-talons-feisar-grid-late`, lap clock 2.45 to 2.8 s. The fogged program's **source copy** is
+in RSX-mapped main memory: the material file is loaded whole at `0x43a48700` this boot, so its four lit variants (code at file offsets
+`0x1ad0`, `0x2060`, `0x2880`, `0x3130`) start at `0x43a4a1d0` and on. Each frame the game copies the program per mine part into a
+VRAM ring (`0xc1122xxx`, `0xc152xxxx`, then `0xc1170xxx`, `0xc156fxxx`: no copy survives a frame) and patches the constants
+there, so a patch of the ring does nothing and a **patch of the source reaches every mine 3 to 5 frames later** (the shader
+recompiles). The patch replaces slot `0x13`, `MAD R0.xyz, R1, {2, -1}.x, .y` (the map's `* 2 - 1`), with
+`MAD R0.xyz, R1, c.x, c.xyzw`, `c = (0, 0, k, 0)` (instruction words `0e000400 c8041c9d 00020000 c8020001` as stored, halves
+swapped), so `N := (0, 0, k)` and `rim = sat(1 - k Vn.z)`; `K[0x3c]` (`0x008c1a18`) is held at 20 so every lit mine sits at
+`p = 1`. `scripts/` has no copy of the driver; the two writes above reproduce it.
+
+| `k` | Expected if `TC1` is the geometric tangent-space eye | Seen |
+| --- | --- | --- |
+| 100 | body black | **bodies and spikes black**, the visualiser ring left: the white is this program's output |
+| 2 | black where `Vn.z >= 0.5`, 87 % of the radius | **bodies black**, a bright edge only |
+| 1 | `1 - cos(theta)`: dark centre, brighter edge | white-looking body with a dark centre |
+| 0 | `rim = 1` everywhere: flat colour | **flat saturated white** |
+
+**`f[TC1]` is the geometric eye vector** (confidence 80, the `k = 2` and `k = 100` frames): the suspect of the paragraph above is
+ruled out. So are the map's sampling and the vertex fetch (each 85):
+
+- Unit 0 at the football draws (D12e's ring dump): format `0x000b8829` (DXT45, 11 levels, local), address `0x60010101` (wrap,
+  **gamma nibble 0, no signed remap**), remap `0xaae4` (identity), filter `0x02063e80` (trilinear, LOD bias `-1.5`, **no signed
+  bits**), texture coordinate control `TC1 = 0`, `TC3 = 0` (neither forced 2D). The `_n` map's whole mip chain is flat on the body
+  (median `N.z = 1.0` on every level from 256 down).
+- RPCS3's vertex fetch (`RSXVertexFetch.glsl`) decodes `CMP` as `11:11:10` to `[-1, 1]` and `UB` as `/255`: the port's reading.
+- The draw writes no glow mask: colour mask `0x00010101` (alpha off), blend off, alpha test `GREATER 0x7f`, target `A8R8G8B8`.
+
+**`k = 1` is the telling frame:** a body whose rim is only `1 - cos(theta)` (0.13 at half the radius) already reads white in the
+grab, and `k = 0` (rim 1) saturates. In the original's pipeline a small rim on this saturated-blue colour (`1.75, 1.1, 10` times
+the rim, then `/2`) ends up near white on the glass. A scene-target read in VRAM at `0xC1920000` (pitch `0x2000`, 1300 x 1080,
+`A8R8G8B8`, the D12e target; the ring walk of this boot recovered the pitch and clip, not the colour offset) returned a
+**stale pre-bloom scene of another camera** whose lit mines (violet rings) have **dark bodies**: 24 x 24 boxes on two bodies read RGB
+mean `(23, 17, 50)` and `(49, 35, 80)`, only the hub rims near `(241, 195, 255)`. That is the port's look before post. Confidence
+55 that the white is added downstream of the program (bloom or exposure on a night circuit), held down because that buffer is
+not the grabbed frame.
+
+**The bitangent is stretched by the part's scale** (confidence 75, vertex block `#15` read, not live): `N' = world3x3 v[1]` and
+`T' = world3x3 (2 v[2] - 1)` are not normalised, `B' = cross(N', T') (2 v[2].w - 1)`, so `normalize(TC1)` is
+`normalize(V.T, s V.B, V.N)` with `s` the football's or spikes' row scale, where the port's frame is orthonormal. It leaves the
+facing point unchanged and the pair's footballs are at `s = 1.06` to `1.31`, so **it is not the whitening**. Not wired.
+
+**Pair** (`mines-ahead`, re-rendered at the merged tree, no change in this lane): whole-frame mean grey 13.62; near ball 60 x 60
+box centred on each image's own ball (theirs at `1060, 520`, ours at `1090, 515`, 1920 x 1080) RGB mean theirs
+`(170, 146, 227)`, ours `(78, 41, 84)`.
+
+**Open** (next address): a read of the frame's own scene target before bloom. Take a full ring dump of one frame
+(`scripts/hd-draw-dump.py`) to get the colour offset `0x194` and context `0x184` at the football draw, read the body's bytes, and
+compare with ours' pre-post value for the same pose. If the bytes are dark, the gap is the post chain's response to a saturated
+blue (`oag_post::hd_bloom`), a change that moves every HD frame.
+
 **2048 and Omega: not checkable** for this finding: it is a live constant of HD's draw, and the cause of the white body is
 open on HD itself, so there is nothing yet to compare. Their mine programs are unread; both name the same world-space
 `eyePositionWorldSpace` uniform ([gxp.md](../../../formats/gxp.md), [gcn.md](../../../formats/gcn.md)), which the port already
