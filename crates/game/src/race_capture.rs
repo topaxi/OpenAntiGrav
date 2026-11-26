@@ -643,7 +643,10 @@ pub fn capture(
         // player's own last crossing, which the window steps on
         // ([`SimRace::runs_on_after_the_end`]); its cosmetics go on ([`Race::tick_cosmetics`]).
         // Said out loud, so a capture that ran short is not read as a lost tick.
-        if race.core.sim.finished() && !race.core.runs_on_after_the_end() {
+        // A network race ends on the server's word, which `drive_to` waits for and then
+        // stops stepping on. This machine's own predicted finish comes first, and a client
+        // that stopped there would never hear the end or compare the board.
+        if options.net.is_none() && race.core.sim.finished() && !race.core.runs_on_after_the_end() {
             println!(
                 "the race finished on tick {} of the {} asked for; only its cosmetics are driven",
                 race.core.sim.world.tick, options.ticks

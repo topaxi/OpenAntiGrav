@@ -297,10 +297,9 @@ pub fn is_zip(path: &Path) -> bool {
 /// unexpected extra file is still a usable pack.
 ///
 /// Idempotent: a member already present at its recorded size is left alone, so
-/// the second call does no work and no writes. Size rather than a hash because
-/// the failure this actually guards against is a run interrupted partway
-/// through a write, which truncates; a member that is the right length is one
-/// the previous run finished. A decrypted member is shorter than its source by
+/// the second call does no work and no writes. Size rather than a hash: a member
+/// is renamed into place whole ([`oag_io::write_shared`]), so the right length is
+/// a finished one, and another length is another download's. A decrypted member is shorter than its source by
 /// exactly [`oag_formats::pure_dlc::SIGNATURE_LEN`] (the trailer this project
 /// never writes back), so that is the length checked for it instead - the
 /// decryption itself still runs every call, since knowing *which* length to
@@ -459,25 +458,26 @@ pub fn ensure_extracted(
         std::fs::create_dir_all(parent)
             .with_context(|| format!("creating {}", parent.display()))?;
 
-        let mut sink = std::fs::File::create(target)
-            .with_context(|| format!("creating {}", target.display()))?;
-        let mut write = || -> std::io::Result<()> {
-            use std::io::Write as _;
-            if let Some(payload) = &decrypted {
-                return sink.write_all(payload);
-            }
-            // The header was consumed by the sniff above and has to go back.
-            sink.write_all(&header)?;
-            std::io::copy(&mut member, &mut sink)?;
-            Ok(())
-        };
-        write().with_context(|| {
+        let context = || {
             format!(
                 "extracting {} from {}",
                 base.to_string_lossy(),
                 zip.display()
             )
-        })?;
+        };
+        let bytes = match decrypted {
+            Some(payload) => payload,
+            None => {
+                // The header was consumed by the sniff above and has to go back.
+                let mut bytes = header.to_vec();
+                member.read_to_end(&mut bytes).with_context(context)?;
+                bytes
+            }
+        };
+        // Renamed into place, never truncated and rewritten: another process may be
+        // reading `target` now, or extracting this member too. Staged in `cache_dir`,
+        // which no pack walk reads, so a half-written member is never mounted.
+        oag_io::write_shared(target, cache_dir, &bytes).with_context(context)?;
     }
 
     Ok(used_out.unwrap_or(out))

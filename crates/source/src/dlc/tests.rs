@@ -131,6 +131,41 @@ fn a_truncated_member_is_written_again() {
     );
 }
 
+/// Two processes unpack into one cache at once (two games, or two tests): a
+/// member another one holds open is replaced whole, never truncated and
+/// rewritten under its reader.
+#[cfg(unix)]
+#[test]
+fn a_reader_of_a_member_never_has_it_rewritten_under_it() {
+    use std::io::Read as _;
+    let dir = temp_dir("reader");
+    let zip = write_sample(&dir, &[5; 64]);
+    let cache = dir.join("cache");
+    let out = ensure_extracted(&zip, &cache, &[]).unwrap();
+    let target = out.join("PACK9.edat");
+    // Another length than the zip's, so the next extraction writes it again.
+    std::fs::write(&target, b"what the reader opened").unwrap();
+    let mut reader = std::fs::File::open(&target).unwrap();
+
+    ensure_extracted(&zip, &cache, &[]).unwrap();
+
+    let mut seen = Vec::new();
+    reader.read_to_end(&mut seen).unwrap();
+    assert_eq!(
+        seen, b"what the reader opened",
+        "the open file is the one it was"
+    );
+    assert_eq!(std::fs::read(&target).unwrap(), tiny_wad(&[5; 64]));
+    for folder in [&cache, &out] {
+        let strays: Vec<_> = std::fs::read_dir(folder)
+            .unwrap()
+            .map(|e| e.unwrap().file_name())
+            .filter(|name| name.to_string_lossy().ends_with(".tmp"))
+            .collect();
+        assert!(strays.is_empty(), "no staging file is left: {strays:?}");
+    }
+}
+
 /// The promise `oag_assets::dlc` and ADR-0021 both make, kept on this side
 /// of the boundary too: a repacked download whose members carry another
 /// name, or no extension at all, still unpacks.
