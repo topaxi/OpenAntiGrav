@@ -50,6 +50,7 @@ Recipes and tools: `docs/reverse-engineering/emulator-recipes.md`.
 
 - **Never poll a capture log for a success marker** (it cost about 9.6 h on 2026-10-08). Run the capture in the foreground under the watchdog with a timeout under 600000 ms: `uv run --with evdev python3 scripts/emu-run.py --child-status <log-dir>/status.json -- python3 scripts/<capture>.py ...`. It exits within 150 s of the last output (`STALLED ... child stage`) and at 570 s overall; read the stage and do not retry unchanged. Longer than ~9 minutes: `emu-run.py --bg --status F -- ...`, then `emu-run.py wait F` in a loop (returns 4 while healthy).
 - **Keep the emulator running between captures** (`rpcs3-drive.py serve`, `scripts/ppsspp-start.sh`, `OAG_RPCS3_ATTACH=1`); boot fresh only when the measurement needs the boot. Build your private tree with `scripts/emu-env.sh`.
+- **Never set `OAG_RPCS3_OWN_HOME`**: it is the maintainer's opt-out of `rpcs3-drive.py`'s private-env guard; source `env.sh` instead.
 - **Stop emulators by pid**: `rpcs3-drive.py stop` (never `--all`; never `pkill -x rpcs3`), `ppsspp-start.sh <lane> stop`. **No unattended emulator retry loops**: launch one run at a time, watch it, on a display you started.
 - Save states live only under `data/saves/<title>/`, never committed.
 
