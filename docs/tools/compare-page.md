@@ -2739,7 +2739,7 @@ visualiser's sRGB decode applied (below).
 | Region (boxes are `x0,y0,x1,y1`) | Area | Grey in region | Signed | Share | With decode | Cause, state |
 | --- | ---: | ---: | ---: | ---: | ---: | --- |
 | Near mines and far cluster `690,420,885,615` `1375,440,1550,592` `1740,465,1920,632` `1240,342,1340,378` | 4.7 % | 65.7 | -10.9 | 3.11 | 3.10 | spike shape and shell follow the music state the pair carries; not a tunable gap |
-| Floor, near road, red strips: polygon `0,590 700,430 850,415 1100,350 1330,335 1370,370 1300,440 1330,465 1920,545 1920,1080 0,1080` | 41.6 % | 6.2 | +2.9 | 2.58 | 1.44 | visualiser strip sampled without its sRGB decode: **read** (75), not wired ([zone-vis-gamma.md](../ghidra/functions/ps3-hdfury-eu/zone-vis-gamma.md), "Ready to wire") |
+| Floor, near road, red strips: polygon `0,590 700,430 850,415 1100,350 1330,335 1370,370 1300,440 1330,465 1920,545 1920,1080 0,1080` | 41.6 % | 6.2 | +2.9 | 2.58 | 1.44 | visualiser strip sampled without its sRGB decode: **read** (75), since wired ([zone-vis-gamma.md](../ghidra/functions/ps3-hdfury-eu/zone-vis-gamma.md), "Wired") |
 | Right wall and white pipe `1320,300,1920,545` | 4.8 % | 21.3 | -6.6 | 1.01 | 0.93 | ours' pipe is darker and the original's rows of small window lights are missing; **unread** |
 | Upper-right screen `1480,0,1920,270` | 5.7 % | 16.3 | +1.3 | 0.94 | 0.97 | original: a purple dot grid with a teal band; ours: grey-white smears and no dots. Also on `mines-ahead`; **unread** (which material is not identified) |
 | HUD `85,60,320,225` `690,20,1230,240` `150,850,670,980` `1250,845,1760,980` | 14.2 % | 4.9 | +2.0 | 0.70 | 0.53 | translucent panels over the scene behind (the drop with the decode is the floor under the two lower ones); no HUD gap of its own measured |
@@ -2781,7 +2781,7 @@ render is deterministic. The endrace pairs do not move. A Zone race cannot be sh
 
 **Ranked next lanes for `cannon-volley`:**
 
-1. Wire the visualiser decode (wire, sonnet, about 1 h): 10.53 to 9.11, under 10 alone. HD only, as `Title` data (2048: checked, differs, no
+1. ~~Wire the visualiser decode~~ wired, see the next section: 10.53 to 9.11, under 10 alone. HD only, as `Title` data (2048: checked, differs, no
    `EQ` tints; Omega: open, its descriptor is unread). Show floor crops at player size: the floor goes darker than the original's on three
    pairs, and `zone-vis-gamma.md`'s second factor stays open.
 2. Identify and read the upper-right screen's material (read, up to 0.94; also on `mines-ahead`).
@@ -3126,6 +3126,24 @@ extend `hd-pair-lag-scan.py` with a score on static objects (the near mines in D
 existing `original.presented_lag` block, and have `rpcs3-hd-pair.py` move `--camera-pose`'s eye and `--pose` back by `k` ticks of the
 original craft's velocity. Every HD pair takes its camera from
 the push buffer, so this likely moves every HD pair with near scenery, not only Detonator's.
+
+### The visualiser's sRGB decode, wired (2026-11-27, `det-vis-srgb`)
+
+HD's strip decode ([zone-vis-gamma.md](../ghidra/functions/ps3-hdfury-eu/zone-vis-gamma.md), "Wired") is on
+`main`'s path as `ZoneFrame::glow_vis_srgb`. All six `detonator-talons` pairs, re-rendered on copies
+(`compare-rerender-ours.rerender`), main to wired:
+
+| Pair | Mean grey | RMSE | Floor box A blue, original / before / after | Box B blue |
+| --- | --- | --- | --- | --- |
+| `cannon-volley` | 10.53 to **9.11** | 0.145 to 0.144 | 18.6 / 26.9 / 7.2 | 29.0 / 51.9 / 14.9 |
+| `cannon-volley-hot` | 7.70 to 4.82 | 0.109 to 0.092 | 29.1 / 49.9 / 28.8 | 28.4 / 69.7 / 32.3 |
+| `mines-ahead` | 9.68 to 9.04 | 0.143 to 0.141 | 8.0 / 18.7 / 2.5 | 14.9 / 37.1 / 5.4 |
+| `pad` | 4.44 to 3.24 | 0.086 to 0.078 | 16.0 / 31.5 / 7.7 | 23.9 / 51.1 / 12.6 |
+| `endrace-norecord` | 8.88, unchanged | 0.097 | | |
+| `endrace-record` | 8.38, unchanged | 0.100 | | |
+
+The numbers equal the scratch measurement above. Floor crops read at native size: `-hot` matches; the other
+three are now darker than the original's (the second factor stays open).
 
 ## The four worst front-end pairs, split by region (2026-11-24, `fe-worst-residuals`)
 

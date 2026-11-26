@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [hd, 2048, omega]
-updated: 2026-11-26
-summary: "Detonator open: wire the floor visualiser sRGB decode, upper-right screen, HD end-screen delay, Omega EndRace Menu, medal tiers"
+updated: 2026-11-27
+summary: "Detonator open: floor visualiser second factor and 2048/Omega strip decode, upper-right screen, HD end-screen delay, Omega EndRace Menu, medal tiers"
 categories: [rendering]
 ---
 
@@ -521,10 +521,13 @@ the glows are right; it is about 40 lines in `oag_raceplay::detonator` behind a 
 
 **`cannon-volley` split by region (2026-11-26, `det-volley-split`; `docs/tools/compare-page.md`, "The `cannon-volley` difference, split by
 region").** 10.53 = mines 3.11 (audio-driven), floor 2.58, right wall 1.01, upper-right screen 0.94, HUD 0.70, far scenery 0.66, hull 0.58,
-ribbon 0.30, shot-specific rest under 0.2 each. **Next, ready to wire:** the visualiser strip's sRGB decode (`zone-vis-gamma.md`) alone takes
-it to **9.11** on current `main` (all four race pairs fall); scope to HD and check a Zone race. Then read the upper-right screen's grey smear
+ribbon 0.30, shot-specific rest under 0.2 each. ~~Next, ready to wire: the visualiser strip's sRGB decode~~ wired on HD (2026-11-27, `det-vis-srgb`; `zone-vis-gamma.md`,
+"Wired"): `cannon-volley` **9.11**, all four race pairs fall. **Next:** read the upper-right screen's grey smear
 (also on `mines-ahead`) and the right wall's missing window lights. The ribbon is
-0.31 of it. The decode leaves the floor darker than the original's on three of four pairs (second factor open).
+0.31 of it. **Open:** (1) the floor is now darker than the original's on three of four pairs (second factor, `zone-vis-gamma.md`,
+"Still unread"); (2) Omega: its `zoneTexVis` is an sRGB texture too, ours draws its strip raw (`oag_omega` has no `ZoneFrame`);
+(3) 2048's HD-lineage circuits author the EQ tints through HD's tables and ours draws the strip raw: read 2048's strip texture
+gamma mode, then port or record differs.
 
 **Hull camera and size, re-based (2026-11-23, `det-camera`).** The maintainer's "ours is far, the original is close" was true and the
 camera flags were not the cause: the pair fed the RAM body (2 to 4 ticks ahead of the presented frame) with the push-buffer camera, and
@@ -604,7 +607,7 @@ mine drawn black in ours and pale violet in the original: without it the box is 
 
 **The vis texel's gamma flag, read (2026-11-23, `det-floor-gain-re`, `docs/ghidra/functions/ps3-hdfury-eu/zone-vis-gamma.md`).** `zoneTexVis`'s address
 word is `0x60730303` (gamma nibble 7, confidence 75): the original sRGB-decodes the strip, ours samples it raw into the linear sum. Applied alone (scratch,
-reverted) it overshoots: box blue ours over original goes from 1.7-2.3 to 0.38-0.89. **Ready to wire on its own** (the page, "Ready to wire"); measure the rest against the decoded floor. Open, in
+reverted) it overshoots: box blue ours over original goes from 1.7-2.3 to 0.38-0.89. ~~Ready to wire on its own~~ wired (the page, "Wired"). Open, in
 order: the viewport z mapping (`SET_VIEWPORT_SCALE`/`OFFSET` z; a doubled depth factor is about 1.33x after the encode), the band-independent floor term
 (the original's floor red 5-9 is not the strip: Track Fog, the Detonator radial bloom), and one RPCS3 frame dump confirming `0x60730303` on the vis unit.
 
