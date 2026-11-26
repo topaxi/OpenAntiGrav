@@ -532,6 +532,7 @@ pub fn run(
                 remote_correction: None,
                 net: None,
                 no_weapon_lights: false,
+                stage_seed: None,
                 force_shield: Vec::new(),
                 medals: Default::default(),
                 scheme: options.scheme,

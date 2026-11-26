@@ -126,6 +126,13 @@ impl RaceSim {
 }
 
 impl Race {
+    /// Restart the particle stage's random stream from `seed` instead of
+    /// [`crate::STAGE_SEED`], so a test can hold a picture over several arrangements of the
+    /// same effects rather than the one the fixed seed deals.
+    pub fn reseed_stage(&mut self, seed: u64) {
+        self.view.stage_rng = oag_core::Rng::new(seed);
+    }
+
     /// The loaded particle effect a trigger plays, for tests.
     #[doc(hidden)]
     #[must_use]

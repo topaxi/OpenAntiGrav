@@ -129,6 +129,8 @@ pub struct CaptureOptions {
     pub net_overlay: bool,
     /// `--no-weapon-lights`.
     pub no_weapon_lights: bool,
+    /// `--stage-seed SEED`.
+    pub stage_seed: Option<u64>,
     /// Every `--force-shield TICK:PERCENT`: the player's shield, as a
     /// percentage of its maximum, written at the end of that tick.
     pub force_shield: Vec<(u32, f32)>,
@@ -490,6 +492,9 @@ pub fn capture(
     // Read before `Race::start` takes `setup`; `difficulty` is `--autopilot-skill`'s fallback.
     let (weapons_on, difficulty) = (setup.weapons_on(), setup.difficulty);
     let mut race = Race::start(setup, view, modules);
+    if let Some(seed) = options.stage_seed {
+        race.reseed_stage(seed);
+    }
     if options.stow_grid_flaps {
         race.stow_grid_flaps();
     }

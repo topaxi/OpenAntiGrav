@@ -331,6 +331,12 @@ pub(crate) struct WreckArgs {
     #[arg(long, requires = "race")]
     pub(crate) no_weapon_lights: bool,
 
+    /// With `--race`, start the particle stage's random stream from `SEED`, so a test
+    /// can read an effect over several arrangements. See
+    /// [`oag_raceplay::Race::reseed_stage`].
+    #[arg(long, value_name = "SEED", requires = "race")]
+    pub(crate) stage_seed: Option<u64>,
+
     /// With `--race --screenshot`, hand craft `SLOT` to a scripted remote person
     /// at a tick: `TICK:SLOT[:WINDOW[:contact][:fire][:own[=UNITS]]]`, e.g. `480:7:20:contact`. The client guesses its
     /// input straight on for `WINDOW` ticks (default 6, 100 ms) while the true
