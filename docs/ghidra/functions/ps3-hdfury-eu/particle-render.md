@@ -238,6 +238,74 @@ units. That is every frame of a blast the camera flies into, which is the case o
 white screen ([particle-fill.md](../../../rendering/particle-fill.md) has the pictures and the
 fill it costs).
 
+## The atlas frame
+
+How HD's particles walk a flipbook. Read in `EBOOT.elf` and checked against the original's own
+quads; confidence **90**.
+
+**Per instance** (`FUN_00281060`, one of three draw-state prologues, `0x00281060`, `0x00286698`,
+`0x00288d98`; unnamed):
+
+- the advance is on (`state+0xc40`) when the frame-rate channel's `hi` (`+0x788`) is above zero
+  (`*0x008b2980 = 0.0`) and the instance's frame count (`instance+0x174`) is not 1;
+- `state+0xc44 = count - 0.01` (`*0x008b2978`).
+
+`Psys_BuildUpdateContext` (`0x00281ec0`) copies them to `ctx+0x6b2` and `ctx+0x6b8`, the
+emitter's flags to `ctx+0x6b4`, and the record's bytes `+0xc8f` and `+0xc94` to `ctx+0x6c0`
+and `+0x6c1`.
+
+**Per particle** (`Psys_UpdateParticles`, `0x0028d0f0`-`0x0028d1bc`), `k = *0x008b2a78 = 0.01`
+and `top = ctx+0x6b8`:
+
+```text
+flags & 0x40 ? frame = age * (top - k)            age clamped to *0x008b2a84 = 1.0
+             : frame += rate * ctx+0x6bc
+if (lo != 0 || hi != 0) && frame > hi: frame = lo     lo = +0xc8f, hi = +0xc94
+if frame >= top: frame -= top
+drawn = floor(frame)
+```
+
+**At spawn** (`Psys_InitParticle`, `0x00289890`): under flag `0x4000000` the frame is a random
+integer in `[+0xc8d, +0xc8e]`, or in `[0, count - 1]` when both are zero; without the flag it is
+`+0xc8d`.
+
+The step is Pulse's (`particle-system.md`, "The atlas frame advances", where `top` is also
+`frames - 0.01`). The hold and the spawn range are HD's addition: on `DATA00` and `DATA02` a
+hold names one frame twice (`hd = lo`) and every range ends inside its grid
+(`crates/pob/tests/pob_ground_truth.rs`).
+
+**Runtime** (RPCS3, the command ring's particle quads, read per cell by
+`scripts/hd-particle-uv.py`; films `emp1`, `cannon1`, `plasma1`, `plasma2`, `missile2`,
+`quake1`, `quake2`, `rocket1` under `data/reference/hd-capture/particle-uv/`):
+
+- **Rate**, per time: cells per 1/30 s are twice the authored rate (`debris006` +1 on 567 of
+  567, `Debris_DetonatorMines` +2 on 2442 of 2442, `PlasmaRings` +2 on 85 of 85). A random
+  channel does not advance (`molten_debris` +0 on 658 of 658).
+- **Hold:** on `explosion_fijets_8x8_grey_gaseous` (`Explosion_Core`, `explosion_fijets`) a
+  particle on the last cell stayed there 107 times and never wrapped; looping sheets wrapped
+  (`Debris_LightBarrier` 374 of 374).
+- **Spawn range:** no quad of that texture read a cell below 23 over 267 quads, where its two
+  emitters author `[20, 63]` and `[23, 43]`.
+- **Over life:** the ages in [particle-fill.md](../../../rendering/particle-fill.md#hd-advances-its-flipbooks-from-the-authored-top-left).
+
+**Not exercised:** Pulse stops the advance of an emitter with a periodic keyframed channel; no
+HD flipbook with a frame rate authors one, so what HD does there was not read.
+
+**Wired** for HD and Fury (`oag_title::Effects::flipbooks`, measured):
+`oag_fx::psys::frames` and `EmitterSpec::random_frame`.
+
+**2048: checked, differs.** `Psys_UpdateParticle` (`0x812ab114`, v1.04): over life
+`age * (count - 0.01)` under bit `4` of `record+0x884`; at a rate `frame += rate * dt` and
+`frame -= count` once it reaches `count`, not `count - 0.01`; no hold step. Its spawn frame was
+not read. Confidence 65 (static; the runtime record's channel offsets are assumed from the
+code's shape). Not wired.
+
+**Omega: checked, split.** `FUN_01724c00` (v1.07) is HD's step, hold and wrap, with the hold
+bytes at runtime `+0xc97`/`+0xc9c`: **checked, applies, not wired** (which file bytes those are,
+and its prologue and spawn, are unread). `FUN_01728ae0` is 2048's (wraps at `count`, no
+hold): **checked, differs**. Which reader serves which effect directory was not
+read. Confidence 60.
+
 ## Names
 
 | Address | Kind | Name | Confidence |

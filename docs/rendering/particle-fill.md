@@ -683,25 +683,53 @@ flat-bottomed dome too":
 Cell numbering from the top-left is therefore right (confidence 94): numbered from the first stored
 row the same cells would run backwards, 58 down to 24. The values are Pulse's over-life law,
 `floor(age / lifetime * (frames - 0.02))` (`oag_fx::psys::frames`), to within a tick (confidence 90
-for the over-life law; HD's frame-rate-channel advance and its random spawn frame are not read).
+for the over-life law).
 The 8x8 rows alone would not say which law this is: 64 frames over 64 ticks is also one frame a
 tick. The 8x4 sheet reads about half the age, which is the over-life spread; its emitter's
 frame-rate channel (a constant 1) would have given the age itself.
 
-**Ours does not do this.** Every source but Pulse on the PSP holds each particle on its spawn frame
-(`Effect::without_pulse_psp_draw_but`), and a non-random emitter spawns on cell 0, the tiny seed of
-the explosion. So the Rocket craft blast's four layers above stay on the seed where the original's
-grow into a full fireball. Not wired.
+**Ours does this on HD and Fury** (`oag_title::Effects::flipbooks`), with the rate law, the
+authored spawn range and the hold frame, all read in the executable and checked against the same
+films ([particle-render.md](../ghidra/functions/ps3-hdfury-eu/particle-render.md#the-atlas-frame)).
+Before, every HD particle stayed on its spawn frame, so the Rocket craft blast's four layers
+above stayed on the tiny seed of the explosion.
 
-`FIREBALL_ADDITIVE` (`WO_ROCKET_EXPLO_TRACK`, `WO_SHIP_EXPLOSION`) is also non-random and held on
-cell 0 by ours, but it carries no flag `0x40`: Pulse's law for it is the frame-rate channel, which
-is unread on HD, and no film here caught it in the original.
+**2048 and Omega: the sheets are the same, their updates differ.** All 17 flipbook sheets HD's
+listed effects name ship in both as `.gxt` and `.gnf`, and each matches HD's turned sheet
+(correlation 0.99 to 1.00; the same sheet turned again gives -0.11 to 0.89). **Flip: checked,
+differs** (their files are already top-down). **Advance: not wired**; the outcome per reader is
+in [particle-render.md](../ghidra/functions/ps3-hdfury-eu/particle-render.md#the-atlas-frame).
 
-**2048 and Omega: the sheets are the same.** All 17 flipbook sheets HD's listed effects name ship in
-both as `.gxt` and `.gnf`, and each matches HD's turned sheet (correlation 0.99 to 1.00; the same
-sheet turned again gives -0.11 to 0.89). **Flip: checked, differs** (their files are already
-top-down). **Advance: not checked**: our loader holds their frames too, and neither executable's
-own advance has been read.
+### The pairs with the advance in, and the oversize trail
+
+All 31 HD `pair.json` pairs under `compare-page`, rendered with the builds either side of the
+change: 27 byte-identical, the four Rocket craft-hit pairs moved. Whole-frame RMSE against the
+original, mean over particle-stage seeds (`--stage-seed`), levels of 255:
+
+| Pair | Seeds | Before | After | Seed spread (after) |
+| --- | --- | --- | --- | --- |
+| `rocket-craft-hit-0233` | 1-8 | 113.6 | 106.5 | 83.1 to 120.2 |
+| `rocket-craft-hit-0100` | 1-8 | 94.8 | 93.1 | 92.0 to 94.4 |
+| `rocket-craft-far-hit-0100` | 1-6 | 34.9 | 34.9 | 33.9 to 35.5 |
+| `rocket-craft-far-hit-0233` | 1-24 | 69.2 | 72.0 | 60.9 to 85.4 |
+
+The far hit at 0.233 s is **worse by 2.8**, paired by seed (about three standard errors).
+
+- It is the spawn range alone: with the advance and the hold but a full-grid spawn it is back to
+  69.2 (seeds 1-8). The same range is what gains on the near pairs (without it
+  `rocket-craft-hit-0233` reads 112.9 and `-0100` 94.5).
+- The range is what the original does. `trail`'s sheet `smoke_new4_8x4` (only `trail` binds it)
+  reads cells 1 to 17 at 0.233 s and up to 27 at 0.4 s on the far film `far3`: `[0, 3]` plus the
+  age. A full-grid spawn would read up to 31. Those first two rows are solid white and
+  yellow-white fireballs; before, ours drew mostly the dim later cells.
+- **Our `trail` quads are too large**, which the dim cells hid. The original's half size on that
+  frame (depth 33 to 84 units, so no near cap) is 2.35 at cells 3 and 4 and 3.57 at cell 14,
+  about `2.2 + 0.09 * cell`; ours is the size channel's 3.5 to 3.8 over the same ages, 2.2 times
+  the area at spawn. Both draw them white, opaque and alpha over.
+- Falsifier: a scratch build holding `trail`'s half size to the original's growth reads 69.2 on
+  the far pair (seeds 1-8, from 73.2), and 109.3 and 93.6 on the near pairs, still better than
+  before. Why the original's quads grow like that when the file's size channel does not is not
+  read; nothing was changed.
 
 ### Posing a far hit
 

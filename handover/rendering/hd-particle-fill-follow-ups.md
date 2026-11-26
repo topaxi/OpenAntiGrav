@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [hd, omega, 2048]
 updated: 2026-11-26
-summary: "Ready: 31 unsprited HD effects, over-life flipbooks. Owed: cap source, flare .gtf rows, Deck 4K hit; half-res awaits maintainer"
+summary: "Ready: 31 unsprited HD effects. Owed: trail size, 2048/Omega flipbooks, cap source, Deck 4K hit; half-res awaits maintainer"
 size: M (50)
 difficulty: medium (55)
 ---
@@ -38,13 +38,15 @@ blast the struck craft's velocity, on HD, 2048 and Omega
   `oag_raceplay::assets::decode_texture` (flare and trail art) and `load/caustic.rs`. Compare each
   with its draw's `v` in a command ring before touching it; a radially symmetric sprite shows
   nothing either way.
-- **HD advances its flipbooks and ours holds the spawn frame** (`particle-fill.md`, "HD
-  advances its flipbooks"). Ready to wire, over-life only: keep `FrameAdvance::OverLife` in
-  `without_pulse_psp_draw_but` for `WO_ROCKET_EXPLO`'s four non-random layers (a title field,
-  ADR-0058), then re-score the Rocket pairs. They stay on cell 0, the explosion's seed, today.
-- **Not read, do not wire on a guess:** HD's frame-rate-channel advance and its random spawn
-  frame. `FIREBALL_ADDITIVE` (wall and ship blasts, no flag `0x40`) is on the rate law and held on
-  cell 0; no film caught it. 2048 and Omega: same sheets, their advance unread.
+- **The Rocket blast's `trail` quads are about 1.5 times the original's half size**
+  (`particle-fill.md`, "The pairs with the advance in, and the oversize trail"). It costs
+  `rocket-craft-far-hit-0233` 2.8 RMSE since the flipbooks advance. Read why the original's grow
+  from 2.2 by 0.09 a tick where the file's size channel gives 3.5: HD's baked channel track
+  (`record+0xc70`, slopes `+0xa70`) or the child spawn is the place to look. Then check whether
+  other emitters differ the same way.
+- **Flipbooks on 2048 and Omega are not wired** (`particle-render.md`, "The atlas frame"): 2048's
+  update wraps at the frame count with no hold; Omega carries that and HD's. Their spawn frames
+  and which reader serves which directory are unread.
 - **The 12-unit pairs' hit tick (`--force-rocket-hit 711:7`) was never checked against the
   original's spawn point.** The far films put the wash quad in world space (view position through
   the frame's camera); the same on `hit2` says where ours should stand.

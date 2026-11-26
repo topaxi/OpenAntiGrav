@@ -340,11 +340,12 @@ handedness read off the Rocket, Plasma, Missile, Quake and Detonator draws,
 The Mine, Bomb, Missile explosion and Detonator Mine and Bomb explosions load none. 2048's
 `.gxt` and Omega's `.gnf` are top-down already: checked, differs.
 
-**Flipbooks.** Cell 0 is the authored top-left, and HD advances its over-life flipbooks (M, four
-emitters of the Rocket craft blast; the rate-law advance is not investigated); ours holds each
-particle on its spawn frame, not wired
-([particle-fill.md](../rendering/particle-fill.md#hd-advances-its-flipbooks-from-the-authored-top-left)).
-2048 and Omega: same sheets, their advance not investigated.
+**Flipbooks.** Cell 0 is the authored top-left. HD and Fury advance them over life or at the
+emitter's rate, spawn inside an authored range and hold on an authored frame (M, executable and
+films; wired, `oag_title::Effects::flipbooks`,
+[particle-render.md](../ghidra/functions/ps3-hdfury-eu/particle-render.md#the-atlas-frame)).
+2048: A, differs (wraps at the frame count, no hold), not wired. Omega: A, carries both HD's and
+2048's update, not wired.
 
 | Weapon | Pulse | Pure | HD / Fury | 2048 | Omega |
 | --- | --- | --- | --- | --- | --- |

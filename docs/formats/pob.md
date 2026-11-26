@@ -1533,6 +1533,21 @@ across both). Pinned by `oag_pob`'s `a_big_endian_blob_parses_to_exactly_what_it
 (fixture word `2 << 16 | 4`) and
 `oag_fx`'s `an_atlas_grid_is_columns_in_the_high_half_so_its_cells_are_square` (ground truth).
 
+### The spawn range and the hold frame - 2026-11-26
+
+Four bytes of HD's long record, read by HD's executable alone
+([particle-render.md](../ghidra/functions/ps3-hdfury-eu/particle-render.md#the-atlas-frame),
+confidence 90):
+
+| Offset | Meaning |
+| --- | --- |
+| `+0xc8d`, `+0xc8e` | first and last frame of a random spawn; `0, 0` is the whole grid. Without flag `0x4000000` the first is the spawn frame |
+| `+0xc8f`, `+0xc94` | once the frame passes the second, it is set to the first; `0, 0` is no hold |
+
+`+0xc8c` is the resolution mode HD computes and ignores (above). On the PSP and PS2 these
+offsets belong to something else. `oag_pob::Emitter::frame_range` reads them from any record long
+enough, and only a title that reads them plays them (`oag_title::Effects::flipbooks`).
+
 ### The sprite templates at `+0x9a4`/`+0x9a8` - 2026-09-30
 
 An emitter can carry **sprite templates**: records the instance turns into one
