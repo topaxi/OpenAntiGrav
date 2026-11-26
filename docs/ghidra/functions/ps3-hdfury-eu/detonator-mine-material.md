@@ -391,7 +391,7 @@ compare with the port's tangent-space `V`. If it is off-normal, the next suspect
 ONE`) and the post chain's alpha-keyed glow are ruled out as the source of the white by the A/B (they do not read
 `MineBrightness`).
 
-### The white is before post: the tangent-space eye vector is off-normal at the facing point (2026-11-26, `det-mine-body-white`)
+### The white is before post, and the program as read reproduces it (2026-11-26, `det-mine-body-white`)
 
 **Method.** RPCS3, state `hd-detonator-talons-feisar-grid-late`, lap clock 2.3 to 5.6 s. The fogged program's **source copy** is
 in RSX-mapped main memory: the material file is loaded whole at `0x43a48700` this boot, so its four lit variants (code at file offsets
@@ -411,38 +411,39 @@ bytes read `(R, G) = (118, 95)` and `(145, 116)` (`B` 221 and 240); `(x / 255)^2
 program's `1.75 / 1.1 = 1.59`. On a patched frame the rim decoded off `R` (`R_lin / 0.875`) and off `G` (`G_lin / 0.55`) agree to
 2 % on every ring of every mine read. So **the original's mine body is bright before any post**: rim 0.2 to 0.35 on the body.
 
-**With `N = (0, 0, 1)` (the map flat), the rim at the facing centre is not 0** (confidence 75: two patched boots, four mines;
-`rim = 1 - Vn.z`). Medians over rings of the mine's own radius:
+**With `N = (0, 0, 1)` (the map flat), the rim near the ball's centre reads 0.1 to 0.35, but that is not an off-normal eye
+vector** (confidence 70). A first reading here took it for one (30 to 50 degrees off-normal); a held-pose read withdrew it. At **one
+pause**, with the patch applied, the frame's ring (`hd-draw-dump.py`, `HOOK_RING_ONLY=1`), every football draw's `c256..c263`,
+`c465..c467` and vertex array, and the scene target were read, and the vertex block `#15` was evaluated per vertex offline
+(`TC1 = (V.T', V.B', V.N')`, `T'`, `N'` through `c256..c258`, `B' = cross(N', T') (2 w - 1)`, `V = c465 - R5`). The projected
+vertices land on the balls in the target (the RSX picture may be a frame older than the ring, a few pixels). Radial profile of the
+nearest clean mine (projected radius 34 px, image 31 px), rim measured against rim predicted from the live constants:
 
-| Mine (radius, px) | `r = 0` | `0.25` | `0.5` | `0.75` |
+| `r / R` | 0.2 | 0.4 | 0.6 | 0.8 |
 | --- | ---: | ---: | ---: | ---: |
-| A (20) | 0.17 | 0.22 | 0.26 | 0.42 (at `0.6`) |
-| B (17) | 0.23 | 0.21 | 0.18 | 0.34 (at `0.6`) |
-| C (27) | 0.35 | 0.31 | 0.42 | 0.61 (at `0.6`) |
-| D (16), second boot | 0.11 | 0.23 | 0.45 | 0.61 |
-| a sphere seen by its own eye | 0 | 0.03 | 0.13 | 0.34 |
+| measured | 0.24 | 0.29 | 0.47 | 0.68 |
+| program as read, live constants | 0.06 | 0.16 | 0.45 | 0.75 |
 
-So **`normalize(f[TC1])` never reaches the map's `(0, 0, 1)` on the ball: at the facing point it is 30 to 50 degrees off-normal**,
-which is what turns a flat body white (`p = 1`) where the port, whose eye vector is geometric, draws it near black. `N = (0, 0, 100)`
-draws the bodies black (so the white is this program's output) and `(0, 0, 2)` too (so `Vn.z > 0.5` everywhere: the vector is
-off-normal, not reversed). `N = (0, 0, 0)` saturates. Which tangential lane carries the offset is **not read**: the runs with
-`N = (+-1, 0, 0)` and `(0, +-1, 0)` landed at different poses (the restore does not hold a pose to the tick) and their blobs
-mix mines with the hull's blue strip. **The earlier reading of the `k = 2` frame as "`TC1` is geometric" in this lane's first
-pass was wrong** and is withdrawn.
+The edge agrees; the inner rings are 0.1 to 0.15 high, where the spikes that point at the camera (the same program, so also
+patched flat, and seen side-on: rim near 1) lie over the body. A second boot with the map unpatched gave the same pattern on a
+12 px mine (`0.29, 0.31, 0.55, 0.73` measured, `0.13, 0.13, 0.45, 0.62` predicted with the `_n` map sampled at the vertices'
+UVs, level 3). Two other mines of the first held frame overlap on screen and were not used. **So the program as read, fed the
+live constants, reproduces the original's body to within the spikes' overlap**: the body's whiteness is the program's own output,
+`rim` 0.2 to 0.35 already reading near white after the encode, and no separate input term is missing. `N = (0, 0, 100)` draws the
+bodies black (the white is this program's output); `N = (0, 0, 0)` saturates.
 
-**Ruled out as the source of the offset** (each 85): the map's sampling (unit 0 at the football draws, D12e's ring dump: format
+**Ruled out as a difference in the inputs** (each 85): the map's sampling (unit 0 at the football draws, D12e's ring dump: format
 `0x000b8829`, DXT45, 11 levels; address `0x60010101`, gamma nibble 0, no signed remap; remap `0xaae4`; filter `0x02063e80`,
-trilinear, LOD bias `-1.5`, no signed bits; the `_n` mip chain is flat on the body), since a constant `N` shows the offset; texture
+trilinear, LOD bias `-1.5`, no signed bits; the `_n` mip chain is flat on the body); texture
 coordinate control (`TC1 = 0`, `TC3 = 0`, neither forced 2D); RPCS3's fetch (`RSXVertexFetch.glsl`: `CMP` as `11:11:10` to
 `[-1, 1]`, `UB` as `/255`, the port's `rcsmodel::unpack_normal`); the glow mask (the draw's colour mask is `0x00010101`, alpha off;
 blend off; alpha test `GREATER 0x7f`).
 
-**Still open, in order:** the vertex block `#15` inputs at the draw. The candidates left are the eye `c[209]` and the position
-constants `c[210]`/`c[211]` of the draw against the frame's own camera (a constant offset of the eye in the mine's frame moves the
-dark point off the visual centre and leaves no point at `Vn.z = 1`, the pattern above), and the tangent frame the RSX builds (`T'`,
-`B' = cross(N', T') (2 w - 1)`, neither normalised: the bitangent is stretched by the part's scale, confidence 75, too small at the
-pair's football scales 1.06 to 1.31 to explain a centre offset). A read that settles it: patch the source to output one lane of
-`normalize(f[TC1])` as the colour, at one held pose, and decode the bytes as above.
+**Still open:** what makes ours darker is then outside the body's program inputs. The `mines-ahead` pair shows the
+original's near mine with long white spikes over the body and a ball about twice ours' on screen, and ours with no spikes visible
+there: the spikes' draw (their own `_n` map, `spikeScale`) and the pair's picture lag ([detonator-mine-draw.md](detonator-mine-draw.md),
+"The displacement") are the next places to measure. The bitangent stretch (`B'` scales with the part's row scale, 75) is part of
+the reading above and is small at the pair's scales.
 
 **Pair** (`mines-ahead`, re-rendered at the merged tree, no change in this lane): whole-frame mean grey 13.62; near ball 60 x 60
 box centred on each image's own ball (theirs at `1060, 520`, ours at `1090, 515`, 1920 x 1080) RGB mean theirs
