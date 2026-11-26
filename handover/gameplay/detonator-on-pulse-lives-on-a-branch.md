@@ -10,7 +10,7 @@ categories: [gameplay]
 
 Pulse ships no Detonator mode. At the maintainer's request (2026-11-25) it was backported on the branch
 `det-pulse-backport` (048d70b7a), and the branch is deliberately **not merged into `main`** until the maintainer
-has played it. Reports: `data/scratch/det-pulse-backport/report.md` and `data/scratch/det-pulse-backport-hud/report.md`.
+has played it. The branch's own commit messages carry the evidence and the frames read.
 
 Try it: check out the branch, then `just play data/images/pulse-psp-usa.chd --race --mode detonator --no-audio`
 (or RACEBOX > MODE `DETONATOR`; the PS2 disc works too). L1 fires the EMP, Square the cannon.
