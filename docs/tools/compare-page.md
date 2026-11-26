@@ -2661,6 +2661,7 @@ the HUD clock's `T - 3`.
 | --- | --- | --- |
 | `cannon-volley-hot` | 11.47 | 10.31 (lag 3.5 static, tick 393 to 388) |
 | `mines-ahead` (before the mine spin) | 13.17 | 13.13 (tick 429 to 427) |
+| `mines-ahead` (with the mine spin and ages, `main` `68bfc33`'s build) | 12.51 | 12.46 (tick 429 to 427) |
 | `cannon-volley`, `pad` (no measured lag) | 14.32, 7.61 | unchanged |
 
 **What is left on `cannon-volley-hot`** (grey = that box's share of the 10.31 whole-frame mean; boxes are `x0, y0, x1, y1`):
