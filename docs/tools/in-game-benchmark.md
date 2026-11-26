@@ -27,7 +27,7 @@ tables, is byte for byte what it was after any run
 | Row | Values | Default | Reaches the run as |
 | --- | --- | --- | --- |
 | MODS | off, on | off; the row is left out while no mod of the player's is enabled (`Menu::offer_choice`) | `--benchmark-mods` |
-| VSYNC | the display page's: off, on, smooth | the player's | `--benchmark-vsync`; the surface is reconfigured for the run and again when it ends |
+| VSYNC | the display page's: off, on, smooth; left out on the web, whose canvas has one present mode (`settings::web::HIDDEN_ROWS`) | the player's | `--benchmark-vsync`; the surface is reconfigured for the run and again when it ends |
 | FRAME LIMIT | the display page's list (greyed under vsync on, as there) | the player's | `--benchmark-frame-limit` |
 | PRESET | YOUR SETTINGS, low, medium, high | YOUR SETTINGS | `--preset` |
 
@@ -68,7 +68,8 @@ for results (`--ticks` under 272 ends inside the countdown and has no figures).
 Back during the run abandons it: Escape, the pad's back button (CIRCLE by default) and the
 Android system Back all end it the same way. The player's settings come back, **no result file is
 written**, and a menu launch returns to the page it was started from; a run started on the command
-line has nothing behind it and ends the game. RUN BENCHMARK is not offered over a race parked
+line has nothing behind it and ends the game. A benchmark's race is never parked behind the menus,
+finished or not (`Session::open_menus`). RUN BENCHMARK is not offered over a race parked
 behind the menus: it would replace that race.
 
 ## Input
@@ -173,17 +174,20 @@ BACK and RUN AGAIN; the pad walks them with left, right, up and down, and a clic
 one. DETAILS lists the numbers of the table below, the screen refresh and where it came from, the
 settings under the menu's own row names and values (read out of the menu tree, so a name edited
 there is edited here), then the mods, the device, the GPU with its driver and the build version.
+The GPU line says what the platform names: it is left out where neither adapter nor driver has a
+name (a browser), and a driver that repeats the adapter's name (Mali) is not said twice.
 
 **COPY TO CLIPBOARD** puts the same text on the clipboard in the same order: the game, circuit and
 preset, the plain lines, a blank line, then DETAILS (`text::copy_text`, pinned line for line by
 `the_copied_text_is_pinned_line_for_line`). The button shows COPIED for two seconds, or COULD NOT
-COPY. It is on the screen where the platform can write a clipboard and left off where it cannot:
+COPY, once the platform has answered: until then it keeps its own name. It is on the screen where
+the platform can write a clipboard and left off where it cannot:
 
 | Platform | Write | How |
 | --- | --- | --- |
 | Linux, Windows, macOS | yes | `arboard` (`app::clipboard::write`); the clipboard object is kept for the life of the process because X11 and Wayland serve the text from the process that owns it |
-| Android | yes | `oag_mobile::clipboard`, the activity's `ClipboardManager` through JNI, on any thread; type-checked for `aarch64-linux-android`, **not run on a phone** |
-| Web | yes | `navigator.clipboard.writeText` through `js_sys`, which needs a secure page and the click that asked; the promise is not awaited, so a later permission refusal is not shown; type-checked for `wasm32`, **not run in a browser** |
+| Android | yes | `oag_mobile::clipboard`, the activity's `ClipboardManager` through JNI, on any thread |
+| Web | yes | `navigator.clipboard.writeText` through `js_sys`, which needs a secure page; the promise is awaited, and a refusal shows COULD NOT COPY and logs a warning |
 | iOS | no | no JNI-like shim; the button is left off (`clipboard::CAN_WRITE`) |
 
 Run on Linux under Xvfb, the clipboard held the text above after the press (`xclip -o`).
@@ -256,16 +260,33 @@ checks each value against the page.
   `the_stats_screen_swaps_to_details_and_answers_a_copy`: DETAILS and COPY through the real
   `Session`, by screenshots. The unit tests in `benchmark::text` hold the verdict thresholds, the
   frame-limit line, the copied text and that no internal name (`_Track`, `track.vex`) is shown.
-  `back_abandons_a_benchmark_and_writes_nothing`: Back by the pad and the system Back from the EXTRAS page, Escape from the command line.
+  `back_abandons_a_benchmark_and_writes_nothing`: Back by the pad and the system Back from the EXTRAS page, with nothing left parked behind the menus; Escape from the command line.
 - Unit tests in `crates/game/src/benchmark/` for the lows, the figures, the JSON keys `compare`
   reads, the screen's hit rectangles and layout, the presets, and the command line.
 - `scripts/bench-render.py selftest` covers the in-game/offscreen warning.
 
+## Run on a phone and in a browser
+
+2026-11-26, Wipeout Pulse (PSP EU), Talon's Junction White, driven by touch from the EXTRAS page.
+
+| Target | Run | COPY read back |
+| --- | --- | --- |
+| Galaxy S21 (Mali-G78, Android 14, `dist` APK, `--no-audio --ticks 600`) | every option row answered a tap (MODS on, VSYNC off, FRAME LIMIT 360, PRESET low) and the result file recorded those; SUMMARY, DETAILS, BACK and RUN AGAIN answered, the screen survived a switch to another app | pasted into a page served over `adb reverse`, which sent the bytes back: the whole summary and DETAILS text |
+| Headless Chromium, 844x390 at ratio 3, `just web` | full three-lap runs by touch (FRAME LIMIT, PRESET, START, COPY, DETAILS, BACK), and the options rows by mouse at 960x544 | `navigator.clipboard.readText` after granting the read, the write having had no permission; with `writeText` replaced by a rejecting one the button said COULD NOT COPY |
+
+The walk is `scripts/web-screenshot.py` with `--tap`, `--grant clipboard-read@T` and
+`--eval 'navigator.clipboard.readText()@T'`. On the S21 `adb shell cmd clipboard` has no
+implementation, hence the paste.
+
+**The refresh rate is not read on either.** winit reports none on Android or the web, so both
+say 60 Hz, `assumed` in DETAILS. The S21's panel ran at 120 Hz during the run above, so its
+verdict and its frames-over-budget figure were judged against half the refresh it had.
+
 ## Not checked
 
-The Steam Deck and a phone were not run for this page: the code path is the window's on every
-platform (the launch file hands `--benchmark` to the same parser), but no result from either is
-in the record.
+The Steam Deck was not run for this page: the code path is the window's on every platform (the
+launch file hands `--benchmark` to the same parser), but no result from it is in the record.
+Safari and Firefox were not tried with COPY.
 
 `FE_EXTRAS` outside Pulse: HD's, Omega's and Pure's main menus author no such row
 (`crates/raceplay/tests/main_menu_ground_truth.rs` reads each list back), so they keep BENCHMARK
