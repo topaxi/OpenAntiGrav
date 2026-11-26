@@ -199,7 +199,7 @@ impl Scene {
     /// Gives slot 0 a shield shell and the race a cockpit sphere, each a copy of its hull on a
     /// block of its own.
     pub(crate) fn give_a_shield_for_tests(&mut self, device: &wgpu::Device) {
-        let mut copy = || {
+        let copy = || {
             let mut shell = self.ships[0].instances(device, 1).remove(0);
             shell.clear_scene_kind_for_tests();
             shell
