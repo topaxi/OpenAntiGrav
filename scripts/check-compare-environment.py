@@ -250,6 +250,8 @@ def check_hd_hull():
         got = hd_pair.hull_check(pair, {} if ram is None else {"team": ram}, team, live)
         assert bool(got) == ok and [c[1] for c in pair.checks] == [ok], (ram, team, live, pair.checks)
         assert pair.rec["original"]["team"] == ram
+    zone = Pair()
+    assert hd_pair.hull_check(zone, {"team": "Zone"}, hd_pair.ZONE_HULL, True), "a Zone race flies the mode's own hull"
 
 
 def check_hd_pilot_assist():

@@ -356,6 +356,11 @@ def detonator_inputs(pair, out, ship, clock):
     return flags
 
 
+#: A Zone race flies the mode's own hull whatever team was picked: RAM names its directory `Data\Ships\Zone`, and ours draws it
+#: under `--mode zone`.
+ZONE_HULL = "zone"
+
+
 def hull_check(pair, ship, team, live):
     """Refuse a pair whose original flies another hull than `--team` names. The parity checks pass on a wrong hull (the
     pose, camera and clocks do not depend on it), so the player's hull directory read in the capture's pause
@@ -481,11 +486,6 @@ def main():
     if not camera or not ship:
         sys.exit("capture has no %s (%s)" % ("camera" if not camera else "ship pose",
                                              record.get("camera_reason")))
-    # A field pair checks the same against its field row below; a wrong hull is refused before ours renders.
-    if not args.field and not hull_check(pair, ship, args.team, live=not args.json):
-        pair.finish()
-    if not pilot_assist_check(pair, ship, plat["ours"].get("pilot_assist"), live=not args.json):
-        pair.finish()
     track = args.track or record.get("track")
     if not track:
         sys.exit("no circuit: the TTY log named none, pass --track")
@@ -525,6 +525,11 @@ def main():
     cp.build(pair, args, "zone" if args.zone else "race" if args.field or args.detonator else "scenery", capture_kind, args.state,
              {"value": HUD_LAG_TICKS, "unit": "ticks", "basis": "measured",
               "what": "HUD clock text vs RAM; the picture is not corrected; on a moving craft it was measured 0 to 3 ticks older than the RAM read (hd-pair-lag-scan.py)"})
+    # A field pair checks the hull against its field row below; a wrong hull or Pilot Assist is refused before ours renders.
+    if not args.field and not hull_check(pair, ship, ZONE_HULL if args.zone else args.team, live=not args.json):
+        pair.finish()
+    if not pilot_assist_check(pair, ship, plat["ours"].get("pilot_assist"), live=not args.json):
+        pair.finish()
     gantry = ship.get("gantry_seconds")
     pair.rec["original"]["gantry_seconds"] = gantry
     flame = ship.get("flame_clock_s")
