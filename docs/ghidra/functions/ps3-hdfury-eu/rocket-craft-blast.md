@@ -6,18 +6,20 @@ Omega (`ps4-omega-eu`, patch 1.07) twins and Pulse's PSP spawn for contrast. Ghi
 of the HD spawn as bad data (a Cell `lvlx` it cannot decode), so the carry block below is
 quoted from `llvm-objdump -d --triple=powerpc64`.
 
-**The law (confidence 85).** On a Rocket's craft hit the spawn copies the struck craft's
+**The law (confidence 80).** On a Rocket's craft hit the spawn copies the struck craft's
 position, dropped 2.5, into the new `WO_ROCKET_EXPLO` once. It then writes the craft's body
 velocity times 1/60 into the instance's inherited velocity. Every particle born afterwards adds
 that times its emitter's `+0x4d0`. The blast is not parented: its emitters stay where it was
-spawned, nothing refreshes the velocity, and the craft's later fate does not reach it. The cloud
+spawned. The velocity is set at the spawn; no other call to the setter reaches this instance,
+but the effect node's own per-tick update is unread, so a later write by another path is not
+excluded (below). The cloud
 travels with the craft only because `WO_ROCKET_EXPLO` authors `+0x4d0 = 1.0` on every root, and
 it falls behind because those roots author a drag of 0.92 a tick.
 
 | Address | Name | Confidence | What it does |
 | --- | --- | --- | --- |
 | `0x0014aa88` | `Rocket_HitCraft` | 72 | the only caller of the spawn; takes the struck racer, spawns the blast once if any viewport sees the craft (`0x000d02f0`), then pushes nearby craft (`0x00149f70`) |
-| `0x0014a7d8` | `Rocket_SpawnCraftBlast` | 85 | spawns `WO_ROCKET_EXPLO` (tag `ROEX`) at a copied matrix, hands it the struck craft's velocity, submits a point light |
+| `0x0014a7d8` | `Rocket_SpawnCraftBlast` | 80 | spawns `WO_ROCKET_EXPLO` (tag `ROEX`) at a copied matrix, hands it the struck craft's velocity, submits a point light |
 | `0x00283b40` | `Psys_SetInheritedVelocity` | 82 | stores a vector at instance `+0x160` and recurses into `+0x24` and `+0x1b4` |
 | `0x0027c288` | `Psys_FindInstanceByHandle` | 80 | the handle table on `*(manager) + 0x468c` (key mod table size, stride 12, match on `+4`) |
 | `0x00149f70` | `Rocket_PushNearbyCraft_q` | 60 | for each other racer within a radius, adds `normalize(d) * (1 - |d| / radius) * strength` to the racer's `+0x110` |
@@ -73,10 +75,15 @@ times the record's `+0x4d0` ([engine-trail.md](engine-trail.md), "What the float
 velocity do"). A child instance takes the parent particle's velocity times its own `+0x4d0`
 (`0x0028a344`-`0x0028a358`), which `oag_fx::psys` already does.
 
-**Written once.** Every direct branch to `0x00283b40` in the executable (`llvm-objdump`,
+**Set at the spawn.** Every direct branch to `0x00283b40` in the executable (`llvm-objdump`,
 `bl 0x283b40`): `0x000d99a8` (in `Ship_PlayDestroyExplosion`), `0x00124738`, `0x00124cec`,
 `0x0014a98c` and its own recursion. Only `0x0014a98c` reaches the blast, and it runs at the
-spawn.
+spawn. That does not cover every writer of `+0x160`: `Trail_HitShipEffect` (`0x002d9fb4`)
+writes it with no call to this setter ([engine-trail.md](engine-trail.md)). The blast's
+`0x180`-byte node takes the table at `0x008745a0` (`0x0014a910`), whose first entries are
+constant getters (`0x00682b60`, `0x00681e60`, `0x0067d518`); its per-tick method was not
+found, so whether anything rewrites the velocity after the spawn is unread. A craft at a
+steady speed would look the same either way, so the capture below cannot settle it.
 
 What `WO_ROCKET_EXPLO`'s twelve emitters author, read through `oag_fx::psys` from the disc:
 `+0x4d0 = 1.0` on all eleven but `trail` (`0.0`); roots `WO_ROCKET_EXPLO`, `SMOKE_BLUCLD`,

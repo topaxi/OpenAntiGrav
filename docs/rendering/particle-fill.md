@@ -441,11 +441,10 @@ is level. All four stay far from the original, whose frame is washed nearly whit
 | 0.1 s | 121.4 | 119.7 |
 | 0.233 s | 129.8 | 126.2 |
 
-The "before" column reproduces the table above exactly. Note that these pairs hold our player
-at each frame's own pose, chosen so a static blast stood near the original's travelling cloud;
-with the carry, the cloud now travels from the hit point with the craft (about 100 units a
-second in ours, 116 to 126 in the field files) and still lands in frame. By eye the fireballs
-now surround the struck craft instead of trailing off to the side. The frame is still far from
+The "before" column reproduces the table above exactly. These pairs hold our player at each
+frame's own pose, chosen so a static blast stood near the original's travelling cloud; the
+struck craft's speed in our pair run was not read. By eye the fireballs now surround the struck
+craft instead of trailing off to the side. The frame is still far from
 the original's near-white wash, whose source stays open.
 
 ## What is left
