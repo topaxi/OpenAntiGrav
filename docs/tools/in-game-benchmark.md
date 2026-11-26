@@ -273,10 +273,11 @@ checks each value against the page.
 | Target | Run | COPY read back |
 | --- | --- | --- |
 | Galaxy S21 (Mali-G78, Android 14, `dist` APK, `--no-audio --ticks 600`) | every option row answered a tap (MODS on, VSYNC off, FRAME LIMIT 360, PRESET low) and the result file recorded those; SUMMARY, DETAILS, BACK and RUN AGAIN answered, the screen survived a switch to another app | pasted into a page served over `adb reverse`, which sent the bytes back: the whole summary and DETAILS text |
-| Headless Chromium, 844x390 at ratio 3, `just web` | full three-lap runs by touch (FRAME LIMIT, PRESET, START, COPY, DETAILS, BACK), and the options rows by mouse at 960x544 | `navigator.clipboard.readText` after granting the read, the write having had no permission; with `writeText` replaced by a rejecting one the button said COULD NOT COPY |
+| Headless Chromium, 844x390 at ratio 3, `just web` | full three-lap runs by touch (FRAME LIMIT, PRESET, START, COPY, DETAILS, BACK); by mouse at 960x544 the options rows and DETAILS, SUMMARY, COPY, RUN AGAIN and BACK | `navigator.clipboard.readText` after granting the read, the write having had no permission; with `writeText` replaced by a rejecting one the button said COULD NOT COPY |
 
 The walk is `scripts/web-screenshot.py` with `--tap`, `--grant clipboard-read@T` and
-`--eval 'navigator.clipboard.readText()@T'`. On the S21 `adb shell cmd clipboard` has no
+`--eval 'navigator.clipboard.readText()@T'`. Grant after the COPY press: Chromium denies the
+write to a page that has been granted the read alone. On the S21 `adb shell cmd clipboard` has no
 implementation, hence the paste.
 
 **The refresh rate is not read on either.** winit reports none on Android or the web, so both
