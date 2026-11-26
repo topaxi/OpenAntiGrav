@@ -284,6 +284,15 @@ def check_detonator_mine_envelopes():
     far.rec["original"]["presented_lag"] = {"picture_total_ticks": 6.0}
     flags = hd_pair.mine_flags(far, {"mines": [ram], "race_clock_s": 2.7, "mine_reads": reads[2:]})
     assert flags[flags.index("--detonator-mine-envelopes") + 1] == "0.2500,1.0000", flags
+    # No read at the picture's clock: the pause's age is moved back by the measured lag; with no measured lag it is kept.
+    aged = dict(ram, age_s=55.0)
+    late = Pair()
+    late.rec["original"]["presented_lag"] = {"picture_total_ticks": 7.5}
+    flags = hd_pair.mine_flags(late, {"mines": [aged], "race_clock_s": 2.7})
+    assert flags[flags.index("--detonator-mine-ages") + 1] == "54.8750", flags
+    unfitted = Pair()
+    flags = hd_pair.mine_flags(unfitted, {"mines": [aged], "race_clock_s": 2.7})
+    assert flags[flags.index("--detonator-mine-ages") + 1] == "55.0000", flags
 
 
 def check_detonator_picture_tick(root):

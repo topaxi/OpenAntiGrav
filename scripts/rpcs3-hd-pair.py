@@ -292,6 +292,11 @@ def mine_flags(pair, ship):
         return []
     at_picture = picture_read(pair, ship)
     mines = [dict(m, **at_picture.get(str(m.get("address")), {})) for m in mines]
+    # A mine's age is a clock, so with no read at the picture's clock the pause's age less the measured lag is the picture's.
+    total = (pair.rec["original"].get("presented_lag") or {}).get("picture_total_ticks")
+    if not at_picture and total is not None and any(m.get("age_s") is not None for m in mines):
+        mines = [m if m.get("age_s") is None else dict(m, age_s=m["age_s"] - total / 60) for m in mines]
+        pair.caveat("each mine's age is the pause's less the picture's %.1f ticks of lag (the age is a clock); its envelope is the pause's own" % total)
     pair.rec["original"]["detonator"]["mines"] = [
         {"entry": m["entry"], "lane": m["lane"], "position": m["position"], "live": bool(m["live"]),
          "football_s": m.get("football_s"), "spikes_t": m.get("spikes_t"), "age_s": m.get("age_s"),
