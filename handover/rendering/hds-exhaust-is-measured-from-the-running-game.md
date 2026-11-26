@@ -2,7 +2,7 @@
 status: measure
 titles: [hd]
 updated: 2026-11-26
-summary: "HD exhaust: read the flame rim eye the console is handed (ours is the origin); talons-pack trail whiter and wider; craft+0xfc"
+summary: "HD exhaust: flame /2 and camera eye wired; flame clock unrecorded in pairs; talons-pack trail whiter and wider; craft+0xfc"
 ---
 
 # HD's exhaust is measured from the running game now: the trail is a 54-sample three-fin tube, the flame breathes with the throttle, and the plume scales rather than blinks
@@ -11,11 +11,16 @@ summary: "HD exhaust: read the flame rim eye the console is handed (ours is the 
 
 ## Open (trimmed 2026-09-04 - three of the four original items are settled, not just narrowed)
 
-- **2026-11-26 (`own-shield-camera`): the flame rim's eye is the world origin, and supplying it makes the rest flame
-  worse.** The one-line fix (`fog.camera = eye` in `flame_scene`, commit `0c86ed0ed`, reverted) brightens ours away
-  from the original on every HD rest-flame pair, so something else in the flame is wrong too. Next: read the vertex
-  program, `c[209]` and the `c256-c258` matrix of a live flame draw (RPCS3), then re-apply. Numbers on
-  engine-flare.md, "Our rim's eye".
+- **2026-11-26 (`hd-flame-colour-gap`): the flame closes on the live program's `/2` and reads the camera eye; both
+  wired.** The console runs `flame_test.rcsmaterial`'s block #2 (fogged, ends `MAD /2 H0.xyz`); the flame block was
+  `Scene::off` (output scale 1.0), so the rest flame drew twice too strong. `hd/talons`' blue/pink split is the noise
+  phase, not a layer. 22 pairs: 17 better, 5 worse on the moved-pixel metric (numbers on engine-flare.md, "Our rim's
+  eye is the camera"). **Open:** (1) the pairs do not record the flame's clock (engine parameter slot 0, a boot-relative
+  clock, 429.579 s in `c1`), so a still pair samples the pink rows at an arbitrary phase: a pair script that reads it
+  and an `--anim-seconds`-style flag for the flame alone would make rest-flame pairs comparable; (2) on the phase
+  average the eye still costs up to 0.6 on three rest pairs (`hd-race/talons-pack`, `hd/metropia`, `hd/vineta-k`),
+  cause unknown; (3) the program fogs the flame with the circuit's fog (factor 1 at chase distance), not wired because
+  the shield shells share the block. Still no boosting dump.
 `engine-trail.md` kept moving after this file's 2026-08-24 snapshot and was
 never folded back; its later sessions already close three of the four items
 below. Do not requote this file - `engine-trail.md`'s "Open, in rough order
