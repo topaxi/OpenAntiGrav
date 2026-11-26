@@ -2,7 +2,7 @@
 status: blocked-hardware
 titles: [all]
 updated: 2026-11-26
-summary: "ADR-0084 clamp: dock/undock Deck test, Steam launch after undock, winit panic without RandR, Windows/macOS poll cost, Wayland"
+summary: "ADR-0084 clamp: dock/undock Deck test, Steam launch after undock, Windows/macOS poll cost, Wayland"
 categories: [rendering]
 size: S (60)
 difficulty: easy (70)
