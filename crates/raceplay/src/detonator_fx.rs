@@ -204,15 +204,52 @@ pub(crate) fn effect_for(kind: EventKind) -> Option<Trigger> {
     }
 }
 
+/// [`Trigger::DetonatorMineExplo`]'s effect once per Detonator stage, every emitter's colour
+/// table replaced by the one entry `DetonatorMine_Explode` (`0x00138e58`) writes from that
+/// stage's mine colour and `Psys_CopyPaletteToTree` (`0x002834f8`) copies to the whole tree
+/// (`psys::detonator_mine_blast_entry`; `docs/ghidra/functions/ps3-hdfury-eu/detonator-mine.md`,
+/// "The blast's colour"). `None` for a stage that authors no colour; empty when `colours` is.
+pub(crate) fn mine_blasts(
+    handles: &EffectHandles,
+    colours: &[Option<[u8; 4]>],
+) -> Vec<Option<Arc<psys::Effect>>> {
+    let Some(effect) = handles.get(Trigger::DetonatorMineExplo) else {
+        return Vec::new();
+    };
+    colours
+        .iter()
+        .map(|colour| {
+            colour.map(|mine| {
+                let mut blast = (**effect).clone();
+                blast.with_one_colour(psys::detonator_mine_blast_entry(mine));
+                Arc::new(blast)
+            })
+        })
+        .collect()
+}
+
 impl RaceView {
     /// Plays this tick's [`Event`]s' effects. A title that does not answer an event's trigger, or
     /// whose effect did not load (the loader's report names it), plays nothing for it.
     pub(crate) fn play_detonator_events(&mut self, core: &SimRace) {
         for Event { kind, at } in &core.sim.detonator_events {
             log::trace!("tick {}: {kind:?} at {at:?}", core.sim.world.tick);
-            let Some(effect) = effect_for(*kind).and_then(|t| self.handles.get(t).cloned()) else {
+            let trigger = effect_for(*kind);
+            let Some(mut effect) = trigger.and_then(|t| self.handles.get(t).cloned()) else {
                 continue;
             };
+            // The stage the colour grade shows: Detonator's stage is its lap counter
+            // (`crate::scene::Scene::sync_zone_grade`).
+            if trigger == Some(Trigger::DetonatorMineExplo) {
+                let laps = core.sim.world.primary_race().laps_completed();
+                let stage = oag_race::Mode::detonator_stage(laps) as usize;
+                let last = self.mine_blasts.len().checked_sub(1);
+                if let Some(Some(blast)) =
+                    last.and_then(|last| self.mine_blasts.get(stage.min(last)))
+                {
+                    effect = Arc::clone(blast);
+                }
+            }
             match *kind {
                 // The one effect of these spawned with a frame, not at a point.
                 EventKind::RoundWall { spawn, rebound, .. } => {

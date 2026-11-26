@@ -965,6 +965,12 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
         rumble,
         zoom_ring: title.race.zoom_ring.or(borrowed_zoom),
         zoom_borrowed: borrowed_zoom.is_some(),
+        mine_blast_colours: title
+            .effects
+            .mine_blast_recolour
+            .and(zone_grade.as_ref())
+            .map(crate::zone_grade::ZoneGrade::detonator_mine_rgba8)
+            .unwrap_or_default(),
         capture_hud: options.hud.clone(),
         hud_waits_for_go: title
             .race

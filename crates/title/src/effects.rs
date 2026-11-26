@@ -468,6 +468,12 @@ pub struct Effects {
     /// `docs/ghidra/functions/ps3-hdfury-eu/particle-render.md`, "The per-particle size
     /// multiplier"). `None` on a title whose init is unread: the size channel alone.
     pub size_ramps: Option<Origin>,
+    /// Whether a live Detonator mine's blast ([`Trigger::DetonatorMineExplo`]) is drawn in one
+    /// colour from the stage's `Detonator Mine Colour`: `DetonatorMine_Explode` overwrites the
+    /// spawned tree's every colour table with one entry
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/detonator-mine.md`, "The blast's colour"). `None`
+    /// on a title whose explode is unread: the tables as authored.
+    pub mine_blast_recolour: Option<Origin>,
 }
 
 /// A billboard nearer than `cull_depth` world units along the view draws nothing, and one
@@ -570,6 +576,7 @@ impl Effects {
         near_law: None,
         craft_blast_carry: None,
         flipbooks: None,
+        mine_blast_recolour: None,
         size_ramps: None,
     };
 

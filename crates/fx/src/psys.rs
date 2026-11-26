@@ -64,7 +64,7 @@ pub use near::{Cull, NearEye, NearLaw};
 pub use path::{effect_path, effect_path_in};
 pub mod streak;
 
-pub use colour::{ColourLaw, ColourMode, LIGHT, light_blend};
+pub use colour::{ColourLaw, ColourMode, LIGHT, detonator_mine_blast_entry, light_blend};
 use emitter_state::EmitterState;
 pub use error::Error;
 use frames::FrameAdvance;

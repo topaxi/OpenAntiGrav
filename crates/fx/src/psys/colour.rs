@@ -103,6 +103,36 @@ impl Effect {
             };
         }
     }
+
+    /// Every emitter's table set to the one entry `rgba` (bytes), the way HD's
+    /// `Psys_CopyPaletteToTree` (`0x002834f8`) copies one record's 256 words to every instance
+    /// of a spawned tree (`docs/ghidra/functions/ps3-hdfury-eu/detonator-mine.md`, "The blast's
+    /// colour").
+    pub fn with_one_colour(&mut self, rgba: [u8; 4]) {
+        for spec in &mut self.emitters {
+            let entry = rgba.map(|byte| f32::from(byte) / spec.colour_divisor);
+            spec.palette.fill(entry);
+        }
+    }
+}
+
+/// The entry `DetonatorMine_Explode` (`0x00138e58`) writes over a live mine's blast, from the
+/// stage's `Detonator Mine Colour` `[r, g, b, a]`: each of `r, g, b` taken `0.8` of the way to
+/// `255` and truncated, then packed as `a << 24 | b << 16 | g << 9 | r << 1` into a word whose
+/// bytes the table reads as `a, b, g, r` (`0x001390c8`-`0x00139164`). The shifts of `9` and `1`
+/// are the executable's: green and red land one bit high, so red loses its top bit, green takes
+/// red's, and blue takes green's (`docs/ghidra/functions/ps3-hdfury-eu/detonator-mine.md`,
+/// "The blast's colour").
+#[must_use]
+pub fn detonator_mine_blast_entry(mine: [u8; 4]) -> [u8; 4] {
+    let toward_white = |byte: u8| -> u32 {
+        let c = f32::from(byte);
+        ((255.0 - c).mul_add(0.8, c) as u32).min(255)
+    };
+    let [r, g, b] = [mine[0], mine[1], mine[2]].map(toward_white);
+    let word = u32::from(mine[3]) << 24 | b << 16 | g << 9 | r << 1;
+    let [a, b, g, r] = word.to_be_bytes();
+    [r, g, b, a]
 }
 
 #[cfg(test)]
