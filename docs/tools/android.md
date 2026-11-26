@@ -651,17 +651,18 @@ unchanged.
 --benchmark-frame-limit refresh_rate` (a capped run, so the FPS compares with nothing but
 itself):
 
-| Run | Result's refresh | Frame limit in force | Budget | Over budget | Average FPS | Frames under 12.5 ms |
+| Run | Present mode | Result's refresh | Frame limit in force | Budget | Over budget | Average FPS |
 | --- | --- | --- | --- | --- | --- | --- |
-| before, VSYNC on | 60, `assumed` | none | 16.7 ms | 317 of 1330 | 65.0 | 258 |
-| after, VSYNC on | 120, `display` | none | 8.3 ms | 1276 of 1276 | 62.3 | 258 |
-| before, VSYNC off | 60, `assumed` | 60 | 16.7 ms | 536 | 55.1 | 3 |
-| after, VSYNC off | 120, `display` | 120 | 8.3 ms | 1161 of 1161 | 56.7 | 32 |
+| before, VSYNC on | `Fifo` | 60, `assumed` | none | 16.7 ms | 317 of 1330 | 65.0 |
+| after, VSYNC on | `Fifo` | 120, `display` | none | 8.3 ms | 1276 of 1276 | 62.3 |
+| before, VSYNC off | `Mailbox` | 60, `assumed` | 60 | 16.7 ms | 536 | 55.1 |
+| after, VSYNC off | `Mailbox` | 120, `display` | 120 | 8.3 ms | 1161 of 1161 | 56.7 |
 
 `dumpsys display` read 120 Hz (`mActiveSfDisplayMode` and `mActiveRenderFrameRate`) in every
-sample of those runs, and the front end then held 120.0 fps with 8.33 ms frames, so the panel
-presents at the rate reported. The race itself is bound by the frame's own cost, which this does
-not change.
+sample of those runs. The VSYNC-on runs agree on their own: `Fifo` presents at most one frame a
+refresh, so an average above 60 frames a second cannot come from a 60 Hz output, including in the
+before run that called itself 60. The race itself is bound by the frame's own cost, which this
+does not change.
 
 **60 Hz** was not tried as a display setting (that is a system setting of the owner's). It was
 observed from the phone's own switching: returning to the app from the home screen, the panel is
