@@ -362,7 +362,7 @@ titles fit.
 ## First phone result
 
 Reported by the maintainer from a Galaxy S24 (Xclipse 940), build `aded31f`, Wipeout HD: the
-stats screen's own figures, with no result file kept.
+stats screen's own figures; no result file of the run is in the record.
 
 | Setting or figure | Value |
 | --- | --- |

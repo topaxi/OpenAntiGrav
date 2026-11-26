@@ -18,7 +18,7 @@ finishes in the window on it too.
   touch from the EXTRAS page, capped at 600 ticks (`docs/tools/in-game-benchmark.md`, "Run on a
   phone and in a browser"), so its numbers compare with nothing.
 - **The Galaxy S24's first report is screen figures only** (`docs/tools/in-game-benchmark.md`,
-  "First phone result"): no result file, so `just bench-compare` has nothing to read, and the
+  "First phone result"): no result file is in the record, so `just bench-compare` has nothing to read, and the
   phone has not shown the verdict of the frame budget.
 - **2048's `FE_EXTRAS` tile** (manual, credits) holds no BENCHMARK: 2048 shows it after OPTIONS
   like HD, Omega and Pure, whose disc menus author no EXTRAS row.
