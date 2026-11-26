@@ -14,7 +14,7 @@ under Autopilot only to get round; no physics law is read from these runs.
 | `0x00069130` | `SPElimination_UpdateTarget` | 90 | Ends the race for every craft when any craft's truncated score reaches the target, below; run 4 ended there live. |
 | `0x0008c6f8` | `Hud_UpdateEliminatorRows` | 88 | Writes `PosTag0`-`7` as `"%s  ( %d )"`, ranked, below; the frames agree row for row. |
 | `0x0008c568` | `Hud_PlaceHighlightBar` | 80 | Moves `HighlightBar` behind the row it is given; the frames show it on the player's row at every rank. |
-| `0x00083ba0` | `Hud_RaiseScoreFeedback` | 75 | Formats an amount into a free `ScoreFeedBack` widget and raises its alpha. Read, never seen in a frame. |
+| `0x00083ba0` | `Hud_RaiseScoreFeedback` | 75 | Formats an amount into a free `ScoreFeedBack` widget and raises its alpha. Seen first on a Detonator frame ([detonator-hud.md](detonator-hud.md), "The floating score"). |
 | `0x000d9d60` | `Ship_RefillLapShield` | 88 | `Ship_AddShield`-shaped: `0.2 * max` then `Ship_PlayAbsorbFeedback`; live, the player's shield rose 28.0 of 140 on each lap. |
 
 The two score blocks in the state and lap code (`0x000e2ddc`, `0x000e5b1c`) are not inside a Ghidra

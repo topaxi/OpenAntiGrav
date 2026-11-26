@@ -19,6 +19,10 @@ The main thread is `detonator-races-its-stages-without-mines-emp-or-auto-speed.m
   changes at most 84, against about 31,000 on HD. HD's cyan wash is an HD-only Zone path, and the originals pick up
   to 6 lights per drawable, so theirs is not hull-only. Which GCN/GXP shader adds it is unread
   (`docs/ghidra/functions/ps3-hdfury-eu/detonator-emp.md`).
+- **The mine explosions' shards (sonnet, 30 min, with the item below).** HD draws both mine effects with
+  their disc sprites since 2026-11-26; 2048 and Omega ship the same emitter trees and the shard atlas
+  (`Debris_DetonatorMines.gxt`/`.gnf`), but list no effect sprites
+  (`docs/ghidra/functions/ps3-hdfury-eu/detonator-mine.md`, "The shards, against the original").
 - **The EMP's mine and bomb kills show no explosion (sonnet, 1-2 h).** The wave clears them on both titles, but
   no explosion effect plays. Map the explosion triggers from each title's own effect table.
 - **Omega's Detonator end screen (sonnet, half a day to a day).** Omega runs HD's path (`FUN_012943b0` with the

@@ -154,6 +154,7 @@ fn an_hd_detonator_race_plays_the_discs_effects_for_each_event() {
     .expect("loading an HD Detonator race");
     let mut race = Race::start(loaded.setup, loaded.view, loaded.modules);
     check_the_wall_spark_is_the_discs_pictures(&race);
+    check_a_shot_mine_throws_the_discs_shards(&race);
     let at = Vec3::new(1.0, 2.0, 3.0);
     let spawn = Vec3::new(4.0, 5.0, 6.0);
     for (kind, trigger) in [
@@ -228,6 +229,60 @@ fn an_hd_detonator_race_plays_the_discs_effects_for_each_event() {
 }
 
 const TALONS: &str = r"Data\Environments\Talons_Junction\track.vex";
+
+/// **A shot mine throws the disc's shards, not procedural puffs:** both mine effects draw every
+/// emitter's own picture, and the live one's `Debris` is the 4 x 4 atlas of glass shards the
+/// original's frame shows, 50 alpha-over particles picked at random from it
+/// (`docs/ghidra/functions/ps3-hdfury-eu/detonator-mine.md`, "The shards, against the original").
+fn check_a_shot_mine_throws_the_discs_shards(race: &Race) {
+    use oag_fx::psys::Blend;
+    for (trigger, name, emitters) in [
+        (Trigger::DetonatorMineExplo, "WO_MINE_EXPLO_DETONATOR", 6),
+        (
+            Trigger::DetonatorMineExploDead,
+            "WO_MINE_EXPLO_DETONATOR_DEAD",
+            3,
+        ),
+    ] {
+        let effect = race
+            .view
+            .handles
+            .get(trigger)
+            .expect("the mine's effect loads");
+        assert_eq!(effect.name, name);
+        assert_eq!(effect.emitters.len(), emitters, "{name}");
+        for spec in &effect.emitters {
+            assert!(
+                spec.sprite.is_some(),
+                "{name}/{} reads its sprite",
+                spec.name
+            );
+            if matches!(spec.render, oag_fx::psys::Render::Billboard) {
+                assert!(
+                    spec.sheet_rect.is_some(),
+                    "{name}/{} draws the disc's sprite, not the procedural profile",
+                    spec.name
+                );
+            }
+        }
+    }
+    let live = race
+        .view
+        .handles
+        .get(Trigger::DetonatorMineExplo)
+        .expect("loaded");
+    let debris = live
+        .emitters
+        .iter()
+        .find(|e| e.name == "Debris")
+        .expect("the live mine's shards");
+    let sprite = debris.sprite.as_ref().expect("the shard atlas");
+    assert_eq!((sprite.width, sprite.height), (512, 512));
+    assert_eq!((debris.atlas.columns, debris.atlas.rows), (4, 4));
+    assert!(debris.atlas.random_frame);
+    assert_eq!(debris.per_emission, (50, 50));
+    assert_eq!(debris.blend, Blend::AlphaOver);
+}
 
 /// **The spark is drawn from the disc's pictures, not a procedural stand-in:** the effect the
 /// race loaded is `WO_CANNON_SPARKS_DETONATOR`, every emitter has its picture (`.gtf`, `.gxt` or

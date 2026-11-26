@@ -79,6 +79,7 @@ branch or vtable entry reaches (`ps3-dform-scan.py --target 0x7e5a8` is empty, a
 | `0x0007e498` | `DetonatorHud_ResetVolleyIcons` | 70 |
 | `0x0007e5a8` | `DetonatorHud_ShowBankedScore` | 62 |
 | `0x00083318` | `Hud_RaiseWarning` | 65 |
+| `0x0008caf0` | `Hud_UpdateScoreFeedback` | 72 |
 
 `Hud_RaiseChainBonus`, `Hud_RaiseScoreFeedback`, `Detonator_UpdateHud` and `Detonator_IsBombAhead`
 keep the names their pages gave them. The three binders sit at 75: each is a run of
@@ -251,6 +252,49 @@ its base package ships. Each title's `Detonator_HUD` entry name is therefore its
   against HD's (60 that the shared widgets read the same sources: the strings and formats are the
   same). Wiring: HD and Omega share the `detonator_hud.xml` bindings; 2048 needs its own layout
   entry and an EMP binding for `EmpCharge`/`EmpFull`, or skips EMP until phase 10.
+
+## The floating score: `Hud_RaiseScoreFeedback` and `Hud_UpdateScoreFeedback` (2026-11-26, `det-mine-blast`)
+
+Static read (`EBOOT.elf`; constants by `read_memory`, TOC slots by `scripts/ps3-toc.py resolve`). Each of the sixteen
+`ScoreFeedBack0`..`15` slots is 12 bytes at `hud+0x3d0 + 12k`: `+0` the Text widget, `+4` a pointer to a world
+position, `+8` a byte, `1` while the slot is free.
+
+`Hud_RaiseScoreFeedback(amount f1, hud, _, at)` (`0x00083ba0`):
+
+```text
+k := the first slot whose byte is 1 (free); none free: return               ; 0x00083bb4..
+for every other busy slot: if its alpha >= 180 (0x008a7624): alpha *= 0.7 (0x008a7614)
+slot[k].at := at                                                             ; the scored object's position
+text := amount < 1.0 (0x008a75bc) ? "+%3.2f" : "+%3.0f"                     ; TOC 0x008a7618 / 0x008a761c
+colour alpha := 0xff (text and its second colour); slot[k].free := 0
+widget+0xb8 = widget+0xbc := amount < 1000.0 ? 1.2 : 2.0                     ; 0x008a7628, 0x008a7620, 0x008a762c
+```
+
+`Hud_UpdateScoreFeedback(dt f1, hud)` (`0x0008caf0`), modes 8, 14 and 20 only (`hud+0x6bc`):
+
+```text
+k := (1.0 - dt) * 0.995                                                     ; 0x008a75bc, 0x008a77ec
+for each slot with a position:
+    if alpha < 1.0: free it, hide the widget (+0x34 &= ~4)
+    else:
+        alpha := alpha * k
+        rise  := 5.0 - 5.0 * alpha / 255                                   ; 0x008a77f0 = -1/255, 0x008a7710 = 5.0
+        p     := at + rise * (view camera's row at +0x1e0)                 ; *(craft+0x6944), the viewing craft's camera
+        widget+0xb0, +0xb4 := 0x00083f48(p)                                ; world to screen
+        set the text's alpha to alpha
+```
+
+So the `+N` stands at the scored object, rises 5 units along the camera's row (`+0x1e0`, read as up: the frame's popup
+sits above the blast) as it fades, and fades by a factor `(1 - dt) * 0.995` per update: at one update a tick
+`0.978`, about 32 ticks to half (the `cannon-volley` frame's `+100`, about 27 ticks after the hit, reads about half
+its full brightness and sits just above the blast, which agrees). Its size is the widget's scale 1.2 under 1000 points, 2.0 from 1000. A
+busy slot at alpha 180 or more is dimmed to 0.7 when another is raised. Confidence **72** for the law (two functions
+that agree on the slot layout; the fade and the rise against one frame), **55** for `+0x1e0` being the camera's up
+and for `0x00083f48` being the plain projection (neither read).
+
+This is the popup's first sighting in a frame ([eliminator-score.md](eliminator-score.md) caught none on Eliminator).
+**Not wired**: ours' HUD draws no `ScoreFeedBack` widget (below). 2048 and Omega: **not checkable** in this lane: the law is read
+in HD's executable only, and neither title's caller of its feedback widgets is located; no frame of either shows one.
 
 ## What stays open
 
