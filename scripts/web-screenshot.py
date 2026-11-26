@@ -3,7 +3,7 @@
 
     uv run --with playwright python3 scripts/web-screenshot.py \\
         --dist target/web/dist --image data/images/pulse-psp-eu.chd \\
-        --out data/web-shots --at 5,10,15 [--press Enter@12] [--pick 30] [--eval JS@20] [--port 8000] [--software] [--resize 1280x720@12]
+        --out data/web-shots --at 5,10,15 [--press Enter@12] [--pick 30] [--eval JS@20] [--grant clipboard-read] [--port 8000] [--software] [--resize 1280x720@12]
 
 Serves `--dist` on 127.0.0.1, opens it in Chromium with WebGPU enabled
 (`--chromium` names the binary, `/usr/bin/chromium` by default; Playwright's
@@ -278,6 +278,14 @@ def main() -> None:
         default=[],
         help="JS@SECONDS: evaluate JS in the page then and print the result",
     )
+    parser.add_argument(
+        "--grant",
+        action="append",
+        default=[],
+        metavar="PERMISSION",
+        help="grant a Chromium permission to the page, repeatable (`clipboard-read` and "
+        "`clipboard-write`, so --eval can read back what a COPY button wrote)",
+    )
     parser.add_argument("--fps", type=float, default=0.0)
     parser.add_argument(
         "--stalls",
@@ -433,6 +441,8 @@ def main() -> None:
             page = browser.new_page(
                 viewport={"width": width, "height": height}, device_scale_factor=args.dpr
             )
+            if args.grant:
+                page.context.grant_permissions(args.grant)
             if args.stalls > 0:
                 # Every animation frame's time, from before the page's own
                 # script runs: a gap is the page's thread busy, a load stall.
