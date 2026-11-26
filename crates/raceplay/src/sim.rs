@@ -675,6 +675,36 @@ impl RaceSim {
             .flatten()
     }
 
+    /// Whether `slot`'s Detonator craft has blown up on a title that plays its end out before the
+    /// results.
+    pub(crate) fn detonator_ending(&self, slot: usize) -> bool {
+        self.detonator_end().is_some()
+            && self.world.ships[slot].physics.craft_state != oag_physics::CraftState::Racing
+    }
+
+    /// The end this race plays on a destroyed craft, `None` outside Detonator and on a title
+    /// that ends at once ([`oag_title::destroyed::DestroyedCraft::detonator_end`]).
+    pub(crate) fn detonator_end(&self) -> Option<oag_title::destroyed::DetonatorEnd> {
+        (self.world.mode() == Mode::Detonator)
+            .then_some(self.destroyed.detonator_end)
+            .flatten()
+    }
+
+    /// Whether `slot`'s end has run its course: a Zone end to state 6 (`zone-destroy.md`, row
+    /// Z9), a Detonator end to the results' time after the blast, any other at once.
+    pub(super) fn end_played_out(&self, slot: usize) -> bool {
+        let physics = &self.world.ships[slot].physics;
+        if self.zone_end().is_some() {
+            return oag_physics::damage::in_state_6(physics, false);
+        }
+        self.detonator_end().is_none_or(|end| {
+            let sequence = self.destroy_sequence();
+            // State 5 counts down from `dwell_secs`, entered `explosion_secs` after the blast.
+            physics.state_timer
+                <= sequence.dwell_secs - (end.results_secs - sequence.explosion_secs)
+        })
+    }
+
     /// Whether `slot`'s wreck has been taken out of the physics world: its title's state 6
     /// removes the body (`PhysicsWorld_RemoveBody`,
     /// `docs/ghidra/functions/ps3-hdfury-eu/ship-destroy.md`, row 12), so it is no longer

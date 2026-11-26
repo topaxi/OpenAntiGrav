@@ -48,8 +48,9 @@ use oag_ui::language::StringTable;
 use oag_ui::menu::{Frame, Layers, Picture, Skin};
 use oag_ui::screen::argb_to_rgba;
 
+use super::hd_text_draw;
 use crate::endrace::Layout;
-use crate::endrace::draw::{fill_draw, image_draw, text_draw};
+use crate::endrace::draw::{fill_draw, image_draw};
 
 /// One racer on the podium.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -123,7 +124,7 @@ pub fn hd_podium_draw_list(
     race_behind: bool,
     sprites: &dyn Fn(&str) -> Option<Placed>,
 ) -> Layers {
-    let mut layers = Layers::behind(skin, frame, backdrop, race_behind);
+    let mut layers = Layers::behind(skin, &frame.without_marks(), backdrop, race_behind);
     let screen = &layout.screen;
     let mut out = Vec::new();
     for fill in &screen.fills {
@@ -146,7 +147,7 @@ pub fn hd_podium_draw_list(
             continue;
         }
         if let (None, Some(string)) = (name, &text.string) {
-            out.push(text_draw(text, string, layout));
+            out.push(hd_text_draw(text, string, layout));
         }
     }
     let find = |name: &str| {
@@ -178,16 +179,17 @@ pub fn hd_podium_draw_list(
             out.push(image_draw(&drawn, placed));
         }
         if let Some(authored) = heading {
-            let mut head = text_draw(authored, strings.get_or_id(place_idstring(place)), layout);
-            if let Draw::Text { x, y, .. } = &mut head {
+            let mut head = hd_text_draw(authored, strings.get_or_id(place_idstring(place)), layout);
+            if let Draw::Text { x, y, .. } | Draw::FacedText { x, y, .. } = &mut head {
                 *x = HEAD_X + COLUMN_STEP * slot;
                 *y = HEAD_Y_BOTTOM - rise;
             }
             out.push(head);
         }
         if let Some(authored) = name_text {
-            let mut name = text_draw(authored, &entry.name, layout);
-            if let Draw::Text { x, y, color, .. } = &mut name {
+            let mut name = hd_text_draw(authored, &entry.name, layout);
+            if let Draw::Text { x, y, color, .. } | Draw::FacedText { x, y, color, .. } = &mut name
+            {
                 *x = NAME_X + COLUMN_STEP * slot;
                 *y = NAME_Y_BOTTOM - rise;
                 *color = argb_to_rgba(ink);

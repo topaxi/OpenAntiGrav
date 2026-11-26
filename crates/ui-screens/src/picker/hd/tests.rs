@@ -650,6 +650,7 @@ fn red_fills(picker: &Picker, extra: &TeamScreen, layout: &Layout) -> Vec<[f32; 
             solid_alpha: 1.0,
             cursor: None,
             arrow: None,
+            marker: None,
             fury: true,
         }),
         ..Frame::default()

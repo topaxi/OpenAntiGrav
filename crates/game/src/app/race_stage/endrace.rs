@@ -166,6 +166,28 @@ impl EndRacePrep {
         })
     }
 
+    /// The faces a screen's `font="Title"` and `font="buttons"` widgets draw in, beside the one
+    /// atlas the renderer was built with.
+    pub(crate) fn install_faces(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        skin: &oag_title::MenuSkin,
+        font: &oag_ui::font::Atlas,
+        title_font: Option<oag_ui::font::Atlas>,
+        buttons_font: Option<oag_ui::font::Atlas>,
+    ) {
+        crate::boot::fonts::install_faces(
+            &mut self.renderer,
+            device,
+            queue,
+            skin,
+            font,
+            title_font,
+            buttons_font,
+        );
+    }
+
     /// The screens, for the choices a finished race makes against what the disc authors.
     pub(crate) fn screens(&self) -> &crate::endrace::EndRaceScreens {
         &self.screens

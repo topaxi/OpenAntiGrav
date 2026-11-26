@@ -628,6 +628,10 @@ impl crate::sim::RaceSim {
         let Some(detonator) = self.detonator.clone() else {
             return;
         };
+        // The record and the rows are taken at the blast: nothing scores while the end plays.
+        if self.detonator_ending(self.world.primary_slot()) {
+            return;
+        }
         let world = &mut self.world;
         if let Some(contact) = &detonator.contact {
             // **Chosen, not measured:** weapons-on damage rules. The original halves every hit

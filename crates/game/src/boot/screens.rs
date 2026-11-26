@@ -422,13 +422,10 @@ pub(super) fn selection_layouts(
     let hex_ring = front_end.and_then(|front_end| front_end.team_hex_ring_peak);
     let track_labels = front_end.map_or(&[][..], |front_end| front_end.track_label_overrides);
     let faces = oag_ui_screens::picker::FaceScales {
-        default: menu_font.map_or(
-            if default_is_row_face {
-                1.0
-            } else {
-                oag_ui_screens::picker::FaceScales::default().default
-            },
-            |menu| font.line_height / menu.line_height,
+        default: oag_ui_screens::picker::FaceScales::default_ratio(
+            font.line_height,
+            menu_font.map(|menu| menu.line_height),
+            default_is_row_face,
         ),
         native_default,
         small_role,
