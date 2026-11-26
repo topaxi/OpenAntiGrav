@@ -181,6 +181,35 @@ def check_ps2_world_clock(root):
     assert pcsx2_state.world_clock(root / "state.p2s") is None
 
 
+def check_hd_flame_clock():
+    """An HD grab records the frame context's boot clock (`*0x00936fd4 + 0xc4`) as `flame_clock_s`, and a re-render puts it
+    on ours as `--flame-clock` less the measured lag; a record without it, a non-HD record, or flags that carry one keep theirs."""
+    import rpcs3_hd_field as field
+
+    class Fake:
+        def __init__(self, words):
+            self.words = words
+
+        def u32(self, addr):
+            return self.words.get(addr, 0)
+
+        def f32(self, addr):
+            return self.words.get(addr, 0.0)
+
+    assert field.flame_clock(Fake({0x00936FD4: 0x3005C9B0, 0x3005C9B0 + 0xC4: 136.6355})) == 136.6355
+    assert field.flame_clock(Fake({})) is None, "no frame context yet reads no clock"
+    assert abs(ce.flame_pin(122.472) - (122.472 - ce.FLAME_CLOCK_LAG_S)) < 1e-9 and ce.flame_pin(None) is None
+    assert 0.0167 <= ce.FLAME_CLOCK_LAG_S <= 0.0334, "the lag sits between the two measured reads"
+    spec = importlib.util.spec_from_file_location("compare_rerender_ours", HERE / "compare-rerender-ours.py")
+    rro = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(rro)
+    rec = {"profile": "hd-fury", "original": {"flame_clock_s": 122.472}}
+    assert rro.hd_flame_clock_flags(rec, ["--race"]) == ["--race", "--flame-clock", "%.4f" % (122.472 - ce.FLAME_CLOCK_LAG_S)]
+    assert rro.hd_flame_clock_flags(rec, ["--flame-clock", "1.0"]) == ["--flame-clock", "1.0"]
+    assert rro.hd_flame_clock_flags({"profile": "hd-fury", "original": {}}, ["--race"]) == ["--race"]
+    assert rro.hd_flame_clock_flags(dict(rec, profile="pulse-psp"), ["--race"]) == ["--race"]
+
+
 def tomllib_load(path):
     import tomllib
     return tomllib.loads(Path(path).read_text())
@@ -388,6 +417,7 @@ def main():
     with tempfile.TemporaryDirectory() as t:
         check_anisotropy(Path(t))
     check_detonator_mine_envelopes()
+    check_hd_flame_clock()
     check_detonator_volley_ticks()
     with tempfile.TemporaryDirectory() as t:
         check_detonator_picture_tick(Path(t))

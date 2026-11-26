@@ -2,8 +2,8 @@
 //! disagree and every line goes through a string id (`assets/ui/strings/english.toml`).
 //!
 //! A run reads as a verdict, a few plain lines and a DETAILS block. The verdict comes from the
-//! share of counted frames that missed one screen refresh (the report's frames over the refresh
-//! budget): up to [`super::report::SMOOTH_SHARE`] is SMOOTH, up to
+//! share of counted frames that missed the frame budget the player asked for
+//! ([`super::report::Context::budget`]): up to [`super::report::SMOOTH_SHARE`] is SMOOTH, up to
 //! [`super::report::MOSTLY_SMOOTH_SHARE`] MOSTLY SMOOTH, more CHOPPY
 //! (`docs/tools/in-game-benchmark.md`, "Reading the screen").
 
@@ -27,7 +27,7 @@ pub mod words {
     pub const CHOPPY: Word = ("OAG_BENCH_VERDICT_CHOPPY", "CHOPPY");
     pub const VERDICT: Word = (
         "OAG_BENCH_VERDICT",
-        "%s: %s FPS ON AVERAGE, ON A %s HZ SCREEN",
+        "%s: %s FPS ON AVERAGE, JUDGED AGAINST %s FPS",
     );
     pub const SLOWEST: Word = (
         "OAG_BENCH_SLOWEST",
@@ -35,7 +35,7 @@ pub mod words {
     );
     pub const STUTTERS: Word = (
         "OAG_BENCH_STUTTERS",
-        "Stutters: %s of %s frames took longer than one screen refresh",
+        "Stutters: %s of %s frames missed the %s ms frame budget",
     );
     pub const CAPPED: Word = (
         "OAG_BENCH_CAPPED",
@@ -187,6 +187,11 @@ fn hz(value: f64) -> String {
     }
 }
 
+/// The frame budget in milliseconds, to a tenth: the stutter line and the FRAMES OVER row.
+fn tenth_ms(value: f64) -> String {
+    format!("{value:.1}")
+}
+
 /// The mods line of the summary.
 fn mods_line(report: &Report, s: Say<'_>) -> String {
     match &report.context.mods {
@@ -208,7 +213,7 @@ pub fn summary(report: &Report, s: Say<'_>) -> Vec<String> {
         &[
             &verdict_word(figures.verdict(), s),
             &fps(figures.average_fps),
-            &hz(report.context.refresh.0),
+            &hz(report.context.budget().hz),
         ],
     )];
     lines.push(say(s, words::SLOWEST, &[&fps(figures.low_1)]));
@@ -218,6 +223,7 @@ pub fn summary(report: &Report, s: Say<'_>) -> Vec<String> {
         &[
             &figures.over_budget.to_string(),
             &figures.counted.to_string(),
+            &tenth_ms(figures.budget_ms),
         ],
     ));
     if let Some(limit) = figures.limited_by {
@@ -278,7 +284,7 @@ pub fn details(report: &Report, s: Say<'_>) -> Details {
         rows.push((say(s, words::P99, &[]), ms(p99_ms)));
         rows.push((say(s, words::WORST, &[]), ms(worst_ms)));
         rows.push((
-            say(s, words::OVER, &[&format!("{budget_ms:.1}")]),
+            say(s, words::OVER, &[&tenth_ms(budget_ms)]),
             say(
                 s,
                 words::OVER_OF,

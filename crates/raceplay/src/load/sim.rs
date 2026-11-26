@@ -558,6 +558,8 @@ pub fn load_sim(options: &Options) -> Result<SimLoad> {
         plasma_release_at_display_scale: title.weapons.plasma_release_at_display_scale.value,
         rocket_launch_at_display_scale: title.weapons.rocket_launch_at_display_scale.value,
         own_craft_box_hides_track: title.weapons.own_craft_box_hides_track.value,
+        surface_probe_lengths: title.weapons.surface_probe_lengths.value,
+        rocket_open_air: title.weapons.rocket_open_air.value,
         reset_triggers: crate::respawn::reset_triggers_for(&title.reset_enables),
         contact_cues: title.contact_cues,
         opponent_fire: title.weapons.opponent_fire.value,

@@ -105,6 +105,8 @@ impl SimSetup {
             plasma_release_at_display_scale: true,
             rocket_launch_at_display_scale: true,
             own_craft_box_hides_track: oag_title::weapons::OwnCraftBox::Falls,
+            surface_probe_lengths: oag_title::weapons::ProbeLengths::PULSE,
+            rocket_open_air: oag_title::weapons::RocketOpenAir::Falls,
             reset_triggers: oag_race::recovery::ResetTriggers::PULSE,
             contact_cues: oag_title::contact_cue::ContactCues::Rearmed,
             opponent_fire: oag_title::weapons::OpponentFire::PULSE,

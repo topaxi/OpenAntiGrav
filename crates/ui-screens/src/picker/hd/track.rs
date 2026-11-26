@@ -218,11 +218,11 @@ fn draw_grid(
                 icon: Some(src), ..
             },
             ..
-        }) => Face::Art {
-            src: src.clone(),
-            size: ArtSize::Fit(ICON_SIZE),
+        }) => Face {
+            picture: Some((src.clone(), ArtSize::Fit(ICON_SIZE))),
+            locked: false,
         },
-        _ => Face::Empty,
+        _ => Face::default(),
     };
     let mut grid = *grid;
     grid.rows = grid.rows.min(rows);

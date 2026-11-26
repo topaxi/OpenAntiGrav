@@ -9,6 +9,7 @@ use oag_physics::{CollisionWorld, ShipState, Surface, TriangleSoup};
 mod cage;
 mod craft_box;
 mod floor_arms;
+mod hd_box;
 mod owner_exempt;
 mod seed;
 

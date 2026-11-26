@@ -982,6 +982,7 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
         now_playing,
         world_clock_offset: options.world_clock_offset,
         gantry_seconds: options.gantry_seconds,
+        flame_seconds: options.flame_seconds,
         camera_override: options.camera,
         fov_override: options.fov_override,
         track_sections: visibility.as_ref().and_then(|v| v.pvs().cloned()),

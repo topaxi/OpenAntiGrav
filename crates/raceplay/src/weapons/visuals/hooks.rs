@@ -65,6 +65,23 @@ impl RaceSim {
     pub fn force_rocket_hit(&mut self, slot: usize) -> bool {
         self.put_craft_on_projectile(oag_tables::weapons::Weapon::Rocket, slot)
     }
+
+    /// Takes up to `count` of the player's Rockets out of the air, without a blast, for
+    /// `--force-rocket-hit-at`: the blast it stands for is played where the flag says. Returns
+    /// how many it took.
+    fn retire_player_rockets(&mut self, player: usize, count: usize) -> usize {
+        let mut retired = 0;
+        for projectile in &mut self.world.projectiles.slots {
+            if retired < count
+                && projectile.kind == Some(oag_tables::weapons::Weapon::Rocket)
+                && usize::from(projectile.owner) == player
+            {
+                *projectile = oag_weapons::projectile::Projectile::default();
+                retired += 1;
+            }
+        }
+        retired
+    }
 }
 
 impl SimRace {
@@ -136,6 +153,34 @@ impl Race {
             self.core.sim.world.ships[slot].physics.body.linear_velocity = velocity;
             self.view.forced_blast_velocity = Some((slot, velocity));
         }
+    }
+
+    /// `count` Rockets striking a craft at `at`, for `--force-rocket-hit-at`: that many craft
+    /// blasts (each with its screen flash) stand at that exact world point, and as many of the
+    /// player's Rockets in flight are taken out. No craft is struck, so there is no damage,
+    /// impulse or cue. `velocity` is what the blasts carry on a title whose spawn writes the
+    /// struck craft's (`oag_title::Effects::craft_blast_carry`). Returns how many Rockets it
+    /// took, or `None` when the race loaded no craft blast. A verification aid and nothing else.
+    pub fn force_rocket_hit_at(
+        &mut self,
+        at: oag_core::math::Vec3,
+        count: usize,
+        velocity: Option<oag_core::math::Vec3>,
+    ) -> Option<usize> {
+        self.view.handles.get(Trigger::CraftBlast)?;
+        let player = self.core.player_slot();
+        let retired = self.core.sim.retire_player_rockets(player, count);
+        let carried = velocity.filter(|_| self.view.craft_blast_carry);
+        for _ in 0..count {
+            self.view.flash_and_play(
+                flash_for(oag_tables::weapons::Weapon::Rocket, true),
+                Trigger::CraftBlast,
+                at,
+                carried,
+                0.0,
+            );
+        }
+        Some(retired)
     }
 
     /// Restart the particle stage's random stream from `seed` instead of

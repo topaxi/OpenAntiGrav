@@ -117,6 +117,8 @@ pub struct CaptureOptions {
     pub force_rocket_hit: Option<(u32, usize)>,
     /// `--force-rocket-hit-velocity`: the struck craft's velocity at that hit.
     pub force_rocket_hit_velocity: Option<oag_core::math::Vec3>,
+    /// `--force-rocket-hit-at`, each wave.
+    pub force_rocket_hit_at: Vec<tick::ForcedRocketHit>,
     /// `--force-quake TICK:SLOT`: see [`SimRace::force_quake`].
     pub force_quake: Option<(u32, usize)>,
     /// `--force-remote-correction`: see [`oag_raceplay::correction::Scene`].

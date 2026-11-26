@@ -295,6 +295,8 @@ pub struct ViewSetup {
     pub world_clock_offset: f32,
     /// [`Options::gantry_seconds`], carried to the gantry's clock.
     pub gantry_seconds: Option<f32>,
+    /// [`Options::flame_seconds`], carried to the flame surfaces' clock.
+    pub flame_seconds: Option<f32>,
     /// [`Options::camera`], carried through to [`Race::view`]. Plain data, so
     /// it rides in the simulation half even though only the renderer reads it.
     pub camera_override: Option<CameraOverride>,
@@ -428,6 +430,7 @@ impl ViewSetup {
             now_playing: None,
             world_clock_offset: 0.0,
             gantry_seconds: None,
+            flame_seconds: None,
             camera_override: None,
             fov_override: None,
             sight: Sighting::default(),

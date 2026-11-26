@@ -165,6 +165,15 @@ pub const TITLE: &Title = &Title {
         own_craft_box_hides_track: oag_title::pre_race::Sourced::measured(
             oag_title::weapons::OwnCraftBox::Falls,
         ),
+        // Measured: each flyer's own update (`psp-pulse-usa/rocket-visuals.md`, `missile.md`,
+        // `plasma.md`, `shuriken.md`).
+        surface_probe_lengths: oag_title::pre_race::Sourced::measured(
+            oag_title::weapons::ProbeLengths::PULSE,
+        ),
+        // Measured: `Rocket_Update`'s `0x7f` arm falls (`rocket-visuals.md`).
+        rocket_open_air: oag_title::pre_race::Sourced::measured(
+            oag_title::weapons::RocketOpenAir::Falls,
+        ),
         opponent_fire: oag_title::pre_race::Sourced::measured(
             oag_title::weapons::OpponentFire::PULSE,
         ),

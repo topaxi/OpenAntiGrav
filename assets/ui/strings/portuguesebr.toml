@@ -435,9 +435,9 @@ OAG_BENCH_PRESET_NAMED = { text = "PREDEFINIÇÃO %s", human = false }
 OAG_BENCH_VERDICT_SMOOTH = { text = "FLUIDO", human = false }
 OAG_BENCH_VERDICT_MOSTLY_SMOOTH = { text = "QUASE FLUIDO", human = false }
 OAG_BENCH_VERDICT_CHOPPY = { text = "COM TRAVADAS", human = false }
-OAG_BENCH_VERDICT = { text = "%s: %s FPS EM MÉDIA, EM UMA TELA DE %s HZ", human = false }
+OAG_BENCH_VERDICT = { text = "%s: %s FPS EM MÉDIA, AVALIADO EM RELAÇÃO A %s FPS", human = false }
 OAG_BENCH_SLOWEST = { text = "Momentos mais lentos: %s FPS (os piores 1 em 100 quadros)", human = false }
-OAG_BENCH_STUTTERS = { text = "Travadas: %s de %s quadros levaram mais que uma atualização da tela", human = false }
+OAG_BENCH_STUTTERS = { text = "Travadas: %s de %s quadros estouraram o orçamento de %s ms por quadro", human = false }
 OAG_BENCH_CAPPED = { text = "Seu limite de quadros (%s FPS) limitou este resultado. Desligue LIMITE DE QUADROS nas OPÇÕES DO BENCHMARK para ver a velocidade máxima do seu hardware.", human = false }
 OAG_BENCH_MODS_NONE = { text = "Mods: nenhum", human = false }
 OAG_BENCH_MODS_LOADED = { text = "Mods: %s carregados", human = false }

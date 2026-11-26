@@ -501,6 +501,8 @@ def main():
               "what": "HUD clock text vs RAM; the picture is not corrected; on a moving craft it was measured 0 to 3 ticks older than the RAM read (hd-pair-lag-scan.py)"})
     gantry = ship.get("gantry_seconds")
     pair.rec["original"]["gantry_seconds"] = gantry
+    flame = ship.get("flame_clock_s")
+    pair.rec["original"]["flame_clock_s"] = flame
     world = ship.get("scenery_clock")
     ours_world_offset = None
     if world is not None and clock is not None:
@@ -573,6 +575,9 @@ def main():
         flags += ["--gantry-seconds", "%.6f" % ce.gantry_pin(gantry, clock_lag)]
     if ours_world_offset is not None:
         flags += ["--world-clock-offset", "%.3f" % ours_world_offset]
+    # The engine flame's noise phase, off the frame context's boot clock in the same pause (`compare_env.flame_pin`).
+    if flame is not None:
+        flags += ["--flame-clock", "%.4f" % ce.flame_pin(flame)]
     field_flags = []
     if args.zone:
         zbits = args.zone.split(",")

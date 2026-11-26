@@ -529,6 +529,7 @@ pub fn run(
                 force_missile_hit: None,
                 force_rocket_hit: None,
                 force_rocket_hit_velocity: None,
+                force_rocket_hit_at: Vec::new(),
                 force_quake: None,
                 remote_correction: None,
                 net: None,

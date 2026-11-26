@@ -375,6 +375,7 @@ fn every_flag_group_is_flattened_into_the_command() {
         "pose_from",
         "hud_state",
         "world_clock_offset",
+        "flame_clock",
         "pose_boost",
     ] {
         assert!(
@@ -552,12 +553,65 @@ fn a_development_build_reads_the_struck_crafts_velocity() {
     );
 }
 
+#[cfg(feature = "dev-cli")]
+#[test]
+fn a_development_build_reads_a_forced_volley() {
+    let cli = Cli::try_parse_from([
+        "oag-game",
+        "--race",
+        "--force-rocket-hit-at",
+        "709:525.15,-28.26,-34.80",
+        "--force-rocket-hit-at",
+        "714:533.12,-27.12,-27.35:2",
+        "--force-rocket-hit-velocity",
+        "89.3,13.9,96.8",
+    ])
+    .expect("two waves and their velocity, with no --force-rocket-hit");
+    let waves = crate::app::args::rocket_hits_at(cli.force_rocket_hit_at()).expect("two waves");
+    let wave = |tick, x, y, z, count| crate::race_capture::tick::ForcedRocketHit {
+        tick,
+        at: oag_core::math::Vec3::new(x, y, z),
+        count,
+    };
+    assert_eq!(
+        waves,
+        [
+            wave(709, 525.15, -28.26, -34.80, 1),
+            wave(714, 533.12, -27.12, -27.35, 2),
+        ]
+    );
+    for bad in [
+        "709",
+        "709:1,2",
+        "x:1,2,3",
+        "709:1,2,3:0",
+        "709:1,2,3:two",
+        "709:1,2,3:1:1",
+        "709:1,NaN,3",
+    ] {
+        assert!(
+            crate::app::args::rocket_hits_at(&[bad.to_string()]).is_err(),
+            "{bad}"
+        );
+    }
+    Cli::try_parse_from([
+        "oag-game",
+        "--race",
+        "--force-rocket-hit",
+        "9:1",
+        "--force-rocket-hit-at",
+        "9:1,2,3",
+    ])
+    .expect("the two forced hits go together");
+}
+
 #[cfg(not(feature = "dev-cli"))]
 #[test]
 fn a_release_build_rejects_seed_and_give() {
     for flag in [
         vec!["--seed", "7"],
         vec!["--give", "rocket"],
+        vec!["--force-rocket-hit-at", "9:1,2,3"],
         vec![
             "--force-rocket-hit",
             "9:1",

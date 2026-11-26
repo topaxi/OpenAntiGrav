@@ -339,14 +339,17 @@ fn a_missile_in_flight_draws_its_two_heads() {
 /// not tell the two apart.
 const FORCED_BLAST_PIXELS: usize = 10_000;
 
-/// Talon's Junction, the player firing one volley of Rockets, with or without
-/// `--force-rocket-hit` putting rival 1 on one of them after tick 289.
-fn rocket_frame(forced: bool, velocity: Option<&str>) -> Option<Vec<[u8; 3]>> {
+/// Rival 1 put on one of the volley's Rockets after tick 289.
+const FORCED_HIT: [&str; 2] = ["--force-rocket-hit", "289:1"];
+
+/// Talon's Junction, the player firing one volley of Rockets, with `forced`'s flags.
+fn rocket_frame(forced: &[&str]) -> Option<Vec<[u8; 3]>> {
+    static RUNS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
     let image = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso")?;
     let scratch = std::env::temp_dir().join(format!(
-        "oag-hd-rocket-blast-{}-{forced}-{}",
+        "oag-hd-rocket-blast-{}-{}",
         std::process::id(),
-        velocity.is_some()
+        RUNS.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
     ));
     std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
     let out = scratch.join("frame.png");
@@ -359,12 +362,7 @@ fn rocket_frame(forced: bool, velocity: Option<&str>) -> Option<Vec<[u8; 3]>> {
         .args(["--render-scale", "100", "--msaa", "off"])
         .args(["--screen-filter", "off", "--anisotropy", "off"])
         .args(["--motion-blur", "off", "--ticks", "296", "--give", "rocket"]);
-    if forced {
-        game.args(["--force-rocket-hit", "289:1"]);
-    }
-    if let Some(velocity) = velocity {
-        game.args(["--force-rocket-hit-velocity", velocity]);
-    }
+    game.args(forced);
     let status = game
         .arg("--input-script")
         .arg(&script)
@@ -386,8 +384,8 @@ fn rocket_frame(forced: bool, velocity: Option<&str>) -> Option<Vec<[u8; 3]>> {
 #[test]
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso and a GPU adapter"]
 fn force_rocket_hit_blows_a_rocket_on_the_named_craft_at_its_tick() {
-    let forced = rocket_frame(true, None).expect("image");
-    let free = rocket_frame(false, None).expect("image");
+    let forced = rocket_frame(&FORCED_HIT).expect("image");
+    let free = rocket_frame(&[]).expect("image");
     let changed = forced
         .iter()
         .zip(&free)
@@ -410,8 +408,13 @@ fn force_rocket_hit_blows_a_rocket_on_the_named_craft_at_its_tick() {
 #[test]
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso and a GPU adapter"]
 fn force_rocket_hit_velocity_moves_what_the_forced_hit_draws() {
-    let own = rocket_frame(true, None).expect("image");
-    let thrown = rocket_frame(true, Some("-300,0,0")).expect("image");
+    let own = rocket_frame(&FORCED_HIT).expect("image");
+    let thrown = rocket_frame(&[
+        FORCED_HIT[0],
+        FORCED_HIT[1],
+        "--force-rocket-hit-velocity=-300,0,0",
+    ])
+    .expect("image");
     let changed = own
         .iter()
         .zip(&thrown)
@@ -421,5 +424,32 @@ fn force_rocket_hit_velocity_moves_what_the_forced_hit_draws() {
     assert!(
         changed > FORCED_BLAST_PIXELS,
         "the velocity changed only {changed} pixels"
+    );
+}
+
+/// `--force-rocket-hit-at` plays its blasts at its point from its tick: given at 289 the frame at
+/// 296 holds them, given at a tick the run never reaches it is the frame of the volley left to fly.
+/// The point is 15 units ahead of the player's craft at tick 289.
+#[cfg(feature = "dev-cli")]
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso and a GPU adapter"]
+fn force_rocket_hit_at_plays_its_blasts_from_its_tick() {
+    let free = rocket_frame(&[]).expect("image");
+    let forced =
+        rocket_frame(&["--force-rocket-hit-at", "289:-116.8,-52,-175.4:3"]).expect("image");
+    let never = rocket_frame(&["--force-rocket-hit-at", "400:-116.8,-52,-175.4:3"]).expect("image");
+    let changed = forced
+        .iter()
+        .zip(&free)
+        .filter(|(a, b)| a.iter().zip(b.iter()).any(|(x, y)| x.abs_diff(*y) > 64))
+        .count();
+    println!("at tick 296: {changed} pixels changed by the forced blasts");
+    assert!(
+        changed > FORCED_BLAST_PIXELS,
+        "no blast at the forced point: {changed} pixels changed"
+    );
+    assert!(
+        never == free,
+        "a flag whose tick never comes changed the frame"
     );
 }

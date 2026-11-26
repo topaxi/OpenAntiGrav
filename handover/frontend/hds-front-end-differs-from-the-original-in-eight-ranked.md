@@ -1,8 +1,8 @@
 ---
-status: ready-to-wire
+status: re-first
 titles: [hd]
 updated: 2026-11-26
-summary: "HD front end: hex cell art, ramp, glyph and icons wired; open: padlock art, key repeat, Team pulse zero point, glyph counter"
+summary: "HD front end: hex cells, padlocks, glyph and icons wired; open: key repeat, Team pulse zero point, glyph counter, Omega's lock colours"
 difficulty: medium (30)
 ---
 
@@ -22,11 +22,12 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
   `HexFade` are gone), Omega's grey selected column (`FrontEnd::hex_selected_fill`); ranked second: the `>>>` glyph, with
   the circuit icons at the widget's 50 units. Pairs (mean grey): `hd/menu-ship-select` 2.73 to 2.54,
   `hd/menu-track-select` 3.77 to 3.54, `omega/menu-ship-select` 20.09 to 19.30, `omega/menu-track-select` 18.83 to 18.54;
-  the other six unchanged. The lead re-renders the page. **Open, ready to wire (RE done)**: the padlock's own art
-  `hexlock_HD.gtf` (UV 75x64 on the 92x80 quad; ours draws `Padlock.gtf` at a fitted 0.44) with its colour ramp from
-  `SelectedLockColFade` to `SelectedLockCol`; the picture under the padlock (the ship silhouette the original draws on
-  every locked cell, ours draws none) and the ramp of the unselected columns' pictures from `0x12000000` to
-  `0x64000000` (ours a flat 0.35). Medium (30).
+  the other six unchanged. The lead re-renders the page. **Padlocks and silhouettes LANDED** (`hd-hex-padlock`;
+  `ship-select-ring.md`, "The cells"): `hexlock_HD` on the 92x80 quad with its ramp, every model's picture under it
+  (black at 100/255 on a locked cell of the selected column), the icon ramp on both grids; `hd/menu-ship-select` 2.54 to
+  2.24, `hd/menu-track-select` 3.54 to 3.52. **Open on Omega, read first**: it inherits the wiring, and
+  `omega/menu-ship-select` went 19.30 to 19.45 (its locks read near (62, 62, 62) by eye on every column; its XML authors HD's
+  two lock colours; its half-row phase is also inverted against ours, so part of that error is geometry): read `FUN_0145af70`'s lock colouring against `HexSelection_SetCell` (`0x001b0c28`); small (30).
   **Open, read first**: the **key repeat** (recipe: decompile `FUN_006770c8`, the pad test `TrackHexSelection_Update`
   asks, and the writer of what it reads, for the initial delay and period; check by holding `right` 3 s on RPCS3 and
   logging `+0x11c` with `scripts/hd_track_hex.py`; small (25)). The **Team pulse zero point** (recipe: find Team

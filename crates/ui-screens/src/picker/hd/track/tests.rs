@@ -366,7 +366,8 @@ fn grid_draws(picker: &Picker) -> Vec<Draw> {
 fn the_grid_puts_a_circuit_in_each_hexagon_and_red_on_the_chosen_column() {
     let picker = grid();
     let draws = grid_draws(&picker);
-    // 9 columns x 2 rows: a hexagon and an icon each, and the ring's one quad on the forward row.
+    // 9 columns x 2 rows: a hexagon and an icon each, flat on the chosen column and shaded across
+    // on the other eight, with the ring's one quad and the direction glyph on top.
     let sprites = draws
         .iter()
         .filter(|d| matches!(d, Draw::Sprite { .. }))
@@ -375,7 +376,7 @@ fn the_grid_puts_a_circuit_in_each_hexagon_and_red_on_the_chosen_column() {
         .iter()
         .filter(|d| matches!(d, Draw::GradientSprite { .. }))
         .count();
-    assert_eq!((sprites, shaded), (2 + 18 + 1 + 1, 16));
+    assert_eq!((sprites, shaded), (2 + 2 + 1 + 1, 16 + 16));
     let red = draws
         .iter()
         .filter(|d| matches!(d, Draw::Sprite { color, .. } if *color == oag_ui::screen::argb_to_rgba(0xffac_0717)))
@@ -384,9 +385,26 @@ fn the_grid_puts_a_circuit_in_each_hexagon_and_red_on_the_chosen_column() {
     // Each icon is the widget's 50 unit quad: the test's 128x64 art fits it as 50 by 25.
     let icons = draws
         .iter()
-        .filter(|d| matches!(d, Draw::Sprite { rect, .. } if rect[2..] == [50.0, 25.0]))
+        .filter(|d| {
+            matches!(d, Draw::Sprite { rect, .. } | Draw::GradientSprite { rect, .. } if rect[2..] == [50.0, 25.0])
+        })
         .count();
     assert_eq!(icons, 18);
+    // Circuits other than the chosen one are black, fading from 100/255 at the chosen column's
+    // edges to 18/255 at the grid's outer edges (nine columns, so four columns of ramp).
+    let outer = draws.iter().find_map(|d| match d {
+        Draw::GradientSprite {
+            rect, left, right, ..
+        } if rect[2..] == [50.0, 25.0] => Some((*left, *right)),
+        _ => None,
+    });
+    let (left, right) = outer.expect("a shaded icon");
+    assert_eq!(left[..3], [0.0; 3]);
+    assert!((left[3] * 255.0 - 18.0).abs() < 1e-3, "{left:?}");
+    assert!(
+        (right[3] * 255.0 - (18.0 + 82.0 / 4.0)).abs() < 1e-3,
+        "{right:?}"
+    );
 }
 
 /// The `>>>` is a 40x10 quad 24 units under the ring, walking one frame of its strip a quarter

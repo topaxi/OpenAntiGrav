@@ -33,6 +33,7 @@ fn report(title: &'static str) -> Report {
             build_version: "0.1.0 (0123456789ab)",
             refresh: (60.0, "display"),
             frame_limit_hz: Some(60.0),
+            target_fps_hz: Some(60.0),
             preset: None,
             mods: None,
             vsync: "off".into(),
@@ -46,7 +47,7 @@ fn report(title: &'static str) -> Report {
             people: 1,
             tick_cap: 40_000,
         },
-        // Slow enough to be CHOPPY, long enough to have a 0.1 % low, and on the frame limit.
+        // Long enough to have a 0.1 % low, and on the frame limit.
         frames: (0..2000)
             .map(|index| Frame {
                 frame_us: 16_700.0,

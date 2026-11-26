@@ -2,7 +2,7 @@
 status: measure
 titles: [hd, omega, 2048]
 updated: 2026-11-26
-summary: "Owed: films of HD explosions and streaks, Rocket blast gaps, cap source, near-pair struck velocity; half-res parked"
+summary: "Owed: films of HD explosions and streaks, Rocket blast gaps, cap source, near pairs' field rewind to adopt; half-res parked"
 size: M (50)
 difficulty: medium (55)
 ---
@@ -41,12 +41,22 @@ blast the struck craft's velocity, on HD, 2048 and Omega
 - **The far Rocket blast with the film's velocity is still not the original's**
   (`particle-fill.md`, "The pose throws the far blast at the camera"): the cloud is smaller,
   `trail` reads as smooth white lobes, and the grey smoke streaming toward the camera is missing.
-- **Near pairs (`rocket-craft-hit-0100`, `-0233`): spawn tick and struck velocity unchecked.**
-  `--force-rocket-hit 711:7` was never compared with the original's spawn point (the far films put
-  the wash quad in world space: view position through the frame's camera; the same on `hit2` says
-  where ours should stand), and ours hands the blast our own opponent's velocity. `hit2`'s
-  `struck_pose.vel` is `(89.31, 13.92, 96.76)`; pose it with `--force-rocket-hit-velocity` once the
-  spawn point is right.
+- **The near pairs: their `field.csv` is 2 ticks ahead of their picture; the move is the lead's to adopt**
+  (`particle-fill.md`, "The first wave and the drawn hull"). It was never the cloud: the film pairs
+  fed ours the RAM poses, and the frame draws every craft 2 ticks back. That also explains the blast's
+  "2-tick lag". `compare_env.py film-pair-field` moves a pair's field to the frame's instant. Adopted,
+  0100 reads 53.96 (from 65.75) and 0233 50.36 (from 62.86), on their current flags. Still open:
+  - 0233's craft stays hidden under white on every arm, against the original's yellow-tinted
+    craft in plain view;
+  - the two-wave pose is still not the best on 0233 (+1.09 +/- 3.64);
+  - the wash quads are cut by the track where the original's cover the frame (hard edges on the
+    floor);
+  - why the original's second wave arrives later is unread.
+- **Lead, not checked: the far pairs may be posed on the second wave's blast.** Their wash quad
+  is 2 ticks old at 0.1 s and 10 at 0.233 s (`particle-fill.md`, "Posing a far hit"), so born about
+  4 ticks after the first shield drop; `far1`'s and `far3`'s shields fall again between 0.05 and
+  0.1 s (to 120 and 110). The far frames' records have no camera here, so their points were not
+  read.
 - **Lead, not checked: the tick that lands a forced Rocket hit adds about 20 units a second upward
   to the struck craft** (set `y` 11, read 31 at the blast). The HD films' struck craft show no such
   jump, comparing frames 8 to 23 ticks apart. Whether it is the Rocket's impulse or our hover after

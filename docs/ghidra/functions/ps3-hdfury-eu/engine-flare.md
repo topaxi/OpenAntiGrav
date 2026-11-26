@@ -147,7 +147,7 @@ fragment programs bound in `c1` carry the same four numbers. So:
 | **The flame's colour is halved: `rgb = mix(fc, tex * colourScale, f) / 2`.** The `/2` is the same closing scale every HD lit program ends on (`Light::output_scale`, 0.5 on HD) | `@0x27 MAD /2` on all five draws; block #2 on the disc carries it too | 90 |
 | The live program is block #2, the fogged permutation | 42 instructions equal block #2's with constants masked | 90 |
 | The fog is the circuit's (`fc` above, density 0.001, EXP2 on clip `w`); at chase distance (about 12 units) its factor is 1 to four places | the constants, shared by 325 of 378 programs in the frame | 85 |
-| The flame's `time` is a boot-relative clock (429.579 s in `c1`), not the race or scenery clock the comparison pairs record | `@0x0d`'s patched constant | 80 |
+| The flame's `time` is a boot-relative clock (429.579 s in `c1`), not the race or scenery clock the comparison pairs record; it is the frame context's `+0xc4` ("The flame's clock at a pair's grab") | `@0x0d`'s patched constant | 80 |
 
 **Wired**: the flame surfaces' block carries the circuit's output scale (`oag_raceplay`'s `flame_scene`),
 which `shade.wesl`'s flame branch already multiplied by; it read `Scene::off`'s 1.0 before, so the rest
@@ -160,7 +160,59 @@ vertical gradient, black to blue, with two pink rows near `v` 0.78 and 0.92, and
 noise. The colour tap reads `(2u, 2v + noise)` with the noise scrolled by `2 * time`, so which part of
 the nozzle lands on a pink row turns over every 0.5 s. Ours (halved, camera eye) at `--anim-seconds`
 0.0 and 0.125 shows the original's blue left and pink right; the other six of eight phases show other
-patterns. The pairs do not record the flame's boot clock, so a still pair cannot match the phase.
+patterns. The pairs made before 2026-11-26 do not record the flame's boot clock, so such a still pair
+cannot match the phase; the pair script now records it ("The flame's clock at a pair's grab" below).
+
+### The flame's clock at a pair's grab
+
+Measured 2026-11-26 (`hd-flame-clock`), RPCS3, HD Fury EU (BCES00664). The flame's `time` is the frame context's
+boot clock: `f32` at `(*0x00936fd4) + 0xc4` (`Render_FrameContextPtr_q`, the context `Game_PresentLoop_q` hands
+the render calls; engine-trail.md, "The draw state's two non-material constants, placed"). Every HD grab now
+records it beside the scenery clock (`grab_with_clock` writes `flame_clock_s` in `<stem>.clock.json`;
+`rpcs3_hd_field.flame_clock`), the pair script stores it as `original.flame_clock_s` and runs ours with
+`--flame-clock` at the recorded value less the lag below (`compare_env.flame_pin`), and a re-render adds the flag
+to an HD pair whose record holds the field. Ours' `--flame-clock` sets the flame surfaces' block's clock alone
+(`oag_raceplay`'s `flame_seconds`); every other animation keeps the world clock.
+
+| Finding | Evidence | Confidence |
+| --- | --- | --- |
+| **The flame program's `time` is `+0xc4`**, read one to two frames behind the PPU | two frame dumps of the Racebox weapons grid state with `+0xc4` read at every pause: 53 flame programs (`@0x0d MAD R1.w, R1, {t}`, `@0x27 MAD /2`, the fog constants) all hold 41.2949 against `+0xc4` 41.3283 (lag 0.0334 s); the second dump's slot-0 time 88.4302 against 88.4469 (lag 0.0167 s) | 85 (two reads, one state) |
+| It runs at game time and stops with the emulator: frozen under a GDB pause | five pauses over 12 s on the `hd-race/talons-pack` state, each read twice 1 s apart, bit-identical; it advanced 12.0 s across them | 85 (one state) |
+| **Within a run its gap to the scenery clock is constant; across boots it is not.** So a pair made before the field existed is clocked only when its own timeline is a known state | `hd-race/talons-pack` state, five pauses: `+0xc4` less the scenery clock 48.57702 to 48.57722, less the lap clock 115.1591 to 115.1593. Across runs the gap was 39.77 (a grid state), 54.78 and 57.01 (two cold boots) | 85 (one state within; three runs across) |
+
+The pin a pair passes is `flame_clock_s - 0.025` s (`compare_env.FLAME_CLOCK_LAG_S`, the mean of the two lag
+reads), within 0.009 s of either read, 2 % of the noise's 0.5 s period.
+
+**Of the 22 pairs above, one is clocked from its record.** `hd-race/talons-pack` was made on the restored
+`hd-race-talons-venom-pack` state with no restart: its record's scenery-less-lap offset 66.58214 equals the restored
+state's 66.58212, so its flame clock at the grab is its `world_clock_s` 73.89487 plus the state's 48.5771 = 122.4720
+s (derived from the timeline's offset, not read at the grab). Every cold-boot pair (`hd/talons` and the eleven other
+Time Trial grids) and the Detonator pairs (their `grid-late` state is not kept) need a regrab with the current
+script; the far-hit pairs were filmed after a restart.
+
+**The phase, on two regrabbed pairs and one clocked pair.** Ours re-rendered at the pin and at 20 clocks 0.025 s apart
+across one 0.5 s period; mean absolute RGB error (0 to 255) over the pixels the flame clock moves, each render
+bit-identical on a second run:
+
+| pair | moved pixels | free (world clock) | at the pin | best of 20 | pin's rank |
+| --- | --- | --- | --- | --- | --- |
+| Talon's Junction, `harimau_c1`, cold boot, flame 410.2580 | 1,679 | 22.947 | **18.384** | the pin | 1 of 20 |
+| Talon's Junction, `harimau_c1`, cold boot, flame 135.1249 | 1,761 | 19.698 | 19.453 | 19.122 (+0.10 s) | 12 of 20 |
+| `hd-race/talons-pack` (clock 122.4720, eight phases 0.0625 s apart) | 1,251 | 34.420 | 34.403 | 34.025 | 7 of 8 |
+
+On the first regrab the pin is the sharpest minimum of the sweep; on the second the error is flat (19.1 to 19.5)
+over most of the period and the pin sits in that flat band, away from the two dips (21.4 to 23.3); on
+`talons-pack` the flame is a distant craft's and the whole sweep spans 0.4 on an error of 34, so it cannot
+discriminate. On the second pair's nozzle box `944,750 32x26` the pin read 30.85 against the free phase's 31.36,
+and an 8-phase sweep ranked the pin 4th of 8: the falsifier written before the capture ("the pin among the best 2 of
+8") failed on that pair. **Phase match at the pin: confidence 60** (one sharp confirmation, one flat, one blind).
+The two regrabbed originals carry RPCS3's "Press and hold the START button to resume" toast top left and fly the
+Fury hull (this profile's Ship Select lands on `harimau_c1`), so they are measurements, not replacements for
+`hd/talons`, and the `hd/talons` nozzle box `935,802 57x58` (standard hull) was not re-measured.
+
+Reproduce: `python3 scripts/rpcs3-drive.py grab <png>` on an attached HD race writes `flame_clock_s`;
+`python3 scripts/hd-draw-dump.py <dir> <stem>` dumps the frame's fragment programs and
+`python3 scripts/ps3-fp-live.py <dir>/<stem>-<address>.bin` shows `@0x0d`'s constant.
 
 ## The fragment program, block #1
 
@@ -390,8 +442,8 @@ original's (37, 60, 89)). Five pairs read worse on this metric: `hd/metropia`, `
 `hd/talons-assegai-c1` and `hd/detonator-talons-cannon-volley`. `hd/talons-assegai-c1`'s original frame shows a
 different view of the craft than ours (error about 105 in both), so it does not compare a flame. The far-hit pairs'
 base binary drew different pixels on its two runs (0.1 and 1.0 million), so their row is not evidence either way.
-The other three are within the flame's phase: the pairs do not record the flame's boot clock, so each still frame
-samples the pink rows at an arbitrary phase. Averaged over eight phases across one 0.5 s period (the pair's
+The other three are within the flame's phase: those pairs predate the flame clock's recording ("The flame's clock at
+a pair's grab"), so each still frame samples the pink rows at an arbitrary phase. Averaged over eight phases across one 0.5 s period (the pair's
 `--world-clock-offset` plus 0 to 0.4375 s, so the scenery barely moves), the error over the moved pixels reads, base /
 `/2` alone / `/2` plus eye: `hd/metropia` 11.83 / 11.69 / 11.95, `hd/vineta-k` 4.40 / 4.40 / 4.44,
 `hd-race/talons-pack` 30.94 / 29.81 / 31.51, `hd/detonator-talons-cannon-volley` 30.13 / 30.15 / 30.10. So the `/2`
@@ -400,8 +452,8 @@ never loses on the phase average, and the eye still costs up to 0.6 on three res
 The `/2` alone was rendered on all 22 pairs too: 13 better, 8 worse on the single-phase metric (`hd/zone-vineta-k-z5`
 76.06 to 83.55 the largest, which the eye takes back to 75.08), against the pair's 17 better and 5 worse. Both are
 wired because together they are the measured program and the better of the two on this table; what still separates
-ours from the original on the rest pairs is open. A still pair cannot separate it from the phase; a pair that records
-the flame's boot clock (engine parameter slot 0, `c1`'s 429.579) would.
+ours from the original on the rest pairs is open. A still pair cannot separate it from the phase; a pair regrabbed with
+the flame clock recorded can ("The flame's clock at a pair's grab").
 
 **Before the `/2` was found, the eye alone made the rest flame worse, so it was held back.** The change tried: `flame_scene`
 (`crates/raceplay/src/scene/frame.rs`) gets `fog: Fog { camera: eye, ..Fog::off() }` (commit `0c86ed0ed`, reverted by

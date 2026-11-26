@@ -74,6 +74,7 @@ use serde::{Deserialize, Serialize};
 pub mod blur;
 mod patience;
 pub mod policy;
+pub mod probe;
 pub mod reflection;
 pub mod residual;
 pub mod width;

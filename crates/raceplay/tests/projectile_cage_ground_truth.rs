@@ -730,3 +730,57 @@ fn the_grid_craft_holds_its_own_first_probes_on_pure() {
     let (launch, rode) = diving(8.0);
     assert!(rode != launch, "8 ahead takes the ride arm: {rode:?}");
 }
+
+/// HD's grid craft builds the box the original's collider holds: `<Misc>` 5, 3.5, 13 (live
+/// `(3.75, 2.625, 9.75)` at `0.75`) on rows that match the original's grid row 0 and 2 without a
+/// mirror, and the race flies HD's own probe lengths and open-air Rocket
+/// (`docs/ghidra/functions/ps3-hdfury-eu/own-craft-box.md`, "Measured live").
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn the_grid_craft_builds_hds_own_box() {
+    let Some(image) = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let loaded = race::load(&race::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        team: Some("FEISAR".to_string()),
+        mode: oag_race::Mode::SingleRace,
+        track: Some(r"Data\Environments\Talons_Junction\track.vex".to_string()),
+        ..race::Options::default()
+    })
+    .expect("loading the race");
+    let race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
+    let ship = &race.core.sim.world.ships[0];
+    let dimensions = ship.handling.dimensions;
+    assert_eq!(
+        (dimensions.width, dimensions.height, dimensions.length),
+        (5.0, 3.5, 13.0)
+    );
+    let body = ship.physics.body;
+    let row0 = Vec3::new(-0.0224, -0.0081, -0.9997);
+    let row2 = Vec3::new(0.9997, -0.0019, -0.0223);
+    assert!(
+        (-body.right()).distance(row0) < 0.1,
+        "row 0 is {:?}, not the original's {row0}",
+        -body.right()
+    );
+    assert!(
+        body.forward().distance(row2) < 0.1,
+        "row 2 is {:?}, not the original's {row2}",
+        body.forward()
+    );
+    assert_eq!(
+        race.core.sim.own_craft_probe(),
+        oag_weapons::projectile::OwnCraftProbe::CraftBox
+    );
+    let laws = race.core.sim.flight_laws();
+    assert_eq!(
+        (laws.probes.rocket, laws.probes.missile, laws.probes.plasma),
+        (6.0, 6.0, 6.0)
+    );
+    assert_eq!(
+        laws.rocket_open_air,
+        oag_weapons::projectile::RocketOpenAir::TurnsAlongNormal
+    );
+}

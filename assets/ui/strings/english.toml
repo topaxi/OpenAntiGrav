@@ -680,9 +680,9 @@ OAG_BENCH_PRESET_NAMED = { text = "PRESET %s", human = false }
 OAG_BENCH_VERDICT_SMOOTH = { text = "SMOOTH", human = false }
 OAG_BENCH_VERDICT_MOSTLY_SMOOTH = { text = "MOSTLY SMOOTH", human = false }
 OAG_BENCH_VERDICT_CHOPPY = { text = "CHOPPY", human = false }
-OAG_BENCH_VERDICT = { text = "%s: %s FPS ON AVERAGE, ON A %s HZ SCREEN", human = false }
+OAG_BENCH_VERDICT = { text = "%s: %s FPS ON AVERAGE, JUDGED AGAINST %s FPS", human = false }
 OAG_BENCH_SLOWEST = { text = "Slowest moments: %s FPS (worst 1 in 100 frames)", human = false }
-OAG_BENCH_STUTTERS = { text = "Stutters: %s of %s frames took longer than one screen refresh", human = false }
+OAG_BENCH_STUTTERS = { text = "Stutters: %s of %s frames missed the %s ms frame budget", human = false }
 OAG_BENCH_CAPPED = { text = "Your frame limit (%s FPS) capped this result. Turn FRAME LIMIT off in BENCHMARK OPTIONS to see how fast your hardware can go.", human = false }
 OAG_BENCH_MODS_NONE = { text = "Mods: none", human = false }
 OAG_BENCH_MODS_LOADED = { text = "Mods: %s loaded", human = false }

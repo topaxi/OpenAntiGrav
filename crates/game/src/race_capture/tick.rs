@@ -23,6 +23,16 @@ pub struct Medals {
     pub earned: std::cell::Cell<Option<oag_tables::race_campaign::Medal>>,
 }
 
+/// One `--force-rocket-hit-at`: see [`Race::force_rocket_hit_at`].
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ForcedRocketHit {
+    /// The blasts play at the end of this tick, so they are drawn from the next, as a hit
+    /// forced by `--force-rocket-hit` at the same tick is.
+    pub tick: u32,
+    pub at: oag_core::math::Vec3,
+    pub count: usize,
+}
+
 /// One simulation tick of a capture: `tick`'s input, the race step, and the
 /// audio that rides it.
 ///
@@ -157,6 +167,20 @@ pub(super) fn advance_one_tick(
             );
         } else if let Some(velocity) = options.force_rocket_hit_velocity {
             race.force_struck_velocity(slot, velocity);
+        }
+    }
+    for hit in options
+        .force_rocket_hit_at
+        .iter()
+        .filter(|h| h.tick == tick)
+    {
+        match race.force_rocket_hit_at(hit.at, hit.count, options.force_rocket_hit_velocity) {
+            None => log::warn!("--force-rocket-hit-at: this race loaded no craft blast"),
+            Some(retired) if retired < hit.count => log::debug!(
+                "--force-rocket-hit-at: {retired} of {} Rockets of the player's were in flight",
+                hit.count
+            ),
+            Some(_) => {}
         }
     }
     if let Some((at, slot)) = options.force_quake

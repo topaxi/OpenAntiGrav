@@ -246,6 +246,7 @@ fn the_logo_is_the_teams_own_front_end_texture() {
     );
 }
 
+mod cells;
 mod slide_draw;
 use super::hex::{HEX_SRC, LOCK_SRC, ModelCell, THICK_OUT_SRC};
 use oag_ui::frontend::Placed;
@@ -265,7 +266,7 @@ fn hex_team(id: &str) -> Entry {
                 _ => None,
             };
             ModelCell {
-                thumb: variant.map(|_| format!(r"Data\Ships\{id}\FE\thumb{row}.gtf")),
+                thumb: Some(format!(r"Data\Ships\{id}\FE\thumb{row}.gtf")),
                 open: variant.is_some(),
                 variant,
             }
@@ -316,23 +317,16 @@ fn the_hex_column_draws_cells_padlocks_and_the_selected_team_in_red() {
     let red = oag_ui::screen::argb_to_rgba(0xffac_0717);
     // Seven selected-column cells, each in `HD_Blue` once.
     assert_eq!(sprites.iter().filter(|(_, c)| *c == red).count(), 7);
-    // 5 columns x 7 rows of cells in all: 7 flat and 28 shaded across.
+    // 5 columns x 7 rows of cells in all: 7 flat and 28 shaded across. The four other columns
+    // shade every picture (28) and their five locked rows' padlocks (20) too.
     let shaded = draws
         .iter()
         .filter(|draw| matches!(draw, Draw::GradientSprite { .. }))
         .count();
-    assert_eq!(shaded, 28);
-    // Five of seven rows are padlocked in each of the five columns.
+    assert_eq!(shaded, 28 + 28 + 20);
+    // Five of the selected column's seven rows are padlocked, in the authored colour exactly.
     let lock = oag_ui::screen::argb_to_rgba(0xff80_8080);
     assert_eq!(sprites.iter().filter(|(_, c)| *c == lock).count(), 5);
-    // The selected column's padlock reads the authored colour exactly; the
-    // outer columns have faded toward `SelectedLockColFade`.
-    let faded = oag_ui::screen::argb_to_rgba(0xff24_2424);
-    assert!(
-        sprites
-            .iter()
-            .any(|(_, c)| c[0] < lock[0] && c[0] > faded[0] && c[3] == 1.0)
-    );
 }
 
 /// A cell outside the selected column runs from `HexColFade` to `HexCol` across its quad: whole at
@@ -353,10 +347,8 @@ fn a_cell_fades_across_its_quad_toward_the_selected_column() {
                 uv,
                 left,
                 right,
-            } => {
+            } if *uv == sheet(HEX_SRC).unwrap().sheet_rect([0.0, 0.0, 74.0, 64.0]) => {
                 assert_eq!([rect[2], rect[3]], [92.0, 80.0]);
-                let art = sheet(HEX_SRC).unwrap().sheet_rect([0.0, 0.0, 74.0, 64.0]);
-                assert_eq!(*uv, art);
                 Some((rect[0], left[3] * 255.0, right[3] * 255.0))
             }
             _ => None,

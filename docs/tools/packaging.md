@@ -64,8 +64,8 @@ a default feature. Every packaging build (`release.yml`, `scripts/build-appimage
 `just build-dist`, `just build-cpu`, `just mac-app`, `just ios-app`, `scripts/build-apk.sh`, the
 web build) passes `--no-default-features --features extensions` (or `android,extensions`) and
 so builds without it; clap then rejects both flags as unknown arguments, and with them
-`--force-rocket-hit-velocity`, a comparison aid gated the same way
-([particle-fill.md](../rendering/particle-fill.md#the-pose-throws-the-far-blast-at-the-camera)).
+`--force-rocket-hit-velocity` and `--force-rocket-hit-at`, comparison aids gated the same way
+([particle-fill.md](../rendering/particle-fill.md#the-volley-posed-at-its-two-points)).
 A perf-test APK that
 `scripts/android-race-phases.sh` drives (it passes `--seed 1`) is built with
 `OAG_APK_DEV_CLI=1 just apk`. `--pose` and the other capture flags stay in every build. A race

@@ -4,6 +4,8 @@
     python3 scripts/compare_env.py show pulse-psp
     python3 scripts/compare_env.py ppsspp-ini pulse-psp        # the [Graphics] text for PPSSPP
     python3 scripts/compare_env.py manifest OUT.toml DIR...   # one [[entry]] per non-refused pair.json
+    python3 scripts/compare_env.py film-field FILM STEM FIELD_IN FIELD_OUT   # a film frame's field at the frame's instant
+    python3 scripts/compare_env.py film-pair-field FILM STEM PAIR_DIR        # the same, in place in a pair, recorded
 
 `scripts/compare-environment.toml` is the profile. The pair scripts (`psp-pulse-pair.py`,
 `pcsx2-pulse-pair.py`, `rpcs3-hd-pair.py`) import this module: they build a `Pair`, record
@@ -247,6 +249,17 @@ def gantry_pin(gantry_s, lag_ticks):
     original had not yet drawn. `None` (no windowed node: the board is gone) stays `None`.
     """
     return None if gantry_s is None else gantry_s - lag_ticks / 60
+
+
+#: How far HD's flame program's `time` lags the frame context clock read in the same pause: the fragment program in the
+#: command ring held 0.0334 s and 0.0167 s less than `+0xc4` on two pauses (`docs/ghidra/functions/ps3-hdfury-eu/engine-flare.md`,
+#: "The flame's clock at a pair's grab"); the mean, so the pin is within 0.009 s (2 % of the noise's 0.5 s period) of either.
+FLAME_CLOCK_LAG_S = 0.025
+
+
+def flame_pin(flame_clock_s):
+    """The `--flame-clock` value for a pair whose original read the frame context clock `flame_clock_s` in its pause."""
+    return None if flame_clock_s is None else flame_clock_s - FLAME_CLOCK_LAG_S
 
 
 def picture_tick(go_tick_, clock_s, total_lag_ticks):
@@ -515,6 +528,122 @@ def write_field_csv(path, rows, with_player=False):
         lines.append(cells(n, r))
     Path(path).write_text("\n".join(lines) + "\n")
     return [r["team"] for r in others]
+
+
+#: A craft slower than this per tick has no measurable pause skew: its frame hull and RAM body coincide.
+AT_REST_UNITS_PER_TICK = 0.05
+
+
+def walked_hull_matrices(spans, start=0x1000):
+    """Every craft-shaped world matrix the frame's command stream loads as vertex constants, as `ps3_pose.hull_matrices`
+    yields them. `spans` are `(base_address, bytes)` of the dumped IO memory. Only what the walked stream loads counts: a
+    dump also holds the next frame's push buffer, built a tick later, which a scan of raw memory finds too."""
+    sys.path.insert(0, str(HERE))
+    import ps3_pose
+    import rsx_fifo
+
+    walk = rsx_fifo.Walk(rsx_fifo.Mem([(base - 0x40000000, blob) for base, blob in spans]))
+    for _pos, method, _noninc, args in walk.run(start):
+        if method == 0x1efc and len(args) >= 17:
+            yield from ps3_pose.hull_matrices(struct.pack(">%dI" % (len(args) - 1), *args[1:]))
+
+
+def frame_craft_ticks(spans, player_pos, player_vel):
+    """`(ticks, record)`: how many whole 60 Hz ticks the RAM player body is ahead of the hull the frame draws.
+
+    An RPCS3 pause leaves RAM 1 or 2 whole ticks ahead of the push buffer for every craft and the camera alike
+    (`docs/tools/compare-page.md`, "The skew is the pause, not the original's draw order"); a pair that takes its camera
+    from the push buffer and its craft from RAM draws every craft that far up the road. A craft at rest reads 0. Raises
+    `ValueError` when no hull is loaded near the body or the skew is not a whole number of ticks."""
+    sys.path.insert(0, str(HERE))
+    import ps3_pose
+
+    if math.sqrt(sum(v * v for v in player_vel)) / 60.0 < AT_REST_UNITS_PER_TICK:
+        return 0, {"craft_ticks": 0, "craft_basis": "the player is at rest: no skew to measure"}
+    hull = ps3_pose.hull_near(list(walked_hull_matrices(spans)), player_pos)
+    if hull is None:
+        raise ValueError("the frame's command stream loads no hull matrix six times within 15 units of the player's body")
+    ticks, off_axis = ps3_pose.whole_ticks(hull["translation"], player_pos, player_vel)
+    return ticks, {"craft_ticks": ticks, "hull_translation": hull["translation"], "hull_loads": hull["count"],
+                   "off_axis_units": off_axis, "ram_body": list(player_pos),
+                   "craft_basis": "the hull world matrix the frame's command stream loads, against the RAM body, one pause"}
+
+
+def rewound_field_rows(rows, ticks):
+    """`--field-from` CSV rows (dicts) with every craft moved back `ticks` ticks of its own velocity."""
+    out = []
+    for r in rows:
+        moved = dict(r)
+        for a in "xyz":
+            moved["pos_" + a] = repr(float(r["pos_" + a]) - float(r["vel_" + a]) * ticks / 60.0)
+        out.append(moved)
+    return out
+
+
+def film_frame_field(film, stem, field_in, field_out):
+    """Write `field_out`: `field_in` (a film frame's RAM field, player in row 0) moved back to the frame's own instant,
+    read off the frame's dumped command ring (`<film>/ring/<stem>-<addr>.bin`). Returns the skew record."""
+    import csv
+
+    rows = list(csv.DictReader(Path(field_in).open()))
+    player = next(r for r in rows if r["slot"] == "0")
+    pos = [float(player["pos_" + a]) for a in "xyz"]
+    vel = [float(player["vel_" + a]) for a in "xyz"]
+    spans = [(int(p.stem.rsplit("-", 1)[1], 16), p.read_bytes()) for p in sorted(Path(film, "ring").glob("%s-4*.bin" % stem))]
+    ticks, record = frame_craft_ticks(spans, pos, vel)
+    with Path(field_out).open("w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=list(rows[0].keys()), lineterminator="\n")
+        w.writeheader()
+        w.writerows(rewound_field_rows(rows, ticks))
+    return record
+
+
+def film_pair_field(film, stem, pair_dir):
+    """Move a film pair's `field.csv` to its frame's instant in place and record the skew in its `pair.json`
+    (`original.presented_lag.craft_ticks` and how it was read). Returns the record."""
+    pair_dir = Path(pair_dir)
+    tmp = pair_dir / "field.csv.new"
+    record = film_frame_field(film, stem, pair_dir / "field.csv", tmp)
+    tmp.replace(pair_dir / "field.csv")
+    pj = pair_dir / "pair.json"
+    rec = json.loads(pj.read_text())
+    lag = rec["original"].get("presented_lag") or {}
+    lag.update(record)
+    lag["craft_note"] = ("field.csv moved back craft_ticks ticks of each craft's own velocity to the frame's instant "
+                         "(compare_env.py film-pair-field)")
+    rec["original"]["presented_lag"] = lag
+    pj.write_text(json.dumps(rec, indent=2) + "\n")
+    return record
+
+
+def selftest_frame_field():
+    """A hull two ticks behind the body, loaded by the walked stream, rewinds every craft two ticks; a hull only in memory
+    the stream never reaches is not the frame's; a craft at rest reads none."""
+    body, vel = (529.36, -25.02, -31.0), (98.3, 16.65, 86.59)
+
+    def world(ticks):
+        return [0.75, 0, 0, 0, 0, 0.75, 0, 0, 0, 0, 0.75, 0] + [b - ticks * v / 60.0 for b, v in zip(body, vel)] + [1.0]
+
+    load = struct.pack(">I", (17 << 18) | 0x1efc) + struct.pack(">I", 256) + struct.pack(">16f", *world(2))
+    stream = bytearray(0x1000) + load * 8 + bytes(4 * 300)
+    stray = bytearray(0x400)
+    for k in range(8):
+        stray[k * 100:k * 100 + 64] = struct.pack(">16f", *world(1))
+    spans = [(0x40000000, bytes(stream)), (0x40400000, bytes(stray))]
+    ticks, record = frame_craft_ticks(spans, body, vel)
+    assert ticks == 2 and record["hull_loads"] == 8, record
+    other = {"slot": "1", "pos_x": "10.0", "pos_y": "0.0", "pos_z": "0.0", "vel_x": "60.0", "vel_y": "0.0", "vel_z": "0.0"}
+    player = {"slot": "0", **{"pos_" + a: repr(b) for a, b in zip("xyz", body)}, **{"vel_" + a: repr(v) for a, v in zip("xyz", vel)}}
+    moved = rewound_field_rows([player, other], ticks)
+    assert max(abs(float(moved[0]["pos_" + a]) - f) for a, f in zip("xyz", world(2)[12:15])) < 1e-4, moved[0]
+    assert abs(float(moved[1]["pos_x"]) - 8.0) < 1e-9, moved[1]
+    assert frame_craft_ticks(spans, body, (0.09, 0.34, 0.06))[0] == 0
+    try:
+        frame_craft_ticks([(0x40000000, bytes(0x1400)), (0x40400000, bytes(stray))], body, vel)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("a hull the stream never loads must not be read as the frame's")
 
 
 def pack_check(pair, place, cam_eye, cam_fwd, player_pos, others, place_range=(3, 6), near=45.0,
@@ -942,7 +1071,12 @@ def main():
         reads = [{"mines": {"1": {"age_s": 1.0}, "2": {"age_s": 1.0}, "3": {"age_s": 0.5}}}]
         assert detonator_pair_mines([armed, shot, gone], reads) == [armed, shot]
         assert detonator_pair_mines([armed, shot, gone]) == [armed]
+        selftest_frame_field()
         print("compare_env selftest ok")
+    elif cmd == "film-field":
+        print(json.dumps(film_frame_field(*sys.argv[2:6])))
+    elif cmd == "film-pair-field":
+        print(json.dumps(film_pair_field(*sys.argv[2:5])))
     elif cmd == "missing-safe-area":
         sys.exit(1 if missing_safe_area(sys.argv[2:]) else 0)
     else:

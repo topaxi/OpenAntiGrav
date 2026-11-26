@@ -2,7 +2,7 @@
 status: measure
 titles: [hd]
 updated: 2026-11-26
-summary: "DRS rise rule for a falling Deck clock (Zone 4K 0.80, pinned 0.96); Zone specular; a Zone program split"
+summary: "Probe rise landed (undocked Deck 4K Zone 0.84 -> 0.90); the undocked 1040 MHz park is unnamed; TT stutter is not the probe; Zone specular"
 ---
 
 # An HD Zone race costs more than a time trial on the same circuit
@@ -12,15 +12,25 @@ Measurements, the cause and the landed part:
 
 ## Open
 
-- **Ranked first: dynamic resolution settles low because the Deck's GPU clock falls with it**
-  (confidence 90). At 3840x2160 unpinned, Zone holds about 0.80 and a time trial 0.93; with the
-  clock pinned at 1600 MHz, 0.96 and 0.99. The cause is measured, the fix is not designed: a rise
-  that GPU milliseconds cannot veto (a probe kept only if no frame is late), which changes the
-  chosen resolution, so the picture changes. It costs power: unpinned DRS drew 3 to 6 W less.
-  Needs and acceptance: [dynamic-resolution.md](../../docs/rendering/dynamic-resolution.md),
-  "What a rise rule that survives this needs". TARGET FPS `original` (HD's width throttle) also
-  steps on a GPU duration: unmeasured on the Deck under a falling clock. The race pass's
-  +1.60 ms at 4K is the answered part, and it is faithful.
+- **Ranked first: the probe rise reaches 0.90, not 0.96.** ADR-0096's probe takes unpinned
+  Zone at 3840x2160 from 0.84 to 0.90 with no more size changes or late seconds, at about 3 W more
+  ([dynamic-resolution.md](../../docs/rendering/dynamic-resolution.md), "The probe rise"). The
+  rest of the gap is the governor: in 38 of 71 steps up it kept the clock at 1040 MHz with the GPU
+  86 to 100 % busy, so a probe from there reads a steady clock and reverts. Unknown why the
+  governor parks there (power profile, the CPU's share of the APU budget, gamescope's frame pacing
+  are all unread). TARGET FPS `original` (HD's width throttle) also steps on a GPU duration: still
+  unmeasured on the Deck under a falling clock. ADR-0096 is accepted: the maintainer took the
+  power trade (8 to 11 W) once the time trial's stutter was shown not to be the probe.
+- **The time trial at 4K loses frames on the Deck** (58 to 191 a minute on both binaries, 2026-11-26),
+  GPU bound at the top clock with the scale at 0.98. Not seen on the earlier day (0.93 then).
+  The probe is not the cause (next item).
+- **What parks the undocked Deck at 1040 MHz is still not named** (answered docked only). Not power (about 8 W of 15) and
+  not CPU; the demand governor is a hypothesis (45). Docked, the park does not happen: the clock sits at
+  or near its ceiling and the 15 W package limit trims the dips
+  ([dynamic-resolution.md](../../docs/rendering/dynamic-resolution.md), "On the Steam Deck: what
+  holds the clock, and the time trial's late seconds").
+- **probe causes TT stutter: no** (confidence 85, 4K, docked, 2+2 in reversed order, same page).
+  The probe's own measurements mixed docked time trials with undocked Zone runs.
 - **The reporter's setup is not known.** At 1280x800 and 1920x1080 both modes hold 100 %, so the
   75 % seen was a larger output or a lower clock than here. A time trial "at 100 %" was not
   reproduced at 4K (0.93).
@@ -36,9 +46,25 @@ Measurements, the cause and the landed part:
 
 ## Next Steps
 
-1. Maintainer's call first: is a higher resolution worth 3 to 6 W on a Deck? If yes, measure how
-   long the Deck's governor takes to raise the clock after a step up (a DRS-off run alternating a
-   light and a heavy size, sampling `freq1_input`), then design the probe as an ADR and measure it
-   with the reproduction on the page above.
+0. Open, not scheduled (the maintainer keeps the Deck docked): the undocked clock park. About
+   8 minutes, Deck undocked and on AC. Build "no probe" from main and "probe" from
+   `drs-probe-parked` with main merged in (touch the differing files if the two share a target
+   directory). Run each under `~/oag-perf/deck-run.sh`, order probe, no probe, no probe, probe,
+   on a copy of the player's settings with `pause_on_focus_loss = false`:
+
+   ```sh
+   [ "$(cat /sys/class/drm/card0-DP-3/status)" = disconnected ] || exit 3
+   [ "$(cat /sys/class/drm/card0/device/power_dpm_force_performance_level)" = auto ] || exit 3
+   RUST_LOG=info,oag_game::app::session::timing=trace \
+   gamescope --backend headless -W 3840 -H 2160 -w 3840 -h 2160 -r 60 -- \
+     oag-game <hd iso> --race --no-intro --autopilot --frame-log --mode zone \
+     --track /data/environments/04_chenghou_project/track.vex --script 70:quit
+   ```
+
+   Stamp each stderr line with `$EPOCHREALTIME`, and beside it sample at 20 Hz what
+   [dynamic-resolution.md](../../docs/rendering/dynamic-resolution.md) lists under "Method"; what to
+   read from the parked samples is under "Open: the undocked clock park" there.
+1. To get past 0.90 (undocked only): sample `pp_power_profile_mode` and the CPU clock beside the GPU clock in one
+   unpinned 4K Zone run (the commands in "The probe rise") and find what holds 1040 MHz.
 2. Read one Chenghou Zone fragment program end to end for a specular term
    (`scripts/ps3-microcode.py fp-file`), then decide the lightmap alpha.

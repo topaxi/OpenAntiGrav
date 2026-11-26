@@ -2,7 +2,7 @@
 status: measure
 titles: [hd]
 updated: 2026-11-26
-summary: "HD exhaust: flame /2 and camera eye wired; flame clock unrecorded in pairs; talons-pack trail whiter and wider; craft+0xfc"
+summary: "HD exhaust: flame /2, eye and clock wired; 21 of 22 flame pairs need a regrab; talons-pack trail whiter and wider; craft+0xfc"
 ---
 
 # HD's exhaust is measured from the running game now: the trail is a 54-sample three-fin tube, the flame breathes with the throttle, and the plume scales rather than blinks
@@ -15,9 +15,15 @@ summary: "HD exhaust: flame /2 and camera eye wired; flame clock unrecorded in p
   wired.** The console runs `flame_test.rcsmaterial`'s block #2 (fogged, ends `MAD /2 H0.xyz`); the flame block was
   `Scene::off` (output scale 1.0), so the rest flame drew twice too strong. `hd/talons`' blue/pink split is the noise
   phase, not a layer. 22 pairs: 17 better, 5 worse on the moved-pixel metric (numbers on engine-flare.md, "Our rim's
-  eye is the camera"). **Open:** (1) the pairs do not record the flame's clock (engine parameter slot 0, a boot-relative
-  clock, 429.579 s in `c1`), so a still pair samples the pink rows at an arbitrary phase: a pair script that reads it
-  and an `--anim-seconds`-style flag for the flame alone would make rest-flame pairs comparable; (2) on the phase
+  eye is the camera"). **Open:** (1) **the flame clock is recorded and wired (2026-11-26, `hd-flame-clock`)**: it is
+  `(*0x00936fd4) + 0xc4`, every HD grab writes it as `flame_clock_s`, the pair script passes `--flame-clock` and the
+  re-render adds it to a record holding `original.flame_clock_s` (engine-flare.md, "The flame's clock at a pair's
+  grab"). Only `hd-race/talons-pack` is clocked from its record (122.4720 s, derived from its state's timeline);
+  the other 21 flame pairs need a regrab with the current script. Next: regrab `hd/talons` with the **standard** hull
+  (this emulator profile's Ship Select lands on `harimau_c1`; `emu-hd-glass-boot.sh`'s `classic` argument and the
+  pair's `--team harimau` must agree, and the restart toast must be gone before the grab), then the other cold-boot
+  grids, then judge the eye's cost below at the recorded phase. The phase match at the pin is confidence 60 (one
+  sharp, one flat, one blind sweep); (2) on the phase
   average the eye still costs up to 0.6 on three rest pairs (`hd-race/talons-pack`, `hd/metropia`, `hd/vineta-k`),
   cause unknown; (3) the program fogs the flame with the circuit's fog (factor 1 at chase distance), not wired because
   the shield shells share the block. Still no boosting dump.

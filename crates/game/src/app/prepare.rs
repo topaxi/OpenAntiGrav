@@ -300,6 +300,7 @@ impl Pending {
             hud: self.hud_state.clone(),
             world_clock_offset: self.cli.capture_view.world_clock_offset.unwrap_or(0.0),
             gantry_seconds: self.cli.capture_view.gantry_seconds,
+            flame_seconds: self.cli.capture_view.flame_clock,
             camera: self.camera,
             fov_override: self
                 .cli

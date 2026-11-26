@@ -832,6 +832,11 @@ impl Session {
             settings,
             refresh,
             frame_limit_hz: self.frame_period().map(|period| 1.0 / period.as_secs_f64()),
+            target_fps_hz: profile
+                .target_fps
+                .resolve(self.display.hz())
+                .hz()
+                .map(f64::from),
             preset: live.request.preset.clone(),
             mods,
             vsync: self.settings.display.vsync.to_string(),

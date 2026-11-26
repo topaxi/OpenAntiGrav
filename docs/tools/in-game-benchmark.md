@@ -142,7 +142,7 @@ bench counts them after its first 60 frames, so the two differ by that grid time
 | Average FPS | frames counted over their summed time (`1e6 / mean frame_us`) |
 | 1 % low, 0.1 % low | the rate of the slowest 1 % (0.1 %) of frames: 1,000 ms over the **mean** frame time of the slowest `ceil(n x 1 %)` frames, at least one (`stats::low_fps`). Under 1,000 counted frames the 0.1 % low would be the one worst frame, so the screen says `N/A UNDER 1000 FRAMES` and the file has `null` |
 | Median, P95, P99, worst | nearest-rank percentiles of the frame time, so each is a frame that happened (`stats::percentile`) |
-| Over the budget | frames that took more than 1.05 times `1000 / refresh Hz`; the refresh rate is the display's, reported or measured, else 60 Hz and the result says `assumed` |
+| Over the budget | frames that took more than 1.05 times the frame budget ("The frame budget" below) |
 
 The screen also lists the settings that change what a frame costs (the vsync mode, the frame limit
 and the dynamic-resolution target among them), the adapter and driver, and the machine (operating
@@ -152,8 +152,29 @@ system, architecture, processor).
 than that reports about 240 fps: the number is the limiter's, not the GPU's. When the average sits
 within 10 % of the limit in force (the limit is not in force under vsync on, where the display
 paces), the screen says so on its own line and the file has `limiter_binds: true`; set
-`frame_limit` to unlimited to measure the machine. The refresh budget (`over the budget`) is the
-display's, and under vsync on most "over" frames are missed refreshes.
+`frame_limit` to unlimited to measure the machine.
+
+## The frame budget
+
+The verdict, the stutter line and the FRAMES OVER row all judge one budget, the frame rate the
+player asked for (`report::Context::budget`; **chosen, not measured**): the longest period, so the
+lowest rate, of these three.
+
+| Term | In force when | Rate |
+| --- | --- | --- |
+| TARGET FPS | it names a rate. `off` names none; `original` (HD's width throttle) names none of its own and paces at the limit or the screen, which the other two terms carry | the rate, `default` being the screen's (60 while none is known) |
+| FRAME LIMIT | the loop is held to it: not `unlimited`, and not under vsync on | the rate, `refresh_rate` resolved the same way |
+| Screen refresh | always | the display's, reported or measured, else 60 Hz and the result says `assumed` |
+
+With neither a target nor a limit the screen alone judges the run. A target above the refresh does
+not count, because the refresh is longer. An assumed 60 Hz still counts: a browser names no rate
+but holds frames to its screen, so judging it against a higher target would call every frame late.
+The cost is the other way round: a faster screen that names no rate is judged at 60. SCREEN REFRESH
+stays a DETAILS row of its own, and the result file names the winning term as `budget_from`
+(`target_fps`, `frame_limit` or `refresh`; equal rates are named in that order).
+
+The 1.05 slack is because a loop held by vsync, the limit or dynamic resolution lands within a few
+percent of the period on every frame, so the literal period would count half of them.
 
 ## Reading the screen
 
@@ -163,9 +184,9 @@ a string id; `benchmark::screen` draws them):
 
 | Line | Says |
 | --- | --- |
-| SMOOTH, MOSTLY SMOOTH or CHOPPY, with the average FPS and the screen's refresh rate | the share of counted frames that took longer than one screen refresh (the frames over the budget below): up to 1 % is SMOOTH, up to 5 % MOSTLY SMOOTH, more CHOPPY (`report::SMOOTH_SHARE`, `MOSTLY_SMOOTH_SHARE`; **chosen, not measured**) |
+| SMOOTH, MOSTLY SMOOTH or CHOPPY, with the average FPS and the FPS it is judged against | the share of counted frames over the frame budget: up to 1 % is SMOOTH (at 60 FPS one late frame every 1.7 seconds), up to 5 % MOSTLY SMOOTH (three a second), more CHOPPY (`report::SMOOTH_SHARE`, `MOSTLY_SMOOTH_SHARE`; **chosen, not measured**) |
 | Slowest moments: N FPS (worst 1 in 100 frames) | the 1 % low |
-| Stutters: N of M frames took longer than one screen refresh | the frames over the budget |
+| Stutters: N of M frames missed the T ms frame budget | the frames over the budget |
 | Your frame limit (N FPS) capped this result. Turn FRAME LIMIT off in BENCHMARK OPTIONS ... | only when the average sits on the limit in force (`limiter_binds`) |
 | Mods: none, or Mods: N loaded | the run's MODS row |
 
@@ -242,7 +263,7 @@ at the start and the end, and `run` (`kind: "in_game"`, the circuit as the loade
 preset, where it started from, the flags). `in_game` carries what is new: the average and the two
 lows (`low_0_1pct_fps` is `null` under 1,000 counted frames), the frames over the budget and the
 budget, the refresh rate and where it came from, the frame limit in force (`frame_limit_hz`) and
-whether the average sits on it (`limiter_binds`), the device and the driver. The CPU and GPU columns of the offscreen bench are not timed through a
+whether the average sits on it (`limiter_binds`), what set the budget (`budget_from`), the device and the driver. The CPU and GPU columns of the offscreen bench are not timed through a
 window and are absent: the comparison says so.
 
 ```sh
@@ -296,6 +317,10 @@ checks each value against the page.
   `the_mods_row_is_left_out_while_no_mod_is_enabled`: BENCHMARK OPTIONS. Unit tests hold the page in
   every title's menu tree (`every_titles_tree_holds_the_benchmark_options_page`) and the PRESET,
   VSYNC and FRAME LIMIT rows to the shipped preset names and the display page's values.
+  The frame budget: `benchmark::report` replays the S24 run, a 120 Hz run with nothing asked
+  for, a vsynced 60 Hz run and a table of which term wins; `the_in_game_benchmark_flies_the_race_the_offscreen_bench_does`
+  checks that a frame limit under vsync on is not a term; `the_options_page_reaches_the_run_and_saves_nothing`
+  checks that the player's TARGET FPS reaches the result.
   `the_stats_screen_swaps_to_details_and_answers_a_copy`: DETAILS and COPY through the real
   `Session`, by screenshots. The unit tests in `benchmark::text` hold the verdict thresholds, the
   frame-limit line, the copied text and that no internal name (`_Track`, `track.vex`) is shown.
@@ -325,14 +350,38 @@ implementation, hence the paste.
 
 **The refresh rate.** Both runs above said 60 Hz, `assumed` in DETAILS, because winit reports
 none on Android or the web; the S21's panel ran at 120 Hz during its run. Android now reads the
-display itself ([android.md](android.md), "The display's refresh rate"), so a phone's verdict is
-against its own rate. The web still reports none and says 60 Hz, `assumed`.
+display itself ([android.md](android.md), "The display's refresh rate"), so a phone's SCREEN
+REFRESH row and the screen's term of the frame budget are its own rate. The web still reports none
+and says 60 Hz, `assumed`.
 
 **The stats screen's fit.** 2026-11-26, the same S21, `--benchmark` from the launch file, screenshots
 of both pages (`adb exec-out screencap`): before the fix HD's button labels covered each other and
 ran off the panel and its summary ran into the saved path; after it HD and Pulse fit both pages, and
 DETAILS, SUMMARY and BACK answer a tap. Headless on the desktop at 2340x1080, both pages of all six
-titles fit. The Galaxy S24 itself was not run.
+titles fit.
+
+## First phone result
+
+Reported by the maintainer from a Galaxy S24 (Xclipse 940), build `aded31f`, Wipeout HD: the
+stats screen's own figures; no result file of the run is in the record.
+
+| Setting or figure | Value |
+| --- | --- |
+| SCREEN REFRESH | 120 Hz |
+| VSYNC, FRAME LIMIT | off, unlimited |
+| TARGET FPS, RENDER SCALE | 60, 100 |
+| Average FPS, 1 % low | 81.5, 50.4 |
+| Frame time median, P95, P99, worst | 11.82, 16.90, 18.27, 25.54 ms |
+| FRAMES OVER 8.3 MS | 8476 OF 9165 |
+| Verdict | "CHOPPY: 81 FPS ON AVERAGE, ON A 120 HZ SCREEN" |
+
+That build judged every frame against the screen's 8.3 ms period, so a run that mostly held the 60
+the player asked for read CHOPPY. Against the budget above (16.7 ms, late past 17.5 ms) the same
+numbers give MOSTLY SMOOTH, whatever lay between the percentiles: P95 (16.90 ms) is under 17.5 ms,
+so at most 458 of the 9165 frames are late (4.997 %), and P99 (18.27 ms) is over it, so at least 92
+are (1.004 %). This is computed from the reported figures
+(`benchmark::report::tests::a_run_that_asked_for_60_is_not_judged_against_a_120_hz_screen`
+replays them); the phone has not been re-run on the new rule.
 
 ## Not checked
 
