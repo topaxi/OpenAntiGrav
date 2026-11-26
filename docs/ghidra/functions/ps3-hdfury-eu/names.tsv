@@ -1145,7 +1145,9 @@
 0x0013b930	function	EMP_SweepSections	75	detonator-emp.md
 # Detonator end-of-race screen (2026-11-22, det-end-re). Static only.
 0x002234b0	function	EndRaceResults_FillDetonatorRows	80	detonator-endrace.md
-0x0022bdb8	function	EndRaceResults_ShowRecordNotice	72	detonator-endrace.md
+0x0022bdb8	function	EndRaceResults_ShowRecordNotice	90	detonator-endrace.md
+0x0001ef28	function	Profile_FindTrackRecords	80	detonator-endrace.md
+0x0032a740	function	Crc32_HashStringZeroInit	85	detonator-endrace.md
 
 # 2026-11-23 zone-destroy-re: the Zone end, Ship_SetState mode 6 (zone-destroy.md). Static only.
 0x00104a58	function	DebrisManager_SpawnZoneDebris	80	zone-destroy.md

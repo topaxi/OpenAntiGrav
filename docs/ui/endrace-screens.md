@@ -160,11 +160,10 @@ and the `TOTAL SCORE` line, drawn in place of the field grid at the filler's coo
 `347` tall, bottom bar `y = 391`; `oag_ui_screens::endrace::hd::detonator`). A destroyed run and a
 finished one print the same rows; the stage row is the scoreboard's laps completed, so stage 5 reads
 `4 / 14` (`hd_endrace_ground_truth::a_detonator_run_destroyed_in_stage_five_draws_four_of_fourteen_and_its_session_rows`).
-The loyalty block beside it draws as on every HD mode and pays on the same laps. **Not drawn:** the
-new-record banner (`RecordNotifyBlock`, `RecValue`): the best-score table it compares against is
-unread and no Detonator best score is kept. **Not checked against a frame of the original**, none
-exists: the grey ink, the left edge of the values and the caption `ER_FINALPOS` (not touched by the
-Detonator branch, drawn as on every HD mode) are read from the executable and the layout file.
+The loyalty block beside it draws as on every HD mode and pays on the same laps. The record notice
+(`RecordNotifyBlock`) and the `MiniText` captions draw, checked against two RPCS3 frames; the
+differences left (timing, text size, the HD style) are listed in
+[detonator-endrace.md](../ghidra/functions/ps3-hdfury-eu/detonator-endrace.md#checked-against-the-original-2026-11-26-rpcs3).
 **Omega** carries the same filler and ids but keeps the built-in scoreboard (no `EndRace` screens
 wired); **2048** has a four-row list on a `Results` page this build does not draw
 (`docs/ui/endrace-2048.md`).

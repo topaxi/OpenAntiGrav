@@ -171,3 +171,19 @@ fn the_session_fills_the_detonator_rows_for_an_hd_detonator_race() {
         "build_endrace must build FieldResults::detonator"
     );
 }
+
+/// The record notice is judged where the race is saved, before it is folded into the store, and
+/// the results model takes it; without either the screen shows no record of the run.
+#[test]
+fn the_session_judges_the_detonator_score_before_saving_and_the_results_take_it() {
+    let save = include_str!("../../session/frame.rs");
+    let judged = save
+        .find("judge_score(")
+        .expect("the finish arm judges the score");
+    let saved = save
+        .find("self.records.record(key, observation)")
+        .expect("the finish arm saves the race");
+    assert!(judged < saved);
+    let build = include_str!("../../session/endrace.rs");
+    assert!(build.contains("results.record = stage.score_record"));
+}

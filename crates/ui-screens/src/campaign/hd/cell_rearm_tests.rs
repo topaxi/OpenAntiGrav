@@ -73,6 +73,7 @@ fn page_body(model: &CellSelection, screen: Screen) -> Vec<Draw> {
         screen,
         scale: [1.0, 1.0],
         faces: crate::picker::FaceScales::default(),
+        labels: Vec::new(),
     };
     let skin = Skin::new(
         oag_hd::frontend::MENU_SKIN,

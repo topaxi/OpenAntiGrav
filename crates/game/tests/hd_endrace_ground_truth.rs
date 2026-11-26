@@ -585,6 +585,58 @@ fn a_detonator_run_destroyed_in_stage_five_draws_four_of_fourteen_and_its_sessio
         !texts.iter().any(|t| t == strings.get_or_id("ER_RACING")),
         "{texts:?}"
     );
+    // The captions the original draws, and the record notice with a score that beat nothing.
+    for wanted in [
+        "SCREEN TITLE",
+        "PLAYER POSITION",
+        "FINAL POSITION",
+        "RECORD NOTIFICATION",
+        "SCORE RECORD 0",
+    ] {
+        assert!(texts.iter().any(|t| t == wanted), "{wanted:?} in {texts:?}");
+    }
+    // The logo only the Fury copy authors, put on the served copy and decoded.
+    let logo = screens
+        .results
+        .screen
+        .images
+        .iter()
+        .find(|image| image.name.as_deref() == Some("RecLogoD"))
+        .expect("RecLogoD on the served results screen");
+    assert!(screens.sprites.get(&logo.src).is_some(), "{}", logo.src);
+
+    // The run kept as a record: the original's blue notice, once.
+    let mut store = oag_game::records::Store::default();
+    let key = oag_game::records::Key::new("hd", Some("17_Track"), "detonator", "venom");
+    let score = u32::try_from(results.score).expect("a score is not negative");
+    let mut beaten = model.clone();
+    beaten.detonator = Some(oag_ui_screens::endrace::DetonatorResults {
+        record: store.judge_score(&key, score.max(1), true),
+        ..results
+    });
+    let drawn: Vec<String> = oag_ui_screens::endrace::hd::hd_results_draw_list(
+        &beaten,
+        &screens.results,
+        &skin,
+        &oag_ui::menu::Frame::default(),
+        &strings,
+        None,
+        false,
+        &|src| screens.sprites.get(src),
+    )
+    .body
+    .iter()
+    .filter_map(|draw| match draw {
+        oag_ui::frontend::Draw::Text { text, .. } => Some(text.clone()),
+        _ => None,
+    })
+    .collect();
+    let wanted = format!("NEW SCORE RECORD {}", score.max(1));
+    assert!(drawn.contains(&wanted), "{wanted:?} in {drawn:?}");
+    assert!(
+        !store.judge_score(&key, score.max(1), true).new,
+        "equal is not a record"
+    );
 }
 
 /// `EndRace Rewards` off the real disc's own definition and string table:

@@ -132,6 +132,36 @@ impl ZoneResults {
     }
 }
 
+/// HD's record notice under a results grid (`EndRaceResults_ShowRecordNotice`, `0x0022bdb8`): the
+/// blue box and `NEW SCORE RECORD <score>` when the run beat the best, else the grey box and
+/// `SCORE RECORD <best>`. Both draw (`docs/ghidra/functions/ps3-hdfury-eu/detonator-endrace.md`,
+/// "The record notice").
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct ScoreRecord {
+    /// Whether this run beat the best before it, strictly (`rm+0x2cd7`).
+    pub new: bool,
+    /// The number printed: this run's score if [`Self::new`], else the standing best.
+    pub value: u32,
+}
+
+impl ScoreRecord {
+    /// The original's law (`0x0005c220`): a record only when `score` is strictly above `best`
+    /// (an unsigned compare), where no record at all reads `0`.
+    #[must_use]
+    pub fn judge(score: u32, best: u32) -> Self {
+        Self {
+            new: score > best,
+            value: score.max(best),
+        }
+    }
+
+    /// The idstring in front of the number.
+    #[must_use]
+    pub fn label(&self) -> &'static str {
+        if self.new { "ER_NSR" } else { "ER_SR" }
+    }
+}
+
 /// HD/Fury's and Omega's Detonator results: six label/value rows and a score line, filled from the
 /// race manager's stats block (`docs/ghidra/functions/ps3-hdfury-eu/detonator-endrace.md`,
 /// `EndRaceResults_FillDetonatorRows`, 80). A destroyed run and a finished one print the same rows.
@@ -147,6 +177,8 @@ pub struct DetonatorResults {
     pub chains: [u16; 3],
     /// The score.
     pub score: i32,
+    /// The record notice under the grid.
+    pub record: ScoreRecord,
 }
 
 impl DetonatorResults {

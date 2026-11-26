@@ -429,8 +429,9 @@ modifier list (`kind 17`, params `0.3, 0.1, 0.3, 1.0, 0.1, 0.1, 0.1, 0, 0`).
 (`0x008b28f0` to `0x0079b490`: `135.13, -123.45, 12.39` and `3931.49, 11241.24, -141.89`), takes
 the doubled points (`fadds x, x, x`) before the timed branch, and calls the noise (`0x0027dbc0`)
 six times in pairs. Omega (`eboot.bin` file `0x800db0`) and 2048 (`eboot.elf` file `0x29b47c`) carry the same
-constants once each: checked, applies, not wired (neither title's EMP wave is wired, see "2048 and
-Omega"); their functions are unread beyond the constants. Not live: no capture reads a spark's velocity.
+constants once each: **ported** (2026-11-26, "2048 and Omega draw it"): both titles' tables list
+the EMP's effect in `turbulence`; their functions are unread beyond the constants. Not live: no
+capture reads a spark's velocity.
 
 **Wired.** `oag_fx::psys::turbulence` (the law, Perlin's `noise3` on a seeded table, the
 particle system's own seconds clock) applies it for an effect a title lists:
@@ -475,7 +476,7 @@ The fork is reachable on HD: a census of every HD circuit's `WO Track` (`oag_vex
 - **Hash.** `Wave` gains `forked` and `fork`; `write_emp` writes the fork only while forked, so an unforked wave hashes as it did.
 - **Look.** A second `WO_QUAKE_DETONATOR` and a second `(0, 5, 10)` light ride the fork's front (`RaceView::emp_fork_effect`); the original's `EMP_DrawLights` adds the fork's light at `emp+0xe0` when `emp+0x60` is set. Both go with the wave. Frames: ours on `05_ubermall` from above at 90 and 105 ticks after the launch, one blue front on each arm of the split, the score up from the kills.
 - **Tests.** `emp::tests::a_wave_that_crosses_a_split_clears_both_branches` (fails without the fork: the branch's mines stay), `without_the_fork_the_branch_is_left_alone`, `a_wave_that_never_steps_onto_the_split_does_not_fork`, `the_fork_walks_its_branch_and_is_released_at_the_merge`; disc: `tests::emp_fork::an_hd_emp_wave_forks_at_the_split_and_clears_both_routes` (the four forked files, mines on the branch and on the ring past the split die, two effects while forked) and `an_hd_circuit_without_a_split_never_forks_its_wave`.
-- **2048 and Omega.** 2048: checked, applies, not wired (`REP2` at `0x811e804c` in the same sweep; its EMP never charges in ours). Omega: `eboot.bin` carries one recursive sweep function with the `REP2` fourcc (`0x0133c600`, immediate at `0x0133ce36`, unnamed; the EMP's, "The launch-time fork"), and Omega's EMP runs the shared module.
+- **2048 and Omega.** Both **ported**: 2048's `REP2` at `0x811e804c` is in the same sweep; Omega's `eboot.bin` carries one recursive sweep function with the `REP2` fourcc (`0x0133c600`, immediate at `0x0133ce36`, unnamed; the EMP's, "The launch-time fork"). Both run the shared module, and the effect and light ride the fork's front ("2048 and Omega draw it").
 
 Tests: `emp::tests::the_wave_steps_one_entry_a_tick_for_extent_seconds` (15 entries at gauge `0`,
 120 at `1`), `tests::detonator_fx::an_hd_emp_wave_carries_the_discs_effect_on_its_front_until_it_ends`
@@ -647,24 +648,60 @@ clears fewer. `zone_3` and `15_anulpha_pass` ring launches clear the same set.
 `tests::emp_fork::an_hd_front_on_a_section_with_no_record_takes_the_other_routes`,
 `an_hd_ring_wave_through_the_fork_reaches_a_few_sections_further`.
 
-### 2048 and Omega
+### 2048 and Omega draw it (2026-11-26)
 
-- **2048: checked, applies, not wired.** `eboot-vita-2048-eu-v104.elf` names `Backend/Weapons/EMP.cpp`,
-  `WO_QUAKE_DETONATOR` (spawned at three sites, `FUN_811e7c68`, `FUN_811e7dd6`, `FUN_811e841c`,
-  as on HD) and `~MAGPULSETRAVEL`. `FUN_811e7dd6` is the same sweep: the `REP2` fourcc
-  (`0x811e804c`-`0x811e8056`), the half-widths `+0x44`/`+0x48` averaged, and the width times
-  `0x3c23d70a` into the instance (`0x811e83f4`). `data.psarc` ships `WO_QUAKE_DETONATOR` in
-  `data/particles` and `data/particles2048`, emitter for emitter HD's. Not wired: 2048's pads
-  never charge the EMP in this engine (`oag_title::Detonator::pads`), and its effect table
-  answers none of the Detonator triggers.
-- **Omega: checked, applies, not wired.** `eboot.bin` (1.07) names `EMP.cpp`, `EMPManager.cpp`,
-  `WO_QUAKE_DETONATOR` and `_MAGPULSETRAVEL`; `data00.psarc` ships the file in both particle
-  directories with HD's emitters. Its sweep was not read. Not wired: Omega's effect table answers
-  none of the Detonator triggers yet (as for the four explosions, [pob.md](../../../formats/pob.md)).
+Both **ported** for the effect, the light's submission and the four per-effect lists. Static, base
+`eboot.bin` of Omega (`/omega/eboot-ps4-omega-eu.bin`) and 2048's v1.04 `eboot.elf`.
+
+**The effect.** Each executable's EMP launch spawns `WO_QUAKE_DETONATOR` with fourcc `EMP1`, attached
+by pointer to the wave's matrix, as HD's does: 2048 `0x811e841c` (called from `0x811e8eea`), Omega
+`0x0133ec10`. The fork and launch-fork spawns (`EMP2`, `REP2`) are in the sweeps above. Both sweeps
+write the edges' distance over `100` into the instance (2048 `0x811e83f4`, Omega
+`0x0133c600`'s tail). Confidence **85** (read in both builds; not seen running).
+
+**The file.** `WO_QUAKE_DETONATOR` was read from HD's `DATA00.PSARC`, 2048's `data.psarc` (both
+`data/particles` and `data/particles2048`) and Omega's `data00.psarc` and `data05.psarc` (both
+directories) and parsed: HD and 2048 give identical emitter records; Omega's differ from them in
+the last digit of four floats. Six emitters on all, all colour-mode word `0`. 2048's executable
+names `Data/Particles` for a named mode such as Detonator (id below 23,
+[particle-paths.md](../vita-2048-eu-v104/particle-paths.md)); this engine reads `Data/Particles2048`
+for 2048, which for this file changes nothing.
+
+**The light.** The EMP vtable's slot 5 (2048 `0x811e8650`, vtable `0x81512410`; Omega
+`0x0133c150`, vtable `0x01915f50`) submits colour `(0, 5, 10)`, range `50`, at each front's matrix
+translation, HD's values (colour: 2048's initialiser at `0x811e8b90`-`0x811e8baa` into
+`0x818ac5cc`, Omega's `0x01a132d8`; range: `0x8152006c` = `50.0`, Omega the immediate
+`0x42480000`). Confidence **85**. The record carries `1/D` and `D` and no exponent, so the
+falloff is HD's, inherited. Wired as `oag_title::Detonator::emp_light`, apart from the cannon's
+`cannon_lights` (still HD only).
+
+**What reads the list, and what ours does not draw.** Both titles gather up to six lights from the
+32-entry list per drawable, by the drawable's sphere or box and a channel filter (2048
+`0x810373d4` and `0x81037524`, called from the draw paths at `0x813b3fb0`-`0x813be044`; Omega
+`0x01623270` and `0x016233b0`, called from scene preparation). So the light is not hull-only.
+**Which of their shader combines add it on a Zone surface is unread.** In ours the EMP light changes
+`0` pixels of a 2048 frame and a few dozen of an Omega frame at ticks 2 to 8 after the launch,
+against HD's `31,000`: HD's cyan wash is the Zone `SVC1` add after the fog
+([detonator-cannon.md](detonator-cannon.md#the-blue-wash-of-a-volley-read-2026-11-24-det-flash-wash-re)),
+which is gated to HD's Zone frame (`ZoneFrame::lit_by_stage_alone`) and Detonator's stage `1`
+surfaces are black. **Open:** the Zone shader combine of each title.
+
+**The lists.** Both titles list the effect in `far_bars`, `extents` and `turbulence`, as HD does.
+No capture of either original pairs them: the lists are HD's paired choices. `sprites` is not
+needed (Vita and PS4 read `.gxt`/`.gnf` for every effect).
+
+**Frames** (ours, `oag-game --race --mode detonator --detonator-emp-charge 12 --press flip`, the
+launch at tick 273, shots at 8, 24, 45 and 67 ticks after): on Omega's default circuit and 2048's
+`DLC1/environments/zone_1` a blue wall spans the road at 8, then streaks run ahead and the road
+behind is clean, as HD's own frames at the same offsets do. No original frame of either title.
+
+**Tests.** `oag-raceplay` `tests::detonator_fx::a_2048_emp_wave_carries_the_discs_effect_and_light_on_its_front`,
+`an_omega_emp_wave_carries_the_discs_effect_and_light_on_its_front` (nothing switched on by hand) and
+`tests::title_effects::each_trigger_is_answered_by_exactly_the_titles_that_read_it`.
 
 ## 2048 and Omega
 
-- **Omega: checked, applies, not wired.** `/omega/eboot-ps4-omega-eu-v107.bin`: the Detonator
+- **Omega: charge and gauge checked, apply.** `/omega/eboot-ps4-omega-eu-v107.bin`: the Detonator
   update holding `EMPREADY` (`FUN_012b6c70` in this import) tests `ship+0x76f4 & 0x8000000`,
   counts into `rm+0x300c0`, reads min/max at table `+0x234`/`+0x238`, computes
   `min((n - (hi - lo)) / (hi - lo), 1)` into `ship+0x8c0c` and raises `EMPREADY`/`EMPFULL` on the
@@ -672,8 +709,9 @@ clears fewer. `zone_3` and `15_anulpha_pass` ring launches clear the same set.
   mode `0xe`, a pad other than `craft+0x2f0` sets `ship+0x76f4 |= 0x8000000` and plays
   `WEAPONPICKUP`. Omega's weapon-pad arm (2026-11-25, base import `/omega/eboot-ps4-omega-eu.bin`
   `0x0130593b`-`0x01305954`): a pad other than `ship+0x8130` is stored and, in mode `0xe`, bit 27
-  of the same flag word is set: HD's law, **ported** (wired as measured). Fire and wave not read.
-- **2048: checked, applies, not wired.** `/2048/eboot-vita-2048-eu-v104.elf`: `FUN_8117e9c2`
+  of the same flag word is set: HD's law, **ported** (wired as measured). Fire and wave: "2048 and
+  Omega draw it".
+- **2048: charge and gauge checked, apply.** `/2048/eboot-vita-2048-eu-v104.elf`: `FUN_8117e9c2`
   tests `ship+0x60a4 & 0x8000000`, counts into `rm+0x2b1f0`, reads table `+0x234`/`+0x238`, and
   computes the same gauge into `ship+0x7458`, with the divide done as a NEON reciprocal estimate
   and three Newton steps (so not bit-identical to an f32 divide), clamped to `1`, then
@@ -681,10 +719,13 @@ clears fewer. `zone_3` and `15_anulpha_pass` ring launches clear the same set.
   `Ship_TestWeaponPad` (`0x811c9c7a`) are HD's two arms without the net guard, and the counts are
   read from `+0x234`/`+0x238` (`4`/`8`)
   ([`vita-2048-eu-v104/detonator-pads.md`](../vita-2048-eu-v104/detonator-pads.md), 75-80). Fire
-  and wave were not read; its HUD widgets differ (`EmpCharge`/`EmpFull`,
+  and wave: "2048 and Omega draw it"; its HUD widgets differ (`EmpCharge`/`EmpFull`,
   [detonator-hud.md](detonator-hud.md)).
 
 ## Names
+
+The 2048 and Omega `EMP_DrawLights` are in their own `names.tsv` (85): `0x811e8650` and
+`0x0133c150`.
 
 | Address | Name | Confidence |
 | --- | --- | ---: |

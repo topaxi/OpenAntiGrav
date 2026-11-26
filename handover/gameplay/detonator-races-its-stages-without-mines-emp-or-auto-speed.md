@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [hd, 2048, omega]
-updated: 2026-11-25
-summary: "Detonator: all 15 phases in; open: Omega EndRace Menu, 2048 Results, medal tiers, radial bloom, floor gain vs bands"
+updated: 2026-11-26
+summary: "Detonator open: HD end-screen delay and text size, Omega EndRace Menu, 2048 Results, medal tiers, radial bloom, floor"
 categories: [rendering]
 ---
 
@@ -32,7 +32,7 @@ evidence), then start at "Next Steps".
 | 10 | EMP: RE (pads, charge flag writer, `EMPManager`) then wire | done on HD and Omega (`detonator-emp.md`, "Wired"); the wave's reach is chosen (`emp::SECTIONS_PER_EXTENT`); 2048's pads read and wired 2026-11-25 (`vita-2048-eu-v104/detonator-pads.md`) | `det-emp-wire` |
 | 11 | Auto-speed: RE Detonator's engine branch, then wire | done on HD, 2048, Omega (`detonator-speed.md`, "Wired"), ramp included | `det-emp-wire` |
 | 12 | Detonator HUD (`detonator_hud.xml`, `hud_detonatorweapons.xml`, `detonator_warnings.xml`) | wired on HD, Omega and 2048, the EMP pips and `EmpReady` included; the three medal models draw on HD and Omega (`det-medals`, 2026-11-23; 2048 left); open: their tier colour, `EmpBarEffect`, 2048's `EmpCharge`/`EmpFull`, bomb-ahead, score feedback (below) | `det-medals` |
-| 13 | End screen proper (stage, mines, bombs, three chain counts, score, new-record banner) | HD wired (`det-end`, `detonator-endrace.md`, "Wired"): the six rows and the score line, live; open: the new-record banner, Omega (no EndRace screens on main) and 2048 (its four-row list has no page to draw on) | `det-end` |
+| 13 | End screen proper (stage, mines, bombs, three chain counts, score, new-record banner) | HD wired and checked live (`detonator-endrace.md`): rows, score line, captions, record notice and kept best; open: the destruction before the panel, end-screen text size, Omega (no EndRace screens on main) and 2048 (no page to draw on) | `det-end` |
 | 14 | Campaign launch (`race_mode_for_cell` maps `Other("Detonator")`; medal = the cannon score, `>=`) | done: 12 cells on HD, Omega, 2048; see `git log` (`Detonator campaign`) | see `git log` |
 | 15 | Omega and 2048 parity leftovers | done: Omega's opening placement and stage cap are HD's law (pinned, `detonator-mode.md`); 2048's per-stage `.gxt` sets wired on its fallback; Omega's grade wired on its HD-lineage circuits (`det-parity`, 2026-11-23) | `det-parity` |
 
@@ -238,9 +238,12 @@ Law: `detonator-cannon.md` ("What the simulation needs"). Decisions already made
   language table (`strings.fill`). The sim keeps race-long 5/10/15 chain counts and counts an EMP's
   bomb kills. Loyalty now pays on those laps (a destroyed run used to bank the full 14 stages).
   **Open:**
-  - **The new-record banner** (`RecordNotifyBlock`, `RecBlockBlue`/`RecBlockGrey`, `RecValue` =
-    `ER_NSR` + score): needs the best-score table `0x0001ef28` returns (unread, 72) and a Detonator
-    best-score store (none on main); drawn off, `RecBlockGrey` included.
+  - **Checked against two RPCS3 frames** (`detonator-endrace.md`, "Checked against the original"):
+    the record notice, the captions and the kept best score landed; open on HD: the **5.4 s of
+    destruction before the panel** (ours puts it up the tick the craft dies; what plays behind it afterwards is unchecked against
+    the original's glow, particle burst and wipe-in), the **end-screen text size** (rows 0.6x, headline 0.7x; the screens draw `default`
+    face as the scaled menu face, the campaign screens use the `Default` atlas), the HD style, the
+    `CONFIRM` glyph.
   - **Omega**: same filler (`FUN_0155bc90`) and ids; but Omega's `endrace_entry` is `None` (a finished
     race keeps the built-in scoreboard; wiring HD's reader leaves `EndRace Menu` with no options,
     `docs/formats/omega-status.md`), so no Omega Detonator screen draws until that is solved (a
@@ -249,8 +252,6 @@ Law: `detonator-cannon.md` ("What the simulation needs"). Decisions already made
     `IG_HUD_SCORE`, no chain rows) is modelled and worded (`Detonator2048Results`, tested) but not
     drawn: it belongs to its `Results` page, a named gap (`docs/ui/endrace-2048.md`); the touch
     Summary page has no widget for it. No layout is invented.
-  - **No live frame of the original** (the grey ink, the `x = 590` left edge, the `RecLogoD` art,
-    whether `MiniText` `ER_FINALPOS` is hidden: the Detonator branch writes none of it).
 - **14 Campaign: done.** `race_mode_for_cell` maps `Other("Detonator")`; `RaceStage::campaign_tier`
   takes the score through `medal_watch::detonator_value` (finished races only, `>=`). 12 cells per
   title, not 14 (`docs/formats/race-campaign.md`, "Detonator cells launch"). The value handed to the
@@ -298,7 +299,7 @@ placement RNG cannot match the original's `Libc_Rand` (a departure, documented).
 misses is, by title. *All three:* the medal tier colours (the tiers draw one grey), the bomb flash writer
 (`b+0x154`, unread: brightness stays `0.2`/`0.8`), ~~the EMP wave's reach (chosen)~~ (read and drawn on HD, `det-emp-look-re`) and the radial bloom
 (`oag-post` has no pass, Zone included), the floor spectrum feed (the pairs stay black under `--no-audio`), the
-hull strip and wreck. *HD:* the new-record banner (needs the best-score table `0x0001ef28` and a store).
+hull strip and wreck. *HD:* the end screen's destruction hold and text size.
 *Omega:* the end-race screen (its `endrace_entry` is `None`, wiring HD's reader leaves `EndRace Menu` with no
 options: Omega's `EndRace Menu`), the sky (`zone_sky: None`), the announcer events and the stage-10 music change
 in its state `2`. *2048:* the `Results` page (the four-row list is modelled, no page to draw on), its pads'
@@ -437,7 +438,7 @@ original frame to compare. The detail is below.
   "What HD draws for a fired EMP": one survey entry a tick for `extent` seconds, `WO_QUAKE_DETONATOR`
   on the front with a `(0, 5, 10)` light; the stepper is the Repulser's, copied). The particle rows
   were `SPARKS` without their noise force, fixed (same page, "The grey rows were sparks that
-  never moved"); 13 other HD emitters author that force, unlisted. The in-run fork and the launch-time fork are wired (`detonator-emp.md`, "The launch-time fork"). The other route's record lookup is wired. Open: `~MAGPULSETRAVEL` unwired; 2048 and Omega checked, applies, not wired. Still open:
+  never moved"); 13 other HD emitters author that force, unlisted. The in-run fork and the launch-time fork are wired (`detonator-emp.md`, "The launch-time fork"). The other route's record lookup is wired. Open: `~MAGPULSETRAVEL` unwired (all three titles). 2048 and Omega draw the wave and submit its light since 2026-11-26 (`detonator-emp.md`, "2048 and Omega draw it"); **open: the light changes no scenery pixels in ours on either** - read each title's Zone shader combine (GCN, GXP) for the vertex or per-draw light, then wire (HD's `lit_by_stage_alone` is HD-only, do not just turn it on). Their mine and bomb explosions are still unwired, so the wave's kills pop nothing there. Still open:
   whether the wave hurts the player,
   `EmpBarEffect` (an `<ImageModel>` the HUD layout reader does not model; the gauge is exposed),
   the ready pulse and post-fire flash on `EmpReady`, 2048's

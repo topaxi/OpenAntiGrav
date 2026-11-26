@@ -481,6 +481,12 @@ const EFFECTS: oag_title::Effects = {
                 Origin::Measured,
             ),
         )
+        // The EMP's wave: `0x0133ec10` spawns it on the front, `EMP1` by pointer, as HD's launch does
+        // (`docs/ghidra/functions/ps3-hdfury-eu/detonator-emp.md`, "2048 and Omega draw it").
+        .with(
+            Trigger::DetonatorEmp,
+            EffectSpec::new(engine_effects::DETONATOR_EMP_EFFECT, Origin::Measured),
+        )
         .with(
             Trigger::ShieldAbsorb,
             EffectSpec::new(
@@ -514,12 +520,18 @@ const EFFECTS: oag_title::Effects = {
                 Origin::InheritedFrom("Wipeout HD"),
             ),
         );
-    // Its three class-6 streaks draw as HD's view-space bar, as HD's list does.
+    // Their class-6 streaks draw as HD's view-space bar, as HD's list does.
     effects.far_bars = &[
         engine_effects::TRAIL_HITSHIP_EFFECT,
         engine_effects::TRAIL_HITSHIP_RED_EFFECT,
         engine_effects::DETONATOR_CANNON_SPARKS_EFFECT,
+        engine_effects::DETONATOR_EMP_EFFECT,
     ];
+    // The EMP's wave spreads by the extent law over the road: this title's sweep feeds the
+    // edges' distance over `100` into the instance, as HD's does. Its `SPARKS` author no speed
+    // and move by their noise force alone. Both lists are HD's, paired against HD only.
+    effects.extents = &[engine_effects::DETONATOR_EMP_EFFECT];
+    effects.turbulence = &[engine_effects::DETONATOR_EMP_EFFECT];
     effects.scenery = &[oag_title::engine_effects::MODESTO_STEAM_EFFECT];
     effects.colour_walk_in = &[(r"Data\particles2048", oag_title::ColourWalk::Reversed)];
     // `Particle_PushQuadBatch` (`docs/ghidra/functions/ps3-hdfury-eu/particle-render.md`).

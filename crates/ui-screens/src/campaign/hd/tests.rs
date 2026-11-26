@@ -549,6 +549,7 @@ fn grid_layout_with_no_card_art() -> Layout {
         screen: Screen::default(),
         scale: [1.0, 1.0],
         faces: crate::picker::FaceScales::default(),
+        labels: Vec::new(),
     }
 }
 
@@ -816,6 +817,7 @@ fn fury_grid_list_with(
         screen: screens.by_name("Grid Selection Fury").unwrap().clone(),
         scale: [1.0, 1.0],
         faces: crate::picker::FaceScales::default(),
+        labels: Vec::new(),
     };
     let grid = |name: &str, required| GridSummary {
         name: name.to_string(),
@@ -952,6 +954,7 @@ fn fury_arrow_targets(card: Option<[f32; 4]>) -> Vec<Target> {
         screen: screens.by_name("Grid Selection Fury").unwrap().clone(),
         scale: [1.0, 1.0],
         faces: crate::picker::FaceScales::default(),
+        labels: Vec::new(),
     };
     let any = |_: &str| {
         Some(Placed {
