@@ -272,6 +272,14 @@ impl Track {
         };
         format!(r"{}\{file}.vex", self.location)
     }
+
+    /// Whether `entry` addresses [`Self::entry_name`]'s file, whichever spelling it is in: a
+    /// title's default circuit need not be written as its plugin definition writes `location`
+    /// (`docs/tools/in-game-benchmark.md`, "The stats screen").
+    #[must_use]
+    pub fn addresses(&self, entry: &str) -> bool {
+        paths_match(&self.entry_name(), entry)
+    }
 }
 
 /// Reads every raceable `PI_Track` out of a plugin definition, in file order.
@@ -342,7 +350,7 @@ pub fn tracks_named(definition_xml: &str, names: &[&str]) -> Vec<Track> {
         .iter()
         .filter_map(|&name| {
             all.iter()
-                .find(|track| paths_match(&track.entry_name(), name))
+                .find(|track| track.addresses(name))
                 .cloned()
         })
         .collect()

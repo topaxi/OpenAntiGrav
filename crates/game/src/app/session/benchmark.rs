@@ -814,13 +814,10 @@ impl Session {
         let context = benchmark::Context {
             title: title.name,
             track: Some(format!("{}: {}", title.name, stage.circuit)),
-            track_name: self.shell.as_ref().and_then(|shell| {
-                shell
-                    .tracks
-                    .iter()
-                    .find(|(track, _)| track.entry_name() == stage.circuit)
-                    .map(|(_, name)| name.clone())
-            }),
+            track_name: self
+                .shell
+                .as_ref()
+                .and_then(|shell| benchmark::circuit_name(&shell.tracks, &stage.circuit)),
             details: self.benchmark_details(),
             build_version: oag_net::BUILD_VERSION,
             mode: world.mode().name(),
