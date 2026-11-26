@@ -159,8 +159,8 @@ fn each_trigger_is_answered_by_exactly_the_titles_that_read_it() {
             "{plasma:?}"
         );
     }
-    // Detonator's mine, bomb and cannon-wall effects: `DetonatorMine_Explode`,
-    // `DetonatorBombBlast_Start` and `PulseBullet_Update` name them on HD; 2048 and Omega ship
+    // Detonator's mine and bomb effects: `DetonatorMine_Explode` and
+    // `DetonatorBombBlast_Start` name them on HD; 2048 and Omega ship
     // the files and are "checked, applies, not wired". Pulse answers them with its own nearest
     // effects, chosen (`docs/gameplay/detonator-pulse.md`).
     for detonator in [
@@ -174,12 +174,14 @@ fn each_trigger_is_answered_by_exactly_the_titles_that_read_it() {
             "{detonator:?}"
         );
     }
-    // The EMP's wave: HD's, 2048's and Omega's own EMP launches spawn `WO_QUAKE_DETONATOR`.
+    // The EMP's wave: HD's, 2048's and Omega's own EMP launches spawn `WO_QUAKE_DETONATOR`;
+    // Pulse's is chosen.
     assert_eq!(has(Trigger::DetonatorEmp), [true, false, true, true, true]);
-    // The cannon's wall spark: HD's, 2048's and Omega's own `PulseBullet` updates spawn it.
+    // The cannon's wall spark: HD's, 2048's and Omega's own `PulseBullet` updates spawn it;
+    // Pulse's is its Cannon's spark, chosen.
     assert_eq!(
         has(Trigger::DetonatorCannonSparks),
-        [false, false, true, true, true]
+        [true, false, true, true, true]
     );
     // Pure's laid Bomb glow and Disruptor bolt are read on its executable alone.
     for own in [
