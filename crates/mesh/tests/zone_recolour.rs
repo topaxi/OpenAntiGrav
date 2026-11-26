@@ -629,8 +629,8 @@ fn the_visualiser_glow_depth_factor_takes_the_originals_near_plane() {
 /// **HD decodes the visualiser strip's RGB with the sRGB curve** (`shape.z`) before it joins
 /// the linear sum. A tint of 128 is `0.502` stored and `0.216` decoded; the glow is
 /// `0.5 * 0.5 * 1.6` of it, which the gamma target encodes by `1/2.2`: `123` stored, `84`
-/// decoded. Dropping the decode gives `123` for both. A smooth-looking constant gain would
-/// not separate them: the two ratios are checked on the same draw.
+/// decoded. Dropping the decode gives `123` for both. One draw per setting: a constant gain
+/// would move both, so the raw value pins the rest of the formula.
 #[test]
 fn the_visualiser_strip_is_srgb_decoded_into_the_linear_sum_when_the_zone_says_so() {
     let instance = wgpu::Instance::default();

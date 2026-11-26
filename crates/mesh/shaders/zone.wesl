@@ -249,8 +249,9 @@ fn zone_glow(n: vec3<f32>, frag: vec4<f32>, uv: vec2<f32>, slots: u32, world: ve
     let drive = zone_set(slots, world).effect.w;
     let gain = up * depth_term * drive;
     // HD's texture unit decodes the strip's RGB with the sRGB curve (`shape.z`; the
-    // address word's gamma nibble), which the linear sum takes; the stand-in path's gamma
-    // sum is decoded whole afterwards, so it keeps the stored texel.
+    // address word's gamma nibble), which the authored linear sum takes. The stand-in path's
+    // gamma sum keeps the stored texel: on a linear target it is decoded whole afterwards,
+    // and on a gamma target it stays as stored.
     // `docs/ghidra/functions/ps3-hdfury-eu/zone-vis-gamma.md`, "The law".
     let fetched = select(vis, srgb_decode(vis), scene.zone.shape.z > 0.5);
     let edge = abs(distance(world, scene.zone.origin.xyz) - scene.zone.radius);

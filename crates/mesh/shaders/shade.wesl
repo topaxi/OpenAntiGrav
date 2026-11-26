@@ -1777,8 +1777,9 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
     // The glow is **added after the light**, which is where the microcode puts
     // it: the accumulate reads `H0` once the lightmap and the interpolated
     // term have already multiplied the albedo, so a glow is not itself lit.
-    // The visualiser glow rides here too, with the stored strip texel: where the
-    // original's texture unit decodes it, `decode(plain)` below decodes the sum.
+    // The visualiser glow rides here too, with the stored strip texel: on a linear target
+    // `decode(plain)` below decodes the sum, which stands in for the original's decode of
+    // the texel; on a gamma target the texel stays as stored.
     let plain = (mix(texel.rgb, zone_gamma, zone_weight * zone_replace) + zone_add_gamma * zone_weight)
         * tint * light
         + glow + zone_glow_gamma + pad_glow + mag_glow_gamma;
