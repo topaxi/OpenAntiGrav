@@ -110,7 +110,7 @@ pub fn regions(
         None => super::rows::regions(menu, skin, frame),
     };
     if let Some(art) = &frame.music_list {
-        out.extend(super::music_list::regions(menu, skin, art, measure));
+        out.extend(super::music_list::regions(menu, skin, frame, art, measure));
     }
     // The footer's reset prompt, drawn by whoever draws the footer, while the row is off default.
     if let Some(rect) = menu.reset_rect.filter(|_| menu.reset_offered().is_some()) {

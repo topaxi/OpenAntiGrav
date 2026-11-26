@@ -248,7 +248,7 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
         options.mode == Mode::Zone,
         store,
         options.water,
-        hides_circuit_pads,
+        geometry::hidden_pads(hides_circuit_pads, options.weapons_on()),
         &mut report,
     );
     // The target's size is the original's, or a fraction of it
@@ -613,6 +613,9 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
     for name in craft_title.effects.names_on(archives.layout.platform) {
         let dir = title.race.effect_dir_for(&track);
         let walk = title.effects.colour_walk_for(dir);
+        // The law of the title whose archive the file is in, like the walk: its cap word is
+        // only that title's record's.
+        let near = title.effects.near_law;
         match listed_particle_effect(
             &mut archives,
             dir,
@@ -622,7 +625,13 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
                 || (circuit_weather && oag_title::engine_effects::WEATHER_EFFECTS.contains(&name)),
             walk,
         ) {
-            Ok((effect, note)) => {
+            Ok((mut effect, note)) => {
+                if let Some(law) = near {
+                    effect.with_near_law(psys::NearLaw {
+                        cull_depth: law.cull_depth,
+                        fade_depth: law.fade_depth,
+                    });
+                }
                 report.push(note);
                 effects.insert(name, effect);
                 report.extend(super::assets::sheet_note(name, &effects));
@@ -847,6 +856,7 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
         trail_sparks: options.trail_sparks,
         request: Some(options.replay_setup_on(&track)),
         campaign_event: false,
+        score_pass: None,
         hd_trail: trail_shape.is_some().then_some(hd_trail_red),
         ps2_trail,
         shield_targets: roster::shield_targets(
@@ -886,6 +896,7 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
         laid_pose_scaled: craft_title.looks.laid_pose_scaled.applies_everywhere(),
         screen_flash: extents,
         quake_flash: craft_title.effects.quake_look.flash,
+        craft_blast_carry: craft_title.effects.craft_blast_carry.is_some(),
         absorb_burst,
         absorb_anchors,
         hit_spark_anchors: super::hit_sparks::anchors(craft_title, &liveries),

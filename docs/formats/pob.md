@@ -1223,6 +1223,30 @@ effects to each); the same stems as 2048's directories, different bytes again.
   executable, not read down to a circuit: `docs/ghidra/functions/ps4-omega-eu/particle-paths.md`.
   The port picks by circuit directory (chosen, not measured).
 
+## HD's record tail: the near size cap and the resolution mode - 2026-11-25
+
+HD's emitter record runs past the PSP record's `0x9b8` bytes. Two more of its tail fields are
+read (`particle-fill-fable`; the evidence is
+[particle-render.md](../ghidra/functions/ps3-hdfury-eu/particle-render.md)):
+
+| Offset | Type | Meaning | Confidence |
+| --- | --- | --- | --- |
+| `+0xc80` | `f32` | **Near size cap** of a billboard (render modes 1 to 4): the drawn size is `min(size, view depth * cap)`. The streak modes do not read it | 94 |
+| `+0xc8c` | `u8` | **Resolution mode**: 4 picks 2, 1 or 0 by the instance's view depth (under 17, under 35, beyond), 3 means 0, anything else is used as it is. HD's draw computes it and does not use it | 85 |
+
+Census over the 71 effect files (189 emitters) of HD's `DATA02.PSARC`: the cap is 0.2 on 47
+billboard emitters, 0.3 on 1, 0.5 on 19 and 1.0 on 21; the mode is 4 on 161 emitters, 3 on 22
+and 0 on 6. The cap goes with two rules that are code and not data: a billboard nearer than 1
+unit of view depth is not drawn, and its alpha fades over depth 1 to 4.
+
+`+0xc80` is `Emitter::near_cap`, read since 2026-11-25; `+0xc8c` has no field. 2048's and
+Omega's files author `+0xc80` too: every billboard emitter of every parsed effect has a positive
+cap between 0.02 and 4.0 (`crates/fx/tests/psys_2048_ground_truth.rs` and
+`psys_omega_ground_truth.rs`). HD's whole disc (all seven archives) authors 0.2, 0.3, 0.5, 1.0
+and 2.0 (`crates/pob/tests/pob_ground_truth.rs`). The PSP and PS2 records end before it: what a
+reader finds at `+0xc80` of their files is another block (zero on most, garbage on others), so
+only a title whose executable reads the field may use it (`oag_title::Effects::near_law`).
+
 ## Evidence summary
 
 Every structural claim below holds on **35 of 35** PSP files and, per the

@@ -119,7 +119,9 @@ pub(super) fn plan(materials: &[Material], textures: Textures<'_>, report: &mut 
         report.glow_layers += usize::from(layer.is_some());
         out.layers.push(layer);
 
-        let plain = scroll_of(material).map(|rate| [0.0, rate]);
+        let plain = scroll_of(material)
+            .map(|rate| [0.0, rate])
+            .or_else(|| super::shield_lightning::magnetic_scroll(material));
         let inherited = plain
             .is_none()
             .then(|| inherited_scroll(material, &mut *textures))

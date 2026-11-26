@@ -666,7 +666,8 @@ mod tests {
         // wave, and the auto-speed ramp.
         // +8: `Wave::{forked, fork}`, the EMP wave's second front (a branch, a ring flag and an
         // entry), padded.
-        const LIMIT: usize = 23_376;
+        // +64: `Handling::eliminator_flip_time`, the craft's authored flip time, 8 bytes per ship.
+        const LIMIT: usize = 23_440;
         let size = std::mem::size_of::<World>();
         assert!(
             size <= LIMIT,

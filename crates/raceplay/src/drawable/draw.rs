@@ -370,6 +370,9 @@ impl Drawable {
             let want = self.wants_cull(draw);
             // The shaded half's pipeline also follows the draw's class (`Built::plain_draws`).
             let plain = shade && self.plain_draws.get(index as usize) == Some(&true);
+            if shade && oag_gpu::skip::skipped(if plain { "track-plain" } else { "track-rich" }) {
+                return;
+            }
             if (want, plain) != *culling {
                 *culling = (want, plain);
                 oag_gpu::perfprobe::pipeline_set();

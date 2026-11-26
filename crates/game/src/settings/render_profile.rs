@@ -561,7 +561,7 @@ impl Default for RenderProfile {
 
 /// Inserts a default [`RenderProfile`] for every `(title, platform)` row
 /// [`known_profiles`] names that [`Settings::render_profiles`] does not
-/// already hold, so the file stays a complete reference for what it can
+/// already hold, and every title's music row, so the file stays a complete reference for what it can
 /// hold - the same property `HEADER` (in `settings.rs`) documents for every
 /// other table.
 pub(super) fn ensure_known_titles(settings: &mut Settings) {
@@ -571,6 +571,7 @@ pub(super) fn ensure_known_titles(settings: &mut Settings) {
             .entry(profile_key(title, platform))
             .or_insert_with(|| RenderProfile::for_title(title));
     }
+    super::music_profile::ensure_known_music_profiles(settings);
 }
 
 /// Every key a `[render_profiles.<title>]` table holds.

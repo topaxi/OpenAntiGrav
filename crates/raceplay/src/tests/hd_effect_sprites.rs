@@ -23,6 +23,7 @@ fn only_hd_lists_effects_whose_gtf_sprites_play() {
         [
             oag_title::engine_effects::DETONATOR_CANNON_SPARKS_EFFECT,
             oag_title::engine_effects::TRACK_BLAST_EFFECT,
+            oag_title::engine_effects::CRAFT_BLAST_EFFECT,
             oag_title::engine_effects::EXPLOSION_EFFECT,
             oag_title::engine_effects::QUAKE_EFFECT,
             oag_title::engine_effects::DETONATOR_EMP_EFFECT,
@@ -358,4 +359,71 @@ fn the_emp_sparks_feel_their_noise_force_only_where_the_title_lists_it() {
     let mut unlisted_effects = *title.effects;
     unlisted_effects.turbulence = &[];
     assert!(!load(&mut archives, &unlisted_effects).has_turbulence());
+}
+
+/// A Rocket that reaches a craft plays HD's `WO_ROCKET_EXPLO` with the disc's own
+/// sprites, every one of the twelve on the particle sheet.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn a_forced_rocket_hit_plays_the_craft_blast_with_its_sprites() {
+    use oag_gameplay::input::{Button, Input};
+    use oag_gameplay::{InputSnapshot, PlayerInputs};
+
+    let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let loaded = crate::load(&crate::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::SingleRace,
+        ..crate::Options::default()
+    })
+    .expect("loading an HD race");
+    let mut race = crate::Race::start(loaded.setup, loaded.view, loaded.modules);
+    let held = |before: u32, now: u32| {
+        let mut buttons = Input::new();
+        buttons.begin_frame(before);
+        buttons.begin_frame(now);
+        PlayerInputs::single(InputSnapshot {
+            buttons,
+            ..InputSnapshot::new()
+        })
+    };
+    for _ in 0..oag_race::COUNTDOWN_TICKS + 10 {
+        race.tick(&held(0, 0));
+    }
+    race.core.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Rocket);
+    race.tick(&held(0, Button::Square.bit()));
+    for _ in 0..3 {
+        race.tick(&held(0, 0));
+    }
+    let blast = race
+        .effect_for_tests(oag_title::Trigger::CraftBlast)
+        .expect("HD loads the craft blast");
+    assert_eq!(race.view.stage.alive_of_effect(&blast), 0, "no blast yet");
+    assert_eq!(
+        blast.emitters.len(),
+        12,
+        "WO_ROCKET_EXPLO's twelve emitters"
+    );
+    for spec in &blast.emitters {
+        assert!(spec.sprite.is_some(), "{} has no sprite", spec.name);
+    }
+    assert_eq!(
+        blast.unplaced_sprites().collect::<Vec<_>>(),
+        Vec::<&str>::new()
+    );
+    let before = race.core.sim.world.ships[1].physics.shield;
+    assert!(race.core.sim.force_rocket_hit(1), "a Rocket is in flight");
+    for _ in 0..3 {
+        race.tick(&held(0, 0));
+    }
+    assert!(
+        race.core.sim.world.ships[1].physics.shield < before,
+        "rival 1 took no damage"
+    );
+    assert!(
+        race.view.stage.alive_of_effect(&blast) > 0,
+        "the craft blast is not playing"
+    );
 }

@@ -208,6 +208,10 @@ pub(super) fn run(stem: &std::path::Path, rig: Rig<'_>) -> Result<()> {
             break;
         }
 
+        // `OAG_SKIP_PASSES=writes` drops writes only after the first frame.
+        if !frames.is_empty() {
+            oag_gpu::skip::arm_writes(device);
+        }
         let index = frames.len() as u64;
         collect(device, &mut timers, &mut gpu);
         gpu.push(vec![f64::NAN; slots]);

@@ -10,7 +10,10 @@ brightness = 110
 [audio]
 music_volume = 80
 
-[audio.music_switches]
+[music_profiles."Wipeout Pulse"]
+music_source = "psp"
+
+[music_profiles."Wipeout Pulse".music_switches]
 "folder:/music" = true
 
 [mod_settings."oag.example"]

@@ -1,7 +1,7 @@
 ---
 status: re-first
 titles: [hd]
-updated: 2026-11-03
+updated: 2026-11-26
 summary: "HD per-team ShieldColour wired; open: activation tint, Zone Battle copy (unverified), hit flash"
 ---
 
@@ -83,6 +83,7 @@ steady-state colour is read".
 
 ## Open
 
+- **Landed 2026-11-26:** the lattice's colour scroll (`u + 3 time`) and the shell's clock; see `shield.md`, "The lattice scrolls".
 - **Landed:** HD's per-team `ShieldColour` target
   (`Livery::shield_colour`, `Setup::shield_targets`). Still open: the models'
   activation tint (`FUN_002c32c8`, packed `(0.547, 0.1, 0.1, 0) * 255`); Zone's
@@ -95,6 +96,9 @@ steady-state colour is read".
 - The `--give shield` CLI in our own engine never demonstrably fired (below).
 - `FUN_00676fe8`, the three-argument flicker call, and `FUN_00125d98`, the
   external-camera shell draw, are still unread.
+- Unwired in `hexagonalshield_rich`: `constantAmbientColour`, the lit variants' light terms, fog. Zone's
+  `zonebattle_shield` program is unread (no mode of ours raises it).
+- Our own `graphics.own_shield` reads its eye from the origin (`docs/rendering/own-shield.md`, "Open").
 
 ## Next Steps
 

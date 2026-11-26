@@ -1,7 +1,7 @@
 //! The MUSIC page's rows: which sources the race playlist draws from.
 //!
 //! The pool and its scans are `oag_sound::pool`; the rows are `crate::music_pool`. A switch
-//! is saved into `[audio] music_switches` and the pool follows at once: what was decoded ahead
+//! is saved into the open title's `music_switches` and the pool follows at once: what was decoded ahead
 //! is dropped ([`oag_sound::Audio::music_pool_changed`]), the song playing goes on.
 
 use log::{error, info};
@@ -13,6 +13,11 @@ use crate::app::stage::Stage;
 use super::Session;
 
 impl Session {
+    /// Which pressing's soundtrack the open title plays.
+    pub(crate) fn music_source(&self) -> oag_sound::MusicSource {
+        self.settings.music_source(self.title_raced())
+    }
+
     /// Builds the menus again where the player stood when what the rows say has changed
     /// (a scan landed, a source appeared): the page's rows are made when the model is.
     pub(crate) fn poll_music_pool(&mut self) {
@@ -54,7 +59,12 @@ impl Session {
             if on { "on" } else { "off" }
         );
         pool.set_enabled(id, on);
-        self.settings.audio.music_switches = pool.switches();
+        if let Some(title) = self.title_raced() {
+            self.settings
+                .music_profile_mut(title)
+                .music_switches
+                .insert(id.to_string(), on);
+        }
         if let Err(e) = self.save_settings() {
             error!("could not save settings: {e:#}");
         }

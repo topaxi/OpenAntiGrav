@@ -450,6 +450,41 @@ pub struct Effects {
     /// `docs/ghidra/functions/ps4-omega-eu/trail-hits.md`), which then plays it only with the
     /// player's `graphics.trail_hits` on, as Pulse and Pure do. See [`Self::trail_hits_on_setting`].
     pub trail_hits_native: bool,
+    /// The near-camera law this title's billboard builder runs, `None` on a title whose builder
+    /// is unread: its particles draw as authored. The size cap that goes with it is each `.pob`
+    /// emitter's own (`+0xc80`). See `docs/ghidra/functions/ps3-hdfury-eu/particle-render.md`.
+    pub near_law: Option<NearLaw>,
+    /// Whether a Rocket's craft blast ([`Trigger::CraftBlast`]) is handed the struck craft's
+    /// velocity as it spawns, so every particle it emits carries that velocity times its own
+    /// emitter's `+0x4d0`. The blast is not parented: its emitters stay where it was spawned.
+    /// `None` on a title whose spawn hands it none (Pulse on the PSP, whose
+    /// `Rocket_SpawnCraftExplosion_q` writes no velocity) or is unread. See
+    /// `docs/ghidra/functions/ps3-hdfury-eu/rocket-craft-blast.md`.
+    pub craft_blast_carry: Option<Origin>,
+}
+
+/// A billboard nearer than `cull_depth` world units along the view draws nothing, and one
+/// nearer than `fade_depth` is faded by `(depth - cull_depth) / (fade_depth - cull_depth)`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct NearLaw {
+    /// Nearer than this, no quad.
+    pub cull_depth: f32,
+    /// Nearer than this, faded.
+    pub fade_depth: f32,
+    /// Where this came from.
+    pub origin: Origin,
+}
+
+impl NearLaw {
+    /// The depths HD's, 2048's and Omega's builders carry, tagged `origin`.
+    #[must_use]
+    pub const fn one_to_four(origin: Origin) -> Self {
+        Self {
+            cull_depth: 1.0,
+            fade_depth: 4.0,
+            origin,
+        }
+    }
 }
 
 /// Where a title's Quake wave takes the `+Y` of the frame its `WO_QUAKE` is
@@ -513,6 +548,8 @@ impl Effects {
         colour_walk_in: &[],
         quake_look: QuakeLook::track(Origin::InheritedFrom("Wipeout Pulse")),
         trail_hits_native: false,
+        near_law: None,
+        craft_blast_carry: None,
     };
 
     /// The entry for `trigger`.
@@ -542,6 +579,13 @@ impl Effects {
             .iter()
             .find(|(listed, _)| norm(listed) == dir)
             .map_or(self.colour_walk, |&(_, walk)| walk)
+    }
+
+    /// This table with its billboards under the near-camera law `law` ([`Self::near_law`]).
+    #[must_use]
+    pub const fn with_near_law(mut self, law: NearLaw) -> Self {
+        self.near_law = Some(law);
+        self
     }
 
     /// This table with its particle colour walk read as `walk` ([`Self::colour_walk`]).

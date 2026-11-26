@@ -19,7 +19,7 @@ use oag_assets::psarc::Archive;
 use oag_core::Rng;
 use oag_core::math::Vec3;
 use oag_fx::psys::sprite::Sprite;
-use oag_fx::psys::{ColourScale, Effect, System, TICK_HZ};
+use oag_fx::psys::{ColourScale, Effect, Render, System, TICK_HZ};
 use oag_pob as pob;
 
 /// Archives that carry `.pob`, and how many each holds.
@@ -33,6 +33,23 @@ const ARCHIVES: [(&str, usize); 5] = [
 
 fn root() -> Option<std::path::PathBuf> {
     oag_testdata::exact("data/extracted/vita/PCSF00007")
+}
+
+/// Every billboard emitter authors the near law's size cap (`+0xc80`) as a positive fraction of
+/// its depth, as this title's builder reads it.
+fn check_near_caps(effect: &Effect) {
+    for spec in &effect.emitters {
+        if spec.template || !matches!(spec.render, Render::Billboard) {
+            continue;
+        }
+        let cap = spec.near_cap.expect("the record reaches +0xc80");
+        assert!(
+            (0.01..=4.0).contains(&cap),
+            "{}/{}: near cap {cap}",
+            effect.name,
+            spec.name
+        );
+    }
 }
 
 /// Plays every 2048 effect for four seconds, and holds the refusals to the
@@ -73,6 +90,7 @@ fn every_2048_effect_plays_or_is_refused_by_name() {
                     continue;
                 }
             };
+            check_near_caps(&effect);
             for spec in &effect.emitters {
                 *words.entry(spec.authored_colour_mode).or_default() += 1;
                 if spec.authored_colour_mode & !2 != 0 {

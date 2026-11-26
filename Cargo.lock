@@ -1196,6 +1196,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "ctt-astcenc"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dc6dc5595dd5b65dd4cf644bf0d9159f0bd3de2e37c539a1a8df12fb1ecfdd77"
+dependencies = [
+ "bitflags 2.13.2",
+ "cc",
+ "paste",
+]
+
+[[package]]
 name = "cursor-icon"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3457,6 +3468,7 @@ dependencies = [
  "arboard",
  "bytemuck",
  "clap",
+ "ctt-astcenc",
  "dirs",
  "gstreamer",
  "gstreamer-app",
@@ -3669,6 +3681,7 @@ dependencies = [
  "oag-display",
  "oag-formats",
  "oag-gpu",
+ "oag-io",
  "oag-rcs",
  "oag-shader-check",
  "oag-testdata",
@@ -3677,6 +3690,7 @@ dependencies = [
  "oag-vex",
  "pollster",
  "serde",
+ "sha2 0.11.1",
  "wgpu",
 ]
 

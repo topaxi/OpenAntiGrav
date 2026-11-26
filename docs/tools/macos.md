@@ -87,5 +87,6 @@ The hook has never run. It needs a paid Apple Developer account.
 (2026-10-12), covering wgpu's Metal backend, winit, cpal, `arboard` and `dirs`:
 `cargo check` does not link, and no dependency here has a build script that needs
 the SDK. Linking, the Metal driver, CoreAudio and the window are untested. The `ci.yml` `determinism`
-job already runs on `macos-latest`. A known gap: the texture-compression support
-covers BC and ASTC only; see the handover thread on it.
+job already runs on `macos-latest`. An Apple Silicon Mac samples BC, so the disc's blocks go up
+unchanged and the ASTC re-encode is never offered there
+([texture-compression.md](../rendering/texture-compression.md)).

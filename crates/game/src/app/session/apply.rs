@@ -389,7 +389,9 @@ impl Session {
             },
             "audio.music_source" => match text.parse::<oag_sound::MusicSource>() {
                 Ok(source) => {
-                    self.settings.audio.music_source = source;
+                    if let Some(title) = self.title_raced() {
+                        self.settings.music_profile_mut(title).music_source = source;
+                    }
                     self.audio.set_music_source(
                         &self.music_discs,
                         source,
@@ -709,6 +711,17 @@ impl Session {
                     if let Some(profile) = self.render_profile_mut() {
                         profile.screen_filter_strength = strength;
                     }
+                }
+                Err(e) => {
+                    warn!("ignoring {setting} = {text:?}: {e}");
+                    return;
+                }
+            },
+            "graphics.texture_compression" => match text.parse::<display::TextureCompression>() {
+                // Read by the next race load's texture uploads.
+                Ok(compression) => {
+                    self.settings.graphics.texture_compression = compression;
+                    crate::texture_cache::apply(compression);
                 }
                 Err(e) => {
                     warn!("ignoring {setting} = {text:?}: {e}");
@@ -1056,7 +1069,8 @@ impl Session {
                 self.switch_selected_mod(text == "on");
                 return;
             }
-            // A MUSIC page row: one source on or off, saved into `[audio] music_switches`.
+            // A MUSIC page row: one source on or off, saved into the open title's
+            // `music_switches`.
             other if crate::music_pool::source_of(other).is_some() => {
                 if let Some(id) = crate::music_pool::source_of(other) {
                     self.switch_music_source(id, text == "on");

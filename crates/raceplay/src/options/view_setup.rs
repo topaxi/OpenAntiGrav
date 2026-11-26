@@ -22,6 +22,9 @@ pub struct ViewSetup {
     /// reads as "an event object exists" - [`oag_hud::Readout::campaign_event`]. A DLC circuit
     /// raced as the HD or Fury Campaign, or any `--track` race, has none.
     pub campaign_event: bool,
+    /// A campaign event's pass score, where it is below the score the race ends on: the target
+    /// the HUD shows until it is met. Set by [`load_event`](super::load_event).
+    pub score_pass: Option<u32>,
     /// Wipeout HD's trail: `Some` with the per-slot blue-to-red colour mix
     /// when the title authors its ribbon as HD's two-texture template,
     /// `None` on every other source, where the ribbon is the PSP preset.
@@ -93,6 +96,9 @@ pub struct ViewSetup {
     /// of its other detonations' flashes but whose own wave is read
     /// (`oag_title::QuakeLook::flash`). Ignored with [`Self::screen_flash`].
     pub quake_flash: bool,
+    /// Whether a Rocket's craft blast carries the struck craft's velocity
+    /// (`oag_title::Effects::craft_blast_carry`).
+    pub craft_blast_carry: bool,
     /// How this title staggers `WO_WEAPON_ABSORB` over a hull, or `None` on a
     /// title whose absorb path is unread. See `race::absorb`.
     pub absorb_burst: Option<oag_title::Burst>,
@@ -319,6 +325,7 @@ impl ViewSetup {
             trail_sparks: false,
             request: None,
             campaign_event: false,
+            score_pass: None,
             hd_trail: None,
             ps2_trail: false,
             // No shield to draw either, and `Palette` has no measured "empty"
@@ -352,6 +359,7 @@ impl ViewSetup {
             laid_pose_scaled: false,
             screen_flash: false,
             quake_flash: false,
+            craft_blast_carry: false,
             absorb_burst: None,
             absorb_anchors: Vec::new(),
             hit_spark_anchors: Vec::new(),

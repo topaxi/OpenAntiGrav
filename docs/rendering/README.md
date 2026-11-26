@@ -111,6 +111,10 @@
   does not fit is now cut between draws and drawn with a negative base vertex, byte-identical to one
   buffer, with the largest buffer every circuit of every title needs - see
   [`vertex-buffers.md`](vertex-buffers.md)
+- **BC textures as ASTC on a device without BC** (2026-11-26, `astc-optin`): the opt-in TEXTURE
+  COMPRESSION row re-encodes a disc's BC texture as ASTC 4x4 into an on-disk cache on a phone GPU,
+  where it would otherwise go up as RGBA8; `original` stays the default - see
+  [`texture-compression.md`](texture-compression.md)
 - **Blended glow batches stamp the mask** (2026-10-01): the arch lights, the start-line laser
   and the tunnel's rim light are blended batches with the glow bits, which the original's stencil
   stamps and ours did not, so they had no bloom; now drawn through a second alpha-only pass and

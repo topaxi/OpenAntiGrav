@@ -42,6 +42,20 @@ pub trait Writes {
 
 impl Writes for wgpu::Queue {
     fn write_buffer(&self, buffer: &wgpu::Buffer, offset: wgpu::BufferAddress, data: &[u8]) {
+        if crate::skip::writes_frozen() {
+            return;
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            if let Some(device) = crate::skip::writes_dummy_device() {
+                dummy_write(device, self, buffer, offset, data);
+                return;
+            }
+            if crate::skip::named("writes-same") {
+                held_write(self, buffer, offset, data);
+                return;
+            }
+        }
         wgpu::Queue::write_buffer(self, buffer, offset, data);
     }
 
@@ -52,7 +66,68 @@ impl Writes for wgpu::Queue {
         data_layout: wgpu::TexelCopyBufferLayout,
         size: wgpu::Extent3d,
     ) {
+        if crate::skip::writes_frozen() {
+            return;
+        }
         wgpu::Queue::write_texture(self, texture, data, data_layout, size);
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+/// `writes-same` ([`crate::skip`]): inside a window, each buffer range is written with the
+/// bytes it was first given in that window; outside, as given, and the held bytes are let go.
+fn held_write(
+    queue: &wgpu::Queue,
+    buffer: &wgpu::Buffer,
+    offset: wgpu::BufferAddress,
+    data: &[u8],
+) {
+    type Held = std::collections::HashMap<(wgpu::Buffer, wgpu::BufferAddress, usize), Vec<u8>>;
+    static HELD: std::sync::Mutex<Option<Held>> = std::sync::Mutex::new(None);
+    let mut held = HELD
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if !crate::skip::writes_replayed() {
+        *held = None;
+        wgpu::Queue::write_buffer(queue, buffer, offset, data);
+        return;
+    }
+    let bytes = held
+        .get_or_insert_with(Default::default)
+        .entry((buffer.clone(), offset, data.len()))
+        .or_insert_with(|| data.to_vec());
+    wgpu::Queue::write_buffer(queue, buffer, offset, bytes);
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+/// `writes-dummy` ([`crate::skip`]): the write copied into a scratch buffer of its own (one per
+/// buffer range, kept), which no pass reads.
+fn dummy_write(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    buffer: &wgpu::Buffer,
+    offset: wgpu::BufferAddress,
+    data: &[u8],
+) {
+    type Scratch = std::collections::HashMap<(wgpu::Buffer, wgpu::BufferAddress), wgpu::Buffer>;
+    static SCRATCH: std::sync::Mutex<Option<Scratch>> = std::sync::Mutex::new(None);
+    let mut scratch = SCRATCH
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let size = (data.len() as wgpu::BufferAddress).next_multiple_of(wgpu::COPY_BUFFER_ALIGNMENT);
+    let target = scratch
+        .get_or_insert_with(Default::default)
+        .entry((buffer.clone(), offset))
+        .or_insert_with(|| {
+            device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("writes-dummy scratch"),
+                size,
+                usage: wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            })
+        });
+    if target.size() >= data.len() as wgpu::BufferAddress {
+        wgpu::Queue::write_buffer(queue, target, 0, data);
     }
 }
 

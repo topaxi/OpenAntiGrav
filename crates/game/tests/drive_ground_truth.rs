@@ -898,8 +898,9 @@ fn a_race_resumed_from_the_pause_menu_draws_its_hud_at_the_new_screen_size() {
     );
 }
 
-/// The MUSIC page's rows reach the settings file: the booted disc's own row
-/// saves a switch into `[audio] music_switches`, and turning it back on saves that too.
+/// MUSIC SOURCE and the MUSIC page's rows reach the settings file: each saves into the booted
+/// title's `[music_profiles]` table and into no other title's. MUSIC SOURCE is offered only
+/// with both Pulse pressings in `data/images/`.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn the_music_page_saves_its_switches() {
@@ -912,7 +913,8 @@ fn the_music_page_saves_its_switches() {
         "music-switch",
         &format!(
             "boot; select options; press cross; until page=options; \
-             select audio; press cross; until page=audio; \
+             select audio; press cross; until page=audio; ticks 60; \
+             set audio.music_source=ps2; ticks 5; \
              select music; press cross; until page=music; ticks 30; \
              set audio.music_pool.{booted}=off; ticks 5; expect page=music; \
              press circle; until page=audio; ticks 5"
@@ -928,10 +930,31 @@ fn the_music_page_saves_its_switches() {
     )
     .expect("the run saved its settings");
     let saved: toml::Table = saved.parse().unwrap();
+    let profiles = saved["music_profiles"].as_table().expect("music_profiles");
+    let switched: Vec<&str> = profiles
+        .iter()
+        .filter(|(_, profile)| profile["music_switches"].get(booted).is_some())
+        .map(|(title, _)| title.as_str())
+        .collect();
     assert_eq!(
-        saved["audio"]["music_switches"][booted].as_bool(),
+        switched,
+        ["Wipeout Pulse"],
+        "only the booted title: {saved}"
+    );
+    assert_eq!(
+        profiles["Wipeout Pulse"]["music_switches"][booted].as_bool(),
         Some(false),
         "the booted disc's switch is saved off: {saved}"
+    );
+    let sources: Vec<&str> = profiles
+        .iter()
+        .filter(|(_, profile)| profile["music_source"].as_str() != Some("auto"))
+        .map(|(title, _)| title.as_str())
+        .collect();
+    assert_eq!(sources, ["Wipeout Pulse"], "only the booted title: {saved}");
+    assert_eq!(
+        profiles["Wipeout Pulse"]["music_source"].as_str(),
+        Some("ps2")
     );
 }
 

@@ -34,7 +34,9 @@ fn populated() -> Settings {
         path: "/music".into(),
         enabled: true,
     }];
-    s.audio.music_switches.insert("folder:/music".into(), true);
+    s.music_profile_mut(oag_pulse::TITLE)
+        .music_switches
+        .insert("folder:/music".into(), true);
     s.audio
         .choose_spatial(Some("usb-codec"), oag_audio::SpatialChoice::Headphones);
     s.race.window_monitors = vec!["DP-1".into()];
@@ -60,7 +62,7 @@ fn a_settings_file_with_every_section_populated_validates() {
         "[log]",
         "[source]",
         "[mod_settings.\"oag.example\"]",
-        "[audio.music_switches]",
+        "[music_profiles.\"Wipeout Pulse\".music_switches]",
         "[[audio.music_folders]]",
         "[[audio.spatial_devices]]",
         "hud_safe_area",
@@ -85,6 +87,14 @@ fn the_file_declares_the_schema_it_is_read_as() {
 fn a_file_without_the_header_and_a_minimal_one_validate() {
     verdict("").unwrap();
     verdict("[audio]\nmusic_volume = 50\n").unwrap();
+}
+
+#[test]
+fn a_music_profile_key_the_schema_lacks_is_named() {
+    let errors = verdict("[music_profiles.\"Wipeout HD\"]\nmusic_sorce = \"ps2\"\n")
+        .unwrap_err()
+        .join("\n");
+    assert!(errors.contains("music_sorce"), "{errors}");
 }
 
 #[test]

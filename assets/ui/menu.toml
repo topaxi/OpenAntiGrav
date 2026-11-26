@@ -1530,6 +1530,20 @@ string_id = "OAG_GRAPHICS_TEXTURE_DETAIL"
 setting = "graphics.texture_detail"
 values = ["original", "high", "maximum"]
 
+# What a disc's block-compressed texture becomes on a device that cannot sample BC (a phone's
+# GPU). `original` is the default: decoded to RGBA8, every texel the disc's. `astc` re-encodes
+# that same picture as ASTC 4x4 blocks, about a quarter of the memory and a faster frame, at a
+# small loss: this project's own re-encode, cached on disk and filled in the background, so the
+# first race on a circuit still draws RGBA8. Offered only on a device that lacks BC and samples
+# ASTC, on any system; the row is dropped everywhere else (`oag_game::texture_cache`). Read by
+# the next race load. See `docs/rendering/texture-compression.md`.
+[[page.entry]]
+kind = "choice"
+label = "TEXTURE COMPRESSION"
+string_id = "OAG_GRAPHICS_TEXTURE_COMPRESSION"
+setting = "graphics.texture_compression"
+values = ["original", "astc"]
+
 
 # Where a craft's engine ribbon draws against the circuit's translucent floors.
 # `original` is the measured order and the default: the original queues every
@@ -1848,6 +1862,9 @@ values = ["0", "25", "50", "75", "90", "100"]
 # Changing it **seeks rather than restarts**: the playhead is carried across in
 # seconds, and the two encodes of a track agree in length to 11 ms, so the same
 # offset lands in the same bar. See `crates/sound/src/lib.rs`.
+#
+# Kept per title (`[music_profiles."<title>"] music_source`), as the MUSIC page's
+# switches are; the row's id is a menu name, not the file path.
 [[page.entry]]
 kind = "choice"
 label = "MUSIC SOURCE"
@@ -1913,6 +1930,7 @@ string_id = "OAG_MENU_BACK"
 # One on/off row per soundtrack source this machine can open: the booted disc, the
 # other titles' discs on the search path, and the folders listed in settings.toml
 # under `[audio] music_folders`. The booted disc starts on, everything else off.
+# A switch is kept for the open title alone (`[music_profiles."<title>"]`).
 # The one row below is a template: `oag_game::music_pool::expand` replaces it with a
 # row per source (`oag_ui::menu::Definition::expand_rows`), and with fewer than two
 # sources takes the page and the MUSIC row that opens it out. Adding a folder from

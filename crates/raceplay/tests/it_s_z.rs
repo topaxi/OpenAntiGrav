@@ -56,6 +56,7 @@ mod transit_ground_truth;
 mod view_independence_ground_truth;
 mod vita_2048_campaign_grid_ground_truth;
 mod vita_2048_countdown_ground_truth;
+mod vita_2048_eliminator_ground_truth;
 mod vita_2048_hud_event_ground_truth;
 mod vita_2048_lighting_ground_truth;
 mod vita_2048_original_ai_ground_truth;
@@ -112,4 +113,6 @@ fn every_test_file_is_listed() {
     }
 }
 
+mod zone_flaps_ground_truth;
+mod zone_weapon_pads_ground_truth;
 mod zz_contact_sweep;

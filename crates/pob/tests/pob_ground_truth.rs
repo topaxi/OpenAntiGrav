@@ -554,6 +554,8 @@ fn every_hd_particle_system_walks_the_same_way_byte_swapped() {
                 .map(|e| format!("{}/{}", system.name, e.name)),
         );
     }
+    check_hd_near_caps(&blobs);
+
     mixed.sort();
     mixed.dedup();
     assert_eq!(
@@ -574,6 +576,34 @@ fn every_hd_particle_system_walks_the_same_way_byte_swapped() {
     assert!(
         fourth.iter().all(|e| e.starts_with("WO_NITRO_SHIP_DEATH/")),
         "blend class 4 escaped WO_NITRO_SHIP_DEATH: {fourth:?}"
+    );
+}
+
+/// The near size cap, `+0xc80`, which HD's billboard builder reads
+/// (`docs/ghidra/functions/ps3-hdfury-eu/particle-render.md`): a Rocket striking a craft caps its
+/// smoke at half its depth and its blue cloud at all of it, and no billboard on the disc caps
+/// outside the five values.
+fn check_hd_near_caps(blobs: &[(usize, Vec<u8>)]) {
+    let mut seen = std::collections::BTreeSet::new();
+    let mut rocket = std::collections::BTreeMap::new();
+    for (_, blob) in blobs {
+        let system = ParticleSystem::parse(blob).expect("parse");
+        for emitter in system.emitters(blob).expect("emitters") {
+            let cap = emitter.near_cap.expect("an HD record reaches +0xc80");
+            if matches!(emitter.draw_class(), Some(1..=3)) {
+                seen.insert((cap * 1000.0).round() as i32);
+            }
+            if system.name == "WO_ROCKET_EXPLO" {
+                rocket.insert(emitter.name.clone(), cap);
+            }
+        }
+    }
+    assert_eq!(rocket.get("WO_ROCKET_EXPLO"), Some(&0.5), "{rocket:?}");
+    assert_eq!(rocket.get("SMOKE_BLUCLD"), Some(&1.0), "{rocket:?}");
+    assert_eq!(
+        seen.into_iter().collect::<Vec<_>>(),
+        [200, 300, 500, 1000, 2000],
+        "which caps HD's billboards author is a measurement, not a tolerance"
     );
 }
 

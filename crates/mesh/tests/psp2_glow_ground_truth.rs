@@ -16,8 +16,8 @@ use std::path::{Path, PathBuf};
 
 use oag_mesh::mesh::rcs::psp2::{self, Animation};
 use oag_mesh::mesh::{
-    Model, PROGRAM_EMISSIVE_ADD, PROGRAM_PICTURE_ADD, PROGRAM_REFLECT_MAP, PROGRAM_VERTEX_BLEND,
-    slots,
+    Model, PROGRAM_EMISSIVE_ADD, PROGRAM_EMISSIVE_ALPHA_MASK, PROGRAM_PAD_BARS,
+    PROGRAM_PICTURE_ADD, PROGRAM_REFLECT_MAP, PROGRAM_VERTEX_BLEND, slots,
 };
 use oag_mesh::mesh_render::TexAnims;
 
@@ -74,6 +74,11 @@ fn first_vertices(
     })
 }
 
+/// A weapon pad's bar mask: the material's own entry, or a class's copy of it.
+fn is_pad_bar(program: f32) -> bool {
+    program == PROGRAM_EMISSIVE_ALPHA_MASK || PROGRAM_PAD_BARS.contains(&program)
+}
+
 #[test]
 #[ignore = "needs data/extracted/vita/PCSF00007"]
 fn arenas_glow_layers_carry_their_authored_rates_and_a_bound_emissive_texture() {
@@ -95,8 +100,9 @@ fn arenas_glow_layers_carry_their_authored_rates_and_a_bound_emissive_texture() 
         assert!((1..=model.emissive.len()).contains(&slot));
     }
     // `TimeScaler` as authored on the three: 0.05, 1.0 and 3.0. The entries that are not glow
-    // layers (the vertex blend, the emissive add, and the window and awning programs of
-    // `psp2::emissive_add`, which Arena's `fc10_Lambert_2UV_Emissive` windows take) carry no rate.
+    // layers (the vertex blend, the emissive add, the weapon pads' bars, and the window and
+    // awning programs of `psp2::emissive_add`, which Arena's `fc10_Lambert_2UV_Emissive`
+    // windows take) carry no rate.
     let mut rates: Vec<f32> = model
         .emissive
         .iter()
@@ -108,6 +114,7 @@ fn arenas_glow_layers_carry_their_authored_rates_and_a_bound_emissive_texture() 
                 PROGRAM_PICTURE_ADD,
             ]
             .contains(&e.program[0])
+                && !is_pad_bar(e.program[0])
         })
         .map(|e| e.rate)
         .collect();
@@ -147,14 +154,15 @@ fn altima_scrolls_its_plain_materials_and_draws_the_rest_still() {
     };
     assert_eq!(report.glow_layers, 0, "{}", report.describe());
     assert_eq!(report.scrolling_materials, 12, "{}", report.describe());
-    // The vertex-red blend's entry and the track surface's unit-tint emissive add
-    // (`psp2::emissive_add`) are the glow-table entries Altima carries: neither is a glow layer.
+    // The vertex-red blend's entry, the track surface's unit-tint emissive add and the weapon
+    // pads' bars (`psp2::emissive_add`) are the entries Altima carries: none is a glow layer.
     assert!(
         model
             .emissive
             .iter()
             .all(|e| e.program[0] == PROGRAM_VERTEX_BLEND
-                || e.program[0] == PROGRAM_EMISSIVE_ADD && e.tint == [1.0; 3]),
+                || e.program[0] == PROGRAM_EMISSIVE_ADD && e.tint == [1.0; 3]
+                || is_pad_bar(e.program[0])),
         "{:?}",
         model.emissive
     );

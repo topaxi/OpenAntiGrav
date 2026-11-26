@@ -232,6 +232,29 @@ brackets): Omega `sol-2` 48.5 to 40.2 (31.40 to 30.81), `anulpha-pass` 41.1 to 3
 its note). The flaps now stand out on both sides as the original's do; how far, against the original, is not measured (the cameras are
 not matched, and Omega's original flap reads larger in the frame).
 
+### The Zone hull's flaps (2026-11-25, `omega-zone-fixes`)
+
+Seen in play: in an Omega Zone race the flaps stayed raised after the start (visual only;
+the level folded to `0`, which `airbrake_flaps_of` reported). **The pose, not the release.**
+2048's and Omega's `.rcsmodel` poses each flap node, and the loader baked the flap's
+vertices through that matrix and swung from it. Census of every hull of both titles against
+the `Airbrake` locator of the `.vex` beside it (HD's own hinge, `Flap::collect`): all agree
+within 0.8 degrees **except Omega's shared Zone hull**
+(`hdships\zone\ship.rcsmodel`; the base copy and both patch copies), whose two nodes are
+pitched **45.2 and 44.8 degrees** open. Its `.vex` is HD's, locator for locator.
+
+`Model::seat_flaps_on_vex` carries each psp2 hull's flaps from the node pose onto the
+`.vex` hinge (the locator is an `Anim Transform`, so the world matrix, not
+`anim_anchors`' unbaked identity). After it the Omega Zone craft matches HD's: raised on the
+grid, flush after GO. The native port's Zone 5 frame (compare page `omega/zone-vineta-k-z5`)
+shows the Zone craft at speed with no raised flap. On every other hull the seat turns a flap
+by under a degree: in a 960x540 Omega single race 681 pixels differ by more than 12/255 with
+the flaps out (mostly their top edges) and 327 with them folded; on 2048, 35 and 6.
+**Lineage**: Omega **ported** (fixed); 2048 **ported** (the same seat on every hull; its Zone
+hull's node is 0.4 degrees off); HD **checked, differs** (its PS3 hull hangs the flap in hinge
+space already). Ground truth: `crates/mesh/tests/psp2_airbrake_flaps_ground_truth.rs`,
+`crates/raceplay/tests/zone_flaps_ground_truth.rs` (Pulse, PS2, Pure, HD, 2048, Omega).
+
 ## Zone: the grid state gates the auto-speed, and `on_grid` is on (2026-10-02)
 
 Zone runs `Ship_HoverFourCorner` (`0x0884ae90`) where every other mode runs `Ship_HoverTwoPoint`. Its epilogue

@@ -102,6 +102,7 @@ impl Race {
             laid_from_rear,
             grid_frame_from_sample,
             slot_teams,
+            row_teams,
             sight,
             capture_zone,
             foreign: _,
@@ -111,6 +112,7 @@ impl Race {
             trail_sparks,
             request,
             campaign_event,
+            score_pass,
             chase_close,
             internal,
             nozzles,
@@ -157,6 +159,7 @@ impl Race {
             laid_pose_scaled,
             screen_flash,
             quake_flash,
+            craft_blast_carry,
             absorb_burst,
             absorb_anchors,
             hit_spark_anchors,
@@ -857,6 +860,7 @@ impl Race {
                 },
                 outcome: crate::outcome::Outcome {
                     slot_teams,
+                    row_teams,
                     ..Default::default()
                 },
                 plans: None,
@@ -936,6 +940,7 @@ impl Race {
                 hull_reach: [0.0; MAX_SHIPS],
                 trail_sparks,
                 campaign_event,
+                score_pass,
                 medal_targets: None,
                 trail_inside: [0; MAX_SHIPS],
                 trail_hit_rest: [0; MAX_SHIPS],
@@ -1031,6 +1036,7 @@ impl Race {
                     quake_flash.then(|| oag_fx::flash::ScreenFlash::only(oag_fx::flash::QUAKE))
                 },
                 craft_flashes: Default::default(),
+                craft_blast_carry,
                 zone_end: super::zone_end::ZoneEndFx::new(zone_end),
                 ship_debris: super::ship_debris::ShipDebrisFx::new(ship_debris, ship_debris_spec),
                 wreck_fx: super::wreck_fx::WreckFx::new(wreck_anchors)

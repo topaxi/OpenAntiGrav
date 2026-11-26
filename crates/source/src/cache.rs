@@ -52,6 +52,16 @@ pub fn default_dlc_cache_dir() -> std::path::PathBuf {
     cache_dir_named("dlc")
 }
 
+/// The default ASTC texture directory: `data/cache/textures` in a repository
+/// checkout, and `<cache dir>/oag/textures` anywhere else. Holds the opt-in ASTC
+/// re-encode of a disc's BC textures (`oag_mesh::mesh_render::astc`), one file
+/// per texture keyed by its content and the encoder settings; deleting it only
+/// costs the encodes again.
+#[must_use]
+pub fn default_texture_cache_dir() -> std::path::PathBuf {
+    cache_dir_named("textures")
+}
+
 /// The default downloaded-ffmpeg directory: `data/cache/ffmpeg` in a repository
 /// checkout, and `<cache dir>/oag/ffmpeg` anywhere else. One directory per pinned
 /// version lives under it (`oag_ffmpeg::install_dir`); deleting it only costs the

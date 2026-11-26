@@ -1186,23 +1186,28 @@ fn list(cx: &Context<'_>, readout: &Readout, sight: Sight) -> Frame {
         let tipped = super::bar_tip::text(cx.art, readout, &label.name, speed_unit).or_else(|| {
             super::time_trial_pace::ladder_caption(cx.art, readout, &label.name, cx.strings)
         });
-        let Some(text) = tipped.or_else(|| {
-            text_for(
-                label,
-                readout,
-                cx.strings,
-                place_shown,
-                speed_unit,
-                cx.art.zone_speed_classes,
-                cx.art.shield_percent,
-                position_combined,
-                if cx.art.total_time_hundredths {
-                    Precision::Hundredths
-                } else {
-                    Precision::Tenths
-                },
-            )
-        }) else {
+        // A score-over-target layout writes its own widgets over every other rule.
+        let ruled = super::score_over::text(cx.layout, readout, &label.name, cx.strings);
+        let generic = || {
+            tipped.or_else(|| {
+                text_for(
+                    label,
+                    readout,
+                    cx.strings,
+                    place_shown,
+                    speed_unit,
+                    cx.art.zone_speed_classes,
+                    cx.art.shield_percent,
+                    position_combined,
+                    if cx.art.total_time_hundredths {
+                        Precision::Hundredths
+                    } else {
+                        Precision::Tenths
+                    },
+                )
+            })
+        };
+        let Some(text) = ruled.unwrap_or_else(generic) else {
             continue;
         };
         if text.is_empty() {
@@ -1211,7 +1216,9 @@ fn list(cx: &Context<'_>, readout: &Readout, sight: Sight) -> Frame {
         // The kill column's rows are drawn at the size the row's own craft
         // gets: the player's larger. Everything downstream reads `label`.
         let scaled;
-        let label = match super::kill_tags::scale(readout, &label.name) {
+        let factor = super::score_over::scale(cx.layout, readout, label)
+            .or_else(|| super::kill_tags::scale(readout, &label.name));
+        let label = match factor {
             Some(factor) => {
                 scaled = Label {
                     scale: label.scale * factor,
@@ -1243,7 +1250,8 @@ fn list(cx: &Context<'_>, readout: &Readout, sight: Sight) -> Frame {
             // so it takes it unconverted rather than through `top_edge`.
             y: placed.map_or_else(|| top_edge(label, line_height), |(_, text)| text[1]),
             scale: label.scale,
-            color: super::messages::colour(readout, &label.name)
+            color: super::score_over::colour(cx.layout, readout, &label.name)
+                .or_else(|| super::messages::colour(readout, &label.name))
                 .or_else(|| super::detonator::colour(readout, &label.name))
                 .or_else(|| super::time_gap::colour(readout, &label.name))
                 .or_else(|| super::time_trial_pace::time_trial_colour(readout, &label.name))
@@ -1261,7 +1269,7 @@ fn list(cx: &Context<'_>, readout: &Readout, sight: Sight) -> Frame {
                 &label.name,
                 outline_colour(cx, label.border.unwrap_or(cx.default_border)),
             )),
-            align: super::dialect_2048::text_align(cx.art, label),
+            align: super::dialect_2048::text_align(cx.art, readout, label),
             text,
             wrap_width: None,
         };

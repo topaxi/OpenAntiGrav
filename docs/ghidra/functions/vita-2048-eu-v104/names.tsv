@@ -440,6 +440,7 @@
 0x81217616	function	Camera_UpdateHoldView	55	../ps3-hdfury-eu/destroy-camera.md
 0x812ab114	function	Psys_UpdateParticle	75	../ps3-hdfury-eu/ship-destroy.md
 0x8112e050	function	PauseMenu_BindRedirectForMode	80	pause-menu.md
+<<<<<<< HEAD
 0x811ccdf4	function	Craft_ApplySpeedPad	80	detonator-pads.md
 0x811c9c7a	function	Ship_TestWeaponPad	75	detonator-pads.md
 0x8100f7c2	function	WeaponStats_ParseEmp	70	detonator-pads.md
@@ -447,3 +448,13 @@
 0x812156a0	function	Camera_Construct	82	../ps3-hdfury-eu/destroy-camera.md
 0x81217ff4	function	Camera_UpdateOrbitView	84	../ps3-hdfury-eu/destroy-camera.md
 0x81218cd8	function	Camera_EnterOrbitView	82	../ps3-hdfury-eu/destroy-camera.md
+
+||||||| 259948344
+
+=======
+0x8128ceca	function	Particle_PushScaledQuadBatch	75	particle-near-law.md
+0x8128e100	function	Particle_PushQuadBatch	75	particle-near-law.md
+0x81206928	function	Rocket_SpawnCraftBlast	80	../ps3-hdfury-eu/rocket-craft-blast.md
+0x812aa644	function	Psys_SetInheritedVelocity	80	../ps3-hdfury-eu/rocket-craft-blast.md
+
+>>>>>>> origin/main

@@ -168,6 +168,17 @@ fn kind_of(material: &Material, ps4: bool) -> Option<Kind> {
             tint: Some("Constant1"),
             ps4: false,
         })
+    } else if super::circuit_pads::material_stem(&material.name) == "weapon_pads" {
+        // The pads' light bars: `W_Cycle * Texture2.a + light`, read on Omega's own pixel
+        // programs and on all 243 of 2048's that declare `W_Cycle`
+        // (`docs/rendering/pads.md`, "2048 and Omega").
+        Some(Kind {
+            mask: Some("Texture2"),
+            program: PROGRAM_EMISSIVE_ALPHA_MASK,
+            colour: None,
+            tint: Some("W_Cycle"),
+            ps4: true,
+        })
     } else if stem.eq_ignore_ascii_case("fc16_phong_alphaspec_normal_emissive") {
         Some(Kind {
             mask: Some("EmissiveMap"),

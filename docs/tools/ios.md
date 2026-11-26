@@ -104,16 +104,14 @@ exclusion. A `cargo clippy --target aarch64-apple-ios` run fails on a lint in
 `oag-gpu` that the desktop gate does not see (`missing_const_for_thread_local`);
 not touched here.
 
-## Known gap: texture compression
+## Texture compression
 
-The disc textures are BC (DXT) blocks and Apple GPUs sample ASTC, not BC. wgpu on
-Metal reports no `TEXTURE_COMPRESSION_BC` on an iPhone, so `texture::upload`
-takes the fallback it has for any adapter without the feature: it decodes the
-blocks on the CPU to `Rgba8Unorm` and uploads those. The picture is the same;
-the cost is load time and GPU memory (RGBA8 is 4 to 8 times a BC block texture),
-which on a phone with a per-app memory ceiling is the likeliest way a race fails
-to load. Open since 2026-09-03 as the ASTC thread (no encoder, no
-cache location); nothing was changed for iOS.
+The disc textures are BC (DXT) blocks and Apple's iOS GPUs sample ASTC, not BC. wgpu on
+Metal reports no `TEXTURE_COMPRESSION_BC` on an iPhone, so `texture::upload` decodes the
+blocks on the CPU to `Rgba8Unorm` by default. The opt-in TEXTURE COMPRESSION row (`astc`)
+re-encodes that picture as ASTC 4x4 into a disc cache, a quarter of the memory, on any
+device without BC that samples ASTC ([texture-compression.md](../rendering/texture-compression.md)).
+The rule is the device's features, so it applies to an iPhone as written; it has not run on one.
 
 ## Not done
 

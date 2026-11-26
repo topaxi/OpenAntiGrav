@@ -696,6 +696,13 @@ pub struct Emitter {
     /// `Particle_PushQuadBatch`); HD's own reader of the word is unread. `1.0` for every other
     /// class, where the word is not this field, and for a record too short to hold it.
     pub colour_scale: f32,
+    /// `+0xc80`: the near size cap of a billboard (render modes 1 to 4), its drawn size
+    /// being `min(size, view depth * cap)`. Only the long record of HD's, 2048's and
+    /// Omega's builds holds this field; a PSP or PS2 file's bytes there belong to
+    /// something else, so take it only for a title whose executable reads it.
+    /// `None` for a blob too short to reach it, and for a sprite template, which is
+    /// not an emitter record (`docs/ghidra/functions/ps3-hdfury-eu/particle-render.md`).
+    pub near_cap: Option<f32>,
     /// `+0x778`: how fast the sprite-atlas frame advances, frames per tick.
     /// The fourth channel the load-time baker `FUN_088f9024` merges, after
     /// alpha, size and roll; see `docs/formats/pob.md`, "The frame-rate
@@ -893,6 +900,7 @@ fn parse_emitter(
         } else {
             1.0
         },
+        near_cap: (record.len() >= 0xc84).then(|| float(0xc80)),
         frame_rate: parse_channel(record, order, 0x778)?,
         emission_scale: parse_channel(record, order, 0x858)?,
         playback_rate: float(0x4cc),

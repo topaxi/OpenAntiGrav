@@ -4,7 +4,7 @@
 // projected through `scene.refraction`.
 
 import oag_shaders::target::{target_in};
-import package::bindings::{behind_glass_tex, emissive_scale, emissive_tint, scene, shadow_sampler};
+import package::bindings::{behind_glass_tex, emissive_scale, emissive_tint, program_in, scene, shadow_sampler};
 import package::fog::{fogged, plus_after_fog};
 import package::shadow::{shadowed};
 import package::types::{Lit, VertexOutput};
@@ -37,7 +37,7 @@ fn opaque_colour(in: VertexOutput, lit_pixel: Lit) -> vec3<f32> {
     // Omega's `rt_icetunnel` (`PROGRAM_ICE_GLASS`, mode 10) weights the grab by the vertex
     // colour's red (carried in `colour.a`) instead, and pushes the sample point
     // `Refraction * a` along the normal (`weight.w`) rather than one unit.
-    let ice = weight.z > 9.5 && weight.z < 10.5;
+    let ice = program_in(weight.z, 10u, 10u);
     let alpha_weight = select(select(1.0, shaded.a, weight.y > 0.5), in.colour.a, ice);
     let w = tint.rgb * weight.x * alpha_weight;
     let reach = select(1.0, weight.w * in.colour.a, ice);

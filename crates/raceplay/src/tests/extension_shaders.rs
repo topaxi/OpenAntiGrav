@@ -277,9 +277,13 @@ fn an_effect_naming_a_shader_lands_on_its_list_when_fired() {
     };
     assert_eq!(quad.len(), 6, "one particle");
     let (mut additive, mut alpha) = (Vec::new(), Vec::new());
-    race.view
-        .stage
-        .extend_vertices(&mut additive, &mut alpha, Vec3::X, Vec3::Y, None);
+    race.view.stage.extend_vertices(
+        &mut additive,
+        &mut alpha,
+        Vec3::X,
+        Vec3::Y,
+        oag_fx::psys::Cull::NONE,
+    );
     assert!(additive.is_empty() && alpha.is_empty());
 }
 

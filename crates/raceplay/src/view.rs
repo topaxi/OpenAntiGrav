@@ -197,6 +197,8 @@ pub struct RaceView {
     /// The weapon detonations' full-screen wash; `Some` on Pulse's PSP
     /// source alone - see `options::ViewSetup::screen_flash`.
     pub(super) screen_flash: Option<oag_fx::flash::ScreenFlash>,
+    /// See `options::ViewSetup::craft_blast_carry`.
+    pub(super) craft_blast_carry: bool,
     /// The washes a craft's state edges start - see `race::craft_flash`.
     pub(super) craft_flashes: super::craft_flash::CraftFlashes,
     /// A Zone craft's end: the death shell and the debris - see `race::zone_end`.
@@ -242,6 +244,8 @@ pub struct RaceView {
     pub(super) trail_sparks: bool,
     /// [`ViewSetup::campaign_event`]: what the HUD's `RaceXPTxt` and `ObjectiveTxt` ask.
     pub(super) campaign_event: bool,
+    /// [`ViewSetup::score_pass`].
+    pub(super) score_pass: Option<u32>,
     /// The campaign cell's gold, silver and bronze targets, for the Detonator HUD's medal
     /// widgets ([`crate::Race::set_medal_targets`]). `None` outside a campaign cell.
     pub(super) medal_targets: Option<oag_tables::race_campaign::MedalTargets>,

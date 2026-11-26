@@ -72,6 +72,7 @@ mod grid_flaps;
 mod hand_back;
 mod mine_branch;
 
+mod craft_blast_carry;
 #[cfg(feature = "extensions")]
 mod extension_picks;
 #[cfg(feature = "extensions")]
@@ -108,6 +109,7 @@ mod message_cue;
 mod mode_override;
 mod models;
 mod multiplayer_time_trial;
+mod near_law;
 mod pads;
 mod people_grid;
 mod perfect_start;
@@ -324,6 +326,7 @@ fn setup(handling: Handling) -> SimSetup {
         finished_thrust: None,
         original_tables: None,
         slot_teams: Vec::new(),
+        row_teams: Vec::new(),
         sight: Sighting::default(),
         collision: CollisionWorld::new(),
         handling,
@@ -443,6 +446,7 @@ pub(crate) fn fixture_view() -> ViewSetup {
         laid_pose_scaled: false,
         screen_flash: false,
         quake_flash: false,
+        craft_blast_carry: false,
         absorb_burst: None,
         absorb_anchors: Vec::new(),
         hit_spark_anchors: Vec::new(),
@@ -464,6 +468,7 @@ pub(crate) fn fixture_view() -> ViewSetup {
         trail_sparks: false,
         request: None,
         campaign_event: false,
+        score_pass: None,
         spark_anchors: Vec::new(),
         // The nearer external view, deliberately a *different* set of round
         // numbers from `chase`: a test that cycles to it and back has to be
