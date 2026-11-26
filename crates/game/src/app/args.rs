@@ -368,6 +368,21 @@ pub(crate) fn remote_correction(
     }))
 }
 
+/// Parses `--force-rocket-hit-velocity`'s `VX,VY,VZ`.
+pub(crate) fn velocity(text: Option<&str>) -> Result<Option<oag_core::math::Vec3>> {
+    let Some(text) = text else { return Ok(None) };
+    let values: Vec<Option<f32>> = text
+        .split(',')
+        .map(|v| v.trim().parse().ok().filter(|v: &f32| v.is_finite()))
+        .collect();
+    match values[..] {
+        [Some(x), Some(y), Some(z)] => Ok(Some(oag_core::math::Vec3::new(x, y, z))),
+        _ => Err(anyhow::anyhow!(
+            "{text:?} is not a velocity; write it as VX,VY,VZ, e.g. 88,11,55"
+        )),
+    }
+}
+
 /// Reads `--leach-path`'s file: one `x,y,z` sample per non-empty line.
 pub(crate) fn leach_path(
     path: Option<&std::path::Path>,

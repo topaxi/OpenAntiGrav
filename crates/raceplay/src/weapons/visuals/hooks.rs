@@ -65,6 +65,15 @@ impl RaceSim {
     pub fn force_rocket_hit(&mut self, slot: usize) -> bool {
         self.put_craft_on_projectile(oag_tables::weapons::Weapon::Rocket, slot)
     }
+
+    /// Gives craft `slot` this velocity, in world units a second, for
+    /// `--force-rocket-hit-velocity`: the craft blast carries the struck craft's
+    /// own. A verification aid and nothing else.
+    pub fn force_craft_velocity(&mut self, slot: usize, velocity: oag_core::math::Vec3) {
+        if self.ship_active(slot) {
+            self.world.ships[slot].physics.body.linear_velocity = velocity;
+        }
+    }
 }
 
 impl SimRace {

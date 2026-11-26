@@ -869,6 +869,9 @@ pub(crate) fn race_launch(
                     cli.wreck.force_rocket_hit.as_deref(),
                     "Rocket hit",
                 )?,
+                force_rocket_hit_velocity: crate::app::args::velocity(
+                    cli.force_rocket_hit_velocity(),
+                )?,
                 force_quake: crate::app::args::force_at_slot(
                     cli.wreck.force_quake.as_deref(),
                     "Quake",

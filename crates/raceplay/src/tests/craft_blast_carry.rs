@@ -57,6 +57,28 @@ fn the_craft_blast_takes_the_struck_crafts_velocity() {
     );
 }
 
+/// `--force-rocket-hit-velocity` writes the velocity the craft blast then takes, and leaves a craft
+/// that is not racing alone.
+#[test]
+fn a_forced_velocity_is_what_the_craft_blast_takes() {
+    let mut race = race_with_a_grid();
+    race.view.craft_blast_carry = true;
+    let velocity = Vec3::new(-3.0, 40.0, 7.0);
+    race.core.sim.force_craft_velocity(1, velocity);
+    assert_eq!(
+        race.view
+            .craft_blast_velocity(&race.core, Trigger::CraftBlast, Some(1)),
+        Some(velocity)
+    );
+    let before = race.core.sim.world.ships[2].physics.body.linear_velocity;
+    race.core.sim.world.ships[2].active = false;
+    race.core.sim.force_craft_velocity(2, velocity);
+    assert_eq!(
+        race.core.sim.world.ships[2].physics.body.linear_velocity,
+        before
+    );
+}
+
 /// On HD the blast's cloud travels with the craft it struck while its emitters stay where it
 /// was spawned: 20 ticks after a forced hit on a racing rival, the cloud's centre has moved
 /// along that craft's heading by a good share of the craft's own travel.
