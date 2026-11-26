@@ -1,27 +1,36 @@
-//! The GE's guard band: a primitive with a vertex outside the 4096-wide screen
-//! space is dropped, not clipped.
+//! What the PSP does with a particle near the eye or off its screen, in two halves: the
+//! executable's own depth tests by draw class, and the GE's drop of a triangle with a vertex
+//! outside its 4096-wide screen space.
 //!
-//! **Read off two replayed frames of the original, not off its code.** Fired
-//! from a standstill, `WO_REPULSER`'s `shazzam` templates (size 20, `+0x64`
-//! `6.0`) are submitted at view depth `-11.8` with corners at screen
-//! `x = -2189..2600` px about the centre, and PPSSPP's software renderer,
-//! replaying that exact `.ppdmp`, draws no band: the frame is the blue tint
-//! alone. Three updates later the same quad is submitted at depth `-71.2`,
-//! corners `-341..452`, and the replay draws a white band across the road. The
-//! boundary itself was not located. Confidence 80; the reference is PPSSPP's
-//! rasteriser, not a PSP.
+//! **The executable** (`docs/ghidra/functions/psp-pulse-usa/particle-system.md`, "Near the eye:
+//! what the PSP does with an emitted particle"):
 //!
-//! **Applied to `WO_REPULSER`'s template quads alone**, on Pulse's PSP source. The
-//! law is the GE's and very likely holds for every primitive, but an A/B of the
-//! guard on and off (2026-10-06) showed it moves the Quake's start frame too, and
-//! there the original's first frame **is** a white wash across the upper screen
-//! that our geometry,
-//! which falls out of range, would lose. Until the Quake's own quad is measured
-//! the guard stays off it. Rockets, plasma and the Repulser's standing frames
-//! other than the wave start were identical, AE 0. The fixed projection is the
-//! dump's standstill one: Pulse's race camera was not checked for a speed fov.
+//! - an emitter's square (draw classes 1 and 2): none nearer than 1 unit, alpha times
+//!   `depth - 1` up to 2 units;
+//! - a rolled quad (class 3): no test at all;
+//! - a bar (classes 6 and 7): none if either end is nearer than 1 unit;
+//! - a sprite template: none nearer than 1 unit.
+//!
+//! **The GE**, measured on PPSSPP's software renderer by editing one emitted bar of a recorded
+//! frame and replaying it (same section): a triangle with a vertex more than [`LIMIT_PX`] from
+//! the screen centre is not drawn, however much of it covers the screen, and the other triangle
+//! of the same quad still draws. A vertex nearer than the near plane is clipped there instead,
+//! so a screen-parallel quad at or inside [`NEAR_PLANE`] draws nothing.
+//!
+//! The reference is PPSSPP's rasteriser, not a PSP. The fixed projection is a standstill race
+//! frame's: Pulse's race camera was not checked for a speed fov. Which sources run this is
+//! `oag_title::Looks::psp_particle_clip`.
+//!
+//! **A sprite template meets the GE drop only on `WO_REPULSER`** ([`TEMPLATE_GUARDED`]):
+//! dropping the Quake's moved its start frame away from the original's, which is a white wash
+//! there. Until the Quake's own quad is measured, templates elsewhere keep every triangle.
 
 use oag_core::math::Vec3;
+use oag_mesh::mesh::GpuVertex;
+
+use super::between_ticks::shift_of;
+use super::near::NearEye;
+use super::{Effect, EmitterSpec, Particle};
 
 /// Pixels from the screen centre a vertex may sit and still be drawn.
 const LIMIT_PX: f32 = 2048.0;
@@ -30,9 +39,42 @@ const LIMIT_PX: f32 = 2048.0;
 /// projection `0.981` and `1.732` times the viewport's `240` and `136`.
 const PX_PER_DEPTH: [f32; 2] = [240.0 * 0.981, 136.0 * 1.732];
 
-/// A particles' nearest depth to be judged at all. The original skips a
-/// particle at `z > -1` before it submits anything.
-const NEAREST: f32 = 1.0;
+/// The race camera's near plane in world units, from the projection in a race frame
+/// (`m10 = -1.0012`, `m14 = -2.4849`).
+pub const NEAR_PLANE: f32 = 1.2417;
+
+/// The CPU draws no square, bar or template nearer than this.
+const CPU_CULL: f32 = 1.0;
+
+/// An emitter's square is faded from [`CPU_CULL`] up to this.
+const FADE_END: f32 = 2.0;
+
+/// The one effect whose sprite templates meet the GE drop ([the module](self)).
+const TEMPLATE_GUARDED: &str = "WO_REPULSER";
+
+/// Which of the PSP's pool routines draws a particle: the record's draw class.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DrawClass {
+    /// Classes 1 and 2, `ParticleSystem_DrawPoolSquares`.
+    Square,
+    /// Class 3, `ParticleSystem_DrawRolledQuads`.
+    Rolled,
+    /// Classes 6 and 7, `ParticleSystem_DrawPoolBars` and its capped twin.
+    Bar,
+}
+
+impl DrawClass {
+    /// The routine for a record's draw class. A class with no routine here is a square: the
+    /// parser rejects it before a particle of it exists.
+    #[must_use]
+    pub fn of(class: Option<u32>) -> Self {
+        match class {
+            Some(3) => Self::Rolled,
+            Some(6 | 7) => Self::Bar,
+            _ => Self::Square,
+        }
+    }
+}
 
 /// Where the camera is and how it is turned, for the screen-range test.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -43,22 +85,6 @@ pub struct GuardBand {
     pub forward: Vec3,
 }
 
-/// The one effect the law was measured on.
-const MEASURED_EFFECT: &str = "WO_REPULSER";
-
-/// Whether a template quad's `corners` are dropped, under `guard` if there is one.
-#[must_use]
-pub fn drops(
-    guard: Option<&GuardBand>,
-    effect: &str,
-    template: bool,
-    corners: &[oag_mesh::mesh::GpuVertex],
-) -> bool {
-    template
-        && effect == MEASURED_EFFECT
-        && guard.is_some_and(|g| g.drops(corners.iter().map(|v| Vec3::from(v.position))))
-}
-
 impl GuardBand {
     /// Whether the GE would drop a primitive with these corners.
     #[must_use]
@@ -66,46 +92,97 @@ impl GuardBand {
         corners.into_iter().any(|corner| {
             let offset = corner - self.eye;
             let depth = offset.dot(self.forward);
-            depth >= NEAREST && (offset.dot(self.right) * PX_PER_DEPTH[0] / depth).abs() > LIMIT_PX
-                || depth >= NEAREST
-                    && (offset.dot(self.up) * PX_PER_DEPTH[1] / depth).abs() > LIMIT_PX
+            // A vertex inside the near plane is clipped there, never range-tested.
+            depth > NEAR_PLANE
+                && [(self.right, PX_PER_DEPTH[0]), (self.up, PX_PER_DEPTH[1])]
+                    .into_iter()
+                    .any(|(axis, scale)| (offset.dot(axis) * scale / depth).abs() > LIMIT_PX)
         })
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn camera() -> GuardBand {
-        GuardBand {
-            eye: Vec3::ZERO,
-            right: Vec3::X,
-            up: Vec3::Y,
-            forward: Vec3::NEG_Z,
-        }
-    }
-
-    /// The two measured frames: `shazzam`'s corners at depth 11.8 fall out of
-    /// range, the same quad at depth 71.2 does not.
-    #[test]
-    fn the_measured_shazzam_quad_is_dropped_near_and_kept_far() {
-        let quad = |depth: f32, x0: f32, x1: f32, y0: f32, y1: f32| {
-            [
-                Vec3::new(x0, y0, -depth),
-                Vec3::new(x1, y0, -depth),
-                Vec3::new(x1, y1, -depth),
-                Vec3::new(x0, y1, -depth),
-            ]
-        };
-        assert!(camera().drops(quad(11.8, -109.7, 130.3, -22.9, 17.1)));
-        assert!(!camera().drops(quad(71.2, -103.3, 136.7, -16.8, 23.2)));
-    }
-
-    #[test]
-    fn a_quad_behind_or_at_the_near_plane_is_not_judged() {
-        let behind = [Vec3::new(5000.0, 0.0, 5.0)];
-        assert!(!camera().drops(behind));
-        assert!(!camera().drops([Vec3::new(5000.0, 0.0, -0.5)]));
+impl Effect {
+    /// Runs this effect's particles under the PSP's near tests and the GE's screen range.
+    pub fn with_psp_clip(&mut self) {
+        self.psp_clip = true;
     }
 }
+
+/// The CPU's depth tests: a particle's alpha under them, or `None` when it draws nothing.
+/// Unchanged when the effect does not run them or the build knows no eye.
+pub(super) fn depth_law(
+    effect: &Effect,
+    spec: &EmitterSpec,
+    particle: &Particle,
+    eye: Option<NearEye>,
+    alpha: f32,
+) -> Option<f32> {
+    let Some(eye) = eye.filter(|_| effect.psp_clip) else {
+        return Some(alpha);
+    };
+    let depth = eye.depth(particle);
+    if spec.draw_class == DrawClass::Bar {
+        let far_end = (particle.origin - eye.eye).dot(eye.forward);
+        let kept = depth >= CPU_CULL && far_end >= CPU_CULL && (depth + far_end) * 0.5 > NEAR_PLANE;
+        return kept.then_some(alpha);
+    }
+    if depth <= NEAR_PLANE {
+        return None;
+    }
+    let faded = !spec.template && spec.draw_class == DrawClass::Square && depth < FADE_END;
+    Some(if faded {
+        alpha * (depth - CPU_CULL)
+    } else {
+        alpha
+    })
+}
+
+/// The GE's drop, on the quads one particle appended to `out` from `start`: six vertices, two
+/// triangles each. A dropped triangle is collapsed onto a vertex of its neighbour, so the list
+/// keeps six a quad and holds no vertex out of range; a quad that loses both is removed.
+pub(super) fn drop_triangles(
+    effect: &Effect,
+    spec: &EmitterSpec,
+    eye: Option<NearEye>,
+    (right, up): (Vec3, Vec3),
+    out: &mut Vec<GpuVertex>,
+    start: usize,
+) {
+    let Some(eye) = eye.filter(|_| effect.psp_clip) else {
+        return;
+    };
+    if spec.template && effect.name != TEMPLATE_GUARDED {
+        return;
+    }
+    let view = GuardBand {
+        eye: eye.eye,
+        right,
+        up,
+        forward: eye.forward,
+    };
+    let drawn = |v: &GpuVertex| Vec3::from(v.position) + shift_of(v) * (eye.draw_alpha - 1.0);
+    let mut at = start;
+    while at + 6 <= out.len() {
+        let first = view.drops(out[at..at + 3].iter().map(drawn));
+        let second = view.drops(out[at + 3..at + 6].iter().map(drawn));
+        match (first, second) {
+            (true, true) => {
+                out.drain(at..at + 6);
+                continue;
+            }
+            (true, false) => {
+                let kept = out[at + 3];
+                out[at..at + 3].fill(kept);
+            }
+            (false, true) => {
+                let kept = out[at];
+                out[at + 3..at + 6].fill(kept);
+            }
+            (false, false) => {}
+        }
+        at += 6;
+    }
+}
+
+#[cfg(test)]
+mod tests;

@@ -268,6 +268,7 @@ pub fn parse(
             field: None,
             view_depth: 0.0,
             near: None,
+            psp_clip: false,
             roots,
             rides_owner_frame: true,
             skipped_templates: 0,
@@ -378,6 +379,7 @@ fn build(
         colour_mode: ColourMode::OverLife,
         authored_colour_mode: 0,
         render: Render::Billboard,
+        draw_class: super::guard::DrawClass::Square,
         streak: StreakDraw::Procedural,
         blend: match e.blend {
             BlendName::Additive => Blend::Additive,

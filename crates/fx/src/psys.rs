@@ -309,6 +309,8 @@ pub struct EmitterSpec {
     pub authored_colour_mode: u32,
     /// Geometry class.
     pub render: Render,
+    /// Which of the PSP's pool routines draws the particles, read by [`guard`]'s tests.
+    pub draw_class: guard::DrawClass,
     /// Which strip a [`Render::Streak`] builds - see [`streak`].
     pub streak: StreakDraw,
     /// Blend class.
@@ -392,6 +394,9 @@ pub struct Effect {
     /// The near-camera law this effect's billboards run under, set by the load for a title
     /// that has it (`near`).
     pub near: Option<NearLaw>,
+    /// The PSP's near tests and screen-range drop, set by the load for a source that has
+    /// them ([`guard`]).
+    pub psp_clip: bool,
     /// Which emitters start on [`System::ignite`]: the root and its sibling
     /// chain, but not a child, which starts when its parent's particle does.
     roots: Vec<usize>,
@@ -467,6 +472,7 @@ impl Effect {
                 .and_then(|root| system.view_depth(data, root))
                 .unwrap_or(0.0),
             near: None,
+            psp_clip: false,
             roots,
             rides_owner_frame: true,
             skipped_templates: 0,

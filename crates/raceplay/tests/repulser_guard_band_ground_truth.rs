@@ -1,15 +1,11 @@
-//! The Repulser's wave-start `shazzam` quad is dropped by the GE's guard band.
+//! A standing Repulser leaves no particle vertex out of the GE's screen space.
 //!
-//! A standing Repulser fired on Talon's Junction submits `WO_REPULSER`'s `shazzam`
-//! templates at view depth ~12, corners ~2000 px off the screen centre; the
-//! original draws no band there (two replayed GE dumps, `particle-system.md`,
-//! "the guard band is the law"). Dropping `oag_fx::psys::guard`'s call takes a
-//! vertex out of range back into the draw list.
-//!
-//! The particles round the templates draw from the stage's random stream, so the claim is
-//! read over several arrangements ([`oag_raceplay::Race::reseed_stage`]). In some of them an
-//! emitted particle, not a template, lands within a few units of the eye and out of range,
-//! which the law is not applied to: [`emitted_particles_near_the_eye_leave_the_guard_band`].
+//! The PSP draws no triangle with a vertex more than 2048 px off the screen centre, a sprite
+//! template's or an emitter's own (`particle-system.md`, "Near the eye"), so neither may our
+//! draw lists hold one. The particles round the effect draw from the stage's random stream:
+//! the claim is read over the fixed arrangement and twenty others
+//! ([`oag_raceplay::Race::reseed_stage`]), several of which put a `WO_REPULSER` bar or a
+//! `WO_REPULSER_BLAST` bead a few units from the eye.
 //!
 //! **`#[ignore]`d and never run in CI**: it needs a disc image.
 
@@ -70,50 +66,16 @@ fn first_escape(path: &std::path::Path, stage_seed: Option<u64>) -> (Option<(u32
     (None, checked)
 }
 
-/// Arrangements in which no particle leaves the screen space. Chosen by outcome: of the
-/// fixed seed and seeds 1 to 20, these are the first six with no emitted particle near
-/// the eye ([`ESCAPING_SEEDS`] lists the others).
-const CLEAN_SEEDS: [Option<u64>; 6] = [Some(1), Some(2), Some(3), Some(4), Some(5), Some(8)];
-
-/// Arrangements in which an emitted particle leaves the screen space: the fixed seed, 6, 9,
-/// 10, 16 and 18 at tick 48 (a `WO_REPULSER` particle 1.4 to 4.2 units ahead, its two
-/// `shazzam` templates dropped), and 7 at tick 0 (a `WO_REPULSER_BLAST` particle 1.1 ahead).
-const ESCAPING_SEEDS: [Option<u64>; 3] = [None, Some(6), Some(7)];
-
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn no_wave_start_quad_leaves_the_guard_band() {
+fn no_repulser_particle_leaves_the_guard_band() {
     let Some(path) = oag_testdata::image("pulse-psp-usa.chd") else {
         return;
     };
-    for stage_seed in CLEAN_SEEDS {
+    for stage_seed in std::iter::once(None).chain((1..=20).map(Some)) {
         let (escape, checked) = first_escape(&path, stage_seed);
         assert!(checked > 0, "the Repulser drew nothing at all");
         if let Some((tick, position)) = escape {
-            panic!(
-                "stage seed {stage_seed:?}, tick {tick}: a particle vertex {position:?} is outside the GE's screen space"
-            );
-        }
-    }
-}
-
-/// The GE drops any primitive with a vertex out of range, very likely for every primitive,
-/// but ours applies the law to `WO_REPULSER`'s templates alone: widening it moved the
-/// Quake's first frame away from the original's (`oag_fx::psys::guard`). An emitted
-/// particle a unit or four from the eye is drawn here, and whether the original drops it
-/// was never filmed. Runs with `OAG_REVIEW_FINDINGS=1`; measuring and wiring the law for
-/// emitted particles removes both the guard and the `#[ignore]`.
-#[test]
-#[ignore = "open defect: emitted Repulser particles near the eye skip the guard band; set OAG_REVIEW_FINDINGS=1"]
-fn emitted_particles_near_the_eye_leave_the_guard_band() {
-    if std::env::var_os("OAG_REVIEW_FINDINGS").is_none() {
-        return;
-    }
-    let Some(path) = oag_testdata::image("pulse-psp-usa.chd") else {
-        return;
-    };
-    for stage_seed in ESCAPING_SEEDS {
-        if let (Some((tick, position)), _) = first_escape(&path, stage_seed) {
             panic!(
                 "stage seed {stage_seed:?}, tick {tick}: a particle vertex {position:?} is outside the GE's screen space"
             );

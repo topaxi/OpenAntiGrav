@@ -56,6 +56,27 @@ fn only_hd_2048_and_omega_run_the_near_law() {
     }
 }
 
+/// The PSP's near tests and screen range (`particle-system.md`, "near the eye") run on
+/// Pulse's PSP and PS2 pressings and on Pure, and on no title with a near law of its own.
+#[test]
+fn only_pulse_and_pure_run_the_psp_particle_clip() {
+    use oag_title::Platform;
+    let pulse = oag_pulse::TITLE.looks.psp_particle_clip;
+    assert!(pulse.applies(Platform::Psp) && pulse.applies(Platform::Ps2));
+    assert_eq!(pulse.origin, Origin::Measured);
+    let pure = oag_pure::TITLE.looks.psp_particle_clip;
+    assert!(pure.applies(Platform::Psp));
+    assert_eq!(pure.origin, Origin::InheritedFrom("Wipeout Pulse (PSP)"));
+    for title in [oag_hd::TITLE, oag_2048::TITLE, oag_omega::TITLE] {
+        assert_eq!(
+            title.looks.psp_particle_clip,
+            oag_title::Rule::UNREAD,
+            "{}",
+            title.name
+        );
+    }
+}
+
 /// Split screen: the law's eye is the view being drawn, not the player's.
 #[test]
 fn each_split_view_gives_the_law_its_own_eye() {
