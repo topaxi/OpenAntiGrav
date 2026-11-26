@@ -2,7 +2,9 @@
 
 **Status: it works, and it is off by default.** `target_fps` names a
 target frame rate, `minimum_resolution` bounds how far the picture may
-shrink, and `render_scale` becomes the ceiling. All three live in
+shrink, and `render_scale` becomes the ceiling. On Wipeout HD it also takes
+`original`, the console's own width throttle
+(["A title's own width throttle"](#a-titles-own-width-throttle)). All three live in
 `[render_profiles.<title> (<platform>)]` and so are **per (title, original
 platform)**, which is the right table for them: a target Pulse holds
 comfortably is not one HD/Fury holds, and a PS2-sourced Pulse race is not the
@@ -719,6 +721,88 @@ holds and the extent loop is the one it was (`a_small_share_leaves_the_extent_lo
 It restores only with the extent at its ceiling. The policy, thresholds and the phone runs are in
 [water.md](water.md), "REFLECTION RESOLUTION `auto`"; the restore patience and relapse backoff are
 the blur rung's own (`drs::patience`, shared).
+
+## A title's own width throttle
+
+2026-11-26. TARGET FPS `original` runs Wipeout HD's own controller instead of the budget
+loop above. The law is read off the PS3 executable
+([scene-width-throttle.md](../ghidra/functions/ps3-hdfury-eu/scene-width-throttle.md),
+confidence 88 to 92): the scene's width is `1 - level / 96` of the full width (1920 to 1300 of
+1920), the level moves one notch a frame, narrower when the GPU's frame takes more than
+16111 us or the flip was late, wider when it takes 15555 us or less, and the height never moves.
+The numbers are title data (`oag_title::width_throttle::Law`, set on HD alone), the controller is
+`oag_present::drs::width`, and none of the budget loop's budget, residual, deadband, cooldown or
+patience applies.
+
+| | HD's original | Ours |
+| --- | --- | --- |
+| Height | 1080, fixed | the render-scale ceiling's, fixed |
+| Width | `1920 - 20 * level` | the ceiling's `(96 - level) / 96`, rounded; level 0 to 31 |
+| Rate it aims at | 60 Hz | **ours:** the rate the limiter or the output holds the loop to; at 60 Hz and below the console's two durations, above it each scaled by `60 / rate` |
+| Narrow | GPU span over 16111 us, or the flip not on time | the same durations; **ours:** "not on time" is a frame interval over 1.5 of the paced period |
+| Widen | GPU span of 15555 us or less, on time | the same |
+| GPU span | first to last command of a frame | **ours:** the sum of every timed pass of one frame: the budget loop's `Cost` plus the labelled passes (shadows, glass, HUD, composite, blit) |
+| Reading's age | two frames old | the newest drained, usually one frame old; one step a frame however many drained |
+| Off | Photo Mode and menus | Photo Mode (the render-scale size), and every title without a law |
+
+What follows from it:
+
+- **The camera keeps the full picture's shape.** The extent is narrower than the
+  ceiling, so the race scene builds its projection for the ceiling's aspect
+  (`Scene::set_squeeze`) and the presentation stretches the columns back out, as the console's
+  final stage does. Framing and FOV do not move; the picture only loses horizontal resolution.
+- **MINIMUM RESOLUTION is greyed.** The floor is the law's own last notch.
+- **The blur rung stays at the player's gather** and the budget loop never runs. The reflection
+  rung still does; it counts the extent as at its ceiling at level 0.
+- **A load or a changed row puts the width back to full** (`Controller::reset`).
+- **A late frame narrows even when the GPU was quick**, which on a loaded host is the whole
+  of its movement: a CPU stall counts, as it does on the console.
+- **With no `TIMESTAMP_QUERY` it does nothing.** The late-frame input alone would narrow and
+  nothing would ever widen.
+
+Omega's executable has none of it and 2048's was not read
+([scene-width-throttle.md](../ghidra/functions/ps3-hdfury-eu/scene-width-throttle.md),
+"Omega and 2048"), so only HD offers the value; on another title the row drops it and a
+hand-written `original` is no controller.
+
+### Measured: the Rocket hit at 3840x2160
+
+2026-11-26, a release build in a borderless 3840x2160 window on a headless weston (RADV, 16:9,
+vsync off, the frame limit equal to the refresh), the
+[particle-fill reproduction](particle-fill.md#how-to-reproduce-it) (HD, seed 1, autopilot,
+Rocket fired once a second from tick 600, hits at ticks 761 and 762). Neither the input script
+nor the per-frame log exists in a windowed run, so both came from a throwaway patch, not kept.
+Other work held the one-minute load between 21 and 87. GPU is the span in the table above;
+interval is the wall-clock frame. "Existing" is TARGET FPS at the same rate with the default
+50 % floor. The window is ticks 760 to 789.
+
+| Card, rate | Arm | GPU mean / worst | Interval mean / worst | Size drawn |
+| --- | --- | --- | --- | --- |
+| RX 7800 XT, 60 | existing a, b | 3.7 / 5.4 to 5.6 ms | 16.6 to 16.7 / 17.3 ms | 3840x2160 throughout |
+| RX 7800 XT, 60 | original b | 3.7 / 5.4 ms | 16.7 / 19.1 ms | 3840x2160 throughout |
+| RX 7800 XT, 60 | original a (load rose to 87 in it) | 3.8 / 5.2 ms | 26.9 / 49.5 ms | 3840 to 3680 wide, 2160 high |
+| iGPU (Raphael), 60 | existing a, b | 36 to 47 / 68 to 88 ms | 37 to 50 / 70 to 95 ms | 1920x1080, the floor |
+| iGPU (Raphael), 60 | original a, b | 79 to 81 / 112 to 134 ms | 82 / 114 to 136 ms | 2600x2160, the floor |
+
+**At 60 Hz the discrete card never leaves 3840:** its worst hit frame is a third of 16.1 ms.
+The one narrowing there, four notches, came from frames the loaded host delivered late.
+**On the iGPU `original` cannot save the frame:** it can give up 32 % of the pixels and no
+height, and the frame needs far more; the existing loop gives up 75 %.
+
+At 240 Hz (the durations become 4028 and 3889 us) four runs of each arm, ticks 600 to 799:
+
+| Arm | GPU worst | Size drawn | Late frames |
+| --- | --- | --- | --- |
+| existing | 3.5 to 4.8 ms | 3840x2160 in one run; down to 2880x1620 in three | 0 to 7 over 25 ms |
+| original | 3.4 to 4.5 ms | width down to 3200, 2600, 2600, 3800; always 2160 high | 0 to 3 over 25 ms |
+
+The one `original` run that held its pace (interval mean 4.23 ms against the 4.17 ms period,
+GPU worst 3.4 ms) moved one notch. The other three had interval means of 4.4 to 9.4 ms and
+two of them GPU frames past 4.0 ms, so these runs do not separate the GPU durations from the
+late-frame input at that rate. The Steam Deck was not run.
+
+Frames at level 0 and level 31, the race held on one tick (the grid at tick 200): the same
+framing, craft and HUD, softer horizontally, no stale columns at the right edge.
 
 ## Three properties the controller does not break
 
