@@ -1179,6 +1179,10 @@ impl Session {
                     self.records.get(&key),
                     &observation,
                 ));
+                stage.score_record = stage.race.core.sim.detonator_score().map(|score| {
+                    let score = u32::try_from(score).unwrap_or(0);
+                    self.records.judge_score(&key, score, !unofficial)
+                });
                 // A Free Play race has a cell to launch through and no medal to
                 // keep (`oag_tables::pure_campaign::free_play_event`).
                 if let Some(cell) = stage

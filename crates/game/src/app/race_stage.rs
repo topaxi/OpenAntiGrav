@@ -75,6 +75,8 @@ pub(crate) struct RaceStage {
     /// `None` on that path too, so there is no table for it to be drawn on.
     /// See `Session::frame`'s finish-transition arm, the only writer.
     pub(crate) personal_best: Option<crate::records::PersonalBest>,
+    /// A Detonator run's record notice, judged where the race is saved (before it is folded in).
+    pub(crate) score_record: Option<oag_ui_screens::endrace::ScoreRecord>,
     /// Whether this race's result has already been folded into
     /// `Session::records` and saved **since this stage last became live** -
     /// not "ever", which is why `Session::resume_race` clears it back to

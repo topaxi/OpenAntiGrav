@@ -1243,6 +1243,9 @@ pub struct Layout {
     /// duplicating: both screens are authored in the same three faces
     /// `Selection_Definition.xml` is.
     pub faces: crate::picker::FaceScales,
+    /// The screen's `MiniText` captions, filled only for a screen whose draw list draws them
+    /// ([`Self::read_mini_texts`]): the generic parser has no arm for the widget.
+    pub labels: Vec<crate::picker::hd::MiniText>,
 }
 
 impl Layout {
@@ -1310,7 +1313,13 @@ impl Layout {
             screen,
             scale,
             faces,
+            labels: Vec::new(),
         })
+    }
+
+    /// Reads this screen's `MiniText` captions out of `xml`, the file `screens` was parsed from.
+    pub fn read_mini_texts(&mut self, xml: &str, screens: &Screens, strings: &StringTable) {
+        self.labels = crate::picker::hd::mini_texts(xml, &self.screen.name, screens, strings);
     }
 
     /// `"default"` draws `1.0`, not `self.faces.default` (a ratio against

@@ -8,10 +8,9 @@
 //! captions, and the grid's rows and score line placed from the grid's own origin. A destroyed run
 //! and a finished one draw the same rows.
 //!
-//! **Not drawn: the new-record banner** (`RecordNotifyBlock`, `RecBlockBlue`/`RecBlockGrey`,
-//! `RecLogo*`, `RecValue`). It needs the best-score table `0x0001ef28` returns, which is unread
-//! (72), and this build keeps no Detonator best score; `RecBlockGrey` would assert "not a
-//! record", so the whole group stays off.
+//! The record notice (`RecordNotifyBlock`) is always drawn: `RecBlockBlue` or `RecBlockGrey`,
+//! `RecLogoD` and `RecValue` (`docs/ghidra/functions/ps3-hdfury-eu/detonator-endrace.md`,
+//! "The record notice").
 
 use oag_ui::frontend::Draw;
 use oag_ui::language::StringTable;
@@ -72,15 +71,30 @@ impl<'a> DetonatorGrid<'a> {
         }
     }
 
-    /// Whether the layout owns `name`: every grid cell and caption, and the record banner, which
-    /// is not drawn at all.
+    /// Whether the layout owns `name`: every grid cell and caption, and the record notice's own
+    /// widgets.
     pub(super) fn owns(name: &str) -> bool {
         name.starts_with("Grid") || name.starts_with("Rec")
     }
 
+    /// Whether `name` is the record box this result shows.
+    pub(super) fn shows_box(&self, name: &str) -> bool {
+        match name {
+            "RecBlockBlue" => self.results.record.new,
+            "RecBlockGrey" => !self.results.record.new,
+            _ => false,
+        }
+    }
+
+    /// `RecValue`'s `"%s %d"`.
+    pub(super) fn record_text(&self, strings: &StringTable) -> String {
+        let record = self.results.record;
+        format!("{} {}", strings.get_or_id(record.label()), record.value)
+    }
+
     /// A widget's content and position (absolute): the six rows' labels and values and the score
     /// line. `None` for a widget [`Self::owns`] that this layout never writes (rows six to eight,
-    /// the other columns, the captions, the banner).
+    /// the other columns, the captions).
     pub(super) fn cell(&self, name: &str, strings: &StringTable) -> Option<(String, f32, f32)> {
         let at = |content: String, x: f32, y: f32| (content, self.origin.0 + x, self.origin.1 + y);
         match name {
