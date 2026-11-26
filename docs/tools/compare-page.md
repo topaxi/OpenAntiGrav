@@ -2743,7 +2743,7 @@ visualiser's sRGB decode applied (below).
 | Right wall and white pipe `1320,300,1920,545` | 4.8 % | 21.3 | -6.6 | 1.01 | 0.93 | ours' pipe is darker and the original's rows of small window lights are missing; **unread** |
 | Upper-right screen `1480,0,1920,270` | 5.7 % | 16.3 | +1.3 | 0.94 | 0.97 | original: a purple dot grid with a teal band; ours: grey-white smears and no dots. Also on `mines-ahead`; **unread** (which material is not identified) |
 | HUD `85,60,320,225` `690,20,1230,240` `150,850,670,980` `1250,845,1760,980` | 14.2 % | 4.9 | +2.0 | 0.70 | 0.53 | translucent panels over the scene behind (the drop with the decode is the floor under the two lower ones); no HUD gap of its own measured |
-| Far scenery and sky (everything else) | 19.3 % | 3.4 | +0.3 | 0.66 | 0.64 | edge-level differences, no single cause named |
+| Far scenery and sky (everything else) | 19.3 % | 3.4 | +0.3 | 0.66 | 0.64 | scenery edges, no single cause named; the sky dome is black on both sides (stage 1's horizon and zenith `0 0 0`, [detonator-look.md](../ghidra/functions/ps3-hdfury-eu/detonator-look.md)) |
 | Hull `815,695,1095,940` | 3.3 % | 17.5 | +6.8 | 0.58 | 0.50 | ours lighter, rear nozzle lit blue-white; fuselage overlay (`rich_iridescent`) **unread** (Detonator thread, row 7) |
 | Ribbon bands: polygons `0,20 0,90 800,400 990,470 1010,440 830,330 60,20`; `600,0 700,0 960,420 900,440`; `1170,0 1230,0 1080,420 1030,420` | 4.3 % | 7.0 | +5.3 | 0.30 | 0.31 | `Trail_Ribbon` dot chains (muted, the whole frame reads 10.22: `detonator-mine.md`, "The ribbon, open"); needs a capture |
 | Blast debris shards `655,715,710,780` `550,830,620,865` `1475,278,1515,315` `505,60,550,115` | 0.3 % | 50.3 | -44.0 | 0.17 | 0.17 | rolled at random; not tunable (other shards lie unboxed in other rows) |
@@ -2752,8 +2752,9 @@ visualiser's sRGB decode applied (below).
 | Destroyed mine's core `1000,460,1075,540` | 0.3 % | 26.4 | -21.7 | 0.08 | 0.08 | the original's dim pink fragment at this age; ribbon and blast timing |
 | Exhaust plume below the hull `900,940,1000,1080` | 0.7 % | 11.9 | -0.6 | 0.08 | 0.11 | the craft is held at rest |
 | `+100` popup `985,418,1080,448` | 0.1 % | 32.3 | -28.8 | 0.04 | 0.04 | **read**, not drawn (Detonator thread) |
+| Cannon rounds (no box) | 0 % | | | 0.00 | 0.00 | both of this grab's rounds are gone before its frame (retired at 10 and 34 ticks, "Not carried: the craft's speed on the rounds" above); no bolt is on screen |
 
-Shot-specific rows (ribbon, shards, flecks, core, `+100`) sum to 0.75; floor, screen, wall, hull, HUD and scenery are scene-wide.
+The blast subtotal, which is also the shot-specific part (ribbon, shards, flecks, core, `+100`), is 0.75; floor, screen, wall, hull, HUD and scenery are scene-wide.
 `cannon-volley-hot` (7.70, which hit nothing) is the control: HUD 0.99, hull 0.83, floor **3.82** (to 1.61 with the decode), ticker 0.09,
 exhaust 0.13, muzzle flashes `825,620,1100,695` 0.25, rest 1.59.
 
@@ -2771,12 +2772,18 @@ the stored scores):
 
 Boxes A `250,780,800,850` and B `1090,780,1230,1000` ([zone-vis-gamma.md](../ghidra/functions/ps3-hdfury-eu/zone-vis-gamma.md)). The decode
 brings `-hot`'s floor to the original's level and leaves the other three at 0.31 to 0.53 of it, so the page's second, unread factor is still
-open. The endrace pairs and HD `zone-vineta-k-z5` do not move, so a Zone race with the decode is **not measured**. Omega's pairs were not
-rendered.
+open. Per-channel mean absolute difference over the whole frame also falls (R, G, B; `cannon-volley` 15.9, 8.6, 18.0 to 13.4, 7.5, 15.5;
+`-hot` 13.3, 5.2, 20.0 to 6.9, 4.2, 9.0; `mines-ahead` 14.8, 8.0, 16.3 to 13.0, 7.9, 12.5; `pad` 8.6, 2.6, 13.1 to 4.7, 2.5, 8.0), so the
+drop is not an effect of the luma weights. But the signed blue turns from too bright to too dark (`cannon-volley` +6.0 to -4.7, `mines-ahead`
++6.4 to -2.9, `pad` +8.3 to -4.0): a player sees a darker violet floor than the original's on three of the four. One `theirs.png` per pair; ours'
+render is deterministic. The endrace pairs do not move. A Zone race cannot be shown by the current pairs: `zone-vineta-k-z5` carries no
+`--zone-bands`, so the strip is zero and the decode has nothing to act on. Omega's pairs were not rendered.
 
 **Ranked next lanes for `cannon-volley`:**
 
-1. Wire the visualiser decode (wire, sonnet, about 1 h): 10.53 to 9.11, under 10 alone. Scope it to HD (Omega's descriptor is unread).
+1. Wire the visualiser decode (wire, sonnet, about 1 h): 10.53 to 9.11, under 10 alone. HD only, as `Title` data (2048: checked, differs, no
+   `EQ` tints; Omega: open, its descriptor is unread). Show floor crops at player size: the floor goes darker than the original's on three
+   pairs, and `zone-vis-gamma.md`'s second factor stays open.
 2. Identify and read the upper-right screen's material (read, up to 0.94; also on `mines-ahead`).
 3. Right wall pipe and window lights (read, up to 1.01).
 4. `Trail_Ribbon` law (capture, RPCS3, about 0.31).

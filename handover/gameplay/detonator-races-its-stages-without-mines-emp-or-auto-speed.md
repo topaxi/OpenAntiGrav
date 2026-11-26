@@ -512,7 +512,7 @@ the original's is dim pink~~ (2026-11-26, `det-mine-blast-glow`: the whole live 
 `detonator-mine.md`, "The blast's colour"; carried pair 12.31 to 12.12; 2048's `FUN_811e6ebc` and Omega's `FUN_0133ac10` carry the same
 law, checked, applies, not wired until those titles answer the mine triggers; the blast takes `detonator_stage(laps)`, not a pinned
 grade's stage). Muting the root's glows had no measured effect in that frame (12.12); their draw law is unread.
-**What is left is the `Trail_Ribbon` dot chains** (on the carried pair, muted: 10.22 against 10.53, so even a perfect ribbon leaves it above 10): ours draws each speed-0 ribbon particle as a dot,
+~~What is left is the `Trail_Ribbon` dot chains~~ (not the whole of it: "`cannon-volley` split by region" below). The ribbon (on the carried pair, muted: 10.22 against 10.53, so even a perfect ribbon leaves it above 10): ours draws each speed-0 ribbon particle as a dot,
 the original shows a few thin lines; the far bar (12.41) and the root's noise force (12.15) are both worse. Next: one RPCS3 capture of the
 blast's particle quads a few ticks after a hit, and who reads the child instance's `+0x130`/`+0x140` (same page, "The ribbon, open").
 And the `+100` (read, not drawn: the next bullet). The craft-speed carry on the rounds is right physics: put back by `v` times their age, ours hits the mine at round age 8 against
@@ -523,8 +523,8 @@ the glows are right; it is about 40 lines in `oag_raceplay::detonator` behind a 
 region").** 10.53 = mines 3.11 (audio-driven), floor 2.58, right wall 1.01, upper-right screen 0.94, HUD 0.70, far scenery 0.66, hull 0.58,
 ribbon 0.30, shot-specific rest under 0.2 each. **Next, ready to wire:** the visualiser strip's sRGB decode (`zone-vis-gamma.md`) alone takes
 it to **9.11** on current `main` (all four race pairs fall); scope to HD and check a Zone race. Then read the upper-right screen's grey smear
-(also on `mines-ahead`) and the right wall's missing window lights. This replaces "what is left is the `Trail_Ribbon`" above: the ribbon is
-0.31 of it.
+(also on `mines-ahead`) and the right wall's missing window lights. The ribbon is
+0.31 of it. The decode leaves the floor darker than the original's on three of four pairs (second factor open).
 
 **Hull camera and size, re-based (2026-11-23, `det-camera`).** The maintainer's "ours is far, the original is close" was true and the
 camera flags were not the cause: the pair fed the RAM body (2 to 4 ticks ahead of the presented frame) with the push-buffer camera, and
