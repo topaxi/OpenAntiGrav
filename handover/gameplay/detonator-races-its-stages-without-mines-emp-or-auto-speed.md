@@ -508,7 +508,9 @@ draws white puffs where the original shows small shards~~ (2026-11-26, `det-mine
 `Debris` atlas is the shards, `detonator-mine.md`, "The shards, against the original"). Still open there: the destroyed mine is not
 carried, because with it the pair reads 12.12 against the published 11.89 (after `det-mine-blast-glow`). ~~The core near-white where
 the original's is dim pink~~ (2026-11-26, `det-mine-blast-glow`: the whole live blast takes the stage's mine colour, read 85 and wired,
-`detonator-mine.md`, "The blast's colour"; carried pair 12.31 to 12.12). The root's glows cost nothing in that frame (muted: 12.12).
+`detonator-mine.md`, "The blast's colour"; carried pair 12.31 to 12.12; 2048's `FUN_811e6ebc` and Omega's `FUN_0133ac10` carry the same
+law, checked, applies, not wired until those titles answer the mine triggers; the blast takes `detonator_stage(laps)`, not a pinned
+grade's stage). Muting the root's glows had no measured effect in that frame (12.12); their draw law is unread.
 **What is left is the `Trail_Ribbon` dot chains** (muted: 11.83, under the published): ours draws each speed-0 ribbon particle as a dot,
 the original shows a few thin lines; the far bar (12.41) and the root's noise force (12.15) are both worse. Next: one RPCS3 capture of the
 blast's particle quads a few ticks after a hit, and who reads the child instance's `+0x130`/`+0x140` (same page, "The ribbon, open").

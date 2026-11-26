@@ -382,6 +382,9 @@ from the spawn directly; no live palette dump.
 **Wired:** `oag_title::Effects::mine_blast_recolour` (HD, measured); `oag_fx::psys::detonator_mine_blast_entry`
 (the packing) and `Effect::with_one_colour`; `oag_raceplay::detonator_fx::mine_blasts` builds one recoloured blast per
 stage at race start, and a shot, chained or EMP'd live mine plays the one for the Detonator stage the lap counter shows.
+That stage is `oag_race::Mode::detonator_stage(laps)`, not the colour grade's committed stage: on a race whose grade
+is pinned to another stage (`ZoneGrade::pin_stage`) the blast and the mine bodies would take different stages' colours.
+No published pair pins a stage.
 Tests: `a_live_mine_blast_entry_is_the_executables_packing_not_a_plain_lerp` and
 `one_colour_fills_every_emitters_whole_table` (`oag-fx`); `check_a_live_mine_blast_takes_the_stage_colour` in
 `tests::detonator_fx::an_hd_detonator_race_plays_the_discs_effects_for_each_event` (HD image).
@@ -399,7 +402,8 @@ Tests: `a_live_mine_blast_entry_is_the_executables_packing_not_a_plain_lerp` and
 | recoloured, and the round carried back by the craft's speed (`102.26` units/s, the prototype above) | 12.98 |
 
 The other five Detonator pairs and two Rocket craft-hit pairs did not move (none plays a live mine's blast). So the
-core is the original's colour now, the root's glows cost nothing in this frame, and **what keeps the pair above its
+core is the original's colour now. Muting the root's glows had no measured effect in this frame (blast about 36 ticks
+old), but their draw law is unread and a younger blast would show them larger. And **what keeps the pair above its
 published 11.89 is the `Trail_Ribbon` dots** (+0.29). The far bar and the noise force both make the pair worse, so neither
 is wired.
 
@@ -427,10 +431,16 @@ clamped to 255, packed `a << 24 | b' << 16 | g' << 9 | r' << 1` into all 256 wor
 `FUN_812aa676`. It takes the instance by the spawn node's own handle (`node+0xec`, the field `0x002c8c70` fills on HD),
 which confirms independently that the recoloured instance is the blast just spawned. The colour comes from
 `FUN_81023fc4` on the player craft's `+0x58d4` (2048's stage colour getter, not followed). 2048's table is
-little-endian, so the same word reads `r, g, b, a` from its low byte up and draws the same colour as HD's. Not wired: 2048
-answers no mine trigger yet (its Detonator lane is deferred). **Omega: not checkable in this lane**: its mine explode
-is known only by the hashed name `0x0133ad5f` ([pob.md](../../../formats/pob.md), "Detonator's explosions"); the
-function was not located.
+little-endian, so the same word reads `r, g, b, a` from its low byte up; it draws HD's colour if that getter packs
+red in the word's top byte as HD's does (not read). Not wired: 2048 answers no mine trigger yet (its Detonator lane is
+deferred).
+
+**Omega: checked, applies, not wired.** `FUN_0133ac10` (patch 1.07, the function holding `0x0133ad5f`) spawns the same
+two systems (looked up by the CRC-32 of their names) and, for a live mine, takes the spawned instance by its own handle
+(`+0xc0`), reads the committed stage's colour word (stage table stride `0x250`, the craft's `+0x68f4`), applies
+`(int)((255 - c) * 0.8 + c)` clamped to 255 and writes `g' << 9 | b' << 16 | r' * 2 | a << 24` into all 256 entries at
+`record+0xc4` (the record at `instance+0x90`), then `FUN_016e03a0` (the tree copy, not opened). Same law; not wired, as
+Omega answers no mine trigger yet.
 
 ## Live and dark mines
 
