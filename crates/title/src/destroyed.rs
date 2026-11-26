@@ -354,3 +354,23 @@ impl DestroyedCraft {
         ..Self::HD_BLOWUP
     };
 }
+
+#[cfg(test)]
+mod tests {
+    use super::DestroyedCraft;
+
+    /// The Detonator finish handler's two waits are the same on HD, 2048 and Omega
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/detonator-endrace.md`, "The wait before the results").
+    #[test]
+    fn the_hd_family_waits_five_and_a_half_seconds_on_a_detonator_end() {
+        for destroyed in [
+            DestroyedCraft::HD,
+            DestroyedCraft::HD_BLOWUP,
+            DestroyedCraft::HD_VITA,
+        ] {
+            assert_eq!(destroyed.detonator_results_secs, Some(5.5));
+        }
+        assert_eq!(DestroyedCraft::PULSE.detonator_results_secs, None);
+        assert_eq!(DestroyedCraft::PURE.detonator_results_secs, None);
+    }
+}
