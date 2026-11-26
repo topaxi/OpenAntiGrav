@@ -90,8 +90,9 @@ scene is 1.5 ms. Every "fidelity none" item passes the byte-identity or pair che
      fast run read 858 MHz against 403) is unknown. A perfetto fence trace per mode would show which wait shrinks.
    - **`hd_zoom` pass timestamp** reads 1.6 to 2.9 ms on trunk against 0.1 to 0.2 ms on 30.0.2 while the frame got faster;
      probably the hoisted barrier landing inside that timestamp pair. Unproven.
-   - **Host GPU p50 at 1080p +3.5 to +7.7 %** on trunk in two of two rounds (`just bench-render hd --size 1920x1080
-     --binary <build>`), frame and CPU unchanged; re-measure at low load before calling it real.
+   - **Host GPU p50 at 1080p about +5 %** on trunk (791/779/793/799 against 734/753/793/760 us, four rounds of
+     `just bench-render hd --size 1920x1080 --binary <build>`), frame and CPU unchanged; inside 30.0.2's own spread in
+     one round. Re-measure on an idle host, or with `OAG_RENDER_GPU_BENCH` per pass, before calling it real.
 
 5. ~~Measure the track's shading on Mali~~ **measured, one fix landed** (`s21-shading`): the rich
    tenth of the circuit's draws costs half the scene pass (`track-rich` 11.1 to 5.6 ms of scene

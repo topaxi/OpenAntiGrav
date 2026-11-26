@@ -1165,7 +1165,7 @@ for the previous frame's fence); CPU work before present is unchanged (`cpu_ms -
 holds 30 to 33 ms through each race; trunk runs in two modes, about 18 ms for a stretch and then about 27 ms (round 1
 stayed fast to the end, round 2 switched at racing second 70, round 3 at second 20). The slow mode alone is the 2.4 to 3.1 ms
 the #10319 backport bought; the fast mode is more than #10319 explains, and which trunk change (or which GPU clock
-behaviour) gives it is not known. GPU clock median 403 MHz in five runs, 858 MHz in trunk round 1. Both builds finish the race
+behaviour) gives it is not known. GPU clock median 403 MHz in five runs, 858 MHz in trunk round 1. The surface is set up the same on both (`surface: present mode Mailbox (offered [Mailbox, Fifo]), 2 frame(s) queued`), so the fast mode is not a present-mode change. Both builds finish the race
 in the same time (1:37.43) and draw the same race mid-way (phone screencaps 40 s into racing, read by eye).
 
 One reading looks wrong and is open: the `hd_zoom` pass timestamp reads 1.6 to 2.9 ms on trunk against 0.1 to 0.2 ms on

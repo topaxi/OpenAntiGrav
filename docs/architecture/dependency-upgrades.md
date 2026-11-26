@@ -184,13 +184,16 @@ The trunk version string is still `30.0.0`; the rev is the identity.
 | --- | ---: | ---: | ---: | ---: | --- |
 | 1920x1080, 1 | 1117 / 1146 | 734 / 791 | 1292 / 1320 | 156 / 157 | 8.5 / 8.0 |
 | 1920x1080, 2 | 1149 / 1150 | 753 / 779 | 1327 / 1322 | 157 / 156 | 6.8 / 10.6 |
+| 1920x1080, 3 | 1813 / 1419 | 793 / 793 | 2072 / 1620 | 226 / 183 | 62.4 / 61.8 |
+| 1920x1080, 4 | 1184 / 1278 | 760 / 799 | 1365 / 1468 | 161 / 169 | 5.6 / 13.5 |
 | 3840x2160, 1 | 1128 / 2035 | 1077 / 1538 | 1384 / 2340 | 156 / 226 | 34.7 / 18.7 |
 | 3840x2160, 2 | 1389 / 1144 | 1146 / 1080 | 1596 / 1382 | 182 / 155 | 27.4 / 5.7 |
 
   The 4K rounds disagree with each other and so does the simulation's own `tick_us` (+44 % and -15 %), which no wgpu
-  change can move: machine state, not the build. At 1080p, where `tick_us` matches, frame and CPU are unchanged and the
-  GPU p50 is 26 to 57 us (3.5 to 7.7 %) higher on trunk in both rounds, against 19 us between main's own two rounds. Small
-  and open; it does not reach the frame, which is CPU-bound.
+  change can move: machine state, not the build. Where `tick_us` matches (1080p rounds 1 and 2), frame and CPU are
+  unchanged. GPU p50 at 1080p over the four rounds: 30.0.2 734, 753, 793, 760 us; trunk 791, 779, 793, 799 us, so
+  about 5 % (36 us at the medians) higher on trunk in three rounds and equal in one, inside 30.0.2's own 59 us spread.
+  Small and open; the frame is CPU-bound and does not show it.
 - Builds: Linux (`cargo check --workspace --all-targets`, `just lint`), wasm (`scripts/build-web.sh --check`), Windows
   (`CARGO_TARGET_DIR=target/win-check cargo check --target x86_64-pc-windows-gnu -p oag-game`), the Android dist APK.
   Every WESL shader is validated by trunk's `naga` through `oag-shader-check` at build time.
