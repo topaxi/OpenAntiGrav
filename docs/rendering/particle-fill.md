@@ -158,6 +158,9 @@ What it says:
   bench has none.
 - **The worst barrage frames are blasts these changes did not reach**: ticks 726 and 756
   cost 78 to 79 and 75 ms on the two newest builds, and 80 and 74 to 75 ms on the older ones.
+  `frame_us` trails the GPU work by two ticks here (the bench holds two frames in flight): those
+  two frames carry the scene passes of ticks 724 and 754, whose `gpu_scene_us` reads 73 and
+  69 ms ("Per effect: what fills the heavy frames").
 - **Tick 784 got heavier**: 51 ms on `790ad033b` and `d66a52ae6` against 43 on `0d662907c` at
   3840x2160, and the window's worst is now tick 786. That is the frame the blast carry and the sprites changed
   ("Measured and dropped", "Carried with the struck craft").
@@ -629,6 +632,93 @@ which was not checked against the original's spawn point. The ring's wash quad i
 younger than the film's labelled age (2 ticks at 0.1 s, 10 at 0.233 s, read off its colour and
 size), so the far pairs render ours at the quad's age. Ours' struck craft keeps our own opponent's
 velocity, so the travelling fireballs do not match.
+
+## Per effect: what fills the heavy frames
+
+2026-11-26, `blast-fill-split`, RX 7800 XT, RADV, 3840x2160. **The heavy frames of the
+reproduction are the disc's own effects at the disc's own sizes and counts. Nothing found in
+them is an invention of ours that would shrink the fill, so nothing was changed.**
+
+The brief's ticks 726 and 756 are `frame_us` peaks. The GPU work is two ticks earlier, at 724
+and 754, and at 784 for the third ("On the Steam Deck" above: scene pass 73, 69 and 58 ms at
+those ticks, 17 ms at tick 760). At 724 and 754 the volley fired 30 ticks earlier has just hit
+the track wall in front of the camera, and the next one has just left it.
+
+The run is the reproduction above with only the HD render profile in the settings file, state
+hash `62b06c2ee353b11d` at tick 800 on every run. Both probes were throwaway patches, not kept:
+a counter of each quad's on-screen area clipped to the frustum (the probe of "Where the time
+goes", keyed by effect, emitter and instance), and a switch that left one effect, the lights or
+the screen flash out. The probe does not move the state hash.
+
+### Fill, in screens
+
+Quads in brackets. Emitters under 0.3 screens at every tick are left out; the totals hold them.
+
+| Effect and emitter | Draw | 724 | 726 | 754 | 756 | 784 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `WO_ROCKET_EXPLO_TRACK` `FIRESPIKES` | additive streak | 7.77 (106) | 6.23 (80) | 7.34 (88) | 5.43 (55) | 3.17 (30) |
+| `WO_ROCKET_EXPLO` `trail` | alpha-over | 0 | 0 | 0 | 0 | 4.62 (100) |
+| `WO_ROCKET_FLARE` `launch_smoke` | alpha-over | 2.20 (24) | 0.00 (1) | 1.74 (24) | 0 | 2.14 (24) |
+| `WO_ROCKET_EXPLO` `FIREBALL_TUMULT_SMOKE_TRAIL` | alpha-over | 0 | 0 | 0 | 0 | 1.03 (4) |
+| `WO_ROCKET_FLARE` `launch_flare` | additive streak | 0.71 (18) | 0 | 0.76 (18) | 0 | 0.90 (20) |
+| `WO_ROCKET_EXPLO_TRACK` root | alpha-over | 0.78 (30) | 0.76 (30) | 0.79 (30) | 0.84 (30) | 0.33 (10) |
+| `WO_ROCKET_FLARE` `WO_ROCKET_FIRE` | additive streak | 0.42 (39) | 0.48 (49) | 0.40 (34) | 0.36 (45) | 0.48 (31) |
+| `WO_ROCKET_EXPLO` `FIREBALL_FIJETS_SMOKE_TRAIL` | alpha-over | 0 | 0 | 0 | 0 | 0.46 (4) |
+| `WO_ROCKET_EXPLO` `SMOKE_BLUCLD` | alpha-over | 0 | 0 | 0 | 0 | 0.46 (1) |
+| **All particles** | | 13.18 | 8.98 | 12.72 | 8.55 | 14.48 |
+| of which additive | | 9.88 | 7.73 | 9.75 | 7.13 | 5.22 |
+
+- **Tick 784's 5.2 additive screens are named**: the track blast's `FIRESPIKES` (3.17) and the
+  player's own launch (`launch_flare`, `WO_ROCKET_FIRE`, 1.38). No sprite template is on
+  screen at 784, and the streaks draw the procedural profile, which is why the sprite trim of
+  "Measured and dropped" left that layer untouched.
+- **The spikes are fresh.** At 724, 754 and 784 every `FIRESPIKES` quad belongs to a blast 4 to
+  10 ticks old: one blast a rocket, three a volley. No older instance re-emits them.
+
+### GPU time, by leaving one thing out
+
+`gpu_scene_us` in milliseconds, twelve arms interleaved over six rounds, one-minute load 10 to
+30, under the gate lock. The card runs in two clock states about 1.6 times apart, so each cell
+is the median of the rounds within 12 % of that arm's best (two to six of the six rounds).
+
+| | 724 | 726 | 754 | 756 | 784 |
+| --- | --- | --- | --- | --- | --- |
+| Scene pass, nothing left out | 3.05 | 2.01 | 2.96 | 1.91 | 2.88 |
+| Scene pass, no particles | 0.70 | 0.71 | 0.75 | 0.74 | 0.78 |
+| **Saved: all particles** | **2.34** | **1.29** | **2.21** | **1.16** | **2.10** |
+| Saved: `WO_ROCKET_EXPLO_TRACK` | 1.29 | 1.05 | 1.20 | 0.95 | 0.57 |
+| of which `FIRESPIKES` alone | 1.10 | 0.79 | 0.96 | 0.68 | 0.42 |
+| Saved: `WO_ROCKET_FLARE` | 0.86 | 0.15 | 0.85 | 0.14 | 0.92 |
+| of which `launch_smoke` alone | 0.47 | 0.02 | 0.40 | 0.02 | 0.39 |
+| Saved: `WO_ROCKET_EXPLO` | 0.02 | 0.02 | 0.07 | 0.02 | 0.42 |
+| Saved: HD's SPU point lights | 0.01 | 0.02 | 0.07 | 0.01 | 0.05 |
+| Saved: the screen flash | 0.00 | -0.04 | 0.00 | -0.02 | 0.02 |
+
+The unpatched build, run in the same rounds, reads 3.04, 2.02, 2.97, 1.92 and 2.85. Two builds
+agree within 0.03 ms, so treat anything under about 0.1 ms as noise: the lights and the flash
+cost nothing measurable at these ticks.
+
+### Authored or ours
+
+| Heavy effect | Verdict | Why |
+| --- | --- | --- |
+| `FIRESPIKES` (track blast) | the disc's | Counts, sizes and lifetimes are the file's, one blast a rocket. HD reads no fade and no size cap on this render mode (5) ([particle-render.md](../ghidra/functions/ps3-hdfury-eu/particle-render.md), "The near-camera law"). Ours draws it with the procedural strip rather than HD's bar ([engine-trail.md](../ghidra/functions/ps3-hdfury-eu/engine-trail.md), "The class-6 draw law"); with that bar, its sprite and its near cull switched on for the probe, the same quads cover 8.44, 6.47, 7.27, 5.22 and 3.22 screens, -4 to +9 % |
+| `launch_smoke`, `launch_flare`, `WO_ROCKET_FIRE` (own launch) | the disc's | The billboards already run the near law with the file's cap; the streaks are render mode 5 in the file, like the spikes |
+| `trail` and the craft blast's smoke (784) | the disc's | Under the near law with the file's cap (0.5 on `trail`). At a near craft blast the original's lists cover more than ours, not less ("Against the original at a near blast") |
+
+What this does not settle:
+
+- **No original frame holds a `.pob` streak quad** (the live dumps listed screen-facing quads
+  only), so the verdict on the spikes rests on the file's data and the executable's builder
+  (confidence 65), not on a picture.
+- The blast's severity of 1.0 is **chosen, not measured**: nothing on HD's rocket path has been
+  read feeding it.
+- Ours caps an instance at 256 particles, and every track blast older than a few ticks sits at
+  or near that cap, almost all `TRAIL_SMOKE` (tiny quads, 0.1 to 0.2 screens a tick). A cap can
+  only make ours draw less.
+
+**Cross-title:** HD only. A measurement; no format, law or asset finding to check on 2048 or
+Omega.
 
 ## What is left
 
