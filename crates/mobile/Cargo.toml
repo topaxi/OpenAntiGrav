@@ -14,13 +14,15 @@ winit = { workspace = true, features = ["android-native-activity"] }
 # The gallery export calls the framework's MediaStore through the JVM the activity already
 # attached; the same jni `android-activity` links, so the lock gains nothing.
 jni = "0.22"
+# The refresh-rate reader's thread (`refresh::LiveRefresh`).
+oag-thread.workspace = true
 
-# iOS: the only code that logs is `ios.rs`.
-[target.'cfg(target_os = "ios")'.dependencies]
+[dependencies]
 log.workspace = true
 
 [dev-dependencies]
 oag-mod.workspace = true
+oag-present.workspace = true
 
 [lints]
 workspace = true

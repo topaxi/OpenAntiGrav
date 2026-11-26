@@ -142,7 +142,7 @@ bench counts them after its first 60 frames, so the two differ by that grid time
 | Average FPS | frames counted over their summed time (`1e6 / mean frame_us`) |
 | 1 % low, 0.1 % low | the rate of the slowest 1 % (0.1 %) of frames: 1,000 ms over the **mean** frame time of the slowest `ceil(n x 1 %)` frames, at least one (`stats::low_fps`). Under 1,000 counted frames the 0.1 % low would be the one worst frame, so the screen says `N/A UNDER 1000 FRAMES` and the file has `null` |
 | Median, P95, P99, worst | nearest-rank percentiles of the frame time, so each is a frame that happened (`stats::percentile`) |
-| Over the budget | frames that took more than 1.05 times `1000 / refresh Hz`; the refresh rate is the display's when the loop measured it, else 60 Hz and the result says `assumed` |
+| Over the budget | frames that took more than 1.05 times `1000 / refresh Hz`; the refresh rate is the display's, reported or measured, else 60 Hz and the result says `assumed` |
 
 The screen also lists the settings that change what a frame costs (the vsync mode, the frame limit
 and the dynamic-resolution target among them), the adapter and driver, and the machine (operating
@@ -280,9 +280,10 @@ The walk is `scripts/web-screenshot.py` with `--tap`, `--grant clipboard-read@T`
 write to a page that has been granted the read alone. On the S21 `adb shell cmd clipboard` has no
 implementation, hence the paste.
 
-**The refresh rate is not read on either.** winit reports none on Android or the web, so both
-say 60 Hz, `assumed` in DETAILS. The S21's panel ran at 120 Hz during the run above, so its
-verdict and its frames-over-budget figure were judged against half the refresh it had.
+**The refresh rate.** Both runs above said 60 Hz, `assumed` in DETAILS, because winit reports
+none on Android or the web; the S21's panel ran at 120 Hz during its run. Android now reads the
+display itself ([android.md](android.md), "The display's refresh rate"), so a phone's verdict is
+against its own rate. The web still reports none and says 60 Hz, `assumed`.
 
 ## Not checked
 
