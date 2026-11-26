@@ -61,8 +61,9 @@ Read px with the title in mind. A Pulse PSP frame is 480x272 and an HD frame
   rewind-pair-field data/reference/compare-page/hd-race/talons-pack 1` and
   `just compare-rerender-ours --only talons-pack` (mean grey 23.05 to 22.39).
   **Open:** its camera may be newer than the picture too (camera 1, craft 2
-  reads 18.78 while edge correlation falls); a re-capture keeping the command
-  ring would settle it. The hue
+  reads 18.78 while edge correlation falls), the effect `det-mine-look-re`
+  measured (`docs/tools/compare-page.md`, "The picture is older than the push
+  buffer's camera"); settle it there, per grab. The hue
   shift (ours greener) of the old frame was not looked at: after the tick the
   frame bias is R +0.2, G +2.1, B +2.5.
 - Tight boxes: for 20 of the top 31 regions the pixels above 15 grey levels

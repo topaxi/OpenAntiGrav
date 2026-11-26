@@ -388,7 +388,7 @@ The node matrix at `ship+0x40` equals the body on all eight craft on every pause
 
 By eye at 1 tick the hull has the original's size and height, where the stored pair's is small and high. Confidence in 1 tick relative to the camera 85: `hd-pair-lag-scan.py`'s RMSE also prefers craft = camera + 1 when the camera is rewound (1:2 over 1:1, 2:3 over 2:2), and the eye to hull distance at 1 tick is 11.6 units, the rig's.
 
-**Open: the camera of this pair may itself be newer than the picture.** Rewinding the camera too scores lower on RMSE and grey (camera 1 craft 2: mean grey 18.78, one render) and goes on falling to camera 2 craft 3 (scan RMSE 0.136 against 0.165 at camera 0 craft 1), while edge correlation falls (0.094 to 0.074). A whole-frame score does not settle it, and no command ring of the frame was kept to read the picture's own matrix. A re-capture that keeps the ring would.
+**Open: the camera of this pair may itself be newer than the picture**, which would be another sample of "The picture is older than the push buffer's camera" below (`det-mine-look-re`, not reconciled with this section). Rewinding the camera too scores lower on RMSE and grey (camera 1 craft 2: mean grey 18.78, one render) and goes on falling to camera 2 craft 3 (scan RMSE 0.136 against 0.165 at camera 0 craft 1), while edge correlation falls (0.094 to 0.074). A whole-frame score does not settle it. What would: that section's measure (static things near the camera, a lag fitted per grab) or a re-capture that keeps the frame's command ring.
 
 ## Pulse PS2: a race pair for every circuit (2026-11-11, `gallery-pulse-ps2`)
 
