@@ -157,8 +157,8 @@ fn after_ticks(effect: &Effect, ticks: usize) -> System {
     system
 }
 
-/// A template draws from a stream of its own: with it playing, every emitted particle is
-/// where it would be without it.
+/// A template draws from a copy of the shared stream: with it playing, every emitted particle
+/// is where it would be without it.
 #[test]
 fn a_template_leaves_the_rest_of_its_effect_unchanged() {
     let without = after_ticks(&spray(3, false), 10);

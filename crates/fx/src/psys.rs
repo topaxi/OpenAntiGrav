@@ -492,10 +492,6 @@ impl Effect {
     }
 }
 
-/// The seed a sprite template's own random stream starts from, mixed with the instance's
-/// ignition count and the template's emitter index.
-const TEMPLATE_STREAM: u64 = 0x7e3a_11a7_e5f0_0d5e;
-
 /// A live instance of an [`Effect`]: one pool of particles and the emitters
 /// filling it.
 ///
@@ -680,6 +676,7 @@ impl System {
     /// on the *next* `ParticleSystem_Update`.
     fn emit(&mut self, effect: &Effect, dt_ticks: f32, moved: Vec3, rng: &mut Rng) {
         let mut children: Vec<(usize, Vec3, Vec3)> = Vec::new();
+        let mut templates_rng: Option<Rng> = None;
         for index in 0..self.emitters.len() {
             if !self.emitters[index].active {
                 continue;
@@ -709,14 +706,11 @@ impl System {
             let run = spec.run_ticks();
             let burst = spec.burst(self.emitters[index].ticks_left, frame_scale);
             let dt_ticks = dt_ticks * spec.playback.rate;
-            // A sprite template draws from a stream of its own, so playing an effect's templates
-            // leaves every other particle of it where the shared stream would put it.
-            let mut own;
+            // The templates draw from one copy of the shared stream, taken at the first: each
+            // takes the values it would have taken, and every other particle what it would have
+            // without them.
             let rng: &mut Rng = if spec.template {
-                own = Rng::new(
-                    TEMPLATE_STREAM ^ (u64::from(self.ignitions) << 16) ^ u64::from(spec_index),
-                );
-                &mut own
+                templates_rng.get_or_insert_with(|| rng.clone())
             } else {
                 &mut *rng
             };
