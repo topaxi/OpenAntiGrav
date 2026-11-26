@@ -328,8 +328,13 @@ models still start fresh
 to 4, size capped at depth times the emitter's `+0xc80`
 ([particle-render.md](../ghidra/functions/ps3-hdfury-eu/particle-render.md),
 [particle-near-law.md](../ghidra/functions/vita-2048-eu-v104/particle-near-law.md)), so a blast
-the camera flies into is a bounded cloud. Pulse and Pure: **?**, their builders are unread and
-their blasts draw as authored.
+the camera flies into is a bounded cloud. Pulse **M** (`oag_title::Looks::psp_particle_clip`,
+2026-11-26): by draw class a particle is dropped, faded or left alone near the eye, and the GE
+draws no triangle with a vertex more than 2048 px off the screen centre
+([particle-system.md](../ghidra/functions/psp-pulse-usa/particle-system.md#2026-11-26-near-the-eye-what-the-psp-does-with-an-emitted-particle));
+sprite templates meet the GE drop on `WO_REPULSER` alone. Pulse PS2 **I:Pulse PSP**. Pure **M**
+for the near tests ([particle-bars.md](../ghidra/functions/psp-pure-usa/particle-bars.md#near-the-eye-2026-11-26)),
+**I:Pulse** for the GE drop.
 
 | Weapon | Pulse | Pure | HD / Fury | 2048 | Omega |
 | --- | --- | --- | --- | --- | --- |

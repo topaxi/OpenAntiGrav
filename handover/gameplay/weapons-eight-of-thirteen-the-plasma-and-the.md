@@ -2,7 +2,7 @@
 status: measure
 titles: [pulse]
 updated: 2026-11-26
-summary: "Repulser blast bead ring starts wide (13.6 units) where the original stays compact; more Repulser leftovers inside"
+summary: "Repulser blast ring starts wide (13.6 units); the Quake template the original never draws; more weapon leftovers inside"
 ---
 
 # Weapons: thirteen of thirteen, the Repulser last (2026-10-04), and the dispatch table read whole
@@ -404,17 +404,20 @@ still open, most player-visible first:
   ([pob.md](../../docs/formats/pob.md)). Frames:
   `psp-seq.png` against `oag-seq.png`.
 - ~~**Open: the wave-start whiteout is confirmed as ours.**~~ Closed 2026-10-06: the `shazzam` quad is dropped by the GE's guard band, see particle-system.md.
-- **Open (2026-11-26): emitted Repulser particles near the eye skip the guard band.** The
-  guard is applied to `WO_REPULSER`'s templates alone (`oag_fx::psys::guard`). Read over 21
-  particle arrangements (`Race::reseed_stage`), 7 draw an emitted particle out of the GE's
-  screen space: the fixed `STAGE_SEED` and seeds 6, 9, 10, 16, 18 at tick 48 after the fire (a
-  `WO_REPULSER` particle 1.4 to 4.2 units ahead; its two `shazzam` templates are dropped), seed 7
-  at tick 0 (a `WO_REPULSER_BLAST` particle 1.1 ahead). Whether the original drops these was
-  never filmed, and widening the guard moved the Quake's first frame before. Next: film a
-  Repulser fired at a standstill on PPSSPP with a particle that near, replay the `.ppdmp`, and
-  wire the law for emitted particles if the band is absent. Test:
-  `repulser_guard_band_ground_truth::emitted_particles_near_the_eye_leave_the_guard_band`
-  (`OAG_REVIEW_FINDINGS=1`).
+- ~~Emitted Repulser particles near the eye skip the guard band~~ **measured and wired
+  2026-11-26**: the PSP drops by draw class on the CPU and the GE draws no triangle with a
+  vertex more than 2048 px off centre, emitted particles included
+  ([particle-system.md](../../docs/ghidra/functions/psp-pulse-usa/particle-system.md),
+  "near the eye").
+- **Open (2026-11-26): the original's Quake template draws nothing, ours does.** Recorded
+  frames 2, 4 and 6 ticks after a standing Quake have its template quad out of range; removing
+  it changes no pixel, while ours washes the screen white from it. `TEMPLATE_GUARDED`
+  (`oag_fx::psys::guard`) still holds templates other than `WO_REPULSER`'s out of the drop.
+  Next: pair ours with and without the template against the original's frames at those ticks,
+  then drop the gate (same section, "The Quake's template").
+- **Open (2026-11-26): the race camera's near plane is 1.0, the PSP's is 1.24** (a standing
+  race frame's projection). Particles play 1.24; world geometry between the two still draws in
+  ours. Not measured against a moving or internal camera.
 - ~~The junction fork's third wave is not built~~ **built 2026-10-04**: the
   in-run fork (`Repulser_AdvanceWave`, 88) on `oag_race::Course::branches`
   (05, 07, 14, 23 carry one), off the forward wave. Not built: the init-tick
