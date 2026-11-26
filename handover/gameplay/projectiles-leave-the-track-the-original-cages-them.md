@@ -62,7 +62,7 @@ was not measured.
    Omega's and 2048's own drains: HD's law inherited reddens `omega_event_xp_ground_truth` and
    `sol_ground_truth::a_field_of_seven_laps_2048_sol_at_ace`, so both keep the immediate push
    (chosen) until their drains are read (Omega `Rocket_HitCraft` `0x0139a6b0` posts into
-   `+0x120`; find its reader).
+   `+0x120`, 2048 `FUN_8120680e` into `+0x110`; find each reader).
 7. **Not measured or not read.**
    - The Missile's travel sweep on code `4` (`flags |= 0x14`, no bounce): decompile only, no capture
      produced it. Fire a Missile across a jump lip (Outpost 7 sample 186) to see it.

@@ -152,8 +152,9 @@ pub fn blast<S: Craft>(
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BlastPush {
     /// Posted into [`oag_physics::ShipState::pending_impulse`] from the craft's nose point,
-    /// which its next physics step drains as `Ship_ApplyCollisionImpulse` does (a forward-axis
-    /// push, the collision stun, nothing under a running Shield). See [`post_impulse`].
+    /// which its next physics step drains as `Ship_ApplyCollisionImpulse` does (a push along one
+    /// body axis, the title's; the collision stun; nothing under a running Shield). See
+    /// [`post_impulse`].
     Posted,
     /// A velocity change at once, radially from the craft's centre, with no stun. See
     /// [`immediate_impulse`].

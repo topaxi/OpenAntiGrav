@@ -123,7 +123,7 @@ the carry ours stays at the spawn point: 0.6 units along a craft that moved 34.
   the instance up by `+0xc0` and hands it `*(craft + 0x75c8) + 0xa0` times `0.016666668`
   through `Psys_SetInheritedVelocity` (`0x01728780`, 80; stores `+0x1d0`, recurses `+0x88` and `+0x228`). It queues a light
   of `D = 100`, colour `(7, 5, 1)`, and pushes nearby craft by `(1 - d / r) * strength`, as
-  HD's `Rocket_PushNearbyCraft_q` does.
+  HD's `Rocket_PushNearbyCraft` does.
 - **Pulse PSP: checked, differs.** `Rocket_SpawnCraftExplosion_q` (`0x0886ed34`) spawns at a
   copied matrix with flags `0, 0` and writes no velocity, then starts `ScreenFlash_Start(0)`.
   Pulse PS2 inherits it. Pure is not read.
@@ -391,9 +391,10 @@ centre at `+0x90` (confidence 60 for the point, open). Tests:
 Pulse's: reverting HD's `blast_push`, the laws mapping or the axis choice each turns it red).
 
 What the HD field felt before and after (2026-11-26, `OAG_REQUIRE_GAME_DATA=1`): the novice Score
-Eliminator pace test (`hd_eliminator_hud_ground_truth`), which went red when Pulse's forward
-drain was tried on HD, stays green; `hd_original_ai_ground_truth`,
-`omega_original_ai_ground_truth` and `vita_2048_original_ai_ground_truth` stay green.
+Eliminator pace test (`hd_eliminator_hud_ground_truth`), which the lineage page recorded red
+under the earlier Pulse posting on HD, stays green, and `hd_original_ai_ground_truth` too. The
+eliminator test does not tell the two axes apart: with HD's drain set to forward it is green as
+well, so it is no evidence for the side row.
 
 ### The other titles
 
@@ -405,8 +406,12 @@ drain was tried on HD, stays green; `hd_original_ai_ground_truth`,
   `omega_event_xp_ground_truth::a_finished_omega_event_raises_the_stored_xp_by_the_authored_award`
   red ("no lap or place award paid"), green again with Omega's old immediate push, so Omega keeps
   the immediate push (chosen) until its drain is read.
-- **2048: not read, not wired.** Its Rocket hit (`Rocket_SpawnCraftBlast` `0x81206928`'s caller)
-  was not read for the push. HD's law inherited turned
+- **2048: checked, applies (posting), not wired.** Its Rocket hit `FUN_81206a9e` (the only
+  caller of `Rocket_SpawnCraftBlast` `0x81206928`) ends in `FUN_8120680e(this, P, firer)`: for
+  every racer but the firer, `d = slot+0x48 - P`, `|d| < record+0x24`, a `(1 - |d| / record+0x24)
+  * record+0x28` falloff along `d / |d|` written into `slot+0x110..+0x11f` through a
+  multiply-accumulate (the decompile shows no load of the old value; whether it adds is not
+  settled). Its drain is unread. HD's law inherited turned
   `sol_ground_truth::a_field_of_seven_laps_2048_sol_at_ace` red (a craft with no flying lap in
   12,000 ticks: flying laps `[1, 1, 2, 1, 0, 1, 1]`), green again without it, so 2048 keeps the
   immediate push (chosen).

@@ -280,10 +280,10 @@ pub enum OwnCraftBox {
 /// How a weapon blast's push reaches the craft it hits.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BlastPush {
-    /// Pulse's: the blast adds `(1 - d / blastradius) * blastforce` to the craft's pending
-    /// impulse, measured from its nose point, and `Ship_ApplyCollisionImpulse` drains it as a
-    /// push along the craft's forward axis plus the `0.5` s collision stun, nothing under a
-    /// running Shield (`docs/ghidra/functions/psp-pulse-usa/contact-response.md`, "Wired:
+    /// Pulse's and HD's: the blast adds `(1 - d / blastradius) * blastforce` to the craft's
+    /// pending impulse, measured from its nose point, and the craft's drain spends it as a push
+    /// along one body axis (the title's `CraftLaws::pending_impulse_on_side`) plus the `0.5` s
+    /// collision stun, nothing under a running Shield (`docs/ghidra/functions/psp-pulse-usa/contact-response.md`, "Wired:
     /// every blast posts its push"). See `oag_weapons::projectile::blast`.
     Posted,
     /// A velocity change at once, with the same falloff, radially away from the craft's
