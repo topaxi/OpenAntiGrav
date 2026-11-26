@@ -27,6 +27,10 @@ finishes in the window on it too.
   which no unit test has; a drive script cannot make a load fail or read the runtime field after
   the CLI run quits. Focus loss, the system Back, a preset's settings file and RUN BENCHMARK over
   a parked race do have `render_bench_ground_truth` tests.
+- **HD's and Omega's stats heading names no circuit** (2026-11-26, S21 and desktop, a command-line
+  run): the heading reads `WIPEOUT HD  YOUR SETTINGS`, where Pulse, Pure and 2048 name one. The
+  result file has the circuit (`/data/environments/talons_junction/track.vex`), so
+  `benchmark_report`'s lookup of it in `shell.tracks` finds nothing. Cause not read.
 - **The refresh budget is 60 Hz where the loop has not measured the display** (a `--drive` run, the
   first seconds of a window): the result says `refresh_source: assumed`.
 
