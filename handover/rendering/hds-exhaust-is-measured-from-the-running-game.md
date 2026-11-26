@@ -17,8 +17,13 @@ summary: "HD exhaust: flame rim eye is the camera (read live), unwired until the
   0.00003 units (confidence 92). Re-applying `fog.camera = eye` in `flame_scene` (commit `0c86ed0ed`, reverted)
   still brightens ours away from the original on the rest pairs, because ours is already brighter and bluer with the
   origin eye: on `hd/talons` (read once) the original's nozzle shows a blue left and pink right half, ours an even
-  blue. Next: find that colour divergence (first suspect the colour tap: scroll clock, `(2u, 2v + noise)`, the texel),
-  starting from dump `c1`, a rest frame near `hd/talons`' start pose; then re-apply the eye. Still no boosting dump.
+  blue. **Ready to start (colour gap, no emulator needed first):** (1) `python3 scripts/rsx-flame-eye.py
+  data/reference/hd-flame-tap/c1 f --program` lists the five rest flame draws (518-522); read their fragment programs
+  and constants (`scripts/ps3-fp-live.py`, the `time` constant in particular) against `shade.wesl`'s flame branch;
+  (2) render `hd/talons` from a scratch copy of its pair and crop the nozzle (box `935,802 57x58`) beside the
+  original, with flame, spikes and hull toggled one at a time, to show which layer holds the blue/pink split;
+  (3) fix that layer, then re-apply `0c86ed0ed` (`fog.camera = eye` in `flame_scene`) and re-render the 22 HD pairs
+  listed on engine-flare.md, "Our rim's eye", twice; none may get worse. Still no boosting dump.
   Numbers on engine-flare.md, "The live vertex program" and "Our rim's eye".
 `engine-trail.md` kept moving after this file's 2026-08-24 snapshot and was
 never folded back; its later sessions already close three of the four items
