@@ -286,7 +286,7 @@ def mine_flags(pair, ship):
     The original numbers its track entries from the player's start cursor and ours from the spline's origin, so
     a mine's entry does not transfer; its position does, and ours snaps each to its nearest survey lane
     (`RaceSim::carry_detonator_mines`). A shot without them (an older record) keeps ours' seeded layout and says so."""
-    mines = [m for m in ship.get("mines") or [] if m["flags"] & 9 == 9]
+    mines = ce.detonator_pair_mines(ship.get("mines") or [], ship.get("mine_reads") or [])
     if not mines:
         pair.caveat("no mine objects were read at the pause: ours lays its own seeded mine layout")
         return []
@@ -303,6 +303,10 @@ def mine_flags(pair, ship):
          **{name: m[name] for name, _ in MINE_DRAW_WORDS if name in m}} for m in mines]
     pair.caveat("Detonator mines: the original's %d mine objects were read in the pause (track entry, lane, position) and ours lays each on its "
                 "survey lane nearest that position (`--detonator-mines`); its bomb and any mine laid later are ours" % len(mines))
+    shot = sum(1 for m in mines if not m["flags"] & 8)
+    if shot:
+        pair.caveat("%d of them had left the pool during the shot (a round triggered it): ours lays it too, so its own replayed "
+                    "round destroys it" % shot)
     flags = ["--detonator-mines", ";".join("%.3f,%.3f,%.3f" % tuple(m["position"]) for m in mines)]
     # Without the envelopes ours' near mines draw dark, unspiked and about half the original's size: quiet raw bands never
     # attack an envelope with no history (`docs/ghidra/functions/ps3-hdfury-eu/detonator-mine-draw.md`, "The spikes in a pair").

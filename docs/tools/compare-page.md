@@ -2976,7 +2976,9 @@ than their objects (below).**
 (`rpcs3_hd_field.detonator_mines`; vtable `0x008642f0`, `docs/ghidra/functions/ps3-hdfury-eu/detonator-mine.md`, "Where a mine
 stands") and records `ship.mines` (flags, position, entry, lane, live, age; `OAG_MINE_RAW=1` keeps the object's bytes for a survey
 of its other fields). `rpcs3-hd-pair.py --detonator` writes the armed ones (`flags & 9 == 9`; a mine that left the pool keeps flag
-`1`) to `original.detonator.mines` and gives ours
+`1`), plus a mine that left the pool during the shot itself, one a round destroyed (its age still advanced over the shot's mine reads;
+`compare_env.detonator_pair_mines`, `docs/ghidra/functions/ps3-hdfury-eu/detonator-mine.md`, "Carrying the destroyed mine"), to
+`original.detonator.mines` and gives ours
 `--detonator-mines "X,Y,Z;X,Y,Z;..."`: ours lays the opening stage as usual (its bomb, its counter), then puts every mine on the
 survey lane nearest each position across the section (`RaceSim::carry_detonator_mines`, a snap of at most 4 units across and 1.5 of the 3.0 lift in height, so a lane on another deck never takes it; a position with
 no lane, or whose lane another carried mine or the bomb holds, is dropped with a warning). Positions, not the original's entry numbers: its survey starts at the player's start cursor and

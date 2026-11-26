@@ -505,13 +505,14 @@ pair:** ~~bright striped grilles ours draws where the original is black~~ (fixed
 and `1/14` too wide (1.2)~~ (fixed, `det-hud-score-box`: `docs/formats/hd-hud.md`, "Detonator's score box" and "Text scales on two axes"), hull too bright (0.7). ~~Open capture state: input latency before ours' fire, the volley pair's mine
 envelopes~~ carried (`det-cannon-regrab`, "The volley clocks and the picture-clock reads"). **Open from that grab:** ~~ours' mine blast
 draws white puffs where the original shows small shards~~ (2026-11-26, `det-mine-blast`: the mine effects draw their disc sprites, the
-`Debris` atlas is the shards, `detonator-mine.md`, "The shards, against the original"). Still open there: the destroyed mine is not
-carried, because with it the pair reads 12.12 against the published 11.89 (after `det-mine-blast-glow`). ~~The core near-white where
+`Debris` atlas is the shards, `detonator-mine.md`, "The shards, against the original"). ~~Still open there: the destroyed mine is not
+carried~~ (2026-11-26, `det-mine-ribbon`: carried, the pair script now keeps a mine that left the pool during the shot; `cannon-volley`
+10.80 to 10.53, score 100 on both; `detonator-mine.md`, "Carrying the destroyed mine"). ~~The core near-white where
 the original's is dim pink~~ (2026-11-26, `det-mine-blast-glow`: the whole live blast takes the stage's mine colour, read 85 and wired,
 `detonator-mine.md`, "The blast's colour"; carried pair 12.31 to 12.12; 2048's `FUN_811e6ebc` and Omega's `FUN_0133ac10` carry the same
 law, checked, applies, not wired until those titles answer the mine triggers; the blast takes `detonator_stage(laps)`, not a pinned
 grade's stage). Muting the root's glows had no measured effect in that frame (12.12); their draw law is unread.
-**What is left is the `Trail_Ribbon` dot chains** (muted: 11.83, under the published): ours draws each speed-0 ribbon particle as a dot,
+**What is left is the `Trail_Ribbon` dot chains** (on the carried pair, muted: 10.22 against 10.53, so even a perfect ribbon leaves it above 10): ours draws each speed-0 ribbon particle as a dot,
 the original shows a few thin lines; the far bar (12.41) and the root's noise force (12.15) are both worse. Next: one RPCS3 capture of the
 blast's particle quads a few ticks after a hit, and who reads the child instance's `+0x130`/`+0x140` (same page, "The ribbon, open").
 And the `+100` (read, not drawn: the next bullet). The craft-speed carry on the rounds is right physics: put back by `v` times their age, ours hits the mine at round age 8 against
