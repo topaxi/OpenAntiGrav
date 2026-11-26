@@ -16,6 +16,7 @@ pub(crate) fn context() -> Context {
         build_version: "test",
         refresh: (60.0, "display"),
         frame_limit_hz: None,
+        target_fps_hz: None,
         preset: None,
         mods: None,
         vsync: "off".into(),
@@ -146,4 +147,115 @@ fn the_result_file_has_what_bench_compare_reads() {
     assert_eq!(json["countdown_ticks_excluded"], COUNTDOWN_TICKS);
     assert_eq!(json["run"]["kind"], "in_game");
     assert_eq!(json["final_state_hash"], "0000000000000abc");
+}
+
+/// A Galaxy S24's HD run as it reported itself (`docs/tools/in-game-benchmark.md`, "First phone
+/// result"): 9165 counted frames, median 11.82 ms, p95 16.90, p99 18.27, worst 25.54, 8476 over
+/// the 8.3 ms refresh period. `late` is what the frames between p95 and p99 took, which the
+/// report did not say.
+fn s24(late: f64) -> Report {
+    let ms = [
+        (689, 8.0),
+        (3893, 10.5),
+        (1, 11.82),
+        (4123, 14.05),
+        (1, 16.9),
+        (366, late),
+        (1, 18.27),
+        (90, 19.794),
+        (1, 25.54),
+    ];
+    let raced = ms
+        .into_iter()
+        .flat_map(|(count, ms)| std::iter::repeat_n(ms * 1000.0, count));
+    let mut run = report(std::iter::repeat_n(100_000.0, COUNTDOWN_FRAMES).chain(raced));
+    run.context.refresh = (120.0, "display");
+    run
+}
+
+#[test]
+fn a_run_that_asked_for_60_is_not_judged_against_a_120_hz_screen() {
+    // The fixture is the run: with nothing asked for it reads as the phone reported it.
+    let judged_at_the_screen = s24(17.0).figures().unwrap();
+    assert_eq!(judged_at_the_screen.counted, 9165);
+    assert_eq!(judged_at_the_screen.over_budget, 8476);
+    for (got, reported) in [
+        (judged_at_the_screen.median_ms, 11.82),
+        (judged_at_the_screen.p95_ms, 16.90),
+        (judged_at_the_screen.p99_ms, 18.27),
+        (judged_at_the_screen.worst_ms, 25.54),
+    ] {
+        assert!((got - reported).abs() < 1e-9, "{got} for {reported}");
+    }
+    assert!((judged_at_the_screen.average_fps - 81.5).abs() < 0.2);
+    assert!((judged_at_the_screen.low_1 - 50.4).abs() < 0.1);
+    assert_eq!(judged_at_the_screen.verdict(), Verdict::Choppy);
+
+    // The percentiles bound the late frames whatever lies between p95 and p99: 17.0 and 17.6
+    // are either side of the 17.5 ms the 60 FPS budget allows.
+    for (late, over) in [(17.0, 92), (17.6, 458)] {
+        let mut run = s24(late);
+        run.context.target_fps_hz = Some(60.0);
+        let figures = run.figures().unwrap();
+        assert!((figures.budget_ms - 1000.0 / 60.0).abs() < 1e-9);
+        assert_eq!(figures.over_budget, over, "late {late}");
+        assert_eq!(figures.verdict(), Verdict::MostlySmooth, "late {late}");
+        assert!(run.json().contains("\"budget_from\": \"target_fps\""));
+    }
+}
+
+/// `slow` of 1000 raced frames at `slow_ms`, the rest at `ms`, on a screen of `hz`.
+fn on_screen(hz: f64, ms: f64, slow: usize, slow_ms: f64) -> Report {
+    let mut run = report(
+        std::iter::repeat_n(100_000.0, COUNTDOWN_FRAMES)
+            .chain(std::iter::repeat_n(ms * 1000.0, 1000 - slow))
+            .chain(std::iter::repeat_n(slow_ms * 1000.0, slow)),
+    );
+    run.context.refresh = (hz, "display");
+    run
+}
+
+#[test]
+fn with_no_target_and_no_limit_a_120_hz_screen_is_the_budget() {
+    let figures = on_screen(120.0, 8.3, 100, 16.6).figures().unwrap();
+    assert!((figures.budget_ms - 1000.0 / 120.0).abs() < 1e-9);
+    assert_eq!(figures.over_budget, 100);
+    assert_eq!(figures.verdict(), Verdict::Choppy);
+}
+
+#[test]
+fn a_vsynced_60_hz_run_allows_jitter_and_counts_the_missed_refreshes() {
+    // Vsync paces the loop itself, so no frame limit is in force: frames land around 16.67 ms
+    // and a missed refresh takes two.
+    let run = on_screen(60.0, 16.9, 8, 33.3);
+    let figures = run.figures().unwrap();
+    assert_eq!(run.context.budget().from, BudgetFrom::Refresh);
+    assert_eq!(figures.over_budget, 8);
+    assert_eq!(figures.verdict(), Verdict::Smooth);
+}
+
+#[test]
+fn the_budget_is_the_longest_period_the_player_or_the_screen_sets() {
+    use BudgetFrom::{FrameLimit, Refresh, TargetFps};
+    for (target, limit, refresh, hz, from) in [
+        (None, None, (120.0, "display"), 120.0, Refresh),
+        (Some(60.0), None, (120.0, "display"), 60.0, TargetFps),
+        (Some(60.0), Some(30.0), (120.0, "display"), 30.0, FrameLimit),
+        (Some(144.0), None, (60.0, "display"), 60.0, Refresh),
+        (None, Some(240.0), (120.0, "display"), 120.0, Refresh),
+        (Some(60.0), Some(60.0), (60.0, "display"), 60.0, TargetFps),
+        (None, Some(60.0), (60.0, "display"), 60.0, FrameLimit),
+        (Some(120.0), None, (60.0, "assumed"), 60.0, Refresh),
+        (Some(30.0), None, (60.0, "assumed"), 30.0, TargetFps),
+    ] {
+        let mut context = context();
+        context.target_fps_hz = target;
+        context.frame_limit_hz = limit;
+        context.refresh = refresh;
+        assert_eq!(
+            context.budget(),
+            Budget { hz, from },
+            "target {target:?}, limit {limit:?}, refresh {refresh:?}"
+        );
+    }
 }

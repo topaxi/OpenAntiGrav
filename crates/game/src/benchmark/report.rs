@@ -14,10 +14,42 @@ use super::plan::COUNTDOWN_TICKS;
 use super::recorder::{Ending, Frame};
 use super::stats::{Summary, json_string, low_fps, summarise};
 
-/// A frame is over the refresh budget when it took more than this many times the budget. A
-/// vsynced loop lands within a few percent of the budget on every frame, so the literal budget
-/// would count half of them.
+/// A frame is over the frame budget ([`Context::budget`]) when it took more than this many times
+/// the budget. A loop held by vsync, the frame limit or dynamic resolution lands within a few
+/// percent of the period on every frame, so the literal period would count half of them.
 pub const OVER_BUDGET_SLACK: f64 = 1.05;
+
+/// What set the frame budget a run is judged against.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BudgetFrom {
+    /// TARGET FPS.
+    TargetFps,
+    /// FRAME LIMIT.
+    FrameLimit,
+    /// The screen's refresh rate, reported, measured or assumed.
+    Refresh,
+}
+
+impl BudgetFrom {
+    /// The name the result file uses.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::TargetFps => "target_fps",
+            Self::FrameLimit => "frame_limit",
+            Self::Refresh => "refresh",
+        }
+    }
+}
+
+/// The frame rate a run is judged against.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Budget {
+    /// Frames a second.
+    pub hz: f64,
+    /// Which setting, or the screen, set it.
+    pub from: BudgetFrom,
+}
 
 /// The adapter, as the offscreen bench's result file names it.
 #[must_use]
@@ -95,10 +127,13 @@ pub struct Context {
     pub track_name: Option<String>,
     /// The build's version string.
     pub build_version: &'static str,
-    /// The refresh rate the budget is read against, and what it came from.
+    /// The screen's refresh rate, and what it came from.
     pub refresh: (f64, &'static str),
     /// The rate the frame limiter holds the loop to, where one is in force.
     pub frame_limit_hz: Option<f64>,
+    /// The rate TARGET FPS names: `None` where it is off, or `original`, which names none of its
+    /// own and paces at the limit or the screen.
+    pub target_fps_hz: Option<f64>,
     /// The preset the run drew with; `None` is the player's own settings.
     pub preset: Option<String>,
     /// The mods that loaded with the run; `None` is a run without any.
@@ -123,6 +158,31 @@ pub struct Context {
     pub people: u8,
     /// The tick the race would have been stopped at.
     pub tick_cap: u32,
+}
+
+impl Context {
+    /// The frame budget the player asked for: the longest period (lowest rate) of TARGET FPS,
+    /// the frame limit and the screen's refresh. A setting that is off or unlimited names no
+    /// period, so the screen alone judges a run with neither. A screen whose rate is only
+    /// assumed still counts: judging a browser held to a 60 Hz screen against a higher target
+    /// would call every frame late. Equal rates are named in that order.
+    #[must_use]
+    pub fn budget(&self) -> Budget {
+        let screen = Budget {
+            hz: self.refresh.0,
+            from: BudgetFrom::Refresh,
+        };
+        [
+            (self.target_fps_hz, BudgetFrom::TargetFps),
+            (self.frame_limit_hz, BudgetFrom::FrameLimit),
+        ]
+        .into_iter()
+        .filter_map(|(hz, from)| hz.map(|hz| Budget { hz, from }))
+        .chain([screen])
+        // The first of equal rates.
+        .min_by(|a, b| a.hz.total_cmp(&b.hz))
+        .unwrap_or(screen)
+    }
 }
 
 /// The numbers of one run.
@@ -156,19 +216,19 @@ pub struct Figures {
     pub p99_ms: f64,
     /// The slowest frame, milliseconds.
     pub worst_ms: f64,
-    /// Frames over the refresh budget (see [`OVER_BUDGET_SLACK`]).
+    /// Frames over the frame budget (see [`OVER_BUDGET_SLACK`]).
     pub over_budget: usize,
-    /// The refresh budget, milliseconds.
+    /// The frame budget, milliseconds (see [`Context::budget`]).
     pub budget_ms: f64,
     /// The frame limit, when the average sits on it: the figure is then the limiter's, not
     /// the machine's.
     pub limited_by: Option<f64>,
 }
 
-/// How a run reads to a player, from the share of counted frames that missed one screen refresh.
+/// How a run reads to a player, from the share of counted frames that missed the frame budget.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Verdict {
-    /// At most [`SMOOTH_SHARE`] of the frames missed a refresh.
+    /// At most [`SMOOTH_SHARE`] of the frames missed it.
     Smooth,
     /// At most [`MOSTLY_SMOOTH_SHARE`] did.
     MostlySmooth,
@@ -176,10 +236,12 @@ pub enum Verdict {
     Choppy,
 }
 
-/// The largest share of missed refreshes a SMOOTH run has: 1 %.
+/// The largest share of late frames a SMOOTH run has: 1 %, at 60 FPS one late frame every 1.7
+/// seconds.
 pub const SMOOTH_SHARE: f64 = 0.01;
 
-/// The largest share a MOSTLY SMOOTH run has: 5 %.
+/// The largest share a MOSTLY SMOOTH run has: 5 %, at 60 FPS three a second, past which a
+/// player sees a stutter as the rule rather than the exception.
 pub const MOSTLY_SMOOTH_SHARE: f64 = 0.05;
 
 /// Counted frames below which the 0.1 % low is only the worst frame.
@@ -189,7 +251,7 @@ pub const LOW_01_FRAMES: usize = 1000;
 const LIMITER_BINDS: f64 = 0.9;
 
 impl Figures {
-    /// The share of counted frames that took longer than one screen refresh.
+    /// The share of counted frames that missed the frame budget.
     #[must_use]
     pub fn stutter_share(&self) -> f64 {
         self.over_budget as f64 / self.counted.max(1) as f64
@@ -232,7 +294,7 @@ impl Report {
     pub fn figures(&self) -> Option<Figures> {
         let counted = self.counted();
         let summary = summarise(&counted)?;
-        let budget_us = 1e6 / self.context.refresh.0;
+        let budget_us = 1e6 / self.context.budget().hz;
         let average_fps = 1e6 / summary.mean;
         Some(Figures {
             counted: summary.count,
@@ -348,13 +410,14 @@ impl Report {
             put(
                 "in_game",
                 format!(
-                    "{{\"average_fps\": {:.2}, \"low_1pct_fps\": {:.2}, \"low_0_1pct_fps\": {}, \"frames_over_budget\": {}, \"budget_ms\": {:.3}, \"refresh_hz\": {:.2}, \"refresh_source\": {}, \"frame_limit_hz\": {}, \"limiter_binds\": {}, \"device\": {}, \"driver\": {}}}",
+                    "{{\"average_fps\": {:.2}, \"low_1pct_fps\": {:.2}, \"low_0_1pct_fps\": {}, \"frames_over_budget\": {}, \"budget_ms\": {:.3}, \"budget_from\": {}, \"refresh_hz\": {:.2}, \"refresh_source\": {}, \"frame_limit_hz\": {}, \"limiter_binds\": {}, \"device\": {}, \"driver\": {}}}",
                     f.average_fps,
                     f.low_1,
                     f.low_01
                         .map_or_else(|| "null".to_string(), |low| format!("{low:.2}")),
                     f.over_budget,
                     f.budget_ms,
+                    json_string(c.budget().from.name()),
                     c.refresh.0,
                     json_string(c.refresh.1),
                     c.frame_limit_hz

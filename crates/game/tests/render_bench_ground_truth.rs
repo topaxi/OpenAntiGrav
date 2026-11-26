@@ -233,7 +233,15 @@ fn the_in_game_benchmark_flies_the_race_the_offscreen_bench_does() {
     };
     let base = std::env::temp_dir().join("oag-in-game-benchmark-ground-truth");
     let (offscreen, _) = bench(&base.join("offscreen"), &image);
-    let (json, shot) = in_game(&base.join("in-game"), &image, &[], "ticks 1");
+    // A frame limit under vsync on, where the display paces and the limit is not in force.
+    let flags = ["--benchmark-vsync", "on", "--benchmark-frame-limit", "30"];
+    let (json, shot) = in_game(&base.join("in-game"), &image, &flags, "ticks 1");
+    assert!(json.contains("\"frame_limit\": \"30\""), "{json}");
+    assert!(
+        json.contains("\"frame_limit_hz\": null"),
+        "no limit judges a vsynced run: {json}"
+    );
+    assert_eq!(field(&json, "budget_from"), "refresh");
 
     assert_eq!(field(&json, "final_tick"), TICKS.to_string());
     assert_eq!(field(&json, "finished"), "false");
@@ -756,7 +764,9 @@ fn the_options_page_reaches_the_run_and_saves_nothing() {
     // are not.
     run(
         "boot; select options; press cross; until page=options; select DISPLAY; press cross; \
-         until page=display; set display.vsync=off; set display.frame_limit=240; quit",
+         until page=display; set display.vsync=off; set display.frame_limit=240; press circle; \
+         until page=options; select GRAPHICS; press cross; until page=graphics; \
+         set graphics.target_fps=30; quit",
         &mods,
     );
     let settings = dir.join("config/oag/settings.toml");
@@ -789,6 +799,11 @@ fn the_options_page_reaches_the_run_and_saves_nothing() {
     assert!(
         json.contains("\"frame_limit\": \"120\""),
         "FRAME LIMIT: {json}"
+    );
+    // The player's TARGET FPS of 30 is the longest period here, longer than the run's limit.
+    assert!(
+        json.contains("\"budget_ms\": 33.333, \"budget_from\": \"target_fps\""),
+        "TARGET FPS: {json}"
     );
     assert!(json.contains("\"preset\": \"low\""), "PRESET: {json}");
     assert!(json.contains("\"render_scale\": \"50%\""), "PRESET: {json}");
