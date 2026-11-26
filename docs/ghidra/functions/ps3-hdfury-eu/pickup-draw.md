@@ -59,10 +59,9 @@ at `WeaponManager + offset` with the state it writes to slot `+0x208`, and the o
 Each odds block holds four columns `0x10` apart (`ai`, `human`, `front`, `back`), four classes
 each. `+0x518` onwards holds the columns' sums over **all thirteen weapons**, mask or no mask.
 
-`+0x7c` and `+0x80` are two managers `WeaponManager_Construct` never builds: every path of both its
-copies ends by storing `0` to both (`0x0012c924`/`0x0012c928`, `0x0012d3f0`/`0x0012d3f4`, confidence
-88, `+0x80` read null live; lane `hd-open-air-arms`'s page, "HD builds no Shuriken"). The mask is
-what keeps the draw from calling through them.
+`+0x7c` and `+0x80` are the two managers `WeaponManager_Construct` never builds: it stores `0` to
+both ([open-air-arms.md](open-air-arms.md), "HD builds no Shuriken"). The mask is what keeps the
+draw from calling through them.
 
 ### Who writes the masks
 
@@ -146,8 +145,8 @@ the Cannon while `*(TOC-0x30d8)` is 2 or more. What those three counts are is **
 
 - **2048: checked, applies, not wired.** The 1.04 executable carries the same weapons screen
   strings, eleven `WeaponsScreenParent->` weapon rows with none for the Repulser or the Shuriken,
-  and its code references neither `ShurikenManager.cpp` nor `RepulserManager.cpp` (a census,
-  confidence 55). Its draw and mask defaults are not read.
+  and [open-air-arms.md](open-air-arms.md) finds no code reference to either manager. Its draw and
+  mask defaults are not read.
 - **Omega: checked, applies, not wired.** The 1.07 executable carries the same eleven rows, and its
   HD-named Eliminator table's first four classes equal `DATA00`'s
   ([weapon-stats.md](../../../formats/weapon-stats.md)). Its draw and mask are not read.

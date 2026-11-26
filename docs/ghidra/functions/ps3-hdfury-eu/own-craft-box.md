@@ -112,7 +112,8 @@ probe (they start 5.5 ahead of the centre, the box ends at 4.875); their first s
 Plasma and the Missile the first probe from the release rides, so no title-wide window is needed.
 
 **Probe lengths, live:** Rocket (`0x001249dc`), Plasma (`0x0011fd80`) and Missile (`0x0011d3a4`) all
-`6.0` on every call. The Shuriken's was not measured.
+`6.0` on every call. The Shuriken's cannot be measured: HD builds no Shuriken
+([open-air-arms.md](open-air-arms.md)); its dead update casts `12.0`.
 
 Records (boot 1, 3 decimals, Talon's Junction grid; start and end are in world space, the rows are the
 collider's, the centre its position):
@@ -149,8 +150,7 @@ later either. The rocket moves to `from + v * dt` (the sweep's end equals the pr
 - The Plasma wired here still falls along its carried normal (Pulse's arm), where its static read is
   world Y.
 - The Plasma's `0x7f` arm is a fall on world Y, static only ([plasma.md](plasma.md)); no box answered
-  a Plasma probe. The Missile's `0x7f` arm (`0x11e440`) and the Shuriken's are unread.
-- The probe length of the Shuriken.
+  a Plasma probe. The Missile's and Shuriken's arms are on [open-air-arms.md](open-air-arms.md).
 - Not wired: HD re-pins the Rocket to class speed through `0.2777` (222.16 units/s on Venom) where
   `oag_weapons` divides by `3.6` (222.22).
 - An opponent's box, and the travel sweep's own box meeting (the sweeps `0x124448` and `0x1202d8`

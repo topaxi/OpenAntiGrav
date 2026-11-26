@@ -1268,6 +1268,12 @@
 0x0002d6a8	function	WeaponStats_ParseMissile	75	rocket-craft-blast.md
 0x00146470	function	Plasma_PushNearbyCraft	80	rocket-craft-blast.md
 0x00142258	function	Missile_PushNearbyCraft	75	rocket-craft-blast.md
+# 2026-11-26 hd-open-air-arms: the Missile's open-air arm; HD builds no ShurikenManager (open-air-arms.md)
+0x0011d288	function	Missile_Update	90	open-air-arms.md
+0x001592c0	function	Shuriken_Update	75	open-air-arms.md
+0x0014cbb0	function	ShurikenManager_Fire	75	open-air-arms.md
+0x0014cdf8	function	ShurikenManager_Construct	80	open-air-arms.md
+# 2026-11-26 hd-weapon-roster: the two pickup draws and the weapon mask (pickup-draw.md)
 0x00014658	function	GameState_IsWeaponEnabled	85	pickup-draw.md
 0x00012938	function	GameState_SetWeaponEnabled	85	pickup-draw.md
 0x00012868	function	GameState_SetWeaponMask	70	pickup-draw.md

@@ -6,6 +6,9 @@
         --log-dir <dir> --weapon plasma --fires 5
     python3 scripts/rpcs3-hd-own-box.py replay <dir>/*.json
 
+`--weapon missile --lift 40` raises each new missile that far at its first update, so its probe
+finds open air (`docs/ghidra/functions/ps3-hdfury-eu/open-air-arms.md`, "Measured live").
+
 `capture` starts the race (if it is still on `START RACE`), leaves the craft parked, gives it a weapon,
 presses fire and logs every call of `Collision_SweepSegment` (`0x0007be58`) whose segment starts near
 the player: the segment, the caller, every box-test call the march makes (`0x00036cac`) with the
@@ -128,6 +131,12 @@ class Reader:
 #: (position `+0xd0`, velocity `+0xe0`) are kept at each call.
 ROCKET_RETURNS = (0x001249E0, 0x00124448)
 ROCKET_BYTES = 0x180
+#: `Missile_Update`'s probe and travel sweep sites: r28 holds the missile (position `+0xa0`,
+#: velocity `+0xb0`, previous position `+0xc0`, carried normal `+0xd0`).
+MISSILE_RETURNS = (0x0011D3A8, 0x0011D4C0)
+#: An instruction in `Missile_Update`'s prologue, r3 still the missile: where `--lift` moves it
+#: into open air.
+AT_MISSILE_UPDATE = 0x0011D29C
 
 
 def one_call(read, tid, regs, pose):
@@ -143,10 +152,11 @@ def one_call(read, tid, regs, pose):
         "body": pose,
         "boxes": [],
     }
-    if call["caller"] in ROCKET_RETURNS:
-        rocket = read.gpr(regs, 25)
-        call["rocket"] = rocket
-        call["object"] = gdb.read(rocket, ROCKET_BYTES).hex()
+    for sites, register in ((ROCKET_RETURNS, 25), (MISSILE_RETURNS, 28)):
+        if call["caller"] in sites:
+            held = read.gpr(regs, register)
+            call["rocket"] = held
+            call["object"] = gdb.read(held, ROCKET_BYTES).hex()
     for address in INNER:
         gdb.add_breakpoint(address)
     read.step_over(tid, AT_MARCH)
@@ -233,11 +243,25 @@ def capture(args):
                 held = time.time()
                 started = time.time()
                 last_near = None
+                lifted = set()
+                if args.lift:
+                    gdb.add_breakpoint(AT_MISSILE_UPDATE)
                 while time.time() - started < args.timeout:
                     if held and time.time() - held > args.hold:
                         session.pad.set("triangle", False)
                         held = 0
-                    found = read.run_to((AT_MARCH,), 2.0)
+                    found = read.run_to((AT_MARCH,) + ((AT_MISSILE_UPDATE,) if args.lift else ()), 2.0)
+                    if found is not None and found[2] == AT_MISSILE_UPDATE:
+                        tid, regs, _ = found
+                        missile = read.gpr(regs, 3)
+                        if missile not in lifted:
+                            lifted.add(missile)
+                            x, y, z = read.floats(missile + 0xA0, 3)
+                            gdb.write(missile + 0xA0, struct.pack(">3f", x, y + args.lift, z))
+                            record.setdefault("lifted", []).append({"missile": missile, "from": [x, y, z], "by": args.lift})
+                            print("fire %d: lifted missile %#x from y %.2f by %.1f" % (number, missile, y, args.lift), flush=True)
+                        read.step_over(tid, AT_MISSILE_UPDATE)
+                        continue
                     if found is None:
                         if last_near and time.time() - last_near > args.quiet:
                             break
@@ -253,6 +277,8 @@ def capture(args):
                     call = one_call(read, tid, regs, here)
                     call["clock_s"] = read.floats(ship + clock, 1)[0]
                     record["calls"].append(call)
+                    # Written per call: a stub that stops answering must not lose the fire.
+                    (out / ("%s.json" % args.weapon)).write_text(json.dumps(fires + [record], indent=1))
                     last_near = time.time()
                     boxed = [b for b in call["boxes"] if answered_by_box(b)]
                     print("fire %d call %2d from %#x len %.2f ret %#x kind %d boxes %d (%d answered) dist %.2f" % (
@@ -264,6 +290,8 @@ def capture(args):
                 session.pad.set("triangle", False)
                 gdb.pause()
                 gdb.remove_breakpoint(AT_MARCH)
+                if args.lift:
+                    gdb.remove_breakpoint(AT_MISSILE_UPDATE)
                 fires.append(record)
                 (out / ("%s.json" % args.weapon)).write_text(json.dumps(fires, indent=1))
                 print("fire %d: %d calls, craft speed %.2f" % (number, len(record["calls"]), math.hypot(*record["pose_at_press"]["vel"])), flush=True)
@@ -305,6 +333,35 @@ def replay(args):
     return 1 if wrong else 0
 
 
+def fall(args):
+    """The Missile's velocity at its sweep against four laws for the probe that found nothing
+    (`docs/ghidra/functions/ps3-hdfury-eu/open-air-arms.md`, "Measured live")."""
+    vector = lambda call, at: list(struct.unpack_from(">3f", bytes.fromhex(call["object"]), at))
+    errors = {}
+    for path in args.captures:
+        for fire in json.load(open(path)):
+            for probe, sweep in zip(fire["calls"], fire["calls"][1:]):
+                if (probe["caller"], sweep["caller"]) != MISSILE_RETURNS or probe["returned"] != 0x7F:
+                    continue
+                before, after = vector(probe, 0xB0), vector(sweep, 0xB0)
+                normal = vector(probe, 0xD0)
+                speed = math.hypot(*before)
+                dt = math.dist(sweep["start"], sweep["end"]) / speed
+                into = sum(v * n for v, n in zip(before, normal))
+                along = [v - into * n for v, n in zip(before, normal)]
+                laws = {
+                    "fall on world Y": [before[0], before[1] - 50.0 * dt, before[2]],
+                    "fall along the normal": [v - 50.0 * dt * n for v, n in zip(before, normal)],
+                    "unchanged": before,
+                    "parallel turn": [v / math.hypot(*along) * speed for v in along],
+                }
+                for name, predicted in laws.items():
+                    errors.setdefault(name, []).append(math.dist(after, predicted))
+    for name, found in errors.items():
+        print("%-22s %d updates, error %.6f to %.6f" % (name, len(found), min(found), max(found)))
+    return 0 if errors else 1
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     commands = parser.add_subparsers(dest="command", required=True)
@@ -319,15 +376,20 @@ def main():
     c.add_argument("--quiet", type=float, default=15.0, help="wall seconds without a near call that end a fire")
     c.add_argument("--between", type=float, default=8.0)
     c.add_argument("--place", help="a capture whose first fire's pose the craft is put back to before each fire")
+    c.add_argument("--lift", type=float, default=0.0, help="raise each new missile this many units before its first update")
     c.add_argument("--settle", type=float, default=4.0, help="wall seconds the placed craft runs before the fire")
     r = commands.add_parser("replay")
     r.add_argument("captures", nargs="+")
     r.add_argument("--frame", choices=("cols", "rows"), default="cols")
     r.add_argument("-v", action="store_true")
+    f = commands.add_parser("fall")
+    f.add_argument("captures", nargs="+")
     args = parser.parse_args()
     if args.command == "capture":
         capture(args)
         return 0
+    if args.command == "fall":
+        return fall(args)
     return replay(args)
 
 

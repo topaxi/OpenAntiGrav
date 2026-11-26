@@ -314,8 +314,9 @@ pub const TITLE: &Title = &Title {
         own_craft_box_hides_track: oag_title::pre_race::Sourced::measured(
             oag_title::weapons::OwnCraftBox::Falls,
         ),
-        // Measured live on RPCS3: Rocket, Missile and Plasma `6.0`, the Shuriken unmeasured
-        // (`ps3-hdfury-eu/own-craft-box.md`, "Measured live").
+        // Measured live on RPCS3: Rocket, Missile and Plasma `6.0`
+        // (`ps3-hdfury-eu/own-craft-box.md`, "Measured live"). The Shuriken's `12.0` is a static
+        // read of an update that never runs (`ps3-hdfury-eu/open-air-arms.md`).
         surface_probe_lengths: oag_title::pre_race::Sourced::measured(
             oag_title::weapons::ProbeLengths::HD,
         ),
