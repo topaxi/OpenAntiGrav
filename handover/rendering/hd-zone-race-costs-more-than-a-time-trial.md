@@ -44,9 +44,24 @@ Measurements, the cause and the landed part:
 
 ## Next Steps
 
-0. Open, not scheduled (the maintainer keeps the Deck docked): the undocked clock park. Recipe:
-   [dynamic-resolution.md](../../docs/rendering/dynamic-resolution.md), "Open: the undocked clock
-   park".
+0. Open, not scheduled (the maintainer keeps the Deck docked): the undocked clock park. About
+   8 minutes, Deck undocked and on AC. Build "no probe" from main and "probe" from
+   `drs-probe-parked` with main merged in (touch the differing files if the two share a target
+   directory). Run each under `~/oag-perf/deck-run.sh`, order probe, no probe, no probe, probe,
+   on a copy of the player's settings with `pause_on_focus_loss = false`:
+
+   ```sh
+   [ "$(cat /sys/class/drm/card0-DP-3/status)" = disconnected ] || exit 3
+   [ "$(cat /sys/class/drm/card0/device/power_dpm_force_performance_level)" = auto ] || exit 3
+   RUST_LOG=info,oag_game::app::session::timing=trace \
+   gamescope --backend headless -W 3840 -H 2160 -w 3840 -h 2160 -r 60 -- \
+     oag-game <hd iso> --race --no-intro --autopilot --frame-log --mode zone \
+     --track /data/environments/04_chenghou_project/track.vex --script 70:quit
+   ```
+
+   Stamp each stderr line with `$EPOCHREALTIME`, and beside it sample at 20 Hz what
+   [dynamic-resolution.md](../../docs/rendering/dynamic-resolution.md) lists under "Method"; what to
+   read from the parked samples is under "Open: the undocked clock park" there.
 1. Maintainer's call first: is a higher resolution worth 3 to 6 W on a Deck? If yes, measure how
    long the Deck's governor takes to raise the clock after a step up (a DRS-off run alternating a
    light and a heavy size, sampling `freq1_input`), then design the probe as an ADR and measure it
