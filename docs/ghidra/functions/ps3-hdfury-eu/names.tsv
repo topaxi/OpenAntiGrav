@@ -1254,9 +1254,14 @@
 0x0014a7d8	function	Rocket_SpawnCraftBlast	80	rocket-craft-blast.md
 0x00283b40	function	Psys_SetInheritedVelocity	82	rocket-craft-blast.md
 0x0027c288	function	Psys_FindInstanceByHandle	80	rocket-craft-blast.md
-0x00149f70	function	Rocket_PushNearbyCraft	60	rocket-craft-blast.md
+0x00149f70	function	Rocket_PushNearbyCraft	82	rocket-craft-blast.md
 0x00287168	function	Psys_PrepareInstance	62	rocket-craft-blast.md
 0x0028bb18	function	Psys_InitTemplateParticle	55	rocket-craft-blast.md
 0x00068160	function	SPDetonator_Update	80	detonator-endrace.md
 0x000630c8	function	SPDetonator_UpdateFinish	80	detonator-endrace.md
 0x0018bdf0	function	Block_CreateStaticArrow	75	menu-blocks.md
+0x000d8a28	function	Ship_ApplyPendingImpulse	80	rocket-craft-blast.md
+0x0002d9f8	function	WeaponStats_ParseRocket	85	rocket-craft-blast.md
+0x0002d6a8	function	WeaponStats_ParseMissile	75	rocket-craft-blast.md
+0x00146470	function	Plasma_PushNearbyCraft	80	rocket-craft-blast.md
+0x00142258	function	Missile_PushNearbyCraft	75	rocket-craft-blast.md

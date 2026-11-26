@@ -528,6 +528,11 @@ impl Drawable {
         })
     }
 
+    /// Whether this is our own shield's shell or cockpit sphere (`Model::own_shield`).
+    pub(super) fn is_own_shield(&self) -> bool {
+        self.model.own_shield
+    }
+
     /// The bytes of vertex data this drawable's model holds.
     #[cfg(test)]
     pub(super) fn model_vertex_bytes(&self) -> usize {

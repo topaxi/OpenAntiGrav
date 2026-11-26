@@ -1,8 +1,8 @@
 ---
 status: measure
 titles: [hd]
-updated: 2026-11-01
-summary: "HD exhaust: talons-pack trail whiter and wider than the original's; confirm live what sets craft+0xfc; engine-trail.md lists the rest"
+updated: 2026-11-26
+summary: "HD exhaust: read the flame rim eye the console is handed (ours is the origin); talons-pack trail whiter and wider; craft+0xfc"
 ---
 
 # HD's exhaust is measured from the running game now: the trail is a 54-sample three-fin tube, the flame breathes with the throttle, and the plume scales rather than blinks
@@ -11,7 +11,11 @@ summary: "HD exhaust: talons-pack trail whiter and wider than the original's; co
 
 ## Open (trimmed 2026-09-04 - three of the four original items are settled, not just narrowed)
 
-- **2026-11-01 (`hd-zone-exhaust`): the Zone flame was baked at the team hull's `EF_Main` origin, now the Zone directory's.** See hd-ship-materials.md, "The Zone flame hangs on the Zone hull". Still open: a pose-matched RPCS3 Zone pair (no Zone race state exists; `zone-moa-therma-hd-early` is a results screen), Zone's trail origin at speed, and the HD Zone wreck (the engine light, shield shell and absorb shell now read the Zone directory, `hd-ship-materials.md` "The rest of the Zone livery").
+- **2026-11-26 (`own-shield-camera`): the flame rim's eye is the world origin, and supplying it makes the rest flame
+  worse.** The one-line fix (`fog.camera = eye` in `flame_scene`, commit `0c86ed0ed`, reverted) brightens ours away
+  from the original on every HD rest-flame pair, so something else in the flame is wrong too. Next: read the vertex
+  program, `c[209]` and the `c256-c258` matrix of a live flame draw (RPCS3), then re-apply. Numbers on
+  engine-flare.md, "Our rim's eye".
 `engine-trail.md` kept moving after this file's 2026-08-24 snapshot and was
 never folded back; its later sessions already close three of the four items
 below. Do not requote this file - `engine-trail.md`'s "Open, in rough order

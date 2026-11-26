@@ -42,10 +42,13 @@ pub(crate) enum SceneKind {
     /// The planar reflection target's primary-fog group: the circuit's scene with the sun
     /// colour and the prelit scale doubled (`scene::behind_glass::reflected_scene`).
     Reflection,
+    /// Our own shield's shell and cockpit sphere (`own_shield.wesl`): the flame surfaces'
+    /// block with the view's eye in it, which the shader's rim, facet and silhouette read.
+    OwnShield,
 }
 
 impl SceneKind {
-    const COUNT: usize = 6;
+    const COUNT: usize = 7;
 
     fn index(self) -> u64 {
         self as u64
