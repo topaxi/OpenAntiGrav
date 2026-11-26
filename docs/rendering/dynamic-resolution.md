@@ -1145,8 +1145,22 @@ overlap (after 8 and 15, before 23 and 13), and across all five "after" runs, th
 included (15, 22 and 21 lines against 9, 14 and 13), no probe began after the 8 dropped lines. A
 loop at the power limit seldom holds the 4 s of quiet a probe waits for.
 
-Not covered: the same time trial undocked, and Zone's park with throttle bits and the profile
-sampled, which needs the Deck undocked.
+Not covered: the same time trial undocked.
+
+### Open: the undocked clock park
+
+**What parks an undocked Deck at 1040 MHz is not answered.** The question above is answered for a
+docked Deck only; the maintainer kept it docked. Recipe for a later undocked pass, about 8 minutes:
+
+1. Deck undocked and on AC: `/sys/class/drm/card0-DP-3/status` reads `disconnected` and
+   `power_dpm_force_performance_level` reads `auto`. Check both before each run and stop if not.
+2. Four 70 s runs of the command in ["How it was run"](#how-it-was-run) at 3840x2160, `-r 60`,
+   `--mode zone`, on a copy of the player's settings, in the order probe, no probe, no probe, probe.
+3. Beside each run, sample at 20 Hz everything listed under ["Method"](#method).
+4. In the samples whose current GPU clock is 600 to 1100 MHz, read: the `FPPT`/`SPPT`/thermal
+   throttle bits (any set would name a limit and end the demand-governor hypothesis), socket power
+   against `power1_cap`, the starred row of `pp_power_profile_mode` if any, the temperature, and the
+   share of the frame period the timed passes fill.
 
 ## On the Steam Deck: TARGET FPS `original` against the budget loop
 

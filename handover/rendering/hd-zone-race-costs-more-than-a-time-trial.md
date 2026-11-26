@@ -21,7 +21,7 @@ Measurements, the cause and the landed part:
   "What a rise rule that survives this needs". TARGET FPS `original` (HD's width throttle) also
   steps on a GPU duration: unmeasured on the Deck under a falling clock. The race pass's
   +1.60 ms at 4K is the answered part, and it is faithful.
-- **What parks the undocked Deck at 1040 MHz is still not named.** Not power (about 8 W of 15) and
+- **What parks the undocked Deck at 1040 MHz is still not named** (answered docked only). Not power (about 8 W of 15) and
   not CPU; the demand governor is a hypothesis (45). Docked, the park does not happen: the clock sits at
   or near its ceiling and the 15 W package limit trims the dips
   ([dynamic-resolution.md](../../docs/rendering/dynamic-resolution.md), "On the Steam Deck: what
@@ -44,9 +44,9 @@ Measurements, the cause and the landed part:
 
 ## Next Steps
 
-0. Deck undocked, on AC: Zone at 3840x2160 four times (before, after) with the sampler of that
-   section, refusing to run if `DP-3` reads connected. It settles the profile, throttle bits and
-   thermal state during the park.
+0. Open, not scheduled (the maintainer keeps the Deck docked): the undocked clock park. Recipe:
+   [dynamic-resolution.md](../../docs/rendering/dynamic-resolution.md), "Open: the undocked clock
+   park".
 1. Maintainer's call first: is a higher resolution worth 3 to 6 W on a Deck? If yes, measure how
    long the Deck's governor takes to raise the clock after a step up (a DRS-off run alternating a
    light and a heavy size, sampling `freq1_input`), then design the probe as an ADR and measure it
