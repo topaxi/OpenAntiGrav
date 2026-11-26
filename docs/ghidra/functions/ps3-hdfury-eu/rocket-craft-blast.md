@@ -210,18 +210,29 @@ template at 2.0 x depth (HD measured; 2048 and Omega inherited, below). Tests:
 `near::tests::a_template_is_capped_by_the_laws_template_cap`, and the disc check
 `check_hd_craft_blast_templates` in `pob_ground_truth.rs`.
 
-Pairs (`compare_env.overlap_score` RMSE x 255, same tree, HD's templates off and on, two
-renders each, identical): 0.1 s 119.7 to **118.0**, 0.233 s 126.2 to **125.2**.
+Pairs (`compare_env.overlap_score` RMSE x 255, same tree, HD's templates off and on): 0.1 s
+119.7 to **118.0**, 0.233 s 126.2 to **125.2**.
 
 **A template takes nothing from the rest of its effect.** Played first as one more emitter, the
 templates moved the 0.233 s pair to 140.0. With the templates listed but muted it stayed at
-126.2, so the change came from their particles being born. Those particles took draws from the
+126.2, so the change came from their particles being born, not from their look. Those particles took draws from the
 instance's shared random stream, which moved every later particle of the blast, and slots from
 a full 256-particle pool, which changed which smoke survived. The original allocates a
 template's particle on its own (`0x00287560`, `0xa0` bytes) outside the emitter pool. Ours now
-keeps eight template slots beside the 256 and seeds each template's draws from its instance and
-emitter (`oag_fx::psys`, `MAX_TEMPLATE_PARTICLES`). With room for the three alone (a 259-slot
-pool) the pair was 125.4, and with both changes 125.2.
+keeps eight template slots beside the 256 (`oag_fx::psys`, `MAX_TEMPLATE_PARTICLES`), and a
+tick's templates draw from one copy of the shared stream, so each template keeps the values it
+drew before and every other particle lands where it would without templates.
+
+| Arm (two renders each, identical) | 0.1 s | 0.233 s |
+| --- | --- | --- |
+| templates off | 119.7 | 126.2 |
+| listed, muted | 119.7 | 126.2 |
+| on, shared stream and pool | 117.8 | 140.0 |
+| on, shared stream, template reserve | 116.2 | 138.5 |
+| on, stream copy and template reserve (wired) | 118.0 | 125.2 |
+
+The 0.233 s pair swings by 14 with the arrangement of the blast alone, so a pair this close to the
+original's white frame measures our random arrangement as much as the wash.
 
 ### The other titles
 
