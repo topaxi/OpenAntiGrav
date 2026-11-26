@@ -237,7 +237,8 @@ pub struct Report {
     /// Of those and the glow-less twin, the materials whose specular term is weighted by their
     /// `SpecularTexture` (bound third) and whose picture is `alpha_emissive`.
     pub alpha_emissive_specular_maps: usize,
-    /// `2048_shipshield_old` shells that draw their Lightning layer (`psp2::shield_lightning`).
+    /// `2048_shipshield_old` and `hd_shipshield_old` shells that draw their Lightning layer
+    /// (`psp2::shield_lightning`).
     pub shield_lightning_materials: usize,
     /// Of that family, shells left to the diffuse alone: no picture, weight or program rates.
     pub shield_lightning_unread: usize,

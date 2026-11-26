@@ -13,7 +13,7 @@ import package::omega_snow::{OmegaSnow, omega_snow, omega_snow_normal};
 import package::own_shield::{own_shield, own_shield_shading};
 import package::panel::{panel_march};
 import package::pad::{pad_normal};
-import oag_shaders::target::{decode, encode, encoded_out, linear_out, target_in};
+import oag_shaders::target::{decode, encode, encoded_out, linear_out, square_decode, target_in};
 import package::shading_modes::{colour_is_light, light_rig, lit_by_rig, nova_prelit, nova_vertices, rig_specular, simplified_lighting, tangents_present, zone_race};
 import package::shadow::{receives_shadow, sun_occlusion};
 import package::water::{enhanced_water, reflective_sea_weight, water_kind, water_normal, water_specular_colour, water_tap_uv};
@@ -903,16 +903,19 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
             a < vec3<f32>(0.5),
         );
     }
-    // **Omega's `2048_shipshield_old` shell** (`Emissive::program` mode 11,
-    // `oag_mesh::mesh::rcs::psp2::shield_lightning`), read off its pixel program:
+    // **The 2048 lineage's shield shells, and HD's** (`Emissive::program` mode 11,
+    // `oag_mesh::mesh::rcs::psp2::shield_lightning` and `oag_mesh::mesh::rcs::shield_scroll`),
+    // read off their pixel programs:
     //
     //     colour    = ShieldColour * diffuse(u + A time, v)
     //     noise     = lightning(u2, B v2 + C time).a
     //     lightning = M * lightning(uv2 + time + noise).rgb
     //
-    // the lightning third, `M`, `A`, `C` and `B` the entry's tint `x`, `y`, `z` and offset. The
-    // diffuse's alpha stays the unscrolled tap's, and the lightning is added after the shell's
-    // `ShieldColour` multiply below, as the program does not tint it.
+    // the lightning third, `M`, `A`, `C` and `B` the entry's tint `x`, `y`, `z` and offset. HD's
+    // shell has no lightning (`M` is zero), only the scrolled colour tap. The diffuse's alpha
+    // stays the unscrolled tap's, and the lightning is added after the shell's `ShieldColour`
+    // multiply below, as the program does not tint it. The Vita's program squares the
+    // lightning tap, its gamma-2 scene's decode; Omega's takes it as the sampler gives it.
     var shield_lightning = vec3<f32>(0.0);
     let lightning_entry = (in.slots >> 24u) & 63u;
     if lightning_entry != 0u && program_in(row_scale.z, 11u, 11u) {
@@ -922,7 +925,8 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
         picture = vec4<f32>(scrolled.rgb, picture.a);
         let uv2 = in.lightmap_texcoord.zw;
         let noise = material_sample(MATERIAL_PAD_MASK, vec2<f32>(uv2.x, row.w * uv2.y + row.z * clock_now)).a;
-        shield_lightning = row.x * material_sample(MATERIAL_PAD_MASK, uv2 + vec2<f32>(clock_now + noise)).rgb;
+        let bolt = material_sample(MATERIAL_PAD_MASK, uv2 + vec2<f32>(clock_now + noise)).rgb;
+        shield_lightning = row.x * mix(bolt, bolt * bolt, square_decode * linear_out);
     }
     // **HD's Zone-mode light cells** (`slots::MAG_WAVE` with the glow entry's rate 3,
     // `oag_mesh::mesh::rcs::damage_lights`): the picture gains a scrolling flash,
