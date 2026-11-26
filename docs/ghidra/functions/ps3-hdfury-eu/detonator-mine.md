@@ -442,6 +442,39 @@ two systems (looked up by the CRC-32 of their names) and, for a live mine, takes
 `record+0xc4` (the record at `instance+0x90`), then `FUN_016e03a0` (the tree copy, not opened). Same law; not wired, as
 Omega answers no mine trigger yet.
 
+## Carrying the destroyed mine (2026-11-26, `det-mine-ribbon`)
+
+**Why the pair lost it.** `rpcs3-hd-pair.py` carried only the armed mines (`flags & 9 == 9`). The mine the
+`cannon-volley` round hit (cv1 grab, `ship.mines[1]`, `0x306da430`, entry 34, lane 2, position
+`217.595, -44.266, -192.347`) reads `flags` `1` at the pause: the hit sets `0x80`, `BaseMine_Update` turns that into
+`4` and drops `8`, and `MineManager_Update`'s compaction clears `0x8c` (above), so it has left the pool by the pause.
+A mine gone long before reads the same `1`. What tells them apart is the age (`+0xc0`): this one's advanced through the
+shot's own mine reads (`52.40 s` at lap clock 0.233 s) and stopped at `54.2836 s` from lap 2.217 s on, while the 79
+armed mines read `54.82 s` at the 2.65 s pause. So it left the pool about 0.5 s before the pause, at the round's hit.
+Without it ours' replayed round hits nothing: no blast, and the score reads 0 where the original's reads 100.
+
+**Rule** (`compare_env.detonator_pair_mines`, used by `mine_flags`): carry the armed mines, plus any `flags & 1` mine whose
+age at the pause is above its age in the shot's first mine read. Its envelope and age are the picture-time read's,
+like the others' (`0.3313, 0.6430, 8.5001`, age `54.2836`, frozen since the hit). Of the other Detonator grabs
+(`hot2`, `shots6`, `gC`) none holds a non-armed mine, so only `cannon-volley` changes.
+
+**Measured** (ours re-rendered on scratch copies of the pairs, the same binary twice, byte-identical):
+
+| `cannon-volley` | mean grey |
+| --- | ---: |
+| published, the destroyed mine not carried | 10.80 |
+| **the destroyed mine carried (adopted)** | **10.53** |
+| carried, `Trail_Ribbon` muted (diagnostic) | 10.22 |
+| carried, `Trail_Ribbon` and the root glows muted (diagnostic) | 10.23 |
+
+The other five Detonator pairs read the same before and after (`-hot` 7.70, `endrace-norecord` 8.88, `endrace-record`
+8.38, `mines-ahead` 9.68, `pad` 4.44). With the mine carried ours shows the blast and `0000100`, as the original does.
+The ribbon is still worth 0.31, but even a perfect ribbon leaves the pair above 10. Its segment law stays open ("The
+ribbon, open" above).
+
+**2048 and Omega: not checkable.** This is a capture input of the HD RPCS3 pair script; neither title has a Detonator
+pair with mine objects read from memory.
+
 ## Live and dark mines
 
 - `DetonatorMine_Place` (`0x00139da0`, vtable `+0x44`, reached through `BaseMine_PlaceAt`
