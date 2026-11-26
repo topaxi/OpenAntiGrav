@@ -453,3 +453,4 @@
 0x81206928	function	Rocket_SpawnCraftBlast	80	../ps3-hdfury-eu/rocket-craft-blast.md
 0x812aa644	function	Psys_SetInheritedVelocity	80	../ps3-hdfury-eu/rocket-craft-blast.md
 
+0x811e8650	function	EMP_DrawLights	85	../ps3-hdfury-eu/detonator-emp.md

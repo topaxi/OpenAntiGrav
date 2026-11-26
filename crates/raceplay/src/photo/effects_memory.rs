@@ -72,7 +72,7 @@ sort_fields! {
         trail_sparks, campaign_event, score_pass, medal_targets, shield_was_up, huds, pair_spoil,
         split_gap, incoming_raises, nozzles, nozzle_axes, engine_lights, spu_vertex_lights,
         hull_points, hd_weapon_lights, spark_anchors, collision_fx, effects, handles,
-        hd_bomb_blast, bomb_shockwave_fades, hd_missile_blast, detonator_cannon_lights,
+        hd_bomb_blast, bomb_shockwave_fades, hd_missile_blast, detonator_cannon_lights, detonator_emp_light,
         detonator_ammo_gauge, ammo_gauge_shown, ammo_gauge_speed, detonator_hull_charge,
         hull_charge_shown, sounds, track_emitters, announcer,
         class_announcer, rumble, boost_kick, boost_fov_kick, flaps, grid_flaps, flap_phase,

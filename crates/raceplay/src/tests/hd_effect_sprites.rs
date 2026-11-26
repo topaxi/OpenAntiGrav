@@ -43,16 +43,29 @@ fn only_hd_lists_effects_whose_gtf_sprites_play() {
     }
 }
 
-/// Only HD and Pure lift the extent law: both for the Quake's wave, the one effect a
-/// matched capture of the original has shown spreading across the road on each (Pure's
-/// `Quake_Update`, `psp-pure-usa/quake.md`), and HD for the Detonator EMP's wave, its blue
+/// The extent law is lifted per effect. HD and Pure lift it for the Quake's wave, the one effect
+/// a matched capture of the original has shown spreading across the road on each (Pure's
+/// `Quake_Update`, `psp-pure-usa/quake.md`); HD also for the Detonator EMP's wave, its blue
 /// recolour (`ps3-hdfury-eu/detonator-emp.md`, "What HD draws for a fired EMP"), and the
-/// Plasma blast's two lightning effects besides (`ps3-hdfury-eu/plasma.md`, "The pairs").
+/// Plasma blast's two lightning effects (`ps3-hdfury-eu/plasma.md`, "The pairs"). 2048 and Omega
+/// list the EMP's wave alone, as HD's does (`detonator-emp.md`, "2048 and Omega draw it").
 #[test]
-fn only_hd_and_pure_lift_the_extent_law_and_only_for_the_quake_and_hds_plasma_blast() {
+fn the_extent_law_is_lifted_only_for_the_effects_each_title_lists() {
     use oag_title::engine_effects as n;
-    for title in [oag_pulse::TITLE, oag_2048::TITLE, oag_omega::TITLE] {
-        assert!(title.effects.extents.is_empty(), "{}", title.name);
+    assert!(oag_pulse::TITLE.effects.extents.is_empty());
+    for title in [oag_2048::TITLE, oag_omega::TITLE] {
+        assert_eq!(
+            title.effects.extents,
+            [n::DETONATOR_EMP_EFFECT],
+            "{}",
+            title.name
+        );
+        assert_eq!(
+            title.effects.turbulence,
+            [n::DETONATOR_EMP_EFFECT],
+            "{}",
+            title.name
+        );
     }
     assert_eq!(oag_pure::TITLE.effects.extents, [n::QUAKE_EFFECT]);
     assert_eq!(
@@ -64,7 +77,12 @@ fn only_hd_and_pure_lift_the_extent_law_and_only_for_the_quake_and_hds_plasma_bl
             n::PLASMA_LIGHTNING_COLLAPSE_EFFECT,
         ]
     );
-    for title in [oag_hd::TITLE, oag_pure::TITLE] {
+    for title in [
+        oag_hd::TITLE,
+        oag_pure::TITLE,
+        oag_2048::TITLE,
+        oag_omega::TITLE,
+    ] {
         let names = title.effects.names();
         for listed in title.effects.extents {
             assert!(names.contains(listed), "{listed} is loaded by the race");
@@ -243,9 +261,9 @@ fn trail_hit_burst(listed: bool) -> Option<oag_fx::psys::Effect> {
     Some(effect)
 }
 
-/// HD, 2048 and Omega list the trail-hit burst and the Detonator wall spark's three streaks
-/// for HD's class-6 bar draw, and HD the EMP's sparks and the Plasma's five effects, whose
-/// lightning is that class; a per-effect choice, not a title-wide one.
+/// HD, 2048 and Omega list the trail-hit burst, the Detonator wall spark's three streaks and the
+/// EMP's sparks for HD's class-6 bar draw, and HD the Plasma's five effects, whose lightning is
+/// that class; a per-effect choice, not a title-wide one.
 #[test]
 fn hd_2048_and_omega_list_the_trail_hit_burst_for_the_far_bar_draw_and_hd_its_plasma() {
     use oag_title::engine_effects as n;
@@ -256,6 +274,7 @@ fn hd_2048_and_omega_list_the_trail_hit_burst_for_the_far_bar_draw_and_hd_its_pl
                 n::TRAIL_HITSHIP_EFFECT,
                 n::TRAIL_HITSHIP_RED_EFFECT,
                 n::DETONATOR_CANNON_SPARKS_EFFECT,
+                n::DETONATOR_EMP_EFFECT,
             ],
             "{}",
             title.name
