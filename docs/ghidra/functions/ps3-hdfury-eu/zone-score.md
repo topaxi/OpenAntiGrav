@@ -46,6 +46,11 @@ the `HUD` face's `3` (`oag_hud::TemplateDigit`) and `oag_ui::font::cells_ink_wid
 pens rounded up). Tests: `crates/hud/src/zone_score/tests.rs` and, on the disc,
 `crates/raceplay/tests/hd_hud_ground_truth.rs::a_zone_race_draws_the_ladder_and_numbers_it_from_the_current_zone`.
 
+**Split screen.** `splitscreenzone_hud/zone_hud.xml` authors the same left-aligned `Score` (`OffsetX="1550"`). Ours does
+not load it: a split Zone race draws the whole-screen `zone_hud.xml` into each view
+(`oag_raceplay::hud`'s `split_assets`), where the move applies as in a single view. Whoever wires the split Zone layout
+must leave its `Score` authored if the two flag bytes turn out to be the split-view flags (unread).
+
 ## Other titles
 
 **Omega: ported** (confidence 80). The same law sits in the HUD update holding `0x01265b2d`
