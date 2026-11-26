@@ -9,6 +9,14 @@ use oag_title::{Origin, Trigger};
 const ONE_TO_FOUR: NearLaw = NearLaw {
     cull_depth: 1.0,
     fade_depth: 4.0,
+    template_cap: None,
+};
+
+/// HD's law: its sprite templates are capped at twice their depth
+/// (`docs/ghidra/functions/ps3-hdfury-eu/rocket-craft-blast.md`, "The screen wash").
+const HD_LAW: NearLaw = NearLaw {
+    template_cap: Some(2.0),
+    ..ONE_TO_FOUR
 };
 
 /// HD's, 2048's and Omega's builders run it, each read in its own executable; Pulse's and
@@ -24,6 +32,18 @@ fn only_hd_2048_and_omega_run_the_near_law() {
             title.name
         );
         assert_eq!(law.origin, Origin::Measured, "{}", title.name);
+    }
+    assert_eq!(
+        oag_hd::TITLE.effects.near_law.unwrap().template_cap,
+        Some(2.0)
+    );
+    for title in [oag_2048::TITLE, oag_omega::TITLE] {
+        assert_eq!(
+            title.effects.near_law.unwrap().template_cap,
+            None,
+            "{}",
+            title.name
+        );
     }
     for title in [oag_pulse::TITLE, oag_pure::TITLE] {
         assert!(title.effects.near_law.is_none(), "{}", title.name);
@@ -86,7 +106,7 @@ fn hds_craft_blast_near_the_camera_is_capped_by_its_depth() {
         .get(Trigger::CraftBlast)
         .cloned()
         .expect("HD loads its craft blast");
-    assert_eq!(blast.near, Some(ONE_TO_FOUR));
+    assert_eq!(blast.near, Some(HD_LAW));
     assert_eq!(blast.emitters[0].near_cap, Some(0.5));
 
     let frame = race.view.camera_frame(&race.core);
@@ -138,6 +158,31 @@ fn hds_craft_blast_near_the_camera_is_capped_by_its_depth() {
             "a quad past its cap: {reach} at {depth}"
         );
     }
+}
+
+/// HD's craft blast plays its root templates, the original's screen wash: `glow_longer` on the
+/// root and a `Glow` each on `FIRE_TRAILS_ONEQUAD` and `MOLTEN_DEBRIS`, each emitting its one
+/// particle and under the template cap
+/// (`docs/ghidra/functions/ps3-hdfury-eu/rocket-craft-blast.md`, "The screen wash").
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn hds_craft_blast_plays_the_screen_wash_templates() {
+    let Some(race) = race_on("data/images/hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let blast = race
+        .view
+        .handles
+        .get(Trigger::CraftBlast)
+        .expect("HD loads its craft blast");
+    let playing: Vec<&str> = blast
+        .emitters
+        .iter()
+        .filter(|spec| spec.template && spec.per_emission != (0, 0))
+        .map(|spec| spec.name.as_str())
+        .collect();
+    assert_eq!(playing, ["glow_longer", "Glow", "Glow"]);
+    assert_eq!(blast.near.and_then(|law| law.template_cap), Some(2.0));
 }
 
 /// The same on 2048's and Omega's own loads: their craft blast carries the law and an authored

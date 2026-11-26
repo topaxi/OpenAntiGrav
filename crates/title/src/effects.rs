@@ -471,6 +471,9 @@ pub struct NearLaw {
     pub cull_depth: f32,
     /// Nearer than this, faded.
     pub fade_depth: f32,
+    /// The half size of a sprite template's quad is at most `depth` times this; `None` draws
+    /// templates uncapped. A template record has no cap field of its own.
+    pub template_cap: Option<f32>,
     /// Where this came from.
     pub origin: Origin,
 }
@@ -482,8 +485,16 @@ impl NearLaw {
         Self {
             cull_depth: 1.0,
             fade_depth: 4.0,
+            template_cap: None,
             origin,
         }
+    }
+
+    /// The same law with sprite templates capped at `cap` times their depth.
+    #[must_use]
+    pub const fn with_template_cap(mut self, cap: f32) -> Self {
+        self.template_cap = Some(cap);
+        self
     }
 }
 

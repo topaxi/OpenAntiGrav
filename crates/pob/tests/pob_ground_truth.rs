@@ -555,6 +555,7 @@ fn every_hd_particle_system_walks_the_same_way_byte_swapped() {
         );
     }
     check_hd_near_caps(&blobs);
+    check_hd_craft_blast_templates(&blobs);
 
     mixed.sort();
     mixed.dedup();
@@ -577,6 +578,47 @@ fn every_hd_particle_system_walks_the_same_way_byte_swapped() {
         fourth.iter().all(|e| e.starts_with("WO_NITRO_SHIP_DEATH/")),
         "blend class 4 escaped WO_NITRO_SHIP_DEATH: {fourth:?}"
     );
+}
+
+/// The Rocket's craft blast carries two sprite templates, and their colour tables are the colours
+/// the original's full-screen wash quads were filmed in: `glow_longer` on the root walks
+/// `(255, 245, 105)` to `(255, 240, 99)`, the yellow of the wash, and `Glow` starts white, the hit
+/// frame's flash (`docs/ghidra/functions/ps3-hdfury-eu/rocket-craft-blast.md`, "The screen wash").
+fn check_hd_craft_blast_templates(blobs: &[(usize, Vec<u8>)]) {
+    let mut found = Vec::new();
+    for (_, blob) in blobs {
+        let system = ParticleSystem::parse(blob).expect("parse");
+        if system.name != "WO_ROCKET_EXPLO" {
+            continue;
+        }
+        for emitter in system.emitters(blob).expect("emitters") {
+            for template in emitter.initial_particles {
+                found.push((emitter.name.clone(), template));
+            }
+        }
+    }
+    let names: Vec<_> = found
+        .iter()
+        .map(|(parent, template)| (parent.as_str(), template.name.as_str()))
+        .collect();
+    assert_eq!(
+        names,
+        [
+            ("WO_ROCKET_EXPLO", "glow_longer"),
+            ("FIRE_TRAILS_ONEQUAD", "Glow"),
+            ("MOLTEN_DEBRIS", "Glow"),
+        ]
+    );
+    let glow_longer = &found[0].1;
+    assert_eq!(glow_longer.lifetime_ticks, (30, 0));
+    assert_eq!((glow_longer.render_mode, glow_longer.blend_class), (2, 2));
+    assert_eq!((glow_longer.size.lo, glow_longer.size.hi), (0.0, 40.0));
+    assert_eq!(glow_longer.colours[0], [255, 245, 105, 255]);
+    assert_eq!(glow_longer.colours[16], [255, 240, 99, 255]);
+    let glow = &found[1].1;
+    assert_eq!(glow.lifetime_ticks, (3, 0));
+    assert_eq!(glow.size.hi, 100.0);
+    assert_eq!(glow.colours[0], [255, 255, 255, 255]);
 }
 
 /// The near size cap, `+0xc80`, which HD's billboard builder reads

@@ -149,7 +149,9 @@ pub const EFFECTS: &Effects = &{
     effects.turbulence = TURBULENCE;
     // The `PartRender` SPU job, image `0x0080bb80`;
     // `docs/ghidra/functions/ps3-hdfury-eu/particle-render.md`.
-    effects.near_law = Some(NearLaw::one_to_four(Origin::Measured));
+    // The template cap is measured on the Rocket's craft blast, where it is read is not:
+    // `docs/ghidra/functions/ps3-hdfury-eu/rocket-craft-blast.md`, "The screen wash".
+    effects.near_law = Some(NearLaw::one_to_four(Origin::Measured).with_template_cap(2.0));
     // `Rocket_SpawnCraftBlast` (`0x0014a7d8`), `0x0014a970`-`0x0014a98c`;
     // `docs/ghidra/functions/ps3-hdfury-eu/rocket-craft-blast.md`.
     effects.craft_blast_carry = Some(Origin::Measured);
@@ -184,10 +186,14 @@ const FAR_BARS: &[&str] = &[
 /// The effects whose sprite templates play: the Plasma head's ring and glow and the
 /// wind-up's glow. The release's `FLASH` and the blast's `START_FLASH` stay muted: with
 /// them on the frame whites out for their few ticks where the original's does not, and
-/// why is unread (same page).
+/// why is unread (same page). The Rocket's craft blast: its root's `glow_longer` is the
+/// yellow screen wash and `FIRE_TRAILS_ONEQUAD`'s `Glow` the white flash of the hit, both
+/// removed from the original's frame by zeroing their gate
+/// (`docs/ghidra/functions/ps3-hdfury-eu/rocket-craft-blast.md`, "The screen wash").
 const TEMPLATES: &[&str] = &[
     engine_effects::PLASMA_FLARE_EFFECT,
     engine_effects::PLASMA_CHARGING_EFFECT,
+    engine_effects::CRAFT_BLAST_EFFECT,
 ];
 
 /// The effects whose `.gtf` sprites HD plays: the Detonator cannon's wall spark, whose five
