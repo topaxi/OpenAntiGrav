@@ -403,8 +403,8 @@ fn a_forced_rocket_hit_plays_the_craft_blast_with_its_sprites() {
     assert_eq!(race.view.stage.alive_of_effect(&blast), 0, "no blast yet");
     assert_eq!(
         blast.emitters.len(),
-        12,
-        "WO_ROCKET_EXPLO's twelve emitters"
+        15,
+        "WO_ROCKET_EXPLO's twelve emitters and its three root templates"
     );
     for spec in &blast.emitters {
         assert!(spec.sprite.is_some(), "{} has no sprite", spec.name);

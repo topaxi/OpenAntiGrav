@@ -334,8 +334,9 @@ fn a_missile_in_flight_draws_its_two_heads() {
     );
 }
 
-/// Bright pixels the forced blast adds at the least, of 522,240. Measured: 25,243
-/// with the flag, 6,669 without.
+/// Pixels of 522,240 the forced hit changes at the least. The volley left to fly strikes a craft
+/// of its own, whose blast's `glow_longer` washes the top of the frame, so brightness alone does
+/// not tell the two apart.
 const FORCED_BLAST_PIXELS: usize = 10_000;
 
 /// Talon's Junction, the player firing one volley of Rockets, with or without
@@ -376,16 +377,25 @@ fn rocket_frame(forced: bool) -> Option<Vec<[u8; 3]>> {
     Some(frame)
 }
 
-/// The flag lands the hit at its tick: 0.1 s later the craft blast fills a part
-/// of the frame that the same volley, left to fly, does not.
+/// The flag lands the hit at its tick: 0.1 s later the frame differs from the same volley left
+/// to fly by the forced blast.
 #[test]
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso and a GPU adapter"]
 fn force_rocket_hit_blows_a_rocket_on_the_named_craft_at_its_tick() {
-    let forced = count(&rocket_frame(true).expect("image"), bright);
-    let free = count(&rocket_frame(false).expect("image"), bright);
-    println!("bright pixels at tick 296: forced {forced}, left to fly {free}");
+    let forced = rocket_frame(true).expect("image");
+    let free = rocket_frame(false).expect("image");
+    let changed = forced
+        .iter()
+        .zip(&free)
+        .filter(|(a, b)| a.iter().zip(b.iter()).any(|(x, y)| x.abs_diff(*y) > 64))
+        .count();
+    println!(
+        "at tick 296: {changed} pixels changed; bright forced {}, left to fly {}",
+        count(&forced, bright),
+        count(&free, bright)
+    );
     assert!(
-        forced > free + FORCED_BLAST_PIXELS,
-        "no blast from the forced hit: {forced} against {free}"
+        changed > FORCED_BLAST_PIXELS,
+        "no blast from the forced hit: {changed} pixels changed"
     );
 }
