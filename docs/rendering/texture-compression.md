@@ -105,7 +105,38 @@ and the thread logs `astc: encoded N texture(s) into DIR in T s` each time its q
 
 ## Measured on the Galaxy S21
 
-Not yet measured with the real encode. The earlier diagnostic arm (ASTC 4x4 void-extent blocks of the right size and rate) read frame -1.1 to -1.8 ms and process GPU memory 2.62-2.66 to 1.50-1.59 GB on HD Vineta K (`docs/tools/android.md`, "HD's textures as ASTC").
+2026-11-26 (`astc-optin`), release `dist` APK (`OAG_APK_DEV_CLI=1 OAG_APK_PROFILEABLE=1 just apk
+--arm64-only`), HD Vineta K forward, render scale 25, REFLECTION RESOLUTION `auto`, `--race
+--autopilot --seed 1 --no-audio --no-intro --frame-log`, every run started at AP 33.0 C, medians of
+racing seconds 15 to 140 (the `docs/tools/android.md` protocol), process GPU memory from Perfetto's
+`android.gpu.memory`. Separate runs in the order listed:
+
+| Run | Frame ms | p99 ms | Scene GPU ms | GPU memory (process) |
+| --- | ---: | ---: | ---: | ---: |
+| `original` 1 | 27.25 | 41.2 | 7.37 | 2.64 GB |
+| `astc`, cold cache | 29.91 | 45.1 | 8.32 | 2.55 GB |
+| `astc`, 97 of 819 uploads still missing | 29.39 | 42.9 | 7.05 | 1.61 GB |
+| `original` 2 | 31.42 | 48.8 | 8.67 | 2.66 GB |
+| `astc`, full cache | 28.22 | 40.4 | 6.90 | 1.61 GB |
+| `original` 3 | 30.28 | 44.2 | 8.39 | 2.61 GB |
+| `astc`, full cache | 28.29 | 40.5 | 6.84 | 1.59 GB |
+
+- **GPU memory: 2.61-2.66 GB to 1.59-1.61 GB, about 1.0 GB less**, every run; 202 MiB of ASTC entries
+  replace the RGBA8 of 819 uploads (414 distinct textures).
+- **Scene pass: 6.8-6.9 ms against 7.4-8.7 ms; p99 40.4-40.5 ms against 41.2-48.8 ms.**
+- **Frame: 28.2-28.3 ms against 27.3-31.4 ms** (median of the three `original` runs 30.3): about 2 ms
+  faster against the median, but the first `original` run was faster than either `astc` one, so the
+  frame gain is within this phone's run-to-run spread and is not claimed beyond "no slower".
+- **While the cache fills, the frame is slower** (29.9 ms on the cold run): the encoder thread takes
+  one big core. The first race on Vineta K wrote 365 entries before the run was stopped at 200 s; the
+  second wrote the last 49 in 29.3 s. So a circuit takes about one race of background encoding, and
+  every later race finds it whole. 414 entries take 108 MB of the phone's storage.
+- **The picture**, read off mid-race captures at the phone's own size: no blocking, banding or colour
+  shift visible on the track, the dome's lattice, the craft or the HUD (the offline numbers above
+  are the measured loss).
+
+**APK size.** astcenc adds 220 symbols, 162 KB, to the 30.5 MB `.text` of `liboag_android.so`, and
+the APK now carries the NDK's `libc++_shared.so` (1.8 MB, about 0.6 MB compressed).
 
 ## Known limits
 
