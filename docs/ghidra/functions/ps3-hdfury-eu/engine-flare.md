@@ -272,8 +272,10 @@ the flame's `alpha`, is measured from the wrong point. The same defect was fixed
 shield ([own-shield.md](../../../rendering/own-shield.md)).
 
 Size, measured with a temporary change that wrote the view's eye into the flame block (not committed): HD,
-`--give shield --hold cross --press square`, `960x544`, 392 pixels differ at tick 400 and 166 at tick 600, at most 39
-of 255 on a channel. Two frames of one run at low speed; a boost frame, where the plume is largest, was not measured.
+`--hold cross` with no shield up, `960x544`, 438 pixels differ at tick 400 (at most 39 of 255 on a channel) and 138 at
+tick 600 (at most 32). The block also feeds the disc shield shells and cockpit spheres, which these frames do not
+show; whether any of their programs reads the eye was not measured. Two frames of one run; a boost frame, where the
+plume is largest, was not measured.
 Confidence 95 that our eye is the origin (code read, and the measured difference), none on how much it matters against
 the original: no comparison pair was re-rendered. Not wired. 2048 and Omega: checked, differs. Their flares take
 `oag_livery::flare`'s `psp2_flare`, which sets no `Flame`, so they are shaded without the rim and the eye does not
