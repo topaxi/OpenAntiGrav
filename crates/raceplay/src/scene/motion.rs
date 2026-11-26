@@ -298,6 +298,7 @@ pub(super) fn velocity_texture(
             | wgpu::TextureUsages::TEXTURE_BINDING
             | readable_in_tests(),
         view_formats: &[],
+        texture_binding_view_dimension: None,
     })
 }
 

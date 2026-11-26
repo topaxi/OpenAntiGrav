@@ -562,6 +562,7 @@ impl PhotoFx {
                     usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                         | wgpu::TextureUsages::TEXTURE_BINDING,
                     view_formats: &[],
+                    texture_binding_view_dimension: None,
                 })
                 .create_view(&wgpu::TextureViewDescriptor::default())
         };

@@ -12,7 +12,7 @@ wgpu.workspace = true
 pollster.workspace = true
 # `shader_file::validate`: see that module for why not `wgpu::naga`. The same version and
 # feature `oag-shader-check` pins.
-naga = { version = "30.0.1", default-features = false, features = ["wgsl-in"] }
+naga = { workspace = true, features = ["wgsl-in"] }
 bytemuck = { workspace = true, features = ["derive"] }
 
 [features]

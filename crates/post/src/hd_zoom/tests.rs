@@ -223,6 +223,7 @@ fn resolve(frames: &[Option<Frame>]) -> Option<(u8, u8)> {
         format,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let view = output.create_view(&Default::default());
     let readback = device.create_buffer(&wgpu::BufferDescriptor {

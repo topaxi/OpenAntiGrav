@@ -499,6 +499,7 @@ fn draw_built(
             format: mesh_render::COVERAGE_FORMAT,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
         queue.write_texture(
             texture.as_image_copy(),
@@ -570,6 +571,7 @@ fn draw_built(
             format,
             usage,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         })
     };
     let colour = make(

@@ -83,11 +83,12 @@ impl Frame {
     }
 
     /// Finishes `encoder` and submits every buffer split off this frame before it, in order.
+    /// `None` when the submission never reached the driver (a lost device), as `Queue::submit`.
     pub fn submit(
         self,
         queue: &wgpu::Queue,
         encoder: wgpu::CommandEncoder,
-    ) -> wgpu::SubmissionIndex {
+    ) -> Option<wgpu::SubmissionIndex> {
         let closed = OPEN
             .with(|open| open.borrow_mut().take())
             .unwrap_or_default();
@@ -111,7 +112,10 @@ impl Drop for Frame {
 /// For a caller that submits part of a frame ahead of [`Frame::submit`] (a split screen's view,
 /// whose post work reads the picture its own scene pass drew): the split-off passes go out
 /// first, or `last` would run ahead of the passes it follows. The frame stays open.
-pub fn submit_with_closed(queue: &wgpu::Queue, last: wgpu::CommandBuffer) -> wgpu::SubmissionIndex {
+pub fn submit_with_closed(
+    queue: &wgpu::Queue,
+    last: wgpu::CommandBuffer,
+) -> Option<wgpu::SubmissionIndex> {
     let closed = OPEN
         .with(|open| open.borrow_mut().as_mut().map(std::mem::take))
         .unwrap_or_default();

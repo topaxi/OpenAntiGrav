@@ -197,6 +197,7 @@ fn the_chain_draws_the_law_on_a_real_device() {
         format,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let out_view = out.create_view(&Default::default());
     // Blue is dark enough that the scanout's sRGB encode and a 2.2 power part by
@@ -324,6 +325,7 @@ fn the_composite_moves_the_scene_sample_by_the_offset_texture() {
         format: oag_gpu::formats::DISTORTION_FORMAT,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     upload(&offsets, &|_| [half(0x3c00), half(0)].concat(), 4);
     let offsets_view = offsets.create_view(&Default::default());
@@ -338,6 +340,7 @@ fn the_composite_moves_the_scene_sample_by_the_offset_texture() {
             format,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
         let out_view = out.create_view(&Default::default());
         let mut encoder = device.create_command_encoder(&Default::default());
@@ -453,6 +456,7 @@ fn the_chain_draws_the_composite_after_the_curve() {
         format,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let out_view = out.create_view(&Default::default());
     let colour = [0.5_f32, 0.25, 0.3];

@@ -904,6 +904,7 @@ impl Output {
                     | wgpu::TextureUsages::COPY_SRC
                     | wgpu::TextureUsages::TEXTURE_BINDING,
                 view_formats: &[],
+                texture_binding_view_dimension: None,
             }));
             return;
         };

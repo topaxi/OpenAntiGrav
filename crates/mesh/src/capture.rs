@@ -200,6 +200,7 @@ fn capture_pixels(
         format,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let depth = device.create_texture(&wgpu::TextureDescriptor {
         label: Some("depth"),
@@ -210,6 +211,7 @@ fn capture_pixels(
         format: DEPTH_FORMAT,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
 
     let Built {

@@ -171,6 +171,7 @@ fn time_a_cleared_pass(adapter: &wgpu::Adapter, name: &str, timing: Timing) {
         format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let view = target.create_view(&Default::default());
 

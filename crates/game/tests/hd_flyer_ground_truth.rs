@@ -575,6 +575,7 @@ impl Frame {
             format: oag_game::render::SCENE_LAYER_FORMAT,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
         Some(Self {
             device,

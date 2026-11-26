@@ -145,6 +145,7 @@ fn frame_pixels(gpu: &Gpu, chain: &Chain, colour: [f32; 3]) -> (Vec<u8>, f32) {
         format: FORMAT,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let out_view = out.create_view(&Default::default());
     let mut encoder = gpu.device.create_command_encoder(&Default::default());
@@ -446,6 +447,7 @@ fn the_readback_is_the_mean_of_every_fourth_gate_byte() {
         format: FORMAT,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let out_view = out.create_view(&Default::default());
     let mut encoder = gpu.device.create_command_encoder(&Default::default());

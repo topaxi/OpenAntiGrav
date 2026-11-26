@@ -108,6 +108,7 @@ impl Formats {
                     | wgpu::TextureUsages::TEXTURE_BINDING
                     | wgpu::TextureUsages::COPY_SRC,
                 view_formats: &[],
+                texture_binding_view_dimension: None,
             });
         }
         // And the driver compiling a shader that stores to all three: a texture that can be

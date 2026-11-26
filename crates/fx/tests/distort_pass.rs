@@ -120,6 +120,7 @@ fn draw(gpu: &Gpu, quads: &[Quad], occluder: f32) -> Vec<[f32; 2]> {
         format: DEPTH_FORMAT,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let depth_view = depth.create_view(&Default::default());
     let mut encoder = device.create_command_encoder(&Default::default());

@@ -548,6 +548,7 @@ impl Map {
                 | wgpu::TextureUsages::TEXTURE_BINDING
                 | wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
 
@@ -657,6 +658,7 @@ impl Map {
                 | wgpu::TextureUsages::TEXTURE_BINDING
                 | wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
         let depth_view = depth.create_view(&wgpu::TextureViewDescriptor {
             dimension: Some(wgpu::TextureViewDimension::D2Array),

@@ -98,6 +98,7 @@ impl Maps {
                 | wgpu::TextureUsages::TEXTURE_BINDING
                 | wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
         let array_view = texture.create_view(&wgpu::TextureViewDescriptor {
             label: Some("self shadow maps"),

@@ -354,6 +354,7 @@ impl Cards {
                 format,
                 usage,
                 view_formats: &[],
+                texture_binding_view_dimension: None,
             })
         };
         let target = |label: &str, format, usage| {
@@ -384,6 +385,7 @@ impl Cards {
                     format: FORMAT,
                     usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
                     view_formats: &[],
+                    texture_binding_view_dimension: None,
                 })
                 .create_view(&wgpu::TextureViewDescriptor::default())
         });

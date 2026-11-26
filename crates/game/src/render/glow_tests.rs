@@ -43,6 +43,7 @@ fn frame_pass(
         format,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let view = target.create_view(&Default::default());
     let row = (W * 4).next_multiple_of(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT);

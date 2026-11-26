@@ -112,6 +112,7 @@ fn stored(device: &wgpu::Device, queue: &wgpu::Queue, grey: u8) -> f32 {
             format,
             usage,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         })
     };
     let colour = target(

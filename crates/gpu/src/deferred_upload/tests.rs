@@ -96,6 +96,7 @@ fn a_texture_lands_in_row_bands() {
         format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let _scope = Scope::open(&queue);
     let level = Level {

@@ -56,6 +56,7 @@ fn flares_over_black(
             format,
             usage,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         })
     };
     // One depth view for every draw: a reused pipeline keeps its bind group while the view

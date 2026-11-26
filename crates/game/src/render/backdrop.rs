@@ -740,6 +740,7 @@ impl FuryBackdrop {
                     | wgpu::TextureUsages::COPY_SRC
                     | wgpu::TextureUsages::COPY_DST,
                 view_formats: &[READ_FORMAT],
+                texture_binding_view_dimension: None,
             });
             let read = texture.create_view(&wgpu::TextureViewDescriptor {
                 format: Some(READ_FORMAT),
@@ -880,6 +881,7 @@ fn upload_sprite(device: &wgpu::Device, queue: &wgpu::Queue) -> wgpu::TextureVie
         format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     for mip in 0..SPRITE_MIPS {
         let size = SPRITE_SIZE >> mip;
