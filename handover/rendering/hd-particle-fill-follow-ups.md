@@ -45,8 +45,9 @@ blast the struck craft's velocity, on HD, 2048 and Omega
 ### Owed measurements
 
 - **The Deck is measured** (`docs/rendering/particle-fill.md`, "On the Steam Deck"): the craft
-  hit's worst frame at 3840x2160 went from 108.5 to 63.9 ms, still far over 16.7. Open there:
-  - the track-wall blasts at ticks 726 and 756 (78 and 75 ms), which no change reached;
+  hit's worst frame at 3840x2160 went from 108.5 to 63.5 ms (`d66a52ae6`), still far over 16.7.
+  Open there:
+  - the blasts at ticks 726 and 756 (79 and 75 ms), which no change reached;
   - tick 784, now 51 ms against 43 before the blast carry and sprites ("What fills tick 784" below);
   - the fragment `discard` of "Measured and dropped", not run on the Deck.
 - **About 1.7 ms of a hit frame at 1080p that is not fill.** With and without the law, ticks 770

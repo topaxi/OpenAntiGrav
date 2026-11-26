@@ -775,7 +775,11 @@ on the same circuit holds 100 %.
 
 **Verdict: true in direction at 3840x2160, not seen at 1280x800 or 1920x1080.** At 4K, with the
 reporter's own settings, Zone settles at about 0.80 (stepping to 0.75) and a time trial at about
-0.93, not 1.00.
+0.93, not 1.00. The pass that grows is the race pass, which is mostly faithful. Why the settle is
+so much deeper than that cost is a hypothesis, not a finding.
+
+Checked again at `d66a52ae6`, two 4K paced runs each: Zone 0.83 and 0.84, time trial 0.93 and
+0.95 (second half of each run).
 
 ### How it was run
 
@@ -838,9 +842,10 @@ Zone surface, which is mostly faithful ([hd-zone-recolour.md](hd-zone-recolour.m
 race costs"). What the controller manages (race pass plus bloom) is 12.67 ms against 11.45, 11 %
 more. The budget loop's other costs are smaller in Zone.
 
-### Why the 4K settle is so much deeper than the content
+### A hypothesis for the depth of the 4K settle (unconfirmed)
 
-A cost 11 % higher moves a controller's linear scale by about 5 %. The rest is the Deck's clock.
+A cost 11 % higher moves a controller's linear scale by about 5 %. The rest may be the Deck's
+clock.
 
 With DRS off under the same pacing, both modes nearly hold 60 at full resolution:
 
@@ -851,18 +856,27 @@ With DRS off under the same pacing, both modes nearly hold 60 at full resolution
 | Time trial, DRS on | 60.0 | 16.67 ms | 16.85 ms | 1305 MHz |
 | Zone, DRS on | 59.9 | 16.71 ms | 16.87 ms | 1104 MHz |
 
-Time trial fits; Zone misses by little. With DRS on, the controller lowers the scale, the load
-falls, the Deck's governor lowers the clock, and the GPU's timestamps (milliseconds, not cycles)
-grow. Area times clock accounts for the readings: Zone's race pass at full size and 1532 MHz,
-8.75 ms, scaled by `0.822² * 1532 / 1180` gives 7.68 ms against 7.65 measured at the settled
-scale (second run 7.59 against 7.53; time trial within 6 %). The controller then sees the
-reading inside its deadband (0.80 to 0.95 of a 13.33 ms budget, so 10.7 to 12.7 ms; Zone's
-median in a traced run was 11.1) and holds. A rise needs eight readings in a row under 10.7 ms;
-a fall needs one over 12.7 ms. In the traced run the readings at the rises were about 9.6 ms and
-at the falls about 14 ms.
+Time trial fits; Zone misses by little. The hypothesis: with DRS on, the controller lowers the
+scale, the load falls, the Deck's governor lowers the clock, the GPU's timestamps (milliseconds,
+not cycles) grow, and the controller reads them as no room to rise.
 
-Confidence **70** that the loop is what deepens the settle. The weak part: joining each frame's
-reading to a clock sample taken four times a second shows Zone's full-size-equivalent cost at
-17.0 ms below 1150 MHz against 13.9 above 1450 MHz, but the same join on the time trial is flat
-(13.1 to 14.2 ms, not ordered by clock). The clock was never pinned: that needs root on the Deck.
-The unpaced column is not a control by itself, because the residual is learned differently there.
+For it:
+
+- The clock is much lower in the DRS arms than at full size (table above).
+- Area times clock matches the mean readings: Zone's race pass at full size and 1532 MHz,
+  8.75 ms, scaled by `0.822² * 1532 / 1180` gives 7.68 ms against 7.65 measured at the settled
+  scale (second run 7.59 against 7.53; time trial within 6 %). That is consistent with the loop,
+  not a test of it.
+- The controller's deadband is 0.80 to 0.95 of a 13.33 ms budget, so 10.7 to 12.7 ms, and Zone's
+  median reading in a traced run was 11.1 ms: it holds. A rise needs eight readings in a row
+  under 10.7 ms; a fall needs one over 12.7 ms. The readings at the rises were about 9.6 ms and
+  at the falls about 14 ms.
+
+Against it, or not shown: each frame's reading was joined to a clock sample taken four times a
+second. Zone's full-size-equivalent cost is 17.0 ms below 1150 MHz against 13.9 above 1450 MHz,
+but the same join on the time trial is flat (13.1 to 14.2 ms, not ordered by clock), and
+milliseconds times megahertz is constant in neither mode. Confidence about **50**.
+
+What would decide it is a run with DRS on and the GPU clock pinned: Steam's quick-access manual
+GPU clock on the Deck, or root writing `power_dpm_force_performance_level`. Not done. The
+unpaced column is not a control by itself, because the residual is learned differently there.
