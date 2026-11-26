@@ -45,6 +45,7 @@ pub(super) fn emitter_placeholder() -> Emitter {
         colour_scale: 1.0,
         near_cap: None,
         frame_range: None,
+        size_span: None,
         frame_rate: channel(),
         emission_scale: channel(),
         playback_rate: 0.0,

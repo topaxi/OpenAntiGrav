@@ -73,7 +73,7 @@ pub(super) fn lend(
         name,
         from.looks.particle_laws.applies(platform),
         from.effects.colour_walk_for(from.race.effect_dir_for("")),
-        from.effects.flipbooks.is_some(),
+        from.effects,
     );
     match loaded {
         Ok((effect, note)) => {

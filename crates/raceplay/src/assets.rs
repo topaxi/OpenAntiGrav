@@ -97,8 +97,9 @@ pub(super) fn leach_beam_texture(
 #[cfg(feature = "view")]
 /// [`particle_effect`] with the per-effect laws a title lists for `name`
 /// (`oag_title::Effects::{sprites, extents, far_bars, pool_bars, templates}`). `walk` is the
-/// colour walk and `flipbooks` the [`oag_title::Effects::flipbooks`] of the title whose
-/// archive `dir` is in, which is not always the one `effects` is.
+/// colour walk and `owner` the effects of the title whose archive `dir` is in, which is not
+/// always the one `effects` is: the particle update's own laws
+/// (`oag_title::Effects::{flipbooks, size_ramps}`) are read from it.
 pub(super) fn listed_particle_effect(
     archives: &mut oag_assets::Archives,
     dir: &str,
@@ -106,7 +107,7 @@ pub(super) fn listed_particle_effect(
     name: &'static str,
     pulse_psp: bool,
     walk: oag_title::ColourWalk,
-    flipbooks: bool,
+    owner: &oag_title::Effects,
 ) -> std::result::Result<(psys::Effect, String), String> {
     let (mut effect, note) = particle_effect(
         archives,
@@ -124,7 +125,8 @@ pub(super) fn listed_particle_effect(
                 psys::streak::KeptBar::No
             },
             templates: effects.templates.contains(&name),
-            flipbooks,
+            flipbooks: owner.flipbooks.is_some(),
+            size_ramps: owner.size_ramps.is_some(),
         },
     )?;
     if effects.turbulence.contains(&name) {

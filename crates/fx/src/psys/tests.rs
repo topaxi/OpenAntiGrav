@@ -53,6 +53,8 @@ pub(super) fn effect(name: &str, looping: bool, duration_ticks: f32) -> std::syn
             near_cap: None,
             authored_frame_range: None,
             frame_range: None,
+            authored_size_ramp: None,
+            size_ramp: None,
             particle_child: None,
             death_child: None,
             spawn_probability: 1.0,
@@ -639,6 +641,7 @@ fn only_the_kept_templates_reset_keeps_templates_emitting_and_rolling() {
     let mut kept = base();
     kept.without_pulse_psp_draw_but(streak::Kept {
         flipbooks: false,
+        size_ramps: false,
         bar: streak::KeptBar::No,
         templates: true,
     });
@@ -888,6 +891,47 @@ fn only_kept_flipbooks_walk_the_atlas() {
     });
     assert_eq!(walked.emitters[0].frames, FrameAdvance::OverLife);
     assert_eq!(walked.emitters[0].frame_range, Some(range));
+}
+
+/// [`streak::Kept::size_ramps`]: a particle born `a` of the way through the emitter's run is
+/// drawn `lo + (hi - lo) * (1 - a)` of its size, for its whole life; without it every
+/// particle draws the size channel alone.
+#[test]
+fn only_kept_size_ramps_scale_a_particle_by_when_it_was_born() {
+    let mut authored = (*effect("ramp", false, 10.0)).clone();
+    authored.emitters[0].authored_size_ramp = Some((0.2, 1.0));
+    authored.emitters[0].lifetime_ticks = (40.0, 0.0);
+    let drawn = |kept: streak::Kept| {
+        let mut effect = authored.clone();
+        effect.without_pulse_psp_draw_but(kept);
+        let effect = std::sync::Arc::new(effect);
+        let mut system = System::new();
+        system.ignite(&effect, Vec3::ZERO, 2.0);
+        run(&mut system, &effect, 20, &mut Rng::new(1));
+        let spec = &effect.emitters[0];
+        let mut born: Vec<(f32, f32)> = system
+            .particles
+            .iter()
+            .filter(|particle| particle.alive())
+            .map(|particle| (particle.life, system.drawn_scale(spec, particle)))
+            .collect();
+        born.sort_by(|a, b| a.0.total_cmp(&b.0));
+        born.into_iter().map(|(_, scale)| scale).collect::<Vec<_>>()
+    };
+    assert_eq!(drawn(streak::Kept::NONE), vec![2.0; 10]);
+    let ramped = drawn(streak::Kept {
+        size_ramps: true,
+        ..streak::Kept::NONE
+    });
+    assert_eq!(ramped.len(), 10);
+    for (born, scale) in ramped.into_iter().enumerate() {
+        let a = born as f32 / 10.0;
+        let want = 2.0 * (0.2 + 0.8 * (1.0 - a));
+        assert!(
+            (scale - want).abs() < 1e-4,
+            "born {born}: {scale} want {want}"
+        );
+    }
 }
 
 /// Live, on a struck craft: a template's first draw carries its size at age

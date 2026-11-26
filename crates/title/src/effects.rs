@@ -463,6 +463,11 @@ pub struct Effects {
     /// on a title whose update is unread: every particle keeps its spawn frame, drawn from the
     /// whole grid.
     pub flipbooks: Option<Origin>,
+    /// Whether the original's particle init scales a particle by the record's own multiplier,
+    /// ramped over the emitter's run (`oag_pob::flags::SIZE_RAMP_OVER_RUN`;
+    /// `docs/ghidra/functions/ps3-hdfury-eu/particle-render.md`, "The per-particle size
+    /// multiplier"). `None` on a title whose init is unread: the size channel alone.
+    pub size_ramps: Option<Origin>,
 }
 
 /// A billboard nearer than `cull_depth` world units along the view draws nothing, and one
@@ -565,6 +570,7 @@ impl Effects {
         near_law: None,
         craft_blast_carry: None,
         flipbooks: None,
+        size_ramps: None,
     };
 
     /// The entry for `trigger`.

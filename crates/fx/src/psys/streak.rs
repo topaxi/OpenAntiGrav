@@ -94,7 +94,8 @@ impl Effect {
     /// [`Kept::templates`] is set. Per effect, for the ones a title lists
     /// (`oag_title::Effects::{far_bars, pool_bars, templates}`): each law was read on a named
     /// effect alone. [`Kept::flipbooks`] is the title's rather than an effect's
-    /// (`oag_title::Effects::flipbooks`): one update function runs every emitter's.
+    /// (`oag_title::Effects::flipbooks`): one update function runs every emitter's. So is
+    /// [`Kept::size_ramps`], which one particle init applies.
     pub fn without_pulse_psp_draw_but(&mut self, kept: Kept) {
         self.reset_pulse_psp_draw(kept);
     }
@@ -114,6 +115,7 @@ impl Effect {
                 spec.frames = super::FrameAdvance::Still;
                 spec.frame_range = None;
             }
+            spec.size_ramp = spec.authored_size_ramp.filter(|_| kept.size_ramps);
             spec.short_run = false;
         }
         if !kept.templates {
@@ -134,6 +136,8 @@ pub struct Kept {
     /// The flipbook advance ([`super::frames`]), with the record's spawn range and hold:
     /// `oag_title::Effects::flipbooks`.
     pub flipbooks: bool,
+    /// The size multiplier ramped over the emitter's run: `oag_title::Effects::size_ramps`.
+    pub size_ramps: bool,
 }
 
 impl Kept {
@@ -142,6 +146,7 @@ impl Kept {
         bar: KeptBar::No,
         templates: false,
         flipbooks: false,
+        size_ramps: false,
     };
 
     /// Only the class-6 bar `bar` names.
@@ -151,6 +156,7 @@ impl Kept {
             bar,
             templates: false,
             flipbooks: false,
+            size_ramps: false,
         }
     }
 }

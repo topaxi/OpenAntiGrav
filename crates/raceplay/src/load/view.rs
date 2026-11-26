@@ -614,7 +614,7 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
         let dir = title.race.effect_dir_for(&track);
         let walk = title.effects.colour_walk_for(dir);
         // The law of the title whose archive the file is in, like the walk: its cap word is
-        // only that title's record's, and so are the flipbook's frame bytes.
+        // only that title's record's, and so are the flipbook's frame bytes and size bounds.
         let near = title.effects.near_law;
         match listed_particle_effect(
             &mut archives,
@@ -624,7 +624,7 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
             particle_laws
                 || (circuit_weather && oag_title::engine_effects::WEATHER_EFFECTS.contains(&name)),
             walk,
-            title.effects.flipbooks.is_some(),
+            title.effects,
         ) {
             Ok((mut effect, note)) => {
                 if let Some(law) = near {

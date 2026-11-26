@@ -720,6 +720,11 @@ pub struct Emitter {
     /// bytes there belong to something else, so take them only for a title whose executable
     /// reads them. `None` for a blob too short to reach them.
     pub frame_range: Option<FrameRange>,
+    /// `+0xc84` and `+0xc88`: the bounds of HD's per-particle size multiplier
+    /// (`flags::SIZE_RAMP`). The same first word is [`Self::colour_scale`] on render mode 5
+    /// and [`Self::distort_strength`] on blend class 8. `None` for a record too short to hold
+    /// them; take it only for a title whose executable reads it.
+    pub size_span: Option<(f32, f32)>,
     /// `+0x778`: how fast the sprite-atlas frame advances, frames per tick.
     /// The fourth channel the load-time baker `FUN_088f9024` merges, after
     /// alpha, size and roll; see `docs/formats/pob.md`, "The frame-rate
@@ -922,6 +927,7 @@ fn parse_emitter(
             spawn: (record[0xc8d], record[0xc8e]),
             hold: (record[0xc8f], record[0xc94]),
         }),
+        size_span: (record.len() >= 0xc8c).then(|| (float(0xc84), float(0xc88))),
         frame_rate: parse_channel(record, order, 0x778)?,
         emission_scale: parse_channel(record, order, 0x858)?,
         playback_rate: float(0x4cc),

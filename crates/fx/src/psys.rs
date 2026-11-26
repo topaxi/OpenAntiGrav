@@ -327,6 +327,12 @@ pub struct EmitterSpec {
     /// The spawn and hold frames this emitter plays, `None` unless the effect is loaded with
     /// [`streak::Kept::flipbooks`].
     pub frame_range: Option<pob::FrameRange>,
+    /// The record's size multiplier bounds, when its flags ramp them over the emitter's run
+    /// ([`pob::flags::SIZE_RAMP_OVER_RUN`]); played only through [`Self::size_ramp`].
+    pub authored_size_ramp: Option<(f32, f32)>,
+    /// A particle born `a` of the way through the emitter's run is drawn
+    /// `lo + (hi - lo) * (1 - a)` times its size channel: [`streak::Kept::size_ramps`].
+    pub size_ramp: Option<(f32, f32)>,
     /// A system attached to each particle this emitter spawns, as an index
     /// into [`Effect::emitters`].
     pub particle_child: Option<usize>,
@@ -878,6 +884,7 @@ impl System {
             size_sample: rng.next_f32(),
             alpha_sample: rng.next_f32(),
             scale: self.scale,
+            ramp: burst.size,
             // `Psys_RandIntRange(0, frames - 1)` under the random-frame
             // flag, drawn only when a sprite on the sheet shows it, so the
             // procedural profile (every PS2 and HD effect) draws what it did.

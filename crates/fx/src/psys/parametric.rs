@@ -388,6 +388,8 @@ fn build(
         near_cap: None,
         authored_frame_range: None,
         frame_range: None,
+        authored_size_ramp: None,
+        size_ramp: None,
         particle_child: None,
         death_child: None,
         spawn_probability: 1.0,

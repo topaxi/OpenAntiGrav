@@ -134,6 +134,11 @@ impl EmitterSpec {
             near_cap: record.near_cap,
             authored_frame_range: record.frame_range,
             frame_range: None,
+            authored_size_ramp: record.size_span.filter(|_| {
+                let wanted = pob::flags::SIZE_RAMP | pob::flags::SIZE_RAMP_OVER_RUN;
+                record.flags & wanted == wanted && record.flags & pob::flags::LOOPING == 0
+            }),
+            size_ramp: None,
             particle_child: record.particle_child,
             death_child: record.death_child,
             spawn_probability: record.child_spawn_probability.clamp(0.0, 1.0),
