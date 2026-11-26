@@ -23,7 +23,7 @@ pub const WITHDRAW_AFTER: usize = 2 * WINDOW;
 /// one; the margin below a half is for GPU work the timer does not see. It also means the frame
 /// spent over half of it waiting, and the GPU was not the long pole.
 pub const MAX_BUSY_SHARE: f32 = 0.4;
-/// The same share where the platform reports no rate at all (Android). A report floors the answer
+/// The same share where the platform reports no rate at all (the web, Xvfb). A report floors the answer
 /// (a measurement only raises it), so a half-rate read is harmless beside one; without it a
 /// half-rate read would be the answer. A quarter leaves the busy work half the period of slack at
 /// half rate for what the timers do not see.
