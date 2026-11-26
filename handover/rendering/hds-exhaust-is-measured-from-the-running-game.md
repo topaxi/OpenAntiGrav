@@ -16,8 +16,9 @@ summary: "HD exhaust: flame rim eye is the camera (read live), unwired until the
   normal through the plain model matrix and subtracts the world position from `c465`, which is the camera centre to
   0.00003 units (confidence 92). Re-applying `fog.camera = eye` in `flame_scene` (commit `0c86ed0ed`, reverted)
   still brightens ours away from the original on the rest pairs, because ours is already brighter and bluer with the
-  origin eye: the original's rest flame shows a blue left and pink right half, ours an even blue. Next: find the
-  colour-tap divergence (scroll clock, `(2u, 2v + noise)`, the texel), then re-apply the eye. Still no boosting dump.
+  origin eye: on `hd/talons` (read once) the original's nozzle shows a blue left and pink right half, ours an even
+  blue. Next: find that colour divergence (first suspect the colour tap: scroll clock, `(2u, 2v + noise)`, the texel),
+  starting from dump `c1`, a rest frame near `hd/talons`' start pose; then re-apply the eye. Still no boosting dump.
   Numbers on engine-flare.md, "The live vertex program" and "Our rim's eye".
 `engine-trail.md` kept moving after this file's 2026-08-24 snapshot and was
 never folded back; its later sessions already close three of the four items

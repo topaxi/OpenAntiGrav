@@ -82,8 +82,8 @@ carried through untouched.
 
 **The program the console runs is not the listing above.** Rebuilt from the stream's
 `TRANSFORM_PROGRAM` uploads on every flame draw of three existing frame dumps of the original
-(`data/reference/hd-flame-tap/`: `c1` and `c2`, stem `f`, one Harimau at thrust, the
-`hd-craft-ibl-probe` frames; `d1`, stem `m`, a grid of eight at rest), the same 20 instructions
+(`data/reference/hd-flame-tap/`, the `hd-craft-ibl-probe` frames: `c1`, stem `f`, one craft at rest at Talon's
+Junction's start; `c2`, stem `f`, the same craft at thrust; `d1`, stem `m`, a grid of eight at rest), the same 20 instructions
 each time:
 
 ```text
@@ -112,9 +112,9 @@ at `c256`-`c259`, `c[4..7]` the view-projection at `c260`-`c263`, `c[208]` is `c
 | **`E` (`c465`) is the camera's world position.** It equals the camera centre solved from the view-projection (the point whose clip x, y and w are zero) on all 73 flame draws, largest gap 0.00003 units | three dumps: `c1` 5 draws, `c2` 5, `d1` 63 (eight craft, eye 7.5 to 147 units away) | 92 |
 | **`V = E - world position`**: the position is taken through the model matrix before the subtraction, so both are world space | the listing, every flame draw | 92 |
 | **The normal is `M * n` with the plain model matrix**, not its inverse transpose, plus `c464.x`, which is 0 on every draw | the listing; `c464` read per draw | 90 |
-| At rest, `EF_Main`'s two draws carry rows (0.75, 0.75, 0.187) and `EF_Boost`'s two (0.75, 0.75, 0): the hull's 0.75 times (1, 1, 0.25) and (1, 1, 0), which is what `hd_flame_transform` writes | `d1`, every craft | 85 |
+| At rest, the length-scaled draws carry rows (0.75, 0.75, 0.187) and (0.75, 0.75, 0): the hull's 0.75 times (1, 1, 0.25) and (1, 1, 0), which is `hd_flame_transform`'s `EF_Main` and `EF_Boost` at rest. Which draw is which shape is not read here (some `d1` craft carry three zero-length draws) | `c1`; `d1`, every craft | 75 |
 
-Seen on three frames from two sessions, rest and thrust; **no boosting frame was dumped**, so
+Seen on three frames, two at rest (`c1`, `d1`) and one at thrust (`c2`); **no boosting frame was dumped**, so
 boost is covered only by the law (boost moves `M`'s scale, not where `E` comes from). Reproduce:
 `python3 scripts/rsx-flame-eye.py data/reference/hd-flame-tap/c1 f --program`.
 
@@ -359,11 +359,13 @@ on `hd/talons` and `hd/moa-therma` (2026-11-26), the moved pixels read, mean RGB
 | `hd/moa-therma` | (58, 77, 106) | (79, 92, 128) | (95, 115, 159) |
 
 Ours is already brighter and bluer than the original with the origin eye; the camera eye raises `alpha`, as the
-program says it should, and so widens a gap that is not the eye's. At player size the original's rest flame shows a
-blue left half and a pink right half in the nozzle; ours is one even blue. So the colour tap (its scroll clock, the
-`(2u, 2v + noise)` displacement, or the texel itself) is the next suspect, not the rim. Ruled out on the way: the rest
+program says it should, and so widens a gap that is not the eye's. On `hd/talons`, read once at 4x, the original's
+nozzle shows a blue left half and a pink right half; ours is one even blue. Whether that is the flame's colour tap
+(its scroll clock, the `(2u, 2v + noise)` displacement, the texel), the spikes or the nozzle behind is not yet shown;
+the colour tap is the first suspect. Ruled out on the way: the rest
 scales (they match), the normal transform (both plain `M`), and an alpha clamp (the original's target is
-`A8R8G8B8`, surface format `0x3148`, so its 1.1 alpha is clamped; clamping ours to 1.0 moved no pixel of either pair).
+`A8R8G8B8`, surface format `0x3148` read off `c1`, so a fixed-point target that should clamp its 1.1 alpha to 1.0,
+inferred, confidence 70; clamping ours to 1.0 moved no pixel of either pair either way).
 
 The disc shield shells and cockpit spheres read the same block and are unaffected: with the eye supplied to them alone,
 18 frames (HD, Omega, 2048, Pulse, Pulse PS2, Pure; chase at ticks 400 and 600, cockpit at 400) are byte-identical.
