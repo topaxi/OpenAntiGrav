@@ -415,7 +415,8 @@ impl Controller {
         self.unreachable = 0;
         self.rung.reset();
         self.reflection.stall();
-        // The original starts a race at full width.
+        // Back to full width: after a load, a rebuilt surface or a changed row the readings
+        // in flight describe another picture. Long frames narrow it again a notch a frame.
         self.width = width::Throttle::default();
     }
 

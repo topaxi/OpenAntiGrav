@@ -427,4 +427,12 @@ fn the_pass_sum_is_the_newest_frames_alone() {
         None,
         "all from before the stall"
     );
+    // The zoom ring runs inside the bloom chain's own bracket, so it is not counted again.
+    let zoom = oag_gpu::timing::PassReading {
+        frame: 5,
+        label: "hd zoom",
+        seconds: 0.5,
+    };
+    let sum = newest_pass_sum(&[readings[2], zoom], 3).expect("frame 5 came back");
+    assert!((sum - 0.003).abs() < 1e-6, "{sum}");
 }

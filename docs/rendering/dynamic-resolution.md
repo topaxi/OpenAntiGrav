@@ -741,7 +741,7 @@ patience applies.
 | Rate it aims at | 60 Hz | **ours:** the rate the limiter or the output holds the loop to; at 60 Hz and below the console's two durations, above it each scaled by `60 / rate` |
 | Narrow | GPU span over 16111 us, or the flip not on time | the same durations; **ours:** "not on time" is a frame interval over 1.5 of the paced period |
 | Widen | GPU span of 15555 us or less, on time | the same |
-| GPU span | first to last command of a frame | **ours:** the sum of every timed pass of one frame: the budget loop's `Cost` plus the labelled passes (shadows, glass, HUD, composite, blit) |
+| GPU span | first to last command of a frame | **ours:** the sum of every timed pass of one frame: the budget loop's `Cost` plus the labelled passes (shadows, glass, HUD, composite, blit), less the zoom ring, which the bloom chain's reading already holds |
 | Reading's age | two frames old | the newest drained, usually one frame old; one step a frame however many drained |
 | Off | Photo Mode and menus | Photo Mode (the render-scale size), and every title without a law |
 
@@ -754,7 +754,10 @@ What follows from it:
 - **MINIMUM RESOLUTION is greyed.** The floor is the law's own last notch.
 - **The blur rung stays at the player's gather** and the budget loop never runs. The reflection
   rung still does; it counts the extent as at its ceiling at level 0.
-- **A load or a changed row puts the width back to full** (`Controller::reset`).
+- **A load, a surface change or a changed row puts the width back to full**
+  (`Controller::reset`). Ours; the console's level was read at 31 during a load.
+- **It throttles at every output size.** Ours: the console resets the level to 0 on any
+  target under 1080 lines (confidence 80), so its 720p path never narrows.
 - **A late frame narrows even when the GPU was quick**, which on a loaded host is the whole
   of its movement: a CPU stall counts, as it does on the console.
 - **With no `TIMESTAMP_QUERY` it does nothing.** The late-frame input alone would narrow and
@@ -791,6 +794,16 @@ interval is the wall-clock frame. "Existing" is TARGET FPS at the same rate with
 The one narrowing there, four notches, came from frames the loaded host delivered late.
 **On the iGPU `original` cannot save the frame:** it can give up 32 % of the pixels and no
 height, and the frame needs far more; the existing loop gives up 75 %.
+
+Width traces, `tick:width`:
+
+| Run | Trace over ticks 740 to 800 |
+| --- | --- |
+| 7800 XT 60, existing b and original b | 3840 at every tick |
+| 7800 XT 60, original a | 3840 to 761, 769:3760, 773:3720, 776 to 786:3840, 792:3800, 799:3680 |
+| iGPU 60, existing a | 1920 at every tick (1080 high) |
+| iGPU 60, original a | 2600 at every tick (2160 high) |
+| 7800 XT 240, original b | 740 to 748:2600, 757:2760, 765:2960, 773:2640, 781:2680, 789:2600, 799:2600 |
 
 At 240 Hz (the durations become 4028 and 3889 us) four runs of each arm, ticks 600 to 799:
 
