@@ -452,7 +452,7 @@ Test: [projectile_bank_ground_truth.rs](../../crates/raceplay/tests/projectile_b
 
 ### Wired: the own-craft box (2026-11-13, lane `pulse-own-craft-box`)
 
-`Weapons::own_craft_box_hides_track` (Pulse measured `true`; Pure, HD, 2048 and Omega chosen `false`)
+`Weapons::own_craft_box_hides_track` (per title; the values below, "The other titles")
 selects `projectile::OwnCraftProbe` for `Projectiles::advance`. On Pulse every flyer that probes
 (Rocket, Missile, Plasma, Shuriken; not the Cannon, which has no probe) asks the firing craft's box
 before the mesh: centre on the body, rows `(-right, up, forward)`, half dimensions `(width, height,
@@ -482,12 +482,38 @@ title's own executable:
 | --- | --- | ---: | --- | --- |
 | Pulse | `Falls` | 90 | the box hit is `0x7f`, the fall arm (live) | [rocket-visuals.md](../ghidra/functions/psp-pulse-usa/rocket-visuals.md) |
 | Pure | `Holds` | 84 | Pulse's raycast, gate and box, but the weapons branch on `kind == 1` themselves: a box hit runs neither the fall nor the ride, the bolt keeps its velocity | [own-craft-box.md](../ghidra/functions/psp-pure-usa/own-craft-box.md) |
-| HD | `PlasmaWindow`, chosen | 65 | a box branch with Pulse's consequence, but the box's surface filter and row sign are open | [own-craft-box.md](../ghidra/functions/ps3-hdfury-eu/own-craft-box.md) |
+| HD | `Falls` | 92 | the box answers `0x7f` through Pulse's transposed gate (live); what follows differs, below | [own-craft-box.md](../ghidra/functions/ps3-hdfury-eu/own-craft-box.md) |
 | 2048 | `Absent` | 84 | the projectile query walks track meshes only | [own-craft-box.md](../ghidra/functions/vita-2048-eu-v104/own-craft-box.md) |
 | Omega | `Absent` | 84 | the same walk, read on its own binary | [own-craft-box.md](../ghidra/functions/ps4-omega-eu/own-craft-box.md) |
 
 `OwnCraftProbe::CraftBoxHolds` (Pure) skips the probe's arms and its cage question on an update the
 box blocks; `OwnCraftProbe::NoBox` (2048, Omega) lets every flyer, the Plasma included, probe from its
-first update, so the chosen 0.04 s window is left only on HD. Pure's probe lengths (Rocket `12.0`) and
-HD's (Plasma `6.0`) differ from the Pulse lengths `oag_weapons` uses for every title; written down on
-the pages, not wired.
+first update. No shipped title keeps the chosen 0.04 s window now. Pure's probe lengths (Rocket `12.0`)
+differ from Pulse's and are written down on its page, not wired.
+
+### HD's box and open-air Rocket (lane `hd-own-box`)
+
+Measured live on RPCS3 (three boots), confidence on the linked page
+([own-craft-box.md](../ghidra/functions/ps3-hdfury-eu/own-craft-box.md), "Measured live"):
+
+| Law | HD | Wired as |
+| --- | --- | --- |
+| the firer's box in a probe | answers `0x7f`, transposed gate (0 of 347 box calls mispredicted) | `Weapons::own_craft_box_hides_track` = `Falls` |
+| probe length | Rocket, Missile, Plasma `6.0` (Shuriken unmeasured, `12.0`) | `Weapons::surface_probe_lengths` = `ProbeLengths::HD` |
+| Rocket on `0x7f` (box or open air) | no fall: turns parallel to its carried normal at the class speed | `Weapons::rocket_open_air` = `TurnsAlongNormal` |
+
+The Missile's and Shuriken's `0x7f` arms are unread, so they keep Pulse's fall. The Plasma keeps
+Pulse's fall along its carried normal; HD's own reads, statically, as a fall on world Y
+([plasma.md](../ghidra/functions/ps3-hdfury-eu/plasma.md)), not wired.
+
+Tests: `crates/weapons/src/projectile/tests/hd_box.rs` (three recorded box segments, the recorded
+Rocket update, the Missile's fall, the 6.0 reach), `projectile_cage_ground_truth::
+the_grid_craft_builds_hds_own_box` (HD's `<Misc>` and rows match the original's collider) and
+`projectile_tilt_ground_truth`, which now judges with each title's own reach. On HD's Vineta K that
+judge counts 3,707 Missile and 4,330 Plasma ticks on a floor against 3,872 and 4,483 with the `12.0`
+probe: the shorter probe loses the floor more often.
+
+**Lineage.** 2048 and Omega: the box **checked, differs** (absent from their query). Probe lengths:
+Omega's `Plasma_Update` reads `6.0` statically ([plasma.md](../ghidra/functions/ps3-hdfury-eu/plasma.md)),
+**checked, applies, not wired**; the other lengths and both titles' open-air arms are unread. Both
+keep Pulse's values, labelled chosen (this wire is HD only).

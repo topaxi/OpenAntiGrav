@@ -307,10 +307,19 @@ pub const TITLE: &Title = &Title {
         // The fire path orthonormalises the launch matrix, and live the rockets hold the
         // class speed (`ps3-hdfury-eu/plasma.md`, "The Rocket's launch scale").
         rocket_launch_at_display_scale: oag_title::pre_race::Sourced::measured(false),
-        // A box branch is read, but its surface filter and row sign are open, 65
-        // (`ps3-hdfury-eu/own-craft-box.md`).
-        own_craft_box_hides_track: oag_title::pre_race::Sourced::chosen(
-            oag_title::weapons::OwnCraftBox::PlasmaWindow,
+        // Measured live on RPCS3: the box answers `0x7f` through Pulse's transposed gate
+        // (`ps3-hdfury-eu/own-craft-box.md`, "Measured live").
+        own_craft_box_hides_track: oag_title::pre_race::Sourced::measured(
+            oag_title::weapons::OwnCraftBox::Falls,
+        ),
+        // Measured live on RPCS3: Rocket, Missile and Plasma `6.0`, the Shuriken unmeasured
+        // (`ps3-hdfury-eu/own-craft-box.md`, "Measured live").
+        surface_probe_lengths: oag_title::pre_race::Sourced::measured(
+            oag_title::weapons::ProbeLengths::HD,
+        ),
+        // Measured live on RPCS3: no fall on `0x7f` (`ps3-hdfury-eu/own-craft-box.md`).
+        rocket_open_air: oag_title::pre_race::Sourced::measured(
+            oag_title::weapons::RocketOpenAir::TurnsAlongNormal,
         ),
         opponent_fire: oag_title::pre_race::Sourced::measured(oag_title::weapons::OpponentFire::HD),
     },

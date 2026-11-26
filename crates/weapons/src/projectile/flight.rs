@@ -5,10 +5,10 @@
 //! under the 1,000-line ratchet.
 
 use super::{
-    FALL_ACCELERATION, FloorArms, Impact, KMH_PER_UNIT_PER_SECOND, LaunchScale, MAX_FLIGHT_SECONDS,
-    MAX_PROJECTILES, OwnCraftProbe, Projectile, Projectiles, RIDE_HEIGHT, SURFACE_PROBE_LENGTH,
-    SweepHit, TriggerRadii, cannon, disruptor, launch_normal, mine, missile, nearest_hit,
-    own_box_blocks, plasma, rocket, shuriken,
+    FALL_ACCELERATION, FlightLaws, FloorArms, Impact, KMH_PER_UNIT_PER_SECOND, LaunchScale,
+    MAX_FLIGHT_SECONDS, MAX_PROJECTILES, OwnCraftProbe, Projectile, Projectiles, RIDE_HEIGHT,
+    RocketOpenAir, SweepHit, TriggerRadii, cannon, disruptor, launch_normal, mine, missile,
+    nearest_hit, own_box_blocks, plasma, rocket, shuriken,
 };
 use crate::Craft;
 use oag_core::math::Vec3;
@@ -31,12 +31,12 @@ impl Projectiles {
     /// elsewhere): a probe or a travel sweep that ends outside it is the
     /// original's collision code `4`, taken before the surface class.
     ///
-    /// `floor_arms` is how the title's weapons write their velocity on a floor
-    /// ([`FloorArms`]). `own_craft` is how the first probes treat the firing craft
+    /// `laws` is how the title's weapons probe and write their velocity on a floor and in
+    /// open air ([`FlightLaws`]; a bare [`FloorArms`] converts). `own_craft` is how the first probes treat the firing craft
     /// ([`OwnCraftProbe`]). `plasma_release` is how fast a Plasma bolt leaves the node
     /// ([`LaunchScale`]).
     // One table block per weapon that flies at an authored speed, plus the cage and
-    // the title's floor arms; a parameter struct is deferred until another asks.
+    // the title's flight laws.
     #[allow(clippy::too_many_arguments)]
     pub fn advance<R: Raycaster + ?Sized, S: Craft>(
         &mut self,
@@ -49,10 +49,15 @@ impl Projectiles {
         disruptor: Option<&oag_tables::weapons::DisruptorStats>,
         trigger_radii: TriggerRadii,
         class: &str,
-        floor_arms: FloorArms,
+        laws: impl Into<FlightLaws>,
         own_craft: OwnCraftProbe,
         plasma_release: LaunchScale,
     ) -> [Option<Impact>; MAX_PROJECTILES] {
+        let FlightLaws {
+            floor_arms,
+            probes,
+            rocket_open_air,
+        } = laws.into();
         let mut impacts = [None; MAX_PROJECTILES];
         // Looked up once: a string match on the class name, the same for every bolt.
         let disruptor_kmh = disruptor.and_then(|stats| stats.speed_for_named(class));
@@ -224,15 +229,8 @@ impl Projectiles {
 
             // The surface probe runs before the flight sweep, as in the original:
             // look along the ridden normal; conform if floor-like, fall if
-            // nothing. Only the Rocket probes 6.0: `Rocket_Update` scales by
-            // `6.0`; `Missile_Update`, `Plasma_Update` (`0x0885c6cc`) and
-            // `Shuriken_Update` (`0x08877bdc`) by `12.0`, each read off its own
-            // function.
-            let probe_length = if matches!(kind, Weapon::Rocket) {
-                SURFACE_PROBE_LENGTH
-            } else {
-                missile::SURFACE_PROBE_LENGTH
-            };
+            // nothing. Each title's lengths are its own ([`ProbeLengths`]).
+            let probe_length = probes.for_weapon(kind);
             // The Cannon flies no probe at all: `Cannon_UpdateRound` (`0x0886593c`)
             // moves `position + velocity * dt` and sweeps that segment, with no
             // surface probe, no ride height and no fall. A probe along a seeded
@@ -244,10 +242,8 @@ impl Projectiles {
                 (kind, own_craft),
                 (Weapon::Plasma, OwnCraftProbe::PlasmaWindow(window)) if age < window
             );
-            // An unscaled release rides its ramp from the first tick, window or not: HD's
-            // bolt flies 211.2, 221.6 and 229.5 km/h on its second to fourth ticks off a
-            // 200 km/h release (`docs/ghidra/functions/ps3-hdfury-eu/plasma.md`, "Measured
-            // live").
+            // An unscaled release rides its ramp from the first tick: inside the window
+            // there is no floor arm to re-pin it.
             if in_plasma_window
                 && plasma_release == LaunchScale::Unscaled
                 && let Some(kmh) = pinned_kmh
@@ -268,7 +264,7 @@ impl Projectiles {
                     false,
                 );
                 // The firing craft's own box hides the track from a probe that crosses it
-                // first: the original's code `0x7f`, a fall. The cage below still asks about
+                // first: the original's code `0x7f`, as open air. The cage below still asks about
                 // the full segment's end, as the original does.
                 let blocked = matches!(
                     own_craft,
@@ -415,6 +411,21 @@ impl Projectiles {
                     // "`Plasma_Update` is `Rocket_Update`'s floor follower"). On a
                     // bank or a loop the two are different directions.
                     projectile.velocity -= projectile.surface * (FALL_ACCELERATION * dt);
+                }
+                // A Rocket that does not fall turns parallel to the normal it carries, at
+                // its class speed; the position already moved on the old velocity.
+                None if kind == Weapon::Rocket
+                    && rocket_open_air == RocketOpenAir::TurnsAlongNormal =>
+                {
+                    let speed = pinned_kmh.map_or_else(
+                        || projectile.velocity.length(),
+                        missile::speed_units_on_surface,
+                    );
+                    let along = projectile.velocity
+                        - projectile.surface * projectile.velocity.dot(projectile.surface);
+                    if along.length_squared() > 1e-6 {
+                        projectile.velocity = along.normalize() * speed;
+                    }
                 }
                 None if kind != Weapon::Cannon => {
                     projectile.velocity -= Vec3::Y * FALL_ACCELERATION * dt;

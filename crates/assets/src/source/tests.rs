@@ -166,6 +166,12 @@ const TITLE: &Title = &Title {
         own_craft_box_hides_track: oag_title::pre_race::Sourced::chosen(
             oag_title::weapons::OwnCraftBox::PlasmaWindow,
         ),
+        surface_probe_lengths: oag_title::pre_race::Sourced::chosen(
+            oag_title::weapons::ProbeLengths::PULSE,
+        ),
+        rocket_open_air: oag_title::pre_race::Sourced::chosen(
+            oag_title::weapons::RocketOpenAir::Falls,
+        ),
         opponent_fire: oag_title::pre_race::Sourced::chosen(
             oag_title::weapons::OpponentFire::PULSE,
         ),

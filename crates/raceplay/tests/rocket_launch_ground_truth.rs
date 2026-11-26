@@ -119,7 +119,7 @@ fn a_volley_from_the_originals_pose_is_laid_at_the_craft_and_cruises_at_the_clas
             None,
             None,
             &class,
-            race.core.sim.floor_arms(),
+            race.core.sim.flight_laws(),
             race.core.sim.own_craft_probe(),
             race.core.sim.plasma_release(),
             oag_weapons::projectile::BlastPush::Posted,

@@ -286,6 +286,14 @@ pub const TITLE: &Title = &Title {
         own_craft_box_hides_track: oag_title::pre_race::Sourced::measured(
             oag_title::weapons::OwnCraftBox::Absent,
         ),
+        // Pulse's, chosen: this title's lengths are unread, and HD's are wired for HD alone.
+        surface_probe_lengths: oag_title::pre_race::Sourced::chosen(
+            oag_title::weapons::ProbeLengths::PULSE,
+        ),
+        // Pulse's, chosen: this title's `Rocket_Update` open-air arm is unread.
+        rocket_open_air: oag_title::pre_race::Sourced::chosen(
+            oag_title::weapons::RocketOpenAir::Falls,
+        ),
         // Measured: 2048's `WeaponAi_DecideFireOrAbsorb` equals Omega's law
         // (`vita-2048-eu-v104/weapon-ai-fire.md`).
         opponent_fire: oag_title::pre_race::Sourced::measured(

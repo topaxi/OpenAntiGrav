@@ -288,6 +288,15 @@ pub const TITLE: &Title = &Title {
         own_craft_box_hides_track: oag_title::pre_race::Sourced::measured(
             oag_title::weapons::OwnCraftBox::Absent,
         ),
+        // Pulse's, chosen: HD's lengths are wired for HD alone. This title's `Plasma_Update`
+        // reads `6.0` (`ps3-hdfury-eu/plasma.md`), not wired; the other lengths are unread.
+        surface_probe_lengths: oag_title::pre_race::Sourced::chosen(
+            oag_title::weapons::ProbeLengths::PULSE,
+        ),
+        // Pulse's, chosen: this title's `Rocket_Update` open-air arm is unread.
+        rocket_open_air: oag_title::pre_race::Sourced::chosen(
+            oag_title::weapons::RocketOpenAir::Falls,
+        ),
         opponent_fire: oag_title::pre_race::Sourced::measured(
             oag_title::weapons::OpponentFire::OMEGA,
         ),

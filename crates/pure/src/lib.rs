@@ -189,6 +189,18 @@ pub const TITLE: &Title = &Title {
         own_craft_box_hides_track: oag_title::pre_race::Sourced::measured(
             oag_title::weapons::OwnCraftBox::Holds,
         ),
+        // Pulse's, inherited: Pure's `Missile_Update` and `Shuriken_Update` are unread. Pure's
+        // Rocket and Plasma probe through their own arm (`floor_arms_ride_launch_normal`),
+        // which does not read these.
+        surface_probe_lengths: oag_title::pre_race::Sourced::inherited(
+            oag_title::weapons::ProbeLengths::PULSE,
+            "Wipeout Pulse",
+        ),
+        // Pulse's, inherited. Pure's Rocket flies its own arm (`floor_arms_ride_launch_normal`).
+        rocket_open_air: oag_title::pre_race::Sourced::inherited(
+            oag_title::weapons::RocketOpenAir::Falls,
+            "Wipeout Pulse",
+        ),
         // Measured: Pure's decision code equals Pulse's law (`psp-pure-usa/weapon-ai-fire.md`).
         opponent_fire: oag_title::pre_race::Sourced::measured(
             oag_title::weapons::OpponentFire::PULSE,

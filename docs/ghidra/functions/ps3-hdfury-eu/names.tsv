@@ -956,8 +956,8 @@
 0x000a8198	function	Track_SampleNearestPoint	78	projectile-launch-normal.md
 0x000a7cc8	function	Track_EvaluateSpline	80	projectile-launch-normal.md
 0x003aa0e8	function	FrontEnd_LoadEnvSettings	85	front-end-model-lighting.md
-0x0007be58	function	Collision_SweepSegment	80	own-craft-box.md
-0x000336b0	function	Collision_RaycastBox	72	own-craft-box.md
+0x0007be58	function	Collision_SweepSegment	90	own-craft-box.md
+0x000336b0	function	Collision_RaycastBox	90	own-craft-box.md
 0x0003a4c8	function	Collision_SetObbTransform	72	own-craft-box.md
 0x0001f430	function	Profile_RecordCampaignResult	82	cell-medal-award.md
 0x001e1028	function	PI_Cell_EvaluateMedalForValue	88	cell-medal-award.md
