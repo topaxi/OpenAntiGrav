@@ -93,6 +93,8 @@ struct Cache {
     simplified_lighting: bool,
     /// [`Scope::craft`]'s state.
     craft: bool,
+    /// [`Scope::zone_stage_light`]'s choice.
+    zone_stage_light: bool,
     texture_calls: u32,
     texture_hits: u32,
     shader_calls: u32,
@@ -160,6 +162,20 @@ impl Scope {
                 }
             });
         }
+    }
+
+    /// Every circuit built in this scope belongs to a Zone race whose frame lights every chunk by
+    /// the stage's ambient and sun alone, on every stage it shows (`lit` true): the circuit's
+    /// pipelines then state that light outright (`shade.wesl`'s `zone_stage_light`) where their
+    /// model allows it (`specialise::zone_light_exact`), so the driver drops the lightmap and
+    /// vertex light chain the Zone branches overwrite. Call it before the first `build()`, as
+    /// [`Self::lit_by`].
+    pub fn zone_stage_light(&self, lit: bool) {
+        CACHE.with(|cell| {
+            if let Some(cache) = cell.borrow_mut().as_mut() {
+                cache.zone_stage_light = lit;
+            }
+        });
     }
 
     /// Every pipeline built in this scope draws a race that has no Zone grade (`zone` false), so
@@ -333,6 +349,15 @@ pub(crate) fn scope_simplified_lighting() -> bool {
 /// Whether the open scope is building craft hulls ([`Scope::craft`]); `false` with no scope open.
 pub(crate) fn scope_craft() -> bool {
     CACHE.with(|cell| cell.borrow().as_ref().is_some_and(|cache| cache.craft))
+}
+
+/// Whether the open scope asked for [`Scope::zone_stage_light`]; `false` with no scope open.
+pub(crate) fn scope_zone_stage_light() -> bool {
+    CACHE.with(|cell| {
+        cell.borrow()
+            .as_ref()
+            .is_some_and(|cache| cache.zone_stage_light)
+    })
 }
 
 pub(crate) fn scope_constants() -> Vec<(&'static str, f64)> {

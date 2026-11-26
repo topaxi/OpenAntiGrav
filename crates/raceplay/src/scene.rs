@@ -633,6 +633,11 @@ impl Scene {
         cache_scope.lit_by(&light);
         cache_scope.simplified_lighting(circuit_lighting.is_simplified());
         cache_scope.zoned(zone_grade.is_some());
+        cache_scope.zone_stage_light(
+            zone_grade
+                .as_ref()
+                .is_some_and(crate::zone_grade::ZoneGrade::lights_every_stage),
+        );
         // The far plane comes from the track's own bounding sphere: a track is
         // hundreds of units across, and a fixed guess would either clip it away or
         // waste the depth range on empty space.

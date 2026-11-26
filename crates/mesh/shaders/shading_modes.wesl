@@ -19,6 +19,13 @@ override nova_prelit: f32 = 1.0;
 override light_rig: f32 = 1.0;
 override zone_race: f32 = 1.0;
 
+// 1.0 on a circuit's pipeline in a Zone race whose frame lights every chunk by the stage's
+// ambient and sun (`mesh_render::BuildCacheScope::zone_stage_light`, only where
+// `specialise::zone_light_exact` holds): `lit_colour` states that light outright, so the driver
+// drops the lightmap and vertex light chain it overwrites. **0.0, the uniform deciding, by
+// default.**
+override zone_stage_light: f32 = 0.0;
+
 // 1.0 on a pipeline every pixel of which takes the authored rig's result: its scene's rig is
 // on for the whole race and every vertex it draws has `lit` 1.0, so `lit_texel`'s last mix
 // has a weight of exactly one and the stand-in result it weighs at zero, with the decode of
