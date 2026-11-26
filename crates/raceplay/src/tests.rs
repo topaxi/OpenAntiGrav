@@ -72,6 +72,7 @@ mod grid_flaps;
 mod hand_back;
 mod mine_branch;
 
+mod craft_blast_carry;
 #[cfg(feature = "extensions")]
 mod extension_picks;
 #[cfg(feature = "extensions")]
@@ -445,6 +446,7 @@ pub(crate) fn fixture_view() -> ViewSetup {
         laid_pose_scaled: false,
         screen_flash: false,
         quake_flash: false,
+        craft_blast_carry: false,
         absorb_burst: None,
         absorb_anchors: Vec::new(),
         hit_spark_anchors: Vec::new(),

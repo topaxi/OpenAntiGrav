@@ -346,14 +346,21 @@ describes ours, not the original: the original's frame is mostly white from 0.1 
 
    The cloud lags the craft, as an effect whose emitters ride it and leave their smoke behind
    would. In ours the hit point is behind the camera after about 0.2 s, so the player flies
-   through the blast and past it. What the original's spawn call attaches to is not read.
+   through the blast and past it. **Read and wired 2026-11-26**: the blast is not parented; the
+   spawn hands it the struck craft's velocity, which every particle carries times its emitter's
+   `+0x4d0` (1.0 on the travelling roots), and drag makes it lag
+   ([rocket-craft-blast.md](../ghidra/functions/ps3-hdfury-eu/rocket-craft-blast.md)).
 2. **Our `WO_ROCKET_EXPLO` played no sprites** (it was not in HD's `Effects::sprites`, so every
    particle was the procedural white profile). Wired 2026-11-26: "With its sprites" below.
 3. **The original washes the whole frame, HUD included, yellow to white.** Its particle lists
    hold single-quad additive draws with a 64x64 texture whose half height is exactly twice
    their depth, which covers the screen. All three hits have them in frames from the hit to
    0.23 s, none before the shot or from 0.3 s on. That they are the wash is not shown, and
-   their source is not identified. Ours draws no screen flash on HD.
+   their source is not identified. Ours draws no screen flash on HD. Re-measured 2026-11-26:
+   square, opaque, warm white to yellow, and 2 to 12 units from the spawn point while the
+   struck craft is 13 to 30 units on, so they do not ride with the cloud
+   ([rocket-craft-blast.md](../ghidra/functions/ps3-hdfury-eu/rocket-craft-blast.md), "The
+   screen wash: narrowed, not found").
 4. **Streaks.** In the carried arm, 25 of our 1,055 quads whose corners differ in depth (our
    streaks) are nearer than 1 unit, with the law on or off: it does not touch streaks. The original's dumped lists hold only screen-facing quads,
    so where its `.pob` streaks are drawn is not known, and no comparison was made.
@@ -423,6 +430,22 @@ means above, which came from a throwaway patch. By eye the sprites turn white bl
 discs into fire and smoke of the original's family; by RMSE three of the four improve and one
 is level. All four stay far from the original, whose frame is washed nearly white
 (reason 3).
+
+### Carried with the struck craft
+
+2026-11-26. With the carry wired, the same two pairs, the same tree with HD's
+`craft_blast_carry` off (before) and on (after), `compare_env.overlap_score`'s RMSE times 255:
+
+| Age | Before | After |
+| --- | --- | --- |
+| 0.1 s | 121.4 | 119.7 |
+| 0.233 s | 129.8 | 126.2 |
+
+The "before" column reproduces the table above exactly. These pairs hold our player at each
+frame's own pose, chosen so a static blast stood near the original's travelling cloud; the
+struck craft's speed in our pair run was not read. By eye the fireballs now surround the struck
+craft instead of trailing off to the side. The frame is still far from
+the original's near-white wash, whose source stays open.
 
 ## What is left
 

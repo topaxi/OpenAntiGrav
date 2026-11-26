@@ -331,7 +331,8 @@ particle spans (array draws) need this extra step.
   blast"). The law's cull and cap were read there on the blast's own quads (2026-11-26, three
   hits: no quad nearer than 1.037, size pinned at 0.5, 1.0, 0.3 and 0.2 times depth).
 - Single-quad additive draws at half height = 2 x depth, full screen, in the frames of a Rocket
-  craft hit up to 0.23 s: which emitter or node draws them. 2.0 is the cap authored by the mode 5
+  craft hit up to 0.23 s: which emitter or node draws them. They sit 2 to 12 units from the
+  blast's spawn point and do not travel with it ([rocket-craft-blast.md](rocket-craft-blast.md)). 2.0 is the cap authored by the mode 5
   emitters of `WO_ROCKET_EXPLO` (`FIRESPIKES`, `FIRE_TRAILS_ONEQUAD`), whose sizes (2.1 to 9.2)
   cannot reach the sizes seen (up to 47).
 - Where a `.pob` effect's streaks are drawn: the dumped `QUADS` lists held only screen-facing

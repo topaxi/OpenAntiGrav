@@ -896,6 +896,7 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
         laid_pose_scaled: craft_title.looks.laid_pose_scaled.applies_everywhere(),
         screen_flash: extents,
         quake_flash: craft_title.effects.quake_look.flash,
+        craft_blast_carry: craft_title.effects.craft_blast_carry.is_some(),
         absorb_burst,
         absorb_anchors,
         hit_spark_anchors: super::hit_sparks::anchors(craft_title, &liveries),

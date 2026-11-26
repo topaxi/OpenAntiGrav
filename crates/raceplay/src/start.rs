@@ -159,6 +159,7 @@ impl Race {
             laid_pose_scaled,
             screen_flash,
             quake_flash,
+            craft_blast_carry,
             absorb_burst,
             absorb_anchors,
             hit_spark_anchors,
@@ -1035,6 +1036,7 @@ impl Race {
                     quake_flash.then(|| oag_fx::flash::ScreenFlash::only(oag_fx::flash::QUAKE))
                 },
                 craft_flashes: Default::default(),
+                craft_blast_carry,
                 zone_end: super::zone_end::ZoneEndFx::new(zone_end),
                 ship_debris: super::ship_debris::ShipDebrisFx::new(ship_debris, ship_debris_spec),
                 wreck_fx: super::wreck_fx::WreckFx::new(wreck_anchors)
