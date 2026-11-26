@@ -389,9 +389,9 @@ and the loader read none of them: every HD effect drew the procedural radial glo
 Measured original: dark teal-grey smoke, smoke/background 0.47/0.59/0.66 at 1 s, lasting
 past 3 s - `docs/ghidra/functions/ps3-hdfury-eu/particle-triggers.md`, "The Rocket's wall
 burst".
-- Open: the blue bias (HD's `psys_lit` takes scene light? unread); HD's flipbooks
-  advance from the authored top-left and ours do not (`particle-fill.md`, "HD advances its
-  flipbooks"; thread `hd-particle-fill-follow-ups.md`); `WO_ROCKET_EXPLO` (craft hit, 12 emitters, all sprites decode) wants a matched
+- Open: the blue bias (HD's `psys_lit` takes scene light? unread); cell 0 is the
+  authored top-left (`particle-fill.md`, "HD advances its flipbooks"); this burst's rate-law
+  advance is unread (thread `hd-particle-fill-follow-ups.md`); `WO_ROCKET_EXPLO` (craft hit, 12 emitters, all sprites decode) wants a matched
   capture before it is listed; the other HD effects likewise.
 
 ## 2026-10-12 (`hd-quake-render`): the Quake draws HD's wave

@@ -157,9 +157,9 @@ frames read at the HUD clock, the wave leaving a craft that stands on the grid.
   whose span table `oag_vex::quake::spans` cannot read: it is big-endian (`quake span records ends
   at 57985050080 but the file is 3066400 bytes` on Talon's Junction). Whether that CPU write also
   reaches what the RSX draws, in addition to the shader, is unmeasured.
-- **The flipbooks.** All five sprites are drawn at frame 0 in ours. HD advances its flipbooks
-  ([particle-fill.md](../../../rendering/particle-fill.md#hd-advances-its-flipbooks-from-the-authored-top-left)); the Quake's two flipbooks
-  take random spawn frames, whose law on HD is unread.
+- **The flipbooks.** All five sprites are drawn on their spawn frame in ours. HD advances its
+  over-life flipbooks ([particle-fill.md](../../../rendering/particle-fill.md#hd-advances-its-flipbooks-from-the-authored-top-left));
+  the Quake's two take random spawn frames with no over-life flag, and their advance is unread.
 - **The launch lead.** `Quake_Init` arms the spans `15.0` ahead; the shader's points are placed at
   the wave itself here, which a matched pair at the very first ticks has not tested.
 - **The same ship and circuit.** The original film is the Fury campaign's first event (a dark delta

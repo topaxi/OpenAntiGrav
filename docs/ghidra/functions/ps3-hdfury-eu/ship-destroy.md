@@ -210,8 +210,9 @@ Two things the HD effect needs that this page cannot supply, both unread:
 1. **What `colour_mode` 3 does on HD.** Read since: the table is not a colour there but a
    blend weight, and the black run means "draw entry 0", white. See "`colour_mode` 3 is a blend
    toward the scene light" below.
-2. **HD's frame advance** (the direction is read, and the original does advance:
-   [particle-fill.md](../../../rendering/particle-fill.md#hd-advances-its-flipbooks-from-the-authored-top-left)). With `WO_SHIP_EXPLOSION` listed in `Effects::sprites` the additive fireball draws
+2. **HD's frame advance for this effect** (the direction is read; the original advances its
+   over-life flipbooks, [particle-fill.md](../../../rendering/particle-fill.md#hd-advances-its-flipbooks-from-the-authored-top-left), and
+   these emitters carry no over-life flag). With `WO_SHIP_EXPLOSION` listed in `Effects::sprites` the additive fireball draws
    a white blowout at ticks 45 to 50 (frame advance on or off, same picture) that the procedural
    profile did not, so listing it **without** this read replaces a black ball with a white one.
    It was not listed and no code changed.

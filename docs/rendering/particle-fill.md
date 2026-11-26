@@ -623,6 +623,11 @@ scripts/psarc.py extract IMAGE:PS3_GAME/USRDIR/DATA02.PSARC GTF /data/psys/tex/ 
 scripts/hd-particle-uv.py --gtf GTF --per-frame FILM
 ```
 
+Films: `data/reference/hd-capture/particle-uv/` (`rocket1`, `plasma1`, `plasma2`, `missile2`,
+`quake1`, `quake2`, `emp1`, `cannon1`). The two Rocket films of the section above,
+`data/reference/hd-capture/rocket-craft-hit/far1` and `far3`, carry no textures: read them with
+`--textures data/reference/hd-capture/particle-uv/rocket1/tex/textures.json`.
+
 **Which effects can have moved.** Only those whose sprites ours loads: the Rocket's two blasts, the
 ship explosion, the Missile's head, the five Plasma effects, the Quake, the two trail hits, and the
 Detonator's cannon spark and EMP. The Mine, Bomb, Missile explosion and Detonator Mine and Bomb
@@ -679,12 +684,18 @@ Cell numbering from the top-left is therefore right (confidence 94): numbered fr
 row the same cells would run backwards, 58 down to 24. The values are Pulse's over-life law,
 `floor(age / lifetime * (frames - 0.02))` (`oag_fx::psys::frames`), to within a tick (confidence 90
 for the over-life law; HD's frame-rate-channel advance and its random spawn frame are not read).
+The 8x8 rows alone would not say which law this is: 64 frames over 64 ticks is also one frame a
+tick. The 8x4 sheet reads about half the age, which is the over-life spread; its emitter's
+frame-rate channel (a constant 1) would have given the age itself.
 
 **Ours does not do this.** Every source but Pulse on the PSP holds each particle on its spawn frame
 (`Effect::without_pulse_psp_draw_but`), and a non-random emitter spawns on cell 0, the tiny seed of
-the explosion. So the Rocket craft blast's four layers above, and the additive fireball of
-`WO_ROCKET_EXPLO_TRACK` and `WO_SHIP_EXPLOSION`, stay a dot where the original's grows into a full
-fireball. Not wired.
+the explosion. So the Rocket craft blast's four layers above stay on the seed where the original's
+grow into a full fireball. Not wired.
+
+`FIREBALL_ADDITIVE` (`WO_ROCKET_EXPLO_TRACK`, `WO_SHIP_EXPLOSION`) is also non-random and held on
+cell 0 by ours, but it carries no flag `0x40`: Pulse's law for it is the frame-rate channel, which
+is unread on HD, and no film here caught it in the original.
 
 **2048 and Omega: the sheets are the same.** All 17 flipbook sheets HD's listed effects name ship in
 both as `.gxt` and `.gnf`, and each matches HD's turned sheet (correlation 0.99 to 1.00; the same

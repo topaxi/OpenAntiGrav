@@ -39,13 +39,12 @@ blast the struck craft's velocity, on HD, 2048 and Omega
   with its draw's `v` in a command ring before touching it; a radially symmetric sprite shows
   nothing either way.
 - **HD advances its flipbooks and ours holds the spawn frame** (`particle-fill.md`, "HD
-  advances its flipbooks"). A non-random emitter stays on cell 0, the explosion's seed, so the
-  Rocket craft blast's four over-life layers and `FIREBALL_ADDITIVE` of the wall and ship blasts
-  draw as dots. Ready to wire: keep `FrameAdvance::OverLife` for HD's listed effects in
-  `without_pulse_psp_draw_but` (a title field, ADR-0058), then re-score the Rocket pairs.
-  `ship-destroy.md` recorded a white blowout when the ship explosion was tried with an advance
-  before the turn: re-judge it. Not read: HD's frame-rate-channel advance and its random spawn
-  frame. 2048 and Omega: same sheets, their advance unread.
+  advances its flipbooks"). Ready to wire, over-life only: keep `FrameAdvance::OverLife` in
+  `without_pulse_psp_draw_but` for `WO_ROCKET_EXPLO`'s four non-random layers (a title field,
+  ADR-0058), then re-score the Rocket pairs. They stay on cell 0, the explosion's seed, today.
+- **Not read, do not wire on a guess:** HD's frame-rate-channel advance and its random spawn
+  frame. `FIREBALL_ADDITIVE` (wall and ship blasts, no flag `0x40`) is on the rate law and held on
+  cell 0; no film caught it. 2048 and Omega: same sheets, their advance unread.
 - **The 12-unit pairs' hit tick (`--force-rocket-hit 711:7`) was never checked against the
   original's spawn point.** The far films put the wash quad in world space (view position through
   the frame's camera); the same on `hit2` says where ours should stand.

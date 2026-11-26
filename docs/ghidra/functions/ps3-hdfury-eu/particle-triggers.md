@@ -218,8 +218,9 @@ sprites play; HD lists `WO_ROCKET_EXPLO_TRACK` alone, Pulse, Pure, 2048 and Omeg
 none. `Sprite::from_gtf` is new. Test: `hd_effect_sprites` (nine sprites when listed,
 none when not). **Every particle draws its spawn frame** in ours. ~~HD's frame advance, and
 which cell is frame 0 (top-left, or the bottom row if the exporter flipped the sheet), are
-unread.~~ Read 2026-11-26: HD advances its flipbooks, from the authored top-left
-([particle-fill.md](../../../rendering/particle-fill.md#hd-advances-its-flipbooks-from-the-authored-top-left)). Pulse's advance was tried and dropped: it plays the sheet top-left first,
+unread.~~ Read 2026-11-26: cell 0 is the authored top-left, and HD advances its over-life
+flipbooks ([particle-fill.md](../../../rendering/particle-fill.md#hd-advances-its-flipbooks-from-the-authored-top-left)); this burst's flipbooks
+carry no over-life flag, and their advance is unread. Pulse's advance was tried and dropped: it plays the sheet top-left first,
 which ends on the white cells, and a row-order flip changed the measured ratios by under
 0.02, so the render cannot tell the two apart and nothing was shipped on a guess.
 
@@ -238,7 +239,7 @@ PS2 renders at four ticks across a rocket burst are byte-identical to main.
 `psys_normal` is also referenced from `FUN_002c7b30` at `0x002c7ea0`, `psys_lit` only
 from its table slot, so what selects lit is not found, and nothing says whether any
 declares `fogFactors` or a light. Unread; nothing was tinted. (2) HD's own frame-advance
-law, which ours does not play (the direction is read, see above). (3) The pose: ours hits a far wall. (4) The
+law for this burst's emitters (the direction is read, see above). (3) The pose: ours hits a far wall. (4) The
 craft hit (`WO_ROCKET_EXPLO`) was captured 2026-11-26 and still draws the procedural profile in
 ours, which is one reason its picture does not match
 ([particle-fill.md](../../../rendering/particle-fill.md), "Against the original at a near

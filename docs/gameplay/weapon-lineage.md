@@ -340,8 +340,9 @@ handedness read off the Rocket, Plasma, Missile, Quake and Detonator draws,
 The Mine, Bomb, Missile explosion and Detonator Mine and Bomb explosions load none. 2048's
 `.gxt` and Omega's `.gnf` are top-down already: checked, differs.
 
-**Flipbooks.** HD advances them from the authored top-left (M, over-life emitters of the Rocket
-craft blast); ours holds each particle on its spawn frame, not wired
+**Flipbooks.** Cell 0 is the authored top-left, and HD advances its over-life flipbooks (M, four
+emitters of the Rocket craft blast; the rate-law advance is not investigated); ours holds each
+particle on its spawn frame, not wired
 ([particle-fill.md](../rendering/particle-fill.md#hd-advances-its-flipbooks-from-the-authored-top-left)).
 2048 and Omega: same sheets, their advance not investigated.
 
