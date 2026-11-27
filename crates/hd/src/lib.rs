@@ -72,6 +72,7 @@ pub mod race;
 /// Wipeout HD / Fury, as the asset layer needs to know it.
 pub const TITLE: &Title = &Title {
     name: "Wipeout HD",
+    released: &[(Platform::Ps3, 2008, 9)],
     archives: ArchiveCandidates {
         patch: PATCH_CANDIDATES,
         data: DATA_CANDIDATES,

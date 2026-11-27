@@ -20,6 +20,7 @@ use oag_ui::frontend::{Align, Draw};
 use oag_ui::hints::{Entry, Press};
 use oag_ui::pointer::Pointer;
 
+use oag_disc::Platform;
 use oag_display::space::SCREEN;
 use oag_gameplay::input::{Button, Input};
 
@@ -37,8 +38,8 @@ pub fn logo_key(source: &str, name: &str) -> String {
     format!("card:{source}:{name}:logo")
 }
 
-/// The sheet key of the cog that marks a card with more than one picture.
-pub const COG_KEY: &str = "card:cog";
+/// The sheet key of the disc that marks a card with more than one picture.
+pub const DISC_KEY: &str = "card:disc";
 
 /// One thing a card can show: a row, and which of its pictures.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -55,7 +56,7 @@ pub struct Card {
     /// What a remembered picture is filed under: the title's slug, or the file
     /// name of a row that would not open.
     pub key: String,
-    /// What the card can show, in the order the cog steps through it.
+    /// What the card can show, in the order the disc steps through it.
     pub variants: Vec<Variant>,
 }
 
@@ -323,7 +324,7 @@ impl Launcher {
         if confirmed { self.confirm_card() } else { None }
     }
 
-    /// [`Launcher::pointer`], in card mode: hover focuses, a click on the cog
+    /// [`Launcher::pointer`], in card mode: hover focuses, a click on the disc
     /// switches the picture, a click anywhere else on a card boots it.
     pub(super) fn pointer_cards(&mut self, pointer: &Pointer) -> Option<String> {
         if pointer.scroll != 0 {
@@ -334,7 +335,7 @@ impl Launcher {
         let at = pointer.at?;
         if pointer.clicked
             && let Some(card) = rects.iter().enumerate().find_map(|(i, r)| {
-                (list[i].variants.len() > 1 && inside(at, cog_hit(*r))).then_some(i)
+                (list[i].variants.len() > 1 && inside(at, disc_hit(*r))).then_some(i)
             })
         {
             self.focus_card(card);
@@ -391,7 +392,8 @@ impl Launcher {
             wrap_width: None,
         });
         for (index, (card, rect)) in list.iter().zip(&rects).enumerate() {
-            self.draw_card(&mut out, sheet, card, *rect, index == cards.focus);
+            let badge = shares_title(&list, card);
+            self.draw_card(&mut out, sheet, card, *rect, index == cards.focus, badge);
         }
         for (index, note) in notes.iter().enumerate() {
             out.push(super::text(
@@ -419,6 +421,7 @@ impl Launcher {
         card: &Card,
         rect: [f32; 4],
         focused: bool,
+        badge: bool,
     ) {
         let selectable = self.selectable_card(card);
         let variant = &card.variants[self.shown_variant(card)];
@@ -491,15 +494,44 @@ impl Launcher {
             }
         }
         if card.variants.len() > 1 {
-            self.draw_cog(out, sheet, rect, focused);
+            self.draw_disc(out, sheet, rect, focused);
+        }
+        if badge {
+            let label = row.platform.to_string();
+            let width = label.len() as f32 * BADGE_CHAR + 6.0;
+            out.push(Draw::Fill {
+                rect: [x + w - width - 3.0, y + h - BADGE - 3.0, width, BADGE],
+                color: DISC_BACK,
+            });
+            out.push(Draw::Text {
+                x: x + w - 6.0,
+                y: y + h - BADGE - 2.0,
+                scale: 1.0,
+                color: super::TEXT,
+                border: None,
+                align: Align::Right,
+                text: label,
+                wrap_width: None,
+            });
         }
         let colour = if focused && selectable {
             super::SELECTED
         } else {
             super::DIM
         };
-        out.push(super::text(x, y + h + 3.0, 1.0, colour, &caption(row)));
-        if card.variants.len() > 1 {
+        let counter = (card.variants.len() > 1)
+            .then(|| format!("{}/{}", self.shown_variant(card) + 1, card.variants.len()));
+        let room = w - counter
+            .as_ref()
+            .map_or(0.0, |c| (c.len() + 1) as f32 * BADGE_CHAR);
+        out.push(super::text(
+            x,
+            y + h + 3.0,
+            1.0,
+            colour,
+            &fit(&caption(row), room),
+        ));
+        if let Some(counter) = counter {
             out.push(Draw::Text {
                 x: x + w,
                 y: y + h + 3.0,
@@ -507,22 +539,22 @@ impl Launcher {
                 color: colour,
                 border: None,
                 align: Align::Right,
-                text: format!("{}/{}", self.shown_variant(card) + 1, card.variants.len()),
+                text: counter,
                 wrap_width: None,
             });
         }
     }
 
-    fn draw_cog(&self, out: &mut Vec<Draw>, sheet: &Sheet, rect: [f32; 4], focused: bool) {
+    fn draw_disc(&self, out: &mut Vec<Draw>, sheet: &Sheet, rect: [f32; 4], focused: bool) {
         let [x, y, w, _] = rect;
-        let cog = [x + w - COG - 3.0, y + 3.0, COG, COG];
+        let disc = [x + w - DISC - 3.0, y + 3.0, DISC, DISC];
         out.push(Draw::Fill {
-            rect: [cog[0] - 1.0, cog[1] - 1.0, cog[2] + 2.0, cog[3] + 2.0],
-            color: COG_BACK,
+            rect: [disc[0] - 1.0, disc[1] - 1.0, disc[2] + 2.0, disc[3] + 2.0],
+            color: DISC_BACK,
         });
-        if let Some(placed) = sheet.get(COG_KEY) {
+        if let Some(placed) = sheet.get(DISC_KEY) {
             out.push(Draw::Sprite {
-                rect: cog,
+                rect: disc,
                 uv: [
                     placed.x as f32,
                     placed.y as f32,
@@ -559,13 +591,53 @@ impl Launcher {
     }
 }
 
-/// The row's own identity under the picture: the serial, which says which
-/// pressing is shown, or the file name where the source carries none.
+/// What a card is called under its picture: the title, or the file name for a
+/// row that does not open as a title.
 fn caption(row: &Candidate) -> String {
-    match &row.serial {
-        Some(_) => row.provenance(),
+    match row.playable() {
+        Some(title) => title.name.to_string(),
         None => row.name.clone(),
     }
+}
+
+/// `text` cut to `width` with a trailing "..." when it would run past it.
+fn fit(text: &str, width: f32) -> String {
+    let most = (width / BADGE_CHAR).max(0.0) as usize;
+    if text.chars().count() <= most {
+        return text.to_string();
+    }
+    let kept: String = text.chars().take(most.saturating_sub(3)).collect();
+    format!("{}...", kept.trim_end())
+}
+
+/// Whether another card is the same title on another platform (Pulse on PSP
+/// and on PS2), so each carries its platform in a corner.
+fn shares_title(list: &[Card], card: &Card) -> bool {
+    let title = |key: &str| {
+        (!key.starts_with("row:"))
+            .then(|| key.split_once(':').map(|(slug, _)| slug.to_string()))
+            .flatten()
+    };
+    let Some(mine) = title(&card.key) else {
+        return false;
+    };
+    list.iter()
+        .filter(|other| title(&other.key).as_deref() == Some(mine.as_str()))
+        .count()
+        > 1
+}
+
+/// When the release `row` is came out, for ordering the cards: the title's
+/// date for that platform, else its first, else last of all.
+fn released(row: &Candidate) -> (u16, u8) {
+    row.playable().map_or((u16::MAX, 0), |title| {
+        title
+            .released
+            .iter()
+            .find(|(platform, _, _)| *platform == row.platform)
+            .or_else(|| title.released.first())
+            .map_or((u16::MAX, 0), |&(_, year, month)| (year, month))
+    })
 }
 
 /// Why each row that will not open will not, for the line under the cards.
@@ -590,8 +662,9 @@ fn has_playable_copy(rows: &[Candidate], locked: &Candidate) -> bool {
             .any(|row| row.is_playable() && row.serial == locked.serial)
 }
 
-/// The cards `rows` make: one per title in the order the titles first appear,
-/// then one for each row that does not open as a title.
+/// The cards `rows` make: one per title and platform (Pulse on PSP and on PS2
+/// are two cards), oldest release first, then one for each row that does not
+/// open as a title.
 #[must_use]
 pub fn build(rows: &[Candidate], pictures: &BTreeMap<String, Vec<String>>) -> Vec<Card> {
     let count = |row: usize| pictures.get(&rows[row].source).map_or(0, Vec::len);
@@ -600,7 +673,7 @@ pub fn build(rows: &[Candidate], pictures: &BTreeMap<String, Vec<String>>) -> Ve
     for (index, row) in rows.iter().enumerate() {
         match row.playable() {
             Some(title) => {
-                let slug = title.slug().to_string();
+                let slug = format!("{}:{}", title.slug(), row.platform);
                 match titles.iter_mut().find(|(key, _)| *key == slug) {
                     Some((_, members)) => {
                         // The same pressing twice (an encrypted disc beside its
@@ -637,6 +710,30 @@ pub fn build(rows: &[Candidate], pictures: &BTreeMap<String, Vec<String>>) -> Ve
             _ => vec![Variant { row, picture: None }],
         }
     };
+    // A copy whose platform is not known (an extracted install) joins the
+    // title's card on a known platform when there is one.
+    let mut at = 0;
+    while at < titles.len() {
+        let unknown = rows[titles[at].1[0]].platform == Platform::Unknown;
+        let slug = titles[at].0.split_once(':').map(|(s, _)| s.to_string());
+        let home = unknown
+            .then(|| {
+                titles.iter().position(|(key, members)| {
+                    rows[members[0]].platform != Platform::Unknown
+                        && key.split_once(':').map(|(s, _)| s) == slug.as_deref()
+                })
+            })
+            .flatten();
+        match home {
+            Some(home) => {
+                let (_, members) = titles.remove(at);
+                let home = if home > at { home - 1 } else { home };
+                titles[home].1.extend(members);
+            }
+            None => at += 1,
+        }
+    }
+    titles.sort_by_key(|(_, members)| released(&rows[members[0]]));
     titles
         .into_iter()
         .map(|(key, members)| Card {
@@ -726,11 +823,11 @@ pub fn layout(count: usize, notes: usize) -> Vec<[f32; 4]> {
         .collect()
 }
 
-/// The area a click or tap on the cog covers: larger than the glyph, so a finger
+/// The area a click or tap on the disc covers: larger than the glyph, so a finger
 /// finds it.
 #[must_use]
-pub fn cog_hit(card: [f32; 4]) -> [f32; 4] {
-    [card[0] + card[2] - COG_HIT, card[1], COG_HIT, COG_HIT]
+pub fn disc_hit(card: [f32; 4]) -> [f32; 4] {
+    [card[0] + card[2] - DISC_HIT, card[1], DISC_HIT, DISC_HIT]
 }
 
 fn inside(at: (f32, f32), rect: [f32; 4]) -> bool {
@@ -758,8 +855,12 @@ const MAX_NOTES: usize = 2;
 const GAP: f32 = 8.0;
 const CAPTION: f32 = 12.0;
 const ASPECT: f32 = 16.0 / 9.0;
-const COG: f32 = 13.0;
-const COG_HIT: f32 = 24.0;
+const DISC: f32 = 13.0;
+const DISC_HIT: f32 = 24.0;
+/// The platform badge's height, and the width a character of the launcher's
+/// font takes (badge and captions).
+const BADGE: f32 = 11.0;
+const BADGE_CHAR: f32 = 6.0;
 /// The logo's left edge and width as fractions of the card: over the side of
 /// HD's picture the swirl leaves clear.
 const LOGO_LEFT: f32 = 0.05;
@@ -767,7 +868,7 @@ const LOGO_WIDTH: f32 = 0.5;
 
 const CARD_BACK: [f32; 4] = [0.08, 0.10, 0.16, 1.0];
 const FRAME: [f32; 4] = [0.36, 0.66, 1.0, 1.0];
-const COG_BACK: [f32; 4] = [0.0, 0.0, 0.0, 0.6];
+const DISC_BACK: [f32; 4] = [0.0, 0.0, 0.0, 0.6];
 
 #[cfg(test)]
 mod tests;

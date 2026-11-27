@@ -4,24 +4,24 @@
 use oag_hud::sprite::{DecodedImage, Sheet};
 use oag_source::art::{Art, Picture};
 
-use super::cards::{COG_KEY, logo_key, picture_key};
+use super::cards::{DISC_KEY, logo_key, picture_key};
 
 /// The widest a picture is kept. A card is at most about 600 pixels across on a
 /// 1080p screen; the 1920-wide ones are averaged down so the sheet's bilinear
 /// sampling does not alias them.
 const ART_WIDTH: u32 = 800;
 
-/// The cog's raster size, a good deal over its size on screen.
-const COG_PIXELS: u32 = 48;
+/// The disc's raster size, a good deal over its size on screen.
+const DISC_PIXELS: u32 = 48;
 
-const COG_SVG: &[u8] = include_bytes!("../../../../assets/ui/launcher-cog.svg");
+const DISC_SVG: &[u8] = include_bytes!("../../../../assets/ui/launcher-disc.svg");
 
 /// What came back from [`load`].
 #[derive(Debug)]
 pub struct Loaded {
     /// Source to the names of the pictures it carries.
     pub pictures: Vec<(String, Vec<String>)>,
-    /// Every picture and logo, with the cog.
+    /// Every picture and logo, with the disc.
     pub sheet: Sheet,
 }
 
@@ -55,7 +55,7 @@ pub fn load_with(sources: &[String], read: impl Fn(&str) -> Vec<Art>) -> Loaded 
             }
         }
     }
-    images.extend(cog());
+    images.extend(disc());
     let mut report = Vec::new();
     let sheet = Sheet::build_with(&[], images, &mut report);
     for line in report {
@@ -76,16 +76,16 @@ fn decoded(src: String, picture: Picture) -> DecodedImage {
     }
 }
 
-fn cog() -> Option<DecodedImage> {
-    let icon = oag_hud::svg::VectorIcon::parse(COG_KEY.to_string(), COG_SVG)
-        .inspect_err(|e| log::warn!("the launcher's cog will not parse: {e}"))
+fn disc() -> Option<DecodedImage> {
+    let icon = oag_hud::svg::VectorIcon::parse(DISC_KEY.to_string(), DISC_SVG)
+        .inspect_err(|e| log::warn!("the launcher's disc will not parse: {e}"))
         .ok()?;
-    let rgba = icon.rasterise(COG_PIXELS, COG_PIXELS)?;
+    let rgba = icon.rasterise(DISC_PIXELS, DISC_PIXELS)?;
     Some(decoded(
-        COG_KEY.to_string(),
+        DISC_KEY.to_string(),
         Picture {
-            width: COG_PIXELS,
-            height: COG_PIXELS,
+            width: DISC_PIXELS,
+            height: DISC_PIXELS,
             rgba,
         },
     ))

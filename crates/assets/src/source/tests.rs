@@ -17,6 +17,7 @@ use oag_title::{ArchiveCandidates, ForeignSerial};
 /// assertion below meaningful.
 const TITLE: &Title = &Title {
     name: "Wipeout Pulse",
+    released: &[],
     archives: ArchiveCandidates {
         patch: &[],
         data: &[
