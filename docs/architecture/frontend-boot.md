@@ -659,8 +659,7 @@ absence and harder to notice as a bug.
   widget inside it starts at the rect's own left edge. A scissor rect for this
   screen would be dead code.
 - **`widthlimited="true"` means wrap, and the width is the enclosing
-  `Viewport`'s own `width`** (corrected on the boot sequence by the original's own frame: the
-  `Viewport`'s width less the text's `x`, "Show Logo's faces and its legal line's wrap" below). `Text::wrap_width` carries it down through
+  `Viewport`'s own `width`** ("Show Logo's faces and its legal line's wrap" below). `Text::wrap_width` carries it down through
   `collect_widgets`, `Draw::Text` gained the same field, and `crate::render`'s
   `push_wrapped_text` breaks the string at word boundaries with
   [`wrap`](../../crates/game/src/loading.rs) - the same function `loading.rs`
@@ -699,15 +698,16 @@ Wired through the existing mechanism, not a second one: `Frontend::draw_screen_o
 
 **Result.** `menu-title` mean grey 4.54 to 3.37 (the press-start box `(235,212,240,32)` 28.66 to 7.81).
 
-**The wrap width, from this frame.** The original breaks the legal line after `IS A`: the first line spans 40 to 378 px (338 wide) and `IS A REGISTERED`
-would span 378. The `Viewport` is `x=40 width=400`, the text `x=40`. A 400 wide line fits `REGISTERED` (ours did); the line breaks at a limit in `[338, 378)`.
-**A `widthlimited` text wraps over `Viewport.width - text.x` (360), confidence 55**: one string, two bounds, 360 the simplest reading; the doc comment on
-`Text::wrap_width` called 400 and 360 indistinguishable and was wrong. Applied in `draw_screen_over` only (the boot sequence) and only where the skin sets `MenuSkin::wrap_from_text_x` (Pulse's, PS2 inherited): the campaign
-screens' own `widthlimited` texts (`Cell Help`) and every other title's boot screens are unmeasured and keep the `Viewport` width.
+**The wrap width, from this frame.** The original breaks the legal line after `IS A` and keeps `EUROPE.` on the second line.
+With the pens the original steps ([menus-original.md](../ui/menus-original.md), "Pulse's text pens step up to whole units") the first line is 338.4
+wide, as the frame's; carrying `REGISTERED` along would be 406.9, and the second line is 371.7. **The `Viewport`'s own 400 wide, the authored number,
+breaks it there (confidence 85)**, and `Viewport.width - text.x` (360) is ruled out: it puts `EUROPE.` on a third line below the screen. (A 360 limit
+was read here first, while our pens ran 7 % narrow and let `REGISTERED` fit in 400.) Test: `boot_legal_wrap_ground_truth`.
 
-**Left open (documented, one residual):** at `scale 0.7` the original's `Pulse_14` glyphs are about 1.07 to 1.08 times wider than ours and its two lines
-sit 11 px apart where ours sit 12.3 (the legal box `(0,244,420,28)` is still 17.9 mean grey, 14.7 at a hand-fitted 1.08 x scale). Not the authored scale; the
-pen law (`bearing_pens`, measured on `Pulse_14`'s heading) or a quad rounding as Pure's `snapped_quad` is the lead. Checked against 2048 and Omega:
+**Result.** The legal box `(0,244,420,28)` falls from 17.9 to 9.8 mean grey and `menu-title` from 3.37 to 2.64.
+
+**Left open (documented, one residual):** the original's two lines sit 11 px apart where ours sit 11.9 (17 px line height at 0.7), so our second line
+is 1 px low. One measurement, and neither flooring the line's `y` nor flooring the line step is read. Checked against 2048 and Omega:
 not applicable (neither names `small_font` or `menu_face_in_boot`; their boot screens are HD's).
 
 ### What the disc actually does at boot

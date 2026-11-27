@@ -3413,3 +3413,25 @@ everything below `y = 60` is pixel-identical before and after on all five.
 
 `menu-options` is worse because its heading authors no scale (1.0) and ours draws 0.8: at 1.0 its header box
 reads 7.57.
+
+## Pulse's heading scales and fractional pens (2026-11-27, `pulse-menu-headings`)
+
+Claim: PS2 headings draw at their authored per-heading scale and fractional-scale text on a whole-unit pen, the PS2 `menu-options` header
+box `(40,0,480,60)` falls from 9.50 to 7.57 or less and no other Pulse menu pair gets worse. **True.** The laws and evidence:
+[menus-original.md](../ui/menus-original.md), "Pulse PS2's headings draw in the Title face" and "Pulse's text pens step up to whole units".
+
+Copies of the stored pairs, ours re-rendered before and after (each twice, identical), against the stored `theirs.png`. Header box mean grey:
+`(40,0,480,60)` on PS2, `(0,0,300,30)` on PSP.
+
+| Pair | Header box | Whole frame |
+| --- | --- | --- |
+| `pulse-ps2/menu-options` | 9.50 -> 7.57 | 1.91 -> 1.85 |
+| `pulse-ps2/menu-main` | 7.09 -> 6.58 | 1.89 -> 1.87 |
+| `pulse-ps2/menu-team` | 7.55 -> 7.08 | 2.23 -> 2.21 |
+| `pulse-ps2/menu-grid` | 8.84 -> 8.14 | 1.73 -> 1.69 |
+| `pulse-ps2/menu-cell` | 8.84 -> 8.14 | 1.93 -> 1.81 |
+| `pulse-psp/menu-title` (legal box `(0,244,420,28)` 17.88 -> 9.77) | 3.32 -> 3.32 | 3.37 -> 2.64 |
+
+The other nine Pulse PSP menu pairs (`cell`, `grid`, `main`, `options`, `pause`, `racebox`, `single`, `team`, `track`) re-render pixel
+for pixel as before.
+
