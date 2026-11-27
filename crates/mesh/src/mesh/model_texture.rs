@@ -47,9 +47,16 @@ pub struct ModelTexture {
     /// **A PSP `.vex` texture does not use this**: it arrives as
     /// [`Texels::Chain`], the disc's own levels, and the blur this field was
     /// added to chase was level *selection*, not chain depth - see
-    /// `docs/rendering/frame-audit.md`. What still passes a `Some` here is a
-    /// pre-swizzled Pure texture whose levels are not read.
+    /// `docs/rendering/frame-audit.md`. What passes a `Some` here is a
+    /// pre-swizzled Pure texture whose levels are not read, and a PS2 texture,
+    /// which authors its own count (`oag_texture::ps2_texture::Ps2Texture::level_count`,
+    /// 1 on every texture on the disc).
     pub mip_count: Option<u32>,
+    /// Pulse's per-texture level selection, as the value a vertex of a draw under
+    /// this texture carries in `GpuVertex::texcoord2.y` -
+    /// [`crate::mesh_render::texlod::texlod_vertex_code`] builds it from the `.vex`
+    /// header. `0.0` for every other texture, which keeps the flat slope law.
+    pub lod_code: f32,
 }
 
 /// How a [`ModelTexture`] carries its texels.
@@ -293,6 +300,7 @@ impl ModelTexture {
             // `mip_count`'s own doc names, just not chased here - this path
             // is HD's, and the thread that measured the PSP one is Pulse's.
             mip_count: None,
+            lod_code: 0.0,
         })
     }
 
@@ -377,6 +385,7 @@ impl ModelTexture {
             height: parsed.height,
             texels,
             mip_count: None,
+            lod_code: 0.0,
         };
         Some((texture, form))
     }
@@ -429,6 +438,7 @@ impl ModelTexture {
             height,
             texels: Texels::Rgba8(rgba),
             mip_count,
+            lod_code: 0.0,
         }
     }
 
@@ -441,6 +451,7 @@ impl ModelTexture {
             height,
             texels: Texels::Chain(levels),
             mip_count: None,
+            lod_code: 0.0,
         }
     }
 
@@ -554,6 +565,7 @@ impl ModelTexture {
                 _ => Texels::Rgba8(Vec::new()),
             },
             mip_count: self.mip_count,
+            lod_code: self.lod_code,
         }
     }
 }

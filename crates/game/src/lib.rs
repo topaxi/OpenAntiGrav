@@ -41,6 +41,7 @@ pub mod drive;
 pub mod endrace;
 pub mod endrace_voice;
 pub mod flyer;
+pub mod front_end_style;
 pub mod ghosts;
 pub mod heap;
 pub mod hud_countdown;

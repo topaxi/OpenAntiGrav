@@ -240,6 +240,104 @@ fn menu_blocks_match_the_names_and_idstrings_menuoption_expects() {
     }
 }
 
+/// WATCH REPLAY's block, which no copy authors, lands on empty screen: one step of the copy's
+/// own spacing under `view_again`, as wide, clear of every other option's box and of every text
+/// and image the screen places.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn watch_replays_added_block_covers_nothing_on_any_copy() {
+    let Some(mut archives) = opened() else {
+        return;
+    };
+    let copies = archives.read_every_name(oag_hd::endrace::SCREEN_ENTRY);
+    assert_eq!(copies.len(), 5, "the five archives that carry the file");
+    added_block_covers_nothing(copies);
+}
+
+/// The same on the plain PSN download's own copies.
+#[test]
+#[ignore = "needs the PSN install in data/extracted/ps3/hd-psn-eu"]
+fn watch_replays_added_block_covers_nothing_on_the_psn_install() {
+    let Some(path) = oag_testdata::exact("data/extracted/ps3/hd-psn-eu") else {
+        return;
+    };
+    let mut archives =
+        oag_hd::open(path.to_str().expect("utf-8 path")).expect("the install opens as HD");
+    let copies = archives.read_every_name(oag_hd::endrace::SCREEN_ENTRY);
+    assert!(!copies.is_empty(), "the install carries the file");
+    added_block_covers_nothing(copies);
+}
+
+fn added_block_covers_nothing(copies: Vec<(String, Vec<u8>)>) {
+    use oag_ui_screens::endrace::{EndRaceMenu, MenuOption};
+
+    for (label, blob) in copies {
+        let xml = String::from_utf8(blob).expect("plain UTF-8");
+        let layout = Layout::read_authored(
+            &Screens::from_xml(&xml),
+            "EndRace Menu",
+            &StringTable::default(),
+            FaceScales::default(),
+            oag_hd::endrace::AUTHORED_GRID,
+            oag_hd::endrace::AUTHORED_GRID,
+        )
+        .expect("EndRace Menu is on this copy");
+        for leave in [MenuOption::ReturnToGrid, MenuOption::ReturnToMenu] {
+            let menu = EndRaceMenu::new(
+                vec![
+                    leave,
+                    MenuOption::RaceAgain,
+                    MenuOption::ViewResultsAgain,
+                    MenuOption::WatchReplay,
+                ],
+                None,
+            );
+            let targets = oag_ui_screens::endrace::hd::hd_menu_targets(&menu, &layout);
+            assert_eq!(targets.len(), 4, "{label}: every option has a box");
+            let rect = |index: usize| {
+                targets
+                    .iter()
+                    .find(|target| target.index == index)
+                    .map(|target| target.rect)
+                    .expect("a box per option")
+            };
+            let [x, y, width, height] = rect(3);
+            let [view_x, view_y, view_width, view_height] = rect(2);
+            assert_eq!(
+                [x, y, width, height],
+                [view_x, view_y + 50.0, view_width, view_height],
+                "{label}"
+            );
+            for index in 0..3 {
+                let [_, other_y, _, other_height] = rect(index);
+                assert!(other_y + other_height <= y, "{label}: option {index}");
+            }
+            let inside = |at_x: f32, at_y: f32| {
+                at_x >= x && at_x < x + width && at_y >= y && at_y < y + height
+            };
+            // The option blocks' own labels are texts too, and are boxes, not neighbours.
+            for text in &layout.screen.texts {
+                let is_block = text.name.is_some()
+                    && layout
+                        .screen
+                        .blocks
+                        .iter()
+                        .any(|block| block.name == text.name);
+                assert!(
+                    is_block || !inside(text.x, text.y),
+                    "{label}: a text under the block: {text:?}"
+                );
+            }
+            for image in &layout.screen.images {
+                assert!(
+                    !inside(image.x, image.y),
+                    "{label}: an image under the block: {image:?}"
+                );
+            }
+        }
+    }
+}
+
 /// HD's own English string table (`DATA02`'s
 /// `Languages\English\entries.xml`) names a finishing position
 /// `ER_{n}PLACE`, not Pulse's `ER_{n}STP` - the measured divergence

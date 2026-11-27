@@ -189,12 +189,14 @@ pub(crate) fn spun_basis(up: oag_core::math::Vec3, phase: f32) -> oag_core::math
 }
 
 /// A mine's two envelopes, the football's `s` (`m+0xf4`) and the spikes' `t` (`m+0xf8`), and its
-/// visualiser's `PitchOffset` (`m+0x108`), which only a comparison pin sets.
+/// visualiser's `PitchOffset` (`m+0x108`) and `(MasterVolume, PitchVolume)` (`m+0x104`, `m+0x10c`),
+/// which only a comparison pin sets.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(crate) struct MineEnvelope {
     pub(crate) football: f32,
     pub(crate) spikes: f32,
     pub(crate) pitch_offset: f32,
+    pub(crate) volumes: Option<(f32, f32)>,
 }
 
 impl MineEnvelope {
@@ -231,6 +233,9 @@ pub struct MinePin {
     pub envelope: Option<(f32, f32, f32)>,
     /// The mine's age, seconds (`m+0xc0`, `--detonator-mine-ages`); held live or dark.
     pub age: Option<f32>,
+    /// The visualiser's `MasterVolume` and `PitchVolume` (`m+0x104`, `m+0x10c`,
+    /// `--detonator-mine-volumes`); held on a live mine only.
+    pub volumes: Option<(f32, f32)>,
 }
 
 /// Pinned mines by survey entry and lane.
@@ -254,7 +259,11 @@ pub(crate) fn hold_pinned(
                 football,
                 spikes,
                 pitch_offset,
+                volumes: envelope.volumes,
             };
+        }
+        if let Some(volumes) = pin.volumes.filter(|_| mine.live) {
+            envelope.volumes = Some(volumes);
         }
         if let Some(pinned) = pin.age {
             *age = pinned;
@@ -310,9 +319,9 @@ pub(crate) const ELECTRICITY_GAIN: f32 = 1.5;
 pub(crate) const DARK_ELECTRICITY: [f32; 3] = [2.0; 3];
 /// `BassHit = clamp(0.25 s, 0, 0.25)`.
 pub(crate) const BASS_HIT_GAIN: f32 = 0.25;
-/// `MasterVolume = clamp01(5 L)` (`K[0x10]`); ours' `L` is band 0.
+/// `MasterVolume = clamp01(5 L)` (`K[0x10]`).
 pub(crate) const MASTER_VOLUME_GAIN: f32 = 5.0;
-/// `PitchVolume = clamp(L, 0, 0.4)` (`K[0x4c]`); ours' `L` is band 1.
+/// `PitchVolume = clamp(1.0 L, 0, 0.4)` (`K[0x48]`, `K[0x4c]`).
 pub(crate) const PITCH_VOLUME_CEILING: f32 = 0.4;
 
 /// The values the visualiser's `electricity` material is drawn with for a frame
@@ -332,10 +341,9 @@ pub(crate) struct VisualiserConstants {
 /// the music's levels, a dark one the literals `DetonatorMine_AnimateToMusic` stores
 /// (`detonator-mine-material.md`).
 ///
-/// **`MasterVolume` and `PitchVolume` read band 0 and band 1, chosen, not measured**: the
-/// original scales one whole-spectrum level both ways (`0x00304cc8`, `detonator-mine-material.md`,
-/// "The visualiser's level", where a wiring of it is measured against the pairs and not kept).
-/// `PitchOffset` is the envelope's: an
+/// `MasterVolume` and `PitchVolume` are both the one whole-spectrum `level`, `clamp01(5 L)` and
+/// `clamp(L, 0, 0.4)`, which `0x00304cc8` returns for both (`detonator-mine-material.md`, "The
+/// visualiser's level"); a comparison pin replaces the pair. `PitchOffset` is the envelope's: an
 /// accumulator whose step is unread, so only a comparison pin moves it from `0`. `TrebleHit` (a
 /// `.bss` word whose writer is unread) stays `0`, the value every live read showed
 /// (`detonator-mine-draw.md`, "The envelope at the picture's tick").
@@ -344,7 +352,7 @@ pub(crate) fn visualiser_constants(
     live: bool,
     stage: &DetonatorColours,
     envelope: &MineEnvelope,
-    levels: &[f32],
+    level: f32,
 ) -> VisualiserConstants {
     if !live {
         return VisualiserConstants {
@@ -356,14 +364,28 @@ pub(crate) fn visualiser_constants(
             treble_hit: 0.0,
         };
     }
+    let (master_volume, pitch_volume) = envelope
+        .volumes
+        .unwrap_or_else(|| visualiser_volumes(level));
     VisualiserConstants {
         colour: stage.mine_electricity.map(|c| c * ELECTRICITY_GAIN),
-        master_volume: (MASTER_VOLUME_GAIN * band_level(levels, 0)).clamp(0.0, 1.0),
-        pitch_volume: band_level(levels, 1).clamp(0.0, PITCH_VOLUME_CEILING),
+        master_volume,
+        pitch_volume,
         pitch_offset: envelope.pitch_offset,
         bass_hit: (envelope.football * BASS_HIT_GAIN).clamp(0.0, BASS_HIT_GAIN),
         treble_hit: 0.0,
     }
+}
+
+/// `(MasterVolume, PitchVolume)` for the whole-spectrum `level` `L`: `clamp01(5 L)` and
+/// `clamp(L, 0, 0.4)`, both off the one reader (`DetonatorMine_AnimateToMusic`, `0x00139774` and
+/// `0x00139ad4`).
+#[must_use]
+pub(crate) fn visualiser_volumes(level: f32) -> (f32, f32) {
+    (
+        (MASTER_VOLUME_GAIN * level).clamp(0.0, 1.0),
+        level.clamp(0.0, PITCH_VOLUME_CEILING),
+    )
 }
 
 /// What a bomb's three models are drawn with for a flash value `f`.

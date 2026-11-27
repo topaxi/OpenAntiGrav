@@ -2,7 +2,9 @@
 
 ## Status
 
-Accepted, 2026-09-16. Extends
+Accepted, 2026-09-16; its "means the same for every preset" for
+`screen_filter_strength` superseded by
+[ADR-0097](0097-a-screen-filter-that-moves-pixels-runs-at-full-strength.md). Extends
 [ADR-0036](0036-ui-composites-at-presentation-resolution.md) (where the UI
 lands) and [ADR-0041](0041-one-row-for-what-resolves-the-frame.md) (what the
 `RECONSTRUCTION` row is *not* for). Relies on

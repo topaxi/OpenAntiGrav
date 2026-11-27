@@ -43,6 +43,23 @@ fn assert_scrolls(model: Option<&oag_mesh::mesh::Model>, what: &str) {
     assert_eq!(entry.tint, [0.0, 3.0, 0.0], "{what}: weight, scroll rate");
 }
 
+/// The shell program's alpha reads the stream's `VertexColour1.w`: the loaded vertices carry it,
+/// not a flat `1.0` (`shield.md`, "Watched on RPCS3").
+fn assert_alpha_is_the_stream(model: Option<&oag_mesh::mesh::Model>, what: &str) {
+    let model = model.unwrap_or_else(|| panic!("{what}: no shell"));
+    let alphas = model.vertices.iter().map(|v| v.colour[3]);
+    let (low, high) = alphas.fold((1.0f32, 0.0f32), |(l, h), a| (l.min(a), h.max(a)));
+    eprintln!("{what}: shell alpha {low}..{high}");
+    // Feisar's stream tops out at byte 178; other teams author their own ramps. A negative value
+    // would be the sun mask's factor encoding leaking into the alpha.
+    assert!(
+        (0.0..0.1).contains(&low)
+            && high <= 1.0
+            && (what != "feisar" || (high - 178.0 / 255.0).abs() < 1e-3),
+        "{what}: shell alpha {low}..{high}"
+    );
+}
+
 #[test]
 #[ignore = "needs a decrypted PS3 disc image in data/images"]
 fn hds_cockpit_sphere_scrolls_too() {
@@ -101,8 +118,17 @@ fn every_hd_team_shield_settles_to_its_authored_shield_colour() {
                     .all(|e| e.program[0] != oag_mesh::mesh::PROGRAM_SHIELD_LIGHTNING)),
                 "zone: another program"
             );
+            // Its chunk declares no stream, so the alpha stays flat.
+            assert!(
+                liveries[0]
+                    .shield
+                    .as_ref()
+                    .is_some_and(|m| m.vertices.iter().all(|v| v.colour[3] == 1.0)),
+                "zone: no stream to read"
+            );
         } else {
             assert_scrolls(liveries[0].shield.as_ref(), team);
+            assert_alpha_is_the_stream(liveries[0].shield.as_ref(), team);
         }
         let colour = liveries[0]
             .shield_colour

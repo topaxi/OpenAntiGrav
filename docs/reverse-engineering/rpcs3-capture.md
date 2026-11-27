@@ -998,6 +998,12 @@ bit (`0x2`, `0x100`); here the same bits sit on the other numbers (state 9 sets 
 `0x100`: `0x0012d970`'s sixteen handlers at `0x0012da48..`), and the readout and the
 picture say state 9 is the Bomb.
 
+**A Rocket on the wall (2026-11-27).** From the weapons-on grid state, the player held where the
+race left it and turned 35 degrees (`scripts/rpcs3-hd-blast-film.py --weapon rocket-wall --yaw 35`)
+bursts its volley on the wall in full view about 14 to 18 ticks after the press, the same on two
+restores ([particle-fill.md](../rendering/particle-fill.md#a-rocket-on-the-wall-paired)). `--scout`
+keeps frames only, for choosing a yaw and the ages.
+
 ### The recorder is the clock
 
 `pause`/`resume` plus `screenshot` costs about a second a frame and has no clock.
@@ -1435,6 +1441,25 @@ M[3].p = 0`, forward is `M[3].xyz` normalised, up `M[1].xyz` normalised, and the
 fov `2 atan(|M[3].xyz| / |M[1].xyz|)`. A dump retried after an incomplete frame mixes
 frames: take the matrix of the draw you read (the leach draw's own `c[467]` is its eye),
 and read poses in the same pause, after the dump.
+
+## An absorbed hit on a shielded craft, with no rival (2026-11-27, `hd-shield-flash`)
+
+Raise the shield (pickup state 5, TRIANGLE), then write a positive float to the
+player's pickup slot `+0x120` while the target is paused and step one game
+frame: the game's own damage drain answers with `ShipShield_Hit` and zeroes the
+word (`ps3-hdfury-eu/shield.md`, "The hit flash, live"). The same word is what a
+weapon hit posts. `scripts/rpcs3-hd-shield.py flash` does it.
+
+Traps from that run:
+
+- **A resting craft gives `pick_camera` nothing** (no frame-unique load); take
+  `rpcs3-hd-blast-film.py`'s `held_camera` fallback.
+- **A START RACE tap that lands after GO thrusts the craft** (one boot of five
+  sat 12 units forward). Compare the pose before pairing frames across boots.
+- **`serve` needs `OAG_COMPARE_PLATFORM=hd-fury`** or it runs the copied stock
+  `Resolution Scale` (150 here, about 1 FPS under load against 21 at 100).
+- A `serve` started within a few seconds of a `stop` can fail with
+  `Connection refused`: RPCS3 logs `GDB: Failed to bind socket`. Wait a minute.
 
 ## Ride height through the flyby, the grid and a straight (2026-10-08, `hd-ride-height`)
 

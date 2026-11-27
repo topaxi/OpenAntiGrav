@@ -407,11 +407,12 @@ pub use emissive::{
     PROGRAM_BULLET_GAUGE, PROGRAM_BW_GLASS, PROGRAM_CANNON_BOLT, PROGRAM_CHEVRON, PROGRAM_CROWD,
     PROGRAM_ELECTRICITY, PROGRAM_ELECTRICITY_AUDIO, PROGRAM_EMISSIVE_ADD,
     PROGRAM_EMISSIVE_ALPHA_MASK, PROGRAM_HULL_CHARGE_1, PROGRAM_HULL_CHARGE_2, PROGRAM_ICE_GLASS,
-    PROGRAM_MINE_RIM, PROGRAM_OMEGA_ROCK, PROGRAM_OMEGA_SNOW, PROGRAM_PAD_BARS, PROGRAM_PANEL_MAP,
-    PROGRAM_PICTURE_ADD, PROGRAM_PICTURE_ALPHA_EMISSIVE, PROGRAM_REFLECT_MAP,
-    PROGRAM_SHIELD_LIGHTNING, PROGRAM_SHINE_MASK, PROGRAM_SNOW, PROGRAM_STATIC_HOLOGRAM,
-    PROGRAM_TARMAC, PROGRAM_TUNNEL_EMISSIVE, PROGRAM_TWIN_BLEND, PROGRAM_UV_OVERLAY,
-    PROGRAM_VERTEX_BLEND, PROGRAM_WATER, REFLECTION_RATE, WINDOW_REFLECTION_RATE, ZONE_EXEMPT_RATE,
+    PROGRAM_LIGHTMAPPED_ADD, PROGRAM_LIGHTMAPPED_SCROLL, PROGRAM_MINE_RIM, PROGRAM_OMEGA_ROCK,
+    PROGRAM_OMEGA_SNOW, PROGRAM_PAD_BARS, PROGRAM_PANEL_MAP, PROGRAM_PICTURE_ADD,
+    PROGRAM_PICTURE_ALPHA_EMISSIVE, PROGRAM_REFLECT_MAP, PROGRAM_SHIELD_LIGHTNING,
+    PROGRAM_SHINE_MASK, PROGRAM_SNOW, PROGRAM_STATIC_HOLOGRAM, PROGRAM_TARMAC, PROGRAM_TWIN_BLEND,
+    PROGRAM_UV_OVERLAY, PROGRAM_VERTEX_BLEND, PROGRAM_WATER, REFLECTION_RATE,
+    WINDOW_REFLECTION_RATE, ZONE_EXEMPT_RATE,
 };
 
 mod flap;
@@ -1120,6 +1121,18 @@ fn build_class(
     // thing done to the lists: `pvs::DrawSections` is built from them and is
     // index-parallel, so it has to see them already sorted.
     model.sort_by_layer();
+    // A PS2 build's textures come from `external` and carry no code, so its
+    // vertices keep the 0.0 they were made with.
+    crate::mesh_render::texlod::assign_lod_codes(
+        &model.textures,
+        &model.indices,
+        &mut model.vertices,
+        model
+            .draws
+            .iter()
+            .chain(&model.alpha_tested_draws)
+            .chain(&model.transparent_draws),
+    );
     Ok(model)
 }
 
@@ -1157,6 +1170,7 @@ pub fn embedded_texture_slots(data: &[u8]) -> Result<TextureSlots> {
                 .collect(),
             _ => Vec::new(),
         };
+    let lods = vex::texture_lods(data).context("reading the texture headers")?;
     Ok(vex::textures(data)
         .context("extracting textures")?
         .into_iter()
@@ -1178,25 +1192,23 @@ pub fn embedded_texture_slots(data: &[u8]) -> Result<TextureSlots> {
                 // at the depth it declares; `.max(1)`: a 0 would upload no
                 // base level at all.
                 let chained = t.levels.len() + 1 == usize::from(t.mip_count.max(1));
-                if let Some(Some(image)) = replacements.get(index) {
-                    std::sync::Arc::new(ModelTexture::replaced(
-                        label,
-                        image,
-                        (width, height),
-                        t.mip_count,
-                        chained,
-                    ))
+                let mut texture = if let Some(Some(image)) = replacements.get(index) {
+                    ModelTexture::replaced(label, image, (width, height), t.mip_count, chained)
                 } else if chained {
-                    std::sync::Arc::new(ModelTexture::chain(label, width, height, t.levels_rgba()))
+                    ModelTexture::chain(label, width, height, t.levels_rgba())
                 } else {
-                    std::sync::Arc::new(ModelTexture::rgba8(
+                    ModelTexture::rgba8(
                         label,
                         width,
                         height,
                         t.to_rgba(),
                         Some(u32::from(t.mip_count).max(1)),
-                    ))
-                }
+                    )
+                };
+                let lod = lods.get(index).copied().flatten();
+                texture.lod_code =
+                    crate::mesh_render::texlod::texlod_vertex_code(lod, texture.width);
+                std::sync::Arc::new(texture)
             })
         })
         .collect())

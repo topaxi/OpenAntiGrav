@@ -95,6 +95,7 @@ fn model(vertices: Vec<GpuVertex>, moving: bool) -> Model {
             height: 1,
             texels: Texels::Rgba8(vec![255, 255, 255, 255]),
             mip_count: None,
+            lod_code: 0.0,
         }))],
         lightmaps: vec![None],
         pad_masks: Vec::new(),
@@ -211,6 +212,7 @@ fn flat(diffuse_alpha: u8, layered: bool) -> Model {
         height: 1,
         texels: Texels::Rgba8(vec![200, 200, 200, diffuse_alpha]),
         mip_count: None,
+        lod_code: 0.0,
     }))];
     if layered {
         for v in &mut vertices {
@@ -222,6 +224,7 @@ fn flat(diffuse_alpha: u8, layered: bool) -> Model {
             height: 1,
             texels: Texels::Rgba8(vec![255, 0, 0, 255]),
             mip_count: None,
+            lod_code: 0.0,
         }))];
         m.emissive = vec![Emissive {
             tint: [1.0, 1.0, 1.0],

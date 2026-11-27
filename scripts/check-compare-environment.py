@@ -209,6 +209,19 @@ def check_hd_flame_clock():
     assert rro.hd_flame_clock_flags(rec, ["--flame-clock", "1.0"]) == ["--flame-clock", "1.0"]
     assert rro.hd_flame_clock_flags({"profile": "hd-fury", "original": {}}, ["--race"]) == ["--race"]
     assert rro.hd_flame_clock_flags(dict(rec, profile="pulse-psp"), ["--race"]) == ["--race"]
+    # A Detonator pair recorded before `--detonator-mine-volumes` gains them from its picture-clock read on a re-render.
+    mines = {"original": {"detonator": {"mines": [{"master_volume": 1.0, "pitch_volume": 0.3154}, {"master_volume": 0.0, "pitch_volume": 0.0}]}}}
+    old = ["--detonator-mines", "1,2,3;4,5,6"]
+    assert ce.recorded_mine_volume_flags(mines, old) == old + ["--detonator-mine-volumes", "1.0000,0.3154;0.0000,0.0000"]
+    again = old + ["--detonator-mine-volumes", "0.5,0.1;0,0"]
+    assert ce.recorded_mine_volume_flags(mines, again) == again
+    assert ce.recorded_mine_volume_flags({"original": {}}, old) == old
+    try:
+        ce.recorded_mine_volume_flags(mines, ["--detonator-mines", "1,2,3"])
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("a record and flags of different mine counts must not be pinned")
 
 
 def check_hd_hull():
@@ -494,9 +507,10 @@ def check_detonator_mine_envelopes():
     # The picture is older than its pause's RAM: each mine takes the read nearest the picture's clock, with its draw words.
     lagged = Pair()
     lagged.rec["original"]["presented_lag"] = {"picture_total_ticks": 6.0}
-    ram = dict(mine(1.0, 1, 0.25, 1.0), address=7)
-    reads = [{"race_clock_s": c, "mines": {"7": {"football_s": s, "spikes_t": t, "pitch_offset": 8.25, "age_s": c + 53.0}}}
-             for c, s, t in ((2.55, 0.6, 0.5), (2.6, 0.5, 0.45), (2.7, 0.25, 1.0))]
+    ram = dict(mine(1.0, 1, 0.25, 1.0), address=7, master_volume=0.5372, pitch_volume=0.1074)
+    reads = [{"race_clock_s": c, "mines": {"7": {"football_s": s, "spikes_t": t, "pitch_offset": 8.25, "age_s": c + 53.0,
+                                                 "master_volume": min(1.0, 5 * v), "pitch_volume": v}}}
+             for c, s, t, v in ((2.55, 0.6, 0.5, 0.1055), (2.6, 0.5, 0.45, 0.3154), (2.7, 0.25, 1.0, 0.1074))]
     flags = hd_pair.mine_flags(lagged, {"mines": [ram], "race_clock_s": 2.7, "mine_reads": reads})
     assert flags[flags.index("--detonator-mine-envelopes") + 1] == "0.5000,0.4500,8.2500", flags
     det = lagged.rec["original"]["detonator"]
@@ -504,6 +518,8 @@ def check_detonator_mine_envelopes():
     # The age turns the mine: it comes from the same read as the envelope, not the pause's.
     assert flags[flags.index("--detonator-mine-ages") + 1] == "55.6000", flags
     assert det["mines"][0]["age_s"] == 55.6, det
+    # The ring's two volumes swing threefold between reads: the picture's read, not the pause's.
+    assert flags[flags.index("--detonator-mine-volumes") + 1] == "1.0000,0.3154", flags
     far = Pair()
     far.rec["original"]["presented_lag"] = {"picture_total_ticks": 6.0}
     flags = hd_pair.mine_flags(far, {"mines": [ram], "race_clock_s": 2.7, "mine_reads": reads[2:]})
@@ -565,6 +581,15 @@ def check_detonator_picture_tick(root):
 
     assert ticks_after({"picture_total_ticks": 7.5}) == ("388", "%.6f" % (7.45 - 7.5 / 60))
     assert ticks_after({}) == ("393", "%.6f" % (7.45 - 3 / 60))
+
+    # The re-render itself adds a recorded Detonator pair's mine volumes (`ce.recorded_mine_volume_flags`).
+    rec = {"profile": "hd-fury", "output": [48, 27], "kind": "race",
+           "original": {"detonator": {"mines": [{"master_volume": 0.9663, "pitch_volume": 0.1933}]}},
+           "ours": {"ticks": 393, "flags": ["--race", "--detonator-mines", "1,2,3", "--ticks", "393"]}}
+    (root / "pair" / "pair.json").write_text(json.dumps(rec))
+    assert rerender.rerender(root / "pair" / "pair.json", fake).startswith("ok")
+    flags = json.loads((root / "pair" / "pair.json").read_text())["ours"]["flags"]
+    assert flags[flags.index("--detonator-mine-volumes") + 1] == "0.9663,0.1933", flags
 
 
 def main():

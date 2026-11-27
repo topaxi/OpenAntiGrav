@@ -473,7 +473,8 @@ HD: **checked, differs** (no `Canvas3D`).
 
 Read live (Vita3K 0.2.1, headless, title screen), every 16-byte `SceGxmTexture` whose data word is
 `0x71492020`: 606 copies `82721600 030b000b 71492020 80000000` and 139 with control word 0 `82721601`
-(bit 0 differs, purpose unread). One more, `40001000 828de66c 71492020 402aaab0`, is not a texture
+(bit 0 differs; race textures show the same pattern only in reused renderer command slots, so it is probably emulator
+residue, confidence 60, [gxt-loader.md](gxt-loader.md)). One more, `40001000 828de66c 71492020 402aaab0`, is not a texture
 descriptor of this atlas. Layout read against Vita3K's `SceGxmTexture` (read for behaviour, decode handwritten).
 Confidence 85 for the decode, since it matches the file on size and mip count.
 

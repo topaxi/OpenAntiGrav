@@ -182,6 +182,7 @@ fn whitened_copy(picture: &ModelTexture) -> Option<ModelTexture> {
         height: picture.height,
         texels,
         mip_count: picture.mip_count,
+        lod_code: picture.lod_code,
     })
 }
 
@@ -251,6 +252,7 @@ mod tests {
             height: 1,
             texels: Texels::Rgba8(vec![10, 20, 30, 77]),
             mip_count: None,
+            lod_code: 0.0,
         }))];
         model
     }

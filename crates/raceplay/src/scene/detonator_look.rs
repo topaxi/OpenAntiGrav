@@ -77,7 +77,7 @@ impl super::Scene {
         let envelopes = self.step_mine_envelopes(race, &laid, seconds);
         for (index, (mine, envelope)) in laid.iter().zip(&envelopes).enumerate() {
             if let Some(drawable) = parts.mine_visualiser.get(index) {
-                let v = visualiser_constants(mine.live, &stage, envelope, &self.band_levels.get());
+                let v = visualiser_constants(mine.live, &stage, envelope, self.music_level.get());
                 drawable.write_program_glow(
                     queue,
                     oag_mesh::mesh::PROGRAM_ELECTRICITY,

@@ -1309,6 +1309,84 @@ The fresh set lives in `data/reference/compare-page/` (`pulse-psp/`, `hd/`, `pul
 holding `theirs.png`, `ours.png`, `side.png` and `pair.json`); the manifest is built with
 `python3 scripts/compare_env.py manifest data/reference/compare-page/fresh.toml data/reference/compare-page/<dirs>`.
 
+### The Pure circuit pairs' residual, split by region and cause (2026-11-27, `pure-circuit-split`)
+
+Ours re-rendered on copies at `266236da7` from each pair's recorded flags (scores within 0.08 of the stored `pair.json` values). Scorer is the page's (magick `Gray` difference, mean 0 to 255);
+every pair's regions were checked to sum to its score. No code changed.
+
+**Falsifiers, written before measuring.** (1) One shared cause: one region class must be the largest on at least 4 of the 6 clustered pairs (Chenghou, Blue Ridge, Citta Nuova, Mandrashee,
+Vineta, Manor Top) and hold at least 25 % there. (2) Animation phase: moving ours' scenery clock by one or two ticks must lower the share above the horizon by more than 0.3 grey.
+
+**Regions** (boxes are `x0..x1, y0..y1` on 480x272, claimed in this order): HUD = clocks `0..100, 0..56`, target time `370..480, 0..34`, lap `0..72, 232..268`, speed and shield
+`306..480, 218..268`; song/pilot text `76..180, 242..266`; craft `178..302, 176..272`; the light strip at craft height `150..480, 156..186`; sky = the pixels that change by more than 6 grey
+when ours' sky pass is not drawn (a scratch build that skips `TrackStage::Sky` in `crates/raceplay/src/scene/record.rs`); background = the rest above `y 137`; near track and walls = the rest below. The HUD boxes include the scenery behind the glyphs,
+so their shares are upper bounds.
+
+| Pair | Score | HUD | Song text | Craft | Strip | Sky | Background | Near |
+| --- | ---: | --- | --- | --- | --- | --- | --- | --- |
+| Chenghou | 6.60 | 1.81 (27 %) | 0.64 | 0.69 | 0.36 | 0.12 | 1.99 (30 %) | 0.98 |
+| Blue Ridge | 6.57 | 1.69 (26 %) | 0.48 | 0.96 | 0.27 | 0.09 | 2.23 (34 %) | 0.86 |
+| Citta Nuova | 6.51 | 2.34 (36 %) | 0.55 | 0.26 | 0.53 | 0.05 | 2.25 (35 %) | 0.51 |
+| Mandrashee | 6.49 | 2.61 (40 %) | 0.59 | 0.54 | 0.45 | 0.49 | 1.53 (24 %) | 0.28 |
+| Vineta | 6.01 | 1.79 (30 %) | 0.05 | 0.58 | 0.31 | 0.28 | 1.71 (29 %) | 1.28 |
+| Manor Top | 5.90 | 1.99 (34 %) | 0.57 | 0.55 | 0.47 | 0.00 | 2.02 (34 %) | 0.32 |
+| Sagarmartha | 9.18 | 2.11 (23 %) | 0.58 | 2.54 (28 %) | 0.53 | 0.11 | 2.55 (28 %) | 0.76 |
+| Sol 2 | 9.03 | 2.49 (28 %) | 0.59 | 0.77 | 0.34 | 1.07 | 2.88 (32 %) | 0.89 |
+| Karbonis (low control) | 3.74 | 1.56 (42 %) | 0.50 | 0.45 | 0.38 | 0.22 | 0.38 | 0.25 |
+| Modesto (low control) | 4.15 | 1.72 (41 %) | 0.01 | 0.24 | 0.26 | 0.20 | 1.30 (31 %) | 0.42 |
+
+**Falsifier 1 is not decided by the box split.** The HUD and song boxes cover 17.8 % of the frame and hold scenery too (the speed and shield box is mostly road). Counting whole boxes, with
+the song text as HUD (it is HUD on screen; the table keeps it apart because it is capture state), the HUD is the largest region on 5 of the 6 (31 to 49 %; Blue Ridge 33 % against background
+34 %); without the song, on 3. Charging each box's area at the mean difference of the region behind it (background for the two top boxes, near track for the other three) leaves a lower bound
+of 12 to 43 % for the HUD, which then leads on 1 of the 6 (Mandrashee); the background, with that area added back, leads on the other five at 36 to 42 %. No single cause is established:
+the HUD's part splits into text layout, the clock lag and the song, and the background's cause is unidentified.
+
+**Falsifier 2 fired.** Above the horizon the share fell by 0 to 0.29 grey over the eight pairs swept, so the lag below is **not** the scenery residual's cause. It is a separate cause.
+
+**Cause: the picture is two stops behind the read, not one** (confidence 75, one capture per pair). `psp-pure-pair.py` subtracts `PRESENTED_LAG = 1` frame (inherited from Pulse PSP).
+Primary evidence is the HUD's own digits. For a lag of N frames the picture's clock is `race_clock_at_stop_s - N x frame_dt_s`; it must truncate to the original's `CURRENT` tenth, and
+`target - clock` to its `BRONZE TIME` tenth (targets: Chenghou 160, Blue Ridge 158, Vineta 130 s from `stats.xml` as
+[hud-time-ladder.md](../ghidra/functions/psp-pure-usa/hud-time-ladder.md) records them; Citta Nuova 176 and Manor Top 141 s inferred from ours' own countdown, as whole seconds).
+
+| Pair | Clock at stop (s) | `CURRENT` | Lags it allows | `BRONZE` | Lags it allows | Both |
+| --- | ---: | --- | --- | --- | --- | --- |
+| Chenghou | 6.573 | 6.5 | 0..2 | 2.33.5 | 2..4 | **2** |
+| Blue Ridge | 6.774 | 6.7 | 0..2 | 2.31.3 | 2..4 | **2** |
+| Manor Top | 4.071 | 4.0 | 0..2 | 2.17.0 | 2..4 | **2** |
+| Citta Nuova | 2.903 | 2.8 | 1..3 | 2.53.1 | 0..2 | 1, 2 |
+| Vineta | 16.683 | 16.6 | 0..2 | 1.53.3 | 0..2 | 0..2 |
+| Mandrashee | 3.937 | 3.8 | 2..4 | | | 2..4 |
+| Sagarmartha | 5.139 | 5.0 | 2..4 | | | 2..4 |
+| Sol 2 | 1.835 | 1.7 | 2..4 | | | 2..4 |
+| Sinucit | 2.135 | 2.0 | 2..4 | | | 2..4 |
+| Sebenco Climb | 0.834 | 0.7 | 2..4 | | | 2..4 |
+| Karbonis | 1.502 | 1.4 | 1..3 | | | 1..3 |
+| Modesto | 17.818 | 17.7 | 1..3 | | | 1..3 |
+
+2 is the only value consistent with all twelve; eight pairs refuse the script's 1. Re-rendered with ours' `--ticks` two lower (race and scenery clocks together), the eight tenths that were
+wrong (five `CURRENT`, three `BRONZE`) read as the original's, and all twelve scores fall: Chenghou 6.60 to 6.13, Blue Ridge 6.57 to 6.32, Citta Nuova 6.51 to 6.34, Mandrashee 6.49 to 5.98,
+Vineta 6.01 to 5.85, Manor Top 5.90 to 4.95, Sagarmartha 9.18 to 8.78, Sol 2 9.03 to 8.71, Karbonis 3.74 to 3.33, Modesto 4.15 to 3.82, Sinucit 14.12 to 13.86, Sebenco Climb 13.73 to 13.45.
+The score is corroboration only (a fitted value can always lower it); Citta Nuova and Sebenco Climb score better still at 3 frames, which Citta Nuova's `BRONZE` digit refuses and
+Sebenco's digit allows, so a per-grab 3 is not excluded.
+
+**Ranked by share.**
+
+1. **Background detail above the horizon**, 24 to 35 % of each score as drawn; cause **not identified**. Not animation phase (falsifier 2). Not a global shift (best shift 0 on 8 of 10; Sagarmartha
+   -1 px, Blue Ridge -0.25 px). Not a flat offset except Chenghou (ours +2.7 grey on flat pixels, R +4; Vineta +1.2) and not 565 quantisation (the original's grab uses all 8-bit levels;
+   quantising ours raises the error). 56 to 90 % of the world error sits on edge and detail pixels, and ours carries more high-frequency energy above `y 137` (Laplacian ratio ours/original
+   1.05 to 1.16 on seven of ten, 0.99 to 1.02 on three): a hint, confidence 40, that the original's unread per-texture level bias ([hull-shine.md](../ghidra/functions/psp-pure-usa/hull-shine.md),
+   "The hull's texture level") applies to scenery too.
+2. **HUD text layout**, on all twelve, not moved by the lag. Pieces: the lap counter's `/3` sits 17 px right of the original's (best paste offset 17 px on 12 of 12; pasting it saves 0.03 to 0.24
+   grey). The time digits' roughly 3 px wider run over six glyphs is the earlier finding; the clocks box reads 0.65 to 0.86 grey on nine of the ten pairs split (Sol 2 1.55, an advert behind it), and the target box up to 1.50 (Mandrashee). Box figures include the scenery behind.
+3. **The presented lag**, above: 0.16 to 0.96 grey on all twelve. Tooling, not the renderer.
+4. **Song lines** (capture state: ours holds `COLD STORAGE / ONYX`, the original plays what it plays), up to 0.64 grey.
+5. **Single-pair items.** Sagarmartha's craft box 2.54 (the known 4 px hull shift). Billboard slots: Pure has `adverts: None`, so every slot's placeholder is suppressed (6 to 25 draws on the
+   Alpha and Beta circuits) and the original's signs are missing (Citta Nuova's blue sign, Vineta's orange panel, Sol 2's flag, Blue Ridge's small boards). Their footprint holds 1.30 grey on
+   Sol 2 (0.37 outside HUD boxes), 0.36 on Sinucit, at most 0.14 on the others: visible to a player, small in the score.
+
+**Reproducing.** Copy a pair directory, re-render with `rerender()` of `scripts/compare-rerender-ours.py`, take the difference with `magick theirs ours -colorspace Gray -compose difference
+-composite`, and sum it over the boxes above. For the lag, subtract 2 from the `--ticks` value in the copy's `ours.flags`.
+
 ## Race shots: a mid-pack frame of a Single Race, weapons off (2026-10-20, `compare-race-shots`)
 
 The grid and Time Trial pairs have one craft. A race shot is the player **in the pack of a Single Race**, flown by the

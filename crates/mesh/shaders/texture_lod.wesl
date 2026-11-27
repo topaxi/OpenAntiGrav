@@ -1,7 +1,7 @@
 // Slope-based texture level of detail and anisotropic sampling.
 
-@if(!bindless) import package::bindings::{albedo, albedo_sampler, fifth_map, lightmap, pad_mask, sixth_map, wave_map};
-@if(bindless) import package::bindings::{material, samplers, textures};
+@if(!bindless) import package::bindings::{albedo, albedo_sampler, fifth_map, lightmap, pad_mask, scene, sixth_map, wave_map};
+@if(bindless) import package::bindings::{material, samplers, scene, textures};
 
 // The GE's texture level slope and bias for a PSP `.vex` model, off by default
 // (0 = the sampler's own derivative-driven selection). See
@@ -9,6 +9,27 @@
 override texlod_slope: f32 = 0.0;
 
 override texlod_bias: f32 = 0.0;
+
+// The race camera's part of a Pulse texture's own bias - `mesh_render::texlod::PSP_TEXLOD_FRAME`.
+override texlod_frame: f32 = 0.0;
+
+// The GE's level at view depth `w`, before TEXTURE DETAIL. `code` is the draw's
+// texture's (`mesh_render::texlod::texlod_vertex_code`, the same on all three corners):
+// 0 is the flat law, `log2(w * slope) + bias`. Any other is Pulse's per-texture
+// one, `log2(2 w slope) + b`, with `b` the texture's own bias clamped to
+// [-8, 7.5] and cut to sixteenths toward zero as the GE register holds it, or
+// exactly 0 for a negative code (`docs/rendering/frame-audit.md`, "The level
+// law, measured").
+fn ge_level(w: f32, code: f32, frame_shift: f32) -> f32 {
+    if code == 0.0 {
+        return log2(max(w * texlod_slope, 1.0e-6)) + texlod_bias;
+    }
+    var bias = 0.0;
+    if code > 0.0 {
+        bias = trunc(clamp(code - 64.0 + texlod_frame + frame_shift, -8.0, 7.5) * 16.0) / 16.0;
+    }
+    return log2(max(2.0 * w * texlod_slope, 1.0e-6)) + bias;
+}
 
 // Wipeout HD's LOD bias on its material textures, in levels (negative reads a
 // finer level): `0` is the sampler's own selection, and what a model that is not
@@ -25,9 +46,26 @@ const MATERIAL_WAVE_MAP: u32 = 3u;
 const MATERIAL_FIFTH_MAP: u32 = 4u;
 const MATERIAL_SIXTH_MAP: u32 = 5u;
 
-// `textureSample` of one of the material pictures (a `MATERIAL_*` constant) through the
-// albedo sampler, with [`material_lod_bias`] added to the level. A pipeline constant, so
-// the branch is resolved at pipeline creation and the call stays in uniform control flow.
+// The player's TEXTURE DETAIL on the hardware path, in levels added to the sampler's own
+// selection (`mesh_render::TextureDetail::level_shift`). A model on the GE's slope rule takes the
+// preset there instead, so its pipelines answer 0 here. 0 at `original`.
+fn detail_shift() -> f32 {
+    if texlod_slope > 0.0 {
+        return 0.0;
+    }
+    return scene.fog.texlod_shift;
+}
+
+// What explicit gradients are scaled by: `2^bias`, the way the sampler applies a bias. The
+// title's constant factor alone at `original`.
+fn grad_scale() -> f32 {
+    let shift = detail_shift();
+    return exp2(material_lod_bias) * select(1.0, exp2(shift), shift != 0.0);
+}
+
+// One of the material pictures (a `MATERIAL_*` constant) through the albedo sampler, `bias`
+// levels from the sampler's own selection. A bias of 0 is a plain `textureSample`. The branch
+// reads a pipeline constant and a uniform, so the call stays in uniform control flow.
 //
 // It takes the picture by name rather than as a `texture_2d` parameter: on the `bindless`
 // variant a picture is an element of a binding array, and naga's SPIR-V writer passes a
@@ -39,7 +77,7 @@ const MATERIAL_SIXTH_MAP: u32 = 5u;
 // Its derivative-uniformity diagnostic is off for `lit_colour`'s reason (`shade.wesl`): Tint judges
 // this fetch against this function, and the guards of its callers are constant across a primitive.
 @diagnostic(off, derivative_uniformity)
-fn material_sample(picture: u32, uv: vec2<f32>) -> vec4<f32> {
+fn picture_sample(picture: u32, uv: vec2<f32>, bias: f32) -> vec4<f32> {
     // The `bindless` variant's slots - see `bindings.wesl`.
     @if(bindless) {
         let albedo = textures[material.albedo];
@@ -50,14 +88,16 @@ fn material_sample(picture: u32, uv: vec2<f32>) -> vec4<f32> {
         let fifth_map = textures[material.fifth_map];
         let sixth_map = textures[material.sixth_map];
     }
-    if material_lod_bias != 0.0 {
+    if bias != 0.0 {
+        // -16 is the lowest `textureSampleBias` takes, past the base of any chain.
+        let at = max(bias, -16.0);
         switch picture {
-            case 1u: { return textureSampleBias(lightmap, albedo_sampler, uv, material_lod_bias); }
-            case 2u: { return textureSampleBias(pad_mask, albedo_sampler, uv, material_lod_bias); }
-            case 3u: { return textureSampleBias(wave_map, albedo_sampler, uv, material_lod_bias); }
-            case 4u: { return textureSampleBias(fifth_map, albedo_sampler, uv, material_lod_bias); }
-            case 5u: { return textureSampleBias(sixth_map, albedo_sampler, uv, material_lod_bias); }
-            default: { return textureSampleBias(albedo, albedo_sampler, uv, material_lod_bias); }
+            case 1u: { return textureSampleBias(lightmap, albedo_sampler, uv, at); }
+            case 2u: { return textureSampleBias(pad_mask, albedo_sampler, uv, at); }
+            case 3u: { return textureSampleBias(wave_map, albedo_sampler, uv, at); }
+            case 4u: { return textureSampleBias(fifth_map, albedo_sampler, uv, at); }
+            case 5u: { return textureSampleBias(sixth_map, albedo_sampler, uv, at); }
+            default: { return textureSampleBias(albedo, albedo_sampler, uv, at); }
         }
     }
     switch picture {
@@ -68,6 +108,19 @@ fn material_sample(picture: u32, uv: vec2<f32>) -> vec4<f32> {
         case 5u: { return textureSample(sixth_map, albedo_sampler, uv); }
         default: { return textureSample(albedo, albedo_sampler, uv); }
     }
+}
+
+// A material fetch at the title's [`material_lod_bias`] plus TEXTURE DETAIL.
+@diagnostic(off, derivative_uniformity)
+fn material_sample(picture: u32, uv: vec2<f32>) -> vec4<f32> {
+    return picture_sample(picture, uv, material_lod_bias + detail_shift());
+}
+
+// A fetch of a material picture that takes TEXTURE DETAIL and no title bias: the effect
+// programs, whose originals' samplers were not read for one.
+@diagnostic(off, derivative_uniformity)
+fn detail_sample(picture: u32, uv: vec2<f32>) -> vec4<f32> {
+    return picture_sample(picture, uv, detail_shift());
 }
 
 // The sampler's `anisotropy_clamp`, for `sample_at_slope_level`. 1 is off.
@@ -134,11 +187,10 @@ fn sample_at_slope_level(uv: vec2<f32>, lod: f32) -> vec4<f32> {
 // form too, with `uv_gradients` of its coordinate taken ahead of the test, because an implicit
 // level inside those branches is not defined where the tangent's length changes across a primitive.
 //
-// [`material_lod_bias`] is applied the way the sampler applies a bias, as a shift of the level:
-// both gradients times `2^bias`. The factor is `1.0` exactly where the override is `0`, so every
-// pipeline without a bias fetches as before.
+// [`material_lod_bias`] and TEXTURE DETAIL are applied the way the sampler applies a bias, as a
+// shift of the level: both gradients times `2^bias` ([`grad_scale`]), 1.0 where there is neither.
 fn material_sample_grad(picture: u32, uv: vec2<f32>, ddx_in: vec2<f32>, ddy_in: vec2<f32>) -> vec4<f32> {
-    let level_scale = exp2(material_lod_bias);
+    let level_scale = grad_scale();
     let ddx = ddx_in * level_scale;
     let ddy = ddy_in * level_scale;
     @if(bindless) {

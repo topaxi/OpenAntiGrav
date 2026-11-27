@@ -203,6 +203,66 @@ fn the_strength_row_mixes_the_filter_with_the_untouched_frame() {
 }
 
 #[test]
+fn a_preset_that_declares_a_fixed_strength_is_never_mixed() {
+    let blue = "fn screen_filter(uv: vec2<f32>, pixel: vec2<f32>) -> vec3<f32> { return vec3<f32>(0.0, 0.0, 1.0); }";
+    let half: FilterStrength = "50".parse().expect("a strength");
+    let fixed = preset("fixed", &format!("//! fixed_strength = true\n{blue}"));
+    let Some((pixel, active)) = filtered(Some(&fixed), half, &[RED]) else {
+        return;
+    };
+    assert!(active);
+    close(pixel, [0, 0, 255]);
+    let Some((pixel, _)) = filtered(Some(&preset("mixed", blue)), half, &[RED]) else {
+        return;
+    };
+    close(pixel, [128, 0, 128]);
+}
+
+/// The two shipped barrel filters draw the same at a stored 50 as at 100;
+/// `psp-lcd` still draws halfway between the untouched frame and itself.
+#[test]
+fn a_stored_fifty_mixes_psp_lcd_and_leaves_the_barrel_built_ins_alone() {
+    let half: FilterStrength = "50".parse().expect("a strength");
+    let white = wgpu::Color::WHITE;
+    let shipped = |id: &str, source: &str, strength: FilterStrength| {
+        filtered(Some(&preset(id, source)), strength, &[white]).map(|(pixel, _)| pixel)
+    };
+    for (id, source) in [
+        (
+            "crt-interlaced",
+            include_str!("../../../../assets/shaders/screen/crt-interlaced.wgsl"),
+        ),
+        (
+            "crt-shadow-mask",
+            include_str!("../../../../assets/shaders/screen/crt-shadow-mask.wgsl"),
+        ),
+    ] {
+        let Some(full) = shipped(id, source, FilterStrength::FULL) else {
+            return;
+        };
+        assert!(
+            full[..3].iter().any(|&c| c < 245),
+            "{id} must change the picture for this to prove anything: {full:?}"
+        );
+        assert_eq!(shipped(id, source, half), Some(full), "{id}");
+    }
+
+    let lcd = include_str!("../../../../assets/shaders/screen/psp-lcd.wgsl");
+    let Some(full) = shipped("psp-lcd", lcd, FilterStrength::FULL) else {
+        return;
+    };
+    let mixed = full.map(|c| u8::try_from((u16::from(c) + 255).div_ceil(2)).expect("a channel"));
+    assert!(
+        full[..3].iter().any(|&c| c < 245),
+        "psp-lcd must change the picture for this to prove anything: {full:?}"
+    );
+    close(
+        shipped("psp-lcd", lcd, half).expect("the same adapter"),
+        [mixed[0], mixed[1], mixed[2]],
+    );
+}
+
+#[test]
 fn a_preset_that_will_not_build_draws_the_frame_unfiltered() {
     let broken = preset(
         "broken",

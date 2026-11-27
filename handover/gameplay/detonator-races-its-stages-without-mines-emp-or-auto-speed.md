@@ -242,8 +242,9 @@ Law: `detonator-cannon.md` ("What the simulation needs"). Decisions already made
     the record notice, the captions and the kept best score landed; open on HD: the **5.4 s of
     destruction before the panel** (ours puts it up the tick the craft dies; what plays behind it afterwards is unchecked against
     the original's glow, particle burst and wipe-in), the **end-screen text size** (rows 0.6x, headline 0.7x; the screens draw `default`
-    face as the scaled menu face, the campaign screens use the `Default` atlas), the HD style, the
-    `CONFIRM` glyph.
+    face as the scaled menu face, the campaign screens use the `Default` atlas), the
+    `CONFIRM` glyph (the HD FE style now follows `display.front_end_style`,
+    `docs/ui/endrace-screens.md`).
   - **Omega**: same filler (`FUN_0155bc90`) and ids; but Omega's `endrace_entry` is `None` (a finished
     race keeps the built-in scoreboard; wiring HD's reader leaves `EndRace Menu` with no options,
     `docs/formats/omega-status.md`), so no Omega Detonator screen draws until that is solved (a
@@ -299,11 +300,9 @@ placement RNG cannot match the original's `Libc_Rand` (a departure, documented).
   `cannon-volley` with envelopes~~ done (`det-cannon-regrab`, 14.32 -> 13.35); `pad`'s floor is music-lit differently on a re-grab.
   The pair now takes each mine's envelope at the picture's tick (`detonator-mine-draw.md`, "The envelope at the picture's
   tick"); near-ball boxes within 20 grey. ~~The mine spin~~ wired (`det-mine-spin`, `detonator-mine-draw.md`, "The spin,
-  wired"): `mines-ahead` 13.17 -> 12.51 with the grab's ages pinned. ~~Ours' `PitchVolume` band~~ read
-  (`det-mine-pitch-volume`, `detonator-mine-material.md`, "The visualiser's level"): both volumes are one whole-spectrum
-  level `L` (`clamp01(5 L)`, `clamp(L, 0, 0.4)`); a wiring (commit `5fac71320`, reverted) gave `mines-ahead` 12.51 -> 12.52
-  and `cannon-volley-hot` +0.04, so not kept. `PitchVolume` is worth 0.01 grey; `MasterVolume` 0.25. To land it: re-grab
-  `cannon-volley-hot` with the volume words so no pair falls back to `L = 0`. Next: the spin on 2048 and Omega (their
+  wired"): `mines-ahead` 13.17 -> 12.51 with the grab's ages pinned. ~~Ours' `PitchVolume` band~~ read and
+  wired (`det-mine-volume-reland`, `detonator-mine-material.md`, "The visualiser's level"; ours' level scale is chosen).
+  Open: the `pad` record carries no mines, so its re-grab with mine reads would pin its rings too. Next: the spin on 2048 and Omega (their
   animate functions are not located). ~~The ring's own radius~~ measured (`det-mine-ring-radius`,
   `detonator-mine-draw.md`, "The ring's radius"): ours already draws it at the original's (57.5 against 55.5 px on the middle
   near mine; the side mines on the law's 74 and 60 px circles in both frames), and the three near mines' boxes carry 2.49 of

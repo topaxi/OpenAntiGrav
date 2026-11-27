@@ -260,11 +260,11 @@ pub struct Report {
     pub electricity_bound: usize,
     /// Electricity materials whose pictures or authored values could not be read (drawn without).
     pub electricity_unread: usize,
-    /// Lightmapped `tunnel_fx_noalpha` slots whose window lights are bound third - see
-    /// `super::tunnel_emissive`.
-    pub tunnel_emissive_bound: usize,
+    /// Lightmapped slots whose family's emissive is bound third or fourth - see
+    /// `super::lightmapped_emissive`.
+    pub lightmapped_emissive_bound: usize,
     /// Such slots whose emissive could not be bound (drawn without).
-    pub tunnel_emissive_unread: usize,
+    pub lightmapped_emissive_unread: usize,
     /// Detonator bomb materials drawn as their colour times their brightness - see
     /// `super::bomb_tint`.
     pub bomb_tint_bound: usize,
@@ -578,13 +578,13 @@ impl Report {
         } + &match self.electricity_unread {
             0 => String::new(),
             n => format!(", {n} electricity material(s) that could not be read (drawn without)"),
-        } + &match self.tunnel_emissive_bound {
+        } + &match self.lightmapped_emissive_bound {
             0 => String::new(),
-            n => format!(", {n} tunnel material(s) drawn with their window lights"),
-        } + &match self.tunnel_emissive_unread {
+            n => format!(", {n} lightmapped material(s) drawn with their emissive"),
+        } + &match self.lightmapped_emissive_unread {
             0 => String::new(),
             n => format!(
-                ", {n} tunnel material(s) whose window lights could not be bound (drawn without)"
+                ", {n} lightmapped material(s) whose emissive could not be bound (drawn without)"
             ),
         } + &match self.bomb_tint_bound {
             0 => String::new(),

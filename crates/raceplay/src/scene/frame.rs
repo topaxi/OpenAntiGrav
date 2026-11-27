@@ -488,6 +488,7 @@ impl Scene {
         let scene = mesh_render::Scene {
             fog: fog
                 .with_texture_detail(race.texture_detail())
+                .with_texlod_camera(projection.y_axis.y)
                 .with_wet(race.wet_road()),
             // Pulse's hull lights reach the craft (see `ship_scene`) and, in this scene,
             // the track vertices a loader marked as lit by the circuit's rig alone.

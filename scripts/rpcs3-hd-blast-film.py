@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""A film of an HD Missile or Bomb exploding on a craft, on an attached RPCS3, with no GDB stub.
+"""A film of an HD Missile or Bomb exploding on a craft, or Rockets bursting on the wall, on an attached RPCS3,
+with no GDB stub.
 
     source data/scratch/<lane>/env.sh
     scripts/emu-restore-state.sh <lane> data/saves/hd-fury/<weapons-on grid state> --no-gdb
@@ -17,6 +18,10 @@ of every texture a particle draw binds (`tex/`, read by `scripts/hd-particle-uv.
 blast object's bytes (`NormalBombBlast`, vtable `0x00864ab8`: its matrix at `+0x290`) or for the Missile the
 pool entry's age and centre (vtable `0x00864b38`, `+0x170`, `+0xd0`). The pickup words and what each one
 fires are on `docs/reverse-engineering/rpcs3-capture.md`.
+
+`--weapon rocket-wall` parks the player where the race left it, turned `--yaw` degrees towards a wall, fires the
+Rocket volley and photographs at ages since the press (nothing is struck, so there is no hit to count from);
+`--scout` keeps only the frames, to find the yaw and the ages first.
 
 The target is frozen with `SIGSTOP`, as the Rocket film does; the picture can trail guest memory by a few
 ticks, and `compare_env.py film-pair-field` moves a pair's field to the frame's instant.
@@ -52,9 +57,9 @@ import ps3_pose  # noqa: E402
 import rpcs3_hd_field  # noqa: E402
 
 #: Pickup-slot states (`docs/reverse-engineering/rpcs3-capture.md`, "Giving the player a weapon").
-#: The word written into the pickup slot. The Mine's 3 did not fire a Mine (the slot still read it after the
-#: press); pass `--state` to try another.
-STATES = {"missile": 1, "mine": 3, "bomb": 9}
+#: The word written into the pickup slot (`rocket-wall` is the Rocket's). The Mine's 3 did not fire a Mine
+#: (the slot still read it after the press); pass `--state` to try another.
+STATES = {"missile": 1, "mine": 3, "bomb": 9, "rocket-wall": 0}
 BOMB_BLAST_VTABLE = 0x00864AB8
 BOMB_BLAST_BYTES = 0x4C0
 SCAN = (0x30000000, 0x40000000)
@@ -106,6 +111,16 @@ def ring_candidates(out, stem):
         base = int(path.stem.rsplit("-", 1)[1], 16)
         candidates.extend(ps3_pose.packet_candidates(path.read_bytes(), base=base))
     return candidates
+
+
+def turned(pos, rows, yaw_deg, side):
+    """`(pos, rows)` moved `side` units along the first basis row and turned `yaw_deg` about the second:
+    positive `yaw_deg` turns the third row (forward) towards the first."""
+    c, s = math.cos(math.radians(yaw_deg)), math.sin(math.radians(yaw_deg))
+    right, up, forward = rows
+    new_forward = [c * forward[i] + s * right[i] for i in range(3)]
+    new_right = [c * right[i] - s * forward[i] for i in range(3)]
+    return [pos[i] + side * right[i] for i in range(3)], [new_right, list(up), new_forward]
 
 
 def film_blast(session, gdb, mem, args, out):
@@ -248,6 +263,45 @@ def film_blast(session, gdb, mem, args, out):
                 hit = (n,) + got
                 break
         after_hit_hold = None
+    elif args.weapon == "rocket-wall":
+        # The player stands where the race left it, turned `yaw` degrees about its own up axis towards a wall,
+        # and fires; nothing is struck, so the ages count from the press.
+        here = place.read_pose(gdb, body)
+        info["start_pose"] = here
+        pos, rows = turned(here["pos"], here["rows"], args.yaw, args.side)
+        info.update({"yaw": args.yaw, "side": args.side, "stand_pos": pos, "stand_rows": rows})
+
+        def hold():
+            park(body, pos, rows)
+
+        for _ in range(args.settle):
+            step(hold)
+        before = shields()
+        photograph("pre", "before the shot", None)
+        gdb.write(slot + rocket.SLOT_STATE, struct.pack(">ii", state, state))
+        session.pad.set("triangle", True)
+        pressed = mem.f32(ship + film.LAP_CLOCK)
+        want = list(ages)
+        frames = 0
+        while want and frames < args.max_frames:
+            step(hold)
+            frames += 1
+            if frames == args.press_frames:
+                session.pad.set("triangle", False)
+            age = mem.f32(ship + film.LAP_CLOCK) - pressed
+            while want and age >= want[0] - 1e-6:
+                name = "a%04d" % round(want[0] * 1000)
+                want.pop(0)
+                if args.scout:
+                    time.sleep(args.flush)
+                    drive.screenshot(out / ("%s.png" % name), trim=True)
+                    print("%s: age %.3f" % (name, age), flush=True)
+                else:
+                    photograph(name, "age since the press", age)
+        session.pad.set("triangle", False)
+        info.update({"pressed_clock": pressed, "fell_shields": dropped_craft() is not None,
+                     "player_pose": place.read_pose(gdb, body)})
+        return shots, info
     else:
         # Weapons that lie on the road: the player stops, drops, then stands `back` units behind the drop.
         here = place.read_pose(gdb, body)
@@ -335,6 +389,9 @@ def main():
     ap.add_argument("--flush", type=float, default=0.5, help="seconds before a stopped frame is grabbed")
     ap.add_argument("--fire-after", type=float, default=5.0, help="lap clock seconds before the shot is set up")
     ap.add_argument("--max-frames", type=int, default=600, help="frames to wait for the hit")
+    ap.add_argument("--yaw", type=float, default=35.0, help="rocket-wall: degrees the parked craft is turned")
+    ap.add_argument("--side", type=float, default=0.0, help="rocket-wall: units the parked craft is moved sideways")
+    ap.add_argument("--scout", action="store_true", help="rocket-wall: frames only, no camera, ring or textures")
     args = ap.parse_args()
     out = args.out
     out.mkdir(parents=True, exist_ok=True)

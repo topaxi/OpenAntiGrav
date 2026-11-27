@@ -388,6 +388,7 @@ impl Ramp {
             height: 1,
             texels: Texels::Rgba8(vec![255; 4]),
             mip_count: None,
+            lod_code: 0.0,
         }));
         // The colour this writes is the whole surface colour, a tint on the
         // white texture and not HD's baked light term.

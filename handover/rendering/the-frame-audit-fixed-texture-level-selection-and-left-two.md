@@ -1,8 +1,8 @@
 ---
 status: re-first
 titles: [pulse]
-updated: 2026-11-10
-summary: "Pulse frame audit: hull sheen closed (the extra pass takes the hull's light colour); open: Pure's twin, the plume's list, far-field texture level"
+updated: 2026-11-27
+summary: "Pulse frame audit: texture levels wired; open: Pure's sheen twin, the plume's list, distant trees"
 ---
 
 # The Pulse frame audit fixed texture level selection and left two differences it could not trace
@@ -94,14 +94,25 @@ of it the same day; see `frame-audit.md`.
   whether the batch-set draw path carries a bound of its own (1,071 static draws
   pass the section test with no twin), and the small transparent quads the census
   cannot match.
-- **Whether real PSP hardware shows level 1 past about 256 units.** The game
-  programs slope mode with slope `1/256` and bias 1; the renderer now applies
-  that law to the disc's levels, and PPSSPP's GPU backends do not, so no frame of
-  the emulator can confirm the far field. Two things stay unread: that our
-  `clip.w` is the GE's `|z|`, and `Texture_BuildBindList`'s per-texture mode and
-  bias. A hardware capture or PPSSPP's software renderer would say.
-- **Wipeout Pure shares the slope rule**; its pre-swizzled textures keep a
-  synthesised chain. Unmeasured against a Pure capture.
+- ~~**Whether the original samples level 1 past about 256 units.**~~ **Answered and
+  wired 2026-11-27** (`pulse-farfield-lod`): no single distance, each texture has its
+  own bias; the formula, evidence and pair scores are in `frame-audit.md`, "The level
+  law, measured". Left from it:
+  - ~~**The camera behind `K = -9.0506`.**~~ **Read 2026-11-27** (`k-writer-watch`): the pre-race
+    flyby's, on Pulse and Pure. Wiring is in
+    [the per-title thread](far-field-texture-level-per-title.md).
+  - **Distant trees are lighter than the original's at every level** (Talon long
+    straight, `frame-audit.md`, "The level law, measured"). Next: compare the two
+    tree draws' blend, alpha test and fog state against ours, about an hour.
+  - **Pulse's version 4 `.vex` textures keep the flat law**, ten Zone wreck textures
+    among them (count in `frame-audit.md`). Switching them on needs a `Title` field,
+    because version 4 is Pure's format too; about an hour.
+  - **Real hardware is unmeasured**: the factor 2 in the slope law is PPSSPP's software
+    rasteriser's.
+  - **Automatic-mode (`.mip` effect and HUD) textures** keep their old selection; only
+    blended and HUD draws used mode 0 in the recorded frames.
+- **Wipeout Pure shares the slope rule and the per-texture bias**, not wired: see
+  `far-field-texture-level-per-title.md`.
 - The cyan strip lights and the start gantry differ between the two sides by
   timing only; a comparison that needs them should pin the same tick after GO.
 
@@ -132,5 +143,3 @@ of it the same day; see `frame-audit.md`.
   "missing, inside the view" draws into a verdict; a cold second boot of Metropia;
   and read `Mesh_SubmitNode`'s caller for the transparent list, since the missing
   draws are all there.
-- Capture Pure at one pose with `psp-trace.py` and confirm or scope the slope
-  rule; read `Texture_BuildBindList`'s mode/bias branch.

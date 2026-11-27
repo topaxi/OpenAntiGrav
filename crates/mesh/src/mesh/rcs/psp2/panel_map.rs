@@ -143,6 +143,7 @@ fn panel_picture(path: &str, blob: &[u8]) -> Option<ModelTexture> {
             levels: vec![texels.iter().flat_map(|h| h.to_le_bytes()).collect()],
         },
         mip_count: None,
+        lod_code: 0.0,
     })
 }
 

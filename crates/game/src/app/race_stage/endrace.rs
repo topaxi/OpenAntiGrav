@@ -122,6 +122,8 @@ impl std::fmt::Debug for EndRaceRuntime {
 pub(crate) struct EndRacePrep {
     screens: crate::endrace::EndRaceScreens,
     renderer: Renderer,
+    /// The `FE Style` the screens were read in, which the frame's block corners follow.
+    style: crate::front_end_style::ScreenStyle,
     /// One preview per decoded trophy, with the medal it stands for and its placement. Empty
     /// unless the race is a campaign cell, the only race `EndRace Rewards` shows a medal for.
     trophies: Vec<(
@@ -134,6 +136,10 @@ pub(crate) struct EndRacePrep {
 impl EndRacePrep {
     /// The screens read in `screens`, with the GPU side built for `format`. `with_trophies` is
     /// whether the race can award a medal; a trophy that will not build draws nothing.
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "one build site, each a separate fact"
+    )]
     pub(crate) fn build(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
@@ -141,6 +147,7 @@ impl EndRacePrep {
         anisotropy: oag_mesh::mesh_render::Anisotropy,
         atlas: oag_ui::font::Atlas,
         mut screens: crate::endrace::EndRaceScreens,
+        style: crate::front_end_style::ScreenStyle,
         with_trophies: bool,
     ) -> Result<Self> {
         let renderer = Renderer::new(device, queue, format, None, atlas, &screens.sprites)?;
@@ -162,6 +169,7 @@ impl EndRacePrep {
         Ok(Self {
             screens,
             renderer,
+            style,
             trophies,
         })
     }
@@ -229,8 +237,10 @@ impl EndRaceRuntime {
         let EndRacePrep {
             screens,
             mut renderer,
+            style,
             trophies,
         } = prep;
+        let frame = style.frame(&frame);
         // `Race End Photo` first after a finish by the line wherever the
         // disc's screen read (Pulse), and nowhere else: Wipeout HD/Fury's
         // equivalent was not read, so its panels come up at once as they
@@ -686,9 +696,7 @@ pub(crate) fn headline(mode: oag_race::Mode, place: Option<u8>) -> Headline {
 /// non-Tournament race, and for a Tournament's own last leg.
 #[must_use]
 ///
-/// **`watch_replay`** adds WATCH REPLAY after VIEW RESULTS AGAIN, for a race that was recorded
-/// and a dialect that can draw a row the disc does not author (Pulse's list; HD's blocks and
-/// 2048's buttons are the disc's own and have no such row).
+/// **`watch_replay`** adds WATCH REPLAY after VIEW RESULTS AGAIN: [`WatchReplayOffer`].
 pub(crate) fn menu_options(
     campaign: bool,
     tournament_next_leg: bool,
@@ -711,6 +719,34 @@ pub(crate) fn menu_options(
         options.push(MenuOption::WatchReplay);
     }
     options
+}
+
+/// What decides whether `EndRace Menu` offers WATCH REPLAY, this build's own row
+/// (`docs/ui/replays.md`, "The end-of-race row").
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct WatchReplayOffer {
+    /// The race was recorded.
+    pub(crate) recorded: bool,
+    /// The run is held to the disc's own screens (`--original-menu`).
+    pub(crate) original_menu: bool,
+    /// A Tournament leg is still to race: watching replaces the finished race, and NEXT RACE
+    /// with it.
+    pub(crate) tournament_next_leg: bool,
+    /// A network link is up: the loader would join the room with the recording's race.
+    pub(crate) networked: bool,
+}
+
+impl WatchReplayOffer {
+    /// On Pulse's list and HD's blocks; 2048's tile strip draws no such row.
+    #[must_use]
+    pub(crate) fn on(self, dialect: Option<oag_title::EndRaceDialect>) -> bool {
+        use oag_title::EndRaceDialect::{Field, Pulse};
+        self.recorded
+            && !self.original_menu
+            && !self.tournament_next_leg
+            && !self.networked
+            && matches!(dialect, Some(Pulse | Field))
+    }
 }
 
 /// Pulse's own Tournament standings, off this project's `oag_race::tournament`

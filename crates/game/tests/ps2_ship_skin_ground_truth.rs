@@ -114,6 +114,8 @@ fn every_team_swaps_in(skin_file: &str, sibling: fn(&str) -> String) {
             rgba(&baseline),
             "{team}: {expected_name} is the same picture as the baseline atlas"
         );
+        // The swapped atlas keeps the slot's level cap: the base alone.
+        assert_eq!(painted.mip_count, Some(1), "{team}: {report:?}");
     }
 }
 

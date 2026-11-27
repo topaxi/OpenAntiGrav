@@ -306,6 +306,7 @@ fn a_bc7_chain_uploads_on_a_device_without_block_compression() {
             levels: vec![vec![1; 16]],
         },
         mip_count: None,
+        lod_code: 0.0,
     };
     let view = crate::mesh_render::texture::upload(&device, &queue, &texture, false);
     drop(view);

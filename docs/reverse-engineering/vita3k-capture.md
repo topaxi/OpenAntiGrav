@@ -443,6 +443,23 @@ Set up and driven as far as the front end; **taps do not register until the firm
 - **`DATA.BIN`** (`ux0/user/00/savedata/PCSF00007/-AUTO-/`) has no readable strings (`strings -a` prints noise), so
   `CameraP1` is not readable off the save; the options screen is (above).
 
+## Which textures a frame binds (2026-11-27, `v2048-texlevel-measure`)
+
+No RenderDoc needed: dump the guest's memory (a `vita3k-mem.py`-style daemon that is Vita3K's parent, reading
+under `SIGSTOP`) and read Vita3K's own renderer queue, which lives in guest memory.
+
+- A queued texture bind is a header word `0x0009xx09` (opcode `SetState`, state `Texture`; mask the flags
+  byte `xx`), the unit index, then the 16-byte `SceGxmTexture`. About 6,000 sit in one race dump (Vita3K `885f9168d`, renderer sources read
+  for behaviour).
+- Descriptor words: word 0 holds mip filter (bit 9), min (10-11), mag (12-13), mip count minus one (17-20)
+  and LOD bias (21-26, `(raw - 31) / 8` levels); word 2 is the texel address with `lod_min0` in its low bits.
+- **Vita3K write-protects the pages of textures it caches.** Join adjacent mappings and read the read-only
+  ones, or exactly the bound textures are missed.
+- **Do not take every descriptor-shaped word in memory as bound state.** Reused command slots keep stale
+  texture words with some bytes overwritten, and random words decode as descriptors.
+- A load wedged at 56 % has usually run the texture loader already, so resident descriptors can still be
+  read, but nothing the game does after the load.
+
 ## The race load, with the screen's own fields (2026-11-16, `vita-race-load-re`)
 
 `scripts/vita-2048-race-load.py --profile <private profile> --out <dir> --node X Y` walks to an event card, taps Play,
