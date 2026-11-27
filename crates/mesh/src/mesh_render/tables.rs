@@ -160,7 +160,7 @@ pub const NODE_ANIMS_SIZE: u64 = std::mem::size_of::<NodeAnims>() as u64;
 /// vast majority of geometry costs one indexed load and no branch - the same
 /// shape as the two tables above.
 ///
-/// 2 KiB at [`crate::mesh::rcs::EMISSIVE_LIMIT`], inside the 64 KiB uniform
+/// 4 KiB at [`crate::mesh::rcs::EMISSIVE_LIMIT`], inside the 64 KiB uniform
 /// binding every wgpu backend guarantees.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]

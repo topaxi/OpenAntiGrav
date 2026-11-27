@@ -30,7 +30,7 @@
 // (`_alphaboost`, `scale.z`) and the advert's weight against its own red
 // channel (`_desaturate`, `scale.w`: `mix(adv.r, adv, w)`).
 
-import package::bindings::{emissive_scale, emissive_tint, scene};
+import package::bindings::{emissive_scale, emissive_tint, material_row, scene};
 import package::texture_lod::{MATERIAL_ALBEDO, MATERIAL_LIGHTMAP, MATERIAL_PAD_MASK, detail_sample};
 import oag_shaders::target::{gamma_to_target, linear_out};
 import package::types::{VertexOutput};
@@ -47,7 +47,7 @@ fn overlay(base: vec3<f32>, layer: vec3<f32>) -> vec3<f32> {
 // call is under the flat `slots` bit that marks a billboard, and the fetches below sit in no branch.
 @diagnostic(off, derivative_uniformity)
 fn holo_billboard(in: VertexOutput) -> vec4<f32> {
-    let entry = (in.slots >> 24u) & 63u;
+    let entry = material_row(in.slots);
     let rates = emissive_tint(entry);
     let tint = emissive_tint(entry + 1u).rgb;
     let finish = emissive_scale(entry + 1u);

@@ -158,7 +158,7 @@ material's `_ne` or `norm` picture (sampler `0xa2d555b9`), whose alpha is the ba
 **What ours does.** `oag_mesh::mesh::rcs::psp2` draws the term through the emissive-add path and
 gives each class of pad its own glow entry
 (`circuit_pads::PadBars`), because a circuit's pads are drawn with its road and the glow table
-holds 64 entries. `oag_raceplay` rewrites those three entries a frame
+is shared across the whole circuit (128 entries). `oag_raceplay` rewrites those three entries a frame
 (`oag_title::weapon_pad::WeaponPadGlow::ByClass`).
 `psp2_circuit_pads_ground_truth` asserts every weapon-pad triangle, and no other, draws from the
 entry of the class its name gives.

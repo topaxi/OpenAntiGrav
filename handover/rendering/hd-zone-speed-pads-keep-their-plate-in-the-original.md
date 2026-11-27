@@ -43,8 +43,7 @@ Evidence page: `docs/ghidra/functions/ps3-hdfury-eu/zone-plain-chunks.md`
 ## Recipe
 
 Steps 1 to 3 and 5 to 6 landed (branch `zone-pad-wire`): `RENDER_ZONE_PLAIN` and `Mesh::zone_plain()`
-in `render_block.rs`; the carrier is `slots::ZONE_PLAIN` (bit 30: the glow index is six bits, the
-seventh was free), set per chunk in `mesh::rcs::surface`; `shade.wesl` drops the Zone surface and
+in `render_block.rs`; the carrier is `slots::ZONE_PLAIN` (bit 5), set per chunk in `mesh::rcs::surface`; `shade.wesl` drops the Zone surface and
 lights the chunk `ambient + sat(N.L) * sun`. Tests and the pad-plate numbers are on
 `docs/ghidra/functions/ps3-hdfury-eu/zone-plain-chunks.md`, "Against this port". Step 4 is still open:
 

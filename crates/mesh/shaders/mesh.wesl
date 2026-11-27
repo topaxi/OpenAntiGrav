@@ -6,7 +6,7 @@
 // black.
 
 import package::alpha_test::{alpha_test_ref};
-import package::bindings::{anims, emissive_scale, emissive_tint, node_anims, program_in, scene, uniforms};
+import package::bindings::{anims, emissive_scale, emissive_tint, material_row, node_anims, program_in, scene, uniforms};
 import package::depth_bias::{biased_clip};
 import package::fog::{fogged, plus_after_fog};
 import package::glow::{stamp_discards, stamp_value, stamped_alpha};
@@ -119,7 +119,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     // the entry's scale and `offset` the animation-table row its offset names, which plays
     // the material's own curve. Laid here into the chunk's unused second pair because the
     // table is a vertex-stage binding and the coordinate is linear in `uv`.
-    let chevron_entry = (in.slots >> 24u) & 63u;
+    let chevron_entry = material_row(in.slots);
     // 2048's and Omega's centre lane takes the entry without `LIT_ALPHA` (`program[1]` 2).
     if ((in.slots & 2147483648u) != 0u || emissive_scale(chevron_entry).w > 1.5)
         && chevron_entry != 0u
@@ -130,6 +130,14 @@ fn vs_main(in: VertexInput) -> VertexOutput {
             in.lightmap_texcoord,
             in.texcoord * emissive_scale(chevron_entry).x + vec2<f32>(offset),
         );
+    }
+    // **HD's keyed lightmapped emissive** (`PROGRAM_LIGHTMAPPED_KEYED`, mode 33): the `k` its
+    // curve plays, from the animation-table row the entry's second lane names, in the second
+    // pair's first lane. Direct comparison: `program_codes` has no bit past 31.
+    let key_entry = material_row(in.slots);
+    if key_entry != 0u && emissive_scale(key_entry).z > 32.5 && emissive_scale(key_entry).z < 33.5 {
+        let row = u32(emissive_scale(key_entry).w + 0.5);
+        out.lightmap_texcoord = vec4<f32>(in.lightmap_texcoord, anims.transform[min(row, 63u)].z, 0.0);
     }
     // `uv * scale + offset`, the GE's own `TEXSCALE`/`TEXOFFSET` arithmetic -
     // the four words `TexAnim_CompileTransformList` (`0x08927358`) writes into

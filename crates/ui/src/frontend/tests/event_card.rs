@@ -20,6 +20,7 @@ fn card_event() -> Vec<MapEvent> {
     events[0].card = EventCard {
         title: "UNITY SQUARE".to_string(),
         kind_label: Some("RACE".to_string()),
+        description: None,
         pass_label: Some("PASS".to_string()),
         has_objective: true,
         objective: Some("FINISH AT LEAST 5TH".to_string()),

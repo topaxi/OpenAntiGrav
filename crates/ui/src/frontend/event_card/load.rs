@@ -40,8 +40,16 @@ const MODE_WRAP: f32 = 375.0;
 const MODE_PITCH: f32 = 21.0;
 
 impl CardPaint<'_> {
-    fn wrapped_lines(&self, text: &str, scale: f32, width: f32) -> usize {
-        self.lines.map_or(1, |lines| lines(text, scale, width))
+    pub(super) fn wrapped_lines(&self, text: &str, scale: f32, width: f32) -> usize {
+        self.atlas.map_or(1, |atlas| {
+            crate::font::wrap(atlas, text, scale, width).len()
+        })
+    }
+
+    /// The width `text` draws at, `None` without an atlas.
+    pub(super) fn text_width(&self, text: &str, scale: f32) -> Option<f32> {
+        self.atlas
+            .map(|atlas| crate::font::measure(atlas, text) * scale)
     }
 
     /// `GameTip_DrawPanel (x = 16, y = 92)`.

@@ -549,6 +549,12 @@ fn event_card(
         tabs: card_tabs(strings),
         title: track.map(|track| track.display_name).unwrap_or_default(),
         kind_label: strings.get(kind_id).map(str::to_string),
+        description: instance
+            .and_then(|instance| instance.field("M_DESCRIPTION"))
+            .and_then(|field| field.value())
+            .and_then(|id| strings.get(id))
+            .filter(|text| !text.is_empty())
+            .map(str::to_string),
         mode_body: mode_body(strings, kind_id),
         pass_label: strings.get("FE_PASS").map(str::to_string),
         has_objective: objective.is_some(),

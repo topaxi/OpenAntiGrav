@@ -596,6 +596,56 @@ def check_detonator_picture_tick(root):
     assert flags[flags.index("--detonator-mine-volumes") + 1] == "0.9663,0.1933", flags
 
 
+def check_pure_presented_lag(root):
+    """A Pure PSP pair recorded one frame behind is re-timed to `ce.PURE_PRESENTED_LAG` by the re-render (race and scenery
+    clocks), once; a Zone pair moves its scenery clock only; a fresh capture takes the same lag."""
+    spec = importlib.util.spec_from_file_location("compare_rerender_ours_pure", HERE / "compare-rerender-ours.py")
+    rerender = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(rerender)
+    script = importlib.util.spec_from_file_location("psp_pure_pair", HERE / "psp-pure-pair.py")
+    pair_script = importlib.util.module_from_spec(script)
+    script.loader.exec_module(pair_script)
+    assert pair_script.PRESENTED_LAG == ce.PURE_PRESENTED_LAG == 2
+
+    make_pair(root, "pair", True)
+    theirs = root / "pair" / "theirs.png"
+    fake = root / "fake-game.sh"
+    fake.write_text('#!/bin/sh\nfor a; do out="$a"; done\ncp "%s" "$out"\n' % theirs)
+    fake.chmod(0o755)
+    pj = root / "pair" / "pair.json"
+    go = ce.go_tick()
+
+    def run(original, ticks, offset):
+        rec = {"profile": "pure-psp", "output": [48, 27], "kind": "race", "original": original,
+               "ours": {"ticks": ticks, "flags": ["--race", "--ticks", str(ticks), "--world-clock-offset", offset]}}
+        pj.write_text(json.dumps(rec))
+        results = []
+        for _ in range(2):
+            assert rerender.rerender(pj, fake).startswith("ok")
+            done = json.loads(pj.read_text())
+            flags = done["ours"]["flags"]
+            results.append((flags[flags.index("--ticks") + 1], flags[flags.index("--world-clock-offset") + 1], done["original"]))
+        assert results[0] == results[1], "a second re-render moves nothing"
+        return results[0]
+
+    # Chenghou's numbers: the stop reads 6.573 s, one frame 0.03338 s; two frames back is 6.5065 s, 390 ticks after GO.
+    dt, at_stop = 0.033384, 6.573305
+    race = {"frame_dt_s": dt, "presented_lag_ticks": 1, "race_clock_at_stop_s": at_stop, "race_clock_s": at_stop - dt,
+            "world_clock_s": 16.581108, "provenance": {"presented_lag": {"value": 1}}}
+    ticks, offset, orig = run(race, go + 392, "5.514")
+    assert ticks == str(go + 390), ticks
+    assert offset == "%.3f" % (16.581108 - dt - (go + 390) / 60), offset
+    assert abs(orig["race_clock_s"] - (at_stop - 2 * dt)) < 1e-9 and orig["presented_lag_ticks"] == 2
+    assert orig["provenance"]["presented_lag"] == ce.pure_lag_provenance(), orig["provenance"]
+    zone = {"frame_dt_s": dt, "presented_lag_ticks": 1, "world_clock_s": 84.116678}
+    ticks, offset, orig = run(zone, 0, "84.117")
+    assert (ticks, offset) == ("0", "%.3f" % (84.116678 - dt)), (ticks, offset)
+    assert orig["presented_lag_ticks"] == 2
+    for other in ({"profile": "pulse-psp", "original": dict(race, presented_lag_ticks=1), "ours": {}},
+                  {"profile": "pure-psp", "original": {}, "ours": {}}):
+        assert ce.pure_lag_flags(other, ["--ticks", "9"], go) == ["--ticks", "9"], other
+
+
 def main():
     import tomllib
     with tempfile.TemporaryDirectory(dir=oag_tmp.temp_root()) as t:
@@ -648,6 +698,8 @@ def main():
     check_hd_countdown_tick()
     check_hd_wait_countdown()
     check_detonator_volley_ticks()
+    with tempfile.TemporaryDirectory() as t:
+        check_pure_presented_lag(Path(t))
     with tempfile.TemporaryDirectory(dir=oag_tmp.temp_root()) as t:
         check_detonator_picture_tick(Path(t))
     print("compare environment: round trip ok")

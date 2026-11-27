@@ -9,7 +9,7 @@ use oag_gpu::formats::SceneStore;
 use oag_rcs::rcsmodel;
 
 use super::skin::{self, flips, picks, roles, skin, variants};
-use super::{Report, TextureSlots, Textures, curve_track, cutout, emissive, slots};
+use super::{Report, TextureSlots, Textures, curve_track, cutout, emissive};
 
 /// One `.rcsmodel`'s whole material setup: every texture, lightmap, slot
 /// role, specular exponent, additive-glow table and alpha-test reference a
@@ -19,8 +19,8 @@ use super::{Report, TextureSlots, Textures, curve_track, cutout, emissive, slots
 /// both read the same per-material tables off the same file, keyed the same
 /// way, and a caller that re-derived them by hand would drift from this one
 /// the moment either grew a term. It has grown five already
-/// (`material_specular_exponent`, `emissive`, `alpha_test_ref`, the `FLIP_V`
-/// fold, `material_anim`) since the reading this was still one inline block.
+/// (`material_specular_exponent`, `emissive`, `alpha_test_ref`,
+/// `material_flip_v`, `material_anim`) since the reading this was still one inline block.
 pub(super) struct MaterialSetup {
     pub(super) textures: TextureSlots,
     pub(super) lightmaps: TextureSlots,
@@ -28,6 +28,9 @@ pub(super) struct MaterialSetup {
     pub(super) material_specular_exponent: Vec<f32>,
     pub(super) material_glow: Vec<f32>,
     pub(super) material_colour_factor: Vec<bool>,
+    /// Per material slot: whether the vertex program flips `v` - see
+    /// [`crate::mesh::Model::material_flip_v`].
+    pub(super) material_flip_v: Vec<bool>,
     pub(super) material_variants: Vec<Option<oag_rcs::rcsmaterial::Variant>>,
     /// Per material slot: whether the material ships a `StaticQuake` vertex
     /// program, so the Quake's displacement reaches it - see
@@ -66,6 +69,7 @@ impl MaterialSetup {
             material_specular_exponent: model.material_specular_exponent.clone(),
             material_glow: model.material_glow.clone(),
             material_colour_factor: model.material_colour_factor.clone(),
+            material_flip_v: model.material_flip_v.clone(),
             material_variants: model.material_variants.clone(),
             material_quake: model.material_quake.clone(),
             material_tangent: model.material_tangent.clone(),
@@ -113,22 +117,11 @@ pub(super) fn material_setup(
         textures,
         report,
     );
-    // **The coordinate's orientation, off the resolved *vertex* block** rather
-    // than the fragment one the roles come from, and folded into the same word
-    // because it is the same kind of statement: what this material's own
-    // microcode says. See `skin::flips`.
-    for (packed, flipped) in
-        material_slots
-            .iter_mut()
-            .zip(flips(model, &material_variants, textures))
-    {
-        if flipped {
-            *packed |= slots::FLIP_V;
-        }
-    }
-    // The additive glow, read off the same resolved variant the roles are -
-    // and after the flip, because it writes into the same word. See
-    // `mesh::slots::ADD_SECOND`.
+    // The coordinate's orientation, off the resolved *vertex* block rather
+    // than the fragment one the roles come from. See `skin::flips`.
+    let material_flip_v = flips(model, &material_variants, textures);
+    // The additive glow, read off the same resolved variant the roles are.
+    // See `mesh::slots::ADD_SECOND`.
     let emissive = emissive::emissive(
         model,
         &material_variants,
@@ -462,12 +455,14 @@ pub(super) fn material_setup(
     if lit_emissive {
         let lit = super::lightmapped_emissive::lightmapped_emissive(
             model,
+            model_blob,
             &material_variants,
             textures,
             &mag_emissive,
             &wave_maps,
             &mut material_slots,
             &mut emissive,
+            &mut anim_tracks,
             report,
         );
         super::mag_wave::merge(&mut mag_emissive, lit.third);
@@ -483,6 +478,7 @@ pub(super) fn material_setup(
         material_specular_exponent,
         material_glow,
         material_colour_factor,
+        material_flip_v,
         material_variants,
         material_quake,
         material_tangent,

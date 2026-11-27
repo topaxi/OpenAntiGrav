@@ -27,6 +27,19 @@ impl Frontend {
         self.default_line_height = Some(default_line_height);
     }
 
+    /// Draws a tile's label under its box in `role`'s own face, which the renderer's glyph
+    /// slot has to hold (`boot::fonts::install_boot_face`). Never called for a role that did
+    /// not load: a `FacedText` with no face falls back to the `Default` atlas at full size.
+    pub fn set_label_face(&mut self, role: &'static str) {
+        self.label_face = Some(role);
+    }
+
+    /// Gives the event card the atlas its words are drawn in, to wrap and centre them by their
+    /// widths. Without it the card takes every text as one line.
+    pub fn set_card_atlas(&mut self, atlas: crate::font::Atlas) {
+        self.card_atlas = Some(std::sync::Arc::new(atlas));
+    }
+
     /// Steps the language picker's rows by one line of the `Default` face this
     /// build loaded (`line_height`, in grid units) rather than by the table
     /// [`font_line_height`] holds, which is Pulse's.

@@ -105,6 +105,7 @@ fn model(slot_bits: u32) -> Model {
         material_specular_exponent: Vec::new(),
         material_glow: Vec::new(),
         material_colour_factor: Vec::new(),
+        material_flip_v: Vec::new(),
         material_quake: Vec::new(),
         material_tangent: Vec::new(),
         material_variants: Vec::new(),

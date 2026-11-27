@@ -339,6 +339,51 @@ def countdown_flags(rec, flags, go_tick_):
     return flags
 
 
+#: Pure PSP's picture is this many of the original's frames (`original.frame_dt_s` each, two of ours' ticks) older than the
+#: RAM read at the stop the screenshot is taken at; read off the HUD's digits (`docs/tools/compare-page.md`, "The Pure
+#: circuit pairs' residual, split by region and cause").
+PURE_PRESENTED_LAG = 2
+
+
+def pure_lag_provenance(zone=False):
+    """`original.provenance.presented_lag` of a Pure PSP pair. The digits were read on the race pairs only."""
+    what = "picture, in the original's frames; HUD digits, docs/tools/compare-page.md"
+    if zone:
+        return {"value": PURE_PRESENTED_LAG, "unit": "ticks", "basis": "platform_measurement",
+                "what": what + " (race pairs; inherited by Zone, not read there)"}
+    return {"value": PURE_PRESENTED_LAG, "unit": "ticks", "basis": "measured", "what": what}
+
+
+def pure_lag_flags(rec, flags, go_tick_):
+    """`flags` at `PURE_PRESENTED_LAG` for a Pure PSP pair recorded with another lag: the race clock (and so `--ticks`) and
+    the scenery clock move back by the difference in the original's frames. Any other pair's flags unchanged. Rewrites the
+    record's clocks and lag to match, so a second call does nothing."""
+    orig = rec.get("original") or {}
+    old = orig.get("presented_lag_ticks")
+    if rec.get("profile") != "pure-psp" or old is None or old == PURE_PRESENTED_LAG:
+        return flags
+    flags = list(flags)
+    dt = orig["frame_dt_s"]
+    at_stop = orig.get("race_clock_at_stop_s")
+    ticks = rec["ours"]["ticks"]
+    if at_stop is not None:
+        clock = at_stop - PURE_PRESENTED_LAG * dt
+        ticks = go_tick_ + tenths_matched_ticks(clock)
+        orig["race_clock_s"] = clock
+        rec["ours"].update({"ticks": ticks, "race_clock_s": (ticks - go_tick_) / 60})
+        flags[flags.index("--ticks") + 1] = str(ticks)
+    if orig.get("world_clock_s") is not None:
+        # `original.world_clock_offset_s` (world less race clock) keeps its value on a race pair: both move together.
+        orig["world_clock_s"] += (old - PURE_PRESENTED_LAG) * dt
+        offset = orig["world_clock_s"] - ticks / 60
+        flags[flags.index("--world-clock-offset") + 1] = "%.3f" % offset
+        rec["ours"]["world_clock_offset_s"] = offset
+    orig["presented_lag_ticks"] = PURE_PRESENTED_LAG
+    if orig.get("provenance") is not None:
+        orig["provenance"]["presented_lag"] = pure_lag_provenance(at_stop is None)
+    return flags
+
+
 def detonator_picture_flags(rec, flags, go_tick_):
     """`flags` with `--ticks` and the gantry pin at the picture's moment, for a Detonator pair whose lag was measured
     (`original.presented_lag.picture_total_ticks`); any other pair's flags unchanged. Records ours' tick and clock."""

@@ -110,6 +110,12 @@ pub struct Model {
     /// on the light rather than a baked light to add - see
     /// `mesh::rcs::skin::light_inputs`. Empty for every title but Wipeout HD.
     pub material_colour_factor: Vec<bool>,
+    /// Per material slot: whether the material's vertex program writes `1 - v`
+    /// into the diffuse coordinate it hands the fragment program, so the build
+    /// flips it once per vertex. Read per material off the vertex microcode
+    /// (`mesh::rcs::skin::flips`); it never reaches a shader. Empty for every
+    /// title but Wipeout HD.
+    pub material_flip_v: Vec<bool>,
     /// Per material slot: whether the material ships a `StaticQuake` vertex
     /// program, which is what makes its vertices carry
     /// [`GpuVertex::quake`]. Empty for every title but Wipeout HD.
@@ -354,6 +360,7 @@ impl Model {
             material_specular_exponent: Vec::new(),
             material_glow: Vec::new(),
             material_colour_factor: Vec::new(),
+            material_flip_v: Vec::new(),
             material_quake: Vec::new(),
             material_tangent: Vec::new(),
             material_variants: Vec::new(),
@@ -413,12 +420,12 @@ pub use emissive::{
     PROGRAM_BULLET_GAUGE, PROGRAM_BW_GLASS, PROGRAM_CANNON_BOLT, PROGRAM_CHEVRON, PROGRAM_CROWD,
     PROGRAM_ELECTRICITY, PROGRAM_ELECTRICITY_AUDIO, PROGRAM_EMISSIVE_ADD,
     PROGRAM_EMISSIVE_ALPHA_MASK, PROGRAM_HULL_CHARGE_1, PROGRAM_HULL_CHARGE_2, PROGRAM_ICE_GLASS,
-    PROGRAM_LIGHTMAPPED_ADD, PROGRAM_LIGHTMAPPED_SCROLL, PROGRAM_MINE_RIM, PROGRAM_OMEGA_ROCK,
-    PROGRAM_OMEGA_SNOW, PROGRAM_PAD_BARS, PROGRAM_PANEL_MAP, PROGRAM_PICTURE_ADD,
-    PROGRAM_PICTURE_ALPHA_EMISSIVE, PROGRAM_REFLECT_MAP, PROGRAM_SHIELD_LIGHTNING,
-    PROGRAM_SHINE_MASK, PROGRAM_SNOW, PROGRAM_STATIC_HOLOGRAM, PROGRAM_TARMAC, PROGRAM_TWIN_BLEND,
-    PROGRAM_UV_OVERLAY, PROGRAM_VERTEX_BLEND, PROGRAM_WATER, REFLECTION_RATE,
-    WINDOW_REFLECTION_RATE, ZONE_EXEMPT_RATE,
+    PROGRAM_LIGHTMAPPED_ADD, PROGRAM_LIGHTMAPPED_KEYED, PROGRAM_LIGHTMAPPED_SCROLL,
+    PROGRAM_MINE_RIM, PROGRAM_OMEGA_ROCK, PROGRAM_OMEGA_SNOW, PROGRAM_PAD_BARS, PROGRAM_PANEL_MAP,
+    PROGRAM_PICTURE_ADD, PROGRAM_PICTURE_ALPHA_EMISSIVE, PROGRAM_REFLECT_MAP,
+    PROGRAM_SHIELD_LIGHTNING, PROGRAM_SHINE_MASK, PROGRAM_SNOW, PROGRAM_STATIC_HOLOGRAM,
+    PROGRAM_TARMAC, PROGRAM_TWIN_BLEND, PROGRAM_UV_OVERLAY, PROGRAM_VERTEX_BLEND, PROGRAM_WATER,
+    REFLECTION_RATE, WINDOW_REFLECTION_RATE, ZONE_EXEMPT_RATE,
 };
 
 mod flap;
@@ -1096,6 +1103,7 @@ fn build_class(
         material_specular_exponent: Vec::new(),
         material_glow: Vec::new(),
         material_colour_factor: Vec::new(),
+        material_flip_v: Vec::new(),
         material_quake: Vec::new(),
         material_tangent: Vec::new(),
         material_variants: Vec::new(),

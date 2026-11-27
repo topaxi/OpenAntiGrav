@@ -114,7 +114,7 @@ below is in the decompile and matches frame 14 to the pixel:
 | Body panel | `x=420` `y=182` 524x244 | second quad, `y` `182`..`426` |
 | Emblem | centre `(463, 134)`, 64 square (`+/-32`) | `FUN_81060584(x, y, trackName, colour)`; one textured quad tinted Blue2048 (the texture is a white square with the glyph as alpha) |
 | Title | centre `x=682`, `y=100`, font `default`, scale `0.82` | `DAT_819488ec = 0x3f51eb85` |
-| Kind line | centre `x=682`, `y=140`, `NEOSANS` | |
+| Kind line | centre `x=682`, `y=140`, `NEOSANS` | the event's description, else the kind label: "The kind line" below |
 | Mode icon | centre `(902, 134)`, 64 square | `FUN_81061040(x, y, 1.0, event+0x190, colour)` picks one of four textures (`DAT_816c87e0`..`ec`) by the event's mode ordinal |
 | Page arrows | `32x32` at `(445, 282)` and `(920, 282)`, right one the same texture mirrored | `FUN_8105c5dc` with swapped `u`; tap regions `x=420` and `x=682`, 262 wide (`FUN_8105b54c`), plus a swipe path; each step plays the `NGP_Change` cue |
 | Page dots | centre `x=682`, spaced 18, the current one Orange2048, the rest Blue2048 | `(682 - (n-1)*9) + i*18`, drawn only when the page count exceeds 1 |
@@ -126,6 +126,31 @@ below is in the decompile and matches frame 14 to the pixel:
 
 Not renamed higher: 75, because this function is shared with the pre-race
 callout and only its event branch was read.
+
+#### The kind line (2026-11-27)
+
+**Confidence: 85.** The line under the title is not the kind label alone. For an
+event, `CampaignEventCard_DrawPanel` takes `GameMode_GetDescription` and compares
+it with the string at `0x81426da8`, which is empty (`00 00 00 00`):
+
+- equal: `GameMode_GetKindLabel` is drawn;
+- otherwise the description is drawn instead, in `NEOSANS`, measured at wrap
+  `0x154` (340) and line `0x16` (22). Under 46 units tall it draws at scale 1,
+  centred at `y = 153 - h/2`; taller, at scale `0.7` (`0x3f333333`), line 15,
+  centred at `y = 155 - h/2`.
+
+The frames agree: Empire Climb's card reads `NO WEAPONS`, which is the string
+`2048_EVENT_1` that `SP.xml`'s `M_DESCRIPTION` names for `2048 - Event 1`; the
+race load of `2048 - Event 2` reads `OFFENSIVE WEAPONS ONLY` (`2048_EVENT_2`).
+Of the 141 `M_DESCRIPTION` fields in `SP.xml`, 1 id is missing from the English
+table (`E3_DEMO_RACE3`) and 77 resolve to an empty string, which leaves the kind.
+
+### `GameMode_GetDescription` - `0x812b3366`
+
+**Confidence: 85.** `localise(DAT_8151cdb0, event + 0x84, 0)`: the field at
+`+0x84` is the event's description id, `M_DESCRIPTION` (a 64-byte `char` field),
+and the result is the language table's string for it. The identification rests on
+the two cards above, whose drawn text is that field's entry.
 
 ### `CampaignEventCard_BuildPageList` - `0x8105114a`
 
@@ -160,15 +185,23 @@ registered: each `GameMode_*` constructor writes it (the mode-icon ordinal,
 ### `CampaignEventCard_DrawObjectivePage` - `0x81055150`
 
 **Confidence: 75.** Page kind `0`. `FE_PASS` (`NEOSANS_LARGE`) at `y=229`, the
-objective's own wording at `y=256`, both centred on `x=702` and wrapped at
-345 wide; a medal glyph (`FUN_81061344`) at the left; a rule at `y=329`
-(`x=482..882`); then a row of 44.8-unit glyphs at `y=370`: the speed class
-(`FUN_81061274`, `param_3[0x65]`) and, for event modes `1`/`2`/`9`/`10`/`11`,
-`callout/num_laps` with the count; then the three restriction glyphs
-(`FUN_81061db6`, `"combat"`/`"agility"`/`"speed"`) when the event restricts
-craft. For event modes `3`/`4` (`param_3[0xb6]`) it adds an `FE_ELITE_PASS`
-row. The elite row, the trophy glyph, the weapon callout and the restriction glyphs
-are drawn 2026-10-05; see [weapon-callout.md](weapon-callout.md).
+objective's own wording at `y=256`, wrapped at 345 wide (`0x43ac8000`) at scale
+`0.82`. **Corrected 2026-11-27**: the lines are not each centred on `x=702`. The
+function measures every pass and elite line, takes the widest width `w`, places
+the block at `x = 682 - (w + 40)/2`, draws the medal glyph (`FUN_81061344`)
+there and every line left-aligned at `x + 40`, so Empire Climb's `PASS` and
+`FINISH THE EVENT` start at x 574 on the frame (the decompile aliases the width
+and the slide offset, so the `+40`/`w` reading is checked against that frame).
+Then a rule at `y=329` (`x=482..882`); then a row of 44.8-unit glyphs at
+`y=370`: the speed class (`FUN_81061274`, `param_3[0x65]`) and, for event modes
+`1`/`2`/`9`/`10`/`11`, `callout/num_laps` with the count; then the three
+restriction glyphs (`FUN_81061db6`, `"combat"`/`"agility"`/`"speed"`) when the
+event restricts craft. For event modes `3`/`4` (`param_3[0xb6]`) it adds an
+`FE_ELITE_PASS` row. The elite row, the trophy glyph, the weapon callout and the
+restriction glyphs are drawn 2026-10-05; see
+[weapon-callout.md](weapon-callout.md). This build measures with its `Default`
+atlas at the scales it draws (0.66 and 0.8), so a face that differs from the
+original's moves the block by half the difference.
 
 ### `GameModeObjective_FormatText` - `0x812b671a`
 
@@ -207,7 +240,10 @@ point is still unread). Confidence for the wording table: 85.
 
 ### `CampaignEventCard_DrawLeaderboardPage` - `0x810540c4`
 
-**Confidence: 75.** Page kind `1`, `void (float dx, float dy, event)`. Three
+**Confidence: 75.** Page kind `1`, `void (float dx, float dy, event)`. The tab
+words and `FE_CURRENT_BEST` are in `NEOSANS_BOLD` at `0.7`; the `CURRENT BEST`
+bar under the selected Personal tab is `Orange2048` (its quad takes the selected
+tab's colour), not grey. Three
 tabs of 138x44 at `x=471`/`613`/`755`, `y=186` (`FE_PERSONAL`, `FE_FRIENDS`,
 `FE_GLOBAL`, `NEOSANS_BOLD` at `0.7`, centred, `y+13`); the selected tab is
 `Orange2048`, the others `Blue2048`, or `Grey2048` when
