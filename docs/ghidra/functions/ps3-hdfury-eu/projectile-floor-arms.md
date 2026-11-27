@@ -85,7 +85,11 @@ same raw write, class `2` writes nothing, `0`/`5` and `4` go to their wall arms.
 `oag_weapons::projectile::FloorArms::ParallelToFloor` (HD, Omega, 2048):
 
 - the Rocket's and Plasma's travel sweep ignores a floor class; a craft on the same step is
-  still struck (HD tests craft in each manager's own pass);
+  still struck. HD tests craft outside the sweep, in each manager's pass: the Plasma through
+  `Plasma_CheckShipHit` (`0x00146838`, [plasma.md](plasma.md)), the Rocket through the call at
+  `0x0014c5a8` (after `Rocket_Update` at `0x0014c584`, on the rocket's `+0x40` bit `0`) into
+  `0x0014bf80`, which reaches `Rocket_HitCraft` at `0x0014c338` (70: the call chain, not the
+  corridor or the bit's meaning);
 - the Shuriken's two arms write the raw step (this engine's Omega and 2048 draws can still
   hand one out);
 - the Plasma's open-air arm re-pins the speed.
