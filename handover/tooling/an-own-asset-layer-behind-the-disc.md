@@ -21,7 +21,8 @@ census and wiring: [`docs/architecture/asset-layers.md`](../../docs/architecture
   record row; (b) keep apart per race-changing mod set; (c) refuse. Recommended: (a) for data
   mods, which cannot change what a disc race reads, and (b) for simulation modules, which
   `docs/architecture/wasm-extensions/README.md` 4.4 already prescribes (a separate modded table)
-  and nothing builds: their results file into the normal rows today. Whether a mod's pilots change
+  and nothing builds: their results file into the normal rows today (read in the code, not run:
+  the finish and exit captures gate on demo, seed, pose and `--give` alone). Whether a mod's pilots change
   an opponent field enough to matter for a record was not checked.
 - **The mods refusal is English only** on the REPLAYS row and in the viewer's notice.
 - **Override forms beyond a loose name.** No hash-addressed override (`read_hash` skips both
