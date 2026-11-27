@@ -322,9 +322,9 @@ struct NodeAnims {
 // written once at build.
 struct Emissives {
     // `rgb` the tint, `w` the coordinate offset `a`.
-    tint_offset: array<vec4<f32>, 64>,
+    tint_offset: array<vec4<f32>, 128>,
     // `x` the coordinate scale `b`, `y` whether the clock moves this layer.
-    scale: array<vec4<f32>, 64>,
+    scale: array<vec4<f32>, 128>,
 };
 
 struct VertexInput {

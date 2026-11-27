@@ -338,6 +338,7 @@ pub(super) fn build_pad_class(
         material_slots,
         material_specular_exponent,
         material_glow,
+        material_flip_v,
         material_variants,
         emissive,
         mag_emissive,
@@ -360,6 +361,7 @@ pub(super) fn build_pad_class(
     out.textures = skins;
     out.lightmaps = seconds;
     out.material_slots = material_slots;
+    out.material_flip_v = material_flip_v;
     out.emissive = emissive;
     out.material_glow = material_glow;
     // The `_ne` mask, third beside the lightmap - see `pad_ne`.

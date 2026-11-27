@@ -38,7 +38,10 @@
 
 use std::sync::Arc;
 
-use oag_mesh::mesh::{Bounds, DrawCall, Emissive, GpuVertex, Model, ModelTexture, Texels, slots};
+use oag_mesh::mesh::{
+    Bounds, DrawCall, Emissive, GpuVertex, Model, ModelTexture, PROGRAM_LIGHTMAPPED_KEYED, Texels,
+    slots,
+};
 use oag_mesh::mesh_render::{self, Anisotropy, Scene, UNIFORMS_SIZE};
 
 const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
@@ -146,6 +149,7 @@ fn model(lit: f32) -> Model {
         material_specular_exponent: Vec::new(),
         material_glow: Vec::new(),
         material_colour_factor: Vec::new(),
+        material_flip_v: Vec::new(),
         material_quake: Vec::new(),
         material_tangent: Vec::new(),
         material_variants: Vec::new(),
@@ -275,6 +279,101 @@ fn the_glow_is_summed_on_the_authored_path_and_not_only_the_stand_in_one() {
     );
 }
 
+/// **A glow-table row past 63 is read as itself**, so the index is seven bits on both sides:
+/// the entry sits at row 100, and a decoy sits at row 36, which a six-bit read would name.
+#[test]
+fn a_glow_entry_past_row_63_is_the_one_drawn() {
+    let instance = wgpu::Instance::default();
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let (device, queue) =
+        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+            .expect("requesting the device");
+    let mut scene = Scene::off();
+    scene.light.enabled = 1.0;
+    scene.fog.camera = [0.0, 0.0, 100.5];
+
+    const ROW: u32 = 100;
+    let mut wide = model(1.0);
+    let layer = wide.emissive[0];
+    let mut table = vec![
+        Emissive {
+            tint: [0.0; 3],
+            ..layer
+        };
+        ROW as usize
+    ];
+    table[ROW as usize - 1] = layer;
+    table[(ROW & 63) as usize - 1] = Emissive {
+        tint: [0.0, 0.0, 2.0],
+        ..layer
+    };
+    wide.emissive = table;
+    for vertex in &mut wide.vertices {
+        vertex.slots = (vertex.slots & slots::ROLE_MASK) | (ROW << slots::MATERIAL_SHIFT);
+        assert_eq!(slots::material_index(vertex.slots), ROW);
+    }
+    let drawn = draw(&device, &queue, &wide, scene);
+    assert_eq!(
+        (drawn[0], drawn[1], drawn[2]),
+        (decoded(TINT[0]), decoded(TINT[1]), decoded(TINT[2])),
+        "row {ROW} was not the one read: the index is being cut to six bits"
+    );
+}
+
+/// **A keyed lightmapped emissive reads the sample row its curve names**
+/// (`PROGRAM_LIGHTMAPPED_KEYED`): the animation table holds `k`, the entry's second lane its row,
+/// and the sample lands at `v = k` of a four-row picture.
+#[test]
+fn a_keyed_emissive_samples_at_its_curves_value() {
+    let instance = wgpu::Instance::default();
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let (device, queue) =
+        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+            .expect("requesting the device");
+    let mut scene = Scene::off();
+    scene.light.enabled = 1.0;
+    scene.fog.camera = [0.0, 0.0, 100.5];
+
+    const ROW: u32 = 5;
+    let mut keyed = model(1.0);
+    keyed.pad_masks = vec![Some(Arc::new(ModelTexture {
+        label: "four rows".into(),
+        width: 1,
+        height: 4,
+        texels: Texels::Rgba8(
+            [50u8, 100, 150, 200]
+                .iter()
+                .flat_map(|&v| [v, v, v, 255])
+                .collect(),
+        ),
+        mip_count: Some(1),
+    }))];
+    keyed.emissive = vec![Emissive {
+        tint: [1.0; 3],
+        offset: 0.0,
+        scale: 1.0,
+        rate: 0.0,
+        program: [PROGRAM_LIGHTMAPPED_KEYED, ROW as f32],
+    }];
+    for vertex in &mut keyed.vertices {
+        vertex.slots = slots::DEFAULT | slots::EMISSIVE | GLOW_SLOT;
+    }
+    // A black albedo and a tint of one: the pixel is the sample itself.
+    for (k, row) in [(0.375, 100u8), (0.875, 200)] {
+        let drawn = draw_keyed(&device, &queue, &keyed, scene, Some((ROW, k)));
+        assert!(
+            drawn[0].abs_diff(row) <= 1,
+            "k = {k} must sample the row of value {row}, drew {drawn:?}"
+        );
+    }
+}
+
 /// Identity camera and model, so clip space is model space.
 fn uniforms() -> Vec<u8> {
     let identity: [[f32; 4]; 4] = [
@@ -295,6 +394,17 @@ fn uniforms() -> Vec<u8> {
 
 /// Draws the model once into a `SIZE`x`SIZE` target and reads the centre back.
 fn draw(device: &wgpu::Device, queue: &wgpu::Queue, model: &Model, scene: Scene) -> [u8; 4] {
+    draw_keyed(device, queue, model, scene, None)
+}
+
+/// [`draw`] with one row of the texture-animation table set to the curve value `k`.
+fn draw_keyed(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    model: &Model,
+    scene: Scene,
+    key: Option<(u32, f32)>,
+) -> [u8; 4] {
     let built = mesh_render::build(
         device,
         queue,
@@ -312,6 +422,14 @@ fn draw(device: &wgpu::Device, queue: &wgpu::Queue, model: &Model, scene: Scene)
     )
     .expect("building the mesh pipeline");
     queue.write_buffer(&built.fog_buffer, 0, bytemuck::bytes_of(&scene));
+    if let Some((row, k)) = key {
+        let transform = [1.0f32, 1.0, k, 0.0];
+        queue.write_buffer(
+            &built.anim_buffer,
+            u64::from(row) * 16,
+            bytemuck::cast_slice(&transform),
+        );
+    }
 
     let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("glow uniforms"),

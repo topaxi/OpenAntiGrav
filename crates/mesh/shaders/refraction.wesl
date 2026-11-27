@@ -4,7 +4,7 @@
 // projected through `scene.refraction`.
 
 import oag_shaders::target::{target_in};
-import package::bindings::{behind_glass_tex, emissive_scale, emissive_tint, program_in, scene, shadow_sampler};
+import package::bindings::{behind_glass_tex, emissive_scale, emissive_tint, material_row, program_in, scene, shadow_sampler};
 import package::fog::{fogged, plus_after_fog};
 import package::shadow::{shadowed};
 import package::types::{Lit, VertexOutput};
@@ -12,9 +12,6 @@ import package::wet::{is_wet_road, wet_road};
 
 // `slots::REFRACTION`.
 const SLOT_REFRACTION: u32 = 1048576u;
-
-// `slots::MATERIAL_SHIFT`.
-const MATERIAL_SHIFT: u32 = 24u;
 
 // An opaque surface's fogged colour from its lit texel: the glass's equation
 // where the material is one, the ordinary `fog(shadow(C))` everywhere else.
@@ -28,7 +25,7 @@ fn opaque_colour(in: VertexOutput, lit_pixel: Lit) -> vec3<f32> {
         return plus_after_fog(fogged(shade_out.colour, in.world, in.view_depth, in.slots), shade_out.after_fog);
     }
     let lit = shade_out.colour;
-    let slot = in.slots >> MATERIAL_SHIFT;
+    let slot = material_row(in.slots);
     let tint = emissive_tint(slot);
     let weight = emissive_scale(slot);
     // `mt_tunnelrefraction` weights the grab by its picture's alpha (rate 1),

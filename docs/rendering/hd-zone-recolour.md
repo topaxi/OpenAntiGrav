@@ -339,15 +339,27 @@ adds its emissive after the light; two shapes:
 | `diffuse_with_specular_from_alpha_scalar` | `0x3bdc0403` | `0x6a30e9cd` | 64 |
 | `diffuseemissivealphaspecular` | `0xb1f2a176` | `0x4d60d566` | 12 |
 | `diffuse_spec_fresnel_emissive` | `0xa2d555b9` | `0x03e55ee0` | 10 |
-| `and_diffuse_emissive`, `and_diffuse_emissive_spec` | `0xfa79b1cd` | `0xb6a7c284` | 0 (Modesto Heights only, table full) |
+| `and_diffuse_emissive`, `and_diffuse_emissive_spec` | `0xfa79b1cd` | `0xb6a7c284` | 16 + 4 (Modesto Heights only) |
 | `mr_shopwin_reflecttranspemis` | `0xd27475a1` | `0x9ce1ba7e` | 8 + 8 (DATA02, DATA03) |
 | `track_surface`, `track_wall` | `0xb1f2a176` | none | 24 + 25 (The Amphiseum, fourth binding) |
 
 `D.a * E(u, (v + a) * b + time) * tint` (`PROGRAM_LIGHTMAPPED_SCROLL`), parameters `a` =
-`0x78256a45`, `b` = `0x78787596`, tint `0xe8bcd7f5`: `uvanim_diffuse_emissive` (16),
+`0x78256a45`, `b` = `0x78787596`, tint `0xe8bcd7f5`: `uvanim_diffuse_emissive` (36),
 `mt_uvanim_diffuse_emissive` (24 + 25) and `mt_uvanim_diffuse_emissive2` (13 + 12). Modesto
 Heights' compile of `uvanim_diffuse_emissive` also declares `0xa24bc055` (a scale over both
 coordinates) and `0xf0d90109` (a speed on `time`); both are read from the material.
+
+**`D.a * E(u, (v + a) * b + k) * tint` (`PROGRAM_LIGHTMAPPED_KEYED`, confidence 80):** Vineta K's
+`mt_uvanim_diffuse_emissive3tokey` (2 + 2 slots over both layouts). Its lightmapped block (fragment
+`@0x8b70`) and Anulpha Pass's `mt_uvanim_diffuse_emissive` block (`@0x8720`) are the same
+instructions with the same patch slots, one for one, except constant slot `0x16`: `time`
+(`0x906b67ba`) in the scroll family, `0x1c5de6ec` here. `0x1c5de6ec` is not a constant: each
+material record authors `[0, 0, 0, 0]` or a start value and an Edge Animation curve on component 0
+of it (`k` rises about 0.75 a second on the lightmapped slots; 0.40, 0.08, -0.30 on other slots of
+the same name). So `k` is the curve sampled on the scenery's animation clock (**chosen, not
+measured**, as for `cf_chevron_pulse`), carried as an `AnimTrack::Param` row per material slot and
+laid in the second coordinate pair by `mesh.wesl`. Slots sharing the `.rcsmaterial` name author
+different curves, so rows are per slot.
 
 The Zone variants of every family above declare no emissive sampler, except
 `mr_shopwin_reflecttranspemis` (its Zone law is unread, so a Zone race draws nothing there, as
@@ -360,8 +372,8 @@ before). `track_surface` and `track_wall` bind fourth because their third holds 
 - `uvanim_diffuse_emissive_bloom` (Modesto): the sample is multiplied by its own alpha, untinted,
   and its alpha is the output alpha; its Zone variants also sample it.
 - `dc_flashing_lights` (Mag Lev) scrolls `u` by its own parameters (`0xd1634606`, `0x3fcae4b3`);
-  `mt_uvanim_diffuse_emissive3tokey_v_scroll` and Vineta K's `mt_uvanim_diffuse_emissive3tokey`
-  compile scroll `u` by an authored value (`0x1c5de6ec`) and declare no `time`.
+  `mt_uvanim_diffuse_emissive3tokey_v_scroll` (Modesto Heights, Sol 2) declares `0x1c5de6ec` and
+  no `time`; its program has not been compared with the keyed one above.
 - `diffusetextureemissivetexture`: the lightmapped program does not accumulate the sample.
 - `basic_uv_scroll`, `cf_billboard1`, `tech_de_ra_emissive`, `uvdistortion_diff_vertexcol`,
   `lambert_spec_reflect_mult_emissive`, `lambert_spec_mult_scroll`: the picture named emissive is
@@ -370,17 +382,28 @@ before). `track_surface` and `track_wall` bind fourth because their third holds 
 - `mageffect08`, `mageffect08_floor`: their mask is `mag_wave`'s. `mageffect08_lh` declares the same
   mask (`0x1202d8df`, not an emissive sampler) with a normal map third; unread.
 
-**Left dark by a limit, not a law:** the glow table holds 63 entries (the six index bits of the slot
-word) and is shared with readers that run after material setup (the circuit's pad masks, the advert
-cards' Zone exemption), so this pass leaves four free. Modesto Heights has 59 before it, and none of
-its lightmapped `and_diffuse_emissive*` and `uvanim_diffuse_emissive` slots is bound (40 slots over
-both layouts). Vineta K's 4 `mt_uvanim_diffuse_emissive3tokey` slots are dark too, for the unread law
-above. The census test pins both sets. Taking those
-four was measured: its light bars and pad lamps went dark and `hd/modesto-heights` rose 3.98 to 5.56.
+**No listed family is left dark.** The glow table holds 127 entries (seven index bits, 24 to 30 of
+the slot word; `FLIP_V` was a build-time per-material flag and left the word, `ZONE_PLAIN` took its
+bit 5). Modesto Heights uses 70 and Vineta K 62; every other HD circuit, every 2048 model (peak 29)
+and every Omega environment model (peak 40) stays under 61. Before the change the census's dark list
+held only Modesto Heights (table full) and Vineta K (law), and only `hd/modesto-heights` moves
+pixels across the 43 comparison pairs. This pass
+still leaves four entries free for the readers that run after material setup (the circuit's pad
+masks, the advert cards' Zone exemption); taking them was measured: Modesto's light bars and pad
+lamps went dark and `hd/modesto-heights` rose 3.98 to 5.56.
 
-Test: `hd_lightmapped_emissive_ground_truth` (one test per archive, pins the bound slots per family
-and fails on a lightmapped slot of a listed family left unbound) and
+Test: `hd_lightmapped_emissive_ground_truth` (one test per archive, pins the bound slots per family,
+fails on a lightmapped slot of a listed family left unbound, and checks a keyed slot's row plays its
+own curve), `hd_emissive_lit_path::a_glow_entry_past_row_63_is_the_one_drawn` and
+`::a_keyed_emissive_samples_at_its_curves_value`, and
 `zone_spu_light::the_fourth_binding_and_the_scrolled_emissive_reach_a_plain_chunk`.
+
+**Measured after widening** (2026-11-27, 43 re-rendered comparison pairs, previous binary against
+this one): mean grey moves by at most +0.0001 and only `hd/modesto-heights` changes pixels (145 of
+them). The newly lit Modesto lights are small: scrolling cyan dashes on the saucer towers and a red
+strip by the large red hub, seen in an autopilot Time Trial at ticks 900 and 2280. Vineta K's keyed
+slots add cyan streaks along a glass tunnel roof, seen from a free camera. No frame of the original
+shows any of them in a matched pose.
 
 **Measured on the pairs** (2026-11-27, re-rendered copies against the previous commit's binary):
 `hd-race/talons-pack`'s blue strip goes from `(26,120,170)` to `(59,153,210)`, mean of its bright
@@ -392,7 +415,8 @@ cyan pixels in `1100,90,1500,300`, against the original's `(59,155,210)`; its me
 Amphiseum's wall lamps and Talon's Junction's strut lamps lit where they were dark; no original
 frame of either is on disk.
 
-**2048 and Omega: names ship, programs unread, left open** (a census of archive names only; neither
+**2048 and Omega: names ship, programs unread, left open** (the wider table changes neither: their
+tables peak at 29 and 40 entries) (a census of archive names only; neither
 reader was run on them, so whether `psp2` or `gcn` already binds these emissives is not known).
 Omega's `data01`, `data02`, `data05` and `data08` ship `track_surface*`, `uvanim_*`, `mt_uvanim_*`,
 `diffuse_*`, `and_diffuse_emissive*` and `mr_shopwin_reflecttranspemis` materials. 2048's EU DLC 2

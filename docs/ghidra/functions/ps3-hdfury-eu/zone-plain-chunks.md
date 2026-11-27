@@ -198,8 +198,8 @@ is labelled chosen), not checked chunk by chunk.
 ## Against this port
 
 **Wired (2026-11-16, `zone-pad-wire`).** `oag_rcs::rcsmodel::Mesh::zone_plain` (`RENDER_ZONE_PLAIN`,
-`0x0e00`) is carried per chunk as `slots::ZONE_PLAIN` (bit 30 of the vertex `slots` word: the glow
-index is six bits for its 64 entries, so the seventh was never set). `shade.wesl` gives such a chunk,
+`0x0e00`) is carried per chunk as `slots::ZONE_PLAIN` (bit 5 of the vertex `slots` word, below the
+seven-bit glow index at bits 24 to 30). `shade.wesl` gives such a chunk,
 in a Zone race only, no Zone surface and no Zone glow, the stage's `ambient + sat(N.L) * sun` as its
 light (no lightmap, no baked vertex light, no occlusion mask; a program fed no light keeps its
 picture) and the plain variant of every program whose Zone variant drops a term (the wave, the
