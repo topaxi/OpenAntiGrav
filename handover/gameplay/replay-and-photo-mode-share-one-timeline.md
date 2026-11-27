@@ -2,7 +2,7 @@
 status: ready-to-wire
 categories: [frontend, tooling]
 titles: [pulse, pure, hd, 2048, omega]
-updated: 2026-11-09
+updated: 2026-11-27
 summary: "ADR-0087: stages 1 to 6 landed, the viewer and photo mode switch both ways and share their keys (ADR-0088); stage 7 take-over is next"
 size: XL
 difficulty: hard
@@ -84,11 +84,18 @@ with `OAG_SWEEP=1 OAG_SWEEP_TITLE=<title>`.
   `results` and `wreck_ended_tick` after a seek back, quiet `step`, and `follow_devices` as an unrecorded writer of `controllers`.
 - **Stage 5 landed** ([the replay page](../../docs/ui/replays.md)): every race the session hands over is recorded to `auto/`
   (a 20-file, 32 MiB ring), the REPLAYS page (WATCH, KEEP, DELETE), the viewer over a `Timeline` with a bar showing the built
-  prefix, the mismatch banner, `Audio::rebuild_race_sfx`, the 60-tick pre-roll, WATCH REPLAY on the Pulse end-of-race list, and
-  `[replay] record`. POSE VIEW (the viewer past the last agreeing second, on the `POSE` chunk, named end at the one-hour cap) is built. Open: split-screen craft cycling in the viewer, and the end-of-race row on HD, 2048, Pure and Omega
-  (their dialects author no such row). Found on the way: a seed above `i64::MAX` made a header unreadable (about half of all
+  prefix, the mismatch banner, `Audio::rebuild_race_sfx`, the 60-tick pre-roll, WATCH REPLAY on the Pulse and HD/Fury
+  end-of-race menus, and `[replay] record`. POSE VIEW (the viewer past the last agreeing second, on the `POSE` chunk, named end
+  at the one-hour cap) is built. Open: split-screen craft cycling in the viewer. Found on the way: a seed above `i64::MAX` made a header unreadable (about half of all
   recordings, ghosts included); a front-end race needs the original AI's request in `[options]`; `follow_devices` is now the
   `controller` event; a DLC pack mounted on the machine fields other hulls, so a rebuild mounts the reader's own.
+- **The end-of-race row, still absent** ([the replay page](../../docs/ui/replays.md), "The end-of-race row"):
+  - **2048**: the `EndRace` pages end in a strip of two icon tiles (`oag_ui_screens::endrace::touch::Button`,
+    `RestartRaceTouchButton` and `QuitTouchButton`). A third tile needs an icon the screen does not author for it, a
+    place in the strip, the cursor's third stop and a `Session::tick_endrace_touch` arm. Omega ships 2048's file
+    byte-identical and draws no end menu at all, as does Pure.
+  - **Leaving the viewer lands on REPLAYS**, not on the finished race's menu: returning there needs the finished race
+    held behind the viewer. The same hold would let a mid-Tournament leg offer the row, which it does not today.
 - **Stage 4 landed** ([the replay file](../../docs/formats/replay-file.md), "The pose track"): `POSE`, every
   craft refined to 0.05 unit and 0.5 degree, captured a segment at a time. 156 to 176 B a craft a second at Venom on all
   five titles (Phantom, first 6,000 ticks: 197 to 263; 4.5 percent over the ADR's Venom row: the sweep stored no key index), a respawn bounded to the same error on all five,

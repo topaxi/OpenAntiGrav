@@ -29,7 +29,9 @@
 //!   reproduces the stacking with no synthetic pitch of this crate's own.
 //!   Each option draws as the Block it is - box, focus colour, blinking
 //!   arrow - per [`hd_menu_draw_list`], and steps in screen order
-//!   ([`hd_screen_order`]).
+//!   ([`hd_screen_order`]). This build's WATCH REPLAY is one more block under
+//!   `view_again`, in that block's own look (`docs/ui/replays.md`, "The
+//!   end-of-race row").
 //!
 //! # What does not, and why
 //!
@@ -90,7 +92,7 @@ use oag_ui::screen::{BlockWidget, Screen, Text, argb_to_rgba};
 
 use super::draw::{fill_draw, format_ticks, headline_text, image_draw, medal_award_text};
 use super::pointer::Target;
-use super::{EndRaceMenu, FieldResults, HdRewards, Headline, Layout};
+use super::{EndRaceMenu, FieldResults, HdRewards, Headline, Layout, MenuOption};
 
 mod detonator;
 mod podium;
@@ -852,15 +854,14 @@ pub fn hd_menu_draw_list(
         out.push(hd_text_draw(text, &content, layout));
     }
     for (index, option) in model.options().iter().enumerate() {
-        let name = option.hd_block_name();
-        let Some(block) = find_block(screen, name) else {
+        let Some((block, text)) = option_block(screen, *option) else {
             continue;
         };
         let content = strings.get_or_id(option.idstring()).to_string();
         let focus = (index == model.index()).then(|| model.focus(index));
-        let label = find_text(screen, name).map(|text| (text, content.as_str()));
+        let label = text.as_ref().map(|text| (text, content.as_str()));
         block_draw(
-            block,
+            &block,
             label,
             focus,
             model.focus(index).fraction(),
@@ -888,7 +889,7 @@ pub fn hd_screen_order(model: &EndRaceMenu, layout: &Layout) -> EndRaceMenu {
     let mut options = model.options().to_vec();
     options.sort_by(|a, b| {
         let y = |option: &super::MenuOption| {
-            find_block(&layout.screen, option.hd_block_name()).map_or(f32::INFINITY, |b| b.y)
+            option_block(&layout.screen, *option).map_or(f32::INFINITY, |(b, _)| b.y)
         };
         y(a).total_cmp(&y(b))
     });
@@ -899,6 +900,24 @@ pub fn hd_screen_order(model: &EndRaceMenu, layout: &Layout) -> EndRaceMenu {
         out.select(index);
     }
     out
+}
+
+/// One option's box and its label widget.
+///
+/// Every option but WATCH REPLAY is a `<Block>` the screen authors. No copy of the file authors
+/// that one, so it is `view_again`'s own box and label, one step further down: the screen's step
+/// from `return_to_menu` to `view_again`. `None` draws nothing and takes no pointer.
+fn option_block(screen: &Screen, option: MenuOption) -> Option<(BlockWidget, Option<Text>)> {
+    if option != MenuOption::WatchReplay {
+        let name = option.hd_block_name();
+        let block = find_block(screen, name)?.clone();
+        return Some((block, find_text(screen, name).cloned()));
+    }
+    let (mut block, text) = option_block(screen, MenuOption::ViewResultsAgain)?;
+    let above = find_block(screen, MenuOption::ReturnToMenu.hd_block_name())?;
+    let step = block.y - above.y;
+    block.y += step;
+    (step > 0.0).then_some((block, text))
 }
 
 /// A named [`BlockWidget`] on `screen` - the box half of a `<Block>`, see
@@ -1020,13 +1039,12 @@ fn block_draw(
 /// crate's.
 #[must_use]
 pub fn hd_menu_targets(model: &EndRaceMenu, layout: &Layout) -> Vec<Target> {
-    let screen = &layout.screen;
     model
         .options()
         .iter()
         .enumerate()
         .filter_map(|(index, option)| {
-            let block = find_block(screen, option.hd_block_name())?;
+            let (block, _) = option_block(&layout.screen, *option)?;
             Some(Target {
                 index,
                 rect: [block.x, block.y, block.width, block.height],

@@ -211,11 +211,34 @@ recorded pose at the end and after a seek) and `..._stops_at_the_last_agreeing_s
 
 ## The end-of-race row
 
-WATCH REPLAY follows VIEW RESULTS AGAIN on the **Pulse dialect** (`EndRaceDialect::Pulse`, the list
-the PSP titles' `EndRace Menu` draws), for a race that was recorded: it writes the file now and opens it.
-HD's blocks and 2048's buttons are the disc's own and have no such row, and Pure and Omega draw no
-end-of-race menu, so on those the REPLAYS page is the way in. **Chosen, not measured.** A row on a
-dialect that cannot draw it would be a cursor stop with nothing on it.
+WATCH REPLAY follows VIEW RESULTS AGAIN on Pulse's `EndRace Menu` list and on HD/Fury's blocks, for a
+race that was recorded: it writes the file now and opens it. No original has the row
+(`offers_watch_replay`, `crates/game/src/app/race_stage/endrace.rs`).
+
+**HD/Fury** authors one `<Block>` per option, so the row is a block of ours: `view_again`'s own box,
+look and label widget, one step further down, the step being the screen's own from `return_to_menu`
+to `view_again` (`oag_ui_screens::endrace::hd`). On every copy of the screen on the Fury disc (five)
+and on the plain PSN install that is `375, 385, 520x40`, with no text, image or other option's box
+under it (`watch_replays_added_block_covers_nothing_on_*`, `crates/hd/tests/endrace_screens_ground_truth.rs`).
+It sits last so the disc's three rows keep their places. Up and Down step it in screen order, and a
+tap or a click selects it and a second one confirms, as on every other block.
+
+It is **not offered**:
+
+- on a race that was not recorded (`[replay] record = false`, or the recording failed);
+- while a Tournament has a leg left to race, on either title: watching replaces the finished race,
+  and NEXT RACE with it, and launching the cell again starts at leg 1;
+- under `--original-menu`, so a compare shot lists what the original lists. The `--menu-page
+  endrace-menu` still never draws it;
+- on 2048, whose `EndRace` pages end in a strip of two icon tiles, not wired; Pure and Omega draw no
+  end-of-race menu. There the REPLAYS page is the way in.
+
+**Leaving the viewer lands on REPLAYS, not back on the end menu**: the menu belongs to the finished
+race, and loading the recording replaces that race. Nothing is lost by it. A campaign medal is saved
+on the tick the race ends and the loyalty award as the screens are built, both before the menu is up.
+HD checked live (2026-11-27, headless, `--autopilot`): a time trial and a campaign single race each
+reached the row, played the race and landed on REPLAYS
+(`replay_viewer_ground_truth::hd_end_of_race_menu_watches_the_race_just_finished` is the time trial).
 
 ## A screenshot opens the viewer
 

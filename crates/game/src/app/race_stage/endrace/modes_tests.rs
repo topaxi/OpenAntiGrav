@@ -96,6 +96,43 @@ fn mid_tournament_menu_opens_on_next_race() {
     assert!(!menu_options(false, false, false).contains(&MenuOption::WatchReplay));
 }
 
+/// WATCH REPLAY is offered on a recorded race on Pulse's list and HD's blocks, and nowhere it
+/// could not be drawn, would break the original's screen, or would end a Tournament.
+#[test]
+fn watch_replay_is_offered_on_pulse_and_hd_recorded_races() {
+    use super::offers_watch_replay;
+    use oag_title::EndRaceDialect::{Field, Pulse, Touch};
+
+    for dialect in [Pulse, Field] {
+        assert!(offers_watch_replay(true, Some(dialect), false, false));
+        assert!(
+            !offers_watch_replay(false, Some(dialect), false, false),
+            "not recorded"
+        );
+        assert!(
+            !offers_watch_replay(true, Some(dialect), true, false),
+            "--original-menu"
+        );
+        assert!(
+            !offers_watch_replay(true, Some(dialect), false, true),
+            "a leg to race"
+        );
+    }
+    assert!(!offers_watch_replay(true, Some(Touch), false, false));
+    assert!(!offers_watch_replay(true, None, false, false));
+}
+
+/// HD's own title package resolves to a dialect that offers the row, and Omega, which draws no
+/// end-of-race menu, does not.
+#[test]
+fn the_title_packages_that_offer_watch_replay() {
+    use super::offers_watch_replay;
+
+    let offers = |title| offers_watch_replay(true, crate::endrace::dialect(title), false, false);
+    assert!(offers(oag_pulse::TITLE) && offers(oag_hd::TITLE));
+    assert!(!offers(oag_2048::TITLE) && !offers(oag_omega::TITLE) && !offers(oag_pure::TITLE));
+}
+
 /// A board as a leg that ends on the person's finish leaves it: the person (slot 0) has
 /// crossed, the opponents are running in `order`.
 fn leg_board(order: [u8; 3]) -> Board {

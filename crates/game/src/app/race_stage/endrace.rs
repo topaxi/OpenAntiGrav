@@ -686,9 +686,7 @@ pub(crate) fn headline(mode: oag_race::Mode, place: Option<u8>) -> Headline {
 /// non-Tournament race, and for a Tournament's own last leg.
 #[must_use]
 ///
-/// **`watch_replay`** adds WATCH REPLAY after VIEW RESULTS AGAIN, for a race that was recorded
-/// and a dialect that can draw a row the disc does not author (Pulse's list; HD's blocks and
-/// 2048's buttons are the disc's own and have no such row).
+/// **`watch_replay`** adds WATCH REPLAY after VIEW RESULTS AGAIN: [`offers_watch_replay`].
 pub(crate) fn menu_options(
     campaign: bool,
     tournament_next_leg: bool,
@@ -711,6 +709,25 @@ pub(crate) fn menu_options(
         options.push(MenuOption::WatchReplay);
     }
     options
+}
+
+/// Whether `EndRace Menu` offers WATCH REPLAY, this build's own row
+/// (`docs/ui/replays.md`, "The end-of-race row"):
+///
+/// - the race was recorded;
+/// - the screen is Pulse's list or HD's blocks (2048's tile strip draws no such row);
+/// - the run is not held to the disc's own screens (`--original-menu`);
+/// - no Tournament leg is still to race: watching replaces the finished race, and NEXT RACE
+///   with it.
+#[must_use]
+pub(crate) fn offers_watch_replay(
+    recorded: bool,
+    dialect: Option<oag_title::EndRaceDialect>,
+    original_menu: bool,
+    tournament_next_leg: bool,
+) -> bool {
+    use oag_title::EndRaceDialect::{Field, Pulse};
+    recorded && !original_menu && !tournament_next_leg && matches!(dialect, Some(Pulse | Field))
 }
 
 /// Pulse's own Tournament standings, off this project's `oag_race::tournament`

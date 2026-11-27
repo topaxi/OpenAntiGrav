@@ -9,7 +9,8 @@ use oag_ui_screens::endrace::{Event, MenuOption};
 
 use crate::app::race_stage::endrace::{
     EndRaceRuntime, LoyaltyInputs, ResultsModel, elimination_results, headline, loyalty_award,
-    menu_options, to_campaign_medal, tournament_results, voice_for, zone_results,
+    menu_options, offers_watch_replay, to_campaign_medal, tournament_results, voice_for,
+    zone_results,
 };
 use crate::app::race_stage::endrace_touch::EndRace;
 use crate::app::race_stage::hd_loyalty::{HdRace, hd_award};
@@ -420,16 +421,15 @@ impl Session {
             observation.campaign_medal.map(to_campaign_medal),
         )
         .filter(|_| !split);
-        // WATCH REPLAY: a recorded race, on the dialect whose list can draw a row the disc does
-        // not author. Pulse's `<Menu>` is that list.
-        let watch_replay = matches!(&self.stage, Stage::Race(stage) if stage.auto_replay)
-            && crate::endrace::dialect(title_ref) == Some(oag_title::EndRaceDialect::Pulse);
+        let tournament_next_leg = !split && self.tournament_has_next_leg();
+        let watch_replay = offers_watch_replay(
+            matches!(&self.stage, Stage::Race(stage) if stage.auto_replay),
+            crate::endrace::dialect(title_ref),
+            self.original_menu,
+            tournament_next_leg,
+        );
         let menu = oag_ui_screens::endrace::EndRaceMenu::new(
-            menu_options(
-                campaign,
-                !split && self.tournament_has_next_leg(),
-                watch_replay,
-            ),
+            menu_options(campaign, tournament_next_leg, watch_replay),
             new_best_lap_ticks,
         );
 

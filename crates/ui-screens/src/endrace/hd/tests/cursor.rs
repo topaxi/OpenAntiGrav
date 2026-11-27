@@ -330,3 +330,44 @@ fn a_single_race_names_each_craft_by_its_team_and_a_racing_craft_says_so() {
         assert!(texts.contains(&wanted.to_string()), "{wanted}: {texts:?}");
     }
 }
+
+/// WATCH REPLAY is no block of the disc's: it stands one step under `view_again` as a copy of
+/// it, with the pointer's rect on it, its label inside it and the last place in screen order.
+#[test]
+fn watch_replay_is_a_copy_of_view_again_one_step_down() {
+    let menu = EndRaceMenu::new(
+        vec![
+            MenuOption::ReturnToMenu,
+            MenuOption::RaceAgain,
+            MenuOption::ViewResultsAgain,
+            MenuOption::WatchReplay,
+        ],
+        None,
+    );
+    let layout = super::menu_layout();
+
+    let targets = hd_menu_targets(&menu, &layout);
+    assert_eq!(
+        targets.iter().find(|t| t.index == 3).map(|t| t.rect),
+        Some([375.0, 385.0, 520.0, 40.0])
+    );
+
+    let layers = hd_menu_draw_list(
+        &menu,
+        &layout,
+        &skin(),
+        &Frame::default(),
+        &strings(),
+        None,
+        false,
+        &|_| None,
+    );
+    let label = layers.body.iter().find_map(|draw| match draw {
+        Draw::Text { x, y, text, .. } if text == "WATCH REPLAY" => Some((*x, *y)),
+        _ => None,
+    });
+    assert_eq!(label, Some((415.0, 388.0)));
+
+    let ordered = crate::endrace::hd::hd_screen_order(&menu, &layout);
+    assert_eq!(ordered.options().last(), Some(&MenuOption::WatchReplay));
+}

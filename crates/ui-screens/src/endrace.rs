@@ -464,8 +464,7 @@ pub enum MenuOption {
     RaceAgain,
     ViewResultsAgain,
     /// Ours (ADR-0087, decision 1): the race just driven, watched again from its recording.
-    /// After `ViewResultsAgain`, on the dialect whose list can draw a row the disc does not
-    /// author.
+    /// After `ViewResultsAgain`, on Pulse's list and HD's blocks.
     WatchReplay,
 }
 
@@ -499,7 +498,7 @@ impl MenuOption {
             Self::ReturnToMenu => "return_to_menu",
             Self::RaceAgain => "race_again",
             Self::ViewResultsAgain => "view_again",
-            // HD's screen authors no such block, so its list never carries this row.
+            // No copy of HD's file authors it: [`hd`] draws a copy of `view_again` below.
             Self::WatchReplay => "watch_replay",
         }
     }
