@@ -6,9 +6,9 @@
 
 use super::{
     FALL_ACCELERATION, FlightLaws, FloorArms, Impact, KMH_PER_UNIT_PER_SECOND, LaunchScale,
-    MAX_FLIGHT_SECONDS, MAX_PROJECTILES, OwnCraftProbe, Projectile, Projectiles, RIDE_HEIGHT,
-    RocketOpenAir, SweepHit, TriggerRadii, cannon, disruptor, launch_normal, mine, missile,
-    nearest_hit, own_box_blocks, plasma, rocket, shuriken,
+    MAX_FLIGHT_SECONDS, MAX_PROJECTILES, OwnCraftProbe, PlasmaFall, Projectile, Projectiles,
+    RIDE_HEIGHT, RocketOpenAir, SweepHit, TriggerRadii, cannon, disruptor, launch_normal, mine,
+    missile, nearest_hit, nearest_hull, own_box_blocks, plasma, rocket, shuriken,
 };
 use crate::Craft;
 use oag_core::math::Vec3;
@@ -57,6 +57,7 @@ impl Projectiles {
             floor_arms,
             probes,
             rocket_open_air,
+            plasma_fall,
         } = laws.into();
         let mut impacts = [None; MAX_PROJECTILES];
         // Looked up once: a string match on the class name, the same for every bolt.
@@ -363,12 +364,12 @@ impl Projectiles {
                         } else {
                             projectile.velocity = toward;
                         }
-                    } else if kind == Weapon::Shuriken && floor_arms == FloorArms::SteerToRidePoint
-                    {
+                    } else if kind == Weapon::Shuriken {
                         // `Shuriken_Update`'s probe floor arm stops at
                         // `(ride point - from) / dt`: no normalise, no rescale, so
                         // the blade's speed is whatever the step was
-                        // (`shuriken.md`, "on a bank the blade's speed drifts").
+                        // (`shuriken.md`, "on a bank the blade's speed drifts"). HD's
+                        // update writes the same (`projectile-floor-arms.md`).
                         projectile.velocity = (to - from) / dt;
                     } else {
                         let along =
@@ -405,12 +406,25 @@ impl Projectiles {
                 // Nothing under it: it falls, keeping its normal so it resumes
                 // riding when the track returns.
                 None if kind == Weapon::Plasma => {
-                    // `Plasma_Update`'s `0x7f` arm falls along the carried normal,
-                    // `velocity -= surface * (dt * 50.0)`, where the Rocket's and
-                    // the Shuriken's is `velocity.y -= dt * 50.0` (`plasma.md`,
-                    // "`Plasma_Update` is `Rocket_Update`'s floor follower"). On a
-                    // bank or a loop the two are different directions.
-                    projectile.velocity -= projectile.surface * (FALL_ACCELERATION * dt);
+                    // Pulse's `Plasma_Update` `0x7f` arm falls along the carried
+                    // normal where its Rocket's falls along world Y (`plasma.md`,
+                    // "`Plasma_Update` is `Rocket_Update`'s floor follower"); HD's
+                    // falls along world Y. See [`PlasmaFall`].
+                    let up = match plasma_fall {
+                        PlasmaFall::AlongCarriedNormal => projectile.surface,
+                        PlasmaFall::WorldY => Vec3::Y,
+                    };
+                    projectile.velocity -= up * (FALL_ACCELERATION * dt);
+                    // HD's `Plasma_Update` pins the speed after every arm, the fall
+                    // included (`projectile-floor-arms.md`). Pulse's re-pins on the
+                    // floor arm alone.
+                    if floor_arms == FloorArms::ParallelToFloor
+                        && let Some(kmh) = pinned_kmh
+                        && projectile.velocity.length_squared() > 0.0
+                    {
+                        projectile.velocity =
+                            projectile.velocity.normalize() * missile::speed_units_on_surface(kmh);
+                    }
                 }
                 // A Rocket that does not fall turns parallel to the normal it carries, at
                 // its class speed; the position already moved on the old velocity.
@@ -441,6 +455,21 @@ impl Projectiles {
                 nearest_hit(from, to, distance, raycaster, ships, projectile.owner)
             } else {
                 None
+            };
+            // HD's `Rocket_Update` and `Plasma_Update` branch on the sweep's wall
+            // classes alone: a floor across the step runs no arm, so the shot keeps
+            // the probe's end. Their craft test is a pass of its own, so a hull on the
+            // step still counts (`projectile-floor-arms.md`).
+            let hit = match hit {
+                Some(floor)
+                    if floor_arms == FloorArms::ParallelToFloor
+                        && matches!(kind, Weapon::Rocket | Weapon::Plasma)
+                        && floor.struck.is_none()
+                        && floor.surface.is_some_and(Surface::is_hoverable) =>
+                {
+                    nearest_hull(from, to, distance, ships, projectile.owner)
+                }
+                hit => hit,
             };
 
             // The travel sweep asks the cage the same way: about the geometry hit
@@ -481,37 +510,29 @@ impl Projectiles {
                 // projectile over a crest into the dip.
                 //
                 // What else the arm writes differs by weapon
-                // (`rocket-visuals.md`, "By-catch in the flight arms"). The Missile
-                // and the Plasma only move: neither writes a normal or a velocity
-                // (a Missile's guidance rewrites it, a Plasma's next probe does).
-                // `Rocket_Update` and `Shuriken_Update` adopt the normal and write
-                // `(next - prev) / dt` raw, which a rocket landing on a ramp face
-                // carries upward. A title that has not measured the arms turns the
-                // velocity parallel with its length kept (chosen, not measured).
+                // (`rocket-visuals.md`, "By-catch in the flight arms"). Pulse's
+                // Missile and Plasma only move: neither writes a normal or a
+                // velocity (a Missile's guidance rewrites it, a Plasma's next probe
+                // does). Its `Rocket_Update` and `Shuriken_Update` adopt the normal
+                // and write `(next - prev) / dt` raw, which a rocket landing on a
+                // ramp face carries upward. HD's Missile only moves and its
+                // Shuriken writes raw too; its Rocket and Plasma never reach here.
                 Some(hit)
                     if kind != Weapon::Cannon
                         && hit.struck.is_none()
                         && hit.surface.is_some_and(Surface::is_hoverable) =>
                 {
                     projectile.position = hit.point + hit.normal * ride_height;
-                    match floor_arms {
+                    let writes_velocity = match floor_arms {
                         // `LaunchNormal` is mapped away above, before the probe.
                         FloorArms::SteerToRidePoint | FloorArms::LaunchNormal => {
-                            if matches!(kind, Weapon::Rocket | Weapon::Shuriken) {
-                                projectile.surface = hit.normal;
-                                projectile.velocity = (projectile.position - from) / dt;
-                            }
+                            matches!(kind, Weapon::Rocket | Weapon::Shuriken)
                         }
-                        FloorArms::ParallelToFloor if !guided => {
-                            projectile.surface = hit.normal;
-                            let along = projectile.velocity
-                                - hit.normal * projectile.velocity.dot(hit.normal);
-                            if along.length_squared() > 1e-6 {
-                                projectile.velocity =
-                                    along.normalize() * projectile.velocity.length();
-                            }
-                        }
-                        FloorArms::ParallelToFloor => {}
+                        FloorArms::ParallelToFloor => kind == Weapon::Shuriken,
+                    };
+                    if writes_velocity {
+                        projectile.surface = hit.normal;
+                        projectile.velocity = (projectile.position - from) / dt;
                     }
                 }
                 Some(hit) => {

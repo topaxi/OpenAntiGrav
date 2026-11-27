@@ -331,6 +331,9 @@ pub const TITLE: &Title = &Title {
         rocket_open_air: oag_title::pre_race::Sourced::measured(
             oag_title::weapons::RocketOpenAir::TurnsAlongNormal,
         ),
+        // Read statically off `Plasma_Update` (`0x0011fc88`):
+        // `ps3-hdfury-eu/projectile-floor-arms.md`.
+        plasma_fall: oag_title::pre_race::Sourced::measured(oag_title::weapons::PlasmaFall::WorldY),
         opponent_fire: oag_title::pre_race::Sourced::measured(oag_title::weapons::OpponentFire::HD),
     },
     weapon_models: race::WEAPON_MODELS,

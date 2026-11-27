@@ -1083,12 +1083,10 @@ passes sample 668. Pinned by `crates/raceplay/tests/hd_bank_floor_ground_truth.r
 
 ### Static read, and what is open
 
-- **`Rocket_Update` (`0x00123fb0`) does not decompile.** Its body stops at a call to
-  `0x00126c38`, which Ghidra had marked non-returning. The flag is cleared, but the body was not
-  re-disassembled, so the arm is unread statically.
-- **The pseudocode above writes `velocity = dir * speed` after the ride**, where `dir` is the
-  normalized ride step. Live, the velocity is the floor-parallel one, so `dir` is that
-  projection. The PPC permutes were not re-read.
+- **`Rocket_Update` and `Plasma_Update`'s arms are read** from the disassembly
+  ([projectile-floor-arms.md](projectile-floor-arms.md)): `dir` in the pseudocode above is the
+  forward row after its component along the carried normal is removed, the parallel turn the
+  captures measured.
 - **A second capture agrees.** The Talon's Junction shots above already read the floor follower as
   `v' = normalize(v - (v.n')n') * speed`, exact over 133 ticks ("Measured live"); this engine had
   not wired it. With it, the straight shot ends at age 2.20 s (original 2.24) and the yawed shot

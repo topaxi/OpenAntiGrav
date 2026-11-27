@@ -250,7 +250,11 @@ def code_cells() -> dict[str, dict[str, tuple[str, str | None]]]:
 
         # `Sourced::measured(ProbeLengths::HD)` and `Sourced::measured(RocketOpenAir::Falls)`: the
         # const or variant is the value.
-        for field, kind in (("surface_probe_lengths", "ProbeLengths"), ("rocket_open_air", "RocketOpenAir")):
+        for field, kind in (
+            ("surface_probe_lengths", "ProbeLengths"),
+            ("rocket_open_air", "RocketOpenAir"),
+            ("plasma_fall", "PlasmaFall"),
+        ):
             found = re.search(rf"Sourced::(\w+)\(\s*[\w:]*{kind}::(\w+)", weapons[field])
             if found is None:
                 raise SystemExit(f"check-weapon-lineage: {title}: `{field}` is not a `Sourced` {kind}")

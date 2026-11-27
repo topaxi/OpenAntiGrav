@@ -98,8 +98,9 @@ pub struct Weapons {
     /// record's down negated (confidence 86), Omega's and 2048's `Plasma_Init` too (80, 75), so
     /// all five titles are `true` (`docs/ghidra/functions/ps3-hdfury-eu/projectile-launch-normal.md`).
     pub launch_normal_is_track_up: crate::pre_race::Sourced<bool>,
-    /// Whether a projectile's floor arms are Pulse's decompiled laws (`true`) or the engine's
-    /// turn parallel to the floor at the same speed (`false`).
+    /// Whether a projectile's floor arms are Pulse's decompiled laws (`true`) or HD's (`false`):
+    /// the probe arms turn the velocity parallel to the floor, the Rocket's and Plasma's travel
+    /// sweeps run no floor arm and the Missile's only moves.
     ///
     /// Pulse's `Missile_Update` probe arm steers to the ride point as the Rocket's does; its
     /// `Shuriken_Update` probe arm and its `Rocket_Update` and `Shuriken_Update` travel-sweep arms
@@ -109,7 +110,8 @@ pub struct Weapons {
     /// and `shuriken.md`, `missile.md`, `plasma.md`). HD turns the Plasma's and the Rockets' velocity parallel to
     /// the floor instead, measured live on Moa Therma's bank, where steering at the ride point slid
     /// both off the bank (`docs/ghidra/functions/ps3-hdfury-eu/plasma.md`, "On Moa Therma's
-    /// bank"); 2048 and Omega inherit it.
+    /// bank"); Omega's and 2048's own updates read the same
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/projectile-floor-arms.md`).
     pub floor_arms_steer_to_ride_point: crate::pre_race::Sourced<bool>,
     /// Whether the Rocket and the Plasma sweep first and then probe and ride along the normal
     /// they were launched with, never changing it (`true`, Pure), instead of adopting each
@@ -150,6 +152,9 @@ pub struct Weapons {
     pub surface_probe_lengths: crate::pre_race::Sourced<ProbeLengths>,
     /// What a Rocket does on an update its surface probe finds nothing. See [`RocketOpenAir`].
     pub rocket_open_air: crate::pre_race::Sourced<RocketOpenAir>,
+    /// The axis a Plasma bolt falls along on an update its surface probe finds nothing. See
+    /// [`PlasmaFall`].
+    pub plasma_fall: crate::pre_race::Sourced<PlasmaFall>,
     /// Which terms of `WeaponAi_DecideFireOrAbsorb` the title's opponents roll
     /// by, on the [`Self::ai`] odds.
     pub opponent_fire: crate::pre_race::Sourced<OpponentFire>,
@@ -294,6 +299,18 @@ impl ProbeLengths {
         plasma: 6.0,
         shuriken: 12.0,
     };
+}
+
+/// The axis a Plasma bolt's open-air fall pulls along.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PlasmaFall {
+    /// `velocity -= surface * 50 * dt`: Pulse's `Plasma_Update`
+    /// (`docs/ghidra/functions/psp-pulse-usa/plasma.md`).
+    AlongCarriedNormal,
+    /// `velocity.y -= 50 * dt`: HD's, Omega's and 2048's
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/projectile-floor-arms.md`), and Pure's
+    /// (`docs/ghidra/functions/psp-pure-usa/floor-follow.md`).
+    WorldY,
 }
 
 /// What a Rocket does on an update its surface probe finds nothing: open air, or the firer's own

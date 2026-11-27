@@ -181,6 +181,10 @@ pub const TITLE: &Title = &Title {
         rocket_open_air: oag_title::pre_race::Sourced::measured(
             oag_title::weapons::RocketOpenAir::Falls,
         ),
+        // Pulse's `Plasma_Update` falls along the carried normal (`psp-pulse-usa/plasma.md`).
+        plasma_fall: oag_title::pre_race::Sourced::measured(
+            oag_title::weapons::PlasmaFall::AlongCarriedNormal,
+        ),
         opponent_fire: oag_title::pre_race::Sourced::measured(
             oag_title::weapons::OpponentFire::PULSE,
         ),

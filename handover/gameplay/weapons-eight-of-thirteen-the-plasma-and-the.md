@@ -1047,8 +1047,8 @@ The 12.0-vs-6.0 probe that the 09-02 port bug was about is genuinely
 title-specific: Pulse probes 12, both HD-lineage ports probe 6, so a
 per-title `SURFACE_PROBE_LENGTH` is right and a shared one would be wrong
 for one of them. Same for the fall axis: the HD engine drops a bolt along
-world Y, the PSP along the carried normal, so an HD racebox would need the
-other branch.
+world Y, the PSP along the carried normal (wired per title as
+`Weapons::plasma_fall`).
 
 **What is not settled.** Which of Pulse's `PlasmaBlast_Construct` ramps
 map onto which of HD's three (~~the PSP page never read the advance~~ -

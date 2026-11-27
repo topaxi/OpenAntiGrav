@@ -113,8 +113,8 @@ weighs them is not read.
 `Shuriken_Update` (`0x001592c0`) casts its probe at `0x00159400` with the reach at TOC `-0x2094`
 (`0x008ab444` = `12.0`). `0x7f` (tested at `0x001597c8`) branches to `0x001598f8`:
 `velocity +0x130 .y += dt * [0x008ab460 = -50.0]`, then the travel sweep at `0x0015989c`. The other
-arm (`0x001597d0`) forms `1.0 / dt`, which looks like Pulse's raw `(ride point - start) / dt` and
-not the parallel turn (not followed further).
+arm (`0x001597d0`) writes Pulse's raw `(ride point - start) / dt`, not the parallel turn
+([projectile-floor-arms.md](projectile-floor-arms.md#shuriken_update-0x001592c0-which-never-runs)).
 
 ## Names
 

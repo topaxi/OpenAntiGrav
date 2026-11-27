@@ -273,13 +273,11 @@ pub const TITLE: &Title = &Title {
         // Read statically off this title's own `Plasma_Init`, confidence 75; its Rocket, Missile
         // and Shuriken inits are not located and take HD's (`ps3-hdfury-eu/projectile-launch-normal.md`).
         launch_normal_is_track_up: oag_title::pre_race::Sourced::measured(true),
-        // HD's parallel turn, measured live on HD; this title's own flight is unread.
-        floor_arms_steer_to_ride_point: oag_title::pre_race::Sourced::inherited(
-            false,
-            "Wipeout HD",
-        ),
-        // HD's law, inherited: this title's `Rocket_Update` and `Plasma_Update` are unread.
-        floor_arms_ride_launch_normal: oag_title::pre_race::Sourced::inherited(false, "Wipeout HD"),
+        // This title's own Rocket, Plasma and Missile updates read the parallel turn
+        // (`ps3-hdfury-eu/projectile-floor-arms.md`, "Omega and 2048").
+        floor_arms_steer_to_ride_point: oag_title::pre_race::Sourced::measured(false),
+        // Its own Rocket and Plasma updates adopt each floor's normal (same page).
+        floor_arms_ride_launch_normal: oag_title::pre_race::Sourced::measured(false),
         // HD's law, inherited through Omega: 2048's `Plasma_Launch` caller is unread.
         plasma_release_at_display_scale: oag_title::pre_race::Sourced::inherited(
             false,
@@ -302,6 +300,9 @@ pub const TITLE: &Title = &Title {
         rocket_open_air: oag_title::pre_race::Sourced::chosen(
             oag_title::weapons::RocketOpenAir::Falls,
         ),
+        // This title's own `Plasma_Update` (`0x811fc650`):
+        // `ps3-hdfury-eu/projectile-floor-arms.md`, "Omega and 2048".
+        plasma_fall: oag_title::pre_race::Sourced::measured(oag_title::weapons::PlasmaFall::WorldY),
         // Measured: 2048's `WeaponAi_DecideFireOrAbsorb` equals Omega's law
         // (`vita-2048-eu-v104/weapon-ai-fire.md`).
         opponent_fire: oag_title::pre_race::Sourced::measured(

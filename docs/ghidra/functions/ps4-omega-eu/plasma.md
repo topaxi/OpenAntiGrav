@@ -114,14 +114,18 @@ if (!hit || out.kind == 0xe) {                            // open air
 } else {                                                  // a floor: ride it
     p->surface  = out.normal;                             // + 0x150
     next        = out.point + out.normal * 4.0f;          // the ride height
-    p->velocity = normalize(next - p->prev) * ...
-    p->velocity = normalize(p->velocity) * (Plasma_GetSpeed(p) * 0.2777f);
+    forward     = p->velocity - p->surface * dot(p->surface, p->velocity);   // parallel turn
+    p->velocity = normalize(forward) * (Plasma_GetSpeed(p) * 0.2777f);       // every arm
 }
 hit = Collide(g_world, p->prev, next, &out);              // the travel segment
 if (hit && out.kind in {4, 5, 6, 8}) p->destroy = 1;      // mask 0x170 over kinds 0..8
 if (p->destroy) Event_Push(0x33, next);                   // 0x0174a4f0
 p->ramp = min(0.0f, p->ramp + dt * 3.0f);                 // + 0x164, seeded -1.2 by Plasma_Init
 ```
+
+The velocity line was first written as `normalize(next - p->prev)`; the decompile removes the
+velocity's component along the new normal
+([projectile-floor-arms.md](../ps3-hdfury-eu/projectile-floor-arms.md#omega-and-2048)).
 
 Two things are worth the reader's attention:
 

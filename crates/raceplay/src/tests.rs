@@ -385,6 +385,7 @@ fn setup(handling: Handling) -> SimSetup {
         own_craft_box_hides_track: oag_title::weapons::OwnCraftBox::Falls,
         surface_probe_lengths: oag_title::weapons::ProbeLengths::PULSE,
         rocket_open_air: oag_title::weapons::RocketOpenAir::Falls,
+        plasma_fall: oag_title::weapons::PlasmaFall::AlongCarriedNormal,
         reset_triggers: oag_race::recovery::ResetTriggers::PULSE,
         contact_cues: oag_title::contact_cue::ContactCues::Rearmed,
         opponent_fire: oag_title::weapons::OpponentFire::PULSE,

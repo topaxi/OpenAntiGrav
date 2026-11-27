@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [pulse, hd]
-updated: 2026-11-26
-summary: "Cage, launch normal, floor arms, own box and HD air arms wired; open: HD Plasma fall axis, floor arms, opponent box, travel sweep"
+updated: 2026-11-27
+summary: "Cage, floor arms, own box and HD air arms wired; open: Omega/2048 Rocket air arm and probe reach, HD Missile speed step, opponent box"
 size: S (50)
 difficulty: medium (55)
 ---
@@ -42,7 +42,7 @@ was not measured.
    projectile's cage hit is not drawn.
 3. ~~The first probes of a projectile miss on the firing craft's box collider.~~ **Wired 2026-11-13**
    (lane `pulse-own-craft-box`, see Done). Open from it: the travel sweep's own box meeting (65: same
-   function, no reading of its own), an opponent's box (75), HD's box wired (Next Steps 1 for what is left), and the 2,302-probe replay as a Rust test: it cannot be ported until someone re-captures the 56 files
+   function, no reading of its own), an opponent's box (75), HD's box wired, and the 2,302-probe replay as a Rust test: it cannot be ported until someone re-captures the 56 files
    (the originals were scratch and are gone; `scripts/psp-projectile-sweeps.py --box ... --out FILE`,
    checked by `scripts/psp-craft-box-replay.py`). Keep them where a reap does not delete them, e.g.
    `data/traces/pulse-own-craft-box/` in the main checkout (the replay script's docstring names it).
@@ -108,8 +108,13 @@ was not measured.
   HD's, 2048's and Omega's own `Rocket_Init` unread (reading HD's decides whether they take the
   law); the Disruptor's advance unread.
 
+- **HD's floor arms and Plasma fall** (2026-11-27, `hd-projectile-arms`): read off HD's, Omega's
+  and 2048's own updates. `FloorArms::ParallelToFloor`: no sweep floor arm for the Rocket and
+  Plasma (a craft on the step still struck), raw arms for the Shuriken, the Plasma's speed
+  re-pinned after its fall; `Weapons::plasma_fall` (world Y except Pulse). Tests
+  `projectile/tests/floor_arms.rs`. Static only: no capture puts a floor across an HD sweep.
 - **The floor arms** (2026-11-12, `pulse-floor-arms`): `Weapons::floor_arms_steer_to_ride_point`
-  (Pulse measured, Pure inherited, HD, 2048 and Omega chosen `false`) selects `projectile::FloorArms`.
+  (Pulse measured, Pure inherited, HD, 2048 and Omega `false`) selects `projectile::FloorArms`.
   Pulse and Pure: the Shuriken's probe arm and the Rocket's and Shuriken's sweep arm write
   `(ride point - start) / dt` raw (the blade's speed drifts), the Missile's probe arm steers to the
   ride point, the Plasma's sweep arm only moves. Tests: `projectile_cage_ground_truth::
@@ -118,9 +123,7 @@ was not measured.
   (each arm's formula on a flat floor, both ways). **Not disc-backed**: the Missile's per-update
   errors and the Rocket's ramp-face exit were never kept as recorded states, so those arms are unit
   tests; recording them (`psp-projectile-sweeps.py` on Outpost 7's ramp, a Missile on Moa Therma)
-  would give them a ground truth. Still open from it: HD's, 2048's and Omega's own Rocket, Missile
-  and Shuriken floor arms are unread (HD's Plasma sweep writes no floor arm at all, so it differs from
-  Pulse's "only moves").
+  would give them a ground truth.
 
 - **The own-craft box** (2026-11-13, `pulse-own-craft-box`): `projectile::own_box_blocks` and
   `OwnCraftProbe`, chosen per title by `Weapons::own_craft_box_hides_track` (Pulse measured; others
@@ -135,8 +138,13 @@ was not measured.
 
 ## Next Steps
 
-1. **HD's Plasma fall axis** (static: world Y, ours along the normal; the box, probe lengths,
-   the Rocket's no-fall arm and the Missile's fall are settled, `projectile-floor.md`, "HD's box
-   and open-air Rocket"). Then 2048's and Omega's own probe lengths and Rocket and Missile arms
-   (Omega's Plasma reads `6.0`), an opponent's box and the travel sweep (items above).
-2. Read HD's `Rocket_Update`, `Missile_Update` and `Shuriken_Update` floor arms (`ps3-hdfury-eu`); if they match Pulse's, flip `Weapons::floor_arms_steer_to_ride_point` for HD (and Omega, 2048 by lineage).
+1. **Omega and 2048: the Rocket does not fall in open air, and probes reach `6.0`** (read
+   2026-11-27, not wired,
+   [projectile-floor-arms.md](../../docs/ghidra/functions/ps3-hdfury-eu/projectile-floor-arms.md#omega-and-2048)).
+   Wire `Weapons::rocket_open_air = TurnsAlongNormal` and `surface_probe_lengths` (`6.0` for the
+   Rocket, Missile and Plasma) for both; run `omega_event_xp_ground_truth` and
+   `sol_ground_truth::a_field_of_seven_laps_2048_sol_at_ace`.
+2. **HD's Missile speed step runs after the open-air fall too** (read to its branch, 70, not
+   wired; same page). Measure its velocity after one open-air update on RPCS3 first. 2048's
+   `Missile_Update` ends in the same unconditional-on-arm speed block.
+3. An opponent's box and the travel sweep's own box meeting (items above).

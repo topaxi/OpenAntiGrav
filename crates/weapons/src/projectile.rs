@@ -68,7 +68,7 @@ mod rocket;
 pub mod shuriken;
 
 pub use geometry::{OwnCraftProbe, hull_radius, own_box_blocks};
-use geometry::{SweepHit, nearest_hit};
+use geometry::{SweepHit, nearest_hit, nearest_hull};
 pub use hit::WeaponHit;
 
 pub use blast::{BlastPush, BlastStats, blast, blast_stats};
@@ -548,11 +548,12 @@ pub enum FloorArms {
     /// Plasma's do; the Shuriken's probe arm and the Rocket's and Shuriken's sweep arm write
     /// `(ride point - start) / dt` raw, with no rescale; the Plasma's sweep arm only moves.
     SteerToRidePoint,
-    /// Every arm turns the velocity parallel to the floor at the weapon's speed, and the sweep
-    /// adopts the normal. HD's Plasma and Rockets, measured live on Moa Therma's bank: the
-    /// velocity is perpendicular to the carried normal on every frame
-    /// (`docs/ghidra/functions/ps3-hdfury-eu/plasma.md`, "On Moa Therma's bank"). HD's sweep arm
-    /// is unread (chosen).
+    /// HD's, and Omega's and 2048's own. The Rocket's, Missile's and Plasma's probe arms turn the
+    /// velocity parallel to the floor, and the Rocket and the Plasma re-pin their speed on every
+    /// arm. Their travel sweeps end on a wall class and run no floor arm at all; the Missile's
+    /// only moves; the Shuriken's two arms write `(ride point - start) / dt` raw (HD's and its
+    /// lineage build none).
+    /// `docs/ghidra/functions/ps3-hdfury-eu/projectile-floor-arms.md`.
     ParallelToFloor,
     /// Pure's: the Rocket and the Plasma sweep first, then probe and ride along the normal they
     /// were launched with, which they never change ([`launch_normal`]). Every other weapon
@@ -617,8 +618,19 @@ pub enum RocketOpenAir {
     TurnsAlongNormal,
 }
 
+/// The axis a Plasma bolt falls along on an update its probe finds nothing
+/// (`oag_title::weapons::PlasmaFall`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PlasmaFall {
+    /// `velocity -= surface * 50 * dt` (Pulse).
+    AlongCarriedNormal,
+    /// `velocity.y -= 50 * dt` (HD, Omega, 2048;
+    /// `docs/ghidra/functions/ps3-hdfury-eu/projectile-floor-arms.md`).
+    WorldY,
+}
+
 /// A title's laws for the flyers that probe the track. A bare [`FloorArms`] converts to those
-/// arms with Pulse's probe lengths and open-air fall.
+/// arms with Pulse's probe lengths and open-air falls.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct FlightLaws {
     /// How a floor arm writes the velocity.
@@ -627,6 +639,8 @@ pub struct FlightLaws {
     pub probes: ProbeLengths,
     /// The Rocket's arm when its probe finds nothing.
     pub rocket_open_air: RocketOpenAir,
+    /// The Plasma bolt's fall when its probe finds nothing.
+    pub plasma_fall: PlasmaFall,
 }
 
 impl From<FloorArms> for FlightLaws {
@@ -635,6 +649,7 @@ impl From<FloorArms> for FlightLaws {
             floor_arms,
             probes: ProbeLengths::PULSE,
             rocket_open_air: RocketOpenAir::Falls,
+            plasma_fall: PlasmaFall::AlongCarriedNormal,
         }
     }
 }
