@@ -141,6 +141,22 @@ fn a_locked_copy_listed_first_leaves_the_card_on_the_one_that_plays() {
 }
 
 #[test]
+fn art_is_asked_for_only_from_discs_that_open() {
+    let launcher = chooser(
+        vec![
+            locked("enc.iso", "BCES-00664"),
+            row("eu.chd", oag_pulse::TITLE, Some("UCES-00465")),
+        ],
+        &[],
+    );
+    // A locked disc is left out, so unlocking it is a source not yet asked for.
+    assert_eq!(
+        launcher.art_sources().collect::<Vec<_>>(),
+        ["data/images/eu.chd"]
+    );
+}
+
+#[test]
 fn the_cog_steps_through_a_titles_images_and_reports_the_choice() {
     let mut launcher = chooser(library(), &[]);
     read_art(&mut launcher);

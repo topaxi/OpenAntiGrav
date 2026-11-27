@@ -67,10 +67,11 @@ pub struct Words {
     start: String,
     picture: String,
     quit: String,
+    encrypted: String,
 }
 
 impl Words {
-    /// Looks the five ids up in `table`, falling back to the id itself so a gap
+    /// Looks the ids up in `table`, falling back to the id itself so a gap
     /// is seen.
     #[must_use]
     pub fn from_table(table: &oag_ui::language::StringTable) -> Self {
@@ -81,6 +82,7 @@ impl Words {
             start: say("OAG_LAUNCHER_START"),
             picture: say("OAG_LAUNCHER_PICTURE"),
             quit: say("OAG_LAUNCHER_QUIT"),
+            encrypted: say("OAG_LAUNCHER_ENCRYPTED"),
         }
     }
 }
@@ -144,6 +146,15 @@ impl Launcher {
     pub fn shown_variant(&self, card: &Card) -> usize {
         let Some(cards) = &self.cards else { return 0 };
         shown_index(&self.rows, card, cards.shown.get(&card.key))
+    }
+
+    /// The sources whose art is worth reading: those that open. A locked disc's
+    /// pictures are ciphertext until its key is in.
+    pub fn art_sources(&self) -> impl Iterator<Item = &str> {
+        self.rows
+            .iter()
+            .filter(|row| row.is_playable())
+            .map(|row| row.source.as_str())
     }
 
     /// Records the pictures `source` has, once they have been read.
@@ -211,6 +222,14 @@ impl Launcher {
         self.sync();
     }
 
+    fn note_lines(&self) -> Vec<String> {
+        let encrypted = self
+            .cards
+            .as_ref()
+            .map_or("", |c| c.words.encrypted.as_str());
+        notes(&self.rows, encrypted)
+    }
+
     fn selectable_card(&self, card: &Card) -> bool {
         card.variants
             .iter()
@@ -240,7 +259,7 @@ impl Launcher {
     fn move_row(&mut self, down: bool) {
         let list = self.card_list();
         let Some(cards) = &self.cards else { return };
-        let rects = layout(list.len(), notes(&self.rows).len());
+        let rects = layout(list.len(), self.note_lines().len());
         let Some(from) = rects.get(cards.focus).copied() else {
             return;
         };
@@ -311,7 +330,7 @@ impl Launcher {
             self.move_focus(pointer.scroll.signum() as isize);
         }
         let list = self.card_list();
-        let rects = layout(list.len(), notes(&self.rows).len());
+        let rects = layout(list.len(), self.note_lines().len());
         let at = pointer.at?;
         if pointer.clicked
             && let Some(card) = rects.iter().enumerate().find_map(|(i, r)| {
@@ -341,7 +360,7 @@ impl Launcher {
             return Vec::new();
         };
         let list = self.card_list();
-        let notes = notes(&self.rows);
+        let notes = self.note_lines();
         let rects = layout(list.len(), notes.len());
         let mut out = vec![Draw::Fill {
             rect: [0.0, 0.0, SCREEN.0, SCREEN.1],
@@ -550,12 +569,12 @@ fn caption(row: &Candidate) -> String {
 }
 
 /// Why each row that will not open will not, for the line under the cards.
-fn notes(rows: &[Candidate]) -> Vec<String> {
+fn notes(rows: &[Candidate], encrypted: &str) -> Vec<String> {
     rows.iter()
         .filter_map(|row| match &row.state {
             State::Unavailable(why) => Some(format!("{}: {why}", row.name)),
             State::NeedsKey if !has_playable_copy(rows, row) => {
-                Some(format!("{}: ENCRYPTED - ENTER ITS DISC KEY", row.name))
+                Some(format!("{}: {encrypted}", row.name))
             }
             State::NeedsKey | State::Playable(_) => None,
         })

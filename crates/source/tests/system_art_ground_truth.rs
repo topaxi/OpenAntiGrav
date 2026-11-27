@@ -83,6 +83,16 @@ fn a_vita_folder_offers_its_pic0() {
     }
 }
 
+/// The packed form of the same package.
+#[test]
+#[ignore = "needs data/test-vpk/ (scripts/make-test-vpk.sh)"]
+fn a_vpk_offers_its_pic0() {
+    let Some(vpk) = oag_testdata::exact("data/test-vpk/2048-PCSF00007.vpk") else {
+        return;
+    };
+    assert_eq!(offered(&vpk, Vec::new()), vec![("pic0", 960, 544, None)]);
+}
+
 #[test]
 #[ignore = "needs the Omega packages under data/images/"]
 fn the_omega_package_and_its_unpacked_folder_offer_both_pictures() {

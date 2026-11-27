@@ -425,6 +425,7 @@ OAG_LAUNCHER_MOVE = { text = "PFEILE WÄHLEN", human = false }
 OAG_LAUNCHER_START = { text = "ENTER ODER X STARTEN", human = false }
 OAG_LAUNCHER_PICTURE = { text = "C ODER QUADRAT NÄCHSTES BILD", human = false }
 OAG_LAUNCHER_QUIT = { text = "ESC BEENDEN", human = false }
+OAG_LAUNCHER_ENCRYPTED = { text = "VERSCHLÜSSELT - DISC-SCHLÜSSEL EINGEBEN", human = false }
 
 [untranslated]
 ids = [

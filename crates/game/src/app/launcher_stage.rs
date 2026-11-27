@@ -57,15 +57,14 @@ impl LauncherStage {
         self.art.is_some() || self.wants_art()
     }
 
-    /// Cards, with a source no read has covered (the first frame, or a dropped
-    /// disc).
+    /// Cards, with a disc no read has covered: the first frame, a dropped disc,
+    /// or one a key has just unlocked.
     fn wants_art(&self) -> bool {
         self.launcher.is_cards()
             && self
                 .launcher
-                .rows()
-                .iter()
-                .any(|row| !self.requested.contains(&row.source))
+                .art_sources()
+                .any(|source| !self.requested.iter().any(|seen| seen == source))
     }
 
     /// Takes a finished read, and starts one for whatever has none.
@@ -86,12 +85,7 @@ impl LauncherStage {
             self.art = None;
         }
         if self.art.is_none() && self.wants_art() {
-            self.requested = self
-                .launcher
-                .rows()
-                .iter()
-                .map(|row| row.source.clone())
-                .collect();
+            self.requested = self.launcher.art_sources().map(str::to_string).collect();
             let sources = self.requested.clone();
             self.art = Some(Task::spawn("launcher-art", move || art::load(&sources)));
         }

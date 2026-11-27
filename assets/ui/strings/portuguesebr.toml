@@ -591,3 +591,4 @@ OAG_LAUNCHER_MOVE = { text = "SETAS ESCOLHER", human = false }
 OAG_LAUNCHER_START = { text = "ENTER OU X INICIAR", human = false }
 OAG_LAUNCHER_PICTURE = { text = "C OU QUADRADO PRÓXIMA IMAGEM", human = false }
 OAG_LAUNCHER_QUIT = { text = "ESC SAIR", human = false }
+OAG_LAUNCHER_ENCRYPTED = { text = "CRIPTOGRAFADO - DIGITE A CHAVE DO DISCO", human = false }

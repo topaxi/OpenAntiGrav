@@ -342,6 +342,7 @@ OAG_LAUNCHER_MOVE = { text = "FLÈCHES CHOISIR", human = false }
 OAG_LAUNCHER_START = { text = "ENTRÉE OU X LANCER", human = false }
 OAG_LAUNCHER_PICTURE = { text = "C OU CARRÉ IMAGE SUIVANTE", human = false }
 OAG_LAUNCHER_QUIT = { text = "ÉCHAP QUITTER", human = false }
+OAG_LAUNCHER_ENCRYPTED = { text = "CHIFFRÉ - SAISISSEZ SA CLÉ DE DISQUE", human = false }
 
 [untranslated]
 ids = [
