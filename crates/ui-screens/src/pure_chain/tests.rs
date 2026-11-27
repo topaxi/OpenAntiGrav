@@ -206,3 +206,53 @@ fn the_chain_backs_out_on_the_button_it_is_handed() {
     assert!(choice.update(&mut tick(&[Button::Circle])).is_empty());
     assert_eq!(choice.update(&mut tick(&[Button::Triangle])), [Event::Back]);
 }
+
+/// Pointing at the row at either edge of the window leaves the window where it
+/// is: a click after the hover confirms that row.
+#[test]
+fn hovering_an_edge_row_of_a_long_list_never_scrolls_it() {
+    let skin = skin();
+    let mut list = list(40);
+    let layout = Layout::new(&skin, PITCH);
+    let at = |slot: usize| {
+        Some((
+            layout.text_x + 20.0,
+            layout.rows_y + (slot as f32 + 0.5) * layout.line,
+        ))
+    };
+    let hover = |slot: usize| Pointer {
+        at: at(slot),
+        moved: true,
+        ..Pointer::default()
+    };
+    let click = |slot: usize| Pointer {
+        at: at(slot),
+        clicked: true,
+        ..Pointer::default()
+    };
+    let bottom = layout.visible - 1;
+    list.pointer(&hover(bottom), &skin);
+    list.follow(&skin);
+    assert_eq!(list.window_start(&layout), 0, "the bottom edge");
+    assert_eq!(
+        list.pointer(&click(bottom), &skin),
+        [Event::Confirmed(bottom)]
+    );
+
+    for _ in 0..layout.visible + 4 {
+        list.pointer(
+            &Pointer {
+                scroll: 1,
+                ..Pointer::default()
+            },
+            &skin,
+        );
+        list.follow(&skin);
+    }
+    let first = list.window_start(&layout);
+    assert!(first > 0, "the wheel still scrolls");
+    list.pointer(&hover(0), &skin);
+    list.follow(&skin);
+    assert_eq!(list.window_start(&layout), first, "the top edge");
+    assert_eq!(list.pointer(&click(0), &skin), [Event::Confirmed(first)]);
+}

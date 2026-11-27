@@ -375,26 +375,195 @@ fn a_disabled_row_is_selectable_and_inert_under_a_click() {
     assert_eq!(menu.selected(), 1);
 }
 
-/// Clicking the last visible row of a long page moves the window the way
-/// a pad step onto it does, so the row after it comes into view.
-#[test]
-fn a_click_on_a_long_pages_last_visible_row_scrolls_the_window() {
-    let mut menu = Menu::new(built_in());
-    let long = menu
-        .definition()
-        .pages
+/// A page of `rows` switches, each its own setting, longer than any window.
+fn long_switches(rows: usize) -> Menu {
+    let mut toml = String::from(
+        r#"
+        toml-schema = { location = "https://oag.topaxi.com/mods/schemas/v1/menu.tosd", version = "1.0.0" }
+        root = "main"
+        [[page]]
+        id = "main"
+        title = "MAIN"
+        "#,
+    );
+    for row in 0..rows {
+        toml.push_str(&format!(
+            "[[page.entry]]\nkind = \"toggle\"\nlabel = \"ROW {row}\"\nsetting = \"test.row{row}\"\n"
+        ));
+    }
+    let definition = Definition::parse(&toml, &crate::language::StringTable::default())
+        .expect("the page must parse");
+    Menu::new(definition)
+}
+
+/// The two idioms a long page is drawn in: Pulse's text rows and HD's list of
+/// boxes, each with the window its own pitch gives.
+fn idioms() -> [(&'static str, Skin, Frame); 2] {
+    [
+        ("text rows", skin(), Frame::default()),
+        ("boxed list", hd_skin(), hd_frame()),
+    ]
+}
+
+/// A long page in one idiom, and what a pointer sees of it right now. The
+/// regions are asked for again after every gesture, as the game does each tick.
+struct Long {
+    menu: Menu,
+    skin: Skin,
+    frame: Frame,
+}
+
+impl Long {
+    fn new(skin: Skin, frame: Frame) -> Self {
+        let mut menu = long_switches(40);
+        menu.set_visible_rows(visible_rows(&skin, &frame, false));
+        Self { menu, skin, frame }
+    }
+
+    fn regions(&self) -> Vec<Region> {
+        pointer::regions(&self.menu, &self.skin, &self.frame, &measure)
+    }
+
+    /// The middle of the label of the first or last row on screen.
+    fn edge(&self, last: bool) -> (usize, (f32, f32)) {
+        let rows: Vec<Region> = self
+            .regions()
+            .into_iter()
+            .filter(|region| region.part == Part::Row)
+            .collect();
+        let region = rows[if last { rows.len() - 1 } else { 0 }];
+        (region.row, centre(region.rect))
+    }
+
+    fn feed(&mut self, pointer: &Pointer) -> Vec<MenuEvent> {
+        let regions = self.regions();
+        self.menu.pointer(pointer, &regions)
+    }
+
+    fn at(&self) -> (usize, usize) {
+        (self.menu.selected(), self.menu.scroll())
+    }
+}
+
+fn flipped(events: &[MenuEvent]) -> Vec<&str> {
+    events
         .iter()
-        .find(|page| page.entries.len() > visible())
-        .map(|page| page.id.clone())
-        .expect("a page longer than the screen");
-    assert!(menu.open(&long));
-    menu.set_visible_rows(visible());
-    let regions = pointer::regions(&menu, &skin(), &Frame::default(), &measure);
-    let last_shown = regions.last().unwrap();
-    assert_eq!(last_shown.row, visible() - 1);
-    menu.pointer(&move_to(centre(last_shown.rect)), &regions);
-    assert_eq!(menu.selected(), visible() - 1);
-    assert!(menu.scroll() > 0, "the window followed the cursor down");
+        .filter_map(|event| match event {
+            MenuEvent::Changed { setting, .. } => Some(setting.as_str()),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Hovering the row at either edge of a long page moves the cursor there and
+/// nothing else: a second small move over the same point hits the same row.
+#[test]
+fn hovering_an_edge_row_never_scrolls_the_list() {
+    for (idiom, skin, frame) in idioms() {
+        let mut long = Long::new(skin, frame);
+        let (bottom, at) = long.edge(true);
+        assert!(bottom + 1 < 40, "{idiom}: the page overflows");
+        long.feed(&move_to(at));
+        assert_eq!(long.at(), (bottom, 0), "{idiom}: bottom edge");
+        long.feed(&move_to((at.0 + 1.0, at.1)));
+        assert_eq!(long.at(), (bottom, 0), "{idiom}: and again");
+
+        long.feed(&wheel(4));
+        assert_eq!(long.menu.scroll(), 4, "{idiom}: the wheel still scrolls");
+        let (top, at) = long.edge(false);
+        assert_eq!(top, 4, "{idiom}");
+        long.feed(&move_to(at));
+        assert_eq!(long.at(), (4, 4), "{idiom}: top edge");
+    }
+}
+
+/// The report this answers: the click after a hover on an edge row must act on
+/// that row, and so must the one after it.
+#[test]
+fn a_click_after_a_hover_on_an_edge_row_confirms_that_row() {
+    for (idiom, skin, frame) in idioms() {
+        let mut long = Long::new(skin, frame);
+        let (bottom, at) = long.edge(true);
+        let setting = format!("test.row{bottom}");
+        long.feed(&move_to(at));
+        let click = Pointer {
+            moved: false,
+            ..click_at(at)
+        };
+        for press in 1..=2 {
+            let events = long.feed(&click);
+            assert_eq!(flipped(&events), [setting.as_str()], "{idiom}: {press}");
+            assert_eq!(long.at(), (bottom, 0), "{idiom}: {press}");
+        }
+    }
+}
+
+/// A finger's tap is a move and a click in one tick, and leaves the list too.
+#[test]
+fn a_tap_on_an_edge_row_changes_it_and_leaves_the_list() {
+    for (idiom, skin, frame) in idioms() {
+        let mut long = Long::new(skin, frame);
+        let (bottom, at) = long.edge(true);
+        let setting = format!("test.row{bottom}");
+        for tap in 1..=2 {
+            let events = long.feed(&click_at(at));
+            assert_eq!(flipped(&events), [setting.as_str()], "{idiom}: {tap}");
+            assert_eq!(long.at(), (bottom, 0), "{idiom}: {tap}");
+        }
+    }
+}
+
+/// The pad's own rule comes back the moment the pad moves: one row of
+/// lookahead past the cursor, at whichever end it is heading for. Changing the
+/// value of the row it is already on moves nothing.
+#[test]
+fn a_pad_move_from_a_hovered_edge_row_scrolls_again() {
+    let mut long = Long::new(skin(), Frame::default());
+    let shown = long.menu.visible_rows();
+    let (bottom, at) = long.edge(true);
+    long.feed(&move_to(at));
+    press(&mut long.menu, &[Button::Right]);
+    assert_eq!(long.at(), (bottom, 0), "a value step is no move");
+    press(&mut long.menu, &[Button::Down]);
+    assert_eq!(long.menu.selected(), bottom + 1);
+    assert_eq!(
+        long.menu.scroll(),
+        bottom + 3 - shown,
+        "the row after the cursor is on screen"
+    );
+
+    long.feed(&wheel(4));
+    let (top, at) = long.edge(false);
+    long.feed(&move_to(at));
+    press(&mut long.menu, &[Button::Up]);
+    assert_eq!(long.at(), (top - 1, top - 2), "the row before it too");
+}
+
+/// A row coming or going above a hovered edge row carries the pointer's claim
+/// with it: the window follows the row and asks for no lookahead of its own.
+#[test]
+fn rows_coming_and_going_keep_a_hovered_edge_row_on_its_edge() {
+    let mut long = Long::new(skin(), Frame::default());
+    long.menu.definition.pages[0].entries[0] = Entry::Run {
+        label: "QUIT".into(),
+        action: Action::Quit,
+        inputs: None,
+    };
+    long.menu.offer(Action::Quit, false);
+    let (bottom, at) = long.edge(true);
+    long.feed(&move_to(at));
+    long.menu.offer(Action::Quit, true);
+    assert_eq!(
+        long.at(),
+        (bottom + 1, 1),
+        "inserted above: the same row stays last on screen"
+    );
+
+    long.feed(&wheel(4));
+    let (top, at) = long.edge(false);
+    long.feed(&move_to(at));
+    long.menu.offer(Action::Quit, false);
+    assert_eq!(long.at(), (top - 1, top - 1), "removed above: stays first");
 }
 
 /// The page with the most rows, opened - one that does not fit on screen.

@@ -383,7 +383,9 @@ impl Session {
             let seat_pointers = self.seat_pointers();
             // HD's list rows are taller to the finger, and back to the
             // authored size once a pad, key or mouse speaks.
-            if let Stage::Menu(stage) = &mut self.stage {
+            if let Stage::Menu(stage) = &mut self.stage
+                && self.pointer.layout_may_change(&pointer)
+            {
                 stage.skin.set_touch_rows(self.pointer.touch_spoke_last());
             }
             self.poll_music_pool();

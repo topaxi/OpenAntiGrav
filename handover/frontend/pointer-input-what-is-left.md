@@ -1,7 +1,7 @@
 ---
 status: measure
 titles: [pure, 2048]
-updated: 2026-10-10
+updated: 2026-11-27
 summary: "Live pass over Pure's selection screens under the ink-centred band; 2048's PS TV pointer behaviour unread"
 ---
 
@@ -84,6 +84,10 @@ written ahead of them - see `oag_ui_screens::campaign::pointer` and
   (`HEX_FRICTION`), all chosen (selection-screens.md has the table). The
   maintainer's phone pass decides whether those three constants need tuning;
   the window's DPI is not consulted, so the feel varies with screen size.
+- **A pointer no longer scrolls a list under itself** (2026-11-27, menus.md
+  "A pointer never moves a list under itself"), checked by unit tests and a
+  headless drive on Pulse, not with a real mouse or a finger. For the phone
+  pass: tap an edge row of GRAPHICS twice, and make HD's first tap after a pad.
 - **Headless captures cannot click.** `--press` drives buttons through the
   capture's own tick loop, but the pointer arrives only through winit
   events in `app/handler.rs`; a `--click X,Y` would need `capture::run` to

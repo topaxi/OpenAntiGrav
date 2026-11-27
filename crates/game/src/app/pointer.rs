@@ -14,13 +14,17 @@
 //! title's 480x272, HD's 1920x1080 - and this module does not know which
 //! stage is up.
 //!
+//! A click or a tap is reported **where it was pressed**, not where the mouse
+//! or the finger had got to by the tick or the lift that delivers it, so it
+//! acts on what was under the pointer at the press.
+//!
 //! # A finger is a pointer that is only there while it is down
 //!
 //! A finger has no hover, so a tap on a row has to select and activate it
 //! together, which is exactly what the models do with a `moved` and a
 //! `clicked` in the same tick. Since a finger can also *drag* a list, the
 //! tap is decided on **lift**, not on touch-down: `Started` only remembers
-//! where the finger landed, and `Ended` reports the position, a move and a
+//! where the finger landed, and `Ended` reports that landing spot, a move and a
 //! click in one tick if the finger never left the landing spot's
 //! [`DRAG_THRESHOLD`]. Past it the finger is a drag for good: its travel
 //! goes out as [`Pointer::drag`], and it reports no position and no click,
@@ -71,6 +75,8 @@ pub(crate) struct Window {
     at: Option<(f32, f32)>,
     moved: bool,
     clicked: bool,
+    /// Where the click or reset not yet taken was pressed.
+    click_at: Option<(f32, f32)>,
     back: bool,
     reset: bool,
     /// Wheel detents since the last take, with the fractional remainder of
@@ -176,9 +182,15 @@ impl Window {
             return;
         }
         match button {
-            MouseButton::Left => self.clicked = true,
+            MouseButton::Left => {
+                self.clicked = true;
+                self.click_at = self.at;
+            }
             MouseButton::Right => self.back = true,
-            MouseButton::Middle => self.reset = true,
+            MouseButton::Middle => {
+                self.reset = true;
+                self.click_at = self.at;
+            }
             _ => {}
         }
     }
@@ -248,6 +260,7 @@ impl Window {
                         self.moved = true;
                         self.at = Some(at);
                         self.clicked = true;
+                        self.click_at = Some(self.touch_origin);
                         self.lifted = true;
                     }
                     self.dragging = false;
@@ -285,11 +298,19 @@ impl Window {
         self.touch_spoke_last
     }
 
+    /// Whether the screen may change what it lays out for the device in use.
+    /// Not while a finger is down or on the tick its tap is delivered: the
+    /// taller touch rows would move the row under the finger before it acts.
+    pub(crate) fn layout_may_change(&self, tick: &Pointer) -> bool {
+        self.finger.is_none() && !tick.clicked
+    }
+
     /// Drops every pending press. Call it on focus loss, for the reason
     /// `oag_input::Keyboard::release_all` gives: a click that happened just
     /// before the window lost focus was for whatever took it.
     pub(crate) fn release(&mut self) {
         self.clicked = false;
+        self.click_at = None;
         self.back = false;
         self.reset = false;
         self.scroll = 0.0;
@@ -322,8 +343,9 @@ impl Window {
     pub(crate) fn take(&mut self) -> Pointer {
         let whole = self.scroll.trunc();
         self.scroll -= whole;
+        let pressed_at = self.click_at.take();
         let pointer = Pointer {
-            at: self.at,
+            at: pressed_at.or(self.at),
             moved: self.moved,
             clicked: self.clicked,
             back: self.back,
@@ -340,6 +362,9 @@ impl Window {
         self.reset = false;
         if std::mem::take(&mut self.lifted) {
             self.at = None;
+            self.moved = true;
+        } else if pressed_at.is_some_and(|pressed| self.at != Some(pressed)) {
+            // The travel since the press is the next tick's move.
             self.moved = true;
         }
         for touch in std::mem::take(&mut self.queued) {
