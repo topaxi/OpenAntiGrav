@@ -46,11 +46,13 @@ SKIPPED = {"scripts/check-temp-use.py"}
 
 TMP = re.compile(r"(?<![\w])/tmp(?![\w-])")
 RUST = (
-    (re.compile(r"\benv::temp_dir\b|\buse\s+std::env::\{[^}]*\btemp_dir\b"), "std::env::temp_dir"),
+    (re.compile(r"\benv::temp_dir\b"), "std::env::temp_dir"),
     (re.compile(r"\btempfile::|\buse\s+tempfile\b"), "the tempfile crate"),
     (re.compile(r'"(?:file://)?/tmp(?![\w-])'), "a /tmp literal"),
     (re.compile(r"\bCARGO_TARGET_TMPDIR\b"), "CARGO_TARGET_TMPDIR"),
 )
+# A whole `use` statement, however it is grouped or wrapped.
+USE = re.compile(r"^[ \t]*(?:pub(?:\([^)]*\))?\s+)?use\s[^;]*;", re.MULTILINE)
 CONSTRUCTORS = {
     "TemporaryDirectory",
     "TemporaryFile",
@@ -63,6 +65,14 @@ MKTEMP = re.compile(r"\bmktemp\b(?![^\n)`]*\s-p\b)")
 
 
 def rust(text):
+    for use in USE.finditer(text):
+        statement = use.group()
+        # `std::env::temp_dir` written out is the line scan's to report.
+        if "env::temp_dir" in statement:
+            continue
+        if re.search(r"\benv\b", statement) and re.search(r"\btemp_dir\b", statement):
+            number = text.count("\n", 0, use.start()) + 1
+            yield number, "std::env::temp_dir", " ".join(statement.split())
     for number, line in enumerate(text.split("\n"), 1):
         if line.lstrip().startswith("//"):
             continue
@@ -145,6 +155,9 @@ def selftest():
         "a.rs": [
             "let d = std::env::temp_dir();",
             "use std::env::{self, temp_dir};",
+            "use std::env::temp_dir;",
+            "use std::{env::{self, temp_dir}, fs};",
+            "use std::env::{\n    self,\n    temp_dir,\n};",
             'let p = "/tmp/x";',
             "let d = tempfile::tempdir();",
             'env!("CARGO_TARGET_TMPDIR")',
