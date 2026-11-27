@@ -281,7 +281,7 @@ stage's black.
   binding holds the lightmap and the generic glow reading (`mesh::rcs::emissive`) never bound the
   emissive.
 
-**Wired** (`oag_mesh::mesh::rcs::tunnel_emissive`, `PROGRAM_TUNNEL_EMISSIVE`): a lightmapped
+**Wired** (`oag_mesh::mesh::rcs::lightmapped_emissive`, `PROGRAM_LIGHTMAPPED_ADD`): a lightmapped
 `tunnel_fx_noalpha` slot whose resolved program declares the emissive and the lightmap binds the
 emissive third and takes a glow-table entry; `shade.wesl` adds the decoded tap after the light,
 times `1 - zone_program`. 22 slots on Talon's Junction. The emissive tap's gamma nibble was not read
@@ -313,11 +313,91 @@ this family, so the screen blend reduces to the add. The non-lightmapped slots (
 the generic `ADD_SECOND` reading, gated by the diffuse alpha where the program is not; on the
 Detonator pairs those chunks run their Zone program, which adds nothing.
 
-**2048 and Omega.** 2048: **checked, differs**: none of 2048's Vita archives (`PCSA00015` base, DLC and
-patch) ships a `tunnel_fx` material. Omega: **checked, applies, not wired**: `data02`, `data05` and
+**2048 and Omega.** 2048: none of the US package's archives (`PCSA00015`) ships a `tunnel_fx`
+material; the EU DLC 2 package does (`PCSF00007`, `tunnel_fx_noalpha_mult`, `tunnel_fx_glass`),
+and its program is unread (open). Omega: **checked, applies, not wired**: `data02`, `data05` and
 `data08` ship Talon's `tunnel_fx_noAlpha`, `_1`, `_2` and Tech de Ra's `tunnel_fx_noAlpha_mult*` with
 `tunnel_fx_emissive.gnf`; they go through the `gcn` reader, which this module does not reach, and
 whether its program binds the emissive is unread (Omega's Detonator lane is deferred).
+
+## The other lightmapped emissive families
+
+**Laws (confidence 80 each: the material's own lightmapped program, `HalfBrightIleLightmapSunSpot0SVC0`,
+read with `scripts/ps3-microcode.py fp-file` on the material's block at the offset
+`scripts/ps3-sho.py variants` names; not checked against a running original).** A census over the
+DATA00, DATA02 and DATA03 circuits (every slot whose lightmap holds the second binding and whose
+program declares an emissive picture) found that `tunnel_fx_noalpha` was not alone. Each program
+adds its emissive after the light; two shapes:
+
+`E * tint` at the diffuse coordinate, ungated by the diffuse alpha (`PROGRAM_LIGHTMAPPED_ADD`):
+
+| Family | Emissive sampler | Tint parameter | Lightmapped slots bound |
+| --- | --- | --- | --- |
+| `tunnel_fx_noalpha` | `0xb1f2a176` | none | 46 (DATA00) |
+| `tunnel_fx_noalpha_mult` | `0xb1f2a176` | none | 4 |
+| `diffuse_emissive_with_specular_from_alpha` | `0x3bdc0403` | none | 28 |
+| `diffuse_with_specular_from_alpha_scalar` | `0x3bdc0403` | `0x6a30e9cd` | 64 |
+| `diffuseemissivealphaspecular` | `0xb1f2a176` | `0x4d60d566` | 12 |
+| `diffuse_spec_fresnel_emissive` | `0xa2d555b9` | `0x03e55ee0` | 10 |
+| `and_diffuse_emissive`, `and_diffuse_emissive_spec` | `0xfa79b1cd` | `0xb6a7c284` | 0 (Modesto Heights only, table full) |
+| `mr_shopwin_reflecttranspemis` | `0xd27475a1` | `0x9ce1ba7e` | 8 + 8 (DATA02, DATA03) |
+| `track_surface`, `track_wall` | `0xb1f2a176` | none | 24 + 25 (The Amphiseum, fourth binding) |
+
+`D.a * E(u, (v + a) * b + time) * tint` (`PROGRAM_LIGHTMAPPED_SCROLL`), parameters `a` =
+`0x78256a45`, `b` = `0x78787596`, tint `0xe8bcd7f5`: `uvanim_diffuse_emissive` (16),
+`mt_uvanim_diffuse_emissive` (24 + 25) and `mt_uvanim_diffuse_emissive2` (13 + 12). Modesto
+Heights' compile of `uvanim_diffuse_emissive` also declares `0xa24bc055` (a scale over both
+coordinates) and `0xf0d90109` (a speed on `time`); both are read from the material.
+
+The Zone variants of every family above declare no emissive sampler, except
+`mr_shopwin_reflecttranspemis` (its Zone law is unread, so a Zone race draws nothing there, as
+before). `track_surface` and `track_wall` bind fourth because their third holds the normal map.
+
+**Read and not wired, with what differs:**
+
+- `lambert_spec_mult_emissive_scroll` (Tech de Ra): the emissive is multiplied by a second,
+  scrolled picture (`0x75ccafc8`) and tint before the add; needs a further binding.
+- `uvanim_diffuse_emissive_bloom` (Modesto): the sample is multiplied by its own alpha, untinted,
+  and its alpha is the output alpha; its Zone variants also sample it.
+- `dc_flashing_lights` (Mag Lev) scrolls `u` by its own parameters (`0xd1634606`, `0x3fcae4b3`);
+  `mt_uvanim_diffuse_emissive3tokey_v_scroll` and Vineta K's `mt_uvanim_diffuse_emissive3tokey`
+  compile scroll `u` by an authored value (`0x1c5de6ec`) and declare no `time`.
+- `diffusetextureemissivetexture`: the lightmapped program does not accumulate the sample.
+- `basic_uv_scroll`, `cf_billboard1`, `tech_de_ra_emissive`, `uvdistortion_diff_vertexcol`,
+  `lambert_spec_reflect_mult_emissive`, `lambert_spec_mult_scroll`: the picture named emissive is
+  the slot's own first binding, so nothing is missing a binding (whether it is added unlit is a
+  separate question, unread).
+- `mageffect08`, `mageffect08_floor`: their mask is `mag_wave`'s. `mageffect08_lh` declares the same
+  mask (`0x1202d8df`, not an emissive sampler) with a normal map third; unread.
+
+**Left dark by a limit, not a law:** the glow table holds 63 entries (the six index bits of the slot
+word) and is shared with readers that run after material setup (the circuit's pad masks, the advert
+cards' Zone exemption), so this pass leaves four free. Modesto Heights has 59 before it, and none of
+its lightmapped `and_diffuse_emissive*` and `uvanim_diffuse_emissive` slots is bound (40 slots over
+both layouts). Vineta K's 4 `mt_uvanim_diffuse_emissive3tokey` slots are dark too, for the unread law
+above. The census test pins both sets. Taking those
+four was measured: its light bars and pad lamps went dark and `hd/modesto-heights` rose 3.98 to 5.56.
+
+Test: `hd_lightmapped_emissive_ground_truth` (one test per archive, pins the bound slots per family
+and fails on a lightmapped slot of a listed family left unbound) and
+`zone_spu_light::the_fourth_binding_and_the_scrolled_emissive_reach_a_plain_chunk`.
+
+**Measured on the pairs** (2026-11-27, re-rendered copies against the previous commit's binary):
+`hd-race/talons-pack`'s blue strip goes from `(26,120,170)` to `(59,153,210)`, mean of its bright
+cyan pixels in `1100,90,1500,300`, against the original's `(59,155,210)`; its mean grey rises
+22.39 to 22.69 because ours' strip sits about 30 px from the original's. `hd/anulpha-pass` 4.64 to
+4.70, `hd/the-amphiseum` 4.77 to 4.73, `hd/vineta-k` 2.53 to 2.51, `hd/talons` and
+`hd/talons-assegai-c1` fall by 0.003; every other HD race pair, `hd/modesto-heights` and the six
+`detonator-talons` pairs are unchanged. Frames at an autopilot time trial's tick 900 show
+Amphiseum's wall lamps and Talon's Junction's strut lamps lit where they were dark; no original
+frame of either is on disk.
+
+**2048 and Omega: names ship, programs unread, left open** (a census of archive names only; neither
+reader was run on them, so whether `psp2` or `gcn` already binds these emissives is not known).
+Omega's `data01`, `data02`, `data05` and `data08` ship `track_surface*`, `uvanim_*`, `mt_uvanim_*`,
+`diffuse_*`, `and_diffuse_emissive*` and `mr_shopwin_reflecttranspemis` materials. 2048's EU DLC 2
+(`PCSF00007`) ships `track_surface`, `track_wall`, `tunnel_fx_noalpha_mult`, `tunnel_fx_glass` and
+`uvanim_diffuse_emissive` for the HD circuits.
 
 ## Seen, headless
 

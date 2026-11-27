@@ -180,6 +180,7 @@ mod hull_charge;
 mod hull_normal;
 mod isolate;
 mod light_cone;
+mod lightmapped_emissive;
 mod mag_wave;
 mod mine_rim;
 mod pad_ne;
@@ -189,7 +190,6 @@ mod refraction;
 mod shield_scroll;
 mod snow_rock;
 mod static_hologram;
-mod tunnel_emissive;
 mod twin_blend;
 mod uv_overlay;
 pub use pads::{build_pads, build_weapon_pads};
@@ -801,9 +801,15 @@ fn build_with_options(
         material_anim,
         anim_tracks,
     } = match setup {
-        Setup::Decode(textures, store, water) => {
-            material_setup(&model, model_blob, textures, store, water, &mut report)
-        }
+        Setup::Decode(textures, store, water) => material_setup(
+            &model,
+            model_blob,
+            textures,
+            store,
+            water,
+            true,
+            &mut report,
+        ),
         Setup::Copy(from) => MaterialSetup::of(from),
     };
     out.pad_masks = mag_emissive;

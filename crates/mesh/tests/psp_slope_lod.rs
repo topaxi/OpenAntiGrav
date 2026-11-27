@@ -26,11 +26,22 @@
 //! each at a depth where it must differ from `original`, so a preset that stops
 //! reaching the shader fails its own test.
 //!
+//! # The hardware path
+//!
+//! Every other model is sampled at the sampler's own derivative level, where the
+//! same uniform is a bias (`texture_lod.wesl`, `detail_shift`). Those tests draw
+//! an authored block chain (red, green, blue) minified onto level 2, at no title
+//! bias (2048, Omega) and at HD's -1.5, through the material fetch and through an
+//! effect program's own. A PS2 texture has one level, so a minified one reads the
+//! base (`docs/rendering/texture-level-per-title.md`, "Pulse PS2 in a race").
+//!
 //! Skips when there is no adapter.
 
 use std::sync::Arc;
 
-use oag_mesh::mesh::{Bounds, DrawCall, GpuVertex, Model, ModelTexture, Texels, slots};
+use oag_mesh::mesh::{
+    BlockFormat, Bounds, DrawCall, GpuVertex, Model, ModelTexture, Ps2TextureSet, Texels, slots,
+};
 use oag_mesh::mesh_render::texlod::{PSP_TEXLOD_FRAME, TEXLOD_CODE_OFFSET};
 use oag_mesh::mesh_render::{self, Anisotropy, Scene, TextureDetail, UNIFORMS_SIZE};
 
@@ -175,6 +186,7 @@ fn model(albedo: Arc<ModelTexture>, depth: f32, texcoords: Texcoords) -> Model {
         flame: None,
         absorb_shell: false,
         shield_shell: false,
+        shield_lit: false,
         own_shield: false,
         material_lod_bias: 0.0,
         material_state: Vec::new(),
@@ -393,8 +405,10 @@ fn maximum_texture_detail_is_level_zero_at_every_depth() {
     );
 }
 
+/// With one coordinate everywhere there is no derivative, so the sampler's own level is the
+/// base whatever the preset shifts it by.
 #[test]
-fn texture_detail_leaves_a_model_without_a_chain_alone() {
+fn a_constant_coordinate_without_a_chain_reads_the_base_at_every_preset() {
     let Some((device, queue)) = gpu() else { return };
     for detail in TextureDetail::ALL {
         assert_eq!(
@@ -723,5 +737,191 @@ fn a_material_lod_bias_reads_a_finer_level_than_the_samplers_own() {
     assert!(
         biased > 80,
         "a bias of -1.5 reaches the stripes themselves, contrast {biased} against {plain}"
+    );
+}
+
+/// A device that samples the block-compressed chain below, or `None` with no
+/// adapter that can: without the feature the renderer decodes level 0 alone.
+fn gpu_with_blocks() -> Option<(wgpu::Device, wgpu::Queue)> {
+    let instance = wgpu::Instance::default();
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
+        eprintln!("no GPU adapter: skipping");
+        return None;
+    };
+    if !adapter
+        .features()
+        .contains(wgpu::Features::TEXTURE_COMPRESSION_BC)
+    {
+        eprintln!("no BC sampling: skipping");
+        return None;
+    }
+    Some(
+        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+            required_features: wgpu::Features::TEXTURE_COMPRESSION_BC,
+            ..Default::default()
+        }))
+        .expect("requesting the device"),
+    )
+}
+
+/// A 16x16 DXT1 texture authoring red, green and blue levels, as a `.gtf` carries its chain.
+fn authored_chain() -> Arc<ModelTexture> {
+    let level = |rgb565: u16, blocks: usize| {
+        let [low, high] = rgb565.to_le_bytes();
+        [low, high, low, high, 0, 0, 0, 0].repeat(blocks)
+    };
+    Arc::new(ModelTexture {
+        label: "red, green, blue blocks".into(),
+        width: 16,
+        height: 16,
+        texels: Texels::Blocks {
+            format: BlockFormat::Bc1,
+            levels: vec![level(0xf800, 16), level(0x07e0, 4), level(0x001f, 1)],
+        },
+        mip_count: None,
+        lod_code: 0.0,
+    })
+}
+
+/// Maps `quad` so the sampler's own selection is `level`: the texture is 16 texels
+/// across and the target [`SIZE`] pixels across clip space, so a coordinate of
+/// `k` per clip unit is `k / 2` texels a pixel. `offset` moves the coordinate.
+fn minify(quad: &mut Model, depth: f32, level: f32, offset: [f32; 2]) {
+    let k = 2.0 * level.exp2();
+    for vertex in &mut quad.vertices {
+        vertex.texcoord = [
+            k * vertex.position[0] / depth + offset[0],
+            k * vertex.position[1] / depth + offset[1],
+        ];
+    }
+}
+
+/// The level each preset reads where the sampler alone would read `level`, with
+/// `change` made to the model.
+fn hardware_levels(level: f32, change: impl Fn(&mut Model)) -> Option<[usize; 3]> {
+    let (device, queue) = gpu_with_blocks()?;
+    let depth = 64.0;
+    Some(TextureDetail::ALL.map(|detail| {
+        let mut quad = model(authored_chain(), depth, Texcoords::Constant);
+        minify(&mut quad, depth, level, [0.0; 2]);
+        change(&mut quad);
+        let setup = Setup::all(detail)[0];
+        let image = draw(&device, &queue, &quad, depth, setup);
+        let at = (((SIZE / 2) * SIZE + SIZE / 2) * 4) as usize;
+        (0..3)
+            .max_by_key(|&channel| image[at + channel])
+            .expect("three channels")
+    }))
+}
+
+/// `original`, `high`, `maximum`: level 2, one finer, the base. No title bias,
+/// which is 2048 and Omega.
+#[test]
+fn texture_detail_shifts_the_samplers_own_level() {
+    let Some(levels) = hardware_levels(2.0, |_| {}) else {
+        return;
+    };
+    assert_eq!(levels, [2, 1, 0]);
+}
+
+/// HD's -1.5 and the preset add: a footprint 1.5 levels coarser reads the same three.
+#[test]
+fn texture_detail_adds_to_a_titles_own_material_bias() {
+    let Some(levels) = hardware_levels(3.5, |quad| quad.material_lod_bias = -1.5) else {
+        return;
+    };
+    assert_eq!(levels, [2, 1, 0]);
+}
+
+/// An effect program's fetch (the absorb shell's) takes the preset and not the
+/// title's bias.
+#[test]
+fn texture_detail_reaches_an_effect_programs_own_fetch() {
+    let Some(levels) = hardware_levels(2.0, |quad| {
+        quad.absorb_shell = true;
+        quad.material_lod_bias = -1.5;
+    }) else {
+        return;
+    };
+    assert_eq!(levels, [2, 1, 0]);
+}
+
+/// One PS2 texture upload of a 16x16 one-texel checkerboard, black and white, in
+/// the shape `oag_texture::ps2_texture` reads (raster-order `PSMT8`), alone in a
+/// nested set under `name`.
+fn ps2_set(name: &str) -> Vec<u8> {
+    let mut blob = vec![0x44, 8, 0x00, 0x20];
+    blob.extend_from_slice(&16u16.to_le_bytes());
+    blob.extend_from_slice(&16u16.to_le_bytes());
+    blob.resize(13 + 8 * 16, 0);
+    let quad = |low: u64, high: u64, out: &mut Vec<u8>| {
+        out.extend_from_slice(&low.to_le_bytes());
+        out.extend_from_slice(&high.to_le_bytes());
+    };
+    let image_tag = |bytes: u64, last: u64| (bytes / 16) | (last << 15) | (2 << 58);
+    quad(0, 0x51, &mut blob);
+    quad(16 | (16 << 32), 0x52, &mut blob);
+    quad(0, 0x53, &mut blob);
+    quad(image_tag(256, 0), 0, &mut blob);
+    blob.extend((0..256).map(|texel: usize| ((texel % 16 + texel / 16) % 2) as u8));
+    quad(0, 0x51, &mut blob);
+    quad(16 | (16 << 32), 0x52, &mut blob);
+    quad(0, 0x53, &mut blob);
+    quad(image_tag(1024, 1), 0, &mut blob);
+    // Entry 0 black, entry 1 white, both at the GS's full alpha.
+    let mut palette = vec![0u8; 1024];
+    palette[..8].copy_from_slice(&[0, 0, 0, 128, 255, 255, 255, 128]);
+    blob.extend(palette);
+
+    let mut set = Vec::new();
+    for word in [
+        1,
+        1,
+        oag_formats::wad::hash_name(name),
+        24,
+        blob.len() as u32,
+        blob.len() as u32,
+    ] {
+        set.extend_from_slice(&word.to_le_bytes());
+    }
+    set.extend(blob);
+    set
+}
+
+/// A PS2 texture's header authors no level beyond its base, so a distant texel is
+/// a texel of the base: here the black one or the white one the sample lands on,
+/// never the average a built chain holds.
+#[test]
+fn a_distant_ps2_texel_reads_the_base_level() {
+    let Some((device, queue)) = gpu() else { return };
+    let set = Ps2TextureSet::parse(&ps2_set("check.pct")).expect("the set parses");
+    let texture = set.resolve("check.pct").expect("the texture resolves");
+    let depth = 64.0;
+    // Red at the centre of a draw four texels a pixel, the coordinate shifted onto a
+    // texel's centre and then `step` texels across.
+    let centre = |texture: Arc<ModelTexture>, step: f32| {
+        let mut quad = model(texture, depth, Texcoords::Constant);
+        minify(&mut quad, depth, 2.0, [(0.5 + step) / 16.0, 0.5 / 16.0]);
+        let setup = Setup::all(TextureDetail::Original)[0];
+        let image = draw(&device, &queue, &quad, depth, setup);
+        image[(((SIZE / 2) * SIZE + SIZE / 2) * 4) as usize]
+    };
+    let base = [0.0, 1.0].map(|step| centre(Arc::clone(&texture), step));
+    let (dark, light) = (base[0].min(base[1]), base[0].max(base[1]));
+    assert!(
+        dark < 8 && light > 100,
+        "one texel apart reads the two colours of the base: {base:?}"
+    );
+    // The same picture with no level count gets a built chain, which reads neither.
+    let chained = Arc::new(ModelTexture {
+        mip_count: None,
+        ..(*texture).clone()
+    });
+    let averaged = [0.0, 1.0].map(|step| centre(Arc::clone(&chained), step));
+    assert!(
+        averaged
+            .iter()
+            .all(|&red| red > dark + 30 && red + 30 < light),
+        "the control must average: {averaged:?} against {base:?}"
     );
 }

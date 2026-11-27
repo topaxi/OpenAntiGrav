@@ -542,6 +542,7 @@ pub fn run(
                 size: (width, height),
                 log_every: options.log_every,
                 give: options.give,
+                give_once: false,
                 anisotropy: options.anisotropy,
                 renderer: options.settings.graphics.renderer.clone(),
                 fov: options.settings.graphics.fov,
@@ -586,6 +587,7 @@ pub fn run(
                 detonator_mines: None,
                 detonator_mine_envelopes: None,
                 detonator_mine_ages: None,
+                detonator_mine_volumes: None,
                 detonator_emp_charge: None,
                 detonator_gauge_speed: None,
                 pose_sparks: Vec::new(),
@@ -1116,6 +1118,7 @@ pub fn run(
                     &menu_frame,
                     &mut sprites,
                     title,
+                    crate::front_end_style::style_of(&options.settings),
                     (&face_scales, options.event.as_deref()),
                 )?;
                 preview_request = trophy;

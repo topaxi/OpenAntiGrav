@@ -2,7 +2,7 @@
 status: re-first
 titles: [pulse]
 updated: 2026-11-27
-summary: "Pulse frame audit: texture levels wired; open: Pure's sheen twin, the plume's list, the camera behind some textures' level bias"
+summary: "Pulse frame audit: texture levels wired; open: Pure's sheen twin, the plume's list, distant trees"
 ---
 
 # The Pulse frame audit fixed texture level selection and left two differences it could not trace
@@ -98,12 +98,9 @@ of it the same day; see `frame-audit.md`.
   wired 2026-11-27** (`pulse-farfield-lod`): no single distance, each texture has its
   own bias; the formula, evidence and pair scores are in `frame-audit.md`, "The level
   law, measured". Left from it:
-  - **The camera behind `K = -9.0506`.** 82 of 150 live mesh textures were built with
-    it; ours gives every texture the race camera's `-8.8799`, 2 to 3 sixteenths of a
-    level coarser on those. It writes nothing in a grid frame. Next: a write watch on
-    `g_display+0x5df4` from the front end into a race, logging pc and value until the
-    first `-9.0506` store (about 40 minutes). Pure's Modesto textures hold the same
-    value, so one read settles both.
+  - ~~**The camera behind `K = -9.0506`.**~~ **Read 2026-11-27** (`k-writer-watch`): the pre-race
+    flyby's, on Pulse and Pure. Wiring is in
+    [the per-title thread](far-field-texture-level-per-title.md).
   - **Distant trees are lighter than the original's at every level** (Talon long
     straight, `frame-audit.md`, "The level law, measured"). Next: compare the two
     tree draws' blend, alpha test and fog state against ours, about an hour.
@@ -146,4 +143,3 @@ of it the same day; see `frame-audit.md`.
   "missing, inside the view" draws into a verdict; a cold second boot of Metropia;
   and read `Mesh_SubmitNode`'s caller for the transparent list, since the missing
   draws are all there.
-- Read the `-9.0506` camera (above).

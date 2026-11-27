@@ -31,8 +31,7 @@
 // channel (`_desaturate`, `scale.w`: `mix(adv.r, adv, w)`).
 
 import package::bindings::{emissive_scale, emissive_tint, scene};
-@if(!bindless) import package::bindings::{albedo, albedo_sampler, lightmap, pad_mask};
-@if(bindless) import package::bindings::{material, samplers, textures};
+import package::texture_lod::{MATERIAL_ALBEDO, MATERIAL_LIGHTMAP, MATERIAL_PAD_MASK, detail_sample};
 import oag_shaders::target::{gamma_to_target, linear_out};
 import package::types::{VertexOutput};
 
@@ -48,13 +47,6 @@ fn overlay(base: vec3<f32>, layer: vec3<f32>) -> vec3<f32> {
 // call is under the flat `slots` bit that marks a billboard, and the fetches below sit in no branch.
 @diagnostic(off, derivative_uniformity)
 fn holo_billboard(in: VertexOutput) -> vec4<f32> {
-    // The `bindless` variant's slot - see `bindings.wesl`.
-    @if(bindless) {
-        let albedo = textures[material.albedo];
-        let albedo_sampler = samplers[material.albedo_sampler];
-        let lightmap = textures[material.lightmap];
-        let pad_mask = textures[material.pad_mask];
-    }
     let entry = (in.slots >> 24u) & 63u;
     let rates = emissive_tint(entry);
     let tint = emissive_tint(entry + 1u).rgb;
@@ -62,24 +54,22 @@ fn holo_billboard(in: VertexOutput) -> vec4<f32> {
     let t = scene.time.x;
     let layer_uv = in.lightmap_texcoord.xy;
     let scan_uv = in.lightmap_texcoord.zw;
-    let raw_tap = textureSample(lightmap, albedo_sampler, scan_uv);
+    let raw_tap = detail_sample(MATERIAL_LIGHTMAP, scan_uv);
     let tap = vec4<f32>(gamma_to_target(raw_tap.rgb, linear_out), raw_tap.a);
     let layer = gamma_to_target(
-        textureSample(
-            pad_mask,
-            albedo_sampler,
+        detail_sample(
+            MATERIAL_PAD_MASK,
             rates.z * vec2<f32>(layer_uv.x, layer_uv.y + rates.y * t),
         ).rgb,
         linear_out,
     );
-    let sampled = gamma_to_target(textureSample(albedo, albedo_sampler, in.texcoord).rgb, linear_out);
+    let sampled = gamma_to_target(detail_sample(MATERIAL_ALBEDO, in.texcoord).rgb, linear_out);
     let advert = mix(vec3<f32>(sampled.r), sampled, finish.w);
     let base = advert * layer;
     let drift = rates.x * t;
     let scan = gamma_to_target(
-        textureSample(
-            lightmap,
-            albedo_sampler,
+        detail_sample(
+            MATERIAL_LIGHTMAP,
             vec2<f32>(scan_uv.x + drift, scan_uv.y + drift + tap.y),
         ).rgb,
         linear_out,

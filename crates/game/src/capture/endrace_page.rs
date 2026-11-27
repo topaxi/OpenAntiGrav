@@ -237,6 +237,7 @@ pub(super) fn capture(
     frame: &oag_ui::menu::Frame,
     sprites: &mut oag_hud::sprite::Sheet,
     title: &'static oag_title::Title,
+    saved_style: Option<&str>,
     (face_scales, event): (&[(String, f32)], Option<&str>),
 ) -> Result<(Vec<oag_ui::frontend::Draw>, Option<PreviewRequest>)> {
     let mut archives = match race {
@@ -254,10 +255,16 @@ pub(super) fn capture(
         ..oag_ui_screens::picker::FaceScales::default()
     };
     let skin = oag_ui::menu::Skin::new(menu_skin, space, menu_font.unwrap_or(font).line_height);
-    let globals: Vec<(&str, &str)> = frontend_globals
-        .iter()
-        .map(|(key, value)| (key.as_str(), value.as_str()))
-        .collect();
+    let style = crate::front_end_style::ScreenStyle::new(
+        &mut archives,
+        title,
+        saved_style,
+        frontend_globals
+            .iter()
+            .map(|(key, value)| (key.as_str(), value.as_str())),
+    );
+    let globals = style.global_refs();
+    let frame = &style.frame(frame);
     if let EndRaceKind::Touch(page) = kind {
         let list = super::endrace_touch_page::draw(
             page,

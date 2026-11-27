@@ -156,6 +156,7 @@ impl Ahead {
                     // leaves for the ring: the freshest samples this thread
                     // ever sees.
                     spectrum.publish(analyzer.process(&music, sample_rate));
+                    spectrum.publish_total(analyzer.total());
                     ring.push(&scratch);
                 }
                 std::thread::sleep(POLL);

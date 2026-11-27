@@ -450,6 +450,9 @@ impl Session {
                     parked.scene.set_blur_resolution(blur_resolution);
                     parked.scene.set_squeeze(squeeze);
                     parked.scene.set_band_levels(spectrum);
+                    parked
+                        .scene
+                        .set_music_level(self.audio.output().spectrum().total());
                     parked.render(
                         &self.gpu,
                         &mut encoder,
@@ -554,6 +557,9 @@ impl Session {
                 stage.scene.set_blur_resolution(blur_resolution);
                 stage.scene.set_squeeze(squeeze);
                 stage.scene.set_band_levels(spectrum);
+                stage
+                    .scene
+                    .set_music_level(self.audio.output().spectrum().total());
                 let stats = stage.render(
                     &self.gpu,
                     &mut encoder,

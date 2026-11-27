@@ -5,6 +5,7 @@
     OAG_RPCS3_ATTACH=1 uv run --with evdev python3 scripts/rpcs3-hd-shield.py steady --out DIR --ages 3.0,4.0
     OAG_RPCS3_ATTACH=1 uv run --with evdev python3 scripts/rpcs3-hd-shield.py flash --out DIR --after 2,4,6,8,10,14
     OAG_RPCS3_ATTACH=1 uv run --with evdev python3 scripts/rpcs3-hd-shield.py plain --out DIR --laps 8.6
+    HOOK_LIGHT=1 OAG_RPCS3_ATTACH=1 uv run --with evdev python3 scripts/rpcs3-hd-shield.py draws --out DIR --ages 3.0
 
 The player's pickup slot is written with the Shield state (5) and TRIANGLE pressed. Every pause keeps what
 `rpcs3-hd-blast-film.py` keeps (frame with its clock sidecar, camera candidates, craft poses and teams) plus the
@@ -14,7 +15,9 @@ damage into the slot (`+0x120`, the word `Ship_ApplyPendingDamage_q` consumes an
 answers with `ShipShield_Hit`), steps single game frames and reads the object after each. `plain` raises no
 Shield and photographs the same craft at the named lap clocks, the control that separates the shell from the
 hull under it. The picture trails
-guest memory by a few ticks, so each frame records the ticks since the hit at its pause.
+guest memory by a few ticks, so each frame records the ticks since the hit at its pause. `draws` dumps one frame's
+RSX draw state (`rpcs3_draw_hook.py`) before the Shield is raised (`plain-*`) and at each `--ages` age of it
+(`sNN-*`), read back with `rsx-draw-list.py DIR plain --samplers`.
 """
 import argparse
 import importlib.util
@@ -22,6 +25,7 @@ import json
 import struct
 import sys
 import time
+import types
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -212,6 +216,22 @@ def run_plain(session, live, args, out):
     write_records(out, shots)
 
 
+def dump_draws(live, out, stem, attempts):
+    """Dump the paused frame's command ring and what it names, with the shield object beside it."""
+    gdb = live.gdb
+    hook = types.SimpleNamespace(dump=["0x40000000:0x20000"], dump_attempts=attempts, dump_gap=0.3,
+                                 hook=str(HERE / "rpcs3_draw_hook.py"))
+    before = live.read()
+    drive.dump_frame(gdb, out, stem, hook)
+    state = live.read()
+    state.pop("raw")
+    (out / ("%s.state.json" % stem)).write_text(json.dumps(
+        {"before_dump": {k: v for k, v in before.items() if k != "raw"}, "after_dump": state,
+         "lap_clock": live.clock()}, indent=2) + "\n")
+    print("  %s: active %d time %.3f live %s" % (stem, state["active"], state["time_s"],
+                                                 ["%.3f" % v for v in state["live_rgba"]]), flush=True)
+
+
 def run_flash(session, live, args, out):
     gdb = live.gdb
     wait_shield_age(live, args.hit_age)
@@ -248,7 +268,7 @@ def run_flash(session, live, args, out):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("mode", choices=("steady", "flash", "plain"))
+    ap.add_argument("mode", choices=("steady", "flash", "plain", "draws"))
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--image", default="/home/topaxi/projects/OpenAntiGrav/data/images/hdfury-ps3-eu-dec.iso")
     ap.add_argument("--fire-after", type=float, default=3.0, help="lap-clock seconds before the shield is raised")
@@ -258,6 +278,8 @@ def main():
     ap.add_argument("--damage", type=float, default=10.0)
     ap.add_argument("--after", default="2,4,6,8,10,14", help="flash: game ticks after the damage is consumed")
     ap.add_argument("--laps", default="8.6", help="plain: lap-clock seconds to photograph")
+    ap.add_argument("--attempts", type=int, default=12, help="draws: retries of an incomplete frame")
+    ap.add_argument("--no-plain", action="store_true", help="draws: skip the frame before the Shield is raised")
     args = ap.parse_args()
     out = args.out.resolve()
     out.mkdir(parents=True, exist_ok=True)
@@ -279,12 +301,20 @@ def main():
             gdb.pause()
             gdb.resume()
             return
+        if args.mode == "draws" and not args.no_plain:
+            gdb.pause()
+            dump_draws(live, out, "plain", args.attempts)
+            gdb.resume()
         before, after = raise_shield(session, live, args.hold)
         print("shield raised between lap %.3f and %.3f" % (before, after), flush=True)
         (out / "run.json").write_text(json.dumps(
             {"mode": args.mode, "press_clock_before": before, "press_clock_after": after,
              "args": {k: str(v) for k, v in vars(args).items()}}, indent=2) + "\n")
-        if args.mode == "steady":
+        if args.mode == "draws":
+            for n, age in enumerate(float(a) for a in args.ages.split(",")):
+                wait_shield_age(live, age)
+                dump_draws(live, out, "s%02d" % n, args.attempts)
+        elif args.mode == "steady":
             run_steady(session, live, args, out)
         else:
             run_flash(session, live, args, out)

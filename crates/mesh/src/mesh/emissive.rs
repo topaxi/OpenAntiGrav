@@ -223,11 +223,16 @@ pub const PROGRAM_HULL_CHARGE_2: f32 = 29.0;
 /// the model's `fresnelBase`. See `super::rcs::cannon_bolt`.
 pub const PROGRAM_CANNON_BOLT: f32 = 30.0;
 
-/// [`Emissive::program`]'s mode for HD's `tunnel_fx_noalpha` on a lightmapped slot: its
-/// `EmissiveTexture` (bound third, read at the diffuse coordinate) added after the light, ungated
-/// by the diffuse alpha, on the material's plain program only (its Zone variants declare no
-/// emissive). See `super::rcs::tunnel_emissive`.
-pub const PROGRAM_TUNNEL_EMISSIVE: f32 = 31.0;
+/// [`Emissive::program`]'s mode for a lightmapped HD slot whose program adds its emissive after
+/// the light: the picture at the diffuse coordinate times the entry's tint, ungated by the diffuse
+/// alpha, on the plain program only. It is bound third, or fourth where the second lane is 1 (the
+/// third holds the normal map). See `super::rcs::lightmapped_emissive`.
+pub const PROGRAM_LIGHTMAPPED_ADD: f32 = 31.0;
+
+/// As [`PROGRAM_LIGHTMAPPED_ADD`], for the scrolling families: the third binding at
+/// `(u * k, (v + offset) * scale + time * rate)`, `k` the second lane, times the tint and the
+/// diffuse alpha.
+pub const PROGRAM_LIGHTMAPPED_SCROLL: f32 = 32.0;
 
 /// The second entry of an [`PROGRAM_ELECTRICITY`] material: tint `(PitchVolume, BassHit,
 /// TrebleHit)`, offset `PitchOffset`.

@@ -21,7 +21,11 @@ far that is from a measurement - which for every one of them is "not one".
    you are standing on - that is the only way to choose one.
 2. **SCREEN FILTER STRENGTH** below it mixes the filter's output with the
    untouched frame, `100` being the preset as written. It is applied by the
-   pass itself after the preset returns, so it means the same for every one.
+   pass itself after the preset returns, so it means the same for every one
+   that has it. A preset that declares [`fixed_strength`](#a-preset-that-moves-pixels)
+   (`crt-interlaced` and `crt-shadow-mask` do) has no such row: it is left off
+   the page while one is selected, the pass draws at 100, and the stored value
+   is kept for the next filter.
 3. Both persist in `[render_profiles.<title> (<platform>)]` in
    `settings.toml`, **per (title, original platform)**: a PSP disc can hold
    `psp-3000` while the PS2 pressing holds `crt-interlaced` and Wipeout HD
@@ -139,6 +143,7 @@ copy it out of `assets/shaders/screen/`, change the defaults, done.
 ```wgsl
 //! name = "My filter"
 //! description = "One line, optional."
+//! fixed_strength = false
 //!
 //! [[param]]
 //! name = "amount"
@@ -155,7 +160,8 @@ fn screen_filter(uv: vec2<f32>, pixel: vec2<f32>) -> vec3<f32> {
 ```
 
 The leading `//!` lines are a TOML document: `name` (what the menu shows;
-the id if absent), `description`, and up to sixteen `[[param]]` tables. Each
+the id if absent), `description`, `fixed_strength` (below; `false` if absent),
+and up to sixteen `[[param]]` tables. Each
 becomes `fn param_<name>() -> f32` in the compiled module, in declaration
 order; `min`, `max` and `step` are validated (the default must lie inside
 them) and reserved for a tuning row that does not exist yet. The first line
@@ -205,6 +211,33 @@ The pass reads and writes the same gamma-encoded space the presentation
 target is in ([ADR-0020](../architecture/adr/0020-gamma-authoritative-colour-space.md));
 a preset that sums light - the CRT ones - decodes with a 2.2 power, sums, and
 re-encodes, and that is the preset's own business.
+
+### A preset that moves pixels
+
+SCREEN FILTER STRENGTH mixes the preset's output with the untouched frame at
+the same pixel. A preset that draws the picture somewhere else, such as a
+barrel, then shows two pictures on top of each other at any value below 100:
+the curved one and the flat one. Such a file says so in its header:
+
+```wgsl
+//! fixed_strength = true
+```
+
+The pass then draws it at full strength whatever is stored, and the strength
+row is not offered while it is selected
+([ADR-0097](../architecture/adr/0097-a-screen-filter-that-moves-pixels-runs-at-full-strength.md)). It is the file's declaration, not
+something read off the code or the tunables, so a copy of a barrel built-in
+tuned to `curvature = 0` keeps it until the line is removed, and a barrel of
+your own needs the line.
+
+Which built-ins declare it:
+
+| Id | Declares it | Why |
+| --- | --- | --- |
+| `crt-interlaced`, `crt-shadow-mask` | yes | `warp(uv_in)` bends the coordinate the source is read at |
+| `crt-aperture` | no | flat-faced: reads `frame_at(vec2(uv.x, y))` and its two bloom neighbours `uv.x +/- dx`, `y` snapped to the scanline's centre, so nothing moves further than within its own native line |
+| `psp-lcd` | no | reads the four taps around `(floor(cell) + 0.5) / grid`, within the output pixel's own LCD cell (`frame_at(uv)` with `native_grid = 0`) |
+| `psp-3000` | no | reads `frame_at(uv)` |
 
 ### Keeping colour
 
@@ -379,8 +412,14 @@ is small enough that a port is an afternoon and a converter from PPSSPP's
   adapter.
 - `oag_present::upscale::screen_tests` - on a device: a passthrough composites
   what it was given, a preset sees its own previous output on the second
-  frame, the strength row mixes, a broken preset draws unfiltered, every
-  built-in builds. Skipped where there is no adapter.
+  frame, the strength row mixes, a `fixed_strength` preset ignores it (the two
+  barrel built-ins draw the same at 50 as at 100, `psp-lcd` does not), a broken
+  preset draws unfiltered, every built-in builds. Skipped where there is no
+  adapter.
+- `oag-game`: `tests/menu_screen_filter.rs` (the strength row leaves and
+  returns, holding its value) and
+  `drive_ground_truth::the_strength_row_follows_the_screen_filter` (the real
+  session, headless, disc-backed).
 - The `--presented` captures above, looked at rather than counted - the same
   rule [README.md](README.md#measuring-a-renderer-change) gives for any
   resampler.

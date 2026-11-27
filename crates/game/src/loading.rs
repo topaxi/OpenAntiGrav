@@ -751,6 +751,7 @@ pub mod icon;
 mod layout;
 pub mod track;
 mod wording;
+pub(crate) use assets::pick_style;
 pub use assets::{Art, Assets, Feature, Labels, ModeIcon, tips};
 pub use feature::executable_mode;
 pub use track::TrackLoading;

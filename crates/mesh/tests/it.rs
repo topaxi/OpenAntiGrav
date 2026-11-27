@@ -38,6 +38,7 @@ mod hd_light_bar_ground_truth;
 mod hd_light_cone_ground_truth;
 mod hd_light_cone_lit_path;
 mod hd_lightmapped_albedo_ground_truth;
+mod hd_lightmapped_emissive_ground_truth;
 mod hd_lit_alpha_ground_truth;
 mod hd_lod_ground_truth;
 mod hd_mag_wave_ground_truth;

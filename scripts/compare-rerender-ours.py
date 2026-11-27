@@ -135,6 +135,7 @@ def rerender(pj, binary):
     if rec["profile"] == "hd-fury" and "--gantry-seconds" in flags and orig.get("gantry_seconds") is not None and lag is not None:
         flags[flags.index("--gantry-seconds") + 1] = "%.6f" % ce.gantry_pin(orig["gantry_seconds"], lag)
     flags = hd_flame_clock_flags(rec, flags)
+    flags = ce.recorded_mine_volume_flags(rec, flags)
     flags = ce.countdown_flags(rec, flags, ce.go_tick())
     flags = ce.detonator_picture_flags(rec, flags, ce.go_tick())
     plat = ce.platform(rec["profile"])

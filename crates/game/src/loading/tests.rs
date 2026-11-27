@@ -686,7 +686,8 @@ fn a_title_with_no_wave_draws_no_quads() {
 fn an_unpicked_style_follows_the_served_ground() {
     use oag_hd::loading::{FEATURES, STYLE_FURY, STYLE_HD};
     let pick = |style: Option<&str>, dark: bool| {
-        super::assets::pick_style(FEATURES, style, dark, &mut Vec::new()).map(|chosen| chosen.name)
+        super::assets::pick_style(FEATURES, style, dark, "test", &mut Vec::new())
+            .map(|chosen| chosen.name)
     };
     assert_eq!(pick(None, true), Some(STYLE_FURY), "a black page is Fury");
     assert_eq!(pick(None, false), Some(STYLE_HD), "a white page is HD");

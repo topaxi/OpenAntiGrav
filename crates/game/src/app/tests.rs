@@ -528,6 +528,11 @@ fn a_development_build_accepts_seed_and_give() {
         .expect("dev-cli builds take --seed and --give");
     assert_eq!(cli.seed(), Some(7));
     assert_eq!(cli.give(), Some("rocket"));
+    assert!(!cli.give_once(), "--give tops the slot up by default");
+    let once = Cli::try_parse_from(["oag-game", "--race", "--give", "shield", "--give-once"])
+        .expect("dev-cli builds take --give-once");
+    assert!(once.give_once());
+    assert!(Cli::try_parse_from(["oag-game", "--race", "--give-once"]).is_err());
 }
 
 #[cfg(feature = "dev-cli")]

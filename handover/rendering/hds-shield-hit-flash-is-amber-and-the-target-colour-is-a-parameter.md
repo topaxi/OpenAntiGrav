@@ -2,7 +2,7 @@
 status: re-first
 titles: [hd]
 updated: 2026-11-27
-summary: "HD shield paired, shell alpha wired off the mesh stream; open: ours shell adds ~70 % of the original blue (blend/ambient unread)"
+summary: "HD shield paired; shell alpha, cull, alpha mask and lit program wired from a live draw; open: cockpit sphere draw, mid-age red/green"
 ---
 
 # HD's shield hit-flash is amber, not Pulse's cyan - and the steady-state colour is a parameter this pass did not trace to its source
@@ -90,10 +90,21 @@ flicker. `--give shield` fires in ours (the 2026-09-16 note above no longer hold
 `--force-hit` on a craft with a running Shield now flashes its shell. The activation tint item
 is closed: the draw overwrites it every frame.
 
+## The draw read 2026-11-27 (`hd-shield-blue`)
+
+The missing blue was the shell's own program: ours had lit it with the stand-in rig. The draw
+state, the program and the before/after numbers: `shield.md`, "The shell's draw state"
+(`oag_title::Looks::shield_shell_lit`).
+
 ## Open
 
-- **Ours' settled shell is still dimmer**: about 70 % of the original's blue at every shield
-  age, mostly nose, shoulders and wingtip rims (cyan-white glow there in the original).
+- **Mid-age red and green**: at shield clock 3.21 s the original's shell light is `(2.9, 6.8,
+  20.3)` against ours' `(0.0, 3.5, 18.6)`; one run per age, cause unread.
+- **Triangle count**: the ring draws 1019 to 1024 of the shell's 2193 triangles, in chunks
+  whose index counts differ between boots; what selects them is unread. Ours culls back faces
+  on the GPU and the blue matches, so this is recorded, not chased.
+- **Cockpit sphere**: its draw is unread (blend, cull, program); it keeps the flickered colour
+  (inline chunk) and the generic path.
 - **Landed:** HD's per-team `ShieldColour` target (`Livery::shield_colour`,
   `Setup::shield_targets`), and the lattice's colour scroll (`u + 3 time`). Zone's two values are
   not a bug (normal Zone mode has no shield; Zone Battle on Fury may differ, unverified). Omega and
@@ -101,15 +112,14 @@ is closed: the draw overwrites it every frame.
 - **2048/Omega alpha**: their programs also read the stream's `VertexColour1.w`; whether their
   per-submesh flickered tint reaches a pixel is unmeasured, ours unchanged (checked, applies,
   not wired).
-- The cockpit sphere keeps the flickered colour (inline chunk, unread).
-- Unwired in `hexagonalshield_rich`: `constantAmbientColour`, the lit variants' light terms, fog.
-  Zone's `zonebattle_shield` program is unread (no mode of ours raises it).
+- **2048/Omega cull**: their shell materials carry the back-face cull bit too and ours draws both
+  faces there (checked, applies, not wired).
+- Zone's `zonebattle_shield` program is unread (no mode of ours raises it).
 - Our own `graphics.own_shield` reads its eye from the origin (`docs/rendering/own-shield.md`, "Open").
 
 ## Next Steps
 
-1. Dump the shield draw from one frame's command ring (`scripts/hd-draw-dump.py`): blend factors,
-   colour/alpha write mask (does it write the bloom's glow mask?) and `constantAmbientColour`'s
-   value.
-2. Wire what that read shows as HD data, then re-score the two `hd-shield-*` pairs.
+1. Dump a shield frame from an internal camera (`scripts/rpcs3-hd-shield.py draws` after switching the view on the pad)
+   and wire what the sphere's draw shows.
+2. Repeat the 3.21 s age on the original to see whether the red and green are repeatable.
 3. Only if Zone Battle (Fury) turns out to raise a shield: check which Zone copy it reads.

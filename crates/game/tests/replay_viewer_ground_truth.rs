@@ -536,6 +536,38 @@ fn a_recording_this_build_cannot_rebuild_is_refused_by_name() {
     );
 }
 
+/// HD's `EndRace Menu` offers WATCH REPLAY under VIEW RESULTS AGAIN (`docs/ui/replays.md`,
+/// "The end-of-race row"): a time trial flown to its end, the pointer on the row and a click, the
+/// race just finished plays in the viewer and leaving it lands on REPLAYS.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso and a GPU"]
+fn hd_end_of_race_menu_watches_the_race_just_finished() {
+    let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let profile = Profile::new("hd-endrace-watch");
+    let shots = profile.dir.join("shots");
+    std::fs::create_dir_all(&shots).expect("a directory");
+    // The fourth block's middle, at the window the drive opens (1440x816).
+    let row = "mouse 476 307; ticks 2; click; ticks 2; ";
+    let (status, states) = profile.drive(
+        &image,
+        &format!(
+            "boot; select racebox; press cross; until page=race; set race.mode=time_trial; \
+             select launch_race; press cross; until screen=picker; press cross; \
+             until screen.id=ship-select; press cross; until stage=race within 4000; ticks 300; \
+             until endrace=other within 20000; ticks 100; press cross; ticks 100; \
+             screenshot DIR/shots/menu.png; {row}until replay=playing within 4000; ticks 60; \
+             screenshot DIR/shots/playing.png; escape; until page=replays within 400; quit"
+        ),
+        &["--autopilot"],
+    );
+    assert!(status.success());
+    assert_eq!(profile.replays().len(), 1, "the race just flown, in auto/");
+    let last = states.last().expect("state lines");
+    assert_eq!(text(last, "page"), Some("replays"));
+}
+
 /// A campaign race recorded from the menus, as WATCH REPLAY at its end opens it, rebuilds from
 /// its header and reproduces every stored hash; without its `campaign_skill` the field flies at
 /// another tuning and the file stops matching within seconds (`docs/ui/replays.md`, "What the

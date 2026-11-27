@@ -95,6 +95,7 @@ fn triangle_model(blended: bool, alpha: f32) -> Model {
         flame: None,
         absorb_shell: false,
         shield_shell: false,
+        shield_lit: false,
         own_shield: false,
         material_lod_bias: 0.0,
         material_state: Vec::new(),

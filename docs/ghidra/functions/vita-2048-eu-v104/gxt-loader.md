@@ -60,24 +60,74 @@ other callers, which never call `SetLodBias`. Two were read:
 
 `FUN_81043b1c` (nine call pairs) and the rest were not read.
 
+## In a race: the bound descriptors (2026-11-27, `v2048-texlevel-measure`)
+
+The claim under test: race track, scenery and craft textures are sampled with the loader's state. It would
+be false for a texture whose live `SceGxmTexture` had a bias other than raw 19, mip filter off, or a min or
+mag filter other than linear. **It holds on the race read, confidence 90.**
+
+**Method.** Vita3K 0.2.1 (`885f9168d`), the EU v1.04 game, Single Player Campaign, Queens Mall (offensive
+weapons only). Guest memory was dumped under `SIGSTOP` and read twice over
+([vita3k-capture.md](../../../reverse-engineering/vita3k-capture.md), "Which textures a frame binds"):
+
+1. **Bound state**: Vita3K's queued `SetState`/`Texture` commands, which carry the 16-byte descriptor each
+   bind used. Each descriptor's texel address was matched to a `.gxt` on the disc by the texels themselves.
+2. **Resident state**: every descriptor in memory pointing at a matched `.gxt`'s first texel.
+
+**Bound, one boot, two frames** (grid at 0:10, mid-lap at 0:25), 269 distinct disc textures over both:
+
+| Class | Textures | Binds, 0:10 | Binds, 0:25 | Bias raw, min, mag, mip filter |
+| --- | ---: | ---: | ---: | --- |
+| track and scenery | 244 | 4,647 | 5,626 | 19, 1, 1, 1 on every bind |
+| craft | 14 | 521 | 526 | 19, 1, 1, 1 on every bind |
+| other disc textures | 11 | 176 | 109 | 19, 1, 1, 1 on every bind |
+
+- **None differs.** Lightmaps (`lmaps/*-lmap.gxt`) and pad textures (`weaponpad_norm`) are in the set.
+- Minimum level of detail 0 on all, and the mip count is the file's level count minus one. One race texture
+  has a single level (`m_lightstripv01_e`), where the bias has nothing to select.
+- Texture units 0 to 3. A descriptor holds one sampler state, so near and far draws of a texture read the same.
+- No anisotropy: min and mag read plain linear on every bind, the filter values Vita3K declares (point,
+  linear and two mipmap forms) include no anisotropic one, and the loader makes no anisotropy call.
+
+**Bound textures that are not `.gxt` files** follow other states, which also shows the read can see one:
+
+- the circuit's `track.probes` (64x32): bias raw 31 (0.0), linear/linear, **mip filter off**;
+- 768x512 targets: raw 31, point, mip filter off;
+- small run-time textures: the loader's four values.
+
+**Second boot, resident state only.** The same event wedged mid-load, with the circuit's textures already in
+memory. 226 of the 269 were resident, all with the loader's four values at their texel address; so were all
+444 environment and ship textures that had a descriptor. A mid-load read cannot see a rewrite made after the
+load, so the bound state itself is **seen on one boot**.
+
+**Outside the race**, two front-end textures, `tex/photomode_dots` and `tex/sony_legal_text`, keep bias 19
+with the mip filter off.
+
+**Instrument traps.** A search of all memory for descriptors also finds stale renderer command slots (partly
+overwritten, so the filters read 0) and stray words that decode as descriptors. Neither is bound state; only
+the command read counts.
+
 ## What this says, and what it does not
 
 - **Read.** A texture this loader builds samples trilinear over the file's own mip chain with a -1.5
-  bias. Confidence **85**: the static call, confirmed live on one texture.
-- **Inferred, not read.** Race track materials are `.gxt` files and reach this loader, keeping its
-  sampler bits. Confidence **60**: the loader is reached through a resource table, and other code
-  rewrites the filters of some loaded textures (the Zone and Detonator skins above).
-- **Not read.** Whether a draw rebinds a material texture through a different `SceGxmTexture` copy
-  with other sampler bits. The bind path from a material to its descriptor was not followed.
+  bias. Confidence **90**: the static call, and every disc texture bound in two race frames.
+- **Not measured.** The Zone and Detonator track skins (the static read above says their mip filter is off);
+  the HD and Fury campaign circuits; any second circuit. An HD Zone load wedged in the emulator.
+- **Inferred.** Other circuits and modes keep the loader's bits, because the one loader builds their
+  textures and the race rewrote none of them.
 
 ## Ours
 
-2048's `Looks::material_lod_bias` is `Rule::UNREAD`, so ours samples 2048's track materials at bias 0
-with the player's anisotropy (16x by default). **Checked, differs** for loader-built textures. Before
-wiring, measure one live race-material descriptor: in Vita3K, search RAM for a `SceGxmTexture` whose
-data word is a known track texture's address, as [canvas3d-lattice.md](canvas3d-lattice.md) did. The same `material_lod_bias`
-mechanism HD uses (`oag_title::MATERIAL_LOD_BIAS = -1.5`, `docs/rendering/hd-track-tone.md`) would
-carry 2048's value unchanged.
+2048's `Looks::material_lod_bias` is `Rule::UNREAD`, so ours samples 2048's track materials at bias 0 with
+the player's anisotropy (16x by default). **Checked, differs**, ready to wire: the same
+`material_lod_bias` mechanism HD uses (`oag_title::MATERIAL_LOD_BIAS = -1.5`,
+`docs/rendering/hd-track-tone.md`) carries 2048's value unchanged.
+
+- The shader bias reaches `material_sample` and `material_sample_grad`, which includes lightmaps. Ours reads
+  environment probes at an explicit level, so they stay at bias 0, as the original's do.
+- `oag_raceplay`'s `load/lod_bias.rs` leaves separate pad and weapon models at 0 on HD's census. 2048's
+  pad textures read -1.5, so check which model draws 2048's pads when wiring.
+- The original takes no anisotropic taps, so the 2048 compare profile should say what it runs.
 
 ## Omega (the reverse check)
 
@@ -96,3 +146,6 @@ So Omega's PS4 build does not carry 2048's -1.5. Its sharpness comes from 16x an
 ghidra: decompile 0x812f0ec4 in /2048/eboot-vita-2048-eu-v104.elf
 ghidra: xrefs to 0x813f2630 (the SetLodBias import stub)   # one call, 0x812f11a4
 ```
+
+The race read: [vita3k-capture.md](../../../reverse-engineering/vita3k-capture.md), "Which textures a frame
+binds".

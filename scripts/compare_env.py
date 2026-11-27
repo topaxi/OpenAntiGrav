@@ -271,6 +271,28 @@ def picture_tick(go_tick_, clock_s, total_lag_ticks):
     return go_tick_ + round(clock_s * 60 - total_lag_ticks)
 
 
+def detonator_mine_volume_flags(mines):
+    """`--detonator-mine-volumes` for `mines` in `--detonator-mines` order: each ring's `MasterVolume` and `PitchVolume`
+    (`+0x104`, `+0x10c`) as the original drew them, `[]` unless every mine carries both. Ours has no level of its own under
+    `--no-audio` (`docs/ghidra/functions/ps3-hdfury-eu/detonator-mine-material.md`, "The visualiser's level")."""
+    if not mines or not all(m.get("master_volume") is not None and m.get("pitch_volume") is not None for m in mines):
+        return []
+    return ["--detonator-mine-volumes", ";".join("%.4f,%.4f" % (m["master_volume"], m["pitch_volume"]) for m in mines)]
+
+
+def recorded_mine_volume_flags(rec, flags):
+    """`flags` with the mines' volumes added from `original.detonator.mines` (the read at the picture's clock) for a pair
+    recorded before `--detonator-mine-volumes` existed; unchanged when they are there or no mine was carried."""
+    if "--detonator-mines" not in flags or "--detonator-mine-volumes" in flags:
+        return flags
+    mines = ((rec.get("original") or {}).get("detonator") or {}).get("mines") or []
+    volumes = detonator_mine_volume_flags(mines)
+    carried = len(flags[flags.index("--detonator-mines") + 1].split(";"))
+    if volumes and len(mines) != carried:
+        raise ValueError("the record names %d mines, --detonator-mines %d" % (len(mines), carried))
+    return flags + volumes
+
+
 #: HD's countdown lasts this long, from the race manager's phase 1 to the release
 #: (`docs/ghidra/functions/ps3-hdfury-eu/gantry-clock.md`, "What zeroes it in the countdown").
 HD_COUNTDOWN_S = 3.0

@@ -1,6 +1,6 @@
 // `lit_texel`, the one fragment shading function every entry point calls.
 
-import package::absorb::{absorb_shading, shield_shading};
+import package::absorb::{absorb_shading, shield_lit, shield_shading};
 import package::bindings::{behind_glass_tex, emissive_scale, emissive_tint, env_probe_tex, program_in, rate_from, rate_in, scene, sh_probe_table, shadow_sampler, sky_probe_tex, uniforms};
 @if(!bindless) import package::bindings::{albedo, albedo_sampler, fifth_map, lightmap, pad_mask, sixth_map, wave_map};
 @if(bindless) import package::bindings::{material, samplers, textures};
@@ -17,7 +17,7 @@ import oag_shaders::target::{decode, encode, encoded_out, linear_out, square_dec
 import package::shading_modes::{colour_is_light, light_rig, lit_by_rig, nova_prelit, nova_vertices, rig_specular, simplified_lighting, tangents_present, zone_race, zone_stage_light};
 import package::shadow::{receives_shadow, sun_occlusion};
 import package::water::{enhanced_water, reflective_sea_weight, water_kind, water_normal, water_specular_colour, water_tap_uv};
-import package::texture_lod::{MATERIAL_ALBEDO, MATERIAL_FIFTH_MAP, MATERIAL_LIGHTMAP, MATERIAL_PAD_MASK, MATERIAL_SIXTH_MAP, MATERIAL_WAVE_MAP, ge_level, material_lod_bias, material_sample, material_sample_grad, sample_at_slope_level, texlod_slope, uv_gradients};
+import package::texture_lod::{MATERIAL_ALBEDO, MATERIAL_FIFTH_MAP, MATERIAL_LIGHTMAP, MATERIAL_PAD_MASK, MATERIAL_SIXTH_MAP, MATERIAL_WAVE_MAP, detail_sample, ge_level, grad_scale, material_sample, material_sample_grad, sample_at_slope_level, texlod_slope, uv_gradients};
 import package::types::{Lit, SunTerms, VertexOutput};
 import package::zone::{zone_aniso, zone_base_term, zone_glow, zone_sample, zone_set};
 
@@ -1055,14 +1055,14 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
         let atlas_dy = dpdy(in.lightmap_texcoord.xy);
         let glass_atlas = textureSampleGrad(
             lightmap, albedo_sampler, in.lightmap_texcoord.xy,
-            atlas_dx * exp2(material_lod_bias), atlas_dy * exp2(material_lod_bias),
+            atlas_dx * grad_scale(), atlas_dy * grad_scale(),
         );
         vertex_light_sheen = sheen_prelit
             + scene.light.prelit_scale * pow(glass_atlas.rgb, scene.light.prelit_power)
             + glass_atlas.a * ramp_sun;
         sheen_grid = textureSampleGrad(
             pad_mask, albedo_sampler, in.texcoord,
-            sheen_dx * exp2(material_lod_bias), sheen_dy * exp2(material_lod_bias),
+            sheen_dx * grad_scale(), sheen_dy * grad_scale(),
         ).r;
     }
     // **Both taps are sRGB-decoded**, as the RSX does: the capture of this
@@ -1176,14 +1176,23 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
         let mask = material_sample(MATERIAL_PAD_MASK, in.texcoord);
         emissive_add = select(vec3<f32>(mask.a), decode(mask.rgb), glow_program < 8.5) * glow_tint_offset.rgb;
     }
-    // **HD's `tunnel_fx_noalpha` window lights on a lightmapped slot** (mode 31,
-    // `oag_mesh::mesh::rcs::tunnel_emissive`): the emissive, bound third, at the diffuse coordinate,
-    // added after the light and ungated by the diffuse alpha. Its plain programs only: no Zone
-    // variant declares it, so a chunk on its Zone program adds nothing and a `ZONE_PLAIN` chunk
-    // keeps it. The tap is decoded like every colour unit (its gamma nibble was not read live).
+    // **The emissive of a lightmapped HD slot** (modes 31 and 32,
+    // `oag_mesh::mesh::rcs::lightmapped_emissive`): added after the light, on a plain program only
+    // (the Zone variants declare no emissive), so a chunk on its Zone program adds nothing and a
+    // `ZONE_PLAIN` chunk keeps it. Mode 31 is `E * tint` at the diffuse coordinate, ungated by the
+    // diffuse alpha, bound third (fourth where the second lane is set: the track's third is its
+    // normal map). Mode 32 samples the third at the scrolled `glow_uv` and gates it by the diffuse
+    // alpha. The tap is decoded like every colour unit (its gamma nibble was not read live).
     if glow_program > 30.5 && glow_program < 31.5 {
-        emissive_add = decode(material_sample(MATERIAL_PAD_MASK, in.texcoord).rgb) * glow_tint_offset.rgb
-            * (1.0 - zone_program);
+        var tap = material_sample(MATERIAL_PAD_MASK, in.texcoord);
+        if row_scale.w > 0.5 {
+            tap = material_sample(MATERIAL_WAVE_MAP, in.texcoord);
+        }
+        emissive_add = decode(tap.rgb) * glow_tint_offset.rgb * (1.0 - zone_program);
+    }
+    if glow_program > 31.5 && glow_program < 32.5 {
+        emissive_add = decode(material_sample(MATERIAL_PAD_MASK, glow_uv).rgb) * glow_tint_offset.rgb
+            * first.a * (1.0 - zone_program);
     }
     // **2048's `fc10_Lambert_2UV_Emissive`** (mode 19, `mesh::rcs::psp2::emissive_add`): `D.a * R^2`
     // after the light, `R` the third binding (`ReflectMap`) at `0.5 + 0.5 * reflect(-V, N).xy`.
@@ -1845,14 +1854,12 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
         //
         // The doubling stays a plain multiply rather than a fract: the sampler
         // repeats, and the authored `Uv1` runs outside 0..1 on one node already.
-        let flame_noise = textureSample(
-            albedo,
-            albedo_sampler,
+        let flame_noise = detail_sample(
+            MATERIAL_ALBEDO,
             vec2<f32>(in.texcoord.x, in.texcoord.y + flame_speed * scene.time.x),
         ).a;
-        let flame_texel = textureSample(
-            albedo,
-            albedo_sampler,
+        let flame_texel = detail_sample(
+            MATERIAL_ALBEDO,
             vec2<f32>(in.texcoord.x * 2.0, in.texcoord.y * 2.0 + flame_noise),
         );
         // **The colour tap is sRGB-decoded on fetch on HD's race target; the noise
@@ -1916,8 +1923,8 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
     // reflection term, which this renderer has no probe for.
     var mag_floor = shaded_or_sheen;
     if (in.slots & 262144u) != 0u && zone_program == 0.0 {
-        let grid = textureSample(albedo, albedo_sampler, in.texcoord).r;
-        let ramp = textureSample(lightmap, albedo_sampler, ramp_uv).rgb;
+        let grid = detail_sample(MATERIAL_ALBEDO, in.texcoord).r;
+        let ramp = detail_sample(MATERIAL_LIGHTMAP, ramp_uv).rgb;
         let loop_light = in.colour.rgb;
         // Times the program's output scale: the live floor program (Talon's `0x78d0c0`, the shadowed
         // pass of `mag_effect_loop_opaque`) ends `MAD /2 H0.xyz, fog, H1, fogColour`.
@@ -1951,9 +1958,9 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
     // white wall, where the original's is a white of at most 1 at that alpha.
     var cone_or_floor = mag_floor;
     if (in.slots & 524288u) != 0u {
-        let noise = decode(vec3<f32>(textureSample(lightmap, albedo_sampler, in.texcoord).r)).r;
+        let noise = decode(vec3<f32>(detail_sample(MATERIAL_LIGHTMAP, in.texcoord).r)).r;
         let cone_facing = clamp(ramp_facing, 0.0, 1.0);
-        let ramp = decode(vec3<f32>(textureSample(albedo, albedo_sampler, vec2<f32>(cone_facing)).r)).r;
+        let ramp = decode(vec3<f32>(detail_sample(MATERIAL_ALBEDO, vec2<f32>(cone_facing)).r)).r;
         let ramp_skipped = glow_scale.y > 0.5 && in.normal.y == 0.0;
         cone_or_floor = vec4<f32>(
             clamp(vec3<f32>(noise) * glow_tint_offset.rgb, vec3<f32>(0.0), vec3<f32>(1.0)),
@@ -1982,21 +1989,36 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
     // Branched on its `override` for the flame's reason.
     var absorb = vec4<f32>(0.0);
     if absorb_shading != 0.0 {
-        let absorb_offset = textureSample(albedo, albedo_sampler, in.texcoord).a * 0.5
+        let absorb_offset = detail_sample(MATERIAL_ALBEDO, in.texcoord).a * 0.5
             + 5.0 * scene.time.x;
-        let absorb_rgb = textureSample(
-            albedo,
-            albedo_sampler,
+        let absorb_rgb = detail_sample(
+            MATERIAL_ALBEDO,
             in.texcoord + vec2<f32>(absorb_offset, absorb_offset),
         ).rgb;
         absorb = vec4<f32>(absorb_rgb * scene.light.output_scale, in.colour.a);
     }
     let composed_plain = mix(mix(cone_or_floor, flame, flame_shading), absorb, absorb_shading);
-    let composed_lit = vec4<f32>(
+    var composed_lit = vec4<f32>(
         composed_plain.rgb * select(vec3<f32>(1.0), in.colour.rgb, shield_shading != 0.0)
             + shield_lightning,
         composed_plain.a,
     );
+    // **HD's shield shell, lit by its own program** (block #2 of `hexagonalshield_rich`, read
+    // off a live race draw): `ShieldColour * tex(u + A time, v) * (constantAmbientColour +
+    // directionalLight0Colour * sat(N.L))`, the world-space normal and light, then the fog lerp
+    // and `/2`. The texel is decoded on fetch (gamma nibble 7) and the colour is a linear
+    // constant, so nothing here is lit in gamma space.
+    // Where the frame holds no rig (a circuit with no `.envsettings`) the program's light would
+    // be zero, so the generic path above stands.
+    if shield_lit != 0.0 && scene.light.enabled > 0.5 {
+        let shell_light = scene.light.ambient
+            + scene.light.sun * clamp(dot(n, scene.light.direction), 0.0, 1.0);
+        composed_lit = vec4<f32>(
+            scene.light.output_scale * mix(texel.rgb, decode(texel.rgb), linear_out)
+                * in.colour.rgb * shell_light,
+            composed_lit.a,
+        );
+    }
     // **`enhanced` water** (`mesh::vex_water`, `water.wesl`) replaces the whole sum: the program
     // has its own light, glint and sky and no texture, so running the surface's generic path
     // and overwriting it would only shade it twice. The sky is the probe map's, encoded back to
@@ -2056,19 +2078,16 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
     //     a    = sat((0.5 B.a + 0.5 - AlphaAnim) / (1 - AlphaAnim))
     if bomb_fire {
         let fire_t = scene.time.x;
-        let fire_noise = textureSample(
-            albedo,
-            albedo_sampler,
+        let fire_noise = detail_sample(
+            MATERIAL_ALBEDO,
             vec2<f32>(in.texcoord.x, 0.3 * fire_t + in.texcoord.y),
         ).a;
-        let fire_b = textureSample(
-            albedo,
-            albedo_sampler,
+        let fire_b = detail_sample(
+            MATERIAL_ALBEDO,
             vec2<f32>(in.texcoord.x, fire_noise + in.texcoord.y + 0.04 * fire_t),
         );
-        let fire_c = textureSample(
-            albedo,
-            albedo_sampler,
+        let fire_c = detail_sample(
+            MATERIAL_ALBEDO,
             vec2<f32>(6.0 * in.texcoord.x, 6.0 * (0.3 * fire_t + in.texcoord.y)),
         ).rgb;
         // **Both colour taps are sRGB-decoded on fetch on HD's race target**; the
@@ -2124,7 +2143,7 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
     // would: **chosen, not measured**, the float target here would otherwise
     // multiply the rows above `0.45` several times over.
     if (in.slots & 2097152u) != 0u {
-        let halo_ramp = textureSample(albedo, albedo_sampler, in.texcoord);
+        let halo_ramp = detail_sample(MATERIAL_ALBEDO, in.texcoord);
         let halo_rim = clamp(1.0 - dot(to_eye, n), 0.0, 1.0);
         let halo_alpha = halo_ramp.a * 50.0 * pow(max(halo_rim, 1.0e-6), 10.0 - 10.0 * halo_ramp.a)
             * halo_ramp.a * BOMB_HALO_ALPHA_SCALE;
@@ -2149,9 +2168,8 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
     // The alphas are held to `1` as the 8-bit target they were written to
     // would hold them (**chosen, not measured**).
     if missile_core {
-        let core_tap = textureSample(
-            albedo,
-            albedo_sampler,
+        let core_tap = detail_sample(
+            MATERIAL_ALBEDO,
             vec2<f32>(in.texcoord.x, in.texcoord.y + 0.5 * clock),
         );
         // **The colour tap is sRGB-decoded on fetch on HD's race target**: the blast's
@@ -2161,7 +2179,7 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
         return vec4<f32>(core_rgb * in.colour.rgb, min(core_tap.a * in.sun_mask, 1.0));
     }
     if missile_rays {
-        let rays_tap = textureSample(albedo, albedo_sampler, vec2<f32>(in.texcoord.x, clock));
+        let rays_tap = detail_sample(MATERIAL_ALBEDO, vec2<f32>(in.texcoord.x, clock));
         let rays_rim = clamp(1.0 - dot(to_eye, n), 0.0, 1.0);
         let rays_rim_5 = rays_rim * rays_rim * rays_rim * rays_rim * rays_rim;
         let rays_base = clamp(0.9 - 0.9 * rays_rim_5, 0.0, 1.0);
@@ -2171,17 +2189,15 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
         return vec4<f32>(rays_fade * rays_rgb, min(rays_tap.a, 1.0));
     }
     if missile_shock {
-        let wave_n = textureSample(
-            albedo,
-            albedo_sampler,
+        let wave_n = detail_sample(
+            MATERIAL_ALBEDO,
             vec2<f32>(in.texcoord.x, in.texcoord.y + 0.01 * clock),
         ).a;
         let wave_v = in.texcoord.y + 0.05 * wave_n;
         let wave_c = 0.45 * clock - wave_v;
-        let wave_diagonal = textureSample(albedo, albedo_sampler, vec2<f32>(wave_c, wave_c)).rgb;
-        let wave_tap = textureSample(
-            albedo,
-            albedo_sampler,
+        let wave_diagonal = detail_sample(MATERIAL_ALBEDO, vec2<f32>(wave_c, wave_c)).rgb;
+        let wave_tap = detail_sample(
+            MATERIAL_ALBEDO,
             vec2<f32>(in.texcoord.x + wave_n, wave_v),
         ).rgb;
         let wave_alpha = in.sun_mask * (wave_diagonal.x + wave_diagonal.y + wave_diagonal.z)
@@ -2208,14 +2224,12 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
     //
     //             rgb += probe(reflect(-V, N)) iblScalePower
     if plasma_ring {
-        let ring_n = textureSample(
-            albedo,
-            albedo_sampler,
+        let ring_n = detail_sample(
+            MATERIAL_ALBEDO,
             vec2<f32>(in.texcoord.x, 4.0 * (in.texcoord.y + 0.01 * clock)),
         ).a;
-        let ring_c = textureSample(
-            albedo,
-            albedo_sampler,
+        let ring_c = detail_sample(
+            MATERIAL_ALBEDO,
             in.texcoord + vec2<f32>(0.15 * ring_n + 0.1 * clock),
         ).rgb;
         return vec4<f32>(
@@ -2224,15 +2238,11 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
         );
     }
     if plasma_halo {
-        let halo_n = textureSample(
-            albedo,
-            albedo_sampler,
+        let halo_n = detail_sample(
+            MATERIAL_ALBEDO,
             vec2<f32>(in.texcoord.x, in.texcoord.y + 0.4 * clock),
         ).a;
-        let halo_texel = textureSample(
-            albedo,
-            albedo_sampler,
-            vec2<f32>(
+        let halo_texel = detail_sample(MATERIAL_ALBEDO, vec2<f32>(
                 2.0 * in.texcoord.x + 0.1 * clock,
                 in.texcoord.y + 0.14 * clock + 0.1 * halo_n,
             ),
@@ -2244,20 +2254,17 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
         );
     }
     if plasma_sphere {
-        let sphere_n = textureSample(
-            albedo,
-            albedo_sampler,
+        let sphere_n = detail_sample(
+            MATERIAL_ALBEDO,
             vec2<f32>(in.texcoord.x, 4.0 * (in.texcoord.y + 0.01 * clock)),
         ).a;
-        let sphere_texel = textureSample(
-            albedo,
-            albedo_sampler,
+        let sphere_texel = detail_sample(
+            MATERIAL_ALBEDO,
             in.texcoord + vec2<f32>(0.2 * sphere_n + 0.4 * clock),
         ).rgb;
         let sphere_c = mix(sphere_texel, decode(sphere_texel), encoded_out * linear_out);
-        let noise_texel = textureSample(
-            lightmap,
-            albedo_sampler,
+        let noise_texel = detail_sample(
+            MATERIAL_LIGHTMAP,
             vec2<f32>(5.0 * in.texcoord.x + 10.0 * clock, 15.0 * in.texcoord.y + 10.0 * clock),
         ).rgb;
         let sphere_noise = mix(noise_texel, decode(noise_texel), encoded_out * linear_out);
@@ -2297,16 +2304,14 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
     //     a   = VertexColour2.a * sum(tex(c, c).rgb)       @0x11-@0x16
     if bomb_shock {
         let shock_s = uniforms.model_clock;
-        let shock_n = textureSample(
-            albedo,
-            albedo_sampler,
+        let shock_n = detail_sample(
+            MATERIAL_ALBEDO,
             vec2<f32>(in.texcoord.x, in.texcoord.y + 0.01 * shock_s),
         ).a;
         let shock_c = in.texcoord.y + 0.05 * shock_n + 0.45 * shock_s;
-        let shock_diagonal = textureSample(albedo, albedo_sampler, vec2<f32>(shock_c, shock_c)).rgb;
-        let shock_tap = textureSample(
-            albedo,
-            albedo_sampler,
+        let shock_diagonal = detail_sample(MATERIAL_ALBEDO, vec2<f32>(shock_c, shock_c)).rgb;
+        let shock_tap = detail_sample(
+            MATERIAL_ALBEDO,
             vec2<f32>(in.texcoord.x + shock_n, shock_c),
         ).rgb;
         return vec4<f32>(
@@ -2486,9 +2491,8 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
         }
         return composed;
     }
-    let rim_noise = textureSample(
-        albedo,
-        albedo_sampler,
+    let rim_noise = detail_sample(
+        MATERIAL_ALBEDO,
         vec2<f32>(in.texcoord.x, in.texcoord.y + 0.0001 * scene.time.x),
     ).a;
     let rim_tap = in.texcoord + vec2<f32>(0.2 * rim_noise + 0.4 * scene.time.x);
@@ -2496,7 +2500,7 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
     // programs: the LeachBall's (and the Missile head's) and the Plasma head's unit 0
     // read gamma nibble 7 (`0x60710101`); the noise tap's alpha is raw
     // (docs/rendering/hd-unlit-programs.md, "The weapon units, read live").
-    let rim_texel = textureSample(albedo, albedo_sampler, rim_tap).rgb;
+    let rim_texel = detail_sample(MATERIAL_ALBEDO, rim_tap).rgb;
     let rim_c = mix(rim_texel, decode(rim_texel), encoded_out * linear_out);
     let rim_angle = clamp(1.0 - dot(to_eye, n), 0.0, 1.0);
     // `LG2`/`MUL 5`/`EX2` in the program: `rim^5`, multiplied out so `0^5` is

@@ -1074,6 +1074,26 @@ pub struct ShieldReadout {
     pub critical_percent: u32,
     /// Flash phases per second: a phase is on when `floor(t * this)` is even.
     pub phases_per_second: u32,
+    /// What a running Shield puts in the readout, `None` where nothing shows it.
+    pub countdown: Option<ShieldCountdown>,
+}
+
+/// The Shield's remaining seconds, written over the percentage while a Shield
+/// runs, with a second background widget behind the fill
+/// (`docs/ghidra/functions/ps3-hdfury-eu/hud-readouts.md`, "The Shield countdown").
+///
+/// The original does this only where its layout authors [`Self::widget`], so a
+/// layout without it keeps the percentage.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ShieldCountdown {
+    /// The widget shown behind the fill while a Shield runs, drawn as authored.
+    pub widget: &'static str,
+    /// The seconds' colour, `0xRRGGBB`, drawn opaque.
+    pub rgb: u32,
+    /// The layout file whose copy authoring [`Self::widget`] is the one to read,
+    /// where a title ships several copies and only one authors it. Matched on
+    /// the file name, case-insensitively.
+    pub layout_file: &'static str,
 }
 
 /// A ring of numbered segment widgets, `<prefix>0` .. `<prefix><segments - 1>`.

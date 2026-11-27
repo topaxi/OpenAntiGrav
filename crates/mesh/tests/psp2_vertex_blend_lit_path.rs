@@ -119,6 +119,7 @@ fn model(mode: f32, second: &[[u8; 4]], u: f32, pairs: [[f32; 2]; 3]) -> Model {
         flame: None,
         absorb_shell: false,
         shield_shell: false,
+        shield_lit: false,
         own_shield: false,
         material_lod_bias: 0.0,
         material_state: Vec::new(),

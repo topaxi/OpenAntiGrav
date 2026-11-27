@@ -811,7 +811,8 @@ values = ["psp", "ps2", "wide", "free"]
 # hand offers one, so the row shows a single value and states the fact rather
 # than offering a choice that does nothing.
 #
-# Applies to the next loading screen, not to the one on screen - the
+# The end screens follow it too, from the next finish (`docs/ui/endrace-screens.md`, "HD's FE
+# style on the end screen"). Applies to the next loading screen, not to the one on screen - the
 # illustration is decoded when the setting changes, which is a disc read and so
 # happens in the menus rather than mid-load. See
 # `Session::reload_loading_assets`.
@@ -1525,8 +1526,9 @@ values = ["original", "high", "maximum"]
 # over the mip levels the disc authors: level 1 from 256 units of view depth,
 # level 2 from 512 - and the default. `high` doubles the depth of every step and
 # `maximum` always samples level 0; both are this project's own, chosen rather
-# than measured. One multiplier on the law, not a second code path. See
-# `docs/rendering/frame-audit.md`. Applies live: the session hands the preset to
+# than measured. A title with no such law takes the same steps as a shift of
+# the sampler's own level; Pulse PS2's textures have one level, so a PS2 boot
+# drops the row. See `docs/rendering/texture-level-per-title.md`. Applies live: the session hands the preset to
 # the race every frame and the fragment stage reads it from the scene uniform.
 [[page.entry]]
 kind = "choice"
@@ -1636,7 +1638,9 @@ values_from = "screen_filters"
 
 # How much of the filter shows: a mix between the untouched frame and the
 # filter's output, applied by the pass itself so it means the same for every
-# preset. Greyed while no filter is selected.
+# preset. Greyed while no filter is selected, and left off the page while the
+# selected filter's own header says `fixed_strength` (a preset that moves
+# pixels, where a mix would show two pictures).
 [[page.entry]]
 kind = "choice"
 label = "SCREEN FILTER STRENGTH"

@@ -1044,3 +1044,88 @@ fn an_eight_craft_hd_results_grid_clears_its_own_bottom_bar() {
         "GridBottomBlock is hidden on a race"
     );
 }
+
+/// The `EndRace` screens follow the saved `FE Style`: HD's teal highlight and dark captions
+/// with square block corners, Fury's red and light grey with chamfered ones, and an unset
+/// choice the served (Fury) copy (`docs/ui/endrace-screens.md`, "HD's FE style on the end
+/// screen"). Both read the colours off the disc's own two copies of the front-end root.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn the_endrace_screens_follow_the_saved_front_end_style() {
+    let Some(image) = image() else { return };
+    let mut archives = open_hd_archives(&image.display().to_string());
+    let strings = english(&mut archives);
+    let root = archives
+        .read_name(oag_hd::frontend::names::FRONTEND_ROOT)
+        .expect("the front-end root");
+    let served = oag_ui::screen::Screens::from_xml(&oag_tables::fexml::text(&root).expect("text"));
+    let blocks = oag_ui::menu::block::BlockArt {
+        frame: oag_ui::frontend::Placed {
+            x: 0,
+            y: 0,
+            width: 64,
+            height: 64,
+            quad_extent: None,
+            quad_centre: None,
+            blend: None,
+            scale: [1.0, 1.0],
+        },
+        fill_alpha: 110.0 / 255.0,
+        solid_alpha: 1.0,
+        cursor: None,
+        arrow: None,
+        marker: None,
+        // The served Fury copy's own corners.
+        fury: true,
+    };
+    let frame = oag_ui::menu::Frame {
+        blocks: Some(blocks),
+        ..oag_ui::menu::Frame::default()
+    };
+
+    for (saved, highlight, caption, fury) in [
+        (Some("HD"), 0xff8a_c0ca_u32, 0xff64_6464_u32, false),
+        (Some("FURY"), 0xffac_0717, 0xff96_9696, true),
+        (None, 0xffac_0717, 0xff96_9696, true),
+    ] {
+        let style = oag_game::front_end_style::ScreenStyle::new(
+            &mut archives,
+            oag_hd::TITLE,
+            saved,
+            served
+                .globals
+                .iter()
+                .map(|(name, value)| (name.as_str(), value.as_str())),
+        );
+        let screens = oag_game::endrace::load(
+            &mut archives,
+            &strings,
+            oag_ui_screens::picker::FaceScales::default(),
+            oag_hd::endrace::AUTHORED_GRID,
+            &oag_hud::sprite::Sheet::default(),
+            &style.global_refs(),
+            oag_hd::TITLE,
+        )
+        .expect("HD's own EndRace screens");
+        let record = screens
+            .results
+            .screen
+            .blocks
+            .iter()
+            .find(|block| block.name.as_deref() == Some("RecBlockBlue"))
+            .expect("the record notice's block");
+        assert_eq!(record.color, highlight, "{saved:?} highlight");
+        let loyalty = screens
+            .results
+            .labels
+            .iter()
+            .find(|label| label.text == strings.get_or_id("ER_LOYSTAT"))
+            .expect("the loyalty caption");
+        assert_eq!(loyalty.color, caption, "{saved:?} caption");
+        assert_eq!(
+            style.frame(&frame).blocks.expect("kept").fury,
+            fury,
+            "{saved:?} corners"
+        );
+    }
+}
