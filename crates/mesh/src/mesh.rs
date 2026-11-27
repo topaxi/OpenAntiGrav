@@ -110,6 +110,12 @@ pub struct Model {
     /// on the light rather than a baked light to add - see
     /// `mesh::rcs::skin::light_inputs`. Empty for every title but Wipeout HD.
     pub material_colour_factor: Vec<bool>,
+    /// Per material slot: whether the material's vertex program writes `1 - v`
+    /// into the diffuse coordinate it hands the fragment program, so the build
+    /// flips it once per vertex. Read per material off the vertex microcode
+    /// (`mesh::rcs::skin::flips`); it never reaches a shader. Empty for every
+    /// title but Wipeout HD.
+    pub material_flip_v: Vec<bool>,
     /// Per material slot: whether the material ships a `StaticQuake` vertex
     /// program, which is what makes its vertices carry
     /// [`GpuVertex::quake`]. Empty for every title but Wipeout HD.
@@ -349,6 +355,7 @@ impl Model {
             material_specular_exponent: Vec::new(),
             material_glow: Vec::new(),
             material_colour_factor: Vec::new(),
+            material_flip_v: Vec::new(),
             material_quake: Vec::new(),
             material_tangent: Vec::new(),
             material_variants: Vec::new(),
@@ -1090,6 +1097,7 @@ fn build_class(
         material_specular_exponent: Vec::new(),
         material_glow: Vec::new(),
         material_colour_factor: Vec::new(),
+        material_flip_v: Vec::new(),
         material_quake: Vec::new(),
         material_tangent: Vec::new(),
         material_variants: Vec::new(),

@@ -251,16 +251,13 @@ pub mod slots {
     pub const ALBEDO_FROM_SECOND: u32 = 1 << 1;
     /// The output alpha comes from the second texture rather than the first.
     pub const ALPHA_FROM_SECOND: u32 = 1 << 2;
-    /// The material's vertex program writes `1 - v` into the varying its
-    /// fragment program samples with, so the coordinate has to be flipped.
+    /// This chunk's render-block flags say a Zone race keeps its plain material
+    /// program: `oag_rcs::rcsmodel::Mesh::zone_plain`, bits 9 to 11 of the
+    /// chunk's flags (`oag_rcs::rcsmodel::RENDER_ZONE_PLAIN`).
     ///
-    /// **Read off the vertex microcode, per material** - see
-    /// `oag_rcs::rcsmaterial::vertex` and `mesh::rcs::skin::flips`. Unlike
-    /// the three bits above it this one never reaches the shader: the build
-    /// applies it once per vertex, because it is a property of the material
-    /// and not of the pixel. It rides here because this is already the word
-    /// that carries what a material's own microcode says.
-    pub const FLIP_V: u32 = 1 << 5;
+    /// **Per chunk, like [`ZONE_TRACK`]**, so two chunks of one material can
+    /// differ.
+    pub const ZONE_PLAIN: u32 = 1 << 5;
 
     /// The material's fragment program is **not** fed
     /// `constantAmbientColour`, so the circuit's constant ambient must not be
@@ -468,8 +465,8 @@ pub mod slots {
     /// the blast drives - `AlphaAnim` (the model's own clock) and `ColourAnim`
     /// (a per-draw scalar, the mesh uniform's `model_colour`). Carried as
     /// [`RIM_GLOW`] and [`RIM_EDGE`] **together**, which no single material
-    /// earns, rather than a bit of its own: bits 23 and up are the material
-    /// index and a circuit needs hundreds of those. Every test of either bit
+    /// earns, rather than a bit of its own: bits 24 and up are the material
+    /// index. Every test of either bit
     /// alone excludes this pair. See `docs/rendering/hd-unlit-programs.md`,
     /// "The Bomb's fireball and shockwaves".
     pub const BOMB_FIRE: u32 = RIM_GLOW | RIM_EDGE;
@@ -510,17 +507,14 @@ pub mod slots {
     /// Where a material's index into [`Model::emissive`](super::Model::emissive)
     /// sits in this word, plus one; `0` is "this material has none".
     ///
-    /// **The high half, because the roles are bit flags and the index is a
+    /// **The high byte, because the roles are bit flags and the index is a
     /// number.** Putting it here rather than in a tenth vertex attribute costs
     /// nothing: the word is already `u32`, already per material, and already
-    /// `@interpolate(flat)`, and every shader read of the low half is a masked
-    /// bit test that an index above the role bits cannot disturb. The index
-    /// is into the glow table, which a model holds at most
+    /// `@interpolate(flat)`, and every shader read of a role is a masked bit
+    /// test that an index above the role bits cannot disturb. The shaders read
+    /// it through `bindings.wesl`'s `material_row`. The index is into the glow
+    /// table, which a model holds at most
     /// [`EMISSIVE_LIMIT`](super::rcs::EMISSIVE_LIMIT) entries of.
-    ///
-    /// Twenty-four since [`HOLO_BILLBOARD`] took bit 23 (the index keeps 255 values), twenty-three since [`ICE`] took bit 22, twenty-two since [`REFRACTION`] and a since-retired pass bit took bits 20 and 21, twenty since [`LIGHT_CONE`] took bit 19, nineteen before it, when
-    /// [`MAG_WAVE`] and [`MAG_LOOP`] took bits 17 and 18; seventeen rather than sixteen since the two clock-scroll bits
-    /// ([`CLOCK_SCROLL_RING`], [`CLOCK_SCROLL_HALO`]) took bits 15 and 16.
     pub const MATERIAL_SHIFT: u32 = 24;
 
     /// The material's program lights the albedo texture's **alpha** and tints
@@ -533,29 +527,16 @@ pub mod slots {
     /// painted the surface cyan - `docs/rendering/hd-track-tone.md`, "The blue
     /// cast".
     ///
-    /// **Bit 31, above the index**, because bits 0 to 23 are all taken and the
-    /// index needs only seven: the glow table holds
-    /// [`EMISSIVE_LIMIT`](super::rcs::EMISSIVE_LIMIT) (64) entries, so
-    /// [`material_index`] masks the top bit off.
+    /// **Bit 31, above the index**, because bits 0 to 23 are all taken.
     pub const LIT_ALPHA: u32 = 1 << 31;
 
-    /// This chunk's render-block flags say a Zone race keeps its plain material
-    /// program: `oag_rcs::rcsmodel::Mesh::zone_plain`, bits 9 to 11 of the
-    /// chunk's flags (`oag_rcs::rcsmodel::RENDER_ZONE_PLAIN`).
-    ///
-    /// **Per chunk, like [`ZONE_TRACK`]**, so two chunks of one material can
-    /// differ. Bit 30, above the index: the glow table holds
-    /// [`EMISSIVE_LIMIT`](super::rcs::EMISSIVE_LIMIT) (64) entries, so the index
-    /// is six bits ([`MATERIAL_MASK`]) and the seventh was never set.
-    pub const ZONE_PLAIN: u32 = 1 << 30;
+    /// The bits of the glow-table index, [`MATERIAL_SHIFT`] up: seven, for the 128
+    /// entries a model holds. `bindings.wesl` declares the same value.
+    pub const MATERIAL_MASK: u32 = 0x7f;
 
-    /// The bits of the glow-table index, [`MATERIAL_SHIFT`] up: six, for the 64
-    /// entries a model holds.
-    pub const MATERIAL_MASK: u32 = 0x3f;
-
-    /// The mask covering every role bit - the low half of the word plus
-    /// [`LIT_ALPHA`] and [`ZONE_PLAIN`], with [`MATERIAL_SHIFT`]'s index excluded.
-    pub const ROLE_MASK: u32 = ((1 << MATERIAL_SHIFT) - 1) | LIT_ALPHA | ZONE_PLAIN;
+    /// The mask covering every role bit - the bits below [`MATERIAL_SHIFT`] plus
+    /// [`LIT_ALPHA`], with the index excluded.
+    pub const ROLE_MASK: u32 = ((1 << MATERIAL_SHIFT) - 1) | LIT_ALPHA;
 
     /// This material's [`Model::emissive`](super::Model::emissive) index plus
     /// one, or `0` where it has no entry.
@@ -579,7 +560,17 @@ pub mod slots {
 
 #[cfg(test)]
 mod tests {
-    use super::road_texture;
+    use super::{road_texture, slots};
+
+    #[test]
+    fn the_glow_index_names_every_row_and_overlaps_no_role() {
+        let top = u32::try_from(crate::mesh::rcs::EMISSIVE_LIMIT - 1).unwrap();
+        assert_eq!(slots::MATERIAL_MASK, top);
+        assert_eq!(slots::material_index(top << slots::MATERIAL_SHIFT), top);
+        let index = slots::MATERIAL_MASK << slots::MATERIAL_SHIFT;
+        assert_eq!(index & (slots::LIT_ALPHA | slots::ZONE_PLAIN), 0);
+        assert_eq!(index & slots::ROLE_MASK, 0);
+    }
 
     #[test]
     fn a_road_texture_is_named_for_a_surface_and_a_wall_is_not() {

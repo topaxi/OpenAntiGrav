@@ -150,8 +150,7 @@ fn census(archive: usize) -> Option<(BTreeMap<&'static str, usize>, Dark)> {
     Some((bound, dark))
 }
 
-/// Asserts both halves of [`census`]. `dark` names every slot known to stay unlit: Modesto
-/// Heights' glow table is full (63 entries, less those the later readers need), and Vineta K's
+/// Asserts both halves of [`census`]. `dark` names every slot known to stay unlit: Vineta K's
 /// `mt_uvanim_diffuse_emissive3tokey` runs an unread law.
 fn expect(archive: usize, want: &[(&str, usize)], dark: &[(&str, &str, usize)]) {
     let Some((bound, left)) = census(archive) else {
@@ -172,6 +171,8 @@ fn data00s_circuits_bind_every_lightmapped_emissive() {
     expect(
         0,
         &[
+            ("and_diffuse_emissive", 16),
+            ("and_diffuse_emissive_spec", 4),
             ("diffuse_emissive_with_specular_from_alpha", 28),
             ("diffuse_spec_fresnel_emissive", 10),
             ("diffuse_with_specular_from_alpha_scalar", 64),
@@ -180,13 +181,9 @@ fn data00s_circuits_bind_every_lightmapped_emissive() {
             ("track_wall", 25),
             ("tunnel_fx_noalpha", 46),
             ("tunnel_fx_noalpha_mult", 4),
-            ("uvanim_diffuse_emissive", 16),
+            ("uvanim_diffuse_emissive", 36),
         ],
-        &[
-            ("modesto_heights", "and_diffuse_emissive", 16),
-            ("modesto_heights", "and_diffuse_emissive_spec", 4),
-            ("modesto_heights", "uvanim_diffuse_emissive", 20),
-        ],
+        &[],
     );
 }
 

@@ -184,6 +184,15 @@ fn rate_from(v: f32, lo: u32) -> bool {
     return (rate_codes & code_bits(lo, 31u)) != 0u && v > f32(lo) - 0.5;
 }
 
+// `slots::MATERIAL_SHIFT` and `slots::MATERIAL_MASK`.
+const MATERIAL_SHIFT: u32 = 24u;
+const MATERIAL_MASK: u32 = 127u;
+
+// The glow-table row a vertex's slot word names (`slots::material_index`), 0 for none.
+fn material_row(slots: u32) -> u32 {
+    return (slots >> MATERIAL_SHIFT) & MATERIAL_MASK;
+}
+
 fn emissive_scale(entry: u32) -> vec4<f32> {
     if emissive_rows == 0u {
         return vec4<f32>(0.0);

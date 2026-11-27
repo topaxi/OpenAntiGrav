@@ -146,6 +146,7 @@ fn model(lit: f32) -> Model {
         material_specular_exponent: Vec::new(),
         material_glow: Vec::new(),
         material_colour_factor: Vec::new(),
+        material_flip_v: Vec::new(),
         material_quake: Vec::new(),
         material_tangent: Vec::new(),
         material_variants: Vec::new(),
@@ -272,6 +273,50 @@ fn the_glow_is_summed_on_the_authored_path_and_not_only_the_stand_in_one() {
         (0, 0, 0),
         "a surface that does not declare `ADD_SECOND` must draw its black \
          albedo and nothing else"
+    );
+}
+
+/// **A glow-table row past 63 is read as itself**, so the index is seven bits on both sides:
+/// the entry sits at row 100, and a decoy sits at row 36, which a six-bit read would name.
+#[test]
+fn a_glow_entry_past_row_63_is_the_one_drawn() {
+    let instance = wgpu::Instance::default();
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let (device, queue) =
+        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+            .expect("requesting the device");
+    let mut scene = Scene::off();
+    scene.light.enabled = 1.0;
+    scene.fog.camera = [0.0, 0.0, 100.5];
+
+    const ROW: u32 = 100;
+    let mut wide = model(1.0);
+    let layer = wide.emissive[0];
+    let mut table = vec![
+        Emissive {
+            tint: [0.0; 3],
+            ..layer
+        };
+        ROW as usize
+    ];
+    table[ROW as usize - 1] = layer;
+    table[(ROW & 63) as usize - 1] = Emissive {
+        tint: [0.0, 0.0, 2.0],
+        ..layer
+    };
+    wide.emissive = table;
+    for vertex in &mut wide.vertices {
+        vertex.slots = (vertex.slots & slots::ROLE_MASK) | (ROW << slots::MATERIAL_SHIFT);
+        assert_eq!(slots::material_index(vertex.slots), ROW);
+    }
+    let drawn = draw(&device, &queue, &wide, scene);
+    assert_eq!(
+        (drawn[0], drawn[1], drawn[2]),
+        (decoded(TINT[0]), decoded(TINT[1]), decoded(TINT[2])),
+        "row {ROW} was not the one read: the index is being cut to six bits"
     );
 }
 

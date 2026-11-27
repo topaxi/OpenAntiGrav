@@ -416,4 +416,4 @@ pub(super) fn emissive(
 /// **Measured**: the busiest circuit is Modesto Heights at 51 accumulating
 /// slots, which deduplicate further, against 64 here - and 64 `vec4` pairs is
 /// 2 KiB of uniform, well inside the 64 KiB binding every backend guarantees.
-pub const EMISSIVE_LIMIT: usize = 64;
+pub const EMISSIVE_LIMIT: usize = 128;

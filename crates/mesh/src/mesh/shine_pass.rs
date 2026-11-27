@@ -124,6 +124,7 @@ pub fn plain(model: &mut Model) {
     model.material_glow.clear();
     model.glow_from_program = false;
     model.material_colour_factor.clear();
+    model.material_flip_v.clear();
     model.material_quake.clear();
     model.material_variants.clear();
     model.material_anim.clear();
