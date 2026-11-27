@@ -53,6 +53,7 @@ fn only_hd_lists_effects_whose_gtf_sprites_play() {
             oag_title::engine_effects::PLASMA_LIGHTNING_COLLAPSE_EFFECT,
             oag_title::engine_effects::MINE_EXPLO_EFFECT,
             oag_title::engine_effects::BOMB_SMOKERING_EFFECT,
+            oag_title::engine_effects::BOMB_RAYS_EFFECT,
             oag_title::engine_effects::MISSILE_EXPLO_EFFECT,
             oag_title::engine_effects::MISSILE_BOUNCE_EFFECT,
             oag_title::engine_effects::DETONATOR_MINE_EXPLO_DEAD_EFFECT,
@@ -84,8 +85,9 @@ fn only_hd_lists_effects_whose_gtf_sprites_play() {
 /// a matched capture of the original has shown spreading across the road on each (Pure's
 /// `Quake_Update`, `psp-pure-usa/quake.md`); HD also for the Detonator EMP's wave, its blue
 /// recolour (`ps3-hdfury-eu/detonator-emp.md`, "What HD draws for a fired EMP"), and the
-/// Plasma blast's two lightning effects (`ps3-hdfury-eu/plasma.md`, "The pairs"). 2048 and Omega
-/// list the EMP's wave alone, as HD's does (`detonator-emp.md`, "2048 and Omega draw it").
+/// Plasma blast's two lightning effects (`ps3-hdfury-eu/plasma.md`, "The pairs") and the Bomb's
+/// smoke ring and rays (`docs/rendering/particle-fill.md`, "The Bomb's and the Missile's
+/// explosions paired"). 2048 and Omega list the EMP's wave alone, as HD's does (`detonator-emp.md`, "2048 and Omega draw it").
 #[test]
 fn the_extent_law_is_lifted_only_for_the_effects_each_title_lists() {
     use oag_title::engine_effects as n;
@@ -112,6 +114,8 @@ fn the_extent_law_is_lifted_only_for_the_effects_each_title_lists() {
             n::DETONATOR_EMP_EFFECT,
             n::PLASMA_LIGHTNING_EXPAND_EFFECT,
             n::PLASMA_LIGHTNING_COLLAPSE_EFFECT,
+            n::BOMB_SMOKERING_EFFECT,
+            n::BOMB_RAYS_EFFECT,
         ]
     );
     for title in [
@@ -330,6 +334,7 @@ fn hd_2048_and_omega_list_the_trail_hit_burst_for_the_far_bar_draw_and_hd_its_pl
             n::PLASMA_LAUNCH_EFFECT,
             n::PLASMA_LIGHTNING_EXPAND_EFFECT,
             n::PLASMA_LIGHTNING_COLLAPSE_EFFECT,
+            n::BOMB_RAYS_EFFECT,
         ]
     );
     // The head's and the wind-up's sprite templates play, and the Rocket craft blast's (its
@@ -342,6 +347,50 @@ fn hd_2048_and_omega_list_the_trail_hit_burst_for_the_far_bar_draw_and_hd_its_pl
             n::CRAFT_BLAST_EFFECT
         ]
     );
+}
+
+/// The Bomb's two effects as HD's own lists load them: both spread by the extent the file
+/// authors, the rays as HD's bar with their sprite, the ring's class-6 `sparks` still
+/// procedural (`docs/rendering/particle-fill.md`, "The Bomb's and the Missile's explosions
+/// paired").
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn the_bombs_rays_load_as_sprite_bars_on_their_shell_and_the_ring_sparks_stay_procedural() {
+    use oag_fx::psys::streak::StreakDraw;
+    use oag_title::engine_effects as n;
+    let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let mut archives = oag_hd::open(&image.display().to_string()).expect("HD opens");
+    let title: &Title = oag_hd::TITLE;
+    let mut load = |name: &'static str| {
+        crate::assets::listed_particle_effect(
+            &mut archives,
+            title.race.effect_dir_for("track"),
+            title.effects,
+            name,
+            false,
+            title.effects.colour_walk,
+            title.effects,
+        )
+        .expect("the effect loads")
+        .0
+    };
+
+    let rays = load(n::BOMB_RAYS_EFFECT);
+    assert!(rays.has_extents(), "the rays start on the authored shell");
+    assert_eq!(rays.emitters.len(), 1);
+    assert_eq!(rays.emitters[0].streak, StreakDraw::FarBar { aspect: 1.0 });
+    assert!(rays.emitters[0].sprite.is_some(), "bomb_spike");
+
+    let ring = load(n::BOMB_SMOKERING_EFFECT);
+    assert!(ring.has_extents(), "the smoke stands on the authored ring");
+    let sparks = ring
+        .emitters
+        .iter()
+        .find(|e| e.name == "sparks")
+        .expect("the ring carries sparks");
+    assert_eq!(sparks.streak, StreakDraw::Procedural);
 }
 
 /// `WO_TRAIL_HITSHIP`'s two emitters are class 6 (`+0x4c8` aspect 1.0 and 2.0). Listed, both
@@ -489,6 +538,46 @@ fn a_forced_rocket_hit_plays_the_craft_blast_with_its_sprites() {
         "the craft blast is not playing"
     );
     check_hds_flipbooks_walk(&race, &blast);
+    check_a_forced_shot_stands_the_players_bomb_where_asked(&mut race, &held);
+}
+
+/// `--force-shot-at` moves the player's own laid Bomb, and moves nothing when the player has
+/// no weapon out.
+fn check_a_forced_shot_stands_the_players_bomb_where_asked(
+    race: &mut crate::Race,
+    held: &dyn Fn(u32, u32) -> oag_gameplay::PlayerInputs,
+) {
+    use oag_gameplay::input::Button;
+    let player = race.core.player_slot();
+    let own = |race: &crate::Race| {
+        race.core
+            .sim
+            .world
+            .projectiles
+            .slots
+            .iter()
+            .filter(|shot| shot.kind.is_some() && usize::from(shot.owner) == player)
+            .map(|shot| shot.position)
+            .collect::<Vec<_>>()
+    };
+    for _ in 0..1200 {
+        if own(race).is_empty() {
+            break;
+        }
+        race.tick(&held(0, 0));
+    }
+    assert!(own(race).is_empty(), "the Rocket's own shots have retired");
+    let point = oag_core::math::Vec3::new(12.0, -34.0, 56.0);
+    assert!(!race.core.sim.force_shot_at(player, point), "nothing out");
+    race.core.sim.world.ships[player].pickup.weapon = Some(oag_tables::weapons::Weapon::Bomb);
+    race.tick(&held(0, Button::Square.bit()));
+    for _ in 0..5 {
+        race.tick(&held(0, 0));
+    }
+    let laid = own(race);
+    assert!(!laid.is_empty(), "the Bomb is on the road");
+    assert!(race.core.sim.force_shot_at(player, point), "a Bomb is out");
+    assert_eq!(own(race).first(), Some(&point));
 }
 
 /// HD's update walks its flipbooks: the craft blast's root over its life, the wall blast's
