@@ -232,6 +232,17 @@ match. Not read. Next, in order:
 2. Whether the flaps (the airbrakes) carry their own node matrix in the frame: a normal
    left in model space on a rotated node would tilt exactly those panels.
 
+**On the countdown grab (2026-11-27, `hd-zone-start`, ours at tick 238).** The same
+boxes of `hd/zone-vineta-k-z5`: nose original `(77.6, 83.4, 96.8)`, ours
+`(123.6, 139.0, 174.2)`; left flap `(82.9, 87.1, 98.3)` / `(104.8, 108.9, 119.4)`;
+outer side `(58.2, 80.0, 92.0)` / `(70.4, 95.5, 113.0)`; left pod
+`(87.3, 98.0, 111.0)` / `(97.7, 110.1, 124.9)`. Read side by side at 3x, **the
+left-flap box lies on a flap the original holds raised on the grid** and ours draws
+flush, so that box compares two different surfaces and says nothing about light
+until the grid flaps are drawn. The nose and the outer side are the same shapes on
+both sides. No vertex dump of draws 641..644 survives, so read 1 needs a new
+capture (recipe under "Reproduce").
+
 ## 2048 and Omega
 
 The probe tint (first section):

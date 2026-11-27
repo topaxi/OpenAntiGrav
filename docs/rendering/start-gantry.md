@@ -1097,8 +1097,9 @@ rule HD follows is Omega's, by mode id. Confidence 85 for "the mode picks a diff
 name per mode (the picture, the file shapes and Omega's table agree; HD's own code site was
 not read: the four names are only referenced by a name-to-hash registration loop at
 `0x003f1300`, entries in the registry at `+0x4a20...`, which is not a chooser).
-The Zone icon starts about 3.5 s (210 ticks) before the release and is complete about 10 frames before it
-(`zcd2`, release at video frame 1066 of 30 fps).
+The Zone icon was read off video as starting about 3.5 s before the release and complete about 10 frames before
+it (`zcd2`, release at video frame 1066 of 30 fps); the executable puts the start at 3.0 s
+([gantry-clock.md](../ghidra/functions/ps3-hdfury-eu/gantry-clock.md), "What zeroes it in the countdown").
 
 **Wired for Zone on 2026-10-12 (`hd-zone-board`); Zone Battle and Detonator still are not.** `oag_race::Mode` has
 Zone but no Zone Battle or Detonator, so only Zone could choose its file. The paragraph this replaces said
@@ -1116,8 +1117,8 @@ stays a placed model (the card route is measured on HD only).
 ## Wipeout HD: the Zone board - the model was fine, the Zone grade was covering it (2026-10-12, `hd-zone-board`)
 
 **A Zone race in ours now shows the original's Zone board: a dark panel on which a loop icon assembles from
-light pieces over the 210 ticks before the release.** Disc-backed, no RPCS3 frame of this session (see "Not
-captured" below). Frames: Vineta K, `--mode zone`, 1440x816, ticks 63, 100, 140, 180, 220, 262, 273 and 330
+light pieces before the release** (210 ticks when this was written, 180 since the clock below). Disc-backed, no
+RPCS3 frame of this session (see "Not captured" below). Frames, at 210: Vineta K, `--mode zone`, 1440x816, ticks 63, 100, 140, 180, 220, 262, 273 and 330
 (the board is empty on tick 63 and the loop is whole by about 262); `just play --race --mode zone --track
 /data/environments/01_vineta_k/track.vex --ticks 180 --screenshot out.png`.
 
@@ -1155,13 +1156,21 @@ Every other surface keeps the blanket grade, so the sky, pads and the rest of th
 single race and a Pulse race are byte-identical before and after (sha256 of one frame each), and only the board
 region differs in a Zone frame.
 
-**The clock.** `Clock::assembled_at_release(210)`: frame 0 on tick 63, so the board's own `t` is 3.5 s on the
-release (tick 273). 210 is the thread's reading of "starts about 3.5 s before the release"; the asset's own keys
-run about 250 frames and the thread also reads the icon as complete about 10 video frames (20 ticks) before the
-release, which would make the assembly about 190 ticks: **a mismatch of roughly 45 ticks between the two
-readings, not resolved**. **What the board shows after the release is chosen, not measured**: the timeline keeps
-running and is held at `CLOCK_LIMIT`, so the pieces fade to the arrow by about 6 s into the clock, and the
-original's behaviour there is unread.
+**The clock (2026-11-27, `hd-zone-start`).** `Clock::assembled_at_release(180)`: frame 0 on tick 93, so the
+board's own `t` is 3.0 s on the release (tick 273). The original zeroes the slot 8 node on entering the 3.0 s
+countdown ([gantry-clock.md](../ghidra/functions/ps3-hdfury-eu/gantry-clock.md), "What zeroes it in the
+countdown", confidence 85), which replaces the 210 read off video and settles the two readings of that video that
+disagreed by about 45 ticks. **What the board shows after the release is chosen, not measured**: the timeline keeps
+running and is held at `CLOCK_LIMIT`, so the pieces fade to the arrow by about 6 s into the clock. The original's
+race-manager windows should apply there too (same page, "Open"); not wired.
+
+**The outer pieces fade in the original and not in ours.** In the countdown pair's frame the pieces left and right
+of the centre are translucent, darkening upward. The board authors six `black_fadeout.gtf` quads
+(`Background1` to `Background6`) in its blend list, and ours draws them first, so the pieces paint over them.
+Drawing the blend list in reverse (`OAG_DEBUG_REVERSE_BLENDED=1`) fades the outer pieces as the original does and
+hides the centre ones, so the order is neither: **HD's blended-list order for a billboard is unread** and nothing
+is wired. Next read: the draw order of the gantry's billboard pass in a live frame (`scripts/rsx-draw-list.py` on a
+countdown dump), or the sort in the billboard's submit path.
 
 **Not captured.** An RPCS3 frame beside ours was not obtained: under Xvfb RADV cannot present (no DRI3) and
 the NVIDIA ICD boots but the guest freezes on the grid ("The PS3 application has likely crashed" after a
@@ -2976,7 +2985,7 @@ shows a stippled triangle across one half of the quad, as other 2048 surfaces in
 **Zone (`321Go_Zone.vex`).** The board is each title's own substitution in a Zone race, read from both executables
 (Omega `TrackStartup_Load` `0x01391130`, confidence 85; 2048 `TrackStartup_Read` `0x8121b688`, confidence 80,
 [`vita-2048-eu-v104/track-startup-sound-bank.md`](../ghidra/functions/vita-2048-eu-v104/track-startup-sound-bank.md)). Its
-`assembly_ticks` (210) are HD's, inherited. Tech De Ra in `--mode zone` at ticks 100, 200 and 280 on both titles: a dark
+`assembly_ticks` (210) were HD's when written; HD's are 180 since 2026-11-27 and these titles' stay 210, chosen. Tech De Ra in `--mode zone` at ticks 100, 200 and 280 on both titles: a dark
 panel on which the loop icon's light pieces assemble, as HD's Zone board is described above. Eight of its meshes ride UV keys.
 
 **Per title.** **Omega: ported. 2048: ported**, each on its own `.vex` and `.rcsmodel`

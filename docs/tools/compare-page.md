@@ -1681,12 +1681,31 @@ ours against the original on three scene regions with no craft or board.
 - **A single grab's mean grey is not a measure of a change in ours**: two aligned grabs on one boot read 5.92 and 6.55.
 - The adopted grab was chosen by a rule written before it was taken (at least 2.2 s in, every region's shift at most 0.5 px, first to pass), not by score.
   Craft box: best gradient correlation 0.81 at offset (0, 0). Every grab's craft overlays within 1 px.
-- Left unmatched: the gantry board's glyphs (ours draws a blank board), the engine plume (ours runs no ticks), the two raised flaps on the hull's top, which
-  the original shows on the grid, and a few floating scenery shapes whose animation phase differs.
+- Left unmatched: the fade on the gantry board's outer pieces
+  ([start-gantry.md](../rendering/start-gantry.md), "The Zone board"), the two raised flaps on the hull's top, which the original shows on the grid, and a few
+  floating scenery shapes whose animation phase differs.
+
+**Ours renders the original's countdown moment (2026-11-27, `hd-zone-start`).** The two countdowns differ in length (HD 3.0 s, ours longer), so they share the
+release: `compare_env.countdown_flags` renders ours at `GO_TICK - round((3.0 - race_phase.elapsed_s) * 60)` (238 for the adopted pair), rebases
+`--world-clock-offset` onto that tick so the scenery still shows the original's time, and holds the craft on the pose (`--pose-hold`). `rpcs3-hd-pair.py
+--countdown` records it and `compare-rerender-ours.py` derives it from `original.race_phase`. No presented lag is subtracted: the 3 ticks measured on HD are the
+HUD clock's and this frame draws no HUD. The flame clock pin is absolute and does not move with the tick.
+
+| re-render of the adopted pair, twice, identical | pair mean grey | RMSE | board `800..1382 x 200..356`: grey, share of the pair |
+| --- | --- | --- | --- |
+| ticks 0, board clock 210 ticks (before) | 5.92 | 0.0731 | 28.20, 1.23 |
+| tick 238, board clock 210 ticks | 5.45 | 0.0660 | 19.87, 0.87 |
+| **tick 238, board clock 180 ticks** | **5.49** | 0.0663 | 19.99, 0.88 |
+
+The middle row scores as low as the last because the board's mean grey barely moves between 212 and 262 ticks; it draws the wrong glyphs (an extra piece of the
+centre icon, other pieces outside it). **The glyph overlap tells them apart.** The intersection over union of the board's bright pixels (luma over 75, box
+`810..1370 x 208..350`) against the original's, swept a tick at a time, peaked at 207 to 212 with the 210-tick clock and at 238 to 241 with the 180-tick one
+(0.666 at both peaks, 0.55 to 0.58 at 20 to 30 ticks off): the original's board stood 2.4 to 2.5 s into its own timeline 2.433 s into the countdown, as the
+executable's zero says ([gantry-clock.md](../ghidra/functions/ps3-hdfury-eu/gantry-clock.md), "What zeroes it in the countdown").
 
 **Differences left (not matched, judged by eye on `side.png`).** The original's zone-1 colour grade is a strong cyan wash; ours renders its natural zone 1 grade
 (pale, warm sky). `--zone 1,0,0` (grade pinned to stage 0) is a grey scene and scores worse (mean grey 88.9), so the stage is left unpinned. The original's start gantry
-shows its countdown glyphs and no HUD yet; ours draws a blank board.
+shows its countdown glyphs and no HUD yet.
 
 **No Zone HUD before GO (2026-11-19, `zone-hud-gate`).** HD and Omega draw no Zone HUD until the race is released
 ([hud-start-gate.md](../ghidra/functions/ps3-hdfury-eu/hud-start-gate.md)), and ours follows. With that fix the
