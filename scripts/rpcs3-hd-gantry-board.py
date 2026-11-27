@@ -137,7 +137,7 @@ def grab(out, stem, record, samples):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--image", default="/home/topaxi/projects/OpenAntiGrav/data/images/hdfury-ps3-eu-dec.iso")
+    ap.add_argument("--image", default=str(HERE.parent / "data/images/hdfury-ps3-eu-dec.iso"))
     ap.add_argument("--parked", default="4,10,18,27,40,55", help="lap-clock seconds of the parked samples")
     ap.add_argument("--ages", default="0.5,2.0,3.0,4.0", help="shield-clock seconds of the countdown samples")
     ap.add_argument("--drive-seconds", type=float, default=8.0)
