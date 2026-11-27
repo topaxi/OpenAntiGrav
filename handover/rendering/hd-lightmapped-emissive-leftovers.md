@@ -22,7 +22,8 @@ lightmapped emissive families". Code: `oag_mesh::mesh::rcs::lightmapped_emissive
   `mt_uvanim_diffuse_emissive3tokey*` compiles.
 - **`mr_shopwin_reflecttranspemis` in Zone**: its Zone variants sample the emissive; unread.
 - **`mageffect08_lh`**: mask `0x1202d8df` with a normal map third; unread.
-- **Omega and 2048** ship several of these family names; their `gcn` and `psp2` programs are unread.
+- **Omega and 2048** ship several of these family names; neither their programs nor what `gcn` and
+  `psp2` bind for them today is read.
 - **No frame of the original** shows these lights in a matched pose.
 
 ## Next Steps

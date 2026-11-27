@@ -313,8 +313,9 @@ this family, so the screen blend reduces to the add. The non-lightmapped slots (
 the generic `ADD_SECOND` reading, gated by the diffuse alpha where the program is not; on the
 Detonator pairs those chunks run their Zone program, which adds nothing.
 
-**2048 and Omega.** 2048: **checked, differs**: none of 2048's Vita archives (`PCSA00015` base, DLC and
-patch) ships a `tunnel_fx` material. Omega: **checked, applies, not wired**: `data02`, `data05` and
+**2048 and Omega.** 2048: none of the US package's archives (`PCSA00015`) ships a `tunnel_fx`
+material; the EU DLC 2 package does (`PCSF00007`, `tunnel_fx_noalpha_mult`, `tunnel_fx_glass`),
+and its program is unread (open). Omega: **checked, applies, not wired**: `data02`, `data05` and
 `data08` ship Talon's `tunnel_fx_noAlpha`, `_1`, `_2` and Tech de Ra's `tunnel_fx_noAlpha_mult*` with
 `tunnel_fx_emissive.gnf`; they go through the `gcn` reader, which this module does not reach, and
 whether its program binds the emissive is unread (Omega's Detonator lane is deferred).
@@ -389,13 +390,12 @@ cyan pixels in `1100,90,1500,300`, against the original's `(59,155,210)`; its me
 Amphiseum's wall lamps and Talon's Junction's strut lamps lit where they were dark; no original
 frame of either is on disk.
 
-**2048 and Omega.** Omega: **checked, applies, not wired**: `data01`, `data02`, `data05` and
-`data08` ship these family names (`track_surface*`, `uvanim_*`, `mt_uvanim_*`,
-`diffuse_*`, `and_diffuse_emissive*`, `mr_shopwin_reflecttranspemis`); they go through `gcn`, and
-their programs are unread. 2048: **checked, applies, not wired**: the EU DLC 2 package
+**2048 and Omega: names ship, programs unread, left open** (a census of archive names only; neither
+reader was run on them, so whether `psp2` or `gcn` already binds these emissives is not known).
+Omega's `data01`, `data02`, `data05` and `data08` ship `track_surface*`, `uvanim_*`, `mt_uvanim_*`,
+`diffuse_*`, `and_diffuse_emissive*` and `mr_shopwin_reflecttranspemis` materials. 2048's EU DLC 2
 (`PCSF00007`) ships `track_surface`, `track_wall`, `tunnel_fx_noalpha_mult`, `tunnel_fx_glass` and
-`uvanim_diffuse_emissive` for the HD circuits; they go through `psp2`, and their GXP programs are
-unread.
+`uvanim_diffuse_emissive` for the HD circuits.
 
 ## Seen, headless
 
