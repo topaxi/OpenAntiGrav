@@ -373,7 +373,9 @@ before). `track_surface` and `track_wall` bind fourth because their third holds 
 **Left dark by a limit, not a law:** the glow table holds 63 entries (the six index bits of the slot
 word) and is shared with readers that run after material setup (the circuit's pad masks, the advert
 cards' Zone exemption), so this pass leaves four free. Modesto Heights has 59 before it, and none of
-its lightmapped `and_diffuse_emissive*` and `uvanim_diffuse_emissive` slots is bound. Taking those
+its lightmapped `and_diffuse_emissive*` and `uvanim_diffuse_emissive` slots is bound (40 slots over
+both layouts). Vineta K's 4 `mt_uvanim_diffuse_emissive3tokey` slots are dark too, for the unread law
+above. The census test pins both sets. Taking those
 four was measured: its light bars and pad lamps went dark and `hd/modesto-heights` rose 3.98 to 5.56.
 
 Test: `hd_lightmapped_emissive_ground_truth` (one test per archive, pins the bound slots per family

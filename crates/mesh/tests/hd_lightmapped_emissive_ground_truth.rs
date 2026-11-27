@@ -44,22 +44,19 @@ const FAMILIES: &[(&str, u32, bool)] = &[
     ("uvanim_diffuse_emissive", 0xb1f2_a176, false),
     ("mt_uvanim_diffuse_emissive", 0xb1f2_a176, false),
     ("mt_uvanim_diffuse_emissive2", 0xb1f2_a176, false),
+    // Bound nowhere: its lightmapped compile declares no `time`, and its law is unread.
+    ("mt_uvanim_diffuse_emissive3tokey", 0xb1f2_a176, false),
     ("track_surface", 0xb1f2_a176, true),
     ("track_wall", 0xb1f2_a176, true),
 ];
 
-/// Slots known to stay dark, as `(circuit, family)`: Modesto Heights' glow table is full (63
-/// entries, the slot word's six bits, less those the later readers need).
-const DARK: &[(&str, &str)] = &[
-    ("modesto_heights", "and_diffuse_emissive"),
-    ("modesto_heights", "and_diffuse_emissive_spec"),
-    ("modesto_heights", "uvanim_diffuse_emissive"),
-];
+/// Lightmapped slots left dark, as `((circuit, family), slots over both layouts)`.
+type Dark = BTreeMap<(String, &'static str), usize>;
 
 /// Builds every `track.vex` and `track_reversed.vex` of `DATA0{archive}` and returns the bound
-/// slot count per family. Fails on a lightmapped slot of a listed family whose program declares
-/// the emissive and which does not bind it.
-fn census(archive: usize) -> Option<BTreeMap<&'static str, usize>> {
+/// lightmapped slots of the listed families whose program declares the emissive, split into those
+/// that bind it (per family) and those left dark (per circuit and family).
+fn census(archive: usize) -> Option<(BTreeMap<&'static str, usize>, Dark)> {
     let image = oag_testdata::image("hdfury-ps3-eu-dec.iso")?;
     let spec = format!("{}:PS3_GAME/USRDIR/DATA0{archive}.PSARC", image.display());
     let paths: Vec<String> = oag_assets::psarc::Archive::open(&spec)
@@ -82,7 +79,7 @@ fn census(archive: usize) -> Option<BTreeMap<&'static str, usize>> {
         })
     };
     let mut bound: BTreeMap<&'static str, usize> = BTreeMap::new();
-    let mut missing = Vec::new();
+    let mut dark = Dark::new();
     for path in paths {
         let data = read(&path).expect("the .vex reads");
         let Some(geometry) = mesh::rcs::sibling_geometry(&spec, &path, &data) else {
@@ -143,24 +140,30 @@ fn census(archive: usize) -> Option<BTreeMap<&'static str, usize>> {
             let scrolled = entry == Some(mesh::PROGRAM_LIGHTMAPPED_SCROLL);
             if (add || scrolled) && picture.map(|t| t.label.as_str()) == wanted.as_deref() {
                 *bound.entry(family).or_default() += 1;
-            } else if !DARK.contains(&(circuit, family)) {
-                missing.push(format!("{path} slot {slot} {family} entry {entry:?}"));
+            } else {
+                println!("dark: {path} slot {slot} {family} entry {entry:?}");
+                *dark.entry((circuit.to_string(), family)).or_default() += 1;
             }
         }
     }
-    assert!(
-        missing.is_empty(),
-        "lightmapped slots without their emissive:\n{}",
-        missing.join("\n")
-    );
-    println!("DATA0{archive} lightmapped emissive slots: {bound:?}");
-    Some(bound)
+    println!("DATA0{archive} lightmapped emissive slots: {bound:?}, dark: {dark:?}");
+    Some((bound, dark))
 }
 
-fn expect(archive: usize, want: &[(&str, usize)]) {
-    let Some(bound) = census(archive) else { return };
+/// Asserts both halves of [`census`]. `dark` names every slot known to stay unlit: Modesto
+/// Heights' glow table is full (63 entries, less those the later readers need), and Vineta K's
+/// `mt_uvanim_diffuse_emissive3tokey` runs an unread law.
+fn expect(archive: usize, want: &[(&str, usize)], dark: &[(&str, &str, usize)]) {
+    let Some((bound, left)) = census(archive) else {
+        return;
+    };
     let want: BTreeMap<&str, usize> = want.iter().copied().collect();
     assert_eq!(bound, want, "DATA0{archive}'s census moved");
+    let left: Vec<(&str, &str, usize)> = left
+        .iter()
+        .map(|((circuit, family), &n)| (circuit.as_str(), *family, n))
+        .collect();
+    assert_eq!(left, dark, "DATA0{archive}'s dark slots moved");
 }
 
 #[test]
@@ -179,6 +182,11 @@ fn data00s_circuits_bind_every_lightmapped_emissive() {
             ("tunnel_fx_noalpha_mult", 4),
             ("uvanim_diffuse_emissive", 16),
         ],
+        &[
+            ("modesto_heights", "and_diffuse_emissive", 16),
+            ("modesto_heights", "and_diffuse_emissive_spec", 4),
+            ("modesto_heights", "uvanim_diffuse_emissive", 20),
+        ],
     );
 }
 
@@ -192,6 +200,7 @@ fn data02s_circuits_bind_every_lightmapped_emissive() {
             ("mt_uvanim_diffuse_emissive", 24),
             ("mt_uvanim_diffuse_emissive2", 13),
         ],
+        &[("01_vineta_k", "mt_uvanim_diffuse_emissive3tokey", 2)],
     );
 }
 
@@ -205,5 +214,6 @@ fn data03s_circuits_bind_every_lightmapped_emissive() {
             ("mt_uvanim_diffuse_emissive", 25),
             ("mt_uvanim_diffuse_emissive2", 12),
         ],
+        &[("01_vineta_k", "mt_uvanim_diffuse_emissive3tokey", 2)],
     );
 }
