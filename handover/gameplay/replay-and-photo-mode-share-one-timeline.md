@@ -94,6 +94,9 @@ with `OAG_SWEEP=1 OAG_SWEEP_TITLE=<title>`.
     `RestartRaceTouchButton` and `QuitTouchButton`). A third tile needs an icon the screen does not author for it, a
     place in the strip, the cursor's third stop and a `Session::tick_endrace_touch` arm. Omega ships 2048's file
     byte-identical and draws no end menu at all, as does Pure.
+  - **Network races** (LAN, online) offer no row: `Session::watch_last_race` does not drop the link and
+    `finish_loading` takes the `self.net` branch before the viewer's. Offering it needs a decision on leaving the room
+    to watch. Not run live.
   - **Leaving the viewer lands on REPLAYS**, not on the finished race's menu: returning there needs the finished race
     held behind the viewer. The same hold would let a mid-Tournament leg offer the row, which it does not today.
 - **Stage 4 landed** ([the replay file](../../docs/formats/replay-file.md), "The pose track"): `POSE`, every

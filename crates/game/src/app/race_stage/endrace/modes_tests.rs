@@ -96,39 +96,53 @@ fn mid_tournament_menu_opens_on_next_race() {
     assert!(!menu_options(false, false, false).contains(&MenuOption::WatchReplay));
 }
 
+/// A recorded single player race with nothing against the row.
+const PLAIN: super::WatchReplayOffer = super::WatchReplayOffer {
+    recorded: true,
+    original_menu: false,
+    tournament_next_leg: false,
+    networked: false,
+};
+
 /// WATCH REPLAY is offered on a recorded race on Pulse's list and HD's blocks, and nowhere it
-/// could not be drawn, would break the original's screen, or would end a Tournament.
+/// could not be drawn, would break the original's screen, or would end what goes on after the race.
 #[test]
 fn watch_replay_is_offered_on_pulse_and_hd_recorded_races() {
-    use super::offers_watch_replay;
+    use super::WatchReplayOffer;
     use oag_title::EndRaceDialect::{Field, Pulse, Touch};
 
-    for dialect in [Pulse, Field] {
-        assert!(offers_watch_replay(true, Some(dialect), false, false));
-        assert!(
-            !offers_watch_replay(false, Some(dialect), false, false),
-            "not recorded"
-        );
-        assert!(
-            !offers_watch_replay(true, Some(dialect), true, false),
-            "--original-menu"
-        );
-        assert!(
-            !offers_watch_replay(true, Some(dialect), false, true),
-            "a leg to race"
-        );
+    for dialect in [Some(Pulse), Some(Field)] {
+        assert!(PLAIN.on(dialect));
+        let not_recorded = WatchReplayOffer {
+            recorded: false,
+            ..PLAIN
+        };
+        let compare_shot = WatchReplayOffer {
+            original_menu: true,
+            ..PLAIN
+        };
+        let mid_tournament = WatchReplayOffer {
+            tournament_next_leg: true,
+            ..PLAIN
+        };
+        let networked = WatchReplayOffer {
+            networked: true,
+            ..PLAIN
+        };
+        assert!(!not_recorded.on(dialect));
+        assert!(!compare_shot.on(dialect));
+        assert!(!mid_tournament.on(dialect));
+        assert!(!networked.on(dialect));
     }
-    assert!(!offers_watch_replay(true, Some(Touch), false, false));
-    assert!(!offers_watch_replay(true, None, false, false));
+    assert!(!PLAIN.on(Some(Touch)));
+    assert!(!PLAIN.on(None));
 }
 
 /// HD's own title package resolves to a dialect that offers the row, and Omega, which draws no
 /// end-of-race menu, does not.
 #[test]
 fn the_title_packages_that_offer_watch_replay() {
-    use super::offers_watch_replay;
-
-    let offers = |title| offers_watch_replay(true, crate::endrace::dialect(title), false, false);
+    let offers = |title| PLAIN.on(crate::endrace::dialect(title));
     assert!(offers(oag_pulse::TITLE) && offers(oag_hd::TITLE));
     assert!(!offers(oag_2048::TITLE) && !offers(oag_omega::TITLE) && !offers(oag_pure::TITLE));
 }

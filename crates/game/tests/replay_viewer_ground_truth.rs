@@ -538,8 +538,8 @@ fn a_recording_this_build_cannot_rebuild_is_refused_by_name() {
 }
 
 /// HD's `EndRace Menu` offers WATCH REPLAY under VIEW RESULTS AGAIN (`docs/ui/replays.md`,
-/// "The end-of-race row"): a time trial flown to its end, two taps on the row, the race just
-/// finished plays in the viewer and leaving it lands on REPLAYS.
+/// "The end-of-race row"): a time trial flown to its end, the pointer on the row and a click, the
+/// race just finished plays in the viewer and leaving it lands on REPLAYS.
 #[test]
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso and a GPU"]
 fn hd_end_of_race_menu_watches_the_race_just_finished() {

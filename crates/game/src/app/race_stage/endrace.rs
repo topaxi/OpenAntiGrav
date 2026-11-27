@@ -686,7 +686,7 @@ pub(crate) fn headline(mode: oag_race::Mode, place: Option<u8>) -> Headline {
 /// non-Tournament race, and for a Tournament's own last leg.
 #[must_use]
 ///
-/// **`watch_replay`** adds WATCH REPLAY after VIEW RESULTS AGAIN: [`offers_watch_replay`].
+/// **`watch_replay`** adds WATCH REPLAY after VIEW RESULTS AGAIN: [`WatchReplayOffer`].
 pub(crate) fn menu_options(
     campaign: bool,
     tournament_next_leg: bool,
@@ -711,23 +711,32 @@ pub(crate) fn menu_options(
     options
 }
 
-/// Whether `EndRace Menu` offers WATCH REPLAY, this build's own row
-/// (`docs/ui/replays.md`, "The end-of-race row"):
-///
-/// - the race was recorded;
-/// - the screen is Pulse's list or HD's blocks (2048's tile strip draws no such row);
-/// - the run is not held to the disc's own screens (`--original-menu`);
-/// - no Tournament leg is still to race: watching replaces the finished race, and NEXT RACE
-///   with it.
-#[must_use]
-pub(crate) fn offers_watch_replay(
-    recorded: bool,
-    dialect: Option<oag_title::EndRaceDialect>,
-    original_menu: bool,
-    tournament_next_leg: bool,
-) -> bool {
-    use oag_title::EndRaceDialect::{Field, Pulse};
-    recorded && !original_menu && !tournament_next_leg && matches!(dialect, Some(Pulse | Field))
+/// What decides whether `EndRace Menu` offers WATCH REPLAY, this build's own row
+/// (`docs/ui/replays.md`, "The end-of-race row").
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct WatchReplayOffer {
+    /// The race was recorded.
+    pub(crate) recorded: bool,
+    /// The run is held to the disc's own screens (`--original-menu`).
+    pub(crate) original_menu: bool,
+    /// A Tournament leg is still to race: watching replaces the finished race, and NEXT RACE
+    /// with it.
+    pub(crate) tournament_next_leg: bool,
+    /// A network link is up: the loader would join the room with the recording's race.
+    pub(crate) networked: bool,
+}
+
+impl WatchReplayOffer {
+    /// On Pulse's list and HD's blocks; 2048's tile strip draws no such row.
+    #[must_use]
+    pub(crate) fn on(self, dialect: Option<oag_title::EndRaceDialect>) -> bool {
+        use oag_title::EndRaceDialect::{Field, Pulse};
+        self.recorded
+            && !self.original_menu
+            && !self.tournament_next_leg
+            && !self.networked
+            && matches!(dialect, Some(Pulse | Field))
+    }
 }
 
 /// Pulse's own Tournament standings, off this project's `oag_race::tournament`

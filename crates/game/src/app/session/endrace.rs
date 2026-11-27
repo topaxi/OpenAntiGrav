@@ -8,9 +8,8 @@ use log::warn;
 use oag_ui_screens::endrace::{Event, MenuOption};
 
 use crate::app::race_stage::endrace::{
-    EndRaceRuntime, LoyaltyInputs, ResultsModel, elimination_results, headline, loyalty_award,
-    menu_options, offers_watch_replay, to_campaign_medal, tournament_results, voice_for,
-    zone_results,
+    EndRaceRuntime, LoyaltyInputs, ResultsModel, WatchReplayOffer, elimination_results, headline,
+    loyalty_award, menu_options, to_campaign_medal, tournament_results, voice_for, zone_results,
 };
 use crate::app::race_stage::endrace_touch::EndRace;
 use crate::app::race_stage::hd_loyalty::{HdRace, hd_award};
@@ -422,12 +421,13 @@ impl Session {
         )
         .filter(|_| !split);
         let tournament_next_leg = !split && self.tournament_has_next_leg();
-        let watch_replay = offers_watch_replay(
-            matches!(&self.stage, Stage::Race(stage) if stage.auto_replay),
-            crate::endrace::dialect(title_ref),
-            self.original_menu,
+        let watch_replay = WatchReplayOffer {
+            recorded: matches!(&self.stage, Stage::Race(stage) if stage.auto_replay),
+            original_menu: self.original_menu,
             tournament_next_leg,
-        );
+            networked: self.net.is_some(),
+        }
+        .on(crate::endrace::dialect(title_ref));
         let menu = oag_ui_screens::endrace::EndRaceMenu::new(
             menu_options(campaign, tournament_next_leg, watch_replay),
             new_best_lap_ticks,

@@ -220,14 +220,18 @@ look and label widget, one step further down, the step being the screen's own fr
 to `view_again` (`oag_ui_screens::endrace::hd`). On every copy of the screen on the Fury disc (five)
 and on the plain PSN install that is `375, 385, 520x40`, with no text, image or other option's box
 under it (`watch_replays_added_block_covers_nothing_on_*`, `crates/hd/tests/endrace_screens_ground_truth.rs`).
-It sits last so the disc's three rows keep their places. Up and Down step it in screen order, and a
-tap or a click selects it and a second one confirms, as on every other block.
+It sits last so the disc's three rows keep their places. Up and Down step it in screen order, a mouse
+hover selects it and a click confirms, and a tap selects it and a second tap confirms, as on every
+other block.
 
 It is **not offered**:
 
 - on a race that was not recorded (`[replay] record = false`, or the recording failed);
 - while a Tournament has a leg left to race, on either title: watching replaces the finished race,
   and NEXT RACE with it, and launching the cell again starts at leg 1;
+- while a network link is up (LAN or online), on either title. Watching does not drop the link, and
+  the loader takes its network branch first, so it would join the room with the recording's race
+  (read in `finish_loading`, not run). The recording is on the REPLAYS page once the room is left;
 - under `--original-menu`, so a compare shot lists what the original lists. The `--menu-page
   endrace-menu` still never draws it;
 - on 2048, whose `EndRace` pages end in a strip of two icon tiles, not wired; Pure and Omega draw no
