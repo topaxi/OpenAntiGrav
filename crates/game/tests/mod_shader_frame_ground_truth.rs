@@ -32,7 +32,7 @@
 //! falls back to a flat colour.
 #![cfg(feature = "extensions")]
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 const MOD: &str = "assets/mods/examples/tether";
 const WIDTH: u32 = 960;
@@ -175,11 +175,7 @@ fn check(image: &str, ticks: u32) {
     let Some(manifest) = oag_testdata::exact(&format!("{MOD}/oag-mod.toml")) else {
         return;
     };
-    let scratch: PathBuf = std::env::temp_dir().join(format!(
-        "oag-mod-shader-frame-{}-{ticks}",
-        std::process::id()
-    ));
-    let _ = std::fs::remove_dir_all(&scratch);
+    let scratch = oag_testdata::scratch::dir(&format!("mod-shader-frame-{ticks}"));
     let (on, off, broken) = (
         scratch.join("on"),
         scratch.join("off"),
@@ -335,9 +331,7 @@ fn check_portal(image: &str, mode: &str, ticks: u32, graphics: &str, outside: f3
         return;
     };
     let source = manifest.parent().unwrap();
-    let scratch: PathBuf =
-        std::env::temp_dir().join(format!("oag-portal-frame-{}-{ticks}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&scratch);
+    let scratch = oag_testdata::scratch::dir(&format!("portal-frame-{ticks}"));
     let dir = |name: &str, text: Option<&str>| {
         let at = scratch.join(name);
         std::fs::create_dir_all(&at).unwrap();

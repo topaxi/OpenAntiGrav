@@ -83,7 +83,7 @@ fn a_capped_race_writes_its_frames_and_replays_to_the_same_hash() {
     let Some(image) = oag_testdata::image("data/images/pulse-psp-eu.chd") else {
         return;
     };
-    let base = std::env::temp_dir().join("oag-render-bench-ground-truth");
+    let base = oag_testdata::scratch::dir("render-bench-ground-truth");
     let (json, csv) = bench(&base.join("a"), &image);
     let (again, _) = bench(&base.join("b"), &image);
 
@@ -129,7 +129,7 @@ fn a_split_race_is_benched_per_view_and_the_cut_does_not_change_the_race() {
     let Some(image) = oag_testdata::image("data/images/pulse-psp-eu.chd") else {
         return;
     };
-    let base = std::env::temp_dir().join("oag-render-bench-ground-truth-split");
+    let base = oag_testdata::scratch::dir("render-bench-ground-truth-split");
     let two = ["--players", "2"];
     let (horizontal, csv) = bench_with(
         &base.join("h"),
@@ -232,7 +232,7 @@ fn the_in_game_benchmark_flies_the_race_the_offscreen_bench_does() {
     let Some(image) = oag_testdata::image("data/images/pulse-psp-eu.chd") else {
         return;
     };
-    let base = std::env::temp_dir().join("oag-in-game-benchmark-ground-truth");
+    let base = oag_testdata::scratch::dir("in-game-benchmark-ground-truth");
     let (offscreen, _) = bench(&base.join("offscreen"), &image);
     // A frame limit under vsync on, where the display paces and the limit is not in force.
     let flags = ["--benchmark-vsync", "on", "--benchmark-frame-limit", "30"];
@@ -271,7 +271,7 @@ fn the_benchmark_row_is_on_pulses_extras_page_and_returns_to_it() {
     let Some(image) = oag_testdata::image("data/images/pulse-psp-eu.chd") else {
         return;
     };
-    let base = std::env::temp_dir().join("oag-in-game-benchmark-extras-ground-truth");
+    let base = oag_testdata::scratch::dir("in-game-benchmark-extras-ground-truth");
     let (offscreen, _) = bench(&base.join("offscreen"), &image);
     let dir = base.join("menu");
     let _ = std::fs::remove_dir_all(&dir);
@@ -320,7 +320,7 @@ fn a_preset_changes_the_picture_and_not_the_race_or_the_players_settings() {
     let Some(image) = oag_testdata::image("data/images/pulse-psp-eu.chd") else {
         return;
     };
-    let base = std::env::temp_dir().join("oag-in-game-benchmark-preset-ground-truth");
+    let base = oag_testdata::scratch::dir("in-game-benchmark-preset-ground-truth");
     let (plain, _) = in_game(&base.join("plain"), &image, &[], "ticks 1");
     let low_dir = base.join("low");
     // The player's own settings file, written before the run: a render scale the preset's is
@@ -385,9 +385,7 @@ fn run_benchmark_is_not_offered_over_a_parked_race() {
     let Some(image) = oag_testdata::image("data/images/pulse-psp-eu.chd") else {
         return;
     };
-    let dir = std::env::temp_dir().join("oag-in-game-benchmark-parked-ground-truth");
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a temp directory");
+    let dir = oag_testdata::scratch::dir("in-game-benchmark-parked-ground-truth");
     let log = dir.join("state.jsonl");
     let rows = |middle: &str| -> Vec<String> {
         let _ = std::fs::remove_file(&log);
@@ -503,7 +501,7 @@ fn no_input_changes_a_pulse_benchmark() {
     let Some(image) = oag_testdata::image("data/images/pulse-psp-eu.chd") else {
         return;
     };
-    let base = std::env::temp_dir().join("oag-in-game-benchmark-input-pulse");
+    let base = oag_testdata::scratch::dir("in-game-benchmark-input-pulse");
     input_changes_nothing(&image, "pulse", &base);
 }
 
@@ -515,7 +513,7 @@ fn no_input_changes_an_hd_benchmark() {
     let Some(image) = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso") else {
         return;
     };
-    let base = std::env::temp_dir().join("oag-in-game-benchmark-input-hd");
+    let base = oag_testdata::scratch::dir("in-game-benchmark-input-hd");
     input_changes_nothing(&image, "hd", &base);
     let (json, _, log) = in_game_of(&base.join("again"), &image, "hd", &[], &[], "ticks 1");
     assert!(
@@ -541,7 +539,7 @@ fn back_abandons_a_benchmark_and_writes_nothing() {
     let Some(image) = oag_testdata::image("data/images/pulse-psp-eu.chd") else {
         return;
     };
-    let base = std::env::temp_dir().join("oag-in-game-benchmark-abort-ground-truth");
+    let base = oag_testdata::scratch::dir("in-game-benchmark-abort-ground-truth");
     let run = |dir: &std::path::Path, args: &[&str], script: &str| {
         let _ = std::fs::remove_dir_all(dir);
         std::fs::create_dir_all(dir).expect("a temp directory");
@@ -663,7 +661,7 @@ fn a_benchmark_with_its_mods_off_loads_no_extension_and_no_override() {
     let Some(image) = oag_testdata::image("data/images/pulse-psp-eu.chd") else {
         return;
     };
-    let base = std::env::temp_dir().join("oag-in-game-benchmark-mods-ground-truth");
+    let base = oag_testdata::scratch::dir("in-game-benchmark-mods-ground-truth");
     let Some((mods, overrides)) = mods_and_override(&base) else {
         return;
     };
@@ -736,7 +734,7 @@ fn the_options_page_reaches_the_run_and_saves_nothing() {
     let Some(image) = oag_testdata::image("data/images/pulse-psp-eu.chd") else {
         return;
     };
-    let base = std::env::temp_dir().join("oag-in-game-benchmark-options-ground-truth");
+    let base = oag_testdata::scratch::dir("in-game-benchmark-options-ground-truth");
     let Some((mods, overrides)) = mods_and_override(&base) else {
         return;
     };
@@ -826,8 +824,7 @@ fn the_mods_row_is_left_out_while_no_mod_is_enabled() {
     let Some(image) = oag_testdata::image("data/images/pulse-psp-eu.chd") else {
         return;
     };
-    let base = std::env::temp_dir().join("oag-in-game-benchmark-no-mods-ground-truth");
-    let _ = std::fs::remove_dir_all(&base);
+    let base = oag_testdata::scratch::dir("in-game-benchmark-no-mods-ground-truth");
     let empty = base.join("mods");
     std::fs::create_dir_all(&empty).expect("a temp directory");
     let log = base.join("state.jsonl");
@@ -879,9 +876,7 @@ fn the_stats_screen_swaps_to_details_and_answers_a_copy() {
     let Some(image) = oag_testdata::image("data/images/pulse-psp-eu.chd") else {
         return;
     };
-    let dir = std::env::temp_dir().join("oag-in-game-benchmark-stats-ground-truth");
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a temp directory");
+    let dir = oag_testdata::scratch::dir("in-game-benchmark-stats-ground-truth");
     let shot = |name: &str| dir.join(format!("{name}.png"));
     // The focus moves with the presses, so each action is compared with the screen the same focus
     // gave just before it.

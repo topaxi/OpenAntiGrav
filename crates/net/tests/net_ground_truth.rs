@@ -351,16 +351,16 @@ fn a_lan_host_is_found_joined_started_and_raced_by_two_over_real_sockets() {
 /// A private copy of `oag-server` for the test `tag`: the lobby execs its own `current_exe()`
 /// again for each race, so the shared `target/<profile>/oag-server` must not be the file run
 /// (`oag_testdata::exec`).
-fn server_copy(tag: &str) -> std::path::PathBuf {
-    let tmp = std::path::Path::new(env!("CARGO_TARGET_TMPDIR"));
-    let dest = tmp.join(format!("net-ground-truth-{tag}"));
-    std::fs::create_dir_all(&dest).expect("a scratch directory");
+fn server_copy(tag: &str) -> oag_testdata::scratch::TempDir {
+    let dest = oag_testdata::scratch::dir(&format!("net-ground-truth-{tag}"));
+    let binary = std::path::Path::new(env!("CARGO_BIN_EXE_oag-server"));
     oag_testdata::exec::private_copy(
-        tmp,
-        std::path::Path::new(env!("CARGO_BIN_EXE_oag-server")),
+        &oag_testdata::scratch::cache("binary-copies"),
+        binary,
         &dest,
         || {},
-    )
+    );
+    dest.child(binary.file_name().expect("a binary has a name"))
 }
 
 /// The online lobby the way the maintainer runs it: the real `oag-server lobby` process on
@@ -381,8 +381,9 @@ fn the_lobby_forks_a_real_race_and_the_clients_reconnect_to_it_and_come_back() {
         return;
     };
     let source = image.display().to_string();
+    let server = server_copy("lobby");
     let mut lobby = oag_testdata::exec::spawn(
-        Command::new(server_copy("lobby"))
+        Command::new(&server)
             .args(["lobby", "--image", &source])
             .args(["--listen", "127.0.0.1:0", "--race-listen", "127.0.0.1:0"])
             .args(["--countdown-ms", "200", "--max-ticks", "9000"])
@@ -612,8 +613,9 @@ fn a_race_child_stops_when_its_lobby_is_gone() {
         seats: vec![("Ada".into(), "tok".into())],
         keys: Vec::new(),
     };
+    let server = server_copy("race-child");
     let mut child = oag_testdata::exec::spawn(
-        Command::new(server_copy("race-child"))
+        Command::new(&server)
             .args(["race", "--image", &image.display().to_string()])
             .args(["--listen", "127.0.0.1:0", "--join-timeout", "600"])
             .stdin(Stdio::piped())

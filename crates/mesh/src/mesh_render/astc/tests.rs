@@ -51,10 +51,8 @@ const FAKE: Encoder = Encoder {
 };
 
 /// A fresh directory under the system's temporary one, unique to this test process.
-fn scratch(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("oag-astc-{name}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    dir
+fn scratch(name: &str) -> oag_testdata::scratch::TempDir {
+    oag_testdata::scratch::dir(&format!("astc-{name}"))
 }
 
 #[test]
@@ -156,7 +154,7 @@ fn an_entry_reads_back_only_at_the_sizes_it_was_written_for() {
 #[test]
 fn a_miss_is_queued_encoded_and_found_by_the_next_load() {
     let dir = scratch("fill");
-    let cache = Arc::new(Cache::new(dir.clone(), FAKE));
+    let cache = Arc::new(Cache::new(dir.to_path_buf(), FAKE));
     let source = bc1(16, 16);
     let levels = 5;
     let key = Key::of(&inputs(&source));
@@ -205,9 +203,9 @@ fn a_miss_is_queued_encoded_and_found_by_the_next_load() {
 #[test]
 fn the_cache_is_off_until_configured_and_off_again_with_none() {
     let dir = scratch("configure");
-    configure(Some((dir.clone(), FAKE)));
+    configure(Some((dir.to_path_buf(), FAKE)));
     let first = ACTIVE.lock().unwrap().clone().expect("on");
-    configure(Some((dir.clone(), FAKE)));
+    configure(Some((dir.to_path_buf(), FAKE)));
     let second = ACTIVE.lock().unwrap().clone().expect("still on");
     assert!(
         Arc::ptr_eq(&first, &second),

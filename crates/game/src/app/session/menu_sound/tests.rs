@@ -54,7 +54,8 @@ fn rendered(
     sfx: &mut oag_sound::sfx::MenuSfx,
     start: impl FnOnce(&mut oag_sound::sfx::MenuSfx, &oag_sound::Audio) -> bool,
 ) -> (Vec<i16>, usize) {
-    let wav = std::env::temp_dir().join(format!("oag-name-voice-{}.wav", std::process::id()));
+    let scratch = oag_testdata::scratch::dir("name-voice");
+    let wav = scratch.join("dump.wav");
     let mut audio = oag_sound::Audio::open(
         &oag_sound::settings::Settings::default(),
         Some(wav.clone()),
@@ -72,7 +73,6 @@ fn rendered(
     }
     audio.finish().expect("writing the dump");
     let file = std::fs::read(&wav).expect("the dump");
-    std::fs::remove_file(&wav).ok();
     let pcm = file[44..]
         .as_chunks::<2>()
         .0

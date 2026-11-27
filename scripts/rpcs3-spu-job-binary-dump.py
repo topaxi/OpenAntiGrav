@@ -39,6 +39,10 @@ import struct
 import sys
 import time
 from pathlib import Path
+import os
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import oag_tmp  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -68,7 +72,7 @@ def u32(b, off=0):
 
 
 def main():
-    out = Path(sys.argv[1] if len(sys.argv) > 1 else "/tmp/hd-spu-job-binary-dump")
+    out = Path(sys.argv[1] if len(sys.argv) > 1 else oag_tmp.output("hd-spu-job-binary-dump"))
     out.mkdir(parents=True, exist_ok=True)
     with drive.Session(str(IMAGE), str(out / "logs")) as session:
         print("rpcs3 pid %d" % session.proc.pid, flush=True)

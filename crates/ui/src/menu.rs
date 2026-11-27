@@ -565,6 +565,8 @@ pub use page::{Page, RowMeta};
 
 mod expand;
 pub use expand::RowItem;
+mod items;
+pub use items::ItemOrders;
 mod definition;
 pub use definition::{
     Added, Definition, Error, For, ModMenu, PAUSE_PAGE, PHOTO_ROW, Pause, SCREEN_PAGE_PREFIX,
@@ -578,6 +580,8 @@ pub enum MenuEvent {
     Fired(Action),
     /// A `launch_race` row that names its inputs by setting key was activated.
     Launch(LaunchInputs),
+    /// An item of a list page was opened, by its row id (see `items.rs`).
+    OpenItem(String),
     /// A setting was moved. Apply it and persist it.
     Changed {
         /// The settings key from the definition.
@@ -619,6 +623,11 @@ pub struct Menu {
     /// "the window really is here now", which is what stops a cursor moving
     /// back up from snapping the list to the top.
     scroll: Vec<usize>,
+    /// The row a pointer last put each page's cursor on, parallel to
+    /// [`Self::cursor`]. While the cursor is still there the window keeps no
+    /// lookahead, so pointing at an edge row moves nothing under the pointer.
+    /// A pad move clears it. See `pointer.rs`.
+    pointed: Vec<Option<usize>>,
     /// How many rows fit on screen. See [`Self::set_visible_rows`].
     visible: usize,
     /// Whether this title draws navigation pages as a strip. See
@@ -642,6 +651,10 @@ pub struct Menu {
     defaults: Vec<(String, Value)>,
     /// The words of the footer's reset prompt. See [`Self::set_reset_label`].
     reset_label: String,
+    /// See [`Self::set_item_toggle_label`].
+    item_toggle_label: String,
+    /// The list pages' items in the order they were built in. See `items.rs`.
+    item_base: ItemOrders,
     /// Where that prompt was drawn. See [`Self::set_reset_rect`].
     reset_rect: Option<[f32; 4]>,
     /// The title's stand-in codepoint for the reset button. See [`Self::set_reset_glyph`].
@@ -687,6 +700,7 @@ impl Menu {
         let root = definition.root;
         let cursor = vec![0; definition.pages.len()];
         let scroll = vec![0; definition.pages.len()];
+        let pointed = vec![None; definition.pages.len()];
         let focus = definition
             .pages
             .iter()
@@ -697,6 +711,7 @@ impl Menu {
             stack: vec![root],
             cursor,
             scroll,
+            pointed,
             visible: DEFAULT_VISIBLE_ROWS,
             // A column until a title says otherwise, which is what both PSP
             // discs measurably say.
@@ -708,6 +723,8 @@ impl Menu {
             nav: nav::Log::default(),
             defaults: Vec::new(),
             reset_label: String::new(),
+            item_toggle_label: String::new(),
+            item_base: Vec::new(),
             reset_rect: None,
             reset_glyph: None,
             square_actions: Vec::new(),
@@ -715,6 +732,7 @@ impl Menu {
             roles: crate::roles::Roles::default(),
             music: None,
         };
+        menu.item_base = menu.item_orders();
         // A row that is on a page only while the host offers it starts off the page.
         menu.offer(Action::PhotoMode, false);
         menu.offer(Action::OpenModSettings, false);
@@ -988,11 +1006,13 @@ impl Menu {
     /// the rule and for why the list moves on the second-last visible row.
     #[must_use]
     pub fn scroll(&self) -> usize {
+        let pointed = self.pointed[self.current()] == Some(self.selected());
         window_start(
             self.scroll[self.current()],
             self.selected(),
             self.page().entries.len(),
             self.visible,
+            usize::from(!pointed),
         )
     }
 
@@ -1076,6 +1096,7 @@ impl Menu {
         // cursor, so stepping back up off the last row would jump the page to
         // the top instead of revealing the row above.
         if let Some(dir) = moved {
+            self.pointed[page] = None;
             self.scroll[page] = self.scroll();
             self.nav.when(rows > 1, nav::Nav::Moved(Some(dir)));
         }
@@ -1259,12 +1280,13 @@ pub use skin::{List, Skin, Strip, visible_rows};
 /// Where the visible window starts, given where it was pushed to and where the
 /// cursor is.
 ///
-/// The rule is one row of lookahead at each end: the row after the selected one
-/// is always drawn, so a player moving down sees where they are going before
-/// they get there, and the list starts moving when the cursor reaches the
-/// **second-last** visible row rather than the last. The same on the way up.
-/// That is the `floor`/`ceiling` pair below, and it is why a menu never scrolls
-/// with the cursor pinned to the bottom edge.
+/// `lookahead` is the rows kept drawn past the selected one at each end. A pad
+/// or a keyboard asks for one: the row after the selected one is always drawn,
+/// so a player moving down sees where they are going before they get there, and
+/// the list starts moving when the cursor reaches the **second-last** visible
+/// row rather than the last, the same on the way up. A pointer asks for none:
+/// the window only has to hold the row it is on. That is the `floor`/`ceiling`
+/// pair below.
 ///
 /// `pushed` is a hint and this is a pure function of it, which is what lets
 /// [`Menu::scroll`] be correct on a page whose stored window predates a jump:
@@ -1274,7 +1296,13 @@ pub use skin::{List, Skin, Strip, visible_rows};
 ///
 /// `visible` is passed in rather than a constant because the row pitch is now
 /// the title's, and a skin with a taller face fits fewer rows.
-fn window_start(pushed: usize, selected: usize, rows: usize, visible: usize) -> usize {
+fn window_start(
+    pushed: usize,
+    selected: usize,
+    rows: usize,
+    visible: usize,
+    lookahead: usize,
+) -> usize {
     let visible = visible.max(3);
     // A page that fits never scrolls, whatever it was left holding.
     if rows <= visible {
@@ -1284,10 +1312,10 @@ fn window_start(pushed: usize, selected: usize, rows: usize, visible: usize) -> 
     // Far enough down that the row under the cursor is drawn - unless the
     // cursor is on the final row, where `min(rows)` says there is nothing left
     // to keep visible and the window stops at the end of the list.
-    let floor = (selected + 2).min(rows).saturating_sub(visible);
+    let floor = (selected + 1 + lookahead).min(rows).saturating_sub(visible);
     // Not so far down that the row above the cursor is cut off, and not past
     // the top of the list when the cursor is on the first row.
-    let ceiling = selected.saturating_sub(1);
+    let ceiling = selected.saturating_sub(lookahead);
     pushed.min(last).min(ceiling).max(floor)
 }
 

@@ -18,6 +18,20 @@ use super::menus::combine_variant;
 use super::{BackdropShape, Session};
 
 impl Session {
+    /// Writes the card picture a player changed on the chooser to settings.
+    pub(crate) fn keep_launcher_choice(&mut self) {
+        let Stage::Launcher(stage) = &mut self.stage else {
+            return;
+        };
+        let Some((card, picture)) = stage.launcher.take_choice() else {
+            return;
+        };
+        self.settings.launcher.pictures.insert(card, picture);
+        if let Err(e) = self.save_settings() {
+            warn!("cannot save the chooser's picture: {e:#}");
+        }
+    }
+
     /// Turns a picked disc image into the boot the window hands on to.
     ///
     /// The other half of `main`'s windowed route, run a few seconds later: the

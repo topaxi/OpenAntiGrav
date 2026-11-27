@@ -1,11 +1,8 @@
 use super::*;
 use std::net::TcpListener;
 
-fn temp(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("oag-ffmpeg-inst-{name}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    dir
+fn temp(name: &str) -> oag_testdata::scratch::TempDir {
+    oag_testdata::scratch::dir(&format!("ffmpeg-inst-{name}"))
 }
 
 fn members() -> Vec<(String, Vec<u8>)> {
@@ -215,5 +212,4 @@ fn the_real_pinned_archive_unpacks() {
             "{name}"
         );
     }
-    std::fs::remove_dir_all(root).unwrap();
 }

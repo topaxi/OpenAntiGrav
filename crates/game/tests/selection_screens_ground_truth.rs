@@ -30,7 +30,7 @@ fn shell(path: &std::path::Path) -> boot::Shell {
         dlc: Vec::new(),
         leg: oag_ui::frontend::Leg::LogoFmv,
         movie: None,
-        cache: std::env::temp_dir().join("oag-selection-screens-ground-truth"),
+        cache: oag_testdata::scratch::cache("selection-screens-ground-truth"),
         audio_cache: oag_source::cache::default_audio_cache_dir(),
         extent: oag_game::movie::Extent::Frames(1),
         // Every assertion here is about the XML and two meshes; nothing pays

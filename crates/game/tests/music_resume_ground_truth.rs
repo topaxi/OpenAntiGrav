@@ -85,19 +85,36 @@ fn tick_until(audio: &mut Audio, label: &str, what: &str, ready: impl Fn(&Audio)
 
 const SECONDS: u32 = 20;
 
-/// A per-process cache directory, removed on drop so a failed assert does not
-/// leave its decoded music (about 120 MB) in the temp directory.
-struct Scratch(PathBuf);
+/// A cache directory of this test's own, removed on drop so a failed assert does
+/// not leave its decoded music (about 120 MB) behind.
+struct Scratch(oag_testdata::scratch::TempDir);
 
 impl Drop for Scratch {
+    /// A track prefetch outlives its `Audio` and writes the cache, and a directory
+    /// written into while it is removed stays behind: wait for the fetch threads.
     fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
+        let started = Instant::now();
+        while fetch_threads() > 0 && started.elapsed() < Duration::from_secs(60) {
+            std::thread::sleep(Duration::from_millis(20));
+        }
     }
 }
 
+/// This process's live threads that write a music cache, by name (the menu
+/// music's and `MusicFetchWorker`'s). Zero where `/proc` is not there to say.
+fn fetch_threads() -> usize {
+    std::fs::read_dir("/proc/self/task")
+        .into_iter()
+        .flatten()
+        .filter_map(|task| std::fs::read_to_string(task.ok()?.path().join("comm")).ok())
+        .filter(|name| {
+            ["race-music", "race-source", "menu-source", "menu-music"].contains(&name.trim())
+        })
+        .count()
+}
+
 fn scratch(label: &str) -> Scratch {
-    let dir = std::env::temp_dir().join(format!("oag-music-resume-{}-{label}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = oag_testdata::scratch::dir(&format!("music-resume-{label}"));
     Scratch(dir)
 }
 
@@ -129,7 +146,7 @@ fn resumes_at(label: &str, image: Option<PathBuf>) {
     };
     let discs = audio::MusicDiscs::survey(&image.display().to_string(), &GameLibrary);
     let scratch = scratch(label);
-    let cache = scratch.0.clone();
+    let cache = scratch.0.to_path_buf();
     let file = cache.join("music.toml");
     let title = format!("title-{label}");
 
@@ -329,7 +346,7 @@ fn a_second_launch_on_the_same_track_decodes_nothing(label: &str, image: &str) {
     };
     let discs = audio::MusicDiscs::survey(&image.display().to_string(), &GameLibrary);
     let scratch = scratch(label);
-    let cache = scratch.0.clone();
+    let cache = scratch.0.to_path_buf();
     let mut audio = open_audio(&cache);
 
     let first = audio
@@ -386,7 +403,7 @@ fn omega_reads_its_music_bank_once_across_tracks() {
     };
     let discs = audio::MusicDiscs::survey(&source.display().to_string(), &GameLibrary);
     let scratch = scratch("omega-bank");
-    let cache = scratch.0.clone();
+    let cache = scratch.0.to_path_buf();
     let listed = Audio::booted_track_seconds(&discs);
     assert!(listed.len() > 1, "Omega lists several tracks");
     assert_eq!(discs.bank_reads(), 0, "a survey reads no bank");
@@ -452,7 +469,7 @@ fn a_run_restores_saves_and_quits(label: &str, image: &str) {
     };
     let discs = audio::MusicDiscs::survey(&image.display().to_string(), &GameLibrary);
     let scratch = scratch(&format!("run-{label}"));
-    let cache = scratch.0.clone();
+    let cache = scratch.0.to_path_buf();
     let file = cache.join("music.toml");
     let title = format!("title-run-{label}");
 

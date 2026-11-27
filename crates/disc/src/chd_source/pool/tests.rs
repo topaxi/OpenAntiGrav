@@ -36,10 +36,8 @@ fn identity_of(path: &Path) -> Identity {
     Identity::of(&std::fs::File::open(path).unwrap(), path).unwrap()
 }
 
-fn scratch(tag: &str) -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join(format!("oag-chd-{tag}-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
-    dir
+fn scratch(tag: &str) -> oag_testdata::scratch::TempDir {
+    oag_testdata::scratch::dir(&format!("chd-{tag}"))
 }
 
 fn set_modified(path: &Path) {

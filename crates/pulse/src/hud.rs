@@ -98,6 +98,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // Pulse names a widget per weapon (`pickup_icon_name`) - this field is
     // 2048's own dialect, one widget with a rewritten UV.
     pickup_icon_uv: None,
+    shield_drain_widget: None,
     // Zone's speed-class line, read off `FUN_0881ad10` (`Hud_UpdateZoneSpeedClass`).
     zone_speed_classes: Some(ZONE_SPEED_CLASSES),
     zone_score: oag_title::ZoneScore::Authored,

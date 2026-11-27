@@ -182,6 +182,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // Pure's icons are `<Mode3D><Model>`s (the row above), not a single
     // rewritten-UV `<Image>` widget - 2048's own dialect.
     pickup_icon_uv: None,
+    shield_drain_widget: None,
     // `None`: no Zone speed-class ladder has been read on this title.
     zone_speed_classes: None,
     zone_score: oag_title::ZoneScore::Authored,

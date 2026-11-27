@@ -107,8 +107,9 @@ case "$1" in
     *) scope= ;;
 esac
 
-entered=$(mktemp -u)
-cancel=$(mktemp -u)
+. "$(dirname "$self")/oag-tmp.sh"
+entered=$(mktemp -u -p "$(oag_tmp_root)")
+cancel=$(mktemp -u -p "$(oag_tmp_root)")
 export OAG_GATE_ENTERED=$entered OAG_GATE_CANCEL=$cancel
 prep_pid=0
 waiter=0

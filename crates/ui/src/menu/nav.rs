@@ -192,6 +192,9 @@ impl Menu {
     /// default and a label was supplied.
     #[must_use]
     pub fn reset_offered(&self) -> Option<&str> {
+        if let Some(words) = self.item_toggle_offered() {
+            return Some(words);
+        }
         if !self.reset_label.is_empty() && self.can_reset() {
             return Some(self.reset_label.as_str());
         }
@@ -268,6 +271,10 @@ impl Menu {
     /// owner applies and persists it the same way. Nothing on a row that holds no value,
     /// is disabled, or is already there.
     pub(super) fn reset(&mut self) -> Option<MenuEvent> {
+        // On a list page Square toggles the item (`items.rs`).
+        if self.can_toggle(self.selected()) {
+            return self.adjust(1);
+        }
         let Some(target) = self.reset_target() else {
             let (fires, _) = self.square_action()?;
             self.nav.push(Nav::Accept);
@@ -309,6 +316,10 @@ impl Menu {
     pub(super) fn activate(&mut self) -> Vec<MenuEvent> {
         let page = self.current();
         let row = self.cursor[page];
+        if let Some(event) = self.open_item() {
+            self.nav.push(Nav::Accept);
+            return vec![event];
+        }
         let Some(entry) = self.definition.pages[page].entries.get(row) else {
             return Vec::new();
         };
@@ -326,6 +337,7 @@ impl Menu {
                 {
                     self.cursor[target] = row;
                 }
+                self.sort_items(target);
                 self.stack.push(target);
                 self.snap_focus();
                 self.nav.push(Nav::Accept);

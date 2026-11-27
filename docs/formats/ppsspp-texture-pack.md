@@ -445,9 +445,9 @@ is skipped at `debug`, [mods.md](../tools/mods.md), "Texture packs"), and the de
   advance and only gains texels exactly as in the race. The menu rows, the footer ticker,
   the nav legend and **the loading screen's text** (it draws in the boot's `Default` face) are the
   pack's. A language reload (`Session::resupply_language`) passes the same finder, so a language
-  switch keeps the pack's faces. **A MODS page switch of a pack is live**: `switch_selected_mod` reloads the
+  switch keeps the pack's faces. **A MODS page switch of a pack is live**: `switch_mod` reloads the
   shell (`Session::resupply_language`, which also builds the menu tree again and gives the renderer
-  the new sheet) instead of only rebuilding the menus, then puts the MOD row back on the pack; a
+  the new sheet) instead of only rebuilding the menus, then reopens the page the switch was made on; a
   switch is a second or so on the UI thread in a debug build. Test:
   `drive_ground_truth::the_mods_page_turns_a_texture_pack_on_and_off_and_the_front_ends_faces_follow_live`
   (the faces and the sheet are the pack's after the switch on, the disc's after it off). Cost: a 16x face is a 4096 a side atlas, about 0.3 s each

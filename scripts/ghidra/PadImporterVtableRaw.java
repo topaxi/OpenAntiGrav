@@ -19,7 +19,7 @@ import ghidra.program.model.symbol.SymbolTable;
 public class PadImporterVtableRaw extends GhidraScript {
     @Override
     public void run() throws Exception {
-        String out = getScriptArgs().length > 0 ? getScriptArgs()[0] : "/tmp/pad-vtable-raw.txt";
+        String out = getScriptArgs().length > 0 ? getScriptArgs()[0] : "target/tmp/pad-vtable-raw.txt";
         PrintWriter w = new PrintWriter(new FileWriter(out));
         SymbolTable st = currentProgram.getSymbolTable();
 

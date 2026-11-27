@@ -85,6 +85,7 @@ fn no_audio_retires_a_voice_when_its_sound_ends_and_frees_its_slot() {
 /// and a machine with no device still renders its ticks as it always has.
 #[test]
 fn no_audio_leaves_the_mixer_silent_unless_a_dump_reads_it() {
+    let scratch = oag_testdata::scratch::dir("no-audio");
     let silent = |no_audio: bool, dump: Option<std::path::PathBuf>| {
         Audio::open(
             &crate::settings::Settings::default(),
@@ -98,10 +99,7 @@ fn no_audio_leaves_the_mixer_silent_unless_a_dump_reads_it() {
     };
     assert!(silent(true, None), "--no-audio mixes nothing");
     assert!(
-        !silent(
-            true,
-            Some(std::env::temp_dir().join("oag-no-audio-dump.wav"))
-        ),
+        !silent(true, Some(scratch.join("dump.wav"))),
         "a dump reads the mix"
     );
     assert!(!silent(false, None), "no device alone still renders");
@@ -119,7 +117,7 @@ fn no_soundtrack_spawns_no_race_music_fetch() {
         true,
     );
     let discs = MusicDiscs::default();
-    let cache = std::env::temp_dir();
+    let cache = oag_testdata::scratch::cache("no-audio-music");
     assert!(
         audio
             .race_music_fetch(&discs, MusicSource::Auto, &cache)

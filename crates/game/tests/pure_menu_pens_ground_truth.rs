@@ -126,7 +126,7 @@ fn the_title_screens_hold_on_is_the_stats_face_ending_on_its_anchor() {
         "OAG_REQUIRE_GAME_DATA is set but neither Pure PSP image is present"
     );
     for (name, image) in images {
-        let scratch = std::env::temp_dir().join(format!("oag-pure-title-{name}"));
+        let scratch = oag_testdata::scratch::dir(&format!("pure-title-{name}"));
         let frame = decode(&title_still(&image, &scratch));
         let starts = cyan_starts(&frame, 242..248, 350..418);
         assert_eq!(
@@ -189,7 +189,7 @@ fn the_circuit_panels_label_steps_eight_pixels_a_glyph_as_the_originals_does() {
         "OAG_REQUIRE_GAME_DATA is set but neither Pure PSP image is present"
     );
     for (name, image) in images {
-        let scratch = std::env::temp_dir().join(format!("oag-pure-pens-{name}"));
+        let scratch = oag_testdata::scratch::dir(&format!("pure-pens-{name}"));
         let frame = decode(&still(&image, &scratch));
         let starts = glyph_starts(&frame, 171..180, 244..340);
         assert_eq!(

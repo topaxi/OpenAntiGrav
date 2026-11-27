@@ -499,10 +499,8 @@ fn the_explosion_re_keys_through_the_race_and_stops_when_it_ends() {
 fn quake_hit_render(drop_collisions: bool) -> (Vec<i16>, usize) {
     const LAUNCH: usize = 90;
     let (mut race, _) = race_and_audio();
-    let wav = std::env::temp_dir().join(format!(
-        "oag-quake-hit-{}-{drop_collisions}.wav",
-        std::process::id()
-    ));
+    let scratch = oag_testdata::scratch::dir(&format!("quake-hit-{drop_collisions}"));
+    let wav = scratch.join("dump.wav");
     let mut audio = oag_sound::Audio::open(
         &oag_sound::settings::Settings::default(),
         Some(wav.clone()),
@@ -525,7 +523,6 @@ fn quake_hit_render(drop_collisions: bool) -> (Vec<i16>, usize) {
     }
     audio.finish().expect("writing the dump");
     let file = std::fs::read(&wav).expect("the dump");
-    std::fs::remove_file(&wav).ok();
     let pcm = file[44..]
         .as_chunks::<2>()
         .0

@@ -289,7 +289,7 @@ fn an_oag_image_naming_a_file_or_a_directory_is_used() {
     std::fs::write(directory.join(IMAGE_NAMES[0]), b"").unwrap();
 
     assert_eq!(
-        stated(None, Some(directory.clone().into_os_string()), None).unwrap(),
+        stated(None, Some(directory.to_path_buf().into_os_string()), None).unwrap(),
         Some(
             directory
                 .join(IMAGE_NAMES[0])
@@ -455,10 +455,9 @@ fn a_ps4_root_is_found_by_its_patchs_own_shape() {
     std::fs::write(root.join("omega-eu-patch/uroot/data09.psarc"), b"").unwrap();
 
     assert_eq!(
-        ps4_package_directories_in(std::slice::from_ref(&root)),
-        std::slice::from_ref(&root)
+        ps4_package_directories_in(&[root.to_path_buf()]),
+        [root.to_path_buf()]
     );
-    std::fs::remove_dir_all(&root).unwrap();
 }
 
 /// A base-only extract, with no patch, is not offered - it has no
@@ -469,7 +468,7 @@ fn a_base_only_ps4_extract_is_not_offered() {
     std::fs::create_dir_all(root.join("omega-eu/uroot")).unwrap();
     std::fs::write(root.join("omega-eu/uroot/data00.psarc"), b"").unwrap();
 
-    assert!(ps4_package_directories_in(std::slice::from_ref(&root)).is_empty());
+    assert!(ps4_package_directories_in(&[root.to_path_buf()]).is_empty());
     std::fs::remove_dir_all(&root).unwrap();
 }
 
@@ -519,12 +518,12 @@ fn an_unpacked_folder_is_found_without_an_image() {
     std::fs::write(&data09, b"").unwrap();
 
     assert_eq!(
-        first_package(std::slice::from_ref(&vita), std::slice::from_ref(&ps4), &[]),
+        first_package(&[vita.to_path_buf()], &[ps4.to_path_buf()], &[]),
         Some(copy.clone())
     );
     assert_eq!(
-        first_package(&[], std::slice::from_ref(&ps4), &[]),
-        Some(ps4.clone())
+        first_package(&[], &[ps4.to_path_buf()], &[]),
+        Some(ps4.to_path_buf())
     );
     assert_eq!(first_package(&[], &[], &[]), None);
 
@@ -547,7 +546,7 @@ fn an_oag_image_naming_an_unpacked_folder_is_used() {
         want
     );
     assert_eq!(
-        stated(None, Some(vita.clone().into_os_string()), None).unwrap(),
+        stated(None, Some(vita.to_path_buf().into_os_string()), None).unwrap(),
         want
     );
     std::fs::remove_dir_all(&vita).unwrap();
@@ -679,11 +678,8 @@ fn a_disc_update_mounts_over_its_release_and_is_not_offered() {
     std::fs::remove_dir_all(&root).unwrap();
 }
 
-fn temp_dir(name: &str) -> PathBuf {
-    let directory = std::env::temp_dir().join(format!("oag-source-{name}"));
-    let _ = std::fs::remove_dir_all(&directory);
-    std::fs::create_dir_all(&directory).unwrap();
-    directory
+fn temp_dir(name: &str) -> oag_testdata::scratch::TempDir {
+    oag_testdata::scratch::dir(&format!("source-{name}"))
 }
 
 /// A Windows zip or a tarball has no `$APPIMAGE`: the executable's own folder is

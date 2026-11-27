@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """HD/Fury's Track Select lattice slide against ours: the original's frame N game frames after a circuit step, N read from RAM.
 
-    source data/scratch/<lane>/env.sh ; export XDG_CACHE_HOME=/tmp/oag-<lane>-cache
+    source data/scratch/<lane>/env.sh ; export XDG_CACHE_HOME=$PWD/data/scratch/<lane>/cache
     OAG_COMPARE_PLATFORM=hd-fury python3 scripts/rpcs3-drive.py --image data/images/hdfury-ps3-eu.iso serve   # to Main Menu
     # walk to Track Creation by hand: `cross cross` from RACEBOX (Single Player), `left` back to circuit 0
     OAG_RPCS3_ATTACH=1 uv run --with evdev --with numpy python3 scripts/emu-run.py -- python3 scripts/rpcs3-hd-track-step.py capture \\

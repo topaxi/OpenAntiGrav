@@ -51,6 +51,8 @@ use oag_ui::hints::{Entry, Hint, Line, Press};
 
 use oag_display::space::SCREEN;
 
+pub mod art;
+pub mod cards;
 pub mod key_entry;
 use key_entry::KeyEntry;
 
@@ -348,6 +350,8 @@ pub struct Launcher {
     paste_requested: bool,
     /// A file is being dragged over the window, not yet dropped.
     hovering: bool,
+    /// The card view's state, `None` for the list.
+    cards: Option<cards::Cards>,
 }
 
 impl Launcher {
@@ -368,6 +372,7 @@ impl Launcher {
             can_paste: false,
             paste_requested: false,
             hovering: false,
+            cards: None,
         }
     }
 
@@ -394,6 +399,7 @@ impl Launcher {
             can_paste: false,
             paste_requested: false,
             hovering: false,
+            cards: None,
         }
     }
 
@@ -499,6 +505,7 @@ impl Launcher {
                 if let Some(row) = self.rows.get_mut(self.cursor) {
                     *row = examine(Path::new(&row.source));
                 }
+                self.follow_row(self.cursor, true);
             }
         }
     }
@@ -546,6 +553,7 @@ impl Launcher {
         };
         self.cursor = at;
         if self.rows[at].is_playable() {
+            self.follow_row(at, true);
             return Some(source);
         }
         self.open_entry();
@@ -638,6 +646,9 @@ impl Launcher {
             self.settle(outcome);
             return None;
         }
+        if self.is_cards() {
+            return self.update_cards(input);
+        }
         if input.take(Button::Down) {
             self.step(1);
         }
@@ -674,6 +685,9 @@ impl Launcher {
         }
         if pointer.is_idle() {
             return None;
+        }
+        if self.is_cards() {
+            return self.pointer_cards(pointer);
         }
         if pointer.scroll != 0 {
             self.step(pointer.scroll.signum() as isize);
@@ -799,11 +813,38 @@ pub fn not_found_notice_desktop(folder: &str) -> Vec<String> {
 /// own default is the PSP's.
 #[must_use]
 pub fn draw_list(launcher: &Launcher) -> Vec<Draw> {
-    let mut out = list_draw(launcher);
+    with_drop_note(launcher, list_draw(launcher), SCREEN.1 - 34.0)
+}
+
+/// Whether a run's chooser draws cards: `--launcher-list` asks for the list for
+/// one run, `[launcher] style = "list"` for every run.
+#[must_use]
+pub fn wants_cards(list_flag: bool, style: crate::settings::launcher::LauncherStyle) -> bool {
+    !list_flag && style == crate::settings::launcher::LauncherStyle::Cards
+}
+
+/// What the stage draws: the cards, or [`draw_list`]'s list. `sheet` is the one
+/// [`art`] builds, which the list needs none of. The not-found text and the
+/// disc-key prompt are the list's either way.
+#[must_use]
+pub fn draw(launcher: &Launcher, sheet: &oag_hud::sprite::Sheet) -> Vec<Draw> {
+    if launcher.is_cards() && launcher.entry().is_none() && launcher.notice().is_none() {
+        // Under the heading: the foot of the screen is the captions'.
+        return with_drop_note(launcher, launcher.draw_cards(sheet), 24.0);
+    }
+    draw_list(launcher)
+}
+
+/// `out` with the note a file being dragged over the window gets, at `y`.
+fn with_drop_note(launcher: &Launcher, mut out: Vec<Draw>, y: f32) -> Vec<Draw> {
     if launcher.hovering {
         out.push(text(
-            MARGIN,
-            SCREEN.1 - 34.0,
+            if y < SCREEN.1 / 2.0 {
+                SCREEN.0 / 2.0
+            } else {
+                MARGIN
+            },
+            y,
             1.0,
             SELECTED,
             "DROP THE FILE TO USE IT",
@@ -1002,7 +1043,7 @@ pub fn hints(launcher: &Launcher) -> Vec<Hint> {
     if launcher.notice().is_some() {
         return Vec::new();
     }
-    let entries = hint_entries();
+    let entries = launcher.card_hint_entries().unwrap_or_else(hint_entries);
     let line = Line {
         entries: &entries,
         x: MARGIN,

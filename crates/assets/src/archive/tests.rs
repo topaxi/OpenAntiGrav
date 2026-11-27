@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use super::*;
 
 #[test]
@@ -87,8 +85,8 @@ fn tiny_lzss_wad(name_hash: u32, blob: &[u8]) -> Vec<u8> {
     bytes
 }
 
-fn temp_file(name: &str, contents: &[u8]) -> PathBuf {
-    let path = std::env::temp_dir().join(format!("oag-assets-test-{name}"));
+fn temp_file(name: &str, contents: &[u8]) -> oag_testdata::scratch::TempDir {
+    let path = oag_testdata::scratch::dir("assets-test").child(name);
     std::fs::write(&path, contents).unwrap();
     path
 }
@@ -101,8 +99,6 @@ fn len_reports_the_files_own_size() {
     let archive = Archive::open(path.to_str().unwrap()).unwrap();
     assert_eq!(archive.len(), bytes.len() as u64);
     assert!(!archive.is_empty());
-
-    std::fs::remove_file(path).ok();
 }
 
 /// Two stored entries back to back, so that a read clamped at the end of
@@ -136,8 +132,6 @@ fn read_range_returns_bytes_from_the_middle_of_an_entry() {
     // The offset is into the entry, not into the archive: reading from
     // zero has to land on the blob, not on the directory.
     assert_eq!(archive.read_range(0, 0, 4).unwrap(), b"0123");
-
-    std::fs::remove_file(path).ok();
 }
 
 #[test]
@@ -150,8 +144,6 @@ fn read_range_stops_at_the_end_of_the_entry() {
     // length would quietly return the second entry's bytes as well.
     let mut archive = Archive::open(path.to_str().unwrap()).unwrap();
     assert_eq!(archive.read_range(0, 6, 4096).unwrap(), b"entry");
-
-    std::fs::remove_file(path).ok();
 }
 
 #[test]
@@ -162,8 +154,6 @@ fn read_range_past_the_end_of_an_entry_is_empty() {
     let mut archive = Archive::open(path.to_str().unwrap()).unwrap();
     assert!(archive.read_range(0, 11, 4).unwrap().is_empty());
     assert!(archive.read_range(0, 9_000, 4).unwrap().is_empty());
-
-    std::fs::remove_file(path).ok();
 }
 
 #[test]
@@ -179,8 +169,6 @@ fn read_range_refuses_a_compressed_entry() {
         archive.read_range(0, 4, 4),
         Err(Error::RangeIntoCompressed { .. })
     ));
-
-    std::fs::remove_file(path).ok();
 }
 
 #[test]
@@ -195,8 +183,6 @@ fn read_range_name_resolves_the_name_and_reports_a_missing_one() {
         archive.read_range_name(r"Data\Sound\nothing.bnk", 0, 3),
         Err(Error::NoSuchEntry { .. })
     ));
-
-    std::fs::remove_file(path).ok();
 }
 
 #[test]
@@ -208,8 +194,6 @@ fn read_raw_matches_read_for_a_stored_entry() {
     let mut archive = Archive::open(path.to_str().unwrap()).unwrap();
     assert_eq!(archive.read_raw(0).unwrap(), blob);
     assert_eq!(archive.read(0).unwrap(), blob);
-
-    std::fs::remove_file(path).ok();
 }
 
 /// `Compression::Zlib` was refused outright until Pure's DLC packs turned
@@ -229,8 +213,6 @@ fn a_zlib_entry_inflates_to_the_original_bytes() {
         Compression::Zlib
     );
     assert_eq!(archive.read(0).unwrap(), plain);
-
-    std::fs::remove_file(path).ok();
 }
 
 /// A zlib entry cannot be seeked into any more than an LZSS one can - both
@@ -247,8 +229,6 @@ fn read_range_refuses_a_zlib_entry_too() {
         archive.read_range(0, 0, 4),
         Err(Error::RangeIntoCompressed { .. })
     ));
-
-    std::fs::remove_file(path).ok();
 }
 
 /// `plain` as an LZSS stream of literals only: a set flag bit and the byte,
@@ -304,6 +284,4 @@ fn peek_decodes_only_the_head_of_an_lzss_entry_and_matches_read() {
         let want = &plain[..(len as usize).min(plain.len())];
         assert_eq!(archive.peek(0, len).unwrap(), want, "peek {len}");
     }
-
-    std::fs::remove_file(path).ok();
 }

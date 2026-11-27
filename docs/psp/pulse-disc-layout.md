@@ -40,6 +40,21 @@ just unpack sniff data/images/pulse-psp-usa.chd
 | 1,904 | 57376 | `PSP_GAME/USRDIR/UCES00465/PRX/pspnet_ap_dialog_dummy.prx` | `~SCE` | 7.50 |
 | **8,429,869** | 215520 | **`PSP_GAME/USRDIR/UCES00465/SYSDIR/BOOT.BIN`** | **ELF** | **6.02** |
 
+## System art
+
+`PSP_GAME/PIC1.PNG` is the 480x272 picture the PSP's menu shows behind the game;
+`PSP_GAME/ICON0.PNG` is its 144x80 icon. Neither Pulse nor Pure ships a
+`PIC0.PNG`. The title chooser draws `PIC1.PNG`
+([launcher](../ui/launcher.md)). Confidence 95: read off all four PSP images and
+looked at (2026-11-27).
+
+| image | `PIC1.PNG` |
+| --- | --- |
+| Pulse EU and USA | wordmark; the two files are byte-identical |
+| Pure EU and USA | wordmark, tagline and copyright line; the two files differ |
+
+The PS2 disc of Pulse has no such picture.
+
 ## Findings
 
 ### `BOOT.BIN` is an unencrypted ELF

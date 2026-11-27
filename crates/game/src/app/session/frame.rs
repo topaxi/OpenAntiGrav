@@ -61,8 +61,12 @@ impl Session {
         // hand a window to. Read a frame after the press for the same reason
         // `Launch Game` is checked here rather than in the tick loop - the row
         // lighting up is drawn before the load stalls the window.
+        self.keep_launcher_choice();
         let picked = match &mut self.stage {
-            Stage::Launcher(stage) => stage.picked.take(),
+            Stage::Launcher(stage) => {
+                stage.poll_art();
+                stage.picked.take()
+            }
             _ => None,
         };
         if let Some(source) = picked
@@ -383,7 +387,9 @@ impl Session {
             let seat_pointers = self.seat_pointers();
             // HD's list rows are taller to the finger, and back to the
             // authored size once a pad, key or mouse speaks.
-            if let Stage::Menu(stage) = &mut self.stage {
+            if let Stage::Menu(stage) = &mut self.stage
+                && self.pointer.layout_may_change(&pointer)
+            {
                 stage.skin.set_touch_rows(self.pointer.touch_spoke_last());
             }
             self.poll_music_pool();

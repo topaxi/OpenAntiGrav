@@ -445,6 +445,8 @@ pub enum ValueSource {
     /// dimmed value with the reason for a mod that cannot be switched (the built-in, a
     /// candidate that never opened). Re-supplied each time the MOD row moves.
     ModSwitch,
+    /// One row per installed mod, on the MODS list (`Definition::expand_rows`).
+    ModList,
     /// A template row that expands to one row per music source
     /// ([`super::Definition::expand_rows`]; `oag_sound::pool`). Never supplied as a list.
     MusicPool,
@@ -495,6 +497,7 @@ impl ValueSource {
             Self::Weapons => "weapons",
             Self::Mods => "mods",
             Self::ModSwitch => "mod_switch",
+            Self::ModList => "mod_list",
             Self::MusicPool => "music_pool",
             Self::Replays => "replays",
         }
@@ -532,6 +535,7 @@ impl ValueSource {
             "weapons" => Some(Self::Weapons),
             "mods" => Some(Self::Mods),
             "mod_switch" => Some(Self::ModSwitch),
+            "mod_list" => Some(Self::ModList),
             "music_pool" => Some(Self::MusicPool),
             "replays" => Some(Self::Replays),
             _ => None,

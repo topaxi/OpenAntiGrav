@@ -27,6 +27,9 @@ import sys
 import tomllib
 from pathlib import Path
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import oag_tmp  # noqa: E402
+
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 PROFILE = HERE / "compare-environment.toml"
@@ -814,7 +817,7 @@ def selftest_rewind_pair_field():
     replaces the claim that the picture needed no correction, and a second run is refused."""
     import tempfile
 
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory(dir=oag_tmp.temp_root()) as tmp:
         d = Path(tmp)
         write_field_rows(d / "field.csv", [{"slot": str(n), "pos_x": "10.0", "pos_y": "0.0", "pos_z": "0.0",
                                             "vel_x": repr(60.0 * (n + 1)), "vel_y": "0.0", "vel_z": "0.0"} for n in range(2)])

@@ -122,8 +122,7 @@ fn the_leach_ball_glows_face_on_from_the_real_eye() {
     let Some(image) = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso") else {
         return;
     };
-    let scratch = std::env::temp_dir().join(format!("oag-hd-leach-ball-{}", std::process::id()));
-    std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
+    let scratch = oag_testdata::scratch::dir("hd-leach-ball");
     let locked = frame_of(&image, &scratch, true);
     let control = frame_of(&image, &scratch, false);
     std::fs::remove_dir_all(&scratch).ok();

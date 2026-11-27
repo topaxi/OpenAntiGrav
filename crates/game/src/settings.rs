@@ -69,6 +69,7 @@ use oag_mesh::mesh_render::Anisotropy;
 
 mod controls;
 pub mod ffmpeg;
+pub mod launcher;
 mod music_profile;
 mod online;
 pub mod platform;
@@ -139,6 +140,9 @@ pub struct Settings {
     pub source: Source,
     #[serde(default)]
     pub race: Race,
+    /// How the title chooser looks (`crate::launcher`).
+    #[serde(default)]
+    pub launcher: launcher::Launcher,
     /// The online lobby last connected to (`session::online`).
     #[serde(default)]
     pub online: Online,
@@ -977,6 +981,8 @@ pub fn supply_reset(
             .map(|&(stand_in, _)| stand_in),
     );
     model.set_reset_label(strings.get_or_fallback("OAG_MENU_RESET_TO_DEFAULT", "RESET TO DEFAULT"));
+    let (id, english) = crate::mods::words::TOGGLE;
+    model.set_item_toggle_label(strings.get_or_fallback(id, english));
     crate::campaign::custom::editor_on_square(model, title, strings);
 }
 

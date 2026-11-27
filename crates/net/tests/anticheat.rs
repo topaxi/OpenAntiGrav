@@ -167,11 +167,8 @@ impl Hosted {
     }
 }
 
-fn ban_file(tag: &str) -> std::path::PathBuf {
-    let dir = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("anticheat-{tag}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a scratch directory");
-    dir.join("bans.txt")
+fn ban_file(tag: &str) -> oag_testdata::scratch::TempDir {
+    oag_testdata::scratch::dir(&format!("anticheat-{tag}")).child("bans.txt")
 }
 
 /// The lines of `file` that start with `kind` and name `key`.
@@ -234,7 +231,7 @@ fn try_to_host(file: &std::path::Path, key: &PlayerKey) -> Result<(), (Refusal, 
 #[test]
 fn a_host_that_alters_its_simulation_is_proven_by_the_lobbys_re_simulation_and_struck_not_banned() {
     let file = ban_file("speed");
-    let mut race = hosted(Cheat::Speed, 100_000, Some(file.clone()));
+    let mut race = hosted(Cheat::Speed, 100_000, Some(file.to_path_buf()));
     let reason = race.until_closed();
     assert!(
         reason.contains("its host was caught cheating"),
@@ -493,7 +490,13 @@ fn a_host_of_another_build_than_the_lobby_is_not_judged_by_a_re_simulation_and_n
         Arc::new(PlayerKey::generate().expect("a key")),
         Arc::new(PlayerKey::generate().expect("a key")),
     ];
-    let mut race = hosted_built(Cheat::Speed, 100_000, Some(file.clone()), keys, OTHER_BUILD);
+    let mut race = hosted_built(
+        Cheat::Speed,
+        100_000,
+        Some(file.to_path_buf()),
+        keys,
+        OTHER_BUILD,
+    );
     match bobs_verdict(&mut race) {
         Verdict::NotCheckable(why) => assert!(
             why.contains("the host runs another build") && why.contains(OTHER_BUILD),

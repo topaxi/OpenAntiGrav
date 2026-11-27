@@ -114,6 +114,10 @@ import tempfile
 
 import numpy as np
 from PIL import Image, ImageDraw
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import oag_tmp  # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 DEFAULT_PAIR_DIR = ROOT / "data" / "reference" / "hd-capture" / "talons-matched"
@@ -793,7 +797,7 @@ def main():
     pair_dir = pathlib.Path(args.pair_dir).resolve()
     out_dir = pair_dir.parent / f"{pair_dir.name}-compare"
     poses = args.poses or ["00", "01", "03"]
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory(dir=oag_tmp.temp_root()) as tmp:
         cfg_root = pathlib.Path(tmp)
         for pose in poses:
             compare_one(game, pair_dir, out_dir, pose, args.dump_regions,

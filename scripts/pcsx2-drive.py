@@ -36,14 +36,14 @@ Commands:
     python3 scripts/pcsx2-drive.py config                   # write the datapath ini
     python3 scripts/pcsx2-drive.py boot                     # boot the disc, wait for PINE
     python3 scripts/pcsx2-drive.py press cross cross        # abstract button names
-    python3 scripts/pcsx2-drive.py shot /tmp/frame.png      # GS screenshot, exact output
+    python3 scripts/pcsx2-drive.py shot target/tmp/frame.png      # GS screenshot, exact output
     python3 scripts/pcsx2-drive.py input                    # read the game's own pad mask
     python3 scripts/pcsx2-drive.py stop                      # stop pcsx2-qt AND Xvfb :78
 
 `display`, `config` and `boot` are all idempotent and `boot` runs the first two
 for you, so the one-liner is:
 
-    uv run --with python-xlib python3 scripts/pcsx2-drive.py boot --shot /tmp/f.png
+    uv run --with python-xlib python3 scripts/pcsx2-drive.py boot --shot target/tmp/f.png
 
 Nothing this script writes goes anywhere near the repository: the emulator's
 data path is `~/.cache/oag-pcsx2`, screenshots go where you name them, and the
@@ -72,6 +72,9 @@ from pcsx2_pine import Pine, PineError, STATUS_NAMES  # noqa: E402
 import pad_seat  # noqa: E402
 import xvfb_display  # noqa: E402
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import oag_tmp  # noqa: E402
+
 #: `OAG_PCSX2_DISPLAY` / `OAG_PCSX2_DATA` give a drive member its own display and
 #: data path (own ini, memory card, savestates); unset keeps the shared defaults.
 DISPLAY_NUMBER = int(os.environ.get("OAG_PCSX2_DISPLAY", "78"))
@@ -89,7 +92,7 @@ DISPLAY_MARKER = os.path.join(DATA_PATH, "xvfb.owner.json")
 INI_DIR = os.path.join(DATA_PATH, "PCSX2", "inis")
 SNAP_DIR = os.path.join(DATA_PATH, "PCSX2", "snaps")
 STATE_DIR = os.path.join(DATA_PATH, "PCSX2", "sstates")
-LOG_FILE = os.path.join(DATA_PATH, "oag-pcsx2.log") if "OAG_PCSX2_DATA" in os.environ else "/tmp/oag-pcsx2.log"
+LOG_FILE = os.path.join(DATA_PATH, "oag-pcsx2.log") if "OAG_PCSX2_DATA" in os.environ else oag_tmp.output("oag-pcsx2.log")
 
 DEFAULT_IMAGE = "data/images/pulse-ps2-eu.chd"
 BIOS_DIR = os.path.expanduser("~/.config/PCSX2/bios")

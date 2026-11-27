@@ -137,6 +137,76 @@ beside `shipshield.rcsmodel` in every directory above.
 - HD: **checked, differs**: palette (seven of thirteen teams), colour rate in 2048-content modes,
   the cockpit path by mode. Law otherwise identical.
 
+## The HUD: `ManualShield` drains while the Shield runs
+
+2026-11-27, lane `shield-countdown-titles`. Static reading of the disassembly,
+no live frame of the original with a Shield up (Vita3K was in use).
+**Confidence 80** on the crop, **70** on which branch an ordinary race takes.
+
+`ManualShield` is a 72 x 134 image under `DamageBarParent` in
+`data/xml/2048_hud/HUD_damage_indicator.xml`, the bright outline over the dim
+one round the energy silhouette. `Hud_BindWidgets` (`0x81192cd0`) keeps it at
+`hud+0x6c` and hides it.
+
+**`Hud_UpdateWidgets` (`0x81195cdc`)**, every update:
+
+- `0x81195e44`: `hud+0x10 & 0x8000` clear branches to `0x8119606c`.
+- There `slot = *(ship+0x557c)`. With `slot+0x1bc > 0`,
+  `f = min(slot+0x1b8 / slot+0x1bc, 1)`, else `0`.
+- The widget is made visible, its height is `hud+0x1f4 * f`, its y
+  `hud+0x200 + hud+0x1f4 * (1 - f) / 2` (the sprite is centred, so the bottom
+  edge holds), its source height `hud+0x1fc * f` and its source v
+  `hud+0x1f8 + hud+0x1fc * (1 - f)`. A bottom-anchored crop: it drains from the
+  top.
+
+**The `0x8000` gate.** The race managers `OR` their widget set into `hud+0x10`
+after `Hud_Construct` (`0x81192940`) zeroes it, and none carries `0x8000`:
+`0x200df` (`SpArcadeRaceManager_Construct`, `FUN_81160574`, `FUN_8116471c`,
+`FUN_811853ec`), `0x10097` (`FUN_81161170`, `FUN_8117fb48`), `0x97`
+(`FUN_81183e50`), `0x2` (`FUN_81161c74`, `FUN_81182148`, `FUN_8117c5ce`,
+`FUN_81186584`), and `0xdf | 0x20000`, `0x20800` in the factory at
+`0x812bc7b4`. With the bit set `FUN_81195620` would drain by the ship's
+`ManualShieldStats` instead (`life_time`, `recharge_time`). The two other `OR`s
+of `0x8000` found by instruction search are not this word: `0x8111e246` writes
+an object's `+0x32420` and `0x81364d8a` converts a buffer of halfwords. A writer
+using another instruction form is not excluded.
+
+**The slot's two timers.** The Shield's start writes `+0x1b8` and `+0x1bc` to the
+same duration, clears the held id (`+0x1f8 = -1`, so the weapon box is empty)
+and sets `+0x1f4 & 0x10`; the per-slot update (`0x8120e906`) takes `dt` off
+`+0x1b8`. The percentage under the silhouette is unchanged:
+`Hud_UpdateEnergyBar` (`0x811957a2`) reads no shield timer.
+
+**HD's countdown is in this executable and has nothing to draw on.**
+`FUN_8115dfea` is [`Hud_SetShieldTimer`](../ps3-hdfury-eu/hud-readouts.md#the-shield-countdown)'s
+twin and `FUN_81156220` prints `%2.1f` in `0xff30ff30`, both through
+`DamageBarShieldBg`. No layout a 2048 race loads authors that widget or
+`ShieldBarText`: the `2048_hud\` copy of `HUD_damage_indicator.xml` has neither
+(only the root copy, which the demo roots include, does).
+
+**Wired**: `oag_title::HudArt::shield_drain_widget`, drawn by
+`oag_hud::dialect_2048::shield_drain` from `Readout::shield_drain_fraction`
+(the running timer over its value when it was armed). Test:
+`crates/raceplay/tests/vita_2048_hud_event_ground_truth.rs`.
+
+**Omega**: **ported, inherited from 2048**. `data00.psarc`'s
+`2048_hud\HUD_damage_indicator.xml` authors `ManualShield` at its own atlas's
+rectangle (`omega_2048_mode_hud_names_are_authored_by_its_layouts`) and its
+2048-dialect bind (`FUN_012d1590`) hides it at the start
+([`hud-radar.md`](../ps4-omega-eu/hud-radar.md)); the update that would drain it
+was not read. **HD**: no `ManualShield`; it draws the countdown instead.
+
+**Open**: how long the pickup's Shield lasts in 2048's own modes. Under
+`GameMode_IsHdLineage` (`0x81000930`) the start at `0x8120eaae` takes the time
+from the weapon table's side (`0x8120eb70`); otherwise it takes the ship's
+`ManualShieldStats` `life_time` (`stats+0x4cc`, `3` in all 20 base
+`handlingstats.xml`), where the Race table's Shield authors `5`. Confidence 60,
+not wired: it is simulation, and ours always takes the table's.
+
+**Open**: ours also arms the same timer on an Eliminator absorb
+(`oag_raceplay`'s `eliminator_absorb`, Pulse's law), so the drain shows there
+too; whether 2048's absorb goes through `slot+0x1b8` was not read.
+
 ## Open
 
 - How the `2048_Magnetic_Shield` program uses `ShieldColour` (alpha `0`, RGB `4.59`): unread. Recipe:

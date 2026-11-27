@@ -4,7 +4,7 @@
 //! was doing at the captured instant (talons-boost: `steer_lean` 0.32, a 16 degree bank, in the original's row, none
 //! in ours). The row is read back off ours' own `--trace-out` so the check is the value the drawn matrix reads.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
 fn oag_game(image: &Path, scratch: &Path, mode: &str) -> Command {
@@ -44,10 +44,8 @@ fn last(path: &Path, name: &str) -> f32 {
         .expect("a number")
 }
 
-fn scratch() -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("oag-pose-lean-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).expect("creating the scratch directory");
-    dir
+fn scratch() -> oag_testdata::scratch::TempDir {
+    oag_testdata::scratch::dir("pose-lean")
 }
 
 #[test]

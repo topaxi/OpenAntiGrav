@@ -59,7 +59,7 @@ public class DumpDatabaseState extends GhidraScript {
     @Override
     public void run() throws Exception {
         String[] args = getScriptArgs();
-        String out = args.length > 0 ? args[0] : "/tmp/ghidra-capture/";
+        String out = args.length > 0 ? args[0] : "target/tmp/ghidra-capture/";
         if (!out.endsWith("/")) {
             out = out + "/";
         }

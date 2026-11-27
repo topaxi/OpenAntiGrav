@@ -26,7 +26,7 @@ fn options(image: &std::path::Path) -> boot::Options {
         dlc: Vec::new(),
         leg: frontend::Leg::LogoFmv,
         movie: None,
-        cache: std::env::temp_dir().join("oag-hd-legend-flow-ground-truth"),
+        cache: oag_testdata::scratch::cache("hd-legend-flow-ground-truth"),
         audio_cache: oag_source::cache::default_audio_cache_dir(),
         extent: oag_game::movie::Extent::Frames(oag_game::INTRO_FRAMES_NEEDED),
         no_video: true,

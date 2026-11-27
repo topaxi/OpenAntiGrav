@@ -60,7 +60,7 @@ fn shell(image: &str, pack: Option<&Path>) -> Option<boot::Shell> {
         leg: oag_ui::frontend::Leg::default(),
         language: None,
         movie: None,
-        cache: std::env::temp_dir().join("oag-texture-pack-frontend"),
+        cache: oag_testdata::scratch::cache("texture-pack-frontend"),
         audio_cache: oag_source::cache::default_audio_cache_dir(),
         extent: oag_game::movie::Extent::Frames(1),
         no_video: true,
@@ -323,8 +323,7 @@ fn the_fetched_packs_are_each_offered_only_to_their_own_title() {
 /// in a mod search path of its own, switched on.
 fn report_with_a_mod_pack(image: &str) -> Option<Vec<String>> {
     let image = oag_testdata::image(image)?;
-    let base = std::env::temp_dir().join(format!("oag-pack-platform-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&base);
+    let base = oag_testdata::scratch::dir("pack-platform");
     let dir = base.join("Pulse Pack");
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(
@@ -336,15 +335,14 @@ fn report_with_a_mod_pack(image: &str) -> Option<Vec<String>> {
         enabled: ["ppsspp.pulse-pack".to_string()].into(),
         ..Default::default()
     };
-    let mods =
-        Arc::new(oag_game::mods::Mods::load_from(std::slice::from_ref(&base), &switches).unwrap());
+    let mods = Arc::new(oag_game::mods::Mods::load_from(&[base.to_path_buf()], &switches).unwrap());
     let options = boot::Options {
         source: image.display().to_string(),
         dlc: Vec::new(),
         leg: oag_ui::frontend::Leg::default(),
         language: None,
         movie: None,
-        cache: std::env::temp_dir().join("oag-texture-pack-frontend"),
+        cache: oag_testdata::scratch::cache("texture-pack-frontend"),
         audio_cache: oag_source::cache::default_audio_cache_dir(),
         extent: oag_game::movie::Extent::Frames(1),
         no_video: true,

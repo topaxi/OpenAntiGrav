@@ -229,7 +229,7 @@ fn the_front_ends_own_music_resolves_and_is_not_a_soundtrack_track() {
 #[ignore = "needs a disc image in data/images/"]
 fn the_front_ends_music_loads_through_the_engines_own_path() {
     let Some(image) = image() else { return };
-    let cache = std::env::temp_dir().join("oag-hd-music-ground-truth");
+    let cache = oag_testdata::scratch::cache("hd-music-ground-truth");
     let (name, sound) = library::load_front_end(&GameLibrary, &image.display().to_string(), &cache)
         .expect("loading the front end's music")
         .expect("HD names one");

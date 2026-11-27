@@ -98,6 +98,7 @@ impl Definition {
             meta: Vec::new(),
             parked: Vec::new(),
             opens_on: None,
+            item_page: None,
         };
         let mut built = Pause {
             screen: screen.name,
@@ -315,6 +316,7 @@ impl Definition {
             meta: Vec::new(),
             parked: Vec::new(),
             opens_on: None,
+            item_page: None,
         };
         self.build_rows(pause, opened.rows, strings, false, &mut page, built);
         // The way back is never dropped for want of its words: a page that asks must always have

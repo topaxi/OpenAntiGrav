@@ -1,11 +1,12 @@
-//! The MODS page's ENABLED row: turning a mod on or off, live.
+//! The MODS pages: opening a mod from the list, and turning one on or off, live.
 //!
 //! A switch saves `settings::Mods::disabled` and rebuilds what the mods make, the way
 //! a boot builds it (`crate::app::prepare::mods_menu` and `crate::app::prepare::finish_definition`):
 //! the menu tree with its rows, the MODS listing, the mod campaigns and a two-title race page's
 //! mod tracks. The menu model is built again on the new tree with the same
 //! [`Session::menu_model`] the menus open with, and reopened where the player stood:
-//! the MODS page, on the same mod, BACK leading where it led.
+//! the same page, the cursor and scroll window where they were, the list in the order it was
+//! entered in, the same mod on the MOD row, BACK leading where it led.
 //!
 //! Live rather than on the next launch because nothing a mod adds is held past the
 //! front end: a race reads its options when it launches, a campaign when it opens. A
@@ -54,13 +55,34 @@ impl RebuildJob {
 }
 
 impl Session {
-    /// Re-supplies the ENABLED row for the mod the MOD row just moved onto.
+    /// A row of the list: its detail page.
+    pub(crate) fn open_mod_item(&mut self, id: &str) {
+        let Some(shell) = self.shell.as_ref() else {
+            return;
+        };
+        if let Stage::Menu(stage) = &mut self.stage {
+            mods::open_item(&mut stage.menu, id, &shell.mods, &shell.strings);
+        }
+    }
+
+    /// Re-supplies the ENABLED row for the mod the MOD row holds.
     pub(crate) fn resupply_mod_switch(&mut self) {
         let Some(shell) = self.shell.as_ref() else {
             return;
         };
         if let Stage::Menu(stage) = &mut self.stage {
             mods::resupply_switch(&mut stage.menu, &shell.mods, &shell.strings);
+        }
+    }
+
+    /// The MOD row moved: its ENABLED row, and the list's cursor goes with it, so BACK lands
+    /// on the mod the page showed.
+    pub(crate) fn follow_mod_row(&mut self) {
+        self.resupply_mod_switch();
+        if let Stage::Menu(stage) = &mut self.stage
+            && let Some(id) = mods::selection(&stage.menu)
+        {
+            stage.menu.point_item(mods::PAGE, &id);
         }
     }
 
@@ -75,23 +97,35 @@ impl Session {
         }
     }
 
-    /// The ENABLED row moved to `on`: turns the selected mod on or off, saves, and
-    /// rebuilds the menus with it. The built-in and a mod that never opened do not
-    /// switch; their row holds one value.
+    /// The ENABLED row moved to `on`: [`Self::switch_mod`] for the mod the MOD row is on.
+    pub(crate) fn switch_selected_mod(&mut self, on: bool) {
+        let Stage::Menu(stage) = &self.stage else {
+            return;
+        };
+        if let Some(id) = mods::selection(&stage.menu) {
+            self.switch_mod(&id, on);
+        }
+    }
+
+    /// Turns the mod `id` on or off, saves, and rebuilds the menus with it. The built-in and a
+    /// mod that never opened do not switch; their row holds one value.
     ///
     /// A texture pack adds no rows but changes the front end's faces, which are built with
     /// the shell, so its switch reloads the shell ([`Session::resupply_language`], which
     /// also builds the tree again) instead of only the menus.
-    pub(crate) fn switch_selected_mod(&mut self, on: bool) {
-        let (Some(shell), Stage::Menu(stage)) = (self.shell.as_ref(), &self.stage) else {
+    pub(crate) fn switch_mod(&mut self, id: &str, on: bool) {
+        let Some(shell) = self.shell.as_ref() else {
             return;
         };
-        let Some((id, default_enabled, texture_pack)) = mods::selected(&stage.menu, &shell.mods)
-            .map(|mod_| (mod_.id.clone(), mod_.default_enabled, mod_.texture_pack))
+        let Some((default_enabled, texture_pack)) = shell
+            .mods
+            .iter()
+            .find(|mod_| mod_.id == id && mod_.enabled.is_some())
+            .map(|mod_| (mod_.default_enabled, mod_.texture_pack))
         else {
             return;
         };
-        if !mods::switch(&mut self.settings.mods, &id, on, default_enabled) {
+        if !mods::switch(&mut self.settings.mods, id, on, default_enabled) {
             self.resupply_mod_switch();
             return;
         }
@@ -105,7 +139,7 @@ impl Session {
         if texture_pack {
             self.resupply_language();
         } else {
-            self.rebuild_menus(Some(&id));
+            self.rebuild_menus(None);
         }
     }
 
@@ -183,7 +217,8 @@ impl Session {
     }
 
     /// A menu model built on `shell`, standing where the open menus stand: the trail of pages
-    /// and rows, and the mod the MOD row is on, which no setting holds. `None` when no menu is
+    /// and rows, the order the MODS list was entered in, and the mod the MOD row is on, which
+    /// no setting holds. `None` when no menu is
     /// open; the flag says whether every page of the trail exists in the new tree. Every rebuild
     /// that keeps the player in place goes through this, so none can forget a row that is stored
     /// nowhere.
@@ -193,8 +228,10 @@ impl Session {
         };
         let trail = stage.menu.trail();
         let held = mods::selection(&stage.menu);
+        let orders = stage.menu.item_orders();
         let skin = stage.skin;
         let mut model = self.menu_model(shell, &skin);
+        model.set_item_orders(&orders);
         let restored = model.restore_trail(&trail);
         if let Some(id) = held {
             mods::reseat(&mut model, &id, &shell.mods, &shell.strings);

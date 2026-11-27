@@ -327,6 +327,8 @@ OAG_MEDAL_BRONZE = { text = "BRONZE", human = false }
 OAG_MENU_MODS = { text = "MODS", human = false }
 OAG_MENU_MODS_SUBTITLE = { text = "Ligue ou desligue cada mod; quem o fez, a licença e o que adiciona", human = false }
 OAG_MODS_PAGE_TITLE = { text = "MODS", human = false }
+OAG_MODS_DETAIL_PAGE_TITLE = { text = "MOD", human = false }
+OAG_MODS_TOGGLE = { text = "LIGAR/DESLIGAR", human = false }
 OAG_MODS_ROW = { text = "MOD", human = false }
 OAG_MODS_ID = { text = "ID", human = false }
 OAG_MODS_VERSION = { text = "VERSÃO", human = false }
@@ -584,3 +586,11 @@ OAG_PHOTO_GALLERY = { text = "FOTO SALVA NA GALERIA", human = false }
 OAG_REPLAY_CAMERA = { text = "CÂMERA", human = false }
 OAG_PHOTO_TOUCH_HINT = { text = "ARRASTAR ÓRBITA   PINÇAR ZOOM   2 DEDOS PANORÂMICA   GIRAR INCLINAR   TOQUE DUPLO REDEFINIR", human = false }
 OAG_PHOTO_TOUCH_HINT_FREE = { text = "ARRASTAR OLHAR   PINÇAR APROXIMAR   2 DEDOS DESLIZAR   GIRAR ROLAR   TOQUE DUPLO REDEFINIR", human = false }
+
+# The title chooser's cards (`crates/game/src/launcher/cards.rs`).
+OAG_LAUNCHER_CHOOSE = { text = "ESCOLHA UM JOGO", human = false }
+OAG_LAUNCHER_MOVE = { text = "SETAS ESCOLHER", human = false }
+OAG_LAUNCHER_START = { text = "ENTER OU X INICIAR", human = false }
+OAG_LAUNCHER_PICTURE = { text = "C OU QUADRADO PRÓXIMA IMAGEM", human = false }
+OAG_LAUNCHER_QUIT = { text = "ESC SAIR", human = false }
+OAG_LAUNCHER_ENCRYPTED = { text = "CRIPTOGRAFADO - DIGITE A CHAVE DO DISCO", human = false }

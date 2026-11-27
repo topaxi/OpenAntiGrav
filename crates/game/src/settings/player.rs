@@ -274,8 +274,7 @@ mod tests {
 
     #[test]
     fn a_hand_edited_file_is_cleaned_when_it_loads() {
-        let dir = std::env::temp_dir().join(format!("oag-player-clean-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).expect("scratch dir");
+        let dir = oag_testdata::scratch::dir("player-clean");
         let file = dir.join("settings.toml");
         std::fs::write(
             &file,
@@ -289,7 +288,7 @@ mod tests {
 
     #[test]
     fn a_stored_name_survives_a_restart() {
-        let dir = std::env::temp_dir().join(format!("oag-player-name-{}", std::process::id()));
+        let dir = oag_testdata::scratch::dir("player-name");
         let file = dir.join("settings.toml");
         let mut first = super::super::load_from(&file).expect("a fresh profile loads");
         assert_eq!(first.player.name(), None);

@@ -20,6 +20,7 @@ fn layout() -> Layout {
     for i in 0..10 {
         xml += &image(&format!("ZoneLight{i}"), 400.0 + i as f32, 1.0);
     }
+    xml += &image("ManualShield", 500.0, 20.0);
     xml += "</Screen>";
     Layout::from_xml(&xml)
 }
@@ -106,6 +107,29 @@ fn the_pilot_assist_icon_follows_its_flag() {
         ..Readout::blank()
     };
     assert_eq!(names(&layout, &on, oag_2048::hud::ART), ["PilotAssist"]);
+}
+
+/// A quarter of the Shield left draws the bottom quarter of `ManualShield`'s box and source
+/// rect; none left draws nothing. Fails if the widget is stretched, cropped from the bottom, or
+/// drawn with no Shield up, and if a title with no `shield_drain_widget` draws it.
+#[test]
+fn the_running_shield_drains_its_widget_from_the_top() {
+    let layout = layout();
+    let drain = |art: &oag_title::HudArt, fraction: f32| {
+        let readout = Readout {
+            shield_drain_fraction: fraction,
+            ..Readout::blank()
+        };
+        dialect_2048::shield_drain(&layout, art, &readout)
+    };
+    let full = drain(oag_2048::hud::ART, 1.0).expect("up at full");
+    let quarter = drain(oag_2048::hud::ART, 0.25).expect("up at a quarter");
+    assert_eq!(full.rect, [500.0, 0.0, 20.0, 10.0]);
+    assert_eq!(quarter.rect, [500.0, 7.5, 20.0, 2.5]);
+    assert_eq!(quarter.uv, [0.0, 7.5, 20.0, 2.5]);
+    assert!(drain(oag_2048::hud::ART, 0.0).is_none());
+    assert!(drain(oag_omega::hud::ART_2048, 0.25).is_some());
+    assert!(drain(oag_pulse::hud::ART, 1.0).is_none());
 }
 
 #[test]

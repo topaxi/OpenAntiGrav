@@ -10,7 +10,8 @@ set -uo pipefail
 [ -d /proc/self ] || { echo "check-ppsspp-start: skipped (no /proc)"; exit 0; }
 cd "$(dirname "$0")/.." || exit 1
 start=${PPSSPP_START_UNDER_TEST:-$PWD/scripts/ppsspp-start.sh}
-tmp=$(mktemp -d)
+. scripts/oag-tmp.sh
+tmp=$(mktemp -d -p "$(oag_tmp_root)")
 bystanders=()
 cleanup() {
     local p f

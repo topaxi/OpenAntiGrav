@@ -24,7 +24,8 @@
 set -eu
 mode=${1:-2.35}
 out=${2:-target/portable/oag-server}
-tmp=$(mktemp -d)
+. "$(dirname "${BASH_SOURCE[0]}")/oag-tmp.sh"
+tmp=$(mktemp -d -p "$(oag_tmp_root)")
 trap 'rm -rf "$tmp"' EXIT
 if [ "$mode" = musl ]; then
     target=x86_64-unknown-linux-musl

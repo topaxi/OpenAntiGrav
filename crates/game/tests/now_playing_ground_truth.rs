@@ -200,7 +200,7 @@ fn timeline(image: &str, mode: oag_race::Mode, class: &str) -> Option<Vec<Beat>>
         ..oag_raceplay::Options::default()
     })
     .expect("loading the race");
-    let cache = Path::new(env!("CARGO_TARGET_TMPDIR")).join("now-playing-audio");
+    let cache = oag_testdata::scratch::cache("now-playing-audio");
     let discs = oag_sound::MusicDiscs::survey(&source, &GameLibrary);
     let mut audio = oag_sound::Audio::open(
         &oag_sound::settings::Settings::default(),
@@ -360,7 +360,7 @@ fn a_title_that_starts_its_song_at_load_has_it_from_the_first_step() {
             .music
             .is_some_and(oag_title::Music::song_waits_for_go)
     );
-    let cache = Path::new(env!("CARGO_TARGET_TMPDIR")).join("now-playing-audio");
+    let cache = oag_testdata::scratch::cache("now-playing-audio");
     let discs = oag_sound::MusicDiscs::survey(&source, &GameLibrary);
     let mut audio = oag_sound::Audio::open(
         &oag_sound::settings::Settings::default(),
@@ -834,7 +834,7 @@ fn pulse_pad_music_controls_move_the_song_and_leave_the_simulation_alone() {
             ..oag_raceplay::Options::default()
         })
         .expect("loading the race");
-        let cache = Path::new(env!("CARGO_TARGET_TMPDIR")).join("pad-music-audio");
+        let cache = oag_testdata::scratch::cache("pad-music-audio");
         let discs = oag_sound::MusicDiscs::survey(&source, &GameLibrary);
         let settings = oag_sound::settings::Settings::default();
         let mut audio = oag_sound::Audio::open(&settings, None, None, oag_audio::MIN_BUFFER, true);
