@@ -236,7 +236,9 @@ pub const PROGRAM_LIGHTMAPPED_SCROLL: f32 = 32.0;
 
 /// As [`PROGRAM_LIGHTMAPPED_SCROLL`], with an authored curve in the place of the clock:
 /// `(u, (v + offset) * scale + k)`, `k` sampled from the [`super::AnimTrack::Param`] row the
-/// second lane names, which `mesh.wesl` lays in the chunk's second coordinate pair.
+/// second lane names, which `mesh.wesl` lays in the chunk's second coordinate pair. The curve
+/// runs on the scenery's animation clock: **chosen, not measured**
+/// (`docs/rendering/hd-zone-recolour.md`, "The other lightmapped emissive families").
 pub const PROGRAM_LIGHTMAPPED_KEYED: f32 = 33.0;
 
 /// The second entry of an [`PROGRAM_ELECTRICITY`] material: tint `(PitchVolume, BassHit,

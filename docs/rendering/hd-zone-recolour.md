@@ -385,7 +385,9 @@ before). `track_surface` and `track_wall` bind fourth because their third holds 
 **No listed family is left dark.** The glow table holds 127 entries (seven index bits, 24 to 30 of
 the slot word; `FLIP_V` was a build-time per-material flag and left the word, `ZONE_PLAIN` took its
 bit 5). Modesto Heights uses 70 and Vineta K 62; every other HD circuit, every 2048 model (peak 29)
-and every Omega environment model (peak 40) stay under 61, so no other table changed. This pass
+and every Omega environment model (peak 40) stays under 61. Before the change the census's dark list
+held only Modesto Heights (table full) and Vineta K (law), and only `hd/modesto-heights` moves
+pixels across the 43 comparison pairs. This pass
 still leaves four entries free for the readers that run after material setup (the circuit's pad
 masks, the advert cards' Zone exemption); taking them was measured: Modesto's light bars and pad
 lamps went dark and `hd/modesto-heights` rose 3.98 to 5.56.
