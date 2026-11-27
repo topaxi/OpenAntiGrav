@@ -591,25 +591,33 @@ The `0.4` ceiling never binds here (static only). `L` swings threefold between n
 must take the picture's read, never the pause's. Five off-screen mines hold `0.2766` on every read and sixty hold `0`:
 a mine's words move only while it is animated.
 
-**Ours** reads bands 0 and 1 (chosen, not measured), which on `mines-ahead` gives `(1.0, 0.03)` against the original's
-`(1.0, 0.3154)`. A wiring of the law was built and measured, **not kept**: `oag_audio::Spectrum` published the sum of
-all 512 bins' magnitudes over 1024 as ours' `L` (no range; scale chosen: over two seconds of a music WAV it spans
-0.10 to 0.65, median 0.17, the original's order), and `--detonator-mine-volumes M,P;...` pinned each mine's pair from
-the picture's read. Same `theirs.png`, page scorer:
+**Ours is wired** (2026-11-27, `det-mine-volume-reland`): `visualiser_volumes` applies the two clamps to one level,
+`oag_audio::Spectrum::total`, the sum of all 512 bins' magnitudes over 1024. **Its scale against the original's is
+chosen, not measured** (over two seconds of a music WAV it spans 0.10 to 0.65, median 0.17, the original's order).
+A comparison pins each mine's two words from the picture-clock read (`--detonator-mine-volumes M,P;...`, from
+`original.detonator.mines`; `compare-rerender-ours` adds it to a pair recorded before the flag). The pair pins the
+law's outputs, not `L`, since a mine that was not animated holds stale words. A feed with no music (a fixed or ramp
+band feed, `--no-audio`) reads `L = 0` for any mine not pinned, so its ring loses the lightning; the `pad` record
+carries no mines, so ours' own seeded ones draw that way.
 
 | Pair | Before | After |
 | --- | ---: | ---: |
-| `mines-ahead` | 12.5060 | 12.5155 |
-| `pad` | 7.6074 | 7.6079 |
-| `cannon-volley` | 14.3187 | 14.3187 |
-| `cannon-volley-hot` | 10.3108 | 10.3515 |
+| `mines-ahead` | 9.0662 | 9.0626 |
+| `cannon-volley` | 9.1588 | 9.1513 |
+| `cannon-volley-hot` | 4.8241 | 4.8247 |
+| `pad` | 3.2363 | 3.2373 |
+| `endrace-record`, `endrace-norecord` | 5.1548, 5.9386 | unchanged |
 
-On `mines-ahead` the pin moves the near rings from two smooth circles to the original's jagged lightning at the rim
-(crop 780..1300, 330..690: mean absolute difference to theirs 15.732 before, 15.727 after) while the whole frame
-moves `+0.01`. Diagnostics on that pair: both volumes `0` 12.755, bands 0/1 12.506, the pin 12.516, so **`MasterVolume`
-carries 0.25 grey and `PitchVolume` 0.01**. `cannon-volley-hot` carries no volume words, so under a fixed feed ours'
-`L` was 0 and its rings lost the lightning the original and ours' bands both draw. The lane's acceptance rule ("keep
-the change only if mines-ahead drops") rejected it.
+Reproduce: copy `data/reference/compare-page/hd/detonator-talons-*` and call `compare-rerender-ours.rerender` on each
+`pair.json` (`docs/tools/compare-page.md`). Mine boxes against the original (mean absolute grey difference, before to
+after): `mines-ahead` `620x340+780+330` 12.579 to 12.542, where the near ring's rim turns jagged like the original's;
+`cannon-volley` `500x260+720+350` 21.649 to 21.681; `cannon-volley-hot` `360x120+880+380` 18.618 to 18.641; `pad`
+`260x90+930+390` 21.305 to 21.379. The two cannon pairs' rings move by no visible amount at 1920 wide.
+**`cannon-volley-hot` rises by 0.0006 and `pad` by 0.001**: the law is kept because it is read, not because a pair
+improves.
+
+An earlier wiring (2026-11-26, commit `5fac71320`, reverted) measured `mines-ahead` 12.5060 to 12.5155 on older
+frames; there `MasterVolume` carried 0.25 grey and `PitchVolume` 0.01.
 
 ## Correction: the dark branch does not submit the visualiser (2026-11-24, `det-mine-look-re`)
 
@@ -638,3 +646,5 @@ dark: [detonator-mine-draw.md](detonator-mine-draw.md). That is also the reader 
   **Omega: checked, differs** in the source: its spectrum comes from CRI's `ACX Spectrum Meter`, not MultiStream's
   records ([zone-visualiser.md](zone-visualiser.md)), so no `+0x61c` record exists to read; its mine animate function
   is not located, so whether it reads one whole-spectrum level for both words is unread.
+  **2048 and Omega run HD's law, inherited from HD** (2026-11-27): their rings draw through the same
+  `visualiser_constants`, fed ours' whole-spectrum level; neither has a pair that was measured.
