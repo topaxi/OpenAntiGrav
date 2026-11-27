@@ -542,6 +542,7 @@ pub fn run(
                 size: (width, height),
                 log_every: options.log_every,
                 give: options.give,
+                give_once: false,
                 anisotropy: options.anisotropy,
                 renderer: options.settings.graphics.renderer.clone(),
                 fov: options.settings.graphics.fov,

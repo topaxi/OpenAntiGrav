@@ -2998,3 +2998,20 @@ Omega's default circuit and Tech De Ra and on 2048's thirteen HD-ported circuits
 2048 Combat boards (`321Go_HD_Zone_Battle.vex`, `321go_hd_detonator.vex`, `321Go_2048_Combat.vex`): their files build and
 the substitution is read, and `Adverts::mode_gantries` lists each (`every_omega_mode_board_resolves_to_an_authored_vex`, `every_2048_mode_board_resolves_to_an_authored_vex` read them off the disc), but this engine has no `Mode` for Zone Battle or Combat, so only Zone and (since 2026-11-13, on HD too) Detonator are selected (`gantry_mode`); the digits' phase
 against the original on either title; FINAL LAP and the chequered flag on the node-driven `321Go_2048.vex`.
+
+## HD's `GO` at 0:26.8 in the Shield pairs is the pulse phase (2026-11-27, `hd-gantry-weaponbox`)
+
+The `hd-shield-hit-flash` pair shows `GO` in the original and a bare board in
+ours at race clock 0:26.8. **Not a missing hold.** Both play the pre-lap loop,
+`[3.83, 5.25)` s, 86 ticks, which lasts until the first line crossing
+(measured:
+[gantry-clock.md](../ghidra/functions/ps3-hdfury-eu/gantry-clock.md#the-lap-0-window-live-parked-and-across-the-line-2026-11-27-hd-gantry-weaponbox),
+confidence 92). Ours' capture is at tick 1883, 62 ticks into a loop, inside the
+asset's dark span 59 to 67; rendered at ticks 1883 plus or minus 43, eight
+apart, ours shows `GO` bright, grey and absent in turn. The pair records no
+gantry time for the original, so `--gantry-seconds` cannot be set for these two
+grabs; a re-grab through `rpcs3_hd_field.gantry_seconds` (as
+`scripts/rpcs3-hd-pair.py` does) would pin it. Nothing was wired.
+
+Omega and 2048: **not checkable** for the hold law here; it is read off HD's
+`RaceManager_Update`, and neither executable's race manager was read for it.

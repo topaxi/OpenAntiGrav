@@ -72,6 +72,20 @@ fn every_root_composes_with_nothing_missing_and_nothing_skipped() {
         );
         assert_eq!(c.files.len(), *files, "{root}: files");
         assert_eq!(c.layout.sprites.len(), *sprites, "{root}: sprites");
+        // The include trees that carry `HUD_damage_indicator.xml` author the Shield countdown's
+        // widget, so the inherited HD rule has what it needs; Elimination's score box and
+        // Zone's own shield cluster author none.
+        let countdown = oag_omega::hud::ART
+            .runtime
+            .and_then(|runtime| runtime.shield.countdown)
+            .expect("Omega inherits HD's countdown");
+        let authors = !root.ends_with("Elimination_HUD.xml") && !root.ends_with("Zone_HUD.xml");
+        assert_eq!(
+            c.layout.sprite(countdown.widget).is_some(),
+            authors,
+            "{root}: {}",
+            countdown.widget
+        );
     }
 }
 

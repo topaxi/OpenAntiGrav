@@ -478,6 +478,13 @@ const RUNTIME: &oag_title::hud::RuntimeHud = &oag_title::hud::RuntimeHud {
         warning_rgb: 0x00FF_0000,
         critical_percent: 20,
         phases_per_second: 8,
+        // Inherited from HD, not read off Omega's executable: Omega ships the widget and binds
+        // its name (hud-readouts.md, "The Shield countdown").
+        countdown: Some(oag_title::hud::ShieldCountdown {
+            widget: "DamageBarShieldBg",
+            rgb: 0x0030_FF30,
+            layout_file: "HUD_damage_indicator.xml",
+        }),
     },
     lap_arc: oag_title::hud::SegmentArc {
         prefix: "LapBar",
