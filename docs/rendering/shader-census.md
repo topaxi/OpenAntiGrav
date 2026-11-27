@@ -43,7 +43,15 @@ a reading: an input in the list is not proof it is drawn correctly.
 | Omega | 1104 (36 HD-lineage circuit, 50 2048 circuit, 1018 other) | `data05`, `07`-`09` of the patch over `data00`-`04` of the base |
 | 2048 | 975 | EU `data2`, `data1` over `data`, then `dlc1`, `dlc2` |
 
-A path held by more than one archive is read once, from the first in that order.
+A path held by more than one archive is read once, from the first in that order. For HD that
+is the same copy `Archives` serves (`DATA00`, `DATA02`, then the rest): `DATA01`, which the
+engine mounts ahead of `DATA03`-`06`, holds no model or material. The disc updates
+(`data07`, `data08`) hold no `.rcsmodel` or `.rcsmaterial`
+([`hd-updates.md`](../formats/hd-updates.md)), so they are not mounted here.
+
+The setup arguments are a race's: `graphics.water` at `original` (the default) and the
+lightmapped emissive families on, as craft and circuit builds pass them. The pad pass
+(`mesh::rcs::pads`) builds with them off; its chunks are counted from the whole model's setup.
 
 Left out, as not part of an ordinary race: `/fe/` models, the `zone_N` environments, the Zone
 and Detonator craft, Zone battle HUD and pads, `new_mode_pads`, `pvsblocker` occluders (never
@@ -61,15 +69,17 @@ row only. The HD PSN download edition (`data/extracted/ps3/hd-psn-eu`) is not ce
 
 ## Chunks by matcher
 
-- **HD/Fury**: hull_normal 5132, alpha_emissive 1175, vertex_scroll 1105, window_glass 820, lightmapped_emissive 742, hull_normal+pads 510, mag_wave 390, holo_billboard 301
+- **HD/Fury**: hull_normal 5642, alpha_emissive 1175, vertex_scroll 1105, window_glass 820, lightmapped_emissive 742, mag_wave 390, holo_billboard 301, hull_normal+probe_lit 277
 - **Omega**: fc01_placeholder 35498, zone_colour 28337, crowd 3372, hull_colour 2604, emissive_add+pad_bars 1832, alpha_emissive 1333, glow_layer 1057, emissive_add 874
 - **2048**: fc01_placeholder 35498, zone_colour 28337, emissive_add 1964, emissive_add+pad_bars 1852, alpha_emissive 1849, glow_layer 1101, vertex_blend 882, lit_alpha 158
-
 
 Two simple readings make most of the matcher share on the 2048-lineage circuits:
 `fc01_placeholder` (35,498 submeshes drawn as the fog colour) and `zone_colour` (28,337 drawn
 in the authored Zone colour). Without them the matcher share is 10.3% on Omega and 5.8% on
 2048.
+
+Read as a yes or no (generic counting as not modelled), the modelled share by chunks is the
+matcher column: HD 18.9%, Omega 40.7%, 2048 35.2%.
 
 HD's `unread:no-variant` billboards and ribbon effects may draw through another pass
 (billboards are rendered to a texture, ribbons by the effect renderer); whether the original
