@@ -119,7 +119,7 @@ b     = trunc16(clamp(0.5 * log2(x18) + K + 8.2, -8, 7.5))
 | --- | --- | ---: |
 | `b` | Live, Talon's Junction and Metropia White grids: 150 of 150 mesh textures hold `TEXLEVEL` equal to the formula with the `K` stored in their own object (`+0xb0`) | 90 |
 | `K` at the race camera | Memory write watch on `g_display+0x5df4`, grid frame: `-8.8799` from the race and `VexCamera` writes, `-9.6439`/`-9.7999` from two other cameras | 90 |
-| `K` of the other textures | Of the 150, 82 hold `K = -9.0506`, a camera that writes nothing in a grid frame. Its source is unread | 50 |
+| `K` of the other textures | Of the 150, 82 hold `K = -9.0506`: the **pre-race flyby camera's** (field of view 54.309, `m00` 1.104771), written by `Camera_SubmitScene` and `Camera_ApplyViewProjection`. Write watch through race load on three cold boots ([mesh-draw.md](../ghidra/functions/psp-pulse-usa/mesh-draw.md), "`K = -9.0506` is the pre-race flyby camera's") | 93 |
 | `level = TexLog2(2 w slope) + b` | PPSSPP v1.20.4 software renderer (`Rasterizer.cpp`, `CalculateSamplingParams`), and recorded GE frames replayed with each level painted its own colour (`scripts/psp-ge-level-map.py`). With the bias forced to `0`, the level the pixels show against `log2(2 w slope)`: median error -0.001 (Talon, slope `1/64`, 93 % within 1/8 level), +0.059 (slope `1/32`, 83 %), +0.005 (Metropia, `1/64`, 68 %; the misses are last-level clamps). Without the factor 2: +0.92, +0.44, +0.31 | 85 for the emulator, hardware unmeasured |
 
 `log2(2 w / 256) + b` with `b = 0.5 * log2(x18) + K + 8.2` works out to the
@@ -138,9 +138,14 @@ are ours, and their size:
   the drawing camera's `K` is more than 0.2 away. So the stored value is within 0.2
   level of the current one, and ours is within that of the original: measured, the
   split is `-9.0506` against `-8.8799`, 0.17 level, so those textures (82 of 150)
-  are 2 or 3 sixteenths finer in the original than ours. Ours does not store one
-  because the second value is load-time history whose camera is unread; no write
-  of it happens in a grid frame.
+  are 2 or 3 sixteenths finer in the original than ours. **Ours does not store
+  one yet.** To match, each texture needs a stored `K`, unset at load, replaced
+  by the drawing camera's whenever the two differ by more than 0.2, with the
+  flyby's draws counted. Our flyby's field of view gives the original's
+  `-9.050638` unchanged. Two limits: the original's residency path also rebuilds
+  (17 of 102 flyby-built textures ended at the race value in a full flyby), and
+  a run that skips the flyby (`--race`, a capture, a headless run) holds the race
+  camera's `K` everywhere, which is what ours draws today.
 - **`K` is referred to a 480x272 framebuffer at every output resolution**, so a
   larger output draws the original's levels, softer than the old flat law at
   mid distance. TEXTURE DETAIL sharpens.
