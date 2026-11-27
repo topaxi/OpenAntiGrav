@@ -565,6 +565,8 @@ pub use page::{Page, RowMeta};
 
 mod expand;
 pub use expand::RowItem;
+mod items;
+pub use items::ItemOrders;
 mod definition;
 pub use definition::{
     Added, Definition, Error, For, ModMenu, PAUSE_PAGE, PHOTO_ROW, Pause, SCREEN_PAGE_PREFIX,
@@ -578,6 +580,8 @@ pub enum MenuEvent {
     Fired(Action),
     /// A `launch_race` row that names its inputs by setting key was activated.
     Launch(LaunchInputs),
+    /// An item of a list page was opened, by its row id (see `items.rs`).
+    OpenItem(String),
     /// A setting was moved. Apply it and persist it.
     Changed {
         /// The settings key from the definition.
@@ -647,6 +651,10 @@ pub struct Menu {
     defaults: Vec<(String, Value)>,
     /// The words of the footer's reset prompt. See [`Self::set_reset_label`].
     reset_label: String,
+    /// See [`Self::set_item_toggle_label`].
+    item_toggle_label: String,
+    /// The list pages' items in the order they were built in. See `items.rs`.
+    item_base: ItemOrders,
     /// Where that prompt was drawn. See [`Self::set_reset_rect`].
     reset_rect: Option<[f32; 4]>,
     /// The title's stand-in codepoint for the reset button. See [`Self::set_reset_glyph`].
@@ -715,6 +723,8 @@ impl Menu {
             nav: nav::Log::default(),
             defaults: Vec::new(),
             reset_label: String::new(),
+            item_toggle_label: String::new(),
+            item_base: Vec::new(),
             reset_rect: None,
             reset_glyph: None,
             square_actions: Vec::new(),
@@ -722,6 +732,7 @@ impl Menu {
             roles: crate::roles::Roles::default(),
             music: None,
         };
+        menu.item_base = menu.item_orders();
         // A row that is on a page only while the host offers it starts off the page.
         menu.offer(Action::PhotoMode, false);
         menu.offer(Action::OpenModSettings, false);

@@ -12,7 +12,7 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use oag_ui::language::StringTable;
-use oag_ui::menu::{Added, Definition, Error, For, ModMenu};
+use oag_ui::menu::{Added, Definition, Error, For, ModMenu, RowItem};
 use oag_ui::strings;
 
 /// The title a texture pack's `[games]` serial belongs to, as a mod's `titles` spells it.
@@ -122,6 +122,8 @@ pub mod words {
     pub const TEXTURE_PACK: (&str, &str) = ("OAG_MODS_TEXTURE_PACK", "TEXTURES");
     /// The ADDS line of a mod the player turned off: it adds nothing while off.
     pub const TURNED_OFF: (&str, &str) = ("OAG_MODS_TURNED_OFF", "NOTHING, TURNED OFF");
+    /// The footer's Square prompt on a row of the list.
+    pub const TOGGLE: (&str, &str) = ("OAG_MODS_TOGGLE", "TURN ON/OFF");
     /// The ENABLED row's two values.
     pub const ON: (&str, &str) = ("OAG_MODS_ON", "ON");
     /// See [`ON`].
@@ -167,20 +169,76 @@ pub mod words {
 const VALUE_CHARS: usize = 22;
 
 fn fit(text: &str) -> String {
-    if text.chars().count() <= VALUE_CHARS {
+    cut(text, VALUE_CHARS)
+}
+
+fn cut(text: &str, most: usize) -> String {
+    if text.chars().count() <= most {
         return text.to_string();
     }
-    let keep: String = text.chars().take(VALUE_CHARS - 3).collect();
+    let keep: String = text.chars().take(most - 3).collect();
     format!("{keep}...")
 }
 
-/// The page the mods are listed on, and the setting its one row holds.
+/// The page the mods are listed on, one row each.
 pub const PAGE: &str = "mods";
-/// The MODS page's row. Never persisted: it only says which mod the detail lines are about.
+/// The page a row of the list opens: one mod's switch, settings and detail lines.
+pub const DETAIL: &str = "mod_detail";
+/// The setting of the list page's template row; each mod's row is `<ITEM>.<mod id>`.
+pub const ITEM: &str = "mods.row";
+/// The detail page's MOD row. Never persisted: it only says which mod the page is about.
 pub const SELECTED: &str = "mods.selected";
-/// The MODS page's ENABLED row: the switch of the mod [`SELECTED`] is on, stored in
+/// The detail page's ENABLED row: the switch of the mod [`SELECTED`] is on, stored in
 /// `settings::Mods::disabled` rather than under this key.
 pub const ENABLED: &str = "mods.enabled";
+
+/// Longest name a list row draws before it cuts with `...`, beside a value as long as
+/// `ALWAYS ON`.
+const NAME_CHARS: usize = 24;
+
+/// The mod a list row's setting is about.
+#[must_use]
+pub fn item_of(setting: &str) -> Option<&str> {
+    setting.strip_prefix(ITEM)?.strip_prefix('.')
+}
+
+/// Replaces the list page's template row with one row per mod, in `listing`'s order; the
+/// menus put the ones that are on first when the list is entered. A mod that did not load, or
+/// is left out, has its error under the rows.
+pub fn expand(definition: &mut Definition, listing: &[Listing], strings: &StringTable) {
+    let items: Vec<RowItem> = listing
+        .iter()
+        .map(|mod_| {
+            let (mut values, current) = switch_for(mod_, strings);
+            if let Some(error) = &mod_.error {
+                values = values
+                    .into_iter()
+                    .map(|choice| choice.unusable(error.clone()))
+                    .collect();
+            }
+            RowItem {
+                id: mod_.id.clone(),
+                label: cut(&mod_.name, NAME_CHARS),
+                detail: None,
+                values,
+                current: current.to_string(),
+            }
+        })
+        .collect();
+    definition.expand_rows(oag_ui::menu::ValueSource::ModList, &items);
+}
+
+/// Opens the detail page for the mod `id`: the MOD row on it, then the page walked into, so
+/// BACK returns to the list.
+pub fn open_item(
+    model: &mut oag_ui::menu::Menu,
+    id: &str,
+    listing: &[Listing],
+    strings: &StringTable,
+) {
+    reseat(model, id, listing, strings);
+    model.push(DETAIL);
+}
 
 /// The choices for `ValueSource::ModSwitch`, for the mod the MOD row holds, and the value
 /// to seed: `on`/`off`, or the one dimmed value a mod that cannot be switched holds.
@@ -370,7 +428,7 @@ pub fn table_for(
     listing: &[Listing],
     strings: &StringTable,
 ) -> Option<Vec<(String, String)>> {
-    if model.page().id != PAGE {
+    if model.page().id != DETAIL {
         return None;
     }
     let room = model

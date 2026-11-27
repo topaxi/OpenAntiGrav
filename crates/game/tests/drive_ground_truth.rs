@@ -19,6 +19,8 @@ use std::process::Output;
 
 use serde_json::Value;
 
+mod mod_list;
+
 struct Run {
     output: Output,
     states: Vec<Value>,
@@ -711,20 +713,24 @@ fn the_mods_page_turns_a_mod_off_and_on_and_what_it_adds_goes_and_comes_back_liv
          select remix; press cross; until page=oag.remix/remix; \
          set mod.oag.remix.track_title=CUSTOM; ticks 120; press circle; until page=main; \
          select mods; press cross; until page=mods; \
-         set mods.selected=oag.hillside; set mods.enabled=off; expect page=mods; \
-         press circle; until page=main; \
+         select oag.hillside; press square; ticks 5; expect page=mods; expect focus=oag.hillside; \
+         press cross; until page=mod_detail; press circle; until page=mods; \
+         expect focus=oag.hillside; press circle; until page=main; \
          select campaign; press cross; until screen=campaign; ticks 5; press circle; \
          until screen!=campaign; until page=main; \
          select remix; press cross; until page=oag.remix/remix; ticks 60; press circle; \
          until page=main; \
          select mods; press cross; until page=mods; \
-         set mods.selected=oag.hillside; set mods.enabled=on; \
-         press circle; until page=main; \
+         select oag.hillside; press cross; until page=mod_detail; set mods.enabled=on; \
+         set mods.selected=oag.wall-penalty; press circle; until page=mods; \
+         expect focus=oag.wall-penalty; press circle; until page=main; \
          select campaign; press cross; until page=campaigns; ticks 5; press circle; \
-         until page=main; ticks 5",
+         until page=main; select mods; press cross; until page=mods; \
+         select oag.energy-turbo; press square; ticks 5; expect focus=oag.energy-turbo",
         None,
     );
     assert!(run.output.status.success(), "{}", run.stderr());
+    mod_list::check_the_list_order(&run);
     let tracks = remix_tracks(&run);
     let has = |labels: &[String], name: &str| labels.iter().any(|l| l.contains(name));
     let custom: Vec<&Vec<String>> = tracks.iter().filter(|labels| has(labels, "OCTA")).collect();
@@ -773,10 +779,13 @@ fn the_mods_page_turns_a_mod_off_and_on_and_what_it_adds_goes_and_comes_back_liv
     )
     .expect("the run saved its settings");
     let saved: toml::Table = saved.parse().unwrap();
+    let disabled: Vec<&str> = (saved["mods"]["disabled"].as_array().into_iter().flatten())
+        .filter_map(toml::Value::as_str)
+        .collect();
     assert_eq!(
-        saved["mods"]["disabled"].as_array().map(Vec::len),
-        Some(0),
-        "turned back on, nothing is left off"
+        disabled,
+        ["oag.energy-turbo"],
+        "Hillside turned back on, and the mod Square turned off from the list"
     );
 }
 
@@ -982,8 +991,10 @@ fn the_mods_page_turns_a_texture_pack_on_and_off_and_the_front_ends_faces_follow
         "mods-texture-pack",
         &format!(
             "boot; ticks 5; select mods; press cross; until page=mods; \
-             set mods.selected={id}; set mods.enabled=on; ticks 5; expect page=mods; \
-             set mods.enabled=off; ticks 5; expect page=mods; press circle; until page=main"
+             select {id}; press cross; until page=mod_detail; \
+             set mods.enabled=on; ticks 5; expect page=mod_detail; \
+             set mods.enabled=off; ticks 5; expect page=mod_detail; press circle; \
+             until page=mods; expect focus={id}; press circle; until page=main"
         ),
         None,
         &[("RUST_LOG", "warn,oag_game=info,oag_raceplay=debug")],

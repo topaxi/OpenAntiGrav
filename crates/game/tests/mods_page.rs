@@ -107,11 +107,12 @@ fn every_title_reaches_the_mods_page_from_options() {
             "{}",
             title.name
         );
-        assert!(
-            built.definition.page(mods::PAGE).is_some(),
-            "{}: no MODS page",
-            title.name
-        );
+        let list = built
+            .definition
+            .page(mods::PAGE)
+            .unwrap_or_else(|| panic!("{}: no MODS page", title.name));
+        assert_eq!(list.item_page.as_deref(), Some(mods::DETAIL));
+        assert!(built.definition.page(mods::DETAIL).is_some());
     }
 }
 
@@ -190,7 +191,7 @@ fn the_page_row_steps_through_the_list_and_the_table_follows_it() {
         1,
         "one row reads the list"
     );
-    assert!(model.open(mods::PAGE));
+    assert!(model.open(mods::DETAIL));
     let table = |model: &Menu| mods::table_for(model, &built.listing, &strings).unwrap();
     assert!(table(&model).iter().any(|(_, v)| v == "oag.extras"));
     assert!(model.seed(mods::SELECTED, &Value::Text("test.plain".into())));
@@ -212,7 +213,7 @@ fn a_menu_built_again_keeps_the_mod_the_row_was_on() {
     let model = |built: &mods::Built| {
         let mut model = Menu::new(built.definition.clone());
         model.supply(ValueSource::Mods, &mods::choices(&built.listing, &strings));
-        assert!(model.open(mods::PAGE));
+        assert!(model.open(mods::DETAIL));
         model
     };
     let mut old = model(&built);

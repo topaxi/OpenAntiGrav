@@ -508,6 +508,29 @@ fn a_mod_page_no_entry_reaches_names_the_mod_and_the_page() {
 }
 
 #[test]
+fn a_mod_page_cannot_be_a_list_page() {
+    let (_, key) = mod_error(
+        r#"[[entry]]
+id = "mine"
+parent = "options"
+kind = "submenu"
+label = "MINE"
+target = "mine"
+
+[[page]]
+id = "mine"
+title = "MINE"
+item_page = "options"
+
+[[page.entry]]
+kind = "back"
+label = "BACK"
+"#,
+    );
+    assert_eq!(key, "page \"mine\" item_page");
+}
+
+#[test]
 fn a_mod_page_id_must_be_plain_and_unique() {
     let slash = "[[page]]\nid = \"a/b\"\ntitle = \"X\"\n";
     assert_eq!(mod_error(slash).1, "page \"a/b\" id");
