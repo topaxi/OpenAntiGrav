@@ -8,6 +8,10 @@ arguments), bloom on, 16:9. Runs under a scratch `XDG_*` tree (`--profile DIR`,
 default a temporary one) so no run touches the maintainer's own settings.
 """
 import argparse, importlib.util, json, os, pathlib, subprocess, tempfile
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import oag_tmp  # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 spec = importlib.util.spec_from_file_location("hfc", ROOT / "scripts" / "hd-frame-compare.py")
@@ -29,7 +33,7 @@ def main():
     width, height = Image.open(pair / f"{args.pose}.png").size
     flags = list(hfc.COMPARISON_ARGS)
     flags[1] = f"{width}x{height}"
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory(dir=oag_tmp.temp_root()) as tmp:
         cfg = pathlib.Path(args.profile or tmp)
         (cfg / "oag").mkdir(parents=True, exist_ok=True)
         (cfg / "oag" / "settings.toml").write_text(

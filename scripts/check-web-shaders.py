@@ -57,6 +57,9 @@ import tempfile
 import threading
 from pathlib import Path
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import oag_tmp  # noqa: E402
+
 ROOT = Path(__file__).resolve().parent.parent
 
 # The `enable` directive of a shader variant a native device feature selects, which the
@@ -144,7 +147,7 @@ def collect_modules(build: bool) -> dict[str, str]:
                 print(f"check-web-shaders: {found.group(1)}/{artifact.name} is native only, skipped")
                 continue
             modules[f"{found.group(1)}/{artifact.name}"] = text
-    with tempfile.TemporaryDirectory(prefix="oag-screen-filters-") as scratch:
+    with tempfile.TemporaryDirectory(prefix="oag-screen-filters-", dir=oag_tmp.temp_root()) as scratch:
         subprocess.run(
             [
                 "cargo", "run", "-q", "-p", "oag-post", "--example", "screen_filters_wgsl",

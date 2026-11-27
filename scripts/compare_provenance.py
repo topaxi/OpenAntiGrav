@@ -28,6 +28,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import oag_tmp  # noqa: E402
+
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 MAIN = Path("/home/topaxi/projects/OpenAntiGrav")
@@ -444,7 +447,7 @@ def selftest():
     import types
     sys.path.insert(0, str(HERE))
     import compare_env as ce
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory(dir=oag_tmp.temp_root()) as tmp:
         def finished(profile, kind, capture, autopilot=None, extra=(), clock=True):
             pair = ce.Pair(profile, tmp)
             if clock:
@@ -465,7 +468,7 @@ def selftest():
         assert finished("pulse-psp", "race", "savestate_restore", "timer")[0] == 3, "a huge Autopilot timer refuses"
         code, rec = finished("pulse-psp", "race", "savestate_restore", "timer", ["autopilot_timer=looked at, state predates the flag"])
         assert code == 0 and rec["original"]["provenance"]["overrides"][0]["rule"] == "autopilot_timer", "the override is recorded in the pair"
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory(dir=oag_tmp.temp_root()) as tmp:
         rec = {"ours": {"flags": ["--race", "--pose-from", "{scratch}/pairs/a2/trace.csv", "--field-from", "data/x/field.csv"]}}
         assert len(input_problems(rec, tmp)) == 2, "inputs recorded outside the pair directory and absent from it"
         (Path(tmp) / "trace.csv").write_text("")

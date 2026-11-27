@@ -31,7 +31,7 @@
 //! pairs differ; so does dropping the map from the blur's uniform, and leaving
 //! the previous tick's projection out of the map makes the kick's pair differ.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
 /// A lens change forced at the end of tick 120: the flag and its `TICK:VALUE`.
@@ -69,19 +69,12 @@ fn capture(image: &Path, scratch: &Path, name: &str, blur: &str, forced: Forced<
 }
 
 /// The captures' directory, removed when the test ends, failing or not.
-struct Scratch(PathBuf);
+struct Scratch(oag_testdata::scratch::TempDir);
 
 impl Scratch {
     fn new() -> Self {
-        let dir = std::env::temp_dir().join(format!("oag-lens-blur-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).expect("creating the scratch directory");
+        let dir = oag_testdata::scratch::dir("lens-blur");
         Self(dir)
-    }
-}
-
-impl Drop for Scratch {
-    fn drop(&mut self) {
-        std::fs::remove_dir_all(&self.0).ok();
     }
 }
 

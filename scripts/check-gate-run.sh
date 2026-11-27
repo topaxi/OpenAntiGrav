@@ -15,8 +15,9 @@
 set -uo pipefail
 cd "$(dirname "$0")/.."
 root=$PWD
+. scripts/oag-tmp.sh
 gate_run=${GATE_RUN_UNDER_TEST:-$root/scripts/gate-run.sh}
-tmp=$(mktemp -d)
+tmp=$(mktemp -d -p "$(oag_tmp_root)")
 trap 'rm -rf "$tmp"; kill $(jobs -p) 2>/dev/null' EXIT
 mkdir "$tmp/bin"
 cat >"$tmp/bin/just" <<'JUST'

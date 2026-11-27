@@ -120,7 +120,7 @@ class Rig:
         self.game = Path(game).resolve()
         self.dir.mkdir(parents=True, exist_ok=True)
         self.seat = pad_seat.seat()
-        self.runtime = Path("/tmp/oag-omega-%s%s" % (self.dir.parent.name[:24], pad_seat.tag(self.seat)))
+        self.runtime = Path(os.environ.get("XDG_RUNTIME_DIR") or "/run/user/%d" % os.getuid()) / ("oag-omega-%s%s" % (self.dir.parent.name[:24], pad_seat.tag(self.seat)))
         self.pids = {}
         self.home = self.dir / "home"
         self.env = {**os.environ, "XDG_RUNTIME_DIR": str(self.runtime), "WAYLAND_DISPLAY": "wayland-1"}

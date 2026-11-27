@@ -1,9 +1,10 @@
 //! Where a test finds the disc images this project does not ship.
 //!
 //! **Test-only, and deliberately tiny.** It holds no game knowledge - no image
-//! names, no archive names, no title. It answers one question: *given a name,
-//! where is that file in this checkout, and is it there at all?* Everything
-//! about what the file contains belongs to `oag-disc` and the title crates.
+//! names, no archive names, no title. It answers two questions: *given a name,
+//! where is that file in this checkout, and is it there at all?* and *where may
+//! a test write?* ([`scratch`]). Everything about what a file contains belongs
+//! to `oag-disc` and the title crates.
 //!
 //! # Why this exists
 //!
@@ -29,6 +30,7 @@
 //! is gitignored and does not travel. Run `just link-data` there.
 
 pub mod exec;
+pub mod scratch;
 
 use std::path::{Path, PathBuf};
 

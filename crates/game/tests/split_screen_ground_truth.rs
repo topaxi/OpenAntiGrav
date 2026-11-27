@@ -175,8 +175,7 @@ fn players_draws_distinct_cameras_into_distinct_rectangles() {
     let Some(image) = oag_testdata::image("data/images/pulse-psp-usa.chd") else {
         return;
     };
-    let scratch = std::env::temp_dir().join(format!("oag-split-screen-{}", std::process::id()));
-    std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
+    let scratch = oag_testdata::scratch::dir("split-screen");
 
     let none = frame(&image, &scratch, "none", None, "off");
     let one = frame(&image, &scratch, "one", Some(1), "off");
@@ -229,8 +228,7 @@ fn the_stored_name_is_the_tag_over_the_first_seats_craft() {
     let Some(image) = oag_testdata::image("data/images/pulse-psp-usa.chd") else {
         return;
     };
-    let scratch = std::env::temp_dir().join(format!("oag-split-name-{}", std::process::id()));
-    std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
+    let scratch = oag_testdata::scratch::dir("split-name");
     let plain = frame(&image, &scratch, "plain", Some(2), "off");
     let settings = scratch.join("config").join("oag");
     std::fs::create_dir_all(&settings).expect("creating the settings directory");
@@ -261,8 +259,7 @@ fn four_views_survive_a_multisample_resolve() {
     let Some(image) = oag_testdata::image("data/images/pulse-psp-usa.chd") else {
         return;
     };
-    let scratch = std::env::temp_dir().join(format!("oag-split-msaa-{}", std::process::id()));
-    std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
+    let scratch = oag_testdata::scratch::dir("split-msaa");
     let four = frame(&image, &scratch, "four", Some(4), "4x");
     std::fs::remove_dir_all(&scratch).ok();
     let (w, h) = SIZE;
@@ -287,8 +284,7 @@ fn fsr3_resolves_each_view_from_its_own_rectangle() {
     let Some(image) = oag_testdata::image("data/images/pulse-psp-usa.chd") else {
         return;
     };
-    let scratch = std::env::temp_dir().join(format!("oag-split-fsr3-{}", std::process::id()));
-    std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
+    let scratch = oag_testdata::scratch::dir("split-fsr3");
     let two = frame_with(
         &image,
         &scratch,
@@ -314,8 +310,7 @@ fn fsr3_resolves_each_view_from_its_own_rectangle() {
 
 /// Two views, top and bottom, each holding a picture of its own.
 fn two_up_draws_two_pictures(source: &Path, tag: &str) {
-    let scratch = std::env::temp_dir().join(format!("oag-split-{tag}-{}", std::process::id()));
-    std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
+    let scratch = oag_testdata::scratch::dir(&format!("split-{tag}"));
     let two = frame(source, &scratch, "two", Some(2), "off");
     std::fs::remove_dir_all(&scratch).ok();
     let (w, h) = SIZE;
@@ -340,8 +335,7 @@ fn hd_four_views_each_keep_their_picture() {
     let Some(image) = oag_testdata::image("data/images/hdfury-ps3-eu.iso") else {
         return;
     };
-    let scratch = std::env::temp_dir().join(format!("oag-split-hd-four-{}", std::process::id()));
-    std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
+    let scratch = oag_testdata::scratch::dir("split-hd-four");
     let four = frame(&image, &scratch, "four", Some(4), "off");
     std::fs::remove_dir_all(&scratch).ok();
     let (w, h) = SIZE;

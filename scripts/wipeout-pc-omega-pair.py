@@ -133,7 +133,7 @@ class Rig:
         self.dir.mkdir(parents=True, exist_ok=True)
         # a short path: the sway IPC socket lives here and a unix socket path is limited to 107 bytes
         self.seat = pad_seat.seat()
-        self.runtime = Path("/tmp/oag-omega-port-%s%s" % (lane[:24], pad_seat.tag(self.seat)))
+        self.runtime = Path(os.environ.get("XDG_RUNTIME_DIR") or "/run/user/%d" % os.getuid()) / ("oag-omega-port-%s%s" % (lane[:24], pad_seat.tag(self.seat)))
         self.pids = {}
         self.env = {**os.environ, "XDG_RUNTIME_DIR": str(self.runtime), "WAYLAND_DISPLAY": "wayland-1"}
         self.hold = None

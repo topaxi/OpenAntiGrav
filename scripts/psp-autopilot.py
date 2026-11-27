@@ -12,9 +12,9 @@ reusable artefact: `psp-trace.py --script` replays it into the emulator and
 `oag-trace run --script` replays it into our own physics.
 
     cargo run -q -p oag-trace -- track --source data/images/pulse-psp-usa.chd \\
-        > /tmp/spline.csv
+        > target/tmp/spline.csv
     uv run --with websocket-client scripts/psp-drive.py restart
-    uv run --with websocket-client scripts/psp-autopilot.py --spline /tmp/spline.csv \\
+    uv run --with websocket-client scripts/psp-autopilot.py --spline target/tmp/spline.csv \\
         --laps 1 --script-out verification/scenarios/talons-junction-lap.inputs \\
         --trace-out data/traces/talons-junction-autopilot.csv
 

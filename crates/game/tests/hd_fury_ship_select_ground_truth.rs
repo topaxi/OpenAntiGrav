@@ -29,7 +29,7 @@ fn fury(image: &Path) -> std::sync::Arc<boot::fury::FuryAssets> {
         dlc: Vec::new(),
         leg: frontend::Leg::LogoFmv,
         movie: None,
-        cache: std::env::temp_dir().join("oag-hd-fury-ship-select-ground-truth"),
+        cache: oag_testdata::scratch::cache("hd-fury-ship-select-ground-truth"),
         audio_cache: oag_source::cache::default_audio_cache_dir(),
         extent: oag_game::movie::Extent::Frames(oag_game::INTRO_FRAMES_NEEDED),
         no_video: true,
@@ -316,21 +316,9 @@ fn every_fourth_row_from_the_top_is_a_scanline() {
     assert!((0.6..0.8).contains(&dip), "{dip}: {by_phase:?}");
 }
 
-/// A scratch directory of this call's own under the build's, named by process and call: two
-/// tests of one run, or two checkouts, never share a settings file or a still.
-fn scratch_dir(tag: &str) -> std::path::PathBuf {
-    static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-    std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!(
-        "{tag}-{}-{}",
-        std::process::id(),
-        NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-    ))
-}
-
 /// A 1280x720 capture of `page` through the real binary, with `flags` after the page.
 fn capture_of(image: &Path, page: &str, flags: &[&str]) -> oag_texture::replacer::Image {
-    let dir = scratch_dir("oag-hd-fury-tint-ground-truth");
-    std::fs::create_dir_all(&dir).expect("a temp directory");
+    let dir = oag_testdata::scratch::dir("hd-fury-tint-ground-truth");
     let out = dir.join("page.png");
     let status = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
         .arg(image)

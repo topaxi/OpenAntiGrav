@@ -75,7 +75,7 @@ the output filename always carries it.
 
 Usage:
     scripts/export-ppsspp-sym.py psp-pulse-usa
-    scripts/export-ppsspp-sym.py psp-pulse-eu --out /tmp/psp-pulse-eu.sym
+    scripts/export-ppsspp-sym.py psp-pulse-eu --out target/tmp/psp-pulse-eu.sym
 """
 
 from __future__ import annotations

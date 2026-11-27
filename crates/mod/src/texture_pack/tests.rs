@@ -1,5 +1,5 @@
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipWriter};
@@ -19,11 +19,8 @@ fn resolve(serial: &str) -> Option<String> {
     }
 }
 
-fn scratch(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("oag-pack-{}-{name}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    dir
+fn scratch(name: &str) -> oag_testdata::scratch::TempDir {
+    oag_testdata::scratch::dir(&format!("pack-{name}"))
 }
 
 fn zip_of(path: &Path, entries: &[(&str, &[u8])]) {
@@ -43,7 +40,7 @@ fn a_folder_with_a_textures_ini_is_a_mod_that_starts_off() {
     std::fs::create_dir_all(&pack).unwrap();
     std::fs::write(pack.join("textures.ini"), INI_TEXT).unwrap();
 
-    let found = search(std::slice::from_ref(&base));
+    let found = search(&[base.to_path_buf()]);
     assert_eq!(found.len(), 1);
     let module = Mod::open(&found[0].path).unwrap();
     let m = &module.manifest;
@@ -109,7 +106,7 @@ fn a_folder_holding_textures_zip_is_found_as_the_zip_and_named_after_the_folder(
     );
     std::fs::write(pack.join("Readme.txt"), "not part of the pack").unwrap();
 
-    let found = search(std::slice::from_ref(&base));
+    let found = search(&[base.to_path_buf()]);
     assert_eq!(found.len(), 1);
     assert_eq!(found[0].path, pack.join("textures.zip"));
     let module = Mod::open(&found[0].path).unwrap();
@@ -177,7 +174,7 @@ fn a_pack_linked_once_per_serial_is_one_candidate() {
     for serial in ["UCES00465", "UCUS98712"] {
         std::os::unix::fs::symlink(&real, memstick.join(serial)).unwrap();
     }
-    let found = search(&[base.clone(), memstick]);
+    let found = search(&[base.to_path_buf(), memstick]);
     assert_eq!(found.len(), 1, "{found:?}");
 }
 
@@ -186,11 +183,11 @@ fn a_folder_with_neither_a_manifest_nor_an_ini_is_not_a_candidate() {
     let base = scratch("empty");
     std::fs::create_dir_all(base.join("something")).unwrap();
     std::fs::write(base.join("something/readme.txt"), "x").unwrap();
-    assert!(search(&[base]).is_empty());
+    assert!(search(&[base.to_path_buf()]).is_empty());
 }
 
-fn folder_pack(name: &str, pack_name: &str) -> PathBuf {
-    let pack = scratch(name).join(pack_name);
+fn folder_pack(name: &str, pack_name: &str) -> oag_testdata::scratch::TempDir {
+    let pack = scratch(name).child(pack_name);
     std::fs::create_dir_all(&pack).unwrap();
     std::fs::write(pack.join("textures.ini"), INI_TEXT).unwrap();
     pack
@@ -312,7 +309,7 @@ fn the_written_manifest_names_the_titles_and_a_recognised_pack_gets_them_assigne
 
 #[test]
 fn a_pack_no_serial_of_which_resolves_writes_no_titles() {
-    let pack = scratch("unresolved").join("odd");
+    let pack = scratch("unresolved").child("odd");
     std::fs::create_dir_all(&pack).unwrap();
     std::fs::write(
         pack.join("textures.ini"),

@@ -148,9 +148,7 @@ fn the_headless_demo_run_chains_demos_with_nobody_in_them() {
     let Some(image) = oag_testdata::image("pulse-psp-eu.chd") else {
         return;
     };
-    let scratch = Path::new(env!("CARGO_TARGET_TMPDIR")).join("demo-dry-run");
-    let _ = std::fs::remove_dir_all(&scratch);
-    std::fs::create_dir_all(&scratch).expect("a scratch directory");
+    let scratch = oag_testdata::scratch::dir("demo-dry-run");
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
         .arg(&image)
         .args([
@@ -202,9 +200,7 @@ fn a_wallpaper_on_three_outputs_shows_three_cameras() {
     let Some(image) = oag_testdata::image("pulse-psp-eu.chd") else {
         return;
     };
-    let scratch = Path::new(env!("CARGO_TARGET_TMPDIR")).join("demo-wallpaper-windows");
-    let _ = std::fs::remove_dir_all(&scratch);
-    std::fs::create_dir_all(&scratch).expect("a scratch directory");
+    let scratch = oag_testdata::scratch::dir("demo-wallpaper-windows");
     let shot = scratch.join("wallpaper.png");
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
         .arg(&image)

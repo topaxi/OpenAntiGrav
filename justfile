@@ -70,7 +70,7 @@ native_video_flags := if os() == "linux" { "--features native-video" } else { ""
 # order they get there, so nothing here changes what either asserts. Output of
 # the recipes interleaves; a failure names its recipe.
 [parallel]
-check: fmt-check lint check-ballisticng check-extensions check-web test check-docs check-deps check-unused-deps check-determinism check-size check-comment-history check-title-branching check-title-reach check-names check-captures check-hd-clock-grab check-pair-provenance check-test-data-script check-gate-run check-xvfb-own check-rpcs3-drive-env check-ppsspp-start check-android-stack-script check-handover check-link-data check-strings check-just-args check-status check-weapon-lineage check-test-groups check-schemas (check-guests "--strict")
+check: fmt-check lint check-ballisticng check-extensions check-web test check-docs check-deps check-unused-deps check-determinism check-size check-comment-history check-title-branching check-title-reach check-names check-captures check-hd-clock-grab check-pair-provenance check-test-data-script check-gate-run check-xvfb-own check-rpcs3-drive-env check-ppsspp-start check-android-stack-script check-handover check-link-data check-strings check-just-args check-status check-weapon-lineage check-test-groups check-temp-use check-schemas (check-guests "--strict")
 
 # Documentation is a deliverable, so its links are checked like any other build output
 check-docs:
@@ -261,7 +261,7 @@ check-android-stack-script:
 # `check-status` is left out: a member never commits `status.md`, so a stale table is
 # the lead's to regenerate, and the full `just` checks it.
 [parallel]
-gate-affected: fmt-check lint check-ballisticng check-extensions check-web test-affected check-docs check-deps check-unused-deps check-determinism check-size check-comment-history check-title-branching check-title-reach check-names check-captures check-hd-clock-grab check-pair-provenance check-test-data-script check-gate-run check-xvfb-own check-rpcs3-drive-env check-ppsspp-start check-android-stack-script check-handover check-link-data check-strings check-just-args check-weapon-lineage check-test-groups check-schemas (check-guests "--strict")
+gate-affected: fmt-check lint check-ballisticng check-extensions check-web test-affected check-docs check-deps check-unused-deps check-determinism check-size check-comment-history check-title-branching check-title-reach check-names check-captures check-hd-clock-grab check-pair-provenance check-test-data-script check-gate-run check-xvfb-own check-rpcs3-drive-env check-ppsspp-start check-android-stack-script check-handover check-link-data check-strings check-just-args check-weapon-lineage check-test-groups check-temp-use check-schemas (check-guests "--strict")
 
 # `just test`, narrowed to what `scripts/affected.py` selects. A selection is
 # nextest arguments, one per line; `--no-tests=pass` because a narrowed
@@ -730,9 +730,10 @@ play-mangohud *ARGS:
 # skip's own timing window would silently start depending on it, so this pins
 # every leg to the tick clock rather than to whatever audio happens to be
 # attached. See `crates/game/src/capture.rs`'s `MAX_TICKS` doc comment.
-play-screenshots out="/tmp":
+play-screenshots out="target/tmp/play-screenshots":
     #!/usr/bin/env bash
     set -euo pipefail
+    mkdir -p "{{out}}"
     cargo run -q --release -p oag-game {{native_video_flags}} -- --screenshot "{{out}}/oag-intro.png" --ticks 400 --no-audio
     cargo run -q --release -p oag-game {{native_video_flags}} -- --screenshot "{{out}}/oag-language.png" \
         --until "Language Selection" --hold start --no-audio
@@ -758,9 +759,10 @@ play-screenshots out="/tmp":
 # what it is showing. On an adapter with no compute shaders it degrades to
 # `fsr1` and the two images are identical - that is the fallback working, not
 # the capture failing. See docs/rendering/fsr3.md.
-compare-upscalers image scale="50" out="/tmp":
+compare-upscalers image scale="50" out="target/tmp/compare-upscalers":
     #!/usr/bin/env bash
     set -euo pipefail
+    mkdir -p "{{out}}"
     for upscaler in off fsr1 fsr3; do
         cargo run -q --release -p oag-game -- "{{image}}" --race \
             --screenshot "{{out}}/oag-upscale-{{scale}}-$upscaler.png" \
@@ -1085,16 +1087,18 @@ pcsx2-press *BUTTONS:
 
 # A frame the emulator is actually presenting, at GS resolution, into a file of
 # your choosing. Not frame-exact - use `pcsx2-frame` for that.
-pcsx2-shot path="/tmp/pcsx2-frame.png":
+pcsx2-shot path="target/tmp/pcsx2-frame.png":
+    mkdir -p "$(dirname "{{path}}")"
     uv run --with python-xlib python3 scripts/pcsx2-drive.py shot {{path}}
 
 # THE deterministic capture: load a savestate, step exactly `frames` emulated
 # frames with `hold` held down, and grab the paused frame. Pass `--from-state
 # <slot>` or it is not repeatable - two runs of
-#   just pcsx2-frame /tmp/a.png 30 cross --from-state 2
+#   just pcsx2-frame target/tmp/a.png 30 cross --from-state 2
 # produce byte-identical PNGs, without it they do not. Stepping is verified
 # against a guest frame counter and costs about 0.35 s a frame, deliberately.
-pcsx2-frame path="/tmp/pcsx2-frame.png" frames="30" hold="cross" *ARGS:
+pcsx2-frame path="target/tmp/pcsx2-frame.png" frames="30" hold="cross" *ARGS:
+    mkdir -p "$(dirname "{{path}}")"
     uv run --with python-xlib python3 scripts/pcsx2-drive.py frames {{frames}} --hold {{hold}} --shot {{path}} {{ARGS}}
 
 # Save or load a PCSX2 savestate over PINE, by slot: `just pcsx2-state save 2`.
@@ -1121,7 +1125,7 @@ pcsx2-stop:
 #
 #   just scripted-sim                                    # the whole-lap scenario
 #   just scripted-sim verification/scenarios/steer-left.inputs
-#   just scripted-sim verification/scenarios/steer-left.inputs --every 20 --out /tmp/ours.csv
+#   just scripted-sim verification/scenarios/steer-left.inputs --every 20 --out target/tmp/ours.csv
 #
 # Add `--script-lead 2` if the run is going to be held next to a capture: every
 # capture under data/traces/ was taken through `psp-trace.py --script-lead 2`,
@@ -1181,8 +1185,8 @@ trace-compare *ARGS:
 # Where a track's speed/weapon pads are, with approach points for `just drive
 # place`. See docs/tools/frame-compare.md.
 #
-#   just pads --before 50 > /tmp/pads.csv
-#   just drive place --pads-csv /tmp/pads.csv --pad 3 --before 50 --speed 120
+#   just pads --before 50 > target/tmp/pads.csv
+#   just drive place --pads-csv target/tmp/pads.csv --pad 3 --before 50 --speed 120
 [doc("Dump a track's pad trigger volumes, with approach points for teleports")]
 pads *ARGS:
     cargo run -q -p oag-trace -- pads --source {{psp_image}} "$@"
@@ -1192,16 +1196,18 @@ pads *ARGS:
 # half of a comparison whose emulator half `psp-trace.py --shot-every` took.
 # See docs/tools/frame-compare.md.
 [doc("Render one frame from a captured pose at PSP size")]
-frame-shot trace tick out="/tmp/oag-frame.png" *ARGS:
+frame-shot trace tick out="target/tmp/oag-frame.png" *ARGS:
+    mkdir -p "$(dirname "{{out}}")"
     cargo run -q --release -p oag-game -- --race --screenshot {{out}} \
         --ticks 0 --size 480x272 --pose-from {{trace}} --pose-tick {{tick}} {{ARGS}}
 
 # `compare` exits nonzero whenever the images differ, which here is always -
 # hence the `|| true`; the diff image is the answer, not the exit code.
 [doc("Side-by-side and difference image of an emulator shot and one of ours")]
-frame-compare theirs ours out="/tmp":
+frame-compare theirs ours out="target/tmp/frame-compare":
     #!/usr/bin/env bash
     set -euo pipefail
+    mkdir -p "{{out}}"
     command -v magick >/dev/null || { echo "frame-compare needs ImageMagick"; exit 1; }
     magick "{{theirs}}" -resize '480x272!' "{{out}}/oag-theirs.png"
     magick montage "{{out}}/oag-theirs.png" "{{ours}}" -tile 2x1 -geometry +2+2 "{{out}}/oag-side.png"
@@ -1232,7 +1238,7 @@ compare-rerender-ours *ARGS:
     python3 scripts/compare-rerender-ours.py {{ARGS}}
 
 # Boot each platform's emulator, restore every pair's state, re-make the pair, print one before/after table (docs/tools/compare-page.md).
-#   just compare-rerender-all --out data/scratch/<lane>/compare-page [--platform psp] [--resume] [--dry-run]
+#   just compare-rerender-all --out target/tmp/<lane>/compare-page [--platform psp] [--resume] [--dry-run]
 [doc("Re-make every comparison pair on its own emulator and print the before/after table")]
 compare-rerender-all *ARGS:
     python3 scripts/compare-rerender-all.py {{ARGS}}
@@ -1456,6 +1462,13 @@ check-weapon-lineage:
 # scan, no build, no GPU.
 check-test-groups:
     python3 -I scripts/check-test-groups.py
+
+# No test, script or recipe writes under the OS temp directory (a `tmpfs` with a
+# per-user quota on Linux): `oag_testdata::scratch`, `scripts/oag_tmp.py` and
+# `scripts/oag-tmp.sh` are where they write. Text scan, no build.
+check-temp-use:
+    python3 -I scripts/check-temp-use.py --selftest
+    python3 -I scripts/check-temp-use.py
 
 # Every mod guest crate under assets/mods passes its own tests, and each committed
 # `ext/*.wasm` is what its guest builds: the main workspace compiles neither, a guest being a

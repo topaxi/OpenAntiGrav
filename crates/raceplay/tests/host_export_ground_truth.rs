@@ -33,10 +33,8 @@ fn options() -> Option<oag_raceplay::Options> {
     })
 }
 
-fn scratch(tag: &str) -> std::path::PathBuf {
-    let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("oag-host-export-{tag}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    dir
+fn scratch(tag: &str) -> oag_testdata::scratch::TempDir {
+    oag_testdata::scratch::dir(&format!("host-export-{tag}"))
 }
 
 fn decode(file: &Path) -> oag_texture::replacer::Image {

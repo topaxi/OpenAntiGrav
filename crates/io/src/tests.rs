@@ -1,10 +1,7 @@
 use super::*;
 
-fn scratch(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("oag-io-{}-{name}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a scratch directory");
-    dir
+fn scratch(name: &str) -> oag_testdata::scratch::TempDir {
+    oag_testdata::scratch::dir(&format!("io-{name}"))
 }
 
 #[test]

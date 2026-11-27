@@ -9,10 +9,8 @@ fn place(index: usize, second: u32) -> RaceMusicState {
     }
 }
 
-fn scratch(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("oag-music-state-{}-{name}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
-    dir.join("music.toml")
+fn scratch(name: &str) -> oag_testdata::scratch::TempDir {
+    oag_testdata::scratch::dir(&format!("music-state-{name}")).child("music.toml")
 }
 
 #[test]

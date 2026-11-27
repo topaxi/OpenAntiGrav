@@ -17,15 +17,13 @@
 //! ties: this is `0.00` with one group and `45.72` with both
 //! (`docs/gameplay/race-intro.md`, "The opening shot's window panes stipple on Platinum Rush").
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 /// The left dome's panes in a 960x544 capture: `x0, y0, x1, y1`.
 const PANES: (usize, usize, usize, usize) = (250, 290, 365, 370);
 
-fn scratch(name: &str) -> PathBuf {
-    let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("flyby-pane-{name}"));
-    std::fs::create_dir_all(&dir).expect("a scratch directory");
-    dir
+fn scratch(name: &str) -> oag_testdata::scratch::TempDir {
+    oag_testdata::scratch::dir(&format!("flyby-pane-{name}"))
 }
 
 /// The held shot at `alpha`, RGBA.

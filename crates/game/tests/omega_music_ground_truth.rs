@@ -24,7 +24,7 @@ fn the_listing_and_a_song_load_through_the_engines_path() {
         assert!(e.seconds > 150.0 && e.seconds < 600.0, "{e:?}");
     }
 
-    let cache = std::env::temp_dir();
+    let cache = oag_testdata::scratch::cache("omega-music");
     // A song stored as one eight-channel stream plays through the same path.
     let folded = library::load_entry(&GameLibrary, &source, 2, &cache).expect("location 2 loads");
     let want = listing
@@ -45,9 +45,13 @@ fn the_listing_and_a_song_load_through_the_engines_path() {
 #[ignore = "needs data/extracted/ps4"]
 fn the_front_ends_loop_is_walked_from_the_menus_state() {
     let Some(source) = source() else { return };
-    let (name, sound) = library::load_front_end(&GameLibrary, &source, &std::env::temp_dir())
-        .expect("loads")
-        .expect("Omega has a front-end loop");
+    let (name, sound) = library::load_front_end(
+        &GameLibrary,
+        &source,
+        &oag_testdata::scratch::cache("omega-music"),
+    )
+    .expect("loads")
+    .expect("Omega has a front-end loop");
     let seconds = sound.frames() as f64 / f64::from(sound.sample_rate());
     println!("{name}: {seconds:.2} s, {} Hz", sound.sample_rate());
     assert!(seconds > 10.0);

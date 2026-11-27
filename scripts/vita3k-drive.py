@@ -33,7 +33,7 @@ on that Xwayland presents at full speed. See
 manual recipe this script replaces.
 
     python3 scripts/vita3k-drive.py display
-    python3 scripts/vita3k-drive.py race --screenshot /tmp/2048-race.png
+    python3 scripts/vita3k-drive.py race --screenshot target/tmp/2048-race.png
     python3 scripts/vita3k-drive.py stop
 
 **Always run `stop` at the end of a session.** `boot`/`race`/`shot` each
@@ -97,6 +97,9 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import pad_seat  # noqa: E402
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import oag_tmp  # noqa: E402
 
 #: `OAG_VITA3K_CACHE` moves every file this tool writes (config, pid file,
 #: frames, pipeline marker) to a directory of its own, so two members' Vita3K
@@ -437,7 +440,7 @@ def screenshot(display_num, wid, out_path):
 
 def _frame_digest(display_num, wid):
     import hashlib
-    probe = Path("/tmp/.vita3k-drive-probe-%d.png" % display_num)
+    probe = oag_tmp.temp_root() / ("vita3k-drive-probe-%d.png" % display_num)
     screenshot(display_num, wid, probe)
     return hashlib.md5(probe.read_bytes()).hexdigest()
 

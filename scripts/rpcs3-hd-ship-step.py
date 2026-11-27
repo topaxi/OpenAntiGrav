@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """HD/Fury's Ship Select step against ours: the original's frame N game frames after the selection moved, N read from RAM.
 
-    source data/scratch/<lane>/env.sh ; export XDG_CACHE_HOME=/tmp/oag-<lane>-cache
+    source data/scratch/<lane>/env.sh ; export XDG_CACHE_HOME=$PWD/data/scratch/<lane>/cache
     OAG_COMPARE_PLATFORM=hd-fury python3 scripts/rpcs3-drive.py --image data/images/hdfury-ps3-eu.iso serve   # to Main Menu
     # walk to Ship Select by hand: `right cross right cross cross`
     uv run --with evdev --with numpy python3 scripts/rpcs3-hd-ship-step.py select --hull harimau   # step to a hull

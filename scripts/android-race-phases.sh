@@ -46,7 +46,8 @@ if [[ -n $cool ]]; then
 fi
 
 "${adb[@]}" shell am force-stop $pkg
-args=$(mktemp)
+. "$(dirname "${BASH_SOURCE[0]}")/oag-tmp.sh"
+args=$(mktemp -p "$(oag_tmp_root)")
 trap 'rm -f "$args"' EXIT
 printf '%s\n' "$files/data/oag/images/$image" --race --autopilot --frame-log --seed 1 \
     --track "$track" --mode single_race --script "$seconds:quit" "$@" > "$args"

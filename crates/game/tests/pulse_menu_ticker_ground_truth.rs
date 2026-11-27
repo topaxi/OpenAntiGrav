@@ -455,9 +455,8 @@ fn pulses_main_menu_help_title_text_and_fills_author_their_glow() {
 /// the stored `[player] tag` (none when empty); every run has its own profile, so a settings file
 /// of the player's decides nothing.
 fn campaign_still(image: &std::path::Path, page: &str, pin: Option<&str>, tag: &str) -> Vec<u8> {
-    let dir = std::env::temp_dir().join(format!(
-        "oag-campaign-footer-{}-{page}-{}-{}",
-        std::process::id(),
+    let dir = oag_testdata::scratch::dir(&format!(
+        "campaign-footer-{page}-{}-{}",
         pin.is_some(),
         tag.len()
     ));
@@ -550,11 +549,7 @@ fn menu_page_still(
     tag: Option<&str>,
     label: &str,
 ) -> Vec<u8> {
-    let dir = std::env::temp_dir().join(format!(
-        "oag-pulse-menu-still-{}-{label}",
-        std::process::id()
-    ));
-    let _ = std::fs::remove_dir_all(&dir);
+    let dir = oag_testdata::scratch::dir(&format!("pulse-menu-still-{label}"));
     for empty in ["no-dlc", "no-mods", "config/oag"] {
         std::fs::create_dir_all(dir.join(empty)).expect("a temp directory");
     }

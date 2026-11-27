@@ -82,7 +82,7 @@ fn switching_the_order_drops_a_song_fetched_ahead_for_the_old_one() {
     audio.race_prefetch = Some(MusicFetchWorker::spawn(
         discs,
         MusicSource::Auto,
-        std::env::temp_dir(),
+        oag_testdata::scratch::cache("race-order-music"),
         RacePick::after(5),
         "race-music",
     ));

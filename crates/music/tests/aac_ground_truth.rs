@@ -63,8 +63,7 @@ fn measure(path: &str) -> Option<Measured> {
 /// bit for bit: the tolerance and the measured figures are on
 /// `docs/formats/mp4.md`, "The audio decodes in process".
 fn compare_with_ffmpeg(label: &str, blob: &[u8], ours: &[i16]) {
-    let dir = std::env::temp_dir().join(format!("oag-aac-gt-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = oag_testdata::scratch::dir("aac-gt");
     let input = dir.join("in.mp4");
     std::fs::write(&input, blob).unwrap();
     let out = match std::process::Command::new("ffmpeg")

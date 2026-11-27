@@ -14,6 +14,10 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+import os
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import oag_tmp  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -594,7 +598,7 @@ def check_detonator_picture_tick(root):
 
 def main():
     import tomllib
-    with tempfile.TemporaryDirectory() as t:
+    with tempfile.TemporaryDirectory(dir=oag_tmp.temp_root()) as t:
         root = Path(t)
         make_pair(root / "pairs", "timed", True)
         make_pair(root / "pairs", "untimed", False)
@@ -626,15 +630,15 @@ def main():
             assert "meta" in str(e)
         else:
             raise AssertionError("a pair without meta was not refused")
-    with tempfile.TemporaryDirectory() as t:
+    with tempfile.TemporaryDirectory(dir=oag_tmp.temp_root()) as t:
         check_menu_route(Path(t))
-    with tempfile.TemporaryDirectory() as t:
+    with tempfile.TemporaryDirectory(dir=oag_tmp.temp_root()) as t:
         check_safe_area(Path(t))
-    with tempfile.TemporaryDirectory() as t:
+    with tempfile.TemporaryDirectory(dir=oag_tmp.temp_root()) as t:
         check_ps2_world_clock(Path(t))
-    with tempfile.TemporaryDirectory() as t:
+    with tempfile.TemporaryDirectory(dir=oag_tmp.temp_root()) as t:
         check_loading_bar(Path(t))
-    with tempfile.TemporaryDirectory() as t:
+    with tempfile.TemporaryDirectory(dir=oag_tmp.temp_root()) as t:
         check_anisotropy(Path(t))
     check_detonator_mine_envelopes()
     check_hd_flame_clock()
@@ -644,7 +648,7 @@ def main():
     check_hd_countdown_tick()
     check_hd_wait_countdown()
     check_detonator_volley_ticks()
-    with tempfile.TemporaryDirectory() as t:
+    with tempfile.TemporaryDirectory(dir=oag_tmp.temp_root()) as t:
         check_detonator_picture_tick(Path(t))
     print("compare environment: round trip ok")
 

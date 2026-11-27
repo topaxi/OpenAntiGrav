@@ -93,8 +93,8 @@ fn fixture() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../trackfile/tests/fixtures/oval.track.toml")
 }
 
-fn scratch(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("oag-custom-tracks-{name}-{}", std::process::id()));
+fn scratch(name: &str) -> oag_testdata::scratch::TempDir {
+    let dir = oag_testdata::scratch::dir(&format!("custom-tracks-{name}"));
     std::fs::remove_dir_all(&dir).ok();
     std::fs::create_dir_all(&dir).unwrap();
     dir
@@ -102,7 +102,7 @@ fn scratch(name: &str) -> PathBuf {
 
 /// A directory holding only the committed fixture track, so a scan of it finds
 /// exactly one file.
-fn lone_fixture(name: &str) -> PathBuf {
+fn lone_fixture(name: &str) -> oag_testdata::scratch::TempDir {
     let dir = scratch(name);
     let from = fixture();
     let from = from.parent().unwrap();
@@ -121,7 +121,7 @@ fn finish(scan: &mut Scan) {
 #[test]
 fn nothing_is_read_until_the_scan_is_begun() {
     let dir = lone_fixture("lazy");
-    let mut scan = Scan::new(std::slice::from_ref(&dir), &[], None);
+    let mut scan = Scan::new(&[dir.to_path_buf()], &[], None);
     assert!(!scan.is_empty(), "the file is found by its directory read");
     assert!(scan.task.is_none(), "no thread before begin");
     assert!(!scan.is_settled());
@@ -143,13 +143,12 @@ fn nothing_is_read_until_the_scan_is_begun() {
 
     scan.begin();
     assert!(scan.task.is_none(), "a second begin starts nothing");
-    std::fs::remove_dir_all(dir).ok();
 }
 
 #[test]
 fn a_held_scan_reads_nothing_until_released() {
     let dir = lone_fixture("held");
-    let mut scan = Scan::new(std::slice::from_ref(&dir), &[], None);
+    let mut scan = Scan::new(&[dir.to_path_buf()], &[], None);
     scan.hold(true);
     scan.begin();
     std::thread::sleep(std::time::Duration::from_millis(300));
@@ -158,7 +157,6 @@ fn a_held_scan_reads_nothing_until_released() {
     scan.hold(false);
     finish(&mut scan);
     assert_eq!(scan.listings[0].title, "Fixture Octagon");
-    std::fs::remove_dir_all(dir).ok();
 }
 
 #[test]
@@ -224,19 +222,17 @@ fn the_cache_is_used_while_path_and_modification_time_match_and_dropped_when_eit
         cache::survey(&files, None, &NOT_HELD)[0].title,
         "Fixture Octagon"
     );
-    std::fs::remove_dir_all(dir).ok();
 }
 
 #[test]
 fn a_begun_scan_survives_through_the_cache_file_it_was_given() {
     let dir = lone_fixture("scan");
-    let file = cache::file_in(&scratch("scan-cache"));
-    let mut scan = Scan::new(std::slice::from_ref(&dir), &[], Some(file.clone()));
+    let cache_root = scratch("scan-cache");
+    let file = cache::file_in(&cache_root);
+    let mut scan = Scan::new(&[dir.to_path_buf()], &[], Some(file.clone()));
     scan.begin();
     finish(&mut scan);
     assert!(file.exists(), "the thread writes the cache");
-    std::fs::remove_dir_all(dir).ok();
-    std::fs::remove_dir_all(file.parent().unwrap()).ok();
 }
 
 /// The menu path for an own-format track, in a build without the `ballisticng`
@@ -245,7 +241,7 @@ fn a_begun_scan_survives_through_the_cache_file_it_was_given() {
 #[test]
 fn an_own_format_track_is_listed_raceable_and_starts_a_race_whatever_the_features() {
     let dir = lone_fixture("menu-path");
-    let mut scan = Scan::new(std::slice::from_ref(&dir), &[], None);
+    let mut scan = Scan::new(&[dir.to_path_buf()], &[], None);
     scan.begin();
     finish(&mut scan);
     let strings = StringTable::default();
@@ -262,7 +258,6 @@ fn an_own_format_track_is_listed_raceable_and_starts_a_race_whatever_the_feature
     let entry = oag_raceplay::foreign::entry(options.foreign_track.as_deref().unwrap())
         .expect("the race's catalogue entry");
     assert_eq!(entry.foreign.as_deref(), Some(path.as_path()));
-    std::fs::remove_dir_all(dir).ok();
 }
 
 #[cfg(not(feature = "ballisticng"))]
@@ -466,7 +461,7 @@ fn a_pinned_track_launched_on_another_title_becomes_a_two_title_race_on_its_host
             disc(oag_pulse::TITLE),
         ]
     };
-    let dir = std::env::temp_dir().join(format!("oag-route-host-{}", std::process::id()));
+    let dir = oag_testdata::scratch::dir("route-host");
     let pinned = pinned_loop(&dir);
     let mut options = launched_on(oag_hd::TITLE, &pinned);
     let line = route_to_host(&mut options, title_of, discs).unwrap();

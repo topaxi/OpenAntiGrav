@@ -188,8 +188,7 @@ fn a_speed_blur_shot_is_drawn_again_with_its_zoom_history() {
     let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
         return;
     };
-    let shots = Path::new(env!("CARGO_TARGET_TMPDIR")).join("photo-speed-shots");
-    let _ = std::fs::remove_dir_all(&shots);
+    let shots = oag_testdata::scratch::dir("photo-speed-shots");
     let run = drive(
         &image,
         "speed-blur",

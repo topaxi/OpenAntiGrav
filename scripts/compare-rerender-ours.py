@@ -35,6 +35,9 @@ from concurrent.futures import ThreadPoolExecutor
 import tomllib
 from pathlib import Path
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import oag_tmp  # noqa: E402
+
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
@@ -149,7 +152,7 @@ def rerender(pj, binary):
     # profile's, the same rule the scripts apply.
     argv = rec.get("argv") or []
     image = argv[argv.index("--image") + 1] if "--image" in argv else str(ce.MAIN / plat["image"])
-    with tempfile.TemporaryDirectory(prefix="oag-ours-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="oag-ours-", dir=oag_tmp.temp_root()) as tmp:
         tmp = Path(tmp)
         # The Safe Area the pair's original ran at (`original.safe_area`) overrides the profile's pin; a pair with none
         # recorded keeps the pin and the record says so. A menu pair's own extras (front-end styling, the race

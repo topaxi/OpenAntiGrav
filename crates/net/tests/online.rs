@@ -429,29 +429,20 @@ fn a_refusal_that_arrives_with_the_close_is_still_read() {
 }
 
 /// A shell script standing in for `oag-server race`.
-fn fake_race(name: &str, body: &str) -> std::path::PathBuf {
+fn fake_race(dir: &std::path::Path, name: &str, body: &str) -> std::path::PathBuf {
     use std::os::unix::fs::PermissionsExt;
-    let dir = fake_race_dir();
     let path = dir.join(format!("{name}.sh"));
     std::fs::write(&path, format!("#!/bin/sh\nread job\n{body}\n")).expect("script");
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).expect("chmod");
     path
 }
 
-fn fake_race_dir() -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join(format!("oag-lobby-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).expect("temp dir");
-    dir
-}
-
 /// A script waits at a gate until the test, having seen what it was waiting for, opens it:
 /// a wall-clock `sleep` in the script would race the test's own pump, which a loaded machine
 /// can stall past it (the child would exit before the lobby polled it, and a child that
 /// exited is `Over`, never `Up`).
-fn gate(name: &str) -> std::path::PathBuf {
-    let path = fake_race_dir().join(format!("{name}.gate"));
-    let _ = std::fs::remove_file(&path);
-    path
+fn gate(dir: &std::path::Path, name: &str) -> std::path::PathBuf {
+    dir.join(format!("{name}.gate"))
 }
 
 /// The script's line that blocks until `gate` exists.
@@ -472,8 +463,10 @@ fn child_runner(program: std::path::PathBuf) -> Box<ChildRunner> {
 
 #[test]
 fn a_race_process_that_comes_up_then_crashes_hands_off_then_returns_the_room_with_its_reason() {
-    let gate = gate("crash");
+    let dir = oag_testdata::scratch::dir("lobby");
+    let gate = gate(&dir, "crash");
     let script = fake_race(
+        &dir,
         "crash",
         &format!(
             "echo 'listening on [::]:45678'\n\
@@ -511,7 +504,8 @@ fn a_race_process_that_comes_up_then_crashes_hands_off_then_returns_the_room_wit
 
 #[test]
 fn a_race_that_never_comes_up_is_killed_and_the_slot_freed() {
-    let script = fake_race("never_up", "exec sleep 30");
+    let dir = oag_testdata::scratch::dir("lobby");
+    let script = fake_race(&dir, "never_up", "exec sleep 30");
     let mut lab = Lab::new(Box::new(ChildRunner {
         load_timeout: Duration::from_millis(400),
         ..*child_runner(script)
@@ -529,7 +523,9 @@ fn a_race_that_never_comes_up_is_killed_and_the_slot_freed() {
 
 #[test]
 fn a_race_process_that_goes_quiet_is_stopped_and_the_slot_freed_within_ten_seconds() {
+    let dir = oag_testdata::scratch::dir("lobby");
     let script = fake_race(
+        &dir,
         "hung",
         "echo 'listening on [::]:45680'\n\
          echo 'cert-hash 0303030303030303030303030303030303030303030303030303030303030303'\n\
@@ -556,8 +552,10 @@ fn a_race_process_that_goes_quiet_is_stopped_and_the_slot_freed_within_ten_secon
 
 #[test]
 fn a_client_that_drops_while_its_race_loads_and_takes_its_session_over_receives_the_handoff() {
-    let gate = gate("takeover");
+    let dir = oag_testdata::scratch::dir("lobby");
+    let gate = gate(&dir, "takeover");
     let script = fake_race(
+        &dir,
         "takeover",
         &format!(
             "echo 'listening on [::]:45681'\n\
@@ -584,8 +582,10 @@ fn a_client_that_drops_while_its_race_loads_and_takes_its_session_over_receives_
 
 #[test]
 fn a_session_whose_old_link_closes_before_the_new_one_says_hello_is_still_taken_over() {
-    let gate = gate("takeover-close-first");
+    let dir = oag_testdata::scratch::dir("lobby");
+    let gate = gate(&dir, "takeover-close-first");
     let script = fake_race(
+        &dir,
         "takeover_close_first",
         &format!(
             "echo 'listening on [::]:45682'\n\
@@ -660,14 +660,15 @@ fn board() -> Board {
 /// A race process that comes up, waits at `first` (or, when an earlier run has been through, at
 /// `later`), reports `board` and ends as a finished race.
 fn finishing_race(
+    dir: &std::path::Path,
     name: &str,
     first: &std::path::Path,
     later: &std::path::Path,
     board: &Board,
 ) -> Box<ChildRunner> {
-    let ran = fake_race_dir().join(format!("{name}.ran"));
-    let _ = std::fs::remove_file(&ran);
+    let ran = dir.join(format!("{name}.ran"));
     child_runner(fake_race(
+        dir,
         name,
         &format!(
             "echo 'listening on [::]:45679'\n\
@@ -686,8 +687,9 @@ fn finishing_race(
 
 #[test]
 fn the_races_board_reaches_every_member_and_a_rematch_races_again_with_the_same_settings() {
-    let (first, second) = (gate("board-1"), gate("board-2"));
-    let mut lab = Lab::new(finishing_race("board", &first, &second, &board()));
+    let dir = oag_testdata::scratch::dir("lobby");
+    let (first, second) = (gate(&dir, "board-1"), gate(&dir, "board-2"));
+    let mut lab = Lab::new(finishing_race(&dir, "board", &first, &second, &board()));
     let (a1, a2) = (lab.join("a1"), lab.join("a2"));
     lab.room_starts(a1, a2, ["Feisar", "Qirex"]);
     lab.until("the hand-off", |lab| {

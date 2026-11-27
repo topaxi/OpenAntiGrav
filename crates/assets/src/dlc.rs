@@ -190,7 +190,7 @@ mod tests {
         testing::wad(&[(name, text.as_bytes())])
     }
 
-    fn temp_dir(name: &str) -> std::path::PathBuf {
+    fn temp_dir(name: &str) -> oag_testdata::scratch::TempDir {
         testing::temp_dir(&format!("dlc-{name}"))
     }
 
@@ -241,7 +241,7 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("PACK9.edat"), one_entry_wad("manifest", MANIFEST)).unwrap();
 
-        let packs = discover(&[root]);
+        let packs = discover(&[root.to_path_buf()]);
         assert_eq!(packs.len(), 1, "{packs:?}");
         assert_eq!(packs[0].manifests, vec![MANIFEST.to_string()]);
     }
@@ -260,7 +260,7 @@ mod tests {
         )
         .unwrap();
 
-        let packs = discover(&[root, inner]);
+        let packs = discover(&[root.to_path_buf(), inner]);
 
         assert_eq!(packs.len(), 1, "{packs:?}");
     }
@@ -279,7 +279,7 @@ mod tests {
         )
         .unwrap();
 
-        let packs = discover(&[root]);
+        let packs = discover(&[root.to_path_buf()]);
 
         assert_eq!(packs.len(), 1, "{packs:?}");
         assert_eq!(packs[0].manifests, vec![MANIFEST.to_string()]);

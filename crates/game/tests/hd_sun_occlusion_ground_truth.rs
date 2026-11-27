@@ -77,7 +77,7 @@ fn occlusion_map(scratch: &Path) -> Option<Vec<u8>> {
 #[test]
 #[ignore = "needs the HD disc image"]
 fn the_road_mask_is_stored_srgb_encoded() {
-    let Some(mut texels) = occlusion_map(&std::env::temp_dir().join("oag-hd-sun-occlusion")) else {
+    let Some(mut texels) = occlusion_map(&oag_testdata::scratch::dir("hd-sun-occlusion")) else {
         return;
     };
     texels.sort_unstable();

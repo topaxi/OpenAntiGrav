@@ -228,7 +228,7 @@ fn visit(blob: &[u8], sources: &mut Vec<Source>, walked: &mut Walked) {
 /// `data/dlc` (Pure's through `data/keys/pure-dlc-keys.txt`).
 fn dlc_archives(image: &str) -> Vec<oag_assets::Archive> {
     let roots = [repo_root().join("data/dlc")];
-    let cache = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("dlc-cache");
+    let cache = oag_testdata::scratch::cache("dlc-cache");
     let keys = std::fs::read_to_string(repo_root().join("data/keys/pure-dlc-keys.txt"))
         .map(|text| oag_formats::pure_dlc::parse_keys(&text))
         .unwrap_or_default();

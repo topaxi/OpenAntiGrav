@@ -70,11 +70,7 @@ fn rgb_of(png: &[u8]) -> Vec<[u8; 3]> {
 /// frame at `ticks`, from the chase camera or from `pose`.
 fn frame_of(weapon: &str, ticks: u32, pose: Option<&str>) -> Option<Vec<[u8; 3]>> {
     let image = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso")?;
-    let scratch = std::env::temp_dir().join(format!(
-        "oag-hd-weapon-scene-{}-{weapon}-{ticks}",
-        std::process::id()
-    ));
-    std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
+    let scratch = oag_testdata::scratch::dir(&format!("hd-weapon-scene-{weapon}-{ticks}"));
     let out = scratch.join("frame.png");
     let script = scratch.join("fire.inputs");
     std::fs::write(&script, "300 cross\n2 cross square\n2000 cross\n").expect("the input script");
@@ -312,11 +308,7 @@ fn a_plasma_explosions_sphere_fades_with_its_age() {
 /// tick 388, with the weapon lights on or off.
 fn detonator_volley_frame(weapon_lights: bool) -> Option<Vec<[u8; 3]>> {
     let image = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso")?;
-    let scratch = std::env::temp_dir().join(format!(
-        "oag-det-volley-{}-{weapon_lights}",
-        std::process::id()
-    ));
-    std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
+    let scratch = oag_testdata::scratch::dir(&format!("det-volley-{weapon_lights}"));
     let out = scratch.join("frame.png");
     let script = scratch.join("fire.inputs");
     std::fs::write(&script, "385 none\n2 square\n1 none\n").expect("the input script");

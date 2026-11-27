@@ -23,8 +23,7 @@ fn each_picture_control_changes_the_saved_shot_and_at_neutral_it_is_the_unproces
     let Some(image) = pulse() else {
         return;
     };
-    let shots = Path::new(env!("CARGO_TARGET_TMPDIR")).join("photo-effects-shots");
-    let _ = std::fs::remove_dir_all(&shots);
+    let shots = oag_testdata::scratch::dir("photo-effects-shots");
     // Rows: exposure, saturation, speed blur, depth of field. 72 ticks of a held push is 21 steps
     // (it fires on the first tick, again after 14 and then every 3), 69 is 20, 39 is 10 and 1 is
     // one. A shot after each move (the drive draws a frame only when it is asked for a screenshot, so each
@@ -127,8 +126,7 @@ fn grey_under(tag: &str, args: &[&str]) {
     let Some(image) = pulse() else {
         return;
     };
-    let shots = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("photo-grey-{tag}"));
-    let _ = std::fs::remove_dir_all(&shots);
+    let shots = oag_testdata::scratch::dir(&format!("photo-grey-{tag}"));
     let run = drive_with(
         &image,
         tag,

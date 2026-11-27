@@ -61,7 +61,7 @@ fn source() -> Option<PathBuf> {
 #[ignore = "needs game content in data/extracted/vita/PCSF00007"]
 fn the_front_ends_music_loads_through_the_engines_own_path() {
     let Some(source) = source() else { return };
-    let cache = std::env::temp_dir().join("oag-2048-music-ground-truth");
+    let cache = oag_testdata::scratch::cache("2048-music-ground-truth");
     let (name, sound) =
         library::load_front_end(&GameLibrary, &source.display().to_string(), &cache)
             .expect("loading the front end's music")
@@ -260,7 +260,7 @@ fn the_eleven_declared_race_tracks_are_listed_and_decode() {
         check_spectrum_sidecar(&mut archives, name, entry.seconds);
     }
 
-    let cache = std::env::temp_dir().join("oag-2048-music-ground-truth");
+    let cache = oag_testdata::scratch::cache("2048-music-ground-truth");
     let sound = library::load_entry(&GameLibrary, &source, entries[0].at, &cache)
         .expect("decoding track 01");
     assert!((f64::from(sound.seconds()) - entries[0].seconds).abs() < 1.0);

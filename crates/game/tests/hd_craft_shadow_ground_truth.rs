@@ -170,8 +170,7 @@ fn a_crafts_shadow_reaches_the_road_and_sharpens_with_the_resolution() {
     let Some(image) = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso") else {
         return;
     };
-    let scratch = std::env::temp_dir().join(format!("oag-hd-craft-shadow-{}", std::process::id()));
-    std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
+    let scratch = oag_testdata::scratch::dir("hd-craft-shadow");
     let off = frame_of(&image, &scratch, "off", "original");
     let mapped = frame_of(&image, &scratch, "mapped", "original");
     let original = frame_of(&image, &scratch, "original", "original");

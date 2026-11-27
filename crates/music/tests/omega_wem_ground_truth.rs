@@ -797,8 +797,7 @@ fn ffmpeg_pcm(wem: &Wem<'_>) -> Vec<i16> {
     let mut file = b"RIFF".to_vec();
     file.extend_from_slice(&(body.len() as u32).to_le_bytes());
     file.extend(body);
-    let dir = std::env::temp_dir().join(format!("oag-wem-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = oag_testdata::scratch::dir("wem");
     let input = dir.join("in.at9");
     std::fs::write(&input, &file).unwrap();
     let out = std::process::Command::new("ffmpeg")

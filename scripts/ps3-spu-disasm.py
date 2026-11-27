@@ -54,6 +54,10 @@ import struct
 import subprocess
 import sys
 from pathlib import Path
+import os
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import oag_tmp  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_ELF = ROOT / "data/extracted/ps3/hdfury-eu/PS3_GAME/USRDIR/EBOOT.elf"
@@ -140,14 +144,18 @@ def main() -> int:
     else:
         import tempfile
 
-        fd, tmp = tempfile.mkstemp(suffix=".spu.bin")
+        fd, tmp = tempfile.mkstemp(suffix=".spu.bin", dir=oag_tmp.temp_root())
         import os
 
         os.write(fd, blob)
         os.close(fd)
         blob_path = Path(tmp)
 
-    subprocess.run([objdump, "-D", "-b", "binary", "-m", "spu", str(blob_path)], check=True)
+    try:
+        subprocess.run([objdump, "-D", "-b", "binary", "-m", "spu", str(blob_path)], check=True)
+    finally:
+        if blob_path != args.out:
+            blob_path.unlink()
     return 0
 
 

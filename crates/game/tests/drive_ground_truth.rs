@@ -22,6 +22,7 @@ use serde_json::Value;
 struct Run {
     output: Output,
     states: Vec<Value>,
+    profile: oag_testdata::scratch::TempDir,
 }
 
 impl Run {
@@ -102,9 +103,7 @@ fn drive_flags(
     flags: &[&str],
     soundtrack: bool,
 ) -> Run {
-    let scratch = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("drive-{tag}"));
-    let _ = std::fs::remove_dir_all(&scratch);
-    std::fs::create_dir_all(&scratch).expect("a scratch directory");
+    let scratch = oag_testdata::scratch::dir(&format!("drive-{tag}"));
     let log = scratch.join("state.jsonl");
     let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"));
     command
@@ -143,7 +142,11 @@ fn drive_flags(
         .lines()
         .map(|line| serde_json::from_str(line).expect("a state line is JSON"))
         .collect();
-    Run { output, states }
+    Run {
+        output,
+        states,
+        profile: scratch,
+    }
 }
 
 /// Whether the official `oag.remix` mod is checked out (`assets/mods/official`), which the
@@ -620,7 +623,7 @@ fn a_device_lost_mid_race_saves_the_replay_and_ends_without_a_panic() {
         "the loss was not said:\n{why}"
     );
     assert_eq!(text(run.last(), &["stage"]), Some("race"));
-    let scratch = Path::new(env!("CARGO_TARGET_TMPDIR")).join("drive-device-lost-race");
+    let scratch = &run.profile;
     assert!(
         scratch.join("config/oag/device-lost.txt").is_file(),
         "no note for the next run"
@@ -768,10 +771,8 @@ fn the_mods_page_turns_a_mod_off_and_on_and_what_it_adds_goes_and_comes_back_liv
         why.contains("\"oag.hillside\" is turned off on the MODS page"),
         "the campaign is refused by name, saying why: {why}"
     );
-    let saved = std::fs::read_to_string(
-        Path::new(env!("CARGO_TARGET_TMPDIR")).join("drive-mods-switch/config/oag/settings.toml"),
-    )
-    .expect("the run saved its settings");
+    let saved = std::fs::read_to_string(run.profile.join("config/oag/settings.toml"))
+        .expect("the run saved its settings");
     let saved: toml::Table = saved.parse().unwrap();
     assert_eq!(
         saved["mods"]["disabled"].as_array().map(Vec::len),
@@ -819,10 +820,8 @@ fn the_screen_size_row_saves_hud_safe_area() {
         Some("90"),
         "and ends where the pad left it"
     );
-    let saved = std::fs::read_to_string(
-        Path::new(env!("CARGO_TARGET_TMPDIR")).join("drive-screen-size/config/oag/settings.toml"),
-    )
-    .expect("the run saved its settings");
+    let saved = std::fs::read_to_string(run.profile.join("config/oag/settings.toml"))
+        .expect("the run saved its settings");
     let saved: toml::Table = saved.parse().unwrap();
     assert_eq!(
         saved["graphics"]["hud_safe_area"].as_integer(),
@@ -865,9 +864,7 @@ fn a_race_resumed_from_the_pause_menu_draws_its_hud_at_the_new_screen_size() {
     let Some(image) = pulse() else {
         return;
     };
-    let shots = Path::new(env!("CARGO_TARGET_TMPDIR")).join("drive-screen-size-live");
-    let _ = std::fs::remove_dir_all(&shots);
-    std::fs::create_dir_all(&shots).expect("a screenshot directory");
+    let shots = oag_testdata::scratch::dir("drive-screen-size-live");
     let (before, after) = (shots.join("before.png"), shots.join("after.png"));
     let run = drive(
         &image,
@@ -925,10 +922,8 @@ fn the_music_page_saves_its_switches() {
         true,
     );
     assert!(run.output.status.success(), "{}", run.stderr());
-    let saved = std::fs::read_to_string(
-        Path::new(env!("CARGO_TARGET_TMPDIR")).join("drive-music-switch/config/oag/settings.toml"),
-    )
-    .expect("the run saved its settings");
+    let saved = std::fs::read_to_string(run.profile.join("config/oag/settings.toml"))
+        .expect("the run saved its settings");
     let saved: toml::Table = saved.parse().unwrap();
     let profiles = saved["music_profiles"].as_table().expect("music_profiles");
     let switched: Vec<&str> = profiles
@@ -1428,8 +1423,7 @@ fn the_strength_row_follows_the_screen_filter() {
     let Some(image) = pulse() else {
         return;
     };
-    let scratch = Path::new(env!("CARGO_TARGET_TMPDIR")).join("drive-filter-row-profile");
-    let _ = std::fs::remove_dir_all(&scratch);
+    let scratch = oag_testdata::scratch::dir("drive-filter-row-profile");
     std::fs::create_dir_all(scratch.join("config/oag")).expect("a profile");
     std::fs::create_dir_all(scratch.join("no-mods")).expect("a mods directory");
     std::fs::write(

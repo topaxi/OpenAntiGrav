@@ -44,12 +44,11 @@ fn package(name: &str) -> Option<PathBuf> {
 /// The EU package with its two downloadable archives left out: real folders
 /// holding links to the base archive and the patch's two, because the source
 /// walk does not follow a linked folder.
-struct WithoutPacks(PathBuf);
+struct WithoutPacks(oag_testdata::scratch::TempDir);
 
 impl WithoutPacks {
     fn of(package: &Path) -> Self {
-        let root = std::env::temp_dir().join("oag-2048-dlc-menus-no-packs");
-        let _ = std::fs::remove_dir_all(&root);
+        let root = oag_testdata::scratch::dir("2048-dlc-menus-no-packs");
         for archive in [
             "base/PSP2/data.psarc",
             "patch-v104/PSP2/data1.psarc",
@@ -70,12 +69,6 @@ impl WithoutPacks {
     }
 }
 
-impl Drop for WithoutPacks {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
-    }
-}
-
 fn options(source: &Path) -> boot::Options {
     boot::Options {
         language: Some("English".to_string()),
@@ -83,7 +76,7 @@ fn options(source: &Path) -> boot::Options {
         dlc: Vec::new(),
         leg: frontend::Leg::LogoFmv,
         movie: None,
-        cache: std::env::temp_dir().join("oag-2048-dlc-menus-ground-truth"),
+        cache: oag_testdata::scratch::cache("2048-dlc-menus-ground-truth"),
         audio_cache: oag_source::cache::default_audio_cache_dir(),
         extent: oag_game::movie::Extent::Frames(oag_game::INTRO_FRAMES_NEEDED),
         no_video: true,
