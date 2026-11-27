@@ -2067,6 +2067,10 @@ scripts/vita3k-2048-menu-pair.py pairs --out D --oag-game target/release/oag-gam
 `walk` of `PAUSE_PLAN`. Adopt: name the `menu-*` directories, `python3 scripts/compare_env.py manifest
 data/reference/compare-page/menus-2048.toml data/reference/compare-page/2048/menu-*`, then `just compare-page`.
 
+**2026-11-27 (`2048-menu-pairs`).** Home and Game Mode re-take their stills past the entry
+fade, and four pairs fell: `docs/formats/2048-frontend.md`, "Menu pairs: faces, glyph tint,
+header block, card text".
+
 ## Menu pairs: Wipeout Pulse and Wipeout Pure (PSP) front-end screens (2026-10-27, `menu-pairs-pulse-pure`)
 
 The PPSSPP counterpart of the HD, Omega and 2048 menu route (`scripts/psp-menu-pair.py`, on `compare_menu.py`). The software

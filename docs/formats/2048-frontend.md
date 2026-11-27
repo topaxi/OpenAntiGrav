@@ -1103,6 +1103,85 @@ draw unread). Measured off the frame: horizontal line period about 47.8 px,
 60-degree diagonals, line grey 233-245 on 255. It moves the frame metric by
 about 2 grey, so it is not wired.
 
+## Menu pairs: faces, glyph tint, header block, card text (2026-11-27, `2048-menu-pairs`)
+
+Pairs against the Vita3K frames of `data/reference/compare-page/2048/` (mean grey of
+`|ours - theirs|`, 960x544, same `theirs.png`; method:
+[compare-page.md](../tools/compare-page.md), "Menu pairs: Wipeout 2048 front-end screens").
+
+| Pair | Before | After | Causes closed |
+| --- | --- | --- | --- |
+| `menu-home` | 9.73 | 8.13 | stills taken past the entry fade; `White2048` glyphs; labels in `NEOSANS_BOLD` |
+| `menu-game-mode` | 6.30 | 2.55 | the same, and the header block above the lattice |
+| `menu-card-0` | 7.83 | 7.01 | the event's description line; the pass group centred; `White2048` button glyphs |
+| `menu-card-1` | 7.00 | 5.83 | tab words and `CURRENT BEST` in `NEOSANS_BOLD`; the bar orange; the description line |
+| `menu-title` | 3.80 | 3.80 | unchanged |
+| `menu-map` | 18.04 | 18.05 | unchanged |
+| `menu-team` | 27.31 | 27.27 | unchanged |
+
+The three `race-load-*` pairs share the card painter and rose by 0.16, 0.16 and 0.04
+(`OFFENSIVE WEAPONS ONLY` now reads as the original does, in a bolder face than its
+`NEOSANS`).
+
+### The 2048 stills were taken on the entry tick
+
+`--ticks` counts from boot, so a route reaching `GameModeChoice` (tick 245) or `Home`
+(tick 249) with no ticks, or with `--ticks 40`, shot the screen on the tick it was entered,
+with every `transition` widget at alpha 0: no header icon on either page. The routes now
+carry `--press-until-reached --ticks 490` (`scripts/vita3k-2048-menu-pair.py`;
+`compare-rerender-ours.py` migrates the older records). That is capture state, not a
+change to the game.
+
+### The tile labels are in `NEOSANS_BOLD`
+
+**Confidence 92.** A tile's label is `NEOSANS_BOLD.fnt` (22-unit line) at scale 1, not
+`NEOSANS_BOLD_LARGE` (37) scaled to 16/27, which has the same cap height but wider
+advances. Advance sums off the disc against the frame's ink: `SINGLE PLAYER` 143 against
+139 (ours had 159), `HD CAMPAIGN` 131 against 130 (146), `COMMUNITY` 115 against 116
+(126). `oag_title::TouchFrontEnd::label_face` names the role; the boot sequence's second
+glyph slot holds it (`boot::fonts::install_boot_face`). The same face draws the card's
+leaderboard tabs.
+
+### The glyphs are `White2048`
+
+**Confidence 90.** The tile, tick, play, cross and ship glyphs read `(224..225, 227..228,
+234..235)` on the frames, `Skin.xml`'s `White2048` (`0xffe1e4eb`); ours drew pure white.
+No `<TouchButton>` in `Definition.xml` authors a `color`, so the white a button reads as
+is tinted `White2048`; an authored colour is kept.
+
+### The header block
+
+The `Blue2048` square under a screen's white header glyph was spliced under the *first*
+sprite of the screen, which on `GameModeChoice` is the baked lattice, so the lattice
+covered it and the white glyph was invisible on a white page, live as well as in stills.
+It now goes under its own glyph.
+
+### Left open
+
+- The 4-unit rule right of the header square (`x 16..424`, `y 82..86` on the two frames) and
+  the square's own position (16, 16 on both, ours at the image's rect) are code-drawn and
+  not read; the rule is about 0.6 grey of `menu-home` and `menu-game-mode`.
+- The card's `<TouchHomeButton>` composite (the home square and the three badges,
+  `x 16..60` and `760..946`, about 2.4 grey of the 7 on each card): the widget is authored
+  (`newFEshell`), its art and layout are not; the executable draws it.
+- The card's ground: the original blurs the map behind it, ours shows the lattice and a hex
+  ornament (about 2.5 grey of `menu-card-0`). `menu-home`'s backdrop is the same blurred
+  map.
+- The card's `NEOSANS` (regular) lines draw in the bold `Default` face.
+
+### Omega
+
+- **Description line, pass group: ported.** Omega's `SP.xml` words `M_DESCRIPTION` on 38
+  of its 115 map events, the shared reader draws them, and its hosted map now gets the
+  `Default` atlas the card measures with
+  (`omega_2048_map_ground_truth::omegas_hosted_card_words_its_description_and_centres_the_pass_group`).
+- **Card tabs in `NEOSANS_BOLD`: checked, applies, not wired.** Omega ships
+  `Data/fe/fonts/NEOSANS_BOLD.fnt`, its hosted map loads no role face; whether Omega's
+  card code names that role is not read.
+- **Tile labels, tile tint, header block: checked, differs.** Omega ships
+  `Icon_Home_Header.gnf` but no `NEWGUI` screens; its front end is HD's `<HorizMenu>`
+  (`oag_omega::frontend::TOUCH` has no tiles).
+
 ## See also
 
 - [hd-frontend](hd-frontend.md) - the reading this page's shape and rigor are
