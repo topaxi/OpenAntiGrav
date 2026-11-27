@@ -6,7 +6,7 @@
 //! the state the original keeps in statics: whether the tip or the mode page is up, and the slide.
 
 use oag_title::loading::TipClass;
-use oag_ui::font::{Atlas, wrap};
+use oag_ui::font::Atlas;
 use oag_ui::frontend::{Backdrop, Draw, EventIcon, GameTip, LaunchedCard};
 
 use super::Screen;
@@ -76,8 +76,7 @@ impl CardBackdrop {
     }
 
     pub(super) fn draws(&self, atlas: &Atlas, out: &mut Vec<Draw>) {
-        let lines = |text: &str, scale: f32, width: f32| wrap(atlas, text, scale, width).len();
-        let paint = self.card.paint(self.mode_page, Some(&lines));
+        let paint = self.card.paint(self.mode_page, Some(atlas));
         let backdrop = match (&self.tip, self.mode_page) {
             (_, true) => Backdrop::None,
             (Some(tip), false) => Backdrop::Tip(tip),

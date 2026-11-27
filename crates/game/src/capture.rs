@@ -265,6 +265,7 @@ pub fn run(
         title_font,
         buttons_font,
         face_scales,
+        label_face,
         ..
     } = loaded;
     let pinned_ticker = options
@@ -1327,12 +1328,13 @@ pub fn run(
         buttons_font,
     );
     if options.menu_page.is_none() {
-        crate::boot::fonts::install_boot_menu_face(
+        crate::boot::fonts::install_boot_face(
             &mut renderer,
             &device,
             &queue,
             menu_skin,
             menu_font.as_ref(),
+            label_face.as_ref(),
         );
     }
     crate::prompts::install(&mut renderer, title, platform, &options.settings);

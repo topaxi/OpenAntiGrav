@@ -547,6 +547,7 @@ fn tile_draw(
             argb_to_rgba(ink.rest),
             button.string_width_limit,
             button.small_text,
+            None,
         ));
     }
 }
@@ -611,6 +612,7 @@ fn strip_draw(
                 argb_to_rgba(screen.tiles.map_or(0, |ink| ink.rest)),
                 Some(cell),
                 true,
+                None,
             ));
         }
     }
