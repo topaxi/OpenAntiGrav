@@ -191,12 +191,7 @@ fn a_title_off_the_psp_tick_builds_no_repeating_program() {
 
 /// Interleaved stereo of `ticks` simulation ticks of `playing` at variable
 /// `locked`, then of the mixer alone for `tail` more ticks.
-fn lock_render(
-    banks: &Banks,
-    locked: bool,
-    ticks: usize,
-    tail: usize,
-) -> (Vec<f32>, usize) {
+fn lock_render(banks: &Banks, locked: bool, ticks: usize, tail: usize) -> (Vec<f32>, usize) {
     let program = banks.program(Cue::LockOn).expect("~ROCKLOCK is a program");
     let bus = Cue::LockOn.bus();
     let mut mixer = Mixer::new(RATE);

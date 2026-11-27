@@ -41,6 +41,8 @@ before that change.
 | `0x006234d0` | function | `Scream_DoGrainStop` | 80 |
 | `0x00623830` | function | `Scream_DoGrainEnd` | 85 |
 | `0x006265d0` | function | `Scream_DoGrainModulator` | 70 |
+| `0x00624418` | function | `Scream_SetCueParameter` | 90 |
+| `0x00087fa8` | function | `HudSight_UpdateTone` | 80 |
 | `0x0029fd00` | function | `SpeedupPad_PlayCue` | 82 |
 | `0x000cff78` | function | `Craft_PlayPlayerCue` | 78 |
 | `0x002fc940` | function | `SoundEmitter_Init` | 80 |
@@ -313,7 +315,7 @@ craft emitter in the chase view; another craft's are `[_,_,2,_]`.
 
 2026-11-15, lane `hd-cue-walk`. `WalkModel::cue_variables` (`crates/formats/src/sblk/timeline.rs`) walks a cue with the
 table's operand bytes and four variables; `SequenceTick::walks_cue_variables` (the PS3 tick) selects it for the one-shot
-hud, ship and weapons cues (`CueTables::walks_variables`; held cues and `~ENGINE` keep their waveform). Pulse, Pure and
+hud, ship and weapons cues (`CueTables::walks_variables`; held cues and `~ENGINE` keep their waveform, except the two that run as lists, below). Pulse, Pure and
 2048 keep the walk they had.
 
 - **Perspective** (`CueTables::variables(player)`): another craft's emitter 2; the player's craft 1 (chase view) where
@@ -346,7 +348,8 @@ hud, ship and weapons cues (`CueTables::walks_variables`; held cues and `~ENGINE
   clip, worst of 40 draws: `QUAKELAUNCH` 15.6 % (a timeline before this change too; a single voice 4.1 %), `REPULSOR`
   9.9 %, `CANNONEXPLSHIP` 9.2 %, `SHURIKENEXPL` (17 voices) 4.9 %, `ROCKEXPLSHIP` 4.9 %, `REPULSORHIT` 4.1 %; every other
   cue under 3 %. The game's limiter is on.
-- **Not modelled, so a list that has one keeps its flat pick**: `0x1c` (fixed bend), `0x26` (wait for voices), `0x04`
+- **Not modelled by the timeline walk, so a list that has one keeps its flat pick** (the runner of
+  [Held cues run as lists](#held-cues-run-as-lists) does run `0x1c`): `0x1c` (fixed bend), `0x26` (wait for voices), `0x04`
   (modulators), `0x29` (key off), a nonzero `0x1a` wait, and a variable outside the handler's four. None of the one-shot
   cues walked above has one.
 
@@ -355,8 +358,65 @@ the surface is read ([collision-cues.md](collision-cues.md)), `.COLLISIONS` no l
 pick for a contact, and `.GRIND`, `.COLLSHIELD` and `.GRINDSHIELD` (row 6 of the audit) play. The
 "Severity and surface stay 0" bullet above describes the engine before that.
 
+## Held cues run as lists
+
+2026-11-27, lane `hd-held-race-cues`. `~BLOWUP` and `~ROCKLOCK` (`weapons.bnk` cues 50 and 55; HD has no `hud.bnk`) play
+through `oag_formats::sblk::runner` on HD's layout and 240 Hz tick, in place of one flat waveform. The command lists:
+
+```text
+~BLOWUP   cue volume 110             ~ROCKLOCK   cue volume 60
+01 .. 38   d0    0 deg, vol 110      15           d0
+01 .. dc   d0    0 deg, vol 110      22 00 01 00  d0    unless var0 == 0, skip the next
+01 .. 80   d0    0 deg, vol 80       1c 00        d50   bend 0
+15         d0                        22 00 01 01  d0    unless var0 == 1, skip the next
+01 .. 24   d0   90 deg, vol 50       1c 06        d15   bend 6
+01 .. c8   d5  270 deg, vol 50       01 .. 84     d0    150 deg, bend range 12/12
+01 .. 6c   d0    0 deg, vol 110      01 .. 28     d3    210 deg, bend range 12/12
+1a 000000  d40                       16           d0
+16         d0
+```
+
+| Cue | State | Cadence (240 Hz ticks) | Bend | Confidence |
+| --- | --- | --- | --- | --- |
+| `~ROCKLOCK` | variable 0 = 0 (seeking) | a pair every 53 (221 ms); the first beep at tick 50 | 0 | 90 |
+| `~ROCKLOCK` | variable 0 = 1 (locked) | a pair every 18 (75 ms): the skipped `1c 00` takes its 50-tick wait with it | `6 * 0x7fff / 0x7f` = 1548, +0.567 semitone through 12/12 | 90 |
+| `~BLOWUP` | none | three voices at the start, then the 90/270 pair (270 at +5) and a centred hit every 45 | none | 88 |
+
+The tick and the stepper are the ones [sound.md](sound.md) reads (`Scream_TickCommandList` `0x006253d0`,
+`Scream_StepCommandList` `0x00625218`), with the same countdown, the same extra tick from a second `0x16` in a tick and the
+same end of list as Pulse's. Read this pass:
+
+- `Scream_DoGrainSetBend` (`0x006242b0`): `a < 0` gives `a << 8`, else `(a * 0x8000 - a) / 0x7f`, to
+  `Scream_SetVoiceBend` on the handler. The bend reaches the voices already keyed.
+- `Scream_DoGrainAlternate` (`0x00625e88`): `rand16 % a`, advanced by one when it equals the last pick (kept in the
+  bank's own command byte `c`); `stride` commands run, then the rest of the group is skipped. A group opened inside one
+  stops the handler. The runner keeps `c` per play, seeded from the bank (**chosen**; no held cue wired here has a group).
+- `Scream_DoGrainGoto` (`0x006255f8`): the first `0x23` with `a` equal to the id; a ninth goto in one tick stays put
+  and waits one more tick; no match stops the handler.
+- `Scream_SetCueParameter` (`0x00624418`, behind the thunk `0x006774c8` -> `0x0062b2d0`) writes `handler + 0xa4 + index`
+  for index 0 to 3, the bytes the guard reads. Confidence 90.
+- `HudSight_UpdateTone` (`0x00087fa8`) starts `~ROCKLOCK` with `Sound_PlayBankCue(..., 0x400, 0, 0, 0, 0)` (no variable
+  block, so all four read 0), writes variable 0 each pass (state `1` writes 0, state `2` writes 1) and stops the handle at
+  state 0. State `2` as "locked" is read off the list it selects, not off the state's writer. Confidence 80.
+
+**`~BLOWUP` has no trigger on HD.** The executable holds no `BLOWUP` string, and HD's destroyed craft plays
+`EXPLBIG`, `~SHIP_DESTROYED` and `~SHIP_ONFIRE` ([ship-destroy.md](ship-destroy.md), "Sound on HD"). The program is built
+and tested, and nothing starts it.
+
+**Not run against RPCS3.** The cadences are read from the bank and the handlers, not heard on the original.
+
+Wired: `Bank::cue_runner_modelled` (`WalkModel::cue_variables`), `oag_sound::sfx::layers::program` on the PS3 tick
+(rear angles pan as `sin(angle)`), `repeating::Playing` (the handler's bend to every live voice). It refuses a list with
+`0x04`, `0x05`, `0x1b`, `0x26`, `0x29` or a global variable. Tests: `crates/formats/src/sblk/runner/tests.rs`,
+`hd_sound_ground_truth::hd_s_blowup_and_rocklock_run_their_lists`,
+`sfx_repeating_ground_truth::hd_s_*`.
+
 ## Lineage
 
+- **Held cues, 2048: checked, applies, not wired.** The Vita `weapons.bnk` ships `~BLOWUP` and `~ROCKLOCK` with the same
+  command shapes, waits (50, 15, 40) and bend 6, with Pulse's operand byte order (`22 00 01 01`'s threshold in the
+  high byte). Its `0x1c` and guard handlers are unread, so the PS3 layout is not borrowed for it.
+- **Held cues, Omega: checked, differs.** `_NGP_ShipDeath` and `_NGP_MissileLock` are Wwise events.
 - **2048: checked, applies in shape, not wired.** `weapons.bnk` (79 cues) and `shipHD.bnk` (100 cues) carry `0x22` guards
   too (28 and 58 commands, run through the Vita walk), among `0x04`, `0x1a`, `0x1b`, `0x1c` and `0x29`. Their handlers are
   the Vita ones (`WalkModel::vita`: marker ids in the low byte, `0x2e` for the random goto): the guard's byte positions and
