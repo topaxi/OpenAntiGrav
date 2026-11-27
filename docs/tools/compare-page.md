@@ -1654,7 +1654,7 @@ cursor by several seconds: read the highlighted row off a grab before every `cro
 `RACE AGAIN` (`EndRace Menu`, once the craft has crashed, about 60 s). The countdown is phase 1 of the race manager (`*0x0095ae78 + 0x1950`, word `+0x20`) and
 lasts 3.0 s; about 3 s of phase 0 precede it after `RACE AGAIN`. The lap clock reads 0 through the countdown and at GO alike, so the pair refuses a grab on the
 phase, and draws ours without `--hud-state` (the original draws no HUD yet). The earlier lane's grabs landed mid-race at lap clock 10 s; the cause is
-inferred, not timed: the capture's default `--settle` is 12 s and only `--field` overrode it (with `--settle 0` the pause lands 0.01 to 0.06 s after the
+inferred, not timed: the capture's default `--settle` is 12 s and only `--field` overrode it (with `--settle 0` the pause lands 0.02 to 0.09 s after the
 wait's target, and the 12 s arm was not re-run).
 
 ## The countdown frame (HD Zone, 2026-11-27, `hd-zone-pair-capture`)
