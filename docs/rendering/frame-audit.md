@@ -133,9 +133,14 @@ above for a Pulse (version 6 `.vex`) texture, with `x18` read by
 (`-log2(272 * m11)`, which is the same number at the PSP's aspect). Choices that
 are ours, and their size:
 
-- **One `K` for every texture.** The original's textures keep the `K` they were
-  built with, so about half of them (`-9.05`) are 2 or 3 sixteenths of a level
-  finer than ours.
+- **The drawing camera's `K` for every texture.** The original instead stores `K`
+  per texture (`object+0xb0`) when it builds the bind list, and rebuilds only when
+  the drawing camera's `K` is more than 0.2 away. So the stored value is within 0.2
+  level of the current one, and ours is within that of the original: measured, the
+  split is `-9.0506` against `-8.8799`, 0.17 level, so those textures (82 of 150)
+  are 2 or 3 sixteenths finer in the original than ours. Ours does not store one
+  because the second value is load-time history whose camera is unread; no write
+  of it happens in a grid frame.
 - **`K` is referred to a 480x272 framebuffer at every output resolution**, so a
   larger output draws the original's levels, softer than the old flat law at
   mid distance. TEXTURE DETAIL sharpens.
@@ -143,10 +148,16 @@ are ours, and their size:
   `w` per 2x2 quad and a piecewise-linear `log2` (under 0.1 level).
 - A texture pack's larger picture shifts `b` by `log2` of the width ratio.
 
-**Still on the flat law** `log2(w / 256) + 1`: Pure and Pulse's version 4 Zone
-wrecks (`.vex` version 4; `docs/rendering/texture-level-per-title.md`
-has Pure's measured form), and any draw without a header float. It is the
-formula above with `b = 0`, so it picks its levels as if no texture had a bias.
+**Still on the flat law** `log2(w / 256) + 1`: every version 4 `.vex` texture and
+any draw without a header float. It is the formula above with `b = 0`, so it picks
+its levels as if no texture had a bias. Version 4 is Pure's format
+(`docs/rendering/texture-level-per-title.md` has Pure's measured form), and Pulse
+ships 33 such files on the PSP disc, 55 texture nodes, all in slope mode with a
+non-zero `+0x18`: ten Zone wreck textures in two files, then HUD, trophy,
+memory-stick and default-sky models. The original would apply the formula to the
+wrecks too, if their header holds the same field (not read off a wreck frame).
+The per-team `zonewreck.vex` files read (seven teams) are version 6 and already
+take the new law.
 
 **Far field, ours against the emulator** (Talon's Junction, craft at rest at
 `(198.5, -46.1, -186.0)` on the long straight, 480x272, no filters, no

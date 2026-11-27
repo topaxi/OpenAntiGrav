@@ -107,6 +107,9 @@ of it the same day; see `frame-audit.md`.
   - **Distant trees are lighter than the original's at every level** (Talon long
     straight, `frame-audit.md`, "The level law, measured"). Next: compare the two
     tree draws' blend, alpha test and fog state against ours, about an hour.
+  - **Pulse's version 4 `.vex` textures keep the flat law**, ten Zone wreck textures
+    among them (count in `frame-audit.md`). Switching them on needs a `Title` field,
+    because version 4 is Pure's format too; about an hour.
   - **Real hardware is unmeasured**: the factor 2 in the slope law is PPSSPP's software
     rasteriser's.
   - **Automatic-mode (`.mip` effect and HUD) textures** keep their old selection; only
