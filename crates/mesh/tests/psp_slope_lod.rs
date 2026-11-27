@@ -30,7 +30,9 @@
 use std::sync::Arc;
 
 use oag_mesh::mesh::{Bounds, DrawCall, GpuVertex, Model, ModelTexture, Texels, slots};
-use oag_mesh::mesh_render::{self, Anisotropy, Scene, TextureDetail, UNIFORMS_SIZE};
+use oag_mesh::mesh_render::{
+    self, Anisotropy, PSP_TEXLOD_FRAME, Scene, TEXLOD_CODE_OFFSET, TextureDetail, UNIFORMS_SIZE,
+};
 
 const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 const SIZE: u32 = 64;
@@ -77,6 +79,10 @@ struct Setup {
     detail: TextureDetail,
     anisotropy: Anisotropy,
     texcoords: Texcoords,
+    /// The vertex's per-texture level code (`ModelTexture::lod_code`), 0 for the flat law.
+    code: f32,
+    /// `Fog::texlod_frame`, the camera's shift of that code's bias.
+    frame: f32,
 }
 
 impl Setup {
@@ -88,6 +94,8 @@ impl Setup {
             detail,
             anisotropy: Anisotropy::Off,
             texcoords: Texcoords::Constant,
+            code: 0.0,
+            frame: 0.0,
         }];
         setups.extend(
             [
@@ -100,6 +108,8 @@ impl Setup {
                 detail,
                 anisotropy,
                 texcoords: Texcoords::Stretched,
+                code: 0.0,
+                frame: 0.0,
             }),
         );
         setups
@@ -227,13 +237,11 @@ fn level_at(
     depth: f32,
     setup: Setup,
 ) -> usize {
-    let image = draw(
-        device,
-        queue,
-        &model(texture, depth, setup.texcoords),
-        depth,
-        setup,
-    );
+    let mut quad = model(texture, depth, setup.texcoords);
+    for vertex in &mut quad.vertices {
+        vertex.texcoord2[1] = setup.code;
+    }
+    let image = draw(device, queue, &quad, depth, setup);
     // Dead centre of the triangle.
     let at = (((SIZE / 2) * SIZE + SIZE / 2) * 4) as usize;
     let texel = &image[at..at + 4];
@@ -296,6 +304,69 @@ fn a_chain_is_sampled_at_the_level_the_slope_law_names() {
             "a model without Texels::Chain keeps the sampler's own selection"
         );
     }
+}
+
+/// The vertex code whose bias at the race camera is `bias` levels.
+fn code_for_bias(bias: f32) -> f32 {
+    TEXLOD_CODE_OFFSET + bias - PSP_TEXLOD_FRAME
+}
+
+/// [`assert_levels`] for a texture with its own bias: each `(depth, level)` at that
+/// vertex code and camera shift.
+fn assert_own_bias_levels(code: f32, frame: f32, expected: &[(f32, usize)]) {
+    let Some((device, queue)) = gpu() else { return };
+    for setup in Setup::all(TextureDetail::Original) {
+        let setup = Setup {
+            code,
+            frame,
+            ..setup
+        };
+        for &(depth, level) in expected {
+            assert_eq!(
+                level_at(&device, &queue, chain(), depth, setup),
+                level,
+                "code {code} frame {frame} at view depth {depth}, anisotropy {}",
+                setup.anisotropy
+            );
+        }
+    }
+}
+
+/// `log2(2 w / 256) + b` (`texture_lod.wesl`, `ge_level`). `code` -1 is a bias of exactly 0.
+#[test]
+fn a_texture_with_its_own_bias_is_sampled_on_the_ges_doubled_law() {
+    assert_own_bias_levels(-1.0, 0.0, &[(64.0, 0), (256.0, 1), (512.0, 2)]);
+}
+
+#[test]
+fn a_textures_bias_moves_the_level_by_that_many_levels() {
+    assert_own_bias_levels(
+        code_for_bias(1.0),
+        0.0,
+        &[(64.0, 0), (128.0, 1), (256.0, 2)],
+    );
+    assert_own_bias_levels(
+        code_for_bias(-1.0),
+        0.0,
+        &[(256.0, 0), (512.0, 1), (1024.0, 2)],
+    );
+}
+
+#[test]
+fn a_camera_shift_moves_the_per_texture_bias() {
+    assert_own_bias_levels(
+        code_for_bias(0.0),
+        1.0,
+        &[(64.0, 0), (128.0, 1), (256.0, 2)],
+    );
+}
+
+/// A bias of -0.9 sixteenths is 0 in the GE's register. At `128 * 2^0.52` the level is
+/// then 0.52 (level 1); uncut it would be 0.464 (level 0).
+#[test]
+fn the_ge_cuts_a_bias_to_sixteenths_toward_zero() {
+    let depth = 128.0 * 0.52f32.exp2();
+    assert_own_bias_levels(code_for_bias(-0.9 / 16.0), 0.0, &[(depth, 1)]);
 }
 
 #[test]
@@ -401,6 +472,7 @@ fn draw(
     .expect("building the mesh pipeline");
     let mut scene = Scene::off();
     scene.fog.texlod_shift = setup.detail.level_shift();
+    scene.fog.texlod_frame = setup.frame;
     queue.write_buffer(&built.fog_buffer, 0, bytemuck::bytes_of(&scene));
 
     let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
@@ -547,6 +619,8 @@ fn pixels_moved_by_anisotropy(texcoords: Texcoords, depth: f32) -> Option<usize>
                 detail: TextureDetail::Original,
                 anisotropy,
                 texcoords,
+                code: 0.0,
+                frame: 0.0,
             },
         )
     };
