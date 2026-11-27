@@ -378,6 +378,20 @@ pub(crate) struct WreckArgs {
     )]
     pub(crate) force_rocket_hit: Option<String>,
 
+    /// With `--race --screenshot`, move the player's first weapon out (a laid Bomb, a
+    /// Missile in flight) to a world point at the start of a tick, before
+    /// `--force-bomb-trip` or `--force-missile-hit` on the same tick sets it off:
+    /// `TICK:X,Y,Z`. The blast then stands where a capture of the original had it. A
+    /// verification aid. See [`oag_raceplay::RaceSim::force_shot_at`]. Dev only.
+    #[cfg(feature = "dev-cli")]
+    #[arg(
+        long,
+        value_name = "TICK:X,Y,Z",
+        requires = "race",
+        allow_hyphen_values = true
+    )]
+    pub(crate) force_shot_at: Option<String>,
+
     /// With `--race --screenshot`, at the end of a tick play `COUNT` Rocket craft blasts (1 by
     /// default) at a world point and take as many of the player's Rockets out of the air:
     /// `TICK:X,Y,Z[:COUNT]`, e.g. `709:525.15,-28.26,-34.80`. Repeat it for a volley that lands
@@ -405,6 +419,20 @@ pub(crate) struct WreckArgs {
         allow_hyphen_values = true
     )]
     pub(crate) force_rocket_hit_velocity: Option<String>,
+
+    /// With `--pose-hold-ticks`, hold the craft on this pose instead of its start pose until the
+    /// end of tick `TICK`, then on its start pose: `TICK:X,Y,Z,LX,LY,LZ,UX,UY,UZ,FX,FY,FZ`, the
+    /// position and the left, up and forward rows as `--field-from` reads them. For a capture
+    /// that fired while its craft moved: a Rocket fired before `TICK` leaves from this pose. See
+    /// [`crate::race_capture::pose_hold::Launch`]. Dev only.
+    #[cfg(feature = "dev-cli")]
+    #[arg(
+        long,
+        value_name = "TICK:X,Y,Z,LX,LY,LZ,UX,UY,UZ,FX,FY,FZ",
+        requires = "pose_hold_ticks",
+        allow_hyphen_values = true
+    )]
+    pub(crate) pose_hold_launch: Option<String>,
 
     /// With `--race --screenshot`, launch craft `SLOT`'s Quake so its bump
     /// reaches the player at the end of a tick: `TICK:SLOT`, e.g. `120:1`. The

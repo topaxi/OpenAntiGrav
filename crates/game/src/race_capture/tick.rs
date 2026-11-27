@@ -60,8 +60,12 @@ pub(super) fn advance_one_tick(
             race.give_weapon(slot, weapon);
         }
     }
-    let held_pose =
-        (options.pose_hold == pose_hold::Hold::EveryTick).then(|| pose_hold::StartPose::of(race));
+    let held_pose = (options.pose_hold == pose_hold::Hold::EveryTick).then(|| {
+        options.pose_launch.as_ref().map_or_else(
+            || pose_hold::StartPose::of(race),
+            |launch| launch.held(race, tick),
+        )
+    });
     match (&options.net, &options.remote_correction) {
         (Some(net), _) => net.drive_to(race, u64::from(tick) + 1, snapshot),
         (None, Some(scene)) => scene.tick(race, &snapshot, tick),
@@ -141,6 +145,15 @@ pub(super) fn advance_one_tick(
         && at == tick
     {
         race.core.sim.force_wall_slide(slot);
+    }
+    // Before the forced trips, so they strike the weapon where it now stands.
+    if let Some((at, point)) = options.force_shot_at
+        && at == tick
+    {
+        let player = race.core.player_slot();
+        if !race.core.sim.force_shot_at(player, point) {
+            log::warn!("--force-shot-at: the player has no weapon out");
+        }
     }
     if let Some((at, slot)) = options.force_bomb_trip
         && at == tick

@@ -628,7 +628,8 @@ the 31 others found 89 emitter and template texture references, every one an exi
   `WO_ROCKET_FLARE`, `WO_CANNON_SPARKS`, the four Shuriken effects, `WO_REPULSER_BLAST`,
   `WO_WEAPON_ABSORB`, `WO_SHIP_COLL_SPARK_DAMAGE`, `WO_SHIP_DEATH_DAMAGE_PLUME`,
   `WO_DEBRIS_FIRE`, `WO_DAMAGE_MILD`, `WO_DAMAGE_MODERATE`, `WO_MODESTO_STEAM_A`.
-- **10 not listed, all-streak**: `WO_BOMB_RAYS`, `WO_REPULSER`, `WO_LEACHBEAM_ENERGY`,
+- **9 not listed, all-streak** (`WO_BOMB_RAYS`, the tenth, is listed since 2026-11-27, below):
+  `WO_REPULSER`, `WO_LEACHBEAM_ENERGY`,
   `WO_LEACHBEAM_CHARGING`, `WO_LEACHBEAM_ABSORB`, `WO_SHIP_SPARK_DAMAGE_LEACHBEAM`,
   `WO_SHIP_SPARK_DAMAGE_WEAPON`, `WO_SHIP_COLL_SPARK_NODAMAGE`, `WO_DAMAGE_CRITICAL`,
   `WO_BLUE_WELDER`.
@@ -639,10 +640,11 @@ The streak emitters of the 21 also stay procedural (the Mine's `streaks_fat`, `p
 The listing also gives these effects HD's flipbook walk, and each placed particle draws its spawn
 frame from the stage's generator, so every effect after one in a frame is dealt another
 arrangement. The sheet grows from 3076 to 3590 rows of 4096 on Talon's Junction (31 to 41
-distinct sprites); nothing is dropped. Disc check: `every_hd_sprite_is_on_the_sheet_and_the_weapon_blasts_draw_theirs`
+distinct sprites; 42 with `bomb_spike`, below); nothing is dropped. Disc check: `every_hd_sprite_is_on_the_sheet_and_the_weapon_blasts_draw_theirs`
 (`crates/raceplay/tests/particle_sheet_ground_truth.rs`).
 
-**Against the original.** None of the 21 has a matched capture of its own (the original was seen
+**Against the original.** The Bomb's and the Missile's explosions are paired below. When listed,
+none of the 21 had a matched capture of its own (the original was seen
 walking the sheets of the Detonator Mine and Bomb explosions,
 [particle-render.md](../ghidra/functions/ps3-hdfury-eu/particle-render.md), "The atlas frame"). The HD comparison pairs
 (31, `hd` and `hd-race`) were re-rendered before and after; the build is byte-deterministic (two
@@ -669,6 +671,109 @@ about 9 ticks the explosion model and flash fill the frame and the change is und
 
 **2048 and Omega: not checked here** (out of this change's scope); they read sprites by platform,
 not by this list.
+
+### The Bomb's and the Missile's explosions paired
+
+2026-11-27, RPCS3 0.0.43-20574, HD EU, Talon's Junction, Racebox Single Race, Venom, weapons on,
+each film from a fresh restore of one save state. `scripts/rpcs3-hd-blast-film.py` writes the weapon
+into the pickup slot, sets it off on a rival and keeps, frame by frame, the picture with its world and
+flame clocks, the camera, every craft, the blast object, the command ring and the bound textures;
+`scripts/hd-blast-film-pair.py` makes a pair of one frame. Ours fires the same weapon, moves it to the
+original's blast point (`--force-shot-at`) and sets it off on the struck craft's slot.
+
+| Films (`data/reference/hd-capture/blast/`) | What happened |
+| --- | --- |
+| `missile1`, `missile2` | the shot struck AG Systems after 11 and 12 frames, shield 140 to 125 |
+| `bomb2`, `bomb3` | Auricom, put on the drop, tripped it, shield 145 to 130; blast centres 0.2 units apart |
+| (Mine) | not filmed: pickup word 3 did not fire ([rpcs3-capture.md](../reverse-engineering/rpcs3-capture.md)) |
+
+**Written before the first capture.** A pair without a camera, a craft field or a flame clock is
+invalid. A streak emitter is drawn as sprite bars if the original's ring holds stretched particle
+quads bound to its texture, and not if no stretched quad binds it while the effect's camera-facing
+textures are bound. A listing is kept only if the pair's whole-frame RMSE over `--stage-seed` 1 to 8
+does not rise by more than two paired standard errors.
+
+**The picture's lag.** The stopped target shows its last presented frame, which on these frames is
+further behind RAM than on a calm one. The Missile's was picked by rendering ours at total lags 2 to 5
+and camera lags 1 to 4: total 4 on `missile1` (camera 2 at 0.167 s, 3 at 0.233 s), total 3 and camera 2
+on `missile2` at 0.233 s. The Bomb pairs use total 4 with the camera at rest; a scan of 1 to 8 on both
+Bomb films puts the 0.167 s frame's minimum at 3 on one film and 4 on the other, and the later frames
+are flat. `missile1` at 0.233 s scores better with a younger blast than the rule gives (RMSE 0.204 at
+age 6, 0.203 at 8, 0.218 at the rule's 12, 0.254 at 18); the rule's age is kept and why is not read.
+Confidence in the lag, 70.
+
+**Streak quads** (`scripts/hd-particle-uv.py`; textures named by their bytes against the disc's `.gtf`):
+
+- `WO_BOMB_RAYS`: 600 `bomb_spike` quads, the emitter's own 600 per emission, `0.90` wide and
+  `1.31` long at 0.5 s, `3.67` to `3.76` at 0.8 s (`bomb2` and `bomb3`). Their near ends sit `8.7`
+  units from the blast centre at 0.5 s on both films, against the `9.02` extent the file authors.
+  **Drawn as sprite bars**, confidence 85.
+- `WO_BOMB_SMOKERING`: about 430 to 470 `spark_mblurred` quads, many several times longer than wide
+  (its class-6 `sparks`). Its smoke's quad centres are `14.4` and `14.45` units out at 0.167 s: on a
+  ring, which the file authors (extent 10, widened by its selector-2 channel,
+  [pob.md](../formats/pob.md)).
+- `WO_MISSILE_EXPLO` authors one camera-facing emitter and one sprite template, no streak: nothing
+  to list.
+
+**What was listed**, from the mean whole-frame RMSE over the eight seeds. A bar listing alone for the
+rays changed no pixel: ours emitted them at the centre, inside the fireball. The rings needed the
+extent law (`Effects::extents`) as well, which the quads' distances above are the evidence for.
+
+| Ours | `bomb2` 0.167 | 0.500 | 0.800 | `bomb3` 0.167 | 0.500 | 0.800 |
+| --- | --- | --- | --- | --- | --- | --- |
+| before | 0.2619 | 0.2323 | 0.1337 | 0.2699 | 0.2296 | 0.1299 |
+| ring and rays by extent, rays procedural | 0.2274 | 0.1347 | 0.1361 | 0.2342 | 0.1429 | 0.1325 |
+| **and the rays as sprite bars (wired)** | **0.2274** | **0.1347** | **0.1314** | **0.2342** | **0.1429** | **0.1286** |
+| and the ring's sparks as bars too | 0.2292 | 0.1346 | 0.1314 | 0.2366 | 0.1428 | 0.1286 |
+
+**Each listing on its own** (change in the eight-seed mean RMSE when that one listing is added to the
+other wired ones, negative is closer; paired standard errors in brackets). The rays' `SPRITES` and
+`FAR_BARS` entries count as one, since neither draws anything without the other. The Missile pairs
+do not move with any of them.
+
+| Listing | Film | 0.167 s | 0.500 s | 0.800 s | Kept |
+| --- | --- | --- | --- | --- | --- |
+| `EXTENTS` `WO_BOMB_SMOKERING` | `bomb2` | -0.0345 (27) | -0.0976 (22) | -0.0018 (6) | yes |
+| `EXTENTS` `WO_BOMB_RAYS` | `bomb2` | 0 | 0 | -0.0005 (6) | yes |
+| `FAR_BARS` `WO_BOMB_RAYS` | `bomb2` | 0 | 0 | -0.0047 (16) | yes |
+| `FAR_BARS` `WO_BOMB_RAYS` | `bomb3` | 0 | 0 | -0.0039 (11) | yes |
+| `FAR_BARS` `WO_BOMB_SMOKERING` | `bomb2` | +0.0018 (4.4) | -0.00004 (5) | -0.000003 (3) | no |
+| `FAR_BARS` `WO_BOMB_SMOKERING` | `bomb3` | +0.0024 (3.9) | -0.00007 (5) | -0.00001 (4) | no |
+
+The two extent listings were taken apart on `bomb2` only.
+
+The ring's sparks stay procedural although the original draws them as sprite quads: as bars they
+worsen the 0.167 s frame on both films by more than they gain elsewhere. Listing the rays puts
+`bomb_spike` on the particle sheet (41 to 42 sprites, still 3590 of 4096 rows on Talon's).
+
+**The pairs**, as wired, each re-rendered to identical pixels. RMSE and mean grey: lower is closer.
+
+| Pair | Film | RMSE | Edge NCC | Mean grey |
+| --- | --- | --- | --- | --- |
+| `bomb-craft-hit-0167` | `bomb2` | 0.224 | 0.231 | 32.2 |
+| `bomb-craft-hit-0500` | `bomb2` | 0.131 | 0.294 | 20.0 |
+| `bomb-craft-hit-0800` | `bomb2` | 0.131 | 0.269 | 20.9 |
+| `missile-craft-hit-0167` | `missile1` | 0.171 | 0.135 | 17.6 |
+| `missile-craft-hit-0233` | `missile1` | 0.218 | 0.119 | 32.7 |
+
+Second films, not in the compare page: `bomb3` 0.228, 0.141, 0.129; `missile2` at 0.233 s 0.235.
+
+**Judged by eye.** Both match in layout: the Bomb's fireball, smoke disc, debris and craft; the
+Missile's rings, rays and craft. What differs:
+
+- Bomb 0.167 s: ours' core is white where the original's is yellow under stronger rays, and the
+  ring's procedural sparks read as bright dashes the original does not show.
+- Bomb 0.5 and 0.8 s: ours' fireball is a more even yellow, the original deeper orange with darker
+  mottling; its halo of rays at 0.8 s is brighter than ours.
+- Missile: ours' rings are crisper than the original's washed whites, and at 0.167 s ours' own craft
+  is tinted orange where the original's is dark.
+- Not matched by the pair, not judged: the HUD's pickup row, the other craft.
+
+**2048 and Omega.** 2048's `WO_BOMB_SMOKERING` and `WO_BOMB_RAYS` are its own files (extent 1.5
+against 10; other emitters): checked, differs. Omega's `WO_BOMB_RAYS` is another file (extent 6, a
+`Flames` emitter) and Omega raises no rays trigger: checked, differs. Omega's `WO_BOMB_SMOKERING` in
+`Data\particles` carries HD's three emitters with HD's extents (10, 6.471, 7.059) beside a
+`shockdistort`: checked, applies, not wired (no Omega frame).
 
 ### Every effect that loads a sprite, read off the command ring
 
@@ -842,6 +947,8 @@ two far pairs read 66.50 and 33.60, against 64.71 and 34.06 without velocity or 
 **The picture is still not the original's.** The cloud is smaller, `trail` reads as smooth white
 lobes, and the grey smoke streaming toward the camera is missing (pixels with every channel over
 235 at 0.233 s: 5.9 % against 11.1 %). The near pairs are posed below ("Posing the near hits").
+The cloud and the streams are answered in "The far blast's grey streams are the Rockets' own
+ribbons".
 
 ### Posing a far hit
 
@@ -1060,6 +1167,186 @@ The far pairs (`rocket-craft-far-hit-0100`, `-0233`) are unchanged at 12.91 and 
 
 **2048 and Omega: not checked.** The brief says "Scope: HD only", and the skew is an RPCS3 pause
 property.
+
+### The trails start on the blast's hemisphere
+
+2026-11-27. **On the 0.233 s near pair our player's craft was hidden under white because the
+craft blast spawned every emitter at its anchor. HD spreads them by the extent law: the four
+`FIRE_TRAILS_ONEQUAD` heads start on their authored hemisphere of radius 8.824, so the `trail`
+smoke they leave fans out around the blast instead of stacking along the carry axis in front of
+the camera.** Confidence 85: the disc value and three films agree, the spawn routine that applies
+it on HD is not read (below).
+
+**Ruled out first** (falsifiers written before each run; `hit2` frame `a0233`):
+
+- **Depth, stencil, depth bounds, soft particles.** The particle run (draws 516 to 596) sets
+  depth test `LEQUAL`, mask off, stencil, depth bounds and alpha test off; no texture unit points
+  at the zeta surface. Its projection gives window depth within `1e-6` of the scene's at every
+  distance. The alpha-over fragment program (local `0x01111000`, dumped with the ring) is
+  `TEX R0, f[TEX0], tex0; MUL R0, f[COL0], R0; END`, the same `texel * colour` as ours, and the
+  hull is drawn (draws 436 to 466) before the particles, as ours is.
+- **The sprites.** `trail` samples `smoke_new4_8x4.gtf` in both, and the original's chains sample
+  flipbook cells 3 to 12, the dense first half, as ours do.
+- **The heads' speed.** HD's two velocity routines (`0x00291f18` for velocity mode 1,
+  `0x00292118` for 0 and 2) take the speed as `0x0028c978(instance +0x70, +0x74)`, centre plus
+  spread times `U(-1, 1)`, our form. Scaling our heads' speed by 1.55 (throwaway) left 13 to 18
+  `trail` quads over the craft on seeds 1 to 4, against the threshold of 5.
+- **The tint.** With our alpha-over smoke muted the craft reads yellow, and stays yellow with
+  `glow_longer` muted too: the tint is the additive fireballs in front of the hull, so it needs
+  the blast where the original's stands (the pose), not a law.
+
+**What differs.** Over the craft (screen point `(-0.02, -0.24)`), the original stacks about 3
+`trail` quads, ours 13 to 20. Plotted on the screen, the original's four chains per blast sit
+apart around the frame, ours pile into one blob over the craft. Each chain's nearest quad to its
+blast's `glow_longer` (the blast's site) is the head's spawn point plus at most a tick of travel
+(`scripts/hd-trail-onset.py`):
+
+| Film, frame | Chains | Onset, units from the site |
+| --- | --- | --- |
+| hit1 `a0167` | 12 | 4.3, 6.7, 7.6, 7.8, 8.2, 8.4, 8.4, 8.7, 9.0, 9.0, 9.0, 14.1 |
+| hit2 `a0100` | 4 | 8.3, 8.4, 8.5, 9.1 |
+| hit2 `a0233` | 11 | 8.6, 8.8, 9.0, 9.2, 9.2, 9.5, 9.6, 12.0, 15.0, 18.5, 19.6 |
+| hit3 `a0100` | 4 | 8.4, 8.4, 8.4, 8.6 |
+| hit3 `a0233` | 12 | 5.2, 7.9, 8.0, 8.5, 8.7, 9.2, 9.2, 9.3, 9.4, 12.3, 13.0, 13.9 |
+
+The disc authors `FIRE_TRAILS_ONEQUAD` as shape 7 (hemisphere), `+0x34 = 8.824`, radius mode 0
+(exactly the extent), spread `7.745` unused in that mode. Mode 1 would scatter onsets from about
+1 to 17; the films cluster at 8.3 to 9.6. The longer onsets are chains whose first quads the
+near law drops (the sites are 3.7 units or less from the eye), the shorter ones a chain measured
+against the other blast's site. Ours spawned every head at the anchor (`Spawn::Point`, by
+`without_extents`).
+
+**Wired.** `WO_ROCKET_EXPLO` joins `oag_hd::effects::EXTENTS`. Every emitter of the craft blast
+now spawns as its record says: the root, `SMOKE_BLUCLD` and both fireballs on a 2.255
+hemisphere (mode 1, spread 0.667), `SHIP_DEBRIS` 3.235, `SPARKS` 2.059, `MOLTEN_DEBRIS` 8.824,
+`FIRESPIKES` 0.1, `trail` and the smoke trails on their rings. The extent co-factor is 1 (no
+driver writes one for this effect; the onsets agree with 1). Tests:
+`near_law::hds_craft_blast_plays_the_screen_wash_templates` checks the heads' sphere (disc), and
+`hd_effect_sprites::the_extent_law_is_lifted_only_for_the_effects_each_title_lists` the list.
+
+**The pairs**, on their current flags, rendered twice byte-identical:
+
+| Pair | Before | After |
+| --- | --- | --- |
+| `rocket-craft-hit-0233` | 50.36 | 64.14 |
+| `rocket-craft-hit-0100` | 53.96 | 54.38 |
+| `rocket-craft-far-hit-0100` | 12.91 | 11.89 |
+| `rocket-craft-far-hit-0233` | 45.99 | 43.18 |
+
+Over `--stage-seed 1..8`, paired: 0233 mean grey 62.68 to 54.74 (-7.94 +/- 8.39, closer on 6
+of 8), RMSE -7.72 +/- 8.14; 0100 +0.54 +/- 0.63 (3 of 8 closer). 0233's own seed is worse: its
+50.36 was the second-lowest of its nine seeds, and its single-point pose stands the blast 22.7
+units out with our opponent's velocity, which carried the cloud into the eye ("Posing the near
+hits"). Now the craft stands in plain view where the original's does, without the original's
+yellow (the pose, above). The faithful two-wave pose ("The volley posed at its two points")
+goes from 90.03 to 73.23 on its own seed.
+
+**2048 and Omega.** 2048's own `WO_ROCKET_EXPLO` (`BANG_GLOW`, `DEBRIS_NO_TRAILS`, `SPARKS` and
+the root) authors no trail heads: checked, differs. Omega's two copies (`particles2048` and
+`particles`) both author HD's `FIRE_TRAILS_ONEQUAD` at 8.824: checked, applies, not wired (no
+capture of either's hit).
+
+### The far blast's grey streams are the Rockets' own ribbons
+
+2026-11-27. **The far films' cloud is two waves at two points, and their grey streams are the
+Rockets' smoke ribbons, laid from a launch point behind the camera.** HD draws those ribbons before
+every particle quad of the frame, so the blast and its wash cover them. Ours drew them after the
+particles, and the far pairs posed all three blasts at one point.
+
+**The streams are the Rocket ribbons** (confidence 85). `far3/a0000`, the frame the first shield
+falls, shows the three Rockets still in flight, each with a smoke trail running unbroken back to
+the bottom edge of the screen; the same streams persist at 0.233 s and 0.4 s. The film script
+(`scripts/rpcs3-hd-rocket-film.py --mode hold`) holds the player 30 units behind the rival every
+frame while the Rockets fly and parks it only after the hit: `pre.json` puts the player at
+`(344.28, -39.61, -147.97)` before the press, 28 units behind the pair's pose and 17.7 behind the
+pair's eye. The Rocket does not inherit the craft's velocity (`oag_weapons::projectile::rocket`),
+so the launch point is all that moves the ribbon. The ring keeps the ribbons' draws but not their
+vertices (a main-memory buffer the hook does not dump), so the geometry was not read there.
+
+- Falsifier, written first: fired from the `pre` pose, our ribbons enter from the bottom edge as
+  the original's do, or the launch point is not the cause. They do (`--pose-hold-launch`, below).
+- Ruled out: our ribbons outlive their Rocket by up to 1.85 s as HD's do
+  ([rocket-trail.md](../ghidra/functions/ps3-hdfury-eu/rocket-trail.md)); the forced hit does not
+  cut them.
+
+**HD draws them before the particles** (confidence 85; one film, both frames). In the draw list of
+`far3/a0100` and `a0233` (`scripts/rsx-draw-list.py`), the `RibbonEffects` strips are one run of
+`TRIANGLE_STRIP` draws, blend `SRC_ALPHA, ONE_MINUS_SRC_ALPHA` with alpha `ZERO`, cull off, depth
+mask off: draws 638 to 673 at 0.1 s and 660 to 695 at 0.233 s, 36 each (pool 3's 18 contrail
+elements and pool 4's 9 Rocket ribbons with their 9 shadows). Every particle `QUADS` draw
+follows them: 694 to 774 and 709 to 799, the blast and its sprite templates (the wash) included.
+Ours drew the particles first and every strip after them, so the smoke lay over the white wash.
+**Wired**: the four `RibbonEffects` strips (Missile ribbons and streaks, wingtip contrails, Rocket
+smoke) now draw before the particles (`oag_raceplay::scene::record`, `RIBBON_EFFECTS`); the Leach
+beam, the magstrip wake and the Leach strip keep their place after the particles, their order
+unread. Reverting it turns
+`scene::record::tests::the_ribbon_effects_strips_draw_before_the_particles` red.
+
+**The cloud is two waves** (confidence 85). `scripts/hd-trail-onset.py` finds 3 sites and 12
+trail chains (4 a blast) in `far3/a0233`. Read through each frame's camera, the `glow_longer`
+quads stand on two world points, identical in `a0100` and `a0233` to 0.01 units:
+
+| Site | World point | Blasts | Blue at 0.1 s, 0.233 s | Age at 0.1 s, 0.233 s | Our tick |
+| --- | --- | --- | --- | --- | --- |
+| P1 | `(394.34, -35.94, -120.31)` | 1 | 91, 68 | 5, 13 | 716 |
+| P2 | `(398.98, -35.30, -117.96)` | 2 | 99, 76 | 2, 10 | 719 |
+
+Ages from the blue channel (105 falling to 21 over 30 ticks, "Posing the near hits"). Both frames
+give the same birth ticks, so the far pairs are posed on the second wave as well as the first (the
+lead's question in the far-hit follow-ups). P1 is 3 units from the struck craft's recorded pose,
+the near films' 2-tick lag. `--force-rocket-hit-at` poses both:
+
+```text
+--force-rocket-hit-at 716:394.34,-35.94,-120.31
+--force-rocket-hit-at 719:398.98,-35.30,-117.96:2
+--force-rocket-hit-velocity=88.067871,11.234680,55.156158
+```
+
+(in place of `--force-rocket-hit 717:7`; the struck craft stays on its `field.csv` pose, which is
+the original's at the frame).
+
+**`--pose-hold-launch TICK:X,Y,Z,LX,LY,LZ,UX,UY,UZ,FX,FY,FZ`** (dev only, with
+`--pose-hold-ticks`) holds ship 0 on another pose until the end of `TICK`, then on its start
+pose. The far films' launch, with the press moved to tick 701 (`ours.inputs`
+`701 none / 1 square / 408 none`), 16 ticks of flight as the film's:
+
+```text
+--pose-hold-launch=717:344.282288,-39.608967,-147.973312,0.446097,0.241257,-0.861854,-0.210831,0.964209,0.160783,0.869797,0.109981,0.480995
+```
+
+**The pairs.** `overlap.mean_grey`, own seed, each row rendered twice byte-identical:
+
+| Flags | far 0.1 s | far 0.233 s | near 0.1 s | near 0.233 s |
+| --- | --- | --- | --- | --- |
+| Before (main) | 11.89 | 43.18 | 54.38 | 64.14 |
+| Ribbons before particles, current flags | 11.79 | 43.17 | 54.38 | 64.13 |
+| ... and the two waves | **9.11** | **34.81** | | |
+| ... and the two waves and the launch | 9.27 | 35.92 | | |
+| ... the launch alone (one point) | 13.02 | 43.89 | | |
+
+- Two waves, far 0.233 s over `--stage-seed 1..8`: 43.15 to 35.02, paired -8.13 +/- 0.35,
+  closer on 8 of 8.
+- Near 0.233 s over seeds 1 to 8 with the order change: mean 54.86 (44.13 to 84.61), against
+  54.74 before.
+- By eye at 0.1 s the two waves give the original's plain white frame; the single point left
+  yellow streaks. At 0.233 s the cloud is the original's size and yellow.
+- The launch pose draws the streams where the original has them, and at 0.1 s the wash now covers
+  them as the original's does (16.51 to 13.02 with the order change). It scores 0.16 and 1.11
+  worse than the two waves alone: ours are three narrow white strips bunched right of centre, the
+  original's four wide grey bands span the bottom of the frame. Two causes are open, neither read:
+  the vertex colour (`RibbonEffects_SampleLighting`, `0x002a4280`, a lighting volume; ours draws
+  white), and the fan's width at the eye, wider than HD's authored `spread` 0.05 would give.
+
+**What else moved.** Every HD, 2048 (Vita) and Omega race pair under `compare-page` (63 of 68; the
+five new Bomb and Missile pairs need flags this change predates) rendered with the strips after and
+before the particles: 60 byte-identical, and only `rocket-craft-far-hit-0100`, `-0233` and
+`rocket-craft-hit-0233` moved. The Missile pools move by the static read of the one call that draws
+every pool (confidence 80 there), not by a ring frame; no Missile pair was in the census.
+
+**2048 and Omega: not checked; inherited from HD.** Of the four strips they build only the wingtip
+contrails, which now draw before the particles by HD's order. Their own order is not read: no ring
+of either, and Omega's ribbon render against its particle flush is a static read in its `eboot.bin`
+still to do.
 
 ## Per effect: what fills the heavy frames
 

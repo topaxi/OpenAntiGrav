@@ -707,12 +707,12 @@ as ours also uses the same in the end" - both changes below follow that.
   the cold boot now steps Ship Select until RAM names the pair's `--team` hull ([rpcs3-capture.md](../reverse-engineering/rpcs3-capture.md), "Picking the hull on Ship Select").
   RAM's team name is `harimau` either way and the pair's own `the player's craft (RAM) is the craft ours draws` check passes. The 12 pairs'
   captions say "Harimau (standard hull)". `talons-assegai-c1` (`(7, 0)`) was already the unlocked hull.
-- **The save moved since (2026-11-26, `hd-flame-regrab`): the walk above now picks the Fury hull, and Pilot Assist is on.** On the
+- **The save moved (2026-11-26, `hd-flame-regrab`): Ship Select opens on the Fury hull, and Pilot Assist was on.** On the
   maintainer's save of that day Ship Select opens Harimau's column on the Fury hull, which RAM names `Harimau_c1`
   (`*(*(ship+0x6298)+0x1b4)`, `Data\Ships\Harimau_c1`); one `down` gives `Data\Ships\Harimau`, the orange, yellow-green and blue
-  hull the 12 stored grid pairs fly (read by eye on all 12 regrabs against the stored frames). So `rpcs3-hd-cold-pair.sh`'s default
-  `OAG_HD_CLASSIC=1` is right on this save and `compare-rerender-all.py`'s `(9, 0)` captures the Fury hull; Assegai's column opens on
-  `Assegai_c1`, so `(7, 0)` still holds. The option byte `*(*0x008b098c)+0x473` read `01 01`, so every race frame drew the
+  hull the 12 stored grid pairs fly (read by eye on all 12 regrabs against the stored frames). Assegai's column opens on `Assegai_c1`. No press count is right on every save, so the cold boot steps Ship Select
+  until RAM names the pair's `--team` hull (`rpcs3-hd-ship-step.py select --hull`, called by `emu-hd-glass-boot.sh`;
+  `compare-rerender-all.py selftest` holds that `--team` reaches it). The option byte `*(*0x008b098c)+0x473` read `01 01`, so every race frame drew the
   indicator's bracket under the craft while the profile renders ours off. Two checks in `rpcs3-hd-pair.py` now refuse both:
   the player's hull directory read in the capture's pause against `--team` (a Fury `Harimau_c1` grab with `--team harimau` had passed
   all nine earlier parity checks), and the Pilot Assist byte against the profile's `pilot_assist`
@@ -1643,17 +1643,46 @@ tilt 0.21 deg). Mean grey difference 53.04, RMSE 0.322, edge NCC 0.222 (`compare
 7.9 s, was refused at 3.03 deg and discarded). Confidence 70 that the recipe reproduces; the number is one measurement.
 
 **Menu path** (RACEBOX cursor sits on RACE TYPE; the screen names are `Single Player`, `Track Creation`, `Team Selection`): Main Menu, Racebox, RACE TYPE
-to **Zone** (the setting is remembered between visits; the list ends Zone, Zone Battle, Detonator, Tournament, so read the row before pressing), `cross` to Track
+to **Zone** (the setting is remembered between visits; from Single Race it is 4 `right`s; the list ends Zone, Zone Battle, Detonator, Tournament, so read the row before pressing), `cross` to Track
 Select (Vineta K is the first circuit, no steps), `cross` to Ship Select (Feisar is the first team), `cross` loads (`TTY.log`: `GetMode()==6`, `Loading World
 "Data\Environments\01_Vineta_K\track.vex"`), then START RACE. On a loaded machine a `press` is dropped about one time in four and the screenshot lags the
-cursor by several seconds: read the highlighted row off a grab before every `cross`.
+cursor by several seconds: read the highlighted row off a grab before every `cross`. Pilot Assist is written off first (`rpcs3-hd-pilot-assist.py --off`).
 
-**The grab.** Zone flies the craft itself (about 110 km/h by lap clock 8 s with no input), so a start shot has a window of a fraction of a game second.
-`rpcs3-drive.py restart` fails in Zone (its Down count is one short because the greyed VIEW INVITES row is skipped); open the pause menu with `start`, move to
-RESTART RACE by hand and `cross`: the race reloads straight into the countdown with no START RACE prompt (about 5.2 game seconds to GO). A script then polls
-`world_clock_now()` (no pause) after the reload and runs `rpcs3-hd-pair.py ... --zone 1,0 --autopilot off --state <sidecar with {"mode":"zone","circuit":"vineta-k"}>` once the
-world clock has advanced 2.4 s from its first post-reload reading: the pair's own attach and pause land 2 to 3 game seconds later (emulator at about a fifth of real
-time under load 38), at lap clock 0.0. Lead 2.6 s (one attempt, lap clock 0.57 at the trigger) landed at lap clock 3.3 with the craft already moving; lead 2.4 s landed at 0.0.
+**The grab (2026-11-27, `hd-zone-pair-capture`, replaces the world-clock lead).** `rpcs3-hd-pair.py --zone 1,0 --countdown --autopilot off --state <sidecar
+{"mode":"zone","circuit":"vineta-k"}>` is started **first**; it waits in-process, without pausing, for the race manager to be `--countdown-at` seconds
+(default 2.4) into phase 1, and only then attaches the debugger. The caller then starts the race: `cross` at the fly-over's START RACE prompt, or `cross` on
+`RACE AGAIN` (`EndRace Menu`, once the craft has crashed, about 60 s). The countdown is phase 1 of the race manager (`*0x0095ae78 + 0x1950`, word `+0x20`) and
+lasts 3.0 s; about 3 s of phase 0 precede it after `RACE AGAIN`. The lap clock reads 0 through the countdown and at GO alike, so the pair refuses a grab on the
+phase, and draws ours without `--hud-state` (the original draws no HUD yet). The earlier lane's grabs landed mid-race at lap clock 10 s; the cause is
+inferred, not timed: the capture's default `--settle` is 12 s and only `--field` overrode it (with `--settle 0` the pause lands 0.02 to 0.09 s after the
+wait's target, and the 12 s arm was not re-run).
+
+## The countdown frame (HD Zone, 2026-11-27, `hd-zone-pair-capture`)
+
+Two boots of RPCS3, Vineta K Zone, each grab 13 of 13 parity checks. "Tone" is the original's blue channel mean on a flat patch of the right-hand building
+(`1500..1700 x 150..230`; ours reads 218.3 to 218.8 on every grab, the stored 2026-11-19 original 220.3). "Shift" is the largest best-fit offset, in px, of
+ours against the original on three scene regions with no craft or board.
+
+| grab | s into countdown | tone | shift px | mean grey | RMSE | edge NCC |
+| --- | --- | --- | --- | --- | --- | --- |
+| stored 2026-11-19 | not recorded | 220.3 | 0.3 | 6.26 | 0.0763 | 0.301 |
+| boot A, early | 0.22 | 229.4 | 1.4 | 9.78 | 0.0822 | 0.285 |
+| boot A | 1.06 | 223.7 | 0.3 | 6.62 | 0.0692 | 0.298 |
+| boot A | 2.22 | 220.0 | 0.8 | 6.51 | 0.0786 | 0.289 |
+| boot B | 2.26 | 219.9 | 2.0 | 8.16 | 0.0950 | 0.270 |
+| **boot B, adopted** | 2.43 | 220.1 | 0.07 | 5.92 | 0.0731 | 0.303 |
+| boot B | 2.48 | 221.2 | 0.3 | 6.55 | 0.0746 | 0.300 |
+
+- **The original's tone settles during the countdown** (confidence 75: seven grabs and one unpaused poll). The Environment block's adapted luminance
+  (`FunkLayer` `0x00c50ee0 + 0x254`) read 0.311 at the countdown's start, 0.348 at 1.0 s and 0.359 at 2.4 s (frame luma 0.358 to 0.361): the exposure follows it.
+  Ours holds one tone, near the late original's. A countdown grab before about 2 s is 3 to 9 levels brighter for a reason ours does not model.
+- **The craft hovers with a jitter** of about 0.05 units the whole countdown (polled unpaused), and the presented frame can be older than the camera read in the
+  pause. The scene then sits 1 to 2 px off ours (the doubled edges of the 2.26 s grab) and mean grey rises by up to 2. Judge a grab by its shift, and re-grab.
+- **A single grab's mean grey is not a measure of a change in ours**: two aligned grabs on one boot read 5.92 and 6.55.
+- The adopted grab was chosen by a rule written before it was taken (at least 2.2 s in, every region's shift at most 0.5 px, first to pass), not by score.
+  Craft box: best gradient correlation 0.81 at offset (0, 0). Every grab's craft overlays within 1 px.
+- Left unmatched: the gantry board's glyphs (ours draws a blank board), the engine plume (ours runs no ticks), the two raised flaps on the hull's top, which
+  the original shows on the grid, and a few floating scenery shapes whose animation phase differs.
 
 **Differences left (not matched, judged by eye on `side.png`).** The original's zone-1 colour grade is a strong cyan wash; ours renders its natural zone 1 grade
 (pale, warm sky). `--zone 1,0,0` (grade pinned to stage 0) is a grey scene and scores worse (mean grey 88.9), so the stage is left unpinned. The original's start gantry
@@ -1671,9 +1700,7 @@ left is the gantry board's glyph, the hull's light and the exhaust.
 **A capture that imposes `--hud-state` is drawn with its HUD on screen,** gate or not: such a pair depicts a
 mid-race frame. Every Omega and 2048 Zone pair is one (`omega/zone-vineta-k-z5`, `omega/zone-capital-reach-2048-z5`,
 `2048-vita/zone-altima-z5`, `2048-vita/zone-dlc-vineta-k-z5`), and they render as before. A pre-release pair must
-**not** pass `--hud-state`. `rpcs3-hd-pair.py --zone` always emits it, so this pair's `ours.flags` drops
-`--hud-state 1,1,0,0,0,100,0,1,0,0` by hand. The countdown draws no HUD, so the counters are never seen, and the
-render is otherwise pixel-identical.
+**not** pass `--hud-state`. `rpcs3-hd-pair.py --zone` emits it for a mid-race frame; with `--countdown` it does not.
 
 ## Omega Zone pairs (2026-11-17, `zone-pair-omega`)
 

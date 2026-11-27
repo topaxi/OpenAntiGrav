@@ -109,6 +109,8 @@ pub struct CaptureOptions {
     pub force_leach_lock: Option<(u32, usize)>,
     /// `--leach-path FILE`, parsed: see [`Race::force_leach_path`].
     pub leach_path: Option<Vec<oag_core::math::Vec3>>,
+    /// `--force-shot-at TICK:X,Y,Z`: see [`RaceSim::force_shot_at`].
+    pub force_shot_at: Option<(u32, oag_core::math::Vec3)>,
     /// `--force-bomb-trip TICK:SLOT`: see [`RaceSim::force_bomb_trip`].
     pub force_bomb_trip: Option<(u32, usize)>,
     /// `--force-missile-hit TICK:SLOT`.
@@ -270,6 +272,9 @@ pub struct CaptureOptions {
     /// `--pose-hold`, `--pose-hold-ticks`: when ship 0 is put back on its start pose. See
     /// [`pose_hold`].
     pub pose_hold: pose_hold::Hold,
+    /// `--pose-hold-launch`: the pose ship 0 is held on before it is parked. See
+    /// [`pose_hold::Launch`].
+    pub pose_launch: Option<pose_hold::Launch>,
     /// `--pose-lean`: ship 0's drawn lean and roll phase as the pose's trace row recorded them, put on
     /// after the ticks. See [`pose_lean`].
     pub pose_lean: Option<pose_lean::PoseLean>,
@@ -506,6 +511,9 @@ pub fn capture(
         race.stow_grid_flaps();
     }
     let start_pose = options.pose_hold.start(&race);
+    if let Some(launch) = &options.pose_launch {
+        launch.arm(&mut race);
+    }
     // With a field warm-up and no ticks to run, the player's boost is armed inside the warm-up so it rides the
     // warmed trail; `force_boost_state` would clear that trail for a straight one (`Race::warm_up_field`).
     let warmed_boost = options

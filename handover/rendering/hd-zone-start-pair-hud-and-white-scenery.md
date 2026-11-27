@@ -1,8 +1,8 @@
 ---
 status: re-first
 titles: [hd]
-updated: 2026-11-20
-summary: "HD Zone start pair (hd/zone-vineta-k-z5) at 6.57 after the hull's rim term; board glyph and three over-bright hull panels remain"
+updated: 2026-11-27
+summary: "HD Zone start pair (hd/zone-vineta-k-z5): board glyph, three over-bright hull panels, grid flaps and countdown tone remain"
 ---
 
 # HD Zone start pair: what is left after the Zone frame's light and post chain
@@ -20,14 +20,12 @@ three. By region after: sky 0.10, scenery 1.93, road and pads 1.50, the board
 
 ## Open
 
-- **Which countdown moment the original's frame is.** The gantry board shows
-  a glyph ours does not (ours' board assembly starts at tick 63). The live
-  read for the HUD gate (`docs/ghidra/functions/ps3-hdfury-eu/hud-start-gate.md`)
-  saw the same `3` glyph in phase 1, the countdown, so the frame is inside the
-  countdown; the HUD gate is phase-based, so it needs no re-timing. The pair's
-  `--ticks 0` may be earlier than the original's moment; pinning it needs the
-  countdown timer read in the same pause (`RaceManager +0x1958 - +0x1968`).
-  A pair-timing question for the lead, not a board law. 1.32 grey.
+- **The gantry board shows glyphs ours does not** (ours' board assembly starts at tick 63). A `--countdown` pair now records the
+  original's phase and seconds in it (`original.race_phase`), so ours' `--ticks` can be matched to that moment; it is still 0
+  (`docs/tools/compare-page.md`, "The countdown frame"). 1.24 mean grey on the 2.4 s grab.
+- **Countdown tone and grid flaps, not modelled.** The original's adapted luminance climbs 0.311 to 0.359 over the 3 s countdown and ours holds one
+  tone; the original shows two raised flaps on the hull's top at the grid and ours draws none (same page; the flaps not checked
+  against any other grid work).
 - **The hull's light in a Zone frame: read, three panels overshoot.** The probe tint
   (twice the stage's `Track.Base Colour Highlight`) and `zoneship01`'s rim term
   (`fresnelBase` `0.1234`, `base + (1 - base) * (1 - N.V)^5` added untinted) are wired:
@@ -52,20 +50,15 @@ three. By region after: sky 0.10, scenery 1.93, road and pads 1.50, the board
   dome there. Omega's Flash frame shows peach instead: differs, unread.
 - **2048 and Omega have no Zone frame law read.** Both end the Zone frame in
   `wo_composite_zone_fp` (Omega also `wo_composite_zone_hdfury_fp`), unread.
-- **The adopted pair's provenance says zone 1, score 0 were read off the
-  original's HUD**, but the frame draws no HUD; the values are the race's
-  start state, not a reading.
 - **`_ne.a * zoneBaseInner`.** Two of Vineta K's
   `diffuse_normal_specular_emmissive` Zone variants add it; which variant a
   chunk runs is unread, and the frame shows none.
 
 ## Next Steps
 
-1. After this lands, re-render the pair from the main checkout:
-   `just compare-rerender-ours --only hd/zone-vineta-k-z5 --no-build` (6.57
-   expected).
-2. Read the countdown timer beside the pair's grab and re-time ours'
-   `--ticks` if the moments differ (proposal to the lead; the pair is adopted).
+1. Once the 2026-11-27 countdown grab is adopted, run the 8-phase `--flame-clock` sweep on it (engine-flare.md, "The cold-boot pairs, regrabbed
+   with the clock").
+2. Match ours' `--ticks` to the recorded countdown seconds and see whether the board then draws the original's glyphs.
 3. The hull's three bright panels: decode the normal and tangent streams of the live
    `zoneship01` draws (641..644, `va-06xx-*.bin`) and compare `N` on the nose with
    ours' `hull_normal`; check whether the flaps carry their own node matrix

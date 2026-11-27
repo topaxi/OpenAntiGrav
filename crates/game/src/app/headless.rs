@@ -857,6 +857,7 @@ pub(crate) fn race_launch(
                     "LeachBeam lock",
                 )?,
                 leach_path: crate::app::args::leach_path(cli.wreck.leach_path.as_deref())?,
+                force_shot_at: crate::app::args::shot_at(cli.force_shot_at())?,
                 force_bomb_trip: crate::app::args::force_at_slot(
                     cli.wreck.force_bomb_trip.as_deref(),
                     "Bomb trip",
@@ -940,6 +941,7 @@ pub(crate) fn race_launch(
                     cli.pose_draw.pose_hold,
                     cli.pose_draw.pose_hold_ticks,
                 ),
+                pose_launch: crate::app::args::pose_launch(cli.pose_hold_launch())?,
                 pose_lean: pose_lean(cli)?,
                 pose_flaps: pose_flaps(cli)?,
                 stow_grid_flaps: cli.pose_draw.no_grid_flaps

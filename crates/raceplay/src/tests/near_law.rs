@@ -215,6 +215,24 @@ fn hds_craft_blast_plays_the_screen_wash_templates() {
         .collect();
     assert_eq!(playing, ["glow_longer", "Glow", "Glow"]);
     assert_eq!(blast.near.and_then(|law| law.template_cap), Some(2.0));
+    check_craft_blast_trails_start_on_the_hemisphere(blast);
+}
+
+/// HD's craft blast spreads by the extent law: `FIRE_TRAILS_ONEQUAD`, the heads whose `trail`
+/// smoke the original draws fanning out around the blast, start on the authored 8.824-unit
+/// hemisphere (`docs/rendering/particle-fill.md`, "The trails start on the blast's hemisphere").
+fn check_craft_blast_trails_start_on_the_hemisphere(blast: &oag_fx::psys::Effect) {
+    use oag_fx::psys::spawn::Spawn;
+    let heads = blast
+        .emitters
+        .iter()
+        .find(|spec| spec.name == "FIRE_TRAILS_ONEQUAD")
+        .expect("the craft blast authors its trail heads");
+    let Spawn::Sphere { extent, mode, .. } = heads.spawn else {
+        panic!("the trail heads spawn at the anchor: {:?}", heads.spawn);
+    };
+    assert!((extent - 8.824).abs() < 1e-3, "extent {extent}");
+    assert_eq!(mode, 0, "exactly on the radius");
 }
 
 /// The same on 2048's and Omega's own loads: their craft blast carries the law, HD's template

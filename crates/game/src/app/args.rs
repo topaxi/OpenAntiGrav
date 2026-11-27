@@ -398,6 +398,19 @@ pub(crate) fn rocket_hits_at(
         .collect()
 }
 
+/// Parses `--force-shot-at`'s `TICK:X,Y,Z`.
+pub(crate) fn shot_at(text: Option<&str>) -> Result<Option<(u32, oag_core::math::Vec3)>> {
+    let Some(text) = text else { return Ok(None) };
+    let bad = || {
+        anyhow::anyhow!(
+            "{text:?} is not a forced shot position; write it as TICK:X,Y,Z, e.g. 709:525,-28,-35"
+        )
+    };
+    let (tick, point) = text.split_once(':').ok_or_else(bad)?;
+    let at = velocity(Some(point)).map_err(|_| bad())?.ok_or_else(bad)?;
+    Ok(Some((tick.trim().parse().map_err(|_| bad())?, at)))
+}
+
 /// Parses `--force-rocket-hit-velocity`'s `VX,VY,VZ`.
 pub(crate) fn velocity(text: Option<&str>) -> Result<Option<oag_core::math::Vec3>> {
     let Some(text) = text else { return Ok(None) };
@@ -411,6 +424,41 @@ pub(crate) fn velocity(text: Option<&str>) -> Result<Option<oag_core::math::Vec3
             "{text:?} is not a velocity; write it as VX,VY,VZ, e.g. 88,11,55"
         )),
     }
+}
+
+/// Parses `--pose-hold-launch`'s `TICK:X,Y,Z,LX,LY,LZ,UX,UY,UZ,FX,FY,FZ`; the rows are read as
+/// `--field-from` reads a row (`oag_trace::replay::orientation_of_rows`, left/up/forward).
+pub(crate) fn pose_launch(
+    text: Option<&str>,
+) -> Result<Option<crate::race_capture::pose_hold::Launch>> {
+    use oag_core::math::Vec3;
+    let Some(text) = text else { return Ok(None) };
+    let bad = || {
+        anyhow::anyhow!(
+            "--pose-hold-launch {text:?}: write it as TICK:X,Y,Z,LX,LY,LZ,UX,UY,UZ,FX,FY,FZ"
+        )
+    };
+    let (tick, rest) = text.split_once(':').ok_or_else(bad)?;
+    let until: u32 = tick.trim().parse().map_err(|_| bad())?;
+    let v: Vec<f32> = rest
+        .split(',')
+        .map(|v| v.trim().parse().ok().filter(|v: &f32| v.is_finite()))
+        .collect::<Option<_>>()
+        .ok_or_else(bad)?;
+    let [x, y, z, lx, ly, lz, ux, uy, uz, fx, fy, fz] = v[..] else {
+        return Err(bad());
+    };
+    let orientation = oag_trace::replay::orientation_of_rows(
+        Vec3::new(lx, ly, lz),
+        Vec3::new(ux, uy, uz),
+        Vec3::new(fx, fy, fz),
+        oag_trace::replay::Basis::LeftUpForward,
+    );
+    Ok(Some(crate::race_capture::pose_hold::Launch::new(
+        until,
+        Vec3::new(x, y, z),
+        orientation,
+    )))
 }
 
 /// Reads `--leach-path`'s file: one `x,y,z` sample per non-empty line.

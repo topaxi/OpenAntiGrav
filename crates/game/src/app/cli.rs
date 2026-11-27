@@ -305,6 +305,21 @@ impl Cli {
         None
     }
 
+    /// `--pose-hold-launch`; always `None` in a build without `dev-cli`.
+    pub(crate) fn pose_hold_launch(&self) -> Option<&str> {
+        #[cfg(feature = "dev-cli")]
+        return self.wreck.pose_hold_launch.as_deref();
+        #[cfg(not(feature = "dev-cli"))]
+        None
+    }
+    /// `--force-shot-at`; always `None` in a build without `dev-cli`.
+    pub(crate) fn force_shot_at(&self) -> Option<&str> {
+        #[cfg(feature = "dev-cli")]
+        return self.wreck.force_shot_at.as_deref();
+        #[cfg(not(feature = "dev-cli"))]
+        None
+    }
+
     /// `--force-rocket-hit-at`; always empty in a build without `dev-cli`.
     pub(crate) fn force_rocket_hit_at(&self) -> &[String] {
         #[cfg(feature = "dev-cli")]

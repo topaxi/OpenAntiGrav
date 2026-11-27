@@ -605,6 +605,41 @@ fn a_development_build_reads_a_forced_volley() {
     .expect("the two forced hits go together");
 }
 
+#[cfg(feature = "dev-cli")]
+#[test]
+fn a_development_build_reads_a_launch_pose() {
+    let pose = "717:344.28,-39.61,-147.97,0.446,0.241,-0.862,-0.211,0.964,0.161,0.870,0.110,0.481";
+    let cli = Cli::try_parse_from([
+        "oag-game",
+        "--race",
+        "--pose-hold",
+        "--pose-hold-ticks",
+        "--pose-hold-launch",
+        pose,
+    ])
+    .expect("a launch pose with the every-tick hold");
+    let launch = crate::app::args::pose_launch(cli.pose_hold_launch())
+        .expect("twelve numbers")
+        .expect("given");
+    assert_eq!(launch.until, 717);
+    assert_eq!(
+        launch.pose.position(),
+        oag_core::math::Vec3::new(344.28, -39.61, -147.97)
+    );
+    for bad in [
+        "717",
+        "717:1,2,3",
+        "x:1,2,3,1,0,0,0,1,0,0,0,1",
+        "717:1,2,3,1,0,0,0,1,0,0,0,NaN",
+    ] {
+        assert!(crate::app::args::pose_launch(Some(bad)).is_err(), "{bad}");
+    }
+    assert!(
+        Cli::try_parse_from(["oag-game", "--race", "--pose-hold-launch", pose]).is_err(),
+        "the launch pose needs the every-tick hold"
+    );
+}
+
 #[cfg(not(feature = "dev-cli"))]
 #[test]
 fn a_release_build_rejects_seed_and_give() {
@@ -821,4 +856,17 @@ fn a_run_without_the_pins_has_no_pinned_hud() {
     let cli = Cli::try_parse_from(["oag-game", "--race", "--screenshot", "out.png"])
         .expect("an ordinary capture parses");
     assert!(capture_hud(&cli).expect("nothing to parse").is_none());
+}
+
+#[test]
+fn a_forced_shot_position_reads_its_tick_and_point_and_refuses_anything_else() {
+    use crate::app::args::shot_at;
+    assert_eq!(
+        shot_at(Some("766:-137.17,-49.55,-175.12")).expect("parses"),
+        Some((766, oag_core::math::Vec3::new(-137.17, -49.55, -175.12)))
+    );
+    assert_eq!(shot_at(None).expect("absent"), None);
+    for bad in ["766", "766:1,2", "x:1,2,3", "-137,-49,-175"] {
+        assert!(shot_at(Some(bad)).is_err(), "{bad}");
+    }
 }
