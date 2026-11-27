@@ -339,6 +339,12 @@ sprite templates meet the GE drop on `WO_REPULSER` alone. Pulse PS2 **I:Pulse PS
 for the near tests, the squares' fade factor **I:Pulse** ([particle-bars.md](../ghidra/functions/psp-pure-usa/particle-bars.md#near-the-eye-2026-11-26)),
 **I:Pulse** for the GE drop.
 
+**Texture level** (`oag_title::Looks::every_texture_lod_bias`): 2048 **M** draws every weapon
+model, program and sprite at its loader's bias of -1.5 over the file's levels
+([gxt-loader.md](../ghidra/functions/vita-2048-eu-v104/gxt-loader.md#in-a-race-the-bound-descriptors-2026-11-27-v2048-texlevel-measure-v2048-texlevel-more)).
+Omega **M** differs: its samplers read bias 0. No other title's weapon sprites take a title bias;
+HD's mine and bomb bodies take its material bias ([hd-track-tone.md](../rendering/hd-track-tone.md)).
+
 HD's particle sprites are `.gtf` entries with bottom-up rows, and every HD effect that loads one
 draws it turned top-down since 2026-11-26 (M, against a far Rocket hit on RPCS3,
 [particle-fill.md](../rendering/particle-fill.md#hds-particle-sprites-are-bottom-up); the same
