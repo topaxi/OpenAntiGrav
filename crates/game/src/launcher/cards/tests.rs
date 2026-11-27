@@ -19,6 +19,18 @@ fn row(name: &str, title: &'static oag_title::Title, serial: Option<&str>) -> Ca
     }
 }
 
+fn row_on(
+    name: &str,
+    title: &'static oag_title::Title,
+    platform: Platform,
+    serial: Option<&str>,
+) -> Candidate {
+    Candidate {
+        platform,
+        ..row(name, title, serial)
+    }
+}
+
 fn locked(name: &str, serial: &str) -> Candidate {
     Candidate {
         source: format!("data/images/{name}"),
@@ -96,18 +108,72 @@ fn every_title_gets_one_card_however_many_images_it_has() {
     let mut rows = library();
     // HD twice with one serial (an encrypted copy that a key opens beside its
     // decrypted twin), a PS2 Pulse, and a locked copy of HD.
-    rows.push(row("dec.iso", oag_hd::TITLE, Some("BCES-00664")));
-    rows.push(row("enc.iso", oag_hd::TITLE, Some("BCES-00664")));
-    rows.push(row("ps2.chd", oag_pulse::TITLE, Some("SCES-54748")));
+    rows.push(row_on(
+        "dec.iso",
+        oag_hd::TITLE,
+        Platform::Ps3,
+        Some("BCES-00664"),
+    ));
+    rows.push(row_on(
+        "enc.iso",
+        oag_hd::TITLE,
+        Platform::Ps3,
+        Some("BCES-00664"),
+    ));
+    rows.push(row_on(
+        "ps2.chd",
+        oag_pulse::TITLE,
+        Platform::Ps2,
+        Some("SCES-54748"),
+    ));
     rows.push(locked("locked.iso", "BCES-00664"));
     let list = chooser(rows, &[]).card_list();
 
     let keys: Vec<&str> = list.iter().map(|card| card.key.as_str()).collect();
-    assert_eq!(keys.len(), 3, "{keys:?}");
+    assert_eq!(keys.len(), 4, "{keys:?}");
     let rows_of = |at: usize| -> Vec<usize> { list[at].variants.iter().map(|v| v.row).collect() };
-    assert_eq!(rows_of(0), [0, 1, 5], "both PSP pressings and the PS2 one");
-    assert_eq!(rows_of(1), [2]);
+    // Oldest release first: Pure (2005), Pulse PSP (2007), HD (2008), Pulse PS2 (2009).
+    assert_eq!(rows_of(0), [2], "Pure");
+    assert_eq!(rows_of(1), [0, 1], "both PSP pressings of Pulse");
     assert_eq!(rows_of(2), [3], "the same serial twice is one variant");
+    assert_eq!(rows_of(3), [5], "Pulse on PS2 is a card of its own");
+}
+
+#[test]
+fn a_copy_on_no_known_platform_joins_its_titles_card() {
+    let list = chooser(
+        vec![
+            row_on("psn", oag_hd::TITLE, Platform::Unknown, Some("NPEA00057")),
+            row_on("disc.iso", oag_hd::TITLE, Platform::Ps3, Some("BCES-00664")),
+        ],
+        &[],
+    )
+    .card_list();
+    assert_eq!(
+        list.len(),
+        1,
+        "{:?}",
+        list.iter().map(|c| &c.key).collect::<Vec<_>>()
+    );
+    assert_eq!(list[0].variants.len(), 2);
+}
+
+#[test]
+fn only_a_title_on_two_platforms_carries_a_platform_badge() {
+    let mut rows = library();
+    rows.push(row_on(
+        "ps2.chd",
+        oag_pulse::TITLE,
+        Platform::Ps2,
+        Some("SCES-54748"),
+    ));
+    let launcher = chooser(rows, &[]);
+    let drawn = texts(&draw(&launcher, &Sheet::default()));
+    assert_eq!(drawn.iter().filter(|t| *t == "PSP").count(), 1, "{drawn:?}");
+    assert_eq!(drawn.iter().filter(|t| *t == "PS2").count(), 1, "{drawn:?}");
+
+    let alone = texts(&draw(&chooser(library(), &[]), &Sheet::default()));
+    assert!(!alone.iter().any(|t| t == "PSP"), "{alone:?}");
 }
 
 #[test]
@@ -157,9 +223,11 @@ fn art_is_asked_for_only_from_discs_that_open() {
 }
 
 #[test]
-fn the_cog_steps_through_a_titles_images_and_reports_the_choice() {
+fn the_disc_steps_through_a_titles_images_and_reports_the_choice() {
     let mut launcher = chooser(library(), &[]);
     read_art(&mut launcher);
+    // The cursor starts on the first row's card: Pulse, the second card.
+    assert_eq!(launcher.focused_card(), 1);
     assert_eq!(launcher.pick().as_deref(), Some("data/images/eu.chd"));
     assert_eq!(launcher.take_choice(), None, "nothing was chosen yet");
 
@@ -167,7 +235,7 @@ fn the_cog_steps_through_a_titles_images_and_reports_the_choice() {
     assert_eq!(launcher.pick().as_deref(), Some("data/images/usa.chd"));
     let choice = launcher.take_choice().expect("a choice to save");
     assert_eq!(choice.1, "UCUS-98712:pic1");
-    assert_eq!(choice.0, launcher.card_list()[0].key);
+    assert_eq!(choice.0, launcher.card_list()[1].key);
     assert_eq!(launcher.take_choice(), None, "reported once");
 
     press(&mut launcher, Button::Square);
@@ -198,7 +266,7 @@ fn a_card_with_two_pictures_of_one_image_switches_between_them() {
 
 #[test]
 fn a_remembered_image_is_shown_again_even_before_its_art_is_read() {
-    let key = chooser(library(), &[]).card_list()[0].key.clone();
+    let key = chooser(library(), &[]).card_list()[1].key.clone();
     let mut launcher = chooser(library(), &[(&key, "UCUS-98712:pic1")]);
     assert_eq!(
         launcher.pick().as_deref(),
@@ -207,7 +275,7 @@ fn a_remembered_image_is_shown_again_even_before_its_art_is_read() {
     );
     read_art(&mut launcher);
     assert_eq!(launcher.pick().as_deref(), Some("data/images/usa.chd"));
-    let card = launcher.card_list()[0].clone();
+    let card = launcher.card_list()[1].clone();
     assert_eq!(launcher.shown_variant(&card), 1);
     assert_eq!(
         launcher.take_choice(),
@@ -217,22 +285,22 @@ fn a_remembered_image_is_shown_again_even_before_its_art_is_read() {
 }
 
 #[test]
-fn a_click_on_the_cog_switches_and_a_click_on_the_card_boots() {
+fn a_click_on_the_disc_switches_and_a_click_on_the_card_boots() {
     let mut launcher = chooser(library(), &[]);
     read_art(&mut launcher);
     let rects = layout(2, 0);
 
-    let cog = centre(cog_hit(rects[0]));
-    assert_eq!(click(&mut launcher, cog), None, "the cog boots nothing");
+    let disc = centre(disc_hit(rects[1]));
+    assert_eq!(click(&mut launcher, disc), None, "the disc boots nothing");
     assert_eq!(launcher.pick().as_deref(), Some("data/images/usa.chd"));
 
     assert_eq!(
-        click(&mut launcher, centre(rects[0])).as_deref(),
+        click(&mut launcher, centre(rects[1])).as_deref(),
         Some("data/images/usa.chd")
     );
     // Pure has one image, so its corner is the card like any other part.
     assert_eq!(
-        click(&mut launcher, centre(cog_hit(rects[1]))).as_deref(),
+        click(&mut launcher, centre(disc_hit(rects[0]))).as_deref(),
         Some("data/images/pure.chd")
     );
 }
@@ -246,8 +314,10 @@ fn pad_and_pointer_move_between_cards() {
     let mut launcher = chooser(rows, &[]);
     assert_eq!(launcher.card_list().len(), 5);
 
-    press(&mut launcher, Button::Right);
+    // The first row is Pulse, the second card by release.
     assert_eq!(launcher.focused_card(), 1);
+    press(&mut launcher, Button::Right);
+    assert_eq!(launcher.focused_card(), 2);
     press(&mut launcher, Button::Down);
     assert!(launcher.focused_card() >= 3, "down reaches the lower row");
     press(&mut launcher, Button::Up);
@@ -322,8 +392,10 @@ fn a_card_whose_art_will_not_read_says_its_name() {
         "Pulse's picture and no stand-in for Pure"
     );
     let drawn = texts(&draws);
-    assert!(!drawn.contains(&"Wipeout Pulse".to_string()), "{drawn:?}");
-    assert!(drawn.contains(&"Wipeout Pure".to_string()), "{drawn:?}");
+    // Each name is the caption once; Pure's is also drawn in its empty card.
+    let count = |name: &str| drawn.iter().filter(|t| *t == name).count();
+    assert_eq!(count("Wipeout Pulse"), 1, "{drawn:?}");
+    assert_eq!(count("Wipeout Pure"), 2, "{drawn:?}");
 }
 
 #[test]

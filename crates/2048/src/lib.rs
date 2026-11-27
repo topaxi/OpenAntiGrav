@@ -71,6 +71,7 @@ pub mod tips;
 /// Wipeout 2048, as the asset layer needs to know it.
 pub const TITLE: &Title = &Title {
     name: "Wipeout 2048",
+    released: &[(Platform::Vita, 2012, 2)],
     archives: ArchiveCandidates {
         patch: PATCH_CANDIDATES,
         data: DATA_CANDIDATES,

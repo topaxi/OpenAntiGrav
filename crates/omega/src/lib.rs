@@ -61,6 +61,7 @@ pub mod weapons;
 /// Wipeout: Omega Collection, as the asset layer needs to know it.
 pub const TITLE: &Title = &Title {
     name: "Wipeout: Omega Collection",
+    released: &[(Platform::Ps4, 2017, 6)],
     archives: ArchiveCandidates {
         patch: &[],
         data: DATA_CANDIDATES,

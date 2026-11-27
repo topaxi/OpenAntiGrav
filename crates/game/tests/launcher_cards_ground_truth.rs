@@ -2,7 +2,7 @@
 //! images, with no window.
 //!
 //! What only the running binary shows: the art is read off the discs and
-//! reaches the screen, a picture switched with the cog is there on the next
+//! reaches the screen, a picture switched with the disc is there on the next
 //! launch, and both the flag and the setting bring back the list.
 //!
 //! The sheet is judged by how many colours a card holds, never against disc
@@ -67,7 +67,7 @@ fn settings(root: &Path) -> String {
     std::fs::read_to_string(root.join("config/oag/settings.toml")).expect("a settings file")
 }
 
-/// Distinct colours inside the first card of two, the cog's corner left out.
+/// Distinct colours inside the first card of two, the disc's corner left out.
 fn colours_in_the_first_card(shot: &Path) -> usize {
     let file = std::io::BufReader::new(std::fs::File::open(shot).expect("a screenshot"));
     let mut reader = png::Decoder::new(file).read_info().expect("a PNG");
