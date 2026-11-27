@@ -29,6 +29,9 @@ HD's own shell is the visual reference only (`weapon-absorb-pairs.md`, `shield.m
   world size at that depth converts the width. A plain rim term cannot do this job: it lights a wing seen at a grazing
   angle whole and leaves the true silhouette a pixel wide. The colour is the vertex colour the race writes each frame,
   exactly as for the disc's shell. With the setting off no model carries the override, so no other shader changes.
+- **The eye** is the view's own. The shell and cockpit sphere read a scene block of their own (`SceneKind::OwnShield`,
+  chosen by `Model::own_shield` in `Scene::share_scene_blocks`): the flame surfaces' block (the clock, no fog, no
+  shadow) with `Fog::camera` set to the eye of the view being drawn. The disc's shells stay on the flame's block.
 - **Animation**: the shared `oag_render::shield::ShipShield` law (fade up, swell, hit bulge, fade-out with a swelling
   scale) under `OWN_PALETTE`: it fades up from deep blue, settles to an ice blue `(0.45, 0.80, 1.0)` and flashes
   amber `(1.0, 0.55, 0.10)` on an absorbed hit.
@@ -61,17 +64,26 @@ file with `[graphics] own_shield = true` for "on".
   shell on Talon's Junction): an icy, faceted shell around the craft with a bright edge and the livery visible through
   it. No original-HD capture of a raised shield exists in the repo, so the HD frame is ours rendering HD's data, with
   the limit stated in `crates/livery/src/shield.rs` (it is brighter and flatter than the disc's material).
+- **The eye was the world origin until 2026-11-26.** The shell shared the flame surfaces' block (`Scene::off` plus the
+  clock), whose camera is `(0, 0, 0)`, so the rim, facet and silhouette terms were measured from there: the silhouette
+  line broke up and drew streaks across the hull. Captures with `--give shield --hold cross --press square`,
+  `960x544`, setting on, before and after the fix, same tick: Pulse USA tick 400 differs in 22,596 pixels and tick 600
+  in 34,976 (max channel difference 241 and 230 of 255), Pure USA in 19,633 and 24,937, Pulse PS2 tick 400 in 20,173.
+  After, the line is continuous round the shell's silhouette. With the setting off (Pulse USA and Pure USA at both
+  ticks, Pulse PS2 at 400) and on HD with the setting on (both ticks) the PNGs are byte-identical before and after.
+  No original has this shield, so there is no reference frame; judged by eye against the HD look named below. No
+  comparison pair turns `graphics.own_shield` on.
 - **A hit**: `--force-hit 400:0` flashes the shell amber with the swell, and it settles back to blue. The amber wash over the whole view in that frame is Pulse's own hit burst: the frame with the setting off carries the same wash, and it is not the shell.
 - Tests: `own_shield::offset_surface::tests` (the surface is closed, the asked distance off every triangle, outside
-  only), `crates/mesh/tests/own_shield_lit_path.rs` (the flag reaches the pipeline and reads no texture),
+  only), `crates/mesh/tests/own_shield_lit_path.rs` (the flag reaches the pipeline, reads no texture and takes its eye from the
+  block), `tests::scene_blocks::our_own_shield_reads_each_views_eye` in `oag-raceplay` (each view of a split leaves its
+  own eye in the shell's block),
   `crates/raceplay/tests/own_shield_ground_truth.rs` (Pulse PSP and PS2, Pure PSP: off keeps the disc's shell, palette
   and sphere; on swaps all three and the shell's box holds the hull's with room on every side; HD ignores it) and `menu_definition_settings::the_own_shield_row_is_offered_only_where_the_original_draws_another_look`.
 
 ## Open
 
 - **The clock terms (shimmer, travelling band) moved for the first time on 2026-11-26**: the shield drawables read no clock before ([HD shield page](../ghidra/functions/ps3-hdfury-eu/shield.md), "The lattice scrolls"). With the setting off nothing changed.
-- **The rim and facet terms read the eye from the origin**: `own_shield.wesl` builds its view direction from `scene.fog.camera`, and the block the shell reads is `Scene::off` (camera `(0, 0, 0)`), before and after that fix. The silhouette line and facet shading are therefore judged from the wrong eye.
-
 - A live hit's colour flash is the palette's; a brighter hit flare in the shader is a possible follow-up.
 - **The cockpit sphere was not seen.** In a headless `--camera-view internal` capture the frames with the setting on and
   off are byte-identical at ticks 345, so neither the disc's sphere nor ours showed anything there; the sphere's

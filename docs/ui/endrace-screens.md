@@ -160,14 +160,53 @@ and the `TOTAL SCORE` line, drawn in place of the field grid at the filler's coo
 `347` tall, bottom bar `y = 391`; `oag_ui_screens::endrace::hd::detonator`). A destroyed run and a
 finished one print the same rows; the stage row is the scoreboard's laps completed, so stage 5 reads
 `4 / 14` (`hd_endrace_ground_truth::a_detonator_run_destroyed_in_stage_five_draws_four_of_fourteen_and_its_session_rows`).
-The loyalty block beside it draws as on every HD mode and pays on the same laps. **Not drawn:** the
-new-record banner (`RecordNotifyBlock`, `RecValue`): the best-score table it compares against is
-unread and no Detonator best score is kept. **Not checked against a frame of the original**, none
-exists: the grey ink, the left edge of the values and the caption `ER_FINALPOS` (not touched by the
-Detonator branch, drawn as on every HD mode) are read from the executable and the layout file.
+The loyalty block beside it draws as on every HD mode and pays on the same laps. The record notice
+(`RecordNotifyBlock`) and the `MiniText` captions draw, checked against two RPCS3 frames; the
+differences left (the HD style, the destruction's look) are listed under
+"HD's text, glyph and frame against the original" and in
+[detonator-endrace.md](../ghidra/functions/ps3-hdfury-eu/detonator-endrace.md#checked-against-the-original-2026-11-26-rpcs3).
 **Omega** carries the same filler and ids but keeps the built-in scoreboard (no `EndRace` screens
 wired); **2048** has a four-row list on a `Results` page this build does not draw
 (`docs/ui/endrace-2048.md`).
+
+### HD's text, glyph and frame against the original
+
+Measured on the 2026-11-26 RPCS3 Detonator frames (`data/reference/compare-page/hd/detonator-talons-endrace-*`
+in the compare repository) and on the HD Eliminator frame (`data/reference/hd-eliminator-score/results.png`);
+four faults on every HD `EndRace` screen:
+
+| Fault | Cause | Fix |
+| --- | --- | --- |
+| Rows and `CONFIRM` 0.59 of the original's width | `FaceScales::default` fell back to Pulse's `13/22`: HD loads no `menu` face, and `oag_title::MenuSkin::default_face_is_row_face` was applied by the selection screens only | `oag_ui_screens::picker::FaceScales::default_ratio`, shared by the selection screens, the live session (`session::endrace::prefetch`) and the `--menu-page` still |
+| Headline and `RESULTS` 0.7x and light | `font="Title"` drew in the primary face (`helv.fnt`, line 33) instead of `helvb.fnt` (44) | HD's draw list routes `Title` and `buttons` texts to those faces, and the live end-screen renderer installs them (`EndRacePrep::install_faces`) |
+| No cross glyph on `CONFIRM` | the same routing was missing, so the glyph was suppressed | `ControlTextConfirmButton` draws in the `Buttons` face |
+| A rule at `y = 132`/`962` and a title arrow top left | the front end's frame (`oag_ui::menu::Frame` marks) was drawn behind a screen that sits on the race | `Frame::without_marks` in every HD end-screen draw list; the Menu, Podium and Rewards are the same screens, their frames not photographed |
+
+After the fix the headline spans `578..1340` against the original's `581..1341`, `STAGE CLEARED`
+`436..643` against `436..643` and `CONFIRM` ends at `591` against `593` (1920x1080, 96 % Safe Area).
+The Eliminator frame was captured at a wider Safe Area: every text width is `0.92`-`0.93` of it, the
+panel's own width ratio. Pair mean grey (`scripts/compare-rerender-ours.py` on copies):
+record `10.52 -> 8.38`, no-record `10.87 -> 8.88`.
+
+**Still different** (named, not fixed):
+
+- **Colours.** The original ran the **HD** FE style (`HD_Grey` `0xff646464`, `HD_Blue` `0xff8ac0ca`,
+  both `FEGlobals` names on the blocks, captions and highlight); this build serves only the Fury
+  globals, so the blocks and highlight are red and the captions light grey. It is the FE Style
+  setting ([hd-frontend.md](../formats/hd-frontend.md), "The FE Style switch is live"), not the end
+  screen: a Fury-style player sees red here.
+- **Team badges** on the field grid (`Gridi.{row}`), as before.
+- **The background.** Behind the Detonator panel the original shows the destroyed craft's particle
+  burst on black; ours shows the race scene round the wreck. The camera is the same (mode 2's orbit,
+  wired below), and the HD Eliminator frame shows the race behind its panel, so the black and the
+  burst are the Detonator end's own effect, unread.
+
+**Also wired for the same frames:** the small white triangle before `LOYALTY`, `TOTAL`, the record
+notice and the column heads is an unselectable `<Block>`'s static marker
+([menu-blocks.md](../ghidra/functions/ps3-hdfury-eu/menu-blocks.md), "An unselectable block's
+marker"); and the results open 5.5 s after the blast with the camera orbiting the wreck
+([detonator-endrace.md](../ghidra/functions/ps3-hdfury-eu/detonator-endrace.md), "The wait before
+the results").
 
 ### `EndRace Results`, on an Eliminator race and a Zone run: their own tables
 

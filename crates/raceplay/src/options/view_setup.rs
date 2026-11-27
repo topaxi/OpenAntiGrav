@@ -83,6 +83,11 @@ pub struct ViewSetup {
     pub detonator_rounds_as_cannon: bool,
     /// Whether the EMP is fired with the Repulsor's opening: `Detonator::emp_borrows_repulsor`.
     pub detonator_emp_repulsor: bool,
+    /// Whether a Detonator score add floats its `+N`: `Detonator::floats_score`.
+    pub detonator_score_popups: bool,
+    /// How fast a laid Detonator mine turns, radians per second of its age: `Detonator::mine_spin`,
+    /// `None` off Detonator.
+    pub detonator_mine_spin: Option<f32>,
     /// The craft's cannon gauge in a Detonator race: `Detonator::ammo_gauge`, `None` off Detonator.
     pub detonator_ammo_gauge: Option<oag_title::DetonatorAmmoGauge>,
     /// The craft's plasma shells in a Detonator race: `Detonator::hull_charge`, `None` off Detonator.
@@ -282,6 +287,10 @@ pub struct ViewSetup {
     /// of its own ([`Options::boost_zoom`]), and so is drawn by the scene's own host
     /// pass rather than inside HD's bloom chain. **Chosen, not measured.**
     pub zoom_borrowed: bool,
+    /// Each Detonator stage's `Detonator Mine Colour` bytes, stage `0` first, where the title
+    /// recolours a live mine's blast from it (`oag_title::Effects::mine_blast_recolour`); empty
+    /// elsewhere.
+    pub mine_blast_colours: Vec<Option<[u8; 4]>>,
     /// [`Options::hud`], carried through to the readout.
     pub capture_hud: Option<CaptureHud>,
     /// Whether this race's HUD stays hidden until the race is released:
@@ -293,6 +302,8 @@ pub struct ViewSetup {
     pub world_clock_offset: f32,
     /// [`Options::gantry_seconds`], carried to the gantry's clock.
     pub gantry_seconds: Option<f32>,
+    /// [`Options::flame_seconds`], carried to the flame surfaces' clock.
+    pub flame_seconds: Option<f32>,
     /// [`Options::camera`], carried through to [`Race::view`]. Plain data, so
     /// it rides in the simulation half even though only the renderer reads it.
     pub camera_override: Option<CameraOverride>,
@@ -363,6 +374,8 @@ impl ViewSetup {
             detonator_emp_light: false,
             detonator_emp_repulsor: false,
             detonator_rounds_as_cannon: false,
+            detonator_score_popups: false,
+            detonator_mine_spin: None,
             detonator_ammo_gauge: None,
             detonator_hull_charge: None,
             pulse_laid_pose: false,
@@ -421,11 +434,13 @@ impl ViewSetup {
             hull_draw_factor: 1.0,
             zoom_ring: None,
             zoom_borrowed: false,
+            mine_blast_colours: Vec::new(),
             capture_hud: None,
             hud_waits_for_go: false,
             now_playing: None,
             world_clock_offset: 0.0,
             gantry_seconds: None,
+            flame_seconds: None,
             camera_override: None,
             fov_override: None,
             sight: Sighting::default(),

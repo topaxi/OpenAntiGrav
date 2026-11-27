@@ -162,6 +162,7 @@ pub(super) fn team_logos(team_box: bool, teams: &[oag_raceplay::catalogue::Team]
         })
     }));
     out.push(oag_ui_screens::picker::hd::hex::THICK_OUT_SRC.to_string());
+    out.push(oag_ui_screens::picker::hd::hex::LOCK_SRC.to_string());
     out.push(oag_ui_screens::picker::hd::BLOCK_ARROW_SRC.to_string());
     out.push(oag_ui_screens::campaign::hd::cell_brackets::SRC.to_string());
     out.sort_unstable();
@@ -189,7 +190,8 @@ pub(super) fn track_emblems(
         })
         .collect();
     // `TrackHexSelection` names no art either: the same hexagon and cursor
-    // ring as `Team Selection`'s grid.
+    // ring as `Team Selection`'s grid, and its own direction glyph.
+    out.push(oag_ui_screens::picker::hd::track::DIRECTION_SRC.to_string());
     out.push(oag_ui_screens::picker::hd::hex::HEX_SRC.to_string());
     out.push(oag_ui_screens::picker::hd::hex::THICK_OUT_SRC.to_string());
     out.push(oag_ui_screens::campaign::hd::cell_brackets::SRC.to_string());
@@ -418,17 +420,14 @@ pub(super) fn selection_layouts(
 ) {
     let borrows_ps2_split = front_end.is_some_and(|front_end| front_end.borrows_ps2_split_screens);
     let ship_pose = front_end.and_then(|front_end| front_end.ship_preview_pose);
-    let hex_fade = front_end.and_then(|front_end| front_end.team_hex_fade);
+    let hex_fill = front_end.and_then(|front_end| front_end.hex_selected_fill);
     let hex_ring = front_end.and_then(|front_end| front_end.team_hex_ring_peak);
     let track_labels = front_end.map_or(&[][..], |front_end| front_end.track_label_overrides);
     let faces = oag_ui_screens::picker::FaceScales {
-        default: menu_font.map_or(
-            if default_is_row_face {
-                1.0
-            } else {
-                oag_ui_screens::picker::FaceScales::default().default
-            },
-            |menu| font.line_height / menu.line_height,
+        default: oag_ui_screens::picker::FaceScales::default_ratio(
+            font.line_height,
+            menu_font.map(|menu| menu.line_height),
+            default_is_row_face,
         ),
         native_default,
         small_role,
@@ -460,6 +459,17 @@ pub(super) fn selection_layouts(
                 faces,
                 grid,
             )
+            .map(|mut layout| {
+                if let Some(fill) = hex_fill
+                    && let Some(grid) = layout
+                        .hd_track
+                        .as_mut()
+                        .and_then(|screen| screen.hex_grid.as_mut())
+                {
+                    grid.selected_column = fill;
+                }
+                layout
+            })
         });
     let ship_select = race_box
         .and_then(|included| {
@@ -507,7 +517,9 @@ pub(super) fn selection_layouts(
                     model.zoom = pose.zoom;
                 }
                 if let Some(grid) = layout.hd.as_mut().and_then(|screen| screen.hex.as_mut()) {
-                    grid.fade = hex_fade;
+                    if let Some(fill) = hex_fill {
+                        grid.selected_column = fill;
+                    }
                     if let Some(peak) = hex_ring {
                         grid.ring_peak = Some(peak);
                     }

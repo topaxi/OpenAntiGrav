@@ -9,6 +9,8 @@
 //!
 //! # What draws
 //!
+//! - **No front-end frame**: these screens sit on the race, as the original's do
+//!   (`docs/ui/endrace-screens.md`, "HD's text, glyph and frame against the original").
 //! - **`EndRace Results`**: the title, a headline, and the whole field's
 //!   finishing order - `Grid{col}.{row}`, four columns by ten rows, of which
 //!   only two are captioned at all (`GridHead1`/`GridHead2`, `IG_HUD_POS`/
@@ -86,9 +88,7 @@ use oag_ui::language::StringTable;
 use oag_ui::menu::{Frame, Layers, Picture, Skin};
 use oag_ui::screen::{BlockWidget, Screen, Text, argb_to_rgba};
 
-use super::draw::{
-    fill_draw, format_ticks, headline_text, image_draw, medal_award_text, text_draw,
-};
+use super::draw::{fill_draw, format_ticks, headline_text, image_draw, medal_award_text};
 use super::pointer::Target;
 use super::{EndRaceMenu, FieldResults, HdRewards, Headline, Layout};
 
@@ -105,6 +105,41 @@ mod tests;
 /// see the module doc.
 const GRID_ROW_AREA_TOP: f32 = 368.0 + 44.0;
 const GRID_ROW_AREA_HEIGHT: f32 = 347.0;
+
+/// One HD end-screen text: [`super::draw::text_draw`], except that `font="Title"` draws in the
+/// screen title's own face and `font="buttons"` in the disc's button glyphs. HD's `default` is
+/// the renderer's primary face, so everything else stays a plain text.
+fn hd_text_draw(text: &Text, content: &str, layout: &Layout) -> Draw {
+    let draw = super::draw::text_draw(text, content, layout);
+    let role = match text.font.to_ascii_lowercase().as_str() {
+        "title" => oag_ui::language::roles::TITLE,
+        "buttons" => oag_ui::language::roles::BUTTONS,
+        _ => return draw,
+    };
+    match draw {
+        Draw::Text {
+            x,
+            y,
+            scale,
+            color,
+            border,
+            align,
+            text,
+            wrap_width,
+        } => Draw::FacedText {
+            role,
+            x,
+            y,
+            scale,
+            color,
+            border,
+            align,
+            text,
+            wrap_width,
+        },
+        other => other,
+    }
+}
 
 /// A named [`Text`] on `screen` - what both the header captions and the
 /// menu's own `<Block>` rows are read back as, since [`oag_ui::screen`]'s
@@ -197,7 +232,7 @@ pub fn hd_results_draw_list(
     race_behind: bool,
     sprites: &dyn Fn(&str) -> Option<Placed>,
 ) -> Layers {
-    let mut layers = Layers::behind(skin, frame, backdrop, race_behind);
+    let mut layers = Layers::behind(skin, &frame.without_marks(), backdrop, race_behind);
     let screen = &layout.screen;
     let mut out = Vec::new();
     // Every person's row: one in a one-person race, one per seat in a split.
@@ -251,6 +286,15 @@ pub fn hd_results_draw_list(
         out.push(fill_draw(fill));
     }
     for image in &screen.images {
+        // A record notice's logo goes over its box, which is drawn with the texts; only the
+        // Detonator's has one drawn at all.
+        if image
+            .name
+            .as_deref()
+            .is_some_and(|n| n.starts_with("RecLogo"))
+        {
+            continue;
+        }
         // Every image whose texture this pass chose not to load (the
         // ship-badge column, the target/medal art, the record-notify mode
         // icons) is skipped here for free: `sprites` simply has nothing to
@@ -265,10 +309,23 @@ pub fn hd_results_draw_list(
         if let Some(grid) = &detonator
             && DetonatorGrid::owns(name)
         {
-            if let Some((content, x, y)) = grid.cell(name, strings) {
+            if grid.shows_box(name)
+                && let Some(block) = find_block(screen, name)
+            {
+                block_draw(block, None, None, 0.0, frame, layout, &mut out);
+                out.extend(
+                    screen
+                        .images
+                        .iter()
+                        .filter(|image| image.name.as_deref() == Some("RecLogoD"))
+                        .filter_map(|image| Some(image_draw(image, sprites(&image.src)?))),
+                );
+            } else if name == "RecValue" {
+                out.push(hd_text_draw(text, &grid.record_text(strings), layout));
+            } else if let Some((content, x, y)) = grid.cell(name, strings) {
                 let mut positioned = text.clone();
                 (positioned.x, positioned.y) = (x, y);
-                out.push(text_draw(&positioned, &content, layout));
+                out.push(hd_text_draw(&positioned, &content, layout));
             }
             continue;
         }
@@ -284,7 +341,7 @@ pub fn hd_results_draw_list(
             if player_rows.contains(&row) {
                 positioned.color = 0xffff_ffff;
             }
-            out.push(text_draw(&positioned, &content, layout));
+            out.push(hd_text_draw(&positioned, &content, layout));
             continue;
         }
         if let Some((col, row)) = grid_slot(name) {
@@ -302,7 +359,7 @@ pub fn hd_results_draw_list(
             let mut positioned = text.clone();
             positioned.x = column_x;
             positioned.y = row_y(row);
-            out.push(text_draw(&positioned, &content, layout));
+            out.push(hd_text_draw(&positioned, &content, layout));
             continue;
         }
         // The column headers are `<Block>`s: drawn as their box with their
@@ -394,25 +451,6 @@ pub fn hd_results_draw_list(
                 .map(|loyalty| format!("{} {}", loyalty.award, strings.get_or_id("ER_POINTS"))),
             "loyalty2" => model.loyalty.map(|loyalty| loyalty.total.to_string()),
             "loyalty1.2" => None,
-            // The `NavigationController`'s own icon glyph - `font="buttons"`
-            // (`ps_buttons.fnt`) - still draws nothing **here**, unchanged
-            // by this widget's own local `Layout` never learning a
-            // `Buttons`-role atlas the way `oag_ui_screens::campaign::footer`'s
-            // shared-root path now does (2026-09-25,
-            // `crate::render::Renderer::set_buttons_atlas`): this screen's
-            // `text_draw` (this function's own, not `campaign::draw`'s) has
-            // no `face_role` check at all, so nothing here would route a
-            // `font="buttons"` widget to that atlas even once loaded - a
-            // real gap, left open rather than fixed in the same pass that
-            // found it (out of this screen's own lane). Left `None` in the
-            // meantime for the reason it always was: drawing the resolved
-            // idstring's literal codepoint (`"ε"`) through whichever body
-            // face this screen's `Layout` was built with would show a
-            // Greek letter, not the disc's own cross-button glyph, and per
-            // `CLAUDE.md`'s "never invent what the assets already author" a
-            // wrong glyph is worse than none. `ControlTextConfirm` (the
-            // word, `font="default"` - a loaded face) still draws below.
-            "ControlTextConfirmButton" => None,
             // `Gridp.{row}` (`ER_PERFECT`) - not modelled, see the module
             // doc. Everything else (`ResultsTitle`, `GridHead1`/`2`,
             // `ControlTextConfirm`) already carries its own resolved text.
@@ -420,8 +458,25 @@ pub fn hd_results_draw_list(
             _ => text.string.clone(),
         };
         let Some(content) = content else { continue };
-        out.push(text_draw(text, &content, layout));
+        out.push(hd_text_draw(text, &content, layout));
     }
+    // The captions. The Target and medal blocks' stay off with their blocks, `RECORD
+    // NOTIFICATION` belongs to the notice only the Detonator draws, and `LOYALTY STATUS` to the
+    // loyalty block.
+    let hidden = |label: &&crate::picker::hd::MiniText| {
+        let is = |id: &str| label.text == strings.get_or_id(id);
+        is("ER_NMA")
+            || is("ER_MEDAL_AWARD")
+            || (is("ER_RECORD_NOT") && model.detonator.is_none())
+            || (is("ER_LOYSTAT") && model.loyalty.is_none())
+    };
+    let labels: Vec<_> = layout
+        .labels
+        .iter()
+        .filter(|label| !hidden(label))
+        .cloned()
+        .collect();
+    crate::picker::hd::draw_labels(&labels, &mut out);
     layers.body = out;
     layers
 }
@@ -662,8 +717,7 @@ fn scored_headline(model: &FieldResults, strings: &StringTable) -> Option<String
 ///   `<NavigationController>`, which [`oag_ui::screen`]'s
 ///   `collect_widgets` walks straight through as of the change that added
 ///   this sentence - the same on `Results` and `Menu`. Its own icon glyph
-///   (`ControlTextConfirmButton`, `font="buttons"`) still draws nothing -
-///   see this function's own text-loop match arm for why.
+///   (`ControlTextConfirmButton`, `font="buttons"`) draws from the disc's button face.
 /// - `BigPos` draws the player's own finishing place, and nothing without
 ///   one. **Chosen, not measured**: the widget's name and its placeholder
 ///   `"1"` are the only evidence it is a place at all - its authored centre
@@ -707,7 +761,7 @@ pub fn hd_rewards_draw_list(
     race_behind: bool,
     sprites: &dyn Fn(&str) -> Option<Placed>,
 ) -> Layers {
-    let mut layers = Layers::behind(skin, frame, backdrop, race_behind);
+    let mut layers = Layers::behind(skin, &frame.without_marks(), backdrop, race_behind);
     let screen = &layout.screen;
     let mut out = Vec::new();
     for fill in &screen.fills {
@@ -725,10 +779,7 @@ pub fn hd_rewards_draw_list(
     }
     for text in &screen.texts {
         let content = match text.name.as_deref() {
-            // The icon glyph draws nothing - see `hd_results_draw_list`'s
-            // identical exclusion and its own doc for why.
-            Some("ControlTextConfirmButton") => None,
-            None | Some("ControlTextConfirm") => text.string.clone(),
+            None | Some("ControlTextConfirm" | "ControlTextConfirmButton") => text.string.clone(),
             Some("BigPos") => model.place.map(|place| place.to_string()),
             Some("RewardLine1") => model
                 .campaign
@@ -736,7 +787,7 @@ pub fn hd_rewards_draw_list(
             Some(_) => None,
         };
         let Some(content) = content else { continue };
-        out.push(text_draw(text, &content, layout));
+        out.push(hd_text_draw(text, &content, layout));
     }
     layers.body = out;
     layers
@@ -787,20 +838,18 @@ pub fn hd_menu_draw_list(
     race_behind: bool,
     sprites: &dyn Fn(&str) -> Option<Placed>,
 ) -> Layers {
-    let mut layers = Layers::behind(skin, frame, backdrop, race_behind);
+    let mut layers = Layers::behind(skin, &frame.without_marks(), backdrop, race_behind);
     let screen = &layout.screen;
     let mut out = screen.plain_draws(sprites);
     for text in &screen.texts {
         let name = text.name.as_deref().unwrap_or("");
-        // The icon glyph draws nothing - see `hd_results_draw_list`'s
-        // identical exclusion and its own doc for why.
-        if ALL_BLOCK_NAMES.contains(&name) || name == "ControlTextConfirmButton" {
+        if ALL_BLOCK_NAMES.contains(&name) {
             continue;
         }
         let Some(content) = text.string.clone() else {
             continue;
         };
-        out.push(text_draw(text, &content, layout));
+        out.push(hd_text_draw(text, &content, layout));
     }
     for (index, option) in model.options().iter().enumerate() {
         let name = option.hd_block_name();
@@ -879,6 +928,10 @@ const LABEL_INSET: (f32, f32) = (40.0, 3.0);
 /// `X + 8` (`0x008ac554`), `Y + 4` (`0x008ac588`).
 const ARROW_OFFSET: (f32, f32) = (8.0, 4.0);
 const ARROW_SIZE: f32 = 32.0;
+/// Where an unselectable Block's marker sits, `(17, 13)` (`0x008ac594`, `0x008ac5e0`), and its
+/// size, `16` square (`0x0018bdf0`).
+const MARKER_OFFSET: (f32, f32) = (17.0, 13.0);
+const MARKER_SIZE: f32 = 16.0;
 
 /// One `<Block>` as `Block_Render` draws it: the box, then the arrow on a
 /// focused selectable block while its blink is lit, then the label.
@@ -934,12 +987,27 @@ fn block_draw(
             });
         }
     }
+    if !block.selectable
+        && let Some(art) = frame.blocks
+        && let (Some(tint), Some(marker)) = (block.arrow_color, art.marker)
+    {
+        out.push(Draw::Sprite {
+            rect: [
+                block.x + MARKER_OFFSET.0,
+                block.y + MARKER_OFFSET.1,
+                MARKER_SIZE,
+                MARKER_SIZE,
+            ],
+            uv: marker.sheet_rect([0.0, 0.0, marker.width as f32, marker.height as f32]),
+            color: argb_to_rgba(tint),
+        });
+    }
     if let Some((text, content)) = label {
         let mut positioned = text.clone();
         positioned.x = block.x + LABEL_INSET.0;
         positioned.y = block.y + LABEL_INSET.1;
         positioned.scale = block.text_scale;
-        out.push(text_draw(&positioned, content, layout));
+        out.push(hd_text_draw(&positioned, content, layout));
     }
 }
 

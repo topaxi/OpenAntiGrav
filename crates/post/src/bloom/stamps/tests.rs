@@ -32,6 +32,7 @@ fn glow_at(
             | wgpu::TextureUsages::COPY_DST
             | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let mut pixels = Vec::with_capacity((SIZE.0 * SIZE.1 * 4) as usize);
     for y in 0..SIZE.1 {
@@ -260,6 +261,7 @@ fn the_stamp_group_is_kept_until_the_target_view_changes() {
                 usage: wgpu::TextureUsages::TEXTURE_BINDING
                     | wgpu::TextureUsages::RENDER_ATTACHMENT,
                 view_formats: &[],
+                texture_binding_view_dimension: None,
             })
             .create_view(&wgpu::TextureViewDescriptor::default())
     };

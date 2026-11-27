@@ -1,4 +1,6 @@
 use super::*;
+use crate::psys::{Direction, MAX_PARTICLES, Particle};
+use oag_core::Rng;
 
 /// The `glow`'s size channel as authored: six keys, looping every ten ticks.
 fn glow_size() -> Channel {
@@ -122,4 +124,66 @@ fn a_jump_inside_a_cycle_survives_the_unrolling() {
         let start = cycle * 20.0 + 0.01;
         assert!(v(start) > 0.95, "cycle {cycle} start: {}", v(start));
     }
+}
+
+/// `crate::psys::tests::effect`'s emitter, its particles thrown at a random speed and
+/// direction so they draw from the stream, `per_tick` of them a tick for 30 ticks,
+/// optionally with one sprite template beside it as a second root.
+fn spray(per_tick: u32, with_template: bool) -> Effect {
+    let mut built = (*crate::psys::tests::effect("spray", false, 30.0)).clone();
+    let emitter = &mut built.emitters[0];
+    emitter.per_emission = (per_tick, per_tick);
+    emitter.lifetime_ticks = (100.0, 20.0);
+    emitter.speed_per_tick = (1.0, 0.5);
+    emitter.direction = Direction::Cone { half_angle: 1.0 };
+    emitter.live_cap = 0;
+    if with_template {
+        let mut template = built.emitters[0].clone();
+        template.name = "glow".to_string();
+        template.template = true;
+        template.duration_ticks = 1.0;
+        template.per_emission = (1, 1);
+        template.lifetime_ticks = (30.0, 0.0);
+        built.roots.push(built.emitters.len());
+        built.emitters.push(template);
+    }
+    built
+}
+
+fn after_ticks(effect: &Effect, ticks: usize) -> System {
+    let mut system = System::new();
+    system.ignite(effect, Vec3::ZERO, 1.0);
+    crate::psys::tests::run(&mut system, effect, ticks, &mut Rng::new(5));
+    system
+}
+
+/// A template draws from a copy of the shared stream: with it playing, every emitted particle
+/// is where it would be without it.
+#[test]
+fn a_template_leaves_the_rest_of_its_effect_unchanged() {
+    let without = after_ticks(&spray(3, false), 10);
+    let with = after_ticks(&spray(3, true), 10);
+    let emitted = |system: &System| -> Vec<Particle> {
+        system.particles[..MAX_PARTICLES]
+            .iter()
+            .filter(|p| p.alive())
+            .copied()
+            .collect()
+    };
+    assert!(!emitted(&without).is_empty());
+    assert_eq!(emitted(&with), emitted(&without));
+    assert_eq!(with.alive_count(), without.alive_count() + 1);
+}
+
+/// A template takes none of the emitted pool's slots: in a full pool every emitted particle
+/// still lives beside it.
+#[test]
+fn a_template_lives_beside_a_full_pool() {
+    let system = after_ticks(&spray(40, true), 10);
+    let emitted = system.particles[..MAX_PARTICLES]
+        .iter()
+        .filter(|p| p.alive())
+        .count();
+    assert_eq!(emitted, MAX_PARTICLES);
+    assert_eq!(system.alive_count(), MAX_PARTICLES + 1);
 }

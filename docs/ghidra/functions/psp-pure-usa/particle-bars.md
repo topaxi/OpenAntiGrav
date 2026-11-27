@@ -18,7 +18,7 @@ Confidence **85** (every step below has its Pulse twin; the jump targets are rea
 
 | Index | Table word | Target | Pulse's twin |
 | --- | --- | --- | --- |
-| 0, 1 | `0x00071b78` | `0x08875b78` calls `0x08871e88` | `FUN_089194d0`, the square draw (not read here) |
+| 0, 1 | `0x00071b78` | `0x08875b78` calls `0x08875e88` (`jal 0x00071e88` at `0x08875c0c`) | `ParticleSystem_DrawPoolSquares` ("Near the eye" below) |
 | 2 | `0x00071c1c` | `0x08875c1c` calls `0x088742b0` | `ParticleSystem_DrawRolledQuads` (a `sin`/`cos` roll and a quad of `size * aspect` by `size`) |
 | 3, 4 | `0x00071e00` | `0x08875e00` | nothing is drawn |
 | 5 | `0x00071cc0` | `0x08875cc0` calls **`0x088746c8`** | `ParticleSystem_DrawPoolBars` |
@@ -116,3 +116,19 @@ title lists one**: Pure's absorb burst was too bright at 0.75 s with `WO_WEAPON_
 muted, `Kept { templates: true }` plays them with roll, stretch and sprite).
 
 2048 and Omega: **checked, differs** - their templates are HD's lineage (`ps3-hdfury-eu` `PartRender`), not this PSP routine, and are left muted. HD: not this engine.
+
+## Near the eye (2026-11-26)
+
+Pure's pool routines carry Pulse's near tests, read statically (confidence **85**, no live hit;
+the Pulse laws are in
+[particle-system.md](../psp-pulse-usa/particle-system.md#2026-11-26-near-the-eye-what-the-psp-does-with-an-emitted-particle)):
+
+| Pure | Routine | Near test |
+| --- | --- | --- |
+| `FUN_08875e88` | squares, classes 1 and 2 | none at view `z > -1.0`; for `-2.0 < z` alpha times `(z + 1.0) *` the float at `0x08a8f61c` (zero in the file, written at run time; Pulse's twin holds `-1.0`, inherited) |
+| `FUN_088742b0` | rolled quads, class 3 | none (no float compare anywhere in the listing) |
+| `FUN_088746c8` | bars, class 6 | none if either end has `z > -1.0` (above) |
+
+The class 7 routine (`FUN_08874bc4`) was not read; ours treats it as the bar, as Pulse's reads.
+The GE's screen-range drop was measured on Pulse alone and is inherited. Played through
+`oag_title::Looks::psp_particle_clip`.

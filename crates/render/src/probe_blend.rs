@@ -68,6 +68,7 @@ impl ProbeBlend {
             format: wgpu::TextureFormat::Rgba8Uint,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
         // A storage texture cannot be sRGB, so the array is the linear format and the hull
         // reads it through an sRGB view: the same bytes, decoded on fetch as before.
@@ -85,6 +86,7 @@ impl ProbeBlend {
                 | wgpu::TextureUsages::STORAGE_BINDING
                 | wgpu::TextureUsages::COPY_SRC,
             view_formats: &[ENV_PROBE_FORMAT],
+            texture_binding_view_dimension: None,
         });
         let array = |texture: &wgpu::Texture, format, usage| {
             texture.create_view(&wgpu::TextureViewDescriptor {

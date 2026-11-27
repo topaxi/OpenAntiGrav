@@ -338,11 +338,17 @@ fn the_field_finishes_chenghou_project() {
     // It leaves the ramp at line index ~1712 at speed 169-191 around tick
     // 8031, falls, strikes at tick 8098 and is rescued at tick 8139. Every
     // other circuit stays at none.
+    //
+    // **Two for one craft** once a blast drains along the side row (Pulse's law,
+    // measured live and inherited by Pure: `docs/ghidra/functions/psp-pulse-usa/
+    // contact-response.md`, "The drain pushes along the side row"). The field
+    // still finishes, all seven; slot 6 respawns twice and slot 3 once, the rest
+    // none. With the forward drain every craft stayed at one or none.
     fly(
         r"Data\Environments\04_Chenghou_Project\track.vex",
         "Venom",
         PureClass::Venom,
-        1,
+        2,
     );
 }
 

@@ -1775,3 +1775,93 @@ unexplained. The class-6 root's white blob was already replaced by the bars (202
 no `crates/pob` change was needed, both were decoded. Cross-title: **checked, differs by scope** - HD and 2048 load a `WO_REPULSER`-named effect
 from their own `.pob` archives, (load reports 2026-10-06), but the guard band is a PSP GE law, unmeasured on
 those GPUs; the guard is off there.
+
+**Superseded in part 2026-11-26** (next section): the drop is per triangle, the boundary is
+2048 px, and it applies to every emitter's own particle.
+
+### 2026-11-26: near the eye, what the PSP does with an emitted particle
+
+Two mechanisms, one in the executable and one in the GE. Played by `oag_fx::psys::guard`,
+switched by `oag_title::Looks::psp_particle_clip` (Pulse PSP; the PS2 carries it over,
+unmeasured; Pure inherits the GE half).
+
+#### The executable: a depth test by draw class
+
+| Routine | Classes | Near test | Confidence |
+| --- | --- | --- | ---: |
+| `ParticleSystem_DrawPoolSquares` (`0x089194d0`) | 1, 2 | none at view `z > -1.0`; `-2.0 < z <= -1.0` alpha times `-(z + 1)` | 88 ("The pool's square draw" above) |
+| `ParticleSystem_DrawRolledQuads` (`0x089178c0`) | 3 | **none**: the listing has no float compare | 88 |
+| `ParticleSystem_DrawPoolBars` (`0x08917c7c`) | 6 | none if either end has `z > -1.0`; no fade | 90 |
+| `FUN_08918160` | 7 | none unless both ends have `z <= -1.0`; no fade (the depth test alone read) | 85 |
+| `ParticleSystem_DrawParticle` (`0x089186bc`) | templates | none at `z > -1.0` | 88 |
+
+No routine here tests the screen: there is no CPU clip or cull against the view's sides.
+
+#### The GE: a triangle with a vertex out of range is not drawn
+
+The coordinate space is 4096 wide about the screen centre. Recorded frames
+(`scripts/psp-ge-dump.py`) of a Repulser fired from a standstill do hold emitted `WO_REPULSER`
+bars (vertex type `0x11e`, half width `15.26`, 4x4 atlas cells) with vertices beyond it: on
+Talon's Junction at 50 and 52 updates after the shot, view depth `2.88` and `1.5`, corners at
+`3001..3103` and `-4313..-6674` px. Those bars lie wholly off screen, so their frames cannot
+say drop from clip. The test is to edit one bar's positions in the recorded frame and replay it
+(`scripts/psp-ge-replay.py`), with PPSSPP 1.20.4's software renderer. The frames are taken with
+`scripts/psp-ge-fire-dump.py` (state `time-trial-talons-venom-grid`; the Repulser is
+`--weapon-bit 0x10000`, the Quake `0x8`), and edited with `scripts/psp-ge-edit-prim.py`: `list`
+names the primitives with a vertex out of range, `show` prints a primitive's vertices, and
+`edit DUMP CI OUT --vertex N=SX,SY --red 0,1,2,3 --solid` writes a variant. The Fort Gale row of
+boot 2 (beyond in y) is `ci 3058`, vertices 0 and 1 moved to `y = 2000`.
+
+- positions are `s16` in the push buffer; the strip's two join vertices repeat the bar's first
+  and last and move with them;
+- for the pictures to show, the bar's colour was set to opaque red and its depth, blend,
+  texture, alpha and stencil tests cleared, the same in every variant;
+- each variant is compared with the frame with the bar collapsed to a point.
+
+Pixels changed against the bar removed, at 480x272 (rows 0 to 39 left out: PPSSPP's own
+"running slow" notice; one file replayed twice differs by up to 35 pixels of 1 or 2 levels):
+
+| Bar | As submitted | Pulled to 2000 px | to 2040 px | to 2060 px | One far vertex in, one out |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `WO_REPULSER`, Talon's Junction, its two in-range vertices moved to screen centre | noise | 27,255 | 27,245 | 0 | 25,546 |
+| Fort Gale's weather bar, boot 1 (beyond in x) | 0 | 10,794 | 10,795 | 0 | 10,538 |
+| Fort Gale's weather bar, boot 2 (beyond in y) | 0 | 8,862 | 8,862 | 0 | 8,663 |
+| Fort Gale's weather bar, boot 2 (beyond in negative x) | 0 | 8,546 | 8,546 | 0 | 8,465 |
+
+The weather bars are class 6 pool bars (2x2 atlas, half width `5`), the same
+`ParticleSystem_DrawPoolBars` strip, present on that circuit with no weapon fired.
+
+So a triangle with a vertex beyond 2048 px is **not drawn**, though most of it would cover the
+screen; 2040 draws and 2060 does not; and the strip's other triangle, all in range, still
+draws. Confidence **88**: four bars, two boots, two effects, the controls drawing. It is
+PPSSPP's rasteriser, not a PSP; its source states the same rule
+(`GPU/Software/Clipper.cpp`, `ProcessTriangle`: "If any verts were outside range, throw the
+entire prim away").
+
+**The near plane.** The race frame's projection (`m10 = -1.0012`, `m14 = -2.4849`) puts it at
+**1.24** units, and depth clamp is on at these draws. With it on, a vertex nearer than that is
+clipped rather than range-tested (PPSSPP's `TransformUnit.cpp`), so a
+screen-parallel particle at or inside 1.24 draws nothing, whatever its class. Ours plays that
+for particles; the race camera's own near plane is `1.0` (not changed here).
+
+#### Ours, before and after
+
+`WO_REPULSER` and `WO_REPULSER_BLAST` held no vertex out of range in the fixed particle
+arrangement and twenty others
+([repulser_guard_band_ground_truth.rs](../../../../crates/raceplay/tests/repulser_guard_band_ground_truth.rs)).
+Standing Repulser, Rocket, Plasma, weather and collision-spark frames are byte-identical to
+before: what is dropped there is off screen. All 61 race pairs of Pulse PSP (30), Pulse PS2 (17)
+and Pure (14) on the comparison page also render byte-identical on our side. Frames that move are ones driven through an
+effect at speed (a Quake 6 and 10 ticks after the shot, a Missile head).
+
+#### The Quake's template is out of range on the original too
+
+The 2026-10-06 reading kept templates other than `WO_REPULSER`'s out of the drop because
+applying it moved our Quake's first frame, where the original shows a white wash. Recorded
+frames of the original 2, 4 and 6 updates after a standing Quake hold its template quad (vertex
+type `0x19f`, four vertices, depth `17.8` to `26.9`) with vertices out of range in both
+triangles, and **replaying each frame with that quad removed changes no pixel**
+(`scripts/psp-ge-replay.py --nop-prims CI:CI:19f`, `CI` from `psp-ge-edit-prim.py list`). So whatever
+washes the original's screen there, it is not that quad. Ours still draws it
+(`TEMPLATE_GUARDED` in `guard.rs` is unchanged): extending the drop to every template needs its
+own comparison of the Quake's first frames.

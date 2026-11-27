@@ -717,6 +717,20 @@ impl Default for FaceScales {
     }
 }
 
+impl FaceScales {
+    /// `default` over `menu` off the faces actually loaded. With no `menu` face it is `1.0` where
+    /// the title's rows are the `default` face ([`oag_title::MenuSkin::default_face_is_row_face`]),
+    /// and Pulse's measured ratio elsewhere.
+    #[must_use]
+    pub fn default_ratio(default_line: f32, menu_line: Option<f32>, is_row_face: bool) -> f32 {
+        match menu_line {
+            Some(menu) => default_line / menu,
+            None if is_row_face => 1.0,
+            None => Self::default().default,
+        }
+    }
+}
+
 /// The disc's own layout for one selection screen, with every string
 /// already looked up.
 #[derive(Debug, Clone)]

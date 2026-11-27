@@ -119,6 +119,7 @@ pub(super) fn place_mut(draw: &mut Draw, p: &Placement) -> bool {
             *wrap_width = wrap_width.map(|width| width * p.scale);
             inside(*x, *y, p.clip)
         }
+        Draw::Stretched { text, .. } => place_mut(text, p),
         Draw::Video { .. }
         | Draw::FuryBackdrop(_)
         | Draw::SceneBackdrop(_)

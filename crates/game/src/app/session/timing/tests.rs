@@ -369,3 +369,70 @@ fn an_intermittent_pass_absent_this_frame_leaves_other_on_per_frame_values() {
          {controllers_reading_ms}"
     );
 }
+
+/// TARGET FPS `original` throttles the width on the title that has a law, aimed at the rate the
+/// loop is held to, and is no controller on a title without one.
+#[test]
+fn the_original_target_is_a_width_throttle_only_where_the_title_has_one() {
+    let ceiling = (3840, 2160);
+    let hd = original_limits(Some(oag_hd::TITLE), ceiling, Some(120));
+    let spec = hd.width().expect("HD has a width throttle");
+    assert_eq!(spec.threshold_hz(), 120);
+    assert_eq!(hd.floor(), (2600, 2160));
+    // The title's own two durations, at the rate they are authored against.
+    let at_60 = original_limits(Some(oag_hd::TITLE), ceiling, Some(60));
+    let mut drs = drs::Controller::new();
+    for (gpu, level) in [(0.016_112_5, 1), (0.015_556_5, 1), (0.015_555_5, 0)] {
+        drs.record(cost(gpu, 0.0), None, at_60);
+        drs.finish_frame(None, at_60);
+        assert_eq!(drs.width_level(), level, "{gpu} s");
+    }
+    for title in [
+        Some(oag_pulse::TITLE),
+        Some(oag_pure::TITLE),
+        Some(oag_omega::TITLE),
+        Some(oag_2048::TITLE),
+        None,
+    ] {
+        let limits = original_limits(title, ceiling, Some(60));
+        assert!(limits.width().is_none() && !limits.target().is_on());
+        assert_eq!(drs::Controller::new().extent(limits), ceiling);
+    }
+}
+
+/// The width throttle times the whole frame, so the labelled passes join its reading; the
+/// budget loop's reading is the one it always was.
+#[test]
+fn only_the_width_throttle_is_handed_the_labelled_passes() {
+    let base = cost(0.010, 0.001);
+    let hd = original_limits(Some(oag_hd::TITLE), (1920, 1080), Some(60));
+    let timed = whole_frame_cost(base, 0.004, hd);
+    assert!((timed.total() - 0.015).abs() < 1e-6, "{timed:?}");
+    let budget = drs::Limits::new((1920, 1080), (960, 540), drs::Target::OFFERED[2]);
+    assert_eq!(whole_frame_cost(base, 0.004, budget), base);
+}
+
+#[test]
+fn the_pass_sum_is_the_newest_frames_alone() {
+    let reading = |frame, seconds| oag_gpu::timing::PassReading {
+        frame,
+        label: "glass",
+        seconds,
+    };
+    let readings = [reading(4, 0.001), reading(5, 0.002), reading(5, 0.003)];
+    let sum = newest_pass_sum(&readings, 3).expect("frame 5 came back");
+    assert!((sum - 0.005).abs() < 1e-6, "{sum}");
+    assert_eq!(
+        newest_pass_sum(&readings, 5),
+        None,
+        "all from before the stall"
+    );
+    // The zoom ring runs inside the bloom chain's own bracket, so it is not counted again.
+    let zoom = oag_gpu::timing::PassReading {
+        frame: 5,
+        label: "hd zoom",
+        seconds: 0.5,
+    };
+    let sum = newest_pass_sum(&[readings[2], zoom], 3).expect("frame 5 came back");
+    assert!((sum - 0.003).abs() < 1e-6, "{sum}");
+}

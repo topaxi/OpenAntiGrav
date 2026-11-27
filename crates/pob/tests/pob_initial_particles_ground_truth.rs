@@ -225,3 +225,63 @@ fn every_psp_template_carries_its_own_sprite_and_the_explosions_glow_is_not_its_
     }
     assert_eq!(checked, 28, "the corpus's templates");
 }
+
+/// The Rocket craft blast's templates on the Vita and PS4 discs, against HD's
+/// (`docs/ghidra/functions/ps3-hdfury-eu/rocket-craft-blast.md`, "The screen wash"): the
+/// `particles` copy 2048 inherits from HD carries HD's `glow_longer` and two `Glow`s, its own
+/// `particles2048` file a different `BANG_GLOW`; Omega's `particles2048` file carries HD's two
+/// and its `particles` file none, in the base archive and the patch alike.
+#[test]
+#[ignore = "needs the Vita and PS4 extractions in data/extracted/"]
+fn the_rocket_craft_blast_templates_on_2048_and_omega() {
+    let cases: [(&str, &str, &[&str]); 6] = [
+        (
+            "vita/PCSF00007/base/PSP2/data.psarc",
+            "data/particles/",
+            &["glow_longer", "Glow", "Glow"],
+        ),
+        (
+            "vita/PCSF00007/base/PSP2/data.psarc",
+            "data/particles2048/",
+            &["BANG_GLOW"],
+        ),
+        ("ps4/omega-eu/uroot/data00.psarc", "data/particles/", &[]),
+        (
+            "ps4/omega-eu/uroot/data00.psarc",
+            "data/particles2048/",
+            &["glow_longer", "Glow"],
+        ),
+        (
+            "ps4/omega-eu-patch/uroot/data05.psarc",
+            "data/particles/",
+            &[],
+        ),
+        (
+            "ps4/omega-eu-patch/uroot/data05.psarc",
+            "data/particles2048/",
+            &["glow_longer", "Glow"],
+        ),
+    ];
+    for (archive, directory, want) in cases {
+        let Some(path) = oag_testdata::exact(&format!("data/extracted/{archive}")) else {
+            continue;
+        };
+        let mut archive = oag_assets::psarc::Archive::open_file(&path).expect("the archive opens");
+        let entry = format!("{directory}wo_rocket_explo.pob");
+        let name = archive
+            .paths()
+            .iter()
+            .find(|p| p.to_ascii_lowercase() == entry)
+            .cloned()
+            .unwrap_or_else(|| panic!("{entry} ships"));
+        let blob = archive.read_path(&name).expect("the entry reads");
+        let system = ParticleSystem::parse(&blob).expect("parse");
+        let names: Vec<String> = system
+            .emitters(&blob)
+            .expect("emitters")
+            .into_iter()
+            .flat_map(|e| e.initial_particles.into_iter().map(|t| t.name))
+            .collect();
+        assert_eq!(names, want, "{name}");
+    }
+}

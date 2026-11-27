@@ -721,6 +721,9 @@ pub struct Context<'a> {
     /// Line height of the skin's own face (`2097HUD`, `wo3HUD`), as loaded; the `HUD`
     /// face's again where the skin names none.
     pub skin_line_height: f32,
+    /// The `HUD` face's `3`, for a title that centres the Zone score on a string of them
+    /// ([`oag_title::ZoneScore::CentredOnThrees`]); `None` leaves it as authored.
+    pub template_digit: Option<super::TemplateDigit>,
     /// What a widget with no `BorderColor` outlines its glyphs in.
     ///
     /// 57 of the 84 HUD-font widgets are in that position, and the original draws
@@ -1240,11 +1243,13 @@ fn list(cx: &Context<'_>, readout: &Readout, sight: Sight) -> Frame {
         // position this build overrides, because the layout authors it as a
         // placeholder - `zone_next_row` carries the whole reasoning.
         let placed = next_row.filter(|_| label.name == NEXT_CLASS_WIDGETS[1]);
+        let (score_dx, align) = super::zone_score::place(cx, readout, label, &text);
         let draw = Draw::Text {
             x: placed.map_or(
                 label.x
                     + lap_one_dx(cx, readout, &label.name)
-                    + super::bar_tip::dx(cx, readout, &label.name),
+                    + super::bar_tip::dx(cx, readout, &label.name)
+                    + score_dx,
                 |(_, text)| text[0],
             ),
             // The row's `y` is a **top** edge - every `ZonePlus1`-`ZonePlus10`
@@ -1271,7 +1276,7 @@ fn list(cx: &Context<'_>, readout: &Readout, sight: Sight) -> Frame {
                 &label.name,
                 outline_colour(cx, label.border.unwrap_or(cx.default_border)),
             )),
-            align: super::dialect_2048::text_align(cx.art, readout, label),
+            align,
             text,
             wrap_width: None,
         };
@@ -1286,10 +1291,11 @@ fn list(cx: &Context<'_>, readout: &Readout, sight: Sight) -> Frame {
             Font::Skin => &mut frame.skin_text,
             Font::Hud => &mut frame.hud_text,
         };
-        list.extend(shadow);
-        list.push(draw);
+        list.extend(shadow.map(|draw| draw.stretched(label.stretch)));
+        list.push(draw.stretched(label.stretch));
     }
 
+    super::score_popup::append(&mut frame, cx, readout);
     // The whole HUD, sprites and text alike, slides with the drawn lean on the titles that
     // measured it - see `sway`.
     super::sway::slide(&mut frame, super::sway::offset(cx.art, readout));

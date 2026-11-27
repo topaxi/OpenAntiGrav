@@ -17,6 +17,8 @@
 use std::sync::{LockResult, Mutex, MutexGuard};
 
 pub mod gpu_workers;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod poller;
 #[cfg(target_arch = "wasm32")]
 pub mod web;
 

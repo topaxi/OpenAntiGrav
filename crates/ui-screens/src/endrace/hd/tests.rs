@@ -99,7 +99,7 @@ fn texts(layers: &oag_ui::menu::Layers) -> Vec<String> {
         .body
         .iter()
         .filter_map(|draw| match draw {
-            Draw::Text { text, .. } => Some(text.clone()),
+            Draw::Text { text, .. } | Draw::FacedText { text, .. } => Some(text.clone()),
             _ => None,
         })
         .collect()

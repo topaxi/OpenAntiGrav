@@ -103,6 +103,8 @@ pub struct RaceView {
     pub(super) world_clock_offset: f32,
     /// See [`crate::Options::gantry_seconds`].
     pub(super) gantry_seconds: Option<f32>,
+    /// See [`crate::Options::flame_seconds`].
+    pub(super) flame_seconds: Option<f32>,
     /// The circuit's pre-race flyby, `None` where it has none or a pose was imposed. See
     /// [`super::intro_camera`].
     pub(super) intro: Option<super::intro_camera::IntroCamera>,
@@ -199,6 +201,9 @@ pub struct RaceView {
     pub(super) screen_flash: Option<oag_fx::flash::ScreenFlash>,
     /// See `options::ViewSetup::craft_blast_carry`.
     pub(super) craft_blast_carry: bool,
+    /// The velocity a craft blast on this slot carries instead of the craft's, see
+    /// [`crate::Race::force_struck_velocity`].
+    pub(super) forced_blast_velocity: Option<(usize, oag_core::math::Vec3)>,
     /// The washes a craft's state edges start - see `race::craft_flash`.
     pub(super) craft_flashes: super::craft_flash::CraftFlashes,
     /// A Zone craft's end: the death shell and the debris - see `race::zone_end`.
@@ -316,6 +321,9 @@ pub struct RaceView {
     pub(super) effects: psys::Library,
     /// Each [`Trigger`] resolved against [`Self::effects`] once at load.
     pub(super) handles: EffectHandles,
+    /// A live mine's blast per Detonator stage, recoloured from that stage's mine colour
+    /// ([`crate::detonator_fx::mine_blasts`]); empty where the title draws it as authored.
+    pub(super) mine_blasts: Vec<Option<std::sync::Arc<psys::Effect>>>,
     /// The multi-instance pool everything *except* the hull-mounted sparks
     /// plays in: the rockets' flares and their detonations today, and
     /// whatever gets a recovered trigger next.
@@ -459,6 +467,11 @@ pub struct RaceView {
     pub(super) detonator_emp_repulsor: bool,
     /// The running borrowed opening, see [`crate::emp_repulsor`].
     pub(super) emp_repulsor: Option<crate::emp_repulsor::EmpRepulsor>,
+    /// The floating `+N` slots, or `None` where `options::ViewSetup::detonator_score_popups` is
+    /// off. One per race: a Detonator race has one view.
+    pub(super) score_feedback: Option<oag_hud::ScoreFeedback>,
+    /// `options::ViewSetup::detonator_mine_spin`.
+    pub(super) detonator_mine_spin: Option<f32>,
     /// `options::ViewSetup::detonator_ammo_gauge`, and what the gauge showed last frame.
     pub(super) detonator_ammo_gauge: Option<oag_title::DetonatorAmmoGauge>,
     pub(super) ammo_gauge_shown: std::sync::Mutex<Option<crate::ammo_gauge::Shown>>,
@@ -568,12 +581,13 @@ pub struct RaceView {
     /// What the weather adds to the original's. `[render_profiles.<title>] weather`;
     /// see [`Race::set_weather`].
     pub(super) weather: oag_display::display::Weather,
-    /// Each laid Detonator mine's football and spikes size (`m+0xd8` and the spikes' own), by survey entry
-    /// and lane, as the scene last stepped its music envelope. Absent is `1`. Written by
-    /// [`crate::scene`]'s `write_detonator_looks`, read by [`Race::mine_model_matrices`]: one source for the
-    /// draw, the shadows and the blur's previous pose.
-    pub(super) mine_sizes: std::sync::Mutex<std::collections::BTreeMap<(u16, i8), (f32, f32)>>,
-    /// Laid mines whose music envelope a comparison holds at the original's read (`--detonator-mine-envelopes`),
-    /// by survey entry and lane: the football's `s` and the spikes' `t`.
-    pub(super) mine_pins: std::sync::Mutex<std::collections::BTreeMap<(u16, i8), (f32, f32)>>,
+    /// Each laid Detonator mine's football and spikes size (`m+0xd8` and the spikes' own) and age, by
+    /// survey entry and lane, as the scene last stepped its music envelope. Absent is size `1`, age `0`.
+    /// Written by [`crate::scene`]'s `step_mine_envelopes`, read by [`Race::mine_model_matrices`]: one
+    /// source for the draw, the shadows and the blur's previous pose.
+    pub(super) mine_poses:
+        std::sync::Mutex<std::collections::BTreeMap<(u16, i8), crate::detonator_look::MinePose>>,
+    /// Laid mines a comparison holds at the original's read (`--detonator-mine-envelopes`,
+    /// `--detonator-mine-ages`), by survey entry and lane.
+    pub(super) mine_pins: std::sync::Mutex<crate::detonator_look::MinePins>,
 }

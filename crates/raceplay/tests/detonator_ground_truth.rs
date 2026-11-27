@@ -61,6 +61,8 @@ fn an_hd_detonator_race_loads_its_own_stage_table() {
     );
     assert_eq!(grade.last_stage(), 14);
     assert_eq!(grade.blend().current, 1);
+    // HD's visualiser strip is sRGB-decoded on fetch (`zone-vis-gamma.md`).
+    assert_eq!(grade.zone_uniform().shape[2], 1.0);
     // Stage 1's `Lighting.Track Fog colour` and `density`: the orange-red a track chunk is fogged
     // with (`detonator-look.md`, "What the file says at stage 1").
     assert_eq!(
@@ -687,11 +689,13 @@ fn an_hd_detonator_mine_costs_energy_and_destruction_ends_the_race() {
         after.shield
     );
 
-    for _ in 0..200 {
-        let Some(at) = race.core.sim.detonator_mine_position(0) else {
-            break;
-        };
-        race.core.sim.world.ships[LONE].physics.body.position = at;
+    // The blast, then the 5.5 s the end plays before the race is over.
+    for _ in 0..600 {
+        if race.core.sim.world.ships[LONE].physics.craft_state == oag_physics::CraftState::Racing
+            && let Some(at) = race.core.sim.detonator_mine_position(0)
+        {
+            race.core.sim.world.ships[LONE].physics.body.position = at;
+        }
         race.tick(&PlayerInputs::none());
         if race.core.sim.world.race[LONE].finished {
             break;

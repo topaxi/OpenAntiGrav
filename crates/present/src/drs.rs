@@ -74,8 +74,10 @@ use serde::{Deserialize, Serialize};
 pub mod blur;
 mod patience;
 pub mod policy;
+pub mod probe;
 pub mod reflection;
 pub mod residual;
+pub mod width;
 
 pub use blur::{MAX_BACKOFF, RESTORE_SECONDS, relapse_frames, restore_frames};
 pub use policy::{
@@ -211,6 +213,12 @@ impl Target {
     /// from. Until then it reads as no rate at all ([`Self::hz`] is `None`).
     pub const FOLLOW_DISPLAY: Self = Self(u32::MAX);
 
+    /// The title's own throttle ([`width`]), where it has one.
+    ///
+    /// Not a rate either: the host turns it into [`Limits::original`] with the
+    /// title's law, and on a title with none it is no controller at all.
+    pub const ORIGINAL: Self = Self(u32::MAX - 1);
+
     /// The rate [`Self::resolve`] aims for when no refresh rate is known.
     pub const FOLLOW_FALLBACK_HZ: u32 = 60;
 
@@ -249,6 +257,12 @@ impl Target {
     #[must_use]
     pub fn follows_display(self) -> bool {
         self == Self::FOLLOW_DISPLAY
+    }
+
+    /// Whether this names the title's own throttle.
+    #[must_use]
+    pub fn is_original(self) -> bool {
+        self == Self::ORIGINAL
     }
 
     /// This target with [`Self::FOLLOW_DISPLAY`] replaced by `display_hz`, or by
@@ -337,6 +351,7 @@ impl Target {
         match self.hz() {
             Some(hz) => hz.to_string(),
             None if self.follows_display() => "default".to_string(),
+            None if self.is_original() => "original".to_string(),
             None => "off".to_string(),
         }
     }
@@ -353,9 +368,12 @@ impl std::str::FromStr for Target {
         if text.eq_ignore_ascii_case("default") {
             return Ok(Self::FOLLOW_DISPLAY);
         }
+        if text.eq_ignore_ascii_case("original") {
+            return Ok(Self::ORIGINAL);
+        }
         let hz: u32 = text.parse().map_err(|_| {
             format!(
-                "{text:?} is not a dynamic-resolution target; write a rate, \"default\" or \"off\""
+                "{text:?} is not a dynamic-resolution target; write a rate, \"default\", \"original\" or \"off\""
             )
         })?;
         // Zero is rejected rather than accepted as a second spelling of off,
@@ -410,6 +428,8 @@ pub struct Limits {
     /// The player's blur gather resolution, the most the rung may ask for, or
     /// `None` when no blur is drawn and there is nothing to shed.
     blur: Option<BlurResolution>,
+    /// The title's own width throttle in place of the budget loop.
+    width: Option<width::Spec>,
 }
 
 impl Limits {
@@ -433,7 +453,39 @@ impl Limits {
             floor: (floor.0.clamp(1, ceiling.0), floor.1.clamp(1, ceiling.1)),
             target,
             blur: None,
+            width: None,
         }
+    }
+
+    /// Bounds under a title's own width throttle: the ceiling's height always, its width
+    /// down to the law's last notch. The player's floor does not apply.
+    #[must_use]
+    pub fn original(ceiling: (u32, u32), spec: width::Spec) -> Self {
+        let floor = (spec.narrowest(ceiling.0.max(1)), ceiling.1);
+        Self {
+            width: Some(spec),
+            // The rate the loop is paced at, not the one the law's durations are scaled
+            // to: what else reads the target (the reflection rung's budget) is a frame
+            // period, and at a 30 limit that is 1/30.
+            ..Self::new(ceiling, floor, Target(spec.paced_hz().min(Target::MAX)))
+        }
+    }
+
+    /// How much of the ceiling's width an `extent` keeps while the width throttle squeezes the
+    /// picture into fewer columns: the projection is built for the full width, and the
+    /// presentation stretches the columns back out. `1.0` otherwise.
+    #[must_use]
+    pub fn squeeze(self, extent: (u32, u32)) -> f32 {
+        match self.width {
+            Some(_) => extent.0 as f32 / self.ceiling.0 as f32,
+            None => 1.0,
+        }
+    }
+
+    /// The width throttle in force, or `None` under the budget loop or no controller.
+    #[must_use]
+    pub fn width(self) -> Option<width::Spec> {
+        self.width
     }
 
     /// These bounds with the player's blur gather resolution as the blur

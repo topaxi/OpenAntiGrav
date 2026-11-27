@@ -385,13 +385,12 @@ table are still unwired.
 HD's particle sprites are `/data/psys/tex/*.gtf`, named per emitter at `record+0x4c4`,
 and the loader read none of them: every HD effect drew the procedural radial glow.
 `oag_title::Effects::sprites` now lists the effects whose `.gtf` sprites play (HD:
-`WO_ROCKET_EXPLO_TRACK` only, every particle on its spawn frame).
+`WO_ROCKET_EXPLO_TRACK` only when this landed; more since, with the flipbooks walked).
 Measured original: dark teal-grey smoke, smoke/background 0.47/0.59/0.66 at 1 s, lasting
 past 3 s - `docs/ghidra/functions/ps3-hdfury-eu/particle-triggers.md`, "The Rocket's wall
 burst".
-- Open: the blue bias (HD's `psys_lit` takes scene light? unread); HD's own frame-advance
-  law and which cell of the 8x4 flipbook is frame 0; `WO_ROCKET_EXPLO` (craft hit, 12 emitters, all sprites decode) wants a matched
-  capture before it is listed; the other HD effects likewise.
+- Open: the blue bias (HD's `psys_lit` takes scene light? unread); the other HD effects
+  want a matched capture before they are listed (thread `hd-particle-fill-follow-ups.md`).
 
 ## 2026-10-12 (`hd-quake-render`): the Quake draws HD's wave
 
@@ -417,7 +416,6 @@ Open, in order of what a player would notice:
   the near fire plus the bloom is the unproven reading (`hd-whiteout` found the Missile's the same).
 - **The pale flat plane** on a wall in the first ticks: `molten_debris_colliding`'s own sprite (the
   film shows similar planes); whether a colliding particle lies flat is unread.
-- **The flipbooks**: every `WO_QUAKE` sprite draws frame 0.
 - **HD's own `ParticleSystem_EmitLine`** (the extent law is inherited from Pulse and matched by eye).
 - **Whether HD's CPU `Quake_UpdateSpan` also moves what the RSX draws**; the big-endian span table
   `oag_vex::quake::spans` cannot read (every HD circuit authors the `Quake` node).

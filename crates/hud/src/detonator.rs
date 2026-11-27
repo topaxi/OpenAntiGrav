@@ -7,8 +7,9 @@
 //! Four widgets the layout authors are never drawn, because the original's controller binds
 //! nothing to them (`PulseScore`, `PulseMultiplier`, `EmpScore`, `PulseBankedScore`, confidence
 //! 65-75). The EMP's pips and ready lamp read the charge; its `EmpBarEffect` is an
-//! `<ImageModel>` the layout reader does not model, and the bomb-ahead warning and the floating
-//! score feedback wait on mechanics this build does not run, so they draw nothing.
+//! `<ImageModel>` the layout reader does not model, and the bomb-ahead warning waits on a
+//! mechanic this build does not run, so they draw nothing. The floating score is
+//! [`super::score_popup`].
 
 use super::draw::{Context, lit_draw, sprite_draw};
 use super::{Draw, Readout};

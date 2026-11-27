@@ -161,6 +161,7 @@ fn check(frame: (f32, f32), built: Option<(f32, f32)>) {
             | wgpu::TextureUsages::COPY_DST
             | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let pixels = scene_pixels();
     queue.write_texture(

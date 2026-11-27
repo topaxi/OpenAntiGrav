@@ -233,6 +233,7 @@ pub(super) fn bind_into(
         format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let equaliser = Equaliser::default();
     upload(queue, &texture, &equaliser.texels());

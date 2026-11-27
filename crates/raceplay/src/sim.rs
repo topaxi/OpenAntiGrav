@@ -470,6 +470,10 @@ pub struct RaceSim {
     /// What the firing craft's box does to its projectiles' first probes - see
     /// [`SimSetup::own_craft_box_hides_track`].
     pub(super) own_craft_box_hides_track: oag_title::weapons::OwnCraftBox,
+    /// [`SimSetup::surface_probe_lengths`].
+    pub(super) surface_probe_lengths: oag_title::weapons::ProbeLengths,
+    /// [`SimSetup::rocket_open_air`].
+    pub(super) rocket_open_air: oag_title::weapons::RocketOpenAir,
     /// Which ways a craft is put back are on, and their numbers - see
     /// [`SimSetup::reset_triggers`].
     pub(super) reset_triggers: oag_race::recovery::ResetTriggers,
@@ -577,6 +581,8 @@ pub struct RaceSim {
     /// Restricts what a `Weapon Pad` hands out - see
     /// [`SimSetup::allowed_weapons`]. Empty is no restriction.
     pub(super) allowed_weapons: Arc<[oag_tables::weapons::Weapon]>,
+    /// The title's pickup roster - see [`SimSetup::pickup_roster`].
+    pub(super) pickup_roster: Option<oag_title::pickup_roster::PickupRoster>,
     /// The speed class, which indexes the pickup odds - see [`SimSetup::class`].
     ///
     /// The disc's own spelling, so a title whose ladder is not Pulse's - Pure,
@@ -673,6 +679,36 @@ impl RaceSim {
         (self.world.mode() == Mode::Zone)
             .then_some(self.destroyed.zone_end)
             .flatten()
+    }
+
+    /// Whether `slot`'s Detonator craft has blown up on a title that plays its end out before the
+    /// results.
+    pub(crate) fn detonator_ending(&self, slot: usize) -> bool {
+        self.detonator_end().is_some()
+            && self.world.ships[slot].physics.craft_state != oag_physics::CraftState::Racing
+    }
+
+    /// The end this race plays on a destroyed craft, `None` outside Detonator and on a title
+    /// that ends at once ([`oag_title::destroyed::DestroyedCraft::detonator_end`]).
+    pub(crate) fn detonator_end(&self) -> Option<oag_title::destroyed::DetonatorEnd> {
+        (self.world.mode() == Mode::Detonator)
+            .then_some(self.destroyed.detonator_end)
+            .flatten()
+    }
+
+    /// Whether `slot`'s end has run its course: a Zone end to state 6 (`zone-destroy.md`, row
+    /// Z9), a Detonator end to the results' time after the blast, any other at once.
+    pub(super) fn end_played_out(&self, slot: usize) -> bool {
+        let physics = &self.world.ships[slot].physics;
+        if self.zone_end().is_some() {
+            return oag_physics::damage::in_state_6(physics, false);
+        }
+        self.detonator_end().is_none_or(|end| {
+            let sequence = self.destroy_sequence();
+            // State 5 counts down from `dwell_secs`, entered `explosion_secs` after the blast.
+            physics.state_timer
+                <= sequence.dwell_secs - (end.results_secs - sequence.explosion_secs)
+        })
     }
 
     /// Whether `slot`'s wreck has been taken out of the physics world: its title's state 6

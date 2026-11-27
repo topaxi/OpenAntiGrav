@@ -25,13 +25,14 @@ pub const AUTHORED_GRID: [f32; 2] = [1920.0, 1080.0];
 /// title-bar arrow glyph beside `ResultsTitle`/`FE_MENU`, already spelled
 /// `.gtf` on the widget itself (`src="Data\FE\Images\Title_Arrow_HD.gtf"`),
 /// unlike [`crate::campaign::HEX_TEXTURES`]'s own `.mip`-to-`.gtf` respell -
-/// and `EndRace Podium`'s plinth fill, `dot.gtf`.
+/// `EndRace Podium`'s plinth fill, `dot.gtf`, and the Detonator record notice's logo.
 /// Every other image either widget names - the ship-badge column, the
-/// target/medal/record-notify art - is left unresolved on purpose; see
+/// target/medal art and the other modes' record-notify logos - is left unresolved on purpose; see
 /// `oag_ui_screens::endrace::hd`'s own module doc for why.
-pub const EXTRA_TEXTURES: [&str; 2] = [
+pub const EXTRA_TEXTURES: [&str; 3] = [
     r"Data\FE\Images\Title_Arrow_HD.gtf",
     r"Data\FE\Images\dot.gtf",
+    r"Data\FE\Images\Detonator_BW.gtf",
 ];
 
 #[cfg(test)]

@@ -650,6 +650,7 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     wall_one_sided: oag_title::pre_race::Sourced::inherited(false, "Pulse"),
     wall_steer_away: oag_title::pre_race::Sourced::inherited(false, "Pulse"),
     wall_point_rate_body_local: oag_title::pre_race::Sourced::inherited(false, "Pulse"),
+    pending_impulse_on_side: oag_title::pre_race::Sourced::inherited(true, "Pulse"),
     // Pure's `Craft_Construct` passes `0.01`, `0.01` to a `Body_Integrate` that is Pulse's loop
     // (`0x089345e8`, `docs/physics/pure-physics.md`): read off Pure's own executable, not
     // measured live; the law is measured per frame on Pulse (`docs/physics/body-damping.md`).

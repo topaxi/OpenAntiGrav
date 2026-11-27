@@ -372,6 +372,8 @@ impl Session {
         // so that race is discarded exactly as it always was. Only a race still
         // running when `escape` reached here is worth keeping.
         // A LAN race is the server's and cannot be parked: leaving it leaves the game.
+        // Nor is a benchmark's: leaving it ends the run, whether or not its race had
+        // finished (`docs/tools/in-game-benchmark.md`).
         let was_lan = self.net.is_some();
         self.net = None;
         self.lan = None;
@@ -380,6 +382,7 @@ impl Session {
             && !was_lan
             && !stage.watching
             && stage.demo.is_none()
+            && stage.benchmark.is_none()
         {
             self.suspended_race = Some(stage);
         }

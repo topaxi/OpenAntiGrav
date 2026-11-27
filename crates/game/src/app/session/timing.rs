@@ -609,18 +609,41 @@ impl Session {
             );
         }
         self.feed_windows(render_profile, frame_seconds, drs_limits);
+        self.finish_width_frame(frame_seconds, drs_limits);
+    }
+
+    /// The title's own width throttle moves at most one notch here, once a frame, whatever the
+    /// drain above handed it. Nothing under the budget loop.
+    fn finish_width_frame(&mut self, frame_seconds: Option<f32>, drs_limits: drs::Limits) {
+        if let Some(extent) = self.drs.finish_frame(frame_seconds, drs_limits) {
+            trace!(
+                "width throttle: {}x{} (level {}) - gpu {:.3} ms, frame interval {:.3} ms",
+                extent.0,
+                extent.1,
+                self.drs.width_level(),
+                self.governor_gpu.unwrap_or(0.0) * 1000.0 + self.pass_sum * 1000.0,
+                frame_seconds.unwrap_or(0.0) * 1000.0,
+            );
+        }
     }
 
     /// What the labelled passes cost, drained into the overlay's and the frame log's means.
     ///
-    /// **Not an input to the controller**: nothing here reaches [`assemble`] or `drs::Cost`, so
-    /// the resolution controller is fed what it was before these rows existed.
+    /// **Not an input to the budget loop**: nothing here reaches [`assemble`] or `drs::Cost`, so
+    /// the resolution controller is fed what it was before these rows existed. A title's own
+    /// width throttle times the whole frame and takes their sum ([`Self::record_cost`]).
     fn read_pass_stamps(&mut self) {
         let Some(timer) = self.pass_stamps.as_mut() else {
             return;
         };
         timer.drain_labelled(&self.gpu.device, &mut self.pass_scratch);
         record_passes(&mut self.pass_costs, &self.pass_scratch, self.stall_frame);
+        // Nothing times a pass with further windows open, so no older sum may linger.
+        if !self.screens.is_empty() {
+            self.pass_sum = 0.0;
+        } else if let Some(sum) = newest_pass_sum(&self.pass_scratch, self.stall_frame) {
+            self.pass_sum = sum;
+        }
     }
 
     /// The newest drained frame drawn at the reflection rung's step, its glass pass and every
@@ -795,7 +818,9 @@ impl Session {
         self.governor_gpu = Some(cost.total());
         self.governor_gpu_at = self.frame_index;
         let shed = self.drs.blur_shed();
-        if let Some(extent) = self.drs.record(cost, frame_seconds, drs_limits) {
+        let probing = self.drs.probing();
+        let timed = whole_frame_cost(cost, self.pass_sum, drs_limits);
+        if let Some(extent) = self.drs.record(timed, frame_seconds, drs_limits) {
             // **The reserve is printed beside the costs**, because
             // since ADR-0044 it is not a constant a reader can look up:
             // two lines a minute apart can divide the same scalable
@@ -831,6 +856,28 @@ impl Session {
                 self.drs.scale() * 100.0,
                 drs_limits.ceiling().0,
                 drs_limits.ceiling().1,
+            );
+        }
+        // One line per probe rise begun and ended (ADR-0096), so a run can count them.
+        if self.drs.probing() != probing {
+            let outcome = match self.drs.probe_outcome() {
+                _ if !probing => String::new(),
+                Some(drs::probe::Outcome::Kept(ratio)) => {
+                    format!(", kept at {ratio:.3} of predicted")
+                }
+                Some(drs::probe::Outcome::Late) => ", reverted on a late frame".to_string(),
+                Some(drs::probe::Outcome::Cost { predicted, budget }) => format!(
+                    ", reverted on cost at {predicted:.3} of predicted, {budget:.3} of budget"
+                ),
+                None => ", abandoned".to_string(),
+            };
+            debug!(
+                "dynamic resolution: probe {}{outcome} at {:.0}% of {}x{} - scalable {:.3} ms",
+                if probing { "ended" } else { "began" },
+                self.drs.scale() * 100.0,
+                drs_limits.ceiling().0,
+                drs_limits.ceiling().1,
+                cost.scalable * 1000.0,
             );
         }
         // Said once per spell rather than per frame - see
@@ -990,6 +1037,55 @@ pub(crate) fn reflection_reading(
         .sum();
     let passes = of_frame.map(|reading| reading.seconds.max(0.0)).sum();
     Some((glass, passes))
+}
+
+/// The stamped passes encoded inside a timed chain: HD's bloom chain runs its zoom ring between
+/// its first and last pass, so its time is already in the chain's own reading.
+const INSIDE_A_CHAIN: [&str; 1] = ["hd zoom"];
+
+/// Every labelled pass's seconds of the newest frame in `readings` after `stall_frame` that no
+/// chain's reading holds already, or `None` with no such frame.
+pub(crate) fn newest_pass_sum(
+    readings: &[oag_gpu::timing::PassReading],
+    stall_frame: u64,
+) -> Option<f32> {
+    let newest = readings
+        .iter()
+        .map(|reading| reading.frame)
+        .filter(|&frame| frame > stall_frame)
+        .max()?;
+    let sum = readings
+        .iter()
+        .filter(|reading| reading.frame == newest && !INSIDE_A_CHAIN.contains(&reading.label))
+        .map(|reading| reading.seconds.max(0.0))
+        .sum();
+    Some(sum)
+}
+
+/// The cost the controller is handed. A title's own width throttle times a frame from its first
+/// GPU command to its last, so under it the passes the budget loop leaves to its residual
+/// (`passes`: shadows, glass, HUD, composite, blit) are added.
+pub(crate) fn whole_frame_cost(cost: drs::Cost, passes: f32, limits: drs::Limits) -> drs::Cost {
+    match limits.width() {
+        Some(_) => drs::Cost {
+            scalable: cost.scalable + passes,
+            ..cost
+        },
+        None => cost,
+    }
+}
+
+/// TARGET FPS `original`: the title's own width throttle, aimed at the rate the loop is held
+/// to, or no controller on a title with none.
+pub(crate) fn original_limits(
+    title: Option<&'static oag_title::Title>,
+    ceiling: (u32, u32),
+    held_hz: Option<u32>,
+) -> drs::Limits {
+    match title.and_then(|title| title.width_throttle) {
+        Some(law) => drs::Limits::original(ceiling, drs::width::Spec::new(law.value, held_hz)),
+        None => drs::Limits::new(ceiling, ceiling, drs::Target::OFF),
+    }
 }
 
 /// What the controller is holding back this frame, in milliseconds.

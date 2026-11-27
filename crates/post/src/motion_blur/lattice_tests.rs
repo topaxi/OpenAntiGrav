@@ -64,6 +64,7 @@ fn frames(
             format,
             usage,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         })
     };
     let upload = |texture: &wgpu::Texture, bytes: &[u8]| {

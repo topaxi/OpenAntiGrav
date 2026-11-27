@@ -38,8 +38,7 @@
 //! rect; the stage that plays the circuit's `preview.bik` fills it (or drops
 //! it while no picture has arrived).
 //!
-//! Not drawn, and said so: the page squares, the `Padlock` (HD's circuit gate is open) and the small direction
-//! glyphs on the forward hexagon.
+//! Not drawn, and said so: the page squares and the `Padlock` (HD's circuit gate is open).
 
 use oag_ui::frontend::{Align, Draw, Placed, Video};
 use oag_ui::language::StringTable;
@@ -62,11 +61,43 @@ pub const SCREEN: &str = "Track Creation";
 /// frame of the screen shows, in that order.
 pub const RECORD_ROW_IDS: [&str; 3] = ["FE_PERSONAL", "FE_FRIENDS", "FE_GLOBAL"];
 
-/// A circuit's icon, in units across, in its hexagon: the selected Vineta K
-/// cell's sails span 55 px of a 2000 px frame, 58 units at 0.9424 px per
-/// unit, and the icon texture is drawn at the size that puts its own sails
-/// there (**chosen** from one frame, the texture's fill not measured).
-const ICON_SIZE: f32 = 62.0;
+/// The quad of a circuit's icon in its hexagon, in units across, over the whole of its 256 texel
+/// texture: what the widget passes `_SetCell` (`docs/ghidra/functions/ps3-hdfury-eu/ship-select-ring.md`,
+/// "The cells").
+const ICON_SIZE: f32 = 50.0;
+
+/// The `>>>` under the selected hexagon: `TrackHexSelection`'s own child, a quad of
+/// [`GLYPH_QUAD`] units [`GLYPH_BELOW`] under the ring (neither scaled by the widget's `Scale`),
+/// showing one [`GLYPH_FRAME`] texel frame of a strip of eight, the highlighted arrow walking along
+/// it: the first four are the Fury style's, the last four the other's
+/// (`docs/ghidra/functions/ps3-hdfury-eu/ship-select-ring.md`, "The direction glyph").
+pub const DIRECTION_SRC: &str = r"Data\FE\Images\TrackDirectionSheet.gtf";
+const GLYPH_QUAD: [f32; 2] = [40.0, 10.0];
+const GLYPH_FRAME: [f32; 2] = [32.0, 8.0];
+const GLYPH_BELOW: f32 = 24.0;
+/// Frames a second of the widget's counter, and the frames of one style.
+const GLYPH_RATE: f32 = 4.0;
+const GLYPH_STYLE_FRAMES: f32 = 4.0;
+
+/// The frame of the strip the glyph shows, or `None` while it is hidden: the widget's one counter
+/// (`TrackHexSelection + 0x14c`) is the input cooldown while negative and the glyph's clock
+/// otherwise, set back to 0 on the update that takes it above 1, so a cycle is one second and the
+/// four frames of one style. It counts from the last move, and from the page's opening before any
+/// (the original carries it across visits).
+#[must_use]
+pub(super) fn direction_frame(picker: &Picker, fury: bool) -> Option<f32> {
+    let cooldown = crate::picker::STEP_COOLDOWN_FRAMES as f32 / 60.0;
+    let counter = picker
+        .seconds_since_step()
+        .map_or(picker.seconds(), |since| since - cooldown);
+    if counter < 0.0 {
+        return None;
+    }
+    let frame = (counter.rem_euclid(1.0) * GLYPH_RATE)
+        .floor()
+        .min(GLYPH_STYLE_FRAMES - 1.0);
+    Some(frame + if fury { 0.0 } else { GLYPH_STYLE_FRAMES })
+}
 
 /// What a widget the generic parser does not reach says.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -74,6 +105,8 @@ pub struct TrackScreen {
     /// The `MiniText` headings and the bracket rects, as [`TeamScreen`]
     /// collects them - the rest of that struct is the ship screen's.
     pub common: TeamScreen,
+    /// Whether the front end is in the Fury style, which picks the direction glyph's frames.
+    pub fury_style: bool,
     /// The `Emblem` image's rect. It authors no `src`.
     pub emblem: Option<[f32; 4]>,
     /// The `Emblem`'s `transitiontype="vwipe"`: it waits its `delay` after the page opens.
@@ -167,12 +200,13 @@ fn shape(picker: &Picker) -> (usize, usize) {
 /// Circuits wrap round the list. **Chosen, not measured**: the widget
 /// authors no colour, so the hexagon fills are `Team Selection`'s authored
 /// `HexCol` / `SelectedColumnCol` values (the frame's red and dim grey read
-/// the same on both screens) and the ring is the frame's pale pink; the
-/// small direction glyphs under the forward hexagon's emblem are not drawn
-/// (their art is unlocated). Nothing locks: HD's circuit gate is open
-/// (Pulse's law, unmeasured on HD), so no cell shows a padlock.
+/// the same on both screens) and the ring is the frame's pale pink; the direction
+/// glyph goes under the selected hexagon's emblem, turned half round on the reverse row. Nothing
+/// locks: HD's circuit gate is open (Pulse's law, unmeasured on HD), so no cell shows a padlock
+/// and the glyph a locked circuit hides is always shown.
 fn draw_grid(
     grid: &hex::HexGrid,
+    fury: bool,
     picker: &Picker,
     sprites: &dyn Fn(&str) -> Option<Placed>,
     out: &mut Vec<Draw>,
@@ -184,34 +218,40 @@ fn draw_grid(
                 icon: Some(src), ..
             },
             ..
-        }) => Face::Art {
-            src: src.clone(),
-            size: ArtSize::Fit(ICON_SIZE),
+        }) => Face {
+            picture: Some((src.clone(), ArtSize::Fit(ICON_SIZE))),
+            locked: false,
         },
-        _ => Face::Empty,
+        _ => Face::default(),
     };
     let mut grid = *grid;
     grid.rows = grid.rows.min(rows);
     let slide = picker.slide();
+    let selected = picker.index() % width.max(1);
+    let cursor = hex::Cursor {
+        row: picker.index() / width.max(1),
+        low: slide.ring_offset(),
+    };
     hex::draw_cells(
         &grid,
-        (
-            picker.index() % width.max(1),
-            width,
-            picker.pan(),
-            Some(slide),
-        ),
-        (
-            Some(hex::Cursor {
-                row: picker.index() / width.max(1),
-                low: slide.ring_offset(),
-            }),
-            picker.ring_seconds(),
-        ),
+        (selected, width, picker.pan(), Some(slide)),
+        (Some(cursor), picker.ring_seconds()),
         &face,
         sprites,
         out,
     );
+    if let (Some(frame), Some(placed)) = (direction_frame(picker, fury), sprites(DIRECTION_SRC)) {
+        let (cx, cy) = hex::ring_centre(&grid, selected, Some(slide), cursor);
+        let [w, h] = GLYPH_QUAD;
+        let [u, v] = GLYPH_FRAME;
+        let strip = [0.0, frame * v, u, v];
+        let turned = [u, (frame + 1.0) * v, -u, -v];
+        out.push(Draw::Sprite {
+            rect: [cx - w * 0.5, cy + GLYPH_BELOW - h * 0.5, w, h],
+            uv: placed.sheet_rect(if cursor.row == 0 { strip } else { turned }),
+            color: [1.0; 4],
+        });
+    }
 }
 
 /// The `CIRCUIT LENGTH` and `RACE DISTANCE` values for a lap of `metres`
@@ -278,6 +318,9 @@ pub fn read(
     if let Some(nested) = find_screen(top, SCREEN) {
         walk(nested, (0.0, 0.0), screens, strings, &mut extra.common);
     }
+    // What stands in for `FrontEnd_IsFuryStyle`: the two styles' `HD_BG`, black or white
+    // (`oag_game::boot::sprites::fury_style`).
+    extra.fury_style = screens.global_is_dark("HD_BG");
     walk_track(top, (0.0, 0.0), screens, &mut extra);
     extra.row_labels = RECORD_ROW_IDS.map(|id| strings.get_or_id(id).to_string());
 
@@ -470,7 +513,7 @@ pub(in crate::picker) fn body(
         picker.entry().seconds(),
     ));
     if let Some(grid) = &extra.hex_grid {
-        draw_grid(grid, picker, sprites, &mut out);
+        draw_grid(grid, extra.fury_style, picker, sprites, &mut out);
     }
     let Some(entry) = picker.selected() else {
         return out;

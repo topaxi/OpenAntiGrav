@@ -139,6 +139,7 @@ impl Pipeline {
             format: wgpu::TextureFormat::Rgba8Unorm,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
         // `sceGuTexWrap(GU_REPEAT, GU_REPEAT)`; the filter is chosen, see the module doc.
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {

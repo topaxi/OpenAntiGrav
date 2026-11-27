@@ -1,8 +1,8 @@
 ---
 status: measure
 titles: [hd]
-updated: 2026-11-01
-summary: "HD exhaust: talons-pack trail whiter and wider than the original's; confirm live what sets craft+0xfc; engine-trail.md lists the rest"
+updated: 2026-11-27
+summary: "HD exhaust: flame /2, eye and clock wired; 13 cold-boot flame pairs regrabbed, Zone left; talons-pack trail whiter and wider; craft+0xfc"
 ---
 
 # HD's exhaust is measured from the running game now: the trail is a 54-sample three-fin tube, the flame breathes with the throttle, and the plume scales rather than blinks
@@ -11,7 +11,22 @@ summary: "HD exhaust: talons-pack trail whiter and wider than the original's; co
 
 ## Open (trimmed 2026-09-04 - three of the four original items are settled, not just narrowed)
 
-- **2026-11-01 (`hd-zone-exhaust`): the Zone flame was baked at the team hull's `EF_Main` origin, now the Zone directory's.** See hd-ship-materials.md, "The Zone flame hangs on the Zone hull". Still open: a pose-matched RPCS3 Zone pair (no Zone race state exists; `zone-moa-therma-hd-early` is a results screen), Zone's trail origin at speed, and the HD Zone wreck (the engine light, shield shell and absorb shell now read the Zone directory, `hd-ship-materials.md` "The rest of the Zone livery").
+- **2026-11-26 (`hd-flame-colour-gap`): the flame closes on the live program's `/2` and reads the camera eye; both
+  wired.** The console runs `flame_test.rcsmaterial`'s block #2 (fogged, ends `MAD /2 H0.xyz`); the flame block was
+  `Scene::off` (output scale 1.0), so the rest flame drew twice too strong. `hd/talons`' blue/pink split is the noise
+  phase, not a layer. 22 pairs: 17 better, 5 worse on the moved-pixel metric (numbers on engine-flare.md, "Our rim's
+  eye is the camera"). **Open:** (1) **the flame clock is recorded and wired (2026-11-26, `hd-flame-clock`)**: it is
+  `(*0x00936fd4) + 0xc4`, every HD grab writes it as `flame_clock_s`, the pair script passes `--flame-clock` and the
+  re-render adds it to a record holding `original.flame_clock_s` (engine-flare.md, "The flame's clock at a pair's
+  grab"). Only `hd-race/talons-pack` is clocked from its record (122.4720 s, derived from its state's timeline);
+  the 13 cold-boot grid and Assegai pairs were regrabbed (2026-11-27, `hd-flame-regrab`; engine-flare.md, "The
+  cold-boot pairs, regrabbed with the clock"): the pin ranks in the best 2 of 8 phases on 9 of 13, confidence 70; the
+  scratch pairs await the lead's adoption. Left: the Zone pair's 8-phase flame sweep (it was regrabbed
+  inside the countdown with `flame_clock_s`, compare-page.md, "The countdown frame"), the
+  Detonator and far-hit pairs (states not kept), and judging the eye's cost below on the clocked pairs; (2) on the phase
+  average the eye still costs up to 0.6 on three rest pairs (`hd-race/talons-pack`, `hd/metropia`, `hd/vineta-k`),
+  cause unknown; (3) the program fogs the flame with the circuit's fog (factor 1 at chase distance), not wired because
+  the shield shells share the block. Still no boosting dump.
 `engine-trail.md` kept moving after this file's 2026-08-24 snapshot and was
 never folded back; its later sessions already close three of the four items
 below. Do not requote this file - `engine-trail.md`'s "Open, in rough order

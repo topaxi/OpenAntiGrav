@@ -174,9 +174,10 @@ on the respawn.
   accumulators all diverged. So the "this splat is
   the live `TrailSpeed` patch" hypothesis is **refuted**; a global seconds
   clock bound to the trail material is instead the natural candidate for the
-  flame surface's unread `Speed * time` scroll clock
-  ([engine-flare.md](engine-flare.md)) - hypothesis only, confidence 40, no
-  shader-side confirmation yet.
+  flame surface's `Speed * time` scroll clock. **Confirmed 2026-11-26** on the
+  shader side: the flame program's `@0x0d` time constant is `+0xc4`, one to
+  two frames behind the PPU, on two frame dumps (confidence 85;
+  [engine-flare.md](engine-flare.md), "The flame's clock at a pair's grab").
 - Where the per-trail `TrailSpeed` value physically lives at draw time is
   **not** here either - both obvious carriers are excluded (the splat above is
   global; the `+0x1208` per-trail binding's target holds no phase *value*).

@@ -230,6 +230,7 @@ pub fn results_split(single: &Layout, to: [f32; 2]) -> Option<Layout> {
         screen,
         scale: single.scale,
         faces: single.faces,
+        labels: Vec::new(),
     })
 }
 
@@ -322,5 +323,6 @@ pub fn rewards_split(single: &Layout, to: [f32; 2]) -> Option<Layout> {
         screen,
         scale: single.scale,
         faces: single.faces,
+        labels: Vec::new(),
     })
 }

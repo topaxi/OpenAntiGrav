@@ -7,11 +7,9 @@
 //! for the life of the process. The server is asked directly instead, over a connection of our
 //! own, on a thread of its own: a round trip never lands on a frame.
 
-use std::sync::Arc;
-use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::mpsc::{self, RecvTimeoutError, Sender};
 use std::time::Duration;
 
+use oag_thread::poller::Poller;
 use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use winit::window::Window;
 use x11rb::connection::Connection;
@@ -22,15 +20,8 @@ use x11rb::rust_connection::RustConnection;
 /// How often the server is asked.
 const POLL_EVERY: Duration = Duration::from_secs(1);
 
-/// No answer yet, or none the server could give.
-const UNKNOWN: u32 = 0;
-
 /// A thread asking the X server for the window's output rate once a second.
-pub(crate) struct LiveRefresh {
-    millihertz: Arc<AtomicU32>,
-    /// Dropping it ends the thread at its next wake.
-    _stop: Sender<()>,
-}
+pub(crate) struct LiveRefresh(Poller);
 
 impl LiveRefresh {
     /// Starts on an X11 window; `None` on any other window system or when no server answers.
@@ -42,35 +33,23 @@ impl LiveRefresh {
         };
         let (connection, screen) = RustConnection::connect(None).ok()?;
         let root = connection.setup().roots.get(screen)?.root;
-        let millihertz = Arc::new(AtomicU32::new(UNKNOWN));
-        let (stop, wake) = mpsc::channel::<()>();
-        let shared = Arc::clone(&millihertz);
-        std::thread::Builder::new()
-            .name("x11-refresh".into())
-            .spawn(move || {
-                loop {
-                    // A failed round keeps the last answer: the fallback is a frozen monitor
-                    // report, which is wrong through a dock.
-                    if let Some(rate) = read(&connection, root, id)
-                        && shared.swap(rate, Ordering::Relaxed) != rate
-                    {
-                        log::debug!("X server reports {rate} mHz for the window's output");
-                    }
-                    if wake.recv_timeout(POLL_EVERY) != Err(RecvTimeoutError::Timeout) {
-                        return;
-                    }
-                }
-            })
-            .ok()?;
-        Some(Self {
-            millihertz,
-            _stop: stop,
+        let mut last = None;
+        // A failed round keeps the last answer: the fallback is a frozen monitor report, which
+        // is wrong through a dock.
+        Poller::start("x11-refresh", POLL_EVERY, move || {
+            let rate = read(&connection, root, id)?;
+            if last.replace(rate) != Some(rate) {
+                log::debug!("X server reports {rate} mHz for the window's output");
+            }
+            Some(rate)
         })
+        .ok()
+        .map(Self)
     }
 
     /// The last rate the server gave for the window's output, `None` before its first answer.
     pub(crate) fn millihertz(&self) -> Option<u32> {
-        Some(self.millihertz.load(Ordering::Relaxed)).filter(|&mhz| mhz != UNKNOWN)
+        self.0.latest()
     }
 }
 

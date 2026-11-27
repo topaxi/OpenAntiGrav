@@ -14,6 +14,7 @@ oag-assets.workspace = true
 oag-disc.workspace = true
 oag-formats.workspace = true
 oag-hd.workspace = true
+oag-io.workspace = true
 oag-omega.workspace = true
 oag-pulse.workspace = true
 oag-pure.workspace = true

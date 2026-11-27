@@ -188,6 +188,7 @@ OAG_DISPLAY_GAMMA = { text = "GAMMA", human = false }
 OAG_GRAPHICS_RENDERER = { text = "RENDERER", human = false }
 OAG_GRAPHICS_RENDER_SCALE = { text = "RENDERSKALIERUNG", human = false }
 OAG_GRAPHICS_TARGET_FPS = { text = "ZIEL-BILDRATE", human = false }
+OAG_GRAPHICS_TARGET_FPS_ORIGINAL = { text = "ORIGINAL", human = false }
 OAG_GRAPHICS_TARGET_FPS_DEFAULT = { text = "STANDARD (%s)", human = false }
 OAG_DISPLAY_FRAME_LIMIT_REFRESH_RATE = { text = "BILDWIEDERHOLRATE (%s)", human = false }
 OAG_GRAPHICS_MINIMUM_RESOLUTION = { text = "MINDESTAUFLÖSUNG", human = false }

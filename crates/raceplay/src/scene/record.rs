@@ -137,6 +137,65 @@ pub(super) struct EffectsDrawn {
 /// the Rocket smoke and HD's Leach strip.
 const BEAMS: usize = 8;
 
+/// The strip pipelines of [`BEAMS`], by name, in [`Strip::ALL`]'s order.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Strip {
+    LeachBeam,
+    MagstripContact,
+    MagstripArcs,
+    MissileRibbons,
+    MissileStreaks,
+    Wingtip,
+    RocketSmoke,
+    LeachRibbon,
+}
+
+impl Strip {
+    const ALL: [Self; BEAMS] = [
+        Self::LeachBeam,
+        Self::MagstripContact,
+        Self::MagstripArcs,
+        Self::MissileRibbons,
+        Self::MissileStreaks,
+        Self::Wingtip,
+        Self::RocketSmoke,
+        Self::LeachRibbon,
+    ];
+
+    /// The strips HD's `RibbonEffects_Render` draws (pools 0, 2, 1 and 5, then 3 and 4) go before
+    /// every particle quad, so a blast and its screen wash lie over the smoke: read on the ring for
+    /// pools 3 and 4, the rest by the one call that draws them all
+    /// (`docs/rendering/particle-fill.md`, "The far blast's grey streams are the Rockets' own
+    /// ribbons"). The Leach beam, the magstrip wake and the Leach strip stay after the particles,
+    /// their order unread.
+    fn before_particles(self) -> bool {
+        matches!(
+            self,
+            Self::MissileRibbons | Self::MissileStreaks | Self::Wingtip | Self::RocketSmoke
+        )
+    }
+}
+
+/// One draw of [`Recorder::draw_effects`]' strips-and-particles stretch.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EffectStep {
+    Strip(Strip),
+    Particles,
+}
+
+/// The order [`Recorder::draw_effects`] draws the strips and the particles in.
+fn effect_steps() -> impl Iterator<Item = EffectStep> {
+    let strips = |before: bool| {
+        Strip::ALL
+            .into_iter()
+            .filter(move |strip| strip.before_particles() == before)
+            .map(EffectStep::Strip)
+    };
+    strips(true)
+        .chain(std::iter::once(EffectStep::Particles))
+        .chain(strips(false))
+}
+
 /// One view's scene pass, decided: everything [`Recorder::record`] reads that is not the scene's
 /// own GPU objects.
 pub(super) struct ViewPass<'a> {
@@ -198,19 +257,19 @@ pub(super) struct ViewLists {
 }
 
 impl Scene {
-    /// The strip pipelines, in [`BEAMS`]' order; `None` where the title builds none.
+    /// The strip pipelines, in [`Strip::ALL`]'s order; `None` where the title builds none.
     fn beams(&self) -> [Option<&std::cell::RefCell<oag_fx::beam::Pipeline>>; BEAMS] {
         let [contact, atlas, fat, streaks, vortex, smoke, leach] = self.ribbons.cells();
-        [
-            self.beam.as_ref(),
-            contact,
-            atlas,
-            fat,
-            streaks,
-            vortex,
-            smoke,
-            leach,
-        ]
+        Strip::ALL.map(|strip| match strip {
+            Strip::LeachBeam => self.beam.as_ref(),
+            Strip::MagstripContact => contact,
+            Strip::MagstripArcs => atlas,
+            Strip::MissileRibbons => fat,
+            Strip::MissileStreaks => streaks,
+            Strip::Wingtip => vortex,
+            Strip::RocketSmoke => smoke,
+            Strip::LeachRibbon => leach,
+        })
     }
 
     /// What every effect pipeline's last upload left, and the handles that draw it, for the
@@ -615,9 +674,15 @@ impl<'a> Recorder<'a> {
             effects.exhaust.1
         };
         effects.exhaust.0.draw(render, exhaust);
-        effects.sparks.0.draw(render, effects.sparks.1);
-        for (beam, drawn) in effects.beams.iter().flatten() {
-            beam.draw(render, *drawn);
+        for step in effect_steps() {
+            match step {
+                EffectStep::Particles => effects.sparks.0.draw(render, effects.sparks.1),
+                EffectStep::Strip(strip) => {
+                    if let Some((beam, drawn)) = &effects.beams[strip as usize] {
+                        beam.draw(render, *drawn);
+                    }
+                }
+            }
         }
         if let Some((stage, drawn)) = &effects.mod_shaders {
             stage.draw_surfaces(render, drawn);
@@ -786,5 +851,44 @@ mod tests {
         list.blended_after_craft(false, false);
         assert!(list.0.is_empty());
         assert_eq!(BlendedList::after_craft(false), BlendedList::With);
+    }
+
+    /// HD's ring draws its `RibbonEffects` strips (the Rocket smoke and the wingtip contrails,
+    /// alpha-over triangle strips) before every particle quad of the frame, so the Rocket blast and
+    /// its screen wash cover the smoke; the Missile's pools go with them in the same call. The
+    /// Leach beam, the magstrip wake and the Leach strip keep their place after the particles.
+    #[test]
+    fn the_ribbon_effects_strips_draw_before_the_particles() {
+        let steps: Vec<EffectStep> = effect_steps().collect();
+        let at = |step| {
+            steps
+                .iter()
+                .position(|s| *s == step)
+                .expect("every step once")
+        };
+        let particles = at(EffectStep::Particles);
+        for strip in [
+            Strip::MissileRibbons,
+            Strip::MissileStreaks,
+            Strip::Wingtip,
+            Strip::RocketSmoke,
+        ] {
+            assert!(at(EffectStep::Strip(strip)) < particles, "{strip:?}");
+        }
+        for strip in [
+            Strip::LeachBeam,
+            Strip::MagstripContact,
+            Strip::MagstripArcs,
+            Strip::LeachRibbon,
+        ] {
+            assert!(at(EffectStep::Strip(strip)) > particles, "{strip:?}");
+        }
+        assert_eq!(steps.len(), BEAMS + 1);
+        for (index, strip) in Strip::ALL.into_iter().enumerate() {
+            assert_eq!(
+                strip as usize, index,
+                "the beams array is indexed by the strip"
+            );
+        }
     }
 }

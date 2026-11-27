@@ -87,6 +87,7 @@ fn composited(brightness: Brightness, gamma: Gamma) -> Option<[[u8; 4]; 8]> {
         format,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let surface_view = surface.create_view(&Default::default());
     let readback = device.create_buffer(&wgpu::BufferDescriptor {
@@ -352,6 +353,7 @@ fn a_ui_only_stage_reaches_the_surface_and_its_own_clear_draws_the_bars() {
         format,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let surface_view = surface.create_view(&Default::default());
     let readback = device.create_buffer(&wgpu::BufferDescriptor {

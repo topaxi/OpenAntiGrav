@@ -551,6 +551,12 @@ impl Race {
         self.view.gantry_seconds
     }
 
+    /// The flame clock a capture imposes, [`crate::Options::flame_seconds`] (`None` in every race).
+    #[must_use]
+    pub fn flame_seconds(&self) -> Option<f32> {
+        self.view.flame_seconds
+    }
+
     /// The capture's [`crate::Options::world_clock_offset`], which only the world meshes' clock carries.
     #[must_use]
     pub fn world_clock_offset(&self) -> f32 {

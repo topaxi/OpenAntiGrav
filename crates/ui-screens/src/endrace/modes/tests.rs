@@ -576,6 +576,7 @@ fn the_detonator_results_name_the_ids_their_screen_speaks() {
         bombs: 3,
         chains: [2, 1, 0],
         score: 41_250,
+        record: Default::default(),
     };
     for (id, _) in hd.rows() {
         assert!(DetonatorResults::IDS.contains(&id), "{id}");

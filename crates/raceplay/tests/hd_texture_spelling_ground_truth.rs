@@ -96,7 +96,7 @@ fn hd() -> Option<oag_assets::Archives> {
 fn hd_holds_every_name_its_own_tables_reference() {
     let Some(archives) = hd() else { return };
     let names = hd_names();
-    assert_eq!(names.len(), 85, "the names the census walks");
+    assert_eq!(names.len(), 86, "the names the census walks");
     let missing: Vec<String> = misses(&archives, &names).into_iter().collect();
     assert_eq!(missing, Vec::<String>::new(), "HD's own tables");
 }

@@ -51,6 +51,7 @@ fn a_loading_multisample_pass_keeps_the_view_drawn_before_it() {
             format,
             usage,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         })
     };
     let multisampled = target("msaa", 4, wgpu::TextureUsages::RENDER_ATTACHMENT);

@@ -157,6 +157,7 @@ fn the_chain_smears_what_moved_and_leaves_still_surfaces_sharp() {
             | wgpu::TextureUsages::COPY_DST
             | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let mut pixels = vec![0u8; (SIZE * SIZE * 4) as usize];
     for y in 31..33 {
@@ -189,6 +190,7 @@ fn the_chain_smears_what_moved_and_leaves_still_surfaces_sharp() {
         format: oag_gpu::formats::VELOCITY_FORMAT,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let moving = f32_to_half(0.1);
     let zero = f32_to_half(0.0);
@@ -223,6 +225,7 @@ fn the_chain_smears_what_moved_and_leaves_still_surfaces_sharp() {
         format: wgpu::TextureFormat::Depth32Float,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let depth_view = depth.create_view(&Default::default());
     let mut clear = device.create_command_encoder(&Default::default());
@@ -435,6 +438,7 @@ fn still_block_over_a_moving_background(
             format,
             usage,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         })
     };
     let upload = |texture: &wgpu::Texture, bytes: &[u8]| {
@@ -596,6 +600,7 @@ fn the_tile_reduction_finds_motion_in_the_tile_it_belongs_to() {
             format,
             usage,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         })
     };
     let upload = |texture: &wgpu::Texture, bytes: &[u8]| {
@@ -787,6 +792,7 @@ fn multisampled_chain(half: bool) {
             | wgpu::TextureUsages::COPY_DST
             | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let mut pixels = vec![0u8; (SIZE * SIZE * 4) as usize];
     for y in 31..33 {
@@ -816,6 +822,7 @@ fn multisampled_chain(half: bool) {
             format,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         })
     };
     let velocity = multisampled("velocity", oag_gpu::formats::VELOCITY_FORMAT);

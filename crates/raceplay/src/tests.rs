@@ -115,6 +115,7 @@ mod people_grid;
 mod perfect_start;
 mod photo;
 mod photo_rewind;
+mod pickup_roster;
 #[cfg(feature = "extensions")]
 mod portal_view;
 mod pure_absorb_bar;
@@ -163,6 +164,7 @@ mod trail_order;
 mod transit;
 mod velocity_gate;
 mod vertex_chunks;
+mod view_squeeze;
 mod viewer;
 mod viewpoint;
 mod weapons;
@@ -378,10 +380,13 @@ fn setup(handling: Handling) -> SimSetup {
         plasma_release_at_display_scale: true,
         rocket_launch_at_display_scale: true,
         own_craft_box_hides_track: oag_title::weapons::OwnCraftBox::Falls,
+        surface_probe_lengths: oag_title::weapons::ProbeLengths::PULSE,
+        rocket_open_air: oag_title::weapons::RocketOpenAir::Falls,
         reset_triggers: oag_race::recovery::ResetTriggers::PULSE,
         contact_cues: oag_title::contact_cue::ContactCues::Rearmed,
         opponent_fire: oag_title::weapons::OpponentFire::PULSE,
         score_law: None,
+        score_pace_terms: oag_title::eliminator::ScorePaceTerms::WITH_REPULSER_AND_SHURIKEN,
         flip_law: None,
         // A synthetic track authors no pads, which is also what every Pure
         // track does: an empty set is an ordinary state, not a stub.
@@ -399,6 +404,7 @@ fn setup(handling: Handling) -> SimSetup {
         detonator: None,
         detonator_pads: None,
         allowed_weapons: Vec::new(),
+        pickup_roster: None,
         weapon_pad_refresh: 0.0,
         // These tests run on a synthetic straight and want the ordinary
         // spawn and the ordinary chase camera; `--pose` and its camera are
@@ -442,6 +448,8 @@ pub(crate) fn fixture_view() -> ViewSetup {
         detonator_emp_light: false,
         detonator_emp_repulsor: false,
         detonator_rounds_as_cannon: false,
+        detonator_score_popups: false,
+        detonator_mine_spin: None,
         detonator_ammo_gauge: None,
         detonator_hull_charge: None,
         bomb_shockwave_fades: false,
@@ -530,11 +538,13 @@ pub(crate) fn fixture_view() -> ViewSetup {
         hull_draw_factor: 1.0,
         zoom_ring: None,
         zoom_borrowed: false,
+        mine_blast_colours: Vec::new(),
         capture_hud: None,
         hud_waits_for_go: false,
         now_playing: None,
         world_clock_offset: 0.0,
         gantry_seconds: None,
+        flame_seconds: None,
         camera_override: None,
         fov_override: None,
         sight: Sighting::default(),

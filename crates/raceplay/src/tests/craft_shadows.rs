@@ -21,6 +21,7 @@ fn target(device: &wgpu::Device) -> wgpu::TextureView {
             format: wgpu::TextureFormat::Rgba8Unorm,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         })
         .create_view(&Default::default())
 }

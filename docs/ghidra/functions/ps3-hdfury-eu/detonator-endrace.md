@@ -1,7 +1,7 @@
 # Detonator's end-of-race screen: rows, values, formats, and what the record uses
 
-**Binary:** `EBOOT.elf` (`/hdfury/EBOOT-ps3-hdfury-eu.elf`). Static reading, 2026-11-22; nothing here
-ran (no capture of a Detonator results screen exists). Every `lwz rN,disp(r2)` was resolved with
+**Binary:** `EBOOT.elf` (`/hdfury/EBOOT-ps3-hdfury-eu.elf`). Static reading, 2026-11-22; checked live
+2026-11-26 ("Checked against the original"). Every `lwz rN,disp(r2)` was resolved with
 `scripts/ps3-toc.py resolve <function> 0x<disp>` (all the functions below declare TOC
 `0x008ad4d8`, `ps3-toc.py toc` prints `exact`; displacements are hex, and a decimal `13192` read
 as hex resolves a different string), store and load sites by `scripts/ps3-dform-scan.py`, bodies
@@ -16,7 +16,7 @@ Ghidra truncates by `llvm-objdump -d --mattr=+altivec,+vsx`. Read first:
 Mode `0xe` (Detonator, `g_GameState+0xe0`) draws `Line1` plus one grid of six label/value rows and a
 score line. The filler is `0x002234b0`; it has **no finished/destroyed branch**, it prints the same
 rows from a record the end-of-race builder `0x0005ac00` filled. Confidence **80** (every row is a
-string reference and a load at instruction level; Omega's executable has the same code; no live run).
+string reference and a load at instruction level; Omega's executable has the same code; two live frames).
 
 | Row (widgets) | Label id (HD English, `DATA06`) | Value format | Value read | Source in the race | Conf |
 | --- | --- | --- | --- | --- | ---: |
@@ -28,7 +28,7 @@ string reference and a load at instruction level; Omega's executable has the sam
 | 5 (`Grid0.5`, `Grid1.5`) | `ER_NUM_15_STREAKS` = `NUMBER OF 15 CHAINS` | `%d` | `rec+0x132c` (u16) | `rm+0x2dec` | 78 |
 | header (`Grid0.h`, `Grid1.h`) | `ER_DETONATOR_SCORE` = `TOTAL SCORE` | `%d` | `rec+0x1314` (int) | the score `rm+0x2df0` | 82 |
 | `Line1` | `ER_ZDETONATOR_COM` = `DETONATOR SESSION COMPLETE!` | none | the id, through the localising setter | none | 80 |
-| `RecValue` | `ER_NSR` = `NEW SCORE RECORD` | `%s %d` | `rec+0x1358` | written only on a new record (`rec+0x1357 != 0`), the new score; the flag-clear path (`0x0022c03c`) is unread | 72 |
+| `RecValue` | `ER_NSR` = `NEW SCORE RECORD`, else `ER_SR` = `SCORE RECORD` | `%s %d` | `rec+0x1358` | **always written**: the new score with the flag `rec+0x1357` set, else the standing best ("The record notice") | 90 |
 
 `rec` is `screen+0xb34` = `RaceManager_GetInstance() + 0x1980`
 (`EndRaceResults_OnEnter`, `0x0022e3d0`: the decompile stores `RaceManager_GetInstance() + 0x1980` at `screen+0xb34`; the store is `stw r9, 0xb34(r31)` at `0x0022e414`, found with `ps3-dform-scan.py --disp 0xb34`), so
@@ -157,19 +157,93 @@ prologue, `0x0001f47c`). So **the medal tier is evaluated on the score**, larger
 This closes the "chosen" point `docs/formats/race-campaign.md` carries ("the value it hands the
 compare is the score").
 
-**The "new record" banner** is separate from the tier. At `0x0005c220` mode `0xe` walks a
-five-entry table (`table+0x14`, stride `0x2c`; the table pointer is the result of a call at
-`0x0005b310` whose callee is unread) and compares each entry's `+0x14` unsigned against the new
-score at `0x0005c244`; if the first smaller entry is index `0` the run beats the best:
-`rm+0x2cd7` (`rec+0x1357`) `= 1` and `rm+0x2cd8` (`rec+0x1358`) `= the new score`
-(`0x0005c5c4`, `0x0005c5cc`-`0x0005c5d0`); otherwise `+0x2cd7 = 0` and `+0x2cd8 =` the best entry's
-score (`0x0005c258`-`0x0005c260`). The tail `0x0022bdb8(screen, mode)` shows `RecBlockBlue` and
-hides `RecBlockGrey` when `rec+0x1357 != 0`, the reverse otherwise, and for modes `6`, `13` and `14`
-(jump table `0x0022be60`: all three land on `0x0022be88`) writes `RecValue` as
-`sprintf("%s %d", localise("ER_NSR"), rec+0x1358)` when the flag is set (`lbz 0x1357` at
-`0x0022be8c`, the format `%s %d` at `0x00794b88`). Confidence **72**: which table
-`0x0001ef28` (called at `0x0005b310`) returns (per cell, per circuit, per profile) and what a Detonator entry's `+0x14`
-holds in it are unread; the `0x0005c5a4`-`0x0005c5c8` arithmetic is `flag = (index == 0)`.
+**The "new record" banner** is separate from the tier ("The record notice" below).
+
+## The record notice
+
+`0x0005ac00` at `0x0005c220` (mode `0xe`) walks a five-entry table and compares each entry's `+0x14`
+unsigned against the new score (`0x0005c244`). The flag `rm+0x2cd7` (`rec+0x1357`) is set only when
+the first entry smaller than the score is index `0`, i.e. the score is **strictly above the best**;
+then `rm+0x2cd8` (`rec+0x1358`) is the new score (`0x0005c5c4`-`0x0005c5d0`), else the flag is `0`
+and the value is the best entry's score (`0x0005c258`-`0x0005c260`). The tail `0x0022bdb8` shows
+`RecBlockBlue` or `RecBlockGrey` by the flag and, for modes `6`, `13` and `14` (jump table
+`0x0022be60`, all `0x0022be88`), writes `RecValue` as `sprintf("%s %d", localise(id), rec+0x1358)`
+with `id = ER_NSR` when set and `ER_SR` when clear (`0x0022c03c`: TOC `0x336c`). Both frames show it:
+the notice is **always drawn** (confidence **90**, read and seen). `RecLogoD` (Detonator) shows; the
+`RecLogoSL/TT/Z` logos are hidden.
+
+**The table.** `0x0005b310` calls `0x0001ef28`, which `sprintf`s `"%s_fury"` (TOC `0x008a595c`) with
+the string at `+0x78` of an object found by id, hashes it with `0x0032a740` (a CRC-32, polynomial
+`0xedb88320`, **initial value 0**, result inverted, so `zlib.crc32` does not reproduce it) and walks
+the profile's record list (`*(*(0x009389a0) + 0x450)`, next pointer at node `+0x50`) for that key,
+returning `node + 0x64`: five entries of `0x2c` bytes. Read live on the state of the second run
+(288 nodes; one non-zero): node key `0xc685710b` = CRC of `"17_Track_fury"` (matched exactly), entry
+0 `+0x00` `0.9139784` (mines percent), `+0x04` `1` (bombs), `+0x14` `5600` (the score), `+0x18`
+`"PLAYER"`; entries 1 to 4 zero but for a `1` at `+0x28`. So the table is **per circuit and
+direction** (`18_Track` is the reverse), not per speed class, and starts at `0`. Confidence **85**
+(one live match; the string's source object is not identified).
+
+Ours keeps one best score on the records row (`oag_game::records::Record::best_score`) and takes the
+highest of every class of the title, circuit and mode (`oag_game::records::Store::judge_score`,
+judged where the race is saved, before it is folded in). Not kept: the other four entries and the
+`PLAYER` name. An unofficial run (a mod) sets no record and shows the standing best, **chosen**.
+
+## Checked against the original (2026-11-26, RPCS3)
+
+`scripts/rpcs3-hd-detonator-endscreen.py` on a restored Racebox Detonator state (Talon's Junction,
+Feisar), run to `EndRace Results`; each death **forced** by writing the shield (`ship+0x5fa0`) to
+`0.5` (at lap clock `25.18` for the first run, `45.37` for the second). Comparison pairs:
+`hd/detonator-talons-endrace-record` and `-norecord` in the private compare repository.
+
+| Seen | Run 1 (nothing scored) | Run 2 (cannon fired) |
+| --- | --- | --- |
+| Rows | `0 / 14`, `0.0%`, `0 / 14`, `0`, `0`, `0`, total `0` | `0 / 14`, `0.9%`, `1 / 14`, `0`, `0`, `0`, total `5600` |
+| Record | `rec+0x1357 = 0`, grey `SCORE RECORD 0` | `rec+0x1357 = 1`, `+0x1358 = 5600`, blue `NEW SCORE RECORD 5600` |
+
+- Rows grey and left-aligned at `x = 590`; `TOTAL SCORE` white on the dark bar; `LOYALTY STATUS`
+  block `0 POINTS`, total `60`.
+- The `MiniText` captions draw: `SCREEN TITLE`, `PLAYER POSITION`, `FINAL POSITION`, `LOYALTY
+  STATUS`, `RECORD NOTIFICATION` (the first four also on the Eliminator frame,
+  `data/reference/hd-eliminator-score/results.png`, which has no record notice).
+- Behind the panel: the destroyed craft's particle burst, not a menu backdrop.
+- **Timing:** the out-of-race bit was set at lap clock `45.73`, `EndRace Results` came at `51.13`
+  (**5.4 s** of game time, about ±0.7 s at the poll period). Between them the craft glows, then
+  bursts into the particle cloud, and the panel wipes in.
+
+**Differences left in ours** (named, not fixed): the HD FE style's colours and the destroyed
+craft's glow and burst on black ([endrace-screens.md](../../../ui/endrace-screens.md), "HD's text, glyph and frame against the
+original"). The text sizes, the `CONFIRM` glyph and the frame are fixed there.
+
+## The wait before the results
+
+`SPDetonator`'s Update (`0x00068160`) dispatches on `rm+0x1970` (the phase) through a five-entry
+table at `0x000681f4`; phase 3's entry is `0x000630c8`, which is `SPZone_UpdateFinish`'s shape
+([zone-destroy.md](zone-destroy.md), Z9) plus a call to `0x00297f70` with `0.0` (`0x008a6bf0`) and
+`rm+0x6de28` on every tick, a function that is a bare `blr` and does nothing: sub 0, once the phase time `+0x196c` reaches `1.0`
+(`0x008a6bec`): clear HUD bits, sub 1; sub 1, at `rm+0x2dc4` (`4.5`, written at the blast in
+single player, Z1): push `"EndRace Results"`, `RaceManager_SetPhase(4)`. So **5.5 s after the
+blast**, against `5.4 +- 0.7 s` measured. Confidence **85** (read, and seen once). The race rules
+stop at the blast (phase 3), and the builder `0x0005c630` has already copied the rows and record.
+
+**The names.** `SPDetonator`'s vtable `0x008629c0` slot `+0x0c` holds the descriptor `0x00872680`,
+whose entry is `0x00068160` (Update); the jump table's entry 3 is `0x0006837c`, which is
+`bl 0x000630c8`; the phase-4 arm (`0x00068208`) reads `rm+0x2e10`, the Detonator stage counter.
+
+**The camera.** `Ship_SetState` takes mode 2, the close orbit, for the Zone family except modes 13
+and 21, so mode 14 with it, and the orbit holds until the results ([zone-destroy.md](zone-destroy.md),
+Z2; [destroy-camera.md](destroy-camera.md), Z2f).
+
+Wired (2026-11-26): `DestroyedCraft::detonator_end` (the wait and the orbit); the race ends there, with the rules
+and the mines stopped and the HUD gone from the blast (`RaceSim::end_played_out`,
+`detonator_ending`; pinned by the stage-5 `hd_endrace_ground_truth` run, 330 ticks). Where the craft
+completes all fourteen stages the value of `rm+0x2dc4` is not read: ours ends at once, as before.
+
+- **2048: ported.** Phase 3 of the mode-14 manager in `/2048/eboot-vita-2048-eu-v104.elf`
+  (`0x8117f03e`, inside the switch that calls `FUN_8117e9c2`): `1.0`, then the float at `+0x131ac`
+  (the `4.5` Z1 writes), then the results push and phase 4; the orbit, Z2 of zone-destroy.md. Pinned by `oag-title`'s data test only;
+  no 2048 Detonator run reached here.
+- **Omega: ported.** `FUN_012a0fc0` (`/omega/eboot-ps4-omega-eu.bin`) case 3: the same `1.0` then
+  the float at `rm+0x1aff0`, then `"EndRace Results"` and phase 4. Same data test only.
 
 ## A destroyed craft and a finished race: the same rows, a record on both
 
@@ -231,14 +305,15 @@ target on any `finished` run) would have printed `14 / 14` for a destroyed run a
 stages of loyalty; both now read the scoreboard row. `Headline::Detonator` and the rows draw only when
 the model carries a Detonator result, so every other HD mode is unchanged.
 
-**Chosen, not measured:** the ink and left alignment of the value column (the file authors no `align`
-on `Grid1.r`; the original sets none in the filler, the widget's flag word is unread), and that
-`MiniText` `ER_FINALPOS` stays as on every HD mode (the Detonator branch does not touch it). **Not
-drawn:** the new-record banner (`RecordNotifyBlock`, `RecBlockBlue`/`RecBlockGrey`, `RecLogoD`,
-`RecValue`): its table `0x0001ef28` is unread (72) and main keeps no Detonator best score; drawing
-`RecBlockGrey` would claim "not a record".
+**Drawn:** the rows, the captions and the record notice (`RecLogoD` comes from `DATA06`'s copy of
+`EndRace_Definition.xml`, the only one authoring it; the other widgets are `DATA02`'s). `ER_NSR`,
+`ER_SR` and `ER_RECORD_NOT` are in the served table. Only the Detonator draws a record notice; the
+tail also serves modes `6` and `13`, unchecked here.
 
-**Omega: checked, applies, not wired.** The filler, ids and `rec` offsets are HD's; the ids are in
+**Omega: checked, applies, not wired.** The record key is the same: `FUN_012943b0`
+(`/omega/eboot-ps4-omega-eu.bin`) `sprintf`s `"%s_fury"`, hashes it with the same init-0 CRC-32,
+walks a list whose next pointer is at `+0x50`, and for mode `0xe` compares five `+0x14` entries
+(stride `0x3c`) against the score; its banner flag was not read. The filler, ids and `rec` offsets are HD's; the ids are in
 its served table (`omega_menu_blocks_ground_truth::omegas_served_table_carries_detonators_end_screen_ids`);
 `DetonatorResults` is title-agnostic. Omega keeps the built-in scoreboard
 (`endrace_entry` is `None`: wiring HD's reader there leaves `EndRace Menu` with no options,
@@ -253,23 +328,19 @@ tested; no screen draws it) and is the `Results` page's, which `docs/ui/endrace-
 | Address | Name | Conf |
 | --- | --- | ---: |
 | `0x002234b0` | `EndRaceResults_FillDetonatorRows` | 80 |
-| `0x0022bdb8` | `EndRaceResults_ShowRecordNotice` | 72 |
+| `0x0022bdb8` | `EndRaceResults_ShowRecordNotice` | 90 |
+| `0x0001ef28` | `Profile_FindTrackRecords` | 80 |
+| `0x0032a740` | `Crc32_HashStringZeroInit` | 85 |
+| `0x00068160` | `SPDetonator_Update` | 80 |
+| `0x000630c8` | `SPDetonator_UpdateFinish` | 80 |
 
 `0x0005ac00` (the builder) and `0x0005c630` (its thunk with `force = 1`) stay unnamed here: the
 builder's other modes were not traced ([endrace-loyalty.md](endrace-loyalty.md)).
 
 ## Open, with the next address to try
 
-- **Which table `0x0001ef28` returns** (the record table the banner compares): decompile
-  `0x0001ef28` and check whether the table is keyed by the launched cell or the circuit. Until read, a
-  banner needs a chosen best-score store; the banner is left off ("Wired").
-- **The value widgets' alignment** for `Grid1.r` at `x = 590`: the labels' flag word is written in
-  Omega's decompile (`+0xc4`, `& 0xfff9ffff | 0x20000`) and not for the values; the `Grid1.0` widget
-  in `EndRace_Definition.xml` ([hd-endrace-screens.md](../../../formats/hd-endrace-screens.md)) carries
-  the value widgets' own.
-- **A live frame.** Nothing here ran. A Detonator results screen on RPCS3 (a campaign `grid8` cell,
-  `docs/reverse-engineering/emulator-recipes.md`) would pin the rows, the grey ink and the `590`
-  edge; none of the static readings is expected to move.
+- **The object `0x0001ef28` takes `+0x78` from** (looked up by id through `0x00013688`) is not
+  identified; the live key match fixes the string it holds (`17_Track`).
 - **Bombs and streaks counting rules**: the writers of `rm+0x6de40` (`0x00110a48`, `0x00110c70`,
   `0x00112b64`, `0x0012e334` inside `BombManager_DestroyAtLane`) and `rm+0x6de3c` (`0x00110494`,
   `0x00110990`, `0x00112a34`, `0x0011a6a4`) were found by `ps3-dform-scan.py --disp -0x21c0,-0x21c4`;

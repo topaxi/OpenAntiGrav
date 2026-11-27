@@ -72,32 +72,46 @@ pub const STUN_PER_CONTACT: f32 = 0.5;
 /// 2. **A running Shield suppresses the rest but still consumes the vector**, zeroed at the
 ///    bottom either way.
 /// 3. **The projection.** `magnitude = pending.length()`; the original keeps only *which way
-///    the vector pointed relative to the ship's forward axis* (`sign = dot(forward, pending) <
-///    0.0 ? -1 : 1`) and discards its own direction: `impulse = forward * (sign * magnitude)`.
-/// 4. **Applied at the ship's own position.** `Body_ApplyImpulseAtPoint`'s `point` is read
-///    from the same scene node as the forward axis, so the lever arm is zero and the angular
-///    term vanishes: only the linear half is applied (`linear_velocity += impulse / mass`),
-///    a straight push along the ship's forward axis.
+///    the vector pointed relative to one body row* (`sign = dot(row, pending) < 0.0 ? -1 : 1`)
+///    and discards its own direction: `impulse = row * (sign * magnitude)`. Pulse's row is row
+///    0 of `*(entity+0x794)`, the craft's **left** row, measured live: on 11 drains the
+///    velocity change lay on that row alone with the pending vector's full length, whatever
+///    the blast's direction (`docs/ghidra/functions/psp-pulse-usa/contact-response.md`, "The
+///    drain pushes along the side row"). `on_side` picks the side axis, the forward axis
+///    otherwise.
+/// 4. **Applied at the ship's own position.** `Body_ApplyImpulseAtPoint`'s `point` equals the
+///    body's position (read live), so the lever arm is zero and the angular term vanishes:
+///    only the linear half is applied (`linear_velocity += impulse / mass`).
 /// 5. **The timer arm**: [`STUN_PER_CONTACT`] onto [`ShipState::stun_timer`], skipped under
 ///    the Shield as 3-4.
 ///
 /// [`post_blast_impulse`] is the producer: every weapon blast posts through it
 /// (`oag_weapons::projectile::blast`). A craft-to-craft contact does not (it arms nothing,
 /// `contact-response.md`, "a craft-to-craft hit arms nothing"), and neither does a wall.
-pub fn apply_pending_impulse(state: &mut ShipState) {
+///
+/// `on_side` projects onto the craft's side axis instead of its forward axis, as Pulse's drain
+/// (the left row) and Wipeout HD's drain `0x000d8a28` (body `+0x1d0`, the right row) do; the
+/// sign rule makes the axis's own sign cancel except on an exactly zero dot, where Pulse's
+/// keeps left and this keeps right: `crate::laws::Laws::pending_impulse_on_side`,
+/// `docs/ghidra/functions/ps3-hdfury-eu/rocket-craft-blast.md`, "Where the push goes".
+pub fn apply_pending_impulse(state: &mut ShipState, on_side: bool) {
     if state.pending_impulse == Vec3::ZERO {
         return;
     }
 
     if state.shield_pickup_timer <= 0.0 {
         let magnitude = state.pending_impulse.length();
-        let forward = state.body.forward();
-        let sign = if forward.dot(state.pending_impulse) < 0.0 {
+        let axis = if on_side {
+            state.body.right()
+        } else {
+            state.body.forward()
+        };
+        let sign = if axis.dot(state.pending_impulse) < 0.0 {
             -1.0
         } else {
             1.0
         };
-        let impulse = forward * (sign * magnitude);
+        let impulse = axis * (sign * magnitude);
 
         if state.body.mass > 0.0 {
             state.body.linear_velocity += impulse / state.body.mass;
@@ -201,7 +215,7 @@ mod tests {
         let mut state = ShipState::default();
         let before = state;
 
-        apply_pending_impulse(&mut state);
+        apply_pending_impulse(&mut state, false);
 
         assert_eq!(state, before);
     }
@@ -214,7 +228,7 @@ mod tests {
         let mut state = ship();
         state.pending_impulse = Vec3::new(0.0, 0.0, -5.0);
 
-        apply_pending_impulse(&mut state);
+        apply_pending_impulse(&mut state, false);
 
         assert_eq!(state.body.linear_velocity, Vec3::new(0.0, 0.0, -5.0));
         assert_eq!(state.stun_timer, STUN_PER_CONTACT);
@@ -231,7 +245,7 @@ mod tests {
         // Perpendicular to forward (`NEG_Z`), magnitude 5.
         state.pending_impulse = Vec3::new(3.0, 4.0, 0.0);
 
-        apply_pending_impulse(&mut state);
+        apply_pending_impulse(&mut state, false);
 
         // A dot product of exactly zero takes the original's `>= 0.0`
         // branch, the same sign as the aligned case above - so this lands on
@@ -250,9 +264,113 @@ mod tests {
         let mut state = ship();
         state.pending_impulse = Vec3::new(0.0, 0.0, 5.0);
 
-        apply_pending_impulse(&mut state);
+        apply_pending_impulse(&mut state, false);
 
         assert_eq!(state.body.linear_velocity, Vec3::new(0.0, 0.0, 5.0));
+    }
+
+    /// Wipeout HD's drain (`on_side`): the push runs along the craft's side axis with the
+    /// pending vector's magnitude, keeps the sign of `dot(side, pending)`, and still arms the
+    /// stun. A blast square behind the craft (pending along forward) still shoves it sideways,
+    /// as the `dot >= 0` branch takes a zero dot.
+    #[test]
+    fn on_side_a_pending_impulse_pushes_along_the_side_axis() {
+        let mut state = ship();
+        state.pending_impulse = Vec3::new(-3.0, 0.0, -4.0);
+
+        apply_pending_impulse(&mut state, true);
+
+        // `Body::right` is `+X` at the identity orientation; the pending x is negative.
+        assert_eq!(state.body.linear_velocity, Vec3::new(-5.0, 0.0, 0.0));
+        assert_eq!(state.stun_timer, STUN_PER_CONTACT);
+        assert_eq!(state.pending_impulse, Vec3::ZERO);
+
+        let mut behind = ship();
+        behind.pending_impulse = Vec3::new(0.0, 0.0, -5.0);
+        apply_pending_impulse(&mut behind, true);
+        assert_eq!(behind.body.linear_velocity, Vec3::new(5.0, 0.0, 0.0));
+    }
+
+    /// One drain caught live in Pulse PSP at `Ship_ApplyCollisionImpulse`'s
+    /// `jal Body_ApplyImpulseAtPoint` (`0x0883f3e0`) and after it (`0x0883f3e8`): the body's rows
+    /// (left, up, forward), the raw pending vector and the velocity before and after, mass `1`.
+    struct Drain {
+        left: [f32; 3],
+        up: [f32; 3],
+        forward: [f32; 3],
+        pending: [f32; 3],
+        before: [f32; 3],
+        after: [f32; 3],
+    }
+
+    /// Four of the eleven drains in `docs/ghidra/functions/psp-pulse-usa/contact-response.md`,
+    /// "The drain pushes along the side row": a Rocket from almost square behind (pending
+    /// nearly all forward, `-0.40` on the left row), one from ahead (negative on forward), a
+    /// push to the left, and a Plasma. Each comes out the measured velocity under
+    /// [`crate::laws::Laws::PULSE`]'s axis; a forward drain lands 37 units/s off on the first.
+    const PULSE_DRAINS: [Drain; 4] = [
+        Drain {
+            left: [0.516_615_4, 0.782_307_1, -0.348_000_4],
+            up: [-0.666_230_2, 0.622_579_4, 0.410_526_84],
+            forward: [0.537_815_9, 0.019_763_902, 0.842_830_66],
+            pending: [11.445_094, 2.344_204_7, 23.397_148],
+            before: [48.170_97, 10.447_947, 81.155_426],
+            after: [34.660_595, -10.010_721, 90.256_23],
+        },
+        Drain {
+            left: [-0.130_743_5, 0.048_434, 0.990_232_6],
+            up: [0.018_190_466, 0.998_755_2, -0.046_449_12],
+            forward: [-0.991_249_7, 0.011_939_871, -0.131_461_78],
+            pending: [4.521_763_3, -0.429_839_1, -3.062_098],
+            before: [-87.195_274, 8.743_924, -17.358_387],
+            after: [-86.479_07, 8.478_607, -22.782_797],
+        },
+        Drain {
+            left: [-0.002_941_540_4, 0.013_600_006, 0.999_903_26],
+            up: [0.047_188_1, 0.998_795_7, -0.013_446_121],
+            forward: [-0.998_881_94, 0.047_143_985, -0.003_579_756_2],
+            pending: [-4.709_675, -1.239_925, 45.267_452],
+            before: [-102.401_32, 7.028_005, -0.388_439_5],
+            after: [-102.535_25, 7.647_195_3, 45.135_838],
+        },
+        Drain {
+            left: [-0.049_697_462, 0.046_876_72, 0.997_663_7],
+            up: [0.028_151_784, 0.998_567, -0.045_516_81],
+            forward: [-0.998_367_7, 0.025_823_943, -0.050_945_908],
+            pending: [-3.905_814_4, 1.912_997_7, 0.009_244_53],
+            before: [-74.670_38, -9.018_338, -2.292_822],
+            after: [-74.886_52, -8.814_465, 2.046_158_8],
+        },
+    ];
+
+    /// Pulse's own drain axis reproduces every captured velocity change. Our basis is `right =
+    /// +X`, `up = +Y`, `forward = -Z`, so the original's left row is `-X` and its forward row
+    /// `-Z`.
+    #[test]
+    fn pulses_drain_reproduces_the_captured_velocity_changes() {
+        use oag_core::math::{Mat3, Quat};
+        for (index, drain) in PULSE_DRAINS.iter().enumerate() {
+            let basis = Mat3::from_cols(
+                -Vec3::from(drain.left),
+                Vec3::from(drain.up),
+                -Vec3::from(drain.forward),
+            );
+            let mut state = ship();
+            state.body.orientation = Quat::from_mat3(&basis).normalize();
+            state.body.linear_velocity = Vec3::from(drain.before);
+            state.pending_impulse = Vec3::from(drain.pending);
+
+            apply_pending_impulse(&mut state, crate::laws::Laws::PULSE.pending_impulse_on_side);
+
+            let error = (state.body.linear_velocity - Vec3::from(drain.after)).length();
+            assert!(
+                error < 1e-3,
+                "drain {index}: velocity {:?} is {error} off the captured {:?}",
+                state.body.linear_velocity,
+                drain.after
+            );
+            assert_eq!(state.stun_timer, STUN_PER_CONTACT);
+        }
     }
 
     /// A running Shield suppresses the push and the stun arm alike, but the
@@ -264,7 +382,7 @@ mod tests {
         state.pending_impulse = Vec3::new(0.0, 0.0, -5.0);
         state.shield_pickup_timer = 1.0;
 
-        apply_pending_impulse(&mut state);
+        apply_pending_impulse(&mut state, false);
 
         assert_eq!(state.body.linear_velocity, Vec3::ZERO);
         assert_eq!(state.stun_timer, 0.0);
@@ -279,7 +397,7 @@ mod tests {
         state.body.mass = 0.0;
         state.pending_impulse = Vec3::new(0.0, 0.0, -5.0);
 
-        apply_pending_impulse(&mut state);
+        apply_pending_impulse(&mut state, false);
 
         assert_eq!(state.body.linear_velocity, Vec3::ZERO);
         // Both other effects are unconditional on mass, only the push is

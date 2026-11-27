@@ -121,7 +121,7 @@ fn a_shielded_craft_keeps_its_energy_and_banks_no_shove() {
         Vec3::ZERO,
         "the shove was not posted"
     );
-    oag_physics::wall::apply_pending_impulse(&mut grid[0].physics);
+    oag_physics::wall::apply_pending_impulse(&mut grid[0].physics, false);
     assert_eq!(
         grid[0].physics.body.linear_velocity,
         Vec3::ZERO,
@@ -156,7 +156,7 @@ fn a_blast_shoves_along_the_forward_axis_and_stuns() {
         oag_physics::DamageRules::default(),
         &mut [],
     );
-    oag_physics::wall::apply_pending_impulse(&mut grid[0].physics);
+    oag_physics::wall::apply_pending_impulse(&mut grid[0].physics, false);
 
     // Nose at `z = 0.125`: falloff `0.9875`, directed `+Z`, against a forward axis
     // of `-Z`, so the sign flips and the push is `forward * -magnitude`, which is

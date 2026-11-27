@@ -170,14 +170,16 @@ Controls, pixel-identical (0 differing pixels): `talons`, `tech-de-ra`, `zone-vi
 a Zone race on those stages now draws no circuit fog where it drew the circuit's: no original frame of those stages is on the
 compare page (the one Zone pair is stage 5), so that move is by the data and unchecked against a capture.
 
-**Still open in the upper-middle third:** a bright ribbed slab (a vertical-louvre texture) over the track at the right of the cell,
+**The bright ribbed slab is a holographic billboard (closed 2026-11-26, `det-dark-scenery`, confidence 80).** Talon's slot 435, `adverts/scanlinebillboard.rcsmaterial`, found by `OAG_ONLY_SLOT` bisection on `cannon-volley-hot`. Its Zone variants drop the advert and draw the generic Zone surface, which Detonator stage 1's black `Scene.*` colours leave dark; ours returned the advert overlay before the Zone code ran, which is why the per-class debug build found the slab's scene-class fragments black. Law, evidence and pairs: [hd-zone-recolour.md](../../../rendering/hd-zone-recolour.md), "Holographic billboards in a Zone frame" (`cannon-volley-hot` 10.32 to 8.96, `mines-ahead` 12.46 to 10.63, `cannon-volley` 14.33 to 12.37, `pad` 7.60 to 5.88). Still open in that third: the HUD score panel (the original's chevrons carry white stripes ours lacks).
+
+~~**Still open in the upper-middle third:** a bright ribbed slab (a vertical-louvre texture) over the track at the right of the cell,
 drawn white-grey in ours and near black in the original, and the HUD score panel (the original's chevrons carry white stripes ours
 lacks; the panel box is about 45 % of the cell and its own difference is not a scene term: the cell excluding it reads 23.1 to 10.5
 `pad`, 25.3 to 15.0 `mines-ahead`, 24.6 to 14.1 `cannon-volley`). Ruled out by a removed or muted term, one at a time: the circuit's
 lilac fog (fixed above), the stage ambient, the sky reflection map, the billboard equaliser bands (`--zone-bands` dropped), the
 scene-class zone surface (its lit sum reads black at the slab), the rim-glow classes, the shadow tier, circuit lighting, track shine.
 A debug build that replaced the fragment output per class showed the slab's scene-class fragments black while the normal frame is grey
-there, so its source is a draw or pass outside the class split and is not found.
+there, so its source is a draw or pass outside the class split and is not found.~~
 
 ## The floor's violet: the visualiser, read and fixed (2026-11-23, `det-track-look`)
 

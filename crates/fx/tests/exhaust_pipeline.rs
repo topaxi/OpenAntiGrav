@@ -137,6 +137,7 @@ fn the_exhaust_pipeline_builds_and_draws_on_a_real_device() {
         format: FORMAT,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     // The same depth format `race::Scene` uses, which is the compatibility this
     // test exists to pin: the exhaust shares that pass and that attachment.
@@ -153,6 +154,7 @@ fn the_exhaust_pipeline_builds_and_draws_on_a_real_device() {
         format: DEPTH_FORMAT,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
 
     let view = target.create_view(&wgpu::TextureViewDescriptor::default());

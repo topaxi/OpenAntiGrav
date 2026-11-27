@@ -47,6 +47,7 @@ fn all_three_passes_build_and_draw_on_a_real_device() {
         format,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
         view_formats: &[format.remove_srgb_suffix()],
+        texture_binding_view_dimension: None,
     });
     let source = scene.create_view(&wgpu::TextureViewDescriptor {
         format: Some(format.remove_srgb_suffix()),
@@ -105,6 +106,7 @@ fn a_flat_colour_is_untouched() {
         format,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let mut pixels = vec![128u8; (SIZE * SIZE * 4) as usize];
     for pixel in pixels.chunks_mut(4) {
@@ -211,6 +213,7 @@ fn a_staircase_step_blends_at_the_corner_and_nowhere_else() {
         format,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     // One step: rows 0..32 have their black/white split at x=28, rows
     // 32..64 at x=32 - a single corner at the row-32 boundary, and

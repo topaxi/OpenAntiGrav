@@ -23,9 +23,11 @@ seconds, and from there six taps of cross start a race on Talon's Junction.
 
 So the display is not optional and is also not the user's desktop:
 
-    python3 scripts/rpcs3-drive.py display          # start Xvfb :77
+    scripts/emu-env.sh <lane> <display> <gdb-port>   # once
+    source data/scratch/<lane>/env.sh
+    python3 scripts/rpcs3-drive.py display          # start Xvfb :<display>
     uv run --with evdev python3 scripts/rpcs3-drive.py race --drive 20 --shots
-    python3 scripts/rpcs3-drive.py stop             # stop RPCS3 and Xvfb :77
+    python3 scripts/rpcs3-drive.py stop             # stop RPCS3 and that Xvfb
 
 Xvfb is started with `-listen tcp -nolisten unix` and addressed as
 `127.0.0.1:77` deliberately: a sandboxed session may not be able to write
@@ -69,6 +71,12 @@ records one, and HD's HUD puts speed, position, lap number and lap time in the
 frame. `record` drives that: start, drive, stop, and the file lands in
 `~/.config/rpcs3/recordings/<TITLE_ID>/`.
 
+**Every subcommand needs a private RPCS3 profile**: `scripts/emu-env.sh` then
+`source data/scratch/<lane>/env.sh`. Without it (`XDG_CACHE_HOME` and
+`XDG_CONFIG_HOME` unset, or the user's own `~/.cache` and `~/.config`) the tool
+exits 78 and touches nothing. Whoever means to drive their own profile sets
+`OAG_RPCS3_OWN_HOME=1`.
+
 Needs `evdev` for anything that presses a button; run those through
 `uv run --with evdev`. See docs/reverse-engineering/rpcs3-debugger.md.
 """
@@ -78,6 +86,7 @@ import json
 import glob
 import math
 import os
+import pwd
 import re
 import shutil
 import subprocess
@@ -102,6 +111,45 @@ def xdg_cache():
 
 def xdg_config():
     return os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
+
+
+#: Exit status of a refused run: not argparse's 2, nor `emu_guard`'s 3 and 4.
+EXIT_NOT_PRIVATE = 78
+
+
+def require_private_env():
+    """Exit unless RPCS3's cache and config point away from the user's own.
+
+    `xdg_cache` and `xdg_config` fall back to `~/.cache` and `~/.config`, and a
+    desktop shell often exports exactly those, so "is it set" is not enough. A
+    private directory below the home (a scratch tree) is fine; what is refused
+    is the home itself, its `.cache` and `.config`, their `rpcs3`, and a private
+    directory whose `rpcs3` is a symlink to one of those. The home is both
+    `$HOME` and the password database's, so a changed `$HOME` hides nothing.
+    """
+    if os.environ.get("OAG_RPCS3_OWN_HOME") == "1":
+        return
+    homes = {Path(os.path.expanduser("~")), Path(pwd.getpwuid(os.getuid()).pw_dir)}
+    own = {(home / part).resolve() for home in homes
+           for part in ("", ".cache", ".config", ".cache/rpcs3", ".config/rpcs3")}
+    problems = []
+    for name in ("XDG_CACHE_HOME", "XDG_CONFIG_HOME"):
+        value = os.environ.get(name)
+        if not value:
+            problems.append("%s is not set" % name)
+        elif not os.path.isabs(value):
+            problems.append("%s=%s is not absolute" % (name, value))
+        elif own & {Path(value).resolve(), (Path(value) / "rpcs3").resolve()}:
+            problems.append("%s=%s is your own profile" % (name, value))
+    if not problems:
+        return
+    print("rpcs3-drive: refusing to run: %s.\n"
+          "  It would read and write the user's own RPCS3 cache and config. Build and\n"
+          "  source a private environment first:\n"
+          "    scripts/emu-env.sh <lane> <display> <gdb-port>\n"
+          "    source data/scratch/<lane>/env.sh" % "; ".join(problems),
+          file=sys.stderr, flush=True)
+    raise SystemExit(EXIT_NOT_PRIVATE)
 
 
 TTY = os.path.join(xdg_cache(), "rpcs3", "TTY.log")
@@ -349,6 +397,7 @@ def start_display():
     invocation - can tear this down without ever touching a display it did
     not start. See `xvfb_display`.
     """
+    require_private_env()
     return xvfb_display.bring_up(DISPLAY_NUMBER, DISPLAY_GEOMETRY,
                                  DISPLAY_MARKER)
 
@@ -359,6 +408,7 @@ def stop_display():
     Idempotent: no-op and no error when the display was never ours, is
     already down, or `stop` runs a second time.
     """
+    require_private_env()
     return xvfb_display.tear_down(DISPLAY_NUMBER, DISPLAY_MARKER)
 
 
@@ -440,6 +490,7 @@ def stop_emulator(binary=EMULATOR_BINARY, quiet=False, everyone=False):
     behaviour (`pkill -x rpcs3`) for the maintainer's own machine; on a shared
     one it kills other members' runs, so it is never the default.
     """
+    require_private_env()
     pid = recorded_pid()
     if everyone:
         for name in EMULATOR_PROCESS_NAMES:
@@ -479,6 +530,7 @@ def clear_stale_lock():
     emulators up it never cleared a dead run's lock - the "Another instance"
     modal, then a boot that reached no screen.
     """
+    require_private_env()
     if emulator_running():
         return False
     lock = Path(os.environ.get("XDG_CACHE_HOME")
@@ -532,7 +584,7 @@ def world_clock_now():
         rec = rpcs3_hd_field.world_clock_record(rpcs3_hd_field.Mem(mem), GRAB["cache"])
     except Exception as error:  # noqa: BLE001 - a missing clock is recorded, not raised
         rec = {"world_clock_s": None, "lap_clock_s": None, "world_clock_offset_s": None, "nodes": None, "total": None,
-               "reason": "clock read failed (%s: %s)" % (type(error).__name__, error), "scan": None}
+               "flame_clock_s": None, "reason": "clock read failed (%s: %s)" % (type(error).__name__, error), "scan": None}
     rec["screen"] = current_screen()
     return rec
 
@@ -806,6 +858,7 @@ class Session:
 
     def __init__(self, image, log_dir, config=MUTED, interpreter=False,
                  attach=None):
+        require_private_env()
         # Resolved here rather than passed through: `data/` is gitignored and
         # does not travel into a worktree, so a relative default silently
         # becomes a path RPCS3 answers `Invalid file or folder` for.
@@ -1790,6 +1843,16 @@ def cmd_capture(args):
         shots = []
         field_record = None
         autopilot_note = None
+        if args.wait_countdown is not None:
+            import rpcs3_hd_field
+            print("waiting for %.1f s into the countdown" % args.wait_countdown, flush=True)
+            if session.guard is not None:
+                # The wait makes no GDB packet, so the stage's own ceiling must cover it.
+                session.guard.stage("countdown", limit=args.timeout + 30)
+            reached = rpcs3_hd_field.wait_countdown(rpcs3_hd_field.Mem(session.open_mem()), args.wait_countdown, args.timeout)
+            print("  countdown at %.2f s; attaching" % reached["elapsed_s"], flush=True)
+            if session.guard is not None:
+                session.guard.stage("capture")
         with Debugger(port=int(GDB_SERVER.rsplit(":", 1)[1]) if GDB_SERVER
                       else Debugger.__init__.__defaults__[0]) as gdb:
             for n in range(args.shots):
@@ -1838,11 +1901,29 @@ def cmd_capture(args):
                     except Exception as error:  # noqa: BLE001 - the phase is a bonus
                         print("  %s: no gantry time (%s)" % (stem, error), flush=True)
                     try:
+                        # The player's hull directory (`Harimau` or the Fury `Harimau_c1`), so a pair can refuse a
+                        # grab whose Ship Select landed on another hull than the one ours is told to draw.
+                        import rpcs3_hd_field
+                        fm = rpcs3_hd_field.Mem(session.open_mem())
+                        ship_pose["team"] = rpcs3_hd_field.team_of(fm, player_ship) or None
+                        # The Pilot Assist option byte: on, the frame draws the indicator's bracket under the craft.
+                        ship_pose["pilot_assist"] = rpcs3_hd_field.pilot_assist(fm)
+                    except Exception as error:  # noqa: BLE001 - the pair script refuses a grab without it
+                        print("  %s: no team name or Pilot Assist byte (%s)" % (stem, error), flush=True)
+                    try:
                         # The scenery's animation clock in the same pause, read with the frame (`world_clock_offset_s` of the pair).
                         ship_pose["scenery_clock"] = (None if grab_clock is None or grab_clock["world_clock_s"] is None else
                                                       {"time_s": grab_clock["world_clock_s"], "nodes": grab_clock["nodes"], "total": grab_clock["total"]})
                     except Exception as error:  # noqa: BLE001 - the phase is a bonus
                         print("  %s: no scenery clock (%s)" % (stem, error), flush=True)
+                    try:
+                        # The race manager's phase in the same pause: the lap clock reads 0 through the countdown and at GO alike.
+                        import rpcs3_hd_field
+                        ship_pose["race_phase"] = rpcs3_hd_field.race_phase(rpcs3_hd_field.Mem(session.open_mem()))
+                    except Exception as error:  # noqa: BLE001 - a countdown pair refuses a grab without it
+                        print("  %s: no race phase (%s)" % (stem, error), flush=True)
+                    # The flame's boot clock in the same pause (`original.flame_clock_s` of the pair, `--flame-clock` of ours).
+                    ship_pose["flame_clock_s"] = None if grab_clock is None else grab_clock.get("flame_clock_s")
                     if args.field:
                         # every craft of the field and the HUD's record, in the same pause (`rpcs3_hd_field`)
                         import rpcs3_hd_field
@@ -2640,6 +2721,10 @@ def main(argv=None):
                      help="also read every craft of the field (pose, team, lap clock) and the HUD's record "
                           "(lap, place, speed, shield) at each pause, into the record's `ship.field` and "
                           "`ship.hud` (`rpcs3_hd_field.py`); needs `serve` (attached)")
+    cap.add_argument("--wait-countdown", type=float, metavar="SECONDS",
+                     help="attached: poll the race manager (no pause) until it is this far into its countdown (phase 1, about "
+                          "3 s long), then attach and take the first shot; gives up after --timeout. The caller starts the "
+                          "race (START RACE or Restart Race) while this waits")
     cap.add_argument("--first-at-pause", action="store_true",
                      help="the first shot is taken where the emulator already stands, without running "
                           "for `--interval` first: a state restored with `emu-restore-state.sh --pause` "
@@ -2844,6 +2929,7 @@ def main(argv=None):
     elif args.interpreter and args.config != MUTED:
         parser.error("--interpreter edits the generated copy; with an "
                      "explicit --config, set `PPU Decoder` in that file")
+    require_private_env()
     return args.run(args)
 
 

@@ -5,6 +5,7 @@ fn layout() -> Layout {
         screen: oag_ui::screen::Screen::default(),
         scale: [1.0, 1.0],
         faces: crate::picker::FaceScales::default(),
+        labels: Vec::new(),
     }
 }
 

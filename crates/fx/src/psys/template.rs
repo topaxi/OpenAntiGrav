@@ -137,11 +137,12 @@ impl System {
     /// [`Self::set_draws_live_severity`]. `docs/ghidra/functions/psp-pulse-usa/plasma.md`,
     /// "the head's template playback".
     pub(super) fn drawn_scale(&self, spec: &EmitterSpec, particle: &Particle) -> f32 {
-        if spec.template || self.live_severity {
+        let severity = if spec.template || self.live_severity {
             self.scale
         } else {
             particle.scale
-        }
+        };
+        severity * particle.ramp
     }
 
     /// Frees every template particle, at once - `ParticleSystem_StopAndClear`'s

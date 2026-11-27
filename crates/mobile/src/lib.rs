@@ -1,10 +1,11 @@
 //! What a phone needs around the windowed game, for every mobile OS at once.
 //!
-//! A phone differs from a desktop in three ways that are not the game's
-//! business: there is no command line and no working directory worth the name,
-//! the app's files live where the OS says (not under `$XDG_*`), and the window
-//! system's event loop has to be built the OS's way. This crate holds those
-//! three and nothing else; the game keeps no `cfg(target_os)` for them.
+//! A phone differs from a desktop in ways that are not the game's business:
+//! there is no command line and no working directory worth the name, the app's
+//! files live where the OS says (not under `$XDG_*`), the window system's event
+//! loop has to be built the OS's way, and what the OS offers (shared storage,
+//! the clipboard, the display's rate where winit reports none) is reached
+//! through its own interfaces.
 //!
 //! **The entry points stay in `oag-game`.** The windowed `App` lives in the
 //! binary's own modules and no crate may depend on `oag-game` (rule 2 of
@@ -24,6 +25,7 @@ pub mod export;
 #[cfg(target_os = "ios")]
 pub mod ios;
 pub mod packaged;
+pub mod refresh;
 
 /// Whether this build targets a phone or tablet: the touch overlay is on by
 /// default and a way to quit is not offered (the OS owns the app's lifetime).

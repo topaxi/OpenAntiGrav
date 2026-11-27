@@ -158,7 +158,7 @@ mod tests;
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum OwnCraftProbe {
     /// The firing craft's box blocks a probe that crosses it before the mesh does, seen through
-    /// the transposed rotation ([`own_box_blocks`]), and the blocked probe falls (Pulse).
+    /// the transposed rotation ([`own_box_blocks`]), and the blocked probe takes the open-air arm.
     CraftBox,
     /// The same box, but a blocked probe runs neither the fall nor the ride: the projectile keeps
     /// its velocity that update (Pure, `docs/ghidra/functions/psp-pure-usa/own-craft-box.md`).

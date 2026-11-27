@@ -213,6 +213,7 @@ fn a_split_hud_file_draws_each_group_into_its_own_view_with_a_span() {
         small_line_height: 10.0,
         default_line_height: 10.0,
         skin_line_height: 10.0,
+        template_digit: None,
     };
     let heights = oag_hud::split_hud::LineHeights {
         hud: 25.0,
@@ -307,6 +308,7 @@ fn a_readouts_tag_is_drawn_in_its_view_and_an_empty_list_draws_nothing() {
         small_line_height: 10.0,
         default_line_height: 10.0,
         skin_line_height: 10.0,
+        template_digit: None,
     };
     let names = |tags: Vec<oag_hud::PlayerTag>| -> Vec<(String, f32, [f32; 4])> {
         let mut readouts = one_view_each(2);

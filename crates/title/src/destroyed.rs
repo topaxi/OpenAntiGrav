@@ -246,11 +246,26 @@ impl DestroyCamera {
     };
 }
 
+/// How a Detonator race ends on a destroyed craft
+/// (`docs/ghidra/functions/ps3-hdfury-eu/detonator-endrace.md`, "The wait before the results").
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DetonatorEnd {
+    /// How long after the blast the results open, with the race rules stopped and the HUD gone
+    /// meanwhile: the finish handler's `1.0` s then `4.5` s.
+    pub results_secs: f32,
+    /// Whether the camera is the close orbit of mode 2 until then, as a Zone end's
+    /// ([`ZoneEnd::orbit_camera`]): `Ship_SetState`'s mode-2 arm takes the Zone family but
+    /// modes 13 and 21, so Detonator's 14 with it (`zone-destroy.md`, row Z2).
+    pub orbit_camera: bool,
+}
+
 /// One title's destroyed-craft sequence.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct DestroyedCraft {
     /// A Zone race's own end, `None` where the Zone craft becomes a wreck (Pulse, Pure).
     pub zone_end: Option<ZoneEnd>,
+    /// A Detonator race's own end, `None` where the race is over when the explosion is.
+    pub detonator_end: Option<DetonatorEnd>,
     /// State 4's length: the explosion, before the craft is out of the race.
     pub explosion_secs: f32,
     /// State 5's length: the wreck is solid to other craft for this long, or until it
@@ -287,6 +302,7 @@ impl DestroyedCraft {
     /// solid for `1.5` s, the blast `1.5` s on, the wreck still integrated.
     pub const PULSE: Self = Self {
         zone_end: None,
+        detonator_end: None,
         explosion_secs: 0.5,
         dwell_secs: 1.5,
         settle: None,
@@ -315,6 +331,10 @@ impl DestroyedCraft {
     /// `0.5`) or after `20.0` s, then out of the physics world.
     pub const HD: Self = Self {
         zone_end: Some(ZoneEnd::HD),
+        detonator_end: Some(DetonatorEnd {
+            results_secs: 5.5,
+            orbit_camera: true,
+        }),
         explosion_secs: 0.3,
         dwell_secs: 20.0,
         settle: Some(Settle {
@@ -346,4 +366,28 @@ impl DestroyedCraft {
         camera: DestroyCamera::VITA,
         ..Self::HD_BLOWUP
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{DestroyedCraft, DetonatorEnd};
+
+    /// The Detonator finish handler's two waits and its orbit are the same on HD, 2048 and Omega
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/detonator-endrace.md`, "The wait before the results").
+    #[test]
+    fn the_hd_family_waits_five_and_a_half_seconds_on_a_detonator_end() {
+        let end = DetonatorEnd {
+            results_secs: 5.5,
+            orbit_camera: true,
+        };
+        for destroyed in [
+            DestroyedCraft::HD,
+            DestroyedCraft::HD_BLOWUP,
+            DestroyedCraft::HD_VITA,
+        ] {
+            assert_eq!(destroyed.detonator_end, Some(end));
+        }
+        assert_eq!(DestroyedCraft::PULSE.detonator_end, None);
+        assert_eq!(DestroyedCraft::PURE.detonator_end, None);
+    }
 }

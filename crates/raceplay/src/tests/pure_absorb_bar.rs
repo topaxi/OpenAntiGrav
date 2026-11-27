@@ -23,10 +23,9 @@ fn only_pure_lists_effects_for_the_pool_bar_and_only_the_absorb_burst() {
     ] {
         assert!(title.effects.pool_bars.is_empty(), "{}", title.name);
     }
-    // HD lists its Plasma head and wind-up for their templates (`hd_effect_sprites`).
-    for title in [oag_pulse::TITLE, oag_2048::TITLE, oag_omega::TITLE] {
-        assert!(title.effects.templates.is_empty(), "{}", title.name);
-    }
+    // HD lists its Plasma head and wind-up for their templates (`hd_effect_sprites`), and HD,
+    // 2048 and Omega the Rocket craft blast (`near_law`).
+    assert!(oag_pulse::TITLE.effects.templates.is_empty());
     assert_eq!(oag_pure::TITLE.effects.pool_bars, [ABSORB_EFFECT]);
     assert!(oag_pure::TITLE.effects.templates.is_empty());
     assert!(oag_pure::TITLE.effects.names().contains(&ABSORB_EFFECT));
@@ -63,11 +62,14 @@ fn absorb_burst(title: &Title, load: Load) -> Option<oag_fx::psys::Effect> {
             ABSORB_EFFECT,
             false,
             title.effects.colour_walk,
+            title.effects,
         ),
         Load::Plain => kept(Kept::NONE),
         Load::WithTemplates => kept(Kept {
             bar: KeptBar::Mean,
             templates: true,
+            flipbooks: false,
+            size_ramps: false,
         }),
     }
     .expect("the burst loads");

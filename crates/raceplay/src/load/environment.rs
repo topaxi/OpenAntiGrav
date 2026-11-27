@@ -1089,6 +1089,9 @@ pub(super) fn zone_grade(
                     }
                 }))
             })
+            .map(|grade| {
+                grade.with_glow_vis_srgb(race.zone_frame.is_some_and(|frame| frame.glow_vis_srgb))
+            })
             .map(|grade| grade.with_track_fog(race.zone_frame.is_some_and(|frame| frame.track_fog)))
             .map(|grade| grade.with_arena(in_play.on_zone_circuit(track)))
             .map(|grade| {

@@ -59,6 +59,7 @@ pub mod opponent_autopilot;
 pub mod original_driver;
 pub mod pause_menu;
 pub mod photo;
+pub mod pickup_roster;
 pub mod pre_race;
 pub mod pressing;
 pub mod profile;
@@ -76,6 +77,7 @@ pub mod water;
 pub mod weapon_pad;
 pub mod weapons;
 pub mod weather;
+pub mod width_throttle;
 pub mod wingtip;
 pub mod zone_handling;
 pub mod zoom;
@@ -87,7 +89,9 @@ pub use effects::{
     QuakeLook, QuakeUp, Rule, ShieldPalette, ShieldPalettes, Trigger,
 };
 pub use endrace::{EndRaceDialect, EndRaceStyle};
-pub use hud::{BarModels, HudArt, HudLayouts, HudSkin, ResumeCountdown, ZoneSpeedClasses};
+pub use hud::{
+    BarModels, HudArt, HudLayouts, HudSkin, ResumeCountdown, ZoneScore, ZoneSpeedClasses,
+};
 pub use language::LanguageManifest;
 pub use loading::Loading;
 pub use main_menu::{Attached, MainMenu, OriginalRow};
@@ -146,6 +150,9 @@ pub struct Title {
     pub eliminator: pre_race::Sourced<eliminator::EliminatorRule>,
     /// The Eliminator flip, `None` where the title has none or nobody has wired it.
     pub eliminator_flip: pre_race::Sourced<Option<eliminator::FlipRule>>,
+    /// How a score Eliminator's opponents spend their weapons. See
+    /// [`eliminator::ScorePaceTerms`].
+    pub score_pace: pre_race::Sourced<eliminator::ScorePaceTerms>,
     /// The team ids this title's roster names and the shared identity each is
     /// kept under, for loyalty. See [`team`].
     pub teams: team::Roster,
@@ -175,6 +182,10 @@ pub struct Title {
     /// [`weapon_pad::WeaponPadGlow`]: HD overwrites the material's authored value
     /// with a per-pad cycle, every other title keeps it.
     pub weapon_pad_glow: &'static weapon_pad::WeaponPadGlow,
+    /// Which pickups the executable's draw may grant in each mode, or `None` where its gate has
+    /// not been read: the draw is then the weapon table's alone. See
+    /// [`pickup_roster::PickupRoster`].
+    pub pickup_roster: Option<pre_race::Sourced<pickup_roster::PickupRoster>>,
     /// Which of the ways a craft is put back this title has. See [`recovery::ResetEnables`].
     pub reset_enables: recovery::ResetEnables,
     /// How a destroyed craft's sequence runs. See [`destroyed::DestroyedCraft`].
@@ -314,6 +325,10 @@ pub struct Title {
     /// Whether the original plays pad patterns, and so whether the RUMBLE
     /// setting offers `original`. See [`rumble::Rumble`].
     pub rumble: rumble::Rumble,
+    /// The original's own throttle on the scene's width, or `None` where it has none or none
+    /// has been read: only then does TARGET FPS offer `original`. See
+    /// [`width_throttle::Law`].
+    pub width_throttle: Option<pre_race::Sourced<width_throttle::Law>>,
     /// The attract demo its main menu starts when left alone. See [`demo::Demo`].
     pub demo: demo::Demo,
 }
@@ -729,29 +744,16 @@ pub struct FrontEnd {
     /// What lights the 3-D models a front-end screen draws (the craft on Ship Select), or
     /// `None` where the screen lights them with the viewer's rig. See [`ModelLighting`].
     pub model_lighting: Option<ModelLighting>,
-    /// How the `Team Selection` honeycomb's hexagon fill fades with the column's distance from
-    /// the selected one, or `None` where it is drawn flat (a title whose fade is unread). See
-    /// [`HexFade`].
-    pub team_hex_fade: Option<HexFade>,
+    /// The colour (ARGB) the selected column of a `HexSelection` grid (`Team Selection`'s and
+    /// `Track Creation`'s) is filled with, where the title's widget writes its own, or `None` for
+    /// `HD_Blue` of the front end's style. Omega's `_SetCell` carries a grey inline
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/ship-select-ring.md`, "Omega").
+    pub hex_selected_fill: Option<u32>,
     /// The colour (ARGB) the `Team Selection` honeycomb's cursor ring pulses through between white
     /// and black, where the title computes its own, or `None` for `HD_Blue` of the front end's
     /// style. Omega's update carries the red inline
     /// (`docs/ghidra/functions/ps3-hdfury-eu/ship-select-ring.md`, "Omega").
     pub team_hex_ring_peak: Option<u32>,
-}
-
-/// How a front-end hexagon grid fades its fill (`HexCol`) toward `HexColFade` with the
-/// column's distance from the selected column: `t = column distance / columns`, clamped to
-/// `0..=1`, and `fill = lerp(HexCol, HexColFade, t)` (a colour, alpha included).
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct HexFade {
-    /// Columns out at which a cell has faded all the way.
-    pub columns: f32,
-    /// Texels of the hexagon's own sprite per column of fade across it, or `None` where a
-    /// cell is one flat colour. Each cell's fill runs from its centre's value toward the
-    /// selected column on one side to away from it on the other, as the original's per-vertex
-    /// colours do: `column distance = cell distance -/+ texels from the cell's centre / span`.
-    pub span: Option<f32>,
 }
 
 /// The light a front-end screen's models are drawn in: the engine's own light parameters,

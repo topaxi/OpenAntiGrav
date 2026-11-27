@@ -1,8 +1,8 @@
 ---
 status: measure
 titles: [pulse]
-updated: 2026-10-06
-summary: "Repulser blast bead ring starts wide (13.6 units) where the original stays compact; more Repulser leftovers inside"
+updated: 2026-11-26
+summary: "Repulser blast ring starts wide (13.6 units); the Quake template the original never draws; more weapon leftovers inside"
 ---
 
 # Weapons: thirteen of thirteen, the Repulser last (2026-10-04), and the dispatch table read whole
@@ -404,6 +404,22 @@ still open, most player-visible first:
   ([pob.md](../../docs/formats/pob.md)). Frames:
   `psp-seq.png` against `oag-seq.png`.
 - ~~**Open: the wave-start whiteout is confirmed as ours.**~~ Closed 2026-10-06: the `shazzam` quad is dropped by the GE's guard band, see particle-system.md.
+- ~~Emitted Repulser particles near the eye skip the guard band~~ **measured and wired
+  2026-11-26**: the PSP drops by draw class on the CPU and the GE draws no triangle with a
+  vertex more than 2048 px off centre, emitted particles included
+  ([particle-system.md](../../docs/ghidra/functions/psp-pulse-usa/particle-system.md),
+  "near the eye").
+- **Open (2026-11-26): the original's Quake template draws nothing, ours does.** Recorded
+  frames 2, 4 and 6 ticks after a standing Quake have its template quad out of range; removing
+  it changes no pixel. Ours still draws the template, and its first frames are a white wash;
+  how much of that wash is the template is not isolated (a 2026-10-06 A/B moved 0.18 of the
+  frame at tick 303 when it was dropped). `TEMPLATE_GUARDED`
+  (`oag_fx::psys::guard`) still holds templates other than `WO_REPULSER`'s out of the drop.
+  Next: pair ours with and without the template against the original's frames at those ticks,
+  then drop the gate (same section, "The Quake's template").
+- **Open (2026-11-26): the race camera's near plane is 1.0, the PSP's is 1.24** (a standing
+  race frame's projection). Particles play 1.24; world geometry between the two still draws in
+  ours. Not measured against a moving or internal camera.
 - ~~The junction fork's third wave is not built~~ **built 2026-10-04**: the
   in-run fork (`Repulser_AdvanceWave`, 88) on `oag_race::Course::branches`
   (05, 07, 14, 23 carry one), off the forward wave. Not built: the init-tick

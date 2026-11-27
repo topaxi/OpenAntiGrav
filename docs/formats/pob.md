@@ -1082,9 +1082,12 @@ only when the object is in some view's potentially-visible set.
 **Wired on HD, 2026-11-22**: all four names are `Trigger::DetonatorMineExploDead`,
 `DetonatorMineExplo`, `DetonatorBombExplo` and `DetonatorCannonSparks` in HD's effect table, fired
 off the tick's `oag_weapons::detonator::Event` list (`oag_raceplay::detonator_fx`). The two mine
-effects and the bomb's play their disc emitters with procedural pictures: none is in HD's
-`SPRITES`, `EXTENTS` or `TEMPLATES` lists (no matched capture of the original to decide it), and the
-mine's recolour toward white is not applied. The cannon's wall spark draws its disc sprites and its
+effects and the bomb's draw their disc sprites on their camera-facing emitters since 2026-11-26
+([particle-fill.md](../rendering/particle-fill.md#which-effects-draw-a-sprite)); the live mine's `Debris`
+is the glass shards of the original's frame
+([detonator-mine.md](../ghidra/functions/ps3-hdfury-eu/detonator-mine.md#the-shards-against-the-original-2026-11-26-det-mine-blast)),
+and a live mine's blast takes the stage's mine colour on every emitter since 2026-11-26
+([detonator-mine.md](../ghidra/functions/ps3-hdfury-eu/detonator-mine.md#the-blasts-colour-2026-11-26-det-mine-blast-glow)). The cannon's wall spark draws its disc sprites and its
 bars since 2026-11-25, spawned in the original's frame
 ([detonator-cannon.md](../ghidra/functions/ps3-hdfury-eu/detonator-cannon.md#the-sparks-matrix-read-live-2026-11-25-det-cannon-spark)). 2048 and Omega: all four ship and parse (`psys_2048_ground_truth.rs`,
 `psys_omega_ground_truth.rs`). The cannon's wall spark is **ported** (2026-11-25,
@@ -1532,6 +1535,33 @@ not read here). Checked visually on Pulse's plasma muzzle flash (it now picks a 
 across both). Pinned by `oag_pob`'s `a_big_endian_blob_parses_to_exactly_what_its_little_endian_twin_does`
 (fixture word `2 << 16 | 4`) and
 `oag_fx`'s `an_atlas_grid_is_columns_in_the_high_half_so_its_cells_are_square` (ground truth).
+
+### The spawn range and the hold frame - 2026-11-26
+
+Four bytes of HD's long record, read by HD's executable alone
+([particle-render.md](../ghidra/functions/ps3-hdfury-eu/particle-render.md#the-atlas-frame),
+confidence 90):
+
+| Offset | Meaning |
+| --- | --- |
+| `+0xc8d`, `+0xc8e` | first and last frame of a random spawn; `0, 0` is the whole grid. Without flag `0x4000000` the first is the spawn frame |
+| `+0xc8f`, `+0xc94` | once the frame passes the second, it is set to the first; `0, 0` is no hold |
+
+`+0xc8c` is the resolution mode HD computes and ignores (above). On the PSP and PS2 these
+offsets belong to something else. `oag_pob::Emitter::frame_range` reads them from any record long
+enough, and only a title that reads them plays them (`oag_title::Effects::flipbooks`).
+
+### The size bounds at `+0xc84`/`+0xc88`
+
+HD's per-particle size multiplier runs between these two `f32`s
+([particle-render.md](../ghidra/functions/ps3-hdfury-eu/particle-render.md#the-per-particle-size-multiplier),
+confidence 90): `oag_pob::Emitter::size_span`, played by `oag_title::Effects::size_ramps`. 2048
+authors them at the same offsets. **Omega's record has 8 more bytes from `+0xc84`**: the bounds
+are at `+0xc8c`/`+0xc90`, the spawn range at `+0xc95`/`+0xc96`, the hold at `+0xc97`/`+0xc9c`
+(read off `trail` of its `WO_ROCKET_EXPLO`; the 31 class 8 emitters of
+[heat-haze.md](../ghidra/functions/ps4-omega-eu/heat-haze.md) also read a lower and an upper
+bound at `+0xc8c`/`+0xc90`, `0.5` or `1.0` and `1.0` to `1.5`; confidence 85). `size_span` and `frame_range` read
+HD's offsets and are wrong on an Omega file; no title plays them there.
 
 ### The sprite templates at `+0x9a4`/`+0x9a8` - 2026-09-30
 

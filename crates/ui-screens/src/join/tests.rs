@@ -199,6 +199,7 @@ fn block_frame() -> Frame {
             solid_alpha: 1.0,
             cursor: None,
             arrow: None,
+            marker: None,
             fury: false,
         }),
         ..Frame::default()

@@ -23,6 +23,16 @@ pub struct Medals {
     pub earned: std::cell::Cell<Option<oag_tables::race_campaign::Medal>>,
 }
 
+/// One `--force-rocket-hit-at`: see [`Race::force_rocket_hit_at`].
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ForcedRocketHit {
+    /// The blasts play at the end of this tick, so they are drawn from the next, as a hit
+    /// forced by `--force-rocket-hit` at the same tick is.
+    pub tick: u32,
+    pub at: oag_core::math::Vec3,
+    pub count: usize,
+}
+
 /// One simulation tick of a capture: `tick`'s input, the race step, and the
 /// audio that rides it.
 ///
@@ -50,8 +60,12 @@ pub(super) fn advance_one_tick(
             race.give_weapon(slot, weapon);
         }
     }
-    let held_pose =
-        (options.pose_hold == pose_hold::Hold::EveryTick).then(|| pose_hold::StartPose::of(race));
+    let held_pose = (options.pose_hold == pose_hold::Hold::EveryTick).then(|| {
+        options.pose_launch.as_ref().map_or_else(
+            || pose_hold::StartPose::of(race),
+            |launch| launch.held(race, tick),
+        )
+    });
     match (&options.net, &options.remote_correction) {
         (Some(net), _) => net.drive_to(race, u64::from(tick) + 1, snapshot),
         (None, Some(scene)) => scene.tick(race, &snapshot, tick),
@@ -132,6 +146,15 @@ pub(super) fn advance_one_tick(
     {
         race.core.sim.force_wall_slide(slot);
     }
+    // Before the forced trips, so they strike the weapon where it now stands.
+    if let Some((at, point)) = options.force_shot_at
+        && at == tick
+    {
+        let player = race.core.player_slot();
+        if !race.core.sim.force_shot_at(player, point) {
+            log::warn!("--force-shot-at: the player has no weapon out");
+        }
+    }
     if let Some((at, slot)) = options.force_bomb_trip
         && at == tick
         && !race.core.sim.force_bomb_trip(slot)
@@ -150,11 +173,28 @@ pub(super) fn advance_one_tick(
     }
     if let Some((at, slot)) = options.force_rocket_hit
         && at == tick
-        && !race.core.sim.force_rocket_hit(slot)
     {
-        log::warn!(
-            "--force-rocket-hit: no Rocket in flight from another craft yet, or slot {slot} is not racing (pass --opponents)"
-        );
+        if !race.core.sim.force_rocket_hit(slot) {
+            log::warn!(
+                "--force-rocket-hit: no Rocket in flight from another craft yet, or slot {slot} is not racing (pass --opponents)"
+            );
+        } else if let Some(velocity) = options.force_rocket_hit_velocity {
+            race.force_struck_velocity(slot, velocity);
+        }
+    }
+    for hit in options
+        .force_rocket_hit_at
+        .iter()
+        .filter(|h| h.tick == tick)
+    {
+        match race.force_rocket_hit_at(hit.at, hit.count, options.force_rocket_hit_velocity) {
+            None => log::warn!("--force-rocket-hit-at: this race loaded no craft blast"),
+            Some(retired) if retired < hit.count => log::debug!(
+                "--force-rocket-hit-at: {retired} of {} Rockets of the player's were in flight",
+                hit.count
+            ),
+            Some(_) => {}
+        }
     }
     if let Some((at, slot)) = options.force_quake
         && at == tick

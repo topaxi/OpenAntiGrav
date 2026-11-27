@@ -58,6 +58,7 @@ fn flash_over(store: SceneStore) -> Option<[f32; 3]> {
             format,
             usage,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         })
     };
     let colour = target(

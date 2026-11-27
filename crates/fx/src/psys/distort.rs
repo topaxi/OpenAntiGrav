@@ -44,7 +44,9 @@ impl System {
                 continue;
             }
             let age = 1.0 - (particle.life / particle.max_life).clamp(0.0, 1.0);
-            let half = channel_sample(&spec.size, age, particle.size_sample) * particle.scale;
+            let half = channel_sample(&spec.size, age, particle.size_sample)
+                * particle.scale
+                * particle.ramp;
             let alpha =
                 channel_sample(&spec.alpha, age, particle.alpha_sample) / spec.colour_divisor;
             let Some((half, alpha)) = near::apply(effect, spec, particle, cull.near, half, alpha)

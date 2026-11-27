@@ -765,11 +765,16 @@ impl Session {
             .resize(device, self.framebuffer.allocation());
         // The one controller's scale on this window's own ceiling (the target it wants),
         // while every window holds one seat; the ceiling itself otherwise (`Session::drs_runs`).
-        let (wanted, blur_resolution) = if self.drs_runs() {
+        let (wanted, blur_resolution, squeeze) = if self.drs_runs() {
             let limits = self.drs_limits_for(fullscreen, surface, wanted);
-            (self.drs.extent(limits), self.drs.blur_resolution(limits))
+            let extent = self.drs.extent(limits);
+            (
+                extent,
+                self.drs.blur_resolution(limits),
+                limits.squeeze(extent),
+            )
         } else {
-            (wanted, profile.motion_blur_resolution)
+            (wanted, profile.motion_blur_resolution, 1.0)
         };
         screen.framebuffer.set_extent(wanted);
         let extent = screen.framebuffer.extent();
@@ -798,6 +803,7 @@ impl Session {
         // and does not. The jitter's length is a property of the upscaler resolving this
         // window's frames, as for window 1.
         stage.scene.set_blur_resolution(blur_resolution);
+        stage.scene.set_squeeze(squeeze);
         stage
             .scene
             .set_band_levels(self.audio.output().spectrum().levels());

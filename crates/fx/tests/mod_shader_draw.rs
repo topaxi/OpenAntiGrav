@@ -92,6 +92,7 @@ fn render_bytes(
             format,
             usage,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         })
     };
     let colour = target(
@@ -341,6 +342,7 @@ fn the_engine_texture_slot_is_empty_until_the_engine_fills_it() {
         format: FORMAT,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     gpu.queue.write_texture(
         picture.as_image_copy(),
@@ -389,6 +391,7 @@ fn engine_uv_reads_the_top_of_the_picture_at_the_top_of_the_view() {
         format: FORMAT,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     gpu.queue.write_texture(
         picture.as_image_copy(),
@@ -436,6 +439,7 @@ fn a_point_behind_the_engine_camera_reads_transparent_black() {
         format: FORMAT,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     gpu.queue.write_texture(
         picture.as_image_copy(),
@@ -572,6 +576,7 @@ fn pass_through(gpu: &Gpu, store: SceneStore, text: &str) {
         format: oag_gpu::formats::SCENE_FORMAT,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     // Half floats 4.0, 0.25, 1.0 and 1.0.
     let texel: Vec<u8> = [0x4400u16, 0x3400, 0x3c00, 0x3c00]
@@ -646,6 +651,7 @@ fn engine_round_trip(gpu: &Gpu, store: SceneStore, stored: &[[f32; 3]]) -> Vec<[
                 format: oag_gpu::formats::SCENE_FORMAT,
                 usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
                 view_formats: &[],
+                texture_binding_view_dimension: None,
             });
             let texel: Vec<u8> = [value[0], value[1], value[2], 1.0]
                 .iter()

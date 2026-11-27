@@ -304,8 +304,9 @@ models) are presentation; nothing in the hit depends on them.
 
 Every bomb that goes off (a craft's contact, a cannon's fourth hit, the stage step that replaces
 it) plays `WO_BOMB_EXPLO_DETONATOR` at the bomb (`EventKind::{BombTouched, BombShot, BombReplaced}`,
-`oag_raceplay::detonator_fx`), from the engine's procedural profile (HD's sprite sheets for it are
-not listed; no matched capture). Chosen: it plays whether or not the bomb is in view or the player
+`oag_raceplay::detonator_fx`). Since 2026-11-26 its camera-facing emitters draw the disc's own
+sprites, its streaks the procedural strip, unpaired
+([particle-fill.md](../../../rendering/particle-fill.md#which-effects-draw-a-sprite)). Chosen: it plays whether or not the bomb is in view or the player
 is still racing (the original skips it when the player is out). `BOMBEXPL` plays with it (`Cue::BombExplosion`; `BOMBEXPL_PC`'s operand is unread, so never
 chosen, [detonator-cannon.md](detonator-cannon.md), "Drawn and heard"); the HD Bomb's other blast
 parts (`detonator_bomb_sphere`, `_shockwave`, `_lightrays`) are not drawn. Test:

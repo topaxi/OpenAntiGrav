@@ -115,6 +115,9 @@ pub(crate) struct Host {
     /// stale after window creation.
     #[cfg(target_os = "linux")]
     live: Option<crate::app::x11_refresh::LiveRefresh>,
+    /// Android's answer for the activity's display, where winit reports no rate at all.
+    #[cfg(target_os = "android")]
+    live: Option<oag_mobile::refresh::LiveRefresh>,
     /// A headless session's size, which no window reports; a background surface's, which
     /// the compositor configures.
     size: winit::dpi::PhysicalSize<u32>,
@@ -128,6 +131,8 @@ impl Host {
         Self {
             #[cfg(target_os = "linux")]
             live: crate::app::x11_refresh::LiveRefresh::start(&window),
+            #[cfg(target_os = "android")]
+            live: oag_mobile::refresh::LiveRefresh::start(),
             window: Some(window),
             size: winit::dpi::PhysicalSize::new(0, 0),
             fills_output: false,
@@ -135,10 +140,10 @@ impl Host {
     }
 
     /// The refresh rate of the window's output in millihertz, as live as the platform lets it
-    /// be: on X11 the server's answer through RandR, elsewhere (and before its first answer)
-    /// winit's monitor report.
+    /// be: on X11 the server's answer through RandR and on Android the display's through JNI,
+    /// elsewhere (and before a first answer) winit's monitor report.
     pub(crate) fn refresh_millihertz(&self) -> Option<u32> {
-        #[cfg(target_os = "linux")]
+        #[cfg(any(target_os = "linux", target_os = "android"))]
         if let Some(mhz) = self.live.as_ref().and_then(|live| live.millihertz()) {
             return Some(mhz);
         }
@@ -149,7 +154,7 @@ impl Host {
     /// A seat's extra window: nothing reads its refresh, so it starts no X reader.
     fn seat_window(window: Arc<Window>) -> Self {
         Self {
-            #[cfg(target_os = "linux")]
+            #[cfg(any(target_os = "linux", target_os = "android"))]
             live: None,
             window: Some(window),
             size: winit::dpi::PhysicalSize::new(0, 0),
@@ -161,7 +166,7 @@ impl Host {
     fn headless(size: winit::dpi::PhysicalSize<u32>) -> Self {
         Self {
             window: None,
-            #[cfg(target_os = "linux")]
+            #[cfg(any(target_os = "linux", target_os = "android"))]
             live: None,
             size,
             fills_output: false,
@@ -173,7 +178,7 @@ impl Host {
     fn background(size: winit::dpi::PhysicalSize<u32>) -> Self {
         Self {
             window: None,
-            #[cfg(target_os = "linux")]
+            #[cfg(any(target_os = "linux", target_os = "android"))]
             live: None,
             size,
             fills_output: true,
@@ -904,6 +909,7 @@ impl Output {
                     | wgpu::TextureUsages::COPY_SRC
                     | wgpu::TextureUsages::TEXTURE_BINDING,
                 view_formats: &[],
+                texture_binding_view_dimension: None,
             }));
             return;
         };

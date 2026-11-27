@@ -342,7 +342,7 @@ fn load_hd(
         .with_context(|| format!("reading {}", oag_hd::endrace::SCREEN_ENTRY))?;
     let xml = String::from_utf8(blob).context("EndRace_Definition.xml is not UTF-8")?;
     let screens = oag_ui::screen::Screens::from_xml_with_fallback_globals(&xml, fallback_globals);
-    let results = Layout::read_authored(
+    let mut results = Layout::read_authored(
         &screens,
         "EndRace Results",
         strings,
@@ -351,6 +351,15 @@ fn load_hd(
         authored_grid,
     )
     .context("EndRace Results is not on this screen")?;
+    add_detonator_logo(
+        &mut results,
+        archives,
+        strings,
+        faces,
+        grid,
+        fallback_globals,
+    );
+    results.read_mini_texts(&xml, &screens, strings);
     let rewards = Layout::read_authored(
         &screens,
         "EndRace Rewards",
@@ -396,12 +405,11 @@ fn load_hd(
 
 /// `EndRace Podium` off the first copy of the screen file that authors it.
 ///
-/// `holder_of` serves `DATA02`, which has no Podium, so the other three
-/// screens' copy cannot hold it; this walks every copy
-/// (`Archives::read_every_name`) in mount order and takes the first that does.
-/// Scoped to this one screen on purpose: the other three keep `DATA02`'s.
-/// A copy that will not parse, or none that has the screen, leaves `None`
-/// and says so in the log - nothing is drawn in its place.
+/// `holder_of` serves `DATA02`, which has no Podium, so the other three screens' copy cannot hold
+/// it; this walks every copy (`Archives::read_every_name`) in mount order and takes the first that
+/// does. Scoped to this one screen on purpose: the other three keep `DATA02`'s. A copy that will
+/// not parse, or none that has the screen, leaves `None` and says so in the log - nothing is drawn
+/// in its place.
 fn load_hd_podium(
     archives: &mut oag_assets::Archives,
     strings: &StringTable,
@@ -409,24 +417,84 @@ fn load_hd_podium(
     grid: [f32; 2],
     fallback_globals: &[(&str, &str)],
 ) -> Option<Layout> {
-    for (label, blob) in archives.read_every_name(oag_hd::endrace::SCREEN_ENTRY) {
-        let Ok(xml) = String::from_utf8(blob) else {
-            continue;
-        };
-        let screens =
-            oag_ui::screen::Screens::from_xml_with_fallback_globals(&xml, fallback_globals);
-        if let Some(layout) = Layout::read_authored(
-            &screens,
-            "EndRace Podium",
-            strings,
-            faces,
-            grid,
-            oag_hd::endrace::AUTHORED_GRID,
-        ) {
-            log::debug!("endrace podium: read from {label}");
-            return Some(layout);
-        }
+    let layout = hd_copies(
+        archives,
+        strings,
+        faces,
+        grid,
+        fallback_globals,
+        "EndRace Podium",
+    )
+    .next();
+    if layout.is_none() {
+        log::warn!("no copy of EndRace_Definition.xml authors EndRace Podium - it draws nothing");
     }
-    log::warn!("no copy of EndRace_Definition.xml authors EndRace Podium - it draws nothing");
-    None
+    layout
+}
+
+/// `screen` as every copy of the screen file that authors it reads it, in mount order.
+fn hd_copies(
+    archives: &mut oag_assets::Archives,
+    strings: &StringTable,
+    faces: FaceScales,
+    grid: [f32; 2],
+    fallback_globals: &[(&str, &str)],
+    screen: &str,
+) -> impl Iterator<Item = Layout> {
+    archives
+        .read_every_name(oag_hd::endrace::SCREEN_ENTRY)
+        .into_iter()
+        .filter_map(move |(label, blob)| {
+            let xml = String::from_utf8(blob).ok()?;
+            let screens =
+                oag_ui::screen::Screens::from_xml_with_fallback_globals(&xml, fallback_globals);
+            let layout = Layout::read_authored(
+                &screens,
+                screen,
+                strings,
+                faces,
+                grid,
+                oag_hd::endrace::AUTHORED_GRID,
+            )?;
+            log::debug!("endrace {screen}: read from {label}");
+            Some(layout)
+        })
+}
+
+/// The Detonator record notice's logo, `RecLogoD`: only the Fury copy of the screen file
+/// (`DATA06`) authors it, and the served copy takes it alone, its own widgets and colours being
+/// the ones the original draws (`docs/ghidra/functions/ps3-hdfury-eu/detonator-endrace.md`,
+/// "Checked against the original").
+fn add_detonator_logo(
+    results: &mut Layout,
+    archives: &mut oag_assets::Archives,
+    strings: &StringTable,
+    faces: FaceScales,
+    grid: [f32; 2],
+    fallback_globals: &[(&str, &str)],
+) {
+    let logo = |layout: &Layout| {
+        layout
+            .screen
+            .images
+            .iter()
+            .find(|image| image.name.as_deref() == Some("RecLogoD"))
+            .cloned()
+    };
+    if logo(results).is_some() {
+        return;
+    }
+    let found = hd_copies(
+        archives,
+        strings,
+        faces,
+        grid,
+        fallback_globals,
+        "EndRace Results",
+    )
+    .find_map(|layout| logo(&layout));
+    match found {
+        Some(image) => results.screen.images.push(image),
+        None => log::warn!("no copy of EndRace Results authors RecLogoD - it draws nothing"),
+    }
 }

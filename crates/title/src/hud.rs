@@ -482,6 +482,8 @@ pub struct HudArt {
     /// is on is [`crate::RaceDefaults::zone_stages`], kept separate because the
     /// one title with both recovered them from different places.
     pub zone_speed_classes: Option<&'static ZoneSpeedClasses>,
+    /// Where a Zone run's `Score` value hangs. See [`ZoneScore`].
+    pub zone_score: ZoneScore,
     /// Whether `ShieldBarText` carries a `%` after its digits.
     ///
     /// Pulse's reference frame reads `100%`. Three HD/Fury frames of the running
@@ -824,6 +826,22 @@ impl HudArt {
         self.safe_area
             .map_or(100, |area| area.value.snapped(percent))
     }
+}
+
+/// Where the original puts a Zone run's `Score` value, a widget its layout authors
+/// `align="left"` at the frame's origin and its executable moves at run time.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ZoneScore {
+    /// As the layout authors it.
+    Authored,
+    /// Centred on the value's own width. 2048's, **chosen, not measured** where its
+    /// original measures a string of `3`s
+    /// (`docs/ghidra/functions/vita-2048-eu-v104/zone-speed-class-text.md`, "The score").
+    CentredOnValue,
+    /// The left edge is the anchor less half the width of as many `3`s as the value has
+    /// digits, measured as the widget's own text at its horizontal scale. HD's
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/zone-score.md`).
+    CentredOnThrees,
 }
 
 /// A title's `Safe Area Setting`: a slider in percent whose value is how much of

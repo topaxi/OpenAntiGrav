@@ -48,6 +48,7 @@ const TITLE: &Title = &Title {
     // archives and never draws an exhaust.
     wingtip: None,
     weapon_pad_glow: &oag_title::weapon_pad::WeaponPadGlow::Authored,
+    pickup_roster: None,
     flare: &oag_title::flare::Flare::Unread,
     // Present for the same reason and equally unread: resolving archives has
     // nothing to do with which circuit a race opens on.
@@ -166,6 +167,12 @@ const TITLE: &Title = &Title {
         own_craft_box_hides_track: oag_title::pre_race::Sourced::chosen(
             oag_title::weapons::OwnCraftBox::PlasmaWindow,
         ),
+        surface_probe_lengths: oag_title::pre_race::Sourced::chosen(
+            oag_title::weapons::ProbeLengths::PULSE,
+        ),
+        rocket_open_air: oag_title::pre_race::Sourced::chosen(
+            oag_title::weapons::RocketOpenAir::Falls,
+        ),
         opponent_fire: oag_title::pre_race::Sourced::chosen(
             oag_title::weapons::OpponentFire::PULSE,
         ),
@@ -219,6 +226,9 @@ const TITLE: &Title = &Title {
     loyalty: None,
     eliminator: oag_title::pre_race::Sourced::chosen(oag_title::eliminator::EliminatorRule::Kills),
     eliminator_flip: oag_title::pre_race::Sourced::chosen(None),
+    score_pace: oag_title::pre_race::Sourced::chosen(
+        oag_title::eliminator::ScorePaceTerms::WITH_REPULSER_AND_SHURIKEN,
+    ),
     hud_art: &oag_title::HudArt {
         always_on: &[],
         raster: false,
@@ -237,6 +247,7 @@ const TITLE: &Title = &Title {
         time_ladder_captions: None,
         pickup_icon_uv: None,
         zone_speed_classes: None,
+        zone_score: oag_title::ZoneScore::Authored,
         shield_percent: true,
         sub_weapon_line: true,
         speed_full_kmh: 600,
@@ -291,6 +302,7 @@ const TITLE: &Title = &Title {
     weather: oag_title::weather::Weather::Unplayed,
     water: oag_title::water::Water::NONE,
     rumble: oag_title::rumble::Rumble::Absent,
+    width_throttle: None,
     demo: oag_title::demo::Demo::PULSE,
 };
 

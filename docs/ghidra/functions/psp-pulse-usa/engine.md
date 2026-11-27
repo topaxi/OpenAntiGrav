@@ -1186,8 +1186,9 @@ resolved.
   timer runs, the craft also gets *no lateral grip* and slides.
 - `Ship_ApplyCollisionImpulse` (`0x0883f274`) is what arms it. When the entity has
   a pending impulse at `entity->0x4c + 0x110` and flag `0x10` of the pickup word is
-  clear, it projects the impulse onto the ship's forward axis, applies it to the
-  body, and then does `craft+0x290 += 0.5` before clearing the impulse.
+  clear, it projects the impulse onto the ship's side axis (the left row, measured
+  live: [contact-response.md](contact-response.md#the-drain-pushes-along-the-side-row-measured-2026-11-26)),
+  applies it to the body, and then does `craft+0x290 += 0.5` before clearing the impulse.
 
 **A hit costs half a second of engine and grip, and repeated contact keeps
 re-arming it.** Confidence **85**.

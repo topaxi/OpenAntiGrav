@@ -559,6 +559,7 @@ impl Zoom {
                         wgpu::TextureUsages::empty()
                     },
                 view_formats: &[],
+                texture_binding_view_dimension: None,
             })
         };
         let textures = [texture("hd zoom history a"), texture("hd zoom history b")];

@@ -625,6 +625,53 @@ title was observed on a phone, so there is nothing to match and no confidence sc
   `could not pause` warning), `Occluded` on a desktop (Xvfb has no compositor to send it),
   the S24.
 
+## The display's refresh rate
+
+winit 0.30's Android backend answers `None` for `refresh_rate_millihertz`, so
+`oag_mobile::refresh` asks the activity itself:
+`activity.getWindowManager().getDefaultDisplay().getRefreshRate()` over JNI, once a second on a
+thread of its own (`android-refresh`, the poller the X11 reader also uses, `oag_thread::poller`).
+`getRefreshRate` answers the rate the app's frames are shown at: the active mode's, or the
+system's override for this app. No `DisplayListener` is registered, because it needs a Java
+class and the APK carries none; a change is followed at the next round. Each new surface starts a
+new reader and drops the old one. A failed call keeps the last answer, and before any answer
+there is none, so the game falls back to 60 as it does on a platform that reports nothing.
+
+The value reaches `Host::refresh_millihertz`, so everything the desktop's report feeds reads it
+([dynamic-resolution.md](../rendering/dynamic-resolution.md), "The target is held to the frame
+limiter and to the display"): FRAME LIMIT `refresh_rate`, TARGET FPS `default`, the display
+clamp on dynamic resolution and the CPU governor's period, the overlay's graph scale, the
+labels `REFRESH RATE (N)` and `DEFAULT (N)`, and the benchmark's verdict and `refresh_hz`.
+Nothing is a per-platform default: a fresh profile's frame limit (240) and TARGET FPS (off) are
+unchanged.
+
+**Measured 2026-11-26** on the Galaxy S21 (SM-G991B, Android 14, panel modes 48, 60, 96 and
+120 Hz, the system's adaptive "motion smoothness"), `dist` APKs before (`5893b60d5`) and after
+(`616b21cd3`), Pulse's benchmark on Talon's Junction White, `--no-audio --ticks 1500
+--benchmark-frame-limit refresh_rate` (a capped run, so the FPS compares with nothing but
+itself):
+
+| Run | Present mode | Result's refresh | Frame limit in force | Budget | Over budget | Average FPS |
+| --- | --- | --- | --- | --- | --- | --- |
+| before, VSYNC on | `Fifo` | 60, `assumed` | none | 16.7 ms | 317 of 1330 | 65.0 |
+| after, VSYNC on | `Fifo` | 120, `display` | none | 8.3 ms | 1276 of 1276 | 62.3 |
+| before, VSYNC off | `Mailbox` | 60, `assumed` | 60 | 16.7 ms | 536 | 55.1 |
+| after, VSYNC off | `Mailbox` | 120, `display` | 120 | 8.3 ms | 1161 of 1161 | 56.7 |
+
+`dumpsys display` read 120 Hz (`mActiveSfDisplayMode` and `mActiveRenderFrameRate`) in every
+sample of those runs. The VSYNC-on runs agree on their own: `Fifo` presents at most one frame a
+refresh, so an average above 60 frames a second cannot come from a 60 Hz output, including in the
+before run that called itself 60. The race itself is bound by the frame's own cost, which this
+does not change.
+
+**60 Hz** was not tried as a display setting (that is a system setting of the owner's). It was
+observed from the phone's own switching on returning to the app from the home screen. In one
+return sampled about every half second, the first `dumpsys` sample read 60 and the next, begun
+0.5 s later, 120; the game's reader answered 60 between the starts of those two samples and 120
+at its next round a second later. Other returns logged the same 60 then 120, and the frame limit
+in force under `refresh_rate` went to 60 and back with it. Each such change also drops the
+measured half of `oag_present::refresh`, as any change of report does.
+
 ## Pre-converted caches
 
 `oag-game --no-audio --dry-run --prefetch <image>` is the headless
@@ -1144,6 +1191,33 @@ reordering; a build that ships it should take it from a wgpu release.
 Reproduce: the backport is not in the tree. Copy wgpu-core 30.0.2 out of the cargo registry, apply the PR's diff
 (`gh pr diff 10319 -R gfx-rs/wgpu`, paths without the `wgpu-core/` prefix) with `git apply --reject`, write the 6 failing
 hunks by hand, add the switch, point a root `[patch.crates-io] wgpu-core` at the copy, and build the APK as above.
+
+### wgpu trunk (the git pin) against 30.0.2
+
+Measured 2026-11-26 (`wgpu-trunk`): the tree on gfx-rs/wgpu trunk at `60cef2be828e` (which carries #10319 and everything
+else merged since 30.0.2; `docs/architecture/dependency-upgrades.md`, "Git pins") against the 30.0.2 tree it replaced, two
+dist APKs (`OAG_APK_DEV_CLI=1 OAG_APK_PROFILEABLE=1 just apk --arm64-only`), installed in turn with `adb install -r`,
+interleaved main, trunk, main, trunk, main, trunk. The protocol of the section above with no toggle and no trace: HD
+Vineta K, render scale 25, REFLECTION RESOLUTION auto, `--autopilot --seed 1 --no-audio --no-intro --frame-log`, each start
+at AP <= 33.0 C, 200 s from launch. Medians of the `frame-log` lines:
+
+| Round (host load main / trunk) | Frame ms, racing s 20-80: 30.0.2 / trunk | Whole race (s 10-170) | Present phase ms, s 20-80 |
+| --- | ---: | ---: | ---: |
+| 1 (52 / 70) | 31.4 / 19.5 | 31.0 / 19.0 | 20.4 / 10.0 |
+| 2 (38 / 64) | 30.7 / 19.0 | 30.5 / 25.8 | 20.1 / 8.2 |
+| 3 (50 / 37) | 32.3 / 29.2 | 29.9 / 27.5 | 20.2 / 17.3 |
+
+Trunk is faster in every round, by 2.4 to 12.0 ms over the whole race, and the gain is all in the present phase (the wait
+for the previous frame's fence); CPU work before present is unchanged (`cpu_ms - present_ms` 10.5 to 11.6 ms on both). 30.0.2
+holds 30 to 33 ms through each race; trunk runs in two modes, about 18 ms for a stretch and then about 27 ms (round 1
+stayed fast to the end, round 2 switched at racing second 70, round 3 at second 20). The slow mode alone is the 2.4 to 3.1 ms
+the #10319 backport bought; the fast mode is more than #10319 explains, and which trunk change (or which GPU clock
+behaviour) gives it is not known. GPU clock median 403 MHz in five runs, 858 MHz in trunk round 1. The surface is set up the same on both (`surface: present mode Mailbox (offered [Mailbox, Fifo]), 2 frame(s) queued`), so the fast mode is not a present-mode change. Both builds finish the race
+in the same time (1:37.43) and draw the same race mid-way (phone screencaps 40 s into racing, read by eye).
+
+One reading looks wrong and is open: the `hd_zoom` pass timestamp reads 1.6 to 2.9 ms on trunk against 0.1 to 0.2 ms on
+30.0.2, while the frame got faster. The likely cause is where the hoisted write barrier now lands between timestamp pairs,
+not a slower pass; it is not proven.
 
 ### Inside the scene pass
 

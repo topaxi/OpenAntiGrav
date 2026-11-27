@@ -12,7 +12,7 @@ mod args;
 mod campaign_editor_stage;
 mod campaign_stage;
 mod cli;
-mod clipboard;
+pub(crate) mod clipboard;
 mod device_loss;
 #[cfg(not(target_arch = "wasm32"))]
 mod drive;

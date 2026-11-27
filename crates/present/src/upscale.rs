@@ -690,7 +690,7 @@ impl Framebuffer {
         // ADR-0020, `self.format` is never sRGB in any real call site (the
         // window surface and every capture target are forced non-sRGB), so
         // the twin and the ordinary view hold identical bytes and there is
-        // nothing to decode. Gating on `self.format.is_srgb()` too is what
+        // nothing to decode. Gating on `self.format.has_srgb_suffix()` too is what
         // keeps this flag tracking the format's actual encoding rather than
         // "did a pass run" - the two agreed by accident before that ADR and
         // silently stopped afterwards, which is what made FXAA, SMAA and a
@@ -720,7 +720,7 @@ impl Framebuffer {
             queue,
             Brightness::NEUTRAL,
             Gamma::NEUTRAL,
-            source.is_some() && self.format.is_srgb(),
+            source.is_some() && self.format.has_srgb_suffix(),
             read,
         );
         self.present(encoder, &self.output.view, rect, source.as_ref());

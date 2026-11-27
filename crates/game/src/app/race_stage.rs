@@ -1,7 +1,6 @@
 //! The race stage: a loaded track, and the scene that draws it.
 
 use crate::medal_watch::ticks_to_centiseconds;
-use log::warn;
 use oag_display::display;
 use oag_present::upscale;
 use oag_raceplay as race;
@@ -75,6 +74,8 @@ pub(crate) struct RaceStage {
     /// `None` on that path too, so there is no table for it to be drawn on.
     /// See `Session::frame`'s finish-transition arm, the only writer.
     pub(crate) personal_best: Option<crate::records::PersonalBest>,
+    /// A Detonator run's record notice, judged where the race is saved (before it is folded in).
+    pub(crate) score_record: Option<oag_ui_screens::endrace::ScoreRecord>,
     /// Whether this race's result has already been folded into
     /// `Session::records` and saved **since this stage last became live** -
     /// not "ever", which is why `Session::resume_race` clears it back to
@@ -781,8 +782,7 @@ impl RaceStage {
                 |id: &str, english: &str| done.strings.get_or_fallback(id, english).to_string();
             let list = crate::benchmark::screen::draw_list(
                 &done.report,
-                self.scoreboard.line_height(),
-                self.scoreboard.char_width(),
+                self.scoreboard.face(),
                 done.focus,
                 done.saved.as_deref(),
                 &say,
@@ -1089,11 +1089,14 @@ impl RaceStage {
         // rather than only its format. See this function's own doc.
         self.draw_hud(gpu, &mut encoder, target, viewport, target_size);
         gpu.queue().submit(Some(encoder.finish()));
+        // WebGPU cannot block on a submit (`PollType::Wait` is always `CantWait` there), so the
+        // browser's driver compiles in the background as it always did.
+        #[cfg(not(target_arch = "wasm32"))]
         if let Err(e) = gpu.device().poll(wgpu::PollType::wait_indefinitely()) {
             // Not fatal: the worst outcome is the compile this call exists to
             // avoid happening on the first real frame instead, exactly as it
             // did before this existed.
-            warn!("could not wait for the race scene's warmup submit: {e}");
+            log::warn!("could not wait for the race scene's warmup submit: {e}");
         }
     }
 }

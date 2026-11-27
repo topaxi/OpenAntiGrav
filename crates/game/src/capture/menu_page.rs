@@ -175,6 +175,7 @@ pub(super) fn menu_page(
     definition.drop_unavailable_trail_length(title);
     definition.drop_unavailable_weather(title);
     definition.drop_unavailable_rumble_original(title);
+    definition.drop_unavailable_width_throttle(title);
     crate::water_setting::trim_row(&mut definition, title, &crate::menu_tree::disc_probe());
     definition.drop_unavailable_dynamic_hud(title);
     definition.drop_unavailable_game_options(title);
@@ -185,6 +186,12 @@ pub(super) fn menu_page(
         "auto",
         strings,
         "OAG_AUDIO_SPATIAL_AUTO",
+    );
+    definition.relabel_choice_from(
+        "graphics.target_fps",
+        "original",
+        strings,
+        "OAG_GRAPHICS_TARGET_FPS_ORIGINAL",
     );
     definition.relabel_choice_from(
         "graphics.reflection_resolution",

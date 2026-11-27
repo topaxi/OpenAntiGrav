@@ -83,6 +83,7 @@ fn time_the_chain(adapter: &wgpu::Adapter, name: &str) {
         format: output_format,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let view = output.create_view(&Default::default());
 
@@ -191,6 +192,7 @@ fn resolve_a_white_scene(device: &wgpu::Device, queue: &wgpu::Queue, glow: Glow)
         format,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let view = output.create_view(&Default::default());
     let bytes = u64::from(size.0) * u64::from(size.1) * 4;
@@ -301,6 +303,7 @@ fn the_encode_pass_honours_the_scenes_own_offset() {
         format,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let view = output.create_view(&Default::default());
     let bytes = u64::from(canvas.0) * u64::from(canvas.1) * 4;
@@ -469,6 +472,7 @@ fn the_adaptation_is_the_encoded_mean() {
         format,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let view = output.create_view(&Default::default());
     let stride = (size.0 * 4).next_multiple_of(256);
@@ -586,6 +590,7 @@ fn spill_over_the_edge(device: &wgpu::Device, queue: &wgpu::Queue, reach: (f32, 
         format,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let view = output.create_view(&Default::default());
     let readback = device.create_buffer(&wgpu::BufferDescriptor {
@@ -716,6 +721,7 @@ fn resolve_flat_switched(
         format,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let view = output.create_view(&Default::default());
     let readback = device.create_buffer(&wgpu::BufferDescriptor {

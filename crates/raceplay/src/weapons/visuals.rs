@@ -312,7 +312,7 @@ impl Race {
             return Vec::new();
         };
         let lane_width = detonator.layout.values.distance_offset_between_mines;
-        let sizes = crate::drawable::lock(&self.view.mine_sizes);
+        let poses = crate::drawable::lock(&self.view.mine_poses);
         self.core
             .sim
             .world
@@ -321,47 +321,52 @@ impl Race {
             .iter()
             .filter_map(|placed| {
                 let (position, up) = detonator.survey.mine_point(placed, lane_width)?;
-                let football = sizes
+                let football = poses
                     .get(&(placed.entry, placed.lane))
-                    .map_or(1.0, |&(football, _)| football);
+                    .map_or(1.0, |pose| pose.football);
                 let size = visualiser_scale(placed.live, football);
                 Some(camera_facing_matrix(position, up, eye) * Mat4::from_scale(Vec3::splat(size)))
             })
             .collect()
     }
 
-    /// Puts each live mine's football and spikes size where the matrices read it. A layout
-    /// that does not scale its mines to the music records none, so they stay at size 1.
-    pub(crate) fn record_mine_sizes(
+    /// Puts each mine's age and each live mine's football and spikes size where the matrices
+    /// read them. A layout that does not scale its mines to the music records size `1`.
+    pub(crate) fn record_mine_poses(
         &self,
         laid: &[crate::detonator_look::LaidMine],
         envelopes: &[crate::detonator_look::MineEnvelope],
+        ages: &[f32],
     ) {
-        let mut sizes = crate::drawable::lock(&self.view.mine_sizes);
-        sizes.clear();
         let scales = self
             .core
             .sim
             .detonator
             .as_ref()
             .is_some_and(|d| d.layout.values.mines_scale_to_music);
-        if !scales {
-            return;
-        }
-        for (mine, envelope) in laid.iter().zip(envelopes) {
-            if mine.live {
-                sizes.insert(
-                    (mine.entry, mine.lane),
-                    (envelope.football_scale(), envelope.spike_scale()),
-                );
-            }
+        let mut poses = crate::drawable::lock(&self.view.mine_poses);
+        poses.clear();
+        for ((mine, envelope), &age) in laid.iter().zip(envelopes).zip(ages) {
+            let pose = if mine.live && scales {
+                crate::detonator_look::MinePose {
+                    football: envelope.football_scale(),
+                    spikes: envelope.spike_scale(),
+                    age,
+                }
+            } else {
+                crate::detonator_look::MinePose {
+                    age,
+                    ..Default::default()
+                }
+            };
+            poses.insert((mine.entry, mine.lane), pose);
         }
     }
 
-    /// Holds laid mines' music envelopes at the original's read, `(survey entry, lane)` to the
-    /// football's `s` and the spikes' `t` (`--detonator-mine-envelopes`): a live pinned mine draws
-    /// from them and its envelope does not step.
-    pub fn pin_mine_envelopes(&self, pins: impl IntoIterator<Item = ((u16, i8), (f32, f32))>) {
+    /// Holds laid mines at the original's read, `(survey entry, lane)` to the music envelope
+    /// (`--detonator-mine-envelopes`) and the age (`--detonator-mine-ages`) of each: a pinned mine
+    /// draws from them and neither steps.
+    pub fn pin_mines(&self, pins: impl IntoIterator<Item = ((u16, i8), crate::MinePin)>) {
         crate::drawable::lock(&self.view.mine_pins).extend(pins);
     }
 
@@ -402,27 +407,35 @@ impl Race {
             return Vec::new();
         };
         let lane_width = detonator.layout.values.distance_offset_between_mines;
-        let sizes = crate::drawable::lock(&self.view.mine_sizes);
+        let poses = crate::drawable::lock(&self.view.mine_poses);
         laid.iter()
             .filter_map(|placed| {
                 let (position, up) = match kind {
                     Laid::Mines(_) => detonator.survey.mine_point(placed, lane_width),
                     Laid::Bombs => detonator.survey.point(placed, lane_width),
                 }?;
-                let size = match kind {
-                    Laid::Mines(part) => {
-                        let (football, spikes) = sizes
-                            .get(&(placed.entry, placed.lane))
-                            .copied()
-                            .unwrap_or((1.0, 1.0));
-                        match part {
-                            MinePart::Football => football,
-                            MinePart::Spikes => spikes,
-                        }
-                    }
-                    Laid::Bombs => 1.0,
+                let Laid::Mines(part) = kind else {
+                    return Some(detonator_matrix(position, up));
                 };
-                Some(detonator_matrix(position, up) * Mat4::from_scale(Vec3::splat(size)))
+                let pose = poses
+                    .get(&(placed.entry, placed.lane))
+                    .copied()
+                    .unwrap_or_default();
+                let size = match part {
+                    MinePart::Football => pose.football,
+                    MinePart::Spikes => pose.spikes,
+                };
+                let basis = match self.view.detonator_mine_spin {
+                    Some(rate) => {
+                        Mat4::from_translation(position)
+                            * Mat4::from_mat3(crate::detonator_look::spun_basis(
+                                up,
+                                crate::detonator_look::spin_phase(rate, pose.age),
+                            ))
+                    }
+                    None => detonator_matrix(position, up),
+                };
+                Some(basis * Mat4::from_scale(Vec3::splat(size)))
             })
             .collect()
     }
@@ -572,12 +585,6 @@ impl Race {
     }
 }
 
-/// Where a laid Detonator object sits: upright on the section's up axis, at its position.
-///
-/// `Detonator_SpawnObject` hands the mine's init a basis of the world X axis, the section's up
-/// and the world Z axis (`docs/ghidra/functions/ps3-hdfury-eu/detonator-placement.md`); the init
-/// is unread. **Chosen, not measured**: the same axes, orthonormalised about the up axis so a
-/// banked section does not shear the model. The model is `DetonatorObjects`' (`detonator_models`).
 /// Which laid Detonator object a matrix list is for.
 #[derive(Clone, Copy)]
 enum Laid {
@@ -625,6 +632,13 @@ fn camera_facing_matrix(position: Vec3, up: Vec3, eye: Vec3) -> Mat4 {
     )
 }
 
+/// Where a laid Detonator object sits: upright on the section's up axis, at its position. A
+/// title whose mine spin is read draws its mines on [`crate::detonator_look::spun_basis`] instead.
+///
+/// `Detonator_SpawnObject` hands the mine's init a basis of the world X axis, the section's up
+/// and the world Z axis (`docs/ghidra/functions/ps3-hdfury-eu/detonator-placement.md`); the init
+/// is unread. **Chosen, not measured**: the same axes, orthonormalised about the up axis so a
+/// banked section does not shear the model. The model is `DetonatorObjects`' (`detonator_models`).
 fn detonator_matrix(position: Vec3, up: Vec3) -> Mat4 {
     let up = up.normalize_or_zero();
     let up = if up == Vec3::ZERO { Vec3::Y } else { up };
@@ -726,19 +740,30 @@ impl RaceView {
             let ship = &core.sim.world.ships[slot];
             self.spawn_hd_missile_blast(ship.physics.body.position, ship.physics.body.orientation);
         }
-        // Each detonation's own `ScreenFlash_Start`, whether or not its
-        // effect loaded - see [`flash_for`] and `oag_fx::flash`.
-        if let (Some(kind), Some(flash)) =
-            (flash_for(kind, struck.is_some()), &mut self.screen_flash)
-        {
-            #[expect(clippy::cast_precision_loss, reason = "at most a few seconds of ticks")]
-            flash.start_aged(kind, at, age_ticks as f32 * core.sim.dt);
+        let carried = self.craft_blast_velocity(core, trigger, struck);
+        #[expect(clippy::cast_precision_loss, reason = "at most a few seconds of ticks")]
+        let age = age_ticks as f32 * core.sim.dt;
+        self.flash_and_play(flash_for(kind, struck.is_some()), trigger, at, carried, age)
+    }
+
+    /// A detonation's own `ScreenFlash_Start` (whether or not its effect loaded, see
+    /// [`flash_for`] and `oag_fx::flash`) and its effect at `at`, carrying `carried`.
+    pub(crate) fn flash_and_play(
+        &mut self,
+        flash_kind: Option<oag_fx::flash::Kind>,
+        trigger: Trigger,
+        at: Vec3,
+        carried: Option<Vec3>,
+        age_seconds: f32,
+    ) -> Option<psys::Playing> {
+        if let (Some(kind), Some(flash)) = (flash_kind, &mut self.screen_flash) {
+            flash.start_aged(kind, at, age_seconds);
         }
         let effect = self.handles.get(trigger).cloned()?;
         // Neutral severity: the field the collision sparks derive from an
         // impulse is the *hull's*, and nothing on the rocket path has been
         // read as feeding it. See `oag_fx::sparks::severity`.
-        match self.craft_blast_velocity(core, trigger, struck) {
+        match carried {
             Some(velocity) => self.stage.play_carried(&effect, at, 1.0, velocity),
             None => self.stage.play(&effect, at, 1.0),
         }
@@ -758,8 +783,12 @@ impl RaceView {
         if !self.craft_blast_carry || trigger != Trigger::CraftBlast {
             return None;
         }
-        let ship = &core.sim.world.ships[struck?];
-        ship.active.then_some(ship.physics.body.linear_velocity)
+        let slot = struck?;
+        let ship = &core.sim.world.ships[slot];
+        let own = ship.physics.body.linear_velocity;
+        let forced = self.forced_blast_velocity.filter(|&(at, _)| at == slot);
+        ship.active
+            .then_some(forced.map_or(own, |(_, velocity)| velocity))
     }
 
     /// Which explosion a hit plays and where, or `None` for a weapon with no

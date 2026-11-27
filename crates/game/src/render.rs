@@ -242,6 +242,12 @@ impl std::fmt::Debug for Renderer {
 }
 
 impl Renderer {
+    /// The face this renderer sets text in.
+    #[must_use]
+    pub fn face(&self) -> &Atlas {
+        &self.atlas
+    }
+
     /// Tells the renderer which grid the draw lists it is given are in.
     ///
     /// Set from the front end's own [`Space`] whenever a stage draws a source's
@@ -347,7 +353,7 @@ impl Renderer {
         // Text and fills are not affected either way - they write their colour
         // straight through with no sRGB source - so this is the only draw kind
         // that can differ between the window and a screenshot.
-        let sprite_format = if format.is_srgb() {
+        let sprite_format = if format.has_srgb_suffix() {
             wgpu::TextureFormat::Rgba8UnormSrgb
         } else {
             wgpu::TextureFormat::Rgba8Unorm
@@ -795,11 +801,18 @@ impl Renderer {
                 }
                 segments.push((self.quads.len() as u32, rect));
             }
+            // A stretched text is laid out as its text, then its quads are scaled about its anchor.
+            let (draw, stretch) = match draw {
+                Draw::Stretched { x_scale, text } => (text.as_ref(), Some(*x_scale)),
+                other => (other, None),
+            };
             let quads_before = self.quads.len();
             if warp_end.is_none() && warp.as_ref().is_some_and(|w| index >= w.until) {
                 warp_end = Some(quads_before);
             }
             match draw {
+                // Unwrapped above.
+                Draw::Stretched { .. } => {}
                 Draw::GlowStamp { rect, value } => stamps.push(glow::Stamp::Value(*rect, *value)),
                 Draw::GlowTexel => stamps.extend(
                     self.quads[last_sprite.clone()]
@@ -1035,6 +1048,9 @@ impl Renderer {
                             .push_text(slot, *x, *y, *scale, *color, border, *align, text, bounds),
                     }
                 }
+            }
+            if let (Some(k), Draw::Text { x, .. }) = (stretch, draw) {
+                text::stretch_quads(&mut self.quads[quads_before..], *x, k);
             }
             if matches!(draw, Draw::Text { .. } | Draw::FacedText { .. }) {
                 last_text = quads_before..self.quads.len();

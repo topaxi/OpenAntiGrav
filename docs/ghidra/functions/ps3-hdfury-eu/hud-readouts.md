@@ -450,5 +450,6 @@ per-pickup count or timer in `Readout`, so a held pickup's hexagon stays as auth
   (`0x0016d9a8`) falling back to a tree walk (`0x0016a920`). `arcade_hud.xml`
   composes two widgets named `DamageBar`, and which one this binds was not
   read from here; see [hd-hud.md](../../../formats/hd-hud.md) for why the one
-  sharing `DamageBarBg`'s rectangle is taken as the bound one.
+  on `DamageBarBg`'s texture is taken as the bound one, preferring the same
+  rectangle ("Detonator's score box").
 - **`DamageBar+0x10c`**, written `0xFF`/`0` in step 6.

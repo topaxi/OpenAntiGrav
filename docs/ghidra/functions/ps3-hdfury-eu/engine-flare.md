@@ -78,6 +78,195 @@ So `TC0` is the **view vector** with `Uv1.x` in its `w`, `TC1` the **world
 normal** with `Uv1.y` in its `w`, and `TC2.w` is the colour set's fourth byte,
 carried through untouched.
 
+### The live vertex program, read off RPCS3 frame dumps (2026-11-26, `hd-flame-rim-capture`)
+
+**The program the console runs is not the listing above.** Rebuilt from the stream's
+`TRANSFORM_PROGRAM` uploads on every flame draw of three existing frame dumps of the original
+(`data/reference/hd-flame-tap/`, the `hd-craft-ibl-probe` frames: `c1`, stem `f`, one craft at rest at Talon's
+Junction's start; `c2`, stem `f`, the same craft at thrust; `d1`, stem `m`, a grid of eight at rest), the same 20 instructions
+each time:
+
+```text
+ 0  MOV o[TC3].yz, v[2].xxyx           <- Uv1
+ 1  MOV R0.w, v[3].wwww                <- VertexColour1.w
+ 2  MUL R1.xyz, v[1].yyyy, c[1].xyzx   \
+ 5  MAD R1.xyz, v[1].xxxx, c[0].xyzx    |  normal through the plain model matrix
+ 9  MAD R1.xyz, v[1].zzzz, c[2].xyzx   /
+ 3  MUL R0.xyz, v[0].xyzx, c[210].xyzx \  position * positionScale + positionBias
+ 4  ADD R0.xyz, R0.xyzx, c[211].xyzx   /
+ 6-8,10                                <- R0 = M * R0 + c[3]: the world position
+11  ADD o[TC1].xyz, R1.xyzx, c[208].xxxx
+12-14,16                               <- clip = viewProj (c[4]..c[7]) * R0
+15  ADD o[TC0].xyz, -R0.xyzx, c[209].xyzx  <- eye - world position
+17  MOV o[TC2], R0
+18  MOV o[POS], R1
+19  MOV o[TC3].x, R1.wwww | END
+```
+
+The program's `c[N]` is the register file's `c[256 + N]`: `c[0..3]` is the per-draw model matrix
+at `c256`-`c259`, `c[4..7]` the view-projection at `c260`-`c263`, `c[208]` is `c464`, `c[209]` is
+`c465`, `c[210]`/`c[211]` are `c466`/`c467` (1/128 and the chunk's bias).
+
+| Finding | Evidence | Confidence |
+| --- | --- | --- |
+| **`E` (`c465`) is the camera's world position.** It equals the camera centre solved from the view-projection (the point whose clip x, y and w are zero) on all 73 flame draws, largest gap 0.00003 units | three dumps: `c1` 5 draws, `c2` 5, `d1` 63 (eight craft, eye 7.5 to 147 units away) | 92 |
+| **`V = E - world position`**: the position is taken through the model matrix before the subtraction, so both are world space | the listing, every flame draw | 92 |
+| **The normal is `M * n` with the plain model matrix**, not its inverse transpose, plus `c464.x`, which is 0 on every draw | the listing; `c464` read per draw | 90 |
+| At rest, the length-scaled draws carry rows (0.75, 0.75, 0.187) and (0.75, 0.75, 0): the hull's 0.75 times (1, 1, 0.25) and (1, 1, 0), which is `hd_flame_transform`'s `EF_Main` and `EF_Boost` at rest. Which draw is which shape is not read here (some `d1` craft carry three zero-length draws) | `c1`; `d1`, every craft | 75 |
+
+Seen on three frames, two at rest (`c1`, `d1`) and one at thrust (`c2`); **no boosting frame was dumped**, so
+boost is covered only by the law (boost moves `M`'s scale, not where `E` comes from). Reproduce:
+`python3 scripts/rsx-flame-eye.py data/reference/hd-flame-tap/c1 f --program`.
+
+### The live fragment program is block #2, and it halves its colour (2026-11-26, `hd-flame-colour-gap`)
+
+**The console runs the fogged permutation, not block #1.** The five rest flame draws of `c1` (518 to 522)
+bind fragment programs at local `0x748500`, `0x7487c0`, `0x748a80`, `0x748d40` and `0x749000`, all the same
+42 instructions, and with the inline constants masked they equal `flame_test.rcsmaterial`'s fragment
+block #2 instruction for instruction (blocks #3 to #5 differ in 8 lines each). Read with the patched
+constants, it is block #1's arithmetic plus a fog lerp and a closing halving:
+
+```text
+@0x07  ADD_SAT R0.w, -dot(V, N), 1           <- rim
+@0x0a  MUL R0.x, TC3.x, {fog}.w               <- clip w * 0.001
+@0x0d  MAD R1.w, {2}, {429.579}, Uv1.y        <- Speed * time (c1's clock: 429.579 s)
+@0x17  MAD H0.x, rim^10, {0.3}, {0.45}        <- f
+@0x1a  MAD H2.x, -f, {2}, {2}                 <- 2 (1 - f)
+@0x1e  MUL H3.w, H2.x, TC2.w                  <- alpha, neither fogged nor halved
+@0x21  MUL R0.w, -(d * 0.001)^2, 1/ln 2
+@0x23  TEX H0.xyz, (2u, 2v + noise) unit0
+@0x26  EX2_SAT R0.w                           <- fog factor exp(-(0.001 d)^2)
+@0x27  MAD /2 H0.xyz, factor, tex - fc, fc    <- rgb = mix(fc, tex, factor) / 2
+```
+
+`fc` is `(0.262745, 0.215686, 0.380392)` with density `0.001` in `.w`, the circuit's fog: 325 of the 378
+fragment programs bound in `c1` carry the same four numbers. So:
+
+| Finding | Evidence | Confidence |
+| --- | --- | --- |
+| **The flame's colour is halved: `rgb = mix(fc, tex * colourScale, f) / 2`.** The `/2` is the same closing scale every HD lit program ends on (`Light::output_scale`, 0.5 on HD) | `@0x27 MAD /2` on all five draws; block #2 on the disc carries it too | 90 |
+| The live program is block #2, the fogged permutation | 42 instructions equal block #2's with constants masked | 90 |
+| The fog is the circuit's (`fc` above, density 0.001, EXP2 on clip `w`); at chase distance (about 12 units) its factor is 1 to four places | the constants, shared by 325 of 378 programs in the frame | 85 |
+| The flame's `time` is a boot-relative clock (429.579 s in `c1`), not the race or scenery clock the comparison pairs record; it is the frame context's `+0xc4` ("The flame's clock at a pair's grab") | `@0x0d`'s patched constant | 80 |
+
+**Wired**: the flame surfaces' block carries the circuit's output scale (`oag_raceplay`'s `flame_scene`),
+which `shade.wesl`'s flame branch already multiplied by; it read `Scene::off`'s 1.0 before, so the rest
+flame drew at twice the original's linear strength. The fog is not wired: the block is shared with the
+disc shield shells and the cockpit sphere, nothing measured fogs those, and the factor is 1 at chase
+distance. Reproduce: `python3 scripts/ps3-fp-live.py data/reference/hd-flame-tap/c1/f-c0748500.bin`.
+
+**The blue/pink split on `hd/talons` is the noise phase, not a layer.** `flame_01.gtf` (64x64 DXT5) is a
+vertical gradient, black to blue, with two pink rows near `v` 0.78 and 0.92, and its alpha is 2D cloud
+noise. The colour tap reads `(2u, 2v + noise)` with the noise scrolled by `2 * time`, so which part of
+the nozzle lands on a pink row turns over every 0.5 s. Ours (halved, camera eye) at `--anim-seconds`
+0.0 and 0.125 shows the original's blue left and pink right; the other six of eight phases show other
+patterns. The pairs made before 2026-11-26 do not record the flame's boot clock, so such a still pair
+cannot match the phase; the pair script now records it ("The flame's clock at a pair's grab" below).
+
+### The flame's clock at a pair's grab
+
+Measured 2026-11-26 (`hd-flame-clock`), RPCS3, HD Fury EU (BCES00664). The flame's `time` is the frame context's
+boot clock: `f32` at `(*0x00936fd4) + 0xc4` (`Render_FrameContextPtr_q`, the context `Game_PresentLoop_q` hands
+the render calls; engine-trail.md, "The draw state's two non-material constants, placed"). Every HD grab now
+records it beside the scenery clock (`grab_with_clock` writes `flame_clock_s` in `<stem>.clock.json`;
+`rpcs3_hd_field.flame_clock`), the pair script stores it as `original.flame_clock_s` and runs ours with
+`--flame-clock` at the recorded value less the lag below (`compare_env.flame_pin`), and a re-render adds the flag
+to an HD pair whose record holds the field. Ours' `--flame-clock` sets the flame surfaces' block's clock alone
+(`oag_raceplay`'s `flame_seconds`); every other animation keeps the world clock.
+
+| Finding | Evidence | Confidence |
+| --- | --- | --- |
+| **The flame program's `time` is `+0xc4`**, read one to two frames behind the PPU | two frame dumps of the Racebox weapons grid state with `+0xc4` read at every pause: 53 flame programs (`@0x0d MAD R1.w, R1, {t}`, `@0x27 MAD /2`, the fog constants) all hold 41.2949 against `+0xc4` 41.3283 (lag 0.0334 s); the second dump's slot-0 time 88.4302 against 88.4469 (lag 0.0167 s) | 85 (two reads, one state) |
+| It runs at game time and stops with the emulator: frozen under a GDB pause | five pauses over 12 s on the `hd-race/talons-pack` state, each read twice 1 s apart, bit-identical; it advanced 12.0 s across them | 85 (one state) |
+| **Within a run its gap to the scenery clock is constant; across boots it is not.** So a pair made before the field existed is clocked only when its own timeline is a known state | `hd-race/talons-pack` state, five pauses: `+0xc4` less the scenery clock 48.57702 to 48.57722, less the lap clock 115.1591 to 115.1593. Across runs the gap was 39.77 (a grid state), 54.78 and 57.01 (two cold boots) | 85 (one state within; three runs across) |
+
+The pin a pair passes is `flame_clock_s - 0.025` s (`compare_env.FLAME_CLOCK_LAG_S`, the mean of the two lag
+reads), within 0.009 s of either read, 2 % of the noise's 0.5 s period.
+
+**Of the 22 pairs above, one is clocked from its record.** `hd-race/talons-pack` was made on the restored
+`hd-race-talons-venom-pack` state with no restart: its record's scenery-less-lap offset 66.58214 equals the restored
+state's 66.58212, so its flame clock at the grab is its `world_clock_s` 73.89487 plus the state's 48.5771 = 122.4720
+s (derived from the timeline's offset, not read at the grab). Every cold-boot pair (`hd/talons` and the eleven other
+Time Trial grids) and the Detonator pairs (their `grid-late` state is not kept) need a regrab with the current
+script (the cold-boot ones are regrabbed below); the far-hit pairs were filmed after a restart.
+
+**The phase, on two regrabbed pairs and one clocked pair.** Ours re-rendered at the pin and at 20 clocks 0.025 s apart
+across one 0.5 s period; mean absolute RGB error (0 to 255) over the pixels the flame clock moves, each render
+bit-identical on a second run:
+
+| pair | moved pixels | free (world clock) | at the pin | best of 20 | pin's rank |
+| --- | --- | --- | --- | --- | --- |
+| Talon's Junction, `harimau_c1`, cold boot, flame 410.2580 | 1,679 | 22.947 | **18.384** | the pin | 1 of 20 |
+| Talon's Junction, `harimau_c1`, cold boot, flame 135.1249 | 1,761 | 19.698 | 19.453 | 19.122 (+0.10 s) | 12 of 20 |
+| `hd-race/talons-pack` (clock 122.4720, eight phases 0.0625 s apart) | 1,251 | 34.420 | 34.403 | 34.025 | 7 of 8 |
+
+On the first regrab the pin is the sharpest minimum of the sweep; on the second the error is flat (19.1 to 19.5)
+over most of the period and the pin sits in that flat band, away from the two dips (21.4 to 23.3); on
+`talons-pack` the flame is a distant craft's and the whole sweep spans 0.4 on an error of 34, so it cannot
+discriminate. On the second pair's nozzle box `944,750 32x26` the pin read 30.85 against the free phase's 31.36,
+and an 8-phase sweep ranked the pin 4th of 8: the falsifier written before the capture ("the pin among the best 2 of
+8") failed on that pair. **Phase match at the pin: confidence 60** (one sharp confirmation, one flat, one blind).
+The two regrabbed originals carry RPCS3's "Press and hold the START button to resume" toast top left and fly the
+Fury hull (this profile's Ship Select lands on `harimau_c1`), so they are measurements, not replacements for
+`hd/talons`, and the `hd/talons` nozzle box `935,802 57x58` (standard hull) was not re-measured.
+
+**The cold-boot pairs, regrabbed with the clock (2026-11-27, `hd-flame-regrab`).** All 14 cold-boot pairs of the list
+(`original.provenance.capture_path.kind == "cold_boot"`: the 12 Time Trial grids, `talons-assegai-c1`, `zone-vineta-k-z5`) were
+regrabbed on RPCS3 0.0.43-20574 with `rpcs3-hd-cold-pair.sh`'s steps (profile `hd-fury`, hull shake patched out), each from its own
+cold boot, with the hull the stored pair names checked twice: by RAM (the new `the player's hull (RAM) is the hull ours draws` check,
+`Harimau` or `Assegai_c1`) and by eye against the stored frame. That day's save opened Ship Select on the Fury `Harimau_c1` and had
+Pilot Assist on, so the walk took one `down` and the option was written off before `Restart Race` (compare-page.md, "The save
+moved since"). Ours was re-rendered from scratch copies at the recorded pin and at 7 more phases 0.0625 s apart (one 0.5 s noise
+period), twice per phase: both runs were pixel-identical on every pair. "Crop" is the mean absolute RGB difference (0 to 255) from
+the original over the pixels any phase moves; "nozzle" is the same mask clipped to `880..1040 x 760..900`, where every grid pair's
+own flame sits (on Vineta K, Anulpha Pass and Chenghou Project the clock also moves 11,000 to 35,000 other pixels of the scene).
+Rank is the pin's place among the 8 phases (1 is best). Mean grey is the page's whole-pair score at the pin.
+
+| pair | flame clock (s) | moved px | crop at pin | rank | nozzle at pin | rank | mean grey |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `hd/talons` | 105.9366 | 1,625 | 16.24 | 4 of 8 | 16.24 | 4 of 8 | 2.834 |
+| `hd/talons`, second boot | 104.5756 | 1,593 | 15.43 | 2 of 8 | 15.43 | 2 of 8 | 3.246 |
+| `hd/vineta-k` | 96.5750 | 34,783 | 3.90 | 2 of 8 | 14.93 | 2 of 8 | 2.522 |
+| `hd/anulpha-pass` | 105.2061 | 33,522 | 3.80 | 2 of 8 | 7.84 | 2 of 8 | 4.637 |
+| `hd/moa-therma` | 97.7607 | 1,534 | 12.51 | 1 of 8 | 12.51 | 1 of 8 | 2.617 |
+| `hd/chenghou-project` | 99.7491 | 11,018 | 7.60 | 3 of 8 | 11.59 | 3 of 8 | 2.307 |
+| `hd/metropia` | 100.3077 | 1,683 | 14.56 | 1 of 8 | 14.56 | 1 of 8 | 2.720 |
+| `hd/sebenco-climb` | 108.7260 | 1,395 | 18.04 | 2 of 8 | 18.04 | 2 of 8 | 3.930 |
+| `hd/ubermall` | 111.1978 | 1,148 | 19.95 | 3 of 8 | 19.95 | 3 of 8 | 4.226 |
+| `hd/sol-2` | 103.4375 | 1,455 | 15.41 | 5 of 8 | 15.41 | 5 of 8 | 3.470 |
+| `hd/the-amphiseum` | 114.2185 | 1,529 | 16.29 | 1 of 8 | 16.29 | 1 of 8 | 4.762 |
+| `hd/modesto-heights` | 115.2832 | 1,481 | 15.00 | 1 of 8 | 15.00 | 1 of 8 | 3.961 |
+| `hd/tech-de-ra` | 107.9301 | 1,478 | 12.77 | 2 of 8 | 12.77 | 2 of 8 | 4.001 |
+| `hd/talons-assegai-c1` | 100.9166 | 351 | 42.17 | 1 of 8 | 42.17 | 1 of 8 | 2.652 |
+
+The falsifier, written before the scores were read, was "the pin in the best 2 of 8 on at least ceil(2N/3) of the regrabbed pairs".
+On the 13 pairs measured (first boot of each) the pin ranks in the best 2 on 9: the bar is 9, met with no margin. A pin dropped at
+random ranks in the best 2 one time in 4 (about 3 of 13). The misses are Chenghou Project (3), Ubermall (3), Talon's Junction (4)
+and Sol 2 (5); Talon's Junction ranks 2 on a second boot and 1 on a third (a boot whose original still drew the Pilot Assist
+bracket under the craft, so not adoptable; scored the same way, 34.22 against 36.24 to 39.47). One boot per circuit, so every other rank is seen once. **Phase match at
+the pin: confidence 70** (raised from 60: 9 of 13 against about 3 by chance, the rest within one or two places but for Sol 2).
+At the pin the Talon's nozzle shows the original's pink core where the worst phase (+0.25 s) is plain blue.
+
+The stored `talons-assegai-c1` original flies another hull than ours draws: a narrow blue Assegai against ours' black
+`Assegai_c1` (read by eye; that pair predates the RAM hull check). The regrab's original reads `Assegai_c1` in RAM and matches ours,
+and its whole-pair score falls from the stored 4.78 to 2.65.
+
+**The Zone pair, measured on its countdown grab (2026-11-27, `hd-zone-start`).** The lane above could not: both its grabs landed at lap clock 10.0 to 10.1 s,
+inferred to be the capture's default 12 s settle outlasting Zone's 3 s countdown (compare-page.md, "The grab"). `hd/zone-vineta-k-z5` was regrabbed inside the
+countdown with `flame_clock_s` 352.4618 recorded, and ours rendered at tick 238 (compare-page.md, "The countdown frame") over the same 8 phases, twice each,
+both runs pixel-identical on every phase. The pin 352.4368 ranks **1 of 8 on both masks**:
+
+| mask | moved px | at the pin | rank | by phase, pin first |
+| --- | --- | --- | --- | --- |
+| crop | 61,101 | 9.31 | 1 of 8 | 9.31, 9.79, 10.03, 10.62, 11.30, 11.40, 10.19, 9.71 |
+| nozzle | 4,294 | 29.96 | 1 of 8 | 29.96, 32.26, 32.86, 38.36, 44.99, 46.88, 35.19, 32.55 |
+
+The whole-pair mean grey runs 5.486 (pin) to 5.540. One frame of one boot, so this adds one pair to the count above and leaves the confidence at 70.
+
+Reproduce: `python3 scripts/rpcs3-drive.py grab <png>` on an attached HD race writes `flame_clock_s`;
+`python3 scripts/hd-draw-dump.py <dir> <stem>` dumps the frame's fragment programs and
+`python3 scripts/ps3-fp-live.py <dir>/<stem>-<address>.bin` shows `@0x0d`'s constant.
+
 ## The fragment program, block #1
 
 ```text
@@ -262,12 +451,130 @@ scrolling at exactly `Speed` repeats per second reads zero at 0.5 and not at
 same units; that wants the matched-view harness and a recording, and the
 prediction above is what such a recording would falsify.
 
+## Our rim's eye is the camera (wired 2026-11-26, after the colour's `/2`)
+
+**Wired 2026-11-26 (`hd-flame-colour-gap`), with the colour's closing `/2`.** `flame_scene`
+(`crates/raceplay/src/scene/scene_blocks.rs`) gives the flame surfaces' block (`SceneKind::Flame`) the view's eye as
+`Fog::camera` and the circuit's `Light::output_scale`. Before, the block was `Scene::off` plus the clock: its eye was
+`(0, 0, 0)` and its output scale 1.0, so the rest flame was measured from the wrong point and drawn at twice the
+original's linear strength ("The live fragment program is block #2"). The history below is why the eye alone was
+held back.
+
+**The 22 pairs, re-rendered twice from the branch's binary on scratch copies** (base: `main` at `04c9e4cc9`; final:
+the `/2` plus the eye). "Error in them" is the mean absolute RGB difference (0 to 255) from the original over the
+pixels the change moved; "whole" is the mean absolute RGB difference over the whole frame. The final binary drew both
+runs pixel-identical on every pair.
+
+| pair | pixels moved | error in them | whole |
+| --- | --- | --- | --- |
+| `hd/anulpha-pass` | 3,260 | 16.22 -> 10.30 | 4.4339 -> 4.4246 |
+| `hd/chenghou-project` | 2,407 | 14.51 -> 14.20 | 2.8652 -> 2.8649 |
+| `hd/detonator-talons-cannon-volley` | 106,369 | 25.53 -> 25.62 | 17.8640 -> 17.8690 |
+| `hd/detonator-talons-cannon-volley-hot` | 30,225 | 30.35 -> 30.14 | 14.8942 -> 14.8911 |
+| `hd/detonator-talons-mines-ahead` | 31,074 | 35.42 -> 35.16 | 16.9525 -> 16.9486 |
+| `hd/detonator-talons-pad` | 24,604 | 26.66 -> 26.61 | 11.0953 -> 11.0946 |
+| `hd/metropia` | 1,808 | 21.15 -> 23.57 | 3.6836 -> 3.6858 |
+| `hd/moa-therma` | 1,435 | 27.23 -> 25.53 | 6.3930 -> 6.3919 |
+| `hd/modesto-heights` | 1,520 | 23.90 -> 18.01 | 4.7668 -> 4.7625 |
+| `hd/rocket-craft-far-hit-0100` | (base not repeatable) | 37.06 -> 34.54 | 15.7094 -> 15.5777 |
+| `hd/rocket-craft-far-hit-0233` | (base not repeatable) | 60.00 -> 59.46 | 46.5271 -> 46.2668 |
+| `hd/rocket-craft-hit-0100` | 0 | | 72.6709 |
+| `hd/sebenco-climb` | 1,489 | 22.89 -> 21.03 | 5.0902 -> 5.0888 |
+| `hd/sol-2` | 1,556 | 30.55 -> 24.51 | 6.7846 -> 6.7800 |
+| `hd/talons` | 1,505 | 20.54 -> 16.66 | 3.5015 -> 3.4987 |
+| `hd/talons-assegai-c1` | 360 | 104.84 -> 106.83 | 5.0036 -> 5.0039 |
+| `hd/tech-de-ra` | 1,978 | 22.55 -> 15.04 | 4.5423 -> 4.5351 |
+| `hd/the-amphiseum` | 1,430 | 21.65 -> 20.84 | 6.0316 -> 6.0310 |
+| `hd/ubermall` | 1,207 | 27.49 -> 22.54 | 4.5731 -> 4.5702 |
+| `hd/vineta-k` | 2,284 | 21.02 -> 21.62 | 3.5188 -> 3.5194 |
+| `hd/zone-vineta-k-z5` | 3,805 | 78.14 -> 75.08 | 6.4744 -> 6.4688 |
+| `hd-race/talons-pack` | 1,337 | 33.21 -> 33.95 | 23.9628 -> 23.9633 |
+
+On `hd/talons` the nozzle box `935,802 57x58` moves from 14.81 to 13.05 (mean RGB (36, 65, 94) to (34, 61, 91); the
+original's (37, 60, 89)). Five pairs read worse on this metric: `hd/metropia`, `hd/vineta-k`, `hd-race/talons-pack`,
+`hd/talons-assegai-c1` and `hd/detonator-talons-cannon-volley`. `hd/talons-assegai-c1`'s original frame shows a
+different view of the craft than ours (error about 105 in both), so it does not compare a flame. The far-hit pairs'
+base binary drew different pixels on its two runs (0.1 and 1.0 million), so their row is not evidence either way.
+The other three are within the flame's phase: those pairs predate the flame clock's recording ("The flame's clock at
+a pair's grab"), so each still frame samples the pink rows at an arbitrary phase. Averaged over eight phases across one 0.5 s period (the pair's
+`--world-clock-offset` plus 0 to 0.4375 s, so the scenery barely moves), the error over the moved pixels reads, base /
+`/2` alone / `/2` plus eye: `hd/metropia` 11.83 / 11.69 / 11.95, `hd/vineta-k` 4.40 / 4.40 / 4.44,
+`hd-race/talons-pack` 30.94 / 29.81 / 31.51, `hd/detonator-talons-cannon-volley` 30.13 / 30.15 / 30.10. So the `/2`
+never loses on the phase average, and the eye still costs up to 0.6 on three rest pairs.
+
+The `/2` alone was rendered on all 22 pairs too: 13 better, 8 worse on the single-phase metric (`hd/zone-vineta-k-z5`
+76.06 to 83.55 the largest, which the eye takes back to 75.08), against the pair's 17 better and 5 worse. Both are
+wired because together they are the measured program and the better of the two on this table; what still separates
+ours from the original on the rest pairs is open. A still pair cannot separate it from the phase; a pair regrabbed with
+the flame clock recorded can ("The flame's clock at a pair's grab").
+
+**Before the `/2` was found, the eye alone made the rest flame worse, so it was held back.** The change tried: `flame_scene`
+(`crates/raceplay/src/scene/frame.rs`) gets `fog: Fog { camera: eye, ..Fog::off() }` (commit `0c86ed0ed`, reverted by
+the commit after it). All 172 comparison pairs were re-rendered on copies with the build before and after: 150 are
+byte-identical (every 2048, Omega, Pulse, Pulse PS2 and Pure pair, and 9 of HD's), 22 HD pairs move. "Error in them" is
+the mean absolute RGB difference (0 to 255) from the original over the pixels the change moved; the other columns are
+the page's whole-frame scores. On every grid pair with the craft at rest the error rises and ours gets brighter than
+the original, a dim deep blue; the Zone pair, the Detonator pad and mines pairs and the far-hit pairs improve.
+
+| pair | pixels moved | error in them | mean grey | rmse | edge |
+| --- | --- | --- | --- | --- | --- |
+| `hd/anulpha-pass` | 3,108 | 16.59 -> 19.84 | 4.224 -> 4.229 | 0.0468 -> 0.0468 | 0.4395 -> 0.4396 |
+| `hd/chenghou-project` | 3,113 | 12.78 -> 20.58 | 2.693 -> 2.703 | 0.0376 -> 0.0378 | 0.3937 -> 0.3938 |
+| `hd/detonator-talons-cannon-volley` | 38,230 | 30.37 -> 30.07 | 14.326 -> 14.321 | 0.1727 -> 0.1727 | 0.1037 -> 0.1044 |
+| `hd/detonator-talons-cannon-volley-hot` | 29,567 | 30.61 -> 30.56 | 11.470 -> 11.468 | 0.1394 -> 0.1394 | 0.1019 -> 0.1016 |
+| `hd/detonator-talons-mines-ahead` | 4,584 | 33.13 -> 31.71 | 13.631 -> 13.627 | 0.1682 -> 0.1682 | 0.1053 -> 0.1055 |
+| `hd/detonator-talons-pad` | 26,178 | 22.27 -> 21.59 | 7.604 -> 7.598 | 0.1190 -> 0.1189 | 0.1804 -> 0.1820 |
+| `hd/metropia` | 2,580 | 17.66 -> 30.86 | 3.469 -> 3.486 | 0.0379 -> 0.0382 | 0.4478 -> 0.4478 |
+| `hd/moa-therma` | 1,375 | 27.61 -> 44.38 | 6.222 -> 6.234 | 0.0570 -> 0.0572 | 0.4520 -> 0.4520 |
+| `hd/modesto-heights` | 1,480 | 22.57 -> 31.00 | 4.763 -> 4.769 | 0.0541 -> 0.0542 | 0.4181 -> 0.4181 |
+| `hd/rocket-craft-far-hit-0100` | 185 | 93.48 -> 90.36 | 12.431 -> 12.430 | 0.1336 -> 0.1336 | 0.2789 -> 0.2789 |
+| `hd/rocket-craft-far-hit-0233` | 188 | 65.87 -> 64.52 | 42.693 -> 42.693 | 0.2538 -> 0.2538 | 0.0521 -> 0.0521 |
+| `hd/rocket-craft-hit-0100` | 46 | 195.51 -> 192.94 | 74.008 -> 74.008 | 0.3694 -> 0.3694 | 0.0122 -> 0.0122 |
+| `hd/sebenco-climb` | 1,523 | 22.35 -> 33.66 | 4.800 -> 4.808 | 0.0531 -> 0.0532 | 0.3947 -> 0.3947 |
+| `hd/sol-2` | 1,421 | 31.01 -> 41.40 | 6.325 -> 6.332 | 0.0674 -> 0.0675 | 0.4310 -> 0.4310 |
+| `hd/talons` | 1,466 | 20.87 -> 26.44 | 3.319 -> 3.324 | 0.0395 -> 0.0395 | 0.4306 -> 0.4306 |
+| `hd/talons-assegai-c1` | 331 | 105.84 -> 102.64 | 4.776 -> 4.775 | 0.0599 -> 0.0599 | 0.4090 -> 0.4091 |
+| `hd/tech-de-ra` | 1,662 | 23.79 -> 26.37 | 4.517 -> 4.520 | 0.0447 -> 0.0447 | 0.4535 -> 0.4535 |
+| `hd/the-amphiseum` | 47,791 | 15.75 -> 16.11 | 6.107 -> 6.116 | 0.0648 -> 0.0649 | 0.4157 -> 0.4157 |
+| `hd/ubermall` | 1,115 | 25.91 -> 34.29 | 4.417 -> 4.422 | 0.0417 -> 0.0417 | 0.4487 -> 0.4487 |
+| `hd/vineta-k` | 35,093 | 4.84 -> 5.86 | 3.221 -> 3.239 | 0.0393 -> 0.0396 | 0.4322 -> 0.4321 |
+| `hd/zone-vineta-k-z5` | 4,444 | 74.02 -> 65.02 | 6.270 -> 6.251 | 0.0764 -> 0.0761 | 0.3010 -> 0.3011 |
+| `hd-race/talons-pack` | 1,918 | 31.24 -> 33.46 | 23.054 -> 23.056 | 0.1711 -> 0.1711 | 0.0916 -> 0.0916 |
+
+With the true view angle a face turned to the camera has `rim` near 0, so `alpha` is near its 1.1 maximum; from the
+origin `rim` was larger and the plume dimmer. So something else in our flame is wrong and the origin eye hides part of
+it.
+
+**The space is settled: it is world space and the eye is the camera** ("The live vertex program" above, confidence
+92). So the view's eye is the right value for `Fog::camera`, and the rest pairs get worse for another reason. Re-applied
+on `hd/talons` and `hd/moa-therma` (2026-11-26), the moved pixels read, mean RGB:
+
+| pair | original | ours, origin eye | ours, camera eye |
+| --- | --- | --- | --- |
+| `hd/talons` | (37, 66, 103) | (33, 74, 113) | (36, 85, 128) |
+| `hd/moa-therma` | (58, 77, 106) | (79, 92, 128) | (95, 115, 159) |
+
+Ours is already brighter and bluer than the original with the origin eye; the camera eye raises `alpha`, as the
+program says it should, and so widens a gap that is not the eye's. On `hd/talons`, read once at 4x, the original's
+nozzle shows a blue left half and a pink right half; ours is one even blue. Whether that is the flame's colour tap
+(its scroll clock, the `(2u, 2v + noise)` displacement, the texel), the spikes or the nozzle behind is not yet shown;
+the colour tap is the first suspect. Ruled out on the way: the rest
+scales (they match), the normal transform (both plain `M`), and an alpha clamp (the original's target is
+`A8R8G8B8`, surface format `0x3148` read off `c1`, so a fixed-point target that should clamp its 1.1 alpha to 1.0,
+inferred, confidence 70; clamping ours to 1.0 moved no pixel of either pair either way).
+
+The disc shield shells and cockpit spheres read the same block and are unaffected: with the eye supplied to them alone,
+18 frames (HD, Omega, 2048, Pulse, Pulse PS2, Pure; chase at ticks 400 and 600, cockpit at 400) are byte-identical.
+2048 and Omega flames: checked, differs. Their flares take `oag_livery::flare`'s `psp2_flare`, which sets no `Flame`,
+so they are shaded without the rim; none of their pairs moved.
+
 ## Blocks #0 and #2, in one line each
 
 `#0` computes the same rim term, writes a black `H0.xyz` and samples nothing -
 a depth or mask variant. `#2` is `#1` with `fogColour` (`0x3dc31258`, already
-named on [renderer.md](renderer.md)) and the `float2` still unresolved: the
-fogged permutation. Neither changes anything above.
+named on [renderer.md](renderer.md)), the `float2` still unresolved, and a
+closing `MAD /2` on the colour: the fogged permutation, and the one the console
+runs ("The live fragment program is block #2" above).
 
 ## The runtime, read 2026-08-23
 

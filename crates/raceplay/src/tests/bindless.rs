@@ -157,6 +157,7 @@ pub(super) fn pixels_with(
             format,
             usage,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         })
     };
     let colour = target(

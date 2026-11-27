@@ -31,7 +31,8 @@
 //! the cut, the hand-back to the chase camera on the camera's own 8 s clock, and on 2048 and
 //! Omega the hold view after it. Their stations are the `Camera` nodes of the circuit's
 //! `track.vex`, read whether or not the title draws the circuit's effects. A Zone end whose
-//! [`oag_title::destroyed::ZoneEnd::orbit_camera`] is set is the orbit round the craft instead.
+//! [`oag_title::destroyed::ZoneEnd::orbit_camera`] is set is the orbit round the craft instead,
+//! and so is a Detonator end ([`oag_title::destroyed::DetonatorEnd::orbit_camera`]).
 //!
 //! **Chosen, not measured:**
 //!
@@ -156,6 +157,12 @@ impl RaceView {
 
 #[cfg(feature = "view")]
 impl RaceView {
+    /// Whether the close orbit round the player's wreck has the picture.
+    #[must_use]
+    pub fn orbiting(&self) -> bool {
+        self.destroy_camera.orbit.is_some()
+    }
+
     /// The player's craft is in state 6: the camera stops following it.
     pub(super) fn hold_destroy_camera(&mut self) {
         self.destroy_camera.held = true;
@@ -174,7 +181,8 @@ impl RaceView {
         let subject = ship.physics.body.position;
         let dt = core.sim.dt;
         let law = core.sim.destroyed.camera;
-        let orbits = core.sim.zone_end().is_some_and(|end| end.orbit_camera);
+        let orbits = core.sim.zone_end().is_some_and(|end| end.orbit_camera)
+            || core.sim.detonator_end().is_some_and(|end| end.orbit_camera);
         let out = matches!(
             state,
             oag_physics::CraftState::Destroyed | oag_physics::CraftState::Eliminated

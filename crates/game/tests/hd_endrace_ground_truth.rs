@@ -162,14 +162,7 @@ fn a_finished_hd_race_reaches_endrace_results_with_the_field_populated() {
         false,
         &|_| None,
     );
-    let texts: Vec<String> = layers
-        .body
-        .iter()
-        .filter_map(|draw| match draw {
-            oag_ui::frontend::Draw::Text { text, .. } => Some(text.clone()),
-            _ => None,
-        })
-        .collect();
+    let texts: Vec<String> = layers.body.iter().filter_map(drawn_text).collect();
 
     let player_place = board
         .rows
@@ -245,10 +238,7 @@ fn results_texts(
     )
     .body
     .iter()
-    .filter_map(|draw| match draw {
-        oag_ui::frontend::Draw::Text { text, .. } => Some(text.clone()),
-        _ => None,
-    })
+    .filter_map(drawn_text)
     .collect()
 }
 
@@ -419,14 +409,7 @@ fn hd_endrace_results_draws_its_confirm_prompt_despite_the_malformed_tag() {
         false,
         &|_| None,
     );
-    let texts: Vec<String> = layers
-        .body
-        .iter()
-        .filter_map(|draw| match draw {
-            oag_ui::frontend::Draw::Text { text, .. } => Some(text.clone()),
-            _ => None,
-        })
-        .collect();
+    let texts: Vec<String> = layers.body.iter().filter_map(drawn_text).collect();
     assert!(
         texts.iter().any(|t| t.eq_ignore_ascii_case("Confirm")),
         "EndRace Results should draw its own Confirm prompt once the \
@@ -478,18 +461,40 @@ fn a_detonator_run_destroyed_in_stage_five_draws_four_of_fourteen_and_its_sessio
         race.core.sim.world.detonator.live_mines = 0;
     }
     assert_eq!(race.core.sim.detonator_stage(), Some(5), "reached stage 5");
-    for _ in 0..400 {
+    let mut blast = None;
+    for _ in 0..800 {
         if race.core.sim.finished() {
             break;
         }
-        if let Some(at) = race.core.sim.detonator_mine_position(0) {
+        if blast.is_none()
+            && let Some(at) = race.core.sim.detonator_mine_position(0)
+        {
             let body = &mut race.core.sim.world.ships[LONE].physics.body;
             body.position = at;
             body.linear_velocity = oag_core::math::Vec3::ZERO;
         }
         race.tick(&PlayerInputs::none());
+        let state = race.core.sim.world.ships[LONE].physics.craft_state;
+        if blast.is_none() && state != oag_physics::CraftState::Racing {
+            blast = Some((race.core.sim.world.tick, race.core.sim.detonator_score()));
+            assert!(!race.hud_shown(), "the blast takes the HUD down");
+        }
+        if blast.is_some_and(|(at, _)| race.core.sim.world.tick == at + 60) {
+            assert!(
+                race.view_state().orbiting(),
+                "the camera orbits the wreck (mode 2)"
+            );
+        }
     }
     assert!(race.core.sim.finished(), "the wreck ended the race");
+    // The finish handler's 1.0 s then 4.5 s before `EndRace Results` (`detonator-endrace.md`).
+    let (blast_tick, blast_score) = blast.expect("the craft blew up");
+    let waited = race.core.sim.world.tick - blast_tick;
+    assert!(
+        (328..=332).contains(&waited),
+        "results {waited} ticks after the blast"
+    );
+    assert_eq!(race.core.sim.detonator_score(), blast_score);
 
     let board = race.core.results().expect("a finished race has results");
     let results = oag_game::results_tables::detonator_results(&race.core.sim, Some(board))
@@ -519,10 +524,22 @@ fn a_detonator_run_destroyed_in_stage_five_draws_four_of_fourteen_and_its_sessio
         r"Data\Plugins\Languages\English\entries.xml",
         &oag_ui_screens::endrace::DetonatorResults::IDS,
     ));
+    let menu = oag_hd::frontend::FRONT_END
+        .menu
+        .expect("HD authors a MenuSkin");
+    // HD loads no `menu` face: the ratio its two end-screen builders pass.
+    let faces = oag_ui_screens::picker::FaceScales {
+        default: oag_ui_screens::picker::FaceScales::default_ratio(
+            33.0,
+            None,
+            menu.default_face_is_row_face,
+        ),
+        ..oag_ui_screens::picker::FaceScales::default()
+    };
     let screens = oag_game::endrace::load(
         &mut archives,
         &strings,
-        oag_ui_screens::picker::FaceScales::default(),
+        faces,
         oag_hd::endrace::AUTHORED_GRID,
         &oag_hud::sprite::Sheet::default(),
         &[],
@@ -545,23 +562,24 @@ fn a_detonator_run_destroyed_in_stage_five_draws_four_of_fourteen_and_its_sessio
         oag_display::space::Space::PSP,
         22.0,
     );
-    let texts: Vec<String> = oag_ui_screens::endrace::hd::hd_results_draw_list(
+    // A front-end frame with a mark and a clear of its own, which these screens draw neither of.
+    let frame = oag_ui::menu::Frame {
+        clear: Some(frame_mark()),
+        marks: vec![frame_mark()],
+        ..oag_ui::menu::Frame::default()
+    };
+    let layers = oag_ui_screens::endrace::hd::hd_results_draw_list(
         &model,
         &screens.results,
         &skin,
-        &oag_ui::menu::Frame::default(),
+        &frame,
         &strings,
         None,
-        false,
+        true,
         &|_| None,
-    )
-    .body
-    .iter()
-    .filter_map(|draw| match draw {
-        oag_ui::frontend::Draw::Text { text, .. } => Some(text.clone()),
-        _ => None,
-    })
-    .collect();
+    );
+    check_faces_and_frame(&layers);
+    let texts: Vec<String> = layers.body.iter().filter_map(drawn_text).collect();
     for wanted in [
         "DETONATOR SESSION COMPLETE!",
         "STAGE CLEARED",
@@ -584,6 +602,114 @@ fn a_detonator_run_destroyed_in_stage_five_draws_four_of_fourteen_and_its_sessio
     assert!(
         !texts.iter().any(|t| t == strings.get_or_id("ER_RACING")),
         "{texts:?}"
+    );
+    // The captions the original draws, and the record notice with a score that beat nothing.
+    for wanted in [
+        "SCREEN TITLE",
+        "PLAYER POSITION",
+        "FINAL POSITION",
+        "RECORD NOTIFICATION",
+        "SCORE RECORD 0",
+    ] {
+        assert!(texts.iter().any(|t| t == wanted), "{wanted:?} in {texts:?}");
+    }
+    // The logo only the Fury copy authors, put on the served copy and decoded.
+    let logo = screens
+        .results
+        .screen
+        .images
+        .iter()
+        .find(|image| image.name.as_deref() == Some("RecLogoD"))
+        .expect("RecLogoD on the served results screen");
+    assert!(screens.sprites.get(&logo.src).is_some(), "{}", logo.src);
+
+    // The run kept as a record: the original's blue notice, once.
+    let mut store = oag_game::records::Store::default();
+    let key = oag_game::records::Key::new("hd", Some("17_Track"), "detonator", "venom");
+    let score = u32::try_from(results.score).expect("a score is not negative");
+    let mut beaten = model.clone();
+    beaten.detonator = Some(oag_ui_screens::endrace::DetonatorResults {
+        record: store.judge_score(&key, score.max(1), true),
+        ..results
+    });
+    let drawn: Vec<String> = oag_ui_screens::endrace::hd::hd_results_draw_list(
+        &beaten,
+        &screens.results,
+        &skin,
+        &oag_ui::menu::Frame::default(),
+        &strings,
+        None,
+        false,
+        &|src| screens.sprites.get(src),
+    )
+    .body
+    .iter()
+    .filter_map(drawn_text)
+    .collect();
+    let wanted = format!("NEW SCORE RECORD {}", score.max(1));
+    assert!(drawn.contains(&wanted), "{wanted:?} in {drawn:?}");
+    assert!(
+        !store.judge_score(&key, score.max(1), true).new,
+        "equal is not a record"
+    );
+}
+
+/// The string of a text in either face.
+fn drawn_text(draw: &oag_ui::frontend::Draw) -> Option<String> {
+    match draw {
+        oag_ui::frontend::Draw::Text { text, .. }
+        | oag_ui::frontend::Draw::FacedText { text, .. } => Some(text.clone()),
+        _ => None,
+    }
+}
+
+/// A text in either face, with where it is drawn.
+fn placed(draw: &oag_ui::frontend::Draw) -> Option<(&str, f32, f32)> {
+    match draw {
+        oag_ui::frontend::Draw::Text { text, x, y, .. }
+        | oag_ui::frontend::Draw::FacedText { text, x, y, .. } => Some((text, *x, *y)),
+        _ => None,
+    }
+}
+
+/// A fill no end screen authors, standing for the front end's rules and title arrow.
+fn frame_mark() -> oag_ui::frontend::Draw {
+    oag_ui::frontend::Draw::Fill {
+        rect: [3.0, 5.0, 7.0, 11.0],
+        color: [1.0, 0.0, 1.0, 1.0],
+    }
+}
+
+/// The rows at their authored `0.8` in the primary face, the headline in the `Title` face, the
+/// cross in the button face, and none of the front end's frame
+/// (`docs/ui/endrace-screens.md`, "HD's text, glyph and frame against the original").
+fn check_faces_and_frame(layers: &oag_ui::menu::Layers) {
+    use oag_ui::frontend::Draw;
+    let row = layers.body.iter().find_map(|draw| match draw {
+        Draw::Text { text, scale, .. } if text == "STAGE CLEARED" => Some(*scale),
+        _ => None,
+    });
+    assert!(
+        row.is_some_and(|scale| (scale - 0.8).abs() < 1e-5),
+        "{row:?}"
+    );
+    let role = |wanted: &str| {
+        layers.body.iter().find_map(|draw| match draw {
+            Draw::FacedText { role, text, .. } if text == wanted => Some(*role),
+            _ => None,
+        })
+    };
+    assert_eq!(role("DETONATOR SESSION COMPLETE!"), Some("Title"));
+    assert!(
+        layers.body.iter().any(|draw| matches!(
+            draw,
+            Draw::FacedText { role, .. } if *role == "Buttons"
+        )),
+        "the CONFIRM glyph"
+    );
+    assert!(
+        !layers.clone().flatten().contains(&frame_mark()),
+        "the front-end frame is drawn"
     );
 }
 
@@ -636,14 +762,7 @@ fn hd_endrace_rewards_draws_the_place_and_medal_off_the_real_definition() {
         )
     };
     let texts = |layers: &oag_ui::menu::Layers| -> Vec<String> {
-        layers
-            .body
-            .iter()
-            .filter_map(|draw| match draw {
-                oag_ui::frontend::Draw::Text { text, .. } => Some(text.clone()),
-                _ => None,
-            })
-            .collect()
+        layers.body.iter().filter_map(drawn_text).collect()
     };
     let fill_at = |layers: &oag_ui::menu::Layers, x: f32, y: f32| {
         layers.body.iter().any(|draw| {
@@ -754,10 +873,8 @@ fn hd_endrace_podium_draws_three_places_off_the_copy_that_authors_it() {
         layers
             .body
             .iter()
-            .find_map(|d| match d {
-                Draw::Text { text, x, y, .. } if text == wanted => Some((*x, *y)),
-                _ => None,
-            })
+            .filter_map(placed)
+            .find_map(|(text, x, y)| (text == wanted).then_some((x, y)))
             .unwrap_or_else(|| panic!("{wanted:?} not drawn"))
     };
     let layers = draw(&HdPodium {
@@ -799,7 +916,8 @@ fn hd_endrace_podium_draws_three_places_off_the_copy_that_authors_it() {
             !layers
                 .body
                 .iter()
-                .any(|d| matches!(d, Draw::Text { text, .. } if text == placeholder)),
+                .filter_map(placed)
+                .any(|(text, ..)| text == placeholder),
             "{placeholder:?} leaked"
         );
     }
@@ -810,7 +928,8 @@ fn hd_endrace_podium_draws_three_places_off_the_copy_that_authors_it() {
         !lone
             .body
             .iter()
-            .any(|d| matches!(d, Draw::Text { text, .. } if text == "2ND" || text == "3RD")),
+            .filter_map(placed)
+            .any(|(text, ..)| text == "2ND" || text == "3RD"),
         "an empty place draws no heading"
     );
 }
@@ -893,10 +1012,8 @@ fn an_eight_craft_hd_results_grid_clears_its_own_bottom_bar() {
         layers
             .body
             .iter()
-            .find_map(|draw| match draw {
-                oag_ui::frontend::Draw::Text { text, y, .. } if text == place => Some(*y),
-                _ => None,
-            })
+            .filter_map(placed)
+            .find_map(|(text, _, y)| (text == place).then_some(y))
             .unwrap_or_else(|| panic!("place {place} drew"))
     };
     for place in 1..=8u8 {

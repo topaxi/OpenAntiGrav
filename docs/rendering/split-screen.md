@@ -2084,7 +2084,6 @@ follows from it:
   thread, which is what one submission with the finish overlapped could recover (uploads recorded in
   the encoder instead of `queue.write_buffer`, so a view's data no longer depends on its submit).
 
-||||||| 8a9d45d37
 
 
 ## Threaded recording on equal cores (2026-11-04)

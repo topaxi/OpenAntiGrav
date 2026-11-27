@@ -65,6 +65,7 @@ fn fsr3_skips_the_spatial_anti_aliasing_pass_rather_than_discarding_it() {
                 format: texture_format,
                 usage,
                 view_formats: &[],
+                texture_binding_view_dimension: None,
             })
             .create_view(&Default::default())
     };
@@ -188,6 +189,7 @@ fn a_split_resolves_each_view_with_a_chain_of_its_own() {
                 usage: wgpu::TextureUsages::TEXTURE_BINDING
                     | wgpu::TextureUsages::RENDER_ATTACHMENT,
                 view_formats: &[],
+                texture_binding_view_dimension: None,
             })
             .create_view(&Default::default())
     };

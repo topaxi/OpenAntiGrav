@@ -73,6 +73,7 @@ fn render(node: &Node) -> Option<Vec<[u8; 4]>> {
             format,
             usage,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         })
     };
     let colour = target(

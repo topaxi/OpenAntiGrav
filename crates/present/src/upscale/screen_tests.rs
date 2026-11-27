@@ -51,6 +51,7 @@ fn filtered(
         format,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let surface_view = surface.create_view(&Default::default());
     let readback = device.create_buffer(&wgpu::BufferDescriptor {

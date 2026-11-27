@@ -857,6 +857,7 @@ pub(crate) fn race_launch(
                     "LeachBeam lock",
                 )?,
                 leach_path: crate::app::args::leach_path(cli.wreck.leach_path.as_deref())?,
+                force_shot_at: crate::app::args::shot_at(cli.force_shot_at())?,
                 force_bomb_trip: crate::app::args::force_at_slot(
                     cli.wreck.force_bomb_trip.as_deref(),
                     "Bomb trip",
@@ -869,6 +870,10 @@ pub(crate) fn race_launch(
                     cli.wreck.force_rocket_hit.as_deref(),
                     "Rocket hit",
                 )?,
+                force_rocket_hit_velocity: crate::app::args::velocity(
+                    cli.force_rocket_hit_velocity(),
+                )?,
+                force_rocket_hit_at: crate::app::args::rocket_hits_at(cli.force_rocket_hit_at())?,
                 force_quake: crate::app::args::force_at_slot(
                     cli.wreck.force_quake.as_deref(),
                     "Quake",
@@ -881,6 +886,7 @@ pub(crate) fn race_launch(
                     !cli.wreck.no_correction_smoothing,
                 )?,
                 no_weapon_lights: cli.wreck.no_weapon_lights,
+                stage_seed: cli.wreck.stage_seed,
                 force_shield: crate::app::args::force_shield(&cli.wreck.force_shield)?,
                 medals: crate::race_capture::tick::Medals {
                     forced: crate::app::args::force_medal(&cli.wreck.force_medal)?,
@@ -935,6 +941,7 @@ pub(crate) fn race_launch(
                     cli.pose_draw.pose_hold,
                     cli.pose_draw.pose_hold_ticks,
                 ),
+                pose_launch: crate::app::args::pose_launch(cli.pose_hold_launch())?,
                 pose_lean: pose_lean(cli)?,
                 pose_flaps: pose_flaps(cli)?,
                 stow_grid_flaps: cli.pose_draw.no_grid_flaps
@@ -949,6 +956,7 @@ pub(crate) fn race_launch(
                     .mine_envelopes
                     .as_ref()
                     .map(|m| m.0.clone()),
+                detonator_mine_ages: cli.detonator.mine_ages.as_ref().map(|m| m.0.clone()),
                 detonator_emp_charge: cli.detonator.emp_charge,
                 detonator_gauge_speed: cli.detonator.gauge_speed,
                 pose_sparks: pose_sparks(cli)?,

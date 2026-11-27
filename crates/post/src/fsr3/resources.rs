@@ -126,6 +126,7 @@ impl Target {
             format,
             usage,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
         let mips = (0..mips.max(1))

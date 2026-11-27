@@ -34,7 +34,8 @@ pub(crate) enum SceneKind {
     Ship,
     /// The hulls' and the circuit's shine passes: the craft's with the fog colour black.
     Shine,
-    /// The flame surfaces' (flares and boost plumes): `Scene::off` plus the clock.
+    /// The flame surfaces' (flares and boost plumes) and the shields': `Scene::off` plus
+    /// the clock and the view's eye.
     Flame,
     /// The behind-the-glass target's alternate fog, or the planar reflection target's
     /// alternate-fog group (its lights doubled, as [`SceneKind::Reflection`]'s).

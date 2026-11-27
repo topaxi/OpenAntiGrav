@@ -15,6 +15,7 @@ fn view(device: &wgpu::Device, size: u32) -> wgpu::TextureView {
             format: wgpu::TextureFormat::Rgba8Unorm,
             usage: wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         })
         .create_view(&wgpu::TextureViewDescriptor::default())
 }

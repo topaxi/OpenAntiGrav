@@ -314,6 +314,21 @@ impl Race {
         let Some(weapon) = self.core.sim.world.ships[slot].pickup.weapon else {
             return;
         };
+        // A score Eliminator's Mine, Bomb or Cannon held past the title's stale time, and not
+        // mid-drop, goes on the Shield (`crate::score_pace`).
+        if let Some(stale) = self.core.sim.score_pace.and_then(|pace| pace.stale_ticks)
+            && matches!(
+                weapon,
+                oag_tables::weapons::Weapon::Mine
+                    | oag_tables::weapons::Weapon::Bomb
+                    | oag_tables::weapons::Weapon::Cannon
+            )
+            && self.core.sim.world.ships[slot].pickup.dropping == 0
+            && self.core.sim.world.ships[slot].weapon_ai.held_ticks >= stale
+        {
+            self.eliminator_absorb(slot);
+            return;
+        }
         // A simulation mod's own pickup: the driver asks to fire it wherever it would
         // fire a Turbo (the Turbo's own gate below, on the Turbo's boost time), every tick
         // that gate passes, and never absorbs it. What a fire does is the mod's.

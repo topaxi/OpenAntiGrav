@@ -376,7 +376,19 @@ The node matrix at `ship+0x40` equals the body on all eight craft on every pause
 
 **So a pair that takes the camera from the push buffer and the craft from RAM draws every craft 1 or 2 ticks ahead of its camera**: smaller, higher and farther up the road. On the stored `hd-race/talons-pack`, ours re-rendered with every craft moved back along its own velocity (sigma 7, mean absolute RGB): frame **18.82 at 0 ticks, 17.98 at 1, 21.80 at 2**; the hull's box (`640,330 640x420`) **17.29, 13.34, 17.47**; at one tick the hull is the original's size and sits where the original's does. That pair's skew is one tick. The earlier note that `run2`'s opponent wanted no rewind is not borne out by the push buffer (`r1`, `r2`: opponents skewed with the player).
 
-**Wired for `--detonator` (2026-11-23, `det-camera`, "Detonator pairs: the hull's frame pose"); still open for `--field`:** `rpcs3-hd-pair.py --field` should read the player's hull matrix from the push-buffer regions it already dumps, record the whole-tick skew in `pair.json` (`original.presented_lag.craft_ticks`), refuse a pause where it is not within 0.1 of a whole number, and write the field with every craft moved back that many ticks of its own velocity (or take each hull's translation from the push buffer outright). The HUD clock's 3-tick text lag is a separate thing and stays. Until then a moving HD pair is checked with `hd-pair-lag-scan.py`.
+**Wired for `--detonator` (2026-11-23, `det-camera`, "Detonator pairs: the hull's frame pose") and for the Rocket film pairs (2026-11-26, `compare_env.py film-pair-field`, which reads the hull from the frame's walked command stream; [particle-fill.md](../rendering/particle-fill.md), "The first wave and the drawn hull"); still open for `--field`:** `rpcs3-hd-pair.py --field` should read the player's hull matrix from the push-buffer regions it already dumps, record the whole-tick skew in `pair.json` (`original.presented_lag.craft_ticks`), refuse a pause where it is not within 0.1 of a whole number, and write the field with every craft moved back that many ticks of its own velocity (or take each hull's translation from the push buffer outright). The HUD clock's 3-tick text lag is a separate thing and stays. Until then a moving HD pair is checked with `hd-pair-lag-scan.py`.
+
+**A ringless pair is moved after the fact with `compare_env.py rewind-pair-field <pair-dir> <ticks>` (2026-11-26, `pair-tooling-fixes`).** It moves `field.csv` back the whole ticks the scan picks, records `original.presented_lag.craft_ticks` with the basis (a whole-frame score, not a push-buffer read), replaces the record's claim that the picture needed no correction, and refuses a pair that already records `craft_ticks` (as `film-pair-field` now does too). The camera is not moved. On `hd-race/talons-pack` (current binary, scratch copies, each arm rendered twice with bit-identical results):
+
+| Craft rewind, camera as recorded | mean grey difference | RMSE | edge correlation | hull box grey (`640,330 640x420`, mean absolute RGB) |
+| --- | --- | --- | --- | --- |
+| 0 ticks (stored) | 23.05 | 0.171 | 0.092 | 25.71 |
+| **1 tick** | **22.39** | 0.166 | 0.094 | 21.83 |
+| 2 ticks | 26.21 | 0.191 | 0.089 | 25.86 |
+
+By eye at 1 tick the hull has the original's size and height, where the stored pair's is small and high. Confidence in 1 tick relative to the camera 85: `hd-pair-lag-scan.py`'s RMSE also prefers craft = camera + 1 when the camera is rewound (1:2 over 1:1, 2:3 over 2:2), and the eye to hull distance at 1 tick is 11.6 units, the rig's.
+
+**Open: the camera of this pair may itself be newer than the picture**, which would be another sample of "The picture is older than the push buffer's camera" below (`det-mine-look-re`, not reconciled with this section). Rewinding the camera too scores lower on RMSE and grey (camera 1 craft 2: mean grey 18.78, one render) and goes on falling to camera 2 craft 3 (scan RMSE 0.136 against 0.165 at camera 0 craft 1), while edge correlation falls (0.094 to 0.074). A whole-frame score does not settle it. What would: that section's measure (static things near the camera, a lag fitted per grab) or a re-capture that keeps the frame's command ring.
 
 ## Pulse PS2: a race pair for every circuit (2026-11-11, `gallery-pulse-ps2`)
 
@@ -691,9 +703,21 @@ Menu mean grey 5 to 12 (before 4 to 10) is the same order. Maintainer, 2026-11-1
 as ours also uses the same in the end" - both changes below follow that.
 
 - **Harimau is the standard hull now.** The classic hull (the `down` on Ship Select) is locked on this machine's profile
-  (padlock on the third hex of the column), so the cold-boot walk stops on Team Selection. `compare-rerender-all.py`'s `Rpcs3.TEAMS` is `(9, 0)`;
+  (padlock on the third hex of the column), so the cold-boot walk stops on Team Selection. No press count holds across profiles:
+  the cold boot now steps Ship Select until RAM names the pair's `--team` hull ([rpcs3-capture.md](../reverse-engineering/rpcs3-capture.md), "Picking the hull on Ship Select").
   RAM's team name is `harimau` either way and the pair's own `the player's craft (RAM) is the craft ours draws` check passes. The 12 pairs'
   captions say "Harimau (standard hull)". `talons-assegai-c1` (`(7, 0)`) was already the unlocked hull.
+- **The save moved (2026-11-26, `hd-flame-regrab`): Ship Select opens on the Fury hull, and Pilot Assist was on.** On the
+  maintainer's save of that day Ship Select opens Harimau's column on the Fury hull, which RAM names `Harimau_c1`
+  (`*(*(ship+0x6298)+0x1b4)`, `Data\Ships\Harimau_c1`); one `down` gives `Data\Ships\Harimau`, the orange, yellow-green and blue
+  hull the 12 stored grid pairs fly (read by eye on all 12 regrabs against the stored frames). Assegai's column opens on `Assegai_c1`. No press count is right on every save, so the cold boot steps Ship Select
+  until RAM names the pair's `--team` hull (`rpcs3-hd-ship-step.py select --hull`, called by `emu-hd-glass-boot.sh`;
+  `compare-rerender-all.py selftest` holds that `--team` reaches it). The option byte `*(*0x008b098c)+0x473` read `01 01`, so every race frame drew the
+  indicator's bracket under the craft while the profile renders ours off. Two checks in `rpcs3-hd-pair.py` now refuse both:
+  the player's hull directory read in the capture's pause against `--team` (a Fury `Harimau_c1` grab with `--team harimau` had passed
+  all nine earlier parity checks), and the Pilot Assist byte against the profile's `pilot_assist`
+  (`check-compare-environment.py`, `check_hd_hull` and `check_hd_pilot_assist`). `rpcs3-hd-cold-pair.sh` writes the option off
+  before `Restart Race` (`scripts/rpcs3-hd-pilot-assist.py --off`; the save is not written), and the bracket is gone from the frame.
 - **The original's Menu Style must be FURY for a menu or loading pair.** This profile boots the front end in the HD (white) style and ours' `--menu-page`
   draws only the Fury one whatever `display.front_end_style` says (mean grey 115 to 240 against 4 to 10 on the first try), so the original is switched: `Main Menu` ->
   `OPTIONS` -> `GAME`, down 8 rows to `MENU STYLE`, `right`, **`cross`** to confirm (`circle` cancels and the style reverts), back with `circle`.
@@ -1619,21 +1643,69 @@ tilt 0.21 deg). Mean grey difference 53.04, RMSE 0.322, edge NCC 0.222 (`compare
 7.9 s, was refused at 3.03 deg and discarded). Confidence 70 that the recipe reproduces; the number is one measurement.
 
 **Menu path** (RACEBOX cursor sits on RACE TYPE; the screen names are `Single Player`, `Track Creation`, `Team Selection`): Main Menu, Racebox, RACE TYPE
-to **Zone** (the setting is remembered between visits; the list ends Zone, Zone Battle, Detonator, Tournament, so read the row before pressing), `cross` to Track
+to **Zone** (the setting is remembered between visits; from Single Race it is 4 `right`s; the list ends Zone, Zone Battle, Detonator, Tournament, so read the row before pressing), `cross` to Track
 Select (Vineta K is the first circuit, no steps), `cross` to Ship Select (Feisar is the first team), `cross` loads (`TTY.log`: `GetMode()==6`, `Loading World
 "Data\Environments\01_Vineta_K\track.vex"`), then START RACE. On a loaded machine a `press` is dropped about one time in four and the screenshot lags the
-cursor by several seconds: read the highlighted row off a grab before every `cross`.
+cursor by several seconds: read the highlighted row off a grab before every `cross`. Pilot Assist is written off first (`rpcs3-hd-pilot-assist.py --off`).
 
-**The grab.** Zone flies the craft itself (about 110 km/h by lap clock 8 s with no input), so a start shot has a window of a fraction of a game second.
-`rpcs3-drive.py restart` fails in Zone (its Down count is one short because the greyed VIEW INVITES row is skipped); open the pause menu with `start`, move to
-RESTART RACE by hand and `cross`: the race reloads straight into the countdown with no START RACE prompt (about 5.2 game seconds to GO). A script then polls
-`world_clock_now()` (no pause) after the reload and runs `rpcs3-hd-pair.py ... --zone 1,0 --autopilot off --state <sidecar with {"mode":"zone","circuit":"vineta-k"}>` once the
-world clock has advanced 2.4 s from its first post-reload reading: the pair's own attach and pause land 2 to 3 game seconds later (emulator at about a fifth of real
-time under load 38), at lap clock 0.0. Lead 2.6 s (one attempt, lap clock 0.57 at the trigger) landed at lap clock 3.3 with the craft already moving; lead 2.4 s landed at 0.0.
+**The grab (2026-11-27, `hd-zone-pair-capture`, replaces the world-clock lead).** `rpcs3-hd-pair.py --zone 1,0 --countdown --autopilot off --state <sidecar
+{"mode":"zone","circuit":"vineta-k"}>` is started **first**; it waits in-process, without pausing, for the race manager to be `--countdown-at` seconds
+(default 2.4) into phase 1, and only then attaches the debugger. The caller then starts the race: `cross` at the fly-over's START RACE prompt, or `cross` on
+`RACE AGAIN` (`EndRace Menu`, once the craft has crashed, about 60 s). The countdown is phase 1 of the race manager (`*0x0095ae78 + 0x1950`, word `+0x20`) and
+lasts 3.0 s; about 3 s of phase 0 precede it after `RACE AGAIN`. The lap clock reads 0 through the countdown and at GO alike, so the pair refuses a grab on the
+phase, and draws ours without `--hud-state` (the original draws no HUD yet). The earlier lane's grabs landed mid-race at lap clock 10 s; the cause is
+inferred, not timed: the capture's default `--settle` is 12 s and only `--field` overrode it (with `--settle 0` the pause lands 0.02 to 0.09 s after the
+wait's target, and the 12 s arm was not re-run).
+
+## The countdown frame (HD Zone, 2026-11-27, `hd-zone-pair-capture`)
+
+Two boots of RPCS3, Vineta K Zone, each grab 13 of 13 parity checks. "Tone" is the original's blue channel mean on a flat patch of the right-hand building
+(`1500..1700 x 150..230`; ours reads 218.3 to 218.8 on every grab, the stored 2026-11-19 original 220.3). "Shift" is the largest best-fit offset, in px, of
+ours against the original on three scene regions with no craft or board.
+
+| grab | s into countdown | tone | shift px | mean grey | RMSE | edge NCC |
+| --- | --- | --- | --- | --- | --- | --- |
+| stored 2026-11-19 | not recorded | 220.3 | 0.3 | 6.26 | 0.0763 | 0.301 |
+| boot A, early | 0.22 | 229.4 | 1.4 | 9.78 | 0.0822 | 0.285 |
+| boot A | 1.06 | 223.7 | 0.3 | 6.62 | 0.0692 | 0.298 |
+| boot A | 2.22 | 220.0 | 0.8 | 6.51 | 0.0786 | 0.289 |
+| boot B | 2.26 | 219.9 | 2.0 | 8.16 | 0.0950 | 0.270 |
+| **boot B, adopted** | 2.43 | 220.1 | 0.07 | 5.92 | 0.0731 | 0.303 |
+| boot B | 2.48 | 221.2 | 0.3 | 6.55 | 0.0746 | 0.300 |
+
+- **The original's tone settles during the countdown** (confidence 75: seven grabs and one unpaused poll). The Environment block's adapted luminance
+  (`FunkLayer` `0x00c50ee0 + 0x254`) read 0.311 at the countdown's start, 0.348 at 1.0 s and 0.359 at 2.4 s (frame luma 0.358 to 0.361): the exposure follows it.
+  Ours holds one tone, near the late original's. A countdown grab before about 2 s is 3 to 9 levels brighter for a reason ours does not model.
+- **The craft hovers with a jitter** of about 0.05 units the whole countdown (polled unpaused), and the presented frame can be older than the camera read in the
+  pause. The scene then sits 1 to 2 px off ours (the doubled edges of the 2.26 s grab) and mean grey rises by up to 2. Judge a grab by its shift, and re-grab.
+- **A single grab's mean grey is not a measure of a change in ours**: two aligned grabs on one boot read 5.92 and 6.55.
+- The adopted grab was chosen by a rule written before it was taken (at least 2.2 s in, every region's shift at most 0.5 px, first to pass), not by score.
+  Craft box: best gradient correlation 0.81 at offset (0, 0). Every grab's craft overlays within 1 px.
+- Left unmatched: the fade on the gantry board's outer pieces
+  ([start-gantry.md](../rendering/start-gantry.md), "The Zone board"), the two raised flaps on the hull's top, which the original shows on the grid, and a few
+  floating scenery shapes whose animation phase differs.
+
+**Ours renders the original's countdown moment (2026-11-27, `hd-zone-start`).** The two countdowns differ in length (HD 3.0 s, ours longer), so they share the
+release: `compare_env.countdown_flags` renders ours at `GO_TICK - round((3.0 - race_phase.elapsed_s) * 60)` (238 for the adopted pair), rebases
+`--world-clock-offset` onto that tick so the scenery still shows the original's time, and holds the craft on the pose (`--pose-hold`). `rpcs3-hd-pair.py
+--countdown` records it and `compare-rerender-ours.py` derives it from `original.race_phase`. No presented lag is subtracted: the 3 ticks measured on HD are the
+HUD clock's and this frame draws no HUD. The flame clock pin is absolute and does not move with the tick.
+
+| re-render of the adopted pair, twice, identical | pair mean grey | RMSE | board `800..1382 x 200..356`: grey, share of the pair |
+| --- | --- | --- | --- |
+| ticks 0, board clock 210 ticks (before) | 5.92 | 0.0731 | 28.20, 1.23 |
+| tick 238, board clock 210 ticks | 5.45 | 0.0660 | 19.87, 0.87 |
+| **tick 238, board clock 180 ticks** | **5.49** | 0.0663 | 19.99, 0.88 |
+
+The middle row scores as low as the last because the board's mean grey barely moves between 212 and 262 ticks; it draws the wrong glyphs (an extra piece of the
+centre icon, other pieces outside it). **The glyph overlap tells them apart.** The intersection over union of the board's bright pixels (luma over 75, box
+`810..1370 x 208..350`) against the original's, swept a tick at a time, peaked at 207 to 212 with the 210-tick clock and at 238 to 241 with the 180-tick one
+(0.666 at both peaks, 0.55 to 0.58 at 20 to 30 ticks off): the original's board stood 2.4 to 2.5 s into its own timeline 2.433 s into the countdown, as the
+executable's zero says ([gantry-clock.md](../ghidra/functions/ps3-hdfury-eu/gantry-clock.md), "What zeroes it in the countdown").
 
 **Differences left (not matched, judged by eye on `side.png`).** The original's zone-1 colour grade is a strong cyan wash; ours renders its natural zone 1 grade
 (pale, warm sky). `--zone 1,0,0` (grade pinned to stage 0) is a grey scene and scores worse (mean grey 88.9), so the stage is left unpinned. The original's start gantry
-shows its countdown glyphs and no HUD yet; ours draws a blank board.
+shows its countdown glyphs and no HUD yet.
 
 **No Zone HUD before GO (2026-11-19, `zone-hud-gate`).** HD and Omega draw no Zone HUD until the race is released
 ([hud-start-gate.md](../ghidra/functions/ps3-hdfury-eu/hud-start-gate.md)), and ours follows. With that fix the
@@ -1647,9 +1719,7 @@ left is the gantry board's glyph, the hull's light and the exhaust.
 **A capture that imposes `--hud-state` is drawn with its HUD on screen,** gate or not: such a pair depicts a
 mid-race frame. Every Omega and 2048 Zone pair is one (`omega/zone-vineta-k-z5`, `omega/zone-capital-reach-2048-z5`,
 `2048-vita/zone-altima-z5`, `2048-vita/zone-dlc-vineta-k-z5`), and they render as before. A pre-release pair must
-**not** pass `--hud-state`. `rpcs3-hd-pair.py --zone` always emits it, so this pair's `ours.flags` drops
-`--hud-state 1,1,0,0,0,100,0,1,0,0` by hand. The countdown draws no HUD, so the counters are never seen, and the
-render is otherwise pixel-identical.
+**not** pass `--hud-state`. `rpcs3-hd-pair.py --zone` emits it for a mid-race frame; with `--countdown` it does not.
 
 ## Omega Zone pairs (2026-11-17, `zone-pair-omega`)
 
@@ -2627,6 +2697,169 @@ Top-left quarter mean RGB (x0..960, y0..540), original / ours, same binary (the 
 
 Ours shows the blue wash where the original does (top-left blue 25.0 against 23.7; top-right `(24.4, 13.4, 26.6)` against `(25.9, 12.8, 26.7)`). Ours' round hit a mine (score 0000100, ammo 13) where the original's did not (0000000, ammo 14); mines in the two are ours' seeded plus carried ones. 2048 and Omega: not applicable, an HD pair.
 
+### The volley pair's difference, split (2026-11-26, `det-cannon-hot-gap`)
+
+`cannon-volley-hot` read 11.47 mean grey, with ours' score at 100 and ammo 13 against the original's 0 and 14, ours' round having hit a mine. The
+cause was the capture state, not the layout (the 80 mines are the original's): ours ran to the HUD clock's tick (`T - 3`) with the camera at the push
+buffer's frame, while the picture was about `T - 7.5`. At `T - 3` ours had fired its second volley and its first had reached a mine; at the picture's
+tick it has fired once and hit nothing.
+
+**The picture's lag without mines** (`hd_picture_lag.static_fit`). The mine fit needs two mines 8 to 50 units ahead; this frame's nearest are 74
+to 81. The fallback renders ours with camera and craft `k` ticks behind the push buffer along the camera's own velocity (`ship.rig_eye`), at the
+picture's tick, and takes the `k` whose edges (below the top 380 rows, less HUD, hull and bright blobs) correlate best with the original's. It
+takes only an interior peak that beats every lag 1.5 ticks away by 0.05, and needs the scenery's animation clock (the floor dashes run on it).
+
+| Grab (skew) | Mine fit `k` | Static `k` |
+| --- | --- | --- |
+| `mines-ahead` (2) | 3.06 | about 2.8 (offset sweep around the fit) |
+| `det-pair-lag` `b7/01` (2) | 3.95 | 3.50 |
+| `det-regrab-fitted` `h5` (4) | 2.15 | 1.75 |
+| `det-mine-spikes` `shots3/01` (4) | 2.33 | 1.75 |
+| `det-mine-spin` `shots6/00` (2) | 3.93 | refused: the best score is at the end of the range |
+| `det-volley-pair` `shots2/00` (4, no world clock) | 2.94 | 0.50, why the clock is now required |
+
+So it reads 0.25 to 0.6 ticks low where it agrees, and can fail. On the first `cannon-volley-hot` grab it gave 3.50 (score 0.54 against 0.43 to 0.47 at
+0 to 2); the pad's white walls, an independent object, put it between 3.5 and 4.25 (right edge at x 1526, 1514 against the original's 1516;
+1584 unshifted). Confidence 70 for 3.5 to 4, seen on one grab. "The picture is at `T - 6`" (next section but two) would give `k = 2` here and is
+refused by both readings; this stop followed a fire hold, whose many short stops that section found to fit no single value.
+**Two later boots of the same stop read 1.75** (peaks at 1.75 ticks, skew 4): the lag varies per grab, and each pair carries its own.
+
+**Ours' tick is the picture's** (`compare_env.picture_tick`, `GO + round(60 T - skew - k)`, and the gantry pin with it) wherever the lag was
+measured, by mines or static scene, on the first render and on every re-render (`compare-rerender-ours.py`). A pair with no measured lag keeps
+the HUD clock's `T - 3`.
+
+| Pair (same `theirs.png`) | Before | After |
+| --- | --- | --- |
+| `cannon-volley-hot` | 11.47 | 10.32 (lag 3.5 static, tick 393 to 388, mine ages carried) |
+| `mines-ahead` (before the mine spin) | 13.17 | 13.13 (tick 429 to 427) |
+| `mines-ahead` (with the mine spin and ages, `main` `68bfc33`'s build) | 12.51 | 12.46 (tick 429 to 427) |
+| `cannon-volley`, `pad` (no measured lag) | 14.32, 7.61 | unchanged (both re-checked 2026-11-26, `det-cannon-regrab`) |
+
+**What is left on `cannon-volley-hot`** (grey = that box's share of the 10.32 whole-frame mean; boxes are `x0, y0, x1, y1`):
+
+| Gap | Box | Grey | Also on | Kind, confidence |
+| --- | --- | --- | --- | --- |
+| Striped metal grilles ours draws bright where the original's frame is near black (ours +22 to +37) | `215,0,520,150` and `1030,150,1360,305` | 0.95 + 0.92 | `pad` (both), `mines-ahead` and `cannon-volley` (the second) | draw, 90; **fixed 2026-11-26**: Talon's `scanlinebillboard` (slot 435), whose Zone variants draw the Zone surface, not the advert ([hd-zone-recolour.md](../rendering/hd-zone-recolour.md), "Holographic billboards in a Zone frame"), 80; -hot 10.32 to 8.96 |
+| The score box's side wings are white-striped in the original, solid red in ours | `690,40,830,235` and `1090,40,1230,235` | 0.48 + 0.69 | all four | draw, 90; **fixed 2026-11-26**: the stripes are `DamageBar`, the shield fill, at another rectangle of `detonator_hud2` ([hd-hud.md](../formats/hd-hud.md), "Detonator's score box") |
+| Score digits and `1/14` about 1.1 to 1.25 times the original's width | `790,100,1135,180` and `85,60,320,225` | 0.79 + 0.38 | all four | draw, 85; **fixed 2026-11-26**: the layout's `ScaleX`/`ScaleY` (0.9x1.0, 0.8x0.8) were unread ([hd-hud.md](../formats/hd-hud.md), "Text scales on two axes") |
+| Hull brighter than the original (ours +7) | `825,720,1100,980` | 0.74 | all four (+5 to +8) | draw, 80 (the fuselage overlay is already open) |
+| Muzzle flashes smaller and dimmer (ours -44) | `825,620,1100,720` | 0.70 | firing frame only | capture state, 55: ours presses with no input latency, so its flash is older than the original's |
+| Near floor right of the hull (ours +4) | `1120,640,1920,850` | 0.48 | all four (+2 to +5) | draw or band timing, 50 |
+
+**Mine ages.** This record has no read at the picture's clock, so each mine's age is the pause's less the measured lag (the age is a clock
+running 1:1 with the lap clock): 55.950 - 7.5/60 = 55.825 on all 80 mines (`rpcs3-hd-pair.py`, `mine_flags`). It does not move this frame
+(10.311 with no ages, 10.324 at the picture's, 10.326 at the pause's: the near mines are 74 to 81 units out).
+
+Not carried on that grab: the mines' envelopes were the pause's, 7.5 ticks newer than the picture, and ours fired on the harness's press tick.
+Both are carried since (next section). The craft is held at rest, and the track-name ticker's scroll is wall-clock.
+
+### The volley clocks and the picture-clock reads (2026-11-26, `det-cannon-regrab`)
+
+**Falsifiers written before the grabs:** a first launch on the harness's press tick would mean there is no press latency; near-mine envelopes at
+the picture's clock equal to the pause's would mean the carry cannot move a frame.
+
+**What the shot script reads now.** At every pause it already takes (it adds none, since a stop 8 or fewer ticks after another reads a different
+lag) it keeps each mine's words and the cannon: the volleys left (`*(ship+0x5edc)+0x164`), the held counter (`**0x008a6814+0x6de44`) and
+every `PulseBullet`'s age (`+0x4c`) and launch speed (`+0x124`) (`scripts/rpcs3_hd_volley.py`). A volley's clock is the lap clock less its
+rounds' age, which is the clock before the frame that fired it. The held counter counts the game's frames, each 1 or 2 ticks, not ticks.
+
+**The press and the volley clocks**, one RPCS3 boot each from `hd-detonator-talons-feisar-grid-late`. Lap clock less round age put the first
+volley 2.0 and 2.0 ticks after the send on `-hot`, 4.0 and 3.0 on `cannon-volley`. That is not the press latency itself: the pauses show no
+held frame and no round until later. On the second `-hot` boot the counter read 0 and no round lived at 1.917 and the rounds were 4 ticks old
+at 1.950, so the first frame with the trigger held came 4 to 6 ticks after the send; the first `cannon-volley` boot read 0 at 1.917 and a
+6-tick round at 2.017 (send 1.850). The latency is a few ticks and differs by boot (confidence 60). What is carried, and confirmed by the
+frame, is each round's age at the picture. The second volley of `-hot` is 4 ticks after the first, not 6, because the original's frames
+were 2 ticks long; ours fires each volley at its own clock (`ours.inputs`: one `square` tick per volley, a release between).
+
+**Pairs** (all 80 mines, picture-tick render). Each row is one grab's `theirs.png`; "none" is the same frame with the harness's press window and
+the pause's envelopes. Mean grey, 0 to 255:
+
+| Grab | Picture lag (ticks behind the push buffer) | none | volley clocks only | envelopes at picture only | both |
+| --- | --- | ---: | ---: | ---: | ---: |
+| `-hot` boot 2 (**published**) | 1.75, static | 10.71 | 10.38 | 10.65 | **10.31** |
+| `-hot` boot 3 | 1.75, static | 9.80 | 9.49 | 9.76 | 9.43 |
+| `cannon-volley` boot 1 (**published**) | 2.35, 3 mines, 4.5 px rms | 13.65 | 13.65 | 13.35 | **13.35** |
+| `cannon-volley` boot 2 | refused: mines disagree by 1.58 ticks, static peak at the range's end | 15.72 | 15.72 | 15.72 | 15.72 |
+
+The columns are measured by removing one carry from the full pair ("volley clocks only" keeps the volleys and takes the pause's envelopes).
+The previous published pairs were 10.32 and 14.32 on older `theirs.png`. On `-hot` the muzzle-flash box (`825,620,1100,720`) goes from a signed
+-22.8 grey (ours dimmer) to +6.5 (boot 2) and -33.1 to -2.8 (boot 3); the mean absolute difference there hardly moves (32.5 to 31.9, and 38.0 to
+39.2), because the flash's shape is rolled per tick. The envelope result on `cannon-volley` is seen on one grab.
+
+**Not carried: the craft's speed on the rounds.** The original's round leaves at `500 + 3.6 v` on its launch tick (v read 101.8 to 102.7
+units/s), from a craft that was `v x age` further back than the frame's. A scratch pin doing both moved `-hot`'s rounds (4 ticks old) by about
+a pixel and the pair by +0.01 (10.312 to 10.324, 9.433 to 9.443), and `cannon-volley` by +0.002: the two terms nearly cancel at that age, and
+`cannon-volley`'s rounds are gone before its frame (one retired at age 10 ticks, one on a wall at 34). It lowered no pair and was not kept.
+Whether ours' round then hits the same mine at the same age is not tested.
+
+**Not carried: the mine the original destroyed.** On `cannon-volley` the original scores 0000100 and ours 0000000, because the carried list is
+the mines armed at the pause. Adding that one mine (boot 1) makes ours score 0000100 too, but the frame goes 13.35 to 14.05 (15.78 with the
+speed pin): ours draws its blast as white puffs and long streaks where the original shows small shards and a `+100` (0.40 of the 0.70 added grey
+is above row 450). That is a draw gap in ours' mine blast, open. (The `+100` is drawn since 2026-11-27; it stands 15 px above the
+original's because ours' round hits 36 ticks before the picture and the original's about 27:
+[detonator-hud.md](../ghidra/functions/ps3-hdfury-eu/detonator-hud.md), "The floating score".)
+
+### The `cannon-volley` difference, split by region (2026-11-26, `det-volley-split`)
+
+`cannon-volley` reads **10.5275** mean grey with the destroyed mine carried (`detonator-mine.md`, "Carrying the destroyed mine"), re-rendered
+byte-for-score on `b88ed5e8f`. Question: where the 10.53 sits, and the cheapest lane under 10. Method: the scorer's own difference image
+(`compare_env.overlap_score`'s `magick -colorspace Gray -compose difference`) cut into **disjoint** screen regions, a pixel going to the first
+row that claims it, so the shares (region sum over `1920 x 1080`) add to 10.5275 exactly. Shifting ours by up to 4 px each way (HUD and ticker
+left out) is best unshifted, so no global misalignment. `signed` is ours minus original. The last column is the same split with the floor
+visualiser's sRGB decode applied (below).
+
+| Region (boxes are `x0,y0,x1,y1`) | Area | Grey in region | Signed | Share | With decode | Cause, state |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| Near mines and far cluster `690,420,885,615` `1375,440,1550,592` `1740,465,1920,632` `1240,342,1340,378` | 4.7 % | 65.7 | -10.9 | 3.11 | 3.10 | spike shape and shell follow the music state the pair carries; not a tunable gap |
+| Floor, near road, red strips: polygon `0,590 700,430 850,415 1100,350 1330,335 1370,370 1300,440 1330,465 1920,545 1920,1080 0,1080` | 41.6 % | 6.2 | +2.9 | 2.58 | 1.44 | visualiser strip sampled without its sRGB decode: **read** (75), since wired ([zone-vis-gamma.md](../ghidra/functions/ps3-hdfury-eu/zone-vis-gamma.md), "Wired") |
+| Right wall and white pipe `1320,300,1920,545` | 4.8 % | 21.3 | -6.6 | 1.01 | 0.93 | the window lights: **read and wired** 2026-11-27 (`tunnel_fx_noalpha`'s emissive on a plain chunk, [hd-zone-recolour.md](../rendering/hd-zone-recolour.md), "Window lights on a plain chunk"), but the row stays at 1.03: what is left is registration (ours about 10 px off at the frame's edge), the region means match within 5 levels |
+| Upper-right screen `1480,0,1920,270` | 5.7 % | 16.3 | +1.3 | 0.94 | 0.97 | original: a purple dot grid with a teal band; ours: grey-white smears and no dots. Also on `mines-ahead`; **unread** (which material is not identified) |
+| HUD `85,60,320,225` `690,20,1230,240` `150,850,670,980` `1250,845,1760,980` | 14.2 % | 4.9 | +2.0 | 0.70 | 0.53 | translucent panels over the scene behind (the drop with the decode is the floor under the two lower ones); no HUD gap of its own measured |
+| Far scenery and sky (everything else) | 19.3 % | 3.4 | +0.3 | 0.66 | 0.64 | scenery edges, no single cause named; the sky dome is black on both sides (stage 1's horizon and zenith `0 0 0`, [detonator-look.md](../ghidra/functions/ps3-hdfury-eu/detonator-look.md)) |
+| Hull `815,695,1095,940` | 3.3 % | 17.5 | +6.8 | 0.58 | 0.50 | ours lighter, rear nozzle lit blue-white; fuselage overlay (`rich_iridescent`) **unread** (Detonator thread, row 7) |
+| Ribbon bands: polygons `0,20 0,90 800,400 990,470 1010,440 830,330 60,20`; `600,0 700,0 960,420 900,440`; `1170,0 1230,0 1080,420 1030,420` | 4.3 % | 7.0 | +5.3 | 0.30 | 0.31 | `Trail_Ribbon` dot chains (muted, the whole frame reads 10.22: `detonator-mine.md`, "The ribbon, open"); needs a capture |
+| Blast debris shards `655,715,710,780` `550,830,620,865` `1475,278,1515,315` `505,60,550,115` | 0.3 % | 50.3 | -44.0 | 0.17 | 0.17 | rolled at random; not tunable (other shards lie unboxed in other rows) |
+| White flecks only the original has `1335,195,1385,260` `1065,280,1100,310` `1375,400,1405,435` `1065,335,1085,352` | 0.3 % | 59.5 | -54.4 | 0.16 | 0.16 | white bursts with a halo, not on `mines-ahead` or `pad`, so tied to the volley; **unread** |
+| Track-name ticker `400,75,640,115` | 0.5 % | 26.2 | +4.9 | 0.12 | 0.12 | wall-clock scroll; capture state |
+| Destroyed mine's core `1000,460,1075,540` | 0.3 % | 26.4 | -21.7 | 0.08 | 0.08 | the original's dim pink fragment at this age; ribbon and blast timing |
+| Exhaust plume below the hull `900,940,1000,1080` | 0.7 % | 11.9 | -0.6 | 0.08 | 0.11 | the craft is held at rest |
+| `+100` popup `985,418,1080,448` | 0.1 % | 32.3 | -28.8 | 0.04 | 0.04 | **read**, not drawn (Detonator thread) |
+| Cannon rounds (no box) | 0 % | | | 0.00 | 0.00 | both of this grab's rounds are gone before its frame (retired at 10 and 34 ticks, "Not carried: the craft's speed on the rounds" above); no bolt is on screen |
+
+The blast subtotal, which is also the shot-specific part (ribbon, shards, flecks, core, `+100`), is 0.75; floor, screen, wall, hull, HUD and scenery are scene-wide.
+`cannon-volley-hot` (7.70, which hit nothing) is the control: HUD 0.99, hull 0.83, floor **3.82** (to 1.61 with the decode), ticker 0.09,
+exhaust 0.13, muzzle flashes `825,620,1100,695` 0.25, rest 1.59.
+
+**The decode, measured on the current pairs** (scratch, reverted; `decode(...)` around the `zone_vis_tex` sample in
+`crates/mesh/shaders/zone.wesl` `zone_glow`, then `compare-rerender-ours.rerender` on copies of the pairs). Falsifier written first: less than
+0.53 off `cannon-volley`, or any Detonator pair rising, would rule it out. Neither happened (one render each; the unpatched binary reproduces
+the stored scores):
+
+| Pair | Mean grey | RMSE | Floor box A blue, original / ours / decode | Box B blue |
+| --- | --- | --- | --- | --- |
+| `cannon-volley` | 10.53 to **9.11** | 0.145 to 0.144 | 18.6 / 26.9 / 7.2 | 29.0 / 51.9 / 14.9 |
+| `cannon-volley-hot` | 7.70 to 4.82 | 0.109 to 0.092 | 29.1 / 49.9 / 28.8 | 28.4 / 69.7 / 32.3 |
+| `mines-ahead` | 9.68 to 9.04 | 0.143 to 0.141 | 8.0 / 18.7 / 2.5 | 14.9 / 37.1 / 5.4 |
+| `pad` | 4.44 to 3.24 | 0.086 to 0.078 | 16.0 / 31.5 / 7.7 | 23.9 / 51.1 / 12.6 |
+
+Boxes A `250,780,800,850` and B `1090,780,1230,1000` ([zone-vis-gamma.md](../ghidra/functions/ps3-hdfury-eu/zone-vis-gamma.md)). The decode
+brings `-hot`'s floor to the original's level and leaves the other three at 0.31 to 0.53 of it, so the page's second, unread factor is still
+open. Per-channel mean absolute difference over the whole frame also falls (R, G, B; `cannon-volley` 15.9, 8.6, 18.0 to 13.4, 7.5, 15.5;
+`-hot` 13.3, 5.2, 20.0 to 6.9, 4.2, 9.0; `mines-ahead` 14.8, 8.0, 16.3 to 13.0, 7.9, 12.5; `pad` 8.6, 2.6, 13.1 to 4.7, 2.5, 8.0), so the
+drop is not an effect of the luma weights. But the signed blue turns from too bright to too dark (`cannon-volley` +6.0 to -4.7, `mines-ahead`
++6.4 to -2.9, `pad` +8.3 to -4.0): a player sees a darker violet floor than the original's on three of the four. One `theirs.png` per pair; ours'
+render is deterministic. The endrace pairs do not move. A Zone race cannot be shown by the current pairs: `zone-vineta-k-z5` carries no
+`--zone-bands`, so the strip is zero and the decode has nothing to act on. Omega's pairs were not rendered.
+
+**Ranked next lanes for `cannon-volley`:**
+
+1. ~~Wire the visualiser decode~~ wired, see the next section: 10.53 to 9.11, under 10 alone. HD only, as `Title` data (2048: checked, differs, no
+   `EQ` tints; Omega: open, its descriptor is unread). Show floor crops at player size: the floor goes darker than the original's on three
+   pairs, and `zone-vis-gamma.md`'s second factor stays open.
+2. Identify and read the upper-right screen's material (read, up to 0.94; also on `mines-ahead`).
+3. ~~Right wall pipe and window lights~~ read and wired (`det-volley-wall`): the lights draw, the row does not drop (registration).
+4. `Trail_Ribbon` law (capture, RPCS3, about 0.31).
+
 ### The hull's frame pose in a Detonator pair (2026-11-23, `det-camera`)
 
 **Report (maintainer, from the pairs):** "ours' shots use the wrong camera setting/distance, the original is 'close', ours is 'far'."
@@ -2794,10 +3027,10 @@ recipe that gave 6.0 on every grab is the first stop of a boot or stops 16 or mo
 frame and fits `k` = ticks behind the push buffer's camera with the camera moving at its own velocity (`rpcs3-hd-detonator-shots.py` now records the camera
 rig's eye in RAM, `ship.rig_eye`: the push buffer's eye is the same rig `skew` ticks earlier, so `(rig_eye - eye) / skew` is the camera's velocity,
 the craft's speed but not its direction). Mines nearer than 8 or farther than 50 units are not used, a mine whose own best `k` leaves 8 px is dropped, two
-must remain and agree to 1 tick; otherwise the pair says "not corrected" and keeps the push buffer's frame (`original.presented_lag.picture`,
-a caveat). A fit moves ours' camera and craft back `k` ticks of that velocity (the hull keeps its place in the frame) and records
-`original.presented_lag.picture_ticks`, `picture_total_ticks` (skew + k) and `picture_fit` (per mine). `--picture-lag off` is the old behaviour.
-The bands, the gantry clock and the world clock stay RAM's.
+must remain and agree to 1 tick; otherwise the static scene is tried (`static_fit`, "The volley pair's difference, split"), and a pair that fits
+neither says "not corrected" and keeps the push buffer's frame (`original.presented_lag.picture`, a caveat). A fit moves ours' camera and craft back `k` ticks of that velocity (the hull keeps its place in the frame) and records
+`original.presented_lag.picture_ticks`, `picture_total_ticks` (skew + k), `picture_basis` and `picture_fit` (per mine) or `picture_static_fit`.
+`--picture-lag off` keeps the push buffer's frame. Ours' tick and gantry pin are the picture's. The bands stay RAM's.
 
 Mean grey (the page's score, 0 to 255) and RMSE of ours against the original, `off` then `fit`, on pairs made from fresh grabs on the
 `hd-detonator-talons-feisar-grid-late` state (all but the second-boot mines pair are `REFUSED` by the heading check, 1.04 to 1.71 degrees against 1.00,
@@ -2876,7 +3109,9 @@ than their objects (below).**
 (`rpcs3_hd_field.detonator_mines`; vtable `0x008642f0`, `docs/ghidra/functions/ps3-hdfury-eu/detonator-mine.md`, "Where a mine
 stands") and records `ship.mines` (flags, position, entry, lane, live, age; `OAG_MINE_RAW=1` keeps the object's bytes for a survey
 of its other fields). `rpcs3-hd-pair.py --detonator` writes the armed ones (`flags & 9 == 9`; a mine that left the pool keeps flag
-`1`) to `original.detonator.mines` and gives ours
+`1`), plus a mine that left the pool during the shot itself, one a round destroyed (its age still advanced over the shot's mine reads;
+`compare_env.detonator_pair_mines`, `docs/ghidra/functions/ps3-hdfury-eu/detonator-mine.md`, "Carrying the destroyed mine"), to
+`original.detonator.mines` and gives ours
 `--detonator-mines "X,Y,Z;X,Y,Z;..."`: ours lays the opening stage as usual (its bomb, its counter), then puts every mine on the
 survey lane nearest each position across the section (`RaceSim::carry_detonator_mines`, a snap of at most 4 units across and 1.5 of the 3.0 lift in height, so a lane on another deck never takes it; a position with
 no lane, or whose lane another carried mine or the bomb holds, is dropped with a warning). Positions, not the original's entry numbers: its survey starts at the player's start cursor and
@@ -2890,6 +3125,11 @@ envelope has no history of the music before the frame, and quiet raw bands (all 
 `MineBrightness` 0, a thin dark ring, where the original's `s` is about 0.5. A shot taken before this change has no envelopes
 and runs as it did. One grab at lap 2.68 s, ours before and after the pins: mean grey 14.76 to 14.29; the near mines go from dark
 rings to lit, spiked balls at the original's size.
+
+**The mines' ages** (`det-mine-spin`): the same read keeps each mine's age `+0xc0` (`age_s`), and `rpcs3-hd-pair.py` records it in
+`original.detonator.mines[]` and gives ours `--detonator-mine-ages "A;A;..."`, from the same read as the envelopes. A mine turns about
+its up by `4 x age` ([detonator-mine-draw.md](../ghidra/functions/ps3-hdfury-eu/detonator-mine-draw.md#the-spin-wired-2026-11-26-det-mine-spin)),
+and ours' own age counts from ours' laying, 53 s short of the original's on the `mines-ahead` grab. `mines-ahead` 13.17 -> 12.51.
 
 **Evidence the carry is exact** (`detonator_ground_truth::carried_mines_stand_where_the_originals_objects_stood`, disc-backed): 80
 objects, identical (position to the bit) at lap 2.7 and 3.4 s and across three boots of the same save state, so the layout is
@@ -2958,6 +3198,26 @@ extend `hd-pair-lag-scan.py` with a score on static objects (the near mines in D
 existing `original.presented_lag` block, and have `rpcs3-hd-pair.py` move `--camera-pose`'s eye and `--pose` back by `k` ticks of the
 original craft's velocity. Every HD pair takes its camera from
 the push buffer, so this likely moves every HD pair with near scenery, not only Detonator's.
+
+### The visualiser's sRGB decode, wired (2026-11-27, `det-vis-srgb`)
+
+HD's strip decode ([zone-vis-gamma.md](../ghidra/functions/ps3-hdfury-eu/zone-vis-gamma.md), "Wired") is on
+`main`'s path as `ZoneFrame::glow_vis_srgb`. All six `detonator-talons` pairs, re-rendered on copies
+(`compare-rerender-ours.rerender`), main to wired:
+
+| Pair | Mean grey | RMSE | Floor box A blue, original / before / after | Box B blue |
+| --- | --- | --- | --- | --- |
+| `cannon-volley` | 10.53 to **9.11** | 0.145 to 0.144 | 18.6 / 26.9 / 7.2 | 29.0 / 51.9 / 14.9 |
+| `cannon-volley-hot` | 7.70 to 4.82 | 0.109 to 0.092 | 29.1 / 49.9 / 28.8 | 28.4 / 69.7 / 32.3 |
+| `mines-ahead` | 9.68 to 9.04 | 0.143 to 0.141 | 8.0 / 18.7 / 2.5 | 14.9 / 37.1 / 5.4 |
+| `pad` | 4.44 to 3.24 | 0.086 to 0.078 | 16.0 / 31.5 / 7.7 | 23.9 / 51.1 / 12.6 |
+| `endrace-norecord` | 8.88, unchanged | 0.097 | | |
+| `endrace-record` | 8.38, unchanged | 0.100 | | |
+
+A Zone race keeps its look: `zone-vineta-k-z5` with no bands renders pixel for pixel the same; with made-up bands
+fed, the near floor (box `1300,950,1600,1030`) goes from `(115, 163, 168)` to `(115, 154, 162)` (original `(128, 139, 140)`).
+The numbers equal the scratch measurement above. Floor crops read at native size: `-hot` matches; the other
+three are now darker than the original's (the second factor stays open).
 
 ## The four worst front-end pairs, split by region (2026-11-24, `fe-worst-residuals`)
 

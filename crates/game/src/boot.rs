@@ -689,6 +689,7 @@ pub fn load_shell(
                 blocks.frame_texture,
                 blocks.cursor_texture,
                 blocks.arrow_texture,
+                blocks.unselectable_arrow_texture,
             ]
         })
         .unwrap_or_default();

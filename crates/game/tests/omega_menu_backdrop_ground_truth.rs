@@ -137,6 +137,7 @@ fn draw(
         format,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let view = target.create_view(&Default::default());
     let mut encoder = device.create_command_encoder(&Default::default());

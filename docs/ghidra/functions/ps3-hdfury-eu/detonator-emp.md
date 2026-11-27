@@ -731,7 +731,7 @@ The 2048 and Omega `EMP_DrawLights` are in their own `names.tsv` (85): `0x811e86
 | --- | --- | ---: |
 | `0x0002bbc8` | `WeaponStats_ParseEmp` | 85 |
 | `0x000d4078` | `Ship_TestWeaponPad` | 72 |
-| `0x0012a3e8` | `WeaponManager_RollPickup` | 75 |
+| `0x0012a3e8` | `WeaponManager_RollPickup` | 85, [pickup-draw.md](pickup-draw.md) |
 | `0x00112730` | `EMPManager_Fire` | 72 |
 | `0x0013c430` | `EMP_Launch` | 68 |
 | `0x0013b930` | `EMP_SweepSections` | 75 |

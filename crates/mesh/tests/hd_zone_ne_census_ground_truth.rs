@@ -1,4 +1,5 @@
-//! No Zone variant of a Wipeout HD `_ne` light-bar material adds its light-bar colour.
+//! What Wipeout HD's Zone variants compute: no light-bar colour, and no less work per pixel
+//! than the lit programs they replace.
 //!
 //! **`#[ignore]`d and never run in CI.** It needs game content. Run with
 //! `just test-data`, or only this file:
@@ -17,7 +18,9 @@
 //! `zoneBaseInner` or nothing there. `docs/rendering/hd-zone-recolour.md`,
 //! "The light-bar term in a Zone race".
 
-use oag_rcs::rcsmaterial::{self, Declared, RcsMaterial, fragment::Program};
+use oag_rcs::rcsmaterial::{
+    self, Declared, Features, LIT_RACE_PASS, RcsMaterial, fragment::Program,
+};
 
 const NE: u32 = 0xa2d5_55b9;
 
@@ -43,6 +46,76 @@ fn read(blob: &[u8], material: &RcsMaterial, tint: u32) -> Vec<(bool, Option<u32
         .collect()
 }
 
+/// One program as `(instructions, texture fetches, samples the lightmap)`.
+type Cost = (usize, usize, bool);
+
+/// Each class's lit race program of a lightmapped chunk against its Zone one (`ZoneMode`, the
+/// `Ambient` field), the lit one first.
+fn zone_against_lit(blob: &[u8], material: &RcsMaterial) -> Vec<[Cost; 2]> {
+    let lit = Features::from_pass_word(LIT_RACE_PASS | 0b100);
+    let zone = Features::from_pass_word(LIT_RACE_PASS | 1 << 8);
+    let read = |class: u32, features: Features| {
+        let variant = material
+            .variants
+            .iter()
+            .find(|v| v.class_hash == class && v.feature_hash == features.hash())?;
+        let program = Program::parse(blob, variant.fragment.offset)?;
+        let fetches = program
+            .instructions
+            .iter()
+            .filter(|i| i.is_texture())
+            .count();
+        Some((
+            program.instructions.len(),
+            fetches,
+            program.declared.samples_lightmap(),
+        ))
+    };
+    let classes: std::collections::BTreeSet<u32> =
+        material.variants.iter().map(|v| v.class_hash).collect();
+    classes
+        .into_iter()
+        .filter_map(|class| Some([read(class, lit)?, read(class, zone)?]))
+        .filter(|[(_, _, lightmapped), _]| *lightmapped)
+        .collect()
+}
+
+/// What a Zone race costs the original per pixel (`docs/rendering/hd-zone-recolour.md`, "What a
+/// Zone race costs"): on Chenghou Project's lightmapped surfaces no Zone program samples the
+/// lightmap or fetches fewer textures than the lit program it replaces, and all but one are
+/// longer.
+fn check_zone_programs_are_no_cheaper(pairs: &[(String, [Cost; 2])]) {
+    assert!(pairs.len() >= 20, "only {} pairs", pairs.len());
+    let mut shorter = Vec::new();
+    for (
+        path,
+        [
+            (lit_len, lit_fetches, _),
+            (zone_len, zone_fetches, zone_map),
+        ],
+    ) in pairs
+    {
+        assert!(!zone_map, "{path}: the Zone program samples the lightmap");
+        assert!(
+            zone_fetches >= lit_fetches,
+            "{path}: {zone_fetches} fetches against {lit_fetches}"
+        );
+        if zone_len <= lit_len {
+            shorter.push(path.as_str());
+        }
+    }
+    println!(
+        "{} lit/Zone pairs, shorter in Zone: {shorter:?}",
+        pairs.len()
+    );
+    assert!(
+        shorter
+            .iter()
+            .all(|p| p.ends_with("mageffect_modded.rcsmaterial")),
+        "{shorter:?}"
+    );
+}
+
 #[test]
 #[ignore = "needs a decrypted PS3 disc image in data/images"]
 fn no_zone_variant_adds_the_light_bar_colour() {
@@ -53,6 +126,7 @@ fn no_zone_variant_adds_the_light_bar_colour() {
     let zone_base = rcsmaterial::name_hash("zoneBaseInner");
     let (mut drops, mut keeps) = (Vec::new(), Vec::new());
     let mut vineta_zone_gates = Vec::new();
+    let mut chenghou = Vec::new();
     for archive in ["DATA00", "DATA01", "DATA02", "DATA03"] {
         let spec = format!("{}:PS3_GAME/USRDIR/{archive}.PSARC", image.display());
         let Ok(mut open) = oag_assets::psarc::Archive::open(&spec) else {
@@ -71,6 +145,13 @@ fn no_zone_variant_adds_the_light_bar_colour() {
             let Ok(material) = RcsMaterial::parse(&blob) else {
                 continue;
             };
+            if path.starts_with("/data/environments/04_chenghou_project/materials/") {
+                chenghou.extend(
+                    zone_against_lit(&blob, &material)
+                        .into_iter()
+                        .map(|pair| (path.clone(), pair)),
+                );
+            }
             let variants = read(&blob, &material, tint);
             let Some(colour) = variants
                 .iter()
@@ -122,4 +203,5 @@ fn no_zone_variant_adds_the_light_bar_colour() {
                 .all(|g| g.is_none() || *g == Some(zone_base)),
         "its Zone variants gate zoneBaseInner or nothing: {vineta_zone_gates:x?}"
     );
+    check_zone_programs_are_no_cheaper(&chenghou);
 }

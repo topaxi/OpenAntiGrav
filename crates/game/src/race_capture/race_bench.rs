@@ -179,7 +179,8 @@ pub(super) fn run(stem: &std::path::Path, rig: Rig<'_>) -> Result<()> {
     let timed = timers.iter().all(Option::is_some);
     let mut gpu: Vec<Vec<f64>> = Vec::new();
     let mut frames: Vec<Frame> = Vec::new();
-    let mut in_flight: VecDeque<wgpu::SubmissionIndex> = VecDeque::new();
+    // `None` is a submission that never reached the driver: waiting on it waits for all work.
+    let mut in_flight: VecDeque<Option<wgpu::SubmissionIndex>> = VecDeque::new();
     let load_start = crate::benchmark::load_average();
     let begun = Instant::now();
     let mut previous: Option<Instant> = None;
@@ -190,7 +191,7 @@ pub(super) fn run(stem: &std::path::Path, rig: Rig<'_>) -> Result<()> {
             && let Some(index) = in_flight.pop_front()
         {
             let _ = device.poll(wgpu::PollType::Wait {
-                submission_index: Some(index),
+                submission_index: index,
                 timeout: None,
             });
         }

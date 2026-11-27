@@ -198,7 +198,15 @@ const BOUND: &[(&str, u64, u32, u32)] = &[
     // (`docs/gameplay/ai.md`, "Craft-to-craft bumps cost the field energy").
     ("VENOM", 3, 1, 1),
     ("FLASH", 1, 2, 1),
-    ("FLASH", 2, 0, 1),
+    // Forward 0 -> 1: a blast's pending impulse drains along the side row (Pulse's
+    // law, measured live: `docs/ghidra/functions/psp-pulse-usa/contact-response.md`,
+    // "The drain pushes along the side row"). Noise method over
+    // `perturb::BOUND_OFFSETS` (cells over the old bounds, of 12): forward drain
+    // 0 0 1 2 1 1 1 0 0 (median 1, max 2), side drain 1 0 0 2 1 0 1 0 0 (median 0,
+    // max 2). Destroyed per board, forward drain 19 20 26 20 25 19 16 13 26 (184),
+    // side 21 20 20 21 19 24 15 21 20 (181): noise, not systematic. This cell's
+    // forward count was already 1 at two of the nine offsets under the forward drain.
+    ("FLASH", 2, 1, 1),
     // 2026-10-20, forward 1 -> 2 (lane `ai-gate-robustness`): a wreck in state 6 leaves
     // the collision cage (`oag_physics::damage::in_state_6`). Slot 3 is wrecked at tick
     // 6620 as before; past it the race diverges and slot 6 dies at 15344 (wall 51, rolls

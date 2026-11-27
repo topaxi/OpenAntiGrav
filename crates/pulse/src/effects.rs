@@ -177,6 +177,13 @@ pub const LOOKS: &Looks = &Looks {
         on: Platforms::Only(&[Platform::Psp, Platform::Ps2]),
         origin: Origin::Measured,
     },
+    // The CPU's near tests read on the PSP and the GE's drop replayed on PPSSPP
+    // (`particle-system.md`, "Near the eye"). The PS2 builds and rasterises its particles on
+    // other hardware, unread; the PSP's law is carried over, unmeasured there.
+    psp_particle_clip: Rule {
+        on: Platforms::Only(&[Platform::Psp, Platform::Ps2]),
+        origin: Origin::Measured,
+    },
     // Measured off GS dumps of the original on PCSX2: `docs/rendering/ps2-bloom.md`.
     ps2_glow_mask: Rule {
         on: Platforms::Only(&[Platform::Ps2]),

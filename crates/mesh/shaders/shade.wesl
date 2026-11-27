@@ -14,7 +14,7 @@ import package::own_shield::{own_shield, own_shield_shading};
 import package::panel::{panel_march};
 import package::pad::{pad_normal};
 import oag_shaders::target::{decode, encode, encoded_out, linear_out, square_decode, target_in};
-import package::shading_modes::{colour_is_light, light_rig, lit_by_rig, nova_prelit, nova_vertices, rig_specular, simplified_lighting, tangents_present, zone_race};
+import package::shading_modes::{colour_is_light, light_rig, lit_by_rig, nova_prelit, nova_vertices, rig_specular, simplified_lighting, tangents_present, zone_race, zone_stage_light};
 import package::shadow::{receives_shadow, sun_occlusion};
 import package::water::{enhanced_water, reflective_sea_weight, water_kind, water_normal, water_specular_colour, water_tap_uv};
 import package::texture_lod::{MATERIAL_ALBEDO, MATERIAL_FIFTH_MAP, MATERIAL_LIGHTMAP, MATERIAL_PAD_MASK, MATERIAL_SIXTH_MAP, MATERIAL_WAVE_MAP, material_lod_bias, material_sample, material_sample_grad, sample_at_slope_level, texlod_bias, texlod_slope, uv_gradients};
@@ -198,7 +198,9 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
         let fifth_map = textures[material.fifth_map];
         let sixth_map = textures[material.sixth_map];
     }
-    if (in.slots & 8388608u) != 0u {
+    // A holographic billboard's Zone variants drop the advert and draw the generic Zone surface
+    // (`docs/rendering/hd-zone-recolour.md`, "Holographic billboards in a Zone frame").
+    if (in.slots & 8388608u) != 0u && zone_program == 0.0 {
         return holo_billboard(in);
     }
     // The row of the emissive table this vertex names, read once for every test below.
@@ -677,6 +679,17 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
         if zone_program != 0.0 && scene.zone.shape.w > 0.5 {
             authored = scene.light.ambient + scene.light.sun * ndl;
             sun_light = scene.light.sun * ndl;
+        }
+        // **The two branches above again, unconditionally**, for a pipeline of a race where one
+        // of them always applies (`zone_stage_light`): nothing then depends on the chain before
+        // them, so the driver drops it. An emissive plain chunk takes neither and keeps its
+        // program's `1.0` and no sun, which `specialise::zone_light_exact` has checked is what
+        // the chain gives it (`docs/rendering/hd-zone-recolour.md`, "What a Zone race costs").
+        if zone_stage_light != 0.0 {
+            let own = zone_plain && emissive;
+            let plain_spu = select(vec3<f32>(0.0), spu, zone_plain);
+            authored = select(scene.light.ambient + scene.light.sun * ndl + plain_spu, vec3<f32>(1.0), own);
+            sun_light = select(scene.light.sun * ndl, vec3<f32>(0.0), own);
         }
         // The `_shadow` crowd's sum: no prelit or vertex-light term, the material's `Ambient` added.
         if crowd_lit {
@@ -1163,6 +1176,15 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
         let mask = material_sample(MATERIAL_PAD_MASK, in.texcoord);
         emissive_add = select(vec3<f32>(mask.a), decode(mask.rgb), glow_program < 8.5) * glow_tint_offset.rgb;
     }
+    // **HD's `tunnel_fx_noalpha` window lights on a lightmapped slot** (mode 31,
+    // `oag_mesh::mesh::rcs::tunnel_emissive`): the emissive, bound third, at the diffuse coordinate,
+    // added after the light and ungated by the diffuse alpha. Its plain programs only: no Zone
+    // variant declares it, so a chunk on its Zone program adds nothing and a `ZONE_PLAIN` chunk
+    // keeps it. The tap is decoded like every colour unit (its gamma nibble was not read live).
+    if glow_program > 30.5 && glow_program < 31.5 {
+        emissive_add = decode(material_sample(MATERIAL_PAD_MASK, in.texcoord).rgb) * glow_tint_offset.rgb
+            * (1.0 - zone_program);
+    }
     // **2048's `fc10_Lambert_2UV_Emissive`** (mode 19, `mesh::rcs::psp2::emissive_add`): `D.a * R^2`
     // after the light, `R` the third binding (`ReflectMap`) at `0.5 + 0.5 * reflect(-V, N).xy`.
     if glow_program > 18.5 && glow_program < 19.5 {
@@ -1287,6 +1309,7 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
     var zone_linear = vec3<f32>(0.0);
     var zone_gamma = vec3<f32>(0.0);
     var zone_glow_term = vec3<f32>(0.0);
+    var zone_glow_gamma = vec3<f32>(0.0);
     // How much of the albedo the Zone surface replaces: all of it on a circuit,
     // none of it on an arena, where the zone colour is added instead
     // (`zone_add_*`). See `mesh_render::Zone::shape`.
@@ -1320,8 +1343,9 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
         // The visualiser glow - see `zone_glow`. Gated by `enabled` explicitly
         // rather than trusting `effect.w` to be zero off a Zone race, the same
         // belt-and-braces `surface_linear`/`plain` below already take.
-        zone_glow_term =
-            zone_glow(n, in.clip, in.texcoord, in.slots, in.world) * zone_weight;
+        let zone_vis = zone_glow(n, in.clip, in.texcoord, in.slots, in.world);
+        zone_glow_term = zone_vis.linear * zone_weight;
+        zone_glow_gamma = zone_vis.gamma * zone_weight;
     }
 
     // The read specular term: half-vector against the sun, raised to
@@ -1762,13 +1786,12 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
     // The glow is **added after the light**, which is where the microcode puts
     // it: the accumulate reads `H0` once the lightmap and the interpolated
     // term have already multiplied the albedo, so a glow is not itself lit.
-    // The visualiser glow rides here too, undecoded on the same terms
-    // `zone_gamma` already is on this path - it is a shader parameter and
-    // texture-lookup product, not an albedo sample, so it owes no sRGB
-    // decode either way.
+    // The visualiser glow rides here too, with the stored strip texel: on a linear target
+    // `decode(plain)` below decodes the sum, which stands in for the original's decode of
+    // the texel; on a gamma target the texel stays as stored.
     let plain = (mix(texel.rgb, zone_gamma, zone_weight * zone_replace) + zone_add_gamma * zone_weight)
         * tint * light
-        + glow + zone_glow_term + pad_glow + mag_glow_gamma;
+        + glow + zone_glow_gamma + pad_glow + mag_glow_gamma;
     let plain_rgb = mix(plain, decode(plain), linear_out);
 
     // Vertex colour modulates the texture on all four channels, as the GE's
@@ -1783,12 +1806,12 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
     // sun, no lightmap and no specular, so lighting the flame and then
     // overwriting it is the honest shape as well as the cheap one.
     //
-    // `rim` is the same angle HD's program computes. Its own vertex program
-    // dots an *untransformed* normal attribute against
-    // `eyePositionWorldSpace - position`, which is only meaningful if the eye
-    // reaches it in model space; the angle between the two is the same number
-    // under a rigid transform, so it is computed here from the world normal and
-    // the real camera.
+    // `rim` is the same angle HD's program computes. The program the console
+    // runs takes the position and the normal through the plain model matrix and
+    // subtracts the world position from the camera's world position, so `n` and
+    // `to_eye` here are its two vectors, and the flame surfaces' block carries
+    // the view's eye (`docs/ghidra/functions/ps3-hdfury-eu/engine-flare.md`,
+    // "The live vertex program").
     //
     // **`texel.a` is deliberately absent.** The program's `TEX H0.xyz` writes
     // three components and the fourth is the vertex ramp from the moment

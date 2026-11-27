@@ -6,6 +6,7 @@ Builds one synthetic pair in a temporary directory, writes its manifest with `co
 explanations arrive, that a pair without recorded times shows none (no file-time fallback), and that a pair without
 `meta` is refused instead of showing its directory name.
 """
+import argparse
 import importlib.util
 import json
 import struct
@@ -181,6 +182,229 @@ def check_ps2_world_clock(root):
     assert pcsx2_state.world_clock(root / "state.p2s") is None
 
 
+def check_hd_flame_clock():
+    """An HD grab records the frame context's boot clock (`*0x00936fd4 + 0xc4`) as `flame_clock_s`, and a re-render puts it
+    on ours as `--flame-clock` less the measured lag; a record without it, a non-HD record, or flags that carry one keep theirs."""
+    import rpcs3_hd_field as field
+
+    class Fake:
+        def __init__(self, words):
+            self.words = words
+
+        def u32(self, addr):
+            return self.words.get(addr, 0)
+
+        def f32(self, addr):
+            return self.words.get(addr, 0.0)
+
+    assert field.flame_clock(Fake({0x00936FD4: 0x3005C9B0, 0x3005C9B0 + 0xC4: 136.6355})) == 136.6355
+    assert field.flame_clock(Fake({})) is None, "no frame context yet reads no clock"
+    assert abs(ce.flame_pin(122.472) - (122.472 - ce.FLAME_CLOCK_LAG_S)) < 1e-9 and ce.flame_pin(None) is None
+    assert 0.0167 <= ce.FLAME_CLOCK_LAG_S <= 0.0334, "the lag sits between the two measured reads"
+    spec = importlib.util.spec_from_file_location("compare_rerender_ours", HERE / "compare-rerender-ours.py")
+    rro = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(rro)
+    rec = {"profile": "hd-fury", "original": {"flame_clock_s": 122.472}}
+    assert rro.hd_flame_clock_flags(rec, ["--race"]) == ["--race", "--flame-clock", "%.4f" % (122.472 - ce.FLAME_CLOCK_LAG_S)]
+    assert rro.hd_flame_clock_flags(rec, ["--flame-clock", "1.0"]) == ["--flame-clock", "1.0"]
+    assert rro.hd_flame_clock_flags({"profile": "hd-fury", "original": {}}, ["--race"]) == ["--race"]
+    assert rro.hd_flame_clock_flags(dict(rec, profile="pulse-psp"), ["--race"]) == ["--race"]
+
+
+def check_hd_hull():
+    """An HD pair refuses an original whose RAM hull is not the one ours draws: a Fury `Harimau_c1` grab with
+    `--team harimau` passed every other parity check. A live capture without the read is refused too; an old `--json`
+    record without it passes."""
+    spec = importlib.util.spec_from_file_location("rpcs3_hd_pair", HERE / "rpcs3-hd-pair.py")
+    hd_pair = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(hd_pair)
+    import rpcs3_hd_field as field
+
+    class Pair:
+        def __init__(self):
+            self.rec = {"original": {}}
+            self.checks = []
+
+        def check(self, name, ok, detail):
+            self.checks.append((name, bool(ok), detail))
+            return ok
+
+        def check_equal(self, name, theirs, ours):
+            return self.check(name, theirs == ours, "%r %r" % (theirs, ours))
+
+    class Mem:
+        def __init__(self, path):
+            self.path = path
+
+        def u32(self, addr):
+            return {0x1000 + 0x6298: 0x2000, 0x2000 + 0x1B4: 0x3000}.get(addr, 0)
+
+        def rd(self, _addr, n):
+            return (self.path.encode() + b"\0" * n)[:n]
+
+    assert field.team_of(Mem("Data\\Ships\\Harimau_c1"), 0x1000) == "Harimau_c1"
+    assert field.team_of(Mem("Data\\Ships\\Harimau"), 0x1000) == "Harimau"
+    for ram, team, live, ok in (("Harimau", "harimau", True, True), ("Harimau_c1", "harimau", True, False),
+                                ("Assegai_c1", "Assegai_c1", True, True), (None, "harimau", True, False),
+                                (None, "harimau", False, True)):
+        pair = Pair()
+        got = hd_pair.hull_check(pair, {} if ram is None else {"team": ram}, team, live)
+        assert bool(got) == ok and [c[1] for c in pair.checks] == [ok], (ram, team, live, pair.checks)
+        assert pair.rec["original"]["team"] == ram
+    zone = Pair()
+    assert hd_pair.hull_check(zone, {"team": "Zone"}, hd_pair.ZONE_HULL, True), "a Zone race flies the mode's own hull"
+
+
+def check_hd_countdown():
+    """A `--countdown` Zone pair is refused unless the pause is in the countdown (race manager phase 1, lap clock 0, the
+    craft at rest), draws ours without `--hud-state`, and its capture takes the first shot where the attach pauses the game
+    (the default 12 s settle outlasts the 5.2 s countdown)."""
+    spec = importlib.util.spec_from_file_location("rpcs3_hd_pair", HERE / "rpcs3-hd-pair.py")
+    hd_pair = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(hd_pair)
+    import rpcs3_hd_field as field
+
+    class Pair:
+        def __init__(self):
+            self.rec = {"original": {}}
+            self.checks, self.caveats = [], []
+
+        def check(self, name, ok, detail):
+            self.checks.append((name, bool(ok), detail))
+            return ok
+
+        def check_equal(self, name, theirs, ours):
+            return self.check(name, theirs == ours, "%r %r" % (theirs, ours))
+
+        def caveat(self, text):
+            self.caveats.append(text)
+
+    class Mem:
+        """The race manager at 0x4000 with phase 1 and 1.5 s elapsed."""
+
+        def u32(self, addr):
+            return 0x4000 if addr == field.RACE_MANAGER_PP else 0
+
+        def rd(self, addr, n):
+            assert addr == 0x4000 + field.RACE_PHASE_BLOCK
+            block = bytearray(n)
+            struct.pack_into(">f", block, 0x18, 1.5)
+            struct.pack_into(">I", block, 0x20, 1)
+            return bytes(block)
+
+    assert field.race_phase(Mem()) == {"phase": 1, "elapsed_s": 1.5}
+    rest = {"phase": 1, "elapsed_s": 1.5}
+    for phase, clock, vel, live, ok in ((rest, 0, [0.1, 3.6, 0.1], True, True), ({"phase": 2, "elapsed_s": 4}, 0, [0, 0, 0], True, False),
+                                        (rest, 0.1, [0, 0, 0], True, False), (rest, 0, [0, 0, 5.0], True, False),
+                                        (None, 0, [0, 0, 0], True, False), (None, 3.0, [0, 0, 30.0], False, True)):
+        pair = Pair()
+        ship = {"race_clock_s": clock, "vel": vel, **({"race_phase": phase} if phase else {})}
+        got = hd_pair.countdown_check(pair, ship, live)
+        assert bool(got) == ok, (phase, clock, vel, live, pair.checks)
+    flags = hd_pair.zone_flags(Pair(), "1,0", countdown=True)
+    assert "--hud-state" not in flags, flags
+    assert hd_pair.zone_flags(Pair(), "5,100,4", countdown=False) == ["--hud-state", "1,1,0,0,0,100,0,5,100,0", "--zone-stage", "4"]
+    args = argparse.Namespace(interval=0.12, load=0, team="feisar", press="none", field=False, zone="1,0", keep_autopilot=False,
+                              countdown=False, countdown_at=1.0)
+    cap = [str(c) for c in hd_pair.capture_command(args, Path("o"))]
+    assert cap[cap.index("--settle") + 1] == "0" and "--first-at-pause" in cap and "--wait-countdown" not in cap, cap
+    args.countdown = True
+    cap = [str(c) for c in hd_pair.capture_command(args, Path("o"))]
+    assert cap[cap.index("--wait-countdown") + 1] == "1.0", cap
+    args.zone = None
+    assert "--settle" not in [str(c) for c in hd_pair.capture_command(args, Path("o"))]
+
+
+def check_hd_countdown_tick():
+    """An HD countdown pair renders ours as long before the release as the original's pause was, with the world clock
+    rebased onto the new tick; any other pair is left alone."""
+    assert ce.countdown_tick(272, 2.4333300590515137) == 238
+    assert ce.countdown_tick(272, 3.0) == 272
+    rec = {"profile": "hd-fury", "caveats": ["Zone countdown frame: old words", "kept"],
+           "original": {"race_phase": {"phase": 1, "elapsed_s": 2.4333300590515137}, "world_clock_s": 287.1652526855469,
+                        "zone": {"zone": 1, "score": 0}},
+           "ours": {}}
+    flags = ce.countdown_flags(rec, ["--race", "--world-clock-offset", "287.165", "--ticks", "0"], 272)
+    assert flags[flags.index("--ticks") + 1] == "238", flags
+    assert flags[flags.index("--world-clock-offset") + 1] == "283.199", flags
+    assert "--pose-hold" in flags and ce.countdown_flags(rec, flags, 272) == flags, flags
+    assert rec["ours"]["ticks"] == 238 and rec["caveats"] == [ce.COUNTDOWN_CAVEAT % (1, 0), "kept"], rec
+    for other in ({"profile": "hd-fury", "original": {}, "ours": {}},
+                  {"profile": "hd-fury", "original": {"race_phase": {"phase": 2, "elapsed_s": 1.0}}, "ours": {}},
+                  {"profile": "pulse-psp", "original": rec["original"], "ours": {}}):
+        assert ce.countdown_flags(other, ["--ticks", "0"], 272) == ["--ticks", "0"], other
+
+
+def check_hd_wait_countdown():
+    """`wait_countdown` returns only once the race manager is `elapsed_s` into phase 1 (not in the race phase before the
+    reload, not at the first tick of the countdown) and gives up on a timeout."""
+    import rpcs3_hd_field as field
+    reads = iter([(2, 40.0), (0, 1.0), (1, 0.2), (1, 1.1), (2, 0.1)])
+
+    class Mem:
+        def u32(self, addr):
+            return 0x4000 if addr == field.RACE_MANAGER_PP else 0
+
+        def rd(self, _addr, n):
+            phase, elapsed = next(reads)
+            block = bytearray(n)
+            struct.pack_into(">f", block, 0x18, elapsed)
+            struct.pack_into(">I", block, 0x20, phase)
+            return bytes(block)
+
+    got = field.wait_countdown(Mem(), 1.0, 30.0, clock=lambda: 0.0, sleep=lambda _s: None, say=lambda _t: None)
+    assert got["phase"] == 1 and abs(got["elapsed_s"] - 1.1) < 1e-6, got
+    ticks = iter(range(1000))
+
+    class Never(Mem):
+        def rd(self, _addr, n):
+            return bytes(n)
+
+    try:
+        field.wait_countdown(Never(), 1.0, 5.0, clock=lambda: float(next(ticks)), sleep=lambda _s: None, say=lambda _t: None)
+    except TimeoutError:
+        pass
+    else:
+        raise AssertionError("no countdown must time out")
+
+
+def check_hd_pilot_assist():
+    """An HD pair refuses an original whose save has Pilot Assist on (the indicator's bracket under the craft) when ours is
+    told off, and the reverse; a live capture without the read is refused, an old `--json` record without it passes."""
+    spec = importlib.util.spec_from_file_location("rpcs3_hd_pair", HERE / "rpcs3-hd-pair.py")
+    hd_pair = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(hd_pair)
+    import rpcs3_hd_field as field
+
+    class Pair:
+        def __init__(self):
+            self.rec = {"original": {}}
+            self.checks = []
+
+        def check(self, name, ok, detail):
+            self.checks.append((name, bool(ok), detail))
+            return ok
+
+        def check_equal(self, name, theirs, ours):
+            return self.check(name, theirs == ours, "%r %r" % (theirs, ours))
+
+    class Mem:
+        def u32(self, addr):
+            return {field.OPTIONS_PP: 0x2000, 0x2000: 0x3000}.get(addr, 0)
+
+        def rd(self, addr, n):
+            return bytes([3 if addr == 0x3000 + 0x473 else 0]) * n
+
+    assert field.pilot_assist(Mem()) == 3
+    assert ce.platform("hd-fury")["ours"]["pilot_assist"] == "off"
+    for byte, profile, live, ok in ((0, "off", True, True), (3, "off", True, False), (1, "on", True, True),
+                                    (0, "on", True, False), (None, "off", True, False), (None, "off", False, True)):
+        pair = Pair()
+        got = hd_pair.pilot_assist_check(pair, {} if byte is None else {"pilot_assist": byte}, profile, live)
+        assert bool(got) == ok and [c[1] for c in pair.checks] == [ok], (byte, profile, live, pair.checks)
+    assert hd_pair.pilot_assist_check(Pair(), {"pilot_assist": 3}, None, True), "a profile without the setting checks nothing"
+
+
 def tomllib_load(path):
     import tomllib
     return tomllib.loads(Path(path).read_text())
@@ -230,6 +454,119 @@ def check_loading_bar(root):
     assert cm.LOADING_BAR_TICKS_PER_COLUMN == 10 and cm.LOADING_BAR_FIRST_TARGET_COLUMNS == 33
 
 
+def check_detonator_mine_envelopes():
+    """An HD Detonator pair carries every live mine's music envelope into ours (`--detonator-mine-envelopes`), and a shot
+    record without them is refused: ours' envelopes have no history, so its near mines draw dark and unspiked."""
+    spec = importlib.util.spec_from_file_location("rpcs3_hd_pair", HERE / "rpcs3-hd-pair.py")
+    hd_pair = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(hd_pair)
+
+    class Pair:
+        def __init__(self):
+            self.rec = {"original": {"detonator": {}}}
+            self.checks = []
+
+        def caveat(self, _text):
+            pass
+
+        def check(self, name, ok, detail):
+            self.checks.append((name, bool(ok), detail))
+            return ok
+
+    def mine(x, live, s=None, t=None):
+        m = {"flags": 9, "entry": 1, "lane": 0, "position": [x, 0.0, 0.0], "live": live}
+        if s is not None:
+            m.update(football_s=s, spikes_t=t)
+        return m
+
+    read = Pair()
+    flags = hd_pair.mine_flags(read, {"mines": [mine(1.0, 1, 0.5, 0.75), mine(2.0, 0, 0.0, 0.0)]})
+    at = flags.index("--detonator-mine-envelopes")
+    assert flags[at + 1] == "0.5000,0.7500;0.0000,0.0000", flags
+    assert all(ok for _, ok, _ in read.checks), read.checks
+    old = Pair()
+    flags = hd_pair.mine_flags(old, {"mines": [mine(1.0, 1), mine(2.0, 1)]})
+    assert "--detonator-mine-envelopes" not in flags, flags
+    assert [ok for name, ok, _ in old.checks if "envelope" in name] == [False], old.checks
+    dark = Pair()
+    hd_pair.mine_flags(dark, {"mines": [mine(1.0, 0)]})
+    assert all(ok for _, ok, _ in dark.checks), dark.checks
+    # The picture is older than its pause's RAM: each mine takes the read nearest the picture's clock, with its draw words.
+    lagged = Pair()
+    lagged.rec["original"]["presented_lag"] = {"picture_total_ticks": 6.0}
+    ram = dict(mine(1.0, 1, 0.25, 1.0), address=7)
+    reads = [{"race_clock_s": c, "mines": {"7": {"football_s": s, "spikes_t": t, "pitch_offset": 8.25, "age_s": c + 53.0}}}
+             for c, s, t in ((2.55, 0.6, 0.5), (2.6, 0.5, 0.45), (2.7, 0.25, 1.0))]
+    flags = hd_pair.mine_flags(lagged, {"mines": [ram], "race_clock_s": 2.7, "mine_reads": reads})
+    assert flags[flags.index("--detonator-mine-envelopes") + 1] == "0.5000,0.4500,8.2500", flags
+    det = lagged.rec["original"]["detonator"]
+    assert det["mine_read"]["read_clock_s"] == 2.6 and det["mines"][0]["pitch_offset"] == 8.25, det
+    # The age turns the mine: it comes from the same read as the envelope, not the pause's.
+    assert flags[flags.index("--detonator-mine-ages") + 1] == "55.6000", flags
+    assert det["mines"][0]["age_s"] == 55.6, det
+    far = Pair()
+    far.rec["original"]["presented_lag"] = {"picture_total_ticks": 6.0}
+    flags = hd_pair.mine_flags(far, {"mines": [ram], "race_clock_s": 2.7, "mine_reads": reads[2:]})
+    assert flags[flags.index("--detonator-mine-envelopes") + 1] == "0.2500,1.0000", flags
+    # No read at the picture's clock: the pause's age is moved back by the measured lag; with no measured lag it is kept.
+    aged = dict(ram, age_s=55.0)
+    late = Pair()
+    late.rec["original"]["presented_lag"] = {"picture_total_ticks": 7.5}
+    flags = hd_pair.mine_flags(late, {"mines": [aged], "race_clock_s": 2.7})
+    assert flags[flags.index("--detonator-mine-ages") + 1] == "54.8750", flags
+    unfitted = Pair()
+    flags = hd_pair.mine_flags(unfitted, {"mines": [aged], "race_clock_s": 2.7})
+    assert flags[flags.index("--detonator-mine-ages") + 1] == "55.0000", flags
+
+
+def check_detonator_volley_ticks():
+    """A Detonator pair whose rounds were read presses on each volley's own tick, one tick each with a release between; a
+    record without them (every pair published before) keeps the one held window, since a re-render makes the script again."""
+    sys.path.insert(0, str(HERE))
+    import rpcs3_hd_volley
+    rpcs3_hd_volley.self_test()
+    window = {"press_clock_before_s": 1.8499995, "press_clock_after_s": 2.0499995, "button": "triangle"}
+    assert ce.detonator_input_lines(window, 272) == ["383 none", "12 square", "1 none"]
+    read = dict(window, volley_clocks_s=[1.8833328, 1.9499995])
+    assert ce.detonator_input_lines(read, 272) == ["385 none", "1 square", "3 none", "1 square", "1 none"]
+
+
+def check_detonator_picture_tick(root):
+    """A Detonator pair whose picture lag was measured runs ours to the picture's tick (rounds, mine hits, score, ammo), on
+    the first render and on every re-render; the static-scene fit takes only a sharp, interior peak."""
+    sys.path.insert(0, str(HERE))
+    import hd_picture_lag
+    # lap clock 2.0667 s, picture 7.5 ticks older than RAM: 124 - 7.5 ticks after GO, not the HUD clock's 3
+    assert ce.picture_tick(272, 2.0666661262512207, 7.5) == 388
+    peak = {0.0: 0.44, 1.0: 0.45, 2.0: 0.44, 3.0: 0.50, 3.5: 0.59, 4.0: 0.55, 5.0: 0.38, 6.0: 0.35}
+    assert hd_picture_lag.pick_static(peak) == (3.5, None)
+    assert hd_picture_lag.pick_static({0.0: 0.38, 1.0: 0.36, 3.0: 0.30, 6.0: 0.12})[0] is None  # at the end
+    assert hd_picture_lag.pick_static({0.0: 0.50, 2.0: 0.52, 3.0: 0.53, 6.0: 0.51})[0] is None  # flat
+
+    spec = importlib.util.spec_from_file_location("compare_rerender_ours", HERE / "compare-rerender-ours.py")
+    rerender = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(rerender)
+    fake = root / "fake-oag-game"
+    fake.write_text('#!/bin/sh\nwhile [ "$1" != --screenshot ]; do shift; done\ncp "%s" "$2"\n' % (root / "pair" / "theirs.png"))
+    fake.chmod(0o755)
+    (root / "pair").mkdir()
+    subprocess.run(["magick", "-size", "48x27", "xc:gray30", str(root / "pair" / "theirs.png")], check=True)
+
+    def ticks_after(lag):
+        rec = {"profile": "hd-fury", "output": [48, 27], "kind": "race",
+               "original": {"race_clock_s": 2.0666661262512207, "gantry_seconds": 7.45,
+                            "presented_lag": dict({"hud_clock_ticks": 3}, **lag)},
+               "ours": {"ticks": 393, "flags": ["--race", "--pose-hold-ticks", "--gantry-seconds", "7.400", "--ticks", "393"]}}
+        (root / "pair" / "pair.json").write_text(json.dumps(rec))
+        result = rerender.rerender(root / "pair" / "pair.json", fake)
+        assert result.startswith("ok"), result
+        flags = json.loads((root / "pair" / "pair.json").read_text())["ours"]["flags"]
+        return flags[flags.index("--ticks") + 1], flags[flags.index("--gantry-seconds") + 1]
+
+    assert ticks_after({"picture_total_ticks": 7.5}) == ("388", "%.6f" % (7.45 - 7.5 / 60))
+    assert ticks_after({}) == ("393", "%.6f" % (7.45 - 3 / 60))
+
+
 def main():
     import tomllib
     with tempfile.TemporaryDirectory() as t:
@@ -274,6 +611,16 @@ def main():
         check_loading_bar(Path(t))
     with tempfile.TemporaryDirectory() as t:
         check_anisotropy(Path(t))
+    check_detonator_mine_envelopes()
+    check_hd_flame_clock()
+    check_hd_hull()
+    check_hd_pilot_assist()
+    check_hd_countdown()
+    check_hd_countdown_tick()
+    check_hd_wait_countdown()
+    check_detonator_volley_ticks()
+    with tempfile.TemporaryDirectory() as t:
+        check_detonator_picture_tick(Path(t))
     print("compare environment: round trip ok")
 
 

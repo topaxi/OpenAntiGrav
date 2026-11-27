@@ -60,10 +60,15 @@ pub fn device_label() -> String {
                 .and_then(|line| line.split_once(':'))
                 .map(|(_, name)| name.trim().to_string())
         });
+    let machine = os_arch(std::env::consts::OS, std::env::consts::ARCH);
     match cpu {
-        Some(cpu) => format!("{} {}, {cpu}", std::env::consts::OS, std::env::consts::ARCH),
-        None => format!("{} {}", std::env::consts::OS, std::env::consts::ARCH),
+        Some(cpu) => format!("{machine}, {cpu}"),
+        None => machine,
     }
+}
+
+fn os_arch(os: &str, arch: &str) -> String {
+    format!("{os} {arch}").trim_start().to_string()
 }
 
 /// A directory name for this run: seconds since the epoch, which sorts and never repeats within
@@ -104,6 +109,19 @@ pub struct Request {
     pub vsync: Option<oag_present::perf::Vsync>,
     /// The frame limit for the run; `None` keeps the player's.
     pub frame_limit: Option<oag_present::perf::FrameLimit>,
+}
+
+/// The name the track select gives the circuit a race loaded, out of its rows (`tracks`):
+/// `None` where no row addresses `circuit`.
+#[must_use]
+pub fn circuit_name(
+    tracks: &[(oag_raceplay::catalogue::Track, String)],
+    circuit: &str,
+) -> Option<String> {
+    tracks
+        .iter()
+        .find(|(track, _)| track.addresses(circuit))
+        .map(|(_, name)| name.clone())
 }
 
 /// A mod that loaded with a run, as the result file names it.
@@ -153,12 +171,46 @@ pub struct Done {
     pub strings: oag_ui::language::StringTable,
     /// What the screen shows besides the report.
     pub view: screen::View,
-    /// Ticks the COPIED (or COULD NOT COPY) label stays on its button.
-    pub copied_ticks: u32,
+    /// What the COPY button says.
+    pub(crate) copy: CopyLabel,
 }
 
 /// Ticks a copy's answer stays on the button: two seconds.
 pub const COPIED_TICKS: u32 = 120;
+
+/// The COPY button's label: its own name until the platform says how a write went, then that
+/// answer for [`COPIED_TICKS`].
+#[derive(Debug, Default)]
+pub(crate) struct CopyLabel {
+    waiting: Option<crate::app::clipboard::Outcome>,
+    shown: Option<bool>,
+    ticks: u32,
+}
+
+impl CopyLabel {
+    /// A write was asked for: the last answer comes off the button.
+    pub(crate) fn start(&mut self, outcome: crate::app::clipboard::Outcome) {
+        *self = Self {
+            waiting: Some(outcome),
+            ..Self::default()
+        };
+    }
+
+    /// One tick, and what the button says now: `Some(true)` copied, `Some(false)` refused.
+    pub(crate) fn tick(&mut self) -> Option<bool> {
+        if let Some(took) = self.waiting.as_ref().and_then(|outcome| outcome.get()) {
+            self.waiting = None;
+            self.shown = Some(took);
+            self.ticks = COPIED_TICKS;
+        } else if self.ticks > 0 {
+            self.ticks -= 1;
+            if self.ticks == 0 {
+                self.shown = None;
+            }
+        }
+        self.shown
+    }
+}
 
 /// A benchmark race, from its first frame to its stats screen. Lives on the race stage, so it
 /// ends with the race.
@@ -178,7 +230,44 @@ pub struct Live {
 
 #[cfg(test)]
 mod tests {
-    use super::title_key;
+    use super::{COPIED_TICKS, CopyLabel, os_arch, title_key};
+    use crate::app::clipboard::Outcome;
+
+    /// `wasm32` has no operating system name, so the device line starts at the architecture.
+    #[test]
+    fn a_device_with_no_operating_system_name_has_no_leading_space() {
+        assert_eq!(os_arch("", "wasm32"), "wasm32");
+        assert_eq!(os_arch("linux", "x86_64"), "linux x86_64");
+    }
+
+    /// The browser answers a write later: until then the button claims nothing, and a refusal
+    /// reads as one.
+    #[test]
+    fn the_copy_button_claims_nothing_until_the_write_is_answered() {
+        for took in [false, true] {
+            let outcome = Outcome::default();
+            let mut label = CopyLabel::default();
+            label.start(outcome.clone());
+            for _ in 0..2 * COPIED_TICKS {
+                assert_eq!(label.tick(), None);
+            }
+            outcome.settle(took);
+            assert_eq!(label.tick(), Some(took));
+            for _ in 1..COPIED_TICKS {
+                assert_eq!(label.tick(), Some(took));
+            }
+            assert_eq!(label.tick(), None);
+        }
+    }
+
+    #[test]
+    fn a_second_press_takes_the_last_answer_off_the_button() {
+        let mut label = CopyLabel::default();
+        label.start(Outcome::known(true));
+        assert_eq!(label.tick(), Some(true));
+        label.start(Outcome::default());
+        assert_eq!(label.tick(), None);
+    }
 
     #[test]
     fn a_title_is_filed_under_the_name_the_offscreen_bench_uses() {

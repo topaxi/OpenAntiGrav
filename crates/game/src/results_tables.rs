@@ -12,7 +12,7 @@
 use oag_raceplay::scoreboard::Board;
 use oag_ui_screens::endrace::{
     DetonatorResults, FieldRow, FieldScore, Headline, LapSplit, PeopleResults, PersonName,
-    PersonRow, Results,
+    PersonRow, Results, ScoreRecord,
 };
 
 /// A Detonator run's rows off the race's own state, `None` where the race has no Detonator field.
@@ -22,6 +22,7 @@ use oag_ui_screens::endrace::{
 /// to the target, so stage 5 reads `4 / 14` and a finish `14 / 14`
 /// (`docs/ghidra/functions/ps3-hdfury-eu/detonator-endrace.md`, "The stage row is laps
 /// completed"). With no board the craft's own lap counter stands in.
+/// The record notice is the caller's to fill ([`crate::records::Store::judge_score`]).
 #[must_use]
 pub fn detonator_results(
     sim: &oag_raceplay::RaceSim,
@@ -37,6 +38,7 @@ pub fn detonator_results(
         bombs: sim.detonator_destroyed_bombs()?,
         chains: sim.detonator_chains()?,
         score: sim.detonator_score()?,
+        record: ScoreRecord::default(),
     })
 }
 

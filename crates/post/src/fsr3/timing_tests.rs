@@ -65,6 +65,7 @@ fn both_halves_of_the_chain_read_back_naming_their_own_frame() {
                 format,
                 usage,
                 view_formats: &[],
+                texture_binding_view_dimension: None,
             })
             .create_view(&wgpu::TextureViewDescriptor::default())
     };

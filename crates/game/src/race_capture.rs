@@ -109,12 +109,18 @@ pub struct CaptureOptions {
     pub force_leach_lock: Option<(u32, usize)>,
     /// `--leach-path FILE`, parsed: see [`Race::force_leach_path`].
     pub leach_path: Option<Vec<oag_core::math::Vec3>>,
+    /// `--force-shot-at TICK:X,Y,Z`: see [`RaceSim::force_shot_at`].
+    pub force_shot_at: Option<(u32, oag_core::math::Vec3)>,
     /// `--force-bomb-trip TICK:SLOT`: see [`RaceSim::force_bomb_trip`].
     pub force_bomb_trip: Option<(u32, usize)>,
     /// `--force-missile-hit TICK:SLOT`.
     pub force_missile_hit: Option<(u32, usize)>,
     /// `--force-rocket-hit TICK:SLOT`.
     pub force_rocket_hit: Option<(u32, usize)>,
+    /// `--force-rocket-hit-velocity`: the struck craft's velocity at that hit.
+    pub force_rocket_hit_velocity: Option<oag_core::math::Vec3>,
+    /// `--force-rocket-hit-at`, each wave.
+    pub force_rocket_hit_at: Vec<tick::ForcedRocketHit>,
     /// `--force-quake TICK:SLOT`: see [`SimRace::force_quake`].
     pub force_quake: Option<(u32, usize)>,
     /// `--force-remote-correction`: see [`oag_raceplay::correction::Scene`].
@@ -129,6 +135,8 @@ pub struct CaptureOptions {
     pub net_overlay: bool,
     /// `--no-weapon-lights`.
     pub no_weapon_lights: bool,
+    /// `--stage-seed SEED`.
+    pub stage_seed: Option<u64>,
     /// Every `--force-shield TICK:PERCENT`: the player's shield, as a
     /// percentage of its maximum, written at the end of that tick.
     pub force_shield: Vec<(u32, f32)>,
@@ -264,6 +272,9 @@ pub struct CaptureOptions {
     /// `--pose-hold`, `--pose-hold-ticks`: when ship 0 is put back on its start pose. See
     /// [`pose_hold`].
     pub pose_hold: pose_hold::Hold,
+    /// `--pose-hold-launch`: the pose ship 0 is held on before it is parked. See
+    /// [`pose_hold::Launch`].
+    pub pose_launch: Option<pose_hold::Launch>,
     /// `--pose-lean`: ship 0's drawn lean and roll phase as the pose's trace row recorded them, put on
     /// after the ticks. See [`pose_lean`].
     pub pose_lean: Option<pose_lean::PoseLean>,
@@ -283,9 +294,12 @@ pub struct CaptureOptions {
     /// `--detonator-mines`: the original's mine positions, laid on ours' nearest survey lanes in place of
     /// the seeded opening layout ([`oag_raceplay::RaceSim::carry_detonator_mines`]).
     pub detonator_mines: Option<Vec<oag_core::math::Vec3>>,
-    /// `--detonator-mine-envelopes`: the football's and spikes' envelope of each `detonator_mines` position, in its
-    /// order, held as the original read them ([`oag_raceplay::Race::pin_mine_envelopes`]).
-    pub detonator_mine_envelopes: Option<Vec<(f32, f32)>>,
+    /// `--detonator-mine-envelopes`: the football's and spikes' envelope and the visualiser's `PitchOffset` of each
+    /// `detonator_mines` position, in its order, held as the original read them ([`oag_raceplay::Race::pin_mines`]).
+    pub detonator_mine_envelopes: Option<Vec<(f32, f32, f32)>>,
+    /// `--detonator-mine-ages`: the age of each `detonator_mines` position's mine, in its order, held as the original
+    /// read it ([`oag_raceplay::Race::pin_mines`]).
+    pub detonator_mine_ages: Option<Vec<f32>>,
     /// `--detonator-emp-charge` ([`oag_raceplay::RaceSim::charge_detonator_emp`]).
     pub detonator_emp_charge: Option<u32>,
     /// `--detonator-gauge-speed` ([`oag_raceplay::Race::pin_ammo_gauge_speed`]).
@@ -490,10 +504,16 @@ pub fn capture(
     // Read before `Race::start` takes `setup`; `difficulty` is `--autopilot-skill`'s fallback.
     let (weapons_on, difficulty) = (setup.weapons_on(), setup.difficulty);
     let mut race = Race::start(setup, view, modules);
+    if let Some(seed) = options.stage_seed {
+        race.reseed_stage(seed);
+    }
     if options.stow_grid_flaps {
         race.stow_grid_flaps();
     }
     let start_pose = options.pose_hold.start(&race);
+    if let Some(launch) = &options.pose_launch {
+        launch.arm(&mut race);
+    }
     // With a field warm-up and no ticks to run, the player's boost is armed inside the warm-up so it rides the
     // warmed trail; `force_boost_state` would clear that trail for a straight one (`Race::warm_up_field`).
     let warmed_boost = options
@@ -508,14 +528,20 @@ pub fn capture(
     }
     if let Some(mines) = &options.detonator_mines {
         let lanes = race.core.sim.carry_detonator_mines(mines);
-        if let Some(envelopes) = &options.detonator_mine_envelopes {
-            race.pin_mine_envelopes(
-                lanes
-                    .iter()
-                    .zip(envelopes)
-                    .filter_map(|(lane, &envelope)| lane.map(|lane| (lane, envelope))),
-            );
-        }
+        race.pin_mines(lanes.iter().enumerate().filter_map(|(at, lane)| {
+            let pin = oag_raceplay::MinePin {
+                envelope: options
+                    .detonator_mine_envelopes
+                    .as_ref()
+                    .and_then(|envelopes| envelopes.get(at).copied()),
+                age: options
+                    .detonator_mine_ages
+                    .as_ref()
+                    .and_then(|ages| ages.get(at).copied()),
+            };
+            lane.filter(|_| pin != oag_raceplay::MinePin::default())
+                .map(|lane| (lane, pin))
+        }));
         let dropped = lanes.iter().filter(|lane| lane.is_none()).count();
         if dropped > 0 {
             warn!(
@@ -638,7 +664,10 @@ pub fn capture(
         // player's own last crossing, which the window steps on
         // ([`SimRace::runs_on_after_the_end`]); its cosmetics go on ([`Race::tick_cosmetics`]).
         // Said out loud, so a capture that ran short is not read as a lost tick.
-        if race.core.sim.finished() && !race.core.runs_on_after_the_end() {
+        // A network race ends on the server's word, which `drive_to` waits for and then
+        // stops stepping on. This machine's own predicted finish comes first, and a client
+        // that stopped there would never hear the end or compare the board.
+        if options.net.is_none() && race.core.sim.finished() && !race.core.runs_on_after_the_end() {
             println!(
                 "the race finished on tick {} of the {} asked for; only its cosmetics are driven",
                 race.core.sim.world.tick, options.ticks
@@ -760,6 +789,7 @@ pub fn capture(
             | wgpu::TextureUsages::COPY_DST
             | wgpu::TextureUsages::TEXTURE_BINDING,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let surface = target.create_view(&wgpu::TextureViewDescriptor::default());
     // Where the scene is drawn. Presented, that is an offscreen target at the
@@ -1175,7 +1205,7 @@ pub fn capture(
         //
         // **Every path is `Rgba8Unorm` since ADR-0020** - this capture, a
         // `--presented` capture and the window alike - so `Renderer::new`'s fork of
-        // the sprite sheet's texture format on `format.is_srgb()` now always takes
+        // the sprite sheet's texture format on `format.has_srgb_suffix()` now always takes
         // the raw side, and the HUD's art reaches all three the same way. It used
         // to differ: an ordinary capture was raw while the window and `--presented`
         // were sRGB, which is exactly the disagreement the ADR removed (measured at

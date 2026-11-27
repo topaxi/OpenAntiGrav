@@ -157,13 +157,66 @@ fn a_laid_mines_recorded_size_scales_its_football_and_its_spikes() {
     let first = ordinary;
     let axis = |m: &oag_core::math::Mat4| m.x_axis.truncate().length();
     assert_eq!(axis(&race.mine_model_matrices()[first]), 1.0);
-    race.view
-        .mine_sizes
-        .lock()
-        .expect("not poisoned")
-        .insert((laid[0].entry, laid[0].lane), (1.5, 2.25));
+    race.view.mine_poses.lock().expect("not poisoned").insert(
+        (laid[0].entry, laid[0].lane),
+        crate::detonator_look::MinePose {
+            football: 1.5,
+            spikes: 2.25,
+            age: 0.0,
+        },
+    );
     assert!((axis(&race.mine_model_matrices()[first]) - 1.5).abs() < 1e-5);
     assert!((axis(&race.mine_spike_matrices()[first]) - 2.25).abs() < 1e-5);
+}
+
+/// An HD mine's football and spikes are drawn on the world axes turned about the mine's up by
+/// `4 x age` (`DetonatorMine_AnimateToMusic`), not on an upright frame: a quarter-turn age puts the
+/// model's X where the original's row 0 says.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn an_hd_mine_turns_about_its_up_by_four_times_its_age() {
+    let Some(image) = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let loaded = crate::load(&crate::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: Mode::Detonator,
+        ..crate::Options::default()
+    })
+    .expect("loading an HD Detonator race");
+    let mut race = Race::start(loaded.setup, loaded.view, loaded.modules);
+    race.tick(&oag_gameplay::PlayerInputs::none());
+    let (ordinary, laid) = race.detonator_mine_looks();
+    let age = std::f32::consts::FRAC_PI_8;
+    race.view.mine_poses.lock().expect("not poisoned").insert(
+        (laid[0].entry, laid[0].lane),
+        crate::detonator_look::MinePose {
+            football: 1.0,
+            spikes: 1.5,
+            age,
+        },
+    );
+    let football = race.mine_model_matrices()[ordinary];
+    let spikes = race.mine_spike_matrices()[ordinary];
+    let detonator = race.core.sim.detonator.as_ref().expect("a Detonator race");
+    let lane_width = detonator.layout.values.distance_offset_between_mines;
+    let placed = race.core.sim.world.detonator.live_mines()[0];
+    let (position, up) = detonator
+        .survey
+        .mine_point(&placed, lane_width)
+        .expect("the first mine stands on its lane");
+    let basis = crate::detonator_look::spun_basis(up, std::f32::consts::FRAC_PI_2);
+    let close = |a: oag_core::math::Vec3, b: oag_core::math::Vec3| (a - b).length() < 1e-4;
+    assert!(close(football.w_axis.truncate(), position));
+    assert!(
+        close(football.x_axis.truncate(), basis.x_axis),
+        "football X {:?}, the original's row 0 {:?}",
+        football.x_axis,
+        basis.x_axis
+    );
+    assert!(close(football.z_axis.truncate(), basis.z_axis));
+    assert!(close(spikes.x_axis.truncate(), basis.x_axis * 1.5));
 }
 
 /// A laid mine's visualiser ring is centred on the mine, its Z axis points at the camera, and it
@@ -193,11 +246,14 @@ fn a_laid_mines_visualiser_ring_faces_the_camera_and_follows_the_footballs_size(
     let toward = (eye - centre).normalize();
     assert!(ring[0].z_axis.truncate().normalize().dot(toward) > 0.9999);
     assert!((ring[0].z_axis.truncate().length() - 1.0).abs() < 1e-4);
-    race.view
-        .mine_sizes
-        .lock()
-        .expect("not poisoned")
-        .insert((laid[0].entry, laid[0].lane), (2.0, 1.0));
+    race.view.mine_poses.lock().expect("not poisoned").insert(
+        (laid[0].entry, laid[0].lane),
+        crate::detonator_look::MinePose {
+            football: 2.0,
+            spikes: 1.0,
+            age: 0.0,
+        },
+    );
     let grown = race.mine_visualiser_matrices(eye);
     assert!((grown[0].z_axis.truncate().length() - 1.4).abs() < 1e-4);
 }

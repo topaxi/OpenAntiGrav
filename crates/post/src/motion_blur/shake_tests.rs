@@ -59,6 +59,7 @@ fn blurred_red(lens_motion: Mat4) -> Option<impl Fn(u32, u32) -> u8> {
             format,
             usage,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         })
     };
     let layout = wgpu::TexelCopyBufferLayout {

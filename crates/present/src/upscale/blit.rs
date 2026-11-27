@@ -19,7 +19,7 @@ pub(super) struct Grade {
     /// Whether the blit's source holds sRGB-encoded values the shader has to
     /// decode itself, as `1.0` or `0.0`.
     ///
-    /// One only when `self.format.is_srgb()` - the offscreen target is bound
+    /// One only when `self.format.has_srgb_suffix()` - the offscreen target is bound
     /// through an sRGB view and arrives already decoded by the sampler, while
     /// an upscaler's or FXAA/SMAA's output is deliberately read through the
     /// *non*-sRGB twin because that pass works in perceptual space and a

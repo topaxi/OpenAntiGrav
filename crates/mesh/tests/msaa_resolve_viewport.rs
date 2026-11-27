@@ -71,6 +71,7 @@ fn a_multisample_resolve_covers_the_whole_attachment_and_not_the_viewport() {
             format,
             usage,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         })
     };
     let multisampled = target("msaa", 4, wgpu::TextureUsages::RENDER_ATTACHMENT);

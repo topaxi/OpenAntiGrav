@@ -51,10 +51,14 @@ fn settle(target: Target, pace: f32, flat: f32, per_pixel: f32, truth: f32) -> (
                 fixed: 0.0,
                 blur: 0.0,
             };
+            let probing = drs.probing();
             let moved = drs
                 .record(cost, learning.then_some(frame), limits)
                 .is_some();
-            if moved && frame_index >= 3_000 {
+            // A probe rise and its revert are the probe's own pair, bounded by
+            // `a_held_clock_keeps_its_settle`; what this counts is the loop hunting.
+            let probe = probing || drs.probing();
+            if moved && !probe && frame_index >= 3_000 {
                 changes += 1;
             }
         }

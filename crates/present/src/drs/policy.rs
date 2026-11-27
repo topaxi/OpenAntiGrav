@@ -7,7 +7,7 @@
 
 use oag_display::display::BlurResolution;
 
-use super::{Cost, Limits, Residual, blur::Rung, reflection};
+use super::{Cost, Limits, Residual, blur::Rung, probe, reflection, width};
 
 /// The band around the budget in which nothing happens, as a fraction of it.
 ///
@@ -122,6 +122,11 @@ pub struct Controller {
     /// The reflection rung: the step `auto` draws the glass and sea target at - see
     /// [`super::reflection`]. Fed by [`Self::record_reflection`], with or without a target.
     reflection: reflection::Rung,
+    /// The title's own width throttle, driven instead of everything above while
+    /// [`Limits::width`] carries it.
+    width: width::Throttle,
+    /// The probe rise: a step up on trial after a long quiet hold - see [`super::probe`].
+    probe: probe::Probe,
 }
 
 impl Default for Controller {
@@ -142,6 +147,8 @@ impl Controller {
             residual: Residual::new(),
             rung: Rung::default(),
             reflection: reflection::Rung::new(),
+            width: width::Throttle::default(),
+            probe: probe::Probe::default(),
         }
     }
 
@@ -188,6 +195,11 @@ impl Controller {
         // Before the early return, so a target turned off clears the rung as
         // a blur turned off does.
         self.rung.begin_frame(limits);
+        // The title's own throttle steps once a frame, at [`Self::finish_frame`].
+        if limits.width().is_some() {
+            self.width.offer(cost.total());
+            return None;
+        }
         let period = limits.target().period()?;
         let scalable = cost.scalable;
         if !scalable.is_finite() || scalable <= 0.0 {
@@ -210,6 +222,20 @@ impl Controller {
         if fixed_fills_period {
             self.unreachable = self.unreachable.saturating_add(1);
         }
+        // **A step on trial sees every reading, the cooled-down ones too**, so a late frame
+        // reverts it on the frame it happens. While it runs, nothing else moves the scale: the
+        // readings straight after the step are taken at the clock the step was meant to raise.
+        let late = frame_seconds.is_some_and(|frame| probe::late(frame, period));
+        if let Some(verdict) = self.probe.judge(scalable, late, period, budget) {
+            self.cooldown = self.cooldown.saturating_sub(1);
+            self.under = 0;
+            if let probe::Verdict::Reverted(origin) = verdict {
+                self.steps = origin.clamp(floor_steps(limits), GRID);
+                self.cooldown = COOLDOWN;
+                return Some(limits.pixels(self.scale()));
+            }
+            return None;
+        }
         if self.cooldown > 0 {
             self.cooldown -= 1;
             return None;
@@ -226,6 +252,37 @@ impl Controller {
         } else {
             scalable / budget
         };
+        let quiet =
+            frame_seconds.is_some() && !late && ratio <= *DEADBAND.end() && self.steps < GRID;
+        self.probe.observe(scalable, quiet, period);
+        let moved = self.correct(cost, ratio, budget, fixed_fills_period, limits);
+        // Every action above leaves a cooldown behind it; with none, nothing acted.
+        if self.cooldown > 0 {
+            self.probe.interrupt();
+            return moved;
+        }
+        if self.probe.due(period) {
+            let next = (self.steps + RISE_STEPS).min(GRID);
+            self.probe.start(self.steps, next);
+            self.steps = next;
+            self.cooldown = COOLDOWN;
+            self.under = 0;
+            return Some(limits.pixels(self.scale()));
+        }
+        moved
+    }
+
+    /// The budget loop's own decision on one cooled-down reading: the rungs, the deadband,
+    /// the patient rise and its overshoot guard, and the fall.
+    fn correct(
+        &mut self,
+        cost: Cost,
+        ratio: f32,
+        budget: f32,
+        fixed_fills_period: bool,
+        limits: Limits,
+    ) -> Option<(u32, u32)> {
+        let scalable = cost.scalable;
         // **The blur rung first in both directions** (ADR-0075): an overrun
         // sheds the full gather before the extent falls, and the full gather
         // comes back only at the extent's ceiling, so a restore is the last
@@ -334,6 +391,25 @@ impl Controller {
         Some(limits.pixels(self.scale()))
     }
 
+    /// Ends a frame under the title's own throttle ([`width::Throttle::step`]) and returns the
+    /// extent when it moved. Nothing under the budget loop, which steps as it records.
+    pub fn finish_frame(
+        &mut self,
+        frame_seconds: Option<f32>,
+        limits: Limits,
+    ) -> Option<(u32, u32)> {
+        let spec = limits.width()?;
+        self.width
+            .step(frame_seconds, spec)
+            .then(|| self.extent(limits))
+    }
+
+    /// Notches the title's own throttle has taken off the width.
+    #[must_use]
+    pub fn width_level(&self) -> u32 {
+        self.width.level()
+    }
+
     /// Whether the target cannot be met at any resolution this controller may
     /// choose.
     ///
@@ -387,6 +463,10 @@ impl Controller {
         self.unreachable = 0;
         self.rung.reset();
         self.reflection.stall();
+        // Back to full width: after a load, a rebuilt surface or a changed row the readings
+        // in flight describe another picture. Long frames narrow it again a notch a frame.
+        self.width = width::Throttle::default();
+        self.probe.stall();
     }
 
     /// Records one frame into the reflection rung ([`super::reflection`]) and returns its change
@@ -397,7 +477,10 @@ impl Controller {
         reading: reflection::Reading,
         limits: Limits,
     ) -> Option<reflection::Change> {
-        let at_ceiling = !limits.target().is_on() || self.steps == GRID;
+        let at_ceiling = match limits.width() {
+            Some(_) => self.width.level() == 0,
+            None => !limits.target().is_on() || self.steps == GRID,
+        };
         self.reflection.record(reading, at_ceiling)
     }
 
@@ -422,6 +505,10 @@ impl Controller {
     /// [`record`]: Self::record
     #[must_use]
     pub fn extent(&self, limits: Limits) -> (u32, u32) {
+        if let Some(spec) = limits.width() {
+            let ceiling = limits.ceiling();
+            return (spec.width(ceiling.0, self.width.level()), ceiling.1);
+        }
         if !limits.target().is_on() {
             return limits.ceiling();
         }
@@ -444,6 +531,27 @@ impl Controller {
     #[must_use]
     pub fn blur_shed(&self) -> bool {
         self.rung.is_shed()
+    }
+
+    /// This controller with no probe rise, the loop as it was before ADR-0096.
+    #[cfg(test)]
+    #[must_use]
+    pub(super) fn without_probe(mut self) -> Self {
+        self.probe.off = true;
+        self
+    }
+
+    /// Whether a probe rise is on trial ([`super::probe`]), for the log line that says the
+    /// scale moved.
+    #[must_use]
+    pub fn probing(&self) -> bool {
+        self.probe.on_trial()
+    }
+
+    /// How the last probe rise ended, for the log line that says so.
+    #[must_use]
+    pub fn probe_outcome(&self) -> Option<probe::Outcome> {
+        self.probe.outcome()
     }
 
     /// The scale in force, as a fraction of the ceiling. For tests and the

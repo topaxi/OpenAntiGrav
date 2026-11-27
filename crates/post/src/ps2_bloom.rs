@@ -557,6 +557,7 @@ mod tests {
                 | wgpu::TextureUsages::COPY_DST
                 | wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
         let texels: Vec<u8> = (0..SCENE.0 * SCENE.1)
             .flat_map(|i| {

@@ -73,8 +73,9 @@ START RACE with cross held and logs every hit with the cue name (`r5`) and the S
   starts as a cue, on either entry. `LAUNCHSEQ` (`launch.bnk`) is not part of the start.
 - **The two `go` intervals differ (3.07 s and 4.09 s) because the audio clock is not game time**: the game
   thread is parked at each hit while the audio thread keeps counting, so the number orders hits and bounds
-  nothing. The spacing is the countdown timer `+0x1958`, an authored value this page did not read. The port keeps
-  Pulse's 180 ticks (3.0 s), **inherited, not measured**.
+  nothing. The spacing is set by the countdown timer `+0x1958`, read since as `4.0` with the release 3.0 s into
+  phase 1 ([gantry-clock.md](gantry-clock.md), "What zeroes it in the countdown"), which is the 180 ticks the port
+  already keeps.
 - A third run (`Sound_PlayNamedCue`, `0x0062c500`) hit a stub timeout and gave nothing.
 - The race manager's phase was not read in the capture (the singleton slot did not resolve): the order comes
   from the entries, the phase from the code above.

@@ -67,6 +67,10 @@ pub struct CraftLaws {
     /// `v + (R^T omega) x r`, where Pulse's is textbook: Wipeout HD's, measured live
     /// (`oag_physics::laws::Laws::wall_point_rate_body_local`).
     pub wall_point_rate_body_local: Sourced<bool>,
+    /// A weapon blast's pending impulse drains along the craft's side axis, not its forward
+    /// axis: Wipeout HD's drain `0x000d8a28` projects onto body `+0x1d0`, the right row
+    /// (`oag_physics::laws::Laws::pending_impulse_on_side`).
+    pub pending_impulse_on_side: Sourced<bool>,
     /// The rigid body's linear velocity damping per second, `velocity -= velocity * h * c` in
     /// `Body_Integrate` (`oag_physics::laws::BodyDamping`): `0.01` on every title read.
     pub body_linear_damping: Sourced<f32>,

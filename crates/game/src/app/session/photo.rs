@@ -125,7 +125,10 @@ impl super::Session {
     /// is on screen or parked behind the menus, and this build can write a shot.
     pub(crate) fn photo_available(&self) -> bool {
         let race = match &self.stage {
-            Stage::Race(stage) if !stage.race.core.sim.finished() => Some(stage),
+            // A benchmark's race is never held, so it offers no PHOTO MODE.
+            Stage::Race(stage) if !stage.race.core.sim.finished() && stage.benchmark.is_none() => {
+                Some(stage)
+            }
             _ => self.suspended_race.as_ref(),
         };
         self.net.is_none() && race.is_some_and(|stage| fits(stage))

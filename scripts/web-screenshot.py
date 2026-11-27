@@ -3,7 +3,7 @@
 
     uv run --with playwright python3 scripts/web-screenshot.py \\
         --dist target/web/dist --image data/images/pulse-psp-eu.chd \\
-        --out data/web-shots --at 5,10,15 [--press Enter@12] [--pick 30] [--eval JS@20] [--port 8000] [--software] [--resize 1280x720@12]
+        --out data/web-shots --at 5,10,15 [--press Enter@12] [--pick 30] [--eval JS@20] [--grant clipboard-read@40] [--port 8000] [--software] [--resize 1280x720@12]
 
 Serves `--dist` on 127.0.0.1, opens it in Chromium with WebGPU enabled
 (`--chromium` names the binary, `/usr/bin/chromium` by default; Playwright's
@@ -278,6 +278,15 @@ def main() -> None:
         default=[],
         help="JS@SECONDS: evaluate JS in the page then and print the result",
     )
+    parser.add_argument(
+        "--grant",
+        action="append",
+        default=[],
+        metavar="PERMISSION",
+        help="grant a Chromium permission to the page, repeatable, from the start or at "
+        "PERMISSION@SECONDS. `clipboard-read@T`, after the COPY press, lets --eval read back "
+        "what the page wrote with no permission of its own",
+    )
     parser.add_argument("--fps", type=float, default=0.0)
     parser.add_argument(
         "--stalls",
@@ -410,6 +419,7 @@ def main() -> None:
         + [(float(at), "pick", "") for at in args.pick]
         + ([(args.crash_gpu, "crashgpu", "")] if args.crash_gpu is not None else [])
         + ([(args.lose_image, "lose", "")] if args.lose_image is not None else [])
+        + [(float(at), "grant", p) for p, at in (g.split("@") for g in args.grant if "@" in g)]
         + keyed(args.eval, "eval")
         + [(float(w.split("-")[0]), "profstart", w) for w in args.profile]
         + [(float(w.split("-")[1]), "profstop", w) for w in args.profile]
@@ -427,12 +437,19 @@ def main() -> None:
             else:
                 flags = ["--mute-audio", "--disable-audio-output"] if args.plain else (
                     SOFTWARE_FLAGS[args.software] if args.software else FLAGS)
+                if args.dpr != 1.0:
+                    # Playwright's emulated ratio leaves `devicePixelContentBoxSize`, which
+                    # sizes the canvas, in CSS pixels while pointer positions are scaled.
+                    flags = flags + [f"--force-device-scale-factor={args.dpr:g}"]
                 browser = p.chromium.launch(
                     executable_path=args.chromium, headless=True, args=flags + args.flag,
                 )
             page = browser.new_page(
                 viewport={"width": width, "height": height}, device_scale_factor=args.dpr
             )
+            early = [g for g in args.grant if "@" not in g]
+            if early:
+                page.context.grant_permissions(early)
             if args.stalls > 0:
                 # Every animation frame's time, from before the page's own
                 # script runs: a gap is the page's thread busy, a load stall.
@@ -507,6 +524,9 @@ def main() -> None:
                 elif kind == "crashgpu":
                     browser.new_browser_cdp_session().send("Browser.crashGpuProcess")
                     print(f"crashed the GPU process at {at:g}s", flush=True)
+                elif kind == "grant":
+                    page.context.grant_permissions([key])
+                    print(f"granted {key} at {at:g}s", flush=True)
                 elif kind == "eval":
                     print(f"eval {key!r} at {at:g}s: {page.evaluate(key)}", flush=True)
                 elif kind == "resize":

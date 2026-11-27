@@ -650,6 +650,7 @@ fn make_depth_view(device: &wgpu::Device, width: u32, height: u32) -> wgpu::Text
         format: DEPTH_FORMAT,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     depth.create_view(&wgpu::TextureViewDescriptor::default())
 }

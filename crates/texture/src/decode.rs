@@ -12,9 +12,9 @@
 //!
 //! **Rows are as the file stores them.** A `.gtf`'s run bottom-up
 //! ([`Picture::bottom_up`]); which way up a consumer wants them is the
-//! consumer's, so the flip lives with the consumer that draws top-down
-//! (`oag_hud::sprite`), exactly where it was measured
-//! (`docs/formats/hd-loading.md`).
+//! consumer's, so the flip lives with each consumer that draws top-down
+//! (`oag_hud::sprite`, `oag_fx::psys::sprite`;
+//! `docs/formats/hd-loading.md`).
 
 use crate::{gnf, gtf, gxt, ps2_texture, texture};
 

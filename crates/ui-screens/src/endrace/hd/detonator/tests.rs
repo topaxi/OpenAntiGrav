@@ -1,5 +1,5 @@
 use crate::endrace::hd::hd_results_draw_list;
-use crate::endrace::{DetonatorResults, FieldResults, Headline};
+use crate::endrace::{DetonatorResults, FieldResults, Headline, ScoreRecord};
 use oag_ui::frontend::Draw;
 use oag_ui::language::StringTable;
 use oag_ui::menu::Frame;
@@ -25,7 +25,9 @@ const XML: &str = r#"
 <Text name="Grid2.0"><Values x="0" y="0" scale="0.8" color="0xff646464"></Values></Text>
 <Text name="Grid0.h"><Values x="0" y="0" scale="0.8" color="0xffffffff"></Values></Text>
 <Text name="Grid1.h"><Values x="0" y="0" scale="0.8" color="0xffffffff"></Values></Text>
-<Text name="RecValue"><Values string="NEW" x="0" y="0"></Values></Text>
+<Text name="RecValue"><Values string="NEW" x="120" y="37"></Values></Text>
+<Block name="RecBlockBlue"><Values x="0" y="500" width="791" height="60" Color="0xff0000ff" ArrowColor="0xffffffff" unselectable="true"></Values></Block>
+<Block name="RecBlockGrey"><Values x="0" y="500" width="791" height="60" Color="0xff777777"></Values></Block>
 </Item>
 <Text name="Line1"><Values string="race complete!" x="586" y="50"></Values></Text>
 <Item OffsetX="1180" OffsetY="368">
@@ -45,6 +47,8 @@ fn strings(with_headline: bool) -> StringTable {
 <Entry ID="ER_NUM_10_STREAKS" String="NUMBER OF 10 CHAINS"></Entry>
 <Entry ID="ER_NUM_15_STREAKS" String="NUMBER OF 15 CHAINS"></Entry>
 <Entry ID="ER_DETONATOR_SCORE" String="TOTAL SCORE"></Entry>
+<Entry ID="ER_NSR" String="NEW SCORE RECORD"></Entry>
+<Entry ID="ER_SR" String="SCORE RECORD"></Entry>
 {}</Strings>"#,
         if with_headline {
             r#"<Entry ID="ER_ZDETONATOR_COM" String="DETONATOR SESSION COMPLETE!"></Entry>"#
@@ -81,6 +85,7 @@ fn destroyed_in_stage_five() -> DetonatorResults {
         bombs: 3,
         chains: [2, 1, 0],
         score: 41_250,
+        record: ScoreRecord::default(),
     }
 }
 
@@ -162,7 +167,7 @@ fn the_score_line_is_the_labelled_total_at_y_three_sixty() {
 }
 
 #[test]
-fn rows_six_to_eight_and_the_other_columns_stay_blank_and_no_record_banner_draws() {
+fn rows_six_to_eight_and_the_other_columns_stay_blank() {
     let draws = draw(Some(destroyed_in_stage_five()), &strings(true));
     let texts: Vec<&str> = draws
         .iter()
@@ -172,9 +177,9 @@ fn rows_six_to_eight_and_the_other_columns_stay_blank_and_no_record_banner_draws
         })
         .collect();
     assert!(!texts.contains(&"NEW"), "{texts:?}");
-    // Rows 0 and 5 (label and value each), the score line, `Line1`: the miniature authors a
-    // row 6 and a `Grid2.0` that must stay blank.
-    assert_eq!(texts.len(), 2 * 2 + 2 + 1, "{texts:?}");
+    // Rows 0 and 5 (label and value each), the score line, `Line1` and the record notice's text:
+    // the miniature authors a row 6 and a `Grid2.0` that must stay blank.
+    assert_eq!(texts.len(), 2 * 2 + 2 + 2, "{texts:?}");
 }
 
 #[test]
@@ -240,4 +245,145 @@ fn a_field_grid_model_draws_none_of_it() {
     let draws = draw(None, &strings(true));
     assert!(text_at(&draws, "STAGE CLEARED").is_none());
     assert!(text_at(&draws, "TOTAL SCORE").is_none());
+}
+
+/// The colour of the box the notice draws, where the miniature's blue and grey blocks differ:
+/// every sprite of a block frame is tinted with the block's own `Color`.
+fn box_colours(results: DetonatorResults) -> Vec<[u8; 3]> {
+    let placed = oag_ui::frontend::Placed {
+        x: 0,
+        y: 0,
+        width: 64,
+        height: 64,
+        quad_extent: None,
+        quad_centre: None,
+        blend: None,
+        scale: [1.0, 1.0],
+    };
+    let frame = Frame {
+        blocks: Some(oag_ui::menu::block::BlockArt {
+            frame: placed,
+            fill_alpha: 110.0 / 255.0,
+            solid_alpha: 1.0,
+            cursor: None,
+            arrow: None,
+            marker: None,
+            fury: false,
+        }),
+        ..Frame::default()
+    };
+    let draws = hd_results_draw_list(
+        &model(Some(results)),
+        &layout(),
+        &skin(),
+        &frame,
+        &strings(true),
+        None,
+        false,
+        &|_| None,
+    )
+    .body;
+    let colours: Vec<[u8; 3]> = draws
+        .iter()
+        .filter_map(|draw| match draw {
+            Draw::Sprite { color, .. } => {
+                let [r, g, b, _] = color.map(|c| (c * 255.0).round() as u8);
+                Some([r, g, b])
+            }
+            _ => None,
+        })
+        .collect();
+    assert!(!colours.is_empty(), "the box draws");
+    colours
+}
+
+#[test]
+fn a_new_record_draws_the_blue_box_and_the_new_score_record_text() {
+    let beaten = DetonatorResults {
+        record: ScoreRecord::judge(5600, 0),
+        ..destroyed_in_stage_five()
+    };
+    let draws = draw(Some(beaten), &strings(true));
+    assert!(text_at(&draws, "NEW SCORE RECORD 5600").is_some());
+    let colours = box_colours(beaten);
+    assert!(
+        colours.iter().all(|c| *c == [0, 0, 255]),
+        "blue: {colours:?}"
+    );
+}
+
+#[test]
+fn no_new_record_draws_the_grey_box_and_the_standing_best() {
+    let kept = DetonatorResults {
+        record: ScoreRecord::judge(100, 5600),
+        ..destroyed_in_stage_five()
+    };
+    let draws = draw(Some(kept), &strings(true));
+    assert!(text_at(&draws, "SCORE RECORD 5600").is_some());
+    assert!(text_at(&draws, "NEW SCORE RECORD 5600").is_none());
+    let colours = box_colours(kept);
+    assert!(colours.iter().all(|c| *c == [0x77; 3]), "grey: {colours:?}");
+}
+
+/// An unselectable block with an `ArrowColor` carries the static marker at `(17, 13)`, 16 square;
+/// the grey box, which authors none, carries none.
+#[test]
+fn an_unselectable_block_draws_its_marker_where_it_authors_an_arrow_colour() {
+    let at = |results: DetonatorResults| -> Vec<[f32; 4]> {
+        let placed = |x| oag_ui::frontend::Placed {
+            x,
+            y: 0,
+            width: 64,
+            height: 64,
+            quad_extent: None,
+            quad_centre: None,
+            blend: None,
+            scale: [1.0, 1.0],
+        };
+        let frame = Frame {
+            blocks: Some(oag_ui::menu::block::BlockArt {
+                frame: placed(0),
+                fill_alpha: 110.0 / 255.0,
+                solid_alpha: 1.0,
+                cursor: None,
+                arrow: None,
+                marker: Some(placed(64)),
+                fury: false,
+            }),
+            ..Frame::default()
+        };
+        hd_results_draw_list(
+            &model(Some(results)),
+            &layout(),
+            &skin(),
+            &frame,
+            &strings(true),
+            None,
+            false,
+            &|_| None,
+        )
+        .body
+        .iter()
+        .filter_map(|draw| match draw {
+            Draw::Sprite { rect, .. } if rect[2] == 16.0 && rect[3] == 16.0 => Some(*rect),
+            _ => None,
+        })
+        .collect()
+    };
+    let beaten = DetonatorResults {
+        record: ScoreRecord::judge(5600, 0),
+        ..destroyed_in_stage_five()
+    };
+    let screen = layout().screen;
+    let block = screen
+        .blocks
+        .iter()
+        .find(|block| block.name.as_deref() == Some("RecBlockBlue"))
+        .expect("the blue box");
+    assert!(
+        at(beaten).contains(&[block.x + 17.0, block.y + 13.0, 16.0, 16.0]),
+        "{:?}",
+        at(beaten)
+    );
+    assert!(at(destroyed_in_stage_five()).is_empty());
 }

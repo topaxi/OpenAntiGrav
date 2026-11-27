@@ -125,6 +125,7 @@ fn frame() -> Frame {
                 blend: None,
                 scale: [1.0, 1.0],
             }),
+            marker: None,
             fury: false,
         }),
         ..Frame::default()

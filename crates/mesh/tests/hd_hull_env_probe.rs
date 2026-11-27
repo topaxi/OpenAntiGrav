@@ -151,6 +151,7 @@ fn array(
         format: ENV_PROBE_FORMAT,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     for layer in 0..ENV_PROBE_LAYERS {
         let texels: Vec<u8> = (0..ENV_PROBE_SIZE.0 * ENV_PROBE_SIZE.1)
@@ -488,6 +489,7 @@ fn draw_tinted(
             format,
             usage,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         })
     };
     let colour = make(

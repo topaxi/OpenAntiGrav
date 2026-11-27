@@ -509,6 +509,9 @@ pub struct MenuBlocks {
     /// The settings rows' step arrow: `Data\FE\Images\HD_options_arrow.gtf`,
     /// loaded by `List_Construct`.
     pub arrow_texture: &'static str,
+    /// The small marker an unselectable `<Block>` with an `ArrowColor` carries:
+    /// `Data\FE\Images\NonSelectable_Arrow_HD.gtf`, which `Block_ParseXml`'s other branch creates.
+    pub unselectable_arrow_texture: &'static str,
     /// The `<HorizMenu>` widget's own numbers.
     pub strip: StripBlocks,
     /// The `<List>` widget's own numbers.

@@ -128,6 +128,7 @@ fn write_vis_blanks_on_no_tint_or_no_bands() {
                 | wgpu::TextureUsages::COPY_DST
                 | wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
         // Seed it with something not-black first, so a no-op that merely
         // left the old contents alone would still be caught.
@@ -202,6 +203,7 @@ fn write_vis_changed_writes_only_new_texels() {
         format: texture::FORMAT,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let log = std::cell::RefCell::new(oag_gpu::writes::Log::default());
     let mut last = None;

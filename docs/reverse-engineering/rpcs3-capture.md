@@ -989,9 +989,9 @@ named, and a row below 80 says why:
 **Caveat (2026-11-07, `hd-weapons-2`):** on two grids a state-8 shot also drew a green-cyan shell around the whole craft that stayed for many seconds, with no muzzle flash; which weapon that is, or whether the Cannon draws it, is unresolved (`ps3-hdfury-eu/weapons.md`, "The other weapons against the original").
 
 | **9** | **Bomb** | readout 15 = Bomb's `damage`; fired, a red-and-white bomb sits on the track, ringed, and detonates | **90** |
-| 1 | Missile | readout 15; the later row below (a projectile with five bounces, a hit that fills the explosion pool) | 70 |
+| 1 | Missile | readout 15; the later row below (a projectile with five bounces, a hit that fills the explosion pool); 2026-11-27, two films: the shot took 15 off a rival and its entry showed in the Missile pool (vtable `0x00864b38`) | 90 |
 | **2** | **Quake** | readout 15; `Weapon_FireFromSlot`'s state-2 handler (`0x0012daa0`) sets slot `+0x200` bit `0x8`, which `QuakeManager_Fire` (`0x00147d18`) clears, and the live `g_quake` block (`0x00ae98c0`) runs (speed `270`, age, amplitude) the moment it is fired. `scripts/rpcs3-hd-quake.py`, `docs/ghidra/functions/ps3-hdfury-eu/quake.md` | **90** |
-| 3, 6, 10 | unresolved | readouts 1, 0, 1; state 3 never fired | - |
+| 3, 6, 10 | unresolved | readouts 1, 0, 1; state 3 never fired (again 2026-11-27, one boot: the pair `[3, 3]` was still in the slot after a four-frame press), so the Mine has no known word and has not been filmed | - |
 
 The state is **not** Pulse's craft id: Pulse's Mine is 8 and Bomb 9 by id and 8 and 9 by
 bit (`0x2`, `0x100`); here the same bits sit on the other numbers (state 9 sets `0x2`, state 8
@@ -1261,9 +1261,30 @@ remedy. (3) The patch for `rpcs3-hd-pair.py`: its `set_window` resizes RPCS3's w
 (`size` check refuses). Add `xdotool windowmove <id> 0 0` after `windowsize`, or give the Xvfb 2200 px (`OAG_RPCS3_GEOMETRY=2200x1300x24`) and move the window; `rpcs3-hd-cold-pair.sh` does the move itself.
 (4) `compare-hd-batch.sh` and `rpcs3-hd-variant.sh` restore a savestate per circuit; a cold-boot batch is `rpcs3-hd-cold-pair.sh` per circuit (indices on Track Select: Vineta K 0, Anulpha Pass 1, Moa Therma 2, Chenghou 3, Ubermall 6, Talon's 8, Tech de Ra 11; read `Loading World` off `TTY.log`, a dropped press picks the neighbour).
 
-**Cold-pair knobs and indices (2026-10-27, `hd-cold-pair-remake`).** `rpcs3-hd-cold-pair.sh` reads `OAG_HD_CLASSIC` (default 1; the `down` on Ship Select), `OAG_HD_TEAM_RIGHTS` (default 9, Harimau; Assegai 7) and `OAG_HD_TEAM` (ours' `--team`). On the maintainer's current profile the `down` hull is **locked** (Harimau and Assegai both: the third hex of the team's column shows a padlock), so a cold pair there needs `OAG_HD_CLASSIC=0`; the Harimau hull it picks matches the stored pairs' crop by eye, but Assegai's does not (the stored Assegai pair is the black `c1` hull, the unlocked one is the narrow blue classic). Track Select indices used for 13 cold pairs, every `--track` checked against `pair.json`: Vineta K 0, Anulpha Pass 1, Moa Therma 2 (`03_Track`), Chenghou 3, Metropia 4 (`02_Track`), Sebenco Climb 5, Ubermall 6, Sol 2 7, Talon's 8, Amphiseum 9, **Modesto Heights 10**, Tech de Ra 11 (the table above, confidence 90). A cold boot to a pair takes 170-220 s; about one boot in six drops a press (retry). The world-clock offset read per capture ran 31.4 to 40.5 s on these 13 boots (Tech de Ra 31.4, Sebenco 35.0, Modesto 40.1).
+**Cold-pair knobs and indices (2026-10-27, `hd-cold-pair-remake`).** `rpcs3-hd-cold-pair.sh` reads `OAG_HD_TEAM` (ours' `--team`, default `harimau`), and Ship Select is stepped to that hull ("Picking the hull on Ship Select"); it no longer takes a row or column count. On the profile of that date the `down` hull was **locked** (Harimau and Assegai both: the third hex of the team's column showed a padlock) and the Harimau hull picked there matched the stored pairs' crop by eye, but Assegai's did not (the stored Assegai pair is the black `c1` hull, the unlocked one is the narrow blue classic). Track Select indices used for 13 cold pairs, every `--track` checked against `pair.json`: Vineta K 0, Anulpha Pass 1, Moa Therma 2 (`03_Track`), Chenghou 3, Metropia 4 (`02_Track`), Sebenco Climb 5, Ubermall 6, Sol 2 7, Talon's 8, Amphiseum 9, **Modesto Heights 10**, Tech de Ra 11 (the table above, confidence 90). A cold boot to a pair takes 170-220 s; about one boot in six drops a press (retry). The world-clock offset read per capture ran 31.4 to 40.5 s on these 13 boots (Tech de Ra 31.4, Sebenco 35.0, Modesto 40.1).
 
 **Omega: not checkable** (no PS4 capture path); the original-frame artifact is RPCS3's, specific to HD's capture here. 2048 on Vita3K was not tried.
+
+## Picking the hull on Ship Select (2026-11-26, `pair-tooling-fixes`)
+
+**A press count is not a hull.** Which row the screen opens on and which rows are locked differ between saves, so
+`emu-hd-glass-boot.sh <lane> <circuit> <hull> <name>` runs `rpcs3-hd-ship-step.py select --hull <hull>`, which presses
+and reads until the selected hull is the pair's `--team` (`hd_ship_step.step_to_hull`), then refuses a hull `cross` does not
+accept. The read is the one the craft array uses: the selected `PI_TeamModel` is `screen+0x194`, and its `+0x1b4` points at
+the hull directory (`Data\Ships\Feisar_c1`, `Data\Ships\Harimau`); a craft holds the same model at `ship+0x6298`.
+Confidence 90 (one boot walked by hand plus one end-to-end boot, whose loaded player craft read `Harimau` out of the craft array
+after `select` landed on it).
+
+Read on one save (RPCS3 0.0.43-20574, HD Fury EU, Racebox Time Trial):
+
+- Each team column is a list of 7 rows that **clamps** at both ends. Feisar's, top to bottom: `Feisar_c1`, `Feisar_n1`,
+  `Feisar_c1`, `Feisar`, `Feisar`, `Feisar`, `Feisar`. The screen opened on the third (`_c1`, the Fury hull), the fourth
+  is the standard hull, and the others show a padlock.
+- **A locked row names the same directory as an unlocked one**, so a name match alone does not prove the hull is
+  selectable. A padlock row has no CONFIRM prompt and `cross` leaves the screen on Team Selection, which the boot checks.
+  The stepper stops at the first match on its way out from the opening row, which reaches the unlocked one first.
+- **The team list wraps**: the walk reached Assegai from Harimau with `right` alone.
+- Not read: whether a saved selection can open the screen below the unlocked rows. If it does, the boot refuses.
 
 ## Tech de Ra's glass road is iridescent in the original too (2026-10-21, `hd-rainbow-glass`)
 

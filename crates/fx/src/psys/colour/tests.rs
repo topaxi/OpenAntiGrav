@@ -104,3 +104,39 @@ fn a_law_applied_again_replaces_the_first() {
     effect.with_colour_law(ColourLaw::Forward);
     assert_eq!(effect.emitters[0].colour_mode, ColourMode::OverLife);
 }
+
+/// `DetonatorMine_Explode`'s entry for Detonator stage 1, `Sub Venom`, mine colour
+/// `122 25 255 255`: `0.8` of the way to white is `228, 209, 255`, and the packing's shifts of
+/// `9` and `1` move green and red one bit up, so red keeps its low seven bits, green takes red's
+/// top bit and blue green's (`docs/ghidra/functions/ps3-hdfury-eu/detonator-mine.md`, "The
+/// blast's colour").
+#[test]
+fn a_live_mine_blast_entry_is_the_executables_packing_not_a_plain_lerp() {
+    assert_eq!(
+        detonator_mine_blast_entry([122, 25, 255, 255]),
+        [200, 163, 255, 255]
+    );
+    // Stage 2, `Venom`, `0 142 224`: `204, 232, 248`.
+    assert_eq!(
+        detonator_mine_blast_entry([0, 142, 224, 255]),
+        [152, 209, 249, 255]
+    );
+    // The authored alpha byte rides through; it is never drawn.
+    assert_eq!(detonator_mine_blast_entry([255, 255, 255, 0])[3], 0);
+}
+
+#[test]
+fn one_colour_fills_every_emitters_whole_table() {
+    let mut effect = (*effect("x", true, 10.0)).clone();
+    effect.emitters.push(effect.emitters[0].clone());
+    effect.with_one_colour([51, 102, 153, 255]);
+    for spec in &effect.emitters {
+        assert!(
+            spec.palette
+                .iter()
+                .all(|entry| *entry == [0.2, 0.4, 0.6, 1.0]),
+            "every entry of {} is the one colour",
+            spec.name
+        );
+    }
+}

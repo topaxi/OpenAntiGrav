@@ -489,7 +489,7 @@ pub fn build_with(
         constants.push(("program_codes", f64::from(programs)));
         constants.push(("rate_codes", f64::from(rates)));
     }
-    constants.extend(pipeline_cache::scope_constants());
+    constants.extend(specialise::scope_constants_for(model, prepass));
     if pipeline_cache::scope_craft() {
         constants.retain(|(name, _)| *name != "zone_race");
         constants.push(("zone_race", 0.0));

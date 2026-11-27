@@ -121,6 +121,7 @@ mod difficulty;
 mod found;
 mod lifetime;
 mod loyalty;
+mod score;
 
 mod medal;
 /// The profile's XP total - see `xp.rs`.
@@ -312,6 +313,10 @@ pub struct Record {
     /// ever driven on this row.
     #[serde(default)]
     pub last_best_lap_ticks: Option<u32>,
+    /// The highest score ever kept on this row: a Detonator run's, `None` before one has scored
+    /// (see [`Store::judge_score`]).
+    #[serde(default)]
+    pub best_score: Option<u32>,
     /// The best campaign medal ever earned on this row - never downgraded,
     /// the same "best-of" rule [`Self::best_lap_ticks`] follows, using
     /// [`Medal::better`]. `None` until a race on this row carries an

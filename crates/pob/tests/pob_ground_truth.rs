@@ -555,6 +555,9 @@ fn every_hd_particle_system_walks_the_same_way_byte_swapped() {
         );
     }
     check_hd_near_caps(&blobs);
+    check_hd_craft_blast_templates(&blobs);
+    check_hd_frame_ranges(&blobs);
+    check_hd_size_ramps(&blobs);
 
     mixed.sort();
     mixed.dedup();
@@ -577,6 +580,129 @@ fn every_hd_particle_system_walks_the_same_way_byte_swapped() {
         fourth.iter().all(|e| e.starts_with("WO_NITRO_SHIP_DEATH/")),
         "blend class 4 escaped WO_NITRO_SHIP_DEATH: {fourth:?}"
     );
+}
+
+/// The Rocket's craft blast carries two sprite templates, and their colour tables are the colours
+/// the original's full-screen wash quads were filmed in: `glow_longer` on the root walks
+/// `(255, 245, 105)` to `(255, 240, 99)`, the yellow of the wash, and `Glow` starts white, the hit
+/// frame's flash (`docs/ghidra/functions/ps3-hdfury-eu/rocket-craft-blast.md`, "The screen wash").
+fn check_hd_craft_blast_templates(blobs: &[(usize, Vec<u8>)]) {
+    let mut found = Vec::new();
+    for (_, blob) in blobs {
+        let system = ParticleSystem::parse(blob).expect("parse");
+        if system.name != "WO_ROCKET_EXPLO" {
+            continue;
+        }
+        for emitter in system.emitters(blob).expect("emitters") {
+            for template in emitter.initial_particles {
+                found.push((emitter.name.clone(), template));
+            }
+        }
+    }
+    let names: Vec<_> = found
+        .iter()
+        .map(|(parent, template)| (parent.as_str(), template.name.as_str()))
+        .collect();
+    assert_eq!(
+        names,
+        [
+            ("WO_ROCKET_EXPLO", "glow_longer"),
+            ("FIRE_TRAILS_ONEQUAD", "Glow"),
+            ("MOLTEN_DEBRIS", "Glow"),
+        ]
+    );
+    let glow_longer = &found[0].1;
+    assert_eq!(glow_longer.lifetime_ticks, (30, 0));
+    assert_eq!((glow_longer.render_mode, glow_longer.blend_class), (2, 2));
+    assert_eq!((glow_longer.size.lo, glow_longer.size.hi), (0.0, 40.0));
+    assert_eq!(glow_longer.colours[0], [255, 245, 105, 255]);
+    assert_eq!(glow_longer.colours[16], [255, 240, 99, 255]);
+    let glow = &found[1].1;
+    assert_eq!(glow.lifetime_ticks, (3, 0));
+    assert_eq!(glow.size.hi, 100.0);
+    assert_eq!(glow.colours[0], [255, 255, 255, 255]);
+}
+
+/// The emitters whose flags ramp HD's size multiplier over their own run, and the bounds at
+/// `+0xc84`/`+0xc88` (`docs/ghidra/functions/ps3-hdfury-eu/particle-render.md`, "The
+/// per-particle size multiplier"): three of the disc's, the Rocket blast's `trail` among them.
+fn check_hd_size_ramps(blobs: &[(usize, Vec<u8>)]) {
+    use oag_pob::flags::{SIZE_RAMP, SIZE_RAMP_OVER_RUN};
+    let mut over_run = std::collections::BTreeSet::new();
+    for (_, blob) in blobs {
+        let system = ParticleSystem::parse(blob).expect("parse");
+        for emitter in system.emitters(blob).expect("emitters") {
+            let wanted = SIZE_RAMP | SIZE_RAMP_OVER_RUN;
+            if emitter.flags & wanted == wanted {
+                assert_eq!(
+                    emitter.flags & oag_pob::flags::LOOPING,
+                    0,
+                    "{}",
+                    emitter.name
+                );
+                let (lo, hi) = emitter.size_span.expect("an HD record reaches +0xc88");
+                over_run.insert(format!("{}/{} {lo} {hi}", system.name, emitter.name));
+            }
+        }
+    }
+    assert_eq!(
+        over_run.into_iter().collect::<Vec<_>>(),
+        [
+            "WO_NITRO_SHIP_DEATH/Trail_Ribbon 0 1",
+            "WO_ROCKET_EXPLO/trail 0.2 1",
+            "WO_SHIP_EXPLOSION/FIRE_ANIMS_TRAILS 0.3 1",
+        ]
+    );
+}
+
+/// The spawn range and hold frame, `+0xc8d`..`+0xc94`, that HD's particle update reads
+/// (`docs/formats/pob.md`, "The spawn range and the hold frame"): on every flipbook the range
+/// ends inside the grid, a hold names one frame twice, and the values the original was filmed
+/// playing are where they are read from.
+fn check_hd_frame_ranges(blobs: &[(usize, Vec<u8>)]) {
+    let mut seen = std::collections::BTreeMap::new();
+    for (_, blob) in blobs {
+        let system = ParticleSystem::parse(blob).expect("parse");
+        for emitter in system.emitters(blob).expect("emitters") {
+            let range = emitter.frame_range.expect("an HD record reaches +0xc94");
+            let cells = u32::from(emitter.atlas_grid.0) * u32::from(emitter.atlas_grid.1);
+            if cells <= 1 {
+                continue;
+            }
+            assert!(
+                u32::from(range.spawn.1) < cells,
+                "{} {range:?}",
+                emitter.name
+            );
+            assert!(
+                u32::from(range.hold.1) < cells,
+                "{} {range:?}",
+                emitter.name
+            );
+            assert_eq!(range.hold.0, range.hold.1, "{}", emitter.name);
+            seen.insert(
+                (system.name.clone(), emitter.name.clone()),
+                (range.spawn, range.hold),
+            );
+        }
+    }
+    for (system, emitter, want) in [
+        ("WO_ROCKET_EXPLO", "WO_ROCKET_EXPLO", ((0, 0), (0, 0))),
+        (
+            "WO_ROCKET_EXPLO_TRACK",
+            "WO_ROCKET_EXPLO_TRACK",
+            ((0, 10), (31, 31)),
+        ),
+        (
+            "WO_MINE_EXPLO_DETONATOR",
+            "Explosion_Core",
+            ((20, 63), (63, 63)),
+        ),
+        ("WO_CANNON_SPARKS", "explosion_fijets", ((23, 43), (63, 63))),
+    ] {
+        let key = (system.to_string(), emitter.to_string());
+        assert_eq!(seen.get(&key), Some(&want), "{system} {emitter}");
+    }
 }
 
 /// The near size cap, `+0xc80`, which HD's billboard builder reads

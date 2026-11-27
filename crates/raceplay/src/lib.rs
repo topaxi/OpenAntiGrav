@@ -388,6 +388,8 @@ pub use absorb::absorb_burst_for;
 #[cfg(feature = "view")]
 pub use blast_models::PlasmaBlastModels;
 pub use camera::chase_params;
+#[cfg(feature = "view")]
+pub use detonator_look::MinePin;
 pub use field::{FireLaw, PadSeeking};
 #[cfg(feature = "view")]
 pub use handles::EffectHandles;

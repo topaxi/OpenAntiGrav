@@ -260,6 +260,26 @@ impl Definition {
         }
     }
 
+    /// Drops the TARGET FPS row's `original` value on a title with no width throttle of its
+    /// own (`oag_title::Title::width_throttle`): every title but Wipeout HD. The row keeps
+    /// its other values. Same once-before-read timing as [`Self::drop_unavailable_boost_zoom`].
+    pub fn drop_unavailable_width_throttle(&mut self, title: &oag_title::Title) {
+        if title.width_throttle.is_some() {
+            return;
+        }
+        for page in &mut self.pages {
+            for entry in &mut page.entries {
+                if let Entry::Choice {
+                    setting, values, ..
+                } = entry
+                    && setting == "graphics.target_fps"
+                {
+                    values.retain(|choice| choice.value != "original");
+                }
+            }
+        }
+    }
+
     /// Drops the values of the WATER row that `offered` refuses, and the row itself when
     /// `changes_picture` is false (nothing it could hold would show). The row's own order is
     /// kept, and a value is asked about by its stored spelling. Same once-before-read timing as

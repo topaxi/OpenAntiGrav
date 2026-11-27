@@ -46,11 +46,16 @@ pub(super) fn effect(name: &str, looping: bool, duration_ticks: f32) -> std::syn
             colour_mode: ColourMode::RandomEntry,
             authored_colour_mode: 2,
             render: Render::Billboard,
+            draw_class: guard::DrawClass::Square,
             streak: StreakDraw::Procedural,
             blend: Blend::Additive,
             distort_strength: 0.0,
             colour_scale: 1.0,
             near_cap: None,
+            authored_frame_range: None,
+            frame_range: None,
+            authored_size_ramp: None,
+            size_ramp: None,
             particle_child: None,
             death_child: None,
             spawn_probability: 1.0,
@@ -74,6 +79,7 @@ pub(super) fn effect(name: &str, looping: bool, duration_ticks: f32) -> std::syn
         field: None,
         view_depth: 0.0,
         near: None,
+        psp_clip: false,
         rides_owner_frame: true,
         skipped_templates: 0,
     })
@@ -636,6 +642,8 @@ fn only_the_kept_templates_reset_keeps_templates_emitting_and_rolling() {
 
     let mut kept = base();
     kept.without_pulse_psp_draw_but(streak::Kept {
+        flipbooks: false,
+        size_ramps: false,
         bar: streak::KeptBar::No,
         templates: true,
     });
@@ -782,7 +790,7 @@ fn a_rated_frame_walks_the_atlas_and_wraps() {
     let mut particle = Particle::DEAD;
     let mut drawn = Vec::new();
     for _ in 0..9 {
-        advance.step(&mut particle, 0.0, 0.0, 1.0, 4);
+        advance.step(&mut particle, 0.0, 0.0, 1.0, 4, None);
         drawn.push(particle.frame);
     }
     // 0.5, 1.0, ... 3.5, then 4.0 - 3.99 = 0.01, then 0.51.
@@ -797,11 +805,135 @@ fn an_over_life_frame_follows_the_age() {
         frame_at: 3.0,
         ..Particle::DEAD
     };
-    FrameAdvance::OverLife.step(&mut particle, 0.0, 0.5, 1.0, 16);
+    FrameAdvance::OverLife.step(&mut particle, 0.0, 0.5, 1.0, 16, None);
     assert_eq!(particle.frame, 7);
     assert!((particle.frame_at - 7.99).abs() < 1e-5);
-    FrameAdvance::Still.step(&mut particle, 0.5, 0.9, 1.0, 16);
+    FrameAdvance::Still.step(&mut particle, 0.5, 0.9, 1.0, 16, None);
     assert_eq!(particle.frame, 7, "a still frame never moves");
+}
+
+/// Past the hold's second frame the frame is set to its first and stays, before the wrap;
+/// a `(0, 0)` hold is none.
+#[test]
+fn a_held_frame_stays_on_the_last_cell() {
+    let advance = FrameAdvance::Rate(constant(2.0));
+    let walk = |hold| {
+        let mut particle = Particle {
+            frame_at: 58.0,
+            ..Particle::DEAD
+        };
+        let mut drawn = Vec::new();
+        for _ in 0..5 {
+            advance.step(&mut particle, 0.0, 0.0, 1.0, 64, hold);
+            drawn.push(particle.frame);
+        }
+        drawn
+    };
+    assert_eq!(walk(Some((63, 63))), [60, 62, 63, 63, 63]);
+    assert_eq!(walk(Some((0, 0))), [60, 62, 0, 2, 4]);
+}
+
+/// A spawn range bounds the random frame, `(0, 0)` leaves the whole grid, and without the
+/// random-frame flag the range's first frame is the spawn frame.
+#[test]
+fn a_spawn_range_bounds_the_spawn_frame() {
+    let mut spec = effect("range", false, 1.0).emitters[0].clone();
+    spec.sheet_rect = Some([0.0, 0.0, 1.0, 1.0]);
+    spec.atlas = sprite::Atlas {
+        columns: 8,
+        rows: 8,
+        random_frame: true,
+    };
+    let spawned = |spec: &EmitterSpec| {
+        let mut rng = oag_core::Rng::new(7);
+        (0..400)
+            .map(|_| spec.random_frame(&mut rng))
+            .collect::<Vec<_>>()
+    };
+    let bounds = |frames: Vec<u16>| {
+        (
+            frames.iter().copied().min().expect("drawn"),
+            frames.iter().copied().max().expect("drawn"),
+        )
+    };
+    assert_eq!(bounds(spawned(&spec)), (0, 63));
+    let range = |spawn| {
+        Some(pob::FrameRange {
+            spawn,
+            hold: (0, 0),
+        })
+    };
+    spec.frame_range = range((0, 0));
+    assert_eq!(bounds(spawned(&spec)), (0, 63));
+    spec.frame_range = range((20, 63));
+    assert_eq!(bounds(spawned(&spec)), (20, 63));
+    spec.atlas.random_frame = false;
+    assert_eq!(bounds(spawned(&spec)), (20, 20));
+}
+
+/// [`streak::Kept::flipbooks`] keeps the advance and plays the record's range; without it a
+/// particle stays on its spawn frame, drawn from the whole grid.
+#[test]
+fn only_kept_flipbooks_walk_the_atlas() {
+    let mut authored = (*effect("books", false, 1.0)).clone();
+    let range = pob::FrameRange {
+        spawn: (20, 63),
+        hold: (63, 63),
+    };
+    authored.emitters[0].frames = FrameAdvance::OverLife;
+    authored.emitters[0].authored_frame_range = Some(range);
+    let mut still = authored.clone();
+    still.without_pulse_psp_draw_but(streak::Kept::NONE);
+    assert_eq!(still.emitters[0].frames, FrameAdvance::Still);
+    assert_eq!(still.emitters[0].frame_range, None);
+    let mut walked = authored;
+    walked.without_pulse_psp_draw_but(streak::Kept {
+        flipbooks: true,
+        ..streak::Kept::NONE
+    });
+    assert_eq!(walked.emitters[0].frames, FrameAdvance::OverLife);
+    assert_eq!(walked.emitters[0].frame_range, Some(range));
+}
+
+/// [`streak::Kept::size_ramps`]: a particle born `a` of the way through the emitter's run is
+/// drawn `lo + (hi - lo) * (1 - a)` of its size, for its whole life; without it every
+/// particle draws the size channel alone.
+#[test]
+fn only_kept_size_ramps_scale_a_particle_by_when_it_was_born() {
+    let mut authored = (*effect("ramp", false, 10.0)).clone();
+    authored.emitters[0].authored_size_ramp = Some((0.2, 1.0));
+    authored.emitters[0].lifetime_ticks = (40.0, 0.0);
+    let drawn = |kept: streak::Kept| {
+        let mut effect = authored.clone();
+        effect.without_pulse_psp_draw_but(kept);
+        let effect = std::sync::Arc::new(effect);
+        let mut system = System::new();
+        system.ignite(&effect, Vec3::ZERO, 2.0);
+        run(&mut system, &effect, 20, &mut Rng::new(1));
+        let spec = &effect.emitters[0];
+        let mut born: Vec<(f32, f32)> = system
+            .particles
+            .iter()
+            .filter(|particle| particle.alive())
+            .map(|particle| (particle.life, system.drawn_scale(spec, particle)))
+            .collect();
+        born.sort_by(|a, b| a.0.total_cmp(&b.0));
+        born.into_iter().map(|(_, scale)| scale).collect::<Vec<_>>()
+    };
+    assert_eq!(drawn(streak::Kept::NONE), vec![2.0; 10]);
+    let ramped = drawn(streak::Kept {
+        size_ramps: true,
+        ..streak::Kept::NONE
+    });
+    assert_eq!(ramped.len(), 10);
+    for (born, scale) in ramped.into_iter().enumerate() {
+        let a = born as f32 / 10.0;
+        let want = 2.0 * (0.2 + 0.8 * (1.0 - a));
+        assert!(
+            (scale - want).abs() < 1e-4,
+            "born {born}: {scale} want {want}"
+        );
+    }
 }
 
 /// Live, on a struck craft: a template's first draw carries its size at age

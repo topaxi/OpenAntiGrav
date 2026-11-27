@@ -63,6 +63,7 @@ pub mod loading;
 pub mod loyalty;
 pub mod main_menu;
 pub mod pause_menu;
+pub mod pickups;
 pub mod pre_race;
 pub mod prompts;
 pub mod psn;
@@ -102,6 +103,12 @@ pub const TITLE: &Title = &Title {
     eliminator_flip: oag_title::pre_race::Sourced::measured(Some(
         oag_title::eliminator::FlipRule { seconds: 0.2 },
     )),
+    // Tuned on this title's own Eliminator roster, which has no Repulser or Shuriken
+    // (`docs/gameplay/race-modes.md`, "The pace of a score Eliminator").
+    score_pace: oag_title::pre_race::Sourced::chosen(oag_title::eliminator::ScorePaceTerms {
+        trigger_share: 1.0,
+        stale_seconds: Some(10),
+    }),
     teams: race::TEAM_IDENTITIES,
     loyalty: Some(oag_title::loyalty::LoyaltyEarning {
         law: oag_title::loyalty::LoyaltyLaw::Hd,
@@ -144,6 +151,7 @@ pub const TITLE: &Title = &Title {
         "/data/tex/smoke_trails_frame1_alpha.gtf",
         oag_title::Origin::Measured,
     )),
+    pickup_roster: Some(oag_title::pre_race::Sourced::measured(pickups::ROSTER)),
     weapon_pad_glow: &oag_title::weapon_pad::WeaponPadGlow::Cycle(oag_title::weapon_pad::Cycle {
         // The 6 keyframes at `0x008c26a0`, 12 bytes each.
         keyframes: &[
@@ -236,6 +244,19 @@ pub const TITLE: &Title = &Title {
         oag_title::rumble::SmallMotor::OnOff,
         oag_title::rumble::Triggers::Hd,
     ),
+    // `Render_FinishFrame`'s controller, confidence 88 for the two inputs and 90 for the step
+    // (`docs/ghidra/functions/ps3-hdfury-eu/scene-width-throttle.md`, "The law"): level 0 to 31,
+    // width `1 - level / 96` of 1920, narrower above 16111 us or a late flip, wider at 15555 us
+    // or less.
+    width_throttle: Some(oag_title::pre_race::Sourced::measured(
+        oag_title::width_throttle::Law {
+            max_level: 31,
+            width_notches: 96,
+            narrow_above_us: 16_111,
+            widen_up_to_us: 15_555,
+            frame_hz: 60,
+        },
+    )),
     // `demo_definition.xml` authors the any-press exit and no timer: the durations are Pulse's. `docs/ui/attract-demo.md`.
     demo: oag_title::demo::Demo::inheriting(
         "Pulse",
@@ -259,7 +280,10 @@ pub const TITLE: &Title = &Title {
         ai: Some(r"Data\XML\WeaponAIstats.xml"),
         // Read off HD's own EBOOT: one transfer per ball trip.
         leach_drain: oag_title::weapons::LeachDrain::PerTrip,
-        blast_push: oag_title::pre_race::Sourced::chosen(oag_title::weapons::BlastPush::Immediate),
+        // Read off HD's own EBOOT: every blast posts into the slot's `+0x110` and the craft's
+        // drain pushes along its side axis with the 0.5 s stun
+        // (`docs/ghidra/functions/ps3-hdfury-eu/rocket-craft-blast.md`, "The push").
+        blast_push: oag_title::pre_race::Sourced::measured(oag_title::weapons::BlastPush::Posted),
         // **Chosen, not measured**: HD measures one (`LeachBeamManager_Fire`, `weapon-instance-limits.md`);
         // it takes 2048's and Omega's eight as an intended divergence (maintainer, 2026-10-31).
         leach_beams: oag_title::pre_race::Sourced::chosen(8),
@@ -291,10 +315,20 @@ pub const TITLE: &Title = &Title {
         // The fire path orthonormalises the launch matrix, and live the rockets hold the
         // class speed (`ps3-hdfury-eu/plasma.md`, "The Rocket's launch scale").
         rocket_launch_at_display_scale: oag_title::pre_race::Sourced::measured(false),
-        // A box branch is read, but its surface filter and row sign are open, 65
-        // (`ps3-hdfury-eu/own-craft-box.md`).
-        own_craft_box_hides_track: oag_title::pre_race::Sourced::chosen(
-            oag_title::weapons::OwnCraftBox::PlasmaWindow,
+        // Measured live on RPCS3: the box answers `0x7f` through Pulse's transposed gate
+        // (`ps3-hdfury-eu/own-craft-box.md`, "Measured live").
+        own_craft_box_hides_track: oag_title::pre_race::Sourced::measured(
+            oag_title::weapons::OwnCraftBox::Falls,
+        ),
+        // Measured live on RPCS3: Rocket, Missile and Plasma `6.0`
+        // (`ps3-hdfury-eu/own-craft-box.md`, "Measured live"). The Shuriken's `12.0` is a static
+        // read of an update that never runs (`ps3-hdfury-eu/open-air-arms.md`).
+        surface_probe_lengths: oag_title::pre_race::Sourced::measured(
+            oag_title::weapons::ProbeLengths::HD,
+        ),
+        // Measured live on RPCS3: no fall on `0x7f` (`ps3-hdfury-eu/own-craft-box.md`).
+        rocket_open_air: oag_title::pre_race::Sourced::measured(
+            oag_title::weapons::RocketOpenAir::TurnsAlongNormal,
         ),
         opponent_fire: oag_title::pre_race::Sourced::measured(oag_title::weapons::OpponentFire::HD),
     },
@@ -355,20 +389,27 @@ pub const TITLE: &Title = &Title {
         adverts_unlit: true,
         card_store: oag_title::adverts::CardStore::R5G6B5Linear,
         card_unlit: true,
+        // The countdown's entry zeroes the slot 8 node whatever the mode
+        // (`gantry-clock.md`, "The circuit's own board").
+        countdown_assembly_ticks: Some(180),
         gantry_boards: None,
         // Detonator's board is the one copy `DATA00` ships, Omega's mode-`0xe` name
-        // (`docs/ghidra/functions/ps4-omega-eu/billboards.md`); its assembly ticks are
-        // Zone's, chosen, not measured.
+        // (`docs/ghidra/functions/ps4-omega-eu/billboards.md`). Both boards' clocks are
+        // zeroed on entering the 3.0 s countdown, so frame 0 is 180 ticks before the
+        // release (`docs/ghidra/functions/ps3-hdfury-eu/gantry-clock.md`, "What zeroes
+        // it in the countdown").
         mode_gantries: &[
             oag_title::adverts::ModeGantry {
                 mode: oag_title::adverts::GantryMode::Zone,
                 entry: "/Data/Billboards/HD_Adverts/321Go/321Go_Zone.vex",
-                assembly_ticks: 210,
+                assembly_ticks: 180,
+                race_windows: true,
             },
             oag_title::adverts::ModeGantry {
                 mode: oag_title::adverts::GantryMode::Detonator,
                 entry: "/Data/Billboards/HD_Adverts/321Go/321go_hd_detonator.vex",
-                assembly_ticks: 210,
+                assembly_ticks: 180,
+                race_windows: true,
             },
         ],
         origin: oag_title::Origin::Measured,

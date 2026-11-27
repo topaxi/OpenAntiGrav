@@ -34,6 +34,7 @@ pub(crate) fn depth_texture(
             | wgpu::TextureUsages::TEXTURE_BINDING
             | crate::scene::motion::readable_in_tests(),
         view_formats: &[],
+        texture_binding_view_dimension: None,
     })
 }
 
@@ -62,6 +63,7 @@ pub(crate) fn msaa_color_texture(
             format,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         })
     })
 }

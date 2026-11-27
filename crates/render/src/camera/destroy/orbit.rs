@@ -9,12 +9,16 @@
 //! ```text
 //! t += dt
 //! yaw   += dt * s * 0.1 (wrapped to 2 pi),  s = 9t + 1 for t < 2.5, else 0.5
-//! pitch += dt * 0.35                        while t < 2.5
 //! focus += (craft - focus) * 0.6            per frame
-//! dist  += (target_dist - dist) * 0.02      5.0 for t < 2.5, else 3.0
-//! fov   += (target_fov - fov) * 0.01        20 for t < 2.5, else 65
+//! dist  += (dist_target - dist) * 0.02      the target the previous frame wrote, 4.0 on the first
 //! eye    = focus + dir * (5.0 + dist),  dir = the craft's rotation . Ry(yaw) . Rx(-0.7 + pitch) . back
+//! dist_target = 5.0 for t < 2.5, else 3.0   for the next frame
+//! fov   += (target_fov - fov) * 0.01        this frame's target: 20 for t < 2.5, else 65
+//! pitch += dt * 0.35                        while t < 2.5, after the eye is built
 //! ```
+//!
+//! The order of the distance ease and the pitch step is the originals'
+//! (`docs/ghidra/functions/ps3-hdfury-eu/destroy-camera.md`, "The orbit on 2048 and Omega").
 //!
 //! The eye is not smoothed: the render camera's eye read live is `5 + dist` from the focus on every
 //! frame of a 7 s run (to 0.01), where `5.0` is the camera's constant `cam+0x3b4` (`EYE_STANDOFF`), and
@@ -44,6 +48,8 @@ pub const START_DIST: f32 = 0.5;
 /// The eye's standoff from the focus beyond `dist`, along the same direction (`cam+0x3b4`, block
 /// `+0x10` of the tuning table, never written after the constructor).
 pub const EYE_STANDOFF: f32 = 5.0;
+/// The distance target the enter writes, eased toward on the first frame only (`+0x23c`, row Z2a).
+pub const START_DIST_TARGET: f32 = 4.0;
 /// The field the orbit starts at, in degrees (enter).
 pub const START_FOV: f32 = 65.0;
 /// The distance target in the fast phase, then after it (block `+0x2c`, `+0x3c`).
@@ -62,10 +68,14 @@ pub struct Orbit {
     pub t: f32,
     /// The spin about the craft's up, radians.
     pub yaw: f32,
-    /// The turn about the craft's side, radians.
+    /// The turn about the craft's side, radians, as this frame's eye is built with it.
     pub pitch: f32,
+    /// The pitch step this frame earned, taken after its eye: applied on the next frame.
+    pub pitch_step: f32,
     /// The orbit's radius, added to `EYE_STANDOFF` for the eye's distance from the focus.
     pub dist: f32,
+    /// What `dist` eases toward on the next frame.
+    pub dist_target: f32,
     /// The vertical field, degrees.
     pub fov: f32,
     /// The point looked at.
@@ -80,7 +90,9 @@ impl Orbit {
             t: 0.0,
             yaw: 0.0,
             pitch: 0.0,
+            pitch_step: 0.0,
             dist: START_DIST,
+            dist_target: START_DIST_TARGET,
             fov: START_FOV,
             focus: craft,
         }
@@ -96,16 +108,16 @@ impl Orbit {
             YAW_SLOW
         };
         self.yaw = (self.yaw + dt * rate * YAW_FACTOR).rem_euclid(std::f32::consts::TAU);
-        if fast {
-            self.pitch += dt * PITCH_RATE;
-        }
+        self.pitch += self.pitch_step;
+        self.pitch_step = if fast { dt * PITCH_RATE } else { 0.0 };
         self.focus += (craft - self.focus) * FOCUS_RATE;
         let (dist, fov) = if fast {
             (DIST_TARGETS.0, FOV_TARGETS.0)
         } else {
             (DIST_TARGETS.1, FOV_TARGETS.1)
         };
-        self.dist += (dist - self.dist) * DIST_RATE;
+        self.dist += (self.dist_target - self.dist) * DIST_RATE;
+        self.dist_target = dist;
         self.fov += (fov - self.fov) * FOV_RATE;
     }
 
@@ -171,7 +183,9 @@ mod tests {
 
     #[test]
     fn the_pitch_turns_only_in_the_fast_phase() {
-        let fast = run_to(FAST_SECS);
+        let mut fast = run_to(FAST_SECS);
+        // The last fast frame's step lands on the frame after it.
+        fast.advance(FRAME, Vec3::ZERO);
         assert!(
             (fast.pitch - PITCH_RATE * FAST_SECS).abs() < 0.01,
             "{}",
@@ -197,7 +211,39 @@ mod tests {
         assert!(later.fov > 55.0 && later.fov < 65.0, "{}", later.fov);
     }
 
-    /// The object's own `+0x238`, read per frame: 0.5, then `5 - 4.5 x 0.98^n` toward 5, and after
+    /// The first frame eases from 0.5 toward the enter's 4.0, the next ones toward 5.0: 0.57 after one
+    /// frame, and 0.8305 at the fourth, where HD's `+0x238` read 0.83 (an ease toward 5.0 from the
+    /// first frame gives 0.59 and 0.849).
+    #[test]
+    fn the_radius_eases_toward_the_target_the_previous_frame_wrote() {
+        let mut orbit = start();
+        orbit.advance(FRAME, Vec3::ZERO);
+        assert!((orbit.dist - 0.57).abs() < 1e-5, "{}", orbit.dist);
+        for _ in 0..3 {
+            orbit.advance(FRAME, Vec3::ZERO);
+        }
+        assert!((orbit.dist - 0.8305).abs() < 1e-3, "{}", orbit.dist);
+    }
+
+    /// Frame `n`'s eye is built with the pitch of `n - 1` steps: the step is taken after the eye.
+    #[test]
+    fn the_pitch_steps_after_the_eye_is_built() {
+        let mut orbit = start();
+        for frame in 1..=3 {
+            orbit.advance(FRAME, Vec3::ZERO);
+            let pitch = PITCH_RATE * FRAME * (frame - 1) as f32;
+            let turn =
+                Quat::from_rotation_y(orbit.yaw) * Quat::from_rotation_x(PITCH_OFFSET + pitch);
+            let want = turn * Vec3::Z * (EYE_STANDOFF + orbit.dist);
+            let eye = orbit.pose(Quat::IDENTITY).eye;
+            assert!(
+                (eye - want).length() < 1e-4,
+                "frame {frame}: {eye:?}, want {want:?}"
+            );
+        }
+    }
+
+    /// The object's own `+0x238`, read per frame: 0.5, then close to `5 - 4.5 x 0.98^n` toward 5, and after
     /// 2.5 s toward 3 (4.03 at 2.5 s on RPCS3's 70 frames, 3.07 at 7 s).
     #[test]
     fn the_radius_goes_from_half_a_unit_to_five_and_settles_toward_three() {

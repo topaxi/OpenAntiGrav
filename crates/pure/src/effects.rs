@@ -9,8 +9,8 @@
 //! restated here and labelled as inherited.
 
 use oag_title::{
-    Burst, EffectSpec, Effects, Looks, Origin, Platforms, QuakeLook, QuakeUp, Rule, ShieldPalette,
-    ShieldPalettes, Trigger, engine_effects,
+    Burst, EffectSpec, Effects, Looks, Origin, Platform, Platforms, QuakeLook, QuakeUp, Rule,
+    ShieldPalette, ShieldPalettes, Trigger, engine_effects,
 };
 
 /// Pure's `FUN_08925e20`: the same loop over the same `Ship Collision Fx` class
@@ -295,6 +295,12 @@ pub const LOOKS: &Looks = &Looks {
     own_rockets: Rule {
         on: Platforms::Any,
         origin: Origin::Chosen,
+    },
+    // Pure's own pool routines carry the same near tests (`particle-bars.md`, "Near the
+    // eye"); the GE's screen-range drop is the PSP's, measured on Pulse alone.
+    psp_particle_clip: Rule {
+        on: Platforms::Only(&[Platform::Psp]),
+        origin: Origin::InheritedFrom("Wipeout Pulse (PSP)"),
     },
     ..Looks::unread(ShieldPalettes {
         ps2: ShieldPalette::Ps2Pulse,

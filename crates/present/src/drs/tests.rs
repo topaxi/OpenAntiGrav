@@ -966,3 +966,4 @@ fn a_stall_does_not_unlearn_the_residual() {
 
 mod blur;
 mod machines;
+mod probe;

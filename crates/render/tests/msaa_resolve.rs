@@ -227,6 +227,7 @@ fn render_and_resolve(
         format: FORMAT,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let resolve_view = resolve_target.create_view(&wgpu::TextureViewDescriptor::default());
 
@@ -244,6 +245,7 @@ fn render_and_resolve(
             format: FORMAT,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         })
     });
     let msaa_view = msaa_colour
@@ -267,6 +269,7 @@ fn render_and_resolve(
         format: mesh_render::DEPTH_FORMAT,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let depth_view = depth.create_view(&wgpu::TextureViewDescriptor::default());
 

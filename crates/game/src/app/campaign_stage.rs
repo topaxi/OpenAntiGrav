@@ -1332,6 +1332,7 @@ mod tests {
             screen: oag_ui::screen::Screen::default(),
             scale: [1.0, 1.0],
             faces: oag_ui_screens::picker::FaceScales::default(),
+            labels: Vec::new(),
         };
         super::CampaignStage::new(
             vec![grid("grid0"), grid("grid1")],

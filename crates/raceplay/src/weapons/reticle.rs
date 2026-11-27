@@ -281,4 +281,24 @@ impl RaceView {
         let projection = self.projection(core, screen[0] / screen[1], SIGHT_FAR, self.sight_fov);
         sight::project(view, projection * view, world, screen)
     }
+
+    /// Where a popup `rise` units above `at`, along the camera's up, lands on `screen`: the
+    /// same camera as [`Self::project_for_sight`] and no range test, which is the reticle's
+    /// own. `None` behind the camera.
+    ///
+    /// That the original's camera row `+0x1e0` is up, and that its `0x00083f48` is this
+    /// projection, are read at confidence 55
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/detonator-hud.md`, "The floating score").
+    pub(crate) fn project_score_popup(
+        &self,
+        core: &SimRace,
+        at: Vec3,
+        rise: f32,
+        screen: [f32; 2],
+    ) -> Option<[f32; 2]> {
+        let view = self.view(core);
+        let up = Vec3::new(view.x_axis.y, view.y_axis.y, view.z_axis.y);
+        let projection = self.projection(core, screen[0] / screen[1], SIGHT_FAR, self.sight_fov);
+        sight::to_screen(projection * view, at + up * rise, screen)
+    }
 }

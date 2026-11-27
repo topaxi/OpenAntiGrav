@@ -27,7 +27,7 @@ tables, is byte for byte what it was after any run
 | Row | Values | Default | Reaches the run as |
 | --- | --- | --- | --- |
 | MODS | off, on | off; the row is left out while no mod of the player's is enabled (`Menu::offer_choice`) | `--benchmark-mods` |
-| VSYNC | the display page's: off, on, smooth | the player's | `--benchmark-vsync`; the surface is reconfigured for the run and again when it ends |
+| VSYNC | the display page's: off, on, smooth; left out on the web, whose canvas has one present mode (`settings::web::HIDDEN_ROWS`) | the player's | `--benchmark-vsync`; the surface is reconfigured for the run and again when it ends |
 | FRAME LIMIT | the display page's list (greyed under vsync on, as there) | the player's | `--benchmark-frame-limit` |
 | PRESET | YOUR SETTINGS, low, medium, high | YOUR SETTINGS | `--preset` |
 
@@ -68,7 +68,9 @@ for results (`--ticks` under 272 ends inside the countdown and has no figures).
 Back during the run abandons it: Escape, the pad's back button (CIRCLE by default) and the
 Android system Back all end it the same way. The player's settings come back, **no result file is
 written**, and a menu launch returns to the page it was started from; a run started on the command
-line has nothing behind it and ends the game. RUN BENCHMARK is not offered over a race parked
+line has nothing behind it and ends the game. A benchmark's race is never held, finished or not:
+it is not parked behind the menus (`Session::open_menus`) and they are not built as a pause menu
+over it (`Session::pausing_race`), with no PHOTO MODE row (`Session::photo_available`). RUN BENCHMARK is not offered over a race parked
 behind the menus: it would replace that race.
 
 ## Input
@@ -140,7 +142,7 @@ bench counts them after its first 60 frames, so the two differ by that grid time
 | Average FPS | frames counted over their summed time (`1e6 / mean frame_us`) |
 | 1 % low, 0.1 % low | the rate of the slowest 1 % (0.1 %) of frames: 1,000 ms over the **mean** frame time of the slowest `ceil(n x 1 %)` frames, at least one (`stats::low_fps`). Under 1,000 counted frames the 0.1 % low would be the one worst frame, so the screen says `N/A UNDER 1000 FRAMES` and the file has `null` |
 | Median, P95, P99, worst | nearest-rank percentiles of the frame time, so each is a frame that happened (`stats::percentile`) |
-| Over the budget | frames that took more than 1.05 times `1000 / refresh Hz`; the refresh rate is the display's when the loop measured it, else 60 Hz and the result says `assumed` |
+| Over the budget | frames that took more than 1.05 times the frame budget ("The frame budget" below) |
 
 The screen also lists the settings that change what a frame costs (the vsync mode, the frame limit
 and the dynamic-resolution target among them), the adapter and driver, and the machine (operating
@@ -150,8 +152,29 @@ system, architecture, processor).
 than that reports about 240 fps: the number is the limiter's, not the GPU's. When the average sits
 within 10 % of the limit in force (the limit is not in force under vsync on, where the display
 paces), the screen says so on its own line and the file has `limiter_binds: true`; set
-`frame_limit` to unlimited to measure the machine. The refresh budget (`over the budget`) is the
-display's, and under vsync on most "over" frames are missed refreshes.
+`frame_limit` to unlimited to measure the machine.
+
+## The frame budget
+
+The verdict, the stutter line and the FRAMES OVER row all judge one budget, the frame rate the
+player asked for (`report::Context::budget`; **chosen, not measured**): the longest period, so the
+lowest rate, of these three.
+
+| Term | In force when | Rate |
+| --- | --- | --- |
+| TARGET FPS | it names a rate. `off` names none; `original` (HD's width throttle) names none of its own and paces at the limit or the screen, which the other two terms carry | the rate, `default` being the screen's (60 while none is known) |
+| FRAME LIMIT | the loop is held to it: not `unlimited`, and not under vsync on | the rate, `refresh_rate` resolved the same way |
+| Screen refresh | always | the display's, reported or measured, else 60 Hz and the result says `assumed` |
+
+With neither a target nor a limit the screen alone judges the run. A target above the refresh does
+not count, because the refresh is longer. An assumed 60 Hz still counts: a browser names no rate
+but holds frames to its screen, so judging it against a higher target would call every frame late.
+The cost is the other way round: a faster screen that names no rate is judged at 60. SCREEN REFRESH
+stays a DETAILS row of its own, and the result file names the winning term as `budget_from`
+(`target_fps`, `frame_limit` or `refresh`; equal rates are named in that order).
+
+The 1.05 slack is because a loop held by vsync, the limit or dynamic resolution lands within a few
+percent of the period on every frame, so the literal period would count half of them.
 
 ## Reading the screen
 
@@ -161,32 +184,79 @@ a string id; `benchmark::screen` draws them):
 
 | Line | Says |
 | --- | --- |
-| SMOOTH, MOSTLY SMOOTH or CHOPPY, with the average FPS and the screen's refresh rate | the share of counted frames that took longer than one screen refresh (the frames over the budget below): up to 1 % is SMOOTH, up to 5 % MOSTLY SMOOTH, more CHOPPY (`report::SMOOTH_SHARE`, `MOSTLY_SMOOTH_SHARE`; **chosen, not measured**) |
+| SMOOTH, MOSTLY SMOOTH or CHOPPY, with the average FPS and the FPS it is judged against | the share of counted frames over the frame budget: up to 1 % is SMOOTH (at 60 FPS one late frame every 1.7 seconds), up to 5 % MOSTLY SMOOTH (three a second), more CHOPPY (`report::SMOOTH_SHARE`, `MOSTLY_SMOOTH_SHARE`; **chosen, not measured**) |
 | Slowest moments: N FPS (worst 1 in 100 frames) | the 1 % low |
-| Stutters: N of M frames took longer than one screen refresh | the frames over the budget |
+| Stutters: N of M frames missed the T ms frame budget | the frames over the budget |
 | Your frame limit (N FPS) capped this result. Turn FRAME LIMIT off in BENCHMARK OPTIONS ... | only when the average sits on the limit in force (`limiter_binds`) |
 | Mods: none, or Mods: N loaded | the run's MODS row |
 
 The heading line names the game, the circuit as the track select names it (never the archive's
-`16_Track`) and the preset. The buttons are DETAILS (and SUMMARY to come back), COPY TO CLIPBOARD,
+`16_Track`) and the preset. The race holds its circuit as a path, and the row is the one that
+addresses the same file with separators, capitals and a leading slash folded
+(`Track::addresses`, `benchmark::circuit_name`): HD's default circuit is spelled
+`/data/environments/talons_junction/track.vex` where its definition names `Talons_Junction`, and
+Omega's `environments` differs in case the same way, so an exact comparison names no circuit on
+either (run on both, 2026-11-27, confidence 95; **ported** to Omega, each with its own ground
+truth). The buttons are DETAILS (and SUMMARY to come back), COPY TO CLIPBOARD,
 BACK and RUN AGAIN; the pad walks them with left, right, up and down, and a click or a tap presses
 one. DETAILS lists the numbers of the table below, the screen refresh and where it came from, the
 settings under the menu's own row names and values (read out of the menu tree, so a name edited
 there is edited here), then the mods, the device, the GPU with its driver and the build version.
+The GPU line says what the platform names: it is left out where neither adapter nor driver has a
+name (a browser), and a driver that repeats the adapter's name (Mali) is not said twice.
 
 **COPY TO CLIPBOARD** puts the same text on the clipboard in the same order: the game, circuit and
 preset, the plain lines, a blank line, then DETAILS (`text::copy_text`, pinned line for line by
 `the_copied_text_is_pinned_line_for_line`). The button shows COPIED for two seconds, or COULD NOT
-COPY. It is on the screen where the platform can write a clipboard and left off where it cannot:
+COPY, once the platform has answered: until then it keeps its own name. It is on the screen where
+the platform can write a clipboard and left off where it cannot:
 
 | Platform | Write | How |
 | --- | --- | --- |
 | Linux, Windows, macOS | yes | `arboard` (`app::clipboard::write`); the clipboard object is kept for the life of the process because X11 and Wayland serve the text from the process that owns it |
-| Android | yes | `oag_mobile::clipboard`, the activity's `ClipboardManager` through JNI, on any thread; type-checked for `aarch64-linux-android`, **not run on a phone** |
-| Web | yes | `navigator.clipboard.writeText` through `js_sys`, which needs a secure page and the click that asked; the promise is not awaited, so a later permission refusal is not shown; type-checked for `wasm32`, **not run in a browser** |
+| Android | yes | `oag_mobile::clipboard`, the activity's `ClipboardManager` through JNI, on any thread |
+| Web | yes | `navigator.clipboard.writeText` through `js_sys`, which needs a secure page; the promise is awaited, and a refusal shows COULD NOT COPY and logs a warning |
 | iOS | no | no JNI-like shim; the button is left off (`clipboard::CAN_WRITE`) |
 
 Run on Linux under Xvfb, the clipboard held the text above after the press (`xclip -o`).
+
+## Fitting the stats screen
+
+The screen, like the finished race's results table (`crate::scoreboard`, which shares its overlay),
+is laid out in the 480x272 grid and letterboxed into the window's aspect rectangle, so it takes the
+same share of the picture on every screen. **Pixel size and density do not enter it**: a phone's
+density changes nothing here.
+
+**What overflowed (2026-11-26).** The text is set in the title's own HUD caption face, and each face
+is authored in its title's grid:
+
+| Title | Grid | Line height | Mean capital advance |
+| --- | --- | --- | --- |
+| Pulse (PSP and PS2) | 480x272, 640x448 | 10 | 6.3, 7.4 |
+| Pure | 480x272 | 12 | 7.0 |
+| HD, Omega | 1920x1080 | 34 | 21 |
+| 2048 (its value face; it names no caption face) | 960x544 | 34 | 25 |
+
+Drawn as they stand into the 480x272 grid, the last two rows are about three times the panel's text:
+on HD, Omega and 2048 the button labels ran over each other and off the panel and the summary ran
+into the saved path, on a desktop at 1440x816 and on a Galaxy S21 at 2400x1080 alike. Pulse and Pure
+fitted, which is why desktop checks on Pulse did not show it.
+
+**The rule**, the same on every platform:
+
+- `scoreboard::panel_face` brings the face into the grid: a line taller than 12 units (Pure's, the
+  tallest of the PSP-grid faces) is scaled down to 12, a smaller one is left alone. The results
+  table draws through the same overlay and had the same defect.
+- The stats screen fits every string to its room by measured width: lines wrap by width, the body
+  shrinks until it ends above the saved path, and a heading, a settings row, the saved path or a
+  button label that is still too wide (a long translation) shrinks on its own. The buttons'
+  rectangles, which a click or a tap is tested against, do not move.
+
+`screen::misfits` is the check: a string outside the panel, a label outside its button, text over
+the button rows, or two strings drawn over each other. The results table was checked by
+`--race --autopilot --screenshot` captures: HD before (columns running into each other, four rows
+off the screen) and after (all eight rows in the panel), and Omega after, whose finished race keeps
+this table because it has no EndRace screens wired ([endrace-screens.md](../ui/endrace-screens.md)).
 
 ## The result file
 
@@ -199,7 +269,7 @@ at the start and the end, and `run` (`kind: "in_game"`, the circuit as the loade
 preset, where it started from, the flags). `in_game` carries what is new: the average and the two
 lows (`low_0_1pct_fps` is `null` under 1,000 counted frames), the frames over the budget and the
 budget, the refresh rate and where it came from, the frame limit in force (`frame_limit_hz`) and
-whether the average sits on it (`limiter_binds`), the device and the driver. The CPU and GPU columns of the offscreen bench are not timed through a
+whether the average sits on it (`limiter_binds`), what set the budget (`budget_from`), the device and the driver. The CPU and GPU columns of the offscreen bench are not timed through a
 window and are absent: the comparison says so.
 
 ```sh
@@ -247,25 +317,86 @@ checks each value against the page.
 - `render_bench_ground_truth::a_preset_changes_the_picture_and_not_the_race_or_the_players_settings`.
 - `render_bench_ground_truth::no_input_changes_a_pulse_benchmark` and `..._an_hd_benchmark`: a run
   with every input spent (held CROSS, click, SELECT, START, a stick, focus loss, a key) has the
-  untouched run's flyby length, final tick, state hash, frame count and `settings.toml`.
+  untouched run's flyby length, final tick, state hash, frame count and `settings.toml`. The HD
+  one also reads the stats heading, circuit name included, out of the log;
+  `hd_boot_ground_truth` and `omega_track_model_ground_truth` hold the name lookup against each
+  disc's own track list.
   `a_benchmark_with_its_mods_off_loads_no_extension_and_no_override`,
   `the_options_page_reaches_the_run_and_saves_nothing` and
   `the_mods_row_is_left_out_while_no_mod_is_enabled`: BENCHMARK OPTIONS. Unit tests hold the page in
   every title's menu tree (`every_titles_tree_holds_the_benchmark_options_page`) and the PRESET,
   VSYNC and FRAME LIMIT rows to the shipped preset names and the display page's values.
+  The frame budget: `benchmark::report` replays the S24 run, a 120 Hz run with nothing asked
+  for, a vsynced 60 Hz run and a table of which term wins; `the_in_game_benchmark_flies_the_race_the_offscreen_bench_does`
+  checks that a frame limit under vsync on is not a term; `the_options_page_reaches_the_run_and_saves_nothing`
+  checks that the player's TARGET FPS reaches the result.
   `the_stats_screen_swaps_to_details_and_answers_a_copy`: DETAILS and COPY through the real
   `Session`, by screenshots. The unit tests in `benchmark::text` hold the verdict thresholds, the
   frame-limit line, the copied text and that no internal name (`_Track`, `track.vex`) is shown.
-  `back_abandons_a_benchmark_and_writes_nothing`: Back by the pad and the system Back from the EXTRAS page, Escape from the command line.
+  `back_abandons_a_benchmark_and_writes_nothing`: Back by the pad and the system Back from the EXTRAS page, with nothing left parked behind the menus and the main menu, not the pause menu, opened; Escape from the command line.
 - Unit tests in `crates/game/src/benchmark/` for the lows, the figures, the JSON keys `compare`
   reads, the screen's hit rectangles and layout, the presets, and the command line.
+  `every_title_face_fits_both_pages_even_in_a_long_language` runs `screen::misfits` over both pages
+  with each face's measured size and every string doubled.
+- `benchmark_stats_ground_truth` (one test per title): both pages drawn at 2340x1080 through the
+  title's own caption face and the window's overlay, with no misfit and no lit pixel outside the
+  panel.
 - `scripts/bench-render.py selftest` covers the in-game/offscreen warning.
+
+## Run on a phone and in a browser
+
+2026-11-26, Wipeout Pulse (PSP EU), Talon's Junction White, driven by touch from the EXTRAS page.
+
+| Target | Run | COPY read back |
+| --- | --- | --- |
+| Galaxy S21 (Mali-G78, Android 14, `dist` APK, `--no-audio --ticks 600`) | every option row answered a tap (MODS on, VSYNC off, FRAME LIMIT 360, PRESET low) and the result file recorded those; SUMMARY, DETAILS, BACK and RUN AGAIN answered, the screen survived a switch to another app | pasted into a page served over `adb reverse`, which sent the bytes back: the whole summary and DETAILS text |
+| Headless Chromium, 844x390 at ratio 3, `just web` | full three-lap runs by touch (FRAME LIMIT, PRESET, START, COPY, DETAILS, BACK); by mouse at 960x544 the options rows and DETAILS, SUMMARY, COPY, RUN AGAIN and BACK | `navigator.clipboard.readText` after granting the read, the write having had no permission; with `writeText` replaced by a rejecting one the button said COULD NOT COPY |
+
+The walk is `scripts/web-screenshot.py` with `--tap`, `--grant clipboard-read@T` and
+`--eval 'navigator.clipboard.readText()@T'`. Grant after the COPY press: Chromium denies the
+write to a page that has been granted the read alone. On the S21 `adb shell cmd clipboard` has no
+implementation, hence the paste.
+
+**The refresh rate.** Both runs above said 60 Hz, `assumed` in DETAILS, because winit reports
+none on Android or the web; the S21's panel ran at 120 Hz during its run. Android now reads the
+display itself ([android.md](android.md), "The display's refresh rate"), so a phone's SCREEN
+REFRESH row and the screen's term of the frame budget are its own rate. The web still reports none
+and says 60 Hz, `assumed`.
+
+**The stats screen's fit.** 2026-11-26, the same S21, `--benchmark` from the launch file, screenshots
+of both pages (`adb exec-out screencap`): before the fix HD's button labels covered each other and
+ran off the panel and its summary ran into the saved path; after it HD and Pulse fit both pages, and
+DETAILS, SUMMARY and BACK answer a tap. Headless on the desktop at 2340x1080, both pages of all six
+titles fit.
+
+## First phone result
+
+Reported by the maintainer from a Galaxy S24 (Xclipse 940), build `aded31f`, Wipeout HD: the
+stats screen's own figures; no result file of the run is in the record.
+
+| Setting or figure | Value |
+| --- | --- |
+| SCREEN REFRESH | 120 Hz |
+| VSYNC, FRAME LIMIT | off, unlimited |
+| TARGET FPS, RENDER SCALE | 60, 100 |
+| Average FPS, 1 % low | 81.5, 50.4 |
+| Frame time median, P95, P99, worst | 11.82, 16.90, 18.27, 25.54 ms |
+| FRAMES OVER 8.3 MS | 8476 OF 9165 |
+| Verdict | "CHOPPY: 81 FPS ON AVERAGE, ON A 120 HZ SCREEN" |
+
+That build judged every frame against the screen's 8.3 ms period, so a run that mostly held the 60
+the player asked for read CHOPPY. Against the budget above (16.7 ms, late past 17.5 ms) the same
+numbers give MOSTLY SMOOTH, whatever lay between the percentiles: P95 (16.90 ms) is under 17.5 ms,
+so at most 458 of the 9165 frames are late (4.997 %), and P99 (18.27 ms) is over it, so at least 92
+are (1.004 %). This is computed from the reported figures
+(`benchmark::report::tests::a_run_that_asked_for_60_is_not_judged_against_a_120_hz_screen`
+replays them); the phone has not been re-run on the new rule.
 
 ## Not checked
 
-The Steam Deck and a phone were not run for this page: the code path is the window's on every
-platform (the launch file hands `--benchmark` to the same parser), but no result from either is
-in the record.
+The Steam Deck was not run for this page: the code path is the window's on every platform (the
+launch file hands `--benchmark` to the same parser), but no result from it is in the record.
+Safari and Firefox were not tried with COPY.
 
 `FE_EXTRAS` outside Pulse: HD's, Omega's and Pure's main menus author no such row
 (`crates/raceplay/tests/main_menu_ground_truth.rs` reads each list back), so they keep BENCHMARK

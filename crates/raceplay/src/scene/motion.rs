@@ -304,6 +304,7 @@ pub(super) fn velocity_texture(
             | wgpu::TextureUsages::TEXTURE_BINDING
             | readable_in_tests(),
         view_formats: &[],
+        texture_binding_view_dimension: None,
     })
 }
 
@@ -590,6 +591,25 @@ impl super::Scene {
             .set(resolution == oag_display::display::BlurResolution::Half);
     }
 
+    /// The share of the full width the next frames' viewport keeps when the host will stretch
+    /// it back out: the projection is built for the full width, so the picture is squeezed
+    /// rather than cropped. `1.0` when the viewport is shown at its own shape.
+    pub fn set_squeeze(&self, squeeze: f32) {
+        self.squeeze.set(if squeeze > 0.0 { squeeze } else { 1.0 });
+    }
+
+    /// The projection the last [`Scene::render`] folded into this view's history.
+    #[cfg(test)]
+    pub(crate) fn drawn_projection(&self) -> Option<Mat4> {
+        let motion = self.history().motion.borrow();
+        motion.as_ref().map(|state| state.cur.projection)
+    }
+
+    /// The camera aspect a viewport of `width` by `height` pixels is drawn with.
+    pub(super) fn view_aspect(&self, width: f32, height: f32) -> f32 {
+        view_aspect(width, height, self.squeeze.get())
+    }
+
     /// The audio output's band levels for the next frame (`oag_audio::spectrum::Spectrum::levels`),
     /// raw. A view-side input like the blur resolution: nothing in the simulation reads it.
     pub fn set_band_levels(&self, levels: [f32; 16]) {
@@ -826,4 +846,9 @@ mod advance_tests {
         );
         assert_eq!(prev.view_projection, at(1.0));
     }
+}
+
+/// [`super::Scene::view_aspect`]: the shape of the picture the viewport stands for.
+fn view_aspect(width: f32, height: f32, squeeze: f32) -> f32 {
+    width.max(1.0) / height.max(1.0) / squeeze
 }

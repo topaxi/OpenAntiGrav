@@ -366,8 +366,11 @@ fn beneath_census_all_titles() {
 }
 
 /// The rescue still fires where a craft really is under the circuit: Pulse
-/// `05_Track` forward, FLASH, where two of the field leave the corridor and
-/// drop into the pit under the upper road (ring samples 339 and 349).
+/// `05_Track` forward, FLASH, where one of the field leaves the corridor and
+/// drops into the pit under the upper road (slot 2 on lap 2, ring sample 350).
+/// Two did with a blast drained along forward; the side drain Pulse measures
+/// (`docs/ghidra/functions/psp-pulse-usa/contact-response.md`, "The drain pushes
+/// along the side row") leaves one.
 #[test]
 #[ignore = "needs data/images/pulse-psp-usa.chd"]
 fn the_pulse_05_track_field_is_still_rescued_from_the_pit_under_its_road() {
@@ -388,7 +391,7 @@ fn the_pulse_05_track_field_is_still_rescued_from_the_pit_under_its_road() {
     println!("pulse 05_Track FLASH: respawns {:?}", out.respawns);
     assert_eq!(
         out.beneath_per_lap.iter().sum::<u32>(),
-        2,
+        1,
         "05_Track's pit rescues changed: {:?}",
         out.respawns
     );

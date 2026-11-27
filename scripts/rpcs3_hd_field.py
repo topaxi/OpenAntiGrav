@@ -8,6 +8,9 @@ Shared by `scripts/rpcs3-hd-race-hunt.py` (finds a mid-pack moment) and `scripts
     ship+0x5fac -> +0x270 the craft's rigid body; body+0x1d0 basis rows, +0x200 position, +0x190 velocity
     ship+0x6298 -> +0x1b4 the team's path string, `Data\\Ships\\<team>_c1`
     ship+0x7014           the craft's running lap clock, seconds
+    *0x00936fd4 + 0xc4    the frame context's boot clock, seconds: engine shader parameter slot 0 (`time`), what the
+                         engine flame's noise scrolls by (docs/ghidra/functions/ps3-hdfury-eu/engine-flare.md,
+                         "The flame's clock at a pair's grab")
     the HUD record       `lap` +0xc, `laps` +0x10, `place` +0x14 (1-based), `speed` +0x0, shield +0x48 and its
                          maximum +0x50 (docs/ghidra/functions/ps3-hdfury-eu/hud-readouts.md); the heap moves boot to
                          boot, so it is found by scanning for those fields
@@ -16,11 +19,79 @@ Raw reads are game memory: nothing here is written to a tracked file.
 """
 
 import struct
+import time
 
 GUEST = 0x300000000
 CRAFT_ARRAY = 0x0098D7C0
 RECORD_SCAN = (0x30000000, 0x36000000, 0x40000)
 MAX_SHIELD = 140.0
+#: `Render_FrameContextPtr_q`: the frame context the present loop hands the render calls; its `+0xc4` is the boot clock.
+FRAME_CONTEXT_PP = 0x00936FD4
+FRAME_CLOCK_OFFSET = 0xC4
+
+
+def flame_clock(m):
+    """The frame context's boot clock in seconds (engine parameter slot 0), or `None` before the context exists.
+
+    It runs at game time and stops with the emulator; HD's flame program reads it one to two frames behind the PPU.
+    """
+    ctx = m.u32(FRAME_CONTEXT_PP)
+    return m.f32(ctx + FRAME_CLOCK_OFFSET) if ctx else None
+
+
+#: The options block (`*(*0x008b098c)`); its byte `+0x473` is Pilot Assist, which `Hud_UpdateAssistIndicator` reads every frame
+#: to draw the indicator's bracket under the craft and `Craft_Update` passes on to the craft
+#: (`docs/ghidra/functions/ps3-hdfury-eu/pilot-assist.md`).
+OPTIONS_PP = 0x008B098C
+PILOT_ASSIST_OFFSET = 0x473
+
+
+def pilot_assist_at(m):
+    """The address of the Pilot Assist option byte, or `None` before the options block exists."""
+    holder = m.u32(OPTIONS_PP)
+    opts = m.u32(holder) if holder else 0
+    return opts + PILOT_ASSIST_OFFSET if opts else None
+
+
+def pilot_assist(m):
+    """The Pilot Assist option byte (0 is off), or `None` before the options block exists."""
+    at = pilot_assist_at(m)
+    return m.rd(at, 1)[0] if at is not None else None
+
+
+#: The race manager (`*0x0095ae78`): `+0x1950 +0x20` is the phase word and `+0x1950 +0x18` the seconds in it. Phase 1 is
+#: the countdown (`docs/ghidra/functions/ps3-hdfury-eu/hud-start-gate.md`).
+RACE_MANAGER_PP = 0x0095AE78
+RACE_PHASE_BLOCK = 0x1950
+COUNTDOWN_PHASE = 1
+
+
+def race_phase(m):
+    """`{"phase": int, "elapsed_s": float}` of the race manager, or `None` before it exists."""
+    manager = m.u32(RACE_MANAGER_PP)
+    if not manager:
+        return None
+    block = m.rd(manager + RACE_PHASE_BLOCK, 0x28)
+    return {"phase": struct.unpack_from(">I", block, 0x20)[0], "elapsed_s": struct.unpack_from(">f", block, 0x18)[0]}
+
+
+def wait_countdown(m, elapsed_s, timeout, clock=time.monotonic, sleep=time.sleep, say=print):
+    """Poll, without pausing, until the race manager is `elapsed_s` into its countdown; returns that `race_phase`.
+
+    The countdown is about 3 s, shorter than a capture script takes to start, so the wait runs inside the capture, with
+    only the debugger attach after it. Raises `TimeoutError`.
+    """
+    began = told = clock()
+    while True:
+        now = race_phase(m)
+        if now and now["phase"] == COUNTDOWN_PHASE and now["elapsed_s"] >= elapsed_s:
+            return now
+        if clock() - began > timeout:
+            raise TimeoutError("no countdown within %.0f s (race manager %s)" % (timeout, now))
+        if clock() - told >= 10:
+            say("  waiting for the countdown (race manager %s)" % (now,))
+            told = clock()
+        sleep(0.05)
 
 
 class Mem:
@@ -89,12 +160,17 @@ def hud(m, record):
             "lap_time": struct.unpack(">f", b[0x30:0x34])[0]}
 
 
-def team_of(m, ship):
-    """`Feisar_c1` out of `Data\\Ships\\Feisar_c1`: the string `*(*(ship+0x6298)+0x1b4)` points at."""
-    holder = m.u32(ship + 0x6298)
-    text = m.u32(holder + 0x1B4) if holder else 0
+def model_hull(m, model):
+    """`Feisar_c1` out of `Data\\Ships\\Feisar_c1`: the string a `PI_TeamModel`'s `+0x1b4` points at. A craft holds its
+    model at `ship+0x6298`, Team Selection the selected one at `+0x194` of its screen object (`hd_ship_step.py`)."""
+    text = m.u32(model + 0x1B4) if model else 0
     raw = m.rd(text, 48).split(b"\0")[0].decode("ascii", "replace") if text else ""
     return raw.replace("/", "\\").rsplit("\\", 1)[-1]
+
+
+def team_of(m, ship):
+    """The hull directory the craft was loaded from (`model_hull` of its `PI_TeamModel`)."""
+    return model_hull(m, m.u32(ship + 0x6298))
 
 
 def field_rows(m):
@@ -177,6 +253,69 @@ DETONATOR_MINE_VTABLE = 0x008642F0
 MINE_OBJECT_BYTES = 0x170
 
 
+#: The words `DetonatorMine_AnimateToMusic` writes for the draw each update, by object offset
+#: (`docs/ghidra/functions/ps3-hdfury-eu/detonator-mine-material.md`, "Live mine").
+MINE_DRAW_WORDS = (("football_scale", 0xD8), ("brightness", 0x100), ("master_volume", 0x104), ("pitch_offset", 0x108),
+                   ("pitch_volume", 0x10C), ("bass_hit", 0x110), ("treble_hit", 0x114), ("tempo", 0x118))
+
+
+def mine_draw_words(o):
+    """The draw words of one mine object's bytes `o`, by name."""
+    return {name: struct.unpack(">f", o[at:at + 4])[0] for name, at in MINE_DRAW_WORDS}
+
+
+def mine_state(o):
+    """The words of one mine object's bytes `o` that change while it stands: `live`, `age_s`, the two envelopes and the draw words."""
+    return {"live": o[0x160], "age_s": struct.unpack(">f", o[0xC0:0xC4])[0],
+            "football_s": struct.unpack(">f", o[0xF4:0xF8])[0], "spikes_t": struct.unpack(">f", o[0xF8:0xFC])[0],
+            **mine_draw_words(o)}
+
+
+#: `PulseBullet`'s vtable (`0x00863d98`); its age `+0x4c`, flags `+0x40`, launch speed (`500 + 3.6 v`) `+0x124`
+#: (`docs/ghidra/functions/ps3-hdfury-eu/detonator-cannon.md`, "The round").
+PULSE_BULLET_VTABLE = 0x00863D98
+PULSE_BULLET_BYTES = 0x1C0
+#: The pickup slot `*(ship+0x5edc)` keeps the clip's volleys left at `+0x164`; the race manager `**0x008a6814`
+#: counts the game frames the trigger was held with a loaded, ready cannon at `+0x6de44`.
+PICKUP_SLOT = 0x5EDC
+CLIP_ROUNDS = 0x164
+RACE_MANAGER = 0x008A6814
+HELD_FRAMES = 0x6DE44
+
+
+def pulse_bullets(m, lo=0x30000000, hi=0x40000000, chunk=0x100000):
+    """The addresses of every `PulseBullet` in the heap (the pool of thirty, live or not)."""
+    needle = struct.pack(">I", PULSE_BULLET_VTABLE)
+    found = []
+    for base in range(lo, hi, chunk):
+        try:
+            block = m.rd(base, chunk)
+        except OSError:
+            continue
+        at = block.find(needle)
+        while at >= 0:
+            if at % 4 == 0:
+                found.append(base + at)
+            at = block.find(needle, at + 4)
+    return sorted(found)
+
+
+def cannon_state(m, ship, pool):
+    """The cannon at one pause: game frames (1 or 2 ticks each) the trigger was held so far, volleys left, and every round with an age under its 1 s life
+    (`{address, age_s, launch_speed, flags, position, prev}`)."""
+    manager = m.u32(m.u32(RACE_MANAGER))
+    rounds = []
+    for address in pool:
+        o = m.rd(address, PULSE_BULLET_BYTES)
+        age = struct.unpack(">f", o[0x4C:0x50])[0]
+        if 0.0 < age < 1.05:
+            rounds.append({"address": address, "age_s": age, "flags": struct.unpack(">I", o[0x40:0x44])[0],
+                           "launch_speed": struct.unpack(">f", o[0x124:0x128])[0],
+                           "position": list(struct.unpack(">3f", o[0x170:0x17C])), "prev": list(struct.unpack(">3f", o[0xE0:0xEC]))})
+    return {"held_frames": m.u32(manager + HELD_FRAMES), "volleys_left": m.u32(m.u32(ship + PICKUP_SLOT) + CLIP_ROUNDS),
+            "rounds": rounds}
+
+
 def detonator_mines(m, lo=0x30000000, hi=0x36000000, chunk=0x100000, keep_raw=False):
     """Every active `DetonatorMine` in the heap: `{address, flags, position, entry, lane, live (the byte at +0x160), age_s, football_s and spikes_t (the music envelopes `+0xf4` and `+0xf8`)}`, read in one pass
     (`keep_raw` adds the object's bytes as `raw`, hex, for a survey of its other fields)."""
@@ -196,10 +335,7 @@ def detonator_mines(m, lo=0x30000000, hi=0x36000000, chunk=0x100000, keep_raw=Fa
                     found.append({"address": base + at, "flags": flags,
                                   "position": list(struct.unpack(">3f", o[0x80:0x8c])),
                                   "entry": struct.unpack(">H", o[0xC6:0xC8])[0], "lane": o[0xC8],
-                                  "live": o[0x160],
-                                  "age_s": struct.unpack(">f", o[0xC0:0xC4])[0],
-                                  "football_s": struct.unpack(">f", o[0xF4:0xF8])[0],
-                                  "spikes_t": struct.unpack(">f", o[0xF8:0xFC])[0],
+                                  **mine_state(o),
                                   **({"raw": o.hex()} if keep_raw else {})})
             at = block.find(needle, at + 4)
     return found
@@ -253,7 +389,8 @@ CLOCK_SAMPLE = 24
 def world_clock_record(m, cache, grabbed_at=None):
     """The original's world clock for a frame grab, always a dict: the clock, or `null` with a reason.
 
-    `{"world_clock_s", "lap_clock_s", "world_clock_offset_s", "nodes", "total", "reason", "scan"}`. The scenery clock is
+    `{"world_clock_s", "lap_clock_s", "world_clock_offset_s", "nodes", "total", "reason", "scan", "flame_clock_s"}`;
+    `flame_clock_s` (`flame_clock`) is read on every screen, a race or not. The scenery clock is
     only recorded while a race is running: a player craft in the craft array, a lap clock that is a finite non-negative
     number, and scenery nodes whose time and stamp agree. After a race the freed nodes still read plausible, so a
     menu screen with no player craft records `null` and says why. `cache` is a dict the caller keeps between grabs:
@@ -263,7 +400,11 @@ def world_clock_record(m, cache, grabbed_at=None):
     milliseconds of each other, and `paused` is not known here, so a film frame's `world_clock_s` itself is the moment of the read.
     """
     rec = {"world_clock_s": None, "lap_clock_s": None, "world_clock_offset_s": None, "nodes": None, "total": None,
-           "reason": None, "scan": None}
+           "reason": None, "scan": None, "flame_clock_s": None}
+    try:
+        rec["flame_clock_s"] = flame_clock(m)
+    except Exception as error:  # noqa: BLE001 - the flame clock is a bonus beside the scenery clock
+        rec["flame_clock_reason"] = "%s: %s" % (type(error).__name__, error)
     try:
         rows = field_rows(m)
     except Exception as error:  # noqa: BLE001 - a menu has no craft array, which is the answer

@@ -210,11 +210,9 @@ Two things the HD effect needs that this page cannot supply, both unread:
 1. **What `colour_mode` 3 does on HD.** Read since: the table is not a colour there but a
    blend weight, and the black run means "draw entry 0", white. See "`colour_mode` 3 is a blend
    toward the scene light" below.
-2. **HD's frame advance and flipbook direction** (`particle-triggers.md`, "What was missing: the
-   sprites"). With `WO_SHIP_EXPLOSION` listed in `Effects::sprites` the additive fireball draws
-   a white blowout at ticks 45 to 50 (frame advance on or off, same picture) that the procedural
-   profile did not, so listing it **without** this read replaces a black ball with a white one.
-   It was not listed and no code changed.
+2. **HD's frame advance for this effect** is read and wired ([particle-render.md](particle-render.md#the-atlas-frame)).
+   The white blowout listing `WO_SHIP_EXPLOSION` showed at ticks 45 to 50 was measured before
+   that; the effect has been listed since, and the blowout was not re-measured.
 
 Not shipped: no frame, shader or table was changed. Pinned: `psys_ground_truth.rs`,
 `hd_ship_explosion_root_is_a_fire_flipbook_under_a_black_colour_ramp` (the sprite resolves, the
@@ -356,14 +354,9 @@ reader `FUN_016ddf70` reads (no lerp; confidence 55, and which reader plays whic
 the directories' names and the race's `effect_dir_by_circuit`, not read). Omega's HD-era mode-3 effects
 therefore stay forward, with no light blend either.
 
-**The frame advance, partly read (confidence 60).** In the same update
-(`0x0028d0f0`-`0x0028d1bc`, context `ctx+0x6b0..+0x6c1`): with `ctx+0x6b2` set, emitter
-flag `0x40` (`ctx+0x6b4` is the emitter's `+0x20`) makes `frame = age * (count - 0.01)`.
-Otherwise `frame += rate * ctx+0x6bc`. Then a `[lo, hi]` byte pair (`ctx+0x6c0`/`+0x6c1`,
-from the baked record's `+0xc8f`/`+0xc94`) resets `frame > hi` to `lo`, and the count wraps
-it. `+0x78 = floor(frame)`. The direction is forward for a positive rate. The root's flags
-have no `0x40`, so it steps at a rate. The count's and rate's sources (render state
-`+0xc44`/`+0xc60`) are not read.
+**The frame advance** runs in the same update, after the colour step:
+[particle-render.md](particle-render.md#the-atlas-frame). The root's flags have no `0x40`, so it
+steps at a rate; its record authors spawn `[0, 10]` and holds on frame 31.
 
 **2048: checked, differs.** 2048's per-particle update `Psys_UpdateParticle` (`0x812ab114`,
 v1.04) has no lighting branch. `s17 = 1 - p[+0x6c] / p[+0x70]` (`vdiv` at `0x812ab1b0`, `vsub`

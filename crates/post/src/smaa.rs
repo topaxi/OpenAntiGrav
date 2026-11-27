@@ -89,6 +89,7 @@ fn target(
             // the same reason `fsr1::Fsr1`'s intermediates carry it.
             | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
     Target { texture, view }
@@ -471,6 +472,7 @@ fn upload(
         format,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     queue.write_texture(
         texture.as_image_copy(),

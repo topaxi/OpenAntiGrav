@@ -571,6 +571,74 @@ impl FloorArms {
     }
 }
 
+/// How far along its carried normal each flyer's surface probe reaches, in world units. A title
+/// picks it (`oag_title::weapons::ProbeLengths`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ProbeLengths {
+    /// The Rocket's.
+    pub rocket: f32,
+    /// The Missile's.
+    pub missile: f32,
+    /// The Plasma bolt's.
+    pub plasma: f32,
+    /// The Shuriken's.
+    pub shuriken: f32,
+}
+
+impl ProbeLengths {
+    /// Pulse's.
+    pub const PULSE: Self = Self {
+        rocket: SURFACE_PROBE_LENGTH,
+        missile: missile::SURFACE_PROBE_LENGTH,
+        plasma: missile::SURFACE_PROBE_LENGTH,
+        shuriken: missile::SURFACE_PROBE_LENGTH,
+    };
+
+    /// The length `kind`'s probe casts. A weapon that is none of the four takes the Missile's.
+    #[must_use]
+    pub fn for_weapon(self, kind: Weapon) -> f32 {
+        match kind {
+            Weapon::Rocket => self.rocket,
+            Weapon::Plasma => self.plasma,
+            Weapon::Shuriken => self.shuriken,
+            _ => self.missile,
+        }
+    }
+}
+
+/// What a Rocket does on an update its surface probe finds nothing
+/// (`oag_title::weapons::RocketOpenAir`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RocketOpenAir {
+    /// It falls, `velocity.y -= 50 * dt` (Pulse).
+    Falls,
+    /// It turns parallel to its carried normal at the class speed and does not fall (HD,
+    /// `docs/ghidra/functions/ps3-hdfury-eu/own-craft-box.md`, "The Rocket on `0x7f`").
+    TurnsAlongNormal,
+}
+
+/// A title's laws for the flyers that probe the track. A bare [`FloorArms`] converts to those
+/// arms with Pulse's probe lengths and open-air fall.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct FlightLaws {
+    /// How a floor arm writes the velocity.
+    pub floor_arms: FloorArms,
+    /// How far each probe reaches.
+    pub probes: ProbeLengths,
+    /// The Rocket's arm when its probe finds nothing.
+    pub rocket_open_air: RocketOpenAir,
+}
+
+impl From<FloorArms> for FlightLaws {
+    fn from(floor_arms: FloorArms) -> Self {
+        Self {
+            floor_arms,
+            probes: ProbeLengths::PULSE,
+            rocket_open_air: RocketOpenAir::Falls,
+        }
+    }
+}
+
 /// Whether a projectile leaves with the craft's display scale in its launch matrix, flying
 /// slower than its authored speed until its first floor ride.
 ///
@@ -622,7 +690,7 @@ pub fn step<R: Raycaster + ?Sized, S: Craft>(
     cage: Option<&dyn oag_physics::cage::Containment>,
     weapons: Option<&oag_tables::weapons::WeaponStats>,
     class: &str,
-    floor_arms: FloorArms,
+    laws: impl Into<FlightLaws>,
     own_craft: OwnCraftProbe,
     plasma_release: LaunchScale,
     push: BlastPush,
@@ -642,7 +710,7 @@ pub fn step<R: Raycaster + ?Sized, S: Craft>(
         disruptor_stats.as_ref(),
         TriggerRadii::from_table(weapons),
         class,
-        floor_arms,
+        laws,
         own_craft,
         plasma_release,
     );

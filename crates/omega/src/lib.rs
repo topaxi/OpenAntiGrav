@@ -102,6 +102,12 @@ pub const TITLE: &Title = &Title {
     eliminator_flip: oag_title::pre_race::Sourced::measured(Some(
         oag_title::eliminator::FlipRule { seconds: 0.2 },
     )),
+    // This title's draw still grants the Repulser and the Shuriken (its roster is unread), so it
+    // keeps the terms tuned with them (`docs/gameplay/race-modes.md`, "The pace of a score
+    // Eliminator").
+    score_pace: oag_title::pre_race::Sourced::chosen(
+        oag_title::eliminator::ScorePaceTerms::WITH_REPULSER_AND_SHURIKEN,
+    ),
     teams: race::TEAM_IDENTITIES,
     loyalty: Some(oag_title::loyalty::LoyaltyEarning {
         law: oag_title::loyalty::LoyaltyLaw::Hd,
@@ -121,6 +127,7 @@ pub const TITLE: &Title = &Title {
         oag_title::Origin::InheritedFrom("Wipeout HD"),
     )),
     // Read in this title's own executable (`docs/rendering/pads.md`, "2048 and Omega").
+    pickup_roster: None,
     weapon_pad_glow: &oag_title::weapon_pad::WeaponPadGlow::ByClass(
         oag_title::weapon_pad::ClassCycles::LINEAGE,
     ),
@@ -221,6 +228,8 @@ pub const TITLE: &Title = &Title {
         oag_title::rumble::SmallMotor::Sum,
         oag_title::rumble::Triggers::Omega,
     ),
+    // HD's two thresholds are in neither `eboot.bin` (`scene-width-throttle.md`, "Omega").
+    width_throttle: None,
     // Inherited by lineage, but the disc authors the timeouts and the circuit: `DemoConfig.xml`,
     // read at boot over these (`docs/ui/attract-demo.md`).
     demo: oag_title::demo::Demo {
@@ -245,6 +254,9 @@ pub const TITLE: &Title = &Title {
         ai: Some(r"Data\XML\WeaponAIstats.xml"),
         // HD's law, inherited: Omega's own executable is not checkable here.
         leach_drain: oag_title::weapons::LeachDrain::PerTrip,
+        // Omega's `Rocket_HitCraft` posts HD's falloff into the slot's `+0x120`, but its drain is
+        // unread and HD's posted law reddens `omega_event_xp_ground_truth`, so the push stays
+        // immediate (`rocket-craft-blast.md`, "The other titles").
         blast_push: oag_title::pre_race::Sourced::chosen(oag_title::weapons::BlastPush::Immediate),
         // Measured: eight entries in `LeachBeamManager_Update`'s pool (`weapon-instance-limits.md`).
         leach_beams: oag_title::pre_race::Sourced::measured(8),
@@ -282,6 +294,15 @@ pub const TITLE: &Title = &Title {
         // The projectile query walks track meshes only (`ps4-omega-eu/own-craft-box.md`).
         own_craft_box_hides_track: oag_title::pre_race::Sourced::measured(
             oag_title::weapons::OwnCraftBox::Absent,
+        ),
+        // Pulse's, chosen: HD's lengths are wired for HD alone. This title's `Plasma_Update`
+        // reads `6.0` (`ps3-hdfury-eu/plasma.md`), not wired; the other lengths are unread.
+        surface_probe_lengths: oag_title::pre_race::Sourced::chosen(
+            oag_title::weapons::ProbeLengths::PULSE,
+        ),
+        // Pulse's, chosen: this title's `Rocket_Update` open-air arm is unread.
+        rocket_open_air: oag_title::pre_race::Sourced::chosen(
+            oag_title::weapons::RocketOpenAir::Falls,
         ),
         opponent_fire: oag_title::pre_race::Sourced::measured(
             oag_title::weapons::OpponentFire::OMEGA,
@@ -408,29 +429,35 @@ pub const TITLE: &Title = &Title {
         // `321Go_2048.vex` counts down by moving nodes. Any other board
         // (`321Go_StartFinish.vex`) plays HD's clock on the UV keys its `.vex`
         // authors (`docs/ghidra/functions/ps4-omega-eu/billboards.md`, "The UV keys").
+        // This title's countdown entry is unread.
+        countdown_assembly_ticks: None,
         gantry_boards: Some(&[oag_title::adverts::GantryBoard {
             entry: "/Data/Billboards/HD_Adverts/321Go/321Go_2048.vex",
             assembly_ticks: 200,
         }]),
         // Each mode's board is this title's own substitution
         // (`TrackStartup_Load`, `docs/ghidra/functions/ps4-omega-eu/billboards.md`); the
-        // assembly ticks are HD's Zone figure, inherited, and chosen, not measured, for
-        // the boards of the modes this engine does not run yet.
+        // assembly ticks (210) are chosen, not measured: HD's own boards are read at 180
+        // (`docs/ghidra/functions/ps3-hdfury-eu/gantry-clock.md`) and this title's code
+        // for it is unread.
         mode_gantries: &[
             oag_title::adverts::ModeGantry {
                 mode: oag_title::adverts::GantryMode::Zone,
                 entry: "/Data/Billboards/HD_Adverts/321Go/321Go_Zone.vex",
                 assembly_ticks: 210,
+                race_windows: false,
             },
             oag_title::adverts::ModeGantry {
                 mode: oag_title::adverts::GantryMode::ZoneBattle,
                 entry: "/Data/Billboards/HD_Adverts/321Go/321Go_HD_Zone_Battle.vex",
                 assembly_ticks: 210,
+                race_windows: false,
             },
             oag_title::adverts::ModeGantry {
                 mode: oag_title::adverts::GantryMode::Detonator,
                 entry: "/Data/Billboards/HD_Adverts/321Go/321go_hd_detonator.vex",
                 assembly_ticks: 210,
+                race_windows: false,
             },
         ],
         origin: oag_title::Origin::InheritedFrom("Wipeout HD"),
@@ -533,7 +560,14 @@ const EFFECTS: oag_title::Effects = {
     effects.scenery = &[oag_title::engine_effects::MODESTO_STEAM_EFFECT];
     effects.colour_walk_in = &[(r"Data\particles2048", oag_title::ColourWalk::Reversed)];
     // `Particle_PushQuadBatch` (`docs/ghidra/functions/ps3-hdfury-eu/particle-render.md`).
-    effects.near_law = Some(oag_title::NearLaw::one_to_four(Origin::Measured));
+    // The template cap and the Rocket craft blast's templates follow HD's measurement
+    // (`docs/ghidra/functions/ps3-hdfury-eu/rocket-craft-blast.md`, "The other titles"); the
+    // templates played are Omega's own file's: `particles2048` authors two, `particles` none.
+    effects.near_law = Some(
+        oag_title::NearLaw::one_to_four(Origin::Measured)
+            .with_template_cap(2.0, Origin::InheritedFrom("Wipeout HD")),
+    );
+    effects.templates = &[engine_effects::CRAFT_BLAST_EFFECT];
     // The Rocket's craft-hit spawn, `0x0139a6b0` (`docs/ghidra/functions/ps3-hdfury-eu/rocket-craft-blast.md`).
     effects.craft_blast_carry = Some(Origin::Measured);
     effects

@@ -183,6 +183,142 @@ line, which is what settling gives.
   says nothing about the sphere either way, since the two read different
   colour groups of the same stage; only same-class near against far does.
 
+## Holographic billboards in a Zone frame
+
+**Law (confidence 80).** A holographic billboard (`scanlinebillboard`, its `_alphaboost` and
+`_desaturate` siblings, `wes_`/`nr_billboardholographicscanlines`) draws the generic Zone surface in a
+Zone-family frame, not its advert-and-scanline overlay. Its Zone variants sample neither the advert
+(`0x6f469b89`) nor the second layer (`0xdd7ec609`): they run the shape at the top of this page
+(`zoneTex * zoneEffect + rim^10 * base + rim^5 * baseAlt`, lit, fogged, plus the visualiser glow), and
+the scanline texture (`0xfad8b460`) only gives the alpha. The material's blend is `ONE`/`ONE`
+(state `0x3d`, [hd-track-tone.md](hd-track-tone.md), "The discriminating fit"), so in Detonator stage 1,
+whose `Scene.*` colours are black ([detonator-look.md](../ghidra/functions/ps3-hdfury-eu/detonator-look.md),
+"What the file says at stage 1"), the add is close to nothing and the panels read black.
+
+**Evidence.**
+
+- Talon's `scanlinebillboard.rcsmaterial` (`DATA00.PSARC`, `/data/environments/talons_junction/materials/adverts/`),
+  `scripts/ps3-sho.py variants` and `scripts/ps3-microcode.py fp-file`: the plain variants (`HalfBrightAmbientSunSpot0SVC0`,
+  fragment block `0x21a0`, and the `ShadowMap`, `IleLightmap` and `IleVertex` twins) declare the three
+  holographic samplers and run the overlay. Every `ZoneMode` and `ZoneTrans` variant (fragment blocks
+  `0x2ef0`, `0x3410`, `0x3ee0`, `0x4820`, `0x5b00`, `0x64c0`, `0x7740`, `0x8180`) declares
+  `zoneColourTint`, the Zone textures `0xd5e000d1`, `0x00e5b679`, `0x1f6f85a3` and the scanlines alone.
+  Block `0x2ef0`: `TEX H6.xyz, R1.zwzz unit1` (the Zone texture at `zoneColourTint.xy * (1 - uv)`) times
+  `0x5b79f09f`, plus `rim^5 * 0x6f756a07 + rim^10 * 0x1cc42e87`, times the light `TC0 + sun * N.L`, the
+  visualiser tap, the fog lerp, the closing `/2`; `MOV H0.w, H1.zzzz` from `TEX H1.z, R2 unit0`, the
+  scanlines at `0xd09c054d * uv`.
+- Census over all four PS3 archives, `hd_zone_wave_census_ground_truth::no_zone_variant_of_a_holo_billboard_samples_the_advert`:
+  22 holographic materials on Talon's Junction, Tech de Ra, the Amphiseum, Modesto Heights and `02_track`,
+  208 Zone variants, none declaring the advert or the second layer, all declaring the Zone texture.
+- The picture: on every HD Detonator pair the grilles over the track (Talon's slot 435) were ours'
+  brightest scenery where the original is black. With the rule, the `cannon-volley-hot` grille boxes
+  `215,0,520,150` and `1030,150,1360,305` read mean grey 9.4 and 7.7 (were 43.6 and 36.1; the original
+  6.8 and 13.6), and the upper-right overhead structure of `mines-ahead` (`1100..1920 x 0..400`) 16.6
+  (was 28.5, the original 17.7). The second box now reads darker than the original; not tuned.
+
+**Ours.** `shade.wesl` returns the holographic combine only while `zone_program` is 0: in a Zone frame
+the chunk falls through to the generic surface, which the Zone grade replaces. A chunk the Zone race
+draws on its plain program (`slots::ZONE_PLAIN`) keeps the overlay. The slot's role word keeps the
+scanline texture's blue as the alpha (`ALPHA_FROM_SECOND`, channel 2), which is the Zone variant's own
+alpha tap, and clears `ADD_SECOND`, so none of the billboard's repurposed inputs adds light on the
+generic path. Test: `hd_holo_billboard_lit_path::a_zone_frame_draws_the_zone_surface_on_a_billboard_not_the_overlay`
+(a black Scene set draws black; with the gate removed it draws the overlay and fails).
+
+| Pair (whole-frame mean grey) | Before | After |
+| --- | --- | --- |
+| `detonator-talons-cannon-volley-hot` | 10.32 | 8.96 |
+| `detonator-talons-mines-ahead` | 12.46 | 10.63 |
+| `detonator-talons-cannon-volley` | 14.33 | 12.37 |
+| `detonator-talons-pad` | 7.60 | 5.88 |
+| `zone-vineta-k-z5` (no holographic material) | 6.28 | 6.28, byte-identical |
+
+A headless Talon's Junction Zone race at the `pad` pair's camera (stage 0, `Sub Venom`) moves 3,138
+pixels: the two grille panels draw the saturated Zone surface instead of grey scanline stripes on it.
+The same frame in Time Trial is byte-identical. No original Zone frame of Talon's Junction is on the
+compare page, so the plain-Zone picture is by the read, not checked against a capture.
+
+**Open.** The light the generic path applies: the slot carries `NO_AMBIENT | NO_SUN` (the plain
+variants' unlit overlay), where the Zone variant multiplies by `TC0 + sun * N.L`. Invisible in Detonator
+(black Scene colours) and on a saturated Zone panel; not measured.
+
+**2048 and Omega: checked, differs.** Their readers (`psp2`, `gcn`) never bind the holographic shape
+(`slots::HOLO_BILLBOARD` is set only by `mesh::rcs::holo_billboard`), so these materials already draw
+the generic path in every mode and the gate changes nothing there. Whether their own GXP and GCN Zone
+variants drop the advert is unread.
+
+## Window lights on a plain chunk (2026-11-27, `det-volley-wall`)
+
+**Law (confidence 80: two plain programs agree, and the picture).** `tunnel_fx_noalpha` (Talon's
+Junction's tunnel facades) adds its `EmissiveTexture` (`0xb1f2a176`, `tunnel_fx_emissive.gtf` and
+siblings such as `tunnel_02_posts_ems.gtf`) on its **plain** programs only, after the light and
+ungated by the diffuse alpha:
+
+```text
+out = (fog(light * D + spec * S + 1 - (1 - E) * (1 - X)) + TC1) / 2
+```
+
+with `X` the facing-ramp term (`ramp(TC0.w) * TC0.w * k * S * c`). Its Zone variants declare no
+emissive, so a chunk on its Zone program shows no window lights and a chunk the Zone frame draws
+plain (render flag bit 11, "Chunks a Zone race does not recolour" above) shows them over the Zone
+stage's black.
+
+**Evidence.**
+
+- Microcode, `scripts/ps3-sho.py variants` and `scripts/ps3-microcode.py fp-file` on Talon's
+  `tunnel_fx_noalpha.rcsmaterial` (`DATA00.PSARC`): `HalfBrightAmbientSunSpot0SVC0` (fragment block
+  `0x4f80`, the `Ambient` permutation a plain chunk runs in a Zone frame) does `TEX H3, f[TC4] unit2`
+  (the emissive), `MAD H3, -H3, H0, H0` with `H0 = 1 - X`, `MAD H0, light, D, -H3`, the specular
+  added, then `ADD H0, H0, 1`, the fog lerp and `ADD /2 H0, R2, H0`.
+  `HalfBrightIleLightmapSunSpot0SVC0` (`0x5d20`, a lightmapped slot in a normal race) is the same
+  shape with the lightmap in the light (`@0x38`..`@0x47`). `HalfBrightZoneModeAmbientSunSpot0SVC0`
+  (`0x68a0`) declares the specular map, the three Zone textures and the visualiser, and no `0xb1f2a176`.
+- The wall: on `hd/detonator-talons-cannon-volley` the rows of cyan window lights on the right wall
+  (around `1500..1920 x 300..360`) are two chunks of slot 26, `0xf440791f` and `0x258dd9b9`, both
+  render flags `0x0800` (found by skipping slots, then chunks, at the pair's pose; the other slot-26
+  and slot-17 chunks are flags `0`). Their lights in the original are the emissive texture's 2x6 grid
+  and rows of five.
+- Ours lost them on every frame, not only in a Zone race: slot 26 is lightmapped, so the second
+  binding holds the lightmap and the generic glow reading (`mesh::rcs::emissive`) never bound the
+  emissive.
+
+**Wired** (`oag_mesh::mesh::rcs::tunnel_emissive`, `PROGRAM_TUNNEL_EMISSIVE`): a lightmapped
+`tunnel_fx_noalpha` slot whose resolved program declares the emissive and the lightmap binds the
+emissive third and takes a glow-table entry; `shade.wesl` adds the decoded tap after the light,
+times `1 - zone_program`. 22 slots on Talon's Junction. The emissive tap's gamma nibble was not read
+live: decoded like every colour unit (chosen, not measured). Tests:
+`zone_spu_light::a_plain_tunnel_chunk_adds_its_window_lights_and_its_zone_program_does_not` (fixture)
+and `hd_hull_glow_role_ground_truth::talons_junctions_real_glows_still_glow_after_the_role_fix`
+(every lightmapped slot binds its own emissive third, slot 26 among them).
+
+**Measured on the pairs** (re-rendered copies; the right-wall row is `compare-page.md`'s disjoint split):
+
+| Pair | Mean grey | Wall row share, grey in region | Window strip `1500,300,1920,360`, grey |
+| --- | --- | --- | --- |
+| `cannon-volley` | 9.11 to 9.14 | 1.000 / 20.63 to 1.033 / 21.31 | 17.13 to 19.32 |
+| `mines-ahead` | 9.04 to 9.07 | 1.055 / 21.75 to 1.078 / 22.22 | 17.85 to 19.58 |
+| `cannon-volley-hot`, `pad`, both endrace | unchanged within 0.003 | | |
+| `hd/talons` (no Zone) | 3.32 to 3.28 | | |
+| `hd/talons-assegai-c1` (no Zone) | 4.78 to 4.74 | | |
+
+The lights match the original's in look (`cannon-volley`'s 2x6 grid: 106 pixels over 120 grey against
+the original's 135, mean colour `156,218,218` against `163,217,218`; none before), but the wall row
+does not drop. Its residual is registration, not colour: the pipe joints (untouched by this change)
+fit at ours shifted `(-10, -4)` px and the new grid at `(-14, -4)`, so small bright dots a few pixels
+off count twice; the region means match within 5 levels (pale pipe `115,138,150` against
+`111,133,145`). The two non-Zone pairs fall, which supports the plain-race half of the law; no
+original frame of this wall outside a Zone race is on disk.
+
+**Left out, named:** the `X` term (facing ramp times specular map), which no path of ours draws for
+this family, so the screen blend reduces to the add. The non-lightmapped slots (17 and its kin) keep
+the generic `ADD_SECOND` reading, gated by the diffuse alpha where the program is not; on the
+Detonator pairs those chunks run their Zone program, which adds nothing.
+
+**2048 and Omega.** 2048: **checked, differs**: none of 2048's Vita archives (`PCSA00015` base, DLC and
+patch) ships a `tunnel_fx` material. Omega: **checked, applies, not wired**: `data02`, `data05` and
+`data08` ship Talon's `tunnel_fx_noAlpha`, `_1`, `_2` and Tech de Ra's `tunnel_fx_noAlpha_mult*` with
+`tunnel_fx_emissive.gnf`; they go through the `gcn` reader, which this module does not reach, and
+whether its program binds the emissive is unread (Omega's Detonator lane is deferred).
+
 ## Seen, headless
 
 `just play hd --race --mode zone --track /data/environments/talons_junction/track.vex
@@ -344,3 +480,106 @@ group's HD law reproduces Omega's road. Omega's GCN surface programs are the unr
 
 **HD is unchanged**: `hd/zone-vineta-k-z5` re-rendered with this change is pixel-identical to main's
 (0 of 2,073,600). The rule lives in the psp2 loader, which HD never takes.
+
+## What a Zone race costs (2026-11-26, `zone-cost`)
+
+**The question.** On a Steam Deck, HD's Zone race on Chenghou Project holds about 75 % under
+dynamic resolution where a time trial on the same circuit holds 100 %. The Deck was unreachable
+for this work, so everything below is the desk machine: an RX 7800 XT and the same CPU's Raphael
+iGPU (2 CU, RDNA2, the closer relative of the Deck's APU), RADV, Mesa 26.3.1, shared with other
+lanes (load 6 to 45). Autopilot, seed 1, `--no-audio`, default settings.
+
+**Only the race pass grows.** Per-pass GPU time, `--frame-log` in a window under a headless
+weston, means over two runs of 44 s each. Read this table for which passes move, not for absolute
+cost: `frame_limit = "off"` is not a valid value, so both devices ran under the default 240 fps
+limiter, and the 7800 XT, idle for most of each frame, reads well above the offscreen figures
+below (likely down-clocked; clocks not recorded). The rows listed add up to 1.0 ms more in Zone on
+the iGPU: the race pass's 1.5 less what the other passes save.
+
+| ms | 4K, 7800 XT: time trial / Zone | 1280x800, iGPU: time trial / Zone |
+| --- | --- | --- |
+| race pass | 1.16 / 1.27 | 5.09 / 6.62 |
+| HD bloom (with the Zone feedback resolve) | 0.30 / 0.28 | 0.58 / 0.63 |
+| advert cards | 0.05 / 0.00 | 0.48 / 0.05 |
+| glass | 0.03 / 0.03 | 0.70 / 0.60 |
+| HUD and UI | 0.08 / 0.04 | 0.24 / 0.14 |
+| shadow map, self shadow | 0.02, 0.01 / the same | 0.07, 0.06 / 0.10, 0.09 |
+
+The offscreen bench (`OAG_RENDER_BENCH_RACE`, 5,400 ticks, two runs within 3 %, 4K) agrees:
+race pass 877 us in Zone, 675 us in the time trial, bloom 200 and 193. Omega's Zone on the same
+circuit reads 730 us (its tone map is not in that bench). At 1920x1080: 365, 335 and 320 us.
+The bloom timer closes on `hd encode`, so the Zone feedback blend and the Zone bloom block are
+inside the flat bloom figure.
+
+**Speed is not it.** The race pass is flat from zone 1 to zone 9 (every 600-tick bucket), no
+stage change shows as a spike, and with `--motion-blur high` the blur costs the same in both
+modes (1,017 and 1,020 us at 4K).
+
+**Inside the race pass it is the Zone surface itself.** Throwaway shader switches at 4K: Zone
+889 us; without the visualiser glow 848; without the stage sample, rim terms and glow 739; with
+the whole recolour compiled out 716, against the time trial's 703. So about 170 us of the
+extra is the work of the first section above, per pixel.
+
+**The original pays more per pixel in Zone too.** On Chenghou's lightmapped surfaces, comparing
+each material's lit race program with its `ZoneMode` one (30 pairs): no Zone program samples the
+lightmap, none fetches fewer textures, and all but `mageffect_modded` are longer
+(`lambert_simple` 27 instructions and 2 fetches against 39 and 3, `diffuse_specular` 43 and 2
+against 50 and 4, `diffuse_normal_specular_emmissive` 50 and 3 against 59 and 5). The flat look
+is the stage texture replacing the albedo, not a cheaper program. This is a count of the
+programs, not a timing of the PS3. Held by
+`crates/mesh/tests/hd_zone_ne_census_ground_truth.rs`.
+
+**What was ours: the light chain.** The circuit's pipelines still computed the lightmap, prelit
+and vertex light chain and then overwrote the result with the stage's ambient and sun, a branch
+on a uniform the driver cannot drop. Where the grade is stage-lit and enabled on every stage it
+can show (`ZoneGrade::lights_every_stage`: HD and Fury), the circuit is now built with
+`zone_stage_light`, which states the light outright. An emissive plain chunk (a pad, a sign)
+takes neither Zone branch, so it is named as the `1.0` and no sun its program leaves, and a model
+where an earlier branch relights such a vertex is not specialised
+(`specialise::zone_light_exact`). All 16 HD circuits and arenas tried, and a Detonator race,
+specialise.
+
+Race pass before and after, Zone, interleaved runs (median of per-frame times):
+
+| Device, size | before | after | pairs where after is faster |
+| --- | ---: | ---: | --- |
+| 7800 XT, 3840x2160 | 870 us | 819 us | 3 of 3 |
+| 7800 XT, 1920x1080 | 350 us | 343 us | 6 of 6 (one a tie) |
+| iGPU, 1280x800 | 6,485 us | 6,168 us | 7 of 8 |
+
+One run is `OAG_RENDER_BENCH_RACE=<stem> oag-game <hd iso> --race --mode zone --track
+/data/environments/04_chenghou_project/track.vex --seed 1 --autopilot --no-audio --size <size>
+--ticks <n> --screenshot out.png` (`--mode time_trial` for the reference, `MESA_VK_DEVICE_SELECT`
+to pick the device), reading `gpu_scene_us` from `<stem>.csv` after the first 60 frames. The two
+builds alternate, under the gate lock: 3,600 ticks at 4K (load 12 to 18), 1,800 at 1920x1080
+(load 7) and on the iGPU (load 13).
+
+**Picture: unchanged.** 32 frames, before against after, 0 differing pixels: Zone on Chenghou
+(ticks 150 to 7,300), Talon's Junction, Vineta K, Anulpha Pass,
+`zone_1` and `zone_4`, a Detonator race, a two-player split, `--circuit-lighting simplified`, an
+HD time trial and single race, and, on titles that never specialise, a Zone race and a time trial
+on Omega and a Zone race on Pulse.
+
+**Does the difference explain the Deck?** Partly. With dynamic resolution on (iGPU, 1920x1080,
+`target_fps` 60, 70 s runs, load 8 to 37; mean linear scale from the frame log's `render=`):
+
+| Build | time trial | Zone, two runs | Zone seconds below full |
+| --- | ---: | ---: | ---: |
+| an earlier session, before | 0.998, 0.995 | 0.967, 0.959 | 30 and 34 of 66 |
+| before | 1.000 | 0.959, 0.957 | 29 and 32 of 64 |
+| after | 1.000 | 0.962, 0.977 | 33 of 61, 21 of 64 |
+
+Zone is the arm that leaves full size, the same direction as the report, and the fix does not
+move it by more than the runs differ from each other. A scalable cost 25 to 30 % higher puts a
+controller at about 0.88 to 0.9 of the scale when the time trial sits exactly at its budget, not at
+0.75. On the Deck itself it settles at about 0.80 at 3840x2160; the extra depth is the GPU
+clock falling under the controller (with the clock pinned it settles at 0.96)
+([dynamic-resolution.md](dynamic-resolution.md#why-the-4k-settle-is-so-deep-the-gpu-clock-falls-with-the-scale)).
+
+**Not measured, and open:** what a separate Zone program for the circuit would save. The Deck and
+sound are measured
+([dynamic-resolution.md](dynamic-resolution.md#on-the-steam-deck-hd-zone-against-a-time-trial)):
+the race pass grows by 1.60 ms there at 3840x2160, and a Zone race without sound settles at the
+same scale. Dropping the lightmap fetch and the albedo mix as well
+measured about 45 us more at 4K, but skipping the fetch moves pixels: our Zone surface still gates
+its specular by the lightmap's alpha, where the original's Zone programs sample no lightmap.

@@ -154,6 +154,10 @@ pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
     voices: None,
     binds_emp_ready: oag_title::pre_race::Sourced::chosen(true),
     shows_medals: oag_title::pre_race::Sourced::chosen(false),
+    // The layout authors no floating-score widget.
+    floats_score: oag_title::pre_race::Sourced::chosen(false),
+    // `Pulse_Mine.vex` turns on its own authored animation.
+    mine_spin: None,
 };
 
 /// Pulse's Zone milestone announcer.

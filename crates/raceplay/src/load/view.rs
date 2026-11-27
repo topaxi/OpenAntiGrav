@@ -621,6 +621,10 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
     let absorb_anchors = super::absorb::anchors(absorb_burst, &liveries);
     let mut effects = psys::Library::new();
     let particle_laws = title.looks.particle_laws.applies(archives.layout.platform);
+    let psp_clip = title
+        .looks
+        .psp_particle_clip
+        .applies(archives.layout.platform);
     let circuit_weather = vex_geometry
         && title
             .looks
@@ -632,7 +636,7 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
         let dir = title.race.effect_dir_for(&track);
         let walk = title.effects.colour_walk_for(dir);
         // The law of the title whose archive the file is in, like the walk: its cap word is
-        // only that title's record's.
+        // only that title's record's, and so are the flipbook's frame bytes and size bounds.
         let near = title.effects.near_law;
         match listed_particle_effect(
             &mut archives,
@@ -642,13 +646,18 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
             particle_laws
                 || (circuit_weather && oag_title::engine_effects::WEATHER_EFFECTS.contains(&name)),
             walk,
+            title.effects,
         ) {
             Ok((mut effect, note)) => {
                 if let Some(law) = near {
                     effect.with_near_law(psys::NearLaw {
                         cull_depth: law.cull_depth,
                         fade_depth: law.fade_depth,
+                        template_cap: law.template_cap.map(|(cap, _)| cap),
                     });
+                }
+                if psp_clip {
+                    effect.with_psp_clip();
                 }
                 report.push(note);
                 effects.insert(name, effect);
@@ -910,11 +919,21 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
                 .race
                 .detonator
                 .is_some_and(|detonator| detonator.emp_borrows_repulsor),
+        detonator_score_popups: options.mode == Mode::Detonator
+            && craft_title
+                .race
+                .detonator
+                .is_some_and(|detonator| detonator.floats_score.value),
         detonator_emp_light: options.mode == Mode::Detonator
             && craft_title
                 .race
                 .detonator
                 .is_some_and(|detonator| detonator.emp_light),
+        detonator_mine_spin: craft_title
+            .race
+            .detonator
+            .filter(|_| options.mode == Mode::Detonator)
+            .and_then(|detonator| detonator.mine_spin),
         detonator_ammo_gauge: craft_title
             .race
             .detonator
@@ -979,6 +998,12 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
         rumble,
         zoom_ring: title.race.zoom_ring.or(borrowed_zoom),
         zoom_borrowed: borrowed_zoom.is_some(),
+        mine_blast_colours: title
+            .effects
+            .mine_blast_recolour
+            .and(zone_grade.as_ref())
+            .map(crate::zone_grade::ZoneGrade::detonator_mine_rgba8)
+            .unwrap_or_default(),
         capture_hud: options.hud.clone(),
         hud_waits_for_go: title
             .race
@@ -990,6 +1015,7 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
         now_playing,
         world_clock_offset: options.world_clock_offset,
         gantry_seconds: options.gantry_seconds,
+        flame_seconds: options.flame_seconds,
         camera_override: options.camera,
         fov_override: options.fov_override,
         track_sections: visibility.as_ref().and_then(|v| v.pvs().cloned()),

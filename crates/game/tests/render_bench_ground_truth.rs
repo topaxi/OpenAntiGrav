@@ -170,11 +170,12 @@ fn in_game(
     extra: &[&str],
     during: &str,
 ) -> (String, std::path::PathBuf) {
-    in_game_of(dir, image, "pulse", &["--no-intro"], extra, during)
+    let (json, shot, _) = in_game_of(dir, image, "pulse", &["--no-intro"], extra, during);
+    (json, shot)
 }
 
 /// [`in_game`] on the title whose result file is `<key>.json`, with the launch flags `launch`
-/// (`--no-intro` or none: a benchmark that plays its flyby).
+/// (`--no-intro` or none: a benchmark that plays its flyby), and its log as the third value.
 fn in_game_of(
     dir: &std::path::Path,
     image: &std::path::Path,
@@ -182,7 +183,7 @@ fn in_game_of(
     launch: &[&str],
     extra: &[&str],
     during: &str,
-) -> (String, std::path::PathBuf) {
+) -> (String, std::path::PathBuf, String) {
     // A fresh run directory: an earlier run's result would be a second one.
     let _ = std::fs::remove_dir_all(dir.join("data"));
     std::fs::create_dir_all(dir).expect("a temp directory");
@@ -204,13 +205,13 @@ fn in_game_of(
         .env("XDG_CONFIG_HOME", dir.join("config"))
         .env("XDG_STATE_HOME", dir.join("state"))
         .env("XDG_DATA_HOME", dir.join("data"))
+        // The stats heading is a debug line of this one module; all of `debug` is hundreds of
+        // megabytes of shader compiler output.
+        .env("RUST_LOG", "info,oag_game::app::session::benchmark=debug")
         .output()
         .expect("running oag-game");
-    assert!(
-        out.status.success(),
-        "oag-game: {}",
-        String::from_utf8_lossy(&out.stderr)
-    );
+    let log = String::from_utf8_lossy(&out.stderr).into_owned();
+    assert!(out.status.success(), "oag-game: {log}");
     let runs: Vec<_> = std::fs::read_dir(dir.join("data/oag/bench"))
         .expect("the benchmark wrote a run directory")
         .flatten()
@@ -218,7 +219,7 @@ fn in_game_of(
     assert_eq!(runs.len(), 1, "one run");
     let json = std::fs::read_to_string(runs[0].path().join(format!("{key}.json")))
         .expect("the result file is named for the title");
-    (json, shot)
+    (json, shot, log)
 }
 
 /// The in-game benchmark ends its race on the state the offscreen bench ends the same race on,
@@ -233,7 +234,15 @@ fn the_in_game_benchmark_flies_the_race_the_offscreen_bench_does() {
     };
     let base = std::env::temp_dir().join("oag-in-game-benchmark-ground-truth");
     let (offscreen, _) = bench(&base.join("offscreen"), &image);
-    let (json, shot) = in_game(&base.join("in-game"), &image, &[], "ticks 1");
+    // A frame limit under vsync on, where the display paces and the limit is not in force.
+    let flags = ["--benchmark-vsync", "on", "--benchmark-frame-limit", "30"];
+    let (json, shot) = in_game(&base.join("in-game"), &image, &flags, "ticks 1");
+    assert!(json.contains("\"frame_limit\": \"30\""), "{json}");
+    assert!(
+        json.contains("\"frame_limit_hz\": null"),
+        "no limit judges a vsynced run: {json}"
+    );
+    assert_eq!(field(&json, "budget_from"), "refresh");
 
     assert_eq!(field(&json, "final_tick"), TICKS.to_string());
     assert_eq!(field(&json, "finished"), "false");
@@ -469,8 +478,8 @@ fn run_identity(json: &str) -> Vec<String> {
 fn input_changes_nothing(image: &std::path::Path, key: &str, base: &std::path::Path) {
     // Both runs start from no settings file: `in_game_of` keeps a profile's config.
     let _ = std::fs::remove_dir_all(base);
-    let (quiet, _) = in_game_of(&base.join("quiet"), image, key, &[], &[], "ticks 1");
-    let (busy, _) = in_game_of(&base.join("busy"), image, key, &[], &[], EVERY_INPUT);
+    let (quiet, _, _) = in_game_of(&base.join("quiet"), image, key, &[], &[], "ticks 1");
+    let (busy, _, _) = in_game_of(&base.join("busy"), image, key, &[], &[], EVERY_INPUT);
     assert_eq!(
         run_identity(&busy),
         run_identity(&quiet),
@@ -499,7 +508,7 @@ fn no_input_changes_a_pulse_benchmark() {
 }
 
 /// HD's flyby loops until somebody presses: the run presses for it at a fixed tick, so it plays the
-/// same length every time whatever the player does.
+/// same length every time whatever the player does. Its stats heading names the circuit it raced.
 #[test]
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso and a GPU"]
 fn no_input_changes_an_hd_benchmark() {
@@ -508,7 +517,11 @@ fn no_input_changes_an_hd_benchmark() {
     };
     let base = std::env::temp_dir().join("oag-in-game-benchmark-input-hd");
     input_changes_nothing(&image, "hd", &base);
-    let (json, _) = in_game_of(&base.join("again"), &image, "hd", &[], &[], "ticks 1");
+    let (json, _, log) = in_game_of(&base.join("again"), &image, "hd", &[], &[], "ticks 1");
+    assert!(
+        log.contains("benchmark heading: WIPEOUT HD  TALON'S JUNCTION  YOUR SETTINGS"),
+        "{log}"
+    );
     assert_eq!(
         field(&json, "flyby_ticks"),
         (27 * 60 + 1).to_string(),
@@ -520,7 +533,8 @@ fn no_input_changes_an_hd_benchmark() {
 /// it. Started from the EXTRAS page it returns to that page and writes no result; started from the
 /// command line with a preset it ends the game with the preset never in the player's file. Fails on a
 /// build that ignores the pad's back button or the system Back during the run (the run flies on
-/// and writes a result) or leaves the run going after Back.
+/// and writes a result), leaves the run going after Back, or keeps the abandoned race parked
+/// behind the menus (the root page is then the pause menu, and Back from it resumes the race).
 #[test]
 #[ignore = "needs data/images/pulse-psp-eu.chd and a GPU"]
 fn back_abandons_a_benchmark_and_writes_nothing() {
@@ -549,7 +563,9 @@ fn back_abandons_a_benchmark_and_writes_nothing() {
             "boot; select extras; press cross; until page=extras within 300; select benchmark; \
              press cross; until page=benchmark_options within 300; select benchmark_start; \
              press cross; until benchmark=running within 3000; until sim_tick=300 within 6000; \
-             {abandon}; until stage=menu within 600; expect page=extras; quit"
+             {abandon}; until stage=menu within 600; expect page=extras; expect root=main; \
+             back; until page=main within 300; expect rows!=photo_mode; ticks 10; back; ticks 30; \
+             expect stage=menu; expect page=main; quit"
         );
         let out = run(&dir, &[], &script);
         assert!(
@@ -753,7 +769,9 @@ fn the_options_page_reaches_the_run_and_saves_nothing() {
     // are not.
     run(
         "boot; select options; press cross; until page=options; select DISPLAY; press cross; \
-         until page=display; set display.vsync=off; set display.frame_limit=240; quit",
+         until page=display; set display.vsync=off; set display.frame_limit=240; press circle; \
+         until page=options; select GRAPHICS; press cross; until page=graphics; \
+         set graphics.target_fps=30; quit",
         &mods,
     );
     let settings = dir.join("config/oag/settings.toml");
@@ -786,6 +804,11 @@ fn the_options_page_reaches_the_run_and_saves_nothing() {
     assert!(
         json.contains("\"frame_limit\": \"120\""),
         "FRAME LIMIT: {json}"
+    );
+    // The player's TARGET FPS of 30 is the longest period here, longer than the run's limit.
+    assert!(
+        json.contains("\"budget_ms\": 33.333, \"budget_from\": \"target_fps\""),
+        "TARGET FPS: {json}"
     );
     assert!(json.contains("\"preset\": \"low\""), "PRESET: {json}");
     assert!(json.contains("\"render_scale\": \"50%\""), "PRESET: {json}");

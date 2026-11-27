@@ -38,6 +38,7 @@ import compare_env  # noqa: E402
 import ps3_pose  # noqa: E402
 import rpcs3_hd_field  # noqa: E402
 import rpcs3_place as place  # noqa: E402
+import rpcs3_hd_volley as volley  # noqa: E402
 from rpcs3_debugger import Debugger  # noqa: E402
 
 CLOCK = 0x7014
@@ -88,11 +89,12 @@ def race_clock(gdb, ship):
     return struct.unpack(">f", gdb.read(ship + CLOCK, 4))[0]
 
 
-def run_until(gdb, ship, target, label):
+def run_until(gdb, ship, target, label, recorder):
     """Resume in short steps and stop paused at the first stop whose lap clock is at or past `target`."""
     for _ in range(400):
         gdb.pause()
         now = race_clock(gdb, ship)
+        recorder.sample(now)
         if now >= target:
             return now
         gdb.resume()
@@ -205,7 +207,8 @@ def main():
         print("rpcs3 pid %d" % session.proc.pid, flush=True)
         gdb = Debugger(port=port)
         time.sleep(args.pre_wait)
-        for _ in range(60):
+        # The clock is polled between taps: a six second settle can find it past an early `--fire-clock` or `--shot`.
+        for attempt in range(600):
             gdb.pause()
             try:
                 ship, body = place.find_player(gdb)
@@ -213,9 +216,11 @@ def main():
             except RuntimeError:
                 clock = 0.0
             gdb.resume()
-            if clock > 0.5:
+            if clock > 0.05:
                 break
-            session.tap("cross", settle=6)
+            if attempt % 20 == 0:
+                session.tap("cross", settle=0.2)
+            time.sleep(0.3)
         else:
             sys.exit("the race never started")
         stops = []
@@ -232,8 +237,12 @@ def main():
         if args.emp_clock is not None:
             events.append([args.emp_clock, "emp"])
         events.sort(key=lambda e: e[0])
+        # The heap scan for the mines and the round pool runs once, long before the first kept frame.
+        gdb.pause()
+        recorder = volley.Recorder(session, ship)
+        gdb.resume()
         for at, kind, *rest in events:
-            now = run_until(gdb, ship, at, kind)
+            now = run_until(gdb, ship, at, kind, recorder)
             if kind == "fire" and args.fire_pause is not None:
                 before = now
                 gdb.resume()
@@ -242,6 +251,7 @@ def main():
                     time.sleep(0.03)
                     gdb.pause()
                     after = race_clock(gdb, ship)
+                    recorder.sample(after)
                     if after >= before + args.fire_pause:
                         break
                     gdb.resume()
@@ -304,10 +314,12 @@ def main():
                 gdb.pause()
                 continue
             stem = "%02d" % len(stops)
+            recorder.sample(race_clock(gdb, ship))
             first = observe(session, gdb, ship, body, out, stem, args.flush)
             gdb.resume()
             time.sleep(args.interval)
             gdb.pause()
+            recorder.sample(race_clock(gdb, ship))
             second = observe(session, gdb, ship, body, out, stem + "b", args.flush)
             stops.append((stem, first, second))
             if held_button is not None:
@@ -326,13 +338,26 @@ def main():
                 retry = ps3_pose.pick_camera([stop[1][1], other[1][1]])[0]
                 if retry[0] is not None:
                     picks[at] = retry
+        # Every read's mine draw words, by RAM clock: the picture is several ticks older than its own read, so the pair
+        # takes each mine's envelope from the read nearest the picture's clock (`rpcs3-hd-pair.py`, `mine_flags`).
+        mine_reads = sorted(({"race_clock_s": read[2]["race_clock_s"],
+                              "mines": {str(m["address"]): {k: v for k, v in m.items() if k not in ("raw", "position")}
+                                        for m in read[2].get("mines") or []}}
+                             for _, first, second in stops for read in (first, second) if read[2].get("mines")),
+                            key=lambda r: r["race_clock_s"])
+        (out / "cannon-samples.json").write_text(json.dumps(recorder.samples) + "\n")
+        mine_reads = sorted(mine_reads + recorder.mine_reads, key=lambda r: r["race_clock_s"])
         for (stem, first, second), (camera, reason, count) in zip(stops, picks):
             shot, _, pose = first
+            pose["mine_reads"] = mine_reads
             # The next stop's bands, `--interval` of wall time later: how far the held levels move between two reads
             # bounds what the presented frame's age (0 to 3 ticks) can change.
             pose["zone_bands_next_stop"] = dict(second[2]["zone_bands"], race_clock_s=second[2]["race_clock_s"])
             if fire is not None and pose["race_clock_s"] >= fire["press_clock_after_s"]:
-                pose["fire"] = fire
+                # Rounds read up to this frame's own pause: a later stop's rounds are not in this picture.
+                seen = [s for s in recorder.samples if s["race_clock_s"] <= pose["race_clock_s"]]
+                pose["fire"] = volley.fire_record(fire, seen)
+                pose["cannon"] = seen[-1]
             record = drive.describe(camera, reason, count, drive.track_name(), shot, args.team, None, pose)
             (out / ("%s.json" % stem)).write_text(json.dumps(record, indent=2) + "\n")
             print("  %s: camera %s" % (stem, "eye %s" % ["%.1f" % v for v in camera["eye"]] if camera else "null (%s)" % reason), flush=True)

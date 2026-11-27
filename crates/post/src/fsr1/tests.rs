@@ -82,6 +82,7 @@ fn both_passes_build_and_draw_on_a_real_device() {
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
         // The non-sRGB twin FSR 1 reads through - see the module docs.
         view_formats: &[format.remove_srgb_suffix()],
+        texture_binding_view_dimension: None,
     });
     let source = scene.create_view(&wgpu::TextureViewDescriptor {
         format: Some(format.remove_srgb_suffix()),
@@ -162,6 +163,7 @@ fn upscaling_a_hard_edge_keeps_the_edge_and_the_two_flat_sides() {
         format,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let mut pixels = vec![0u8; (IN.0 * IN.1 * 4) as usize];
     for y in 0..IN.1 {
@@ -331,6 +333,7 @@ fn ringing(stops: f32) -> Option<(u8, u8)> {
         format,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let mut pixels = vec![0u8; (IN.0 * IN.1 * 4) as usize];
     for y in 0..IN.1 {

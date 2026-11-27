@@ -86,6 +86,7 @@ fn drawn(targets: Option<[i64; 4]>) -> (Vec<String>, Vec<f32>) {
         },
         scale: [1.0, 1.0],
         faces: crate::picker::FaceScales::default(),
+        labels: Vec::new(),
     };
     let mut model = CellSelection::new(vec![timed_cell()]).with_tiers(tiers());
     if let Some(targets) = targets {

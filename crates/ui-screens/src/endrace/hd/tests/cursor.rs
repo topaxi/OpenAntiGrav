@@ -68,6 +68,7 @@ fn frame() -> Frame {
             solid_alpha: 1.0,
             cursor: None,
             arrow: Some(placed(96, 32, 32)),
+            marker: None,
             fury: false,
         }),
         ..Frame::default()

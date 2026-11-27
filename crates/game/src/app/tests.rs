@@ -375,6 +375,7 @@ fn every_flag_group_is_flattened_into_the_command() {
         "pose_from",
         "hud_state",
         "world_clock_offset",
+        "flame_clock",
         "pose_boost",
     ] {
         assert!(
@@ -526,11 +527,134 @@ fn a_development_build_accepts_seed_and_give() {
     assert_eq!(cli.give(), Some("rocket"));
 }
 
+#[cfg(feature = "dev-cli")]
+#[test]
+fn a_development_build_reads_the_struck_crafts_velocity() {
+    let cli = Cli::try_parse_from([
+        "oag-game",
+        "--race",
+        "--force-rocket-hit",
+        "717:7",
+        "--force-rocket-hit-velocity",
+        "-88.5,11,55.25",
+    ])
+    .expect("a negative component parses");
+    assert_eq!(
+        crate::app::args::velocity(cli.force_rocket_hit_velocity()).expect("three numbers"),
+        Some(oag_core::math::Vec3::new(-88.5, 11.0, 55.25))
+    );
+    for bad in ["88,11", "88,11,55,0", "88,x,55", "88,NaN,55"] {
+        assert!(crate::app::args::velocity(Some(bad)).is_err(), "{bad}");
+    }
+    assert!(
+        Cli::try_parse_from(["oag-game", "--race", "--force-rocket-hit-velocity", "1,2,3"])
+            .is_err(),
+        "the velocity needs a forced hit to apply to"
+    );
+}
+
+#[cfg(feature = "dev-cli")]
+#[test]
+fn a_development_build_reads_a_forced_volley() {
+    let cli = Cli::try_parse_from([
+        "oag-game",
+        "--race",
+        "--force-rocket-hit-at",
+        "709:525.15,-28.26,-34.80",
+        "--force-rocket-hit-at",
+        "714:533.12,-27.12,-27.35:2",
+        "--force-rocket-hit-velocity",
+        "89.3,13.9,96.8",
+    ])
+    .expect("two waves and their velocity, with no --force-rocket-hit");
+    let waves = crate::app::args::rocket_hits_at(cli.force_rocket_hit_at()).expect("two waves");
+    let wave = |tick, x, y, z, count| crate::race_capture::tick::ForcedRocketHit {
+        tick,
+        at: oag_core::math::Vec3::new(x, y, z),
+        count,
+    };
+    assert_eq!(
+        waves,
+        [
+            wave(709, 525.15, -28.26, -34.80, 1),
+            wave(714, 533.12, -27.12, -27.35, 2),
+        ]
+    );
+    for bad in [
+        "709",
+        "709:1,2",
+        "x:1,2,3",
+        "709:1,2,3:0",
+        "709:1,2,3:two",
+        "709:1,2,3:1:1",
+        "709:1,NaN,3",
+    ] {
+        assert!(
+            crate::app::args::rocket_hits_at(&[bad.to_string()]).is_err(),
+            "{bad}"
+        );
+    }
+    Cli::try_parse_from([
+        "oag-game",
+        "--race",
+        "--force-rocket-hit",
+        "9:1",
+        "--force-rocket-hit-at",
+        "9:1,2,3",
+    ])
+    .expect("the two forced hits go together");
+}
+
+#[cfg(feature = "dev-cli")]
+#[test]
+fn a_development_build_reads_a_launch_pose() {
+    let pose = "717:344.28,-39.61,-147.97,0.446,0.241,-0.862,-0.211,0.964,0.161,0.870,0.110,0.481";
+    let cli = Cli::try_parse_from([
+        "oag-game",
+        "--race",
+        "--pose-hold",
+        "--pose-hold-ticks",
+        "--pose-hold-launch",
+        pose,
+    ])
+    .expect("a launch pose with the every-tick hold");
+    let launch = crate::app::args::pose_launch(cli.pose_hold_launch())
+        .expect("twelve numbers")
+        .expect("given");
+    assert_eq!(launch.until, 717);
+    assert_eq!(
+        launch.pose.position(),
+        oag_core::math::Vec3::new(344.28, -39.61, -147.97)
+    );
+    for bad in [
+        "717",
+        "717:1,2,3",
+        "x:1,2,3,1,0,0,0,1,0,0,0,1",
+        "717:1,2,3,1,0,0,0,1,0,0,0,NaN",
+    ] {
+        assert!(crate::app::args::pose_launch(Some(bad)).is_err(), "{bad}");
+    }
+    assert!(
+        Cli::try_parse_from(["oag-game", "--race", "--pose-hold-launch", pose]).is_err(),
+        "the launch pose needs the every-tick hold"
+    );
+}
+
 #[cfg(not(feature = "dev-cli"))]
 #[test]
 fn a_release_build_rejects_seed_and_give() {
-    for flag in [["--seed", "7"], ["--give", "rocket"]] {
-        let error = Cli::try_parse_from(["oag-game", "--race", flag[0], flag[1]])
+    for flag in [
+        vec!["--seed", "7"],
+        vec!["--give", "rocket"],
+        vec!["--force-rocket-hit-at", "9:1,2,3"],
+        vec![
+            "--force-rocket-hit",
+            "9:1",
+            "--force-rocket-hit-velocity",
+            "1,2,3",
+        ],
+    ] {
+        let error = Cli::try_parse_from(["oag-game", "--race"].into_iter().chain(flag.clone()))
             .expect_err("a build without dev-cli has no such flag");
         assert_eq!(
             error.kind(),
@@ -732,4 +856,17 @@ fn a_run_without_the_pins_has_no_pinned_hud() {
     let cli = Cli::try_parse_from(["oag-game", "--race", "--screenshot", "out.png"])
         .expect("an ordinary capture parses");
     assert!(capture_hud(&cli).expect("nothing to parse").is_none());
+}
+
+#[test]
+fn a_forced_shot_position_reads_its_tick_and_point_and_refuses_anything_else() {
+    use crate::app::args::shot_at;
+    assert_eq!(
+        shot_at(Some("766:-137.17,-49.55,-175.12")).expect("parses"),
+        Some((766, oag_core::math::Vec3::new(-137.17, -49.55, -175.12)))
+    );
+    assert_eq!(shot_at(None).expect("absent"), None);
+    for bad in ["766", "766:1,2", "x:1,2,3", "-137,-49,-175"] {
+        assert!(shot_at(Some(bad)).is_err(), "{bad}");
+    }
 }

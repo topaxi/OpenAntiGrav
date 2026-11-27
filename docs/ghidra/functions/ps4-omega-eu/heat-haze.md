@@ -141,7 +141,8 @@ directories):
 | others | `1.0` to `10.0` | `1.0` to `5.0` |
 
 `+0xc88` is `0` on all of them, `+0xc80` is `1.0`, `+0xc8c` is `0.5` or `1.0` and `+0xc90`
-`1.0` to `1.5`; the last two are unread. The patch retunes the explosions' distortion from
+`1.0` to `1.5`; the last two are the particle init's size bounds in Omega's layout
+([particle-render.md](../ps3-hdfury-eu/particle-render.md#the-atlas-frame)). The patch retunes the explosions' distortion from
 `10` to `2` (a fifth), which is a plausible fix for a shock ring that was too violent, and is
 why the patch's file, not the base's, is the one to read. Confidence **85** for the
 source (four push sites agree, and the values are sane floats on every one of 31 emitters);

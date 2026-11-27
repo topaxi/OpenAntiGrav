@@ -104,15 +104,26 @@ impl Sprite {
         Self::from_container(oag_texture::decode::Container::Gxt, blob)
     }
 
-    /// `blob` decoded as `container` by `oag_texture::decode`, base level, rows as
-    /// the file stores them; `None` when it will not decode or is larger than a
-    /// `u16` can say.
+    /// `blob` decoded as `container` by `oag_texture::decode`, base level, rows turned
+    /// top-down where the file stores them bottom-up (`.gtf`); `None` when it will not
+    /// decode or is larger than a `u16` can say.
+    ///
+    /// The original puts `v = 0`, a `.gtf`'s first stored row, on the bottom edge of a
+    /// particle's quad; a billboard here puts row 0 on the top edge
+    /// (`docs/rendering/particle-fill.md`, "HD's particle sprites are bottom-up").
     fn from_container(container: oag_texture::decode::Container, blob: &[u8]) -> Option<Self> {
         let picture = oag_texture::decode::decode_as(container, blob).ok()?;
+        let width = u16::try_from(picture.width).ok()?;
+        let rgba = if picture.bottom_up {
+            let row = usize::from(width).max(1) * 4;
+            picture.rgba.rchunks_exact(row).flatten().copied().collect()
+        } else {
+            picture.rgba
+        };
         Some(Self {
-            width: u16::try_from(picture.width).ok()?,
+            width,
             height: u16::try_from(picture.height).ok()?,
-            rgba: picture.rgba.into(),
+            rgba: rgba.into(),
         })
     }
 
@@ -242,16 +253,28 @@ impl Atlas {
 }
 
 impl super::EmitterSpec {
-    /// A new particle's atlas frame: `Psys_RandIntRange(0, frames - 1)`
-    /// under the random-frame flag, frame 0 otherwise - and no draw at all
-    /// unless a sprite is placed, so an effect drawing the procedural
-    /// profile consumes the generator exactly as it did before sprites.
+    /// The frame a particle spawns on: `Psys_RandIntRange` over the grid under the
+    /// random-frame flag, or over [`oag_pob::FrameRange::spawn`] where the emitter plays one;
+    /// without the flag, that range's first frame. Drawn only when a sprite is placed, so an
+    /// effect drawing the procedural profile consumes the generator exactly as it did before
+    /// sprites.
     pub(super) fn random_frame(&self, rng: &mut oag_core::Rng) -> u16 {
-        if self.sheet_rect.is_some() && self.atlas.random_frame && self.atlas.frames() > 1 {
-            super::random_range(rng, (0, u32::from(self.atlas.frames()) - 1)) as u16
-        } else {
-            0
+        if self.sheet_rect.is_none() {
+            return 0;
         }
+        let spawn = self.frame_range.map_or((0, 0), |range| range.spawn);
+        if !self.atlas.random_frame {
+            return u16::from(spawn.0);
+        }
+        if self.atlas.frames() <= 1 {
+            return 0;
+        }
+        let range = if spawn == (0, 0) {
+            (0, u32::from(self.atlas.frames()) - 1)
+        } else {
+            (u32::from(spawn.0), u32::from(spawn.1))
+        };
+        super::random_range(rng, range) as u16
     }
 }
 

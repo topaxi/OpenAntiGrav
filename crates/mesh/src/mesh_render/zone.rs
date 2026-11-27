@@ -252,6 +252,7 @@ fn layered(
         format: inner.format(),
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let mut encoder =
         device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some(label) });
@@ -348,6 +349,7 @@ pub(super) fn resources(
         format: texture::FORMAT,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     queue.write_texture(
         wgpu::TexelCopyTextureInfo {

@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [hd, 2048, omega]
-updated: 2026-11-26
-summary: "Detonator: all 15 phases in; open: Omega EndRace Menu, 2048 Results, medal tiers, radial bloom, floor gain vs bands"
+updated: 2026-11-27
+summary: "Detonator open: floor visualiser second factor and 2048/Omega strip decode, upper-right screen, HD end-screen delay, Omega EndRace Menu, medal tiers"
 categories: [rendering]
 ---
 
@@ -32,7 +32,7 @@ evidence), then start at "Next Steps".
 | 10 | EMP: RE (pads, charge flag writer, `EMPManager`) then wire | done on HD and Omega (`detonator-emp.md`, "Wired"); the wave's reach is chosen (`emp::SECTIONS_PER_EXTENT`); 2048's pads read and wired 2026-11-25 (`vita-2048-eu-v104/detonator-pads.md`) | `det-emp-wire` |
 | 11 | Auto-speed: RE Detonator's engine branch, then wire | done on HD, 2048, Omega (`detonator-speed.md`, "Wired"), ramp included | `det-emp-wire` |
 | 12 | Detonator HUD (`detonator_hud.xml`, `hud_detonatorweapons.xml`, `detonator_warnings.xml`) | wired on HD, Omega and 2048, the EMP pips and `EmpReady` included; the three medal models draw on HD and Omega (`det-medals`, 2026-11-23; 2048 left); open: their tier colour, `EmpBarEffect`, 2048's `EmpCharge`/`EmpFull`, bomb-ahead, score feedback (below) | `det-medals` |
-| 13 | End screen proper (stage, mines, bombs, three chain counts, score, new-record banner) | HD wired (`det-end`, `detonator-endrace.md`, "Wired"): the six rows and the score line, live; open: the new-record banner, Omega (no EndRace screens on main) and 2048 (its four-row list has no page to draw on) | `det-end` |
+| 13 | End screen proper (stage, mines, bombs, three chain counts, score, new-record banner) | HD wired and checked live (`detonator-endrace.md`): rows, score line, captions, record notice and kept best; open: the destruction before the panel, end-screen text size, Omega (no EndRace screens on main) and 2048 (no page to draw on) | `det-end` |
 | 14 | Campaign launch (`race_mode_for_cell` maps `Other("Detonator")`; medal = the cannon score, `>=`) | done: 12 cells on HD, Omega, 2048; see `git log` (`Detonator campaign`) | see `git log` |
 | 15 | Omega and 2048 parity leftovers | done: Omega's opening placement and stage cap are HD's law (pinned, `detonator-mode.md`); 2048's per-stage `.gxt` sets wired on its fallback; Omega's grade wired on its HD-lineage circuits (`det-parity`, 2026-11-23) | `det-parity` |
 
@@ -190,7 +190,7 @@ Law: `detonator-cannon.md` ("What the simulation needs"). Decisions already made
   water and a preview has no probe for), the camera (`ModelZ -87`'s projection is unread), when each
   widget enables and whether a lower tier stays under a higher (best tier only here), 2048's
   `ImageX 720` skin, and HD's end-race `MedalModel*` (same models, not drawn there). **Still open:** the EMP
-  widgets (phase 10), the bomb-ahead warning and `ScoreFeedBack0..15` (need an event stream),
+  widgets (phase 10), the bomb-ahead warning (needs an event stream), `ScoreFeedBack0..15` on Omega and 2048 (HD's is wired),
   HD's streak line (its language table has no `HUD_CHAIN_n`), the bullet icons' per-state art and
   the per-volley fired words. The brief that follows is what was read, kept for those:
   (`docs/ghidra/functions/ps3-hdfury-eu/detonator-hud.md`,
@@ -216,7 +216,7 @@ Law: `detonator-cannon.md` ("What the simulation needs"). Decisions already made
   | `PulseBonus` | the streak line `HUD_CHAIN_n - amount` (1000/3000/5000), held 2.0 s then faded 1.0 s | `%s - %d` | edge-detect `C.awards` (`first_five`, `second_five`, `ten`, `fifteen` go false to true); the timers are view state | ready (needs the language ids `HUD_CHAIN_5/10/15`) |
   | `DetonatorStage` | HUD stage over 14 | `%d/%d` | `World::detonator.stages_laid.min(14)`: the original's `rm+0x2dee` starts at 1 (the constructors store it) and counts start-line crossings, capped 14 (72) | ready |
   | `DamageBar`, `DamageBarBg`, `ShieldBarText` | energy percent (white in mode 14) | `(int)pct` | the generic shield readout (`oag_hud::shield_bar`, `Readout::shield`) fed with the craft's energy pool | ready once the layout loads |
-  | `ScoreFeedBack0`..`15` | a floating `+N` per score add (`+%3.0f`) | text | **missing**: the sim exposes only the running score; add a per-tick score-add event list (det-fx's per-tick event stream is the natural carrier), or approximate with the score delta | needs an event |
+  | `ScoreFeedBack0`..`15` | a floating `+N` per score add (`+%3.0f`) | text | `Event::points` | wired on HD 2026-11-27 (`detonator-hud.md`, "The floating score"); Omega and 2048 author the widgets, their caller unread |
   | `DetonatorGold/Silver/BronzeMedal` | model when the score passes the cell's thresholds | model | `crate::medal_watch::detonator_value` + the cell | wired (`det-medals`); best tier only, chosen |
   | `ForwardWarning*` | bomb-ahead warning, once per stage, 2.0 s | icons | **missing**: `Detonator_IsBombAhead` (500.0 track measure + straight distance, `0xd2a30`/`0x588f0` unread) and the per-stage latch. On HD message 8 selects `ForwardWarningMineIcon`, which `Detonator_warnings.xml` does not author, so HD probably draws no bomb icon (55, `detonator-hud.md`) | needs RE + a capture |
   | `Emp_0`..`7`, `EmpReady`, `EmpBarEffect` | `n = rm+0x2dd8` pips lit while `n > i`, `EmpReady` at `table+0x1bc`, gauge `min(n/8, 1)` | pips | `RaceSim::detonator_emp`, `detonator_emp_gauge` | pips and `EmpReady` wired (HD, Omega); `EmpBarEffect` not drawn (an `<ImageModel>`); 2048's `EmpCharge`/`EmpFull` open |
@@ -238,9 +238,12 @@ Law: `detonator-cannon.md` ("What the simulation needs"). Decisions already made
   language table (`strings.fill`). The sim keeps race-long 5/10/15 chain counts and counts an EMP's
   bomb kills. Loyalty now pays on those laps (a destroyed run used to bank the full 14 stages).
   **Open:**
-  - **The new-record banner** (`RecordNotifyBlock`, `RecBlockBlue`/`RecBlockGrey`, `RecValue` =
-    `ER_NSR` + score): needs the best-score table `0x0001ef28` returns (unread, 72) and a Detonator
-    best-score store (none on main); drawn off, `RecBlockGrey` included.
+  - **Checked against two RPCS3 frames** (`detonator-endrace.md`, "Checked against the original"):
+    the record notice, the captions and the kept best score landed; open on HD: the **5.4 s of
+    destruction before the panel** (ours puts it up the tick the craft dies; what plays behind it afterwards is unchecked against
+    the original's glow, particle burst and wipe-in), the **end-screen text size** (rows 0.6x, headline 0.7x; the screens draw `default`
+    face as the scaled menu face, the campaign screens use the `Default` atlas), the HD style, the
+    `CONFIRM` glyph.
   - **Omega**: same filler (`FUN_0155bc90`) and ids; but Omega's `endrace_entry` is `None` (a finished
     race keeps the built-in scoreboard; wiring HD's reader leaves `EndRace Menu` with no options,
     `docs/formats/omega-status.md`), so no Omega Detonator screen draws until that is solved (a
@@ -249,8 +252,6 @@ Law: `detonator-cannon.md` ("What the simulation needs"). Decisions already made
     `IG_HUD_SCORE`, no chain rows) is modelled and worded (`Detonator2048Results`, tested) but not
     drawn: it belongs to its `Results` page, a named gap (`docs/ui/endrace-2048.md`); the touch
     Summary page has no widget for it. No layout is invented.
-  - **No live frame of the original** (the grey ink, the `x = 590` left edge, the `RecLogoD` art,
-    whether `MiniText` `ER_FINALPOS` is hidden: the Detonator branch writes none of it).
 - **14 Campaign: done.** `race_mode_for_cell` maps `Other("Detonator")`; `RaceStage::campaign_tier`
   takes the score through `medal_watch::detonator_value` (finished races only, `>=`). 12 cells per
   title, not 14 (`docs/formats/race-campaign.md`, "Detonator cells launch"). The value handed to the
@@ -289,8 +290,25 @@ placement RNG cannot match the original's `Libc_Rand` (a departure, documented).
   (`det-mine-eye-centre`, `detonator-mine-material.md`, "The lit draw, read live"): the lit pass is block `#15` and `c[209]`
   is the world camera, as ours feeds; the program, vertex decode, map, alpha test and cull all match, and the formula gives
   dark there in RPCS3's own shaders. A live A/B (`K[0x3c]` 0) turns the original's body dark with bright rings, so its
-  body rim is about 0.4-0.7, not 0: its tangent-space `V` is off-normal. Next: patch the football's fragment program in
-  VRAM to output `normalize(f[TC1])` and grab; then the vertex fetch (`0x1738` base offset, `CMP` scale).
+  body rim is about 0.4-0.7, not 0: its tangent-space `V` is off-normal. ~~Next: patch the football's fragment program in
+  VRAM to output `normalize(f[TC1])`~~ done (`det-mine-body-white`, 2026-11-26, "The white is before post, and the program as read
+  reproduces it"): read at one held pose, the program fed the frame's live constants matches the original's body rim at the edge
+  and is 0.1-0.15 high inside, where the camera-facing spikes overlap; no input term is missing. ~~Next: ours' spikes~~ done
+  (`det-mine-spikes`, `detonator-mine-draw.md`, "The spikes in a pair"): the old `mines-ahead` pair carried no envelopes;
+  re-grabbed with them, ours' near mines are lit and spiked at the original's size (same theirs 15.44 -> 13.93). ~~Re-grab
+  `cannon-volley` with envelopes~~ done (`det-cannon-regrab`, 14.32 -> 13.35); `pad`'s floor is music-lit differently on a re-grab.
+  The pair now takes each mine's envelope at the picture's tick (`detonator-mine-draw.md`, "The envelope at the picture's
+  tick"); near-ball boxes within 20 grey. ~~The mine spin~~ wired (`det-mine-spin`, `detonator-mine-draw.md`, "The spin,
+  wired"): `mines-ahead` 13.17 -> 12.51 with the grab's ages pinned. ~~Ours' `PitchVolume` band~~ read
+  (`det-mine-pitch-volume`, `detonator-mine-material.md`, "The visualiser's level"): both volumes are one whole-spectrum
+  level `L` (`clamp01(5 L)`, `clamp(L, 0, 0.4)`); a wiring (commit `5fac71320`, reverted) gave `mines-ahead` 12.51 -> 12.52
+  and `cannon-volley-hot` +0.04, so not kept. `PitchVolume` is worth 0.01 grey; `MasterVolume` 0.25. To land it: re-grab
+  `cannon-volley-hot` with the volume words so no pair falls back to `L = 0`. Next: the spin on 2048 and Omega (their
+  animate functions are not located). ~~The ring's own radius~~ measured (`det-mine-ring-radius`,
+  `detonator-mine-draw.md`, "The ring's radius"): ours already draws it at the original's (57.5 against 55.5 px on the middle
+  near mine; the side mines on the law's 74 and 60 px circles in both frames), and the three near mines' boxes carry 2.49 of
+  `mines-ahead`'s 12.5. ~~The upper-right scenery~~ fixed (`det-dark-scenery`: Talon's `scanlinebillboard`
+  hologram drew its advert in a Zone frame; `mines-ahead` 12.46 to 10.63). Next for that pair: the score panel (2.10, HUD).
   (3) ~~Ours builds the football and spikes with no tangent~~: wired (`Mesh::inline_tangents`, `+10`); the dark centre is
   gone, ours' core 143 -> 157.5 against the original's 188, so the body is still darker than the original's white.
 
@@ -298,7 +316,7 @@ placement RNG cannot match the original's `Libc_Rand` (a departure, documented).
 misses is, by title. *All three:* the medal tier colours (the tiers draw one grey), the bomb flash writer
 (`b+0x154`, unread: brightness stays `0.2`/`0.8`), ~~the EMP wave's reach (chosen)~~ (read and drawn on HD, `det-emp-look-re`) and the radial bloom
 (`oag-post` has no pass, Zone included), the floor spectrum feed (the pairs stay black under `--no-audio`), the
-hull strip and wreck. *HD:* the new-record banner (needs the best-score table `0x0001ef28` and a store).
+hull strip and wreck. *HD:* the end screen's destruction hold and text size.
 *Omega:* the end-race screen (its `endrace_entry` is `None`, wiring HD's reader leaves `EndRace Menu` with no
 options: Omega's `EndRace Menu`), the sky (`zone_sky: None`), the announcer events and the stage-10 music change
 in its state `2`. *2048:* the `Results` page (the four-row list is modelled, no page to draw on), its pads'
@@ -481,6 +499,37 @@ positions differ by construction (ours places with its own seeded `Rng`), so a m
 | 8 | HUD score panel | 5.7 % | 0.46-0.59 | 2.6-3.4 | The numbers, layout and clip pips agree; the translucent red panel in ours lets the bright sky through (the "red translucent layer"), the original's panel sits on a dark scene. Mostly row 1 bleeding through, not a HUD error; panel alpha not separately measured. |
 | 9 | HUD stage, energy, clip | 8 % | 0.05-0.14 | under 1 | Close: `1/14`, `100` (both, with ours held at rest) and the `15`/`12` clip match, including the clip falling to 12 after three volleys; the score reads 0 in the original and 100 in ours after its round hit a mine, ours' mines being elsewhere. |
 
+**The volley pair split (2026-11-26, `det-cannon-hot-gap`; `docs/tools/compare-page.md`, "The volley pair's difference, split").** Its
+capture state is partly fixed (picture lag off the static scene, ours at the picture's tick, mine ages; 11.47 to 10.32). **Open draw gaps, on every Detonator
+pair:** ~~bright striped grilles ours draws where the original is black~~ (fixed 2026-11-26, `det-dark-scenery`: the `scanlinebillboard` hologram's Zone variants draw the Zone surface, `docs/rendering/hd-zone-recolour.md`, "Holographic billboards in a Zone frame"; -hot 10.32 to 8.96, pad 7.60 to 5.88), ~~the score box's white-striped wings (1.2), HUD digits
+and `1/14` too wide (1.2)~~ (fixed, `det-hud-score-box`: `docs/formats/hd-hud.md`, "Detonator's score box" and "Text scales on two axes"), hull too bright (0.7). ~~Open capture state: input latency before ours' fire, the volley pair's mine
+envelopes~~ carried (`det-cannon-regrab`, "The volley clocks and the picture-clock reads"). **Open from that grab:** ~~ours' mine blast
+draws white puffs where the original shows small shards~~ (2026-11-26, `det-mine-blast`: the mine effects draw their disc sprites, the
+`Debris` atlas is the shards, `detonator-mine.md`, "The shards, against the original"). ~~Still open there: the destroyed mine is not
+carried~~ (2026-11-26, `det-mine-ribbon`: carried, the pair script now keeps a mine that left the pool during the shot; `cannon-volley`
+10.80 to 10.53, score 100 on both; `detonator-mine.md`, "Carrying the destroyed mine"). ~~The core near-white where
+the original's is dim pink~~ (2026-11-26, `det-mine-blast-glow`: the whole live blast takes the stage's mine colour, read 85 and wired,
+`detonator-mine.md`, "The blast's colour"; carried pair 12.31 to 12.12; 2048's `FUN_811e6ebc` and Omega's `FUN_0133ac10` carry the same
+law, checked, applies, not wired until those titles answer the mine triggers; the blast takes `detonator_stage(laps)`, not a pinned
+grade's stage). Muting the root's glows had no measured effect in that frame (12.12); their draw law is unread.
+~~What is left is the `Trail_Ribbon` dot chains~~ (not the whole of it: "`cannon-volley` split by region" below). The ribbon (on the carried pair, muted: 10.22 against 10.53, so even a perfect ribbon leaves it above 10): ours draws each speed-0 ribbon particle as a dot,
+the original shows a few thin lines; the far bar (12.41) and the root's noise force (12.15) are both worse. Next: one RPCS3 capture of the
+blast's particle quads a few ticks after a hit, and who reads the child instance's `+0x130`/`+0x140` (same page, "The ribbon, open").
+The `+100` is drawn (2026-11-27), 15 px above the original's because ours' shot is 9 ticks older at the picture. The craft-speed carry on the rounds is right physics: put back by `v` times their age, ours hits the mine at round age 8 against
+the original's 10 (without the carry, 1). But it raised the carried pair to 13.75 (12.98 with the recolour), because the younger blast shows more of those gaps. Re-try it once
+the glows are right; it is about 40 lines in `oag_raceplay::detonator` behind a `--detonator-cannon-craft-speed` flag.
+
+**`cannon-volley` split by region (2026-11-26, `det-volley-split`; `docs/tools/compare-page.md`, "The `cannon-volley` difference, split by
+region").** 10.53 = mines 3.11 (audio-driven), floor 2.58, right wall 1.01, upper-right screen 0.94, HUD 0.70, far scenery 0.66, hull 0.58,
+ribbon 0.30, shot-specific rest under 0.2 each. ~~Next, ready to wire: the visualiser strip's sRGB decode~~ wired on HD (2026-11-27, `det-vis-srgb`; `zone-vis-gamma.md`,
+"Wired"): `cannon-volley` **9.11**, all four race pairs fall. **Next:** read the upper-right screen's grey smear
+(also on `mines-ahead`). ~~The right wall's missing window lights~~ wired (2026-11-27, `det-volley-wall`; `hd-zone-recolour.md`, "Window lights
+on a plain chunk"): the lights draw, the wall row stays at 1.03 (registration); Omega's `tunnel_fx_noAlpha` is checked, applies, not wired. The ribbon is
+0.31 of it. **Open:** (1) the floor is now darker than the original's on three of four pairs (second factor, `zone-vis-gamma.md`,
+"Still unread"); (2) Omega: its `zoneTexVis` is an sRGB texture too, ours draws its strip raw (`oag_omega` has no `ZoneFrame`);
+(3) 2048's HD-lineage circuits author the EQ tints through HD's tables and ours draws the strip raw: read whether their
+Zone GXP squares the `zoneTexVis` tap and the strip's gamma mode (`zone-vis-gamma.md`, "Cross-title"), then port or record differs.
+
 **Hull camera and size, re-based (2026-11-23, `det-camera`).** The maintainer's "ours is far, the original is close" was true and the
 camera flags were not the cause: the pair fed the RAM body (2 to 4 ticks ahead of the presented frame) with the push-buffer camera, and
 ours drew the Detonator hull at 0.75 where the original draws 0.63. Both fixed (`docs/tools/compare-page.md`, "The hull's frame pose in a
@@ -559,7 +608,7 @@ mine drawn black in ours and pale violet in the original: without it the box is 
 
 **The vis texel's gamma flag, read (2026-11-23, `det-floor-gain-re`, `docs/ghidra/functions/ps3-hdfury-eu/zone-vis-gamma.md`).** `zoneTexVis`'s address
 word is `0x60730303` (gamma nibble 7, confidence 75): the original sRGB-decodes the strip, ours samples it raw into the linear sum. Applied alone (scratch,
-reverted) it overshoots: box blue ours over original goes from 1.7-2.3 to 0.38-0.89. **Ready to wire on its own** (the page, "Ready to wire"); measure the rest against the decoded floor. Open, in
+reverted) it overshoots: box blue ours over original goes from 1.7-2.3 to 0.38-0.89. ~~Ready to wire on its own~~ wired (the page, "Wired"). Open, in
 order: the viewport z mapping (`SET_VIEWPORT_SCALE`/`OFFSET` z; a doubled depth factor is about 1.33x after the encode), the band-independent floor term
 (the original's floor red 5-9 is not the strip: Track Fog, the Detonator radial bloom), and one RPCS3 frame dump confirming `0x60730303` on the vis unit.
 

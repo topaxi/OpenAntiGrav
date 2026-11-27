@@ -392,11 +392,10 @@ pub struct Effects {
     /// Effects whose own sprites are read from the title's separate texture
     /// entries, where the sprite source is not the `.pob` itself: HD's
     /// `/data/psys/tex/<stem>.gtf`, named by each emitter's authored path.
-    /// A listed effect draws each particle on its spawn frame: its sprites are
-    /// flipbooks, and HD's own frame advance (and which cell is frame 0) is
-    /// unread. An effect not listed keeps the procedural profile for every emitter, so
-    /// wiring one is a decision made per effect against a matched capture,
-    /// never by extension to the rest of the title's `.pob` files.
+    /// A listed effect's sprites are flipbooks, walked under [`Self::flipbooks`]. An
+    /// effect not listed keeps the procedural profile for every emitter, so wiring one is
+    /// a decision made per effect against a matched capture, never by extension to the
+    /// rest of the title's `.pob` files.
     pub sprites: &'static [&'static str],
     /// Effects whose line, rectangle, box and ring emitters place a particle
     /// by the emitter extent law on a source that is not Pulse on the PSP,
@@ -424,10 +423,7 @@ pub struct Effects {
     pub pool_bars: &'static [&'static str],
     /// Effects whose sprite templates (`oag_fx::psys::Effect::add_templates`) play on a source
     /// that is not Pulse on the PSP. An effect not listed keeps its templates muted; wiring one is a
-    /// decision made per effect against a matched capture, never by extension to the title. No title
-    /// lists one yet: Pure's template draw, sampler and initialiser are Pulse's
-    /// (`docs/ghidra/functions/psp-pure-usa/particle-bars.md`, "The template draw"), but its absorb burst
-    /// drew far too bright at 0.75 s with them on, and why is unread.
+    /// decision made per effect against a matched capture, never by extension to the title.
     pub templates: &'static [&'static str],
     /// Effects whose emitters' noise force (modifier type `0x11`, `oag_fx::psys::Effect::with_turbulence`)
     /// is applied. Read on Pulse's PSP executable and HD's alike; an effect not listed keeps its
@@ -461,6 +457,23 @@ pub struct Effects {
     /// `Rocket_SpawnCraftExplosion_q` writes no velocity) or is unread. See
     /// `docs/ghidra/functions/ps3-hdfury-eu/rocket-craft-blast.md`.
     pub craft_blast_carry: Option<Origin>,
+    /// Whether the original's particle update walks its flipbooks: Pulse's frame advance,
+    /// plus the emitter record's own spawn range and hold frame
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/particle-render.md`, "The atlas frame"). `None`
+    /// on a title whose update is unread: every particle keeps its spawn frame, drawn from the
+    /// whole grid.
+    pub flipbooks: Option<Origin>,
+    /// Whether the original's particle init scales a particle by the record's own multiplier,
+    /// ramped over the emitter's run (`oag_pob::flags::SIZE_RAMP_OVER_RUN`;
+    /// `docs/ghidra/functions/ps3-hdfury-eu/particle-render.md`, "The per-particle size
+    /// multiplier"). `None` on a title whose init is unread: the size channel alone.
+    pub size_ramps: Option<Origin>,
+    /// Whether a live Detonator mine's blast ([`Trigger::DetonatorMineExplo`]) is drawn in one
+    /// colour from the stage's `Detonator Mine Colour`: `DetonatorMine_Explode` overwrites the
+    /// spawned tree's every colour table with one entry
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/detonator-mine.md`, "The blast's colour"). `None`
+    /// on a title whose explode is unread: the tables as authored.
+    pub mine_blast_recolour: Option<Origin>,
 }
 
 /// A billboard nearer than `cull_depth` world units along the view draws nothing, and one
@@ -471,6 +484,10 @@ pub struct NearLaw {
     pub cull_depth: f32,
     /// Nearer than this, faded.
     pub fade_depth: f32,
+    /// The half size of a sprite template's quad is at most `depth` times this, and where the
+    /// factor came from; `None` draws templates uncapped. A template record has no cap field of
+    /// its own.
+    pub template_cap: Option<(f32, Origin)>,
     /// Where this came from.
     pub origin: Origin,
 }
@@ -482,8 +499,16 @@ impl NearLaw {
         Self {
             cull_depth: 1.0,
             fade_depth: 4.0,
+            template_cap: None,
             origin,
         }
+    }
+
+    /// The same law with sprite templates capped at `cap` times their depth, tagged `origin`.
+    #[must_use]
+    pub const fn with_template_cap(mut self, cap: f32, origin: Origin) -> Self {
+        self.template_cap = Some((cap, origin));
+        self
     }
 }
 
@@ -550,6 +575,9 @@ impl Effects {
         trail_hits_native: false,
         near_law: None,
         craft_blast_carry: None,
+        flipbooks: None,
+        mine_blast_recolour: None,
+        size_ramps: None,
     };
 
     /// The entry for `trigger`.
@@ -935,6 +963,10 @@ pub struct Looks {
     /// `without_extents` and `without_pulse_psp_draw` take them away). Keyed on
     /// the race's own archive.
     pub particle_laws: Rule,
+    /// The PSP's particle near tests by draw class and the GE's drop of a triangle off its
+    /// screen space (`oag_fx::psys::guard`). A title whose billboard builder has its own near
+    /// law ([`Effects::near_law`]) leaves this unread. Keyed on the race's own archive.
+    pub psp_particle_clip: Rule,
     /// The PS2's bloom glow-mask stamp rule. Keyed on the race's own archive.
     pub ps2_glow_mask: Rule,
     /// The PS2's engine trail: the ribbon's baked vertex colours go out as
@@ -1117,6 +1149,7 @@ impl Looks {
             psp_glow_mask: Rule::UNREAD,
             bloom_under_hud: Rule::UNREAD,
             particle_laws: Rule::UNREAD,
+            psp_particle_clip: Rule::UNREAD,
             ps2_glow_mask: Rule::UNREAD,
             ps2_trail: Rule::UNREAD,
             circuit_effects: Rule::UNREAD,

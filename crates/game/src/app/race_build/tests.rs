@@ -73,6 +73,7 @@ fn race_build_polls_never_wait_on_the_build() {
         format,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let view = target.create_view(&wgpu::TextureViewDescriptor::default());
     let request = Request {

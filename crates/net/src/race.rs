@@ -210,6 +210,26 @@ pub fn return_seats(race: &mut Race, away: u8) {
 pub fn presence(race: &mut Race, away: u8) {
     retire(race, away);
     return_seats(race, away);
+    #[cfg(feature = "test-cheats")]
+    staged_wreck(race);
+}
+
+/// A wreck a test stages, on every peer alike, so that a race one person leaves by wreck is
+/// reached on purpose: `OAG_TEST_WRECK=<slot>` destroys that craft at
+/// [`crate::host::CHEAT_AT`]. Part of [`presence`] because the host, a client's confirmed state
+/// and the referee all pass through it before a tick. Built only with `test-cheats`.
+#[cfg(feature = "test-cheats")]
+fn staged_wreck(race: &mut Race) {
+    if race.core.sim.world.tick != u64::from(crate::host::CHEAT_AT) {
+        return;
+    }
+    let slot = std::env::var("OAG_TEST_WRECK")
+        .ok()
+        .and_then(|slot| slot.parse::<usize>().ok());
+    if let Some(ship) = slot.and_then(|slot| race.core.sim.world.ships.get_mut(slot)) {
+        ship.physics.craft_state = oag_physics::CraftState::Destroyed;
+        ship.physics.state_timer = oag_physics::damage::DESTROYED_DURATION;
+    }
 }
 
 /// The state hash a prepared race starts from: what the client must reproduce to

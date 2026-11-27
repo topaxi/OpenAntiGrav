@@ -19,6 +19,14 @@ pub(crate) struct CaptureViewArgs {
     #[arg(long, value_name = "SECONDS")]
     pub(crate) gantry_seconds: Option<f32>,
 
+    /// Draw the engine flame surfaces at this clock instead of the world clock. **A capture aid**:
+    /// HD's flame scrolls its noise by `2 * time` with `time` the frame context's boot clock (engine
+    /// parameter slot 0), which a pair records as `original.flame_clock_s`
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/engine-flare.md`, "The flame's clock at a pair's grab").
+    /// Unlike `--anim-seconds` it leaves every other clock alone.
+    #[arg(long, value_name = "SECONDS")]
+    pub(crate) flame_clock: Option<f32>,
+
     /// Which tick of `--pose-from` to take the pose off.
     #[arg(long, default_value_t = 0, requires = "pose_from")]
     pub(crate) pose_tick: u64,

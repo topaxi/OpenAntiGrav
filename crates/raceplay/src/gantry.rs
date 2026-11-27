@@ -364,7 +364,7 @@ pub(super) fn place_card(
         (Some(zone), _, _) => mode_clock(zone, name, report),
         (None, Some(board), _) => native_clock(board, name, report),
         (None, None, true) => Clock::PULSE,
-        (None, None, false) => hd_clock(&model, name, report),
+        (None, None, false) => hd_clock(&model, spec.countdown_assembly_ticks, name, report),
     };
     let mut card = match crate::adverts::card_from(8, model, &blob, spec) {
         Ok(card) => card,
@@ -467,7 +467,7 @@ fn place_hd(
         mount.width,
         mount.height,
     ));
-    let clock = hd_clock(&model, name, report);
+    let clock = hd_clock(&model, None, name, report);
     Placed {
         model,
         matrix,
@@ -481,15 +481,14 @@ fn place_hd(
 pub(super) enum ClockRule {
     /// Pulse's own, measured against the original: [`Clock::PULSE`].
     Measured,
-    /// The PS3 geometry titles: the start tick off the asset's own `GO` edge
-    /// as [`Clock::inherited`] gives it, then from the release
-    /// HD's own race-manager window ([`Clock::hd`]), **read from HD's EBOOT
-    /// and matched against its RPCS3 capture**.
+    /// The PS3 geometry titles: the start tick from the title's countdown
+    /// entry, or off the asset's own `GO` edge where that is unread
+    /// ([`Clock::inherited`]), then from the release HD's own race-manager
+    /// windows ([`Clock::in_hd_windows`]), **read from HD's EBOOT and matched
+    /// against its RPCS3 capture**.
     HdRaceManager,
 }
 
-/// HD's clock on `model`'s own `GO` edge, or the timeline off the race start
-/// with the reason in the report.
 /// A node-driven board's clock: frame 0 lands [`oag_title::adverts::GantryBoard::assembly_ticks`]
 /// before the release and the timeline then runs on.
 fn native_clock(
@@ -507,44 +506,74 @@ fn native_clock(
     clock
 }
 
-/// A mode board's clock: its assembly ends on the release, per
-/// [`oag_title::adverts::ModeGantry::assembly_ticks`], and the line says what is
-/// and is not measured.
+/// A mode board's clock: frame 0 lands
+/// [`oag_title::adverts::ModeGantry::assembly_ticks`] before the release, and the
+/// line says what is and is not measured.
 fn mode_clock(zone: oag_title::adverts::ModeGantry, name: &str, report: &mut Vec<String>) -> Clock {
-    let clock = Clock::assembled_at_release(zone.assembly_ticks);
+    let mut clock = Clock::assembled_at_release(zone.assembly_ticks);
+    let after = if zone.race_windows {
+        clock = clock.in_hd_windows();
+        "from the release the race manager's lap windows hold it, as they hold `3 2 1 GO`"
+    } else {
+        "what it shows after the release is chosen, not measured - the timeline runs on and is \
+         held at its limit"
+    };
     report.push(format!(
-        "start gantry clock: {name} is this title's {:?} board, its assembly starting {} ticks \
-         before the release, on tick {} (Zone read off RPCS3, one boot: a few ticks either \
-         way); what it shows after the release is chosen, not measured - the timeline runs on and \
-         is held at its limit",
+        "start gantry clock: {name} is this title's {:?} board, its frame 0 {} ticks before \
+         the release, on tick {} (the title's own table says where that comes from); {after}",
         zone.mode, zone.assembly_ticks, clock.start_tick,
     ));
     clock
 }
 
-fn hd_clock(model: &Model, name: &str, report: &mut Vec<String>) -> Clock {
+/// What HD's windows do to a clock from the release, for the loader's line.
+fn hd_windows_line() -> String {
+    let window = HD_PRE_LAP_WINDOW;
+    format!(
+        "from tick {} the clock is kept in [{:.2}, {:.2}) s and reset to {:.2} when outside it, \
+         the window HD's race manager (0x0005e948) holds the gantry in before the first line \
+         crossing - so GO is lit on the release and then loops every {} ticks (read from the \
+         EBOOT, confidence 85; the green step on the release is measured on RPCS3, 2026-10-04, \
+         confidence 75). After the first crossing the race manager's later windows take over by \
+         lap: [6.02, 9.30) between laps, [9.50, 9.90) on the lap before the last, [12.35, 13.30) \
+         on the last (read from the EBOOT, confidence 85)",
+        window.from_tick,
+        window.from,
+        window.to,
+        window.from,
+        window.period(),
+    )
+}
+
+/// The circuit board's clock in HD's windows: frame 0 `entry_ticks` before the
+/// release where the title's countdown entry says so, else off `model`'s own
+/// `GO` edge, or the timeline off the race start with the reason in the report.
+fn hd_clock(
+    model: &Model,
+    entry_ticks: Option<u64>,
+    name: &str,
+    report: &mut Vec<String>,
+) -> Clock {
+    if let Some(ticks) = entry_ticks {
+        let clock = Clock::assembled_at_release(ticks).in_hd_windows();
+        report.push(format!(
+            "start gantry clock: {name}'s frame 0 is tick {}, {ticks} ticks before the release \
+             (this title's countdown entry zeroes the board's time); {}",
+            clock.start_tick,
+            hd_windows_line(),
+        ));
+        return clock;
+    }
     match go_edge(model).map(|edge| (edge, Clock::hd(edge))) {
         Ok((edge, Some(clock))) => {
-            let window = HD_PRE_LAP_WINDOW;
             report.push(format!(
                 "start gantry clock: {name}'s own GO edge is asset frame {} (the first frame the \
                  board samples its authored green), so frame 0 is tick {} and the edge would land \
-                 on tick {}; from tick {} the clock is kept in [{:.2}, {:.2}) s and reset to {:.2} \
-                 when outside it, the window HD's race manager (0x0005e948) holds the gantry in \
-                 before the first line crossing - so GO is lit on the release and then loops \
-                 every {} ticks (read from the EBOOT, confidence 85; the green step on the release \
-                 is measured on RPCS3, 2026-10-04, confidence 75, and bounds the start tick from \
-                 below). After the first crossing the race manager's later windows take over \
-                 by lap: [6.02, 9.30) between laps, [9.50, 9.90) on the lap before the last, \
-                 [12.35, 13.30) on the last (read from the EBOOT, confidence 85)",
+                 on tick {}; {}",
                 edge.frame,
                 clock.start_tick,
                 oag_race::COUNTDOWN_TICKS + 1,
-                window.from_tick,
-                window.from,
-                window.to,
-                window.from,
-                window.period(),
+                hd_windows_line(),
             ));
             clock
         }
@@ -862,8 +891,9 @@ impl CardTimeline {
     /// capture pins one.
     ///
     /// **A capture's [`crate::Options::gantry_seconds`] pins the race manager's board** - the
-    /// timelines that carry a release window, which is the gantry's `GO` board - and no other
-    /// timeline, so an advert beside it keeps its own clock.
+    /// timelines that carry a release window: the gantry's `GO` board, and a title's mode board
+    /// where `ModeGantry::race_windows` - and no other timeline, so an advert beside it keeps its
+    /// own clock.
     pub(super) fn seconds(&self, race: &Race, anim_seconds: Option<f32>) -> f32 {
         anim_seconds
             .or(race

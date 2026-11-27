@@ -59,8 +59,7 @@ pub(super) fn set_shift(vertex: &mut GpuVertex, shift: Vec3) {
     vertex.sun_mask = shift.z;
 }
 
-/// The move [`set_shift`] wrote, for tests.
-#[cfg(test)]
+/// The move [`set_shift`] wrote.
 pub(super) fn shift_of(vertex: &GpuVertex) -> Vec3 {
     Vec3::new(
         vertex.lightmap_texcoord[0],

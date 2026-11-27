@@ -18,12 +18,22 @@ The target is frozen with `SIGSTOP` on the emulator's own pid and read through t
 with the stub on, this save state did not answer in time. The picture on screen can therefore trail
 guest memory by a few ticks; the ring, the camera and the poses are from the same stop.
 Raw captures are derived game data: keep them under `data/`.
+
+`--arm` removes one candidate source of the hit's screen wash before the shot, by data writes only (the
+recompiler ignores writes to code): `light-off` zeroes the colour of the point light the craft blast
+submits (the static `Rocket_SpawnCraftBlast` fills once, guarded by a byte it sets), `emitter-off:NAME[,NAME...]`
+zeroes the particles per emission (`+0x6c`, `+0x70`) and the live cap (`+0xa0`) of every loaded `.pob`
+emitter record named NAME, `templates-off:NAME[,NAME...]` zeroes the gate (`+0x9a4`) of their sprite template
+list (`crates/pob/src/initial.rs`), which no emission count governs; `tag-caps:VALUE` gives every loaded record whose near size cap (`+0xc80`) is
+VALUE a distinct cap of its own (1.1, 1.2, ...), so a capped quad's half height over its depth names the
+record that drew it (`docs/ghidra/functions/ps3-hdfury-eu/rocket-craft-blast.md`, "The screen wash").
 """
 import argparse
 import glob
 import importlib.util
 import json
 import os
+import re
 import signal
 import struct
 import sys
@@ -56,6 +66,13 @@ ROCKET = 0
 SLOT_STATE = 0x204
 FIFO = 0x40000000
 LOCAL = 0xC0000000
+#: `bl SpuLight_AddCandidate` in `Rocket_SpawnCraftBlast`: the executable the addresses below are read in.
+LIGHT_CALL = (0x0014AA34, bytes.fromhex("4852ce95"))
+#: `Rocket_SpawnCraftBlast`'s light static: guard byte at `+0x10`, colour vector at `+0x20`.
+LIGHT_STATIC_PTR = 0x008AD4D8 - 0x252C
+#: The heap a loaded `.pob` sits in; the executable's own strings below it are never scanned.
+POB_SCAN = ((0x30000000, 0x40000000),)
+SCAN_CHUNK = 0x100000
 
 
 class Frozen:
@@ -135,6 +152,94 @@ def ring_dump(read, out, stem):
     return len(quads)
 
 
+def find_records(read, name):
+    """Every guest address holding `name` NUL-terminated at a 16-byte boundary, read in chunks; an
+    unmapped chunk is skipped."""
+    key = name.encode() + b"\0"
+    hits = []
+    for lo, hi in POB_SCAN:
+        for at in range(lo, hi, SCAN_CHUNK):
+            try:
+                blob = read(at, SCAN_CHUNK + len(key))
+            except Exception:  # noqa: BLE001 - an unmapped chunk
+                continue
+            start = 0
+            while True:
+                i = blob.find(key, start)
+                if i < 0:
+                    break
+                if (at + i) % 16 == 0 and at + i not in hits:
+                    hits.append(at + i)
+                start = i + 1
+    return hits
+
+
+def records_with_cap(read, cap):
+    """`(address, name)` of every loaded emitter record whose `+0xc80` is `cap`: a 16-byte aligned
+    upper-case name with a plausible particles-per-emission pair (`+0x6c` <= `+0x70`, 1 to 1000). A child
+    record sits inside its effect's blob, so no allocator fill is required before it."""
+    pattern = re.compile(rb"([A-Z][A-Z0-9_]{2,30})\x00")
+    found = []
+    for lo, hi in POB_SCAN:
+        for at in range(lo, hi, SCAN_CHUNK):
+            try:
+                blob = read(at, SCAN_CHUNK + 0x1000)
+            except Exception:  # noqa: BLE001 - an unmapped chunk
+                continue
+            for match in pattern.finditer(blob):
+                i = match.start(1)
+                if (at + i) % 16 or i >= SCAN_CHUNK or i + 0xC84 > len(blob):
+                    continue
+                low, high = struct.unpack_from(">ii", blob, i + 0x6C)
+                if struct.unpack_from(">f", blob, i + 0xC80)[0] == cap and 1 <= low <= high <= 1000:
+                    found.append((at + i, match.group(1).decode()))
+    return found
+
+
+def apply_arm(gdb, arm, out):
+    """Remove one wash candidate (module docstring); records what it wrote in `arm.json`."""
+    log = {"arm": arm, "writes": []}
+
+    def put(addr, blob, what):
+        before = gdb.read(addr, len(blob))
+        gdb.write(addr, blob)
+        log["writes"].append({"addr": "%08x" % addr, "what": what, "before": before.hex(),
+                              "after": gdb.read(addr, len(blob)).hex()})
+
+    if arm == "light-off":
+        code = gdb.read(LIGHT_CALL[0], 4)
+        if code != LIGHT_CALL[1]:
+            sys.exit("the executable differs: %#x holds %s, not %s" % (LIGHT_CALL[0], code.hex(), LIGHT_CALL[1].hex()))
+        static = place.u32(gdb.read(LIGHT_STATIC_PTR, 4))
+        put(static + 0x10, b"\1", "guard: filled")
+        put(static + 0x20, bytes(16), "colour")
+    elif arm.startswith("emitter-off:"):
+        for name in arm.split(":", 1)[1].split(","):
+            records = find_records(gdb.read, name)
+            if not records:
+                sys.exit("no record named %s in guest memory" % name)
+            for rec in records:
+                put(rec + 0x6C, bytes(8), "per emission min, max of %s" % name)
+                put(rec + 0xA0, bytes(4), "live cap of %s" % name)
+    elif arm.startswith("templates-off:"):
+        for name in arm.split(":", 1)[1].split(","):
+            records = [rec for rec in find_records(gdb.read, name) if place.u32(gdb.read(rec + 0x9A4, 4))]
+            if not records:
+                sys.exit("no record named %s with a sprite template list" % name)
+            for rec in records:
+                put(rec + 0x9A4, bytes(4), "sprite template gate of %s" % name)
+    elif arm.startswith("tag-caps:"):
+        records = records_with_cap(gdb.read, float(arm.split(":", 1)[1]))
+        if not records:
+            sys.exit("no record with that cap in guest memory")
+        for n, (rec, name) in enumerate(records):
+            put(rec + 0xC80, struct.pack(">f", 1.1 + 0.1 * n), "near cap of %s" % name)
+    elif arm != "none":
+        sys.exit("unknown arm %s" % arm)
+    (out / "arm.json").write_text(json.dumps(log, indent=1) + "\n")
+    print("arm %s: %d write(s)" % (arm, len(log["writes"])), flush=True)
+
+
 def film_hit(session, gdb, mem, args, out):
     read = gdb.read
     ages = sorted(float(a) for a in args.ages.split(","))
@@ -155,6 +260,7 @@ def film_hit(session, gdb, mem, args, out):
             time.sleep(2)
     else:
         sys.exit("the race never reached %.1f s on the lap clock" % args.fire_after)
+    apply_arm(gdb, args.arm, out)
     slot = place.u32(gdb.read(ship + film.AUTOPILOT_SLOT, 4))
     gdb.write(slot + SLOT_STATE, struct.pack(">ii", ROCKET, ROCKET))
     session.pad.set("cross", True)
@@ -271,6 +377,8 @@ def main():
     ap.add_argument("--ages", default="0.05,0.1,0.167,0.233,0.3,0.4,0.55", help="seconds since the hit")
     ap.add_argument("--flush", type=float, default=0.5, help="seconds before a stopped frame is grabbed")
     ap.add_argument("--fire-after", type=float, default=5.0, help="lap clock seconds before the shot is set up")
+    ap.add_argument("--arm", default="none",
+                    help="none, light-off, emitter-off:NAMES, templates-off:NAMES or tag-caps:VALUE (module docstring)")
     ap.add_argument("--max-frames", type=int, default=600, help="frames to wait for the hit")
     args = ap.parse_args()
     out = args.out

@@ -262,6 +262,7 @@ pub(crate) struct MenuArgs {
 
 /// Capturing a wrecked craft in a headless `--race --screenshot` run.
 #[derive(clap::Args, Debug)]
+#[command(group(clap::ArgGroup::new("forced_rocket").multiple(true)))]
 pub(crate) struct WreckArgs {
     /// With `--race --screenshot`, put one craft into the destroyed sequence at
     /// the end of a tick: `TICK:SLOT`, e.g. `60:3` and then `--ticks 100` for a
@@ -331,6 +332,12 @@ pub(crate) struct WreckArgs {
     #[arg(long, requires = "race")]
     pub(crate) no_weapon_lights: bool,
 
+    /// With `--race`, start the particle stage's random stream from `SEED`, so a test
+    /// can read an effect over several arrangements. See
+    /// [`oag_raceplay::Race::reseed_stage`].
+    #[arg(long, value_name = "SEED", requires = "race")]
+    pub(crate) stage_seed: Option<u64>,
+
     /// With `--race --screenshot`, hand craft `SLOT` to a scripted remote person
     /// at a tick: `TICK:SLOT[:WINDOW[:contact][:fire][:own[=UNITS]]]`, e.g. `480:7:20:contact`. The client guesses its
     /// input straight on for `WINDOW` ticks (default 6, 100 ms) while the true
@@ -363,8 +370,69 @@ pub(crate) struct WreckArgs {
     /// fired at the end of a tick: `TICK:SLOT`, e.g. `294:1`. The same aid
     /// `--force-missile-hit` is, for the Rocket's craft explosion. See
     /// [`oag_raceplay::RaceSim::force_rocket_hit`].
-    #[arg(long, value_name = "TICK:SLOT", requires = "race")]
+    #[arg(
+        long,
+        value_name = "TICK:SLOT",
+        requires = "race",
+        group = "forced_rocket"
+    )]
     pub(crate) force_rocket_hit: Option<String>,
+
+    /// With `--race --screenshot`, move the player's first weapon out (a laid Bomb, a
+    /// Missile in flight) to a world point at the start of a tick, before
+    /// `--force-bomb-trip` or `--force-missile-hit` on the same tick sets it off:
+    /// `TICK:X,Y,Z`. The blast then stands where a capture of the original had it. A
+    /// verification aid. See [`oag_raceplay::RaceSim::force_shot_at`]. Dev only.
+    #[cfg(feature = "dev-cli")]
+    #[arg(
+        long,
+        value_name = "TICK:X,Y,Z",
+        requires = "race",
+        allow_hyphen_values = true
+    )]
+    pub(crate) force_shot_at: Option<String>,
+
+    /// With `--race --screenshot`, at the end of a tick play `COUNT` Rocket craft blasts (1 by
+    /// default) at a world point and take as many of the player's Rockets out of the air:
+    /// `TICK:X,Y,Z[:COUNT]`, e.g. `709:525.15,-28.26,-34.80`. Repeat it for a volley that lands
+    /// in waves. The blasts stand where a capture of the original put them, which
+    /// `--force-rocket-hit` cannot: it lands every Rocket at one point. No craft is struck. A
+    /// verification aid. See [`oag_raceplay::Race::force_rocket_hit_at`]. Dev only.
+    #[cfg(feature = "dev-cli")]
+    #[arg(
+        long,
+        value_name = "TICK:X,Y,Z[:COUNT]",
+        requires = "race",
+        group = "forced_rocket"
+    )]
+    pub(crate) force_rocket_hit_at: Vec<String>,
+
+    /// With `--force-rocket-hit`, give the struck craft this velocity as it is put on the Rocket;
+    /// with `--force-rocket-hit-at`, have its blasts carry it. In world units a second. The craft
+    /// blast carries the struck craft's velocity, so a comparison with a capture needs the
+    /// captured craft's. See [`oag_raceplay::Race::force_struck_velocity`]. Dev only.
+    #[cfg(feature = "dev-cli")]
+    #[arg(
+        long,
+        value_name = "VX,VY,VZ",
+        requires = "forced_rocket",
+        allow_hyphen_values = true
+    )]
+    pub(crate) force_rocket_hit_velocity: Option<String>,
+
+    /// With `--pose-hold-ticks`, hold the craft on this pose instead of its start pose until the
+    /// end of tick `TICK`, then on its start pose: `TICK:X,Y,Z,LX,LY,LZ,UX,UY,UZ,FX,FY,FZ`, the
+    /// position and the left, up and forward rows as `--field-from` reads them. For a capture
+    /// that fired while its craft moved: a Rocket fired before `TICK` leaves from this pose. See
+    /// [`crate::race_capture::pose_hold::Launch`]. Dev only.
+    #[cfg(feature = "dev-cli")]
+    #[arg(
+        long,
+        value_name = "TICK:X,Y,Z,LX,LY,LZ,UX,UY,UZ,FX,FY,FZ",
+        requires = "pose_hold_ticks",
+        allow_hyphen_values = true
+    )]
+    pub(crate) pose_hold_launch: Option<String>,
 
     /// With `--race --screenshot`, launch craft `SLOT`'s Quake so its bump
     /// reaches the player at the end of a tick: `TICK:SLOT`, e.g. `120:1`. The

@@ -477,6 +477,10 @@ impl Race {
         if self.core.sim.zone_end().is_some() && self.view.zone_end_age().is_some() {
             return false;
         }
+        // A Detonator craft's blast hides it the same way while the end plays.
+        if self.core.sim.detonator_ending(self.core.player_slot()) {
+            return false;
+        }
         if self.view.hud_waits_for_go
             && self.view.capture_hud.is_none()
             && oag_race::RaceState::thrust_gated(self.core.sim.world.tick)

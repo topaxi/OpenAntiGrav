@@ -1,8 +1,8 @@
 ---
 status: parked
 titles: [all]
-updated: 2026-11-24
-summary: "Dependency benefits left for lanes: wasmtime 51, quinn 0.14 follow-ups, zip zstd-rs, cpal 0.19, wgpu 31, winit 0.31, HDR, mixer bench"
+updated: 2026-11-26
+summary: "Dependency benefits left for lanes: wasmtime 51, quinn 0.14 follow-ups, zip zstd-rs, cpal 0.19, wgpu to crates.io at 31, winit 0.31, HDR, mixer bench"
 categories: [rendering, audio]
 size: L (40)
 difficulty: medium (40)
@@ -55,7 +55,8 @@ the numbers below is measured unless it says so.
   smaller and faster build and one `x11rb`; no player-visible change expected.
   Size XL (30), difficulty hard (40): the event-loop and window API changed.
   Wait for the stable release; reopen as an `oag-game` and `oag-view` migration
-  lane then.
+  lane then. It also turns the startup panic on an X server without RandR into an
+  error (`docs/rendering/dynamic-resolution.md`); it does not make one work.
 - **wasmtime 51.0.0 is stable (2026-11-20) and ready to open as a lane.** Ours
   is the exact pin `=50.0.3` on purpose (determinism: fuel, NaN
   canonicalisation, ABI word). Gains: faster compile of host-defined functions
@@ -85,12 +86,16 @@ the numbers below is measured unless it says so.
   late-callback count in `crates/audio/src/output.rs`; 0.18.2 reports
   PipeWire, CoreAudio and AAudio xruns as `ErrorKind::Xrun` but 0.19 removes
   that kind again, so wait for 0.19. Size S (60), difficulty easy (60).
-- **wgpu 31 (unreleased)**: `Features::UNRESTRICTED_BYTES_PER_ROW`
-  ([#10619](https://github.com/gfx-rs/wgpu/pull/10619)) retires the 256-byte
-  row padding in `crates/view/src/offscreen.rs`, `crates/mesh/src/capture.rs`
-  and `crates/gpu/src/writes.rs`. The same release makes a live `BufferView`
-  block `unmap` and `destroy`, and `Queue::submit` returns an `Option`. Read
-  every mapped-range holder before the bump. Size M (50), difficulty medium (50).
+- **wgpu: back to crates.io at 31, then `UNRESTRICTED_BYTES_PER_ROW`.** The
+  tree is on a git pin of trunk (`docs/architecture/dependency-upgrades.md`,
+  "Git pins"), so the API breaks (`submit` returning an `Option`, the new
+  descriptor fields, `has_srgb_suffix`) are already done. When wgpu 31 ships:
+  `wgpu = "31"` and `naga` the same, re-run the six-frame picture check and one
+  S21 round from that page. The pin already carries
+  `Features::UNRESTRICTED_BYTES_PER_ROW` ([#10619](https://github.com/gfx-rs/wgpu/pull/10619)),
+  which retires the 256-byte row padding in `crates/view/src/offscreen.rs`,
+  `crates/mesh/src/capture.rs` and `crates/gpu/src/writes.rs`; not wired. Size
+  S (50), difficulty easy (50).
 - **A toml regression test.** `toml_parser` 1.1.6 fixes a stack overflow on
   invalid TOML ([toml-rs/toml#1265](https://github.com/toml-rs/toml/pull/1265));
   the lock has it. A test feeding a mod manifest thousands of unbalanced `[` and

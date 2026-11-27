@@ -136,6 +136,7 @@ pub(crate) fn physics_laws(laws: Option<&CraftLaws>) -> oag_physics::laws::Laws 
         wall_one_sided: laws.wall_one_sided.value,
         wall_steer_away: laws.wall_steer_away.value,
         wall_point_rate_body_local: laws.wall_point_rate_body_local.value,
+        pending_impulse_on_side: laws.pending_impulse_on_side.value,
         body_damping: oag_physics::laws::BodyDamping {
             linear: laws.body_linear_damping.value,
             angular: laws.body_angular_damping.value,

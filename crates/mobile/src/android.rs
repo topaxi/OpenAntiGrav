@@ -136,6 +136,86 @@ pub fn take_launch_args() -> Vec<String> {
     args
 }
 
+/// Asks, each time it is called, the refresh rate in Hz of the display the activity is on.
+///
+/// The returned reader holds its own reference to the activity, so a thread may keep it; it
+/// attaches that thread to the JVM the activity started.
+///
+/// # Errors
+///
+/// The activity is not up, or the JVM refused the reference.
+pub(crate) fn display_rate()
+-> Result<impl FnMut() -> Result<f32, crate::export::Error> + Send + 'static, crate::export::Error>
+{
+    use crate::export::Error;
+    let app = APP
+        .get()
+        .ok_or(Error::Unsupported("the activity is not up"))?;
+    let vm = jni::JavaVM::singleton().map_err(|e| Error::System(e.to_string()))?;
+    let activity = app.activity_as_ptr();
+    let activity = vm
+        .attach_current_thread(|env| own_activity(env, activity))
+        .map_err(|e| Error::System(e.to_string()))?;
+    Ok(move || {
+        // The attachment names the thread: unnamed, ART renames it `Thread-N` in every profile.
+        let named = || jni::AttachConfig::default().thread_name(jni::jni_str!("android-refresh"));
+        vm.attach_current_thread_with_config(
+            named,
+            Some(jni::DEFAULT_LOCAL_FRAME_CAPACITY),
+            |env| {
+                let outcome = display_refresh_rate(env, &activity);
+                if env.exception_check() {
+                    env.exception_clear();
+                }
+                outcome.map_err(|e| Error::System(e.to_string()))
+            },
+        )
+    })
+}
+
+/// A global reference of our own to the activity, valid on any thread for as long as we hold it.
+#[allow(unsafe_code)] // wrapping the activity's raw reference, see below
+fn own_activity(
+    env: &mut jni::Env,
+    activity: *mut std::ffi::c_void,
+) -> jni::errors::Result<jni::refs::Global<jni::objects::JObject<'static>>> {
+    use jni::objects::JObject;
+    use std::mem::ManuallyDrop;
+
+    // SAFETY: the activity's JNI global reference, owned by `android-activity` for as long as
+    // the app runs; `ManuallyDrop` keeps this wrapper from deleting a reference it does not own.
+    let activity = ManuallyDrop::new(unsafe { JObject::from_raw(env, activity.cast()) });
+    env.new_global_ref(&*activity)
+}
+
+/// `activity.getWindowManager().getDefaultDisplay().getRefreshRate()`: the activity's own
+/// display, on every Android the APK runs on (`Activity.getDisplay` needs API 30).
+fn display_refresh_rate(
+    env: &mut jni::Env,
+    activity: &jni::objects::JObject,
+) -> jni::errors::Result<f32> {
+    use jni::{jni_sig, jni_str};
+
+    let manager = env
+        .call_method(
+            activity,
+            jni_str!("getWindowManager"),
+            jni_sig!("()Landroid/view/WindowManager;"),
+            &[],
+        )?
+        .l()?;
+    let display = env
+        .call_method(
+            &manager,
+            jni_str!("getDefaultDisplay"),
+            jni_sig!("()Landroid/view/Display;"),
+            &[],
+        )?
+        .l()?;
+    env.call_method(&display, jni_str!("getRefreshRate"), jni_sig!("()F"), &[])?
+        .f()
+}
+
 /// Inserts `bytes` into `MediaStore` as `plan` describes and returns the new item's URI.
 ///
 /// Runs on whichever thread calls it: the JVM the activity started is attached for the call.

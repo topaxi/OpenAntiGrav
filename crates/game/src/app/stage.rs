@@ -746,6 +746,7 @@ impl Stage {
             result_key,
             record_target,
             personal_best: None,
+            score_record: None,
             result_saved: false,
             // Filled in by the caller once this stage is actually handed
             // off - see `Session::finish_loading`/`finish_race_loading`,

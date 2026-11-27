@@ -68,6 +68,7 @@ fn the_pass_builds_and_draws_on_a_real_device() {
         format,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
         view_formats: &[format.remove_srgb_suffix()],
+        texture_binding_view_dimension: None,
     });
     let source = scene.create_view(&wgpu::TextureViewDescriptor {
         format: Some(format.remove_srgb_suffix()),
@@ -129,6 +130,7 @@ fn a_flat_colour_is_untouched() {
         format,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let mut pixels = vec![128u8; (SIZE * SIZE * 4) as usize];
     for pixel in pixels.chunks_mut(4) {
@@ -230,6 +232,7 @@ fn a_hard_edge_blends_only_near_the_seam() {
         format,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let mut pixels = vec![0u8; (SIZE * SIZE * 4) as usize];
     for y in 0..SIZE {

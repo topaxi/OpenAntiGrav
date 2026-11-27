@@ -69,8 +69,9 @@ impl Scene {
             drawable.share_scene(device, blocks, SceneKind::Flame);
         }
         // The shield shell and cockpit sphere scroll on the shader's clock (`PROGRAM_SHIELD_LIGHTNING`,
-        // `own_shield.wesl`). Their drawables' own block stays `Scene::off` with `time` at zero, so
-        // they read the flame's: `Scene::off` plus the clock, and nothing else moves.
+        // `own_shield.wesl`), and our own shield also reads the eye. Their drawables' own block stays
+        // `Scene::off` with `time` at zero, so they read the flame's: `Scene::off` plus the clock and
+        // the eye.
         for drawable in self
             .shield
             .iter_mut()
@@ -194,8 +195,47 @@ impl Scene {
     }
 }
 
+/// The flame surfaces' block (flares, boost plumes, flare spikes, and the shield shells and
+/// cockpit sphere that share it): `Scene::off` plus the clock, the view's eye and the title's
+/// output scale, taken from the circuit's `scene`.
+///
+/// HD's live flame program measures its rim from the camera's world position
+/// (`docs/ghidra/functions/ps3-hdfury-eu/engine-flare.md`, "The live vertex program") and closes
+/// its colour on `MAD /2` ("The live fragment program is block #2"), which is `Light::output_scale` (0.5 on HD, 1.0 on every other title).
+/// No other draw on this block reads the scale. The program also fogs the colour with the
+/// circuit's fog, which at chase distance is a factor of 1 to four places; the block keeps fog
+/// off, so the shields sharing it are not fogged on a guess.
+/// The flame surfaces' clock: a capture's imposed flame clock ([`crate::Options::flame_seconds`],
+/// the original's frame context clock at the grab) or else the world clock every other animation
+/// rides (`docs/ghidra/functions/ps3-hdfury-eu/engine-flare.md`, "The flame's clock at a pair's grab").
+pub(super) fn flame_seconds(imposed: Option<f32>, world: f32) -> f32 {
+    imposed.unwrap_or(world)
+}
+
+pub(super) fn flame_scene(
+    scene: &mesh_render::Scene,
+    eye: [f32; 3],
+    seconds: f32,
+) -> mesh_render::Scene {
+    let off = mesh_render::Scene::off();
+    mesh_render::Scene {
+        fog: mesh_render::Fog {
+            camera: eye,
+            ..mesh_render::Fog::off()
+        },
+        time: [seconds; 4],
+        light: off.light.with_output_scale(scene.light.output_scale),
+        ..off
+    }
+}
+
 #[cfg(test)]
 impl Scene {
+    /// Sets the circuit's light rig's output scale, as HD's loader does (0.5).
+    pub(crate) fn set_output_scale_for_tests(&mut self, output_scale: f32) {
+        self.light = self.light.with_output_scale(output_scale);
+    }
+
     /// Gives slot 0 a shield shell and the race a cockpit sphere, each a copy of its hull on a
     /// block of its own.
     pub(crate) fn give_a_shield_for_tests(&mut self, device: &wgpu::Device) {
@@ -207,6 +247,14 @@ impl Scene {
         let (shell, sphere) = (copy(), copy());
         self.shield = vec![Some(shell)];
         self.shield_cockpit = Some(sphere);
+    }
+
+    /// The kind of scene block slot 0's engine flare reads.
+    pub(crate) fn flare_scene_kind_for_tests(&self) -> Option<SceneKind> {
+        self.flares
+            .first()
+            .and_then(Option::as_ref)
+            .and_then(Drawable::scene_kind_for_tests)
     }
 
     /// The kinds of scene block slot 0's shield shell and the cockpit sphere read.

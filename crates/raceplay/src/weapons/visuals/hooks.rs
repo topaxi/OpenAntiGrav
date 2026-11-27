@@ -50,6 +50,25 @@ impl RaceSim {
         self.put_craft_on_projectile(oag_tables::weapons::Weapon::Bomb, slot)
     }
 
+    /// Moves the player's first weapon in the air or on the road to `at`, for
+    /// `--force-shot-at`: a laid Bomb or a Missile then stands where a capture of the
+    /// original had it, and `--force-bomb-trip` or `--force-missile-hit` on the same
+    /// tick sets it off there. `false` when the player has none out. A verification
+    /// aid and nothing else.
+    pub fn force_shot_at(&mut self, player: usize, at: oag_core::math::Vec3) -> bool {
+        let Some(shot) = self
+            .world
+            .projectiles
+            .slots
+            .iter_mut()
+            .find(|p| p.kind.is_some() && usize::from(p.owner) == player)
+        else {
+            return false;
+        };
+        shot.position = at;
+        true
+    }
+
     /// Puts craft `slot` on the first Missile another craft owns, for
     /// `--force-missile-hit`, the same way [`Self::force_bomb_trip`] does for a
     /// Bomb: the next tick's own hit test finds the craft under the missile and
@@ -64,6 +83,23 @@ impl RaceSim {
     /// else.
     pub fn force_rocket_hit(&mut self, slot: usize) -> bool {
         self.put_craft_on_projectile(oag_tables::weapons::Weapon::Rocket, slot)
+    }
+
+    /// Takes up to `count` of the player's Rockets out of the air, without a blast, for
+    /// `--force-rocket-hit-at`: the blast it stands for is played where the flag says. Returns
+    /// how many it took.
+    fn retire_player_rockets(&mut self, player: usize, count: usize) -> usize {
+        let mut retired = 0;
+        for projectile in &mut self.world.projectiles.slots {
+            if retired < count
+                && projectile.kind == Some(oag_tables::weapons::Weapon::Rocket)
+                && usize::from(projectile.owner) == player
+            {
+                *projectile = oag_weapons::projectile::Projectile::default();
+                retired += 1;
+            }
+        }
+        retired
     }
 }
 
@@ -126,6 +162,53 @@ impl RaceSim {
 }
 
 impl Race {
+    /// Gives the craft a forced hit strikes this velocity, in world units a second, for
+    /// `--force-rocket-hit-velocity`. The craft takes it now, and every craft blast on `slot` from
+    /// here carries exactly it: the tick that lands the hit changes the craft's velocity before the
+    /// blast reads it. A craft that is not racing is left alone. A verification aid and nothing
+    /// else.
+    pub fn force_struck_velocity(&mut self, slot: usize, velocity: oag_core::math::Vec3) {
+        if self.core.sim.ship_active(slot) {
+            self.core.sim.world.ships[slot].physics.body.linear_velocity = velocity;
+            self.view.forced_blast_velocity = Some((slot, velocity));
+        }
+    }
+
+    /// `count` Rockets striking a craft at `at`, for `--force-rocket-hit-at`: that many craft
+    /// blasts (each with its screen flash) stand at that exact world point, and as many of the
+    /// player's Rockets in flight are taken out. No craft is struck, so there is no damage,
+    /// impulse or cue. `velocity` is what the blasts carry on a title whose spawn writes the
+    /// struck craft's (`oag_title::Effects::craft_blast_carry`). Returns how many Rockets it
+    /// took, or `None` when the race loaded no craft blast. A verification aid and nothing else.
+    pub fn force_rocket_hit_at(
+        &mut self,
+        at: oag_core::math::Vec3,
+        count: usize,
+        velocity: Option<oag_core::math::Vec3>,
+    ) -> Option<usize> {
+        self.view.handles.get(Trigger::CraftBlast)?;
+        let player = self.core.player_slot();
+        let retired = self.core.sim.retire_player_rockets(player, count);
+        let carried = velocity.filter(|_| self.view.craft_blast_carry);
+        for _ in 0..count {
+            self.view.flash_and_play(
+                flash_for(oag_tables::weapons::Weapon::Rocket, true),
+                Trigger::CraftBlast,
+                at,
+                carried,
+                0.0,
+            );
+        }
+        Some(retired)
+    }
+
+    /// Restart the particle stage's random stream from `seed` instead of
+    /// [`crate::STAGE_SEED`], so a test can hold a picture over several arrangements of the
+    /// same effects rather than the one the fixed seed deals.
+    pub fn reseed_stage(&mut self, seed: u64) {
+        self.view.stage_rng = oag_core::Rng::new(seed);
+    }
+
     /// The loaded particle effect a trigger plays, for tests.
     #[doc(hidden)]
     #[must_use]

@@ -45,6 +45,15 @@ import pcsx2_state  # noqa: E402
 BINARY = ROOT / "target/debug/oag-game"
 
 
+def hd_flame_clock_flags(rec, flags):
+    """`flags` with `--flame-clock` added for an HD pair that recorded the frame context clock (`original.flame_clock_s`),
+    so ours' flame draws at the original's noise phase; a record without one, or flags that carry one, are left alone."""
+    flame = (rec.get("original") or {}).get("flame_clock_s")
+    if rec["profile"] != "hd-fury" or "--flame-clock" in flags or flame is None:
+        return flags
+    return flags + ["--flame-clock", "%.4f" % ce.flame_pin(flame)]
+
+
 def ps2_world_clock_flags(rec, flags):
     """`flags` with `--world-clock-offset` added for a Pulse PS2 grid pair recorded without it.
 
@@ -122,6 +131,9 @@ def rerender(pj, binary):
     lag = (orig.get("presented_lag") or {}).get("hud_clock_ticks")
     if rec["profile"] == "hd-fury" and "--gantry-seconds" in flags and orig.get("gantry_seconds") is not None and lag is not None:
         flags[flags.index("--gantry-seconds") + 1] = "%.6f" % ce.gantry_pin(orig["gantry_seconds"], lag)
+    flags = hd_flame_clock_flags(rec, flags)
+    flags = ce.countdown_flags(rec, flags, ce.go_tick())
+    flags = ce.detonator_picture_flags(rec, flags, ce.go_tick())
     plat = ce.platform(rec["profile"])
     flags = ce.profile_anisotropy_flags(flags, plat, rec.get("kind"))
     flags = ce.profile_pilot_assist_flags(flags, plat, rec.get("kind"))

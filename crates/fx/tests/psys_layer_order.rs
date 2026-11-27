@@ -82,6 +82,7 @@ fn centre_red(underlay: [f32; 4], alpha: [f32; 4], additive: [f32; 4]) -> Option
             format,
             usage,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         })
     };
     let target = texture(

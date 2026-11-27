@@ -249,12 +249,13 @@ fn two_rooms_race_one_after_the_other_through_one_slot_and_return_to_their_rooms
     lab.room_starts(a1, a2, ["Feisar", "Qirex"]);
     lab.room_starts(b1, b2, ["Auricom", "Assegai"]);
 
-    // Room A took the slot; room B is told it is next.
-    lab.until("room A's hand-off", |lab| {
-        lab.people[a1]
-            .room
-            .as_ref()
-            .is_some_and(|r| r.phase == RoomPhase::Racing)
+    // Room A took the slot; room B is told it is next. B's START is still on the wire when
+    // `room_starts` returns, and A may already be racing by then, so each is waited for.
+    lab.until("room B told it is next", |lab| {
+        lab.phase(b1) == Some(RoomPhase::Queued { position: 1 })
+    });
+    lab.until("room A racing", |lab| {
+        lab.phase(a1) == Some(RoomPhase::Racing)
     });
     assert_eq!(lab.phase(b1), Some(RoomPhase::Queued { position: 1 }));
     assert_eq!(

@@ -270,7 +270,8 @@ behind a tree is still wanted.
 | Flares | `0x4d` + depth, measured | among list B by depth, under `ribbons_first()` | a nearer tree covers a farther craft's flare |
 | `Trail` ribbons | `0x4d000000`, measured | before list B | nothing |
 | Boost plumes | key unread | after list B, over everything | not touched until read |
-| Rocket ribbon, weapon bodies, wrecks, shield shells | key unread | after list B | not touched until read |
+| Rocket ribbon and the other `RibbonEffects` strips (HD lineage) | key unread; HD's ring draws them before every particle quad ([rocket-trail.md](../ghidra/functions/ps3-hdfury-eu/rocket-trail.md#drawn-before-the-particles)) | after list B, before the particles | the blast and its wash cover the smoke |
+| Weapon bodies, wrecks, shield shells | key unread | after list B | not touched until read |
 | Blob and hull shadows | no key in the original (ours) | before the hulls | not touched |
 
 **Cross-title check (CLAUDE.md).** Pure: **checked, applies, inherited** - the same `trail_order` path moves with it

@@ -42,6 +42,7 @@ use oag_hud::{Precision, format_lap_time};
 use oag_raceplay::scoreboard::{Board, Row};
 #[cfg(test)]
 use oag_raceplay::scoreboard::{Craft, build};
+use oag_ui::font::Atlas;
 use oag_ui::frontend::{Align, Draw};
 use oag_ui::menu;
 
@@ -474,6 +475,20 @@ fn craft_label(row: &Row, several_people: bool) -> String {
     }
 }
 
+/// The tallest line the panels are set in, in grid units: Pure's caption face, the tallest of the
+/// PSP-grid titles', so no face a title authors for this grid is changed.
+const PANEL_LINE_HEIGHT: f32 = 12.0;
+
+/// `face` brought into the panels' 480x272 grid. A title's caption face is authored in the title's
+/// own grid, and HD's, Omega's and 2048's are 34 units tall in grids of 1920x1080 and 960x544:
+/// drawn here as they stand they are three times the panel's rows and run off it
+/// (`docs/tools/in-game-benchmark.md`, "Fitting the stats screen").
+#[must_use]
+pub fn panel_face(face: &Atlas) -> Atlas {
+    face.clone()
+        .with_texel_scale((PANEL_LINE_HEIGHT / face.line_height).min(1.0))
+}
+
 /// Draws a board over whatever is already in the target.
 ///
 /// A renderer of its own rather than a method on [`crate::hud_overlay::Overlay`]: that
@@ -485,7 +500,6 @@ fn craft_label(row: &Row, several_people: bool) -> String {
 pub struct Overlay {
     renderer: crate::render::Renderer,
     line_height: f32,
-    char_width: f32,
 }
 
 impl std::fmt::Debug for Overlay {
@@ -508,20 +522,13 @@ impl Overlay {
         format: wgpu::TextureFormat,
         assets: &oag_hud::Assets,
     ) -> anyhow::Result<Self> {
-        let sample = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-        let char_width = oag_ui::font::measure(&assets.small_font, sample) / sample.len() as f32;
-        let renderer = crate::render::Renderer::new(
-            device,
-            queue,
-            format,
-            None,
-            assets.small_font.clone(),
-            &assets.sheet,
-        )?;
+        let face = panel_face(&assets.small_font);
+        let line_height = face.line_height;
+        let renderer =
+            crate::render::Renderer::new(device, queue, format, None, face, &assets.sheet)?;
         Ok(Self {
             renderer,
-            line_height: assets.small_font.line_height,
-            char_width,
+            line_height,
         })
     }
 
@@ -545,16 +552,10 @@ impl Overlay {
         self.draw_list(device, queue, encoder, view, &list, viewport);
     }
 
-    /// The font's line height, which a panel built for [`Self::draw_list`] spaces itself by.
+    /// The face the panels are set in, in the 480x272 grid ([`panel_face`]).
     #[must_use]
-    pub fn line_height(&self) -> f32 {
-        self.line_height
-    }
-
-    /// The mean width of a capital or a digit in the font, at text scale one.
-    #[must_use]
-    pub fn char_width(&self) -> f32 {
-        self.char_width
+    pub fn face(&self) -> &Atlas {
+        self.renderer.face()
     }
 
     /// Draws any panel's list over the frame: the renderer is this overlay's, the list is the

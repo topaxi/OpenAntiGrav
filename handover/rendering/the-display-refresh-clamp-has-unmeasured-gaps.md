@@ -1,8 +1,8 @@
 ---
 status: blocked-hardware
 titles: [all]
-updated: 2026-11-04
-summary: "ADR-0084's refresh clamp: the Deck test (dock, undock, pacing, QAM limit, width baseline), Windows/macOS poll cost, Wayland mode change"
+updated: 2026-11-26
+summary: "ADR-0084 clamp: dock/undock Deck test, Steam launch after undock, Windows/macOS poll cost, Wayland"
 categories: [rendering]
 size: S (60)
 difficulty: easy (70)
@@ -15,6 +15,17 @@ The clamp reads the output's refresh (`oag_present::refresh`; on X11 through Ran
 
 ## Open
 
+- **What a game started from Steam reads on an undocked Deck that was docked earlier** in the same
+  boot. Outside Steam, gamescope's second Xwayland (`DISPLAY=:1`) still reported the TV
+  (3840x2160, 59981 mHz) with the panel at 90 Hz, while `:0` reported 89887
+  (`docs/rendering/dynamic-resolution.md`, "On the Steam Deck: the refresh the output reports").
+  About 5 minutes with the maintainer's hands: dock, undock, start the build from Steam with
+  `RUST_LOG=oag_game=debug` and read the `X server reports N mHz` line. 90 is a pass.
+- An X server without RandR panics inside winit 0.30.13 before the reader starts (`failed to
+  request XRandR version`). Recorded, not planned: upstream does not support such a server, a fix
+  is a fork, and the maintainer ruled it not worth investment. Gamescope and a default Xvfb have
+  RandR. Evidence: `docs/rendering/dynamic-resolution.md`, "On the Steam Deck: the refresh the
+  output reports", the "No RandR extension" bullet.
 - A real dock and undock on the Deck: launch undocked then dock (expect 60 within about two
   seconds), launch docked then undock (expect back to 90). Headless Xvfb mode changes follow;
   gamescope headless could not change its rate, so the rate change under gamescope is unproven.

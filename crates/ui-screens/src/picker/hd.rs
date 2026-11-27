@@ -263,6 +263,22 @@ pub fn read(
     })
 }
 
+/// Every `<MiniText>` caption on the screen named `name` in `xml`, where `screens` is the same
+/// file parsed with the front end's globals. Empty when the screen is not in it.
+pub(crate) fn mini_texts(
+    xml: &str,
+    name: &str,
+    screens: &Screens,
+    strings: &StringTable,
+) -> Vec<MiniText> {
+    let root = parse(xml);
+    let mut out = TeamScreen::default();
+    if let Some(screen) = find_screen(&root, name) {
+        walk(screen, (0.0, 0.0), screens, strings, &mut out);
+    }
+    out.labels
+}
+
 fn find_screen<'a>(node: &'a Node, name: &str) -> Option<&'a Node> {
     if node.name.eq_ignore_ascii_case("Screen") && node.attr("name") == Some(name) {
         return Some(node);
@@ -354,10 +370,9 @@ fn walk(
                     scale: number(child, "Scale").unwrap_or(1.0),
                     hex: colour("HexCol").unwrap_or(0x6480_8080),
                     hex_fade: colour("HexColFade").unwrap_or(0x3280_8080),
-                    fade: None,
                     selected_column: 0,
                     selected_lock: colour("SelectedLockCol").unwrap_or(0xff80_8080),
-                    selected_lock_fade: colour("SelectedLockColFade").unwrap_or(0xff24_2424),
+                    selected_lock_fade: colour("SelectedLockColFade").unwrap_or(0xff16_1616),
                     ring_peak: None,
                     phase_by_entry: true,
                 });

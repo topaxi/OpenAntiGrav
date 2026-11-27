@@ -1,7 +1,7 @@
 //! The scene blocks every drawable of a kind reads: one write per kind per view, in a region
 //! of the buffer that belongs to that view alone.
 
-use super::scene_build::{bare_scene, test_gpu};
+use super::scene_build::{bare_scene, bare_scene_of, livery, test_gpu, triangle};
 use super::*;
 use crate::drawable::SceneKind;
 use oag_display::display::{Fov, Shadows};
@@ -21,6 +21,7 @@ fn target(device: &wgpu::Device) -> wgpu::TextureView {
             format: wgpu::TextureFormat::Rgba8Unorm,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         })
         .create_view(&Default::default())
 }
@@ -213,4 +214,140 @@ fn the_shield_shell_and_sphere_read_the_clocked_block() {
         scene.shield_scene_kinds_for_tests(),
         [Some(SceneKind::Flame); 2]
     );
+}
+
+/// The engine flare's rim (`flame_shading`) and our own shield's rim, facets and silhouette
+/// are measured from the eye (`to_eye`), so the flame surfaces' block holds the eye of the view
+/// being drawn, with the clock and no fog. Drop the camera from `flame_scene` and the eye read
+/// back is the origin; move the flare or the shields off the block and their kind is not it.
+#[test]
+fn the_flame_surfaces_and_shields_read_each_views_eye() {
+    let Some((device, queue)) = test_gpu() else {
+        return;
+    };
+    let mut craft = livery();
+    craft.flare = Some(triangle());
+    let mut scene = bare_scene_of(&device, &queue, &[craft]);
+    scene.give_a_shield_for_tests(&device);
+    scene.share_scene_blocks_for_tests(&device);
+    assert_eq!(scene.flare_scene_kind_for_tests(), Some(SceneKind::Flame));
+    assert_eq!(
+        scene.shield_scene_kinds_for_tests(),
+        [Some(SceneKind::Flame); 2]
+    );
+    let view = target(&device);
+    let mut race = race_with_a_grid();
+    assert_eq!(race.set_viewport_count(2), 2, "the grid fields two craft");
+    scene.render_viewports(
+        &device,
+        &queue,
+        &view,
+        &race,
+        (0.0, 0.0, 64.0, 64.0),
+        Fov::AUTHORED,
+        true,
+        true,
+        None,
+        Shadows::Off,
+        &[],
+        crate::scene::WindowEffects::default(),
+        &mut [],
+    );
+    for slot in 0..2 {
+        race.view.set_viewpoint(&race.core, slot);
+        let eye = race.view.camera_position(&race.core).to_array();
+        race.view.reset_viewpoint();
+        assert_ne!(eye, [0.0; 3], "view {slot}'s camera is not at the origin");
+        let block = scene.scene_block(&device, &queue, slot, SceneKind::Flame);
+        assert_eq!(block.fog.camera, eye, "view {slot}'s flame surfaces");
+        let circuit = scene.scene_block(&device, &queue, slot, SceneKind::Circuit);
+        assert_eq!(block.time, circuit.time, "their clock");
+        assert_eq!(block.fog.enabled, 0.0, "they are not fogged");
+    }
+}
+
+/// HD's flame program closes its colour on `MAD /2`, which is the circuit's
+/// `Light::output_scale`, so the flame surfaces' block carries it. Drop it from `flame_scene`
+/// and the block reads `Scene::off`'s 1.0 where HD's circuit reads 0.5.
+#[test]
+fn the_flame_surfaces_close_on_the_circuits_output_scale() {
+    let Some((device, queue)) = test_gpu() else {
+        return;
+    };
+    let mut craft = livery();
+    craft.flare = Some(triangle());
+    let mut scene = bare_scene_of(&device, &queue, &[craft]);
+    scene.share_scene_blocks_for_tests(&device);
+    scene.set_output_scale_for_tests(0.5);
+    assert_eq!(scene.flare_scene_kind_for_tests(), Some(SceneKind::Flame));
+    let view = target(&device);
+    let race = race_with_a_grid();
+    scene.render_viewports(
+        &device,
+        &queue,
+        &view,
+        &race,
+        (0.0, 0.0, 64.0, 64.0),
+        Fov::AUTHORED,
+        true,
+        true,
+        None,
+        Shadows::Off,
+        &[],
+        crate::scene::WindowEffects::default(),
+        &mut [],
+    );
+    let flame = scene.scene_block(&device, &queue, 0, SceneKind::Flame);
+    let circuit = scene.scene_block(&device, &queue, 0, SceneKind::Circuit);
+    assert_eq!(circuit.light.output_scale, 0.5, "HD's output scale");
+    assert_eq!(
+        flame.light.output_scale, circuit.light.output_scale,
+        "the flame program's closing `/2`"
+    );
+}
+
+/// A capture's imposed flame clock (`Options::flame_seconds`, the original's frame context clock at
+/// the grab) reaches the flame surfaces' block and nothing else: the circuit keeps the world
+/// clock. Read the world clock in `flame_scene`'s caller again and the flame block's time is the
+/// circuit's; impose it on the circuit too and the circuit's is the imposed one.
+#[test]
+fn an_imposed_flame_clock_reaches_the_flame_surfaces_alone() {
+    let Some((device, queue)) = test_gpu() else {
+        return;
+    };
+    let mut craft = livery();
+    craft.flare = Some(triangle());
+    let mut scene = bare_scene_of(&device, &queue, &[craft]);
+    scene.share_scene_blocks_for_tests(&device);
+    let view = target(&device);
+    let mut race = race_with_a_grid();
+    let imposed = 122.472_f32;
+    race.view.flame_seconds = Some(imposed);
+    scene.render_viewports(
+        &device,
+        &queue,
+        &view,
+        &race,
+        (0.0, 0.0, 64.0, 64.0),
+        Fov::AUTHORED,
+        true,
+        true,
+        None,
+        Shadows::Off,
+        &[],
+        crate::scene::WindowEffects::default(),
+        &mut [],
+    );
+    let flame = scene.scene_block(&device, &queue, 0, SceneKind::Flame);
+    let circuit = scene.scene_block(&device, &queue, 0, SceneKind::Circuit);
+    assert_eq!(
+        flame.time, [imposed; 4],
+        "the flame rides the imposed clock"
+    );
+    assert_eq!(
+        circuit.time,
+        [race.world_clock_seconds(); 4],
+        "the circuit keeps the world clock"
+    );
+    assert_ne!(flame.time, circuit.time);
 }

@@ -450,6 +450,7 @@ fn upload_levels(
         format: FORMAT,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     for (mip, ((level_width, level_height), bytes)) in dims.iter().zip(levels).enumerate() {
         // The block-aligned extent, as for BC: a compressed copy is validated in

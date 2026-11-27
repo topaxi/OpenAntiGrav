@@ -481,11 +481,17 @@ pub struct Options {
     /// is put at the same phase. Read off the original's RAM, never derived; `0.0` is every race.
     pub world_clock_offset: f32,
     /// The start gantry's animation time in seconds, imposed on the board for the frame. **A capture
-    /// aid**: the original's GO board loops over a window of its own node's time (`[3.83, 5.25)`
+    /// aid**: the original's start board loops over a window of its own node's time (`[3.83, 5.25)`
     /// s before the first line crossing, 86 ticks a loop) whose phase the race clock alone does not
     /// give, so a pair is only comparable when ours shows the phase the original's RAM held. Read
     /// off the gantry node's `+0xc0`, never derived; `None` is every race.
     pub gantry_seconds: Option<f32>,
+    /// The engine flame surfaces' clock in seconds, imposed for the frame. **A capture aid**: HD's
+    /// flame scrolls its noise by `2 * time` against the frame context's boot clock (engine
+    /// parameter slot 0), which no race clock of ours gives, so a still pair matches the noise's
+    /// phase only when ours draws at the clock the original's RAM held. Read off RAM, never
+    /// derived; `None` is every race, where the flame rides the world clock.
+    pub flame_seconds: Option<f32>,
     /// Render from this camera instead of the chase camera.
     ///
     /// The other half of the same capture aid: a ship pose replicates *what*
@@ -721,6 +727,10 @@ pub struct SimSetup {
     /// What the firing craft's box does to its projectiles' first probes,
     /// `oag_title::weapons::Weapons::own_craft_box_hides_track`.
     pub own_craft_box_hides_track: oag_title::weapons::OwnCraftBox,
+    /// `oag_title::weapons::Weapons::surface_probe_lengths`.
+    pub surface_probe_lengths: oag_title::weapons::ProbeLengths,
+    /// `oag_title::weapons::Weapons::rocket_open_air`.
+    pub rocket_open_air: oag_title::weapons::RocketOpenAir,
     /// Which ways a craft is put back are on, and the numbers they fire on:
     /// `oag_race::recovery::ResetTriggers::PULSE` with the title's
     /// `oag_title::Title::reset_enables` applied.
@@ -734,6 +744,9 @@ pub struct SimSetup {
     /// What an Eliminator is won on, `None` for kills: `oag_title::Title::eliminator` with the
     /// opponents' scale resolved for this race's difficulty.
     pub score_law: Option<oag_race::ScoreLaw>,
+    /// How a score Eliminator's opponents spend their weapons:
+    /// `oag_title::Title::score_pace`. Read only where [`Self::score_law`] is `Some`.
+    pub score_pace_terms: oag_title::eliminator::ScorePaceTerms,
     /// The Eliminator flip, `None` outside an Eliminator and on a title without one:
     /// `oag_title::Title::eliminator_flip`.
     pub flip_law: Option<oag_physics::flip::FlipLaw>,
@@ -782,15 +795,20 @@ pub struct SimSetup {
     /// list, or does not restrict at all when empty - the same "empty is no
     /// override" convention [`Options::grid_teams`] uses.
     ///
-    /// **Nothing sets this except `race::load::campaign::load_event`**, off
-    /// the 2048 campaign event's own `M_WEAPONSET` -
+    /// Set from [`oag_title::Title::pickup_roster`] for the race's mode, then
+    /// replaced by `race::load::campaign::load_event` with a 2048 campaign
+    /// event's own `M_WEAPONSET` -
     /// `oag_tables::mjolnir::campaign::WeaponSet::allowed_weapons`, the bits
     /// that project has pinned at confidence >= 70 (see
     /// `docs/formats/2048-campaign.md`'s "The weapon set gate" section).
-    /// Every non-2048 race, and a 2048 event whose weapon set decodes to
-    /// nothing recognised, draws exactly as it always did - see
+    /// A title with no roster, outside such an event, restricts nothing - see
     /// [`oag_weapons::pickup::draw`]'s own `allowed` parameter.
     pub allowed_weapons: Vec<oag_tables::weapons::Weapon>,
+    /// The title's pickup roster ([`oag_title::Title::pickup_roster`]), for what it says beyond
+    /// [`Self::allowed_weapons`]: the order a person's roll passes a disallowed weapon's weight
+    /// along, whether the AI's draw refuses a repeat, and the one-live exclusions. `None` where
+    /// the title has none: every draw refuses a repeat and nothing is left out.
+    pub pickup_roster: Option<oag_title::pickup_roster::PickupRoster>,
     /// Seconds a weapon pad is inert for after it is crossed, for this race's
     /// speed class.
     ///

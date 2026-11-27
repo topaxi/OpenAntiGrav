@@ -223,6 +223,7 @@ fn every_ported_pass_builds_and_dispatches_on_a_real_device() {
                 format,
                 usage,
                 view_formats: &[],
+                texture_binding_view_dimension: None,
             })
             .create_view(&wgpu::TextureViewDescriptor::default())
     };
@@ -848,6 +849,7 @@ fn the_multisampled_build_binds_a_multisampled_scene() {
                 usage: wgpu::TextureUsages::TEXTURE_BINDING
                     | wgpu::TextureUsages::RENDER_ATTACHMENT,
                 view_formats: &[],
+                texture_binding_view_dimension: None,
             })
             .create_view(&wgpu::TextureViewDescriptor::default())
     };

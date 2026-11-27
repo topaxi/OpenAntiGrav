@@ -584,6 +584,17 @@ pub struct Modifier {
     pub params: [f32; 9],
 }
 
+/// The atlas frames [`Emitter::frame_range`] names.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FrameRange {
+    /// `+0xc8d`, `+0xc8e`: the first and last frame a random spawn takes, `(0, 0)` for the
+    /// whole grid. Without the random-frame flag the first is the spawn frame.
+    pub spawn: (u8, u8),
+    /// `+0xc8f`, `+0xc94`: once the frame passes the second it is set to the first,
+    /// `(0, 0)` for no hold.
+    pub hold: (u8, u8),
+}
+
 /// One emitter record, at its own base inside a resolved `.pob` resource.
 ///
 /// The root emitter's base **is** the resource base, so its `+0x00` name is
@@ -703,6 +714,17 @@ pub struct Emitter {
     /// `None` for a blob too short to reach it, and for a sprite template, which is
     /// not an emitter record (`docs/ghidra/functions/ps3-hdfury-eu/particle-render.md`).
     pub near_cap: Option<f32>,
+    /// `+0xc8d`, `+0xc8e`, `+0xc8f` and `+0xc94`: the frames of the sprite atlas a particle
+    /// spawns on and holds at. Only the long record of HD's build is read to hold them
+    /// (`docs/formats/pob.md`, "The spawn range and the hold frame"); a PSP or PS2 file's
+    /// bytes there belong to something else, so take them only for a title whose executable
+    /// reads them. `None` for a blob too short to reach them.
+    pub frame_range: Option<FrameRange>,
+    /// `+0xc84` and `+0xc88`: the bounds of HD's per-particle size multiplier
+    /// (`flags::SIZE_RAMP`). The same first word is [`Self::colour_scale`] on render mode 5
+    /// and [`Self::distort_strength`] on blend class 8. `None` for a record too short to hold
+    /// them; take it only for a title whose executable reads it.
+    pub size_span: Option<(f32, f32)>,
     /// `+0x778`: how fast the sprite-atlas frame advances, frames per tick.
     /// The fourth channel the load-time baker `FUN_088f9024` merges, after
     /// alpha, size and roll; see `docs/formats/pob.md`, "The frame-rate
@@ -901,6 +923,11 @@ fn parse_emitter(
             1.0
         },
         near_cap: (record.len() >= 0xc84).then(|| float(0xc80)),
+        frame_range: (record.len() > 0xc94).then(|| FrameRange {
+            spawn: (record[0xc8d], record[0xc8e]),
+            hold: (record[0xc8f], record[0xc94]),
+        }),
+        size_span: (record.len() >= 0xc8c).then(|| (float(0xc84), float(0xc88))),
         frame_rate: parse_channel(record, order, 0x778)?,
         emission_scale: parse_channel(record, order, 0x858)?,
         playback_rate: float(0x4cc),

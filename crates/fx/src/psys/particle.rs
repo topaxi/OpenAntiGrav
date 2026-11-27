@@ -28,6 +28,9 @@ pub(super) struct Particle {
     /// The system's scale at spawn - the original's severity, which
     /// multiplies both speed and drawn size.
     pub(super) scale: f32,
+    /// The size multiplier fixed at spawn, `1.0` without one:
+    /// [`super::EmitterSpec::size_ramp`].
+    pub(super) ramp: f32,
     /// Which cell of the emitter's [`super::Atlas`] it draws - see [`super::sprite`].
     pub(super) frame: u16,
     /// [`Particle::frame`] before its floor, as [`super::frames`] advances it.
@@ -69,6 +72,7 @@ impl Particle {
         size_sample: 0.0,
         alpha_sample: 0.0,
         scale: 0.0,
+        ramp: 1.0,
         frame: 0,
         frame_at: 0.0,
         fresh: false,

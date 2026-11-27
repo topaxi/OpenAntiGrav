@@ -291,6 +291,7 @@ fn capture(
         format,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let view = target.create_view(&wgpu::TextureViewDescriptor::default());
 

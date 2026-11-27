@@ -11,6 +11,7 @@ use crate::psys::{Blend, Render, System};
 const LAW: NearLaw = NearLaw {
     cull_depth: 1.0,
     fade_depth: 4.0,
+    template_cap: None,
 };
 
 /// The eye at the origin looking down `-Z`, drawn on the tick.
@@ -99,6 +100,27 @@ fn a_billboard_is_never_larger_than_its_depth_times_the_cap() {
     // An emitter with no cap keeps its size at any depth.
     let uncapped = billboard_effect(8.0, None, Some(LAW));
     assert!((half_of(&quads_at(&uncapped, 10.0, CULL)) - 8.0).abs() < 1e-4);
+}
+
+/// A sprite template has no cap of its own: the law's template cap bounds it, and its spec's
+/// `near_cap` is not read.
+#[test]
+fn a_template_is_capped_by_the_laws_template_cap() {
+    let mut built = billboard_effect(
+        8.0,
+        Some(0.5),
+        Some(NearLaw {
+            template_cap: Some(2.0),
+            ..LAW
+        }),
+    );
+    built.emitters[0].template = true;
+    // 8 / 3 is past 2.0: capped to 6, not to the spec's 1.5.
+    assert!((half_of(&quads_at(&built, 3.0, CULL)) - 6.0).abs() < 1e-4);
+    assert!((half_of(&quads_at(&built, 5.0, CULL)) - 8.0).abs() < 1e-4);
+    // Without a template cap the template keeps its size.
+    built.near = Some(LAW);
+    assert!((half_of(&quads_at(&built, 3.0, CULL)) - 8.0).abs() < 1e-4);
 }
 
 #[test]

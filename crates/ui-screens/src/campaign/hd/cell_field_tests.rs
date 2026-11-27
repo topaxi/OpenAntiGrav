@@ -71,6 +71,7 @@ fn drawn(summary: &GridSummary, next: Option<&str>) -> Vec<String> {
         screen,
         scale: [1.0, 1.0],
         faces: crate::picker::FaceScales::default(),
+        labels: Vec::new(),
     };
     let model = CellSelection::new(vec![cell("grid8_0_0")]);
     let skin = Skin::new(

@@ -20,7 +20,7 @@ use std::sync::Arc;
 
 use oag_gpu::formats::{SCENE_FORMAT, SceneStore};
 use oag_mesh::mesh::{Bounds, DrawCall, Emissive, GpuVertex, Model, ModelTexture, Texels, slots};
-use oag_mesh::mesh_render::{self, Anisotropy, Scene, UNIFORMS_SIZE};
+use oag_mesh::mesh_render::{self, Anisotropy, Scene, UNIFORMS_SIZE, Zone, ZoneSet};
 
 const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 const SIZE: u32 = 64;
@@ -329,6 +329,67 @@ fn scanlinebillboards_tint_desaturation_and_alpha_boost_reach_the_colour() {
     );
 }
 
+/// **In a Zone frame the billboard draws the Zone surface, not the advert.** The Zone variants of every
+/// holographic material declare none of the advert or second-layer samplers and compute the generic Zone
+/// surface (`docs/rendering/hd-zone-recolour.md`, "Holographic billboards in a Zone frame"), so a Scene set
+/// of black colours draws black where the overlay would be `0.252`. A chunk the Zone race draws on its plain
+/// program (`slots::ZONE_PLAIN`) keeps the overlay, as does a frame with the Zone grade off.
+#[test]
+fn a_zone_frame_draws_the_zone_surface_on_a_billboard_not_the_overlay() {
+    let instance = wgpu::Instance::default();
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let (device, queue) =
+        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+            .expect("requesting the device");
+    let black = ZoneSet {
+        effect: [0.0; 4],
+        base: [0.0; 4],
+        base_alt: [0.0; 4],
+    };
+    let at = |model: &Model, zone: bool| {
+        let mut scene = Scene::off();
+        scene.light.enabled = 1.0;
+        scene.fog.camera = [0.0, 0.0, 100.5];
+        if zone {
+            scene.zone = Zone {
+                uv_scale: [1.0, 1.0],
+                enabled: 1.0,
+                track: black,
+                scene: black,
+                track_outer: black,
+                scene_outer: black,
+                ..Zone::default()
+            };
+        }
+        draw(&device, &queue, model, scene)
+    };
+    let encoded = |v: f32| (v.powf(1.0 / 2.2) * 255.0).round() as i32;
+    let lines = [128, 128, 255];
+    let billboard = model(128, lines, 128, slots::HOLO_BILLBOARD);
+
+    let off = at(&billboard, false);
+    assert!(
+        (i32::from(off[0]) - encoded(0.252)).abs() <= 3,
+        "off a Zone race the overlay draws: {off:?}"
+    );
+    let zone = at(&billboard, true);
+    assert!(
+        zone[..3].iter().all(|&c| c <= 2),
+        "a black Scene set draws the billboard black: {zone:?}"
+    );
+    let plain = at(
+        &model(128, lines, 128, slots::HOLO_BILLBOARD | slots::ZONE_PLAIN),
+        true,
+    );
+    assert!(
+        (i32::from(plain[0]) - encoded(0.252)).abs() <= 3,
+        "a Zone-plain chunk keeps its own program: {plain:?}"
+    );
+}
+
 /// A two-texel-wide layer: dark on the left half, bright on the right.
 fn halves() -> Arc<ModelTexture> {
     Arc::new(ModelTexture {
@@ -471,6 +532,7 @@ pub(crate) fn draw_into(
             format,
             usage,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         })
     };
     let colour = make(

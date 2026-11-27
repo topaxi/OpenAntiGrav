@@ -205,12 +205,14 @@ fn target_fps_offers_default_after_the_fixed_rates_and_shows_the_live_rate() {
     let names: Vec<&str> = values.iter().map(|(value, _)| value.as_str()).collect();
     assert_eq!(
         names,
-        ["off", "30", "60", "90", "100", "120", "144", "default"]
+        [
+            "off", "original", "30", "60", "90", "100", "120", "144", "default"
+        ]
     );
     assert!(
-        values[7].1.eq_ignore_ascii_case("default"),
+        values[8].1.eq_ignore_ascii_case("default"),
         "{}",
-        values[7].1
+        values[8].1
     );
 
     let mut menu = Menu::new(definition);
@@ -225,6 +227,59 @@ fn target_fps_offers_default_after_the_fixed_rates_and_shows_the_live_rate() {
         _ => false,
     });
     assert!(labelled);
+}
+
+/// TARGET FPS offers `original` only where the title has a width throttle of its own (HD),
+/// keeps every other value everywhere, and greys MINIMUM RESOLUTION while it is chosen.
+#[test]
+fn target_fps_offers_original_only_where_the_title_throttles_its_width() {
+    let values = |definition: &Definition| -> Vec<String> {
+        definition
+            .pages
+            .iter()
+            .flat_map(|page| page.entries.iter())
+            .filter_map(|entry| match entry {
+                oag_ui::menu::Entry::Choice {
+                    setting, values, ..
+                } if setting == "graphics.target_fps" => Some(values),
+                _ => None,
+            })
+            .flat_map(|values| values.iter().map(|choice| choice.value.clone()))
+            .collect()
+    };
+    let every = values(&built_in());
+    assert!(every.iter().any(|value| value == "original"), "{every:?}");
+    let without: Vec<String> = every
+        .iter()
+        .filter(|value| *value != "original")
+        .cloned()
+        .collect();
+    for (title, offered) in [
+        (oag_pulse::TITLE, &without),
+        (oag_pure::TITLE, &without),
+        (oag_hd::TITLE, &every),
+        (oag_omega::TITLE, &without),
+        (oag_2048::TITLE, &without),
+    ] {
+        let mut definition = built_in();
+        definition.drop_unavailable_width_throttle(title);
+        assert_eq!(&values(&definition), offered, "{}", title.name);
+    }
+    let floor = built_in()
+        .pages
+        .iter()
+        .flat_map(|page| page.entries.iter())
+        .find(|entry| entry.setting() == Some("graphics.minimum_resolution"))
+        .and_then(|entry| entry.disabled_by().cloned())
+        .expect("MINIMUM RESOLUTION is greyed by something");
+    assert_eq!(floor.setting, "graphics.target_fps");
+    assert!(
+        floor
+            .values
+            .contains(&oag_ui::menu::Value::Text("original".to_string())),
+        "{:?}",
+        floor.values
+    );
 }
 
 #[test]

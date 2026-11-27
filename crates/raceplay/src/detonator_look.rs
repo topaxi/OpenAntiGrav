@@ -68,7 +68,8 @@ pub(crate) struct LaidMine {
     pub(crate) live: bool,
 }
 
-/// Every laid mine's envelopes, and the race clock they were last stepped at.
+/// Every laid mine's envelopes and the race clock it was first laid at, and the race clock they
+/// were last stepped at.
 ///
 /// **Once per tick, not once per frame**: a frame between two ticks (or a second view of the
 /// same one) leaves them as they are, so the envelope's rate is the update rate whatever the
@@ -77,12 +78,13 @@ pub(crate) struct LaidMine {
 #[derive(Debug, Default)]
 pub(crate) struct MineEnvelopes {
     stepped_at: Option<u32>,
-    mines: std::collections::BTreeMap<(u16, i8), MineEnvelope>,
+    mines: std::collections::BTreeMap<(u16, i8), (MineEnvelope, f32)>,
 }
 
 impl MineEnvelopes {
     /// Steps every mine of `laid` against `levels` if `seconds` is a clock not stepped yet, and
-    /// drops the mines no longer laid. Returns each mine's envelope, in `laid`'s order.
+    /// drops the mines no longer laid. Returns each mine's envelope, in `laid`'s order; a mine
+    /// seen for the first time is laid at `seconds`.
     pub(crate) fn advance(
         &mut self,
         laid: &[LaidMine],
@@ -95,7 +97,10 @@ impl MineEnvelopes {
             .retain(|key, _| laid.iter().any(|mine| (mine.entry, mine.lane) == *key));
         laid.iter()
             .map(|mine| {
-                let envelope = self.mines.entry((mine.entry, mine.lane)).or_default();
+                let (envelope, _) = self
+                    .mines
+                    .entry((mine.entry, mine.lane))
+                    .or_insert((MineEnvelope::default(), seconds));
                 if step && mine.live {
                     envelope.step(levels, mine_band(mine.entry, mine.lane));
                 }
@@ -103,13 +108,72 @@ impl MineEnvelopes {
             })
             .collect()
     }
+
+    /// Each mine of `laid`'s age at the race clock `seconds`, in `laid`'s order: the time since
+    /// [`Self::advance`] first saw it (`m+0xc0`, which `DetonatorMine_Place` zeroes and every
+    /// update steps). A mine `advance` has not seen is `0`.
+    #[must_use]
+    pub(crate) fn ages(&self, laid: &[LaidMine], seconds: f32) -> Vec<f32> {
+        laid.iter()
+            .map(|mine| {
+                self.mines
+                    .get(&(mine.entry, mine.lane))
+                    .map_or(0.0, |&(_, laid_at)| (seconds - laid_at).max(0.0))
+            })
+            .collect()
+    }
 }
 
-/// A mine's two envelopes: the football's `s` (`m+0xf4`) and the spikes' `t` (`m+0xf8`).
+/// What a laid mine's model matrices read: the football's and spikes' sizes and the mine's age.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct MinePose {
+    pub(crate) football: f32,
+    pub(crate) spikes: f32,
+    pub(crate) age: f32,
+}
+
+impl Default for MinePose {
+    fn default() -> Self {
+        Self {
+            football: 1.0,
+            spikes: 1.0,
+            age: 0.0,
+        }
+    }
+}
+
+/// The angle a mine `age` seconds old is turned by at `rate` radians a second, wrapped to one
+/// turn: `DetonatorMine_AnimateToMusic`'s `phase = wrap(4 age)` (`m+0x150`).
+#[must_use]
+pub(crate) fn spin_phase(rate: f32, age: f32) -> f32 {
+    (rate * age).rem_euclid(std::f32::consts::TAU)
+}
+
+/// A mine's basis: the world axes turned about `up` by `phase`, not a frame built on `up`.
+///
+/// The original writes all three rows from scratch, row 0 `(x^2 (1-c) + c, xy (1-c) - z s,
+/// xz (1-c) + y s)` and so on for the axis `(x, y, z)` (`0x006ca538`), and its rows are the
+/// model's axes, so each row is a column here: about `+Y`, the model's X axis goes to
+/// `(c, 0, s)`, a turn of `-phase` in this crate's right-handed sense
+/// (`docs/ghidra/functions/ps3-hdfury-eu/detonator-mine-draw.md`, "The spin").
+#[must_use]
+pub(crate) fn spun_basis(up: oag_core::math::Vec3, phase: f32) -> oag_core::math::Mat3 {
+    let up = up.normalize_or_zero();
+    let up = if up == oag_core::math::Vec3::ZERO {
+        oag_core::math::Vec3::Y
+    } else {
+        up
+    };
+    oag_core::math::Mat3::from_axis_angle(up, -phase)
+}
+
+/// A mine's two envelopes, the football's `s` (`m+0xf4`) and the spikes' `t` (`m+0xf8`), and its
+/// visualiser's `PitchOffset` (`m+0x108`), which only a comparison pin sets.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(crate) struct MineEnvelope {
     pub(crate) football: f32,
     pub(crate) spikes: f32,
+    pub(crate) pitch_offset: f32,
 }
 
 impl MineEnvelope {
@@ -138,17 +202,41 @@ impl MineEnvelope {
     }
 }
 
+/// A laid mine a comparison holds at the original's read.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct MinePin {
+    /// The football's `s`, the spikes' `t` and the visualiser's `PitchOffset`
+    /// (`--detonator-mine-envelopes`); held on a live mine only.
+    pub envelope: Option<(f32, f32, f32)>,
+    /// The mine's age, seconds (`m+0xc0`, `--detonator-mine-ages`); held live or dark.
+    pub age: Option<f32>,
+}
+
+/// Pinned mines by survey entry and lane.
+pub(crate) type MinePins = std::collections::BTreeMap<(u16, i8), MinePin>;
+
 /// Replaces the envelope of every live mine in `pins` (by survey entry and lane) with the pinned
-/// football `s` and spikes `t`: a comparison holds a mine at the original's read.
+/// football `s`, spikes `t` and `PitchOffset`, and the age of every pinned mine with its pinned
+/// age: a comparison holds a mine at the original's read.
 pub(crate) fn hold_pinned(
     laid: &[LaidMine],
     envelopes: &mut [MineEnvelope],
-    pins: &std::collections::BTreeMap<(u16, i8), (f32, f32)>,
+    ages: &mut [f32],
+    pins: &MinePins,
 ) {
-    for (mine, envelope) in laid.iter().zip(envelopes) {
-        if let Some(&(football, spikes)) = pins.get(&(mine.entry, mine.lane)).filter(|_| mine.live)
-        {
-            *envelope = MineEnvelope { football, spikes };
+    for ((mine, envelope), age) in laid.iter().zip(envelopes).zip(ages) {
+        let Some(pin) = pins.get(&(mine.entry, mine.lane)) else {
+            continue;
+        };
+        if let Some((football, spikes, pitch_offset)) = pin.envelope.filter(|_| mine.live) {
+            *envelope = MineEnvelope {
+                football,
+                spikes,
+                pitch_offset,
+            };
+        }
+        if let Some(pinned) = pin.age {
+            *age = pinned;
         }
     }
 }
@@ -201,9 +289,9 @@ pub(crate) const ELECTRICITY_GAIN: f32 = 1.5;
 pub(crate) const DARK_ELECTRICITY: [f32; 3] = [2.0; 3];
 /// `BassHit = clamp(0.25 s, 0, 0.25)`.
 pub(crate) const BASS_HIT_GAIN: f32 = 0.25;
-/// `MasterVolume = clamp01(5 L0)`.
+/// `MasterVolume = clamp01(5 L)` (`K[0x10]`); ours' `L` is band 0.
 pub(crate) const MASTER_VOLUME_GAIN: f32 = 5.0;
-/// `PitchVolume = clamp(L1, 0, 0.4)`.
+/// `PitchVolume = clamp(L, 0, 0.4)` (`K[0x4c]`); ours' `L` is band 1.
 pub(crate) const PITCH_VOLUME_CEILING: f32 = 0.4;
 
 /// The values the visualiser's `electricity` material is drawn with for a frame
@@ -224,8 +312,12 @@ pub(crate) struct VisualiserConstants {
 /// (`detonator-mine-material.md`).
 ///
 /// **`MasterVolume` and `PitchVolume` read band 0 and band 1, chosen, not measured**: the
-/// original's two level readers (`0x304cc8`) are unread. `PitchOffset` (an accumulator whose
-/// step is unread) and `TrebleHit` (a `.bss` word whose writer is unread) stay `0`.
+/// original scales one whole-spectrum level both ways (`0x00304cc8`, `detonator-mine-material.md`,
+/// "The visualiser's level", where a wiring of it is measured against the pairs and not kept).
+/// `PitchOffset` is the envelope's: an
+/// accumulator whose step is unread, so only a comparison pin moves it from `0`. `TrebleHit` (a
+/// `.bss` word whose writer is unread) stays `0`, the value every live read showed
+/// (`detonator-mine-draw.md`, "The envelope at the picture's tick").
 #[must_use]
 pub(crate) fn visualiser_constants(
     live: bool,
@@ -247,7 +339,7 @@ pub(crate) fn visualiser_constants(
         colour: stage.mine_electricity.map(|c| c * ELECTRICITY_GAIN),
         master_volume: (MASTER_VOLUME_GAIN * band_level(levels, 0)).clamp(0.0, 1.0),
         pitch_volume: band_level(levels, 1).clamp(0.0, PITCH_VOLUME_CEILING),
-        pitch_offset: 0.0,
+        pitch_offset: envelope.pitch_offset,
         bass_hit: (envelope.football * BASS_HIT_GAIN).clamp(0.0, BASS_HIT_GAIN),
         treble_hit: 0.0,
     }

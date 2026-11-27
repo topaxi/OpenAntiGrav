@@ -391,6 +391,7 @@ pub fn step_cannon<S: Craft>(
         events.push(Event {
             kind: EventKind::Volley,
             at: ship.physics().body.position,
+            points: None,
         });
     }
 
@@ -409,6 +410,7 @@ pub fn step_cannon<S: Craft>(
                         .normalize_or_zero(),
                 },
                 at,
+                points: None,
             });
         }
         let hit = test_hits(field, survey, config, index, &mut events);
@@ -552,6 +554,7 @@ fn test_hits(
         events.push(Event {
             kind: EventKind::MineShot { live: placed.live },
             at,
+            points: Some(points),
         });
         field.remove_mine(i);
     }
@@ -590,6 +593,7 @@ fn test_hits(
         events.push(Event {
             kind: EventKind::BombShot,
             at,
+            points: Some(points),
         });
         field.remove_bomb(i);
         chain_reaction(field, survey, config, at, events);
@@ -628,6 +632,7 @@ fn chain_reaction(
         events.push(Event {
             kind: EventKind::MineChained { live: placed.live },
             at,
+            points: Some(points),
         });
         field.remove_mine(i);
     }

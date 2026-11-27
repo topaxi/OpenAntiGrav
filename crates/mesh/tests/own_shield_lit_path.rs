@@ -1,7 +1,7 @@
 //! Draws one triangle through the mesh pipeline on a fixture needing no game content, and pins
 //! that `Model::own_shield` reaches the pipeline: the model is shaded by `own_shield.wesl`, which
-//! reads no texture and no lighting, where the same model without it is shaded by the ordinary
-//! path. Skips when there is no adapter. Runs in `just test`.
+//! reads no texture and no lighting but takes its eye from the scene block, where the same
+//! model without it is shaded by the ordinary path. Skips when there is no adapter. Runs in `just test`.
 
 use oag_gpu::formats::SceneStore;
 use oag_mesh::mesh_render::Scene;
@@ -19,7 +19,7 @@ fn a_model_with_the_own_shield_flag_is_drawn_by_the_own_shield_shader() {
     let (device, queue) =
         pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
             .expect("requesting the device");
-    let at = |grey: u8, own_shield: bool| {
+    let seen = |grey: u8, own_shield: bool, camera: [f32; 3]| {
         let mut shell = model(grey);
         shell.flame = None;
         shell.own_shield = own_shield;
@@ -27,7 +27,7 @@ fn a_model_with_the_own_shield_flag_is_drawn_by_the_own_shield_shader() {
             vertex.colour = [1.0; 4];
         }
         let mut scene = Scene::off();
-        scene.fog.camera = [0.0, 0.0, 100.5];
+        scene.fog.camera = camera;
         draw_into(
             &device,
             &queue,
@@ -37,9 +37,18 @@ fn a_model_with_the_own_shield_flag_is_drawn_by_the_own_shield_shader() {
             SceneStore::Computed,
         )
     };
+    let on_axis = [0.0, 0.0, 100.5];
+    let at = |grey: u8, own_shield: bool| seen(grey, own_shield, on_axis);
     let plain = at(128, false);
     let own = at(128, true);
     assert_ne!(plain, own, "the flag changes the shading");
     assert!(own[0] > 0.0, "the shell draws something: {own:?}");
     assert_eq!(own, at(250, true), "the own shield reads no texture");
+    // The rim and facet terms take the eye from the block: from the side the same
+    // triangle is seen nearly edge-on.
+    assert_ne!(
+        own,
+        seen(128, true, [100.0, 0.0, 0.5]),
+        "the own shield reads the block's eye"
+    );
 }

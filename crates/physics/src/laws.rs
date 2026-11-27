@@ -51,6 +51,14 @@ pub struct Laws {
     /// HD's `Body_ResolveContact` reads its stored rate (negated, body-local) straight into
     /// `cross(r, rate)`; the two agree for a level craft and part with pitch or roll.
     pub wall_point_rate_body_local: bool,
+    /// The pending blast impulse drains along the craft's side axis (basis row 0) rather than
+    /// its forward axis. Pulse PSP's `Ship_ApplyCollisionImpulse` (`0x0883f274`) projects onto
+    /// row 0 of `*(entity+0x794)`, the left row, measured live on 11 drains
+    /// (`docs/ghidra/functions/psp-pulse-usa/contact-response.md`, "The drain pushes along the
+    /// side row"); Wipeout HD's drain `0x000d8a28` projects slot `+0x110` onto body `+0x1d0`,
+    /// the right row (`docs/ghidra/functions/ps3-hdfury-eu/rocket-craft-blast.md`, "Where the
+    /// push goes"). See [`crate::wall::apply_pending_impulse`].
+    pub pending_impulse_on_side: bool,
     /// The rigid body's own velocity damping, applied by the integrator
     /// ([`crate::integrate::integrate`]): `0.01` on both halves on every title read.
     pub body_damping: BodyDamping,
@@ -115,6 +123,7 @@ impl Laws {
         wall_one_sided: false,
         wall_steer_away: false,
         wall_point_rate_body_local: false,
+        pending_impulse_on_side: true,
         // `Body_Integrate`'s `0.01` pair, measured per frame (`docs/physics/body-damping.md`).
         body_damping: BodyDamping::PULSE,
     };

@@ -239,6 +239,7 @@ fn upload_levels<'a>(
             | wgpu::TextureUsages::COPY_DST
             | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     for (level, (mip_width, mip_height, mip_rgba)) in levels.enumerate() {
         write_level(
@@ -468,6 +469,7 @@ fn upload_with(
             | wgpu::TextureUsages::COPY_DST
             | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     for (index, texels) in levels[skip..].iter().enumerate() {
         // **The block-aligned size, not the level's own.** A 2048x2048 chain

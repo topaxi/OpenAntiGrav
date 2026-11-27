@@ -246,6 +246,7 @@ fn the_logo_is_the_teams_own_front_end_texture() {
     );
 }
 
+mod cells;
 mod slide_draw;
 use super::hex::{HEX_SRC, LOCK_SRC, ModelCell, THICK_OUT_SRC};
 use oag_ui::frontend::Placed;
@@ -265,7 +266,7 @@ fn hex_team(id: &str) -> Entry {
                 _ => None,
             };
             ModelCell {
-                thumb: variant.map(|_| format!(r"Data\Ships\{id}\FE\thumb{row}.gtf")),
+                thumb: Some(format!(r"Data\Ships\{id}\FE\thumb{row}.gtf")),
                 open: variant.is_some(),
                 variant,
             }
@@ -274,10 +275,12 @@ fn hex_team(id: &str) -> Entry {
     entry
 }
 
+/// Each of the widget's own images at its own place on the sheet, so a draw's `uv` names it.
 fn sheet(name: &str) -> Option<Placed> {
     let known = [HEX_SRC, LOCK_SRC, THICK_OUT_SRC];
-    (known.contains(&name) || name.contains("thumb")).then_some(Placed {
-        x: 0,
+    let at = known.iter().position(|src| *src == name);
+    (at.is_some() || name.contains("thumb")).then_some(Placed {
+        x: 128 * at.map_or(known.len() as u32, |at| at as u32),
         y: 0,
         width: 128,
         height: 64,
@@ -314,80 +317,66 @@ fn the_hex_column_draws_cells_padlocks_and_the_selected_team_in_red() {
     let red = oag_ui::screen::argb_to_rgba(0xffac_0717);
     // Seven selected-column cells, each in `HD_Blue` once.
     assert_eq!(sprites.iter().filter(|(_, c)| *c == red).count(), 7);
-    // 5 columns x 7 rows of cells in all, 7 + 28 draws.
-    let grey = oag_ui::screen::argb_to_rgba(0x6480_8080);
-    assert_eq!(sprites.iter().filter(|(_, c)| *c == grey).count(), 28);
-    // Five of seven rows are padlocked in each of the five columns.
+    // 5 columns x 7 rows of cells in all: 7 flat and 28 shaded across. The four other columns
+    // shade every picture (28) and their five locked rows' padlocks (20) too.
+    let shaded = draws
+        .iter()
+        .filter(|draw| matches!(draw, Draw::GradientSprite { .. }))
+        .count();
+    assert_eq!(shaded, 28 + 28 + 20);
+    // Five of the selected column's seven rows are padlocked, in the authored colour exactly.
     let lock = oag_ui::screen::argb_to_rgba(0xff80_8080);
     assert_eq!(sprites.iter().filter(|(_, c)| *c == lock).count(), 5);
-    // The selected column's padlock reads the authored colour exactly; the
-    // outer columns have faded toward `SelectedLockColFade`.
-    let faded = oag_ui::screen::argb_to_rgba(0xff24_2424);
-    assert!(
-        sprites
-            .iter()
-            .any(|(_, c)| c[0] < lock[0] && c[0] > faded[0] && c[3] == 1.0)
-    );
 }
 
-/// With a fade the hexagon fills are shaded across each cell and ease with the column's
-/// distance from the selected one: brighter toward it, on both sides, and dimmer the further
-/// out. Without one (the layout as read) they stay the one authored colour.
+/// A cell outside the selected column runs from `HexColFade` to `HexCol` across its quad: whole at
+/// the selected column's edges, none at the grid's outer edges. The quad is the widget's 92x80 over
+/// the art's 74x64 texels.
 #[test]
-fn a_faded_grid_shades_each_fill_toward_the_selected_column() {
-    let mut layout = layout();
-    let picker = picker_of(&["A", "B", "C", "D", "E", "F"], "C");
-    let flat = |layout: &Layout| {
-        let extra = layout.hd.as_deref().unwrap();
-        body(&picker, layout, extra, &Frame::default(), &|n| sheet(n))
-            .iter()
-            .any(|draw| matches!(draw, Draw::GradientSprite { .. }))
-    };
-    assert!(!flat(&layout), "a grid read off the disc fades nothing");
-    layout.hd.as_deref_mut().unwrap().hex.as_mut().unwrap().fade = Some(oag_title::HexFade {
-        columns: 2.22,
-        span: Some(109.0),
-    });
+fn a_cell_fades_across_its_quad_toward_the_selected_column() {
+    let layout = layout();
     let extra = layout.hd.as_deref().unwrap();
+    let picker = picker_of(&["A", "B", "C", "D", "E", "F"], "C");
     let draws = body(&picker, &layout, extra, &Frame::default(), &|n| sheet(n));
-    // Each cell's fill: (column centre, left alpha, right alpha), over the five columns.
+    // Each fill: (left edge of its quad, alpha at the left, alpha at the right), in 255ths.
     let mut cells: Vec<(f32, f32, f32)> = draws
         .iter()
         .filter_map(|draw| match draw {
             Draw::GradientSprite {
-                rect, left, right, ..
-            } => Some((rect[0], left[3], right[3])),
+                rect,
+                uv,
+                left,
+                right,
+            } if *uv == sheet(HEX_SRC).unwrap().sheet_rect([0.0, 0.0, 74.0, 64.0]) => {
+                assert_eq!([rect[2], rect[3]], [92.0, 80.0]);
+                Some((rect[0], left[3] * 255.0, right[3] * 255.0))
+            }
             _ => None,
         })
         .collect();
-    assert_eq!(cells.len(), 28, "four fading columns of seven");
+    assert_eq!(cells.len(), 28, "four shaded columns of seven");
     cells.sort_by(|a, b| a.0.total_cmp(&b.0));
-    let by_column: Vec<&[(f32, f32, f32)]> = cells.chunks(7).collect();
-    let (outer_left, inner_left, inner_right, outer_right) = (
-        by_column[0][0],
-        by_column[1][0],
-        by_column[2][0],
-        by_column[3][0],
-    );
-    assert!(
-        outer_left.2 > outer_left.1,
-        "left of the selection, brighter toward it"
-    );
-    assert!(inner_left.2 > inner_left.1);
-    assert!(
-        inner_right.1 > inner_right.2,
-        "right of it, brighter on its left"
-    );
-    assert!(outer_right.1 > outer_right.2);
-    assert!(
-        inner_left.1 > outer_left.1 && inner_right.1 > outer_right.1,
-        "dimmer further out"
-    );
-    let authored = oag_ui::screen::argb_to_rgba(0x6480_8080)[3];
-    assert!(
-        inner_left.2 < authored,
-        "the grid's own colour is the selected column's"
-    );
+    // `HexColFade`'s alpha is 50, `HexCol`'s 100, so half way is 75.
+    let want = [[50.0, 75.0], [75.0, 100.0], [100.0, 75.0], [75.0, 50.0]];
+    for (column, [left, right]) in cells.chunks(7).zip(want) {
+        for cell in column {
+            assert!((cell.1 - left).abs() < 0.01, "{cell:?} left {left}");
+            assert!((cell.2 - right).abs() < 0.01, "{cell:?} right {right}");
+        }
+    }
+}
+
+/// The share of `HexCol` at a point, in columns from the middle of the selected column: Track
+/// Select's nine columns fade over four, and the spare column of a slide has none.
+#[test]
+fn the_edge_share_reaches_zero_at_the_outer_edge_and_on_the_spare_column() {
+    use super::hex::edge_share;
+    assert_eq!(edge_share(4, 0.5), 1.0);
+    assert_eq!(edge_share(4, -1.5), 0.75);
+    assert_eq!(edge_share(4, 4.5), 0.0);
+    assert_eq!(edge_share(2, 3.5), 0.0);
+    assert_eq!(edge_share(2, -2.5), 0.0);
+    assert_eq!(edge_share(0, 1.5), 0.0, "a one column grid divides by one");
 }
 
 /// The cursor ring: one quad of `Hexagon_HD_THICK_OUT.gtf`, 92x80 units over a 74x64 texel window,
@@ -650,6 +639,7 @@ fn red_fills(picker: &Picker, extra: &TeamScreen, layout: &Layout) -> Vec<[f32; 
             solid_alpha: 1.0,
             cursor: None,
             arrow: None,
+            marker: None,
             fury: true,
         }),
         ..Frame::default()

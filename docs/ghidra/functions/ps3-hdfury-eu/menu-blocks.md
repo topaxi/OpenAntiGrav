@@ -42,6 +42,7 @@ left unnamed for the reason [mode-manager.md](mode-manager.md) gives.
 | --- | --- | --- |
 | `0x0018b818` | `Block_Construct` | 85 |
 | `0x0018b050` | `Block_Render` | 82 |
+| `0x0018bdf0` | `Block_CreateStaticArrow` | 75 |
 | `0x0018acb8` | `Block_DrawFill` | 80 |
 | `0x0018a5d0` | `Block_DrawTopBand` | 78 |
 | `0x00189f00` | `Block_DrawCorner` | 82 |
@@ -421,6 +422,21 @@ eased, with a blinking arrow at its left edge; nothing brightens its label.
 Implemented in `oag_ui::menu::block::Focus` and
 `oag_ui_screens::endrace::hd::hd_menu_draw_list`; the parsed attributes are
 `oag_ui::screen::BlockWidget`.
+
+## An unselectable block's marker
+
+`Block_ParseXml`'s non-selectable branch calls `0x0018bdf0` with the `ArrowColor` (`+0x154`)
+where a selectable block calls `Block_MakeSelectable`: an `Image` child of
+`Data\FE\Images\NonSelectable_Arrow_HD.gtf` (`0x008ac5d8`), `16.0` square, at `X + 17.0`
+(`0x008ac594`), `Y + 13.0` (`0x008ac5e0`), tinted `ArrowColor`, held (nothing blinks it).
+It is the small white triangle before `LOYALTY`, `TOTAL` and the record notice on `EndRace
+Results`; its position matches the 2026-11-26 RPCS3 frames to a pixel. Which authored attribute
+picks the branch is not resolved from the decompile (its two flags read as one); the frames show
+it on blocks authoring `unselectable="true"`. Confidence 80.
+
+- **Omega: checked, applies, wired as data.** `/omega/eboot-ps4-omega-eu.bin` names the same file
+  at `0x0181b059`; no Omega screen with such a block is drawn here yet.
+- **2048: not checked** (its front end is another widget set).
 
 ## `FrontEnd_IsFuryStyle` - `0x0015b620`
 

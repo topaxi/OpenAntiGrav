@@ -6,8 +6,8 @@ use crate::detonator_look::{MinePart, bomb_constants, mine_constants, visualiser
 
 impl super::Scene {
     /// Steps every laid mine's music envelope for the race clock `seconds` (a clock already stepped is left as
-    /// it is) and puts each live mine's football and spikes size where the matrices read it
-    /// ([`Race::mine_model_matrices`]). Called before the matrices are written, so the frame draws the
+    /// it is) and puts each mine's age and each live mine's football and spikes size where the matrices read
+    /// it ([`Race::mine_model_matrices`]). Called before the matrices are written, so the frame draws the
     /// size its own envelope has.
     pub(super) fn step_mine_envelopes(
         &self,
@@ -15,17 +15,18 @@ impl super::Scene {
         laid: &[crate::detonator_look::LaidMine],
         seconds: f32,
     ) -> Vec<crate::detonator_look::MineEnvelope> {
-        let mut envelopes = crate::drawable::lock(&self.bomb_blast.detonator.envelopes).advance(
-            laid,
-            &self.band_levels.get(),
-            seconds,
-        );
+        let (mut envelopes, mut ages) = {
+            let mut stepped = crate::drawable::lock(&self.bomb_blast.detonator.envelopes);
+            let envelopes = stepped.advance(laid, &self.band_levels.get(), seconds);
+            (envelopes, stepped.ages(laid, seconds))
+        };
         crate::detonator_look::hold_pinned(
             laid,
             &mut envelopes,
+            &mut ages,
             &crate::drawable::lock(&race.view.mine_pins),
         );
-        race.record_mine_sizes(laid, &envelopes);
+        race.record_mine_poses(laid, &envelopes, &ages);
         envelopes
     }
 

@@ -138,7 +138,12 @@ toml = "1"
 thiserror = "2"
 
 # GPU rendering and windowing.
-wgpu = "30.0.1"
+# A git pin of gfx-rs/wgpu trunk, not a release: it carries gfx-rs/wgpu#10319 (one barrier for
+# all of a submission's queue writes), which no 30.x release has. Every gfx-rs crate comes from
+# this one rev. Back to a crates.io release once wgpu 31 ships
+# (`docs/architecture/dependency-upgrades.md`, "Git pins").
+wgpu = { git = "https://github.com/gfx-rs/wgpu", rev = "60cef2be828e03ba54e2e1598001b4625c0c2163" }
+naga = { git = "https://github.com/gfx-rs/wgpu", rev = "60cef2be828e03ba54e2e1598001b4625c0c2163", default-features = false }
 winit = "0.30"
 # Idle inhibition on a Wayland desktop (`oag_game::idle`): the protocol bound over winit's own
 # connection. Already in the lockfile through winit.

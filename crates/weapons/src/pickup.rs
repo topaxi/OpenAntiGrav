@@ -414,8 +414,25 @@ impl Held {
 /// `allowed` restricts the draw to a subset of [`IMPLEMENTED`]: `None` draws from
 /// all, and `Some(&[])` hands out nothing rather than falling back to
 /// unrestricted (authored absence is honest; `docs/formats/2048-campaign.md`'s
-/// weapon-set gate). The one `Some` caller reads
+/// weapon-set gate). The callers' lists are a title's pickup roster
+/// (`oag_title::pickup_roster`) or a 2048 event's
 /// `oag_tables::mjolnir::campaign::WeaponSet::allowed_weapons`.
+///
+/// # What a disallowed weapon's weight does
+///
+/// By default it leaves the roll, which is HD's AI draw. With `pass_on`, a title's
+/// order, a **person's** roll keeps it and a roll landing on a disallowed weapon
+/// goes to the next allowed one in that order: HD's `WeaponManager_RollPickup`
+/// (`docs/ghidra/functions/ps3-hdfury-eu/pickup-draw.md`). An AI driver ignores
+/// `pass_on`, and so does a table that weighs no disallowed weapon, where both
+/// readings give the same distribution.
+///
+/// # What an excluded weapon's weight does
+///
+/// `excluded` leaves a weapon out of the total **and** out of a person's walk, so a roll is
+/// never passed on to it: HD's one-live exclusions, which take the LeachBeam, the Quake and
+/// the Cannon out of both draws while the field holds or runs enough of them
+/// (`docs/ghidra/functions/ps3-hdfury-eu/pickup-draw.md`, "One-live exclusions").
 #[must_use]
 pub fn draw(
     rng: &mut Rng,
@@ -423,15 +440,40 @@ pub fn draw(
     driver: Driver,
     last: Option<Weapon>,
     allowed: Option<&[Weapon]>,
+    pass_on: Option<&[Weapon]>,
+    excluded: &[Weapon],
 ) -> Option<Weapon> {
+    let gate = Gate { allowed, excluded };
+    let pass_on = pass_on.filter(|order| {
+        driver != Driver::Ai
+            && order.iter().any(|&weapon| {
+                !permitted(weapon, allowed)
+                    && !excluded.contains(&weapon)
+                    && driver.weight(table, weapon) > 0.0
+            })
+    });
     for _ in 0..REDRAW_ATTEMPTS {
-        let drawn = draw_once(rng, table, driver, allowed)?;
-        if Some(drawn) != last {
-            return Some(drawn);
+        let drawn = draw_once(rng, table, driver, gate, pass_on);
+        if drawn.is_some() && drawn != last {
+            return drawn;
         }
     }
     // Hand over the repeat rather than nothing: a silent pad reads as broken.
-    draw_once(rng, table, driver, allowed)
+    draw_once(rng, table, driver, gate, pass_on)
+}
+
+/// What a draw may hand out: the mode's `allowed` list less what the field leaves `excluded`.
+#[derive(Clone, Copy)]
+struct Gate<'a> {
+    allowed: Option<&'a [Weapon]>,
+    excluded: &'a [Weapon],
+}
+
+impl Gate<'_> {
+    /// Whether the draw may take `weapon`.
+    fn takes(self, weapon: Weapon) -> bool {
+        permitted(weapon, self.allowed) && !self.excluded.contains(&weapon)
+    }
 }
 
 /// How many times [`draw`] re-rolls to avoid repeating the last pickup.
@@ -440,8 +482,16 @@ pub fn draw(
 /// odds and spends at most nine draws.
 pub const REDRAW_ATTEMPTS: usize = 8;
 
+/// Whether `allowed` lets a draw hand out `weapon`.
+#[must_use]
+fn permitted(weapon: Weapon, allowed: Option<&[Weapon]>) -> bool {
+    // A mod's own pickup is the mod's to weigh: a title's or an event's list names the title's.
+    matches!(weapon, Weapon::Extension(_))
+        || allowed.is_none_or(|allowed| allowed.contains(&weapon))
+}
+
 /// A weapon's weight for this draw: the driver/table's own, or `0.0` when `allowed`
-/// is `Some` and does not list it.
+/// does not permit it.
 #[must_use]
 fn gated_weight(
     driver: Driver,
@@ -449,28 +499,29 @@ fn gated_weight(
     weapon: Weapon,
     allowed: Option<&[Weapon]>,
 ) -> f32 {
-    // A mod's own pickup is the mod's to weigh: an event's weapon set names the title's.
-    if !matches!(weapon, Weapon::Extension(_))
-        && allowed.is_some_and(|allowed| !allowed.contains(&weapon))
-    {
+    if !permitted(weapon, allowed) {
         return 0.0;
     }
     driver.weight(table, weapon).max(0.0)
 }
 
 /// One weighted draw, with no regard for what came before it.
+///
+/// `None` when nothing is weighted, or, with `pass_on`, when the roll runs off the end of the
+/// order without meeting an allowed weapon.
 #[must_use]
 fn draw_once(
     rng: &mut Rng,
     table: &PickupTable,
     driver: Driver,
-    allowed: Option<&[Weapon]>,
+    gate: Gate<'_>,
+    pass_on: Option<&[Weapon]>,
 ) -> Option<Weapon> {
     // The title's weapons, then each mod's own pickup the table carries a row for
     // (`oag_raceplay`'s race table, in kind order): a table without one walks exactly as
     // before.
     let walk = || {
-        IMPLEMENTED.iter().copied().chain(
+        pass_on.unwrap_or(IMPLEMENTED).iter().copied().chain(
             table
                 .odds
                 .iter()
@@ -478,29 +529,36 @@ fn draw_once(
                 .filter(|weapon| matches!(weapon, Weapon::Extension(_))),
         )
     };
-    let total: f32 = walk()
-        .map(|weapon| gated_weight(driver, table, weapon, allowed))
-        .sum();
+    // Passing on keeps a disallowed weapon's weight in the roll; an excluded one leaves it.
+    let weigh = |weapon| {
+        if gate.excluded.contains(&weapon) {
+            0.0
+        } else if pass_on.is_some() {
+            driver.weight(table, weapon).max(0.0)
+        } else {
+            gated_weight(driver, table, weapon, gate.allowed)
+        }
+    };
+    let total: f32 = walk().map(weigh).sum();
     if total <= 0.0 || !total.is_finite() {
         return None;
     }
 
     let mut roll = rng.next_f32() * total;
     for weapon in walk() {
-        let weight = gated_weight(driver, table, weapon, allowed);
-        if weight <= 0.0 {
-            continue;
-        }
-        roll -= weight;
-        if roll < 0.0 {
+        roll -= weigh(weapon);
+        // A weightless entry cannot take the roll below zero by itself; one met after the
+        // roll has landed on a disallowed weapon takes it.
+        if roll < 0.0 && gate.takes(weapon) {
             return Some(weapon);
         }
     }
+    if pass_on.is_some() {
+        return None;
+    }
     // Float slack only (`next_f32` is half-open on `1.0`); the last weighted
     // weapon is the right answer.
-    walk()
-        .rev()
-        .find(|&weapon| gated_weight(driver, table, weapon, allowed) > 0.0)
+    walk().rev().find(|&weapon| weigh(weapon) > 0.0)
 }
 
 #[cfg(test)]

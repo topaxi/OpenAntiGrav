@@ -70,7 +70,7 @@ native_video_flags := if os() == "linux" { "--features native-video" } else { ""
 # order they get there, so nothing here changes what either asserts. Output of
 # the recipes interleaves; a failure names its recipe.
 [parallel]
-check: fmt-check lint check-ballisticng check-extensions check-web test check-docs check-deps check-unused-deps check-determinism check-size check-comment-history check-title-branching check-title-reach check-names check-captures check-hd-clock-grab check-pair-provenance check-test-data-script check-gate-run check-xvfb-own check-android-stack-script check-handover check-link-data check-strings check-just-args check-status check-weapon-lineage check-test-groups check-schemas (check-guests "--strict")
+check: fmt-check lint check-ballisticng check-extensions check-web test check-docs check-deps check-unused-deps check-determinism check-size check-comment-history check-title-branching check-title-reach check-names check-captures check-hd-clock-grab check-pair-provenance check-test-data-script check-gate-run check-xvfb-own check-rpcs3-drive-env check-ppsspp-start check-android-stack-script check-handover check-link-data check-strings check-just-args check-status check-weapon-lineage check-test-groups check-schemas (check-guests "--strict")
 
 # Documentation is a deliverable, so its links are checked like any other build output
 check-docs:
@@ -231,6 +231,18 @@ check-gate-run:
 check-xvfb-own:
     bash scripts/check-xvfb-own.sh
 
+# `scripts/rpcs3-drive.py` refuses the user's own RPCS3 cache and config, as a CLI
+# and when imported, and touches nothing when it does. Starts no emulator or
+# display. Offline, no build, about two seconds.
+check-rpcs3-drive-env:
+    bash scripts/check-rpcs3-drive-env.sh
+
+# `scripts/ppsspp-start.sh` against stand-in `PPSSPPSDL` and `Xvfb`: `stop` signals
+# only this lane's recorded processes, kills a PPSSPP that ignores TERM, and can run
+# twice; `start` refuses a running lane. Offline, no build, about six seconds.
+check-ppsspp-start:
+    bash scripts/check-ppsspp-start.sh
+
 # The prologue reader behind `scripts/check-android-stack.py` (the guard on the
 # frames under Android's 2 MiB `android_main` thread, run by `build-apk.sh`), on
 # aarch64 disassembly snippets. Offline, no NDK, no build.
@@ -249,7 +261,7 @@ check-android-stack-script:
 # `check-status` is left out: a member never commits `status.md`, so a stale table is
 # the lead's to regenerate, and the full `just` checks it.
 [parallel]
-gate-affected: fmt-check lint check-ballisticng check-extensions check-web test-affected check-docs check-deps check-unused-deps check-determinism check-size check-comment-history check-title-branching check-title-reach check-names check-captures check-hd-clock-grab check-pair-provenance check-test-data-script check-gate-run check-xvfb-own check-android-stack-script check-handover check-link-data check-strings check-just-args check-weapon-lineage check-test-groups check-schemas (check-guests "--strict")
+gate-affected: fmt-check lint check-ballisticng check-extensions check-web test-affected check-docs check-deps check-unused-deps check-determinism check-size check-comment-history check-title-branching check-title-reach check-names check-captures check-hd-clock-grab check-pair-provenance check-test-data-script check-gate-run check-xvfb-own check-rpcs3-drive-env check-ppsspp-start check-android-stack-script check-handover check-link-data check-strings check-just-args check-weapon-lineage check-test-groups check-schemas (check-guests "--strict")
 
 # `just test`, narrowed to what `scripts/affected.py` selects. A selection is
 # nextest arguments, one per line; `--no-tests=pass` because a narrowed
@@ -1529,6 +1541,8 @@ check-pair-provenance:
     python3 scripts/compare_provenance.py selftest
     python3 scripts/compare_env.py selftest
     python3 scripts/hd_fury_backdrop.py selftest
+    python3 scripts/hd_ship_step.py selftest
+    python3 scripts/compare-rerender-all.py selftest
     python3 scripts/compare_provenance.py scan
 
 # Re-snapshot every program in the open Ghidra project. Two steps because only

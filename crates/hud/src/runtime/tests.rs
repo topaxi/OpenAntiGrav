@@ -61,13 +61,20 @@ fn sheet() -> crate::sprite::Sheet {
 
 /// Runs `f` against an HD context over [`layout`].
 fn with_hd<R>(art: &oag_title::HudArt, f: impl FnOnce(&Context<'_>) -> R) -> R {
-    let layout = layout();
+    with_layout(&layout(), art, f)
+}
+
+fn with_layout<R>(
+    layout: &Layout,
+    art: &oag_title::HudArt,
+    f: impl FnOnce(&Context<'_>) -> R,
+) -> R {
     let strings = oag_ui::language::StringTable::default();
     let sheet = sheet();
     let cx = Context {
         default_border: layout.default_border(),
         tag_label: None,
-        layout: &layout,
+        layout,
         strings: &strings,
         sheet: &sheet,
         art,
@@ -75,6 +82,7 @@ fn with_hd<R>(art: &oag_title::HudArt, f: impl FnOnce(&Context<'_>) -> R) -> R {
         small_line_height: 10.0,
         default_line_height: 10.0,
         skin_line_height: 10.0,
+        template_digit: None,
     };
     f(&cx)
 }
@@ -438,4 +446,34 @@ fn pulses_lap_counter_closes_up_on_lap_one_only() {
     with_hd(oag_hd::hud::ART, |cx| {
         assert_eq!(crate::draw::lap_one_dx(cx, &at(1, 3), "LapOf"), 0.0);
     });
+}
+
+/// `Detonator_HUD.xml`'s `DamageBar` is the white stripes at another rectangle of its
+/// background's sheet, and it is still the fill: drawn over the score box in the readout's white
+/// and cropped from the top.
+#[test]
+fn a_fill_at_another_rectangle_of_the_background_s_sheet_is_drawn() {
+    let layout = Layout::from_xml(&format!(
+        r#"<Screen><Image name="DamageBarBg">
+             <Values x="0" y="0" width="564" height="236" U="0" V="0" TxtrWidth="564"
+                     TxtrHeight="236" Src="{SRC}"/>
+             <Image name="DamageBar">
+               <Values x="5" y="20" width="553" height="200" U="0" V="790" TxtrWidth="553"
+                       TxtrHeight="200" color="0xFFFFFFFF" Src="{SRC}"/>
+             </Image>
+           </Image></Screen>"#
+    ));
+    let r = Readout {
+        mode: oag_race::Mode::Detonator,
+        ..readout(50.0)
+    };
+    let draw = with_layout(&layout, oag_hd::hud::ART, |cx| {
+        let bg = cx.layout.sprite("DamageBarBg").expect("authored");
+        shield_fill(cx, &r, bg)
+    });
+    let Some(Draw::Sprite { uv, color, .. }) = draw else {
+        panic!("the stripes draw: {draw:?}");
+    };
+    assert_eq!(uv, [0.0, 890.0, 553.0, 100.0]);
+    assert_eq!(color, [1.0; 4]);
 }

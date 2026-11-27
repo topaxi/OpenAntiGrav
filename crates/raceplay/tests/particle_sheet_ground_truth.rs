@@ -8,10 +8,9 @@
 
 use oag_raceplay as race;
 
-/// Loads a race on `source` (on `track`, else the title's own first circuit) and
-/// returns its loader report, checked for dropped sprites, or `None` where the
-/// source is not here.
-fn report_on(source: &str, track: Option<&str>) -> Option<String> {
+/// Loads a race on `source` (on `track`, else the title's own first circuit),
+/// or `None` where the source is not here.
+fn load_on(source: &str, track: Option<&str>) -> Option<race::Loaded> {
     let source = oag_testdata::image(source)?;
     let loaded = race::load(&race::Options {
         source: source.display().to_string(),
@@ -21,13 +20,22 @@ fn report_on(source: &str, track: Option<&str>) -> Option<String> {
         ..race::Options::default()
     })
     .expect("loading the race");
+    Some(loaded)
+}
+
+/// The loader report of [`load_on`], checked for dropped sprites.
+fn checked_report(loaded: &race::Loaded) -> String {
     let report = loaded.report.join("\n");
     let dropped: Vec<&str> = report
         .lines()
         .filter(|line| line.contains("did not fit the sprite sheet"))
         .collect();
     assert!(dropped.is_empty(), "{dropped:#?}");
-    Some(report)
+    report
+}
+
+fn report_on(source: &str, track: Option<&str>) -> Option<String> {
+    load_on(source, track).map(|loaded| checked_report(&loaded))
 }
 
 fn report(source: &str) -> Option<String> {
@@ -43,19 +51,82 @@ fn line<'a>(report: &'a str, effect: &str) -> &'a str {
         .unwrap_or_else(|| panic!("{effect} was not loaded"))
 }
 
+/// Every HD effect whose camera-facing emitters a player sees draw the disc's
+/// own sprite: named one by one, so dropping any from `oag_hd`'s `SPRITES`
+/// turns this red.
+const HD_WIRED: &[&str] = &[
+    "WO_MINE_EXPLO",
+    "WO_BOMB_SMOKERING",
+    "WO_MISSILE_EXPLO",
+    "WO_MISSILE_BOUNCE",
+    "WO_MINE_EXPLO_DETONATOR_DEAD",
+    "WO_MINE_EXPLO_DETONATOR",
+    "WO_BOMB_EXPLO_DETONATOR",
+    "WO_ROCKET_FLARE",
+    "WO_CANNON_SPARKS",
+    "WO_SHURIKEN_HEAD",
+    "WO_SHURIKEN_TRAIL",
+    "WO_SHURIKEN_BOUNCE",
+    "WO_SHURIKEN_EXPIRE",
+    "WO_REPULSER_BLAST",
+    "WO_WEAPON_ABSORB",
+    "WO_SHIP_COLL_SPARK_DAMAGE",
+    "WO_SHIP_DEATH_DAMAGE_PLUME",
+    "WO_DEBRIS_FIRE",
+    "WO_DAMAGE_MILD",
+    "WO_DAMAGE_MODERATE",
+    "WO_MODESTO_STEAM_A",
+];
+
+/// Every camera-facing emitter of each [`HD_WIRED`] effect has its sprite decoded and
+/// placed on the sheet, and the report names none it could not read.
+fn check_hds_billboards_draw_their_sprites(loaded: &race::Loaded, report: &str) {
+    for name in HD_WIRED {
+        let effect = loaded
+            .view
+            .effects
+            .get(name)
+            .unwrap_or_else(|| panic!("{name} was not loaded"));
+        let billboards: Vec<_> = effect
+            .emitters
+            .iter()
+            .filter(|spec| spec.render == oag_fx::psys::Render::Billboard)
+            .collect();
+        assert!(
+            !billboards.is_empty(),
+            "{name} has no camera-facing emitter"
+        );
+        for spec in billboards {
+            assert!(
+                spec.sprite.is_some() && spec.sheet_rect.is_some(),
+                "{name}: {} draws no sprite",
+                spec.name
+            );
+        }
+        let line = line(report, name);
+        assert!(
+            line.contains("sprite(s) read") && !line.contains("not read"),
+            "{line}"
+        );
+    }
+}
+
 /// HD (with Fury's content, the same disc): the Rocket's craft hit reads all
-/// twelve of its sprites, and it and the Detonator's waves are all on the sheet.
+/// twelve of its emitters' sprites and its three templates', the weapon explosions
+/// and ship damage effects draw theirs, and all of it is on the sheet.
 #[test]
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
-fn every_hd_sprite_is_on_the_sheet_and_the_craft_blast_reads_twelve() {
-    let Some(report) = report("data/images/hdfury-ps3-eu-dec.iso") else {
+fn every_hd_sprite_is_on_the_sheet_and_the_weapon_blasts_draw_theirs() {
+    let Some(loaded) = load_on("data/images/hdfury-ps3-eu-dec.iso", None) else {
         return;
     };
+    let report = checked_report(&loaded);
     let craft = line(&report, "WO_ROCKET_EXPLO");
     assert!(
-        craft.contains("12 emitter(s)") && craft.ends_with("12 sprite(s) read"),
+        craft.contains("15 emitter(s)") && craft.ends_with("15 sprite(s) read"),
         "{craft}"
     );
+    check_hds_billboards_draw_their_sprites(&loaded, &report);
 }
 
 #[test]

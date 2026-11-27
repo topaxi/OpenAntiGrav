@@ -161,6 +161,8 @@ fn parse_one(record: &[u8], order: ByteOrder, offset: usize) -> Option<Emitter> 
         distort_strength: 0.0,
         colour_scale: 1.0,
         near_cap: None,
+        frame_range: None,
+        size_span: None,
         frame_rate: constant(),
         emission_scale: constant(),
         playback_rate: 1.0,

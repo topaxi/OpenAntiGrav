@@ -5,7 +5,8 @@
 //! - nearer than [`NearLaw::fade_depth`]: alpha times
 //!   `(depth - cull_depth) / (fade_depth - cull_depth)`;
 //! - at any depth: the half size is at most `depth * cap`, the emitter's own
-//!   [`EmitterSpec::near_cap`].
+//!   [`EmitterSpec::near_cap`], or for a sprite template (which has no cap field)
+//!   [`NearLaw::template_cap`].
 //!
 //! Billboards only (render modes 1 to 4), the heat-haze quads included: the streak classes have
 //! their own depth rule and read no cap. Read on HD's SPU job, Omega's CPU twin and 2048's two
@@ -25,6 +26,8 @@ pub struct NearLaw {
     pub cull_depth: f32,
     /// Nearer than this its alpha is faded.
     pub fade_depth: f32,
+    /// The cap of a sprite template's quad, `None` for uncapped.
+    pub template_cap: Option<f32>,
 }
 
 /// The eye a frame's quads are built for: what the law reads.
@@ -43,9 +46,11 @@ pub struct NearEye {
 /// neither.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Cull<'a> {
-    /// The PSP GE's screen-range cull ([`super::guard`]).
+    /// The camera, for the Pulse PSP strips that are built screen-parallel
+    /// ([`super::streak`]).
     pub guard: Option<&'a GuardBand>,
-    /// The eye the near law reads, for the effects that carry it.
+    /// The eye the near laws read, for the effects that carry one ([`Effect::near`],
+    /// [`super::guard`]).
     pub near: Option<NearEye>,
 }
 
@@ -58,7 +63,7 @@ impl Cull<'_> {
 }
 
 impl NearEye {
-    fn depth(&self, particle: &Particle) -> f32 {
+    pub(super) fn depth(&self, particle: &Particle) -> f32 {
         let drawn = particle.position + particle.shift() * (self.draw_alpha - 1.0);
         (drawn - self.eye).dot(self.forward)
     }
@@ -93,7 +98,12 @@ pub(super) fn apply(
     } else {
         alpha
     };
-    let half = spec.near_cap.map_or(half, |cap| half.min(depth * cap));
+    let cap = if spec.template {
+        law.template_cap
+    } else {
+        spec.near_cap
+    };
+    let half = cap.map_or(half, |cap| half.min(depth * cap));
     Some((half, alpha))
 }
 

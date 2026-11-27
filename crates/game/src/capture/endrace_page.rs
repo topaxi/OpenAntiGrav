@@ -76,6 +76,12 @@ pub(super) enum EndRaceKind {
     /// reachable, and two of the six statistics draw blank on purpose, as this
     /// build's own race would leave them.
     ZoneResults,
+    /// HD's Detonator `EndRace Results`, fed the values a live RPCS3 run left on screen
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/detonator-endrace.md`, "Checked against the
+    /// original"): `true` the run that beat the record, `false` the one that did not.
+    DetonatorResults {
+        new_record: bool,
+    },
     /// Wipeout 2048's `RaceSummary`/`ObjectiveSummary` - see
     /// [`super::endrace_touch_page`].
     Touch(super::endrace_touch_page::TouchPage),
@@ -125,6 +131,10 @@ pub(super) fn endrace_kind(page: &str) -> Option<EndRaceKind> {
             Some(EndRaceKind::EliminationResults)
         }
         "endrace-results-zone" | "endrace_results_zone" => Some(EndRaceKind::ZoneResults),
+        "endrace-results-detonator" => Some(EndRaceKind::DetonatorResults { new_record: true }),
+        "endrace-results-detonator-norecord" => {
+            Some(EndRaceKind::DetonatorResults { new_record: false })
+        }
         "endrace-results-people" | "endrace_results_people" => Some(EndRaceKind::PeopleResults),
         "endrace-results-online" | "endrace_results_online" => Some(EndRaceKind::OnlineResults),
         "endrace-results-split" | "endrace_results_split" => Some(EndRaceKind::SplitResults),
@@ -236,9 +246,10 @@ pub(super) fn capture(
         ),
     };
     let faces = oag_ui_screens::picker::FaceScales {
-        default: menu_font.map_or(
-            oag_ui_screens::picker::FaceScales::default().default,
-            |menu| font.line_height / menu.line_height,
+        default: oag_ui_screens::picker::FaceScales::default_ratio(
+            font.line_height,
+            menu_font.map(|menu| menu.line_height),
+            menu_skin.default_face_is_row_face,
         ),
         ..oag_ui_screens::picker::FaceScales::default()
     };
@@ -605,6 +616,9 @@ fn endrace_page(
                 &|src| sprites.get(src),
             )
         }
+        EndRaceKind::DetonatorResults { .. } => {
+            anyhow::bail!("the Detonator results page is Wipeout HD/Fury's")
+        }
         EndRaceKind::ZoneResults => {
             let model = oag_ui_screens::endrace::ZoneResults {
                 zones_cleared: 7,
@@ -677,6 +691,24 @@ fn endrace_page(
 ///
 /// # Errors
 ///
+/// The rows the original drew on two RPCS3 runs of Talon's Junction (`17_Track`): one that
+/// scored `5600` and beat the empty record, one that scored nothing.
+fn captured_detonator(new_record: bool) -> oag_ui_screens::endrace::DetonatorResults {
+    let (mines_percent, bombs, score) = if new_record {
+        (1700.0 / 1860.0, 1, 5600)
+    } else {
+        (0.0, 0, 0)
+    };
+    oag_ui_screens::endrace::DetonatorResults {
+        stage: 0,
+        mines_percent,
+        bombs,
+        chains: [0; 3],
+        score,
+        record: oag_ui_screens::endrace::ScoreRecord::judge(score as u32, 0),
+    }
+}
+
 /// `--menu-page endrace-rewards` on an HD copy that authors no `EndRace
 /// Rewards` (`DATA06`'s).
 #[allow(
@@ -730,6 +762,27 @@ fn hd_endrace_page(
                         team: None,
                     },
                 ],
+            };
+            oag_ui_screens::endrace::hd::hd_results_draw_list(
+                &model,
+                results,
+                skin,
+                frame,
+                strings,
+                backdrop,
+                false,
+                &|src| sprites.get(src),
+            )
+        }
+        EndRaceKind::DetonatorResults { new_record } => {
+            let model = oag_ui_screens::endrace::FieldResults {
+                detonator: Some(captured_detonator(new_record)),
+                loyalty: Some(oag_ui_screens::endrace::HdLoyalty {
+                    award: 0,
+                    total: 60,
+                }),
+                headline: oag_ui_screens::endrace::Headline::Detonator,
+                rows: Vec::new(),
             };
             oag_ui_screens::endrace::hd::hd_results_draw_list(
                 &model,

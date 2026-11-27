@@ -100,9 +100,6 @@ impl System {
             };
             let rgb = [colour[0], colour[1], colour[2]];
             let corners = billboard(spec, particle, age, half, right, up, rgb, alpha);
-            if guard::drops(cull.guard, &effect.name, spec.template, &corners) {
-                continue;
-            }
             let place = usize::from(shader);
             match out.iter_mut().find(|(at, _)| *at == place) {
                 Some((_, list)) => list.extend_from_slice(&corners),
@@ -135,11 +132,15 @@ impl System {
             if spec.under_alpha != underlay {
                 continue;
             }
+            let Some(alpha) = guard::depth_law(effect, spec, particle, cull.near, alpha) else {
+                continue;
+            };
             let out: &mut Vec<GpuVertex> = match spec.blend {
                 Blend::Additive => additive,
                 Blend::AlphaOver => alpha_over,
                 Blend::Distort => continue,
             };
+            let start = out.len();
             let gain = spec.streak.colour_gain(spec.colour_scale);
             let rgb = [colour[0] * gain, colour[1] * gain, colour[2] * gain];
             if let Render::Streak { .. } = spec.render {
@@ -152,17 +153,16 @@ impl System {
                     (right, up),
                     cull.guard,
                 );
-                continue;
+            } else {
+                let Some((half, alpha)) =
+                    near::apply(effect, spec, particle, cull.near, half, alpha)
+                else {
+                    continue;
+                };
+                let corners = billboard(spec, particle, age, half, right, up, rgb, alpha);
+                out.extend_from_slice(&corners);
             }
-            let Some((half, alpha)) = near::apply(effect, spec, particle, cull.near, half, alpha)
-            else {
-                continue;
-            };
-            let corners = billboard(spec, particle, age, half, right, up, rgb, alpha);
-            if guard::drops(cull.guard, &effect.name, spec.template, &corners) {
-                continue;
-            }
-            out.extend_from_slice(&corners);
+            guard::drop_triangles(effect, spec, cull.near, (right, up), out, start);
         }
     }
 }

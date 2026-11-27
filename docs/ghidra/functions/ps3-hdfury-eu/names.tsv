@@ -215,6 +215,7 @@
 0x0067a7b8	function	SoundSystem_GetBandLevel_Stub	85	zone-visualiser.md
 0x00b6cc90	data	g_sound_system	80	zone-visualiser.md
 0x00304558	function	SoundSystem_GetBandLevel32	84	zone-visualiser.md
+0x00304cc8	function	SoundSystem_GetSpectrumTotal	70	detonator-mine-material.md
 0x00307e78	function	SoundSystem_UpdateBandLevels	86	zone-visualiser.md
 0x00305c20	function	SoundSystem_InitBandAnalysis	72	zone-visualiser.md
 0x00304320	function	SoundSystem_UpdateMeters	76	zone-visualiser.md
@@ -955,8 +956,8 @@
 0x000a8198	function	Track_SampleNearestPoint	78	projectile-launch-normal.md
 0x000a7cc8	function	Track_EvaluateSpline	80	projectile-launch-normal.md
 0x003aa0e8	function	FrontEnd_LoadEnvSettings	85	front-end-model-lighting.md
-0x0007be58	function	Collision_SweepSegment	80	own-craft-box.md
-0x000336b0	function	Collision_RaycastBox	72	own-craft-box.md
+0x0007be58	function	Collision_SweepSegment	90	own-craft-box.md
+0x000336b0	function	Collision_RaycastBox	90	own-craft-box.md
 0x0003a4c8	function	Collision_SetObbTransform	72	own-craft-box.md
 0x0001f430	function	Profile_RecordCampaignResult	82	cell-medal-award.md
 0x001e1028	function	PI_Cell_EvaluateMedalForValue	88	cell-medal-award.md
@@ -1139,13 +1140,15 @@
 # 2026-11-22 det-speed-emp-re: Detonator auto-speed, pads, EMP (detonator-speed.md, detonator-emp.md)
 0x0002bbc8	function	WeaponStats_ParseEmp	85	detonator-emp.md
 0x000d4078	function	Ship_TestWeaponPad	72	detonator-emp.md
-0x0012a3e8	function	WeaponManager_RollPickup	75	detonator-emp.md
+0x0012a3e8	function	WeaponManager_RollPickup	85	pickup-draw.md
 0x00112730	function	EMPManager_Fire	72	detonator-emp.md
 0x0013c430	function	EMP_Launch	68	detonator-emp.md
 0x0013b930	function	EMP_SweepSections	75	detonator-emp.md
 # Detonator end-of-race screen (2026-11-22, det-end-re). Static only.
 0x002234b0	function	EndRaceResults_FillDetonatorRows	80	detonator-endrace.md
-0x0022bdb8	function	EndRaceResults_ShowRecordNotice	72	detonator-endrace.md
+0x0022bdb8	function	EndRaceResults_ShowRecordNotice	90	detonator-endrace.md
+0x0001ef28	function	Profile_FindTrackRecords	80	detonator-endrace.md
+0x0032a740	function	Crc32_HashStringZeroInit	85	detonator-endrace.md
 
 # 2026-11-23 zone-destroy-re: the Zone end, Ship_SetState mode 6 (zone-destroy.md). Static only.
 0x00104a58	function	DebrisManager_SpawnZoneDebris	80	zone-destroy.md
@@ -1211,10 +1214,12 @@
 0x001b10f8	function	HexSelection_Update	85	ship-select-ring.md
 0x001b09b8	function	HexSelection_Step	85	ship-select-ring.md
 0x001b0920	function	HexSelection_SetRow	75	ship-select-ring.md
-0x001b0c28	function	HexSelection_SetCell	70	ship-select-ring.md
+0x001b0c28	function	HexSelection_SetCell	85	ship-select-ring.md
 0x001b0320	function	HexSelection_ClearCell	70	ship-select-ring.md
 0x001b2a48	function	HexSelection_Destroy	70	ship-select-ring.md
 0x002096f0	function	TrackHexSelection_Update	85	ship-select-ring.md
+0x0020a3a0	function	TrackHexSelection_Build	80	ship-select-ring.md
+0x002092a8	function	TrackHexSelection_Refill	80	ship-select-ring.md
 0x00200498	function	Colour_LerpArgb	85	ship-select-ring.md
 0x00112e50	function	EMPManager_Update	78	detonator-emp.md
 0x0013c320	function	EMP_UpdateWave	85	detonator-emp.md
@@ -1252,4 +1257,35 @@
 0x0014a7d8	function	Rocket_SpawnCraftBlast	80	rocket-craft-blast.md
 0x00283b40	function	Psys_SetInheritedVelocity	82	rocket-craft-blast.md
 0x0027c288	function	Psys_FindInstanceByHandle	80	rocket-craft-blast.md
-0x00149f70	function	Rocket_PushNearbyCraft	60	rocket-craft-blast.md
+0x00149f70	function	Rocket_PushNearbyCraft	82	rocket-craft-blast.md
+0x00287168	function	Psys_PrepareInstance	62	rocket-craft-blast.md
+0x0028bb18	function	Psys_InitTemplateParticle	55	rocket-craft-blast.md
+0x00068160	function	SPDetonator_Update	80	detonator-endrace.md
+0x000630c8	function	SPDetonator_UpdateFinish	80	detonator-endrace.md
+0x0018bdf0	function	Block_CreateStaticArrow	75	menu-blocks.md
+0x000d8a28	function	Ship_ApplyPendingImpulse	80	rocket-craft-blast.md
+0x0002d9f8	function	WeaponStats_ParseRocket	85	rocket-craft-blast.md
+0x0002d6a8	function	WeaponStats_ParseMissile	75	rocket-craft-blast.md
+0x00146470	function	Plasma_PushNearbyCraft	80	rocket-craft-blast.md
+0x00142258	function	Missile_PushNearbyCraft	75	rocket-craft-blast.md
+# 2026-11-26 hd-open-air-arms: the Missile's open-air arm; HD builds no ShurikenManager (open-air-arms.md)
+0x0011d288	function	Missile_Update	90	open-air-arms.md
+0x001592c0	function	Shuriken_Update	75	open-air-arms.md
+0x0014cbb0	function	ShurikenManager_Fire	75	open-air-arms.md
+0x0014cdf8	function	ShurikenManager_Construct	80	open-air-arms.md
+# 2026-11-26 hd-weapon-roster: the two pickup draws and the weapon mask (pickup-draw.md)
+0x00014658	function	GameState_IsWeaponEnabled	85	pickup-draw.md
+0x00012938	function	GameState_SetWeaponEnabled	85	pickup-draw.md
+0x00012868	function	GameState_SetWeaponMask	70	pickup-draw.md
+0x00012ae8	function	GameState_ResetWeaponMaskForMode	80	pickup-draw.md
+0x00129c20	function	WeaponManager_RollPickupAi	85	pickup-draw.md
+0x0012ad90	function	WeaponManager_AwardPickup	75	pickup-draw.md
+0x0025ed10	function	WeaponsScreen_ShowMask	75	pickup-draw.md
+0x0025e5a8	function	WeaponsScreen_StoreMask	75	pickup-draw.md
+0x0002df78	function	WeaponStats_ParsePickupOdds	88	pickup-draw.md
+0x0008caf0	function	Hud_UpdateScoreFeedback	72	detonator-hud.md
+0x002834f8	function	Psys_CopyPaletteToTree	85	detonator-mine.md
+0x0027f610	function	Psys_CreateInstance	70	detonator-mine.md
+0x00ad5fd4	data	Psys_LastRootHandle	75	detonator-mine.md
+0x0008ce10	function	Hud_UpdateZoneWidgets	80	zone-score.md
+

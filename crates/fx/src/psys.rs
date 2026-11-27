@@ -64,7 +64,7 @@ pub use near::{Cull, NearEye, NearLaw};
 pub use path::{effect_path, effect_path_in};
 pub mod streak;
 
-pub use colour::{ColourLaw, ColourMode, LIGHT, light_blend};
+pub use colour::{ColourLaw, ColourMode, LIGHT, detonator_mine_blast_entry, light_blend};
 use emitter_state::EmitterState;
 pub use error::Error;
 use frames::FrameAdvance;
@@ -91,6 +91,16 @@ pub const TICK_HZ: f32 = 60.0;
 /// emission that would overflow replaces the particle nearest death (see
 /// [`expendable_slot`]) rather than being dropped.
 pub const MAX_PARTICLES: usize = 256;
+
+/// Sprite template particles one [`System`] holds beside [`MAX_PARTICLES`]. The original
+/// allocates each template's particle on its own when the instance starts (HD
+/// `Psys_PrepareInstance_q`, `0x00287560`), so a template never takes an emitted particle's
+/// place in a full pool (`docs/ghidra/functions/ps3-hdfury-eu/rocket-craft-blast.md`, "The
+/// screen wash"). Past this many, templates replace each other.
+pub const MAX_TEMPLATE_PARTICLES: usize = 8;
+
+/// Every particle slot of one [`System`]: the emitted pool and the templates' reserve.
+pub const PARTICLE_SLOTS: usize = MAX_PARTICLES + MAX_TEMPLATE_PARTICLES;
 
 /// Emitter states one [`System`] can run at once.
 ///
@@ -299,6 +309,8 @@ pub struct EmitterSpec {
     pub authored_colour_mode: u32,
     /// Geometry class.
     pub render: Render,
+    /// Which of the PSP's pool routines draws the particles, read by [`guard`]'s tests.
+    pub draw_class: guard::DrawClass,
     /// Which strip a [`Render::Streak`] builds - see [`streak`].
     pub streak: StreakDraw,
     /// Blend class.
@@ -311,6 +323,18 @@ pub struct EmitterSpec {
     pub colour_scale: f32,
     /// The near law's size cap, [`pob::Emitter::near_cap`]; read only under [`Effect::near`].
     pub near_cap: Option<f32>,
+    /// [`pob::Emitter::frame_range`] as the record holds it; played only through
+    /// [`Self::frame_range`].
+    pub authored_frame_range: Option<pob::FrameRange>,
+    /// The spawn and hold frames this emitter plays, `None` unless the effect is loaded with
+    /// [`streak::Kept::flipbooks`].
+    pub frame_range: Option<pob::FrameRange>,
+    /// The record's size multiplier bounds, when its flags ramp them over the emitter's run
+    /// ([`pob::flags::SIZE_RAMP_OVER_RUN`]); played only through [`Self::size_ramp`].
+    pub authored_size_ramp: Option<(f32, f32)>,
+    /// A particle born `a` of the way through the emitter's run is drawn
+    /// `lo + (hi - lo) * (1 - a)` times its size channel: [`streak::Kept::size_ramps`].
+    pub size_ramp: Option<(f32, f32)>,
     /// A system attached to each particle this emitter spawns, as an index
     /// into [`Effect::emitters`].
     pub particle_child: Option<usize>,
@@ -382,6 +406,9 @@ pub struct Effect {
     /// The near-camera law this effect's billboards run under, set by the load for a title
     /// that has it (`near`).
     pub near: Option<NearLaw>,
+    /// The PSP's near tests and screen-range drop, set by the load for a source that has
+    /// them ([`guard`]).
+    pub psp_clip: bool,
     /// Which emitters start on [`System::ignite`]: the root and its sibling
     /// chain, but not a child, which starts when its parent's particle does.
     roots: Vec<usize>,
@@ -457,6 +484,7 @@ impl Effect {
                 .and_then(|root| system.view_depth(data, root))
                 .unwrap_or(0.0),
             near: None,
+            psp_clip: false,
             roots,
             rides_owner_frame: true,
             skipped_templates: 0,
@@ -491,7 +519,7 @@ impl Effect {
 /// simulation uses them (ADR-0003), though nothing here is hashed.
 #[derive(Debug, Clone, PartialEq)]
 pub struct System {
-    particles: [Particle; MAX_PARTICLES],
+    particles: [Particle; PARTICLE_SLOTS],
     emitters: [EmitterState; MAX_EMITTER_STATES],
     /// The original's severity: multiplies ejection speed and drawn size,
     /// never particle counts.
@@ -539,7 +567,7 @@ impl System {
     #[must_use]
     pub const fn new() -> Self {
         Self {
-            particles: [Particle::DEAD; MAX_PARTICLES],
+            particles: [Particle::DEAD; PARTICLE_SLOTS],
             emitters: [EmitterState::IDLE; MAX_EMITTER_STATES],
             scale: 1.0,
             count_scale: 1.0,
@@ -666,6 +694,7 @@ impl System {
     /// on the *next* `ParticleSystem_Update`.
     fn emit(&mut self, effect: &Effect, dt_ticks: f32, moved: Vec3, rng: &mut Rng) {
         let mut children: Vec<(usize, Vec3, Vec3)> = Vec::new();
+        let mut templates_rng: Option<Rng> = None;
         for index in 0..self.emitters.len() {
             if !self.emitters[index].active {
                 continue;
@@ -695,6 +724,14 @@ impl System {
             let run = spec.run_ticks();
             let burst = spec.burst(self.emitters[index].ticks_left, frame_scale);
             let dt_ticks = dt_ticks * spec.playback.rate;
+            // The templates draw from one copy of the shared stream, taken at the first: each
+            // takes the values it would have taken, and every other particle what it would have
+            // without them.
+            let rng: &mut Rng = if spec.template {
+                templates_rng.get_or_insert_with(|| rng.clone())
+            } else {
+                &mut *rng
+            };
             loop {
                 let state = &mut self.emitters[index];
                 // `short_run`: past the first update, the last tick of a finite run
@@ -776,7 +813,9 @@ impl System {
                 particle.roll = rotation.advance(particle, before, after, dt_ticks);
             }
             let frames = spec.atlas.frames();
-            spec.frames.step(particle, before, after, dt_ticks, frames);
+            let hold = spec.frame_range.map(|range| range.hold);
+            spec.frames
+                .step(particle, before, after, dt_ticks, frames, hold);
             let last_tick = if spec.short_run && spec.template {
                 dt
             } else {
@@ -851,6 +890,7 @@ impl System {
             size_sample: rng.next_f32(),
             alpha_sample: rng.next_f32(),
             scale: self.scale,
+            ramp: burst.size,
             // `Psys_RandIntRange(0, frames - 1)` under the random-frame
             // flag, drawn only when a sprite on the sheet shows it, so the
             // procedural profile (every PS2 and HD effect) draws what it did.
@@ -865,7 +905,11 @@ impl System {
         if let Some(rotation) = &spec.rotation {
             rotation.start(&mut particle, rng);
         }
-        let slot = expendable_slot(&self.particles);
+        let slot = if spec.template {
+            MAX_PARTICLES + expendable_slot(&self.particles[MAX_PARTICLES..])
+        } else {
+            expendable_slot(&self.particles[..MAX_PARTICLES])
+        };
         self.particles[slot] = particle;
 
         spec.particle_child
@@ -1001,7 +1045,7 @@ impl System {
 /// loaded reached 56. Trail hits are [`Stage::play_expendable`] and take what is
 /// left (up to 112 at once in those runs). The pool is 26,784 bytes an
 /// instance, 1.7 MB in all, and [`pipeline::MAX_VERTICES`] sizes three
-/// 100-byte-vertex buffers at `MAX_INSTANCES * MAX_PARTICLES * 6`, 28.1 MiB on
+/// 100-byte-vertex buffers at `MAX_INSTANCES * PARTICLE_SLOTS * 6`, 29.0 MiB on
 /// the GPU. `docs/formats/pulse-absent-effects.md`, "Trail-hit burst budget".
 pub const MAX_INSTANCES: usize = 64;
 

@@ -4233,8 +4233,8 @@ Vineta K's own footage to a few grey levels).
   (`ship.vex` + `ship.rcsmodel`) is not reachable from the preview path, so
   the `SHIP MODEL` frame is empty. The biggest thing still missing.
 - **The hex grid** (`HexSelection`): drawn since 2026-10-08, see below.
-- **The bracket corner marks, the padlock, the unlock condition text and
-  the loyalty value** - no unlock or loyalty state is kept.
+- **The unlock condition text** - not drawn. The bracket corner marks, the loyalty value and the
+  honeycomb's padlocks have landed since.
 
 ### The `NAVIGATE TEAM` honeycomb, 2026-10-08 (hd-ship-select)
 
@@ -4245,12 +4245,12 @@ the front end's own. Drawn by `oag_ui_screens::picker::hd::hex`:
 
 | Piece | Source | Confidence |
 | --- | --- | --- |
-| cell | `Data\FE\Images\Hexagon_HD.gtf` (72x62 art in 128x64) at 1.22 | 70 |
+| cell | `Data\FE\Images\Hexagon_HD_Faded.gtf` (72x62 art in 128x64, alpha 221), a 92x80 quad over 74x64 texels (`ship-select-ring.md`, "The cells") | 90 |
 | cursor ring | one quad of `Hexagon_HD_THICK_OUT.gtf` (92x80 units, UV 74x64 texels) pulsing white to `HD_Blue` to black, wired from `ship-select-ring.md`; the older band reading is superseded, see "The cursor ring" below | 85 (law), pulse zero point unread |
-| padlock | `Padlock.gtf` (the image this screen authors at 512x512), visible art 91x129 texels drawn at 0.44; colour `SelectedLockCol` on the selected column, faded toward `SelectedLockColFade` by 0.2 and 0.65 one and two columns out (frame reads 128, 110, 68) | 70 |
+| padlock | `Data\FE\Images\hexlock_HD.gtf` (the widget class's own), its 75x64 texel window on the 92x80 quad; `SelectedLockCol` on the selected column, ramped across each other column from `SelectedLockColFade` (`ship-select-ring.md`, "The cells") | 90 |
 | model icon | `<modellocation>\FE\thumb<LiveryNumber>.gtf` - `Feisar_c1\FE\thumb4.gtf` for `concept1`, `Feisar\FE\thumb0.gtf` for `normal`; census: every model of every team carries one | 85 (the frame's two icons match thumb4 and thumb0) |
-| selected column | `HD_Blue` once on the bare cell (`SelectedColumnCol` is not a key `HexSelection_ParseXml` reads); the frame reads (151, 6, 20), 0.88 of `HD_Blue` on each channel, one common factor (the cell art's coverage, unread) | 85 |
-| neighbour columns | the same cells in `HexCol` fading with distance (see "The honeycomb fades" below), open rows ghosting their thumbnail in black at 0.35: **chosen, not measured** (the frame shows faint silhouettes) | - |
+| selected column | `HD_Blue` once on the bare cell (`SelectedColumnCol` is not a key `HexSelection_ParseXml` reads); (149, 6, 20) with the art's alpha. Omega writes a grey, `0xff808080` | 90 |
+| neighbour columns | the same cells ramping from `HexColFade` to `HexCol` toward the selected column (see "The honeycomb fades" below), every model's picture in black, ramped from `0x12000000` to `0x64000000` toward the selected column (locked rows too); on the selected column an open row's picture is white and a locked one's black at `0x64000000` | 90 (the ramp) |
 
 Geometry, one settled RPCS3 frame (Feisar selected, fresh profile of the
 maintainer's save): first column centre = the authored origin `x=272`, column
@@ -4329,36 +4329,27 @@ unmeasured. Tests: `picker::hd::tests::*` (the miniature) and
 `hd_reads_its_own_team_selection` (the disc: the five colours, the origin,
 Feisar's open rows and thumbnails, every model's thumbnail on the sheet).
 
-### The honeycomb fades with the column's distance, and each cell is shaded across itself, 2026-11-18 (`hd-menu-ship`)
+### The honeycomb fades with the column's distance, and each cell is shaded across itself
 
-The pair `hd/menu-ship-select` (Fury style, Feisar, Safe Area 96, one frame) shows the grey fill of the cells
-as **a function of the column, not one value**: the median fill of the plain cells (pixels where ours drew the authored 50),
-by x in 12-pixel steps, is 23, 24, 25, 27, 29, 30, 31 | 35, 37, 38, 40, 41, 42 on the left of the selected column and the
-mirror image on its right (42, 41, 39, 38, 36, 34, 31, 29, 28, 27, 25, 23); it does not vary with the row. Two things are in that:
+The pair `hd/menu-ship-select` (Fury style, Feisar, Safe Area 96) shows the grey fill of the cells as a
+function of the column, not one value, and each cell rising toward the selected column across itself
+(cell centres 38.5 and 27.5 one and two columns out, 0.117 a pixel inside a cell). The law is the
+widget's own: `_SetCell` ramps each quad from `HexColFade` to `HexCol` by column edge, over art whose
+alpha is 221/255 (`docs/ghidra/functions/ps3-hdfury-eu/ship-select-ring.md`, "The cells", which has
+the predicted against the measured values). It draws on every title that has this widget, Omega
+included, and on both grids; there is no per-title fade data.
 
-- **A step per column.** The cell centres read 38.5 one column out and 27.5 two out, 11.25 less each: `HexCol` (fill 50)
-  easing to `HexColFade` (25) at `2.22` columns (`HexColFade`'s alpha over `HexCol`'s, lerped as colours, alpha included).
-  The 5-column grid's half width, 2.5, would give 40 and 30; the two read values fit 2.2 better. Two points, one frame:
-  confidence 50. `HexFade::columns`. The track screen's grid (nine columns, `fade_columns` 4 in the entry below) is another read.
-- **A slope across each cell.** Inside a cell the fill rises toward the selected column by 0.117 per pixel (24 to 31 across the
-  cell two out, 35 to 42 across the one beside the selected column), so the step between two neighbouring cells is larger than
-  the slope inside them: each cell has its own colour at its two edges, as per-vertex colours on the sprite do, not one
-  function of x. Drawn as `Draw::GradientSprite` with the colour at the sprite's left and right edges taken from the cell's
-  column distance `-/+ x / 109` texels per column (`HexFade::span`, fitted to the 0.117 and the 11.25, confidence 50). The texture
-  is 128 wide and its visible hexagon centred on texel 37, so the edge colours are the visible edges' values extended to the
-  texture's edges.
-
-Where it lives: `oag_title::HexFade` on `oag_hd::frontend::FRONT_END` (`team_hex_fade`), applied by
-`oag_game::boot::screens` after `picker::hd::read`, which reads the grid with no fade. **The other titles are unchanged**:
-Omega's grid has none until its own frame is read, and the track screen keeps its stepped fade (`HexFade { columns: 4, span:
-None }`). The HD style's colours are the same `HexCol`; its frame is unmeasured, so the fade is inherited there. What
-the same frame still shows and is not drawn: the selected cell's ring in a lighter pink (`200, 92, 102` against our flat red), the
-red cells' (149, 6, 20) against ours (161, 0, 0), and the team card's fill at 31 where ours draws 50 (the authored
+Measured on the pairs when the art, quad and ramp landed: `hd/menu-ship-select`'s hex column 5.21 to
+3.18 mean grey and its centre column 8.59 to 4.00, the frame 2.73 to 2.54; `omega/menu-ship-select`
+20.09 to 19.30. The padlock's own art and ramp and the silhouette behind it are drawn too
+(`ship-select-ring.md`, "The cells": hex column 3.18 to 0.39, frame 2.54 to 2.24). What the same
+frame still shows and is not drawn: the team card's fill at 31 where ours draws 50 (the authored
 `HD_LightGrey` `0x7f646464` over black; the original's alpha reads about `0x50`; cause unread).
 
-Tests: `picker::hd::tests::a_faded_grid_shades_each_fill_toward_the_selected_column` (the shading's direction and order),
-`hd_ship_preview_ground_truth::the_honeycomb_fill_fades_toward_the_grids_edge` (the page through the binary; 4,016 grey fill
-pixels from 15 to 42 with it, 1,082 with the wiring dropped, where the count assertion fails).
+Tests: `picker::hd::tests::a_cell_fades_across_its_quad_toward_the_selected_column` (the ramp's
+values and the quad), `selection_screens_ground_truth::hd_reads_its_own_team_selection` (the art's
+alpha), `hd_ship_preview_ground_truth::the_honeycomb_fill_fades_toward_the_grids_edge` (the page
+through the binary).
 
 ### Ship Select follows the variant, and draws what it adds in red, 2026-10-09 (hd-ship-variants)
 
@@ -4445,24 +4436,24 @@ Measured off RPCS3 frame `030-track-settled0.png`
   rows of the selected column are red, the ring sits on the chosen direction's row.
   The two rows are the two directions (forward above, reverse below), as the
   2026-09-29 walk measured.
-- **Colours**: the widget authors none. The red (149,6,20) and dim grey match
-  `Team Selection`'s authored `HexCol`/`SelectedColumnCol` over black, so those
-  values are reused - **chosen, not measured** as a transfer. The dim fill **fades
-  with distance**: 41, 35, 30 and 24 one to four columns out, which is `HexCol`
-  (50) easing to `HexColFade` (25) in four steps (measured, one frame, confidence
-  60; `HexGrid::fade_columns`, 0 on Team Selection, where no fade was measured).
-  The ring is pale pink (221/155/162), a different tint from Team Selection's.
+- **Colours**: the widget authors none, so its class defaults apply (`HexCol` `0x64808080`,
+  `HexColFade` `0x32808080`), with `HD_Blue` on the selected column (Omega: a grey) and the same ramp as
+  `Team Selection`'s over nine columns: 41, 35, 30 and 24 one to four columns out, as measured on one
+  frame (`docs/ghidra/functions/ps3-hdfury-eu/ship-select-ring.md`, "The cells").
 - **The picture in each hexagon** is the circuit's own white icon,
   `<environment>\FE\TrackSelectEmblem_BW.gtf` (the file `Cell Selection`'s `Track
   Emblem` draws, `cell_emblems::track_emblem_src`, shared rather than named twice).
-  White on the selected column, `0,0,0,0.35` over the dim ones; 62 units across
-  (**chosen** from the sails on Vineta K). The match of this file to the frame's
-  pictures is by eye on one frame, not by a table.
+  White on the selected column, black over the others, ramped from `0x12000000` to `0x64000000`
+  toward it (`ship-select-ring.md`, "The cells"); a 50 unit quad over its 256 texels, the widget's own argument. The match of this file to
+  the frame's pictures is by eye on one frame, not by a table.
 - **Locks**: none. `Gate::read` returns `open()` for HD and the screen filters
   unoffered circuits before the grid exists, so no cell can be locked. Pulse's law,
   unmeasured on HD; nothing is drawn rather than a padlock on a guess.
-- **Not drawn**: the small direction glyphs under the forward cell's icon (art
-  unlocated); the ring is the outline art once, thinner than the frame's.
+- **The direction glyph** under the selected cell's icon is the widget's own (`ship-select-ring.md`,
+  "The direction glyph"). On `hd/menu-track-select` the two centre cells go 14.22 to 0.23 mean grey, the
+  glyph box 39.72 to 0.19, the grid region 3.68 to 1.13 and the frame 3.77 to 3.54. The glyph box's
+  figure needs the still's clock to land on the frame the original's frame shows (its counter is not
+  read at the grab); art, quad, place and turn do not.
 - **Pointer**: each hexagon is a target (`What::Cell`, tested as a hexagon), a
   click steps to that circuit and direction and a second click confirms; the old
   top/bottom-half targets on the hex frame go when the grid exists. Pad unchanged.
@@ -4975,8 +4966,8 @@ hold 24 `Tournament` cells in the archive read, none walked).
    by the circuit's index, eases the ring half way to the other direction's row each frame, and pulses the ring on a counter that
    is never reset between visits (`docs/ghidra/functions/ps3-hdfury-eu/ship-select-ring.md`, "Track Select"). The pair
    `hd/menu-track-select`: the ring's band 27.4 to 2.9 mean grey, the ring box 19.7 to 14.3, the grid region 3.99 to 3.68
-   (twin capture 3.98 to 3.67). Open: the `>>>` glyph's scroll and the fill (0.87 of `HD_Blue`, the
-   `Faded` art; 149 against 172 on Ship and Track Select). The 0.2 s input cooldown is wired.
+   (twin capture 3.98 to 3.67). The 0.2 s input cooldown, the `>>>` glyph and the `Faded` cell art are
+   wired.
 8. **Loading, EndRace.** Not re-paired: ours on software Vulkan sat on Ship
    Select for 32 s without reaching a load. See the `hd-loading-screen` and
    `lane-hd-endrace` captures.

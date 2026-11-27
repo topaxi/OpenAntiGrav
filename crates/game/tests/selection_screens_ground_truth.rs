@@ -915,11 +915,20 @@ fn hd_reads_its_own_team_selection() {
     for src in [HEX_SRC, LOCK_SRC, THICK_OUT_SRC] {
         assert!(shell.sprites.get(src).is_some(), "{src}");
     }
+    // The cell art is the faded hexagon, alpha 221 inside: the original's selected column reads
+    // `HD_Blue` times that (149 of 172 on red), which the opaque `Hexagon_HD.gtf` does not.
+    let art = shell.sprites.get(HEX_SRC).expect("the cell art");
+    let alpha = shell
+        .sprites
+        .alpha_at(art, 37.0 / 128.0, 0.5)
+        .expect("inside the sheet");
+    assert_eq!((alpha * 255.0).round(), 221.0);
     let classic = shell
         .sprites
         .get(r"Data\Ships\Feisar\FE\thumb0.gtf")
         .expect("Feisar thumb0");
     assert_eq!((classic.width, classic.height), (126, 64));
+    check_the_padlocks_and_silhouettes(&shell, ship);
 
     // The authored chrome: the three `corner="true"` brackets draw their
     // marks, the five `ArrowColor` blocks their arrow, and both textures are
@@ -939,6 +948,134 @@ fn hd_reads_its_own_team_selection() {
     ] {
         assert!(shell.sprites.get(src).is_some(), "{src}");
     }
+}
+
+/// The `NAVIGATE TEAM` cells as the page draws them off the disc's own teams, art and colours on a
+/// fresh profile (`ship-select-ring.md`, "The cells"): every locked cell is `hexlock_HD.gtf`'s own
+/// 75x64 texel window on the 92x80 quad over the model's own picture, flat in `SelectedLockCol` on
+/// Feisar's column and run out to `SelectedLockColFade` at the grid's outer edges; the pictures are
+/// black at 100/255 under Feisar's locked rows and run out to 18/255.
+fn check_the_padlocks_and_silhouettes(
+    shell: &boot::Shell,
+    layout: &oag_ui_screens::picker::Layout,
+) {
+    use oag_ui::frontend::Draw;
+    use oag_ui_screens::picker::hd::hex::LOCK_SRC;
+    assert_eq!(LOCK_SRC, r"Data\FE\Images\hexlock_HD.gtf");
+    let lock = shell.sprites.get(LOCK_SRC).expect("the widget's padlock");
+    assert_eq!((lock.width, lock.height), (128, 64));
+    let alpha = |u: f32, v: f32| {
+        shell
+            .sprites
+            .alpha_at(lock, u / 128.0, v / 64.0)
+            .expect("inside the sheet")
+    };
+    // The padlock's body is opaque and centred in the window; its margin is clear.
+    assert_eq!((alpha(37.5, 31.5), alpha(10.0, 31.5)), (1.0, 0.0));
+
+    let entries: Vec<Entry> = shell
+        .teams
+        .iter()
+        .map(|team| Entry {
+            id: team.id.clone(),
+            label: team.id.clone(),
+            details: Details::Ship {
+                rating: None,
+                variants: Vec::new(),
+                stats: Vec::new(),
+                models: team.hex_cells(oag_title::VariantJoin::Suffix, ["", "_c1", "_n1"]),
+                logo: None,
+                loyalty: None,
+            },
+        })
+        .collect();
+    let picker = Picker::new(Kind::Ship, entries, Some("Feisar"), None).with_entries_across();
+    let face = shell.menu_font.as_ref().unwrap_or(&shell.font);
+    let skin = oag_ui::menu::Skin::new(shell.menu_skin, shell.space, face.line_height);
+    let draws = oag_ui_screens::picker::draw_list(
+        &picker,
+        layout,
+        &skin,
+        &shell.frame,
+        None,
+        false,
+        &|src| shell.sprites.get(src),
+        &|text| oag_ui::font::measure(face, text),
+    )
+    .body;
+    // Every draw over `uv`, as (rect, left colour, right colour), left column first.
+    let over = |uv: [f32; 4]| {
+        let mut found: Vec<([f32; 4], [f32; 4], [f32; 4])> = draws
+            .iter()
+            .filter_map(|draw| match draw {
+                Draw::Sprite {
+                    rect,
+                    uv: at,
+                    color,
+                } if *at == uv => Some((*rect, *color, *color)),
+                Draw::GradientSprite {
+                    rect,
+                    uv: at,
+                    left,
+                    right,
+                } if *at == uv => Some((*rect, *left, *right)),
+                _ => None,
+            })
+            .collect();
+        found.sort_by(|a, b| a.0[0].total_cmp(&b.0[0]));
+        found
+    };
+    let byte = |c: [f32; 4]| c.map(|v| (v * 255.0).round() as u32);
+
+    let locks = over(lock.sheet_rect([0.0, 0.0, 75.0, 64.0]));
+    assert!(locks.iter().all(|(rect, ..)| rect[2..] == [92.0, 80.0]));
+    let leftmost = locks.first().expect("padlocks");
+    let rightmost = locks.last().expect("padlocks");
+    assert_eq!(byte(leftmost.1), [36, 36, 36, 255], "SelectedLockColFade");
+    assert_eq!(byte(rightmost.2), [36, 36, 36, 255]);
+    // Feisar's four locked rows, the selected column's, in `SelectedLockCol` flat.
+    let flat = locks
+        .iter()
+        .filter(|(_, l, r)| l == r && byte(*l) == [128, 128, 128, 255])
+        .count();
+    assert_eq!(flat, 4);
+
+    // Feisar's own seven pictures: open rows white, locked rows black at 100/255.
+    let feisar = shell
+        .teams
+        .iter()
+        .find(|team| team.id == "Feisar")
+        .expect("Feisar");
+    let mut lit = Vec::new();
+    for cell in feisar.hex_cells(oag_title::VariantJoin::Suffix, ["", "_c1", "_n1"]) {
+        let src = cell.thumb.expect("every model has a thumbnail");
+        let thumb = shell.sprites.get(&src).expect("on the sheet");
+        let drawn = over(thumb.sheet_rect([0.0, 0.0, thumb.width as f32, thumb.height as f32]));
+        let [(_, left, right)] = drawn[..] else {
+            panic!("{src}: drawn {} times", drawn.len());
+        };
+        assert_eq!(left, right, "{src}: flat on the selected column");
+        lit.push((cell.open, byte(left)));
+    }
+    for (open, colour) in lit {
+        let want = if open {
+            [255, 255, 255, 255]
+        } else {
+            [0, 0, 0, 100]
+        };
+        assert_eq!(colour, want, "open {open}");
+    }
+    // The outer columns' pictures end at 18/255: every shaded black image bar the padlocks.
+    let faintest = draws
+        .iter()
+        .filter_map(|draw| match draw {
+            Draw::GradientSprite { left, right, .. } if left[..3] == [0.0; 3] => {
+                Some(left[3].min(right[3]) * 255.0)
+            }
+            _ => None,
+        })
+        .fold(f32::INFINITY, f32::min);
+    assert_eq!(faintest.round(), 18.0);
 }
 
 /// Wipeout HD/Fury: `Track Creation` reads off `DATA06`'s own
@@ -999,7 +1136,10 @@ fn hd_reads_its_own_track_creation() {
     // The grid names no art: the hexagon, the ring and every circuit's white
     // icon must be on the sheet, or the live screen draws an empty grid while
     // a stubbed unit test passes.
+    // The Fury front end takes the first four frames of the direction glyph's strip.
+    assert!(extra.fury_style);
     for src in [
+        oag_ui_screens::picker::hd::track::DIRECTION_SRC,
         oag_ui_screens::picker::hd::hex::HEX_SRC,
         oag_ui_screens::picker::hd::hex::THICK_OUT_SRC,
         oag_ui_screens::campaign::hd::cell_brackets::SRC,
@@ -1116,10 +1256,38 @@ fn omega_reads_its_own_team_selection() {
     assert_eq!([model.rot_x, model.rot_y], pose.rotation);
     let grid = extra.hex.expect("the honeycomb");
     assert_eq!((grid.columns, grid.rows, grid.scale), (5, 9, 0.8));
-    // Its cursor ring pulses through the red its update computes inline (`ship-select-ring.md`,
-    // "Omega"), and the selected column is `HD_Blue` of its own colour template, the same red.
+    // Its cursor ring pulses through the red its update computes inline, and its `_SetCell` writes
+    // `0xff808080` over the selected column of both grids where HD's looks up `HD_Blue`
+    // (`ship-select-ring.md`, "Omega").
     assert_eq!(grid.ring_peak, Some(0xffee_0707));
-    assert_eq!(grid.selected_column, 0xffee_0707);
+    assert_eq!(grid.selected_column, 0xff80_8080);
+    let creation = shell
+        .track_select
+        .as_ref()
+        .and_then(|layout| layout.hd_track.as_deref())
+        .expect("Track Creation");
+    let circuits = creation.hex_grid.expect("Track Creation's grid");
+    assert_eq!(circuits.selected_column, 0xff80_8080);
+    // Omega's white front end takes the last four frames of the direction glyph's strip.
+    assert!(!creation.fury_style);
+    let glyph = oag_ui_screens::picker::hd::track::DIRECTION_SRC;
+    assert!(shell.sprites.get(glyph).is_some(), "{glyph}");
+    // The cell art is the faded hexagon, as the 1x file this build loads has it.
+    let art = shell
+        .sprites
+        .get(oag_ui_screens::picker::hd::hex::HEX_SRC)
+        .expect("the cell art");
+    let alpha = shell
+        .sprites
+        .alpha_at(art, 37.0 / 128.0, 0.5)
+        .expect("inside the sheet");
+    assert_eq!((alpha * 255.0).round(), 215.0);
+    // The padlock the shared grid draws is on this sheet too, at the size its 75x64 window needs.
+    let lock = shell
+        .sprites
+        .get(oag_ui_screens::picker::hd::hex::LOCK_SRC)
+        .expect("the widget's padlock");
+    assert_eq!((lock.width, lock.height), (128, 64));
     // The nineteen declared teams are all offered: the twelve HD-era, the two Tigrons and
     // the five 2048-era, whose `Logo.gtf` sits under their own `Ships\<Team>` directory.
     assert_eq!(shell.teams.len(), 19);

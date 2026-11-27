@@ -120,6 +120,8 @@ pub fn finish_definition(
     definition.drop_unavailable_weather(title);
     // And the RUMBLE row's `original` value, where the original plays patterns: HD and Omega.
     definition.drop_unavailable_rumble_original(title);
+    // And TARGET FPS's `original` value, where the title has a width throttle: HD.
+    definition.drop_unavailable_width_throttle(title);
     // And the TEXTURE COMPRESSION row, unless the device lacks BC and samples ASTC; kept while
     // no device exists yet, and trimmed again once one does (`Stage::loading`).
     crate::texture_cache::trim_row(definition, crate::texture_cache::offered());
@@ -141,6 +143,12 @@ pub fn finish_definition(
         "auto",
         strings,
         "OAG_AUDIO_SPATIAL_AUTO",
+    );
+    definition.relabel_choice_from(
+        "graphics.target_fps",
+        "original",
+        strings,
+        "OAG_GRAPHICS_TARGET_FPS_ORIGINAL",
     );
     definition.relabel_choice_from(
         "graphics.reflection_resolution",

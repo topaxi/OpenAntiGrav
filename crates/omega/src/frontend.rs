@@ -357,7 +357,9 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
         ps4: true,
         tone: None,
     }),
-    team_hex_fade: None,
+    // `FUN_0145af70`, the widget's `_SetCell`, writes `0xff808080` over the selected column
+    // (`docs/ghidra/functions/ps3-hdfury-eu/ship-select-ring.md`, "Omega").
+    hex_selected_fill: Some(0xff80_8080),
     // The ring's update computes white to this red to black inline, not a lookup of `HD_Blue`
     // (`FUN_0142caa0`, `docs/ghidra/functions/ps3-hdfury-eu/ship-select-ring.md`, "Omega").
     team_hex_ring_peak: Some(0xffee_0707),
@@ -523,6 +525,7 @@ pub const MENU_BLOCKS: oag_title::MenuBlocks = oag_title::MenuBlocks {
     frame_texture: r"Data\FE\Images\file2.gtf",
     cursor_texture: r"Data\FE\Images\cursor.gtf",
     arrow_texture: r"Data\FE\Images\HD_options_arrow.gtf",
+    unselectable_arrow_texture: r"Data\FE\Images\NonSelectable_Arrow_HD.gtf",
     strip: oag_title::StripBlocks {
         // `HorizMenu_Construct`, `0x001b47c8`: `+0xe0 = 298.0`, the field
         // `HorizMenu_ParseXml` fills from `ItemWidth`.

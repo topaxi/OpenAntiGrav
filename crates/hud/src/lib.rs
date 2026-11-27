@@ -71,6 +71,7 @@ pub mod race_line;
 pub mod radar;
 mod runtime;
 mod score_over;
+pub mod score_popup;
 pub mod score_rows;
 pub mod screen_layout;
 mod shield_bar;
@@ -83,6 +84,7 @@ mod sway;
 pub mod time_gap;
 mod time_trial_pace;
 mod widget;
+mod zone_score;
 
 pub use assets::{Assets, SplitAssets, split_family};
 pub use compose::{Composed, compose};
@@ -97,6 +99,7 @@ pub use pickup::{IconFrame, mod_icon_size, pickup_icon_name};
 pub use placement::{Placement, place};
 pub use player_tags::PlayerTag;
 pub use race_line::RaceLine;
+pub use score_popup::{SCORE_POPUPS, ScoreFeedback, ScorePopup};
 pub use sight_draw::sight_draws;
 pub use sub_weapon::SubWeapon;
 pub use time_trial_pace::{PaceTier, RecordTarget, TimeTrialPace, pace_for};
@@ -105,6 +108,7 @@ pub use widget::{Fill, Font, ImageModel, Label, Model, Sprite, VertAlign};
 // The two the outline default is built from. Everything else `draw` decides is
 // private to it; `tests` reaches those through `super::draw::*`.
 use draw::{BORDER_CONSTANT, FALLBACK_BORDER};
+pub use zone_score::TemplateDigit;
 
 use oag_ui::frontend::{Align, Draw};
 use oag_ui::screen::argb_to_rgba;
@@ -423,12 +427,18 @@ impl Layout {
     }
 
     fn label_from(&mut self, node: &Node, offset_x: f32, offset_y: f32) -> Option<Label> {
+        // `ScaleX`/`ScaleY` per axis, each falling back to the uniform `scale`; no shipped widget
+        // authors both spellings.
+        let uniform = number(&self.constants, node.value("scale")).unwrap_or(1.0);
+        let scale = number(&self.constants, node.value("ScaleY")).unwrap_or(uniform);
+        let scale_x = number(&self.constants, node.value("ScaleX")).unwrap_or(uniform);
         Some(Label {
             name: anonymous_or(node),
             x: offset_x + number(&self.constants, node.value("x")).unwrap_or(0.0),
             y: offset_y + number(&self.constants, node.value("y")).unwrap_or(0.0),
             font: node.value("font").map(Font::parse).unwrap_or_default(),
-            scale: number(&self.constants, node.value("scale")).unwrap_or(1.0),
+            scale,
+            stretch: if scale > 0.0 { scale_x / scale } else { 1.0 },
             color: colour(&self.constants, node.value("Color")),
             border: node
                 .value("BorderColor")
@@ -696,6 +706,8 @@ pub struct Readout {
     pub sub_weapon: Option<SubWeapon>,
     /// What a Detonator race's HUD shows; `None` in every other mode ([`detonator`]).
     pub detonator: Option<Detonator>,
+    /// The floating `+N` scores, by `ScoreFeedBack` widget ([`score_popup`]).
+    pub score_popups: [Option<ScorePopup>; SCORE_POPUPS],
     /// Whether the race is an event of the title's own single-player campaign (2048's
     /// `SP.xml`) - the object its HUD binds at `hud+4`. Without one the HUD draws no `RaceXPTxt`
     /// and no `ObjectiveTxt`: the 2048 DLC's HD and Fury Campaign events carry none. See

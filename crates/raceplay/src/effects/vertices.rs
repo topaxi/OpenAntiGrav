@@ -37,8 +37,8 @@ impl Race {
         }
     }
 
-    /// The cull of the view being drawn with no guard band: its eye, for the effects under
-    /// the near-camera law (`oag_fx::psys::Effect::near`).
+    /// The cull of the view being drawn with no strip camera: its eye, for the effects under
+    /// a near law (`oag_fx::psys::Effect::near`, `oag_fx::psys::guard`).
     pub(crate) fn near_cull(&self) -> psys::Cull<'static> {
         let camera = self.view.camera_frame(&self.core);
         psys::Cull {
@@ -51,9 +51,9 @@ impl Race {
         }
     }
 
-    /// The GE's guard band, on Pulse's PSP source alone - `psys::guard`.
-    /// That source is the one whose flash answers every kind; Pure's
-    /// Quake-only wash is not a sign of it.
+    /// The camera Pulse's PSP strips are built screen-parallel against
+    /// (`oag_fx::psys::streak`), on that source alone. It is the one whose
+    /// flash answers every kind; Pure's Quake-only wash is not a sign of it.
     pub(crate) fn stage_guard_band(&self) -> Option<psys::guard::GuardBand> {
         let camera = self.view.camera_frame(&self.core);
         self.view
@@ -101,7 +101,7 @@ impl Race {
         self.view
             .scenery_fx
             .weather()
-            .extend_vertices(additive, alpha_over, camera, right, up);
+            .extend_vertices(additive, alpha_over, camera, right, up, near);
         if self.view.enhanced_weather() {
             self.view
                 .scenery_fx

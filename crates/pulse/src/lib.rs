@@ -57,6 +57,10 @@ pub const TITLE: &Title = &Title {
     ),
     // No flip in this executable: no `FE_FLIP`, no flip tunable, no `5 pi`.
     eliminator_flip: oag_title::pre_race::Sourced::measured(None),
+    // No score Eliminator: never read.
+    score_pace: oag_title::pre_race::Sourced::chosen(
+        oag_title::eliminator::ScorePaceTerms::WITH_REPULSER_AND_SHURIKEN,
+    ),
     teams: race::TEAM_IDENTITIES,
     loyalty: Some(oag_title::loyalty::LoyaltyEarning {
         law: oag_title::loyalty::LoyaltyLaw::Pulse,
@@ -73,6 +77,7 @@ pub const TITLE: &Title = &Title {
     // `Texture_LoadEngineFlare` at `0x08a84c80`. Note the directory case
     // differs from the noise map's; the WAD hash is case-insensitive.
     wingtip: None,
+    pickup_roster: None,
     weapon_pad_glow: &oag_title::weapon_pad::WeaponPadGlow::Authored,
     flare: &oag_title::flare::Flare::Sprite(r"Data\Tex\EngineFlare\grabbedEngineFlare128x64x8.mip"),
     // Measured: the six stand-in codepoints and the glyph each draws, read off
@@ -123,6 +128,7 @@ pub const TITLE: &Title = &Title {
     },
     // PSP: no motors; the PS2 level-and-timer law is documented and not played (`docs/gameplay/rumble.md`).
     rumble: oag_title::rumble::Rumble::Absent,
+    width_throttle: None,
     // The 60 s idle test and the 120 s timeout are read off the executable; `docs/ui/attract-demo.md`.
     demo: oag_title::demo::Demo::PULSE,
     // The two tables Pulse picks between by race mode. `DAT_08b32428` is what
@@ -163,6 +169,15 @@ pub const TITLE: &Title = &Title {
         // Measured on PPSSPP: 2,302 probes of 56 captures, 0 mispredicted (`rocket-visuals.md`).
         own_craft_box_hides_track: oag_title::pre_race::Sourced::measured(
             oag_title::weapons::OwnCraftBox::Falls,
+        ),
+        // Measured: each flyer's own update (`psp-pulse-usa/rocket-visuals.md`, `missile.md`,
+        // `plasma.md`, `shuriken.md`).
+        surface_probe_lengths: oag_title::pre_race::Sourced::measured(
+            oag_title::weapons::ProbeLengths::PULSE,
+        ),
+        // Measured: `Rocket_Update`'s `0x7f` arm falls (`rocket-visuals.md`).
+        rocket_open_air: oag_title::pre_race::Sourced::measured(
+            oag_title::weapons::RocketOpenAir::Falls,
         ),
         opponent_fire: oag_title::pre_race::Sourced::measured(
             oag_title::weapons::OpponentFire::PULSE,
@@ -230,6 +245,8 @@ pub const TITLE: &Title = &Title {
         adverts_unlit: true,
         card_store: oag_title::adverts::CardStore::R5G6B5Gamma,
         card_unlit: true,
+        // Pulse's start is `gantry::Clock::PULSE`.
+        countdown_assembly_ticks: None,
         gantry_boards: None,
         mode_gantries: &[],
         origin: oag_title::Origin::Measured,
@@ -383,7 +400,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     )),
     borrows_ps2_split_screens: true,
     model_lighting: None,
-    team_hex_fade: None,
+    hex_selected_fill: None,
     team_hex_ring_peak: None,
 };
 

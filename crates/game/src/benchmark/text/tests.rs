@@ -7,7 +7,8 @@ fn english(id: &str, fallback: &str) -> String {
     fallback.to_string()
 }
 
-/// `slow` of 1,000 counted frames at 50 ms (three refreshes), the rest at one refresh of 60 Hz.
+/// `slow` of 1,000 counted frames at 50 ms (three periods of the 60 FPS budget), the rest at
+/// one.
 fn run(slow: usize) -> Report {
     let frames = std::iter::repeat_n(100_000.0, COUNTDOWN_FRAMES)
         .chain(std::iter::repeat_n(16_600.0, 1000 - slow))
@@ -16,7 +17,7 @@ fn run(slow: usize) -> Report {
 }
 
 #[test]
-fn the_verdict_follows_the_share_of_frames_that_missed_a_refresh() {
+fn the_verdict_follows_the_share_of_frames_that_missed_the_budget() {
     for (slow, verdict) in [
         (0, Verdict::Smooth),
         (10, Verdict::Smooth),
@@ -38,12 +39,28 @@ fn the_summary_leads_with_the_verdict_and_speaks_plainly() {
     assert_eq!(
         lines,
         [
-            "MOSTLY SMOOTH: 57 FPS ON AVERAGE, ON A 60 HZ SCREEN",
+            "MOSTLY SMOOTH: 57 FPS ON AVERAGE, JUDGED AGAINST 60 FPS",
             "Slowest moments: 20 FPS (worst 1 in 100 frames)",
-            "Stutters: 30 of 1000 frames took longer than one screen refresh",
+            "Stutters: 30 of 1000 frames missed the 16.7 ms frame budget",
             "Mods: none",
         ]
     );
+}
+
+#[test]
+fn the_lines_and_the_row_name_the_target_while_the_refresh_keeps_its_row() {
+    let mut run = run(30);
+    run.context.refresh = (120.0, "display");
+    run.context.target_fps_hz = Some(60.0);
+    let text = copy_text(&run, &english);
+    for line in [
+        "MOSTLY SMOOTH: 57 FPS ON AVERAGE, JUDGED AGAINST 60 FPS",
+        "Stutters: 30 of 1000 frames missed the 16.7 ms frame budget",
+        "FRAMES OVER 16.7 MS: 30 OF 1000",
+        "SCREEN REFRESH: 120 HZ",
+    ] {
+        assert!(text.contains(line), "{line} not in:\n{text}");
+    }
 }
 
 #[test]
@@ -97,9 +114,9 @@ fn the_copied_text_is_pinned_line_for_line() {
         copy_text(&run, &english),
         "\
 Pulse, Vineta K, YOUR SETTINGS
-MOSTLY SMOOTH: 57 FPS ON AVERAGE, ON A 60 HZ SCREEN
+MOSTLY SMOOTH: 57 FPS ON AVERAGE, JUDGED AGAINST 60 FPS
 Slowest moments: 20 FPS (worst 1 in 100 frames)
-Stutters: 30 of 1000 frames took longer than one screen refresh
+Stutters: 30 of 1000 frames missed the 16.7 ms frame budget
 Mods: none
 
 DETAILS
@@ -135,6 +152,30 @@ fn a_run_with_mods_names_them_in_the_details() {
             .machine
             .contains(&("MODS".to_string(), "oag.energy-turbo 1.0.0".to_string()))
     );
+}
+
+/// A browser names neither its adapter nor its driver, and a Mali's driver is its adapter's
+/// name again: the line reads as what is known, never as empty brackets.
+#[test]
+fn the_gpu_line_says_only_what_the_platform_named() {
+    for (adapter, driver, line) in [
+        ("", "", None),
+        ("Mali-G78", "Mali-G78", Some("Mali-G78")),
+        ("Mali-G78", "", Some("Mali-G78")),
+        ("", "Mesa 25", Some("Mesa 25")),
+        ("RX 7800", "Mesa 25", Some("RX 7800 (Mesa 25)")),
+    ] {
+        let mut run = run(0);
+        run.context.adapter_name = adapter.into();
+        run.context.driver = driver.into();
+        let machine = details(&run, &english).machine;
+        let shown = machine.iter().find(|(name, _)| name == "GPU");
+        assert_eq!(
+            shown.map(|(_, value)| value.as_str()),
+            line,
+            "adapter {adapter:?}, driver {driver:?}"
+        );
+    }
 }
 
 #[test]

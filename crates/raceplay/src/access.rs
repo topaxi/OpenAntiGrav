@@ -21,6 +21,29 @@ fn launch_scale(at_display_scale: bool) -> oag_weapons::projectile::LaunchScale 
     }
 }
 
+/// The flight's probe lengths for a title's.
+fn probe_lengths(
+    lengths: oag_title::weapons::ProbeLengths,
+) -> oag_weapons::projectile::ProbeLengths {
+    oag_weapons::projectile::ProbeLengths {
+        rocket: lengths.rocket,
+        missile: lengths.missile,
+        plasma: lengths.plasma,
+        shuriken: lengths.shuriken,
+    }
+}
+
+/// The flight's open-air arm for a title's.
+fn rocket_open_air(
+    arm: oag_title::weapons::RocketOpenAir,
+) -> oag_weapons::projectile::RocketOpenAir {
+    use oag_title::weapons::RocketOpenAir;
+    match arm {
+        RocketOpenAir::Falls => oag_weapons::projectile::RocketOpenAir::Falls,
+        RocketOpenAir::TurnsAlongNormal => oag_weapons::projectile::RocketOpenAir::TurnsAlongNormal,
+    }
+}
+
 /// The flight's probe rule for a title's own-craft box. A title that has not measured it keeps a
 /// Plasma off the probe for [`UNMEASURED_PLASMA_PROBE_WINDOW`] seconds (chosen).
 #[must_use]
@@ -485,6 +508,17 @@ impl RaceSim {
         }
     }
 
+    /// The title's flight laws for the flyers that probe the track: [`Self::floor_arms`] with
+    /// `oag_title::weapons::Weapons::surface_probe_lengths` and `rocket_open_air`.
+    #[must_use]
+    pub fn flight_laws(&self) -> oag_weapons::projectile::FlightLaws {
+        oag_weapons::projectile::FlightLaws {
+            floor_arms: self.floor_arms(),
+            probes: probe_lengths(self.surface_probe_lengths),
+            rocket_open_air: rocket_open_air(self.rocket_open_air),
+        }
+    }
+
     /// How fast this title's Rocket leaves the craft,
     /// `oag_title::weapons::Weapons::rocket_launch_at_display_scale`.
     #[must_use]
@@ -821,8 +855,8 @@ impl RaceView {
 
 #[cfg(test)]
 mod own_craft_box_tests {
-    use super::own_craft_probe_for;
-    use oag_weapons::projectile::OwnCraftProbe;
+    use super::{own_craft_probe_for, probe_lengths, rocket_open_air};
+    use oag_weapons::projectile::{OwnCraftProbe, ProbeLengths, RocketOpenAir};
 
     /// Each title's measured own-craft box reaches the flight as the rule its executable runs
     /// (`docs/gameplay/projectile-floor.md`, "The other titles").
@@ -835,9 +869,34 @@ mod own_craft_box_tests {
         assert_eq!(probe(oag_pure::TITLE), OwnCraftProbe::CraftBoxHolds);
         assert_eq!(probe(oag_2048::TITLE), OwnCraftProbe::NoBox);
         assert_eq!(probe(oag_omega::TITLE), OwnCraftProbe::NoBox);
-        assert!(matches!(
-            probe(oag_hd::TITLE),
-            OwnCraftProbe::PlasmaWindow(_)
-        ));
+        assert_eq!(probe(oag_hd::TITLE), OwnCraftProbe::CraftBox);
+    }
+
+    /// HD alone has its measured probe lengths and its Rocket's open-air arm; every other title
+    /// flies Pulse's (`docs/gameplay/projectile-floor.md`, "HD's box and open-air Rocket").
+    #[test]
+    fn only_hd_flies_its_own_probe_lengths_and_open_air_rocket() {
+        let laws = |title: &oag_title::Title| {
+            (
+                probe_lengths(title.weapons.surface_probe_lengths.value),
+                rocket_open_air(title.weapons.rocket_open_air.value),
+            )
+        };
+        let pulse = (ProbeLengths::PULSE, RocketOpenAir::Falls);
+        for title in [
+            oag_pulse::TITLE,
+            oag_pure::TITLE,
+            oag_2048::TITLE,
+            oag_omega::TITLE,
+        ] {
+            assert_eq!(laws(title), pulse, "{}", title.name);
+        }
+        let hd = ProbeLengths {
+            rocket: 6.0,
+            missile: 6.0,
+            plasma: 6.0,
+            shuriken: 12.0,
+        };
+        assert_eq!(laws(oag_hd::TITLE), (hd, RocketOpenAir::TurnsAlongNormal));
     }
 }

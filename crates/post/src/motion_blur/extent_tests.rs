@@ -136,6 +136,7 @@ fn the_chain_smears_inside_a_viewport_smaller_than_its_allocation() {
             | wgpu::TextureUsages::COPY_DST
             | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     // A 2x2 white block at (18, 18), inside the rectangle; a marker at
     // (50, 50), outside it.
@@ -171,6 +172,7 @@ fn the_chain_smears_inside_a_viewport_smaller_than_its_allocation() {
         format: oag_gpu::formats::VELOCITY_FORMAT,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let moving = super::tests::f32_to_half(0.1).to_le_bytes();
     let zero = super::tests::f32_to_half(0.0).to_le_bytes();
@@ -200,6 +202,7 @@ fn the_chain_smears_inside_a_viewport_smaller_than_its_allocation() {
         format: wgpu::TextureFormat::Depth32Float,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let depth_view = depth.create_view(&Default::default());
     let mut clear = device.create_command_encoder(&Default::default());

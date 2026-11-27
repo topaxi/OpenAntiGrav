@@ -538,6 +538,7 @@ impl Weather {
         camera: Frame,
         right: Vec3,
         up: Vec3,
+        cull: psys::Cull<'_>,
     ) {
         if !self.is_active() {
             return;
@@ -560,7 +561,7 @@ impl Weather {
         };
         self.pool
             .in_world(&anchor, effect.view_depth)
-            .extend_vertices(additive, alpha_over, effect, right, up, psys::Cull::NONE);
+            .extend_vertices(additive, alpha_over, effect, right, up, cull);
     }
 }
 

@@ -159,19 +159,21 @@ fn the_wave_clears_what_lies_ahead_and_scores_the_emp_values() {
     charge(&mut field, 8);
     fire(&mut field, &survey, &config(), 10);
 
-    let mut kinds = Vec::new();
+    let mut events = Vec::new();
     for _ in 0..130 {
-        kinds.extend(
-            step_wave(&mut field, &survey, &config(), 1.0 / 60.0)
-                .into_iter()
-                .map(|e| e.kind),
-        );
+        events.extend(step_wave(&mut field, &survey, &config(), 1.0 / 60.0));
     }
+    let kinds: Vec<EventKind> = events.iter().map(|e| e.kind).collect();
     assert!(
         !field.emp.wave.live,
         "the wave ends once its age reaches the extent"
     );
     assert_eq!(field.cannon.score, 100 + 25 + 25 + 50 + 1000);
+    assert_eq!(
+        events.iter().filter_map(|e| e.points).sum::<i32>(),
+        25 + 25 + 50 + 1000,
+        "each kill's event carries what it paid"
+    );
     assert_eq!(
         field.cannon.destroyed_mines,
         3 + 3,

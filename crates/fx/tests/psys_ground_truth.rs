@@ -842,6 +842,34 @@ fn hd_ship_explosion_root_is_a_fire_flipbook_under_a_black_colour_ramp() {
         assert_eq!(root.palette[entry][3], 1.0, "entry {entry}");
     }
     assert!(root.palette[64][..3].iter().all(|&c| c == 1.0));
+
+    let hemisphere = tex(&mut archives, r"Tex\yellow_glow_hemi.tga").expect("the hemisphere reads");
+    check_the_hemisphere_sits_in_the_top_half("HD .gtf", &hemisphere);
+}
+
+/// `yellow_glow_hemi`, the Rocket craft blast's wash, is a half disc rising from the middle of
+/// its square: decoded, its opaque half is the upper rows, the way 2048's `.gxt` and Omega's
+/// `.gnf` of the same art store it. HD's `.gtf` stores it the other way up
+/// (`docs/rendering/particle-fill.md`, "HD's particle sprites are bottom-up").
+pub(crate) fn check_the_hemisphere_sits_in_the_top_half(
+    source: &str,
+    sprite: &oag_fx::psys::sprite::Sprite,
+) {
+    assert_eq!((sprite.width, sprite.height), (64, 64), "{source}");
+    let (upper, lower) = sprite.rgba.split_at(sprite.rgba.len() / 2);
+    let alpha = |half: &[u8]| -> u32 {
+        half.as_chunks::<4>()
+            .0
+            .iter()
+            .map(|p| u32::from(p[3]))
+            .sum()
+    };
+    assert!(
+        alpha(upper) > 5 * alpha(lower),
+        "{source}: upper half alpha {}, lower {}",
+        alpha(upper),
+        alpha(lower)
+    );
 }
 
 /// HD's mode 3 is a blend of entry 0 toward the scene light weighted by the table's red, so the

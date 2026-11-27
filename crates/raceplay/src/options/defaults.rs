@@ -79,6 +79,7 @@ impl Default for Options {
             hud: None,
             world_clock_offset: 0.0,
             gantry_seconds: None,
+            flame_seconds: None,
             camera: None,
             fov_override: None,
             demo: false,

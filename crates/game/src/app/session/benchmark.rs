@@ -538,24 +538,18 @@ impl Session {
         let strings = &done.strings;
         let say = |id: &str, english: &str| strings.get_or_fallback(id, english).to_string();
         let text = benchmark::text::copy_text(&done.report, &say);
-        let copied = crate::app::clipboard::write(&text);
-        debug!("benchmark result copied to the clipboard: {copied}");
-        done.view.copied = Some(copied);
-        done.copied_ticks = benchmark::COPIED_TICKS;
+        debug!("benchmark result: asking for a clipboard write");
+        done.copy.start(crate::app::clipboard::write(&text));
+        done.view.copied = done.copy.tick();
     }
 
-    /// Takes the COPIED label off its button once its ticks have run out.
+    /// Puts the write's answer on the button when it arrives, and takes it off in time.
     fn age_copy_label(&mut self) {
         let Stage::Race(stage) = &mut self.stage else {
             return;
         };
-        if let Some(done) = stage.benchmark.as_mut().and_then(|live| live.done.as_mut())
-            && done.copied_ticks > 0
-        {
-            done.copied_ticks -= 1;
-            if done.copied_ticks == 0 {
-                done.view.copied = None;
-            }
+        if let Some(done) = stage.benchmark.as_mut().and_then(|live| live.done.as_mut()) {
+            done.view.copied = done.copy.tick();
         }
     }
 
@@ -628,16 +622,22 @@ impl Session {
         if let Stage::Race(stage) = &mut self.stage
             && let Some(live) = stage.benchmark.as_mut()
         {
+            let strings = oag_ui::strings::project_table(self.settings.language.as_deref());
+            let say = |id: &str, english: &str| strings.get_or_fallback(id, english).to_string();
+            debug!(
+                "benchmark heading: {}",
+                benchmark::text::head(&report, &say)
+            );
             live.done = Some(Done {
                 report,
                 focus: Choice::Back,
                 saved,
-                strings: oag_ui::strings::project_table(self.settings.language.as_deref()),
+                strings,
                 view: screen::View {
                     can_copy: crate::app::clipboard::CAN_WRITE,
                     ..screen::View::default()
                 },
-                copied_ticks: 0,
+                copy: benchmark::CopyLabel::default(),
             });
         }
     }
@@ -820,13 +820,10 @@ impl Session {
         let context = benchmark::Context {
             title: title.name,
             track: Some(format!("{}: {}", title.name, stage.circuit)),
-            track_name: self.shell.as_ref().and_then(|shell| {
-                shell
-                    .tracks
-                    .iter()
-                    .find(|(track, _)| track.entry_name() == stage.circuit)
-                    .map(|(_, name)| name.clone())
-            }),
+            track_name: self
+                .shell
+                .as_ref()
+                .and_then(|shell| benchmark::circuit_name(&shell.tracks, &stage.circuit)),
             details: self.benchmark_details(),
             build_version: oag_net::BUILD_VERSION,
             mode: world.mode().name(),
@@ -838,6 +835,11 @@ impl Session {
             settings,
             refresh,
             frame_limit_hz: self.frame_period().map(|period| 1.0 / period.as_secs_f64()),
+            target_fps_hz: profile
+                .target_fps
+                .resolve(self.display.hz())
+                .hz()
+                .map(f64::from),
             preset: live.request.preset.clone(),
             mods,
             vsync: self.settings.display.vsync.to_string(),

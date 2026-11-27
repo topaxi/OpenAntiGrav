@@ -55,6 +55,10 @@ pub const TITLE: &Title = &Title {
     ),
     // No flip in this executable: no `FE_FLIP`, no flip tunable, no `5 pi`.
     eliminator_flip: oag_title::pre_race::Sourced::measured(None),
+    // No score Eliminator: never read.
+    score_pace: oag_title::pre_race::Sourced::chosen(
+        oag_title::eliminator::ScorePaceTerms::WITH_REPULSER_AND_SHURIKEN,
+    ),
     teams: race::TEAM_IDENTITIES,
     loyalty: Some(oag_title::loyalty::LoyaltyEarning {
         law: oag_title::loyalty::LoyaltyLaw::Pulse,
@@ -69,6 +73,7 @@ pub const TITLE: &Title = &Title {
     // The same sprite Pulse names, and found under the same name on Pure's
     // disc - see `oag_pulse`'s note for the literal it was read from.
     wingtip: None,
+    pickup_roster: None,
     weapon_pad_glow: &oag_title::weapon_pad::WeaponPadGlow::Authored,
     flare: &oag_title::flare::Flare::Sprite(r"Data\Tex\EngineFlare\grabbedEngineFlare128x64x8.mip"),
     // Measured: the six glyphs of `FX300ANG.fnt` - see `prompts`.
@@ -119,6 +124,7 @@ pub const TITLE: &Title = &Title {
     },
     // No motors on a PSP (`docs/gameplay/rumble.md`, "Provenance per title").
     rumble: oag_title::rumble::Rumble::Absent,
+    width_throttle: None,
     // Inherited by lineage, `docs/ui/attract-demo.md`.
     demo: oag_title::demo::Demo {
         // `Demo_Definition.xml` is shared verbatim by both discs (`docs/ui/attract-demo.md`).
@@ -187,6 +193,18 @@ pub const TITLE: &Title = &Title {
         // Pulse's raycast, gate and box; a box hit runs no arm (`psp-pure-usa/own-craft-box.md`).
         own_craft_box_hides_track: oag_title::pre_race::Sourced::measured(
             oag_title::weapons::OwnCraftBox::Holds,
+        ),
+        // Pulse's, inherited: Pure's `Missile_Update` and `Shuriken_Update` are unread. Pure's
+        // Rocket and Plasma probe through their own arm (`floor_arms_ride_launch_normal`),
+        // which does not read these.
+        surface_probe_lengths: oag_title::pre_race::Sourced::inherited(
+            oag_title::weapons::ProbeLengths::PULSE,
+            "Wipeout Pulse",
+        ),
+        // Pulse's, inherited. Pure's Rocket flies its own arm (`floor_arms_ride_launch_normal`).
+        rocket_open_air: oag_title::pre_race::Sourced::inherited(
+            oag_title::weapons::RocketOpenAir::Falls,
+            "Wipeout Pulse",
         ),
         // Measured: Pure's decision code equals Pulse's law (`psp-pure-usa/weapon-ai-fire.md`).
         opponent_fire: oag_title::pre_race::Sourced::measured(
@@ -490,7 +508,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     endrace_style: None,
     borrows_ps2_split_screens: false,
     model_lighting: None,
-    team_hex_fade: None,
+    hex_selected_fill: None,
     team_hex_ring_peak: None,
 };
 

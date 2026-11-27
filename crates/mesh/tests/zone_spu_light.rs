@@ -18,7 +18,8 @@ use std::sync::Arc;
 use oag_core::math::Mat4;
 use oag_gpu::formats::SceneStore;
 use oag_mesh::mesh::{
-    Bounds, DrawCall, Emissive, GpuVertex, Model, ModelTexture, Texels, ZONE_EXEMPT_RATE, slots,
+    Bounds, DrawCall, Emissive, GpuVertex, Model, ModelTexture, PROGRAM_TUNNEL_EMISSIVE, Texels,
+    ZONE_EXEMPT_RATE, slots,
 };
 use oag_mesh::mesh_render::{
     self, Anisotropy, CraftShadow, Scene, ShadowMap, ShadowMaps, ShadowReceiver, SpuLight,
@@ -405,6 +406,117 @@ fn a_black_zone_surface_turns_the_lights_colour_and_a_plain_chunk_multiplies_it(
     assert_near(pixel[2], 0, "no marker", pixel);
 }
 
+/// **`tunnel_fx_noalpha`'s window lights** (`PROGRAM_TUNNEL_EMISSIVE`, `mesh::rcs::tunnel_emissive`):
+/// on a plain chunk in a Zone frame the emissive bound third is added after the light, decoded and
+/// unlit, so a black albedo under a black stage shows it at half (the program's `/2`); the same
+/// chunk on its Zone program, whose variants declare no emissive, shows nothing
+/// (`docs/rendering/hd-zone-recolour.md`, "Window lights on a plain chunk").
+#[test]
+fn a_plain_tunnel_chunk_adds_its_window_lights_and_its_zone_program_does_not() {
+    let instance = wgpu::Instance::default();
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let (device, queue) =
+        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+            .expect("requesting the device");
+    let art = stage_art(&texture("black stage", [0, 0, 0, 255]));
+    let mut frame = scene(&[]);
+    frame.fog.enabled = 0.0;
+    const WINDOW: u8 = 200;
+    let quad = |bits: u32| {
+        let mut m = model([0, 0, 0, 255], bits | EXEMPT_SLOT);
+        m.emissive = vec![Emissive {
+            tint: [1.0; 3],
+            offset: 0.0,
+            scale: 1.0,
+            rate: 0.0,
+            program: [PROGRAM_TUNNEL_EMISSIVE, 0.0],
+        }];
+        m.pad_masks = vec![Some(texture(
+            "window lights",
+            [WINDOW, WINDOW, WINDOW, 255],
+        ))];
+        m
+    };
+    let want = srgb_encode(OUTPUT_SCALE * srgb_decode(f32::from(WINDOW) / 255.0));
+    let plain = draw(
+        &device,
+        &queue,
+        &quad(slots::DEFAULT | slots::ZONE_PLAIN),
+        &art,
+        frame,
+        None,
+    );
+    for (channel, got) in ["red", "green", "blue"].into_iter().zip(plain) {
+        assert_near(
+            got,
+            want,
+            &format!("a plain chunk's window lights, {channel}"),
+            plain,
+        );
+    }
+    let zone = draw(&device, &queue, &quad(slots::DEFAULT), &art, frame, None);
+    for (channel, got) in ["red", "green", "blue"].into_iter().zip(zone) {
+        assert_near(
+            got,
+            0,
+            &format!("a chunk on its Zone program, {channel}"),
+            zone,
+        );
+    }
+}
+
+/// A circuit built against the stage light (`zone_stage_light`) draws what the uniform-driven Zone
+/// branches draw: a chunk on its Zone program, a plain chunk, and an emissive plain chunk, each
+/// under a sun, an ambient and an SPU light. The three expected pixels differ from one another, so
+/// a build that lights one kind as another fails.
+#[test]
+fn the_stage_light_pipeline_draws_what_the_zone_branches_draw() {
+    let instance = wgpu::Instance::default();
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let (device, queue) =
+        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+            .expect("requesting the device");
+    let art = stage_art(&texture("grey stage", [128, 128, 128, 255]));
+    let mut lit = scene(&[LIGHT]);
+    lit.fog.enabled = 0.0;
+    lit.light = mesh_render::Light::authored(
+        [0.0, 0.0, 1.0],
+        [0.4, 0.2, 0.1],
+        [0.2, 0.3, 0.4],
+        [1.0; 3],
+        [1.0; 3],
+        0.0,
+    )
+    .with_output_scale(OUTPUT_SCALE);
+
+    let kinds = [
+        ("a Zone chunk", slots::DEFAULT),
+        ("a plain chunk", slots::DEFAULT | slots::ZONE_PLAIN),
+        (
+            "an emissive plain chunk",
+            slots::DEFAULT | slots::ZONE_PLAIN | slots::EMISSIVE,
+        ),
+    ];
+    let mut seen = Vec::new();
+    for (what, bits) in kinds {
+        let quad = model([200, 200, 200, 255], bits);
+        let uniform = draw_built(&device, &queue, &quad, &art, lit, None, true, false);
+        let built = draw_built(&device, &queue, &quad, &art, lit, None, true, true);
+        assert_eq!(built, uniform, "{what}");
+        assert!(
+            !seen.contains(&built),
+            "{what} reads like another kind: {built:?}"
+        );
+        seen.push(built);
+    }
+}
+
 /// The centre texel of the quad drawn into HD's race target, with a craft's coverage map of
 /// `coverage` everywhere when one is given.
 fn draw(
@@ -415,6 +527,26 @@ fn draw(
     scene: Scene,
     coverage: Option<u8>,
 ) -> [u8; 4] {
+    draw_built(device, queue, model, stage, scene, coverage, false, false)
+}
+
+/// [`draw`] with the build told it is a circuit's (`prepass`) and, with `stage_light`, built in a
+/// scope whose race lights it by the stage alone (`BuildCacheScope::zone_stage_light`).
+#[allow(clippy::too_many_arguments)]
+fn draw_built(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    model: &Model,
+    stage: &zone::StageArt,
+    scene: Scene,
+    coverage: Option<u8>,
+    prepass: bool,
+    stage_light: bool,
+) -> [u8; 4] {
+    let scope = stage_light.then(mesh_render::BuildCacheScope::open);
+    if let Some(scope) = &scope {
+        scope.zone_stage_light(true);
+    }
     let coverage_view = coverage.map(|value| {
         let extent = wgpu::Extent3d {
             width: 4,
@@ -430,6 +562,7 @@ fn draw(
             format: mesh_render::COVERAGE_FORMAT,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
         queue.write_texture(
             texture.as_image_copy(),
@@ -462,7 +595,7 @@ fn draw(
         },
         ShadowReceiver::Both,
         mesh_render::Texcoords::Interleaved,
-        false,
+        prepass,
         false,
         false,
         false,
@@ -501,6 +634,7 @@ fn draw(
             format,
             usage,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         })
     };
     let colour = make(

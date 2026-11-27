@@ -79,6 +79,7 @@ branch or vtable entry reaches (`ps3-dform-scan.py --target 0x7e5a8` is empty, a
 | `0x0007e498` | `DetonatorHud_ResetVolleyIcons` | 70 |
 | `0x0007e5a8` | `DetonatorHud_ShowBankedScore` | 62 |
 | `0x00083318` | `Hud_RaiseWarning` | 65 |
+| `0x0008caf0` | `Hud_UpdateScoreFeedback` | 72 |
 
 `Hud_RaiseChainBonus`, `Hud_RaiseScoreFeedback`, `Detonator_UpdateHud` and `Detonator_IsBombAhead`
 keep the names their pages gave them. The three binders sit at 75: each is a run of
@@ -252,6 +253,79 @@ its base package ships. Each title's `Detonator_HUD` entry name is therefore its
   same). Wiring: HD and Omega share the `detonator_hud.xml` bindings; 2048 needs its own layout
   entry and an EMP binding for `EmpCharge`/`EmpFull`, or skips EMP until phase 10.
 
+## The floating score: `Hud_RaiseScoreFeedback` and `Hud_UpdateScoreFeedback` (2026-11-26, `det-mine-blast`)
+
+Static read (`EBOOT.elf`; constants by `read_memory`, TOC slots by `scripts/ps3-toc.py resolve`). Each of the sixteen
+`ScoreFeedBack0`..`15` slots is 12 bytes at `hud+0x3d0 + 12k`: `+0` the Text widget, `+4` a pointer to a world
+position, `+8` a byte, `1` while the slot is free.
+
+`Hud_RaiseScoreFeedback(amount f1, hud, _, at)` (`0x00083ba0`):
+
+```text
+k := the first slot whose byte is 1 (free); none free: return               ; 0x00083bb4..
+for every other busy slot: if its alpha >= 180 (0x008a7624): alpha *= 0.7 (0x008a7614)
+slot[k].at := at                                                             ; the scored object's position
+text := amount < 1.0 (0x008a75bc) ? "+%3.2f" : "+%3.0f"                     ; TOC 0x008a7618 / 0x008a761c
+colour alpha := 0xff (text and its second colour); slot[k].free := 0
+widget+0xb8 = widget+0xbc := amount < 1000.0 ? 1.2 : 2.0                     ; 0x008a7628, 0x008a7620, 0x008a762c
+```
+
+`Hud_UpdateScoreFeedback(dt f1, hud)` (`0x0008caf0`), modes 8, 14 and 20 only (`hud+0x6bc`):
+
+```text
+k := (1.0 - dt) * 0.995                                                     ; 0x008a75bc, 0x008a77ec
+for each slot with a position:
+    if alpha < 1.0: free it, hide the widget (+0x34 &= ~4)
+    else:
+        alpha := alpha * k
+        rise  := 5.0 - 5.0 * alpha / 255                                   ; 0x008a77f0 = -1/255, 0x008a7710 = 5.0
+        p     := at + rise * (view camera's row at +0x1e0)                 ; *(craft+0x6944), the viewing craft's camera
+        widget+0xb0, +0xb4 := 0x00083f48(p)                                ; world to screen
+        set the text's alpha to alpha, and the second (border) colour's
+```
+
+The alpha is a byte: the update reads the top byte of the second colour (widget `+0xc8`, getter
+`0x002005d8`), frees the slot when it is under `1`, multiplies, and writes `trunc(product)` into both the text
+colour (`+0xc4`, read by `0x00200460`, set by `Text_SetColour`) and the second one (`0x002005e0`), taking the
+rise off the untruncated product (decompiled again 2026-11-27, `det-score-popup`). At one update a 60 Hz
+tick the first values are `255, 249, 243, 237, 231`. The raise's dimming reads the same
+byte, truncates and writes both colours the same way (`255 -> 178`; `0x00083ba0` decompiled).
+
+So the `+N` stands at the scored object, rises 5 units along the camera's row (`+0x1e0`, read as up: the frame's popup
+sits above the blast) as it fades, and fades by a factor `(1 - dt) * 0.995` per update: at one update a tick
+`0.978`, about 32 ticks to half (the `cannon-volley` frame's `+100`, about 27 ticks after the hit, reads about half
+its full brightness and sits just above the blast, which agrees). Its size is the widget's scale 1.2 under 1000 points, 2.0 from 1000. A
+busy slot at alpha 180 or more is dimmed to 0.7 when another is raised. Confidence **72** for the law (two functions
+that agree on the slot layout; the fade and the rise against one frame), **55** for `+0x1e0` being the camera's up
+and for `0x00083f48` being the plain projection (neither read).
+
+This is the popup's first sighting in a frame ([eliminator-score.md](eliminator-score.md) caught none on Eliminator).
+### Wired (2026-11-27, `det-score-popup`)
+
+`oag_hud::ScoreFeedback` holds the sixteen slots; `oag_hud::score_popup` draws each through the layout's own
+`ScoreFeedBack%d` widget (`HUD_scoring_feedback.xml`, embedded in `detonator_hud.xml`: font `HUDSmall`,
+centred, colour `0x00ffffff`, `BorderColor 0xffff0000`). The amount rides out of the simulation on
+`oag_weapons::detonator::Event::points` (`MineShot`, `MineChained`, `BombShot`, `MineEmped`, `BombEmped`; a
+streak's `AddFlat` raises none). **Chosen:** one update per 60 Hz tick with `dt = 1/60`; the original updates
+per frame, and with the fixed `0.995` per update its fade depends on its frame rate. The face takes HD's lit-text
+`0.8` like every other HUD string, the border does not. Gate: `oag_title::Detonator::floats_score`, HD only.
+**Chosen:** the position is copied at the raise (the original keeps a pointer into the object), the camera's
+up is the view matrix's second row, and the projection is the reticle's without its 250-unit range test.
+
+Against the `cannon-volley` pair's `+100` (the original's ink spans x 995-1070, y 420-443): ours spans x
+998-1073, y 405-427, the same size and colour. The 15 px is the popup's age, not the law: ours' round hits
+36 updates before the pair's picture, the original's blast reads about 27. Rendering ours' popup at 27 updates
+puts it at the original's height within 3 px (predicted from the rise, no fit). Pair mean grey 10.53 to 10.54;
+the box around the popup 17.11 to 22.42 on the published pair, because a popup 15 px off adds its own strokes
+to the difference. Moved to the original's rows (the layer alone, PIL greys) the box reads 18.14 without, 10.68
+with. With our round carried by the craft's speed (a prototype, not committed) the ink still stands 4 px high
+and the same box reads 18.27 with the popup off, 21.83 with it on: strokes this thin lower the box only once
+the age matches to the tick. The other five Detonator pairs are pixel-identical (none scores).
+
+**2048 and Omega: checked, applies, not wired.** Both author the sixteen widgets (Omega as HD's, scale 1.2;
+2048's skin in the `HUD` font at 0.6, same colours), so only the title flag holds them off: neither title's
+caller of them is located and no frame of either shows one.
+
 ## What stays open
 
 - The `EmpBarEffect` shader constants (`Colour`, `EMP`, `Speed`, `Brightness`, `EMP_Rays`) and the
@@ -278,14 +352,15 @@ which stands a race on a known cannon and compares the drawn texts exactly.
 | `Bullet00`..`14` | drawn while `index < clip`; a spent icon is hidden | **chosen:** the per-state art (`0x0007f0a0`) is unread, 55 |
 | `Multi00`..`14` | `Multi(14-i)` drawn once volley `i` hit; a streak award recolours the last 5/10/15 pips ending at the latest hit volley to `0xff00eeff` | recolour range 60 (read from the `Hud_RaiseChainBonus` description, not the pip loop); an unlit pip is hidden, **chosen** |
 | `PulseBonus` | the award's `HUD_CHAIN_n` text and amount (`STREAK_*` of the cannon law), held 2.0 s, faded over 1.0 s | **HD's language table has no `HUD_CHAIN_n`**: the line draws nothing there and the loader report names the ids; Omega's reads `5 CHAIN` |
-| `ShieldBarText`, `DamageBar`, `DamageBarBg` | the generic shield readout; white in Detonator (the original's mode-14 test, `hud-readouts.md`) | |
+| `ShieldBarText`, `DamageBar`, `DamageBarBg` | the generic shield readout; white in Detonator (the original's mode-14 test, `hud-readouts.md`) | `DamageBar` is the score box's white stripes, cropped by the shield (`docs/formats/hd-hud.md`, "Detonator's score box") |
 | `DetonatorStageParent`, `BulletBack`, `EMPBack` | static art, always on | `EMPBack` is the plate the EMP pips sit on |
 | `Emp_0`..`Emp_7`, `EmpReady` | the EMP charge (`RaceSim::detonator_emp`) | a pip drawn while the charge is over its index (vertex colour `0` draws nothing), `EmpReady` once the charge reaches `minNumPadsToCollectEMP`; the post-fire flash and the ready pulse (`+0x168`, `+0x174`) are not modelled |
 
 Not drawn, and named in the loader report: the four widgets the original never binds
 (`PulseScore`, `PulseMultiplier`, `EmpScore`, `PulseBankedScore`), `EmpBarEffect` (an
 `<ImageModel>`; its gauge is `RaceSim::detonator_emp_gauge`),
-`ForwardWarning*`/`Warning*` (the bomb-ahead raise is unread) and `ScoreFeedBack0`..`15`.
+`ForwardWarning*`/`Warning*` (the bomb-ahead raise is unread) and, on Omega and 2048, `ScoreFeedBack0`..`15`
+(HD draws them: "The floating score").
 The reload gauge is the craft's own `detonator_bulletgaugesegments` material
 constant, not a HUD widget: untouched.
 

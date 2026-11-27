@@ -4,7 +4,7 @@
 //! a move, plus the sprite sheet binding that arrived with it.
 
 use super::sprite::{SHEET_SIZE, Sheet};
-use super::{MAX_INSTANCES, MAX_PARTICLES};
+use super::{MAX_INSTANCES, PARTICLE_SLOTS};
 use oag_mesh::mesh::GpuVertex;
 
 mod distort;
@@ -73,7 +73,7 @@ pub const BLEND_ALPHA_OVER: wgpu::BlendState = wgpu::BlendState {
 /// silently drop whole effects off a busy grid - the truncation in
 /// [`Pipeline::upload`] cuts at a vertex, so an over-long frame loses the
 /// tail of the last quads and reads as an explosion that never happened.
-pub const MAX_VERTICES: usize = MAX_INSTANCES * MAX_PARTICLES * 6;
+pub const MAX_VERTICES: usize = MAX_INSTANCES * PARTICLE_SLOTS * 6;
 
 /// The particle's tick move, `psys.wesl`'s locations 5 and 6: the bytes of
 /// `GpuVertex::lightmap_texcoord` and `sun_mask`, which carry it on this
@@ -302,6 +302,7 @@ impl Pipeline {
             format: wgpu::TextureFormat::Rgba8Unorm,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
         let view = sheet.create_view(&wgpu::TextureViewDescriptor::default());
         // Bilinear, clamped: **chosen, not measured.** The particle path sets
