@@ -378,6 +378,20 @@ pub(crate) struct WreckArgs {
     )]
     pub(crate) force_rocket_hit: Option<String>,
 
+    /// With `--race --screenshot`, move the player's first weapon out (a laid Bomb, a
+    /// Missile in flight) to a world point at the start of a tick, before
+    /// `--force-bomb-trip` or `--force-missile-hit` on the same tick sets it off:
+    /// `TICK:X,Y,Z`. The blast then stands where a capture of the original had it. A
+    /// verification aid. See [`oag_raceplay::RaceSim::force_shot_at`]. Dev only.
+    #[cfg(feature = "dev-cli")]
+    #[arg(
+        long,
+        value_name = "TICK:X,Y,Z",
+        requires = "race",
+        allow_hyphen_values = true
+    )]
+    pub(crate) force_shot_at: Option<String>,
+
     /// With `--race --screenshot`, at the end of a tick play `COUNT` Rocket craft blasts (1 by
     /// default) at a world point and take as many of the player's Rockets out of the air:
     /// `TICK:X,Y,Z[:COUNT]`, e.g. `709:525.15,-28.26,-34.80`. Repeat it for a volley that lands

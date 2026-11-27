@@ -50,6 +50,25 @@ impl RaceSim {
         self.put_craft_on_projectile(oag_tables::weapons::Weapon::Bomb, slot)
     }
 
+    /// Moves the player's first weapon in the air or on the road to `at`, for
+    /// `--force-shot-at`: a laid Bomb or a Missile then stands where a capture of the
+    /// original had it, and `--force-bomb-trip` or `--force-missile-hit` on the same
+    /// tick sets it off there. `false` when the player has none out. A verification
+    /// aid and nothing else.
+    pub fn force_shot_at(&mut self, player: usize, at: oag_core::math::Vec3) -> bool {
+        let Some(shot) = self
+            .world
+            .projectiles
+            .slots
+            .iter_mut()
+            .find(|p| p.kind.is_some() && usize::from(p.owner) == player)
+        else {
+            return false;
+        };
+        shot.position = at;
+        true
+    }
+
     /// Puts craft `slot` on the first Missile another craft owns, for
     /// `--force-missile-hit`, the same way [`Self::force_bomb_trip`] does for a
     /// Bomb: the next tick's own hit test finds the craft under the missile and

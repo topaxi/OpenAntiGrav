@@ -822,3 +822,16 @@ fn a_run_without_the_pins_has_no_pinned_hud() {
         .expect("an ordinary capture parses");
     assert!(capture_hud(&cli).expect("nothing to parse").is_none());
 }
+
+#[test]
+fn a_forced_shot_position_reads_its_tick_and_point_and_refuses_anything_else() {
+    use crate::app::args::shot_at;
+    assert_eq!(
+        shot_at(Some("766:-137.17,-49.55,-175.12")).expect("parses"),
+        Some((766, oag_core::math::Vec3::new(-137.17, -49.55, -175.12)))
+    );
+    assert_eq!(shot_at(None).expect("absent"), None);
+    for bad in ["766", "766:1,2", "x:1,2,3", "-137,-49,-175"] {
+        assert!(shot_at(Some(bad)).is_err(), "{bad}");
+    }
+}

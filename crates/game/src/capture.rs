@@ -525,6 +525,7 @@ pub fn run(
                 force_wall_slide: None,
                 force_leach_lock: None,
                 leach_path: None,
+                force_shot_at: None,
                 force_bomb_trip: None,
                 force_missile_hit: None,
                 force_rocket_hit: None,

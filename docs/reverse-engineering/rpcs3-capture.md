@@ -989,9 +989,9 @@ named, and a row below 80 says why:
 **Caveat (2026-11-07, `hd-weapons-2`):** on two grids a state-8 shot also drew a green-cyan shell around the whole craft that stayed for many seconds, with no muzzle flash; which weapon that is, or whether the Cannon draws it, is unresolved (`ps3-hdfury-eu/weapons.md`, "The other weapons against the original").
 
 | **9** | **Bomb** | readout 15 = Bomb's `damage`; fired, a red-and-white bomb sits on the track, ringed, and detonates | **90** |
-| 1 | Missile | readout 15; the later row below (a projectile with five bounces, a hit that fills the explosion pool) | 70 |
+| 1 | Missile | readout 15; the later row below (a projectile with five bounces, a hit that fills the explosion pool); 2026-11-27, two films: the shot took 15 off a rival and its entry showed in the Missile pool (vtable `0x00864b38`) | 90 |
 | **2** | **Quake** | readout 15; `Weapon_FireFromSlot`'s state-2 handler (`0x0012daa0`) sets slot `+0x200` bit `0x8`, which `QuakeManager_Fire` (`0x00147d18`) clears, and the live `g_quake` block (`0x00ae98c0`) runs (speed `270`, age, amplitude) the moment it is fired. `scripts/rpcs3-hd-quake.py`, `docs/ghidra/functions/ps3-hdfury-eu/quake.md` | **90** |
-| 3, 6, 10 | unresolved | readouts 1, 0, 1; state 3 never fired | - |
+| 3, 6, 10 | unresolved | readouts 1, 0, 1; state 3 never fired (again 2026-11-27, one boot: the pair `[3, 3]` was still in the slot after a four-frame press), so the Mine has no known word and has not been filmed | - |
 
 The state is **not** Pulse's craft id: Pulse's Mine is 8 and Bomb 9 by id and 8 and 9 by
 bit (`0x2`, `0x100`); here the same bits sit on the other numbers (state 9 sets `0x2`, state 8

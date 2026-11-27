@@ -181,7 +181,10 @@ const TURBULENCE: &[&str] = &[engine_effects::DETONATOR_EMP_EFFECT];
 /// live"), the engine's two trail hits, the Detonator EMP's sparks (`docs/ghidra/functions/ps3-hdfury-eu/detonator-emp.md`,
 /// "The grey rows were sparks that never moved"), and the Plasma's five, whose lightning is that class. Paired against the
 /// original phase by phase: with the bar the launch's and the blast's white blobs are
-/// lightning (`docs/ghidra/functions/ps3-hdfury-eu/plasma.md`, "The pairs").
+/// lightning (`docs/ghidra/functions/ps3-hdfury-eu/plasma.md`, "The pairs"). And the Bomb's rays.
+/// The smoke ring's `sparks` are class 6 and the original draws them as sprite quads too, but
+/// listed they take the Bomb's 0.17 s pair further from the original, so they stay procedural
+/// (`docs/rendering/particle-fill.md`, "The Bomb's and the Missile's explosions paired").
 const FAR_BARS: &[&str] = &[
     engine_effects::DETONATOR_CANNON_SPARKS_EFFECT,
     engine_effects::TRAIL_HITSHIP_EFFECT,
@@ -192,6 +195,7 @@ const FAR_BARS: &[&str] = &[
     engine_effects::PLASMA_LAUNCH_EFFECT,
     engine_effects::PLASMA_LIGHTNING_EXPAND_EFFECT,
     engine_effects::PLASMA_LIGHTNING_COLLAPSE_EFFECT,
+    engine_effects::BOMB_RAYS_EFFECT,
 ];
 
 /// The effects whose sprite templates play: the Plasma head's ring and glow and the
@@ -212,7 +216,7 @@ const TEMPLATES: &[&str] = &[
 /// every one decodes (`docs/rendering/particle-fill.md`, "Which effects draw a sprite").
 ///
 /// **Not listed: the effects whose every emitter is a streak that [`FAR_BARS`] does not
-/// name.** A procedural strip samples nothing, so listing one changes no pixel: `WO_BOMB_RAYS`,
+/// name.** A procedural strip samples nothing, so listing one changes no pixel:
 /// `WO_REPULSER`, the three LeachBeam effects and its hit spark, the weapon spark, the
 /// no-damage collision spark, `WO_DAMAGE_CRITICAL` and `WO_BLUE_WELDER`. The streak
 /// emitters of a listed effect stay procedural for the same reason.
@@ -224,7 +228,9 @@ const TEMPLATES: &[&str] = &[
 /// (`detonator-emp.md`, "What HD draws"), the Missile's head (`weapons.md`, "The Missile's red
 /// rings"), the ship explosion (`ship-destroy.md`, "`colour_mode` 3 is a blend toward the
 /// scene light"), the two trail hits (`engine-trail.md`, "The red variant's colour is in its
-/// sprites") and the Plasma's five (`plasma.md`, "The pairs"). The Detonator Mine and Bomb
+/// sprites"), the Plasma's five (`plasma.md`, "The pairs") and the Bomb's smoke ring and rays and
+/// the Missile's explosion (`particle-fill.md`, "The Bomb's and the Missile's explosions
+/// paired"). The Detonator Mine and Bomb
 /// explosions' sheets were seen walking in the original (`particle-render.md`, "The atlas
 /// frame"), their picture not paired. **Every other entry is unpaired**: it draws the sprite
 /// its own emitter names, and no capture of the original has judged the result.
@@ -245,6 +251,7 @@ const SPRITES: &[&str] = &[
     engine_effects::PLASMA_LIGHTNING_COLLAPSE_EFFECT,
     engine_effects::MINE_EXPLO_EFFECT,
     engine_effects::BOMB_SMOKERING_EFFECT,
+    engine_effects::BOMB_RAYS_EFFECT,
     engine_effects::MISSILE_EXPLO_EFFECT,
     engine_effects::MISSILE_BOUNCE_EFFECT,
     engine_effects::DETONATOR_MINE_EXPLO_DEAD_EFFECT,
@@ -271,17 +278,21 @@ const SPRITES: &[&str] = &[
 /// (`docs/ghidra/functions/ps3-hdfury-eu/quake.md`), the Detonator EMP's, a band of blue smoke
 /// across it (`detonator-emp.md`), and the Plasma blast's two,
 /// whose lightning fills the blast instead of bunching at its centre (`plasma.md`,
-/// "The pairs"), and the Rocket's craft blast, whose `FIRE_TRAILS_ONEQUAD` heads start on
+/// "The pairs"), the Rocket's craft blast, whose `FIRE_TRAILS_ONEQUAD` heads start on
 /// their 8.8-unit hemisphere, so their smoke trails fan out around the blast instead of
 /// piling up in front of the camera (`docs/rendering/particle-fill.md`, "The trails start on
-/// the blast's hemisphere"). Every other HD effect keeps its emitters at their anchors until a
-/// matched capture says otherwise.
+/// the blast's hemisphere"), and the Bomb's smoke ring and rays: the original's smoke stands on
+/// a ring and its 600 rays start on a shell at the radius the file authors, outside the fireball
+/// (`docs/rendering/particle-fill.md`, "The Bomb's and the Missile's explosions paired"). Every
+/// other HD effect keeps its emitters at their anchors until a matched capture says otherwise.
 const EXTENTS: &[&str] = &[
     engine_effects::QUAKE_EFFECT,
     engine_effects::DETONATOR_EMP_EFFECT,
     engine_effects::PLASMA_LIGHTNING_EXPAND_EFFECT,
     engine_effects::PLASMA_LIGHTNING_COLLAPSE_EFFECT,
     engine_effects::CRAFT_BLAST_EFFECT,
+    engine_effects::BOMB_SMOKERING_EFFECT,
+    engine_effects::BOMB_RAYS_EFFECT,
 ];
 
 /// The activation and hit colours are read off HD's executable; the settled

@@ -398,6 +398,19 @@ pub(crate) fn rocket_hits_at(
         .collect()
 }
 
+/// Parses `--force-shot-at`'s `TICK:X,Y,Z`.
+pub(crate) fn shot_at(text: Option<&str>) -> Result<Option<(u32, oag_core::math::Vec3)>> {
+    let Some(text) = text else { return Ok(None) };
+    let bad = || {
+        anyhow::anyhow!(
+            "{text:?} is not a forced shot position; write it as TICK:X,Y,Z, e.g. 709:525,-28,-35"
+        )
+    };
+    let (tick, point) = text.split_once(':').ok_or_else(bad)?;
+    let at = velocity(Some(point)).map_err(|_| bad())?.ok_or_else(bad)?;
+    Ok(Some((tick.trim().parse().map_err(|_| bad())?, at)))
+}
+
 /// Parses `--force-rocket-hit-velocity`'s `VX,VY,VZ`.
 pub(crate) fn velocity(text: Option<&str>) -> Result<Option<oag_core::math::Vec3>> {
     let Some(text) = text else { return Ok(None) };
