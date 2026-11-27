@@ -377,11 +377,11 @@ pub const LOOKS: &Looks = &Looks {
         on: Platforms::Any,
         origin: Origin::Measured,
     },
-    // The raised shell's three draws of a live race frame run block #2 of
+    // The raised shell's draws of a live race frame (two boots) run block #2 of
     // `hexagonalshield_rich` (ambient, sun and fog patched with the circuit's
     // `.envsettings` values to six digits), cull back faces, mask the alpha write
     // and sample no shadow map. `docs/ghidra/functions/ps3-hdfury-eu/shield.md`,
-    // "The shell's draw state", confidence 88.
+    // "The shell's draw state", confidence 90.
     shield_shell_lit: Rule {
         on: Platforms::Any,
         origin: Origin::Measured,
