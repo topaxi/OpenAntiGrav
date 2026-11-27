@@ -360,6 +360,10 @@ def detonator_inputs(pair, out, ship, clock):
 #: under `--mode zone`.
 ZONE_HULL = "zone"
 
+#: Seconds into the countdown a `--countdown` pair is grabbed by default. The original's tone is still falling early in it
+#: (`docs/tools/compare-page.md`, "The countdown frame").
+COUNTDOWN_AT_S = 2.2
+
 #: Horizontal speed above which a countdown grab is not at rest on the grid (the craft only bobs vertically there).
 COUNTDOWN_REST_SPEED = 0.5
 
@@ -497,8 +501,8 @@ def main():
                     help="with --zone: a race-start frame. The capture waits for the countdown (start it with START RACE or "
                          "Restart Race while the script waits), the pause must find the race manager in it (refused otherwise) "
                          "and ours is drawn without `--hud-state`, as the original draws no HUD yet")
-    ap.add_argument("--countdown-at", type=float, default=1.0, metavar="SECONDS",
-                    help="with --countdown: how far into the countdown the capture attaches")
+    ap.add_argument("--countdown-at", type=float, default=COUNTDOWN_AT_S, metavar="SECONDS",
+                    help="with --countdown: how far into the 3 s countdown the capture attaches")
     ap.add_argument("--detonator", action="store_true",
                     help="a Detonator race shot (`rpcs3-hd-detonator-shots.py` record, passed with --json): ours runs its own countdown and "
                          "clock from the grid in `--mode detonator` (its auto-speed, its own mines laid at ITS placement, the original's "
