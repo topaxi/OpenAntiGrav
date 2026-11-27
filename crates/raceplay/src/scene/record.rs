@@ -137,6 +137,18 @@ pub(super) struct EffectsDrawn {
 /// the Rocket smoke and HD's Leach strip.
 const BEAMS: usize = 8;
 
+/// The strips of [`BEAMS`] that HD's `RibbonEffects_Render` draws (pools 0, 2, 1 and 5, then 3 and
+/// 4): the Missile's ribbons and explosion streaks, the wingtip contrails and the Rocket smoke. The
+/// original draws them before every particle quad, so a blast and its screen wash lie over the
+/// smoke (`docs/rendering/particle-fill.md`, "The far blast's grey streams are the Rockets' own
+/// ribbons").
+const RIBBON_EFFECTS: std::ops::Range<usize> = 3..7;
+
+/// Whether strip `at` of [`BEAMS`] draws before the particles.
+fn beam_before_particles(at: usize) -> bool {
+    RIBBON_EFFECTS.contains(&at)
+}
+
 /// One view's scene pass, decided: everything [`Recorder::record`] reads that is not the scene's
 /// own GPU objects.
 pub(super) struct ViewPass<'a> {
@@ -615,10 +627,18 @@ impl<'a> Recorder<'a> {
             effects.exhaust.1
         };
         effects.exhaust.0.draw(render, exhaust);
+        let beams = |before: bool, render: &mut wgpu::RenderPass<'_>| {
+            for (at, beam) in effects.beams.iter().enumerate() {
+                if let Some((beam, drawn)) = beam
+                    && beam_before_particles(at) == before
+                {
+                    beam.draw(render, *drawn);
+                }
+            }
+        };
+        beams(true, render);
         effects.sparks.0.draw(render, effects.sparks.1);
-        for (beam, drawn) in effects.beams.iter().flatten() {
-            beam.draw(render, *drawn);
-        }
+        beams(false, render);
         if let Some((stage, drawn)) = &effects.mod_shaders {
             stage.draw_surfaces(render, drawn);
         }
@@ -786,5 +806,20 @@ mod tests {
         list.blended_after_craft(false, false);
         assert!(list.0.is_empty());
         assert_eq!(BlendedList::after_craft(false), BlendedList::With);
+    }
+
+    /// HD's ring draws its `RibbonEffects` strips (the Rocket smoke and the wingtip contrails,
+    /// alpha-over triangle strips) before every particle quad of the frame, so the Rocket blast and
+    /// its screen wash cover the smoke. The strips [`Scene::beams`] lists at 3 to 6 are those
+    /// pools; the Leach beam, the magstrip wake and the Leach strip keep their place after the
+    /// particles, their order unread.
+    #[test]
+    fn the_ribbon_effects_strips_draw_before_the_particles() {
+        let before: Vec<usize> = (0..BEAMS).filter(|&at| beam_before_particles(at)).collect();
+        assert_eq!(
+            before,
+            [3, 4, 5, 6],
+            "missile ribbons, streaks, wingtip, Rocket smoke"
+        );
     }
 }

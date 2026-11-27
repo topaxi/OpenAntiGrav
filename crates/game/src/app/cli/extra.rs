@@ -406,6 +406,20 @@ pub(crate) struct WreckArgs {
     )]
     pub(crate) force_rocket_hit_velocity: Option<String>,
 
+    /// With `--pose-hold-ticks`, hold the craft on this pose instead of its start pose until the
+    /// end of tick `TICK`, then on its start pose: `TICK:X,Y,Z,LX,LY,LZ,UX,UY,UZ,FX,FY,FZ`, the
+    /// position and the left, up and forward rows as `--field-from` reads them. For a capture
+    /// that fired while its craft moved: a Rocket fired before `TICK` leaves from this pose. See
+    /// [`crate::race_capture::pose_hold::Launch`]. Dev only.
+    #[cfg(feature = "dev-cli")]
+    #[arg(
+        long,
+        value_name = "TICK:X,Y,Z,LX,LY,LZ,UX,UY,UZ,FX,FY,FZ",
+        requires = "pose_hold_ticks",
+        allow_hyphen_values = true
+    )]
+    pub(crate) pose_hold_launch: Option<String>,
+
     /// With `--race --screenshot`, launch craft `SLOT`'s Quake so its bump
     /// reaches the player at the end of a tick: `TICK:SLOT`, e.g. `120:1`. The
     /// rival's wave a headless run would otherwise never send, for what a Quake
