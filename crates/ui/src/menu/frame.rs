@@ -124,9 +124,21 @@ pub struct Frame {
     /// The pause screen's music list's art, for a title that authors one
     /// ([`super::music_list`]).
     pub music_list: Option<super::music_list::Art>,
+    /// The scale the disc authors for a page's heading, keyed by page id. A page not listed
+    /// draws it at the skin's own.
+    pub heading_scales: Vec<(&'static str, f32)>,
 }
 
 impl Frame {
+    /// The scale the disc authors for `page`'s heading, or `None` for the skin's own.
+    #[must_use]
+    pub fn heading_scale(&self, page: &str) -> Option<f32> {
+        self.heading_scales
+            .iter()
+            .find(|(id, _)| *id == page)
+            .map(|(_, scale)| *scale)
+    }
+
     /// The rect of every sprite and fill among the marks, `[x, y, w, h]` in the page's grid:
     /// where the frame has drawn something a prompt added to the footer must not cover.
     #[must_use]
@@ -527,5 +539,6 @@ pub fn read(
         select_arrow,
         scroll_arrows,
         music_list: None,
+        heading_scales: Vec::new(),
     }
 }

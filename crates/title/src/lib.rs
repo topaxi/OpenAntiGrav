@@ -446,6 +446,18 @@ pub struct ListScreen {
     pub back: bool,
 }
 
+/// A page of this build's menu tree whose heading stands where one of the disc's own screens does:
+/// that screen's title-font `Text` authors the heading's scale, which is read off the disc at boot.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PageHeading {
+    /// The `menu.toml` page's id.
+    pub page: &'static str,
+    /// The archive entry that authors the screen.
+    pub file: &'static str,
+    /// The screen's own `name` attribute.
+    pub screen: &'static str,
+}
+
 /// One title's front end: how it lays menus out, and how it boots into them.
 ///
 /// # Why the two are one field
@@ -636,6 +648,9 @@ pub struct FrontEnd {
     /// `Racebox`, `Single Player` and `Additional`. Empty where this build draws none of the
     /// disc's list screens that way. See [`ListScreen`].
     pub list_screens: &'static [ListScreen],
+    /// The menu tree's pages whose heading takes its scale from the disc. A page named neither
+    /// here nor by [`Self::list_screens`] draws its heading at [`MenuSkin::title_scale`].
+    pub page_headings: &'static [PageHeading],
     /// Text widgets of the track screen whose string the screen's class sets in
     /// code in place of the one its XML authors: `(widget name, string id)` pairs,
     /// empty where the class takes the XML's own. Pulse's

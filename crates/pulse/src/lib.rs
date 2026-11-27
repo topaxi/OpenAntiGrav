@@ -375,6 +375,21 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
             back: true,
         },
     ],
+    // The two `Additional_Definition.xml` screens whose headings author no `scale`: the OPTIONS
+    // and EXTRAS pages. Every other page's heading authors `FEGlobals->TitleScale`
+    // (`docs/ui/menus-original.md`, "Pulse PS2's headings draw in the Title face").
+    page_headings: &[
+        oag_title::PageHeading {
+            page: "options",
+            file: names::ADDITIONAL_DEFINITION,
+            screen: "Additional",
+        },
+        oag_title::PageHeading {
+            page: "extras",
+            file: names::ADDITIONAL_DEFINITION,
+            screen: "extras",
+        },
+    ],
     // `TrackSelection_ApplySelection` hands `MSC_DISTANCE` to `Info1 Title` through
     // `0x088ede50` (`0x088cd0f4` sets the label); the XML's `IG_HUD_DISTANCE` is never shown.
     track_label_overrides: &[("Info1 Title", "MSC_DISTANCE")],
