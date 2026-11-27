@@ -66,9 +66,18 @@ impl Scene {
             self.sample_count(),
             self.bloom.is_some(),
             static_glow,
+            self.disc_lod_bias,
         ));
         self.ghost.teams = liveries.iter().map(|l| l.team.clone()).collect();
         *self.ghost.rng.borrow_mut() = Some(Rng::new(0x6405_7a71));
+    }
+
+    /// The sampler bias the ghost's hull pass carries, or `None` with no ghost armed.
+    #[cfg(test)]
+    pub(crate) fn ghost_lod_bias(&self) -> Option<f32> {
+        self.ghost
+            .pipeline()
+            .map(oag_render::ghost::Pipeline::lod_bias)
     }
 
     /// The ship drawable the ghost borrows: the first slot flying its team.

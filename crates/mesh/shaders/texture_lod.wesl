@@ -38,6 +38,11 @@ fn ge_level(w: f32, code: f32, frame_shift: f32) -> f32 {
 // the measurement.
 override material_lod_bias: f32 = 0.0;
 
+// The same bias on the effect programs' own fetches (`detail_sample`), for a title whose
+// loader biases every texture it loads (2048, `BuildCacheScope::every_texture_lod_bias`).
+// `0` on every other, HD included, whose effect samplers were not read for one.
+override effect_lod_bias: f32 = 0.0;
+
 // The material pictures `material_sample` can read, by the name `bindings.wesl` gives them.
 const MATERIAL_ALBEDO: u32 = 0u;
 const MATERIAL_LIGHTMAP: u32 = 1u;
@@ -116,11 +121,11 @@ fn material_sample(picture: u32, uv: vec2<f32>) -> vec4<f32> {
     return picture_sample(picture, uv, material_lod_bias + detail_shift());
 }
 
-// A fetch of a material picture that takes TEXTURE DETAIL and no title bias: the effect
-// programs, whose originals' samplers were not read for one.
+// A fetch of a material picture by an effect program: TEXTURE DETAIL and
+// [`effect_lod_bias`], not the material's own bias.
 @diagnostic(off, derivative_uniformity)
 fn detail_sample(picture: u32, uv: vec2<f32>) -> vec4<f32> {
-    return picture_sample(picture, uv, detail_shift());
+    return picture_sample(picture, uv, effect_lod_bias + detail_shift());
 }
 
 // The sampler's `anisotropy_clamp`, for `sample_at_slope_level`. 1 is off.

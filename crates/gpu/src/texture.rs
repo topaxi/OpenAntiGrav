@@ -86,6 +86,57 @@ pub fn upload_rgba8(
     )
 }
 
+/// [`upload_rgba8`] with the authored levels below the base, `mips[0]` half its size and
+/// each next one half again (never under one texel a side).
+pub fn upload_rgba8_chain(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    label: &str,
+    (width, height): (u32, u32),
+    base: &[u8],
+    mips: &[Vec<u8>],
+) -> wgpu::Texture {
+    let texture = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some(label),
+        size: wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1 + mips.len() as u32,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Rgba8Unorm,
+        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        view_formats: &[],
+        texture_binding_view_dimension: None,
+    });
+    for (level, data) in std::iter::once(base)
+        .chain(mips.iter().map(Vec::as_slice))
+        .enumerate()
+    {
+        let size = wgpu::Extent3d {
+            width: (width >> level).max(1),
+            height: (height >> level).max(1),
+            depth_or_array_layers: 1,
+        };
+        queue.write_texture(
+            wgpu::TexelCopyTextureInfo {
+                mip_level: level as u32,
+                ..texture.as_image_copy()
+            },
+            data,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(size.width * 4),
+                rows_per_image: Some(size.height),
+            },
+            size,
+        );
+    }
+    texture
+}
+
 /// Bilinear (`Linear` mag and min) and clamped to the edge on every axis: a sample past
 /// `0..1` repeats the border texel instead of wrapping round to the opposite side.
 pub fn clamp_linear_sampler(device: &wgpu::Device, label: &str) -> wgpu::Sampler {

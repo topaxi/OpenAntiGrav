@@ -468,6 +468,10 @@ pub struct ZoneStageTextures {
     /// How many stages the sets are numbered for: fifteen on HD/Fury, matching its
     /// [`ZonePalette`] table.
     pub stages: u32,
+    /// The "track" set is sampled with the mip filter off, so from its base level alone,
+    /// whatever levels the file carries. Wipeout 2048's `zoneModeTrack<n>.gxt`
+    /// (`docs/ghidra/functions/vita-2048-eu-v104/gxt-loader.md`, "In a race").
+    pub track_single_level: crate::Rule,
 }
 
 impl ZoneStageTextures {

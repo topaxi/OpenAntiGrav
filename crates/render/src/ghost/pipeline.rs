@@ -40,8 +40,11 @@ impl Pipeline {
     /// `stamps_glow` is whether the target's alpha is Pulse's glow mask: the
     /// depth lay's `BASE` and the third pass's static are both stamps into
     /// it, and a source whose mask is not Pulse's gets neither. `static_glow`
-    /// is `staticglow.mip`, decoded; `None` builds no third pass.
+    /// is `staticglow.mip`, decoded; `None` builds no third pass. `lod_bias`
+    /// is the title's every-texture sampler bias in levels, which the hull pass
+    /// applies to the hull's own textures; 0 on a title whose loader sets none.
     #[must_use]
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
@@ -51,6 +54,7 @@ impl Pipeline {
         sample_count: u32,
         stamps_glow: bool,
         static_glow: Option<&FlareTexture>,
+        lod_bias: f32,
     ) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("ghost"),
@@ -108,6 +112,11 @@ impl Pipeline {
         } else {
             wgpu::ColorWrites::empty()
         };
+        let constants = [
+            mesh_render::linear_constants(format, store),
+            &[("disc_lod_bias", f64::from(lod_bias))],
+        ]
+        .concat();
         let build = |state: PassState| {
             device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some(state.label),
@@ -155,7 +164,7 @@ impl Pipeline {
                         }),
                     ],
                     compilation_options: wgpu::PipelineCompilationOptions {
-                        constants: mesh_render::linear_constants(format, store),
+                        constants: &constants,
                         ..Default::default()
                     },
                 }),
@@ -232,6 +241,8 @@ impl Pipeline {
             width: 1,
             height: 1,
             rgba: vec![0; 4],
+            mips: Vec::new(),
+            lod_bias: 0.0,
         };
         let static_bind = bind_static(
             device,
@@ -247,6 +258,7 @@ impl Pipeline {
             uniform_bind,
             static_bind,
             stamps_glow,
+            lod_bias,
         }
     }
 }

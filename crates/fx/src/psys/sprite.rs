@@ -43,8 +43,14 @@
 //! ([`packing`], sprites [`PAD`] texels apart), not anything the original does;
 //! a sprite that does not fit is left unplaced and its emitter keeps the procedural
 //! profile, which [`Sheet::place`] reports by returning `None`.
+//!
+//! A sprite that carries its file's mip chain ([`Sprite::chain`]) is laid out for it and
+//! the sheet holds lower levels too ([`chain`]).
 
+mod chain;
 mod packing;
+
+pub use chain::{ATLAS_LEVELS, GUTTER};
 
 use std::sync::Arc;
 
@@ -63,7 +69,8 @@ pub const SHEET_SIZE: u32 = 4096;
 /// sprite's edge never reads its neighbour.
 pub const PAD: u32 = 2;
 
-/// One decoded sprite: level 0, straight RGBA8888, row-major from the top.
+/// One decoded sprite: level 0, straight RGBA8888, row-major from the top, and its file's
+/// lower levels where they are read.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Sprite {
     /// Texels across.
@@ -72,6 +79,10 @@ pub struct Sprite {
     pub height: u16,
     /// `width * height * 4` bytes.
     pub rgba: Arc<[u8]>,
+    /// The levels below the base, each half the one above, largest first: `Some` for a
+    /// `.gxt`, whose sampler reads down them (empty where the file authors one level),
+    /// `None` where the base alone is sampled.
+    pub chain: Option<Vec<Arc<[u8]>>>,
 }
 
 impl Sprite {
@@ -92,16 +103,21 @@ impl Sprite {
             width: texture.width,
             height: texture.height,
             rgba: texture.rgba8().into(),
+            chain: None,
         })
     }
 
-    /// A Vita `.gxt`'s one texture, level 0 - the sprite Wipeout 2048 ships as
+    /// A Vita `.gxt`'s one texture with its mip chain - the sprite Wipeout 2048 ships as
     /// a separate file beside its `.pob`. `None` for a blob that is not a
     /// `.gxt`, names a format this build does not decode, or is larger than a
     /// `u16` can say.
     #[must_use]
     pub fn from_gxt(blob: &[u8]) -> Option<Self> {
-        Self::from_container(oag_texture::decode::Container::Gxt, blob)
+        let mut sprite = Self::from_container(oag_texture::decode::Container::Gxt, blob)?;
+        let gxt = oag_texture::gxt::Gxt::parse(blob).ok()?;
+        let levels = gxt.only()?.lower_levels_rgba(blob);
+        sprite.chain = Some(levels.into_iter().map(Arc::from).collect());
+        Some(sprite)
     }
 
     /// `blob` decoded as `container` by `oag_texture::decode`, base level, rows turned
@@ -124,6 +140,7 @@ impl Sprite {
             width,
             height: u16::try_from(picture.height).ok()?,
             rgba: rgba.into(),
+            chain: None,
         })
     }
 
@@ -137,6 +154,7 @@ impl Sprite {
             width: mask.width,
             height: mask.height,
             rgba: mask.rgba.into(),
+            chain: None,
         })
     }
 
@@ -191,6 +209,7 @@ impl Sprite {
             width: texture.width,
             height: texture.height,
             rgba: texture.rgba8().into(),
+            chain: None,
         })
     }
 }
@@ -309,12 +328,24 @@ pub struct Sheet {
     placed: Vec<(Sprite, [f32; 4])>,
     /// Where the next sprite may go.
     free: packing::Free,
+    /// The levels below [`Self::pixels`], where a sprite carries a chain.
+    lower: chain::Lower,
+    /// [`Self::chain_every_sprite`].
+    chain_every: bool,
     /// Bumped on every change to [`Self::pixels`], so an uploader can tell
     /// its copy is stale.
     generation: u64,
 }
 
 impl Sheet {
+    /// Chains every sprite placed from here on, authored levels or not: a sheet drawn at a
+    /// sampler bias samples every sprite's lower levels, so one with no chain of its own (a
+    /// mod's, this engine's own art) takes the gutter and box-filtered levels too. Call it
+    /// before the first [`Self::place`].
+    pub fn chain_every_sprite(&mut self) {
+        self.chain_every = true;
+    }
+
     /// Places `sprite` - or finds it, when an identical one is already
     /// there - and returns its rectangle as `[u0, v0, u1, v1]` in `0..=1`
     /// sheet coordinates, on its outer texel edges.
@@ -326,18 +357,20 @@ impl Sheet {
             return Some(*rect);
         }
         let (w, h) = (u32::from(sprite.width), u32::from(sprite.height));
-        let (x, y) = self.free.take(w, h)?;
-        let side = SHEET_SIZE as usize;
+        let chain = sprite.chain.as_deref().or(self.chain_every.then_some(&[]));
+        // A chained sprite sits `GUTTER` inside a cell on the `GUTTER` grid.
+        let gutter = if chain.is_some() { GUTTER } else { 0 };
+        let (x, y) = if gutter == 0 {
+            self.free.take(w, h)?
+        } else {
+            let cell = |side: u32| (side + 2 * gutter).next_multiple_of(gutter) - PAD;
+            let (x, y) = self.free.take_aligned(cell(w), cell(h), gutter)?;
+            (x + gutter, y + gutter)
+        };
         let pixels = Arc::make_mut(self.pixels.get_or_insert_with(Arc::default));
-        let needed = (y + h) as usize * side * 4;
-        if pixels.len() < needed {
-            pixels.reserve_exact(needed - pixels.len());
-            pixels.resize(needed, 0);
-        }
-        let row = usize::from(sprite.width) * 4;
-        for line in 0..usize::from(sprite.height) {
-            let to = ((y as usize + line) * side + x as usize) * 4;
-            pixels[to..to + row].copy_from_slice(&sprite.rgba[line * row..(line + 1) * row]);
+        chain::blit(pixels, SHEET_SIZE, &sprite.rgba, (w, h), (x, y), gutter);
+        if let Some(levels) = chain {
+            self.lower.write(sprite, levels, (x, y));
         }
         let size = SHEET_SIZE as f32;
         let rect = [
@@ -357,6 +390,13 @@ impl Sheet {
     #[must_use]
     pub fn pixels(&self) -> Option<&[u8]> {
         self.pixels.as_deref().map(Vec::as_slice)
+    }
+
+    /// The rows placed so far on `level` of a chained sheet (1 up to [`ATLAS_LEVELS`] - 1),
+    /// [`SHEET_SIZE`] >> `level` texels a row; `None` on a sheet whose sprites carry none.
+    #[must_use]
+    pub fn lower_pixels(&self, level: u32) -> Option<&[u8]> {
+        self.lower.level(level)
     }
 
     /// How many rows [`Self::pixels`] holds, 0 while nothing is placed.

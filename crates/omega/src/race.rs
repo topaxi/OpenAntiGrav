@@ -156,6 +156,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
             track: "Data/tex/detonatorModeTrack",
             extension: ".gnf",
             stages: 15,
+            track_single_level: oag_title::Rule::UNREAD,
         }),
         stage_textures: None,
         cannon_lights: false,
@@ -751,6 +752,7 @@ pub const ZONE_FALLBACK: &oag_title::ZoneFallback = &oag_title::ZoneFallback {
         track: "Data/tex/zoneModeTrack",
         extension: ".gnf",
         stages: 15,
+        track_single_level: oag_title::Rule::UNREAD,
     },
     stages: &oag_title::ZoneStages {
         records: &[

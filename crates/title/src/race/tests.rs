@@ -681,6 +681,7 @@ fn a_zone_fallback_holds_back_only_the_circuits_that_keep_their_own_model() {
         track: "t",
         extension: ".gnf",
         stages: 15,
+        track_single_level: crate::Rule::UNREAD,
     };
     const STAGES: ZoneStages = ZoneStages {
         records: &[(0, "A")],

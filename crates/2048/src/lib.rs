@@ -345,6 +345,17 @@ pub const TITLE: &Title = &Title {
             on: oag_title::Platforms::Any,
             origin: oag_title::Origin::Measured,
         },
+        // The GXT loader gives every texture it loads trilinear filtering and a LOD bias of
+        // -1.5, and a race binds them so (confidence 92):
+        // `docs/ghidra/functions/vita-2048-eu-v104/gxt-loader.md`, "In a race".
+        material_lod_bias: oag_title::Rule {
+            on: oag_title::Platforms::Any,
+            origin: oag_title::Origin::Measured,
+        },
+        every_texture_lod_bias: oag_title::Rule {
+            on: oag_title::Platforms::Any,
+            origin: oag_title::Origin::Measured,
+        },
         // State bit 4 (back-face culling) of the material word, **inherited from HD**: the
         // Vita header's `+0x12` word is HD's, 22,483 of 22,994 materials carry the bit
         // (`docs/ghidra/functions/ps3-hdfury-eu/chunk-cull.md`, "2048 / Omega"). Only the
@@ -802,6 +813,21 @@ mod tests {
     fn the_2048s_own_water_differs_from_off() {
         assert!(TITLE.water.original_differs);
         assert!(!TITLE.water.offers_enhanced());
+    }
+
+    /// The GXT loader's -1.5 on the circuit's materials and on every other texture a race
+    /// binds, measured (`docs/ghidra/functions/vita-2048-eu-v104/gxt-loader.md`).
+    #[test]
+    fn the_2048s_loader_biases_every_texture_it_loads() {
+        for rule in [
+            TITLE.looks.material_lod_bias,
+            TITLE.looks.every_texture_lod_bias,
+        ] {
+            assert!(rule.applies_everywhere());
+            assert_eq!(rule.origin, oag_title::Origin::Measured);
+        }
+        assert_eq!(TITLE.looks.material_lod_levels(), -1.5);
+        assert_eq!(TITLE.looks.every_texture_lod_levels(), -1.5);
     }
 
     #[test]

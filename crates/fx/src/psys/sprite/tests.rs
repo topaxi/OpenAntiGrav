@@ -5,6 +5,7 @@ fn sprite(width: u16, height: u16, fill: u8) -> Sprite {
         width,
         height,
         rgba: vec![fill; usize::from(width) * usize::from(height) * 4].into(),
+        chain: None,
     }
 }
 

@@ -80,6 +80,7 @@ fn draw(gpu: &Gpu, quads: &[Quad], occluder: f32) -> Vec<[f32; 2]> {
                     width: 4,
                     height: 4,
                     rgba: texel.repeat(16).into(),
+                    chain: None,
                 })
                 .expect("the sprite fits");
             let uv = [(rect[0] + rect[2]) / 2.0, (rect[1] + rect[3]) / 2.0];

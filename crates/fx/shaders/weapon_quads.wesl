@@ -13,6 +13,10 @@ import oag_shaders::target::{linear_out, gamma_to_target, target_out};
 @group(1) @binding(0) var quad_texture: texture_2d<f32>;
 @group(1) @binding(1) var quad_sampler: sampler;
 
+// The title's sampler LOD bias on its textures, in levels (`FlareTexture::lod_bias`); `0`
+// reads the base, the only level such a title uploads.
+override disc_lod_bias: f32 = 0.0;
+
 @vertex
 fn vs_main(in: VertexInput) -> VertexOutput {
     var out: VertexOutput;
@@ -24,7 +28,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    let texel = textureSample(quad_texture, quad_sampler, in.texcoord);
+    let texel = textureSampleBias(quad_texture, quad_sampler, in.texcoord, disc_lod_bias);
     // The recovered blend, identical to the exhaust flare's own
     // (`sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_FIX, 0, 0xffffff)` at both
     // `Cannon_BuildBoltList` and `Cannon_BuildMuzzleFlashList`):

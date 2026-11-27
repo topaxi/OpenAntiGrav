@@ -18,6 +18,8 @@ struct Uniforms {
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
 @group(1) @binding(0) var albedo: texture_2d<f32>;
 @group(1) @binding(1) var albedo_sampler: sampler;
+// The title's sampler bias on the hull's own textures, in levels; 0 where its loader sets none.
+override disc_lod_bias: f32 = 0.0;
 @group(2) @binding(0) var static_texture: texture_2d<f32>;
 @group(2) @binding(1) var static_sampler: sampler;
 
@@ -73,7 +75,7 @@ fn fs_depth(in: VertexOutput) -> MrtOutput {
 // state is the cross-fade; the write mask keeps the glow mask untouched.
 @fragment
 fn fs_hull(in: VertexOutput) -> MrtOutput {
-    let texel = textureSample(albedo, albedo_sampler, in.texcoord);
+    let texel = textureSampleBias(albedo, albedo_sampler, in.texcoord, disc_lod_bias);
     if texel.a <= 0.0 {
         discard;
     }

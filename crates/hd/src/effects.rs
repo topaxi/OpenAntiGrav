@@ -357,6 +357,8 @@ pub const LOOKS: &Looks = &Looks {
         on: Platforms::Any,
         origin: Origin::Measured,
     },
+    // HD's effect, pad and sprite samplers were not read for a bias.
+    every_texture_lod_bias: Rule::UNREAD,
     // State bit 7 is the alpha-to-coverage path (blend and alpha test off,
     // depth written): all 31 `cf_tree` draws (`0xbd`) of a live Moa Therma race
     // frame are issued that way. Bit 2 on a blended state writes depth: the

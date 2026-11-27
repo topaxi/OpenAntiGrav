@@ -58,7 +58,17 @@ fn bind_texture(
 ) -> wgpu::BindGroup {
     let texture = image.upload(device, queue, label);
     let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-    let sampler = oag_gpu::texture::clamp_linear_sampler(device, label);
+    let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+        label: Some(label),
+        address_mode_u: wgpu::AddressMode::ClampToEdge,
+        address_mode_v: wgpu::AddressMode::ClampToEdge,
+        address_mode_w: wgpu::AddressMode::ClampToEdge,
+        mag_filter: wgpu::FilterMode::Linear,
+        min_filter: wgpu::FilterMode::Linear,
+        // Between levels where the image binds a chain.
+        mipmap_filter: wgpu::MipmapFilterMode::Linear,
+        ..Default::default()
+    });
     device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some(label),
         layout,
@@ -178,6 +188,11 @@ impl Pipeline {
             immediate_size: 0,
         });
 
+        let constants = [
+            oag_mesh::mesh_render::linear_constants(format, store),
+            &[("disc_lod_bias", f64::from(bolt.lod_bias))],
+        ]
+        .concat();
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("weapon quads"),
             layout: Some(&pipeline_layout),
@@ -213,7 +228,10 @@ impl Pipeline {
                     targets.extend(velocity.target(true));
                     targets
                 },
-                compilation_options: oag_mesh::mesh_render::fragment_options(format, store),
+                compilation_options: wgpu::PipelineCompilationOptions {
+                    constants: &constants,
+                    ..Default::default()
+                },
             }),
             primitive: wgpu::PrimitiveState {
                 cull_mode: None,
