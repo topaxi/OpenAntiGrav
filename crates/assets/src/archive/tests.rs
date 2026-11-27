@@ -86,7 +86,7 @@ fn tiny_lzss_wad(name_hash: u32, blob: &[u8]) -> Vec<u8> {
 }
 
 fn temp_file(name: &str, contents: &[u8]) -> oag_testdata::scratch::TempDir {
-    let path = oag_testdata::scratch::dir(&format!("assets-test-{name}"));
+    let path = oag_testdata::scratch::dir("assets-test").child(name);
     std::fs::write(&path, contents).unwrap();
     path
 }

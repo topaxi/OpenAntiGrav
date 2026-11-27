@@ -338,7 +338,7 @@ fn every_stamped_label_has_a_row() {
     ]
     .map(String::from)
     .to_vec();
-    let mut stack = vec![crates];
+    let mut stack = vec![crates.clone()];
     while let Some(dir) = stack.pop() {
         for entry in std::fs::read_dir(&dir).expect("a crate directory") {
             let path = entry.expect("an entry").path();
@@ -347,7 +347,11 @@ fn every_stamped_label_has_a_row() {
                     stack.push(path);
                 }
             } else if path.extension().is_some_and(|ext| ext == "rs")
-                && !path.to_string_lossy().contains("tests")
+                && !path
+                    .strip_prefix(&crates)
+                    .expect("under crates")
+                    .to_string_lossy()
+                    .contains("tests")
                 && let Ok(text) = std::fs::read_to_string(&path)
             {
                 for part in text.split("timing::stamp(\"").skip(1) {

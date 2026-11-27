@@ -404,7 +404,11 @@ fn hillside() -> oag_mod::Mod {
 
 /// A scratch copy of the example mod, its campaign file replaced by `campaign`
 /// and an extra broken one beside it when `broken`.
-fn scratch_mod(name: &str, campaign: &str, broken: bool) -> oag_mod::Mod {
+fn scratch_mod(
+    name: &str,
+    campaign: &str,
+    broken: bool,
+) -> (oag_testdata::scratch::TempDir, oag_mod::Mod) {
     let source = examples().join("example-campaign");
     let dir = oag_testdata::scratch::dir(&format!("custom-{name}"));
     for sub in ["campaigns", "pilots", "tracks", "ui"] {
@@ -423,13 +427,14 @@ fn scratch_mod(name: &str, campaign: &str, broken: bool) -> oag_mod::Mod {
     if broken {
         std::fs::write(dir.join("campaigns/broken.toml"), "[campaign]\n").unwrap();
     }
-    oag_mod::Mod::open(&dir).unwrap()
+    let module = oag_mod::Mod::open(&dir).unwrap();
+    (dir, module)
 }
 
 #[test]
 fn installed_skips_a_title_the_mod_is_not_for_and_names_a_broken_campaign() {
     needs_examples!();
-    let module = scratch_mod("installed", example_text(), true);
+    let (_dir, module) = scratch_mod("installed", example_text(), true);
     let pulse = Installed::for_title([&module, &hillside()], &[], oag_pulse::TITLE, &|_| true);
     assert_eq!(pulse.campaigns.len(), 1, "{:?}", pulse.failed);
     assert!(matches!(
@@ -476,7 +481,7 @@ fn a_campaign_on_a_disc_that_is_not_here_is_left_out_by_name() {
     needs_examples!();
     let text =
         example_text().replacen("track = \"03_Track\"", "track = \"wipeout-hd:03_Track\"", 1);
-    let module = scratch_mod("cross-disc", &text, false);
+    let (_dir, module) = scratch_mod("cross-disc", &text, false);
     let without = Installed::for_title([&module, &hillside()], &[], oag_pulse::TITLE, &|_| false);
     assert!(without.campaigns.is_empty());
     assert!(
@@ -524,7 +529,7 @@ fn mod_progress_and_disc_progress_never_meet() {
 #[test]
 fn a_campaign_racing_a_mod_turned_off_is_left_out_saying_so() {
     needs_examples!();
-    let module = scratch_mod("turned-off", example_text(), false);
+    let (_dir, module) = scratch_mod("turned-off", example_text(), false);
     let off = Installed::for_title([&module], &["oag.hillside"], oag_pulse::TITLE, &|_| true);
     assert!(off.campaigns.is_empty());
     let reason = &off.failed[0].1;

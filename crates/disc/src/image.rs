@@ -364,7 +364,7 @@ mod tests {
     use std::io::Write;
 
     fn temp_file(name: &str, contents: &[u8]) -> oag_testdata::scratch::TempDir {
-        let path = oag_testdata::scratch::dir(&format!("disc-test-{name}"));
+        let path = oag_testdata::scratch::dir("disc-test").child(name);
         let mut f = std::fs::File::create(&path).unwrap();
         f.write_all(contents).unwrap();
         path

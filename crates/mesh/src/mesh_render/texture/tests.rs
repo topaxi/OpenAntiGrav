@@ -215,9 +215,10 @@ fn a_device_without_astc_keeps_its_rgba8_upload_with_the_setting_on() {
         lod_code: 0.0,
     };
     let off = upload(&device, &queue, &texture, false).expect("fits");
-    let dir = oag_testdata::scratch::dir("astc-inert");
+    let scratch = oag_testdata::scratch::dir("astc-inert");
+    let dir = scratch.join("cache");
     astc::configure(Some((
-        dir.to_path_buf(),
+        dir.clone(),
         astc::Encoder {
             name: "fake",
             quality: 0.0,
