@@ -297,3 +297,10 @@
 0x00194bf8	function	ListWidget_StepForward	85	music-list.md
 0x00195a18	function	ListWidget_ShadeArrows	85	music-list.md
 0x0027a5c0	data	g_game_paused	70	music-list.md
+
+# How many texture levels a race samples: MXL is the file header's own count. See texture-level.md.
+0x00222798	function	Texture_ReadFromStream	90	texture-level.md
+0x00220e30	function	Texture_BuildGsState	92	texture-level.md
+0x00221138	function	Texture_RebuildSamplerRegisters	85	texture-level.md
+0x00221348	function	Texture_ComputeLevelBlocks	90	texture-level.md
+0x0026f6a0	function	Texture_SetSamplerState	80	texture-level.md
