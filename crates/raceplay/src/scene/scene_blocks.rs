@@ -71,14 +71,19 @@ impl Scene {
         // The shield shell and cockpit sphere scroll on the shader's clock (`PROGRAM_SHIELD_LIGHTNING`,
         // `own_shield.wesl`), and our own shield also reads the eye. Their drawables' own block stays
         // `Scene::off` with `time` at zero, so they read the flame's: `Scene::off` plus the clock and
-        // the eye.
+        // the eye. A shell under its own lit program reads the craft's light and fog besides.
         for drawable in self
             .shield
             .iter_mut()
             .chain([&mut self.shield_cockpit])
             .flatten()
         {
-            drawable.share_scene(device, blocks, SceneKind::Flame);
+            let kind = if drawable.shield_lit() {
+                SceneKind::Shield
+            } else {
+                SceneKind::Flame
+            };
+            drawable.share_scene(device, blocks, kind);
         }
         for spike in self.flare_spikes.iter_mut().flatten() {
             spike.drawable.share_scene(device, blocks, SceneKind::Flame);
@@ -190,7 +195,13 @@ impl Scene {
         self.scene_blocks.write_view(
             queue,
             block,
-            [circuit, ship, &shine::shine_scene(ship), flame],
+            [
+                circuit,
+                ship,
+                &shine::shine_scene(ship),
+                flame,
+                &shield_scene(ship, flame),
+            ],
         );
     }
 }
@@ -226,6 +237,19 @@ pub(super) fn flame_scene(
         time: [seconds; 4],
         light: off.light.with_output_scale(scene.light.output_scale),
         ..off
+    }
+}
+
+/// A lit shield shell's block: the craft's light rig and fog (its program lerps the circuit's
+/// fog inside its `/2`) over the flame's block, whose clock its colour tap scrolls on.
+pub(super) fn shield_scene(
+    ship: &mesh_render::Scene,
+    flame: &mesh_render::Scene,
+) -> mesh_render::Scene {
+    mesh_render::Scene {
+        fog: ship.fog,
+        light: ship.light,
+        ..*flame
     }
 }
 

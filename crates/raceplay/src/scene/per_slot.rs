@@ -60,7 +60,10 @@ impl Build<'_> {
     /// One drawable per slot from the model `pick` takes out of that slot's
     /// livery, blended with `blend` and written into the glow mask;
     /// `None` for a slot with no model or an empty one. A grid wider than the
-    /// liveries repeats the last, as the hulls do.
+    /// liveries repeats the last, as the hulls do. A shield shell under its own
+    /// lit program (`Model::shield_lit`) takes neither: the original masks the
+    /// draw's alpha off and its program samples no shadow map
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/shield.md`, "The shell's draw state").
     pub(super) fn drawables(
         &self,
         pick: impl Fn(&oag_livery::Livery) -> Option<Model>,
@@ -74,6 +77,14 @@ impl Build<'_> {
                 let Some(model) = pick(livery).filter(|model| !model.indices.is_empty()) else {
                     return Ok(None);
                 };
+                let (glow, receiver) = if model.shield_lit {
+                    (
+                        mesh_render::GlowMask::Protected,
+                        mesh_render::ShadowReceiver::Never,
+                    )
+                } else {
+                    (mesh_render::GlowMask::Written, receiver)
+                };
                 Drawable::new(
                     self.device,
                     self.queue,
@@ -84,7 +95,7 @@ impl Build<'_> {
                     self.sample_count,
                     depth,
                     blend,
-                    mesh_render::GlowMask::Written,
+                    glow,
                     self.zone_art,
                     self.shadow_maps,
                     receiver,

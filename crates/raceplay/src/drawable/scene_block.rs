@@ -37,6 +37,9 @@ pub(crate) enum SceneKind {
     /// The flame surfaces' (flares and boost plumes) and the shields': `Scene::off` plus
     /// the clock and the view's eye.
     Flame,
+    /// A shield shell under its own lit program (`oag_mesh::mesh::Model::shield_lit`): the
+    /// craft's light rig and fog with the flame's clock.
+    Shield,
     /// The behind-the-glass target's alternate fog, or the planar reflection target's
     /// alternate-fog group (its lights doubled, as [`SceneKind::Reflection`]'s).
     GlassAlternate,
@@ -46,7 +49,7 @@ pub(crate) enum SceneKind {
 }
 
 impl SceneKind {
-    const COUNT: usize = 6;
+    const COUNT: usize = 7;
 
     fn index(self) -> u64 {
         self as u64
@@ -153,20 +156,20 @@ impl SceneBlocks {
         oag_gpu::perfprobe::write_buffer(queue, &self.buffer, at, bytemuck::bytes_of(scene));
     }
 
-    /// Writes the four blocks every view composes, `scenes` in [`Self::VIEW_KINDS`] order, as
-    /// one `queue.write_buffer` for each run of used kinds: the four sit back to back in the
-    /// view's region, so with all four used it is one write where [`Self::write`] made four.
+    /// Writes the five blocks every view composes, `scenes` in [`Self::VIEW_KINDS`] order, as
+    /// one `queue.write_buffer` for each run of used kinds: the five sit back to back in the
+    /// view's region, so with all five used it is one write where [`Self::write`] made five.
     /// The padding between two blocks of a run is written as the zeros [`Self::new`] left
     /// there; an unused kind's block is still never written.
     pub(crate) fn write_view(
         &self,
         queue: &dyn oag_gpu::writes::Writes,
         view: ViewBlock,
-        scenes: [&mesh_render::Scene; 4],
+        scenes: [&mesh_render::Scene; 5],
     ) {
         const STRIDE: usize = mesh_render::SCENE_STRIDE as usize;
         const SIZE: usize = mesh_render::SCENE_SIZE as usize;
-        let mut staged = [0u8; 4 * STRIDE];
+        let mut staged = [0u8; 5 * STRIDE];
         let used = Self::VIEW_KINDS.map(|kind| self.used[kind as usize]);
         let mut next = 0;
         while next < used.len() {
@@ -187,16 +190,17 @@ impl SceneBlocks {
         }
     }
 
-    /// The kinds [`Self::write_view`] writes, in buffer order: adjacent, the first four.
-    pub(crate) const VIEW_KINDS: [SceneKind; 4] = [
+    /// The kinds [`Self::write_view`] writes, in buffer order: adjacent, the first five.
+    pub(crate) const VIEW_KINDS: [SceneKind; 5] = [
         SceneKind::Circuit,
         SceneKind::Ship,
         SceneKind::Shine,
         SceneKind::Flame,
+        SceneKind::Shield,
     ];
 }
 
-// `write_view` stages the four as one span from the first: they must be the first four kinds.
+// `write_view` stages them as one span from the first: they must be the first kinds.
 const _: () = {
     let kinds = SceneBlocks::VIEW_KINDS;
     let mut i = 0;
@@ -242,6 +246,12 @@ impl SceneBlocks {
 }
 
 impl Drawable {
+    /// Whether this drawable's model draws under a shield shell's own lit program, which reads
+    /// [`SceneKind::Shield`].
+    pub(crate) fn shield_lit(&self) -> bool {
+        self.model.shield_lit
+    }
+
     /// Moves this drawable's bind group 2 onto `blocks` as a `kind` drawable. From here the
     /// frame writes its scene through [`SceneBlocks::write`] and [`Self::write_scene`] is not
     /// to be called; the draws bind [`Self::scene_offset`].

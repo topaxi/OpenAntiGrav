@@ -113,11 +113,11 @@ fn blocks_are_aligned_and_do_not_overlap() {
     );
 }
 
-/// A view's four blocks go out as one write, and each reads back as the scene it was given.
-/// Write them with four `SceneBlocks::write` calls instead and the log holds four writes; leave
+/// A view's blocks go out as one write, and each reads back as the scene it was given.
+/// Write them with one `SceneBlocks::write` call each instead and the log holds five writes; leave
 /// a kind unused and its block is not written (two runs around it).
 #[test]
-fn a_views_four_blocks_are_one_write() {
+fn a_views_blocks_are_one_write() {
     use crate::drawable::{SceneBlocks, SceneKind};
     let Some((device, queue)) = test_gpu() else {
         return;
@@ -131,6 +131,7 @@ fn a_views_four_blocks_are_one_write() {
         scene_with(2.0),
         scene_with(3.0),
         scene_with(4.0),
+        scene_with(5.0),
     ];
     let block = SceneBlocks::view(3);
     let write = |used: &[SceneKind]| {
@@ -142,14 +143,14 @@ fn a_views_four_blocks_are_one_write() {
         blocks.write_view(
             &log,
             block,
-            [&scenes[0], &scenes[1], &scenes[2], &scenes[3]],
+            [&scenes[0], &scenes[1], &scenes[2], &scenes[3], &scenes[4]],
         );
         let writes = log.borrow().len();
         log.borrow_mut().replay(&queue);
         (blocks, writes)
     };
     let (blocks, writes) = write(&SceneBlocks::VIEW_KINDS);
-    assert_eq!(writes, 1, "four adjacent blocks, one write");
+    assert_eq!(writes, 1, "five adjacent blocks, one write");
     for (kind, scene) in SceneBlocks::VIEW_KINDS.into_iter().zip(&scenes) {
         let read = blocks.read(&device, &queue, 3, kind);
         assert_eq!(read.time, scene.time, "{kind:?}");

@@ -215,6 +215,26 @@ pub(super) fn own_shield(options: &crate::Options, craft_title: &oag_title::Titl
 }
 
 #[cfg(feature = "view")]
+/// The shell draw of a title whose own lit shell program is read
+/// (`oag_title::Looks::shield_shell_lit`): back faces culled by the material's state word, and
+/// the lit program's flag. Only a shell that authors `ShieldColour`, and never our own shield.
+/// The cockpit sphere keeps its drawing: its draw is unread.
+pub(super) fn lit_shield_shell(
+    shell: Option<&mut oag_mesh::mesh::Model>,
+    options: &crate::Options,
+    craft_title: &oag_title::Title,
+) {
+    if own_shield(options, craft_title) || !craft_title.looks.shield_shell_lit.applies_everywhere()
+    {
+        return;
+    }
+    if let Some(shell) = shell.filter(|shell| shell.shield_shell) {
+        shell.honour_cull();
+        shell.shield_lit = true;
+    }
+}
+
+#[cfg(feature = "view")]
 /// The cockpit sphere `oag_livery::cockpit_shield` loaded, under our own shader when this race
 /// draws our own shield.
 pub(super) fn own_cockpit(
@@ -465,6 +485,9 @@ pub(super) fn grid(
         &seat_paints,
         report,
     )?;
+    for livery in &mut liveries {
+        lit_shield_shell(livery.shield.as_mut(), options, craft_title);
+    }
     // A Zone craft is never a wreck: its end is the death shell and the debris, drawn for the
     // player's craft (`zone-destroy.md`, rows Z7 to Z11). Loaded where the wreck would be.
     if options.hull_wreck

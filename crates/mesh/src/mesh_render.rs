@@ -33,6 +33,7 @@ pub use tables::{EMISSIVES_SIZE, Emissives, NODE_ANIMS_SIZE, NodeAnims, TEX_ANIM
 pub use texlod::{PSP_TEXLOD_BIAS, PSP_TEXLOD_SLOPE, TextureDetail};
 use uniforms::Uniforms;
 mod prepass;
+mod shells;
 mod specialise;
 mod velocity;
 mod vertex_layout;
@@ -456,17 +457,7 @@ pub fn build_with(
             ("flame_speed", f64::from(flame.scroll_speed)),
         ]);
     }
-    // HD's absorb shell program, whose two numbers are literals in its own
-    // microcode rather than material parameters - see `crate::absorb_shell`.
-    if model.absorb_shell {
-        constants.push(("absorb_shading", 1.0));
-    }
-    if model.shield_shell {
-        constants.push(("shield_shading", 1.0));
-    }
-    if model.own_shield {
-        constants.push(("own_shield_shading", 1.0));
-    }
+    constants.extend(shells::constants(model));
     let present = specialise::slots_present(model);
     constants.push(("slots_present", f64::from(present)));
     if !specialise::nova_vertices(model) {

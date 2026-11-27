@@ -377,6 +377,15 @@ pub const LOOKS: &Looks = &Looks {
         on: Platforms::Any,
         origin: Origin::Measured,
     },
+    // The raised shell's three draws of a live race frame run block #2 of
+    // `hexagonalshield_rich` (ambient, sun and fog patched with the circuit's
+    // `.envsettings` values to six digits), cull back faces, mask the alpha write
+    // and sample no shadow map. `docs/ghidra/functions/ps3-hdfury-eu/shield.md`,
+    // "The shell's draw state", confidence 88.
+    shield_shell_lit: Rule {
+        on: Platforms::Any,
+        origin: Origin::Measured,
+    },
     // The last full-screen quad of a frame runs fragment program `0x01113c41` with unit 0
     // filter `0x02022000` and TEXCOORD0 at `(0.5 / width, 0.5 / height)` of the scaled
     // source: 23 of 23 1080p frames, 8 of them races at widths 1300, 1320 and 1660.
@@ -440,6 +449,15 @@ mod tests {
                 .final_composite_half_texel
                 .applies_everywhere()
         );
+    }
+
+    /// HD's shield shell draws under its own lit program, read live; an unread title's keeps
+    /// the generic path.
+    #[test]
+    fn hd_lights_its_shield_shell_and_an_unread_title_does_not() {
+        assert!(LOOKS.shield_shell_lit.applies_everywhere());
+        assert_eq!(LOOKS.shield_shell_lit.origin, Origin::Measured);
+        assert!(!Looks::unread(SHIELD).shield_shell_lit.applies_everywhere());
     }
 
     /// HD's scene stores encoded values, measured live; an unread title's
