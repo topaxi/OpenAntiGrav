@@ -1344,7 +1344,7 @@ the HUD's part splits into text layout, the clock lag and the song, and the back
 
 **Falsifier 2 fired.** Above the horizon the share fell by 0 to 0.29 grey over the eight pairs swept, so the lag below is **not** the scenery residual's cause. It is a separate cause.
 
-**Cause: the picture is two stops behind the read, not one** (confidence 75, one capture per pair). `psp-pure-pair.py` subtracts `PRESENTED_LAG = 1` frame (inherited from Pulse PSP).
+**Cause: the picture is two stops behind the read, not one** (confidence 75, one capture per pair). `psp-pure-pair.py` subtracted `PRESENTED_LAG = 1` frame (inherited from Pulse PSP) until it was wired (below).
 Primary evidence is the HUD's own digits. For a lag of N frames the picture's clock is `race_clock_at_stop_s - N x frame_dt_s`; it must truncate to the original's `CURRENT` tenth, and
 `target - clock` to its `BRONZE TIME` tenth (targets: Chenghou 160, Blue Ridge 158, Vineta 130 s from `stats.xml` as
 [hud-time-ladder.md](../ghidra/functions/psp-pure-usa/hud-time-ladder.md) records them; Citta Nuova 176 and Manor Top 141 s inferred from ours' own countdown, as whole seconds).
@@ -1394,7 +1394,7 @@ Sebenco's digit allows, so a per-grab 3 is not excluded.
 with another (`compare_env.pure_lag_flags`): race clock = `race_clock_at_stop_s - 2 x frame_dt_s`, `--ticks` from it by the script's own tenths rule, the
 scenery clock back by the same frame. The record's `presented_lag_ticks` and provenance follow, so a second run changes nothing. Confidence stays 75
 (the digits above). On all twelve race pairs `--ticks` fell by 2. The two Zone pairs have no race clock: only their scenery clock moved back one frame,
-labelled inherited (the digits were not read on a Zone state), and their pose is still the stop's uncorrected moving read.
+labelled inherited (the digits were not read on a Zone state), and their pose is still the stop's uncorrected moving read. Neither frame changed by a pixel: nothing in view animates over 33 ms.
 
 Copies of the stored pairs, re-rendered with the same binary before and after (mean grey; the clocks and target boxes are `0..100, 0..56` and
 `370..480, 0..34`, as mean grey inside the box):
