@@ -224,7 +224,8 @@ the curved one and the flat one. Such a file says so in its header:
 ```
 
 The pass then draws it at full strength whatever is stored, and the strength
-row is not offered while it is selected. It is the file's declaration, not
+row is not offered while it is selected
+([ADR-0097](../architecture/adr/0097-a-screen-filter-that-moves-pixels-runs-at-full-strength.md)). It is the file's declaration, not
 something read off the code or the tunables, so a copy of a barrel built-in
 tuned to `curvature = 0` keeps it until the line is removed, and a barrel of
 your own needs the line.
