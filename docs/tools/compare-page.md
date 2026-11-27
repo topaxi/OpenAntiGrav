@@ -707,6 +707,17 @@ as ours also uses the same in the end" - both changes below follow that.
   the cold boot now steps Ship Select until RAM names the pair's `--team` hull ([rpcs3-capture.md](../reverse-engineering/rpcs3-capture.md), "Picking the hull on Ship Select").
   RAM's team name is `harimau` either way and the pair's own `the player's craft (RAM) is the craft ours draws` check passes. The 12 pairs'
   captions say "Harimau (standard hull)". `talons-assegai-c1` (`(7, 0)`) was already the unlocked hull.
+- **The save moved since (2026-11-26, `hd-flame-regrab`): the walk above now picks the Fury hull, and Pilot Assist is on.** On the
+  maintainer's save of that day Ship Select opens Harimau's column on the Fury hull, which RAM names `Harimau_c1`
+  (`*(*(ship+0x6298)+0x1b4)`, `Data\Ships\Harimau_c1`); one `down` gives `Data\Ships\Harimau`, the orange, yellow-green and blue
+  hull the 12 stored grid pairs fly (read by eye on all 12 regrabs against the stored frames). So `rpcs3-hd-cold-pair.sh`'s default
+  `OAG_HD_CLASSIC=1` is right on this save and `compare-rerender-all.py`'s `(9, 0)` captures the Fury hull; Assegai's column opens on
+  `Assegai_c1`, so `(7, 0)` still holds. The option byte `*(*0x008b098c)+0x473` read `01 01`, so every race frame drew the
+  indicator's bracket under the craft while the profile renders ours off. Two checks in `rpcs3-hd-pair.py` now refuse both:
+  the player's hull directory read in the capture's pause against `--team` (a Fury `Harimau_c1` grab with `--team harimau` had passed
+  all nine earlier parity checks), and the Pilot Assist byte against the profile's `pilot_assist`
+  (`check-compare-environment.py`, `check_hd_hull` and `check_hd_pilot_assist`). `rpcs3-hd-cold-pair.sh` writes the option off
+  before `Restart Race` (`scripts/rpcs3-hd-pilot-assist.py --off`; the save is not written), and the bracket is gone from the frame.
 - **The original's Menu Style must be FURY for a menu or loading pair.** This profile boots the front end in the HD (white) style and ours' `--menu-page`
   draws only the Fury one whatever `display.front_end_style` says (mean grey 115 to 240 against 4 to 10 on the first try), so the original is switched: `Main Menu` ->
   `OPTIONS` -> `GAME`, down 8 rows to `MENU STYLE`, `right`, **`cross`** to confirm (`circle` cancels and the style reverts), back with `circle`.

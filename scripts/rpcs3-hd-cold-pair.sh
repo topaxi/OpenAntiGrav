@@ -21,6 +21,9 @@ python3 scripts/rpcs3-hd-no-hull-shake.py ${OAG_HD_KEEP_HULL_SHAKE:+--remove} ||
 rm -f "$W/xdg/cache/rpcs3/TTY.log"
 bash scripts/emu-hd-glass-boot.sh "$lane" "$circuit" "${OAG_HD_TEAM:-harimau}" cold-$circuit || exit 3
 export OAG_RPCS3_ATTACH=1
+# A save with Pilot Assist on draws its indicator under the craft; the profile renders ours with it off, and the pair script
+# refuses a mismatch. The Restart Race below builds the race afresh from the option.
+python3 scripts/rpcs3-hd-pilot-assist.py --off || exit 3
 uv run --with evdev python3 scripts/emu-run.py -- python3 -u scripts/rpcs3-drive.py --log-dir "$W/restart" restart | tail -1
 # The window is placed off-centre by RPCS3 and a 1920 wide resize then runs off the right edge of the Xvfb (a clipped frame the
 # trim in rpcs3-drive.py turns into 1760 px): move it to the corner and size it before the pair script looks.

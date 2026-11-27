@@ -1891,6 +1891,16 @@ def cmd_capture(args):
                     except Exception as error:  # noqa: BLE001 - the phase is a bonus
                         print("  %s: no gantry time (%s)" % (stem, error), flush=True)
                     try:
+                        # The player's hull directory (`Harimau` or the Fury `Harimau_c1`), so a pair can refuse a
+                        # grab whose Ship Select landed on another hull than the one ours is told to draw.
+                        import rpcs3_hd_field
+                        fm = rpcs3_hd_field.Mem(session.open_mem())
+                        ship_pose["team"] = rpcs3_hd_field.team_of(fm, player_ship) or None
+                        # The Pilot Assist option byte: on, the frame draws the indicator's bracket under the craft.
+                        ship_pose["pilot_assist"] = rpcs3_hd_field.pilot_assist(fm)
+                    except Exception as error:  # noqa: BLE001 - the pair script refuses a grab without it
+                        print("  %s: no team name or Pilot Assist byte (%s)" % (stem, error), flush=True)
+                    try:
                         # The scenery's animation clock in the same pause, read with the frame (`world_clock_offset_s` of the pair).
                         ship_pose["scenery_clock"] = (None if grab_clock is None or grab_clock["world_clock_s"] is None else
                                                       {"time_s": grab_clock["world_clock_s"], "nodes": grab_clock["nodes"], "total": grab_clock["total"]})

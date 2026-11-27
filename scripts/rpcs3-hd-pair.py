@@ -356,6 +356,36 @@ def detonator_inputs(pair, out, ship, clock):
     return flags
 
 
+#: A Zone race flies the mode's own hull whatever team was picked: RAM names its directory `Data\Ships\Zone`, and ours draws it
+#: under `--mode zone`.
+ZONE_HULL = "zone"
+
+
+def hull_check(pair, ship, team, live):
+    """Refuse a pair whose original flies another hull than `--team` names. The parity checks pass on a wrong hull (the
+    pose, camera and clocks do not depend on it), so the player's hull directory read in the capture's pause
+    (`ship.team`: `Harimau`, or the Fury `Harimau_c1`) is compared with it. A live capture must have read it; a reused
+    `--json` record made before the field existed is checked only when it holds one."""
+    ram = ship.get("team")
+    pair.rec["original"]["team"] = ram
+    if ram is None:
+        return pair.check("the player's hull was read from RAM", not live, "no `team` in the capture record")
+    return pair.check_equal("the player's hull (RAM) is the hull ours draws", ram.lower(), team.lower())
+
+
+def pilot_assist_check(pair, ship, profile_value, live):
+    """Refuse a pair whose original draws the Pilot Assist indicator ours is not told to draw, or the reverse. The option is
+    a save setting (`ship.pilot_assist`, the byte read in the capture's pause, 0 is off): a save with it on puts the
+    indicator's bracket under the craft of every race frame. Checked like the hull: a live capture must have read it."""
+    byte = ship.get("pilot_assist")
+    pair.rec["original"]["pilot_assist_byte"] = byte
+    if profile_value is None:
+        return True
+    if byte is None:
+        return pair.check("the original's Pilot Assist option was read from RAM", not live, "no `pilot_assist` in the capture record")
+    return pair.check_equal("the original's Pilot Assist option is ours'", "off" if byte == 0 else "on", profile_value)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--out", type=Path, required=True)
@@ -495,6 +525,11 @@ def main():
     cp.build(pair, args, "zone" if args.zone else "race" if args.field or args.detonator else "scenery", capture_kind, args.state,
              {"value": HUD_LAG_TICKS, "unit": "ticks", "basis": "measured",
               "what": "HUD clock text vs RAM; the picture is not corrected; on a moving craft it was measured 0 to 3 ticks older than the RAM read (hd-pair-lag-scan.py)"})
+    # A field pair checks the hull against its field row below; a wrong hull or Pilot Assist is refused before ours renders.
+    if not args.field and not hull_check(pair, ship, ZONE_HULL if args.zone else args.team, live=not args.json):
+        pair.finish()
+    if not pilot_assist_check(pair, ship, plat["ours"].get("pilot_assist"), live=not args.json):
+        pair.finish()
     gantry = ship.get("gantry_seconds")
     pair.rec["original"]["gantry_seconds"] = gantry
     flame = ship.get("flame_clock_s")
