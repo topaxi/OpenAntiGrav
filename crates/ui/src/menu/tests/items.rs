@@ -286,7 +286,8 @@ fn the_toggle_target_of_a_text_row_is_where_its_value_is_drawn() {
     assert!(toggle.rect[0] > row.rect[0] + row.rect[2] * 0.5);
 }
 
-/// HD's blocks: the label block opens, the value block toggles.
+/// HD's blocks: the label block opens, the value block toggles. The label block's step arrows
+/// toggle too, so the value block is found as the rightmost of the row's targets.
 #[test]
 fn on_hds_list_blocks_the_value_block_toggles_and_the_label_block_opens() {
     let skin = Skin::new(
@@ -296,8 +297,38 @@ fn on_hds_list_blocks_the_value_block_toggles_and_the_label_block_opens() {
     );
     let frame = super::pointer::hd_frame();
     let mut menu = entered(&FOUR, "b");
+    let regions = pointer::regions(&menu, &skin, &frame, &measure);
+    let value = regions
+        .iter()
+        .filter(|r| r.row == 2)
+        .max_by(|a, b| a.rect[0].total_cmp(&b.rect[0]))
+        .copied()
+        .expect("targets");
+    let label = regions
+        .iter()
+        .find(|r| r.row == 2 && r.part == Part::Row)
+        .expect("a label block");
+    assert!(
+        value.rect[0] >= label.rect[0] + label.rect[2],
+        "{regions:?}"
+    );
+    let at = (
+        value.rect[0] + value.rect[2] * 0.5,
+        value.rect[1] + value.rect[3] * 0.5,
+    );
+    let click_at = |menu: &mut Menu, at| {
+        menu.pointer(
+            &Pointer {
+                at: Some(at),
+                moved: true,
+                clicked: true,
+                ..Pointer::default()
+            },
+            &regions,
+        )
+    };
     assert_eq!(
-        click(&mut menu, &skin, &frame, 2, Part::StepForward),
+        click_at(&mut menu, at),
         [MenuEvent::Changed {
             setting: "x.row.a".to_string(),
             value: Value::Text("on".to_string()),
@@ -307,4 +338,24 @@ fn on_hds_list_blocks_the_value_block_toggles_and_the_label_block_opens() {
         click(&mut menu, &skin, &frame, 2, Part::Row),
         [MenuEvent::OpenItem("a".to_string())]
     );
+}
+
+/// A pad's window is not the tightest one holding the cursor: a rebuild keeps it.
+#[test]
+fn a_rebuilt_list_keeps_a_window_the_cursor_sits_in_the_middle_of() {
+    let many: Vec<(String, &str)> = (0..20).map(|n| (format!("m{n:02}"), "on")).collect();
+    let many: Vec<(&str, &str)> = many.iter().map(|(id, v)| (id.as_str(), *v)).collect();
+    let mut menu = entered(&many, "m00");
+    for _ in 0..12 {
+        press(&mut menu, &[Button::Down]);
+    }
+    for _ in 0..3 {
+        press(&mut menu, &[Button::Up]);
+    }
+    let window = menu.scroll();
+    let mut rebuilt = model(&many);
+    rebuilt.set_item_orders(&menu.item_orders());
+    assert!(rebuilt.restore_trail(&menu.trail()));
+    assert_eq!(rebuilt.scroll(), window);
+    assert_eq!(focused(&rebuilt), focused(&menu));
 }
