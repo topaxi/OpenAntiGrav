@@ -104,6 +104,9 @@ of it the same day; see `frame-audit.md`.
     `g_display+0x5df4` from the front end into a race, logging pc and value until the
     first `-9.0506` store (about 40 minutes). Pure's Modesto textures hold the same
     value, so one read settles both.
+  - **Distant trees are lighter than the original's at every level** (Talon long
+    straight, `frame-audit.md`, "The level law, measured"). Next: compare the two
+    tree draws' blend, alpha test and fog state against ours, about an hour.
   - **Real hardware is unmeasured**: the factor 2 in the slope law is PPSSPP's software
     rasteriser's.
   - **Automatic-mode (`.mip` effect and HUD) textures** keep their old selection; only

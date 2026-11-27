@@ -166,6 +166,17 @@ Mean absolute luma error against the original over the same boxes, flat then
 per-texture: 10.08 to 9.89, 12.11 to 11.31, 4.21 to 3.76, 6.44 to 6.44, 8.75 to
 8.31. The near road is level 0 either way.
 
+**Distant trees stay lighter than the original's, and the level is not why.** In
+box `204,84,20,16` of the same frame the original's mean RGB is `88,98,86`; ours
+reads `101,115,106` under the flat law, `101,116,107` under the per-texture law
+and `104,118,107` forced to level 0. The recorded tree draws (`Tree_1x1.tga`,
+blended and alpha-tested) hold `TEXLEVEL` bias `+0.8125`, which is ours. Mean
+absolute error in the box goes from 32.1 to 31.3. The cause is unread.
+
+At a larger output the same law reads softer than the flat one did: at 1920x1080
+this frame's centre 960x400 has a Laplacian standard deviation of 24.8 against
+25.9, visible on the far road and treeline.
+
 **The comparison pairs** (2026-11-27, every pair re-rendered with the build
 before and after): 137 pairs of HD, Pure, Pulse PS2, 2048 and Omega are
 pixel-identical; 32 of the 40 Pulse PSP pairs move, identically on a second
