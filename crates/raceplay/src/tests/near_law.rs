@@ -216,16 +216,13 @@ fn hds_craft_blast_plays_the_screen_wash_templates() {
     assert_eq!(playing, ["glow_longer", "Glow", "Glow"]);
     assert_eq!(blast.near.and_then(|law| law.template_cap), Some(2.0));
     check_craft_blast_trails_start_on_the_hemisphere(blast);
+    check_track_blast_plays_its_flare_template(&race);
 }
 
-/// HD's track blast plays its one root template, the `dc_flare_d` quad the original draws on a
-/// wall hit (`docs/rendering/particle-fill.md`, "A Rocket on the wall paired").
-#[test]
-#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
-fn hds_track_blast_plays_its_flare_template() {
-    let Some(race) = race_on("data/images/hdfury-ps3-eu-dec.iso") else {
-        return;
-    };
+/// HD's track blast, off the same load, plays its one root template with a sprite: the
+/// `dc_flare_d` quad the original draws on a wall hit (`docs/rendering/particle-fill.md`, "A
+/// Rocket on the wall paired").
+fn check_track_blast_plays_its_flare_template(race: &Race) {
     let blast = race
         .view
         .handles
