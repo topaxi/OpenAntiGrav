@@ -99,6 +99,8 @@ with `OAG_SWEEP=1 OAG_SWEEP_TITLE=<title>`.
     to watch. Not run live.
   - **Leaving the viewer lands on REPLAYS**, not on the finished race's menu: returning there needs the finished race
     held behind the viewer. The same hold would let a mid-Tournament leg offer the row, which it does not today.
+    Acceptance for that fix: after watching a mid-Tournament leg, the leg's end menu returns with NEXT RACE, and
+    the tournament continues at the next leg with its standings intact.
 - **Stage 4 landed** ([the replay file](../../docs/formats/replay-file.md), "The pose track"): `POSE`, every
   craft refined to 0.05 unit and 0.5 degree, captured a segment at a time. 156 to 176 B a craft a second at Venom on all
   five titles (Phantom, first 6,000 ticks: 197 to 263; 4.5 percent over the ADR's Venom row: the sweep stored no key index), a respawn bounded to the same error on all five,
