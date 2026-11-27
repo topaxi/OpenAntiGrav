@@ -1,8 +1,8 @@
 ---
 status: measure
 titles: [hd, omega, 2048]
-updated: 2026-11-26
-summary: "Owed: films of HD explosions and streaks, Rocket blast gaps, cap source, near pairs' field rewind to adopt; half-res parked"
+updated: 2026-11-27
+summary: "Owed: HD Mine/Detonator films, Bomb colour and spark gaps, Omega ring, Rocket blast gaps, cap source, near pairs to adopt; half-res parked"
 size: M (50)
 difficulty: medium (55)
 ---
@@ -75,20 +75,28 @@ blast the struck craft's velocity, on HD, 2048 and Omega
 - **Flipbook advance on 2048 and Omega is not wired**: 2048's update wraps at the frame count with
   no hold; Omega carries that one and HD's, and which serves which directory is unread.
 
-### HD effect sprites: what is left (21 of 31 listed 2026-11-26)
+### HD effect sprites: what is left
 
-`docs/rendering/particle-fill.md`, "Which effects draw a sprite" has the list and what was
-measured. Left:
+`docs/rendering/particle-fill.md`, "Which effects draw a sprite" has the list; "The Bomb's and the
+Missile's explosions paired" has the first original pairs (Bomb and Missile) and what they decided.
+Left:
 
-- **No original frame of any of the 21.** The Mine, Bomb and Missile explosion and the three
-  Detonator explosions are the ones a player sees; film one in RPCS3 and pair it
-  (`scripts/rpcs3-hd-particle-ring.py`).
-- **Streak emitters stay procedural**, in the 21 and in the 10 all-streak effects (`WO_BOMB_RAYS`,
-  `WO_REPULSER`, the three LeachBeam effects and the hit spark, the weapon spark, the no-damage
-  spark, `WO_DAMAGE_CRITICAL`, `WO_BLUE_WELDER`). Drawing their sprites is a `FAR_BARS` listing,
-  each wanting an original pair first.
-- **Sprite templates of the new effects stay muted** (`TEMPLATES`): not checked which of them
-  author any.
+- **The Mine is unfilmed**: pickup word 3 does not fire. Find the word (6 and 10 are the other
+  unresolved ones), then `scripts/rpcs3-hd-blast-film.py --weapon mine --state N`. `WO_MINE_EXPLO`'s
+  streaks (`streaks_fat`, `plasma_core`, `sparks`) wait on it.
+- **The three Detonator explosions are unfilmed.**
+- **Omega's smoke ring is not spread**: its `WO_BOMB_SMOKERING` authors HD's extents. One entry in
+  Omega's `effects.extents`, inherited from HD; no Omega frame to judge it.
+- **What the Bomb pairs still show** (same section, "Judged by eye"): the ring's sparks (class 6)
+  are sprite quads in the original and procedural dashes in ours, and listing them as HD's bar pairs
+  worse, so the bar's shape or colour for them is wrong somewhere; the fireball's colour; the halo of
+  rays at 0.8 s.
+- **What the Missile pairs still show**: crisper rings than the original's, an orange-tinted own
+  craft at 0.167 s, and a metric that prefers a blast 4 to 6 ticks younger than the lag rule's at
+  0.233 s. Its sprite template (`missile_shockring`) is muted (`TEMPLATES`) and was not tried.
+- **Other streak emitters stay procedural**, in the other listed effects and in the 9 all-streak
+  ones; each wants an original pair first.
+- **Sprite templates of the other new effects stay muted**: not checked which of them author any.
 
 ### Particles into a half-resolution target, composited
 

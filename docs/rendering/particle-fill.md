@@ -628,7 +628,8 @@ the 31 others found 89 emitter and template texture references, every one an exi
   `WO_ROCKET_FLARE`, `WO_CANNON_SPARKS`, the four Shuriken effects, `WO_REPULSER_BLAST`,
   `WO_WEAPON_ABSORB`, `WO_SHIP_COLL_SPARK_DAMAGE`, `WO_SHIP_DEATH_DAMAGE_PLUME`,
   `WO_DEBRIS_FIRE`, `WO_DAMAGE_MILD`, `WO_DAMAGE_MODERATE`, `WO_MODESTO_STEAM_A`.
-- **10 not listed, all-streak**: `WO_BOMB_RAYS`, `WO_REPULSER`, `WO_LEACHBEAM_ENERGY`,
+- **9 not listed, all-streak** (`WO_BOMB_RAYS`, the tenth, is listed since 2026-11-27, below):
+  `WO_REPULSER`, `WO_LEACHBEAM_ENERGY`,
   `WO_LEACHBEAM_CHARGING`, `WO_LEACHBEAM_ABSORB`, `WO_SHIP_SPARK_DAMAGE_LEACHBEAM`,
   `WO_SHIP_SPARK_DAMAGE_WEAPON`, `WO_SHIP_COLL_SPARK_NODAMAGE`, `WO_DAMAGE_CRITICAL`,
   `WO_BLUE_WELDER`.
@@ -639,10 +640,11 @@ The streak emitters of the 21 also stay procedural (the Mine's `streaks_fat`, `p
 The listing also gives these effects HD's flipbook walk, and each placed particle draws its spawn
 frame from the stage's generator, so every effect after one in a frame is dealt another
 arrangement. The sheet grows from 3076 to 3590 rows of 4096 on Talon's Junction (31 to 41
-distinct sprites); nothing is dropped. Disc check: `every_hd_sprite_is_on_the_sheet_and_the_weapon_blasts_draw_theirs`
+distinct sprites; 42 with `bomb_spike`, below); nothing is dropped. Disc check: `every_hd_sprite_is_on_the_sheet_and_the_weapon_blasts_draw_theirs`
 (`crates/raceplay/tests/particle_sheet_ground_truth.rs`).
 
-**Against the original.** None of the 21 has a matched capture of its own (the original was seen
+**Against the original.** The Bomb's and the Missile's explosions are paired below. When listed,
+none of the 21 had a matched capture of its own (the original was seen
 walking the sheets of the Detonator Mine and Bomb explosions,
 [particle-render.md](../ghidra/functions/ps3-hdfury-eu/particle-render.md), "The atlas frame"). The HD comparison pairs
 (31, `hd` and `hd-race`) were re-rendered before and after; the build is byte-deterministic (two
@@ -669,6 +671,94 @@ about 9 ticks the explosion model and flash fill the frame and the change is und
 
 **2048 and Omega: not checked here** (out of this change's scope); they read sprites by platform,
 not by this list.
+
+### The Bomb's and the Missile's explosions paired
+
+2026-11-27, RPCS3 0.0.43-20574, HD EU, Talon's Junction, Racebox Single Race, Venom, weapons on,
+each film from a fresh restore of one save state. `scripts/rpcs3-hd-blast-film.py` writes the weapon
+into the pickup slot, sets it off on a rival and keeps, frame by frame, the picture with its world and
+flame clocks, the camera, every craft, the blast object, the command ring and the bound textures;
+`scripts/hd-blast-film-pair.py` makes a pair of one frame. Ours fires the same weapon, moves it to the
+original's blast point (`--force-shot-at`) and sets it off on the struck craft's slot.
+
+| Films (`data/reference/hd-capture/blast/`) | What happened |
+| --- | --- |
+| `missile1`, `missile2` | the shot struck AG Systems after 11 and 12 frames, shield 140 to 125 |
+| `bomb2`, `bomb3` | Auricom, put on the drop, tripped it, shield 145 to 130; blast centres 0.2 units apart |
+| (Mine) | not filmed: pickup word 3 did not fire ([rpcs3-capture.md](../reverse-engineering/rpcs3-capture.md)) |
+
+**Written before the first capture.** A pair without a camera, a craft field or a flame clock is
+invalid. A streak emitter is drawn as sprite bars if the original's ring holds stretched particle
+quads bound to its texture, and not if no stretched quad binds it while the effect's camera-facing
+textures are bound. A listing is kept only if the pair's whole-frame RMSE over `--stage-seed` 1 to 8
+does not rise by more than two paired standard errors.
+
+**The picture's lag.** The stopped target shows its last presented frame, which on these frames is
+further behind RAM than on a calm one. The Missile's was picked by rendering ours at total lags 2 to 5
+and camera lags 1 to 4: total 4 on `missile1` (camera 2 at 0.167 s, 3 at 0.233 s), total 3 and camera 2
+on `missile2` at 0.233 s. The Bomb pairs use total 4 with the camera at rest; a scan of 1 to 8 on both
+Bomb films puts the 0.167 s frame's minimum at 3 on one film and 4 on the other, and the later frames
+are flat. `missile1` at 0.233 s scores better with a younger blast than the rule gives (RMSE 0.204 at
+age 6, 0.203 at 8, 0.218 at the rule's 12, 0.254 at 18); the rule's age is kept and why is not read.
+Confidence in the lag, 70.
+
+**Streak quads** (`scripts/hd-particle-uv.py`; textures named by their bytes against the disc's `.gtf`):
+
+- `WO_BOMB_RAYS`: 600 `bomb_spike` quads, the emitter's own 600 per emission, `0.90` wide and
+  `1.31` long at 0.5 s, `3.67` to `3.76` at 0.8 s (`bomb2` and `bomb3`). Their near ends sit `8.7`
+  units from the blast centre at 0.5 s on both films, against the `9.02` extent the file authors.
+  **Drawn as sprite bars**, confidence 85.
+- `WO_BOMB_SMOKERING`: about 430 to 470 `spark_mblurred` quads, many several times longer than wide
+  (its class-6 `sparks`). Its smoke's quad centres are `14.4` and `14.45` units out at 0.167 s: on a
+  ring, which the file authors (extent 10, widened by its selector-2 channel,
+  [pob.md](../formats/pob.md)).
+- `WO_MISSILE_EXPLO` authors one camera-facing emitter and one sprite template, no streak: nothing
+  to list.
+
+**What was listed**, from the mean whole-frame RMSE over the eight seeds. A bar listing alone for the
+rays changed no pixel: ours emitted them at the centre, inside the fireball. The rings needed the
+extent law (`Effects::extents`) as well, which the quads' distances above are the evidence for.
+
+| Ours | `bomb2` 0.167 | 0.500 | 0.800 | `bomb3` 0.167 | 0.500 | 0.800 |
+| --- | --- | --- | --- | --- | --- | --- |
+| before | 0.2619 | 0.2323 | 0.1337 | 0.2699 | 0.2296 | 0.1299 |
+| ring and rays by extent, rays procedural | 0.2274 | 0.1347 | 0.1361 | 0.2342 | 0.1429 | 0.1325 |
+| **and the rays as sprite bars (wired)** | **0.2274** | **0.1347** | **0.1314** | **0.2342** | **0.1429** | **0.1286** |
+| and the ring's sparks as bars too | 0.2292 | 0.1346 | 0.1314 | 0.2366 | 0.1428 | 0.1286 |
+
+On `bomb2`, the smoke ring's extent is the whole of the 0.167 s and 0.5 s gain; the rays' extent adds
+`0.0005` at 0.8 s. The ring's sparks worsen 0.167 s on both films (4.4 and 3.9 standard errors), so
+they stay procedural although the original draws them as sprite quads. Listing the rays puts
+`bomb_spike` on the particle sheet (41 to 42 sprites, still 3590 of 4096 rows on Talon's).
+
+**The pairs**, as wired, each re-rendered to identical pixels. RMSE and mean grey: lower is closer.
+
+| Pair | Film | RMSE | Edge NCC | Mean grey |
+| --- | --- | --- | --- | --- |
+| `bomb-craft-hit-0167` | `bomb2` | 0.224 | 0.231 | 32.2 |
+| `bomb-craft-hit-0500` | `bomb2` | 0.131 | 0.294 | 20.0 |
+| `bomb-craft-hit-0800` | `bomb2` | 0.131 | 0.269 | 20.9 |
+| `missile-craft-hit-0167` | `missile1` | 0.171 | 0.135 | 17.6 |
+| `missile-craft-hit-0233` | `missile1` | 0.218 | 0.119 | 32.7 |
+
+Second films, not in the compare page: `bomb3` 0.228, 0.141, 0.129; `missile2` at 0.233 s 0.235.
+
+**Judged by eye.** Both match in layout: the Bomb's fireball, smoke disc, debris and craft; the
+Missile's rings, rays and craft. What differs:
+
+- Bomb 0.167 s: ours' core is white where the original's is yellow under stronger rays, and the
+  ring's procedural sparks read as bright dashes the original does not show.
+- Bomb 0.5 and 0.8 s: ours' fireball is a more even yellow, the original deeper orange with darker
+  mottling; its halo of rays at 0.8 s is brighter than ours.
+- Missile: ours' rings are crisper than the original's washed whites, and at 0.167 s ours' own craft
+  is tinted orange where the original's is dark.
+- Not matched by the pair, not judged: the HUD's pickup row, the other craft.
+
+**2048 and Omega.** 2048's `WO_BOMB_SMOKERING` and `WO_BOMB_RAYS` are its own files (extent 1.5
+against 10; other emitters): checked, differs. Omega's `WO_BOMB_RAYS` is another file (extent 6, a
+`Flames` emitter) and Omega raises no rays trigger: checked, differs. Omega's `WO_BOMB_SMOKERING` in
+`Data\particles` carries HD's three emitters with HD's extents (10, 6.471, 7.059) beside a
+`shockdistort`: checked, applies, not wired (no Omega frame).
 
 ### Every effect that loads a sprite, read off the command ring
 
