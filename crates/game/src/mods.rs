@@ -120,6 +120,8 @@ pub mod words {
     pub const NOTHING: (&str, &str) = ("OAG_MODS_NOTHING", "NOTHING");
     /// What a texture pack that is on adds.
     pub const TEXTURE_PACK: (&str, &str) = ("OAG_MODS_TEXTURE_PACK", "TEXTURES");
+    /// What a mod with fallback entries for the title adds beside its rows.
+    pub const GAME_FILES: (&str, &str) = ("OAG_MODS_GAME_FILES", "GAME FILES");
     /// The ADDS line of a mod the player turned off: it adds nothing while off.
     pub const TURNED_OFF: (&str, &str) = ("OAG_MODS_TURNED_OFF", "NOTHING, TURNED OFF");
     /// The footer's Square prompt on a row of the list.
@@ -596,6 +598,11 @@ fn changes_a_race(m: &oag_mod::Mod) -> bool {
 fn has_fallback_entries(m: &oag_mod::Mod) -> bool {
     let folder = format!("{FALLBACK_DIR}/");
     m.names().iter().any(|name| name.starts_with(&folder))
+}
+
+fn has_fallback_for(m: &oag_mod::Mod, slug: &str) -> bool {
+    let folder = format!("{FALLBACK_DIR}/{slug}/");
+    m.is_for(slug) && m.names().iter().any(|name| name.starts_with(&folder))
 }
 
 /// `m`'s fallback entries for each title its `titles` admit, one [`oag_source::layers::ModFallback`]
@@ -1089,6 +1096,15 @@ impl Mods {
                     .and_then(|page| page.split_once('/'))
                 {
                     rows.push(short.to_string());
+                }
+                // So are asset files of this title (`fallback/<title>/`), which add no row.
+                if enabled
+                    && target.is_some_and(|target| {
+                        has_fallback_for(module, &oag_source::layers::slug(target.title))
+                    })
+                {
+                    let (id, english) = words::GAME_FILES;
+                    rows.push(table.get_or_fallback(id, english).to_string());
                 }
                 Listing::loaded(
                     module,

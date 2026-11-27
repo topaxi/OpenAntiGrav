@@ -165,6 +165,28 @@ fn a_mod_off_network_races_leaves_the_fingerprint_and_is_not_mounted_there() {
     assert!(layering.for_network().mods_for(oag_pulse::TITLE).is_empty());
 }
 
+/// A mod that adds only asset files is not listed as adding nothing: its ADDS line names them
+/// while it is on.
+#[test]
+fn the_mods_page_says_a_mod_with_fallback_entries_adds_game_files() {
+    let dir = base("adds");
+    folder(&dir.join("loose"), "test.loose");
+    let adds = |off: &[&str]| {
+        let target = oag_ui::menu::For {
+            title: oag_pulse::TITLE,
+            platform: oag_assets::Platform::Psp,
+            updated: false,
+        };
+        let built = load(&dir, off)
+            .build(oag_ui::menu::BUILT_IN, None, Some(target))
+            .unwrap();
+        let listing = built.listing.iter().find(|mod_| mod_.id == "test.loose");
+        listing.expect("listed").rows.clone()
+    };
+    assert_eq!(adds(&[]), ["GAME FILES"]);
+    assert!(adds(&["test.loose"]).is_empty());
+}
+
 /// The official `oag.detonator-pulse` is single player: one player with it on and one with it
 /// off fingerprint the same, so they can race each other.
 #[test]
