@@ -108,6 +108,10 @@ Every dump also shows non-loader states (probes, render targets), so the read ca
 | billboards, HUD | `billboards/hd_adverts`, `2048_hud` | 19, 1, 1, 1 |
 | **Zone skins** | `zoneModeTrack2..4.gxt` | **19, 1, 1, 0** (linear) and **19, 0, 0, 0** (point copy), one level |
 
+- On every disc texture bound in a race dump of boots 3, 4, 6 and 7 the descriptor's level count is the
+  file's, so each is read over its own full chain. The exception is the Zone skins, whose one level is the
+  v1.04 file's. On boot 1's wedged repeat, 226 of its 269 textures were resident with the loader's state,
+  and so were all 444 environment and ship textures with a descriptor.
 - The effect textures named above have 2 to 8 levels, so the bias selects levels on them. Two weapon flash
   textures (`pulse_bombflash_glow`, `pulse_mineflash_glow`) have one level.
 - No texture of a magstrip, light cone, hologram or rim effect was bound in any run, so those are unread.
@@ -145,6 +149,9 @@ their whole level 0 and on the pointers at `DAT_815d2d0c`.
   Detonator race was run.
 - **Not measured.** Fury (DLC2) circuits, the other circuits, a native circuit's Zone, Eliminator, split
   screen.
+- **Score history.** 2026-11-27: 90 on Queens Mall, bound state from one boot (`v2048-texlevel-measure`);
+  92 on five race runs across three circuits, with Queens Mall bound on a second boot (263 of 269 shared)
+  and the Zone skins seen live on two boots (`v2048-texlevel-more`).
 
 ## Ours
 
