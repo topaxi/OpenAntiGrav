@@ -569,7 +569,10 @@ fn load_split_hud(
     let layout = layout?;
     let origin = match archives.layer_of(entry) {
         Some(oag_assets::layers::Kind::Override) => Origin::Override,
-        Some(oag_assets::layers::Kind::Fallback) => Origin::Fallback,
+        // A mod's entry sits behind the disc as the fallback does.
+        Some(oag_assets::layers::Kind::Mod | oag_assets::layers::Kind::Fallback) => {
+            Origin::Fallback
+        }
         None => {
             report.push(format!("HUD split layout: {entry} is not in this source"));
             return None;

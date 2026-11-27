@@ -785,10 +785,19 @@ fn an_omega_wall_death_plays_the_discs_spark() {
     check_the_title_plays_the_wall_spark(path.display().to_string(), None);
 }
 
+/// Mounts the official mod `oag.detonator-pulse`, which carries Pulse's Detonator data (ADR-0100):
+/// `None` without the official-mods submodule, a failure under `OAG_REQUIRE_GAME_DATA=1`.
+fn with_pulse_detonator_mod() -> Option<()> {
+    let manifest = oag_testdata::exact("assets/mods/official/detonator-pulse/oag-mod.toml")?;
+    oag_source::layers::register_mod_folder(manifest.parent()?, "oag.detonator-pulse");
+    Some(())
+}
+
 /// A Pulse Detonator race: its title ships no Detonator, so no cannon model, EMP effect or
 /// light of its own.
 fn pulse_race() -> Option<Race> {
     let image = oag_testdata::image("data/images/pulse-psp-usa.chd")?;
+    with_pulse_detonator_mod()?;
     let loaded = crate::load(&crate::Options {
         source: image.display().to_string(),
         class: "VENOM".to_string(),
@@ -938,7 +947,10 @@ fn a_pulse_detonator_mine_scales_to_the_music_only_if_its_layout_says_so() {
 #[test]
 #[ignore = "needs data/images/pulse-psp-usa.chd"]
 fn a_pulse_detonator_run_ends_as_a_pulse_zone_run_does() {
-    let Some(image) = oag_testdata::image("data/images/pulse-psp-usa.chd") else {
+    let (Some(image), Some(())) = (
+        oag_testdata::image("data/images/pulse-psp-usa.chd"),
+        with_pulse_detonator_mod(),
+    ) else {
         return;
     };
     let end = |mode: Mode| {

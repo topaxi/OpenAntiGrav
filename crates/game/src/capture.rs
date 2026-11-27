@@ -698,6 +698,15 @@ pub fn run(
                 // that authors one.
                 let mut settings = options.settings.clone();
                 settings.race.team = settings.race.opening_team(title).to_string();
+                // A stored mode the title does not offer previews the default mode, as the live
+                // screen does (`Session::pending_race`).
+                let offered = race_setup.modes(title);
+                settings.race.mode =
+                    crate::pending_race::PendingRace::stored_mode(&settings.race, |mode| {
+                        offered.contains(&mode)
+                    })
+                    .name()
+                    .to_string();
                 let layout = match kind {
                     oag_ui_screens::picker::Kind::Track => track_select.as_ref(),
                     oag_ui_screens::picker::Kind::Ship => ship_select.as_ref(),

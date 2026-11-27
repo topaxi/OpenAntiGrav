@@ -46,7 +46,7 @@ license = "CC-BY-4.0"        # an SPDX expression ("MIT OR Apache-2.0"), or:
 # license-file = "LICENSE"   # a file in the mod (not both)
 description = "What it adds."
 repository = "https://example.org/example"   # optional
-# homepage, keywords = [...], titles = ["wipeout-pulse"], needs-titles = ["wipeout-hd"], oag = ">=0.1", default-enabled = false (optional)
+# homepage, keywords = [...], titles = ["wipeout-pulse"], needs-titles = ["wipeout-hd"], oag = ">=0.1", default-enabled = false, network-races = false (optional)
 ```
 
 A mod **with no licence loads**, and the mods list and the load report print `no license
@@ -320,9 +320,49 @@ the engine names none of them.
   (`[campaign-medals]` above) from a Wipeout HD disc on the search path; without one the
   swatches stay and the MODS page names the missing disc. Art only: it changes no rule, so the LAN
   fingerprint leaves it out.
-- **Delivery** (ADR-0083 decision 5): a checkout finds the submodule; packaged builds
-  (AppImage, AUR, Windows, macOS) copy the folder beside the executable, which the release
-  recipes do not do yet. Web and phone builds have no official mods.
+- **`detonator-pulse/` (`oag.detonator-pulse`): Pulse Detonator.** On by default. Detonator
+  on Wipeout Pulse, which ships none ([detonator-pulse.md](../gameplay/detonator-pulse.md)):
+  its layouts, scoring, weapon table, HUD layouts and two craft hulls of this project's own, as
+  fallback entries (`fallback/wipeout-pulse/`, below). The engine offers a mode only where the
+  data it names resolves, so turned off or absent, Pulse's MODE row has no DETONATOR and
+  `--mode detonator` refuses. Detonator is single player, so it sets
+  `network-races = false`: no LAN or online race mounts its entries, and it leaves the
+  fingerprint alone (a player with it on races one without it).
+- **Delivery** (ADR-0083 decision 5): a checkout finds the submodule; the AppImage, tarball,
+  Windows, macOS, iOS and Android builds ship the mods
+  ([packaging.md](packaging.md#official-mods)). The AUR packages and the web build have none.
+
+## Fallback entries: `fallback/<title>/`
+
+Every file under `fallback/<title>/` of a mod that is on is an asset entry of that title, named
+by its path under the folder: `fallback/wipeout-pulse/Data/XML/Foo.xml` is Pulse's
+`Data\XML\Foo.xml` ([ADR-0100](../architecture/adr/0100-a-mod-carries-fallback-entries.md)).
+`<title>` is the title's slug (`wipeout-pulse`, `wipeout-pure`, `wipeout-hd`, `wipeout-2048`,
+`wipeout-omega-collection`), the spelling `titles` uses; a folder for a title the manifest's
+`titles` leaves out is ignored. It works from a folder, a `.zip` and a `.oagmod`.
+
+An entry answers only a name **no disc or DLC holds**: it is searched after the DLC packs and
+before this project's own embedded fallback, and a player's `overrides/<title>/` file wins
+over it. Several mods holding one name: the first in search order wins. The load report
+names every entry a mod answered. A mod cannot replace disc data this way. The MODS detail
+page's ADDS line reads **GAME FILES** for a mod that is on and holds entries for the running
+title.
+
+A mode that loads data of its own (Detonator) is offered on a title only where every entry it
+names resolves, so a mod that carries a title's Detonator data turns the mode on there.
+
+**`[mod] network-races`** (absent: `true`) says whether a LAN or online race mounts the mod's
+fallback entries. With it `true`, a race over the network mounts them, and since they can hold
+a race's own tables the mod counts in the LAN and online fingerprint
+([ADR-0083](../architecture/adr/0083-official-mods-are-a-public-folder-and-the-fingerprint-counts-race-changers.md)):
+players must agree on it. With it `false`, the entries serve single-player races only: no
+network race mounts them (`oag_raceplay::Options::network`, set by every LAN host, LAN joiner
+and online race) and they do not count, so a player with the mod on races one without it.
+
+The key governs **only the fallback entries**. It does not touch a mod's menu rows, pages,
+strings, effects, sounds, icons or texture pack (none of which is in the fingerprint), nor its
+tracks, campaigns or simulation module, which count in the fingerprint as before whatever the
+key says. A simulation module never runs in a network race in any case.
 
 ## Saved picks: `mod_settings`
 

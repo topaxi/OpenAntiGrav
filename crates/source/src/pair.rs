@@ -54,24 +54,24 @@ impl SourcePair {
             craft_source,
             packs,
             pure_packs,
-            &crate::layers::overrides_search_path(),
+            &crate::layers::Layering::player(),
         )
     }
 
-    /// [`Self::open`] with the override directories of both sources looked for in `overrides`
-    /// alone ([`crate::title::open_source_in`]).
+    /// [`Self::open`] with the player's layers of both sources `layering` names
+    /// ([`crate::title::open_source_in`]).
     pub fn open_in(
         source: &str,
         craft_source: Option<&str>,
         packs: Vec<Pack>,
         pure_packs: Vec<Pack>,
-        overrides: &[std::path::PathBuf],
+        layering: &crate::layers::Layering,
     ) -> Result<Self> {
-        let track = crate::title::open_source_in(source, packs, pure_packs, overrides)?;
+        let track = crate::title::open_source_in(source, packs, pure_packs, layering)?;
         match craft_source {
             Some(craft_source) if craft_source != source => {
                 let craft =
-                    crate::title::open_source_in(craft_source, Vec::new(), Vec::new(), overrides)?;
+                    crate::title::open_source_in(craft_source, Vec::new(), Vec::new(), layering)?;
                 Ok(Self::Split { track, craft })
             }
             _ => Ok(Self::Single(track)),

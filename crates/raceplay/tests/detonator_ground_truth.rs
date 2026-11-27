@@ -1112,7 +1112,10 @@ fn carried_mines_stand_where_the_originals_objects_stood() {
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn a_pulse_detonator_race_lays_pulse_mines_on_a_zone_circuit_with_red_charging_pads() {
-    let Some(path) = oag_testdata::image("data/images/pulse-psp-usa.chd") else {
+    let (Some(path), Some(_)) = (
+        oag_testdata::image("data/images/pulse-psp-usa.chd"),
+        with_pulse_detonator_mod(),
+    ) else {
         return;
     };
     let loaded = race::load(&race::Options {
@@ -1262,6 +1265,9 @@ fn a_pulse_detonator_race_lays_pulse_mines_on_a_zone_circuit_with_red_charging_p
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn a_pulse_detonator_hud_shows_the_emp_gauge_and_the_clip() {
+    if with_pulse_detonator_mod().is_none() {
+        return;
+    }
     for (image, size) in [
         ("data/images/pulse-psp-usa.chd", (480.0, 272.0)),
         ("data/images/pulse-ps2-eu.chd", (640.0, 448.0)),
@@ -1356,4 +1362,39 @@ fn a_pulse_detonator_hud_shows_the_emp_gauge_and_the_clip() {
         };
         assert_eq!(clip(15), clip(0) + 15, "{image}: one icon a volley");
     }
+}
+
+/// Mounts the official mod `oag.detonator-pulse`, which carries Pulse's Detonator data (ADR-0100):
+/// `None` without the official-mods submodule, a failure under `OAG_REQUIRE_GAME_DATA=1`.
+fn with_pulse_detonator_mod() -> Option<std::path::PathBuf> {
+    let manifest = oag_testdata::exact("assets/mods/official/detonator-pulse/oag-mod.toml")?;
+    let root = manifest.parent()?.to_path_buf();
+    oag_source::layers::register_mod_folder(&root, "oag.detonator-pulse");
+    Some(root)
+}
+
+/// **Without the mod that carries its data, a Pulse Detonator race is refused** (ADR-0100): the
+/// load names the missing entries rather than racing a mode with no layout, table or HUD.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_pulse_detonator_race_without_its_data_is_refused() {
+    let Some(path) = oag_testdata::image("data/images/pulse-psp-usa.chd") else {
+        return;
+    };
+    oag_source::layers::register_mods(Vec::new());
+    let Err(refused) = race::load(&race::Options {
+        no_effects: true,
+        source: path.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::Detonator,
+        ..race::Options::default()
+    }) else {
+        panic!("a Pulse Detonator race with no mod carrying its data is refused");
+    };
+    let why = format!("{refused:#}");
+    assert!(
+        why.contains("no disc, DLC pack or enabled mod holds")
+            && why.contains(r"DetonatorLayouts_Pulse\PatternFile.xml"),
+        "{why}"
+    );
 }

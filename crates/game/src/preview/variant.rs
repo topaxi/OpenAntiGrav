@@ -134,12 +134,14 @@ pub fn model_or_default(
     archives: &mut oag_assets::Archives,
     entry: &str,
     fallback: Option<&str>,
-    race_hull: Option<&str>,
+    race_hull: Option<&super::RaceHull>,
     livery: Option<oag_livery::LiveryFolder<'_>>,
 ) -> Result<(Model, String)> {
     let (mut model, loaded) = load(archives, entry, fallback, livery)?;
-    if let Some(race_hull) = race_hull {
-        super::seat_flaps(archives, race_hull, &mut model);
+    if let Some(race_hull) = race_hull
+        && !super::own_hull_on(archives, &loaded, race_hull.own_hull, &mut model)
+    {
+        super::seat_flaps(archives, &race_hull.entry, &mut model);
     }
     Ok((model, loaded))
 }

@@ -569,6 +569,7 @@ pub const DETONATOR_CRAFT: oag_title::DetonatorCraft = oag_title::DetonatorCraft
         livery_key: "zoneship_zone",
     },
     livery_fallback: Some("zoneship_faisar"),
+    own_hull: &[],
 };
 
 /// HD's Detonator handling: `Team_LoadHandlingStats` (`0x001e6ff8`) tests mode `0xe` before the

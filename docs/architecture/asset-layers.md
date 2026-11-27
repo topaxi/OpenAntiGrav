@@ -8,8 +8,14 @@ search order), `oag_source::layers` (where the layers come from).
 ## The search order
 
 ```text
-override (player)  ->  update archives  ->  bulk  ->  companion  ->  extra  ->  DLC packs  ->  fallback (this project)
+override (player)  ->  update archives  ->  bulk  ->  companion  ->  extra  ->  DLC packs  ->  mods  ->  fallback (this project)
 ```
+
+The mods' layers are the `fallback/<title>/` folders of the mods that are on, in mod search
+order ([ADR-0100](adr/0100-a-mod-carries-fallback-entries.md), [mods.md](../tools/mods.md#fallback-entries-fallbacktitle)).
+Like the fallback they answer only a name no disc or DLC holds. The composition root registers
+them (`oag_source::layers::register_mods`) at start and whenever a mod is switched; an open that
+mounts the player's layers (`Layering::player`) keeps its own title's.
 
 First hit wins. Override and fallback are loose entries, not archives: a name
 maps to a file or to embedded bytes. A name is compared lowercase, with `/` for

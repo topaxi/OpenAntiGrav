@@ -59,7 +59,7 @@ pub(crate) enum PreviewSource {
         own_entry: Option<(String, oag_race::Mode)>,
         /// The race hull this front-end hull's flaps are seated from
         /// (`crate::preview::race_hull_entry`); `None` where the title draws the race hull.
-        race_hull: Option<String>,
+        race_hull: Option<crate::preview::RaceHull>,
         /// Each variant id the row offers that paints the hull from another livery folder, with
         /// its folders (`crate::preview::variant::livery_folders`).
         liveries: Vec<(String, crate::preview::variant::Folders)>,
@@ -993,7 +993,7 @@ pub(crate) fn read_preview(
     } else {
         let entry = variant_name.as_deref().unwrap_or(&name);
         let race_hull = match &source {
-            PreviewSource::Ship { race_hull, .. } => race_hull.as_deref(),
+            PreviewSource::Ship { race_hull, .. } => race_hull.as_ref(),
             PreviewSource::Track { .. } => None,
         };
         let livery = livery_of(&source, variant);

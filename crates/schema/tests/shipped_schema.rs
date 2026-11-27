@@ -46,6 +46,9 @@ fn shipped() -> Vec<(&'static str, &'static str)> {
         ("assets/mods/examples/tether/fx/lock.toml", "effect"),
         ("crates/trackfile/tests/fixtures/oval.track.toml", "track"),
         ("crates/mod/tests/fixtures/example.rumble.toml", "rumble"),
+        // The official mods' submodule (github.com/OpenAntiGrav/official-mods), on the same
+        // terms as the examples.
+        ("assets/mods/official/detonator-pulse/oag-mod.toml", "mod"),
         ("crates/game/tests/fixtures/music-state.toml", "music-state"),
         ("crates/game/tests/fixtures/rejoin.toml", "rejoin"),
         ("crates/game/tests/fixtures/identity.toml", "identity"),
@@ -114,8 +117,10 @@ fn shipped() -> Vec<(&'static str, &'static str)> {
 #[test]
 fn every_shipped_document_validates_against_the_schema_it_names() {
     for (path, kind) in shipped() {
-        if path.starts_with("assets/mods/examples/") && !root().join(path).is_file() {
-            eprintln!("skipped {path}: the example mods submodule is not checked out");
+        if (path.starts_with("assets/mods/examples/") || path.starts_with("assets/mods/official/"))
+            && !root().join(path).is_file()
+        {
+            eprintln!("skipped {path}: its mods submodule is not checked out");
             continue;
         }
         let text = std::fs::read_to_string(root().join(path)).unwrap();

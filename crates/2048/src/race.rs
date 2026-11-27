@@ -568,6 +568,7 @@ pub const DETONATOR_CRAFT: oag_title::DetonatorCraft = oag_title::DetonatorCraft
         livery_key: "zoneship_zone",
     },
     livery_fallback: None,
+    own_hull: &[],
 };
 
 /// 2048's Detonator handling: the loader (`0x810bfd54`) tests mode `0xe` first and the file is

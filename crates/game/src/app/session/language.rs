@@ -118,11 +118,9 @@ impl Session {
         shell.mods = mods;
         shell.custom_campaigns = custom_campaigns;
         shell.rebuild = rebuild;
-        if let Some((definition, listing, installed)) = rebuilt {
-            self.custom_tracks.set_mod_files(&installed.tracks);
-            shell.definition = definition;
-            shell.mods = listing;
-            shell.custom_campaigns = std::sync::Arc::new(installed);
+        if let Some(rebuilt) = rebuilt {
+            self.custom_tracks.set_mod_files(&rebuilt.2.tracks);
+            shell.adopt_rebuilt(rebuilt);
         }
         // Decoded once at boot and language-independent, so it rides across.
         shell.menu_sfx = self.shell.as_ref().and_then(|old| old.menu_sfx.clone());

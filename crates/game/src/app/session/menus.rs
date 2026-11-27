@@ -463,11 +463,21 @@ impl Session {
 
     /// The race the selection screens lead to: a campaign cell's own launch options, else the
     /// RACE page's settings ([`crate::pending_race::PendingRace`]).
+    ///
+    /// A stored mode the title does not offer (a `detonator` on a Pulse whose Detonator data no
+    /// mod that is on carries) previews and seeds the default mode, as its launch races it.
     pub(crate) fn pending_race(&self) -> crate::pending_race::PendingRace {
-        crate::pending_race::PendingRace::resolve(
-            &self.settings.race,
-            self.campaign_cell.as_ref().and(self.race_options.as_ref()),
-        )
+        let launch = self.campaign_cell.as_ref().and(self.race_options.as_ref());
+        let mut pending = crate::pending_race::PendingRace::resolve(&self.settings.race, launch);
+        if launch.is_none()
+            && let Some(shell) = self.shell.as_ref()
+        {
+            pending.mode =
+                crate::pending_race::PendingRace::stored_mode(&self.settings.race, |mode| {
+                    shell.offers_mode(mode)
+                });
+        }
+        pending
     }
 
     /// Re-supplies the CIRCUIT row from whichever list the current
@@ -717,14 +727,14 @@ impl Session {
         // mode this one does not have still races - and still checks
         // the circuit against whichever list that leftover mode
         // implies.
-        // A mode this title does not offer (a stored `detonator` carried to Pulse) is
-        // refused the same way, with a line saying so.
+        // A mode this title does not offer (a stored `detonator` on a Pulse whose Detonator
+        // data no mod that is on carries) is refused the same way, with a line saying so.
         if let Some(mode) = oag_race::Mode::from_name(&self.settings.race.mode) {
-            match self.shell.as_ref().map(|shell| shell.title) {
-                Some(title) if !oag_ui::menu::mode_offered(mode, title) => log::warn!(
+            match self.shell.as_ref() {
+                Some(shell) if !shell.offers_mode(mode) => log::warn!(
                     "race.mode {:?} is not a mode {} offers; racing {} instead",
                     mode.name(),
-                    title.name,
+                    shell.title.name,
                     race_options.mode.name()
                 ),
                 _ => race_options.mode = mode,

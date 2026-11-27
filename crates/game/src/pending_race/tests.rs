@@ -95,3 +95,23 @@ fn the_race_page_settings_are_the_race_without_a_cell() {
     assert_eq!(pending.mode, Mode::Eliminator);
     assert_eq!(pending.class, "venom");
 }
+
+/// A stored mode the title does not offer (Detonator on a Pulse with its mod off) previews the
+/// default mode; an offered one is kept.
+#[test]
+fn a_stored_mode_the_title_does_not_offer_is_the_default() {
+    let race = settings::Race {
+        mode: "detonator".to_string(),
+        ..settings::Race::default()
+    };
+    let all = |_: oag_race::Mode| true;
+    let no_detonator = |mode: oag_race::Mode| mode != oag_race::Mode::Detonator;
+    assert_eq!(
+        PendingRace::stored_mode(&race, all),
+        oag_race::Mode::Detonator
+    );
+    assert_eq!(
+        PendingRace::stored_mode(&race, no_detonator),
+        oag_race::Mode::default()
+    );
+}

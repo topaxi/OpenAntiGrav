@@ -96,10 +96,13 @@ pub struct Options {
     /// Opens the texture packs the player has on, on the load thread
     /// ([`crate::texture_pack::Finder`]); `None` draws the disc's own textures.
     pub find_texture_packs: Option<crate::texture_pack::Finder>,
-    /// Mounts no player override directory around the source, only this project's own fallback
+    /// Mounts no player override directory and no mod entries around the source, only this project's own fallback
     /// layer: a race that must not depend on the player's files (the benchmark with its mods
     /// off, `docs/tools/in-game-benchmark.md`).
     pub no_overrides: bool,
+    /// A LAN or online race: the mods whose fallback entries serve only single-player races
+    /// (`[mod] network-races = false`) are not mounted ([`Self::layering`], ADR-0100).
+    pub network: bool,
     /// The ring the player's `graphics.boost_zoom` borrows, handed in by the composition
     /// root (the one place that may name HD's); `None` is off. Used only where
     /// `oag_title::RaceDefaults::borrows_zoom_ring`.

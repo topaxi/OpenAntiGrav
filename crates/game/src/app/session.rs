@@ -1031,6 +1031,10 @@ pub(crate) struct Shell {
     /// circuits are: the strings do not change while the game runs, and the
     /// string table is not kept past boot.
     pub(crate) modes: Vec<menu::Choice>,
+    /// The title's own mode data something other than a mod held at boot
+    /// ([`crate::boot::RaceSetup::mode_data_held`]): with the mods on now, what [`Self::modes`]
+    /// is recomputed from when a mod is switched ([`Self::adopt_rebuilt`]).
+    pub(crate) mode_data_held: Vec<String>,
     /// The `KILLS` row's values, off the disc's own `Eliminations` list.
     pub(crate) kill_targets: Vec<menu::Choice>,
     /// The `TARGET` row's values, off the disc's own `Eliminations` slider.
@@ -1177,7 +1181,8 @@ impl Shell {
             circuit_names: boot_shell.circuit_names.clone(),
             strings: boot_shell.strings.clone(),
             entries: boot_shell.entries.clone(),
-            modes: menu::mode_choices(&boot_shell.strings, title),
+            modes: menu::mode_choices(&boot_shell.strings, &boot_shell.race_setup.modes(title)),
+            mode_data_held: boot_shell.race_setup.mode_data_held.clone(),
             kill_targets: (boot_shell.race_setup.kill_targets.iter())
                 .map(menu::Choice::plain)
                 .collect(),
@@ -1267,6 +1272,24 @@ impl Shell {
             model_gate: boot_shell.model_gate.clone(),
             map: crate::boot::map_seed::MapSeed::of(boot_shell),
         }
+    }
+
+    /// Takes what a rebuild for the mods made: its tree, listing and campaigns, its mods'
+    /// fallback entries (registered for every later open) and the modes they now offer.
+    pub(crate) fn adopt_rebuilt(&mut self, rebuilt: mods_page::Rebuilt) {
+        let (definition, listing, installed, fallbacks) = rebuilt;
+        self.definition = definition;
+        self.mods = listing;
+        self.custom_campaigns = std::sync::Arc::new(installed);
+        // A mod's fallback entries can add a mode's data (ADR-0100): the MODE row follows.
+        oag_source::layers::register_mods(fallbacks);
+        let modes = crate::boot::offered_modes(self.title, &self.mode_data_held);
+        self.modes = menu::mode_choices(&self.strings, &modes);
+    }
+
+    /// Whether the MODE row offers `mode` ([`Self::modes`]).
+    pub(crate) fn offers_mode(&self, mode: oag_race::Mode) -> bool {
+        self.modes.iter().any(|choice| choice.value == mode.name())
     }
 
     /// The list the CIRCUIT row shows for `mode` - [`Self::zone_tracks`] under

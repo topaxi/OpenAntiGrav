@@ -101,28 +101,58 @@ pub fn mode_label(mode: oag_race::Mode, strings: &crate::language::StringTable) 
         .to_string()
 }
 
-/// Every race mode `title` offers as a row, labelled from `strings`.
+/// The race modes in `modes` as rows, labelled from `strings`: the MODE row's list, `modes`
+/// being what [`offered_modes`] answered for the title.
 #[must_use]
 pub fn mode_choices(
     strings: &crate::language::StringTable,
-    title: &oag_title::Title,
+    modes: &[oag_race::Mode],
 ) -> Vec<Choice> {
-    oag_race::Mode::ALL
+    modes
         .iter()
-        .filter(|mode| mode_offered(**mode, title))
         .map(|mode| Choice::labelled(mode.name(), mode_label(*mode, strings)))
         .collect()
 }
 
-/// Whether `title` offers `mode` at all: a mode that loads data of its own beside the
-/// circuit is offered only where the title names that data. Detonator is the one today
-/// (`oag_title::RaceDefaults::detonator`); every other mode is offered everywhere.
+/// The entries `mode` loads of its own beside the circuit on `title`, `Some` only for a mode
+/// that has such data, empty where the title names none. Detonator is the one today
+/// ([`oag_title::Title::detonator_data`]).
 #[must_use]
-pub fn mode_offered(mode: oag_race::Mode, title: &oag_title::Title) -> bool {
+pub fn mode_data(mode: oag_race::Mode, title: &oag_title::Title) -> Option<Vec<&'static str>> {
     match mode {
-        oag_race::Mode::Detonator => title.race.detonator.is_some(),
-        _ => true,
+        oag_race::Mode::Detonator => Some(title.detonator_data()),
+        _ => None,
     }
+}
+
+/// Whether `title` offers `mode` at all: a mode that loads data of its own beside the circuit
+/// ([`mode_data`]) is offered only where the title names that data and every entry of it
+/// resolves in the title's archives (`holds`, which counts an enabled mod's entries): on HD
+/// the disc holds Detonator's, on Pulse a mod does
+/// (`docs/architecture/adr/0100-a-mod-carries-fallback-entries.md`). Every other mode is
+/// offered everywhere.
+#[must_use]
+pub fn mode_offered(
+    mode: oag_race::Mode,
+    title: &oag_title::Title,
+    holds: &dyn Fn(&str) -> bool,
+) -> bool {
+    match mode_data(mode, title) {
+        None => true,
+        Some(entries) => !entries.is_empty() && entries.iter().all(|entry| holds(entry)),
+    }
+}
+
+/// Every race mode `title` offers ([`mode_offered`]), in [`oag_race::Mode::ALL`]'s order.
+#[must_use]
+pub fn offered_modes(
+    title: &oag_title::Title,
+    holds: &dyn Fn(&str) -> bool,
+) -> Vec<oag_race::Mode> {
+    oag_race::Mode::ALL
+        .into_iter()
+        .filter(|mode| mode_offered(*mode, title, holds))
+        .collect()
 }
 
 /// The `HUD Style` skins `title`'s disc lists, valued and shown by the disc's own entry strings.

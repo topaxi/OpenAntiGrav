@@ -223,3 +223,40 @@ fn a_tetrahedron_outlines_three_edges_from_every_direction() {
         assert_eq!(rings[0].len(), 3, "{direction:?}: {rings:?}");
     }
 }
+
+/// A tetrahedron's four triangles, split per face as an exporter writes them, weld into a closed
+/// hull: four vertices, every edge with the face across it, each plane facing out.
+#[test]
+fn triangles_weld_into_a_closed_hull_with_reciprocal_neighbours() {
+    let corners = [
+        [0.0, 0.0, 0.0],
+        [1.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0],
+        [0.0, 0.0, 1.0],
+    ];
+    let faces = [[0, 2, 1], [0, 1, 3], [0, 3, 2], [1, 2, 3]];
+    let positions: Vec<[f32; 3]> = faces.iter().flatten().map(|&i| corners[i]).collect();
+    let triangles: Vec<[u32; 3]> = (0..4).map(|f| [f * 3, f * 3 + 1, f * 3 + 2]).collect();
+    let hull = Occluder::from_triangles(&positions, &triangles).expect("a hull");
+    assert_eq!(hull.vertices.len(), 4);
+    assert_eq!(hull.faces.len(), 4);
+    for (f, face) in hull.faces.iter().enumerate() {
+        for edge in 0..3 {
+            let across = face.neighbour(edge).expect("closed") as usize;
+            let back = &hull.faces[across];
+            assert!((0..3).any(|e| back.neighbour(e) == Some(f as u16)));
+        }
+        let centre = face.indices().iter().fold([0.0f32; 3], |acc, &i| {
+            let v = hull.vertices[usize::from(i)];
+            [acc[0] + v[0], acc[1] + v[1], acc[2] + v[2]]
+        });
+        let out = [
+            centre[0] / 3.0 - 0.25,
+            centre[1] / 3.0 - 0.25,
+            centre[2] / 3.0 - 0.25,
+        ];
+        let facing = out[0] * face.normal[0] + out[1] * face.normal[1] + out[2] * face.normal[2];
+        assert!(facing > 0.0, "face {f} faces in");
+    }
+    assert_eq!(hull.bounds, ([0.0; 3], [1.0; 3]));
+}

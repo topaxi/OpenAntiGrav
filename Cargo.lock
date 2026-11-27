@@ -3665,6 +3665,7 @@ name = "oag-livery"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "log",
  "oag-assets",
  "oag-core",
  "oag-display",
@@ -3700,6 +3701,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bytemuck",
+ "gltf",
  "log",
  "oag-assets",
  "oag-bytes",
@@ -3716,7 +3718,9 @@ dependencies = [
  "oag-vex",
  "pollster",
  "serde",
+ "serde_json",
  "sha2 0.11.1",
+ "thiserror 2.0.21",
  "wgpu",
 ]
 

@@ -374,6 +374,7 @@ impl NetPlay {
             eliminator_kill_target: None,
             eliminator_score_target: None,
             zone_stage: None,
+            network: true,
             ..options
         })
     }

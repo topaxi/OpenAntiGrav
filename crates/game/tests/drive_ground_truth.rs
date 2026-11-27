@@ -19,6 +19,7 @@ use std::process::Output;
 
 use serde_json::Value;
 
+mod mod_fallback_switch;
 mod mod_list;
 mod tournament;
 

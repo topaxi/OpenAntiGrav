@@ -205,6 +205,62 @@ fn the_zone_hull_carries_its_own_nozzle_too() {
     }
 }
 
+/// **A Pulse Detonator race draws this project's own hull on every craft**
+/// (`oag_title::DetonatorCraft::own_hull`, `docs/formats/own-hull.md`): each livery's hull is
+/// the file's parts on the team's `Zone.vex`, not the disc's eight-mesh Zone hull.
+#[test]
+#[ignore = "needs a disc image"]
+fn a_pulse_detonator_race_flies_the_own_hull_on_every_craft() {
+    let (Some(image), Some(mod_root)) = (image(), with_pulse_detonator_mod()) else {
+        return;
+    };
+    let loaded = race::load(&race::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::Detonator,
+        opponent_teams: Vec::new(),
+        ..race::Options::default()
+    })
+    .expect("loading a Pulse Detonator race");
+    let file = oag_pulse::race::OWN_HULL.replace('\\', "/");
+    let bytes = std::fs::read(mod_root.join("fallback/wipeout-pulse").join(file))
+        .expect("the committed hull");
+    let own = oag_mesh::mesh::own_hull::parse(&bytes).expect("it parses");
+    let (_, triangles) = own.counts();
+    assert!(!loaded.liveries.is_empty());
+    for livery in &loaded.liveries {
+        assert_eq!(
+            livery.hull.mesh_count,
+            own.parts.len(),
+            "{}: the own hull's parts, not the disc's meshes",
+            livery.team
+        );
+        assert!(
+            livery.hull.indices.len() / 3 >= triangles,
+            "{}",
+            livery.team
+        );
+        assert!(
+            loaded
+                .report
+                .iter()
+                .any(|line| line.contains(&format!(r"\{}\Zone.vex: own hull drawn", livery.team))),
+            "{}: no own hull line in the load report",
+            livery.team
+        );
+    }
+    let shadows = loaded
+        .report
+        .iter()
+        .filter(|line| line.contains("the own hull's shadow occluder"))
+        .count();
+    assert_eq!(
+        shadows,
+        loaded.liveries.len(),
+        "every craft casts the own hull's shadow"
+    );
+}
+
 /// The player flies what the player picked, whatever the grid does around them.
 #[test]
 #[ignore = "needs a disc image"]
@@ -677,4 +733,13 @@ fn a_zone_race_flies_the_picked_team_in_its_own_paint() {
         "one shared Zone hull"
     );
     assert_ne!(paint_a, paint_b, "{first} and {last} wear their own paint");
+}
+
+/// Mounts the official mod `oag.detonator-pulse`, which carries Pulse's Detonator data (ADR-0100):
+/// `None` without the official-mods submodule, a failure under `OAG_REQUIRE_GAME_DATA=1`.
+fn with_pulse_detonator_mod() -> Option<std::path::PathBuf> {
+    let manifest = oag_testdata::exact("assets/mods/official/detonator-pulse/oag-mod.toml")?;
+    let root = manifest.parent()?.to_path_buf();
+    oag_source::layers::register_mod_folder(&root, "oag.detonator-pulse");
+    Some(root)
 }

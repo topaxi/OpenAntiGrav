@@ -14,12 +14,22 @@
 //! `Data\HUD\Foo.mip`. It is empty by default, never committed, and every entry
 //! it answers is named in the load report.
 //!
+//! # A mod's entries: `fallback/<title>/` of an enabled mod
+//!
+//! The composition root, which knows which mods are on, hands each enabled mod's
+//! `fallback/<title>/` folder over as a [`ModFallback`] ([`register_mods`]); every
+//! open that mounts the player's layers ([`Layering::player`]) puts the ones for
+//! its title between the DLC and the embedded fallback, so they too answer only
+//! a name no disc or DLC holds
+//! (`docs/architecture/adr/0100-a-mod-carries-fallback-entries.md`).
+//!
 //! # The fallback: this project's own art, embedded
 //!
 //! Carried in the binary from `assets/fallback/`, so a packaged build needs no
 //! directory beside it. It answers only a name no archive holds.
 
 use std::path::PathBuf;
+use std::sync::RwLock;
 
 use oag_assets::Archives;
 use oag_assets::layers::{Kind, Layer};
@@ -43,6 +53,129 @@ pub fn slug(title: &Title) -> String {
         }
     }
     out.trim_end_matches('-').to_string()
+}
+
+/// One enabled mod's entries for one title: its `fallback/<slug>/` folder as a
+/// [`Kind::Mod`] layer.
+#[derive(Debug, Clone)]
+pub struct ModFallback {
+    /// The title the entries are for, as [`slug`] spells it.
+    pub slug: String,
+    /// The entries, named by their path under `fallback/<slug>/`.
+    pub layer: Layer,
+    /// Whether a LAN or online race mounts them: the mod's `[mod] network-races`.
+    pub network: bool,
+}
+
+impl ModFallback {
+    /// Every `fallback/<slug>/` folder of the mod folder `root` that holds a file, one each,
+    /// labelled `label`: a mod read from a folder without its manifest consulted (a test that
+    /// mounts an official mod; the game reads the manifest first).
+    #[must_use]
+    pub fn in_folder(root: &std::path::Path, label: &str) -> Vec<Self> {
+        let Ok(read) = std::fs::read_dir(root.join("fallback")) else {
+            return Vec::new();
+        };
+        let mut dirs: Vec<PathBuf> = read
+            .filter_map(|e| e.ok().map(|e| e.path()))
+            .filter(|p| p.is_dir())
+            .collect();
+        dirs.sort();
+        dirs.into_iter()
+            .filter_map(|dir| {
+                let slug = dir.file_name()?.to_string_lossy().into_owned();
+                let layer = Layer::from_dir(Kind::Mod, &dir)?.labelled(label);
+                Some(Self {
+                    slug,
+                    layer,
+                    network: true,
+                })
+            })
+            .collect()
+    }
+}
+
+/// What an open mounts around a title's archives besides the embedded fallback.
+#[derive(Debug, Clone, Default)]
+pub struct Layering {
+    /// The directories the player's override is looked for in.
+    pub overrides: Vec<PathBuf>,
+    /// The enabled mods' entries, every title's; an open keeps its own title's.
+    pub mods: Vec<ModFallback>,
+}
+
+impl Layering {
+    /// These layers for a LAN or online race: without the mods whose entries serve only
+    /// single-player races ([`ModFallback::network`]).
+    #[must_use]
+    pub fn for_network(mut self) -> Self {
+        self.mods.retain(|m| m.network);
+        self
+    }
+}
+
+impl Layering {
+    /// The player's layers: the override search path and the mods [`register_mods`]
+    /// last registered.
+    #[must_use]
+    pub fn player() -> Self {
+        Self {
+            overrides: overrides_search_path(),
+            mods: registered_mods(),
+        }
+    }
+
+    /// None of the player's layers, the embedded fallback alone: a benchmark that runs
+    /// without the player's files.
+    #[must_use]
+    pub fn none() -> Self {
+        Self::default()
+    }
+
+    /// The mod layers for `title`, in registration order.
+    #[must_use]
+    pub fn mods_for(&self, title: &Title) -> Vec<Layer> {
+        let slug = slug(title);
+        self.mods
+            .iter()
+            .filter(|m| m.slug == slug)
+            .map(|m| m.layer.clone())
+            .collect()
+    }
+}
+
+static MODS: RwLock<Vec<ModFallback>> = RwLock::new(Vec::new());
+
+/// Replaces the enabled mods' entries every later [`Layering::player`] mounts. Set by the
+/// composition root at start and whenever a mod is switched on or off; nothing else writes it.
+pub fn register_mods(mods: Vec<ModFallback>) {
+    *MODS
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = mods;
+}
+
+/// Registers the mod folder `root`'s entries ([`ModFallback::in_folder`]) as the only enabled
+/// mod: a test that races a mode whose data a mod carries.
+pub fn register_mod_folder(root: &std::path::Path, label: &str) {
+    register_mods(ModFallback::in_folder(root, label));
+}
+
+/// What [`register_mods`] last registered.
+#[must_use]
+pub fn registered_mods() -> Vec<ModFallback> {
+    MODS.read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .clone()
+}
+
+/// Whether a mod [`register_mods`] last registered for `title` holds `name`.
+#[must_use]
+pub fn registered_mods_hold(title: &Title, name: &str) -> bool {
+    let slug = slug(title);
+    MODS.read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .iter()
+        .any(|m| m.slug == slug && m.layer.contains(name))
 }
 
 /// Where override directories are looked for when nothing names one.
@@ -152,12 +285,6 @@ const EMBEDDED: &[(&str, &[u8])] = embedded![
     "Data/XML/BenchmarkPresets_Omega.toml",
     "Data/XML/BenchmarkPresets_Pulse.toml",
     "Data/XML/BenchmarkPresets_Pure.toml",
-    "Data/XML/DetonatorLayouts_Pulse/DetonatorScoring.xml",
-    "Data/XML/DetonatorLayouts_Pulse/Detonator_HUD.xml",
-    "Data/XML/DetonatorLayouts_Pulse/Detonator_HUD_PS2.xml",
-    "Data/XML/DetonatorLayouts_Pulse/GamePlayValues.xml",
-    "Data/XML/DetonatorLayouts_Pulse/PatternFile.xml",
-    "Data/XML/DetonatorLayouts_Pulse/WeaponStats_Detonator.xml",
     "Data/XML/HUD_assist_indicator.xml",
     "Data/XML/LoadingScreen_2048.toml",
     "Data/XML/LoadingScreen_HD.toml",
@@ -186,20 +313,22 @@ pub fn fallback_layer() -> Layer {
     layer
 }
 
-/// `archives` with both layers mounted, the override from `bases`.
+/// `archives` with the layers `layering` names and the embedded fallback mounted.
 #[must_use]
-pub fn mount_in(archives: Archives, title: &Title, bases: &[PathBuf]) -> Archives {
-    let archives = archives.with_fallback(fallback_layer());
-    match override_layer_in(bases, title) {
+pub fn mount_in(archives: Archives, title: &Title, layering: &Layering) -> Archives {
+    let archives = archives
+        .with_mods(layering.mods_for(title))
+        .with_fallback(fallback_layer());
+    match override_layer_in(&layering.overrides, title) {
         Some(layer) => archives.with_override(layer),
         None => archives,
     }
 }
 
-/// [`mount_in`] over [`overrides_search_path`].
+/// [`mount_in`] over [`Layering::player`].
 #[must_use]
 pub fn mount(archives: Archives, title: &Title) -> Archives {
-    mount_in(archives, title, &overrides_search_path())
+    mount_in(archives, title, &Layering::player())
 }
 
 #[cfg(test)]

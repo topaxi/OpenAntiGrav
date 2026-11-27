@@ -81,6 +81,13 @@ optional = true
 type = "boolean"
 optional = true
 
+# Whether the mod's fallback entries (fallback/<title>/) are mounted in a LAN or online race
+# and count in the network fingerprint. Absent: true. false for entries that serve only
+# single-player races (docs/tools/mods.md, "Fallback entries").
+[types.mod.network-races]
+type = "boolean"
+optional = true
+
 [elements]
 
 [elements.toml-schema]

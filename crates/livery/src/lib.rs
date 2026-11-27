@@ -58,6 +58,7 @@ pub mod engine_light;
 pub mod entry;
 mod flare;
 mod locator_pair;
+pub mod own_hull;
 pub mod own_shield;
 pub use flare::{Scale, Spike};
 mod shield;
@@ -743,6 +744,9 @@ fn one(
     if let Some(skin) = skin {
         ship_skin::apply(archives, skin, &hull_name, &mut hull, report);
     }
+    // Before every model built off the hull below (its shield, overlays and shine pass).
+    let own = own_hull::for_host(archives, ships, ctx.mode, &hull_name, &blob)
+        .filter(|own| own_hull::apply(own, &mut hull, &blob, report));
     report.push(format!(
         "{hull_name}: {} triangle(s), model centre {:?}, radius {:.2}",
         hull.indices.len() / 3,
@@ -750,7 +754,29 @@ fn one(
         hull.radius
     ));
 
-    let (nozzle, nozzle_axis, collision_fx) = locators(archives, &hull_name, &blob, report);
+    let (mut nozzle, mut nozzle_axis, mut collision_fx) =
+        locators(archives, &hull_name, &blob, report);
+    // `Ship Muzzle` and `cannon_flash` stay the model's: the simulation reads them off the
+    // `.vex` (`oag_raceplay::load::muzzle`), and the drawn weapon must leave where it does.
+    if let Some(own) = &own {
+        let anchors = own_hull::anchors(own);
+        if let Some((at, axis)) = anchors.flare {
+            (nozzle, nozzle_axis) = (Some(at), Some(axis));
+        }
+        if !anchors.collision_fx.is_empty() {
+            collision_fx = anchors.collision_fx;
+        }
+        report.push(format!(
+            "{hull_name}: own hull anchors - engine_flare {}, {} collision fx \
+             (the model's own where the file places none)",
+            if anchors.flare.is_some() {
+                "placed"
+            } else {
+                "the model's"
+            },
+            collision_fx.len()
+        ));
+    }
     let engine_light = engine_light::load(
         archives,
         team,

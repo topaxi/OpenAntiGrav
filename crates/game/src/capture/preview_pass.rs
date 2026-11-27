@@ -24,7 +24,7 @@ pub(super) struct PreviewRequest {
     pub livery: Option<crate::preview::variant::Folders>,
     /// The race hull a front-end hull's flaps are seated from - see
     /// [`crate::preview::race_hull_entry`].
-    pub race_hull: Option<String>,
+    pub race_hull: Option<crate::preview::RaceHull>,
     /// Where it goes, in the screen's grid - [`oag_ui_screens::picker::Layout::preview`].
     pub rect: [f32; 4],
     pub kind: oag_ui_screens::picker::Kind,
@@ -122,7 +122,7 @@ pub(super) fn draw_preview(
                 &mut archives,
                 &request.entry,
                 request.fallback.as_deref(),
-                request.race_hull.as_deref(),
+                request.race_hull.as_ref(),
                 request
                     .livery
                     .as_ref()

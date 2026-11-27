@@ -35,6 +35,19 @@ impl PendingRace {
             },
         }
     }
+
+    /// The stored race mode the RACE page's `settings` name, as a selection screen previews it:
+    /// a mode the title does not offer (`offered`; a `detonator` on a Pulse whose Detonator data
+    /// no mod that is on carries, ADR-0100) is the default mode, as its launch races it.
+    #[must_use]
+    pub fn stored_mode(
+        settings: &settings::Race,
+        offered: impl Fn(oag_race::Mode) -> bool,
+    ) -> oag_race::Mode {
+        oag_race::Mode::from_name(&settings.mode)
+            .filter(|mode| offered(*mode))
+            .unwrap_or_default()
+    }
 }
 
 #[cfg(test)]

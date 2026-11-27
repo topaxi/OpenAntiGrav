@@ -98,3 +98,65 @@ fn the_embedded_table_is_sorted_with_no_path_twice() {
         assert!(layer.contains(name), "{name} is not in the fallback layer");
     }
 }
+
+/// A mod's `fallback/<slug>/` folders are one layer per title, and an open keeps only its own
+/// title's, so a mod's Pulse entries never answer on Pure.
+#[test]
+fn a_mod_folder_is_one_layer_per_title_and_an_open_keeps_its_own() {
+    let root = oag_testdata::scratch::dir("mod-fallback-layers");
+    for (slug, file) in [
+        ("wipeout-pulse", "Data/XML/Ours.xml"),
+        ("wipeout-pure", "Data/XML/Other.xml"),
+    ] {
+        let path = root.join("fallback").join(slug).join(file);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, b"x").unwrap();
+    }
+    std::fs::create_dir_all(root.join("fallback/wipeout-hd")).unwrap();
+    let mods = ModFallback::in_folder(&root, "test.mod");
+    assert_eq!(
+        mods.iter().map(|m| m.slug.as_str()).collect::<Vec<_>>(),
+        ["wipeout-pulse", "wipeout-pure"],
+        "an empty folder is no layer"
+    );
+    let layering = Layering {
+        overrides: Vec::new(),
+        mods,
+    };
+    let pulse = layering.mods_for(TITLE);
+    assert_eq!(pulse.len(), 1);
+    assert!(pulse[0].contains("Data\\XML\\Ours.xml") && !pulse[0].contains("Data\\XML\\Other.xml"));
+    assert_eq!(pulse[0].kind(), Kind::Mod);
+    assert_eq!(pulse[0].label(), "test.mod");
+    assert!(layering.mods_for(oag_hd::TITLE).is_empty());
+    assert!(Layering::none().mods_for(TITLE).is_empty());
+    // A mod whose entries serve only single-player races is not mounted in a network race.
+    let mut single = layering.clone();
+    single.mods.iter_mut().for_each(|m| m.network = false);
+    assert!(single.clone().for_network().mods_for(TITLE).is_empty());
+    assert_eq!(
+        single.mods_for(TITLE).len(),
+        1,
+        "a single-player race mounts it"
+    );
+    assert_eq!(layering.for_network().mods_for(TITLE).len(), 1);
+    std::fs::remove_dir_all(&root).unwrap();
+}
+
+/// What [`register_mods`] registers is what [`Layering::player`] mounts and what
+/// [`registered_mods_hold`] answers, until it is replaced.
+#[test]
+fn the_registered_mods_are_the_players_until_replaced() {
+    let mut layer = Layer::new(Kind::Mod, "test.mod");
+    layer.insert_bytes("Data\\XML\\Ours.xml", b"x");
+    register_mods(vec![ModFallback {
+        slug: slug(TITLE),
+        layer,
+        network: true,
+    }]);
+    assert_eq!(Layering::player().mods_for(TITLE).len(), 1);
+    assert!(registered_mods_hold(TITLE, "data/xml/ours.xml"));
+    assert!(!registered_mods_hold(oag_pure::TITLE, "data/xml/ours.xml"));
+    register_mods(Vec::new());
+    assert!(!registered_mods_hold(TITLE, "data/xml/ours.xml"));
+}

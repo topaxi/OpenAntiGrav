@@ -14,7 +14,16 @@ use oag_source::title::{Opened, open_source_in};
 use std::path::{Path, PathBuf};
 
 fn open(source: &str, overrides: &[PathBuf]) -> Opened {
-    open_source_in(source, Vec::new(), Vec::new(), overrides).expect("the source opens")
+    open_source_in(
+        source,
+        Vec::new(),
+        Vec::new(),
+        &oag_source::layers::Layering {
+            overrides: overrides.to_vec(),
+            mods: Vec::new(),
+        },
+    )
+    .expect("the source opens")
 }
 
 fn circuit(opened: &mut Opened, track: &str) -> (Inputs, Vec<String>) {

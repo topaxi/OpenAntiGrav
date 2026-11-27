@@ -418,6 +418,64 @@ made. The add-on's importer is the way in. (The glb is also written by this add-
 not through Blender's glTF exporter, which re-splits vertices and cannot emit the `u8`/`MAT4`
 accessors the format needs.)
 
+## A craft hull
+
+`scripts/blender/oag_hull.py` writes and reads a craft hull of this project's own
+([own-hull.md](../formats/own-hull.md)). It has no add-on panel; call it from the Python
+console, or run it headless:
+
+```python
+import sys; sys.path.insert(0, "<repo>/scripts/blender")
+import oag_hull
+oag_hull.export_hull(bpy.context.selected_objects, "<path>/hull.glb")
+oag_hull.import_hull("<path>/hull.glb")
+```
+
+```sh
+blender -b --factory-startup --python-exit-code 1 --python scripts/blender/oag_hull.py -- export <scene.blend> <out.glb>
+blender -b --factory-startup --python-exit-code 1 --python scripts/blender/oag_hull.py -- reexport <in.glb> <out.glb>
+blender -b --factory-startup --python-exit-code 1 --python scripts/blender/oag_hull.py -- placeholder <out.glb>
+```
+
+The scene:
+
+- **One mesh object per part**, named as the host mesh node (`shipShape`,
+  `AirBrake_LeftShape`).
+- **Material slots** named as the host texture's file name (`texture1.tga`).
+- **An object named `shadowShape`** is the shadow occluder: a closed, low-poly shell.
+- **Empties** named `engine_flare` or `ship_collision_fx<n>` move those anchors. Blender's
+  `.NNN` suffixes are stripped.
+- **The object's origin is the part's pivot.** On an airbrake it is the hinge, and the flap
+  swings about the object's local X.
+- **Axes are glTF's:** Blender `(x, y, z)` is engine `(x, z, -y)`. The nose points Blender
+  `-Y`, up is `+Z`, the craft's left is `+X`, and 1 unit is 1 engine unit.
+- **UV** `v` is flipped.
+- **Vertex colour** comes from the active colour attribute as sRGB bytes, and is left out when
+  the mesh has none (the host's own tint then applies).
+- **Normals** are the corner normals, so sharp edges survive.
+
+Vertices are split per corner only where position, normal, UV or colour differ (normals within
+1e-3 rad are one). The glb is written by the script itself with the track add-on's buffer writer
+(`oag_track.trackfile`), never through Blender's glTF exporter, which re-splits vertices. The same
+scene writes the same bytes, and `reexport` of a written file reproduces it byte for byte.
+Blender's stock glTF importer opens a hull glb too, as a look at it, but it does not keep the
+file's normals and UVs for a byte-identical export.
+
+### The Pulse Detonator hulls
+
+The two hulls of the official mod `oag.detonator-pulse`
+(`assets/mods/official/detonator-pulse/fallback/wipeout-pulse/Data/Ships/Detonator_Pulse/`)
+are edited in Blender: `oag_hull.import_hull(<file>)` into a scene, edit the parts, then
+`oag_hull.export_hull(objects, <file>)`, with the material slots named as the host's textures.
+An imported hull keeps the file's normals and texture coordinates in the corner attributes
+`oag_normal` and `oag_uv`, so untouched corners write back the same bytes; `just
+blender-fixtures` checks that both files survive an import and export byte for byte.
+
+To model against a disc hull, write it out as OBJ with its textures and node tree:
+`cargo run -p oag-mesh --example export_obj -- <image>:<archive> <entry.vex> <out-dir>`
+(`--locators`, `--swap` in the example's own docs). The output is disc content: keep it under
+`data/` and never commit it.
+
 ## Race it
 
 `oag-game --track-file name.track.toml` works in every build, and so does RACE REMIX's CUSTOM title (the files in

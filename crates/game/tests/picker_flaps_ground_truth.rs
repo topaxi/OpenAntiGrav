@@ -89,11 +89,12 @@ fn check(image: &str) {
                 None,
             )
             .unwrap_or_else(|e| panic!("{entry}: {e:#}"));
-            let race_blob = archives.read_name(&race_hull).expect(&race_hull);
-            let race = mesh::build(&race_hull, &race_blob).expect(&race_hull);
+            let race_entry = &race_hull.entry;
+            let race_blob = archives.read_name(race_entry).expect(race_entry);
+            let race = mesh::build(race_entry, &race_blob).expect(race_entry);
             assert!(
                 race.airbrakes.iter().all(Option::is_some),
-                "{race_hull}: the race hull's two flaps are found (PS2's Triakis names them \
+                "{race_entry}: the race hull's two flaps are found (PS2's Triakis names them \
                  `andy_ship:AirBrake_left`)"
             );
             assert!(
@@ -104,7 +105,7 @@ fn check(image: &str) {
             assert!(points > 0, "{entry}: no flap vertices");
             if worst >= TOLERANCE {
                 bad.push(format!(
-                    "{} {mode:?}: a flap vertex of {entry} is {worst} from the race hull's {race_hull}",
+                    "{} {mode:?}: a flap vertex of {entry} is {worst} from the race hull's {race_entry}",
                     team.id
                 ));
             }

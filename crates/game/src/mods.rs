@@ -120,6 +120,8 @@ pub mod words {
     pub const NOTHING: (&str, &str) = ("OAG_MODS_NOTHING", "NOTHING");
     /// What a texture pack that is on adds.
     pub const TEXTURE_PACK: (&str, &str) = ("OAG_MODS_TEXTURE_PACK", "TEXTURES");
+    /// What a mod with fallback entries for the title adds beside its rows.
+    pub const GAME_FILES: (&str, &str) = ("OAG_MODS_GAME_FILES", "GAME FILES");
     /// The ADDS line of a mod the player turned off: it adds nothing while off.
     pub const TURNED_OFF: (&str, &str) = ("OAG_MODS_TURNED_OFF", "NOTHING, TURNED OFF");
     /// The footer's Square prompt on a row of the list.
@@ -578,17 +580,126 @@ fn game_version() -> semver::Version {
         .unwrap_or_else(|_| semver::Version::new(0, 0, 0))
 }
 
-/// Whether a race with `m` on differs from one without: it carries a simulation module, a
-/// `tracks/*.track.toml` or a `campaigns/*.toml`.
+/// The folder a mod's fallback entries sit in, one sub-folder per title slug (ADR-0100).
+pub const FALLBACK_DIR: &str = "fallback";
+
+/// Whether a network race with `m` on differs from one without: it carries a simulation module,
+/// a `tracks/*.track.toml`, a `campaigns/*.toml` or fallback entries (`fallback/<title>/`, which
+/// can hold a race's own tables) that a network race mounts (`[mod] network-races`, ADR-0100).
 fn changes_a_race(m: &oag_mod::Mod) -> bool {
-    m.manifest.extension.as_ref().is_some_and(|e| e.simulation)
+    (m.manifest.network_races && has_fallback_entries(m))
+        || m.manifest.extension.as_ref().is_some_and(|e| e.simulation)
         || m.files_under("tracks", "toml")
             .iter()
             .any(|name| name.ends_with(".track.toml"))
         || !m.files_under("campaigns", "toml").is_empty()
 }
 
+fn has_fallback_entries(m: &oag_mod::Mod) -> bool {
+    let folder = format!("{FALLBACK_DIR}/");
+    m.names().iter().any(|name| name.starts_with(&folder))
+}
+
+fn has_fallback_for(m: &oag_mod::Mod, slug: &str) -> bool {
+    let folder = format!("{FALLBACK_DIR}/{slug}/");
+    m.is_for(slug) && m.names().iter().any(|name| name.starts_with(&folder))
+}
+
+/// `m`'s fallback entries for each title its `titles` admit, one [`oag_source::layers::ModFallback`]
+/// per `fallback/<slug>/` folder that holds a file. A folder mod's entries are its files; a `.zip`
+/// or `.oagmod` is opened again and read in place, entry by entry, when a load asks for one.
+fn fallbacks_of(m: &oag_mod::Mod) -> Vec<oag_source::layers::ModFallback> {
+    use oag_assets::layers::{Kind, Layer};
+    let folder = format!("{FALLBACK_DIR}/");
+    let mut by_slug: std::collections::BTreeMap<String, Vec<String>> = Default::default();
+    for name in m.names() {
+        let Some(rest) = name.strip_prefix(&folder) else {
+            continue;
+        };
+        if let Some((slug, path)) = rest.split_once('/')
+            && !path.is_empty()
+            && m.is_for(slug)
+        {
+            by_slug
+                .entry(slug.to_string())
+                .or_default()
+                .push(name.clone());
+        }
+    }
+    let label = format!("{} ({})", m.manifest.id, m.label());
+    let reopened = std::sync::OnceLock::<Option<std::sync::Arc<oag_mod::Mod>>>::new();
+    by_slug
+        .into_iter()
+        .filter_map(|(slug, names)| {
+            let root = format!("{folder}{slug}");
+            let layer = match m.local_path(&root) {
+                Some(dir) => Layer::from_dir(Kind::Mod, &dir)?,
+                None => {
+                    let opened = reopened
+                        .get_or_init(|| {
+                            match oag_mod::Mod::open(std::path::Path::new(&m.label())) {
+                                Ok(opened) => Some(std::sync::Arc::new(opened)),
+                                Err(why) => {
+                                    log::warn!(
+                                        "mod {}: its fallback entries will not open: {why}",
+                                        m.label()
+                                    );
+                                    None
+                                }
+                            }
+                        })
+                        .clone()?;
+                    let mut layer = Layer::new(Kind::Mod, label.clone());
+                    for name in names {
+                        let inner = name[root.len() + 1..].to_string();
+                        let opened = std::sync::Arc::clone(&opened);
+                        layer.insert_reader(
+                            &inner,
+                            std::sync::Arc::new(move || {
+                                opened
+                                    .read(&name)
+                                    .map_err(std::io::Error::other)?
+                                    .ok_or_else(|| {
+                                        std::io::Error::from(std::io::ErrorKind::NotFound)
+                                    })
+                            }),
+                        );
+                    }
+                    layer
+                }
+            };
+            Some(oag_source::layers::ModFallback {
+                slug,
+                layer: layer.labelled(label.clone()),
+                network: m.manifest.network_races,
+            })
+        })
+        .collect()
+}
+
 impl Mods {
+    /// The fallback entries of every mod that is on (ADR-0100), each title's in the mods'
+    /// search order: what [`Self::register_fallbacks`] hands the archive opens.
+    #[must_use]
+    pub fn fallbacks(&self) -> Vec<oag_source::layers::ModFallback> {
+        self.player().flat_map(fallbacks_of).collect()
+    }
+
+    /// Registers [`Self::fallbacks`] for every later open of a title's archives
+    /// ([`oag_source::layers::register_mods`]): called at start and whenever a mod is switched.
+    pub fn register_fallbacks(&self) {
+        let fallbacks = self.fallbacks();
+        for fallback in &fallbacks {
+            log::debug!(
+                "mod fallback for {}: {} entries from {}",
+                fallback.slug,
+                fallback.layer.len(),
+                fallback.layer.label()
+            );
+        }
+        oag_source::layers::register_mods(fallbacks);
+    }
+
     /// The extras and whatever lies on the default search path, with the mods the player's
     /// switches (`settings::Mods`) turn off turned off.
     ///
@@ -985,6 +1096,15 @@ impl Mods {
                     .and_then(|page| page.split_once('/'))
                 {
                     rows.push(short.to_string());
+                }
+                // So are asset files of this title (`fallback/<title>/`), which add no row.
+                if enabled
+                    && target.is_some_and(|target| {
+                        has_fallback_for(module, &oag_source::layers::slug(target.title))
+                    })
+                {
+                    let (id, english) = words::GAME_FILES;
+                    rows.push(table.get_or_fallback(id, english).to_string());
                 }
                 Listing::loaded(
                     module,
