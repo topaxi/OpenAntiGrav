@@ -419,6 +419,13 @@ OAG_FFMPEG_NO = { text = "NEIN DANKE", human = false }
 OAG_FFMPEG_DOWNLOADING = { text = "FFMPEG WIRD HERUNTERGELADEN %s - ZURÜCK BRICHT AB", human = false }
 OAG_FFMPEG_UNPACKING = { text = "FFMPEG WIRD ENTPACKT...", human = false }
 
+# The title chooser's cards (`crates/game/src/launcher/cards.rs`).
+OAG_LAUNCHER_CHOOSE = { text = "SPIEL WÄHLEN", human = false }
+OAG_LAUNCHER_MOVE = { text = "PFEILE WÄHLEN", human = false }
+OAG_LAUNCHER_START = { text = "ENTER ODER X STARTEN", human = false }
+OAG_LAUNCHER_PICTURE = { text = "C ODER QUADRAT NÄCHSTES BILD", human = false }
+OAG_LAUNCHER_QUIT = { text = "ESC BEENDEN", human = false }
+
 [untranslated]
 ids = [
     # The REPLAYS page's EXPORT row on a phone; no translation pass yet.

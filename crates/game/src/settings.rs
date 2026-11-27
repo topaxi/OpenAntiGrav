@@ -69,6 +69,7 @@ use oag_mesh::mesh_render::Anisotropy;
 
 mod controls;
 pub mod ffmpeg;
+pub mod launcher;
 mod music_profile;
 mod online;
 pub mod platform;
@@ -139,6 +140,9 @@ pub struct Settings {
     pub source: Source,
     #[serde(default)]
     pub race: Race,
+    /// How the title chooser looks (`crate::launcher`).
+    #[serde(default)]
+    pub launcher: launcher::Launcher,
     /// The online lobby last connected to (`session::online`).
     #[serde(default)]
     pub online: Online,

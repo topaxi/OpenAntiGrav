@@ -64,11 +64,9 @@ impl Stage {
             &oag_hud::sprite::Sheet::default(),
         )
         .context("building the disc chooser")?;
-        Ok(Self::Launcher(Box::new(LauncherStage {
-            renderer,
-            launcher,
-            picked: None,
-        })))
+        Ok(Self::Launcher(Box::new(LauncherStage::new(
+            renderer, launcher,
+        ))))
     }
 
     /// The loading screen, holding the half-boot it will hand the window to.

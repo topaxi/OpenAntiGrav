@@ -27,9 +27,15 @@ pub(crate) struct BootArgs {
     /// "no disc image found" error rather than an empty screen.
     ///
     /// Needs a window: `--race`, `--dry-run` and `--screenshot` all name their
-    /// own source and are refused.
+    /// own source and are refused. `--drive` can walk it, with no window.
     #[arg(long)]
     pub(crate) launcher: bool,
+
+    /// Show the chooser as a list of every disc image (platform, serial, file
+    /// name) instead of one card per title, for this run. `[launcher] style =
+    /// "list"` in settings.toml does the same for every run.
+    #[arg(long)]
+    pub(crate) launcher_list: bool,
 
     /// Which movie to play: an archive entry name, or `hash:XXXXXXXX` for one of
     /// the reels whose name is not recovered.

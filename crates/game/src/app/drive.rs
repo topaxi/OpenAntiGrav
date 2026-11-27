@@ -29,6 +29,7 @@ const DRAG_STEPS: u32 = 8;
 
 use crate::app::gpu::Gpu;
 use crate::app::handler::App;
+use crate::app::launcher_stage::LauncherStage;
 use crate::app::menu_stage::MenuStage;
 use crate::app::session::Session;
 use crate::app::stage::Stage;
@@ -49,15 +50,24 @@ const WAIT_FRAME: Duration = Duration::from_micros(16_667);
 
 /// Runs `script` against a headless session.
 ///
+/// `scripted_launcher` is `--launcher`: without it a chooser is an error, since
+/// a script that expects a title's own screens would walk the chooser instead.
+///
 /// # Errors
 ///
 /// The device or session will not open, a step times out, or a row a step names is not there.
 /// The message carries the step, its line and the last state reported.
 #[inline(never)]
-pub(crate) fn run(app: &mut App, script: Script, state_log: Option<&Path>) -> Result<()> {
-    if app.launcher.is_some() {
+pub(crate) fn run(
+    app: &mut App,
+    script: Script,
+    scripted_launcher: bool,
+    state_log: Option<&Path>,
+) -> Result<()> {
+    if app.launcher.is_some() && !scripted_launcher {
         bail!(
-            "--drive: no disc image was chosen and the search path holds several; pass --source <image>"
+            "--drive: no disc image was chosen and the search path holds several; pass --source <image>, \
+             or --launcher to script the chooser"
         );
     }
     let size = app.settings.display.window_size;
@@ -563,6 +573,17 @@ fn state_of(session: &mut Session) -> State {
                 .selected_event()
                 .map(|event| event.name.clone());
         }
+        Stage::Launcher(stage) => {
+            state.page = Some(
+                if stage.launcher.is_cards() {
+                    "launcher-cards"
+                } else {
+                    "launcher-list"
+                }
+                .to_string(),
+            );
+            state.screen = Some(chooser_screen(stage));
+        }
         Stage::Menu(stage) => {
             state.page = Some(stage.menu.page().id.clone());
             let tree = stage.menu.definition();
@@ -683,6 +704,63 @@ fn resolved(session: &Session) -> Option<Resolved> {
 }
 
 /// The screen that has the tick: an overlay if one is open, else the menu page.
+/// The chooser as a screen: its cards or rows, the focused one labelled by what
+/// it shows, `busy` while the cards' art is still being read.
+fn chooser_screen(stage: &LauncherStage) -> Screen {
+    let launcher = &stage.launcher;
+    let row = |index: usize, id: String, label: String| Row {
+        index,
+        id: Some(id),
+        label,
+        action: None,
+        kind: "entry",
+        setting: None,
+        value: None,
+        values: Vec::new(),
+        enabled: true,
+    };
+    let (rows, at): (Vec<Row>, usize) = if launcher.is_cards() {
+        let list = launcher.card_list();
+        let rows = list
+            .iter()
+            .enumerate()
+            .map(|(index, card)| {
+                let shown = &card.variants[launcher.shown_variant(card)];
+                let source = &launcher.rows()[shown.row];
+                let label = format!(
+                    "{}:{}",
+                    source.name,
+                    shown.picture.as_deref().unwrap_or("none")
+                );
+                row(index, card.key.clone(), label)
+            })
+            .collect();
+        (rows, launcher.focused_card())
+    } else {
+        let rows = launcher
+            .rows()
+            .iter()
+            .enumerate()
+            .map(|(index, source)| row(index, source.name.clone(), source.title().to_string()))
+            .collect();
+        (rows, launcher.cursor())
+    };
+    let focus = rows.get(at).map(|focused| Focus {
+        index: focused.index,
+        id: focused.id.clone(),
+        label: focused.label.clone(),
+        setting: None,
+    });
+    Screen {
+        kind: "launcher".to_string(),
+        id: "launcher".to_string(),
+        focus,
+        rows,
+        busy: stage.reading_art(),
+        ..Screen::default()
+    }
+}
+
 fn screen(stage: &MenuStage) -> Screen {
     let overlay = |kind: &str| Screen {
         kind: kind.to_string(),
