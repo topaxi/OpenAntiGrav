@@ -523,7 +523,8 @@ the glows are right; it is about 40 lines in `oag_raceplay::detonator` behind a 
 region").** 10.53 = mines 3.11 (audio-driven), floor 2.58, right wall 1.01, upper-right screen 0.94, HUD 0.70, far scenery 0.66, hull 0.58,
 ribbon 0.30, shot-specific rest under 0.2 each. ~~Next, ready to wire: the visualiser strip's sRGB decode~~ wired on HD (2026-11-27, `det-vis-srgb`; `zone-vis-gamma.md`,
 "Wired"): `cannon-volley` **9.11**, all four race pairs fall. **Next:** read the upper-right screen's grey smear
-(also on `mines-ahead`) and the right wall's missing window lights. The ribbon is
+(also on `mines-ahead`). ~~The right wall's missing window lights~~ wired (2026-11-27, `det-volley-wall`; `hd-zone-recolour.md`, "Window lights
+on a plain chunk"): the lights draw, the wall row stays at 1.03 (registration); Omega's `tunnel_fx_noAlpha` is checked, applies, not wired. The ribbon is
 0.31 of it. **Open:** (1) the floor is now darker than the original's on three of four pairs (second factor, `zone-vis-gamma.md`,
 "Still unread"); (2) Omega: its `zoneTexVis` is an sRGB texture too, ours draws its strip raw (`oag_omega` has no `ZoneFrame`);
 (3) 2048's HD-lineage circuits author the EQ tints through HD's tables and ours draws the strip raw: read whether their
