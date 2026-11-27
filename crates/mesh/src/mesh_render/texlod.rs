@@ -23,7 +23,7 @@ pub const PSP_TEXLOD_BIAS: f32 = 1.0;
 pub const PSP_TEXLOD_FRAME: f32 = -0.679_944;
 
 /// The vertical projection scale (`m11`) [`PSP_TEXLOD_FRAME`] was taken at.
-pub const PSP_TEXLOD_M11: f32 = 1.732_050_8;
+const PSP_TEXLOD_M11: f32 = 1.732_050_8;
 
 /// What [`crate::mesh_render::Fog::texlod_frame`] holds for a camera whose
 /// projection has this `m11`: the change in the game's `K` from the camera
@@ -48,13 +48,25 @@ pub fn texlod_vertex_code(lod: Option<TextureLod>, drawn_width: u32) -> f32 {
     let Some(lod) = lod else {
         return 0.0;
     };
-    let Some(term) = lod.bias_term() else {
+    let Some(term) = bias_term(lod.density) else {
         return -1.0;
     };
     let scale = (drawn_width / u32::from(lod.width).max(1)).max(1);
     #[allow(clippy::cast_precision_loss)]
     let levels = scale.ilog2() as f32;
     TEXLOD_CODE_OFFSET + (term + levels).clamp(-32.0, 32.0)
+}
+
+/// A texture's own share of the GE bias, `log2(sqrt(density))` levels. `None` where
+/// the game emits a bias of exactly 0 whatever the camera: a density of 0 or of
+/// the one NaN bit pattern `0xffc00000`. Any other value with no logarithm
+/// saturates the clamp at the top.
+fn bias_term(density: f32) -> Option<f32> {
+    if density == 0.0 || density.to_bits() == 0xFFC0_0000 {
+        return None;
+    }
+    let term = 0.5 * density.log2();
+    Some(if term.is_nan() { f32::INFINITY } else { term })
 }
 
 /// Added to a texture's bias term in [`texlod_vertex_code`], so that no term

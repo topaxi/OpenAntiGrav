@@ -31,9 +31,8 @@
 use std::sync::Arc;
 
 use oag_mesh::mesh::{Bounds, DrawCall, GpuVertex, Model, ModelTexture, Texels, slots};
-use oag_mesh::mesh_render::{
-    self, Anisotropy, PSP_TEXLOD_FRAME, Scene, TEXLOD_CODE_OFFSET, TextureDetail, UNIFORMS_SIZE,
-};
+use oag_mesh::mesh_render::texlod::{PSP_TEXLOD_FRAME, TEXLOD_CODE_OFFSET};
+use oag_mesh::mesh_render::{self, Anisotropy, Scene, TextureDetail, UNIFORMS_SIZE};
 
 const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 const SIZE: u32 = 64;

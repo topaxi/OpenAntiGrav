@@ -18,7 +18,7 @@ mod stamp;
 mod tables;
 mod uniforms;
 
-mod texlod;
+pub mod texlod;
 pub use blend::{ADDITIVE_BLEND, PlainBlend, TRANSPARENT_BLEND, TransparentPipelines};
 pub use foliage::Foliage;
 pub use glow_mask::GlowMask;
@@ -30,10 +30,7 @@ pub use hull_points::{HULL_POINT_SLOTS, HullPoint, HullPointLights};
 pub use spu_light::{MAX_SPU_LIGHTS, RGBE_ROUND_TRIP, SpuLight, SpuLights};
 pub use stamp::Stamp;
 pub use tables::{EMISSIVES_SIZE, Emissives, NODE_ANIMS_SIZE, NodeAnims, TEX_ANIMS_SIZE, TexAnims};
-pub use texlod::{
-    PSP_TEXLOD_BIAS, PSP_TEXLOD_FRAME, PSP_TEXLOD_M11, PSP_TEXLOD_SLOPE, TEXLOD_CODE_OFFSET,
-    TextureDetail, assign_lod_codes, texlod_frame_shift, texlod_vertex_code,
-};
+pub use texlod::{PSP_TEXLOD_BIAS, PSP_TEXLOD_SLOPE, TextureDetail};
 use uniforms::Uniforms;
 mod prepass;
 mod specialise;

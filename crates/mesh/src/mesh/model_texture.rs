@@ -52,7 +52,7 @@ pub struct ModelTexture {
     pub mip_count: Option<u32>,
     /// Pulse's per-texture level selection, as the value a vertex of a draw under
     /// this texture carries in `GpuVertex::texcoord2.y` -
-    /// [`crate::mesh_render::texlod_vertex_code`] builds it from the `.vex`
+    /// [`crate::mesh_render::texlod::texlod_vertex_code`] builds it from the `.vex`
     /// header. `0.0` for every other texture, which keeps the flat slope law.
     pub lod_code: f32,
 }

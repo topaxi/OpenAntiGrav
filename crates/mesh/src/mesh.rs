@@ -1122,7 +1122,7 @@ fn build_class(
     model.sort_by_layer();
     // A PS2 build's textures come from `external` and carry no code, so its
     // vertices keep the 0.0 they were made with.
-    crate::mesh_render::assign_lod_codes(
+    crate::mesh_render::texlod::assign_lod_codes(
         &model.textures,
         &model.indices,
         &mut model.vertices,
@@ -1205,7 +1205,8 @@ pub fn embedded_texture_slots(data: &[u8]) -> Result<TextureSlots> {
                     )
                 };
                 let lod = lods.get(index).copied().flatten();
-                texture.lod_code = crate::mesh_render::texlod_vertex_code(lod, texture.width);
+                texture.lod_code =
+                    crate::mesh_render::texlod::texlod_vertex_code(lod, texture.width);
                 std::sync::Arc::new(texture)
             })
         })

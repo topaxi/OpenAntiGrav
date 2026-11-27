@@ -16,7 +16,7 @@
 //! `Texels::Rgba8`, and the count below would be zero.
 
 use oag_mesh::mesh::{self, Model, Texels};
-use oag_mesh::mesh_render::{PSP_TEXLOD_FRAME, TEXLOD_CODE_OFFSET, texlod_frame_shift};
+use oag_mesh::mesh_render::texlod::{PSP_TEXLOD_FRAME, TEXLOD_CODE_OFFSET, texlod_frame_shift};
 
 #[test]
 #[ignore = "needs data/images/pulse-psp-usa.chd"]

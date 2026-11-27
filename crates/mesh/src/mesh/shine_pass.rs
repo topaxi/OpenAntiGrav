@@ -24,7 +24,7 @@ pub fn build(hull: &Model) -> Option<Model> {
     let lightmaps = std::mem::take(&mut model.lightmaps);
     plain(&mut model);
     mask(&mut model, lightmaps);
-    crate::mesh_render::assign_lod_codes(
+    crate::mesh_render::texlod::assign_lod_codes(
         &model.textures,
         &model.indices,
         &mut model.vertices,

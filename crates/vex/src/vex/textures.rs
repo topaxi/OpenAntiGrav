@@ -213,21 +213,6 @@ pub struct TextureLod {
     pub density: f32,
 }
 
-impl TextureLod {
-    /// The texture's own share of the GE bias, `log2(sqrt(density))` levels.
-    /// `None` where the game emits a bias of exactly 0 whatever the camera: a
-    /// density of 0 or of the one NaN bit pattern `0xffc00000`. Any other value
-    /// with no logarithm saturates the clamp at the top.
-    #[must_use]
-    pub fn bias_term(self) -> Option<f32> {
-        if self.density == 0.0 || self.density.to_bits() == 0xFFC0_0000 {
-            return None;
-        }
-        let term = 0.5 * self.density.log2();
-        Some(if term.is_nan() { f32::INFINITY } else { term })
-    }
-}
-
 /// The level-selection input of every `Texture` node, positional like [`textures`].
 ///
 /// `None` for a node [`stored_textures`] cannot read, for a file whose version the

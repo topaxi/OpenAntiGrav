@@ -205,7 +205,7 @@ pub fn build_track(track: &Model) -> Option<TrackPass> {
         .collect();
     plain(&mut model);
     shine_pass::mask(&mut model, lightmaps);
-    oag_mesh::mesh_render::assign_lod_codes(
+    oag_mesh::mesh_render::texlod::assign_lod_codes(
         &model.textures,
         &model.indices,
         &mut model.vertices,

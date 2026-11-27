@@ -98,7 +98,7 @@ struct Fog {
     // the original's dry road, and the only value any other title writes.
     wet: f32,
     // The camera's part of a Pulse texture's level bias, as the change from the
-    // race camera's - `mesh_render::texlod_frame_shift`. 0.0 is that camera.
+    // race camera's - `mesh_render::texlod::texlod_frame_shift`. 0.0 is that camera.
     texlod_frame: f32,
 };
 

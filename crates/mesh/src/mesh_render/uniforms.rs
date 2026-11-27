@@ -323,7 +323,7 @@ pub struct Fog {
     /// branch on it, so a dry frame runs none of the wet code.
     pub wet: f32,
     /// The camera's part of a Pulse texture's level bias, as the change from the
-    /// race camera's (`mesh_render::texlod_frame_shift`). `0.0`, which every
+    /// race camera's (`mesh_render::texlod::texlod_frame_shift`). `0.0`, which every
     /// buffer nothing writes holds, is that camera.
     pub texlod_frame: f32,
     /// Pads the block to the 16 bytes WGSL rounds a struct to.
@@ -366,7 +366,7 @@ impl Fog {
     #[must_use]
     pub fn with_texlod_camera(self, m11: f32) -> Self {
         Self {
-            texlod_frame: super::texlod_frame_shift(m11),
+            texlod_frame: super::texlod::texlod_frame_shift(m11),
             ..self
         }
     }
