@@ -38,7 +38,9 @@ The GE then selects `level = TexLog2(2 * w * slope) + bias` (PPSSPP's software r
 | --- | --- | --- | ---: | --- |
 | `0x0887f058` | `Texture_BuildBindList` | `0x08928d4c` | 85 | One of two `lui 0xc800` sites in the binary. Pulse's body: the `+0x06 & 0x18` switch, the `0xc8000002`/`0xc8000000` words, `TEXMODE` with `levels - 1`, the per-level loop, the CLUT words and `TEXFLUSH`. Only the context offsets differ (`+0x180` list, `+0x148` per-level addresses) |
 | `0x0887d610` | `Texture_LodBiasFromDensity` | `0x08926f6c` | 85 | The same expression and constants: `/0.6931472`, `+0.2`, `+8.0`, clamp `7.5`/`-8.0`, read of `g_display + 0x5df4` |
-| `0x08a30f24` | `Camera_StoreTextureLodTerm` | `0x0887840c` (tail) | 75 | The same two projected points (`-0.5`/`0.5`, `z = 1`, `w = 1`), the `* 480.0` and the difference of two logs, stored at `+0x5df4`. Three callers (`0x0883fc04`, `0x0883ff34`, `0x0885fdf8`), unread |
+| `0x08a30f24` | `Camera_StoreTextureLodTerm` | `0x0887840c` (tail) | 90 | The same two projected points (`-0.5`/`0.5`, `z = 1`, `w = 1`), the `* 480.0` and the difference of two logs, stored at `+0x5df4` (`0x08a3111c` seen live). Three callers (`0x0883fc04`, `0x0883ff34`, `0x0885fdf8`), below |
+| `0x0883ff34` | `Camera_SubmitScene_q` | `0x08878874` | 65 | Builds the view and projection from a camera object and the field of view, then calls `0x08a30f24`. Live: the flyby's `K` and, once racing, the race camera's |
+| `0x0883fc04` | `Camera_ApplyViewProjection` | `0x0887840c` | 70 | Copies the stored view and projection into the display slots, then calls `0x08a30f24`. Live: the race camera's `K` |
 | `0x0887e900` | `Texture_Bind` | (Pulse's bind, read by `pulse-farfield-lod`) | 70 | `|*(+0x2a0) - K| > 0.2` calls `Texture_RebuildBindList`, then hands `+0x180` (the bind list) to the GE call list |
 | `0x0887e9e8` | `Texture_RebuildBindList` | | 75 | Lays out the per-level addresses, calls `Texture_BuildBindList`, stores K at `+0x2a0` |
 | `0x088f01d4` | `Gu_TexLevelMode` | `0x088114b0` | 85 | The only other `lui 0xc800`: `(clamp(bias * scale, -0x80, 0x7f) << 16 | mode) | 0xc8000000` |
@@ -69,19 +71,43 @@ texture by texel bytes:
 - **Fit.** One K in `[-9.0507, -9.0486]` reproduces the byte exactly for 37 of the 40 textures,
   over `x18` from 0.007 to 1,584 (five decades). The three misses are `TempTexBlue.tga` binds,
   several textures under one name.
-- **Reading.** The `0.5 * log2(x18)` slope therefore holds. The K in force when Pure binds in the
-  race is about -9.05, **not** `-log2(480 * m00)` of the drawn projection. It cannot be a stale build
-  either: the drawn camera's -8.32 is 0.73 away, past the 0.2 rebuild threshold, so `Texture_Bind`
-  would have rebuilt. -9.05 is exactly Pulse's stored grid K (-9.0506, `pulse-farfield-lod`, 150 of
-  150 exact), which points at one load-time camera both titles share. Its source is unread. Next read:
-  `Camera_StoreTextureLodTerm`'s three callers (`0x0883fc04`, `0x0883ff34`, `0x0885fdf8`) and
-  whether any runs per race frame.
-- **Consequence for wiring.** If Pure took the drawn camera's K, ours would sit 11 to 12 sixteenths
-  coarser than the original on 72 of 88 binds. Pure's K must come from the same source as the
-  original's.
+- **Reading.** The `0.5 * log2(x18)` slope holds, and the `K` in the textures is about -9.05.
+  It is a stored value from an earlier camera, below.
 
 **Confidence 85** for the law on Pure: static identity with Pulse's measured law, plus 37 of 40
-textures exact in a recorded list. **50** for where the K of -9.05 comes from (not the drawn projection; source unread).
+textures exact in a recorded list.
+
+## The `K` of -9.05 is the pre-race flyby's
+
+**Confidence 85** (2026-11-27, PPSSPP v1.20.4, software renderer, the Modesto compare pair's save
+state). One state and one circuit, and the flyby watched is a RESTART's, not the first load's.
+
+**In a race frame** (write watch on `g_display+0x5df4`, `g_display` at `0x08a8e960`):
+
+| `K` | `m00` | Through |
+| ---: | ---: | --- |
+| -8.3184 | 0.66504 | `0x0885fdf8`, once a frame |
+| -8.8799 | 0.98149 | `0x0883fc04`, the rest |
+
+The world meshes bind in `FUN_08882e5c` (the 0.2 test at `0x088830c0`). Over 4 frames 300 of 306
+checks, and on a reload 174 of 180, read `K = -8.8799` with the projection slot's `m00` 0.98149;
+the other 6 read -8.3184. Of the 70 textures checked, 63 hold `-9.0506`, 4 `-9.0491` and 3
+`-8.3184`. -9.05 is 0.17 from -8.88, so the test keeps it. An earlier reading on this page took
+the -8.32 projection for the one the textures bind under, and concluded the value could not be a
+stale build; it can.
+
+**Through a restart** (pause menu, RESTART, twice from the same state; halting watch on value
+changes): the first `-9.0506` store is `Camera_StoreTextureLodTerm` called from `0x0883ff34`
+(under `0x08893394`), `m00` 1.10471, about 0.85 s after the confirming press. A frame taken then
+shows the flyby camera with the HUD hidden. Pulse's flyby camera writes the same value
+([mesh-draw.md](../psp-pulse-usa/mesh-draw.md), "`K = -9.0506` is the pre-race flyby camera's").
+
+Not read: where the 4 textures' `-9.0491` comes from, the camera of `m00` 1.45836 seen in one
+restart, Pure's first load, and whether Pure has Pulse's residency rebuild.
+
+**Consequence for wiring.** Pure takes Pulse's rule: a stored `K` per texture, replaced past 0.2,
+with the flyby's draws counted. Current-camera `K` alone (-8.88 here) is 2 to 3 sixteenths coarser
+than the original on the textures the flyby drew.
 
 ## Ours
 

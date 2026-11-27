@@ -582,15 +582,22 @@ Any other NaN falls through the comparisons to `7.5`.
 
 **`K = *(float *)(g_display + 0x5df4)`** is written by every camera that draws:
 `VexCamera_Draw` (`0x08900a9c`), `Camera_SubmitScene` (`0x08878874`) and
-`FUN_0887840c` project `(-0.5, 0, 1, 1)` and `(0.5, 0, 1, 1)` by the projection
+`Camera_ApplyViewProjection` (`0x0887840c`) project `(-0.5, 0, 1, 1)` and `(0.5, 0, 1, 1)` by the projection
 just built, take `d = |x0/w0 - x1/w1| * 480` and store `log2(1/d) - log2(|w0|)`,
 which is `-log2(480 * m00)`. `Gfx_Init` stores 0.
 
 **Each texture keeps the `K` it was built with.** `Texture_RebuildBindList`
 `0x08928550` (confidence 85) calls `Texture_BuildBindList` and then stores `K` at
-the object's `+0xb0`. `Gfx_BindTexture` (`0x08928460`) and
-`Mesh_DrawBatchSet` call it again only when `|object+0xb0 - K| > 0.2`. So a
-bind list can carry any `K` within 0.2 of the camera that draws with it.
+the object's `+0xb0`. A bind list is rebuilt, and `K` re-stored, in three places:
+
+| Trigger | Where (return address seen live) | When |
+| --- | --- | --- |
+| load | `Texture_BindEmbeddedData` (`0x08928134`) | once, with whatever `K` the word holds. Before the first 3D camera that is `Gfx_Init`'s `0` |
+| residency | `Texture_PrepareForDraw_q` (`0x08928174`; `0x08928234`, `0x0892826c`), called by the draw paths before the test below | a texture with bit `0x10` at `+0xb6` and nothing at `+0x58`: rebuilt **whatever `K` it holds**, after the allocation attempt, succeeded or not |
+| the 0.2 test | `Gfx_BindTexture` (`0x08928520`), `FUN_0890f288` (`0x0890f580`), `Mesh_DrawBatchSet` | `\|object+0xb0 - K\| > 0.2` |
+
+So a bind list carries the `K` of the camera current at its last rebuild, which
+can be any `K` within 0.2 of the camera that draws with it later.
 
 **Measured live** (2026-11-27, PPSSPP software renderer, breakpoint at
 `0x089304bc` in `Mesh_DrawBatchSet`, 700 binds per grid, each texture's
@@ -603,10 +610,61 @@ bind list can carry any `K` within 0.2 of the camera that draws with it.
 
 A memory write watch on `g_display+0x5df4` over a grid frame sees `-8.8799`
 (race camera `m00` 0.981491, exact), `-9.6439` and `-9.7999` (cameras of
-`m00` 1.667 and 1.857). **Nothing writes `-9.0506` in a grid frame**: it is
-load-time history, and its camera is unread. Pure holds the same value on its
-Modesto textures (`psp-pure-usa/texture-level.md`)
-\- one read should settle both.
+`m00` 1.667 and 1.857). Nothing writes `-9.0506` in a grid frame: it is the
+flyby's, below.
+
+### `K = -9.0506` is the pre-race flyby camera's
+
+**Confidence 93** (a runtime write watch on three cold boots, an exact
+arithmetic match, and Pure's twin doing the same; one circuit, Talon's Junction,
+PPSSPP).
+
+**Method** (2026-11-27, PPSSPP v1.20.4, software renderer, Racebox Time Trial
+Venom): a halting write watch on `g_display+0x5df4` armed at Team Selection,
+plus an execution breakpoint on `Texture_RebuildBindList` (`0x08928550`) logging
+texture, `K` and `ra`, from the ship confirmation to the grid. Boots 2 and 3
+stop only when the word changes (`change: true`). `K` reads `0` at every menu
+tap from boot to Team Selection.
+
+- The first `-9.0506` store is `Camera_SubmitScene` (`0x0887974c`), in the first
+  frame of `InGameTrackDescriptionScreen`, the flyby. `Camera_ApplyViewProjection`
+  (`0x08878618`) stores the same value each flyby frame.
+- The projection it came from has `m00` 1.104771, and `g_camera_fov_degrees`
+  reads `54.30899`: the flyby's field of view
+  ([race-intro.md](../../../gameplay/race-intro.md)). `-log2(272 / tan(54.30899429 / 2))`
+  is `-9.050638`, the live value to float precision.
+- Callers: `Camera_SubmitScene` from the scene walk `FUN_08944160`;
+  `Camera_ApplyViewProjection` from `Gfx_FlushRenderManager`.
+
+**How the textures get it.** They load at `K = 0`. The flyby's draws rebuild
+every texture they reach. The race camera is only 0.171 away, so the 0.2 test
+keeps `-9.0506`; only the residency path moves it afterwards.
+
+Counts over **every texture built during the load (887, not only the mesh
+textures of the table above)**:
+
+| Boot | Flyby ended by Cross at | Ever built at `-9.0506` | Hold it on the grid | Hold `-8.8799` | Never rebuilt (`0`) |
+| ---: | --- | ---: | ---: | ---: | ---: |
+| 1 | 20 s | 102 | 85 (last logged build, no live read) | 61 | 728 |
+| 2 | 20 s | 102 | 85 (`+0xb0` read live) | 61 | 727 |
+| 3 | 6.4 s | 70 | 70 (`+0xb0` read live) | 60 | 750 |
+
+(Boot 2's live read covers 886 of the 887.) In boot 2 the 85 were last built
+through the residency path (78), the 0.2 test in `Gfx_BindTexture` (2) and in
+`FUN_0890f288` (5). The 17 that moved from `-9.0506` to `-8.8799` all did so
+through the residency path, about when the race camera took over, with the two
+values closer than 0.2. Boot 3 was a prediction written before it ran: a shorter
+flyby draws fewer textures, so fewer hold `-9.0506`, and none gets it after the
+flyby.
+
+`Camera_ApplyViewProjection`: a vtable slot (word at `0x08acb24c`, the table
+that also holds `Camera_SubmitScene`) that copies the stored view and projection
+matrices into the display slots, hands both to the GE (`Gu_SetMatrix`), and ends
+with the `K` store above. `Texture_PrepareForDraw_q`: for a texture with bit
+`0x10` at `+0xb6` and nothing at `+0x58`, asks `FUN_089449ac` for memory and
+calls `Texture_RebuildBindList`; for one with bit `8` set, copies the pixel
+levels and palette into the second buffer and clears the bit. What the memory
+is (VRAM is the reading) is not read, hence `_q`.
 
 **The disc.** Every texture of the circuits' and ships' `.vex` files has
 `flags & 0x18 == 0` (flags 128, 194, 228); seven of them hold `x == 0` and the
@@ -1271,6 +1329,8 @@ previous pass on this subsystem got wrong.
 | `0x08811558` | function | `Gu_TexProjMapMode` | 85 |
 | `0x08810a88` | function | `Gu_SpecularCoef` | 82 |
 | `0x08928d4c` | function | `Texture_BuildBindList` | 85 |
+| `0x0887840c` | function | `Camera_ApplyViewProjection` | 75 |
+| `0x08928174` | function | `Texture_PrepareForDraw_q` | 65 |
 | `0x0890d904` | function | `Mesh_BeginTransparentPass` | 85 |
 | `0x0890dc20` | function | `Mesh_EndTransparentPass` | 82 |
 | `0x0887a268` | function | `SceneLight_CallMaterialList` | 78 |

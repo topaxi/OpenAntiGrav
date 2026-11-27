@@ -346,8 +346,10 @@
 0x088567c8	function	Rocket_FireVolley	78	floor-follow.md
 0x0887f058	function	Texture_BuildBindList	85	texture-level.md
 0x0887d610	function	Texture_LodBiasFromDensity	85	texture-level.md
-0x08a30f24	function	Camera_StoreTextureLodTerm	75	texture-level.md
+0x08a30f24	function	Camera_StoreTextureLodTerm	90	texture-level.md
 0x0887e900	function	Texture_Bind	70	texture-level.md
 0x0887e9e8	function	Texture_RebuildBindList	75	texture-level.md
 0x088f01d4	function	Gu_TexLevelMode	85	texture-level.md
 0x088f04e4	function	Gu_TexLodSlope	85	texture-level.md
+0x0883ff34	function	Camera_SubmitScene	65	texture-level.md
+0x0883fc04	function	Camera_ApplyViewProjection	70	texture-level.md
