@@ -12,10 +12,11 @@
 //! quad against a three-level chain whose levels are red, green and blue, at
 //! four view depths, and reads which level arrived.
 //!
-//! The law under test is `level = log2(|z| * 1/256) + 1`, clamped at 0 and at
+//! The flat law under test is `level = log2(w * 1/256) + 1`, clamped at 0 and at
 //! the last level: depth 64 is level 0, 256 is level 1, 512 is level 2 and a
-//! depth far past the chain stays on level 2. See
-//! `mesh_render::PSP_TEXLOD_SLOPE` for where the two constants come from.
+//! depth far past the chain stays on level 2. A texture with its own bias takes
+//! `log2(2 w / 256) + b` instead, with the camera's term and the sixteenths cut
+//! (`docs/rendering/frame-audit.md`, "The level law, measured").
 //!
 //! # TEXTURE DETAIL
 //!

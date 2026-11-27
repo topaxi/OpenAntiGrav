@@ -8,14 +8,10 @@ use crate::mesh::{Model, Texels};
 /// The GE's texture level slope, as Pulse programs it: `1/256`.
 ///
 /// `Gfx_FlushRenderManager` calls `Gu_TexLevelMode(2, 1.0)` - slope mode, bias
-/// `1.0` - and then `Gu_TexLodSlope(0x3b800000)` once per frame; nothing else in
-/// the binary emits `TEXLODSLOPE`. In slope mode the level is
-/// `log2(|z| * slope) + bias`, a function of **view depth** alone: level 0 up to
-/// `z = 128`, level 1 at `z = 256`, level 2 at `z = 512`. Recovered from the
-/// binary (confidence 85 on the two values, see `mesh-draw.md`), **not** measured
-/// off the GE: `|z|` here is the vertex's view-space depth (`clip.w`), an
-/// unverified reading of the GE's own `z`, and the game's per-texture
-/// `Texture_BuildBindList` emits its own mode and bias, unread.
+/// `1.0` - and `Gu_TexLodSlope(0x3b800000)` once per frame. A Pulse mesh texture
+/// then writes its own bias ([`texlod_vertex_code`]); a draw without one takes
+/// the flat law `log2(w * slope) + `[`PSP_TEXLOD_BIAS`], with `w` the view depth
+/// (`docs/rendering/frame-audit.md`, "The level law, measured").
 pub const PSP_TEXLOD_SLOPE: f32 = 1.0 / 256.0;
 
 /// The bias of [`PSP_TEXLOD_SLOPE`]'s call, in levels.

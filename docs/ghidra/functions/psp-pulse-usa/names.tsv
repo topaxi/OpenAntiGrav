@@ -1539,3 +1539,5 @@
 0x088fab50	function	Modifier_NoiseForce	80	particle-noise-force.md
 0x088f2be4	function	Perlin_Noise3	88	particle-noise-force.md
 0x088f2604	function	Perlin_InitTables	85	particle-noise-force.md
+0x08926f6c	function	Texture_LodBiasFromDensity	90	mesh-draw.md
+0x08928550	function	Texture_RebuildBindList	85	mesh-draw.md
