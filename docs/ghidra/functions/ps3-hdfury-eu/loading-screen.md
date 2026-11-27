@@ -157,7 +157,13 @@ made it look like an object read from twenty places: it is a block read from
 byte `+1`. Four readers agree on one meaning:
 
 - `0x00029948` (profile defaults): while it is `0` the profile's `FE_Style`
-  is forced to `HD` (`0x48 0x44`) and `PlayedFuryBefore` is not created.
+  is forced to `HD` (`0x48 0x44`) and `PlayedFuryBefore` is not created. While it
+  is set and the profile has no `PlayedFuryBefore` yet, `FE_Style` is written
+  `FURY` once (the five bytes through TOC slot `-0x78dc` of this function,
+  `0x008a5bfc` -> `0x0077a7a0` `'FURY'`, `scripts/ps3-toc.py resolve
+  0x00029948 -0x78dc`) and `PlayedFuryBefore` is created, so a first launch of
+  this disc draws Fury and a later choice stays. Confidence 80 (decompile and
+  the TOC resolve, not run).
 - `0x00183b38` (front-end background): while it is `0`, `BackgroundAnimFury_Load`
   is skipped and the Fury bits at `+0x34` are not set.
 - `0x001a8f50` (menu list update): while it is `0`, an item whose flags carry

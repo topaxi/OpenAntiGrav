@@ -190,16 +190,33 @@ record `10.52 -> 8.38`, no-record `10.87 -> 8.88`.
 
 **Still different** (named, not fixed):
 
-- **Colours.** The original ran the **HD** FE style (`HD_Grey` `0xff646464`, `HD_Blue` `0xff8ac0ca`,
-  both `FEGlobals` names on the blocks, captions and highlight); this build serves only the Fury
-  globals, so the blocks and highlight are red and the captions light grey. It is the FE Style
-  setting ([hd-frontend.md](../formats/hd-frontend.md), "The FE Style switch is live"), not the end
-  screen: a Fury-style player sees red here.
 - **Team badges** on the field grid (`Gridi.{row}`), as before.
 - **The background.** Behind the Detonator panel the original shows the destroyed craft's particle
   burst on black; ours shows the race scene round the wreck. The camera is the same (mode 2's orbit,
   wired below), and the HD Eliminator frame shows the race behind its panel, so the black and the
   burst are the Detonator end's own effect, unread.
+
+### HD's FE style on the end screen
+
+The 2026-11-26 frames ran the **HD** FE style (white and teal, dark captions); a first launch
+with the Fury content forces Fury ([loading-screen.md](../ghidra/functions/ps3-hdfury-eu/loading-screen.md),
+"The byte at `0x00b979fd`"), so those captures had a saved choice of `HD`. Both end-screen
+paths (the live session's prefetch and `--menu-page`) now follow
+`settings.display.front_end_style` through `oag_game::front_end_style`, the resolver the loading
+screen uses: a style whose ground differs from the served copy takes the `FEGlobals` of the copy
+of the front-end root that has it (`DATA06`'s `skin.xml` for `HD`: `HD_Blue` `0xff8ac0ca`,
+`HD_Grey` `0xff646464`, against `DATA00`'s `0xffac0717` and `0xff969696`) and its block corners
+(`FrontEnd_IsFuryStyle`, square top-left in HD). An unset choice stays the served Fury copy, byte
+for byte. Nothing transcribes a colour. Both pairs, rendered with the original's style:
+record `8.38 -> 5.15`, no-record `8.88 -> 5.94` mean grey (the same still with `FURY` unchanged at
+`8.38`). A live `--drive` Detonator run shows the same on the real `Session` in both styles.
+
+The **menus** still draw Fury whatever the setting: they are built from the served copy at boot
+(open: [pause-menu.md](pause-menu.md), the HD-style row). Omega: **checked, differs**: it offers no
+`FE Style` row and its boot always copies `WOHD_Colours` over `HD_Colours`
+([fe-style-colours.md](../ghidra/functions/ps4-omega-eu/fe-style-colours.md)), and it draws no HD
+end screen here (`endrace_entry` is `None`). 2048: not checked (its end screen is the touch dialect
+with no `FE Style`).
 
 **Also wired for the same frames:** the small white triangle before `LOYALTY`, `TOTAL`, the record
 notice and the column heads is an unselectable `<Block>`'s static marker

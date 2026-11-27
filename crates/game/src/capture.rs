@@ -1116,6 +1116,7 @@ pub fn run(
                     &menu_frame,
                     &mut sprites,
                     title,
+                    crate::front_end_style::style_of(&options.settings),
                     (&face_scales, options.event.as_deref()),
                 )?;
                 preview_request = trophy;

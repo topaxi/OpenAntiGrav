@@ -222,7 +222,8 @@ fill theirs).
 
 RPCS3 frames, same disc, in **both FE styles** (the original's "Menu Style" row,
 `docs/formats/hd-frontend.md`, "The FE Style switch is live"; the first round's frames were in the HD
-style, white and teal, and a Fury-style player sees the same screen in red):
+style, white and teal, and a Fury-style player sees the same screen in red; the end screens follow
+the saved style, [endrace-screens.md](endrace-screens.md), "HD's FE style on the end screen"):
 
 - **Geometry**, from the file. The title arrow at `(480, 251)` and `GAME PAUSED` at `(520, 240)`; each
   row a `Block` (`x = 480`, `width = 520`, `height = 40`) or a `List`, fifty apart from `y = 310`; the
