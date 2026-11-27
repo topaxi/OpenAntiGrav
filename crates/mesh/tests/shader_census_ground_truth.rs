@@ -54,6 +54,8 @@ impl Part {
 /// One title's archives as one name space, earlier archives shadowing later ones.
 struct Archives {
     open: Vec<Archive>,
+    /// What each of `open` is called, for the table.
+    labels: Vec<String>,
     index: BTreeMap<String, (usize, String)>,
     cache: HashMap<String, Option<Vec<u8>>>,
 }
@@ -63,7 +65,8 @@ fn norm(path: &str) -> String {
 }
 
 impl Archives {
-    fn new(open: Vec<Archive>) -> Self {
+    fn new(named: Vec<(String, Archive)>) -> Self {
+        let (labels, open): (Vec<String>, Vec<Archive>) = named.into_iter().unzip();
         let mut index = BTreeMap::new();
         for (n, archive) in open.iter().enumerate() {
             for path in archive.paths() {
@@ -72,6 +75,7 @@ impl Archives {
         }
         Self {
             open,
+            labels,
             index,
             cache: HashMap::new(),
         }
@@ -91,6 +95,13 @@ impl Archives {
             self.cache.insert(key, bytes.clone());
         }
         bytes
+    }
+
+    /// Which archive serves `name`.
+    fn holder(&self, name: &str) -> &str {
+        self.index
+            .get(&norm(name))
+            .map_or("?", |(n, _)| &self.labels[*n])
     }
 
     /// The `.rcsmodel`s an ordinary race draws.
@@ -277,9 +288,11 @@ fn census(title: &str, mut archives: Archives, part: Part) -> (Rows, usize) {
             row.materials.insert(stem(&material.name));
             *row.places.entry(here.clone()).or_default() += material.chunks;
             if row.example.is_empty() {
+                let file = norm(&material.name);
+                let archive = archives.holder(&material.name);
                 row.example = match material.block {
-                    Some(at) => format!("{} @{at:#x}", norm(&material.name)),
-                    None => norm(&material.name),
+                    Some(at) => format!("{archive}:{file} @{at:#x}"),
+                    None => format!("{archive}:{file}"),
                 };
                 if let Some(file) = archives.read(&material.name) {
                     row.reads = reads(title, &file, material.block);
@@ -371,7 +384,8 @@ fn hd_archives() -> Option<Archives> {
         (0..7)
             .map(|n| {
                 let spec = format!("{}:PS3_GAME/USRDIR/DATA0{n}.PSARC", image.display());
-                Archive::open(&spec).expect("the archive opens")
+                let open = Archive::open(&spec).expect("the archive opens");
+                (format!("DATA0{n}"), open)
             })
             .collect(),
     ))
@@ -381,7 +395,9 @@ fn loose(paths: &[&str]) -> Option<Archives> {
     let mut open = Vec::new();
     for path in paths {
         let path = oag_testdata::exact(path)?;
-        open.push(Archive::open_file(&path).expect("the archive opens"));
+        let label = path.file_name().map(|n| n.to_string_lossy().into_owned());
+        let archive = Archive::open_file(&path).expect("the archive opens");
+        open.push((label.unwrap_or_default(), archive));
     }
     Some(Archives::new(open))
 }
