@@ -66,12 +66,43 @@
 // bluish next to the 3000's, which `cool` offers and leaves off, since
 // nothing here was measured against one. See
 // `docs/rendering/screen-filters.md`.
+//
+// What keeps colour where it was (the doc's "Colour audit"):
+//
+// - The grid only darkens, so nothing clips and no channel is lost.
+// - `gap` and `subpixel` are shares of *light* taken, applied through the
+//   panel's 2.2 curve, so every level and hue is dimmed by the same share.
+// - Each output pixel takes the average of the structure over its own
+//   footprint, so every channel gets the same share at every window size,
+//   including the ones where a cell is not a whole number of pixels.
+// - The gaps sit between all the stripes, not only at the cell's edges, so
+//   the stripes lose the same amount.
+// - The smear mixes the structured picture with the last structured picture,
+//   so a still frame settles to one frame's structure instead of the mask
+//   feeding back into itself.
+
+// Light let through from 0 to `x`, per stripe (red, green, blue), where `x`
+// counts LCD pixels: each stripe is a third of a pixel and opens with a gap
+// `width` of a stripe wide.
+fn stripes_upto(x: f32, width: f32) -> vec3<f32> {
+    let whole = floor(x);
+    let rest = vec3<f32>(x - whole) - vec3<f32>(0.0, 1.0 / 3.0, 2.0 / 3.0);
+    let third = vec3<f32>(1.0 / 3.0);
+    let length = vec3<f32>(whole / 3.0) + clamp(rest, vec3<f32>(0.0), third);
+    let dark = vec3<f32>(whole * width / 3.0) + clamp(rest, vec3<f32>(0.0), third * width);
+    return length - param_gap() * dark;
+}
+
+// The same along rows, where each LCD pixel opens with a gap `width` of its
+// height.
+fn rows_upto(y: f32, width: f32) -> f32 {
+    let whole = floor(y);
+    return y - param_gap() * (whole * width + min(y - whole, width));
+}
 
 fn screen_filter(uv: vec2<f32>, pixel: vec2<f32>) -> vec3<f32> {
     let grid = screen.native_size;
-    // Where in its LCD pixel this output pixel is, 0..1 on each axis.
     let cell = uv * grid;
-    let inside = fract(cell);
 
     var current: vec3<f32>;
     if param_native_grid() > 0.5 {
@@ -89,32 +120,25 @@ fn screen_filter(uv: vec2<f32>, pixel: vec2<f32>) -> vec3<f32> {
         current = frame_at(uv);
     }
 
-    // The slow panel: what was showing last frame is still partly showing.
-    var color = mix(current, previous_at(uv), param_persistence());
-
     // A grey floor under everything - the backlight through a panel that
     // never quite closes - and a cooler white if asked for.
-    color = param_black_lift() + color * (1.0 - param_black_lift());
+    var color = param_black_lift() + current * (1.0 - param_black_lift());
     color *= mix(vec3<f32>(1.0), vec3<f32>(0.94, 0.97, 1.04), param_cool());
 
-    // The border between LCD pixels. `gap_width` is in cell units, so it is a
-    // fraction of the cell at any window size; at a small window the cell is
-    // a pixel or two and the sampler blurs the border into a slight darkening,
-    // which is the right answer there.
+    // The grid over it, averaged across this pixel's footprint. At a window
+    // narrower than the LCD the footprint covers whole stripes and the
+    // structure becomes an even dimming, which is the right answer there.
+    let half = 0.5 * grid * screen.texel;
     let width = param_gap_width();
-    let border_x = smoothstep(0.0, width, inside.x) * (1.0 - smoothstep(1.0 - width, 1.0, inside.x));
-    let border_y = smoothstep(0.0, width, inside.y) * (1.0 - smoothstep(1.0 - width, 1.0, inside.y));
-    color *= 1.0 - param_gap() * (1.0 - border_x * border_y);
+    let passed = (stripes_upto(cell.x + half.x, width) - stripes_upto(cell.x - half.x, width))
+        / (2.0 * half.x);
+    let row = (rows_upto(cell.y + half.y, width) - rows_upto(cell.y - half.y, width))
+        / (2.0 * half.y);
+    let total = passed.r + passed.g + passed.b;
+    let taken = param_subpixel();
+    let light = (vec3<f32>((1.0 - taken) * total) + taken * passed) * row;
+    color *= pow(light, vec3<f32>(1.0 / 2.2));
 
-    // The vertical RGB stripe inside each cell, energy-preserving across the
-    // three thirds.
-    let third = i32(floor(inside.x * 3.0)) % 3;
-    let favoured = vec3<f32>(
-        select(0.0, 1.0, third == 0),
-        select(0.0, 1.0, third == 1),
-        select(0.0, 1.0, third == 2),
-    );
-    color *= 1.0 + param_subpixel() * (3.0 * favoured - 1.0);
-
-    return clamp(color, vec3<f32>(0.0), vec3<f32>(1.0));
+    // The slow panel: what was showing last frame is still partly showing.
+    return clamp(mix(color, previous_at(uv), param_persistence()), vec3<f32>(0.0), vec3<f32>(1.0));
 }

@@ -285,4 +285,7 @@ fn stem(path: &Path) -> String {
 }
 
 #[cfg(test)]
+mod colour_tests;
+
+#[cfg(test)]
 mod tests;
