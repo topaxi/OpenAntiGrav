@@ -58,6 +58,19 @@ Ground truth: `crates/2048/tests/vpk_ground_truth.rs`,
 `crates/disc/tests/ground_truth.rs` (categories, named refusals),
 `crates/game/tests/launcher_ground_truth.rs`.
 
+## System art
+
+`sce_sys/pic0.png` is the 960x544 picture the console shows when the game
+starts, wordmark included, on 2048 a palette PNG; `sce_sys/icon0.png` is the
+128x128 icon. The [title chooser](../ui/launcher.md) draws `pic0.png`, from an
+extracted folder's `base/sce_sys/` or from a `.vpk`'s own `sce_sys/`.
+Confidence 95 for the folders (`PCSF00007` and `PCSA00015` decoded and looked
+at, 2026-11-27); a `.vpk` has not been read for it. The `PCSF00110` extract here
+has no `sce_sys`, so it has no picture.
+
+Omega: *checked, differs*: its pictures are entries of the PS4 package's header,
+outside the file tree ([PS4 packages](ps4-package.md#system-art)).
+
 ## `.pkg`: the outer layer reads, the PFS layer does not
 
 **The outer layer** (public, [pkg2zip](https://github.com/mmozeiko/pkg2zip),

@@ -73,6 +73,31 @@ sectors on both packages' `pfs_image.dat`; the reader refuses a length that is n
 and [psarc.md](psarc.md) record. This reader inflates each sector fully, and its
 output equals the *patched* extract everywhere.
 
+## System art
+
+The console's pictures of a game are entries of the header's own table, stored
+in the clear (`flags1` `0`) and outside the PFS, so no key is needed. Their
+names are the package's own: the entry-name table is entry `0x0200`, and each
+row's second word is an offset into it. Read on both Omega packages
+(2026-11-27), confidence 95.
+
+| entry id | name | what it is | in |
+| --- | --- | --- | --- |
+| `0x1006` | `pic1.png` | 1920x1080, a small logo on black | base only |
+| `0x1200` | `icon0.png` | 512x512 | base and patch |
+| `0x1220` | `pic0.png` | 1920x1080, key art with the logo | base only |
+
+`0x1280`, `0x12a0` and `0x12c0` are `.dds` copies of the three, not read.
+`oag_disc::ps4_pkg::header::header_entry` reads one entry; the
+[title chooser](../ui/launcher.md) offers `pic0` then `pic1`. An unpacked folder
+does not keep them, so for one the chooser looks for a base package on the
+search path whose `content_id` holds `WIPEOUTOMEGA`
+(`EP9000-CUSA05670_00-WIPEOUTOMEGA00EU` on this European one; no other region's
+id has been read, confidence 60 that it holds there).
+
+2048: *checked, differs*: the Vita keeps `sce_sys/pic0.png` as a file in the
+game's tree ([Vita packages](vita-package.md#system-art)).
+
 ## Census (2026-10-07)
 
 Source: `crates/disc/tests/ps4_pkg_ground_truth.rs` and a one-off listing; the file

@@ -47,6 +47,14 @@ AES layer is the only encryption and RPCS3 removes it on install. 6,674 entries 
 all (53 + 5,292 + 1,275 + 54). Confidence 95 for the counts (asserted by
 `crates/hd/tests/hd_psn_ground_truth.rs`).
 
+### System art
+
+The package root holds `PIC1.PNG` (1920x1080, a grey background with no
+wordmark) and `ICON0.PNG` (320x176, RGB, the logo on white), the same pair of
+names and sizes as the [disc's](ps3-disc.md#system-art) with different pictures.
+The [title chooser](../ui/launcher.md) draws the icon over the picture, as it
+does for the disc. Confidence 95: decoded and looked at (2026-11-27).
+
 ### Against the Fury disc (name, size, MD5; `just psarc-diff`)
 
 6,503 distinct paths on PSN. 54 are PSN-only; 4,689 disc paths are absent from PSN.

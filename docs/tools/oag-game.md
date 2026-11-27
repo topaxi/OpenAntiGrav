@@ -71,11 +71,12 @@ is in [packaging](packaging.md#where-the-disc-image-comes-from), and
 `crates/source/src/source.rs` is the code. **No image ships with the engine** and
 none ever will - see [legal](../overview/legal.md).
 
-**Finding more than one opens the chooser.** `just launch`, or `oag-game` with
-nothing named, reads every image on the search path and puts them on screen with
-what each one turned out to be - the title off its own serial, its platform, and
-its file name. Up and down choose, Enter or X boots the one under the cursor,
-Escape quits.
+**Finding more than one opens the chooser.** `oag-game` with nothing named reads
+every image on the search path and draws one card per title from the title's own
+system art ([launcher](../ui/launcher.md)). `just launch`, `--launcher-list` and
+`[launcher] style = "list"` show the list instead: every image with what it
+turned out to be - the title off its own serial, its platform, and its file name.
+Up and down choose, Enter or X boots the one under the cursor, Escape quits.
 
 ```
 OPENANTIGRAV
@@ -101,7 +102,7 @@ An image that will not open is **listed and marked rather than hidden**. The
 case it exists for is a PS3 disc: `hdfury-ps3-eu.iso` and its decrypted twin
 carry the same serial - the `PS3_DISC.SFB` that answers it is outside the
 encrypted region - so nothing short of opening the archives tells them apart,
-and a chooser that filtered on identity would offer the wrong one. The row says
+and a chooser that filtered on identity would offer the wrong one. The list's row says
 what to do about it; the terminal says it at more length, with a pointer to
 [the PS3 disc format](../formats/ps3-disc.md). See `oag_game::launcher`.
 
@@ -138,7 +139,8 @@ ticks, and the ship is correspondingly slower than under `--hold cross`.
 
 | Flag | What it does |
 | --- | --- |
-| `--launcher` | Show the disc chooser even when a source would resolve on its own. Without it the chooser appears only when nothing named a source and the search path holds more than one image. Lists the search path only - a configured source is not a row - and an empty search path is still the not-found error. Refused with `--race`, `--dry-run` and `--screenshot`, which name their own source and open no window. |
+| `--launcher` | Show the disc chooser even when a source would resolve on its own. Without it the chooser appears only when nothing named a source and the search path holds more than one image. Lists the search path only - a configured source is not a row - and an empty search path is still the not-found error. Refused with `--race`, `--dry-run` and `--screenshot`, which name their own source and open no window. `--drive` can walk it. |
+| `--launcher-list` | Show the chooser as a list of every image instead of one card per title, for this run. `[launcher] style = "list"` does the same for every run. See [launcher](../ui/launcher.md). |
 | `--movie <entry>` | Which movie to play: a `Data.wad` entry name, or `hash:XXXXXXXX` for one of the reels whose name is not recovered. Defaults to `Data\Movies\Intro.PMF`, which is what the `LogoFMV` screen plays and the only movie the disc's own boot ever opens - see [frontend boot](../architecture/frontend-boot.md#what-the-disc-actually-does-at-boot). |
 | `--reel` | Boot `Intro Screen->IntroMovie1` instead of `LogoFMV`: the code-side state with the frame-counted holds at 144, 231 and 260, playing the 260-frame dev/pub reel those counters describe. **Not the boot order** - the disc never enters that state at boot, and the reels carry no Pulse branding. See [the dev/pub reel](../architecture/frontend-boot.md#the-devpub-reel). Implies `--movie hash:b1ba72c3` unless `--movie` is given. |
 | `--movie-frames <n>` | Convert only the first `n` frames. All of them by default, which for the 1200-frame intro is 33 MiB of cache and about 80 seconds of `ffmpeg`, once. |
@@ -201,7 +203,7 @@ oag-game data/images/pulse-psp-eu.chd --no-audio --no-intro \
 
 `--drive "<steps>"` or `--drive-file <file>` (`#` starts a comment); steps are separated by
 newlines or `;`, and a word with spaces is quoted (`select "TRACK TITLE"`). `--state-log <file>`
-sends the state lines to a file, stderr otherwise. `--drive` needs one disc image (`--source`, or one on the search path) and refuses `--race`, `--screenshot`, `--dry-run` and `--launcher`. Run it with a profile of its own
+sends the state lines to a file, stderr otherwise. `--drive` needs one disc image (`--source`, or one on the search path), or `--launcher` to script the chooser itself ([launcher](../ui/launcher.md#scripting-and-tests)), and refuses `--race`, `--screenshot` and `--dry-run`. Run it with a profile of its own
 (`XDG_CONFIG_HOME` and friends): the menus save settings as a window does.
 
 **A run that looks at the picture and has nobody to hear it** passes `--no-audio` (a null output)
@@ -248,7 +250,7 @@ by 0.04 of the width against a 0.01 tolerance.
 
 Conditions are `key=value` or `key!=value`, case-insensitive: `stage` (`launcher`, `loading`,
 `frontend`, `menu`, `race`), `frontend` (the disc's state name), `page` (the menu page, under
-whatever is open over it), `screen` (`page`, `picker`, `campaign`, `prompt`, ...), `screen.id`
+whatever is open over it), `screen` (`page`, `picker`, `campaign`, `prompt`, `launcher`, ...), `screen.id`
 (the page id, or `track-select`/`ship-select`; on a `prompt`, what it is for: `rejoinrace` for the online REJOIN RACE offer, `online` for a lobby question), `screen.help` (`open` or `closed`, on a selection screen that authors a Help), `title`, `focus` (the focused row's id, setting
 or label - any of them holds), `opening_reads` (`landed` once what the next selection screen
 opens on is read, else `reading`; `stage=menu` only), `photo` (photo mode's lens, `internal`, `close`, `track` or `free`, or `none`, on `stage=race`), `demo` (`loading` while an attract demo's race loads, `running` once it is live), `benchmark` (`loading`, `running` or `stats` for the in-game benchmark), `root` (the root page of the menu tree on screen, `main`, or `pause` over a held race; `stage=menu` only), `rows` (the label, id and action of every row on screen: `rows!=photo_mode` asserts a row is absent), `sim_tick` (the world's tick, on `stage=race`; the flyby holds it at 0), `humans` (slots a person flies, on `stage=race`: `0` in a demo), `replay` (the replay viewer while a recording is watched on `stage=race`: `opening`, `playing`, `paused`, `ended` or `stopped`, the last when the build stops matching the recording) `replay_at` (`at/length/built` in ticks, `-` before the first keyframe), `replay_follow` (the grid slot the viewer's picture follows) and `replay_hud` (`on` or `off`), `hints` (the buttons the hints on the last drawn frame press, comma-separated, absent while none is up), `notice` (the text of the band over the screen that says why a dropped screenshot did not open, while it is up), `photo_fx` (photo mode's picture controls, the rewind row's tick, `orbit`, `pan`, `fov`, `subject`, `hud` and `free`, the free lens's eye relative to the craft and its yaw, pitch and roll) and `photo_job` (`drawn/frames` of a photo shot of several frames under way, else `none`; a drive draws only the frames it is asked for, and asks for one each frame while such a shot runs), `glass_target` (`WxH` of the glass and sea target on `stage=race`, on a circuit that draws one: the original's size while a photo shot is drawn, the profile's `reflection_resolution` fraction otherwise), `endrace` (`photo` while `Race End Photo` is up, `other` for the rest of the end screens) and `race.title|track|track_file|team|variant|mode|source|craft_source|target` (only once a race is loading; `target` is the Eliminator's kills or points to win, on `stage=race` in that mode). On `stage=race` the state lines also carry `hash` (the race's state hash) and `sim_tick`, so a line is written for every tick the race steps and none while it stands still (photo mode, the pause menu).

@@ -31,6 +31,9 @@ How every screen answers a mouse or a finger, including why a hover never
 scrolls a list, is in
 [menus.md](../architecture/menus.md#a-mouse-and-a-finger).
 
+The title chooser a run with several games shows, as cards drawn from each
+title's own system art or as a list, is in [launcher.md](launcher.md).
+
 The player's name and tag, and when they are asked for, are in
 [player-name.md](player-name.md). The attract demo an untouched main menu starts, and
 `--demo`/`--wallpaper`, are in [attract-demo.md](attract-demo.md).

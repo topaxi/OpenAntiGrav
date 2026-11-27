@@ -235,6 +235,16 @@ Identification needs nothing from this page at all:
 `PS3_DISC.SFB` as of 2026-08-17, which is in a plain region, so `oag-unpack info`
 works on the encrypted image exactly as it does on the decrypted one.
 
+## System art
+
+`PS3_GAME/PIC1.PNG` (1920x1080) is the background the console shows for the disc
+and `PS3_GAME/ICON0.PNG` (320x176, RGB, no alpha) its icon, which carries the
+logo: HD/Fury's `PIC1.PNG` has no wordmark. `PIC0.PNG` (1000x560) and `PIC2.PNG`
+(310x250) are also there and are not used. `oag_source::art` reads the first two
+through the same decrypting reader as the archives, for the
+[title chooser](../ui/launcher.md). Confidence 95: decoded and looked at
+(2026-11-27).
+
 ## See also
 
 - [PSARC](psarc.md) - the container this layer gets you to
