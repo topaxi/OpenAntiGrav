@@ -115,12 +115,15 @@ at Vertica, all of which the original and the new frame resolve.
 | RMSE after a 16x box reduction of both, native | 0.1228 | 0.1230 | |
 | Mean vertical neighbour step, 1820x1024 route | 6.58 | 7.73 | 7.15 |
 
-The difference is all in fine detail (the 16x figures are level), and the original's amount of it lies
-between the two builds. A sharp picture scored against a reference whose pixels do not line up with
-ours scores worse than a blurred one, which is the likely reading, **not tested**. The new frames
-are somewhat grainier than the originals on distant crowds: the original is drawn at 2x internal
-resolution and resized, ours takes one tap per output pixel. The level rule itself is the GS dumps'
-measurement, not the pairs'.
+The 16x figures are level, so colour and coverage did not move; the difference is in fine detail, and
+the original's amount of it lies between the two builds. The likely reading is that a sharp picture
+scores worse than a blurred one against a reference whose pixels do not line up with ours. Partly
+tested: with the field of view 0.05 degrees wider (about half a pixel at the edge), each build's own
+17 frames moved by a mean RMSE of 0.0234 before and 0.0327 after, so the new picture is the more
+sensitive to a sub-pixel offset. Whether that accounts for the whole rise is **not established**.
+The new frames are somewhat grainier than the originals on distant crowds: the original is drawn at
+2x internal resolution and resized, ours takes one tap per output pixel. The level rule itself is the
+GS dumps' measurement, not the pairs'.
 
 ## What TEXTURE DETAIL reaches
 
