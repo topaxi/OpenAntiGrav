@@ -1413,7 +1413,7 @@ pub fn draw_list(
     // Frame::backdrops's own clear/picture/marks order - see its doc for why
     // a race behind the menus drops anything covering the whole screen.
     let mut layers = Layers::behind(skin, frame, backdrop, race_behind);
-    layers.push_title(skin, frame, page.title.clone());
+    layers.push_page_title(skin, frame, &page.id, page.title.clone());
 
     // Which idiom a page is drawn in is the *title's* answer first and this
     // page's second: a strip needs a disc that authors one, and a page with

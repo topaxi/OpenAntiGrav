@@ -235,3 +235,30 @@ fn a_skin_authored_at_1080p_is_drawn_at_its_own_numbers() {
         "a 1080-line screen must not fit fewer rows than a 272-line one"
     );
 }
+
+/// A page the frame carries an authored heading scale for draws its title at it; any other page
+/// at the skin's own.
+#[test]
+fn a_pages_heading_draws_at_the_scale_the_disc_authors_for_it() {
+    let mut menu = Menu::new(fixture());
+    press(&mut menu, &[Button::Cross]);
+    let skin = skin();
+    assert_eq!(menu.page().id, "options");
+    let title_scale = |frame: &Frame| {
+        draw_list(&menu, &skin, &no_bindings, &measure, None, frame, false)
+            .flatten()
+            .into_iter()
+            .find_map(|draw| match draw {
+                Draw::FacedText { text, scale, .. } if text == "OPTIONS" => Some(scale),
+                _ => None,
+            })
+            .expect("the page draws its title")
+    };
+    let (_, _, own) = skin.title_at();
+    assert_eq!(title_scale(&Frame::default()), own);
+    let authored = Frame {
+        heading_scales: vec![("options", own * 1.25)],
+        ..Frame::default()
+    };
+    assert_eq!(title_scale(&authored), own * 1.25);
+}

@@ -754,14 +754,7 @@ impl Frontend {
             };
             let align = Align::parse(&text.align);
             let body = self.strings.get_or_id(id).to_string();
-            // Where the skin says so ([`oag_title::MenuSkin::wrap_from_text_x`]) a `widthlimited` text
-            // wraps where the line from its own `x` is the `Viewport`'s width long, not at that width
-            // from the screen's edge
-            // (`docs/architecture/frontend-boot.md`, "Show Logo's faces and its legal line's wrap").
-            let from_x = self.menu_skin.is_some_and(|skin| skin.wrap_from_text_x);
-            let wrap_width = text
-                .wrap_width
-                .map(|width| if from_x { width - text.x } else { width });
+            let wrap_width = text.wrap_width;
             // A widget in a role the title holds a face for draws in that face at its authored
             // scale (`Frontend::faced_role`); every other is the `Default` atlas, corrected by the
             // role's ratio.

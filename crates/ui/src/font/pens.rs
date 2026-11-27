@@ -7,9 +7,10 @@ pub enum Pens {
     /// Each pen steps by the advance alone, in fractions.
     #[default]
     Advance,
-    /// The first glyph's ink starts at the text's x and each pen steps by the glyph's bearing
-    /// ([`super::pen_step`] without the whole-unit step): Pulse's front end
-    /// (`oag_title::MenuSkin::bearing_pens`).
+    /// The first glyph's ink starts at the text's x and each glyph's ink edge, its bearing past
+    /// the pen, steps up to a whole unit counted from there ([`super::pen_step`]): Pulse's front
+    /// end (`oag_title::MenuSkin::bearing_pens`). The quads stay the atlas cell's, unlike
+    /// [`Self::Snapped`].
     Bearing,
     /// Each glyph's ink edge steps up to a whole unit ([`super::pen_step`]): Pure's front end
     /// (`oag_title::MenuSkin::snapped_pens`).

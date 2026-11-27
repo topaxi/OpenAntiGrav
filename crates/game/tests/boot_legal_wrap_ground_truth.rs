@@ -17,15 +17,14 @@
 //! transcribed by hand into the doc: it is 114 *characters* (the `©` is one
 //! codepoint, two UTF-8 bytes), and at the disc's own `font="small"
 //! scale="0.7"` it wraps to exactly two lines against the enclosing
-//! `Viewport`'s `width="400"` - both comfortably inside it, the second
-//! starting at `y=261.9` on a 272-tall screen. So the fix was real wrapping,
-//! not a bigger viewport or a smaller scale.
+//! `Viewport`'s `width="400"`, the second starting at `y=261.9` on a 272-tall
+//! screen. So the fix was real wrapping, not a bigger viewport or a smaller scale.
 
 use std::path::PathBuf;
 
 use oag_ui::font::Atlas;
 use oag_ui::language::roles;
-use oag_ui::{font, screen};
+use oag_ui::screen;
 
 const PSP_USA: &str = "data/images/pulse-psp-usa.chd";
 
@@ -89,12 +88,13 @@ fn boot_legal_wraps_to_two_lines_that_clear_the_screen() {
         .unwrap_or_else(|e| panic!("{font_name}: {e}"));
     let atlas = Atlas::from_font(&real_font);
 
-    // `Show Logo` draws `BOOT_LEGAL` in the third slot's `Title` face and wraps it over the
-    // `Viewport`'s width less the widget's own `x` (`Frontend::draw_screen_over`): the original
-    // breaks the line after "A" where the 400 wide reading would carry on to "registered".
+    // `Show Logo` draws `BOOT_LEGAL` in the third slot's `Title` face on Pulse's pen
+    // (`docs/ui/menus-original.md`, "Pulse's text pens step up to whole units"), wrapped over the
+    // `Viewport`'s own width: the original's first line is 338 wide and ends at `is a`, where
+    // carrying `registered` along would run past 400.
     let skin = oag_pulse::FRONT_END.menu.expect("Pulse's menu skin");
     assert_eq!(skin.small_font, Some(roles::TITLE));
-    assert!(skin.menu_face_in_boot && skin.wrap_from_text_x);
+    assert!(skin.menu_face_in_boot && skin.bearing_pens);
     for language in &languages {
         assert_eq!(
             language.font(roles::SMALL),
@@ -103,27 +103,24 @@ fn boot_legal_wraps_to_two_lines_that_clear_the_screen() {
             language.name
         );
     }
-    let narrow = oag_ui::font::wrap(&atlas, text, legal.scale, 400.0 - legal.x);
-    assert_eq!(
-        narrow.first().map(|line| line.ends_with("is a")),
-        Some(true),
-        "the first line ends at `is a`: {narrow:#?}"
-    );
-
     let width = legal.wrap_width.unwrap();
-    let lines = oag_ui::font::wrap(&atlas, text, legal.scale, width);
+    let pens = oag_ui::font::Pens::Bearing;
+    let lines = oag_ui::font::wrap_pens(&atlas, text, legal.scale, width, pens);
     assert_eq!(
         lines.len(),
         2,
         "BOOT_LEGAL's real wrap at the Viewport's width: {lines:#?}"
     );
-    for line in &lines {
-        let measured = font::measure(&atlas, line) * legal.scale;
-        assert!(
-            measured <= width,
-            "{line:?} is {measured}px, over the {width}px wrap width"
-        );
-    }
+    assert!(
+        lines[0].ends_with("is a"),
+        "the first line ends at `is a`: {lines:#?}"
+    );
+    let measured: Vec<f32> = lines
+        .iter()
+        .map(|line| oag_ui::font::run_width(&atlas, line, legal.scale, pens))
+        .collect();
+    assert!((measured[0] - 338.4).abs() < 0.05, "{measured:?}");
+    assert!((measured[1] - 371.7).abs() < 0.05, "{measured:?}");
 
     // The second line's top edge, top-anchored and growing downward from the
     // widget's own `y`.

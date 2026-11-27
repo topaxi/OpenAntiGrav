@@ -420,3 +420,77 @@ fn the_ps2_headings_author_the_title_role_and_its_skin_draws_them_in_it() {
         "the PS2 fills no Title role"
     );
 }
+
+/// Where each glyph's ink starts on Pulse's pen: from `x`, the first glyph's ink there, each ink
+/// edge stepped up to a whole unit.
+fn pulse_ink_lefts(atlas: &oag_ui::font::Atlas, text: &str, x: f32, scale: f32) -> Vec<f32> {
+    let scale = scale * atlas.texel_scale;
+    let cells = text.chars().map(|c| (c, atlas.cell(c).expect("a glyph")));
+    let mut pen = None;
+    let mut lefts = Vec::new();
+    for (c, cell) in cells {
+        let from = pen.unwrap_or(-cell.bearing * scale);
+        let (left, next) = oag_ui::font::pen_step(&cell, scale, from, true);
+        pen = Some(next);
+        if c != ' ' {
+            lefts.push(x + left);
+        }
+    }
+    lefts
+}
+
+/// A text, the `x` it is authored at, and where each of its glyphs' ink starts in the frame.
+type Case<'a> = (&'a str, f32, &'a [f32]);
+
+/// Pulse's `Title` face stepped as the original draws it at a fractional scale, against the ink
+/// read off its frames (`docs/ui/menus-original.md`, "Pulse's text pens step up to whole units"):
+/// the PS2's headings at 0.8 and the PSP's legal line at 0.7.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn pulses_pens_put_a_fractional_text_where_the_original_does() {
+    let ps2_headings: [(&str, &[f32]); 3] = [
+        (
+            "MAIN MENU",
+            &[66.0, 76.0, 87.0, 95.0, 110.0, 120.0, 129.0, 139.0],
+        ),
+        (
+            "SHIP SELECT",
+            &[
+                66.0, 76.0, 87.0, 95.0, 110.0, 120.0, 129.0, 137.0, 146.0, 156.0,
+            ],
+        ),
+        (
+            "RACE CAMPAIGN",
+            &[
+                66.0, 75.0, 85.0, 94.0, 108.0, 117.0, 127.0, 137.0, 147.0, 158.0, 166.0, 176.0,
+            ],
+        ),
+    ];
+    // The legal line opens `\u{a9}2007 `, then a word of four: its first nine glyphs.
+    let psp_legal: &[f32] = &[40.0, 47.0, 54.0, 61.0, 68.0, 78.0, 85.0, 92.0, 99.0];
+    for (label, image, _) in images() {
+        let (cases, scale): (Vec<Case>, f32) = match label {
+            "pulse-ps2-eu" => (
+                ps2_headings.iter().map(|(t, l)| (*t, 66.0, *l)).collect(),
+                0.8,
+            ),
+            "pulse-psp-usa" => (vec![("\u{a9}2007 SONY", 40.0, psp_legal)], 0.7),
+            _ => continue,
+        };
+        let (mut archives, languages) = languages_of(&image);
+        let name = languages
+            .iter()
+            .find_map(|language| language.font(roles::TITLE))
+            .expect("a Title face")
+            .to_string();
+        let font = archives.read_font(&name).expect("the Title face reads");
+        let atlas = oag_ui::font::Atlas::from_font(&font);
+        for (text, x, lefts) in cases {
+            assert_eq!(
+                pulse_ink_lefts(&atlas, text, x, scale),
+                lefts,
+                "{label}: {text:?} in {name}"
+            );
+        }
+    }
+}

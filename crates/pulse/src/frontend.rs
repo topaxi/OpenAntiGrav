@@ -176,7 +176,6 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     row_extra_leading: Some(6.0),
     menu_font: Some("menu"),
     menu_face_in_boot: true,
-    wrap_from_text_x: true,
     text: Some(0xFF33_A6B9),
     title: Some(0xFF00_0000),
     // `FE Screen` opens with its own full-screen black `<Image>`, so
@@ -321,14 +320,14 @@ pub const PS2_MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     small_font: None,
     stats_font: None,
     snapped_pens: false,
-    // Inherited from PSP: the pen law measured on the PSP's `Pulse_14.fnt` heading, not measured on the PS2.
+    // Measured on both: the PSP's `Pulse_14.fnt` heading and legal line, the PS2's headings
+    // (`docs/ui/menus-original.md`, "Pulse's text pens step up to whole units").
     bearing_pens: true,
     default_face_is_row_face: false,
     first_row_y: Some(53.0),
     row_extra_leading: Some(17.0),
     menu_font: Some("menu"),
     menu_face_in_boot: true,
-    wrap_from_text_x: true,
     text: Some(0xFF33_A6B9),
     title: Some(0xFF00_0000),
     background: None,

@@ -135,7 +135,6 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     // the executable.
     menu_font: None,
     menu_face_in_boot: false,
-    wrap_from_text_x: false,
     // `FEGlobals->TextColor`. White, against Pulse's cyan - and **one of the
     // globals that does not move between the archives**, which is worth saying
     // here because half the palette does. See `selected` below.
@@ -486,6 +485,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     news: None,
     race_setup: None,
     list_screens: &[],
+    page_headings: &[],
     track_label_overrides: &[],
     card_track_aliases: &[],
     track_record_empty: "-",

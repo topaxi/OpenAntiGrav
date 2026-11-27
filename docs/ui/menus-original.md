@@ -897,15 +897,15 @@ frame image above a text). 56 px over 40 grey on each of the Cell and Track Sele
 ## A text's pen starts at its first glyph's ink (2026-11-23, `pulse-fe-leftovers`)
 
 **Law (confidence 80).** On Pulse's front end the first glyph's ink starts at the widget's authored `x`, each later glyph's ink sits its font bearing right
-of the pen, and the next pen is the previous ink edge plus the advance less the bearing (`oag_ui::font::pen_step` without the whole-pixel step, started
-at `x` minus the first glyph's bearing; the same measure `font::ink_width` states). `Pulse_14.fnt` gives every letter but `T` a left bearing of -1, so
+of the pen, and the next pen is the previous ink edge plus the advance less the bearing (`oag_ui::font::pen_step`, started
+at `x` minus the first glyph's bearing; each ink edge steps up to a whole unit, "Pulse's text pens step up to whole units" below; the same measure `font::ink_width` states). `Pulse_14.fnt` gives every letter but `T` a left bearing of -1, so
 the advance-only pen this build used inked every such letter one pixel right of the original's: Track Select's heading `TRACK SELECT` (x 50, `Title` role) had
 ink starts 50, 60, 68, 77, 86, 100, 109, 118, 126, 135, 143 against the original's 50, 59, 67, 76, 85, 99, 108, 117, 125, 134, 143. With the law they agree
 (the two `T`s have bearing 0 and never moved). Applying the bearing **without** shifting the first pen moves the first glyph of every string one
 pixel left wherever its bearing is -1 (prompt glyphs, words; whole-frame 2.71 % on Cell), so the first-glyph rule is part of the law; it differs from Pure's (`pen_step` from `x`, ink at `x` plus the first bearing, rounded
 up).
 
-Wired as `oag_title::MenuSkin::bearing_pens` (`Renderer::set_bearing_pens`, with the faces in `install_faces`): Pulse PSP measured; **Pulse PS2 inherits it from the PSP**
+Wired as `oag_title::MenuSkin::bearing_pens` (`Renderer::set_bearing_pens`, with the faces in `install_faces`): Pulse PSP measured; **Pulse PS2 took it from the PSP, and its headings have since measured it** (below)
 (its skin sets the same field; the three PS2 pairs improve 0.02 to 0.05 points, 24876 to 24708, 23351 to 22874 and 60066 to 59656 px over 40 grey, so it is not
 a regression there; not measured on the PS2). Share over 40 grey on the four stored Pulse PSP pairs, main's binary against the branch (the glyph face, this pen law and the footer routes together), same
 `theirs.png`: Cell 0.40 % to 0.04 %, Track Select 0.53 % to 0.13 %, Grid 1.41 % to 1.13 %, Team 1.38 % to 0.96 %. Test: `render::tests::a_bearing_pen_starts_the_first_ink_at_x_and_steps_by_bearing`
@@ -915,6 +915,36 @@ Every measure of a drawn text takes the same pen (`oag_ui::font::Pens`: advance,
 
 **Cross-title: HD, Omega, 2048 checked, not measured.** `Font_MeasureString` is the same bearing arithmetic on HD (`font::ink_width`); whether HD's *draw* uses it has no
 capture here, so those three keep the advance-only pen (all their menu pairs re-render byte-identical with the field off). Pure: its own measured law above.
+
+## Pulse's text pens step up to whole units (2026-11-27, `pulse-menu-headings`)
+
+**Law (confidence 90).** Each glyph's ink edge, its bearing past the pen, steps up to a whole unit of the front end's grid, and the
+next pen is that edge plus the advance less the bearing: `oag_ui::font::pen_step(cell, scale, pen, true)`, the step Pure's front end
+takes. Unlike Pure's, Pulse's quads stay the atlas cell's (Pure's whole-pixel sprite quads make every Pulse PSP pair worse, 0.7 to 4.6
+mean grey in the header box). At a whole scale and a whole `x` the step changes nothing, which is why the 1.0 measurements above did
+not show it.
+
+**Evidence**, the left edge of every glyph's ink against the law's, read as column runs off stored frames:
+
+| Frame | Text (face, scale) | Law | Frame |
+| --- | --- | --- | --- |
+| PCSX2 `pulse-ps2/menu-main` | `MAIN MENU` (`Pulse_14`, 0.8, x 66) | 66 76 87 95 110 120 129 139 | the same, plus a constant half unit |
+| PCSX2 `menu-team` | `SHIP SELECT` | 66 76 87 95 110 120 129 137 146 156 | the same (two glyphs merge in one run) |
+| PCSX2 `menu-grid` | `RACE CAMPAIGN` | 66 75 85 94 108 117 127 137 147 158 166 176 | the same (one pair merges) |
+| PPSSPP `pulse-psp/menu-title` | the legal line's first line (`Pulse_14`, 0.7, x 40) | 40 47 54 61 68 78 85 ... 357 363 373 | all of them |
+
+The other readings fail on the legal line's first line, 338 wide in the frame: fractional advances end it at 354 (314 wide), each
+advance rounded at 347, each advance rounded up at 389.
+
+The step is counted from the text's own `x` (**chosen, not measured**: every measured widget authors a whole `x`, where this and an
+absolute step are the same), so a centred line or a scrolling ticker at a fractional position moves as one piece. `Pens::Bearing` is the one
+law for the draw and every measure of it (`run_width`, alignment, wrap, the hint rectangles). Tests:
+`font_roles_ground_truth::pulses_pens_put_a_fractional_text_where_the_original_does` (the disc faces against the edges above),
+`render::tests::a_bearing_pen_starts_the_first_ink_at_x_and_steps_by_bearing`,
+`hints::tests::a_bearing_legend_rect_covers_its_drawn_ink` and `a_bearing_hint_ends_on_the_stepped_pen`.
+
+**Pulse PS2 is measured, no longer inherited.** **Cross-title: HD, Omega and 2048 are not affected** (they keep the advance-only pen,
+`bearing_pens` off).
 
 ## Pure's glyph quads are whole pixels (2026-11-23, `pure-leftovers`)
 
@@ -1045,11 +1075,17 @@ does. Pinned by `font_roles_ground_truth::the_ps2_headings_author_the_title_role
   original's 133, 157, 182, 248, 272 (a threshold-90 column-run read, luma, the 128..388 x 22..44 box): the
   same face to 2 px.
 
-**`Additional`'s heading is larger.** `FE_OPT_PLUS` and `FE_EXTRAS` author no `scale`, where `FE_MM` and
-`FE_RACEBOX` author `scale="FEGlobals->TitleScale"` (0.8). This build draws every heading at
-`MenuSkin::title_scale`, so the PS2 `OPTIONS` heading is smaller than the original's. Reading each
-heading's own scale is open.
+**`Additional`'s heading is larger, and each heading's scale is read.** `FE_OPT_PLUS` and `FE_EXTRAS` author no
+`scale` (1.0), where `FE_MM`, `FE_RACEBOX`, `RC_SHIPSEL` and the rest author `scale="FEGlobals->TitleScale"` (0.8; the
+PSP's `TitleScale` is 1.0, so the PSP does not move). The boot reads the first title-font `Text` of the screen a menu
+page stands where (`oag_title::PageHeading`: `options` is `Additional`, `extras` is `extras`; a compare page is its
+`ListScreen`) and `menu::draw_list` draws that page's heading at it (`Frame::heading_scales`); every other heading keeps
+`MenuSkin::title_scale`. PS2 `menu-options`' header box falls from 9.50 to 7.57 mean grey. Tests:
+`selection_screens_ground_truth::the_ps2_pressing_reads_the_same_screens_on_its_own_grid`,
+`menu::tests::drawing::a_pages_heading_draws_at_the_scale_the_disc_authors_for_it`.
 
-**Not closed:** at 0.8 ours' pens run about 3.4 % short (`SHIP SELECT` mean advance 15.73 against
-16.27 px), where at 1.0 they match; the original's glyphs are also heavier (an outline about 1 px wide
-at 2x that ours does not draw).
+Other headings on the disc that author no scale, none of which a page of this build stands where: `Profile`, `Profile Details`,
+`Manage Profile`, `Records` (the four-category hub), `TournamentLoad` and the memory-stick screens. This build's `records` page
+is a table of class bests, which on the disc is `Race Records` and its three siblings, headed at `TitleScale`.
+
+**Not closed:** the original's glyphs are heavier (an outline about 1 px wide at 2x that ours does not draw).

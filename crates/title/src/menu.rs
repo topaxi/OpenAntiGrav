@@ -161,11 +161,13 @@ pub struct MenuSkin {
     /// whole pixels"); every other title draws fractions as before.
     pub snapped_pens: bool,
     /// Whether a text's first glyph's ink starts at the text's x and each next glyph's ink sits its
-    /// font bearing right of the pen (`oag_ui::font::pen_step` without the whole-unit step): the
-    /// original's `Font_MeasureString` pen. **Measured on Pulse PSP** (Track Select's heading in
-    /// `Pulse_14.fnt`, bearing -1 on every glyph but `T`: ink starts 50, 59, 67, 76, 85 against 50, 60,
-    /// 68, 77, 86 without it; `docs/ui/menus-original.md`, "A text's pen starts at its first glyph's
-    /// ink"). `false` lays the pen out on the advance alone.
+    /// font bearing right of the pen, stepped up to a whole unit counted from that x
+    /// (`oag_ui::font::pen_step`): the original's `Font_MeasureString` pen. **Measured on Pulse
+    /// PSP** (Track Select's heading in `Pulse_14.fnt`, bearing -1 on every glyph but `T`: ink
+    /// starts 50, 59, 67, 76, 85 against 50, 60, 68, 77, 86 without it) and, at a fractional scale,
+    /// on the PSP's legal line and the PS2's headings (`docs/ui/menus-original.md`, "A text's pen
+    /// starts at its first glyph's ink" and "Pulse's text pens step up to whole units"). `false`
+    /// lays the pen out on the advance alone.
     pub bearing_pens: bool,
     /// Whether a selection screen's `font="default"` rows draw at their authored
     /// scale in the one face the title has (`true`: HD and Omega, which load no
@@ -223,11 +225,6 @@ pub struct MenuSkin {
     /// (`docs/architecture/frontend-boot.md`, "Show Logo's faces and its legal line's wrap"). `false` keeps every text of the
     /// sequence in the `Default` atlas.
     pub menu_face_in_boot: bool,
-    /// Whether a `widthlimited` text of the boot sequence wraps over its `Viewport`'s width less its
-    /// own `x` rather than over the `Viewport`'s width: Pulse's `BOOT_LEGAL` (`x=40` in a 400 wide
-    /// `Viewport`) breaks where a 360 wide line does (`docs/architecture/frontend-boot.md`, "Show
-    /// Logo's faces and its legal line's wrap", confidence 55). Measured on that one string.
-    pub wrap_from_text_x: bool,
     /// Unselected row text, as this title's own menu screens draw it.
     ///
     /// `FEGlobals->TextColor` on both PSP titles. HD is why the wording is "as its
@@ -623,7 +620,6 @@ mod tests {
         row_extra_leading: Some(6.0),
         menu_font: Some("menu"),
         menu_face_in_boot: false,
-        wrap_from_text_x: false,
         text: Some(0xFF33_A6B9),
         title: Some(0xFF00_0000),
         background: None,

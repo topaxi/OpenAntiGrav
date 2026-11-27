@@ -56,7 +56,24 @@ impl Layers {
     /// position, scale, colour and face when the skin has them, the frame's
     /// ink and this build's substitute otherwise.
     pub fn push_title(&mut self, skin: &Skin, frame: &Frame, title: String) {
+        self.push_scaled_title(skin, frame, None, title);
+    }
+
+    /// [`Self::push_title`] for a page of the menu tree: its heading takes the scale the disc
+    /// authors for `page` ([`Frame::heading_scale`]), where it authors one.
+    pub fn push_page_title(&mut self, skin: &Skin, frame: &Frame, page: &str, title: String) {
+        self.push_scaled_title(skin, frame, frame.heading_scale(page), title);
+    }
+
+    fn push_scaled_title(
+        &mut self,
+        skin: &Skin,
+        frame: &Frame,
+        authored: Option<f32>,
+        title: String,
+    ) {
         let (x, y, scale) = skin.title_at();
+        let scale = authored.unwrap_or(scale);
         self.chrome.push(Draw::title(
             skin.title_font(),
             x,

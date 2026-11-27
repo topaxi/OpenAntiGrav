@@ -888,6 +888,7 @@ pub fn load_shell(
         sprites.entries(),
         &mut report,
     );
+    frame.heading_scales = headings::read(&mut archives, front_end, &screens.globals, &mut report);
     // The pause screen's music list draws its arrows off the front end's own sheet.
     frame.music_list = title
         .pause_menu
@@ -1430,6 +1431,7 @@ mod configure;
 pub mod demo_config;
 pub mod fonts;
 pub mod fury;
+mod headings;
 mod images;
 mod includes;
 pub mod map_seed;

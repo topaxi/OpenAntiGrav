@@ -144,6 +144,7 @@ fn a_framed_page_still_clips_the_value_and_not_the_frame() {
         select_arrow: None,
         scroll_arrows: [None, None],
         music_list: None,
+        heading_scales: Vec::new(),
     };
     let before = oag_ui::menu::draw_list(
         &menu,
