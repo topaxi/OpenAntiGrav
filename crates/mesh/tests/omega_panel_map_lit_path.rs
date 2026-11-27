@@ -17,7 +17,7 @@ use oag_mesh::mesh::{
     BlockFormat, Bounds, DrawCall, Emissive, GpuVertex, Model, ModelTexture, PROGRAM_PANEL_MAP,
     Texels, slots,
 };
-use oag_mesh::mesh_render::{self, Anisotropy, Scene, UNIFORMS_SIZE};
+use oag_mesh::mesh_render::{self, Anisotropy, Scene, TextureDetail, UNIFORMS_SIZE};
 
 const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 const SIZE: u32 = 64;
@@ -289,6 +289,65 @@ fn the_sheen_is_gated_by_the_diffuse_alpha_not_its_red() {
         bright[2] <= bright_base[2] + 2,
         "a bright red with no diffuse alpha reflects nothing: {bright:?} against {bright_base:?}"
     );
+}
+
+/// The road's diffuse is read under explicit gradients (`material_sample_grad`), which
+/// TEXTURE DETAIL scales (`texture_lod.wesl`, `grad_scale`). An authored red, green, blue
+/// chain minified two levels: `original` reads level 2, `high` 1, `maximum` the base.
+#[test]
+fn texture_detail_scales_the_explicit_gradients() {
+    let instance = wgpu::Instance::default();
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    if !adapter
+        .features()
+        .contains(wgpu::Features::TEXTURE_COMPRESSION_BC)
+    {
+        eprintln!("no BC sampling: skipping");
+        return;
+    }
+    let (device, queue) = pollster::block_on(adapter.request_device(
+        &mesh_render::device_descriptor("panel-map detail", &adapter),
+    ))
+    .expect("requesting the device");
+    let (width, height) = oag_mesh::mesh::sky_paraboloid::SIZE;
+    let grey = vec![160u8; (width * height * 4) as usize];
+    let sky = mesh_render::upload_sky_probe(&device, &queue, &grey);
+    let level = |rgb565: u16, blocks: usize| {
+        let [low, high] = rgb565.to_le_bytes();
+        [low, high, low, high, 0, 0, 0, 0].repeat(blocks)
+    };
+    let mut quad = model(PROGRAM_PANEL_MAP, -0.25, 0.0, 50.0, 255);
+    quad.textures = vec![Some(Arc::new(ModelTexture {
+        label: "red, green, blue blocks".into(),
+        width: 16,
+        height: 16,
+        texels: Texels::Blocks {
+            format: BlockFormat::Bc1,
+            levels: vec![level(0xf800, 16), level(0x07e0, 4), level(0x001f, 1)],
+        },
+        mip_count: None,
+        lod_code: 0.0,
+    }))];
+    // 16 texels across, 64 pixels across clip space: 8 per clip unit is 4 texels a pixel.
+    for vertex in &mut quad.vertices {
+        vertex.texcoord = [8.0 * vertex.position[0], 8.0 * vertex.position[1]];
+    }
+    let levels = TextureDetail::ALL.map(|detail| {
+        let mut scene = Scene::off();
+        scene.light.enabled = 1.0;
+        scene.light.direction = [0.0, 0.0, 1.0];
+        scene.light.sun = [0.6, 0.6, 0.6];
+        scene.fog.camera = [100.0, 0.0, 100.5];
+        scene.fog.texlod_shift = detail.level_shift();
+        let texel = draw(&device, &queue, &quad, scene, Some(&sky));
+        (0..3)
+            .max_by_key(|&channel| texel[channel])
+            .expect("three channels")
+    });
+    assert_eq!(levels, [2, 1, 0]);
 }
 
 /// Identity camera and model, so clip space is model space.
