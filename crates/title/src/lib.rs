@@ -59,6 +59,7 @@ pub mod opponent_autopilot;
 pub mod original_driver;
 pub mod pause_menu;
 pub mod photo;
+pub mod pickup_roster;
 pub mod pre_race;
 pub mod pressing;
 pub mod profile;
@@ -147,6 +148,9 @@ pub struct Title {
     pub eliminator: pre_race::Sourced<eliminator::EliminatorRule>,
     /// The Eliminator flip, `None` where the title has none or nobody has wired it.
     pub eliminator_flip: pre_race::Sourced<Option<eliminator::FlipRule>>,
+    /// How a score Eliminator's opponents spend their weapons. See
+    /// [`eliminator::ScorePaceTerms`].
+    pub score_pace: pre_race::Sourced<eliminator::ScorePaceTerms>,
     /// The team ids this title's roster names and the shared identity each is
     /// kept under, for loyalty. See [`team`].
     pub teams: team::Roster,
@@ -176,6 +180,10 @@ pub struct Title {
     /// [`weapon_pad::WeaponPadGlow`]: HD overwrites the material's authored value
     /// with a per-pad cycle, every other title keeps it.
     pub weapon_pad_glow: &'static weapon_pad::WeaponPadGlow,
+    /// Which pickups the executable's draw may grant in each mode, or `None` where its gate has
+    /// not been read: the draw is then the weapon table's alone. See
+    /// [`pickup_roster::PickupRoster`].
+    pub pickup_roster: Option<pre_race::Sourced<pickup_roster::PickupRoster>>,
     /// Which of the ways a craft is put back this title has. See [`recovery::ResetEnables`].
     pub reset_enables: recovery::ResetEnables,
     /// How a destroyed craft's sequence runs. See [`destroyed::DestroyedCraft`].

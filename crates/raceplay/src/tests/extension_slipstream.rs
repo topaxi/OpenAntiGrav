@@ -112,7 +112,7 @@ fn the_pads_draw_it_beside_the_titles_weapons_at_its_own_odds() {
             let n = 20_000;
             let hits = (0..n)
                 .filter(|_| {
-                    draw(&mut rng, table, driver, None, None)
+                    draw(&mut rng, table, driver, None, None, None)
                         == Some(Weapon::Extension(oag_tables::weapons::ModKind::FIRST))
                 })
                 .count();

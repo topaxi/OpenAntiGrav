@@ -103,10 +103,10 @@ This explains two earlier observations: no object with `Shuriken.cpp`'s vtable i
 ([rpcs3-capture.md](../../../reverse-engineering/rpcs3-capture.md), "Giving the player a weapon";
 state `12` would call through the null manager).
 
-**Not read:** why HD's `weaponstats_Elimination.xml` still gives the Shuriken nonzero odds, and
-where HD's pickup grant drops it. This engine hands HD's Eliminator the Shuriken from those odds,
-so it throws a weapon the original cannot. The Repulser sits next to it (`+0x7c`, zeroed by the same
-store, read `0` live); whether HD's Repulser reaches another path was not examined.
+**The pickup grant drops it.** HD's `weaponstats_Elimination.xml` still gives the Shuriken and the
+Repulser (`+0x7c`, zeroed by the same store, read `0` live) nonzero odds, and both pickup draws test
+a per-mode weapon mask that holds neither ([pickup-draw.md](pickup-draw.md), 88). Why the table
+weighs them is not read.
 
 ## The Shuriken's update, which never runs
 

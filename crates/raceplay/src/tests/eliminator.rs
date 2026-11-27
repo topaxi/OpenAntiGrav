@@ -715,3 +715,41 @@ fn a_player_beaten_to_the_kill_target_finishes_second() {
     assert!(race.core.sim.finished());
     assert_eq!(race.core.eliminator_place(), 2);
 }
+
+/// A score Eliminator opponent holding a Mine for its title's stale time and a tick spends it on
+/// the Shield, not before, and a title with no stale time keeps it (`crate::score_pace`).
+#[test]
+fn a_score_eliminator_opponent_spends_a_stale_mine_on_the_shield() {
+    let held_after = |stale_seconds: Option<u32>, held_ticks: u32| {
+        let mut race = scored(200);
+        race.core.sim.score_pace = Some(crate::score_pace::ScorePace::at(
+            oag_title::eliminator::ScorePaceTerms {
+                trigger_share: 0.2,
+                stale_seconds,
+            },
+            oag_ai::Difficulty::Novice,
+        ));
+        let slot = 1;
+        race.core.sim.world.ships[slot].physics.craft_state = oag_physics::CraftState::Racing;
+        race.core.sim.world.ships[slot].pickup.weapon = Some(oag_tables::weapons::Weapon::Mine);
+        // The decision's own clock adds this tick's.
+        race.core.sim.world.ships[slot].weapon_ai.held_ticks = held_ticks - 1;
+        race.spend_opponent_pickup(
+            slot,
+            &oag_physics::ShipControls::default(),
+            &oag_ai::Field::EMPTY,
+        );
+        race.core.sim.world.ships[slot].pickup.weapon
+    };
+    assert_eq!(held_after(Some(10), 600), None, "held ten seconds: spent");
+    assert_eq!(
+        held_after(Some(10), 599),
+        Some(oag_tables::weapons::Weapon::Mine),
+        "a tick short: kept"
+    );
+    assert_eq!(
+        held_after(None, 6000),
+        Some(oag_tables::weapons::Weapon::Mine),
+        "no stale time: kept"
+    );
+}

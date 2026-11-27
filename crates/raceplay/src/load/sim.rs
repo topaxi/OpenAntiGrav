@@ -564,6 +564,7 @@ pub fn load_sim(options: &Options) -> Result<SimLoad> {
         contact_cues: title.contact_cues,
         opponent_fire: title.weapons.opponent_fire.value,
         score_law: rule.law,
+        score_pace_terms: title.score_pace.value,
         flip_law: rule.flip,
         speedup_pads,
         weapon_pads,
@@ -571,10 +572,15 @@ pub fn load_sim(options: &Options) -> Result<SimLoad> {
         weapon_ai,
         detonator,
         detonator_pads: title.race.detonator.map(|d| d.pads),
-        // No caller of the general `load` sets this - only `race::load::campaign::load_event`
-        // does, on the `Loaded` this returns, after this whole function has already run.
-        // See `SimSetup::allowed_weapons`'s own doc comment.
-        allowed_weapons: Vec::new(),
+        // A 2048 campaign event replaces this on the `Loaded` this returns. See
+        // `SimSetup::allowed_weapons`'s own doc comment.
+        allowed_weapons: title.pickup_roster.map_or_else(Vec::new, |roster| {
+            roster
+                .value
+                .enabled(options.mode == oag_race::Mode::Eliminator)
+                .to_vec()
+        }),
+        pickup_order: title.pickup_roster.map(|roster| roster.value.player_order),
         weapon_pad_refresh,
         class_gravity_scale,
         start_boost,

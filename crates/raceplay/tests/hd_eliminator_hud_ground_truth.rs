@@ -500,18 +500,17 @@ fn median_laps(sorted: &[Outcome]) -> u32 {
 }
 
 /// A Novice score Eliminator lasts about as long as the original's (nine laps to 200 on Vineta K,
-/// n = 1), a third either way, as the median over `NOVICE_PACE_SEEDS`: seven measured; over
-/// seeds 1 to 12 alone, ten measured, nine with the
-/// craft's up as the launch normal. The median is more than six laps, which it was not (one to
-/// three) while opponents steered for pads and bunched.
+/// n = 1), a third either way, as the median over `NOVICE_PACE_SEEDS`: nine measured on HD's own
+/// Eliminator roster and its score-pace terms, and nine on each of seeds 25 to 48 and 49 to 72.
+/// The median is more than six laps, which it was not (one to three) while opponents steered for
+/// pads and bunched.
 ///
 /// **A race still running at 1,000 s counts at the laps it had** (`docs/gameplay/race-modes.md`,
 /// "The pace of a score Eliminator"), and the median must not depend on it: every such race has
 /// already run at least the median's laps, so however long it would have run, the median is
 /// the same. A Novice opponent that holds a Mine for good still fails it: seven of twelve ran
-/// past 1,000 s that way, and more than half unended puts the median into the cap. One seed (1)
-/// runs past it, at 19 laps with its opponents on 117 to 187 points
-/// (`docs/ghidra/functions/ps3-hdfury-eu/projectile-launch-normal.md`, "Turning it on").
+/// past 1,000 s that way, and more than half unended puts the median into the cap. None of the 24
+/// runs past it.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn a_novice_score_eliminator_reaches_its_target_at_about_the_originals_pace() {
@@ -529,7 +528,7 @@ fn a_novice_score_eliminator_reaches_its_target_at_about_the_originals_pace() {
     );
 }
 
-/// An Elite score Eliminator takes more than three laps at the median over `PACE_SEEDS` (nine
+/// An Elite score Eliminator takes more than three laps at the median over `PACE_SEEDS` (eight
 /// measured, six with the craft's own up as the launch normal; one while the opponent spent every
 /// pickup the moment the law let it, which the twenty-second hold of a fresh pickup stops), and
 /// every seed reaches its target. Elite is the default difficulty, so these twelve races also

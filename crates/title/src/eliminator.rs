@@ -45,3 +45,24 @@ pub enum ScoreTarget {
     /// The executable's own default, for a title with no such slider.
     Fixed(u32),
 }
+
+/// How a score Eliminator's opponents spend the weapons they hold, so a race reaches its target at
+/// about the original's length (`docs/gameplay/race-modes.md`, "The pace of a score Eliminator").
+/// Every term is ours: the original's drop and Cannon decisions are unread.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ScorePaceTerms {
+    /// The share of a pilot's own trigger span every tier lays Mines and Bombs at.
+    pub trigger_share: f32,
+    /// Seconds an opponent holds a Mine, Bomb or Cannon before it spends it on the Shield instead,
+    /// or `None` to hold it until it is used. A held weapon blocks the next pad.
+    pub stale_seconds: Option<u32>,
+}
+
+impl ScorePaceTerms {
+    /// The terms tuned on a draw that still holds the Repulser and the Shuriken: both are spent
+    /// within about a second and a half, so the three slow weapons are fewer of the grants.
+    pub const WITH_REPULSER_AND_SHURIKEN: Self = Self {
+        trigger_share: 0.2,
+        stale_seconds: None,
+    };
+}

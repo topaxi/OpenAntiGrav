@@ -110,6 +110,12 @@ pub const TITLE: &Title = &Title {
     eliminator_flip: oag_title::pre_race::Sourced::measured(Some(
         oag_title::eliminator::FlipRule { seconds: 0.2 },
     )),
+    // This title's draw still grants the Repulser and the Shuriken (its roster is unread), so it
+    // keeps the terms tuned with them (`docs/gameplay/race-modes.md`, "The pace of a score
+    // Eliminator").
+    score_pace: oag_title::pre_race::Sourced::chosen(
+        oag_title::eliminator::ScorePaceTerms::WITH_REPULSER_AND_SHURIKEN,
+    ),
     teams: race::TEAM_IDENTITIES,
     loyalty: Some(oag_title::loyalty::LoyaltyEarning {
         law: oag_title::loyalty::LoyaltyLaw::Hd,
@@ -133,6 +139,7 @@ pub const TITLE: &Title = &Title {
         oag_title::Origin::InheritedFrom("Wipeout HD"),
     )),
     // Read in this title's own executable (`docs/rendering/pads.md`, "2048 and Omega").
+    pickup_roster: None,
     weapon_pad_glow: &oag_title::weapon_pad::WeaponPadGlow::ByClass(
         oag_title::weapon_pad::ClassCycles::LINEAGE,
     ),
