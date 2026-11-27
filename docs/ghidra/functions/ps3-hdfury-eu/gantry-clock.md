@@ -143,8 +143,131 @@ would make it 90+.
 `RaceManager_ResetGantryTime` (`0x00055488`) calls `SetTime(*0x008a6860)` on
 the same node, and `*0x008a6860` is `0.0`. Its one direct caller is
 `0x00043510` (a restart-shaped routine that reseeds and re-resolves a team
-record), and it is also an OPD (`0x00872268`) in a vtable. **When in the
-countdown that runs was not traced**, so the start tick is not read from code.
+record), and it is also an OPD (`0x00872268`) in a vtable. When in the
+countdown that runs was not traced; the countdown's own zero is read below.
+
+### What zeroes it in the countdown (2026-11-27, `hd-zone-start`, confidence 85)
+
+`RaceManager`'s phase-0 work, `0x0005e2d8`, dispatches on `this+0x1974` through
+the five-entry table at `0x0005e3a4` (TOC slot `-0x6a80` -> `0x008a6a58`).
+Sub-states 3 (`0x0005e5ec`) and 4 (`0x0005e56c`) both end the intro the same way:
+`AnimNode_UpdateTransformTree(0.0, node)` on the node of `this+0x1950` (the
+billboard slot 8 node of section 4; `bl 0x002c1b30` at `0x0005e638` and
+`0x0005e5a8`, the float from TOC slot `-0x6c78` -> `0x008a6860`, `0.0`) and
+`RaceManager_SetPhase(this, 1)` (`bl 0x00056368` at `0x0005e60c` and
+`0x0005e5dc`). **So the gantry's time is 0 when the countdown starts.** The mode
+updates reach it from their own phase 0: `SPZone_Update`'s table (`0x0007679c`,
+case 0 -> `0x000767b0`, `bl 0x0005e2d8` at `0x000767bc`) and
+`SPDetonator_Update`'s (`0x000681f4`, case 0 -> `0x000683d8`, `bl` at
+`0x000683e4`).
+
+**The countdown lasts 3.0 s.** `this+0x1958` is set to `4.0` (`lis r9,0x4080`,
+`stw r9,0x1958` at `0x00056d98` and `0x0005d4e0`). `RaceManager_UpdateCountdown`
+(`0x00057690`) computes `max(4.0 - this+0x1968, 0)`, floors it (`0x00425798`,
+reached through the stub `0x00677078`) and truncates to an integer; the release
+branch (`0x00057848`) is the one taken when that integer is 0, so the race is
+released 3.0 s into phase 1. RPCS3's polled phase said the same (compare-page.md,
+"The grab").
+
+**Corroborated on one frame.** The Zone countdown pair's original was paused
+2.433 s into phase 1. Ours' Zone board, swept a tick at a time, overlaps its
+glyphs best where its own board time is 2.4 to 2.5 s (compare-page.md, "The
+countdown frame").
+
+Wired: HD's Zone and Detonator mode boards take frame 0 180 ticks before the
+release (`oag_title::adverts::ModeGantry::assembly_ticks`, was 210).
+
+### The circuit's own board (2026-11-27, `hd-go-board`)
+
+**HD's `3 2 1 GO` board is zeroed on entering the countdown too, so its frame 0
+is tick 93**, 180 before the release. The single race and time trial updates
+reach the same phase-0 work `0x0005e2d8`: `0x00061560` (case 0 -> `0x00061748`,
+`bl` at `0x00061750`) and `0x00070770` (case 0 -> `0x000709ac`, `bl` at
+`0x000709b4`). They sit with `SPArcade_RaceManager.cpp` and
+`SPTimeTrial_RaceManager.cpp` by address next to their `__FILE__` functions in
+`ps3-toc.py map` (confidence 70 for the mode names; no live `GetMode`).
+
+**Every caller, from the ELF** (a scan of `EBOOT.elf` for `bl 0x0005e2d8`): 19
+sites, `0x00041184`, `0x000415c0`, `0x00060f74`, `0x00061750`, `0x00066c78`,
+`0x000683e4`, `0x0006951c`, `0x00069718`, `0x0006a92c`, `0x0006aca0`,
+`0x0006be68`, `0x0006e42c`, `0x00070434`, `0x000709b4`, `0x00072bac`,
+`0x00073398`, `0x00075a2c`, `0x000767bc` and `0x0007d428`. Ghidra's xrefs list
+11 of them. Of the other eight, `0x00061750`, `0x000683e4`, `0x000709b4` and
+`0x000767bc` are the case bodies read above; `0x00069718`, `0x0006aca0`,
+`0x0006e42c` and `0x00073398` are known only from their `bl` encoding. The sites
+were not mapped to modes.
+
+**Confidence 85 for the zeroing law** (the shared function, above) and **70 for
+the names single race and time trial**. The value is applied to the circuit
+board whatever the mode, on the reading that every mode's countdown goes through
+that shared function (confidence 70).
+
+Wired as HD `Title` data (`oag_title::adverts::Adverts::countdown_assembly_ticks`,
+`Some(180)`), read by `oag_raceplay`'s `hd_clock`; the board is then kept in the
+same windows as before. It replaces the start HD inherited from its asset's `GO`
+edge (frame 203, tick 70).
+
+**What changes on screen** (`oag-game --race --mode single_race`, Talon's
+Junction, ticks 112 to 273):
+
+| Tick | Before (frame 0 on 70) | Now (frame 0 on 93) |
+| ---: | --- | --- |
+| 112 | `3` fully up | red block entering from the left |
+| 140 | `3` | `3` |
+| 165 | `2` | `3` |
+| 185 | `2` | `2` |
+| 262 | red, `1` fading | red, `1` |
+| 272 | **teal board, a faded `1`** | **red, `1`** |
+| 273 | `GO` | `GO` |
+
+The lit-white glyph changes on ticks 128 (`3`), 178 (`2`), 228 (`1`) and 273
+(`GO`), pinned by
+`start_gantry_clock_inherit_ground_truth.rs`. **The last countdown tick now
+matches the 2026-10-04 RPCS3 capture**, where the red and the `1` leave in one
+video frame as `GO` arrives
+([start-gantry.md](../../../rendering/start-gantry.md#hds-countdown-on-rpcs3-measured-2026-10-04));
+before, ours had turned teal by tick 272.
+
+**One reading of that capture is not settled.** It puts the first `3` sliding in
+at video frames 146 and 144 against steps at 223 and 224, which is tick 113 to
+119. Ours' red block starts entering at about tick 106 and the white `3` is
+first lit on 128; before, the `3` was fully up at 112. Which of the two the
+capture's reader marked is not recorded and the video was not kept, so the `3`
+neither confirms nor refutes the start tick. A re-capture that records the
+node's time in phase 1 would.
+
+Pictures after the release are unchanged: the free run reads 3.0 s on the
+release (3.38 s before), both outside `[3.83, 5.25)`, so both jump to 3.83 s.
+All 36 HD comparison pairs re-rendered pixel-identical to the previous build's.
+
+**2048 and Omega: checked, applies, not wired.** Both play HD's
+`321Go_StartFinish.vex` on their HD-lineage circuits; their rows keep
+`countdown_assembly_ticks: None` (frame 0 on tick 71, off the asset's `GO`
+edge), because neither executable's countdown entry was read. The drive brief
+put them out of scope.
+
+**2048 and Omega, the mode boards: checked, applies, not wired.** Both ship `321Go_Zone.vex`, and
+their `ModeGantry` rows keep 210 and no windows; neither executable's countdown entry
+was read.
+
+### The mode boards after the release (2026-11-27, `hd-zone-start`, confidence 85)
+
+The windows of section 3 act on whatever node slot 8 holds. `SPZone_Update` calls
+`RaceManager_Update` (`bl 0x0005e948` at `0x0007673c`) and so does
+`SPDetonator_Update` (`0x00068160`), so their boards are windowed like `3 2 1 GO`:
+`[3.83, 5.25)` from the release, then by lap. A Zone race has no lap count
+(`total == 0`), so after the first crossing it is `[6.017, 9.3)`.
+
+**Consistent with a live Zone race:** two RPCS3 captures on Vineta K Zone (2026-11-16)
+recorded **6.628 s and 6.758 s** at lap clocks 40.868 and 40.999 s and scenery clocks
+294.464 and 294.595 s. All three advance by the same 0.131 s, so a node in that race
+runs in real time on neither the lap nor the scenery clock. The range itself is no
+evidence: `rpcs3_hd_field.gantry_seconds` returns only values inside the windows, and it
+identifies the node as the gantry's by that alone.
+
+Wired for HD (`oag_title::adverts::ModeGantry::race_windows`). Ours: the countdown frame
+is unchanged by it (pixel-identical), the release jumps the icon to its whole loop, and
+the between-laps window plays the loop drawing itself.
 
 `RaceManager_SetPhase` (`0x00056368`) stores `+0x1970` and clears the timers at
 `+0x1968`/`+0x196c`/`+0x1974`; phases 0-4 dispatch through a jump table at
@@ -244,9 +367,7 @@ the step-A strip (not kept).
 
 - ~~The lap windows are not played.~~ Played since 2026-10-04 (above). Open
   from it: the writer of `ship+0x7810`, and a live lap crossing.
-- What calls `RaceManager_ResetGantryTime` during a countdown, and so the start
-  tick in code. The capture bounds 70 from below only, and two cues point
-  later: at tick 271 our backdrop is already part way to green where the
-  original is red 2 ticks before the step, and the capture's digits come
-  about 13 ticks later than ours.
+- What calls `RaceManager_ResetGantryTime` during a countdown. The countdown's
+  own zero is read above, so the start tick no longer depends on it.
+- The first `3` against the capture ("The circuit's own board" above).
 - The phase jump table at `*(TOC-0x6c00)`.

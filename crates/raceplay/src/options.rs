@@ -481,7 +481,7 @@ pub struct Options {
     /// is put at the same phase. Read off the original's RAM, never derived; `0.0` is every race.
     pub world_clock_offset: f32,
     /// The start gantry's animation time in seconds, imposed on the board for the frame. **A capture
-    /// aid**: the original's GO board loops over a window of its own node's time (`[3.83, 5.25)`
+    /// aid**: the original's start board loops over a window of its own node's time (`[3.83, 5.25)`
     /// s before the first line crossing, 86 ticks a loop) whose phase the race clock alone does not
     /// give, so a pair is only comparable when ours shows the phase the original's RAM held. Read
     /// off the gantry node's `+0xc0`, never derived; `None` is every race.
@@ -804,10 +804,11 @@ pub struct SimSetup {
     /// A title with no roster, outside such an event, restricts nothing - see
     /// [`oag_weapons::pickup::draw`]'s own `allowed` parameter.
     pub allowed_weapons: Vec<oag_tables::weapons::Weapon>,
-    /// The order a person's roll passes a disallowed weapon's weight along
-    /// ([`oag_title::pickup_roster::PickupRoster::player_order`]), or `None`
-    /// where the title has no roster.
-    pub pickup_order: Option<&'static [oag_tables::weapons::Weapon]>,
+    /// The title's pickup roster ([`oag_title::Title::pickup_roster`]), for what it says beyond
+    /// [`Self::allowed_weapons`]: the order a person's roll passes a disallowed weapon's weight
+    /// along, whether the AI's draw refuses a repeat, and the one-live exclusions. `None` where
+    /// the title has none: every draw refuses a repeat and nothing is left out.
+    pub pickup_roster: Option<oag_title::pickup_roster::PickupRoster>,
     /// Seconds a weapon pad is inert for after it is crossed, for this race's
     /// speed class.
     ///

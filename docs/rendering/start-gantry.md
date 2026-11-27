@@ -281,11 +281,9 @@ Pulse's gantry clock is `(tick - 92) / 60`.
 
 ### Every other title: Pulse's rule on its own `GO` edge
 
-**HD's start tick is bounded by its capture (2026-10-04, confidence 75; see
-[HD's countdown on RPCS3](#hds-countdown-on-rpcs3-measured-2026-10-04)), and
-what it does after the release is read from its EBOOT (the "After the release"
-bullet below). Everything else here is
-inherited from Pulse, unmeasured (2026-10-03, maintainer's rule: a title
+**HD's start tick and what it does after the release are both read from its
+EBOOT (the HD and "After the release" bullets below). The rest of this section
+is inherited from Pulse, unmeasured (2026-10-03, maintainer's rule: a title
 with no measured rule runs the known one). No confidence score.** The rule is
 that the board's `GO` edge lands on the tick after the thrust gate (273) and
 the clock is held on `GO` from there. `race::gantry::clock::go_edge` reads the
@@ -302,18 +300,16 @@ own texture tracks (`TexAnims`) at 60 frames a second, and
   `Board` teleport), one frame past the chosen loop end of 349.
 - **HD**: the edge is **frame 203**. `321_go_64.gtf`'s backdrop column steps
   from its red texels to the green marker column (cols 57-59) as the Edge
-  Animation curve's `u` ramps 0.861 -> 0.901 over frames 198-204, so
-  frame 0 is **tick 70**. The digits then read `3` about tick 110, `2` about 160,
-  `1` about 210, against Pulse's captured 132, 178 and 222: the asset's own
-  spacing, not a fitted one. `GO`'s letters reach full opacity a few frames
-  after the green (alpha 72 at frames 207-210, 255 from 211), so on HD the
-  board would be green on the release tick and `GO` fully lit about 8 ticks
-  later. **On HD that ramp is never seen**: the release jump below lands past
-  it, which is what the 2026-10-04 capture shows (`GO` bright on the step
-  frame). Since the jump turns the board green on the release for any start
-  tick that keeps the free run short of frame 203 there, the capture bounds 70
-  from below rather than measuring it; the digits reading ~13 ticks late in the
-  capture point later.
+  Animation curve's `u` ramps 0.861 -> 0.901 over frames 198-204. **HD does not
+  start the board off this edge**: it zeroes the board on entering the
+  countdown, so frame 0 is **tick 93**, 180 before the release (2026-11-27,
+  [gantry-clock.md](../ghidra/functions/ps3-hdfury-eu/gantry-clock.md#the-circuits-own-board-2026-11-27-hd-go-board)).
+  The lit digits change on ticks 128 (`3`), 178 (`2`) and 228 (`1`). The free
+  run reads frame 180 on the release, short of the edge, and the release jump
+  below lights `GO`. `GO`'s letters reach full opacity a few frames after the
+  green (alpha 72 at frames 207-210, 255 from 211); **on HD that ramp is never
+  seen**, because the jump lands past it, as the 2026-10-04 capture shows (`GO`
+  bright on the step frame).
 - **After the release, HD's own law, read from its EBOOT (2026-10-04,
   confidence 85; [gantry-clock.md](../ghidra/functions/ps3-hdfury-eu/gantry-clock.md)).**
   The billboard's curve time is the gantry node's animation time, and HD's race
@@ -342,8 +338,8 @@ own texture tracks (`TexAnims`) at 60 frames a second, and
   found in ...`).
 
 Played on HD (`oag-game --race --track /data/environments/talons_junction/track.vex
---ticks N --screenshot`, `hdfury-ps3-eu-dec.iso`), since the release window (2026-10-04): the `3 2 1`
-strip at tick 271, a fully lit `GO` on tick 273 with no digit left, dark at
+--ticks N --screenshot`, `hdfury-ps3-eu-dec.iso`), since the release window (2026-10-04): the red
+`3 2 1` strip at tick 272, a fully lit `GO` on tick 273 with no digit left, dark at
 +18..+30, +59..+67 and +104..+116 ticks, and the same 86-tick loop on. The side
 by side against the capture is in the gantry-clock evidence page.
 
@@ -351,9 +347,12 @@ by side against the capture is in the gantry-clock evidence page.
 
 **Question: at which race tick does HD's board turn green and `GO` light,
 against the frame the craft can first move?** Answer: **on the release, to
-within one 30 fps video frame (2 ticks). Confidence 75.** The inherited start
-tick 70 (frame 203 on tick 273) stands, now measured; the held span does not
-match the original, below.
+within one 30 fps video frame (2 ticks). Confidence 75.** The start tick this
+build used then (70, off the asset's `GO` edge) fits that but is not measured by
+it; HD's code puts frame 0 on tick 93
+([gantry-clock.md](../ghidra/functions/ps3-hdfury-eu/gantry-clock.md#the-circuits-own-board-2026-11-27-hd-go-board)).
+The method below and its mismatches are as captured on 2026-10-04, against
+start tick 70.
 
 Method. `scripts/rpcs3-drive.py countdown` boots HD on a private RPCS3 (own
 `XDG_CONFIG_HOME`/`XDG_CACHE_HOME`, display :91, GDB port 2391, silent), walks
@@ -1097,8 +1096,9 @@ rule HD follows is Omega's, by mode id. Confidence 85 for "the mode picks a diff
 name per mode (the picture, the file shapes and Omega's table agree; HD's own code site was
 not read: the four names are only referenced by a name-to-hash registration loop at
 `0x003f1300`, entries in the registry at `+0x4a20...`, which is not a chooser).
-The Zone icon starts about 3.5 s (210 ticks) before the release and is complete about 10 frames before it
-(`zcd2`, release at video frame 1066 of 30 fps).
+The Zone icon was read off video as starting about 3.5 s before the release and complete about 10 frames before
+it (`zcd2`, release at video frame 1066 of 30 fps); the executable puts the start at 3.0 s
+([gantry-clock.md](../ghidra/functions/ps3-hdfury-eu/gantry-clock.md), "What zeroes it in the countdown").
 
 **Wired for Zone on 2026-10-12 (`hd-zone-board`); Zone Battle and Detonator still are not.** `oag_race::Mode` has
 Zone but no Zone Battle or Detonator, so only Zone could choose its file. The paragraph this replaces said
@@ -1116,8 +1116,8 @@ stays a placed model (the card route is measured on HD only).
 ## Wipeout HD: the Zone board - the model was fine, the Zone grade was covering it (2026-10-12, `hd-zone-board`)
 
 **A Zone race in ours now shows the original's Zone board: a dark panel on which a loop icon assembles from
-light pieces over the 210 ticks before the release.** Disc-backed, no RPCS3 frame of this session (see "Not
-captured" below). Frames: Vineta K, `--mode zone`, 1440x816, ticks 63, 100, 140, 180, 220, 262, 273 and 330
+light pieces before the release** (210 ticks when this was written, 180 since the clock below). Disc-backed, no
+RPCS3 frame of this session (see "Not captured" below). Frames, at 210: Vineta K, `--mode zone`, 1440x816, ticks 63, 100, 140, 180, 220, 262, 273 and 330
 (the board is empty on tick 63 and the loop is whole by about 262); `just play --race --mode zone --track
 /data/environments/01_vineta_k/track.vex --ticks 180 --screenshot out.png`.
 
@@ -1155,13 +1155,26 @@ Every other surface keeps the blanket grade, so the sky, pads and the rest of th
 single race and a Pulse race are byte-identical before and after (sha256 of one frame each), and only the board
 region differs in a Zone frame.
 
-**The clock.** `Clock::assembled_at_release(210)`: frame 0 on tick 63, so the board's own `t` is 3.5 s on the
-release (tick 273). 210 is the thread's reading of "starts about 3.5 s before the release"; the asset's own keys
-run about 250 frames and the thread also reads the icon as complete about 10 video frames (20 ticks) before the
-release, which would make the assembly about 190 ticks: **a mismatch of roughly 45 ticks between the two
-readings, not resolved**. **What the board shows after the release is chosen, not measured**: the timeline keeps
-running and is held at `CLOCK_LIMIT`, so the pieces fade to the arrow by about 6 s into the clock, and the
-original's behaviour there is unread.
+**The clock (2026-11-27, `hd-zone-start`).** `Clock::assembled_at_release(180)`: frame 0 on tick 93, so the
+board's own `t` is 3.0 s on the release (tick 273). The original zeroes the slot 8 node on entering the 3.0 s
+countdown ([gantry-clock.md](../ghidra/functions/ps3-hdfury-eu/gantry-clock.md), "What zeroes it in the
+countdown", confidence 85), which replaces the 210 read off video and settles the two readings of that video that
+disagreed by about 45 ticks. **From the release the race manager's lap windows hold it**
+(`ModeGantry::race_windows`; same page, "The mode boards after the release"): the clock jumps from 3.0 s to
+3.83 s, where the loop icon is whole, and a Zone race past its first crossing plays `[6.017, 9.3)`, in which the
+loop draws itself. HD only; Omega's and 2048's boards run their timeline on to `CLOCK_LIMIT`, chosen.
+
+In the original's frame 2.43 s into the countdown the outer pieces are still in flight, and ours at frame 180 (the
+release) has not finished them either, so the video's "complete about 10 frames before the release" can only have
+meant the centre loop.
+
+**The outer pieces fade in the original and not in ours.** In the countdown pair's frame the pieces left and right
+of the centre are translucent, darkening upward. The board authors six `black_fadeout.gtf` quads
+(`Background1` to `Background6`) in its blend list, and ours draws them first, so the pieces paint over them.
+Drawing the blend list in reverse (`OAG_DEBUG_REVERSE_BLENDED=1`) fades the outer pieces as the original does and
+hides the centre ones, so the order is neither: **HD's blended-list order for a billboard is unread** and nothing
+is wired. Next read: the draw order of the gantry's billboard pass in a live frame (`scripts/rsx-draw-list.py` on a
+countdown dump), or the sort in the billboard's submit path.
 
 **Not captured.** An RPCS3 frame beside ours was not obtained: under Xvfb RADV cannot present (no DRI3) and
 the NVIDIA ICD boots but the guest freezes on the grid ("The PS3 application has likely crashed" after a
@@ -2976,7 +2989,7 @@ shows a stippled triangle across one half of the quad, as other 2048 surfaces in
 **Zone (`321Go_Zone.vex`).** The board is each title's own substitution in a Zone race, read from both executables
 (Omega `TrackStartup_Load` `0x01391130`, confidence 85; 2048 `TrackStartup_Read` `0x8121b688`, confidence 80,
 [`vita-2048-eu-v104/track-startup-sound-bank.md`](../ghidra/functions/vita-2048-eu-v104/track-startup-sound-bank.md)). Its
-`assembly_ticks` (210) are HD's, inherited. Tech De Ra in `--mode zone` at ticks 100, 200 and 280 on both titles: a dark
+`assembly_ticks` (210) were HD's when written; HD's are 180 since 2026-11-27 and these titles' stay 210, chosen. Tech De Ra in `--mode zone` at ticks 100, 200 and 280 on both titles: a dark
 panel on which the loop icon's light pieces assemble, as HD's Zone board is described above. Eight of its meshes ride UV keys.
 
 **Per title.** **Omega: ported. 2048: ported**, each on its own `.vex` and `.rcsmodel`

@@ -1,7 +1,8 @@
 //! HD's pickup roster per mode, off the disc's own odds through a loaded race's own gate.
 //!
 //! The Eliminator table weighs the Repulser and the Shuriken; HD's executable never hands
-//! either out (`docs/ghidra/functions/ps3-hdfury-eu/pickup-draw.md`).
+//! either out (`docs/ghidra/functions/ps3-hdfury-eu/pickup-draw.md`). The same load carries
+//! the AI's repeat and the one-live exclusions.
 //!
 //! **`#[ignore]`d and never run in CI.** It needs game content, which this project does not
 //! ship. See `docs/architecture/adr/0006-no-copyrighted-content.md`.
@@ -51,8 +52,9 @@ fn census(mode: oag_race::Mode) -> Option<[Vec<(Weapon, f32)>; 2]> {
     })
     .expect("loading the race");
     let setup = loaded.setup;
-    let weapons = setup.weapons.expect("HD's weapon table reads");
+    let weapons = setup.weapons.as_ref().expect("HD's weapon table reads");
     let allowed = (!setup.allowed_weapons.is_empty()).then_some(&*setup.allowed_weapons);
+    check_the_one_live_rules(&setup, weapons, allowed);
     let drivers = [Driver::HUMAN_UNPLACED, Driver::Ai];
     Some(drivers.map(|driver| {
         let mut counts: Vec<(Weapon, f32)> = Vec::new();
@@ -61,8 +63,16 @@ fn census(mode: oag_race::Mode) -> Option<[Vec<(Weapon, f32)>; 2]> {
             let table = weapons.pickups_for(class).expect("every class has odds");
             let mut rng = Rng::new(seed as u64 + 1);
             for _ in 0..DRAWS {
-                let drawn = draw(&mut rng, table, driver, None, allowed, setup.pickup_order)
-                    .expect("an HD table always grants");
+                let drawn = draw(
+                    &mut rng,
+                    table,
+                    driver,
+                    None,
+                    allowed,
+                    setup.pickup_roster.map(|roster| roster.player_order),
+                    &[],
+                )
+                .expect("an HD table always grants");
                 total += 1.0;
                 match counts.iter_mut().find(|(weapon, _)| *weapon == drawn) {
                     Some((_, count)) => *count += 1.0,
@@ -72,6 +82,51 @@ fn census(mode: oag_race::Mode) -> Option<[Vec<(Weapon, f32)>; 2]> {
         }
         counts.iter().map(|&(w, c)| (w, c / total)).collect()
     }))
+}
+
+/// The loaded race carries HD's AI draw with no repeat refusal and the three one-live
+/// exclusions, and with all three out the disc's odds still grant, never one of them.
+fn check_the_one_live_rules(
+    setup: &race::SimSetup,
+    weapons: &oag_tables::weapons::WeaponStats,
+    allowed: Option<&[Weapon]>,
+) {
+    let roster = setup.pickup_roster.expect("HD's race carries its roster");
+    assert!(
+        !roster.ai_refuses_repeat,
+        "HD's AI draw does not refuse a repeat"
+    );
+    let rules: Vec<(Weapon, u8)> = roster
+        .exclusions
+        .iter()
+        .map(|exclusion| (exclusion.weapon, exclusion.limit))
+        .collect();
+    assert_eq!(
+        rules,
+        [
+            (Weapon::LeachBeam, 1),
+            (Weapon::Quake, 1),
+            (Weapon::Cannon, 2)
+        ]
+    );
+    let excluded: Vec<Weapon> = rules.iter().map(|&(weapon, _)| weapon).collect();
+    let table = weapons.pickups_for("VENOM").expect("Venom has odds");
+    let mut rng = Rng::new(7);
+    for driver in [Driver::HUMAN_UNPLACED, Driver::Ai] {
+        for _ in 0..2_000 {
+            let drawn = draw(
+                &mut rng,
+                table,
+                driver,
+                None,
+                allowed,
+                Some(roster.player_order),
+                &excluded,
+            )
+            .expect("HD's odds grant with the three out");
+            assert!(!excluded.contains(&drawn), "{driver:?} drew {drawn:?}");
+        }
+    }
 }
 
 fn roster(shares: &[(Weapon, f32)]) -> Vec<String> {

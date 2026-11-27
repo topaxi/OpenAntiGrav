@@ -1229,8 +1229,23 @@ HD's terms, Novice seeds 1 to 24 sorted: 4, 7, 7, 7, 8, 8, 8, 8, 8, 8, 9, 9, 10,
 so its stale spend lands at 20 s. Pulse, Pure, 2048 and Omega Eliminators and an HD single race
 hash identically after 7,200 ticks with and without the change (Novice and Elite, seeds 1 and 2).
 
-**Will move again:** HD's AI repeat refusal and its one-live exclusions (the Cannon while two
-craft hold one) are read but not wired; both change the draw, and the stickiest weapon most.
+**HD's AI repeat and its one-live exclusions, wired (2026-11-27, `hd-pickup-exclusions`).** HD's
+AI draw no longer refuses a repeat, and both draws leave out the LeachBeam and the Quake while one
+is held or running and the Cannon while two craft hold one
+([pickup-draw.md](../ghidra/functions/ps3-hdfury-eu/pickup-draw.md)). `ScorePaceTerms` were not
+retuned: the Novice median stays inside 6 to 12.
+
+| Tree | Novice median, seeds 1-24 | Novice median, seeds 25-48 |
+| --- | --- | --- |
+| Before (roster and pace terms only) | 9 | 9 |
+| AI repeat alone | 11 | 8 |
+| AI repeat and the three exclusions | **10** | **10** |
+
+Both items, seeds 1 to 24 sorted: 5, 6, 7, 7, 8, 8, 8, 9, 9, 9, 10, 10, 11, 11, 12, 12, 12, 13,
+14, 14, 15, 18, 18, 19; seeds 25 to 48: 5, 5, 5, 5, 6, 8, 8, 9, 10, 10, 10, 10, 11, 11, 12, 12,
+13, 14, 15, 16, 17, 17, 17, 18. Every race reaches 200. The Elite pin (more than three laps, every
+race ends) holds. Pulse PSP and PS2, Pure, 2048 and Omega single races hash identically at tick
+3,600 before and after (seed 7, opponents on).
 
 ### Firing on the original's law (2026-10-03)
 
@@ -1858,8 +1873,9 @@ to `GO` lands on the green step above, tick 273, which puts frame 0 at **tick 92
 the "about a second of `GO` before the craft can move" the gantry docs recorded
 was our clock starting at tick 0, not the original's behaviour.
 `crates/raceplay/src/gantry.rs::CLOCK_START_TICK`, **Pulse only**: every other
-title runs Pulse's rule on its own `GO` edge (HD: frame 203, tick 70; inherited
-from Pulse, unmeasured - `docs/rendering/start-gantry.md`). The
+title runs Pulse's rule on its own `GO` edge (inherited from Pulse, unmeasured -
+`docs/rendering/start-gantry.md`), except HD, whose code puts frame 0 on tick 93
+(`docs/ghidra/functions/ps3-hdfury-eu/gantry-clock.md`). The
 cockpit-view overlay
 (`Cockpit_321GO.vex`, only drawn where no gantry is) was **not** measured in the
 original and still runs off `world.tick / 60`.

@@ -425,34 +425,41 @@ pub const TITLE: &Title = &Title {
         // `321Go_2048.vex` counts down by moving nodes. Any other board
         // (`321Go_StartFinish.vex`) plays HD's clock on the UV keys its `.vex`
         // authors (`docs/ghidra/functions/ps4-omega-eu/billboards.md`, "The UV keys").
+        // This title's countdown entry is unread.
+        countdown_assembly_ticks: None,
         gantry_boards: Some(&[oag_title::adverts::GantryBoard {
             entry: "/Data/Billboards/HD_Adverts/321Go/321Go_2048.vex",
             assembly_ticks: 200,
         }]),
         // Each mode's board is this title's own substitution
         // (`TrackStartup_Read`, `docs/ghidra/functions/vita-2048-eu-v104/track-startup-sound-bank.md`);
-        // the assembly ticks are HD's Zone figure, inherited, and chosen, not measured, for
-        // the boards of the modes this engine does not run yet.
+        // the assembly ticks (210) are chosen, not measured: HD's own boards are read at 180
+        // (`docs/ghidra/functions/ps3-hdfury-eu/gantry-clock.md`) and this title's code
+        // for it is unread.
         mode_gantries: &[
             oag_title::adverts::ModeGantry {
                 mode: oag_title::adverts::GantryMode::Zone,
                 entry: "/Data/Billboards/HD_Adverts/321Go/321Go_Zone.vex",
                 assembly_ticks: 210,
+                race_windows: false,
             },
             oag_title::adverts::ModeGantry {
                 mode: oag_title::adverts::GantryMode::ZoneBattle,
                 entry: "/Data/Billboards/HD_Adverts/321Go/321Go_HD_Zone_Battle.vex",
                 assembly_ticks: 210,
+                race_windows: false,
             },
             oag_title::adverts::ModeGantry {
                 mode: oag_title::adverts::GantryMode::Detonator,
                 entry: "/Data/Billboards/HD_Adverts/321Go/321go_hd_detonator.vex",
                 assembly_ticks: 210,
+                race_windows: false,
             },
             oag_title::adverts::ModeGantry {
                 mode: oag_title::adverts::GantryMode::Combat,
                 entry: "/Data/Billboards/HD_Adverts/321Go/321Go_2048_Combat.vex",
                 assembly_ticks: 210,
+                race_windows: false,
             },
         ],
         origin: oag_title::Origin::InheritedFrom("Wipeout HD"),

@@ -801,10 +801,13 @@ fn hd_zone_race() -> Option<crate::Loaded> {
 
 /// The mode picks the board (`GetMode()` 6, measured on RPCS3): a Zone race's
 /// slot 8 is the 8,368-byte `321Go_Zone.vex` the game loads last, not
-/// `3 2 1 GO`, and its clock starts 210 ticks before the release.
+/// `3 2 1 GO`, and its clock starts on entering the 3.0 s countdown, 180 ticks before the
+/// release, and from the release the race manager's windows hold it
+/// (`docs/ghidra/functions/ps3-hdfury-eu/gantry-clock.md`, "What zeroes it in the countdown"
+/// and "The mode boards after the release").
 #[test]
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
-fn hd_zone_race_shows_the_zone_board_on_slot_8_and_starts_it_210_ticks_early() {
+fn hd_zone_race_shows_the_zone_board_on_slot_8_and_starts_it_with_the_countdown() {
     let Some(loaded) = hd_zone_race() else {
         return;
     };
@@ -830,8 +833,16 @@ fn hd_zone_race_shows_the_zone_board_on_slot_8_and_starts_it_210_ticks_early() {
         "{labels:?}"
     );
     let clock = card.timeline.as_ref().expect("a clocked card").clock();
-    assert_eq!(clock.seconds(oag_race::COUNTDOWN_TICKS + 1 - 210), 0.0);
-    assert!((clock.seconds(oag_race::COUNTDOWN_TICKS + 1) - 3.5).abs() < 1e-3);
+    assert_eq!(clock.start_tick, oag_race::COUNTDOWN_TICKS + 1 - 180);
+    // The countdown runs free to 3.0 s; the release jumps it to the pre-lap window's 3.83 s,
+    // which loops every 86 ticks. After a crossing a Zone race, with no lap count, is held in
+    // the between-laps window.
+    let release = oag_race::COUNTDOWN_TICKS + 1;
+    assert!((clock.seconds(release - 1) - 179.0 / 60.0).abs() < 1e-3);
+    assert_eq!(clock.window, Some(crate::gantry::HD_PRE_LAP_WINDOW));
+    assert!((clock.seconds(release) - 3.83).abs() < 1e-3);
+    assert!((clock.seconds(release + 86) - 3.83).abs() < 1e-3);
+    assert_eq!(clock.laps, Some(crate::gantry::HD_LAP_WINDOWS));
     assert!(
         loaded
             .report

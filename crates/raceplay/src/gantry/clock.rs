@@ -27,6 +27,15 @@
 //! turns it into a start tick. Where no edge can be found the clock runs from
 //! the race start, as it always did, and the loader says so.
 //!
+//! # When HD's board starts
+//!
+//! HD zeroes the slot 8 node's time on entering its 3.0 s countdown, so frame 0
+//! is 180 ticks before the release
+//! (`oag_title::adverts::Adverts::countdown_assembly_ticks`, `gantry-clock.md`).
+//! The free run therefore reads 3.0 s on the release, short of the asset's `GO`
+//! edge, and the window below is what lights `GO`. The edge rule that follows
+//! sets the start only where a title's countdown entry is unread.
+//!
 //! # What `GO` is on Wipeout HD
 //!
 //! HD authors no `TEXOFFSET` step. Its board is one material's Edge Animation
@@ -37,10 +46,9 @@
 //! green. That is the frame the `u` offset finishes stepping across to the
 //! green marker column - the same "green step" Pulse's tick 273 was pinned on.
 //! HD's own countdown was captured on RPCS3 (confidence 75): the
-//! green step lands on the release within one 30 fps video frame. Since the
-//! release jump below, that bounds the start tick from below rather than
-//! measuring it: any start that keeps the free run short of the edge at the
-//! release turns the board green on the release.
+//! green step lands on the release within one 30 fps video frame, which the
+//! release jump below gives for any start that keeps the free run short of the
+//! edge there.
 //!
 //! # What HD does after the release: [`ReleaseWindow`]
 //!
@@ -50,7 +58,7 @@
 //! race manager's per-frame update (`0x0005e948`) keeps that time inside a
 //! window for the race phase it is in, resetting it to the window's start when
 //! it is outside. Before the craft first crosses the line the window is
-//! `[3.83, 5.25)` s, so on the release the clock jumps from frame ~203 to frame
+//! `[3.83, 5.25)` s, so on the release the clock jumps from its free run to frame
 //! 229.8 (`GO` already lit) and then loops 86 ticks. [`HD_PRE_LAP_WINDOW`].
 
 use oag_mesh::mesh::{DrawCall, Model};
@@ -221,10 +229,11 @@ impl Clock {
     /// A board whose own timeline runs `assembly_ticks` ticks up to the
     /// release: frame 0 on tick `release - assembly_ticks`, then free-running.
     ///
-    /// HD's Zone board, whose assembly was read off the original as starting
-    /// about 3.5 s before the release (`oag_title::adverts::ModeGantry`). **What
-    /// the board does after the release is chosen, not measured**: the clock
-    /// keeps running to the asset's own end and the caller clamps it.
+    /// A board HD zeroes on entering the countdown: a mode's own
+    /// (`oag_title::adverts::ModeGantry`), or the circuit's
+    /// (`Adverts::countdown_assembly_ticks`). With no window set the clock keeps
+    /// running to the asset's own end and the caller clamps it; what a board
+    /// shows then is **chosen, not measured**.
     #[must_use]
     pub const fn assembled_at_release(assembly_ticks: u64) -> Self {
         Self {
@@ -232,6 +241,18 @@ impl Clock {
             hold: None,
             window: None,
             laps: None,
+        }
+    }
+
+    /// The same clock kept, from the release on, in the windows HD's race
+    /// manager picks: [`HD_PRE_LAP_WINDOW`], then [`HD_LAP_WINDOWS`] by lap.
+    #[must_use]
+    pub const fn in_hd_windows(self) -> Self {
+        Self {
+            hold: None,
+            window: Some(HD_PRE_LAP_WINDOW),
+            laps: Some(HD_LAP_WINDOWS),
+            ..self
         }
     }
 
@@ -266,20 +287,15 @@ impl Clock {
         })
     }
 
-    /// HD's: the timeline free-runs from the inherited start tick until the
-    /// release and is then kept in [`HD_PRE_LAP_WINDOW`] by the rule HD's own
-    /// race manager runs.
+    /// HD's rule where a title's countdown entry is unread: the timeline
+    /// free-runs from the inherited start tick until the release and is then
+    /// kept in HD's windows ([`Clock::in_hd_windows`]).
     ///
     /// `None` when the edge is later than the release, as for
     /// [`Clock::inherited`].
     #[must_use]
     pub fn hd(edge: GoEdge) -> Option<Self> {
-        Some(Self {
-            hold: None,
-            window: Some(HD_PRE_LAP_WINDOW),
-            laps: Some(HD_LAP_WINDOWS),
-            ..Self::inherited(edge)?
-        })
+        Self::inherited(edge).map(Self::in_hd_windows)
     }
 
     /// The gantry's clock at `tick` with the board in a later race-manager

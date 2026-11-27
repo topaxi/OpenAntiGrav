@@ -1,7 +1,7 @@
 ---
 status: ready-to-wire
 titles: [pure, 2048, omega]
-updated: 2026-11-03
+updated: 2026-11-27
 summary: "Hit sparks, absorb, wreck nodes and Pure's own big blast wired per title; open: 2048/Omega other hit triggers; Pure VECTOR laps"
 difficulty: medium (30)
 ---
@@ -57,14 +57,10 @@ the survey is below; none was trivial enough to fix in that lane.
     `start-gantry.md` ("board's background is black"), not the clock. (c) A lap crossing was not
     captured live; the windows were forced through the TOC floats instead
     (`scripts/rpcs3-drive.py lapboard --window`).
-  - **The start tick in code**: what runs `RaceManager_ResetGantryTime` (`0x00055488`) during
-    a countdown. The capture bounds tick 70 from below only, and two cues point later: our
-    backdrop is part way to green at tick 271 where the original is red, and the capture's
-    digits come ~13 ticks later than ours.
   - **Plasma's `UV_offset`** (`plasma.md`, 2026-09-25): `AnimNode_UpdateTransformTree`'s slot
     `+0x40` on that node class is `MeshImporter_SetTime`, so the binding is the node's animation
     time, not a keyframe evaluator's output.
 
 ## Next Steps
 
-1. 2048/Omega's non-Cannon hit trigger and `WO_DAMAGE_*` smoke. (The gantry clock landed 2026-10-03: HD runs Pulse's rule on its own `GO` edge, frame 203 / tick 70; 2048 and Omega place no gantry - `docs/rendering/start-gantry.md`.)
+1. 2048/Omega's non-Cannon hit trigger and `WO_DAMAGE_*` smoke. (The gantry clock landed: HD's start tick is read from its countdown entry, tick 93, `docs/ghidra/functions/ps3-hdfury-eu/gantry-clock.md`; 2048 and Omega's HD-lineage boards stay on their own `GO` edge, `docs/rendering/start-gantry.md`.)

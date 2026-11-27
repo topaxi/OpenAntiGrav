@@ -202,6 +202,8 @@ The change applies to every title that loads a `.vex` with embedded textures:
 `crates/render/tests/psp_texture_levels_ground_truth.rs` fails if a circuit's
 textures stop arriving as the disc's own chain.
 
+**The other titles** (Pure, Pulse PS2, HD/Fury, 2048, Omega): the rule each uses to pick a texture's level at distance, its evidence and confidence, and ours' state are one row each in [texture-level-per-title.md](texture-level-per-title.md).
+
 ## 2. The hull's sheen (drawn; gap closed 2026-11-10)
 
 What was ruled out: the hull's light list (it is the recovered `AmbientLight` and
