@@ -119,10 +119,10 @@ fn each_texture_detail_preset_draws_its_own_picture_on_hd() {
     let default = shot(None);
     std::fs::remove_dir_all(&scratch).ok();
 
-    assert_eq!(default, original, "original is the default preset");
-    assert_ne!(original, high, "high must shift the sampler's level");
-    assert_ne!(high, maximum, "maximum must reach the base level");
-    assert_ne!(original, maximum, "maximum must differ from original");
+    assert!(default == original, "original is the default preset");
+    assert!(original != high, "high must shift the sampler's level");
+    assert!(high != maximum, "maximum must reach the base level");
+    assert!(original != maximum, "maximum must differ from original");
 }
 
 #[test]
@@ -138,12 +138,12 @@ fn pulse_ps2_has_one_level_for_texture_detail_to_move() {
     let maximum = shot("maximum");
     std::fs::remove_dir_all(&scratch).ok();
 
-    assert_eq!(
-        original, high,
-        "a PS2 race reads the base at every distance"
+    assert!(
+        original == high,
+        "a PS2 race reads the base at every distance: high moved it"
     );
-    assert_eq!(
-        original, maximum,
-        "a PS2 race reads the base at every distance"
+    assert!(
+        original == maximum,
+        "a PS2 race reads the base at every distance: maximum moved it"
     );
 }
