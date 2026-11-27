@@ -23,8 +23,9 @@ census and wiring: [`docs/architecture/asset-layers.md`](../../docs/architecture
   not located. Repro: `oag-wad cat` the entry `Data\Environments\16_Track\track.vex` into
   `<dir>/wipeout-pulse/Data/Environments/16_Track/track.vex`, set `OAG_OVERRIDES=<dir>` and
   race that circuit. Other circuits load normally. Other titles not tried.
-  `drive_ground_truth::tournament` breaks a leg with a non-track override, which stays a
-  failing load once this is fixed.
+  `drive_ground_truth::tournament` breaks a leg with a non-track override, which should stay
+  a failing load once this is fixed (a non-track `.vex` ought not to decode); the test's
+  first assertion says so if not.
 - **A mod must be recorded.** The replay's state hashes already turn a modded table into a
   reported desync, but the replay header does not say that mods were active, and a record or
   a ghost lap set on a modded race is stored like any other. Decide: a `mods` flag in
