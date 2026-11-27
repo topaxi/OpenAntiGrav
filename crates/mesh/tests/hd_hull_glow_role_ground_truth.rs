@@ -242,7 +242,7 @@ fn talons_junctions_real_glows_still_glow_after_the_role_fix() {
 }
 
 /// A lightmapped `tunnel_fx_noalpha` slot (the lightmap holds the second binding) binds its
-/// `EmissiveTexture` third and names a [`mesh::PROGRAM_TUNNEL_EMISSIVE`] entry. Slot 26 is
+/// `EmissiveTexture` third and names a [`mesh::PROGRAM_LIGHTMAPPED_ADD`] entry. Slot 26 is
 /// the right wall of every HD Detonator pair (`docs/rendering/hd-zone-recolour.md`, "Window lights
 /// on a plain chunk").
 fn lightmapped_tunnel_slots_bind_their_window_lights_third(
@@ -263,7 +263,7 @@ fn lightmapped_tunnel_slots_bind_their_window_lights_third(
             .and_then(|i| model.emissive.get(i as usize));
         assert_eq!(
             entry.map(|e| e.program[0]),
-            Some(mesh::PROGRAM_TUNNEL_EMISSIVE),
+            Some(mesh::PROGRAM_LIGHTMAPPED_ADD),
             "lightmapped tunnel slot {slot} names no window-light entry"
         );
         // `EmissiveTexture`, `0xb1f2a176`: each slot names its own picture under it.

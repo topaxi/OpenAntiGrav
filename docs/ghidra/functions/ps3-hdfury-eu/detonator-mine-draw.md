@@ -187,9 +187,8 @@ Row 1 decides how much of the `mines-ahead` and `cannon-volley` gap is real: re-
   `0xac7c75d0` at `+0x0e`, `Uv1_Uv2` at `+0x12`), is a flat disc in its own XY plane, radius 2.45. The lightning ring is the
   texture's, at the disc's rim.
 - **Chosen, not measured:** which model axis takes the camera direction (Z, the disc's normal) and the roll about it (the
-  mine's own up); `MasterVolume` and `PitchVolume` read bands 0 and 1 (the original reads one whole-spectrum level
-  for both, [detonator-mine-material.md](detonator-mine-material.md), "The visualiser's level"; a wiring of it was
-  measured and not kept); `PitchOffset` and `TrebleHit` stay 0 (accumulator step and `.bss` writer unread); the colour tap is decoded.
+  mine's own up); the scale of ours' whole-spectrum level behind `MasterVolume` and `PitchVolume` (the clamps are the
+  original's, [detonator-mine-material.md](detonator-mine-material.md), "The visualiser's level"); `PitchOffset` and `TrebleHit` stay 0 (accumulator step and `.bss` writer unread); the colour tap is decoded.
 - **On the three published Detonator pairs the cell and frame barely move** (pairs as published, no picture-lag fit):
   `pad` 8.82 -> 8.82, `mines-ahead` 16.38 -> 16.40, `cannon-volley` 15.32 -> 15.33 mean grey. Ours' near mines are
   smaller and nearer the screen edge than the original's there (the picture lag the pairs do not carry), so the ring lands

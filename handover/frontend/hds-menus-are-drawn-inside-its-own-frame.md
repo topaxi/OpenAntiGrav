@@ -1,7 +1,7 @@
 ---
 status: re-first
 titles: [hd, pulse]
-updated: 2026-08-19
+updated: 2026-11-27
 summary: "Whether HD's FE Style rebinds FEGlobals or swaps skin.xml is unread; Pulse's own FE Screen frame unnamed"
 ---
 
@@ -12,6 +12,8 @@ summary: "Whether HD's FE Style rebinds FEGlobals or swaps skin.xml is unread; P
 ## Open
 
 - Whether the FE Style option rebinds the `FEGlobals` or swaps the served `skin.xml` - the code that chooses is unread
+- The menus and pause screens ignore `display.front_end_style` (the loading screen and end screens follow it,
+  `oag_game::front_end_style::ScreenStyle`)
 - Both PSP titles' `menu_frame` is `None`, and Pulse's is a gap rather than a measurement - its own `FE Screen` (with the light angled top bar) is unnamed
 
 ## Next Steps

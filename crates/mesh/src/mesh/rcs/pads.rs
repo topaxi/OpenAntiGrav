@@ -353,6 +353,8 @@ pub(super) fn build_pad_class(
         // The pads' model draws no water, and the glow table is shared: `off` lays no
         // tapped-water entries, so the room goes to each pad's own copy below.
         oag_display::display::Water::Off,
+        // Nor any lightmapped emissive family.
+        false,
         &mut report,
     );
     out.textures = skins;

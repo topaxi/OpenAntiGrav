@@ -18,8 +18,8 @@ use std::sync::Arc;
 use oag_core::math::Mat4;
 use oag_gpu::formats::SceneStore;
 use oag_mesh::mesh::{
-    Bounds, DrawCall, Emissive, GpuVertex, Model, ModelTexture, PROGRAM_TUNNEL_EMISSIVE, Texels,
-    ZONE_EXEMPT_RATE, slots,
+    Bounds, DrawCall, Emissive, GpuVertex, Model, ModelTexture, PROGRAM_LIGHTMAPPED_ADD,
+    PROGRAM_LIGHTMAPPED_SCROLL, Texels, ZONE_EXEMPT_RATE, slots,
 };
 use oag_mesh::mesh_render::{
     self, Anisotropy, CraftShadow, Scene, ShadowMap, ShadowMaps, ShadowReceiver, SpuLight,
@@ -407,7 +407,7 @@ fn a_black_zone_surface_turns_the_lights_colour_and_a_plain_chunk_multiplies_it(
     assert_near(pixel[2], 0, "no marker", pixel);
 }
 
-/// **`tunnel_fx_noalpha`'s window lights** (`PROGRAM_TUNNEL_EMISSIVE`, `mesh::rcs::tunnel_emissive`):
+/// **`tunnel_fx_noalpha`'s window lights** (`PROGRAM_LIGHTMAPPED_ADD`, `mesh::rcs::lightmapped_emissive`):
 /// on a plain chunk in a Zone frame the emissive bound third is added after the light, decoded and
 /// unlit, so a black albedo under a black stage shows it at half (the program's `/2`); the same
 /// chunk on its Zone program, whose variants declare no emissive, shows nothing
@@ -433,7 +433,7 @@ fn a_plain_tunnel_chunk_adds_its_window_lights_and_its_zone_program_does_not() {
             offset: 0.0,
             scale: 1.0,
             rate: 0.0,
-            program: [PROGRAM_TUNNEL_EMISSIVE, 0.0],
+            program: [PROGRAM_LIGHTMAPPED_ADD, 0.0],
         }];
         m.pad_masks = vec![Some(texture(
             "window lights",
@@ -467,6 +467,78 @@ fn a_plain_tunnel_chunk_adds_its_window_lights_and_its_zone_program_does_not() {
             zone,
         );
     }
+}
+
+/// The two other lightmapped emissive paths (`mesh::rcs::lightmapped_emissive`): the track's
+/// picture bound fourth (mode 31 with the second lane set), and the scrolled, alpha-gated mode 32,
+/// which reads the third binding at `v = (v + offset) * scale` times the tint and the diffuse alpha
+/// and adds nothing on a Zone program (`docs/rendering/hd-zone-recolour.md`, "The other
+/// lightmapped emissive families").
+#[test]
+fn the_fourth_binding_and_the_scrolled_emissive_reach_a_plain_chunk() {
+    let instance = wgpu::Instance::default();
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let (device, queue) =
+        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+            .expect("requesting the device");
+    let art = stage_art(&texture("black stage", [0, 0, 0, 255]));
+    let mut frame = scene(&[]);
+    frame.fog.enabled = 0.0;
+    let plain_bits = slots::DEFAULT | slots::ZONE_PLAIN;
+    let shown = |level: f32| srgb_encode(OUTPUT_SCALE * level);
+    let entry = |offset: f32, program: [f32; 2], tint: f32| Emissive {
+        tint: [tint; 3],
+        offset,
+        scale: 1.0,
+        rate: 0.0,
+        program,
+    };
+
+    // Fourth binding: the third holds another picture, which must not be the one added.
+    let mut fourth = model([0, 0, 0, 255], plain_bits | EXEMPT_SLOT);
+    fourth.emissive = vec![entry(0.0, [PROGRAM_LIGHTMAPPED_ADD, 1.0], 1.0)];
+    fourth.pad_masks = vec![Some(texture("normal map", [40, 40, 40, 255]))];
+    fourth.wave_maps = vec![Some(texture("track lights", [200, 200, 200, 255]))];
+    let got = draw(&device, &queue, &fourth, &art, frame, None);
+    assert_near(
+        got[0],
+        shown(srgb_decode(200.0 / 255.0)),
+        "fourth binding",
+        got,
+    );
+
+    // Scrolled: four rows, sampled at the row centre the offset names.
+    let rows = Arc::new(ModelTexture {
+        label: "four rows".into(),
+        width: 1,
+        height: 4,
+        texels: Texels::Rgba8(
+            [50u8, 100, 150, 200]
+                .iter()
+                .flat_map(|&v| [v, v, v, 255])
+                .collect(),
+        ),
+        mip_count: Some(1),
+        lod_code: 0.0,
+    });
+    let scrolled = |alpha: u8, offset: f32, bits: u32| {
+        let mut m = model([0, 0, 0, alpha], bits | EXEMPT_SLOT);
+        m.emissive = vec![entry(offset, [PROGRAM_LIGHTMAPPED_SCROLL, 1.0], 0.5)];
+        m.pad_masks = vec![Some(rows.clone())];
+        draw(&device, &queue, &m, &art, frame, None)
+    };
+    let row = |value: f32| shown(0.5 * srgb_decode(value / 255.0));
+    let second = scrolled(255, 0.375, plain_bits);
+    assert_near(second[0], row(100.0), "row 1", second);
+    let fourth_row = scrolled(255, 0.875, plain_bits);
+    assert_near(fourth_row[0], row(200.0), "row 3", fourth_row);
+    let gated = scrolled(0, 0.875, plain_bits);
+    assert_near(gated[0], 0, "no diffuse alpha, no emissive", gated);
+    let zone = scrolled(255, 0.875, slots::DEFAULT);
+    assert_near(zone[0], 0, "a chunk on its Zone program", zone);
 }
 
 /// A circuit built against the stage light (`zone_stage_light`) draws what the uniform-driven Zone

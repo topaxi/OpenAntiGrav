@@ -167,7 +167,7 @@ fn a_pinned_live_mine_holds_the_originals_envelope_whatever_the_bands_are() {
     );
     let pin = |envelope| MinePin {
         envelope: Some(envelope),
-        age: None,
+        ..MinePin::default()
     };
     let pins = std::collections::BTreeMap::from([
         ((5, 0), pin((0.5886, 0.568, 8.375))),
@@ -176,7 +176,7 @@ fn a_pinned_live_mine_holds_the_originals_envelope_whatever_the_bands_are() {
     hold_pinned(&mines, &mut stepped, &mut [0.0; 3], &pins);
     assert_eq!(stepped[0].brightness(), 2.0 * 0.5886);
     assert_eq!(
-        visualiser_constants(true, &stage(), &stepped[0], &quiet).pitch_offset,
+        visualiser_constants(true, &stage(), &stepped[0], 0.1).pitch_offset,
         8.375,
         "the pinned PitchOffset reaches the ring"
     );
@@ -233,15 +233,12 @@ fn a_live_visualiser_takes_the_stage_colour_times_one_and_a_half_and_a_dark_one_
         football: 0.5,
         ..MineEnvelope::default()
     };
-    let mut levels = [0.0_f32; 16];
-    levels[0] = 0.1;
-    levels[1] = 0.9;
-    let live = visualiser_constants(true, &stage(), &envelope, &levels);
+    let live = visualiser_constants(true, &stage(), &envelope, 0.9);
     assert_eq!(live.colour, [0.4 * 1.5, 0.0, 0.9 * 1.5]);
-    assert_eq!(live.master_volume, 0.5);
+    assert_eq!(live.master_volume, 1.0);
     assert_eq!(live.pitch_volume, 0.4, "capped at 0.4");
     assert_eq!(live.bass_hit, 0.125);
-    let dark = visualiser_constants(false, &stage(), &envelope, &levels);
+    let dark = visualiser_constants(false, &stage(), &envelope, 0.9);
     assert_eq!(dark.colour, [2.0; 3]);
     assert_eq!(
         (dark.master_volume, dark.pitch_volume, dark.bass_hit),
@@ -285,11 +282,52 @@ fn a_mines_age_counts_from_its_laying_and_a_pin_holds_it_live_or_dark() {
     let pins = std::collections::BTreeMap::from([(
         (6, 1),
         MinePin {
-            envelope: None,
             age: Some(55.7002),
+            ..MinePin::default()
         },
     )]);
     let mut stepped = vec![MineEnvelope::default(); 2];
     hold_pinned(&[a, dark], &mut stepped, &mut ages, &pins);
     assert_eq!(ages, [2.5, 55.7002], "a dark mine's age is pinned too");
+}
+
+/// `MasterVolume` and `PitchVolume` are both the one level `0x00304cc8` returns: `clamp01(5 L)` and
+/// `clamp(L, 0, 0.4)`. The original's reads on `mines-ahead` (`detonator-mine-material.md`,
+/// "The visualiser's level") give `(0.7069, 0.1414)` and `(1.0, 0.3154)`: five times where unclamped.
+#[test]
+fn both_visualiser_volumes_are_the_one_whole_spectrum_level() {
+    let envelope = MineEnvelope::default();
+    let close =
+        |(m, p): (f32, f32), (em, ep): (f32, f32)| (m - em).abs() < 1e-4 && (p - ep).abs() < 1e-6;
+    for (level, read) in [
+        (0.141_378_43, (0.706_892_1, 0.141_378_43)),
+        (0.315_428_3, (1.0, 0.315_428_3)),
+    ] {
+        let v = visualiser_constants(true, &stage(), &envelope, level);
+        assert!(
+            close((v.master_volume, v.pitch_volume), read),
+            "{level}: {v:?}"
+        );
+    }
+    assert_eq!(visualiser_volumes(0.0), (0.0, 0.0));
+    assert_eq!(visualiser_volumes(0.7), (1.0, 0.4));
+}
+
+/// A pinned mine draws the original's two volumes whatever ours' level is; an unpinned or dark one
+/// does not take them.
+#[test]
+fn a_pinned_live_mine_holds_the_originals_volumes() {
+    let mines = [laid(5, 0, true), laid(6, 0, false), laid(7, 0, true)];
+    let mut stepped = vec![MineEnvelope::default(); 3];
+    let pin = MinePin {
+        volumes: Some((1.0, 0.3154)),
+        ..MinePin::default()
+    };
+    let pins = std::collections::BTreeMap::from([((5, 0), pin), ((6, 0), pin)]);
+    hold_pinned(&mines, &mut stepped, &mut [0.0; 3], &pins);
+    let v = visualiser_constants(true, &stage(), &stepped[0], 0.05);
+    assert_eq!((v.master_volume, v.pitch_volume), (1.0, 0.3154));
+    assert_eq!(stepped[1].volumes, None, "a dark mine keeps its literals");
+    let own = visualiser_constants(true, &stage(), &stepped[2], 0.05);
+    assert_eq!((own.master_volume, own.pitch_volume), (0.25, 0.05));
 }

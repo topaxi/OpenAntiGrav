@@ -807,6 +807,9 @@ impl Session {
         stage
             .scene
             .set_band_levels(self.audio.output().spectrum().levels());
+        stage
+            .scene
+            .set_music_level(self.audio.output().spectrum().total());
         let effects = oag_raceplay::WindowEffects {
             motion_blur: profile.motion_blur,
             camera_jitter: upscale::jitter_phases(

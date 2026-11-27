@@ -425,7 +425,7 @@ impl Session {
             &source,
             &strings,
             entries.as_deref(),
-            crate::app::args::style_of(&self.settings),
+            crate::front_end_style::style_of(&self.settings),
         );
         oag_raceplay::loader_log::lines(&assets.notes);
         self.loading_assets = assets;

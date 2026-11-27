@@ -351,65 +351,17 @@ impl Assets {
         // `Draw::Sprite` indexes it. All five illustrations rather than one,
         // because the original draws a feature per screen and this is read once
         // per disc - see `Screen::new`.
-        // **The served front end, read first**: with no saved choice the style is the one
-        // the menus are drawn in, which is the ground this archive clears to.
-        // Read through the title's own colour template, as its front end is, so the four
-        // globals are the ones the menus resolve (Omega's `WOHD_Colours` overwrites
-        // `HD_Grey`); a title with no template reads the file as it stands.
-        let screens = |blob: &[u8], template| {
-            let xml = oag_ui::xml::expand(blob).ok()?;
-            Some(oag_ui::screen::Screens::from_xml_with_fallbacks(
-                &xml,
-                &[],
-                &[],
-                template,
-            ))
-        };
-        let mut served = loading.palette.and_then(|_| {
-            let front_end = title.front_end?;
-            let blob = archives.read_name(front_end.root).ok()?;
-            screens(&blob, front_end.boot.colour_template)
-        });
-        let dark_ground = loading
-            .palette
-            .zip(served.as_ref())
-            .is_some_and(|(names, served)| served.global_is_dark(names.background));
-        let chosen = pick_style(loading.features, style, dark_ground, &mut notes);
-        // **The chosen style's own ground.** A style chosen against the served front end's
-        // ground (HD's white pictures on the black archive) takes the four globals from the copy
-        // of the front-end file whose ground matches, as the original does with a skin file per
-        // style; without one the served copy stands.
-        if let (Some(names), Some(style), Some(front_end)) =
-            (loading.palette, chosen, title.front_end)
-            && served
-                .as_ref()
-                .is_some_and(|served| served.global_is_dark(names.background) != style.dark_ground)
-        {
-            let own = archives
-                .read_every_name(front_end.root)
-                .into_iter()
-                .filter_map(|(label, blob)| {
-                    Some((label, screens(&blob, front_end.boot.colour_template)?))
-                })
-                .find(|(_, copy)| {
-                    copy.globals.contains_key(names.background)
-                        && copy.global_is_dark(names.background) == style.dark_ground
-                });
-            match own {
-                Some((label, copy)) => {
-                    notes.push(format!(
-                        "loading screen: {} style takes its colours from {label}",
-                        style.name
-                    ));
-                    served = Some(copy);
-                }
-                None => notes.push(format!(
-                    "loading screen: no copy of {} has a {} ground; the served colours stand",
-                    front_end.root,
-                    if style.dark_ground { "dark" } else { "light" }
-                )),
-            }
-        }
+        let crate::front_end_style::Resolved {
+            chosen,
+            root: served,
+            ..
+        } = crate::front_end_style::resolve(
+            &mut archives,
+            title,
+            style,
+            "loading screen",
+            &mut notes,
+        );
         // **The copy that carries every feature's prose, which is not the one
         // the front end is served.** Two of Wipeout HD's five descriptions -
         // `FE_ABSORB_INST` and `FE_FLIP_INST`, the two Fury mechanics - are in
@@ -723,10 +675,11 @@ impl Assets {
 /// with none matching takes its first. An unknown style name falls back to the
 /// title's first and says so, the same way a saved language this source does not
 /// carry falls through.
-pub(super) fn pick_style<'a>(
+pub(crate) fn pick_style<'a>(
     styles: &'a [oag_title::loading::FeatureStyle],
     style: Option<&str>,
     dark_ground: bool,
+    context: &str,
     notes: &mut Vec<String>,
 ) -> Option<&'a oag_title::loading::FeatureStyle> {
     let chosen = match style {
@@ -747,7 +700,7 @@ pub(super) fn pick_style<'a>(
             .or_else(|| styles.first()),
     }?;
     notes.push(format!(
-        "loading screen: {} style, {} feature(s)",
+        "{context}: {} style, {} feature(s)",
         chosen.name,
         chosen.features.len()
     ));
