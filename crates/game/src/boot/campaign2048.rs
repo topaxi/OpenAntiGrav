@@ -551,7 +551,7 @@ fn event_card(
         kind_label: strings.get(kind_id).map(str::to_string),
         description: instance
             .and_then(|instance| instance.field("M_DESCRIPTION"))
-            .and_then(oag_2048::campaign::Field::value)
+            .and_then(|field| field.value())
             .and_then(|id| strings.get(id))
             .filter(|text| !text.is_empty())
             .map(str::to_string),
