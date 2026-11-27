@@ -68,6 +68,25 @@ def particle_quads(film, stem):
                 yield regs.get(0x1A00, 0), [struct.unpack_from(">3e2x4B2e", blob, (q * 4 + k) * 16) for k in range(4)]
 
 
+#: `NV4097_SET_SURFACE_*`: the render target a draw goes to.
+SURFACE = (("clip_h", 0x200), ("clip_v", 0x204), ("format", 0x208), ("color_a", 0x210), ("zeta", 0x214))
+
+
+def surfaces(film, stem):
+    """`{(is particle quads, surface registers): draws}` over every draw of one dumped ring."""
+    walk = rsx_fifo.Walk(rsx_fifo.Mem.load(sorted(glob.glob("%s/ring/%s-4*.bin" % (film, stem)))))
+    regs, found = {}, collections.Counter()
+    for _pos, method, noninc, args in walk.run(0x1000):
+        for i, v in enumerate(args):
+            regs[method if noninc else method + 4 * i] = v
+        if method != 0x1808 or not args[0]:
+            continue
+        fmt = regs.get(0x1740, 0)
+        particle = args[0] == 8 and (fmt >> 8 & 0xFF, fmt >> 4 & 0xF, fmt & 0xF) == (16, 3, 3)
+        found[(particle, " ".join("%s=%08x" % (n, regs.get(m, 0)) for n, m in SURFACE))] += 1
+    return found
+
+
 def names(index_path, gtf_dir):
     """Texture offset (as `%08x`) to the `.gtf` stem whose payload holds the dumped bytes."""
     gtfs = {p.stem: p.read_bytes() for p in Path(gtf_dir).rglob("*.gtf")}
@@ -129,7 +148,15 @@ def main():
     ap.add_argument("--gtf", required=True)
     ap.add_argument("--textures", type=Path, help="textures.json of another capture, for a film with no tex/")
     ap.add_argument("--per-frame", action="store_true", help="print each texture's cells per frame")
+    ap.add_argument("--surfaces", action="store_true",
+                    help="print each ring's render targets, particle draws against all others, and stop")
     args = ap.parse_args()
+    if args.surfaces:
+        for film in args.films:
+            for stem in sorted({p.name.split("-")[0] for p in (film / "ring").glob("*.bin")}):
+                for (particle, regs), draws in surfaces(film, stem).most_common():
+                    print("%s %s %-8s x%-4d %s" % (film.name, stem, "particle" if particle else "other", draws, regs))
+        return
     totals = collections.defaultdict(collections.Counter)
     for film in args.films:
         index = args.textures or film / "tex" / "textures.json"

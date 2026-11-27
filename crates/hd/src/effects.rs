@@ -185,6 +185,10 @@ const TURBULENCE: &[&str] = &[engine_effects::DETONATOR_EMP_EFFECT];
 /// The smoke ring's `sparks` are class 6 and the original draws them as sprite quads too, but
 /// listed they take the Bomb's 0.17 s pair further from the original, so they stay procedural
 /// (`docs/rendering/particle-fill.md`, "The Bomb's and the Missile's explosions paired").
+/// And the Rocket's flare, whose launch streaks the bar turns from one white beam at the camera
+/// into small flames, and its track blast, whose streaks the original draws as sprite quads
+/// (`docs/rendering/particle-fill.md`, "A Rocket on the wall paired"). The craft blast's
+/// streaks stay procedural.
 const FAR_BARS: &[&str] = &[
     engine_effects::DETONATOR_CANNON_SPARKS_EFFECT,
     engine_effects::TRAIL_HITSHIP_EFFECT,
@@ -196,6 +200,8 @@ const FAR_BARS: &[&str] = &[
     engine_effects::PLASMA_LIGHTNING_EXPAND_EFFECT,
     engine_effects::PLASMA_LIGHTNING_COLLAPSE_EFFECT,
     engine_effects::BOMB_RAYS_EFFECT,
+    engine_effects::ROCKET_FLARE_EFFECT,
+    engine_effects::TRACK_BLAST_EFFECT,
 ];
 
 /// The effects whose sprite templates play: the Plasma head's ring and glow and the
@@ -204,11 +210,14 @@ const FAR_BARS: &[&str] = &[
 /// why is unread (same page). The Rocket's craft blast: its root's `glow_longer` is the
 /// yellow screen wash and `FIRE_TRAILS_ONEQUAD`'s `Glow` the white flash of the hit, both
 /// removed from the original's frame by zeroing their gate
-/// (`docs/ghidra/functions/ps3-hdfury-eu/rocket-craft-blast.md`, "The screen wash").
+/// (`docs/ghidra/functions/ps3-hdfury-eu/rocket-craft-blast.md`, "The screen wash"). The
+/// Rocket's track blast: the original draws its `dc_flare_d` quads on a wall hit
+/// (`docs/rendering/particle-fill.md`, "A Rocket on the wall paired").
 const TEMPLATES: &[&str] = &[
     engine_effects::PLASMA_FLARE_EFFECT,
     engine_effects::PLASMA_CHARGING_EFFECT,
     engine_effects::CRAFT_BLAST_EFFECT,
+    engine_effects::TRACK_BLAST_EFFECT,
 ];
 
 /// The effects whose `.gtf` sprites HD plays, from `/data/psys/tex/`: every effect this

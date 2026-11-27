@@ -998,6 +998,12 @@ bit (`0x2`, `0x100`); here the same bits sit on the other numbers (state 9 sets 
 `0x100`: `0x0012d970`'s sixteen handlers at `0x0012da48..`), and the readout and the
 picture say state 9 is the Bomb.
 
+**A Rocket on the wall (2026-11-27).** From the weapons-on grid state, the player held where the
+race left it and turned 35 degrees (`scripts/rpcs3-hd-blast-film.py --weapon rocket-wall --yaw 35`)
+bursts its volley on the wall in full view about 14 to 18 ticks after the press, the same on two
+restores ([particle-fill.md](../rendering/particle-fill.md#a-rocket-on-the-wall-paired)). `--scout`
+keeps frames only, for choosing a yaw and the ages.
+
 ### The recorder is the clock
 
 `pause`/`resume` plus `screenshot` costs about a second a frame and has no clock.
