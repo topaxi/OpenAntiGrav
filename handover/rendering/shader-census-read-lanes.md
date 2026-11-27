@@ -1,8 +1,8 @@
 ---
-status: ready
+status: re-first
 titles: [hd, omega, 2048]
 updated: 2026-11-27
-summary: "Read lanes ranked by the shader census: 2048's fc07 emissive maps and HD's base_diffusespecular specular map are declared by programs no matcher claims"
+summary: "Census read lanes: 2048 fc07 emissive maps and HD base_diffusespecular specular maps have no matcher"
 categories: [rendering]
 ---
 
