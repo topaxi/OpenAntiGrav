@@ -328,9 +328,9 @@ the engine names none of them.
   `--mode detonator` refuses. Detonator is single player, so it sets
   `network-races = false`: no LAN or online race mounts its entries, and it leaves the
   fingerprint alone (a player with it on races one without it).
-- **Delivery** (ADR-0083 decision 5): a checkout finds the submodule; every packaged desktop and
-  phone build ships the mods ([packaging.md](packaging.md#official-mods)). The web build has
-  none.
+- **Delivery** (ADR-0083 decision 5): a checkout finds the submodule; the AppImage, tarball,
+  Windows, macOS, iOS and Android builds ship the mods
+  ([packaging.md](packaging.md#official-mods)). The AUR packages and the web build have none.
 
 ## Fallback entries: `fallback/<title>/`
 

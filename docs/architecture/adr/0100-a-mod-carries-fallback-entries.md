@@ -67,9 +67,9 @@ archives' search order.
 
 - With the mod off or absent, Pulse has no Detonator: no MODE value, nothing loaded, and
   `--mode detonator` on Pulse refuses. HD, 2048 and Omega are unaffected.
-- Pulse Detonator is only where the official mods are. Every packaged desktop and phone build
-  ships them ([packaging.md](../../tools/packaging.md#official-mods)); the web build ships none,
-  so it has no Pulse Detonator.
+- Pulse Detonator is only where the official mods are. The AppImage, tarball, Windows, macOS,
+  iOS and Android builds ship them ([packaging.md](../../tools/packaging.md#official-mods)); the
+  AUR packages and the web build ship none, so they have no Pulse Detonator.
 - A test of a Pulse Detonator race registers the official mod's layer itself, and fails under
   `OAG_REQUIRE_GAME_DATA=1` when the official-mods submodule is missing.
 - There is no `overrides/`-style mod folder that wins over the disc; a mod that must replace

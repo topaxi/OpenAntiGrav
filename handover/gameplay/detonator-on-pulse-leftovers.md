@@ -1,5 +1,5 @@
 ---
-status: parked
+status: blocked-maintainer
 titles: [pulse]
 updated: 2026-11-27
 summary: "Detonator on Pulse ships as the mod oag.detonator-pulse; no medals, score targets, announcer lines or far-LOD hull"
@@ -21,7 +21,8 @@ What a race has, and the mod split, are on
   ([own-hull.md](../../docs/formats/own-hull.md)).
 - On PS2 the cannon still leaves from the disc hull's `cannon_flash` locators, at its nose and
   not at the new hull's pods.
-- The web build ships no official mods, so it has no Pulse Detonator.
+- The AUR packages and the web build ship no official mods, so they have no Pulse Detonator
+  (before the move the data was in the binary).
 - No record that the maintainer has judged the EMP's look since it borrowed the Repulsor's.
 
 ## Next Steps
