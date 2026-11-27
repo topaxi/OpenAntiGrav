@@ -170,11 +170,12 @@ fn in_game(
     extra: &[&str],
     during: &str,
 ) -> (String, std::path::PathBuf) {
-    in_game_of(dir, image, "pulse", &["--no-intro"], extra, during)
+    let (json, shot, _) = in_game_of(dir, image, "pulse", &["--no-intro"], extra, during);
+    (json, shot)
 }
 
 /// [`in_game`] on the title whose result file is `<key>.json`, with the launch flags `launch`
-/// (`--no-intro` or none: a benchmark that plays its flyby).
+/// (`--no-intro` or none: a benchmark that plays its flyby), and its log as the third value.
 fn in_game_of(
     dir: &std::path::Path,
     image: &std::path::Path,
@@ -182,7 +183,7 @@ fn in_game_of(
     launch: &[&str],
     extra: &[&str],
     during: &str,
-) -> (String, std::path::PathBuf) {
+) -> (String, std::path::PathBuf, String) {
     // A fresh run directory: an earlier run's result would be a second one.
     let _ = std::fs::remove_dir_all(dir.join("data"));
     std::fs::create_dir_all(dir).expect("a temp directory");
@@ -204,13 +205,13 @@ fn in_game_of(
         .env("XDG_CONFIG_HOME", dir.join("config"))
         .env("XDG_STATE_HOME", dir.join("state"))
         .env("XDG_DATA_HOME", dir.join("data"))
+        // The stats heading is a debug line of this one module; all of `debug` is hundreds of
+        // megabytes of shader compiler output.
+        .env("RUST_LOG", "info,oag_game::app::session::benchmark=debug")
         .output()
         .expect("running oag-game");
-    assert!(
-        out.status.success(),
-        "oag-game: {}",
-        String::from_utf8_lossy(&out.stderr)
-    );
+    let log = String::from_utf8_lossy(&out.stderr).into_owned();
+    assert!(out.status.success(), "oag-game: {log}");
     let runs: Vec<_> = std::fs::read_dir(dir.join("data/oag/bench"))
         .expect("the benchmark wrote a run directory")
         .flatten()
@@ -218,7 +219,7 @@ fn in_game_of(
     assert_eq!(runs.len(), 1, "one run");
     let json = std::fs::read_to_string(runs[0].path().join(format!("{key}.json")))
         .expect("the result file is named for the title");
-    (json, shot)
+    (json, shot, log)
 }
 
 /// The in-game benchmark ends its race on the state the offscreen bench ends the same race on,
@@ -477,8 +478,8 @@ fn run_identity(json: &str) -> Vec<String> {
 fn input_changes_nothing(image: &std::path::Path, key: &str, base: &std::path::Path) {
     // Both runs start from no settings file: `in_game_of` keeps a profile's config.
     let _ = std::fs::remove_dir_all(base);
-    let (quiet, _) = in_game_of(&base.join("quiet"), image, key, &[], &[], "ticks 1");
-    let (busy, _) = in_game_of(&base.join("busy"), image, key, &[], &[], EVERY_INPUT);
+    let (quiet, _, _) = in_game_of(&base.join("quiet"), image, key, &[], &[], "ticks 1");
+    let (busy, _, _) = in_game_of(&base.join("busy"), image, key, &[], &[], EVERY_INPUT);
     assert_eq!(
         run_identity(&busy),
         run_identity(&quiet),
@@ -507,7 +508,7 @@ fn no_input_changes_a_pulse_benchmark() {
 }
 
 /// HD's flyby loops until somebody presses: the run presses for it at a fixed tick, so it plays the
-/// same length every time whatever the player does.
+/// same length every time whatever the player does. Its stats heading names the circuit it raced.
 #[test]
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso and a GPU"]
 fn no_input_changes_an_hd_benchmark() {
@@ -516,7 +517,11 @@ fn no_input_changes_an_hd_benchmark() {
     };
     let base = std::env::temp_dir().join("oag-in-game-benchmark-input-hd");
     input_changes_nothing(&image, "hd", &base);
-    let (json, _) = in_game_of(&base.join("again"), &image, "hd", &[], &[], "ticks 1");
+    let (json, _, log) = in_game_of(&base.join("again"), &image, "hd", &[], &[], "ticks 1");
+    assert!(
+        log.contains("benchmark heading: WIPEOUT HD  TALON'S JUNCTION  YOUR SETTINGS"),
+        "{log}"
+    );
     assert_eq!(
         field(&json, "flyby_ticks"),
         (27 * 60 + 1).to_string(),

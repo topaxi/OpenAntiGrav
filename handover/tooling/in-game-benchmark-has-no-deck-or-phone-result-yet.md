@@ -1,8 +1,8 @@
 ---
 status: measure
 titles: [all]
-updated: 2026-11-26
-summary: "Benchmark: compare Deck and full S21 result files; S24 figures only; mod preset file untried; 2048 tile unwired; HD/Omega heading no circuit"
+updated: 2026-11-27
+summary: "Benchmark: compare Deck and full S21 result files; S24 figures only; mod preset file untried; 2048 tile unwired; other circuit-path lookups unchecked"
 ---
 
 # The in-game benchmark is wired on every title; no compared Deck or phone result files
@@ -30,10 +30,12 @@ finishes in the window on it too.
   which no unit test has; a drive script cannot make a load fail or read the runtime field after
   the CLI run quits. Focus loss, the system Back, a preset's settings file and RUN BENCHMARK over
   a parked race do have `render_bench_ground_truth` tests.
-- **HD's and Omega's stats heading names no circuit** (2026-11-26, S21 and desktop, a command-line
-  run): the heading reads `WIPEOUT HD  YOUR SETTINGS`, where Pulse, Pure and 2048 name one. The
-  result file has the circuit (`/data/environments/talons_junction/track.vex`), so
-  `benchmark_report`'s lookup of it in `shell.tracks` finds nothing. Cause not read.
+- **Other places compare a race's circuit path byte for byte** with the catalogue's spelling
+  (`Track::entry_name() == entry`): `app/session/replays.rs` (the replay list's circuit name),
+  `load.rs` (the loading screen's label), `online.rs`, `lan.rs` and `app/headless.rs`. HD's and
+  Omega's default circuits are spelled otherwise (`docs/tools/in-game-benchmark.md`, "Reading the
+  screen"), so one that reaches these without coming from a menu row would match nothing. None was
+  run; `Track::addresses` is the comparison that folds the spellings.
 - **The screen's term of the frame budget is 60 Hz where the loop has not measured the display** (a
   `--drive` run, the web, the first seconds of a window): the result says `refresh_source:
   assumed`, and a faster screen that names no rate is judged at 60.

@@ -111,6 +111,19 @@ pub struct Request {
     pub frame_limit: Option<oag_present::perf::FrameLimit>,
 }
 
+/// The name the track select gives the circuit a race loaded, out of its rows (`tracks`):
+/// `None` where no row addresses `circuit`.
+#[must_use]
+pub fn circuit_name(
+    tracks: &[(oag_raceplay::catalogue::Track, String)],
+    circuit: &str,
+) -> Option<String> {
+    tracks
+        .iter()
+        .find(|(track, _)| track.addresses(circuit))
+        .map(|(_, name)| name.clone())
+}
+
 /// A mod that loaded with a run, as the result file names it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ModLoaded {

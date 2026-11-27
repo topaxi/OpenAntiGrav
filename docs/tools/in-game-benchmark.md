@@ -191,7 +191,13 @@ a string id; `benchmark::screen` draws them):
 | Mods: none, or Mods: N loaded | the run's MODS row |
 
 The heading line names the game, the circuit as the track select names it (never the archive's
-`16_Track`) and the preset. The buttons are DETAILS (and SUMMARY to come back), COPY TO CLIPBOARD,
+`16_Track`) and the preset. The race holds its circuit as a path, and the row is the one that
+addresses the same file with separators, capitals and a leading slash folded
+(`Track::addresses`, `benchmark::circuit_name`): HD's default circuit is spelled
+`/data/environments/talons_junction/track.vex` where its definition names `Talons_Junction`, and
+Omega's `environments` differs in case the same way, so an exact comparison names no circuit on
+either (run on both, 2026-11-27, confidence 95; **ported** to Omega, each with its own ground
+truth). The buttons are DETAILS (and SUMMARY to come back), COPY TO CLIPBOARD,
 BACK and RUN AGAIN; the pad walks them with left, right, up and down, and a click or a tap presses
 one. DETAILS lists the numbers of the table below, the screen refresh and where it came from, the
 settings under the menu's own row names and values (read out of the menu tree, so a name edited
@@ -311,7 +317,10 @@ checks each value against the page.
 - `render_bench_ground_truth::a_preset_changes_the_picture_and_not_the_race_or_the_players_settings`.
 - `render_bench_ground_truth::no_input_changes_a_pulse_benchmark` and `..._an_hd_benchmark`: a run
   with every input spent (held CROSS, click, SELECT, START, a stick, focus loss, a key) has the
-  untouched run's flyby length, final tick, state hash, frame count and `settings.toml`.
+  untouched run's flyby length, final tick, state hash, frame count and `settings.toml`. The HD
+  one also reads the stats heading, circuit name included, out of the log;
+  `hd_boot_ground_truth` and `omega_track_model_ground_truth` hold the name lookup against each
+  disc's own track list.
   `a_benchmark_with_its_mods_off_loads_no_extension_and_no_override`,
   `the_options_page_reaches_the_run_and_saves_nothing` and
   `the_mods_row_is_left_out_while_no_mod_is_enabled`: BENCHMARK OPTIONS. Unit tests hold the page in
