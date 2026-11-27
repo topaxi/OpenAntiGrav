@@ -623,7 +623,7 @@ fn a_device_lost_mid_race_saves_the_replay_and_ends_without_a_panic() {
         "the loss was not said:\n{why}"
     );
     assert_eq!(text(run.last(), &["stage"]), Some("race"));
-    let scratch = oag_testdata::scratch::dir("drive-device-lost-race");
+    let scratch = &run.profile;
     assert!(
         scratch.join("config/oag/device-lost.txt").is_file(),
         "no note for the next run"
