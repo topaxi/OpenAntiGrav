@@ -143,8 +143,62 @@ would make it 90+.
 `RaceManager_ResetGantryTime` (`0x00055488`) calls `SetTime(*0x008a6860)` on
 the same node, and `*0x008a6860` is `0.0`. Its one direct caller is
 `0x00043510` (a restart-shaped routine that reseeds and re-resolves a team
-record), and it is also an OPD (`0x00872268`) in a vtable. **When in the
-countdown that runs was not traced**, so the start tick is not read from code.
+record), and it is also an OPD (`0x00872268`) in a vtable. When in the
+countdown that runs was not traced; the countdown's own zero is read below.
+
+### What zeroes it in the countdown (2026-11-27, `hd-zone-start`, confidence 85)
+
+`RaceManager`'s phase-0 work, `0x0005e2d8`, dispatches on `this+0x1974` through
+the five-entry table at `0x0005e3a4` (TOC slot `-0x6a80` -> `0x008a6a58`).
+Sub-states 3 (`0x0005e5ec`) and 4 (`0x0005e56c`) both end the intro the same way:
+`AnimNode_UpdateTransformTree(0.0, node)` on the node of `this+0x1950` (the
+billboard slot 8 node of section 4; `bl 0x002c1b30` at `0x0005e638` and
+`0x0005e5a8`, the float from TOC slot `-0x6c78` -> `0x008a6860`, `0.0`) and
+`RaceManager_SetPhase(this, 1)` (`bl 0x00056368` at `0x0005e60c` and
+`0x0005e5dc`). **So the gantry's time is 0 when the countdown starts.** The mode
+updates reach it from their own phase 0: `SPZone_Update`'s table (`0x0007679c`,
+case 0 -> `0x000767b0`, `bl 0x0005e2d8` at `0x000767bc`) and
+`SPDetonator_Update`'s (`0x000681f4`, case 0 -> `0x000683d8`, `bl` at
+`0x000683e4`).
+
+**The countdown lasts 3.0 s.** `this+0x1958` is set to `4.0` (`lis r9,0x4080`,
+`stw r9,0x1958` at `0x00056d98` and `0x0005d4e0`). `RaceManager_UpdateCountdown`
+(`0x00057690`) computes `max(4.0 - this+0x1968, 0)`, floors it (`0x00425798`,
+reached through the stub `0x00677078`) and truncates to an integer; the release
+branch (`0x00057848`) is the one taken when that integer is 0, so the race is
+released 3.0 s into phase 1. RPCS3's polled phase said the same (compare-page.md,
+"The grab").
+
+**Corroborated on one frame.** The Zone countdown pair's original was paused
+2.433 s into phase 1. Ours' Zone board, swept a tick at a time, overlaps its
+glyphs best where its own board time is 2.4 to 2.5 s (compare-page.md, "The
+countdown frame").
+
+Wired: HD's Zone and Detonator mode boards take frame 0 180 ticks before the
+release (`oag_title::adverts::ModeGantry::assembly_ticks`, was 210).
+
+**2048 and Omega: checked, applies, not wired.** Both ship `321Go_Zone.vex`, and
+their `ModeGantry` rows keep 210 and no windows; neither executable's countdown entry
+was read.
+
+### The mode boards after the release (2026-11-27, `hd-zone-start`, confidence 85)
+
+The windows of section 3 act on whatever node slot 8 holds. `SPZone_Update` calls
+`RaceManager_Update` (`bl 0x0005e948` at `0x0007673c`) and so does
+`SPDetonator_Update` (`0x00068160`), so their boards are windowed like `3 2 1 GO`:
+`[3.83, 5.25)` from the release, then by lap. A Zone race has no lap count
+(`total == 0`), so after the first crossing it is `[6.017, 9.3)`.
+
+**Consistent with a live Zone race:** two RPCS3 captures on Vineta K Zone (2026-11-16)
+recorded **6.628 s and 6.758 s** at lap clocks 40.868 and 40.999 s and scenery clocks
+294.464 and 294.595 s. All three advance by the same 0.131 s, so a node in that race
+runs in real time on neither the lap nor the scenery clock. The range itself is no
+evidence: `rpcs3_hd_field.gantry_seconds` returns only values inside the windows, and it
+identifies the node as the gantry's by that alone.
+
+Wired for HD (`oag_title::adverts::ModeGantry::race_windows`). Ours: the countdown frame
+is unchanged by it (pixel-identical), the release jumps the icon to its whole loop, and
+the between-laps window plays the loop drawing itself.
 
 `RaceManager_SetPhase` (`0x00056368`) stores `+0x1970` and clears the timers at
 `+0x1968`/`+0x196c`/`+0x1974`; phases 0-4 dispatch through a jump table at
@@ -242,6 +296,16 @@ the step-A strip (not kept).
 
 ## Open
 
+- **HD's `3 2 1 GO` board starts with the countdown too, and ours does not yet.**
+  The same phase-0 work is reached by the updates at `0x00061560` (case 0 ->
+  `0x00061748`, `bl 0x0005e2d8` at `0x00061750`) and `0x00070770` (case 0 ->
+  `0x000709ac`, `bl` at `0x000709b4`), which sit with `SPArcade_RaceManager.cpp` and
+  `SPTimeTrial_RaceManager.cpp` (by address next to their `__FILE__` functions in
+  `ps3-toc.py map`, confidence 70 for the mode names; no live `GetMode`). So frame 0
+  would be tick 93, 180 before the release, where ours inherits the asset's `GO` edge
+  (tick 70). The release jump to 3.83 s turns the board green on the release either
+  way. The 2026-10-04 capture's digits came about 13 ticks later than ours: the same
+  direction, not the same size. Not wired: it moves every HD grid frame.
 - ~~The lap windows are not played.~~ Played since 2026-10-04 (above). Open
   from it: the writer of `ship+0x7810`, and a live lap crossing.
 - What calls `RaceManager_ResetGantryTime` during a countdown, and so the start

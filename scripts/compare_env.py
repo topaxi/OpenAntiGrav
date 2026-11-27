@@ -268,6 +268,52 @@ def picture_tick(go_tick_, clock_s, total_lag_ticks):
     return go_tick_ + round(clock_s * 60 - total_lag_ticks)
 
 
+#: HD's countdown lasts this long, from the race manager's phase 1 to the release
+#: (`docs/ghidra/functions/ps3-hdfury-eu/gantry-clock.md`, "What zeroes it in the countdown").
+HD_COUNTDOWN_S = 3.0
+
+#: The countdown pair's caveat; `%d, %d` are the zone and score.
+COUNTDOWN_CAVEAT = ("Zone countdown frame: the original draws no HUD yet, so zone %d and score %d are by construction, not read; "
+                    "ours runs to the same time before the release (the race manager's seconds in its countdown) with the craft "
+                    "held on the pose; effects that need history have only the countdown's")
+
+
+def countdown_tick(go_tick_, elapsed_s):
+    """Ours' tick for an HD frame `elapsed_s` into the original's countdown. Ours counts down longer than HD, so the two
+    share the release and not the start: ours stands as long before its release as the original did before its own."""
+    return picture_tick(go_tick_, elapsed_s - HD_COUNTDOWN_S, 0)
+
+
+def countdown_flags(rec, flags, go_tick_):
+    """`flags` at the countdown moment an HD pair's pause read (`original.race_phase`, phase 1): `--ticks` there, the world
+    clock rebased so the scenery still shows the original's time, and `--pose-hold`. Any other pair's flags unchanged.
+    Records ours' tick, clock and offset, and replaces the pair's countdown caveat."""
+    orig = rec.get("original") or {}
+    phase = orig.get("race_phase")
+    if rec.get("profile") != "hd-fury" or not phase or phase["phase"] != 1:
+        return flags
+    flags = list(flags)
+    ticks = countdown_tick(go_tick_, phase["elapsed_s"])
+    values = {"--ticks": str(ticks)}
+    if orig.get("world_clock_s") is not None:
+        offset = orig["world_clock_s"] - ticks / 60
+        values["--world-clock-offset"] = "%.3f" % offset
+        rec["ours"]["world_clock_offset_s"] = offset
+    for name, value in values.items():
+        if name in flags:
+            flags[flags.index(name) + 1] = value
+        else:
+            flags += [name, value]
+    if "--pose-hold" not in flags:
+        flags += ["--pose-hold"]
+    rec["ours"].update({"ticks": ticks, "race_clock_s": (ticks - go_tick_) / 60, "pose_hold": True})
+    zone = orig.get("zone")
+    if zone:
+        rec["caveats"] = [COUNTDOWN_CAVEAT % (zone["zone"], zone["score"]) if c.startswith("Zone countdown frame:") else c
+                          for c in rec.get("caveats", [])]
+    return flags
+
+
 def detonator_picture_flags(rec, flags, go_tick_):
     """`flags` with `--ticks` and the gantry pin at the picture's moment, for a Detonator pair whose lag was measured
     (`original.presented_lag.picture_total_ticks`); any other pair's flags unchanged. Records ours' tick and clock."""

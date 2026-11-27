@@ -251,9 +251,17 @@ The stored `talons-assegai-c1` original flies another hull than ours draws: a na
 `Assegai_c1` (read by eye; that pair predates the RAM hull check). The regrab's original reads `Assegai_c1` in RAM and matches ours,
 and its whole-pair score falls from the stored 4.78 to 2.65.
 
-**The Zone pair was not measured here.** Both grabs of that lane landed at lap clock 10.0 to 10.1 s, inferred to be the capture's default 12 s settle
-outlasting Zone's 3 s countdown (compare-page.md, "The grab"). It was regrabbed inside the countdown with the flame clock recorded (compare-page.md, "The countdown frame", 2026-11-27); no 8-phase flame
-sweep was run on it.
+**The Zone pair, measured on its countdown grab (2026-11-27, `hd-zone-start`).** The lane above could not: both its grabs landed at lap clock 10.0 to 10.1 s,
+inferred to be the capture's default 12 s settle outlasting Zone's 3 s countdown (compare-page.md, "The grab"). `hd/zone-vineta-k-z5` was regrabbed inside the
+countdown with `flame_clock_s` 352.4618 recorded, and ours rendered at tick 238 (compare-page.md, "The countdown frame") over the same 8 phases, twice each,
+both runs pixel-identical on every phase. The pin 352.4368 ranks **1 of 8 on both masks**:
+
+| mask | moved px | at the pin | rank | by phase, pin first |
+| --- | --- | --- | --- | --- |
+| crop | 61,101 | 9.31 | 1 of 8 | 9.31, 9.79, 10.03, 10.62, 11.30, 11.40, 10.19, 9.71 |
+| nozzle | 4,294 | 29.96 | 1 of 8 | 29.96, 32.26, 32.86, 38.36, 44.99, 46.88, 35.19, 32.55 |
+
+The whole-pair mean grey runs 5.486 (pin) to 5.540. One frame of one boot, so this adds one pair to the count above and leaves the confidence at 70.
 
 Reproduce: `python3 scripts/rpcs3-drive.py grab <png>` on an attached HD race writes `flame_clock_s`;
 `python3 scripts/hd-draw-dump.py <dir> <stem>` dumps the frame's fragment programs and

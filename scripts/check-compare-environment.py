@@ -315,6 +315,26 @@ def check_hd_countdown():
     assert "--settle" not in [str(c) for c in hd_pair.capture_command(args, Path("o"))]
 
 
+def check_hd_countdown_tick():
+    """An HD countdown pair renders ours as long before the release as the original's pause was, with the world clock
+    rebased onto the new tick; any other pair is left alone."""
+    assert ce.countdown_tick(272, 2.4333300590515137) == 238
+    assert ce.countdown_tick(272, 3.0) == 272
+    rec = {"profile": "hd-fury", "caveats": ["Zone countdown frame: old words", "kept"],
+           "original": {"race_phase": {"phase": 1, "elapsed_s": 2.4333300590515137}, "world_clock_s": 287.1652526855469,
+                        "zone": {"zone": 1, "score": 0}},
+           "ours": {}}
+    flags = ce.countdown_flags(rec, ["--race", "--world-clock-offset", "287.165", "--ticks", "0"], 272)
+    assert flags[flags.index("--ticks") + 1] == "238", flags
+    assert flags[flags.index("--world-clock-offset") + 1] == "283.199", flags
+    assert "--pose-hold" in flags and ce.countdown_flags(rec, flags, 272) == flags, flags
+    assert rec["ours"]["ticks"] == 238 and rec["caveats"] == [ce.COUNTDOWN_CAVEAT % (1, 0), "kept"], rec
+    for other in ({"profile": "hd-fury", "original": {}, "ours": {}},
+                  {"profile": "hd-fury", "original": {"race_phase": {"phase": 2, "elapsed_s": 1.0}}, "ours": {}},
+                  {"profile": "pulse-psp", "original": rec["original"], "ours": {}}):
+        assert ce.countdown_flags(other, ["--ticks", "0"], 272) == ["--ticks", "0"], other
+
+
 def check_hd_wait_countdown():
     """`wait_countdown` returns only once the race manager is `elapsed_s` into phase 1 (not in the race phase before the
     reload, not at the first tick of the countdown) and gives up on a timeout."""
@@ -596,6 +616,7 @@ def main():
     check_hd_hull()
     check_hd_pilot_assist()
     check_hd_countdown()
+    check_hd_countdown_tick()
     check_hd_wait_countdown()
     check_detonator_volley_ticks()
     with tempfile.TemporaryDirectory() as t:

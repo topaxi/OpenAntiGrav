@@ -184,9 +184,14 @@ pub struct ModeGantry {
     pub mode: GantryMode,
     /// The model's archive path, spelled as a `trackstartup.xml` names one.
     pub entry: &'static str,
-    /// Ticks the board's assembly runs before the release (HD: 210, about 3.5 s off
-    /// the capture; one boot, so a few ticks either way).
+    /// Ticks before the release at which the board's frame 0 plays. HD: 180, read from
+    /// the countdown's entry
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/gantry-clock.md`).
     pub assembly_ticks: u64,
+    /// Whether the title's race manager keeps this board's time in HD's lap windows from the
+    /// release on (same page, "The mode boards after the release"). `false` where the title's
+    /// own code is unread: the board's timeline then runs on.
+    pub race_windows: bool,
 }
 
 impl Adverts {

@@ -403,8 +403,7 @@ def zone_flags(pair, spec, countdown):
               else "read off the original's own HUD in the paused frame (HD's Zone counters are not located in RAM)")
     pair.rec["original"]["zone"] = {"zone": zone_n, "score": zone_score, "stage_pinned": stage, "source": source}
     if countdown:
-        pair.caveat("Zone countdown frame: the original draws no HUD yet, so zone %d and score %d are by construction, not read; "
-                    "ours runs no ticks, so every effect that needs history (exhaust, trail) starts cold" % (zone_n, zone_score))
+        pair.caveat(ce.COUNTDOWN_CAVEAT % (zone_n, zone_score))
     else:
         pair.caveat("Zone state read off the original's HUD by eye (zone %d, score %d), not from RAM; ours runs no ticks, so every "
                     "effect that needs history (exhaust, trail) starts cold; speed readout shows 0 in ours" % (zone_n, zone_score))
@@ -601,6 +600,8 @@ def main():
         pair.finish()
     if args.countdown and not countdown_check(pair, ship, live=not args.json):
         pair.finish()
+    if args.countdown and ship.get("race_phase"):
+        args.ours_ticks = ce.countdown_tick(GO_TICK, ship["race_phase"]["elapsed_s"])
     gantry = ship.get("gantry_seconds")
     pair.rec["original"]["gantry_seconds"] = gantry
     flame = ship.get("flame_clock_s")
@@ -615,7 +616,8 @@ def main():
         pair.rec["original"]["world_clock_s"] = world["time_s"]
         pair.rec["original"]["world_clock_note"] = ("scenery MeshImporter nodes' animation time (+0xc0) less the lap clock, the most "
                                                     "common value (%d of %d nodes), RAM, same pause as the frame" % (world["nodes"], world["total"]))
-        ours_world_offset = offset - GO_TICK / 60 if not (args.field or args.zone) else world["time_s"]
+        # A field or Zone shot's own ticks (0, or the countdown's) are on ours' clock already.
+        ours_world_offset = offset - GO_TICK / 60 if not (args.field or args.zone) else world["time_s"] - args.ours_ticks / 60
         pair.rec["ours"]["world_clock_offset_s"] = ours_world_offset
     pair.check("the scenery's animation clock was read", world is not None, "%s" % (world,))
     shutil_copy(record["screenshot"], out / "theirs.png")
@@ -752,10 +754,12 @@ def main():
     # A craft resting after GO turns, in the original as in ours (bank-to-yaw, docs/physics/grid-state.md), and the
     # original's pose has already turned for the clock it was read at. Running that clock again from it turned ours
     # twice, so `--pose-hold` puts the craft back on the fed pose for the frame and the last trace row; the clock,
-    # the GO board, the record panel and the exhaust still run their ticks. A race shot runs no ticks and needs none.
+    # the GO board, the record panel and the exhaust still run their ticks. A race shot runs no ticks and needs none;
+    # a countdown frame runs to its moment in the countdown.
     ours_csv = out / "ours-trace.csv"
-    cmd = base if args.field or args.zone else base + ["--pose-hold"] + (["--pose-hold-ticks"] if args.detonator else [])
-    pair.rec["ours"]["pose_hold"] = not (args.field or args.zone)
+    still = (args.field or args.zone) and not args.countdown
+    cmd = base if still else base + ["--pose-hold"] + (["--pose-hold-ticks"] if args.detonator else [])
+    pair.rec["ours"]["pose_hold"] = not still
     pair.rec["ours"]["pose_arg"] = "exact, slot 0 of field.csv" if args.field or args.detonator else pose
     pair.rec["ours"]["flags"] = [str(c) for c in cmd[2:]]
     run(cmd + ["--ticks", args.ours_ticks, "--screenshot", out / "ours.png"], stdout=subprocess.DEVNULL)
