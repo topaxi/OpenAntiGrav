@@ -47,6 +47,11 @@ const TIME: u32 = 0x906b_67ba;
 const SCROLL_UV_SCALE: u32 = 0xa24b_c055;
 const SCROLL_SPEED: u32 = 0xf0d9_0109;
 
+/// Glow-table entries left free for the readers that run after material setup: the circuit's pad
+/// masks (`pads::bind_scene_pad_masks`, up to three) and the advert cards' Zone exemption
+/// (`oag_render::gantry`, one). Without them Modesto Heights' light bars go dark.
+const LATER_READERS: usize = 4;
+
 /// Which of the two laws a family's program runs.
 #[derive(Clone, Copy)]
 enum Law {
@@ -256,7 +261,7 @@ pub(super) fn lightmapped_emissive(
             });
         let index = entry(spec, material, &declared).and_then(|layer| {
             table.iter().position(|seen| *seen == layer).or_else(|| {
-                (table.len() + 1 < EMISSIVE_LIMIT).then(|| {
+                (table.len() + 1 + LATER_READERS < EMISSIVE_LIMIT).then(|| {
                     table.push(layer);
                     table.len() - 1
                 })

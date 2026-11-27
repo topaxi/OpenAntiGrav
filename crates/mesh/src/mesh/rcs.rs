@@ -801,9 +801,15 @@ fn build_with_options(
         material_anim,
         anim_tracks,
     } = match setup {
-        Setup::Decode(textures, store, water) => {
-            material_setup(&model, model_blob, textures, store, water, &mut report)
-        }
+        Setup::Decode(textures, store, water) => material_setup(
+            &model,
+            model_blob,
+            textures,
+            store,
+            water,
+            true,
+            &mut report,
+        ),
         Setup::Copy(from) => MaterialSetup::of(from),
     };
     out.pad_masks = mag_emissive;

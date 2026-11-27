@@ -49,9 +49,10 @@ const FAMILIES: &[(&str, u32, bool)] = &[
 ];
 
 /// Slots known to stay dark, as `(circuit, family)`: Modesto Heights' glow table is full (63
-/// entries, the slot word's six bits).
+/// entries, the slot word's six bits, less those the later readers need).
 const DARK: &[(&str, &str)] = &[
     ("modesto_heights", "and_diffuse_emissive"),
+    ("modesto_heights", "and_diffuse_emissive_spec"),
     ("modesto_heights", "uvanim_diffuse_emissive"),
 ];
 
@@ -88,7 +89,7 @@ fn census(archive: usize) -> Option<BTreeMap<&'static str, usize>> {
             continue;
         };
         let source = oag_rcs::rcsmodel::Model::parse(&geometry).expect("the .rcsmodel parses");
-        let (model, _) = mesh::rcs::build_scene(
+        let (model, report) = mesh::rcs::build_scene(
             &path,
             &data,
             &geometry,
@@ -96,6 +97,8 @@ fn census(archive: usize) -> Option<BTreeMap<&'static str, usize>> {
             oag_gpu::formats::SceneStore::default(),
         )
         .expect("the circuit builds");
+        // The glow table is shared with readers that run later: this pass must leave them room.
+        assert_eq!(report.pad_ne_unread, 0, "{path}: a pad mask lost its entry");
         for (slot, material) in source.materials.iter().enumerate() {
             let leaf = material.name.rsplit('/').next().unwrap_or_default();
             let Some(&(family, sampler, fourth)) = FAMILIES
@@ -166,7 +169,6 @@ fn data00s_circuits_bind_every_lightmapped_emissive() {
     expect(
         0,
         &[
-            ("and_diffuse_emissive_spec", 4),
             ("diffuse_emissive_with_specular_from_alpha", 28),
             ("diffuse_spec_fresnel_emissive", 10),
             ("diffuse_with_specular_from_alpha_scalar", 64),
@@ -175,7 +177,7 @@ fn data00s_circuits_bind_every_lightmapped_emissive() {
             ("track_wall", 25),
             ("tunnel_fx_noalpha", 46),
             ("tunnel_fx_noalpha_mult", 4),
-            ("uvanim_diffuse_emissive", 32),
+            ("uvanim_diffuse_emissive", 16),
         ],
     );
 }
