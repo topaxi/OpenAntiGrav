@@ -704,6 +704,7 @@ pub(super) fn water(
                 ))
             });
             let Some((block, normal, second)) = read else {
+                super::census::claim(slot, "water", super::census::Outcome::NotDrawn);
                 report.water_taps_unread += 1;
                 continue;
             };
@@ -721,6 +722,7 @@ pub(super) fn water(
                     .is_some_and(|entry| entry.program[0] == 0.0 && entry.rate <= 1.0);
             let index = (held == 0 || glow).then(|| lay(table, &block)).flatten();
             let Some(index) = index else {
+                super::census::claim(slot, "water", super::census::Outcome::NotDrawn);
                 report.water_taps_blocked += 1;
                 continue;
             };
@@ -740,6 +742,7 @@ pub(super) fn water(
                 {
                     *frame = TangentFrame::Raw;
                 }
+                super::census::claim(slot, "water", super::census::Outcome::Drawn);
                 report.water_taps_drawn += 1;
                 continue;
             }
@@ -776,8 +779,10 @@ pub(super) fn water(
                     *word |= u32::try_from(index + 1).unwrap_or(0) << slots::MATERIAL_SHIFT;
                 }
             }
+            super::census::claim(slot, "water", super::census::Outcome::NotDrawn);
             report.water_lit_colour += 1;
         } else {
+            super::census::claim(slot, "water", super::census::Outcome::NotDrawn);
             report.water_glint_only += 1;
         }
     }

@@ -39,11 +39,13 @@ pub(super) fn shield_scroll(
             Program::parse(&blob, variant.fragment.offset)?.clock_scroll_rate(TIME)
         });
         let (Some(rate), Some(word)) = (rate, packed.get_mut(slot)) else {
+            super::census::claim(slot, "shield_scroll", super::census::Outcome::NotDrawn);
             report.shield_scroll_unread += 1;
             continue;
         };
         // Any other family's glow index is kept.
         if slots::material_index(*word) != 0 && *word & slots::ADD_SECOND == 0 {
+            super::census::claim(slot, "shield_scroll", super::census::Outcome::NotDrawn);
             report.shield_scroll_unread += 1;
             continue;
         }
@@ -61,11 +63,13 @@ pub(super) fn shield_scroll(
             })
         });
         let Some(index) = index else {
+            super::census::claim(slot, "shield_scroll", super::census::Outcome::NotDrawn);
             report.shield_scroll_unread += 1;
             continue;
         };
         *word &= slots::ROLE_MASK & !slots::ADD_SECOND;
         *word |= u32::try_from(index + 1).unwrap_or(0) << slots::MATERIAL_SHIFT;
+        super::census::claim(slot, "shield_scroll", super::census::Outcome::Drawn);
         report.shield_scroll_bound += 1;
     }
 }

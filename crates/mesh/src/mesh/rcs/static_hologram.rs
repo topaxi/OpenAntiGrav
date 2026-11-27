@@ -106,6 +106,7 @@ pub(super) fn static_hologram(
             continue;
         };
         if !is_static_hologram(&declared) {
+            super::census::claim(slot, "static_hologram", super::census::Outcome::NotDrawn);
             report.static_hologram_other_shape += 1;
             continue;
         }
@@ -115,6 +116,7 @@ pub(super) fn static_hologram(
         // The generic reading gives this slot an additive glow off its second texture; any
         // other family's index is kept.
         if slots::material_index(*word) != 0 && *word & slots::ADD_SECOND == 0 {
+            super::census::claim(slot, "static_hologram", super::census::Outcome::NotDrawn);
             report.static_hologram_unread += 1;
             continue;
         }
@@ -156,6 +158,7 @@ pub(super) fn static_hologram(
             parameter(ALPHA_SCALE),
         )
         else {
+            super::census::claim(slot, "static_hologram", super::census::Outcome::NotDrawn);
             report.static_hologram_unread += 1;
             continue;
         };
@@ -173,6 +176,7 @@ pub(super) fn static_hologram(
             })
         });
         let Some(index) = index else {
+            super::census::claim(slot, "static_hologram", super::census::Outcome::NotDrawn);
             report.static_hologram_unread += 1;
             continue;
         };
@@ -186,6 +190,7 @@ pub(super) fn static_hologram(
                 | slots::ALBEDO_FROM_SECOND
                 | slots::ALPHA_FROM_SECOND);
         *word |= u32::try_from(index + 1).unwrap_or(0) << slots::MATERIAL_SHIFT;
+        super::census::claim(slot, "static_hologram", super::census::Outcome::Drawn);
         report.static_hologram_bound += 1;
     }
     statics

@@ -132,6 +132,7 @@ pub(super) fn snow_rock(
         // with an additive glow the generic reading gave its unit 1, which is the mask: that
         // reading is replaced. Any other family's index is kept.
         if slots::material_index(*word) != 0 && *word & slots::ADD_SECOND == 0 {
+            super::census::claim(slot, "snow_rock", super::census::Outcome::NotDrawn);
             report.snow_rock_unread += 1;
             continue;
         }
@@ -182,6 +183,7 @@ pub(super) fn snow_rock(
             value(ROCK_SPECULAR),
         )
         else {
+            super::census::claim(slot, "snow_rock", super::census::Outcome::NotDrawn);
             report.snow_rock_unread += 1;
             continue;
         };
@@ -213,6 +215,7 @@ pub(super) fn snow_rock(
                 })
             });
         let Some(first) = first else {
+            super::census::claim(slot, "snow_rock", super::census::Outcome::NotDrawn);
             report.snow_rock_unread += 1;
             continue;
         };
@@ -224,6 +227,7 @@ pub(super) fn snow_rock(
         bound.tangent[slot] = true;
         *word &= slots::ROLE_MASK & !slots::ADD_SECOND;
         *word |= u32::try_from(first + 1).unwrap_or(0) << slots::MATERIAL_SHIFT;
+        super::census::claim(slot, "snow_rock", super::census::Outcome::Drawn);
         report.snow_rock_bound += 1;
     }
     bound

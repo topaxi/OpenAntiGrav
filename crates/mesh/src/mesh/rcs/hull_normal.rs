@@ -113,6 +113,7 @@ pub(super) fn hull_normal(
             .find(|(h, p)| *h == hash && p.is_some())
             .and_then(|(_, p)| p.clone())
         else {
+            super::census::claim(slot, "hull_normal", super::census::Outcome::NotDrawn);
             report.hull_normal_unread += 1;
             continue;
         };
@@ -129,6 +130,7 @@ pub(super) fn hull_normal(
             })
             .clone();
         let Some(texture) = texture else {
+            super::census::claim(slot, "hull_normal", super::census::Outcome::NotDrawn);
             report.hull_normal_unread += 1;
             continue;
         };
@@ -144,6 +146,7 @@ pub(super) fn hull_normal(
         } else {
             TangentFrame::Raw
         };
+        super::census::claim(slot, "hull_normal", super::census::Outcome::Drawn);
         report.hull_normal_bound += 1;
     }
     (maps, marked)

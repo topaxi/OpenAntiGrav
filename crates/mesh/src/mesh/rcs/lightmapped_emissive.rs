@@ -300,6 +300,11 @@ pub(super) fn lightmapped_emissive(
         let Some(declared) = textures(&format!("/{}", material.name))
             .and_then(|blob| rcsmaterial::Declared::parse(&blob, variant.fragment.offset))
         else {
+            super::census::claim(
+                slot,
+                "lightmapped_emissive",
+                super::census::Outcome::NotDrawn,
+            );
             report.lightmapped_emissive_unread += 1;
             continue;
         };
@@ -312,6 +317,11 @@ pub(super) fn lightmapped_emissive(
             Binding::Fourth => (fourths, &mut bound.fourth),
         };
         if slots::material_index(*word) != 0 || occupied.get(slot).is_some_and(Option::is_some) {
+            super::census::claim(
+                slot,
+                "lightmapped_emissive",
+                super::census::Outcome::NotDrawn,
+            );
             report.lightmapped_emissive_unread += 1;
             continue;
         }
@@ -332,11 +342,17 @@ pub(super) fn lightmapped_emissive(
             })
         });
         let (Some(picture), Some(index)) = (picture, index) else {
+            super::census::claim(
+                slot,
+                "lightmapped_emissive",
+                super::census::Outcome::NotDrawn,
+            );
             report.lightmapped_emissive_unread += 1;
             continue;
         };
         target[slot] = Some(Arc::new(picture));
         *word |= u32::try_from(index + 1).unwrap_or(0) << slots::MATERIAL_SHIFT;
+        super::census::claim(slot, "lightmapped_emissive", super::census::Outcome::Drawn);
         report.lightmapped_emissive_bound += 1;
     }
     bound

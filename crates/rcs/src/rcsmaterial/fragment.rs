@@ -28,6 +28,7 @@ pub use glow_alpha::Lane;
 mod normal_read;
 mod opcode;
 mod sun_dot;
+mod unpatched;
 
 /// One fragment-program dword, whose 16-bit halves are stored swapped.
 #[must_use]

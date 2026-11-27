@@ -120,6 +120,11 @@ pub(super) fn plan(
                     && s.dirt_texcoords.len() == s.positions.len()
             });
         if !readable {
+            crate::mesh::rcs::census::claim(
+                index,
+                "tarmac",
+                crate::mesh::rcs::census::Outcome::NotDrawn,
+            );
             report.tarmac_unread += 1;
             continue;
         }
@@ -133,6 +138,11 @@ pub(super) fn plan(
         let emissive_path = material.sampler(EMISSIVE).filter(|p| !p.is_empty());
         let emissive_picture = emissive_path.map(&mut picture);
         let (Some(markings), Some(dirt)) = (markings, dirt) else {
+            crate::mesh::rcs::census::claim(
+                index,
+                "tarmac",
+                crate::mesh::rcs::census::Outcome::NotDrawn,
+            );
             report.tarmac_unread += 1;
             continue;
         };
@@ -151,6 +161,11 @@ pub(super) fn plan(
             })
         });
         let Some(slot) = at.and_then(|at| u32::try_from(at + 1).ok()) else {
+            crate::mesh::rcs::census::claim(
+                index,
+                "tarmac",
+                crate::mesh::rcs::census::Outcome::NotDrawn,
+            );
             report.tarmac_unread += 1;
             continue;
         };
@@ -160,6 +175,7 @@ pub(super) fn plan(
             sixth: Some(dirt),
             emissive: emissive_picture.flatten(),
         });
+        crate::mesh::rcs::census::claim(index, "tarmac", crate::mesh::rcs::census::Outcome::Drawn);
         report.tarmac_materials += 1;
     }
     out

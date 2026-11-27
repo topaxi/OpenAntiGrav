@@ -171,6 +171,7 @@ mod billboard_glass;
 mod bomb_tint;
 pub mod bullet_gauge;
 pub mod cannon_bolt;
+pub mod census;
 mod chevron_pulse;
 mod cutout;
 mod damage_lights;

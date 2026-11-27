@@ -424,6 +424,7 @@ pub(super) fn holo_billboard(
             continue;
         }
         let Some(shape) = classify(&declared, &program, &material.parameters) else {
+            super::census::claim(slot, "holo_billboard", super::census::Outcome::NotDrawn);
             report.holo_billboard_other_shape += 1;
             continue;
         };
@@ -448,6 +449,7 @@ pub(super) fn holo_billboard(
         let (Some(advert), Some(scanlines), Some(second)) =
             (load(ADVERT), load(SCANLINES), load(SECOND))
         else {
+            super::census::claim(slot, "holo_billboard", super::census::Outcome::NotDrawn);
             report.holo_billboard_unread += 1;
             continue;
         };
@@ -459,6 +461,7 @@ pub(super) fn holo_billboard(
             })
         });
         let Some(index) = index else {
+            super::census::claim(slot, "holo_billboard", super::census::Outcome::NotDrawn);
             report.holo_billboard_unread += 1;
             continue;
         };
@@ -470,6 +473,7 @@ pub(super) fn holo_billboard(
             *word |= slots::HOLO_BILLBOARD;
             *word |= u32::try_from(index + 1).unwrap_or(0) << slots::MATERIAL_SHIFT;
         }
+        super::census::claim(slot, "holo_billboard", super::census::Outcome::Drawn);
         report.holo_billboard_bound += 1;
     }
     thirds

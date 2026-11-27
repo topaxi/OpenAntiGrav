@@ -190,6 +190,7 @@ pub(super) fn light_cone(
             *word |= slots::LIGHT_CONE;
             *word |= u32::try_from(index + 1).unwrap_or(0) << slots::MATERIAL_SHIFT;
         }
+        super::census::claim(slot, "light_cone", super::census::Outcome::Drawn);
         report.light_cone_bound += 1;
     }
 }

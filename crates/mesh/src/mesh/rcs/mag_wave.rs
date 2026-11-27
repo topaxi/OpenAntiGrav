@@ -115,10 +115,12 @@ pub(super) fn mag_wave(
             value_of(COLOUR),
             value_of(SCALE),
         ) else {
+            super::census::claim(slot, "mag_wave", super::census::Outcome::NotDrawn);
             report.mag_wave_unread += 1;
             continue;
         };
         let (Some(e_tex), Some(w_tex)) = (load(&e_path, textures), load(&w_path, textures)) else {
+            super::census::claim(slot, "mag_wave", super::census::Outcome::NotDrawn);
             report.mag_wave_unread += 1;
             continue;
         };
@@ -134,6 +136,7 @@ pub(super) fn mag_wave(
             ) {
                 (Some(grid), Some(ramp), Some(bias)) => Some((grid, ramp, bias.value[0])),
                 _ => {
+                    super::census::claim(slot, "mag_wave", super::census::Outcome::NotDrawn);
                     report.mag_wave_unread += 1;
                     continue;
                 }
@@ -155,6 +158,7 @@ pub(super) fn mag_wave(
             })
         });
         let Some(index) = index else {
+            super::census::claim(slot, "mag_wave", super::census::Outcome::NotDrawn);
             report.mag_wave_unread += 1;
             continue;
         };
@@ -172,6 +176,7 @@ pub(super) fn mag_wave(
             }
             *word |= u32::try_from(index + 1).unwrap_or(0) << slots::MATERIAL_SHIFT;
         }
+        super::census::claim(slot, "mag_wave", super::census::Outcome::Drawn);
         report.mag_wave_bound += 1;
     }
     (emissive, wave)

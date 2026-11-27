@@ -164,6 +164,7 @@ pub(super) fn vertex_scroll(
             });
         let Some(at) = at else { continue };
         material_anim[slot] = u32::try_from(at + 1).unwrap_or(0);
+        super::census::claim(slot, "vertex_scroll", super::census::Outcome::Drawn);
         report.vertex_scrolls += 1;
     }
 }
