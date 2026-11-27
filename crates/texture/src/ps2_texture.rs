@@ -211,6 +211,16 @@ pub struct Ps2Texture {
     pub indices: Vec<u8>,
 }
 
+impl Ps2Texture {
+    /// Levels the GS samples, base included: `flags & 0x1f` beyond the base, as the
+    /// engine writes `TEX1.MXL` (`docs/ghidra/functions/ps2-pulse-eu/texture-level.md`,
+    /// "The law"). Every texture on the disc authors none beyond it.
+    #[must_use]
+    pub fn level_count(&self) -> u32 {
+        u32::from(self.flags & 0x1f) + 1
+    }
+}
+
 /// Just enough of the header to classify a blob, without decoding it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Header {

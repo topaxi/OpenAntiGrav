@@ -18,7 +18,7 @@ Lane `farfield-lod-titles`, 2026-11-27. Read alongside the Pulse PSP law, which 
 | Title | The law | Evidence | Conf | Ours today | Outcome |
 | --- | --- | --- | ---: | --- | --- |
 | **Pure (PSP)** | Pulse's, call for call: slope `1/256` set once per frame (`Gu_TexLevelMode(2, 1.0)`, `Gu_TexLodSlope(1/powf(2,8))` in `FUN_08866bec`). Per-texture `TEXLEVEL` from `Texture_BuildBindList` `0x0887f058` with the bias of `Texture_LodBiasFromDensity` `0x0887d610`. K stored per texture at `+0x2a0`, rebuilt past 0.2 (`Texture_Bind` `0x0887e900`) | Static: every function is Pulse's body. Live, Modesto GE lists: one `TEXLODSLOPE` `1/256`; 56 `TEXLEVEL` values, mode 2 bias -0.06 to +6.25, plus mode-0 words. One K in `[-9.0507, -9.0486]` reproduces the bias byte exactly for 37 of 40 matched track textures (`x18` 0.007 to 1,584). That K is not `-log2(480 * m00)` of the drawn projection (-8.32), and with the 0.2 rebuild threshold it cannot be a stale build either; its source is unread | 85 (bias form), 50 (K) | Track textures are disc chains (`9213011dd`) on the shared slope path with Pulse's constant bias 1.0: no per-texture bias, no mode-0 textures | **checked, applies, not wired**: Pure takes whatever `pulse-farfield-lod` wires, with its own header floats and K ([psp-pure-usa/texture-level.md](../ghidra/functions/psp-pure-usa/texture-level.md)) |
-| **Pulse (PS2)** | One level. The GS samples `flags & 0x1f` levels beyond the base (the texture file header's own count), and every shipped texture authors 0, so a race reads the base at every distance: `TEX1` `MXL` 0, `MMIN` 1 (linear, no mipmapping) | Four in-race GS dumps, the disc census of 14,005 texture objects and the loader read: [below](#pulse-ps2-in-a-race) and [texture-level.md](../ghidra/functions/ps2-pulse-eu/texture-level.md) | 92 | `ps2_textures.rs` uploads each PS2 texture as RGBA8 with `mip_count None`, a box chain to 1x1 sampled by the hardware's derivative level. Distant PS2 surfaces are softer than the original's base-level reads | **checked, differs** (handover: ready to wire) |
+| **Pulse (PS2)** | One level. The GS samples `flags & 0x1f` levels beyond the base (the texture file header's own count), and every shipped texture authors 0, so a race reads the base at every distance: `TEX1` `MXL` 0, `MMIN` 1 (linear, no mipmapping) | Four in-race GS dumps, the disc census of 14,005 texture objects and the loader read: [below](#pulse-ps2-in-a-race) and [texture-level.md](../ghidra/functions/ps2-pulse-eu/texture-level.md) | 92 | `ps2_textures.rs` uploads each PS2 texture with the file's own level count (`Ps2Texture::level_count`, `flags & 0x1f` + 1), so one level; the player's anisotropy still takes its taps on it (the compare pairs run it off) | **ported** |
 | **HD/Fury (PS3)** | RSX hardware selection (derivative level) over the `.gtf`'s authored chain. Texture filter word `0x02063e80`: `LINEAR_MIPMAP_LINEAR`, bias `-1.5` (`0x1e80` as signed 5.8). Control word `0x80078000`: anisotropy 0. Environment probes `0x02062000`, bias 0 | Command rings of 2,619 + 3,935 binds on Anulpha Pass and The Amphiseum ([hd-track-tone.md](hd-track-tone.md), "The LOD bias, wired and held"); the authored chain ([gtf.md](../formats/gtf.md), "The mip chain is the disc's") | 85 | Authored chain, derivative level, `material_lod_bias` -1.5 on track and glass materials (`oag_hd::effects`, `Origin::Measured`). Anisotropy is the player's (16x default; the pairs run it off) | **ported** |
 | **2048 (Vita)** | GXM hardware selection over the `.gxt`'s chain. Every texture the GXT loader makes is linear/linear, mip filter enabled, repeat, `sceGxmTextureSetLodBias(0x13)` = -1.5. No anisotropy | `GxtLoader_LoadTexture` `0x812f0ec4`, the only `SetLodBias` call site. The live canvas atlas descriptor carries raw 19 in 606 copies ([gxt-loader.md](../ghidra/functions/vita-2048-eu-v104/gxt-loader.md)). **In a race**, 269 distinct disc textures bound over two frames all carry the loader's state (bias raw 19, linear, linear, mip filter on); `track.probes` bind at bias 0 with the mip filter off. One boot for the bound state, a second for the resident descriptors. The Zone and Detonator track skins have their mip filter switched off after load (static, not measured live) | 90 | `material_lod_bias` is `Rule::UNREAD`: bias 0, anisotropy 16x by default | **checked, differs** (handover: ready to wire) |
 | **Omega (PS4)** | GNM hardware selection. Mipmapped colour samplers are `AnisoLinear` 16x with mip `Linear`, LOD bias 0.0 (+1.0 on 1 or 2 per boot). Bilinear 1x elsewhere | The native port's log of the game's own S#, four boots on three circuits ([omega-status.md](../formats/omega-status.md), "The port's anisotropy") | 90 | Bias 0 (no `material_lod_bias` rule), anisotropy 16x by default and in the `omega` pair profile. The +1.0 samplers are not mapped to materials | **ported** for bias and filter; the +1.0 samplers are open |
@@ -95,27 +95,84 @@ texture archives and are not scanned.
 - Entries `0xb077d3bd` and `0x8d17fa0d` hold 61 and 122 texture headers, all with 0 levels, in a packing
   that is not decoded ([ps2-texture.md](../formats/ps2-texture.md#not-determined)).
 
+## Pulse PS2 wired: what moved in the pairs
+
+2026-11-27, 22 PS2 pairs rendered before and after. 18 moved (17 race frames and the Team menu's hull
+preview); a second render of the new build was pixel-identical on all 22. Every PSP, HD, 2048, Omega
+and Pure pair is pixel-identical to the build before. Mean grey over the 22 went 75.38 to 75.35
+(originals 76.02).
+
+By eye at 3x on far-field crops the new frames match the originals and the old ones do not: the
+box chain smeared the crowd stands and the trackside wall, and erased the tread texture on a girder
+at Vertica, all of which the original and the new frame resolve.
+
+**RMSE against the original went up all the same**, and is recorded rather than explained away:
+
+| Over the 17 race frames | Before | After | Original |
+| --- | ---: | ---: | ---: |
+| RMSE, native 1280x720 | 0.1832 | 0.1878 (farther on 17) | |
+| RMSE, ours drawn at 1820x1024 and Lanczos-resized as the original is | 0.1832 | 0.1855 (farther on 17) | |
+| RMSE after a 16x box reduction of both, native | 0.1228 | 0.1230 | |
+| Mean vertical neighbour step, 1820x1024 route | 6.58 | 7.73 | 7.15 |
+
+The 16x figures are level, so colour and coverage did not move; the difference is in fine detail, and
+the original's amount of it lies between the two builds. The likely reading is that a sharp picture
+scores worse than a blurred one against a reference whose pixels do not line up with ours. Partly
+tested: with the field of view 0.05 degrees wider (about half a pixel at the edge), each build's own
+17 frames moved by a mean RMSE of 0.0234 before and 0.0327 after, so the new picture is the more
+sensitive to a sub-pixel offset. Whether that accounts for the whole rise is **not established**.
+The new frames are somewhat grainier than the originals on distant crowds: the original is drawn at
+2x internal resolution and resized, ours takes one tap per output pixel. The level rule itself is the
+GS dumps' measurement, not the pairs'.
+
 ## What TEXTURE DETAIL reaches
 
-The GRAPHICS row TEXTURE DETAIL (`original`, `high`, `maximum`) is `TextureDetail::level_shift`,
-carried as `scene.fog.texlod_shift`. `mesh.wesl` reads it in **one place**: the slope path
-(`shade.wesl`, the `texlod_slope` branch). That branch runs only for a model with a `Texels::Chain`:
+The GRAPHICS row TEXTURE DETAIL (`original`, `high`, `maximum`) is `TextureDetail::level_shift`
+(0, -1, -64 levels), carried as `scene.fog.texlod_shift`. `high` and `maximum` are this project's own,
+chosen rather than measured. A model takes it on one of two paths:
 
-| Title | Path | Does `high`/`maximum` move the level today? |
+| Path | Which models | Where the shift goes |
 | --- | --- | --- |
-| Pulse PSP | slope path | yes |
-| Pure PSP | slope path (chained since `9213011dd`) | yes |
-| Pulse PS2 | hardware derivative level over a box chain | **no** |
-| HD/Fury | hardware derivative level + `material_lod_bias` (`textureSampleBias`/`textureSampleGrad`) | **no** |
-| 2048 | hardware derivative level | **no** |
-| Omega | hardware derivative level | **no** |
+| Slope | a model with `Texels::Chain` (Pulse PSP, Pure) | added to the level of the GE's law (`shade.wesl`, the `texlod_slope` branch) |
+| Hardware | every other: Pulse PS2, HD/Fury, 2048, Omega, and a PSP model without a chain | added to the sampler's own level (`texture_lod.wesl`, `detail_shift`) |
 
-The row is shown on every title (`assets/ui/menu.toml`, no title gate), so on four of six it does
-nothing. Ready to wire: add `scene.fog.texlod_shift` to the bias on the hardware path. That means
-`material_sample`'s `textureSampleBias`, the `exp2` scale in `material_sample_grad`, and the plain
-`textureSample` reads of material textures. A `maximum` shift of -64 clamps to the base level, as it
-does on the slope path. Both apply to the shader as it stands on `main` at `80ef69d91`; lane
-`pulse-farfield-lod` is changing the slope path.
+On the hardware path it reaches:
+
+- every material fetch (`material_sample`), on top of the title's `material_lod_bias`, as a
+  `textureSampleBias` of the sum;
+- the explicit-gradient fetches (`material_sample_grad`, and HD's lightmapped glass sheen), as a
+  scale of both gradients by `2^shift`;
+- the effect programs' own fetches (flame, magstrip floor, light cone, absorb shell, weapon
+  programs, rim, `holo.wesl`) through `detail_sample`, which adds the shift and no title bias.
+
+At `original` the sum is the title's bias alone, so a pipeline with none takes a plain
+`textureSample`. `textureSampleBias` takes -16 at the lowest, past the base of any chain, so `maximum`
+reads level 0. A slope-path model's hardware fetches (its second binding and the like) take no shift,
+as before.
+
+Not reached:
+
+- the Zone stage textures (`zone.wesl`), whose alpha is a band index;
+- explicit-level reads (`textureSampleLevel`: the panel march's field, probes, shadow maps);
+- sprites and particles (`oag-fx`).
+
+**On Pulse PS2 the row has no choice**: every texture has one level, so there is no finer one to
+reach. Whole frames are byte-identical across the three presets
+(`texture_detail_ground_truth.rs`, `pulse_ps2_has_one_level_for_texture_detail_to_move`), so a PS2
+boot drops the row (`menu_tree::trim_texture_detail_row`, `menu_web_rows.rs`). The setting and
+`--texture-detail` are still read there.
+
+Tests:
+
+| Claim | Test |
+| --- | --- |
+| Level 2, 1, 0 per preset at no title bias (2048, Omega), at -1.5 (HD), and through an effect fetch | `psp_slope_lod.rs`, `texture_detail_shifts_the_samplers_own_level`, `..._adds_to_a_titles_own_material_bias`, `..._reaches_an_effect_programs_own_fetch` |
+| The same through explicit gradients | `omega_panel_map_lit_path.rs`, `texture_detail_scales_the_explicit_gradients` |
+| HD's whole frame differs pairwise across the presets | `texture_detail_ground_truth.rs`, `each_texture_detail_preset_draws_its_own_picture_on_hd` |
+| A distant PS2 texel is a texel of the base | `psp_slope_lod.rs`, `a_distant_ps2_texel_reads_the_base_level`; `ps2_texture_binding_ground_truth.rs` over 32 track sets |
+
+2048 against Omega (CLAUDE.md's pairing): **ported**, both take the same hardware path and the
+no-title-bias test is theirs. Omega's panel-map road is the explicit-gradient test's fixture.
 
 ## Reproducing
 

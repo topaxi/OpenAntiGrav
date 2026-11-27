@@ -1526,8 +1526,9 @@ values = ["original", "high", "maximum"]
 # over the mip levels the disc authors: level 1 from 256 units of view depth,
 # level 2 from 512 - and the default. `high` doubles the depth of every step and
 # `maximum` always samples level 0; both are this project's own, chosen rather
-# than measured. One multiplier on the law, not a second code path. See
-# `docs/rendering/frame-audit.md`. Applies live: the session hands the preset to
+# than measured. A title with no such law takes the same steps as a shift of
+# the sampler's own level; Pulse PS2's textures have one level, so a PS2 boot
+# drops the row. See `docs/rendering/texture-level-per-title.md`. Applies live: the session hands the preset to
 # the race every frame and the fragment stage reads it from the scene uniform.
 [[page.entry]]
 kind = "choice"

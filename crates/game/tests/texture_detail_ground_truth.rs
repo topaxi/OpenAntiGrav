@@ -1,7 +1,7 @@
 //! TEXTURE DETAIL reaches the frame a player sees.
 //!
-//! **`#[ignore]`d and never run in CI.** It needs a Pulse disc image under
-//! `data/images/` and a GPU adapter. See
+//! **`#[ignore]`d and never run in CI.** It needs the Pulse PSP, Pulse PS2 and
+//! Wipeout HD disc images under `data/images/` and a GPU adapter. See
 //! `docs/architecture/adr/0006-no-copyrighted-content.md`.
 //!
 //! ```sh
@@ -21,12 +21,25 @@
 //! byte-identical.
 //!
 //! `original` is also the default: a run with no flag is byte-identical to it.
+//!
+//! HD takes the preset on the other path, as a shift of the sampler's own level,
+//! and its three pictures differ pairwise too. Pulse PS2's textures author one
+//! level (`docs/rendering/texture-level-per-title.md`, "Pulse PS2 in a race"),
+//! so there all three are the same picture; a chain built under them would part them.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-fn capture(image: &Path, scratch: &Path, detail: Option<&str>) -> Vec<u8> {
-    let out = scratch.join(format!("far-{}.png", detail.unwrap_or("default")));
+/// The far field of Pulse PSP's 16th circuit, past the 256 units a level step needs.
+const PSP_LONG_STRAIGHT: [&str; 3] = [
+    "--track",
+    "Data\\Environments\\16_Track\\track.vex",
+    "--pose=-297.96,-50.5,-172.83",
+];
+
+fn capture(image: &Path, scratch: &Path, at: &[&str], detail: Option<&str>) -> Vec<u8> {
+    let name = image.file_stem().expect("an image name").to_string_lossy();
+    let out = scratch.join(format!("{name}-{}.png", detail.unwrap_or("default")));
     let mut command = Command::new(env!("CARGO_BIN_EXE_oag-game"));
     command
         .arg(image)
@@ -47,8 +60,8 @@ fn capture(image: &Path, scratch: &Path, detail: Option<&str>) -> Vec<u8> {
             "off",
         ])
         .args(["--screen-filter", "off", "--anisotropy", "off"])
-        .args(["--track", "Data\\Environments\\16_Track\\track.vex"])
-        .args(["--ticks", "1", "--pose=-297.96,-50.5,-172.83"])
+        .args(["--ticks", "1"])
+        .args(at)
         .arg("--screenshot")
         .arg(&out)
         // A settings file of the player's must not decide the preset.
@@ -62,8 +75,9 @@ fn capture(image: &Path, scratch: &Path, detail: Option<&str>) -> Vec<u8> {
     oag_texture::png::picture_only(&std::fs::read(&out).expect("reading the screenshot"))
 }
 
-fn scratch() -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("oag-texture-detail-{}", std::process::id()));
+fn scratch(name: &str) -> PathBuf {
+    let dir =
+        std::env::temp_dir().join(format!("oag-texture-detail-{name}-{}", std::process::id()));
     std::fs::create_dir_all(&dir).expect("creating the scratch directory");
     dir
 }
@@ -74,11 +88,12 @@ fn each_texture_detail_preset_draws_its_own_picture_of_the_far_field() {
     let Some(image) = oag_testdata::image("data/images/pulse-psp-eu.chd") else {
         return;
     };
-    let scratch = scratch();
-    let original = capture(&image, &scratch, Some("original"));
-    let high = capture(&image, &scratch, Some("high"));
-    let maximum = capture(&image, &scratch, Some("maximum"));
-    let default = capture(&image, &scratch, None);
+    let scratch = scratch("psp");
+    let shot = |detail| capture(&image, &scratch, &PSP_LONG_STRAIGHT, detail);
+    let original = shot(Some("original"));
+    let high = shot(Some("high"));
+    let maximum = shot(Some("maximum"));
+    let default = shot(None);
     std::fs::remove_dir_all(&scratch).ok();
 
     assert_eq!(default, original, "original is the default preset");
@@ -87,5 +102,48 @@ fn each_texture_detail_preset_draws_its_own_picture_of_the_far_field() {
     assert_ne!(
         original, maximum,
         "maximum must differ from the recovered law"
+    );
+}
+
+#[test]
+#[ignore = "needs a Wipeout HD disc image in data/images/ and a GPU adapter"]
+fn each_texture_detail_preset_draws_its_own_picture_on_hd() {
+    let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let scratch = scratch("hd");
+    let shot = |detail| capture(&image, &scratch, &[], detail);
+    let original = shot(Some("original"));
+    let high = shot(Some("high"));
+    let maximum = shot(Some("maximum"));
+    let default = shot(None);
+    std::fs::remove_dir_all(&scratch).ok();
+
+    assert!(default == original, "original is the default preset");
+    assert!(original != high, "high must shift the sampler's level");
+    assert!(high != maximum, "maximum must reach the base level");
+    assert!(original != maximum, "maximum must differ from original");
+}
+
+#[test]
+#[ignore = "needs a Pulse PS2 disc image in data/images/ and a GPU adapter"]
+fn pulse_ps2_has_one_level_for_texture_detail_to_move() {
+    let Some(image) = oag_testdata::image("pulse-ps2-eu.chd") else {
+        return;
+    };
+    let scratch = scratch("ps2");
+    let shot = |detail| capture(&image, &scratch, &[], Some(detail));
+    let original = shot("original");
+    let high = shot("high");
+    let maximum = shot("maximum");
+    std::fs::remove_dir_all(&scratch).ok();
+
+    assert!(
+        original == high,
+        "a PS2 race reads the base at every distance: high moved it"
+    );
+    assert!(
+        original == maximum,
+        "a PS2 race reads the base at every distance: maximum moved it"
     );
 }

@@ -179,6 +179,7 @@ pub(super) fn menu_page(
     crate::water_setting::trim_row(&mut definition, title, &crate::menu_tree::disc_probe());
     definition.drop_unavailable_dynamic_hud(title);
     definition.drop_unavailable_game_options(title);
+    crate::menu_tree::trim_texture_detail_row(&mut definition, platform);
     definition.rename_campaign_row(title, strings);
     definition.rename_multiplayer_row(title, strings);
     definition.relabel_choice_from(

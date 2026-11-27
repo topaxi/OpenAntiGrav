@@ -47,8 +47,10 @@ pub struct ModelTexture {
     /// **A PSP `.vex` texture does not use this**: it arrives as
     /// [`Texels::Chain`], the disc's own levels, and the blur this field was
     /// added to chase was level *selection*, not chain depth - see
-    /// `docs/rendering/frame-audit.md`. What still passes a `Some` here is a
-    /// pre-swizzled Pure texture whose levels are not read.
+    /// `docs/rendering/frame-audit.md`. What passes a `Some` here is a
+    /// pre-swizzled Pure texture whose levels are not read, and a PS2 texture,
+    /// which authors its own count (`oag_texture::ps2_texture::Ps2Texture::level_count`,
+    /// 1 on every texture on the disc).
     pub mip_count: Option<u32>,
     /// Pulse's per-texture level selection, as the value a vertex of a draw under
     /// this texture carries in `GpuVertex::texcoord2.y` -

@@ -219,6 +219,9 @@ live. Proof: `psp_slope_lod.rs` reads the level each preset selects at depths
 `texture_detail_ground_truth.rs` runs the binary per preset on the Talon straight
 and asserts the three pictures differ pairwise.
 
+The shift also reaches every model off the slope law, as a bias on the sampler's own level
+(Pulse PS2, HD, 2048, Omega): [texture-level-per-title.md](texture-level-per-title.md#what-texture-detail-reaches).
+
 Talon long straight (`--pose -297.96,-50.5,-172.83`, `--ticks 1`, 480x272),
 luma Laplacian standard deviation, measured on the flat law, same metric as above (`magick ... -colorspace
 Gray -define convolve:scale='!' -morphology Convolve Laplacian:0`, sd x 255):
