@@ -281,7 +281,7 @@ pub(crate) fn open_viewer(
         oag_replay::ActiveMod::differences(&replay.header.active_mods, &view.active_mods);
     let viewer = Viewer::open(setup, view, modules, *replay).map_err(|e| {
         let why = match (&e, &mods_differ) {
-            (_, Some(differ)) => format!("{differ}; {e}"),
+            (_, Some(differ)) => format!("{}{differ}", page::MODS),
             (OpenError::NoPoseTrack(_), None) => page::NO_POSE_TRACK.to_string(),
             (OpenError::Start(start), None) => format!("{start:#}"),
         };
@@ -289,8 +289,10 @@ pub(crate) fn open_viewer(
         if shot.is_none() {
             refused.insert(path.clone(), why);
         }
-        let differ = mods_differ.as_deref().map_or_else(String::new, |d| format!("{d}; "));
-        anyhow::anyhow!("{} cannot be rebuilt here: {differ}{e}", path.display())
+        oag_raceplay::ModsDiffer::over(
+            anyhow::anyhow!("{} cannot be rebuilt here: {e}", path.display()),
+            mods_differ.as_deref(),
+        )
     })?;
     let viewer = match shot {
         Some((tick, _)) => viewer.starting_at(tick),

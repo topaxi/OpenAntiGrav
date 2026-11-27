@@ -118,3 +118,59 @@ fn a_mod_that_is_also_a_texture_pack_moves_the_mode_row_live() {
     };
     assert_eq!(offered, [true, false, true], "on, off, on again");
 }
+
+/// A Detonator race driven from the menus is recorded with the mod in its header, and watching
+/// it after the MODS page has switched the mod off in the same session says which mod is
+/// missing on the file's row.
+#[test]
+#[ignore = "needs a disc image in data/images/ and the official-mods submodule"]
+fn a_detonator_replay_watched_with_its_mod_off_names_the_mod() {
+    let (Some(image), Some(root)) = (pulse(), official()) else {
+        return;
+    };
+    let script = format!(
+        "boot; select racebox; press cross; until page=race; set race.mode=detonator; \
+         select launch_race; press cross; until screen=picker; press cross; \
+         until screen.id=ship-select; press cross; until stage=race within 4000; \
+         ticks 280; hold cross 120; escape; until page=pause within 100; \
+         select pause_quit; press cross; until page=main within 600; \
+         select mods; press cross; until page=mods; select {ID}; press square; ticks 5; \
+         press circle; until page=main; \
+         select replays; press cross; until page=replays; ticks 30; \
+         select watch_replay; press cross; until page=replays within 900; ticks 5"
+    );
+    let mods = root.parent().expect("the official mods");
+    let run = drive_with(
+        &image,
+        "mods-replay",
+        &script,
+        None,
+        &[("OAG_MODS", mods.to_str().expect("a UTF-8 path"))],
+    );
+    assert!(run.output.status.success(), "{}", run.why_not_success());
+
+    let auto = run.profile.join("data/oag/replays/auto");
+    let file = std::fs::read_dir(&auto)
+        .expect("the race was kept")
+        .next()
+        .expect("one recording")
+        .expect("readable")
+        .path();
+    let replay = oag_replay::Replay::from_bytes(&std::fs::read(file).expect("the recording"))
+        .expect("it reads back");
+    assert!(
+        replay
+            .header
+            .active_mods
+            .iter()
+            .any(|m| m.id == ID && !m.version.is_empty()),
+        "{:?}",
+        replay.header.active_mods
+    );
+
+    let why = (run.last().pointer("/screen/rows/0/values/0/unavailable"))
+        .and_then(Value::as_str)
+        .unwrap_or_else(|| panic!("the row is not dimmed: {}\n{}", run.last(), run.stderr()));
+    assert!(why.starts_with(&format!("missing {ID} ")), "{why}");
+}
+

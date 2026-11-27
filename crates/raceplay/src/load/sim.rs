@@ -96,14 +96,36 @@ pub fn load_sim(options: &Options) -> Result<SimLoad> {
     // Named on whatever fails once it is known: a recording raced with a mod that is off now
     // usually cannot even be loaded, and the missing file says less than the missing mod.
     let mut mods_differ = None;
-    read_sim(options, &mut mods_differ).map_err(|e| named(e, mods_differ.as_deref()))
+    read_sim(options, &mut mods_differ).map_err(|e| ModsDiffer::over(e, mods_differ.as_deref()))
 }
 
-/// `error` under the line that names how the mods differ from a recording's, when they do.
-pub(super) fn named(error: anyhow::Error, mods_differ: Option<&str>) -> anyhow::Error {
-    match mods_differ {
-        Some(differ) => error.context(differ.to_string()),
-        None => error,
+/// How the mods differ from a recording's ([`oag_replay::ActiveMod::differences`]), as the
+/// context over what then failed: a screen downcasts to it and says this alone, a log writes the
+/// whole chain.
+#[derive(Debug)]
+pub struct ModsDiffer(pub String);
+
+impl std::fmt::Display for ModsDiffer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "mods differ from the recording: {}", self.0)
+    }
+}
+
+impl ModsDiffer {
+    /// `error` under the line, when the mods differ.
+    pub fn over(error: anyhow::Error, mods_differ: Option<&str>) -> anyhow::Error {
+        match mods_differ {
+            Some(differ) => error.context(Self(differ.to_string())),
+            None => error,
+        }
+    }
+
+    /// What the player is told of `error`: the mods that differ when they do, else its chain.
+    #[must_use]
+    pub fn or_chain(error: &anyhow::Error) -> String {
+        error
+            .downcast_ref::<Self>()
+            .map_or_else(|| format!("{error:#}"), ToString::to_string)
     }
 }
 
@@ -159,7 +181,7 @@ fn read_sim(options: &Options, mods_differ: &mut Option<String>) -> Result<SimLo
     if let Some(recorded) = &options.recorded_active_mods {
         *mods_differ = oag_replay::ActiveMod::differences(recorded, &active_mods);
         if let Some(differ) = mods_differ.as_deref() {
-            log::warn!("replay: {differ}");
+            log::warn!("replay: {}", ModsDiffer(differ.to_string()));
         }
     }
     refuse_a_mode_without_its_data(options.mode, title, &archives)?;

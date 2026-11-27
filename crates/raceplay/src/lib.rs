@@ -404,7 +404,7 @@ pub use load::authored_length;
 pub use load::load_view;
 #[cfg(feature = "view")]
 pub use load::ripple::{Ripples, SpanPlaces};
-pub use load::{SimLoad, export_track, load, load_sim};
+pub use load::{ModsDiffer, SimLoad, export_track, load, load_sim};
 #[cfg(feature = "view")]
 pub use load::{authored_light, hd_bloom_params};
 #[cfg(feature = "view")]

@@ -23,6 +23,19 @@ use super::{Entry, Folder, Head};
 /// [`words::NO_POSE_TRACK`].
 pub const NO_POSE_TRACK: &str = "no-pose-track";
 
+/// What starts a [`Context::refused`] value that is the mods differing from the recording's: the
+/// row shows the rest alone, because its one line cuts a mod's name off after a lead.
+pub const MODS: &str = "mods:";
+
+/// The [`Context::refused`] value for a load that failed with `error`.
+#[must_use]
+pub fn refusal(error: &anyhow::Error) -> String {
+    error.downcast_ref::<oag_raceplay::ModsDiffer>().map_or_else(
+        || format!("{error:#}"),
+        |differ| format!("{MODS}{}", differ.0),
+    )
+}
+
 /// The page, and the row that holds which file the page is about. Never persisted.
 pub const PAGE: &str = "replays";
 /// See [`PAGE`].
@@ -181,6 +194,8 @@ fn unusable(entry: &Entry, cx: &Context<'_>) -> Option<String> {
     if let Some(why) = cx.refused.get(&entry.path) {
         return Some(if why == NO_POSE_TRACK {
             cx.say(words::NO_POSE_TRACK)
+        } else if let Some(differ) = why.strip_prefix(MODS) {
+            differ.to_string()
         } else {
             cx.say(words::REFUSED).replace("%s", why)
         });
@@ -263,16 +278,19 @@ pub fn table_for(
         .visible_rows()
         .saturating_sub(model.page().entries.len());
     let entry = selected(model, entries)?;
-    // A dimmed value's reason draws in the note slot under the rows, which is the first detail
-    // line's place: the lines start one lower.
-    let room = if unusable(entry, cx).is_some() {
-        room.saturating_sub(1)
-    } else {
-        room
-    };
+    Some(lines_within(entry, cx, room))
+}
+
+/// [`lines`] as the `room` lines under the rows hold them. A dimmed value's reason draws in the
+/// note slot, which is the first line's place, so a blank line takes it and the details start
+/// one lower.
+fn lines_within(entry: &Entry, cx: &Context<'_>, room: usize) -> Vec<(String, String)> {
     let mut lines = lines(entry, cx);
+    if unusable(entry, cx).is_some() {
+        lines.insert(0, (String::new(), String::new()));
+    }
     lines.truncate(room);
-    Some(lines)
+    lines
 }
 
 /// All of `entry`'s detail lines, most useful first.

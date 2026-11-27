@@ -28,8 +28,9 @@ impl ActiveMod {
         }
     }
 
-    /// How the mods `here` differ from the `recorded` ones, each difference naming its mod, or
-    /// `None` when they are the same mods at the same releases in the same load order.
+    /// How the mods `here` differ from the `recorded` ones, each difference naming its mod
+    /// first, or `None` when they are the same mods at the same releases in the same load order.
+    /// The list alone, with no lead: a screen with one short line shows it as it is.
     #[must_use]
     pub fn differences(recorded: &[Self], here: &[Self]) -> Option<String> {
         let mut why = Vec::new();
@@ -61,7 +62,7 @@ impl ActiveMod {
                 ids(recorded)
             ));
         }
-        (!why.is_empty()).then(|| format!("mods differ from the recording: {}", why.join("; ")))
+        (!why.is_empty()).then(|| why.join("; "))
     }
 }
 
@@ -89,8 +90,8 @@ mod tests {
         assert_eq!(
             ActiveMod::differences(&recorded, &here).as_deref(),
             Some(
-                "mods differ from the recording: missing a.gone 1.0.0; \
-                 b.moved is 1.1.0 here and 1.0.0 in the recording; extra c.new 3.0.0"
+                "missing a.gone 1.0.0; b.moved is 1.1.0 here and 1.0.0 in the recording; \
+                 extra c.new 3.0.0"
             )
         );
     }
@@ -101,10 +102,7 @@ mod tests {
         let here = mods(&[("b.two", "1.0.0"), ("a.one", "1.0.0")]);
         assert_eq!(
             ActiveMod::differences(&recorded, &here).as_deref(),
-            Some(
-                "mods differ from the recording: load order is b.two, a.one here and \
-                 a.one, b.two in the recording"
-            )
+            Some("load order is b.two, a.one here and a.one, b.two in the recording")
         );
     }
 }
