@@ -391,18 +391,20 @@ pub const TITLE: &Title = &Title {
         card_unlit: true,
         gantry_boards: None,
         // Detonator's board is the one copy `DATA00` ships, Omega's mode-`0xe` name
-        // (`docs/ghidra/functions/ps4-omega-eu/billboards.md`); its assembly ticks are
-        // Zone's, chosen, not measured.
+        // (`docs/ghidra/functions/ps4-omega-eu/billboards.md`). Both boards' clocks are
+        // zeroed on entering the 3.0 s countdown, so frame 0 is 180 ticks before the
+        // release (`docs/ghidra/functions/ps3-hdfury-eu/gantry-clock.md`, "What zeroes
+        // it in the countdown").
         mode_gantries: &[
             oag_title::adverts::ModeGantry {
                 mode: oag_title::adverts::GantryMode::Zone,
                 entry: "/Data/Billboards/HD_Adverts/321Go/321Go_Zone.vex",
-                assembly_ticks: 210,
+                assembly_ticks: 180,
             },
             oag_title::adverts::ModeGantry {
                 mode: oag_title::adverts::GantryMode::Detonator,
                 entry: "/Data/Billboards/HD_Adverts/321Go/321go_hd_detonator.vex",
-                assembly_ticks: 210,
+                assembly_ticks: 180,
             },
         ],
         origin: oag_title::Origin::Measured,

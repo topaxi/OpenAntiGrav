@@ -431,8 +431,9 @@ pub const TITLE: &Title = &Title {
         }]),
         // Each mode's board is this title's own substitution
         // (`TrackStartup_Read`, `docs/ghidra/functions/vita-2048-eu-v104/track-startup-sound-bank.md`);
-        // the assembly ticks are HD's Zone figure, inherited, and chosen, not measured, for
-        // the boards of the modes this engine does not run yet.
+        // the assembly ticks (210) are chosen, not measured: HD's own boards are read at 180
+        // (`docs/ghidra/functions/ps3-hdfury-eu/gantry-clock.md`) and this title's code
+        // for it is unread.
         mode_gantries: &[
             oag_title::adverts::ModeGantry {
                 mode: oag_title::adverts::GantryMode::Zone,
