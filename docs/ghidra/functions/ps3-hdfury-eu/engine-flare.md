@@ -251,8 +251,8 @@ The stored `talons-assegai-c1` original flies another hull than ours draws: a na
 `Assegai_c1` (read by eye; that pair predates the RAM hull check). The regrab's original reads `Assegai_c1` in RAM and matches ours,
 and its whole-pair score falls from the stored 4.78 to 2.65.
 
-**The Zone pair was not measured here.** Both grabs of that lane landed at lap clock 10.0 to 10.1 s: the capture's default 12 s settle outlasts Zone's
-3 s countdown. It was regrabbed inside the countdown with the flame clock recorded (compare-page.md, "The countdown frame", 2026-11-27); no 8-phase flame
+**The Zone pair was not measured here.** Both grabs of that lane landed at lap clock 10.0 to 10.1 s, inferred to be the capture's default 12 s settle
+outlasting Zone's 3 s countdown (compare-page.md, "The grab"). It was regrabbed inside the countdown with the flame clock recorded (compare-page.md, "The countdown frame", 2026-11-27); no 8-phase flame
 sweep was run on it.
 
 Reproduce: `python3 scripts/rpcs3-drive.py grab <png>` on an attached HD race writes `flame_clock_s`;
