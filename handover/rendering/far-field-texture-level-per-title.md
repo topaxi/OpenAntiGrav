@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [pure, pulse, hd, 2048, omega]
 updated: 2026-11-27
-summary: "Far-field texture level: PS2 single level (92) and TEXTURE DETAIL ready to wire; 2048 bias and Pure K to measure"
+summary: "Far-field texture level: PS2 single level (92) and TEXTURE DETAIL ready to wire; 2048 bias ready to wire (90), Pure K to read"
 ---
 
 # Far-field texture level, title by title
@@ -14,14 +14,15 @@ read values only, as `Title` data, with a test, a break-it, and the other titles
 
 ## Open
 
-- **2048: `material_lod_bias` -1.5, measure first, do not wire below 90** (maintainer: the evidence is the loader plus one front-end texture; race materials need an in-race read, as for PS2). `GxtLoader_LoadTexture` (`0x812f0ec4`) gives every
-  texture it builds `sceGxmTextureSetLodBias(0x13)` = -1.5, trilinear, no anisotropy (confidence 85,
-  `docs/ghidra/functions/vita-2048-eu-v104/gxt-loader.md`). That race materials keep those bits is
-  inferred (60). The Zone and Detonator track skins have their mip filter switched off after load.
-  First read one live race-material `SceGxmTexture` in Vita3K, about 45 minutes. Then wiring: one `material_lod_bias:
-  Rule { on: Any, origin: Measured }` in `crates/2048/src/lib.rs`'s `Looks`, and a test like
-  `oag-hd`'s `the_material_lod_bias_follows_its_rule`. Then re-render the three 2048 pairs. Omega must
-  stay at bias 0 (its S# read 0.0).
+- **2048: `material_lod_bias` -1.5, ready to wire** (confidence 90, at the maintainer's gate of 90). In a
+  Queens Mall race all 269 distinct disc textures bound over two frames carry the loader's state (bias -1.5,
+  trilinear, no anisotropy), none differs (`docs/ghidra/functions/vita-2048-eu-v104/gxt-loader.md`, "In a
+  race"). Bound state is from one boot; a second boot agrees on resident descriptors only. Not measured live:
+  Zone and Detonator track skins (static read: mip filter off), HD/Fury circuits, a second circuit.
+  Wiring: one `material_lod_bias: Rule { on: Any, origin: Measured }` in `crates/2048/src/lib.rs`'s `Looks`,
+  and a test like `oag-hd`'s `the_material_lod_bias_follows_its_rule`. Then re-render the three 2048 pairs.
+  Check which model draws 2048's pads: `load/lod_bias.rs` leaves separate pad models at 0, and 2048's pad
+  textures read -1.5. Omega must stay at bias 0 (its S# read 0.0).
 - **Pulse PS2: one level, ready to wire** (confidence 92, over the maintainer's gate of 90). A race reads
   the base level at every distance: `TEX1` `MXL` 0 and `MMIN` 1 on 242,433 textured primitives (both fields) of four
   in-race dumps, and all 14,005 shipped texture objects author 0 levels beyond the base
@@ -48,13 +49,12 @@ read values only, as `Title` data, with a test, a break-it, and the other titles
 - **Not read:**
   - which camera built the Modesto textures' stored K (-9.05, against the race camera's -8.32);
   - Omega's two +1.0-bias samplers' materials;
-  - a live 2048 race-material descriptor (the loader's value is confirmed on the front-end canvas
-    only).
+  - 2048's Zone and Detonator track skins and an HD/Fury circuit, live.
 
 ## Next Steps
 
 1. After `pulse-farfield-lod` merges: wire the PS2 single level (about an hour with its test and the PS2
    pairs), then TEXTURE DETAIL on the hardware path (about an hour, a shader change with a level test per
    preset).
-2. Measure: 2048's live race-material descriptors in a race (about 45 minutes in Vita3K); wire the `Rule` line only at 90+.
+2. Wire 2048's `material_lod_bias` (about an hour with its test and the three pairs).
 3. Read: Pure's K source (about 30 minutes in Ghidra).
