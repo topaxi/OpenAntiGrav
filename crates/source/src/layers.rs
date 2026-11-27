@@ -31,8 +31,8 @@
 use std::path::PathBuf;
 use std::sync::RwLock;
 
-use oag_assets::{Archives, Platform};
 use oag_assets::layers::{Kind, Layer};
+use oag_assets::{Archives, Platform};
 use oag_title::Title;
 
 /// The environment variable that names the override directories outright: a

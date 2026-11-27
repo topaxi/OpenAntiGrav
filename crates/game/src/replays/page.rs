@@ -30,10 +30,12 @@ pub const MODS: &str = "mods:";
 /// The [`Context::refused`] value for a load that failed with `error`.
 #[must_use]
 pub fn refusal(error: &anyhow::Error) -> String {
-    error.downcast_ref::<oag_raceplay::ModsDiffer>().map_or_else(
-        || format!("{error:#}"),
-        |differ| format!("{MODS}{}", differ.0),
-    )
+    error
+        .downcast_ref::<oag_raceplay::ModsDiffer>()
+        .map_or_else(
+            || format!("{error:#}"),
+            |differ| format!("{MODS}{}", differ.0),
+        )
 }
 
 /// The page, and the row that holds which file the page is about. Never persisted.

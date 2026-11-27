@@ -181,7 +181,10 @@ fn an_enabled_mod_is_listed_for_its_titles_platform_and_network() {
     };
     assert!(any.is_for(&[oag_hd::TITLE], Platform::Ps3));
     assert!(pack.is_for(&[TITLE], Platform::Psp));
-    assert!(pack.is_for(&[oag_hd::TITLE, TITLE], Platform::Psp), "a craft's title counts");
+    assert!(
+        pack.is_for(&[oag_hd::TITLE, TITLE], Platform::Psp),
+        "a craft's title counts"
+    );
     assert!(!pack.is_for(&[TITLE], Platform::Ps2));
     assert!(!pack.is_for(&[oag_hd::TITLE], Platform::Psp));
     let layering = Layering {
