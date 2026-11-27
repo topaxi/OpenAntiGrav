@@ -104,9 +104,19 @@ pub struct Adverts {
     /// What the target the cards are drawn into stores of a card's colour: HD's linear-light
     /// 5-6-5, Pulse's truncated gamma 5-6-5, or the full 8 bits. See [`CardStore`].
     pub card_store: CardStore,
+    /// Ticks before the release at which the circuit's own start board (`3 2 1 GO`)
+    /// plays frame 0, or `None` where the title's countdown entry is unread: the
+    /// board's start then comes from its asset's own `GO` edge. The boards in
+    /// [`Self::gantry_boards`] and [`Self::mode_gantries`] carry their own.
+    ///
+    /// HD: 180, read from the countdown's entry, which zeroes the slot 8 node
+    /// 3.0 s before the release
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/gantry-clock.md`, "The circuit's own
+    /// board").
+    pub countdown_assembly_ticks: Option<u64>,
     /// The slot 8 boards whose countdown is their nodes' own motion, or `None` where
-    /// the title has none. Any board not listed plays HD's clock off its own `GO`
-    /// edge.
+    /// the title has none. Any board not listed plays HD's clock, from
+    /// [`Self::countdown_assembly_ticks`] or off its own `GO` edge.
     pub gantry_boards: Option<&'static [GantryBoard]>,
     /// The board slot 8 shows instead of the circuit's own, by race mode; empty
     /// where the title keeps one gantry for every mode. A mode this engine does not
