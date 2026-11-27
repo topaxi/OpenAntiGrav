@@ -702,8 +702,10 @@ bench-compare A B:
 #
 # The other half of `play`, which names an image for you. This one names none,
 # reads every `.chd` and `.iso` under `data/images/` - and beside the AppImage,
-# and under `~/.local/share/oag/images` - and puts them on screen with what each
-# one turned out to be. Up and down choose, Enter or X boots, Escape quits.
+# and under `~/.local/share/oag/images` - and lists each with what it turned out
+# to be. Up and down choose, Enter or X boots, Escape quits. The list is passed
+# explicitly (`--launcher-list`): a player's chooser draws a card per title, the
+# list is the one that names every image, which is what debugging wants.
 #
 # `--launcher` is passed explicitly rather than relying on the bare no-argument
 # path, so this recipe shows the screen even for a developer who has `$OAG_IMAGE`
@@ -713,7 +715,7 @@ bench-compare A B:
 # encrypted `hdfury-ps3-eu.iso` sitting beside its decrypted twin is what that
 # is for; see `just ps3iso decrypt` and docs/formats/ps3-disc.md.
 launch *ARGS:
-    cargo run --release -p oag-game {{native_video_flags}} -- --launcher "$@"
+    cargo run --release -p oag-game {{native_video_flags}} -- --launcher --launcher-list "$@"
 
 # Same as `play`, but wrapped with MangoHud for an FPS/frametime overlay. Needs
 # `mangohud` installed; override the binary with `MANGOHUD_BIN`.

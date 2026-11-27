@@ -336,6 +336,14 @@ OAG_OPTIONS_PLAYER_TAG = { text = "TAG DU JOUEUR", human = false }
 OAG_PLAYER_NAME_TITLE = { text = "ENTREZ VOTRE NOM", human = false }
 OAG_PLAYER_TAG_TITLE = { text = "ENTREZ VOTRE TAG", human = false }
 
+# The title chooser's cards (`crates/game/src/launcher/cards.rs`).
+OAG_LAUNCHER_CHOOSE = { text = "CHOISIR UN JEU", human = false }
+OAG_LAUNCHER_MOVE = { text = "FLÈCHES CHOISIR", human = false }
+OAG_LAUNCHER_START = { text = "ENTRÉE OU X LANCER", human = false }
+OAG_LAUNCHER_PICTURE = { text = "C OU CARRÉ IMAGE SUIVANTE", human = false }
+OAG_LAUNCHER_QUIT = { text = "ÉCHAP QUITTER", human = false }
+OAG_LAUNCHER_ENCRYPTED = { text = "CHIFFRÉ - SAISISSEZ SA CLÉ DE DISQUE", human = false }
+
 [untranslated]
 ids = [
     # The REPLAYS page's EXPORT row on a phone; no translation pass yet.

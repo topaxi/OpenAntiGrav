@@ -219,6 +219,8 @@ pub(crate) enum Launch {
 pub(crate) struct Windowed {
     app: Box<App>,
     drive: Option<crate::drive::Script>,
+    /// `--launcher` was given, so a script is meant to walk the chooser.
+    scripted_launcher: bool,
     state_log: Option<std::path::PathBuf>,
 }
 
@@ -228,6 +230,7 @@ impl Windowed {
         Self {
             app: Box::new(app),
             drive: None,
+            scripted_launcher: false,
             state_log: None,
         }
     }
@@ -809,6 +812,20 @@ fn launch(mut cli: Cli) -> Result<Launch> {
         }
     };
 
+    // Cards unless the list was asked for. The not-found screen and the disc-key
+    // prompt look the same either way.
+    let cards = launcher::wants_cards(cli.boot.launcher_list, settings.launcher.style);
+    let launcher = launcher.map(|chooser| {
+        if !cards {
+            return chooser;
+        }
+        let table = oag_ui::strings::project_table(settings.language.as_deref());
+        chooser.with_cards(
+            launcher::cards::Words::from_table(&table),
+            settings.launcher.pictures.clone(),
+        )
+    });
+
     // With no chooser there is exactly one source and it is loaded before the
     // window, as it always was. With one, everything below waits for the pick -
     // see `Session::finish_launcher`.
@@ -874,6 +891,7 @@ fn launch(mut cli: Cli) -> Result<Launch> {
 
     // `--drive` runs the same session with no window and so no event loop: made after it.
     let drive = cli.dev.drive()?;
+    let scripted_launcher = cli.boot.launcher;
     let state_log = cli.dev.state_log.clone();
 
     let app = App {
@@ -935,6 +953,7 @@ fn launch(mut cli: Cli) -> Result<Launch> {
     Ok(Launch::Window(Box::new(Windowed {
         app: Box::new(app),
         drive,
+        scripted_launcher,
         state_log,
     })))
 }
@@ -946,15 +965,16 @@ fn run_window(window: Windowed) -> Result<()> {
     let Windowed {
         mut app,
         drive,
+        scripted_launcher,
         state_log,
     } = window;
     #[cfg(not(target_arch = "wasm32"))]
     if let Some(script) = drive {
         oag_sound::probe::mark_frame_thread();
-        return crate::app::drive::run(&mut app, script, state_log.as_deref());
+        return crate::app::drive::run(&mut app, script, scripted_launcher, state_log.as_deref());
     }
     #[cfg(target_arch = "wasm32")]
-    let _ = (drive, state_log);
+    let _ = (drive, state_log, scripted_launcher);
     // A wallpaper on a compositor with a layer shell is the desktop background, with no window.
     #[cfg(target_os = "linux")]
     if app.demo == Some(true) {

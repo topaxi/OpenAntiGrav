@@ -122,6 +122,7 @@ fn a_game_started_the_way_a_player_starts_it_may_restart() {
         &["pulse.chd", "--no-soundtrack", "--no-effects"],
         &["--source=pulse.chd", "--dlc", "pack", "--no-intro"],
         &["pulse.chd", "--launcher", "--pick-language"],
+        &["--launcher", "--launcher-list"],
         &["pulse.chd", "--script", "45:lose-device"],
     ] {
         assert!(restartable_args(&args(list)), "{list:?}");

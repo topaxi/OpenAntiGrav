@@ -700,6 +700,11 @@ pub mod archives {
     /// same files). No circuits, no ship models, no textures.
     pub const DATA09: &str = "uroot/data09.psarc";
 
+    /// What a PS4 package's content id holds when it is this title's. Read on
+    /// the European package only (`EP9000-CUSA05670_00-WIPEOUTOMEGA00EU`,
+    /// `docs/formats/ps4-package.md`, "System art").
+    pub const PKG_CONTENT_ID: &str = "WIPEOUTOMEGA";
+
     /// All nine, in package-then-archive-number order.
     pub const ALL: &[&str] = &[
         DATA00, DATA01, DATA02, DATA03, DATA04, DATA05, DATA07, DATA08, DATA09,
