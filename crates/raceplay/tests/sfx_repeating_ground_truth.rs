@@ -1,5 +1,6 @@
-//! `~BLOWUP` and `~ROCKLOCK` played as the repeating lists Pulse's `hud.bnk`
-//! and HD's `weapons.bnk` author, against the discs.
+//! Held cues played as the lists Pulse's `hud.bnk` and HD's `weapons.bnk`
+//! author, against the discs: `~BLOWUP` and `~ROCKLOCK` on both, and HD's
+//! `~AUTOPILOT` and travel loops.
 //!
 //! **`#[ignore]`d and never run in CI**: they need game content. Run with
 //! `just test-data`.
@@ -9,7 +10,9 @@
 //! seeking and every 15 once it is locked. `~BLOWUP` is `[key-on loop, 0x15,
 //! key-on, 0x1a, 0x16]`: the second waveform re-keyed every 43 ticks. Both at
 //! the measured 258.4 Hz. Those are Pulse's lists; HD's, at 240 Hz, are the
-//! `hd_s_` tests at the end. Set `OAG_RENDER_DIR` to also write renders as WAVs.
+//! `hd_s_` tests at the end. HD's other held lists are built on the PS3 tick
+//! only, so Pulse has no program for them. Set `OAG_RENDER_DIR` to also write
+//! renders as WAVs.
 
 use std::path::PathBuf;
 
@@ -99,6 +102,19 @@ fn the_lock_tone_beeps_at_the_tempo_its_parameter_picks() {
         };
         ran += 1;
         let banks = banks(&path);
+        for cue in [
+            Cue::Autopilot,
+            Cue::PlasmaTravel,
+            Cue::RocketTravel,
+            Cue::ShurikenTravel,
+            Cue::QuakeTravel,
+        ] {
+            assert!(
+                banks.program(cue).is_none(),
+                "{file}: {} runs HD's lists only",
+                cue.name()
+            );
+        }
         let program = banks.program(Cue::LockOn).expect("~ROCKLOCK is a program");
         let bus = Cue::LockOn.bus();
         let mut mixer = Mixer::new(RATE);

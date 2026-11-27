@@ -468,8 +468,9 @@ record's pointer into the slot the caller passed and marks the record. `SoundEmi
 | `~QUAKETRAVEL` | `Quake_Update` (`0x002d36cc`), with the first-frame `WO_QUAKE` spawn | `Quake_Update` (`0x002d3368`): `SoundEmitter_Release(emitter, 1)` | 82 |
 
 HD never hands out a Shuriken ([pickup-draw.md](pickup-draw.md)), so `~SHURIKENTRAVEL` is not heard in a HD race.
-The engine's own conditions were already these (Autopilot timer above 0; the bolt flying, after the Plasma's charge; the
-wave existing), so no condition moved.
+The engine opens and releases each on what it already had (Autopilot timer above 0; the bolt flying, after the Plasma's
+charge; the wave existing), so no condition moved. The `~AUTOPILOT` start's two gates, `+0x1970 == 2` on `0x00054628`'s
+object and the two-global test at `0x000ea738`, are not mapped to anything here: **open**.
 
 ### Wired
 
