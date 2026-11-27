@@ -95,6 +95,33 @@ texture archives and are not scanned.
 - Entries `0xb077d3bd` and `0x8d17fa0d` hold 61 and 122 texture headers, all with 0 levels, in a packing
   that is not decoded ([ps2-texture.md](../formats/ps2-texture.md#not-determined)).
 
+## Pulse PS2 wired: what moved in the pairs
+
+2026-11-27, 22 PS2 pairs rendered before and after. 18 moved (17 race frames and the Team menu's hull
+preview); a second render of the new build was pixel-identical on all 22. Every PSP, HD, 2048, Omega
+and Pure pair is pixel-identical to the build before. Mean grey over the 22 went 75.38 to 75.35
+(originals 76.02).
+
+By eye at 3x on far-field crops the new frames match the originals and the old ones do not: the
+box chain smeared the crowd stands and the trackside wall, and erased the tread texture on a girder
+at Vertica, all of which the original and the new frame resolve.
+
+**RMSE against the original went up all the same**, and is recorded rather than explained away:
+
+| Over the 17 race frames | Before | After | Original |
+| --- | ---: | ---: | ---: |
+| RMSE, native 1280x720 | 0.1832 | 0.1878 (farther on 17) | |
+| RMSE, ours drawn at 1820x1024 and Lanczos-resized as the original is | 0.1832 | 0.1855 (farther on 17) | |
+| RMSE after a 16x box reduction of both, native | 0.1228 | 0.1230 | |
+| Mean vertical neighbour step, 1820x1024 route | 6.58 | 7.73 | 7.15 |
+
+The difference is all in fine detail (the 16x figures are level), and the original's amount of it lies
+between the two builds. A sharp picture scored against a reference whose pixels do not line up with
+ours scores worse than a blurred one, which is the likely reading, **not tested**. The new frames
+are somewhat grainier than the originals on distant crowds: the original is drawn at 2x internal
+resolution and resized, ours takes one tap per output pixel. The level rule itself is the GS dumps'
+measurement, not the pairs'.
+
 ## What TEXTURE DETAIL reaches
 
 The GRAPHICS row TEXTURE DETAIL (`original`, `high`, `maximum`) is `TextureDetail::level_shift`
