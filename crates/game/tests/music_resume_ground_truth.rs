@@ -89,6 +89,28 @@ const SECONDS: u32 = 20;
 /// not leave its decoded music (about 120 MB) behind.
 struct Scratch(oag_testdata::scratch::TempDir);
 
+impl Drop for Scratch {
+    /// A track prefetch outlives its `Audio` and writes the cache, and a directory
+    /// written into while it is removed stays behind: wait for the fetch threads.
+    fn drop(&mut self) {
+        let started = Instant::now();
+        while fetch_threads() > 0 && started.elapsed() < Duration::from_secs(60) {
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
+}
+
+/// This process's live music fetch threads, by the names `MusicFetchWorker` is
+/// given. Zero where `/proc` is not there to say.
+fn fetch_threads() -> usize {
+    std::fs::read_dir("/proc/self/task")
+        .into_iter()
+        .flatten()
+        .filter_map(|task| std::fs::read_to_string(task.ok()?.path().join("comm")).ok())
+        .filter(|name| ["race-music", "race-source", "menu-source"].contains(&name.trim()))
+        .count()
+}
+
 fn scratch(label: &str) -> Scratch {
     let dir = oag_testdata::scratch::dir(&format!("music-resume-{label}"));
     Scratch(dir)
