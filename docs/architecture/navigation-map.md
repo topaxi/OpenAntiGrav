@@ -260,8 +260,8 @@ alive behind the viewer, not just the first.
 A leg whose load fails takes `finish_race_loading`'s error arm, which calls
 `abandon_tournament` and then `open_menus`. The leg's launch facts went with the
 loading stage, so there is nothing to continue from: the tournament ends and its
-standings are dropped. The arm clears it for every failed load, because no other
-load can happen while a tournament has legs to go (WATCH REPLAY is refused
+standings are dropped. The arm clears it for every failed load: by reading, no
+other load happens while a tournament has legs to go (WATCH REPLAY is refused
 mid-tournament, and a paused leg's menus offer no launch).
 
 Without that call the standings outlived the leg. Observed on Pulse PSP EU with a
