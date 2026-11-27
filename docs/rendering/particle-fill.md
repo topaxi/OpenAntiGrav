@@ -1232,10 +1232,16 @@ pose. The far films' launch, with the press moved to tick 701 (`ours.inputs`
   the vertex colour (`RibbonEffects_SampleLighting`, `0x002a4280`, a lighting volume; ours draws
   white), and the fan's width at the eye, wider than HD's authored `spread` 0.05 would give.
 
-**2048 and Omega: not checkable here.** Of the four strips they build only the wingtip contrails,
-which now draw before the particles by HD's order, inherited. A draw order is read off a command
-ring and neither has one: Omega's emulator gives no memory readout, and there is no Vita ring
-tool.
+**What else moved.** Every HD, 2048 (Vita) and Omega race pair under `compare-page` (63 of 68; the
+five new Bomb and Missile pairs need flags this change predates) rendered with the strips after and
+before the particles: 60 byte-identical, and only `rocket-craft-far-hit-0100`, `-0233` and
+`rocket-craft-hit-0233` moved. The Missile pools move by the static read of the one call that draws
+every pool (confidence 80 there), not by a ring frame; no Missile pair was in the census.
+
+**2048 and Omega: not checked; inherited from HD.** Of the four strips they build only the wingtip
+contrails, which now draw before the particles by HD's order. Their own order is not read: no ring
+of either, and Omega's ribbon render against its particle flush is a static read in its `eboot.bin`
+still to do.
 
 ## Per effect: what fills the heavy frames
 

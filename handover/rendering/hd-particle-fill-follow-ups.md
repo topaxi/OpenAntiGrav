@@ -55,7 +55,12 @@ blast the struck craft's velocity, on HD, 2048 and Omega
     at `*0x00d43cc4`, unread; ours draws white, the original's streams are grey;
   - the fan at the eye is wider than `spread` 0.05 gives: ours are three narrow strips right of
     centre, the original's four wide bands span the frame's bottom. Unread;
-  - `trail` still reads as smooth white lobes (not looked at).
+  - `trail` still reads as smooth white lobes (not looked at);
+  - Omega's and 2048's ribbon order against their particles is inherited from HD: read Omega's
+    ribbon render against its particle flush in its `eboot.bin`;
+  - the five new HD Bomb and Missile pairs were not in the order change's census (their flags are
+    newer): re-render them after the merge, the Missile ribbons and streaks moved before the
+    particles.
 - **The near pairs: their `field.csv` is 2 ticks ahead of their picture; the move is the lead's to adopt**
   (`particle-fill.md`, "The first wave and the drawn hull"). It was never the cloud: the film pairs
   fed ours the RAM poses, and the frame draws every craft 2 ticks back. That also explains the blast's
