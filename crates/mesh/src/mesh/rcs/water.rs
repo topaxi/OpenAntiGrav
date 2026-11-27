@@ -670,6 +670,7 @@ pub(super) fn water(
                                 height: 1,
                                 texels: Texels::Rgba8(vec![0, 0, 0, 255]),
                                 mip_count: None,
+                                lod_code: 0.0,
                             })
                         })
                         .clone(),

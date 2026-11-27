@@ -214,6 +214,7 @@ fn plain() -> Arc<ModelTexture> {
         height: 4,
         texels: Texels::Rgba8(levels().remove(0)),
         mip_count: None,
+        lod_code: 0.0,
     })
 }
 
@@ -601,6 +602,7 @@ fn stripes() -> Arc<ModelTexture> {
         height: 16,
         texels: Texels::Rgba8(texels),
         mip_count: None,
+        lod_code: 0.0,
     })
 }
 

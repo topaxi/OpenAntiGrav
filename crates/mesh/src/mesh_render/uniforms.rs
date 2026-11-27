@@ -322,8 +322,12 @@ pub struct Fog {
     /// road and is what every buffer nothing writes holds; the shader takes a
     /// branch on it, so a dry frame runs none of the wet code.
     pub wet: f32,
+    /// The camera's part of a Pulse texture's level bias, as the change from the
+    /// race camera's (`mesh_render::texlod_frame_shift`). `0.0`, which every
+    /// buffer nothing writes holds, is that camera.
+    pub texlod_frame: f32,
     /// Pads the block to the 16 bytes WGSL rounds a struct to.
-    pub wet_pad: [f32; 3],
+    pub wet_pad: [f32; 2],
 }
 
 impl Fog {
@@ -344,7 +348,8 @@ impl Fog {
             curve: 0.0,
             texlod_shift: 0.0,
             wet: 0.0,
-            wet_pad: [0.0; 3],
+            texlod_frame: 0.0,
+            wet_pad: [0.0; 2],
         }
     }
 
@@ -353,6 +358,15 @@ impl Fog {
     pub fn with_texture_detail(self, detail: super::TextureDetail) -> Self {
         Self {
             texlod_shift: detail.level_shift(),
+            ..self
+        }
+    }
+
+    /// This fog with the level bias of a camera whose projection has this `m11`.
+    #[must_use]
+    pub fn with_texlod_camera(self, m11: f32) -> Self {
+        Self {
+            texlod_frame: super::texlod_frame_shift(m11),
             ..self
         }
     }
@@ -379,7 +393,8 @@ impl Fog {
             curve: 0.0,
             texlod_shift: 0.0,
             wet: 0.0,
-            wet_pad: [0.0; 3],
+            texlod_frame: 0.0,
+            wet_pad: [0.0; 2],
         }
     }
 
@@ -404,7 +419,8 @@ impl Fog {
             curve: 1.0,
             texlod_shift: 0.0,
             wet: 0.0,
-            wet_pad: [0.0; 3],
+            texlod_frame: 0.0,
+            wet_pad: [0.0; 2],
         }
     }
 }

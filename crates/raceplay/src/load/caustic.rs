@@ -26,6 +26,7 @@ fn frame(archives: &mut oag_assets::Archives, index: usize) -> Result<Arc<ModelT
         height: picture.height,
         texels: oag_mesh::mesh::Texels::Rgba8(picture.rgba),
         mip_count: None,
+        lod_code: 0.0,
     }))
 }
 

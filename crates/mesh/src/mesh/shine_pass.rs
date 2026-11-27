@@ -24,6 +24,12 @@ pub fn build(hull: &Model) -> Option<Model> {
     let lightmaps = std::mem::take(&mut model.lightmaps);
     plain(&mut model);
     mask(&mut model, lightmaps);
+    crate::mesh_render::assign_lod_codes(
+        &model.textures,
+        &model.indices,
+        &mut model.vertices,
+        &model.draws,
+    );
     Some(model)
 }
 

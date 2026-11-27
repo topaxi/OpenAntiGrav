@@ -28,6 +28,7 @@ fn texture(label: &str, rgba: [u8; 4]) -> Arc<ModelTexture> {
         height: 1,
         texels: Texels::Rgba8(rgba.to_vec()),
         mip_count: None,
+        lod_code: 0.0,
     })
 }
 

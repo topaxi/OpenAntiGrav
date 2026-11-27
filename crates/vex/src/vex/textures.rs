@@ -196,6 +196,63 @@ pub fn stored_textures<'a>(
     Ok(out)
 }
 
+/// The `.vex` version Wipeout Pulse ships, the one whose texture header was read
+/// for [`TextureLod`].
+const PULSE_VERSION: u32 = 6;
+
+/// The bits of a texture's flags byte that pick the GE level mode; zero is slope mode.
+const TEXLOD_MODE_BITS: u8 = 0x18;
+
+/// The slope mode input of a Pulse texture: the `f32` at payload `+0x18`
+/// (`docs/ghidra/functions/psp-pulse-usa/mesh-draw.md`, "The per-texture level bias").
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TextureLod {
+    /// Width in texels, as the header holds it.
+    pub width: u16,
+    /// Texels squared per world unit squared, as the file holds it.
+    pub density: f32,
+}
+
+impl TextureLod {
+    /// The texture's own share of the GE bias, `log2(sqrt(density))` levels.
+    /// `None` where the game emits a bias of exactly 0 whatever the camera: a
+    /// density of 0 or of the one NaN bit pattern `0xffc00000`. Any other value
+    /// with no logarithm saturates the clamp at the top.
+    #[must_use]
+    pub fn bias_term(self) -> Option<f32> {
+        if self.density == 0.0 || self.density.to_bits() == 0xFFC0_0000 {
+            return None;
+        }
+        let term = 0.5 * self.density.log2();
+        Some(if term.is_nan() { f32::INFINITY } else { term })
+    }
+}
+
+/// The level-selection input of every `Texture` node, positional like [`textures`].
+///
+/// `None` for a node [`stored_textures`] cannot read, for a file whose version the
+/// header was not read for, and for a texture whose flags give it another mode than
+/// slope (no `.vex` texture on the Pulse disc has one).
+///
+/// # Errors
+///
+/// A texture block that will not walk.
+pub fn texture_lods(data: &[u8]) -> Result<Vec<Option<TextureLod>>> {
+    let tree = nodes(data)?;
+    let read = version(data)? == PULSE_VERSION;
+    Ok(stored_textures(data, &tree)?
+        .into_iter()
+        .map(|stored| {
+            let stored = stored.filter(|t| read && t.flags & TEXLOD_MODE_BITS == 0)?;
+            let density = le::u32_at(&data[stored.node.payload()], 0x18)?;
+            Some(TextureLod {
+                width: stored.width,
+                density: f32::from_bits(density),
+            })
+        })
+        .collect())
+}
+
 /// Extracts the textures appended after the node tree.
 ///
 /// See [`stored_textures`] for how they are located.

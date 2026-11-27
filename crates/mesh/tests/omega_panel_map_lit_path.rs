@@ -53,6 +53,7 @@ fn texture(label: &str, texels: &[[u8; 4]]) -> Option<Arc<ModelTexture>> {
         height: 1,
         texels: Texels::Rgba8(texels.concat()),
         mip_count: None,
+        lod_code: 0.0,
     }))
 }
 
@@ -69,6 +70,7 @@ fn field(value: f32) -> Option<Arc<ModelTexture>> {
             levels: vec![bits.to_le_bytes().repeat(16)],
         },
         mip_count: None,
+        lod_code: 0.0,
     }))
 }
 

@@ -17,7 +17,7 @@ import oag_shaders::target::{decode, encode, encoded_out, linear_out, square_dec
 import package::shading_modes::{colour_is_light, light_rig, lit_by_rig, nova_prelit, nova_vertices, rig_specular, simplified_lighting, tangents_present, zone_race, zone_stage_light};
 import package::shadow::{receives_shadow, sun_occlusion};
 import package::water::{enhanced_water, reflective_sea_weight, water_kind, water_normal, water_specular_colour, water_tap_uv};
-import package::texture_lod::{MATERIAL_ALBEDO, MATERIAL_FIFTH_MAP, MATERIAL_LIGHTMAP, MATERIAL_PAD_MASK, MATERIAL_SIXTH_MAP, MATERIAL_WAVE_MAP, material_lod_bias, material_sample, material_sample_grad, sample_at_slope_level, texlod_bias, texlod_slope, uv_gradients};
+import package::texture_lod::{MATERIAL_ALBEDO, MATERIAL_FIFTH_MAP, MATERIAL_LIGHTMAP, MATERIAL_PAD_MASK, MATERIAL_SIXTH_MAP, MATERIAL_WAVE_MAP, ge_level, material_lod_bias, material_sample, material_sample_grad, sample_at_slope_level, texlod_slope, uv_gradients};
 import package::types::{Lit, SunTerms, VertexOutput};
 import package::zone::{zone_aniso, zone_base_term, zone_glow, zone_sample, zone_set};
 
@@ -771,7 +771,7 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
     var first: vec4<f32>;
     if texlod_slope > 0.0 {
         let lod = max(
-            log2(max(in.view_depth * texlod_slope, 1.0e-6)) + texlod_bias + scene.fog.texlod_shift,
+            ge_level(in.view_depth, in.lightmap_texcoord.w, scene.fog.texlod_frame) + scene.fog.texlod_shift,
             0.0,
         );
         first = sample_at_slope_level(first_uv, lod);
