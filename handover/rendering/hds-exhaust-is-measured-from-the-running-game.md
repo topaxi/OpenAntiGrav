@@ -21,8 +21,8 @@ summary: "HD exhaust: flame /2, eye and clock wired; 13 cold-boot flame pairs re
   grab"). Only `hd-race/talons-pack` is clocked from its record (122.4720 s, derived from its state's timeline);
   the 13 cold-boot grid and Assegai pairs were regrabbed (2026-11-27, `hd-flame-regrab`; engine-flare.md, "The
   cold-boot pairs, regrabbed with the clock"): the pin ranks in the best 2 of 8 phases on 9 of 13, confidence 70; the
-  scratch pairs await the lead's adoption. Left: the Zone pair (the pair script's start-up outruns Zone's 5.2 s
-  countdown at full emulator speed: stall the game while it attaches, or capture first and pair with `--json`), the
+  scratch pairs await the lead's adoption. Left: the Zone pair's 8-phase flame sweep (it was regrabbed
+  inside the countdown with `flame_clock_s`, compare-page.md, "The countdown frame"), the
   Detonator and far-hit pairs (states not kept), and judging the eye's cost below on the clocked pairs; (2) on the phase
   average the eye still costs up to 0.6 on three rest pairs (`hd-race/talons-pack`, `hd/metropia`, `hd/vineta-k`),
   cause unknown; (3) the program fogs the flame with the circuit's fog (factor 1 at chase distance), not wired because
