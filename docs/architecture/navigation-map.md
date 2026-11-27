@@ -170,8 +170,9 @@ cell's race is an ordinary race start. A Tournament cell differs only in
 `record_finished_leg` (`tournament.rs:37`, called from `frame.rs:1176`) folds
 each leg's board into it, `tournament_has_next_leg` (`tournament.rs:54`) turns
 RACE AGAIN into NEXT RACE, and `abandon_tournament` (`tournament.rs:111`) drops
-it. Its three callers: `leave_finished_race`, `handle_picker`'s Back out of Team
-Selection (`picker.rs:816`) and `leave_shared` (`picker/seat.rs:259`).
+it. Its four callers: `leave_finished_race`, `handle_picker`'s Back out of Team
+Selection (`picker.rs:816`), `leave_shared` (`picker/seat.rs:259`) and
+`finish_race_loading`'s failed-load arm (see "A leg that will not load").
 
 ### Network
 
@@ -196,7 +197,7 @@ unless the flow saved it by hand.
 | `campaign_cell`, `campaign_custom`, `campaign_difficulty`, `campaign_ai_skill_scale` | campaign launch; cleared by RACE page, demo, benchmark, launch keys | drained into the race at build; RACE AGAIN and NEXT RACE copy them back from the race; benchmark saves and restores them (`benchmark.rs:375`) |
 | `campaign_home` | a mod campaign event | `open_menus` restores `race_options`' source, craft source and difficulty from it on every return, whatever the return is for |
 | `campaign_add_on` | 2048 tier launch | set and cleared around one call |
-| `tournament` | Tournament cell launch | outlives every race by design; cleared only at the three sites above |
+| `tournament` | Tournament cell launch | outlives every race by design; cleared only at the four sites above |
 | `pending_event`, `pending_card` | 2048 event launch, end-of-race restart | cleared by `start_watching` |
 | `watching`, `viewer` | replay watch | `watching` is also how `advance_race_build` knows the race is for the viewer |
 | `demo.saved`, `benchmark.saved` | demo, benchmark | hand-written save and restore of `race_options` and launch slots: a push and pop without a stack |
@@ -254,17 +255,33 @@ launch, final rank, the end screens) sits on the finished `RaceStage` and dies
 at the first `self.stage =` that replaces it. A fix has to keep the second
 alive behind the viewer, not just the first.
 
-**A reachable stale tournament today (found by reading, not run).** A leg whose
-load fails takes `finish_race_loading`'s error arm (`load.rs:1158`), which calls
-`open_menus` and never `abandon_tournament`. `tournament` stays `Some` with legs
-to go. `start_race_box` and `launch_from_settings` clear the `campaign_*` slots
-but not `tournament`, so the next RACE-page race would end with NEXT RACE
-offered (`tournament_has_next_leg`): `menu_options` puts NEXT RACE first and
-drops RACE AGAIN, and NEXT RACE would launch the tournament's next track as a
-plain race with no cell. `record_finished_leg` would also fold that race's board
-into the old standings. A test that forces a leg's load to fail would settle it.
+### A leg that will not load
 
-**The last leg leaves it set too, harmlessly.** WATCH REPLAY is offered on a
+A leg whose load fails takes `finish_race_loading`'s error arm, which calls
+`abandon_tournament` and then `open_menus`. The leg's launch facts went with the
+loading stage, so there is nothing to continue from: the tournament ends and its
+standings are dropped. The arm clears it for every failed load, because no other
+load can happen while a tournament has legs to go (WATCH REPLAY is refused
+mid-tournament, and a paused leg's menus offer no launch).
+
+Without that call the standings outlived the leg. Observed on Pulse PSP EU with a
+two-leg mod Tournament whose first circuit was broken by an override: the next
+RACE-page race's end menu led with NEXT RACE, offered no RACE AGAIN and no WATCH
+REPLAY, and confirming it loaded the tournament's second circuit.
+`drive_ground_truth::tournament` drives that flow and reads the `tournament` key
+of the drive state.
+
+`launch_from_settings` and `launch_keyed` (the two menu launch funnels) still do
+not clear `tournament`; ADR-0099's migration step 2 (a run owns it, and ending
+the run drops it) is where that becomes one place. This failed-load case is the
+only part of that step built.
+
+**A second failure path is unverified.** `finish_launch` only logs a synchronous
+`launch_race` error. After NEXT RACE that would leave the finished leg on screen
+with `Progress` already advanced; no way to make it happen was found, and
+RETURN TO MENUS from there clears the tournament.
+
+**The last leg leaves it set, harmlessly.** WATCH REPLAY is offered on a
 Tournament's last leg, and that path (`start_watching`, `leave_viewer`,
 `open_menus`) never calls `abandon_tournament`. With every leg run,
 `tournament_has_next_leg` is false, the standings table is chosen by the race's

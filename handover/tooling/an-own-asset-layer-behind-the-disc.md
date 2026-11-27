@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [all]
-updated: 2026-10-11
-summary: "Record active mods in the replay header; override forms beyond a loose name (hash, archive-addressed)"
+updated: 2026-11-27
+summary: "A circuit override fails the load; record active mods in the replay header; override forms beyond a loose name"
 size: S (45)
 difficulty: medium (35)
 ---
@@ -15,6 +15,16 @@ census and wiring: [`docs/architecture/asset-layers.md`](../../docs/architecture
 
 ## Open
 
+- **Overriding a circuit's `track.vex` makes that race fail to load**, even with a
+  byte-identical copy of the disc's own file (seen on Pulse PSP EU, `16_Track`, a debug
+  build). The log says `cannot start a race: expected a .wad path or
+  <image>:<path-on-disc>, got ".../overrides/wipeout-pulse"`, so something in the race load
+  opens the override directory (the holder of the entry) as an archive spec; the caller is
+  not located. Repro: `oag-wad cat` the entry `Data\Environments\16_Track\track.vex` into
+  `<dir>/wipeout-pulse/Data/Environments/16_Track/track.vex`, set `OAG_OVERRIDES=<dir>` and
+  race that circuit. Other circuits load normally. Other titles not tried.
+  `drive_ground_truth::tournament` breaks a leg with a non-track override, which stays a
+  failing load once this is fixed.
 - **A mod must be recorded.** The replay's state hashes already turn a modded table into a
   reported desync, but the replay header does not say that mods were active, and a record or
   a ghost lap set on a modded race is stored like any other. Decide: a `mods` flag in
@@ -33,6 +43,8 @@ census and wiring: [`docs/architecture/asset-layers.md`](../../docs/architecture
 
 ## Next Steps
 
+0. Find the caller that reopens an entry's holder path for a circuit, fix it, and add a
+   disc-backed test that races an overridden circuit. 1-2 hours.
 1. Header flag for active mods, and the records decision. 1-2 hours.
 2. Move the PromptFont glyphs and cursors into the layer if the maintainer wants one report
    line for every stand-in. 1 hour.
