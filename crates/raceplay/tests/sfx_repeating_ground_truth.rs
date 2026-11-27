@@ -1,5 +1,5 @@
 //! `~BLOWUP` and `~ROCKLOCK` played as the repeating lists Pulse's `hud.bnk`
-//! authors, against the discs.
+//! and HD's `weapons.bnk` author, against the discs.
 //!
 //! **`#[ignore]`d and never run in CI**: they need game content. Run with
 //! `just test-data`.
@@ -8,8 +8,8 @@
 //! key-on +15, 0x16]`: a beep every 30 master ticks while the reticle is
 //! seeking and every 15 once it is locked. `~BLOWUP` is `[key-on loop, 0x15,
 //! key-on, 0x1a, 0x16]`: the second waveform re-keyed every 43 ticks. Both at
-//! the measured 258.4 Hz. Set `OAG_RENDER_DIR` to also write each render as a
-//! WAV to look at.
+//! the measured 258.4 Hz. Those are Pulse's lists; HD's, at 240 Hz, are the
+//! `hd_s_` tests at the end. Set `OAG_RENDER_DIR` to also write renders as WAVs.
 
 use std::path::PathBuf;
 
@@ -22,8 +22,11 @@ const RATE: u32 = 44_100;
 const TICK: f64 = 1.0 / 60.0;
 const MASTER: f64 = 44_100.0 * 3.0 / 512.0;
 const PULSE: [&str; 3] = ["pulse-psp-usa.chd", "pulse-psp-eu.chd", "pulse-ps2-eu.chd"];
-/// Titles whose lists are read on no binary this runner was read from.
-const NOT_PSP_TICK: [&str; 2] = ["pure-psp-usa.chd", "hdfury-ps3-eu-dec.iso"];
+/// A title whose lists are read on no binary this runner was read from.
+const NOT_PSP_TICK: [&str; 1] = ["pure-psp-usa.chd"];
+const HD: &str = "hdfury-ps3-eu-dec.iso";
+/// HD's master tick, `Scream_MasterTick`.
+const HD_MASTER: f64 = 240.0;
 
 fn banks(path: &std::path::Path) -> Banks {
     let opened =
@@ -183,5 +186,103 @@ fn a_title_off_the_psp_tick_builds_no_repeating_program() {
             assert!(banks.program(cue).is_none(), "{file}: {}", cue.name());
         }
     }
-    assert!(ran > 0, "no Pure or HD disc image was present");
+    assert!(ran > 0, "no Pure disc image was present");
+}
+
+/// Interleaved stereo of `ticks` simulation ticks of `playing` at variable
+/// `locked`, then of the mixer alone for `tail` more ticks.
+fn lock_render(banks: &Banks, locked: bool, ticks: usize, tail: usize) -> (Vec<f32>, usize) {
+    let program = banks.program(Cue::LockOn).expect("~ROCKLOCK is a program");
+    let bus = Cue::LockOn.bus();
+    let mut mixer = Mixer::new(RATE);
+    let mut rng = Rng::new(1);
+    let mut playing = Playing::open(program, &mut mixer, bus, VoicePlace::DRY, &mut rng);
+    let mut stereo = Vec::new();
+    for tick in 0..ticks + tail {
+        if tick < ticks {
+            playing.set_parameter(0, i8::from(locked));
+            playing.advance(TICK, &mut mixer, bus, VoicePlace::DRY, &mut rng);
+        }
+        let mut chunk = vec![0.0f32; 2 * (RATE / 60) as usize];
+        mixer.render(&mut chunk);
+        stereo.extend(chunk);
+    }
+    let keyed = playing.keyed();
+    playing.stop(&mut mixer);
+    assert_eq!(mixer.active_voices(), 0, "stopped");
+    (stereo, keyed)
+}
+
+/// Seconds of the last audible frame.
+fn ends(stereo: &[f32]) -> f64 {
+    let last = stereo
+        .chunks(2)
+        .rposition(|f| f[0].abs() + f[1].abs() > 1e-4)
+        .expect("audible");
+    last as f64 / f64::from(RATE)
+}
+
+/// HD's `~ROCKLOCK` through the mixer: the original's two cadences, the pair
+/// panned apart, and the locked bend on the voices
+/// (`docs/ghidra/functions/ps3-hdfury-eu/cue-variables.md`, "Held cues run as
+/// lists").
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn hd_s_lock_tone_runs_its_list_and_locking_speeds_and_raises_it() {
+    let Some(path) = oag_testdata::image(HD) else {
+        return;
+    };
+    let banks = banks(&path);
+
+    // Two seconds: seeking pairs at ticks 50, 103, ... 474 of 480, locked from
+    // tick 65 every 18.
+    let (seeking, seeking_keys) = lock_render(&banks, false, 120, 0);
+    let (_, locked_keys) = lock_render(&banks, true, 120, 0);
+    assert_eq!(seeking_keys, 2 * 9);
+    // The 24th pass keys its first beep at tick 479; its second falls past 2 s.
+    assert_eq!(locked_keys, 2 * 24 - 1);
+
+    // The 150-degree voice sits right of centre and the 210-degree one left, at
+    // equal and opposite pans, so the two channels carry different samples.
+    assert!(
+        seeking.chunks(2).any(|f| (f[0] - f[1]).abs() > 1e-3),
+        "panned apart"
+    );
+
+    // One pair each, then silence. The second voice's audible length shortens by
+    // the locked bend (`6 * 0x7fff / 0x7f` through 12 semitones).
+    let (one_seeking, keys) = lock_render(&banks, false, 14, 46);
+    assert_eq!(keys, 2);
+    let (one_locked, keys) = lock_render(&banks, true, 20, 40);
+    assert_eq!(keys, 2);
+    let bend = (6.0 * 32_767.0_f64 / 127.0).floor() / 32_767.0 * 12.0;
+    let pitch = (bend / 12.0).exp2();
+    let length = |stereo: &[f32], onset: f64| ends(stereo) - onset / HD_MASTER;
+    let ratio = length(&one_seeking, 53.0) / length(&one_locked, 68.0);
+    assert!((ratio - pitch).abs() < 0.006, "{ratio} not {pitch}");
+}
+
+/// HD's `~BLOWUP` runs as a list too. No HD trigger names the cue, so this plays
+/// the program the bank builds.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn hd_s_blowup_re_keys_a_pair_and_a_hit_every_45_ticks() {
+    let Some(path) = oag_testdata::image(HD) else {
+        return;
+    };
+    let banks = banks(&path);
+    let program = banks.program(Cue::Blowup).expect("~BLOWUP is a program");
+    let bus = Cue::Blowup.bus();
+    let mut mixer = Mixer::new(RATE);
+    let mut rng = Rng::new(1);
+    let mut playing = Playing::open(program, &mut mixer, bus, VoicePlace::DRY, &mut rng);
+    // Three at the start, and the 90-degree voice of the first pass.
+    assert_eq!(playing.keyed(), 4);
+    let audio = render(&mut playing, &mut mixer, &mut rng, bus, 60, |_, _| {});
+    // Passes at 45, 90, 135, 180 and 225 of 240 ticks, three voices each, and
+    // the first pass's last two at tick 5.
+    assert_eq!(playing.keyed(), 3 + 3 + 5 * 3);
+    dump("hd-blowup-after-mono", &audio);
+    playing.stop(&mut mixer);
+    assert_eq!(mixer.active_voices(), 0, "stopped");
 }
