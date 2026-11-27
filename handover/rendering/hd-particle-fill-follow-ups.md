@@ -2,7 +2,7 @@
 status: measure
 titles: [hd, omega, 2048]
 updated: 2026-11-27
-summary: "Owed: HD Mine/Detonator films, Bomb colour and spark gaps, Omega ring, Rocket blast gaps, cap source, near pairs to adopt; half-res parked"
+summary: "Owed: HD track-blast template and orientation, Mine/Detonator films, Bomb colour and spark gaps, Omega ring, cap source, near pairs; half-res parked"
 size: M (50)
 difficulty: medium (55)
 ---
@@ -82,6 +82,25 @@ blast the struck craft's velocity, on HD, 2048 and Omega
 - **Flipbook advance on 2048 and Omega is not wired**: 2048's update wraps at the frame count with
   no hold; Omega carries that one and HD's, and which serves which directory is unread.
 
+### The Rocket on the wall: what the pairs show
+
+`docs/rendering/particle-fill.md`, "A Rocket on the wall paired" has the films, the buffer and the
+listings (the flare is listed, both blasts are not). Left, by size of the picture difference:
+
+- **The track blast's sprite template is muted and the original draws it** (three `dc_flare_d`
+  quads, up to 100 units). `TEMPLATES += TRACK_BLAST_EFFECT` read -0.075 and -0.033 at 0.333 s on
+  the two films and nothing at 0.5 and 0.6 s; with it on, `FAR_BARS += TRACK_BLAST_EFFECT` is no
+  longer worse anywhere and is -0.005 to -0.013 at 0.5 s. Two lines, pairs ready.
+- **The track blast flies off the wall in the original** (streaks one-sided, along the Rocket's
+  heading and back off the wall); ours is unoriented and fans up both sides. Read what matrix HD's
+  `Rocket_Update` hands the `WO_ROCKET_EXPLO_TRACK` spawn.
+- **HD's volley on the wall is wider and later than ours**: hits 14.8 units apart and born 14, 15
+  and 18 ticks after the press, against ours' 8.7 units and 13, 13, 14. Simulation, not render.
+- **A faint orange tail below the craft at 0.2 s** in ours, with the flare's bar; the original
+  shows none.
+- **2048 and Omega author the same launch streak** (`WO_ROCKET_FIRE`): checked, applies, not
+  wired; no frame of either.
+
 ### HD effect sprites: what is left
 
 `docs/rendering/particle-fill.md`, "Which effects draw a sprite" has the list; "The Bomb's and the
@@ -102,7 +121,8 @@ Left:
   craft at 0.167 s, and a metric that prefers a blast 4 to 6 ticks younger than the lag rule's at
   0.233 s. Its sprite template (`missile_shockring`) is muted (`TEMPLATES`) and was not tried.
 - **Other streak emitters stay procedural**, in the other listed effects and in the 9 all-streak
-  ones; each wants an original pair first.
+  ones; each wants an original pair first. `scripts/rpcs3-hd-blast-film.py` and
+  `hd-blast-film-pair.py` film and pair a Rocket on the wall, a Missile or a Bomb.
 - **Sprite templates of the other new effects stay muted**: not checked which of them author any.
 
 ### Particles into a half-resolution target, composited
@@ -130,14 +150,6 @@ HD's width throttle, the other idea here, is TARGET FPS `original`
     quads are the same on the Deck (same state hash); its milliseconds per effect are not
     measured and need the throwaway skip switch rebuilt;
   - the fragment `discard` of "Measured and dropped", not run on the Deck.
-- **No original frame of a `.pob` streak.** The track blast's `FIRESPIKES` is the largest single
-  fill at ticks 724 and 754 (1.1 of 3.0 ms) and is judged authored from the file and the
-  executable only (confidence 65). Film a wall hit in RPCS3 and find the buffer HD's mode 5
-  quads go to.
-- **`WO_ROCKET_EXPLO_TRACK`, `WO_ROCKET_EXPLO` and `WO_ROCKET_FLARE` are not in HD's
-  `FAR_BARS`** (`crates/hd/src/effects.rs`), so their class-6 emitters draw the procedural strip
-  rather than the read bar with its sprite. A picture gap; fill measured within 9 % under the
-  bar. Wants a pair against the original before listing.
 - **Our 256-particle instance cap** is full on every track blast a few ticks after it starts
   (`TRAIL_SMOKE`). What the original's pool does there is unread.
 - **About 1.7 ms of a hit frame at 1080p that is not fill.** With and without the law, ticks 770
@@ -162,4 +174,4 @@ HD's width throttle, the other idea here, is TARGET FPS `original`
 
 ## Next Steps
 
-1. Film an HD wall hit for the streak quads.
+1. Play the HD track blast's sprite template, then list its streaks ("The Rocket on the wall").
