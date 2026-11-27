@@ -613,8 +613,8 @@ Reproduce: copy `data/reference/compare-page/hd/detonator-talons-*` and call `co
 after): `mines-ahead` `620x340+780+330` 12.579 to 12.542, where the near ring's rim turns jagged like the original's;
 `cannon-volley` `500x260+720+350` 21.649 to 21.681; `cannon-volley-hot` `360x120+880+380` 18.618 to 18.641; `pad`
 `260x90+930+390` 21.305 to 21.379. The two cannon pairs' rings move by no visible amount at 1920 wide.
-**`cannon-volley-hot` rises by 0.0006 and `pad` by 0.001**: the law is kept because it is read, not because a pair
-improves.
+**`cannon-volley-hot` rises by 0.0006 and `pad` by 0.001**; the mine boxes also rise on `cannon-volley`, `-hot` and
+`pad` (`cannon-volley`'s whole-frame fall comes from outside its box).
 
 An earlier wiring (2026-11-26, commit `5fac71320`, reverted) measured `mines-ahead` 12.5060 to 12.5155 on older
 frames; there `MasterVolume` carried 0.25 grey and `PitchVolume` 0.01.
