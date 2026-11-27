@@ -318,7 +318,9 @@ Against the `cannon-volley` pair's `+100` (the original's ink spans x 995-1070, 
 puts it at the original's height within 3 px (predicted from the rise, no fit). Pair mean grey 10.53 to 10.54;
 the box around the popup 17.11 to 22.42 on the published pair, because a popup 15 px off adds its own strokes
 to the difference. Moved to the original's rows (the layer alone, PIL greys) the box reads 18.14 without, 10.68
-with. The other five Detonator pairs are pixel-identical (none scores).
+with. With our round carried by the craft's speed (a prototype, not committed) the ink still stands 4 px high
+and the same box reads 18.27 with the popup off, 21.83 with it on: strokes this thin lower the box only once
+the age matches to the tick. The other five Detonator pairs are pixel-identical (none scores).
 
 **2048 and Omega: checked, applies, not wired.** Both author the sixteen widgets (Omega as HD's, scale 1.2;
 2048's skin in the `HUD` font at 0.6, same colours), so only the title flag holds them off: neither title's
