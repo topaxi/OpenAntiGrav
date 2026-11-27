@@ -448,8 +448,8 @@ Set up and driven as far as the front end; **taps do not register until the firm
 No RenderDoc needed: dump the guest's memory (a `vita3k-mem.py`-style daemon that is Vita3K's parent, reading
 under `SIGSTOP`) and read Vita3K's own renderer queue, which lives in guest memory.
 
-- A queued texture bind is the words `0x00090009` (opcode `SetState`, state `Texture`), the unit index, then
-  the 16-byte `SceGxmTexture`. About 6,000 sit in one race dump (Vita3K `885f9168d`, renderer sources read
+- A queued texture bind is a header word `0x0009xx09` (opcode `SetState`, state `Texture`; mask the flags
+  byte `xx`), the unit index, then the 16-byte `SceGxmTexture`. About 6,000 sit in one race dump (Vita3K `885f9168d`, renderer sources read
   for behaviour).
 - Descriptor words: word 0 holds mip filter (bit 9), min (10-11), mag (12-13), mip count minus one (17-20)
   and LOD bias (21-26, `(raw - 31) / 8` levels); word 2 is the texel address with `lod_min0` in its low bits.

@@ -86,7 +86,8 @@ weapons only). Guest memory was dumped under `SIGSTOP` and read twice over
 - Minimum level of detail 0 on all, and the mip count is the file's level count minus one. One race texture
   has a single level (`m_lightstripv01_e`), where the bias has nothing to select.
 - Texture units 0 to 3. A descriptor holds one sampler state, so near and far draws of a texture read the same.
-- `SceGxmTexture` has no anisotropy field, and the loader makes no anisotropy call.
+- No anisotropy: min and mag read plain linear on every bind, the filter values Vita3K declares (point,
+  linear and two mipmap forms) include no anisotropic one, and the loader makes no anisotropy call.
 
 **Bound textures that are not `.gxt` files** follow other states, which also shows the read can see one:
 
