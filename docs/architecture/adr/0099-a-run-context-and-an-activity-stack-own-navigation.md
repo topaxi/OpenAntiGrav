@@ -38,7 +38,9 @@ fix:
 
 A second, smaller symptom is reachable now: a leg whose load fails returns to the
 menus without clearing `tournament`, so the next unrelated race can be offered
-NEXT RACE (the map's last section; found by reading, not yet run).
+NEXT RACE (the map's last section; found by reading, not yet run). WATCH REPLAY on a
+Tournament's last leg leaves `tournament` set the same way, without a visible
+effect today.
 
 This ADR's `RunContext` is not ADR-0093's custom-campaign "run state". That one
 is a mod's bounded blob; a `RunContext` for a custom campaign would hold it.
@@ -74,9 +76,13 @@ is a mod's bounded blob; a `RunContext` for a custom campaign would hold it.
 4. **A defined pop.** Popping an entry drops it and, if no other entry still
    references its `RunContext`, drops the run. A run's end is therefore one
    place: abandoning a tournament is its run being dropped, on every path,
-   including a failed load. The entry underneath gets `resumed()`; the end-of-race
-   menu's `resumed()` rebuilds nothing, because its race and run were never
-   dropped.
+   including a failed load. The entry underneath gets `resumed()`. Its race and
+   run were never dropped, so the end screens need no rebuild, but `resumed()`
+   restores the session-wide state the pushed activity changed: race music and
+   sound effects, rumble, the window title and the held menu backdrop. **A pop
+   back to a finished race does not re-arm its result**: today's `resume_race`
+   sets `result_saved = false` and settles poses, which is right for a paused
+   unfinished race and would record a finished leg twice.
 5. **WATCH REPLAY pushes.** The finished race stays on the stack, end screens
    and run intact. The watch is a new run (its origin is "pop") on a new entry:
    a race load, replaced by the viewer's race. EXIT pops it, and the finished

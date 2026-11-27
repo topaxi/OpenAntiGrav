@@ -131,7 +131,7 @@ races only). From here on the race, not the session, owns them.
 | Menu (pause) -> Loading | RESTART | `restart_parked_race` (`pause_menu.rs:209`) -> `finish_launch` | `campaign_*` re-armed from the parked race | the parked race |
 | Race -> Menu (quit) | QUIT on the pause menu, or escape on a title with no pause screen | `quit_parked_race` (`pause_menu.rs:230`) -> `quit_campaign_race` (`escape.rs:155`) or `leave_finished_race`; `escape` -> `quit_campaign_race` for a campaign race, else `open_menus` | a campaign race reopens its Cell Selection; a plain escape parks an unfinished race in `suspended_race` | the race and `tournament` on the quit paths (both reach `leave_finished_race`) |
 | Race -> Race (photo) | photo mode | `photo` set on `Session` | the race, ticking stopped | nothing |
-| Race -> Menu | network race ended early | `frame` (`frame.rs:1105`) -> `open_menus` | nothing | the race, `net`, `lan` |
+| Race -> Menu | network race ended early | `frame` (`frame.rs:1107`) -> `open_menus` | nothing | the race, `net`, `lan` |
 
 ### Race end
 
@@ -259,6 +259,16 @@ load fails takes `finish_race_loading`'s error arm (`load.rs:1158`), which calls
 `open_menus` and never `abandon_tournament`. `tournament` stays `Some` with legs
 to go. `start_race_box` and `launch_from_settings` clear the `campaign_*` slots
 but not `tournament`, so the next RACE-page race would end with NEXT RACE
-offered (`tournament_has_next_leg`), and `record_finished_leg` would fold its
-board into the old standings. A test that forces a leg's load to fail would
-settle it.
+offered (`tournament_has_next_leg`): `menu_options` puts NEXT RACE first and
+drops RACE AGAIN, and NEXT RACE would launch the tournament's next track as a
+plain race with no cell. `record_finished_leg` would also fold that race's board
+into the old standings. A test that forces a leg's load to fail would settle it.
+
+**The last leg leaves it set too, harmlessly.** WATCH REPLAY is offered on a
+Tournament's last leg, and that path (`start_watching`, `leave_viewer`,
+`open_menus`) never calls `abandon_tournament`. With every leg run,
+`tournament_has_next_leg` is false, the standings table is chosen by the race's
+mode, not by `tournament` (`endrace.rs:260` in the session), and the medal reads
+`tournament_final_rank` only for a Tournament cell, whose launch replaces
+`tournament`. So the leftover `Progress` is overwritten by the next RACE-page
+race's board (`record_leg` overwrites the current leg) and nothing shows it.
