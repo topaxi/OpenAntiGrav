@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [pure, pulse]
 updated: 2026-11-27
-summary: "Pure render: Sinucit adverts and strip, HUD lap and digits, pair lag (2 frames, not 1) and scenery detail open; most else closed"
+summary: "Pure render: Sinucit adverts and strip, HUD lap and digits and scenery detail open; most else closed"
 difficulty: medium (30)
 ---
 
@@ -110,9 +110,7 @@ Ranked by what a player notices: hull and plume, then effects, then track and li
     the offsets, ours a fixed table) and Pure's `FxScreenMist` draw function, unread (relocation trap, confidence 70).
 
 11. **The circuit pairs' residual, split** (2026-11-27, `docs/tools/compare-page.md`, "The Pure circuit pairs' residual, split by region and cause"). In order of what to wire:
-    (a) `scripts/psp-pure-pair.py` `PRESENTED_LAG` 1 to 2 (digits, confidence 75; all twelve race pairs, 0.16 to 0.96 grey). The constant alone moves no stored pair, because
-    `compare-rerender-ours` replays `ours.flags`: recompute `--ticks` and `--world-clock-offset` from each record's at-stop clock, frame time and world clock, or re-capture from the
-    states, and check the two Zone pairs (a moving pose read at the same stop). (b) The lap counter's `/3` sits 17 px right of the original's on all twelve; read Pure's `Hud` lap widgets.
+    (a) ~~The presented lag, 1 to 2 frames~~ wired 2026-11-27 (`docs/tools/compare-page.md`, "The presented lag, wired"); the Zone pairs inherit it unread. (b) The lap counter's `/3` sits 17 px right of the original's on all twelve; read Pure's `Hud` lap widgets.
     (c) The billboard slots (`adverts: None`): signs missing on Citta Nuova, Vineta, Sol 2, Blue Ridge, Sinucit; needs Pure's advert pass measured. (d) The largest share: background detail above the
     horizon (24 to 35 % of each score) has no identified cause; a GE list reading the scenery's `TEXLEVEL` bias is the next measurement.
 

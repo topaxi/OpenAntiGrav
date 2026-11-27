@@ -135,6 +135,7 @@ def rerender(pj, binary):
     flags = ce.recorded_mine_volume_flags(rec, flags)
     flags = ce.countdown_flags(rec, flags, ce.go_tick())
     flags = ce.detonator_picture_flags(rec, flags, ce.go_tick())
+    flags = ce.pure_lag_flags(rec, flags, ce.go_tick())
     plat = ce.platform(rec["profile"])
     flags = ce.profile_anisotropy_flags(flags, plat, rec.get("kind"))
     flags = ce.profile_pilot_assist_flags(flags, plat, rec.get("kind"))

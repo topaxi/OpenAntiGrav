@@ -40,7 +40,7 @@ the addresses are the loaded ones (the module loads at its linked base, so they 
 ## What the pair does with it
 
 `scripts/psp-pure-pair.py` reads `*(0x08a8c5f4) + 0x44` at the same stop as the race clock,
-less the presented-frame lag (inherited from Pulse), and writes `original.world_clock_s`,
+less the presented-frame lag (`compare_env.PURE_PRESENTED_LAG`, two frames, read off Pure's HUD digits: [compare-page.md](../../../tools/compare-page.md), "The presented lag, wired"), and writes `original.world_clock_s`,
 `original.world_clock_offset_s` (world clock less race clock) and `ours.world_clock_offset_s`
 (world clock less ours' tick over 60), and passes `--world-clock-offset` to ours.
 
