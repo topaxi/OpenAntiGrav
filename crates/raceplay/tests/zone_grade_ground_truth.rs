@@ -438,6 +438,42 @@ fn a_2048_zone_race_publishes_the_flash_stages_zone_colours() {
     assert_eq!(zone.stage_light[1][..3], [0.984_314; 3]);
 }
 
+/// **2048 samples its Zone track skins with the mip filter off, so each binds one level.**
+///
+/// HD's ported circuits take the fifteen `zoneModeTrack<n>.gxt`. Drop
+/// `ZoneStageTextures::track_single_level` and the upload synthesises a box chain
+/// under each, which reads `mip_count: None` here.
+#[test]
+#[ignore = "needs the unpacked 2048 packages in data/extracted/"]
+fn a_2048_zone_race_binds_its_track_skins_from_one_level() {
+    let Some(path) = oag_testdata::exact("data/extracted/vita/PCSF00007") else {
+        return;
+    };
+    let loaded = race::load(&race::Options {
+        no_effects: true,
+        source: path.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::Zone,
+        track: Some(r"data\art\published\DLC1\environments\Vineta_K\track.vex".to_string()),
+        ..race::Options::default()
+    })
+    .expect("loading a 2048 Zone race");
+    let mut grade = loaded.zone_grade.expect("the fallback table loads");
+    assert_eq!(grade.stage_art_counts(), (15, 15));
+    for stage in 0..=grade.last_stage() {
+        grade.request_stage(stage);
+        grade.commit();
+        let art = grade.stage_art_pair();
+        let track = art.track.expect("a track skin");
+        assert_eq!(track.mip_count, Some(1), "stage {stage}: {}", track.label);
+        let general = art.scene.expect("a general set texture");
+        assert_eq!(
+            general.mip_count, None,
+            "stage {stage}: the general set's sampler was not read"
+        );
+    }
+}
+
 /// The base Vita package, or `None` with a printed reason.
 fn open_2048() -> Option<oag_assets::Archives> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))

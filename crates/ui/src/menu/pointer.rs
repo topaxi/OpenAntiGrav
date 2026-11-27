@@ -20,6 +20,11 @@
 //!   or a back row that is what cross does. On a choice or a toggle it
 //!   steps the value forward the way cross does, unless the click landed on
 //!   one of HD's step arrows, which step the way it points.
+//! - **A pointer never moves the list under itself.** A hover, a click and a
+//!   tap put the cursor on the row without the one row of lookahead a pad move
+//!   keeps, so a row at either edge of a long page stays where it is and the
+//!   next click lands on what the player sees. The wheel and a drag are how a
+//!   pointer scrolls. A pad or keyboard move from that row scrolls again.
 //! - **On a page longer than the screen, the wheel scrolls the view** one
 //!   row per detent, the way a desktop list does, and **a finger scrolls
 //!   it** through [`crate::kinetic`]: the list follows the finger, a flick
@@ -190,13 +195,13 @@ impl Menu {
         if pointer.moved
             && let Some(region) = hit
         {
-            self.move_cursor(page, region.row);
+            self.point_cursor(page, region.row);
         }
 
         if pointer.clicked
             && let Some(region) = hit
         {
-            self.move_cursor(page, region.row);
+            self.point_cursor(page, region.row);
             // **A click on a row whose attached rows are hidden only reveals
             // them** (HD's and Omega's main menu): a mouse has already revealed
             // them by hovering, but a finger has no hover, and activating at once
@@ -226,7 +231,7 @@ impl Menu {
         // The middle button resets the row under the pointer, else the one the cursor is on.
         if pointer.reset {
             if let Some(region) = hit {
-                self.move_cursor(page, region.row);
+                self.point_cursor(page, region.row);
             }
             out.extend(self.reset());
         }
@@ -330,10 +335,20 @@ impl Menu {
         self.scroll[page] = start;
     }
 
+    /// Puts the cursor on the row under a pointer and leaves the window where it
+    /// is drawn, so what the pointer is over does not move.
+    fn point_cursor(&mut self, page: usize, row: usize) {
+        let shown = self.scroll();
+        if self.move_cursor(page, row) {
+            self.pointed[page] = Some(row);
+            self.scroll[page] = shown;
+        }
+    }
+
     /// Puts the cursor on `row` and lets the window follow, the way a pad
     /// move in [`Self::update`] does - stored, so the list scrolls rather
-    /// than snapping.
-    fn move_cursor(&mut self, page: usize, row: usize) {
+    /// than snapping. `false` for a row that takes no cursor.
+    fn move_cursor(&mut self, page: usize, row: usize) -> bool {
         let rows = self.definition.pages[page].entries.len();
         if row >= rows
             || matches!(
@@ -341,7 +356,7 @@ impl Menu {
                 Entry::Inert { .. }
             )
         {
-            return;
+            return false;
         }
         let dir = if row > self.cursor[page] {
             super::nav::Dir::Down
@@ -351,7 +366,9 @@ impl Menu {
         self.nav
             .when(self.cursor[page] != row, super::nav::Nav::Moved(Some(dir)));
         self.cursor[page] = row;
+        self.pointed[page] = None;
         self.scroll[page] = self.scroll();
+        true
     }
 
     /// Moves the cursor of the page on screen to `row`, with the sound of a step, for a page

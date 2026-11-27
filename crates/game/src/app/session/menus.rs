@@ -598,6 +598,8 @@ impl Session {
             menu::MenuEvent::Fired(menu::Action::OpenModSettings) => {
                 self.open_selected_mod_settings();
             }
+            // A row of the MODS list (`session::mods_page`).
+            menu::MenuEvent::OpenItem(id) => self.open_mod_item(id),
             // The AI PILOTS page's own two actions - see `super::pilot_editor`.
             menu::MenuEvent::Fired(menu::Action::SavePilot) => self.save_pilot(),
             menu::MenuEvent::Fired(menu::Action::NewPilot) => self.new_pilot(),
@@ -1041,6 +1043,7 @@ impl Session {
     pub(crate) fn menu_model(&mut self, shell: &super::Shell, skin: &menu::Skin) -> menu::Menu {
         let mut definition = shell.definition.clone();
         crate::music_pool::expand(&mut definition, self.music_discs.pool(), &shell.strings);
+        crate::mods::expand(&mut definition, &shell.mods, &shell.strings);
         let paused = self.add_pause_screen(&mut definition);
         let mut model = menu::Menu::new(definition);
         model.set_pause_screen(paused);

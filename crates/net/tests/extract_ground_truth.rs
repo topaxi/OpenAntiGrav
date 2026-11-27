@@ -27,23 +27,20 @@ const SHORT: usize = 300;
 /// The most ticks a one-lap race is flown to find its finish line (the longest lap is 4,000).
 const FINISH: usize = 6_000;
 
-/// Where an extraction is written: `/var/tmp` where it exists, else `target/`. An extraction is
-/// gigabytes of small writes and reads, and `target/` can sit on an encrypting filesystem
-/// (`OAG_EXTRACT_DIR` overrides; about 30% of the Omega first-circuit test's CPU is spent in the kernel there).
-fn work_dir(name: &str) -> PathBuf {
+/// Where an extraction is written, removed when the test ends: `/var/tmp` where it exists, else
+/// `target/tmp`. An extraction is gigabytes of small writes and reads, and `target/` can sit on an
+/// encrypting filesystem (about 30% of the Omega first-circuit test's CPU is spent in the kernel
+/// there). `/var/tmp` is on disk, not a `tmpfs`. `OAG_EXTRACT_DIR` overrides.
+fn work_dir(name: &str) -> oag_testdata::scratch::TempDir {
     let base = Path::new("/var/tmp");
     let root = if let Some(dir) = std::env::var_os("OAG_EXTRACT_DIR") {
         PathBuf::from(dir)
     } else if base.is_dir() {
         base.to_path_buf()
     } else {
-        oag_testdata::repo_root().join("target")
+        oag_testdata::scratch::root()
     };
-    let dir = root.join("oag-extract-ground-truth");
-    std::fs::create_dir_all(&dir).expect("work dir");
-    let out = dir.join(name);
-    let _ = std::fs::remove_dir_all(&out);
-    out
+    oag_testdata::scratch::at(root.join("oag-extract-ground-truth").join(name))
 }
 
 /// The state hash after each tick of the loaded `race`: `ticks` of them, or, when
@@ -187,7 +184,6 @@ fn check(source: &Path, name: &str, which: usize) {
         "{name}: {}: the race never moved, so the comparison proves nothing",
         planned.label
     );
-    let _ = std::fs::remove_dir_all(&out);
 }
 
 macro_rules! per_title {

@@ -171,7 +171,7 @@ fn a_song_past_the_booted_soundtrack_comes_from_the_pool_and_a_vanished_mount_is
 
 #[test]
 fn a_cached_walk_keeps_the_listing_and_follows_a_change_below_it() {
-    let base = std::env::temp_dir().join(format!("oag-music-folder-{}", std::process::id()));
+    let base = oag_testdata::scratch::dir("music-folder");
     let (library, cache) = (base.join("library"), base.join("cache"));
     std::fs::create_dir_all(library.join("sub")).expect("library");
     std::fs::write(library.join("a.mp3"), b"").expect("a");
@@ -273,8 +273,7 @@ fn a_pool_that_never_started_a_disc_scan_is_not_scanning() {
 
 #[test]
 fn a_folder_scan_lists_every_format_it_decodes_and_nothing_else() {
-    let root = std::env::temp_dir().join(format!("oag-folder-formats-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&root);
+    let root = oag_testdata::scratch::dir("folder-formats");
     std::fs::create_dir_all(root.join("album")).expect("temp folder");
     for name in [
         "a.mp3",
@@ -287,7 +286,10 @@ fn a_folder_scan_lists_every_format_it_decodes_and_nothing_else() {
     ] {
         std::fs::write(root.join(name), b"x").expect("temp file");
     }
-    let scan = FolderScan::start(Arc::new(crate::folders::Disk::default()), root.clone());
+    let scan = FolderScan::start(
+        Arc::new(crate::folders::Disk::default()),
+        root.to_path_buf(),
+    );
     wait_for(|| scan.status() != Status::Scanning);
     let names: Vec<String> = scan
         .files()

@@ -18,11 +18,8 @@ license = "CC-BY-4.0"
 description = "A mod for the tests."
 "#;
 
-fn scratch(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("oag-mod-{}-{name}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    dir
+fn scratch(name: &str) -> oag_testdata::scratch::TempDir {
+    oag_testdata::scratch::dir(&format!("mod-{name}"))
 }
 
 fn folder(dir: &Path, manifest: &str) {
@@ -164,7 +161,7 @@ fn a_search_finds_each_kind_skips_a_broken_one_and_names_a_duplicate() {
     std::fs::write(dir.join("broken.oagmod"), b"not a zip").unwrap();
     std::fs::create_dir_all(dir.join("plain-folder")).unwrap();
 
-    let loaded = load(std::slice::from_ref(&dir), &semver::Version::new(0, 1, 0));
+    let loaded = load(&[dir.to_path_buf()], &semver::Version::new(0, 1, 0));
     assert_eq!(loaded.mods.len(), 1, "{:?}", loaded.failed);
     assert_eq!(loaded.failed.len(), 2, "{:?}", loaded.failed);
     assert!(

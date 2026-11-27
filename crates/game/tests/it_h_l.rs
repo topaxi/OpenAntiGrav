@@ -48,6 +48,7 @@ mod hud_scale_gate;
 mod ipf_ground_truth;
 mod language_reload_ground_truth;
 mod lap_messages_ground_truth;
+mod launcher_cards_ground_truth;
 mod launcher_ground_truth;
 mod loading_screen_ground_truth;
 

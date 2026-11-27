@@ -1056,7 +1056,7 @@ impl Session {
             "pilot.low" | "pilot.high" => return,
             // The MOD row moves the detail lines and the ENABLED row; nothing is stored.
             crate::mods::SELECTED => {
-                self.resupply_mod_switch();
+                self.follow_mod_row();
                 return;
             }
             // The REPLAY row moves the detail lines; nothing is stored.
@@ -1071,6 +1071,13 @@ impl Session {
             // Saved by the switch itself, into `[mods] disabled`, and rebuilt live.
             crate::mods::ENABLED => {
                 self.switch_selected_mod(text == "on");
+                return;
+            }
+            // A row of the MODS list, toggled in place.
+            other if crate::mods::item_of(other).is_some() => {
+                if let Some(id) = crate::mods::item_of(other) {
+                    self.switch_mod(id, text == "on");
+                }
                 return;
             }
             // A MUSIC page row: one source on or off, saved into the open title's

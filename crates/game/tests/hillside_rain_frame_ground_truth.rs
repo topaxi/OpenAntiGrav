@@ -154,7 +154,7 @@ fn measure((width, texels): &(usize, Vec<[u8; 3]>), [x0, y0, x1, y1]: [usize; 4]
 #[test]
 #[ignore = "needs a Pulse disc image, the mod examples and --features extensions"]
 fn the_final_lap_frame_is_greyer_darker_and_flareless_and_an_earlier_one_is_untouched() {
-    let scratch = std::env::temp_dir().join("oag-hillside-rain-frame");
+    let scratch = oag_testdata::scratch::dir("hillside-rain-frame");
     let Some([on, off]) = copies(&scratch) else {
         return;
     };

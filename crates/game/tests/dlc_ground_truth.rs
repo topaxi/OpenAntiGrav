@@ -160,7 +160,7 @@ fn a_pack_team_is_named_by_the_disc_and_its_id_is_not_always_that_name() {
         dlc: vec![workspace("data/dlc")],
         leg: oag_ui::frontend::Leg::LogoFmv,
         movie: Some(boot::DEFAULT_BOOT_MOVIE.to_string()),
-        cache: std::env::temp_dir().join("oag-dlc-ground-truth"),
+        cache: oag_testdata::scratch::cache("dlc-ground-truth"),
         audio_cache: oag_source::cache::default_audio_cache_dir(),
         extent: oag_game::movie::Extent::Frames(1),
         no_video: true,

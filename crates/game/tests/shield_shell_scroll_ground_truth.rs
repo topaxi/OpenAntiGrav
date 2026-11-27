@@ -23,7 +23,7 @@
 //! magnetic shell of a 2048 craft on a vertex scroll track. A shell whose drawable reads no
 //! clock stands still, so the pixel count is zero without the wiring.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
 const WIDTH: usize = 480;
@@ -134,11 +134,8 @@ fn frame(
     pixels_of(&std::fs::read(&out).expect("reading the screenshot"))
 }
 
-fn scratch(title: &str) -> PathBuf {
-    let dir =
-        std::env::temp_dir().join(format!("oag-shield-scroll-{title}-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).expect("creating the scratch directory");
-    dir
+fn scratch(title: &str) -> oag_testdata::scratch::TempDir {
+    oag_testdata::scratch::dir(&format!("shield-scroll-{title}"))
 }
 
 /// How many pixels differ between `a` and `b` where `control_a` and `control_b`

@@ -70,7 +70,8 @@ link_into() {
 # anywhere (including the main checkout, and CI). See `just check-link-data`.
 self_check() {
     local tmp
-    tmp=$(mktemp -d)
+    . "$(dirname "${BASH_SOURCE[0]}")/oag-tmp.sh"
+    tmp=$(mktemp -d -p "$(oag_tmp_root)")
     trap 'rm -rf "$tmp"' RETURN
 
     mkdir -p "$tmp/src/traces" "$tmp/dst/traces"

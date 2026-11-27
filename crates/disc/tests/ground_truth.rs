@@ -161,7 +161,8 @@ fn listing_matches_chdman_and_the_reference_iso() {
         return;
     }
 
-    let iso = std::env::temp_dir().join("oag-ground-truth.iso");
+    let scratch = oag_testdata::scratch::dir("ground-truth-iso");
+    let iso = scratch.join("oag-ground-truth.iso");
     let status = Command::new("chdman")
         .args(["extractdvd", "-f", "-i"])
         .arg(&path)
@@ -195,8 +196,6 @@ fn listing_matches_chdman_and_the_reference_iso() {
         from_iso.read_entry(boot).expect("read from iso"),
         "BOOT.BIN differs between the CHD and the extracted ISO"
     );
-
-    std::fs::remove_file(&iso).ok();
 }
 
 /// `ChdSource::read_sectors` splits a long read across threads; the bytes must

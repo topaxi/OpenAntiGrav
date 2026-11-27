@@ -22,6 +22,7 @@ fn quad(sheet: &mut Sheet, colour: [f32; 4], w: f32) -> Vec<GpuVertex> {
             width: 4,
             height: 4,
             rgba: [255u8; 4].repeat(16).into(),
+            chain: None,
         })
         .expect("the sprite fits");
     let uv = [(rect[0] + rect[2]) / 2.0, (rect[1] + rect[3]) / 2.0];

@@ -35,7 +35,7 @@ fn flyby(held: bool) -> Option<(Vec<bool>, bool)> {
         ..oag_raceplay::Options::default()
     })
     .expect("loading the race");
-    let cache = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("flyby-voice-audio");
+    let cache = oag_testdata::scratch::cache("flyby-voice-audio");
     let discs = oag_sound::MusicDiscs::survey(&source, &GameLibrary);
     let mut audio = oag_sound::Audio::open(
         &oag_sound::settings::Settings::default(),

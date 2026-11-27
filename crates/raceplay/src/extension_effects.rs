@@ -124,6 +124,7 @@ mod view {
             width,
             height,
             rgba: base.into(),
+            chain: None,
         })
     }
 
@@ -221,6 +222,7 @@ mod view {
                         width: u16::try_from(width).map_err(|e| e.to_string())?,
                         height: u16::try_from(height).map_err(|e| e.to_string())?,
                         rgba: rgba.into(),
+                        chain: None,
                     })
                 }
                 parametric::TextureRef::Host { entry, name } => host(entry, name),

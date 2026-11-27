@@ -243,8 +243,7 @@ fn a_lone_craft_races_a_disc_circuit_and_its_exported_file_identically() {
         return;
     };
     let image = image.display().to_string();
-    let dir = std::env::temp_dir().join(format!("oag-trackfile-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = oag_testdata::scratch::dir("trackfile");
     for track in [
         r"Data\Environments\03_Track\track.vex",
         r"Data\Environments\16_Track\track.vex",
@@ -381,7 +380,6 @@ fn a_lone_craft_races_a_disc_circuit_and_its_exported_file_identically() {
         println!("{track}: lap {moved}, |position| {travelled:.0}");
         assert!(travelled > 100.0, "{track}: the AI craft did not drive");
     }
-    std::fs::remove_dir_all(dir).ok();
 }
 
 #[cfg(feature = "ballisticng")]
@@ -459,8 +457,7 @@ fn lions_den_races_the_same_converted_as_loaded_directly() {
         .into_iter()
         .find(|p| p.parent().is_some_and(|d| d.ends_with("1392209921")))
         .expect("Lion's Den is in the census");
-    let dir = std::env::temp_dir().join(format!("oag-trackfile-lion-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = oag_testdata::scratch::dir("trackfile-lion");
     let manifest = dir.join("lions-den.track.toml");
     oag_trackfile::write(&oag_bng_import::read(&wtrk).unwrap(), &manifest).unwrap();
 
@@ -503,7 +500,6 @@ fn lions_den_races_the_same_converted_as_loaded_directly() {
             .length()
             > 100.0
     );
-    std::fs::remove_dir_all(dir).ok();
 }
 
 /// A committed track file on Pulse's physics: it loads, the report says what the
@@ -694,8 +690,7 @@ fn a_track_file_loads_on_the_disc_it_borrows_from_and_where_its_author_offers_it
     no_art_miss(&report);
 
     // The same loop pinned to Pulse by a host sky.
-    let dir = std::env::temp_dir().join(format!("oag-trackfile-host-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = oag_testdata::scratch::dir("trackfile-host");
     let mut pinned = oag_trackfile::read(&own).unwrap().track;
     let art = pinned.art.as_mut().unwrap();
     art.skybox = None;

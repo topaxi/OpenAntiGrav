@@ -367,6 +367,23 @@ pub fn candidates() -> Vec<PathBuf> {
     found
 }
 
+/// Every PS4 base package with a patch beside it in the directories of
+/// [`search_path`], including those [`candidates`] leaves out because an
+/// unpacked folder already stands for the title. The art a folder does not keep
+/// is read out of these.
+#[must_use]
+pub fn ps4_base_packages() -> Vec<PathBuf> {
+    let mut found: Vec<PathBuf> = search_path()
+        .iter()
+        .flat_map(|directory| std::fs::read_dir(directory).into_iter().flatten().flatten())
+        .map(|entry| entry.path())
+        .filter(|path| path.is_file() && is_listed_ps4_package(path))
+        .collect();
+    found.sort();
+    found.dedup();
+    found
+}
+
 /// Where Wipeout 2048's own extracts live, unlike every other title's a
 /// **directory** rather than a disc image - see `data/README.md` and
 /// `oag_2048`'s own module docs. `just play 2048` reads the same location.

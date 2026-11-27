@@ -10,21 +10,20 @@ fn a_title_directory_is_its_lowercase_hyphenated_name() {
 
 #[test]
 fn no_directory_is_no_override() {
-    let none = std::env::temp_dir().join("oag-no-such-overrides-dir");
-    assert!(override_layer_in(&[none], TITLE).is_none());
+    let scratch = oag_testdata::scratch::dir("overrides-none");
+    assert!(override_layer_in(&[scratch.join("missing")], TITLE).is_none());
 }
 
 #[test]
 fn files_under_the_title_directory_are_the_override_and_another_title_s_are_not() {
-    let base = std::env::temp_dir().join(format!("oag-overrides-{}", std::process::id()));
+    let base = oag_testdata::scratch::dir("overrides");
     let mine = base.join("wipeout-pulse/Data/HUD");
     std::fs::create_dir_all(&mine).unwrap();
     std::fs::write(mine.join("Foo.mip"), b"mod").unwrap();
 
-    let layer = override_layer_in(std::slice::from_ref(&base), TITLE).expect("an override");
+    let layer = override_layer_in(&[base.to_path_buf()], TITLE).expect("an override");
     assert!(layer.contains("Data\\HUD\\foo.mip"));
-    assert!(override_layer_in(std::slice::from_ref(&base), oag_pure::TITLE).is_none());
-    std::fs::remove_dir_all(&base).unwrap();
+    assert!(override_layer_in(&[base.to_path_buf()], oag_pure::TITLE).is_none());
 }
 
 /// The fallback carries the indicator's layout and art under the entry names the

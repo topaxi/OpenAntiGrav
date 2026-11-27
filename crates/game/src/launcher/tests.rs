@@ -611,8 +611,7 @@ fn hovering_a_file_says_it_will_be_used() {
 /// and not played when it will not open.
 #[test]
 fn a_dropped_non_image_is_listed_as_one_that_will_not_open() {
-    let dir = std::env::temp_dir().join(format!("oag-drop-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = oag_testdata::scratch::dir("drop");
     let file = dir.join("junk.iso");
     std::fs::write(&file, vec![0u8; 4096]).unwrap();
     let mut l = Launcher::new(vec![broken("x.iso")]);

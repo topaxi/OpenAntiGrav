@@ -30,12 +30,25 @@ impl Free {
     /// Takes room for a `width` by `height` sprite and returns its top-left
     /// corner, or `None` when no empty rectangle holds it.
     pub(super) fn take(&mut self, width: u32, height: u32) -> Option<(u32, u32)> {
+        self.take_aligned(width, height, 1)
+    }
+
+    /// [`Self::take`] at a corner whose coordinates are both multiples of `align`.
+    pub(super) fn take_aligned(
+        &mut self,
+        width: u32,
+        height: u32,
+        align: u32,
+    ) -> Option<(u32, u32)> {
         let (w, h) = (width + PAD, height + PAD);
-        let [x, y, ..] = *self
+        let (x, y) = self
             .0
             .iter()
-            .filter(|free| free[2] >= w && free[3] >= h)
-            .min_by_key(|free| (free[1] + h, free[0]))?;
+            .filter_map(|&[fx, fy, fw, fh]| {
+                let (x, y) = (fx.next_multiple_of(align), fy.next_multiple_of(align));
+                (x + w <= fx + fw && y + h <= fy + fh).then_some((x, y))
+            })
+            .min_by_key(|&(x, y)| (y + h, x))?;
         let mut split = Vec::with_capacity(self.0.len() + 4);
         for &[fx, fy, fw, fh] in &self.0 {
             if x >= fx + fw || x + w <= fx || y >= fy + fh || y + h <= fy {

@@ -89,7 +89,7 @@ mod tests {
 
     #[test]
     fn a_manifest_lists_the_files_this_source_owns_and_no_others() {
-        let root = std::env::temp_dir().join(format!("oag-manifest-{}", std::process::id()));
+        let root = oag_testdata::scratch::dir("manifest");
         let (movies, audio) = (root.join("movies"), root.join("audio"));
         std::fs::create_dir_all(&movies).unwrap();
         std::fs::create_dir_all(&audio).unwrap();

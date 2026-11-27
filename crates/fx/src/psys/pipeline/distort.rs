@@ -52,6 +52,7 @@ impl Distort {
         device: &wgpu::Device,
         layout: &wgpu::PipelineLayout,
         sample_count: u32,
+        lod_bias: f32,
     ) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("psys distort"),
@@ -106,7 +107,10 @@ impl Distort {
                     }),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
-                compilation_options: Default::default(),
+                compilation_options: wgpu::PipelineCompilationOptions {
+                    constants: &[("disc_lod_bias", f64::from(lod_bias))],
+                    ..Default::default()
+                },
             }),
             primitive: wgpu::PrimitiveState {
                 cull_mode: None,

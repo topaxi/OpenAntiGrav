@@ -66,6 +66,10 @@ import struct
 import sys
 import time
 from pathlib import Path
+import os
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import oag_tmp  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -367,7 +371,7 @@ def main():
     args = [a for a in sys.argv[1:] if a not in flags]
     early = "--early" in sys.argv[1:]
     params = "--params" in sys.argv[1:]
-    out = Path(args[0] if args else "/tmp/hd-trail-dump")
+    out = Path(args[0] if args else oag_tmp.output("hd-trail-dump"))
     out.mkdir(parents=True, exist_ok=True)
     with drive.Session(str(IMAGE), str(out / "logs")) as session:
         print("rpcs3 pid %d" % session.proc.pid, flush=True)

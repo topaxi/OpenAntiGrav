@@ -18,6 +18,7 @@ impl Menu {
         let Some(at) = self.definition.pages.iter().position(|page| page.id == id) else {
             return false;
         };
+        self.sort_items(at);
         self.stack = vec![at];
         self.snap_focus();
         true
@@ -34,6 +35,7 @@ impl Menu {
         let Some(at) = self.definition.pages.iter().position(|page| page.id == id) else {
             return false;
         };
+        self.sort_items(at);
         self.stack.push(at);
         self.snap_focus();
         true
@@ -50,6 +52,10 @@ pub struct Spot {
     pub row: Option<String>,
     /// The selected row's index, for a row with neither.
     pub index: usize,
+    /// Where the page's window was.
+    pub scroll: usize,
+    /// Whether a pointer put the cursor there, which keeps the window as it was drawn.
+    pub pointed: bool,
 }
 
 impl Menu {
@@ -70,6 +76,12 @@ impl Menu {
                     page: page.id.clone(),
                     row,
                     index,
+                    scroll: if at == self.current() {
+                        self.scroll()
+                    } else {
+                        self.scroll[at]
+                    },
+                    pointed: self.pointed[at] == Some(index),
                 }
             })
             .collect()
@@ -95,6 +107,8 @@ impl Menu {
             });
             let last = page.entries.len().saturating_sub(1);
             self.cursor[at] = by_key.unwrap_or(spot.index.min(last));
+            self.scroll[at] = spot.scroll;
+            self.pointed[at] = spot.pointed.then_some(self.cursor[at]);
             stack.push(at);
         }
         let whole = stack.len() == trail.len();

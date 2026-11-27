@@ -100,6 +100,9 @@ import emu_guard
 import rpcs3_pad
 import xvfb_display
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import oag_tmp  # noqa: E402
+
 def xdg_cache():
     """`$XDG_CACHE_HOME`, or `~/.cache` - where RPCS3 puts `TTY.log` and the log.
 
@@ -2612,7 +2615,7 @@ def main(argv=None):
     parser.add_argument("--image",
                         default="data/images/hdfury-ps3-eu-dec.iso",
                         help="the layer-1 DECRYPTED disc image")
-    parser.add_argument("--log-dir", default="/tmp/rpcs3-drive",
+    parser.add_argument("--log-dir", default=oag_tmp.output("rpcs3-drive"),
                         help="where the emulator log and screenshots go")
     parser.add_argument("--config", default=MUTED, metavar="PATH",
                         help="a config.yml to pass RPCS3 as --config. The "

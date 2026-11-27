@@ -25,7 +25,7 @@
 //! after the pads under both orders, so a pad behind a tree stays hidden
 //! (`docs/rendering/draw-order.md`, "Hull, pads and trees on Platinum Rush White").
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
 fn capture(image: &Path, scratch: &Path, order: Option<&str>) -> Vec<u8> {
@@ -77,10 +77,8 @@ fn capture_with(image: &Path, scratch: &Path, flag: Option<[&str; 2]>) -> Vec<u8
     oag_texture::png::picture_only(&std::fs::read(&out).expect("reading the screenshot"))
 }
 
-fn scratch() -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("oag-trail-order-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).expect("creating the scratch directory");
-    dir
+fn scratch() -> oag_testdata::scratch::TempDir {
+    oag_testdata::scratch::dir("trail-order")
 }
 
 #[test]

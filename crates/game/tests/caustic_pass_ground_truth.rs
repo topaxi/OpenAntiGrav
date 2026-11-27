@@ -91,8 +91,7 @@ fn vostok_reefs_floor_draws_its_caustics_and_they_follow_the_clock() {
     let Some(image) = oag_testdata::image("data/images/pulse-ps2-eu.chd") else {
         return;
     };
-    let scratch = std::env::temp_dir().join(format!("oag-caustic-{}", std::process::id()));
-    std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
+    let scratch = oag_testdata::scratch::dir("caustic");
     let disc = (image.as_path(), "Wipeout Pulse (PS2)");
     let at = (VOSTOK, OVER_THE_FLOOR);
     check_pass(disc, &scratch, at);
@@ -121,8 +120,7 @@ fn vineta_ks_seabed_draws_its_embedded_caustics_and_they_follow_the_clock() {
     let Some(image) = oag_testdata::image("data/images/pure-psp-eu.chd") else {
         return;
     };
-    let scratch = std::env::temp_dir().join(format!("oag-caustic-pure-{}", std::process::id()));
-    std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
+    let scratch = oag_testdata::scratch::dir("caustic-pure");
     let disc = (image.as_path(), "Wipeout Pure (PSP)");
     check_pass(disc, &scratch, (VINETA, OVER_THE_SEABED));
 }

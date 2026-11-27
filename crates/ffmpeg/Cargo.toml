@@ -24,5 +24,8 @@ zip = { version = "9.5.0", default-features = false, features = ["deflate"] }
 [target.'cfg(not(any(target_arch = "wasm32", target_os = "android")))'.dev-dependencies]
 lzma-rust2 = { version = "0.25", default-features = false, features = ["std", "xz", "encoder"] }
 
+[dev-dependencies]
+oag-testdata.workspace = true
+
 [lints]
 workspace = true

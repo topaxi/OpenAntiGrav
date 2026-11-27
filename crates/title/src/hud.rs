@@ -477,6 +477,13 @@ pub struct HudArt {
     /// (`Repulser`/`Shuriken`, unimplemented on 2048 per
     /// `docs/gameplay/pickups.md`); every weapon 2048 grants has an entry.
     pub pickup_icon_uv: Option<[Option<[u16; 4]>; 14]>,
+    /// The image widget a running Shield drains: drawn cropped from the top to the fraction of
+    /// its duration left, bottom edge fixed, and not at all with none up. `None` draws nothing.
+    ///
+    /// 2048's `ManualShield`: `Hud_UpdateWidgets`' slot-timer branch scales height and source
+    /// rect by `min(slot+0x1b8 / slot+0x1bc, 1)`
+    /// (`docs/ghidra/functions/vita-2048-eu-v104/shield.md`, "The HUD").
+    pub shield_drain_widget: Option<&'static str>,
     /// What this title calls each rung of its Zone escalation ladder, or `None`
     /// if not read. See [`ZoneSpeedClasses`]. The *names* only: which rung a zone
     /// is on is [`crate::RaceDefaults::zone_stages`], kept separate because the

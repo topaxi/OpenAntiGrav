@@ -29,7 +29,7 @@ table - because if either is wrong everything downstream is nonsense read
 from the wrong address, not a subtly wrong law.
 
     uv run --with websocket-client scripts/psp-watch-soundemitter.py \\
-        --port 47820 --hits 400 --out /tmp/soundemitter.csv
+        --port 47820 --hits 400 --out target/tmp/soundemitter.csv
 """
 
 import argparse
@@ -41,6 +41,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from ppsspp_debugger import Debugger
+import os
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import oag_tmp  # noqa: E402
 
 ENTRY = 0x08939C00  # SoundEmitter_ComputeVolumeAndAngle
 MGR_PTR = 0x08AC1E10  # _DAT_002bde10 + image base 0x08804000; holds *the* manager pointer
@@ -125,7 +129,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--port", type=int, default=47800)
     parser.add_argument("--hits", type=int, default=200)
-    parser.add_argument("--out", default="/tmp/soundemitter.csv")
+    parser.add_argument("--out", default=oag_tmp.output("soundemitter.csv"))
     args = parser.parse_args()
 
     dbg = Debugger(args.port)

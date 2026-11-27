@@ -2,7 +2,8 @@
 
 ## Status
 
-Proposed (2026-10-29). Builds on [ADR-0066](0066-the-menu-is-the-disc-plus-mods.md)
+Proposed (2026-10-29); decision 6 superseded by
+[ADR-0098](0098-the-mods-page-is-a-list-of-mods-and-a-detail-page.md). Builds on [ADR-0066](0066-the-menu-is-the-disc-plus-mods.md)
 (mods, and the menu as the disc plus mods) and [ADR-0077](0077-a-custom-campaign-compiles-to-the-titles-own-grid.md)
 (custom campaigns, which may race another mod's track).
 

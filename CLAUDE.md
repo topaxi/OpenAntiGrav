@@ -32,6 +32,7 @@ scripts/gate-run.sh RECIPE   # a gate recipe under the shared gate lock, prebuil
 just check-docs   # internal links in docs/ (not CLAUDE.md, .claude/ or HANDOVER.md)
 just check-deps | check-unused-deps (cargo shear) | check-determinism | check-size | check-comment-history   # the rules below
 just check-names | check-handover | check-schemas | check-weapon-lineage | check-guests   # `check-guests --strict` (the gate) fails a stale ext/*.wasm; `just rebuild-guests` regenerates
+just check-temp-use # no test, script or recipe writes under /tmp (a tmpfs with a quota)
 just check-status # status.md's RE-coverage table matches names.tsv; `just gen-status` regenerates it
 just check-title-branching | check-title-reach   # ratchets: per-title behaviour is `Title` data (ADR-0058), and generic crates reach a title only through `oag_title::Title`, the oag-source registry or the composition root
 just check-hd-clock-grab   # every HD/Fury grab of the original goes through `rpcs3-drive.py`'s `grab_with_clock`
@@ -73,6 +74,11 @@ whole read and decode again.
 2. Sniff before you read (`Archive::peek`); read only what the assertion needs; stop a simulation at the tick its claim is decided.
 3. A test that only prints is a scratch sweep: `#[ignore]` with a reason and an early return unless `OAG_SWEEP` is set.
 4. Remove redundancy before splitting for the tail: every slice pays its own fixture load.
+
+**A test writes through `oag_testdata::scratch`, never `/tmp` or `std::env::temp_dir()`**: `dir(label)`
+for files removed with the test (bind the guard for as long as they are read; `OAG_KEEP_SCRATCH=1`
+keeps them), `cache(name)` for a transcode worth reusing. Scripts use `scripts/oag_tmp.py` or
+`scripts/oag-tmp.sh`.
 
 **A new `tests/*.rs` file is a `mod` line in its crate's `tests/it*.rs`**, not a
 binary of its own. `oag-game` and `oag-raceplay` have five binaries

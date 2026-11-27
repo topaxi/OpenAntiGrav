@@ -7,7 +7,8 @@ cd "$(dirname "$0")/.."
 cargo nextest run --workspace --tests --cargo-profile quick --no-tests=fail \
   -E 'package(oag-schema) | binary(/schema/) | (binary(/^it/) & test(/^[a-z0-9_]*schema[a-z0-9_]*::/))' --status-level fail
 
-dist=$(mktemp -d)
+. scripts/oag-tmp.sh
+dist=$(mktemp -d -p "$(oag_tmp_root)")
 trap 'rm -rf "$dist"' EXIT
 scripts/stage-schemas.sh "$dist"
 base=$(grep -oE 'https://[^"]*/mods/schemas' crates/schema/src/lib.rs | head -1)

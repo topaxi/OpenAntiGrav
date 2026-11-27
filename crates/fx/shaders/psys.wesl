@@ -35,6 +35,10 @@ import oag_shaders::target::{linear_out, gamma_to_target, target_out};
 @group(0) @binding(1) var sheet: texture_2d<f32>;
 @group(0) @binding(2) var sheet_sampler: sampler;
 
+// The title's sampler LOD bias on its sprites, in levels (`Pipeline::with_lod_bias`); `0`
+// reads the base, the only level such a title uploads.
+override disc_lod_bias: f32 = 0.0;
+
 struct VertexOutput {
     @builtin(position) clip: vec4<f32>,
     @location(0) colour: vec4<f32>,
@@ -132,7 +136,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let capped_v = 0.5 * clamp(s / f, 0.0, 1.0) + 0.5 * clamp((s - (1.0 - f)) / f, 0.0, 1.0);
     let folded = vec2<f32>(in.texcoord.x, mix(in.cell_v.x, in.cell_v.y, capped_v));
     let uv = select(in.texcoord, folded, in.sampled > 1.5);
-    let texel = textureSample(sheet, sheet_sampler, uv);
+    let texel = textureSampleBias(sheet, sheet_sampler, uv, disc_lod_bias);
     let sprite = in.colour * texel;
     let picked = select(procedural, sprite, in.sampled > 0.5);
     let rgb = picked.rgb;

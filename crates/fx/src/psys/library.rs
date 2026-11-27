@@ -37,6 +37,11 @@ impl Library {
         Self::default()
     }
 
+    /// [`Sheet::chain_every_sprite`] on this library's sheet, before the first insert.
+    pub fn chain_every_sprite(&mut self) {
+        self.sheet.chain_every_sprite();
+    }
+
     /// Adds `effect` under `name`, replacing any effect already there.
     ///
     /// Places each billboard emitter's sprite on the library's [`Sheet`]

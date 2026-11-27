@@ -557,6 +557,8 @@ OAG_MEDAL_BRONZE = { text = "BRONZE", human = false }
 OAG_MENU_MODS = { text = "MODS", human = false }
 OAG_MENU_MODS_SUBTITLE = { text = "Turn each mod on or off; who made it, its licence and what it adds", human = false }
 OAG_MODS_PAGE_TITLE = { text = "MODS", human = false }
+OAG_MODS_DETAIL_PAGE_TITLE = { text = "MOD", human = false }
+OAG_MODS_TOGGLE = { text = "TURN ON/OFF", human = false }
 OAG_MODS_ROW = { text = "MOD", human = false }
 OAG_MODS_ID = { text = "ID", human = false }
 OAG_MODS_VERSION = { text = "VERSION", human = false }
@@ -773,3 +775,11 @@ OAG_FFMPEG_YES = { text = "DOWNLOAD", human = false }
 OAG_FFMPEG_NO = { text = "NO THANKS", human = false }
 OAG_FFMPEG_DOWNLOADING = { text = "DOWNLOADING FFMPEG %s - BACK CANCELS", human = false }
 OAG_FFMPEG_UNPACKING = { text = "UNPACKING FFMPEG...", human = false }
+
+# The title chooser's cards (`crates/game/src/launcher/cards.rs`).
+OAG_LAUNCHER_CHOOSE = { text = "CHOOSE A GAME", human = false }
+OAG_LAUNCHER_MOVE = { text = "ARROWS CHOOSE", human = false }
+OAG_LAUNCHER_START = { text = "ENTER OR X START", human = false }
+OAG_LAUNCHER_PICTURE = { text = "C OR SQUARE NEXT PICTURE", human = false }
+OAG_LAUNCHER_QUIT = { text = "ESCAPE QUIT", human = false }
+OAG_LAUNCHER_ENCRYPTED = { text = "ENCRYPTED - ENTER ITS DISC KEY", human = false }

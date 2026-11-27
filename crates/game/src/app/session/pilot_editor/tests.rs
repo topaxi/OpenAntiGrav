@@ -34,27 +34,16 @@ values_from = \"pilot_axis_high\"
     menu::Menu::new(definition)
 }
 
-/// A directory holding one pilot file, cleaned up on drop - the same
+/// A directory holding one pilot file - the same
 /// idiom `pilots`' own tests use, kept local rather than shared so this
 /// file does not reach into `oag_raceplay::pilots`' private test helpers.
-struct Scratch(std::path::PathBuf);
+struct Scratch(oag_testdata::scratch::TempDir);
 
 impl Scratch {
     fn with(name: &str, body: &str) -> Self {
-        let dir = std::env::temp_dir().join(format!(
-            "oag-pilot-editor-{}-{:p}",
-            std::process::id(),
-            name.as_ptr()
-        ));
-        std::fs::create_dir_all(&dir).expect("a scratch directory");
+        let dir = oag_testdata::scratch::dir("pilot-editor");
         std::fs::write(dir.join(format!("{name}.toml")), body).expect("a scratch pilot");
         Self(dir)
-    }
-}
-
-impl Drop for Scratch {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
     }
 }
 
@@ -207,8 +196,7 @@ fn a_table_entry_has_its_percent_s_replaced_by_the_name() {
 /// A pilot file is hand-authored; a crash while the editor saves it must leave it as it was.
 #[test]
 fn a_pilot_save_cut_short_keeps_the_hand_written_file() {
-    let dir = std::env::temp_dir().join(format!("oag-pilot-save-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
+    let dir = oag_testdata::scratch::dir("pilot-save");
     let nested = dir.join("pilots");
 
     write_pilot(&nested, "winston", "# mine\nwander = [0.3, 0.6]\n")

@@ -83,18 +83,27 @@ impl Tint {
     /// `sprite` with every texel's colour swapped, alpha untouched.
     #[must_use]
     pub fn sprite(self, sprite: &Sprite) -> Sprite {
-        let mut rgba = sprite.rgba.to_vec();
+        Sprite {
+            width: sprite.width,
+            height: sprite.height,
+            rgba: self.texels(&sprite.rgba),
+            chain: sprite
+                .chain
+                .as_ref()
+                .map(|levels| levels.iter().map(|level| self.texels(level)).collect()),
+        }
+    }
+
+    /// RGBA8 texels with every colour swapped, alpha untouched.
+    fn texels(self, source: &[u8]) -> Arc<[u8]> {
+        let mut rgba = source.to_vec();
         for texel in rgba.as_chunks_mut::<4>().0 {
             let rgb = [texel[0], texel[1], texel[2]].map(|c| f32::from(c) / 255.0);
             for (byte, value) in texel.iter_mut().zip(self.apply_within(rgb, 1.0)) {
                 *byte = (value * 255.0).round().clamp(0.0, 255.0) as u8;
             }
         }
-        Sprite {
-            width: sprite.width,
-            height: sprite.height,
-            rgba: Arc::from(rgba),
-        }
+        Arc::from(rgba)
     }
 }
 
@@ -148,6 +157,7 @@ mod tests {
             width: 1,
             height: 1,
             rgba: Arc::from(vec![14, 78, 129, 200]),
+            chain: None,
         });
         effect.emitters[1].sprite = None;
 

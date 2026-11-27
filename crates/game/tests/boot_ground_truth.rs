@@ -52,7 +52,7 @@ fn load_leg(leg: oag_ui::frontend::Leg, movie: &str) -> Option<boot::Boot> {
         leg,
         movie: Some(movie.to_string()),
         // Nothing is written and ffmpeg is never run.
-        cache: std::env::temp_dir().join("oag-boot-ground-truth"),
+        cache: oag_testdata::scratch::cache("boot-ground-truth"),
         audio_cache: oag_source::cache::default_audio_cache_dir(),
         extent: oag_game::movie::Extent::Frames(oag_game::INTRO_FRAMES_NEEDED),
         no_video: true,
@@ -451,8 +451,7 @@ fn the_title_pair_route_stays_on_show_logo_on_a_fresh_profile() {
     let Some(image) = image() else {
         return;
     };
-    let scratch = std::env::temp_dir().join(format!("oag-title-route-{}", std::process::id()));
-    std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
+    let scratch = oag_testdata::scratch::dir("title-route");
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
         .arg(&image)
         .args(title_pair_route())

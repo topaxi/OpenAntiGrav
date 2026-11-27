@@ -18,9 +18,11 @@ oag-io.workspace = true
 oag-omega.workspace = true
 oag-pulse.workspace = true
 oag-pure.workspace = true
+oag-texture.workspace = true
 oag-title.workspace = true
 oag-display.workspace = true
 anyhow.workspace = true
+log.workspace = true
 dirs = "7"
 # Unpacking a downloaded DLC zip into the cache, and nothing else. Deliberately
 # here rather than in `oag-assets`: `dlc` writes the members out as plain files,

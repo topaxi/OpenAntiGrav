@@ -82,6 +82,9 @@ import tempfile
 import numpy as np
 from PIL import Image
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import oag_tmp  # noqa: E402
+
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 # `talons-matched` (this script's original pair) is gone from disk - confirmed
 # 2026-09-17, `renderer.md`'s "The Amphiseum sign flip is re-derived at a
@@ -454,7 +457,7 @@ def main():
             png_path, tint_path, lit_path, roles, palette, fog_byte, args
         )
     else:
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory(dir=oag_tmp.temp_root()) as tmp:
             tint_path, lit_path = run(pathlib.Path(tmp))
             _classify_and_report(
                 png_path, tint_path, lit_path, roles, palette, fog_byte, args

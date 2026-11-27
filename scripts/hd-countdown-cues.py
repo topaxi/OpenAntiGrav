@@ -10,7 +10,7 @@ countdown-voice.md`), and the SCREAM master tick (`0x013bc500`, 240 a second of 
 which runs while the game thread is parked, so it orders hits and says nothing of game time).
 
     scripts/emu-env.sh <lane> 94 <gdb-port>; source data/scratch/<lane>/env.sh
-    export XDG_CACHE_HOME=/tmp/oag-<lane>-cache
+    export XDG_CACHE_HOME=$PWD/data/scratch/<lane>/cache
     uv run --with evdev python3 scripts/emu-run.py -- \\
         python3 -u scripts/hd-countdown-cues.py [--out DIR] [--which announcer,bank,named]
 """

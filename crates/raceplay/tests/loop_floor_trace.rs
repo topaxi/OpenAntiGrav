@@ -225,7 +225,12 @@ fn describe(race: &race::Race, tick: u32, slot: usize, p: &Projectile) -> String
 }
 
 fn out_path(name: &str) -> String {
-    std::env::var("OAG_LOOP_TRACE_OUT").unwrap_or_else(|_| format!("/tmp/oag-loop-trace-{name}"))
+    std::env::var("OAG_LOOP_TRACE_OUT").unwrap_or_else(|_| {
+        oag_testdata::scratch::cache("loop-trace")
+            .join(name)
+            .display()
+            .to_string()
+    })
 }
 
 #[test]

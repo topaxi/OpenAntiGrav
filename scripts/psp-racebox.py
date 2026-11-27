@@ -12,7 +12,7 @@ landed where intended is a frame of the screen they were sent to. Skipping
 that frame is how a stuck selector reads as a class it never actually reached.
 
     uv run --with websocket-client scripts/psp-racebox.py \\
-        --race-type time_trial --class phantom --confirm --shot-prefix /tmp/phantom
+        --race-type time_trial --class phantom --confirm --shot-prefix target/tmp/phantom
 
 Requires a PPSSPP debugger already reachable (see `psp-drive.py preflight`)
 and a compositor or Xvfb `DISPLAY` `import` (ImageMagick) can screenshot -
@@ -27,6 +27,10 @@ import time
 
 sys.path.insert(0, "scripts")
 from ppsspp_debugger import Debugger  # noqa: E402
+import os
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import oag_tmp  # noqa: E402
 
 MAIN_MENU = "Main Menu"
 RACEBOX = "Racebox"
@@ -98,7 +102,7 @@ def main():
     ap.add_argument("--display", default=":97", help="X display to screenshot, e.g. Xvfb's")
     ap.add_argument("--race-type", choices=sorted(RACE_TYPES), default="time_trial")
     ap.add_argument("--class", dest="cls", choices=sorted(CLASSES), default="venom")
-    ap.add_argument("--shot-prefix", default="/tmp/racebox")
+    ap.add_argument("--shot-prefix", default=oag_tmp.output("racebox/shot"))
     ap.add_argument(
         "--confirm",
         action="store_true",

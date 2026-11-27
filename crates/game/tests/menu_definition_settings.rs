@@ -1157,15 +1157,18 @@ fn every_settings_row_is_one_the_game_seeds() {
             // The web's own rows are dropped on a desktop and seeded only there.
             // The REPLAYS page's REPLAY row only says which file the rows under it are about;
             // the files are listed each time the menus open (`Session::replay_choices`).
-            // The MODS page's MOD row only says which mod the rows under it are about, and
+            // The mod detail page's MOD row only says which mod the rows under it are about, and
             // its ENABLED row is seeded from `[mods] disabled` for that mod
-            // (`oag_game::mods::resupply_switch`), not from a key of its own.
+            // (`oag_game::mods::resupply_switch`), not from a key of its own. The MODS list's
+            // template row is replaced by one row per mod, each holding that mod's switch
+            // (`oag_game::mods::expand`).
             // The BENCHMARK OPTIONS rows are one run's own and never a setting: the session holds
             // and seeds them each time the page opens (`Session::open_benchmark_options`).
             if PILOT_EDITOR_ROWS.contains(&setting)
                 || setting.starts_with("benchmark.")
                 || setting == oag_game::mods::SELECTED
                 || setting == oag_game::mods::ENABLED
+                || setting == oag_game::mods::ITEM
                 || setting == oag_game::replays::page::SELECTED
                 || setting == oag_game::music_pool::TEMPLATE
                 || oag_game::settings::web::WEB_ONLY_ROWS.contains(&setting)

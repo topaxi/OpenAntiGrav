@@ -75,6 +75,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from ppsspp_debugger import Debugger
+import os
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import oag_tmp  # noqa: E402
 
 # `Weapons_DispatchFire`, and the world pointer it is handed. The prototype is
 # `(float dt, World *world)`; the float rides in `f12`, so the world arrives in
@@ -250,7 +254,7 @@ def main():
     )
     parser.add_argument("--freeze-hits", type=int, default=6)
     parser.add_argument("--display", default=":97", help="the X display to screenshot")
-    parser.add_argument("--shots", default="/tmp", help="directory for the PNGs")
+    parser.add_argument("--shots", default=oag_tmp.output("psp-fire-weapon"), help="directory for the PNGs")
     parser.add_argument("--prefix", default="weapon")
     parser.add_argument("--timeout", type=float, default=40.0)
     args = parser.parse_args()

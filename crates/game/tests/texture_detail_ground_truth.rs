@@ -27,7 +27,7 @@
 //! level (`docs/rendering/texture-level-per-title.md`, "Pulse PS2 in a race"),
 //! so there all three are the same picture; a chain built under them would part them.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
 /// The far field of Pulse PSP's 16th circuit, past the 256 units a level step needs.
@@ -75,11 +75,8 @@ fn capture(image: &Path, scratch: &Path, at: &[&str], detail: Option<&str>) -> V
     oag_texture::png::picture_only(&std::fs::read(&out).expect("reading the screenshot"))
 }
 
-fn scratch(name: &str) -> PathBuf {
-    let dir =
-        std::env::temp_dir().join(format!("oag-texture-detail-{name}-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).expect("creating the scratch directory");
-    dir
+fn scratch(name: &str) -> oag_testdata::scratch::TempDir {
+    oag_testdata::scratch::dir(&format!("texture-detail-{name}"))
 }
 
 #[test]
@@ -94,7 +91,6 @@ fn each_texture_detail_preset_draws_its_own_picture_of_the_far_field() {
     let high = shot(Some("high"));
     let maximum = shot(Some("maximum"));
     let default = shot(None);
-    std::fs::remove_dir_all(&scratch).ok();
 
     assert_eq!(default, original, "original is the default preset");
     assert_ne!(original, high, "high must move a level step out");
@@ -117,7 +113,6 @@ fn each_texture_detail_preset_draws_its_own_picture_on_hd() {
     let high = shot(Some("high"));
     let maximum = shot(Some("maximum"));
     let default = shot(None);
-    std::fs::remove_dir_all(&scratch).ok();
 
     assert!(default == original, "original is the default preset");
     assert!(original != high, "high must shift the sampler's level");
@@ -136,7 +131,6 @@ fn pulse_ps2_has_one_level_for_texture_detail_to_move() {
     let original = shot("original");
     let high = shot("high");
     let maximum = shot("maximum");
-    std::fs::remove_dir_all(&scratch).ok();
 
     assert!(
         original == high,

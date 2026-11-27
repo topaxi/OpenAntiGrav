@@ -67,7 +67,7 @@ fn server_binary(dest: &Path) -> PathBuf {
         assert!(status.success(), "oag-server builds");
     };
     exec::private_copy(
-        Path::new(env!("CARGO_TARGET_TMPDIR")),
+        &oag_testdata::scratch::cache("binary-copies"),
         &dir.join("oag-server"),
         dest,
         build,
@@ -76,11 +76,12 @@ fn server_binary(dest: &Path) -> PathBuf {
 
 /// A lobby and the directory its clients keep their profiles in.
 pub(crate) struct Lab {
-    pub(crate) dir: PathBuf,
     image: PathBuf,
     addr: String,
     hash: String,
     _lobby: Proc,
+    // Declared after the lobby: it is killed before its directory goes.
+    pub(crate) dir: oag_testdata::scratch::TempDir,
 }
 
 impl Lab {
@@ -96,8 +97,7 @@ impl Lab {
         max_ticks: u32,
         extra: &[&str],
     ) -> Self {
-        let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("rejoin-{tag}"));
-        let _ = std::fs::remove_dir_all(&dir);
+        let dir = oag_testdata::scratch::dir(&format!("rejoin-{tag}"));
         std::fs::create_dir_all(dir.join("no-mods")).expect("a scratch directory");
         let log = File::create(dir.join("lobby.log")).expect("a log");
         let lobby = spawn(

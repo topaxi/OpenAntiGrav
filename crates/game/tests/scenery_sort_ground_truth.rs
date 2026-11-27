@@ -25,15 +25,13 @@
 //! makes `depth` change as many pixels as `original`. `original` is also the default: a run
 //! with no flag is byte-identical to `--scenery-sort original`.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
 const SIZE: (usize, usize) = (3360, 1440);
 
-fn scratch() -> PathBuf {
-    let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join("scenery-sort");
-    std::fs::create_dir_all(&dir).expect("a scratch directory");
-    dir
+fn scratch() -> oag_testdata::scratch::TempDir {
+    oag_testdata::scratch::dir("scenery-sort")
 }
 
 /// The fly-by frame at tick 148, RGBA. `sort` is `--scenery-sort`'s value or none, `tint` the

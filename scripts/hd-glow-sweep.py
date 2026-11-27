@@ -56,6 +56,9 @@ import subprocess
 import sys
 import tempfile
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import oag_tmp  # noqa: E402
+
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 IMAGE = ROOT / "data" / "images" / "hdfury-ps3-eu-dec.iso"
 GAME = ROOT / "target" / "release" / "oag-game"
@@ -139,7 +142,7 @@ def reference(args):
     )
     if not grabs:
         raise SystemExit(f"no numbered grabs under {root}")
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory(dir=oag_tmp.temp_root()) as tmp:
         into = pathlib.Path(tmp)
         rows = []
         for grab in grabs:
@@ -212,7 +215,7 @@ def sweep(args):
     keep = pathlib.Path(args.keep) if args.keep else None
     if keep:
         keep.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory(dir=oag_tmp.temp_root()) as tmp:
         into = pathlib.Path(tmp)
         rows = []
         for env in envs:

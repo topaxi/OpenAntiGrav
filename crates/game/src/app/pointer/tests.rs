@@ -70,7 +70,7 @@ fn a_tap_reports_on_lift_as_a_move_and_a_click_and_then_is_nowhere() {
     assert!(window.take().is_idle(), "within the threshold");
     window.touch(touch(1, TouchPhase::Ended, 104.0, 52.0));
     let tick = window.take();
-    assert_eq!(tick.at, Some((104.0, 52.0)));
+    assert_eq!(tick.at, Some((100.0, 50.0)), "where it landed, not lifted");
     assert!(tick.moved && tick.clicked && tick.released);
     let after = window.take();
     assert_eq!(after.at, None);
@@ -255,4 +255,40 @@ fn the_left_button_clicks_on_the_press_when_the_screen_does_not_pan() {
     assert!(down.clicked && !down.pressed);
     window.cursor_moved(80.0, 90.0);
     assert_eq!(window.take().drag, (0.0, 0.0));
+}
+
+#[test]
+fn a_click_acts_where_it_was_pressed_though_the_mouse_has_moved_on() {
+    let mut window = Window::default();
+    window.cursor_moved(10.0, 20.0);
+    window.take();
+    window.button(MouseButton::Left, ElementState::Pressed);
+    window.cursor_moved(10.0, 60.0);
+    let tick = window.take();
+    assert!(tick.clicked);
+    assert_eq!(tick.at, Some((10.0, 20.0)));
+    let next = window.take();
+    assert!(next.moved && !next.clicked, "{next:?}");
+    assert_eq!(next.at, Some((10.0, 60.0)));
+
+    window.button(MouseButton::Middle, ElementState::Pressed);
+    window.cursor_moved(10.0, 90.0);
+    let reset = window.take();
+    assert!(reset.reset);
+    assert_eq!(reset.at, Some((10.0, 60.0)));
+}
+
+/// The taller touch rows wait for the tap that switches to them to be read
+/// against the rows it was made on.
+#[test]
+fn the_layout_holds_while_a_finger_is_down_and_for_its_tap() {
+    let mut window = Window::default();
+    window.touch(touch(1, TouchPhase::Started, 100.0, 50.0));
+    let down = window.take();
+    assert!(!window.layout_may_change(&down), "held");
+    window.touch(touch(1, TouchPhase::Ended, 100.0, 50.0));
+    let tap = window.take();
+    assert!(!window.layout_may_change(&tap), "its tap");
+    let after = window.take();
+    assert!(window.layout_may_change(&after));
 }

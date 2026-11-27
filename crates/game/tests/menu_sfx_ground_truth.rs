@@ -297,7 +297,8 @@ fn pressing_every_menu_cue_twenty_times_leaves_no_voice_behind() {
     ] {
         let Some(image) = image(name) else { continue };
         let (mut sfx, _) = load(&image, fury);
-        let dump = std::env::temp_dir().join(format!("menu-leak-{}.wav", std::process::id()));
+        let scratch = oag_testdata::scratch::dir("menu-leak");
+        let dump = scratch.join("dump.wav");
         let mut audio = oag_sound::Audio::open(
             &oag_sound::settings::Settings::default(),
             Some(dump.clone()),
@@ -323,7 +324,6 @@ fn pressing_every_menu_cue_twenty_times_leaves_no_voice_behind() {
             tick += 1;
         }
         let left = audio.output().with_mixer(|mixer| mixer.active_voices());
-        let _ = std::fs::remove_file(&dump);
         assert_eq!(
             left, 0,
             "{name} fury={fury}: voices still held after {tick} ticks"

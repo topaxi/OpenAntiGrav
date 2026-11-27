@@ -1,7 +1,7 @@
 //! The MODS page: reachable from OPTIONS on every title, listing each mod built-in first,
 //! marking a mod with no licence, and listing one that did not load dimmed with its error.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use oag_game::mods::{self, Mods};
 use oag_ui::language::StringTable;
@@ -30,11 +30,8 @@ label = "GARAGE"
 target = "records"
 "#;
 
-fn scratch(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("oag-mods-page-{}-{name}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    dir
+fn scratch(name: &str) -> oag_testdata::scratch::TempDir {
+    oag_testdata::scratch::dir(&format!("mods-page-{name}"))
 }
 
 fn folder(root: &Path, manifest: &str, menu: &str) {
@@ -60,7 +57,7 @@ fn build(base: &Path, title: &'static oag_title::Title) -> mods::Built {
 
 /// Garage (licensed), Plain (no licence), Wrong (a row whose parent does not exist, left
 /// out at build) and a file that is not a zip.
-fn proof_mods() -> PathBuf {
+fn proof_mods() -> oag_testdata::scratch::TempDir {
     let dir = scratch("proof");
     folder(&dir.join("garage"), MANIFEST, MENU);
     folder(
@@ -107,17 +104,19 @@ fn every_title_reaches_the_mods_page_from_options() {
             "{}",
             title.name
         );
-        assert!(
-            built.definition.page(mods::PAGE).is_some(),
-            "{}: no MODS page",
-            title.name
-        );
+        let list = built
+            .definition
+            .page(mods::PAGE)
+            .unwrap_or_else(|| panic!("{}: no MODS page", title.name));
+        assert_eq!(list.item_page.as_deref(), Some(mods::DETAIL));
+        assert!(built.definition.page(mods::DETAIL).is_some());
     }
 }
 
 #[test]
 fn the_list_has_the_built_in_first_then_each_mod_then_what_did_not_load() {
-    let built = build(&proof_mods(), oag_pulse::TITLE);
+    let fixtures = proof_mods();
+    let built = build(&fixtures, oag_pulse::TITLE);
     assert_eq!(
         ids(&built),
         [
@@ -136,7 +135,8 @@ fn the_list_has_the_built_in_first_then_each_mod_then_what_did_not_load() {
 
 #[test]
 fn a_mod_with_no_license_says_so_in_capitals() {
-    let built = build(&proof_mods(), oag_pulse::TITLE);
+    let fixtures = proof_mods();
+    let built = build(&fixtures, oag_pulse::TITLE);
     let strings = StringTable::default();
     let table = built.listing[2].table(&strings);
     assert!(
@@ -161,7 +161,8 @@ fn a_mod_with_no_license_says_so_in_capitals() {
 
 #[test]
 fn a_mod_that_did_not_load_is_listed_dimmed_with_its_error() {
-    let built = build(&proof_mods(), oag_pulse::TITLE);
+    let fixtures = proof_mods();
+    let built = build(&fixtures, oag_pulse::TITLE);
     let strings = StringTable::default();
     let choices = mods::choices(&built.listing, &strings);
     assert!(choices[0].unavailable.is_none() && choices[1].unavailable.is_none());
@@ -182,7 +183,8 @@ fn a_mod_that_did_not_load_is_listed_dimmed_with_its_error() {
 
 #[test]
 fn the_page_row_steps_through_the_list_and_the_table_follows_it() {
-    let built = build(&proof_mods(), oag_pulse::TITLE);
+    let fixtures = proof_mods();
+    let built = build(&fixtures, oag_pulse::TITLE);
     let strings = StringTable::default();
     let mut model = Menu::new(built.definition);
     assert_eq!(
@@ -190,7 +192,7 @@ fn the_page_row_steps_through_the_list_and_the_table_follows_it() {
         1,
         "one row reads the list"
     );
-    assert!(model.open(mods::PAGE));
+    assert!(model.open(mods::DETAIL));
     let table = |model: &Menu| mods::table_for(model, &built.listing, &strings).unwrap();
     assert!(table(&model).iter().any(|(_, v)| v == "oag.extras"));
     assert!(model.seed(mods::SELECTED, &Value::Text("test.plain".into())));
@@ -207,12 +209,13 @@ fn the_page_row_steps_through_the_list_and_the_table_follows_it() {
 
 #[test]
 fn a_menu_built_again_keeps_the_mod_the_row_was_on() {
-    let built = build(&proof_mods(), oag_pulse::TITLE);
+    let fixtures = proof_mods();
+    let built = build(&fixtures, oag_pulse::TITLE);
     let strings = StringTable::default();
     let model = |built: &mods::Built| {
         let mut model = Menu::new(built.definition.clone());
         model.supply(ValueSource::Mods, &mods::choices(&built.listing, &strings));
-        assert!(model.open(mods::PAGE));
+        assert!(model.open(mods::DETAIL));
         model
     };
     let mut old = model(&built);

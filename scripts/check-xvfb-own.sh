@@ -13,7 +13,8 @@ set -uo pipefail
 [ -d /proc/self ] || { echo "check-xvfb-own: skipped (no /proc)"; exit 0; }
 cd "$(dirname "$0")/.." || exit 1
 own=${XVFB_OWN_UNDER_TEST:-$PWD/scripts/xvfb-own.sh}
-tmp=$(mktemp -d)
+. scripts/oag-tmp.sh
+tmp=$(mktemp -d -p "$(oag_tmp_root)")
 bystanders=()
 cleanup() {
     local p

@@ -6,7 +6,7 @@
 //! `T` seconds, so without the hold ours turns a second time. Amphiseum Black's start slot is
 //! banked: 900 ticks turn it about 1.3 degrees.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
 const TICKS: &str = "900";
@@ -58,10 +58,8 @@ fn run(image: &Path, scratch: &Path, hold: bool) -> ((f64, [f64; 3]), (f64, [f64
     (pose(&rows[0]), pose(last))
 }
 
-fn scratch() -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("oag-pose-hold-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).expect("creating the scratch directory");
-    dir
+fn scratch() -> oag_testdata::scratch::TempDir {
+    oag_testdata::scratch::dir("pose-hold")
 }
 
 #[test]

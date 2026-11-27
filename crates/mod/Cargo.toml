@@ -28,6 +28,7 @@ zip = { version = "9.5.0", default-features = false, features = ["deflate"] }
 zip = { version = "9.5.0", default-features = false, features = ["deflate", "zstd"] }
 
 [dev-dependencies]
+oag-testdata.workspace = true
 oag-schema = { workspace = true, features = ["validate"] }
 oag-io = { workspace = true, features = ["crash-hook"] }
 
