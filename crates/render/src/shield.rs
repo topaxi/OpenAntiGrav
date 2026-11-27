@@ -195,8 +195,8 @@ pub const FADE_COLOUR: [f32; 4] = [0.0, 0.0, 0.0, 0.0];
 /// counterpart (`FUN_00125660`) copies exactly that block into the object's
 /// current colour on a hit - the same shape as Pulse's `ShipShield_Hit`
 /// copying its own `.bss` slot. See
-/// `docs/ghidra/functions/ps3-hdfury-eu/shield.md`. Confidence **80**: static
-/// evidence only, same ceiling Pulse's own page carries for the same reason.
+/// `docs/ghidra/functions/ps3-hdfury-eu/shield.md`. Confidence **92**: the live
+/// object holds it after an absorbed hit ("Watched on RPCS3").
 pub const HD_HIT_COLOUR: [f32; 4] = [1.0, 0.2, 0.0, 1.0];
 
 /// HD's own colour on activation, before the fade-up reaches [`TARGET_COLOUR`].
@@ -205,10 +205,8 @@ pub const HD_HIT_COLOUR: [f32; 4] = [1.0, 0.2, 0.0, 1.0];
 /// [`ACTIVATION_COLOUR`]'s neutral transparent black, read from the same
 /// initialiser as [`HD_HIT_COLOUR`]. The alpha is still `0.0`, so the shell is
 /// still invisible on the activation frame; only the hue the fade-up starts
-/// from moves. Confidence **78**: the literal reads are as solid as
-/// [`HD_HIT_COLOUR`]'s, one notch down only because the first component reads
-/// as a non-round `0x3F0C0831` rather than a value with an obvious decimal
-/// source, which is worth a second look if HD's shield is ever traced live.
+/// from moves. Confidence **90**: read statically and off the live object on
+/// the activation frame ("The steady-state colour is read").
 pub const HD_ACTIVATION_COLOUR: [f32; 4] = [0.547_126, 0.1, 0.1, 0.0];
 
 /// Which three colours a shell's animation moves between - the one axis this

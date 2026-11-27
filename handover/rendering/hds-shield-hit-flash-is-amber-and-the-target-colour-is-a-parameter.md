@@ -1,8 +1,8 @@
 ---
 status: re-first
 titles: [hd]
-updated: 2026-11-26
-summary: "HD per-team ShieldColour wired; open: activation tint, Zone Battle copy (unverified), hit flash"
+updated: 2026-11-27
+summary: "HD shield paired with the original (raised, hit flash); open: ours adds ~75 % of its blue and the original barely flickers"
 ---
 
 # HD's shield hit-flash is amber, not Pulse's cyan - and the steady-state colour is a parameter this pass did not trace to its source
@@ -81,27 +81,35 @@ from activation `(0.547, 0.1, 0.1, 0)` over about 2 s. Table of all teams and
 the read recipe: `docs/ghidra/functions/ps3-hdfury-eu/shield.md`, "The
 steady-state colour is read".
 
+## Watched and paired 2026-11-27 (`hd-shield-flash`)
+
+Amber hit flash watched live (`(1.0, 0.2, 0.0)`, swell `1.1`) and the raised shell and flash
+paired against ours: `docs/ghidra/functions/ps3-hdfury-eu/shield.md`, "Watched on RPCS3".
+`--give shield` fires in ours (the 2026-09-16 note above no longer holds). `--force-hit` on a
+craft with a running Shield now flashes its shell. The activation tint item is closed: the draw
+overwrites it every frame.
+
 ## Open
 
-- **Landed 2026-11-26:** the lattice's colour scroll (`u + 3 time`) and the shell's clock; see `shield.md`, "The lattice scrolls".
-- **Landed:** HD's per-team `ShieldColour` target
-  (`Livery::shield_colour`, `Setup::shield_targets`). Still open: the models'
-  activation tint (`FUN_002c32c8`, packed `(0.547, 0.1, 0.1, 0) * 255`); Zone's
-  two values are not a bug (normal Zone mode has no shield, so DATA00's alpha-0
-  copy, which ours loads, is consistent; Zone Battle on Fury may differ, unverified); Omega and 2048:
-  values decoded, shell build and wire in `omega-2048-shield-shell-and-palette.md`.
-- The amber hit flash is still unwatched in a frame (static read only). Recipe:
-  gdb-break `ShipShield_Hit` (`0x00125660`) in a race where a rival hits the
-  player, read `object+0xc0` (expected `(1, 0.2, 0, 1)`).
-- The `--give shield` CLI in our own engine never demonstrably fired (below).
-- `FUN_00676fe8`, the three-argument flicker call, and `FUN_00125d98`, the
-  external-camera shell draw, are still unread.
-- Unwired in `hexagonalshield_rich`: `constantAmbientColour`, the lit variants' light terms, fog. Zone's
-  `zonebattle_shield` program is unread (no mode of ours raises it).
+- **Ours' settled shell is dimmer.** Its own light over the craft box is (0.7, 2.2, 14.3) mean
+  8-bit levels against the original's (0.6, 4.8, 19.2), mostly nose, shoulders, wingtip rims
+  (cyan-white glow there in the original). Cause unread.
+- **The original barely follows the `sin` alpha flicker** (blue ratio 0.88 across `sin` +1 to -1,
+  ours 0.46; one run per age, conf 70), although it computes it and writes it as the node tint.
+  Dropping ours' flicker alone would overshoot, so nothing is wired.
+- **Landed:** HD's per-team `ShieldColour` target (`Livery::shield_colour`,
+  `Setup::shield_targets`), and the lattice's colour scroll (`u + 3 time`). Zone's two values are
+  not a bug (normal Zone mode has no shield; Zone Battle on Fury may differ, unverified). Omega and
+  2048: `omega-2048-shield-shell-and-palette.md`.
+- `FUN_00125d98` is read (`ShipShield_DrawShell`); `FUN_00676fe8` is `sin`.
+- Unwired in `hexagonalshield_rich`: `constantAmbientColour`, the lit variants' light terms, fog.
+  Zone's `zonebattle_shield` program is unread (no mode of ours raises it).
 - Our own `graphics.own_shield` reads its eye from the origin (`docs/rendering/own-shield.md`, "Open").
 
 ## Next Steps
 
-1. Omega/2048 shell and palette: see `omega-2048-shield-shell-and-palette.md` (decoded; ready to wire).
-2. Only if Zone Battle (Fury) turns out to raise a shield: check which Zone copy it reads.
-3. Decompile `FUN_00125d98` and `FUN_00676fe8`.
+1. Dump the shield draw from one frame's command ring (`scripts/hd-draw-dump.py`): blend factors
+   and colour/alpha write mask (does it write the bloom's glow mask?), the vertex attribute node
+   `+0xf0` feeds, and `constantAmbientColour`'s value. One capture should settle both open items.
+2. Wire what that read shows as HD `Title` data, then re-score the two `hd-shield-*` pairs.
+3. Only if Zone Battle (Fury) turns out to raise a shield: check which Zone copy it reads.
