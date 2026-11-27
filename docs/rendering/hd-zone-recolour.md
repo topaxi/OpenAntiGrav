@@ -379,6 +379,16 @@ Test: `hd_lightmapped_emissive_ground_truth` (one test per archive, pins the bou
 and fails on a lightmapped slot of a listed family left unbound) and
 `zone_spu_light::the_fourth_binding_and_the_scrolled_emissive_reach_a_plain_chunk`.
 
+**Measured on the pairs** (2026-11-27, re-rendered copies against the previous commit's binary):
+`hd-race/talons-pack`'s blue strip goes from `(26,120,170)` to `(59,153,210)`, mean of its bright
+cyan pixels in `1100,90,1500,300`, against the original's `(59,155,210)`; its mean grey rises
+22.39 to 22.69 because ours' strip sits about 30 px from the original's. `hd/anulpha-pass` 4.64 to
+4.70, `hd/the-amphiseum` 4.77 to 4.73, `hd/vineta-k` 2.53 to 2.51, `hd/talons` and
+`hd/talons-assegai-c1` fall by 0.003; every other HD race pair, `hd/modesto-heights` and the six
+`detonator-talons` pairs are unchanged. Frames at an autopilot time trial's tick 900 show
+Amphiseum's wall lamps and Talon's Junction's strut lamps lit where they were dark; no original
+frame of either is on disk.
+
 **2048 and Omega.** Omega: **checked, applies, not wired**: `data01`, `data02`, `data05` and
 `data08` ship these family names (`track_surface*`, `uvanim_*`, `mt_uvanim_*`,
 `diffuse_*`, `and_diffuse_emissive*`, `mr_shopwin_reflecttranspemis`); they go through `gcn`, and
