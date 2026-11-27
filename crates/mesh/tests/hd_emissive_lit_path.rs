@@ -354,6 +354,7 @@ fn a_keyed_emissive_samples_at_its_curves_value() {
                 .collect(),
         ),
         mip_count: Some(1),
+        lod_code: 0.0,
     }))];
     keyed.emissive = vec![Emissive {
         tint: [1.0; 3],
