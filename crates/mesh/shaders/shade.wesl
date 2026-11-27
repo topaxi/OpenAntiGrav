@@ -1094,8 +1094,11 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
     // some never read it at all. A `b` of 0 with the clock ungated is the
     // worst of both - it annihilates the surface's own `v` and marches one row
     // of the texture across it. See `oag_mesh::mesh::Emissive::rate`.
+    // Mode 33's `k` is its curve's, which `mesh.wesl` laid in the second pair; its second lane
+    // is the curve's table row, not a `u` scale.
+    let glow_keyed = row_scale.z > 32.5 && row_scale.z < 33.5;
     let glow_v = (in.texcoord.y + glow_tint_offset.w) * glow_scale.x
-        + scene.time.x * glow_scale.y;
+        + select(scene.time.x * glow_scale.y, in.lightmap_texcoord.z, glow_keyed);
     // Fetched only where `ADD_SECOND` is set: everywhere else `glow_gate`
     // below is zero and the sample is multiplied away. A branch on `slots`,
     // which `lit_texel`'s own attribute explains.
@@ -1107,7 +1110,7 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
     let glow_program = row_scale.z;
     let glow_is_billboard = glow_program > 0.5 && glow_program < 1.5;
     let glow_is_bw_glass = glow_program > 1.5 && glow_program < 2.5;
-    let glow_u_scale = select(1.0, row_scale.w, row_scale.w > 0.0);
+    let glow_u_scale = select(1.0, row_scale.w, row_scale.w > 0.0 && !glow_keyed);
     let glow_uv = select(
         vec2<f32>(in.texcoord.x * glow_u_scale, glow_v),
         in.lightmap_texcoord.zw,
@@ -1176,13 +1179,13 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
         let mask = material_sample(MATERIAL_PAD_MASK, in.texcoord);
         emissive_add = select(vec3<f32>(mask.a), decode(mask.rgb), glow_program < 8.5) * glow_tint_offset.rgb;
     }
-    // **The emissive of a lightmapped HD slot** (modes 31 and 32,
+    // **The emissive of a lightmapped HD slot** (modes 31 to 33,
     // `oag_mesh::mesh::rcs::lightmapped_emissive`): added after the light, on a plain program only
     // (the Zone variants declare no emissive), so a chunk on its Zone program adds nothing and a
     // `ZONE_PLAIN` chunk keeps it. Mode 31 is `E * tint` at the diffuse coordinate, ungated by the
     // diffuse alpha, bound third (fourth where the second lane is set: the track's third is its
-    // normal map). Mode 32 samples the third at the scrolled `glow_uv` and gates it by the diffuse
-    // alpha. The tap is decoded like every colour unit (its gamma nibble was not read live).
+    // normal map). Modes 32 and 33 sample the third at the scrolled `glow_uv` and gate it by the
+    // diffuse alpha. The tap is decoded like every colour unit (its gamma nibble was not read live).
     if glow_program > 30.5 && glow_program < 31.5 {
         var tap = material_sample(MATERIAL_PAD_MASK, in.texcoord);
         if row_scale.w > 0.5 {
@@ -1190,7 +1193,7 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
         }
         emissive_add = decode(tap.rgb) * glow_tint_offset.rgb * (1.0 - zone_program);
     }
-    if glow_program > 31.5 && glow_program < 32.5 {
+    if glow_program > 31.5 && glow_program < 33.5 {
         emissive_add = decode(material_sample(MATERIAL_PAD_MASK, glow_uv).rgb) * glow_tint_offset.rgb
             * first.a * (1.0 - zone_program);
     }

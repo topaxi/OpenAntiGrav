@@ -455,12 +455,14 @@ pub(super) fn material_setup(
     if lit_emissive {
         let lit = super::lightmapped_emissive::lightmapped_emissive(
             model,
+            model_blob,
             &material_variants,
             textures,
             &mag_emissive,
             &wave_maps,
             &mut material_slots,
             &mut emissive,
+            &mut anim_tracks,
             report,
         );
         super::mag_wave::merge(&mut mag_emissive, lit.third);

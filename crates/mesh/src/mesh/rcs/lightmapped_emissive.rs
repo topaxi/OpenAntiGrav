@@ -7,12 +7,14 @@
 //!
 //! **A family is listed only when its own `HalfBrightIleLightmapSunSpot0SVC0` program was read**
 //! (`docs/rendering/hd-zone-recolour.md`, "Window lights on a plain chunk" and "The other
-//! lightmapped emissive families"). Two laws:
+//! lightmapped emissive families"). Three laws:
 //!
 //! - [`PROGRAM_LIGHTMAPPED_ADD`]: `light * D + E * tint`, `E` at the diffuse coordinate,
 //!   ungated by the diffuse alpha ([`Law::Add`]);
 //! - [`PROGRAM_LIGHTMAPPED_SCROLL`]: `light * D + D.a * E(u, (v + a) * b + time) * tint`
-//!   ([`Law::Scroll`]).
+//!   ([`Law::Scroll`]);
+//! - [`PROGRAM_LIGHTMAPPED_KEYED`]: the same with the material's own curve `k` in place of
+//!   `time` ([`Law::Keyed`]).
 //!
 //! The Zone variants of every listed family declare no such sampler, except
 //! `mr_shopwin_reflecttranspemis`, whose Zone law is unread.
@@ -20,15 +22,18 @@
 //! Left out, named: `tunnel_fx_noalpha`'s `X` term (facing ramp times specular map), so its
 //! screen blend reduces to the add.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use oag_rcs::rcsmaterial;
 use oag_rcs::rcsmodel;
 
 use crate::mesh::{
-    Emissive, PROGRAM_LIGHTMAPPED_ADD, PROGRAM_LIGHTMAPPED_SCROLL, TextureSlots, slots,
+    ANIM_TRACK_LIMIT, AnimTrack, Emissive, PROGRAM_LIGHTMAPPED_ADD, PROGRAM_LIGHTMAPPED_KEYED,
+    PROGRAM_LIGHTMAPPED_SCROLL, TextureSlots, slots,
 };
 
+use super::curve_track::ParamCurveTrack;
 use super::emissive::{EMISSIVE_LIMIT, family};
 use super::skin::decode_texture;
 use super::{Report, Textures};
@@ -42,6 +47,9 @@ const SCROLL_TINT: u32 = 0xe8bc_d7f5;
 const SCROLL_OFFSET: u32 = 0x7825_6a45;
 const SCROLL_SCALE: u32 = 0x7878_7596;
 const TIME: u32 = 0x906b_67ba;
+/// The keyed family's `k`, which takes `time`'s place in its program and which the material's
+/// curve drives.
+const KEY: u32 = 0x1c5d_e6ec;
 /// Modesto Heights' compile of `uvanim_diffuse_emissive` also declares a scale over both
 /// coordinates and a speed on `time`: `(u, (v + a) * b + speed * time) * k`.
 const SCROLL_UV_SCALE: u32 = 0xa24b_c055;
@@ -60,6 +68,7 @@ enum Law {
         tint: Option<u32>,
     },
     Scroll,
+    Keyed,
 }
 
 /// Where the picture is bound.
@@ -91,6 +100,15 @@ const fn scroll(name: &'static str) -> Family {
         name,
         sampler: EMISSIVE_TEXTURE,
         law: Law::Scroll,
+        binding: Binding::Third,
+    }
+}
+
+const fn keyed(name: &'static str) -> Family {
+    Family {
+        name,
+        sampler: EMISSIVE_TEXTURE,
+        law: Law::Keyed,
         binding: Binding::Third,
     }
 }
@@ -137,6 +155,7 @@ const FAMILIES: &[Family] = &[
     scroll("uvanim_diffuse_emissive"),
     scroll("mt_uvanim_diffuse_emissive"),
     scroll("mt_uvanim_diffuse_emissive2"),
+    keyed("mt_uvanim_diffuse_emissive3tokey"),
     track("track_surface"),
     track("track_wall"),
 ];
@@ -147,12 +166,41 @@ pub(super) struct Bound {
     pub(super) fourth: TextureSlots,
 }
 
+/// The animation rows a keyed material's curve plays on, one per material name.
+struct Keys<'a> {
+    model_blob: &'a [u8],
+    tracks: &'a mut Vec<AnimTrack>,
+    blob: Option<Arc<[u8]>>,
+    rows: HashMap<String, usize>,
+}
+
+impl Keys<'_> {
+    /// `material`'s row, appended on first use; `None` where the table is full.
+    fn row(&mut self, material: &rcsmodel::Material) -> Option<usize> {
+        if let Some(&row) = self.rows.get(&material.name) {
+            return Some(row);
+        }
+        if self.tracks.len() + 1 >= ANIM_TRACK_LIMIT {
+            return None;
+        }
+        let blob = self
+            .blob
+            .get_or_insert_with(|| Arc::from(self.model_blob))
+            .clone();
+        self.tracks
+            .push(AnimTrack::Param(ParamCurveTrack::of(material, blob, KEY)));
+        self.rows.insert(material.name.clone(), self.tracks.len());
+        Some(self.tracks.len())
+    }
+}
+
 /// The entry `spec`'s program draws this material with, or `None` where a value it reads is not
 /// in the material record.
 fn entry(
     spec: &Family,
     material: &rcsmodel::Material,
     declared: &rcsmaterial::Declared,
+    keys: &mut Keys<'_>,
 ) -> Option<Emissive> {
     let value = |hash: u32| {
         material
@@ -198,6 +246,20 @@ fn entry(
                 program: [PROGRAM_LIGHTMAPPED_SCROLL, uv_scale],
             }
         }
+        Law::Keyed => {
+            if !declared.parameters.contains(&KEY) {
+                return None;
+            }
+            #[allow(clippy::cast_precision_loss)]
+            let row = keys.row(material)? as f32;
+            Emissive {
+                tint: rgb(SCROLL_TINT)?,
+                offset: value(SCROLL_OFFSET)?[0],
+                scale: value(SCROLL_SCALE)?[0],
+                rate: 0.0,
+                program: [PROGRAM_LIGHTMAPPED_KEYED, row],
+            }
+        }
     })
 }
 
@@ -207,14 +269,22 @@ fn entry(
 #[allow(clippy::too_many_arguments)]
 pub(super) fn lightmapped_emissive(
     model: &rcsmodel::Model,
+    model_blob: &[u8],
     variants: &[Option<rcsmaterial::Variant>],
     textures: Textures<'_>,
     thirds: &TextureSlots,
     fourths: &TextureSlots,
     packed: &mut [u32],
     table: &mut Vec<Emissive>,
+    tracks: &mut Vec<AnimTrack>,
     report: &mut Report,
 ) -> Bound {
+    let mut keys = Keys {
+        model_blob,
+        tracks,
+        blob: None,
+        rows: HashMap::new(),
+    };
     let mut bound = Bound {
         third: vec![None; model.materials.len()],
         fourth: vec![None; model.materials.len()],
@@ -259,7 +329,7 @@ pub(super) fn lightmapped_emissive(
             .and_then(|path| {
                 textures(&format!("/{path}")).and_then(|bytes| decode_texture(&path, &bytes))
             });
-        let index = entry(spec, material, &declared).and_then(|layer| {
+        let index = entry(spec, material, &declared, &mut keys).and_then(|layer| {
             table.iter().position(|seen| *seen == layer).or_else(|| {
                 (table.len() + 1 + LATER_READERS < EMISSIVE_LIMIT).then(|| {
                     table.push(layer);

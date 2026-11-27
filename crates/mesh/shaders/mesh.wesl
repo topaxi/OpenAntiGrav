@@ -131,6 +131,14 @@ fn vs_main(in: VertexInput) -> VertexOutput {
             in.texcoord * emissive_scale(chevron_entry).x + vec2<f32>(offset),
         );
     }
+    // **HD's keyed lightmapped emissive** (`PROGRAM_LIGHTMAPPED_KEYED`, mode 33): the `k` its
+    // curve plays, from the animation-table row the entry's second lane names, in the second
+    // pair's first lane. Direct comparison: `program_codes` has no bit past 31.
+    let key_entry = material_row(in.slots);
+    if key_entry != 0u && emissive_scale(key_entry).z > 32.5 && emissive_scale(key_entry).z < 33.5 {
+        let row = u32(emissive_scale(key_entry).w + 0.5);
+        out.lightmap_texcoord = vec4<f32>(in.lightmap_texcoord, anims.transform[min(row, 63u)].z, 0.0);
+    }
     // `uv * scale + offset`, the GE's own `TEXSCALE`/`TEXOFFSET` arithmetic -
     // the four words `TexAnim_CompileTransformList` (`0x08927358`) writes into
     // each animated material's display list. The direction is the authored

@@ -44,7 +44,7 @@ const FAMILIES: &[(&str, u32, bool)] = &[
     ("uvanim_diffuse_emissive", 0xb1f2_a176, false),
     ("mt_uvanim_diffuse_emissive", 0xb1f2_a176, false),
     ("mt_uvanim_diffuse_emissive2", 0xb1f2_a176, false),
-    // Bound nowhere: its lightmapped compile declares no `time`, and its law is unread.
+    // Scrolls by its material's own curve (`PROGRAM_LIGHTMAPPED_KEYED`).
     ("mt_uvanim_diffuse_emissive3tokey", 0xb1f2_a176, false),
     ("track_surface", 0xb1f2_a176, true),
     ("track_wall", 0xb1f2_a176, true),
@@ -138,7 +138,9 @@ fn census(archive: usize) -> Option<(BTreeMap<&'static str, usize>, Dark)> {
             let circuit = path.split('/').nth(3).unwrap_or_default();
             let add = entry == Some(mesh::PROGRAM_LIGHTMAPPED_ADD);
             let scrolled = entry == Some(mesh::PROGRAM_LIGHTMAPPED_SCROLL);
-            if (add || scrolled) && picture.map(|t| t.label.as_str()) == wanted.as_deref() {
+            let keyed = entry == Some(mesh::PROGRAM_LIGHTMAPPED_KEYED);
+            if (add || scrolled || keyed) && picture.map(|t| t.label.as_str()) == wanted.as_deref()
+            {
                 *bound.entry(family).or_default() += 1;
             } else {
                 println!("dark: {path} slot {slot} {family} entry {entry:?}");
@@ -150,8 +152,7 @@ fn census(archive: usize) -> Option<(BTreeMap<&'static str, usize>, Dark)> {
     Some((bound, dark))
 }
 
-/// Asserts both halves of [`census`]. `dark` names every slot known to stay unlit: Vineta K's
-/// `mt_uvanim_diffuse_emissive3tokey` runs an unread law.
+/// Asserts both halves of [`census`]. `dark` names every slot known to stay unlit.
 fn expect(archive: usize, want: &[(&str, usize)], dark: &[(&str, &str, usize)]) {
     let Some((bound, left)) = census(archive) else {
         return;
@@ -196,8 +197,9 @@ fn data02s_circuits_bind_every_lightmapped_emissive() {
             ("mr_shopwin_reflecttranspemis", 8),
             ("mt_uvanim_diffuse_emissive", 24),
             ("mt_uvanim_diffuse_emissive2", 13),
+            ("mt_uvanim_diffuse_emissive3tokey", 2),
         ],
-        &[("01_vineta_k", "mt_uvanim_diffuse_emissive3tokey", 2)],
+        &[],
     );
 }
 
@@ -210,7 +212,8 @@ fn data03s_circuits_bind_every_lightmapped_emissive() {
             ("mr_shopwin_reflecttranspemis", 8),
             ("mt_uvanim_diffuse_emissive", 25),
             ("mt_uvanim_diffuse_emissive2", 12),
+            ("mt_uvanim_diffuse_emissive3tokey", 2),
         ],
-        &[("01_vineta_k", "mt_uvanim_diffuse_emissive3tokey", 2)],
+        &[],
     );
 }
