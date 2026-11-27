@@ -415,6 +415,17 @@ pub(super) fn material_setup(
         report,
     );
     super::mag_wave::merge(&mut mag_emissive, window_masks);
+    // `tunnel_fx_noalpha`'s window lights on a lightmapped slot ride the third binding too.
+    let tunnel_lights = super::tunnel_emissive::tunnel_emissive(
+        model,
+        &material_variants,
+        textures,
+        &mag_emissive,
+        &mut material_slots,
+        &mut emissive,
+        report,
+    );
+    super::mag_wave::merge(&mut mag_emissive, tunnel_lights);
     // The disc's own alpha-test reference, for a caller's cutout draws - see
     // `cutout`, which reports a comparison this shader cannot reproduce
     // rather than drawing one wrongly.
