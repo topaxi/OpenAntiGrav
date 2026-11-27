@@ -80,7 +80,8 @@ So the census is of that byte. It finds a texture object by its upload packet's 
 offset, so one with levels would be found. (The earlier count of 7,020 blobs could not have: it admitted
 only blobs whose length closed on one level and a palette.) Over `WADS2.WAD` and `WADSP.WAD` with 443 nested
 WADs expanded: **14,005 texture objects, 12,152 at the start of a file and 1,853 inside a larger one, all
-with 0 levels beyond the base**. All 14,005 also carry exactly one level's block offsets and two packet
+with 0 levels beyond the base**. The count includes copies (a nested set repeats textures the archive also
+holds at top level); the distinct count was not taken. All 14,005 also carry exactly one level's block offsets and two packet
 sizes (level and CLUT), as their dimensions imply. `PRERACE.WAD` (voice clips) and `PS2MUSIC.WAD` are not
 texture archives and are not scanned.
 

@@ -9,7 +9,7 @@ Reports, for every textured primitive, the `TEX1` of the drawing context it uses
 upload, split into those a primitive reads as `TEX0` base or CLUT and those nothing reads. `--draws` prints one
 line per textured state group.
 
-First used for `docs/rendering/texture-level-per-title.md`, "Pulse PS2 in a race". The dump format and the packet walk are `pcsx2-gsdump.py`'s.
+`docs/rendering/texture-level-per-title.md`, "Pulse PS2 in a race", records what it found. The dump format and the packet walk are `pcsx2-gsdump.py`'s.
 """
 import argparse
 import collections

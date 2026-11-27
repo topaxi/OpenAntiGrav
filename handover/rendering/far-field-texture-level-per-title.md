@@ -23,7 +23,7 @@ read values only, as `Title` data, with a test, a break-it, and the other titles
   `oag-hd`'s `the_material_lod_bias_follows_its_rule`. Then re-render the three 2048 pairs. Omega must
   stay at bias 0 (its S# read 0.0).
 - **Pulse PS2: one level, ready to wire** (confidence 92, over the maintainer's gate of 90). A race reads
-  the base level at every distance: `TEX1` `MXL` 0 and `MMIN` 1 on 242,433 textured primitives of four
+  the base level at every distance: `TEX1` `MXL` 0 and `MMIN` 1 on 242,433 textured primitives (both fields) of four
   in-race dumps, and all 14,005 shipped texture objects author 0 levels beyond the base
   (`docs/rendering/texture-level-per-title.md`, "Pulse PS2 in a race"). Ours uploads a box chain: in
   `crates/mesh/src/mesh/ps2_textures.rs` pass `Some(1)` to `ModelTexture::rgba8`, PS2 path only, with a test
