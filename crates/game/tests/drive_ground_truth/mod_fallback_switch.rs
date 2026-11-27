@@ -119,17 +119,12 @@ fn a_mod_that_is_also_a_texture_pack_moves_the_mode_row_live() {
     assert_eq!(offered, [true, false, true], "on, off, on again");
 }
 
-/// A Detonator race driven from the menus is recorded with the mod in its header, and watching
-/// it after the MODS page has switched the mod off in the same session says which mod is
-/// missing on the file's row.
-#[test]
-#[ignore = "needs a disc image in data/images/ and the official-mods submodule"]
-fn a_detonator_replay_watched_with_its_mod_off_names_the_mod() {
-    let (Some(image), Some(root)) = (pulse(), official()) else {
-        return;
-    };
+/// A race of `mode` driven from the menus, quit, the mod switched off on the MODS page and the
+/// recording watched, all in one session; `then` is what happens after WATCH.
+fn watched_with_the_mod_off(tag: &str, mode: &str, then: &str) -> Option<Run> {
+    let (image, root) = (pulse()?, official()?);
     let script = format!(
-        "boot; select racebox; press cross; until page=race; set race.mode=detonator; \
+        "boot; select racebox; press cross; until page=race; set race.mode={mode}; \
          select launch_race; press cross; until screen=picker; press cross; \
          until screen.id=ship-select; press cross; until stage=race within 4000; \
          ticks 280; hold cross 120; escape; until page=pause within 100; \
@@ -137,18 +132,33 @@ fn a_detonator_replay_watched_with_its_mod_off_names_the_mod() {
          select mods; press cross; until page=mods; select {ID}; press square; ticks 5; \
          press circle; until page=main; \
          select replays; press cross; until page=replays; ticks 30; \
-         select watch_replay; press cross; until page=replays within 900; ticks 5"
+         select watch_replay; press cross; {then}"
     );
     let mods = root.parent().expect("the official mods");
     let run = drive_with(
         &image,
-        "mods-replay",
+        tag,
         &script,
         None,
         &[("OAG_MODS", mods.to_str().expect("a UTF-8 path"))],
     );
     assert!(run.output.status.success(), "{}", run.why_not_success());
+    Some(run)
+}
 
+/// A Detonator race driven from the menus is recorded with the mod in its header, and watching
+/// it after the MODS page has switched the mod off in the same session says which mod is
+/// missing on the file's row.
+#[test]
+#[ignore = "needs a disc image in data/images/ and the official-mods submodule"]
+fn a_detonator_replay_watched_with_its_mod_off_names_the_mod() {
+    let Some(run) = watched_with_the_mod_off(
+        "mods-replay",
+        "detonator",
+        "until page=replays within 900; ticks 5",
+    ) else {
+        return;
+    };
     let auto = run.profile.join("data/oag/replays/auto");
     let file = std::fs::read_dir(&auto)
         .expect("the race was kept")
@@ -174,3 +184,22 @@ fn a_detonator_replay_watched_with_its_mod_off_names_the_mod() {
     assert!(why.starts_with(&format!("missing {ID} ")), "{why}");
 }
 
+/// A recording that still loads with the mod off (a Time Trial needs none of its entries) plays,
+/// and the viewer opens saying which mod is missing.
+#[test]
+#[ignore = "needs a disc image in data/images/ and the official-mods submodule"]
+fn a_replay_that_still_loads_without_a_mod_says_so_as_the_viewer_opens() {
+    let Some(run) = watched_with_the_mod_off(
+        "mods-replay-plays",
+        "time_trial",
+        "until replay=playing within 4000; ticks 5",
+    ) else {
+        return;
+    };
+    let notice = text(run.last(), &["notice"])
+        .unwrap_or_else(|| panic!("no notice: {}\n{}", run.last(), run.stderr()));
+    assert!(
+        notice.starts_with(&format!("mods differ from the recording: missing {ID} ")),
+        "{notice}"
+    );
+}

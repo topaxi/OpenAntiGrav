@@ -881,6 +881,9 @@ impl Session {
                         *watching,
                     ) {
                         Ok(active) => {
+                            if let Some(differ) = &active.mods_differ {
+                                self.notice = Some(super::shot_open::Notice::mods(differ));
+                            }
                             self.viewer = Some(active);
                             self.return_to_replays = false;
                             self.shot_pending = false;

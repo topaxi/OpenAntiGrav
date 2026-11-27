@@ -209,7 +209,12 @@ impl Session {
             debug!(
                 "shot: the viewer's race hashes {hash:#018x} where the shot was taken at {shot:#018x}"
             );
-            self.notice = Some(Notice::new(self.project_word(words::OTHER_HASH)));
+            // Other mods explain another hash, and name what to switch.
+            let differ = (self.viewer.as_ref()).and_then(|active| active.mods_differ.as_deref());
+            self.notice = Some(match differ {
+                Some(differ) => Notice::mods(differ),
+                None => Notice::new(self.project_word(words::OTHER_HASH)),
+            });
         }
     }
 
@@ -263,6 +268,11 @@ impl Session {
 }
 
 impl Notice {
+    /// The mods differ from the recording's, `differ` naming each.
+    pub(crate) fn mods(differ: &str) -> Self {
+        Self::new(oag_raceplay::ModsDiffer(differ.to_string()).to_string())
+    }
+
     pub(crate) fn new(text: String) -> Self {
         Self {
             text,

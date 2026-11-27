@@ -207,6 +207,9 @@ pub(crate) struct Active {
     /// Whether the viewer was opened from a screenshot, which leaving it returns to the main
     /// menu from rather than to the REPLAYS page.
     pub(crate) from_shot: bool,
+    /// How the mods on differ from the recording's ([`oag_replay::ActiveMod::differences`]),
+    /// said over the picture as the viewer opens.
+    pub(crate) mods_differ: Option<String>,
     /// The touch controls were hidden by a tap on the picture.
     chrome_hidden: bool,
     /// Ticks since a finger last touched the screen.
@@ -313,6 +316,7 @@ pub(crate) fn open_viewer(
         scrubbing: false,
         shot,
         from_shot: shot.is_some() || dropped,
+        mods_differ,
         chrome_hidden: false,
         idle: 0,
         bar_drag: None,
