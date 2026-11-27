@@ -48,6 +48,7 @@ const TITLE: &Title = &Title {
     // archives and never draws an exhaust.
     wingtip: None,
     weapon_pad_glow: &oag_title::weapon_pad::WeaponPadGlow::Authored,
+    pickup_roster: None,
     flare: &oag_title::flare::Flare::Unread,
     // Present for the same reason and equally unread: resolving archives has
     // nothing to do with which circuit a race opens on.
@@ -225,6 +226,9 @@ const TITLE: &Title = &Title {
     loyalty: None,
     eliminator: oag_title::pre_race::Sourced::chosen(oag_title::eliminator::EliminatorRule::Kills),
     eliminator_flip: oag_title::pre_race::Sourced::chosen(None),
+    score_pace: oag_title::pre_race::Sourced::chosen(
+        oag_title::eliminator::ScorePaceTerms::WITH_REPULSER_AND_SHURIKEN,
+    ),
     hud_art: &oag_title::HudArt {
         always_on: &[],
         raster: false,

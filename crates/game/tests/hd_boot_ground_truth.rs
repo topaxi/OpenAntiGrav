@@ -605,6 +605,7 @@ fn all_sixteen_languages_load_including_the_latin_1_one() {
 fn a_circuit_is_named_off_the_copy_that_agrees_with_the_circuit_list() {
     let Some(image) = image() else { return };
     let (shell, _) = shell(&image);
+    the_benchmark_heading_names_the_default_circuit(&shell);
 
     let seventeen = shell
         .tracks
@@ -659,6 +660,28 @@ fn a_circuit_is_named_off_the_copy_that_agrees_with_the_circuit_list() {
         shell.strings.get("17_TRACK"),
         Some("SEBENCO CLIMB REVERSE"),
         "the served copy is untouched and still disagrees"
+    );
+}
+
+/// The benchmark races [`oag_hd::race::DEFAULT_TRACK`], which this disc's definition spells with
+/// other separators and capitals, and its stats screen still names the circuit.
+fn the_benchmark_heading_names_the_default_circuit(shell: &boot::Shell) {
+    let listed: Vec<_> = shell
+        .tracks
+        .iter()
+        .map(|track| {
+            let label = oag_raceplay::catalogue::label(
+                track,
+                &shell.circuit_names,
+                &shell.strings,
+                &shell.tracks,
+            );
+            (track.clone(), label)
+        })
+        .collect();
+    assert_eq!(
+        oag_game::benchmark::circuit_name(&listed, oag_hd::race::DEFAULT_TRACK).as_deref(),
+        Some("TALON'S JUNCTION")
     );
 }
 

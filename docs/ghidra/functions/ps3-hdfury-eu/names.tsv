@@ -1140,7 +1140,7 @@
 # 2026-11-22 det-speed-emp-re: Detonator auto-speed, pads, EMP (detonator-speed.md, detonator-emp.md)
 0x0002bbc8	function	WeaponStats_ParseEmp	85	detonator-emp.md
 0x000d4078	function	Ship_TestWeaponPad	72	detonator-emp.md
-0x0012a3e8	function	WeaponManager_RollPickup	75	detonator-emp.md
+0x0012a3e8	function	WeaponManager_RollPickup	85	pickup-draw.md
 0x00112730	function	EMPManager_Fire	72	detonator-emp.md
 0x0013c430	function	EMP_Launch	68	detonator-emp.md
 0x0013b930	function	EMP_SweepSections	75	detonator-emp.md
@@ -1268,8 +1268,24 @@
 0x0002d6a8	function	WeaponStats_ParseMissile	75	rocket-craft-blast.md
 0x00146470	function	Plasma_PushNearbyCraft	80	rocket-craft-blast.md
 0x00142258	function	Missile_PushNearbyCraft	75	rocket-craft-blast.md
+# 2026-11-26 hd-open-air-arms: the Missile's open-air arm; HD builds no ShurikenManager (open-air-arms.md)
+0x0011d288	function	Missile_Update	90	open-air-arms.md
+0x001592c0	function	Shuriken_Update	75	open-air-arms.md
+0x0014cbb0	function	ShurikenManager_Fire	75	open-air-arms.md
+0x0014cdf8	function	ShurikenManager_Construct	80	open-air-arms.md
+# 2026-11-26 hd-weapon-roster: the two pickup draws and the weapon mask (pickup-draw.md)
+0x00014658	function	GameState_IsWeaponEnabled	85	pickup-draw.md
+0x00012938	function	GameState_SetWeaponEnabled	85	pickup-draw.md
+0x00012868	function	GameState_SetWeaponMask	70	pickup-draw.md
+0x00012ae8	function	GameState_ResetWeaponMaskForMode	80	pickup-draw.md
+0x00129c20	function	WeaponManager_RollPickupAi	85	pickup-draw.md
+0x0012ad90	function	WeaponManager_AwardPickup	75	pickup-draw.md
+0x0025ed10	function	WeaponsScreen_ShowMask	75	pickup-draw.md
+0x0025e5a8	function	WeaponsScreen_StoreMask	75	pickup-draw.md
+0x0002df78	function	WeaponStats_ParsePickupOdds	88	pickup-draw.md
 0x0008caf0	function	Hud_UpdateScoreFeedback	72	detonator-hud.md
 0x002834f8	function	Psys_CopyPaletteToTree	85	detonator-mine.md
 0x0027f610	function	Psys_CreateInstance	70	detonator-mine.md
 0x00ad5fd4	data	Psys_LastRootHandle	75	detonator-mine.md
 0x0008ce10	function	Hud_UpdateZoneWidgets	80	zone-score.md
+

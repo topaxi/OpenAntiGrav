@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Cold-boot HD Fury EU and walk Time Trial to one circuit WITHOUT saving a state; the serve stays up on the race (a no-savestate arm of the glass study).
-#   scripts/emu-hd-glass-boot.sh <lane> <circuit-index> <team-rights> <classic 0|1> <name> [class-rights]
+#   scripts/emu-hd-glass-boot.sh <lane> <circuit-index> <hull> <name> [class-rights]
+# <hull> is the pair's --team (`harimau`, `Assegai_c1`): Ship Select is stepped until RAM names it as selected, never by a press count.
 # Needs `scripts/emu-env.sh <lane> ...` run first. The GDB stub stays ON and the savestate modes are off: the serve is then drivable by rpcs3-hd-pair.py (capture reads the camera and pose through the stub).
 set -euo pipefail
-lane=${1:?lane}; circuit=${2:?circuit index}; team=${3:?team rights}; classic=${4:?0|1}; name=${5:?state name}; speed=${6:-0}
+lane=${1:?lane}; circuit=${2:?circuit index}; hull=${3:?hull, e.g. harimau}; name=${4:?state name}; speed=${5:-0}
 main=/home/topaxi/projects/OpenAntiGrav
 repo=$(cd "$(dirname "$0")/.." && pwd)
 W=$main/data/scratch/$lane
@@ -44,9 +45,10 @@ press cross --wait 3                      # Track Select (the screen reads `Trac
 for _ in $(seq 1 "$circuit"); do press right --wait 0.8; done
 press cross --wait 3                      # Ship Select (reads `Team Selection`)
 [ "$(screen)" = "Team Selection" ] || { echo "not on Ship Select: $(screen)" >&2; exit 3; }
-for _ in $(seq 1 "$team"); do press right --wait 0.8; done
-[ "$classic" = 1 ] && press down --wait 1
-press cross --wait 3                      # the race loads
+uv run --with evdev --with numpy python3 scripts/rpcs3-hd-ship-step.py select --hull "$hull" || exit 3
+# A locked hull takes no `cross` (padlock, no CONFIRM prompt); a dropped one is retried.
+for _ in 1 2 3; do press cross --wait 3; [ "$(screen)" = "Team Selection" ] || break; done   # the race loads
+[ "$(screen)" != "Team Selection" ] || { echo "Ship Select did not accept $hull (locked on this profile?)" >&2; exit 3; }
 for _ in $(seq 1 60); do [ "$(screen)" = HUD ] && break; sleep 2; done
 sleep 12
 for _ in 1 2 3; do press cross --wait 4; done   # START RACE

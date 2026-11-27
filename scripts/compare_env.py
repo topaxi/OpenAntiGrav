@@ -580,39 +580,88 @@ def rewound_field_rows(rows, ticks):
     return out
 
 
+def write_field_rows(path, rows):
+    """`--field-from` CSV rows (dicts, one header) written the way the pair's own `field.csv` is."""
+    import csv
+
+    with Path(path).open("w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=list(rows[0].keys()), lineterminator="\n")
+        w.writeheader()
+        w.writerows(rows)
+
+
+def read_field_rows(path):
+    import csv
+
+    with Path(path).open() as f:
+        return list(csv.DictReader(f))
+
+
 def film_frame_field(film, stem, field_in, field_out):
     """Write `field_out`: `field_in` (a film frame's RAM field, player in row 0) moved back to the frame's own instant,
     read off the frame's dumped command ring (`<film>/ring/<stem>-<addr>.bin`). Returns the skew record."""
-    import csv
-
-    rows = list(csv.DictReader(Path(field_in).open()))
+    rows = read_field_rows(field_in)
     player = next(r for r in rows if r["slot"] == "0")
     pos = [float(player["pos_" + a]) for a in "xyz"]
     vel = [float(player["vel_" + a]) for a in "xyz"]
     spans = [(int(p.stem.rsplit("-", 1)[1], 16), p.read_bytes()) for p in sorted(Path(film, "ring").glob("%s-4*.bin" % stem))]
     ticks, record = frame_craft_ticks(spans, pos, vel)
-    with Path(field_out).open("w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=list(rows[0].keys()), lineterminator="\n")
-        w.writeheader()
-        w.writerows(rewound_field_rows(rows, ticks))
+    write_field_rows(field_out, rewound_field_rows(rows, ticks))
     return record
+
+
+def check_not_rewound(pair_dir):
+    """A pair whose record already names `craft_ticks` has a moved `field.csv`: moving it again would double the rewind."""
+    rec = json.loads((Path(pair_dir) / "pair.json").read_text())
+    done = (rec["original"].get("presented_lag") or {}).get("craft_ticks")
+    if done is not None:
+        raise ValueError("%s already records craft_ticks %s: its field.csv is not rewound a second time" % (pair_dir, done))
+
+
+def record_craft_ticks(pair_dir, record, note, picture=None):
+    """Merge a skew record into the pair's `original.presented_lag` with the note saying how `field.csv` moved; `picture`
+    replaces the record's statement about the picture's own instant."""
+    pj = Path(pair_dir) / "pair.json"
+    rec = json.loads(pj.read_text())
+    lag = rec["original"].get("presented_lag") or {}
+    lag.update(record)
+    lag["craft_note"] = note
+    if picture is not None:
+        lag["picture"] = picture
+    rec["original"]["presented_lag"] = lag
+    pj.write_text(json.dumps(rec, indent=2) + "\n")
 
 
 def film_pair_field(film, stem, pair_dir):
     """Move a film pair's `field.csv` to its frame's instant in place and record the skew in its `pair.json`
     (`original.presented_lag.craft_ticks` and how it was read). Returns the record."""
     pair_dir = Path(pair_dir)
+    check_not_rewound(pair_dir)
     tmp = pair_dir / "field.csv.new"
     record = film_frame_field(film, stem, pair_dir / "field.csv", tmp)
     tmp.replace(pair_dir / "field.csv")
-    pj = pair_dir / "pair.json"
-    rec = json.loads(pj.read_text())
-    lag = rec["original"].get("presented_lag") or {}
-    lag.update(record)
-    lag["craft_note"] = ("field.csv moved back craft_ticks ticks of each craft's own velocity to the frame's instant "
-                         "(compare_env.py film-pair-field)")
-    rec["original"]["presented_lag"] = lag
-    pj.write_text(json.dumps(rec, indent=2) + "\n")
+    record_craft_ticks(pair_dir, record, "field.csv moved back craft_ticks ticks of each craft's own velocity to the "
+                                         "frame's instant (compare_env.py film-pair-field)")
+    return record
+
+
+def rewind_pair_field(pair_dir, ticks):
+    """Move the `field.csv` of a pair with no dumped command ring back `ticks` whole ticks of each craft's own velocity
+    and record it. The count is not read from the frame: it is picked by rendering ours at each rewind against the
+    original (`scripts/hd-pair-lag-scan.py <pair> 0:0 0:1 0:2`), which the record says."""
+    ticks = int(ticks)
+    if ticks < 1:
+        raise ValueError("ticks must be a whole number of ticks the craft are ahead, got %d" % ticks)
+    pair_dir = Path(pair_dir)
+    check_not_rewound(pair_dir)
+    write_field_rows(pair_dir / "field.csv", rewound_field_rows(read_field_rows(pair_dir / "field.csv"), ticks))
+    record = {"craft_ticks": ticks,
+              "craft_basis": "picked by rendering ours with every craft moved back whole ticks and scoring each against "
+                             "theirs.png (hd-pair-lag-scan.py); no command ring of the frame was kept"}
+    record_craft_ticks(pair_dir, record, "field.csv moved back craft_ticks ticks of each craft's own velocity "
+                                         "(compare_env.py rewind-pair-field); the camera is not moved",
+                       picture="field.csv moved back to the picture's instant for the craft; the camera is the "
+                               "recorded push-buffer matrix, unmoved")
     return record
 
 
@@ -644,6 +693,30 @@ def selftest_frame_field():
         pass
     else:
         raise AssertionError("a hull the stream never loads must not be read as the frame's")
+    selftest_rewind_pair_field()
+
+
+def selftest_rewind_pair_field():
+    """A pair with no ring: `field.csv` moves every craft back by its own velocity, the record names the count and
+    replaces the claim that the picture needed no correction, and a second run is refused."""
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmp:
+        d = Path(tmp)
+        write_field_rows(d / "field.csv", [{"slot": str(n), "pos_x": "10.0", "pos_y": "0.0", "pos_z": "0.0",
+                                            "vel_x": repr(60.0 * (n + 1)), "vel_y": "0.0", "vel_z": "0.0"} for n in range(2)])
+        (d / "pair.json").write_text(json.dumps({"original": {"presented_lag": {"hud_clock_ticks": 3, "picture": "none"}}}))
+        rewind_pair_field(d, "2")
+        assert [float(r["pos_x"]) for r in read_field_rows(d / "field.csv")] == [8.0, 6.0]
+        lag = json.loads((d / "pair.json").read_text())["original"]["presented_lag"]
+        assert lag["craft_ticks"] == 2 and lag["hud_clock_ticks"] == 3 and lag["picture"] != "none", lag
+        try:
+            rewind_pair_field(d, 2)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("a second rewind of the same field.csv must be refused")
+        assert float(read_field_rows(d / "field.csv")[0]["pos_x"]) == 8.0
 
 
 def pack_check(pair, place, cam_eye, cam_fwd, player_pos, others, place_range=(3, 6), near=45.0,
@@ -1077,6 +1150,8 @@ def main():
         print(json.dumps(film_frame_field(*sys.argv[2:6])))
     elif cmd == "film-pair-field":
         print(json.dumps(film_pair_field(*sys.argv[2:5])))
+    elif cmd == "rewind-pair-field":
+        print(json.dumps(rewind_pair_field(*sys.argv[2:4])))
     elif cmd == "missing-safe-area":
         sys.exit(1 if missing_safe_area(sys.argv[2:]) else 0)
     else:

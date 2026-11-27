@@ -63,6 +63,7 @@ pub mod loading;
 pub mod loyalty;
 pub mod main_menu;
 pub mod pause_menu;
+pub mod pickups;
 pub mod pre_race;
 pub mod prompts;
 pub mod psn;
@@ -102,6 +103,12 @@ pub const TITLE: &Title = &Title {
     eliminator_flip: oag_title::pre_race::Sourced::measured(Some(
         oag_title::eliminator::FlipRule { seconds: 0.2 },
     )),
+    // Tuned on this title's own Eliminator roster, which has no Repulser or Shuriken
+    // (`docs/gameplay/race-modes.md`, "The pace of a score Eliminator").
+    score_pace: oag_title::pre_race::Sourced::chosen(oag_title::eliminator::ScorePaceTerms {
+        trigger_share: 1.0,
+        stale_seconds: Some(10),
+    }),
     teams: race::TEAM_IDENTITIES,
     loyalty: Some(oag_title::loyalty::LoyaltyEarning {
         law: oag_title::loyalty::LoyaltyLaw::Hd,
@@ -144,6 +151,7 @@ pub const TITLE: &Title = &Title {
         "/data/tex/smoke_trails_frame1_alpha.gtf",
         oag_title::Origin::Measured,
     )),
+    pickup_roster: Some(oag_title::pre_race::Sourced::measured(pickups::ROSTER)),
     weapon_pad_glow: &oag_title::weapon_pad::WeaponPadGlow::Cycle(oag_title::weapon_pad::Cycle {
         // The 6 keyframes at `0x008c26a0`, 12 bytes each.
         keyframes: &[
@@ -312,8 +320,9 @@ pub const TITLE: &Title = &Title {
         own_craft_box_hides_track: oag_title::pre_race::Sourced::measured(
             oag_title::weapons::OwnCraftBox::Falls,
         ),
-        // Measured live on RPCS3: Rocket, Missile and Plasma `6.0`, the Shuriken unmeasured
-        // (`ps3-hdfury-eu/own-craft-box.md`, "Measured live").
+        // Measured live on RPCS3: Rocket, Missile and Plasma `6.0`
+        // (`ps3-hdfury-eu/own-craft-box.md`, "Measured live"). The Shuriken's `12.0` is a static
+        // read of an update that never runs (`ps3-hdfury-eu/open-air-arms.md`).
         surface_probe_lengths: oag_title::pre_race::Sourced::measured(
             oag_title::weapons::ProbeLengths::HD,
         ),

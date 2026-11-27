@@ -395,7 +395,8 @@ is not a measurement.
   everything Pulse's measured law supplies stands.
 - **Per mode:** the race table zeroes the Repulser and Shuriken out of all four
   classes and the Eliminator table does not - the same per-mode gating
-  Pulse has, held by the ground-truth test.
+  Pulse has, held by the ground-truth test. HD's executable never hands either
+  out even so ([pickup-draw.md](../ghidra/functions/ps3-hdfury-eu/pickup-draw.md)).
 
 ### Detonator's attributes
 

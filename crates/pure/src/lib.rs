@@ -55,6 +55,10 @@ pub const TITLE: &Title = &Title {
     ),
     // No flip in this executable: no `FE_FLIP`, no flip tunable, no `5 pi`.
     eliminator_flip: oag_title::pre_race::Sourced::measured(None),
+    // No score Eliminator: never read.
+    score_pace: oag_title::pre_race::Sourced::chosen(
+        oag_title::eliminator::ScorePaceTerms::WITH_REPULSER_AND_SHURIKEN,
+    ),
     teams: race::TEAM_IDENTITIES,
     loyalty: Some(oag_title::loyalty::LoyaltyEarning {
         law: oag_title::loyalty::LoyaltyLaw::Pulse,
@@ -69,6 +73,7 @@ pub const TITLE: &Title = &Title {
     // The same sprite Pulse names, and found under the same name on Pure's
     // disc - see `oag_pulse`'s note for the literal it was read from.
     wingtip: None,
+    pickup_roster: None,
     weapon_pad_glow: &oag_title::weapon_pad::WeaponPadGlow::Authored,
     flare: &oag_title::flare::Flare::Sprite(r"Data\Tex\EngineFlare\grabbedEngineFlare128x64x8.mip"),
     // Measured: the six glyphs of `FX300ANG.fnt` - see `prompts`.

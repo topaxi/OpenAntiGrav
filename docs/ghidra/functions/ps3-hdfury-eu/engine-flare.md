@@ -188,7 +188,7 @@ reads), within 0.009 s of either read, 2 % of the noise's 0.5 s period.
 state's 66.58212, so its flame clock at the grab is its `world_clock_s` 73.89487 plus the state's 48.5771 = 122.4720
 s (derived from the timeline's offset, not read at the grab). Every cold-boot pair (`hd/talons` and the eleven other
 Time Trial grids) and the Detonator pairs (their `grid-late` state is not kept) need a regrab with the current
-script; the far-hit pairs were filmed after a restart.
+script (the cold-boot ones are regrabbed below); the far-hit pairs were filmed after a restart.
 
 **The phase, on two regrabbed pairs and one clocked pair.** Ours re-rendered at the pin and at 20 clocks 0.025 s apart
 across one 0.5 s period; mean absolute RGB error (0 to 255) over the pixels the flame clock moves, each render
@@ -209,6 +209,52 @@ and an 8-phase sweep ranked the pin 4th of 8: the falsifier written before the c
 The two regrabbed originals carry RPCS3's "Press and hold the START button to resume" toast top left and fly the
 Fury hull (this profile's Ship Select lands on `harimau_c1`), so they are measurements, not replacements for
 `hd/talons`, and the `hd/talons` nozzle box `935,802 57x58` (standard hull) was not re-measured.
+
+**The cold-boot pairs, regrabbed with the clock (2026-11-27, `hd-flame-regrab`).** All 14 cold-boot pairs of the list
+(`original.provenance.capture_path.kind == "cold_boot"`: the 12 Time Trial grids, `talons-assegai-c1`, `zone-vineta-k-z5`) were
+regrabbed on RPCS3 0.0.43-20574 with `rpcs3-hd-cold-pair.sh`'s steps (profile `hd-fury`, hull shake patched out), each from its own
+cold boot, with the hull the stored pair names checked twice: by RAM (the new `the player's hull (RAM) is the hull ours draws` check,
+`Harimau` or `Assegai_c1`) and by eye against the stored frame. That day's save opened Ship Select on the Fury `Harimau_c1` and had
+Pilot Assist on, so the walk took one `down` and the option was written off before `Restart Race` (compare-page.md, "The save
+moved since"). Ours was re-rendered from scratch copies at the recorded pin and at 7 more phases 0.0625 s apart (one 0.5 s noise
+period), twice per phase: both runs were pixel-identical on every pair. "Crop" is the mean absolute RGB difference (0 to 255) from
+the original over the pixels any phase moves; "nozzle" is the same mask clipped to `880..1040 x 760..900`, where every grid pair's
+own flame sits (on Vineta K, Anulpha Pass and Chenghou Project the clock also moves 11,000 to 35,000 other pixels of the scene).
+Rank is the pin's place among the 8 phases (1 is best). Mean grey is the page's whole-pair score at the pin.
+
+| pair | flame clock (s) | moved px | crop at pin | rank | nozzle at pin | rank | mean grey |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `hd/talons` | 105.9366 | 1,625 | 16.24 | 4 of 8 | 16.24 | 4 of 8 | 2.834 |
+| `hd/talons`, second boot | 104.5756 | 1,593 | 15.43 | 2 of 8 | 15.43 | 2 of 8 | 3.246 |
+| `hd/vineta-k` | 96.5750 | 34,783 | 3.90 | 2 of 8 | 14.93 | 2 of 8 | 2.522 |
+| `hd/anulpha-pass` | 105.2061 | 33,522 | 3.80 | 2 of 8 | 7.84 | 2 of 8 | 4.637 |
+| `hd/moa-therma` | 97.7607 | 1,534 | 12.51 | 1 of 8 | 12.51 | 1 of 8 | 2.617 |
+| `hd/chenghou-project` | 99.7491 | 11,018 | 7.60 | 3 of 8 | 11.59 | 3 of 8 | 2.307 |
+| `hd/metropia` | 100.3077 | 1,683 | 14.56 | 1 of 8 | 14.56 | 1 of 8 | 2.720 |
+| `hd/sebenco-climb` | 108.7260 | 1,395 | 18.04 | 2 of 8 | 18.04 | 2 of 8 | 3.930 |
+| `hd/ubermall` | 111.1978 | 1,148 | 19.95 | 3 of 8 | 19.95 | 3 of 8 | 4.226 |
+| `hd/sol-2` | 103.4375 | 1,455 | 15.41 | 5 of 8 | 15.41 | 5 of 8 | 3.470 |
+| `hd/the-amphiseum` | 114.2185 | 1,529 | 16.29 | 1 of 8 | 16.29 | 1 of 8 | 4.762 |
+| `hd/modesto-heights` | 115.2832 | 1,481 | 15.00 | 1 of 8 | 15.00 | 1 of 8 | 3.961 |
+| `hd/tech-de-ra` | 107.9301 | 1,478 | 12.77 | 2 of 8 | 12.77 | 2 of 8 | 4.001 |
+| `hd/talons-assegai-c1` | 100.9166 | 351 | 42.17 | 1 of 8 | 42.17 | 1 of 8 | 2.652 |
+
+The falsifier, written before the scores were read, was "the pin in the best 2 of 8 on at least ceil(2N/3) of the regrabbed pairs".
+On the 13 pairs measured (first boot of each) the pin ranks in the best 2 on 9: the bar is 9, met with no margin. A pin dropped at
+random ranks in the best 2 one time in 4 (about 3 of 13). The misses are Chenghou Project (3), Ubermall (3), Talon's Junction (4)
+and Sol 2 (5); Talon's Junction ranks 2 on a second boot and 1 on a third (a boot whose original still drew the Pilot Assist
+bracket under the craft, so not adoptable; scored the same way, 34.22 against 36.24 to 39.47). One boot per circuit, so every other rank is seen once. **Phase match at
+the pin: confidence 70** (raised from 60: 9 of 13 against about 3 by chance, the rest within one or two places but for Sol 2).
+At the pin the Talon's nozzle shows the original's pink core where the worst phase (+0.25 s) is plain blue.
+
+The stored `talons-assegai-c1` original flies another hull than ours draws: a narrow blue Assegai against ours' black
+`Assegai_c1` (read by eye; that pair predates the RAM hull check). The regrab's original reads `Assegai_c1` in RAM and matches ours,
+and its whole-pair score falls from the stored 4.78 to 2.65.
+
+**The Zone pair was not measured.** Zone runs the craft from the reload, and the pair script's start-up costs about 13 game seconds
+at full emulator speed, more than the 5.2 s countdown (compare-page.md's 2.4 s lead was set with the emulator at a fifth of real
+time). Both grabs landed at lap clock 10.0 to 10.1 s; one passed all ten checks, but ours' craft sits ahead of and smaller than the
+original's in that frame, so no flame crop compares.
 
 Reproduce: `python3 scripts/rpcs3-drive.py grab <png>` on an attached HD race writes `flame_clock_s`;
 `python3 scripts/hd-draw-dump.py <dir> <stem>` dumps the frame's fragment programs and

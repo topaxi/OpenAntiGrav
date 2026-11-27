@@ -7,9 +7,13 @@
 //!
 //! What it changes, in a race whose Eliminator is won on points and nowhere else:
 //!
-//! - **Trigger.** Every tier fires its Mines, Bombs and Cannon at [`TRIGGER_SHARE`] of its pilot's
-//!   own appetite. Novice's appetite is otherwise zero (`oag_ai::Difficulty::aggression`), and a
-//!   Novice that picked one up held it for the rest of the race, so its slot never took another pad.
+//! - **Trigger.** Every tier lays its Mines and Bombs at the title's
+//!   [`ScorePaceTerms::trigger_share`] of its pilot's own appetite, and holds the Cannon at all.
+//!   Novice's appetite is otherwise zero (`oag_ai::Difficulty::aggression`), and a Novice that
+//!   picked one up held it for the rest of the race, so its slot never took another pad.
+//! - **Stale.** Where the title sets [`ScorePaceTerms::stale_seconds`], a Mine, Bomb or Cannon held
+//!   that long goes on the Eliminator's Shield instead: the three are kept 24 to 42 s a grant, and a
+//!   held weapon blocks the next pad.
 //! - **Hold.** An opponent keeps a fresh pickup [`ScorePace::hold_ticks`] before it may spend it
 //!   at all (fire, drop, absorb, Turbo, Autopilot), on top of the measured `0.8` s gate
 //!   (`oag_ai::weapon_ai::HOLD_TICKS`). A held weapon blocks the next pad, so this paces supply; ours
@@ -22,32 +26,35 @@
 //!   pack's density.
 
 use oag_tables::race_campaign::Difficulty;
-
-/// The share of a pilot's own trigger span a score Eliminator's opponent fires its dropped and held
-/// weapons at, on every tier. **Chosen, not measured.**
-pub const TRIGGER_SHARE: f32 = 0.2;
+use oag_title::eliminator::ScorePaceTerms;
 
 /// Seconds the Hard rung's opponent keeps a fresh pickup before it may spend it. **Chosen, not
 /// measured.**
 pub const HARD_HOLD_SECONDS: u32 = 20;
 
 /// The terms a score Eliminator's opponents spend weapons on; `None` on every other race.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ScorePace {
     /// Ticks a fresh pickup is kept before it may be spent.
     pub hold_ticks: u32,
+    /// The share of a pilot's own trigger span its Mines and Bombs are laid at.
+    pub trigger_share: f32,
+    /// Ticks a Mine, Bomb or Cannon is held before it is spent on the Shield, or `None`.
+    pub stale_ticks: Option<u32>,
 }
 
 impl ScorePace {
-    /// The terms at `difficulty`, by the original's rung.
+    /// The title's `terms` at `difficulty`, by the original's rung.
     #[must_use]
-    pub fn at(difficulty: oag_ai::Difficulty) -> Self {
+    pub fn at(terms: ScorePaceTerms, difficulty: oag_ai::Difficulty) -> Self {
         let hold_seconds = match crate::finished_thrust::rung(difficulty) {
             Difficulty::Easy | Difficulty::Medium => 0,
             Difficulty::Hard => HARD_HOLD_SECONDS,
         };
         Self {
             hold_ticks: hold_seconds * 60,
+            trigger_share: terms.trigger_share,
+            stale_ticks: terms.stale_seconds.map(|seconds| seconds * 60),
         }
     }
 
@@ -55,9 +62,10 @@ impl ScorePace {
     #[must_use]
     pub fn of(
         score_law: Option<oag_race::ScoreLaw>,
+        terms: ScorePaceTerms,
         difficulty: oag_ai::Difficulty,
     ) -> Option<Self> {
-        score_law.map(|_| Self::at(difficulty))
+        score_law.map(|_| Self::at(terms, difficulty))
     }
 
     /// An opponent flying `own` at `difficulty`: the level's own temper, then `pace`'s trigger in a
@@ -72,14 +80,14 @@ impl ScorePace {
         pace.map_or(tempered, |pace| pace.temper(own, tempered))
     }
 
-    /// `tempered` with its trigger set to [`TRIGGER_SHARE`] of `own`'s, the pilot before any
+    /// `tempered` with its trigger set to [`Self::trigger_share`] of `own`'s, the pilot before any
     /// difficulty scaled it.
     #[must_use]
     pub fn temper(self, own: &oag_ai::Pilot, tempered: oag_ai::Pilot) -> oag_ai::Pilot {
         oag_ai::Pilot {
             trigger: oag_ai::Span::new(
-                own.trigger.low * TRIGGER_SHARE,
-                own.trigger.high * TRIGGER_SHARE,
+                own.trigger.low * self.trigger_share,
+                own.trigger.high * self.trigger_share,
             ),
             ..tempered
         }
@@ -90,9 +98,11 @@ impl ScorePace {
 mod tests {
     use super::*;
 
+    const TERMS: ScorePaceTerms = ScorePaceTerms::WITH_REPULSER_AND_SHURIKEN;
+
     #[test]
     fn only_a_score_race_has_terms() {
-        assert_eq!(ScorePace::of(None, oag_ai::Difficulty::Novice), None);
+        assert_eq!(ScorePace::of(None, TERMS, oag_ai::Difficulty::Novice), None);
         let law = oag_race::ScoreLaw {
             damage: 0.1,
             kill: 20.0,
@@ -100,15 +110,27 @@ mod tests {
             death: 5.0,
             opponent_scale: 1.15,
         };
-        assert!(ScorePace::of(Some(law), oag_ai::Difficulty::Novice).is_some());
+        assert!(ScorePace::of(Some(law), TERMS, oag_ai::Difficulty::Novice).is_some());
     }
 
     #[test]
     fn only_the_hard_rung_waits() {
-        assert_eq!(ScorePace::at(oag_ai::Difficulty::Novice).hold_ticks, 0);
-        assert_eq!(ScorePace::at(oag_ai::Difficulty::Skilled).hold_ticks, 0);
-        assert_eq!(ScorePace::at(oag_ai::Difficulty::Elite).hold_ticks, 1200);
-        assert_eq!(ScorePace::at(oag_ai::Difficulty::Ace).hold_ticks, 1200);
+        assert_eq!(
+            ScorePace::at(TERMS, oag_ai::Difficulty::Novice).hold_ticks,
+            0
+        );
+        assert_eq!(
+            ScorePace::at(TERMS, oag_ai::Difficulty::Skilled).hold_ticks,
+            0
+        );
+        assert_eq!(
+            ScorePace::at(TERMS, oag_ai::Difficulty::Elite).hold_ticks,
+            1200
+        );
+        assert_eq!(
+            ScorePace::at(TERMS, oag_ai::Difficulty::Ace).hold_ticks,
+            1200
+        );
     }
 
     #[test]
@@ -119,7 +141,7 @@ mod tests {
             tempered.trigger.high, 0.0,
             "Novice's own temper fires nothing"
         );
-        let paced = ScorePace::at(oag_ai::Difficulty::Novice).temper(&own, tempered);
+        let paced = ScorePace::at(TERMS, oag_ai::Difficulty::Novice).temper(&own, tempered);
         assert!(paced.trigger.high > 0.0);
         assert_eq!(paced.ram, tempered.ram, "only the trigger moves");
     }

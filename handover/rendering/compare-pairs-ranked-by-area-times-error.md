@@ -1,7 +1,7 @@
 ---
 status: measure
 titles: [hd, pulse, pure, 2048]
-updated: 2026-11-12
+updated: 2026-11-26
 summary: "Race pairs by area x error: HD GO boards, RECORD band lead; 2048 dark; PS2 frame-wide open; Talon's pack tick is capture skew, script fix ready"
 ---
 
@@ -56,9 +56,14 @@ Read px with the title in mind. A Pulse PSP frame is 480x272 and an HD frame
   `rpcs3-hd-pair.py --field` reads the hull matrix from the regions it already
   dumps, records `original.presented_lag.craft_ticks` and writes the field
   moved back by it (`docs/tools/compare-page.md`, "The skew is the pause");
-  then re-make `hd-race/talons-pack`. Until then, to adopt one tick on the
-  stored pair from the main checkout: copy its `lag/field0_1.csv` over
-  `field.csv` and `just compare-rerender-ours --only talons-pack`. The hue
+  then re-make `hd-race/talons-pack`. Until then, one tick is adopted on the
+  stored pair from the main checkout with `python3 scripts/compare_env.py
+  rewind-pair-field data/reference/compare-page/hd-race/talons-pack 1` and
+  `just compare-rerender-ours --only talons-pack` (mean grey 23.05 to 22.39).
+  **Open:** its camera may be newer than the picture too (camera 1, craft 2
+  reads 18.78 while edge correlation falls), the effect `det-mine-look-re`
+  measured (`docs/tools/compare-page.md`, "The picture is older than the push
+  buffer's camera"); settle it there, per grab. The hue
   shift (ours greener) of the old frame was not looked at: after the tick the
   frame bias is R +0.2, G +2.1, B +2.5.
 - Tight boxes: for 20 of the top 31 regions the pixels above 15 grey levels

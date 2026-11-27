@@ -1056,11 +1056,18 @@ Novice race on Vineta K (Venom, target 200) ended when its leading opponent was 
 laps done. That is one race, so n = 1, and nothing of the original's Skilled or Elite is
 measured. `oag_raceplay::score_pace` holds ours near it. Its terms apply only where the race's
 Eliminator is won on points (HD, 2048, Omega), so a kill Eliminator (Pulse, Pure) and every other
-mode run as before. **The pace was tuned on HD alone**; 2048 and Omega take it unmeasured.
+mode run as before. **The pace was tuned on HD alone**; 2048 and Omega take it unmeasured. The
+terms are per title (`oag_title::eliminator::ScorePaceTerms`, `Title::score_pace`, chosen): HD's
+were retuned on its own roster (see "HD's real pickup roster" below); 2048 and Omega keep the
+terms tuned with the Repulser and the Shuriken in the pool, because our draw for them still
+grants both. Checked, applies, not wired: neither title's executable has code or a tag for either
+weapon's manager, so their original rosters are likely HD's; once ours drops the two, they take
+HD's terms.
 
 | Term | What it does | Why |
 | --- | --- | --- |
-| Trigger | Every tier drops Mines and Bombs and holds the Cannon on `TRIGGER_SHARE = 0.2` of its pilot's own trigger span | Novice's appetite is `0` (`Difficulty::aggression`). A Novice opponent that took a Mine, Bomb or Cannon held it for good, so its slot never took another pad |
+| Trigger | Every tier drops Mines and Bombs on `trigger_share` of its pilot's own trigger span (`0.2`; HD `1.0`), and holds the Cannon at all | Novice's appetite is `0` (`Difficulty::aggression`). A Novice opponent that took a Mine, Bomb or Cannon held it for good, so its slot never took another pad |
+| Stale | HD only: a Mine, Bomb or Cannon held 10 s (`stale_seconds`), and not mid-drop, goes on the Eliminator's Shield (`Race::eliminator_absorb`) | The three are held 24 to 42 s a grant on HD's roster, and a held weapon blocks the next pad. See below |
 | Absorb | The measured decision's absorb half spends the weapon on the Eliminator's 1 s Shield (`Race::eliminator_absorb`, the player's path) instead of keeping it | The decision and HD's `absorbScale` (`3.6 / 2.6 / 0.6`) are measured ([weapon-ai-fire.md](../ghidra/functions/ps3-hdfury-eu/weapon-ai-fire.md)); keeping the weapon fired it later instead |
 | Hold | The Hard rung (Elite, Ace) keeps a fresh pickup 20 s before spending it in any way (fire, drop, absorb, Turbo, Autopilot), on top of the measured 0.8 s gate | Measured on ours: an Elite opponent spent a Missile 1.5 to 1.8 s after taking it, and scaling the fire odds by 0.2 did not lengthen that. Why is unverified; the window's flat second chance (`rates[4]`, which ignores the odds) is a candidate. A held weapon blocks the next pad, so the hold paces supply. Novice and Skilled absorb enough of theirs |
 | No pad seeking | `PadSeeking::Off` ([Steering for weapon pads](#steering-for-weapon-pads-2026-10-03)) | Tuned for Pulse's five-kill race. Here it doubled the supply |
@@ -1164,6 +1171,66 @@ four laps between two sets of twelve seeds, more than one set can pin, so the No
 the median over seeds 1 to 24 (`NOVICE_PACE_SEEDS`). The window stays 6 to 12, anchored on the
 original's 9 laps (n = 1, a third either way); 7 sits inside it. Elite keeps seeds 1 to 12 and
 passed unchanged.
+
+**HD's real pickup roster slows ours to a median of 14 laps (2026-11-26, `hd-weapon-roster`).**
+HD never hands out the Repulser or the Shuriken
+([pickup-draw.md](../ghidra/functions/ps3-hdfury-eu/pickup-draw.md)); every figure above this
+paragraph was measured, and the pacing terms tuned, with both in our pool. Vineta K, Venom, the
+leading opponent's completed laps, one tree with the roster and one without it:
+
+| Run | Median | Sorted laps |
+| --- | ---: | --- |
+| Novice, seeds 1-24, Repulser and Shuriken in the pool | 8 | 3, 4, 4, 4, 5, 5, 5, 5, 6, 7, 8, 8, 9, 11, 11, 14, 14, 15, 16, 16, 17, 17, 17, 19 |
+| Novice, seeds 1-24, HD's roster | **14** (two seeds still running at 1,000 s) | 5, 7, 9, 9, 11, 12, 12, 13, 13, 13, 13, 14, 14, 14, 14, 14, 14, 14, 16, 16, 17, 19, 20, 20 |
+| Elite, seeds 1-12, Repulser and Shuriken in the pool | 6 | 1, 3, 3, 3, 4, 6, 6, 7, 8, 8, 9, 11 |
+| Elite, seeds 1-12, HD's roster | 9 | 6, 7, 7, 8, 8, 8, 10, 11, 11, 15, 16, 21 |
+
+The Novice median is 14 with the person's pass-on removed too, so the roster itself moves it, not
+the draw law. The Novice pin's window (6 to 12) is anchored on the original's nine laps and is not
+met on these terms.
+
+**Why the roster slows it, and HD's own terms (2026-11-27, `hd-score-pace`).** A scratch sweep
+counted, per weapon over Novice seeds 1 to 24, the grants and how long each was held, with the
+pool switched per run (`SimSetup::allowed_weapons` and `pickup_order` emptied gives the old
+pool, which reproduces the median of 8 seed for seed):
+
+| Weapon | Grants, old pool | Mean held, old pool | Grants, HD's roster | Mean held, HD's roster |
+| --- | ---: | ---: | ---: | ---: |
+| Mine | 268 | 24.7 s | 357 | 26.4 s |
+| Bomb | 200 | 26.6 s | 290 | 24.1 s |
+| Cannon | 221 | 42.8 s | 298 | 40.2 s |
+| Rocket, Missile, Plasma, Quake, LeachBeam | 1151 | 1.2 to 1.6 s | 1545 | 1.3 to 1.9 s |
+| Repulser, Shuriken | 452 | 1.4 s | - | - |
+
+Mine, Bomb and Cannon fill about nine tenths of the time a slot is held. The Repulser and the
+Shuriken were both spent at once, so without them the three slow weapons rise from 30 % to 38 %
+of grants and the slot is blocked longer: mean field kills a race fell from 11.2 to 9.6, and the
+fast races are the ones whose slots stood empty more. Rocket grants went up, so it is supply, not
+a lost kill weapon. The AI's drop and Cannon decisions are ours (`C` and `?` in
+[weapon-lineage.md](weapon-lineage.md)), so the fix is a retune, chosen.
+
+`trigger_share` alone does not pin it: the Mine is dropped only with somebody close behind, and
+the Cannon's hold does not read the share (`Driver::holds_fire`). Novice medians, seeds 1 to 24:
+`0.2` 14, `0.4` 10, `0.8` 12, `1.6` 10. A stale time spends what the share cannot. Novice medians
+over three sets of 24 seeds:
+
+| Terms | 1-24 | 25-48 | 49-72 |
+| --- | ---: | ---: | ---: |
+| `0.2`, no stale time | 14 | 14 | 12 |
+| `0.2`, stale 5 s | 11 | 10 | 10 |
+| `0.2`, stale 10 s | 10 | 11 | 9 |
+| `1.0`, stale 7 s | 10 | 11 | 8 |
+| **`1.0`, stale 10 s (HD)** | **9** | **9** | **9** |
+| `1.0`, stale 13 s | 10 | 12 | 9 |
+
+HD's terms, Novice seeds 1 to 24 sorted: 4, 7, 7, 7, 8, 8, 8, 8, 8, 8, 9, 9, 10, 10, 10, 11, 11,
+12, 12, 13, 15, 15, 17, 17; every race reaches 200. Elite seeds 1 to 12: median 8 (4, 6, 7, 8, 8,
+8, 9, 11, 12, 13, 14, 19), every race reaches 200; Elite's 20 s hold comes before the stale time,
+so its stale spend lands at 20 s. Pulse, Pure, 2048 and Omega Eliminators and an HD single race
+hash identically after 7,200 ticks with and without the change (Novice and Elite, seeds 1 and 2).
+
+**Will move again:** HD's AI repeat refusal and its one-live exclusions (the Cannon while two
+craft hold one) are read but not wired; both change the draw, and the stickiest weapon most.
 
 ### Firing on the original's law (2026-10-03)
 

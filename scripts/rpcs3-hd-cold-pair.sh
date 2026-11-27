@@ -2,7 +2,7 @@
 # One HD Time Trial original frame from a COLD boot (no savestate), the capture path that keeps the circuit's glass clean:
 #   scripts/rpcs3-hd-cold-pair.sh <lane> <circuit-index> <out-dir> [oag-game]
 # A restored savestate paints garbage on the stand glass (docs/reverse-engineering/rpcs3-capture.md, 2026-10-21 glass study).
-# OAG_HD_CLASSIC=0 picks the other hull of the team (the saved profile unlocks one of them); OAG_HD_TEAM_RIGHTS (default 9, Harimau; Assegai is 7) and OAG_HD_TEAM (our --team name) pick the team.
+# OAG_HD_TEAM (default harimau; our --team name, `_c1` for the Fury hull) is the hull: Ship Select is stepped until RAM names it.
 # The lane's env.sh should set OAG_RPCS3_GEOMETRY=2200x1300x24 so the 1920x1080 window is not clipped. Writes <out>/theirs.png
 # (and ours.png when the oag-game build knows the flags). The window is resized to the profile's output by rpcs3-hd-pair.py.
 set -uo pipefail
@@ -19,8 +19,11 @@ cd "$repo"
 # (`OAG_HD_KEEP_HULL_SHAKE=1` keeps it). Applied when RPCS3 loads the game, so before the boot below.
 python3 scripts/rpcs3-hd-no-hull-shake.py ${OAG_HD_KEEP_HULL_SHAKE:+--remove} || exit 3
 rm -f "$W/xdg/cache/rpcs3/TTY.log"
-bash scripts/emu-hd-glass-boot.sh "$lane" "$circuit" "${OAG_HD_TEAM_RIGHTS:-9}" "${OAG_HD_CLASSIC:-1}" cold-$circuit || exit 3
+bash scripts/emu-hd-glass-boot.sh "$lane" "$circuit" "${OAG_HD_TEAM:-harimau}" cold-$circuit || exit 3
 export OAG_RPCS3_ATTACH=1
+# A save with Pilot Assist on draws its indicator under the craft; the profile renders ours with it off, and the pair script
+# refuses a mismatch. The Restart Race below builds the race afresh from the option.
+python3 scripts/rpcs3-hd-pilot-assist.py --off || exit 3
 uv run --with evdev python3 scripts/emu-run.py -- python3 -u scripts/rpcs3-drive.py --log-dir "$W/restart" restart | tail -1
 # The window is placed off-centre by RPCS3 and a 1920 wide resize then runs off the right edge of the Xvfb (a clipped frame the
 # trim in rpcs3-drive.py turns into 1760 px): move it to the corner and size it before the pair script looks.
