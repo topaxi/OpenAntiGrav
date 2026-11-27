@@ -147,7 +147,7 @@ enum Strip {
     MissileStreaks,
     Wingtip,
     RocketSmoke,
-    LeachStrip,
+    LeachRibbon,
 }
 
 impl Strip {
@@ -159,7 +159,7 @@ impl Strip {
         Self::MissileStreaks,
         Self::Wingtip,
         Self::RocketSmoke,
-        Self::LeachStrip,
+        Self::LeachRibbon,
     ];
 
     /// The strips HD's `RibbonEffects_Render` draws (pools 0, 2, 1 and 5, then 3 and 4) go before
@@ -268,7 +268,7 @@ impl Scene {
             Strip::MissileStreaks => streaks,
             Strip::Wingtip => vortex,
             Strip::RocketSmoke => smoke,
-            Strip::LeachStrip => leach,
+            Strip::LeachRibbon => leach,
         })
     }
 
@@ -879,7 +879,7 @@ mod tests {
             Strip::LeachBeam,
             Strip::MagstripContact,
             Strip::MagstripArcs,
-            Strip::LeachStrip,
+            Strip::LeachRibbon,
         ] {
             assert!(at(EffectStep::Strip(strip)) > particles, "{strip:?}");
         }
