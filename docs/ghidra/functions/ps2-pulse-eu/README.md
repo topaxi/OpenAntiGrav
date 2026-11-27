@@ -27,6 +27,7 @@ form, and Ghidra's string search will return all three.
 | [Grid Selection](grid-selection.md) | The tier tiles and their medal colour by overall points, matching the PSP body for body; the `Selector`'s pulse (same law) and where the PS2 draws it (outline top-left minus `(11, 14)`, GS dump) |
 | [Recovered C library](libc.md) | `strlen`, `strcmp`, `strcasecmp`, `tolower`, `_ctype_` |
 | [Loading screen](loading-screen.md) | The same procedural heartbeat wave as the PSP, and the four places the port diverges |
+| [Texture levels](texture-level.md) | `TEX1` `MXL` is the file header's own level count (`flags & 0x1f`); the disc authors 0 everywhere, and nothing builds levels |
 | [Texture names](texture-names.md) | Why no `.mip` or `.tga` name resolves on this disc: the loader rewrites the extension to `.pct` before it hashes |
 | [Shield pickup](shield-pickup.md) | The shield's visual object: `ShipShield_Activate`/`Deactivate`/`Update`, the PSP's law at `+0x80`, and a raised shell captured on PCSX2 by writing its fields |
 | [Two-person Head2Head](head2head.md) | The split screen's Head2Head is mode 9 with `g_split_mode` set: two people, no AI, a per-view gap readout, the race ends when both finish; mode `0xf` builds no race here |
@@ -41,7 +42,7 @@ form, and Ghidra's string search will return all three.
 
 ## Renames
 
-**180 applied live**, 3 more collected in [names.tsv](names.tsv) but not yet
+**185 applied live**, 3 more collected in [names.tsv](names.tsv) but not yet
 applied - the `Anim Transform` page's three data globals, rejected by the
 MCP bridge's `rename_data` name-quality gate (see that page). Run the script
 directly against a bridge with `SCES_547.48` open to pick those up, since it

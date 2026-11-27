@@ -615,6 +615,13 @@ was not established (the BIOS language setting is the obvious candidate,
 confidence 50) and it does not matter: the button sequence is identical either
 way.
 
+**From a saved main menu instead** (measured 2026-11-27, PCSX2 v2.9.168): copy
+`data/saves/pulse-ps2/menu/main-menu-pcsx2-2.9.168.p2s` into the data path's `sstates/` as a slot, load it,
+run `scripts/pcsx2-pulse-walk.py --slot S unlock`, then `down` x3, `cross` (Racebox), `cross` (Track Select,
+32 entries), `cross` (track), `cross` (ship); after the load, `cross` once on the circuit description reaches
+the grid. `pcsx2-pulse-walk.py race` recognises the HUD only under `OAG_COMPARE_PLATFORM=pulse-ps2`
+(its screenshot size); without it the walk times out with the race running.
+
 ## The state channel: EE console, and its limit
 
 `EnableEEConsole` and `EnableIOPConsole` put the game's own `printf` into the
