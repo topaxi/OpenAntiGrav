@@ -445,7 +445,9 @@ the single waveform did.
   truncating, to `Scream_SetVoiceBend` on the handler, so it reaches voices already keyed. The same arithmetic as
   Pulse's (`oag_formats::sblk::pitch::random_bend_word`).
 - A game stop is `Scream_StopSound` (`0x0062c2d0`), then `0x0062de08`, then for a bank cue
-  `Scream_StopHandlerSound` (`0x00626350`). `Scream_FindStopMarker` (`0x00623428`) returns the index of the first
+  `Scream_StopHandlerSound` (`0x00626350`): `0x0062de08` branches on bits 24 to 28 of the handle word, 5 goes there,
+  and the SBlk start routine (`0x00626e78`) allocates its handler through `0x00623be8`, which asks `0x0062d248` for
+  type 5. `Scream_FindStopMarker` (`0x00623428`) returns the index of the first
   `0x2b` (`'+'`) that is not the last command. If there is one, the program counter is set past it, the handler's voices
   are keyed off (`0x0062fd98`), the goto depth word (`*0x008c0038 + 0x20`) is zeroed and `Scream_StepCommandList` is
   called until it returns non-zero or runs off the end. That loop never reads the countdown, so **the delays of the tail
@@ -462,7 +464,7 @@ record's pointer into the slot the caller passed and marks the record. `SoundEmi
 | Cue | Started | Stopped | Conf |
 | --- | --- | --- | --- |
 | `~AUTOPILOT` | `0x000ea79c`, the weapon-fire jump table's case 6 (function `0x000ea0c8`): `Sound_PlayBankCue`, volume `0x400`, no variable block, handle `ship+0x5ee8`; the player's craft only (role word `+0x628c == 0`), behind a race-state test (`+0x1970`) | `Autopilot_Update` (`0x00129988`) when the timer reaches 0: `Scream_StopSound` | 88 |
-| `~PLASMATVL` | `0x0011fa20`, handle `projectile+0x68` | `0x0011ebf0`, before `PLASMAHITWALL` | 85 |
+| `~PLASMATVL` | `0x0011fa20` in `Plasma_Launch`, at charge expiry, handle `projectile+0x68` | `0x0011ebf0`, before `PLASMAHITWALL` | 85 |
 | `~ROCKETTVL` | `0x001251f8`, handle `+0x58` | `0x0014c690`, before `ROCKEXPLWALL`/`ROCKEXPLSHIP` | 85 |
 | `~SHURIKENTRAVEL` | `0x00159dd0`, handle `+0x58` | `0x0014f728`, before `SHURIKENEXPL` | 82 |
 | `~QUAKETRAVEL` | `Quake_Update` (`0x002d36cc`), with the first-frame `WO_QUAKE` spawn | `Quake_Update` (`0x002d3368`): `SoundEmitter_Release(emitter, 1)` | 82 |
@@ -503,7 +505,8 @@ Tests: `crates/formats/src/sblk/runner/tests.rs`, `hd_sound_ground_truth::hd_s_b
   too (28 and 58 commands, run through the Vita walk), among `0x04`, `0x1a`, `0x1b`, `0x1c` and `0x29`. Their handlers are
   the Vita ones (`WalkModel::vita`: marker ids in the low byte, `0x2e` for the random goto): the guard's byte positions and
   which variable is the perspective are unread, and 2048's tick is the Vita race build's (`SequenceTick::Vita` is wired for
-  the countdown only). It keeps the flat pick; the walk here is HD's, not borrowed for it.
+  the countdown only). The race loader asks the hashed bank by spelled name and loads none of these cues, so they are
+  silent there ([2048-audio.md](../../../formats/2048-audio.md)); the walk here is HD's, not borrowed for it.
 - **Omega: checked, differs.** Its banks are Wwise: a cue's perspective is a separate authored event (`<cue>_PC__<bank>`,
   the player's version, already played through `Banks::player_timelines`) and switch containers, not variables in a list.
   The `variables` table does not apply.
