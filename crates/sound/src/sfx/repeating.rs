@@ -1,6 +1,6 @@
 //! A cue whose command list repeats, played for as long as it is held.
 //!
-//! `~BLOWUP` re-keys a waveform every 43 master ticks while the explosion holds
+//! `~BLOWUP` re-keys a waveform on a loop while the explosion holds
 //! the handler, and `~ROCKLOCK` beeps at the tempo a cue parameter picks; both
 //! stop only when the game releases the handle, so neither is a finite
 //! [`Timeline`](super::layers::Timeline). [`Playing`] drives the list's
