@@ -61,9 +61,9 @@ BODY_VELOCITY = 0x180
 SERIAL = "UCUS98612_2.00"
 #: Close chase eye: 3.0 up, 11.25 back at the 0.75 craft scale, 11.643 from the body (camera.md, read live).
 CLOSE_DISTANCE = 11.643
-#: How many stops the presented frame lags the stop it is taken at: Pulse's measurement (`psp-presented-lag.py`), inherited
-#: here unmeasured. A resting craft cannot tell: the pose is the same at both stops; the clock differs by one tick.
-PRESENTED_LAG = 1
+#: How many stops the presented frame lags the stop it is taken at (`compare_env.PURE_PRESENTED_LAG`). A resting craft's pose
+#: is the same at every one of them; the clocks differ.
+PRESENTED_LAG = ce.PURE_PRESENTED_LAG
 #: The player's Autopilot pickup record of a Zone race flown on the Autopilot: its running byte `+0x154` and its timer `+0x15c`
 #: (`docs/ghidra/functions/psp-pure-usa/autopilot.md`). Its address belongs to the state (the `autopilot_record` of the state's
 #: `.json` sidecar, `psp-pure-zone-state.py`; `--autopilot-record` overrides); a load restores it.
@@ -326,9 +326,7 @@ def main():
         pair.rec["original"]["race_clock_at_stop_s"] = shown + PRESENTED_LAG * dt
         pair.rec["original"].update({"race_clock_s": clock, "frame_dt_s": dt, "race_clock_address": "%#x" % clock_at,
                                      "presented_lag_ticks": PRESENTED_LAG})
-    cp.build(pair, args, "scenery", "savestate_restore", args.state,
-             {"value": PRESENTED_LAG, "unit": "ticks", "basis": "inherited from Pulse PSP, unmeasured on Pure",
-              "what": "picture"})
+    cp.build(pair, args, "scenery", "savestate_restore", args.state, ce.pure_lag_provenance(bool(zone)))
     drift = math.dist(pose0["pos"], pose1["pos"])
     pair.check("the state loads to the same pose twice (a load is bit-identical)", drift < 0.001,
                "%.5f units between the two loads' first stops" % drift)
