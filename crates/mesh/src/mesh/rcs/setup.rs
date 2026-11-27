@@ -87,6 +87,9 @@ pub(super) fn material_setup(
     textures: Textures<'_>,
     store: SceneStore,
     water_law: Water,
+    // Whether the lightmapped families bind their emissive: `false` for a model that draws
+    // none of them and needs the glow table's room for its own entries.
+    lit_emissive: bool,
     report: &mut Report,
 ) -> MaterialSetup {
     // **The variant first**, because which sampler entry each of this
@@ -415,17 +418,6 @@ pub(super) fn material_setup(
         report,
     );
     super::mag_wave::merge(&mut mag_emissive, window_masks);
-    // `tunnel_fx_noalpha`'s window lights on a lightmapped slot ride the third binding too.
-    let tunnel_lights = super::tunnel_emissive::tunnel_emissive(
-        model,
-        &material_variants,
-        textures,
-        &mag_emissive,
-        &mut material_slots,
-        &mut emissive,
-        report,
-    );
-    super::mag_wave::merge(&mut mag_emissive, tunnel_lights);
     // The disc's own alpha-test reference, for a caller's cutout draws - see
     // `cutout`, which reports a comparison this shader cannot reproduce
     // rather than drawing one wrongly.
@@ -465,6 +457,22 @@ pub(super) fn material_setup(
         &mut emissive,
         report,
     );
+    // The emissive of a lightmapped slot rides the third binding (the track's, the fourth). Last of
+    // the glow-table readers: a full table leaves these dark, never a family that already drew.
+    if lit_emissive {
+        let lit = super::lightmapped_emissive::lightmapped_emissive(
+            model,
+            &material_variants,
+            textures,
+            &mag_emissive,
+            &wave_maps,
+            &mut material_slots,
+            &mut emissive,
+            report,
+        );
+        super::mag_wave::merge(&mut mag_emissive, lit.third);
+        super::mag_wave::merge(&mut wave_maps, lit.fourth);
+    }
     let (mut fifth_maps, mut sixth_maps) = (snow.rock, snow.rock_normal);
     super::mag_wave::merge(&mut fifth_maps, chevron_emasks);
     super::mag_wave::merge(&mut sixth_maps, chevron_waves);
