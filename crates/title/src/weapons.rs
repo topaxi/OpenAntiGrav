@@ -28,11 +28,12 @@ pub struct Weapons {
     /// `oag_raceplay`'s `load_weapons` opens it for `Mode::Eliminator` and falls
     /// back to [`Self::race`], with a report line, where it is `None`.
     pub elimination: Option<&'static str>,
-    /// The table only Detonator ships, or `None` for a title with no Detonator.
+    /// The table a Detonator race reads, or `None` for a title with no Detonator. HD's family
+    /// ships it; Pulse's is this project's own, in the fallback layer.
     ///
-    /// Beside [`Self::race`], not instead of it: it authors a Mine, a Cannon, a Bomb and an
+    /// Read in place of [`Self::race`] in that mode: it authors a Mine, a Cannon, a Bomb and an
     /// `EMP` block and none of the thirteen pickups (`oag_tables::weapons::WeaponStats::detonator`,
-    /// `docs/formats/weapon-stats.md`, "Detonator's attributes"). Nothing in a race reads it yet.
+    /// `docs/formats/weapon-stats.md`, "Detonator's attributes").
     pub detonator: Option<&'static str>,
     /// The table an opponent's fire odds are read from (`useAgainstPlayer`,
     /// `useAgainstAI` and `absorb` per weapon, `oag_tables::weapons::ai`), or `None`

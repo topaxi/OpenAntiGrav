@@ -185,7 +185,6 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
             circuit_weapon_pad_key: None,
         },
         races_zone_circuit: false,
-        weapons_supplement: None,
         // Omega plays Wwise events in place of named cues; the EMP's are not located.
         voices: None,
         // The executable names no `EmpReady` string, so its binder probably never binds the

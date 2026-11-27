@@ -2,8 +2,8 @@
 <!-- Detonator on Wipeout Pulse: this project's own HUD layout, since Pulse ships no
      Detonator. Arranged as Fury's: the EMP gauge bottom left, the clip over the shield bar
      bottom right, the score where Zone has it, drawn with the disc's own HUD texture, fonts, strings and countdown models
-     (docs/gameplay/detonator-pulse.md, "The HUD"). The PS2 disc's copy, in its 640x448 grid. Six EMP pips, one per pad charge up
-     to a full EMP; EmpReady marks the third, where the EMP can be fired. -->
+     (docs/gameplay/detonator-pulse.md, "The HUD"). The PS2 disc's copy, in its 640x448 grid. Eight EMP pips, one per pad charge up
+     to a full EMP; EmpReady marks the fourth, where the EMP can be fired. -->
 <Screen>
   <Screen name="HUD">
     <Variable global="HudColour1">
@@ -49,40 +49,52 @@
         <Values string="EMP" font="HUDSmall" align="left" scale="1.0" Color="FEConst->HudColour2" x="5" y="0" CalcBlur="1" BorderColor="FEConst->HudBGColour"></Values>
       </Text>
       <Image name="EmpBack_0">
-        <Values x="8" y="20" width="36" height="33" U="0" V="0" TxtrWidth="27" TxtrHeight="26" CalcBlur="1" Color="FEConst->HudColour3A" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+        <Values x="8" y="20" width="27" height="33" U="0" V="0" TxtrWidth="20" TxtrHeight="26" CalcBlur="1" Color="FEConst->HudColour3A" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
       </Image>
       <Image name="EmpBack_1">
-        <Values x="45" y="20" width="36" height="33" U="28" V="0" TxtrWidth="27" TxtrHeight="26" CalcBlur="1" Color="FEConst->HudColour3A" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+        <Values x="36" y="20" width="27" height="33" U="21" V="0" TxtrWidth="20" TxtrHeight="26" CalcBlur="1" Color="FEConst->HudColour3A" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
       </Image>
       <Image name="EmpBack_2">
-        <Values x="83" y="20" width="36" height="33" U="56" V="0" TxtrWidth="27" TxtrHeight="26" CalcBlur="1" Color="FEConst->HudColour3A" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+        <Values x="64" y="20" width="27" height="33" U="42" V="0" TxtrWidth="20" TxtrHeight="26" CalcBlur="1" Color="FEConst->HudColour3A" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
       </Image>
       <Image name="EmpBack_3">
-        <Values x="120" y="20" width="36" height="33" U="84" V="0" TxtrWidth="27" TxtrHeight="26" CalcBlur="1" Color="FEConst->HudColour3A" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+        <Values x="92" y="20" width="27" height="33" U="63" V="0" TxtrWidth="20" TxtrHeight="26" CalcBlur="1" Color="FEConst->HudColour3A" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
       </Image>
       <Image name="EmpBack_4">
-        <Values x="157" y="20" width="36" height="33" U="112" V="0" TxtrWidth="27" TxtrHeight="26" CalcBlur="1" Color="FEConst->HudColour3A" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+        <Values x="120" y="20" width="27" height="33" U="84" V="0" TxtrWidth="20" TxtrHeight="26" CalcBlur="1" Color="FEConst->HudColour3A" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
       </Image>
       <Image name="EmpBack_5">
-        <Values x="195" y="20" width="37" height="33" U="140" V="0" TxtrWidth="28" TxtrHeight="26" CalcBlur="1" Color="FEConst->HudColour3A" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+        <Values x="148" y="20" width="27" height="33" U="105" V="0" TxtrWidth="20" TxtrHeight="26" CalcBlur="1" Color="FEConst->HudColour3A" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+      </Image>
+      <Image name="EmpBack_6">
+        <Values x="176" y="20" width="27" height="33" U="126" V="0" TxtrWidth="20" TxtrHeight="26" CalcBlur="1" Color="FEConst->HudColour3A" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+      </Image>
+      <Image name="EmpBack_7">
+        <Values x="204" y="20" width="28" height="33" U="147" V="0" TxtrWidth="21" TxtrHeight="26" CalcBlur="1" Color="FEConst->HudColour3A" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
       </Image>
       <Image name="Emp_0">
-        <Values x="8" y="20" width="36" height="33" U="0" V="0" TxtrWidth="27" TxtrHeight="26" CalcBlur="1" Color="FEConst->HudColour3" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+        <Values x="8" y="20" width="27" height="33" U="0" V="0" TxtrWidth="20" TxtrHeight="26" CalcBlur="1" Color="FEConst->HudColour3" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
       </Image>
       <Image name="Emp_1">
-        <Values x="45" y="20" width="36" height="33" U="28" V="0" TxtrWidth="27" TxtrHeight="26" CalcBlur="1" Color="FEConst->HudColour3" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+        <Values x="36" y="20" width="27" height="33" U="21" V="0" TxtrWidth="20" TxtrHeight="26" CalcBlur="1" Color="FEConst->HudColour3" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
       </Image>
       <Image name="Emp_2">
-        <Values x="83" y="20" width="36" height="33" U="56" V="0" TxtrWidth="27" TxtrHeight="26" CalcBlur="1" Color="FEConst->HudColour3" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+        <Values x="64" y="20" width="27" height="33" U="42" V="0" TxtrWidth="20" TxtrHeight="26" CalcBlur="1" Color="FEConst->HudColour3" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
       </Image>
       <Image name="Emp_3">
-        <Values x="120" y="20" width="36" height="33" U="84" V="0" TxtrWidth="27" TxtrHeight="26" CalcBlur="1" Color="FEConst->HudColour3" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+        <Values x="92" y="20" width="27" height="33" U="63" V="0" TxtrWidth="20" TxtrHeight="26" CalcBlur="1" Color="FEConst->HudColour3" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
       </Image>
       <Image name="Emp_4">
-        <Values x="157" y="20" width="36" height="33" U="112" V="0" TxtrWidth="27" TxtrHeight="26" CalcBlur="1" Color="FEConst->HudColour3" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+        <Values x="120" y="20" width="27" height="33" U="84" V="0" TxtrWidth="20" TxtrHeight="26" CalcBlur="1" Color="FEConst->HudColour3" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
       </Image>
       <Image name="Emp_5">
-        <Values x="195" y="20" width="37" height="33" U="140" V="0" TxtrWidth="28" TxtrHeight="26" CalcBlur="1" Color="FEConst->HudColour3" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+        <Values x="148" y="20" width="27" height="33" U="105" V="0" TxtrWidth="20" TxtrHeight="26" CalcBlur="1" Color="FEConst->HudColour3" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+      </Image>
+      <Image name="Emp_6">
+        <Values x="176" y="20" width="27" height="33" U="126" V="0" TxtrWidth="20" TxtrHeight="26" CalcBlur="1" Color="FEConst->HudColour3" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+      </Image>
+      <Image name="Emp_7">
+        <Values x="204" y="20" width="28" height="33" U="147" V="0" TxtrWidth="21" TxtrHeight="26" CalcBlur="1" Color="FEConst->HudColour3" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
       </Image>
       <Image name="EmpReady">
         <Values x="113" y="54" width="12" height="12" U="19" V="87" TxtrWidth="9" TxtrHeight="7" CalcBlur="1" Color="FEConst->HudColour1" Src="Data\HUD\Textures\PulseHUD.mip"></Values>

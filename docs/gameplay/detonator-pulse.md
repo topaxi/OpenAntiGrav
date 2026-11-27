@@ -15,19 +15,44 @@ CIRCUIT row then lists the Zone circuits only).
 | Part | On Pulse | Where |
 | --- | --- | --- |
 | Circuit | the picked circuit's Zone twin (`zone_track.vex` beside `track.vex`), as a Zone race flies | `oag_title::Detonator::races_zone_circuit` |
-| Mines and bombs | Pulse's own `Pulse_Mine.vex` and `Pulse_Bomb.vex`, laid by HD's placement law; contact radius, damage and slowdown are Pulse's race table's `Mine` and `Bomb` | `objects: None` (the ordinary mine and bomb pools draw them) |
+| Mines and bombs | Pulse's own `Pulse_Mine.vex` and `Pulse_Bomb.vex`, laid by HD's placement law; contact radius, damage and push from this project's Detonator table (see [The numbers](#the-numbers)) | `objects: None` (the ordinary mine and bomb pools draw them), `oag_title::weapons::Weapons::detonator` |
 | Mine size | the mines hold their authored size; the music does not scale them (see [Mine size](#mine-size)) | `MinesScaleToMusic="0"` |
-| Layout | this project's six pattern groups and fourteen stage counts (30 mines at stage 1 to 108 at 14) | `assets/fallback/Data/XML/DetonatorLayouts_Pulse/` |
+| Layout | this project's six pattern groups; Fury's fourteen stage counts (80 mines at stage 1 to 200 at 14) | `assets/fallback/Data/XML/DetonatorLayouts_Pulse/` |
 | Pads | every speed pad (a Zone circuit authors no weapon pad: 0 on all eight PSP `zone_track.vex`, against 7 to 15 on the race files) is drawn as the race circuit's own first `Weapon Pad`, held at the red key of its ready cycle (`READY_KEYFRAMES[0]`, 204, 102, 102; `docs/rendering/pads.md`); the circuit's own speed pads are not drawn | `DetonatorPads::circuit_weapon_pad_key` |
 | Pad law | a pad gives no boost and charges the EMP once per entry, HD's arm | `DetonatorPads` `speed_pad_charges`, `weapon_pad_charges` |
-| EMP | HD's charge, gauge, L1 fire and wave on this project's `EMP` block: ready at 3 pads, full at 6, extent 1 to 3 s, 3 survey entries a tick; drawn as the Repulsor's (see [The EMP](#the-emp)), no light | `weapons_supplement`, `oag_pulse::effects`, `emp_borrows_repulsor` |
-| Cannon | HD's cannon on Pulse's own `Cannon` (`rate`; `rounds` 30 held to 15 volleys); one wall rebound, three hits to a bomb; the rounds leave from the hull's dimensions (Pulse's hulls author no `cannon_flash`); each round is drawn as Pulse's own Cannon's (see [The cannon](#the-cannon)); a wall hit sparks Pulse's `WO_CANNON_SPARKS` | `weapons_supplement` |
+| EMP | HD's charge, gauge, L1 fire and wave: ready at 4 pads, full at 8, extent 0.25 to 2 s, 1 survey entry a tick; drawn as the Repulsor's (see [The EMP](#the-emp)), no light | `WeaponStats_Detonator.xml`, `oag_pulse::effects`, `emp_borrows_repulsor` |
+| Cannon | HD's cannon: 15 volleys, one every 0.1 s, one wall rebound, four hits to a bomb; the rounds leave from the hull's dimensions (Pulse's hulls author no `cannon_flash`); each round is drawn as Pulse's own Cannon's (see [The cannon](#the-cannon)); a wall hit sparks Pulse's `WO_CANNON_SPARKS` | `WeaponStats_Detonator.xml` |
 | Explosions | a mine and a bomb go up as Pulse's `WO_MINE_EXPLO` | `oag_pulse::effects` |
-| Mine slowdown | `velocity_reduction` 0.5, as the supplement names it | `weapons_supplement` |
-| Scoring | this project's `<Bullet>` and `<Emp>` values (10 a live mine, 5 a dark one, 5 an EMP'd live mine) | `DetonatorScoring.xml` in the same directory |
+| Sounds | Pulse's own `MINEEXPL` and `BOMBEXPL` (`weapons.bnk`) and, on a pad charge, `WEAPONPICKUP` (`hud.bnk`) | `oag_sound::sfx::Banks::load_detonator` |
+| End of a run | the craft's own destroy sequence, then the results 5.5 s after the craft goes, under the close orbit: HD's wait, inherited | `DestroyedCraft::detonator_end` |
+| Scoring | Fury's figures (100 a live mine, 50 a dark one, 2000 a bomb, 50 an EMP'd live mine) | `DetonatorScoring.xml` in the same directory |
 | HUD | this project's own layout, arranged as Fury's (see [The HUD](#the-hud)) | `oag_pulse::hud::layouts::DETONATOR`, `ps2_hud` |
 | Not drawn | the stage grade (Pulse ships none), the medals, the announcer lines | `palette: None`, `shows_medals`, `voices: None` |
 | Craft | the team's Zone hull (`Zone.vex`) with its boost plume and wreck, until this project has a Detonator hull of its own; the team's race handling; Ship Select previews it (`Zone_FE.vex`) with the skin row fixed and the team's own ratings | `craft: Some`, `handling: None` |
+
+## The numbers
+
+The maintainer asked for the rules close to Fury's (2026-11-27). The figures in this project's
+`WeaponStats_Detonator.xml`, `GamePlayValues.xml` and `DetonatorScoring.xml` are chosen after
+HD's own, as recorded in [weapon-stats.md](../formats/weapon-stats.md) and
+[detonator-layouts.md](../formats/detonator-layouts.md). Pulse's shields run 95 to 110 against
+HD's 100, so a damage figure means about the same.
+
+| Figure | Value |
+| --- | --- |
+| Mine | 10 damage, halves the speed; no push, no slowdown time |
+| Bomb | 20 damage, push 30, four cannon hits |
+| Cannon | `rate` 10 (a volley every 0.1 s), 15 volleys, 0.75 s reload either way |
+| EMP | ready at 4 pads, full at 8, 0.25 to 2 s, speed 1 |
+| Stages | 80 to 200 mines; 10 shield back a stage; 100 for a chain reaction mine |
+| Score | multiplier 1.0, 100 / 50 a mine, 2000 + 500 a bomb; EMP 50 / 25 / 1000 |
+
+The pattern groups stay this project's six: HD's `PatternFile.xml` is authored content and is
+not copied.
+
+Still not Fury's: the handling is the team's own at the picked speed class (HD flies one
+classless Detonator file, and Pulse ships none); the circuits are the Zone ones; there are no
+medals, score targets, campaign events, EMP voice lines or floating `+N` popups.
 
 ## Mine size
 
@@ -37,7 +62,7 @@ attribute is this project's: no shipped file names it, so HD, Omega and 2048 sca
 
 A held mine is sized to the distance a craft sets it off at (the maintainer's ruling,
 2026-11-27): the contact test is the craft's position within the Mine's `trigger_radius` of the
-mine, 3 on Pulse's own race table, and `Pulse_Mine.vex` reaches 3.18 from its origin at its
+mine, 3 in this project's Detonator table, and `Pulse_Mine.vex` reaches 3.18 from its origin at its
 authored size (its additive spikes; the solid body ends at 1.32). The size is `trigger_radius`
 over that reach, about 0.94, both read at load, so a modded model or table sizes itself.
 Pinned by `a_pulse_detonator_mine_scales_to_the_music_only_if_its_layout_says_so`
@@ -64,9 +89,9 @@ while the flight, hit and wall laws stay Detonator's. The code gates on
 are unchanged. The round flies at 500 units a second (HD's law), well past the Pickup's, so
 a round is read as a pair of glowing darts leaving the nose rather than as a lingering shot.
 
-The clip is 15 volleys of two rounds. Pulse's `Cannon` names `rounds` 30, which read as volleys
-would overrun the cannon's 15 volleys of hit slots, streak awards and HUD icons, so the clip is
-held to 15 (`oag_weapons::detonator::cannon::CLIP_VOLLEYS`). HD's table already says 15.
+The clip is 15 volleys of two rounds. A table naming more is held to 15
+(`oag_weapons::detonator::cannon::CLIP_VOLLEYS`): the cannon has hit slots, streak awards and
+HUD icons for no more.
 
 ## The EMP
 
@@ -91,8 +116,8 @@ project's. None of the four Pulse layouts read (Arcade, Elimination, Time Trial,
 
 - bottom left, the score (`DetonatorScorePlain`, plain digits as Pulse's Zone score) under `SCORE`, at the
   coordinates each pressing's `Zone_HUD.xml` gives its own;
-- above it, the EMP: `EMP` over six segments cut from the speed bar's art and a mark under the
-  third, shown once the EMP can be fired. Six pips because Pulse's EMP is full at six
+- above it, the EMP: `EMP` over eight segments cut from the speed bar's art and a mark under
+  the fourth, shown once the EMP can be fired. Eight pips because the EMP is full at eight
   pads;
 - bottom right, over the shield bar: the volleys left (`PulseBullets`), an icon a volley
   (`Bullet00`-`14`) and over each a pip lit when that volley hits (`Multi00`-`14`);
@@ -105,12 +130,13 @@ layer.
 
 ## Why the data lives in the fallback layer
 
-The layout files and the Detonator-only weapon blocks are read by the same parsers HD's are
-(`oag_tables::detonator_layout`, `oag_tables::weapons::detonator_supplement`), the HUD layouts by `oag_hud::compose`, out of
-`assets/fallback/` ([ADR-0061](../architecture/adr/0061-two-asset-layers-around-the-disc.md)),
-embedded by `oag_source::layers::fallback_layer`. A player's override layer can replace any of
-them. Pulse's own race table stands under the supplement: its `Mine`, `Bomb` and
-`Cannon` are the race's, and the supplement adds only what Detonator reads beyond them.
+The layout files and the weapon table are read by the same parsers HD's are
+(`oag_tables::detonator_layout`, `oag_tables::weapons`), the HUD layouts by
+`oag_hud::compose`, out of `assets/fallback/`
+([ADR-0061](../architecture/adr/0061-two-asset-layers-around-the-disc.md)), embedded by
+`oag_source::layers::fallback_layer`. A player's override layer can replace any of them.
+In Detonator the table is read in place of Pulse's race table, so a mod to the race table
+does not reach the mode.
 
 ## PS2
 
@@ -126,10 +152,11 @@ Unchanged: the new `Title` fields are `false`/`None` there, and their Detonator 
 
 `crates/raceplay/tests/detonator_ground_truth.rs`,
 `a_pulse_detonator_race_lays_pulse_mines_on_a_zone_circuit_with_red_charging_pads` (PSP USA):
-the Zone twin is flown, the layout and supplement are read, the 17 speed pads of
-`16_Track`'s Zone twin carry the weapon pad in red, the first tick lays 15 to 30 mines, three
-pads ready the EMP with no boost, L1 clears the mines ahead for 5 each, and Square spends the
+the Zone twin is flown, the layout and table are read, the 17 speed pads of
+`16_Track`'s Zone twin carry the weapon pad in red, the first tick lays 80 mines, four
+pads ready the EMP with no boost, L1 clears the mines ahead for 50 each, and Square spends the
 clip. `a_pulse_detonator_hud_shows_the_emp_gauge_and_the_clip` (PSP and PS2) checks the
-gauge and the clip; `a_pulse_detonator_round_is_drawn_as_the_pulse_cannons_own` and
+three sounds, the gauge and the clip; `a_pulse_detonator_end_waits_for_furys_five_and_a_half_seconds`
+the end of a run; `a_pulse_detonator_round_is_drawn_as_the_pulse_cannons_own` and
 `a_pulse_emp_wave_is_the_repulsors_wave_and_opening` (`crates/raceplay/src/tests/detonator_fx.rs`)
 the cannon and the EMP.

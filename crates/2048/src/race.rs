@@ -520,7 +520,6 @@ pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
         circuit_weapon_pad_key: None,
     },
     races_zone_circuit: false,
-    weapons_supplement: None,
     // 2048's cue names are hashed and its Detonator speech bank is not located.
     voices: None,
     // Its skin binds `EmpCharge`/`EmpFull`; the executable has no `EmpReady` string

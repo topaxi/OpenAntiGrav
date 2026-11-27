@@ -892,15 +892,6 @@ pub(super) fn load_weapons(
         stats.absorb.len(),
         stats.pickups.len()
     ));
-    let stats = match title
-        .race
-        .detonator
-        .and_then(|d| d.weapons_supplement)
-        .filter(|_| mode == Mode::Detonator)
-    {
-        Some(supplement) => with_supplement(archives, stats, supplement, report),
-        None => stats,
-    };
     // A weapon this title tunes on attributes this build does not read.
     // Reported per weapon, because "the disc has no Bomb" and "this build
     // cannot read this disc's Bomb" are different statements and only one of
@@ -912,43 +903,6 @@ pub(super) fn load_weapons(
         ));
     }
     Some(stats)
-}
-
-/// `stats` with the Detonator-only attributes of `entry` (`oag_title::Detonator::weapons_supplement`);
-/// unchanged, with a report line, where it does not read or authors none.
-fn with_supplement(
-    archives: &mut oag_assets::Archives,
-    stats: oag_tables::weapons::WeaponStats,
-    entry: &str,
-    report: &mut Vec<String>,
-) -> oag_tables::weapons::WeaponStats {
-    let read = archives
-        .read_name(entry)
-        .map_err(|e| e.to_string())
-        .and_then(|blob| {
-            oag_tables::weapons::detonator_supplement(&blob).map_err(|e| e.to_string())
-        });
-    match read {
-        Ok(Some(detonator)) => {
-            report.push(format!(
-                "{entry}: Detonator's own blocks beside the race table (EMP {})",
-                if detonator.emp.is_some() {
-                    "authored"
-                } else {
-                    "absent"
-                }
-            ));
-            stats.with_detonator(detonator)
-        }
-        Ok(None) => {
-            report.push(format!("{entry}: authors no Detonator block; not applied"));
-            stats
-        }
-        Err(e) => {
-            report.push(format!("{entry}: {e}; not applied"));
-            stats
-        }
-    }
 }
 
 /// Detonator's two layout files, or `None` off Detonator, on a title that names none, or when

@@ -122,6 +122,29 @@ impl Banks {
         Self::load_cues(archives, banks, zone, tick, &cues, &|cue| cue.name())
     }
 
+    /// Adds Detonator's explosion and pad charge cues, [`Cue::DETONATOR`], by name on a build
+    /// whose [`Self::load`] does not carry them: a title that races Detonator on flat cues. The
+    /// explosions are in the weapons bank and `WEAPONPICKUP` in the HUD bank, as Pulse's discs
+    /// hold them. A cue its bank lacks is a report line and silence.
+    pub fn load_detonator(
+        &mut self,
+        archives: &mut Archives,
+        banks: &oag_title::SoundBanks,
+        tick: oag_title::SequenceTick,
+    ) {
+        if tick.walks_cue_variables() {
+            return;
+        }
+        let named = |cue: Cue| (cue, cue.name());
+        self.load_named(
+            archives,
+            banks.weapons,
+            tick,
+            &[Cue::MineExplosion, Cue::BombExplosion].map(named),
+        );
+        self.load_named(archives, banks.hud, tick, &[named(Cue::WeaponPickup)]);
+    }
+
     /// Reads the front end's navigation cues, [`Cue::FRONT_END`], and the results
     /// lines, [`Cue::RESULTS`], out of the
     /// title's front-end bank.

@@ -344,6 +344,8 @@ pub const ALWAYS_ON: &[&str] = &[
     "EmpBack_3",
     "EmpBack_4",
     "EmpBack_5",
+    "EmpBack_6",
+    "EmpBack_7",
     // The same layout's clip frame.
     "ClipBack",
 ];

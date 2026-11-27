@@ -1133,8 +1133,26 @@ fn a_pulse_detonator_race_lays_pulse_mines_on_a_zone_circuit_with_red_charging_p
         "this project's layout is read:\n{report}"
     );
     assert!(
-        report.contains(r"WeaponStats_Detonator.xml: Detonator's own blocks beside the race table (EMP authored)"),
-        "the EMP block is read beside Pulse's own table:\n{report}"
+        report.contains(
+            r"DetonatorLayouts_Pulse\WeaponStats_Detonator.xml: 3 weapon(s) with an absorb value"
+        ),
+        "this project's own Detonator table is read in place of the race table:\n{report}"
+    );
+    // Its figures are Fury's: a mine costs 10 and neither pushes nor slows beyond the halving,
+    // a bomb 20.
+    let weapons = loaded.setup.weapons.as_ref().expect("the table");
+    let contact = oag_weapons::detonator::Contact::from_stats(weapons).expect("mine and bomb");
+    assert_eq!(
+        (
+            contact.mine.damage,
+            contact.mine.blast_force,
+            contact.mine.slowdown_time
+        ),
+        (10.0, 0.0, 0.0)
+    );
+    assert_eq!(
+        (contact.bomb.damage, contact.bomb.blast_force),
+        (20.0, 30.0)
     );
     // The Zone hull is flown, and wrecks as the Zone one.
     for entry in [r"\Zone.vex", r"\zonewreck.vex", r"\Zoneboost.vex"] {
@@ -1176,14 +1194,15 @@ fn a_pulse_detonator_race_lays_pulse_mines_on_a_zone_circuit_with_red_charging_p
     race.tick(&PlayerInputs::none());
     let first = race.core.sim.world.detonator;
     assert_eq!(first.stages_laid, 1, "the opening stage is laid");
+    println!("stage 1 laid {} mines", first.live_mines);
     assert!(
-        (15..=30).contains(&first.live_mines),
-        "stage 1 aims for 30: {}",
+        (40..=80).contains(&first.live_mines),
+        "stage 1 aims for 80: {}",
         first.live_mines
     );
-    // Stood on a speed pad: a charge and no boost, ready at this project's count of 3.
+    // Stood on a speed pad: a charge and no boost, ready at Fury's count of 4.
     start_racing(&mut race);
-    // Three pads apart from each other: two side by side are one entry.
+    // Four pads apart from each other: two side by side are one entry.
     let mut apart: Vec<[f32; 3]> = Vec::new();
     for pad in &loaded.setup.speedup_pads {
         let c = pad.centre();
@@ -1192,8 +1211,8 @@ fn a_pulse_detonator_race_lays_pulse_mines_on_a_zone_circuit_with_red_charging_p
             apart.push(c);
         }
     }
-    assert!(apart.len() >= 3, "three pads apart: {apart:?}");
-    for (n, &pad) in apart.iter().take(3).enumerate() {
+    assert!(apart.len() >= 4, "four pads apart: {apart:?}");
+    for (n, &pad) in apart.iter().take(4).enumerate() {
         race.core.sim.set_autopilot(false);
         let ship = &mut race.core.sim.world.ships[0].physics;
         ship.body.position = oag_core::math::Vec3::from_array(pad);
@@ -1210,14 +1229,14 @@ fn a_pulse_detonator_race_lays_pulse_mines_on_a_zone_circuit_with_red_charging_p
     }
     assert_eq!(
         race.core.sim.detonator_emp(),
-        Some((3, true)),
-        "three pads ready the EMP"
+        Some((4, true)),
+        "four pads ready the EMP"
     );
     assert!(race.core.sim.l1_is_flip(), "L1 is the EMP");
-    // The EMP clears the mines ahead, paid by this project's `<Emp>` (5 a live mine).
+    // The EMP clears the mines ahead, paid by this project's `<Emp>` (50 a live mine).
     let (live, paid) = emp_from_a_stand(&loaded, true).expect("a mine to stand before");
     assert!(live > 0, "the wave clears a mine");
-    assert_eq!(paid, 5 * live as i32);
+    assert_eq!(paid, 50 * live as i32);
     // Square spends Pulse's own Cannon clip.
     let mut race = race::Race::start(
         loaded.setup.clone(),
@@ -1226,10 +1245,7 @@ fn a_pulse_detonator_race_lays_pulse_mines_on_a_zone_circuit_with_red_charging_p
     );
     start_racing(&mut race);
     let full = race.core.sim.world.detonator.cannon.clip;
-    assert_eq!(
-        full, 15,
-        "Pulse's 30 rounds are held to the cannon's 15 volleys"
-    );
+    assert_eq!(full, 15, "fifteen volleys");
     for _ in 0..3 {
         race.tick(&square());
         keep_alive(&mut race);
@@ -1240,7 +1256,7 @@ fn a_pulse_detonator_race_lays_pulse_mines_on_a_zone_circuit_with_red_charging_p
     );
 }
 
-/// **Pulse's Detonator HUD is a layout of ours arranged as Fury's**: six EMP pips bottom left, the
+/// **Pulse's Detonator HUD is a layout of ours arranged as Fury's**: eight EMP pips bottom left, the
 /// clip over the shield bar bottom right, and none of Time Trial's speed bar or lap times. The PS2
 /// disc reads the copy in its own 640x448 grid.
 #[test]
@@ -1254,7 +1270,6 @@ fn a_pulse_detonator_hud_shows_the_emp_gauge_and_the_clip() {
             return;
         };
         let loaded = race::load(&race::Options {
-            no_effects: true,
             source: path.display().to_string(),
             class: "VENOM".to_string(),
             mode: oag_race::Mode::Detonator,
@@ -1262,6 +1277,14 @@ fn a_pulse_detonator_hud_shows_the_emp_gauge_and_the_clip() {
         })
         .expect("loading a Pulse Detonator race");
         assert_eq!(loaded.hud.space.size, size, "{image}");
+        // Detonator's explosions and its pad charge sound: this build's flat cues load them by
+        // name.
+        for cue in oag_gameplay::cue::Cue::DETONATOR {
+            assert!(
+                loaded.view.sounds.pick_at(cue, 0).is_some(),
+                "{image}: {cue:?} is loaded"
+            );
+        }
         let layout = loaded.hud.layout.as_ref().expect("a HUD layout");
         for gone in ["SpeedBarBg", "SpeedBar", "TimeIcon"] {
             assert!(layout.sprite(gone).is_none(), "{image}: {gone}");
@@ -1277,7 +1300,7 @@ fn a_pulse_detonator_hud_shows_the_emp_gauge_and_the_clip() {
             );
             sprite.rect
         };
-        for index in 0..6 {
+        for index in 0..8 {
             assert!(
                 rect(&format!("Emp_{index}"))[0] < size.0 / 2.0,
                 "{image}: left"
@@ -1316,11 +1339,11 @@ fn a_pulse_detonator_hud_shows_the_emp_gauge_and_the_clip() {
             oag_hud::draw_list(&context, &readout).sprites.len()
         };
         assert_eq!(
-            drawn(3, true),
-            drawn(0, false) + 4,
-            "{image}: 3 pips and the mark"
+            drawn(4, true),
+            drawn(0, false) + 5,
+            "{image}: 4 pips and the mark"
         );
-        assert_eq!(drawn(6, true), drawn(0, false) + 7, "{image}: full");
+        assert_eq!(drawn(8, true), drawn(0, false) + 9, "{image}: full");
         let clip = |clip: u8| {
             let readout = oag_hud::Readout {
                 detonator: Some(oag_hud::Detonator {

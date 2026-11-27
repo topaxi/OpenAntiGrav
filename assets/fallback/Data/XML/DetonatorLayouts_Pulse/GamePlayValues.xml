@@ -1,8 +1,7 @@
 <?xml version="1.0"?>
-<!-- Detonator on Wipeout Pulse: this project's own values, chosen, not measured
-     (docs/gameplay/detonator-pulse.md). What it omits keeps the static block
-     (oag_tables::detonator_layout::GamePlayValues::default). Fewer mines per stage than the
-     static block: Pulse's craft and circuits are the handheld's. MinesScaleToMusic="0"
+<!-- Detonator on Wipeout Pulse: this project's own values, chosen after Fury's
+     (docs/gameplay/detonator-pulse.md, "The numbers"). What it omits keeps the static block
+     (oag_tables::detonator_layout::GamePlayValues::default). MinesScaleToMusic="0"
      holds each mine still, sized to its trigger sphere; an override that is a copy of this
      whole file with the attribute set to "1" brings the music's scaling back. -->
-<GamePlayValues RemoveMinesEachStage="0" DistanceOffsetBetweenMines="3.5" NumStepsToIgnoreAfterJump="20" MineCountsRepresentMaxTotalToAppear="1" EnergyRechargePerStage="5" PointsForChainReactionMines="50" CannonLockoutTimeFromManualReload="1" CannonLockoutTimeRunOutBullets="2" MineCountStage1="30" MineCountStage2="36" MineCountStage3="42" MineCountStage4="48" MineCountStage5="54" MineCountStage6="60" MineCountStage7="66" MineCountStage8="72" MineCountStage9="78" MineCountStage10="84" MineCountStage11="90" MineCountStage12="96" MineCountStage13="102" MineCountStage14="108" MinesScaleToMusic="0"></GamePlayValues>
+<GamePlayValues RemoveMinesEachStage="0" DistanceOffsetBetweenMines="3.5" NumStepsToIgnoreAfterJump="20" MineCountsRepresentMaxTotalToAppear="1" EnergyRechargePerStage="10" PointsForChainReactionMines="100" CannonLockoutTimeFromManualReload="0.75" CannonLockoutTimeRunOutBullets="0.75" MineCountStage1="80" MineCountStage2="90" MineCountStage3="95" MineCountStage4="100" MineCountStage5="105" MineCountStage6="110" MineCountStage7="120" MineCountStage8="130" MineCountStage9="140" MineCountStage10="150" MineCountStage11="170" MineCountStage12="180" MineCountStage13="190" MineCountStage14="200" MinesScaleToMusic="0"></GamePlayValues>

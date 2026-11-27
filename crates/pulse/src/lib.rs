@@ -138,7 +138,8 @@ pub const TITLE: &Title = &Title {
     weapons: &oag_title::weapons::Weapons {
         race: r"Data\XML\WeaponStats_Race.xml",
         elimination: Some(r"Data\XML\WeaponStats_Elimination.xml"),
-        detonator: None,
+        // Ours, in the fallback layer: Pulse ships no Detonator.
+        detonator: Some(r"Data\XML\DetonatorLayouts_Pulse\WeaponStats_Detonator.xml"),
         ai: Some(r"Data\XML\WeaponAIstats.xml"),
         leach_drain: oag_title::weapons::LeachDrain::PerTick,
         blast_push: oag_title::pre_race::Sourced::measured(oag_title::weapons::BlastPush::Posted),

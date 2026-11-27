@@ -7,6 +7,8 @@
 //! `docs/ghidra/functions/ps3-hdfury-eu/ship-destroy.md`. 2048 and Omega run
 //! HD's `Ship_SetState` with the same cases and timers.
 
+use crate::pre_race::Sourced;
+
 /// Which state edge puts `shipwreck.vex` on the craft in place of its hull.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WreckFrom {
@@ -259,13 +261,22 @@ pub struct DetonatorEnd {
     pub orbit_camera: bool,
 }
 
+impl DetonatorEnd {
+    /// HD's: the finish handler's `1.0` s then `4.5` s, under the close orbit.
+    pub const HD: Self = Self {
+        results_secs: 5.5,
+        orbit_camera: true,
+    };
+}
+
 /// One title's destroyed-craft sequence.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct DestroyedCraft {
     /// A Zone race's own end, `None` where the Zone craft becomes a wreck (Pulse, Pure).
     pub zone_end: Option<ZoneEnd>,
-    /// A Detonator race's own end, `None` where the race is over when the explosion is.
-    pub detonator_end: Option<DetonatorEnd>,
+    /// A Detonator race's own end, `None` where the race is over when the explosion is. It carries
+    /// its own provenance: Pulse's sequence is measured, the end its Detonator takes is HD's.
+    pub detonator_end: Option<Sourced<DetonatorEnd>>,
     /// State 4's length: the explosion, before the craft is out of the race.
     pub explosion_secs: f32,
     /// State 5's length: the wreck is solid to other craft for this long, or until it
@@ -302,7 +313,7 @@ impl DestroyedCraft {
     /// solid for `1.5` s, the blast `1.5` s on, the wreck still integrated.
     pub const PULSE: Self = Self {
         zone_end: None,
-        detonator_end: None,
+        detonator_end: Some(Sourced::inherited(DetonatorEnd::HD, "Wipeout HD")),
         explosion_secs: 0.5,
         dwell_secs: 1.5,
         settle: None,
@@ -322,6 +333,8 @@ impl DestroyedCraft {
     pub const PURE: Self = Self {
         sound: DestroyedSound::BlowupAndBlasts,
         gaseous_flash: Some(r"Data\Weapons\explosion_gaseous.vex"),
+        // Pure races no Detonator.
+        detonator_end: None,
         ..Self::PULSE
     };
 
@@ -331,10 +344,7 @@ impl DestroyedCraft {
     /// `0.5`) or after `20.0` s, then out of the physics world.
     pub const HD: Self = Self {
         zone_end: Some(ZoneEnd::HD),
-        detonator_end: Some(DetonatorEnd {
-            results_secs: 5.5,
-            orbit_camera: true,
-        }),
+        detonator_end: Some(Sourced::measured(DetonatorEnd::HD)),
         explosion_secs: 0.3,
         dwell_secs: 20.0,
         settle: Some(Settle {
@@ -371,6 +381,7 @@ impl DestroyedCraft {
 #[cfg(test)]
 mod tests {
     use super::{DestroyedCraft, DetonatorEnd};
+    use crate::pre_race::Sourced;
 
     /// The Detonator finish handler's two waits and its orbit are the same on HD, 2048 and Omega
     /// (`docs/ghidra/functions/ps3-hdfury-eu/detonator-endrace.md`, "The wait before the results").
@@ -385,9 +396,13 @@ mod tests {
             DestroyedCraft::HD_BLOWUP,
             DestroyedCraft::HD_VITA,
         ] {
-            assert_eq!(destroyed.detonator_end, Some(end));
+            assert_eq!(destroyed.detonator_end, Some(Sourced::measured(end)));
         }
-        assert_eq!(DestroyedCraft::PULSE.detonator_end, None);
+        // Pulse's Detonator takes HD's wait, labelled as inherited.
+        assert_eq!(
+            DestroyedCraft::PULSE.detonator_end,
+            Some(Sourced::inherited(end, "Wipeout HD"))
+        );
         assert_eq!(DestroyedCraft::PURE.detonator_end, None);
     }
 }

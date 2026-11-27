@@ -641,12 +641,6 @@ pub struct Detonator {
     /// Whether a Detonator race flies the Zone variant of the picked circuit
     /// ([`RaceDefaults::zone`]) rather than the race circuit itself.
     pub races_zone_circuit: bool,
-    /// A table read beside the race's own weapon table that authors only Detonator's blocks
-    /// (`Global`, `EMP`, and the Cannon's and Bomb's Detonator attributes), for a title that
-    /// ships no Detonator weapon table: the race table's Mine, Bomb and Cannon stand, and this
-    /// adds what the mode reads beyond them. `None` where the title's own Detonator table
-    /// carries them.
-    pub weapons_supplement: Option<&'static str>,
     /// The EMP's two announcer lines and the bank that holds them, or `None` where a title's
     /// are not located.
     pub voices: Option<DetonatorVoices>,

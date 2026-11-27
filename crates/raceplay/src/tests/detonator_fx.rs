@@ -932,3 +932,27 @@ fn a_pulse_detonator_mine_scales_to_the_music_only_if_its_layout_says_so() {
     race.record_mine_poses(&laid, &loud, &ages);
     assert!(size(&race) > 2.0, "scaled: {}", size(&race));
 }
+
+/// **A destroyed craft's run ends as Fury's does**: the blast and the wreck play, and the race is
+/// out 5.5 s after the craft goes, though Pulse's own wreck is solid for 1.5 s alone.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn a_pulse_detonator_end_waits_for_furys_five_and_a_half_seconds() {
+    let Some(mut race) = pulse_race() else {
+        return;
+    };
+    race.tick(&oag_gameplay::PlayerInputs::none());
+    let ship = &mut race.core.sim.world.ships[0].physics;
+    ship.craft_state = oag_physics::CraftState::Destroyed;
+    ship.state_timer = oag_physics::damage::DESTROYED_DURATION;
+    let mut ticks = 0;
+    while !race.core.sim.world.race[0].finished && ticks < 1200 {
+        race.tick(&oag_gameplay::PlayerInputs::none());
+        ticks += 1;
+    }
+    let seconds = ticks as f32 * race.core.sim.dt;
+    assert!(
+        (5.4..5.7).contains(&seconds),
+        "the run ends after {seconds} s"
+    );
+}

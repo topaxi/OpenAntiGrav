@@ -112,10 +112,10 @@ const ZONE_CRAFT: oag_title::ZoneCraft = oag_title::ZoneCraft::ModelsInTeam {
     boost: ships::ZONE_BOOST,
 };
 
-/// Detonator on Pulse, which ships no such mode: HD's law on Pulse's own Zone circuits, Mine,
-/// Bomb and Cannon (`docs/gameplay/detonator-pulse.md`). What Pulse has no data for (the layout,
-/// the EMP, the cannon's Detonator attributes) is this project's own file in the fallback
-/// layer; the pad look is the circuit's own weapon pad, held at its cycle's red key.
+/// Detonator on Pulse, which ships no such mode: HD's law on Pulse's own Zone circuits, Mine
+/// and Bomb models (`docs/gameplay/detonator-pulse.md`). What Pulse has no data for (the layout,
+/// the weapon table, the scoring) is this project's own file in the fallback layer, its figures
+/// chosen after HD's; the pad look is the circuit's own weapon pad, held at its cycle's red key.
 pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
     palette: None,
     fallback_palette: None,
@@ -150,7 +150,6 @@ pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
         circuit_weapon_pad_key: Some(0),
     },
     races_zone_circuit: true,
-    weapons_supplement: Some(r"Data\XML\DetonatorLayouts_Pulse\WeaponStats_Detonator.xml"),
     voices: None,
     binds_emp_ready: oag_title::pre_race::Sourced::chosen(true),
     shows_medals: oag_title::pre_race::Sourced::chosen(false),

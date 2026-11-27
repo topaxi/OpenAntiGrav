@@ -422,14 +422,6 @@ impl WeaponStats {
         self.detonator
     }
 
-    /// This table with `detonator` as its Detonator-only attributes, for a race table read
-    /// beside a [`detonator_supplement`].
-    #[must_use]
-    pub fn with_detonator(mut self, detonator: DetonatorStats) -> Self {
-        self.detonator = Some(detonator);
-        self
-    }
-
     /// The Quake's `<Stats>`, or `None` when the file authors no Quake.
     #[must_use]
     pub fn quake(&self) -> Option<QuakeStats> {
@@ -506,26 +498,6 @@ pub fn from_blob(data: &[u8]) -> Result<WeaponStats> {
     } else {
         parse(std::str::from_utf8(data).map_err(|_| fexml::Error::NotText)?)
     }
-}
-
-/// Reads only the Detonator-only attributes of a table that authors nothing else
-/// (`oag_title::Detonator::weapons_supplement`): `None` when it authors none of them.
-///
-/// # Errors
-///
-/// [`Error`] for a blob that is not a `<WeaponStats>` document, or an attribute that is not a
-/// number.
-pub fn detonator_supplement(data: &[u8]) -> Result<Option<DetonatorStats>> {
-    let xml = if fexml::is_fexml(data) {
-        fexml::expand(data)?
-    } else {
-        std::str::from_utf8(data)
-            .map_err(|_| fexml::Error::NotText)?
-            .to_string()
-    };
-    let root = fexml::parse(&xml);
-    let stats = find(&root, "WeaponStats").ok_or(Error::MissingRoot)?;
-    detonator::parse(stats)
 }
 
 /// Reads a weapon table out of expanded XML.
