@@ -577,6 +577,7 @@ pub fn run(
                 pose_intensity: None,
                 pose_speed: None,
                 pose_hold: crate::race_capture::pose_hold::Hold::Off,
+                pose_launch: None,
                 pose_lean: None,
                 pose_flaps: None,
                 stow_grid_flaps: false,

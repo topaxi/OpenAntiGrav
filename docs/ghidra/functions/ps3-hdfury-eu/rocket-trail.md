@@ -277,6 +277,16 @@ Confidence 80 (the slot table is
 constructors, reads the ribbon pointer at `rocket + 0x124`, and also calls the
 point light `0x006778c8` (at `0x001246cc`) - the launch light, unread here.
 
+## Drawn before the particles
+
+Read 2026-11-27 off two frames of the far Rocket film `far3` (`scripts/rsx-draw-list.py`, frames
+`a0100` and `a0233`): the `RibbonEffects` strips are one run of 36 `TRIANGLE_STRIP` draws (pool 3's
+18 contrails, pool 4's 9 ribbons and 9 shadows), blend `SRC_ALPHA, ONE_MINUS_SRC_ALPHA` with alpha
+`ZERO`, cull off, depth mask off, and every particle `QUADS` draw of the frame follows them, the
+Rocket blast and its screen wash included. Confidence 85. Ours draws the four `RibbonEffects`
+strips before its particles since then; the evidence and the pairs are in
+[particle-fill.md](../../../rendering/particle-fill.md#the-far-blasts-grey-streams-are-the-rockets-own-ribbons).
+
 ## Open
 
 - The lighting volume behind `RibbonEffects_SampleLighting`: what file fills

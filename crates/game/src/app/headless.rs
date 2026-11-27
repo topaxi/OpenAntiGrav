@@ -941,6 +941,7 @@ pub(crate) fn race_launch(
                     cli.pose_draw.pose_hold,
                     cli.pose_draw.pose_hold_ticks,
                 ),
+                pose_launch: crate::app::args::pose_launch(cli.pose_hold_launch())?,
                 pose_lean: pose_lean(cli)?,
                 pose_flaps: pose_flaps(cli)?,
                 stow_grid_flaps: cli.pose_draw.no_grid_flaps

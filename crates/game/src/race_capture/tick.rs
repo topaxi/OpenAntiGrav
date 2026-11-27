@@ -60,8 +60,12 @@ pub(super) fn advance_one_tick(
             race.give_weapon(slot, weapon);
         }
     }
-    let held_pose =
-        (options.pose_hold == pose_hold::Hold::EveryTick).then(|| pose_hold::StartPose::of(race));
+    let held_pose = (options.pose_hold == pose_hold::Hold::EveryTick).then(|| {
+        options.pose_launch.as_ref().map_or_else(
+            || pose_hold::StartPose::of(race),
+            |launch| launch.held(race, tick),
+        )
+    });
     match (&options.net, &options.remote_correction) {
         (Some(net), _) => net.drive_to(race, u64::from(tick) + 1, snapshot),
         (None, Some(scene)) => scene.tick(race, &snapshot, tick),
