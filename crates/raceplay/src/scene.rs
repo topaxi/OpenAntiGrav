@@ -565,6 +565,8 @@ pub struct Scene {
     build_cache: BuildCacheCounts,
     /// `(distinct pipelines carrying the title's every-texture LOD bias, all distinct)`.
     lod_biased: (usize, usize),
+    /// The title's every-texture LOD bias, for the pipelines built after [`Self::new`].
+    disc_lod_bias: f32,
 }
 
 /// One scene build's pipeline cache: `(asked for, reused, distinct built)`.
@@ -1244,6 +1246,7 @@ impl Scene {
             upload_staging: std::cell::RefCell::default(),
             build_cache,
             lod_biased,
+            disc_lod_bias,
             bloom,
             ps2_bloom,
             bloom_pending: std::cell::Cell::new(false),

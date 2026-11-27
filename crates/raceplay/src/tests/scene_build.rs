@@ -339,6 +339,8 @@ struct BuiltRace {
     /// lines for a sprite the sheet had no room for.
     sheet_chained: bool,
     sheet_misses: Vec<String>,
+    /// The bias the time-trial ghost's pipeline was built with.
+    ghost_bias: Option<f32>,
 }
 
 fn built_race_scene(image: &std::path::Path) -> Option<BuiltRace> {
@@ -386,7 +388,7 @@ fn built_race_scene(image: &std::path::Path) -> Option<BuiltRace> {
         .iter()
         .filter(|(_, number)| served.contains(number))
         .count();
-    let scene = Scene::new(
+    let mut scene = Scene::new(
         &device,
         &queue,
         loaded.track_model,
@@ -432,7 +434,16 @@ fn built_race_scene(image: &std::path::Path) -> Option<BuiltRace> {
         disc_lod_bias,
     )
     .expect("the scene builds");
+    scene.prepare_ghost(
+        &device,
+        &queue,
+        wgpu::TextureFormat::Rgba8Unorm,
+        oag_race::Mode::TimeTrial,
+        &[livery()],
+        None,
+    );
     Some(BuiltRace {
+        ghost_bias: scene.ghost_lod_bias(),
         wanted,
         rebound: scene.adverts_rebound(),
         wrapped: scene.adverts_wrapped(),
@@ -480,6 +491,8 @@ fn v2048_biases_every_race_pipeline_and_its_circuit() {
         "the particle sheet holds no lower level"
     );
     assert!(built.sheet_misses.is_empty(), "{:?}", built.sheet_misses);
+    // A ghost draws the hull's own textures through a pipeline of its own.
+    assert_eq!(built.ghost_bias, Some(-1.5), "the ghost's hull pass");
 }
 
 #[test]
