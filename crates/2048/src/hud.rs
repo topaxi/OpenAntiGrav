@@ -199,6 +199,8 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     bar_models: None,
     time_ladder_captions: None,
     pickup_icon_uv: Some(PICKUP_ICON_UV),
+    // See `oag_title::HudArt::shield_drain_widget`.
+    shield_drain_widget: Some("ManualShield"),
     // The class name above `ZONE`, off the zone: see [`ZONE_SPEED_CLASSES`].
     zone_speed_classes: Some(ZONE_SPEED_CLASSES),
     zone_score: oag_title::ZoneScore::CentredOnValue,
@@ -392,7 +394,8 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
 ///   class was drawn as text, `VENOM`/`FLASH`, not as the badge).
 /// - `RadarDot0`-`7`: the opponents behind the craft on the radar, placed and faded per tick by
 ///   `oag_hud::radar` (`docs/ghidra/functions/ps4-omega-eu/hud-radar.md`).
-/// - `ManualShield`, `GiftCannon*`, `TargetShip*`, `TargetReticule*`,
+/// - `ManualShield`: the running Shield's drain, off [`ART`]'s `shield_drain_widget`.
+/// - `GiftCannon*`, `TargetShip*`, `TargetReticule*`,
 ///   `ReverseShipPos*`, `VoiceCom*`, `ObjectivePoint*`, `GloryMoment*`,
 ///   `ProtoTypeShipLogo`, `SpeedPad*`, `RaceMedal`, `MissileSight*`,
 ///   `LeachBeamSight*`: never seen in any state reached.

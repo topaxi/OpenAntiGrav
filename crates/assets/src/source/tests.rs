@@ -246,6 +246,7 @@ const TITLE: &Title = &Title {
         bar_models: None,
         time_ladder_captions: None,
         pickup_icon_uv: None,
+        shield_drain_widget: None,
         zone_speed_classes: None,
         zone_score: oag_title::ZoneScore::Authored,
         shield_percent: true,

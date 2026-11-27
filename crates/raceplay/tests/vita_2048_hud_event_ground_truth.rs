@@ -279,6 +279,56 @@ fn pilot_assist_draws_its_icon_whole_and_the_total_reads_hundredths() {
     assert!(text.contains(&"0.00.0"), "CURRENT in tenths: {text:?}");
 
     a_grant_flies_the_missile_icon_to_the_slot_and_widens_the_frame(&context, &mut race);
+    a_running_shield_drains_manual_shield(&context, &mut race);
+}
+
+/// The disc's own `ManualShield` (72x134, the one sprite that wide) over the energy bar: absent
+/// with no Shield, its whole box as one starts, and its bottom half half way through with the
+/// bottom edge where it was. The played layout authors no `DamageBarShieldBg`, so HD's countdown
+/// the executable also carries has nothing to draw on
+/// (`docs/ghidra/functions/vita-2048-eu-v104/shield.md`, "The HUD"). Runs on the race
+/// [`pilot_assist_draws_its_icon_whole_and_the_total_reads_hundredths`] already loaded.
+///
+/// Fails if `HudArt::shield_drain_widget` is dropped from 2048, if the draw list loses the drain,
+/// or if the race stops filling `Readout::shield_drain_fraction`.
+fn a_running_shield_drains_manual_shield(
+    context: &oag_hud::Context<'_>,
+    race: &mut oag_raceplay::Race,
+) {
+    assert!(context.layout.sprite("ManualShield").is_some());
+    assert!(context.layout.sprite("DamageBarShieldBg").is_none());
+    assert!(context.layout.label("ShieldBarText").is_none());
+    let drain = |race: &oag_raceplay::Race| {
+        oag_hud::draw_list(context, &race.readout())
+            .sprites
+            .iter()
+            .find_map(|draw| match draw {
+                Draw::Sprite { rect, .. } if rect[2] == 72.0 => Some(*rect),
+                _ => None,
+            })
+    };
+    let slot = race.core.player_slot();
+    assert_eq!(drain(race), None, "no drain with no Shield up");
+
+    race.core.sim.world.ships[slot].physics.shield_pickup_timer = 3.0;
+    race.tick(&oag_gameplay::PlayerInputs::none());
+    let full = drain(race).expect("up as the Shield starts");
+    assert_eq!(full[3], 134.0, "{full:?}");
+
+    for _ in 0..90 {
+        race.tick(&oag_gameplay::PlayerInputs::none());
+    }
+    let half = drain(race).expect("still up half way");
+    assert!((half[3] - 134.0 * 0.5).abs() < 2.0, "{half:?}");
+    assert!(
+        ((half[1] + half[3]) - (full[1] + full[3])).abs() < 0.01,
+        "the bottom edge holds: {full:?} {half:?}"
+    );
+
+    for _ in 0..100 {
+        race.tick(&oag_gameplay::PlayerInputs::none());
+    }
+    assert_eq!(drain(race), None, "gone once the Shield expires");
 }
 
 /// 2048's pickup grant on the disc's own layout and Missile icon: the icon sits at the authored
