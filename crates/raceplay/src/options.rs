@@ -804,10 +804,11 @@ pub struct SimSetup {
     /// A title with no roster, outside such an event, restricts nothing - see
     /// [`oag_weapons::pickup::draw`]'s own `allowed` parameter.
     pub allowed_weapons: Vec<oag_tables::weapons::Weapon>,
-    /// The order a person's roll passes a disallowed weapon's weight along
-    /// ([`oag_title::pickup_roster::PickupRoster::player_order`]), or `None`
-    /// where the title has no roster.
-    pub pickup_order: Option<&'static [oag_tables::weapons::Weapon]>,
+    /// The title's pickup roster ([`oag_title::Title::pickup_roster`]), for what it says beyond
+    /// [`Self::allowed_weapons`]: the order a person's roll passes a disallowed weapon's weight
+    /// along, whether the AI's draw refuses a repeat, and the one-live exclusions. `None` where
+    /// the title has none: every draw refuses a repeat and nothing is left out.
+    pub pickup_roster: Option<oag_title::pickup_roster::PickupRoster>,
     /// Seconds a weapon pad is inert for after it is crossed, for this race's
     /// speed class.
     ///

@@ -426,6 +426,13 @@ impl Held {
 /// (`docs/ghidra/functions/ps3-hdfury-eu/pickup-draw.md`). An AI driver ignores
 /// `pass_on`, and so does a table that weighs no disallowed weapon, where both
 /// readings give the same distribution.
+///
+/// # What an excluded weapon's weight does
+///
+/// `excluded` leaves a weapon out of the total **and** out of a person's walk, so a roll is
+/// never passed on to it: HD's one-live exclusions, which take the LeachBeam, the Quake and
+/// the Cannon out of both draws while the field holds or runs enough of them
+/// (`docs/ghidra/functions/ps3-hdfury-eu/pickup-draw.md`, "One-live exclusions").
 #[must_use]
 pub fn draw(
     rng: &mut Rng,
@@ -434,21 +441,39 @@ pub fn draw(
     last: Option<Weapon>,
     allowed: Option<&[Weapon]>,
     pass_on: Option<&[Weapon]>,
+    excluded: &[Weapon],
 ) -> Option<Weapon> {
+    let gate = Gate { allowed, excluded };
     let pass_on = pass_on.filter(|order| {
         driver != Driver::Ai
-            && order
-                .iter()
-                .any(|&weapon| !permitted(weapon, allowed) && driver.weight(table, weapon) > 0.0)
+            && order.iter().any(|&weapon| {
+                !permitted(weapon, allowed)
+                    && !excluded.contains(&weapon)
+                    && driver.weight(table, weapon) > 0.0
+            })
     });
     for _ in 0..REDRAW_ATTEMPTS {
-        let drawn = draw_once(rng, table, driver, allowed, pass_on);
+        let drawn = draw_once(rng, table, driver, gate, pass_on);
         if drawn.is_some() && drawn != last {
             return drawn;
         }
     }
     // Hand over the repeat rather than nothing: a silent pad reads as broken.
-    draw_once(rng, table, driver, allowed, pass_on)
+    draw_once(rng, table, driver, gate, pass_on)
+}
+
+/// What a draw may hand out: the mode's `allowed` list less what the field leaves `excluded`.
+#[derive(Clone, Copy)]
+struct Gate<'a> {
+    allowed: Option<&'a [Weapon]>,
+    excluded: &'a [Weapon],
+}
+
+impl Gate<'_> {
+    /// Whether the draw may take `weapon`.
+    fn takes(self, weapon: Weapon) -> bool {
+        permitted(weapon, self.allowed) && !self.excluded.contains(&weapon)
+    }
 }
 
 /// How many times [`draw`] re-rolls to avoid repeating the last pickup.
@@ -489,7 +514,7 @@ fn draw_once(
     rng: &mut Rng,
     table: &PickupTable,
     driver: Driver,
-    allowed: Option<&[Weapon]>,
+    gate: Gate<'_>,
     pass_on: Option<&[Weapon]>,
 ) -> Option<Weapon> {
     // The title's weapons, then each mod's own pickup the table carries a row for
@@ -504,12 +529,14 @@ fn draw_once(
                 .filter(|weapon| matches!(weapon, Weapon::Extension(_))),
         )
     };
-    // Passing on keeps a disallowed weapon's weight in the roll.
+    // Passing on keeps a disallowed weapon's weight in the roll; an excluded one leaves it.
     let weigh = |weapon| {
-        if pass_on.is_some() {
+        if gate.excluded.contains(&weapon) {
+            0.0
+        } else if pass_on.is_some() {
             driver.weight(table, weapon).max(0.0)
         } else {
-            gated_weight(driver, table, weapon, allowed)
+            gated_weight(driver, table, weapon, gate.allowed)
         }
     };
     let total: f32 = walk().map(weigh).sum();
@@ -522,7 +549,7 @@ fn draw_once(
         roll -= weigh(weapon);
         // A weightless entry cannot take the roll below zero by itself; one met after the
         // roll has landed on a disallowed weapon takes it.
-        if roll < 0.0 && permitted(weapon, allowed) {
+        if roll < 0.0 && gate.takes(weapon) {
             return Some(weapon);
         }
     }

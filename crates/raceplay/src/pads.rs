@@ -392,7 +392,23 @@ impl SimRace {
         } else {
             oag_weapons::pickup::Driver::Ai
         };
-        let last = self.sim.world.ships[slot].pickup.last;
+        // HD's AI draw writes the slot without comparing the previous grant.
+        let roster = self.sim.pickup_roster;
+        let last = match roster {
+            Some(roster) if who == oag_weapons::pickup::Driver::Ai && !roster.ai_refuses_repeat => {
+                None
+            }
+            _ => self.sim.world.ships[slot].pickup.last,
+        };
+        // HD's one-live exclusions (`docs/ghidra/functions/ps3-hdfury-eu/pickup-draw.md`).
+        let excluded: Vec<oag_tables::weapons::Weapon> = roster
+            .map_or(&[][..], |roster| roster.exclusions)
+            .iter()
+            .filter(|exclusion| {
+                held_or_running(&self.sim.world, exclusion.weapon) >= exclusion.limit
+            })
+            .map(|exclusion| exclusion.weapon)
+            .collect();
         // The title's pickup roster for this mode, or a 2048 event's weapon set; `None`
         // with neither - the same "empty is no restriction" reading
         // `SimSetup::allowed_weapons`'s own doc comment gives. AI slots are gated
@@ -406,7 +422,8 @@ impl SimRace {
             who,
             last,
             allowed,
-            self.sim.pickup_order,
+            roster.map(|roster| roster.player_order),
+            &excluded,
         );
         if let Some(weapon) = drawn {
             let pickup = &mut self.sim.world.ships[slot].pickup;
@@ -420,4 +437,21 @@ impl SimRace {
             }
         }
     }
+}
+
+/// How many of `weapon` the field holds or runs: every craft holding one, plus a LeachBeam's live
+/// beams or a Quake's wave in flight. Counted from the grant, as the original's words are; a
+/// Cannon firing its clip is still held.
+fn held_or_running(world: &oag_gameplay::World, weapon: oag_tables::weapons::Weapon) -> u8 {
+    use oag_tables::weapons::Weapon;
+    let held = world.ships[..world.ship_count as usize]
+        .iter()
+        .filter(|ship| ship.pickup.weapon == Some(weapon))
+        .count();
+    let running = match weapon {
+        Weapon::LeachBeam => world.leach_beams_live(),
+        Weapon::Quake => usize::from(world.quake.is_some()),
+        _ => 0,
+    };
+    u8::try_from(held + running).unwrap_or(u8::MAX)
 }

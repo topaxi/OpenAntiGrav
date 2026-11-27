@@ -118,7 +118,7 @@ of it. Confidence **85** for the three rules, each writer read at instruction le
 | Quake | the word at `0x009943a4` (`*(TOC-0x30dc)`) is non-zero, the same | `1` by the arm call (`0x00147ce0`), `2` by `QuakeManager_Fire`, through `0x0012d8c8` | `0` through the same setter, and at `0x000e9b8c` |
 | Cannon | the count at `0x00993d80` (`*(TOC-0x30d8)`) is 2 or more | `+1` by the arm call (`0x0010f2e8`) | `-1` when the clip empties (`0x000e9cd0`) and when the held one is given up (`0x000e95f8`) |
 
-All three count from the grant, not from the shot. This project applies none of them.
+All three count from the grant, not from the shot.
 
 ## Names
 
@@ -142,10 +142,17 @@ All three count from the grant, not from the shot. This project applies none of 
   person's order into `SimSetup::pickup_order`.
 - `oag_weapons::pickup::draw` leaves a disallowed weight out for the AI and passes it on for a
   person, as above.
-- **Not applied:** the AI's missing repeat refusal (ours refuses repeats for both), the three
-  one-live exclusions, the weapons screen's toggles, and the demo's open gate.
-- Disc-backed: `hd_pickup_roster_ground_truth` (raceplay) holds both rosters and the two Rocket
-  shares through a loaded race.
+- **The AI draw's missing repeat refusal** is `PickupRoster::ai_refuses_repeat` (`false` on HD):
+  the weapon pad hands an AI slot's draw no previous grant. A person's still re-rolls.
+- **The one-live exclusions** are `PickupRoster::exclusions`: LeachBeam and Quake at one, Cannon at
+  two. The weapon pad counts them at the grant from the race's own state (every craft holding one,
+  plus live LeachBeam beams and a Quake wave in flight), so no counter is stored; `draw` takes the
+  excluded list and leaves each out of the total and the walk. A Cannon emptying its clip or a
+  pickup given up releases it, as the original's decrements do.
+- **Not applied:** the weapons screen's toggles, and the demo's open gate.
+- Disc-backed: `hd_pickup_roster_ground_truth` (raceplay) holds both rosters, the two Rocket shares,
+  the loaded race's AI repeat and exclusion rules, and that HD's odds still grant with all three
+  out. Fixture tests: `crates/raceplay/src/tests/pickup_roster.rs`.
 
 ## Cross-title
 
@@ -156,4 +163,7 @@ All three count from the grant, not from the shot. This project applies none of 
 - **Omega: checked, applies, not wired.** The 1.07 executable carries the same eleven rows, and its
   HD-named Eliminator table's first four classes equal `DATA00`'s
   ([weapon-stats.md](../../../formats/weapon-stats.md)). Its draw and mask are not read.
+- **The AI repeat and the one-live exclusions on 2048 and Omega: not checkable until their draw is
+  read.** Neither draw has been located, so whether either keeps HD's `WeaponManager_RollPickupAi`
+  and the three exclusion words is open; ours gives both titles Pulse's draw (no roster).
 - **Pulse and Pure: not examined.** Their draw is untouched.

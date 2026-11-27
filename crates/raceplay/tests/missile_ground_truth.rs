@@ -388,6 +388,7 @@ fn a_pad_can_hand_out_a_missile_and_firing_one_spends_it() {
             None,
             None,
             None,
+            &[],
         ) == Some(Weapon::Missile)
     });
     assert!(

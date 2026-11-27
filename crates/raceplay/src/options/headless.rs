@@ -120,7 +120,7 @@ impl SimSetup {
             detonator: None,
             detonator_pads: None,
             allowed_weapons: Vec::new(),
-            pickup_order: None,
+            pickup_roster: None,
             weapon_pad_refresh: 0.0,
             pose_override: None,
             field_poses: Vec::new(),

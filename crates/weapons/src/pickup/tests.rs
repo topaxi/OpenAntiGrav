@@ -53,7 +53,8 @@ fn a_class_that_weights_nothing_implemented_hands_out_nothing() {
             Driver::HUMAN_UNPLACED,
             None,
             Some(&allowed),
-            None
+            None,
+            &[]
         ),
         None
     );
@@ -71,7 +72,8 @@ fn a_zero_weight_is_never_drawn() {
                 Driver::HUMAN_UNPLACED,
                 None,
                 None,
-                None
+                None,
+                &[]
             ),
             None
         );
@@ -85,11 +87,19 @@ fn the_two_drivers_read_their_own_columns() {
     let ai_only = table(&[(Weapon::Turbo, 0.0, 1.0)]);
     let mut rng = Rng::new(7);
     assert_eq!(
-        draw(&mut rng, &ai_only, Driver::Ai, None, None, None),
+        draw(&mut rng, &ai_only, Driver::Ai, None, None, None, &[]),
         Some(Weapon::Turbo)
     );
     assert_eq!(
-        draw(&mut rng, &ai_only, Driver::HUMAN_UNPLACED, None, None, None),
+        draw(
+            &mut rng,
+            &ai_only,
+            Driver::HUMAN_UNPLACED,
+            None,
+            None,
+            None,
+            &[]
+        ),
         None
     );
 }
@@ -118,6 +128,7 @@ fn the_walk_visits_a_weight_in_proportion_to_it() {
             None,
             Some(&allowed),
             None,
+            &[],
         ) {
             Some(Weapon::Turbo) => turbos += 1,
             Some(Weapon::Shield) => shields += 1,
@@ -152,6 +163,7 @@ fn allowed_restricts_the_draw_without_changing_the_ratio_of_what_stays_in() {
             None,
             Some(&[Weapon::Turbo, Weapon::Shield]),
             None,
+            &[],
         );
         assert!(
             matches!(drawn, Some(Weapon::Turbo) | Some(Weapon::Shield)),
@@ -168,7 +180,8 @@ fn allowed_restricts_the_draw_without_changing_the_ratio_of_what_stays_in() {
             Driver::HUMAN_UNPLACED,
             None,
             Some(&[]),
-            None
+            None,
+            &[]
         ),
         None
     );
@@ -190,6 +203,7 @@ fn the_same_seed_draws_the_same_sequence() {
                     None,
                     None,
                     None,
+                    &[],
                 )
             })
             .collect::<Vec<_>>()
@@ -232,7 +246,9 @@ fn the_players_odds_bend_with_their_place() {
     let count = |driver| {
         let mut rng = Rng::new(11);
         (0..2_000)
-            .filter(|_| draw(&mut rng, &odds, driver, None, None, None) == Some(Weapon::Shield))
+            .filter(|_| {
+                draw(&mut rng, &odds, driver, None, None, None, &[]) == Some(Weapon::Shield)
+            })
             .count()
     };
 
@@ -260,10 +276,10 @@ fn an_opponents_odds_do_not_bend() {
     let mut first = Rng::new(11);
     let mut second = Rng::new(11);
     let front: Vec<_> = (0..200)
-        .map(|_| draw(&mut first, &odds, Driver::Ai, None, None, None))
+        .map(|_| draw(&mut first, &odds, Driver::Ai, None, None, None, &[]))
         .collect();
     let back: Vec<_> = (0..200)
-        .map(|_| draw(&mut second, &odds, Driver::Ai, None, None, None))
+        .map(|_| draw(&mut second, &odds, Driver::Ai, None, None, None, &[]))
         .collect();
     assert_eq!(front, back, "the AI column is not a function of place");
 }
@@ -305,7 +321,15 @@ fn a_pad_does_not_hand_out_the_same_weapon_twice_running() {
     let mut rng = Rng::new(3);
     let mut last = None;
     for _ in 0..500 {
-        let drawn = draw(&mut rng, &odds, Driver::HUMAN_UNPLACED, last, None, None);
+        let drawn = draw(
+            &mut rng,
+            &odds,
+            Driver::HUMAN_UNPLACED,
+            last,
+            None,
+            None,
+            &[],
+        );
         assert_ne!(drawn, last, "the same weapon came out twice running");
         last = drawn;
     }
@@ -326,7 +350,8 @@ fn an_overwhelming_weight_terminates_and_may_repeat() {
             Driver::HUMAN_UNPLACED,
             Some(Weapon::Turbo),
             None,
-            None
+            None,
+            &[]
         ),
         Some(Weapon::Turbo),
         "the only weighted weapon must still come out"
@@ -491,7 +516,7 @@ fn a_mod_pickup_row_is_drawn_at_its_weight_and_absent_changes_nothing() {
     let mut rng = Rng::new(9);
     let extensions = (0..4000)
         .filter(|_| {
-            draw(&mut rng, &modded, Driver::Ai, None, None, None)
+            draw(&mut rng, &modded, Driver::Ai, None, None, None, &[])
                 == Some(Weapon::Extension(ModKind::FIRST))
         })
         .count();
@@ -504,7 +529,8 @@ fn a_mod_pickup_row_is_drawn_at_its_weight_and_absent_changes_nothing() {
             Driver::Ai,
             Some(Weapon::Turbo),
             Some(&[]),
-            None
+            None,
+            &[]
         ),
         Some(Weapon::Extension(ModKind::FIRST)),
         "the event's weapon set does not reach the mod's pickup"
@@ -512,7 +538,7 @@ fn a_mod_pickup_row_is_drawn_at_its_weight_and_absent_changes_nothing() {
     let sequence = |table: &PickupTable| {
         let mut rng = Rng::new(5);
         (0..64)
-            .map(|_| draw(&mut rng, table, Driver::Ai, None, None, None))
+            .map(|_| draw(&mut rng, table, Driver::Ai, None, None, None, &[]))
             .collect::<Vec<_>>()
     };
     let mut zero = vanilla.clone();
@@ -542,7 +568,15 @@ fn a_person_passes_a_disallowed_roll_on_and_an_ai_leaves_it_out() {
         let mut rng = Rng::new(7);
         let rockets = (0..20_000)
             .filter(|_| {
-                let drawn = draw(&mut rng, &odds, driver, None, Some(&allowed), Some(&order));
+                let drawn = draw(
+                    &mut rng,
+                    &odds,
+                    driver,
+                    None,
+                    Some(&allowed),
+                    Some(&order),
+                    &[],
+                );
                 assert!(drawn == Some(Weapon::Rocket) || drawn == Some(Weapon::Mine));
                 drawn == Some(Weapon::Rocket)
             })
@@ -576,6 +610,7 @@ fn an_order_with_no_disallowed_weight_changes_nothing() {
                     None,
                     Some(&allowed),
                     pass_on,
+                    &[],
                 )
             })
             .collect::<Vec<_>>()
@@ -598,7 +633,8 @@ fn a_roll_off_the_end_of_the_order_is_rolled_again() {
                 Driver::HUMAN_UNPLACED,
                 None,
                 Some(&allowed),
-                Some(&order)
+                Some(&order),
+                &[]
             ),
             Some(Weapon::Rocket)
         );
