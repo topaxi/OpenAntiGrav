@@ -177,7 +177,71 @@ countdown frame").
 Wired: HD's Zone and Detonator mode boards take frame 0 180 ticks before the
 release (`oag_title::adverts::ModeGantry::assembly_ticks`, was 210).
 
-**2048 and Omega: checked, applies, not wired.** Both ship `321Go_Zone.vex`, and
+### The circuit's own board (2026-11-27, `hd-go-board`)
+
+**HD's `3 2 1 GO` board is zeroed on entering the countdown too, so its frame 0
+is tick 93**, 180 before the release. The single race and time trial updates
+reach the same phase-0 work `0x0005e2d8`: `0x00061560` (case 0 -> `0x00061748`,
+`bl` at `0x00061750`) and `0x00070770` (case 0 -> `0x000709ac`, `bl` at
+`0x000709b4`). They sit with `SPArcade_RaceManager.cpp` and
+`SPTimeTrial_RaceManager.cpp` by address next to their `__FILE__` functions in
+`ps3-toc.py map` (confidence 70 for the mode names; no live `GetMode`).
+
+**Every caller, from the ELF** (a scan of `EBOOT.elf` for `bl 0x0005e2d8`): 19
+sites, `0x00041184`, `0x000415c0`, `0x00060f74`, `0x00061750`, `0x00066c78`,
+`0x000683e4`, `0x0006951c`, `0x00069718`, `0x0006a92c`, `0x0006aca0`,
+`0x0006be68`, `0x0006e42c`, `0x00070434`, `0x000709b4`, `0x00072bac`,
+`0x00073398`, `0x00075a2c`, `0x000767bc` and `0x0007d428`. Ghidra's xrefs list
+11 of them (they miss the eight inside case bodies it did not disassemble). The
+sites were not mapped to modes. The zeroing sits in the shared function, so the
+value is applied to the circuit board whatever the mode: confidence 85 for the
+modes named above, Zone and Detonator, 70 for the others.
+
+Wired as HD `Title` data (`oag_title::adverts::Adverts::countdown_assembly_ticks`,
+`Some(180)`), read by `oag_raceplay`'s `hd_clock`; the board is then kept in the
+same windows as before. It replaces the start HD inherited from its asset's `GO`
+edge (frame 203, tick 70).
+
+**What changes on screen** (`oag-game --race --mode single_race`, Talon's
+Junction, ticks 112 to 273):
+
+| Tick | Before (frame 0 on 70) | Now (frame 0 on 93) |
+| ---: | --- | --- |
+| 112 | `3` fully up | red block entering from the left |
+| 140 | `3` | `3` |
+| 165 | `2` | `3` |
+| 185 | `2` | `2` |
+| 262 | red, `1` fading | red, `1` |
+| 272 | **teal board, a faded `1`** | **red, `1`** |
+| 273 | `GO` | `GO` |
+
+The lit-white glyph changes on ticks 128 (`3`), 178 (`2`), 228 (`1`) and 273
+(`GO`), pinned by
+`start_gantry_clock_inherit_ground_truth.rs`. **The last countdown tick now
+matches the 2026-10-04 RPCS3 capture**, where the red and the `1` leave in one
+video frame as `GO` arrives
+([start-gantry.md](../../../rendering/start-gantry.md#hds-countdown-on-rpcs3-measured-2026-10-04));
+before, ours had turned teal by tick 272.
+
+**One reading of that capture is not settled.** It puts the first `3` sliding in
+at video frames 146 and 144 against steps at 223 and 224, which is tick 113 to
+119. Ours' red block starts entering at about tick 106 and the white `3` is
+first lit on 128; before, the `3` was fully up at 112. Which of the two the
+capture's reader marked is not recorded and the video was not kept, so the `3`
+neither confirms nor refutes the start tick. A re-capture that records the
+node's time in phase 1 would.
+
+Pictures after the release are unchanged: the free run reads 3.0 s on the
+release (3.38 s before), both outside `[3.83, 5.25)`, so both jump to 3.83 s.
+All 36 HD comparison pairs re-rendered pixel-identical to the previous build's.
+
+**2048 and Omega: checked, applies, not wired.** Both play HD's
+`321Go_StartFinish.vex` on their HD-lineage circuits; their rows keep
+`countdown_assembly_ticks: None` (frame 0 on tick 71, off the asset's `GO`
+edge), because neither executable's countdown entry was read. The drive brief
+put them out of scope.
+
+**2048 and Omega, the mode boards: checked, applies, not wired.** Both ship `321Go_Zone.vex`, and
 their `ModeGantry` rows keep 210 and no windows; neither executable's countdown entry
 was read.
 
@@ -296,21 +360,9 @@ the step-A strip (not kept).
 
 ## Open
 
-- **HD's `3 2 1 GO` board starts with the countdown too, and ours does not yet.**
-  The same phase-0 work is reached by the updates at `0x00061560` (case 0 ->
-  `0x00061748`, `bl 0x0005e2d8` at `0x00061750`) and `0x00070770` (case 0 ->
-  `0x000709ac`, `bl` at `0x000709b4`), which sit with `SPArcade_RaceManager.cpp` and
-  `SPTimeTrial_RaceManager.cpp` (by address next to their `__FILE__` functions in
-  `ps3-toc.py map`, confidence 70 for the mode names; no live `GetMode`). So frame 0
-  would be tick 93, 180 before the release, where ours inherits the asset's `GO` edge
-  (tick 70). The release jump to 3.83 s turns the board green on the release either
-  way. The 2026-10-04 capture's digits came about 13 ticks later than ours: the same
-  direction, not the same size. Not wired: it moves every HD grid frame.
 - ~~The lap windows are not played.~~ Played since 2026-10-04 (above). Open
   from it: the writer of `ship+0x7810`, and a live lap crossing.
-- What calls `RaceManager_ResetGantryTime` during a countdown, and so the start
-  tick in code. The capture bounds 70 from below only, and two cues point
-  later: at tick 271 our backdrop is already part way to green where the
-  original is red 2 ticks before the step, and the capture's digits come
-  about 13 ticks later than ours.
+- What calls `RaceManager_ResetGantryTime` during a countdown. The countdown's
+  own zero is read above, so the start tick no longer depends on it.
+- The first `3` against the capture ("The circuit's own board" above).
 - The phase jump table at `*(TOC-0x6c00)`.

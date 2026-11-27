@@ -281,11 +281,9 @@ Pulse's gantry clock is `(tick - 92) / 60`.
 
 ### Every other title: Pulse's rule on its own `GO` edge
 
-**HD's start tick is bounded by its capture (2026-10-04, confidence 75; see
-[HD's countdown on RPCS3](#hds-countdown-on-rpcs3-measured-2026-10-04)), and
-what it does after the release is read from its EBOOT (the "After the release"
-bullet below). Everything else here is
-inherited from Pulse, unmeasured (2026-10-03, maintainer's rule: a title
+**HD's start tick and what it does after the release are both read from its
+EBOOT (the HD and "After the release" bullets below). The rest of this section
+is inherited from Pulse, unmeasured (2026-10-03, maintainer's rule: a title
 with no measured rule runs the known one). No confidence score.** The rule is
 that the board's `GO` edge lands on the tick after the thrust gate (273) and
 the clock is held on `GO` from there. `race::gantry::clock::go_edge` reads the
@@ -302,18 +300,16 @@ own texture tracks (`TexAnims`) at 60 frames a second, and
   `Board` teleport), one frame past the chosen loop end of 349.
 - **HD**: the edge is **frame 203**. `321_go_64.gtf`'s backdrop column steps
   from its red texels to the green marker column (cols 57-59) as the Edge
-  Animation curve's `u` ramps 0.861 -> 0.901 over frames 198-204, so
-  frame 0 is **tick 70**. The digits then read `3` about tick 110, `2` about 160,
-  `1` about 210, against Pulse's captured 132, 178 and 222: the asset's own
-  spacing, not a fitted one. `GO`'s letters reach full opacity a few frames
-  after the green (alpha 72 at frames 207-210, 255 from 211), so on HD the
-  board would be green on the release tick and `GO` fully lit about 8 ticks
-  later. **On HD that ramp is never seen**: the release jump below lands past
-  it, which is what the 2026-10-04 capture shows (`GO` bright on the step
-  frame). Since the jump turns the board green on the release for any start
-  tick that keeps the free run short of frame 203 there, the capture bounds 70
-  from below rather than measuring it; the digits reading ~13 ticks late in the
-  capture point later.
+  Animation curve's `u` ramps 0.861 -> 0.901 over frames 198-204. **HD does not
+  start the board off this edge**: it zeroes the board on entering the
+  countdown, so frame 0 is **tick 93**, 180 before the release (2026-11-27,
+  [gantry-clock.md](../ghidra/functions/ps3-hdfury-eu/gantry-clock.md#the-circuits-own-board-2026-11-27-hd-go-board)).
+  The lit digits change on ticks 128 (`3`), 178 (`2`) and 228 (`1`). The free
+  run reads frame 180 on the release, short of the edge, and the release jump
+  below lights `GO`. `GO`'s letters reach full opacity a few frames after the
+  green (alpha 72 at frames 207-210, 255 from 211); **on HD that ramp is never
+  seen**, because the jump lands past it, as the 2026-10-04 capture shows (`GO`
+  bright on the step frame).
 - **After the release, HD's own law, read from its EBOOT (2026-10-04,
   confidence 85; [gantry-clock.md](../ghidra/functions/ps3-hdfury-eu/gantry-clock.md)).**
   The billboard's curve time is the gantry node's animation time, and HD's race
@@ -342,8 +338,8 @@ own texture tracks (`TexAnims`) at 60 frames a second, and
   found in ...`).
 
 Played on HD (`oag-game --race --track /data/environments/talons_junction/track.vex
---ticks N --screenshot`, `hdfury-ps3-eu-dec.iso`), since the release window (2026-10-04): the `3 2 1`
-strip at tick 271, a fully lit `GO` on tick 273 with no digit left, dark at
+--ticks N --screenshot`, `hdfury-ps3-eu-dec.iso`), since the release window (2026-10-04): the red
+`3 2 1` strip at tick 272, a fully lit `GO` on tick 273 with no digit left, dark at
 +18..+30, +59..+67 and +104..+116 ticks, and the same 86-tick loop on. The side
 by side against the capture is in the gantry-clock evidence page.
 
@@ -351,9 +347,12 @@ by side against the capture is in the gantry-clock evidence page.
 
 **Question: at which race tick does HD's board turn green and `GO` light,
 against the frame the craft can first move?** Answer: **on the release, to
-within one 30 fps video frame (2 ticks). Confidence 75.** The inherited start
-tick 70 (frame 203 on tick 273) stands, now measured; the held span does not
-match the original, below.
+within one 30 fps video frame (2 ticks). Confidence 75.** The start tick this
+build used then (70, off the asset's `GO` edge) fits that but is not measured by
+it; HD's code puts frame 0 on tick 93
+([gantry-clock.md](../ghidra/functions/ps3-hdfury-eu/gantry-clock.md#the-circuits-own-board-2026-11-27-hd-go-board)).
+The method below and its mismatches are as captured on 2026-10-04, against
+start tick 70.
 
 Method. `scripts/rpcs3-drive.py countdown` boots HD on a private RPCS3 (own
 `XDG_CONFIG_HOME`/`XDG_CACHE_HOME`, display :91, GDB port 2391, silent), walks
