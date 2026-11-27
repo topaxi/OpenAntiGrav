@@ -96,6 +96,57 @@ fn mid_tournament_menu_opens_on_next_race() {
     assert!(!menu_options(false, false, false).contains(&MenuOption::WatchReplay));
 }
 
+/// A recorded single player race with nothing against the row.
+const PLAIN: super::WatchReplayOffer = super::WatchReplayOffer {
+    recorded: true,
+    original_menu: false,
+    tournament_next_leg: false,
+    networked: false,
+};
+
+/// WATCH REPLAY is offered on a recorded race on Pulse's list and HD's blocks, and nowhere it
+/// could not be drawn, would break the original's screen, or would end what goes on after the race.
+#[test]
+fn watch_replay_is_offered_on_pulse_and_hd_recorded_races() {
+    use super::WatchReplayOffer;
+    use oag_title::EndRaceDialect::{Field, Pulse, Touch};
+
+    for dialect in [Some(Pulse), Some(Field)] {
+        assert!(PLAIN.on(dialect));
+        let not_recorded = WatchReplayOffer {
+            recorded: false,
+            ..PLAIN
+        };
+        let compare_shot = WatchReplayOffer {
+            original_menu: true,
+            ..PLAIN
+        };
+        let mid_tournament = WatchReplayOffer {
+            tournament_next_leg: true,
+            ..PLAIN
+        };
+        let networked = WatchReplayOffer {
+            networked: true,
+            ..PLAIN
+        };
+        assert!(!not_recorded.on(dialect));
+        assert!(!compare_shot.on(dialect));
+        assert!(!mid_tournament.on(dialect));
+        assert!(!networked.on(dialect));
+    }
+    assert!(!PLAIN.on(Some(Touch)));
+    assert!(!PLAIN.on(None));
+}
+
+/// HD's own title package resolves to a dialect that offers the row, and Omega, which draws no
+/// end-of-race menu, does not.
+#[test]
+fn the_title_packages_that_offer_watch_replay() {
+    let offers = |title| PLAIN.on(crate::endrace::dialect(title));
+    assert!(offers(oag_pulse::TITLE) && offers(oag_hd::TITLE));
+    assert!(!offers(oag_2048::TITLE) && !offers(oag_omega::TITLE) && !offers(oag_pure::TITLE));
+}
+
 /// A board as a leg that ends on the person's finish leaves it: the person (slot 0) has
 /// crossed, the opponents are running in `order`.
 fn leg_board(order: [u8; 3]) -> Board {

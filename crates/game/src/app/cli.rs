@@ -129,7 +129,7 @@ pub(crate) struct Cli {
 
     /// With `--screenshot` or `--drive`: leave out what this build adds to the disc's own screens
     /// (2048's RACEBOX, a mod's race page and MULTIPLAYER tiles on `GameModeChoice`, and the pad focus
-    /// on its touch grids; the PHOTO MODE row of a pause screen that authors none), so a frame can be compared against a capture of the original's menu definition. A player always has them.
+    /// on its touch grids; the PHOTO MODE row of a pause screen that authors none; the WATCH REPLAY row of an end-of-race menu), so a frame can be compared against a capture of the original's menu definition. A player always has them.
     #[arg(long)]
     pub(crate) original_menu: bool,
 

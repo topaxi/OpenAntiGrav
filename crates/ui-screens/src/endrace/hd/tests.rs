@@ -58,6 +58,7 @@ fn strings() -> StringTable {
 <Entry ID="ER_RETURN_GRID" String="RETURN TO GRID"></Entry>
 <Entry ID="ER_RETURN_MENU" String="RETURN TO MENU"></Entry>
 <Entry ID="ER_VIEW_AGAIN" String="VIEW RESULTS AGAIN"></Entry>
+<Entry ID="OAG_ENDRACE_WATCH_REPLAY" String="WATCH REPLAY"></Entry>
 </Strings>"#,
     )
 }
