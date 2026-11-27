@@ -172,9 +172,10 @@ def main():
         "track": "Talon's Junction, Racebox Single Race, Venom",
         "craft": player["team"],
         "state": "RPCS3 %s/%s (scripts/rpcs3-hd-shield.py)" % (capture.name, stem),
-        "note": "Shield clock %.2f s on the original, ours the same age less the %d tick picture lag; %s%s. The HUD's "
+        "note": "Shield clock %.2f s on the original (sin(t)/4 + 3/4 = %.2f), ours the same age less the %d tick "
+                "picture lag; %s%s. The HUD's "
                 "pickup row, shield countdown and message are not matched, and the original's hull shake is not patched "
-                "out.%s" % (shield["time_s"], args.lag, what,
+                "out.%s" % (shield["time_s"], math.sin(shield["time_s"]) / 4 + 0.75, args.lag, what,
                             " (the hit is a write of the pending-damage word on the original, --force-hit on ours)"
                             if flash else "", " %s." % camera_note if camera_note else ""),
     }

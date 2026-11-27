@@ -2,7 +2,7 @@
 status: re-first
 titles: [hd]
 updated: 2026-11-27
-summary: "HD shield paired with the original (raised, hit flash); open: ours adds ~75 % of its blue and the original barely flickers"
+summary: "HD shield paired, shell alpha wired off the mesh stream; open: ours shell adds ~70 % of the original blue (blend/ambient unread)"
 ---
 
 # HD's shield hit-flash is amber, not Pulse's cyan - and the steady-state colour is a parameter this pass did not trace to its source
@@ -85,31 +85,31 @@ steady-state colour is read".
 
 Amber hit flash watched live (`(1.0, 0.2, 0.0)`, swell `1.1`) and the raised shell and flash
 paired against ours: `docs/ghidra/functions/ps3-hdfury-eu/shield.md`, "Watched on RPCS3".
-`--give shield` fires in ours (the 2026-09-16 note above no longer holds). `--force-hit` on a
-craft with a running Shield now flashes its shell. The activation tint item is closed: the draw
-overwrites it every frame.
+Wired: HD's shell alpha is the mesh's `VertexColour1.w` times the live alpha, with no `sin`
+flicker. `--give shield` fires in ours (the 2026-09-16 note above no longer holds).
+`--force-hit` on a craft with a running Shield now flashes its shell. The activation tint item
+is closed: the draw overwrites it every frame.
 
 ## Open
 
-- **Ours' settled shell is dimmer.** Its own light over the craft box is (0.7, 2.2, 14.3) mean
-  8-bit levels against the original's (0.6, 4.8, 19.2), mostly nose, shoulders, wingtip rims
-  (cyan-white glow there in the original). Cause unread.
-- **The original barely follows the `sin` alpha flicker** (blue ratio 0.88 across `sin` +1 to -1,
-  ours 0.46; one run per age, conf 70), although it computes it and writes it as the node tint.
-  Dropping ours' flicker alone would overshoot, so nothing is wired.
+- **Ours' settled shell is still dimmer**: about 70 % of the original's blue at every shield
+  age, mostly nose, shoulders and wingtip rims (cyan-white glow there in the original).
 - **Landed:** HD's per-team `ShieldColour` target (`Livery::shield_colour`,
   `Setup::shield_targets`), and the lattice's colour scroll (`u + 3 time`). Zone's two values are
   not a bug (normal Zone mode has no shield; Zone Battle on Fury may differ, unverified). Omega and
   2048: `omega-2048-shield-shell-and-palette.md`.
-- `FUN_00125d98` is read (`ShipShield_DrawShell`); `FUN_00676fe8` is `sin`.
+- **2048/Omega alpha**: their programs also read the stream's `VertexColour1.w`; whether their
+  per-submesh flickered tint reaches a pixel is unmeasured, ours unchanged (checked, applies,
+  not wired).
+- The cockpit sphere keeps the flickered colour (inline chunk, unread).
 - Unwired in `hexagonalshield_rich`: `constantAmbientColour`, the lit variants' light terms, fog.
   Zone's `zonebattle_shield` program is unread (no mode of ours raises it).
 - Our own `graphics.own_shield` reads its eye from the origin (`docs/rendering/own-shield.md`, "Open").
 
 ## Next Steps
 
-1. Dump the shield draw from one frame's command ring (`scripts/hd-draw-dump.py`): blend factors
-   and colour/alpha write mask (does it write the bloom's glow mask?), the vertex attribute node
-   `+0xf0` feeds, and `constantAmbientColour`'s value. One capture should settle both open items.
-2. Wire what that read shows as HD `Title` data, then re-score the two `hd-shield-*` pairs.
+1. Dump the shield draw from one frame's command ring (`scripts/hd-draw-dump.py`): blend factors,
+   colour/alpha write mask (does it write the bloom's glow mask?) and `constantAmbientColour`'s
+   value.
+2. Wire what that read shows as HD data, then re-score the two `hd-shield-*` pairs.
 3. Only if Zone Battle (Fury) turns out to raise a shield: check which Zone copy it reads.
