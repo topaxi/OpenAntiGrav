@@ -420,8 +420,7 @@ release, so that name-building rule is PSP-specific - `movie::open`'s magic
 dispatch is what actually opens the file now, not this name.
 
 Expect a race to load more slowly off the PS2 disc. 5,861 of `WADS2.WAD`'s 7,200
-entries are [LZSS](../formats/lzss.md) where no PSP archive compresses anything,
-and the track blob is still decompressed twice (see [below](#two-things-oag-render-could-grow)).
+entries are [LZSS](../formats/lzss.md) where no PSP archive compresses anything.
 
 `--dry-run` is worth knowing about on its own: it prints what came off the disc,
 including the values this mode has to make an assumption about, so the assumptions
@@ -819,9 +818,9 @@ number is `oag-trace drive`'s, on `verification/scenarios/sideshift-flick.inputs
 **4.0 units inside the shift's own 0.2 s**, against the same file under the other
 scheme, where the steering is identical by construction.
 
-## Two things `oag-render` could grow
+## One thing `oag-render` could grow
 
-Neither blocks anything; both are places this mode reaches around a seam rather than
+It does not block anything; it is a place this mode reaches around a seam rather than
 through it.
 
 - **A view-projection writer.** `mesh_render::write_uniforms` computes an *orbit*
@@ -829,9 +828,6 @@ through it.
   not something a chase camera can use, so `race.rs` declares the shader's uniform
   block itself and writes the two matrices directly. A unit test asserts its size
   against `mesh_render::UNIFORMS_SIZE` so the duplicate cannot drift silently.
-- **A from-bytes entry point for `track`.** `track::load` takes an archive
-  specifier, so a caller that also wants the file's collision nodes - which every
-  caller that wants to drive on it does - decompresses the same blob twice.
 
 ## Music controls in a race
 

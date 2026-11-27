@@ -36,6 +36,13 @@ replaces the disc's `Data\XML\Arcade_HUD.xml`. Loose files only, no whole-archiv
 mounting. Empty by default; user content, never committed; every entry it answers
 is reported as answered by the override, searched ahead of the disc.
 
+**A circuit's `track.vex` is read like any other entry.** A race load takes it through
+`Archives::read_name`. `Archives::locate` answers with a label, which for a layer is a
+directory (override) or a description (fallback) and not an archive spec, so nothing may
+reopen it: a loader that did failed every race on an overridden circuit, a byte-identical
+copy included. `load::track_inputs` (raceplay) pins that a byte-identical override loads
+the same spline, collision, pads and start slot as the disc.
+
 **A mod that changes a table changes the simulation.** A replay carries the
 initial state hash and one every interval ([ADR-0055](adr/0055-replays-are-inputs-and-a-ghost-is-poses.md)), so a replay recorded
 without the mod and played with it reports a desync instead of diverging; a ghost
