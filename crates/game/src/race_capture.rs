@@ -758,6 +758,7 @@ pub fn capture(
         zone_grade,
         shadows,
         behind_glass,
+        title.looks.every_texture_lod_levels(),
     )?;
     scene.set_blur_resolution(options.motion_blur_resolution);
     scene.attach_ripples(ripples);

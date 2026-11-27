@@ -234,6 +234,7 @@ pub const LOOKS: &Looks = &Looks {
     lit_output_halved: Rule::UNREAD,
     // The GE selects the level by its slope law (`oag_mesh::mesh_render::PSP_TEXLOD_SLOPE`), not a bias.
     material_lod_bias: Rule::UNREAD,
+    every_texture_lod_bias: Rule::UNREAD,
     material_render_state: Rule::UNREAD,
     // `Mesh_SetBatchDrawState` enables `GU_CULL_FACE` when `pass_mask & 0x20` is clear
     // (`docs/ghidra/functions/psp-pulse-usa/mesh-draw.md`, "The plume is two-sided"), and a

@@ -248,6 +248,7 @@ pub(super) fn scene_with_billboards(
         None,
         Default::default(),
         Default::default(),
+        0.0,
     )
     .expect("the scene builds")
 }
@@ -319,7 +320,22 @@ fn a_scene_build_ends_once_the_process_is_exiting() {
 /// placeholder shows its 8x8 digit stub (or, once stripped, nothing), and this
 /// reads zero.
 fn adverts_rebound(source: &str) -> Option<(usize, usize, usize)> {
-    let image = oag_testdata::image(source)?;
+    let built = built_race_scene(&oag_testdata::image(source)?)?;
+    Some((built.wanted, built.rebound, built.wrapped))
+}
+
+/// One disc's default circuit, loaded and built into a real scene.
+struct BuiltRace {
+    wanted: usize,
+    rebound: usize,
+    wrapped: usize,
+    /// `(pipelines carrying the title's every-texture LOD bias, all distinct)`.
+    lod_biased: (usize, usize),
+    track_material_bias: f32,
+    speed_pad_pictures: usize,
+}
+
+fn built_race_scene(image: &std::path::Path) -> Option<BuiltRace> {
     let instance = wgpu::Instance::default();
     let adapter = oag_gpu::test_adapter::request(&instance)?;
     let (device, queue) = pollster::block_on(adapter.request_device(
@@ -332,6 +348,15 @@ fn adverts_rebound(source: &str) -> Option<(usize, usize, usize)> {
         ..crate::Options::default()
     })
     .expect("loading the race");
+    let track_material_bias = loaded.track_model.material_lod_bias;
+    let speed_pad_pictures = loaded
+        .track_model
+        .textures
+        .iter()
+        .flatten()
+        .filter(|texture| texture.label.to_ascii_lowercase().contains("speedpad"))
+        .count();
+    let disc_lod_bias = loaded.title.looks.every_texture_lod_levels();
     let served: Vec<u32> = loaded.billboards.adverts.iter().map(|c| c.slot).collect();
     let wanted = oag_render::gantry::placeholder_texture_slots(&loaded.track_model)
         .iter()
@@ -380,9 +405,38 @@ fn adverts_rebound(source: &str) -> Option<(usize, usize, usize)> {
         None,
         Default::default(),
         Default::default(),
+        disc_lod_bias,
     )
     .expect("the scene builds");
-    Some((wanted, scene.adverts_rebound(), scene.adverts_wrapped()))
+    Some(BuiltRace {
+        wanted,
+        rebound: scene.adverts_rebound(),
+        wrapped: scene.adverts_wrapped(),
+        lod_biased: scene.lod_biased_pipelines(),
+        track_material_bias,
+        speed_pad_pictures,
+    })
+}
+
+/// **2048's loader biases every texture it loads, so every pipeline of its race does.**
+///
+/// Drop `Looks::every_texture_lod_bias` or `Scene::new`'s scope call and the pipelines carry
+/// no `effect_lod_bias`; drop `material_lod_bias` and the circuit (speed pads are its own
+/// submeshes) is left at 0.
+#[test]
+#[ignore = "needs data/extracted/vita/PCSF00007 and a GPU"]
+fn v2048_biases_every_race_pipeline_and_its_circuit() {
+    let Some(source) = oag_testdata::exact("data/extracted/vita/PCSF00007") else {
+        return;
+    };
+    let Some(built) = built_race_scene(&source) else {
+        return;
+    };
+    assert_eq!(built.track_material_bias, -1.5);
+    assert!(built.speed_pad_pictures > 0, "no speed pad on the circuit");
+    let (biased, all) = built.lod_biased;
+    assert!(biased > 0, "no pipeline carries the bias");
+    assert_eq!(biased, all, "{biased} of {all} distinct pipelines biased");
 }
 
 #[test]

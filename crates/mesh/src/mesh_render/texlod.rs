@@ -216,8 +216,15 @@ pub(super) fn constants(model: &Model, anisotropy: Anisotropy) -> Vec<(&'static 
     }
     // A title's own bias on its material textures, a separate knob from the
     // slope law above: it adds to the sampler's derivative-driven level
-    // (`textureSampleBias`), where the slope law replaces it.
-    if model.material_lod_bias != 0.0 {
+    // (`textureSampleBias`), where the slope law replaces it. A scope whose title
+    // biases every texture overrides the model's and reaches the effect programs.
+    let everywhere = super::pipeline_cache::scope_every_texture_lod_bias();
+    if everywhere != 0.0 {
+        out.extend([
+            ("material_lod_bias", f64::from(everywhere)),
+            ("effect_lod_bias", f64::from(everywhere)),
+        ]);
+    } else if model.material_lod_bias != 0.0 {
         out.push(("material_lod_bias", f64::from(model.material_lod_bias)));
     }
     out

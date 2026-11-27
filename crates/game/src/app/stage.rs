@@ -620,6 +620,7 @@ impl Stage {
             zone_grade,
             shadows,
             behind_glass,
+            title.looks.every_texture_lod_levels(),
         )?);
         scene.attach_ripples(ripples);
         scene.attach_mist(
