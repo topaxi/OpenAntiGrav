@@ -555,3 +555,69 @@ fn a_layout_without_the_countdown_widget_keeps_the_percent() {
         assert_eq!(countdown_backing(cx, &r, bg), None);
     });
 }
+
+/// A layout shaped like `HUD_proximity.xml`'s: the arc and its marker 100 below it.
+fn proximity_layout() -> Layout {
+    Layout::from_xml(&format!(
+        r#"<Screen>
+             <Image name="ProximityBar">
+               <Values x="627" y="849" width="666" height="114" U="358" V="524"
+                       TxtrWidth="666" TxtrHeight="114" Src="{SRC}"/>
+             </Image>
+             <Image name="ProxBackground">
+               <Values x="907" y="972" width="107" height="69" U="415" V="54"
+                       TxtrWidth="107" TxtrHeight="69" Src="{SRC}"/>
+             </Image>
+           </Screen>"#
+    ))
+}
+
+fn proximity_rects(art: &oag_title::HudArt) -> Vec<[f32; 4]> {
+    with_layout(&proximity_layout(), art, |cx| {
+        proximity_sprites(cx)
+            .iter()
+            .map(|draw| match draw {
+                Draw::Sprite { rect, .. } => *rect,
+                other => panic!("unexpected draw {other:?}"),
+            })
+            .collect()
+    })
+}
+
+/// The idle indicator: the arc where it is authored, the marker 20 above its own place.
+#[test]
+fn the_idle_proximity_arc_is_drawn_with_its_marker_raised() {
+    assert_eq!(
+        proximity_rects(oag_hd::hud::ART),
+        [[627.0, 849.0, 666.0, 114.0], [907.0, 952.0, 107.0, 69.0]]
+    );
+}
+
+/// And the whole HUD's draw list carries them: neither widget is on the always-on list.
+#[test]
+fn the_draw_list_carries_the_idle_proximity_arc() {
+    let rects: Vec<[f32; 4]> = with_layout(&proximity_layout(), oag_hd::hud::ART, |cx| {
+        draw_list(cx, &Readout::blank())
+            .sprites
+            .iter()
+            .filter_map(|draw| match draw {
+                Draw::Sprite { rect, .. } => Some(*rect),
+                _ => None,
+            })
+            .collect()
+    });
+    assert_eq!(
+        rects,
+        [[627.0, 849.0, 666.0, 114.0], [907.0, 952.0, 107.0, 69.0]]
+    );
+}
+
+/// A title with no runtime rules draws no indicator of its own.
+#[test]
+fn a_title_without_the_rule_draws_no_proximity_arc() {
+    let art = oag_title::HudArt {
+        runtime: None,
+        ..*oag_hd::hud::ART
+    };
+    assert!(proximity_rects(&art).is_empty());
+}

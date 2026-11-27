@@ -163,6 +163,48 @@ fn every_arc_segment_is_authored_where_its_arc_is() {
     );
 }
 
+/// The proximity indicator's two widgets. In `arcade_hud.xml` they land where the running
+/// original draws them (`docs/ghidra/functions/ps3-hdfury-eu/hud-readouts.md`, "The
+/// proximity indicator"): the arc over x 627..1293, y 849..963, and the marker, 20 above
+/// its authored place, over x 907..1014, y 952..1021. `elimination_hud.xml` authors a
+/// shorter arc of its own, not seen on screen. No other default-skin root authors them.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_proximity_indicator_is_where_the_original_draws_it() {
+    let Some(mut archives) = open() else {
+        return;
+    };
+    let proximity = oag_hd::hud::RUNTIME.proximity.expect("HD's rule");
+    let mut measured = Vec::new();
+    for &root in DEFAULT_SKIN {
+        let layout = composed(&mut archives, root).layout;
+        let (Some(bar), Some(marker)) = (
+            layout.sprite(proximity.bar),
+            layout.sprite(proximity.background),
+        ) else {
+            continue;
+        };
+        let mut raised = marker.rect;
+        raised[1] -= f32::from(proximity.lift);
+        measured.push((root, bar.rect.map(f32::round), raised.map(f32::round)));
+    }
+    assert_eq!(
+        measured,
+        [
+            (
+                "/data/xml/arcade_hud.xml",
+                [627.0, 849.0, 666.0, 114.0],
+                [907.0, 952.0, 107.0, 69.0],
+            ),
+            (
+                "/data/xml/elimination_hud.xml",
+                [627.0, 831.0, 666.0, 51.0],
+                [871.0, 902.0, 179.0, 69.0],
+            ),
+        ]
+    );
+}
+
 /// Pilot Assist's indicator: which of the default skin's layouts author the six
 /// widgets `oag_hd::hud::ART.assist` names. A layout without them draws no
 /// indicator, which is the original's behaviour for that mode.

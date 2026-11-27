@@ -502,6 +502,76 @@ per-pickup count or timer in `Readout`, so a held pickup's hexagon stays as auth
 
 2048: `HUD_pickups.xml` is not this layout, not checked.
 
+## The proximity indicator: the arc under the craft
+
+Lane `hd-shield-follow`, 2026-11-27. The faint arc the original shows on the road
+under the craft is HUD art: `ProximityIndicator`, the rear-proximity widget. It is
+no part of the shield and no floor geometry.
+
+**Layout** (`HUD_proximity.xml`, loaded under `ForwardHUD` by `arcade_hud.xml`):
+a `<Text name="ProximityIndicator" OffsetX="960" OffsetY="906">` holding the
+centred `Image` `ProximityBar` (666 x 114, source `U358 V524` of
+`HUD_Components.gtf`), which holds `ProxBackground` (`y=100`, 107 x 69,
+`U415 V54`) and `Prox4`..`Prox0` (red `0xFFFF0000`, `y` 82 / 92 / 102 / 113 /
+124, rotation centres `-764` .. `-806`). Only the arcade and elimination roots
+load it (all three HUD styles); time trial, speed lap, zone, detonator and duel
+do not. The `DATA00` copy of `elimination_hud.xml` loads `HUD_Elim_proximity.xml`
+instead (the same two names); `DATA02`'s loads `HUD_proximity.xml`.
+
+**The draws** (command ring of one frame, two boots, with and without a Shield;
+confidence **92**):
+
+| | `ProximityBar` | `ProxBackground` |
+| --- | --- | --- |
+| quads | 4, x 627 / 793.5 / 960 / 1126.5 / 1293, y 849..963 | 1, x 907..1014, y 952..1021 |
+| texels | x 358..1024, y 386..500 (the authored `V524` flipped) | x 415..522, y 901..970 |
+
+Both draw on the composite target (`0x210 = 0x10000`) with the HUD atlas
+(1024 x 1024), the common HUD fragment program (`0x01114181`), blend
+`SRC_ALPHA` / `ONE_MINUS_SRC_ALPHA` and vertex colour `ffffffcc` (the HUD's
+`lit_alpha`). `Prox0`..`Prox4` are not drawn: the player is last on the grid and
+nothing is behind. A Shield running changes neither draw.
+
+`ProxBackground`'s rectangle centre is `y = 986.5`, 20 above the authored
+`906 + 100 = 1006`: the update's idle lift below.
+
+**Bind** (`Hud_BindWidgets`, `0x0009bb30`): `ProximityBar` `hud+0x5b8`,
+`ProxBackground` `+0x4f4`, `Prox0`..`Prox4` `+0x4f8`..`+0x508`.
+`ProxBackground`'s authored `y` is read off the widget (vtable `+0x74`,
+`0x0009c000`) into `hud+0x290`. `ProximityBar` is one of the status groups
+`Hud_ShowStatusGroups` shows and hides ([hud-start-gate.md](hud-start-gate.md)).
+
+**The per-tick law** (`Hud_Update`, `0x0009e96c`..`0x0009facc`, read
+statically; confidence **75**, the lit state not seen live):
+
+1. Over every other craft, `FUN_000d0398` gives the signed along-track distance:
+   the difference of the two craft's progress (`ship+0x7010`) wrapped into half a
+   lap either side (`0x008a8b04` is `0.5`, the lap length is `*(ship+0x6f64)`).
+2. Craft on one side only are kept, the side chosen by the byte at
+   `*(hud+0x40)+0x54`; the smallest `|d|` wins, starting from `999.9`
+   (`0x008a7c00`).
+3. `lit = int((1 - min(|d| * 0.004, 1)) * 5 + 0.5)`: `0.004` (`0x008a7c0c`) is a
+   range of **250 units**.
+4. `lit == 0`: `Prox0`..`Prox4` hidden, `ProxBackground` unrotated at
+   `y = hud+0x290 - 20` (`0x008a7678`).
+5. `lit > 0`: `Prox0`..`Prox(lit-1)` and `ProxBackground` visible at their
+   authored `y`, rotated about their own centres by an angle taken from a vector
+   dot product clamped to `[-0.43, 0.43]` radians (halved under bit `0x200` of
+   `hud+0x44`). Which two vectors, and the rotation's sign, are unread.
+
+Wired as `RuntimeHud::proximity`, the idle state only. The 2097 and WIP3OUT skins author
+their own widgets (`ProxArrow`, `ProxBar`) and draw none of it (`RETRO_ART.runtime` is
+`None`).
+
+**2048: checked, differs** (confidence 70). 2048's `data/xml/2048_hud/HUD_proximity.xml`
+authors its own `ProximityIndicator` and `ProximityBar` with `ProxBackground2048`
+and `Prox2048_*` children. Its original frames show no idle arc this build lacks
+(the ring under the craft is already in both). Not wired; its law is unread.
+
+**Omega: checked, applies, wired** (confidence 70; no Omega test of its own yet). `data/xml/HUD_proximity.xml` ships the same two
+names and its original pairs (a native PC build of the same game) show the same
+arc; Omega draws HD's `ALWAYS_ON` list. Its update function is unread.
+
 ## Not read
 
 - **Which craft `beam+0xc94c` is** (above), so `ship+0x6958` is not wired.

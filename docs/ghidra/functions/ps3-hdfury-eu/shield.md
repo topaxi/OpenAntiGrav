@@ -141,10 +141,10 @@ bool ShipShield_Update(double dt, ShipShield *self)
     alpha = self->rgba.a * (n * K1 + K2);                // K1/K2 corrupted by the TOC
                                                           // defect in THIS function's
                                                           // own decompile - see below
-    if (craft->external_camera_flag == 0)                // craft+0x5f42
+    if (craft->internal_view_flag != 0)                  // craft+0x5f42
         ShipShield_DrawCockpit(self);                    // FUN_001258d8
     else
-        ShipShield_DrawShell(self);                      // FUN_00125d98, unread
+        ShipShield_DrawShell(self);                      // FUN_00125d98
 
     self->time += dt;
     if (self->fading && self->rgba.a <= 0.1)             // literal in the InitColours
@@ -158,8 +158,8 @@ Every sub-computation lines up with Pulse's `ShipShield_Update`
 `(int)(dt / 0.016666668)`, HD's reciprocal `dt * 59.9999924` - the same
 boundary, multiplied instead of divided), the per-channel colour lerp at
 `object+0xc0..0xcc` toward `object+0xd0..0xdc`, the swell lerp at
-`object+0xe4` toward `object+0xe8` at rate `object+0xec`, and the external
-`craft+0x5f42` camera flag choosing between two draw calls exactly the way
+`object+0xe4` toward `object+0xe8` at rate `object+0xec`, and the
+`craft+0x5f42` view flag choosing between two draw calls the way
 Pulse's `craft+0x6d` does.
 
 **`K1`/`K2` were not read directly** - `get_xrefs_to` on the `0.25`/`0.75`
@@ -595,6 +595,14 @@ so the lag is at least 3 ticks there.
 
 ### The shell draw: `FUN_00125d98` and the flicker
 
+**The branch** (`0x0012627c`..`0x0012628c`, read from the instructions; the pseudocode
+under "`ShipShield_Update`" had its two arms swapped until this read): `lbz r0,0x5f42(craft)`,
+`beq` to `ShipShield_DrawShell`, fall through to `ShipShield_DrawCockpit_q`. So the cockpit
+sphere draws when the byte is set (the internal view and the look-back,
+[particle-triggers.md](particle-triggers.md), "the player's view flags") and the shell when it
+is clear. A global byte read first (TOC `-0x32ec`), when set, calls **both** draws; what sets
+it is unread. Confidence **90**.
+
 `ShipShield_Update` calls the external-camera draw with the colour
 `(live.r, live.g, live.b, alpha)`, `alpha = live.a * (n * K1 + K2)`:
 
@@ -761,9 +769,43 @@ Ours over the original is now 1.00, 0.91 and 0.98 (was 0.76, 0.68, 0.73), and
 last over first is 0.87 against 0.88. The program is the cause; the cull takes
 blue away, and the alpha mask changes no pixel in these frames.
 
-At 3.21 s the original's shell light also carries red and green that ours does
-not (original `(2.9, 6.8, 20.3)`, ours `(0.0, 3.5, 18.6)`); one original run
-per age, cause unread.
+The 3.21 s column is wrong for the original: that one frame lacks the craft's floor
+shadow, which inflates all three channels. See "The red and green at 3.21 s" below.
+
+### The red and green at 3.21 s: a missing floor shadow, no draw
+
+At 3.21 s the one run read `(2.9, 6.8, 20.3)` against ours `(0.0, 3.5, 18.6)`. Lane
+`hd-shield-follow`, same save and pose. Confidence **90** that no shield draw adds red or green.
+
+Falsifier written before the re-shoot: with the craft's floor shadow present at that age, the red
+delta over the craft box falls to the other ages' level (about 0.2), or H1 (the surplus is the
+shadow) is false.
+
+- The shadow is a hard-edged dark blob right of the craft. Over the mask of pixels where the
+  3.21 s frame differs from its no-shield pair by more than 12 red and 10 green (11 274 px,
+  box 1040..1240 x 900..1010), the mean RGB is `(81, 116, 134)` in the two frames without the
+  shadow and `(47..68, 85..96, 113..130)` in the other 30 frames on that grid slot.
+- The two frames without it: the original 3.21 s one (age 3.210) and one re-shoot (age 3.154,
+  third boot). Both read red `+2.6` to `+2.9` in the craft box.
+- A further boot, stepping through ages 2.61, 3.09, 3.15, 3.30 and 3.55, has the shadow in every
+  frame. Against the no-shield frame at lap clock 7.85 the craft box reads:
+
+| shield clock | red | green | blue |
+| --- | --- | --- | --- |
+| 2.61 | -0.16 | 3.94 | 18.96 |
+| 3.09 | -0.49 | 3.54 | 17.80 |
+| 3.15 | -0.42 | 3.64 | 17.91 |
+| 3.30 | 0.17 | 4.32 | 18.93 |
+| 3.55 | 0.09 | 4.08 | 18.39 |
+| ours, 3.21 | 0.02 | 3.49 | 18.55 |
+
+So ours' blue over the original near 3.2 s is 0.98 to 1.04, not 0.91, and red and green match.
+The shell's one pass is the ring evidence from two boots ("The shell's draw state").
+
+Why a frame drops the shadow is unread. It is not the shield clock (present at 3.148 s, absent at
+3.154 s on another boot).
+
+2048 and Omega: **not applicable**, there is no draw to carry over.
 
 ### What ours draws
 
@@ -774,8 +816,36 @@ craft's light rig and fog and the flame surfaces' clock, writing no glow mask
 and receiving no shadow map. Where a circuit authors no rig, the shell draws as
 before.
 
-Left as before, because their draws are unread: the cockpit sphere, Zone
-Battle's `zonebattle_shield`, and our own shield.
+Left as before: the cockpit sphere (draw read since, "The cockpit sphere's draw"),
+and, their draws unread, Zone Battle's `zonebattle_shield` and our own shield.
+
+### The cockpit sphere's draw
+
+Lane `hd-shield-follow`, 2026-11-27, RPCS3, R1 held (look-back, which sets
+`craft+0x5f42`; the internal camera itself was not selected live), Shield raised, two
+boots. Confidence **88** for the draw and its state.
+
+- One draw absent from the plain frame: draw 372 of 470, and 365 of 468 on the second
+  boot; 2304 indices, `hexagonalshield_rich` fragment block #2, the shell's own program,
+  with ambient, sun and fog patched in. Unit 0 is a 256 x 128 DXT45.
+- Blend `SRC_ALPHA` / `ONE`, depth test `LEQUAL`, depth write off, colour mask
+  `0x00010101` (alpha masked), cull on, `GL_BACK`, front `CCW`.
+- `ShieldColour` is the object's live colour without the flicker.
+- The stride-18 vertex binds `VertexColour1` as unorm8 x 4 at `+0x0e` (`.w` 0..216 on the
+  disc's `vr_shield_cockpit.rcsmodel`).
+- The prediction written first (cull off or front, the eye being inside) was **wrong**.
+  The state is the shell's. The disc mesh is wound **inward** (761 of 768 triangles;
+  the Feisar shell is outward, 2190 of 2193), so back-face cull keeps the faces seen
+  from inside.
+- The draw's pixels are not detectable: shield frame minus plain frame has no blue
+  excess (mean blue minus red -0.02 over the frame). Cause unread.
+
+**Not wired.** This build queues the sphere in the internal view but no pixel of it was
+seen: a shield-on capture is unchanged by a white tint and by a 5x scale (temporary
+probes). That is its own open defect, and the lit program cannot be checked until it is
+read.
+
+2048: draw not captured. Omega: not checkable live (no memory or command readout).
 
 ### 2048 and Omega, the draw state
 
@@ -793,6 +863,7 @@ Battle's `zonebattle_shield`, and our own shield.
 
 ## History
 
+- 2026-11-27: `hd-shield-follow`. The cockpit sphere's draw read on two boots, not wired. The 3.21 s red and green traced to a missing floor shadow in that frame; `ShipShield_Update`'s branch arms corrected.
 - 2026-11-27: `hd-shield-blue`. The shell's draw state and lit program read off the command ring on two boots and wired; ours' shield blue moves from about 70 % to 91 to 100 % of the original's.
 - 2026-11-27: `hd-shield-flash`. Raised shell and amber flash watched and paired; shell draw, flicker constants and sine read; shell alpha wired to the authored `VertexColour1.w` without the flicker.
 - 2026-09-16: page created. `Shield.cpp`'s constructor, activate, update, hit
