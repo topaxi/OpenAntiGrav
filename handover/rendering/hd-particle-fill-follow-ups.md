@@ -47,12 +47,14 @@ blast the struck craft's velocity, on HD, 2048 and Omega
     `--force-rocket-hit-at 716:394.34,-35.94,-120.31 --force-rocket-hit-at 719:398.98,-35.30,-117.96:2`
     (keep `--force-rocket-hit-velocity`): 11.79 to 9.11 and 43.17 to 34.81, -8.13 +/- 0.35 over 8
     seeds on 0.233 s;
-  - optionally also the launch (`--pose-hold-launch=717:...` and `ours.inputs`
+  - the lead adopts the two waves only; not the launch pose. For the record, the launch (`--pose-hold-launch=717:...` and `ours.inputs`
     `701 none / 1 square / 408 none`, values on the page): faithful, the streams appear, but 0.16 and
     1.11 worse than the two waves alone until the two items below land.
   Left:
-  - the ribbon's vertex colour: `RibbonEffects_SampleLighting` (`0x002a4280`) reads a lighting volume
-    at `*0x00d43cc4`, unread; ours draws white, the original's streams are grey;
+  - **RE item for a later opus lane:** the ribbon's vertex colour. `RibbonEffects_SampleLighting`
+    (`0x002a4280`) looks the Rocket's position up in a spatial tree (`0x003c2598`/`0x003c2488` over
+    `0x006d00b0`, data at `*0x00d43cc4`) and packs an RGB; which file fills it and its layout are
+    unread. Ours draws white, the original's streams are grey;
   - the fan at the eye is wider than `spread` 0.05 gives: ours are three narrow strips right of
     centre, the original's four wide bands span the frame's bottom. Unread;
   - `trail` still reads as smooth white lobes (not looked at);
