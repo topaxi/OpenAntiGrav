@@ -176,7 +176,6 @@ fn a_host_whose_profile_key_is_on_the_ban_file_is_refused_with_the_reason() {
     };
     // The key the game will find in its profile, made the way the game makes it.
     let scratch = oag_testdata::scratch::dir("hosted-banned-key");
-    let _ = std::fs::remove_dir_all(&scratch);
     let key = oag_game::identity::load_or_create_at(&scratch.join("identity.toml"))
         .expect("a key is made");
     let bans = scratch.join("bans.txt");
@@ -217,8 +216,6 @@ fn a_host_that_alters_its_race_is_proven_by_the_lobby_and_struck_and_the_guest_i
         return;
     };
     let scratch = oag_testdata::scratch::dir("hosted-cheat-bans");
-    let _ = std::fs::remove_dir_all(&scratch);
-    std::fs::create_dir_all(&scratch).expect("a scratch directory");
     let bans = scratch.join("bans.txt");
     let bans = bans.display().to_string();
     let lab = Lab::with_lobby_args("hosted-cheat", image, 20_000, &["--ban-file", &bans]);

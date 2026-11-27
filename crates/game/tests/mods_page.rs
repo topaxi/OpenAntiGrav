@@ -31,10 +31,7 @@ target = "records"
 "#;
 
 fn scratch(name: &str) -> oag_testdata::scratch::TempDir {
-    let dir = oag_testdata::scratch::dir(&format!("mods-page-{name}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    dir
+    oag_testdata::scratch::dir(&format!("mods-page-{name}"))
 }
 
 fn folder(root: &Path, manifest: &str, menu: &str) {

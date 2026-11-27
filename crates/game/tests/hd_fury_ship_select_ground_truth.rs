@@ -319,7 +319,6 @@ fn every_fourth_row_from_the_top_is_a_scanline() {
 /// A 1280x720 capture of `page` through the real binary, with `flags` after the page.
 fn capture_of(image: &Path, page: &str, flags: &[&str]) -> oag_texture::replacer::Image {
     let dir = oag_testdata::scratch::dir("hd-fury-tint-ground-truth");
-    std::fs::create_dir_all(&dir).expect("a temp directory");
     let out = dir.join("page.png");
     let status = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
         .arg(image)

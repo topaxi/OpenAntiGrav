@@ -763,7 +763,6 @@ fn the_log_section_survives_a_rewrite_as_written() {
 fn an_unreadable_settings_file_boots_on_defaults() {
     use std::os::unix::fs::PermissionsExt;
     let dir = oag_testdata::scratch::dir("settings-unreadable");
-    std::fs::create_dir_all(&dir).expect("scratch dir");
     let file = dir.join("settings.toml");
     std::fs::write(&file, "[graphics]\nanisotropy = \"4x\"\n").expect("write");
     std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o000)).expect("chmod");
@@ -839,7 +838,6 @@ fn shadows_after_loading(
         "settings-shadows-{}",
         NEXT.fetch_add(1, Ordering::Relaxed)
     ));
-    std::fs::create_dir_all(&dir).expect("scratch dir");
     let file = dir.join("settings.toml");
     if let Some(text) = text {
         std::fs::write(&file, text).expect("write");
@@ -1180,7 +1178,6 @@ pub(super) fn load_text(text: &str) -> (Settings, String) {
         "settings-fallback-{}",
         NEXT.fetch_add(1, Ordering::Relaxed)
     ));
-    std::fs::create_dir_all(&dir).expect("scratch dir");
     let file = dir.join("settings.toml");
     std::fs::write(&file, text).expect("write");
     let loaded = load_from(&file).expect("a bad value must not stop the load");

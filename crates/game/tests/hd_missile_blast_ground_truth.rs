@@ -77,7 +77,6 @@ fn frame_of(ticks: u32) -> Option<Vec<[u8; 3]>> {
 fn frame_with(ticks: u32, extra: &[String]) -> Option<Vec<[u8; 3]>> {
     let image = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso")?;
     let scratch = oag_testdata::scratch::dir(&format!("hd-missile-blast-{ticks}"));
-    std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
     let out = scratch.join("frame.png");
     let script = scratch.join("fire.inputs");
     std::fs::write(&script, "285 none\n1 square\n400 none\n").expect("the input script");
@@ -247,7 +246,6 @@ fn the_explosions_streaks_all_die() {
 fn submitted_at(ticks: u32) -> Option<(u32, u32)> {
     let image = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso")?;
     let scratch = oag_testdata::scratch::dir(&format!("hd-missile-head-{ticks}"));
-    std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
     let script = scratch.join("fire.inputs");
     std::fs::write(&script, "285 none\n1 square\n400 none\n").expect("the input script");
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
@@ -344,7 +342,6 @@ fn rocket_frame(forced: &[&str]) -> Option<Vec<[u8; 3]>> {
         "hd-rocket-blast-{}",
         RUNS.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
     ));
-    std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
     let out = scratch.join("frame.png");
     let script = scratch.join("fire.inputs");
     std::fs::write(&script, "285 none\n1 square\n400 none\n").expect("the input script");

@@ -128,7 +128,6 @@ fn columns(brake: &[u8], rest: &[u8]) -> (usize, usize, usize) {
 fn check(source: &Path, tag: &str, mode: &str) {
     // Per checkout (not the shared /tmp), so two checkouts' runs never write one PNG.
     let scratch = oag_testdata::scratch::dir(&format!("zone-flaps-{tag}-{mode}"));
-    std::fs::create_dir_all(&scratch).unwrap();
     // The two frames are independent runs of the game, each a full race
     // load; side by side they cost one load's wall clock rather than two.
     // Each has its own profile directories: two processes sharing one settings

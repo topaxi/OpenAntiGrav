@@ -171,7 +171,6 @@ fn a_crafts_shadow_reaches_the_road_and_sharpens_with_the_resolution() {
         return;
     };
     let scratch = oag_testdata::scratch::dir("hd-craft-shadow");
-    std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
     let off = frame_of(&image, &scratch, "off", "original");
     let mapped = frame_of(&image, &scratch, "mapped", "original");
     let original = frame_of(&image, &scratch, "original", "original");

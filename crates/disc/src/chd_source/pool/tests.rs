@@ -37,9 +37,7 @@ fn identity_of(path: &Path) -> Identity {
 }
 
 fn scratch(tag: &str) -> oag_testdata::scratch::TempDir {
-    let dir = oag_testdata::scratch::dir(&format!("chd-{tag}"));
-    std::fs::create_dir_all(&dir).unwrap();
-    dir
+    oag_testdata::scratch::dir(&format!("chd-{tag}"))
 }
 
 fn set_modified(path: &Path) {

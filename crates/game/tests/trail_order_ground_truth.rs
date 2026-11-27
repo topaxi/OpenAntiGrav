@@ -78,9 +78,7 @@ fn capture_with(image: &Path, scratch: &Path, flag: Option<[&str; 2]>) -> Vec<u8
 }
 
 fn scratch() -> oag_testdata::scratch::TempDir {
-    let dir = oag_testdata::scratch::dir("trail-order");
-    std::fs::create_dir_all(&dir).expect("creating the scratch directory");
-    dir
+    oag_testdata::scratch::dir("trail-order")
 }
 
 #[test]

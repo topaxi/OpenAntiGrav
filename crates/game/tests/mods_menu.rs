@@ -37,10 +37,7 @@ const STRINGS: &str =
     "[strings]\nTEST_GARAGE = { text = \"GARAGE (from the mod)\", human = true }\n";
 
 fn scratch(name: &str) -> oag_testdata::scratch::TempDir {
-    let dir = oag_testdata::scratch::dir(&format!("mods-menu-{name}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    dir
+    oag_testdata::scratch::dir(&format!("mods-menu-{name}"))
 }
 
 fn folder(root: &Path, manifest: &str, menu: &str) {

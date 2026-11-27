@@ -3,9 +3,7 @@ use oag_replay::{Header, Recorder};
 use super::*;
 
 fn scratch(name: &str) -> oag_testdata::scratch::TempDir {
-    let dir = oag_testdata::scratch::dir(&format!("replays-{name}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    dir
+    oag_testdata::scratch::dir(&format!("replays-{name}"))
 }
 
 /// A replay of `ticks` ticks; each tick is a stored input, so the file's size grows with it.

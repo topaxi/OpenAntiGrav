@@ -20,8 +20,6 @@ fn a_disc_mounts_the_update_folder_beside_it() {
         return;
     };
     let beside = oag_testdata::scratch::dir("hd-update");
-    let _ = std::fs::remove_dir_all(&beside);
-    std::fs::create_dir_all(&beside).expect("a scratch folder");
     let linked = beside.join("hd.iso");
     let absolute = |path: &std::path::Path| path.canonicalize().expect("the path exists");
     std::os::unix::fs::symlink(absolute(&image), &linked).expect("the image link");

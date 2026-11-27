@@ -324,7 +324,6 @@ fn the_fetched_packs_are_each_offered_only_to_their_own_title() {
 fn report_with_a_mod_pack(image: &str) -> Option<Vec<String>> {
     let image = oag_testdata::image(image)?;
     let base = oag_testdata::scratch::dir("pack-platform");
-    let _ = std::fs::remove_dir_all(&base);
     let dir = base.join("Pulse Pack");
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(

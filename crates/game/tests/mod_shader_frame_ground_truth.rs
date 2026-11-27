@@ -176,7 +176,6 @@ fn check(image: &str, ticks: u32) {
         return;
     };
     let scratch = oag_testdata::scratch::dir(&format!("mod-shader-frame-{ticks}"));
-    let _ = std::fs::remove_dir_all(&scratch);
     let (on, off, broken) = (
         scratch.join("on"),
         scratch.join("off"),
@@ -333,7 +332,6 @@ fn check_portal(image: &str, mode: &str, ticks: u32, graphics: &str, outside: f3
     };
     let source = manifest.parent().unwrap();
     let scratch = oag_testdata::scratch::dir(&format!("portal-frame-{ticks}"));
-    let _ = std::fs::remove_dir_all(&scratch);
     let dir = |name: &str, text: Option<&str>| {
         let at = scratch.join(name);
         std::fs::create_dir_all(&at).unwrap();

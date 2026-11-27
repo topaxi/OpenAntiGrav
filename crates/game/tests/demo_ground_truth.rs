@@ -149,8 +149,6 @@ fn the_headless_demo_run_chains_demos_with_nobody_in_them() {
         return;
     };
     let scratch = oag_testdata::scratch::dir("demo-dry-run");
-    let _ = std::fs::remove_dir_all(&scratch);
-    std::fs::create_dir_all(&scratch).expect("a scratch directory");
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
         .arg(&image)
         .args([
@@ -203,8 +201,6 @@ fn a_wallpaper_on_three_outputs_shows_three_cameras() {
         return;
     };
     let scratch = oag_testdata::scratch::dir("demo-wallpaper-windows");
-    let _ = std::fs::remove_dir_all(&scratch);
-    std::fs::create_dir_all(&scratch).expect("a scratch directory");
     let shot = scratch.join("wallpaper.png");
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
         .arg(&image)

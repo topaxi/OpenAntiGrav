@@ -64,7 +64,6 @@ fn hillside(boost: Option<usize>, tag: &str) -> Option<oag_testdata::scratch::Te
         track.speedup_pad_props[pad].insert("boost".into(), 2.0);
     }
     let dir = oag_testdata::scratch::dir(&format!("track-props-{tag}"));
-    std::fs::create_dir_all(&dir).unwrap();
     for entry in std::fs::read_dir(source.parent().unwrap()).unwrap() {
         let path = entry.unwrap().path();
         if path.extension().is_some_and(|e| e == "png") {
@@ -97,7 +96,6 @@ fn hillside_with_triggers(
     };
     track.triggers = vec![at("entrance", entrance), at("exit", exit)];
     let dir = oag_testdata::scratch::dir(&format!("track-portal-{tag}"));
-    std::fs::create_dir_all(&dir).unwrap();
     for entry in std::fs::read_dir(source.parent().unwrap()).unwrap() {
         let path = entry.unwrap().path();
         if path.extension().is_some_and(|e| e == "png") {

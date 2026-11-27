@@ -434,7 +434,6 @@ fn example_dir(path: &str) -> Option<std::path::PathBuf> {
 #[test]
 fn a_save_cut_short_leaves_no_half_written_manifest() {
     let root = oag_testdata::scratch::dir("campaign-cut");
-    let _ = std::fs::remove_dir_all(&root);
     oag_io::cut_the_next_write_after(4);
     assert!(write_mod(&root, &built(), &["wipeout-pulse"]).is_err());
     let folder = std::fs::read_dir(&root)
@@ -452,7 +451,6 @@ fn a_save_cut_short_leaves_no_half_written_manifest() {
 #[test]
 fn a_written_mod_is_found_opened_and_lists_its_campaign() {
     let root = oag_testdata::scratch::dir("campaign-write");
-    let _ = std::fs::remove_dir_all(&root);
     let def = built();
     let first = write_mod(&root, &def, &["wipeout-pulse"]).unwrap();
     let second = write_mod(&root, &def, &["wipeout-pulse"]).unwrap();

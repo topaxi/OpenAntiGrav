@@ -550,7 +550,6 @@ fn menu_page_still(
     label: &str,
 ) -> Vec<u8> {
     let dir = oag_testdata::scratch::dir(&format!("pulse-menu-still-{label}"));
-    let _ = std::fs::remove_dir_all(&dir);
     for empty in ["no-dlc", "no-mods", "config/oag"] {
         std::fs::create_dir_all(dir.join(empty)).expect("a temp directory");
     }

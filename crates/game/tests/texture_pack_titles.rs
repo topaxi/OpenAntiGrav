@@ -9,10 +9,7 @@ use oag_game::mods::Mods;
 use oag_ui::menu::{BUILT_IN, For};
 
 fn base(name: &str) -> oag_testdata::scratch::TempDir {
-    let dir = oag_testdata::scratch::dir(&format!("pack-titles-{name}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    dir
+    oag_testdata::scratch::dir(&format!("pack-titles-{name}"))
 }
 
 /// A pack folder with no manifest, as a player drops one in.

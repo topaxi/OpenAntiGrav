@@ -52,9 +52,7 @@ const FAKE: Encoder = Encoder {
 
 /// A fresh directory under the system's temporary one, unique to this test process.
 fn scratch(name: &str) -> oag_testdata::scratch::TempDir {
-    let dir = oag_testdata::scratch::dir(&format!("astc-{name}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    dir
+    oag_testdata::scratch::dir(&format!("astc-{name}"))
 }
 
 #[test]

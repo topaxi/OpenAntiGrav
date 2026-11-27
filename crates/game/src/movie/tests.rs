@@ -231,7 +231,6 @@ fn an_uncapped_conversion_keeps_the_count_it_was_measured_at() {
 #[test]
 fn a_cache_lookup_finds_only_a_file_that_is_really_there() {
     let dir = oag_testdata::scratch::dir("cached-unit");
-    std::fs::create_dir_all(&dir).expect("the temp directory");
     let to = Conversion {
         key: "0badcafe-1234",
         cache_dir: &dir,
@@ -574,7 +573,6 @@ fn a_polled_feed_restarts_at_position_zero_and_wraps_a_repeating_movie() {
 #[test]
 fn concurrent_writes_of_one_key_leave_one_complete_file() {
     let dir = oag_testdata::scratch::dir("atomic");
-    std::fs::create_dir_all(&dir).unwrap();
     let out = dir.join("key-1-2x2-av1-all.ivf");
     let payload = vec![7u8; 1 << 20];
     std::thread::scope(|scope| {

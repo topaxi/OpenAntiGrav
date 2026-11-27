@@ -140,9 +140,7 @@ fn room(files: [&std::path::Path; 2], dialers: [Option<Box<dyn Dialer>>; 2]) -> 
 }
 
 fn scratch(name: &str) -> oag_testdata::scratch::TempDir {
-    let dir = oag_testdata::scratch::dir(&format!("net-play-rejoin-{name}"));
-    std::fs::create_dir_all(&dir).unwrap();
-    dir
+    oag_testdata::scratch::dir(&format!("net-play-rejoin-{name}"))
 }
 
 /// One round: the host ticks, every client takes its step. `dead` is a client that is not

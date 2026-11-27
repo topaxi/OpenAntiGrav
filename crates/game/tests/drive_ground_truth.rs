@@ -865,8 +865,6 @@ fn a_race_resumed_from_the_pause_menu_draws_its_hud_at_the_new_screen_size() {
         return;
     };
     let shots = oag_testdata::scratch::dir("drive-screen-size-live");
-    let _ = std::fs::remove_dir_all(&shots);
-    std::fs::create_dir_all(&shots).expect("a screenshot directory");
     let (before, after) = (shots.join("before.png"), shots.join("after.png"));
     let run = drive(
         &image,

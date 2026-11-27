@@ -141,7 +141,6 @@ mod tests {
             "Venom",
         );
         let root = oag_testdata::scratch::dir("arm");
-        let _ = std::fs::remove_dir_all(&root);
         let lap = GhostLap {
             lap_ticks: 100,
             poses: vec![

@@ -701,7 +701,6 @@ fn a_saved_picture_is_the_frame_the_player_saw_at_its_full_size() {
         return;
     };
     let shots = oag_testdata::scratch::dir("photo-pixels-shots");
-    let _ = std::fs::remove_dir_all(&shots);
     // The camera is moved off the craft. The reference is a screenshot with the help hidden and the
     // HUD off. The first shot is taken with the help up, so the screen's text would show in it if
     // it were drawn into the picture; the second with the HUD row on, so the HUD would show in it.
@@ -946,7 +945,6 @@ fn the_games_motion_blur_never_reaches_a_photo() {
         return;
     };
     let shots = oag_testdata::scratch::dir("photo-blur-shots");
-    let _ = std::fs::remove_dir_all(&shots);
     let script = format!(
         "{TO_THE_RACE} escape; until stage=menu; select photo_mode; press cross; \
          until photo=free within 200; press select select; ticks 5; hold left 40; hold up 1; \
@@ -979,7 +977,6 @@ fn a_motion_blur_shot_smears_what_it_should_and_any_input_abandons_it() {
         return;
     };
     let shots = oag_testdata::scratch::dir("photo-mblur-shots");
-    let _ = std::fs::remove_dir_all(&shots);
     let to_the_race = "boot; select racebox; press cross; until page=race; \
          set race.mode=time_trial; select launch_race; press cross; until screen=picker; \
          press cross; until screen.id=ship-select; press cross; until stage=race within 4000; \
@@ -1122,8 +1119,6 @@ fn the_right_stick_and_the_triggers_move_the_view_and_never_the_race() {
         return;
     };
     let shots = oag_testdata::scratch::dir("photo-bindings-shots");
-    let _ = std::fs::remove_dir_all(&shots);
-    std::fs::create_dir_all(&shots).expect("a directory");
     let to_the_throttle = TO_THE_TIME_TRIAL.replace("ticks 400; ", "hold cross 700; ");
     let control = drive_unmodded(
         &image,
@@ -1271,8 +1266,6 @@ fn fingers_move_the_view_and_never_the_race() {
         return;
     };
     let shots = oag_testdata::scratch::dir("photo-touch-shots");
-    let _ = std::fs::remove_dir_all(&shots);
-    std::fs::create_dir_all(&shots).expect("a directory");
     let to_the_throttle = TO_THE_TIME_TRIAL.replace("ticks 400; ", "hold cross 700; ");
     let control = drive_unmodded(
         &image,
@@ -1347,7 +1340,6 @@ fn a_photo_carries_its_race_and_resimulates_to_the_hash_it_was_taken_at() {
         return;
     };
     let shots = oag_testdata::scratch::dir("photo-meta-shots");
-    let _ = std::fs::remove_dir_all(&shots);
     let to_the_race = TO_THE_TIME_TRIAL.replace("ticks 400; ", "hold cross 400; ");
     let run = drive_unmodded(
         &image,

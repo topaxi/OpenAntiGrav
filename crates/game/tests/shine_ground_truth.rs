@@ -191,7 +191,6 @@ fn the_extra_pass_changes_the_grid_frame() {
         return;
     };
     let scratch = oag_testdata::scratch::dir("shine");
-    std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
     let with = grid_frame(&image, &scratch, "with", &[]);
     let without = grid_frame(&image, &scratch, "without", &["--no-hull-shine"]);
     std::fs::remove_dir_all(&scratch).ok();
@@ -208,7 +207,6 @@ fn the_circuits_extra_pass_changes_the_grid_frame() {
         return;
     };
     let scratch = oag_testdata::scratch::dir("track-shine");
-    std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
     let track = ["--track", r"Data\Environments\07_Track\track.vex"];
     let with = grid_frame(&image, &scratch, "with", &track);
     let without = grid_frame(

@@ -68,7 +68,6 @@ fn an_encrypted_ps3_image_is_listed_with_the_fix_rather_than_hidden() {
     // A symlink in a directory of its own, so the `.dkey` that sits beside the
     // real image is not beside this one.
     let dir = oag_testdata::scratch::dir("launcher-locked");
-    std::fs::create_dir_all(&dir).unwrap();
     let link = dir.join("hdfury-ps3-eu.iso");
     let _ = std::fs::remove_file(&link);
     std::os::unix::fs::symlink(&encrypted, &link).unwrap();
@@ -113,7 +112,6 @@ fn a_dropped_key_file_unlocks_the_encrypted_image_it_belongs_to() {
         return;
     };
     let dir = oag_testdata::scratch::dir("launcher-drop");
-    std::fs::create_dir_all(&dir).unwrap();
     let link = dir.join("hdfury-ps3-eu.iso");
     let _ = std::fs::remove_file(&link);
     std::os::unix::fs::symlink(&encrypted, &link).unwrap();

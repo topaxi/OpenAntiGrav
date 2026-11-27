@@ -15,10 +15,7 @@ description = "A mod the package carries."
 "#;
 
 fn scratch(name: &str) -> oag_testdata::scratch::TempDir {
-    let dir = oag_testdata::scratch::dir(&format!("mobile-{name}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    dir
+    oag_testdata::scratch::dir(&format!("mobile-{name}"))
 }
 
 /// A package's assets: the files under [`ROOT`] and the index the build writes for them.

@@ -407,7 +407,6 @@ fn hillside() -> oag_mod::Mod {
 fn scratch_mod(name: &str, campaign: &str, broken: bool) -> oag_mod::Mod {
     let source = examples().join("example-campaign");
     let dir = oag_testdata::scratch::dir(&format!("custom-{name}"));
-    let _ = std::fs::remove_dir_all(&dir);
     for sub in ["campaigns", "pilots", "tracks", "ui"] {
         std::fs::create_dir_all(dir.join(sub)).unwrap();
     }
@@ -1175,7 +1174,6 @@ fn a_mods_tier_words_follow_the_active_language_and_fall_back_to_english() {
 #[test]
 fn a_mod_folders_strings_files_are_read_by_language() {
     let dir = oag_testdata::scratch::dir("words");
-    let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(dir.join("strings")).unwrap();
     std::fs::write(
         dir.join("oag-mod.toml"),

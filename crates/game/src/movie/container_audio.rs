@@ -273,7 +273,6 @@ mod tests {
     #[test]
     fn a_truncated_cache_file_is_rejected() {
         let dir = oag_testdata::scratch::dir("container-audio-test");
-        std::fs::create_dir_all(&dir).expect("creating a scratch dir");
         let path = dir.join("truncated.s16le");
         std::fs::write(&path, [0u8; 3]).expect("writing 3 stray bytes");
         assert!(read_cached(&path, 2, 48_000).is_none());
@@ -285,7 +284,6 @@ mod tests {
     #[test]
     fn a_whole_cache_file_reads_back_as_pcm() {
         let dir = oag_testdata::scratch::dir("container-audio-test");
-        std::fs::create_dir_all(&dir).expect("creating a scratch dir");
         let path = dir.join("whole.s16le");
         let mut bytes = Vec::new();
         for sample in [1i16, -1, 2, -2] {

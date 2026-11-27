@@ -137,7 +137,6 @@ fn the_plasma_bolts_head_has_a_violet_core_not_a_white_disc() {
         return;
     };
     let scratch = oag_testdata::scratch::dir("hd-plasma-ball");
-    std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
     let control = frame_of(&image, &scratch, false, None);
     assert_eq!(
         count(&control, BALL, violet) + count(&control, BALL, white),

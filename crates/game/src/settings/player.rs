@@ -275,7 +275,6 @@ mod tests {
     #[test]
     fn a_hand_edited_file_is_cleaned_when_it_loads() {
         let dir = oag_testdata::scratch::dir("player-clean");
-        std::fs::create_dir_all(&dir).expect("scratch dir");
         let file = dir.join("settings.toml");
         std::fs::write(
             &file,

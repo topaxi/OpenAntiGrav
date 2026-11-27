@@ -189,7 +189,6 @@ fn a_speed_blur_shot_is_drawn_again_with_its_zoom_history() {
         return;
     };
     let shots = oag_testdata::scratch::dir("photo-speed-shots");
-    let _ = std::fs::remove_dir_all(&shots);
     let run = drive(
         &image,
         "speed-blur",

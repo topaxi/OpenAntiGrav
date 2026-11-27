@@ -123,7 +123,6 @@ fn the_leach_ball_glows_face_on_from_the_real_eye() {
         return;
     };
     let scratch = oag_testdata::scratch::dir("hd-leach-ball");
-    std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
     let locked = frame_of(&image, &scratch, true);
     let control = frame_of(&image, &scratch, false);
     std::fs::remove_dir_all(&scratch).ok();

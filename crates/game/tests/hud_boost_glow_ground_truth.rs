@@ -123,9 +123,7 @@ fn mean(rgba: &[u8], channel: usize, x: (usize, usize), y: (usize, usize)) -> f3
 }
 
 fn scratch() -> oag_testdata::scratch::TempDir {
-    let dir = oag_testdata::scratch::dir("boost-glow");
-    std::fs::create_dir_all(&dir).expect("creating the scratch directory");
-    dir
+    oag_testdata::scratch::dir("boost-glow")
 }
 
 #[test]

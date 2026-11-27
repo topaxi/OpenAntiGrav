@@ -105,7 +105,6 @@ fn the_leach_strip_is_drawn_from_the_players_hull_toward_the_rival() {
         return;
     };
     let scratch = oag_testdata::scratch::dir("hd-leach-strip");
-    std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
     let locked = frame_of(&image, &scratch, true);
     let control = frame_of(&image, &scratch, false);
     std::fs::remove_dir_all(&scratch).ok();

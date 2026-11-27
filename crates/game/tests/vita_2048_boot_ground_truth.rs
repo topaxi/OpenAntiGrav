@@ -1129,7 +1129,6 @@ fn pixels_of(png: &[u8]) -> Vec<u8> {
 fn the_select_team_capture_draws_the_hull_at_the_widgets_origin() {
     let Some(source) = source() else { return };
     let scratch = oag_testdata::scratch::dir("team-hull");
-    std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
     let out = scratch.join("team.png");
     let status = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
         .arg(&source)
@@ -1180,7 +1179,6 @@ fn the_select_team_capture_draws_the_hull_at_the_widgets_origin() {
 fn the_title_capture_settles_on_the_logo_and_the_prompt() {
     let Some(source) = source() else { return };
     let scratch = oag_testdata::scratch::dir("title-settled");
-    std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
     let out = scratch.join("title.png");
     let status = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
         .arg(&source)

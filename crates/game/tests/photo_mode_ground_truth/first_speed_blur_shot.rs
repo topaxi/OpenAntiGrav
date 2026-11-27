@@ -35,7 +35,6 @@ fn two_shots_of_a_visit(
     args: &[&str],
 ) -> (f32, f32, f32) {
     let shots = oag_testdata::scratch::dir(&format!("photo-first-speed-{tag}"));
-    let _ = std::fs::remove_dir_all(&shots);
     let run = drive_with(
         image,
         tag,

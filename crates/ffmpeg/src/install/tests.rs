@@ -2,10 +2,7 @@ use super::*;
 use std::net::TcpListener;
 
 fn temp(name: &str) -> oag_testdata::scratch::TempDir {
-    let dir = oag_testdata::scratch::dir(&format!("ffmpeg-inst-{name}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    dir
+    oag_testdata::scratch::dir(&format!("ffmpeg-inst-{name}"))
 }
 
 fn members() -> Vec<(String, Vec<u8>)> {

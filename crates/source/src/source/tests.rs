@@ -679,10 +679,7 @@ fn a_disc_update_mounts_over_its_release_and_is_not_offered() {
 }
 
 fn temp_dir(name: &str) -> oag_testdata::scratch::TempDir {
-    let directory = oag_testdata::scratch::dir(&format!("source-{name}"));
-    let _ = std::fs::remove_dir_all(&directory);
-    std::fs::create_dir_all(&directory).unwrap();
-    directory
+    oag_testdata::scratch::dir(&format!("source-{name}"))
 }
 
 /// A Windows zip or a tarball has no `$APPIMAGE`: the executable's own folder is

@@ -71,7 +71,6 @@ fn rgb_of(png: &[u8]) -> Vec<[u8; 3]> {
 fn frame_of(weapon: &str, ticks: u32, pose: Option<&str>) -> Option<Vec<[u8; 3]>> {
     let image = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso")?;
     let scratch = oag_testdata::scratch::dir(&format!("hd-weapon-scene-{weapon}-{ticks}"));
-    std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
     let out = scratch.join("frame.png");
     let script = scratch.join("fire.inputs");
     std::fs::write(&script, "300 cross\n2 cross square\n2000 cross\n").expect("the input script");
@@ -310,7 +309,6 @@ fn a_plasma_explosions_sphere_fades_with_its_age() {
 fn detonator_volley_frame(weapon_lights: bool) -> Option<Vec<[u8; 3]>> {
     let image = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso")?;
     let scratch = oag_testdata::scratch::dir(&format!("det-volley-{weapon_lights}"));
-    std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
     let out = scratch.join("frame.png");
     let script = scratch.join("fire.inputs");
     std::fs::write(&script, "385 none\n2 square\n1 none\n").expect("the input script");

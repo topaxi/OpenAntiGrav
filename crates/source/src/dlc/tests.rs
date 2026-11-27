@@ -49,10 +49,7 @@ fn write_sample(dir: &std::path::Path, payload: &[u8]) -> std::path::PathBuf {
 /// A directory of this test's own, the same shape
 /// [`crate::source`]'s tests use, so nothing here touches `data/cache`.
 fn temp_dir(name: &str) -> oag_testdata::scratch::TempDir {
-    let directory = oag_testdata::scratch::dir(&format!("dlc-cache-{name}"));
-    let _ = std::fs::remove_dir_all(&directory);
-    std::fs::create_dir_all(&directory).unwrap();
-    directory
+    oag_testdata::scratch::dir(&format!("dlc-cache-{name}"))
 }
 
 #[test]

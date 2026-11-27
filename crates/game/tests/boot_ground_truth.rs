@@ -452,7 +452,6 @@ fn the_title_pair_route_stays_on_show_logo_on_a_fresh_profile() {
         return;
     };
     let scratch = oag_testdata::scratch::dir("title-route");
-    std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
         .arg(&image)
         .args(title_pair_route())

@@ -23,9 +23,7 @@ use std::path::Path;
 const PANES: (usize, usize, usize, usize) = (250, 290, 365, 370);
 
 fn scratch(name: &str) -> oag_testdata::scratch::TempDir {
-    let dir = oag_testdata::scratch::dir(&format!("flyby-pane-{name}"));
-    std::fs::create_dir_all(&dir).expect("a scratch directory");
-    dir
+    oag_testdata::scratch::dir(&format!("flyby-pane-{name}"))
 }
 
 /// The held shot at `alpha`, RGBA.

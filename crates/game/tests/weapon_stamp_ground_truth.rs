@@ -105,7 +105,6 @@ fn a_laid_bombs_body_and_lamp_stamp_the_mask() {
         return;
     };
     let scratch = oag_testdata::scratch::dir("weapon-stamp");
-    std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
     let bomb = mask_of(&image, &scratch, Some("bomb"), "bomb");
     let control = mask_of(&image, &scratch, None, "control");
     std::fs::remove_dir_all(&scratch).ok();

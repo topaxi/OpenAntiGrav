@@ -571,7 +571,6 @@ fn the_campaign_select_frame_shows_the_2048_banner() {
         return;
     };
     let dir = oag_testdata::scratch::dir("omega-campaign-card-art-ground-truth");
-    std::fs::create_dir_all(&dir).expect("a temp directory");
     let out = dir.join("campaign-select.png");
     let status = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
         .arg(&omega)
@@ -701,7 +700,6 @@ fn omegas_footer_prompts_flow_to_where_the_original_draws_them() {
 /// Omega's Track Select still, `flags` added, as RGBA.
 fn omega_track_select_still(omega: &std::path::Path, tag: &str, flags: &[&str]) -> Vec<u8> {
     let dir = oag_testdata::scratch::dir(&format!("omega-track-hex-ground-truth-{tag}"));
-    std::fs::create_dir_all(&dir).expect("a temp directory");
     let out = dir.join("track-select.png");
     let status = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
         .arg(omega)

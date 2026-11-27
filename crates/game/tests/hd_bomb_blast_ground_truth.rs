@@ -72,7 +72,6 @@ fn rgb_of(png: &[u8]) -> Vec<[u8; 3]> {
 fn frame_of(ticks: u32) -> Option<Vec<[u8; 3]>> {
     let image = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso")?;
     let scratch = oag_testdata::scratch::dir(&format!("hd-bomb-blast-{ticks}"));
-    std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
     let out = scratch.join("frame.png");
     let script = scratch.join("lay.inputs");
     std::fs::write(&script, "390 cross\n1 cross square\n400 cross\n").expect("the input script");

@@ -61,10 +61,7 @@ mod tests {
     use super::*;
 
     fn scratch(name: &str) -> oag_testdata::scratch::TempDir {
-        let dir = oag_testdata::scratch::dir(&format!("revision-{name}"));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        dir
+        oag_testdata::scratch::dir(&format!("revision-{name}"))
     }
 
     #[test]

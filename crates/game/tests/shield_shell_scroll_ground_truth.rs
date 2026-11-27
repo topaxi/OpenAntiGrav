@@ -135,9 +135,7 @@ fn frame(
 }
 
 fn scratch(title: &str) -> oag_testdata::scratch::TempDir {
-    let dir = oag_testdata::scratch::dir(&format!("shield-scroll-{title}"));
-    std::fs::create_dir_all(&dir).expect("creating the scratch directory");
-    dir
+    oag_testdata::scratch::dir(&format!("shield-scroll-{title}"))
 }
 
 /// How many pixels differ between `a` and `b` where `control_a` and `control_b`

@@ -95,9 +95,7 @@ fn frame(image: &Path, scratch: &Path, name: &str, effect: &str, clock: &str) ->
 }
 
 fn scratch() -> oag_testdata::scratch::TempDir {
-    let dir = oag_testdata::scratch::dir("mag-floor-scroll");
-    std::fs::create_dir_all(&dir).expect("creating the scratch directory");
-    dir
+    oag_testdata::scratch::dir("mag-floor-scroll")
 }
 
 /// The summed absolute RGB difference between `a` and `b` where `control_a`

@@ -94,7 +94,6 @@ fn a_mesh_whose_texture_did_not_resolve_draws_nothing_and_says_so() {
 #[test]
 fn an_image_beside_the_manifest_reads_as_its_pixels() {
     let dir = oag_testdata::scratch::dir("art-png");
-    std::fs::create_dir_all(&dir).unwrap();
     let pixels = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
     std::fs::write(
         dir.join("t.png"),

@@ -64,7 +64,6 @@ fn measure(path: &str) -> Option<Measured> {
 /// `docs/formats/mp4.md`, "The audio decodes in process".
 fn compare_with_ffmpeg(label: &str, blob: &[u8], ours: &[i16]) {
     let dir = oag_testdata::scratch::dir("aac-gt");
-    std::fs::create_dir_all(&dir).unwrap();
     let input = dir.join("in.mp4");
     std::fs::write(&input, blob).unwrap();
     let out = match std::process::Command::new("ffmpeg")

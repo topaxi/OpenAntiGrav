@@ -89,7 +89,6 @@ fn a_destroyed_device_is_a_loss_and_its_later_errors_are_swallowed() {
 #[test]
 fn the_note_stays_until_it_is_cleared() {
     let dir = oag_testdata::scratch::dir("device-loss");
-    let _ = std::fs::remove_dir_all(&dir);
     assert!(!marker_present_in(&dir), "no loss yet");
     leave_marker_in(
         &dir,

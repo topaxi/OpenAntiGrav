@@ -13,9 +13,7 @@ fn key() -> Key {
 }
 
 fn scratch(name: &str) -> oag_testdata::scratch::TempDir {
-    let dir = oag_testdata::scratch::dir(&format!("ghosts-{name}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    dir
+    oag_testdata::scratch::dir(&format!("ghosts-{name}"))
 }
 
 fn replay(key: &Key, lap_ticks: u32) -> Replay {

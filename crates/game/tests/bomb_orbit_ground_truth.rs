@@ -112,9 +112,7 @@ fn frame(image: &Path, scratch: &Path, name: &str, give: Option<&str>, clock: &s
 }
 
 fn scratch() -> oag_testdata::scratch::TempDir {
-    let dir = oag_testdata::scratch::dir("bomb-orbit");
-    std::fs::create_dir_all(&dir).expect("creating the scratch directory");
-    dir
+    oag_testdata::scratch::dir("bomb-orbit")
 }
 
 /// How many pixels differ between `a` and `b` where `control_a` and `control_b`

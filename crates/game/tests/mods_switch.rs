@@ -34,7 +34,6 @@ target = "records"
 /// Garage, a mod that adds one row, and a file that is not a zip.
 fn base(name: &str) -> oag_testdata::scratch::TempDir {
     let dir = oag_testdata::scratch::dir(&format!("mods-switch-{name}"));
-    let _ = std::fs::remove_dir_all(&dir);
     let garage = dir.join("garage");
     std::fs::create_dir_all(&garage).unwrap();
     std::fs::write(garage.join("oag-mod.toml"), MANIFEST).unwrap();
@@ -226,10 +225,7 @@ fn fingerprint_of(dir: &Path) -> u64 {
 }
 
 fn empty_base(name: &str) -> oag_testdata::scratch::TempDir {
-    let empty = oag_testdata::scratch::dir(&format!("mods-switch-{name}"));
-    let _ = std::fs::remove_dir_all(&empty);
-    std::fs::create_dir_all(&empty).unwrap();
-    empty
+    oag_testdata::scratch::dir(&format!("mods-switch-{name}"))
 }
 
 #[test]

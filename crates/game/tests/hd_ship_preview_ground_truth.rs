@@ -560,7 +560,6 @@ fn the_live_screen_draws_the_hull_where_the_fit_rests_it() {
         return;
     };
     let dir = oag_testdata::scratch::dir("hd-ship-swap-live");
-    let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(dir.join("mods")).expect("a scratch directory");
     let shot = |name: &str| dir.join(format!("{name}.png"));
     let script = format!(
@@ -817,7 +816,6 @@ fn ship_selects_hull_is_as_bright_as_the_original_on_both_paths() {
     assert!(capture > 150.0, "the capture's hull is {capture:.2}");
 
     let dir = oag_testdata::scratch::dir("hd-ship-light-live");
-    let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(dir.join("mods")).expect("a scratch directory");
     let shot = dir.join("settled.png");
     let script = format!(

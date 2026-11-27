@@ -69,10 +69,7 @@ fn deflate(data: &[u8]) -> Vec<u8> {
 }
 
 fn scratch(name: &str) -> oag_testdata::scratch::TempDir {
-    let dir = oag_testdata::scratch::dir(&format!("vpk-{name}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    dir
+    oag_testdata::scratch::dir(&format!("vpk-{name}"))
 }
 
 fn put(dir: &Path, name: &str, bytes: &[u8]) -> PathBuf {

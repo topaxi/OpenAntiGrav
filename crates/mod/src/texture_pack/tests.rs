@@ -20,10 +20,7 @@ fn resolve(serial: &str) -> Option<String> {
 }
 
 fn scratch(name: &str) -> oag_testdata::scratch::TempDir {
-    let dir = oag_testdata::scratch::dir(&format!("pack-{name}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    dir
+    oag_testdata::scratch::dir(&format!("pack-{name}"))
 }
 
 fn zip_of(path: &Path, entries: &[(&str, &[u8])]) {

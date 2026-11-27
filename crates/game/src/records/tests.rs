@@ -1048,7 +1048,6 @@ fn the_campaign_cursor_is_kept_per_campaign_and_round_trips() {
 #[test]
 fn background_saves_land_in_order_and_none_is_lost() {
     let dir = oag_testdata::scratch::dir("records-order");
-    std::fs::create_dir_all(&dir).expect("a scratch directory");
     let file = dir.join("records.toml");
     let with_cursor = |event: &str| {
         let mut store = Store::default();

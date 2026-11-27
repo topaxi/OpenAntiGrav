@@ -31,9 +31,7 @@ use std::process::Command;
 const SIZE: (usize, usize) = (3360, 1440);
 
 fn scratch() -> oag_testdata::scratch::TempDir {
-    let dir = oag_testdata::scratch::dir("scenery-sort");
-    std::fs::create_dir_all(&dir).expect("a scratch directory");
-    dir
+    oag_testdata::scratch::dir("scenery-sort")
 }
 
 /// The fly-by frame at tick 148, RGBA. `sort` is `--scenery-sort`'s value or none, `tint` the

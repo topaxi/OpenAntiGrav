@@ -63,9 +63,7 @@ fn capture(image: &Path, scratch: &Path, detail: Option<&str>) -> Vec<u8> {
 }
 
 fn scratch() -> oag_testdata::scratch::TempDir {
-    let dir = oag_testdata::scratch::dir("texture-detail");
-    std::fs::create_dir_all(&dir).expect("creating the scratch directory");
-    dir
+    oag_testdata::scratch::dir("texture-detail")
 }
 
 #[test]

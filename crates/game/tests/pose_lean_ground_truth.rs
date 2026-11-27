@@ -45,9 +45,7 @@ fn last(path: &Path, name: &str) -> f32 {
 }
 
 fn scratch() -> oag_testdata::scratch::TempDir {
-    let dir = oag_testdata::scratch::dir("pose-lean");
-    std::fs::create_dir_all(&dir).expect("creating the scratch directory");
-    dir
+    oag_testdata::scratch::dir("pose-lean")
 }
 
 #[test]

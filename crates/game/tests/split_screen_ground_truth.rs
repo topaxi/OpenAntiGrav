@@ -176,7 +176,6 @@ fn players_draws_distinct_cameras_into_distinct_rectangles() {
         return;
     };
     let scratch = oag_testdata::scratch::dir("split-screen");
-    std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
 
     let none = frame(&image, &scratch, "none", None, "off");
     let one = frame(&image, &scratch, "one", Some(1), "off");
@@ -230,7 +229,6 @@ fn the_stored_name_is_the_tag_over_the_first_seats_craft() {
         return;
     };
     let scratch = oag_testdata::scratch::dir("split-name");
-    std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
     let plain = frame(&image, &scratch, "plain", Some(2), "off");
     let settings = scratch.join("config").join("oag");
     std::fs::create_dir_all(&settings).expect("creating the settings directory");
@@ -262,7 +260,6 @@ fn four_views_survive_a_multisample_resolve() {
         return;
     };
     let scratch = oag_testdata::scratch::dir("split-msaa");
-    std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
     let four = frame(&image, &scratch, "four", Some(4), "4x");
     std::fs::remove_dir_all(&scratch).ok();
     let (w, h) = SIZE;
@@ -288,7 +285,6 @@ fn fsr3_resolves_each_view_from_its_own_rectangle() {
         return;
     };
     let scratch = oag_testdata::scratch::dir("split-fsr3");
-    std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
     let two = frame_with(
         &image,
         &scratch,
@@ -315,7 +311,6 @@ fn fsr3_resolves_each_view_from_its_own_rectangle() {
 /// Two views, top and bottom, each holding a picture of its own.
 fn two_up_draws_two_pictures(source: &Path, tag: &str) {
     let scratch = oag_testdata::scratch::dir(&format!("split-{tag}"));
-    std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
     let two = frame(source, &scratch, "two", Some(2), "off");
     std::fs::remove_dir_all(&scratch).ok();
     let (w, h) = SIZE;
@@ -341,7 +336,6 @@ fn hd_four_views_each_keep_their_picture() {
         return;
     };
     let scratch = oag_testdata::scratch::dir("split-hd-four");
-    std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
     let four = frame(&image, &scratch, "four", Some(4), "off");
     std::fs::remove_dir_all(&scratch).ok();
     let (w, h) = SIZE;

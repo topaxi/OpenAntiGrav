@@ -244,7 +244,6 @@ fn a_lone_craft_races_a_disc_circuit_and_its_exported_file_identically() {
     };
     let image = image.display().to_string();
     let dir = oag_testdata::scratch::dir("trackfile");
-    std::fs::create_dir_all(&dir).unwrap();
     for track in [
         r"Data\Environments\03_Track\track.vex",
         r"Data\Environments\16_Track\track.vex",
@@ -459,7 +458,6 @@ fn lions_den_races_the_same_converted_as_loaded_directly() {
         .find(|p| p.parent().is_some_and(|d| d.ends_with("1392209921")))
         .expect("Lion's Den is in the census");
     let dir = oag_testdata::scratch::dir("trackfile-lion");
-    std::fs::create_dir_all(&dir).unwrap();
     let manifest = dir.join("lions-den.track.toml");
     oag_trackfile::write(&oag_bng_import::read(&wtrk).unwrap(), &manifest).unwrap();
 
@@ -694,7 +692,6 @@ fn a_track_file_loads_on_the_disc_it_borrows_from_and_where_its_author_offers_it
 
     // The same loop pinned to Pulse by a host sky.
     let dir = oag_testdata::scratch::dir("trackfile-host");
-    std::fs::create_dir_all(&dir).unwrap();
     let mut pinned = oag_trackfile::read(&own).unwrap().track;
     let art = pinned.art.as_mut().unwrap();
     art.skybox = None;

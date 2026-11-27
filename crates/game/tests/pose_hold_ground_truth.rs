@@ -59,9 +59,7 @@ fn run(image: &Path, scratch: &Path, hold: bool) -> ((f64, [f64; 3]), (f64, [f64
 }
 
 fn scratch() -> oag_testdata::scratch::TempDir {
-    let dir = oag_testdata::scratch::dir("pose-hold");
-    std::fs::create_dir_all(&dir).expect("creating the scratch directory");
-    dir
+    oag_testdata::scratch::dir("pose-hold")
 }
 
 #[test]

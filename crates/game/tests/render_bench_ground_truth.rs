@@ -386,8 +386,6 @@ fn run_benchmark_is_not_offered_over_a_parked_race() {
         return;
     };
     let dir = oag_testdata::scratch::dir("in-game-benchmark-parked-ground-truth");
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a temp directory");
     let log = dir.join("state.jsonl");
     let rows = |middle: &str| -> Vec<String> {
         let _ = std::fs::remove_file(&log);
@@ -827,7 +825,6 @@ fn the_mods_row_is_left_out_while_no_mod_is_enabled() {
         return;
     };
     let base = oag_testdata::scratch::dir("in-game-benchmark-no-mods-ground-truth");
-    let _ = std::fs::remove_dir_all(&base);
     let empty = base.join("mods");
     std::fs::create_dir_all(&empty).expect("a temp directory");
     let log = base.join("state.jsonl");
@@ -880,8 +877,6 @@ fn the_stats_screen_swaps_to_details_and_answers_a_copy() {
         return;
     };
     let dir = oag_testdata::scratch::dir("in-game-benchmark-stats-ground-truth");
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a temp directory");
     let shot = |name: &str| dir.join(format!("{name}.png"));
     // The focus moves with the presses, so each action is compared with the screen the same focus
     // gave just before it.

@@ -102,7 +102,6 @@ fn the_grid_frame_of_outpost_7_stamps_its_blended_glow_batches() {
         return;
     };
     let scratch = oag_testdata::scratch::dir("glow-stamp");
-    std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
     let mask = mask_of(&image, &scratch);
     std::fs::remove_dir_all(&scratch).ok();
 
