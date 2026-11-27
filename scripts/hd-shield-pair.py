@@ -66,6 +66,7 @@ def main():
     ap.add_argument("--lag", type=int, required=True, help="ticks the picture is behind the RAM read")
     ap.add_argument("--lag-basis", default="picked by rendering ours at several lags and scoring against theirs.png")
     ap.add_argument("--camera-from", help="another stem's camera, for a frame whose camera is missing (a resting camera)")
+    ap.add_argument("--team", default="Feisar", help="the hull the original must fly; another one is refused")
     ap.add_argument("--oag-game", type=Path, default=HERE.parent / "target/debug/oag-game")
     ap.add_argument("--no-render", action="store_true")
     args = ap.parse_args()
@@ -96,6 +97,8 @@ def main():
              "fwd": c["rows"][2], "pos": c["pos"], "vel": c["vel"]} for n, c in enumerate(crafts)]
     ce.write_field_csv(out / "field.csv", rows, with_player=True)
     player = next(c for c in crafts if c["player"])
+    if player["team"].lower() != args.team.lower():
+        sys.exit("refused: the original flies %s, not %s (--team)" % (player["team"], args.team))
 
     ticks = go + round(ship["race_clock_s"] * 60) - args.lag
     age_ticks = round(shield["time_s"] * 60) - args.lag
