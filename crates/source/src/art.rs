@@ -93,17 +93,10 @@ fn directory(root: &Path, ps4_packages: impl FnOnce() -> Vec<PathBuf>) -> Vec<Ar
         let logo = file(&root.join("ICON0.PNG"));
         return one("pic1", pic1, logo);
     }
-    if root
-        .join("omega-eu-patch")
-        .join(oag_omega::archives::DATA09)
-        .is_file()
-    {
+    if let Some(mark) = crate::title::ps4_folder_content_id(root) {
         return ps4_packages()
             .iter()
-            .filter(|pkg| {
-                ps4_pkg::header::content_id(pkg)
-                    .is_some_and(|id| id.contains(oag_omega::archives::PKG_CONTENT_ID))
-            })
+            .filter(|pkg| ps4_pkg::header::content_id(pkg).is_some_and(|id| id.contains(mark)))
             .map(|pkg| ps4_package(pkg))
             .find(|found| !found.is_empty())
             .unwrap_or_default();
