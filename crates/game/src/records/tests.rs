@@ -1216,11 +1216,8 @@ fn a_run_that_named_a_circuit_files_under_that_one() {
     );
 }
 
-fn scratch_records(name: &str) -> std::path::PathBuf {
-    let dir = oag_testdata::scratch::dir(&format!("records-{name}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a scratch directory");
-    dir.join("records.toml")
+fn scratch_records(name: &str) -> oag_testdata::scratch::TempDir {
+    oag_testdata::scratch::dir(&format!("records-{name}")).child("records.toml")
 }
 
 fn store_with_a_gold() -> Store {

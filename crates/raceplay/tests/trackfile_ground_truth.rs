@@ -381,7 +381,6 @@ fn a_lone_craft_races_a_disc_circuit_and_its_exported_file_identically() {
         println!("{track}: lap {moved}, |position| {travelled:.0}");
         assert!(travelled > 100.0, "{track}: the AI craft did not drive");
     }
-    std::fs::remove_dir_all(dir).ok();
 }
 
 #[cfg(feature = "ballisticng")]

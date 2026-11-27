@@ -22,10 +22,21 @@ use std::sync::atomic::{AtomicU64, Ordering};
 #[derive(Debug)]
 #[must_use = "the directory is removed as soon as this guard drops"]
 pub struct TempDir {
+    /// What is removed.
+    root: PathBuf,
+    /// What the value reads as: `root`, or a [`TempDir::child`] of it.
     path: PathBuf,
 }
 
 impl TempDir {
+    /// The same guard reading as `name` inside the directory, for a helper that
+    /// hands a test one file to use and keeps its directory alive with it.
+    /// Nothing is created at `name`.
+    pub fn child(mut self, name: impl AsRef<Path>) -> Self {
+        self.path.push(name);
+        self
+    }
+
     /// The directory's path.
     #[must_use]
     pub fn path(&self) -> &Path {
@@ -41,13 +52,15 @@ impl Deref for TempDir {
     }
 }
 
-impl AsRef<Path> for TempDir {
+// On the reference only: handed to `Command::env` or `fs::write` by value, the
+// guard would drop inside that call and take the directory with it.
+impl AsRef<Path> for &TempDir {
     fn as_ref(&self) -> &Path {
         &self.path
     }
 }
 
-impl AsRef<OsStr> for TempDir {
+impl AsRef<OsStr> for &TempDir {
     fn as_ref(&self) -> &OsStr {
         self.path.as_os_str()
     }
@@ -56,7 +69,7 @@ impl AsRef<OsStr> for TempDir {
 impl Drop for TempDir {
     fn drop(&mut self) {
         if std::env::var_os("OAG_KEEP_SCRATCH").is_none() {
-            let _ = std::fs::remove_dir_all(&self.path);
+            let _ = std::fs::remove_dir_all(&self.root);
         }
     }
 }
@@ -76,7 +89,10 @@ pub fn dir(label: &str) -> TempDir {
     // A killed run may have left this name behind, and process ids are reused.
     let _ = std::fs::remove_dir_all(&path);
     std::fs::create_dir_all(&path).expect("a scratch directory under target/tmp");
-    TempDir { path }
+    TempDir {
+        root: path.clone(),
+        path,
+    }
 }
 
 /// The directory `name` that every run of this checkout shares and none removes.
@@ -131,6 +147,15 @@ mod tests {
         assert!(path.starts_with(root()));
         drop(scratch);
         assert!(!path.exists(), "{} survived", path.display());
+    }
+
+    #[test]
+    fn a_child_keeps_its_directory_alive_and_takes_it_along() {
+        let file = dir("child").child("file");
+        let parent = file.parent().expect("a parent").to_path_buf();
+        std::fs::write(&file, b"x").expect("the directory is there");
+        drop(file);
+        assert!(!parent.exists(), "{} survived", parent.display());
     }
 
     #[test]

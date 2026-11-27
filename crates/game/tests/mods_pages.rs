@@ -50,7 +50,8 @@ fn build(dir: &Path) -> mods::Built {
 
 #[test]
 fn a_mod_page_is_reached_from_its_row_in_the_built_tree() {
-    let built = build(&folder("good", &["good"]));
+    let fixtures = folder("good", &["good"]);
+    let built = build(&fixtures);
     let at = built
         .definition
         .pages

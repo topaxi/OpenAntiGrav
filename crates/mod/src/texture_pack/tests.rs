@@ -1,5 +1,5 @@
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipWriter};
@@ -189,8 +189,8 @@ fn a_folder_with_neither_a_manifest_nor_an_ini_is_not_a_candidate() {
     assert!(search(&[base.to_path_buf()]).is_empty());
 }
 
-fn folder_pack(name: &str, pack_name: &str) -> PathBuf {
-    let pack = scratch(name).join(pack_name);
+fn folder_pack(name: &str, pack_name: &str) -> oag_testdata::scratch::TempDir {
+    let pack = scratch(name).child(pack_name);
     std::fs::create_dir_all(&pack).unwrap();
     std::fs::write(pack.join("textures.ini"), INI_TEXT).unwrap();
     pack
@@ -312,7 +312,7 @@ fn the_written_manifest_names_the_titles_and_a_recognised_pack_gets_them_assigne
 
 #[test]
 fn a_pack_no_serial_of_which_resolves_writes_no_titles() {
-    let pack = scratch("unresolved").join("odd");
+    let pack = scratch("unresolved").child("odd");
     std::fs::create_dir_all(&pack).unwrap();
     std::fs::write(
         pack.join("textures.ini"),

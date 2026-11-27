@@ -1,8 +1,6 @@
 //! Each title's music choice: kept apart across a save and load, filled from an old file's
 //! one global value, and what the menus and the pool read.
 
-use std::path::PathBuf;
-
 use oag_sound::MusicSource;
 use oag_ui::menu::Value;
 
@@ -13,14 +11,13 @@ const HD: &str = "Wipeout HD";
 const PULSE: &str = "Wipeout Pulse";
 const DISC: &str = "disc:wipeout-pure:psp";
 
-/// A settings file of this test's own under the temp directory.
-struct File(PathBuf);
+/// A settings file of this test's own.
+struct File(oag_testdata::scratch::TempDir);
 
 impl File {
     fn new(name: &str, text: &str) -> Self {
         let dir = oag_testdata::scratch::dir(&format!("music-{name}"));
-        std::fs::create_dir_all(&dir).expect("a temp directory");
-        let path = dir.join("settings.toml");
+        let path = dir.child("settings.toml");
         std::fs::write(&path, text).expect("write");
         Self(path)
     }
@@ -34,14 +31,6 @@ impl File {
             .expect("read")
             .parse()
             .expect("parses")
-    }
-}
-
-impl Drop for File {
-    fn drop(&mut self) {
-        if let Some(dir) = self.0.parent() {
-            let _ = std::fs::remove_dir_all(dir);
-        }
     }
 }
 

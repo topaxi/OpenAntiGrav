@@ -21,7 +21,7 @@
 //! the module.
 #![cfg(feature = "extensions")]
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 
 use oag_core::math::Vec3;
@@ -51,7 +51,7 @@ const HALF: f32 = 30.0;
 /// Hillside with every speed pad widened across the road (the driver's line passes
 /// beside them otherwise) and, with `boost`, `boost = 2.0` on that speed pad; written
 /// beside a copy of its images in a directory of its own.
-fn hillside(boost: Option<usize>, tag: &str) -> Option<PathBuf> {
+fn hillside(boost: Option<usize>, tag: &str) -> Option<oag_testdata::scratch::TempDir> {
     let source = oag_testdata::exact(HILLSIDE)?;
     let mut track = oag_trackfile::read(&source).expect("Hillside reads").track;
     for pad in &mut track.speedup_pads {
@@ -71,14 +71,18 @@ fn hillside(boost: Option<usize>, tag: &str) -> Option<PathBuf> {
             std::fs::copy(&path, dir.join(path.file_name().unwrap())).unwrap();
         }
     }
-    let manifest = dir.join("hillside.track.toml");
+    let manifest = dir.child("hillside.track.toml");
     oag_trackfile::write(&track, &manifest).expect("writable");
     Some(manifest)
 }
 
 /// Hillside with two trigger boxes, the entrance and the exit of a portal pair, each centred
 /// on `entrance` / `exit` and `HALF` wide in every direction; written like [`hillside`].
-fn hillside_with_triggers(entrance: Vec3, exit: Vec3, tag: &str) -> Option<PathBuf> {
+fn hillside_with_triggers(
+    entrance: Vec3,
+    exit: Vec3,
+    tag: &str,
+) -> Option<oag_testdata::scratch::TempDir> {
     let source = oag_testdata::exact(HILLSIDE)?;
     let mut track = oag_trackfile::read(&source).expect("Hillside reads").track;
     let at = |name: &str, p: Vec3| oag_trackfile::props::Trigger {
@@ -100,7 +104,7 @@ fn hillside_with_triggers(entrance: Vec3, exit: Vec3, tag: &str) -> Option<PathB
             std::fs::copy(&path, dir.join(path.file_name().unwrap())).unwrap();
         }
     }
-    let manifest = dir.join("hillside.track.toml");
+    let manifest = dir.child("hillside.track.toml");
     oag_trackfile::write(&track, &manifest).expect("writable");
     Some(manifest)
 }
@@ -439,7 +443,7 @@ fn a_transit_to_a_trigger_comes_out_where_the_trigger_stands() {
         let image = oag_testdata::image("data/images/pulse-psp-eu.chd").unwrap();
         let loaded = race::load(&race::Options {
             source: image.display().to_string(),
-            foreign_track: Some(plain),
+            foreign_track: Some(plain.to_path_buf()),
             class: "VENOM".to_string(),
             mode: oag_race::Mode::SingleRace,
             no_driver_for_class: true,
@@ -458,7 +462,7 @@ fn a_transit_to_a_trigger_comes_out_where_the_trigger_stands() {
     let image = oag_testdata::image("data/images/pulse-psp-eu.chd").unwrap();
     let loaded = race::load(&race::Options {
         source: image.display().to_string(),
-        foreign_track: Some(file),
+        foreign_track: Some(file.to_path_buf()),
         class: "VENOM".to_string(),
         mode: oag_race::Mode::SingleRace,
         no_driver_for_class: true,

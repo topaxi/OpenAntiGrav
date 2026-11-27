@@ -149,14 +149,21 @@ mod old_and_foreign_headers {
         out
     }
 
-    fn stored(name: &str, edit: impl FnOnce(&str) -> String) -> (PathBuf, Key) {
+    fn stored(
+        name: &str,
+        edit: impl FnOnce(&str) -> String,
+    ) -> (oag_testdata::scratch::TempDir, Key) {
         let root = scratch(name);
         let key = key();
         let path = path_in(&root, &key);
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         let bytes = with_head(&replay(&key, 3_000).to_bytes(), edit);
         std::fs::write(&path, bytes).unwrap();
-        (path, key)
+        let relative = path
+            .strip_prefix(&root)
+            .expect("inside the root")
+            .to_path_buf();
+        (root.child(relative), key)
     }
 
     /// An old ghost file (no `toml-schema` line) is raced as before and the absence is a `debug`

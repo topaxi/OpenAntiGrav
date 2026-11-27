@@ -117,7 +117,8 @@ fn every_title_reaches_the_mods_page_from_options() {
 
 #[test]
 fn the_list_has_the_built_in_first_then_each_mod_then_what_did_not_load() {
-    let built = build(&proof_mods(), oag_pulse::TITLE);
+    let fixtures = proof_mods();
+    let built = build(&fixtures, oag_pulse::TITLE);
     assert_eq!(
         ids(&built),
         [
@@ -136,7 +137,8 @@ fn the_list_has_the_built_in_first_then_each_mod_then_what_did_not_load() {
 
 #[test]
 fn a_mod_with_no_license_says_so_in_capitals() {
-    let built = build(&proof_mods(), oag_pulse::TITLE);
+    let fixtures = proof_mods();
+    let built = build(&fixtures, oag_pulse::TITLE);
     let strings = StringTable::default();
     let table = built.listing[2].table(&strings);
     assert!(
@@ -161,7 +163,8 @@ fn a_mod_with_no_license_says_so_in_capitals() {
 
 #[test]
 fn a_mod_that_did_not_load_is_listed_dimmed_with_its_error() {
-    let built = build(&proof_mods(), oag_pulse::TITLE);
+    let fixtures = proof_mods();
+    let built = build(&fixtures, oag_pulse::TITLE);
     let strings = StringTable::default();
     let choices = mods::choices(&built.listing, &strings);
     assert!(choices[0].unavailable.is_none() && choices[1].unavailable.is_none());
@@ -182,7 +185,8 @@ fn a_mod_that_did_not_load_is_listed_dimmed_with_its_error() {
 
 #[test]
 fn the_page_row_steps_through_the_list_and_the_table_follows_it() {
-    let built = build(&proof_mods(), oag_pulse::TITLE);
+    let fixtures = proof_mods();
+    let built = build(&fixtures, oag_pulse::TITLE);
     let strings = StringTable::default();
     let mut model = Menu::new(built.definition);
     assert_eq!(
@@ -207,7 +211,8 @@ fn the_page_row_steps_through_the_list_and_the_table_follows_it() {
 
 #[test]
 fn a_menu_built_again_keeps_the_mod_the_row_was_on() {
-    let built = build(&proof_mods(), oag_pulse::TITLE);
+    let fixtures = proof_mods();
+    let built = build(&fixtures, oag_pulse::TITLE);
     let strings = StringTable::default();
     let model = |built: &mods::Built| {
         let mut model = Menu::new(built.definition.clone());

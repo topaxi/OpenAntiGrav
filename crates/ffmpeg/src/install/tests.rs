@@ -215,5 +215,4 @@ fn the_real_pinned_archive_unpacks() {
             "{name}"
         );
     }
-    std::fs::remove_dir_all(root).unwrap();
 }

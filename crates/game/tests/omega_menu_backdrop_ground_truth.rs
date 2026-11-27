@@ -272,6 +272,7 @@ pub(crate) fn decode_stored_png(bytes: &[u8]) -> (usize, usize, Vec<u8>) {
 fn menu_page(source: &std::path::Path, anim_seconds: &str, name: &str) -> (usize, usize, Vec<u8>) {
     let scratch = oag_testdata::scratch::dir(&format!("omega-backdrop-{name}"));
     let out = scratch.join("shot.png");
+    let profile = oag_testdata::scratch::dir("omega-backdrop-profile");
     let status = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
         .arg(source)
         .args([
@@ -285,14 +286,8 @@ fn menu_page(source: &std::path::Path, anim_seconds: &str, name: &str) -> (usize
         ])
         .args(["--anim-seconds", anim_seconds, "--screenshot"])
         .arg(&out)
-        .env(
-            "XDG_CONFIG_HOME",
-            oag_testdata::scratch::dir("omega-backdrop-config"),
-        )
-        .env(
-            "XDG_STATE_HOME",
-            oag_testdata::scratch::dir("omega-backdrop-state"),
-        )
+        .env("XDG_CONFIG_HOME", profile.join("config"))
+        .env("XDG_STATE_HOME", profile.join("state"))
         .status()
         .expect("running oag-game");
     assert!(

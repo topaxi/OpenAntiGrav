@@ -143,7 +143,6 @@ fn nothing_is_read_until_the_scan_is_begun() {
 
     scan.begin();
     assert!(scan.task.is_none(), "a second begin starts nothing");
-    std::fs::remove_dir_all(dir).ok();
 }
 
 #[test]
@@ -158,7 +157,6 @@ fn a_held_scan_reads_nothing_until_released() {
     scan.hold(false);
     finish(&mut scan);
     assert_eq!(scan.listings[0].title, "Fixture Octagon");
-    std::fs::remove_dir_all(dir).ok();
 }
 
 #[test]
@@ -224,19 +222,17 @@ fn the_cache_is_used_while_path_and_modification_time_match_and_dropped_when_eit
         cache::survey(&files, None, &NOT_HELD)[0].title,
         "Fixture Octagon"
     );
-    std::fs::remove_dir_all(dir).ok();
 }
 
 #[test]
 fn a_begun_scan_survives_through_the_cache_file_it_was_given() {
     let dir = lone_fixture("scan");
-    let file = cache::file_in(&scratch("scan-cache"));
+    let cache_root = scratch("scan-cache");
+    let file = cache::file_in(&cache_root);
     let mut scan = Scan::new(&[dir.to_path_buf()], &[], Some(file.clone()));
     scan.begin();
     finish(&mut scan);
     assert!(file.exists(), "the thread writes the cache");
-    std::fs::remove_dir_all(dir).ok();
-    std::fs::remove_dir_all(file.parent().unwrap()).ok();
 }
 
 /// The menu path for an own-format track, in a build without the `ballisticng`
@@ -262,7 +258,6 @@ fn an_own_format_track_is_listed_raceable_and_starts_a_race_whatever_the_feature
     let entry = oag_raceplay::foreign::entry(options.foreign_track.as_deref().unwrap())
         .expect("the race's catalogue entry");
     assert_eq!(entry.foreign.as_deref(), Some(path.as_path()));
-    std::fs::remove_dir_all(dir).ok();
 }
 
 #[cfg(not(feature = "ballisticng"))]

@@ -113,7 +113,6 @@ fn stored_and_deflated_entries_read_by_range() {
         assert_eq!(set.read(index, 69_999, 5).unwrap(), big[69_999..]);
         assert!(set.read(index, 70_000, 5).unwrap().is_empty());
     }
-    std::fs::remove_dir_all(dir).ok();
 }
 
 #[test]
@@ -143,7 +142,6 @@ fn a_patch_vpk_with_the_same_title_id_joins_and_another_title_does_not() {
     assert!(names.contains(&"base/PSP2/data.psarc"));
     assert!(names.contains(&"patch/PSP2/data1.psarc"));
     assert!(!names.iter().any(|n| n.starts_with("usa/")), "{names:?}");
-    std::fs::remove_dir_all(dir).ok();
 }
 
 #[test]
@@ -163,5 +161,4 @@ fn what_cannot_be_read_is_refused_by_name() {
         b"PK\x03\x04 and then nothing like a directory",
     );
     assert!(VpkSet::open(&not_zip).is_err());
-    std::fs::remove_dir_all(dir).ok();
 }

@@ -375,14 +375,12 @@ mod tests {
         let path = temp_file("magic.iso", b"MComprHD\x00\x00\x00\x7c");
         // Named `.iso` but actually a CHD: the extension must not win.
         assert_eq!(sniff_container(&path).unwrap(), Container::Chd);
-        std::fs::remove_file(path).ok();
     }
 
     #[test]
     fn falls_back_to_raw_iso() {
         let path = temp_file("plain.chd", &vec![0u8; 4096]);
         assert_eq!(sniff_container(&path).unwrap(), Container::RawIso);
-        std::fs::remove_file(path).ok();
     }
 
     #[test]
@@ -392,7 +390,6 @@ mod tests {
             sniff_container(&path),
             Err(Error::UnknownContainer { .. })
         ));
-        std::fs::remove_file(path).ok();
     }
 
     #[test]
@@ -405,15 +402,12 @@ mod tests {
         );
         let ps4 = temp_file("ps4.pkg", b"\x7fCNT\x00\x00\x00\x01 more header");
         assert_eq!(sniff_container(&ps4).unwrap(), Container::Ps4Pkg);
-        std::fs::remove_file(vita).ok();
-        std::fs::remove_file(ps4).ok();
     }
 
     #[test]
     fn a_zip_is_a_vpk() {
         let path = temp_file("a.vpk", b"PK\x03\x04 and the rest");
         assert_eq!(sniff_container(&path).unwrap(), Container::Vpk);
-        std::fs::remove_file(path).ok();
     }
 
     #[test]
