@@ -908,7 +908,23 @@ fn a_pulse_detonator_mine_scales_to_the_music_only_if_its_layout_says_so() {
             .length()
     };
     race.record_mine_poses(&laid, &loud, &ages);
-    assert!((size(&race) - 1.0).abs() < 1e-4, "held: {}", size(&race));
+    // Held, the model's farthest point ends on the Mine's trigger sphere: 3 units, which
+    // `Pulse_Mine.vex` overshoots at its authored size by under a fifth of a unit.
+    let reach = race.view.detonator_mine_reach.expect("Pulse's Mine body");
+    let detonator = race.core.sim.detonator.as_ref().expect("a Detonator race");
+    let trigger = detonator
+        .contact
+        .as_ref()
+        .expect("contact")
+        .mine
+        .trigger_radius;
+    assert!((trigger - 3.0).abs() < 1e-4, "trigger: {trigger}");
+    assert!((3.1..3.3).contains(&reach), "reach: {reach}");
+    assert!(
+        (size(&race) * reach - trigger).abs() < 1e-3,
+        "held: {}",
+        size(&race)
+    );
     let detonator = race.core.sim.detonator.as_mut().expect("a Detonator race");
     std::sync::Arc::make_mut(&mut detonator.layout)
         .values

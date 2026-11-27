@@ -142,6 +142,27 @@ impl Default for MinePose {
     }
 }
 
+/// How far `model`'s farthest vertex sits from its origin. The model's own animation and a
+/// laid pose only turn it about that origin, so this holds in every frame.
+pub(crate) fn model_reach(model: &oag_mesh::mesh::Model) -> f32 {
+    model
+        .vertices
+        .iter()
+        .map(|vertex| oag_core::math::Vec3::from_array(vertex.position).length())
+        .fold(0.0, f32::max)
+}
+
+/// The size of a Detonator mine its layout holds still: the one at which a model reaching
+/// `reach` from its origin ends on the Mine's `trigger_radius` sphere, the distance a craft
+/// sets it off at. `1` where either is not known (`docs/gameplay/detonator-pulse.md`,
+/// "Mine size").
+pub(crate) fn held_mine_size(reach: Option<f32>, trigger_radius: Option<f32>) -> f32 {
+    match (reach, trigger_radius) {
+        (Some(reach), Some(radius)) if reach > 0.0 => radius / reach,
+        _ => 1.0,
+    }
+}
+
 /// The angle a mine `age` seconds old is turned by at `rate` radians a second, wrapped to one
 /// turn: `DetonatorMine_AnimateToMusic`'s `phase = wrap(4 age)` (`m+0x150`).
 #[must_use]

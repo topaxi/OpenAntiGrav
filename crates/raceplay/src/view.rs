@@ -472,6 +472,8 @@ pub struct RaceView {
     pub(super) score_feedback: Option<oag_hud::ScoreFeedback>,
     /// `options::ViewSetup::detonator_mine_spin`.
     pub(super) detonator_mine_spin: Option<f32>,
+    /// `options::ViewSetup::detonator_mine_reach`.
+    pub(super) detonator_mine_reach: Option<f32>,
     /// `options::ViewSetup::detonator_ammo_gauge`, and what the gauge showed last frame.
     pub(super) detonator_ammo_gauge: Option<oag_title::DetonatorAmmoGauge>,
     pub(super) ammo_gauge_shown: std::sync::Mutex<Option<crate::ammo_gauge::Shown>>,

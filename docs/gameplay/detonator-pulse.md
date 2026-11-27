@@ -32,11 +32,26 @@ CIRCUIT row then lists the Zone circuits only).
 ## Mine size
 
 HD scales a laid mine's body to the music. On Pulse the maintainer ruled that out (2026-11-27),
-so this project's `DetonatorLayouts_Pulse/GamePlayValues.xml` sets `MinesScaleToMusic="0"`; the
-mine still spins on its own authored animation. The attribute is this project's: no shipped file
-names it, so HD, Omega and 2048 scale as before. A player's override of that file with
-`MinesScaleToMusic="1"` (`overrides/wipeout-pulse/Data/XML/DetonatorLayouts_Pulse/GamePlayValues.xml`,
-[ADR-0061](../architecture/adr/0061-two-asset-layers-around-the-disc.md)) brings the scaling back.
+so this project's `DetonatorLayouts_Pulse/GamePlayValues.xml` sets `MinesScaleToMusic="0"`. The
+attribute is this project's: no shipped file names it, so HD, Omega and 2048 scale as before.
+
+A held mine is sized to the distance a craft sets it off at (the maintainer's ruling,
+2026-11-27): the contact test is the craft's position within the Mine's `trigger_radius` of the
+mine, 3 on Pulse's own race table, and `Pulse_Mine.vex` reaches 3.18 from its origin at its
+authored size (its additive spikes; the solid body ends at 1.32). The size is `trigger_radius`
+over that reach, about 0.94, both read at load, so a modded model or table sizes itself.
+Pinned by `a_pulse_detonator_mine_scales_to_the_music_only_if_its_layout_says_so`
+(`crates/raceplay/src/tests/detonator_fx.rs`). A Pulse race mine is drawn smaller, at 0.6, so a
+Detonator mine looks about 1.6 times a race one.
+
+The mine spins on the model's own animation. It does not take the race mine's code tumble
+(`Mine_PoseNode`, [mine.md](../ghidra/functions/psp-pulse-usa/mine.md)).
+
+An override brings the scaling back: copy the whole file to
+`overrides/wipeout-pulse/Data/XML/DetonatorLayouts_Pulse/GamePlayValues.xml`
+([ADR-0061](../architecture/adr/0061-two-asset-layers-around-the-disc.md)) and set
+`MinesScaleToMusic="1"`. An override replaces the file, so a copy holding the attribute alone
+loses every other value in it.
 
 ## The cannon
 

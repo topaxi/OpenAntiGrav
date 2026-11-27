@@ -331,19 +331,20 @@ impl Race {
     }
 
     /// Puts each mine's age and each live mine's football and spikes size where the matrices
-    /// read them. A layout that does not scale its mines to the music records size `1`.
+    /// read them. A layout that does not scale its mines to the music holds each at
+    /// [`crate::detonator_look::held_mine_size`].
     pub(crate) fn record_mine_poses(
         &self,
         laid: &[crate::detonator_look::LaidMine],
         envelopes: &[crate::detonator_look::MineEnvelope],
         ages: &[f32],
     ) {
-        let scales = self
-            .core
-            .sim
-            .detonator
-            .as_ref()
-            .is_some_and(|d| d.layout.values.mines_scale_to_music);
+        let detonator = self.core.sim.detonator.as_ref();
+        let scales = detonator.is_some_and(|d| d.layout.values.mines_scale_to_music);
+        let held = crate::detonator_look::held_mine_size(
+            self.view.detonator_mine_reach.filter(|_| !scales),
+            detonator.and_then(|d| Some(d.contact.as_ref()?.mine.trigger_radius)),
+        );
         let mut poses = crate::drawable::lock(&self.view.mine_poses);
         poses.clear();
         for ((mine, envelope), &age) in laid.iter().zip(envelopes).zip(ages) {
@@ -355,8 +356,9 @@ impl Race {
                 }
             } else {
                 crate::detonator_look::MinePose {
+                    football: held,
+                    spikes: held,
                     age,
-                    ..Default::default()
                 }
             };
             poses.insert((mine.entry, mine.lane), pose);

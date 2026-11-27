@@ -73,7 +73,7 @@ pub const EFFECTS: &Effects = &Effects::engine(Origin::Measured)
     )
     // Detonator, which Pulse ships no effect of its own for: its nearest
     // (`docs/gameplay/detonator-pulse.md`). A mine and a bomb go up as the Mine
-    // does, the cannon's round sparks as the Cannon's, and the EMP rides the Quake.
+    // does, the cannon's round sparks as the Cannon's, and the EMP draws the Repulsor's wave.
     .with(
         Trigger::DetonatorMineExploDead,
         EffectSpec::new(engine_effects::MINE_EXPLO_EFFECT, Origin::Chosen),

@@ -63,7 +63,12 @@ pub(super) fn circuit_weapon_pads(
         .zone
         .race_of(track)
         .unwrap_or_else(|| track.to_string());
-    let colour = oag_render::weapon_pad::READY_KEYFRAMES.get(key)?;
+    let Some(colour) = oag_render::weapon_pad::READY_KEYFRAMES.get(key) else {
+        report.push(format!(
+            "Detonator pads: the weapon pad's ready cycle has no key {key}; no pad is drawn"
+        ));
+        return None;
+    };
     let blob = match archives.read_name(&donor) {
         Ok(blob) => blob,
         Err(e) => {
@@ -71,12 +76,20 @@ pub(super) fn circuit_weapon_pads(
             return None;
         }
     };
-    let mut model = mesh::build_weapon_pads_placed(&donor, &blob, None, places).ok()?;
+    let mut build = |external| match mesh::build_weapon_pads_placed(&donor, &blob, external, places)
+    {
+        Ok(model) => Some(model),
+        Err(e) => {
+            report.push(format!("Detonator pads: {donor}: {e}; no pad is drawn"));
+            None
+        }
+    };
+    let mut model = build(None)?;
     if !model.textures.is_empty()
         && model.textures.iter().all(Option::is_none)
         && let Some(external) = ps2_texture_set(archives, &donor)
     {
-        model = mesh::build_weapon_pads_placed(&donor, &blob, Some(&external), places).ok()?;
+        model = build(Some(&external))?;
     }
     if model.indices.is_empty() {
         report.push(format!(

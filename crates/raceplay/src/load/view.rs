@@ -929,6 +929,10 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
                 .race
                 .detonator
                 .is_some_and(|detonator| detonator.emp_light),
+        detonator_mine_reach: mine_model
+            .as_ref()
+            .filter(|_| options.mode == Mode::Detonator && detonator_objects.is_none())
+            .map(crate::detonator_look::model_reach),
         detonator_mine_spin: craft_title
             .race
             .detonator

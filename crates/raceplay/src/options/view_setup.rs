@@ -88,6 +88,9 @@ pub struct ViewSetup {
     /// How fast a laid Detonator mine turns, radians per second of its age: `Detonator::mine_spin`,
     /// `None` off Detonator.
     pub detonator_mine_spin: Option<f32>,
+    /// How far from its origin the laid mine model reaches, where a Detonator race lays the
+    /// title's race Mine (`Detonator::objects` is `None`): what a held mine is sized by.
+    pub detonator_mine_reach: Option<f32>,
     /// The craft's cannon gauge in a Detonator race: `Detonator::ammo_gauge`, `None` off Detonator.
     pub detonator_ammo_gauge: Option<oag_title::DetonatorAmmoGauge>,
     /// The craft's plasma shells in a Detonator race: `Detonator::hull_charge`, `None` off Detonator.
@@ -376,6 +379,7 @@ impl ViewSetup {
             detonator_rounds_as_cannon: false,
             detonator_score_popups: false,
             detonator_mine_spin: None,
+            detonator_mine_reach: None,
             detonator_ammo_gauge: None,
             detonator_hull_charge: None,
             pulse_laid_pose: false,
