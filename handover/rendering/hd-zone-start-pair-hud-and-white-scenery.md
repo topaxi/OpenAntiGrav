@@ -32,6 +32,9 @@ three. By region after: sky 0.10, scenery 1.93, road and pads 1.50, the board
   settles it.
 - **Omega and 2048 mode boards keep 210 ticks and no lap windows**: their code is unread
   (`gantry-clock.md`, "What zeroes it in the countdown": checked, applies, not wired).
+- **Omega and 2048's `3 2 1 GO` board (`321Go_StartFinish.vex`, HD-lineage circuits) still
+  starts off its `GO` edge, tick 71**: their countdown entry is unread (`gantry-clock.md`,
+  "The circuit's own board": checked, applies, not wired).
 - **A re-grab should record the gantry node's time in the countdown.**
   `rpcs3_hd_field.gantry_seconds` keeps only values inside the race windows (from 3.83 s), so
   the pair's `gantry_seconds` is null; the unfiltered node time in phase 1 would check the 180

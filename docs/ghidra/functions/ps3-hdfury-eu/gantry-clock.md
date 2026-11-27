@@ -192,10 +192,15 @@ sites, `0x00041184`, `0x000415c0`, `0x00060f74`, `0x00061750`, `0x00066c78`,
 `0x000683e4`, `0x0006951c`, `0x00069718`, `0x0006a92c`, `0x0006aca0`,
 `0x0006be68`, `0x0006e42c`, `0x00070434`, `0x000709b4`, `0x00072bac`,
 `0x00073398`, `0x00075a2c`, `0x000767bc` and `0x0007d428`. Ghidra's xrefs list
-11 of them (they miss the eight inside case bodies it did not disassemble). The
-sites were not mapped to modes. The zeroing sits in the shared function, so the
-value is applied to the circuit board whatever the mode: confidence 85 for the
-modes named above, Zone and Detonator, 70 for the others.
+11 of them. Of the other eight, `0x00061750`, `0x000683e4`, `0x000709b4` and
+`0x000767bc` are the case bodies read above; `0x00069718`, `0x0006aca0`,
+`0x0006e42c` and `0x00073398` are known only from their `bl` encoding. The sites
+were not mapped to modes.
+
+**Confidence 85 for the zeroing law** (the shared function, above) and **70 for
+the names single race and time trial**. The value is applied to the circuit
+board whatever the mode, on the reading that every mode's countdown goes through
+that shared function (confidence 70).
 
 Wired as HD `Title` data (`oag_title::adverts::Adverts::countdown_assembly_ticks`,
 `Some(180)`), read by `oag_raceplay`'s `hd_clock`; the board is then kept in the
