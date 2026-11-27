@@ -506,4 +506,12 @@ const RUNTIME: &oag_title::hud::RuntimeHud = &oag_title::hud::RuntimeHud {
         hit_pills: &["PickupDamageBG", "PickupAbsorbBG"],
         argb: 0x5aff_ffff,
     }),
+    // `Hud_Update`'s proximity block, nothing near behind: `Prox0`..`Prox4` hidden,
+    // `ProxBackground` 20 above its authored `y` (hud-readouts.md, "The proximity
+    // indicator"). Omega inherits HD's.
+    proximity: Some(oag_title::hud::ProximityIdle {
+        bar: "ProximityBar",
+        background: "ProxBackground",
+        lift: 20,
+    }),
 };

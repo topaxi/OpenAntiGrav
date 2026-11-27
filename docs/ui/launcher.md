@@ -12,14 +12,17 @@ One card per title, drawn from the title's own system art: the picture the
 console shows for the game, read at run time from the player's own files.
 Nothing is copied out of an image, cached to disk or shipped.
 
-- **One card per title**, however many images of it there are. Titles appear in
-  the order their first image does. Every image of the title, and every picture
+- **One card per title and platform**, however many images of it there are: Pulse
+  on PSP and on PS2 are two cards, and a copy whose platform is unknown (an
+  extracted install) joins its title's card. Cards run oldest release first, by
+  each title's `released` dates in `oag_title::Title` (European release): Pure,
+  Pulse PSP, HD, Pulse PS2, 2048, Omega. Every image of the title, and every picture
   an image carries, is one of the card's *variants*.
-- **The cog** at a card's top right, shown only when there is more than one
-  variant, steps through them. The caption under the card names the pressing
-  shown (platform and serial, or the file name where the source carries no
-  serial) with its place, `2/3`. Two pressings may carry the identical picture,
-  so the caption is what says the switch happened.
+- **The disc** (a plain CD shape) at a card's top right, shown only when there is
+  more than one variant, steps through them. The caption under the card is the
+  title's name, with the variant's place (`2/3`) at its right; a name too long to
+  fit beside it is cut with `...`. When a title has cards on two platforms, each
+  carries its platform (`PSP`, `PS2`) in a badge at its bottom right.
 - **The choice is remembered** in `settings.toml`, `[launcher.pictures]`, keyed
   by title. Before the pictures are read, confirming still boots the remembered
   pressing. With nothing remembered, a card shows its first variant with a
@@ -40,10 +43,10 @@ Nothing is copied out of an image, cached to disk or shipped.
 | --- | --- | --- | --- | --- |
 | pad | d-pad | cross, start | square | the footer hint |
 | keyboard | arrows | Enter, X | C | Escape |
-| mouse | hover; wheel steps | click the card | click the cog | click ESCAPE QUIT |
-| touch | | tap the card | tap the cog | tap ESCAPE QUIT |
+| mouse | hover; wheel steps | click the card | click the disc | click ESCAPE QUIT |
+| touch | | tap the card | tap the disc | tap ESCAPE QUIT |
 
-The cog's hit area (24x24 of the 480x272 grid) is larger than the glyph.
+The disc's hit area (24x24 of the 480x272 grid) is larger than the glyph.
 
 ## The list
 

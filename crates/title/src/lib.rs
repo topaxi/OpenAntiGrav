@@ -133,6 +133,9 @@ pub use zoom::ZoomRing;
 pub struct Title {
     /// The title as a person would name it, for reports and error messages.
     pub name: &'static str,
+    /// When each platform's release first came out, as `(platform, year, month)`
+    /// (the European release): the launcher orders its cards by it.
+    pub released: &'static [(Platform, u16, u8)],
     /// Which bulk and companion archives its releases carry.
     pub archives: ArchiveCandidates,
     /// Serials known to belong to a *different* title. See [`ArchiveCandidates`].

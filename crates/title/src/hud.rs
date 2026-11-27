@@ -726,6 +726,21 @@ pub struct RuntimeHud {
     pub place_arc: SegmentArc,
     /// The pickup bar's idle look, `None` where unmeasured.
     pub pickup_idle: Option<PickupIdle>,
+    /// The rear-proximity indicator with nothing near behind, `None` where unread.
+    pub proximity: Option<ProximityIdle>,
+}
+
+/// The arc the HUD keeps under the craft: HD's `ProximityIndicator` as it draws with no craft
+/// near behind (`docs/ghidra/functions/ps3-hdfury-eu/hud-readouts.md`, "The proximity
+/// indicator"). The lit segments are not part of this.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ProximityIdle {
+    /// The arc itself, drawn where the layout authors it.
+    pub bar: &'static str,
+    /// The marker over the arc's middle.
+    pub background: &'static str,
+    /// How far above its authored `y` the idle marker sits, in layout units.
+    pub lift: u16,
 }
 
 /// The alpha byte the original's HUD writes into the vertex colour of its lit

@@ -36,6 +36,7 @@ use oag_title::{ArchiveCandidates, ForeignSerial, Platform, Title};
 /// Wipeout Pure, as the asset layer needs to know it.
 pub const TITLE: &Title = &Title {
     name: "Wipeout Pure",
+    released: &[(Platform::Psp, 2005, 9)],
     archives: ArchiveCandidates {
         patch: &[],
         data: DATA_CANDIDATES,
