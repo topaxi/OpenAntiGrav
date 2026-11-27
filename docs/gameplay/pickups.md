@@ -696,7 +696,11 @@ Eliminator draws eight weapons. A person's roll that lands on one passes to the 
 in HD's order (the Rocket takes both weights, 28 of 90), an AI's leaves them out of the total.
 Evidence and the two draws:
 [pickup-draw.md](../ghidra/functions/ps3-hdfury-eu/pickup-draw.md). Wired as
-`Title::pickup_roster`.
+`Title::pickup_roster`, which also carries HD's two other differences: its AI draw does not refuse a
+repeat (`PickupRoster::ai_refuses_repeat`), and both draws leave out the LeachBeam and the Quake
+while one is held or running, and the Cannon while two are held (`PickupRoster::exclusions`). An
+excluded weapon leaves the total and a person's walk alike, so unlike a disabled one its roll is not
+passed on.
 
 ## What a fired Turbo does
 
