@@ -880,7 +880,7 @@ fn a_bearing_pen_starts_the_first_ink_at_x_and_steps_by_bearing() {
         height: 8,
         palette: vec![[255, 255, 255, 255]; 16],
         indices: vec![1; 64],
-        glyphs: vec![glyph(b'a', 9, 0), glyph(b'b', 8, -1)],
+        glyphs: vec![glyph(b'a', 9, 0), glyph(b'b', 8, -1), glyph(b'm', 12, -1)],
     };
     let mut renderer = Renderer::new(
         &device,
@@ -891,13 +891,13 @@ fn a_bearing_pen_starts_the_first_ink_at_x_and_steps_by_bearing() {
         &oag_hud::sprite::Sheet::default(),
     )
     .expect("the ui pipeline");
-    let lefts = |renderer: &mut Renderer, text: &str| -> Vec<f32> {
+    let lefts_at = |renderer: &mut Renderer, x: f32, scale: f32, text: &str| -> Vec<f32> {
         renderer.quads.clear();
         renderer.push_text(
             GlyphSlot::Primary,
-            50.0,
+            x,
             0.0,
-            1.0,
+            scale,
             [1.0; 4],
             [0.0; 4],
             Align::Left,
@@ -906,11 +906,23 @@ fn a_bearing_pen_starts_the_first_ink_at_x_and_steps_by_bearing() {
         );
         renderer.quads.iter().map(|quad| quad.rect[0]).collect()
     };
+    let lefts = |renderer: &mut Renderer, text: &str| lefts_at(renderer, 50.0, 1.0, text);
     assert_eq!(lefts(&mut renderer, "ab"), [50.0, 59.0]);
     assert_eq!(lefts(&mut renderer, "ba"), [50.0, 58.0]);
     renderer.set_bearing_pens(true);
     assert_eq!(lefts(&mut renderer, "ab"), [50.0, 58.0]);
     assert_eq!(lefts(&mut renderer, "ba"), [50.0, 59.0]);
+    // At a fractional scale each ink edge steps up to a whole unit: a 12-advance glyph of bearing
+    // -1 at 0.8 (`Pulse_14.fnt` on a PS2 heading) lands 10 apart where the fraction puts it 9.6.
+    assert_eq!(
+        lefts_at(&mut renderer, 50.0, 0.8, "mmm"),
+        [50.0, 60.0, 70.0]
+    );
+    // Counted from the text's own x, so a line at a fractional position moves as one piece.
+    assert_eq!(
+        lefts_at(&mut renderer, 50.5, 0.8, "mmm"),
+        [50.5, 60.5, 70.5]
+    );
 }
 
 /// `HudArt::half_unit_glyph_quads`: a glyph is its cell grown half a grid unit on every side with the

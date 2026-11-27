@@ -321,7 +321,8 @@ pub const PS2_MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     small_font: None,
     stats_font: None,
     snapped_pens: false,
-    // Inherited from PSP: the pen law measured on the PSP's `Pulse_14.fnt` heading, not measured on the PS2.
+    // Measured on both: the PSP's `Pulse_14.fnt` heading and legal line, the PS2's headings
+    // (`docs/ui/menus-original.md`, "Pulse's text pens step up to whole units").
     bearing_pens: true,
     default_face_is_row_face: false,
     first_row_y: Some(53.0),

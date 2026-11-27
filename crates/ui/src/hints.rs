@@ -257,7 +257,7 @@ fn placed(face: Face, text: &str, scale: f32) -> (f32, f32) {
             (run.end, run.ink_right)
         }
         crate::font::Pens::Bearing => {
-            let width = crate::font::ink_width(face.atlas, text, scale, false);
+            let width = crate::font::ink_width(face.atlas, text, scale, true);
             (width, width)
         }
         crate::font::Pens::Advance => {
@@ -276,7 +276,7 @@ fn piece_ink(atlas: &Atlas, line: &str, scale: f32) -> Vec<(f32, f32)> {
     let mut spans: Vec<(f32, f32)> = vec![(f32::MAX, f32::MIN)];
     for ch in line.chars() {
         let Some(cell) = atlas.cell(ch) else { continue };
-        let (ink_left, next) = crate::font::pen_step(&cell, scale, pen, false);
+        let (ink_left, next) = crate::font::pen_step(&cell, scale, pen, true);
         if ch == ' ' {
             spans.push((f32::MAX, f32::MIN));
         } else if let Some(span) = spans.last_mut() {
@@ -304,10 +304,13 @@ fn segments(run: &Run, substitution: &Substitution) -> Vec<Segment> {
     let mut out: Vec<Segment> = Vec::new();
     let scale = atlas.texel_scale * run.scale;
     let mut pen = run.left;
+    // A bearing face counts its pen from `run.left` (`origin`), the text's first ink, as
+    // `Renderer::push_text` draws it; the other faces keep an absolute pen.
+    let mut origin = 0.0;
     if run.face.pens == crate::font::Pens::Bearing {
-        // The text's first ink starts at `run.left`, as `Renderer::push_text` draws it.
         let first = run.text.chars().find_map(|ch| atlas.cell(ch));
-        pen -= first.map_or(0.0, |cell| cell.bearing * scale);
+        origin = run.left;
+        pen = -first.map_or(0.0, |cell| cell.bearing * scale);
     }
     for ch in run.text.chars() {
         // The glyph's own extent: its quad on a snapped face (whole pixels from the pen), its ink
@@ -315,19 +318,21 @@ fn segments(run: &Run, substitution: &Substitution) -> Vec<Segment> {
         let (next, left, right) =
             atlas
                 .cell(ch)
-                .map_or((pen, pen, pen), |cell| match run.face.pens {
-                    crate::font::Pens::Snapped => {
-                        let quad = crate::font::snapped_quad(&cell, scale, pen);
-                        let next = crate::font::pen_step(&cell, scale, pen, true).1;
-                        (next, quad.left, quad.left + quad.width)
-                    }
-                    crate::font::Pens::Bearing => {
-                        let (ink_left, next) = crate::font::pen_step(&cell, scale, pen, false);
-                        (next, ink_left, next)
-                    }
-                    crate::font::Pens::Advance => {
-                        let next = pen + cell.advance * scale;
-                        (next, pen, next)
+                .map_or((pen, origin + pen, origin + pen), |cell| {
+                    match run.face.pens {
+                        crate::font::Pens::Snapped => {
+                            let quad = crate::font::snapped_quad(&cell, scale, pen);
+                            let next = crate::font::pen_step(&cell, scale, pen, true).1;
+                            (next, quad.left, quad.left + quad.width)
+                        }
+                        crate::font::Pens::Bearing => {
+                            let (ink_left, next) = crate::font::pen_step(&cell, scale, pen, true);
+                            (next, origin + ink_left, origin + next)
+                        }
+                        crate::font::Pens::Advance => {
+                            let next = pen + cell.advance * scale;
+                            (next, pen, next)
+                        }
                     }
                 });
         match substitution.button_drawn(ch, run.face.buttons) {

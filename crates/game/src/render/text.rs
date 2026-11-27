@@ -184,7 +184,7 @@ impl Renderer {
         let width: f32 = if let Some(run) = snapped_run {
             run.end
         } else if bearing_pens {
-            font::ink_width(atlas, text, scale, false)
+            font::ink_width(atlas, text, scale, true)
         } else if self.hud.whole_advances {
             text.chars()
                 .filter_map(|c| atlas.cell(c))
@@ -236,12 +236,17 @@ impl Renderer {
             pen = pen.ceil();
         }
         let y = self.hud.snap(y);
+        // A bearing pen counts from the text's own origin, `origin`: its first glyph's ink starts
+        // there (`font::ink_width` measures from it) and the ink edges step up to whole units from
+        // there, so a string at a fractional position (a centred line, a scrolling ticker) moves as
+        // one piece. At the whole positions a disc widget authors this is the absolute step.
+        let mut origin = 0.0;
         if bearing_pens {
-            // The text's first glyph's ink starts at `x` (`font::ink_width` measures from there).
             let first = text
                 .chars()
                 .find_map(|c| self.atlas_for(slot).and_then(|atlas| atlas.cell(c)));
-            pen -= first.map_or(0.0, |cell| cell.bearing * scale * texel);
+            origin = pen;
+            pen = -first.map_or(0.0, |cell| cell.bearing * scale * texel);
         }
 
         for ch in text.chars() {
@@ -265,7 +270,8 @@ impl Renderer {
             let (ink_left, next) = if self.hud.snapped_pens {
                 font::pen_step(&cell, scale * texel, pen, true)
             } else if bearing_pens {
-                font::pen_step(&cell, scale * texel, pen, false)
+                let (ink_left, next) = font::pen_step(&cell, scale * texel, pen, true);
+                (origin + ink_left, next)
             } else {
                 (pen, pen + self.hud.advance(cell.advance * scale * texel))
             };

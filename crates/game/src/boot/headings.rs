@@ -42,7 +42,9 @@ pub(super) fn read(
             match read {
                 Ok(xml) => Some(Screens::from_xml_with_fallback_globals(&xml, &fallback)),
                 Err(error) => {
-                    report.push(format!("{file}: {error:#}; its headings keep the skin's scale"));
+                    report.push(format!(
+                        "{file}: {error:#}; its headings keep the skin's scale"
+                    ));
                     None
                 }
             }

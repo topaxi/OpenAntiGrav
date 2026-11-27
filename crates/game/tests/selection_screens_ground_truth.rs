@@ -411,6 +411,18 @@ fn the_ps2_pressing_reads_the_same_screens_on_its_own_grid() {
     let shell = shell(&path);
     let track = shell.track_select.as_ref().expect("Track Creation reads");
     let ship = shell.ship_select.as_ref().expect("Team Selection reads");
+    // The scale each heading is authored at, off the same boot: `Additional`'s and `extras`' own
+    // `Text` authors none (1.0), every other screen's `FEGlobals->TitleScale` (0.8). A page the
+    // disc does not stand behind keeps the skin's.
+    for (page, scale) in [
+        ("options", Some(1.0)),
+        ("extras", Some(1.0)),
+        ("pulse-options", Some(1.0)),
+        ("pulse-main", Some(0.8)),
+        ("records", None),
+    ] {
+        assert_eq!(shell.frame.heading_scale(page), scale, "{page}");
+    }
     // `<Item OffsetX="387" OffsetY="41">` on `Track Creation`, `OffsetY="74"`
     // on `Team Selection` - the PSP's 290/25 and 290/45 scaled.
     assert_eq!(track.panel, [387.0, 43.0, 227.0, 329.0]);

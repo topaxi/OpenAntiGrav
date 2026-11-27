@@ -1060,8 +1060,9 @@ pub fn cells_ink_width(cells: &[Cell], scale: f32, snap: bool) -> f32 {
 ///
 /// The ink's left edge sits its bearing right of the pen, and the next pen is one advance less
 /// that bearing past it. `snap` rounds the ink's left edge up to a whole screen unit, as the
-/// original's pens do on Pure's front end (`docs/ui/menus-original.md`, "Pure's text pens step
-/// up to whole pixels") and its `Font_MeasureString` does on HD.
+/// original's pens do on Pure's and Pulse's front ends (`docs/ui/menus-original.md`, "Pure's text
+/// pens step up to whole pixels" and "Pulse's text pens step up to whole units") and its
+/// `Font_MeasureString` does on HD.
 #[must_use]
 pub fn pen_step(cell: &Cell, scale: f32, x: f32, snap: bool) -> (f32, f32) {
     let mut ink_left = cell.bearing.mul_add(scale, x);
@@ -1112,7 +1113,7 @@ pub fn snapped_run(atlas: &Atlas, text: &str, scale: f32) -> SnappedRun {
 pub fn run_width(atlas: &Atlas, text: &str, scale: f32, pens: Pens) -> f32 {
     match pens {
         Pens::Snapped => snapped_run(atlas, text, scale).ink_right,
-        Pens::Bearing => ink_width(atlas, text, scale, false),
+        Pens::Bearing => ink_width(atlas, text, scale, true),
         Pens::Advance => measure(atlas, text) * scale,
     }
 }

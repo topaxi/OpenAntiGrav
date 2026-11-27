@@ -277,6 +277,53 @@ fn snapped_atlas() -> Atlas {
     Atlas::from_font(&font)
 }
 
+/// A string that opens with a button glyph is cut on the same stepped pens: three 9-advance
+/// glyphs of bearing -1 at 0.8 end at 24 from x, where the fraction ends at 22.4.
+#[test]
+fn a_bearing_hint_ends_on_the_stepped_pen() {
+    use oag_texture::fnt::{Font, Glyph};
+    let glyph = |ch: u8| Glyph {
+        codepoint: u16::from(ch),
+        width: 7,
+        height: 4,
+        u0: 0,
+        u1: 7,
+        v0: 0,
+        v1: 4,
+        advance: 9,
+        bearing: -1,
+    };
+    let font = Font {
+        line_height: 8,
+        unknown: 0,
+        width: 16,
+        height: 8,
+        palette: vec![[255, 255, 255, 255]; 16],
+        indices: vec![1; 128],
+        glyphs: vec![glyph(b'X'), glyph(b'a')],
+    };
+    let atlas = Atlas::from_font(&font);
+    let mut list = [text(None, 10.0, 0.0, Align::Left, "Xaa")];
+    let Draw::Text { scale, .. } = &mut list[0] else {
+        unreachable!("text(None, ..) is a Draw::Text")
+    };
+    *scale = 0.8;
+    let hints = scan(&list, None, &Substitution::reading(&TABLE), &|_| {
+        Some(Face {
+            atlas: &atlas,
+            buttons: false,
+            pens: crate::font::Pens::Bearing,
+        })
+    });
+    assert_eq!(hints.len(), 1);
+    assert_eq!(hints[0].rect[0], 10.0);
+    assert!(
+        (hints[0].rect[2] - 24.0).abs() < 1e-3,
+        "{:?}",
+        hints[0].rect
+    );
+}
+
 /// On a snapped face a wrapped legend's rectangle covers the ink as drawn: each glyph of `aaa bbb` steps up to
 /// a whole unit, so the line is wider than its fractional advances say and a tap on its last glyph has to land.
 #[test]
@@ -374,7 +421,23 @@ fn a_bearing_legend_rect_covers_its_drawn_ink() {
         let hints = legend_wrapped(&atlas, place, &entries, pens);
         hints[0].rect[0] + hints[0].rect[2]
     };
-    let ink_right = 10.0 + crate::font::ink_width(&atlas, "aaabbb", 1.0, false);
+    let ink_right = 10.0 + crate::font::ink_width(&atlas, "aaabbb", 1.0, true);
+    // At 0.8 the ink edges step up to whole units: lefts 0, 8, 16, 24, 32, 40 from x, the last
+    // glyph 5.6 wide, where the fraction would end at 41.6.
+    let scaled = legend_wrapped(
+        &atlas,
+        Wrapped {
+            scale: 0.8,
+            ..place
+        },
+        &entries,
+        crate::font::Pens::Bearing,
+    );
+    assert!(
+        (scaled[0].rect[0] + scaled[0].rect[2] - 55.6).abs() < 1e-3,
+        "{:?}",
+        scaled[0].rect
+    );
     assert!(
         (right(crate::font::Pens::Bearing) - ink_right).abs() < 1e-3,
         "the rect ends at {}, the ink at {ink_right}",
