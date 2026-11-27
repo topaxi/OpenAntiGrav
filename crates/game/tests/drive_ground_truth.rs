@@ -20,6 +20,7 @@ use std::process::Output;
 use serde_json::Value;
 
 mod mod_list;
+mod tournament;
 
 struct Run {
     output: Output,

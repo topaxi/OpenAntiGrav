@@ -1157,6 +1157,11 @@ impl Session {
             }
             Err(RaceBuildError::Load(e)) => {
                 error!("cannot start a race: {e:#}");
+                // A Tournament leg that would not load ends the tournament: the leg's launch
+                // facts went with the loading stage, and standings left behind would offer
+                // NEXT RACE after the next unrelated race (`docs/architecture/navigation-map.md`,
+                // "A leg that will not load").
+                self.abandon_tournament();
                 // A benchmark that would not load gives the player's own options back.
                 self.abandon_benchmark_launch();
                 // A demo that would not load ends a `--demo` chain rather than retrying it.

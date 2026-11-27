@@ -646,6 +646,10 @@ fn state_of(session: &mut Session) -> State {
             .to_string(),
         );
     }
+    state.tournament = session
+        .tournament
+        .as_ref()
+        .map(|progress| format!("{}/{}", progress.leg_number(), progress.leg_count()));
     state.demo = match &session.stage {
         Stage::Race(stage) if stage.demo.is_some() => Some("running".to_string()),
         Stage::Loading(_) if session.demo.loading.is_some() => Some("loading".to_string()),
