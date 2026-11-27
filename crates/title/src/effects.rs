@@ -1054,6 +1054,12 @@ pub struct Looks {
     /// floor reads sharper than the sampler's own selection gives. Wipeout HD's
     /// (the RSX filter word `0x02063e80` on every material unit).
     pub material_lod_bias: Rule,
+    /// Every disc texture a race binds is sampled at the same bias, over the file's own mip
+    /// chain: pads, weapon models, shields, adverts, effect programs, particles and trails as
+    /// well as the circuit. Wipeout 2048's, whose one GXT loader asks it of everything it
+    /// loads (`docs/ghidra/functions/vita-2048-eu-v104/gxt-loader.md`). The Zone track skins
+    /// are sampled from one level (`crate::race::ZoneStageTextures::track_single_level`).
+    pub every_texture_lod_bias: Rule,
     /// A circuit material's render-state word is honoured beyond its blend and
     /// alpha-test bits: a state with bit 7 draws unblended, among the cutouts,
     /// writing depth (the original's alpha-to-coverage path), and a blended
@@ -1108,9 +1114,9 @@ pub struct Looks {
     pub sky_brightness: Rule,
 }
 
-/// The LOD bias [`Looks::material_lod_bias`] applies, in levels: the filter
-/// word's bias field `0x1e80` as a signed 5.8 fixed-point number, `-384 / 256`.
-/// One value because the one measurement it comes from is the only one there is.
+/// The LOD bias [`Looks::material_lod_bias`] applies, in levels. HD's is the RSX filter
+/// word's bias field `0x1e80` as a signed 5.8 fixed-point number, `-384 / 256`; 2048's is
+/// the GXT loader's `sceGxmTextureSetLodBias(19)`, `(19 - 31) / 8`. Both read -1.5.
 pub const MATERIAL_LOD_BIAS: f32 = -1.5;
 
 impl Looks {
@@ -1130,6 +1136,17 @@ impl Looks {
     #[must_use]
     pub fn material_lod_levels(&self) -> f32 {
         if self.material_lod_bias.applies_everywhere() {
+            MATERIAL_LOD_BIAS
+        } else {
+            0.0
+        }
+    }
+
+    /// The bias every other disc texture of a race takes, in levels: [`MATERIAL_LOD_BIAS`]
+    /// where [`Self::every_texture_lod_bias`] applies, else `0.0`.
+    #[must_use]
+    pub fn every_texture_lod_levels(&self) -> f32 {
+        if self.every_texture_lod_bias.applies_everywhere() {
             MATERIAL_LOD_BIAS
         } else {
             0.0
@@ -1175,6 +1192,7 @@ impl Looks {
             lit_output_halved: Rule::UNREAD,
             shield_shell_lit: Rule::UNREAD,
             material_lod_bias: Rule::UNREAD,
+            every_texture_lod_bias: Rule::UNREAD,
             material_render_state: Rule::UNREAD,
             batch_back_face_cull: Rule::UNREAD,
             batch_back_face_cull_carried: Rule::UNREAD,

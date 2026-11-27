@@ -869,6 +869,7 @@ colour = "#ff2010"
                     width: 1,
                     height: 1,
                     rgba: vec![255; 4].into(),
+                    chain: None,
                 }),
                 _ => Err(format!("{entry} has no texture node {name}")),
             },

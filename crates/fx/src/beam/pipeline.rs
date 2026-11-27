@@ -410,6 +410,7 @@ impl Pipeline {
             .iter()
             .copied()
             .chain([
+                ("disc_lod_bias", f64::from(texture.lod_bias)),
                 ("glow_mask", f64::from(style.glow_mask)),
                 (
                     "vertex_alpha_weight",
@@ -518,6 +519,8 @@ impl Pipeline {
             width: 1,
             height: 1,
             rgba: vec![255; 4],
+            mips: Vec::new(),
+            lod_bias: 0.0,
         };
         let texture = bind_texture(
             device,
@@ -653,6 +656,7 @@ fn bind_texture(
         address_mode_w: wgpu::AddressMode::ClampToEdge,
         mag_filter: wgpu::FilterMode::Linear,
         min_filter: wgpu::FilterMode::Linear,
+        mipmap_filter: wgpu::MipmapFilterMode::Linear,
         ..Default::default()
     });
     device.create_bind_group(&wgpu::BindGroupDescriptor {

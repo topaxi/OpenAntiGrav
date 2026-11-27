@@ -112,6 +112,7 @@ fn a_texture_of_the_mod_reaches_the_emitter() {
         width: 1,
         height: 1,
         rgba: vec![255; 4].into(),
+        chain: None,
     };
     let text = file(&GOOD.replace("drag = 0.95", "drag = 0.95\ntexture = \"fx/glow.png\""));
     let parsed = parse(

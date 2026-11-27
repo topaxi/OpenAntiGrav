@@ -155,20 +155,44 @@ their whole level 0 and on the pointers at `DAT_815d2d0c`.
 
 ## Ours
 
-2048's `Looks::material_lod_bias` is `Rule::UNREAD`, so ours samples 2048's track materials at bias 0 with
-the player's anisotropy (16x by default). **Checked, differs.** The same `material_lod_bias` mechanism HD
-uses (`oag_title::MATERIAL_LOD_BIAS = -1.5`, `docs/rendering/hd-track-tone.md`) carries 2048's value
-unchanged. By family:
+2048's `Looks` carries the loader's bias as data (`oag_title::Looks::material_lod_bias` and
+`every_texture_lod_bias`, both `Rule` `Any`/`Measured`, `oag_title::MATERIAL_LOD_BIAS = -1.5`). **Ported
+for the bias.** `Scene::new` takes it and puts it on every pipeline of a race:
 
-- The shader bias reaches `material_sample` and `material_sample_grad`, which includes lightmaps. Ours reads
-  environment probes at an explicit level, so they stay at bias 0, as the original's do.
-- `oag_raceplay`'s `load/lod_bias.rs` leaves separate pad and weapon models at 0 on HD's census. On 2048
-  both read -1.5.
-- `detail_sample` takes no title bias, so the flame, absorb shell and weapon programs would stay at 0 where
-  the original's textures say -1.5. Sprites and particles (`oag-fx`) take no shift either.
-- The Zone skins want no bias and no mip filter. `zone.wesl` samples them with its own samplers, which
-  take no title bias.
-- The original takes no anisotropic taps, so the 2048 compare profile should say what it runs.
+| Family | How the bias reaches it |
+| --- | --- |
+| track, scenery, lightmaps, pads, craft, weapon models, shields, adverts | the pipeline cache scope's override constants, on the material fetches (`material_lod_bias`) |
+| flame, absorb shell, weapon programs and the other effect programs' own fetches | `detail_sample` (`effect_lod_bias`, `texture_lod.wesl`) |
+| particle sprites | `psys` and distortion pipelines, over a sprite atlas that carries each `.gxt`'s own levels |
+| flare, ribbon pair, leach beam, Cannon quads, wingtip contrails | each `oag_fx` pipeline's `disc_lod_bias`, over the file's own levels |
+| the time-trial ghost's hull | `oag_render::ghost`'s hull pass |
+| Zone track skins | no bias reaches them (`zone.wesl` has its own samplers); bound from one level (`ZoneStageTextures::track_single_level`) |
+
+Environment probes are read at an explicit level and stay at bias 0, as the original's are. Anisotropy
+stays the player's setting; the 2048 compare profile runs it off.
+
+Levels: every 2048 effect `.gxt` the sprites and ribbons name authors 3 to 9 levels
+(`data/particles2048/tex` is PVRTC), the ribbon textures 6 or 7, `engineflare_rich` 6. The atlas holds
+five, a chosen depth (`oag_fx::psys::sprite::ATLAS_LEVELS`): a sprite sits on a 16-texel grid with its
+edge texels repeated around it, and a level a file does not author is a box filter of the one above,
+also chosen. A sprite with no chain of its own (a mod's, this engine's own art) takes the same grid
+and box-filtered levels. Every sprite of a 2048 race still fits the 4096 atlas.
+
+Open or inherited:
+
+- **Material textures sample a box-filtered chain, not the file's own levels.** The bias is the
+  original's; the levels it selects are ours.
+- **The Zone skins' point descriptor** is not drawn: ours binds them through `zone.wesl`'s samplers.
+- **Detonator skins** keep a synthesised chain: their live state is unread (static only, confidence 80).
+- **Magstrip, light cone, hologram and rim effects** take the bias on the static loader read alone: no
+  run bound one.
+- **The HUD and menus** are not wired. Their textures read -1.5 in the original; at one texel a pixel
+  or fewer that bias selects the base anyway.
+
+The ground truth is `scene_build.rs`'s `v2048_biases_every_race_pipeline_and_its_circuit` (every
+distinct pipeline, the effect textures, the ghost) and `zone_grade_ground_truth.rs`'s
+`a_2048_zone_race_binds_its_track_skins_from_one_level`; `psp_slope_lod.rs`, `chain_draw.rs` and the
+ghost's tests read the selected level off a draw.
 
 ## Omega (the reverse check)
 
@@ -180,6 +204,7 @@ unchanged. By family:
 - no negative bias anywhere.
 
 So Omega's PS4 build does not carry 2048's -1.5. Its sharpness comes from 16x anisotropy instead.
+**Ours: checked, differs.** Omega's `Looks` leaves both rules unread, so its race draws at bias 0.
 
 **The Zone skins: checked on the files, applies.** Omega's `Data/tex/zoneModeTrack0..14.gnf` and
 `detonatorModeTrack0..14.gnf` (`data00.psarc` and `data08.psarc`) are 256x256 with one level

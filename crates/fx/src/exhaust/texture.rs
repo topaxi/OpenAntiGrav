@@ -18,6 +18,12 @@ pub struct FlareTexture {
     pub height: u32,
     /// `width * height * 4` bytes, RGBA8.
     pub rgba: Vec<u8>,
+    /// The levels the file authors below [`Self::rgba`], largest first; empty where it
+    /// authors none or the title samples the base alone.
+    pub mips: Vec<Vec<u8>>,
+    /// The title's sampler LOD bias, in levels. `0`, every title but one whose loader
+    /// biases its textures, samples [`Self::rgba`] alone and leaves [`Self::mips`] unused.
+    pub lod_bias: f32,
 }
 
 impl FlareTexture {
@@ -64,6 +70,8 @@ impl FlareTexture {
             width: size,
             height: size,
             rgba,
+            mips: Vec::new(),
+            lod_bias: 0.0,
         }
     }
 
@@ -110,6 +118,8 @@ impl FlareTexture {
             address_mode_w: wgpu::AddressMode::ClampToEdge,
             mag_filter: wgpu::FilterMode::Linear,
             min_filter: wgpu::FilterMode::Linear,
+            // Between levels where a chain is bound; one level has nothing to blend.
+            mipmap_filter: wgpu::MipmapFilterMode::Linear,
             ..Default::default()
         });
         let shape_texture = shape.map(|shape| shape.upload(device, queue, label));
@@ -138,8 +148,13 @@ impl FlareTexture {
         })
     }
 
-    /// This image as a texture on the device, with its pixels written.
+    /// This image as a texture on the device, with its pixels written: the base alone,
+    /// or the file's whole chain under a title bias ([`Self::lod_bias`]).
     pub fn upload(&self, device: &wgpu::Device, queue: &wgpu::Queue, label: &str) -> wgpu::Texture {
-        oag_gpu::texture::upload_rgba8(device, queue, label, (self.width, self.height), &self.rgba)
+        let size = (self.width, self.height);
+        if self.lod_bias == 0.0 {
+            return oag_gpu::texture::upload_rgba8(device, queue, label, size, &self.rgba);
+        }
+        oag_gpu::texture::upload_rgba8_chain(device, queue, label, size, &self.rgba, &self.mips)
     }
 }

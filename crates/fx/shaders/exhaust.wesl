@@ -33,6 +33,10 @@ import oag_shaders::target::{decode, encoded_out, linear_out, gamma_to_target, t
 // See `docs/ghidra/functions/ps3-hdfury-eu/engine-flare.md`.
 override trail_shape: f32 = 0.0;
 
+// The title's sampler LOD bias on its textures, in levels (`FlareTexture::lod_bias`); `0`
+// reads the base, the only level such a title uploads.
+override disc_lod_bias: f32 = 0.0;
+
 struct VertexOutput {
     @builtin(position) clip: vec4<f32>,
     @location(0) colour: vec4<f32>,
@@ -62,7 +66,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 }
 
 fn shade(in: VertexOutput) -> vec4<f32> {
-    let texel = textureSample(flare, flare_sampler, in.texcoord);
+    let texel = textureSampleBias(flare, flare_sampler, in.texcoord, disc_lod_bias);
 
     // The recovered blend is additive weighted by source alpha:
     //
@@ -108,13 +112,13 @@ fn shade(in: VertexOutput) -> vec4<f32> {
     // manager's constructor binds to the material parameter by address.
     // See docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md.
     let displaced = vec2<f32>(in.texcoord.x + texel.a, in.texcoord.y);
-    let authored = textureSample(trail_shape_texture, flare_sampler, displaced);
+    let authored = textureSampleBias(trail_shape_texture, flare_sampler, displaced, disc_lod_bias);
     // HD's program reads the *red* texture's colour at the same displaced
     // coordinate and lerps the blue one toward it by the per-craft mix the
     // engine patches - 1.0 exactly when the craft wears a Fury skin
     // (`concept1`, `nitro`, `detonator`, `chrome_c1`), which is what makes a
     // Fury craft's trail red where a classic craft's is blue.
-    let red = textureSample(flare, flare_sampler, displaced);
+    let red = textureSampleBias(flare, flare_sampler, displaced, disc_lod_bias);
     // `mix` rather than a branch, for the reason every other override in this
     // tree uses one: a pipeline built without it takes `texel` unchanged and
     // compiles to the picture it always drew.

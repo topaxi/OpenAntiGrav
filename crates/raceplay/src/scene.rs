@@ -563,6 +563,10 @@ pub struct Scene {
     /// pool of 128 drawables sharing one pipeline set from one that compiled
     /// 128 of them.
     build_cache: BuildCacheCounts,
+    /// `(distinct pipelines carrying the title's every-texture LOD bias, all distinct)`.
+    lod_biased: (usize, usize),
+    /// The title's every-texture LOD bias, for the pipelines built after [`Self::new`].
+    disc_lod_bias: f32,
 }
 
 /// One scene build's pipeline cache: `(asked for, reused, distinct built)`.
@@ -621,6 +625,8 @@ impl Scene {
         zone_grade: Option<crate::zone_grade::ZoneGrade>,
         shadows: crate::shadow::Assets,
         behind_glass: behind_glass::BehindGlassModels,
+        // `oag_title::Looks::every_texture_lod_levels`: 0 leaves each model's own bias.
+        disc_lod_bias: f32,
     ) -> Result<Self> {
         // **Opened here, not by the caller.** Every drawable below shares this
         // `device`, so `mesh_render::build` parses `mesh.wgsl` once and reuses
@@ -637,6 +643,7 @@ impl Scene {
         } = billboards;
         let cache_scope = mesh_render::BuildCacheScope::open();
         cache_scope.lit_by(&light);
+        cache_scope.every_texture_lod_bias(disc_lod_bias);
         cache_scope.simplified_lighting(circuit_lighting.is_simplified());
         cache_scope.zoned(zone_grade.is_some());
         cache_scope.zone_stage_light(
@@ -1138,12 +1145,13 @@ impl Scene {
             mesh_render::Velocity::Write,
             !ps2_mask,
         ));
-        let sparks = std::cell::RefCell::new(sparks::Pipeline::new(
+        let sparks = std::cell::RefCell::new(sparks::Pipeline::with_lod_bias(
             device,
             format,
             store,
             sample_count,
             mesh_render::Velocity::Write,
+            disc_lod_bias,
         ));
         let weapon_quads =
             weapon_quads::build(device, queue, format, store, cannon, liveries, sample_count);
@@ -1220,6 +1228,13 @@ impl Scene {
         let (shader_calls, shader_hits) = cache_scope.shader_counts();
         let (texture_calls, texture_hits) = cache_scope.texture_counts();
         let build_cache = cache_scope.pipeline_counts();
+        let lod_biased = cache_scope.lod_biased_pipeline_counts();
+        if disc_lod_bias != 0.0 {
+            debug!(
+                "race scene texture LOD bias {disc_lod_bias}: {} of {} distinct pipelines",
+                lod_biased.0, lod_biased.1
+            );
+        }
         debug!(
             "race scene build cache: shader {shader_hits}/{shader_calls} reused, pipeline \
              {}/{} reused ({} distinct built), texture upload {texture_hits}/{texture_calls} reused",
@@ -1230,6 +1245,8 @@ impl Scene {
             uniform_blocks: UniformBlocks::new(device),
             upload_staging: std::cell::RefCell::default(),
             build_cache,
+            lod_biased,
+            disc_lod_bias,
             bloom,
             ps2_bloom,
             bloom_pending: std::cell::Cell::new(false),

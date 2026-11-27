@@ -164,6 +164,27 @@ impl Pipeline {
         sample_count: u32,
         velocity: oag_mesh::mesh_render::Velocity,
     ) -> Self {
+        Self::with_lod_bias(device, format, store, sample_count, velocity, 0.0)
+    }
+
+    /// [`Self::new`] for a title whose loader biases its textures
+    /// (`oag_title::Looks::every_texture_lod_bias`): the sheet holds
+    /// [`super::sprite::ATLAS_LEVELS`] levels and every sample takes `lod_bias`. `0.0` is
+    /// the one-level sheet of every other title.
+    pub fn with_lod_bias(
+        device: &wgpu::Device,
+        format: wgpu::TextureFormat,
+        // What the scene target stores - see `oag_gpu::formats::SceneStore`.
+        store: oag_gpu::formats::SceneStore,
+        sample_count: u32,
+        velocity: oag_mesh::mesh_render::Velocity,
+        lod_bias: f32,
+    ) -> Self {
+        let levels = if lod_bias == 0.0 {
+            1
+        } else {
+            super::sprite::ATLAS_LEVELS
+        };
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("psys"),
             source: wgpu::ShaderSource::Wgsl(
@@ -209,6 +230,11 @@ impl Pipeline {
             immediate_size: 0,
         });
 
+        let constants = [
+            oag_mesh::mesh_render::linear_constants(format, store),
+            &[("disc_lod_bias", f64::from(lod_bias))],
+        ]
+        .concat();
         let build = |label: &str, blend: wgpu::BlendState| {
             device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some(label),
@@ -252,7 +278,10 @@ impl Pipeline {
                         targets.extend(velocity.target(true));
                         targets
                     },
-                    compilation_options: oag_mesh::mesh_render::fragment_options(format, store),
+                    compilation_options: wgpu::PipelineCompilationOptions {
+                        constants: &constants,
+                        ..Default::default()
+                    },
                 }),
                 primitive: wgpu::PrimitiveState {
                     // A camera-facing quad has no meaningful winding: the
@@ -278,7 +307,7 @@ impl Pipeline {
         let additive = build("psys additive", BLEND);
         let alpha_over = build("psys alpha-over", BLEND_ALPHA_OVER);
 
-        let distort = distort::Distort::new(device, &pipeline_layout, sample_count);
+        let distort = distort::Distort::new(device, &pipeline_layout, sample_count, lod_bias);
 
         let uniforms = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("psys uniforms"),
@@ -296,7 +325,7 @@ impl Pipeline {
                 height: SHEET_SIZE,
                 depth_or_array_layers: 1,
             },
-            mip_level_count: 1,
+            mip_level_count: levels,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba8Unorm,
@@ -313,6 +342,7 @@ impl Pipeline {
             label: Some("psys sprite sheet"),
             mag_filter: wgpu::FilterMode::Linear,
             min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::MipmapFilterMode::Linear,
             ..Default::default()
         });
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -395,6 +425,35 @@ impl Pipeline {
                 wgpu::Extent3d {
                     width: SHEET_SIZE,
                     height: sheet.rows(),
+                    depth_or_array_layers: 1,
+                },
+            );
+        }
+        for level in 1..self.sheet.mip_level_count() {
+            let side = SHEET_SIZE >> level;
+            let Some(pixels) = sheet
+                .lower_pixels(level)
+                .filter(|pixels| !pixels.is_empty())
+            else {
+                continue;
+            };
+            let rows = (pixels.len() / (side as usize * 4)) as u32;
+            queue.write_texture(
+                wgpu::TexelCopyTextureInfo {
+                    texture: &self.sheet,
+                    mip_level: level,
+                    origin: wgpu::Origin3d::ZERO,
+                    aspect: wgpu::TextureAspect::All,
+                },
+                pixels,
+                wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(side * 4),
+                    rows_per_image: Some(rows),
+                },
+                wgpu::Extent3d {
+                    width: side,
+                    height: rows,
                     depth_or_array_layers: 1,
                 },
             );

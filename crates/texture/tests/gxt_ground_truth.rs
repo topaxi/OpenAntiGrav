@@ -116,7 +116,9 @@ fn survey(check: &mut impl FnMut(&str, &Gxt, &[u8])) -> Survey {
 fn every_shipped_gxt_parses_and_every_known_format_decodes() {
     let mut checked = 0usize;
     let (mut covered, mut total, mut claimed) = (0usize, 0u64, 0u64);
+    let mut levels = EffectLevels::default();
     let found = survey(&mut |name, parsed, blob| {
+        levels.check(name, parsed, blob);
         let seen = gxt::coverage(blob);
         if !seen.is_empty() {
             covered += 1;
@@ -142,6 +144,7 @@ fn every_shipped_gxt_parses_and_every_known_format_decodes() {
     if found.files == 0 {
         return;
     }
+    levels.report();
 
     println!(
         "{} files, {} UBC2 + {} UBC1 + {} UBC3 + {} PVRTII4BPP + {} Argb8888 + {} Rgb888 \
@@ -181,6 +184,105 @@ fn every_shipped_gxt_parses_and_every_known_format_decodes() {
     println!("gxt coverage: {covered} file(s), {claimed} of {total} byte(s) ({pct:.2}%)");
     assert_eq!(covered, 9910, "every shipped .gxt has bytes to cover");
     assert_eq!(claimed, total, "expected to close exactly");
+}
+
+/// **The effect textures' lower levels are pictures of their base.** A race samples the
+/// particle sprites, trails, engine flare and leech beam down these chains
+/// (`docs/ghidra/functions/vita-2048-eu-v104/gxt-loader.md`, "In a race"), so a wrong
+/// offset or block order there would draw noise at distance. Each level must sit close to a
+/// 2x2 box downsample of the one above it.
+#[derive(Default)]
+struct EffectLevels {
+    files: usize,
+    levels: usize,
+    total: f64,
+    worst: (f64, String),
+}
+
+impl EffectLevels {
+    const DIRS: [&str; 4] = [
+        "particles2048/tex/",
+        "ribboneffects/textures/",
+        "tex/engineflare/",
+        "textures/pulse_leechbeam1_add",
+    ];
+
+    fn check(&mut self, name: &str, parsed: &Gxt, blob: &[u8]) {
+        let lower = name.to_ascii_lowercase();
+        if !Self::DIRS.iter().any(|dir| lower.contains(dir)) {
+            return;
+        }
+        let Some(texture) = parsed.only() else {
+            return;
+        };
+        let authored = texture.lower_levels_rgba(blob);
+        assert_eq!(
+            authored.len(),
+            usize::from(texture.mip_levels) - 1,
+            "{name}: every authored level decodes"
+        );
+        self.files += 1;
+        let mut above = texture
+            .to_rgba(blob)
+            .expect("the base decodes")
+            .into_flattened();
+        for (index, level) in authored.into_iter().enumerate() {
+            let (width, height) = texture.level_size(index as u8);
+            let (down_w, down_h) = texture.level_size(index as u8 + 1);
+            assert_eq!(
+                level.len(),
+                (down_w * down_h * 4) as usize,
+                "{name}: level {}",
+                index + 1
+            );
+            // Alpha-weighted colour: the colour of a transparent texel is free.
+            let mut difference = 0.0;
+            for y in 0..down_h {
+                for x in 0..down_w {
+                    let mut sum = [0.0_f64; 4];
+                    for (dx, dy) in [(0, 0), (1, 0), (0, 1), (1, 1)] {
+                        let at = ((y * 2 + dy).min(height - 1) * width
+                            + (x * 2 + dx).min(width - 1))
+                            as usize
+                            * 4;
+                        let alpha = f64::from(above[at + 3]) / 255.0;
+                        for c in 0..3 {
+                            sum[c] += f64::from(above[at + c]) * alpha / 4.0;
+                        }
+                        sum[3] += f64::from(above[at + 3]) / 4.0;
+                    }
+                    let at = (y * down_w + x) as usize * 4;
+                    let alpha = f64::from(level[at + 3]) / 255.0;
+                    for c in 0..3 {
+                        difference += (f64::from(level[at + c]) * alpha - sum[c]).abs();
+                    }
+                    difference += (f64::from(level[at + 3]) - sum[3]).abs();
+                }
+            }
+            // The first two levels carry the picture; under 8 texels a PVRTC level is its
+            // own few words and says little.
+            if index < 2 && down_w.min(down_h) >= 8 {
+                let mean = difference / f64::from(down_w * down_h * 4);
+                self.levels += 1;
+                self.total += mean;
+                if mean > self.worst.0 {
+                    self.worst = (mean, format!("{name} level {}", index + 1));
+                }
+            }
+            above = level;
+        }
+    }
+
+    fn report(&self) {
+        let mean = self.total / self.levels.max(1) as f64;
+        println!(
+            "effect chains: {} files, {} levels, mean difference {mean:.2}, worst {:.2} ({})",
+            self.files, self.levels, self.worst.0, self.worst.1
+        );
+        assert!(self.files > 100, "{} effect textures", self.files);
+        assert!(mean < 6.0, "mean difference {mean:.2}");
+        assert!(self.worst.0 < 25.0, "{:?}", self.worst);
+    }
 }
 
 /// Decodes a named entry to a checkerboard-composited PNG so a human can check
