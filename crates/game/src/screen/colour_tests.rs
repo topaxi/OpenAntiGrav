@@ -67,6 +67,14 @@ pub(super) fn settled(
     picture: &Picture,
     native: (f32, f32),
 ) -> [Picture; 2] {
+    let frames: Vec<&Picture> = std::iter::repeat_n(picture, SETTLE as usize).collect();
+    composited(gpu, preset, &frames, native)
+}
+
+/// Composites `frames` in order through one pass, and returns the last two
+/// outputs. The pictures share one size.
+fn composited(gpu: &Gpu, preset: &Preset, frames: &[&Picture], native: (f32, f32)) -> [Picture; 2] {
+    let picture = frames[0];
     let size = wgpu::Extent3d {
         width: picture.width,
         height: picture.height,
@@ -83,21 +91,21 @@ pub(super) fn settled(
         view_formats: &[],
         texture_binding_view_dimension: None,
     });
-    gpu.queue.write_texture(
-        source.as_image_copy(),
-        &picture.pixels,
-        wgpu::TexelCopyBufferLayout {
-            offset: 0,
-            bytes_per_row: Some(picture.width * 4),
-            rows_per_image: Some(picture.height),
-        },
-        size,
-    );
     let view = source.create_view(&Default::default());
     let mut pass =
         Screen::new(&gpu.device, wgpu::TextureFormat::Rgba8Unorm, preset).expect("the pass");
     let mut outputs = Vec::new();
-    for index in 0..SETTLE {
+    for (index, frame) in frames.iter().enumerate() {
+        gpu.queue.write_texture(
+            source.as_image_copy(),
+            &frame.pixels,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(picture.width * 4),
+                rows_per_image: Some(picture.height),
+            },
+            size,
+        );
         let mut encoder = gpu.device.create_command_encoder(&Default::default());
         pass.render(
             &gpu.device,
@@ -113,7 +121,7 @@ pub(super) fn settled(
             },
         );
         gpu.queue.submit(Some(encoder.finish()));
-        if index + 2 >= SETTLE {
+        if index + 2 >= frames.len() {
             outputs.push(read(
                 gpu,
                 pass.output_texture().expect("an output"),
@@ -403,4 +411,158 @@ fn a_still_picture_through_the_psp_lcd_is_dimmed_evenly() {
             "@{label}: share of the lifted grey per level {shares:.3?}"
         );
     }
+}
+
+/// A slow panel: the frame after a white one still shows `persistence` of it.
+#[test]
+fn the_psp_lcd_still_smears_what_it_last_showed() {
+    let Some(gpu) = gpu() else {
+        eprintln!("no GPU adapter; skipping");
+        return;
+    };
+    let preset = preset("psp-lcd");
+    let persistence = preset
+        .params
+        .iter()
+        .find(|p| p.name == "persistence")
+        .map_or(0.0, |p| f64::from(p.default));
+    let (width, height) = output_size((3, 1));
+    let white = Picture::flat(width, height, [255; 3]);
+    let black = Picture::flat(width, height, [0; 3]);
+    // The encoded mean over the middle, which is what the history mixes in.
+    let level = |picture: &Picture| {
+        let rect = middle(width, height);
+        let mut sum = 0.0;
+        for y in rect.1..rect.3 {
+            for x in rect.0..rect.2 {
+                sum += f64::from(picture.pixels[((y * width + x) * 4 + 1) as usize]);
+            }
+        }
+        sum / f64::from((rect.2 - rect.0) * (rect.3 - rect.1))
+    };
+    let lit = level(&settled(&gpu, &preset, &white, NATIVE)[1]);
+    let dark = level(&settled(&gpu, &preset, &black, NATIVE)[1]);
+    let mut frames = vec![&white; SETTLE as usize];
+    frames.push(&black);
+    let after = level(&composited(&gpu, &preset, &frames, NATIVE)[1]);
+    let expected = dark + persistence * (lit - dark);
+    assert!(
+        (after - expected).abs() < 2.0,
+        "after white then black: {after:.1}, expected {expected:.1}"
+    );
+}
+
+/// Blocks the frame sweep compares hue over: wide enough to hold several mask
+/// periods at every capture size it is run at.
+const BLOCK: u32 = 24;
+
+/// Runs every built-in over captured `--screen-filter off` frames and prints how
+/// far each moved their colour. `OAG_FILTER_IN` names a directory of
+/// `psp-*-off.png` and `ps2-*-off.png`; the filtered frames are written beside
+/// them.
+#[test]
+#[ignore = "a sweep over captured frames; run with OAG_FILTER_IN=<directory>"]
+fn print_what_the_filters_do_to_captured_frames() {
+    let Some(directory) = std::env::var_os("OAG_FILTER_IN").map(std::path::PathBuf::from) else {
+        return;
+    };
+    let Some(gpu) = gpu() else {
+        eprintln!("no GPU adapter; skipping");
+        return;
+    };
+    let mut frames: Vec<_> = std::fs::read_dir(&directory)
+        .expect("the directory")
+        .map(|entry| entry.expect("an entry").path())
+        .filter(|path| path.to_string_lossy().ends_with("-off.png"))
+        .collect();
+    frames.sort();
+    for path in frames {
+        let name = path.file_stem().expect("a name").to_string_lossy();
+        let stem = name.trim_end_matches("-off");
+        let native = if stem.starts_with("ps2") {
+            (640.0, 448.0)
+        } else {
+            (480.0, 272.0)
+        };
+        let frame = load(&path);
+        for (id, _) in super::BUILT_IN {
+            let curved = preset(id);
+            let out = settled(&gpu, &curved, &frame, native);
+            save(&directory.join(format!("{stem}-{id}.png")), &out[1]);
+            // Compared without the barrel and the dark corners, which move
+            // and shade the picture rather than recolour it.
+            let mut flat = curved.clone();
+            for param in &mut flat.params {
+                if param.name == "curvature" || param.name == "corner" {
+                    param.default = 0.0;
+                }
+            }
+            let out = settled(&gpu, &flat, &frame, native);
+            println!("{stem} {id}: {}", compare(&frame, &out));
+        }
+    }
+}
+
+fn load(path: &std::path::Path) -> Picture {
+    let file = std::io::BufReader::new(std::fs::File::open(path).expect("a frame"));
+    let mut reader = png::Decoder::new(file).read_info().expect("a PNG");
+    let mut pixels = vec![0; reader.output_buffer_size().expect("a size")];
+    let info = reader.next_frame(&mut pixels).expect("the pixels");
+    assert_eq!(info.color_type, png::ColorType::Rgba, "{path:?}");
+    pixels.truncate(info.buffer_size());
+    Picture {
+        width: info.width,
+        height: info.height,
+        pixels,
+    }
+}
+
+fn save(path: &std::path::Path, picture: &Picture) {
+    let file = std::io::BufWriter::new(std::fs::File::create(path).expect("a file"));
+    let mut encoder = png::Encoder::new(file, picture.width, picture.height);
+    encoder.set_color(png::ColorType::Rgba);
+    encoder.set_depth(png::BitDepth::Eight);
+    let mut writer = encoder.write_header().expect("a header");
+    writer.write_image_data(&picture.pixels).expect("the pixels");
+}
+
+fn compare(off: &Picture, out: &[Picture]) -> String {
+    let whole = (0, 0, off.width, off.height);
+    let before = shown(std::slice::from_ref(off), whole);
+    let after = shown(out, whole);
+    let luminance = |c: [f64; 3]| {
+        let l = c.map(|v| (v / 255.0).powf(2.2));
+        0.2126 * l[0] + 0.7152 * l[1] + 0.0722 * l[2]
+    };
+    let (mut turns, mut saturation, mut weight) = (Vec::new(), [0.0, 0.0], 0.0);
+    for y in 0..off.height / BLOCK {
+        for x in 0..off.width / BLOCK {
+            let rect = (x * BLOCK, y * BLOCK, (x + 1) * BLOCK, (y + 1) * BLOCK);
+            let a = shown(std::slice::from_ref(off), rect);
+            let b = shown(out, rect);
+            let (h0, s0) = hue_saturation(a);
+            let (h1, s1) = hue_saturation(b);
+            saturation[0] += s0;
+            saturation[1] += s1;
+            weight += 1.0;
+            // A hue means little where there is hardly any colour.
+            if s0 > 0.2 && a.iter().any(|v| *v > 48.0) {
+                turns.push(turn(h0, h1));
+            }
+        }
+    }
+    let signed = turns.iter().sum::<f64>() / turns.len() as f64;
+    let mut magnitudes: Vec<f64> = turns.iter().map(|t| t.abs()).collect();
+    magnitudes.sort_by(f64::total_cmp);
+    let mean = magnitudes.iter().sum::<f64>() / magnitudes.len() as f64;
+    let p95 = magnitudes[magnitudes.len() * 95 / 100];
+    format!(
+        "mean rgb {:.1?} -> {:.1?}, luminance x{:.3}, saturation {:.3} -> {:.3}, hue turn mean {mean:.1} p95 {p95:.1} signed {signed:+.1} deg over {} blocks",
+        before,
+        after,
+        luminance(after) / luminance(before),
+        saturation[0] / weight,
+        saturation[1] / weight,
+        turns.len(),
+    )
 }

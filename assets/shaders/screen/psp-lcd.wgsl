@@ -31,7 +31,7 @@
 //!
 //! [[param]]
 //! name = "subpixel"
-//! default = 0.5
+//! default = 0.25
 //! min = 0.0
 //! max = 0.8
 //! step = 0.05
