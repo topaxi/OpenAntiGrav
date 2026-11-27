@@ -69,15 +69,19 @@ texture by texel bytes:
 - **Fit.** One K in `[-9.0507, -9.0486]` reproduces the byte exactly for 37 of the 40 textures,
   over `x18` from 0.007 to 1,584 (five decades). The three misses are `TempTexBlue.tga` binds,
   several textures under one name.
-- **Reading.** The `0.5 * log2(x18)` slope therefore holds, and the K in the bytes is the stored
-  one: each texture keeps the K it was built with. It is rebuilt only when the current K moves more
-  than 0.2 away. Pulse's Talon and Metropia grid textures carry the same stored K, -9.0506
-  (`pulse-farfield-lod`, 150 of 150 exact). Why the Modesto textures were not rebuilt for a camera
-  0.73 away is not read.
+- **Reading.** The `0.5 * log2(x18)` slope therefore holds. The K in force when Pure binds in the
+  race is about -9.05, **not** `-log2(480 * m00)` of the drawn projection. It cannot be a stale build
+  either: the drawn camera's -8.32 is 0.73 away, past the 0.2 rebuild threshold, so `Texture_Bind`
+  would have rebuilt. -9.05 is exactly Pulse's stored grid K (-9.0506, `pulse-farfield-lod`, 150 of
+  150 exact), which points at one load-time camera both titles share. Its source is unread. Next read:
+  `Camera_StoreTextureLodTerm`'s three callers (`0x0883fc04`, `0x0883ff34`, `0x0885fdf8`) and
+  whether any runs per race frame.
+- **Consequence for wiring.** If Pure took the drawn camera's K, ours would sit 11 to 12 sixteenths
+  coarser than the original on 72 of 88 binds. Pure's K must come from the same source as the
+  original's.
 
 **Confidence 85** for the law on Pure: static identity with Pulse's measured law, plus 37 of 40
-textures exact in a recorded list. **50** for where the stored -9.05 comes from (the earlier camera
-that built the textures was not identified on Pure).
+textures exact in a recorded list. **50** for where the K of -9.05 comes from (not the drawn projection; source unread).
 
 ## Ours
 

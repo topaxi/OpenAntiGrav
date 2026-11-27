@@ -47,21 +47,35 @@ Two independent sources agree on the value:
    copies read from Vita3K's RAM ([canvas3d-lattice.md](canvas3d-lattice.md), "The atlas
    descriptor decoded").
 
-The other `sceGxmTextureSetMinFilter`/`SetMipFilter` callers checked (`FUN_810242e8`) are render
-targets with the mip filter off. They never call `SetLodBias`, so they sample at bias 0.
+`GxtLoader_LoadTexture` has no direct caller: its address sits in a function-pointer table at
+`0x81517624`, so the resource system reaches it. `SetMinFilter` and `SetMipFilter` have about twenty
+other callers, which never call `SetLodBias`. Two were read:
+
+- **`FUN_810242e8`**: render targets, mip filter off.
+- **`Environment_LoadHDFuryContent`**: the same, plus the **Zone and Detonator track skins**. Fifteen
+  descriptors (`DAT_815d2d0c`, allocated under `Game/FunkLayer.LIVE/FunkLayer.zone.cpp`; the
+  `data/Tex/zoneModeTrackN.gxt` and `DetonatorModeTrackN.gxt` strings) are set to min filter linear
+  and **mip filter 0 (off)** after loading. Those skins sample level 0 at every distance, whatever
+  bias the loader left.
+
+`FUN_81043b1c` (nine call pairs) and the rest were not read.
 
 ## What this says, and what it does not
 
-- **Read.** Every `.gxt` the game loads through this loader, race materials included, samples
-  trilinear over the file's own mip chain with a -1.5 bias. Confidence **80**: one call site,
-  confirmed live on one texture, not on a race material's descriptor.
+- **Read.** A texture this loader builds samples trilinear over the file's own mip chain with a -1.5
+  bias. Confidence **85**: the static call, confirmed live on one texture.
+- **Inferred, not read.** Race track materials are `.gxt` files and reach this loader, keeping its
+  sampler bits. Confidence **60**: the loader is reached through a resource table, and other code
+  rewrites the filters of some loaded textures (the Zone and Detonator skins above).
 - **Not read.** Whether a draw rebinds a material texture through a different `SceGxmTexture` copy
   with other sampler bits. The bind path from a material to its descriptor was not followed.
 
 ## Ours
 
 2048's `Looks::material_lod_bias` is `Rule::UNREAD`, so ours samples 2048's track materials at bias 0
-with the player's anisotropy (16x by default). **Checked, differs.** The same `material_lod_bias`
+with the player's anisotropy (16x by default). **Checked, differs** for loader-built textures. Before
+wiring, measure one live race-material descriptor: in Vita3K, search RAM for a `SceGxmTexture` whose
+data word is a known track texture's address, as [canvas3d-lattice.md](canvas3d-lattice.md) did. The same `material_lod_bias`
 mechanism HD uses (`oag_title::MATERIAL_LOD_BIAS = -1.5`, `docs/rendering/hd-track-tone.md`) would
 carry 2048's value unchanged.
 
