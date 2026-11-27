@@ -698,7 +698,7 @@ def main():
     check_hd_countdown_tick()
     check_hd_wait_countdown()
     check_detonator_volley_ticks()
-    with tempfile.TemporaryDirectory() as t:
+    with tempfile.TemporaryDirectory(dir=oag_tmp.temp_root()) as t:
         check_pure_presented_lag(Path(t))
     with tempfile.TemporaryDirectory(dir=oag_tmp.temp_root()) as t:
         check_detonator_picture_tick(Path(t))

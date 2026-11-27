@@ -131,7 +131,7 @@ fn omegas_hosted_card_words_its_description_and_centres_the_pass_group() {
         dlc: Vec::new(),
         leg: oag_ui::frontend::Leg::LogoFmv,
         movie: None,
-        cache: std::env::temp_dir().join("oag-omega-2048-card"),
+        cache: oag_testdata::scratch::cache("omega-2048-card"),
         audio_cache: oag_source::cache::default_audio_cache_dir(),
         extent: oag_game::movie::Extent::Frames(oag_game::INTRO_FRAMES_NEEDED),
         no_video: true,
