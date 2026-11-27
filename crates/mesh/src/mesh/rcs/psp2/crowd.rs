@@ -108,7 +108,7 @@ pub(super) fn plan(
     report: &mut Report,
 ) -> Plan {
     let mut out = Plan::default();
-    for material in &decoded.materials {
+    for (index, material) in decoded.materials.iter().enumerate() {
         let eye_frame = ps4
             && (skinned(material)
                 || textures(&material.name)
@@ -125,10 +125,22 @@ pub(super) fn plan(
         });
         match (admitted, slot) {
             (Some(entry), Some(_)) => {
+                crate::mesh::rcs::census::claim(
+                    index,
+                    "crowd",
+                    crate::mesh::rcs::census::Outcome::Drawn,
+                );
                 report.crowd_materials += 1;
                 report.crowd_eye_frames += usize::from(entry.offset > 0.5);
             }
-            (Some(_), None) => report.crowd_unread += 1,
+            (Some(_), None) => {
+                crate::mesh::rcs::census::claim(
+                    index,
+                    "crowd",
+                    crate::mesh::rcs::census::Outcome::NotDrawn,
+                );
+                report.crowd_unread += 1;
+            }
             _ => {}
         }
         out.slots.push(slot.unwrap_or(0));

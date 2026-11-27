@@ -30,6 +30,7 @@ use oag_audio::spatial::{
 use oag_audio::{Bus, Mixer, Play, Sound, VoiceId};
 use oag_core::Rng;
 use oag_formats::sblk::Bank;
+use oag_formats::sblk::pitch::random_bend_word;
 use oag_formats::sblk::runner::Runner;
 use oag_formats::sblk::timeline::WalkModel;
 use oag_title::SequenceTick;
@@ -136,11 +137,7 @@ impl Timeline {
         let draws: Vec<f32> = self
             .bends
             .iter()
-            .map(|&percent| {
-                let raw = (rng.below(0x7fff) as i64 * 0xffff / 0x7fff) - 0x8000;
-                let bend = (raw * i64::from(percent) / 100) as i16;
-                f32::from(bend)
-            })
+            .map(|&percent| f32::from(random_bend_word(rng.below(0x7fff), percent)))
             .collect();
         self.layers
             .iter()
@@ -462,7 +459,8 @@ pub(super) fn program(
     // one-shot path.
     let (model, rear) = match tick {
         SequenceTick::Psp => (WalkModel::default(), RearPan::Front),
-        // HD starts both cues with no variable block, so all four read zero.
+        // HD starts these with no variable block, or on a projectile's emitter,
+        // which sets none, so all four read zero.
         SequenceTick::Ps3 => (
             WalkModel {
                 cue_variables: Some([0; 4]),
@@ -537,7 +535,7 @@ impl Where {
 /// did. Once any voice is off-centre every voice takes its authored angle, so a
 /// centred grain is not 3 dB louder beside a panned one. A placed cue shifts the
 /// emitter's pan by the angle.
-fn pan_for(at: Where, angle: i32, any_off_centre: bool, rear: RearPan) -> Option<f32> {
+pub(super) fn pan_for(at: Where, angle: i32, any_off_centre: bool, rear: RearPan) -> Option<f32> {
     match at.pan {
         Some(pan) if angle == 0 => Some(pan),
         Some(pan) => {

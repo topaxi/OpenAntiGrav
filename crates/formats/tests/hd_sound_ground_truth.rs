@@ -368,4 +368,73 @@ fn hd_s_blowup_and_rocklock_run_their_lists() {
         .filter(|k| k.0 <= 90)
         .collect();
     assert_eq!(keys, expected);
+
+    hd_s_autopilot_runs_its_list_and_releases_its_tail(&blob);
+    hd_s_travel_lists_run_and_bend(&blob);
+}
+
+/// `~AUTOPILOT`: three one-shots and a loop at 90 degrees at once, the 270
+/// loop ten ticks on, then a blip every 22 from an alternate group of eight. Its
+/// stop plays the two voices after the `0x2b`, which no held path reaches.
+fn hd_s_autopilot_runs_its_list_and_releases_its_tail(blob: &[u8]) {
+    let mut pilot = hd_runner(blob, "~AUTOPILOT");
+    let mut seed = 7_u32;
+    let mut rand = || {
+        seed = seed.wrapping_mul(1_103_515_245).wrapping_add(12_345);
+        seed >> 16
+    };
+    let mut keys = pilot.start(&mut rand);
+    for _ in 0..600 {
+        keys.extend(pilot.tick(&mut rand));
+    }
+    let at: Vec<(u32, i32)> = keys.iter().map(|g| (g.tick, g.angle)).collect();
+    assert_eq!(
+        &at[..5],
+        &[(0, 0), (0, 0), (0, 0), (0, 90), (10, 270)],
+        "the opening voices"
+    );
+    let blips = &at[5..];
+    let ticks: Vec<u32> = blips.iter().map(|b| b.0).collect();
+    assert_eq!(
+        ticks,
+        (0..ticks.len() as u32)
+            .map(|k| 32 + 22 * k)
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(blips.len(), 26);
+    let angles: std::collections::BTreeSet<i32> = blips.iter().map(|b| b.1).collect();
+    assert_eq!(
+        angles.into_iter().collect::<Vec<_>>(),
+        vec![10, 20, 30, 40, 320, 330, 340, 350]
+    );
+    assert!(
+        blips.windows(2).all(|w| w[0].1 != w[1].1),
+        "the alternate group never repeats its last pick"
+    );
+
+    let tail = pilot.release(&mut rand);
+    let tail: Vec<(u32, i32)> = tail.iter().map(|g| (g.tick, g.angle)).collect();
+    assert_eq!(tail, vec![(600, 0), (600, 0)], "both at the stop");
+}
+
+/// The travel loops: a random bend ahead of the loop voices, and two one-shots
+/// re-keyed every 33 ticks over the Plasma and Shuriken loops. None has a tail.
+fn hd_s_travel_lists_run_and_bend(blob: &[u8]) {
+    let mut quake = hd_runner(blob, "~QUAKETRAVEL");
+    assert_eq!(run(&mut quake, 0, 100), vec![(0, 270), (15, 90)]);
+    assert_eq!(quake.bend(), -32768, "a 100 percent draw of zero");
+    assert!(quake.release(&mut || 0).is_empty());
+
+    let mut rocket = hd_runner(blob, "~ROCKETTVL");
+    assert_eq!(run(&mut rocket, 0, 100), vec![(0, 0)]);
+    assert_eq!(rocket.bend(), -32768);
+
+    for name in ["~PLASMATVL", "~SHURIKENTRAVEL"] {
+        let mut cue = hd_runner(blob, name);
+        let ticks: Vec<u32> = run(&mut cue, 0, 70).iter().map(|k| k.0).collect();
+        // The loop and a pair at once, the pair's second two ticks on, and the
+        // pair again each 2 + 31 ticks.
+        assert_eq!(ticks, vec![0, 0, 2, 33, 35, 66, 68], "{name}");
+        assert!(cue.release(&mut || 0).is_empty(), "{name}");
+    }
 }

@@ -67,6 +67,7 @@ pub(super) fn hull_charge(
             continue;
         };
         *word |= index << slots::MATERIAL_SHIFT;
+        super::census::claim(slot, "hull_charge", super::census::Outcome::Drawn);
         report.hull_charge_bound += 1;
     }
 }

@@ -806,8 +806,9 @@ pub struct TextShadow {
 
 /// The lap counter closes up on lap one: with a lap target and the lap equal to
 /// one, the executable moves the two glyphs after the digit left by [`Self::dx`]
-/// (a one-digit lap leaves the gap a two-digit one fills). Pulse's
-/// `Hud_UpdateLapCounter` (`0x0881a690`), `-17.0` in the 480-wide layout space.
+/// (a one-digit lap leaves the gap a two-digit one fills). Each title's own
+/// `Hud_UpdateLapCounter`, `-17.0` in the 480-wide layout space: Pulse's
+/// (`0x0881a690`) and Pure's (`0x0881ed14`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LapOneShift {
     /// The widgets that move: the separator and the lap total.

@@ -147,6 +147,7 @@ pub(super) fn ice(
             path_of(SNOW).and_then(|p| decode(&p)),
             path_of(MASK).and_then(|p| decode(&p)),
         ) else {
+            super::census::claim(slot, "ice", super::census::Outcome::NotDrawn);
             report.ice_unread += 1;
             continue;
         };
@@ -160,6 +161,7 @@ pub(super) fn ice(
                 })
             });
         let Some(first) = first else {
+            super::census::claim(slot, "ice", super::census::Outcome::NotDrawn);
             report.ice_unread += 1;
             continue;
         };
@@ -170,6 +172,7 @@ pub(super) fn ice(
             *word |= slots::ICE;
             *word |= u32::try_from(first + 1).unwrap_or(0) << slots::MATERIAL_SHIFT;
         }
+        super::census::claim(slot, "ice", super::census::Outcome::Drawn);
         report.ice_bound += 1;
     }
     masks

@@ -120,10 +120,12 @@ pub(super) fn alpha_emissive(
             || (*word & slots::ADD_SECOND != 0
                 && table.get(held - 1).is_some_and(|e| e.program == [0.0; 2]));
         if !generic {
+            super::census::claim(slot, "alpha_emissive", super::census::Outcome::NotDrawn);
             report.alpha_emissive_unread += 1;
             continue;
         }
         let Some(value) = material.parameters.iter().find(|p| p.hash == colour) else {
+            super::census::claim(slot, "alpha_emissive", super::census::Outcome::NotDrawn);
             report.alpha_emissive_unread += 1;
             continue;
         };
@@ -158,11 +160,13 @@ pub(super) fn alpha_emissive(
             })
         });
         let Some(index) = index.and_then(|i| u32::try_from(i + 1).ok()) else {
+            super::census::claim(slot, "alpha_emissive", super::census::Outcome::NotDrawn);
             report.alpha_emissive_unread += 1;
             continue;
         };
         *word &= slots::ROLE_MASK & !slots::ADD_SECOND;
         *word |= index << slots::MATERIAL_SHIFT;
+        super::census::claim(slot, "alpha_emissive", super::census::Outcome::Drawn);
         report.alpha_emissive_bound += 1;
         if let Some(map) = specular {
             maps[slot] = Some(map);

@@ -186,6 +186,7 @@ pub(super) fn billboard_glass(
             })
         });
         let Some(index) = index else {
+            super::census::claim(slot, "billboard_glass", super::census::Outcome::NotDrawn);
             report.billboard_glass_unbound += 1;
             continue;
         };
@@ -193,8 +194,10 @@ pub(super) fn billboard_glass(
             | slots::ADD_SECOND
             | (u32::try_from(index + 1).unwrap_or(0) << slots::MATERIAL_SHIFT);
         if layer.program[0] == PROGRAM_BILLBOARD {
+            super::census::claim(slot, "billboard_glass", super::census::Outcome::Drawn);
             report.billboard_multiplied += 1;
         } else {
+            super::census::claim(slot, "billboard_glass", super::census::Outcome::Drawn);
             report.glass_bw_multiplied += 1;
         }
     }

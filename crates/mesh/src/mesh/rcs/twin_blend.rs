@@ -157,6 +157,7 @@ pub(super) fn twin_blend(
             continue;
         }
         if !is_twin_blend(&declared, &program) {
+            super::census::claim(slot, "twin_blend", super::census::Outcome::NotDrawn);
             report.twin_blend_other_shape += 1;
             continue;
         }
@@ -166,6 +167,7 @@ pub(super) fn twin_blend(
         // The generic reading gives this slot an additive glow off its second texture; any
         // other family's index is kept.
         if slots::material_index(*word) != 0 && *word & slots::ADD_SECOND == 0 {
+            super::census::claim(slot, "twin_blend", super::census::Outcome::NotDrawn);
             report.twin_blend_unread += 1;
             continue;
         }
@@ -191,6 +193,7 @@ pub(super) fn twin_blend(
             picture(BARS),
             rate(&blob, variant),
         ) else {
+            super::census::claim(slot, "twin_blend", super::census::Outcome::NotDrawn);
             report.twin_blend_unread += 1;
             continue;
         };
@@ -208,6 +211,7 @@ pub(super) fn twin_blend(
             })
         });
         let Some(index) = index else {
+            super::census::claim(slot, "twin_blend", super::census::Outcome::NotDrawn);
             report.twin_blend_unread += 1;
             continue;
         };
@@ -222,6 +226,7 @@ pub(super) fn twin_blend(
                 | slots::ALBEDO_FROM_SECOND
                 | slots::ALPHA_FROM_SECOND);
         *word |= u32::try_from(index + 1).unwrap_or(0) << slots::MATERIAL_SHIFT;
+        super::census::claim(slot, "twin_blend", super::census::Outcome::Drawn);
         report.twin_blend_bound += 1;
     }
     bound

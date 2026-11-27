@@ -1451,3 +1451,11 @@ list (ADR-0090 clause 3: only data the descendant's own files confirm). Pinned b
 `vita_2048_hud_ground_truth::the_eliminator_lap_hexagon_is_authored_only_by_the_unplayed_bare_root`;
 no 2048 Eliminator frame was captured, so whether the original's Eliminator shows a lap counter
 at all is read from the layouts alone.
+
+## Pure's lap counter closes up on lap one (2026-11-27, `menu-pairs`)
+
+Pure's `Hud_UpdateLapCounter` (`0x0881ed14`,
+[hud-lap-counter.md](../ghidra/functions/psp-pure-usa/hud-lap-counter.md)) moves `LapOf` and `Lap Outof` left by 17
+layout units while the lap is 1, as Pulse's does. The layout XML authors the lap-two-and-later positions. Wired
+through `oag_title::HudArt::lap_one_shift` for both titles; numbers in
+[compare-page.md](../tools/compare-page.md), "Pure's lap-one close-up". HD authors no such rule.

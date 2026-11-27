@@ -76,6 +76,15 @@ pub trait CueTables: Copy {
     #[must_use]
     fn repeats(self) -> bool;
 
+    /// Whether HD's list for this held cue plays as it runs, on HD's layout
+    /// alone: `~AUTOPILOT` and the travel loops `~PLASMATVL`, `~ROCKETTVL`,
+    /// `~SHURIKENTRAVEL` and `~QUAKETRAVEL`, each opened and released where HD's
+    /// code does (`docs/ghidra/functions/ps3-hdfury-eu/cue-variables.md`, "Held
+    /// cues the game starts and stops"). Pulse's lists of these names are
+    /// unread, so they keep their one waveform.
+    #[must_use]
+    fn runs_hd_list(self) -> bool;
+
     /// Whether an HD walk of this cue's list is wired: a one-shot of the hud,
     /// ship or weapons bank. A held cue keeps one waveform unless it
     /// [repeats](Self::repeats) (a looping list only a runner plays), and
@@ -340,6 +349,17 @@ impl CueTables for Cue {
 
     fn repeats(self) -> bool {
         matches!(self, Self::Blowup | Self::LockOn)
+    }
+
+    fn runs_hd_list(self) -> bool {
+        matches!(
+            self,
+            Self::Autopilot
+                | Self::PlasmaTravel
+                | Self::RocketTravel
+                | Self::ShurikenTravel
+                | Self::QuakeTravel
+        )
     }
 
     fn walks_variables(self) -> bool {

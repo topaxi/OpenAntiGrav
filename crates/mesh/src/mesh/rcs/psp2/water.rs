@@ -290,6 +290,15 @@ pub(super) fn plan(
             normals.bind(index, map);
             true
         });
+        crate::mesh::rcs::census::claim(
+            index,
+            "sea",
+            if laid {
+                crate::mesh::rcs::census::Outcome::Drawn
+            } else {
+                crate::mesh::rcs::census::Outcome::NotDrawn
+            },
+        );
         match law {
             Law::Reflective(sea) => {
                 report.sea.reflective += 1;

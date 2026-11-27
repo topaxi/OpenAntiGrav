@@ -295,10 +295,12 @@ pub(super) fn window_glass(
                 .find(|p| p.hash == hash)
                 .map(|p| p.value[0])
         }) else {
+            super::census::claim(slot, "window_glass", super::census::Outcome::NotDrawn);
             report.window_glass_unread += 1;
             continue;
         };
         if slots::material_index(*word) != 0 {
+            super::census::claim(slot, "window_glass", super::census::Outcome::NotDrawn);
             report.window_glass_blocked += 1;
             continue;
         }
@@ -320,6 +322,7 @@ pub(super) fn window_glass(
             Some((picture, [value[0], value[1], value[2]]))
         });
         if row.glow.is_some() && glow.is_none() {
+            super::census::claim(slot, "window_glass", super::census::Outcome::NotDrawn);
             report.window_glass_unread += 1;
             continue;
         }
@@ -362,6 +365,7 @@ pub(super) fn window_glass(
             }),
         };
         let Some(index) = index else {
+            super::census::claim(slot, "window_glass", super::census::Outcome::NotDrawn);
             report.window_glass_blocked += 1;
             continue;
         };
@@ -369,6 +373,7 @@ pub(super) fn window_glass(
             masks[slot] = Some(picture);
         }
         *word |= u32::try_from(index + 1).unwrap_or(0) << slots::MATERIAL_SHIFT;
+        super::census::claim(slot, "window_glass", super::census::Outcome::Drawn);
         report.window_glass_bound += 1;
     }
     masks

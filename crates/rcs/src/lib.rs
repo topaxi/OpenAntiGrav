@@ -29,6 +29,7 @@ pub mod gcn;
 pub mod gxp;
 pub mod hd_pvs;
 pub mod points2;
+pub mod program_key;
 pub mod rcsanimclip;
 pub mod rcsmaterial;
 pub mod rcsmodel;

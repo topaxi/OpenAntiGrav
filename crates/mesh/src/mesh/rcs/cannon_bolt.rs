@@ -167,6 +167,7 @@ pub(super) fn cannon_bolt(
                 | slots::ALBEDO_FROM_SECOND
                 | slots::ALPHA_FROM_SECOND);
         *word |= index << slots::MATERIAL_SHIFT;
+        super::census::claim(slot, "cannon_bolt", super::census::Outcome::Drawn);
         report.cannon_bolt_bound += 1;
     }
 }

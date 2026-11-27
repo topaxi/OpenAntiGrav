@@ -574,7 +574,7 @@ Ranked by how much a player notices, ours first listed worst:
    `RACE` page with the value right-aligned at the far edge, greyed rows and no
    rules. Structural (our page tree is our own, `menus.md`); the rule lines and
    the selector arrows are disc art and not drawn.
-2. ~~**The top-bar title is set in the wrong face on every page.**~~ **Closed 2026-10-08 on both PSP pressings**: `oag_pulse::frontend::MENU_SKIN::title_font` is `Some("Title")` and the renderer's third glyph slot carries `Pulse_14.fnt` (`oag_game::boot::fonts::third_atlas_slot`; `body_font` keeps `Default` in the second). The PS2 port keeps `None`: nothing re-measured its title. *(was:)* The original's
+2. ~~**The top-bar title is set in the wrong face on every page.**~~ **Closed 2026-10-08 on both PSP pressings**: `oag_pulse::frontend::MENU_SKIN::title_font` is `Some("Title")` and the renderer's third glyph slot carries `Pulse_14.fnt` (`oag_game::boot::fonts::third_atlas_slot`; `body_font` keeps `Default` in the second). The PS2 port took it on 2026-11-27 ("Pulse PS2's headings draw in the Title face" below). *(was:)* The original's
    `MAIN MENU`/`TRACK SELECT`/`RACE CAMPAIGN` are the `Title` role,
    `Pulse_14.fnt` (17px): 9 glyphs span 152 px of the 960-wide crop, 17 px a
    glyph. Ours draws `Pulse_20.fnt` (22px): 12 glyphs span 305 px, 25 px a glyph,
@@ -883,8 +883,8 @@ too (and so does the reset prompt, `prompts::footer_faces`), pinned for both sti
 A prompt-style substitute (`--prompt-style xbox`) still draws on both stills: the `Title` face carries the substitute art like the others.
 
 **Cross-title.** HD, Omega and 2048 author `font="buttons"` and have their own `PS_BUTTONS.fnt` slot (not changed: their grid, cell and Track Select pairs re-render
-byte-identical). Pure's prompts draw in its `Stats` face (unchanged, byte-identical). **Pulse PS2: checked, differs in wiring** - its skin carries no
-third slot (`PS2_MENU_SKIN.title_font` is `None`), so the glyphs keep the menu face; the PS2's `Pulse_14.fnt` carries the six glyphs at its own size
+byte-identical). Pure's prompts draw in its `Stats` face (unchanged, byte-identical). **Pulse PS2: checked, differs in wiring** - its skin names no
+`small_font` (`PS2_MENU_SKIN.small_font` is `None`; the third slot carries the heading since 2026-11-27), so the glyphs keep the menu face; the PS2's `Pulse_14.fnt` carries the six glyphs at its own size
 (`prompt_glyphs_ground_truth`), so this is checked, applies, not wired (a PS2 glyph slot is the open step).
 
 **Open: Confirm and Back dim at the top.** On every Pulse pair the four `NavigationController` texts (the two glyphs and the two words) read dimmer in the
@@ -1028,3 +1028,28 @@ against ours `C_`), 50 ms at 58 a second, inside the pair clock's stated two-cha
 so the first quad is `ceil(x - W / 2)`. `W` is the executable's measure: the first glyph's ink to the last glyph's ink, each pen stepped up to a whole unit on the way (`oag_ui::font::snapped_centre_pen`), not the advance sum nor `snapped_run().end`. An odd `W` at scale 1 is a `.5` tie and rounds up. Evidence and
 the seven-row table: `docs/ghidra/functions/psp-pure-usa/menu-text-centring.md`; the before and after of the pause pair: `docs/tools/compare-page.md`, "The rows' rounding, recovered from the executable". Wired for Pure only (`MenuSkin::snapped_pens`): `menu-pause`'s band-word box 610 to 240 px over 40 grey, every other Pure pair, Pulse and HD pairs pixel for pixel
 equal. Test: `font::centre_tests` (a tie at scale 1, a 1.2 string the old rule starts a unit left, a leading bearing) and `render::tests::a_snapped_pen_draws_each_glyph_at_a_whole_unit` (they fail with the law off), `pure_centre_ground_truth` (the seven rows, on the disc).
+
+## Pulse PS2's headings draw in the Title face (2026-11-27, `menu-pairs`)
+
+**Authored.** The PS2 pressing's own XML names `font="Title"` on the heading widgets: `FE_MM`
+(`MainMenu_Definition.xml`), `FE_RACEBOX` (`RaceBox_Definition.xml`), `RC_SHIPSEL`
+(`Selection_Definition.xml`) and `FE_OPT_PLUS` (`Additional_Definition.xml`), all in `54748/WADS2.WAD`.
+`PS2_MENU_SKIN` now names `title_font: Some("Title")` and `body_font: Some("Default")`, as the PSP skin
+does. Pinned by `font_roles_ground_truth::the_ps2_headings_author_the_title_role_and_its_skin_draws_them_in_it`.
+
+**Checked against the frames** (the stored PCSX2 GS grabs at 1280x720, not a fresh 1:1 capture; confidence 85):
+
+- `SHIP SELECT` was 231 px wide in ours against 195 in the original; in the Title face at the skin's 0.8 it
+  is 186 to 187.
+- With `title_scale` at 1.0, ours' `OPTIONS` glyph left edges are 134, 158, 182, 250, 274 against the
+  original's 133, 157, 182, 248, 272 (a threshold-90 column-run read, luma, the 128..388 x 22..44 box): the
+  same face to 2 px.
+
+**`Additional`'s heading is larger.** `FE_OPT_PLUS` and `FE_EXTRAS` author no `scale`, where `FE_MM` and
+`FE_RACEBOX` author `scale="FEGlobals->TitleScale"` (0.8). This build draws every heading at
+`MenuSkin::title_scale`, so the PS2 `OPTIONS` heading is smaller than the original's. Reading each
+heading's own scale is open.
+
+**Not closed:** at 0.8 ours' pens run about 3.4 % short (`SHIP SELECT` mean advance 15.73 against
+16.27 px), where at 1.0 they match; the original's glyphs are also heavier (an outline about 1 px wide
+at 2x that ours does not draw).

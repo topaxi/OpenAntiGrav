@@ -90,6 +90,13 @@ pub(super) fn plan(
             Some(blob) => {
                 plan.factor[index] = input_is_factor(&blob, INPUT).is_factor();
                 census.materials += usize::from(plan.factor[index]);
+                if plan.factor[index] {
+                    crate::mesh::rcs::census::claim(
+                        index,
+                        "hull_colour",
+                        crate::mesh::rcs::census::Outcome::Drawn,
+                    );
+                }
             }
         }
     }

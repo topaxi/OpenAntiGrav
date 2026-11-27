@@ -111,6 +111,7 @@ pub(super) fn damage_lights(
             path_of(MASK_SAMPLER).and_then(|p| decode(&p)),
             colour,
         ) else {
+            super::census::claim(slot, "damage_lights", super::census::Outcome::NotDrawn);
             report.damage_lights_unread += 1;
             continue;
         };
@@ -128,6 +129,7 @@ pub(super) fn damage_lights(
             })
         });
         let Some(index) = index else {
+            super::census::claim(slot, "damage_lights", super::census::Outcome::NotDrawn);
             report.damage_lights_unread += 1;
             continue;
         };
@@ -138,6 +140,7 @@ pub(super) fn damage_lights(
             *word |= slots::MAG_WAVE;
             *word |= u32::try_from(index + 1).unwrap_or(0) << slots::MATERIAL_SHIFT;
         }
+        super::census::claim(slot, "damage_lights", super::census::Outcome::Drawn);
         report.damage_lights_bound += 1;
     }
     (blues, masks)

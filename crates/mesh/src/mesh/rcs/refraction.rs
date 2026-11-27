@@ -154,6 +154,7 @@ pub(super) fn refraction(
         }
         let value_of = |hash: u32| material.parameters.iter().find(|p| p.hash == hash);
         let Some(weight) = value_of(WEIGHT) else {
+            super::census::claim(slot, "refraction", super::census::Outcome::NotDrawn);
             report.refraction_unread += 1;
             continue;
         };
@@ -168,6 +169,7 @@ pub(super) fn refraction(
             1.0,
         );
         let Some(index) = table_index(table, entry) else {
+            super::census::claim(slot, "refraction", super::census::Outcome::NotDrawn);
             report.refraction_unread += 1;
             continue;
         };
@@ -180,6 +182,7 @@ pub(super) fn refraction(
             *word |= slots::REFRACTION;
             *word |= u32::try_from(index + 1).unwrap_or(0) << slots::MATERIAL_SHIFT;
         }
+        super::census::claim(slot, "refraction", super::census::Outcome::Drawn);
         report.refraction_bound += 1;
     }
 }

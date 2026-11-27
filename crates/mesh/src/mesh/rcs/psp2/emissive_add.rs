@@ -247,6 +247,11 @@ pub(super) fn plan(
             path,
             tint.map_or(Some(UNIT.to_vec()), |name| material.param(name_hash(name))),
         ) else {
+            crate::mesh::rcs::census::claim(
+                index,
+                "emissive_add",
+                crate::mesh::rcs::census::Outcome::NotDrawn,
+            );
             report.emissive_add_unread += 1;
             continue;
         };
@@ -259,6 +264,11 @@ pub(super) fn plan(
                     .or_insert_with(|| super::picture_memo::picture(path, textures, report))
                     .clone();
                 if loaded.is_none() {
+                    crate::mesh::rcs::census::claim(
+                        index,
+                        "emissive_add",
+                        crate::mesh::rcs::census::Outcome::NotDrawn,
+                    );
                     report.emissive_add_unread += 1;
                     continue;
                 }
@@ -279,6 +289,11 @@ pub(super) fn plan(
             })
         });
         let Some(slot) = at.and_then(|at| u32::try_from(at + 1).ok()) else {
+            crate::mesh::rcs::census::claim(
+                index,
+                "emissive_add",
+                crate::mesh::rcs::census::Outcome::NotDrawn,
+            );
             report.emissive_add_unread += 1;
             continue;
         };
@@ -291,6 +306,11 @@ pub(super) fn plan(
                 .map(str::to_string),
             alpha_gated: program == PROGRAM_REFLECT_MAP || program == PROGRAM_PICTURE_ADD,
         });
+        crate::mesh::rcs::census::claim(
+            index,
+            "emissive_add",
+            crate::mesh::rcs::census::Outcome::Drawn,
+        );
         report.emissive_add_materials += 1;
     }
     out

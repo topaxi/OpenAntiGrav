@@ -104,6 +104,11 @@ impl PadBars {
                 continue;
             }
             emissive.push(entry);
+            crate::mesh::rcs::census::claim(
+                material,
+                "pad_bars",
+                crate::mesh::rcs::census::Outcome::Drawn,
+            );
             let slot = u32::try_from(emissive.len()).unwrap_or(0);
             out.slots.push((material, class, slot));
         }

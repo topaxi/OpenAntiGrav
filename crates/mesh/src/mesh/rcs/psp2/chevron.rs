@@ -148,6 +148,11 @@ pub(super) fn plan(
                 .clone()
         };
         let (Some(emask), Some(wave)) = (picture(emask_path), picture(wave_path)) else {
+            crate::mesh::rcs::census::claim(
+                at,
+                "chevron",
+                crate::mesh::rcs::census::Outcome::NotDrawn,
+            );
             report.chevron_unread += 1;
             continue;
         };
@@ -165,6 +170,11 @@ pub(super) fn plan(
                 tracks.len()
             }
             None => {
+                crate::mesh::rcs::census::claim(
+                    at,
+                    "chevron",
+                    crate::mesh::rcs::census::Outcome::NotDrawn,
+                );
                 report.chevron_unread += 1;
                 continue;
             }
@@ -184,10 +194,16 @@ pub(super) fn plan(
             })
         });
         let Some(slot) = index.and_then(|i| u32::try_from(i + 1).ok()) else {
+            crate::mesh::rcs::census::claim(
+                at,
+                "chevron",
+                crate::mesh::rcs::census::Outcome::NotDrawn,
+            );
             report.chevron_unread += 1;
             continue;
         };
         out.pulses[at] = Some(Pulse { slot, emask, wave });
+        crate::mesh::rcs::census::claim(at, "chevron", crate::mesh::rcs::census::Outcome::Drawn);
         report.chevron_materials += 1;
     }
     out

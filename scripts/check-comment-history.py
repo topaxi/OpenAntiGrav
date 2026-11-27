@@ -82,7 +82,7 @@ BASELINE: dict[str, int] = {
     "pob": 9,
     "post": 9,
     "present": 4,
-    "pulse": 21,
+    "pulse": 20,
     "pure": 36,
     "race": 22,
     "rcs": 19,
