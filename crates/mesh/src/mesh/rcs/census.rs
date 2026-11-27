@@ -13,7 +13,7 @@ use oag_gpu::formats::SceneStore;
 use oag_rcs::rcsmodel::{self, psp2};
 use oag_rcs::{program_key, rcsmaterial};
 
-use super::{Report, Textures, pads, setup};
+use super::{Report, Textures, setup};
 
 /// What a matcher did with a material it recognised.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -53,6 +53,13 @@ pub(super) fn claim(slot: usize, family: &'static str, outcome: Outcome) {
             .or_default()
             .insert((family, outcome));
     });
+}
+
+/// [`claim`] of a family drawing, for a caller holding an optional material index.
+pub(super) fn drawn(slot: Option<usize>, family: &'static str) {
+    if let Some(slot) = slot {
+        claim(slot, family, Outcome::Drawn);
+    }
 }
 
 /// Records one shown submesh of material `slot`.
@@ -123,10 +130,7 @@ pub fn hd(blob: &[u8], textures: Textures<'_>) -> Result<(Vec<Material>, Report)
             let key = block.and_then(|at| {
                 program_key::hd_fragment(&textures(&format!("/{}", material.name))?, at)
             });
-            let mut claims = claims.families.get(&slot).cloned().unwrap_or_default();
-            if pads::is_pad_material(&material.name) {
-                claims.insert(("pads", Outcome::Drawn));
-            }
+            let claims = claims.families.get(&slot).cloned().unwrap_or_default();
             Material {
                 name: material.name.clone(),
                 chunks: chunks[slot],
@@ -177,13 +181,7 @@ pub fn psp2(
                     program_key::gxp_fragments(&file)
                 }
             });
-            let mut families = claims.families.get(&slot).cloned().unwrap_or_default();
-            if material.is_placeholder() {
-                families.insert(("fc01_placeholder", Outcome::Drawn));
-            }
-            if material.zone_colour_slot().is_some() {
-                families.insert(("zone_colour", Outcome::Drawn));
-            }
+            let families = claims.families.get(&slot).cloned().unwrap_or_default();
             Material {
                 name: material.name.clone(),
                 chunks: claims.shown[&slot],

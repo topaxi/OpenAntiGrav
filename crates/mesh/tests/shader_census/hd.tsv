@@ -104,7 +104,6 @@
 2f38203e955bd322	matcher:probe_lit
 2f588c721993a28d	generic
 2f6be18952177a60	matcher:hull_normal
-2f6be18952177a60	matcher:hull_normal+pads
 2f8e696ff2472fb1	generic
 2fe87bcd488f15e2	generic
 30e5a3b8a2e129cc	matcher:hull_normal
@@ -406,7 +405,6 @@ aa600309dd665722	generic
 aaab50f7854335f5	generic
 aacacff1a019867f	generic
 ab182869208ce966	matcher:hull_normal
-ab182869208ce966	matcher:hull_normal+pads
 ac1666732bade171	generic
 ac92e7fd6660e67a	matcher:window_glass
 aca12122c12a7284	matcher:holo_billboard

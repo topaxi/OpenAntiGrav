@@ -591,24 +591,30 @@ fn build_scanned(
                     | crate::mesh::slots::NO_SUN
                     | twin_here.map_or(0, |t| t.slot << crate::mesh::slots::MATERIAL_SHIFT),
             ),
-            None if placeholder => (
-                FOG_FLAT,
-                0.0,
-                role | crate::mesh::slots::NO_AMBIENT | crate::mesh::slots::NO_SUN,
-            ),
-            Some([r, g, b]) => (
-                [
-                    r,
-                    g,
-                    b,
-                    match zone_slot {
-                        Some((k, _)) if !ps4 => ZONE_COLOUR_ALPHA + f32::from(k),
-                        _ => 1.0,
-                    },
-                ],
-                0.0,
-                role | crate::mesh::slots::NO_AMBIENT | crate::mesh::slots::NO_SUN,
-            ),
+            None if placeholder => {
+                super::census::drawn(submesh.material, "fc01_placeholder");
+                (
+                    FOG_FLAT,
+                    0.0,
+                    role | crate::mesh::slots::NO_AMBIENT | crate::mesh::slots::NO_SUN,
+                )
+            }
+            Some([r, g, b]) => {
+                super::census::drawn(zone_slot.and(submesh.material), "zone_colour");
+                (
+                    [
+                        r,
+                        g,
+                        b,
+                        match zone_slot {
+                            Some((k, _)) if !ps4 => ZONE_COLOUR_ALPHA + f32::from(k),
+                            _ => 1.0,
+                        },
+                    ],
+                    0.0,
+                    role | crate::mesh::slots::NO_AMBIENT | crate::mesh::slots::NO_SUN,
+                )
+            }
             None => ([1.0; 4], 1.0, role),
         };
         // Anulpha Pass's alpha-lit families, read on each title's own programs (`lit_alpha`).
