@@ -602,6 +602,10 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
     let absorb_burst = super::absorb::absorb_burst_for(craft_title);
     let absorb_anchors = super::absorb::anchors(absorb_burst, &liveries);
     let mut effects = psys::Library::new();
+    // A biased sheet is sampled down every sprite's levels, whoever's sprite it is.
+    if title.looks.every_texture_lod_levels() != 0.0 {
+        effects.chain_every_sprite();
+    }
     let particle_laws = title.looks.particle_laws.applies(archives.layout.platform);
     let psp_clip = title
         .looks

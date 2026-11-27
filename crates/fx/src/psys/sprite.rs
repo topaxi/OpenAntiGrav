@@ -330,12 +330,22 @@ pub struct Sheet {
     free: packing::Free,
     /// The levels below [`Self::pixels`], where a sprite carries a chain.
     lower: chain::Lower,
+    /// [`Self::chain_every_sprite`].
+    chain_every: bool,
     /// Bumped on every change to [`Self::pixels`], so an uploader can tell
     /// its copy is stale.
     generation: u64,
 }
 
 impl Sheet {
+    /// Chains every sprite placed from here on, authored levels or not: a sheet drawn at a
+    /// sampler bias samples every sprite's lower levels, so one with no chain of its own (a
+    /// mod's, this engine's own art) takes the gutter and box-filtered levels too. Call it
+    /// before the first [`Self::place`].
+    pub fn chain_every_sprite(&mut self) {
+        self.chain_every = true;
+    }
+
     /// Places `sprite` - or finds it, when an identical one is already
     /// there - and returns its rectangle as `[u0, v0, u1, v1]` in `0..=1`
     /// sheet coordinates, on its outer texel edges.
@@ -347,8 +357,9 @@ impl Sheet {
             return Some(*rect);
         }
         let (w, h) = (u32::from(sprite.width), u32::from(sprite.height));
+        let chain = sprite.chain.as_deref().or(self.chain_every.then_some(&[]));
         // A chained sprite sits `GUTTER` inside a cell on the `GUTTER` grid.
-        let gutter = if sprite.chain.is_some() { GUTTER } else { 0 };
+        let gutter = if chain.is_some() { GUTTER } else { 0 };
         let (x, y) = if gutter == 0 {
             self.free.take(w, h)?
         } else {
@@ -358,7 +369,7 @@ impl Sheet {
         };
         let pixels = Arc::make_mut(self.pixels.get_or_insert_with(Arc::default));
         chain::blit(pixels, SHEET_SIZE, &sprite.rgba, (w, h), (x, y), gutter);
-        if let Some(levels) = &sprite.chain {
+        if let Some(levels) = chain {
             self.lower.write(sprite, levels, (x, y));
         }
         let size = SHEET_SIZE as f32;

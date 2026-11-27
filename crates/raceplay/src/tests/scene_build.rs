@@ -338,6 +338,8 @@ struct BuiltRace {
     /// Whether the particle sheet holds a level below its base, and the load report's
     /// lines for a sprite the sheet had no room for.
     sheet_chained: bool,
+    /// Level 1 of the sheet at the middle of a chain-less sprite placed after the load.
+    late_sprite_level_1: Option<[u8; 4]>,
     sheet_misses: Vec<String>,
     /// The bias the time-trial ghost's pipeline was built with.
     ghost_bias: Option<f32>,
@@ -382,6 +384,24 @@ fn built_race_scene(image: &std::path::Path) -> Option<BuiltRace> {
     .filter_map(|(name, texture)| texture.map(|t| (name, t.lod_bias, t.mips.len())))
     .collect();
     let sheet_chained = loaded.view.effects.sheet().lower_pixels(1).is_some();
+    let late_sprite_level_1 = {
+        use oag_fx::psys::sprite::{SHEET_SIZE, Sprite};
+        let mut effects = loaded.view.effects.clone();
+        let rect = effects.place_sprite(&Sprite {
+            width: 32,
+            height: 32,
+            rgba: [9u8, 8, 7, 6].repeat(32 * 32).into(),
+            chain: None,
+        });
+        rect.zip(effects.sheet().lower_pixels(1))
+            .and_then(|(rect, pixels)| {
+                let middle = |a: f32, b: f32| ((a + b) / 2.0 * SHEET_SIZE as f32) as usize / 2;
+                let at = (middle(rect[1], rect[3]) * (SHEET_SIZE as usize / 2)
+                    + middle(rect[0], rect[2]))
+                    * 4;
+                pixels.get(at..at + 4)?.try_into().ok()
+            })
+    };
     let sheet_misses = loaded
         .report
         .iter()
@@ -457,6 +477,7 @@ fn built_race_scene(image: &std::path::Path) -> Option<BuiltRace> {
         speed_pad_pictures,
         effect_textures,
         sheet_chained,
+        late_sprite_level_1,
         sheet_misses,
     })
 }
@@ -494,6 +515,11 @@ fn v2048_biases_every_race_pipeline_and_its_circuit() {
     assert!(
         built.sheet_chained,
         "the particle sheet holds no lower level"
+    );
+    assert_eq!(
+        built.late_sprite_level_1,
+        Some([9, 8, 7, 6]),
+        "a sprite with no chain of its own has no lower level on the race's sheet"
     );
     assert!(built.sheet_misses.is_empty(), "{:?}", built.sheet_misses);
     // A ghost draws the hull's own textures through a pipeline of its own.

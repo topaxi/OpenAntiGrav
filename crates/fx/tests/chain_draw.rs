@@ -233,3 +233,53 @@ fn a_biased_effect_texture_reads_its_own_levels() {
     assert_levels_one_and_two(draw(-1.5), "weapon quads");
     assert_eq!(draw(0.0), [255; 3], "no bias: the base alone is bound");
 }
+
+/// A sprite with no chain of its own (a mod's, or this engine's own art) shares the atlas
+/// with the chained ones. Minified at the bias it reads its own colour on every level,
+/// whether it was placed before or after them.
+#[test]
+fn an_unchained_sprite_on_a_chained_sheet_keeps_its_colour_minified() {
+    let Some((device, queue)) = gpu() else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let (base, lower) = levels();
+    let chained = Sprite {
+        width: SIDE as u16,
+        height: SIDE as u16,
+        rgba: base.into(),
+        chain: Some(lower.into_iter().map(Into::into).collect()),
+    };
+    let flat = Sprite {
+        width: SIDE as u16,
+        height: SIDE as u16,
+        rgba: [255u8, 255, 0, 255].repeat((SIDE * SIDE) as usize).into(),
+        chain: None,
+    };
+    for flat_first in [false, true] {
+        let mut pipeline = Particles::with_lod_bias(
+            &device,
+            FORMAT,
+            SceneStore::Computed,
+            1,
+            Velocity::None,
+            -1.5,
+        );
+        let mut sheet = Sheet::default();
+        sheet.chain_every_sprite();
+        let rect = if flat_first {
+            let rect = sheet.place(&flat).expect("the sprite fits");
+            sheet.place(&chained).expect("the sprite fits");
+            rect
+        } else {
+            sheet.place(&chained).expect("the sprite fits");
+            sheet.place(&flat).expect("the sprite fits")
+        };
+        pipeline.sync_sheet(&queue, &sheet);
+        pipeline.upload(&queue, &projection(), 1.0, &[], &quad(rect));
+        let pixel = centre(&device, &queue, |pass| {
+            pipeline.draw(pass, pipeline.drawn())
+        });
+        assert_eq!(pixel, [255, 255, 0], "flat first: {flat_first}");
+    }
+}
