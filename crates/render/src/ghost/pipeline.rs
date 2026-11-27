@@ -44,6 +44,7 @@ impl Pipeline {
     /// is the title's every-texture sampler bias in levels, which the hull pass
     /// applies to the hull's own textures; 0 on a title whose loader sets none.
     #[must_use]
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
