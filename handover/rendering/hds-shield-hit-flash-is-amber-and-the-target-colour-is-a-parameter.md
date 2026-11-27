@@ -100,6 +100,9 @@ state, the program and the before/after numbers: `shield.md`, "The shell's draw 
 
 - **Mid-age red and green**: at shield clock 3.21 s the original's shell light is `(2.9, 6.8,
   20.3)` against ours' `(0.0, 3.5, 18.6)`; one run per age, cause unread.
+- **Triangle count**: the ring draws 1019 to 1024 of the shell's 2193 triangles, in chunks
+  whose index counts differ between boots; what selects them is unread. Ours culls back faces
+  on the GPU and the blue matches, so this is recorded, not chased.
 - **Cockpit sphere**: its draw is unread (blend, cull, program); it keeps the flickered colour
   (inline chunk) and the generic path.
 - **Landed:** HD's per-team `ShieldColour` target (`Livery::shield_colour`,

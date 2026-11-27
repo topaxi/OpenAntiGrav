@@ -678,10 +678,27 @@ Without a shield (`plain`) the craft box matches: ours minus original is
 Lane `hd-shield-blue` (2026-11-27). The raised shell's draws were read off one
 frame's RSX command ring, same save, circuit and ship as the pairs (Talon's
 Junction, Feisar, RPCS3 0.0.43-20574), on **two boots**. Confidence **92** for
-the draw state and the patched constants (runtime, one binary). Reproduce with
-`scripts/rpcs3-hd-shield.py draws --out <dir>`, then
-`scripts/rsx-draw-list.py <dir> s00 --samplers`; the shell's draws are the ones
-that bind the 256 x 128 hexagon texture.
+the draw state and the patched constants (runtime, one binary). The shell's
+draws are the ones that bind the 256 x 128 hexagon texture.
+
+**Reproducing.** Restore
+`data/saves/hd-fury/hd-racebox-talons-venom-weapons-grid-rpcs3-20574.SAVESTAT.zst`
+(`scripts/emu-restore-state.sh`, `OAG_COMPARE_PLATFORM=hd-fury`), then against
+that attached `serve`:
+
+```sh
+HOOK_LIGHT=1 HOOK_MIN=600 HOOK_NO_HEADS=1 OAG_RPCS3_ATTACH=1 \
+  uv run --with evdev python3 scripts/rpcs3-hd-shield.py draws --out <dir> --ages 2.0 --attempts 60
+python3 scripts/rsx-draw-list.py <dir> s00 --samplers
+```
+
+Without `HOOK_MIN` the hook keeps a half-built ring (254 draws of about 800);
+`HOOK_NEED_SCREEN=1` never accepted a frame at this profile. The captures are
+kept on the capture machine in `data/traces/hd-shield-blue/` (gitignored):
+`draws1` (the frame before the Shield, 793 draws), `draws2` (boot 1, shield
+clock 2.0 to 2.5 s, 808 draws) and `draws3` (boot 2, 3.5 s), with
+`falsifiers.md`, written before the first capture, and `vp_live.py`, which
+lifts the vertex program out of the ring.
 
 | state | original | ours before |
 | --- | --- | --- |
@@ -695,8 +712,10 @@ that bind the 256 x 128 hexagon texture.
 | shadow maps, probes | bound on units 1 to 5 from earlier draws; the program samples none of them | received the craft shadow map |
 | program | block #2 of `hexagonalshield_rich` (`+0x3770`), lit and fogged | **no light of its own: an invented stand-in rig** |
 
-The triangle counts are about half the authored 2193; what removes the rest
-before the ring is not read.
+The triangle counts are about half the authored 2193, and the chunks' index
+counts differ between the boots on a static model, so something picks
+triangles per frame before the ring (a view-dependent cull on the CPU or SPU is
+the likely one). Not read.
 
 ### The program
 
