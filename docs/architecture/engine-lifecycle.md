@@ -81,6 +81,9 @@ Three consequences worth stating explicitly:
 The original's state machine is expected to be more granular. Recovering it is
 an M2 deliverable and this diagram will be replaced by what is actually found.
 
+What our engine builds today, screen by screen, is on the
+[navigation map](navigation-map.md).
+
 ## Startup
 
 1. Parse the command line, including `--assets psp|ps2`.
