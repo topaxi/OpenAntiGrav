@@ -480,6 +480,11 @@ row that does nothing when pressed. Adding an action means adding it to the enum
 *and* handling it in the composition root, which is the point: "defined but not
 wired up" cannot ship.
 
+A page may carry `item_page = "<page id>"`: it is then a **list page**, whose `choice` rows are
+items. Accept opens the named page, Square steps the row, and rows holding `on` are listed first
+when the page is entered. A target that is no page is refused, and so is the key on a mod's page.
+MODS is the one list page ([the MODS page](../ui/mods-page.md)).
+
 ### What the loader refuses
 
 Each has a test, and the last is the only one that cannot be caught a row at a

@@ -169,7 +169,7 @@ format = "ppsspp"            # the one format; anything else refuses the mod by 
   the zip PPSSPP prefers.
 - **`default-enabled`** is the one mod key that changes the settings file: a mod that starts
   off is switched on through `[mods] enabled = ["ppsspp.my-pack"]`, beside `disabled` for a mod
-  that starts on; an id is in at most one. The MODS page's ENABLED row writes the right one.
+  that starts on; an id is in at most one. The MODS list and a mod's ENABLED row write the right one.
   The page's ADDS line for a pack that is on reads **TEXTURES**.
 - **What it does.** A race load opens the packs that are on and made for the running title, takes the first whose `[games]`
   names the disc's serial (a PSP disc only: the keys are the PSP's), and the decoders ask it as
@@ -260,13 +260,13 @@ Rules:
   parent. On HD and Omega it is revealed below the parent tab while the parent or one of
   its attached rows has focus, with the pad (left and right step the top level, up and down
   step inside the family) and the pointer.
-- **Settings live on the MODS page.** A top-level `settings = "<page id>"` names one of the
-  mod's own pages as its settings page. The MODS page's SETTINGS row opens it for the mod the
-  MOD row is on (`oag_game::mods::settings_page`), BACK returns there, and it needs no `[[entry]]`
+- **Settings live on the mod's detail page.** A top-level `settings = "<page id>"` names one of
+  the mod's own pages as its settings page. The detail page's SETTINGS row opens it for the mod
+  the MOD row is on (`oag_game::mods::settings_page`), BACK returns there, and it needs no `[[entry]]`
   to be reached; ADDS lists it. A mod's options go there, not on the main menu
   (`oag.slipstream`'s PORTAL VIEW does). A `settings` that names no page of the mod is a load
   error naming the key (`a_settings_key_naming_no_page_of_the_mod_is_refused`).
-- **A page of its own.** A `[[page]]` (`id`, `title`/`title_string_id`, `[[page.entry]]` rows in the grammar of `assets/ui/menu.toml`) is added to the tree as `<mod id>/<id>`. An `entry` or a page row of the same mod names it by the short `id` (`target = "picker"`); a mod cannot name another mod's page, and a short id wins over a title page of the same name only for its own mod's rows. A page id is non-empty with no `/`. A page no row of the mod reaches, a `target`, `action` or string id that does not resolve, or a colliding page id is a load error naming the mod and the key (`page "picker" entry 0 target`). A template `choice` row (`values_from`, no values) on a mod page expands like any other (`a_template_choice_row_on_a_mod_page_expands_like_one_on_an_engine_page`). A `choice` row's list may be a closed query instead: `values_from = { query = "tracks_of", of = "<setting key>" }`. The queries are `titles_available`, `tracks_of`, `teams_of`, `variants_of`, `speed_classes_union`, `ai_difficulties` and `custom_tracks`; `of` (only the `*_of` queries take one) names the setting whose value is the argument, empty meaning the booted title, and it must be the `setting` of a choice row on the mod's own pages or the mod is refused naming the row. `tracks_of`, `teams_of` and `variants_of` with an `of` list the title that setting's value names (a title from `titles_available` or `craft_titles`) and are re-listed when the setting changes; with the title not openable here a row keeps its list. Each may name one more setting, its **companion**, which must also be a choice row's setting on the mod's pages and re-lists the row when it changes: `tracks_of` takes `craft_title` (under the CUSTOM title it lists the custom tracks, each greyed with the reason when its host disc is missing or that craft title cannot race it), `teams_of` takes `class` (the roster narrowed to the teams that author it; the title resolves as a craft title, so "Wipeout HD" with only 2048 here lists 2048's reshipped HD teams, ADR-0035) and `variants_of` takes `team` (that team's variants; without it, the title's first team's). A companion on another query, or without an `of`, is a load error. The fixed name `craft_titles` (every title plus a craft title a guest roster stands for) and `race_modes` are also open to a mod row. A choice row may carry `default = "<value>"`: the value a `mod.<id>.<key>` row takes while nothing is saved for it, when its list offers it (with literal `values` it must be one of them). A mod cannot define a query. A mod with a bad page is left out alone, listed with its error, and the game keeps running (`crates/game/tests/mods_pages.rs`). `just check-strings` holds a repository mod (`assets/mods/examples/*`, `assets/mods/official/*`) to its strings: every page title, row label and subtitle names a `string_id` whose English text is in the mod's `strings/english.toml` or, for a word an engine page shares (`OAG_RACE_MODE`, `OAG_MENU_BACK`), in the project's `english.toml` (`scripts/check-strings.py --mod DIR` checks one more folder). [ADR-0082](../architecture/adr/0082-a-mod-owns-pages-settings-queries-and-one-launch-action.md) supersedes ADR-0066 decision 4 for this.
+- **A page of its own.** A `[[page]]` (`id`, `title`/`title_string_id`, `[[page.entry]]` rows in the grammar of `assets/ui/menu.toml`) is added to the tree as `<mod id>/<id>`. An `entry` or a page row of the same mod names it by the short `id` (`target = "picker"`); a mod cannot name another mod's page, and a short id wins over a title page of the same name only for its own mod's rows. A page id is non-empty with no `/`. A page no row of the mod reaches, a `target`, `action` or string id that does not resolve, or a colliding page id is a load error naming the mod and the key (`page "picker" entry 0 target`). A template `choice` row (`values_from`, no values) on a mod page expands like any other (`a_template_choice_row_on_a_mod_page_expands_like_one_on_an_engine_page`). A `choice` row's list may be a closed query instead: `values_from = { query = "tracks_of", of = "<setting key>" }`. The queries are `titles_available`, `tracks_of`, `teams_of`, `variants_of`, `speed_classes_union`, `ai_difficulties` and `custom_tracks`; `of` (only the `*_of` queries take one) names the setting whose value is the argument, empty meaning the booted title, and it must be the `setting` of a choice row on the mod's own pages or the mod is refused naming the row. `tracks_of`, `teams_of` and `variants_of` with an `of` list the title that setting's value names (a title from `titles_available` or `craft_titles`) and are re-listed when the setting changes; with the title not openable here a row keeps its list. Each may name one more setting, its **companion**, which must also be a choice row's setting on the mod's pages and re-lists the row when it changes: `tracks_of` takes `craft_title` (under the CUSTOM title it lists the custom tracks, each greyed with the reason when its host disc is missing or that craft title cannot race it), `teams_of` takes `class` (the roster narrowed to the teams that author it; the title resolves as a craft title, so "Wipeout HD" with only 2048 here lists 2048's reshipped HD teams, ADR-0035) and `variants_of` takes `team` (that team's variants; without it, the title's first team's). A companion on another query, or without an `of`, is a load error. The fixed name `craft_titles` (every title plus a craft title a guest roster stands for) and `race_modes` are also open to a mod row. A choice row may carry `default = "<value>"`: the value a `mod.<id>.<key>` row takes while nothing is saved for it, when its list offers it (with literal `values` it must be one of them). A mod cannot define a query. `item_page`, the engine's key for the MODS list, is refused on a mod page. A mod with a bad page is left out alone, listed with its error, and the game keeps running (`crates/game/tests/mods_pages.rs`). `just check-strings` holds a repository mod (`assets/mods/examples/*`, `assets/mods/official/*`) to its strings: every page title, row label and subtitle names a `string_id` whose English text is in the mod's `strings/english.toml` or, for a word an engine page shares (`OAG_RACE_MODE`, `OAG_MENU_BACK`), in the project's `english.toml` (`scripts/check-strings.py --mod DIR` checks one more folder). [ADR-0082](../architecture/adr/0082-a-mod-owns-pages-settings-queries-and-one-launch-action.md) supersedes ADR-0066 decision 4 for this.
 - **Launching a race.** An `action = "launch_race"` row with a `launch = { ... }` table names where each input of the race is read from, by setting key: `track_title`, `track`, `craft_title`, `team`, `variant`, `mode`, `class`, `difficulty`. A key is an engine setting (`race.mode`, `race.class`, `ai.difficulty`) or a `mod.<id>.<key>` of the mod's own settings; a key nothing stores aborts the launch with its name in the log. An input left out is the booted title's own (no `track_title` races the booted disc's circuit). The engine keeps the rules for combining them: a CUSTOM track's host disc, the craft falling back to the track's title, a class no team authors, a class no controller drives. A `launch_race` row without `launch` is the ordinary RACE page's own launch, and only a `launch_race` row may carry `launch`. RACE REMIX's START row (the official mod `oag.remix`) is this action with its `mod.oag.remix.*` keys. A mod's attached `[[entry]]` rows cannot carry `launch` yet, only `[[page.entry]]` rows can. `crates/game/src/app/session/launch_keys/tests.rs` reads those keys off the mod's page and builds a Pulse craft on a Pure track and an HD craft on a Pulse track from them.
 - **Not yet.** A mod cannot add a race mode.
 
@@ -365,14 +365,18 @@ mod files until `git submodule update`. Two lines make that visible:
 ## The MODS page
 
 Every title's main menu has a **MODS** row under OPTIONS (added by `oag-extras` like any mod row,
-after RECORDS and before QUIT). It opens a page with a **MOD** row that steps through the list,
-built-in first, then each mod in search order, then what was left out; an **ENABLED** row that
-turns the mod MOD is on on or off; a **SETTINGS** row that opens that mod's settings page, there
-only while the mod is on and its `menu.toml` names one (`settings`, below); and under them the lines for that mod: id, version (marked BUILT
-IN for `oag-extras`), authors, licence (**NO LICENSE STATED** when the manifest has neither
-`license` nor `license-file`; `see <file>` for a `license-file`) and what it added. Values over 22
-characters are cut with `...`. Where the page has no room for every line (Pulse: four under the
-three rows), AUTHORS goes first, then VERSION, then LICENSE (`Listing::table_within`).
+after RECORDS and before QUIT). It opens a list with one row per mod, name and `ON`/`OFF`, the
+mods that are on first; accept opens a mod's detail page and Square toggles it. The list, its
+controls, its order and the pointer are in [the MODS page](../ui/mods-page.md).
+
+The detail page has a **MOD** row that steps through the mods (built-in first, then each mod in
+search order, then what was left out); an **ENABLED** row that turns the mod MOD is on on or off;
+a **SETTINGS** row that opens that mod's settings page, there only while the mod is on and its
+`menu.toml` names one (`settings`, below); and under them the lines for that mod: id, version
+(marked BUILT IN for `oag-extras`), authors, licence (**NO LICENSE STATED** when the manifest has
+neither `license` nor `license-file`; `see <file>` for a `license-file`) and what it added. Values
+over 22 characters are cut with `...`. Where the page has no room for every line (Pulse: four
+under the three rows), AUTHORS goes first, then VERSION, then LICENSE (`Listing::table_within`).
 
 **The LAN content fingerprint** ([ADR-0083](../architecture/adr/0083-official-mods-are-a-public-folder-and-the-fingerprint-counts-race-changers.md))
 counts only the mods that are on and change a race: a simulation module (`[extension] simulation = true`),
@@ -388,7 +392,7 @@ out, so two machines that differ in one still match and can race. The filter is
   as `[mods] enabled = [...]`. `oag_game::mods::switch` writes it, and a switch that equals the default is not stored.
 - An off mod adds nothing: no menu rows, no strings, no campaigns, no pilots, no tracks on a
   CUSTOM title, and it is left out of the LAN content fingerprint (as is any mod that changes no race, below). It stays on the MODS
-  page, its ADDS line reading **NOTHING, TURNED OFF**, so it can be turned back on. The gate is
+  list, its detail page's ADDS line reading **NOTHING, TURNED OFF**, so it can be turned back on. The gate is
   one place, `oag_game::mods::Mods` (`player()` and `build()`).
 - **A live LANGUAGE pick rebuilds the tree through the same call** (`oag_game::menu_tree::rebuilt`,
   shared by the switch and `Session::resupply_language`), so a mod row and the MODS page
@@ -414,10 +418,10 @@ out, so two machines that differ in one still match and can race. The filter is
   its rules modules through `Mods::player()` as it loads (`oag_game::mod_extensions::attach`,
   called from `Session::launch_race` with the saved set), so an off mod's module is not found,
   and a race already parked keeps the modules it started with.
-- **It applies at once.** The menus are rebuilt as a boot builds them and reopen on the MODS page
-  with BACK leading where it led. A race parked under the menus keeps what it started with.
+- **It applies at once.** The menus are rebuilt as a boot builds them and reopen on the page the
+  switch was made on, with BACK leading where it led; the list keeps its order and scroll. A race parked under the menus keeps what it started with.
 - **`oag-extras` cannot be turned off**: it carries OPTIONS, this page's row and QUIT. Its
-  ENABLED row holds one value, **ALWAYS ON**. A candidate that never opened has one dimmed OFF:
+  switch holds one value, **ALWAYS ON**. A candidate that never opened has one dimmed OFF:
   there is nothing to switch.
 - **A campaign that races a track of a mod that is off or missing is left out whole**, the log
   names the reason (`mod "oag.hillside" is turned off on the MODS page`), and its mod's entry
@@ -428,10 +432,8 @@ A candidate the search left out (a broken zip, a duplicate id, a mod for another
 a mod whose rows did not fit the menu are listed too, **dimmed, with the error in the note line
 under the rows** and no detail lines: the mechanism a custom track that will not load uses. It
 is the same list the boot load report is written from (`oag_game::mods::Built::listing`); a mod
-turned off is a line of its own there. The pointer and touch move both rows as they move any
-choice row. A flat-list front end (Pulse, Pure, 2048) draws it as a page; HD and Omega reveal MODS
-below OPTIONS with the pad or pointer. `--menu-page mods` draws the page headless with the
-profile's switches, and `--menu-page mods:<mod id>` puts the MOD row on that mod. `just mods-list`
+turned off is a line of its own there. A flat-list front end (Pulse, Pure, 2048) draws the pages
+as pages; HD and Omega reveal MODS below OPTIONS with the pad or pointer. `just mods-list`
 (`oag-mod`) does not read the game's settings and lists every mod it finds.
 
 ## Event channels: `[channels]`

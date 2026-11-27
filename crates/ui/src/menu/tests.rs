@@ -13,6 +13,7 @@ mod drawing;
 mod expand;
 mod frame;
 mod hide;
+mod items;
 mod jump;
 mod launch;
 mod music_list;

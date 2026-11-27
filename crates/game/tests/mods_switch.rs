@@ -167,7 +167,7 @@ fn the_enabled_row_follows_the_mod_row() {
     let strings = StringTable::default();
     let mut model = Menu::new(built.definition.clone());
     model.supply(ValueSource::Mods, &mods::choices(&built.listing, &strings));
-    assert!(model.open(mods::PAGE));
+    assert!(model.open(mods::DETAIL));
     let enabled = |model: &Menu| -> Vec<String> {
         let entry = model
             .page()
@@ -424,14 +424,14 @@ fn the_settings_row_opens_the_selected_mods_own_page_and_only_while_it_has_one()
     let strings = StringTable::default();
     let mut model = Menu::new(built.definition.clone());
     model.supply(ValueSource::Mods, &mods::choices(&built.listing, &strings));
-    assert!(model.open(mods::PAGE));
+    assert!(model.open(mods::DETAIL));
     assert!(offers_settings(&mut model, &built, "test.tuner"));
     assert_eq!(
         mods::settings_page(&model, &built.listing).as_deref(),
         Some("test.tuner/tuning")
     );
     assert!(model.push("test.tuner/tuning"), "the page is in the tree");
-    assert!(model.open(mods::PAGE));
+    assert!(model.open(mods::DETAIL));
     assert!(
         !offers_settings(&mut model, &built, "test.garage"),
         "garage names no settings page"
@@ -441,7 +441,7 @@ fn the_settings_row_opens_the_selected_mods_own_page_and_only_while_it_has_one()
     let built = build(&load(&dir, &off(&["test.tuner"])));
     let mut model = Menu::new(built.definition.clone());
     model.supply(ValueSource::Mods, &mods::choices(&built.listing, &strings));
-    assert!(model.open(mods::PAGE));
+    assert!(model.open(mods::DETAIL));
     assert!(
         !offers_settings(&mut model, &built, "test.tuner"),
         "an off mod's page is not in the tree"

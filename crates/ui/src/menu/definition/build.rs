@@ -273,6 +273,13 @@ impl Definition {
                     "a page id is non-empty and has no '/' (the tree adds the mod's id)",
                 ));
             }
+            if page.item_page.is_some() {
+                return Err(fault(
+                    mod_id,
+                    format!("page {:?} item_page", page.id),
+                    "a mod's page cannot be a list page",
+                ));
+            }
             let full = page_id(mod_id, &page.id);
             if self.pages.iter().any(|other| other.id == full) {
                 return Err(fault(mod_id, key, format!("{full:?} is already a page")));
@@ -290,6 +297,7 @@ impl Definition {
                 meta: Vec::new(),
                 parked: Vec::new(),
                 opens_on: None,
+                item_page: None,
             });
             done.pages.push(full);
         }
@@ -345,6 +353,12 @@ impl Definition {
         while let Some(page) = stack.pop() {
             if !seen.insert(page) {
                 continue;
+            }
+            // A list page's items open a page of their own.
+            if let Some(id) = &self.pages[page].item_page
+                && let Some(at) = self.pages.iter().position(|page| &page.id == id)
+            {
+                stack.push(at);
             }
             for entry in &self.pages[page].entries {
                 match entry {

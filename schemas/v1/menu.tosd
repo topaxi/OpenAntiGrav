@@ -218,6 +218,10 @@ optional = true
 type = "string"
 optional = true
 
+[types.page.item_page]
+type = "string"
+optional = true
+
 [types.page.entry]
 type = "array"
 itemtype = "types.entry"

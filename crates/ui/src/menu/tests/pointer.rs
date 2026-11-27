@@ -19,7 +19,7 @@ fn hd_skin() -> Skin {
 
 /// The frame a served HD archive resolves, with its block art - the same
 /// fixture `tests/blocks.rs` builds.
-fn hd_frame() -> Frame {
+pub(super) fn hd_frame() -> Frame {
     let placed = |x: u32, width: u32, height: u32| Placed {
         x,
         y: 0,
