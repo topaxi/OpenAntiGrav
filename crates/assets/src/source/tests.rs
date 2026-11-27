@@ -933,7 +933,7 @@ fn only_a_partial_update_is_a_gap() {
 fn a_copy_authoring_the_needle_is_picked_unless_an_update_replaces_the_name() {
     let dir = testing::temp_dir("mount-authoring");
     let mut archives = mounted(&dir, &[("a.xml", b"plain")], Vec::new());
-    let mut add = |name: &str, entry: &[u8]| {
+    let add = |name: &str, entry: &[u8]| {
         let sub = dir.join(name);
         std::fs::create_dir_all(&sub).expect("an archive directory");
         Container::open(&testing::write_wad(&sub, "Data.wad", &[("a.xml", entry)]))
