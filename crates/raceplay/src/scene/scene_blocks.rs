@@ -273,6 +273,13 @@ impl Scene {
         self.shield_cockpit = Some(sphere);
     }
 
+    /// Flags slot 0's shell as one under its own lit program, as HD's loader does.
+    pub(crate) fn light_the_shield_for_tests(&mut self) {
+        if let Some(Some(shell)) = self.shield.first_mut() {
+            shell.light_for_tests();
+        }
+    }
+
     /// The kind of scene block slot 0's engine flare reads.
     pub(crate) fn flare_scene_kind_for_tests(&self) -> Option<SceneKind> {
         self.flares

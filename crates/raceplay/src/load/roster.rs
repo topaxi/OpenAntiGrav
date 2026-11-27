@@ -219,7 +219,7 @@ pub(super) fn own_shield(options: &crate::Options, craft_title: &oag_title::Titl
 /// (`oag_title::Looks::shield_shell_lit`): back faces culled by the material's state word, and
 /// the lit program's flag. Only a shell that authors `ShieldColour`, and never our own shield.
 /// The cockpit sphere keeps its drawing: its draw is unread.
-pub(super) fn lit_shield_shell(
+pub(crate) fn lit_shield_shell(
     shell: Option<&mut oag_mesh::mesh::Model>,
     options: &crate::Options,
     craft_title: &oag_title::Title,

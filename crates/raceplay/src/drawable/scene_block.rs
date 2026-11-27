@@ -252,6 +252,12 @@ impl Drawable {
         self.model.shield_lit
     }
 
+    /// Sets the model's lit-shield flag after the build, for tests.
+    #[cfg(test)]
+    pub(crate) fn light_for_tests(&mut self) {
+        std::sync::Arc::make_mut(&mut self.model).shield_lit = true;
+    }
+
     /// Moves this drawable's bind group 2 onto `blocks` as a `kind` drawable. From here the
     /// frame writes its scene through [`SceneBlocks::write`] and [`Self::write_scene`] is not
     /// to be called; the draws bind [`Self::scene_offset`].

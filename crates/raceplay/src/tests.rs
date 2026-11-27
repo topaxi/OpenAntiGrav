@@ -138,6 +138,7 @@ mod second_person;
 mod shared_half;
 mod shield_flash;
 mod shield_hits;
+mod shield_shell_lit;
 mod shine_writes;
 mod ship_debris;
 mod slot_hud;
@@ -179,7 +180,7 @@ mod zone_end;
 mod zoom;
 
 /// A model declaring `slots` texture slots of which the first `decoded` filled.
-fn model(slots: usize, decoded: usize) -> Model {
+pub(crate) fn model(slots: usize, decoded: usize) -> Model {
     Model {
         airbrakes: [None, None],
         node_vertex_ranges: Vec::new(),

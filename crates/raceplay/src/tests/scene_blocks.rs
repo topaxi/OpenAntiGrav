@@ -352,3 +352,54 @@ fn an_imposed_flame_clock_reaches_the_flame_surfaces_alone() {
     );
     assert_ne!(flame.time, circuit.time);
 }
+
+/// A shell under its own lit program reads a block with the craft's light and fog, where the
+/// flame's has neither: on the flame's block the program's ambient and sun are zero and the
+/// shell draws black. The cockpit sphere, whose draw is unread, stays on the flame's.
+#[test]
+fn a_lit_shield_shell_reads_the_crafts_light_with_the_flames_clock() {
+    let Some((device, queue)) = test_gpu() else {
+        return;
+    };
+    let mut scene = bare_scene(&device, &queue);
+    scene.give_a_shield_for_tests(&device);
+    scene.light_the_shield_for_tests();
+    scene.share_scene_blocks_for_tests(&device);
+    scene.set_output_scale_for_tests(0.5);
+    assert_eq!(
+        scene.shield_scene_kinds_for_tests(),
+        [Some(SceneKind::Shield), Some(SceneKind::Flame)]
+    );
+    let view = target(&device);
+    let race = race_with_a_grid();
+    scene.render_viewports(
+        &device,
+        &queue,
+        &view,
+        &race,
+        (0.0, 0.0, 64.0, 64.0),
+        Fov::AUTHORED,
+        true,
+        true,
+        None,
+        Shadows::Off,
+        &[],
+        crate::scene::WindowEffects::default(),
+        &mut [],
+    );
+    let shield = scene.scene_block(&device, &queue, 0, SceneKind::Shield);
+    let craft = scene.scene_block(&device, &queue, 0, SceneKind::Ship);
+    let flame = scene.scene_block(&device, &queue, 0, SceneKind::Flame);
+    assert_eq!(
+        bytemuck::bytes_of(&shield.light),
+        bytemuck::bytes_of(&craft.light),
+        "the craft's rig"
+    );
+    assert_eq!(shield.light.output_scale, 0.5);
+    assert_eq!(
+        bytemuck::bytes_of(&shield.fog),
+        bytemuck::bytes_of(&craft.fog),
+        "the craft's fog"
+    );
+    assert_eq!(shield.time, flame.time, "the flame's clock");
+}

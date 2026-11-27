@@ -77,14 +77,7 @@ impl Build<'_> {
                 let Some(model) = pick(livery).filter(|model| !model.indices.is_empty()) else {
                     return Ok(None);
                 };
-                let (glow, receiver) = if model.shield_lit {
-                    (
-                        mesh_render::GlowMask::Protected,
-                        mesh_render::ShadowReceiver::Never,
-                    )
-                } else {
-                    (mesh_render::GlowMask::Written, receiver)
-                };
+                let (glow, receiver) = mask_and_shadow(&model, receiver);
                 Drawable::new(
                     self.device,
                     self.queue,
@@ -104,5 +97,44 @@ impl Build<'_> {
                 .map(Some)
             })
             .collect()
+    }
+}
+
+/// A per-slot model's glow mask and shadow receiver: written and `receiver`, except for a lit
+/// shield shell.
+fn mask_and_shadow(
+    model: &Model,
+    receiver: mesh_render::ShadowReceiver,
+) -> (mesh_render::GlowMask, mesh_render::ShadowReceiver) {
+    if model.shield_lit {
+        (
+            mesh_render::GlowMask::Protected,
+            mesh_render::ShadowReceiver::Never,
+        )
+    } else {
+        (mesh_render::GlowMask::Written, receiver)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_lit_shield_shell_leaves_the_glow_mask_and_takes_no_shadow() {
+        let mut model = crate::tests::model(0, 0);
+        let mapped = mesh_render::ShadowReceiver::Mapped;
+        assert_eq!(
+            mask_and_shadow(&model, mapped),
+            (mesh_render::GlowMask::Written, mapped)
+        );
+        model.shield_lit = true;
+        assert_eq!(
+            mask_and_shadow(&model, mapped),
+            (
+                mesh_render::GlowMask::Protected,
+                mesh_render::ShadowReceiver::Never
+            )
+        );
     }
 }
