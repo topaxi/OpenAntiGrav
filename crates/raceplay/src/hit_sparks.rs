@@ -235,9 +235,21 @@ impl HitSparks {
 
 impl Race {
     /// Lands a weapon hit on `slot` without a weapon, for `--force-hit`: the
-    /// same call a real one makes, on the shield the craft has now. A
+    /// same calls a real one makes, on the shield the craft has now. A running
+    /// Shield swallows it, so the shell flashes and no sparks are thrown. A
     /// verification aid and nothing else.
     pub fn force_weapon_hit(&mut self, slot: usize) {
+        let shielded = self
+            .core
+            .sim
+            .world
+            .ships
+            .get(slot)
+            .is_some_and(|ship| ship.physics.shield_pickup_timer > 0.0);
+        if shielded {
+            crate::stage::stage!(self).shield_hit(&self.core, slot);
+            return;
+        }
         let mut hits = [oag_weapons::projectile::WeaponHit::default(); MAX_SHIPS];
         if let Some(hit) = hits.get_mut(slot) {
             hit.landed = true;

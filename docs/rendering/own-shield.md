@@ -73,7 +73,7 @@ file with `[graphics] own_shield = true` for "on".
   ticks, Pulse PS2 at 400) and on HD with the setting on (both ticks) the PNGs are byte-identical before and after.
   No original has this shield, so there is no reference frame; judged by eye against the HD look named below. No
   comparison pair turns `graphics.own_shield` on.
-- **A hit**: `--force-hit 400:0` flashes the shell amber with the swell, and it settles back to blue. The amber wash over the whole view in that frame is Pulse's own hit burst: the frame with the setting off carries the same wash, and it is not the shell.
+- **A hit**: `--force-hit 400:0` on a raised shield flashes the shell amber with the swell, and it settles back to blue. A running Shield swallows the hit, so no hit burst or view wash is thrown, with the setting on or off.
 - Tests: `own_shield::offset_surface::tests` (the surface is closed, the asked distance off every triangle, outside
   only), `crates/mesh/tests/own_shield_lit_path.rs` (the flag reaches the pipeline, reads no texture and takes its eye from the
   block), `tests::scene_blocks::our_own_shield_reads_each_views_eye` in `oag-raceplay` (each view of a split leaves its

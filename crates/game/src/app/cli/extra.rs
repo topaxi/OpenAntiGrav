@@ -280,7 +280,9 @@ pub(crate) struct WreckArgs {
     /// hull shows (hit sparks, HD's damage smoke), there because a headless run
     /// has no rival whose weapon reaches the player. The hit spends no shield
     /// and takes none; pair it with `--force-shield` for the shield it should
-    /// find. See [`oag_raceplay::Race::force_weapon_hit`].
+    /// find. On a craft with a running Shield pickup it is swallowed: the shell
+    /// flashes and no sparks are thrown. See
+    /// [`oag_raceplay::Race::force_weapon_hit`].
     #[arg(long, value_name = "TICK:SLOT", requires = "race")]
     pub(crate) force_hit: Option<String>,
 

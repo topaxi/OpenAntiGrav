@@ -1442,6 +1442,25 @@ fov `2 atan(|M[3].xyz| / |M[1].xyz|)`. A dump retried after an incomplete frame 
 frames: take the matrix of the draw you read (the leach draw's own `c[467]` is its eye),
 and read poses in the same pause, after the dump.
 
+## An absorbed hit on a shielded craft, with no rival (2026-11-27, `hd-shield-flash`)
+
+Raise the shield (pickup state 5, TRIANGLE), then write a positive float to the
+player's pickup slot `+0x120` while the target is paused and step one game
+frame: the game's own damage drain answers with `ShipShield_Hit` and zeroes the
+word (`ps3-hdfury-eu/shield.md`, "The hit flash, live"). The same word is what a
+weapon hit posts. `scripts/rpcs3-hd-shield.py flash` does it.
+
+Traps from that run:
+
+- **A resting craft gives `pick_camera` nothing** (no frame-unique load); take
+  `rpcs3-hd-blast-film.py`'s `held_camera` fallback.
+- **A START RACE tap that lands after GO thrusts the craft** (one boot of five
+  sat 12 units forward). Compare the pose before pairing frames across boots.
+- **`serve` needs `OAG_COMPARE_PLATFORM=hd-fury`** or it runs the copied stock
+  `Resolution Scale` (150 here, about 1 FPS under load against 21 at 100).
+- A `serve` started within a few seconds of a `stop` can fail with
+  `Connection refused`: RPCS3 logs `GDB: Failed to bind socket`. Wait a minute.
+
 ## Ride height through the flyby, the grid and a straight (2026-10-08, `hd-ride-height`)
 
 `scripts/rpcs3-height.py` samples the player's body, craft entry and ship through `/proc/<pid>/mem`
