@@ -38,9 +38,24 @@ blast the struck craft's velocity, on HD, 2048 and Omega
   `oag_raceplay::assets::decode_texture` (flare and trail art) and `load/caustic.rs`. Compare each
   with its draw's `v` in a command ring before touching it; a radially symmetric sprite shows
   nothing either way.
-- **The far Rocket blast with the film's velocity is still not the original's**
-  (`particle-fill.md`, "The pose throws the far blast at the camera"): the cloud is smaller,
-  `trail` reads as smooth white lobes, and the grey smoke streaming toward the camera is missing.
+- **The far Rocket blast: the cloud and the grey streams are answered (2026-11-27)**
+  (`particle-fill.md`, "The far blast's grey streams are the Rockets' own ribbons"). The streams are
+  the Rockets' ribbons from a launch 28 units back; HD draws the ribbons before the particles (wired).
+  The cloud is two waves at two measured points. **For the lead to adopt** (pose decisions, not
+  laws), on both far pairs:
+  - replace `--force-rocket-hit 717:7` with
+    `--force-rocket-hit-at 716:394.34,-35.94,-120.31 --force-rocket-hit-at 719:398.98,-35.30,-117.96:2`
+    (keep `--force-rocket-hit-velocity`): 11.79 to 9.11 and 43.17 to 34.81, -8.13 +/- 0.35 over 8
+    seeds on 0.233 s;
+  - optionally also the launch (`--pose-hold-launch=717:...` and `ours.inputs`
+    `701 none / 1 square / 408 none`, values on the page): faithful, the streams appear, but 0.16 and
+    1.11 worse than the two waves alone until the two items below land.
+  Left:
+  - the ribbon's vertex colour: `RibbonEffects_SampleLighting` (`0x002a4280`) reads a lighting volume
+    at `*0x00d43cc4`, unread; ours draws white, the original's streams are grey;
+  - the fan at the eye is wider than `spread` 0.05 gives: ours are three narrow strips right of
+    centre, the original's four wide bands span the frame's bottom. Unread;
+  - `trail` still reads as smooth white lobes (not looked at).
 - **The near pairs: their `field.csv` is 2 ticks ahead of their picture; the move is the lead's to adopt**
   (`particle-fill.md`, "The first wave and the drawn hull"). It was never the cloud: the film pairs
   fed ours the RAM poses, and the frame draws every craft 2 ticks back. That also explains the blast's
@@ -59,11 +74,6 @@ blast the struck craft's velocity, on HD, 2048 and Omega
   - the wash quads are cut by the track where the original's cover the frame (hard edges on the
     floor);
   - why the original's second wave arrives later is unread.
-- **Lead, not checked: the far pairs may be posed on the second wave's blast.** Their wash quad
-  is 2 ticks old at 0.1 s and 10 at 0.233 s (`particle-fill.md`, "Posing a far hit"), so born about
-  4 ticks after the first shield drop; `far1`'s and `far3`'s shields fall again between 0.05 and
-  0.1 s (to 120 and 110). The far frames' records have no camera here, so their points were not
-  read.
 - **Lead, not checked: the tick that lands a forced Rocket hit adds about 20 units a second upward
   to the struck craft** (set `y` 11, read 31 at the blast). The HD films' struck craft show no such
   jump, comparing frames 8 to 23 ticks apart. Whether it is the Rocket's impulse or our hover after

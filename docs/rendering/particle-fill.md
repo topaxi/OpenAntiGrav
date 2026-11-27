@@ -842,6 +842,8 @@ two far pairs read 66.50 and 33.60, against 64.71 and 34.06 without velocity or 
 **The picture is still not the original's.** The cloud is smaller, `trail` reads as smooth white
 lobes, and the grey smoke streaming toward the camera is missing (pixels with every channel over
 235 at 0.233 s: 5.9 % against 11.1 %). The near pairs are posed below ("Posing the near hits").
+The cloud and the streams are answered in "The far blast's grey streams are the Rockets' own
+ribbons".
 
 ### Posing a far hit
 
@@ -1138,6 +1140,102 @@ goes from 90.03 to 73.23 on its own seed.
 the root) authors no trail heads: checked, differs. Omega's two copies (`particles2048` and
 `particles`) both author HD's `FIRE_TRAILS_ONEQUAD` at 8.824: checked, applies, not wired (no
 capture of either's hit).
+
+### The far blast's grey streams are the Rockets' own ribbons
+
+2026-11-27. **The far films' cloud is two waves at two points, and their grey streams are the
+Rockets' smoke ribbons, laid from a launch point behind the camera.** HD draws those ribbons before
+every particle quad of the frame, so the blast and its wash cover them. Ours drew them after the
+particles, and the far pairs posed all three blasts at one point.
+
+**The streams are the Rocket ribbons** (confidence 85). `far3/a0000`, the frame the first shield
+falls, shows the three Rockets still in flight, each with a smoke trail running unbroken back to
+the bottom edge of the screen; the same streams persist at 0.233 s and 0.4 s. The film script
+(`scripts/rpcs3-hd-rocket-film.py --mode hold`) holds the player 30 units behind the rival every
+frame while the Rockets fly and parks it only after the hit: `pre.json` puts the player at
+`(344.28, -39.61, -147.97)` before the press, 28 units behind the pair's pose and 17.7 behind the
+pair's eye. The Rocket does not inherit the craft's velocity (`oag_weapons::projectile::rocket`),
+so the launch point is all that moves the ribbon. The ring keeps the ribbons' draws but not their
+vertices (a main-memory buffer the hook does not dump), so the geometry was not read there.
+
+- Falsifier, written first: fired from the `pre` pose, our ribbons enter from the bottom edge as
+  the original's do, or the launch point is not the cause. They do (`--pose-hold-launch`, below).
+- Ruled out: our ribbons outlive their Rocket by up to 1.85 s as HD's do
+  ([rocket-trail.md](../ghidra/functions/ps3-hdfury-eu/rocket-trail.md)); the forced hit does not
+  cut them.
+
+**HD draws them before the particles** (confidence 85; one film, both frames). In the draw list of
+`far3/a0100` and `a0233` (`scripts/rsx-draw-list.py`), the `RibbonEffects` strips are one run of
+`TRIANGLE_STRIP` draws, blend `SRC_ALPHA, ONE_MINUS_SRC_ALPHA` with alpha `ZERO`, cull off, depth
+mask off: draws 638 to 673 at 0.1 s and 660 to 695 at 0.233 s, 36 each (pool 3's 18 contrail
+elements and pool 4's 9 Rocket ribbons with their 9 shadows). Every particle `QUADS` draw
+follows them: 694 to 774 and 709 to 799, the blast and its sprite templates (the wash) included.
+Ours drew the particles first and every strip after them, so the smoke lay over the white wash.
+**Wired**: the four `RibbonEffects` strips (Missile ribbons and streaks, wingtip contrails, Rocket
+smoke) now draw before the particles (`oag_raceplay::scene::record`, `RIBBON_EFFECTS`); the Leach
+beam, the magstrip wake and the Leach strip keep their place after the particles, their order
+unread. Reverting it turns
+`scene::record::tests::the_ribbon_effects_strips_draw_before_the_particles` red.
+
+**The cloud is two waves** (confidence 85). `scripts/hd-trail-onset.py` finds 3 sites and 12
+trail chains (4 a blast) in `far3/a0233`. Read through each frame's camera, the `glow_longer`
+quads stand on two world points, identical in `a0100` and `a0233` to 0.01 units:
+
+| Site | World point | Blasts | Blue at 0.1 s, 0.233 s | Age at 0.1 s, 0.233 s | Our tick |
+| --- | --- | --- | --- | --- | --- |
+| P1 | `(394.34, -35.94, -120.31)` | 1 | 91, 68 | 5, 13 | 716 |
+| P2 | `(398.98, -35.30, -117.96)` | 2 | 99, 76 | 2, 10 | 719 |
+
+Ages from the blue channel (105 falling to 21 over 30 ticks, "Posing the near hits"). Both frames
+give the same birth ticks, so the far pairs are posed on the second wave as well as the first (the
+lead's question in the far-hit follow-ups). P1 is 3 units from the struck craft's recorded pose,
+the near films' 2-tick lag. `--force-rocket-hit-at` poses both:
+
+```text
+--force-rocket-hit-at 716:394.34,-35.94,-120.31
+--force-rocket-hit-at 719:398.98,-35.30,-117.96:2
+--force-rocket-hit-velocity=88.067871,11.234680,55.156158
+```
+
+(in place of `--force-rocket-hit 717:7`; the struck craft stays on its `field.csv` pose, which is
+the original's at the frame).
+
+**`--pose-hold-launch TICK:X,Y,Z,LX,LY,LZ,UX,UY,UZ,FX,FY,FZ`** (dev only, with
+`--pose-hold-ticks`) holds ship 0 on another pose until the end of `TICK`, then on its start
+pose. The far films' launch, with the press moved to tick 701 (`ours.inputs`
+`701 none / 1 square / 408 none`), 16 ticks of flight as the film's:
+
+```text
+--pose-hold-launch=717:344.282288,-39.608967,-147.973312,0.446097,0.241257,-0.861854,-0.210831,0.964209,0.160783,0.869797,0.109981,0.480995
+```
+
+**The pairs.** `overlap.mean_grey`, own seed, each row rendered twice byte-identical:
+
+| Flags | far 0.1 s | far 0.233 s | near 0.1 s | near 0.233 s |
+| --- | --- | --- | --- | --- |
+| Before (main) | 11.89 | 43.18 | 54.38 | 64.14 |
+| Ribbons before particles, current flags | 11.79 | 43.17 | 54.38 | 64.13 |
+| ... and the two waves | **9.11** | **34.81** | | |
+| ... and the two waves and the launch | 9.27 | 35.92 | | |
+| ... the launch alone (one point) | 13.02 | 43.89 | | |
+
+- Two waves, far 0.233 s over `--stage-seed 1..8`: 43.15 to 35.02, paired -8.13 +/- 0.35,
+  closer on 8 of 8.
+- Near 0.233 s over seeds 1 to 8 with the order change: mean 54.86 (44.13 to 84.61), against
+  54.74 before.
+- By eye at 0.1 s the two waves give the original's plain white frame; the single point left
+  yellow streaks. At 0.233 s the cloud is the original's size and yellow.
+- The launch pose draws the streams where the original has them, and at 0.1 s the wash now covers
+  them as the original's does (16.51 to 13.02 with the order change). It scores 0.16 and 1.11
+  worse than the two waves alone: ours are three narrow white strips bunched right of centre, the
+  original's four wide grey bands span the bottom of the frame. Two causes are open, neither read:
+  the vertex colour (`RibbonEffects_SampleLighting`, `0x002a4280`, a lighting volume; ours draws
+  white), and the fan's width at the eye, wider than HD's authored `spread` 0.05 would give.
+
+**2048 and Omega: not checkable here.** Of the four strips they build only the wingtip contrails,
+which now draw before the particles by HD's order, inherited. A draw order is read off a command
+ring and neither has one: Omega's emulator gives no memory readout, and there is no Vita ring
+tool.
 
 ## Per effect: what fills the heavy frames
 
