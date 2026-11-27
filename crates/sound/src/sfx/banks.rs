@@ -819,7 +819,15 @@ fn load_one(
                     }
                 }
                 Ok(None) if contact_built => {}
-                Ok(None) => extra = not_one_event(cue, &loaded),
+                Ok(None) => {
+                    extra = not_one_event(cue, &loaded).map(|flat| match &program {
+                        Ok(Some(_)) => format!(
+                            "sfx: {name}'s {} waveform(s) are the parts of its list, not alternates of one event",
+                            loaded.waveforms.len()
+                        ),
+                        _ => flat,
+                    });
+                }
                 Err(e) => line.push_str(&format!("; timeline not built, flat pick kept: {e}")),
             }
             match program {
