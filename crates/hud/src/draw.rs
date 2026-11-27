@@ -1043,6 +1043,7 @@ fn list(cx: &Context<'_>, readout: &Readout, sight: Sight) -> Frame {
     frame.sprites.extend(
         super::runtime::arc_sprites(cx, readout)
             .into_iter()
+            .chain(super::runtime::proximity_sprites(cx))
             .map(|draw| lit_draw(cx, draw)),
     );
     frame.sprites.extend(super::assist::sprites(cx, readout));

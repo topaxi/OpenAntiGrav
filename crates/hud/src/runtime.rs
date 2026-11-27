@@ -251,6 +251,26 @@ fn lit_segments(runtime: &RuntimeHud, readout: &Readout) -> Vec<String> {
     names
 }
 
+/// The rear-proximity arc and its marker, idle: the marker raised, no segment lit.
+pub(super) fn proximity_sprites(cx: &Context<'_>) -> Vec<Draw> {
+    let Some(proximity) = cx.art.runtime.and_then(|runtime| runtime.proximity) else {
+        return Vec::new();
+    };
+    let Some(bar) = cx.layout.sprite(proximity.bar) else {
+        return Vec::new();
+    };
+    let marker = cx.layout.sprite(proximity.background).map(|sprite| {
+        let mut raised = sprite.clone();
+        raised.rect[1] -= f32::from(proximity.lift);
+        raised
+    });
+    [Some(bar.clone()), marker]
+        .iter()
+        .flatten()
+        .filter_map(|sprite| sprite_draw(sprite, cx.sheet))
+        .collect()
+}
+
 /// `<prefix>k` for every `k` in the arc that `up` accepts.
 fn segments(arc: &SegmentArc, up: impl Fn(i64) -> bool) -> Vec<String> {
     (0..arc.segments)
