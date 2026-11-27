@@ -933,26 +933,35 @@ fn a_pulse_detonator_mine_scales_to_the_music_only_if_its_layout_says_so() {
     assert!(size(&race) > 2.0, "scaled: {}", size(&race));
 }
 
-/// **A destroyed craft's run ends as Fury's does**: the blast and the wreck play, and the race is
-/// out 5.5 s after the craft goes, though Pulse's own wreck is solid for 1.5 s alone.
+/// **A destroyed craft ends a Pulse Detonator run as it ends a Pulse Zone run**: the same tick,
+/// the same camera, no wait of Fury's.
 #[test]
 #[ignore = "needs data/images/pulse-psp-usa.chd"]
-fn a_pulse_detonator_end_waits_for_furys_five_and_a_half_seconds() {
-    let Some(mut race) = pulse_race() else {
+fn a_pulse_detonator_run_ends_as_a_pulse_zone_run_does() {
+    let Some(image) = oag_testdata::image("data/images/pulse-psp-usa.chd") else {
         return;
     };
-    race.tick(&oag_gameplay::PlayerInputs::none());
-    let ship = &mut race.core.sim.world.ships[0].physics;
-    ship.craft_state = oag_physics::CraftState::Destroyed;
-    ship.state_timer = oag_physics::damage::DESTROYED_DURATION;
-    let mut ticks = 0;
-    while !race.core.sim.world.race[0].finished && ticks < 1200 {
+    let end = |mode: Mode| {
+        let loaded = crate::load(&crate::Options {
+            source: image.display().to_string(),
+            class: "VENOM".to_string(),
+            mode,
+            ..crate::Options::default()
+        })
+        .expect("loading a Pulse race");
+        let mut race = Race::start(loaded.setup, loaded.view, loaded.modules);
         race.tick(&oag_gameplay::PlayerInputs::none());
-        ticks += 1;
-    }
-    let seconds = ticks as f32 * race.core.sim.dt;
-    assert!(
-        (5.4..5.7).contains(&seconds),
-        "the run ends after {seconds} s"
-    );
+        let ship = &mut race.core.sim.world.ships[0].physics;
+        ship.craft_state = oag_physics::CraftState::Destroyed;
+        ship.state_timer = oag_physics::damage::DESTROYED_DURATION;
+        let mut ticks = 0;
+        while !race.core.sim.world.race[0].finished && ticks < 1200 {
+            race.tick(&oag_gameplay::PlayerInputs::none());
+            ticks += 1;
+        }
+        (ticks, race.view.orbiting())
+    };
+    let zone = end(Mode::Zone);
+    assert!(zone.0 < 1200, "the Zone run ends");
+    assert_eq!(end(Mode::Detonator), zone);
 }

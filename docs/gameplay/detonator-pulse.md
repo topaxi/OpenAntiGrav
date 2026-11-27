@@ -24,7 +24,7 @@ CIRCUIT row then lists the Zone circuits only).
 | Cannon | HD's cannon: 15 volleys, one every 0.1 s, one wall rebound, four hits to a bomb; the rounds leave from the hull's dimensions (Pulse's hulls author no `cannon_flash`); each round is drawn as Pulse's own Cannon's (see [The cannon](#the-cannon)); a wall hit sparks Pulse's `WO_CANNON_SPARKS` | `WeaponStats_Detonator.xml` |
 | Explosions | a mine and a bomb go up as Pulse's `WO_MINE_EXPLO` | `oag_pulse::effects` |
 | Sounds | Pulse's own `MINEEXPL` and `BOMBEXPL` (`weapons.bnk`) and, on a pad charge, `WEAPONPICKUP` (`hud.bnk`) | `oag_sound::sfx::Banks::load_detonator` |
-| End of a run | the craft's own destroy sequence, then the results 5.5 s after the craft goes, under the close orbit: HD's wait, inherited | `DestroyedCraft::detonator_end` |
+| End of a run | as a Pulse Zone run: out of the race when the 0.5 s explosion ends, the results at once, the blast, wreck and destroy camera going on behind them (the maintainer's ruling, 2026-11-27) | `DestroyedCraft::detonator_end` `None` |
 | Scoring | Fury's figures (100 a live mine, 50 a dark one, 2000 a bomb, 50 an EMP'd live mine) | `DetonatorScoring.xml` in the same directory |
 | HUD | this project's own layout, arranged as Fury's (see [The HUD](#the-hud)) | `oag_pulse::hud::layouts::DETONATOR`, `ps2_hud` |
 | Not drawn | the stage grade (Pulse ships none), the medals, the announcer lines | `palette: None`, `shows_medals`, `voices: None` |
@@ -51,7 +51,8 @@ The pattern groups stay this project's six: HD's `PatternFile.xml` is authored c
 not copied.
 
 Still not Fury's: the handling is the team's own at the picked speed class (HD flies one
-classless Detonator file, and Pulse ships none); the circuits are the Zone ones; there are no
+classless Detonator file, and Pulse ships none); the circuits are the Zone ones; a destroyed
+craft ends the run as a Pulse Zone run, with none of Fury's 5.5 s wait; there are no
 medals, score targets, campaign events, EMP voice lines or floating `+N` popups.
 
 ## Mine size
@@ -156,7 +157,7 @@ the Zone twin is flown, the layout and table are read, the 17 speed pads of
 `16_Track`'s Zone twin carry the weapon pad in red, the first tick lays 80 mines, four
 pads ready the EMP with no boost, L1 clears the mines ahead for 50 each, and Square spends the
 clip. `a_pulse_detonator_hud_shows_the_emp_gauge_and_the_clip` (PSP and PS2) checks the
-three sounds, the gauge and the clip; `a_pulse_detonator_end_waits_for_furys_five_and_a_half_seconds`
+three sounds, the gauge and the clip; `a_pulse_detonator_run_ends_as_a_pulse_zone_run_does`
 the end of a run; `a_pulse_detonator_round_is_drawn_as_the_pulse_cannons_own` and
 `a_pulse_emp_wave_is_the_repulsors_wave_and_opening` (`crates/raceplay/src/tests/detonator_fx.rs`)
 the cannon and the EMP.

@@ -667,19 +667,11 @@ const _: () = {
 impl RaceSim {
     /// The title's destroyed-sequence timers, for every craft's physics step.
     pub(super) fn destroy_sequence(&self) -> oag_physics::damage::DestroySequence {
-        let mut sequence = crate::launch_hover::destroy_sequence(
+        crate::launch_hover::destroy_sequence(
             &self.destroyed,
             self.world.mode() == Mode::Zone,
             self.dt,
-        );
-        // State 5 lasts at least as long as a Detonator end waits: its timer stops at zero, so
-        // a shorter dwell (Pulse's) would never count the wait out ([`Self::end_played_out`]).
-        if let Some(end) = self.detonator_end() {
-            sequence.dwell_secs = sequence
-                .dwell_secs
-                .max(end.results_secs - sequence.explosion_secs);
-        }
-        sequence
+        )
     }
 
     /// The Zone end this race plays, `None` outside Zone and on a title that wrecks the craft.
@@ -700,7 +692,7 @@ impl RaceSim {
     /// that ends at once ([`oag_title::destroyed::DestroyedCraft::detonator_end`]).
     pub(crate) fn detonator_end(&self) -> Option<oag_title::destroyed::DetonatorEnd> {
         (self.world.mode() == Mode::Detonator)
-            .then_some(self.destroyed.detonator_end.map(|end| end.value))
+            .then_some(self.destroyed.detonator_end)
             .flatten()
     }
 
