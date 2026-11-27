@@ -1846,8 +1846,13 @@ def cmd_capture(args):
         if args.wait_countdown is not None:
             import rpcs3_hd_field
             print("waiting for %.1f s into the countdown" % args.wait_countdown, flush=True)
+            if session.guard is not None:
+                # The wait makes no GDB packet, so the stage's own ceiling must cover it.
+                session.guard.stage("countdown", limit=args.timeout + 30)
             reached = rpcs3_hd_field.wait_countdown(rpcs3_hd_field.Mem(session.open_mem()), args.wait_countdown, args.timeout)
             print("  countdown at %.2f s; attaching" % reached["elapsed_s"], flush=True)
+            if session.guard is not None:
+                session.guard.stage("capture")
         with Debugger(port=int(GDB_SERVER.rsplit(":", 1)[1]) if GDB_SERVER
                       else Debugger.__init__.__defaults__[0]) as gdb:
             for n in range(args.shots):
