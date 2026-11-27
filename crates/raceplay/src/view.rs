@@ -321,6 +321,9 @@ pub struct RaceView {
     pub(super) effects: psys::Library,
     /// Each [`Trigger`] resolved against [`Self::effects`] once at load.
     pub(super) handles: EffectHandles,
+    /// A live mine's blast per Detonator stage, recoloured from that stage's mine colour
+    /// ([`crate::detonator_fx::mine_blasts`]); empty where the title draws it as authored.
+    pub(super) mine_blasts: Vec<Option<std::sync::Arc<psys::Effect>>>,
     /// The multi-instance pool everything *except* the hull-mounted sparks
     /// plays in: the rockets' flares and their detonations today, and
     /// whatever gets a recovered trigger next.

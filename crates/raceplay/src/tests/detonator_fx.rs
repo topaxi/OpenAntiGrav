@@ -154,6 +154,8 @@ fn an_hd_detonator_race_plays_the_discs_effects_for_each_event() {
     .expect("loading an HD Detonator race");
     let mut race = Race::start(loaded.setup, loaded.view, loaded.modules);
     check_the_wall_spark_is_the_discs_pictures(&race);
+    check_a_shot_mine_throws_the_discs_shards(&race);
+    check_a_live_mine_blast_takes_the_stage_colour(&mut race);
     let at = Vec3::new(1.0, 2.0, 3.0);
     let spawn = Vec3::new(4.0, 5.0, 6.0);
     for (kind, trigger) in [
@@ -228,6 +230,95 @@ fn an_hd_detonator_race_plays_the_discs_effects_for_each_event() {
 }
 
 const TALONS: &str = r"Data\Environments\Talons_Junction\track.vex";
+
+/// **A shot mine throws the disc's shards, not procedural puffs:** both mine effects draw every
+/// emitter's own picture, and the live one's `Debris` is the 4 x 4 atlas of glass shards the
+/// original's frame shows, 50 alpha-over particles picked at random from it
+/// (`docs/ghidra/functions/ps3-hdfury-eu/detonator-mine.md`, "The shards, against the original").
+fn check_a_shot_mine_throws_the_discs_shards(race: &Race) {
+    use oag_fx::psys::Blend;
+    for (trigger, name, emitters) in [
+        (Trigger::DetonatorMineExplo, "WO_MINE_EXPLO_DETONATOR", 6),
+        (
+            Trigger::DetonatorMineExploDead,
+            "WO_MINE_EXPLO_DETONATOR_DEAD",
+            3,
+        ),
+    ] {
+        let effect = race
+            .view
+            .handles
+            .get(trigger)
+            .expect("the mine's effect loads");
+        assert_eq!(effect.name, name);
+        assert_eq!(effect.emitters.len(), emitters, "{name}");
+        for spec in &effect.emitters {
+            assert!(
+                spec.sprite.is_some(),
+                "{name}/{} reads its sprite",
+                spec.name
+            );
+            if matches!(spec.render, oag_fx::psys::Render::Billboard) {
+                assert!(
+                    spec.sheet_rect.is_some(),
+                    "{name}/{} draws the disc's sprite, not the procedural profile",
+                    spec.name
+                );
+            }
+        }
+    }
+    let live = race
+        .view
+        .handles
+        .get(Trigger::DetonatorMineExplo)
+        .expect("loaded");
+    let debris = live
+        .emitters
+        .iter()
+        .find(|e| e.name == "Debris")
+        .expect("the live mine's shards");
+    let sprite = debris.sprite.as_ref().expect("the shard atlas");
+    assert_eq!((sprite.width, sprite.height), (512, 512));
+    assert_eq!((debris.atlas.columns, debris.atlas.rows), (4, 4));
+    assert!(debris.atlas.random_frame);
+    assert_eq!(debris.per_emission, (50, 50));
+    assert_eq!(debris.blend, Blend::AlphaOver);
+}
+
+/// **A live mine's blast is drawn in one colour from the stage's mine colour:** on the opening
+/// stage (`1`, `Sub Venom`, mine colour `122 25 255` in `detonatormode.effectsettings`) every
+/// emitter's table is the one entry `DetonatorMine_Explode` writes, `200 163 255`, and a shot live
+/// mine plays that recoloured blast (`docs/ghidra/functions/ps3-hdfury-eu/detonator-mine.md`,
+/// "The blast's colour").
+fn check_a_live_mine_blast_takes_the_stage_colour(race: &mut Race) {
+    let blast = race
+        .view
+        .mine_blasts
+        .get(1)
+        .cloned()
+        .flatten()
+        .expect("stage 1 authors a mine colour, so the blast is recoloured");
+    assert_eq!(blast.emitters.len(), 6);
+    let want = [200.0 / 255.0, 163.0 / 255.0, 1.0];
+    for spec in &blast.emitters {
+        assert!(
+            spec.palette.iter().all(|entry| entry[..3] == want),
+            "{} is drawn in the stage's blast colour",
+            spec.name
+        );
+    }
+    let at = Vec3::new(7.0, 8.0, 9.0);
+    race.core.sim.detonator_events = vec![oag_weapons::detonator::Event {
+        kind: EventKind::MineShot { live: true },
+        at,
+    }];
+    race.view.play_detonator_events(&race.core);
+    assert_eq!(
+        race.view.stage.frames_of(&blast).len(),
+        1,
+        "a shot live mine on the opening stage plays the recoloured blast"
+    );
+}
 
 /// **The spark is drawn from the disc's pictures, not a procedural stand-in:** the effect the
 /// race loaded is `WO_CANNON_SPARKS_DETONATOR`, every emitter has its picture (`.gtf`, `.gxt` or

@@ -66,6 +66,22 @@ def platform(key):
     return out
 
 
+def detonator_pair_mines(mines, reads=()):
+    """The original's mine objects a Detonator pair carries into ours: the armed ones (`flags & 9 == 9`), plus any mine that left
+    the pool during the shot's own mine reads (`reads`, `ship.mine_reads`). A mine a cannon round triggered is compacted out of the
+    pool within two updates and keeps only flag `1`, as does one gone long before; the difference is that its age (`+0xc0`, which
+    stops when it leaves) still advanced between the shot's first read and the pause. Ours needs that mine laid, or its replayed
+    round has nothing to hit and shows no blast and no `+100` where the original's frame has both
+    (`docs/ghidra/functions/ps3-hdfury-eu/detonator-mine.md`, "Carrying the destroyed mine")."""
+    first = reads[0]["mines"] if reads else {}
+
+    def left_during_shot(m):
+        before = first.get(str(m.get("address")), {}).get("age_s")
+        return m["flags"] & 1 and before is not None and m.get("age_s") is not None and m["age_s"] > before
+
+    return [m for m in mines if m["flags"] & 9 == 9 or left_during_shot(m)]
+
+
 def detonator_input_lines(fire, go_tick_):
     """The lines of a Detonator pair's `ours.inputs`: idle through the countdown and up to the original's press, SQUARE (ours'
     cannon button) over the window the original's button was held, idle after; `fire` is `original.detonator.fire` of
@@ -1122,6 +1138,12 @@ def main():
         assert detonator_input_lines(None, 272) == ["273 none"]
         fire = {"press_clock_before_s": 1.8667, "press_clock_after_s": 1.9}
         assert detonator_input_lines(fire, 272) == ["384 none", "2 square", "1 none"]
+        armed = {"address": 1, "flags": 9, "age_s": 3.0}
+        shot = {"address": 2, "flags": 1, "age_s": 2.5}
+        gone = {"address": 3, "flags": 1, "age_s": 0.5}
+        reads = [{"mines": {"1": {"age_s": 1.0}, "2": {"age_s": 1.0}, "3": {"age_s": 0.5}}}]
+        assert detonator_pair_mines([armed, shot, gone], reads) == [armed, shot]
+        assert detonator_pair_mines([armed, shot, gone]) == [armed]
         selftest_frame_field()
         print("compare_env selftest ok")
     elif cmd == "film-field":

@@ -170,6 +170,7 @@ pub struct Overlay {
     small_line_height: f32,
     default_line_height: f32,
     skin_line_height: f32,
+    template_digit: Option<oag_hud::TemplateDigit>,
     /// The grid the layout is authored in - `Assets::space`, kept so the
     /// frame loop can hand a screen filter the title's own row count on the
     /// `--race` route, which has no menu shell to read it from.
@@ -310,6 +311,7 @@ impl Overlay {
             small_line_height: assets.small_font.line_height,
             default_line_height: assets.default_font.line_height,
             skin_line_height: assets.skin_font.line_height,
+            template_digit: oag_hud::TemplateDigit::of(&assets.font),
             sheet: assets.sheet.clone(),
             art: assets.art,
             strings: assets.strings.clone(),
@@ -508,6 +510,7 @@ impl Overlay {
             small_line_height: self.small_line_height,
             default_line_height: self.default_line_height,
             skin_line_height: self.skin_line_height,
+            template_digit: self.template_digit,
             default_border: self.layout.default_border(),
             tag_label: self.tag_label.as_ref(),
         }

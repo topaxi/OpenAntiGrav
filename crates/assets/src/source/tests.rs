@@ -247,6 +247,7 @@ const TITLE: &Title = &Title {
         time_ladder_captions: None,
         pickup_icon_uv: None,
         zone_speed_classes: None,
+        zone_score: oag_title::ZoneScore::Authored,
         shield_percent: true,
         sub_weapon_line: true,
         speed_full_kmh: 600,

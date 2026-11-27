@@ -280,6 +280,10 @@ pub struct ViewSetup {
     /// of its own ([`Options::boost_zoom`]), and so is drawn by the scene's own host
     /// pass rather than inside HD's bloom chain. **Chosen, not measured.**
     pub zoom_borrowed: bool,
+    /// Each Detonator stage's `Detonator Mine Colour` bytes, stage `0` first, where the title
+    /// recolours a live mine's blast from it (`oag_title::Effects::mine_blast_recolour`); empty
+    /// elsewhere.
+    pub mine_blast_colours: Vec<Option<[u8; 4]>>,
     /// [`Options::hud`], carried through to the readout.
     pub capture_hud: Option<CaptureHud>,
     /// Whether this race's HUD stays hidden until the race is released:
@@ -420,6 +424,7 @@ impl ViewSetup {
             hull_draw_factor: 1.0,
             zoom_ring: None,
             zoom_borrowed: false,
+            mine_blast_colours: Vec::new(),
             capture_hud: None,
             hud_waits_for_go: false,
             now_playing: None,

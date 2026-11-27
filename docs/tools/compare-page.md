@@ -2694,8 +2694,8 @@ the HUD clock's `T - 3`.
 | Gap | Box | Grey | Also on | Kind, confidence |
 | --- | --- | --- | --- | --- |
 | Striped metal grilles ours draws bright where the original's frame is near black (ours +22 to +37) | `215,0,520,150` and `1030,150,1360,305` | 0.95 + 0.92 | `pad` (both), `mines-ahead` and `cannon-volley` (the second) | draw, 90; **fixed 2026-11-26**: Talon's `scanlinebillboard` (slot 435), whose Zone variants draw the Zone surface, not the advert ([hd-zone-recolour.md](../rendering/hd-zone-recolour.md), "Holographic billboards in a Zone frame"), 80; -hot 10.32 to 8.96 |
-| The score box's side wings are white-striped in the original, solid red in ours | `690,40,830,235` and `1090,40,1230,235` | 0.48 + 0.69 | all four | draw, 90 |
-| Score digits and `1/14` about 1.1 to 1.25 times the original's width | `790,100,1135,180` and `85,60,320,225` | 0.79 + 0.38 | all four | draw, 85; font scale or spacing unread |
+| The score box's side wings are white-striped in the original, solid red in ours | `690,40,830,235` and `1090,40,1230,235` | 0.48 + 0.69 | all four | draw, 90; **fixed 2026-11-26**: the stripes are `DamageBar`, the shield fill, at another rectangle of `detonator_hud2` ([hd-hud.md](../formats/hd-hud.md), "Detonator's score box") |
+| Score digits and `1/14` about 1.1 to 1.25 times the original's width | `790,100,1135,180` and `85,60,320,225` | 0.79 + 0.38 | all four | draw, 85; **fixed 2026-11-26**: the layout's `ScaleX`/`ScaleY` (0.9x1.0, 0.8x0.8) were unread ([hd-hud.md](../formats/hd-hud.md), "Text scales on two axes") |
 | Hull brighter than the original (ours +7) | `825,720,1100,980` | 0.74 | all four (+5 to +8) | draw, 80 (the fuselage overlay is already open) |
 | Muzzle flashes smaller and dimmer (ours -44) | `825,620,1100,720` | 0.70 | firing frame only | capture state, 55: ours presses with no input latency, so its flash is older than the original's |
 | Near floor right of the hull (ours +4) | `1120,640,1920,850` | 0.48 | all four (+2 to +5) | draw or band timing, 50 |
@@ -2750,6 +2750,67 @@ Whether ours' round then hits the same mine at the same age is not tested.
 the mines armed at the pause. Adding that one mine (boot 1) makes ours score 0000100 too, but the frame goes 13.35 to 14.05 (15.78 with the
 speed pin): ours draws its blast as white puffs and long streaks where the original shows small shards and a `+100` (0.40 of the 0.70 added grey
 is above row 450). That is a draw gap in ours' mine blast, open.
+
+### The `cannon-volley` difference, split by region (2026-11-26, `det-volley-split`)
+
+`cannon-volley` reads **10.5275** mean grey with the destroyed mine carried (`detonator-mine.md`, "Carrying the destroyed mine"), re-rendered
+byte-for-score on `b88ed5e8f`. Question: where the 10.53 sits, and the cheapest lane under 10. Method: the scorer's own difference image
+(`compare_env.overlap_score`'s `magick -colorspace Gray -compose difference`) cut into **disjoint** screen regions, a pixel going to the first
+row that claims it, so the shares (region sum over `1920 x 1080`) add to 10.5275 exactly. Shifting ours by up to 4 px each way (HUD and ticker
+left out) is best unshifted, so no global misalignment. `signed` is ours minus original. The last column is the same split with the floor
+visualiser's sRGB decode applied (below).
+
+| Region (boxes are `x0,y0,x1,y1`) | Area | Grey in region | Signed | Share | With decode | Cause, state |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| Near mines and far cluster `690,420,885,615` `1375,440,1550,592` `1740,465,1920,632` `1240,342,1340,378` | 4.7 % | 65.7 | -10.9 | 3.11 | 3.10 | spike shape and shell follow the music state the pair carries; not a tunable gap |
+| Floor, near road, red strips: polygon `0,590 700,430 850,415 1100,350 1330,335 1370,370 1300,440 1330,465 1920,545 1920,1080 0,1080` | 41.6 % | 6.2 | +2.9 | 2.58 | 1.44 | visualiser strip sampled without its sRGB decode: **read** (75), not wired ([zone-vis-gamma.md](../ghidra/functions/ps3-hdfury-eu/zone-vis-gamma.md), "Ready to wire") |
+| Right wall and white pipe `1320,300,1920,545` | 4.8 % | 21.3 | -6.6 | 1.01 | 0.93 | ours' pipe is darker and the original's rows of small window lights are missing; **unread** |
+| Upper-right screen `1480,0,1920,270` | 5.7 % | 16.3 | +1.3 | 0.94 | 0.97 | original: a purple dot grid with a teal band; ours: grey-white smears and no dots. Also on `mines-ahead`; **unread** (which material is not identified) |
+| HUD `85,60,320,225` `690,20,1230,240` `150,850,670,980` `1250,845,1760,980` | 14.2 % | 4.9 | +2.0 | 0.70 | 0.53 | translucent panels over the scene behind (the drop with the decode is the floor under the two lower ones); no HUD gap of its own measured |
+| Far scenery and sky (everything else) | 19.3 % | 3.4 | +0.3 | 0.66 | 0.64 | scenery edges, no single cause named; the sky dome is black on both sides (stage 1's horizon and zenith `0 0 0`, [detonator-look.md](../ghidra/functions/ps3-hdfury-eu/detonator-look.md)) |
+| Hull `815,695,1095,940` | 3.3 % | 17.5 | +6.8 | 0.58 | 0.50 | ours lighter, rear nozzle lit blue-white; fuselage overlay (`rich_iridescent`) **unread** (Detonator thread, row 7) |
+| Ribbon bands: polygons `0,20 0,90 800,400 990,470 1010,440 830,330 60,20`; `600,0 700,0 960,420 900,440`; `1170,0 1230,0 1080,420 1030,420` | 4.3 % | 7.0 | +5.3 | 0.30 | 0.31 | `Trail_Ribbon` dot chains (muted, the whole frame reads 10.22: `detonator-mine.md`, "The ribbon, open"); needs a capture |
+| Blast debris shards `655,715,710,780` `550,830,620,865` `1475,278,1515,315` `505,60,550,115` | 0.3 % | 50.3 | -44.0 | 0.17 | 0.17 | rolled at random; not tunable (other shards lie unboxed in other rows) |
+| White flecks only the original has `1335,195,1385,260` `1065,280,1100,310` `1375,400,1405,435` `1065,335,1085,352` | 0.3 % | 59.5 | -54.4 | 0.16 | 0.16 | white bursts with a halo, not on `mines-ahead` or `pad`, so tied to the volley; **unread** |
+| Track-name ticker `400,75,640,115` | 0.5 % | 26.2 | +4.9 | 0.12 | 0.12 | wall-clock scroll; capture state |
+| Destroyed mine's core `1000,460,1075,540` | 0.3 % | 26.4 | -21.7 | 0.08 | 0.08 | the original's dim pink fragment at this age; ribbon and blast timing |
+| Exhaust plume below the hull `900,940,1000,1080` | 0.7 % | 11.9 | -0.6 | 0.08 | 0.11 | the craft is held at rest |
+| `+100` popup `985,418,1080,448` | 0.1 % | 32.3 | -28.8 | 0.04 | 0.04 | **read**, not drawn (Detonator thread) |
+| Cannon rounds (no box) | 0 % | | | 0.00 | 0.00 | both of this grab's rounds are gone before its frame (retired at 10 and 34 ticks, "Not carried: the craft's speed on the rounds" above); no bolt is on screen |
+
+The blast subtotal, which is also the shot-specific part (ribbon, shards, flecks, core, `+100`), is 0.75; floor, screen, wall, hull, HUD and scenery are scene-wide.
+`cannon-volley-hot` (7.70, which hit nothing) is the control: HUD 0.99, hull 0.83, floor **3.82** (to 1.61 with the decode), ticker 0.09,
+exhaust 0.13, muzzle flashes `825,620,1100,695` 0.25, rest 1.59.
+
+**The decode, measured on the current pairs** (scratch, reverted; `decode(...)` around the `zone_vis_tex` sample in
+`crates/mesh/shaders/zone.wesl` `zone_glow`, then `compare-rerender-ours.rerender` on copies of the pairs). Falsifier written first: less than
+0.53 off `cannon-volley`, or any Detonator pair rising, would rule it out. Neither happened (one render each; the unpatched binary reproduces
+the stored scores):
+
+| Pair | Mean grey | RMSE | Floor box A blue, original / ours / decode | Box B blue |
+| --- | --- | --- | --- | --- |
+| `cannon-volley` | 10.53 to **9.11** | 0.145 to 0.144 | 18.6 / 26.9 / 7.2 | 29.0 / 51.9 / 14.9 |
+| `cannon-volley-hot` | 7.70 to 4.82 | 0.109 to 0.092 | 29.1 / 49.9 / 28.8 | 28.4 / 69.7 / 32.3 |
+| `mines-ahead` | 9.68 to 9.04 | 0.143 to 0.141 | 8.0 / 18.7 / 2.5 | 14.9 / 37.1 / 5.4 |
+| `pad` | 4.44 to 3.24 | 0.086 to 0.078 | 16.0 / 31.5 / 7.7 | 23.9 / 51.1 / 12.6 |
+
+Boxes A `250,780,800,850` and B `1090,780,1230,1000` ([zone-vis-gamma.md](../ghidra/functions/ps3-hdfury-eu/zone-vis-gamma.md)). The decode
+brings `-hot`'s floor to the original's level and leaves the other three at 0.31 to 0.53 of it, so the page's second, unread factor is still
+open. Per-channel mean absolute difference over the whole frame also falls (R, G, B; `cannon-volley` 15.9, 8.6, 18.0 to 13.4, 7.5, 15.5;
+`-hot` 13.3, 5.2, 20.0 to 6.9, 4.2, 9.0; `mines-ahead` 14.8, 8.0, 16.3 to 13.0, 7.9, 12.5; `pad` 8.6, 2.6, 13.1 to 4.7, 2.5, 8.0), so the
+drop is not an effect of the luma weights. But the signed blue turns from too bright to too dark (`cannon-volley` +6.0 to -4.7, `mines-ahead`
++6.4 to -2.9, `pad` +8.3 to -4.0): a player sees a darker violet floor than the original's on three of the four. One `theirs.png` per pair; ours'
+render is deterministic. The endrace pairs do not move. A Zone race cannot be shown by the current pairs: `zone-vineta-k-z5` carries no
+`--zone-bands`, so the strip is zero and the decode has nothing to act on. Omega's pairs were not rendered.
+
+**Ranked next lanes for `cannon-volley`:**
+
+1. Wire the visualiser decode (wire, sonnet, about 1 h): 10.53 to 9.11, under 10 alone. HD only, as `Title` data (2048: checked, differs, no
+   `EQ` tints; Omega: open, its descriptor is unread). Show floor crops at player size: the floor goes darker than the original's on three
+   pairs, and `zone-vis-gamma.md`'s second factor stays open.
+2. Identify and read the upper-right screen's material (read, up to 0.94; also on `mines-ahead`).
+3. Right wall pipe and window lights (read, up to 1.01).
+4. `Trail_Ribbon` law (capture, RPCS3, about 0.31).
 
 ### The hull's frame pose in a Detonator pair (2026-11-23, `det-camera`)
 
@@ -3000,7 +3061,9 @@ than their objects (below).**
 (`rpcs3_hd_field.detonator_mines`; vtable `0x008642f0`, `docs/ghidra/functions/ps3-hdfury-eu/detonator-mine.md`, "Where a mine
 stands") and records `ship.mines` (flags, position, entry, lane, live, age; `OAG_MINE_RAW=1` keeps the object's bytes for a survey
 of its other fields). `rpcs3-hd-pair.py --detonator` writes the armed ones (`flags & 9 == 9`; a mine that left the pool keeps flag
-`1`) to `original.detonator.mines` and gives ours
+`1`), plus a mine that left the pool during the shot itself, one a round destroyed (its age still advanced over the shot's mine reads;
+`compare_env.detonator_pair_mines`, `docs/ghidra/functions/ps3-hdfury-eu/detonator-mine.md`, "Carrying the destroyed mine"), to
+`original.detonator.mines` and gives ours
 `--detonator-mines "X,Y,Z;X,Y,Z;..."`: ours lays the opening stage as usual (its bomb, its counter), then puts every mine on the
 survey lane nearest each position across the section (`RaceSim::carry_detonator_mines`, a snap of at most 4 units across and 1.5 of the 3.0 lift in height, so a lane on another deck never takes it; a position with
 no lane, or whose lane another carried mine or the bomb holds, is dropped with a warning). Positions, not the original's entry numbers: its survey starts at the player's start cursor and

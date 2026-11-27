@@ -1283,3 +1283,9 @@
 0x0025ed10	function	WeaponsScreen_ShowMask	75	pickup-draw.md
 0x0025e5a8	function	WeaponsScreen_StoreMask	75	pickup-draw.md
 0x0002df78	function	WeaponStats_ParsePickupOdds	88	pickup-draw.md
+0x0008caf0	function	Hud_UpdateScoreFeedback	72	detonator-hud.md
+0x002834f8	function	Psys_CopyPaletteToTree	85	detonator-mine.md
+0x0027f610	function	Psys_CreateInstance	70	detonator-mine.md
+0x00ad5fd4	data	Psys_LastRootHandle	75	detonator-mine.md
+0x0008ce10	function	Hud_UpdateZoneWidgets	80	zone-score.md
+

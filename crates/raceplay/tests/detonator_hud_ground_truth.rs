@@ -124,7 +124,7 @@ fn texts(frame: &oag_hud::Frame) -> Vec<String> {
     ]
     .into_iter()
     .flatten()
-    .filter_map(|draw| match draw {
+    .filter_map(|draw| match draw.unstretched() {
         Draw::Text { text, .. } => Some(text.clone()),
         _ => None,
     })

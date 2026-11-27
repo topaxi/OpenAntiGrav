@@ -1,8 +1,8 @@
 ---
 status: re-first
 titles: [hd, omega]
-updated: 2026-11-15
-summary: "What sets the float Hud_UpdateZoneSpeedClass compares is untraced; zone 60 and beyond unproven"
+updated: 2026-11-26
+summary: "Speed-class float writer untraced; zone 60 and beyond unproven"
 categories: [frontend, rendering]
 ---
 

@@ -382,3 +382,12 @@ impl Renderer {
         }
     }
 }
+
+/// Scales `quads` horizontally by `x_scale` about `anchor`: the second axis of a
+/// [`oag_ui::frontend::Draw::Stretched`] text, whose own layout used the vertical scale.
+pub(super) fn stretch_quads(quads: &mut [Quad], anchor: f32, x_scale: f32) {
+    for quad in quads {
+        quad.rect[0] = anchor + (quad.rect[0] - anchor) * x_scale;
+        quad.rect[2] *= x_scale;
+    }
+}

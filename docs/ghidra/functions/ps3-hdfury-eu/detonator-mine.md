@@ -265,16 +265,13 @@ if !DetonatorMine_IsLive(m):                             ; vtable +0x40
     spawn "WO_MINE_EXPLO_DETONATOR_DEAD" (TOC -0x2ba0), fourcc 'MIED' (0x4445494d), at pos
 else:
     spawn "WO_MINE_EXPLO_DETONATOR" (TOC -0x2bb0), same fourcc, at pos
-    recolour: c := colour behind 0x00677cf8(player craft+0x6284);
-              each of 256 words of a table looked up through 0x0027c288 becomes
-              lerp(c, 255, 0.8) per channel (255.0 at TOC -0x2b94, 0.8 at -0x2ba4)
+    recolour the blast just spawned: see "The blast's colour" (2026-11-26)
 sound "MINEEXPL" (TOC -0x2b98) at volume 1.0 (TOC -0x2b90), positioned
 ```
 
 Both effects go through `0x002c9108` with the race manager as parent, the call shape
 [particle-triggers.md](particle-triggers.md) reads for every HD weapon effect. Confidence **82**
-for which name fires when; **55** for the recolour (the colour source and the table's owner are
-not read to their definitions).
+for which name fires when; **85** for the recolour, read to its definitions in "The blast's colour" below.
 
 **When each fires**:
 
@@ -290,14 +287,193 @@ a mine a cannon round hits, or a destroyed bomb's chain reaction sets off, plays
 `WO_MINE_EXPLO_DETONATOR` while it was laid this stage and `_DEAD` after
 (`oag_weapons::detonator::EventKind`, `oag_raceplay::detonator_fx::effect_for`). The disc's own
 `.pob`. Since 2026-11-26 their camera-facing emitters draw the disc's own sprites, their streaks
-the procedural strip, unpaired
-([particle-fill.md](../../../rendering/particle-fill.md#which-effects-draw-a-sprite)). Chosen: a shot mine explodes the tick it is hit (the original
+the procedural strip
+([particle-fill.md](../../../rendering/particle-fill.md#which-effects-draw-a-sprite)); the live one's shards are paired against
+the original's frame below. Chosen: a shot mine explodes the tick it is hit (the original
 the next), the effect plays whether or not the mine is in view, and the recolour toward white
 (`lerp(c, 255, 0.8)`, 55) is not applied. `MINEEXPL` plays with it, at volume 1.0 where the mine was (`Cue::MineExplosion`, see
 [detonator-cannon.md](detonator-cannon.md), "Drawn and heard"). Test:
 `tests::detonator_fx::an_hd_detonator_race_plays_the_discs_effects_for_each_event`.
 **2048/Omega: checked, applies, not wired** - the effects ship and parse
 (`psys_2048_ground_truth.rs`, `psys_omega_ground_truth.rs`); the contact law is not read there.
+
+## The shards, against the original (2026-11-26, `det-mine-blast`)
+
+**Claim checked:** the original's frame of a mine a cannon round destroyed (the `cannon-volley` pair, Talon's Junction,
+its published RPCS3 grab) shows small glass shards, a dim pink puff and a `+100`; ours drew white puffs
+and long dotted streaks. **The shards are the disc's**: `wo_mine_explo_detonator.pob` (`DATA00` `/data/psys/`) has six
+emitters, and its `Debris` is 50 alpha-over billboards, life `152 +- 54` ticks, radial at `1.31 +- 0.76` units a tick,
+gravity `0.01`, size `0.3` to `0.8`, picking a random frame of a 512 x 512, 4 x 4 atlas of glass triangles. The other
+five: the root (3 additive glows, size 7.5 shrinking to 0 over `74 +- 15` ticks, each with a `Trail_Ribbon` child),
+`streaks_fat` (10 additive streaks, `12 +- 3` ticks), `sparks` (10 thin streaks, `113 +- 29` ticks) and `Explosion_Core`
+(3 additive billboards off a 1024 x 1024, 8 x 8 smoke atlas, 43 ticks). `_DEAD` has three: the same debris as its root,
+and black `streaks_fat` and `sparks`. Every emitter's `.gtf` decodes. Confidence **85** that `Debris` is what the frame
+shows (the atlas's shapes and the shards' size and spread on the frame agree; one frame).
+
+**Wired:** both mine effects are in HD's sprite list (`oag_hd` `SPRITES`, with HD's other weapon explosions,
+[particle-fill.md](../../../rendering/particle-fill.md#which-effects-draw-a-sprite)), so ours draws the disc's pictures
+where it drew the procedural profile. Test: `check_a_shot_mine_throws_the_discs_shards` in
+`tests::detonator_fx::an_hd_detonator_race_plays_the_discs_effects_for_each_event`.
+
+**The blast's age.** In the original the round (fired at lap 1.917 s) retired at age 10 ticks (the grab's cannon reads at
+each pause, [compare-page.md](../../../tools/compare-page.md), "The volley clocks": its `flags` read `5` from lap 2.083 s on), and the picture is 6.35 ticks older than the 2.65 s pause, so the blast is
+about 27 ticks old in the frame. Ours' round, fired from the craft held at the picture's pose, hits that mine 1 tick
+after the volley (tick 389 of 425), so ours' blast is 36 ticks old. Putting the round back where the original's moving
+craft fired it (`102.26` units/s times its age, and `3.6 v` on the launch tick) makes ours hit at tick 396, 29 ticks
+before the picture.
+
+**Mean grey on `cannon-volley`** (published 11.89, the destroyed mine not carried):
+
+| Ours | mean grey |
+| --- | ---: |
+| the destroyed mine carried (position `217.595, -44.266, -192.347`, words and age `54.28 s` from the grab's pause read), procedural pictures | 12.70 |
+| the same, the disc's sprites | 12.53 |
+| the same, and the round carried back by the craft's speed | 13.75 |
+| the destroyed mine carried, after the HD weapon explosions' flipbook and size-ramp work (sprites listed, merged 2026-11-26) | 12.31 |
+
+So the sprites lower the carried pair by 0.17, but the pair with the destroyed mine stays above the published 11.89,
+and the speed carry raises it: the younger blast shows more of what ours still draws wrong. What is left:
+
+- **The root's three glows and their `Trail_Ribbon`s.** Ours draws each glow as a large white disc and each ribbon as a
+  chain of dots (the ribbon's particles have speed 0, a `Streak { from_spawn }` of zero length per tick). The original's
+  frame shows neither the discs nor the dots, only a few thin lines. Unread: how HD draws a speed-0 streak child, and
+  whether the root's glow is drawn at all. Drawing the effects' streaks as HD's far bar (`FAR_BARS`) turns the dots into
+  thin lines, but brighter and more of them than the original's, and the carried pair goes 12.53 to 12.92: not kept.
+- **`Explosion_Core`.** The original's is a dim, translucent pink smoke; ours was near-white. **Read and wired
+  2026-11-26**: the whole blast is recoloured from the stage's mine colour ("The blast's colour" below).
+- **The `+100`**: a HUD widget, not an effect ([detonator-hud.md](detonator-hud.md), "The floating score").
+
+The destroyed mine is therefore **not carried** in the published pair, and the craft-speed carry is not kept.
+
+**2048 and Omega: checked, applies, not wired** (the brief defers their Detonator lanes). Both mine effects ship with
+HD's emitter trees (the same six and three emitters, counts, blends, classes and lives; the `.pob`s name
+`Tex\Debris_DetonatorMines.tga`), and the shard atlas ships as `data/particles{,2048}/Tex/Debris_DetonatorMines.gxt` in
+2048's `data.psarc` and `.gnf` in Omega's base archive (census run on `psys_2048_ground_truth.rs` and
+`psys_omega_ground_truth.rs`'s archive walks, 2026-11-26). Neither title lists its effects' sprites yet
+(`Effects::sprites` is HD's alone), so wiring them is a decode check of the `.gxt`/`.gnf` atlas plus the list entry.
+
+## The blast's colour (2026-11-26, `det-mine-blast-glow`)
+
+**Claim:** a live mine's blast (`WO_MINE_EXPLO_DETONATOR`) is not drawn in its authored white.
+`DetonatorMine_Explode` overwrites every colour table of the tree it has just spawned with one
+entry made from the stage's `Detonator Mine Colour`. Static, `EBOOT.elf`, and 2048's twin; confidence **85**.
+
+| Step | Address | Read |
+| --- | --- | --- |
+| The blast's handle | `0x00139028`-`0x0013903c` | `Psys_FindInstanceByHandle(*(*(TOC -0x2bac)) + 0x468c, *(*(TOC -0x2ba8)))`: TOC `-0x2bac` holds `0x00ad5fd8` (the particle manager, whose `+0x468c` is its instance store, written by `0x0027ff58`/`0x00280290`), TOC `-0x2ba8` holds `0x00ad5fd4` |
+| `0x00ad5fd4` is the last root instance made | `0x0027f610` | `Psys_CreateInstance`: for an instance with no parent it stores the new handle (`instance+0x18`) at `*(r2+0x5428) + 0x3418` = `0x00ad2bbc + 0x3418` = `0x00ad5fd4`. The spawn `0x002c9108` -> `0x002c8c70` -> `0x0027f610` runs on the line before, so the handle is the blast's own |
+| The colour | `0x00139050`-`0x0013905c` | `Environment_GetStageMineColour` (through the stub `0x00677cf8`) for the player craft's `+0x6284`: the committed stage's `Detonator Mine Colour`, word `r << 24 \| g << 16 \| b << 8 \| a` ([detonator-mine-material.md](detonator-mine-material.md)) |
+| Toward white | `0x001390c8`-`0x001390e8` | per channel `fmadds (255 - c) * 0.8 + c`, `fctidz` (truncate), clamped to `255` (255.0 at TOC `-0x2b94`, 0.8 at `-0x2ba4`) |
+| The packing | `0x001390ac`, `0x00139110`, `0x00139138`, `0x00139160` | `a << 24 \| b' << 16 \| g' << 9 \| r' << 1` (`rlwinm` 24/0-7, 16/0-15, 1/0-30, 9/0-22) |
+| The write | `0x0013916c`-`0x0013918c` | the word into all 256 entries at `instance+0x28` (the root record) `+0xc4` |
+| To the whole tree | `0x00139194` -> `0x002834f8` | `Psys_CopyPaletteToTree`: copies the record's 1024 bytes at `+0xc4` into every instance reached by `+0x24` (child) and `+0x1b4` (sibling), recursively |
+
+HD's tables are read as bytes `a, b, g, r` ([pob.md](../../../formats/pob.md), "The one field that is not a plain
+re-read"), so the shifts of `9` and `1` (not `8` and `0`) put green and red one bit high: red keeps its low seven bits,
+green takes red's top bit, blue takes green's. With every channel at `204` or more after the lerp, the drawn entry is
+`r = 2 r' - 256`, `g = (2 g' - 256) | 1`, `b = b' | 1`. On the opening stage (`1`, `Sub Venom`, `122 25 255`) that is
+**`200 163 255`**, a lavender. The blast's six emitters (root glows, `Trail_Ribbon`, `Debris`, `streaks_fat`, `sparks`,
+`Explosion_Core`) are all mode-0 walks of their tables, so all six draw in that one colour; the dark mine's blast
+(`_DEAD`) is not recoloured. The table's alpha byte is the authored colour's, and HD never reads it.
+
+Why 85: static, every step read to its definition, and 2048's own explode carries the same law with the handle taken
+from the spawn directly; no live palette dump.
+
+**Wired:** `oag_title::Effects::mine_blast_recolour` (HD, measured); `oag_fx::psys::detonator_mine_blast_entry`
+(the packing) and `Effect::with_one_colour`; `oag_raceplay::detonator_fx::mine_blasts` builds one recoloured blast per
+stage at race start, and a shot, chained or EMP'd live mine plays the one for the Detonator stage the lap counter shows.
+That stage is `oag_race::Mode::detonator_stage(laps)`, not the colour grade's committed stage: on a race whose grade
+is pinned to another stage (`ZoneGrade::pin_stage`) the blast and the mine bodies would take different stages' colours.
+No published pair pins a stage.
+Tests: `a_live_mine_blast_entry_is_the_executables_packing_not_a_plain_lerp` and
+`one_colour_fills_every_emitters_whole_table` (`oag-fx`); `check_a_live_mine_blast_takes_the_stage_colour` in
+`tests::detonator_fx::an_hd_detonator_race_plays_the_discs_effects_for_each_event` (HD image).
+
+**Against the original** (`cannon-volley` with the destroyed mine carried, the `det-mine-blast` setup above):
+
+| Ours | mean grey |
+| --- | ---: |
+| before (main, 2026-11-26) | 12.31 |
+| the blast recoloured | **12.12** |
+| the same, `Trail_Ribbon` muted (a diagnostic, not wired) | 11.83 |
+| the same, the root's glows muted (diagnostic) | 12.12 |
+| recoloured, the effect's class 6 drawn as HD's far bar (`FAR_BARS`) | 12.41 |
+| recoloured, the root's noise force (modifier `0x11`, `Effects::turbulence`) on | 12.15 |
+| recoloured, and the round carried back by the craft's speed (`102.26` units/s, the prototype above) | 12.98 |
+
+The other five Detonator pairs and two Rocket craft-hit pairs did not move (none plays a live mine's blast). So the
+core is the original's colour now. Muting the root's glows had no measured effect in this frame (blast about 36 ticks
+old), but their draw law is unread and a younger blast would show them larger. And **what keeps the pair above its
+published 11.89 is the `Trail_Ribbon` dots** (+0.29). The far bar and the noise force both make the pair worse, so neither
+is wired.
+
+**The ribbon, open.** Each root particle carries a `Trail_Ribbon` child instance (`Psys_InitParticle` `0x00289890`:
+the child spawns with probability `child+0x4d4` = 1, its instance stores the parent particle at `+0x140`, the parent's
+position at `+0x130`, the parent's velocity times `child+0x4d0` (0.01) at `+0x160`, and sets `+0x170 = 1`). The ribbon
+emits one speed-0 particle a tick, mode 5, flags `0x22000000`. As read so far, a mode-5 particle's second point is its own
+previous position (`Psys_UpdateParticles` `0x0028cc10` copies `+0x20` to `+0x30` each tick under `ctx+8`), so each
+ribbon particle would be a short bar of zero length, which is ours' dot. The original's frame shows thin lines instead.
+Not read: who reads the child instance's `+0x130`/`+0x140`/`+0x170` (the instance update `0x00288d98` does not touch
+`+0x130`), and what flag `0x20000000` without `0x4000` gates. Next: one RPCS3 capture of the blast's particle quads a
+few ticks after a hit ([particle-render.md](particle-render.md), "Reproducing").
+
+**Names** (`names.tsv`):
+
+| Address | Kind | Name | Confidence | Why |
+| --- | --- | --- | ---: | --- |
+| `0x002834f8` | function | `Psys_CopyPaletteToTree` | 85 | copies `+0xc4`'s 1024 bytes down `+0x24`/`+0x1b4`, recursing; nothing else |
+| `0x0027f610` | function | `Psys_CreateInstance` | 70 | allocates `0x1d0` bytes, constructs, links into the manager's list, stores a root's handle; the child-flag tests at its head are unread |
+| `0x00ad5fd4` | data | `Psys_LastRootHandle` | 75 | written by `Psys_CreateInstance` for a parentless instance, read here; Ghidra lists a dozen more readers among the effect spawners (`EMP_SpawnLaunchEffect`, `Trail_HitShipEffect`), not followed |
+
+**2048: checked, applies, not wired.** Its mine explode (`FUN_811e6ebc`, `eboot-vita-2048-eu-v104.elf`) spawns the
+same two names with the same fourcc and recolours the live one with the same law: `trunc(c + (255 - c) * 0.8)`
+clamped to 255, packed `a << 24 | b' << 16 | g' << 9 | r' << 1` into all 256 words at `instance+0x28` `+0xc4`, then
+`FUN_812aa676`. It takes the instance by the spawn node's own handle (`node+0xec`, the field `0x002c8c70` fills on HD),
+which confirms independently that the recoloured instance is the blast just spawned. The colour comes from
+`FUN_81023fc4` on the player craft's `+0x58d4` (2048's stage colour getter, not followed). 2048's table is
+little-endian, so the same word reads `r, g, b, a` from its low byte up; it draws HD's colour if that getter packs
+red in the word's top byte as HD's does (not read). Not wired: 2048 answers no mine trigger yet (its Detonator lane is
+deferred).
+
+**Omega: checked, applies, not wired.** `FUN_0133ac10` (patch 1.07, the function holding `0x0133ad5f`) spawns the same
+two systems (looked up by the CRC-32 of their names) and, for a live mine, takes the spawned instance by its own handle
+(`+0xc0`), reads the committed stage's colour word (stage table stride `0x250`, the craft's `+0x68f4`), applies
+`(int)((255 - c) * 0.8 + c)` clamped to 255 and writes `g' << 9 | b' << 16 | r' * 2 | a << 24` into all 256 entries at
+`record+0xc4` (the record at `instance+0x90`), then `FUN_016e03a0` (the tree copy, not opened). Same law; not wired, as
+Omega answers no mine trigger yet.
+
+## Carrying the destroyed mine (2026-11-26, `det-mine-ribbon`)
+
+**Why the pair lost it.** `rpcs3-hd-pair.py` carried only the armed mines (`flags & 9 == 9`). The mine the
+`cannon-volley` round hit (cv1 grab, `ship.mines[1]`, `0x306da430`, entry 34, lane 2, position
+`217.595, -44.266, -192.347`) reads `flags` `1` at the pause: the hit sets `0x80`, `BaseMine_Update` turns that into
+`4` and drops `8`, and `MineManager_Update`'s compaction clears `0x8c` (above), so it has left the pool by the pause.
+A mine gone long before reads the same `1`. What tells them apart is the age (`+0xc0`): this one's advanced through the
+shot's own mine reads (`52.40 s` at lap clock 0.233 s) and stopped at `54.2836 s` from lap 2.217 s on, while the 79
+armed mines read `54.82 s` at the 2.65 s pause. So it left the pool about 0.5 s before the pause, at the round's hit.
+Without it ours' replayed round hits nothing: no blast, and the score reads 0 where the original's reads 100.
+
+**Rule** (`compare_env.detonator_pair_mines`, used by `mine_flags`): carry the armed mines, plus any `flags & 1` mine whose
+age at the pause is above its age in the shot's first mine read. Its envelope and age are the picture-time read's,
+like the others' (`0.3313, 0.6430, 8.5001`, age `54.2836`, frozen since the hit). Of the other Detonator grabs
+(`hot2`, `shots6`, `gC`) none holds a non-armed mine, so only `cannon-volley` changes.
+
+**Measured** (ours re-rendered on scratch copies of the pairs, the same binary twice, byte-identical):
+
+| `cannon-volley` | mean grey |
+| --- | ---: |
+| published, the destroyed mine not carried | 10.80 |
+| **the destroyed mine carried (adopted)** | **10.53** |
+| carried, `Trail_Ribbon` muted (diagnostic) | 10.22 |
+| carried, `Trail_Ribbon` and the root glows muted (diagnostic) | 10.23 |
+
+The other five Detonator pairs read the same before and after (`-hot` 7.70, `endrace-norecord` 8.88, `endrace-record`
+8.38, `mines-ahead` 9.68, `pad` 4.44). With the mine carried ours shows the blast and `0000100`, as the original does.
+The ribbon is still worth 0.31, but even a perfect ribbon leaves the pair above 10. Its segment law stays open ("The
+ribbon, open" above).
+
+**2048 and Omega: not checkable.** This is a capture input of the HD RPCS3 pair script; neither title has a Detonator
+pair with mine objects read from memory.
 
 ## Live and dark mines
 

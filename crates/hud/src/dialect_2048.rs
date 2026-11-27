@@ -9,9 +9,7 @@
 //! `scripts/check-file-size.py`, the same seam [`super::shield_bar`] and
 //! [`super::lap_splits`] already used.
 
-use oag_ui::frontend::Align;
-
-use super::{Label, Layout, Readout, Sprite, argb_to_rgba};
+use super::{Layout, Readout, Sprite, argb_to_rgba};
 
 /// One widget for the whole `1/3`, where Pulse/HD split lap and lap count
 /// into `Lap`/`LapOf`/`Lap Outof`. `Arcade_HUD.xml` authors `Laps` alone,
@@ -259,22 +257,6 @@ pub(super) fn releasing_icon(
         .pickup
         .is_none()
         .then_some(readout.pickup_releasing)?
-}
-
-/// The Zone `SCORE` value's `Score` widget is authored left-anchored at `ScoreTxt`'s x, and
-/// `FUN_811538c2` writes its x as `ScoreTxt`'s x minus half the width of the value's digits
-/// (`docs/ghidra/functions/vita-2048-eu-v104/zone-speed-class-text.md`, "The score"). That is a
-/// centre on the digits. **Chosen, not measured:** the original measures a string of as many `3`s
-/// as the value has digits, which equals the value's own width only when the font's digits are
-/// one width.
-pub(super) fn text_align(art: &oag_title::HudArt, readout: &Readout, label: &Label) -> Align {
-    // A Zone run alone: an Eliminator's `Score` keeps the authored anchor.
-    let zone = art.pickup_icon_uv.is_some() && readout.zone > 0;
-    if zone && label.name == "Score" && label.align == Align::Left {
-        Align::Centre
-    } else {
-        label.align
-    }
 }
 
 /// `Hud_UpdatePickupIcon`'s fly speed, pixels a second.

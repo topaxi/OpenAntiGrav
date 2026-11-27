@@ -670,6 +670,20 @@ impl ZoneGrade {
         self.table.detonator_colours(self.blend.current)
     }
 
+    /// Each stage's `Detonator Mine Colour` bytes `[r, g, b, a]`, stage `0` first, up to
+    /// [`Self::last_stage`]; `None` for a stage that does not author it.
+    #[must_use]
+    pub fn detonator_mine_rgba8(&self) -> Vec<Option<[u8; 4]>> {
+        (0..=self.last_stage)
+            .map(|stage| {
+                self.table.stage_rgba8(
+                    stage,
+                    oag_tables::effectsettings::key::DETONATOR_MINE_COLOUR,
+                )
+            })
+            .collect()
+    }
+
     /// The highest stage this file names.
     #[must_use]
     pub fn last_stage(&self) -> u32 {

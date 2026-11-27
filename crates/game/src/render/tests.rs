@@ -1169,3 +1169,88 @@ fn a_warp_bends_its_draws_cuts_its_bars_and_is_spent() {
     assert_eq!(flat.len(), 3);
     assert!(flat.iter().all(|quad| quad.warp == [0.0; 4]), "spent");
 }
+
+/// A [`Draw::Stretched`] text keeps its height and its anchor and has every glyph quad scaled by
+/// `x_scale` about it: HD's `ScaleX`/`ScaleY` on a `Text`.
+///
+/// **Skips with no adapter.**
+#[test]
+fn a_stretched_text_is_scaled_across_about_its_anchor() {
+    let instance = wgpu::Instance::default();
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let Ok((device, queue)) = pollster::block_on(adapter.request_device(&Default::default()))
+    else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let format = wgpu::TextureFormat::Rgba8Unorm;
+    let mut renderer = Renderer::new(
+        &device,
+        &queue,
+        format,
+        None,
+        Atlas::build(),
+        &oag_hud::sprite::Sheet::default(),
+    )
+    .expect("the ui pipeline");
+    let target = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("stretched text test"),
+        size: wgpu::Extent3d {
+            width: 4,
+            height: 4,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+        view_formats: &[],
+        texture_binding_view_dimension: None,
+    });
+    let view = target.create_view(&Default::default());
+    let text = Draw::Text {
+        x: 100.0,
+        y: 10.0,
+        scale: 1.0,
+        color: [1.0; 4],
+        border: None,
+        align: Align::Centre,
+        text: "0000000".to_string(),
+        wrap_width: None,
+    };
+    let mut quads_of = |draw: Draw| {
+        let mut encoder = device.create_command_encoder(&Default::default());
+        renderer.render_with(
+            wgpu::LoadOp::Load,
+            &device,
+            &queue,
+            &mut encoder,
+            &view,
+            &[draw],
+            (0.0, 0.0, 4.0, 4.0),
+            None,
+        );
+        queue.submit(Some(encoder.finish()));
+        renderer.quads.iter().map(|q| q.rect).collect::<Vec<_>>()
+    };
+    let plain = quads_of(text.clone());
+    let stretched = quads_of(text.stretched(0.9));
+    assert!(!plain.is_empty());
+    assert_eq!(plain.len(), stretched.len(), "no glyph lost");
+    for (a, b) in plain.iter().zip(&stretched) {
+        assert!(
+            (b[0] - (100.0 + (a[0] - 100.0) * 0.9)).abs() < 1e-3,
+            "{a:?} {b:?}"
+        );
+        assert!((b[2] - a[2] * 0.9).abs() < 1e-3, "{a:?} {b:?}");
+        assert_eq!(
+            (a[1], a[3]),
+            (b[1], b[3]),
+            "the vertical axis is the text's own"
+        );
+    }
+}

@@ -535,6 +535,7 @@ pub(crate) fn fixture_view() -> ViewSetup {
         hull_draw_factor: 1.0,
         zoom_ring: None,
         zoom_borrowed: false,
+        mine_blast_colours: Vec::new(),
         capture_hud: None,
         hud_waits_for_go: false,
         now_playing: None,
