@@ -284,10 +284,12 @@ for each slot with a position:
         set the text's alpha to alpha, and the second (border) colour's
 ```
 
-Both colours are stored as bytes: the update reads the text colour's top byte, frees the slot when it is under
-`1`, multiplies, writes `trunc(product)` into `Text_SetColour` and into `0x002005e0` (the second colour), and
-takes the rise off the untruncated product (decompiled again 2026-11-27, `det-score-popup`). At one update a
-tick the first values are `255, 249, 243, 237, 231`. The raise's dimming also truncates (`255 -> 178`).
+The alpha is a byte: the update reads the top byte of the second colour (widget `+0xc8`, getter
+`0x002005d8`), frees the slot when it is under `1`, multiplies, and writes `trunc(product)` into both the text
+colour (`+0xc4`, read by `0x00200460`, set by `Text_SetColour`) and the second one (`0x002005e0`), taking the
+rise off the untruncated product (decompiled again 2026-11-27, `det-score-popup`). At one update a 60 Hz
+tick the first values are `255, 249, 243, 237, 231`. The raise's dimming reads the same
+byte, truncates and writes both colours the same way (`255 -> 178`; `0x00083ba0` decompiled).
 
 So the `+N` stands at the scored object, rises 5 units along the camera's row (`+0x1e0`, read as up: the frame's popup
 sits above the blast) as it fades, and fades by a factor `(1 - dt) * 0.995` per update: at one update a tick
@@ -304,7 +306,8 @@ This is the popup's first sighting in a frame ([eliminator-score.md](eliminator-
 `ScoreFeedBack%d` widget (`HUD_scoring_feedback.xml`, embedded in `detonator_hud.xml`: font `HUDSmall`,
 centred, colour `0x00ffffff`, `BorderColor 0xffff0000`). The amount rides out of the simulation on
 `oag_weapons::detonator::Event::points` (`MineShot`, `MineChained`, `BombShot`, `MineEmped`, `BombEmped`; a
-streak's `AddFlat` raises none). One update per 60 Hz tick with `dt = 1/60`; the face takes HD's lit-text
+streak's `AddFlat` raises none). **Chosen:** one update per 60 Hz tick with `dt = 1/60`; the original updates
+per frame, and with the fixed `0.995` per update its fade depends on its frame rate. The face takes HD's lit-text
 `0.8` like every other HUD string, the border does not. Gate: `oag_title::Detonator::floats_score`, HD only.
 **Chosen:** the position is copied at the raise (the original keeps a pointer into the object), the camera's
 up is the view matrix's second row, and the projection is the reticle's without its 250-unit range test.
