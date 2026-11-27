@@ -656,13 +656,8 @@ would move from 0.46 to the original's 0.88 or above, and its peak level fall.
 | raised, shield clock 4.0 s | 0.0527, 0.0524 | 0.0973, 0.0958 |
 | 1 substep after the hit (salmon pink, hex lattice) | 0.0755, 0.0743 | 0.1521, 0.1474 |
 
-**Open: the level.** Ours' settled shell now adds about 70 % of the original's
-blue at every age, mostly short at the nose, shoulders and wingtip rims, where
-the original has a cyan-white glow. Ruled out: the lattice scroll phase (six
-phases across one period moved the craft box RMSE only from 0.0973 to 0.0987,
-before the wire) and the flicker constants. Not read: the draw's blend state and
-alpha write mask (the shell writes no glow mask in ours) and
-`constantAmbientColour`'s value, which multiplies the shell's RGB.
+**The level, closed.** Ours added about 70 % of the original's blue at every
+age here. The cause is in the next section, "The shell's draw state".
 
 Without a shield (`plain`) the craft box matches: ours minus original is
 (-0.2, 0.0, 0.0) mean levels at lap clock 7.6 and (-0.6, -0.7, -2.0) at 8.6.
@@ -678,8 +673,127 @@ Without a shield (`plain`) the craft box matches: ours minus original is
   `Update` writes the same flickered tint per submesh; whether that tint reaches
   a pixel there is not measured, and ours' PS4/Vita shells are unchanged.
 
+## The shell's draw state
+
+Lane `hd-shield-blue` (2026-11-27). The raised shell's draws were read off one
+frame's RSX command ring, same save, circuit and ship as the pairs (Talon's
+Junction, Feisar, RPCS3 0.0.43-20574), on **two boots**. Confidence **92** for
+the draw state and the patched constants (runtime, one binary). The shell's
+draws are the ones that bind the 256 x 128 hexagon texture.
+
+**Reproducing.** Restore
+`data/saves/hd-fury/hd-racebox-talons-venom-weapons-grid-rpcs3-20574.SAVESTAT.zst`
+(`scripts/emu-restore-state.sh`, `OAG_COMPARE_PLATFORM=hd-fury`), then against
+that attached `serve`:
+
+```sh
+HOOK_LIGHT=1 HOOK_MIN=600 HOOK_NO_HEADS=1 OAG_RPCS3_ATTACH=1 \
+  uv run --with evdev python3 scripts/rpcs3-hd-shield.py draws --out <dir> --ages 2.0 --attempts 60
+python3 scripts/rsx-draw-list.py <dir> s00 --samplers
+```
+
+Without `HOOK_MIN` the hook keeps a half-built ring (254 draws of about 800);
+`HOOK_NEED_SCREEN=1` never accepted a frame at this profile. The captures are
+kept on the capture machine in `data/traces/hd-shield-blue/` (gitignored):
+`draws1` (the frame before the Shield, 793 draws), `draws2` (boot 1, shield
+clock 2.0 to 2.5 s, 808 draws) and `draws3` (boot 2, 3.5 s), with
+`falsifiers.md`, written before the first capture, and `vp_live.py`, which
+lifts the vertex program out of the ring.
+
+| state | original | ours before |
+| --- | --- | --- |
+| draws | one pass in index chunks: 3 draws, 1024 triangles (boot 1), 4 draws, 1019 (boot 2), of the 2193 authored; none in a frame with no shield | 2193 triangles |
+| face cull | on, `GL_BACK` (`0x405`), front `CCW` | both faces |
+| blend | `SRC_ALPHA`, `ONE`, `ADD` | the same |
+| colour write mask | `0x00010101`: **alpha masked off** | wrote destination alpha (the glow mask) |
+| depth | test `LEQUAL`, no write | the same |
+| store | `SET_SHADER_PACKER` 1: sRGB-encoded before the blend | the same |
+| textures | unit 0 only: the hexagon DXT45, decoded to linear on fetch | the same texture |
+| shadow maps, probes | bound on units 1 to 5 from earlier draws; the program samples none of them | received the craft shadow map |
+| program | block #2 of `hexagonalshield_rich` (`+0x3770`), lit and fogged | **no light of its own: an invented stand-in rig** |
+
+The triangle counts are about half the authored 2193, and the chunks' index
+counts differ between the boots on a static model, so something picks
+triangles per frame before the ring (a view-dependent cull on the CPU or SPU is
+the likely one). Not read.
+
+### The program
+
+The fragment program patched into the ring, in linear light:
+
+```text
+alpha = VertexColour1.w * tex(u, v).a * ShieldColour.a
+light = constantAmbientColour + directionalLight0Colour * sat(N . L)
+lit   = ShieldColour.rgb * tex(u + 3 t, v).rgb * light
+rgb   = lerp(fogColour, lit, exp2(-(distance * density)^2 * 1.44269)) / 2
+```
+
+The patched values on Talon's Junction, each equal to its
+`environments/talons_junction/track.envsettings` to six digits: ambient
+`(0.403922, 0.392157, 0.509804)`, sun colour `(2.0, 1.82745, 0.886275)`, sun
+direction `(-0.7776, 0.58152, -0.23911)`, fog `(0.262745, 0.215686, 0.380392)`
+at density `0.001`. `ShieldColour` was `(0, 0.031, 0.996, 1)`, the settled
+Feisar value. At chase distance the fog factor is about 0.9998.
+
+The vertex program in the ring (20 instructions, byte-identical on both boots)
+is not the disc's 13-instruction block: it passes the **world-space** normal
+and position, so `N . L` is the plain world dot product. Confidence **90** for
+the law.
+
+### What ours changed, one at a time
+
+Ours lit the shell on the flame surfaces' block, which has no light, so
+`shade.wesl` fell to its stand-in `0.15 + 0.75 key + 0.25 fill` rig, multiplied
+in gamma space, with no ambient, sun, fog or `/2`. Each change below was
+predicted before it was rendered; the blue is the shell's own light (shield
+frame minus plain frame, mean 8-bit levels over the 640 x 420 craft box at
+(640, 560)) at shield clocks 1.73, 3.21 and 4.75 s.
+
+| ours | blue light | raised: grey, RMSE, box RMSE | hit flash: grey, RMSE, box RMSE |
+| --- | --- | --- | --- |
+| original | 19.6, 20.3, 17.3 | | |
+| before | 14.9, 13.7, 12.7 | 3.438, 0.0523, 0.0958 | 6.634, 0.0743, 0.1474 |
+| + back faces culled | 13.5, 12.6, 11.4 | 3.429, 0.0521, 0.0947 | 6.538, 0.0730, 0.1421 |
+| + alpha masked, no shadow | identical pixels | | |
+| + the lit program | 19.5, 18.6, 16.9 | 3.352, 0.0508, 0.0894 | 6.497, 0.0722, 0.1390 |
+
+Ours over the original is now 1.00, 0.91 and 0.98 (was 0.76, 0.68, 0.73), and
+last over first is 0.87 against 0.88. The program is the cause; the cull takes
+blue away, and the alpha mask changes no pixel in these frames.
+
+At 3.21 s the original's shell light also carries red and green that ours does
+not (original `(2.9, 6.8, 20.3)`, ours `(0.0, 3.5, 18.6)`); one original run
+per age, cause unread.
+
+### What ours draws
+
+`oag_title::Looks::shield_shell_lit` (HD only). A shell that authors
+`ShieldColour` and runs the hexagon program culls by its own material state
+and draws with `Model::shield_lit`: the law above on a block carrying the
+craft's light rig and fog and the flame surfaces' clock, writing no glow mask
+and receiving no shadow map. Where a circuit authors no rig, the shell draws as
+before.
+
+Left as before, because their draws are unread: the cockpit sphere, Zone
+Battle's `zonebattle_shield`, and our own shield.
+
+### 2048 and Omega, the draw state
+
+- **Lit program:** checked, differs. The PS4's shell program is
+  `ShieldColour * constantAmbientColour * diffuse` plus a lightning layer,
+  with lit variants adding `liveLighting0` and `shCoeffs` terms
+  ([PS4](../ps4-omega-eu/shield.md), "The two shell programs"), not HD's
+  ambient-plus-sun. The Vita's lightning law matches the PS4's; its ambient
+  factor is not read. Ours' PS4 and Vita shells are unchanged.
+- **Back-face cull:** checked, applies, not wired. The Feisar shell's material
+  state carries the cull bit `0x10` on Omega and 2048 (`0x3d`), as does 2048's
+  own magnetic shell (`0x39`), and ours draws both faces there.
+- **Alpha mask, blend:** not checkable: no live draw of either shell has been
+  read (the Vita and PS4 emulators give frames, no command ring read here).
+
 ## History
 
+- 2026-11-27: `hd-shield-blue`. The shell's draw state and lit program read off the command ring on two boots and wired; ours' shield blue moves from about 70 % to 91 to 100 % of the original's.
 - 2026-11-27: `hd-shield-flash`. Raised shell and amber flash watched and paired; shell draw, flicker constants and sine read; shell alpha wired to the authored `VertexColour1.w` without the flicker.
 - 2026-09-16: page created. `Shield.cpp`'s constructor, activate, update, hit
   and colour-table initialiser read and cross-checked against

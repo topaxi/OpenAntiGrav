@@ -174,6 +174,8 @@ pub struct CaptureOptions {
     /// Written **outside** [`Race::tick`], only when the slot is already empty,
     /// so firing still spends it and nothing here reaches a determinism hash.
     pub give: Option<oag_tables::weapons::Weapon>,
+    /// `--give-once`: hand [`Self::give`] over at tick 0 only.
+    pub give_once: bool,
     /// The shape to draw at inside the frame, leaving bars.
     ///
     /// A capture is a picture of a window, so it letterboxes the way a window

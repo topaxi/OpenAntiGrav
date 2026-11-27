@@ -10,10 +10,12 @@
 //!   `ShieldBarText` takes the same colour; `DamageBarBg` is forced white,
 //!   and flashes the warning colour on a flash's "on" phase. A flash runs at
 //!   or under the critical percentage, or through the post-hit second.
+//!   While a Shield runs, a layout that authors the countdown widget shows it
+//!   behind the fill and puts the seconds left in `ShieldBarText`.
 //! - **The two arcs.** Segments are shown or hidden, never tinted: the
 //!   yellow is baked into the atlas.
 
-use oag_title::hud::{RuntimeHud, SegmentArc, ShieldReadout};
+use oag_title::hud::{RuntimeHud, SegmentArc, ShieldCountdown, ShieldReadout};
 use oag_ui::screen::argb_to_rgba;
 
 use super::draw::{Context, crop_vertically, sprite_draw};
@@ -83,6 +85,34 @@ fn rgb(shield: &ShieldReadout, readout: &Readout) -> u32 {
     }
 }
 
+/// The title's countdown, while a Shield runs and the layout authors its widget.
+fn countdown<'a>(cx: &Context<'a>, readout: &Readout) -> Option<&'a ShieldCountdown> {
+    let countdown = cx.art.runtime.as_ref()?.shield.countdown.as_ref()?;
+    (readout.shield_seconds > 0.0 && cx.layout.sprite(countdown.widget).is_some())
+        .then_some(countdown)
+}
+
+/// `ShieldBarText`'s string while a Shield runs: the seconds left to one
+/// decimal, the original's `"%2.1f"`.
+pub(super) fn countdown_text(cx: &Context<'_>, readout: &Readout, name: &str) -> Option<String> {
+    countdown(cx, readout)?;
+    let shield = &cx.art.runtime?.shield;
+    (name == shield.text).then(|| format!("{:.1}", readout.shield_seconds))
+}
+
+/// The widget shown between `background` and the fill while a Shield runs.
+pub(super) fn countdown_backing(
+    cx: &Context<'_>,
+    readout: &Readout,
+    background: &Sprite,
+) -> Option<Draw> {
+    let widget = countdown(cx, readout)?.widget;
+    if background.name != cx.art.runtime?.shield.background {
+        return None;
+    }
+    sprite_draw(cx.layout.sprite(widget)?, cx.sheet)
+}
+
 /// The colour `name` is drawn in this frame when the runtime overrides what
 /// its layout authors, or `None` to keep the layout's.
 ///
@@ -95,6 +125,10 @@ pub(super) fn colour(cx: &Context<'_>, readout: &Readout, name: &str) -> Option<
     let blinking = flashing(shield, readout);
     let on = !blinking || phase_on(shield, readout);
     if name == shield.text {
+        // The seconds are written after the flash table, so they never blink.
+        if let Some(countdown) = countdown(cx, readout) {
+            return Some(argb_to_rgba(OPAQUE | countdown.rgb));
+        }
         let alpha = if on { OPAQUE } else { 0 };
         return Some(argb_to_rgba(alpha | rgb(shield, readout)));
     }

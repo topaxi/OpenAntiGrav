@@ -322,6 +322,23 @@ Whether the original reaches it by its own precedence is still unread, and the o
 duplicated roots stay as they were. See
 [the Eliminator page](../ghidra/functions/ps3-hdfury-eu/eliminator-hud.md).
 
+### Two copies of the shield layout
+
+`/data/xml/HUD_damage_indicator.xml` is in `DATA02` (904 B) and `DATA06`
+(1,192 B), and only `DATA06`'s authors `DamageBarShieldBg`. The running original
+draws that widget while a Shield is up, with its pointer non-null in the HUD
+object, so it reads `DATA06`'s copy
+([hud-readouts.md](../ghidra/functions/ps3-hdfury-eu/hud-readouts.md#the-shield-countdown),
+confidence 90, one race type: Racebox Single Race). This build's precedence picks
+`DATA02`'s, so the HUD load reads this one file from the copy that authors the
+widget (`Archives::read_name_authoring`); an update or a mod holding the name
+still answers.
+
+**Not generalised.** Four more XML files differ between `DATA06` and the copy
+this build reads: `hud_lap_ghost.xml`, `hud_positions.xml` (10,487 against
+12,704 B), `zone_hud.xml` and `rankings.xml`. Whether the original takes
+`DATA06`'s for those too is not measured, and archive precedence is unchanged.
+
 ### The precedence mechanism, read precisely
 
 `Archives::holder_of` (`crates/assets/src/source.rs`) checks the bulk archive

@@ -202,7 +202,8 @@ pub(super) fn load_hud(
     // the PSP shortens its layouts, the PS2 and HD ship plain `<?xml`, and
     // reaching for `expand` refused the PS2's outright and took the whole HUD
     // with it.
-    let composed = oag_hud::compose(entry, |path| archives.read_name(path).ok());
+    let countdown = art.runtime.and_then(|runtime| runtime.shield.countdown);
+    let composed = oag_hud::compose(entry, |path| read_layout(archives, path, countdown));
     let mut layout = match composed {
         Some(composed) => {
             let layout = composed.layout;
@@ -485,6 +486,24 @@ pub(super) fn load_hud(
     // again (`oag_hud::Assets::rasterise_vector_icons`).
     assets.rasterise_vector_icons(1.0, report);
     assets
+}
+
+/// One layout file of the HUD. The file [`oag_title::hud::ShieldCountdown::layout_file`]
+/// names is read from the copy that authors the countdown widget: HD/Fury ships it in
+/// two copies and the original draws the widget (`docs/formats/hd-hud.md`, "Two copies of
+/// the shield layout"). Every other file reads by name.
+fn read_layout(
+    archives: &mut oag_assets::Archives,
+    path: &str,
+    countdown: Option<oag_title::hud::ShieldCountdown>,
+) -> Option<Vec<u8>> {
+    let file = path.rsplit(['/', '\\']).next().unwrap_or(path);
+    match countdown {
+        Some(countdown) if file.eq_ignore_ascii_case(countdown.layout_file) => {
+            archives.read_name_authoring(path, countdown.widget).ok()
+        }
+        _ => archives.read_name(path).ok(),
+    }
 }
 
 /// `PlrTag0` of the title's player-tag layout, for a race with more than one person. The eight

@@ -1042,6 +1042,13 @@ pub struct Looks {
     /// bright against the unscaled sky. Wipeout HD's (read off its microcode's
     /// scale field, and confirmed against the live scene target).
     pub lit_output_halved: Rule,
+    /// The raised shield shell draws with its own lit fragment program, and with the draw
+    /// state read beside it: `ShieldColour * texture * (constant ambient + sun * sat(N.L))`
+    /// off the circuit's light, fogged, on the program's `/2`; back faces culled by the
+    /// material's state word; the scene's alpha (the bloom's glow mask) left alone; no
+    /// shadow. Wipeout HD's
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/shield.md`, "The shell's draw state").
+    pub shield_shell_lit: Rule,
     /// The circuit's material textures (albedo, normal, lightmap) are sampled
     /// trilinear with a LOD bias of [`MATERIAL_LOD_BIAS`] levels, so a distant
     /// floor reads sharper than the sampler's own selection gives. Wipeout HD's
@@ -1166,6 +1173,7 @@ impl Looks {
             own_rockets: Rule::UNREAD,
             skips_language_picker: Rule::UNREAD,
             lit_output_halved: Rule::UNREAD,
+            shield_shell_lit: Rule::UNREAD,
             material_lod_bias: Rule::UNREAD,
             material_render_state: Rule::UNREAD,
             batch_back_face_cull: Rule::UNREAD,

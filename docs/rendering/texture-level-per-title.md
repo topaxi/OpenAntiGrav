@@ -106,24 +106,94 @@ By eye at 3x on far-field crops the new frames match the originals and the old o
 box chain smeared the crowd stands and the trackside wall, and erased the tread texture on a girder
 at Vertica, all of which the original and the new frame resolve.
 
-**RMSE against the original went up all the same**, and is recorded rather than explained away:
+**RMSE against the original went up all the same.** Over the 17 race frames mean RMSE went 0.1832 to 0.1878 (all
+three channels), farther on every one, and 0.1228 to 0.1230 after a 16x box reduction of both, so colour and coverage
+did not move. Why: [below](#why-the-error-rose-when-the-law-went-in).
 
-| Over the 17 race frames | Before | After | Original |
+## Why the error rose when the law went in
+
+Lane `ps2-sharpness-check`, 2026-11-27. Three readings were stated before measuring: (A) the law is right and the rise
+is misalignment only; (B) the original's picture is softer than ours for a reason outside the law; (C) the law is wrong
+for these frames. **(B), confidence 80: the original is a 512x512 frame shown through PCSX2's 2x and stretch, ours a
+1280x720 render of a different horizontal projection. Through the same chain, level 0 matches the original's detail and
+the old box chain does not (C rejected).** The law's confidence stays 92. The verdict is 80 and no higher: one
+original capture per pair, PCSX2's stretch filter assumed, and 18 % of the rise unexplained.
+
+All figures below are over the 16 grid pairs. The Zone pair is left out: its state draws 640x448, not 512x512, and its
+moving craft does not correlate block for block.
+
+### The two differences between the pictures
+
+1. **Projection, known and larger.** The original's race projection is `40/21` shown at `16:9`, ours a true `16:9`
+   ([camera.md](../ghidra/functions/ps2-pulse-eu/camera.md)). Ours draws everything 7.1 % wider, so the pairs are
+   misregistered by about +35 px at the left edge and -32 px at the right at 1280 wide (Metropia, Talon's Junction).
+   With ours' projection aspect overridden to `40/21` (a scratch build, not committed), Metropia's block offsets outside
+   the HUD fall under 2 px.
+2. **The capture grid.** The 16 grid originals are GS screenshots of 1820x1024, twice 512 rows, where the Zone pair's
+   is 1592x896, twice 448; each grid state's GS registers scissor 512x512, and the screenshot holds detail up to its
+   vertical Nyquist, so its 1024 rows are real. (The [GS dumps](#pulse-ps2-in-a-race) above are from a boot that drew
+   640x448.) At `upscale_multiplier` 2 PCSX2 therefore samples 1024 columns and 1024
+   rows, stretches them to the 1820x1024 screenshot, and one Lanczos takes that to 1280x720. The original has 1024
+   samples across the picture, ours 1280; down it, the original has 1024 rows into 720, ours 720. Its screenshot's
+   spectrum shows it: power at the screenshot's Nyquist is 0.8 across and 93 down.
+
+The chain was copied on our side: ours at 1024x1024 with the `40/21` projection, stretched to 1820x1024 (bilinear,
+assumed: PCSX2's filter was not read), then the pair script's Lanczos to 1280x720.
+
+### Detail
+
+Fixed boxes on far stands and walls, one per pair, chosen on the original. Laplacian standard deviation of luma
+([frame-audit.md](frame-audit.md)'s kernel, computed in numpy: that page's `fx:standard_deviation` command returns
+about 3e10 on ImageMagick 7.1.2-36 HDRI), and the standard deviation of the second difference along x and y.
+
+| Picture | Laplacian | x | y |
 | --- | ---: | ---: | ---: |
-| RMSE, native 1280x720 | 0.1832 | 0.1878 (farther on 17) | |
-| RMSE, ours drawn at 1820x1024 and Lanczos-resized as the original is | 0.1832 | 0.1855 (farther on 17) | |
-| RMSE after a 16x box reduction of both, native | 0.1228 | 0.1230 | |
-| Mean vertical neighbour step, 1820x1024 route | 6.58 | 7.73 | 7.15 |
+| original | 10.04 | 17.19 | 21.02 |
+| ours as paired, old box chain | 9.15 | 18.16 | 17.54 |
+| ours as paired, level 0 | 15.70 | 32.98 | 31.54 |
+| through the chain, old box chain | 6.94 | 10.91 | 14.62 |
+| through the chain, level 0 | 10.60 | 17.73 | 22.45 |
 
-The 16x figures are level, so colour and coverage did not move; the difference is in fine detail, and
-the original's amount of it lies between the two builds. The likely reading is that a sharp picture
-scores worse than a blurred one against a reference whose pixels do not line up with ours. Partly
-tested: with the field of view 0.05 degrees wider (about half a pixel at the edge), each build's own
-17 frames moved by a mean RMSE of 0.0234 before and 0.0327 after, so the new picture is the more
-sensitive to a sub-pixel offset. Whether that accounts for the whole rise is **not established**.
-The new frames are somewhat grainier than the originals on distant crowds: the original is drawn at
-2x internal resolution and resized, ours takes one tap per output pixel. The level rule itself is the
-GS dumps' measurement, not the pairs'.
+As paired, the original sits between the two builds, which is what made the old picture look right. Through the chain,
+level 0 lands within 7 % of the original on all three, and the old chain carries about half the energy (0.49 of the
+original's high band against 1.07). Level 0 is the closer one on 11, 13 and 12 of the 16 boxes (Laplacian, x, y).
+
+### Error
+
+| Route | Summed mean grey, old to level 0 | Mean RMSE of the pair score |
+| --- | --- | --- |
+| as paired | 215.09 to 222.31 (+7.22) | 0.1502 to 0.1543 |
+| projection matched | 122.62 to 126.71 (+4.09) | 0.0969 to 0.1000 |
+| projection and capture grid matched | 145.68 to 147.01 (+1.33) | 0.1154 to 0.1165 |
+
+Mean grey and RMSE here are the pair score's own (`compare_env.overlap_score`), so the RMSE does not match the
+0.18 figures above. Compare within a row only: in the last route our HUD was laid out at 1024x1024 and stretched, which raises both sides'
+error. Matching the projection removes 43 % of the rise and matching the grid as well another 38 %.
+
+**The last 18 % is not closed.** It sits in the far crowd boxes: there the old chain still scores a lower RMSE after
+each 32 px tile is registered on its own (20.80 old, 22.13 level 0, 8-bit, through the chain), while a band of the frame
+clear of the HUD is level once registered (21.89 old, 21.74 level 0). In those boxes level 0's high band correlates only 0.68 with the original's (0.67 for the old
+chain). At that correlation RMSE is lowest for a picture holding about 0.68² = 0.46 of the original's detail energy,
+which is what the old chain holds, so RMSE there prefers it whether or not its level is right. Why the correlation is
+not higher is not established.
+
+**Do not read a PS2 pair's RMSE or mean grey as a verdict on texture sharpness** while ours is rendered at 1280x720
+in a true `16:9`.
+
+### Anisotropy is not the cause
+
+Every PS2 pair already renders with `--anisotropy off`, as the compare profile records, so it took no part in the
+change. Turning it to 16x on Metropia, Platinum Rush and Talon's Junction lowers mean grey by 0.05 to 0.3 on all three
+routes, the direction any added smoothing goes. The GS takes one bilinear tap (`MMIN` 1); the player's setting is left
+as it is and nothing is wired.
+
+### Limits
+
+- The original side is one capture per pair. A second grab was not possible: the grid states were saved by PCSX2
+  v2.9.148 and v2.9.168 refuses them (two tried, Metropia Black and Talon's Junction White;
+  [compare-page.md](../tools/compare-page.md), "Zone pairs: Wipeout Pulse PS2").
+- No GS dump was taken at a pair's state, for the same reason. `MXL` 0 there rests on the dumps above and the disc census.
+- Our renders repeat pixel for pixel on a second run.
 
 ## What TEXTURE DETAIL reaches
 
