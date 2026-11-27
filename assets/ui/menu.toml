@@ -1636,7 +1636,9 @@ values_from = "screen_filters"
 
 # How much of the filter shows: a mix between the untouched frame and the
 # filter's output, applied by the pass itself so it means the same for every
-# preset. Greyed while no filter is selected.
+# preset. Greyed while no filter is selected, and left off the page while the
+# selected filter's own header says `fixed_strength` (a preset that moves
+# pixels, where a mix would show two pictures).
 [[page.entry]]
 kind = "choice"
 label = "SCREEN FILTER STRENGTH"

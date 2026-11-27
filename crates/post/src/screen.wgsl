@@ -43,8 +43,9 @@ struct Screen {
     frame: f32,
     // Seconds since the filter was built. For anything that animates.
     time: f32,
-    // The player's SCREEN FILTER STRENGTH row, 0..1. Applied by `fs_main`
-    // below, not by the filter, so every preset honours it identically.
+    // The player's SCREEN FILTER STRENGTH row, 0..1, or 1 for a preset whose
+    // header says `fixed_strength`. Applied by `fs_main` below, not by the
+    // filter, so every preset honours it identically.
     strength: f32,
     // Three scalars rather than a `vec3<f32>`, which would be 16-aligned and
     // push `params` out to 64: the Rust mirror is `[f32; 3]` at 36.

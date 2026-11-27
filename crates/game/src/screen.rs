@@ -69,6 +69,23 @@ pub const BUILT_IN: &[(&str, &str)] = &[
     ),
 ];
 
+/// The SCREEN FILTER row's setting.
+const FILTER_ROW: &str = "graphics.screen_filter";
+/// The SCREEN FILTER STRENGTH row's setting.
+const STRENGTH_ROW: &str = "graphics.screen_filter_strength";
+
+/// Takes SCREEN FILTER STRENGTH off the menus while the filter the SCREEN
+/// FILTER row holds declares [`Preset::fixed_strength`], and puts it back
+/// otherwise. The stored strength is not touched. Called once the filter row
+/// is supplied and seeded, and again each time it changes.
+pub fn offer_strength_row(model: &mut menu::Menu, catalogue: &Catalogue) {
+    let fixed = model
+        .value_of(FILTER_ROW)
+        .and_then(|id| catalogue.get(id))
+        .is_some_and(|preset| preset.fixed_strength);
+    model.offer_choice(STRENGTH_ROW, !fixed);
+}
+
 /// One user file: what it parsed to, and when it was last read.
 #[derive(Debug)]
 struct UserFile {
