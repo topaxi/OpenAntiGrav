@@ -268,13 +268,17 @@ const SPRITES: &[&str] = &[
 /// (`docs/ghidra/functions/ps3-hdfury-eu/quake.md`), the Detonator EMP's, a band of blue smoke
 /// across it (`detonator-emp.md`), and the Plasma blast's two,
 /// whose lightning fills the blast instead of bunching at its centre (`plasma.md`,
-/// "The pairs"). Every other HD effect keeps its emitters at their anchors until a
+/// "The pairs"), and the Rocket's craft blast, whose `FIRE_TRAILS_ONEQUAD` heads start on
+/// their 8.8-unit hemisphere, so their smoke trails fan out around the blast instead of
+/// piling up in front of the camera (`docs/rendering/particle-fill.md`, "The trails start on
+/// the blast's hemisphere"). Every other HD effect keeps its emitters at their anchors until a
 /// matched capture says otherwise.
 const EXTENTS: &[&str] = &[
     engine_effects::QUAKE_EFFECT,
     engine_effects::DETONATOR_EMP_EFFECT,
     engine_effects::PLASMA_LIGHTNING_EXPAND_EFFECT,
     engine_effects::PLASMA_LIGHTNING_COLLAPSE_EFFECT,
+    engine_effects::CRAFT_BLAST_EFFECT,
 ];
 
 /// The activation and hit colours are read off HD's executable; the settled
