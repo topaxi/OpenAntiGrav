@@ -126,15 +126,22 @@ pub(super) fn resolve(
 
     log::info!("racing on {}: {track}", title.name);
 
-    let spec = archives
-        .locate(&track)
-        .ok_or_else(|| assets::zone_circuit_miss(&track, options.mode, title, archives))?
-        .to_string();
+    if archives.locate(&track).is_none() {
+        return Err(assets::zone_circuit_miss(
+            &track,
+            options.mode,
+            title,
+            archives,
+        ));
+    }
 
-    // `oag_render::track::load`'s read, without the renderer: the same
-    // container open and the same parse.
-    let data = oag_assets::Container::open(&spec)?.read_entry(&track)?;
-    let ai = oag_vex::track::from_vex(&data, &track).map_err(anyhow::Error::msg)?;
+    // Read through `archives`, never by reopening what `locate` names: for a
+    // player's override that name is a directory, not an archive
+    // (`docs/architecture/asset-layers.md`, "The override").
+    let track_blob = archives
+        .read_name(&track)
+        .with_context(|| format!("reading {track} out of {}", archives.layout.describe()))?;
+    let ai = oag_vex::track::from_vex(&track_blob, &track).map_err(anyhow::Error::msg)?;
     let label = track.clone();
     report.push(format!(
         "{label}: {} path(s), {} junction(s), {} control point(s)",
@@ -143,13 +150,6 @@ pub(super) fn resolve(
         ai.point_count()
     ));
 
-    // Read again for the collision nodes: `oag_render::track::load` takes an
-    // archive rather than bytes, so this blob is decompressed twice (see
-    // `docs/tools/oag-game.md`); that costs most on the PS2, where 5,861 of
-    // `WADS2.WAD`'s 7,200 entries are LZSS.
-    let track_blob = archives
-        .read_name(&track)
-        .with_context(|| format!("reading {track} out of {}", archives.layout.describe()))?;
     stages::reach(stages::Stage::TrackRead)?;
     // **This track file's own class numbering.** Read once, off its version word,
     // and consulted everywhere below that used to spell a `vex::CLASS_*`
@@ -339,3 +339,6 @@ fn foreign(
         art: f.art,
     })
 }
+
+#[cfg(test)]
+mod tests;
