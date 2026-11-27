@@ -27,7 +27,7 @@ CIRCUIT row then lists the Zone circuits only).
 | Scoring | this project's `<Bullet>` and `<Emp>` values (10 a live mine, 5 a dark one, 5 an EMP'd live mine) | `DetonatorScoring.xml` in the same directory |
 | HUD | this project's own layout, arranged as Fury's (see [The HUD](#the-hud)) | `oag_pulse::hud::layouts::DETONATOR`, `ps2_hud` |
 | Not drawn | the stage grade (Pulse ships none), the medals, the announcer lines | `palette: None`, `shows_medals`, `voices: None` |
-| Craft | the team's Zone hull (`Zone.vex`) with its boost plume and wreck, until this project has a Detonator hull of its own; the team's race handling | `craft: Some`, `handling: None` |
+| Craft | the team's Zone hull (`Zone.vex`) with its boost plume and wreck, until this project has a Detonator hull of its own; the team's race handling; Ship Select previews it (`Zone_FE.vex`) with the skin row fixed and the team's own ratings | `craft: Some`, `handling: None` |
 
 ## Mine size
 

@@ -684,6 +684,15 @@ use, and on Pulse the paint on the shared Zone hull. The original's
 label and the four rating bars forced to 10
 (`docs/ghidra/functions/psp-pulse-usa/zone-mode.md`); the screen draws both, the
 preview is the team's own `Zone_FE.vex`, and the label has no arrows to press. On HD/Fury and Omega, whose Zone craft is one shared hull, the preview is that hull in the picked team's `zoneship_<x>` livery, by the decision the race's hull build takes (`oag_livery::zone_livery::swap`; `docs/ghidra/functions/ps3-hdfury-eu/zone-craft.md`, "Ship Select preview").
+**Detonator takes the same rule** (2026-11-27): which hull, paint and skin row Ship Select
+shows is the race's own question, `oag_livery::entry::own_craft`, so a mode that flies its own
+craft previews it under a fixed label and any other previews the team's. Pulse's Detonator
+(this project's) previews `Zone_FE.vex`; HD/Fury and Omega preview the Detonator hull in the
+team's livery. The four rating bars stay the team's in Detonator: forced bars are Zone's
+reading only. What the original HD loads on that screen in Detonator is unread; its fit has a
+Detonator box
+([team-selection-model.md](../ghidra/functions/ps3-hdfury-eu/team-selection-model.md), "The
+fit"), so drawing the race's hull is confidence 70.
 `oag_title::ZoneTeamStep` is the per-title answer: Pure's own chain has no team
 step in Zone and keeps skipping it. HD/Fury, 2048 and Omega were not read in Zone; they take Pulse's
 rule without the ratings (maintainer, 2026-10-26: "the team matters for loyalty"). Back from Track Select is the RACE

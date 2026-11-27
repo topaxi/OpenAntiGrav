@@ -421,6 +421,7 @@ pub const SHIP_FIT: oag_title::ShipFit = oag_title::ShipFit {
     slide_ease: 0.0625,
     floor: 11.0,
     zone_box: [-4.2, 4.2],
+    detonator_box: [-2.0, 0.0],
 };
 
 /// What `TrackSelection_Screen`'s update does to the circuit model each frame, read off the

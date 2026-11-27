@@ -1,10 +1,10 @@
-//! The Ship Select preview of a Zone race wears what the race's hull build puts on the craft: the
-//! one Zone hull, in the picked team's livery
+//! The Ship Select preview of a race flying the mode's own craft wears what the race's hull build
+//! puts on it: the one Zone (or Detonator) hull, in the picked team's livery
 //! (`docs/ghidra/functions/ps3-hdfury-eu/zone-craft.md`, "As wired").
 //!
 //! Each case builds the hull twice for every team the definition gives a Zone livery: once as the
 //! race does (`oag_livery::load`, given the rows the race load reads) and once as the picker's
-//! preview does (`oag_game::preview::zone_race_hull_entry` and `variant::zone_folders` over the
+//! preview does (`oag_game::preview::own_craft_entry` and `variant::own_craft_folders` over the
 //! front end's own catalogue), and requires the same entry, the same livery folder and the same
 //! texels. A preview that stopped applying the livery draws the hull's default skin and fails the
 //! texel comparison; a race that stopped would fail it from the other side.
@@ -14,7 +14,7 @@
 //!     -E 'test(/^zone_preview_ground_truth::/)'
 //! ```
 
-use oag_game::preview::variant::zone_folders;
+use oag_game::preview::variant::own_craft_folders;
 use oag_mesh::mesh::{Model, Texels};
 use oag_race::Mode;
 use std::hash::{Hash, Hasher};
@@ -49,6 +49,7 @@ fn race_hull(
     title: &'static oag_title::Title,
     liveries: &[(String, String)],
     team: &str,
+    mode: Mode,
 ) -> (Model, String) {
     let mut report = Vec::new();
     let loaded = oag_livery::load(
@@ -57,7 +58,7 @@ fn race_hull(
         &oag_livery::LoadContext {
             store: Default::default(),
             race: title.race,
-            mode: Mode::Zone,
+            mode,
             flare: title.flare,
             hull_overlay: false,
             leach_overlay: false,
@@ -75,7 +76,7 @@ fn race_hull(
         &[],
         &mut report,
     )
-    .unwrap_or_else(|e| panic!("{team}: the Zone hull loads: {e:#}"));
+    .unwrap_or_else(|e| panic!("{team}: the {mode:?} hull loads: {e:#}"));
     let hull = loaded.into_iter().next().expect("one craft").hull;
     (hull, report.join("\n"))
 }
@@ -90,6 +91,7 @@ fn check(
     name: &str,
     title: &'static oag_title::Title,
     archives: &mut oag_assets::Archives,
+    mode: Mode,
     (has_selector, only, default_skin_of): (bool, Option<&[&str]>, Option<&str>),
 ) -> usize {
     let blob = archives
@@ -97,14 +99,21 @@ fn check(
         .expect("teams definition");
     let xml = oag_tables::fexml::text(&blob).expect("the definition reads");
     let catalogue = oag_raceplay::catalogue::teams(&xml);
-    let liveries = oag_raceplay::catalogue::zone_liveries(&catalogue, title.race);
-    let key = title.race.zone_craft.livery_key().expect("a livery key");
+    let liveries: Vec<(String, String)> = catalogue
+        .iter()
+        .flat_map(|team| team.craft_liveries(title.race, mode))
+        .collect();
+    let craft = oag_livery::entry::own_craft(title.race.ships(), mode).expect("an own craft");
+    let key = craft.livery_key().expect("a livery key");
+    let word = oag_livery::entry::craft_label(mode);
     let mut checked = 0;
     let mut default_texels = None;
     for team in &catalogue {
-        let Some(authored) = team.zone_livery.as_deref() else {
+        let rows = team.craft_liveries(title.race, mode);
+        let Some((_, authored)) = rows.first() else {
             continue;
         };
+        let authored = authored.as_str();
         if !authored.starts_with("zoneship_")
             || only.is_some_and(|only| !only.iter().any(|id| id.eq_ignore_ascii_case(&team.id)))
         {
@@ -112,16 +121,17 @@ fn check(
         }
         let label = format!("{name}/{}", team.id);
         let ships = title.race.ships_for(&team.id);
-        let entry = ships.hull_entry_name(&team.id, Some(ships.zone), None);
+        let craft = oag_livery::entry::own_craft(ships, mode).expect("an own craft");
+        let entry = ships.hull_entry_name(&team.id, Some(craft), None);
         if has_selector {
             assert_eq!(
-                oag_game::preview::zone_race_hull_entry(title, &team.id, Mode::Zone),
+                oag_game::preview::own_craft_entry(title, &team.id, mode),
                 Some(entry.clone()),
                 "{label}: the preview draws the hull the race builds"
             );
         }
-        let folders = zone_folders(title, team, Mode::Zone)
-            .unwrap_or_else(|| panic!("{label}: a Zone livery folder"));
+        let folders = own_craft_folders(title, team, mode)
+            .unwrap_or_else(|| panic!("{label}: a {word} livery folder"));
         assert_eq!(folders.own, key, "{label}");
         assert_eq!(folders.worn, authored, "{label}: the definition's own name");
         assert!(
@@ -134,10 +144,10 @@ fn check(
             "{label}"
         );
 
-        let (race, report) = race_hull(archives, title, &liveries, &team.id);
+        let (race, report) = race_hull(archives, title, &liveries, &team.id, mode);
         assert!(
             report.contains(&format!(
-                "{}: Zone livery {authored} replaces {key} on ",
+                "{}: {word} livery {authored} replaces {key} on ",
                 team.id
             )) && !report.contains("does not hold"),
             "{label}: {report}"
@@ -168,9 +178,13 @@ fn check(
             );
         }
 
-        assert_eq!(zone_folders(title, team, Mode::TimeTrial), None, "{label}");
         assert_eq!(
-            oag_game::preview::zone_race_hull_entry(title, &team.id, Mode::TimeTrial),
+            own_craft_folders(title, team, Mode::TimeTrial),
+            None,
+            "{label}"
+        );
+        assert_eq!(
+            oag_game::preview::own_craft_entry(title, &team.id, Mode::TimeTrial),
             None,
             "{label}"
         );
@@ -189,8 +203,13 @@ fn hd_zone_preview_wears_the_livery_the_race_does() {
         oag_source::title::open_source(&path.display().to_string(), Vec::new(), Vec::new())
             .expect("opening HD/Fury")
             .archives;
-    let checked = check("HD", oag_hd::TITLE, &mut archives, (true, None, None));
-    assert_eq!(checked, 12, "every team the definition gives a Zone livery");
+    for mode in [Mode::Zone, Mode::Detonator] {
+        let checked = check("HD", oag_hd::TITLE, &mut archives, mode, (true, None, None));
+        assert_eq!(
+            checked, 12,
+            "every team the definition gives a {mode:?} livery"
+        );
+    }
 }
 
 #[test]
@@ -200,8 +219,16 @@ fn vita_2048_zone_preview_wears_the_livery_the_race_does() {
         return;
     };
     let mut archives = oag_2048::open(&path.display().to_string()).expect("opening 2048");
-    let checked = check("2048", oag_2048::TITLE, &mut archives, (false, None, None));
-    assert_eq!(checked, 12);
+    for mode in [Mode::Zone, Mode::Detonator] {
+        let checked = check(
+            "2048",
+            oag_2048::TITLE,
+            &mut archives,
+            mode,
+            (false, None, None),
+        );
+        assert_eq!(checked, 12, "{mode:?}");
+    }
 }
 
 #[test]
@@ -211,13 +238,17 @@ fn omega_zone_preview_wears_the_livery_the_race_does() {
         return;
     };
     let mut archives = oag_omega::open(&path.display().to_string()).expect("opening Omega");
-    // Auricom's `Team.gnf` is byte-identical to the default folder's `zoneship_team`.
+    // Auricom's `Team.gnf` is byte-identical to the default folder's `zoneship_team` on the Zone
+    // hull; the Detonator hull's default matches no team's of these four.
     let only = ["Qirex", "Auricom", "AG_Systems", "Assegai"];
-    let checked = check(
-        "Omega",
-        oag_omega::TITLE,
-        &mut archives,
-        (true, Some(&only), Some("Auricom")),
-    );
-    assert_eq!(checked, only.len());
+    for mode in [Mode::Zone, Mode::Detonator] {
+        let checked = check(
+            "Omega",
+            oag_omega::TITLE,
+            &mut archives,
+            mode,
+            (true, Some(&only), (mode == Mode::Zone).then_some("Auricom")),
+        );
+        assert_eq!(checked, only.len(), "{mode:?}");
+    }
 }

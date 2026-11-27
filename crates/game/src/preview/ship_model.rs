@@ -321,15 +321,20 @@ impl ShipPlayer {
     }
 }
 
-/// The fore and aft extent of the fit's box: the Zone box where the screen
-/// draws the Zone hull, else the selected model's own length each way. `None`
+/// The fore and aft extent of the fit's box: the mode's box where the screen
+/// draws the mode's own craft (`own_craft`: Detonator's, else Zone's), else the
+/// selected model's own length each way. `None`
 /// where neither is known, and the craft is then not fitted.
 #[must_use]
-pub fn box_z(fit: &ShipFit, zone_hull: bool, length: Option<f32>) -> Option<[f32; 2]> {
-    if zone_hull {
-        Some(fit.zone_box)
-    } else {
-        length.map(|length| [-length, length])
+pub fn box_z(
+    fit: &ShipFit,
+    own_craft: Option<oag_race::Mode>,
+    length: Option<f32>,
+) -> Option<[f32; 2]> {
+    match own_craft {
+        Some(oag_race::Mode::Detonator) => Some(fit.detonator_box),
+        Some(_) => Some(fit.zone_box),
+        None => length.map(|length| [-length, length]),
     }
 }
 

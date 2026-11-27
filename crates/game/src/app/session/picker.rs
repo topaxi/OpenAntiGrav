@@ -380,11 +380,11 @@ impl Session {
                         team.variant_stats(join, variants.iter().map(|(id, _)| id.as_str()))
                     })
                     .unwrap_or_default();
-                // Zone's one hull is not any of the team's own models, and the grid's thumbnails
-                // are theirs: see `crate::livery_row::zone_model_cells`.
-                let zone_entry = crate::preview::zone_race_hull_entry(title, &choice.value, mode);
-                let models = if zone_entry.is_some() {
-                    crate::livery_row::zone_model_cells()
+                // The mode's own craft is not any of the team's own models, and the grid's
+                // thumbnails are theirs: see `crate::livery_row::own_craft_model_cells`.
+                let own_entry = crate::preview::own_craft_entry(title, &choice.value, mode);
+                let models = if own_entry.is_some() {
+                    crate::livery_row::own_craft_model_cells()
                 } else {
                     details
                         .map(|team| {
@@ -869,10 +869,10 @@ pub(super) fn ship_source(
         ),
         skins,
         join,
-        hull_file: crate::preview::zone_hull_file(title, mode),
-        zone_entry: crate::preview::zone_race_hull_entry(title, team, mode),
-        zone_livery: details
-            .and_then(|details| crate::preview::variant::zone_folders(title, details, mode)),
+        hull_file: crate::preview::own_hull_file(title, mode),
+        own_entry: crate::preview::own_craft_entry(title, team, mode).map(|entry| (entry, mode)),
+        own_livery: details
+            .and_then(|details| crate::preview::variant::own_craft_folders(title, details, mode)),
         race_hull: crate::preview::race_hull_entry(title, team, mode),
     }
 }

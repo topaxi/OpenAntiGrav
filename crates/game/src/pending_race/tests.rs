@@ -45,7 +45,7 @@ fn ship_screen(
     );
     (
         livery_row::fixed_row(title, pending.mode),
-        preview::zone_hull_file(title, pending.mode),
+        preview::own_hull_file(title, pending.mode),
         livery.variants.len(),
     )
 }

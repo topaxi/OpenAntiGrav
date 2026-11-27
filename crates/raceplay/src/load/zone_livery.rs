@@ -38,11 +38,10 @@ pub(super) fn resolve(
         }
     };
     let teams = crate::catalogue::teams(&xml);
-    if mode == Mode::Detonator {
-        crate::catalogue::detonator_liveries(&teams, title.race)
-    } else {
-        crate::catalogue::zone_liveries(&teams, title.race)
-    }
+    teams
+        .iter()
+        .flat_map(|team| team.craft_liveries(title.race, mode))
+        .collect()
 }
 
 #[cfg(test)]

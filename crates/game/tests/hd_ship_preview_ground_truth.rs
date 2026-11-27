@@ -281,7 +281,7 @@ fn the_screens_own_fit_lands_feisar_where_the_original_draws_it() {
         .and_then(|stats| stats.length_milli)
         .expect("Feisar's classic hull authors a length");
     assert_eq!(length, 3800);
-    let box_z = oag_game::preview::ship_model::box_z(&fit, false, Some(f32::from(length) / 1000.0))
+    let box_z = oag_game::preview::ship_model::box_z(&fit, None, Some(f32::from(length) / 1000.0))
         .expect("a box");
     let space = oag_display::space::Space::HD;
     let framing = oag_game::preview::ship_model::rest(&fit, space.display_aspect, box_z);
@@ -339,7 +339,7 @@ fn the_screens_own_fit_lands_feisar_where_the_original_draws_it() {
     ];
     for (team, directory, edges) in frames {
         let box_z =
-            oag_game::preview::ship_model::box_z(&fit, false, Some(concept(team))).expect("a box");
+            oag_game::preview::ship_model::box_z(&fit, None, Some(concept(team))).expect("a box");
         let entry = format!(r"Data\Ships\{directory}\ship.vex");
         let drawn = silhouette(&mut archives, &entry, (&widget, &fit, box_z), 1.0);
         for (ours, theirs) in drawn.into_iter().zip(edges) {
