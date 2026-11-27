@@ -56,5 +56,4 @@ fn files_that_are_not_tracks_are_listed_with_a_reason() {
             .as_deref()
             .is_some_and(|p| p.starts_with("unreadable"))
     );
-    std::fs::remove_dir_all(dir).ok();
 }

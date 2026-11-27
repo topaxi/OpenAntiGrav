@@ -500,7 +500,6 @@ fn lions_den_races_the_same_converted_as_loaded_directly() {
             .length()
             > 100.0
     );
-    std::fs::remove_dir_all(dir).ok();
 }
 
 /// A committed track file on Pulse's physics: it loads, the report says what the
