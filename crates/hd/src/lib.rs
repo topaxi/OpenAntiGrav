@@ -389,6 +389,9 @@ pub const TITLE: &Title = &Title {
         adverts_unlit: true,
         card_store: oag_title::adverts::CardStore::R5G6B5Linear,
         card_unlit: true,
+        // The countdown's entry zeroes the slot 8 node whatever the mode
+        // (`gantry-clock.md`, "The circuit's own board").
+        countdown_assembly_ticks: Some(180),
         gantry_boards: None,
         // Detonator's board is the one copy `DATA00` ships, Omega's mode-`0xe` name
         // (`docs/ghidra/functions/ps4-omega-eu/billboards.md`). Both boards' clocks are

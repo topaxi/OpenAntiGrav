@@ -9,21 +9,21 @@
 //!
 //! Pulse's measured rule is that the board's `GO` edge lands on the tick
 //! after the thrust gate opens (tick 273) and `GO` is held from there. HD
-//! inherits only the start tick from that rule (its edge on the release);
-//! from the release on it runs its own race manager's windows, read from the
-//! EBOOT, not Pulse's hold.
+//! zeroes its board on entering the countdown instead, and from the release on
+//! runs its own race manager's windows, both read from the EBOOT.
 //!
 //! - **Pulse**: the rule, run on Pulse's own asset, finds frame 181 and so
 //!   tick 92 - the number measured against the original. That is the check the
 //!   rule is read the same way on every title.
-//! - **HD**: the rule finds frame 203, so frame 0 is tick 70, and the loader
-//!   says so. From the release on, HD runs its own race manager's window
-//!   (`0x0005e948`, read from the EBOOT, confidence 85): the clock jumps to
-//!   3.83 s and loops `[3.83, 5.25)`, 86 ticks. Pinned against the 2026-10-04
-//!   RPCS3 capture: `GO` is lit on the release and its dark centres land
-//!   within 2 ticks of the measured +23, +61 and +109. The start tick is
-//!   bounded from below by the same capture (the green step on the release,
-//!   confidence 75), not measured.
+//! - **HD**: frame 0 is tick 93, 180 before the release
+//!   (`docs/ghidra/functions/ps3-hdfury-eu/gantry-clock.md`, "The circuit's own
+//!   board"), so the digits read `3`, `2`, `1` through the countdown and the
+//!   asset's own `GO` edge (frame 203) is never reached before the release. From
+//!   the release on, HD runs its own race manager's window (`0x0005e948`,
+//!   confidence 85): the clock jumps to 3.83 s and loops `[3.83, 5.25)`, 86
+//!   ticks. Pinned against the 2026-10-04 RPCS3 capture: `GO` is lit on the
+//!   release and its dark centres land within 2 ticks of the measured +23, +61
+//!   and +109.
 //! - **2048 and Omega**: the card pass is HD's, inherited, and plays the boards whose
 //!   countdown is node motion (`321Go_2048.vex`, every native 2048 circuit, on both
 //!   titles). Frame 0 lands `assembly_ticks` before the release, so `GO` slides in on it.
@@ -123,8 +123,8 @@ fn hds_go_lights_on_the_release_and_pulses_in_the_originals_phase() {
         .iter()
         .find(|l| l.starts_with("start gantry clock:"))
         .unwrap_or_else(|| panic!("no gantry clock line: {:#?}", loaded.report));
-    assert!(line.contains("asset frame 203"), "{line}");
-    assert!(line.contains("frame 0 is tick 70"), "{line}");
+    assert!(line.contains("frame 0 is tick 93"), "{line}");
+    assert!(line.contains("180 ticks before the release"), "{line}");
     assert!(line.contains("kept in [3.83, 5.25) s"), "{line}");
     assert!(line.contains("loops every 86 ticks"), "{line}");
     assert!(line.contains("0x0005e948"), "{line}");
@@ -137,9 +137,16 @@ fn hds_go_lights_on_the_release_and_pulses_in_the_originals_phase() {
         .expect("Talon's Junction shows a gantry card");
     let timeline = card.timeline.as_ref().expect("the gantry card is clocked");
     let (model, clock) = (&card.model, timeline.clock());
+    assert_eq!(clock.start_tick, 93);
     assert_eq!(clock.window, Some(gantry::HD_PRE_LAP_WINDOW));
     let release = oag_race::COUNTDOWN_TICKS + 1;
+    // The asset's own `GO` edge (frame 203) is past the free run, which reads
+    // 180 on the release: the window's jump is what lights `GO`.
+    let edge = gantry::go_edge(model).expect("HD's board samples its green");
+    assert_eq!(edge.frame, 203);
+    assert!(u64::from(edge.frame) > release - clock.start_tick);
     let cull = timeline.cull();
+    countdown_reads(model, &clock, cull);
     let lit = |tick: u64| {
         let seconds = clock.seconds(tick);
         lit_white(model, cull.hidden(seconds), seconds)
@@ -148,10 +155,8 @@ fn hds_go_lights_on_the_release_and_pulses_in_the_originals_phase() {
     assert!(full > 0, "GO never lights");
 
     // `GO` is fully lit on the release itself, as on the original's step
-    // frame; the tick before is still the red board. The inherited clock put
-    // only the fading digits' ghost here, 3% of this.
+    // frame; the tick before is still the red board with its `1`.
     assert_eq!(lit(release), full, "GO is not lit on the release");
-    assert!(lit(release - 1) < full / 10, "lit before the release");
 
     // The dark phases: runs where nothing lit white is sampled, as ticks
     // from the release. The 2026-10-04 capture's dark centres are +23, +61
@@ -213,7 +218,7 @@ fn hds_clock_is_found_on_the_loader_path_a_race_really_takes() {
         .iter()
         .find(|l| l.starts_with("start gantry clock:"))
         .unwrap_or_else(|| panic!("no gantry clock line: {:#?}", loaded.report));
-    assert!(line.contains("frame 0 is tick 70"), "{line}");
+    assert!(line.contains("frame 0 is tick 93"), "{line}");
 }
 
 fn loaded_report(source: &str, track: Option<&str>) -> Vec<String> {
@@ -308,6 +313,25 @@ fn curve_board_counts_down(source: &str, track: Option<&str>) {
         three != two && two != one && one != go && three != one,
         "the board shows the same glyph at two beats of the countdown"
     );
+}
+
+/// HD's countdown as a player reads it: the ticks at which the lit glyph changes
+/// are the `3`, the `2`, the `1` (asset frames 35, 85 and 135 from the start tick
+/// 93) and `GO` on the release; the `1` stays up until then.
+fn countdown_reads(model: &mesh::Model, clock: &gantry::Clock, cull: &gantry::PanelCull) {
+    let release = oag_race::COUNTDOWN_TICKS + 1;
+    let mut shown = Vec::new();
+    let mut changes = Vec::new();
+    for tick in 0..=release {
+        let seconds = clock.seconds(tick);
+        let lit = lit_vertices(model, cull.hidden(seconds), seconds);
+        if lit != shown {
+            changes.push(tick);
+            shown = lit;
+        }
+        assert!(!shown.is_empty() || tick < 128, "dark at tick {tick}");
+    }
+    assert_eq!(changes, [128, 178, 228, release]);
 }
 
 /// The drawn, texture-animated vertices that sample lit white at `seconds`:

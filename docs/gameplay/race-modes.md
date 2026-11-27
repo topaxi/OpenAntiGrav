@@ -1873,8 +1873,9 @@ to `GO` lands on the green step above, tick 273, which puts frame 0 at **tick 92
 the "about a second of `GO` before the craft can move" the gantry docs recorded
 was our clock starting at tick 0, not the original's behaviour.
 `crates/raceplay/src/gantry.rs::CLOCK_START_TICK`, **Pulse only**: every other
-title runs Pulse's rule on its own `GO` edge (HD: frame 203, tick 70; inherited
-from Pulse, unmeasured - `docs/rendering/start-gantry.md`). The
+title runs Pulse's rule on its own `GO` edge (inherited from Pulse, unmeasured -
+`docs/rendering/start-gantry.md`), except HD, whose code puts frame 0 on tick 93
+(`docs/ghidra/functions/ps3-hdfury-eu/gantry-clock.md`). The
 cockpit-view overlay
 (`Cockpit_321GO.vex`, only drawn where no gantry is) was **not** measured in the
 original and still runs off `world.tick / 60`.

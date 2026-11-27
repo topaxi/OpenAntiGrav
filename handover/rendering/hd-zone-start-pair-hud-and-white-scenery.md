@@ -2,7 +2,7 @@
 status: re-first
 titles: [hd]
 updated: 2026-11-27
-summary: "HD Zone start pair: board fade order, bright hull panels, grid flaps, countdown tone; `3 2 1 GO` start read, unwired"
+summary: "HD Zone start pair: board fade order, bright hull panels, grid flaps, countdown tone; `3 2 1 GO` first-digit tick unsettled"
 ---
 
 # HD Zone start pair: what is left after the Zone frame's light and post chain
@@ -25,10 +25,16 @@ three. By region after: sky 0.10, scenery 1.93, road and pads 1.50, the board
   28.20 -> 19.99 mean grey, pair 5.92 -> 5.49). What is left is the `black_fadeout` quads'
   draw order: HD's billboard blend order is unread
   (`docs/rendering/start-gantry.md`, "The Zone board").
-- **HD's `3 2 1 GO` board starts with the countdown too, and ours starts it 23 ticks earlier.**
-  Read for the single race and time trial updates, not wired (`gantry-clock.md`, "Open").
+- **The first `3` of HD's `3 2 1 GO` against the capture is unsettled.** The board now starts on
+  tick 93 and matches the capture on the last countdown tick; the capture's "`3` sliding in" tick
+  (113 to 119) falls between ours' red block (about 106) and white `3` (128)
+  (`gantry-clock.md`, "The circuit's own board"). A re-capture recording the node time in phase 1
+  settles it.
 - **Omega and 2048 mode boards keep 210 ticks and no lap windows**: their code is unread
   (`gantry-clock.md`, "What zeroes it in the countdown": checked, applies, not wired).
+- **Omega and 2048's `3 2 1 GO` board (`321Go_StartFinish.vex`, HD-lineage circuits) still
+  starts off its `GO` edge, tick 71**: their countdown entry is unread (`gantry-clock.md`,
+  "The circuit's own board": checked, applies, not wired).
 - **A re-grab should record the gantry node's time in the countdown.**
   `rpcs3_hd_field.gantry_seconds` keeps only values inside the race windows (from 3.83 s), so
   the pair's `gantry_seconds` is null; the unfiltered node time in phase 1 would check the 180
@@ -67,13 +73,11 @@ three. By region after: sky 0.10, scenery 1.93, road and pads 1.50, the board
 
 ## Next Steps
 
-1. Wire HD's `3 2 1 GO` board to the countdown-entry start (read, `gantry-clock.md`, "Open");
-   every HD grid frame moves, so re-render the HD pairs.
-2. The hull's bright panels: a new capture (`HOOK_TEX_RE='0\.69804'
+1. The hull's bright panels: a new capture (`HOOK_TEX_RE='0\.69804'
    scripts/rpcs3-hd-zone-frame.py --small 2500`), decode the normal and tangent streams of the
    live `zoneship01` draws (641..644, `va-06xx-*.bin`; none survive from the earlier lanes) and
    compare `N` on the nose with ours' `hull_normal` (zone-hull-light.md, "Still open").
-3. The board's fade: read the draw order of the gantry's billboard pass from a countdown dump
+2. The board's fade: read the draw order of the gantry's billboard pass from a countdown dump
    (`scripts/rsx-draw-list.py`).
-4. Read `zoneship01`'s program on Omega (GCN) and 2048 (GXP) and wire `fresnelBase`
+3. Read `zoneship01`'s program on Omega (GCN) and 2048 (GXP) and wire `fresnelBase`
    on their Zone hulls.

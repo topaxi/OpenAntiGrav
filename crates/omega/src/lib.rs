@@ -429,6 +429,8 @@ pub const TITLE: &Title = &Title {
         // `321Go_2048.vex` counts down by moving nodes. Any other board
         // (`321Go_StartFinish.vex`) plays HD's clock on the UV keys its `.vex`
         // authors (`docs/ghidra/functions/ps4-omega-eu/billboards.md`, "The UV keys").
+        // This title's countdown entry is unread.
+        countdown_assembly_ticks: None,
         gantry_boards: Some(&[oag_title::adverts::GantryBoard {
             entry: "/Data/Billboards/HD_Adverts/321Go/321Go_2048.vex",
             assembly_ticks: 200,

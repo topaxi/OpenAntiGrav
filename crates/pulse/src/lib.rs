@@ -245,6 +245,8 @@ pub const TITLE: &Title = &Title {
         adverts_unlit: true,
         card_store: oag_title::adverts::CardStore::R5G6B5Gamma,
         card_unlit: true,
+        // Pulse's start is `gantry::Clock::PULSE`.
+        countdown_assembly_ticks: None,
         gantry_boards: None,
         mode_gantries: &[],
         origin: oag_title::Origin::Measured,
