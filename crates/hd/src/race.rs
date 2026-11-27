@@ -349,6 +349,9 @@ pub const ZONE_FRAME: &oag_title::ZoneFrame = &oag_title::ZoneFrame {
     // (`docs/ghidra/functions/ps3-hdfury-eu/zone-shader.md`, "The glow's depth factor").
     glow_window_near: 0.5417,
     detonator_glow_window_near: 0.479,
+    // `Environment_LoadStageTextures` ORs gamma nibble 7 into the strip's address word
+    // (`0x003d6dc8`, confidence 75).
+    glow_vis_srgb: true,
 };
 
 /// HD/Fury's boost and damage zoom-streak ring, `FunkLayerZoom`.
