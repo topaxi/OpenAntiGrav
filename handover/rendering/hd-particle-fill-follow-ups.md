@@ -145,6 +145,10 @@ HD's width throttle, the other idea here, is TARGET FPS `original`
   `FAR_BARS`** (`crates/hd/src/effects.rs`), so their class-6 emitters draw the procedural strip
   rather than the read bar with its sprite. A picture gap; fill measured within 9 % under the
   bar. Wants a pair against the original before listing.
+  `WO_ROCKET_EXPLO` was tried listed on the four Rocket craft pairs (2026-11-27): the far pairs do
+  not move (11.79 to 11.79, 43.17 to 43.20; 9.11 and 34.81 on the two-wave pose, unchanged), the
+  near 0.1 s pair 54.38 to 54.39 and the near 0.233 s pair 64.13 to 65.33 on its own seed. Not
+  listed: no pair favours it, and the far look does not depend on it.
 - **Our 256-particle instance cap** is full on every track blast a few ticks after it starts
   (`TRAIL_SMOKE`). What the original's pool does there is unread.
 - **About 1.7 ms of a hit frame at 1080p that is not fill.** With and without the law, ticks 770
