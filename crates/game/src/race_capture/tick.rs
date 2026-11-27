@@ -146,6 +146,15 @@ pub(super) fn advance_one_tick(
     {
         race.core.sim.force_wall_slide(slot);
     }
+    // Before the forced trips, so they strike the weapon where it now stands.
+    if let Some((at, point)) = options.force_shot_at
+        && at == tick
+    {
+        let player = race.core.player_slot();
+        if !race.core.sim.force_shot_at(player, point) {
+            log::warn!("--force-shot-at: the player has no weapon out");
+        }
+    }
     if let Some((at, slot)) = options.force_bomb_trip
         && at == tick
         && !race.core.sim.force_bomb_trip(slot)
