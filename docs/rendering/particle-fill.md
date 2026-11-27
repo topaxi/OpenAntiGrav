@@ -726,9 +726,24 @@ extent law (`Effects::extents`) as well, which the quads' distances above are th
 | **and the rays as sprite bars (wired)** | **0.2274** | **0.1347** | **0.1314** | **0.2342** | **0.1429** | **0.1286** |
 | and the ring's sparks as bars too | 0.2292 | 0.1346 | 0.1314 | 0.2366 | 0.1428 | 0.1286 |
 
-On `bomb2`, the smoke ring's extent is the whole of the 0.167 s and 0.5 s gain; the rays' extent adds
-`0.0005` at 0.8 s. The ring's sparks worsen 0.167 s on both films (4.4 and 3.9 standard errors), so
-they stay procedural although the original draws them as sprite quads. Listing the rays puts
+**Each listing on its own** (change in the eight-seed mean RMSE when that one listing is added to the
+other wired ones, negative is closer; paired standard errors in brackets). The rays' `SPRITES` and
+`FAR_BARS` entries count as one, since neither draws anything without the other. The Missile pairs
+do not move with any of them.
+
+| Listing | Film | 0.167 s | 0.500 s | 0.800 s | Kept |
+| --- | --- | --- | --- | --- | --- |
+| `EXTENTS` `WO_BOMB_SMOKERING` | `bomb2` | -0.0345 (27) | -0.0976 (22) | -0.0018 (6) | yes |
+| `EXTENTS` `WO_BOMB_RAYS` | `bomb2` | 0 | 0 | -0.0005 (6) | yes |
+| `FAR_BARS` `WO_BOMB_RAYS` | `bomb2` | 0 | 0 | -0.0047 (16) | yes |
+| `FAR_BARS` `WO_BOMB_RAYS` | `bomb3` | 0 | 0 | -0.0039 (11) | yes |
+| `FAR_BARS` `WO_BOMB_SMOKERING` | `bomb2` | +0.0018 (4.4) | -0.00004 (5) | -0.000003 (3) | no |
+| `FAR_BARS` `WO_BOMB_SMOKERING` | `bomb3` | +0.0024 (3.9) | -0.00007 (5) | -0.00001 (4) | no |
+
+The two extent listings were taken apart on `bomb2` only.
+
+The ring's sparks stay procedural although the original draws them as sprite quads: as bars they
+worsen the 0.167 s frame on both films by more than they gain elsewhere. Listing the rays puts
 `bomb_spike` on the particle sheet (41 to 42 sprites, still 3590 of 4096 rows on Talon's).
 
 **The pairs**, as wired, each re-rendered to identical pixels. RMSE and mean grey: lower is closer.
