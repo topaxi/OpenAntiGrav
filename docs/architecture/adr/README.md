@@ -107,6 +107,7 @@ out to be wrong.
 | [0096](0096-dynamic-resolution-probes-a-rise-a-falling-clock-hides.md) | Dynamic resolution probes a rise a falling clock hides | **Accepted** (2026-11-26); a second way to rise beside ADR-0042's loop, kept only when the clock paid for the step |
 | [0097](0097-a-screen-filter-that-moves-pixels-runs-at-full-strength.md) | A screen filter that moves pixels runs at full strength | **Accepted** (2026-11-27); supersedes ADR-0053's strength item |
 | [0098](0098-the-mods-page-is-a-list-of-mods-and-a-detail-page.md) | The MODS page is a list of mods, and each mod has a detail page | **Accepted** (2026-11-27); supersedes ADR-0078 decision 6 |
+| [0099](0099-a-run-context-and-an-activity-stack-own-navigation.md) | A run context and an activity stack own navigation | **Proposed** (2026-11-27); WATCH REPLAY mid-Tournament returns to the leg's end menu; map in `navigation-map.md`; nothing built |
 
 ## Format
 

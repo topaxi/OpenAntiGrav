@@ -64,6 +64,7 @@ Then, depending on what you are here to do:
 | See what each dependency upgrade changed, and what is held back and why | [Dependency upgrades](architecture/dependency-upgrades.md) |
 | Know which thread reads and decodes music | [Music threads](architecture/music-threads.md) |
 | Add or change a menu | [Menus](architecture/menus.md) |
+| Know what survives a switch between menus, races and replays | [Navigation map](architecture/navigation-map.md) |
 | Persist something to a player's own machine | [Persistence](architecture/persistence.md) |
 | What happens when the GPU device is lost | [Device loss](architecture/device-loss.md) |
 | Let a mod carry behaviour (a craft specialty, a track trigger, a HUD widget) | [WebAssembly extensions](architecture/wasm-extensions/README.md) (design, ADR-0079 Proposed) |
