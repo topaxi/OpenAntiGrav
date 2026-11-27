@@ -730,6 +730,7 @@ fn omega_2048_mode_hud_names_are_authored_by_its_layouts() {
     }
     let art = oag_omega::hud::ART_2048;
     let mut wanted: Vec<&str> = art.always_on.to_vec();
+    wanted.extend(art.shield_drain_widget);
     if let oag_title::hud::Sights::Concentric {
         seeking, locked, ..
     } = art.sights
@@ -737,6 +738,10 @@ fn omega_2048_mode_hud_names_are_authored_by_its_layouts() {
         wanted.extend(seeking.iter());
         wanted.extend(locked.iter());
     }
+    assert!(
+        art.shield_drain_widget.is_some(),
+        "a Shield draws its drain"
+    );
     let missing: Vec<&&str> = wanted.iter().filter(|n| !names.contains(**n)).collect();
     assert!(missing.is_empty(), "not authored by Omega: {missing:?}");
 }

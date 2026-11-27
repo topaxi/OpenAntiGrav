@@ -235,7 +235,7 @@ all of them: the fire clears the held pickup.
 | Pure | nothing added: empty box, percentage | already right | static, USA: the fire (`0x0884c8bc`) clears the held id (`+0x1d8`) and the HUD update (`0x0892195c`) draws no icon for id `0`, with a text only for the Autopilot; no reader of the Shield fields (`+0x178`, `+0x17c`) found in it | 75 |
 | 2048 | the `ManualShield` outline drains from the top; percentage unchanged | wired (`HudArt::shield_drain_widget`) | static: [2048's `shield.md`](../vita-2048-eu-v104/shield.md#the-hud-manualshield-drains-while-the-shield-runs). The executable also carries this page's countdown, but no layout it loads has the widget | 75 |
 | Omega, HD circuits | seconds left | ported, inherited from HD | `data00`'s copy authors the widget and the executable holds `DamageBarShieldBg` and `%2.1f`; its update was not read | inherited |
-| Omega, 2048 circuits | the drain | ported, inherited from 2048 | its `2048_hud\` layout authors `ManualShield` | inherited |
+| Omega, 2048 circuits | the drain | ported, inherited from 2048 | its `2048_hud\` layout authors `ManualShield` and its bind (`FUN_012d1590`) hides it; the update unread | inherited |
 
 No comparison pair on any title holds a running Shield.
 

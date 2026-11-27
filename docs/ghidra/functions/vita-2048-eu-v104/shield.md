@@ -166,8 +166,10 @@ after `Hud_Construct` (`0x81192940`) zeroes it, and none carries `0x8000`:
 (`FUN_81183e50`), `0x2` (`FUN_81161c74`, `FUN_81182148`, `FUN_8117c5ce`,
 `FUN_81186584`), and `0xdf | 0x20000`, `0x20800` in the factory at
 `0x812bc7b4`. With the bit set `FUN_81195620` would drain by the ship's
-`ManualShieldStats` instead (`life_time`, `recharge_time`). A writer using
-another instruction form is not excluded.
+`ManualShieldStats` instead (`life_time`, `recharge_time`). The two other `OR`s
+of `0x8000` found by instruction search are not this word: `0x8111e246` writes
+an object's `+0x32420` and `0x81364d8a` converts a buffer of halfwords. A writer
+using another instruction form is not excluded.
 
 **The slot's two timers.** The Shield's start writes `+0x1b8` and `+0x1bc` to the
 same duration, clears the held id (`+0x1f8 = -1`, so the weapon box is empty)
@@ -189,9 +191,10 @@ twin and `FUN_81156220` prints `%2.1f` in `0xff30ff30`, both through
 
 **Omega**: **ported, inherited from 2048**. `data00.psarc`'s
 `2048_hud\HUD_damage_indicator.xml` authors `ManualShield` at its own atlas's
-rectangle and the executable holds the string (`0x018757ae`, no reference
-found), so Omega's update was not read. **HD**: no `ManualShield`; it draws the
-countdown instead.
+rectangle (`omega_2048_mode_hud_names_are_authored_by_its_layouts`) and its
+2048-dialect bind (`FUN_012d1590`) hides it at the start
+([`hud-radar.md`](../ps4-omega-eu/hud-radar.md)); the update that would drain it
+was not read. **HD**: no `ManualShield`; it draws the countdown instead.
 
 **Open**: how long the pickup's Shield lasts in 2048's own modes. Under
 `GameMode_IsHdLineage` (`0x81000930`) the start at `0x8120eaae` takes the time
@@ -199,6 +202,10 @@ from the weapon table's side (`0x8120eb70`); otherwise it takes the ship's
 `ManualShieldStats` `life_time` (`stats+0x4cc`, `3` in all 20 base
 `handlingstats.xml`), where the Race table's Shield authors `5`. Confidence 60,
 not wired: it is simulation, and ours always takes the table's.
+
+**Open**: ours also arms the same timer on an Eliminator absorb
+(`oag_raceplay`'s `eliminator_absorb`, Pulse's law), so the drain shows there
+too; whether 2048's absorb goes through `slot+0x1b8` was not read.
 
 ## Open
 
