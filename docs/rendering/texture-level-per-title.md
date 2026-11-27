@@ -114,9 +114,10 @@ did not move. Why: [below](#why-the-error-rose-when-the-law-went-in).
 
 Lane `ps2-sharpness-check`, 2026-11-27. Three readings were stated before measuring: (A) the law is right and the rise
 is misalignment only; (B) the original's picture is softer than ours for a reason outside the law; (C) the law is wrong
-for these frames. **(B), confidence 85: the original is a 512x512 frame shown through PCSX2's 2x and stretch, ours a
+for these frames. **(B), confidence 80: the original is a 512x512 frame shown through PCSX2's 2x and stretch, ours a
 1280x720 render of a different horizontal projection. Through the same chain, level 0 matches the original's detail and
-the old box chain does not (C rejected).** The law's confidence stays 92.
+the old box chain does not (C rejected).** The law's confidence stays 92. The verdict is 80 and no higher: one
+original capture per pair, PCSX2's stretch filter assumed, and 18 % of the rise unexplained.
 
 All figures below are over the 16 grid pairs. The Zone pair is left out: its state draws 640x448, not 512x512, and its
 moving craft does not correlate block for block.
@@ -128,8 +129,10 @@ moving craft does not correlate block for block.
    misregistered by about +35 px at the left edge and -32 px at the right at 1280 wide (Metropia, Talon's Junction).
    With ours' projection aspect overridden to `40/21` (a scratch build, not committed), Metropia's block offsets outside
    the HUD fall under 2 px.
-2. **The capture grid.** Each grid state's own GS registers scissor 512x512 (the [GS dumps](#pulse-ps2-in-a-race)
-   above are from a boot that drew 640x448). At `upscale_multiplier` 2 PCSX2 therefore samples 1024 columns and 1024
+2. **The capture grid.** The 16 grid originals are GS screenshots of 1820x1024, twice 512 rows, where the Zone pair's
+   is 1592x896, twice 448; each grid state's GS registers scissor 512x512, and the screenshot holds detail up to its
+   vertical Nyquist, so its 1024 rows are real. (The [GS dumps](#pulse-ps2-in-a-race) above are from a boot that drew
+   640x448.) At `upscale_multiplier` 2 PCSX2 therefore samples 1024 columns and 1024
    rows, stretches them to the 1820x1024 screenshot, and one Lanczos takes that to 1280x720. The original has 1024
    samples across the picture, ours 1280; down it, the original has 1024 rows into 720, ours 720. Its screenshot's
    spectrum shows it: power at the screenshot's Nyquist is 0.8 across and 93 down.
@@ -140,7 +143,8 @@ assumed: PCSX2's filter was not read), then the pair script's Lanczos to 1280x72
 ### Detail
 
 Fixed boxes on far stands and walls, one per pair, chosen on the original. Laplacian standard deviation of luma
-([frame-audit.md](frame-audit.md)'s kernel), and the standard deviation of the second difference along x and y.
+([frame-audit.md](frame-audit.md)'s kernel, computed in numpy: that page's `fx:standard_deviation` command returns
+about 3e10 on ImageMagick 7.1.2-36 HDRI), and the standard deviation of the second difference along x and y.
 
 | Picture | Laplacian | x | y |
 | --- | ---: | ---: | ---: |
