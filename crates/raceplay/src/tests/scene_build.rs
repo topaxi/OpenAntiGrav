@@ -353,6 +353,7 @@ fn built_race_scene(image: &std::path::Path) -> Option<BuiltRace> {
     let loaded = crate::load(&crate::Options {
         source: image.display().to_string(),
         class: "VENOM".to_string(),
+        wingtip_contrails: crate::WingtipContrails::On { lender: None },
         ..crate::Options::default()
     })
     .expect("loading the race");
@@ -372,6 +373,10 @@ fn built_race_scene(image: &std::path::Path) -> Option<BuiltRace> {
         ("leach beam", loaded.leach_beam_texture.as_ref()),
         ("cannon bolt", loaded.cannon_quad_textures.0.as_ref()),
         ("cannon flash", loaded.cannon_quad_textures.1.as_ref()),
+        (
+            "wingtip contrail",
+            loaded.ribbon_textures.wingtip.as_ref().map(|w| &w.texture),
+        ),
     ]
     .into_iter()
     .filter_map(|(name, texture)| texture.map(|t| (name, t.lod_bias, t.mips.len())))
@@ -478,7 +483,7 @@ fn v2048_biases_every_race_pipeline_and_its_circuit() {
     // The effect textures `oag_fx` draws take the same bias over their files' own chains.
     assert_eq!(
         built.effect_textures.len(),
-        6,
+        7,
         "{:?}",
         built.effect_textures
     );

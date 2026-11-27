@@ -195,7 +195,7 @@ pub(crate) fn decode(blob: &[u8], platform: oag_assets::Platform) -> Option<Flar
             width,
             height,
             rgba: rgba.into_flattened(),
-            mips: Vec::new(),
+            mips: texture.lower_levels_rgba(blob),
             lod_bias: 0.0,
         });
     }
