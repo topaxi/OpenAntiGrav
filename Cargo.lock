@@ -4073,6 +4073,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "dirs",
+ "log",
  "oag-2048",
  "oag-assets",
  "oag-disc",
@@ -4085,6 +4086,7 @@ dependencies = [
  "oag-pure",
  "oag-tables",
  "oag-testdata",
+ "oag-texture",
  "oag-title",
  "oag-weapons",
  "zip",
