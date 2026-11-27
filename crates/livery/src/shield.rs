@@ -54,7 +54,8 @@ pub(super) fn shield_model(
         .ok_or_else(|| {
             format!("{name}: a .vex with external geometry and no .rcsmodel beside it")
         })?;
-    let (mut model, built, colour) = if mesh::rcs::psp2::is_psp2(&geometry) {
+    let psp2 = mesh::rcs::psp2::is_psp2(&geometry);
+    let (mut model, built, colour) = if psp2 {
         let (model, built) = mesh::rcs::psp2::build(name, &geometry, None, &mut |path| {
             textures.read(archives, path)
         })
@@ -86,6 +87,12 @@ pub(super) fn shield_model(
         model.shield_shell = true;
         for vertex in &mut model.vertices {
             vertex.colour[..3].fill(1.0);
+            // The PS3 program's alpha reads the stream's `VertexColour1.w`,
+            // which the mesh build carries as the sun mask (`1.0` with no
+            // stream); `docs/ghidra/functions/ps3-hdfury-eu/shield.md`.
+            if !psp2 {
+                vertex.colour[3] = vertex.sun_mask;
+            }
         }
     }
     // **Said out loud because the picture does not say it.** A shield model

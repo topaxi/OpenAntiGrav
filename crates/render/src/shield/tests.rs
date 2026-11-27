@@ -428,7 +428,7 @@ fn a_fixed_60_hz_shield_runs_ahead_of_the_jittered_live_one() {
 /// tints.
 #[test]
 fn the_ps2_shell_is_never_tinted_and_the_other_palettes_are() {
-    for palette in [PULSE_PALETTE, HD_PALETTE] {
+    for palette in [PULSE_PALETTE, OMEGA_PALETTE] {
         let mut shield = ShipShield::with_palette(palette);
         shield.activate();
         assert_eq!(shield.shell_colour(), shield.colour());
@@ -443,6 +443,33 @@ fn the_ps2_shell_is_never_tinted_and_the_other_palettes_are() {
         ps2.advance(DT);
         reference.advance(DT);
     }
+}
+
+/// HD's shell takes the lerped colour and its alpha as they are: the program
+/// reads the opacity off the mesh, so the flicker the cockpit sphere takes
+/// ([`ShipShield::colour`]) is not on the shell.
+#[test]
+fn the_hd_shell_alpha_does_not_flicker() {
+    let mut shield = ShipShield::with_palette(HD_PALETTE);
+    shield.activate();
+    for _ in 0..240 {
+        shield.advance(DT);
+    }
+    let mut dimmest_sphere = 1.0f32;
+    for _ in 0..400 {
+        shield.advance(DT);
+        let shell = shield.shell_colour();
+        assert!(
+            (shell[3] - 1.0).abs() < 1e-3,
+            "the shell flickered: {shell:?}"
+        );
+        assert_eq!(shell[..3], shield.colour()[..3]);
+        dimmest_sphere = dimmest_sphere.min(shield.colour()[3]);
+    }
+    assert!(
+        dimmest_sphere < 0.55,
+        "the sphere stopped flickering: {dimmest_sphere}"
+    );
 }
 
 /// A craft whose palette carries its own authored target fades up to that

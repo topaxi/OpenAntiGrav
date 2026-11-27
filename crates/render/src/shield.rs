@@ -233,6 +233,13 @@ pub struct Palette {
     /// is then drawn at its authored colours, scaled by the swell, until it
     /// switches off. See `docs/ghidra/functions/ps2-pulse-eu/shield-pickup.md`.
     pub tints_shell: bool,
+    /// Whether the shell's alpha takes the `sin` flicker.
+    ///
+    /// `false` on HD, whose shell program reads its alpha off the mesh's own
+    /// `VertexColour1` stream, so the flickered tint the draw writes per node
+    /// does not reach the picture
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/shield.md`, "Watched on RPCS3").
+    pub flickers_shell_alpha: bool,
     /// How far the colour moves toward its target per substep ([`COLOUR_RATE`]
     /// everywhere a race is launched; [`CONTENT_2048_COLOUR_RATE`] is the
     /// 2048-content modes' value).
@@ -250,6 +257,7 @@ pub const PULSE_PALETTE: Palette = Palette {
     target: TARGET_COLOUR,
     hit: HIT_COLOUR,
     tints_shell: true,
+    flickers_shell_alpha: true,
     colour_rate: COLOUR_RATE,
     target_alpha_from_cockpit: false,
 };
@@ -277,6 +285,7 @@ pub const HD_PALETTE: Palette = Palette {
     target: TARGET_COLOUR,
     hit: HD_HIT_COLOUR,
     tints_shell: true,
+    flickers_shell_alpha: false,
     colour_rate: COLOUR_RATE,
     target_alpha_from_cockpit: false,
 };
@@ -286,6 +295,7 @@ pub const HD_PALETTE: Palette = Palette {
 /// (`docs/ghidra/functions/ps4-omega-eu/shield.md`, `ShipShield_Construct`).
 pub const OMEGA_PALETTE: Palette = Palette {
     target_alpha_from_cockpit: true,
+    flickers_shell_alpha: true,
     ..HD_PALETTE
 };
 
@@ -308,6 +318,7 @@ pub const OWN_PALETTE: Palette = Palette {
     target: OWN_TARGET_COLOUR,
     hit: OWN_HIT_COLOUR,
     tints_shell: true,
+    flickers_shell_alpha: true,
     colour_rate: COLOUR_RATE,
     target_alpha_from_cockpit: false,
 };
@@ -502,13 +513,16 @@ impl ShipShield {
     }
 
     /// The colour the **shell** multiplies its authored vertices by: [`Self::colour`],
+    /// with the unflickered alpha where [`Palette::flickers_shell_alpha`] is `false`,
     /// or the identity where [`Palette::tints_shell`] is `false`.
     #[must_use]
     pub fn shell_colour(&self) -> [f32; 4] {
-        if self.palette.tints_shell {
+        if !self.palette.tints_shell {
+            [1.0; 4]
+        } else if self.palette.flickers_shell_alpha {
             self.colour()
         } else {
-            [1.0; 4]
+            self.rgba
         }
     }
 
