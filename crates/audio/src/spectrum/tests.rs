@@ -163,3 +163,39 @@ fn an_empty_band_has_no_span_and_reads_zero() {
         assert_eq!(range.level(0.0, 0.01), 0.0);
     }
 }
+
+/// **The whole-spectrum total is not ranged.** A steady tone at half the amplitude reads half the
+/// total, where its band reads the same full level once its range has settled: the Detonator mine's
+/// visualiser reads a raw level (`0x00304cc8`), not a band's place in its own history. Silence reads
+/// zero, and the total is every bin's magnitude over the transform's length.
+#[test]
+fn the_total_is_every_bins_magnitude_and_scales_with_the_music() {
+    let sample_rate = 48_000;
+    let total_of = |amplitude: f32| {
+        let mut analyzer = Analyzer::new();
+        let samples: Vec<f32> = tone(1_000.0, sample_rate, FFT_SIZE * 4)
+            .iter()
+            .map(|s| s * amplitude)
+            .collect();
+        analyzer.process(&samples, sample_rate);
+        (analyzer.total(), analyzer.magnitudes.iter().sum::<f32>())
+    };
+    let (loud, loud_bins) = total_of(1.0);
+    let (quiet, _) = total_of(0.5);
+    assert!(
+        (loud - loud_bins / 1024.0).abs() < 1e-6,
+        "{loud} {loud_bins}"
+    );
+    assert!(loud > 0.1, "a full-scale tone reads a level: {loud}");
+    assert!((quiet / loud - 0.5).abs() < 1e-3, "{quiet} against {loud}");
+    assert_eq!(total_of(0.0).0, 0.0);
+}
+
+/// [`Spectrum::total`] reads silence until the first publish and the latest one after.
+#[test]
+fn spectrum_total_starts_silent_and_reflects_the_latest_publish() {
+    let spectrum = Spectrum::new();
+    assert_eq!(spectrum.total(), 0.0);
+    spectrum.publish_total(0.3154);
+    assert_eq!(spectrum.total(), 0.3154);
+}

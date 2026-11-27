@@ -586,6 +586,7 @@ pub fn run(
                 detonator_mines: None,
                 detonator_mine_envelopes: None,
                 detonator_mine_ages: None,
+                detonator_mine_volumes: None,
                 detonator_emp_charge: None,
                 detonator_gauge_speed: None,
                 pose_sparks: Vec::new(),
