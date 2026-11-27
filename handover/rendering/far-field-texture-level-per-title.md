@@ -14,7 +14,7 @@ read values only, as `Title` data, with a test, a break-it, and the other titles
 
 ## Open
 
-- **2048: `material_lod_bias` -1.5, measure first.** `GxtLoader_LoadTexture` (`0x812f0ec4`) gives every
+- **2048: `material_lod_bias` -1.5, measure first, do not wire below 90** (maintainer: the evidence is the loader plus one front-end texture; race materials need an in-race read, as for PS2). `GxtLoader_LoadTexture` (`0x812f0ec4`) gives every
   texture it builds `sceGxmTextureSetLodBias(0x13)` = -1.5, trilinear, no anisotropy (confidence 85,
   `docs/ghidra/functions/vita-2048-eu-v104/gxt-loader.md`). That race materials keep those bits is
   inferred (60). The Zone and Detonator track skins have their mip filter switched off after load.
@@ -53,5 +53,5 @@ read values only, as `Title` data, with a test, a break-it, and the other titles
 
 1. After `pulse-farfield-lod` merges: the PS2 in-race measure (above; wire only at 90+), then TEXTURE DETAIL on the
    hardware path (about an hour, a shader change with a level test per preset).
-2. Measure: 2048's live race-material descriptor (about 45 minutes in Vita3K), then its `Rule` line.
+2. Measure: 2048's live race-material descriptors in a race (about 45 minutes in Vita3K); wire the `Rule` line only at 90+.
 3. Read: Pure's K source (about 30 minutes in Ghidra).
