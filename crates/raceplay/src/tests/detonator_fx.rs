@@ -785,7 +785,7 @@ fn an_omega_wall_death_plays_the_discs_spark() {
     check_the_title_plays_the_wall_spark(path.display().to_string(), None);
 }
 
-/// Mounts the official mod `oag.detonator-pulse`, which carries Pulse's Detonator data (ADR-0098):
+/// Mounts the official mod `oag.detonator-pulse`, which carries Pulse's Detonator data (ADR-0100):
 /// `None` without the official-mods submodule, a failure under `OAG_REQUIRE_GAME_DATA=1`.
 fn with_pulse_detonator_mod() -> Option<()> {
     let manifest = oag_testdata::exact("assets/mods/official/detonator-pulse/oag-mod.toml")?;

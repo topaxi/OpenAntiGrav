@@ -278,7 +278,7 @@ fn guard_skips(word: u32, globals: &[i8; GLOBAL_SLOTS]) -> Option<bool> {
 /// skipped, or `None` for a variable outside the handler's four.
 /// The operand is `[variable, mode, threshold]`, bytes `word >> 16`, `word >> 8`
 /// and `word`; the three modes compare as [`guard_skips`] does.
-fn variable_guard_skips(word: u32, variables: &[i8; 4]) -> Option<bool> {
+pub(super) fn variable_guard_skips(word: u32, variables: &[i8; 4]) -> Option<bool> {
     let variable = usize::try_from((word >> 16) as u8 as i8).ok()?;
     let value = *variables.get(variable)?;
     let mode = ((word >> 8) & 0xff) as u8 as i8;

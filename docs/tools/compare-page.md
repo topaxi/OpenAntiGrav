@@ -1202,8 +1202,9 @@ The script needs no numpy: the offset is pure Python over `magick` edge maps. `t
 `+0x180`; the tripod at `*(controller+0x40)` at `Camera_CopyTripodToView` (`0x08849970`); the clock at `Race_UpdateLaunchGrade`'s `a0 + 0x130` (seconds, advances by the frame time `0.0333` per craft update, camera.md; read twice, a second load reads it at the picture's own stop). The camera node was located
 already (camera.md), so the grid fallback was not needed. Ours takes the craft's row through `--pose-from` and builds **its own chase camera**
 (`--no-camera`): the original's tripod matrix is a shear that ours' `look_at` re-orthonormalises, so feeding it draws the pitch 5.71 degrees wrong; the shear
-is ported in the chase rig (`chase_view_sheared`). The presented frame lags the stop by one (Pulse's measurement, **inherited and unmeasured on Pure**;
-a resting craft cannot tell, the clock can: it moved the HUD tenth in 4 of 4 pairs, matched by reading it at the stop and subtracting one frame).
+is ported in the chase rig (`chase_view_sheared`). The presented frame lags the stop by **two** of the original's frames (2026-11-27, read off the HUD's
+digits: "The presented lag, wired" below; it was inherited from Pulse as one until then). A resting craft cannot tell, the clocks can: both are the stop's
+read less two `frame_dt_s`.
 The circuit is checked by ours' own spawn: 0.2 to 8.8 units and under 3.5 degrees from the original's grid pose on the four circuits.
 
 **Known, not fixed here.** Ours draws the hull darker and less lit than the original on all four, and its Pure HUD has no speed gauge and shows `TOTAL`
@@ -1343,7 +1344,7 @@ the HUD's part splits into text layout, the clock lag and the song, and the back
 
 **Falsifier 2 fired.** Above the horizon the share fell by 0 to 0.29 grey over the eight pairs swept, so the lag below is **not** the scenery residual's cause. It is a separate cause.
 
-**Cause: the picture is two stops behind the read, not one** (confidence 75, one capture per pair). `psp-pure-pair.py` subtracts `PRESENTED_LAG = 1` frame (inherited from Pulse PSP).
+**Cause: the picture is two stops behind the read, not one** (confidence 75, one capture per pair). `psp-pure-pair.py` subtracted `PRESENTED_LAG = 1` frame (inherited from Pulse PSP) until it was wired (below).
 Primary evidence is the HUD's own digits. For a lag of N frames the picture's clock is `race_clock_at_stop_s - N x frame_dt_s`; it must truncate to the original's `CURRENT` tenth, and
 `target - clock` to its `BRONZE TIME` tenth (targets: Chenghou 160, Blue Ridge 158, Vineta 130 s from `stats.xml` as
 [hud-time-ladder.md](../ghidra/functions/psp-pure-usa/hud-time-ladder.md) records them; Citta Nuova 176 and Manor Top 141 s inferred from ours' own countdown, as whole seconds).
@@ -1385,7 +1386,40 @@ Sebenco's digit allows, so a per-grab 3 is not excluded.
    Sol 2 (0.37 outside HUD boxes), 0.36 on Sinucit, at most 0.14 on the others: visible to a player, small in the score.
 
 **Reproducing.** Copy a pair directory, re-render with `rerender()` of `scripts/compare-rerender-ours.py`, take the difference with `magick theirs ours -colorspace Gray -compose difference
--composite`, and sum it over the boxes above. For the lag, subtract 2 from the `--ticks` value in the copy's `ours.flags`.
+-composite`, and sum it over the boxes above. The split above was measured at one frame of lag (before the wiring below).
+
+#### The presented lag, wired (2026-11-27, `pure-pair-lag`)
+
+`compare_env.PURE_PRESENTED_LAG = 2` is the one number: `psp-pure-pair.py` records it, and `compare-rerender-ours` re-times a stored Pure PSP record made
+with another (`compare_env.pure_lag_flags`): race clock = `race_clock_at_stop_s - 2 x frame_dt_s`, `--ticks` from it by the script's own tenths rule, the
+scenery clock back by the same frame. The record's `presented_lag_ticks` and provenance follow, so a second run changes nothing. Confidence stays 75
+(the digits above). On all twelve race pairs `--ticks` fell by 2. The two Zone pairs have no race clock: only their scenery clock moved back one frame,
+labelled inherited (the digits were not read on a Zone state), and their pose is still the stop's uncorrected moving read. Neither frame changed by a pixel: nothing in view animates over 33 ms.
+
+Copies of the stored pairs, re-rendered with the same binary before and after (mean grey; the clocks and target boxes are `0..100, 0..56` and
+`370..480, 0..34`, as mean grey inside the box):
+
+| Pair | Score | Clocks box | Target box |
+| --- | --- | --- | --- |
+| Chenghou | 6.60 -> 6.13 | 16.03 -> 15.98 | 19.32 -> 14.39 |
+| Blue Ridge | 6.57 -> 6.32 | 16.86 -> 16.40 | 16.34 -> 14.71 |
+| Citta Nuova | 6.51 -> 6.34 | 16.67 -> 16.48 | 39.45 -> 39.45 |
+| Mandrashee | 6.49 -> 5.98 | 16.41 -> 15.82 | 52.46 -> 52.12 |
+| Vineta | 6.01 -> 5.85 | 15.15 -> 15.17 | 15.72 -> 15.72 |
+| Manor Top | 5.90 -> 4.95 | 18.38 -> 18.38 | 27.82 -> 16.35 |
+| Sagarmartha | 9.18 -> 8.78 | 20.09 -> 18.07 | 26.33 -> 26.31 |
+| Sol 2 | 9.03 -> 8.71 | 36.14 -> 34.11 | 17.93 -> 17.93 |
+| Sinucit | 14.12 -> 13.86 | 22.39 -> 21.03 | 18.27 -> 18.49 |
+| Sebenco Climb | 13.73 -> 13.44 | 19.54 -> 17.89 | 15.60 -> 14.22 |
+| Karbonis | 3.74 -> 3.33 | 17.98 -> 17.98 | 12.98 -> 12.98 |
+| Modesto | 4.15 -> 3.82 | 18.33 -> 17.93 | 14.02 -> 14.02 |
+| Zone 8 | 35.23 -> 35.23 | not read | not read |
+| Zone 9 | 34.54 -> 34.54 | not read | not read |
+
+No pair worsened in score. The eight wrong tenths now read as the original's: `CURRENT` on Mandrashee, Sagarmartha, Sol 2, Sinucit and Sebenco Climb,
+`BRONZE TIME` on Chenghou, Blue Ridge and Manor Top; all 24 time readouts of the twelve pairs now show the original's digits (read on 3x and 4x crops).
+The boxes also hold the scenery behind (Sinucit's target box rose 0.22 and Vineta's clocks box 0.02 with unchanged digits), and a `CURRENT` tenth can run
+past `x 100`, so the box figures are not a digit test. Mandrashee's `BRONZE TIME` digits still sit to the right of the original's (the layout item above).
 
 ## Race shots: a mid-pack frame of a Single Race, weapons off (2026-10-20, `compare-race-shots`)
 
@@ -1842,7 +1876,7 @@ reading that stands (one frame each, confidence 40). The racer-row offsets are O
 **Claim: the page carries one Pulse PS2 Zone pair, Talon's Junction White at zone 5, against PCSX2 v2.9.168. True, with a gap.** Pair `pulse-ps2-zone-talons-white-z5`
 (`pulse-ps2/zone-talons-white-z5/`), 12 parity checks passed, rmse 0.297 / edge correlation 0.069 / mean grey 27.4. Start to pair took about 25 minutes, 12 of them walking from a cold boot.
 
-- **Old PS2 states do not load.** Every state in `data/saves/pulse-ps2/` was made by PCSX2 v2.9.138; v2.9.168 refuses each ("This save state was created with PCSX2 version v2.9.138. It is no longer compatible"), so none of the grid pairs of "Pulse PS2: a race pair for every circuit" can be re-captured from its state until it is walked again. `data/saves/pulse-ps2/menu/main-menu-pcsx2-2.9.168.p2s` is a v2.9.168 state on the Main Menu (fresh card, name `AAAA` and tag `AAA` as the profile record in EE RAM reads, formatted) to start walks from. The v2.9.168 GS screenshot in a race is 1592x896 (the earlier notes say 1820x1024, the boot screens' size); it is 16:9 either way, so the one Lanczos resize to 1280x720 stands.
+- **Old PS2 states do not load.** Every state in `data/saves/pulse-ps2/` was made by PCSX2 v2.9.138; v2.9.168 refuses each ("This save state was created with PCSX2 version v2.9.138. It is no longer compatible"), so none of the grid pairs of "Pulse PS2: a race pair for every circuit" can be re-captured from its state until it is walked again. (Seen again 2026-11-27: the refusal for the Metropia Black and Talon's Junction White grid states names v2.9.148.) `data/saves/pulse-ps2/menu/main-menu-pcsx2-2.9.168.p2s` is a v2.9.168 state on the Main Menu (fresh card, name `AAAA` and tag `AAA` as the profile record in EE RAM reads, formatted) to start walks from. The v2.9.168 GS screenshot of the Zone race is 1592x896, while the older grid states' in-race grabs are 1820x1024; it is 16:9 either way, so the one Lanczos resize to 1280x720 stands.
 - **The state.** Main Menu, `down` x3, `cross` (Racebox), `right` x5 on RACE TYPE (reads `ZONE`; Speed Class, Weapons and AI Difficulty grey out), `cross`, Track Select (Talon's Junction White, 1/2 on a fresh card), `cross` (Assegai, Zone, all four stats 10), `cross`, `cross` through the description page. **A Zone race on the PS2 flies itself with no input**: zone 0 at about 12 s after the HUD, zone 5 about 36 s (real time under Xvfb), class names `sub-venom`, `venom`, `sub-flash`, `flash` as the zone climbs. The state is `data/saves/pulse-ps2/zone-talons-white-assegai-z5.p2s`, made by running the race in 3 s slices (pause, `savestate` per slice; a slice's picture is read by loading it); zone 5 begins between slices 3 and 4 of the second set.
 - **The grab.** `pcsx2-pulse-pair.py --zone-capture` loads the state, writes the game's `Aspect Ratio` option (`DAT_00284fe8 = 1`, a fresh card has 4:3: the first build read projection aspect 1.4286 and the pair refused), advances four frames, holds F8 (a paused VM keeps the screenshot request until a frame is presented: no file appeared), taps F7 once (the file appears; the frame counter moved by exactly 1) and saves a state with the VM still paused. `--zone ZONE,SCORE[,KMH[,SHIELD]] [--zone-class flash] [--zone-from DIR]` then reads the craft, body, camera eye/axes/field and the world clock out of that state and renders ours at tick 0 (`--mode zone --team Assegai --hud-state 1,1,0,0,KMH,SHIELD,0,ZONE,SCORE,ZONE_S`). The race pair's running-VM grab cannot be used: a craft at Flash speed moves many units in the few tenths of a second it lags the state. A flying craft's cached basis trails its body by 0.0135 at this frame (a resting one by under 5e-3), so `pcsx2_state.player_craft` takes a `cache_tolerance` and the Zone path passes 0.05; it picks the craft 11.64 units from the camera eye, the chase rig's distance.
 - **HUD values read by eye**, since Pulse PS2's Zone counters are not located in RAM (no PS2 Zone page exists; the PSP's are `docs/ghidra/functions/psp-pulse-usa/zone-mode.md`): zone 5, score 4211, 94 km/h (the grab before the aspect fix read 100 km/h and 4209), shield 19 (the bar blinks, so the grab shows the number only), class FLASH. The grab is deterministic: a second capture of the same state gave an identical `theirs.png` (rmse 0) and the same HUD. The seconds into the zone are not readable off the frame; ours uses 0 and 6 s changes 15 pixels.
@@ -2032,6 +2066,10 @@ scripts/vita3k-2048-menu-pair.py pairs --out D --oag-game target/release/oag-gam
 `walk --plan "wait:8,pu:Return:title,..." --keep` photographs any plan, `--attach` reuses the running Vita3K). The pause frame is a
 `walk` of `PAUSE_PLAN`. Adopt: name the `menu-*` directories, `python3 scripts/compare_env.py manifest
 data/reference/compare-page/menus-2048.toml data/reference/compare-page/2048/menu-*`, then `just compare-page`.
+
+**2026-11-27 (`2048-menu-pairs`).** Home and Game Mode re-take their stills past the entry
+fade, and four pairs fell: [campaign-screens.md](../ui/campaign-screens.md), "2048 menu pairs:
+what the four worst differed by".
 
 ## Menu pairs: Wipeout Pulse and Wipeout Pure (PSP) front-end screens (2026-10-27, `menu-pairs-pulse-pure`)
 
@@ -3322,3 +3360,56 @@ and `menu-team` 27.31, `pulse-psp/menu-team` 2.48: unchanged. Every other `menu-
 **Re-make the pairs** (the lead adopts the lane's re-made pairs):
 `pulse-psp/menu-pause` and `menu-title` and `pure-psp/menu-pause` are `compare-rerender-ours.py --only <pair>` from a tree with this lane; `pulse-ps2/menu-team`
 needs `--menu-model-seconds 0.575` in its recorded flags (and `original.ship_sway_fitted`; a fresh PCSX2 capture fits it itself).
+
+## Pure's lap-one close-up (2026-11-27, `menu-pairs`)
+
+Claim: the Pure race HUD's `LAP 1/3` sits where the original puts it, so the box `(0,225,60,47)` on `pure-psp/vineta`
+falls from 16.8 mean grey. **True.** The cause is not the layout XML (it authors `LapOf` at `x="27"` and `Lap Outof` at
+`x="40"`) but Pure's own `Hud_UpdateLapCounter`, which moves both left by 17 on lap one
+([hud-lap-counter.md](../ghidra/functions/psp-pure-usa/hud-lap-counter.md)). `oag_pure::hud::ART::lap_one_shift` now
+carries it.
+
+Copies of the stored pairs, ours re-rendered before and after, against the stored `theirs.png`. Box is `(0,225,60,47)`
+mean grey; the score is the page's mean grey over the frame. Every race pair is on lap one.
+
+| Pair | Box | Score |
+| --- | --- | --- |
+| Vineta | 16.99 -> 4.52 | 5.85 -> 5.58 |
+| Blue Ridge | 15.87 -> 4.30 | 6.32 -> 6.08 |
+| Chenghou | 18.53 -> 8.57 | 6.13 -> 5.92 |
+| Citta Nuova | 15.56 -> 4.09 | 6.34 -> 6.10 |
+| Karbonis | 13.36 -> 4.31 | 3.33 -> 3.14 |
+| Mandrashee | 13.30 -> 5.05 | 5.98 -> 5.81 |
+| Manor Top | 13.02 -> 4.84 | 4.95 -> 4.78 |
+| Modesto | 17.39 -> 3.43 | 3.82 -> 3.52 |
+| Sagarmartha | 14.43 -> 7.03 | 8.78 -> 8.63 |
+| Sebenco Climb | 44.40 -> 36.39 | 13.44 -> 13.28 |
+| Sinucit | 25.67 -> 14.68 | 13.86 -> 13.62 |
+| Sol 2 | 12.49 -> 5.13 | 8.71 -> 8.56 |
+| `menu-pause` | 16.96 -> 4.85 | 5.05 -> 4.80 |
+
+The two Zone pairs do not move (score and box equal). What is left in the box is the scenery behind the digits
+(Sebenco Climb and Sinucit sit over a bright background).
+
+`menu-pause` has no `ours.drive` beside the stored record on this machine: it was rebuilt from
+`scripts/pure-pause.drive` with `@TICKS@` 1612 (the record's `race_clock_read.basis`).
+
+## Pulse PS2's heading face (2026-11-27, `menu-pairs`)
+
+Claim: the PS2 Ship Select heading draws in the `Title` role's `Pulse_14` face, so `pulse-ps2/menu-team`'s header
+box `(40,0,480,60)` falls from 10.18. **True.** Evidence and what stays open:
+[menus-original.md](../ui/menus-original.md), "Pulse PS2's headings draw in the Title face".
+
+Copies of the stored pairs, ours re-rendered before and after, against the stored `theirs.png`. Header box mean grey;
+everything below `y = 60` is pixel-identical before and after on all five.
+
+| Pair | Header box | Whole frame |
+| --- | --- | --- |
+| `menu-main` | 8.74 -> 7.10 | 1.94 -> 1.88 |
+| `menu-team` | 10.19 -> 7.56 | 2.31 -> 2.22 |
+| `menu-grid` | 11.52 -> 8.85 | 1.81 -> 1.73 |
+| `menu-cell` | 11.52 -> 8.85 | 2.02 -> 1.93 |
+| `menu-options` | **8.11 -> 9.50 (worse)** | **1.87 -> 1.91 (worse)** |
+
+`menu-options` is worse because its heading authors no scale (1.0) and ours draws 0.8: at 1.0 its header box
+reads 7.57.

@@ -1,4 +1,4 @@
-//! A mode that loads data of its own is offered only where that data resolves (ADR-0098):
+//! A mode that loads data of its own is offered only where that data resolves (ADR-0100):
 //! Detonator on Pulse with the official mod `oag.detonator-pulse` on, not with it off, and on
 //! HD, 2048 and Omega off their own discs whatever the mods.
 //!

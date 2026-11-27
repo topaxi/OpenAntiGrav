@@ -523,6 +523,9 @@ fn build_scanned(
             .is_some_and(|m| m.is_placeholder());
         report.placeholder_submeshes += usize::from(placeholder && !place.hidden);
         report.unplaced += usize::from(place.unplaced);
+        if let (Some(m), false) = (submesh.material, place.hidden) {
+            super::census::shown(m);
+        }
         // The second texture is this material's lightmap, where its submesh's
         // own declaration carries a `lightmapUV` - which is the same set of
         // submeshes, exactly (`oag_rcs`'s declaration ground truth).
@@ -575,6 +578,9 @@ fn build_scanned(
             .and_then(flat_constant::emissive_colour);
         report.emissive_colour_submeshes += usize::from(emissive.is_some());
         let zone = zone.or(emissive);
+        if let (Some(m), true) = (submesh.material, emissive.is_some()) {
+            super::census::claim(m, "flat_emissive", super::census::Outcome::Drawn);
+        }
         // HD's `nr_twinblend`: unlit, three coordinate pairs, one glow-table entry.
         let twin_here = twin.of(submesh.material);
         let (colour, lit, role) = match zone {
@@ -585,24 +591,30 @@ fn build_scanned(
                     | crate::mesh::slots::NO_SUN
                     | twin_here.map_or(0, |t| t.slot << crate::mesh::slots::MATERIAL_SHIFT),
             ),
-            None if placeholder => (
-                FOG_FLAT,
-                0.0,
-                role | crate::mesh::slots::NO_AMBIENT | crate::mesh::slots::NO_SUN,
-            ),
-            Some([r, g, b]) => (
-                [
-                    r,
-                    g,
-                    b,
-                    match zone_slot {
-                        Some((k, _)) if !ps4 => ZONE_COLOUR_ALPHA + f32::from(k),
-                        _ => 1.0,
-                    },
-                ],
-                0.0,
-                role | crate::mesh::slots::NO_AMBIENT | crate::mesh::slots::NO_SUN,
-            ),
+            None if placeholder => {
+                super::census::drawn(submesh.material, "fc01_placeholder");
+                (
+                    FOG_FLAT,
+                    0.0,
+                    role | crate::mesh::slots::NO_AMBIENT | crate::mesh::slots::NO_SUN,
+                )
+            }
+            Some([r, g, b]) => {
+                super::census::drawn(zone_slot.and(submesh.material), "zone_colour");
+                (
+                    [
+                        r,
+                        g,
+                        b,
+                        match zone_slot {
+                            Some((k, _)) if !ps4 => ZONE_COLOUR_ALPHA + f32::from(k),
+                            _ => 1.0,
+                        },
+                    ],
+                    0.0,
+                    role | crate::mesh::slots::NO_AMBIENT | crate::mesh::slots::NO_SUN,
+                )
+            }
             None => ([1.0; 4], 1.0, role),
         };
         // Anulpha Pass's alpha-lit families, read on each title's own programs (`lit_alpha`).
@@ -611,6 +623,9 @@ fn build_scanned(
                 .material
                 .and_then(|m| decoded.materials.get(m))
                 .is_some_and(lit_alpha::admits);
+        if let (Some(m), true) = (submesh.material, alpha_lit) {
+            super::census::claim(m, "lit_alpha", super::census::Outcome::Drawn);
+        }
         let role = if alpha_lit {
             role | crate::mesh::slots::LIT_ALPHA | crate::mesh::slots::DEFAULT
         } else {
@@ -1041,6 +1056,9 @@ fn bind_textures(
                         .clone()
                 });
             report.alpha_product_materials += usize::from(alpha.is_some());
+            if alpha.is_some() {
+                super::census::claim(index, "alpha_product", super::census::Outcome::Drawn);
+            }
             let (texture, form) = match (alpha, path) {
                 (Some(picture), _) => (picture, None),
                 (None, Some(path)) => {

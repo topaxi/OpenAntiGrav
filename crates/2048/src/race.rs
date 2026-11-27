@@ -491,6 +491,7 @@ pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
         track: "data/Tex/detonatorModeTrack",
         extension: ".gxt",
         stages: 15,
+        track_single_level: oag_title::Rule::UNREAD,
     }),
     cannon_lights: false,
     // `FUN_811e8650`, the EMP vtable's slot 5.
@@ -608,6 +609,12 @@ pub const ZONE_FALLBACK: &oag_title::ZoneFallback = &oag_title::ZoneFallback {
         track: "data/Tex/zoneModeTrack",
         extension: ".gxt",
         stages: 15,
+        // Min and mag linear, mip filter off, and a point-filtered copy: read statically
+        // for all fifteen and live on two boots (confidence 92).
+        track_single_level: oag_title::Rule {
+            on: oag_title::Platforms::Any,
+            origin: oag_title::Origin::Measured,
+        },
     },
     stages: FALLBACK_ZONE_STAGES,
     own_model_under: None,

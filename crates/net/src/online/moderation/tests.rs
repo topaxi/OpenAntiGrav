@@ -8,11 +8,8 @@ fn day() -> SystemTime {
     oag_log::stamp::parse(DAY).expect("a stamp")
 }
 
-fn scratch(tag: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("oag-moderation-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a scratch directory");
-    dir.join("bans.txt")
+fn scratch(tag: &str) -> oag_testdata::scratch::TempDir {
+    oag_testdata::scratch::dir(&format!("moderation-{tag}")).child("bans.txt")
 }
 
 /// A strike on host `[1; 32]` in race `race`, reported by `[by; 32]`, at `at`.
@@ -128,7 +125,7 @@ fn strikes_count_over_distinct_races_and_distinct_reporters_whatever_their_order
 #[test]
 fn one_reporter_or_one_race_is_one_strikes_worth_and_bans_nobody() {
     let file = scratch("one-strike");
-    let mut bans = BanFile::new(Some(file.clone()));
+    let mut bans = BanFile::new(Some(file.to_path_buf()));
     let t = day();
     assert_eq!(bans.strike(&strike(1, 7, t), t).ban, None);
     assert_eq!(
@@ -139,7 +136,7 @@ fn one_reporter_or_one_race_is_one_strikes_worth_and_bans_nobody() {
     let standing = bans.strike(&strike(2, 8, t + 2 * MINUTE), t + 2 * MINUTE);
     assert_eq!(standing.counted, 2, "races 1 and 2 by two reporters");
     let file2 = scratch("one-race");
-    let mut one_race = BanFile::new(Some(file2.clone()));
+    let mut one_race = BanFile::new(Some(file2.to_path_buf()));
     one_race.strike(&strike(1, 7, t), t);
     let standing = one_race.strike(&strike(1, 8, t), t);
     assert_eq!((standing.counted, standing.ban), (1, None), "one race");
@@ -166,7 +163,7 @@ fn each_later_ban_doubles_up_to_the_cap_and_a_ban_uses_up_its_strikes() {
     let mut t = day();
     let mut lengths = Vec::new();
     for round in 0..3_u64 {
-        let mut bans = BanFile::new(Some(file.clone()));
+        let mut bans = BanFile::new(Some(file.to_path_buf()));
         assert!(
             bans.bans().banned(&[1; 32], ip, t).is_none(),
             "round {round}: free"
@@ -183,14 +180,14 @@ fn each_later_ban_doubles_up_to_the_cap_and_a_ban_uses_up_its_strikes() {
         assert_eq!(bans.strike(&strike(99 + round, 9, t), t).ban, None);
         t += length;
         assert!(
-            BanFile::new(Some(file.clone()))
+            BanFile::new(Some(file.to_path_buf()))
                 .bans()
                 .banned(&[1; 32], ip, t)
                 .is_none(),
             "expired, read after a restart"
         );
         // The strikes the ban was made on are used up: one more is not a ban.
-        let mut again = BanFile::new(Some(file.clone()));
+        let mut again = BanFile::new(Some(file.to_path_buf()));
         assert_eq!(again.bans().standing(&[1; 32], t).counted, 0);
         t += MINUTE;
         let _ = again.strike(&strike(1_000 + round, 10 + round as u8, t), t);
@@ -211,7 +208,7 @@ fn each_later_ban_doubles_up_to_the_cap_and_a_ban_uses_up_its_strikes() {
 #[test]
 fn a_ban_the_lobby_makes_is_written_with_its_dates_and_reads_back() {
     let file = scratch("dates");
-    let mut bans = BanFile::new(Some(file.clone()));
+    let mut bans = BanFile::new(Some(file.to_path_buf()));
     let t = day();
     let mut first = strike(1, 7, t);
     first.reason = "altered\nthe race".into();

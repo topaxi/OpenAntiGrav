@@ -106,7 +106,8 @@ impl Session {
 
     /// Discards `self.tournament` - called wherever an EndRace `Return`
     /// option leaves the flow, whether the tournament finished or was
-    /// abandoned mid-way. See [`Session::tournament`]'s own doc for why
+    /// abandoned mid-way, on backing out of its Team Selection and when a
+    /// leg's race fails to load. See [`Session::tournament`]'s own doc for why
     /// there is nothing to save.
     pub(crate) fn abandon_tournament(&mut self) {
         self.tournament = None;

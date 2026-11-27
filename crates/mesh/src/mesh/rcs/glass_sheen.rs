@@ -121,6 +121,9 @@ pub(super) fn bias(model: &rcsmodel::Model, packed: &mut [u32], table: &mut Vec<
         let Some(word) = packed.get_mut(slot) else {
             continue;
         };
+        if *word & slots::FACING_RAMP_SHEEN != 0 {
+            super::census::claim(slot, "glass_sheen", super::census::Outcome::Drawn);
+        }
         if *word & slots::FACING_RAMP_SHEEN == 0 || slots::material_index(*word) != 0 {
             continue;
         }
@@ -302,6 +305,7 @@ pub(super) fn lightmapped_grids(
                     .map(std::sync::Arc::new)
             });
         if grid.is_none() {
+            super::census::claim(slot, "glass_sheen", super::census::Outcome::NotDrawn);
             report.glass_grid_unread += 1;
         }
         grids[slot] = grid;

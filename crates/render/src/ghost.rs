@@ -169,6 +169,7 @@ pub struct Pipeline {
     uniform_bind: wgpu::BindGroup,
     static_bind: wgpu::BindGroup,
     stamps_glow: bool,
+    lod_bias: f32,
 }
 
 mod pipeline;
@@ -235,6 +236,12 @@ impl Pipeline {
     #[must_use]
     pub fn stamps_glow(&self) -> bool {
         self.stamps_glow
+    }
+
+    /// The sampler bias the hull pass was built with.
+    #[must_use]
+    pub fn lod_bias(&self) -> f32 {
+        self.lod_bias
     }
 }
 

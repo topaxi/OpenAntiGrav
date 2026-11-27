@@ -26,6 +26,10 @@ import struct
 import sys
 import time
 from pathlib import Path
+import os
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import oag_tmp  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -62,7 +66,7 @@ def main():
     ap.add_argument("--flush", type=float, default=1.5)
     ap.add_argument("--pushes", type=int, default=3, help="frames the push is repeated")
     args = ap.parse_args()
-    out = args.out or Path("/tmp/oag-floor-spark")
+    out = args.out or Path(oag_tmp.output("floor-spark"))
     out.mkdir(parents=True, exist_ok=True)
     port = int(drive.GDB_SERVER.rsplit(":", 1)[1])
     with drive.Session(args.image, str(out / "logs")) as session:

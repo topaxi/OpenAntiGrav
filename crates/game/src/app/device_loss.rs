@@ -168,14 +168,15 @@ fn clear_marker_in(dir: &std::path::Path) {
 }
 
 /// The arguments a restarted game may be given again: what a player launches with. A disc image
-/// or any positional path, `--source`, `--dlc`, `--launcher`, the language and intro switches,
+/// or any positional path, `--source`, `--dlc`, `--launcher`, `--launcher-list`, the language and intro switches,
 /// `--no-audio`, `--no-soundtrack`, and `--script` (a timed button script that only presses buttons). Anything else
 /// can do something a second time that must not happen twice: reopen a race (`--race`,
 /// `--connect`, `--online`), overwrite a file (`--dump-audio`, `--tap-audio`, `--screenshot`), or
 /// run a measurement. One such argument and the game does not restart.
 pub(crate) fn restartable_args(args: &[std::ffi::OsString]) -> bool {
-    const BARE: [&str; 8] = [
+    const BARE: [&str; 9] = [
         "--launcher",
+        "--launcher-list",
         "--no-audio",
         "--no-soundtrack",
         "--no-effects",

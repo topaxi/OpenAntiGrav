@@ -15,6 +15,10 @@ import struct
 import sys
 import time
 from pathlib import Path
+import os
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import oag_tmp  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -39,7 +43,7 @@ def read_flags(mem):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--image", required=True)
-    ap.add_argument("--log-dir", default="/tmp/oag-camera-flags")
+    ap.add_argument("--log-dir", default=oag_tmp.output("camera-flags"))
     ap.add_argument("--press", default="select")
     ap.add_argument("--presses", type=int, default=4)
     ap.add_argument("--settle", type=float, default=1.5)

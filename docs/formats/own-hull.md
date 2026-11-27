@@ -14,7 +14,7 @@ handling and no picker. The first and only user is Pulse's Detonator craft
 | --- | --- |
 | Reader | `oag_mesh::mesh::own_hull::parse`, and `substitute` draws it on a host `Model` |
 | Wiring | `oag_livery::own_hull` (race), `oag_game::preview::own_hull_on` (Ship Select), `oag_raceplay`'s shadow hulls |
-| Title data | `oag_title::DetonatorCraft::own_hull`, a list of asset entries (on Pulse a mod's fallback entries, ADR-0098) |
+| Title data | `oag_title::DetonatorCraft::own_hull`, a list of asset entries (on Pulse a mod's fallback entries, ADR-0100) |
 | Marker | the asset's extras: `"oag_kind": "hull"`, `"oag_version": "1.0.0"` (another kind or major is refused by name) |
 | Writer | `scripts/blender/oag_hull.py` ([Blender](../tools/blender.md#a-craft-hull)) |
 
@@ -25,7 +25,7 @@ and reads it back. A glb holds every number as a little-endian binary accessor, 
 reaches the reader bit for bit, with nothing to round and no axis or texture-coordinate change
 (glTF's axes and UV origin are the engine's). `scripts/check-leakage.py` refuses a tracked `.glb`
 in the engine repository (model sources of our own live in the mod repositories), and the files
-are a mod's fallback entries anyway ([ADR-0098](../architecture/adr/0098-a-mod-carries-fallback-entries.md)),
+are a mod's fallback entries anyway ([ADR-0100](../architecture/adr/0100-a-mod-carries-fallback-entries.md)),
 so they live in the official-mods repository, in `oag.detonator-pulse`. The engine's unit tests
 build a small hull glb in memory instead of keeping a fixture.
 

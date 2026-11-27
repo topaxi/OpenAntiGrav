@@ -36,6 +36,9 @@ import sys
 
 import numpy as np
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import oag_tmp  # noqa: E402
+
 # The speed plate, with enough margin around the numerals for the high-pass to
 # have a background to subtract. w, h, x, y.
 CROP = (190, 34, 1000, 546)
@@ -262,7 +265,7 @@ def main(argv=None):
     gl.add_argument("video")
     gl.add_argument("--fps", type=float, default=6.0)
     gl.add_argument("--keep", type=int, default=24)
-    gl.add_argument("--out", default="/tmp/rpcs3-hud-glyphs")
+    gl.add_argument("--out", default=oag_tmp.output("rpcs3-hud-glyphs"))
     gl.set_defaults(run=cmd_glyphs)
 
     args = parser.parse_args(argv)

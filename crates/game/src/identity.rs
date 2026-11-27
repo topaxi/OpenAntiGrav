@@ -125,10 +125,8 @@ fn write(path: &Path, key: &PlayerKey) -> Result<()> {
 mod tests {
     use super::*;
 
-    fn scratch(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("oag-identity-{}-{name}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        dir.join("config").join("oag").join("identity.toml")
+    fn scratch(name: &str) -> oag_testdata::scratch::TempDir {
+        oag_testdata::scratch::dir(&format!("identity-{name}")).child("config/oag/identity.toml")
     }
 
     #[test]

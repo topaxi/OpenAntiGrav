@@ -1103,6 +1103,37 @@ draw unread). Measured off the frame: horizontal line period about 47.8 px,
 60-degree diagonals, line grey 233-245 on 255. It moves the frame metric by
 about 2 grey, so it is not wired.
 
+## Faces, glyph tint and header block (2026-11-27, `2048-menu-pairs`)
+
+What the menu pairs showed and what was wired from it. The before/after table, the
+region ranking, the capture-route finding, what is left and the Omega answers are in
+[campaign-screens.md](../ui/campaign-screens.md), "2048 menu pairs: what the four worst
+differed by".
+
+### The tile labels are in `NEOSANS_BOLD`
+
+**Confidence 92.** A tile's label is `NEOSANS_BOLD.fnt` (22-unit line) at scale 1, not
+`NEOSANS_BOLD_LARGE` (37) scaled to 16/27, which has the same cap height but wider
+advances. Advance sums off the disc against the frame's ink: `SINGLE PLAYER` 143 against
+139 (ours had 159), `HD CAMPAIGN` 131 against 130 (146), `COMMUNITY` 115 against 116
+(126). `oag_title::TouchFrontEnd::label_face` names the role; the boot sequence's second
+glyph slot holds it (`boot::fonts::install_boot_face`). The same face draws the card's
+leaderboard tabs.
+
+### The glyphs are `White2048`
+
+**Confidence 90.** The tile, tick, play, cross and ship glyphs read `(224..225, 227..228,
+234..235)` on the frames, `Skin.xml`'s `White2048` (`0xffe1e4eb`); ours drew pure white.
+No `<TouchButton>` in `Definition.xml` authors a `color`, so the white a button reads as
+is tinted `White2048`; an authored colour is kept.
+
+### The header block
+
+The `Blue2048` square under a screen's white header glyph was spliced under the *first*
+sprite of the screen, which on `GameModeChoice` is the baked lattice, so the lattice
+covered it and the white glyph was invisible on a white page, live as well as in stills.
+It now goes under its own glyph.
+
 ## See also
 
 - [hd-frontend](hd-frontend.md) - the reading this page's shape and rigor are

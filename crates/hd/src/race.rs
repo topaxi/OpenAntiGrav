@@ -443,6 +443,7 @@ pub const ZONE_STAGE_TEXTURES: &oag_title::ZoneStageTextures = &oag_title::ZoneS
     track: "/data/tex/zonemodetrack",
     extension: ".gtf",
     stages: 15,
+    track_single_level: oag_title::Rule::UNREAD,
 };
 
 /// `Ship_UpdateDetonatorHullParams`'s reset (`0x00107f20`) stores `1.3` and `1.6` (`0x008a9840`,
@@ -489,6 +490,7 @@ pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
         track: "/data/tex/detonatormodetrack",
         extension: ".gtf",
         stages: 15,
+        track_single_level: oag_title::Rule::UNREAD,
     }),
     cannon_lights: true,
     emp_light: true,

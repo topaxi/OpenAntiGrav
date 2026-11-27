@@ -920,6 +920,7 @@ fn list(cx: &Context<'_>, readout: &Readout, sight: Sight) -> Frame {
         let tinted = super::runtime::tinted(cx, readout, sprite)
             .or_else(|| super::dialect_2048::energy_bg_tint(sprite, readout));
         let fill = super::runtime::shield_fill(cx, readout, sprite);
+        let backing = super::runtime::countdown_backing(cx, readout, sprite);
         let sprite = tinted.as_ref().unwrap_or(sprite);
         let tip_dx = super::bar_tip::dx(cx, readout, &sprite.name);
         let marked;
@@ -1036,11 +1037,15 @@ fn list(cx: &Context<'_>, readout: &Readout, sight: Sight) -> Frame {
         frame.sprites.extend(added.map(|draw| styled(draw, false)));
         frame
             .sprites
+            .extend(backing.map(|draw| styled(lit_draw(cx, draw), recolour)));
+        frame
+            .sprites
             .extend(fill.map(|draw| styled(draw, recolour)));
     }
     frame.sprites.extend(
         super::runtime::arc_sprites(cx, readout)
             .into_iter()
+            .chain(super::runtime::proximity_sprites(cx))
             .map(|draw| lit_draw(cx, draw)),
     );
     frame.sprites.extend(super::assist::sprites(cx, readout));
@@ -1074,8 +1079,13 @@ fn list(cx: &Context<'_>, readout: &Readout, sight: Sight) -> Frame {
     }
 
     // 2048's state-gated fills, over their dim backgrounds - see
-    // `dialect_2048::state_sprites`.
-    for sprite in super::dialect_2048::state_sprites(cx.layout, cx.art, readout) {
+    // `dialect_2048::state_sprites` - and the running Shield's drain.
+    for sprite in super::dialect_2048::state_sprites(cx.layout, cx.art, readout)
+        .into_iter()
+        .chain(super::dialect_2048::shield_drain(
+            cx.layout, cx.art, readout,
+        ))
+    {
         frame.sprites.extend(sprite_draw(&sprite, cx.sheet));
     }
 
@@ -1188,9 +1198,11 @@ fn list(cx: &Context<'_>, readout: &Readout, sight: Sight) -> Frame {
         {
             continue;
         }
-        let tipped = super::bar_tip::text(cx.art, readout, &label.name, speed_unit).or_else(|| {
-            super::time_trial_pace::ladder_caption(cx.art, readout, &label.name, cx.strings)
-        });
+        let tipped = super::bar_tip::text(cx.art, readout, &label.name, speed_unit)
+            .or_else(|| super::runtime::countdown_text(cx, readout, &label.name))
+            .or_else(|| {
+                super::time_trial_pace::ladder_caption(cx.art, readout, &label.name, cx.strings)
+            });
         // A score-over-target layout writes its own widgets over every other rule.
         let ruled = super::score_over::text(cx.layout, readout, &label.name, cx.strings);
         let generic = || {

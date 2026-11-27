@@ -31,7 +31,7 @@
 //! Every other model is sampled at the sampler's own derivative level, where the
 //! same uniform is a bias (`texture_lod.wesl`, `detail_shift`). Those tests draw
 //! an authored block chain (red, green, blue) minified onto level 2, at no title
-//! bias (2048, Omega) and at HD's -1.5, through the material fetch and through an
+//! bias (Omega) and at -1.5 (HD, 2048), through the material fetch and through an
 //! effect program's own. A PS2 texture has one level, so a minified one reads the
 //! base (`docs/rendering/texture-level-per-title.md`, "Pulse PS2 in a race").
 //!
@@ -173,6 +173,7 @@ fn model(albedo: Arc<ModelTexture>, depth: f32, texcoords: Texcoords) -> Model {
         material_specular_exponent: Vec::new(),
         material_glow: Vec::new(),
         material_colour_factor: Vec::new(),
+        material_flip_v: Vec::new(),
         material_quake: Vec::new(),
         material_tangent: Vec::new(),
         material_variants: Vec::new(),
@@ -186,6 +187,7 @@ fn model(albedo: Arc<ModelTexture>, depth: f32, texcoords: Texcoords) -> Model {
         flame: None,
         absorb_shell: false,
         shield_shell: false,
+        shield_lit: false,
         own_shield: false,
         material_lod_bias: 0.0,
         material_state: Vec::new(),
@@ -843,6 +845,23 @@ fn texture_detail_reaches_an_effect_programs_own_fetch() {
         return;
     };
     assert_eq!(levels, [2, 1, 0]);
+}
+
+/// A scope whose title biases every texture (2048) reaches a material fetch and an effect
+/// program's own fetch of a model that asks for no bias itself: a footprint 1.5 levels
+/// coarser reads the same three presets as an unbiased one. HD's case is the test above,
+/// where the model's bias stays off the effect fetch.
+#[test]
+fn an_every_texture_bias_reaches_material_and_effect_fetches() {
+    for effect in [false, true] {
+        // One scope a device: `hardware_levels` makes its own.
+        let scope = mesh_render::BuildCacheScope::open();
+        scope.every_texture_lod_bias(-1.5);
+        let Some(levels) = hardware_levels(3.5, |quad| quad.absorb_shell = effect) else {
+            return;
+        };
+        assert_eq!(levels, [2, 1, 0], "absorb shell: {effect}");
+    }
 }
 
 /// One PS2 texture upload of a 16x16 one-texel checkerboard, black and white, in

@@ -243,14 +243,13 @@ fn the_strength_row_leaves_the_page_for_a_filter_with_a_fixed_strength() {
 /// A filter of the player's own opts out the same way, by its header.
 #[test]
 fn a_user_preset_that_declares_a_fixed_strength_takes_the_row_away_too() {
-    let directory = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("menu-fixed-filter");
-    std::fs::create_dir_all(&directory).expect("a directory");
+    let directory = oag_testdata::scratch::dir("menu-fixed-filter");
     std::fs::write(
         directory.join("bent.wgsl"),
         "//! fixed_strength = true\nfn screen_filter(uv: vec2<f32>, pixel: vec2<f32>) -> vec3<f32> { return frame_at(uv); }\n",
     )
     .expect("a preset file");
-    let catalogue = Catalogue::load(Some(directory));
+    let catalogue = Catalogue::load(Some(directory.to_path_buf()));
     let mut menu = Menu::new(built_in());
     assert!(menu.open("graphics_advanced"));
     menu.supply(ValueSource::ScreenFilters, &catalogue.choices());

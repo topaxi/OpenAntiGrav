@@ -340,8 +340,7 @@ fn reading_in_chunks_gives_the_same_samples_as_converting_in_one() {
     );
     assert!(short.is_none(), "a source that ends early is a miss");
 
-    let dir = std::env::temp_dir().join(format!("oag-at3-chunk-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).expect("temp dir");
+    let dir = oag_testdata::scratch::dir("at3-chunk");
     let path = dir.join("track.s16le");
     std::fs::write(&path, &bytes).expect("write");
     let from_disk = read_cached(&path, stereo);

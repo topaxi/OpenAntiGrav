@@ -888,7 +888,7 @@ fn zone_stage_art(
     textures: &'static oag_title::ZoneStageTextures,
     report: &mut Vec<String>,
 ) -> (oag_mesh::mesh::TextureSlots, oag_mesh::mesh::TextureSlots) {
-    let mut load = |set: &str, entry: &dyn Fn(u32) -> String| {
+    let mut load = |set: &str, levels: Option<u32>, entry: &dyn Fn(u32) -> String| {
         let mut decoded = 0_u32;
         let mut art = Vec::with_capacity(textures.stages as usize);
         for stage in textures.stages() {
@@ -897,7 +897,10 @@ fn zone_stage_art(
                 .read_name(&name)
                 .ok()
                 .and_then(|blob| oag_mesh::mesh::ModelTexture::from_container(&name, &blob))
-                .map(std::sync::Arc::new);
+                .map(|mut texture| {
+                    texture.mip_count = levels.or(texture.mip_count);
+                    std::sync::Arc::new(texture)
+                });
             if slot.is_some() {
                 decoded += 1;
             } else {
@@ -918,7 +921,11 @@ fn zone_stage_art(
         ));
         art
     };
-    let track = load("track", &|stage| textures.track_entry(stage));
+    let track_levels = textures
+        .track_single_level
+        .applies_everywhere()
+        .then_some(1);
+    let track = load("track", track_levels, &|stage| textures.track_entry(stage));
     let general = if textures.general.is_empty() {
         // The title ships no general set. HD's fifteen are byte-identical flat whites
         // ([`oag_title::ZoneStageTextures`]), so a scene chunk's surface is its `Scene.Texture
@@ -937,7 +944,7 @@ fn zone_stage_art(
         ));
         textures.stages().map(|_| Some(white.clone())).collect()
     } else {
-        load("general", &|stage| textures.general_entry(stage))
+        load("general", None, &|stage| textures.general_entry(stage))
     };
     (track, general)
 }
@@ -1201,6 +1208,8 @@ pub(super) fn cloud_layer(
                 width: image.width,
                 height: image.height,
                 rgba: image.rgba.clone(),
+                mips: Vec::new(),
+                lod_bias: 0.0,
             },
         ));
     }
@@ -1220,6 +1229,8 @@ pub(super) fn cloud_layer(
                     width: u32::from(texture.width),
                     height: u32::from(texture.height),
                     rgba: texture.to_rgba(),
+                    mips: Vec::new(),
+                    lod_bias: 0.0,
                 },
             ))
         }

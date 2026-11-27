@@ -430,6 +430,7 @@
 0x0001cbe0	function	SaveData_MigrateCellMedalsToHardElite	85	race-campaign.md
 0x0009e3d0	function	Hud_Update	72	hud-readouts.md
 0x000866c8	function	Hud_UpdateShieldReadout	82	hud-readouts.md
+0x00089f60	function	Hud_SetShieldTimer	90	hud-readouts.md
 0x00096ef0	function	Hud_UpdateLapCounter	80	hud-readouts.md
 0x00096088	function	Hud_UpdatePositionCounter	78	hud-readouts.md
 0x00086e88	function	Hud_UpdateSpeedReadout	82	hud-readouts.md
@@ -1291,3 +1292,10 @@
 0x00ad5fd4	data	Psys_LastRootHandle	75	detonator-mine.md
 0x0008ce10	function	Hud_UpdateZoneWidgets	80	zone-score.md
 
+0x00624418	function	Scream_SetCueParameter	90	cue-variables.md
+0x00087fa8	function	HudSight_UpdateTone	80	cue-variables.md
+0x0062c2d0	function	Scream_StopSound	80	cue-variables.md
+0x00626350	function	Scream_StopHandlerSound	88	cue-variables.md
+0x00623428	function	Scream_FindStopMarker	90	cue-variables.md
+0x002fea88	function	SoundEmitterCue_Stop	85	cue-variables.md
+0x002fd528	function	SoundEmitter_Release	78	cue-variables.md

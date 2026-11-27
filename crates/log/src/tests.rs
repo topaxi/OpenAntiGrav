@@ -15,20 +15,12 @@ fn at(days: u64, secs: u64) -> SystemTime {
     UNIX_EPOCH + Duration::from_secs(days * DAY + secs)
 }
 
-struct Scratch(PathBuf);
+struct Scratch(oag_testdata::scratch::TempDir);
 
 impl Scratch {
     fn new(name: &str) -> Self {
-        let dir = std::env::temp_dir().join(format!("oag-log-{}-{name}", std::process::id()));
-        let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir).unwrap();
+        let dir = oag_testdata::scratch::dir(&format!("log-{name}"));
         Self(dir)
-    }
-}
-
-impl Drop for Scratch {
-    fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.0);
     }
 }
 

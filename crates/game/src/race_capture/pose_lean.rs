@@ -77,22 +77,23 @@ mod tests {
 right_x,right_y,right_z,up_x,up_y,up_z,fwd_x,fwd_y,fwd_z,pos_x,pos_y,pos_z,vel_x,vel_y,vel_z,speed";
     const ROW: &str = "5,0.016683,1,100,0,0,0,0,22,1,0,0,0,1,0,0,0,1,10,2.5,-30,0,0,22,22";
 
-    fn trace(name: &str, text: &str) -> std::path::PathBuf {
-        let path = std::env::temp_dir().join(format!("oag-pose-lean-{name}.csv"));
+    fn trace(name: &str, text: &str) -> (oag_testdata::scratch::TempDir, std::path::PathBuf) {
+        let dir = oag_testdata::scratch::dir(&format!("pose-lean-{name}"));
+        let path = dir.join("trace.csv");
         std::fs::write(&path, text).unwrap();
-        path
+        (dir, path)
     }
 
     #[test]
     fn a_row_without_the_lean_columns_is_refused() {
-        let path = trace("none", &format!("{HEAD}\n{ROW}\n"));
+        let (_scratch, path) = trace("none", &format!("{HEAD}\n{ROW}\n"));
         let error = PoseLean::from_trace(&path, 5).expect_err("no steer_lean column");
         assert!(format!("{error:#}").contains("steer_lean"), "{error:#}");
     }
 
     #[test]
     fn the_columns_of_the_pose_row_are_what_is_imported() {
-        let path = trace(
+        let (_scratch, path) = trace(
             "both",
             &format!("{HEAD},steer_lean,roll_phase\n{ROW},0.32,-0.25\n"),
         );

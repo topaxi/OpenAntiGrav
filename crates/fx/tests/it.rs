@@ -9,6 +9,7 @@
 //! A new test file is only compiled once it is listed here, and
 //! `every_test_file_is_listed` below fails until it is.
 
+mod chain_draw;
 mod cloud_field_ground_truth;
 mod cockpit_hit_draw;
 mod distort_pass;

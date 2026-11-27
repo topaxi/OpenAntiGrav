@@ -672,6 +672,15 @@ pub(super) fn regions(
                     layout.pitch,
                 ],
             });
+            if menu.can_toggle(row) {
+                out.push(toggle_region(
+                    row,
+                    right,
+                    layout.label_x,
+                    y + band,
+                    layout.pitch,
+                ));
+            }
             // The arrows step the way they point, over the whole band's
             // height and a little past the arrow itself - 9 by 10 is a poor
             // target for a finger. Only on a row that steps.
@@ -706,7 +715,11 @@ pub(super) fn regions(
                 if has_value {
                     out.push(Region {
                         row,
-                        part: Part::Row,
+                        part: if menu.can_toggle(row) {
+                            Part::StepForward
+                        } else {
+                            Part::Row
+                        },
                         rect: geometry.value,
                     });
                 }
@@ -747,8 +760,26 @@ pub(super) fn regions(
                     part: Part::Row,
                     rect: [left, y, width, row_height],
                 });
+                if menu.can_toggle(row) {
+                    out.push(toggle_region(row, skin.value_right(), left, y, row_height));
+                }
             }
         }
     }
     out
+}
+
+/// The share of a bare-text row its right-hand ON/OFF column takes: a click there toggles a
+/// list item, a click on the rest of the row opens it (see `items.rs`).
+const TOGGLE_COLUMN: f32 = 0.22;
+
+/// The toggle target of list item `row`, whose row spans `left` to `right` from `y`, `height`
+/// tall.
+fn toggle_region(row: usize, right: f32, left: f32, y: f32, height: f32) -> super::pointer::Region {
+    let width = (right - left).max(0.0) * TOGGLE_COLUMN;
+    super::pointer::Region {
+        row,
+        part: super::pointer::Part::StepForward,
+        rect: [right - width, y, width, height],
+    }
 }

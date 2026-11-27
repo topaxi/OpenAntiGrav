@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [hd]
-updated: 2026-11-16
-summary: "HD's one-shot race cues now play their walked lists; open: held cues need a runner, 0x04/0x1c/0x26, cockpit view, front-end bend"
+updated: 2026-11-27
+summary: "Open: held cues behind 0x04/0x05, ~SHIP_ONFIRE, cockpit view, front-end bend, cues with unread triggers"
 size: M (45)
 difficulty: medium (55)
 ---
@@ -58,10 +58,16 @@ table). The Zone class-step cues
    handles `0x08` as a child with the variables (unit-tested), but the race model leaves `0x08` unwalked, so the cue keeps
    its flat pick: what the game computes the severity from is unread (`FUN_000d8bd0`, `0x000d8bd0`). Read it, then wire the
    surface and severity, then `.COLLSHIELD`, `.GRIND` and `.GRINDSHIELD` beside it.
-2. **Held cues** (row 5): `~SHIELD`, `~AUTOPILOT`, `~BLOWUP`, `~ROCKLOCK`, the travel loops, `~LEACHATTACH`, `~magstrip01`
-   loop, re-key and wait. Still one waveform. Needs `oag_formats::sblk::runner` on HD's tick and layout
-   (`layers::program` is PSP-only), and `0x26`, `0x1c` (a fixed bend) and `0x04` (modulators) read or modelled; the walk
-   leaves all three unread, so a list that has one keeps its flat pick.
+2. **The other held cues** (row 5): ~~`~BLOWUP`, `~ROCKLOCK`~~ (2026-11-27), ~~`~AUTOPILOT`, `~PLASMATVL`,
+   `~ROCKETTVL`, `~SHURIKENTRAVEL`, `~QUAKETRAVEL`~~ run their lists, started and stopped where HD does
+   (cue-variables.md "Held cues the game starts and stops"). **None was heard against the original.** Left:
+   - `~SHIP_ONFIRE`: the runner accepts it (two loops, no bend), but `slot_held` keeps its one waveform and its
+     start and stop on HD are unread.
+   - `0x04` blocks `~SHIELD`, `~LEACHATTACH`, `~MISSILETVL`, `~SHIP_DESTROYED`; `0x05` blocks `~magstrip01`. Read
+     `0x04`'s targets (`0x006285f0` and the per-tick update).
+   - 2048: its `weapons.bnk` ships the same lists (`~AUTOPILOT` with `0x30` for `0x19`); checked, applies in shape, not
+     wired: the loader asks its hashed bank by spelled name and finds none of them, and the Vita handlers are unread.
+   - Omega: checked, differs (Wwise events).
 3. **The cockpit view**: the player's perspective is 1 (chase) for a cue on the player's craft; the original makes it 0
    in the cockpit view (`Ship_UpdateEngineCrossfade`, `craft + 0x5f42`). The sound crate does not see the camera.
    **Chosen**, as are `ABSORB`, `SHURIKEN` and the player's `CANNON`, which read variable 2 and have no live capture of
@@ -77,8 +83,9 @@ table). The Zone class-step cues
 
 1. Read `FUN_000d8bd0` for the collision severity thresholds, then wire `.COLLISIONS`' variables 0 and 1 (walk `0x08`
    as a child under the race model) and add `.COLLSHIELD`, `.GRIND` and `.GRINDSHIELD`.
-2. Held cues: `oag_formats::sblk::runner` on HD's layout and tick with gotos, alternates and the variables, then
-   `~BLOWUP` and `~ROCKLOCK` (variable 0 selects the lock tone's fixed bend) through it.
-3. Read `0x0062fd98` (key-off), `0x04`'s targets and the ADSR mapping (`0x006323a0`) so the lists that carry them walk.
-4. Regression gate for all of it: the loader report of `oag-game <hd iso> --race --dry-run` with `RUST_LOG=debug` (71
-   `sfx:` lines, 38 of them "plays its timeline" since the walk landed), and the Pulse and Pure cue census tests unchanged.
+2. ~~Held cues: the runner on HD's layout, `~BLOWUP`, `~ROCKLOCK`, `0x1b`, `~AUTOPILOT` and the travel loops.~~ Done.
+   Next on held cues: listen to them against RPCS3 (a Talon's Junction race with weapons on).
+3. Read `0x04`'s targets and the ADSR mapping (`0x006323a0`) so the lists that carry them walk (the key-off,
+   `0x0062fd98`, is read).
+4. Regression gate for all of it: the loader report of `oag-game <hd iso> --race --dry-run` with `RUST_LOG=debug` (68
+   `sfx:` lines, 46 of them "plays its timeline" on 2026-11-27), and the Pulse and Pure cue census tests unchanged.

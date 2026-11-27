@@ -286,6 +286,17 @@ pub fn identify(source: &str) -> Option<&'static Title> {
         .map(|opened| opened.title)
 }
 
+/// What the content id of the package behind the unpacked PS4 folder `root`
+/// holds, or `None` when `root` is not such a folder. Here for the reason
+/// [`borrowed_zoom_ring`] is.
+#[must_use]
+pub fn ps4_folder_content_id(root: &std::path::Path) -> Option<&'static str> {
+    root.join("omega-eu-patch")
+        .join(oag_omega::archives::DATA09)
+        .is_file()
+        .then_some(oag_omega::archives::PKG_CONTENT_ID)
+}
+
 /// The zoom-streak ring a title with none of its own may borrow
 /// (`graphics.boost_zoom`, `oag_title::RaceDefaults::borrows_zoom_ring`): HD/Fury's.
 /// Here, the one place a title package is named for another's data, so no generic

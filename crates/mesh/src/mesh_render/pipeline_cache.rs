@@ -95,6 +95,8 @@ struct Cache {
     craft: bool,
     /// [`Scope::zone_stage_light`]'s choice.
     zone_stage_light: bool,
+    /// [`Scope::every_texture_lod_bias`]'s levels.
+    every_texture_lod_bias: f32,
     texture_calls: u32,
     texture_hits: u32,
     shader_calls: u32,
@@ -176,6 +178,36 @@ impl Scope {
                 cache.zone_stage_light = lit;
             }
         });
+    }
+
+    /// Every fetch of a material picture by a pipeline built in this scope takes `levels` of
+    /// LOD bias, the effect programs' own included, whatever the model asks: a title whose
+    /// loader biases every texture it loads (`oag_title::Looks::every_texture_lod_bias`).
+    /// `0.0`, the default, leaves each model's own `material_lod_bias` and gives the effect
+    /// programs none. Call it before the first `build()`, as [`Self::lit_by`].
+    pub fn every_texture_lod_bias(&self, levels: f32) {
+        CACHE.with(|cell| {
+            if let Some(cache) = cell.borrow_mut().as_mut() {
+                cache.every_texture_lod_bias = levels;
+            }
+        });
+    }
+
+    /// `(distinct pipelines built with the scope's bias, all distinct pipelines)` so far.
+    #[must_use]
+    pub fn lod_biased_pipeline_counts(&self) -> (usize, usize) {
+        with_open_cache(|cache| {
+            let biased = cache
+                .pipelines
+                .keys()
+                .filter(|key| {
+                    key.constants
+                        .iter()
+                        .any(|(name, _)| *name == "effect_lod_bias")
+                })
+                .count();
+            (biased, cache.pipelines.len())
+        })
     }
 
     /// Every pipeline built in this scope draws a race that has no Zone grade (`zone` false), so
@@ -357,6 +389,15 @@ pub(crate) fn scope_zone_stage_light() -> bool {
         cell.borrow()
             .as_ref()
             .is_some_and(|cache| cache.zone_stage_light)
+    })
+}
+
+/// The open scope's [`Scope::every_texture_lod_bias`] levels, `0.0` with no scope open.
+pub(crate) fn scope_every_texture_lod_bias() -> f32 {
+    CACHE.with(|cell| {
+        cell.borrow()
+            .as_ref()
+            .map_or(0.0, |cache| cache.every_texture_lod_bias)
     })
 }
 

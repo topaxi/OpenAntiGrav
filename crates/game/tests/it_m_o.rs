@@ -31,6 +31,7 @@ mod mine_texture_scroll_ground_truth;
 mod mod_shader_frame_ground_truth;
 mod mode_data_ground_truth;
 mod mods_fallback;
+mod mods_list;
 mod mods_menu;
 mod mods_page;
 mod mods_pages;

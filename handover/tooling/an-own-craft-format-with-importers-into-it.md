@@ -129,7 +129,7 @@ What is built ([own-hull.md](../../docs/formats/own-hull.md)):
 
 **2026-11-27: the hull is a glb now.** It was TOML only while the engine embedded it
 (`check-leakage.py` refuses a tracked `.glb` here). Once the two hulls moved into the official
-mod `oag.detonator-pulse` (ADR-0098), the file became `hull.glb`/`hull_ps2.glb`: one node per
+mod `oag.detonator-pulse` (ADR-0100), the file became `hull.glb`/`hull_ps2.glb`: one node per
 part, one primitive per surface, its material named as the host texture, the kind marked in the
 asset extras, read by `gltf` in `oag_mesh::mesh::own_hull::parse`. Images are allowed by the
 format and not read yet: the own-texture path below can use them without a format change.

@@ -12,7 +12,8 @@ set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
 drive=${RPCS3_DRIVE_UNDER_TEST:-$PWD/scripts/rpcs3-drive.py}
 export PYTHONDONTWRITEBYTECODE=1
-tmp=$(mktemp -d)
+. scripts/oag-tmp.sh
+tmp=$(mktemp -d -p "$(oag_tmp_root)")
 trap 'rm -rf -- "$tmp"' EXIT
 home=$tmp/home
 mine=$tmp/lane

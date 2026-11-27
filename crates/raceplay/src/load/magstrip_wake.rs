@@ -182,6 +182,8 @@ pub(crate) fn decode(blob: &[u8], platform: oag_assets::Platform) -> Option<Flar
             width: u32::from(sprite.width),
             height: u32::from(sprite.height),
             rgba: sprite.rgba.to_vec(),
+            mips: Vec::new(),
+            lod_bias: 0.0,
         });
     }
     if platform == oag_assets::Platform::Vita {
@@ -193,6 +195,8 @@ pub(crate) fn decode(blob: &[u8], platform: oag_assets::Platform) -> Option<Flar
             width,
             height,
             rgba: rgba.into_flattened(),
+            mips: texture.lower_levels_rgba(blob),
+            lod_bias: 0.0,
         });
     }
     let gtf = oag_texture::gtf::Gtf::parse(blob).ok()?;
@@ -203,5 +207,7 @@ pub(crate) fn decode(blob: &[u8], platform: oag_assets::Platform) -> Option<Flar
         width,
         height,
         rgba: rgba.into_flattened(),
+        mips: Vec::new(),
+        lod_bias: 0.0,
     })
 }

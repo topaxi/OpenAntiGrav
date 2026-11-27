@@ -17,6 +17,7 @@ use oag_title::{ArchiveCandidates, ForeignSerial};
 /// assertion below meaningful.
 const TITLE: &Title = &Title {
     name: "Wipeout Pulse",
+    released: &[],
     archives: ArchiveCandidates {
         patch: &[],
         data: &[
@@ -246,6 +247,7 @@ const TITLE: &Title = &Title {
         bar_models: None,
         time_ladder_captions: None,
         pickup_icon_uv: None,
+        shield_drain_widget: None,
         zone_speed_classes: None,
         zone_score: oag_title::ZoneScore::Authored,
         shield_percent: true,
@@ -565,8 +567,8 @@ fn an_extracted_directory_is_joined_with_a_separator() {
 
 /// A directory shaped like an extract, under a name of its own so two tests
 /// never collide.
-fn extract(name: &str, files: &[&str]) -> std::path::PathBuf {
-    let root = std::env::temp_dir().join(format!("oag-assets-layout-{name}"));
+fn extract(name: &str, files: &[&str]) -> oag_testdata::scratch::TempDir {
+    let root = oag_testdata::scratch::dir(&format!("assets-layout-{name}"));
     std::fs::remove_dir_all(&root).ok();
     for file in files {
         let path = root.join(file);
@@ -926,4 +928,36 @@ fn only_a_partial_update_is_a_gap() {
     let (empty, _) = Layout::resolve_on(source, UPDATED, &[folder]).unwrap();
     assert!(empty.update_gap(UPDATED).is_some());
     assert_eq!(empty.update_gap(TITLE), None);
+}
+
+/// [`Archives::read_name_authoring`] picks past an earlier copy for one that
+/// holds the needle, and an update archive's copy answers whatever it holds.
+#[test]
+fn a_copy_authoring_the_needle_is_picked_unless_an_update_replaces_the_name() {
+    let dir = testing::temp_dir("mount-authoring");
+    let mut archives = mounted(&dir, &[("a.xml", b"plain")], Vec::new());
+    let add = |name: &str, entry: &[u8]| {
+        let sub = dir.join(name);
+        std::fs::create_dir_all(&sub).expect("an archive directory");
+        Container::open(&testing::write_wad(&sub, "Data.wad", &[("a.xml", entry)]))
+            .expect("an archive")
+    };
+    let extra = add("extra", b"has <Widget>");
+    let patch = add("patch", b"updated");
+    archives.extra.push(extra);
+
+    assert_eq!(archives.read_name("a.xml").unwrap(), b"plain");
+    assert_eq!(
+        archives.read_name_authoring("a.xml", "Widget").unwrap(),
+        b"has <Widget>"
+    );
+    assert_eq!(
+        archives.read_name_authoring("a.xml", "Absent").unwrap(),
+        b"plain"
+    );
+    archives.patch.push(patch);
+    assert_eq!(
+        archives.read_name_authoring("a.xml", "Widget").unwrap(),
+        b"updated"
+    );
 }

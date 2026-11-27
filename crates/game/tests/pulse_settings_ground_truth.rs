@@ -38,7 +38,7 @@ fn shell(image: &Path) -> (boot::Shell, oag_assets::Archives) {
         dlc: Vec::new(),
         leg: frontend::Leg::LogoFmv,
         movie: None,
-        cache: std::env::temp_dir().join("oag-pulse-settings-ground-truth"),
+        cache: oag_testdata::scratch::cache("pulse-settings-ground-truth"),
         audio_cache: oag_source::cache::default_audio_cache_dir(),
         extent: oag_game::movie::Extent::Frames(oag_game::INTRO_FRAMES_NEEDED),
         no_video: true,

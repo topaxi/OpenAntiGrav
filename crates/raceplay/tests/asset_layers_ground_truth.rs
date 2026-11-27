@@ -101,7 +101,7 @@ fn an_override_replaces_a_real_disc_entry_by_name() {
         .read_name(entry)
         .expect("the arcade layout is on the disc");
 
-    let dir = std::env::temp_dir().join(format!("oag-layers-gt-{}", std::process::id()));
+    let dir = oag_testdata::scratch::dir("layers-gt");
     let file = dir.join(entry.replace('\\', "/"));
     std::fs::create_dir_all(file.parent().unwrap()).unwrap();
     std::fs::write(&file, b"the player's own layout").unwrap();

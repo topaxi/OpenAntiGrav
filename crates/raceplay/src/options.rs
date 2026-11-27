@@ -101,7 +101,7 @@ pub struct Options {
     /// off, `docs/tools/in-game-benchmark.md`).
     pub no_overrides: bool,
     /// A LAN or online race: the mods whose fallback entries serve only single-player races
-    /// (`[mod] network-races = false`) are not mounted ([`Self::layering`], ADR-0098).
+    /// (`[mod] network-races = false`) are not mounted ([`Self::layering`], ADR-0100).
     pub network: bool,
     /// The ring the player's `graphics.boost_zoom` borrows, handed in by the composition
     /// root (the one place that may name HD's); `None` is off. Used only where

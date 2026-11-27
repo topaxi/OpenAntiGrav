@@ -174,6 +174,10 @@ mod raw {
         /// module's own `# string_id` doc.
         #[serde(default)]
         pub title_string_id: Option<String>,
+        /// A list page: the page each of its choice rows opens (see `items.rs`). Only in
+        /// this project's own `menu.toml`; a mod's page may not carry it.
+        #[serde(default)]
+        pub item_page: Option<String>,
         #[serde(default, rename = "entry")]
         pub entries: Vec<Entry>,
     }
@@ -375,6 +379,15 @@ impl Definition {
                 entries,
                 subtitles,
                 meta,
+                item_page: match &page.item_page {
+                    Some(id) if !index.contains_key(id) => {
+                        return Err(Error::NoSuchPage {
+                            context: format!("page {:?} item_page", page.id),
+                            id: id.clone(),
+                        });
+                    }
+                    id => id.clone(),
+                },
                 ..Page::default()
             });
         }

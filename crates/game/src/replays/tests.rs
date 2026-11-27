@@ -2,10 +2,8 @@ use oag_replay::{Header, Recorder};
 
 use super::*;
 
-fn scratch(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("oag-replays-{name}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    dir
+fn scratch(name: &str) -> oag_testdata::scratch::TempDir {
+    oag_testdata::scratch::dir(&format!("replays-{name}"))
 }
 
 /// A replay of `ticks` ticks; each tick is a stored input, so the file's size grows with it.

@@ -13,7 +13,7 @@
 
 fn draws(skip: Option<&str>) -> Option<u64> {
     let image = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso")?;
-    let scratch = std::env::temp_dir().join("oag-hd-rest-flame");
+    let scratch = oag_testdata::scratch::dir("hd-rest-flame");
     let mut run = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"));
     run.arg(&image)
         .args([

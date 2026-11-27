@@ -120,7 +120,7 @@ pub struct Manifest {
     pub default_enabled: bool,
     /// `[mod] network-races`: whether the mod's fallback entries (`fallback/<title>/`) are
     /// mounted in a LAN or online race and count in the network fingerprint. `true` when
-    /// absent; `false` for a mod whose entries serve only single-player races (ADR-0098).
+    /// absent; `false` for a mod whose entries serve only single-player races (ADR-0100).
     pub network_races: bool,
 }
 

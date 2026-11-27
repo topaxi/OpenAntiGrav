@@ -82,6 +82,7 @@ pub(super) fn bullet_gauge(
         };
         *word &= slots::ROLE_MASK & !slots::ADD_SECOND;
         *word |= index << slots::MATERIAL_SHIFT;
+        super::census::claim(slot, "bullet_gauge", super::census::Outcome::Drawn);
         report.bullet_gauge_bound += 1;
     }
 }

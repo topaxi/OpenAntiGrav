@@ -57,15 +57,13 @@ fn capture(
 
 /// The four recordings of one frame, byte for byte.
 fn same_every_way(name: &str, image: &std::path::Path, args: &[&str]) {
-    let dir = std::env::temp_dir()
-        .join("oag-split-recording-ground-truth")
-        .join(name);
+    let dir = oag_testdata::scratch::dir(&format!("split-recording-{name}"));
     let interleaved = capture(&dir, image, "interleaved", args);
     for recording in ["reversed", "threaded", "overlapped"] {
         assert!(
             capture(&dir, image, recording, args) == interleaved,
             "{name}: the {recording} recording draws a different picture than the interleaved one \
-             (both in {})",
+             (both in {}, kept with OAG_KEEP_SCRATCH=1)",
             dir.display()
         );
     }

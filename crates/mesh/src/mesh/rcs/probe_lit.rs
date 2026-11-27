@@ -90,10 +90,12 @@ pub(super) fn probe_lit(
             .find(|p| p.hash == REFLECTIVITY)
             .map(|p| p.value[0])
         else {
+            super::census::claim(slot, "probe_lit", super::census::Outcome::NotDrawn);
             report.probe_lit_unread += 1;
             continue;
         };
         if slots::material_index(*word) != 0 {
+            super::census::claim(slot, "probe_lit", super::census::Outcome::NotDrawn);
             report.probe_lit_blocked += 1;
             continue;
         }
@@ -117,10 +119,12 @@ pub(super) fn probe_lit(
             })
         });
         let Some(index) = index else {
+            super::census::claim(slot, "probe_lit", super::census::Outcome::NotDrawn);
             report.probe_lit_blocked += 1;
             continue;
         };
         *word |= u32::try_from(index + 1).unwrap_or(0) << slots::MATERIAL_SHIFT;
+        super::census::claim(slot, "probe_lit", super::census::Outcome::Drawn);
         report.probe_lit_bound += 1;
     }
 }

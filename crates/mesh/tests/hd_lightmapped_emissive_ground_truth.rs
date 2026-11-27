@@ -21,6 +21,8 @@ use oag_rcs::rcsmaterial::Declared;
 use crate::archive_cache;
 
 const LIGHTMAP: u32 = 0x37b5_db58;
+/// The keyed family's curve-driven `k`.
+const KEY: u32 = 0x1c5d_e6ec;
 
 /// `(family, the sampler its program adds, whether it rides the fourth binding)`.
 const FAMILIES: &[(&str, u32, bool)] = &[
@@ -44,7 +46,7 @@ const FAMILIES: &[(&str, u32, bool)] = &[
     ("uvanim_diffuse_emissive", 0xb1f2_a176, false),
     ("mt_uvanim_diffuse_emissive", 0xb1f2_a176, false),
     ("mt_uvanim_diffuse_emissive2", 0xb1f2_a176, false),
-    // Bound nowhere: its lightmapped compile declares no `time`, and its law is unread.
+    // Scrolls by its material's own curve (`PROGRAM_LIGHTMAPPED_KEYED`).
     ("mt_uvanim_diffuse_emissive3tokey", 0xb1f2_a176, false),
     ("track_surface", 0xb1f2_a176, true),
     ("track_wall", 0xb1f2_a176, true),
@@ -120,10 +122,10 @@ fn census(archive: usize) -> Option<(BTreeMap<&'static str, usize>, Dark)> {
             if !(declares(sampler) && declares(LIGHTMAP)) {
                 continue;
             }
-            let entry = slots::material_index(word)
+            let layer = slots::material_index(word)
                 .checked_sub(1)
-                .and_then(|i| model.emissive.get(i as usize))
-                .map(|e| e.program[0]);
+                .and_then(|i| model.emissive.get(i as usize));
+            let entry = layer.map(|e| e.program[0]);
             let table = if fourth {
                 &model.wave_maps
             } else {
@@ -138,7 +140,13 @@ fn census(archive: usize) -> Option<(BTreeMap<&'static str, usize>, Dark)> {
             let circuit = path.split('/').nth(3).unwrap_or_default();
             let add = entry == Some(mesh::PROGRAM_LIGHTMAPPED_ADD);
             let scrolled = entry == Some(mesh::PROGRAM_LIGHTMAPPED_SCROLL);
-            if (add || scrolled) && picture.map(|t| t.label.as_str()) == wanted.as_deref() {
+            let keyed = entry == Some(mesh::PROGRAM_LIGHTMAPPED_KEYED);
+            if keyed {
+                let row = layer.expect("a keyed slot has its entry").program[1] as usize;
+                assert_own_curve(&model, &geometry, material, row, &path);
+            }
+            if (add || scrolled || keyed) && picture.map(|t| t.label.as_str()) == wanted.as_deref()
+            {
                 *bound.entry(family).or_default() += 1;
             } else {
                 println!("dark: {path} slot {slot} {family} entry {entry:?}");
@@ -150,9 +158,36 @@ fn census(archive: usize) -> Option<(BTreeMap<&'static str, usize>, Dark)> {
     Some((bound, dark))
 }
 
-/// Asserts both halves of [`census`]. `dark` names every slot known to stay unlit: Modesto
-/// Heights' glow table is full (63 entries, less those the later readers need), and Vineta K's
-/// `mt_uvanim_diffuse_emissive3tokey` runs an unread law.
+/// A keyed slot's animation row plays its own material's curve, not that of another slot sharing
+/// the `.rcsmaterial` name.
+fn assert_own_curve(
+    model: &mesh::Model,
+    geometry: &[u8],
+    material: &oag_rcs::rcsmodel::Material,
+    row: usize,
+    path: &str,
+) {
+    let curve = material
+        .curve
+        .as_ref()
+        .expect("a keyed material has a curve");
+    let track = &model.anim_tracks[row - 1];
+    for seconds in [0.5, 1.7] {
+        let want = curve
+            .sample(geometry, seconds)
+            .into_iter()
+            .find(|(c, _)| c.name_hash == KEY && c.component == 0)
+            .map(|(_, v)| v)
+            .expect("the curve drives the key");
+        assert_eq!(
+            track.sample(seconds).1[0],
+            want,
+            "{path}: row {row} at {seconds}"
+        );
+    }
+}
+
+/// Asserts both halves of [`census`]. `dark` names every slot known to stay unlit.
 fn expect(archive: usize, want: &[(&str, usize)], dark: &[(&str, &str, usize)]) {
     let Some((bound, left)) = census(archive) else {
         return;
@@ -172,6 +207,8 @@ fn data00s_circuits_bind_every_lightmapped_emissive() {
     expect(
         0,
         &[
+            ("and_diffuse_emissive", 16),
+            ("and_diffuse_emissive_spec", 4),
             ("diffuse_emissive_with_specular_from_alpha", 28),
             ("diffuse_spec_fresnel_emissive", 10),
             ("diffuse_with_specular_from_alpha_scalar", 64),
@@ -180,13 +217,9 @@ fn data00s_circuits_bind_every_lightmapped_emissive() {
             ("track_wall", 25),
             ("tunnel_fx_noalpha", 46),
             ("tunnel_fx_noalpha_mult", 4),
-            ("uvanim_diffuse_emissive", 16),
+            ("uvanim_diffuse_emissive", 36),
         ],
-        &[
-            ("modesto_heights", "and_diffuse_emissive", 16),
-            ("modesto_heights", "and_diffuse_emissive_spec", 4),
-            ("modesto_heights", "uvanim_diffuse_emissive", 20),
-        ],
+        &[],
     );
 }
 
@@ -199,8 +232,9 @@ fn data02s_circuits_bind_every_lightmapped_emissive() {
             ("mr_shopwin_reflecttranspemis", 8),
             ("mt_uvanim_diffuse_emissive", 24),
             ("mt_uvanim_diffuse_emissive2", 13),
+            ("mt_uvanim_diffuse_emissive3tokey", 2),
         ],
-        &[("01_vineta_k", "mt_uvanim_diffuse_emissive3tokey", 2)],
+        &[],
     );
 }
 
@@ -213,7 +247,8 @@ fn data03s_circuits_bind_every_lightmapped_emissive() {
             ("mr_shopwin_reflecttranspemis", 8),
             ("mt_uvanim_diffuse_emissive", 25),
             ("mt_uvanim_diffuse_emissive2", 12),
+            ("mt_uvanim_diffuse_emissive3tokey", 2),
         ],
-        &[("01_vineta_k", "mt_uvanim_diffuse_emissive3tokey", 2)],
+        &[],
     );
 }

@@ -64,11 +64,9 @@ impl Stage {
             &oag_hud::sprite::Sheet::default(),
         )
         .context("building the disc chooser")?;
-        Ok(Self::Launcher(Box::new(LauncherStage {
-            renderer,
-            launcher,
-            picked: None,
-        })))
+        Ok(Self::Launcher(Box::new(LauncherStage::new(
+            renderer, launcher,
+        ))))
     }
 
     /// The loading screen, holding the half-boot it will hand the window to.
@@ -300,6 +298,7 @@ impl Stage {
                 sprites: &loaded.sprites,
                 skin: loaded.menu_skin,
                 menu_font: loaded.menu_font.as_ref(),
+                label_face: loaded.label_face.as_ref(),
                 title_font: loaded.title_font.as_ref(),
                 buttons_font: loaded.buttons_font.as_ref(),
             },
@@ -620,6 +619,7 @@ impl Stage {
             zone_grade,
             shadows,
             behind_glass,
+            title.looks.every_texture_lod_levels(),
         )?);
         scene.attach_ripples(ripples);
         scene.attach_mist(
@@ -882,6 +882,7 @@ pub(crate) struct FrontendFaces<'a> {
     pub(crate) sprites: &'a oag_hud::sprite::Sheet,
     pub(crate) skin: &'static oag_title::MenuSkin,
     pub(crate) menu_font: Option<&'a oag_ui::font::Atlas>,
+    pub(crate) label_face: Option<&'a boot::fonts::LabelFace>,
     pub(crate) title_font: Option<&'a oag_ui::font::Atlas>,
     pub(crate) buttons_font: Option<&'a oag_ui::font::Atlas>,
 }
@@ -913,7 +914,14 @@ pub(crate) fn frontend_renderer(
         faces.title_font.cloned(),
         faces.buttons_font.cloned(),
     );
-    boot::fonts::install_boot_menu_face(&mut renderer, device, queue, faces.skin, faces.menu_font);
+    boot::fonts::install_boot_face(
+        &mut renderer,
+        device,
+        queue,
+        faces.skin,
+        faces.menu_font,
+        faces.label_face,
+    );
     Ok(renderer)
 }
 

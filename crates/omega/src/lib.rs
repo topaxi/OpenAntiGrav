@@ -61,6 +61,7 @@ pub mod weapons;
 /// Wipeout: Omega Collection, as the asset layer needs to know it.
 pub const TITLE: &Title = &Title {
     name: "Wipeout: Omega Collection",
+    released: &[(Platform::Ps4, 2017, 6)],
     archives: ArchiveCandidates {
         patch: &[],
         data: DATA_CANDIDATES,
@@ -699,6 +700,11 @@ pub mod archives {
     /// `frontend/gui` files; `data00` and `data08` carry older layers of the
     /// same files). No circuits, no ship models, no textures.
     pub const DATA09: &str = "uroot/data09.psarc";
+
+    /// What a PS4 package's content id holds when it is this title's. Read on
+    /// the European package only (`EP9000-CUSA05670_00-WIPEOUTOMEGA00EU`,
+    /// `docs/formats/ps4-package.md`, "System art").
+    pub const PKG_CONTENT_ID: &str = "WIPEOUTOMEGA";
 
     /// All nine, in package-then-archive-number order.
     pub const ALL: &[&str] = &[

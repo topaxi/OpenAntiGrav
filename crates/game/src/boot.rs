@@ -84,6 +84,8 @@ pub struct Boot {
     pub circuit_names: oag_ui::language::CircuitNames,
     /// The row face and the title's own - see [`Shell::menu_font`]/[`Shell::title_font`].
     pub menu_font: Option<oag_ui::font::Atlas>,
+    /// See [`Shell::label_face`].
+    pub label_face: Option<fonts::LabelFace>,
     /// See [`Shell::face_scales`].
     pub face_scales: Vec<(String, f32)>,
     pub title_font: Option<oag_ui::font::Atlas>,
@@ -307,6 +309,8 @@ pub struct Shell {
     /// The face menu rows are drawn in, when the title names one and it
     /// reads. `None` falls the menus back to [`Self::font`].
     pub menu_font: Option<oag_ui::font::Atlas>,
+    /// A touch front end's tile label face, see [`fonts::load_label_face`].
+    pub label_face: Option<fonts::LabelFace>,
     pub title_font: Option<oag_ui::font::Atlas>,
     /// The PlayStation button-glyph face (`PS_BUTTONS.fnt` on HD and Omega).
     pub buttons_font: Option<oag_ui::font::Atlas>,
@@ -601,6 +605,15 @@ pub fn load_shell(
         &languages,
         preferred_language,
         menu_skin,
+        texel_scale,
+        title.prompts,
+        &mut report,
+    );
+    let label_face = fonts::load_label_face(
+        &mut archives,
+        &languages,
+        preferred_language,
+        front_end.touch_shell().and_then(|touch| touch.label_face),
         texel_scale,
         title.prompts,
         &mut report,
@@ -992,6 +1005,7 @@ pub fn load_shell(
             ship_select_split,
             race_setup,
             menu_font,
+            label_face,
             title_font,
             buttons_font,
             face_scales,
@@ -1178,6 +1192,7 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
         ship_select_split,
         race_setup,
         menu_font,
+        label_face,
         title_font,
         buttons_font,
         face_scales,
@@ -1263,6 +1278,16 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
         ),
         (campaign_events, extra_tiles, tiers, team_ratings),
     );
+    if let Some((_, role)) = &label_face {
+        frontend.set_label_face(role);
+    }
+    if title
+        .front_end
+        .and_then(|front| front.touch_shell())
+        .is_some()
+    {
+        frontend.set_card_atlas(font.clone());
+    }
 
     // **Before `set_backdrop`, which bakes a rect out of it.** The PS2's `Skin.xml`
     // places widgets in a 640x448 grid rather than the PSP's 480x272, so every widget
@@ -1379,6 +1404,7 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
         race_setup,
         circuit_names,
         menu_font,
+        label_face,
         face_scales,
         title_font,
         buttons_font,
@@ -1395,58 +1421,6 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
         after_language_movie_sound,
         sprites,
         report,
-    }
-}
-
-/// Loads the looping backdrop the disc plays behind its menus.
-///
-/// **The disc's own arrangement, not decoration we invented.** `FE Screen` -
-/// the original's main menu - carries a `Movie` widget naming
-/// `Data\Movies\Backdrop.PMF`, and a cold boot under PPSSPP with
-/// `MoviePlayer_Open` armed from reset opens exactly two movies in ten minutes:
-/// the intro, and this. See [`DEFAULT_BOOT_MOVIE`] and
-/// `docs/ghidra/functions/psp-pulse-usa/frontend-video.md`. Our menu tree is ours;
-/// what it sits on is the disc's.
-///
-/// Three differences from [`load_movie`], each of which is why this is its own
-/// function rather than a second call:
-///
-/// - **Absence is never an error.** `load_movie` bails on a movie the command
-///   line named and the source does not have, because a run that cannot play
-///   the movie it was asked for has failed. Nothing asked for this one, so
-///   every way of not getting it - no such entry, no `ffmpeg`, `--no-video` -
-///   ends as `None` and a note, and the menus draw on black.
-/// - **Always the whole movie**, whatever `--movie-frames` says. That flag
-///   exists so a first run need not transcode 1200 intro frames; capping a
-///   *loop* at four would make the backdrop stutter round every seventh of a
-///   second, which is not a shorter version of the same thing.
-/// - **It is loaded here, at boot, rather than when the menus first open.** The
-///   270 frames cost about thirteen seconds to transcode once and nothing on
-///   every run after, and boot is already paying that for the intro's 1200 -
-///   whereas the menus open on a keypress out of a race, where a
-///   thirteen-second freeze would read as a hang.
-fn load_backdrop(
-    archives: &mut oag_assets::Archives,
-    name: &str,
-    options: &Options,
-    report: &mut Vec<String>,
-    watch: crate::movie::Watch<'_>,
-) -> Option<Movie> {
-    if options.no_video {
-        return None;
-    }
-    let wanted = Options {
-        extent: Extent::Whole,
-        ..options.clone()
-    };
-    match load_movie(archives, name, &wanted, report, watch) {
-        Ok(movie) => movie,
-        // Reported and dropped. `load_movie` only errors here on an entry it
-        // cannot read, and the backdrop is not worth failing a boot over.
-        Err(e) => {
-            report.push(format!("no menu backdrop: {e:#}"));
-            None
-        }
     }
 }
 
@@ -1477,8 +1451,8 @@ pub mod worker;
 use fonts::load_font;
 pub use movies::{DEFAULT_BOOT_MOVIE, DEVPUB_REEL, EntryRef};
 use movies::{
-    authored_movie, load_movie, load_movie_sound, load_second_movie, resolve_movie_region,
-    resolve_pure_movie_region, same_planes,
+    authored_movie, load_backdrop, load_movie, load_movie_sound, load_second_movie,
+    resolve_movie_region, resolve_pure_movie_region, same_planes,
 };
 use oag_ui::language::load::{chosen_language, load_languages, load_strings, with_overlays};
 use oag_ui::xml::expand;

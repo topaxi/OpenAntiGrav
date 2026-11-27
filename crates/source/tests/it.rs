@@ -12,6 +12,7 @@
 mod eliminator_ai_stats_ground_truth;
 mod hd_update_source_ground_truth;
 mod psn_source_ground_truth;
+mod system_art_ground_truth;
 mod two_title_2048_sources_ground_truth;
 
 /// A `tests/*.rs` file missing from every `tests/it*.rs` listing compiles into

@@ -163,15 +163,14 @@ mod tests {
 
     #[test]
     fn tracks_and_ships_are_listed_by_extension_per_base() {
-        let base =
-            std::env::temp_dir().join(format!("oag-ballisticng-source-{}", std::process::id()));
+        let base = oag_testdata::scratch::dir("ballisticng-source");
         std::fs::create_dir_all(base.join("tracks")).unwrap();
         std::fs::create_dir_all(base.join("ships")).unwrap();
         std::fs::write(base.join("tracks/b.WTRK"), b"x").unwrap();
         std::fs::write(base.join("tracks/a.wtrk"), b"x").unwrap();
         std::fs::write(base.join("tracks/notes.txt"), b"x").unwrap();
         std::fs::write(base.join("ships/s.csf"), b"x").unwrap();
-        let bases = [base.clone(), base.join("missing")];
+        let bases = [base.to_path_buf(), base.join("missing")];
         let names = |v: Vec<PathBuf>| -> Vec<String> {
             v.iter()
                 .map(|p| p.file_name().unwrap().to_string_lossy().into_owned())
@@ -183,7 +182,7 @@ mod tests {
         assert_eq!(resolve_in(&bases, "b"), Some(base.join("tracks/b.WTRK")));
         std::fs::write(base.join("tracks/lion one.wtrk"), b"x").unwrap();
         std::fs::write(base.join("tracks/lion two.wtrk"), b"x").unwrap();
-        let bases = [base.clone()];
+        let bases = [base.to_path_buf()];
         assert_eq!(resolve_in(&bases, "lion"), None, "two partial matches");
         assert_eq!(
             resolve_in(&bases, "one"),
@@ -195,8 +194,7 @@ mod tests {
 
     #[test]
     fn a_workshop_download_is_found_and_an_own_format_track_is_not() {
-        let base =
-            std::env::temp_dir().join(format!("oag-ballisticng-layout-{}", std::process::id()));
+        let base = oag_testdata::scratch::dir("ballisticng-layout");
         // `<base>/<content id>/<item>/<name>.wtrk`, as Steam lays it out.
         std::fs::create_dir_all(base.join("473770/111")).unwrap();
         std::fs::create_dir_all(base.join("tracks")).unwrap();
@@ -205,13 +203,13 @@ mod tests {
         std::fs::write(base.join("473770/111/lion.csf"), b"x").unwrap();
         std::fs::write(base.join("tracks/mine.track.toml"), b"x").unwrap();
         std::fs::write(base.join("deep/er/still/too_deep.wtrk"), b"x").unwrap();
-        let found = tracks_in(std::slice::from_ref(&base));
+        let found = tracks_in(&[base.to_path_buf()]);
         assert_eq!(
             found,
             [base.join("473770/111/lion.wtrk")],
             "an own-format track is not BallisticNG content"
         );
-        assert_eq!(resolve_in(std::slice::from_ref(&base), "MINE"), None);
+        assert_eq!(resolve_in(&[base.to_path_buf()], "MINE"), None);
         // The base is the content directory itself: one level down.
         let content = base.join("473770");
         assert_eq!(tracks_in(&[content]), [base.join("473770/111/lion.wtrk")]);

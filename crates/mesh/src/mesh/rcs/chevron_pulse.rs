@@ -99,6 +99,7 @@ pub(super) fn chevron_pulse(
         // The program lights the albedo's alpha, which `skin` says with `LIT_ALPHA`; a slot
         // read otherwise, or one whose glow index is taken, keeps its reading.
         if *word & slots::LIT_ALPHA == 0 || slots::material_index(*word) != 0 {
+            super::census::claim(slot, "chevron_pulse", super::census::Outcome::NotDrawn);
             report.chevron_pulse_unread += 1;
             continue;
         }
@@ -126,6 +127,7 @@ pub(super) fn chevron_pulse(
             value_of(COLOUR),
             value_of(SCALE),
         ) else {
+            super::census::claim(slot, "chevron_pulse", super::census::Outcome::NotDrawn);
             report.chevron_pulse_unread += 1;
             continue;
         };
@@ -140,6 +142,7 @@ pub(super) fn chevron_pulse(
                 tracks.len()
             }
             None => {
+                super::census::claim(slot, "chevron_pulse", super::census::Outcome::NotDrawn);
                 report.chevron_pulse_unread += 1;
                 continue;
             }
@@ -159,12 +162,14 @@ pub(super) fn chevron_pulse(
             })
         });
         let Some(index) = index else {
+            super::census::claim(slot, "chevron_pulse", super::census::Outcome::NotDrawn);
             report.chevron_pulse_unread += 1;
             continue;
         };
         emasks[slot] = Some(emask);
         waves[slot] = Some(wave);
         *word |= u32::try_from(index + 1).unwrap_or(0) << slots::MATERIAL_SHIFT;
+        super::census::claim(slot, "chevron_pulse", super::census::Outcome::Drawn);
         report.chevron_pulse_bound += 1;
     }
     (emasks, waves)

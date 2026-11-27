@@ -54,6 +54,10 @@ import sys
 import time
 from collections import Counter
 from pathlib import Path
+import os
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import oag_tmp  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -131,7 +135,7 @@ def step_off_breakpoint(dbg, hit_addr, targets):
 
 def main():
     global TARGETS
-    out = Path(sys.argv[1] if len(sys.argv) > 1 else "/tmp/hd-flare-gate-check")
+    out = Path(sys.argv[1] if len(sys.argv) > 1 else oag_tmp.output("hd-flare-gate-check"))
     if len(sys.argv) > 2:
         only = {"byte": BYTE_FLAG_BEQ, "count": COUNT_FIELD_BLE,
                 "alt": ALT_PATH_BEQ}[sys.argv[2]]

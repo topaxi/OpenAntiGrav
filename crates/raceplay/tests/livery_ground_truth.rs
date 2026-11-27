@@ -735,7 +735,7 @@ fn a_zone_race_flies_the_picked_team_in_its_own_paint() {
     assert_ne!(paint_a, paint_b, "{first} and {last} wear their own paint");
 }
 
-/// Mounts the official mod `oag.detonator-pulse`, which carries Pulse's Detonator data (ADR-0098):
+/// Mounts the official mod `oag.detonator-pulse`, which carries Pulse's Detonator data (ADR-0100):
 /// `None` without the official-mods submodule, a failure under `OAG_REQUIRE_GAME_DATA=1`.
 fn with_pulse_detonator_mod() -> Option<std::path::PathBuf> {
     let manifest = oag_testdata::exact("assets/mods/official/detonator-pulse/oag-mod.toml")?;

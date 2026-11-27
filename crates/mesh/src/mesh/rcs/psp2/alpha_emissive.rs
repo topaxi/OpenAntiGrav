@@ -76,6 +76,11 @@ pub(super) fn plan(
         let drawn = weighted.map_or_else(|| material.diffuse_texture(), |w| Some(w.picture));
         let held = plan.adds.get(index).is_some_and(Option::is_some) || glow.role(Some(index)) != 0;
         if held || drawn != Some(picture) {
+            crate::mesh::rcs::census::claim(
+                index,
+                "alpha_emissive",
+                crate::mesh::rcs::census::Outcome::NotDrawn,
+            );
             report.alpha_emissive_unread += 1;
             continue;
         }
@@ -86,6 +91,11 @@ pub(super) fn plan(
                     .or_insert_with(|| super::picture_memo::picture(w.specular, textures, report))
                     .clone();
                 if map.is_none() {
+                    crate::mesh::rcs::census::claim(
+                        index,
+                        "alpha_emissive",
+                        crate::mesh::rcs::census::Outcome::NotDrawn,
+                    );
                     report.alpha_emissive_unread += 1;
                     continue;
                 }
@@ -116,6 +126,11 @@ pub(super) fn plan(
             })
         });
         let Some(slot) = at.and_then(|at| u32::try_from(at + 1).ok()) else {
+            crate::mesh::rcs::census::claim(
+                index,
+                "alpha_emissive",
+                crate::mesh::rcs::census::Outcome::NotDrawn,
+            );
             report.alpha_emissive_unread += 1;
             continue;
         };
@@ -126,6 +141,11 @@ pub(super) fn plan(
             alpha_gated: false,
         });
         if tint.is_some() {
+            crate::mesh::rcs::census::claim(
+                index,
+                "alpha_emissive",
+                crate::mesh::rcs::census::Outcome::Drawn,
+            );
             report.alpha_emissive_materials += 1;
         }
         report.alpha_emissive_specular_maps += usize::from(weighted.is_some());

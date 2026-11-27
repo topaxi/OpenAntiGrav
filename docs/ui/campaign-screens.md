@@ -5617,3 +5617,89 @@ the picture reads as the original's flat rows.
 `menu-options`, `menu-racebox`, `menu-single`, `menu-team`, `menu-title`, `menu-track`.
 **Left open**: the PS2 title screen has no pair (the dump is the evidence; ours' PS2 title stamps are gone with the skin field).
 **2048/Omega**: not applicable (Pulse PS2's front end; no `frontend_glow` on HD or Omega, so no value stamps to drop).
+
+## 2048 menu pairs: what the four worst differed by (2026-11-27, `2048-menu-pairs`)
+
+Wipeout 2048's own pairs (`data/reference/compare-page/2048/menu-*`, 960x544, the same
+`theirs.png` before and after; mean grey is `|ours - theirs|` over the whole frame). Method
+of the pairs: [compare-page.md](../tools/compare-page.md), "Menu pairs: Wipeout 2048
+front-end screens". Format-level evidence:
+[2048-frontend.md](../formats/2048-frontend.md), "Faces, glyph tint and header block", and
+[campaign-event-card.md](../ghidra/functions/vita-2048-eu-v104/campaign-event-card.md).
+
+| Pair | Before | Code only, old route | After |
+| --- | --- | --- | --- |
+| `menu-home` | 9.73 | 8.54 | 8.13 |
+| `menu-game-mode` | 6.30 | 2.81 | 2.55 |
+| `menu-card-0` | 7.83 | 7.01 | 7.01 |
+| `menu-card-1` | 7.00 | 5.83 | 5.83 |
+| `menu-title` | 3.80 | | 3.80 |
+| `menu-map` | 18.04 | | 18.05 |
+| `menu-team` | 27.31 | | 27.27 |
+
+The `race-load-late`, `-mode` and `-tip` pairs share the card painter: 19.95 to 20.11, 19.01
+to 19.17 and 29.20 to 29.24 (their subtitle now reads `OFFENSIVE WEAPONS ONLY` as the
+original's, in a bolder face than its `NEOSANS`).
+
+### Regions
+
+Share of the whole-frame mean (`x0,y0,x1,y1`, grey), before to after:
+
+| Region | Box | `home` | `game-mode` | Cause |
+| --- | --- | --- | --- | --- |
+| Header | `0,0,440,100` | 1.58 to 1.17 | 2.46 to 0.86 | block above the lattice, glyph past its fade; the rule is left |
+| Tile row 1 icons | home `80,185,880,335`, mode `220,95,740,235` | 1.92 to 1.04 | 0.33 to 0.02 | `White2048` |
+| Tile row 1 labels | home `80,340,880,375`, mode `220,240,740,295` | 1.79 to 1.52 | 1.65 to 0.91 | `NEOSANS_BOLD`; on `home` the blurred backdrop is under it |
+| Backdrop above and below the row | `0,100,960,185`, `0,375,960,430` | 0.93 and 0.91, unchanged | | the original's blurred map |
+
+| Region | Box | `card-0` | `card-1` | Cause |
+| --- | --- | --- | --- | --- |
+| Badges | `750,0,960,80` | 1.76, unchanged | 1.76, unchanged | `TouchHomeButton`, unwired |
+| Body | `425,185,950,430` | 2.76 to 2.08 | 1.68 to 0.91 | pass group centred (page 0); tabs and bar (page 1); ground left |
+| Title panel | `425,90,950,185` | 1.18 to 1.16 | 1.18 to 1.16 | description reads right; face weight left |
+| Home square | `0,0,80,80` | 0.65, unchanged | 0.65, unchanged | `TouchHomeButton`, unwired |
+| Ground below the photo | `0,430,560,544` | 0.64, unchanged | 0.64, unchanged | the original's blurred map |
+
+### The 2048 stills were taken on the entry tick
+
+`--ticks` counts from boot, so a route reaching `GameModeChoice` (tick 245) with no ticks, or
+`Home` (tick 249) with `--ticks 40`, shot the screen on the tick it was entered, with every
+`transition` widget at alpha 0: no header glyph on either page. The routes now carry
+`--press-until-reached --ticks 490` (`scripts/vita3k-2048-menu-pair.py`;
+`compare-rerender-ours.py` migrates the older records). This is capture state, not a change to
+the game, and its share is the difference between the last two columns above.
+
+### Left open
+
+Each needs the executable (v1.04, `/2048/eboot-vita-2048-eu-v104.elf`) and is not read:
+
+- **`TouchHomeButton` composite**: the card's home square (`x 16..60`) and three badges
+  (`x 760..946`). The widget name string `0x81459cc4` is referenced at `0x810fc422` (no
+  function is defined there), and the class's source-path string
+  `Frontend/Items/TouchHomeButton_Item.cpp` (`0x814595a0`) from `FUN_813cf8cc`. The widget is
+  authored (`newFEshell`'s `<TouchHomeButton>`, `x=16 y=16`); its art and layout are not.
+- **The header rule** (`x 16..424`, `y 82..86`) and the square's position (16, 16 on both
+  frames, ours at the image's rect): not found in any widget, no address yet; the first place to
+  look is the screen classes `GameModeChoice_Screen` and `Home`. Measured only.
+- **The card's blurred ground** and `menu-home`'s blurred map backdrop: the card is drawn by
+  `CampaignEventCard_Draw` (`0x810f1196`); the blur pass is unread. Ours shows the lattice and a
+  hex ornament.
+- The card's `NEOSANS` (regular) lines draw in the bold `Default` face.
+
+### Omega
+
+- **Description line, pass group: ported.** Omega's `SP.xml` words `M_DESCRIPTION` on 38 of
+  its 115 map events, the shared reader draws them, and its hosted map now gets the atlas the
+  card measures with
+  (`omega_2048_map_ground_truth::omegas_hosted_card_words_its_description_and_centres_the_pass_group`).
+- **Card button glyphs `White2048`: checked, applies, wired by the shared painter.** Omega's
+  globals define `White2048` and its hosted card now draws the buttons tinted (seen in the draw
+  list, `[0.882, 0.894, 0.922]`); no Omega frame of the card confirms the colour.
+- **Card tabs in `NEOSANS_BOLD`: checked, applies, not wired.** Omega ships
+  `Data/fe/fonts/NEOSANS_BOLD.fnt`, and its eboot's `FUN_013a9040` references both
+  `FE_CURRENT_BEST` (`0x0181c50d`) and `NEOSANS_BOLD` (`0x01822a0e`); the hosted map loads no
+  role face.
+- **Tile labels, tile tint, header block: checked, differs.** Omega ships
+  `Icon_Home_Header.gnf` but no `NEWGUI` screens; its front end is HD's `<HorizMenu>`
+  (`oag_omega::frontend::TOUCH` has no tiles).
+

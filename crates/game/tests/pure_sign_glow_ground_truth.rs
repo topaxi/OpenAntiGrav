@@ -144,7 +144,7 @@ fn modesto_s_neon_signs_glow_and_the_mask_holds_the_originals_glow_bytes() {
     let Some(image) = oag_testdata::image("data/images/pure-psp-usa.chd") else {
         return;
     };
-    let scratch = std::env::temp_dir().join(format!("oag-pure-sign-glow-{}", std::process::id()));
+    let scratch = oag_testdata::scratch::dir("pure-sign-glow");
     let (frame, mask) = run(&image, &scratch);
     std::fs::remove_dir_all(&scratch).ok();
 

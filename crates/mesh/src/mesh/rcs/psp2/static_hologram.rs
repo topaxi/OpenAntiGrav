@@ -58,12 +58,22 @@ pub(super) fn plan(
         let rate = |hash| material.param(hash).and_then(|v| v.first().copied());
         let (Some(scan), Some(advert), Some(noise)) = (path(SCAN), path(ADVERT), path(STATIC))
         else {
+            crate::mesh::rcs::census::claim(
+                index,
+                "static_hologram",
+                crate::mesh::rcs::census::Outcome::NotDrawn,
+            );
             report.static_hologram_unread += 1;
             continue;
         };
         let (Some(advert_rate), Some(static_rate), Some(alpha)) =
             (rate(ADVERT_RATE), rate(STATIC_RATE), rate(ALPHA_SCALE))
         else {
+            crate::mesh::rcs::census::claim(
+                index,
+                "static_hologram",
+                crate::mesh::rcs::census::Outcome::NotDrawn,
+            );
             report.static_hologram_unread += 1;
             continue;
         };
@@ -75,6 +85,11 @@ pub(super) fn plan(
         };
         let (Some(advert), Some(noise), Some(_)) = (picture(advert), picture(noise), picture(scan))
         else {
+            crate::mesh::rcs::census::claim(
+                index,
+                "static_hologram",
+                crate::mesh::rcs::census::Outcome::NotDrawn,
+            );
             report.static_hologram_unread += 1;
             continue;
         };
@@ -92,6 +107,11 @@ pub(super) fn plan(
             })
         });
         let Some(slot) = at.and_then(|at| u32::try_from(at + 1).ok()) else {
+            crate::mesh::rcs::census::claim(
+                index,
+                "static_hologram",
+                crate::mesh::rcs::census::Outcome::NotDrawn,
+            );
             report.static_hologram_unread += 1;
             continue;
         };
@@ -104,6 +124,11 @@ pub(super) fn plan(
                 wipe: noise,
                 bars: None,
             },
+        );
+        crate::mesh::rcs::census::claim(
+            index,
+            "static_hologram",
+            crate::mesh::rcs::census::Outcome::Drawn,
         );
         report.static_hologram_materials += 1;
     }

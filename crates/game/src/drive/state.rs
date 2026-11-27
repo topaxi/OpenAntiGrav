@@ -220,6 +220,9 @@ pub struct State {
     /// (`session::demo`); absent in every other race.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub demo: Option<String>,
+    /// The Tournament in progress as `leg/legs` (`1/3`), on any stage; absent outside one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tournament: Option<String>,
     /// `loading` while the in-game benchmark's race loads, `running` while it is flown and
     /// `stats` once its stats screen is up (`session::benchmark`); absent otherwise.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -264,7 +267,7 @@ impl State {
     /// focused row's id, setting and label, so `focus=launch` and `focus="LAUNCH RACE"` both hold.
     ///
     /// Keys: `stage`, `frontend`, `map_event`, `page`, `screen` (the overlay kind, `page` when none),
-    /// `screen.id`, `screen.help` (`open` or `closed`, where the screen has a Help), `title`, `focus`, `opening_reads`, `demo`, `benchmark`, `root` (the menu tree's root page, on `stage=menu`), `rows` (the label, id and action of every row on screen, so `rows!=photo_mode` asserts an absent row), `sim_tick` (the world's tick, on `stage=race`), `humans`, `hints` (the buttons the hints on screen depict), and `race.title|track|track_file|team|variant|mode|source|craft_source|target`.
+    /// `screen.id`, `screen.help` (`open` or `closed`, where the screen has a Help), `title`, `focus`, `opening_reads`, `demo`, `tournament` (`leg/legs`), `benchmark`, `root` (the menu tree's root page, on `stage=menu`), `rows` (the label, id and action of every row on screen, so `rows!=photo_mode` asserts an absent row), `sim_tick` (the world's tick, on `stage=race`), `humans`, `hints` (the buttons the hints on screen depict), and `race.title|track|track_file|team|variant|mode|source|craft_source|target`.
     #[must_use]
     pub fn get(&self, key: &str) -> Vec<String> {
         let screen = self.screen.as_ref();
@@ -293,6 +296,7 @@ impl State {
             "notice" => one(self.notice.clone()),
             "endrace" => one(self.endrace.clone()),
             "demo" => one(self.demo.clone()),
+            "tournament" => one(self.tournament.clone()),
             "benchmark" => one(self.benchmark.clone()),
             "root" => one(self.root.clone()),
             "sim_tick" => one(self.sim_tick.map(|tick| tick.to_string())),
@@ -373,6 +377,7 @@ impl State {
                 | "notice"
                 | "endrace"
                 | "demo"
+                | "tournament"
                 | "benchmark"
                 | "root"
                 | "rows"

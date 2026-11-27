@@ -26,7 +26,8 @@ cd "$(dirname "$0")/.."
 
 blender=${BLENDER:-blender}
 fixtures=crates/trackfile/tests/fixtures
-out=$(mktemp -d)
+. "$(dirname "${BASH_SOURCE[0]}")/oag-tmp.sh"
+out=$(mktemp -d -p "$(oag_tmp_root)")
 trap 'rm -rf "$out"' EXIT
 
 run() {

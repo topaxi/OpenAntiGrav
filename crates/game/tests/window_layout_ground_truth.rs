@@ -11,8 +11,7 @@ use std::path::{Path, PathBuf};
 
 /// A still of `page`, as the bytes of the PNG the binary wrote.
 fn still(image: &Path, page: &str, name: &str) -> Vec<u8> {
-    let dir = std::env::temp_dir().join("oag-window-layout-ground-truth");
-    std::fs::create_dir_all(&dir).expect("a temp directory");
+    let dir = oag_testdata::scratch::dir("window-layout-ground-truth");
     let out = dir.join(format!("{name}.png"));
     let status = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
         .arg(image)

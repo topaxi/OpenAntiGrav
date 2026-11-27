@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Original-vs-ours pairs of Wipeout HD / Fury's front-end screens, one RPCS3 walk, every pair environment-checked.
 
-    source data/scratch/<lane>/env.sh ; export XDG_CACHE_HOME=/tmp/oag-<lane>-cache
+    source data/scratch/<lane>/env.sh ; export XDG_CACHE_HOME=$PWD/data/scratch/<lane>/cache
     OAG_COMPARE_PLATFORM=hd-fury python3 scripts/rpcs3-drive.py --image data/images/hdfury-ps3-eu.iso serve   # to Main Menu
     OAG_RPCS3_ATTACH=1 uv run --with evdev python3 scripts/emu-run.py -- python3 scripts/rpcs3-hd-menu-pair.py \\
         --out data/scratch/<lane>/compare-page/hd --oag-game target/release/oag-game

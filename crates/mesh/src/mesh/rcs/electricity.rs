@@ -201,6 +201,7 @@ pub(super) fn electricity(
             entries(&material.parameters),
             packed.get_mut(slot),
         ) else {
+            super::census::claim(slot, "electricity", super::census::Outcome::NotDrawn);
             report.electricity_unread += 1;
             continue;
         };
@@ -211,6 +212,7 @@ pub(super) fn electricity(
             })
         });
         let Some(index) = index else {
+            super::census::claim(slot, "electricity", super::census::Outcome::NotDrawn);
             report.electricity_unread += 1;
             continue;
         };
@@ -223,6 +225,7 @@ pub(super) fn electricity(
                 | slots::ALBEDO_FROM_SECOND
                 | slots::ALPHA_FROM_SECOND);
         *word |= u32::try_from(index + 1).unwrap_or(0) << slots::MATERIAL_SHIFT;
+        super::census::claim(slot, "electricity", super::census::Outcome::Drawn);
         report.electricity_bound += 1;
     }
     thirds

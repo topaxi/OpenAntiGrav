@@ -1,5 +1,4 @@
 use std::collections::BTreeMap;
-use std::path::PathBuf;
 
 use super::*;
 
@@ -15,11 +14,8 @@ license = "CC-BY-4.0"
 description = "A mod the package carries."
 "#;
 
-fn scratch(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("oag-mobile-{}-{name}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    dir
+fn scratch(name: &str) -> oag_testdata::scratch::TempDir {
+    oag_testdata::scratch::dir(&format!("mobile-{name}"))
 }
 
 /// A package's assets: the files under [`ROOT`] and the index the build writes for them.
@@ -45,7 +41,7 @@ fn reader(assets: &BTreeMap<String, Vec<u8>>) -> impl FnMut(&str) -> io::Result<
 
 #[test]
 fn a_first_launch_writes_every_file_the_index_names_with_its_subfolders() {
-    let dest = scratch("fresh").join("assets/mods/official");
+    let dest = scratch("fresh").child("assets/mods/official");
     let assets = package(&[
         ("remix/oag-mod.toml", MANIFEST.as_bytes()),
         ("remix/strings/english.toml", b"[strings]\n"),
@@ -88,7 +84,7 @@ fn what_is_installed_under_the_official_path_is_found_and_opened_by_the_mod_sear
 
 #[test]
 fn a_second_launch_of_the_same_build_leaves_the_folder_alone() {
-    let dest = scratch("again").join("official");
+    let dest = scratch("again").child("official");
     let assets = package(&[("a/oag-mod.toml", MANIFEST.as_bytes())]);
     install(&mut reader(&assets), &dest).unwrap();
     std::fs::write(dest.join("a/marker"), b"x").unwrap();
@@ -104,7 +100,7 @@ fn a_second_launch_of_the_same_build_leaves_the_folder_alone() {
 
 #[test]
 fn a_newer_build_replaces_the_folder_whole_and_a_dropped_mod_does_not_linger() {
-    let dest = scratch("newer").join("official");
+    let dest = scratch("newer").child("official");
     let old = package(&[
         ("gone/oag-mod.toml", MANIFEST.as_bytes()),
         ("kept/oag-mod.toml", b"old"),
@@ -125,7 +121,7 @@ fn a_newer_build_replaces_the_folder_whole_and_a_dropped_mod_does_not_linger() {
 
 #[test]
 fn a_package_without_an_index_is_an_error_and_leaves_the_previous_folder() {
-    let dest = scratch("noindex").join("official");
+    let dest = scratch("noindex").child("official");
     let assets = package(&[("a/oag-mod.toml", b"x")]);
     install(&mut reader(&assets), &dest).unwrap();
     let error = install(&mut reader(&BTreeMap::new()), &dest).unwrap_err();
@@ -135,7 +131,7 @@ fn a_package_without_an_index_is_an_error_and_leaves_the_previous_folder() {
 
 #[test]
 fn a_file_that_is_not_the_size_the_index_says_is_refused_and_nothing_is_swapped_in() {
-    let dest = scratch("size").join("official");
+    let dest = scratch("size").child("official");
     let mut assets = package(&[("a/oag-mod.toml", b"four")]);
     assets.insert(format!("{ROOT}/a/oag-mod.toml"), b"truncated".to_vec());
     let error = install(&mut reader(&assets), &dest).unwrap_err();

@@ -104,7 +104,7 @@ fn main() -> anyhow::Result<()> {
         if packed & slots::ALPHA_FROM_SECOND != 0 {
             roles.push("alpha_from_second");
         }
-        if packed & slots::FLIP_V != 0 {
+        if model.material_flip_v.get(slot).copied().unwrap_or(false) {
             roles.push("flip_v");
         }
         if packed & slots::EMISSIVE == slots::EMISSIVE {

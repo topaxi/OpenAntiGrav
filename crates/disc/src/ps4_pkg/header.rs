@@ -14,6 +14,14 @@ pub const MAGIC: [u8; 4] = *b"\x7fCNT";
 pub const ENTRY_KEYS: u32 = 0x10;
 pub const IMAGE_KEY: u32 = 0x20;
 pub const PARAM_SFO: u32 = 0x1000;
+/// `pic1.png`, as the package's own name table (entry `0x0200`) spells it.
+pub const PIC1_PNG: u32 = 0x1006;
+/// `pic0.png`, likewise.
+pub const PIC0_PNG: u32 = 0x1220;
+
+/// The largest header entry [`header_entry`] reads: a broken table must not
+/// allocate gigabytes.
+const MAX_HEADER_ENTRY: u32 = 32 << 20;
 
 /// `pfs_flags` bit that selects the second key derivation.
 const PFS_NEW_CRYPT: u64 = 0x2000_0000_0000_0000;
@@ -158,8 +166,8 @@ impl Header {
     }
 }
 
-/// `path`'s PARAM.SFO, without opening the file system under it.
-pub fn param_sfo(path: &Path) -> Option<Vec<u8>> {
+/// `path`'s header, without opening the file system under it.
+fn open_header(path: &Path) -> Option<(FileSource, Header)> {
     let file = std::fs::File::open(path).ok()?;
     let len = file.metadata().ok()?.len();
     let mut src = FileSource {
@@ -167,5 +175,26 @@ pub fn param_sfo(path: &Path) -> Option<Vec<u8>> {
         file,
     };
     let header = Header::read(&mut src, len).ok()?;
-    header.read_entry(&mut src, PARAM_SFO).ok()?
+    Some((src, header))
+}
+
+/// Header entry `id` of `path` as stored: the entries the console reads without
+/// a key (`PARAM.SFO`, the system art). `None` when there is none, or when it
+/// is larger than any such entry is.
+pub fn header_entry(path: &Path, id: u32) -> Option<Vec<u8>> {
+    let (mut src, header) = open_header(path)?;
+    if header.entry(id)?.data_size > MAX_HEADER_ENTRY {
+        return None;
+    }
+    header.read_entry(&mut src, id).ok()?
+}
+
+/// `path`'s content id, for example `EP9000-CUSA05670_00-WIPEOUTOMEGA00EU`.
+pub fn content_id(path: &Path) -> Option<String> {
+    Some(open_header(path)?.1.content_id)
+}
+
+/// `path`'s PARAM.SFO.
+pub fn param_sfo(path: &Path) -> Option<Vec<u8>> {
+    header_entry(path, PARAM_SFO)
 }

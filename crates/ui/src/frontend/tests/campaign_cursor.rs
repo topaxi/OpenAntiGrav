@@ -4,6 +4,8 @@ use super::wipeout2048::{
     boot, pass_event_one, press, reach_the_grid, reach_the_shell, three_events, tick,
 };
 use super::*;
+use crate::frontend::canvas_camera;
+use crate::pointer::Pointer;
 
 fn on_the_map() -> (Frontend, Input) {
     let mut frontend = boot(0);
@@ -187,4 +189,26 @@ fn the_stick_does_nothing_off_the_campaign_map() {
     assert_eq!(frontend.campaign.cursor.at, None);
     assert_eq!(frontend.touch.selected, selected);
     assert!(!frontend.wants_mouse_pan());
+}
+
+#[test]
+fn a_hover_over_any_event_pans_the_map_nowhere() {
+    let (mut frontend, mut input) = on_the_map();
+    let before = frontend.campaign.scroll();
+    for index in 0..frontend.campaign_events().len() {
+        let at = centre_of(&frontend, index);
+        let (width, height) = frontend.space().size;
+        let (view_w, view_h) = canvas_camera::VIEWPORT;
+        let at = (at.0 * width / view_w, at.1 * height / view_h);
+        assert!(frontend.pointer(&Pointer {
+            at: Some(at),
+            moved: true,
+            ..Pointer::default()
+        }));
+        for _ in 0..30 {
+            tick(&mut frontend, &mut input, 0);
+        }
+        assert_eq!(frontend.campaign.selected, index, "the hover landed");
+        assert_eq!(frontend.campaign.scroll(), before, "event {index}");
+    }
 }

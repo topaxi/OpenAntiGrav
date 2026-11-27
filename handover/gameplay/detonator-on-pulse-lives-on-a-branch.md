@@ -20,7 +20,7 @@ Try it: check out the branch, then `just play data/images/pulse-psp-usa.chd --ra
 - **Track:** the picked circuit's Zone twin (`zone_track.vex`).
 - **Mines and bombs:** `Pulse_Mine.vex` and `Pulse_Bomb.vex`, with Pulse's race-table `Mine`/`Bomb` values.
 - **Pads:** every speed pad becomes the circuit's own weapon pad, held at Pulse's red key `(204,102,102)`; it charges the EMP and gives no boost. Pulse's Zone circuits have no weapon pads.
-- **Data:** our own layout, values, scoring, HUD layouts and hulls are the official mod `oag.detonator-pulse` (`assets/mods/official/detonator-pulse/fallback/wipeout-pulse/`, ADR-0098).
+- **Data:** our own layout, values, scoring, HUD layouts and hulls are the official mod `oag.detonator-pulse` (`assets/mods/official/detonator-pulse/fallback/wipeout-pulse/`, ADR-0100).
 - **Cannon rounds:** drawn as Pulse's Cannon pickup shots.
 - **EMP:** borrows Pulse's Repulsor (`WO_REPULSER` on the front, blue flash, blast and ring at launch).
 - **Gauge:** an EMP gauge of six pips cut from Pulse's shield bar art, with a separate PS2 layout.

@@ -159,7 +159,7 @@ layer.
 
 The layout files, the weapon table, the HUD layouts and the two hulls are the official mod
 `oag.detonator-pulse`'s fallback entries, `fallback/wipeout-pulse/` of the mod
-([ADR-0098](../architecture/adr/0098-a-mod-carries-fallback-entries.md)): an enabled mod's
+([ADR-0100](../architecture/adr/0100-a-mod-carries-fallback-entries.md)): an enabled mod's
 entries answer a name no disc or DLC holds, ahead of this project's embedded fallback. They are
 read by the same parsers HD's are (`oag_tables::detonator_layout`, `oag_tables::weapons`), the
 HUD layouts by `oag_hud::compose`. A player's override layer can replace any of them.

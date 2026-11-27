@@ -7,7 +7,7 @@
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-livery --run-ignored all own_hull_ground_truth::
 //! ```
 //!
-//! The files are read from the official mod `oag.detonator-pulse` (ADR-0098), which carries them:
+//! The files are read from the official mod `oag.detonator-pulse` (ADR-0100), which carries them:
 //! the test fails under `OAG_REQUIRE_GAME_DATA=1` without the official-mods submodule. Each
 //! pressing must take its own: the PSP discs `hull.glb`, the PS2 disc, whose `Zone.vex` is
 //! another model, `hull_ps2.glb`.

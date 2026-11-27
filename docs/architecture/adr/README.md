@@ -86,7 +86,7 @@ out to be wrong.
 | [0075](0075-dynamic-resolution-sheds-the-blur-gather-before-pixels.md) | Dynamic resolution sheds the blur gather before pixels | **Proposed** (2026-10-25); a second, discrete controller output beside ADR-0040/0042/0044/0073, which stand |
 | [0076](0076-a-track-file-carries-its-art-as-an-optional-section.md) | A track file carries its art as an optional section | **Proposed** |
 | [0077](0077-a-custom-campaign-compiles-to-the-titles-own-grid.md) | A custom campaign is a mod file that compiles to the title's own grid | Accepted |
-| [0078](0078-a-mod-is-turned-off-by-id-live-and-the-built-in-never.md) | A mod is turned off by id, live, and the built-in never | **Proposed**; its LAN-fingerprint consequence amended by [ADR-0083](0083-official-mods-are-a-public-folder-and-the-fingerprint-counts-race-changers.md) |
+| [0078](0078-a-mod-is-turned-off-by-id-live-and-the-built-in-never.md) | A mod is turned off by id, live, and the built-in never | **Proposed**; its LAN-fingerprint consequence amended by [ADR-0083](0083-official-mods-are-a-public-folder-and-the-fingerprint-counts-race-changers.md); its decision 6 superseded by [ADR-0098](0098-the-mods-page-is-a-list-of-mods-and-a-detail-page.md) |
 | [0079](0079-extensions-are-sandboxed-webassembly-guests-behind-two-worlds.md) | Extensions are sandboxed WebAssembly guests behind two worlds: a sim world of copies in and bounded commands out, and a HUD world that reaches no state | **Proposed** |
 | [0080](0080-a-wasm-mod-may-own-a-screen-and-save-a-small-blob.md) | A WebAssembly mod may own a screen in a third, frontend world and save one small blob; supersedes ADR-0066 decision 4 for wasm screens only | **Proposed** |
 | [0081](0081-screen-layouts-are-files-and-a-track-may-carry-its-loading-screen.md) | Screen layouts are files (`screen-layout.tosd`, a split HUD or a loading screen), and a track may carry its own loading screen in its manifest | **Accepted** |
@@ -106,7 +106,9 @@ out to be wrong.
 | [0095](0095-every-file-under-the-profile-folder-is-written-atomically.md) | Every file under the profile folder is written atomically | **Accepted** (2026-11-20); one temp-file-and-rename helper (`profile::write`), flushed, web one `setItem` |
 | [0096](0096-dynamic-resolution-probes-a-rise-a-falling-clock-hides.md) | Dynamic resolution probes a rise a falling clock hides | **Accepted** (2026-11-26); a second way to rise beside ADR-0042's loop, kept only when the clock paid for the step |
 | [0097](0097-a-screen-filter-that-moves-pixels-runs-at-full-strength.md) | A screen filter that moves pixels runs at full strength | **Accepted** (2026-11-27); supersedes ADR-0053's strength item |
-| [0098](0098-a-mod-carries-fallback-entries.md) | A mod carries fallback entries, and a backported mode ships as an official mod | **Accepted** (2026-11-27); extends ADR-0061 |
+| [0098](0098-the-mods-page-is-a-list-of-mods-and-a-detail-page.md) | The MODS page is a list of mods, and each mod has a detail page | **Accepted** (2026-11-27); supersedes ADR-0078 decision 6 |
+| [0099](0099-a-run-context-and-an-activity-stack-own-navigation.md) | A run context and an activity stack own navigation | **Proposed** (2026-11-27); WATCH REPLAY mid-Tournament returns to the leg's end menu; map in `navigation-map.md`; nothing built |
+| [0100](0100-a-mod-carries-fallback-entries.md) | A mod carries fallback entries, and a backported mode ships as an official mod | **Accepted** (2026-11-27); extends ADR-0061 |
 
 ## Format
 

@@ -443,6 +443,20 @@ type = "array"
 itemtype = "string"
 optional = true
 
+# [launcher]: the title chooser's look, and each card's remembered picture.
+[types.launcher]
+type = "table"
+
+[types.launcher.style]
+type = "string"
+allowedvalues = ["cards", "list"]
+optional = true
+
+# Card (the title) to the picture it was left on.
+[types.launcher.pictures]
+type = "types.string-map"
+optional = true
+
 # [online]: the lobby last connected to.
 [types.online]
 type = "table"
@@ -634,6 +648,10 @@ optional = true
 
 [elements.race]
 type = "types.race"
+optional = true
+
+[elements.launcher]
+type = "types.launcher"
 optional = true
 
 [elements.online]

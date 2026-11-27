@@ -147,7 +147,8 @@ echo "$backup"
 
 step "Adding r2 to the unaffected list"
 
-tmp="$(mktemp)"
+. "$(dirname "${BASH_SOURCE[0]}")/oag-tmp.sh"
+tmp=$(mktemp -p "$(oag_tmp_root)")
 trap 'rm -f "$tmp"' EXIT
 
 awk -v ins="$REGISTER_LINE" '

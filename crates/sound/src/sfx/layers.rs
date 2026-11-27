@@ -30,6 +30,7 @@ use oag_audio::spatial::{
 use oag_audio::{Bus, Mixer, Play, Sound, VoiceId};
 use oag_core::Rng;
 use oag_formats::sblk::Bank;
+use oag_formats::sblk::pitch::random_bend_word;
 use oag_formats::sblk::runner::Runner;
 use oag_formats::sblk::timeline::WalkModel;
 use oag_title::SequenceTick;
@@ -136,24 +137,14 @@ impl Timeline {
         let draws: Vec<f32> = self
             .bends
             .iter()
-            .map(|&percent| {
-                let raw = (rng.below(0x7fff) as i64 * 0xffff / 0x7fff) - 0x8000;
-                let bend = (raw * i64::from(percent) / 100) as i16;
-                f32::from(bend)
-            })
+            .map(|&percent| f32::from(random_bend_word(rng.below(0x7fff), percent)))
             .collect();
         self.layers
             .iter()
             .map(|layer| {
-                let pitch = layer.bend.map_or(1.0, |b| {
-                    let bend = draws[b.draw];
-                    let semitones = if bend < 0.0 {
-                        f32::from(b.down) * bend / 32768.0
-                    } else {
-                        f32::from(b.up) * bend / 32767.0
-                    };
-                    (semitones / 12.0).exp2()
-                });
+                let pitch = layer
+                    .bend
+                    .map_or(1.0, |b| bend_pitch(draws[b.draw], b.down, b.up));
                 CueVoice {
                     sound: Arc::clone(&layer.sound),
                     looping: layer.looping,
@@ -165,6 +156,17 @@ impl Timeline {
             })
             .collect()
     }
+}
+
+/// The playback rate a SCREAM bend word gives through a descriptor's range of
+/// `down` and `up` semitones.
+pub(super) fn bend_pitch(bend: f32, down: i8, up: i8) -> f32 {
+    let semitones = if bend < 0.0 {
+        f32::from(down) * bend / 32768.0
+    } else {
+        f32::from(up) * bend / 32767.0
+    };
+    (semitones / 12.0).exp2()
 }
 
 /// How [`timelines`] reads a cue; the default is a Pulse-style walk of a race cue.
@@ -435,10 +437,14 @@ pub struct Program {
     /// The layer each key-on command starts, by its command index.
     pub(super) layers: BTreeMap<usize, Layer>,
     pub(super) ticks_per_second: f64,
+    /// Every voice of a play takes its authored angle once any of the list's is
+    /// off-centre. `false` keeps the per-tick reading the PSP list had.
+    pub(super) panned: bool,
 }
 
-/// `name` as a [`Program`], when the title runs on the PSP tick, the list is
-/// one a runner runs and every waveform it keys on decodes and pans.
+/// `name` as a [`Program`], when the title runs on the PSP or PS3 tick, the
+/// list is one a runner of that layout runs and every waveform it keys on
+/// decodes and pans.
 ///
 /// # Errors
 ///
@@ -448,32 +454,57 @@ pub(super) fn program(
     name: &str,
     tick: SequenceTick,
 ) -> anyhow::Result<Option<Program>> {
-    // The runner's semantics are Pulse PSP's; PS2 lends its tick, the same way
-    // the timelines do. A title on another tick keeps the one-shot path.
-    if !matches!(tick, SequenceTick::Psp) {
-        return Ok(None);
-    }
+    // The runner's semantics are Pulse PSP's (PS2 lends its tick, as the
+    // timelines do) and HD's PS3 build's. A title on another tick keeps the
+    // one-shot path.
+    let (model, rear) = match tick {
+        SequenceTick::Psp => (WalkModel::default(), RearPan::Front),
+        // HD starts these with no variable block, or on a projectile's emitter,
+        // which sets none, so all four read zero.
+        SequenceTick::Ps3 => (
+            WalkModel {
+                cue_variables: Some([0; 4]),
+                ..WalkModel::default()
+            },
+            RearPan::Fold,
+        ),
+        SequenceTick::Vita | SequenceTick::Unknown => return Ok(None),
+    };
     let Some(ticks_per_second) = tick.ticks_per_second() else {
         return Ok(None);
     };
-    let Some(runner) = bank.cue_named(name).and_then(|cue| bank.cue_runner(&cue)) else {
+    let Some(runner) = bank
+        .cue_named(name)
+        .and_then(|cue| bank.cue_runner_modelled(&cue, model))
+    else {
         return Ok(None);
     };
-    let mut decoder = Decoder::default();
+    let mut decoder = Decoder {
+        rear,
+        ..Decoder::default()
+    };
     let mut layers = BTreeMap::new();
     for grain in runner.key_ons() {
-        if pan_of_angle(grain.angle).is_none() {
+        if rear.pan(grain.angle).is_none() {
             return Ok(None);
         }
-        let Some(layer) = decoder.layer(bank, name, grain, ticks_per_second)? else {
+        let Some(mut layer) = decoder.layer(bank, name, grain, ticks_per_second)? else {
             return Ok(None);
         };
+        // The range a later `0x1c` bends this voice through.
+        layer.bend = Some(Bend {
+            draw: 0,
+            down: grain.sound.bend_down,
+            up: grain.sound.bend_up,
+        });
         layers.insert(grain.sound.command, layer);
     }
+    let panned = rear == RearPan::Fold && layers.values().any(|l| l.angle != 0);
     Ok(Some(Program {
         runner,
         layers,
         ticks_per_second,
+        panned,
     }))
 }
 
@@ -504,7 +535,7 @@ impl Where {
 /// did. Once any voice is off-centre every voice takes its authored angle, so a
 /// centred grain is not 3 dB louder beside a panned one. A placed cue shifts the
 /// emitter's pan by the angle.
-fn pan_for(at: Where, angle: i32, any_off_centre: bool, rear: RearPan) -> Option<f32> {
+pub(super) fn pan_for(at: Where, angle: i32, any_off_centre: bool, rear: RearPan) -> Option<f32> {
     match at.pan {
         Some(pan) if angle == 0 => Some(pan),
         Some(pan) => {
@@ -522,6 +553,18 @@ fn pan_for(at: Where, angle: i32, any_off_centre: bool, rear: RearPan) -> Option
 /// it as starved).
 pub fn start(mixer: &mut Mixer, voices: &[CueVoice], bus: Bus, at: Where) -> Vec<VoiceId> {
     let any_off_centre = voices.iter().any(|v| v.angle != 0);
+    start_panned(mixer, voices, bus, at, any_off_centre)
+}
+
+/// [`start`] with the caller saying whether the cue has an off-centre voice
+/// anywhere, for a list that keys its voices a tick at a time.
+pub(super) fn start_panned(
+    mixer: &mut Mixer,
+    voices: &[CueVoice],
+    bus: Bus,
+    at: Where,
+    any_off_centre: bool,
+) -> Vec<VoiceId> {
     let mut ids = Vec::with_capacity(voices.len());
     for voice in voices {
         let base = if voice.looping {

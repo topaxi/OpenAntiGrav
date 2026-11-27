@@ -594,8 +594,10 @@ the allowed craft classes, `FUN_810535fe`), in the order
 class and laps has the three dots of frame 14. The objective line is worded for
 all 80 events that author one (`BEAT M:SS` for `GameMode_SpeedLapRace`,
 `ZONE TARGET : n` for Zone, `SCORE n POINTS` for the rest - see
-`campaign-event-card.md`'s `GameModeObjective_FormatText`). The kind line
-under the title is the executable's (`GameMode_GetKindLabel`): `ZONE`,
+`campaign-event-card.md`'s `GameModeObjective_FormatText`). The line under
+the title is the event's `M_DESCRIPTION` where it words one, and otherwise the
+executable's kind label ([campaign-event-card.md](../ghidra/functions/vita-2048-eu-v104/campaign-event-card.md),
+"The kind line"; `GameMode_GetKindLabel`): `ZONE`,
 `COMBAT` for Elimination, `RACE`, and for the timed class `SPEED LAP` on
 button shapes `5`/`6` and `TIME TRIAL` otherwise - the 13 events with laps and
 a `BEAT M:SS` pass are `TIME TRIAL` with the stopwatch icon (the map draws

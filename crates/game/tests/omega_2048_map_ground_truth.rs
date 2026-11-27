@@ -49,7 +49,7 @@ fn omegas_definition_reads_to_the_structure_2048s_does() {
         dlc: Vec::new(),
         leg: oag_ui::frontend::Leg::LogoFmv,
         movie: None,
-        cache: std::env::temp_dir().join("oag-omega-2048-map-vita"),
+        cache: oag_testdata::scratch::cache("omega-2048-map-vita"),
         audio_cache: oag_source::cache::default_audio_cache_dir(),
         extent: oag_game::movie::Extent::Frames(oag_game::INTRO_FRAMES_NEEDED),
         no_video: true,
@@ -115,4 +115,68 @@ fn omegas_rank_table_is_half_2048s() {
     }
     assert!(ranks_o.meets(ranks_v.thresholds[0] / 2, Some(1)));
     assert!(!ranks_v.meets(ranks_v.thresholds[0] / 2, Some(1)));
+}
+
+/// Omega ships 2048's `SP.xml` descriptions, and its hosted map words and centres the card as
+/// 2048's does.
+#[test]
+#[ignore = "needs the decrypted PS4 package pair"]
+fn omegas_hosted_card_words_its_description_and_centres_the_pass_group() {
+    let Some(omega) = oag_testdata::exact("data/extracted/ps4") else {
+        return;
+    };
+    let options = oag_game::boot::Options {
+        language: Some("English".to_string()),
+        source: omega.display().to_string(),
+        dlc: Vec::new(),
+        leg: oag_ui::frontend::Leg::LogoFmv,
+        movie: None,
+        cache: oag_testdata::scratch::cache("omega-2048-card"),
+        audio_cache: oag_source::cache::default_audio_cache_dir(),
+        extent: oag_game::movie::Extent::Frames(oag_game::INTRO_FRAMES_NEEDED),
+        no_video: true,
+        refresh_video: false,
+        prefer_av1_cache: false,
+        find_texture_packs: None,
+    };
+    let (shell, _, _) = oag_game::boot::load_shell(&options).expect("omega shell");
+    assert_eq!(
+        shell
+            .campaign_events
+            .iter()
+            .filter(|event| event.card.description.is_some())
+            .count(),
+        38
+    );
+    let name = "2048 - Event 1";
+    let seed = oag_game::boot::map_seed::MapSeed::of(&shell).expect("Omega hosts the map");
+    let mut frontend = seed.open(
+        &oag_game::records::Store::default(),
+        "omega",
+        &options.source,
+        String::new(),
+    );
+    assert!(frontend.select_campaign_event(name));
+    let mut input = oag_gameplay::input::Input::new();
+    for tick in 0..600u32 {
+        if frontend.event_card_open() {
+            break;
+        }
+        let cross = oag_gameplay::input::Button::Cross.bit();
+        input.begin_frame(if tick.is_multiple_of(2) { cross } else { 0 });
+        frontend.update(1.0 / 60.0, &mut input, None);
+    }
+    assert!(frontend.event_card_open(), "the card of {name} opens");
+    let x = frontend
+        .draw_list()
+        .iter()
+        .find_map(|draw| match draw {
+            oag_ui::frontend::Draw::Text { text, x, .. } if text == "PASS" => Some(*x),
+            _ => None,
+        })
+        .expect("the PASS line");
+    assert!(
+        x != 552.0,
+        "centred by the atlas's widths, not at the fallback x"
+    );
 }

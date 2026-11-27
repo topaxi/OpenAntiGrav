@@ -103,6 +103,11 @@ pub(super) fn plan(
             .filter(|s| s.material == Some(index))
             .all(|s| !s.positions.is_empty() && s.vita_vertex_colour1.len() == s.positions.len());
         if !weighted || taken.get(index).copied().unwrap_or(true) {
+            crate::mesh::rcs::census::claim(
+                index,
+                "vertex_blend",
+                crate::mesh::rcs::census::Outcome::NotDrawn,
+            );
             report.vertex_blend_unread += 1;
             continue;
         }
@@ -110,6 +115,11 @@ pub(super) fn plan(
             .entry(named.second.to_string())
             .or_insert_with(|| decode_picture(named.second, &mut *textures));
         let Ok((second, _)) = second.clone() else {
+            crate::mesh::rcs::census::claim(
+                index,
+                "vertex_blend",
+                crate::mesh::rcs::census::Outcome::NotDrawn,
+            );
             report.vertex_blend_unread += 1;
             continue;
         };
@@ -120,10 +130,20 @@ pub(super) fn plan(
             })
         });
         let Some(slot) = at.and_then(|at| u32::try_from(at + 1).ok()) else {
+            crate::mesh::rcs::census::claim(
+                index,
+                "vertex_blend",
+                crate::mesh::rcs::census::Outcome::NotDrawn,
+            );
             report.vertex_blend_unread += 1;
             continue;
         };
         out.blends[index] = Some(Blend { slot, second });
+        crate::mesh::rcs::census::claim(
+            index,
+            "vertex_blend",
+            crate::mesh::rcs::census::Outcome::Drawn,
+        );
         report.vertex_blend_materials += 1;
     }
     out

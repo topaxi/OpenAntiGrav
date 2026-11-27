@@ -158,6 +158,8 @@ impl Race {
             // pickup pays back into - `oag_physics::damage`.
             shield: ship.physics.shield,
             shield_max: ship.handling.dimensions.shield,
+            shield_seconds: ship.physics.shield_pickup_timer.max(0.0),
+            shield_drain_fraction: hud.shield_fraction_left(ship.physics.shield_pickup_timer),
             lap: if counted {
                 finished.map_or(race.lap, |held| held.lap)
             } else {

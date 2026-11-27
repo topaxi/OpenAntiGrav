@@ -48,7 +48,9 @@ fn the_dark_hull_panels_lose_the_constant_ambient_blue_cast() {
     let Some(source) = omega() else {
         return;
     };
-    let out = std::env::temp_dir().join("oag-omega-hull-sh-ambient.png");
+    let scratch = oag_testdata::scratch::dir("omega-hull-sh-ambient");
+    let out = scratch.join("shot.png");
+    let profile = oag_testdata::scratch::dir("omega-sh-profile");
     let status = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
         .arg(&source)
         .args([
@@ -98,18 +100,9 @@ fn the_dark_hull_panels_lose_the_constant_ambient_blue_cast() {
         ])
         .args(["--team", "FEISAR_C1", "--screenshot"])
         .arg(&out)
-        .env(
-            "XDG_CONFIG_HOME",
-            std::env::temp_dir().join("oag-omega-sh-config"),
-        )
-        .env(
-            "XDG_DATA_HOME",
-            std::env::temp_dir().join("oag-omega-sh-data"),
-        )
-        .env(
-            "XDG_STATE_HOME",
-            std::env::temp_dir().join("oag-omega-sh-state"),
-        )
+        .env("XDG_CONFIG_HOME", profile.join("config"))
+        .env("XDG_DATA_HOME", profile.join("data"))
+        .env("XDG_STATE_HOME", profile.join("state"))
         .status()
         .expect("running oag-game");
     assert!(status.success(), "oag-game --race on Modesto Heights");

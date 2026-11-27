@@ -26,15 +26,17 @@ cam_fwd_x,cam_fwd_y,cam_fwd_z,cam_pos_x,cam_pos_y,cam_pos_z
 6,0.016683,1,100,0,0,0,0,22,1,0,0,0,1,0,0,0,1,10,2.5,-29.6,0,0,22,22,1,0,0,0,1,0,0,0,1,10,8,-44.6
 ";
 
-fn fixture_file(name: &str, text: &str) -> std::path::PathBuf {
-    let path = std::env::temp_dir().join(format!("oag-game-pose-from-{name}.csv"));
-    std::fs::write(&path, text).expect("a writable temp dir");
-    path
+/// The file, and the guard of the directory it is in.
+fn fixture_file(name: &str, text: &str) -> (oag_testdata::scratch::TempDir, std::path::PathBuf) {
+    let dir = oag_testdata::scratch::dir(&format!("pose-from-{name}"));
+    let path = dir.join("trace.csv");
+    std::fs::write(&path, text).expect("a writable scratch dir");
+    (dir, path)
 }
 
 #[test]
 fn a_pose_from_a_trace_row_is_exact_and_carries_the_camera() {
-    let path = fixture_file("carries-camera", FIXTURE);
+    let (_scratch, path) = fixture_file("carries-camera", FIXTURE);
     let (pose, camera) = pose_from_trace(&path, 5, false, Some(70.0)).expect("the fixture row");
     let race::PoseRequest::Exact(pose) = pose else {
         panic!("--pose-from must not re-derive the pose from the spline");
@@ -47,7 +49,7 @@ fn a_pose_from_a_trace_row_is_exact_and_carries_the_camera() {
 
 #[test]
 fn no_camera_keeps_the_chase_camera_even_when_the_capture_has_one() {
-    let path = fixture_file("no-camera", FIXTURE);
+    let (_scratch, path) = fixture_file("no-camera", FIXTURE);
     let (_, camera) = pose_from_trace(&path, 5, true, None).expect("the fixture row");
     assert!(camera.is_none());
 }
@@ -60,7 +62,7 @@ slot,team,left_x,left_y,left_z,up_x,up_y,up_z,fwd_x,fwd_y,fwd_z,pos_x,pos_y,pos_
 
 #[test]
 fn a_field_row_is_an_exact_pose_and_names_its_team() {
-    let path = fixture_file("field", FIELD);
+    let (_scratch, path) = fixture_file("field", FIELD);
     let field = pose::field_from_csv(&path).expect("the fixture field");
     assert!(field.player.is_none(), "no slot 0 row, no player pose");
     let field = field.opponents;
@@ -84,7 +86,7 @@ fn a_field_row_is_an_exact_pose_and_names_its_team() {
 #[test]
 fn a_field_rows_lean_and_roll_phase_are_read_when_both_columns_exist() {
     let text = format!("{},steer_lean,roll_phase\n1,Feisar,1,0,0,0,1,0,0,0,1,10,2.5,-30,0.5,-0.25\n2,Qirex,0,0,-1,0,1,0,1,0,0,-5,3,8,-0.1,0.0\n", FIELD.lines().nth(1).map(|_| "slot,team,left_x,left_y,left_z,up_x,up_y,up_z,fwd_x,fwd_y,fwd_z,pos_x,pos_y,pos_z").unwrap());
-    let path = fixture_file("field-lean", &text);
+    let (_scratch, path) = fixture_file("field-lean", &text);
     let leans = pose::field_from_csv(&path)
         .expect("a field with lean columns")
         .leans();
@@ -92,7 +94,8 @@ fn a_field_rows_lean_and_roll_phase_are_read_when_both_columns_exist() {
     let first = leans[0].expect("slot 1 carries its lean");
     assert_eq!((first.steer_lean, first.roll_phase), (0.5, -0.25));
     assert_eq!(leans[1].expect("slot 2").steer_lean, -0.1);
-    let plain = pose::field_from_csv(&fixture_file("field-nolean", FIELD)).expect("an old field");
+    let (_scratch, nolean) = fixture_file("field-nolean", FIELD);
+    let plain = pose::field_from_csv(&nolean).expect("an old field");
     assert_eq!(
         plain.leans(),
         vec![None, None],
@@ -106,7 +109,7 @@ fn a_slot_zero_row_is_the_players_exact_pose() {
         "\n1,Feisar",
         "\n0,Player,0,0,-1,0,1,0,1,0,0,7,8,9\n1,Feisar",
     );
-    let path = fixture_file("field-player", &text);
+    let (_scratch, path) = fixture_file("field-player", &text);
     let field = pose::field_from_csv(&path).expect("a field with a player row");
     let player = field.player.expect("slot 0 is the player");
     assert_eq!(player.position, oag_core::math::Vec3::new(7.0, 8.0, 9.0));
@@ -119,7 +122,7 @@ fn a_field_of_the_player_alone_is_a_field() {
     // A Zone run has no opponents; `--field-warmup` still warms the player's exhaust.
     let text = "slot,team,left_x,left_y,left_z,up_x,up_y,up_z,fwd_x,fwd_y,fwd_z,pos_x,pos_y,pos_z,vel_x,vel_y,vel_z\n\
                 0,Assegai,0,0,-1,0,1,0,1,0,0,7,8,9,10,0,0\n";
-    let path = fixture_file("field-player-alone", text);
+    let (_scratch, path) = fixture_file("field-player-alone", text);
     let field = pose::field_from_csv(&path).expect("a player-only field");
     assert!(field.opponents.is_empty());
     assert_eq!(
@@ -131,7 +134,7 @@ fn a_field_of_the_player_alone_is_a_field() {
 #[test]
 fn a_field_with_a_gap_in_its_slots_is_refused() {
     let text = FIELD.replace("\n2,Qirex", "\n3,Qirex");
-    let path = fixture_file("field-gap", &text);
+    let (_scratch, path) = fixture_file("field-gap", &text);
     let error = pose::field_from_csv(&path).expect_err("slot 3 follows slot 1");
     assert!(format!("{error:#}").contains("in order"), "{error:#}");
 }
@@ -337,7 +340,7 @@ fn a_state_that_is_not_two_numbers_is_refused() {
 
 #[test]
 fn a_missing_tick_is_an_error_that_names_the_range() {
-    let path = fixture_file("missing-tick", FIXTURE);
+    let (_scratch, path) = fixture_file("missing-tick", FIXTURE);
     let error = pose_from_trace(&path, 99, false, None).expect_err("tick 99 is not there");
     assert!(error.to_string().contains("no tick 99"), "{error}");
 }
@@ -496,7 +499,7 @@ fn opening_a_capture_releases_whatever_confirmed_it() {
 
 #[test]
 fn a_warm_up_needs_every_velocity_and_never_guesses_one() {
-    let path = fixture_file("field-novel", FIELD);
+    let (_scratch, path) = fixture_file("field-novel", FIELD);
     let field = pose::field_from_csv(&path).expect("a field without velocities");
     assert!(field.velocities().is_err(), "no vel columns, no warm-up");
 
@@ -505,7 +508,7 @@ slot,team,left_x,left_y,left_z,up_x,up_y,up_z,fwd_x,fwd_y,fwd_z,pos_x,pos_y,pos_
 0,Player,0,0,-1,0,1,0,1,0,0,7,8,9,1,2,3
 1,Feisar,1,0,0,0,1,0,0,0,1,10,2.5,-30,4,5,6
 ";
-    let path = fixture_file("field-vel", text);
+    let (_scratch, path) = fixture_file("field-vel", text);
     let velocities = pose::field_from_csv(&path)
         .and_then(|field| field.velocities())
         .expect("a complete field");
@@ -525,6 +528,11 @@ fn a_development_build_accepts_seed_and_give() {
         .expect("dev-cli builds take --seed and --give");
     assert_eq!(cli.seed(), Some(7));
     assert_eq!(cli.give(), Some("rocket"));
+    assert!(!cli.give_once(), "--give tops the slot up by default");
+    let once = Cli::try_parse_from(["oag-game", "--race", "--give", "shield", "--give-once"])
+        .expect("dev-cli builds take --give-once");
+    assert!(once.give_once());
+    assert!(Cli::try_parse_from(["oag-game", "--race", "--give-once"]).is_err());
 }
 
 #[cfg(feature = "dev-cli")]

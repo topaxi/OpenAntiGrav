@@ -62,6 +62,7 @@ use crate::pointer::{Pointer, contains};
 
 use super::campaign_map::ProgressState;
 use super::*;
+use crate::font::Atlas;
 
 pub use load::GameTip;
 use oag_2048::frontend::states as w2048;
@@ -74,8 +75,12 @@ pub struct EventCard {
     /// The circuit's authored display name (`M_DISPLAYNAME`), e.g.
     /// `UNITY SQUARE`. Empty on a Zone event, which authors no circuit.
     pub title: String,
-    /// The kind line under the title. **Chosen**: see this module's docs.
+    /// The kind word under the title (`GameMode_GetKindLabel`), drawn where
+    /// [`Self::description`] is `None`.
     pub kind_label: Option<String>,
+    /// The event's `M_DESCRIPTION`, resolved: what the card words under the title instead of
+    /// the kind when the disc gives it any text.
+    pub description: Option<String>,
     /// `FE_PASS` resolved, drawn above the objective when the event authors
     /// a pass objective.
     pub pass_label: Option<String>,
@@ -175,9 +180,6 @@ enum Page {
     Mode,
 }
 
-/// Counts the lines a text wraps to at a scale and a width.
-pub type LineCount<'a> = &'a dyn Fn(&str, f32, f32) -> usize;
-
 /// What the card's picture slot shows.
 #[derive(Debug, Clone, Copy)]
 pub enum Backdrop<'a> {
@@ -203,7 +205,12 @@ pub struct CardPaint<'a> {
     globals: &'a std::collections::HashMap<String, String>,
     placements: &'a [(String, Placed)],
     bold: f32,
-    lines: Option<LineCount<'a>>,
+    /// The atlas the card's texts draw in, for the layouts that depend on their widths. `None`
+    /// (a test with no font) takes every text as one line and the pass group as unmeasured.
+    atlas: Option<&'a Atlas>,
+    /// The `NEOSANS_BOLD` role the renderer holds a face for, `None` where it holds none (the
+    /// race load): the text then draws in `Default` at the same scale.
+    bold_face: Option<&'static str>,
 }
 
 impl std::fmt::Debug for CardPaint<'_> {
@@ -245,10 +252,9 @@ impl LaunchedCard {
     }
 
     /// The painter over this card. `mode_page` is whether the race manager has appended the
-    /// mode page (the card then turns to it); `lines` counts the lines a text wraps to at a
-    /// scale and width, which the mode page centres its body with.
+    /// mode page (the card then turns to it); `atlas` is what the card's texts draw in.
     #[must_use]
-    pub fn paint<'a>(&'a self, mode_page: bool, lines: Option<LineCount<'a>>) -> CardPaint<'a> {
+    pub fn paint<'a>(&'a self, mode_page: bool, atlas: Option<&'a Atlas>) -> CardPaint<'a> {
         let page = if mode_page {
             CardPaint::card_pages(&self.event).len()
         } else {
@@ -264,7 +270,8 @@ impl LaunchedCard {
             globals: &self.globals,
             placements: &self.placements,
             bold: self.bold,
-            lines,
+            atlas,
+            bold_face: None,
         }
     }
 
@@ -315,6 +322,10 @@ const HEADER: [f32; 4] = [420.0, 92.0, 524.0, 86.0];
 const BODY: [f32; 4] = [420.0, 182.0, 524.0, 244.0];
 /// Centre of the two panels.
 const CENTRE_X: f32 = 682.0;
+/// The description line's wrap (`0x154`), and its scale: one `NEOSANS` line of the 22-unit
+/// pitch, drawn as the kind line is.
+const SUBTITLE_WRAP: f32 = 340.0;
+const SUBTITLE_SCALE: f32 = 0.54;
 const BUTTON_SIZE: (f32, f32) = (122.0, 96.0);
 const BUTTON_Y: f32 = 432.0;
 /// The drawn `x` of Change craft, Back and Launch.
@@ -405,7 +416,8 @@ impl Frontend {
             globals: &self.screens.globals,
             placements: &self.placements,
             bold: self.face_scale("NEOSANS_BOLD"),
-            lines: None,
+            atlas: self.card_atlas.as_deref(),
+            bold_face: self.label_face,
         })
     }
 
@@ -592,6 +604,31 @@ impl CardPaint<'_> {
             .map(|(_, placed)| *placed)
     }
 
+    /// A centred line the executable draws in `NEOSANS_BOLD` at `scale`.
+    pub(super) fn bold_text(
+        &self,
+        text: &str,
+        x: f32,
+        y: f32,
+        scale: f32,
+        color: [f32; 4],
+    ) -> Draw {
+        let Some(role) = self.bold_face else {
+            return Self::card_text(text, x, y, scale, color, None);
+        };
+        Draw::FacedText {
+            role,
+            x,
+            y,
+            scale,
+            color,
+            border: None,
+            align: Align::Centre,
+            text: text.to_string(),
+            wrap_width: None,
+        }
+    }
+
     /// A skin global as a colour, white where the skin has none.
     pub(super) fn global_colour(&self, name: &str) -> [f32; 4] {
         self.globals
@@ -730,9 +767,7 @@ impl CardPaint<'_> {
                 None,
             ));
         }
-        if let Some(kind) = &card.kind_label {
-            out.push(Self::card_text(kind, CENTRE_X, 140.0, 0.54, blue, None));
-        }
+        self.draw_subtitle(card, blue, out);
         self.card_sprite(
             event.kind.texture_name(),
             [870.0, 102.0, 64.0, 64.0],
@@ -754,11 +789,39 @@ impl CardPaint<'_> {
         }
     }
 
+    /// The line under the title: the event's own `M_DESCRIPTION` where it words one, else the
+    /// kind (`CampaignEventCard_DrawPanel`, `campaign-event-card.md`, "The kind line"). A
+    /// description wraps at [`SUBTITLE_WRAP`] and shrinks when it needs more than two lines.
+    fn draw_subtitle(&self, card: &EventCard, blue: [f32; 4], out: &mut Vec<Draw>) {
+        let Some(description) = card.description.as_deref() else {
+            if let Some(kind) = &card.kind_label {
+                out.push(Self::card_text(kind, CENTRE_X, 140.0, 0.54, blue, None));
+            }
+            return;
+        };
+        let lines = self.wrapped_lines(description, SUBTITLE_SCALE, SUBTITLE_WRAP) as f32;
+        let (scale, y) = if lines <= 2.0 {
+            (SUBTITLE_SCALE, 153.0 - lines * 11.0)
+        } else {
+            let small = SUBTITLE_SCALE * 0.7;
+            let lines = self.wrapped_lines(description, small, SUBTITLE_WRAP) as f32;
+            (small, 155.0 - lines * 7.5)
+        };
+        out.push(Self::card_text(
+            description,
+            CENTRE_X,
+            y,
+            scale,
+            blue,
+            Some(SUBTITLE_WRAP),
+        ));
+    }
+
     /// Change craft, Back and Launch.
     fn draw_buttons(&self, out: &mut Vec<Draw>) {
         let blue = self.global_colour("Blue2048");
         let orange = self.global_colour("Orange2048");
-        let white = [1.0, 1.0, 1.0, 1.0];
+        let white = self.global_colour("White2048");
         let allowed = self.launch_allowed;
         let launch_tint = if allowed {
             blue
@@ -912,27 +975,19 @@ impl CardPaint<'_> {
                 rect: [x, TAB_RECT.0, TAB_RECT.1, TAB_RECT.2],
                 color: fill,
             });
-            out.push(Self::card_text(
+            out.push(self.bold_text(
                 &tabs.tabs[index],
                 x + TAB_RECT.1 * 0.5,
                 TAB_RECT.0 + 13.0,
                 0.7,
                 ink,
-                None,
             ));
         }
         out.push(Draw::Fill {
             rect: [471.0, 234.0, 422.0, 37.0],
-            color: grey,
+            color: orange,
         });
-        out.push(Self::card_text(
-            &tabs.current_best,
-            CENTRE_X,
-            243.0,
-            0.7,
-            white,
-            None,
-        ));
+        out.push(self.bold_text(&tabs.current_best, CENTRE_X, 243.0, 0.7, white));
         if matches!(self.state, ProgressState::Open | ProgressState::Locked) {
             out.push(Self::card_text("--", CENTRE_X, 332.0, 1.0, blue, None));
         }

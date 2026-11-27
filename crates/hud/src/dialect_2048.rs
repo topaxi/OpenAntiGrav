@@ -333,6 +333,21 @@ const SPEED_BAR_STEP_KMH: f32 = 140.0;
 /// How many `ZoneLightN` dashes the arc has.
 const ZONE_LIGHTS: u32 = 10;
 
+/// The widget [`oag_title::HudArt::shield_drain_widget`] names, cropped to the running Shield's
+/// remaining fraction ([`Readout::shield_drain_fraction`]) with its bottom edge fixed.
+pub(super) fn shield_drain(
+    layout: &Layout,
+    art: &oag_title::HudArt,
+    readout: &Readout,
+) -> Option<Sprite> {
+    let fraction = readout.shield_drain_fraction.min(1.0);
+    if fraction <= 0.0 {
+        return None;
+    }
+    let bar = layout.sprite(art.shield_drain_widget?)?;
+    Some(super::draw::crop_vertically(bar, fraction))
+}
+
 /// The widgets 2048 draws off race state rather than always: the lit speed
 /// segments, the thrust swoosh, the Pilot Assist icon and the Zone arc's
 /// lit dashes. Empty on every other title and outside the layouts that

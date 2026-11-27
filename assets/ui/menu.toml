@@ -555,22 +555,44 @@ kind = "back"
 label = "BACK"
 string_id = "OAG_MENU_BACK"
 
-# **The MODS page.** One MOD row that steps through every mod the run has
-# (`values_from = "mods"`, built-in first; a mod that did not load is listed dimmed with
-# its error as the reason, the way a custom track that will not load is), an ENABLED row
-# that turns the mod the MOD row is on on or off, and under them the detail lines of that
-# mod: id, version, authors, licence (NO LICENSE STATED when it has none) and what it
-# added. `mods.selected` is never stored; it only says which mod the rows are about.
-# ENABLED is stored as `[mods] disabled` in the settings file and rebuilds the menus at
-# once (`oag_game::mods`, `session::mods_page`). A stepper plus one switch rather than a
-# switch per mod: the page's rows are this file's, and the mods are only known at run
-# time. Reached from OPTIONS through the built-in mod `oag-extras`, like any mod's row;
-# `oag-extras` itself cannot be turned off, since it carries OPTIONS and this row.
-# Chosen, not measured.
+# **The MODS page** is two pages. `mods` lists every mod the run has, one row each: its name,
+# ON or OFF on the right, the mods that are on first (the order is decided when the list is
+# entered, so a toggle never moves a row). Accept opens that mod on `mod_detail`; Square toggles
+# it in place. `item_page` makes the list's choice rows items (`oag_ui::menu`'s `items.rs`);
+# the one template row is expanded into one per mod (`values_from = "mod_list"`). A mod that
+# did not load is listed dimmed with its error as the note.
+#
+# `mod_detail` is a MOD row that steps through the mods (`values_from = "mods"`, built-in
+# first), an ENABLED row that turns the mod the MOD row is on on or off, and under them the
+# detail lines of that mod: id, version, authors, licence (NO LICENSE STATED when it has none)
+# and what it added. `mods.selected` is never stored; it only says which mod the rows are
+# about. ENABLED and the list's values are stored as `[mods] disabled` in the settings file
+# and rebuild the menus at once (`oag_game::mods`, `session::mods_page`). The pages' rows are
+# this file's and the mods are only known at run time, hence the template and the stepper.
+# Reached from OPTIONS through the built-in mod `oag-extras`, like any mod's row; `oag-extras`
+# itself cannot be turned off, since it carries OPTIONS and this row. Chosen, not measured.
 [[page]]
 id = "mods"
 title = "MODS"
 title_string_id = "OAG_MODS_PAGE_TITLE"
+item_page = "mod_detail"
+
+[[page.entry]]
+kind = "choice"
+label = "MOD"
+string_id = "OAG_MODS_ROW"
+setting = "mods.row"
+values_from = "mod_list"
+
+[[page.entry]]
+kind = "back"
+label = "BACK"
+string_id = "OAG_MENU_BACK"
+
+[[page]]
+id = "mod_detail"
+title = "MOD"
+title_string_id = "OAG_MODS_DETAIL_PAGE_TITLE"
 
 [[page.entry]]
 kind = "choice"

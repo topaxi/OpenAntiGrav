@@ -8,6 +8,7 @@
 //! not, and knows no race, menu, window or settings file.
 //!
 //! - [`source`]: the image search path and the container rules.
+//! - [`art`]: a source's own system art (the console's title picture).
 //! - [`title`]: [`title::open_source`], a source opened as whichever title it is.
 //! - [`extract`]: a server extraction, the slice of a source a server's races read.
 //! - [`dlc`]: the downloadable-content directories and the packs in them.
@@ -17,6 +18,7 @@
 //! - [`tracks`]: the player's own-format tracks, and every custom track joined with BallisticNG's.
 //! - [`cache`]: where derived movie, audio and DLC copies live.
 
+pub mod art;
 pub mod ballisticng;
 pub mod cache;
 pub mod dlc;

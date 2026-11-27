@@ -1364,7 +1364,7 @@ fn a_pulse_detonator_hud_shows_the_emp_gauge_and_the_clip() {
     }
 }
 
-/// Mounts the official mod `oag.detonator-pulse`, which carries Pulse's Detonator data (ADR-0098):
+/// Mounts the official mod `oag.detonator-pulse`, which carries Pulse's Detonator data (ADR-0100):
 /// `None` without the official-mods submodule, a failure under `OAG_REQUIRE_GAME_DATA=1`.
 fn with_pulse_detonator_mod() -> Option<std::path::PathBuf> {
     let manifest = oag_testdata::exact("assets/mods/official/detonator-pulse/oag-mod.toml")?;
@@ -1373,7 +1373,7 @@ fn with_pulse_detonator_mod() -> Option<std::path::PathBuf> {
     Some(root)
 }
 
-/// **Without the mod that carries its data, a Pulse Detonator race is refused** (ADR-0098): the
+/// **Without the mod that carries its data, a Pulse Detonator race is refused** (ADR-0100): the
 /// load names the missing entries rather than racing a mode with no layout, table or HUD.
 #[test]
 #[ignore = "needs a disc image in data/images/"]

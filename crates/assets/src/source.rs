@@ -794,6 +794,30 @@ impl Archives {
         Ok(blob)
     }
 
+    /// Reads the copy of `name` that contains `needle`, for an entry several
+    /// archives ship and only some copies author the part the caller needs.
+    ///
+    /// A mod's override or an update archive holding `name` answers as in
+    /// [`Self::read_name`], and so does a name no copy of which contains
+    /// `needle`. Otherwise the first copy that does, in precedence order.
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::read_name`].
+    pub fn read_name_authoring(&mut self, name: &str, needle: &str) -> Result<Vec<u8>> {
+        let layered = matches!(self.holder_of(name), Some(Held::Override | Held::Patch(_)));
+        if !layered {
+            let found = self.read_every_name(name).into_iter().find(|(_, blob)| {
+                blob.windows(needle.len())
+                    .any(|window| window == needle.as_bytes())
+            });
+            if let Some((_, blob)) = found {
+                return Ok(blob);
+            }
+        }
+        self.read_name(name)
+    }
+
     /// The first `len` bytes of `name` (all of it when shorter), out of
     /// whichever archive [`Self::read_name`] would read it from, reading only
     /// what holds them. A layer's file is read whole and cut.

@@ -421,6 +421,11 @@ comparison for a week.
 Pulse, scrolled wave normals with a planar or sky reflection on HD, 2048 and
 Omega), the per-circuit census, and what is drawn here today.
 
+## Which shaders are modelled
+
+[`shader-census.md`](shader-census.md): every HD, Omega and 2048 race material by its fragment
+program, ranked by chunks drawn, held to a baseline by a test.
+
 ## Prerequisites
 
 Requires [asset archaeology](../architecture/asset-pipeline.md) (M1). There is

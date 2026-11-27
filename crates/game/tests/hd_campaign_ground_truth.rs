@@ -36,7 +36,7 @@ fn open() -> Option<Hd> {
         dlc: Vec::new(),
         leg: oag_ui::frontend::Leg::LogoFmv,
         movie: None,
-        cache: std::env::temp_dir().join("oag-hd-campaign-ground-truth"),
+        cache: oag_testdata::scratch::cache("hd-campaign-ground-truth"),
         audio_cache: oag_source::cache::default_audio_cache_dir(),
         extent: oag_game::movie::Extent::Frames(oag_game::INTRO_FRAMES_NEEDED),
         no_video: true,

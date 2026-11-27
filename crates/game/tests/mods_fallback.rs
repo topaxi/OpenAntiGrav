@@ -1,4 +1,4 @@
-//! A mod's fallback entries (ADR-0098): `fallback/<title>/` of a mod that is on, read in place
+//! A mod's fallback entries (ADR-0100): `fallback/<title>/` of a mod that is on, read in place
 //! from a folder or a `.oagmod`, one layer per title its `titles` admit, none when it is off.
 
 use std::io::Write;

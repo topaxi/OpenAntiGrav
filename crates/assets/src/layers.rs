@@ -10,7 +10,7 @@
 //! - [`Kind::Mod`] is an enabled mod's `fallback/<title>/` folder, searched
 //!   after the DLC packs and before this project's own fallback: like the
 //!   fallback it answers only a name no disc or DLC holds
-//!   (`docs/architecture/adr/0098-a-mod-carries-fallback-entries.md`).
+//!   (`docs/architecture/adr/0100-a-mod-carries-fallback-entries.md`).
 //! - [`Kind::Fallback`] is searched after every archive including the DLC
 //!   packs, so it answers only what the disc and its packs cannot. It holds
 //!   this project's own art, and a last-place layer cannot shadow anything by

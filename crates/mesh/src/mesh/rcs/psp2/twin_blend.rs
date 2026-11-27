@@ -94,6 +94,11 @@ pub(super) fn plan(
             .filter(|s| s.material == Some(index))
             .all(|s| !s.positions.is_empty() && s.bars_blend_texcoords.len() == s.positions.len());
         if !readable {
+            crate::mesh::rcs::census::claim(
+                index,
+                "twin_blend",
+                crate::mesh::rcs::census::Outcome::NotDrawn,
+            );
             report.twin_blend_unread += 1;
             continue;
         }
@@ -105,6 +110,11 @@ pub(super) fn plan(
         };
         let pictures = paths.map(picture);
         let [Some(_), Some(second), Some(wipe), Some(bars)] = pictures else {
+            crate::mesh::rcs::census::claim(
+                index,
+                "twin_blend",
+                crate::mesh::rcs::census::Outcome::NotDrawn,
+            );
             report.twin_blend_unread += 1;
             continue;
         };
@@ -122,6 +132,11 @@ pub(super) fn plan(
             })
         });
         let Some(slot) = at.and_then(|at| u32::try_from(at + 1).ok()) else {
+            crate::mesh::rcs::census::claim(
+                index,
+                "twin_blend",
+                crate::mesh::rcs::census::Outcome::NotDrawn,
+            );
             report.twin_blend_unread += 1;
             continue;
         };
@@ -132,6 +147,11 @@ pub(super) fn plan(
             wipe,
             bars: Some(bars),
         });
+        crate::mesh::rcs::census::claim(
+            index,
+            "twin_blend",
+            crate::mesh::rcs::census::Outcome::Drawn,
+        );
         report.twin_blend_materials += 1;
     }
     out

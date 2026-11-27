@@ -18,6 +18,20 @@ use super::menus::combine_variant;
 use super::{BackdropShape, Session};
 
 impl Session {
+    /// Writes the card picture a player changed on the chooser to settings.
+    pub(crate) fn keep_launcher_choice(&mut self) {
+        let Stage::Launcher(stage) = &mut self.stage else {
+            return;
+        };
+        let Some((card, picture)) = stage.launcher.take_choice() else {
+            return;
+        };
+        self.settings.launcher.pictures.insert(card, picture);
+        if let Err(e) = self.save_settings() {
+            warn!("cannot save the chooser's picture: {e:#}");
+        }
+    }
+
     /// Turns a picked disc image into the boot the window hands on to.
     ///
     /// The other half of `main`'s windowed route, run a few seconds later: the
@@ -1143,6 +1157,11 @@ impl Session {
             }
             Err(RaceBuildError::Load(e)) => {
                 error!("cannot start a race: {e:#}");
+                // A Tournament leg that would not load ends the tournament: the leg's launch
+                // facts went with the loading stage, and standings left behind would offer
+                // NEXT RACE after the next unrelated race (`docs/architecture/navigation-map.md`,
+                // "A leg that will not load").
+                self.abandon_tournament();
                 // A benchmark that would not load gives the player's own options back.
                 self.abandon_benchmark_launch();
                 // A demo that would not load ends a `--demo` chain rather than retrying it.

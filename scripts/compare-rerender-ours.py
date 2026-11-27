@@ -35,6 +35,9 @@ from concurrent.futures import ThreadPoolExecutor
 import tomllib
 from pathlib import Path
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import oag_tmp  # noqa: E402
+
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
@@ -67,6 +70,23 @@ def ps2_world_clock_flags(rec, flags):
         return flags
     rec["ours"]["world_clock_offset_s"] = offset
     return flags + ["--world-clock-offset", "%.3f" % offset]
+
+
+def settled_2048_menu_flags(rec, flags):
+    """2048's Home and Game Mode stills in older records were taken on the tick the screen is entered (`--ticks`
+    counts from boot), before the widgets' entry fades: run past it, as `vita3k-2048-menu-pair.py` records them now."""
+    if rec.get("profile") != "2048" or rec.get("kind") != "menu" or "--until" not in flags:
+        return flags
+    if flags[flags.index("--until") + 1] not in ("Home", "GameModeChoice"):
+        return flags
+    flags = list(flags)
+    if "--press-until-reached" not in flags:
+        flags.append("--press-until-reached")
+    if "--ticks" in flags:
+        flags[flags.index("--ticks") + 1] = "490"
+    else:
+        flags += ["--ticks", "490"]
+    return flags
 
 
 def rerender(pj, binary):
@@ -132,9 +152,11 @@ def rerender(pj, binary):
     if rec["profile"] == "hd-fury" and "--gantry-seconds" in flags and orig.get("gantry_seconds") is not None and lag is not None:
         flags[flags.index("--gantry-seconds") + 1] = "%.6f" % ce.gantry_pin(orig["gantry_seconds"], lag)
     flags = hd_flame_clock_flags(rec, flags)
+    flags = settled_2048_menu_flags(rec, flags)
     flags = ce.recorded_mine_volume_flags(rec, flags)
     flags = ce.countdown_flags(rec, flags, ce.go_tick())
     flags = ce.detonator_picture_flags(rec, flags, ce.go_tick())
+    flags = ce.pure_lag_flags(rec, flags, ce.go_tick())
     plat = ce.platform(rec["profile"])
     flags = ce.profile_anisotropy_flags(flags, plat, rec.get("kind"))
     flags = ce.profile_pilot_assist_flags(flags, plat, rec.get("kind"))
@@ -149,7 +171,7 @@ def rerender(pj, binary):
     # profile's, the same rule the scripts apply.
     argv = rec.get("argv") or []
     image = argv[argv.index("--image") + 1] if "--image" in argv else str(ce.MAIN / plat["image"])
-    with tempfile.TemporaryDirectory(prefix="oag-ours-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="oag-ours-", dir=oag_tmp.temp_root()) as tmp:
         tmp = Path(tmp)
         # The Safe Area the pair's original ran at (`original.safe_area`) overrides the profile's pin; a pair with none
         # recorded keeps the pin and the record says so. A menu pair's own extras (front-end styling, the race

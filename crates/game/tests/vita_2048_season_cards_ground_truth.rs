@@ -34,7 +34,7 @@ fn options(source: &Path) -> boot::Options {
         dlc: Vec::new(),
         leg: frontend::Leg::LogoFmv,
         movie: None,
-        cache: std::env::temp_dir().join("oag-2048-season-cards-ground-truth"),
+        cache: oag_testdata::scratch::cache("2048-season-cards-ground-truth"),
         audio_cache: oag_source::cache::default_audio_cache_dir(),
         extent: oag_game::movie::Extent::Frames(oag_game::INTRO_FRAMES_NEEDED),
         no_video: true,
@@ -160,7 +160,7 @@ fn the_season_cards_resolve_to_atlas_rectangles_decoded_from_the_disc() {
 #[ignore = "needs the extracted package under data/extracted/vita/ and a GPU adapter"]
 fn the_season_2048_card_is_drawn_on_the_map() {
     let Some(source) = source() else { return };
-    let scratch = std::env::temp_dir().join(format!("oag-season-card-{}", std::process::id()));
+    let scratch = oag_testdata::scratch::dir("season-card");
     let records = scratch.join("config/oag");
     std::fs::create_dir_all(&records).expect("creating the scratch directory");
     std::fs::write(

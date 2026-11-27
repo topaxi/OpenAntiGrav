@@ -45,6 +45,12 @@ impl Scene {
         self.build_cache
     }
 
+    /// `(distinct pipelines carrying the title's every-texture LOD bias, all distinct)`.
+    #[must_use]
+    pub fn lod_biased_pipelines(&self) -> (usize, usize) {
+        self.lod_biased
+    }
+
     /// How many rows down the ladder the next speed class begins, or `None`
     /// with no grade, no recovered ladder, or on the top rung.
     ///

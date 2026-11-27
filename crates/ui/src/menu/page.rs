@@ -45,6 +45,9 @@ pub struct Page {
     /// was left: a page that asks "are you sure" opens on the way back, a screen of tiles on
     /// the list it was opened for. `None` leaves the cursor where it was.
     pub opens_on: Option<String>,
+    /// Set on a list page, one row per item (see `items.rs`): the id of the page an item
+    /// opens.
+    pub item_page: Option<String>,
 }
 
 impl Page {
@@ -68,6 +71,7 @@ impl Page {
             meta,
             parked: Vec::new(),
             opens_on: None,
+            item_page: None,
         }
     }
 

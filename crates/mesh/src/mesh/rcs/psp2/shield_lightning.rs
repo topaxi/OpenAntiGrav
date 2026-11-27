@@ -85,6 +85,11 @@ pub(super) fn plan(
             Some((weight, rates, Arc::new(picture)))
         })();
         let Some((weight, rates, texture)) = read else {
+            crate::mesh::rcs::census::claim(
+                index,
+                "shield_lightning",
+                crate::mesh::rcs::census::Outcome::NotDrawn,
+            );
             report.shield_lightning_unread += 1;
             continue;
         };
@@ -102,6 +107,11 @@ pub(super) fn plan(
             })
         });
         let Some(slot) = at.and_then(|at| u32::try_from(at + 1).ok()) else {
+            crate::mesh::rcs::census::claim(
+                index,
+                "shield_lightning",
+                crate::mesh::rcs::census::Outcome::NotDrawn,
+            );
             report.shield_lightning_unread += 1;
             continue;
         };
@@ -111,6 +121,11 @@ pub(super) fn plan(
             colour: None,
             alpha_gated: false,
         });
+        crate::mesh::rcs::census::claim(
+            index,
+            "shield_lightning",
+            crate::mesh::rcs::census::Outcome::Drawn,
+        );
         report.shield_lightning_materials += 1;
     }
 }

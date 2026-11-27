@@ -121,7 +121,7 @@ pub const OWN_HULL_PS2: &str = r"Data\Ships\Detonator_Pulse\hull_ps2.glb";
 /// Detonator on Pulse, which ships no such mode: HD's law on Pulse's own Zone circuits, Mine
 /// and Bomb models (`docs/gameplay/detonator-pulse.md`). What Pulse has no data for (the layout,
 /// the weapon table, the scoring) is this project's own file, carried as a mod's fallback entries
-/// (ADR-0098), its figures chosen after HD's: the MODE row offers Detonator on Pulse only where a
+/// (ADR-0100), its figures chosen after HD's: the MODE row offers Detonator on Pulse only where a
 /// mod that is on carries them. The pad look is the circuit's own weapon pad, held at its cycle's
 /// red key.
 pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {

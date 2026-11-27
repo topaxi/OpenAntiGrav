@@ -367,3 +367,56 @@ fn pures_stats_slot_is_its_own_face_and_the_scroll_face() {
         );
     }
 }
+
+/// The PS2 pressing's own heading widgets name the `title` role, and its skin
+/// draws the screen title in it. Dropping `PS2_MENU_SKIN.title_font` sends the
+/// heading back to the 22px row face.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_ps2_headings_author_the_title_role_and_its_skin_draws_them_in_it() {
+    let Some((_, image, _)) = images()
+        .into_iter()
+        .find(|(label, ..)| *label == "pulse-ps2-eu")
+    else {
+        return;
+    };
+    let (mut archives, languages) = languages_of(&image);
+    for (file, heading) in [
+        (r"Data\Plugins\PI001\GUI\MainMenu_Definition.xml", "FE_MM"),
+        (
+            r"Data\Plugins\PI001\GUI\Selection_Definition.xml",
+            "RC_SHIPSEL",
+        ),
+        (
+            r"Data\Plugins\PI001\GUI\RaceBox_Definition.xml",
+            "FE_RACEBOX",
+        ),
+        (
+            r"Data\Plugins\PI001\GUI\Additional_Definition.xml",
+            "FE_OPT_PLUS",
+        ),
+    ] {
+        let raw = archives
+            .read_name(file)
+            .unwrap_or_else(|e| panic!("{file}: {e}"));
+        let xml = oag_tables::fexml::text(&raw).expect("xml text");
+        let wanted = format!("idstring=\"{heading}\"");
+        let element = xml
+            .split('<')
+            .find(|element| element.contains(&wanted) && element.contains("TitleXOffset"))
+            .unwrap_or_else(|| panic!("{file}: no {heading} heading"));
+        assert!(
+            element.to_ascii_lowercase().contains("font=\"title\""),
+            "{file}: {element}"
+        );
+    }
+    let skin = oag_pulse::frontend::PS2_MENU_SKIN;
+    assert_eq!(skin.title_font, Some(roles::TITLE));
+    assert_eq!(skin.body_font, Some(roles::DEFAULT));
+    assert!(
+        languages
+            .iter()
+            .any(|language| language.font(roles::TITLE).is_some()),
+        "the PS2 fills no Title role"
+    );
+}

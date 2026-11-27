@@ -17,14 +17,17 @@ use oag_weapons::projectile::{MAX_PROJECTILES, Projectile};
 
 use super::CueTables;
 use super::layers::{self, Where};
-use super::{Banks, Cue};
+use super::repeating::TICK_SECONDS;
+use super::{Banks, Cue, Playing};
 
 /// One weapon's held voices per projectile slot, empty where it does not
 /// occupy the slot: one looping voice from a title's own bank, every voice the
-/// event starts from a Wwise event ([`Banks::held_voices`]).
+/// event starts from a Wwise event ([`Banks::held_voices`]), or the open list of
+/// a cue that runs one ([`Banks::program`]).
 #[derive(Debug, Clone)]
 pub(super) struct TravelVoices {
     voices: [Vec<VoiceId>; MAX_PROJECTILES],
+    playing: [Option<Playing>; MAX_PROJECTILES],
 }
 
 /// Where a voice at `at` is heard from, `radius` its emitter's.
@@ -47,6 +50,7 @@ impl TravelVoices {
     pub(super) fn new() -> Self {
         Self {
             voices: std::array::from_fn(|_| Vec::new()),
+            playing: std::array::from_fn(|_| None),
         }
     }
 
@@ -90,6 +94,31 @@ impl TravelVoices {
         cue: Cue,
         radius: f32,
     ) {
+        if let Some(program) = banks.program(cue) {
+            let playing = &mut self.playing[slot];
+            match at {
+                Some(at) => {
+                    let place = heard(at, radius, listener);
+                    match playing {
+                        Some(playing) => playing.place(mixer, place),
+                        None => {
+                            *playing = Some(Playing::open(program, mixer, cue.bus(), place, rng));
+                            log::trace!("sfx: held {cue:?} opened, running its list");
+                        }
+                    }
+                    if let Some(playing) = playing {
+                        playing.advance(TICK_SECONDS, mixer, cue.bus(), place, rng);
+                    }
+                }
+                None => {
+                    if let Some(playing) = playing.take() {
+                        log::trace!("sfx: held {cue:?} released");
+                        playing.release(mixer, cue.bus(), rng);
+                    }
+                }
+            }
+            return;
+        }
         let held = &mut self.voices[slot];
         // Forget a handle the pool reclaimed before the bolt ended (starved, not
         // stopped), so a later tick does not stop whatever the pool gave it next.
@@ -143,6 +172,9 @@ impl TravelVoices {
 
     /// Releases every held voice, for [`super::Audio::stop_race_sfx`].
     pub(super) fn stop_all(&mut self, mixer: &mut Mixer) {
+        for playing in self.playing.iter_mut().filter_map(Option::take) {
+            playing.stop(mixer);
+        }
         for held in &mut self.voices {
             for id in held.drain(..) {
                 mixer.stop(id);

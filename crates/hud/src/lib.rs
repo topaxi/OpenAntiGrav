@@ -736,6 +736,12 @@ pub struct Readout {
     /// `false` on [`Self::blank`], the same as every other "nothing has run
     /// yet" field.
     pub shield_flashing: bool,
+    /// Seconds a running Shield has left, `0.0` with none up. HD's countdown
+    /// reads it ([`oag_title::hud::ShieldCountdown`]).
+    pub shield_seconds: f32,
+    /// How much of the running Shield is left, `0..=1`, `0.0` with none up: the seconds left over
+    /// the seconds it started with. [`oag_title::HudArt::shield_drain_widget`] reads it.
+    pub shield_drain_fraction: f32,
     /// HD's [`Self::shield_flashing`]: the post-hit window armed by a drop of
     /// the truncated whole percentage, `hud+0x110 > 0` in
     /// `Hud_UpdateShieldReadout`. See `Race::advance_shield_flash_whole`.

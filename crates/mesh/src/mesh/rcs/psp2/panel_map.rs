@@ -197,6 +197,11 @@ pub(super) fn plan(
             taken,
             !mask || reflection_mask.is_some(),
         ) else {
+            crate::mesh::rcs::census::claim(
+                index,
+                "panel_map",
+                crate::mesh::rcs::census::Outcome::NotDrawn,
+            );
             report.panel.unread += 1;
             continue;
         };
@@ -207,6 +212,11 @@ pub(super) fn plan(
             })
         });
         let Some(slot) = at.and_then(|at| u32::try_from(at + 1).ok()) else {
+            crate::mesh::rcs::census::claim(
+                index,
+                "panel_map",
+                crate::mesh::rcs::census::Outcome::NotDrawn,
+            );
             report.panel.unread += 1;
             continue;
         };
@@ -216,6 +226,11 @@ pub(super) fn plan(
             sixth: reflection_mask,
             emissive: glow,
         });
+        crate::mesh::rcs::census::claim(
+            index,
+            "panel_map",
+            crate::mesh::rcs::census::Outcome::Drawn,
+        );
         report.panel.materials += 1;
     }
 }

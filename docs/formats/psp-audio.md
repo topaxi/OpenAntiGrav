@@ -505,6 +505,9 @@ this table.
 
 ### Two cues that repeat while held: `~BLOWUP` and `~ROCKLOCK` (2026-09-30)
 
+HD's two lists differ and run on HD's layout and tick:
+[cue-variables.md](../ghidra/functions/ps3-hdfury-eu/cue-variables.md#held-cues-run-as-lists).
+
 A list with a `0x15`/`0x16` loop has no end, so it cannot be laid down as a
 timeline. `oag_formats::sblk::runner::Runner` runs it as the handler does, one
 master tick at a time, with the four cue parameters and `0x22` guards, and

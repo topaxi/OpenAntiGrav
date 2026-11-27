@@ -20,6 +20,7 @@ pub struct MapSeed {
     events: Vec<MapEvent>,
     face_scales: Vec<(String, f32)>,
     line_height: f32,
+    font: oag_ui::font::Atlas,
     space: oag_display::space::Space,
     screen: &'static str,
 }
@@ -45,6 +46,7 @@ impl MapSeed {
             events: shell.campaign_events.clone(),
             face_scales: shell.face_scales.clone(),
             line_height: shell.font.line_height,
+            font: shell.font.clone(),
             space: shell.space,
             screen: touch.canvas_screen,
         })
@@ -70,6 +72,7 @@ impl MapSeed {
         if !self.face_scales.is_empty() {
             frontend.set_face_scales(self.face_scales.clone(), self.line_height);
         }
+        frontend.set_card_atlas(self.font.clone());
         frontend.set_campaign(self.events.clone());
         frontend.set_space(self.space);
         frontend.refresh_campaign_progress(|name| {

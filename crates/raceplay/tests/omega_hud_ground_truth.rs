@@ -72,6 +72,20 @@ fn every_root_composes_with_nothing_missing_and_nothing_skipped() {
         );
         assert_eq!(c.files.len(), *files, "{root}: files");
         assert_eq!(c.layout.sprites.len(), *sprites, "{root}: sprites");
+        // The include trees that carry `HUD_damage_indicator.xml` author the Shield countdown's
+        // widget, so the inherited HD rule has what it needs; Elimination's score box and
+        // Zone's own shield cluster author none.
+        let countdown = oag_omega::hud::ART
+            .runtime
+            .and_then(|runtime| runtime.shield.countdown)
+            .expect("Omega inherits HD's countdown");
+        let authors = !root.ends_with("Elimination_HUD.xml") && !root.ends_with("Zone_HUD.xml");
+        assert_eq!(
+            c.layout.sprite(countdown.widget).is_some(),
+            authors,
+            "{root}: {}",
+            countdown.widget
+        );
     }
 }
 
@@ -716,6 +730,7 @@ fn omega_2048_mode_hud_names_are_authored_by_its_layouts() {
     }
     let art = oag_omega::hud::ART_2048;
     let mut wanted: Vec<&str> = art.always_on.to_vec();
+    wanted.extend(art.shield_drain_widget);
     if let oag_title::hud::Sights::Concentric {
         seeking, locked, ..
     } = art.sights
@@ -723,6 +738,10 @@ fn omega_2048_mode_hud_names_are_authored_by_its_layouts() {
         wanted.extend(seeking.iter());
         wanted.extend(locked.iter());
     }
+    assert!(
+        art.shield_drain_widget.is_some(),
+        "a Shield draws its drain"
+    );
     let missing: Vec<&&str> = wanted.iter().filter(|n| !names.contains(**n)).collect();
     assert!(missing.is_empty(), "not authored by Omega: {missing:?}");
 }

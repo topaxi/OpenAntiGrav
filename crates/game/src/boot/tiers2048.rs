@@ -276,6 +276,7 @@ fn card(
     EventCard {
         title: circuit.to_string(),
         kind_label: strings.get(kind_id).map(str::to_string),
+        description: None,
         mode_body: super::campaign2048::mode_body(strings, kind_id),
         has_objective: false,
         laps,

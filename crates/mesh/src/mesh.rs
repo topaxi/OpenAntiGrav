@@ -110,6 +110,12 @@ pub struct Model {
     /// on the light rather than a baked light to add - see
     /// `mesh::rcs::skin::light_inputs`. Empty for every title but Wipeout HD.
     pub material_colour_factor: Vec<bool>,
+    /// Per material slot: whether the material's vertex program writes `1 - v`
+    /// into the diffuse coordinate it hands the fragment program, so the build
+    /// flips it once per vertex. Read per material off the vertex microcode
+    /// (`mesh::rcs::skin::flips`); it never reaches a shader. Empty for every
+    /// title but Wipeout HD.
+    pub material_flip_v: Vec<bool>,
     /// Per material slot: whether the material ships a `StaticQuake` vertex
     /// program, which is what makes its vertices carry
     /// [`GpuVertex::quake`]. Empty for every title but Wipeout HD.
@@ -203,6 +209,11 @@ pub struct Model {
     /// (on an HD model the vertex colour is otherwise a light term the generic
     /// path ignores as a tint).
     pub shield_shell: bool,
+    /// Beside [`Self::shield_shell`]: the shell's own lit program,
+    /// `ShieldColour * texture * (ambient + sun * sat(N.L))` on the light's output scale, off
+    /// the scene block's rig instead of the stand-in light
+    /// (`oag_title::Looks::shield_shell_lit`). The caller hands it a block that carries one.
+    pub shield_lit: bool,
     /// Our own HD/Fury-style shield (`graphics.own_shield`): the model is drawn by
     /// `own_shield.wesl`, with the vertex colour carrying the shield's animated colour as
     /// `shield_shell`'s does. Set only on the models `oag_livery::own_shield` builds for it.
@@ -349,6 +360,7 @@ impl Model {
             material_specular_exponent: Vec::new(),
             material_glow: Vec::new(),
             material_colour_factor: Vec::new(),
+            material_flip_v: Vec::new(),
             material_quake: Vec::new(),
             material_tangent: Vec::new(),
             material_variants: Vec::new(),
@@ -364,6 +376,7 @@ impl Model {
             flame: None,
             absorb_shell: false,
             shield_shell: false,
+            shield_lit: false,
             own_shield: false,
             material_lod_bias: 0.0,
             material_state: Vec::new(),
@@ -407,12 +420,12 @@ pub use emissive::{
     PROGRAM_BULLET_GAUGE, PROGRAM_BW_GLASS, PROGRAM_CANNON_BOLT, PROGRAM_CHEVRON, PROGRAM_CROWD,
     PROGRAM_ELECTRICITY, PROGRAM_ELECTRICITY_AUDIO, PROGRAM_EMISSIVE_ADD,
     PROGRAM_EMISSIVE_ALPHA_MASK, PROGRAM_HULL_CHARGE_1, PROGRAM_HULL_CHARGE_2, PROGRAM_ICE_GLASS,
-    PROGRAM_LIGHTMAPPED_ADD, PROGRAM_LIGHTMAPPED_SCROLL, PROGRAM_MINE_RIM, PROGRAM_OMEGA_ROCK,
-    PROGRAM_OMEGA_SNOW, PROGRAM_PAD_BARS, PROGRAM_PANEL_MAP, PROGRAM_PICTURE_ADD,
-    PROGRAM_PICTURE_ALPHA_EMISSIVE, PROGRAM_REFLECT_MAP, PROGRAM_SHIELD_LIGHTNING,
-    PROGRAM_SHINE_MASK, PROGRAM_SNOW, PROGRAM_STATIC_HOLOGRAM, PROGRAM_TARMAC, PROGRAM_TWIN_BLEND,
-    PROGRAM_UV_OVERLAY, PROGRAM_VERTEX_BLEND, PROGRAM_WATER, REFLECTION_RATE,
-    WINDOW_REFLECTION_RATE, ZONE_EXEMPT_RATE,
+    PROGRAM_LIGHTMAPPED_ADD, PROGRAM_LIGHTMAPPED_KEYED, PROGRAM_LIGHTMAPPED_SCROLL,
+    PROGRAM_MINE_RIM, PROGRAM_OMEGA_ROCK, PROGRAM_OMEGA_SNOW, PROGRAM_PAD_BARS, PROGRAM_PANEL_MAP,
+    PROGRAM_PICTURE_ADD, PROGRAM_PICTURE_ALPHA_EMISSIVE, PROGRAM_REFLECT_MAP,
+    PROGRAM_SHIELD_LIGHTNING, PROGRAM_SHINE_MASK, PROGRAM_SNOW, PROGRAM_STATIC_HOLOGRAM,
+    PROGRAM_TARMAC, PROGRAM_TWIN_BLEND, PROGRAM_UV_OVERLAY, PROGRAM_VERTEX_BLEND, PROGRAM_WATER,
+    REFLECTION_RATE, WINDOW_REFLECTION_RATE, ZONE_EXEMPT_RATE,
 };
 
 mod flap;
@@ -1091,6 +1104,7 @@ fn build_class(
         material_specular_exponent: Vec::new(),
         material_glow: Vec::new(),
         material_colour_factor: Vec::new(),
+        material_flip_v: Vec::new(),
         material_quake: Vec::new(),
         material_tangent: Vec::new(),
         material_variants: Vec::new(),
@@ -1104,6 +1118,7 @@ fn build_class(
         flame: None,
         absorb_shell: false,
         shield_shell: false,
+        shield_lit: false,
         own_shield: false,
         material_lod_bias: 0.0,
         material_state: Vec::new(),

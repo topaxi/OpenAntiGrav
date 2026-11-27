@@ -27,6 +27,9 @@ import sys
 import tomllib
 from pathlib import Path
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import oag_tmp  # noqa: E402
+
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 PROFILE = HERE / "compare-environment.toml"
@@ -333,6 +336,51 @@ def countdown_flags(rec, flags, go_tick_):
     if zone:
         rec["caveats"] = [COUNTDOWN_CAVEAT % (zone["zone"], zone["score"]) if c.startswith("Zone countdown frame:") else c
                           for c in rec.get("caveats", [])]
+    return flags
+
+
+#: Pure PSP's picture is this many of the original's frames (`original.frame_dt_s` each, two of ours' ticks) older than the
+#: RAM read at the stop the screenshot is taken at; read off the HUD's digits (`docs/tools/compare-page.md`, "The Pure
+#: circuit pairs' residual, split by region and cause").
+PURE_PRESENTED_LAG = 2
+
+
+def pure_lag_provenance(zone=False):
+    """`original.provenance.presented_lag` of a Pure PSP pair. The digits were read on the race pairs only."""
+    what = "picture, in the original's frames; HUD digits, docs/tools/compare-page.md"
+    if zone:
+        return {"value": PURE_PRESENTED_LAG, "unit": "ticks", "basis": "platform_measurement",
+                "what": what + " (race pairs; inherited by Zone, not read there)"}
+    return {"value": PURE_PRESENTED_LAG, "unit": "ticks", "basis": "measured", "what": what}
+
+
+def pure_lag_flags(rec, flags, go_tick_):
+    """`flags` at `PURE_PRESENTED_LAG` for a Pure PSP pair recorded with another lag: the race clock (and so `--ticks`) and
+    the scenery clock move back by the difference in the original's frames. Any other pair's flags unchanged. Rewrites the
+    record's clocks and lag to match, so a second call does nothing."""
+    orig = rec.get("original") or {}
+    old = orig.get("presented_lag_ticks")
+    if rec.get("profile") != "pure-psp" or old is None or old == PURE_PRESENTED_LAG:
+        return flags
+    flags = list(flags)
+    dt = orig["frame_dt_s"]
+    at_stop = orig.get("race_clock_at_stop_s")
+    ticks = rec["ours"]["ticks"]
+    if at_stop is not None:
+        clock = at_stop - PURE_PRESENTED_LAG * dt
+        ticks = go_tick_ + tenths_matched_ticks(clock)
+        orig["race_clock_s"] = clock
+        rec["ours"].update({"ticks": ticks, "race_clock_s": (ticks - go_tick_) / 60})
+        flags[flags.index("--ticks") + 1] = str(ticks)
+    if orig.get("world_clock_s") is not None:
+        # `original.world_clock_offset_s` (world less race clock) keeps its value on a race pair: both move together.
+        orig["world_clock_s"] += (old - PURE_PRESENTED_LAG) * dt
+        offset = orig["world_clock_s"] - ticks / 60
+        flags[flags.index("--world-clock-offset") + 1] = "%.3f" % offset
+        rec["ours"]["world_clock_offset_s"] = offset
+    orig["presented_lag_ticks"] = PURE_PRESENTED_LAG
+    if orig.get("provenance") is not None:
+        orig["provenance"]["presented_lag"] = pure_lag_provenance(at_stop is None)
     return flags
 
 
@@ -769,7 +817,7 @@ def selftest_rewind_pair_field():
     replaces the claim that the picture needed no correction, and a second run is refused."""
     import tempfile
 
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory(dir=oag_tmp.temp_root()) as tmp:
         d = Path(tmp)
         write_field_rows(d / "field.csv", [{"slot": str(n), "pos_x": "10.0", "pos_y": "0.0", "pos_z": "0.0",
                                             "vel_x": repr(60.0 * (n + 1)), "vel_y": "0.0", "vel_z": "0.0"} for n in range(2)])

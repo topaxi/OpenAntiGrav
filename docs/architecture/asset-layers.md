@@ -12,7 +12,7 @@ override (player)  ->  update archives  ->  bulk  ->  companion  ->  extra  ->  
 ```
 
 The mods' layers are the `fallback/<title>/` folders of the mods that are on, in mod search
-order ([ADR-0098](adr/0098-a-mod-carries-fallback-entries.md), [mods.md](../tools/mods.md#fallback-entries-fallbacktitle)).
+order ([ADR-0100](adr/0100-a-mod-carries-fallback-entries.md), [mods.md](../tools/mods.md#fallback-entries-fallbacktitle)).
 Like the fallback they answer only a name no disc or DLC holds. The composition root registers
 them (`oag_source::layers::register_mods`) at start and whenever a mod is switched; an open that
 mounts the player's layers (`Layering::player`) keeps its own title's.

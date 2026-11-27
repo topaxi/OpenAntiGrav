@@ -422,27 +422,31 @@ fn the_held_backdrop_plays_the_fade_on_hd() {
     });
 }
 
-/// Pulse's lap counter closes up on lap one (`Hud_UpdateLapCounter`, `-17`): the separator and the
-/// total move, the digit does not, later laps and HD (no such rule) draw as authored.
+/// Pulse's and Pure's lap counters close up on lap one (each title's `Hud_UpdateLapCounter`, `-17`):
+/// the separator and the total move, the digit does not, later laps and HD (no such rule) draw as
+/// authored.
 #[test]
-fn pulses_lap_counter_closes_up_on_lap_one_only() {
+fn psp_lap_counters_close_up_on_lap_one_only() {
     let at = |lap, laps| Readout {
         lap,
         laps,
         ..readout(100.0)
     };
-    with_hd(oag_pulse::hud::ART, |cx| {
-        for name in ["LapOf", "Lap Outof"] {
+    for (title, art) in [("pulse", oag_pulse::hud::ART), ("pure", oag_pure::hud::ART)] {
+        with_hd(art, |cx| {
+            for name in ["LapOf", "Lap Outof"] {
+                let dx = |lap, laps| crate::draw::lap_one_dx(cx, &at(lap, laps), name);
+                assert_eq!(dx(1, 3), -17.0, "{title} {name}");
+                assert_eq!(dx(2, 3), 0.0, "{title} {name}");
+                assert_eq!(dx(1, 0), 0.0, "{title} {name}");
+            }
             assert_eq!(
-                crate::draw::lap_one_dx(cx, &at(1, 3), name),
-                -17.0,
-                "{name}"
+                crate::draw::lap_one_dx(cx, &at(1, 3), "Lap"),
+                0.0,
+                "{title}"
             );
-            assert_eq!(crate::draw::lap_one_dx(cx, &at(2, 3), name), 0.0, "{name}");
-            assert_eq!(crate::draw::lap_one_dx(cx, &at(1, 0), name), 0.0, "{name}");
-        }
-        assert_eq!(crate::draw::lap_one_dx(cx, &at(1, 3), "Lap"), 0.0);
-    });
+        });
+    }
     with_hd(oag_hd::hud::ART, |cx| {
         assert_eq!(crate::draw::lap_one_dx(cx, &at(1, 3), "LapOf"), 0.0);
     });
@@ -476,4 +480,148 @@ fn a_fill_at_another_rectangle_of_the_background_s_sheet_is_drawn() {
     };
     assert_eq!(uv, [0.0, 890.0, 553.0, 100.0]);
     assert_eq!(color, [1.0; 4]);
+}
+
+/// [`layout`] with the countdown widget `HUD_damage_indicator.xml`'s Fury copy authors
+/// between the background and the fill, a little larger than both.
+fn countdown_layout() -> Layout {
+    let mut layout = layout();
+    let backing = Layout::from_xml(&format!(
+        r#"<Screen><Image name="DamageBarShieldBg">
+             <Values x="0" y="0" width="260" height="200" U="770" V="186"
+                     TxtrWidth="254" TxtrHeight="194" color="0xff00ff00" Src="{SRC}"/>
+           </Image></Screen>"#
+    ));
+    layout.sprites.extend(backing.sprites);
+    layout
+}
+
+/// The Shield running with its post-hit flash on an "off" phase, so a blink
+/// would show.
+fn shielded() -> Readout {
+    Readout {
+        shield_seconds: 1.967,
+        shield_flashing_whole: true,
+        shield_blink_phase_whole: 0.133,
+        ..readout(100.0)
+    }
+}
+
+/// While a Shield runs the number is its remaining seconds to one decimal, in
+/// the countdown's green, and it does not blink.
+#[test]
+fn a_running_shield_writes_its_seconds_over_the_percent() {
+    with_layout(&countdown_layout(), oag_hd::hud::ART, |cx| {
+        let r = shielded();
+        assert_eq!(
+            countdown_text(cx, &r, "ShieldBarText").as_deref(),
+            Some("2.0")
+        );
+        assert_eq!(colour(cx, &r, "ShieldBarText"), Some(argb(0xFF30_FF30)));
+        let spent = Readout {
+            shield_seconds: 0.0,
+            ..r
+        };
+        assert_eq!(countdown_text(cx, &spent, "ShieldBarText"), None);
+        assert_eq!(colour(cx, &spent, "ShieldBarText"), Some(argb(0x0016_64FF)));
+    });
+}
+
+/// The widget is drawn over the background and under the fill, only while a
+/// Shield runs.
+#[test]
+fn a_running_shield_puts_its_widget_behind_the_fill() {
+    let layout = countdown_layout();
+    let widths = |r: &Readout| -> Vec<f32> {
+        with_layout(&layout, oag_hd::hud::ART, |cx| {
+            draw_list(cx, r)
+                .sprites
+                .iter()
+                .filter_map(|draw| match draw {
+                    Draw::Sprite { rect, uv, .. } if uv[0] == 770.0 => Some(rect[2]),
+                    _ => None,
+                })
+                .collect()
+        })
+    };
+    assert_eq!(widths(&shielded()), vec![254.0, 260.0, 254.0]);
+    assert_eq!(widths(&readout(100.0)), vec![254.0, 254.0]);
+}
+
+/// A layout without the widget (the PSN download's) keeps the percentage.
+#[test]
+fn a_layout_without_the_countdown_widget_keeps_the_percent() {
+    with_hd(oag_hd::hud::ART, |cx| {
+        let r = shielded();
+        assert_eq!(countdown_text(cx, &r, "ShieldBarText"), None);
+        assert_eq!(colour(cx, &r, "ShieldBarText"), Some(argb(0x0016_64FF)));
+        let bg = cx.layout.sprite("DamageBarBg").expect("authored");
+        assert_eq!(countdown_backing(cx, &r, bg), None);
+    });
+}
+
+/// A layout shaped like `HUD_proximity.xml`'s: the arc and its marker 100 below it.
+fn proximity_layout() -> Layout {
+    Layout::from_xml(&format!(
+        r#"<Screen>
+             <Image name="ProximityBar">
+               <Values x="627" y="849" width="666" height="114" U="358" V="524"
+                       TxtrWidth="666" TxtrHeight="114" Src="{SRC}"/>
+             </Image>
+             <Image name="ProxBackground">
+               <Values x="907" y="972" width="107" height="69" U="415" V="54"
+                       TxtrWidth="107" TxtrHeight="69" Src="{SRC}"/>
+             </Image>
+           </Screen>"#
+    ))
+}
+
+fn proximity_rects(art: &oag_title::HudArt) -> Vec<[f32; 4]> {
+    with_layout(&proximity_layout(), art, |cx| {
+        proximity_sprites(cx)
+            .iter()
+            .map(|draw| match draw {
+                Draw::Sprite { rect, .. } => *rect,
+                other => panic!("unexpected draw {other:?}"),
+            })
+            .collect()
+    })
+}
+
+/// The idle indicator: the arc where it is authored, the marker 20 above its own place.
+#[test]
+fn the_idle_proximity_arc_is_drawn_with_its_marker_raised() {
+    assert_eq!(
+        proximity_rects(oag_hd::hud::ART),
+        [[627.0, 849.0, 666.0, 114.0], [907.0, 952.0, 107.0, 69.0]]
+    );
+}
+
+/// And the whole HUD's draw list carries them: neither widget is on the always-on list.
+#[test]
+fn the_draw_list_carries_the_idle_proximity_arc() {
+    let rects: Vec<[f32; 4]> = with_layout(&proximity_layout(), oag_hd::hud::ART, |cx| {
+        draw_list(cx, &Readout::blank())
+            .sprites
+            .iter()
+            .filter_map(|draw| match draw {
+                Draw::Sprite { rect, .. } => Some(*rect),
+                _ => None,
+            })
+            .collect()
+    });
+    assert_eq!(
+        rects,
+        [[627.0, 849.0, 666.0, 114.0], [907.0, 952.0, 107.0, 69.0]]
+    );
+}
+
+/// A title with no runtime rules draws no indicator of its own.
+#[test]
+fn a_title_without_the_rule_draws_no_proximity_arc() {
+    let art = oag_title::HudArt {
+        runtime: None,
+        ..*oag_hd::hud::ART
+    };
+    assert!(proximity_rects(&art).is_empty());
 }

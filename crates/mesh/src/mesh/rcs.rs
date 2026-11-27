@@ -171,6 +171,7 @@ mod billboard_glass;
 mod bomb_tint;
 pub mod bullet_gauge;
 pub mod cannon_bolt;
+pub mod census;
 mod chevron_pulse;
 mod cutout;
 mod damage_lights;
@@ -271,6 +272,7 @@ fn surface(model: &rcsmodel::Model, mesh: &rcsmodel::Mesh, tables: &Model) -> Su
     let material_slots = &tables.material_slots;
     let material_specular_exponent = &tables.material_specular_exponent;
     let material_colour_factor = &tables.material_colour_factor;
+    let material_flip_v = &tables.material_flip_v;
     let material_glow = &tables.material_glow;
     let material_quake = &tables.material_quake;
     let material_tangent = &tables.material_tangent;
@@ -324,6 +326,7 @@ fn surface(model: &rcsmodel::Model, mesh: &rcsmodel::Mesh, tables: &Model) -> Su
         specular_exponent,
         glow: material_glow.get(slot).copied().unwrap_or(0.0),
         colour_factor: material_colour_factor.get(slot).copied().unwrap_or(false),
+        flip_v: material_flip_v.get(slot).copied().unwrap_or(false),
         quake: material_quake.get(slot).copied().unwrap_or(false),
         tangent: material_tangent.get(slot).copied().unwrap_or_default(),
         anim,
@@ -419,6 +422,9 @@ struct Surface {
     /// light - see `skin::light_inputs`. Marks the chunk's vertices through
     /// `GpuVertex::sun_mask`.
     colour_factor: bool,
+    /// Whether the material's vertex program flips `v` - see
+    /// [`Model::material_flip_v`].
+    flip_v: bool,
     /// Whether the material ships a `StaticQuake` vertex program - see
     /// `GpuVertex::quake`.
     quake: bool,
@@ -536,7 +542,7 @@ fn emit(
         indices,
         chunk,
     } = mesh;
-    let flip_v = surface.roles & slots::FLIP_V != 0;
+    let flip_v = surface.flip_v;
     let first_vertex = u32::try_from(out.vertices.len()).unwrap_or(u32::MAX);
     let first_index = u32::try_from(out.indices.len()).unwrap_or(u32::MAX);
     let mut centre = Vec3::ZERO;
@@ -789,6 +795,7 @@ fn build_with_options(
         material_specular_exponent,
         material_glow,
         material_colour_factor,
+        material_flip_v,
         material_variants,
         material_quake,
         material_tangent,
@@ -836,6 +843,7 @@ fn build_with_options(
     out.material_glow = material_glow;
     out.glow_from_program = true;
     out.material_colour_factor = material_colour_factor;
+    out.material_flip_v = material_flip_v;
     out.material_quake = material_quake;
     out.material_state = model.materials.iter().map(|m| m.state).collect();
     out.material_tangent = material_tangent;

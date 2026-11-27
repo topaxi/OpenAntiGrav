@@ -248,6 +248,7 @@ pub(super) fn scene_with_billboards(
         None,
         Default::default(),
         Default::default(),
+        0.0,
     )
     .expect("the scene builds")
 }
@@ -319,7 +320,32 @@ fn a_scene_build_ends_once_the_process_is_exiting() {
 /// placeholder shows its 8x8 digit stub (or, once stripped, nothing), and this
 /// reads zero.
 fn adverts_rebound(source: &str) -> Option<(usize, usize, usize)> {
-    let image = oag_testdata::image(source)?;
+    let built = built_race_scene(&oag_testdata::image(source)?)?;
+    Some((built.wanted, built.rebound, built.wrapped))
+}
+
+/// One disc's default circuit, loaded and built into a real scene.
+struct BuiltRace {
+    wanted: usize,
+    rebound: usize,
+    wrapped: usize,
+    /// `(pipelines carrying the title's every-texture LOD bias, all distinct)`.
+    lod_biased: (usize, usize),
+    track_material_bias: f32,
+    speed_pad_pictures: usize,
+    /// Each effect texture the load holds: its name, bias and authored levels below the base.
+    effect_textures: Vec<(&'static str, f32, usize)>,
+    /// Whether the particle sheet holds a level below its base, and the load report's
+    /// lines for a sprite the sheet had no room for.
+    sheet_chained: bool,
+    /// Level 1 of the sheet at the middle of a chain-less sprite placed after the load.
+    late_sprite_level_1: Option<[u8; 4]>,
+    sheet_misses: Vec<String>,
+    /// The bias the time-trial ghost's pipeline was built with.
+    ghost_bias: Option<f32>,
+}
+
+fn built_race_scene(image: &std::path::Path) -> Option<BuiltRace> {
     let instance = wgpu::Instance::default();
     let adapter = oag_gpu::test_adapter::request(&instance)?;
     let (device, queue) = pollster::block_on(adapter.request_device(
@@ -329,15 +355,65 @@ fn adverts_rebound(source: &str) -> Option<(usize, usize, usize)> {
     let loaded = crate::load(&crate::Options {
         source: image.display().to_string(),
         class: "VENOM".to_string(),
+        wingtip_contrails: crate::WingtipContrails::On { lender: None },
         ..crate::Options::default()
     })
     .expect("loading the race");
+    let track_material_bias = loaded.track_model.material_lod_bias;
+    let speed_pad_pictures = loaded
+        .track_model
+        .textures
+        .iter()
+        .flatten()
+        .filter(|texture| texture.label.to_ascii_lowercase().contains("speedpad"))
+        .count();
+    let disc_lod_bias = loaded.title.looks.every_texture_lod_levels();
+    let effect_textures = [
+        ("flare sprite", loaded.flare.as_ref()),
+        ("ribbon noise", loaded.noise.as_ref()),
+        ("ribbon shape", loaded.trail_shape.as_ref()),
+        ("leach beam", loaded.leach_beam_texture.as_ref()),
+        ("cannon bolt", loaded.cannon_quad_textures.0.as_ref()),
+        ("cannon flash", loaded.cannon_quad_textures.1.as_ref()),
+        (
+            "wingtip contrail",
+            loaded.ribbon_textures.wingtip.as_ref().map(|w| &w.texture),
+        ),
+    ]
+    .into_iter()
+    .filter_map(|(name, texture)| texture.map(|t| (name, t.lod_bias, t.mips.len())))
+    .collect();
+    let sheet_chained = loaded.view.effects.sheet().lower_pixels(1).is_some();
+    let late_sprite_level_1 = {
+        use oag_fx::psys::sprite::{SHEET_SIZE, Sprite};
+        let mut effects = loaded.view.effects.clone();
+        let rect = effects.place_sprite(&Sprite {
+            width: 32,
+            height: 32,
+            rgba: [9u8, 8, 7, 6].repeat(32 * 32).into(),
+            chain: None,
+        });
+        rect.zip(effects.sheet().lower_pixels(1))
+            .and_then(|(rect, pixels)| {
+                let middle = |a: f32, b: f32| ((a + b) / 2.0 * SHEET_SIZE as f32) as usize / 2;
+                let at = (middle(rect[1], rect[3]) * (SHEET_SIZE as usize / 2)
+                    + middle(rect[0], rect[2]))
+                    * 4;
+                pixels.get(at..at + 4)?.try_into().ok()
+            })
+    };
+    let sheet_misses = loaded
+        .report
+        .iter()
+        .filter(|line| line.contains("did not fit the sprite sheet"))
+        .cloned()
+        .collect();
     let served: Vec<u32> = loaded.billboards.adverts.iter().map(|c| c.slot).collect();
     let wanted = oag_render::gantry::placeholder_texture_slots(&loaded.track_model)
         .iter()
         .filter(|(_, number)| served.contains(number))
         .count();
-    let scene = Scene::new(
+    let mut scene = Scene::new(
         &device,
         &queue,
         loaded.track_model,
@@ -380,9 +456,74 @@ fn adverts_rebound(source: &str) -> Option<(usize, usize, usize)> {
         None,
         Default::default(),
         Default::default(),
+        disc_lod_bias,
     )
     .expect("the scene builds");
-    Some((wanted, scene.adverts_rebound(), scene.adverts_wrapped()))
+    scene.prepare_ghost(
+        &device,
+        &queue,
+        wgpu::TextureFormat::Rgba8Unorm,
+        oag_race::Mode::TimeTrial,
+        &[livery()],
+        None,
+    );
+    Some(BuiltRace {
+        ghost_bias: scene.ghost_lod_bias(),
+        wanted,
+        rebound: scene.adverts_rebound(),
+        wrapped: scene.adverts_wrapped(),
+        lod_biased: scene.lod_biased_pipelines(),
+        track_material_bias,
+        speed_pad_pictures,
+        effect_textures,
+        sheet_chained,
+        late_sprite_level_1,
+        sheet_misses,
+    })
+}
+
+/// **2048's loader biases every texture it loads, so every pipeline of its race does.**
+///
+/// Drop `Looks::every_texture_lod_bias` or `Scene::new`'s scope call and the pipelines carry
+/// no `effect_lod_bias`; drop `material_lod_bias` and the circuit (speed pads are its own
+/// submeshes) is left at 0.
+#[test]
+#[ignore = "needs data/extracted/vita/PCSF00007 and a GPU"]
+fn v2048_biases_every_race_pipeline_and_its_circuit() {
+    let Some(source) = oag_testdata::exact("data/extracted/vita/PCSF00007") else {
+        return;
+    };
+    let Some(built) = built_race_scene(&source) else {
+        return;
+    };
+    assert_eq!(built.track_material_bias, -1.5);
+    assert!(built.speed_pad_pictures > 0, "no speed pad on the circuit");
+    let (biased, all) = built.lod_biased;
+    assert!(biased > 0, "no pipeline carries the bias");
+    assert_eq!(biased, all, "{biased} of {all} distinct pipelines biased");
+    // The effect textures `oag_fx` draws take the same bias over their files' own chains.
+    assert_eq!(
+        built.effect_textures.len(),
+        7,
+        "{:?}",
+        built.effect_textures
+    );
+    for (name, bias, mips) in &built.effect_textures {
+        assert_eq!(*bias, -1.5, "{name}");
+        assert!(*mips > 0, "{name} carries no chain");
+    }
+    assert!(
+        built.sheet_chained,
+        "the particle sheet holds no lower level"
+    );
+    assert_eq!(
+        built.late_sprite_level_1,
+        Some([9, 8, 7, 6]),
+        "a sprite with no chain of its own has no lower level on the race's sheet"
+    );
+    assert!(built.sheet_misses.is_empty(), "{:?}", built.sheet_misses);
+    // A ghost draws the hull's own textures through a pipeline of its own.
+    assert_eq!(built.ghost_bias, Some(-1.5), "the ghost's hull pass");
 }
 
 #[test]

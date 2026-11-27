@@ -504,8 +504,25 @@ pub(crate) fn decode_texture(
     Ok(FlareTexture {
         width: picture.width,
         height: picture.height,
+        mips: file_mips(&picture, &blob),
+        lod_bias: 0.0,
         rgba: picture.rgba,
     })
+}
+
+#[cfg(feature = "view")]
+/// The levels a `.gxt` authors below the picture decoded off it, which a title whose loader
+/// biases its textures samples down (`load::lod_bias`). Empty for every other container.
+fn file_mips(picture: &oag_texture::decode::Picture, blob: &[u8]) -> Vec<Vec<u8>> {
+    if picture.container != oag_texture::decode::Container::Gxt {
+        return Vec::new();
+    }
+    let Ok(gxt) = oag_texture::gxt::Gxt::parse(blob) else {
+        return Vec::new();
+    };
+    gxt.only()
+        .map(|texture| texture.lower_levels_rgba(blob))
+        .unwrap_or_default()
 }
 
 #[cfg(feature = "view")]
@@ -597,6 +614,8 @@ pub(super) fn exhaust_texture(
                 width: image.width,
                 height: image.height,
                 rgba: image.rgba.clone(),
+                mips: Vec::new(),
+                lod_bias: 0.0,
             },
             format!(
                 "{name}: {}x{} from the texture pack",
@@ -622,6 +641,8 @@ pub(super) fn exhaust_texture(
         FlareTexture {
             width: picture.width,
             height: picture.height,
+            mips: file_mips(&picture, &blob),
+            lod_bias: 0.0,
             rgba: picture.rgba,
         },
         note,

@@ -34,8 +34,7 @@ fn two_shots_of_a_visit(
     to_the_race: &str,
     args: &[&str],
 ) -> (f32, f32, f32) {
-    let shots = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("photo-first-speed-{tag}"));
-    let _ = std::fs::remove_dir_all(&shots);
+    let shots = oag_testdata::scratch::dir(&format!("photo-first-speed-{tag}"));
     let run = drive_with(
         image,
         tag,

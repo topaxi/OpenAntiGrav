@@ -82,6 +82,9 @@ pub struct TouchButton {
 /// hangs off `Title` rather than being selected apart from it.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TouchFrontEnd {
+    /// The font role a tile's label under its box is drawn in, at that face's own size. `None`
+    /// draws it in the `Default` face scaled down (a title whose own tiles nothing measured).
+    pub label_face: Option<&'static str>,
     /// `NEWGUI/Definition.xml`'s `GameModeChoice` screen, in the file's own
     /// order. A title's own table, so a count is the title's: 2048's is the
     /// v1.04 patch's copy, **six** buttons in two rows of three (the extra two,
@@ -159,6 +162,7 @@ mod tests {
     /// 2048's own shape, as a fixture: this crate must not know any title's
     /// data, so the sanity check below cannot reach for `oag-2048`.
     const TWO_ZERO_FOUR_EIGHT_SHAPED: TouchFrontEnd = TouchFrontEnd {
+        label_face: Some("NEOSANS_BOLD"),
         game_mode_choice: &[
             TouchButton {
                 id: "FE_SP_CAMPAIGN",

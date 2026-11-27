@@ -624,7 +624,7 @@ pub fn load_sim(options: &Options) -> Result<SimLoad> {
 /// Refuses a race of `mode` on `title` when the data the mode loads of its own does not resolve in
 /// `archives`: the rule the MODE row offers modes by (`oag_ui::menu::mode_offered`), applied to a
 /// race asked for by flag, by a stale setting or by a campaign cell, so none races a half-built
-/// mode. Detonator on Pulse is the case: its data is a mod's (ADR-0098).
+/// mode. Detonator on Pulse is the case: its data is a mod's (ADR-0100).
 fn refuse_a_mode_without_its_data(
     mode: oag_race::Mode,
     title: &oag_title::Title,

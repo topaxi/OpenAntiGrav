@@ -21,6 +21,7 @@ decrypted `EBOOT.elf` wherever the decompiler's output is quoted below.
 | --- | --- | --- |
 | `0x0009e3d0` | `Hud_Update` | 72 |
 | `0x000866c8` | `Hud_UpdateShieldReadout` | 82 |
+| `0x00089f60` | `Hud_SetShieldTimer` | 90 |
 | `0x00096ef0` | `Hud_UpdateLapCounter` | 80 |
 | `0x00096088` | `Hud_UpdatePositionCounter` | 78 |
 | `0x00086e88` | `Hud_UpdateSpeedReadout` | 82 |
@@ -163,14 +164,15 @@ the lap and place the two functions below read), and `f = pct * 0.01`.
    `0x4CFFFFFF`/`0xBFFFFFFF` and the text white, with red (`0x4CFF0000`,
    `0xFFFF0000`) and green (`0x4C00FF00`, `0xFF00FF00`) variants on the same
    two conditions. Not a default-skin path.
-8. **The digits.** When `DamageBarShieldBg` is null or hidden - which it
-   always is on the default skin, hidden at bind and in no path's shipped copy
-   (see [hd-hud.md](../../../formats/hd-hud.md#what-is-not-done)) - the text is
+8. **The digits.** When `DamageBarShieldBg` is null or hidden the text is
    `(int)pct` as up to three ASCII digits, **no `%`**, written through the
    string setter `0x00202d28` (`0x00086ba4`-`0x00086c54`, decimal by
    `mulhw` against `0x51eb851f`/`0x66666667`). The other branch formats
    `+0x1c4` with `"%2.1f"` and colours the text white in modes 13 and 21,
-   `0xFF30FF30` otherwise. Then `+0x10c = pct`.
+   `0xFF30FF30` otherwise. Then `+0x10c = pct`. **The other branch runs while a
+   Shield is up**: see [the Shield countdown](#the-shield-countdown). (This
+   page used to say the widget is in no shipped copy of the layout; `DATA06`'s
+   copy authors it.)
 
 **Confidence 82** on the table in step 6, the colour in step 4 and the crop in
 step 1: every constant is a direct read, the branch structure was walked in the
@@ -178,6 +180,66 @@ disassembly as well as the decompile, and the three `talons-matched` frames of
 the running original agree with the steady row - a full blue hexagon and a
 blue `100`/`98`. What stays open: the field meanings behind `c` (step 3), and
 the `+0x44` bit that gates the call.
+
+## The Shield countdown
+
+2026-11-27, `hd-gantry-weaponbox`. While a craft's Shield runs, the shield
+hexagon's number is the **seconds left**, in green, over a second, slightly
+larger green background, and the weapon box is empty. **Confidence 90**: static
+read, then two RPCS3 boots.
+
+**`Hud_SetShieldTimer` (`0x00089f60`)**, `(time, hud, show)`: returns when
+`hud+0x1bc` (`DamageBarShieldBg`) is null; `show == 0` clears bit `0x4` of the
+widget's `+0x34`; otherwise it stores `time` at `hud+0x1c4` and sets the bit.
+Its one caller is in `PlayerStatus_Update`, `bl` at `0x000cc504`, which passes
+`f1 = slot+0x1c8` and `show = (slot+0x200 >> 4) & 1`, `slot` being
+`*(ship+0x5edc)`: bit `0x10` of the pickup slot's flags, the Shield-active bit.
+`Hud_UpdateShieldReadout` then takes the `"%2.1f"` branch of step 8. Its text
+colour write comes after the flash table of step 6, so the number does not
+blink.
+
+**The widget is authored once.** `HUD_damage_indicator.xml` ships on the
+Fury disc in `DATA02` (904 B) and `DATA06` (1,192 B); the one difference is a
+`DamageBarShieldBg` image between `DamageBarBg` and `DamageBar`, colour
+`0xff00ff00`, 260 x 200 around the 254 x 194 hexagon from the same atlas
+rectangle ([hd-hud.md](../../../formats/hd-hud.md#two-copies-of-the-shield-layout)).
+The original draws it, so it reads `DATA06`'s copy in that race.
+
+**Live**, Racebox Single Race, Talon's Junction, Feisar, the Shield written into
+the slot (state 5) and fired with TRIANGLE
+(`scripts/rpcs3-hd-gantry-board.py`, RPCS3 0.0.43-20574):
+
+| | boot 1 | boot 2 |
+| --- | --- | --- |
+| `slot+0x1c8` at shield clock 0.50, 2.0, 3.0, 4.0 s | 4.451, 2.966, 1.954, 0.947 | 4.489, 2.946, 1.942, 0.926 |
+| `hud+0x1c4` at the same pauses | (HUD not located) | 4.507, 2.979, 1.958, 0.942 |
+| digits on the frame, green | `4.6` `3.1` `2.1` `1.1` | `4.6` `3.0` `2.0` `1.0` |
+| `slot+0x200` | 16 | 16 |
+
+In the same pause `hud+0x1c4` is 0.016 to 0.033 s behind the slot (more time
+left): the HUD holds an earlier update's value. Ours draws the current tick's
+timer; **not wired**, one boot (boot 1 did not locate the HUD). The frame trails RAM, by
+about 0.15 s on boot 1 and 0.05 s on boot 2, which is what separates the digits
+from the words. Boot 2 found `hud` at `0x329021b0`, `hud+0x1bc` non-null, its
+`0x4` bit clear before the shot and set at all four pauses.
+
+**Per title**, what the HUD shows while a Shield runs. The weapon box is empty on
+all of them: the fire clears the held pickup.
+
+| Title | Shown | Ours | Evidence | Confidence |
+| --- | --- | --- | --- | --- |
+| HD / Fury | seconds left in green, green backing | wired (`oag_title::hud::ShieldCountdown`) | above | 90 |
+| PSN HD download | the percentage | already right | none of its four archives' XML names `DamageBarShieldBg`, so `hud+0x1bc` is null | 75 |
+| Pulse (PSP) | nothing added: empty box, percentage | already right | static: `PlayerStatus_Update` (`0x0883b3b8`) takes the icon from the held id, writes the [`SubWeapon`](../psp-pulse-usa/sub-weapon.md) line for Autopilot and Cannon only, and reads neither the Shield flag nor its timer; [`shield-pickup.md`](../psp-pulse-usa/shield-pickup.md)'s image-wide scan finds no HUD reader | 85 |
+| Pulse (PS2) | as PSP | already right | inherited from PSP, its own binary not read | inherited |
+| Pure | nothing added: empty box, percentage | already right | static, USA: the fire (`0x0884c8bc`) clears the held id (`+0x1d8`) and the HUD update (`0x0892195c`) draws no icon for id `0`, with a text only for the Autopilot; no reader of the Shield fields (`+0x178`, `+0x17c`) found in it | 75 |
+| 2048 | the `ManualShield` outline drains from the top; percentage unchanged | wired (`HudArt::shield_drain_widget`) | static: [2048's `shield.md`](../vita-2048-eu-v104/shield.md#the-hud-manualshield-drains-while-the-shield-runs). The executable also carries this page's countdown, but no layout it loads has the widget | 75 |
+| Omega, HD circuits | seconds left | ported, inherited from HD | `data00`'s copy authors the widget and the executable holds `DamageBarShieldBg` and `%2.1f`; its update was not read | inherited |
+| Omega, 2048 circuits | the drain | ported, inherited from 2048 | its `2048_hud\` layout authors `ManualShield` and its bind (`FUN_012d1590`) hides it; the update unread | inherited |
+
+Of the comparison pairs, only HD's `shield-raised` and `shield-hit-flash` raise
+a Shield. No Pulse, Pure, 2048 or Omega pair gives ours one, so none holds a
+drain.
 
 ## `Hud_UpdateLapCounter` (`0x00096ef0`)
 
@@ -439,6 +501,76 @@ colours are read since ([hd-pickup-table.md](hd-pickup-table.md)); the easing co
 per-pickup count or timer in `Readout`, so a held pickup's hexagon stays as authored.
 
 2048: `HUD_pickups.xml` is not this layout, not checked.
+
+## The proximity indicator: the arc under the craft
+
+Lane `hd-shield-follow`, 2026-11-27. The faint arc the original shows on the road
+under the craft is HUD art: `ProximityIndicator`, the rear-proximity widget. It is
+no part of the shield and no floor geometry.
+
+**Layout** (`HUD_proximity.xml`, loaded under `ForwardHUD` by `arcade_hud.xml`):
+a `<Text name="ProximityIndicator" OffsetX="960" OffsetY="906">` holding the
+centred `Image` `ProximityBar` (666 x 114, source `U358 V524` of
+`HUD_Components.gtf`), which holds `ProxBackground` (`y=100`, 107 x 69,
+`U415 V54`) and `Prox4`..`Prox0` (red `0xFFFF0000`, `y` 82 / 92 / 102 / 113 /
+124, rotation centres `-764` .. `-806`). Only the arcade and elimination roots
+load it (all three HUD styles); time trial, speed lap, zone, detonator and duel
+do not. The `DATA00` copy of `elimination_hud.xml` loads `HUD_Elim_proximity.xml`
+instead (the same two names); `DATA02`'s loads `HUD_proximity.xml`.
+
+**The draws** (command ring of one frame, two boots, with and without a Shield;
+confidence **92**):
+
+| | `ProximityBar` | `ProxBackground` |
+| --- | --- | --- |
+| quads | 4, x 627 / 793.5 / 960 / 1126.5 / 1293, y 849..963 | 1, x 907..1014, y 952..1021 |
+| texels | x 358..1024, y 386..500 (the authored `V524` flipped) | x 415..522, y 901..970 |
+
+Both draw on the composite target (`0x210 = 0x10000`) with the HUD atlas
+(1024 x 1024), the common HUD fragment program (`0x01114181`), blend
+`SRC_ALPHA` / `ONE_MINUS_SRC_ALPHA` and vertex colour `ffffffcc` (the HUD's
+`lit_alpha`). `Prox0`..`Prox4` are not drawn: the player is last on the grid and
+nothing is behind. A Shield running changes neither draw.
+
+`ProxBackground`'s rectangle centre is `y = 986.5`, 20 above the authored
+`906 + 100 = 1006`: the update's idle lift below.
+
+**Bind** (`Hud_BindWidgets`, `0x0009bb30`): `ProximityBar` `hud+0x5b8`,
+`ProxBackground` `+0x4f4`, `Prox0`..`Prox4` `+0x4f8`..`+0x508`.
+`ProxBackground`'s authored `y` is read off the widget (vtable `+0x74`,
+`0x0009c000`) into `hud+0x290`. `ProximityBar` is one of the status groups
+`Hud_ShowStatusGroups` shows and hides ([hud-start-gate.md](hud-start-gate.md)).
+
+**The per-tick law** (`Hud_Update`, `0x0009e96c`..`0x0009facc`, read
+statically; confidence **75**, the lit state not seen live):
+
+1. Over every other craft, `FUN_000d0398` gives the signed along-track distance:
+   the difference of the two craft's progress (`ship+0x7010`) wrapped into half a
+   lap either side (`0x008a8b04` is `0.5`, the lap length is `*(ship+0x6f64)`).
+2. Craft on one side only are kept, the side chosen by the byte at
+   `*(hud+0x40)+0x54`; the smallest `|d|` wins, starting from `999.9`
+   (`0x008a7c00`).
+3. `lit = int((1 - min(|d| * 0.004, 1)) * 5 + 0.5)`: `0.004` (`0x008a7c0c`) is a
+   range of **250 units**.
+4. `lit == 0`: `Prox0`..`Prox4` hidden, `ProxBackground` unrotated at
+   `y = hud+0x290 - 20` (`0x008a7678`).
+5. `lit > 0`: `Prox0`..`Prox(lit-1)` and `ProxBackground` visible at their
+   authored `y`, rotated about their own centres by an angle taken from a vector
+   dot product clamped to `[-0.43, 0.43]` radians (halved under bit `0x200` of
+   `hud+0x44`). Which two vectors, and the rotation's sign, are unread.
+
+Wired as `RuntimeHud::proximity`, the idle state only. The 2097 and WIP3OUT skins author
+their own widgets (`ProxArrow`, `ProxBar`) and draw none of it (`RETRO_ART.runtime` is
+`None`).
+
+**2048: checked, differs** (confidence 70). 2048's `data/xml/2048_hud/HUD_proximity.xml`
+authors its own `ProximityIndicator` and `ProximityBar` with `ProxBackground2048`
+and `Prox2048_*` children. Its original frames show no idle arc this build lacks
+(the ring under the craft is already in both). Not wired; its law is unread.
+
+**Omega: checked, applies, wired** (confidence 70; no Omega test of its own yet). `data/xml/HUD_proximity.xml` ships the same two
+names and its original pairs (a native PC build of the same game) show the same
+arc; Omega draws HD's `ALWAYS_ON` list. Its update function is unread.
 
 ## Not read
 

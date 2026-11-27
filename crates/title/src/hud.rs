@@ -477,6 +477,13 @@ pub struct HudArt {
     /// (`Repulser`/`Shuriken`, unimplemented on 2048 per
     /// `docs/gameplay/pickups.md`); every weapon 2048 grants has an entry.
     pub pickup_icon_uv: Option<[Option<[u16; 4]>; 14]>,
+    /// The image widget a running Shield drains: drawn cropped from the top to the fraction of
+    /// its duration left, bottom edge fixed, and not at all with none up. `None` draws nothing.
+    ///
+    /// 2048's `ManualShield`: `Hud_UpdateWidgets`' slot-timer branch scales height and source
+    /// rect by `min(slot+0x1b8 / slot+0x1bc, 1)`
+    /// (`docs/ghidra/functions/vita-2048-eu-v104/shield.md`, "The HUD").
+    pub shield_drain_widget: Option<&'static str>,
     /// What this title calls each rung of its Zone escalation ladder, or `None`
     /// if not read. See [`ZoneSpeedClasses`]. The *names* only: which rung a zone
     /// is on is [`crate::RaceDefaults::zone_stages`], kept separate because the
@@ -719,6 +726,21 @@ pub struct RuntimeHud {
     pub place_arc: SegmentArc,
     /// The pickup bar's idle look, `None` where unmeasured.
     pub pickup_idle: Option<PickupIdle>,
+    /// The rear-proximity indicator with nothing near behind, `None` where unread.
+    pub proximity: Option<ProximityIdle>,
+}
+
+/// The arc the HUD keeps under the craft: HD's `ProximityIndicator` as it draws with no craft
+/// near behind (`docs/ghidra/functions/ps3-hdfury-eu/hud-readouts.md`, "The proximity
+/// indicator"). The lit segments are not part of this.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ProximityIdle {
+    /// The arc itself, drawn where the layout authors it.
+    pub bar: &'static str,
+    /// The marker over the arc's middle.
+    pub background: &'static str,
+    /// How far above its authored `y` the idle marker sits, in layout units.
+    pub lift: u16,
 }
 
 /// The alpha byte the original's HUD writes into the vertex colour of its lit
@@ -784,8 +806,9 @@ pub struct TextShadow {
 
 /// The lap counter closes up on lap one: with a lap target and the lap equal to
 /// one, the executable moves the two glyphs after the digit left by [`Self::dx`]
-/// (a one-digit lap leaves the gap a two-digit one fills). Pulse's
-/// `Hud_UpdateLapCounter` (`0x0881a690`), `-17.0` in the 480-wide layout space.
+/// (a one-digit lap leaves the gap a two-digit one fills). Each title's own
+/// `Hud_UpdateLapCounter`, `-17.0` in the 480-wide layout space: Pulse's
+/// (`0x0881a690`) and Pure's (`0x0881ed14`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LapOneShift {
     /// The widgets that move: the separator and the lap total.
@@ -1074,6 +1097,26 @@ pub struct ShieldReadout {
     pub critical_percent: u32,
     /// Flash phases per second: a phase is on when `floor(t * this)` is even.
     pub phases_per_second: u32,
+    /// What a running Shield puts in the readout, `None` where nothing shows it.
+    pub countdown: Option<ShieldCountdown>,
+}
+
+/// The Shield's remaining seconds, written over the percentage while a Shield
+/// runs, with a second background widget behind the fill
+/// (`docs/ghidra/functions/ps3-hdfury-eu/hud-readouts.md`, "The Shield countdown").
+///
+/// The original does this only where its layout authors [`Self::widget`], so a
+/// layout without it keeps the percentage.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ShieldCountdown {
+    /// The widget shown behind the fill while a Shield runs, drawn as authored.
+    pub widget: &'static str,
+    /// The seconds' colour, `0xRRGGBB`, drawn opaque.
+    pub rgb: u32,
+    /// The layout file whose copy authoring [`Self::widget`] is the one to read,
+    /// where a title ships several copies and only one authors it. Matched on
+    /// the file name, case-insensitively.
+    pub layout_file: &'static str,
 }
 
 /// A ring of numbered segment widgets, `<prefix>0` .. `<prefix><segments - 1>`.

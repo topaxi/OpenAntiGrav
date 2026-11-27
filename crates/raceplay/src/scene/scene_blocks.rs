@@ -71,14 +71,19 @@ impl Scene {
         // The shield shell and cockpit sphere scroll on the shader's clock (`PROGRAM_SHIELD_LIGHTNING`,
         // `own_shield.wesl`), and our own shield also reads the eye. Their drawables' own block stays
         // `Scene::off` with `time` at zero, so they read the flame's: `Scene::off` plus the clock and
-        // the eye.
+        // the eye. A shell under its own lit program reads the craft's light and fog besides.
         for drawable in self
             .shield
             .iter_mut()
             .chain([&mut self.shield_cockpit])
             .flatten()
         {
-            drawable.share_scene(device, blocks, SceneKind::Flame);
+            let kind = if drawable.shield_lit() {
+                SceneKind::Shield
+            } else {
+                SceneKind::Flame
+            };
+            drawable.share_scene(device, blocks, kind);
         }
         for spike in self.flare_spikes.iter_mut().flatten() {
             spike.drawable.share_scene(device, blocks, SceneKind::Flame);
@@ -190,7 +195,13 @@ impl Scene {
         self.scene_blocks.write_view(
             queue,
             block,
-            [circuit, ship, &shine::shine_scene(ship), flame],
+            [
+                circuit,
+                ship,
+                &shine::shine_scene(ship),
+                flame,
+                &shield_scene(ship, flame),
+            ],
         );
     }
 }
@@ -229,6 +240,23 @@ pub(super) fn flame_scene(
     }
 }
 
+/// A lit shield shell's block: the craft's light rig and fog (its program lerps the circuit's
+/// fog inside its `/2`) over the flame's block, whose clock its colour tap scrolls on. Where
+/// the circuit authors no rig the shell draws as on the flame's block, unlit and unfogged.
+pub(super) fn shield_scene(
+    ship: &mesh_render::Scene,
+    flame: &mesh_render::Scene,
+) -> mesh_render::Scene {
+    if ship.light.enabled < 0.5 {
+        return *flame;
+    }
+    mesh_render::Scene {
+        fog: ship.fog,
+        light: ship.light,
+        ..*flame
+    }
+}
+
 #[cfg(test)]
 impl Scene {
     /// Sets the circuit's light rig's output scale, as HD's loader does (0.5).
@@ -247,6 +275,25 @@ impl Scene {
         let (shell, sphere) = (copy(), copy());
         self.shield = vec![Some(shell)];
         self.shield_cockpit = Some(sphere);
+    }
+
+    /// Gives the circuit an authored light rig, as HD's loader does.
+    pub(crate) fn enable_light_rig_for_tests(&mut self) {
+        self.light = mesh_render::Light::authored(
+            [0.0, 1.0, 0.0],
+            [2.0, 1.5, 1.0],
+            [0.4, 0.4, 0.5],
+            [1.0; 3],
+            [1.0; 3],
+            0.0,
+        );
+    }
+
+    /// Flags slot 0's shell as one under its own lit program, as HD's loader does.
+    pub(crate) fn light_the_shield_for_tests(&mut self) {
+        if let Some(Some(shell)) = self.shield.first_mut() {
+            shell.light_for_tests();
+        }
     }
 
     /// The kind of scene block slot 0's engine flare reads.

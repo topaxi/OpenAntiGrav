@@ -232,6 +232,7 @@ pub(super) fn menu_page(
         std::thread::sleep(std::time::Duration::from_millis(20));
     }
     crate::music_pool::expand(&mut definition, music_discs.pool(), strings);
+    crate::mods::expand(&mut definition, &mods, strings);
     let mut model = oag_ui::menu::Menu::new(definition);
     race_sources::supply(
         &mut model,
@@ -411,9 +412,9 @@ pub(super) fn menu_page(
     }
     model.open(page);
     model.set_reveal_attached(title.main_menu.attached == oag_title::Attached::Revealed);
-    // On the MODS page the suffix is a mod id (`--menu-page mods:example.garage`): there is
-    // one row, so what a still needs to choose is which mod it is on.
-    if page == crate::mods::PAGE
+    // On the mod detail page the suffix is a mod id (`--menu-page mod_detail:example.garage`):
+    // what a still needs to choose is which mod it is on.
+    if page == crate::mods::DETAIL
         && let Some(id) = focus
     {
         anyhow::ensure!(

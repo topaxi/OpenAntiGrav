@@ -53,7 +53,7 @@ fn have_ffmpeg() -> bool {
 const FRAMES: usize = 48;
 
 fn cache_dir() -> PathBuf {
-    std::env::temp_dir().join("oag-movie-ground-truth")
+    oag_testdata::scratch::cache("movie-ground-truth")
 }
 
 fn load() -> Option<boot::Boot> {

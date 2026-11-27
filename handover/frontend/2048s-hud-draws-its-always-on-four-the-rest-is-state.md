@@ -97,7 +97,9 @@ PSP's grid, twice the size, right-hand column off screen.
   `2048_hud.fnt`, not the 5x7 fallback; this line was stale.
 - **Unseen states**: the sights (no opponent in range at any sampled instant
   - Square did not fire, what does is unmeasured), the radar, the countdown,
-  Elimination, Speed Lap, the pickup absorb/`ManualShield`, `GiftCannon`,
+  Elimination, Speed Lap, the pickup absorb, a raised Shield (the
+  `ManualShield` drain is wired from a static read, no frame of the original
+  has judged it), `GiftCannon`,
   `RaceMedal`, `GloryMoment`, `ObjectivePoint`.
 - **`scripts/vita3k-drive.py`'s `race` menu walk is save-state dependent and
   not proven unattended-reliable even on a fresh save** - see its own

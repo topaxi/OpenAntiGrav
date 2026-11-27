@@ -247,8 +247,12 @@ fn trace_a_rocket_volley_along_the_floor() {
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(7_200);
-    let out = std::env::var("OAG_ROCKET_TRACE_OUT")
-        .unwrap_or_else(|_| "/tmp/oag-drive/hd-rocket-floor/trace.log".to_string());
+    let out = std::env::var("OAG_ROCKET_TRACE_OUT").unwrap_or_else(|_| {
+        oag_testdata::scratch::cache("rocket-floor")
+            .join("trace.log")
+            .display()
+            .to_string()
+    });
 
     let Some(loaded) = load(title, track) else {
         return;

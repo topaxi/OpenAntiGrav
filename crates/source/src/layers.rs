@@ -21,7 +21,7 @@
 //! open that mounts the player's layers ([`Layering::player`]) puts the ones for
 //! its title between the DLC and the embedded fallback, so they too answer only
 //! a name no disc or DLC holds
-//! (`docs/architecture/adr/0098-a-mod-carries-fallback-entries.md`).
+//! (`docs/architecture/adr/0100-a-mod-carries-fallback-entries.md`).
 //!
 //! # The fallback: this project's own art, embedded
 //!

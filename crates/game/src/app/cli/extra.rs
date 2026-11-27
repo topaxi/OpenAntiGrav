@@ -1024,11 +1024,12 @@ pub(crate) struct DevArgs {
     /// `until page=race`, `select race.track`, `set race.mode=time_trial`, `press cross`,
     /// `ticks 60`, `screenshot out.png`, `expect stage=race`, `quit`. The game reports its state
     /// as JSON lines (`--state-log`); the script reads that, never a picture. Needs `--source`
-    /// or one disc image in the search path. See docs/tools/oag-game.md, "Driving the menus".
+    /// or one disc image in the search path, or `--launcher` to script the chooser itself. See
+    /// docs/tools/oag-game.md, "Driving the menus".
     #[arg(
         long,
         value_name = "STEPS",
-        conflicts_with_all = ["drive_file", "race", "screenshot", "dry_run", "trace_out", "launcher"]
+        conflicts_with_all = ["drive_file", "race", "screenshot", "dry_run", "trace_out"]
     )]
     pub(crate) drive: Option<String>,
 
@@ -1036,7 +1037,7 @@ pub(crate) struct DevArgs {
     #[arg(
         long,
         value_name = "FILE",
-        conflicts_with_all = ["race", "screenshot", "dry_run", "trace_out", "launcher"]
+        conflicts_with_all = ["race", "screenshot", "dry_run", "trace_out"]
     )]
     pub(crate) drive_file: Option<std::path::PathBuf>,
 

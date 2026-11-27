@@ -28,7 +28,7 @@ fn fury(image: &Path) -> std::sync::Arc<boot::fury::FuryAssets> {
         dlc: Vec::new(),
         leg: frontend::Leg::LogoFmv,
         movie: None,
-        cache: std::env::temp_dir().join("oag-hd-fury-backdrop-ground-truth"),
+        cache: oag_testdata::scratch::cache("hd-fury-backdrop-ground-truth"),
         audio_cache: oag_source::cache::default_audio_cache_dir(),
         extent: oag_game::movie::Extent::Frames(oag_game::INTRO_FRAMES_NEEDED),
         no_video: true,

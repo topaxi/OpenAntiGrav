@@ -2,7 +2,7 @@
 //! built-in cannot be turned off, and the row follows the MOD row.
 
 use std::collections::BTreeSet;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use oag_game::mods::{self, Mods};
 use oag_ui::language::StringTable;
@@ -32,9 +32,8 @@ target = "records"
 "#;
 
 /// Garage, a mod that adds one row, and a file that is not a zip.
-fn base(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("oag-mods-switch-{}-{name}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
+fn base(name: &str) -> oag_testdata::scratch::TempDir {
+    let dir = oag_testdata::scratch::dir(&format!("mods-switch-{name}"));
     let garage = dir.join("garage");
     std::fs::create_dir_all(&garage).unwrap();
     std::fs::write(garage.join("oag-mod.toml"), MANIFEST).unwrap();
@@ -168,7 +167,7 @@ fn the_enabled_row_follows_the_mod_row() {
     let strings = StringTable::default();
     let mut model = Menu::new(built.definition.clone());
     model.supply(ValueSource::Mods, &mods::choices(&built.listing, &strings));
-    assert!(model.open(mods::PAGE));
+    assert!(model.open(mods::DETAIL));
     let enabled = |model: &Menu| -> Vec<String> {
         let entry = model
             .page()
@@ -225,11 +224,8 @@ fn fingerprint_of(dir: &Path) -> u64 {
     load(dir, &BTreeSet::new()).content_fingerprint(&Default::default())
 }
 
-fn empty_base(name: &str) -> PathBuf {
-    let empty = std::env::temp_dir().join(format!("oag-mods-switch-{}-{name}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&empty);
-    std::fs::create_dir_all(&empty).unwrap();
-    empty
+fn empty_base(name: &str) -> oag_testdata::scratch::TempDir {
+    oag_testdata::scratch::dir(&format!("mods-switch-{name}"))
 }
 
 #[test]
@@ -350,7 +346,7 @@ fn a_texture_pack_starts_off_and_its_switch_is_the_enabled_list() {
     let id = "ppsspp.some-pulse-pack";
 
     let mut switches = oag_game::settings::Mods::default();
-    let loaded = Mods::load_from(std::slice::from_ref(&dir), &switches).unwrap();
+    let loaded = Mods::load_from(&[dir.to_path_buf()], &switches).unwrap();
     assert!(
         loaded.is_disabled(id),
         "off before the player says otherwise"
@@ -363,7 +359,7 @@ fn a_texture_pack_starts_off_and_its_switch_is_the_enabled_list() {
 
     assert!(mods::switch(&mut switches, id, true, entry.default_enabled));
     assert!(switches.enabled.contains(id) && switches.disabled.is_empty());
-    let loaded = Mods::load_from(std::slice::from_ref(&dir), &switches).unwrap();
+    let loaded = Mods::load_from(&[dir.to_path_buf()], &switches).unwrap();
     assert!(!loaded.is_disabled(id));
     assert!(loaded.player().any(|m| m.manifest.id == id));
 
@@ -374,7 +370,11 @@ fn a_texture_pack_starts_off_and_its_switch_is_the_enabled_list() {
         entry.default_enabled
     ));
     assert!(switches.enabled.is_empty() && switches.disabled.is_empty());
-    assert!(Mods::load_from(&[dir], &switches).unwrap().is_disabled(id));
+    assert!(
+        Mods::load_from(&[dir.to_path_buf()], &switches)
+            .unwrap()
+            .is_disabled(id)
+    );
 }
 
 const TUNER_MENU: &str = r#"
@@ -424,14 +424,14 @@ fn the_settings_row_opens_the_selected_mods_own_page_and_only_while_it_has_one()
     let strings = StringTable::default();
     let mut model = Menu::new(built.definition.clone());
     model.supply(ValueSource::Mods, &mods::choices(&built.listing, &strings));
-    assert!(model.open(mods::PAGE));
+    assert!(model.open(mods::DETAIL));
     assert!(offers_settings(&mut model, &built, "test.tuner"));
     assert_eq!(
         mods::settings_page(&model, &built.listing).as_deref(),
         Some("test.tuner/tuning")
     );
     assert!(model.push("test.tuner/tuning"), "the page is in the tree");
-    assert!(model.open(mods::PAGE));
+    assert!(model.open(mods::DETAIL));
     assert!(
         !offers_settings(&mut model, &built, "test.garage"),
         "garage names no settings page"
@@ -441,7 +441,7 @@ fn the_settings_row_opens_the_selected_mods_own_page_and_only_while_it_has_one()
     let built = build(&load(&dir, &off(&["test.tuner"])));
     let mut model = Menu::new(built.definition.clone());
     model.supply(ValueSource::Mods, &mods::choices(&built.listing, &strings));
-    assert!(model.open(mods::PAGE));
+    assert!(model.open(mods::DETAIL));
     assert!(
         !offers_settings(&mut model, &built, "test.tuner"),
         "an off mod's page is not in the tree"

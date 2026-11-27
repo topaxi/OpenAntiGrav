@@ -71,6 +71,7 @@ pub mod tips;
 /// Wipeout 2048, as the asset layer needs to know it.
 pub const TITLE: &Title = &Title {
     name: "Wipeout 2048",
+    released: &[(Platform::Vita, 2012, 2)],
     archives: ArchiveCandidates {
         patch: PATCH_CANDIDATES,
         data: DATA_CANDIDATES,
@@ -342,6 +343,17 @@ pub const TITLE: &Title = &Title {
         // The race composite and its exposure, read off the eboot and its
         // programs: `docs/ghidra/functions/vita-2048-eu-v104/exposure.md`.
         wo_composite: oag_title::Rule {
+            on: oag_title::Platforms::Any,
+            origin: oag_title::Origin::Measured,
+        },
+        // The GXT loader gives every texture it loads trilinear filtering and a LOD bias of
+        // -1.5, and a race binds them so (confidence 92):
+        // `docs/ghidra/functions/vita-2048-eu-v104/gxt-loader.md`, "In a race".
+        material_lod_bias: oag_title::Rule {
+            on: oag_title::Platforms::Any,
+            origin: oag_title::Origin::Measured,
+        },
+        every_texture_lod_bias: oag_title::Rule {
             on: oag_title::Platforms::Any,
             origin: oag_title::Origin::Measured,
         },
@@ -802,6 +814,21 @@ mod tests {
     fn the_2048s_own_water_differs_from_off() {
         assert!(TITLE.water.original_differs);
         assert!(!TITLE.water.offers_enhanced());
+    }
+
+    /// The GXT loader's -1.5 on the circuit's materials and on every other texture a race
+    /// binds, measured (`docs/ghidra/functions/vita-2048-eu-v104/gxt-loader.md`).
+    #[test]
+    fn the_2048s_loader_biases_every_texture_it_loads() {
+        for rule in [
+            TITLE.looks.material_lod_bias,
+            TITLE.looks.every_texture_lod_bias,
+        ] {
+            assert!(rule.applies_everywhere());
+            assert_eq!(rule.origin, oag_title::Origin::Measured);
+        }
+        assert_eq!(TITLE.looks.material_lod_levels(), -1.5);
+        assert_eq!(TITLE.looks.every_texture_lod_levels(), -1.5);
     }
 
     #[test]

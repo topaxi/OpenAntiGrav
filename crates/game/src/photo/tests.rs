@@ -36,8 +36,7 @@ fn the_race_does_not_tick_while_the_mode_is_open() {
 
 #[test]
 fn a_second_shot_in_the_same_second_gets_a_name_of_its_own() {
-    let dir = std::env::temp_dir().join(format!("oag-photo-name-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = oag_testdata::scratch::dir("photo-name");
     let first = shot_path(&dir, "Wipeout Pulse", 1_700_000_000);
     assert_eq!(
         first.file_name().unwrap().to_str().unwrap(),
@@ -329,8 +328,7 @@ fn only_a_page_cannot_write_a_shot() {
 #[test]
 fn a_shot_the_gallery_took_leaves_no_copy_and_one_it_refused_stays() {
     use oag_mobile::export::Error;
-    let dir = std::env::temp_dir().join(format!("oag-settle-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = oag_testdata::scratch::dir("settle");
     let kept = dir.join("kept.png");
     let moved = dir.join("moved.png");
     std::fs::write(&kept, b"x").unwrap();

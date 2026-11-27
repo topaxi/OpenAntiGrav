@@ -1,4 +1,4 @@
-# ADR-0098: A mod carries fallback entries, and a backported mode ships as an official mod
+# ADR-0100: A mod carries fallback entries, and a backported mode ships as an official mod
 
 ## Status
 

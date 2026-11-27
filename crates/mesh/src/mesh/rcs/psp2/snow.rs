@@ -313,8 +313,18 @@ pub(super) fn plan(
         };
         let unread = |report: &mut Report| {
             if rock {
+                crate::mesh::rcs::census::claim(
+                    index,
+                    "rock",
+                    crate::mesh::rcs::census::Outcome::NotDrawn,
+                );
                 report.rock_unread += 1;
             } else {
+                crate::mesh::rcs::census::claim(
+                    index,
+                    "snow",
+                    crate::mesh::rcs::census::Outcome::NotDrawn,
+                );
                 report.snow_unread += 1;
             }
         };
@@ -395,8 +405,18 @@ pub(super) fn plan(
             rock,
         });
         if rock {
+            crate::mesh::rcs::census::claim(
+                index,
+                "rock",
+                crate::mesh::rcs::census::Outcome::Drawn,
+            );
             report.rock_materials += 1;
         } else {
+            crate::mesh::rcs::census::claim(
+                index,
+                "snow",
+                crate::mesh::rcs::census::Outcome::Drawn,
+            );
             report.snow_materials += 1;
         }
     }

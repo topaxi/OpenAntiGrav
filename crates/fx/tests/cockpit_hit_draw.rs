@@ -33,6 +33,8 @@ fn noise() -> FlareTexture {
         width: cockpit_hit::TEXELS,
         height: cockpit_hit::TEXELS,
         rgba,
+        mips: Vec::new(),
+        lod_bias: 0.0,
     }
 }
 

@@ -54,8 +54,8 @@ fn shell_for(image: &std::path::Path, language: &str) -> boot::Shell {
         leg: oag_ui::frontend::Leg::default(),
         language: Some(language.to_string()),
         movie: None,
-        cache: std::env::temp_dir(),
-        audio_cache: std::env::temp_dir(),
+        cache: oag_testdata::scratch::cache("language-reload"),
+        audio_cache: oag_testdata::scratch::cache("language-reload-audio"),
         extent: oag_game::movie::Extent::Whole,
         // No video decoded here - this is the "cheap half" of the boot, the
         // same half `Session::resupply_language` pays again on a LANGUAGE
@@ -93,8 +93,8 @@ fn the_chain_default_on_pulse_psp_eu_is_english() {
         // doc for the English-then-first fallback that lands here.
         language: None,
         movie: None,
-        cache: std::env::temp_dir(),
-        audio_cache: std::env::temp_dir(),
+        cache: oag_testdata::scratch::cache("language-reload"),
+        audio_cache: oag_testdata::scratch::cache("language-reload-audio"),
         extent: oag_game::movie::Extent::Whole,
         no_video: true,
         refresh_video: false,

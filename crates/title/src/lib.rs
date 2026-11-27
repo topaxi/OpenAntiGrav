@@ -133,6 +133,9 @@ pub use zoom::ZoomRing;
 pub struct Title {
     /// The title as a person would name it, for reports and error messages.
     pub name: &'static str,
+    /// When each platform's release first came out, as `(platform, year, month)`
+    /// (the European release): the launcher orders its cards by it.
+    pub released: &'static [(Platform, u16, u8)],
     /// Which bulk and companion archives its releases carry.
     pub archives: ArchiveCandidates,
     /// Serials known to belong to a *different* title. See [`ArchiveCandidates`].
@@ -1185,7 +1188,7 @@ impl Title {
     /// table and its HUD layout (with the PS2's, where it has one). Empty where the title has no
     /// Detonator. A title offers the mode only where every one resolves in its archives, which on
     /// Pulse is where an enabled mod carries them
-    /// (`docs/architecture/adr/0098-a-mod-carries-fallback-entries.md`).
+    /// (`docs/architecture/adr/0100-a-mod-carries-fallback-entries.md`).
     #[must_use]
     pub fn detonator_data(&self) -> Vec<&'static str> {
         let Some(detonator) = self.race.detonator else {

@@ -339,6 +339,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // Same reasoning again: HD names a widget per weapon, same as Pulse -
     // 2048's own dialect is the one with a single rewritten-UV widget.
     pickup_icon_uv: None,
+    shield_drain_widget: None,
     // The fifteen rungs' names. Which rung a zone is on is a different
     // question and an open one - see [`ZONE_SPEED_CLASSES`].
     zone_speed_classes: Some(ZONE_SPEED_CLASSES),
@@ -468,6 +469,13 @@ pub const RUNTIME: &oag_title::hud::RuntimeHud = &oag_title::hud::RuntimeHud {
         warning_rgb: 0x00FF_0000,
         critical_percent: 20,
         phases_per_second: 8,
+        // `Hud_UpdateShieldReadout`'s `DamageBarShieldBg` branch, shown by `PlayerStatus_Update`
+        // while the slot's Shield bit is set (hud-readouts.md, "The Shield countdown").
+        countdown: Some(oag_title::hud::ShieldCountdown {
+            widget: "DamageBarShieldBg",
+            rgb: 0x0030_FF30,
+            layout_file: "HUD_damage_indicator.xml",
+        }),
     },
     lap_arc: oag_title::hud::SegmentArc {
         prefix: "LapBar",
@@ -484,6 +492,14 @@ pub const RUNTIME: &oag_title::hud::RuntimeHud = &oag_title::hud::RuntimeHud {
         backdrop: "PickupBackground",
         hit_pills: &["PickupDamageBG", "PickupAbsorbBG"],
         argb: 0x5aff_ffff,
+    }),
+    // `Hud_Update`'s proximity block, nothing near behind: `Prox0`..`Prox4` hidden,
+    // `ProxBackground` 20 above its authored `y` (hud-readouts.md, "The proximity
+    // indicator"). Omega inherits HD's.
+    proximity: Some(oag_title::hud::ProximityIdle {
+        bar: "ProximityBar",
+        background: "ProxBackground",
+        lift: 20,
     }),
 };
 

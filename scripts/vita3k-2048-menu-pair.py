@@ -119,6 +119,9 @@ HOME_TILES = {"team": "156x256", "community": "318x256", "profile": "480x256", "
 TO_MAP = "start,cross,cross,cross"
 TO_HOME = "start,cross,cross,triangle,cross"
 EVENT = "2048 - Event 1"
+#: `--ticks` counts from boot, and these screens are entered near tick 250: 490 leaves them four seconds, like the walk's `wait:4`, past
+#: the entry fades (`docs/ui/campaign-screens.md`, "The 2048 stills were taken on the entry tick").
+SETTLED_TICKS = "490"
 
 #: The original's cold-boot walk, one plan, shots named by `WALK` ids. The original is a FRESH save (no campaign progress), ours a fresh profile.
 PLAN = ",".join([
@@ -148,7 +151,7 @@ WALK = [
     {"id": "psn", "title": "PSN prompt", "screen": "Boot Connect", "route": None, "xml": "the Vita system's own dialog",
      "why": "the dialog is the system's, not a screen of the game's XML"},
     # `--original-menu` leaves out this build's RACEBOX, REMIX and MULTIPLAYER tiles and its pad focus; a player keeps them.
-    {"id": "game-mode", "title": "Game Mode", "screen": "GameModeChoice", "route": ["--until", "GameModeChoice", "--press", TO_MAP, "--original-menu"],
+    {"id": "game-mode", "title": "Game Mode", "screen": "GameModeChoice", "route": ["--until", "GameModeChoice", "--press", TO_MAP, "--press-until-reached", "--ticks", SETTLED_TICKS, "--original-menu"],
      "xml": "Definition.xml GameModeChoice",
      "selection": {"original": "no tile highlighted (fresh entry)", "ours": "no tile highlighted (fresh entry)"}},
     {"id": "sp-tutorial", "title": "Campaign welcome panel", "screen": "SPTutorial", "route": None, "xml": "newFEshell->SPTutorial",
@@ -159,7 +162,7 @@ WALK = [
      "xml": "SP.xml / newFEshell event card", "selection": {"original": "Empire Climb, page 0", "ours": "Empire Climb, page 0"}},
     {"id": "card-1", "title": "Event card, page 1", "screen": "newFEshell", "route": ["--until", "card:1:" + EVENT, "--press", TO_MAP],
      "xml": "SP.xml / newFEshell event card", "selection": {"original": "Empire Climb, page 1 (leaderboard)", "ours": "Empire Climb, page 1 (leaderboard)"}},
-    {"id": "home", "title": "Home", "screen": "Home", "route": ["--until", "Home", "--press", TO_HOME, "--ticks", "40", "--original-menu"],
+    {"id": "home", "title": "Home", "screen": "Home", "route": ["--until", "Home", "--press", TO_HOME, "--press-until-reached", "--ticks", SETTLED_TICKS, "--original-menu"],
      "xml": "Definition.xml Home", "selection": {"original": "no tile highlighted", "ours": "no tile highlighted"}},
     {"id": "team", "title": "Select Team", "screen": "team", "route": ["--until", "team", "--press", TO_HOME, "--ticks", "40"],
      "xml": "Team_Definition.xml", "selection": {"original": "Feisar Speed, top-left tile of the 5x4 grid", "ours": "AG Systems and Speed ringed in two button rows", "matched": False,

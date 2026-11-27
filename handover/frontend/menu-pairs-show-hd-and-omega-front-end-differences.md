@@ -1,7 +1,7 @@
 ---
 status: ready-to-wire
 titles: [hd, omega, 2048, pulse, pure]
-updated: 2026-11-24
+updated: 2026-11-27
 categories: [frontend, rendering]
 summary: "Menu pairs on the compare page, ranked differences; Omega chooser, 2048 card art; Pulse list screens and pause now pairs"
 difficulty: medium (30)
@@ -66,6 +66,16 @@ Seven pairs and seven gaps of the touch front end, two cold boots each (method a
 renderer or UI code changed. The campaign pair (map plus event card pages 0 and 1, Empire Climb, fresh save both sides) is made for the **base Single Player Campaign** ("2048 - Event 1") only; the HD and Fury DLC campaigns are not paired yet (their Game Mode tiles are known, HD at (477,162); pair like with like, only Fury is thought to draw the red background rect);
 2048's map and card show no difficulty control, so there was none to match. Ranked by the share of pixels that differ by more than
 40 grey:
+
+**2026-11-27 (`2048-menu-pairs`):** Home 9.73 to 8.13, Game Mode 6.30 to 2.55, card page 0
+7.83 to 7.01, page 1 7.00 to 5.83 mean grey (`docs/ui/campaign-screens.md`, "2048 menu pairs:
+what the four worst differed by"). Closed: the header icon (a capture-tick
+artifact plus a draw-order defect on Game Mode), the rows' label face and tint, the card's
+subtitle, tabs and `CURRENT BEST` bar. Left: the header rule, the card's `TouchHomeButton`
+composite (home square and badges; `0x810fc422`, `FUN_813cf8cc`), the blurred ground
+(`CampaignEventCard_Draw` `0x810f1196`), and, on Omega, the card tabs in `NEOSANS_BOLD`
+(applies, not wired: Omega ships the face and `FUN_013a9040` names it; the hosted map loads
+no role face).
 
 1. **Select Team** (was 56.7 %, mean grey 94.9; 2026-10-27 `2048-team-grid`: 38.3): the grid, badges, cursor cell, header square and
    confirm tick now draw from the disc (`TouchTeamGrid` read in Ghidra). Still differs: the 19 locked cells (rule needs the save and the
