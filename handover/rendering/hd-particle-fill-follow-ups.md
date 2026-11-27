@@ -48,8 +48,10 @@ blast the struck craft's velocity, on HD, 2048 and Omega
   0100 reads 53.96 (from 65.75) and 0233 50.36 (from 62.86), on their current flags. Still open:
   - ~~0233's craft stays hidden under white on every arm~~: closed 2026-11-27, the craft blast
     spreads by the extent law (`particle-fill.md`, "The trails start on the blast's hemisphere").
-    Left: 0233's own-seed score went 50.36 to 64.14 (8-seed mean 62.68 to 54.74), because its
-    single-point pose stands the blast 22.7 units out; the original's yellow on the craft is the
+    Open: 0233's own-seed score went 50.36 to 64.14 while its 8-seed mean went 62.68 to 54.74
+    (closer on 6 of 8), 0100 +0.42, both far pairs closer. Is the own-seed loss particle
+    randomness against one frame (0233 spans 44 to 85 across seeds), or its single-point pose,
+    which stands the blast 22.7 units out? the original's yellow on the craft is the
     additive fireballs in front of it and needs the blast at the original's sites. Re-posing
     0233 on the two waves (73.23 now, from 90.03) is the next step, a pose decision for the lead;
   - Omega authors the same trail heads (8.824) in both its files: checked, applies, not wired;
