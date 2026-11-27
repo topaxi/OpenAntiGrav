@@ -562,6 +562,15 @@ def check_detonator_picture_tick(root):
     assert ticks_after({"picture_total_ticks": 7.5}) == ("388", "%.6f" % (7.45 - 7.5 / 60))
     assert ticks_after({}) == ("393", "%.6f" % (7.45 - 3 / 60))
 
+    # The re-render itself adds a recorded Detonator pair's mine volumes (`ce.recorded_mine_volume_flags`).
+    rec = {"profile": "hd-fury", "output": [48, 27], "kind": "race",
+           "original": {"detonator": {"mines": [{"master_volume": 0.9663, "pitch_volume": 0.1933}]}},
+           "ours": {"ticks": 393, "flags": ["--race", "--detonator-mines", "1,2,3", "--ticks", "393"]}}
+    (root / "pair" / "pair.json").write_text(json.dumps(rec))
+    assert rerender.rerender(root / "pair" / "pair.json", fake).startswith("ok")
+    flags = json.loads((root / "pair" / "pair.json").read_text())["ours"]["flags"]
+    assert flags[flags.index("--detonator-mine-volumes") + 1] == "0.9663,0.1933", flags
+
 
 def main():
     import tomllib
