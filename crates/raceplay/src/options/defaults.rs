@@ -116,4 +116,19 @@ mod tests {
         let layering = options.layering();
         assert!(layering.overrides.is_empty() && layering.mods.is_empty());
     }
+
+    #[test]
+    fn a_network_race_mounts_no_mod_that_is_single_player_only() {
+        use oag_assets::layers::{Kind, Layer};
+        oag_source::layers::register_mods(vec![oag_source::layers::ModFallback {
+            slug: "wipeout-pulse".to_string(),
+            layer: Layer::new(Kind::Mod, "test.mod"),
+            network: false,
+        }]);
+        let mut options = Options::default();
+        assert_eq!(options.layering().mods.len(), 1);
+        options.network = true;
+        assert!(options.layering().mods.is_empty());
+        oag_source::layers::register_mods(Vec::new());
+    }
 }
