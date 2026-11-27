@@ -286,6 +286,10 @@ pub struct Archives {
     /// The player's override, searched before everything above. `None` unless
     /// [`Self::with_override`] mounted one. See [`crate::layers`].
     pub overrides: Option<Layer>,
+    /// The enabled mods' entries for this title, searched after [`Self::packs`]
+    /// and before [`Self::fallback`], in the order [`Self::with_mods`] was given
+    /// them. Empty unless it mounted one.
+    pub mods: Vec<Layer>,
     /// This project's own substitutes, searched after everything above including
     /// [`Self::packs`]. `None` unless [`Self::with_fallback`] mounted one.
     pub fallback: Option<Layer>,
@@ -451,6 +455,7 @@ impl Archives {
             add_ons,
             read_memo: None,
             overrides: None,
+            mods: Vec::new(),
             fallback: None,
             layer_hits: Vec::new(),
         })
@@ -492,12 +497,19 @@ impl Archives {
         {
             return Some(Held::Override);
         }
-        self.holder_of_archive(name).or_else(|| {
-            self.fallback
-                .as_ref()
-                .is_some_and(|layer| layer.contains(name))
-                .then_some(Held::Fallback)
-        })
+        self.holder_of_archive(name)
+            .or_else(|| {
+                self.mods
+                    .iter()
+                    .position(|layer| layer.contains(name))
+                    .map(Held::Mod)
+            })
+            .or_else(|| {
+                self.fallback
+                    .as_ref()
+                    .is_some_and(|layer| layer.contains(name))
+                    .then_some(Held::Fallback)
+            })
     }
 
     /// [`Self::holder_of`] over the mounted archives alone, the two loose layers
@@ -563,6 +575,13 @@ impl Archives {
                 .filter(|(_, pack)| pack.contains(name))
                 .map(|(index, _)| Held::Pack(index)),
         );
+        out.extend(
+            self.mods
+                .iter()
+                .enumerate()
+                .filter(|(_, layer)| layer.contains(name))
+                .map(|(index, _)| Held::Mod(index)),
+        );
         if self
             .fallback
             .as_ref()
@@ -581,6 +600,7 @@ impl Archives {
                 .as_ref()
                 .expect("holder_of found it here")
                 .label(),
+            Held::Mod(index) => self.mods[index].label(),
             Held::Fallback => self
                 .fallback
                 .as_ref()
@@ -627,7 +647,7 @@ impl Archives {
     /// [`Self::holder_of_archive`]'s answer, which never names one.
     fn held(&mut self, at: Held) -> &mut Container {
         match at {
-            Held::Override | Held::Fallback => {
+            Held::Override | Held::Mod(_) | Held::Fallback => {
                 unreachable!("a loose layer is read through read_at, never held")
             }
             Held::Patch(index) => &mut self.patch[index],
@@ -682,6 +702,7 @@ impl Archives {
     pub fn layer_of(&self, name: &str) -> Option<crate::layers::Kind> {
         match self.holder_of(name)? {
             Held::Override => Some(LayerKind::Override),
+            Held::Mod(_) => Some(LayerKind::Mod),
             Held::Fallback => Some(LayerKind::Fallback),
             _ => None,
         }
@@ -695,6 +716,18 @@ impl Archives {
     pub fn with_override(mut self, layer: Layer) -> Self {
         debug_assert_eq!(layer.kind(), LayerKind::Override);
         self.overrides = (!layer.is_empty()).then_some(layer);
+        self
+    }
+
+    /// Mounts enabled mods' entries behind every archive, DLC included, and ahead
+    /// of this project's own fallback; empty layers are dropped.
+    #[must_use]
+    pub fn with_mods(mut self, layers: Vec<Layer>) -> Self {
+        debug_assert!(layers.iter().all(|layer| layer.kind() == LayerKind::Mod));
+        self.mods = layers
+            .into_iter()
+            .filter(|layer| !layer.is_empty())
+            .collect();
         self
     }
 
@@ -721,6 +754,7 @@ impl Archives {
     fn read_at(&mut self, at: Held, name: &str) -> Result<Vec<u8>> {
         let (kind, layer) = match at {
             Held::Override => (LayerKind::Override, self.overrides.as_ref()),
+            Held::Mod(index) => (LayerKind::Mod, self.mods.get(index)),
             Held::Fallback => (LayerKind::Fallback, self.fallback.as_ref()),
             _ => return self.held(at).read_entry(name),
         };
@@ -770,7 +804,7 @@ impl Archives {
     pub fn peek_name(&mut self, name: &str, len: u64) -> Result<Vec<u8>> {
         let cut = usize::try_from(len).unwrap_or(usize::MAX);
         match self.holder_of(name) {
-            Some(at @ (Held::Override | Held::Fallback)) => {
+            Some(at @ (Held::Override | Held::Mod(_) | Held::Fallback)) => {
                 let mut blob = self.read_at(at, name)?;
                 blob.truncate(cut);
                 Ok(blob)
@@ -861,6 +895,7 @@ fn mount_add_ons(
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Held {
     Override,
+    Mod(usize),
     Fallback,
     Patch(usize),
     Data,

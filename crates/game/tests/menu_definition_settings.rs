@@ -642,8 +642,10 @@ fn drop_quit_removes_only_the_quit_rows() {
 #[test]
 fn the_supplied_mode_rows_are_exactly_the_modes_the_game_has() {
     let strings = oag_ui::language::StringTable::default();
-    // HD names every mode's data, Detonator's included, so it offers them all.
-    let stored: Vec<String> = mode_choices(&strings, oag_hd::TITLE)
+    // HD names every mode's data, Detonator's included; where it all resolves it offers them all.
+    let (every, none) = (|_: &str| true, |_: &str| false);
+    let offered = oag_ui::menu::offered_modes(oag_hd::TITLE, &every);
+    let stored: Vec<String> = mode_choices(&strings, &offered)
         .into_iter()
         .map(|choice| choice.value)
         .collect();
@@ -655,18 +657,14 @@ fn the_supplied_mode_rows_are_exactly_the_modes_the_game_has() {
             .collect::<Vec<_>>(),
         "the supplied rows and Mode::ALL must be one list, in the same order"
     );
-    // Pure ships no Detonator and names none, so its row does not offer one; Pulse's is
-    // this project's own (`docs/gameplay/detonator-pulse.md`).
-    assert!(
-        mode_choices(&strings, oag_pulse::TITLE)
-            .iter()
-            .any(|choice| choice.value == oag_race::Mode::Detonator.name())
-    );
-    assert!(
-        mode_choices(&strings, oag_pure::TITLE)
-            .iter()
-            .all(|choice| choice.value != oag_race::Mode::Detonator.name())
-    );
+    // Pure ships no Detonator and names none, so its row never offers one. Pulse names its own
+    // (`docs/gameplay/detonator-pulse.md`), offered only where that data resolves.
+    let detonator = |title, holds: &dyn Fn(&str) -> bool| {
+        oag_ui::menu::offered_modes(title, holds).contains(&oag_race::Mode::Detonator)
+    };
+    assert!(detonator(oag_pulse::TITLE, &every));
+    assert!(!detonator(oag_pulse::TITLE, &none));
+    assert!(!detonator(oag_pure::TITLE, &every));
 }
 
 #[test]
@@ -849,9 +847,12 @@ fn the_mode_row_starts_on_the_time_trial() {
 
     let strings = oag_ui::language::StringTable::default();
     assert_eq!(
-        mode_choices(&strings, oag_pulse::TITLE)
-            .first()
-            .map(|choice| choice.value.clone()),
+        mode_choices(
+            &strings,
+            &oag_ui::menu::offered_modes(oag_pulse::TITLE, &|_| false)
+        )
+        .first()
+        .map(|choice| choice.value.clone()),
         Some(oag_race::Mode::TimeTrial.name().to_string())
     );
     assert_eq!(

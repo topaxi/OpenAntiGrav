@@ -112,6 +112,7 @@ impl Session {
         }
         let mut archives = opened.archives;
         let strings = language::StringTable::default();
+        let mode_data_held = crate::boot::mode_data_held(&archives, title);
 
         // **Two documents, not one.** See this module's own docs: 2048 is the
         // one title in the corpus that splits `PI_Team` and `PI_Track` across
@@ -205,7 +206,11 @@ impl Session {
             tracks,
             teams: team_choices,
             languages: Vec::new(),
-            modes: menu::mode_choices(&strings, title),
+            modes: menu::mode_choices(
+                &strings,
+                &crate::boot::offered_modes(title, &mode_data_held),
+            ),
+            mode_data_held,
             kill_targets: Vec::new(),
             score_targets: Vec::new(),
             weapons: Vec::new(),

@@ -1181,6 +1181,27 @@ pub struct ForeignSerial {
 }
 
 impl Title {
+    /// The entries a Detonator race loads of its own beside the circuit: its layouts, its weapon
+    /// table and its HUD layout (with the PS2's, where it has one). Empty where the title has no
+    /// Detonator. A title offers the mode only where every one resolves in its archives, which on
+    /// Pulse is where an enabled mod carries them
+    /// (`docs/architecture/adr/0098-a-mod-carries-fallback-entries.md`).
+    #[must_use]
+    pub fn detonator_data(&self) -> Vec<&'static str> {
+        let Some(detonator) = self.race.detonator else {
+            return Vec::new();
+        };
+        let mut entries: Vec<&'static str> = detonator
+            .layouts
+            .iter()
+            .flat_map(|l| [l.pattern_file, l.gameplay_values, l.scoring])
+            .collect();
+        entries.extend(self.weapons.detonator);
+        entries.push(self.hud.detonator);
+        entries.extend(detonator.ps2_hud);
+        entries
+    }
+
     /// What `choice` makes the front end's Back and Help buttons on `platform`'s pressing, for a
     /// Help screen the disc opens on `authored_help`. The one place that decides; a title with no
     /// front end of its own backs on the circle.

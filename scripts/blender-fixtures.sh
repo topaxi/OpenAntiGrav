@@ -8,6 +8,9 @@
 #   blender_motion.*        the loop with keyframed motion (an airship, a turning sun)
 #   blender_motion.reexport.* that imported and exported again
 #   oval.reexport.*         the committed oval, imported by the add-on and exported again
+#   Detonator_Pulse/hull*.glb the own hulls of the official mod oag.detonator-pulse, imported
+#                           and exported again (compared, never rewritten); skipped with a
+#                           line when the official-mods submodule is not checked out
 #
 # It also runs `roundtrip.py line`, which asserts the racing-line paths and writes no fixture,
 # `textures` (every own-image case an export survives), `channels` (a trigger's oag_emit, an animation's oag_on, the track's published channels), `props` (mod_* properties, trigger Empties, Make trigger from mesh) and `effect` (a mod effect
@@ -53,6 +56,24 @@ for f in blender_loop.track.toml blender_loop.glb blender_checker.png \
     cp "$out/$f" "$fixtures/$f"
   elif ! cmp -s "$out/$f" "$fixtures/$f"; then
     echo "stale: $fixtures/$f (run: just blender-fixtures --update)" >&2
+    status=1
+  fi
+done
+# The own craft hulls (docs/formats/own-hull.md): each must survive an import and export byte
+# for byte.
+mod=assets/mods/official/detonator-pulse
+hulls=$mod/fallback/wipeout-pulse/Data/Ships/Detonator_Pulse
+files="hull.glb hull_ps2.glb"
+if [ ! -f "$mod/oag-mod.toml" ]; then
+  echo "blender fixtures: skipped the own hulls, the official-mods submodule is not checked out ($mod)"
+  files=
+fi
+for file in $files; do
+  hull=$hulls/$file
+  "$blender" -b --factory-startup --python-exit-code 1 \
+    --python scripts/blender/oag_hull.py -- reexport "$hull" "$out/hull.reexport.glb"
+  if ! cmp -s "$out/hull.reexport.glb" "$hull"; then
+    echo "the own hull does not survive import and export: $hull" >&2
     status=1
   fi
 done

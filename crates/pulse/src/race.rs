@@ -112,10 +112,18 @@ const ZONE_CRAFT: oag_title::ZoneCraft = oag_title::ZoneCraft::ModelsInTeam {
     boost: ships::ZONE_BOOST,
 };
 
+/// The Detonator hull drawn on the PSP's `Zone.vex`, a mod's fallback entry.
+pub const OWN_HULL: &str = r"Data\Ships\Detonator_Pulse\hull.glb";
+
+/// The same on the PS2's `Zone.vex`, a different model with other node and texture names.
+pub const OWN_HULL_PS2: &str = r"Data\Ships\Detonator_Pulse\hull_ps2.glb";
+
 /// Detonator on Pulse, which ships no such mode: HD's law on Pulse's own Zone circuits, Mine
 /// and Bomb models (`docs/gameplay/detonator-pulse.md`). What Pulse has no data for (the layout,
-/// the weapon table, the scoring) is this project's own file in the fallback layer, its figures
-/// chosen after HD's; the pad look is the circuit's own weapon pad, held at its cycle's red key.
+/// the weapon table, the scoring) is this project's own file, carried as a mod's fallback entries
+/// (ADR-0098), its figures chosen after HD's: the MODE row offers Detonator on Pulse only where a
+/// mod that is on carries them. The pad look is the circuit's own weapon pad, held at its cycle's
+/// red key.
 pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
     palette: None,
     fallback_palette: None,
@@ -128,11 +136,12 @@ pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
         gameplay_values: r"Data\XML\DetonatorLayouts_Pulse\GamePlayValues.xml",
         scoring: r"Data\XML\DetonatorLayouts_Pulse\DetonatorScoring.xml",
     }),
-    // The Zone hull, until this project has a Detonator hull of its own; the handling stays
-    // the team's (`docs/gameplay/detonator-pulse.md`).
+    // The team's Zone hull carries this project's own Detonator geometry, painted with the
+    // hull's own textures; the handling stays the team's (`docs/gameplay/detonator-pulse.md`).
     craft: Some(oag_title::DetonatorCraft {
         hull: ZONE_CRAFT,
         livery_fallback: None,
+        own_hull: &[OWN_HULL, OWN_HULL_PS2],
     }),
     cannon_lights: false,
     emp_light: false,

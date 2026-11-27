@@ -29,7 +29,7 @@ pub struct Weapons {
     /// back to [`Self::race`], with a report line, where it is `None`.
     pub elimination: Option<&'static str>,
     /// The table a Detonator race reads, or `None` for a title with no Detonator. HD's family
-    /// ships it; Pulse's is this project's own, in the fallback layer.
+    /// ships it; Pulse's is this project's own, a mod's fallback entry (ADR-0098).
     ///
     /// Read in place of [`Self::race`] in that mode: it authors a Mine, a Cannon, a Bomb and an
     /// `EMP` block and none of the thirteen pickups (`oag_tables::weapons::WeaponStats::detonator`,

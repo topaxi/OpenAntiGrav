@@ -596,9 +596,22 @@ pub struct RaceSetup {
     /// `Race_ReadSetupOptions` compares against `"On"`; the string id is the
     /// row's label in the front end's own string table.
     pub weapons: Vec<(String, String)>,
+    /// The entries of the title's own mode data ([`oag_ui::menu::mode_data`]) that something
+    /// other than a mod answered when the source opened: the disc, its DLC, the player's
+    /// override or this project's fallback. With the mods registered now they decide which
+    /// modes are offered ([`Self::modes`]), so switching a mod needs no second open.
+    pub mode_data_held: Vec<String>,
 }
 
 impl RaceSetup {
+    /// The race modes `title` offers on this source ([`oag_ui::menu::offered_modes`]): its own
+    /// mode data held by [`Self::mode_data_held`] or by a mod that is on now
+    /// ([`oag_source::layers::registered_mods_hold`]).
+    #[must_use]
+    pub fn modes(&self, title: &oag_title::Title) -> Vec<oag_race::Mode> {
+        offered_modes(title, &self.mode_data_held)
+    }
+
     /// The `WEAPONS` row's options: stored as the disc's `value` (`On`/`Off`),
     /// shown as its own string for the entry (`FE_ON`/`FE_OFF`, in the
     /// language `strings` is for).
@@ -623,12 +636,40 @@ pub(super) fn read_race_setup(
     report: &mut Vec<String>,
 ) -> RaceSetup {
     let mut setup = read_setup_lists(archives, front_end.race_setup, report);
+    setup.mode_data_held = mode_data_held(archives, title);
     if let oag_title::eliminator::EliminatorRule::Score(rule) = title.eliminator.value
         && let oag_title::eliminator::ScoreTarget::Slider(path) = rule.target
     {
         setup.score_targets = read_score_targets(archives, path, report);
     }
     setup
+}
+
+/// The race modes `title` offers ([`oag_ui::menu::offered_modes`]) where `held` is the mode data
+/// something other than a mod holds ([`RaceSetup::mode_data_held`]) and the mods registered now
+/// ([`oag_source::layers::registered_mods_hold`]) hold the rest.
+#[must_use]
+pub fn offered_modes(title: &oag_title::Title, held: &[String]) -> Vec<oag_race::Mode> {
+    oag_ui::menu::offered_modes(title, &|name| {
+        held.iter().any(|h| h.eq_ignore_ascii_case(name))
+            || oag_source::layers::registered_mods_hold(title, name)
+    })
+}
+
+/// The entries of `title`'s own mode data that `archives` holds anywhere but in a mod layer
+/// ([`RaceSetup::mode_data_held`]).
+#[must_use]
+pub fn mode_data_held(archives: &oag_assets::Archives, title: &oag_title::Title) -> Vec<String> {
+    oag_race::Mode::ALL
+        .into_iter()
+        .filter_map(|mode| oag_ui::menu::mode_data(mode, title))
+        .flatten()
+        .filter(|name| {
+            archives.locate(name).is_some()
+                && archives.layer_of(name) != Some(oag_assets::layers::Kind::Mod)
+        })
+        .map(str::to_string)
+        .collect()
 }
 
 /// The steps of the `Eliminations` slider in `name`: HD's `TARGET` row. Empty, and reported, when
@@ -687,6 +728,7 @@ fn read_setup_lists(
                 .into_iter()
                 .filter_map(|(string, value)| Some((string, value?)))
                 .collect(),
+            mode_data_held: Vec::new(),
         },
         Err(error) => {
             report.push(format!(

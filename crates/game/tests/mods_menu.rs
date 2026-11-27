@@ -245,7 +245,7 @@ fn rebuilt_labels(base: &Path, disabled: &[&str], language: Option<&str>) -> Vec
         disabled: disabled.iter().map(|id| (*id).to_string()).collect(),
         ..Default::default()
     };
-    let (definition, _, _) = oag_game::menu_tree::rebuilt(
+    let (definition, _, _, _) = oag_game::menu_tree::rebuilt(
         &[base.to_path_buf()],
         &disabled,
         language,

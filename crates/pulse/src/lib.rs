@@ -138,7 +138,7 @@ pub const TITLE: &Title = &Title {
     weapons: &oag_title::weapons::Weapons {
         race: r"Data\XML\WeaponStats_Race.xml",
         elimination: Some(r"Data\XML\WeaponStats_Elimination.xml"),
-        // Ours, in the fallback layer: Pulse ships no Detonator.
+        // Ours, a mod's fallback entry: Pulse ships no Detonator (`docs/gameplay/detonator-pulse.md`).
         detonator: Some(r"Data\XML\DetonatorLayouts_Pulse\WeaponStats_Detonator.xml"),
         ai: Some(r"Data\XML\WeaponAIstats.xml"),
         leach_drain: oag_title::weapons::LeachDrain::PerTick,

@@ -117,19 +117,68 @@ pub fn ship_entry(title: &oag_title::Title, location: &str, mode: oag_race::Mode
     )
 }
 
+/// The hull a race flies, as a front-end twin of it needs it: where its flaps are seated from,
+/// and the race's own hull geometry drawn on it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RaceHull {
+    /// The race hull's entry ([`seat_flaps`]).
+    pub entry: String,
+    /// The hull files of this project's own the race draws on it
+    /// ([`oag_title::DetonatorCraft::own_hull`]); empty for none.
+    pub own_hull: &'static [&'static str],
+}
+
 /// The hull the race flies for `team` in `mode`, on a title whose Ship Select draws a front-end
 /// twin of it (`ship_FE.vex`, [`draws_hull`] false): the file the twin's airbrake flaps are seated
-/// from ([`seat_flaps`]). Named by the race's own entry rule, [`oag_title::race::ShipPaths::hull_entry_name`].
+/// from ([`seat_flaps`]), named by the race's own entry rule
+/// ([`oag_title::race::ShipPaths::hull_entry_name`]), and the own hull the race draws on it.
 #[must_use]
 pub fn race_hull_entry(
     title: &oag_title::Title,
     team: &str,
     mode: oag_race::Mode,
-) -> Option<String> {
+) -> Option<RaceHull> {
     (!draws_hull(title, oag_ui_screens::picker::Kind::Ship)).then(|| {
         let ships = title.race.ships_for(team);
-        ships.hull_entry_name(team, oag_livery::entry::own_craft(ships, mode), None)
+        RaceHull {
+            entry: ships.hull_entry_name(team, oag_livery::entry::own_craft(ships, mode), None),
+            own_hull: oag_livery::own_hull::files(ships, mode),
+        }
     })
+}
+
+/// Draws the race's own hull ([`RaceHull::own_hull`]) on the front-end twin `model` read from
+/// `entry`, with the flaps on its own hinges: `true` where it did, so the caller does not seat
+/// them again. Each file that does not fit is a `warn`, as in a race.
+pub fn own_hull_on(
+    archives: &mut oag_assets::Archives,
+    entry: &str,
+    own_hull: &[&str],
+    model: &mut Model,
+) -> bool {
+    if own_hull.is_empty() {
+        return false;
+    }
+    let Ok(blob) = archives.read_name(entry) else {
+        return false;
+    };
+    match oag_livery::own_hull::first_fitting(archives, own_hull, &blob) {
+        Ok(Some(hull)) => {
+            let mut report = Vec::new();
+            let done = oag_livery::own_hull::apply(&hull, model, &blob, &mut report);
+            for line in report {
+                log::debug!("preview {line}");
+            }
+            done
+        }
+        Ok(None) => false,
+        Err(outcomes) => {
+            log::warn!(
+                "preview {entry}: no own Detonator hull fits this model ({outcomes}) - the disc's hull draws"
+            );
+            false
+        }
+    }
 }
 
 /// Seats a front-end hull's airbrake flaps where `race_entry`'s model has them at rest.

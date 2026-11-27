@@ -1468,7 +1468,7 @@ pub(crate) mod roster;
 pub mod scene;
 mod screens;
 pub mod tiers2048;
-pub use screens::{PauseScreens, RaceSetup};
+pub use screens::{PauseScreens, RaceSetup, mode_data_held, offered_modes};
 pub(crate) mod sprites;
 mod steps;
 mod team_ratings2048;

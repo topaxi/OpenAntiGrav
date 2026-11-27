@@ -22,6 +22,7 @@ impl Default for Options {
             recorded_mods: None,
             find_texture_packs: None,
             no_overrides: false,
+            network: false,
             boost_zoom: None,
             trail_hits: TrailHits::Off,
             wingtip_contrails: WingtipContrails::Off,
@@ -88,14 +89,17 @@ impl Default for Options {
 }
 
 impl Options {
-    /// Where the player's override directories are looked for when this race opens a source:
-    /// the default search path, or none under [`Self::no_overrides`] (the fallback layer alone).
+    /// The player's layers this race mounts when it opens a source: the override search path
+    /// and the enabled mods' entries, or neither under [`Self::no_overrides`] (the fallback
+    /// layer alone).
     #[must_use]
-    pub fn override_bases(&self) -> Vec<std::path::PathBuf> {
+    pub fn layering(&self) -> oag_source::layers::Layering {
         if self.no_overrides {
-            Vec::new()
+            oag_source::layers::Layering::none()
+        } else if self.network {
+            oag_source::layers::Layering::player().for_network()
         } else {
-            oag_source::layers::overrides_search_path()
+            oag_source::layers::Layering::player()
         }
     }
 }
@@ -107,8 +111,9 @@ mod tests {
     #[test]
     fn a_race_without_overrides_looks_in_no_override_directory() {
         let mut options = Options::default();
-        assert!(!options.override_bases().is_empty());
+        assert!(!options.layering().overrides.is_empty());
         options.no_overrides = true;
-        assert!(options.override_bases().is_empty());
+        let layering = options.layering();
+        assert!(layering.overrides.is_empty() && layering.mods.is_empty());
     }
 }

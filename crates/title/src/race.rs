@@ -757,6 +757,11 @@ pub struct DetonatorCraft {
     /// The livery a craft whose team authors no `PI_TeamModel name="detonator"` wears, where the
     /// original has a literal for it; `None` keeps the hull's default skin.
     pub livery_fallback: Option<&'static str>,
+    /// Hull files of this project's own, entries of a mod's fallback (ADR-0098) or the embedded
+    /// fallback (ADR-0061) a player's override replaces by path, tried in order: the first whose parts name the hull's mesh
+    /// nodes is drawn on it, its textures and render state the hull's own
+    /// (`docs/formats/own-hull.md`). Empty where the craft is the hull alone.
+    pub own_hull: &'static [&'static str],
 }
 
 /// The entries of Detonator's layout files, global to every circuit

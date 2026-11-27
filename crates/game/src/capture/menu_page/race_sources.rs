@@ -45,7 +45,7 @@ pub(super) fn supply(
     );
     model.supply(
         oag_ui::menu::ValueSource::RaceModes,
-        &oag_ui::menu::mode_choices(strings, title),
+        &oag_ui::menu::mode_choices(strings, &race_setup.modes(title)),
     );
     model.supply(
         oag_ui::menu::ValueSource::SpeedClasses,
@@ -109,6 +109,7 @@ mod tests {
                 ("FE_ON".into(), "On".into()),
                 ("FE_OFF".into(), "Off".into()),
             ],
+            mode_data_held: Vec::new(),
         };
         let mut model = oag_ui::menu::Menu::new(definition);
         supply(&mut model, title, &[], &[], &setup, &strings, "Assegai");

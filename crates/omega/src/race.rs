@@ -237,6 +237,7 @@ pub const DETONATOR_CRAFT: oag_title::DetonatorCraft = oag_title::DetonatorCraft
         livery_key: "zoneship_team",
     },
     livery_fallback: None,
+    own_hull: &[],
 };
 
 /// Omega's Detonator handling: v1.07 `0x014af2a0` tests mode `0xe` first and the file is

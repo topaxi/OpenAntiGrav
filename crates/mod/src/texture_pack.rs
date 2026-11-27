@@ -105,6 +105,7 @@ pub fn recognise(container: &Container) -> Option<Manifest> {
             serials: serials(container, INI),
         }),
         default_enabled: false,
+        network_races: true,
     })
 }
 

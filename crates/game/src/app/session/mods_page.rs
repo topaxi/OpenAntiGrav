@@ -25,6 +25,7 @@ pub(crate) type Rebuilt = (
     menu::Definition,
     Vec<mods::Listing>,
     crate::campaign::custom::Installed,
+    Vec<oag_source::layers::ModFallback>,
 );
 
 /// A rebuild's inputs, owned.
@@ -143,7 +144,7 @@ impl Session {
         let Some(mut shell) = self.shell.clone() else {
             return;
         };
-        let (definition, listing, installed) = match built {
+        let (definition, listing, installed, fallbacks) = match built {
             Ok(built) => built,
             Err(e) => {
                 error!(
@@ -156,6 +157,9 @@ impl Session {
         shell.definition = definition;
         shell.mods = listing;
         shell.custom_campaigns = std::sync::Arc::new(installed);
+        // A mod's fallback entries can add a mode's data (ADR-0098): the MODE row follows.
+        oag_source::layers::register_mods(fallbacks);
+        shell.reoffer_modes();
         let Some(mut model) = self.reopened_menu(&shell) else {
             self.shell = Some(shell);
             return;
@@ -168,6 +172,7 @@ impl Session {
             stage.menu = model;
         }
         self.shell = Some(shell);
+        self.resupply_race_modes();
         self.stalled = true;
     }
 

@@ -118,6 +118,10 @@ pub struct Manifest {
     /// Whether the mod is on until the player turns it off. `true` for every mod but a
     /// texture pack, which changes what a race looks like and starts off.
     pub default_enabled: bool,
+    /// `[mod] network-races`: whether the mod's fallback entries (`fallback/<title>/`) are
+    /// mounted in a LAN or online race and count in the network fingerprint. `true` when
+    /// absent; `false` for a mod whose entries serve only single-player races (ADR-0098).
+    pub network_races: bool,
 }
 
 /// Where `[campaign-medals]` takes its atlas from.
@@ -540,6 +544,8 @@ struct Table {
     oag: Option<String>,
     #[serde(rename = "default-enabled")]
     default_enabled: Option<bool>,
+    #[serde(rename = "network-races")]
+    network_races: Option<bool>,
 }
 
 fn bad(key: &'static str, problem: impl Into<String>) -> Error {
@@ -760,6 +766,7 @@ impl Manifest {
             channels,
             texture_pack,
             default_enabled,
+            network_races: t.network_races.unwrap_or(true),
         })
     }
 

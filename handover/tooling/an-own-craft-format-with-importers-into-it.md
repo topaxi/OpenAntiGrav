@@ -1,7 +1,7 @@
 ---
 status: ready-to-wire
 titles: [all]
-updated: 2026-10-12
+updated: 2026-11-27
 summary: "Census BallisticNG .csf craft, then an ADR for the craft format and oag-craftfile; design only so far"
 size: XL (20)
 difficulty: hard (35)
@@ -117,6 +117,30 @@ it yields is plain `Handling` data.
   the original campaigns stay vanilla** (their own craft, tracks and the original AI).
   A custom campaign, this project's own or a mod's, is where custom craft, tracks and
   controllers belong, with more freedom.
+
+## 2026-11-27: the hull-geometry slice landed (Pulse Detonator)
+
+What is built ([own-hull.md](../../docs/formats/own-hull.md)):
+- `hull.glb`: parts keyed by a host model's mesh node names, surfaces by its texture names,
+  locators and a shadow occluder. It is drawn on the host `.vex` by
+  `oag_mesh::mesh::own_hull::substitute`, keeping the host's textures and render state.
+- The Blender side is `scripts/blender/oag_hull.py` (export, import, placeholder).
+- Pulse's Detonator craft is the first user (`DetonatorCraft::own_hull`).
+
+**2026-11-27: the hull is a glb now.** It was TOML only while the engine embedded it
+(`check-leakage.py` refuses a tracked `.glb` here). Once the two hulls moved into the official
+mod `oag.detonator-pulse` (ADR-0098), the file became `hull.glb`/`hull_ps2.glb`: one node per
+part, one primitive per surface, its material named as the host texture, the kind marked in the
+asset extras, read by `gltf` in `oag_mesh::mesh::own_hull::parse`. Images are allowed by the
+format and not read yet: the own-texture path below can use them without a format change.
+
+Left open for the craft format proper:
+- the manifest, handling, picker and an own-texture path (this slice only paints with the
+  host's textures);
+- a `.vex`-free host (an `.rcsmodel` host: the substitution reads `.vex` node names and
+  draw state);
+- the `oag-craftfile` crate: when it lands, the reader moves there from `oag-mesh`;
+- whether a glb sibling is still wanted.
 
 ## Next Steps
 

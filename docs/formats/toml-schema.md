@@ -50,7 +50,6 @@ compatible addition goes into the same `v1` schema, a breaking change gets `v2/`
 | `identity` | `$XDG_CONFIG_HOME/oag/identity.toml` (a player's key pair, [ADR-0092](../architecture/adr/0092-a-player-hosted-race-is-a-room-whose-owner-runs-the-race-host.md)) | `oag_game::identity` | [`identity.tosd`](../../schemas/v1/identity.tosd) |
 | `rejoin` | `$XDG_STATE_HOME/oag/rejoin.toml` ([online reconnect](../networking/server-roadmap.md)) | `oag_game::rejoin_record` | [`rejoin.tosd`](../../schemas/v1/rejoin.tosd) |
 | `track` | `<name>.track.toml` ([track file](track-file.md)) | `oag_trackfile::read` | [`track.tosd`](../../schemas/v1/track.tosd) |
-
 | `settings` | `$XDG_CONFIG_HOME/oag/settings.toml` ([persistence](../architecture/persistence.md)) | `oag_game::settings` | [`settings.tosd`](../../schemas/v1/settings.tosd) |
 | `mod` | `oag-mod.toml` at the root of a mod ([mods](../tools/mods.md)) | `oag_mod` manifest reader | [`mod.tosd`](../../schemas/v1/mod.tosd) |
 | `mod-menu` | a mod's `menu.toml` ([mods](../tools/mods.md)) | `oag_ui::menu` mod rows | [`mod-menu.tosd`](../../schemas/v1/mod-menu.tosd) |

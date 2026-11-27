@@ -23,6 +23,7 @@ oag-texture.workspace = true
 oag-title.workspace = true
 oag-vex.workspace = true
 anyhow.workspace = true
+log.workspace = true
 
 [dev-dependencies]
 oag-testdata.workspace = true

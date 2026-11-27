@@ -102,3 +102,81 @@ fn an_empty_layer_is_not_mounted() {
         .with_fallback(Layer::new(LayerKind::Fallback, "empty"));
     assert!(archives.overrides.is_none() && archives.fallback.is_none());
 }
+
+/// An enabled mod's entries sit between the DLC and this project's fallback: the player's
+/// override beats the disc, the disc beats a pack, a pack beats a mod, an earlier mod beats a
+/// later one, and a mod beats the embedded fallback. A mod's entry read through a reader (a zip
+/// member) answers like a file, and the report names the mod.
+#[test]
+fn a_mod_answers_after_the_dlc_and_before_the_fallback() {
+    let dir = testing::temp_dir("layer-mod-order");
+    let overrides = layer_dir(
+        LayerKind::Override,
+        &dir.join("override"),
+        &[("Override.bin", b"override")],
+    );
+    let first = layer_dir(
+        LayerKind::Mod,
+        &dir.join("first-mod"),
+        &[
+            ("Override.bin", b"mod"),
+            ("Disc.bin", b"mod"),
+            ("Pack.bin", b"mod"),
+            ("Mod.bin", b"first mod"),
+            ("Fallback.bin", b"mod"),
+        ],
+    );
+    let mut second = Layer::new(LayerKind::Mod, "second mod");
+    second.insert_reader(
+        "Mod.bin",
+        std::sync::Arc::new(|| Ok(b"second mod".to_vec())),
+    );
+    second.insert_reader(
+        "Data\\XML\\Zipped.xml",
+        std::sync::Arc::new(|| Ok(b"zipped".to_vec())),
+    );
+    let mut fallback = Layer::new(LayerKind::Fallback, "this project");
+    fallback.insert_bytes("Mod.bin", b"fallback");
+    fallback.insert_bytes("Fallback.bin", b"fallback");
+    fallback.insert_bytes("Embedded.bin", b"fallback");
+    let mut archives = mounted(
+        &dir,
+        &[("Override.bin", b"disc"), ("Disc.bin", b"disc")],
+        vec![pack(&dir, "one", &[("Pack.bin", b"pack")])],
+    )
+    .with_override(overrides)
+    .with_mods(vec![first, second, Layer::new(LayerKind::Mod, "empty mod")])
+    .with_fallback(fallback);
+
+    assert_eq!(archives.mods.len(), 2, "the empty mod is not mounted");
+    assert_eq!(archives.read_name("Override.bin").unwrap(), b"override");
+    assert_eq!(archives.read_name("Disc.bin").unwrap(), b"disc");
+    assert_eq!(archives.read_name("Pack.bin").unwrap(), b"pack");
+    assert_eq!(archives.read_name("Mod.bin").unwrap(), b"first mod");
+    assert_eq!(archives.read_name("Fallback.bin").unwrap(), b"mod");
+    assert_eq!(archives.read_name("Embedded.bin").unwrap(), b"fallback");
+    assert_eq!(
+        archives.read_name("/data/xml/zipped.xml").unwrap(),
+        b"zipped"
+    );
+    assert_eq!(archives.layer_of("Mod.bin"), Some(LayerKind::Mod));
+    assert_eq!(archives.layer_of("Pack.bin"), None);
+    assert_eq!(
+        archives.locations("Mod.bin").len(),
+        3,
+        "both mods and the fallback hold it"
+    );
+    let report = archives.take_layer_report();
+    assert!(
+        report
+            .iter()
+            .any(|line| line.contains("Data\\XML\\Zipped.xml") || line.contains("zipped.xml")),
+        "{report:?}"
+    );
+    assert!(
+        report
+            .iter()
+            .any(|line| line.contains("answered by the mod second mod")),
+        "{report:?}"
+    );
+}

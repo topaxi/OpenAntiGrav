@@ -118,7 +118,7 @@ impl Session {
         shell.mods = mods;
         shell.custom_campaigns = custom_campaigns;
         shell.rebuild = rebuild;
-        if let Some((definition, listing, installed)) = rebuilt {
+        if let Some((definition, listing, installed, _)) = rebuilt {
             self.custom_tracks.set_mod_files(&installed.tracks);
             shell.definition = definition;
             shell.mods = listing;

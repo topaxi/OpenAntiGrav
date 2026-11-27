@@ -284,6 +284,15 @@ impl LodGroups {
         Some((usize::from(member.group), member.child))
     }
 
+    /// Whether node `node` sits under a coarser tier than a group's first child.
+    #[must_use]
+    pub fn is_coarse_tier(&self, node: u32) -> bool {
+        usize::try_from(node)
+            .ok()
+            .and_then(|node| *self.member.get(node)?)
+            .is_some_and(|member| member.child > 0)
+    }
+
     /// Group `group`'s `d = -z * fov_degrees / 65` - the number
     /// [`Self::child_at`] compares against the authored distances. `0` for a
     /// group the model does not have.

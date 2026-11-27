@@ -7,8 +7,10 @@ mines for mines, speed and weapon pads replaced by red weapon pads". The mode's 
 data. Nothing on this page is measured on Pulse: every value is **chosen, not measured**,
 because the original has no such mode.
 
-Try it: `just play <pulse disc> --race --mode detonator`, or RACEBOX, MODE `DETONATOR` (the
-CIRCUIT row then lists the Zone circuits only).
+The mode's files are the official mod `oag.detonator-pulse` (`assets/mods/official/detonator-pulse/`,
+on by default; see [Why the data is a mod](#why-the-data-is-a-mod)). With it on, try
+`just play <pulse disc> --race --mode detonator`, or RACEBOX, MODE `DETONATOR` (the CIRCUIT row
+then lists the Zone circuits only). With it off, Pulse has no Detonator.
 
 ## What a race has
 
@@ -17,7 +19,7 @@ CIRCUIT row then lists the Zone circuits only).
 | Circuit | the picked circuit's Zone twin (`zone_track.vex` beside `track.vex`), as a Zone race flies | `oag_title::Detonator::races_zone_circuit` |
 | Mines and bombs | Pulse's own `Pulse_Mine.vex` and `Pulse_Bomb.vex`, laid by HD's placement law; contact radius, damage and push from this project's Detonator table (see [The numbers](#the-numbers)) | `objects: None` (the ordinary mine and bomb pools draw them), `oag_title::weapons::Weapons::detonator` |
 | Mine size | the mines hold their authored size; the music does not scale them (see [Mine size](#mine-size)) | `MinesScaleToMusic="0"` |
-| Layout | this project's six pattern groups; Fury's fourteen stage counts (80 mines at stage 1 to 200 at 14) | `assets/fallback/Data/XML/DetonatorLayouts_Pulse/` |
+| Layout | this project's six pattern groups; Fury's fourteen stage counts (80 mines at stage 1 to 200 at 14) | `assets/mods/official/detonator-pulse/fallback/wipeout-pulse/Data/XML/DetonatorLayouts_Pulse/` |
 | Pads | every speed pad (a Zone circuit authors no weapon pad: 0 on all eight PSP `zone_track.vex`, against 7 to 15 on the race files) is drawn as the race circuit's own first `Weapon Pad`, held at the red key of its ready cycle (`READY_KEYFRAMES[0]`, 204, 102, 102; `docs/rendering/pads.md`); the circuit's own speed pads are not drawn | `DetonatorPads::circuit_weapon_pad_key` |
 | Pad law | a pad gives no boost and charges the EMP once per entry, HD's arm | `DetonatorPads` `speed_pad_charges`, `weapon_pad_charges` |
 | EMP | HD's charge, gauge, L1 fire and wave: ready at 4 pads, full at 8, extent 0.25 to 2 s, 1 survey entry a tick; drawn as the Repulsor's (see [The EMP](#the-emp)), no light | `WeaponStats_Detonator.xml`, `oag_pulse::effects`, `emp_borrows_repulsor` |
@@ -28,7 +30,7 @@ CIRCUIT row then lists the Zone circuits only).
 | Scoring | Fury's figures (100 a live mine, 50 a dark one, 2000 a bomb, 50 an EMP'd live mine) | `DetonatorScoring.xml` in the same directory |
 | HUD | this project's own layout, arranged as Fury's (see [The HUD](#the-hud)) | `oag_pulse::hud::layouts::DETONATOR`, `ps2_hud` |
 | Not drawn | the stage grade (Pulse ships none), the medals, the announcer lines | `palette: None`, `shows_medals`, `voices: None` |
-| Craft | the team's Zone hull (`Zone.vex`) with its boost plume and wreck, until this project has a Detonator hull of its own; the team's race handling; Ship Select previews it (`Zone_FE.vex`) with the skin row fixed and the team's own ratings | `craft: Some`, `handling: None` |
+| Craft | this project's own hull drawn on the team's Zone hull (`Zone.vex`): its textures, render state, boost plume and wreck, with the geometry, flare anchor, spark anchors and shadow of `assets/mods/official/detonator-pulse/fallback/wipeout-pulse/Data/Ships/Detonator_Pulse/hull.glb` (see [The craft](#the-craft)); the team's race handling; Ship Select previews it on `Zone_FE.vex` with the skin row fixed and the team's own ratings | `craft: Some`, `DetonatorCraft::own_hull`, `handling: None` |
 
 ## The numbers
 
@@ -109,9 +111,33 @@ nothing visible half a second later. The EMP now borrows the Repulsor:
 The front itself is soon far ahead on the road and small; the launch look is what tells a
 player the EMP fired. Code: `oag_raceplay::emp_repulsor`.
 
+## The craft
+
+The craft is a hull of this project's own, drawn in Blender, on each team's own Zone hull. It
+wears the team's Zone paint, the textures embedded in its `Zone.vex`, so the file carries only
+geometry, normals, texture coordinates and vertex colours, and names the textures it paints
+with. Format and rules: [own-hull.md](../formats/own-hull.md); authoring:
+[blender.md](../tools/blender.md#a-craft-hull).
+
+- `oag_pulse::race::DETONATOR`'s `own_hull` lists `Detonator_Pulse\hull.glb` (the PSP
+  model) and then `Detonator_Pulse\hull_ps2.glb`. The first that fits the disc's `Zone.vex`
+  is drawn.
+- Pulse PS2's `Zone.vex` is another model (other node names, one `Zone_ColourMap.tga`
+  atlas), so the PS2 pressing has a hull of its own, modelled apart at that model's density:
+  462 triangles on the PSP (the disc's Zone hull has 417), 1,470 on the PS2 (1,494).
+- Both are original shapes in the manner of Fury's Detonator craft: forward-swept drooping
+  wings ending in cannon pods, a wedge fuselage under a bubble canopy, twin canted fins and a
+  tail boom. Neither has a far LOD part; the hull draws at every distance.
+- The hull's exhaust anchor (`engine_flare`), spark anchors and shadow occluder come from
+  the file. The cannon still leaves from the hull's dimensions (on PS2 from the disc hull's
+  `cannon_flash` locators, at its nose and not at the new pods) and the Plasma node is the
+  disc's `ship_muzzle`, because the simulation reads them off the `.vex`.
+- A player's override layer replaces the file by path. A file that will not read or fit
+  draws the disc's hull and says so.
+
 ## The HUD
 
-`assets/fallback/Data/XML/DetonatorLayouts_Pulse/Detonator_HUD.xml` is a whole layout of this
+`Data\XML\DetonatorLayouts_Pulse\Detonator_HUD.xml` (in the mod) is a whole layout of this
 project's. None of the four Pulse layouts read (Arcade, Elimination, Time Trial, Zone) uses
 `<LoadXML>`; Detonator's does not either. It is arranged as Fury's:
 
@@ -129,13 +155,28 @@ It names the disc's own HUD texture, fonts, strings and countdown models. The PS
 its HUD in 640x448, so it reads `Detonator_HUD_PS2.xml`. Both replace by path from the override
 layer.
 
-## Why the data lives in the fallback layer
+## Why the data is a mod
 
-The layout files and the weapon table are read by the same parsers HD's are
-(`oag_tables::detonator_layout`, `oag_tables::weapons`), the HUD layouts by
-`oag_hud::compose`, out of `assets/fallback/`
-([ADR-0061](../architecture/adr/0061-two-asset-layers-around-the-disc.md)), embedded by
-`oag_source::layers::fallback_layer`. A player's override layer can replace any of them.
+The layout files, the weapon table, the HUD layouts and the two hulls are the official mod
+`oag.detonator-pulse`'s fallback entries, `fallback/wipeout-pulse/` of the mod
+([ADR-0098](../architecture/adr/0098-a-mod-carries-fallback-entries.md)): an enabled mod's
+entries answer a name no disc or DLC holds, ahead of this project's embedded fallback. They are
+read by the same parsers HD's are (`oag_tables::detonator_layout`, `oag_tables::weapons`), the
+HUD layouts by `oag_hud::compose`. A player's override layer can replace any of them.
+
+`oag_pulse::race::DETONATOR` still names the files; the engine names no mod. A mode that loads
+data of its own is offered only where every entry it names resolves in the title's archives
+(`oag_title::Title::detonator_data`, `oag_ui::menu::mode_offered`): on HD the disc holds them, on
+Pulse the mod does. With the mod off, the MODE row has no `DETONATOR`, a saved
+`race.mode = "detonator"` races and previews the default mode, and `--race --mode detonator`
+refuses with a `warn` naming the missing entries. Switching the mod on the MODS page re-offers
+the mode at once.
+
+Packaged builds do not copy the official mods yet, and web and phone builds have none
+([mods.md](../tools/mods.md#official-mods-assetsmodsofficial)), so Pulse Detonator is absent there until they do.
+Detonator is single player, so the mod sets `[mod] network-races = false`: no LAN or online
+race mounts its entries and it leaves the network fingerprint alone, so a player with it on
+races one without it.
 In Detonator the table is read in place of Pulse's race table, so a mod to the race table
 does not reach the mode.
 

@@ -287,7 +287,33 @@ pub fn hulls(
         // disagree.
         let ships = race.ships_for(team);
         let name = ships.hull_entry_name(team, oag_livery::entry::own_craft(ships, mode), None);
-        let found = archives.read_name(&name).ok().and_then(|blob| {
+        let blob = archives.read_name(&name).ok();
+        // A hull of this project's own casts its own file's occluder, or none
+        // (`docs/formats/own-hull.md`, "The shadow").
+        if let Some(own) = blob.as_deref().and_then(|blob| {
+            oag_livery::own_hull::find(archives, ships, mode, blob)
+                .ok()
+                .flatten()
+        }) {
+            let hull = own
+                .shadow
+                .as_ref()
+                .and_then(|s| Occluder::from_triangles(&s.positions, &s.triangles));
+            report.push(match &hull {
+                Some(hull) => format!(
+                    "slot {slot}: the own hull's shadow occluder - {} face(s), {} vertex slot(s)",
+                    hull.faces.len(),
+                    hull.vertices.len()
+                ),
+                None => format!(
+                    "slot {slot}: the own hull authors no usable shadow occluder - this craft \
+                     casts no `original` shadow"
+                ),
+            });
+            out.push(hull);
+            continue;
+        }
+        let found = blob.and_then(|blob| {
             let tree = vex::nodes(&blob).ok()?;
             let found: Vec<usize> = tree
                 .iter()

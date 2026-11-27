@@ -165,7 +165,7 @@ fn lend(
         lender,
         Vec::new(),
         Vec::new(),
-        &options.override_bases(),
+        &options.layering(),
     ) {
         Ok(opened) => opened,
         Err(why) => {

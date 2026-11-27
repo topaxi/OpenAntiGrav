@@ -350,6 +350,7 @@ pub(super) fn mounted(
         add_ons: Vec::new(),
         read_memo: None,
         overrides: None,
+        mods: Vec::new(),
         fallback: None,
         layer_hits: Vec::new(),
     }

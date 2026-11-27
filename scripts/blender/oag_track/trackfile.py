@@ -383,18 +383,23 @@ def write_glb(track):
     }
     if animations:
         doc["animations"] = animations
+    return pack_glb(doc, b.data)
+
+
+def pack_glb(doc, data):
+    """The glb container: `doc` as the JSON chunk, `data` (4-byte aligned) as the BIN chunk."""
     text = json.dumps(doc, separators=(",", ":")).encode()
     text += b" " * (-len(text) % 4)
-    total = 12 + 8 + len(text) + 8 + len(b.data)
+    total = 12 + 8 + len(text) + 8 + len(data)
     return (
         b"glTF"
         + struct.pack("<II", 2, total)
         + struct.pack("<I", len(text))
         + b"JSON"
         + text
-        + struct.pack("<I", len(b.data))
+        + struct.pack("<I", len(data))
         + b"BIN\0"
-        + bytes(b.data)
+        + bytes(data)
     )
 
 

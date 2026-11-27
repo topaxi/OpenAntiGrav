@@ -61,13 +61,13 @@ pub fn open_source(source: &str, packs: Vec<Pack>, pure_packs: Vec<Pack>) -> Res
         source,
         packs,
         pure_packs,
-        &crate::layers::overrides_search_path(),
+        &crate::layers::Layering::player(),
     )
 }
 
-/// [`open_source`] with the player's override directories looked for in `overrides` alone: an
-/// empty list mounts only the fallback layer, which is this project's own art (a benchmark that
-/// runs without the player's files).
+/// [`open_source`] with the player's layers `layering` names: the override directories and the
+/// enabled mods' entries. [`crate::layers::Layering::none`] mounts only the fallback layer, which
+/// is this project's own art (a benchmark that runs without the player's files).
 ///
 /// # Errors
 ///
@@ -76,10 +76,10 @@ pub fn open_source_in(
     source: &str,
     packs: Vec<Pack>,
     pure_packs: Vec<Pack>,
-    overrides: &[std::path::PathBuf],
+    layering: &crate::layers::Layering,
 ) -> Result<Opened> {
     let mut opened = open_unlayered(source, packs, pure_packs)?;
-    opened.archives = crate::layers::mount_in(opened.archives, opened.title, overrides);
+    opened.archives = crate::layers::mount_in(opened.archives, opened.title, layering);
     Ok(opened)
 }
 

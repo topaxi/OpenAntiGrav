@@ -395,7 +395,8 @@ pub mod layouts {
     /// Time trial and speed lap: 10 images, 25 texts, 2 models.
     pub const TIME_TRIAL: &str = r"Data\XML\TimeTrial_HUD.xml";
     /// Ours, not the disc's: Pulse ships no Detonator. A whole layout of this project's with an
-    /// EMP gauge and the clip (`assets/fallback/`, `docs/gameplay/detonator-pulse.md`, "The HUD").
+    /// EMP gauge and the clip, a mod's fallback entry (`docs/gameplay/detonator-pulse.md`, "The
+    /// HUD").
     pub const DETONATOR: &str = r"Data\XML\DetonatorLayouts_Pulse\Detonator_HUD.xml";
     /// [`DETONATOR`] in the PS2 disc's 640x448 grid.
     pub const DETONATOR_PS2: &str = r"Data\XML\DetonatorLayouts_Pulse\Detonator_HUD_PS2.xml";

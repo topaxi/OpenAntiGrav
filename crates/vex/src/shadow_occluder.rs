@@ -230,6 +230,84 @@ impl Occluder {
         })
     }
 
+    /// An occluder built from a triangle mesh rather than read from a payload: positions
+    /// welded where they are equal, each triangle's plane from its winding, and the face across
+    /// each edge found by its shared vertices. For a hull of this project's own
+    /// (`docs/formats/own-hull.md`). `None` when the mesh has no usable triangle or more than
+    /// `u16` faces or vertices.
+    #[must_use]
+    pub fn from_triangles(positions: &[[f32; 3]], triangles: &[[u32; 3]]) -> Option<Self> {
+        let mut vertices: Vec<[f32; 3]> = Vec::new();
+        let mut welded = Vec::with_capacity(positions.len());
+        for p in positions {
+            let bits = p.map(f32::to_bits);
+            let at = vertices
+                .iter()
+                .position(|v| v.map(f32::to_bits) == bits)
+                .unwrap_or_else(|| {
+                    vertices.push(*p);
+                    vertices.len() - 1
+                });
+            welded.push(u16::try_from(at).ok()?);
+        }
+        let mut faces = Vec::new();
+        for tri in triangles {
+            let ids = tri.map(|i| welded.get(i as usize).copied());
+            let [Some(a), Some(b), Some(c)] = ids else {
+                continue;
+            };
+            if a == b || b == c || a == c {
+                continue;
+            }
+            let [pa, pb, pc] = [a, b, c].map(|i| vertices[usize::from(i)]);
+            let u = [pb[0] - pa[0], pb[1] - pa[1], pb[2] - pa[2]];
+            let v = [pc[0] - pa[0], pc[1] - pa[1], pc[2] - pa[2]];
+            let n = [
+                u[1] * v[2] - u[2] * v[1],
+                u[2] * v[0] - u[0] * v[2],
+                u[0] * v[1] - u[1] * v[0],
+            ];
+            let length = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
+            if length <= 1e-12 {
+                continue;
+            }
+            faces.push(Face {
+                normal: n.map(|x| x / length),
+                count: 3,
+                vertices: [a, b, c, a],
+                neighbours: [NO_NEIGHBOUR; MAX_FACE_VERTICES],
+            });
+        }
+        if faces.is_empty() || u16::try_from(faces.len()).is_err() {
+            return None;
+        }
+        let mut edges = std::collections::BTreeMap::new();
+        for (f, face) in faces.iter().enumerate() {
+            for s in 0..3 {
+                edges.insert((face.vertices[s], face.vertices[s + 1]), f as u16);
+            }
+        }
+        for face in &mut faces {
+            for s in 0..3 {
+                if let Some(&across) = edges.get(&(face.vertices[s + 1], face.vertices[s])) {
+                    face.neighbours[s] = across;
+                }
+            }
+        }
+        let mut bounds = ([f32::MAX; 3], [f32::MIN; 3]);
+        for v in &vertices {
+            for axis in 0..3 {
+                bounds.0[axis] = bounds.0[axis].min(v[axis]);
+                bounds.1[axis] = bounds.1[axis].max(v[axis]);
+            }
+        }
+        Some(Self {
+            bounds,
+            faces,
+            vertices,
+        })
+    }
+
     /// The edges on the silhouette against `direction`: those where exactly one of
     /// the two faces meeting there faces it.
     ///

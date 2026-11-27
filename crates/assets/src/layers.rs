@@ -7,6 +7,10 @@
 //! - [`Kind::Override`] is searched before every archive, so a file the player
 //!   supplies replaces the disc's entry of the same name. It is user content,
 //!   empty by default and never shipped.
+//! - [`Kind::Mod`] is an enabled mod's `fallback/<title>/` folder, searched
+//!   after the DLC packs and before this project's own fallback: like the
+//!   fallback it answers only a name no disc or DLC holds
+//!   (`docs/architecture/adr/0098-a-mod-carries-fallback-entries.md`).
 //! - [`Kind::Fallback`] is searched after every archive including the DLC
 //!   packs, so it answers only what the disc and its packs cannot. It holds
 //!   this project's own art, and a last-place layer cannot shadow anything by
@@ -23,6 +27,7 @@
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use crate::{Error, Result};
 
@@ -31,6 +36,9 @@ use crate::{Error, Result};
 pub enum Kind {
     /// In front of the disc: the player's own files replace its entries.
     Override,
+    /// Behind the disc and its DLC, ahead of [`Self::Fallback`]: an enabled mod's
+    /// entries, for what the disc and its DLC lack.
+    Mod,
     /// Behind the disc and its DLC: this project's own art, for what they lack.
     Fallback,
 }
@@ -41,15 +49,30 @@ impl Kind {
     pub const fn word(self) -> &'static str {
         match self {
             Self::Override => "override",
+            Self::Mod => "mod",
             Self::Fallback => "fallback",
         }
     }
 }
 
-#[derive(Debug, Clone)]
+/// Reads one entry out of a place a layer does not open itself (a mod's zip).
+pub type ReadEntry = Arc<dyn Fn() -> std::io::Result<Vec<u8>> + Send + Sync>;
+
+#[derive(Clone)]
 enum Entry {
     File(PathBuf),
     Bytes(&'static [u8]),
+    Read(ReadEntry),
+}
+
+impl std::fmt::Debug for Entry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::File(path) => f.debug_tuple("File").field(path).finish(),
+            Self::Bytes(bytes) => write!(f, "Bytes({} bytes)", bytes.len()),
+            Self::Read(_) => f.write_str("Read"),
+        }
+    }
 }
 
 /// One layer of loose entries.
@@ -107,9 +130,22 @@ impl Layer {
         }
     }
 
+    /// This layer under another `label`, for a load report that should name it otherwise.
+    #[must_use]
+    pub fn labelled(mut self, label: impl Into<String>) -> Self {
+        self.label = label.into();
+        self
+    }
+
     /// Adds one entry held in memory, for a layer this build carries itself.
     pub fn insert_bytes(&mut self, name: &str, bytes: &'static [u8]) {
         self.entries.insert(key(name), Entry::Bytes(bytes));
+    }
+
+    /// Adds one entry read on demand by `read`, for a layer whose files sit in a
+    /// container this crate does not open (a mod's `.zip` or `.oagmod`).
+    pub fn insert_reader(&mut self, name: &str, read: ReadEntry) {
+        self.entries.insert(key(name), Entry::Read(read));
     }
 
     /// Which side of the disc this layer is.
@@ -155,6 +191,10 @@ impl Layer {
                 path: path.display().to_string(),
                 source,
             }),
+            Some(Entry::Read(read)) => read().map_err(|source| Error::LayerRead {
+                path: format!("{}: {name}", self.label),
+                source,
+            }),
             None => Err(Error::NoSuchLayerEntry {
                 layer: self.label.clone(),
                 name: name.to_string(),
@@ -181,6 +221,10 @@ impl Hit {
         match self.kind {
             Kind::Override => format!(
                 "{} answered by the player's override ({}), searched ahead of the disc's own entries",
+                self.name, self.layer
+            ),
+            Kind::Mod => format!(
+                "{} answered by the mod {}: no disc or DLC entry of that name",
                 self.name, self.layer
             ),
             Kind::Fallback => format!(

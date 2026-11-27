@@ -106,6 +106,7 @@ out to be wrong.
 | [0095](0095-every-file-under-the-profile-folder-is-written-atomically.md) | Every file under the profile folder is written atomically | **Accepted** (2026-11-20); one temp-file-and-rename helper (`profile::write`), flushed, web one `setItem` |
 | [0096](0096-dynamic-resolution-probes-a-rise-a-falling-clock-hides.md) | Dynamic resolution probes a rise a falling clock hides | **Accepted** (2026-11-26); a second way to rise beside ADR-0042's loop, kept only when the clock paid for the step |
 | [0097](0097-a-screen-filter-that-moves-pixels-runs-at-full-strength.md) | A screen filter that moves pixels runs at full strength | **Accepted** (2026-11-27); supersedes ADR-0053's strength item |
+| [0098](0098-a-mod-carries-fallback-entries.md) | A mod carries fallback entries, and a backported mode ships as an official mod | **Accepted** (2026-11-27); extends ADR-0061 |
 
 ## Format
 

@@ -21,9 +21,12 @@ oag-gpu.workspace = true
 oag-display.workspace = true
 oag-thread.workspace = true
 anyhow.workspace = true
+# The own hull file is a glb (`mesh::own_hull`); the version and features `oag-trackfile` uses.
+gltf = { version = "1.4", default-features = false, features = ["extras", "names", "utils"] }
 bytemuck = { workspace = true, features = ["derive"] }
 wgpu.workspace = true
 serde.workspace = true
+thiserror.workspace = true
 log.workspace = true
 pollster.workspace = true
 
@@ -44,6 +47,7 @@ workspace = true
 
 [dev-dependencies]
 oag-testdata.workspace = true
+serde_json = "1"
 
 [[test]]
 name = "it"

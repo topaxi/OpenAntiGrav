@@ -118,7 +118,7 @@ pub fn load_sim(options: &Options) -> Result<SimLoad> {
             options.craft_source.as_deref(),
             packs,
             pure_packs,
-            &options.override_bases(),
+            &options.layering(),
         )?
     };
     let (opened, craft_opened, title, craft_title) = pair.into_parts();
@@ -129,6 +129,7 @@ pub fn load_sim(options: &Options) -> Result<SimLoad> {
         report.push(format!("craft from {}", craft_title.name));
     }
     report.push(archives.layout.describe());
+    refuse_a_mode_without_its_data(options.mode, title, &archives)?;
     let finder = options.find_texture_packs.as_ref();
     let texture_pack = crate::texture_pack::engage(finder, title, &archives, &mut report);
     for pack in &archives.packs {
@@ -618,4 +619,38 @@ pub fn load_sim(options: &Options) -> Result<SimLoad> {
         vex_geometry,
         extents,
     })
+}
+
+/// Refuses a race of `mode` on `title` when the data the mode loads of its own does not resolve in
+/// `archives`: the rule the MODE row offers modes by (`oag_ui::menu::mode_offered`), applied to a
+/// race asked for by flag, by a stale setting or by a campaign cell, so none races a half-built
+/// mode. Detonator on Pulse is the case: its data is a mod's (ADR-0098).
+fn refuse_a_mode_without_its_data(
+    mode: oag_race::Mode,
+    title: &oag_title::Title,
+    archives: &oag_assets::Archives,
+) -> Result<()> {
+    if mode != oag_race::Mode::Detonator {
+        return Ok(());
+    }
+    let named = title.detonator_data();
+    let missing: Vec<&str> = named
+        .iter()
+        .copied()
+        .filter(|entry| archives.locate(entry).is_none())
+        .collect();
+    if named.is_empty() || !missing.is_empty() {
+        let why = if named.is_empty() {
+            format!("{} has no Detonator", title.name)
+        } else {
+            format!(
+                "Detonator on {} needs data no disc, DLC pack or enabled mod holds: {}",
+                title.name,
+                missing.join(", ")
+            )
+        };
+        log::warn!("{why}");
+        anyhow::bail!("{why}");
+    }
+    Ok(())
 }
