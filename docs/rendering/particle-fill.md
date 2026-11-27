@@ -877,6 +877,25 @@ position), so the bar is not what moved those frames. A listed streak takes a sp
 such particle draws its spawn frame from the stage's generator, which deals the blast another
 arrangement.
 
+**The compare page's `rocket-craft-hit-0233` moved by that draw alone** (mean grey 64.13 to 68.63,
+RMSE 0.4010 to 0.4112 on its own seed). On 2026-11-27 a bisect of the pair's recorded flags over
+`26d661fb1..e30b48161`, rebuilding only the binary, puts the move on the merge that listed the two
+effects (`0af31fca8`, against its first parent `d49ebff45`); one binary renders it to identical
+pixels twice. Four throwaway arms on that merge, compared with the frames on either side of it:
+
+| Arm | Result |
+| --- | --- |
+| flare listed, only `WO_ROCKET_FIRE`'s spawn-frame draw removed | the frame from before: 479 pixels differ, by 1 level |
+| flare unlisted | the frame from before: 21 pixels, by 1 level |
+| track blast unlisted | the frame from after: 309 pixels, by at most 2 levels |
+| draws of both effects' streak quads skipped, every random draw kept | byte-identical, before and after (49 flare quad draws skipped after, none from the track blast) |
+
+So the flare's quads put no pixel in this frame, and the whole change is the extra draw. Over
+`--stage-seed` 1 to 24 the two sides read mean grey 63.40 and 62.74 (paired -0.67 +/- 3.74, 13 of
+24 closer). Seeds 1 to 8 alone read 54.74 and 63.50 (+8.76 +/- 3.72, 2 of 8 closer), so eight seeds
+are not enough on this pair. A sprite listing on any effect that fires before the hit re-deals its
+own seed.
+
 **`WO_ROCKET_EXPLO`, the craft blast, is not judged here**: its look was being changed at the
 same time. On that look as it was, `FAR_BARS` for it read 0.0000, 0.0000, +0.0001 and +0.0047
 (23) on the four craft-hit pairs (`0100`, far `0100`, far `0233`, `0233`).
