@@ -238,6 +238,51 @@ fn talons_junctions_real_glows_still_glow_after_the_role_fix() {
             "{family} should still glow on Talon's Junction: {families:?}"
         );
     }
+    lightmapped_tunnel_slots_bind_their_window_lights_third(&model, &geometry_model);
+}
+
+/// A lightmapped `tunnel_fx_noalpha` slot (the lightmap holds the second binding) binds its
+/// `EmissiveTexture` third and names a [`mesh::PROGRAM_TUNNEL_EMISSIVE`] entry. Slot 26 is
+/// the right wall of every HD Detonator pair (`docs/rendering/hd-zone-recolour.md`, "Window lights
+/// on a plain chunk").
+fn lightmapped_tunnel_slots_bind_their_window_lights_third(
+    model: &mesh::Model,
+    geometry_model: &oag_rcs::rcsmodel::Model,
+) {
+    let mut bound = Vec::new();
+    for (slot, material) in geometry_model.materials.iter().enumerate() {
+        if !material.name.ends_with("/tunnel_fx_noalpha.rcsmaterial") {
+            continue;
+        }
+        let word = model.material_slots[slot];
+        if word & mesh::slots::SECOND_IS_LIGHTMAP == 0 {
+            continue;
+        }
+        let entry = mesh::slots::material_index(word)
+            .checked_sub(1)
+            .and_then(|i| model.emissive.get(i as usize));
+        assert_eq!(
+            entry.map(|e| e.program[0]),
+            Some(mesh::PROGRAM_TUNNEL_EMISSIVE),
+            "lightmapped tunnel slot {slot} names no window-light entry"
+        );
+        // `EmissiveTexture`, `0xb1f2a176`: each slot names its own picture under it.
+        let emissive = material
+            .samplers
+            .iter()
+            .find(|(hash, _)| *hash == 0xb1f2_a176)
+            .and_then(|(_, path)| path.clone())
+            .expect("a tunnel slot names its emissive");
+        let third = model.pad_masks.get(slot).and_then(Option::as_ref);
+        assert_eq!(
+            third.map(|t| t.label.as_str()),
+            Some(emissive.as_str()),
+            "lightmapped tunnel slot {slot} does not bind its emissive third"
+        );
+        bound.push(slot);
+    }
+    println!("Talon's Junction lightmapped tunnel slots with window lights: {bound:?}");
+    assert!(bound.contains(&26), "slot 26 is not among {bound:?}");
 }
 
 #[test]

@@ -246,6 +246,79 @@ variants' unlit overlay), where the Zone variant multiplies by `TC0 + sun * N.L`
 the generic path in every mode and the gate changes nothing there. Whether their own GXP and GCN Zone
 variants drop the advert is unread.
 
+## Window lights on a plain chunk (2026-11-27, `det-volley-wall`)
+
+**Law (confidence 80: two plain programs agree, and the picture).** `tunnel_fx_noalpha` (Talon's
+Junction's tunnel facades) adds its `EmissiveTexture` (`0xb1f2a176`, `tunnel_fx_emissive.gtf` and
+siblings such as `tunnel_02_posts_ems.gtf`) on its **plain** programs only, after the light and
+ungated by the diffuse alpha:
+
+```text
+out = (fog(light * D + spec * S + 1 - (1 - E) * (1 - X)) + TC1) / 2
+```
+
+with `X` the facing-ramp term (`ramp(TC0.w) * TC0.w * k * S * c`). Its Zone variants declare no
+emissive, so a chunk on its Zone program shows no window lights and a chunk the Zone frame draws
+plain (render flag bit 11, "Chunks a Zone race does not recolour" above) shows them over the Zone
+stage's black.
+
+**Evidence.**
+
+- Microcode, `scripts/ps3-sho.py variants` and `scripts/ps3-microcode.py fp-file` on Talon's
+  `tunnel_fx_noalpha.rcsmaterial` (`DATA00.PSARC`): `HalfBrightAmbientSunSpot0SVC0` (fragment block
+  `0x4f80`, the `Ambient` permutation a plain chunk runs in a Zone frame) does `TEX H3, f[TC4] unit2`
+  (the emissive), `MAD H3, -H3, H0, H0` with `H0 = 1 - X`, `MAD H0, light, D, -H3`, the specular
+  added, then `ADD H0, H0, 1`, the fog lerp and `ADD /2 H0, R2, H0`.
+  `HalfBrightIleLightmapSunSpot0SVC0` (`0x5d20`, a lightmapped slot in a normal race) is the same
+  shape with the lightmap in the light (`@0x38`..`@0x47`). `HalfBrightZoneModeAmbientSunSpot0SVC0`
+  (`0x68a0`) declares the specular map, the three Zone textures and the visualiser, and no `0xb1f2a176`.
+- The wall: on `hd/detonator-talons-cannon-volley` the rows of cyan window lights on the right wall
+  (around `1500..1920 x 300..360`) are two chunks of slot 26, `0xf440791f` and `0x258dd9b9`, both
+  render flags `0x0800` (found by skipping slots, then chunks, at the pair's pose; the other slot-26
+  and slot-17 chunks are flags `0`). Their lights in the original are the emissive texture's 2x6 grid
+  and rows of five.
+- Ours lost them on every frame, not only in a Zone race: slot 26 is lightmapped, so the second
+  binding holds the lightmap and the generic glow reading (`mesh::rcs::emissive`) never bound the
+  emissive.
+
+**Wired** (`oag_mesh::mesh::rcs::tunnel_emissive`, `PROGRAM_TUNNEL_EMISSIVE`): a lightmapped
+`tunnel_fx_noalpha` slot whose resolved program declares the emissive and the lightmap binds the
+emissive third and takes a glow-table entry; `shade.wesl` adds the decoded tap after the light,
+times `1 - zone_program`. 22 slots on Talon's Junction. The emissive tap's gamma nibble was not read
+live: decoded like every colour unit (chosen, not measured). Tests:
+`zone_spu_light::a_plain_tunnel_chunk_adds_its_window_lights_and_its_zone_program_does_not` (fixture)
+and `hd_hull_glow_role_ground_truth::talons_junctions_real_glows_still_glow_after_the_role_fix`
+(every lightmapped slot binds its own emissive third, slot 26 among them).
+
+**Measured on the pairs** (re-rendered copies; the right-wall row is `compare-page.md`'s disjoint split):
+
+| Pair | Mean grey | Wall row share, grey in region | Window strip `1500,300,1920,360`, grey |
+| --- | --- | --- | --- |
+| `cannon-volley` | 9.11 to 9.14 | 1.000 / 20.63 to 1.033 / 21.31 | 17.13 to 19.32 |
+| `mines-ahead` | 9.04 to 9.07 | 1.055 / 21.75 to 1.078 / 22.22 | 17.85 to 19.58 |
+| `cannon-volley-hot`, `pad`, both endrace | unchanged within 0.003 | | |
+| `hd/talons` (no Zone) | 3.32 to 3.28 | | |
+| `hd/talons-assegai-c1` (no Zone) | 4.78 to 4.74 | | |
+
+The lights match the original's in look (`cannon-volley`'s 2x6 grid: 106 pixels over 120 grey against
+the original's 135, mean colour `156,218,218` against `163,217,218`; none before), but the wall row
+does not drop. Its residual is registration, not colour: the pipe joints (untouched by this change)
+fit at ours shifted `(-10, -4)` px and the new grid at `(-14, -4)`, so small bright dots a few pixels
+off count twice; the region means match within 5 levels (pale pipe `115,138,150` against
+`111,133,145`). The two non-Zone pairs fall, which supports the plain-race half of the law; no
+original frame of this wall outside a Zone race is on disk.
+
+**Left out, named:** the `X` term (facing ramp times specular map), which no path of ours draws for
+this family, so the screen blend reduces to the add. The non-lightmapped slots (17 and its kin) keep
+the generic `ADD_SECOND` reading, gated by the diffuse alpha where the program is not; on the
+Detonator pairs those chunks run their Zone program, which adds nothing.
+
+**2048 and Omega.** 2048: **checked, differs**: none of 2048's Vita archives (`PCSA00015` base, DLC and
+patch) ships a `tunnel_fx` material. Omega: **checked, applies, not wired**: `data02`, `data05` and
+`data08` ship Talon's `tunnel_fx_noAlpha`, `_1`, `_2` and Tech de Ra's `tunnel_fx_noAlpha_mult*` with
+`tunnel_fx_emissive.gnf`; they go through the `gcn` reader, which this module does not reach, and
+whether its program binds the emissive is unread (Omega's Detonator lane is deferred).
+
 ## Seen, headless
 
 `just play hd --race --mode zone --track /data/environments/talons_junction/track.vex

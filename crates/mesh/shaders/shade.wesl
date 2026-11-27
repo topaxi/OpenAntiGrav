@@ -1176,6 +1176,15 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
         let mask = material_sample(MATERIAL_PAD_MASK, in.texcoord);
         emissive_add = select(vec3<f32>(mask.a), decode(mask.rgb), glow_program < 8.5) * glow_tint_offset.rgb;
     }
+    // **HD's `tunnel_fx_noalpha` window lights on a lightmapped slot** (mode 31,
+    // `oag_mesh::mesh::rcs::tunnel_emissive`): the emissive, bound third, at the diffuse coordinate,
+    // added after the light and ungated by the diffuse alpha. Its plain programs only: no Zone
+    // variant declares it, so a chunk on its Zone program adds nothing and a `ZONE_PLAIN` chunk
+    // keeps it. The tap is decoded like every colour unit (its gamma nibble was not read live).
+    if glow_program > 30.5 && glow_program < 31.5 {
+        emissive_add = decode(material_sample(MATERIAL_PAD_MASK, in.texcoord).rgb) * glow_tint_offset.rgb
+            * (1.0 - zone_program);
+    }
     // **2048's `fc10_Lambert_2UV_Emissive`** (mode 19, `mesh::rcs::psp2::emissive_add`): `D.a * R^2`
     // after the light, `R` the third binding (`ReflectMap`) at `0.5 + 0.5 * reflect(-V, N).xy`.
     if glow_program > 18.5 && glow_program < 19.5 {

@@ -223,6 +223,12 @@ pub const PROGRAM_HULL_CHARGE_2: f32 = 29.0;
 /// the model's `fresnelBase`. See `super::rcs::cannon_bolt`.
 pub const PROGRAM_CANNON_BOLT: f32 = 30.0;
 
+/// [`Emissive::program`]'s mode for HD's `tunnel_fx_noalpha` on a lightmapped slot: its
+/// `EmissiveTexture` (bound third, read at the diffuse coordinate) added after the light, ungated
+/// by the diffuse alpha, on the material's plain program only (its Zone variants declare no
+/// emissive). See `super::rcs::tunnel_emissive`.
+pub const PROGRAM_TUNNEL_EMISSIVE: f32 = 31.0;
+
 /// The second entry of an [`PROGRAM_ELECTRICITY`] material: tint `(PitchVolume, BassHit,
 /// TrebleHit)`, offset `PitchOffset`.
 pub const PROGRAM_ELECTRICITY_AUDIO: f32 = 26.0;
