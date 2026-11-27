@@ -10,7 +10,8 @@ second a build reproduces, plays the file's `POSE` chunk; see "What stops it" be
 
 A race the session hands over is recorded from its first tick (`RaceStage::arm_auto_replay`, called
 once the session has finished writing to the race: seats, windows, the AI choice) unless the
-setting `[replay] record = false` (default on, `settings.tosd`) or the race is a network race. A
+setting `[replay] record = false` (default on, `settings.tosd`). A network race records its
+confirmed run ([networking](../networking/README.md#a-clients-recording-is-the-confirmed-run-2026-11-17)). A
 race with a simulation mod is recorded too: the header's `mods` list names each module, its SHA-256
 and its picks, and no ghost is offered from it
 ([determinism-and-state.md](../architecture/wasm-extensions/determinism-and-state.md#replays)). It is written to
@@ -327,7 +328,6 @@ Omega's light backdrop needed the band behind the detail lines; 2048's value col
 
 - **Split screen**: one view per window.
 - **The Steam Deck** (ADR-0087 decision 3) is still unmeasured; the opening pass's wall time on this desktop is in the timeline page.
-- **A modded race and a network race record nothing** (decision 7).
 - **The web build** has no file system to keep a replay in: the page is empty there (`replays::WRITES`). **A phone
   records and lists replays** into the app's files directory (`<external files>/data/oag/replays`), reached over USB
   ([Android](../tools/android.md)); on Android 10 and later the page's EXPORT row copies the replay to `Download/OpenAntiGrav` (`oag_mobile::export`), where the file manager and the share sheet reach it, and a notice says whether it went. A share sheet of our own and an import are still open (`replays::REACHABLE` is the desktop-only half).
