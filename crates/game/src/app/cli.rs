@@ -328,6 +328,14 @@ impl Cli {
         &[]
     }
 
+    /// `--give-once`; always `false` in a build without `dev-cli`.
+    pub(crate) fn give_once(&self) -> bool {
+        #[cfg(feature = "dev-cli")]
+        return self.race_run.give_once;
+        #[cfg(not(feature = "dev-cli"))]
+        false
+    }
+
     /// `--give`; always `None` in a build without `dev-cli`.
     pub(crate) fn give(&self) -> Option<&str> {
         #[cfg(feature = "dev-cli")]

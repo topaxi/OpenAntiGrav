@@ -477,3 +477,81 @@ fn a_fill_at_another_rectangle_of_the_background_s_sheet_is_drawn() {
     assert_eq!(uv, [0.0, 890.0, 553.0, 100.0]);
     assert_eq!(color, [1.0; 4]);
 }
+
+/// [`layout`] with the countdown widget `HUD_damage_indicator.xml`'s Fury copy authors
+/// between the background and the fill, a little larger than both.
+fn countdown_layout() -> Layout {
+    let mut layout = layout();
+    let backing = Layout::from_xml(&format!(
+        r#"<Screen><Image name="DamageBarShieldBg">
+             <Values x="0" y="0" width="260" height="200" U="770" V="186"
+                     TxtrWidth="254" TxtrHeight="194" color="0xff00ff00" Src="{SRC}"/>
+           </Image></Screen>"#
+    ));
+    layout.sprites.extend(backing.sprites);
+    layout
+}
+
+/// The Shield running with its post-hit flash on an "off" phase, so a blink
+/// would show.
+fn shielded() -> Readout {
+    Readout {
+        shield_seconds: 1.967,
+        shield_flashing_whole: true,
+        shield_blink_phase_whole: 0.133,
+        ..readout(100.0)
+    }
+}
+
+/// While a Shield runs the number is its remaining seconds to one decimal, in
+/// the countdown's green, and it does not blink.
+#[test]
+fn a_running_shield_writes_its_seconds_over_the_percent() {
+    with_layout(&countdown_layout(), oag_hd::hud::ART, |cx| {
+        let r = shielded();
+        assert_eq!(
+            countdown_text(cx, &r, "ShieldBarText").as_deref(),
+            Some("2.0")
+        );
+        assert_eq!(colour(cx, &r, "ShieldBarText"), Some(argb(0xFF30_FF30)));
+        let spent = Readout {
+            shield_seconds: 0.0,
+            ..r
+        };
+        assert_eq!(countdown_text(cx, &spent, "ShieldBarText"), None);
+        assert_eq!(colour(cx, &spent, "ShieldBarText"), Some(argb(0x0016_64FF)));
+    });
+}
+
+/// The widget is drawn over the background and under the fill, only while a
+/// Shield runs.
+#[test]
+fn a_running_shield_puts_its_widget_behind_the_fill() {
+    let layout = countdown_layout();
+    let widths = |r: &Readout| -> Vec<f32> {
+        with_layout(&layout, oag_hd::hud::ART, |cx| {
+            draw_list(cx, r)
+                .sprites
+                .iter()
+                .filter_map(|draw| match draw {
+                    Draw::Sprite { rect, uv, .. } if uv[0] == 770.0 => Some(rect[2]),
+                    _ => None,
+                })
+                .collect()
+        })
+    };
+    assert_eq!(widths(&shielded()), vec![254.0, 260.0, 254.0]);
+    assert_eq!(widths(&readout(100.0)), vec![254.0, 254.0]);
+}
+
+/// A layout without the widget (the PSN download's) keeps the percentage.
+#[test]
+fn a_layout_without_the_countdown_widget_keeps_the_percent() {
+    with_hd(oag_hd::hud::ART, |cx| {
+        let r = shielded();
+        assert_eq!(countdown_text(cx, &r, "ShieldBarText"), None);
+        assert_eq!(colour(cx, &r, "ShieldBarText"), Some(argb(0x0016_64FF)));
+        let bg = cx.layout.sprite("DamageBarBg").expect("authored");
+        assert_eq!(countdown_backing(cx, &r, bg), None);
+    });
+}

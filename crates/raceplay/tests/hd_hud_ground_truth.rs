@@ -336,11 +336,22 @@ fn a_race_hands_the_hud_hds_own_grid_rather_than_the_psps() {
         oag_display::space::Space::HD,
         "an HD source authors its HUD in 1920x1080"
     );
+    the_shield_layout_is_the_copy_that_authors_the_countdown(&loaded.hud);
     assert_ne!(
         loaded.hud.space,
         oag_display::space::Space::PSP,
         "the PSP's 480x272 is the default a `Renderer` starts at, and drawing \
          HD's layouts in it is the bug this test exists for"
+    );
+}
+
+/// The disc ships `HUD_damage_indicator.xml` twice and only `DATA06`'s copy
+/// authors `DamageBarShieldBg`; archive order alone reads the other one.
+fn the_shield_layout_is_the_copy_that_authors_the_countdown(hud: &oag_hud::Assets) {
+    let layout = hud.layout.as_ref().expect("a composed layout");
+    assert!(
+        layout.sprite("DamageBarShieldBg").is_some(),
+        "the loaded HUD has no Shield countdown widget"
     );
 }
 

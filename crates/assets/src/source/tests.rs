@@ -926,3 +926,35 @@ fn only_a_partial_update_is_a_gap() {
     assert!(empty.update_gap(UPDATED).is_some());
     assert_eq!(empty.update_gap(TITLE), None);
 }
+
+/// [`Archives::read_name_authoring`] picks past an earlier copy for one that
+/// holds the needle, and an update archive's copy answers whatever it holds.
+#[test]
+fn a_copy_authoring_the_needle_is_picked_unless_an_update_replaces_the_name() {
+    let dir = testing::temp_dir("mount-authoring");
+    let mut archives = mounted(&dir, &[("a.xml", b"plain")], Vec::new());
+    let mut add = |name: &str, entry: &[u8]| {
+        let sub = dir.join(name);
+        std::fs::create_dir_all(&sub).expect("an archive directory");
+        Container::open(&testing::write_wad(&sub, "Data.wad", &[("a.xml", entry)]))
+            .expect("an archive")
+    };
+    let extra = add("extra", b"has <Widget>");
+    let patch = add("patch", b"updated");
+    archives.extra.push(extra);
+
+    assert_eq!(archives.read_name("a.xml").unwrap(), b"plain");
+    assert_eq!(
+        archives.read_name_authoring("a.xml", "Widget").unwrap(),
+        b"has <Widget>"
+    );
+    assert_eq!(
+        archives.read_name_authoring("a.xml", "Absent").unwrap(),
+        b"plain"
+    );
+    archives.patch.push(patch);
+    assert_eq!(
+        archives.read_name_authoring("a.xml", "Widget").unwrap(),
+        b"updated"
+    );
+}
