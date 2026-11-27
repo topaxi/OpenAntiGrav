@@ -162,18 +162,6 @@ pub(crate) fn parse_step(spec: Option<&str>) -> Result<loading::Phase> {
     })))
 }
 
-/// The saved front-end styling, as a name a title can match, or `None` for
-/// "whatever this source leads with".
-///
-/// An empty setting is `None` rather than `Some("")`: the key is always in the
-/// file (see [`settings::Display::front_end_style`]) and empty is what it holds
-/// until somebody chooses, which must not be matched against a real style name.
-#[must_use]
-pub(crate) fn style_of(settings: &settings::Settings) -> Option<&str> {
-    let name = settings.display.front_end_style.trim();
-    (!name.is_empty()).then_some(name)
-}
-
 /// Turns a comma-separated list of abstract button names into a mask.
 ///
 /// Unknown names are skipped rather than fatal: `none` is a real value in the

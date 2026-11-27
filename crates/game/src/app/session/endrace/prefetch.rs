@@ -42,6 +42,8 @@ pub(crate) struct EndRacePrepArgs {
     faces: oag_ui_screens::picker::FaceScales,
     grid: [f32; 2],
     globals: Vec<(String, String)>,
+    /// The saved `FE Style` (`settings.display.front_end_style`), `None` for the served one.
+    style: Option<String>,
     base_sprites: oag_hud::sprite::Sheet,
     atlas: oag_ui::font::Atlas,
     skin: &'static oag_title::MenuSkin,
@@ -100,11 +102,15 @@ impl EndRacePrepArgs {
         if self.leaving() {
             return None;
         }
-        let global_refs: Vec<(&str, &str)> = self
-            .globals
-            .iter()
-            .map(|(key, value)| (key.as_str(), value.as_str()))
-            .collect();
+        let style = crate::front_end_style::ScreenStyle::new(
+            &mut archives,
+            self.title,
+            self.style.as_deref(),
+            self.globals
+                .iter()
+                .map(|(key, value)| (key.as_str(), value.as_str())),
+        );
+        let global_refs = style.global_refs();
         let screens = match crate::endrace::load(
             &mut archives,
             &self.strings,
@@ -139,6 +145,7 @@ impl EndRacePrepArgs {
             self.anisotropy,
             self.atlas.clone(),
             screens,
+            style,
             self.with_trophies,
         ) {
             Ok(mut prep) => {
@@ -192,6 +199,7 @@ impl Session {
                 .iter()
                 .map(|(key, value)| (key.clone(), value.clone()))
                 .collect(),
+            style: crate::front_end_style::style_of(&self.settings).map(str::to_string),
             base_sprites: shell.sprites.clone(),
             atlas: shell
                 .menu_font
@@ -313,5 +321,26 @@ mod tests {
                 "EndRacePrepArgs::run must call {needed}"
             );
         }
+    }
+
+    /// The saved `FE Style` reaches the screens' colours in the worker and their block corners
+    /// in the runtime; without either, a player who chose `HD` still sees Fury's red.
+    #[test]
+    fn the_saved_front_end_style_reaches_the_live_screens() {
+        let source = include_str!("prefetch.rs");
+        let run = &source[source.find("pub(crate) fn run(self)").unwrap()..];
+        let run = &run[..run.find("impl Session").unwrap()];
+        for needed in ["ScreenStyle::new(", "self.style.as_deref()", "&global_refs"] {
+            assert!(run.contains(needed), "EndRacePrepArgs::run: {needed}");
+        }
+        assert!(
+            source.contains("style: crate::front_end_style::style_of(&self.settings)"),
+            "the prep takes the saved style"
+        );
+        assert!(
+            include_str!("../../race_stage/endrace.rs")
+                .contains("let frame = style.frame(&frame);"),
+            "the runtime draws the frame in the style the screens were read in"
+        );
     }
 }

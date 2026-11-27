@@ -217,7 +217,7 @@ pub(crate) fn run_windowless(
             &options.source,
             &loaded.strings,
             loaded.entries.as_deref(),
-            crate::app::args::style_of(settings),
+            crate::front_end_style::style_of(settings),
         );
         oag_raceplay::loader_log::lines(&assets.notes);
         capture::loading(

@@ -242,8 +242,9 @@ Law: `detonator-cannon.md` ("What the simulation needs"). Decisions already made
     the record notice, the captions and the kept best score landed; open on HD: the **5.4 s of
     destruction before the panel** (ours puts it up the tick the craft dies; what plays behind it afterwards is unchecked against
     the original's glow, particle burst and wipe-in), the **end-screen text size** (rows 0.6x, headline 0.7x; the screens draw `default`
-    face as the scaled menu face, the campaign screens use the `Default` atlas), the HD style, the
-    `CONFIRM` glyph.
+    face as the scaled menu face, the campaign screens use the `Default` atlas), the
+    `CONFIRM` glyph (the HD FE style now follows `display.front_end_style`,
+    `docs/ui/endrace-screens.md`).
   - **Omega**: same filler (`FUN_0155bc90`) and ids; but Omega's `endrace_entry` is `None` (a finished
     race keeps the built-in scoreboard; wiring HD's reader leaves `EndRace Menu` with no options,
     `docs/formats/omega-status.md`), so no Omega Detonator screen draws until that is solved (a

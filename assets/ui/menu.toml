@@ -811,7 +811,8 @@ values = ["psp", "ps2", "wide", "free"]
 # hand offers one, so the row shows a single value and states the fact rather
 # than offering a choice that does nothing.
 #
-# Applies to the next loading screen, not to the one on screen - the
+# The end screens follow it too, from the next finish (`docs/ui/endrace-screens.md`, "HD's FE
+# style on the end screen"). Applies to the next loading screen, not to the one on screen - the
 # illustration is decoded when the setting changes, which is a disc read and so
 # happens in the menus rather than mid-load. See
 # `Session::reload_loading_assets`.

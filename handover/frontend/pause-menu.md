@@ -47,7 +47,8 @@ pause screen where one applies). Online pause stays the maintainer's decision
   row, the opaque blocks and the grey follow `FEGlobals` (`HD_Blue`), and this build serves `DATA00`'s
   Fury palette on every page. The original's pause screen in the Fury style is red (RPCS3, Single Race and
   Time Trial) and matches ours; the HD style (white, teal) needs the front end's own style switch
-  (`display.front_end_style` selects only the loading illustration here).
+  (`display.front_end_style` reaches the loading screen and the end screens, `oag_game::front_end_style`;
+  the menus and the pause screen do not follow it yet).
 - **HD, small residuals**: the lists' step arrows stop at the ends where ours wrap; the greyed row's fill is
   chosen (`INERT_FILL_ALPHA`); END SESSION leaves like QUIT, the original finishes the race into the results.
 - Tournament and Eliminator on HD are the static reading, not walked live (Single Race, Time Trial, Speed Lap and Zone were).
