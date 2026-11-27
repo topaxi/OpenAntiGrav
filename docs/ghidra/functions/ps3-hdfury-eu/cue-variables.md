@@ -392,7 +392,8 @@ same end of list as Pulse's. Read this pass:
   bank's own command byte `c`); `stride` commands run, then the rest of the group is skipped. A group opened inside one
   stops the handler. The runner keeps `c` per play, seeded from the bank (**chosen**; no held cue wired here has a group).
 - `Scream_DoGrainGoto` (`0x006255f8`): the first `0x23` with `a` equal to the id; a ninth goto in one tick stays put
-  and waits one more tick; no match stops the handler.
+  and waits one more tick; no match stops the handler. The depth counter is a global (`*0x008c0038 + 0x20`)
+  whose reset is unread; the runner counts per handler per tick (**chosen**; neither wired cue has a goto).
 - `Scream_SetCueParameter` (`0x00624418`, behind the thunk `0x006774c8` -> `0x0062b2d0`) writes `handler + 0xa4 + index`
   for index 0 to 3, the bytes the guard reads. Confidence 90.
 - `HudSight_UpdateTone` (`0x00087fa8`) starts `~ROCKLOCK` with `Sound_PlayBankCue(..., 0x400, 0, 0, 0, 0)` (no variable
