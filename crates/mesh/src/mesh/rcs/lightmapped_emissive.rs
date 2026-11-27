@@ -22,7 +22,6 @@
 //! Left out, named: `tunnel_fx_noalpha`'s `X` term (facing ramp times specular map), so its
 //! screen blend reduces to the add.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use oag_rcs::rcsmaterial;
@@ -166,20 +165,17 @@ pub(super) struct Bound {
     pub(super) fourth: TextureSlots,
 }
 
-/// The animation rows a keyed material's curve plays on, one per material name.
+/// The animation rows the keyed materials' curves play on, one per material slot: slots that
+/// share a `.rcsmaterial` name author different curves.
 struct Keys<'a> {
     model_blob: &'a [u8],
     tracks: &'a mut Vec<AnimTrack>,
     blob: Option<Arc<[u8]>>,
-    rows: HashMap<String, usize>,
 }
 
 impl Keys<'_> {
-    /// `material`'s row, appended on first use; `None` where the table is full.
+    /// A new row playing `material`'s curve; `None` where the table is full.
     fn row(&mut self, material: &rcsmodel::Material) -> Option<usize> {
-        if let Some(&row) = self.rows.get(&material.name) {
-            return Some(row);
-        }
         if self.tracks.len() + 1 >= ANIM_TRACK_LIMIT {
             return None;
         }
@@ -189,7 +185,6 @@ impl Keys<'_> {
             .clone();
         self.tracks
             .push(AnimTrack::Param(ParamCurveTrack::of(material, blob, KEY)));
-        self.rows.insert(material.name.clone(), self.tracks.len());
         Some(self.tracks.len())
     }
 }
@@ -283,7 +278,6 @@ pub(super) fn lightmapped_emissive(
         model_blob,
         tracks,
         blob: None,
-        rows: HashMap::new(),
     };
     let mut bound = Bound {
         third: vec![None; model.materials.len()],

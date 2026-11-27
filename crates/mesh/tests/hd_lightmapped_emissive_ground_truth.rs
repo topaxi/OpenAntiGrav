@@ -21,6 +21,8 @@ use oag_rcs::rcsmaterial::Declared;
 use crate::archive_cache;
 
 const LIGHTMAP: u32 = 0x37b5_db58;
+/// The keyed family's curve-driven `k`.
+const KEY: u32 = 0x1c5d_e6ec;
 
 /// `(family, the sampler its program adds, whether it rides the fourth binding)`.
 const FAMILIES: &[(&str, u32, bool)] = &[
@@ -120,10 +122,10 @@ fn census(archive: usize) -> Option<(BTreeMap<&'static str, usize>, Dark)> {
             if !(declares(sampler) && declares(LIGHTMAP)) {
                 continue;
             }
-            let entry = slots::material_index(word)
+            let layer = slots::material_index(word)
                 .checked_sub(1)
-                .and_then(|i| model.emissive.get(i as usize))
-                .map(|e| e.program[0]);
+                .and_then(|i| model.emissive.get(i as usize));
+            let entry = layer.map(|e| e.program[0]);
             let table = if fourth {
                 &model.wave_maps
             } else {
@@ -139,6 +141,10 @@ fn census(archive: usize) -> Option<(BTreeMap<&'static str, usize>, Dark)> {
             let add = entry == Some(mesh::PROGRAM_LIGHTMAPPED_ADD);
             let scrolled = entry == Some(mesh::PROGRAM_LIGHTMAPPED_SCROLL);
             let keyed = entry == Some(mesh::PROGRAM_LIGHTMAPPED_KEYED);
+            if keyed {
+                let row = layer.expect("a keyed slot has its entry").program[1] as usize;
+                assert_own_curve(&model, &geometry, material, row, &path);
+            }
             if (add || scrolled || keyed) && picture.map(|t| t.label.as_str()) == wanted.as_deref()
             {
                 *bound.entry(family).or_default() += 1;
@@ -150,6 +156,35 @@ fn census(archive: usize) -> Option<(BTreeMap<&'static str, usize>, Dark)> {
     }
     println!("DATA0{archive} lightmapped emissive slots: {bound:?}, dark: {dark:?}");
     Some((bound, dark))
+}
+
+/// A keyed slot's animation row plays its own material's curve, not that of another slot sharing
+/// the `.rcsmaterial` name.
+fn assert_own_curve(
+    model: &mesh::Model,
+    geometry: &[u8],
+    material: &oag_rcs::rcsmodel::Material,
+    row: usize,
+    path: &str,
+) {
+    let curve = material
+        .curve
+        .as_ref()
+        .expect("a keyed material has a curve");
+    let track = &model.anim_tracks[row - 1];
+    for seconds in [0.5, 1.7] {
+        let want = curve
+            .sample(geometry, seconds)
+            .into_iter()
+            .find(|(c, _)| c.name_hash == KEY && c.component == 0)
+            .map(|(_, v)| v)
+            .expect("the curve drives the key");
+        assert_eq!(
+            track.sample(seconds).1[0],
+            want,
+            "{path}: row {row} at {seconds}"
+        );
+    }
 }
 
 /// Asserts both halves of [`census`]. `dark` names every slot known to stay unlit.
