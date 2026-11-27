@@ -55,7 +55,7 @@ per trap 2 above, a prior probe against the same process is exactly the
 condition that has bitten this capture already.
 
     uv run --with websocket-client scripts/psp-loading-wave-capture.py \\
-        --port 47800 --hits 260 --out /tmp/loading-wave.csv
+        --port 47800 --hits 260 --out target/tmp/loading-wave.csv
 """
 
 import argparse

@@ -15,7 +15,7 @@ So this module sends the same committed script (`verification/scenarios/*.inputs
 emulator's own clock rather than by breakpoints:
 
     uv run --with websocket-client scripts/psp-drive.py drive \\
-        --script verification/scenarios/talons-junction-lap.inputs --log /tmp/run.csv
+        --script verification/scenarios/talons-junction-lap.inputs --log target/tmp/run.csv
 
 The clock is `cpu.status`'s `ticks` - the PSP cycle counter - which is answered
 by the debugger's own thread and costs about 0.1 ms whether the CPU is running or

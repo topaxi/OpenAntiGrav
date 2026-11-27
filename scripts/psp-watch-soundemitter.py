@@ -29,7 +29,7 @@ table - because if either is wrong everything downstream is nonsense read
 from the wrong address, not a subtly wrong law.
 
     uv run --with websocket-client scripts/psp-watch-soundemitter.py \\
-        --port 47820 --hits 400 --out /tmp/soundemitter.csv
+        --port 47820 --hits 400 --out target/tmp/soundemitter.csv
 """
 
 import argparse

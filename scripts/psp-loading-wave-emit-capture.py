@@ -78,7 +78,7 @@ appeared in a capture despite the call site firing exactly as often as
 trusting the `layer0`/`layer1` split in isolation.
 
     uv run --with websocket-client scripts/psp-loading-wave-emit-capture.py \\
-        --port 47800 --hits 200 --out /tmp/loading-wave-emit.csv
+        --port 47800 --hits 200 --out target/tmp/loading-wave-emit.csv
 """
 
 import argparse

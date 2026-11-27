@@ -33,7 +33,7 @@ on that Xwayland presents at full speed. See
 manual recipe this script replaces.
 
     python3 scripts/vita3k-drive.py display
-    python3 scripts/vita3k-drive.py race --screenshot /tmp/2048-race.png
+    python3 scripts/vita3k-drive.py race --screenshot target/tmp/2048-race.png
     python3 scripts/vita3k-drive.py stop
 
 **Always run `stop` at the end of a session.** `boot`/`race`/`shot` each

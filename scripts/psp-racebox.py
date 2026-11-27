@@ -12,7 +12,7 @@ landed where intended is a frame of the screen they were sent to. Skipping
 that frame is how a stuck selector reads as a class it never actually reached.
 
     uv run --with websocket-client scripts/psp-racebox.py \\
-        --race-type time_trial --class phantom --confirm --shot-prefix /tmp/phantom
+        --race-type time_trial --class phantom --confirm --shot-prefix target/tmp/phantom
 
 Requires a PPSSPP debugger already reachable (see `psp-drive.py preflight`)
 and a compositor or Xvfb `DISPLAY` `import` (ImageMagick) can screenshot -

@@ -36,14 +36,14 @@ Commands:
     python3 scripts/pcsx2-drive.py config                   # write the datapath ini
     python3 scripts/pcsx2-drive.py boot                     # boot the disc, wait for PINE
     python3 scripts/pcsx2-drive.py press cross cross        # abstract button names
-    python3 scripts/pcsx2-drive.py shot /tmp/frame.png      # GS screenshot, exact output
+    python3 scripts/pcsx2-drive.py shot target/tmp/frame.png      # GS screenshot, exact output
     python3 scripts/pcsx2-drive.py input                    # read the game's own pad mask
     python3 scripts/pcsx2-drive.py stop                      # stop pcsx2-qt AND Xvfb :78
 
 `display`, `config` and `boot` are all idempotent and `boot` runs the first two
 for you, so the one-liner is:
 
-    uv run --with python-xlib python3 scripts/pcsx2-drive.py boot --shot /tmp/f.png
+    uv run --with python-xlib python3 scripts/pcsx2-drive.py boot --shot target/tmp/f.png
 
 Nothing this script writes goes anywhere near the repository: the emulator's
 data path is `~/.cache/oag-pcsx2`, screenshots go where you name them, and the
