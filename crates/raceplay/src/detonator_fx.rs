@@ -232,7 +232,16 @@ impl RaceView {
     /// Plays this tick's [`Event`]s' effects. A title that does not answer an event's trigger, or
     /// whose effect did not load (the loader's report names it), plays nothing for it.
     pub(crate) fn play_detonator_events(&mut self, core: &SimRace) {
-        for Event { kind, at } in &core.sim.detonator_events {
+        if let Some(feedback) = &mut self.score_feedback {
+            for event in &core.sim.detonator_events {
+                if let Some(points) = event.points {
+                    feedback.raise(points, event.at);
+                }
+            }
+            // The HUD's own update runs after the adds, so a popup is drawn already faded once.
+            feedback.advance(core.sim.dt);
+        }
+        for Event { kind, at, .. } in &core.sim.detonator_events {
             log::trace!("tick {}: {kind:?} at {at:?}", core.sim.world.tick);
             let trigger = effect_for(*kind);
             let Some(mut effect) = trigger.and_then(|t| self.handles.get(t).cloned()) else {
@@ -262,6 +271,45 @@ impl RaceView {
                 }
             }
         }
+    }
+}
+
+impl Race {
+    /// The floating scores as `slot`'s HUD draws them this frame, by widget. Empty for any
+    /// slot but the one the cannon belongs to.
+    #[must_use]
+    pub(crate) fn score_popups(
+        &self,
+        slot: usize,
+    ) -> [Option<oag_hud::ScorePopup>; oag_hud::SCORE_POPUPS] {
+        let mut shown = [None; oag_hud::SCORE_POPUPS];
+        let Some(feedback) = &self.view.score_feedback else {
+            return shown;
+        };
+        if slot != self.core.player_slot() {
+            return shown;
+        }
+        let screen = self.view.sight.screen();
+        for (out, popup) in shown.iter_mut().zip(feedback.slots()) {
+            *out = popup.and_then(|popup| {
+                let [x, y] = self
+                    .view
+                    .project_score_popup(&self.core, popup.at, popup.rise, screen)?;
+                eprintln!(
+                    "TMPPOP tick={} slot={popup:?} xy={x},{y} nomrise={:?}",
+                    self.core.sim.world.tick,
+                    self.view
+                        .project_score_popup(&self.core, popup.at, 0.0, screen)
+                );
+                Some(oag_hud::ScorePopup {
+                    points: popup.points,
+                    x,
+                    y,
+                    alpha: popup.alpha,
+                })
+            });
+        }
+        shown
     }
 }
 

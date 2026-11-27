@@ -326,6 +326,15 @@ pub fn project(
     if distance >= DRAW_RANGE {
         return None;
     }
+    Some(Projected {
+        screen: to_screen(view_projection, world, screen)?,
+        distance,
+    })
+}
+
+/// Where `world` lands on `screen`, `y` down, or `None` behind the camera.
+#[must_use]
+pub fn to_screen(view_projection: Mat4, world: Vec3, screen: [f32; 2]) -> Option<[f32; 2]> {
     let clip = view_projection * Vec4::new(world.x, world.y, world.z, 1.0);
     if clip.w <= 0.0 {
         return None;
@@ -334,10 +343,7 @@ pub fn project(
     // The original's `136 + 136 * y/w` against a clip space whose `y` runs
     // down. Ours runs up, so the sign flips and the number does not.
     let y = screen[1] * 0.5 - screen[1] * 0.5 * (clip.y / clip.w);
-    Some(Projected {
-        screen: [x, y],
-        distance,
-    })
+    Some([x, y])
 }
 
 /// What the reticle is doing, and what the tone plays because of it.

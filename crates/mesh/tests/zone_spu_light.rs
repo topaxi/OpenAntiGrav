@@ -18,7 +18,8 @@ use std::sync::Arc;
 use oag_core::math::Mat4;
 use oag_gpu::formats::SceneStore;
 use oag_mesh::mesh::{
-    Bounds, DrawCall, Emissive, GpuVertex, Model, ModelTexture, Texels, ZONE_EXEMPT_RATE, slots,
+    Bounds, DrawCall, Emissive, GpuVertex, Model, ModelTexture, PROGRAM_TUNNEL_EMISSIVE, Texels,
+    ZONE_EXEMPT_RATE, slots,
 };
 use oag_mesh::mesh_render::{
     self, Anisotropy, CraftShadow, Scene, ShadowMap, ShadowMaps, ShadowReceiver, SpuLight,
@@ -403,6 +404,68 @@ fn a_black_zone_surface_turns_the_lights_colour_and_a_plain_chunk_multiplies_it(
     unmarked.zone.shape[3] = 0.0;
     let pixel = draw(&device, &queue, &zone_chunk, &art, unmarked, None);
     assert_near(pixel[2], 0, "no marker", pixel);
+}
+
+/// **`tunnel_fx_noalpha`'s window lights** (`PROGRAM_TUNNEL_EMISSIVE`, `mesh::rcs::tunnel_emissive`):
+/// on a plain chunk in a Zone frame the emissive bound third is added after the light, decoded and
+/// unlit, so a black albedo under a black stage shows it at half (the program's `/2`); the same
+/// chunk on its Zone program, whose variants declare no emissive, shows nothing
+/// (`docs/rendering/hd-zone-recolour.md`, "Window lights on a plain chunk").
+#[test]
+fn a_plain_tunnel_chunk_adds_its_window_lights_and_its_zone_program_does_not() {
+    let instance = wgpu::Instance::default();
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let (device, queue) =
+        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+            .expect("requesting the device");
+    let art = stage_art(&texture("black stage", [0, 0, 0, 255]));
+    let mut frame = scene(&[]);
+    frame.fog.enabled = 0.0;
+    const WINDOW: u8 = 200;
+    let quad = |bits: u32| {
+        let mut m = model([0, 0, 0, 255], bits | EXEMPT_SLOT);
+        m.emissive = vec![Emissive {
+            tint: [1.0; 3],
+            offset: 0.0,
+            scale: 1.0,
+            rate: 0.0,
+            program: [PROGRAM_TUNNEL_EMISSIVE, 0.0],
+        }];
+        m.pad_masks = vec![Some(texture(
+            "window lights",
+            [WINDOW, WINDOW, WINDOW, 255],
+        ))];
+        m
+    };
+    let want = srgb_encode(OUTPUT_SCALE * srgb_decode(f32::from(WINDOW) / 255.0));
+    let plain = draw(
+        &device,
+        &queue,
+        &quad(slots::DEFAULT | slots::ZONE_PLAIN),
+        &art,
+        frame,
+        None,
+    );
+    for (channel, got) in ["red", "green", "blue"].into_iter().zip(plain) {
+        assert_near(
+            got,
+            want,
+            &format!("a plain chunk's window lights, {channel}"),
+            plain,
+        );
+    }
+    let zone = draw(&device, &queue, &quad(slots::DEFAULT), &art, frame, None);
+    for (channel, got) in ["red", "green", "blue"].into_iter().zip(zone) {
+        assert_near(
+            got,
+            0,
+            &format!("a chunk on its Zone program, {channel}"),
+            zone,
+        );
+    }
 }
 
 /// A circuit built against the stage light (`zone_stage_light`) draws what the uniform-driven Zone

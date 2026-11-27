@@ -349,6 +349,9 @@ pub const ZONE_FRAME: &oag_title::ZoneFrame = &oag_title::ZoneFrame {
     // (`docs/ghidra/functions/ps3-hdfury-eu/zone-shader.md`, "The glow's depth factor").
     glow_window_near: 0.5417,
     detonator_glow_window_near: 0.479,
+    // `Environment_LoadStageTextures` ORs gamma nibble 7 into the strip's address word
+    // (`0x003d6dc8`, confidence 75).
+    glow_vis_srgb: true,
 };
 
 /// HD/Fury's boost and damage zoom-streak ring, `FunkLayerZoom`.
@@ -524,6 +527,8 @@ pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
     // `Detonator_UpdateHud` (`0x00067120`) compares the cell's thresholds against the score
     // (`detonator-hud.md`, 65).
     shows_medals: oag_title::pre_race::Sourced::measured(true),
+    // `DetonatorScoring_Add*` -> `Hud_RaiseScoreFeedback` (`0x00083ba0`) (`detonator-hud.md`, 72).
+    floats_score: oag_title::pre_race::Sourced::measured(true),
 };
 
 /// HD's Detonator object models (`DetonatorMine_Construct` `0x0013a7d8`,

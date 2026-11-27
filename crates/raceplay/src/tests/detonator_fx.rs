@@ -156,6 +156,7 @@ fn an_hd_detonator_race_plays_the_discs_effects_for_each_event() {
     check_the_wall_spark_is_the_discs_pictures(&race);
     check_a_shot_mine_throws_the_discs_shards(&race);
     check_a_live_mine_blast_takes_the_stage_colour(&mut race);
+    check_a_shot_mine_floats_its_score(&mut race, &loaded.hud);
     let at = Vec3::new(1.0, 2.0, 3.0);
     let spawn = Vec3::new(4.0, 5.0, 6.0);
     for (kind, trigger) in [
@@ -179,7 +180,11 @@ fn an_hd_detonator_race_plays_the_discs_effects_for_each_event() {
             "{trigger:?} resolves to a loaded effect"
         );
         let playing = race.view.stage.playing_count();
-        race.core.sim.detonator_events = vec![Event { kind, at }];
+        race.core.sim.detonator_events = vec![Event {
+            kind,
+            at,
+            points: None,
+        }];
         race.view.play_detonator_events(&race.core);
         assert!(
             race.view.stage.playing_count() > playing,
@@ -198,10 +203,12 @@ fn an_hd_detonator_race_plays_the_discs_effects_for_each_event() {
         Event {
             kind: EventKind::MineShot { live: false },
             at,
+            points: None,
         },
         Event {
             kind: EventKind::BombTouched,
             at,
+            points: None,
         },
     ];
     race.core.sim.drain_cues();
@@ -219,6 +226,7 @@ fn an_hd_detonator_race_plays_the_discs_effects_for_each_event() {
     race.core.sim.detonator_events = vec![Event {
         kind: EventKind::Volley,
         at,
+        points: None,
     }];
     race.view.play_detonator_events(&race.core);
     assert_eq!(
@@ -311,12 +319,96 @@ fn check_a_live_mine_blast_takes_the_stage_colour(race: &mut Race) {
     race.core.sim.detonator_events = vec![oag_weapons::detonator::Event {
         kind: EventKind::MineShot { live: true },
         at,
+        points: None,
     }];
     race.view.play_detonator_events(&race.core);
     assert_eq!(
         race.view.stage.frames_of(&blast).len(),
         1,
         "a shot live mine on the opening stage plays the recoloured blast"
+    );
+}
+
+/// **A score add floats its `+N` where the scored object was**, drawn through the layout's own
+/// `ScoreFeedBack` widgets, fading and climbing each tick; 2000 points are drawn at scale 2
+/// and dim the popup already up (`docs/ghidra/functions/ps3-hdfury-eu/detonator-hud.md`,
+/// "The floating score").
+fn check_a_shot_mine_floats_its_score(race: &mut Race, hud: &oag_hud::Assets) {
+    let ahead = race
+        .view
+        .view(&race.core)
+        .inverse()
+        .transform_point3(Vec3::new(0.0, 0.0, -30.0));
+    let context = hud.context().expect("the Detonator layout loaded");
+    let popups = |race: &Race| {
+        let frame = oag_hud::draw_list(&context, &race.readout());
+        let mut shown = Vec::new();
+        for draw in frame.small_text {
+            if let oag_ui::frontend::Draw::Text {
+                x,
+                y,
+                scale,
+                color,
+                border,
+                text,
+                ..
+            } = draw
+                && text.starts_with('+')
+            {
+                shown.push((text, x, y, scale, color[3], border.map(|b| b[3])));
+            }
+        }
+        // The title's text shadow draws each string first; the face is the last of the pair.
+        shown
+            .chunks(2)
+            .map(|pair| pair[1].clone())
+            .collect::<Vec<_>>()
+    };
+    let shot = |points: Option<i32>| oag_weapons::detonator::Event {
+        kind: EventKind::MineShot { live: true },
+        at: ahead,
+        points,
+    };
+    assert!(popups(race).is_empty(), "nothing scored yet");
+
+    race.core.sim.detonator_events = vec![shot(Some(100))];
+    race.view.play_detonator_events(&race.core);
+    let [(text, x, first_y, scale, alpha, border)] = &popups(race)[..] else {
+        panic!("one popup: {:?}", popups(race));
+    };
+    assert_eq!((text.as_str(), *scale), ("+100", 1.2));
+    // HD's lit text is the written alpha times 0.8, in bytes: 249 reads 199.
+    assert_eq!(
+        *alpha,
+        199.0 / 255.0,
+        "faded once by the update after the add"
+    );
+    assert_eq!(*border, Some(249.0 / 255.0), "the border fades with it");
+    let (x, first_y) = (*x, *first_y);
+    assert!(
+        (x - 960.0).abs() < 1.0,
+        "at the point ahead of the camera: {x}"
+    );
+
+    race.core.sim.detonator_events.clear();
+    for _ in 0..30 {
+        race.view.play_detonator_events(&race.core);
+    }
+    let later = popups(race);
+    assert!(
+        later[0].2 < first_y - 20.0,
+        "it climbs: {first_y} {later:?}"
+    );
+    assert!(later[0].4 < 0.6, "and fades: {later:?}");
+
+    race.core.sim.detonator_events = vec![shot(Some(50)), shot(Some(2000)), shot(None)];
+    race.view.play_detonator_events(&race.core);
+    let shown = popups(race);
+    let drawn: Vec<(&str, f32)> = shown.iter().map(|p| (p.0.as_str(), p.3)).collect();
+    assert_eq!(
+        drawn,
+        [("+100", 1.2), ("+ 50", 1.2), ("+2000", 2.0)],
+        "an event that pays nothing raises none"
     );
 }
 
@@ -633,6 +725,10 @@ fn check_the_title_plays_the_wall_spark(source: String, track: Option<&str>) {
     .expect("loading a Detonator race");
     let mut race = Race::start(loaded.setup, loaded.view, loaded.modules);
     check_the_wall_spark_is_the_discs_pictures(&race);
+    assert!(
+        race.view.score_feedback.is_none(),
+        "the floating score is wired on HD only"
+    );
     let (spawn, rebound) = (Vec3::new(4.0, 5.0, 6.0), Vec3::X);
     race.core.sim.detonator_events = vec![Event {
         kind: EventKind::RoundWall {
@@ -641,6 +737,7 @@ fn check_the_title_plays_the_wall_spark(source: String, track: Option<&str>) {
             rebound,
         },
         at: spawn,
+        points: None,
     }];
     race.view.play_detonator_events(&race.core);
     let effect = race

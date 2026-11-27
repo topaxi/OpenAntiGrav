@@ -382,6 +382,7 @@ pub fn place_stage(
         .map(|(at, _)| Event {
             kind: EventKind::BombReplaced,
             at,
+            points: None,
         })
         .collect();
     field.live_bombs = 0;
@@ -687,6 +688,10 @@ pub struct Event {
     pub kind: EventKind,
     /// Where, in the world.
     pub at: Vec3,
+    /// What the event added to the score through `Hud_RaiseScoreFeedback`, or `None`
+    /// where it adds none (`docs/ghidra/functions/ps3-hdfury-eu/detonator-cannon.md`,
+    /// "The score").
+    pub points: Option<i32>,
 }
 
 /// The things [`Event`] reports. Each names the original's effect or sound it stands behind in
@@ -788,6 +793,7 @@ pub fn step_contacts<S: crate::Craft>(
         went.push(Event {
             kind: EventKind::MineTouched,
             at,
+            points: None,
         });
         field.remove_mine(i);
     }
@@ -825,6 +831,7 @@ pub fn step_contacts<S: crate::Craft>(
         went.push(Event {
             kind: EventKind::BombTouched,
             at,
+            points: None,
         });
         field.remove_bomb(i);
     }

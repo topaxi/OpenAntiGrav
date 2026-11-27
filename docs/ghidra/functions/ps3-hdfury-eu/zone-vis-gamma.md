@@ -69,9 +69,9 @@ statically, the word layout is confirmed by live reads on other units, and a bin
 ruled out only indirectly (live words elsewhere carry bits the builder never writes). The strip's own word
 has not been read live at a Zone draw.
 
-**3. Ours.** `crates/mesh/shaders/zone.wesl` `zone_glow` samples `zone_vis_tex` (`Rgba8Unorm`) raw, and
-`shade.wesl` adds `zone_glow_term` into `lit_linear`, HD's linear sum, before the encode. So ours' strip is
-`decode`-less where every other HD gamma-7 texel is decoded.
+**3. Ours, before the wiring.** `crates/mesh/shaders/zone.wesl` `zone_glow` sampled `zone_vis_tex`
+(`Rgba8Unorm`) raw into `lit_linear`, HD's linear sum, where every other HD gamma-7 texel is decoded. See
+"Wired" below.
 
 ## What applying it does (measured, scratch build, reverted)
 
@@ -111,32 +111,45 @@ original's floor: its red is 5.1 to 9.5 where the strip's decoded red (`14 * L`)
    the track-surface draw's unit that binds `*(0x00c7dfb0 + 0x32b0)`'s offset: its `SET_TEXTURE_ADDRESS` should
    read `0x60730303`.
 
-## Ready to wire
+## Wired (2026-11-27, `det-vis-srgb`)
 
-Wire the decode on its own, then measure items 1 and 2 against the decoded floor: it is a read law, it is how
-every other gamma-7 unit of HD is already handled ([hd-track-tone.md](../../../rendering/hd-track-tone.md),
-"The texture unit's decode is the sRGB curve"), and a factor measured against the raw floor would come out the
-wrong size. Decode the strip's RGB on HD: `decode(textureSample(zone_vis_tex, ...).rgb)` in `zone_glow` (or an
-`Rgba8UnormSrgb` view of the strip) where the scene is linear. Expect the table above: box blue 0.38-0.89 of
-the original's, mean grey down 0.6 to 1.2, RMSE up 0.001 to 0.004. A test: the visualiser glow of a smooth
-slot at level 1 against level 0.5 differs by the sRGB curve's ratio, not 2. The gamma-path comment in
-`shade.wesl` above `plain` ("it is a shader parameter and texture-lookup product ... owes no sRGB decode either
-way") contradicts this page and changes with the wiring.
+`oag_title::ZoneFrame::glow_vis_srgb` (HD alone, `true`) reaches the shader as `Zone::shape.z`.
+`zone_glow` decodes the fetched texel with the piecewise sRGB curve before the `up * depth * E.w` gain, for
+the authored linear sum only. The stand-in gamma sum (`plain` in `shade.wesl`) keeps the stored texel, since
+`decode(plain)` decodes that whole sum. Tests: `zone_recolour::the_visualiser_strip_is_srgb_decoded_into_the_linear_sum_when_the_zone_says_so`
+(a tint of 128 reads 84 decoded and 123 raw; red with the shader's `select` replaced by the raw texel) and
+the `shape.z` assertion in `detonator_ground_truth::an_hd_detonator_race_loads_its_own_stage_table` (red with
+HD's field `false`).
 
-**Re-measured on the current Detonator pairs (2026-11-26):** the same scratch decode takes `cannon-volley` 10.53 to 9.11, `-hot` 7.70 to
-4.82, `mines-ahead` 9.68 to 9.04 and `pad` 4.44 to 3.24, and RMSE now falls on all four (the rise above was on the older pairs). Numbers and
-floor boxes: [compare-page.md](../../../tools/compare-page.md), "The `cannon-volley` difference, split by region".
+The six Detonator pairs, mean grey: `cannon-volley` 10.53 to **9.11**, `-hot` 7.70 to 4.82, `mines-ahead` 9.68 to
+9.04, `pad` 4.44 to 3.24; the two end screens unchanged. Read at player size, the floor under `-hot` matches
+the original's; on `cannon-volley`, `mines-ahead` and `pad` ours is now darker than the original's (box blue
+0.31 to 0.53 of it), where before it was a lilac wash brighter than it. **The second factor stays open**
+(the three items above); nothing was tuned toward it. A Zone race keeps its look: `zone-vineta-k-z5` with no
+bands is pixel for pixel the same, and with made-up bands fed (`--zone-bands`, no original to compare) only the
+near floor darkens.
 
 ## Cross-title
 
-- **2048: checked, differs.** Its effect-settings tables author no `EQ` tints, so ours' strip stays blank
-  there ([detonator-look.md](detonator-look.md), "Cross-title"); there is nothing for a decode to act on.
-- **Omega: open.** Searched once: `eboot.bin`'s only `zoneTexVis` string (`0x0182a6d1`) is referenced from
-  `ShaderConstants_InitNameTable` alone (`0x015c47de`, `0x015c4a6d`), so the strip's create is not reached
-  from the name. Its visualiser is fed by another library ([detonator-look.md](detonator-look.md),
-  "Cross-title" under "The floor's violet"); on GNM the sRGB choice is the texture descriptor's format. Next:
-  the counterpart of `Environment_LoadStageTextures` (the stage-texture loads beside a 256-texel zero fill),
-  and the descriptor format of the texture it creates.
+- **2048, its own `ZoneMode2048` tables: checked, differs.** They author no `EQ` tints, so ours' strip stays
+  blank there ([detonator-look.md](detonator-look.md), "Cross-title"); there is nothing for a decode to act on.
+- **2048, HD-lineage circuits: the data reaches the strip, the decode is open.** Those circuits take HD's own
+  title-wide tables ([zone-environment-fallback.md](../vita-2048-eu-v104/zone-environment-fallback.md)), which do
+  author the tints (on Vineta K `eq_tints` reads `(1, 216, 255)` in Zone and `(171, 9, 255)` / `(14, 1, 55)` in
+  Detonator), so ours lights their strip and, with `oag_2048` carrying `zone_frame: None` (`shape.z` 0), samples it
+  raw. Whether 2048 decodes it is unread, and its lit programs decode texels in the shader by squaring
+  (`oag-shader-check`'s `square_decode`), so HD's unit-side law is not assumed. Next: whether a `DLC1/environments`
+  program declaring `zoneTexVis` squares that tap (`scripts/vita-usse.py`), and the strip texture's GXM gamma mode.
+- **Omega: checked, applies, not wired.** `FUN_015f4920` (`eboot.bin`, the load that names
+  `data/Tex/zoneModeTrack0.gnf`) creates three `256 x 32` textures with GNM data format `0xfac90a` and
+  zero-fills them (`0x8000` bytes each). That format word is `8_8_8_8` (surface `0x0a`), channel type `9`
+  (sRGB), channels `X Y Z W`. Their descriptors are at `0x01e5f6b0` (stride `0x38`). The frame preparation
+  (`Scene_PrepareFrame_q`, `0x015d080b`) stores `0x01e5f6b0 + i * 0x38` into the shader-constant slot
+  `+0x8a8`, whose name `ShaderConstants_InitNameTable` fills with `zoneTexVis` (stored at `+0x8a0`,
+  `0x015c4a6d`, out of `R11` loaded at `0x015c47de`). So Omega's texture unit decodes the strip too.
+  Confidence 75 (static; the descriptor's sRGB is not read live). What Omega writes into the 32 rows, and its
+  pixel program's use of them, are unread. Not wired: `oag_omega` carries `zone_frame: None`, so its HD-lineage
+  circuits' strip is still raw in ours.
 
 ## Names
 

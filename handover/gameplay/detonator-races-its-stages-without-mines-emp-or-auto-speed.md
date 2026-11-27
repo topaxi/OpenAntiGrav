@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [hd, 2048, omega]
-updated: 2026-11-26
-summary: "Detonator open: wire the floor visualiser sRGB decode, upper-right screen, HD end-screen delay, Omega EndRace Menu, medal tiers"
+updated: 2026-11-27
+summary: "Detonator open: floor visualiser second factor and 2048/Omega strip decode, upper-right screen, HD end-screen delay, Omega EndRace Menu, medal tiers"
 categories: [rendering]
 ---
 
@@ -190,7 +190,7 @@ Law: `detonator-cannon.md` ("What the simulation needs"). Decisions already made
   water and a preview has no probe for), the camera (`ModelZ -87`'s projection is unread), when each
   widget enables and whether a lower tier stays under a higher (best tier only here), 2048's
   `ImageX 720` skin, and HD's end-race `MedalModel*` (same models, not drawn there). **Still open:** the EMP
-  widgets (phase 10), the bomb-ahead warning and `ScoreFeedBack0..15` (need an event stream),
+  widgets (phase 10), the bomb-ahead warning (needs an event stream), `ScoreFeedBack0..15` on Omega and 2048 (HD's is wired),
   HD's streak line (its language table has no `HUD_CHAIN_n`), the bullet icons' per-state art and
   the per-volley fired words. The brief that follows is what was read, kept for those:
   (`docs/ghidra/functions/ps3-hdfury-eu/detonator-hud.md`,
@@ -216,7 +216,7 @@ Law: `detonator-cannon.md` ("What the simulation needs"). Decisions already made
   | `PulseBonus` | the streak line `HUD_CHAIN_n - amount` (1000/3000/5000), held 2.0 s then faded 1.0 s | `%s - %d` | edge-detect `C.awards` (`first_five`, `second_five`, `ten`, `fifteen` go false to true); the timers are view state | ready (needs the language ids `HUD_CHAIN_5/10/15`) |
   | `DetonatorStage` | HUD stage over 14 | `%d/%d` | `World::detonator.stages_laid.min(14)`: the original's `rm+0x2dee` starts at 1 (the constructors store it) and counts start-line crossings, capped 14 (72) | ready |
   | `DamageBar`, `DamageBarBg`, `ShieldBarText` | energy percent (white in mode 14) | `(int)pct` | the generic shield readout (`oag_hud::shield_bar`, `Readout::shield`) fed with the craft's energy pool | ready once the layout loads |
-  | `ScoreFeedBack0`..`15` | a floating `+N` per score add (`+%3.0f`) | text | **missing**; law read 2026-11-26 (`detonator-hud.md`, "The floating score"): the raise names the scored object's position, the text fades by `(1 - dt) * 0.995` per update and rises `5 (1 - alpha/255)` along the camera's row `+0x1e0`, scale 1.2 under 1000 points; wire as 16 view-side slots raised off the per-tick `detonator::Event` list (a shot mine, a bomb, the chain, the EMP), projected through the sight's world-to-screen path (about 1.5 h, sonnet) | ready to wire |
+  | `ScoreFeedBack0`..`15` | a floating `+N` per score add (`+%3.0f`) | text | `Event::points` | wired on HD 2026-11-27 (`detonator-hud.md`, "The floating score"); Omega and 2048 author the widgets, their caller unread |
   | `DetonatorGold/Silver/BronzeMedal` | model when the score passes the cell's thresholds | model | `crate::medal_watch::detonator_value` + the cell | wired (`det-medals`); best tier only, chosen |
   | `ForwardWarning*` | bomb-ahead warning, once per stage, 2.0 s | icons | **missing**: `Detonator_IsBombAhead` (500.0 track measure + straight distance, `0xd2a30`/`0x588f0` unread) and the per-stage latch. On HD message 8 selects `ForwardWarningMineIcon`, which `Detonator_warnings.xml` does not author, so HD probably draws no bomb icon (55, `detonator-hud.md`) | needs RE + a capture |
   | `Emp_0`..`7`, `EmpReady`, `EmpBarEffect` | `n = rm+0x2dd8` pips lit while `n > i`, `EmpReady` at `table+0x1bc`, gauge `min(n/8, 1)` | pips | `RaceSim::detonator_emp`, `detonator_emp_gauge` | pips and `EmpReady` wired (HD, Omega); `EmpBarEffect` not drawn (an `<ImageModel>`); 2048's `EmpCharge`/`EmpFull` open |
@@ -515,16 +515,20 @@ grade's stage). Muting the root's glows had no measured effect in that frame (12
 ~~What is left is the `Trail_Ribbon` dot chains~~ (not the whole of it: "`cannon-volley` split by region" below). The ribbon (on the carried pair, muted: 10.22 against 10.53, so even a perfect ribbon leaves it above 10): ours draws each speed-0 ribbon particle as a dot,
 the original shows a few thin lines; the far bar (12.41) and the root's noise force (12.15) are both worse. Next: one RPCS3 capture of the
 blast's particle quads a few ticks after a hit, and who reads the child instance's `+0x130`/`+0x140` (same page, "The ribbon, open").
-And the `+100` (read, not drawn: the next bullet). The craft-speed carry on the rounds is right physics: put back by `v` times their age, ours hits the mine at round age 8 against
+The `+100` is drawn (2026-11-27), 15 px above the original's because ours' shot is 9 ticks older at the picture. The craft-speed carry on the rounds is right physics: put back by `v` times their age, ours hits the mine at round age 8 against
 the original's 10 (without the carry, 1). But it raised the carried pair to 13.75 (12.98 with the recolour), because the younger blast shows more of those gaps. Re-try it once
 the glows are right; it is about 40 lines in `oag_raceplay::detonator` behind a `--detonator-cannon-craft-speed` flag.
 
 **`cannon-volley` split by region (2026-11-26, `det-volley-split`; `docs/tools/compare-page.md`, "The `cannon-volley` difference, split by
 region").** 10.53 = mines 3.11 (audio-driven), floor 2.58, right wall 1.01, upper-right screen 0.94, HUD 0.70, far scenery 0.66, hull 0.58,
-ribbon 0.30, shot-specific rest under 0.2 each. **Next, ready to wire:** the visualiser strip's sRGB decode (`zone-vis-gamma.md`) alone takes
-it to **9.11** on current `main` (all four race pairs fall); scope to HD and check a Zone race. Then read the upper-right screen's grey smear
-(also on `mines-ahead`) and the right wall's missing window lights. The ribbon is
-0.31 of it. The decode leaves the floor darker than the original's on three of four pairs (second factor open).
+ribbon 0.30, shot-specific rest under 0.2 each. ~~Next, ready to wire: the visualiser strip's sRGB decode~~ wired on HD (2026-11-27, `det-vis-srgb`; `zone-vis-gamma.md`,
+"Wired"): `cannon-volley` **9.11**, all four race pairs fall. **Next:** read the upper-right screen's grey smear
+(also on `mines-ahead`). ~~The right wall's missing window lights~~ wired (2026-11-27, `det-volley-wall`; `hd-zone-recolour.md`, "Window lights
+on a plain chunk"): the lights draw, the wall row stays at 1.03 (registration); Omega's `tunnel_fx_noAlpha` is checked, applies, not wired. The ribbon is
+0.31 of it. **Open:** (1) the floor is now darker than the original's on three of four pairs (second factor, `zone-vis-gamma.md`,
+"Still unread"); (2) Omega: its `zoneTexVis` is an sRGB texture too, ours draws its strip raw (`oag_omega` has no `ZoneFrame`);
+(3) 2048's HD-lineage circuits author the EQ tints through HD's tables and ours draws the strip raw: read whether their
+Zone GXP squares the `zoneTexVis` tap and the strip's gamma mode (`zone-vis-gamma.md`, "Cross-title"), then port or record differs.
 
 **Hull camera and size, re-based (2026-11-23, `det-camera`).** The maintainer's "ours is far, the original is close" was true and the
 camera flags were not the cause: the pair fed the RAM body (2 to 4 ticks ahead of the presented frame) with the push-buffer camera, and
@@ -604,7 +608,7 @@ mine drawn black in ours and pale violet in the original: without it the box is 
 
 **The vis texel's gamma flag, read (2026-11-23, `det-floor-gain-re`, `docs/ghidra/functions/ps3-hdfury-eu/zone-vis-gamma.md`).** `zoneTexVis`'s address
 word is `0x60730303` (gamma nibble 7, confidence 75): the original sRGB-decodes the strip, ours samples it raw into the linear sum. Applied alone (scratch,
-reverted) it overshoots: box blue ours over original goes from 1.7-2.3 to 0.38-0.89. **Ready to wire on its own** (the page, "Ready to wire"); measure the rest against the decoded floor. Open, in
+reverted) it overshoots: box blue ours over original goes from 1.7-2.3 to 0.38-0.89. ~~Ready to wire on its own~~ wired (the page, "Wired"). Open, in
 order: the viewport z mapping (`SET_VIEWPORT_SCALE`/`OFFSET` z; a doubled depth factor is about 1.33x after the encode), the band-independent floor term
 (the original's floor red 5-9 is not the strip: Track Fog, the Detonator radial bloom), and one RPCS3 frame dump confirming `0x60730303` on the vis unit.
 

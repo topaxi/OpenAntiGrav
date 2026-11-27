@@ -189,6 +189,7 @@ mod refraction;
 mod shield_scroll;
 mod snow_rock;
 mod static_hologram;
+mod tunnel_emissive;
 mod twin_blend;
 mod uv_overlay;
 pub use pads::{build_pads, build_weapon_pads};

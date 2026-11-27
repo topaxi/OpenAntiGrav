@@ -1293,6 +1293,7 @@ fn list(cx: &Context<'_>, readout: &Readout, sight: Sight) -> Frame {
         list.push(draw.stretched(label.stretch));
     }
 
+    super::score_popup::append(&mut frame, cx, readout);
     // The whole HUD, sprites and text alike, slides with the drawn lean on the titles that
     // measured it - see `sway`.
     super::sway::slide(&mut frame, super::sway::offset(cx.art, readout));

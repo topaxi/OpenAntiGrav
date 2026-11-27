@@ -575,7 +575,8 @@ fn a_volley_reports_itself_once_at_the_craft() {
         first,
         [Event {
             kind: EventKind::Volley,
-            at: ship.physics.body.position
+            at: ship.physics.body.position,
+            points: None
         }]
     );
     assert!(tick_events(&mut field, FIRE, &ship, &open_air).is_empty());
@@ -595,6 +596,7 @@ fn a_shot_mine_reports_whether_it_was_live_and_where_it_was() {
             [Event {
                 kind: EventKind::MineShot { live },
                 at: Vec3::new(0.0, crate::detonator::MINE_LIFT, 150.0),
+                points: Some(if live { 100 } else { 50 }),
             }]
         );
     }
@@ -624,6 +626,8 @@ fn a_destroyed_bomb_and_the_mines_it_chains_report_themselves() {
             .any(|k| matches!(k, EventKind::MineChained { live: false })),
         "the far mine stays: {kinds:?}"
     );
+    let paid: Vec<i32> = events.iter().filter_map(|e| e.points).collect();
+    assert_eq!(paid, [2000, 100], "the bomb, then the chained live mine");
 }
 
 #[test]

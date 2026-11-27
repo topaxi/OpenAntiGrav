@@ -73,6 +73,7 @@ sort_fields! {
         split_gap, incoming_raises, nozzles, nozzle_axes, engine_lights, spu_vertex_lights,
         hull_points, hd_weapon_lights, spark_anchors, collision_fx, effects, handles, mine_blasts,
         hd_bomb_blast, bomb_shockwave_fades, hd_missile_blast, detonator_cannon_lights, detonator_emp_light,
+        score_feedback,
         detonator_mine_spin,
         detonator_ammo_gauge, ammo_gauge_shown, ammo_gauge_speed, detonator_hull_charge,
         hull_charge_shown, sounds, track_emitters, announcer,

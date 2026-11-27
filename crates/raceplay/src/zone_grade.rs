@@ -226,6 +226,8 @@ pub struct ZoneGrade {
     /// The near plane the visualiser glow's depth factor is built from; `0.0` keeps the
     /// renderer's own window depth. See [`Self::with_glow_window_near`].
     glow_window_near: f32,
+    /// The visualiser strip is sRGB-decoded on fetch. See [`Self::with_glow_vis_srgb`].
+    glow_vis_srgb: bool,
     /// Whether a track chunk takes the stage's Track fog ([`oag_title::ZoneFrame::track_fog`]).
     track_fog: bool,
 }
@@ -257,6 +259,7 @@ impl ZoneGrade {
             arena: false,
             stage_lit: false,
             glow_window_near: 0.0,
+            glow_vis_srgb: false,
             track_fog: false,
             hull_probe_tint_scale: None,
         })
@@ -329,6 +332,13 @@ impl ZoneGrade {
     #[must_use]
     pub fn with_glow_window_near(mut self, near: f32) -> Self {
         self.glow_window_near = near;
+        self
+    }
+
+    /// The visualiser strip is decoded on fetch ([`oag_title::ZoneFrame::glow_vis_srgb`]).
+    #[must_use]
+    pub fn with_glow_vis_srgb(mut self, on: bool) -> Self {
+        self.glow_vis_srgb = on;
         self
     }
 
@@ -1055,7 +1065,7 @@ impl ZoneGrade {
             shape: [
                 if self.arena { 1.0 } else { 0.0 },
                 self.glow_window_near,
-                0.0,
+                if self.glow_vis_srgb { 1.0 } else { 0.0 },
                 if self.stage_lit { 1.0 } else { 0.0 },
             ],
             aniso,
