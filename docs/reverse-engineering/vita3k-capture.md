@@ -457,6 +457,13 @@ under `SIGSTOP`) and read Vita3K's own renderer queue, which lives in guest memo
   ones, or exactly the bound textures are missed.
 - **Do not take every descriptor-shaped word in memory as bound state.** Reused command slots keep stale
   texture words with some bytes overwritten, and random words decode as descriptors.
+- A flat texture (the Zone skins) has no 64-byte stretch distinct enough to fingerprint: match its whole
+  level 0, or the Zone case reads as "no skin bound".
+- One process can walk and dump: import `vita-2048-pair.py`, call `boot_and_walk` (which confirms the craft
+  in the HD and Fury Campaigns) and read `/proc/<pid>/mem` of its own child. HD Campaign cells: Race node
+  `(505, 345)` re-centred `(533, 333)`, Zone node `(600, 395)` re-centred `(527, 297)`. Of eleven
+  launches on a loaded machine (2026-11-27), six reached the HUD, four hung on "Sony Computer
+  Entertainment presents" and one wedged at 56 % with the craft confirmed, as the load rose past 50.
 - A load wedged at 56 % has usually run the texture loader already, so resident descriptors can still be
   read, but nothing the game does after the load.
 

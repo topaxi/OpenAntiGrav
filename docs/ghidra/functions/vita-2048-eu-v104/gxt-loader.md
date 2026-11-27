@@ -52,81 +52,122 @@ Two independent sources agree on the value:
 other callers, which never call `SetLodBias`. Two were read:
 
 - **`FUN_810242e8`**: render targets, mip filter off.
-- **`Environment_LoadHDFuryContent`**: the same, plus the **Zone and Detonator track skins**. Fifteen
-  descriptors (`DAT_815d2d0c`, allocated under `Game/FunkLayer.LIVE/FunkLayer.zone.cpp`; the
-  `data/Tex/zoneModeTrackN.gxt` and `DetonatorModeTrackN.gxt` strings) are set to min filter linear
-  and **mip filter 0 (off)** after loading. Those skins sample level 0 at every distance, whatever
-  bias the loader left.
+- **`Environment_LoadHDFuryContent`**: the same, plus the **Zone and Detonator track skins**. It loads
+  fifteen `data/Tex/zoneModeTrackN.gxt` (or `DetonatorModeTrackN.gxt` when the mode word `DAT_8153fd24`
+  is `0xe`) into `DAT_815d2d0c` (allocated under `Game/FunkLayer.LIVE/FunkLayer.zone.cpp`). For each it
+  sets min and mag filter linear and **mip filter 0 (off)**, then copies the descriptor into
+  `DAT_815d2d48` and sets the copy to **point** min and mag, mip filter off. Nothing sets the bias, so
+  both keep raw 19. The v1.04 patch (`data2.psarc`) ships these skins with **one level** (256x256 RGBA8),
+  where the base `data.psarc` has seven, so no bias or mip filter has anything to select.
 
 `FUN_81043b1c` (nine call pairs) and the rest were not read.
 
-## In a race: the bound descriptors (2026-11-27, `v2048-texlevel-measure`)
+## In a race: the bound descriptors (2026-11-27, `v2048-texlevel-measure`, `v2048-texlevel-more`)
 
-The claim under test: race track, scenery and craft textures are sampled with the loader's state. It would
-be false for a texture whose live `SceGxmTexture` had a bias other than raw 19, mip filter off, or a min or
-mag filter other than linear. **It holds on the race read, confidence 90.**
+The claim under test: every disc texture bound in a 2048 race is sampled with the loader's state. It is
+false for a texture whose live `SceGxmTexture` has a bias other than raw 19, mip filter off, a min or mag
+filter other than linear, or a minimum level other than 0. **As worded it is false: the Zone skins differ.
+Every other disc texture read carries the loader's state, in five race runs and two Zone runs.**
 
-**Method.** Vita3K 0.2.1 (`885f9168d`), the EU v1.04 game, Single Player Campaign, Queens Mall (offensive
-weapons only). Guest memory was dumped under `SIGSTOP` and read twice over
-([vita3k-capture.md](../../../reverse-engineering/vita3k-capture.md), "Which textures a frame binds"):
+**Method.** Vita3K 0.2.1 (`885f9168d`), the EU v1.04 game. Guest memory was dumped under `SIGSTOP`
+([vita3k-capture.md](../../../reverse-engineering/vita3k-capture.md), "Which textures a frame binds").
+**Bound state** is Vita3K's queued `SetState`/`Texture` commands, which carry the 16-byte descriptor each
+bind used. Each descriptor's texel address was matched to a `.gxt` on the disc by the texels themselves.
+Every dump also shows non-loader states (probes, render targets), so the read can see a difference.
 
-1. **Bound state**: Vita3K's queued `SetState`/`Texture` commands, which carry the 16-byte descriptor each
-   bind used. Each descriptor's texel address was matched to a `.gxt` on the disc by the texels themselves.
-2. **Resident state**: every descriptor in memory pointing at a matched `.gxt`'s first texel.
+| Circuit | Mode | Boot | Dumps | Distinct disc textures | Differing |
+| --- | --- | --- | ---: | ---: | --- |
+| Queens Mall (native) | Race | 1 | 2 (0:10, 0:25) | 269 | none |
+| Queens Mall | Race | 3 | 3 | 311 | none |
+| Vineta K (DLC1, HD Campaign) | Race | 4 | 3 | 228 | none |
+| Vineta K | Race | 7 | 3 | 216 | none |
+| Altima (native; see below) | Race | 6 | 3 | 184 | none |
+| Vineta K (HD Campaign) | Zone, zones 4 and 6 | 2 | 2 | 29 | 3 Zone skins |
+| Vineta K | Zone, zones 4 and 6 | 5 | 2 | 29 | 3 Zone skins |
 
-**Bound, one boot, two frames** (grid at 0:10, mid-lap at 0:25), 269 distinct disc textures over both:
+- Each boot number is a separate emulator process. Boot 1 is the first lane's.
+- Queens Mall's boot 3 shares 263 of boot 1's 269 textures, all with the same state: the bound state on a
+  second boot.
+- Altima is a substituted event: the HD Campaign's Race cell with its circuit name overwritten in memory
+  (`vita3k-mem.py rename-track Vineta_K altima`). Mode, class and craft are the HD cell's. 109 of its 141
+  environment textures are under `environments/altima/`.
+- A Zone race draws the track from the skins and binds only seven track and scenery textures, so the Zone
+  runs say little about track materials. The 26 textures of each Zone run that are not skins (craft, pads,
+  effects, HUD and those seven) all read the loader's state.
 
-| Class | Textures | Binds, 0:10 | Binds, 0:25 | Bias raw, min, mag, mip filter |
-| --- | ---: | ---: | ---: | --- |
-| track and scenery | 244 | 4,647 | 5,626 | 19, 1, 1, 1 on every bind |
-| craft | 14 | 521 | 526 | 19, 1, 1, 1 on every bind |
-| other disc textures | 11 | 176 | 109 | 19, 1, 1, 1 on every bind |
+**By family**, state as bias raw, min, mag, mip filter (minimum level 0 on all):
 
-- **None differs.** Lightmaps (`lmaps/*-lmap.gxt`) and pad textures (`weaponpad_norm`) are in the set.
-- Minimum level of detail 0 on all, and the mip count is the file's level count minus one. One race texture
-  has a single level (`m_lightstripv01_e`), where the bias has nothing to select.
-- Texture units 0 to 3. A descriptor holds one sampler state, so near and far draws of a texture read the same.
-- No anisotropy: min and mag read plain linear on every bind, the filter values Vita3K declares (point,
-  linear and two mipmap forms) include no anisotropic one, and the loader makes no anisotropy call.
+| Family | Examples bound | State |
+| --- | --- | --- |
+| track and scenery, lightmaps | `environments/*/textures`, `lmaps/*-lmap.gxt` | 19, 1, 1, 1 |
+| craft | `ships/*2048`, `hdships/*` | 19, 1, 1, 1 |
+| speed and weapon pads | `speedpad_diff/norm`, `weaponpad_diff/norm`, DLC `ds_speedup_cs/ne` | 19, 1, 1, 1 |
+| weapon models | `hd_rocket1`, `hd_mine1`, `hd_bomb*`, `hd_leechbeam*` | 19, 1, 1, 1 |
+| exhaust flame and shield absorb | `flame_01`, `flame_01_hd`, `zonebattle_hd_absorbinternal` | 19, 1, 1, 1 |
+| particles, ribbon trails, flares | `particles/tex`, `particles2048/tex`, `ribboneffects`, `engineflare`, `lensflare`, `smoke_trails` | 19, 1, 1, 1 |
+| billboards, HUD | `billboards/hd_adverts`, `2048_hud` | 19, 1, 1, 1 |
+| **Zone skins** | `zoneModeTrack2..4.gxt` | **19, 1, 1, 0** (linear) and **19, 0, 0, 0** (point copy), one level |
 
-**Bound textures that are not `.gxt` files** follow other states, which also shows the read can see one:
+- On every disc texture bound in a race dump of boots 3, 4, 6 and 7 the descriptor's level count is the
+  file's, so each is read over its own full chain. The exception is the Zone skins, whose one level is the
+  v1.04 file's. On boot 1's wedged repeat, 226 of its 269 textures were resident with the loader's state,
+  and so were all 444 environment and ship textures with a descriptor.
+- The effect textures named above have 2 to 8 levels, so the bias selects levels on them. Two weapon flash
+  textures (`pulse_bombflash_glow`, `pulse_mineflash_glow`) have one level.
+- No texture of a magstrip, light cone, hologram or rim effect was bound in any run, so those are unread.
+- This is the descriptor's state. A fragment program can still choose a level itself; no program was read
+  for that.
+- Zone skins, both boots: at zone 4 the linear descriptor of skin 3 and the point copies of skins 2 and 3
+  are bound; at zone 6 the linear descriptor of skin 4 and the point copies of skins 3 and 4. The live
+  descriptors of all fifteen pairs match the static loop above.
+- No anisotropy: apart from the point copies, a few point binds of run-time textures and one stray
+  record, min and mag read plain linear, the filter values Vita3K declares include no anisotropic one,
+  and the loader makes no anisotropy call.
 
-- the circuit's `track.probes` (64x32): bias raw 31 (0.0), linear/linear, **mip filter off**;
+**Bound textures that are not `.gxt` files** follow other states:
+
+- the circuit's `track.probes` (64x32): bias raw 31 (0.0), linear/linear, mip filter off;
 - 768x512 targets: raw 31, point, mip filter off;
-- small run-time textures: the loader's four values.
-
-**Second boot, resident state only.** The same event wedged mid-load, with the circuit's textures already in
-memory. 226 of the 269 were resident, all with the loader's four values at their texel address; so were all
-444 environment and ship textures that had a descriptor. A mid-load read cannot see a rewrite made after the
-load, so the bound state itself is **seen on one boot**.
+- in Zone, 64x2 (raw 31, linear) and 256x32 (raw 31, point) run-time textures, mip filter off.
 
 **Outside the race**, two front-end textures, `tex/photomode_dots` and `tex/sony_legal_text`, keep bias 19
-with the mip filter off.
+with the mip filter off (boot 1).
 
 **Instrument traps.** A search of all memory for descriptors also finds stale renderer command slots (partly
 overwritten, so the filters read 0) and stray words that decode as descriptors. Neither is bound state; only
-the command read counts.
+the command read counts. The Zone skins are too flat for a match on 64 distinct bytes: they were matched on
+their whole level 0 and on the pointers at `DAT_815d2d0c`.
 
 ## What this says, and what it does not
 
-- **Read.** A texture this loader builds samples trilinear over the file's own mip chain with a -1.5
-  bias. Confidence **90**: the static call, and every disc texture bound in two race frames.
-- **Not measured.** The Zone and Detonator track skins (the static read above says their mip filter is off);
-  the HD and Fury campaign circuits; any second circuit. An HD Zone load wedged in the emulator.
-- **Inferred.** Other circuits and modes keep the loader's bits, because the one loader builds their
-  textures and the race rewrote none of them.
+- **Read, confidence 92.** A race, on the three circuits above, samples every disc texture it binds
+  trilinear over the file's own chain with a -1.5 bias and no anisotropy. A runtime read in an emulator,
+  and Omega does not agree, so it stays under 95.
+- **Read, confidence 92.** The Zone skins are sampled with the mip filter off, linear and point, from one
+  level. Static loop and two live boots agree.
+- **Static only.** The Detonator skins take the same loop (confidence 80 for their live state). No
+  Detonator race was run.
+- **Not measured.** Fury (DLC2) circuits, the other circuits, a native circuit's Zone, Eliminator, split
+  screen.
+- **Score history.** 2026-11-27: 90 on Queens Mall, bound state from one boot (`v2048-texlevel-measure`);
+  92 on five race runs across three circuits, with Queens Mall bound on a second boot (263 of 269 shared)
+  and the Zone skins seen live on two boots (`v2048-texlevel-more`).
 
 ## Ours
 
 2048's `Looks::material_lod_bias` is `Rule::UNREAD`, so ours samples 2048's track materials at bias 0 with
-the player's anisotropy (16x by default). **Checked, differs**, ready to wire: the same
-`material_lod_bias` mechanism HD uses (`oag_title::MATERIAL_LOD_BIAS = -1.5`,
-`docs/rendering/hd-track-tone.md`) carries 2048's value unchanged.
+the player's anisotropy (16x by default). **Checked, differs.** The same `material_lod_bias` mechanism HD
+uses (`oag_title::MATERIAL_LOD_BIAS = -1.5`, `docs/rendering/hd-track-tone.md`) carries 2048's value
+unchanged. By family:
 
 - The shader bias reaches `material_sample` and `material_sample_grad`, which includes lightmaps. Ours reads
   environment probes at an explicit level, so they stay at bias 0, as the original's do.
-- `oag_raceplay`'s `load/lod_bias.rs` leaves separate pad and weapon models at 0 on HD's census. 2048's
-  pad textures read -1.5, so check which model draws 2048's pads when wiring.
+- `oag_raceplay`'s `load/lod_bias.rs` leaves separate pad and weapon models at 0 on HD's census. On 2048
+  both read -1.5.
+- `detail_sample` takes no title bias, so the flame, absorb shell and weapon programs would stay at 0 where
+  the original's textures say -1.5. Sprites and particles (`oag-fx`) take no shift either.
+- The Zone skins want no bias and no mip filter. `zone.wesl` samples them with its own samplers, which
+  take no title bias.
 - The original takes no anisotropic taps, so the 2048 compare profile should say what it runs.
 
 ## Omega (the reverse check)
@@ -139,6 +180,11 @@ the player's anisotropy (16x by default). **Checked, differs**, ready to wire: t
 - no negative bias anywhere.
 
 So Omega's PS4 build does not carry 2048's -1.5. Its sharpness comes from 16x anisotropy instead.
+
+**The Zone skins: checked on the files, applies.** Omega's `Data/tex/zoneModeTrack0..14.gnf` and
+`detonatorModeTrack0..14.gnf` (`data00.psarc` and `data08.psarc`) are 256x256 with one level
+(`last_mip_level` 0), as the v1.04 skins are. Their sampler state on Omega is **not checkable**: the
+port's S# log is not mapped to textures.
 
 ## Reproducing
 

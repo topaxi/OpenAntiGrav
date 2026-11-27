@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [pure, pulse, hd, 2048, omega]
 updated: 2026-11-27
-summary: "Far-field texture level: 2048 bias (90) and the PSP stored K per texture (the flyby's -9.0506) ready to wire"
+summary: "Far-field texture level: 2048 bias (92) and the PSP stored K per texture (the flyby's -9.0506) ready to wire"
 ---
 
 # Far-field texture level, title by title
@@ -13,15 +13,20 @@ read values only, as `Title` data, with a test, a break-it, and the other titles
 
 ## Open
 
-- **2048: `material_lod_bias` -1.5, ready to wire** (confidence 90, at the maintainer's gate of 90). In a
-  Queens Mall race all 269 distinct disc textures bound over two frames carry the loader's state (bias -1.5,
-  trilinear, no anisotropy), none differs (`docs/ghidra/functions/vita-2048-eu-v104/gxt-loader.md`, "In a
-  race"). Bound state is from one boot; a second boot agrees on resident descriptors only. Not measured live:
-  Zone and Detonator track skins (static read: mip filter off), HD/Fury circuits, a second circuit.
-  Wiring: one `material_lod_bias: Rule { on: Any, origin: Measured }` in `crates/2048/src/lib.rs`'s `Looks`,
-  and a test like `oag-hd`'s `the_material_lod_bias_follows_its_rule`. Then re-render the three 2048 pairs.
-  Check which model draws 2048's pads: `load/lod_bias.rs` leaves separate pad models at 0, and 2048's pad
-  textures read -1.5. `detail_sample` takes no title bias, so 2048's effect programs would not get it. Omega must stay at bias 0 (its S# read 0.0).
+- **2048: `material_lod_bias` -1.5, ready to wire** (confidence 92; the maintainer's gate is 90). Every disc
+  texture bound carries bias -1.5, trilinear, no anisotropy on Queens Mall (two boots, 269 and 311
+  textures), Altima (184) and Vineta K (two boots, 228 and 216). Zone (two boots, 29 textures): only the
+  Zone skins differ, mip filter off, one level
+  (`docs/ghidra/functions/vita-2048-eu-v104/gxt-loader.md`, "In a race"). Not measured live: Detonator
+  (same loop statically), Fury circuits, a native circuit's Zone.
+  Wiring, by family:
+  - track, scenery, lightmaps, craft: one `material_lod_bias: Rule { on: Any, origin: Measured }` in
+    `crates/2048/src/lib.rs`'s `Looks`, and a test like `oag-hd`'s `the_material_lod_bias_follows_its_rule`;
+  - pads and weapon models: `load/lod_bias.rs` leaves separate models at 0; on 2048 they read -1.5;
+  - flame, absorb shell, weapon programs: `detail_sample` takes no title bias; their textures read -1.5.
+    Particles and trails (`oag-fx`) read -1.5 too and take no shift;
+  - Zone skins: add no bias. Check that ours loads the one-level `data2.psarc` skins.
+  Then re-render the three 2048 pairs. Omega must stay at bias 0 (its S# read 0.0).
 - **Pulse and Pure PSP: a stored `K` per texture, ready to wire** (Pulse 93, Pure 85). The `-9.0506`
   is the pre-race flyby camera's (`docs/ghidra/functions/psp-pulse-usa/mesh-draw.md`, "`K = -9.0506` is
   the pre-race flyby camera's"; `docs/ghidra/functions/psp-pure-usa/texture-level.md`). The rule:
