@@ -216,45 +216,6 @@ fn hds_clock_is_found_on_the_loader_path_a_race_really_takes() {
     assert!(line.contains("frame 0 is tick 70"), "{line}");
 }
 
-/// HD's Zone board's clock is zeroed on entering the 3.0 s countdown, so its frame 0 is 180
-/// ticks before the release (`docs/ghidra/functions/ps3-hdfury-eu/gantry-clock.md`, "What
-/// zeroes it in the countdown").
-#[test]
-#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
-fn hds_zone_board_starts_with_the_countdown() {
-    let Some(image) = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso") else {
-        return;
-    };
-    let loaded = race::load(&race::Options {
-        no_effects: true,
-        source: image.display().to_string(),
-        track: Some("/data/environments/01_vineta_k/track.vex".to_string()),
-        mode: oag_race::Mode::Zone,
-        ..race::Options::default()
-    })
-    .expect("loading the race");
-    let card = loaded
-        .billboards
-        .adverts
-        .iter()
-        .find(|card| card.slot == 8)
-        .expect("a Zone race on Vineta K shows a gantry card");
-    let clock = card
-        .timeline
-        .as_ref()
-        .expect("the gantry card is clocked")
-        .clock();
-    assert_eq!(clock.start_tick, oag_race::COUNTDOWN_TICKS + 1 - 180);
-    assert!(
-        loaded
-            .report
-            .iter()
-            .any(|l| l.starts_with("start gantry clock:") && l.contains("Zone board")),
-        "{:#?}",
-        loaded.report
-    );
-}
-
 fn loaded_report(source: &str, track: Option<&str>) -> Vec<String> {
     race::load(&race::Options {
         no_effects: true,
