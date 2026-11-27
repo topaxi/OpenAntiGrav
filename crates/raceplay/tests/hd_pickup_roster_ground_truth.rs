@@ -61,8 +61,16 @@ fn census(mode: oag_race::Mode) -> Option<[Vec<(Weapon, f32)>; 2]> {
             let table = weapons.pickups_for(class).expect("every class has odds");
             let mut rng = Rng::new(seed as u64 + 1);
             for _ in 0..DRAWS {
-                let drawn = draw(&mut rng, table, driver, None, allowed, setup.pickup_order)
-                    .expect("an HD table always grants");
+                let drawn = draw(
+                    &mut rng,
+                    table,
+                    driver,
+                    None,
+                    allowed,
+                    setup.pickup_roster.map(|roster| roster.player_order),
+                    &[],
+                )
+                .expect("an HD table always grants");
                 total += 1.0;
                 match counts.iter_mut().find(|(weapon, _)| *weapon == drawn) {
                     Some((_, count)) => *count += 1.0,

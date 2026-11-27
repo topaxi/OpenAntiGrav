@@ -404,7 +404,7 @@ fn setup(handling: Handling) -> SimSetup {
         detonator: None,
         detonator_pads: None,
         allowed_weapons: Vec::new(),
-        pickup_order: None,
+        pickup_roster: None,
         weapon_pad_refresh: 0.0,
         // These tests run on a synthetic straight and want the ordinary
         // spawn and the ordinary chase camera; `--pose` and its camera are

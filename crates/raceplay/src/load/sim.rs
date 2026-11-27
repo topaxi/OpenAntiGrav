@@ -580,7 +580,7 @@ pub fn load_sim(options: &Options) -> Result<SimLoad> {
                 .enabled(options.mode == oag_race::Mode::Eliminator)
                 .to_vec()
         }),
-        pickup_order: title.pickup_roster.map(|roster| roster.value.player_order),
+        pickup_roster: title.pickup_roster.map(|roster| roster.value),
         weapon_pad_refresh,
         class_gravity_scale,
         start_boost,
