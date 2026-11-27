@@ -76,6 +76,12 @@ blast the struck craft's velocity, on HD, 2048 and Omega
     which stands the blast 22.7 units out? the original's yellow on the craft is the
     additive fireballs in front of it and needs the blast at the original's sites. Re-posing
     0233 on the two waves (73.23 now, from 90.03) is the next step, a pose decision for the lead;
+  - 0233's later own-seed move, 64.13 (rendered at `26d661fb1`) to 68.56 (at `e30b48161`), is not
+    a picture defect: no change wanted. `0af31fca8` (the flare listing) alone is +4.50, adding one
+    spawn-frame draw per `WO_ROCKET_FIRE` particle that re-deals the blast. The later merges move it
+    -0.06 more, nearly all `e30b48161`'s (68.62 to 68.56). Seeds 1-24 before and after: 63.40 and 62.74. Do not
+    read this pair's own seed as a regression: compare `--stage-seed` 1 to 24 on both sides
+    (`particle-fill.md`, "A Rocket on the wall paired");
   - Omega authors the same trail heads (8.824) in both its files: checked, applies, not wired;
   - the two-wave pose is still not the best on 0233 (+1.09 +/- 3.64);
   - the wash quads are cut by the track where the original's cover the frame (hard edges on the
