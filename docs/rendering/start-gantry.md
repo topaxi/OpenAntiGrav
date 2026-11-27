@@ -1160,9 +1160,14 @@ region differs in a Zone frame.
 board's own `t` is 3.0 s on the release (tick 273). The original zeroes the slot 8 node on entering the 3.0 s
 countdown ([gantry-clock.md](../ghidra/functions/ps3-hdfury-eu/gantry-clock.md), "What zeroes it in the
 countdown", confidence 85), which replaces the 210 read off video and settles the two readings of that video that
-disagreed by about 45 ticks. **What the board shows after the release is chosen, not measured**: the timeline keeps
-running and is held at `CLOCK_LIMIT`, so the pieces fade to the arrow by about 6 s into the clock. The original's
-race-manager windows should apply there too (same page, "Open"); not wired.
+disagreed by about 45 ticks. **From the release the race manager's lap windows hold it**
+(`ModeGantry::race_windows`; same page, "The mode boards after the release"): the clock jumps from 3.0 s to
+3.83 s, where the loop icon is whole, and a Zone race past its first crossing plays `[6.017, 9.3)`, in which the
+loop draws itself. HD only; Omega's and 2048's boards run their timeline on to `CLOCK_LIMIT`, chosen.
+
+In the original's frame 2.43 s into the countdown the outer pieces are still in flight, and ours at frame 180 (the
+release) has not finished them either, so the video's "complete about 10 frames before the release" can only have
+meant the centre loop.
 
 **The outer pieces fade in the original and not in ours.** In the countdown pair's frame the pieces left and right
 of the centre are translucent, darkening upward. The board authors six `black_fadeout.gtf` quads

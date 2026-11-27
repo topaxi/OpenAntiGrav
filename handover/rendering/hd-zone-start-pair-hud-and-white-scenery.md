@@ -2,7 +2,7 @@
 status: re-first
 titles: [hd]
 updated: 2026-11-27
-summary: "HD Zone start pair: board fade order, bright hull panels, grid flaps, countdown tone; GO board start and Zone window read, unwired"
+summary: "HD Zone start pair: board fade order, bright hull panels, grid flaps, countdown tone; `3 2 1 GO` start read, unwired"
 ---
 
 # HD Zone start pair: what is left after the Zone frame's light and post chain
@@ -26,11 +26,8 @@ three. By region after: sky 0.10, scenery 1.93, road and pads 1.50, the board
   draw order: HD's billboard blend order is unread
   (`docs/rendering/start-gantry.md`, "The Zone board").
 - **HD's `3 2 1 GO` board starts with the countdown too, and ours starts it 23 ticks earlier.**
-  Read, not wired (`gantry-clock.md`, "Open").
-- **The Zone board after the release.** The race manager's `[3.83, 5.25)` window applies to
-  whatever model slot 8 holds and `SPZone_Update` calls it; ours runs the timeline on. Read,
-  ready to wire (`gantry-clock.md`, "Open"). The same holds for Detonator.
-- **Omega and 2048 mode boards keep 210 ticks**: their countdown entry is unread
+  Read for the single race and time trial updates, not wired (`gantry-clock.md`, "Open").
+- **Omega and 2048 mode boards keep 210 ticks and no lap windows**: their code is unread
   (`gantry-clock.md`, "What zeroes it in the countdown": checked, applies, not wired).
 - **A re-grab should record the gantry node's time in the countdown.**
   `rpcs3_hd_field.gantry_seconds` keeps only values inside the race windows (from 3.83 s), so
@@ -70,9 +67,8 @@ three. By region after: sky 0.10, scenery 1.93, road and pads 1.50, the board
 
 ## Next Steps
 
-1. Wire HD's Zone and Detonator boards to the post-release window and HD's `3 2 1 GO` board to
-   the countdown-entry start (both read, `gantry-clock.md`, "Open"); every HD countdown frame
-   moves, so re-render the HD pairs.
+1. Wire HD's `3 2 1 GO` board to the countdown-entry start (read, `gantry-clock.md`, "Open");
+   every HD grid frame moves, so re-render the HD pairs.
 2. The hull's bright panels: a new capture (`HOOK_TEX_RE='0\.69804'
    scripts/rpcs3-hd-zone-frame.py --small 2500`), decode the normal and tangent streams of the
    live `zoneship01` draws (641..644, `va-06xx-*.bin`; none survive from the earlier lanes) and
