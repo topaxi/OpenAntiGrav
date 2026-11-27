@@ -136,6 +136,10 @@ pub(crate) struct EndRacePrep {
 impl EndRacePrep {
     /// The screens read in `screens`, with the GPU side built for `format`. `with_trophies` is
     /// whether the race can award a medal; a trophy that will not build draws nothing.
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "one build site, each a separate fact"
+    )]
     pub(crate) fn build(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
