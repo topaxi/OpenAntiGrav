@@ -61,7 +61,11 @@
 //
 // The scanline profile is a gaussian in the distance from the line's centre
 // whose width is `beam_min` for black and `beam_max` for white, in line
-// units. Each output pixel sums the two nearest lines. `bloom` adds a wider,
+// units, and whose peak falls as it widens, so a line carries as much light
+// as its channel asks for. With a fixed peak each channel's light would go
+// with its width as well, which darkens the middle levels and turns mixed
+// colours (`docs/rendering/screen-filters.md`, "Colour audit").
+// Each output pixel sums the two nearest lines. `bloom` adds a wider,
 // dimmer tap either side of each source column, which is what a bright
 // pixel's glow into its neighbours looks like through the glass.
 
@@ -78,7 +82,8 @@ fn to_gamma(c: vec3<f32>) -> vec3<f32> {
 fn beam(distance: f32, brightness: f32) -> f32 {
     let width = mix(param_beam_min(), param_beam_max(), brightness);
     let x = distance / width;
-    return exp(-x * x);
+    // Relative to the widest beam, so white is unchanged and nothing exceeds it.
+    return exp(-x * x) * param_beam_max() / width;
 }
 
 // The source on scanline `line` under this pixel, with the bloom taps.

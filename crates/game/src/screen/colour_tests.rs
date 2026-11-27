@@ -316,7 +316,7 @@ const HUE_TURN: f64 = 5.0;
 
 /// Every grey and every colour of `id`, at every output width, against the
 /// tolerances; the failures, one line each.
-fn colour_failures(gpu: &Gpu, id: &str, hues: bool) -> Vec<String> {
+fn colour_failures(gpu: &Gpu, id: &str) -> Vec<String> {
     let preset = preset(id);
     let mut failures = Vec::new();
     for (label, num, den) in SCALES {
@@ -336,8 +336,8 @@ fn colour_failures(gpu: &Gpu, id: &str, hues: bool) -> Vec<String> {
                 failures.push(format!("{id} @{label}: grey {grey} came out {out:.1?}"));
             }
         }
-        for (name, colour) in COLOURS.iter().filter(|_| hues) {
-            let out = patch(*colour);
+        for (name, colour) in COLOURS {
+            let out = patch(colour);
             let turned = turn(
                 hue_saturation(colour.map(f64::from)).0,
                 hue_saturation(out).0,
@@ -350,33 +350,26 @@ fn colour_failures(gpu: &Gpu, id: &str, hues: bool) -> Vec<String> {
     failures
 }
 
-fn assert_keeps_colour(ids: &[&str], hues: bool) {
+fn assert_keeps_colour(ids: &[&str]) {
     let Some(gpu) = gpu() else {
         eprintln!("no GPU adapter; skipping");
         return;
     };
     let failures: Vec<String> = ids
         .iter()
-        .flat_map(|id| colour_failures(&gpu, id, hues))
+        .flat_map(|id| colour_failures(&gpu, id))
         .collect();
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
 #[test]
 fn the_psp_filters_keep_greys_neutral_and_hues_in_place() {
-    assert_keeps_colour(&["psp-lcd", "psp-3000"], true);
+    assert_keeps_colour(&["psp-lcd", "psp-3000"]);
 }
 
 #[test]
-fn the_crt_television_filters_keep_greys_neutral_and_hues_in_place() {
-    assert_keeps_colour(&["crt-interlaced", "crt-shadow-mask"], true);
-}
-
-/// The grille's per-channel beam width turns mixed colours (orange by 8
-/// degrees), so only its greys are held here.
-#[test]
-fn the_aperture_grille_keeps_greys_neutral() {
-    assert_keeps_colour(&["crt-aperture"], false);
+fn the_crt_filters_keep_greys_neutral_and_hues_in_place() {
+    assert_keeps_colour(&["crt-interlaced", "crt-shadow-mask", "crt-aperture"]);
 }
 
 /// A slow panel's smear is a delay, not a gain: a still picture settles to the
@@ -461,8 +454,11 @@ const BLOCK: u32 = 24;
 /// `psp-*-off.png` and `ps2-*-off.png`; the filtered frames are written beside
 /// them.
 #[test]
-#[ignore = "a sweep over captured frames; run with OAG_FILTER_IN=<directory>"]
+#[ignore = "a sweep over captured frames; run with OAG_SWEEP=1 OAG_FILTER_IN=<directory>"]
 fn print_what_the_filters_do_to_captured_frames() {
+    if std::env::var_os("OAG_SWEEP").is_none() {
+        return;
+    }
     let Some(directory) = std::env::var_os("OAG_FILTER_IN").map(std::path::PathBuf::from) else {
         return;
     };
@@ -523,7 +519,9 @@ fn save(path: &std::path::Path, picture: &Picture) {
     encoder.set_color(png::ColorType::Rgba);
     encoder.set_depth(png::BitDepth::Eight);
     let mut writer = encoder.write_header().expect("a header");
-    writer.write_image_data(&picture.pixels).expect("the pixels");
+    writer
+        .write_image_data(&picture.pixels)
+        .expect("the pixels");
 }
 
 fn compare(off: &Picture, out: &[Picture]) -> String {
