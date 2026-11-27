@@ -529,15 +529,11 @@ fn the_ps2_front_end_either_boots_or_says_what_it_could_not_find() {
 /// its extraction before the slow uncapped one reaches the same files - not
 /// because anything was starving.
 ///
-/// `CARGO_TARGET_TMPDIR` rather than `std::env::temp_dir()`: Cargo hands each
-/// package its own directory under that worktree's `target/`, which makes the
-/// path per-worktree for free and keeps this off the 32 GiB `/tmp` tmpfs, where
-/// a 63 MiB reel per run is not free. The per-test leaf is what closes the race
+/// Under `target/tmp` rather than the OS temp directory, which keeps a 63 MiB
+/// reel per run off a `tmpfs`. The per-test label is what closes the race
 /// *within* one run.
-fn transcode_scratch(test: &str) -> std::path::PathBuf {
-    std::path::Path::new(env!("CARGO_TARGET_TMPDIR"))
-        .join("ps2-progress-ground-truth")
-        .join(test)
+fn transcode_scratch(test: &str) -> oag_testdata::scratch::TempDir {
+    oag_testdata::scratch::dir(&format!("ps2-progress-{test}"))
 }
 
 /// The plumbing under this is easy to break silently and impossible to notice
@@ -560,7 +556,7 @@ fn transcode_scratch(test: &str) -> std::path::PathBuf {
 /// test of its own next door and costs a minute, because that is the one that
 /// was actually broken.
 ///
-/// Scratch space comes from [`transcode_scratch`], not a shared `/tmp` path -
+/// Scratch space comes from [`transcode_scratch`], not a shared path -
 /// see that function for the race it exists to prevent.
 #[test]
 #[ignore = "needs data/images/ and ffmpeg"]
@@ -594,10 +590,11 @@ fn a_transcode_reports_its_frames_as_it_encodes_them() {
 
     let seen = std::sync::Mutex::new(Vec::new());
     let watch = |step: oag_game::movie::Step| seen.lock().expect("the watch's lock").push(step);
+    let scratch = transcode_scratch("a_transcode_reports_its_frames_as_it_encodes_them");
     let movie = oag_game::movie::open(
         blob,
         &format!("{}-{}", path.replace(['/', '\\'], "_"), blob.len()),
-        &transcode_scratch("a_transcode_reports_its_frames_as_it_encodes_them"),
+        &scratch,
         oag_game::movie::Extent::Frames(FRAMES),
         oag_game::movie::Decode {
             no_video: false,
@@ -701,10 +698,11 @@ fn an_uncapped_transcode_still_reports_a_total_to_divide_by() {
 
     let seen = std::sync::Mutex::new(Vec::new());
     let watch = |step: oag_game::movie::Step| seen.lock().expect("the watch's lock").push(step);
+    let scratch = transcode_scratch("an_uncapped_transcode_still_reports_a_total_to_divide_by");
     let movie = oag_game::movie::open(
         blob,
         &format!("{}-{}", path.replace(['/', '\\'], "_"), blob.len()),
-        &transcode_scratch("an_uncapped_transcode_still_reports_a_total_to_divide_by"),
+        &scratch,
         // The whole reel: the case that was broken.
         oag_game::movie::Extent::Whole,
         oag_game::movie::Decode {

@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use super::*;
 
 #[test]
@@ -87,8 +85,8 @@ fn tiny_lzss_wad(name_hash: u32, blob: &[u8]) -> Vec<u8> {
     bytes
 }
 
-fn temp_file(name: &str, contents: &[u8]) -> PathBuf {
-    let path = std::env::temp_dir().join(format!("oag-assets-test-{name}"));
+fn temp_file(name: &str, contents: &[u8]) -> oag_testdata::scratch::TempDir {
+    let path = oag_testdata::scratch::dir(&format!("assets-test-{name}"));
     std::fs::write(&path, contents).unwrap();
     path
 }

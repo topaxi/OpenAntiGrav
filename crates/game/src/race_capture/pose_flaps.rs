@@ -56,11 +56,16 @@ mod tests {
     const HEAD: &str = "tick,dt,grounded,throttle,brake,steer,airbrake_l,airbrake_r,speed_cached,\
 right_x,right_y,right_z,up_x,up_y,up_z,fwd_x,fwd_y,fwd_z,pos_x,pos_y,pos_z,vel_x,vel_y,vel_z,speed";
 
-    fn trace(name: &str, left: f32, right: f32) -> std::path::PathBuf {
+    fn trace(
+        name: &str,
+        left: f32,
+        right: f32,
+    ) -> (oag_testdata::scratch::TempDir, std::path::PathBuf) {
         let row = format!(
             "7,0.016683,1,100,0,0,{left},{right},22,1,0,0,0,1,0,0,0,1,10,2.5,-30,0,0,22,22"
         );
-        let path = std::env::temp_dir().join(format!("oag-pose-flaps-{name}.csv"));
+        let dir = oag_testdata::scratch::dir(&format!("pose-flaps-{name}"));
+        let path = dir.join("trace.csv");
         std::fs::write(
             &path,
             format!(
@@ -70,12 +75,13 @@ right_x,right_y,right_z,up_x,up_y,up_z,fwd_x,fwd_y,fwd_z,pos_x,pos_y,pos_z,vel_x
             ),
         )
         .unwrap();
-        path
+        (dir, path)
     }
 
     #[test]
     fn the_two_levels_of_the_pose_row_are_what_is_imported() {
-        let flaps = PoseFlaps::from_trace(&trace("levels", 100.0, 83.5), 7).expect("a row");
+        let (_scratch, path) = trace("levels", 100.0, 83.5);
+        let flaps = PoseFlaps::from_trace(&path, 7).expect("a row");
         assert_eq!(
             flaps,
             PoseFlaps {
@@ -87,7 +93,8 @@ right_x,right_y,right_z,up_x,up_y,up_z,fwd_x,fwd_y,fwd_z,pos_x,pos_y,pos_z,vel_x
 
     #[test]
     fn a_tick_the_trace_lacks_is_refused() {
-        let error = PoseFlaps::from_trace(&trace("tick", 0.0, 0.0), 9).expect_err("no tick 9");
+        let (_scratch, path) = trace("tick", 0.0, 0.0);
+        let error = PoseFlaps::from_trace(&path, 9).expect_err("no tick 9");
         assert!(format!("{error:#}").contains("no tick 9"), "{error:#}");
     }
 }

@@ -469,7 +469,7 @@ fn a_source_is_swept_for_stale_slots(
         dlc: Vec::new(),
         leg: oag_ui::frontend::Leg::LogoFmv,
         movie: None,
-        cache: std::env::temp_dir().join("oag-spawn-heading-ground-truth"),
+        cache: oag_testdata::scratch::cache("spawn-heading-ground-truth"),
         audio_cache: oag_source::cache::default_audio_cache_dir(),
         extent: oag_game::movie::Extent::Frames(1),
         // Every assertion here is about a spawn; nothing pays for a transcode.

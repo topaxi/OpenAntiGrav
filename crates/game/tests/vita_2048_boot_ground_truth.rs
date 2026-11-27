@@ -55,7 +55,7 @@ fn options(source: &Path) -> boot::Options {
         dlc: Vec::new(),
         leg: frontend::Leg::LogoFmv,
         movie: None,
-        cache: std::env::temp_dir().join("oag-2048-boot-ground-truth"),
+        cache: oag_testdata::scratch::cache("2048-boot-ground-truth"),
         audio_cache: oag_source::cache::default_audio_cache_dir(),
         extent: oag_game::movie::Extent::Frames(oag_game::INTRO_FRAMES_NEEDED),
         no_video: true,
@@ -474,7 +474,7 @@ fn the_rank_gated_side_challenges_are_the_authored_locked_option() {
 #[ignore = "needs the extracted package under data/extracted/vita/ and a GPU adapter"]
 fn the_opening_view_renders_the_prism_the_rings_and_no_prism_for_an_unreached_event() {
     let Some(source) = source() else { return };
-    let scratch = std::env::temp_dir().join(format!("oag-prism-map-{}", std::process::id()));
+    let scratch = oag_testdata::scratch::dir("prism-map");
     let records = scratch.join("config/oag");
     std::fs::create_dir_all(&records).expect("creating the scratch directory");
     std::fs::write(
@@ -1128,7 +1128,7 @@ fn pixels_of(png: &[u8]) -> Vec<u8> {
 #[ignore = "needs the extracted package under data/extracted/vita/ and a GPU adapter"]
 fn the_select_team_capture_draws_the_hull_at_the_widgets_origin() {
     let Some(source) = source() else { return };
-    let scratch = std::env::temp_dir().join(format!("oag-team-hull-{}", std::process::id()));
+    let scratch = oag_testdata::scratch::dir("team-hull");
     std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
     let out = scratch.join("team.png");
     let status = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
@@ -1179,7 +1179,7 @@ fn the_select_team_capture_draws_the_hull_at_the_widgets_origin() {
 #[ignore = "needs the extracted package under data/extracted/vita/ and a GPU adapter"]
 fn the_title_capture_settles_on_the_logo_and_the_prompt() {
     let Some(source) = source() else { return };
-    let scratch = std::env::temp_dir().join(format!("oag-title-settled-{}", std::process::id()));
+    let scratch = oag_testdata::scratch::dir("title-settled");
     std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
     let out = scratch.join("title.png");
     let status = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))

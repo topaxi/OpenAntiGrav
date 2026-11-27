@@ -1,8 +1,8 @@
 use super::*;
 use std::net::TcpListener;
 
-fn temp(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("oag-ffmpeg-inst-{name}-{}", std::process::id()));
+fn temp(name: &str) -> oag_testdata::scratch::TempDir {
+    let dir = oag_testdata::scratch::dir(&format!("ffmpeg-inst-{name}"));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     dir

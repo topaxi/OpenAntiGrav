@@ -48,7 +48,8 @@ fn the_dark_hull_panels_lose_the_constant_ambient_blue_cast() {
     let Some(source) = omega() else {
         return;
     };
-    let out = std::env::temp_dir().join("oag-omega-hull-sh-ambient.png");
+    let scratch = oag_testdata::scratch::dir("omega-hull-sh-ambient");
+    let out = scratch.join("shot.png");
     let status = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
         .arg(&source)
         .args([
@@ -100,15 +101,12 @@ fn the_dark_hull_panels_lose_the_constant_ambient_blue_cast() {
         .arg(&out)
         .env(
             "XDG_CONFIG_HOME",
-            std::env::temp_dir().join("oag-omega-sh-config"),
+            oag_testdata::scratch::dir("omega-sh-config"),
         )
-        .env(
-            "XDG_DATA_HOME",
-            std::env::temp_dir().join("oag-omega-sh-data"),
-        )
+        .env("XDG_DATA_HOME", oag_testdata::scratch::dir("omega-sh-data"))
         .env(
             "XDG_STATE_HOME",
-            std::env::temp_dir().join("oag-omega-sh-state"),
+            oag_testdata::scratch::dir("omega-sh-state"),
         )
         .status()
         .expect("running oag-game");

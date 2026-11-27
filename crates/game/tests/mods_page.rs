@@ -1,7 +1,7 @@
 //! The MODS page: reachable from OPTIONS on every title, listing each mod built-in first,
 //! marking a mod with no licence, and listing one that did not load dimmed with its error.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use oag_game::mods::{self, Mods};
 use oag_ui::language::StringTable;
@@ -30,8 +30,8 @@ label = "GARAGE"
 target = "records"
 "#;
 
-fn scratch(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("oag-mods-page-{}-{name}", std::process::id()));
+fn scratch(name: &str) -> oag_testdata::scratch::TempDir {
+    let dir = oag_testdata::scratch::dir(&format!("mods-page-{name}"));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     dir
@@ -60,7 +60,7 @@ fn build(base: &Path, title: &'static oag_title::Title) -> mods::Built {
 
 /// Garage (licensed), Plain (no licence), Wrong (a row whose parent does not exist, left
 /// out at build) and a file that is not a zip.
-fn proof_mods() -> PathBuf {
+fn proof_mods() -> oag_testdata::scratch::TempDir {
     let dir = scratch("proof");
     folder(&dir.join("garage"), MANIFEST, MENU);
     folder(

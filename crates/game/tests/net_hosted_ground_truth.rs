@@ -14,8 +14,6 @@
 //! The games are spawned by `net_rejoin_ground_truth::Lab` (`CARGO_BIN_EXE_oag-game`), so this
 //! module is in nextest's `gpu-vram` group like that one.
 
-use std::path::Path;
-
 use crate::net_rejoin_ground_truth::{Lab, Proc, image};
 
 const HOST_ARGS: [&str; 3] = ["--online-host", "--online-host-port", "0"];
@@ -177,7 +175,7 @@ fn a_host_whose_profile_key_is_on_the_ban_file_is_refused_with_the_reason() {
         return;
     };
     // The key the game will find in its profile, made the way the game makes it.
-    let scratch = Path::new(env!("CARGO_TARGET_TMPDIR")).join("hosted-banned-key");
+    let scratch = oag_testdata::scratch::dir("hosted-banned-key");
     let _ = std::fs::remove_dir_all(&scratch);
     let key = oag_game::identity::load_or_create_at(&scratch.join("identity.toml"))
         .expect("a key is made");
@@ -218,7 +216,7 @@ fn a_host_that_alters_its_race_is_proven_by_the_lobby_and_struck_and_the_guest_i
     let Some(image) = image() else {
         return;
     };
-    let scratch = Path::new(env!("CARGO_TARGET_TMPDIR")).join("hosted-cheat-bans");
+    let scratch = oag_testdata::scratch::dir("hosted-cheat-bans");
     let _ = std::fs::remove_dir_all(&scratch);
     std::fs::create_dir_all(&scratch).expect("a scratch directory");
     let bans = scratch.join("bans.txt");

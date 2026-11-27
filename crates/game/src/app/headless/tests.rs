@@ -77,7 +77,8 @@ fn trace_out_drives_the_craft_from_its_input_script() {
         "--ticks".to_string(),
         "300".to_string(),
     ]);
-    let path = std::env::temp_dir().join("oag-game-trace-out-input-script-test.csv");
+    let scratch = oag_testdata::scratch::dir("trace-out");
+    let path = scratch.join("input-script.csv");
     write_trace(scripted_race, &cli, ControlScheme::default(), &path).expect("writing the trace");
     let csv = std::fs::read_to_string(&path).expect("reading the trace back");
 
@@ -101,7 +102,7 @@ fn trace_out_drives_the_craft_from_its_input_script() {
         return;
     };
     let cli_unscripted = Cli::parse_from(["oag-game", "--race", "--ticks", "300"]);
-    let path2 = std::env::temp_dir().join("oag-game-trace-out-no-script-test.csv");
+    let path2 = scratch.join("no-script.csv");
     write_trace(
         unscripted_race,
         &cli_unscripted,

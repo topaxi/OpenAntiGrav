@@ -22,7 +22,7 @@
 //!
 //! `original` is also the default: a run with no flag is byte-identical to it.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
 fn capture(image: &Path, scratch: &Path, detail: Option<&str>) -> Vec<u8> {
@@ -62,8 +62,8 @@ fn capture(image: &Path, scratch: &Path, detail: Option<&str>) -> Vec<u8> {
     oag_texture::png::picture_only(&std::fs::read(&out).expect("reading the screenshot"))
 }
 
-fn scratch() -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("oag-texture-detail-{}", std::process::id()));
+fn scratch() -> oag_testdata::scratch::TempDir {
+    let dir = oag_testdata::scratch::dir("texture-detail");
     std::fs::create_dir_all(&dir).expect("creating the scratch directory");
     dir
 }

@@ -438,8 +438,8 @@ fn fake_race(name: &str, body: &str) -> std::path::PathBuf {
     path
 }
 
-fn fake_race_dir() -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join(format!("oag-lobby-{}", std::process::id()));
+fn fake_race_dir() -> oag_testdata::scratch::TempDir {
+    let dir = oag_testdata::scratch::dir("lobby");
     std::fs::create_dir_all(&dir).expect("temp dir");
     dir
 }

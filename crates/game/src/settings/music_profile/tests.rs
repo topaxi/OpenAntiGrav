@@ -18,7 +18,7 @@ struct File(PathBuf);
 
 impl File {
     fn new(name: &str, text: &str) -> Self {
-        let dir = std::env::temp_dir().join(format!("oag-music-{name}-{}", std::process::id()));
+        let dir = oag_testdata::scratch::dir(&format!("music-{name}"));
         std::fs::create_dir_all(&dir).expect("a temp directory");
         let path = dir.join("settings.toml");
         std::fs::write(&path, text).expect("write");

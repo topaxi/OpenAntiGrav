@@ -70,9 +70,8 @@ pub fn write_wad(dir: &Path, name: &str, entries: &[(&str, &[u8])]) -> String {
 /// # Panics
 ///
 /// If the directory cannot be created.
-#[must_use]
-pub fn temp_dir(name: &str) -> std::path::PathBuf {
-    let directory = std::env::temp_dir().join(format!("oag-assets-{name}"));
+pub fn temp_dir(name: &str) -> oag_testdata::scratch::TempDir {
+    let directory = oag_testdata::scratch::dir(&format!("assets-{name}"));
     let _ = std::fs::remove_dir_all(&directory);
     std::fs::create_dir_all(&directory).expect("creating a test directory");
     directory

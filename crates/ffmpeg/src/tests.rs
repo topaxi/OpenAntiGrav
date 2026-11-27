@@ -28,8 +28,8 @@ fn either_one_alone_is_used_and_neither_is_missing() {
     assert_eq!(pick(None, None, true), None);
 }
 
-fn temp(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("oag-ffmpeg-{name}-{}", std::process::id()));
+fn temp(name: &str) -> oag_testdata::scratch::TempDir {
+    let dir = oag_testdata::scratch::dir(&format!("ffmpeg-{name}"));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     dir
@@ -98,7 +98,7 @@ fn a_process_with_the_pinned_copy_installed_resolves_it_ahead_of_nothing() {
     std::fs::write(&ffmpeg, b"x").unwrap();
     configure(Policy {
         use_pinned: true,
-        root: Some(root),
+        root: Some(root.to_path_buf()),
     });
     assert_eq!(resolve(Tool::Ffmpeg), Some(ffmpeg.clone()));
     assert!(!wants_download());

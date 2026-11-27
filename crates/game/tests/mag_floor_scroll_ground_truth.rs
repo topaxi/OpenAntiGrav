@@ -17,7 +17,7 @@
 //! pose with the effect off (`OAG_MAGFX=off`) - and asks for a difference
 //! *outside* the pixels where the control pair differs.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
 const WIDTH: usize = 480;
@@ -94,8 +94,8 @@ fn frame(image: &Path, scratch: &Path, name: &str, effect: &str, clock: &str) ->
     pixels_of(&std::fs::read(&out).expect("reading the screenshot"))
 }
 
-fn scratch() -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("oag-mag-floor-scroll-{}", std::process::id()));
+fn scratch() -> oag_testdata::scratch::TempDir {
+    let dir = oag_testdata::scratch::dir("mag-floor-scroll");
     std::fs::create_dir_all(&dir).expect("creating the scratch directory");
     dir
 }

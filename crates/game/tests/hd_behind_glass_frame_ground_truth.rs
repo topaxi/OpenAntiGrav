@@ -70,7 +70,7 @@ fn the_ceiling_panes_show_the_teal_behind_the_glass() {
     let Some(image) = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso") else {
         return;
     };
-    let scratch = std::env::temp_dir().join(format!("oag-hd-behind-glass-{}", std::process::id()));
+    let scratch = oag_testdata::scratch::dir("hd-behind-glass");
     std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
     let out = scratch.join("frame.png");
     let status = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))

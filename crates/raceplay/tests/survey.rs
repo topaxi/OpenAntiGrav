@@ -20,7 +20,7 @@ fn the_committed_own_format_track_lists_by_its_title_and_loads() {
 
 #[test]
 fn files_that_are_not_tracks_are_listed_with_a_reason() {
-    let dir = std::env::temp_dir().join(format!("oag-survey-{}", std::process::id()));
+    let dir = oag_testdata::scratch::dir("survey");
     std::fs::create_dir_all(&dir).unwrap();
 
     let junk = dir.join("junk.wtrk");

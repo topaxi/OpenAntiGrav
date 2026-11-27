@@ -42,13 +42,29 @@ fn run_on(image: &std::path::Path, tag: &str, script: &str) -> Run {
 }
 
 fn run_on_with(image: &std::path::Path, tag: &str, script: &str, flags: &[&str]) -> Run {
-    let shots = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("pause-shots");
+    run_into(
+        &oag_testdata::scratch::dir("pause-shots"),
+        image,
+        tag,
+        script,
+        flags,
+    )
+}
+
+/// [`run_on_with`] with the screenshots kept in `shots` for the caller to read.
+fn run_into(
+    shots: &std::path::Path,
+    image: &std::path::Path,
+    tag: &str,
+    script: &str,
+    flags: &[&str],
+) -> Run {
     let run = drive_binary(
         env!("CARGO_BIN_EXE_oag-game"),
         image,
         &format!("pause-{tag}"),
         script,
-        &shots,
+        shots,
         flags,
     );
     assert!(run.status.success(), "{tag}: {}", run.stderr);
@@ -173,7 +189,7 @@ fn the_track_list_is_clickable_where_the_page_leaves_room_for_it() {
                  ticks 30",
                 to_the_race(mode)
             ),
-            &std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("pause-shots"),
+            &oag_testdata::scratch::dir("pause-shots"),
             &["--original-menu"],
         );
         assert!(run.status.success(), "{tag}: {}", run.stderr);
@@ -195,9 +211,10 @@ fn a_pulse_pause_draws_the_hud_dimmed_under_the_tint() {
     let Some(image) = pulse() else {
         return;
     };
-    let shot = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("pause-shots/pulse-hud.png");
-    let _ = std::fs::remove_file(&shot);
-    let _ = run_on_with(
+    let shots = oag_testdata::scratch::dir("pause-shots");
+    let shot = shots.join("pulse-hud.png");
+    let _ = run_into(
+        &shots,
         &image,
         "hud",
         &format!(
@@ -229,10 +246,10 @@ fn a_pulse_pause_blooms_its_rows_into_the_gaps_between_them() {
     let Some(image) = pulse() else {
         return;
     };
-    let shot =
-        std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("pause-shots/pulse-bloom.png");
-    let _ = std::fs::remove_file(&shot);
-    let _ = run_on_with(
+    let shots = oag_testdata::scratch::dir("pause-shots");
+    let shot = shots.join("pulse-bloom.png");
+    let _ = run_into(
+        &shots,
         &image,
         "bloom",
         &format!(
@@ -1122,7 +1139,7 @@ mod y2048_screens {
             dlc: Vec::new(),
             leg: oag_ui::frontend::Leg::LogoFmv,
             movie: None,
-            cache: std::env::temp_dir().join("oag-2048-pause-ground-truth"),
+            cache: oag_testdata::scratch::cache("2048-pause-ground-truth"),
             audio_cache: oag_source::cache::default_audio_cache_dir(),
             extent: oag_game::movie::Extent::Frames(oag_game::INTRO_FRAMES_NEEDED),
             no_video: true,

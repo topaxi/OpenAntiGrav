@@ -68,8 +68,8 @@ fn deflate(data: &[u8]) -> Vec<u8> {
     e.finish().unwrap()
 }
 
-fn scratch(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("oag-vpk-{name}-{}", std::process::id()));
+fn scratch(name: &str) -> oag_testdata::scratch::TempDir {
+    let dir = oag_testdata::scratch::dir(&format!("vpk-{name}"));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     dir

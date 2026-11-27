@@ -2,7 +2,7 @@
 //! a bad page leaves only its mod out, and `scripts/check-strings.py` holds a mod page to
 //! its string ids (ADR-0082 decisions 1 and 6).
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
 use oag_game::mods::{self, Mods};
@@ -24,8 +24,8 @@ fn copy(from: &Path, to: &Path) {
 }
 
 /// A mods folder holding the fixture mods named in `names`.
-fn folder(tag: &str, names: &[&str]) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("oag-mods-pages-{}-{tag}", std::process::id()));
+fn folder(tag: &str, names: &[&str]) -> oag_testdata::scratch::TempDir {
+    let dir = oag_testdata::scratch::dir(&format!("mods-pages-{tag}"));
     let _ = std::fs::remove_dir_all(&dir);
     for name in names {
         copy(&Path::new(FIXTURES).join(name), &dir.join(name));

@@ -86,7 +86,7 @@ fn made(
     count: usize,
     needle: &str,
 ) -> Made {
-    let shots = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("photo-native-{tag}-shots"));
+    let shots = oag_testdata::scratch::dir(&format!("photo-native-{tag}-shots"));
     let _ = std::fs::remove_dir_all(&shots);
     let slug: String = name
         .chars()
@@ -411,7 +411,7 @@ fn input_before_a_redrawn_shot_begins_cancels_it() {
          until photo=free within 200; press select select; ticks 20; \
          press cross; press cross; ticks 10; press circle; until photo=none within 50"
     );
-    let shots = Path::new(env!("CARGO_TARGET_TMPDIR")).join("photo-native-cancel-shots");
+    let shots = oag_testdata::scratch::dir("photo-native-cancel-shots");
     let _ = std::fs::remove_dir_all(&shots);
     let scaled = drive_unmodded(&image, "native-cancel-scaled", &script, &shots, HALF_FSR3.1);
     assert!(scaled.status.success(), "{}", scaled.stderr);

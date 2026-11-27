@@ -762,7 +762,7 @@ fn the_log_section_survives_a_rewrite_as_written() {
 #[test]
 fn an_unreadable_settings_file_boots_on_defaults() {
     use std::os::unix::fs::PermissionsExt;
-    let dir = std::env::temp_dir().join(format!("oag-settings-unreadable-{}", std::process::id()));
+    let dir = oag_testdata::scratch::dir("settings-unreadable");
     std::fs::create_dir_all(&dir).expect("scratch dir");
     let file = dir.join("settings.toml");
     std::fs::write(&file, "[graphics]\nanisotropy = \"4x\"\n").expect("write");
@@ -835,9 +835,8 @@ fn shadows_after_loading(
 ) -> std::collections::BTreeMap<String, oag_display::display::Shadows> {
     use std::sync::atomic::{AtomicU32, Ordering};
     static NEXT: AtomicU32 = AtomicU32::new(0);
-    let dir = std::env::temp_dir().join(format!(
-        "oag-settings-shadows-{}-{}",
-        std::process::id(),
+    let dir = oag_testdata::scratch::dir(&format!(
+        "settings-shadows-{}",
         NEXT.fetch_add(1, Ordering::Relaxed)
     ));
     std::fs::create_dir_all(&dir).expect("scratch dir");
@@ -1177,9 +1176,8 @@ fn weather_defaults_to_the_original_and_round_trips_its_names() {
 pub(super) fn load_text(text: &str) -> (Settings, String) {
     use std::sync::atomic::{AtomicU32, Ordering};
     static NEXT: AtomicU32 = AtomicU32::new(0);
-    let dir = std::env::temp_dir().join(format!(
-        "oag-settings-fallback-{}-{}",
-        std::process::id(),
+    let dir = oag_testdata::scratch::dir(&format!(
+        "settings-fallback-{}",
         NEXT.fetch_add(1, Ordering::Relaxed)
     ));
     std::fs::create_dir_all(&dir).expect("scratch dir");
@@ -1260,9 +1258,8 @@ fn the_cpu_governor_is_on_by_default_and_for_a_file_that_omits_it() {
 fn the_reset_defaults_are_what_a_first_run_loads() {
     use std::sync::atomic::{AtomicU32, Ordering};
     static NEXT: AtomicU32 = AtomicU32::new(0);
-    let dir = std::env::temp_dir().join(format!(
-        "oag-settings-first-run-{}-{}",
-        std::process::id(),
+    let dir = oag_testdata::scratch::dir(&format!(
+        "settings-first-run-{}",
         NEXT.fetch_add(1, Ordering::Relaxed)
     ));
     let loaded = load_from(&dir.join("settings.toml")).expect("a missing file loads defaults");

@@ -39,12 +39,11 @@ fn package(name: &str) -> Option<PathBuf> {
 /// The EU package with its two downloadable archives left out: real folders
 /// holding links to the base archive and the patch's two, because the source
 /// walk does not follow a linked folder.
-struct WithoutPacks(PathBuf);
+struct WithoutPacks(oag_testdata::scratch::TempDir);
 
 impl WithoutPacks {
     fn of(package: &Path, tag: &str) -> Self {
-        let root = std::env::temp_dir().join(format!("oag-2048-no-packs-{tag}"));
-        let _ = std::fs::remove_dir_all(&root);
+        let root = oag_testdata::scratch::dir(&format!("2048-no-packs-{tag}"));
         for archive in [
             "base/PSP2/data.psarc",
             "patch-v104/PSP2/data1.psarc",
@@ -62,12 +61,6 @@ impl WithoutPacks {
             .expect("a link");
         }
         Self(root)
-    }
-}
-
-impl Drop for WithoutPacks {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
     }
 }
 

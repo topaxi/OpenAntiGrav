@@ -71,8 +71,7 @@ fn rgb_of(png: &[u8]) -> Vec<[u8; 3]> {
 /// launch boost, so the craft is further along the fixed camera's view at a given tick than it was.
 fn frame_of(ticks: u32) -> Option<Vec<[u8; 3]>> {
     let image = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso")?;
-    let scratch =
-        std::env::temp_dir().join(format!("oag-hd-bomb-blast-{}-{ticks}", std::process::id()));
+    let scratch = oag_testdata::scratch::dir(&format!("hd-bomb-blast-{ticks}"));
     std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
     let out = scratch.join("frame.png");
     let script = scratch.join("lay.inputs");

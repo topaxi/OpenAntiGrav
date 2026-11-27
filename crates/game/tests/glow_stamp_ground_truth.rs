@@ -101,7 +101,7 @@ fn the_grid_frame_of_outpost_7_stamps_its_blended_glow_batches() {
     let Some(image) = oag_testdata::image("data/images/pulse-psp-usa.chd") else {
         return;
     };
-    let scratch = std::env::temp_dir().join(format!("oag-glow-stamp-{}", std::process::id()));
+    let scratch = oag_testdata::scratch::dir("glow-stamp");
     std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
     let mask = mask_of(&image, &scratch);
     std::fs::remove_dir_all(&scratch).ok();

@@ -78,31 +78,20 @@ fn no_built_in_pilot_digests_to_zero() {
     }
 }
 
-/// A directory of pilots, cleaned up afterwards.
+/// A directory of pilots.
 ///
 /// **Never [`directory`].** Every test in this module goes through
 /// [`parse`] or [`load_from`] with a path it made itself, so the suite
 /// cannot read the developer's own pilots and pass on one machine only.
-struct Scratch(PathBuf);
+struct Scratch(oag_testdata::scratch::TempDir);
 
 impl Scratch {
     fn with(files: &[(&str, &str)]) -> Self {
-        let dir = std::env::temp_dir().join(format!(
-            "oag-pilots-{}-{:p}",
-            std::process::id(),
-            files as *const _
-        ));
-        std::fs::create_dir_all(&dir).expect("a scratch directory");
+        let dir = oag_testdata::scratch::dir("pilots");
         for (name, body) in files {
             std::fs::write(dir.join(name), body).expect("a scratch pilot");
         }
         Self(dir)
-    }
-}
-
-impl Drop for Scratch {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
     }
 }
 

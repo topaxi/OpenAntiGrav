@@ -1047,7 +1047,7 @@ fn the_campaign_cursor_is_kept_per_campaign_and_round_trips() {
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn background_saves_land_in_order_and_none_is_lost() {
-    let dir = std::env::temp_dir().join(format!("oag-records-order-{}", std::process::id()));
+    let dir = oag_testdata::scratch::dir("records-order");
     std::fs::create_dir_all(&dir).expect("a scratch directory");
     let file = dir.join("records.toml");
     let with_cursor = |event: &str| {
@@ -1217,7 +1217,7 @@ fn a_run_that_named_a_circuit_files_under_that_one() {
 }
 
 fn scratch_records(name: &str) -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join(format!("oag-records-{}-{name}", std::process::id()));
+    let dir = oag_testdata::scratch::dir(&format!("records-{name}"));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("a scratch directory");
     dir.join("records.toml")

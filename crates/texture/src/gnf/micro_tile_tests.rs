@@ -328,17 +328,18 @@ fn micro_tiled_address_against_the_oracle_pairs() {
             decode_micro_tiled(blob, texture, micro_tile_index, TileOrder::RowMajor, false);
         let decoded_bytes: Vec<u8> = decoded.iter().flatten().copied().collect();
         let truth_bytes: Vec<u8> = truth.iter().flatten().copied().collect();
+        let out = oag_testdata::scratch::cache("gnf-harimau");
         std::fs::write(
-            "/tmp/gnf_harimau_decoded.png",
+            out.join("decoded.png"),
             crate::png::encode_rgba(texture.width, texture.height, &decoded_bytes),
         )
         .unwrap();
         std::fs::write(
-            "/tmp/gnf_harimau_truth.png",
+            out.join("truth.png"),
             crate::png::encode_rgba(texture.width, texture.height, &truth_bytes),
         )
         .unwrap();
-        println!("wrote /tmp/gnf_harimau_decoded.png and _truth.png");
+        println!("wrote decoded.png and truth.png in {}", out.display());
 
         // Hypothesis: the tile-row stride is HALF of pitch_blocks/8 (16, not 32).
         {

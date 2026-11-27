@@ -19,7 +19,7 @@ fn a_disc_mounts_the_update_folder_beside_it() {
     else {
         return;
     };
-    let beside = std::env::temp_dir().join(format!("oag-hd-update-{}", std::process::id()));
+    let beside = oag_testdata::scratch::dir("hd-update");
     let _ = std::fs::remove_dir_all(&beside);
     std::fs::create_dir_all(&beside).expect("a scratch folder");
     let linked = beside.join("hd.iso");

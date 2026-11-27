@@ -3,13 +3,13 @@
 //! tree, the texture packs a race or the front end opens).
 
 use std::collections::BTreeSet;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use oag_game::mods::Mods;
 use oag_ui::menu::{BUILT_IN, For};
 
-fn base(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("oag-pack-titles-{}-{name}", std::process::id()));
+fn base(name: &str) -> oag_testdata::scratch::TempDir {
+    let dir = oag_testdata::scratch::dir(&format!("pack-titles-{name}"));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     dir
@@ -118,7 +118,8 @@ fn a_mod_for_another_title_is_not_in_the_menu_the_strings_or_the_mods_page() {
         "toml-schema = { location = \"https://oag.topaxi.com/mods/schemas/v1/mod-menu.tosd\", version = \"1.0.0\" }\n\n[[entry]]\nid = \"purity\"\nparent = \"options\"\nkind = \"submenu\"\nlabel = \"PURITY\"\ntarget = \"records\"\n",
     )
     .unwrap();
-    let mods = Mods::load_from(&[base], &oag_game::settings::Mods::default()).unwrap();
+    let mods =
+        Mods::load_from(&[base.to_path_buf()], &oag_game::settings::Mods::default()).unwrap();
     let build = |title| {
         mods.build(
             BUILT_IN,

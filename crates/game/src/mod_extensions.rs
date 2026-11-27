@@ -261,7 +261,7 @@ mod tests {
     /// through its reader, from a folder and from a zip alike.
     #[test]
     fn a_mods_strings_files_and_icons_reach_its_source() {
-        let dir = std::env::temp_dir().join(format!("oag-modext-{}", std::process::id()));
+        let dir = oag_testdata::scratch::dir("modext");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(dir.join("ext")).unwrap();
         std::fs::create_dir_all(dir.join("ui")).unwrap();
@@ -330,7 +330,7 @@ badge = "ui/badge.png"
     /// value, else the row's `default`, else the first value for one the row does not list.
     #[test]
     fn a_mods_choice_rows_reach_its_source_as_indices_into_their_values() {
-        let dir = std::env::temp_dir().join(format!("oag-modopt-{}", std::process::id()));
+        let dir = oag_testdata::scratch::dir("modopt");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(dir.join("ext")).unwrap();
         std::fs::write(dir.join("ext/m.wasm"), b"\0asm").unwrap();

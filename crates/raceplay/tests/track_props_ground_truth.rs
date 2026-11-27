@@ -63,7 +63,7 @@ fn hillside(boost: Option<usize>, tag: &str) -> Option<PathBuf> {
             vec![oag_trackfile::props::Props::new(); track.speedup_pads.len()];
         track.speedup_pad_props[pad].insert("boost".into(), 2.0);
     }
-    let dir = std::env::temp_dir().join(format!("oag-track-props-{}-{tag}", std::process::id()));
+    let dir = oag_testdata::scratch::dir(&format!("track-props-{tag}"));
     std::fs::create_dir_all(&dir).unwrap();
     for entry in std::fs::read_dir(source.parent().unwrap()).unwrap() {
         let path = entry.unwrap().path();
@@ -92,7 +92,7 @@ fn hillside_with_triggers(entrance: Vec3, exit: Vec3, tag: &str) -> Option<PathB
         emits: None,
     };
     track.triggers = vec![at("entrance", entrance), at("exit", exit)];
-    let dir = std::env::temp_dir().join(format!("oag-track-portal-{}-{tag}", std::process::id()));
+    let dir = oag_testdata::scratch::dir(&format!("track-portal-{tag}"));
     std::fs::create_dir_all(&dir).unwrap();
     for entry in std::fs::read_dir(source.parent().unwrap()).unwrap() {
         let path = entry.unwrap().path();

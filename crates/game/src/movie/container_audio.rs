@@ -272,7 +272,7 @@ mod tests {
     /// track, the same rule `oag_music::at3::read_cached` applies.
     #[test]
     fn a_truncated_cache_file_is_rejected() {
-        let dir = std::env::temp_dir().join("oag-container-audio-test");
+        let dir = oag_testdata::scratch::dir("container-audio-test");
         std::fs::create_dir_all(&dir).expect("creating a scratch dir");
         let path = dir.join("truncated.s16le");
         std::fs::write(&path, [0u8; 3]).expect("writing 3 stray bytes");
@@ -284,7 +284,7 @@ mod tests {
     /// the same round trip [`oag_music::at3::from_s16le`] is asserted against.
     #[test]
     fn a_whole_cache_file_reads_back_as_pcm() {
-        let dir = std::env::temp_dir().join("oag-container-audio-test");
+        let dir = oag_testdata::scratch::dir("container-audio-test");
         std::fs::create_dir_all(&dir).expect("creating a scratch dir");
         let path = dir.join("whole.s16le");
         let mut bytes = Vec::new();

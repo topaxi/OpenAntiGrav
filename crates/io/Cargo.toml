@@ -12,5 +12,8 @@ publish = false
 # Lets a test of a crate above this one cut the next write short (`cut_the_next_write_after`).
 crash-hook = []
 
+[dev-dependencies]
+oag-testdata.workspace = true
+
 [lints]
 workspace = true

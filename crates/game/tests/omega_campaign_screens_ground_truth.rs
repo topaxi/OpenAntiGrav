@@ -570,7 +570,7 @@ fn the_campaign_select_frame_shows_the_2048_banner() {
     let Some(omega) = oag_testdata::exact("data/extracted/ps4") else {
         return;
     };
-    let dir = std::env::temp_dir().join("oag-omega-campaign-card-art-ground-truth");
+    let dir = oag_testdata::scratch::dir("omega-campaign-card-art-ground-truth");
     std::fs::create_dir_all(&dir).expect("a temp directory");
     let out = dir.join("campaign-select.png");
     let status = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
@@ -628,7 +628,7 @@ fn omegas_footer_prompts_flow_to_where_the_original_draws_them() {
         dlc: Vec::new(),
         leg: oag_ui::frontend::Leg::LogoFmv,
         movie: None,
-        cache: std::env::temp_dir().join("oag-omega-legend-flow-ground-truth"),
+        cache: oag_testdata::scratch::cache("omega-legend-flow-ground-truth"),
         audio_cache: oag_source::cache::default_audio_cache_dir(),
         extent: oag_game::movie::Extent::Frames(oag_game::INTRO_FRAMES_NEEDED),
         no_video: true,
@@ -700,7 +700,7 @@ fn omegas_footer_prompts_flow_to_where_the_original_draws_them() {
 
 /// Omega's Track Select still, `flags` added, as RGBA.
 fn omega_track_select_still(omega: &std::path::Path, tag: &str, flags: &[&str]) -> Vec<u8> {
-    let dir = std::env::temp_dir().join(format!("oag-omega-track-hex-ground-truth-{tag}"));
+    let dir = oag_testdata::scratch::dir(&format!("omega-track-hex-ground-truth-{tag}"));
     std::fs::create_dir_all(&dir).expect("a temp directory");
     let out = dir.join("track-select.png");
     let status = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))

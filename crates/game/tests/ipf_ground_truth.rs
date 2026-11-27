@@ -146,7 +146,7 @@ fn both_ipf_files_decode_through_the_movie_cache() {
     if !have_ffmpeg() {
         return;
     }
-    let cache = std::env::temp_dir().join("oag-ipf-ground-truth");
+    let cache = oag_testdata::scratch::cache("ipf-ground-truth");
 
     for (path, width, height, frames) in FILES {
         let blob = read(&image, path);
@@ -235,7 +235,7 @@ fn the_front_ends_own_backdrop_name_resolves_to_the_60hz_cut() {
         dlc: Vec::new(),
         leg: oag_ui::frontend::Leg::LogoFmv,
         movie: Some(r"Data\Movies\Backdrop.ipf".to_string()),
-        cache: std::env::temp_dir().join("oag-ipf-ground-truth"),
+        cache: oag_testdata::scratch::cache("ipf-ground-truth"),
         audio_cache: oag_source::cache::default_audio_cache_dir(),
         extent: movie::Extent::Whole,
         // The resolution is what is under test, not the transcode.
@@ -298,7 +298,7 @@ fn the_slot_lengths_are_the_bitstreams_own_frame_boundaries() {
         return;
     }
 
-    let dir = std::env::temp_dir().join("oag-ipf-ground-truth");
+    let dir = oag_testdata::scratch::cache("ipf-ground-truth");
     std::fs::create_dir_all(&dir).expect("creating the scratch directory");
 
     for (path, ..) in FILES {

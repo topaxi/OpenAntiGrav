@@ -240,7 +240,7 @@ fn the_wreck_replaces_the_hull_from_state_5_and_not_before() {
         .map_or(0, |model| triangles(model, false));
     let wreck = triangles(&victim.wreck.as_ref().expect("a wreck").model, false);
 
-    let scratch = std::env::temp_dir().join(format!("oag-wreck-{}", std::process::id()));
+    let scratch = oag_testdata::scratch::dir("wreck");
     std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
     let (exploding, exploding_tris) = frame(&image, &scratch, "exploding", "60", &[]);
     let (exploding_hull, exploding_hull_tris) = frame(

@@ -10,22 +10,19 @@
 //!     -E 'test(/^campaign_cursor_ground_truth::/)'
 //! ```
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use serde_json::Value;
 
 /// A profile directory; the game's config, data and state live under it.
-struct Profile(PathBuf);
+struct Profile(oag_testdata::scratch::TempDir);
 
 impl Profile {
     /// A new, empty profile owned by this test process alone. The process id keeps two tests that
     /// share a `tag` (the PS2 and PSP pickers) from wiping and rewriting each other's state log
     /// when nextest runs them at once.
     fn fresh(tag: &str) -> Self {
-        let dir = Path::new(env!("CARGO_TARGET_TMPDIR"))
-            .join(format!("campaign-cursor-{tag}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).expect("a scratch directory");
+        let dir = oag_testdata::scratch::dir(&format!("campaign-cursor-{tag}"));
         Self(dir)
     }
 

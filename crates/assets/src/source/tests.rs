@@ -564,8 +564,8 @@ fn an_extracted_directory_is_joined_with_a_separator() {
 
 /// A directory shaped like an extract, under a name of its own so two tests
 /// never collide.
-fn extract(name: &str, files: &[&str]) -> std::path::PathBuf {
-    let root = std::env::temp_dir().join(format!("oag-assets-layout-{name}"));
+fn extract(name: &str, files: &[&str]) -> oag_testdata::scratch::TempDir {
+    let root = oag_testdata::scratch::dir(&format!("assets-layout-{name}"));
     std::fs::remove_dir_all(&root).ok();
     for file in files {
         let path = root.join(file);

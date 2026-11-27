@@ -433,7 +433,7 @@ fn example_dir(path: &str) -> Option<std::path::PathBuf> {
 
 #[test]
 fn a_save_cut_short_leaves_no_half_written_manifest() {
-    let root = std::env::temp_dir().join(format!("oag-campaign-cut-{}", std::process::id()));
+    let root = oag_testdata::scratch::dir("campaign-cut");
     let _ = std::fs::remove_dir_all(&root);
     oag_io::cut_the_next_write_after(4);
     assert!(write_mod(&root, &built(), &["wipeout-pulse"]).is_err());
@@ -451,13 +451,13 @@ fn a_save_cut_short_leaves_no_half_written_manifest() {
 
 #[test]
 fn a_written_mod_is_found_opened_and_lists_its_campaign() {
-    let root = std::env::temp_dir().join(format!("oag-campaign-write-{}", std::process::id()));
+    let root = oag_testdata::scratch::dir("campaign-write");
     let _ = std::fs::remove_dir_all(&root);
     let def = built();
     let first = write_mod(&root, &def, &["wipeout-pulse"]).unwrap();
     let second = write_mod(&root, &def, &["wipeout-pulse"]).unwrap();
     assert_ne!(first, second, "a saved campaign never overwrites another");
-    let found = crate::search(std::slice::from_ref(&root));
+    let found = crate::search(&[root.to_path_buf()]);
     assert_eq!(found.len(), 2);
     let opened = crate::Mod::open(&first).unwrap();
     assert_eq!(opened.manifest.id, "player.small");

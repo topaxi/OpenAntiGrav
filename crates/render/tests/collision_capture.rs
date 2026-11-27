@@ -86,7 +86,7 @@ fn a_synthetic_corridor_renders_through_the_capture_path() {
 
     let stem = std::env::var("OAG_COLLISION_PNG")
         .map(std::path::PathBuf::from)
-        .unwrap_or_else(|_| std::env::temp_dir().join("oag-collision-corridor.png"));
+        .unwrap_or_else(|_| oag_testdata::scratch::cache("collision-capture").join("corridor.png"));
 
     for (style, suffix) in [(Style::Wireframe, "wire"), (Style::Solid, "solid")] {
         let model = collision::build_model("corridor", &nodes, style, false);
@@ -147,7 +147,8 @@ fn an_empty_model_captures_a_frame_instead_of_panicking() {
     let model = collision::build_model("empty", &[], Style::Wireframe, true);
     assert!(model.vertices.is_empty() && model.indices.is_empty());
 
-    let path = std::env::temp_dir().join("oag-empty-model.png");
+    let scratch = oag_testdata::scratch::dir("empty-model");
+    let path = scratch.join("model.png");
     oag_mesh::capture::capture_from(
         &model,
         &path,

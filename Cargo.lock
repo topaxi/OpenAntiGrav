@@ -3439,6 +3439,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "lzma-rust2 0.25.0",
+ "oag-testdata",
  "sha2 0.11.1",
  "tar",
  "ureq",
@@ -3655,6 +3656,9 @@ dependencies = [
 [[package]]
 name = "oag-io"
 version = "0.1.0"
+dependencies = [
+ "oag-testdata",
+]
 
 [[package]]
 name = "oag-livery"
@@ -3687,6 +3691,7 @@ dependencies = [
  "env_filter 2.1.0",
  "env_logger",
  "log",
+ "oag-testdata",
 ]
 
 [[package]]
@@ -3723,6 +3728,7 @@ dependencies = [
  "log",
  "oag-mod",
  "oag-present",
+ "oag-testdata",
  "oag-thread",
  "winit",
 ]
@@ -3736,6 +3742,7 @@ dependencies = [
  "oag-io",
  "oag-schema",
  "oag-tables",
+ "oag-testdata",
  "oag-texture",
  "semver",
  "serde",
@@ -4058,6 +4065,7 @@ dependencies = [
  "oag-pure",
  "oag-race",
  "oag-tables",
+ "oag-testdata",
  "oag-thread",
  "oag-title",
  "oag-ui",

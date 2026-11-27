@@ -21,7 +21,7 @@ fn script(pick: &str) -> String {
 }
 
 fn shot(image: &Path, pick: &str, tag: &str, resolution: &str) -> (Run, Vec<PathBuf>) {
-    let shots = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("photo-glass-{tag}-shots"));
+    let shots = oag_testdata::scratch::dir(&format!("photo-glass-{tag}-shots"));
     let _ = std::fs::remove_dir_all(&shots);
     let run = drive_unmodded(
         image,

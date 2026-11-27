@@ -2,7 +2,7 @@
 //! built-in cannot be turned off, and the row follows the MOD row.
 
 use std::collections::BTreeSet;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use oag_game::mods::{self, Mods};
 use oag_ui::language::StringTable;
@@ -32,8 +32,8 @@ target = "records"
 "#;
 
 /// Garage, a mod that adds one row, and a file that is not a zip.
-fn base(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("oag-mods-switch-{}-{name}", std::process::id()));
+fn base(name: &str) -> oag_testdata::scratch::TempDir {
+    let dir = oag_testdata::scratch::dir(&format!("mods-switch-{name}"));
     let _ = std::fs::remove_dir_all(&dir);
     let garage = dir.join("garage");
     std::fs::create_dir_all(&garage).unwrap();
@@ -225,8 +225,8 @@ fn fingerprint_of(dir: &Path) -> u64 {
     load(dir, &BTreeSet::new()).content_fingerprint(&Default::default())
 }
 
-fn empty_base(name: &str) -> PathBuf {
-    let empty = std::env::temp_dir().join(format!("oag-mods-switch-{}-{name}", std::process::id()));
+fn empty_base(name: &str) -> oag_testdata::scratch::TempDir {
+    let empty = oag_testdata::scratch::dir(&format!("mods-switch-{name}"));
     let _ = std::fs::remove_dir_all(&empty);
     std::fs::create_dir_all(&empty).unwrap();
     empty
@@ -350,7 +350,7 @@ fn a_texture_pack_starts_off_and_its_switch_is_the_enabled_list() {
     let id = "ppsspp.some-pulse-pack";
 
     let mut switches = oag_game::settings::Mods::default();
-    let loaded = Mods::load_from(std::slice::from_ref(&dir), &switches).unwrap();
+    let loaded = Mods::load_from(&[dir.to_path_buf()], &switches).unwrap();
     assert!(
         loaded.is_disabled(id),
         "off before the player says otherwise"
@@ -363,7 +363,7 @@ fn a_texture_pack_starts_off_and_its_switch_is_the_enabled_list() {
 
     assert!(mods::switch(&mut switches, id, true, entry.default_enabled));
     assert!(switches.enabled.contains(id) && switches.disabled.is_empty());
-    let loaded = Mods::load_from(std::slice::from_ref(&dir), &switches).unwrap();
+    let loaded = Mods::load_from(&[dir.to_path_buf()], &switches).unwrap();
     assert!(!loaded.is_disabled(id));
     assert!(loaded.player().any(|m| m.manifest.id == id));
 
@@ -374,7 +374,11 @@ fn a_texture_pack_starts_off_and_its_switch_is_the_enabled_list() {
         entry.default_enabled
     ));
     assert!(switches.enabled.is_empty() && switches.disabled.is_empty());
-    assert!(Mods::load_from(&[dir], &switches).unwrap().is_disabled(id));
+    assert!(
+        Mods::load_from(&[dir.to_path_buf()], &switches)
+            .unwrap()
+            .is_disabled(id)
+    );
 }
 
 const TUNER_MENU: &str = r#"

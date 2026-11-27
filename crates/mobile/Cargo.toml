@@ -21,6 +21,7 @@ oag-thread.workspace = true
 log.workspace = true
 
 [dev-dependencies]
+oag-testdata.workspace = true
 oag-mod.workspace = true
 oag-present.workspace = true
 

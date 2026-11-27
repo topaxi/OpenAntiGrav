@@ -139,9 +139,8 @@ fn room(files: [&std::path::Path; 2], dialers: [Option<Box<dyn Dialer>>; 2]) -> 
     }
 }
 
-fn scratch(name: &str) -> std::path::PathBuf {
-    let dir =
-        std::env::temp_dir().join(format!("oag-net-play-rejoin-{}-{name}", std::process::id()));
+fn scratch(name: &str) -> oag_testdata::scratch::TempDir {
+    let dir = oag_testdata::scratch::dir(&format!("net-play-rejoin-{name}"));
     std::fs::create_dir_all(&dir).unwrap();
     dir
 }

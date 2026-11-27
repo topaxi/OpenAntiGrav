@@ -86,7 +86,7 @@ fn the_boot_reads_wohd_and_the_ship_select_bar_has_two_colours() {
         dlc: Vec::new(),
         leg: oag_ui::frontend::Leg::LogoFmv,
         movie: None,
-        cache: std::env::temp_dir().join("oag-omega-colour-template-ground-truth"),
+        cache: oag_testdata::scratch::cache("omega-colour-template-ground-truth"),
         audio_cache: oag_source::cache::default_audio_cache_dir(),
         extent: oag_game::movie::Extent::Frames(1),
         no_video: true,

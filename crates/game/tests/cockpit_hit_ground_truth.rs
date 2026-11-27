@@ -89,8 +89,7 @@ fn luma_of(png: &[u8]) -> Vec<f32> {
 /// tick 300, as the mean vertical luma difference in each of [`BANDS`].
 fn noise_bands(ticks: u32) -> Option<[f32; 7]> {
     let image = oag_testdata::image("data/images/pulse-psp-usa.chd")?;
-    let scratch =
-        std::env::temp_dir().join(format!("oag-cockpit-hit-{}-{ticks}", std::process::id()));
+    let scratch = oag_testdata::scratch::dir(&format!("cockpit-hit-{ticks}"));
     std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
     let out = scratch.join("frame.png");
     let status = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))

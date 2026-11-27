@@ -523,7 +523,7 @@ fn hd_single_race_mode_icon_clip_is_on_the_disc_in_both_stylings() {
         // square, the base one 250.
         let side = if style == "FURY" { 400 } else { 250 };
         assert_eq!((format.width, format.height), (side, side), "{style}");
-        let cache = std::env::temp_dir().join("oag-loading-icon-gt");
+        let cache = oag_testdata::scratch::cache("loading-icon-gt");
         let movie = oag_game::loading::icon::open(clip, &cache)
             .unwrap_or_else(|e| panic!("{style}: {e:#}"));
         assert!(movie.frame_count > 1, "{style}");

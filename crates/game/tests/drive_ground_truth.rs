@@ -102,7 +102,7 @@ fn drive_flags(
     flags: &[&str],
     soundtrack: bool,
 ) -> Run {
-    let scratch = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("drive-{tag}"));
+    let scratch = oag_testdata::scratch::dir(&format!("drive-{tag}"));
     let _ = std::fs::remove_dir_all(&scratch);
     std::fs::create_dir_all(&scratch).expect("a scratch directory");
     let log = scratch.join("state.jsonl");
@@ -620,7 +620,7 @@ fn a_device_lost_mid_race_saves_the_replay_and_ends_without_a_panic() {
         "the loss was not said:\n{why}"
     );
     assert_eq!(text(run.last(), &["stage"]), Some("race"));
-    let scratch = Path::new(env!("CARGO_TARGET_TMPDIR")).join("drive-device-lost-race");
+    let scratch = oag_testdata::scratch::dir("drive-device-lost-race");
     assert!(
         scratch.join("config/oag/device-lost.txt").is_file(),
         "no note for the next run"
@@ -768,9 +768,9 @@ fn the_mods_page_turns_a_mod_off_and_on_and_what_it_adds_goes_and_comes_back_liv
         why.contains("\"oag.hillside\" is turned off on the MODS page"),
         "the campaign is refused by name, saying why: {why}"
     );
-    let saved = std::fs::read_to_string(
-        Path::new(env!("CARGO_TARGET_TMPDIR")).join("drive-mods-switch/config/oag/settings.toml"),
-    )
+    let saved = std::fs::read_to_string(oag_testdata::scratch::dir(
+        "drive-mods-switch/config/oag/settings.toml",
+    ))
     .expect("the run saved its settings");
     let saved: toml::Table = saved.parse().unwrap();
     assert_eq!(
@@ -819,9 +819,9 @@ fn the_screen_size_row_saves_hud_safe_area() {
         Some("90"),
         "and ends where the pad left it"
     );
-    let saved = std::fs::read_to_string(
-        Path::new(env!("CARGO_TARGET_TMPDIR")).join("drive-screen-size/config/oag/settings.toml"),
-    )
+    let saved = std::fs::read_to_string(oag_testdata::scratch::dir(
+        "drive-screen-size/config/oag/settings.toml",
+    ))
     .expect("the run saved its settings");
     let saved: toml::Table = saved.parse().unwrap();
     assert_eq!(
@@ -865,7 +865,7 @@ fn a_race_resumed_from_the_pause_menu_draws_its_hud_at_the_new_screen_size() {
     let Some(image) = pulse() else {
         return;
     };
-    let shots = Path::new(env!("CARGO_TARGET_TMPDIR")).join("drive-screen-size-live");
+    let shots = oag_testdata::scratch::dir("drive-screen-size-live");
     let _ = std::fs::remove_dir_all(&shots);
     std::fs::create_dir_all(&shots).expect("a screenshot directory");
     let (before, after) = (shots.join("before.png"), shots.join("after.png"));
@@ -925,9 +925,9 @@ fn the_music_page_saves_its_switches() {
         true,
     );
     assert!(run.output.status.success(), "{}", run.stderr());
-    let saved = std::fs::read_to_string(
-        Path::new(env!("CARGO_TARGET_TMPDIR")).join("drive-music-switch/config/oag/settings.toml"),
-    )
+    let saved = std::fs::read_to_string(oag_testdata::scratch::dir(
+        "drive-music-switch/config/oag/settings.toml",
+    ))
     .expect("the run saved its settings");
     let saved: toml::Table = saved.parse().unwrap();
     let profiles = saved["music_profiles"].as_table().expect("music_profiles");

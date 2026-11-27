@@ -23,13 +23,12 @@ use std::path::{Path, PathBuf};
 use serde_json::Value;
 
 struct Profile {
-    dir: PathBuf,
+    dir: oag_testdata::scratch::TempDir,
 }
 
 impl Profile {
     fn new(tag: &str) -> Self {
-        let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("replay-viewer-{tag}"));
-        let _ = std::fs::remove_dir_all(&dir);
+        let dir = oag_testdata::scratch::dir(&format!("replay-viewer-{tag}"));
         std::fs::create_dir_all(dir.join("no-mods")).expect("a scratch directory");
         eprintln!("profile: {}", dir.display());
         Self { dir }

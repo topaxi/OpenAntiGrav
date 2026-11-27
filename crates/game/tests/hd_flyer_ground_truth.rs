@@ -405,7 +405,7 @@ fn the_cell_page_card_is_exposed_and_bloomed_by_the_front_ends_chain() {
     let Some(image) = image() else {
         return;
     };
-    let dir = std::env::temp_dir().join("oag-hd-flyer-cell-chain-ground-truth");
+    let dir = oag_testdata::scratch::dir("hd-flyer-cell-chain-ground-truth");
     for empty in ["no-dlc", "no-mods", "config/oag"] {
         std::fs::create_dir_all(dir.join(empty)).expect("a temp directory");
     }
@@ -742,7 +742,7 @@ fn the_menu_model_seconds_reach_the_card_and_wrap_at_the_loops_end() {
 /// `--menu-page grid-select`'s Fury card (`09_blitzed`) at `--menu-model-seconds seconds` (the flag's absence for
 /// `None`), as the PNG's RGBA bytes: the flag's whole path from the command line to the card's build.
 fn grid_select_still(image: &std::path::Path, seconds: Option<&str>) -> Vec<u8> {
-    let dir = std::env::temp_dir().join("oag-hd-flyer-clock-flag-ground-truth");
+    let dir = oag_testdata::scratch::dir("hd-flyer-clock-flag-ground-truth");
     for empty in ["no-dlc", "no-mods", "config/oag"] {
         std::fs::create_dir_all(dir.join(empty)).expect("a temp directory");
     }

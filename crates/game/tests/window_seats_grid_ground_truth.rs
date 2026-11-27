@@ -14,7 +14,7 @@
 /// counted from the front), in seat order.
 fn seat_rows(mode: &str, extra: &[&str]) -> Option<Vec<usize>> {
     let image = oag_testdata::image("data/images/pulse-psp-usa.chd")?;
-    let dir = std::env::temp_dir().join("oag-window-seats-grid-ground-truth");
+    let dir = oag_testdata::scratch::dir("window-seats-grid-ground-truth");
     std::fs::create_dir_all(&dir).expect("a temp directory");
     let out = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
         .arg(image)

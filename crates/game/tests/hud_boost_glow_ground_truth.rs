@@ -19,7 +19,7 @@
 //! wiring - the copies in `oag_hud::boost_smear`, or `Scene::stamp_glow` from
 //! `oag_game::hud_views::draw` - leaves the bar crisp and mint, which this reads.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 /// The RGBA bytes of a PNG this project's own writer made (stored deflate blocks).
 fn rgba_of(png: &[u8], width: usize, height: usize) -> Vec<u8> {
@@ -122,8 +122,8 @@ fn mean(rgba: &[u8], channel: usize, x: (usize, usize), y: (usize, usize)) -> f3
     sum as f32 / ((x.1 - x.0) * (y.1 - y.0)) as f32
 }
 
-fn scratch() -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("oag-boost-glow-{}", std::process::id()));
+fn scratch() -> oag_testdata::scratch::TempDir {
+    let dir = oag_testdata::scratch::dir("boost-glow");
     std::fs::create_dir_all(&dir).expect("creating the scratch directory");
     dir
 }

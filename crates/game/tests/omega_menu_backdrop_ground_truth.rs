@@ -30,7 +30,7 @@ fn assets(source: &std::path::Path) -> std::sync::Arc<MenuBackdrop> {
         dlc: Vec::new(),
         leg: Leg::LogoFmv,
         movie: None,
-        cache: std::env::temp_dir().join("oag-omega-menu-backdrop-ground-truth"),
+        cache: oag_testdata::scratch::cache("omega-menu-backdrop-ground-truth"),
         audio_cache: oag_source::cache::default_audio_cache_dir(),
         extent: oag_game::movie::Extent::Frames(oag_game::INTRO_FRAMES_NEEDED),
         no_video: true,
@@ -270,7 +270,8 @@ pub(crate) fn decode_stored_png(bytes: &[u8]) -> (usize, usize, Vec<u8>) {
 /// `--menu-page main` for `anim_seconds`, through the real binary: the path a
 /// player's window takes, which the tests above go around.
 fn menu_page(source: &std::path::Path, anim_seconds: &str, name: &str) -> (usize, usize, Vec<u8>) {
-    let out = std::env::temp_dir().join(format!("oag-omega-backdrop-{name}.png"));
+    let scratch = oag_testdata::scratch::dir(&format!("omega-backdrop-{name}"));
+    let out = scratch.join("shot.png");
     let status = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
         .arg(source)
         .args([
@@ -286,11 +287,11 @@ fn menu_page(source: &std::path::Path, anim_seconds: &str, name: &str) -> (usize
         .arg(&out)
         .env(
             "XDG_CONFIG_HOME",
-            std::env::temp_dir().join("oag-omega-backdrop-config"),
+            oag_testdata::scratch::dir("omega-backdrop-config"),
         )
         .env(
             "XDG_STATE_HOME",
-            std::env::temp_dir().join("oag-omega-backdrop-state"),
+            oag_testdata::scratch::dir("omega-backdrop-state"),
         )
         .status()
         .expect("running oag-game");

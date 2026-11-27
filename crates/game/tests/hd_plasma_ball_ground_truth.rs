@@ -136,7 +136,7 @@ fn the_plasma_bolts_head_has_a_violet_core_not_a_white_disc() {
     let Some(image) = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso") else {
         return;
     };
-    let scratch = std::env::temp_dir().join(format!("oag-hd-plasma-ball-{}", std::process::id()));
+    let scratch = oag_testdata::scratch::dir("hd-plasma-ball");
     std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
     let control = frame_of(&image, &scratch, false, None);
     assert_eq!(

@@ -92,7 +92,7 @@ fn moa_therma_s_grid_mask_is_graded_and_zero_where_nothing_glows() {
     let Some(image) = oag_testdata::image("data/images/pulse-ps2-eu.chd") else {
         return;
     };
-    let scratch = std::env::temp_dir().join(format!("oag-ps2-mask-{}", std::process::id()));
+    let scratch = oag_testdata::scratch::dir("ps2-mask");
     std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
     let mask = mask_of(&image, &scratch);
     std::fs::remove_dir_all(&scratch).ok();

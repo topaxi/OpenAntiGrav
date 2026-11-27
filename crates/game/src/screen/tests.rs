@@ -5,20 +5,12 @@ use std::time::Duration;
 
 use super::*;
 
-/// A directory of its own under the system temp dir, removed on drop.
-struct Scratch(PathBuf);
+/// A directory of its own.
+struct Scratch(oag_testdata::scratch::TempDir);
 
 impl Scratch {
     fn new(name: &str) -> Self {
-        let dir = std::env::temp_dir().join(format!(
-            "oag-screen-{name}-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_nanos())
-                .unwrap_or_default()
-        ));
-        std::fs::create_dir_all(&dir).expect("a scratch directory");
+        let dir = oag_testdata::scratch::dir(&format!("screen-{name}"));
         Self(dir)
     }
 
@@ -26,12 +18,6 @@ impl Scratch {
         let path = self.0.join(name);
         std::fs::write(&path, body).expect("a scratch file");
         path
-    }
-}
-
-impl Drop for Scratch {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
     }
 }
 
@@ -97,7 +83,7 @@ fn the_choices_lead_with_off_and_follow_the_shipped_order() {
 fn a_user_file_joins_the_list_and_a_rewrite_bumps_its_revision() {
     let scratch = Scratch::new("user");
     let path = scratch.write("mine.wgsl", PASSTHROUGH);
-    let mut catalogue = Catalogue::load(Some(scratch.0.clone()));
+    let mut catalogue = Catalogue::load(Some(scratch.0.to_path_buf()));
 
     let mine = catalogue.get("mine").expect("the user file").clone();
     assert_eq!(mine.name, "Mine");
@@ -127,7 +113,7 @@ fn a_user_file_joins_the_list_and_a_rewrite_bumps_its_revision() {
 fn a_user_file_shadows_the_built_in_of_the_same_stem_and_falls_back_when_deleted() {
     let scratch = Scratch::new("shadow");
     let path = scratch.write("psp-3000.wgsl", PASSTHROUGH);
-    let mut catalogue = Catalogue::load(Some(scratch.0.clone()));
+    let mut catalogue = Catalogue::load(Some(scratch.0.to_path_buf()));
 
     assert_eq!(catalogue.get("psp-3000").expect("shadowed").name, "Mine");
     // In the built-in's own place, not appended.
@@ -148,7 +134,7 @@ fn a_user_file_shadows_the_built_in_of_the_same_stem_and_falls_back_when_deleted
 fn a_file_that_stops_compiling_keeps_its_last_good_revision() {
     let scratch = Scratch::new("broken");
     let path = scratch.write("mine.wgsl", PASSTHROUGH);
-    let mut catalogue = Catalogue::load(Some(scratch.0.clone()));
+    let mut catalogue = Catalogue::load(Some(scratch.0.to_path_buf()));
     let good = catalogue.get("mine").expect("good").revision;
 
     std::fs::write(
@@ -172,7 +158,7 @@ fn a_file_that_never_compiled_is_not_offered() {
     let scratch = Scratch::new("never");
     scratch.write("nope.wgsl", "this is not wgsl\n");
     scratch.write("notes.txt", PASSTHROUGH);
-    let catalogue = Catalogue::load(Some(scratch.0.clone()));
+    let catalogue = Catalogue::load(Some(scratch.0.to_path_buf()));
     assert!(catalogue.get("nope").is_none());
     assert!(catalogue.get("notes").is_none());
     assert_eq!(catalogue.choices().len(), 1 + BUILT_IN.len());

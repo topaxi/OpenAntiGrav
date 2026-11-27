@@ -149,11 +149,7 @@ fn ffmpeg_present() -> bool {
 
 /// FFmpeg's decode of each blob as interleaved `s16le`, one process for all.
 fn ffmpeg_pcm(blobs: &[&[u8]]) -> Vec<Vec<i16>> {
-    let dir = std::env::temp_dir().join(format!(
-        "oag-atrac9-gt-{}-{:?}",
-        std::process::id(),
-        std::thread::current().id()
-    ));
+    let dir = oag_testdata::scratch::dir(&format!("atrac9-gt-{:?}", std::thread::current().id()));
     std::fs::create_dir_all(&dir).unwrap();
     let mut cmd = std::process::Command::new("ffmpeg");
     cmd.args(["-hide_banner", "-v", "error", "-xerror", "-y"]);
@@ -308,7 +304,7 @@ fn atrac9_against_libatrac9_sweep() {
         return;
     }
     let oracle = PathBuf::from(std::env::var("OAG_ATRAC9_ORACLE").expect("OAG_ATRAC9_ORACLE"));
-    let dir = std::env::temp_dir().join(format!("oag-atrac9-sweep-{}", std::process::id()));
+    let dir = oag_testdata::scratch::dir("atrac9-sweep");
     std::fs::create_dir_all(&dir).unwrap();
     let mut files = 0usize;
     let mut identical = 0usize;

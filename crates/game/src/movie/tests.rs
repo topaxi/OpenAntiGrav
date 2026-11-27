@@ -230,7 +230,7 @@ fn an_uncapped_conversion_keeps_the_count_it_was_measured_at() {
 /// [`cache_name`] builds and from opening the container, and never converts.
 #[test]
 fn a_cache_lookup_finds_only_a_file_that_is_really_there() {
-    let dir = std::env::temp_dir().join("oag-cached-unit");
+    let dir = oag_testdata::scratch::dir("cached-unit");
     std::fs::create_dir_all(&dir).expect("the temp directory");
     let to = Conversion {
         key: "0badcafe-1234",
@@ -573,7 +573,7 @@ fn a_polled_feed_restarts_at_position_zero_and_wraps_a_repeating_movie() {
 /// a failed writer leaves neither: a reader never sees a half-written clip.
 #[test]
 fn concurrent_writes_of_one_key_leave_one_complete_file() {
-    let dir = std::env::temp_dir().join(format!("oag-atomic-{}", std::process::id()));
+    let dir = oag_testdata::scratch::dir("atomic");
     std::fs::create_dir_all(&dir).unwrap();
     let out = dir.join("key-1-2x2-av1-all.ivf");
     let payload = vec![7u8; 1 << 20];
@@ -620,7 +620,7 @@ fn concurrent_writes_of_one_key_leave_one_complete_file() {
 /// nothing or the whole blob, and no temporary is left behind.
 #[test]
 fn concurrent_source_writes_never_expose_a_partial_mp4() {
-    let dir = std::env::temp_dir().join(format!("oag-source-{}", std::process::id()));
+    let dir = oag_testdata::scratch::dir("source");
     let blob = vec![9u8; 32 << 20];
     let path = dir.join("clip.mp4");
     let done = std::sync::atomic::AtomicBool::new(false);

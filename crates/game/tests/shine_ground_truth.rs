@@ -190,7 +190,7 @@ fn the_extra_pass_changes_the_grid_frame() {
     let Some(image) = oag_testdata::image("data/images/pulse-psp-usa.chd") else {
         return;
     };
-    let scratch = std::env::temp_dir().join(format!("oag-shine-{}", std::process::id()));
+    let scratch = oag_testdata::scratch::dir("shine");
     std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
     let with = grid_frame(&image, &scratch, "with", &[]);
     let without = grid_frame(&image, &scratch, "without", &["--no-hull-shine"]);
@@ -207,7 +207,7 @@ fn the_circuits_extra_pass_changes_the_grid_frame() {
     let Some(image) = oag_testdata::image("data/images/pulse-psp-usa.chd") else {
         return;
     };
-    let scratch = std::env::temp_dir().join(format!("oag-track-shine-{}", std::process::id()));
+    let scratch = oag_testdata::scratch::dir("track-shine");
     std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
     let track = ["--track", r"Data\Environments\07_Track\track.vex"];
     let with = grid_frame(&image, &scratch, "with", &track);

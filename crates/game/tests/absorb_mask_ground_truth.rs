@@ -114,7 +114,7 @@ fn a_real_absorbs_overlay_does_not_flood_the_hull_with_glow() {
     let Some(image) = oag_testdata::image("data/images/pulse-psp-usa.chd") else {
         return;
     };
-    let scratch = std::env::temp_dir().join(format!("oag-absorb-mask-{}", std::process::id()));
+    let scratch = oag_testdata::scratch::dir("absorb-mask");
     std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
     // 35 ticks after the press is just past a half second: the peak.
     let peak = mask_of(&image, &scratch, true, 736);

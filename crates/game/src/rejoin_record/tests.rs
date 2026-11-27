@@ -12,7 +12,7 @@ fn rejoin() -> Rejoin {
 }
 
 fn scratch(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("oag-rejoin-{}-{name}", std::process::id()));
+    let dir = oag_testdata::scratch::dir(&format!("rejoin-{name}"));
     std::fs::create_dir_all(&dir).unwrap();
     dir.join("rejoin.toml")
 }

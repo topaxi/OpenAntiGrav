@@ -104,7 +104,7 @@ fn the_leach_strip_is_drawn_from_the_players_hull_toward_the_rival() {
     let Some(image) = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso") else {
         return;
     };
-    let scratch = std::env::temp_dir().join(format!("oag-hd-leach-strip-{}", std::process::id()));
+    let scratch = oag_testdata::scratch::dir("hd-leach-strip");
     std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
     let locked = frame_of(&image, &scratch, true);
     let control = frame_of(&image, &scratch, false);

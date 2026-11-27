@@ -18,7 +18,7 @@
 //! height. Every pixel that differs between the two frames is then the texture
 //! scroll, and a frame with no mine at all is the control for the scenery.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
 const WIDTH: usize = 480;
@@ -119,8 +119,8 @@ fn frame(image: &Path, scratch: &Path, name: &str, mine: bool, clock: &str) -> V
     pixels_of(&std::fs::read(&out).expect("reading the screenshot"))
 }
 
-fn scratch() -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("oag-mine-scroll-{}", std::process::id()));
+fn scratch() -> oag_testdata::scratch::TempDir {
+    let dir = oag_testdata::scratch::dir("mine-scroll");
     std::fs::create_dir_all(&dir).expect("creating the scratch directory");
     dir
 }

@@ -168,7 +168,7 @@ impl Hosted {
 }
 
 fn ban_file(tag: &str) -> std::path::PathBuf {
-    let dir = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("anticheat-{tag}"));
+    let dir = oag_testdata::scratch::dir(&format!("anticheat-{tag}"));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("a scratch directory");
     dir.join("bans.txt")

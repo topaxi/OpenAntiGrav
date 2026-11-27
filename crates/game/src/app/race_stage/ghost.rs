@@ -140,7 +140,7 @@ mod tests {
             "time_trial",
             "Venom",
         );
-        let root = std::env::temp_dir().join(format!("oag-arm-{}", std::process::id()));
+        let root = oag_testdata::scratch::dir("arm");
         let _ = std::fs::remove_dir_all(&root);
         let lap = GhostLap {
             lap_ticks: 100,

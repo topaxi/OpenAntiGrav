@@ -30,7 +30,7 @@ pub(crate) struct Run {
     pub(crate) status: std::process::ExitStatus,
     pub(crate) stderr: String,
     pub(crate) states: Vec<Value>,
-    pub(crate) dir: PathBuf,
+    pub(crate) dir: oag_testdata::scratch::TempDir,
 }
 
 /// The game binary, named here so the modules split out of this one need not name it
@@ -125,9 +125,7 @@ fn drive_binary_in(
     args: &[&str],
     launch: Launch,
 ) -> Run {
-    let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("photo-{tag}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a scratch directory");
+    let dir = oag_testdata::scratch::dir(&format!("photo-{tag}"));
     let log = dir.join("state.jsonl");
     let no_mods = dir.join("no-mods");
     if launch == Launch::Unmodded {
@@ -239,7 +237,7 @@ fn a_race_through_photo_mode_hashes_the_same_at_every_tick_as_one_without() {
     let Some(image) = pulse() else {
         return;
     };
-    let shots = Path::new(env!("CARGO_TARGET_TMPDIR")).join("photo-hash-shots");
+    let shots = oag_testdata::scratch::dir("photo-hash-shots");
     let control = drive(
         &image,
         "hash-control",
@@ -391,7 +389,7 @@ fn a_device_lost_during_a_rewind_still_keeps_the_replay() {
     let Some(image) = pulse() else {
         return;
     };
-    let shots = Path::new(env!("CARGO_TARGET_TMPDIR")).join("photo-device-lost-shots");
+    let shots = oag_testdata::scratch::dir("photo-device-lost-shots");
     let run = drive_unmodded(
         &image,
         "device-lost-rewind",
@@ -432,7 +430,7 @@ fn a_race_handed_a_pickup_hashes_the_same_at_every_tick_after_a_rewind() {
     let Some(image) = pulse() else {
         return;
     };
-    let shots = Path::new(env!("CARGO_TARGET_TMPDIR")).join("photo-give-shots");
+    let shots = oag_testdata::scratch::dir("photo-give-shots");
     let to_the_race = TO_THE_TIME_TRIAL.replace(
         "ticks 400; ",
         "hold cross 300; hold cross square 2; hold cross 30; hold cross square 2; hold cross 66; ",
@@ -547,7 +545,7 @@ fn a_rewound_visit_hashes_as_the_control(tag: &str, control: &Run, rewound: &Run
 /// the race reads. Returns how many ticks it compared.
 fn leaving_by(image: &Path, tag: &str, mode: &str, leave: &str) -> usize {
     let to_the_race = TO_THE_TIME_TRIAL.replace("single_race", mode);
-    let shots = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("photo-{tag}-shots"));
+    let shots = oag_testdata::scratch::dir(&format!("photo-{tag}-shots"));
     let control = drive_with(
         image,
         &format!("{tag}-control"),
@@ -616,7 +614,7 @@ fn a_live_race_played_from_a_scrub_and_left_hashes_as_it_was() {
     let Some(image) = pulse() else {
         return;
     };
-    let shots = Path::new(env!("CARGO_TARGET_TMPDIR")).join("photo-play-shots");
+    let shots = oag_testdata::scratch::dir("photo-play-shots");
     // The throttle is held so the craft moves and every hash is sensitive. No mod is mounted
     // (`drive_unmodded`): the PLAY test is of the unmodded recording
     // (`docs/ui/photo-mode.md`, "Accumulated shots and rewind").
@@ -702,7 +700,7 @@ fn a_saved_picture_is_the_frame_the_player_saw_at_its_full_size() {
     let Some(image) = pulse() else {
         return;
     };
-    let shots = Path::new(env!("CARGO_TARGET_TMPDIR")).join("photo-pixels-shots");
+    let shots = oag_testdata::scratch::dir("photo-pixels-shots");
     let _ = std::fs::remove_dir_all(&shots);
     // The camera is moved off the craft. The reference is a screenshot with the help hidden and the
     // HUD off. The first shot is taken with the help up, so the screen's text would show in it if
@@ -755,7 +753,7 @@ fn escape_leaves_the_mode_and_the_next_one_opens_the_menus_and_the_race_still_ru
     let Some(image) = pulse() else {
         return;
     };
-    let shots = Path::new(env!("CARGO_TARGET_TMPDIR")).join("photo-escape-shots");
+    let shots = oag_testdata::scratch::dir("photo-escape-shots");
     let run = drive(
         &image,
         "escape",
@@ -786,7 +784,7 @@ fn select_on_race_end_photo_opens_the_mode_and_leaving_returns_to_it() {
     let Some(image) = pulse() else {
         return;
     };
-    let shots = Path::new(env!("CARGO_TARGET_TMPDIR")).join("photo-finish-shots");
+    let shots = oag_testdata::scratch::dir("photo-finish-shots");
     // The player is flown for them, so the race reaches its line and `Race End Photo`.
     let run = drive_with(
         &image,
@@ -839,7 +837,7 @@ fn every_disc_word_a_title_maps_is_in_its_string_table() {
             dlc: Vec::new(),
             leg: oag_ui::frontend::Leg::LogoFmv,
             movie: None,
-            cache: std::env::temp_dir().join("oag-photo-strings-ground-truth"),
+            cache: oag_testdata::scratch::cache("photo-strings-ground-truth"),
             audio_cache: oag_source::cache::default_audio_cache_dir(),
             extent: oag_game::movie::Extent::Frames(oag_game::INTRO_FRAMES_NEEDED),
             no_video: true,
@@ -947,7 +945,7 @@ fn the_games_motion_blur_never_reaches_a_photo() {
     let Some(image) = pulse() else {
         return;
     };
-    let shots = Path::new(env!("CARGO_TARGET_TMPDIR")).join("photo-blur-shots");
+    let shots = oag_testdata::scratch::dir("photo-blur-shots");
     let _ = std::fs::remove_dir_all(&shots);
     let script = format!(
         "{TO_THE_RACE} escape; until stage=menu; select photo_mode; press cross; \
@@ -980,7 +978,7 @@ fn a_motion_blur_shot_smears_what_it_should_and_any_input_abandons_it() {
     let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
         return;
     };
-    let shots = Path::new(env!("CARGO_TARGET_TMPDIR")).join("photo-mblur-shots");
+    let shots = oag_testdata::scratch::dir("photo-mblur-shots");
     let _ = std::fs::remove_dir_all(&shots);
     let to_the_race = "boot; select racebox; press cross; until page=race; \
          set race.mode=time_trial; select launch_race; press cross; until screen=picker; \
@@ -1123,7 +1121,7 @@ fn the_right_stick_and_the_triggers_move_the_view_and_never_the_race() {
     let Some(image) = pulse() else {
         return;
     };
-    let shots = Path::new(env!("CARGO_TARGET_TMPDIR")).join("photo-bindings-shots");
+    let shots = oag_testdata::scratch::dir("photo-bindings-shots");
     let _ = std::fs::remove_dir_all(&shots);
     std::fs::create_dir_all(&shots).expect("a directory");
     let to_the_throttle = TO_THE_TIME_TRIAL.replace("ticks 400; ", "hold cross 700; ");
@@ -1272,7 +1270,7 @@ fn fingers_move_the_view_and_never_the_race() {
     let Some(image) = pulse() else {
         return;
     };
-    let shots = Path::new(env!("CARGO_TARGET_TMPDIR")).join("photo-touch-shots");
+    let shots = oag_testdata::scratch::dir("photo-touch-shots");
     let _ = std::fs::remove_dir_all(&shots);
     std::fs::create_dir_all(&shots).expect("a directory");
     let to_the_throttle = TO_THE_TIME_TRIAL.replace("ticks 400; ", "hold cross 700; ");
@@ -1348,7 +1346,7 @@ fn a_photo_carries_its_race_and_resimulates_to_the_hash_it_was_taken_at() {
     let Some(image) = pulse() else {
         return;
     };
-    let shots = Path::new(env!("CARGO_TARGET_TMPDIR")).join("photo-meta-shots");
+    let shots = oag_testdata::scratch::dir("photo-meta-shots");
     let _ = std::fs::remove_dir_all(&shots);
     let to_the_race = TO_THE_TIME_TRIAL.replace("ticks 400; ", "hold cross 400; ");
     let run = drive_unmodded(

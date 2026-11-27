@@ -80,7 +80,7 @@ fn shell(label: &str, image: &Path) -> boot::Shell {
         dlc: Vec::new(),
         leg: frontend::Leg::LogoFmv,
         movie: None,
-        cache: std::env::temp_dir().join("oag-roster-ground-truth"),
+        cache: oag_testdata::scratch::cache("roster-ground-truth"),
         audio_cache: oag_source::cache::default_audio_cache_dir(),
         extent: oag_game::movie::Extent::Frames(oag_game::INTRO_FRAMES_NEEDED),
         no_video: true,

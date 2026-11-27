@@ -19,7 +19,7 @@ fn the_race_hull_frames_to_a_hull_sized_sphere() {
         dlc: Vec::new(),
         leg: oag_ui::frontend::Leg::LogoFmv,
         movie: None,
-        cache: std::env::temp_dir().join("oag-hd-ship-preview-ground-truth"),
+        cache: oag_testdata::scratch::cache("hd-ship-preview-ground-truth"),
         audio_cache: oag_source::cache::default_audio_cache_dir(),
         extent: oag_game::movie::Extent::Frames(oag_game::INTRO_FRAMES_NEEDED),
         no_video: true,
@@ -65,7 +65,7 @@ fn each_variant_directory_has_a_hull_of_its_own() {
         dlc: Vec::new(),
         leg: oag_ui::frontend::Leg::LogoFmv,
         movie: None,
-        cache: std::env::temp_dir().join("oag-hd-ship-preview-ground-truth"),
+        cache: oag_testdata::scratch::cache("hd-ship-preview-ground-truth"),
         audio_cache: oag_source::cache::default_audio_cache_dir(),
         extent: oag_game::movie::Extent::Frames(oag_game::INTRO_FRAMES_NEEDED),
         no_video: true,
@@ -114,7 +114,7 @@ fn omega_draws_every_teams_ps4_hull_at_the_updates_rest_pose() {
         dlc: Vec::new(),
         leg: oag_ui::frontend::Leg::LogoFmv,
         movie: None,
-        cache: std::env::temp_dir().join("oag-omega-ship-preview-ground-truth"),
+        cache: oag_testdata::scratch::cache("omega-ship-preview-ground-truth"),
         audio_cache: oag_source::cache::default_audio_cache_dir(),
         extent: oag_game::movie::Extent::Frames(oag_game::INTRO_FRAMES_NEEDED),
         no_video: true,
@@ -235,7 +235,7 @@ fn the_screens_own_fit_lands_feisar_where_the_original_draws_it() {
         dlc: Vec::new(),
         leg: oag_ui::frontend::Leg::LogoFmv,
         movie: None,
-        cache: std::env::temp_dir().join("oag-hd-ship-preview-ground-truth"),
+        cache: oag_testdata::scratch::cache("hd-ship-preview-ground-truth"),
         audio_cache: oag_source::cache::default_audio_cache_dir(),
         extent: oag_game::movie::Extent::Frames(oag_game::INTRO_FRAMES_NEEDED),
         no_video: true,
@@ -394,24 +394,13 @@ fn silhouette(
     ]
 }
 
-/// A scratch directory of this call's own under the build's, named by process and call: two
-/// tests of one run, or two checkouts, never share a settings file or a still.
-fn scratch_dir(tag: &str) -> std::path::PathBuf {
-    static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-    std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!(
-        "{tag}-{}-{}",
-        std::process::id(),
-        NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-    ))
-}
-
 /// A still of `team`'s Ship Select `step_seconds` after a step, as RGBA.
 fn ship_select_still(
     image: &std::path::Path,
     team: &str,
     step_seconds: &str,
 ) -> oag_texture::replacer::Image {
-    let dir = scratch_dir("oag-hd-ship-swap-ground-truth");
+    let dir = oag_testdata::scratch::dir("hd-ship-swap-ground-truth");
     std::fs::create_dir_all(dir.join("config/oag")).expect("a temp directory");
     std::fs::write(
         dir.join("config/oag/settings.toml"),
@@ -570,7 +559,7 @@ fn the_live_screen_draws_the_hull_where_the_fit_rests_it() {
     let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
         return;
     };
-    let dir = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("hd-ship-swap-live");
+    let dir = oag_testdata::scratch::dir("hd-ship-swap-live");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(dir.join("mods")).expect("a scratch directory");
     let shot = |name: &str| dir.join(format!("{name}.png"));
@@ -705,7 +694,7 @@ fn boot_archives(
         dlc: Vec::new(),
         leg: oag_ui::frontend::Leg::LogoFmv,
         movie: None,
-        cache: std::env::temp_dir().join(format!("oag-{tag}-ship-light-ground-truth")),
+        cache: oag_testdata::scratch::cache(&format!("{tag}-ship-light-ground-truth")),
         audio_cache: oag_source::cache::default_audio_cache_dir(),
         extent: oag_game::movie::Extent::Frames(oag_game::INTRO_FRAMES_NEEDED),
         no_video: true,
@@ -827,7 +816,7 @@ fn ship_selects_hull_is_as_bright_as_the_original_on_both_paths() {
     eprintln!("capture hull box luma {capture:.2}");
     assert!(capture > 150.0, "the capture's hull is {capture:.2}");
 
-    let dir = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("hd-ship-light-live");
+    let dir = oag_testdata::scratch::dir("hd-ship-light-live");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(dir.join("mods")).expect("a scratch directory");
     let shot = dir.join("settled.png");
@@ -1095,7 +1084,7 @@ fn ship_select_entry_still(
     image: &std::path::Path,
     entry_seconds: Option<&str>,
 ) -> oag_texture::replacer::Image {
-    let dir = scratch_dir("oag-hd-entry-wipe-ground-truth");
+    let dir = oag_testdata::scratch::dir("hd-entry-wipe-ground-truth");
     std::fs::create_dir_all(dir.join("config/oag")).expect("a temp directory");
     std::fs::write(
         dir.join("config/oag/settings.toml"),
@@ -1191,7 +1180,7 @@ fn track_select_still(
     tag: &str,
     flags: &[&str],
 ) -> oag_texture::replacer::Image {
-    let dir = scratch_dir("oag-hd-track-hex-ground-truth");
+    let dir = oag_testdata::scratch::dir("hd-track-hex-ground-truth");
     std::fs::create_dir_all(dir.join("config/oag")).expect("a temp directory");
     let out = dir.join(format!("{tag}.png"));
     let status = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))

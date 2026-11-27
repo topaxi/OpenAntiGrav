@@ -352,11 +352,9 @@ fn a_lan_host_is_found_joined_started_and_raced_by_two_over_real_sockets() {
 /// again for each race, so the shared `target/<profile>/oag-server` must not be the file run
 /// (`oag_testdata::exec`).
 fn server_copy(tag: &str) -> std::path::PathBuf {
-    let tmp = std::path::Path::new(env!("CARGO_TARGET_TMPDIR"));
-    let dest = tmp.join(format!("net-ground-truth-{tag}"));
-    std::fs::create_dir_all(&dest).expect("a scratch directory");
+    let dest = oag_testdata::scratch::dir(&format!("net-ground-truth-{tag}"));
     oag_testdata::exec::private_copy(
-        tmp,
+        &oag_testdata::scratch::cache("binary-copies"),
         std::path::Path::new(env!("CARGO_BIN_EXE_oag-server")),
         &dest,
         || {},

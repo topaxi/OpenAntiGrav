@@ -99,7 +99,7 @@ mod tests {
 
     #[test]
     fn own_tracks_are_found_flat_and_one_level_down_and_listed_before_workshop_ones() {
-        let base = std::env::temp_dir().join(format!("oag-own-tracks-{}", std::process::id()));
+        let base = oag_testdata::scratch::dir("own-tracks");
         let bng = base.join("bng");
         std::fs::create_dir_all(base.join("own/pack")).unwrap();
         std::fs::create_dir_all(base.join("own/pack/deeper")).unwrap();

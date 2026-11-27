@@ -345,7 +345,7 @@ fn an_address_hosts_only_its_cap_of_rooms() {
 
 #[test]
 fn a_banned_key_cannot_host_and_a_ban_added_later_delists_the_room() {
-    let dir = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("player-host-bans");
+    let dir = oag_testdata::scratch::dir("player-host-bans");
     std::fs::create_dir_all(&dir).expect("a scratch directory");
     let file = dir.join("bans.txt");
     let banned = PlayerKey::generate().expect("a key");

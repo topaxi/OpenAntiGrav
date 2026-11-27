@@ -21,7 +21,7 @@
 //! where the control pair differs. Dropping the bomb's node-animation write
 //! leaves that set empty.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
 const WIDTH: usize = 480;
@@ -111,8 +111,8 @@ fn frame(image: &Path, scratch: &Path, name: &str, give: Option<&str>, clock: &s
     pixels_of(&std::fs::read(&out).expect("reading the screenshot"))
 }
 
-fn scratch() -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("oag-bomb-orbit-{}", std::process::id()));
+fn scratch() -> oag_testdata::scratch::TempDir {
+    let dir = oag_testdata::scratch::dir("bomb-orbit");
     std::fs::create_dir_all(&dir).expect("creating the scratch directory");
     dir
 }
