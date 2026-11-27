@@ -21,6 +21,7 @@ decrypted `EBOOT.elf` wherever the decompiler's output is quoted below.
 | --- | --- | --- |
 | `0x0009e3d0` | `Hud_Update` | 72 |
 | `0x000866c8` | `Hud_UpdateShieldReadout` | 82 |
+| `0x00089f60` | `Hud_SetShieldTimer` | 90 |
 | `0x00096ef0` | `Hud_UpdateLapCounter` | 80 |
 | `0x00096088` | `Hud_UpdatePositionCounter` | 78 |
 | `0x00086e88` | `Hud_UpdateSpeedReadout` | 82 |
@@ -163,14 +164,15 @@ the lap and place the two functions below read), and `f = pct * 0.01`.
    `0x4CFFFFFF`/`0xBFFFFFFF` and the text white, with red (`0x4CFF0000`,
    `0xFFFF0000`) and green (`0x4C00FF00`, `0xFF00FF00`) variants on the same
    two conditions. Not a default-skin path.
-8. **The digits.** When `DamageBarShieldBg` is null or hidden - which it
-   always is on the default skin, hidden at bind and in no path's shipped copy
-   (see [hd-hud.md](../../../formats/hd-hud.md#what-is-not-done)) - the text is
+8. **The digits.** When `DamageBarShieldBg` is null or hidden the text is
    `(int)pct` as up to three ASCII digits, **no `%`**, written through the
    string setter `0x00202d28` (`0x00086ba4`-`0x00086c54`, decimal by
    `mulhw` against `0x51eb851f`/`0x66666667`). The other branch formats
    `+0x1c4` with `"%2.1f"` and colours the text white in modes 13 and 21,
-   `0xFF30FF30` otherwise. Then `+0x10c = pct`.
+   `0xFF30FF30` otherwise. Then `+0x10c = pct`. **The other branch runs while a
+   Shield is up**: see [the Shield countdown](#the-shield-countdown). (This
+   page used to say the widget is in no shipped copy of the layout; `DATA06`'s
+   copy authors it.)
 
 **Confidence 82** on the table in step 6, the colour in step 4 and the crop in
 step 1: every constant is a direct read, the branch structure was walked in the
@@ -178,6 +180,55 @@ disassembly as well as the decompile, and the three `talons-matched` frames of
 the running original agree with the steady row - a full blue hexagon and a
 blue `100`/`98`. What stays open: the field meanings behind `c` (step 3), and
 the `+0x44` bit that gates the call.
+
+## The Shield countdown
+
+2026-11-27, `hd-gantry-weaponbox`. While a craft's Shield runs, the shield
+hexagon's number is the **seconds left**, in green, over a second, slightly
+larger green background, and the weapon box is empty. **Confidence 90**: static
+read, then two RPCS3 boots.
+
+**`Hud_SetShieldTimer` (`0x00089f60`)**, `(time, hud, show)`: returns when
+`hud+0x1bc` (`DamageBarShieldBg`) is null; `show == 0` clears bit `0x4` of the
+widget's `+0x34`; otherwise it stores `time` at `hud+0x1c4` and sets the bit.
+Its one caller is in `PlayerStatus_Update`, `bl` at `0x000cc504`, which passes
+`f1 = slot+0x1c8` and `show = (slot+0x200 >> 4) & 1`, `slot` being
+`*(ship+0x5edc)`: bit `0x10` of the pickup slot's flags, the Shield-active bit.
+`Hud_UpdateShieldReadout` then takes the `"%2.1f"` branch of step 8. Its text
+colour write comes after the flash table of step 6, so the number does not
+blink.
+
+**The widget is authored once.** `HUD_damage_indicator.xml` ships on the
+Fury disc in `DATA02` (904 B) and `DATA06` (1,192 B); the one difference is a
+`DamageBarShieldBg` image between `DamageBarBg` and `DamageBar`, colour
+`0xff00ff00`, 260 x 200 around the 254 x 194 hexagon from the same atlas
+rectangle ([hd-hud.md](../../../formats/hd-hud.md#two-copies-of-the-shield-layout)).
+The original draws it, so it reads `DATA06`'s copy in that race.
+
+**Live**, Racebox Single Race, Talon's Junction, Feisar, the Shield written into
+the slot (state 5) and fired with TRIANGLE
+(`scripts/rpcs3-hd-gantry-board.py`, RPCS3 0.0.43-20574):
+
+| | boot 1 | boot 2 |
+| --- | --- | --- |
+| `slot+0x1c8` at shield clock 0.50, 2.0, 3.0, 4.0 s | 4.451, 2.966, 1.954, 0.947 | 4.489, 2.946, 1.942, 0.926 |
+| `hud+0x1c4` at the same pauses | (HUD not located) | 4.507, 2.979, 1.958, 0.942 |
+| digits on the frame, green | `4.6` `3.1` `2.1` `1.1` | `4.6` `3.0` `2.0` `1.0` |
+| `slot+0x200` | 16 | 16 |
+
+`hud+0x1c4` is the slot's value one update earlier. The frame trails RAM, by
+about 0.15 s on boot 1 and 0.05 s on boot 2, which is what separates the digits
+from the words. Boot 2 found `hud` at `0x329021b0`, `hud+0x1bc` non-null, its
+`0x4` bit clear before the shot and set at all four pauses.
+
+**Per title.** HD/Fury: wired (`oag_title::hud::ShieldCountdown`). The PSN
+download: **checked, differs**: none of its four archives' XML names the widget,
+so `hud+0x1bc` is null there and the percentage stays. Omega: **ported,
+inherited from HD**: its `data00` copy authors the widget and its executable
+holds both `DamageBarShieldBg` and `%2.1f`; its update was not read.
+2048: **checked, applies, not wired**: `data/xml/HUD_damage_indicator.xml`
+authors the widget and the executable holds its name; 2048's HUD update is its
+own (`oag_hud::dialect_2048`) and was not read.
 
 ## `Hud_UpdateLapCounter` (`0x00096ef0`)
 

@@ -363,10 +363,37 @@ panel (z -3.9 against -6.15), so this is the board-shading gap in
 explains the backdrop turning green two ticks early in
 the step-A strip (not kept).
 
+## The lap-0 window live, parked and across the line (2026-11-27, `hd-gantry-weaponbox`)
+
+**`GO` stays on the board until the player's first line crossing, whatever the
+race clock.** Confidence 92: the static law above, and two RPCS3 boots of a
+Talon's Junction Racebox Single Race (Feisar,
+`scripts/rpcs3-hd-gantry-board.py`) reading `ship+0x7810` and the gantry node's
+`+0xc0` in the same pause as each frame.
+
+| | boot 1 | boot 2 |
+| --- | --- | --- |
+| lap clock of the parked samples, s | 4, 10, 18, 27, 40, 55 | 3, 7, 13, 21, 33, 40 |
+| `ship+0x7810` at all of them | 0 | 0 |
+| gantry time, s | 4.95, 5.10, 4.38, 4.62, 4.41, 4.80 | 3.96, 5.09, 3.85, 4.49, 4.89, 4.70 |
+| after the craft crosses, `ship+0x7810` | 1 | 1 |
+| gantry time after the crossing, s | 6.05, 6.20, 6.56 | 6.017, 6.07, 6.17 |
+
+Every parked time is inside `[3.83, 5.25)`; the frames show `GO` bright, dim or
+absent, the loop's own phases. Four more samples per boot with a Shield up
+(lap clock up to 60 s) were inside it too. In boot 2 the counter read 1 on one
+10 ms poll with the node still at 3.85 s and 6.017 s, the window's start, on a
+later one: the race manager resets the time after the counter moves, and the
+board changes while the gantry is still ahead of the craft. **It is the crossing
+counter, not passing under the board.** This also closes the "live lap crossing"
+open item and raises the counter mapping above from 75 to 90. In boot 1 the
+parked craft was pushed forward by an opponent lapping it (55 s sample), short of
+the line, with the counter still 0.
+
 ## Open
 
 - ~~The lap windows are not played.~~ Played since 2026-10-04 (above). Open
-  from it: the writer of `ship+0x7810`, and a live lap crossing.
+  from it: the writer of `ship+0x7810`.
 - What calls `RaceManager_ResetGantryTime` during a countdown. The countdown's
   own zero is read above, so the start tick no longer depends on it.
 - The first `3` against the capture ("The circuit's own board" above).

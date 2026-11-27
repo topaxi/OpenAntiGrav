@@ -1,8 +1,8 @@
 ---
 status: re-first
 titles: [hd]
-updated: 2026-10-22
-summary: "HD LeachBeam flash craft unread; recorded-lap and lap-count capture for the dim Lap rows"
+updated: 2026-11-27
+summary: "HD LeachBeam flash craft unread; dim Lap rows capture; DATA06 HUD copies; 2048 Shield countdown unwired"
 ---
 
 # HD/Fury's HUD draws, and three of Pulse's constants applied to every title were why it did not
@@ -140,6 +140,13 @@ not measured as a scale, only seen in a 2x crop. 2048 and Omega not captured.
   captures completes a lap. Confidence 70 stands; see `hd-hud.md`'s per-lap
   section.
 
+- **`DATA06` copies of other HUD files (2026-11-27).** The original reads `DATA06`'s
+  `HUD_damage_indicator.xml`; `hud_positions.xml`, `zone_hud.xml`, `hud_lap_ghost.xml` and
+  `rankings.xml` differ there too and this build reads the other copy
+  ([hd-hud.md](../../docs/formats/hd-hud.md#two-copies-of-the-shield-layout)). A frame of
+  the original against each, or the PSARC mount order from the EBOOT, settles it.
+- **2048's Shield countdown** is authored and bound by name, not wired: its HUD update is
+  unread ([hud-readouts.md](../../docs/ghidra/functions/ps3-hdfury-eu/hud-readouts.md#the-shield-countdown)).
 - **HD/Omega `ThrustBar` (2026-10-16): done.** Drawn off the craft's throttle after Pilot Assist's scale (`Readout::thrust_percent`) with its truncated `NN%` label, no chase; see [hd-hud.md](../../docs/formats/hd-hud.md#hds-speed-bar-fill-is-a-curvebar-and-it-draws). Still open from the speed bar: its full scale (`Hud_UpdateSpeedReadout` multiplies by a reciprocal of 700, now HD's and Omega's `HudArt::speed_full_kmh`) and crop-versus-path-length past `CurveStartPos`.
 - **HD HUD digits (`hd-hud-digits`, 2026-10-22): sizes match, opacity does not.** The lap `1` and speed `0` match the original within 0.4 px and the same edge width on all 13 cold pairs; the lap-count `3` sits 0.5 px up and left and is 1.1 to 1.35 px narrower in the edge-to-edge span, ~~cause unfound~~ **cause found and wired 2026-10-22 (`hd-hud-leftovers`): the glyph quad is the cell grown half a unit (`HudArt::half_unit_glyph_quads`) and every lit string has a black `0x40` twin one unit up and left that ours never drew (`HudArt::text_shadow`); the `3`'s spans are now within -0.45..+0.53 px on 13 pairs**. The visible "smaller and softer" is the original drawing the lit HUD at **0.8 alpha** (lap `1` solves to 0.800 on all 13 pairs; authored colour alpha is 1.0). Source unread; likely the `100` box's "roughly 0.8" lead above. Numbers and method in [hd-hud.md](../../docs/formats/hd-hud.md#the-hud-digits-size-and-softness-hd-hud-digits-2026-10-22). Find where the original gets the 0.8 (a vertex alpha on the HUD sprites, or the HUD pass's blend constant) before drawing anything at it. **`hd-hud-alpha-capture` (2026-10-22) found it: the vertex colour alpha byte is `0xCC` on the lap `1`, `3`, labels and panels (two cold boots, identical census), the fragment program is `TEX * COL0` with no constant and the blend colour is 0; the `0xB4` Record glyphs read `0x90`, so it multiplies. The black shadows (`0x40`) and the speed-bar gradient and shield-bar colours (`0xFF`) are not scaled, so it is not HUD-wide. **WIRED 2026-10-22 (`HudArt::lit_alpha`, HD measured, Omega inherited; ours' lap `1` now 0.788-0.800 on all 13 pairs).** Still unread: the code that applies it (Image/Text draw slots, or a PPU write-watch on the HUD vertex buffer), the `0x48` row (explained) and `0x32` row (**identified 2026-10-22: `Lap2Image`/`Lap1Image` drawn empty at alpha 0x32 on lap 1 of 3, which ours does not draw; the rule for how many rows is unmeasured**) and whether Omega's HUD does the same. See [hd-hud.md](../../docs/formats/hd-hud.md#the-08-is-the-vertex-colours-alpha-byte-0xcc-hd-hud-alpha-capture-2026-10-22).** **`hd-hud-alpha` (2026-10-22) searched the layout and the lap counter and did not find it**: not in any of the 314 HUD/XML files, not in `HUD_colours.xml`, not in `Hud_UpdateLapCounter`. Next: the `Text` widget's draw slot (what scales the `+0xc4` colour's alpha), or one RPCS3 draw capture of the lap `1`'s blend state and fragment constants. See [hd-hud.md](../../docs/formats/hd-hud.md#where-the-08-is-not-hd-hud-alpha-2026-10-22).
 

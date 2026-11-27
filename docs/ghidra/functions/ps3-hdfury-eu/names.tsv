@@ -430,6 +430,7 @@
 0x0001cbe0	function	SaveData_MigrateCellMedalsToHardElite	85	race-campaign.md
 0x0009e3d0	function	Hud_Update	72	hud-readouts.md
 0x000866c8	function	Hud_UpdateShieldReadout	82	hud-readouts.md
+0x00089f60	function	Hud_SetShieldTimer	90	hud-readouts.md
 0x00096ef0	function	Hud_UpdateLapCounter	80	hud-readouts.md
 0x00096088	function	Hud_UpdatePositionCounter	78	hud-readouts.md
 0x00086e88	function	Hud_UpdateSpeedReadout	82	hud-readouts.md
