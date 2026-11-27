@@ -422,27 +422,31 @@ fn the_held_backdrop_plays_the_fade_on_hd() {
     });
 }
 
-/// Pulse's lap counter closes up on lap one (`Hud_UpdateLapCounter`, `-17`): the separator and the
-/// total move, the digit does not, later laps and HD (no such rule) draw as authored.
+/// Pulse's and Pure's lap counters close up on lap one (each title's `Hud_UpdateLapCounter`, `-17`):
+/// the separator and the total move, the digit does not, later laps and HD (no such rule) draw as
+/// authored.
 #[test]
-fn pulses_lap_counter_closes_up_on_lap_one_only() {
+fn psp_lap_counters_close_up_on_lap_one_only() {
     let at = |lap, laps| Readout {
         lap,
         laps,
         ..readout(100.0)
     };
-    with_hd(oag_pulse::hud::ART, |cx| {
-        for name in ["LapOf", "Lap Outof"] {
+    for (title, art) in [("pulse", oag_pulse::hud::ART), ("pure", oag_pure::hud::ART)] {
+        with_hd(art, |cx| {
+            for name in ["LapOf", "Lap Outof"] {
+                let dx = |lap, laps| crate::draw::lap_one_dx(cx, &at(lap, laps), name);
+                assert_eq!(dx(1, 3), -17.0, "{title} {name}");
+                assert_eq!(dx(2, 3), 0.0, "{title} {name}");
+                assert_eq!(dx(1, 0), 0.0, "{title} {name}");
+            }
             assert_eq!(
-                crate::draw::lap_one_dx(cx, &at(1, 3), name),
-                -17.0,
-                "{name}"
+                crate::draw::lap_one_dx(cx, &at(1, 3), "Lap"),
+                0.0,
+                "{title}"
             );
-            assert_eq!(crate::draw::lap_one_dx(cx, &at(2, 3), name), 0.0, "{name}");
-            assert_eq!(crate::draw::lap_one_dx(cx, &at(1, 0), name), 0.0, "{name}");
-        }
-        assert_eq!(crate::draw::lap_one_dx(cx, &at(1, 3), "Lap"), 0.0);
-    });
+        });
+    }
     with_hd(oag_hd::hud::ART, |cx| {
         assert_eq!(crate::draw::lap_one_dx(cx, &at(1, 3), "LapOf"), 0.0);
     });

@@ -371,7 +371,7 @@ pub(super) fn load_title_font(
 /// (`oag_pure::frontend::MENU_SKIN::title_font` is `Some("Title")`),
 /// and its `Title` role happens to resolve to the same `.fnt` its `Default`
 /// role already does, so the slot's *contents* do not change for it either -
-/// only Pulse's `None` arm still swaps in a genuinely different atlas.
+/// only the `None` arm swaps in a genuinely different atlas.
 /// Pure's own campaign-free menus never construct a `Draw::FacedText { role:
 /// "Default", .. }`, so relabelling its slot `"Title"` collides with
 /// nothing. Loading the atlas anyway costs one clone of an already-decoded
@@ -379,11 +379,11 @@ pub(super) fn load_title_font(
 /// `Default`-labelled draw finds the slot already filled rather than needing
 /// this function taught about it.
 ///
-/// The `Title`/`Default` pair is mutually exclusive on every title measured
-/// so far (`oag_pulse::frontend::MENU_SKIN::title_font` is the only `None`
-/// left; `oag_hd`'s and `oag_pure`'s are both `Some("Title")`, and 2048/Omega
-/// carry HD's) - which is what lets one slot serve either without a title
-/// ever needing both in the same frame. A title that grows a second,
+/// The `Title`/`Default` pair shares one slot except where a title names a
+/// [`oag_title::MenuSkin::body_font`] (both Pulse pressings, which carry the
+/// title in the third slot); `oag_hd`'s and `oag_pure`'s skins are
+/// `Some("Title")` with none, and 2048/Omega carry HD's. That is what lets one
+/// slot serve either without a title ever needing both in the same frame. A title that grows a second,
 /// genuinely simultaneous role will need a second slot, not a change here.
 #[must_use]
 pub fn face_atlas_slot(

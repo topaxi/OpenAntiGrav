@@ -230,7 +230,12 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     }),
     incoming_warnings: false,
     runtime: None,
-    lap_one_shift: None,
+    // Measured: Pure's own `Hud_UpdateLapCounter` (`0x0881ed14`), see
+    // `docs/ghidra/functions/psp-pure-usa/hud-lap-counter.md`.
+    lap_one_shift: Some(oag_title::hud::LapOneShift {
+        widgets: &["LapOf", "Lap Outof"],
+        dx: -17,
+    }),
     bar_tip: None,
     boost_smear: None,
     absorb_glow: None,
