@@ -1,7 +1,7 @@
 ---
 status: re-first
 titles: [hd]
-updated: 2026-11-26
+updated: 2026-11-27
 summary: "HD front end: hex cells, padlocks, glyph and icons wired; open: key repeat, Team pulse zero point, glyph counter, Omega's lock colours"
 difficulty: medium (30)
 ---
@@ -122,8 +122,8 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
      (`st+0x1028`, `+0x102c` via `FUN_005b9408`; unwired because `oag-input` reads no motion sensor;
      about half a day: a motion read in `oag-input` plus a `CraftInput` field) and the sign of the pad axes
      (chosen). See `team-selection-model.md`, "The player's own turn, pan and zoom".
-  4. **The Detonator box** (`-2.0..0`) is Title data nobody uses: the preview
-     does not draw the Detonator hull. Small (50).
+  4. ~~**The Detonator box** (`-2.0..0`)~~ (LANDED 2026-11-27): a Detonator Ship Select draws
+     the Detonator hull and fits it with that box; not paired against an RPCS3 frame.
   5. ~~**Omega** keeps its borrowed pose~~ (LANDED 2026-11-19, `hd-ship-craft`): the update's rest
      rotation, position, scale and lens are wired (`oag_title::ShipPose`), and the update's fit
      result is never read, so Omega has **no fit and no settle** (the "settle inherited from HD" reading is

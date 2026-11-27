@@ -461,11 +461,19 @@ pub struct RaceView {
     pub(super) detonator_cannon_lights: bool,
     /// `options::ViewSetup::detonator_emp_light`.
     pub(super) detonator_emp_light: bool,
+    /// `options::ViewSetup::detonator_rounds_as_cannon`.
+    pub(super) detonator_rounds_as_cannon: bool,
+    /// `options::ViewSetup::detonator_emp_repulsor`.
+    pub(super) detonator_emp_repulsor: bool,
+    /// The running borrowed opening, see [`crate::emp_repulsor`].
+    pub(super) emp_repulsor: Option<crate::emp_repulsor::EmpRepulsor>,
     /// The floating `+N` slots, or `None` where `options::ViewSetup::detonator_score_popups` is
     /// off. One per race: a Detonator race has one view.
     pub(super) score_feedback: Option<oag_hud::ScoreFeedback>,
     /// `options::ViewSetup::detonator_mine_spin`.
     pub(super) detonator_mine_spin: Option<f32>,
+    /// `options::ViewSetup::detonator_mine_reach`.
+    pub(super) detonator_mine_reach: Option<f32>,
     /// `options::ViewSetup::detonator_ammo_gauge`, and what the gauge showed last frame.
     pub(super) detonator_ammo_gauge: Option<oag_title::DetonatorAmmoGauge>,
     pub(super) ammo_gauge_shown: std::sync::Mutex<Option<crate::ammo_gauge::Shown>>,

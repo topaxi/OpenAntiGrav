@@ -494,6 +494,8 @@ pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
     }),
     cannon_lights: true,
     emp_light: true,
+    emp_borrows_repulsor: false,
+    ps2_hud: None,
     // `DetonatorMine_AnimateToMusic`'s `phase = 4.0 * age` (TOC `-0x2bcc`), read live
     // (`detonator-mine-draw.md`, "The spin").
     mine_spin: Some(4.0),
@@ -516,7 +518,9 @@ pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
         speed_pad_charges: oag_title::pre_race::Sourced::measured(true),
         weapon_pad_charges: oag_title::pre_race::Sourced::measured(true),
         replaces_circuit_pads: oag_title::pre_race::Sourced::measured(true),
+        circuit_weapon_pad_key: None,
     },
+    races_zone_circuit: false,
     // The two names are in `speech_det.bnk` (`DATA00`) and in no other speech bank on the disc;
     // which bank the mode opens is not read, the census places them.
     voices: Some(oag_title::DetonatorVoices {

@@ -48,6 +48,9 @@ pub(super) fn banks_and_announcers(
         (false, _) => {}
     }
     let mut sounds = oag_sound::sfx::Banks::load(archives, &banks, mode == Mode::Zone, tick);
+    if mode == Mode::Detonator {
+        sounds.load_detonator(archives, &banks, tick);
+    }
     // A Zone craft's end plays `shipdestroy` out of the environment bank
     // (`oag_title::destroyed::ZoneEnd::cue`).
     if let (Mode::Zone, Some(cue)) = (mode, destroyed.zone_end.and_then(|end| end.cue)) {

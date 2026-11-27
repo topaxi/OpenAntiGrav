@@ -106,7 +106,10 @@ pub(super) fn resolve(
     // Which file, though, is a title fact: Pulse keeps it beside the race
     // circuit under a prefixed name, Pure and HD keep whole circuits of their
     // own. `ZoneCircuit` is that axis, measured on all three.
-    let track = if options.mode == Mode::Zone {
+    let zone_circuit = options.mode == Mode::Zone
+        || (options.mode == Mode::Detonator
+            && title.race.detonator.is_some_and(|d| d.races_zone_circuit));
+    let track = if zone_circuit {
         let zone = match &options.track {
             Some(_) => title.race.zone.variant_of(&track),
             None => title.race.zone.default_track(&default),

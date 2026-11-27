@@ -693,6 +693,21 @@ impl Team {
         self.liveries_of(self.detonator_livery.as_deref(), race)
     }
 
+    /// The liveries `mode`'s own craft is painted from: the Detonator ones in a Detonator race,
+    /// else the Zone ones. The race's hull build and the front end's preview both read this.
+    #[must_use]
+    pub fn craft_liveries(
+        &self,
+        race: &oag_title::RaceDefaults,
+        mode: oag_race::Mode,
+    ) -> Vec<(String, String)> {
+        if mode == oag_race::Mode::Detonator {
+            self.detonator_liveries(race)
+        } else {
+            self.zone_liveries(race)
+        }
+    }
+
     fn liveries_of(
         &self,
         livery: Option<&str>,

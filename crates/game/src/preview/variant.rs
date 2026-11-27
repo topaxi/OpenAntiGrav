@@ -70,17 +70,17 @@ pub fn livery_folders(
     })
 }
 
-/// The livery folders a Zone race paints `team`'s hull from, by the decision the race's hull
-/// build takes ([`oag_livery::zone_livery::swap`]) over the same rows
-/// ([`oag_raceplay::catalogue::Team::zone_liveries`]). `None` outside Zone, on a title whose Zone
-/// hull has no livery key, and for a team the definition gives no Zone livery.
+/// The livery folders `mode`'s own craft is painted from for `team`, by the decision the race's
+/// hull build takes ([`oag_livery::zone_livery::swap`]) over the same rows
+/// ([`oag_raceplay::catalogue::Team::craft_liveries`]). `None` for a mode that flies the team's
+/// hull, on a craft with no livery key, and for a team the definition gives no livery.
 #[must_use]
-pub fn zone_folders(
+pub fn own_craft_folders(
     title: &oag_title::Title,
     team: &oag_raceplay::catalogue::Team,
     mode: oag_race::Mode,
 ) -> Option<Folders> {
-    let liveries = team.zone_liveries(title.race);
+    let liveries = team.craft_liveries(title.race, mode);
     let mut report = Vec::new();
     let folder = oag_livery::zone_livery::swap(
         title.race.ships_for(&team.id),
@@ -97,7 +97,7 @@ pub fn zone_folders(
 }
 
 /// The livery folders the picker's selected team paints its preview hull from: a Zone race's
-/// ([`zone_folders`]) where the row is fixed (`fixed_livery`, Zone's one hull), else the selected
+/// ([`own_craft_folders`]) where the row is fixed (`fixed_livery`, the mode's one hull), else the selected
 /// variant's ([`livery_folders`]). The `--menu-page` still and the live screen's read take it, so
 /// neither can drop the Zone paint alone.
 #[must_use]
@@ -109,7 +109,7 @@ pub fn picked_folders(
     variant: &str,
 ) -> Option<Folders> {
     if fixed_livery {
-        zone_folders(title, team, mode)
+        own_craft_folders(title, team, mode)
     } else {
         livery_folders(
             team,
@@ -166,7 +166,7 @@ fn load(
 
 #[cfg(test)]
 mod tests {
-    use super::{Folders, picked_folders, variant_location, zone_folders};
+    use super::{Folders, own_craft_folders, picked_folders, variant_location};
     use oag_title::VariantJoin;
 
     fn qirex() -> oag_raceplay::catalogue::Team {
@@ -189,12 +189,15 @@ mod tests {
         for title in [oag_hd::TITLE, oag_2048::TITLE] {
             let team = qirex();
             assert_eq!(
-                zone_folders(title, &team, oag_race::Mode::Zone),
+                own_craft_folders(title, &team, oag_race::Mode::Zone),
                 Some(want.clone()),
                 "{}",
                 title.name
             );
-            assert_eq!(zone_folders(title, &team, oag_race::Mode::TimeTrial), None);
+            assert_eq!(
+                own_craft_folders(title, &team, oag_race::Mode::TimeTrial),
+                None
+            );
             // The picker's fixed row (Zone) takes the Zone paint, whatever variant id it holds.
             assert_eq!(
                 picked_folders(title, &team, oag_race::Mode::Zone, true, ""),

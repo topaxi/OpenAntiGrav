@@ -615,6 +615,14 @@ pub struct Detonator {
     /// HD's, 2048's and Omega's `EMP_DrawLights` all read
     /// (`detonator-emp.md`, "2048 and Omega draw it").
     pub emp_light: bool,
+    /// The Detonator HUD layout a source authored in the PS2's 640x448 grid reads in place of
+    /// the title's own, for a layout of ours whose coordinates are the PSP's. `None` where the
+    /// title's layout serves every source.
+    pub ps2_hud: Option<&'static str>,
+    /// For a title with no EMP of its own: a fired EMP also draws the Repulsor's opening, its
+    /// screen flash, its blast riding the firer and its field ring
+    /// (`docs/gameplay/detonator-pulse.md`, "The EMP").
+    pub emp_borrows_repulsor: bool,
     /// How fast a laid mine turns about its up axis, radians per second of the mine's age: its
     /// football and spikes are drawn on the world axes turned by `rate * age`, not on a frame
     /// built on the up axis. `None` where a title's mine animation is unread, and the mine keeps
@@ -634,6 +642,9 @@ pub struct Detonator {
     pub objects: Option<DetonatorObjects>,
     /// What a speed pad and a weapon pad do in Detonator.
     pub pads: DetonatorPads,
+    /// Whether a Detonator race flies the Zone variant of the picked circuit
+    /// ([`RaceDefaults::zone`]) rather than the race circuit itself.
+    pub races_zone_circuit: bool,
     /// The EMP's two announcer lines and the bank that holds them, or `None` where a title's
     /// are not located.
     pub voices: Option<DetonatorVoices>,
@@ -695,6 +706,10 @@ pub struct DetonatorPads {
     /// `WorldManager_Construct` deletes the circuit's pad importers before it loads
     /// `padReplacement` and the `Detonator_Pad` model.
     pub replaces_circuit_pads: crate::pre_race::Sourced<bool>,
+    /// For a title that ships no Detonator pad model: every pad is drawn as the race circuit's
+    /// own first `Weapon Pad`, held at this key of the weapon pad's ready cycle, in place of the
+    /// circuit's own pads. `None` where [`DetonatorObjects::pad`] carries the model.
+    pub circuit_weapon_pad_key: Option<usize>,
 }
 
 /// The EMP's announcer lines: `Detonator_UpdateRace` raises `EMPREADY` and `EMPFULL` through

@@ -79,9 +79,12 @@ fn the_window_is_measured_in_device_coordinates_times_the_screen() {
 #[test]
 fn the_fit_uses_its_own_origin_and_the_zone_box() {
     assert_eq!(FIT.origin, [1220.0, 500.0]);
-    assert_eq!(box_z(&FIT, true, Some(3.8)), Some([-4.2, 4.2]));
-    assert_eq!(box_z(&FIT, false, Some(3.8)), Some([-3.8, 3.8]));
-    assert_eq!(box_z(&FIT, false, None), None);
+    let zone = Some(oag_race::Mode::Zone);
+    let detonator = Some(oag_race::Mode::Detonator);
+    assert_eq!(box_z(&FIT, zone, Some(3.8)), Some([-4.2, 4.2]));
+    assert_eq!(box_z(&FIT, detonator, Some(3.8)), Some([-2.0, 0.0]));
+    assert_eq!(box_z(&FIT, None, Some(3.8)), Some([-3.8, 3.8]));
+    assert_eq!(box_z(&FIT, None, None), None);
     let widget = widget([1220.0, 412.0]);
     let framing = rest(&FIT, ASPECT, [-3.8, 3.8]);
     let authored = framed(&widget, None, &Craft::default(), Space::HD, 1.0);

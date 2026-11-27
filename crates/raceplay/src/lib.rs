@@ -218,6 +218,8 @@ mod drawable;
 mod effects;
 mod eliminator;
 #[cfg(feature = "view")]
+mod emp_repulsor;
+#[cfg(feature = "view")]
 pub mod engine_light;
 #[cfg(feature = "view")]
 pub mod env_probes;

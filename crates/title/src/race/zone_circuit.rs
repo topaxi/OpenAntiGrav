@@ -146,6 +146,19 @@ impl ZoneCircuit {
         }
     }
 
+    /// The race circuit a [`Self::Prefixed`] Zone circuit is the twin of, or `None` where the
+    /// two are not derivable from each other (or `zone` carries no prefix).
+    #[must_use]
+    pub fn race_of(self, zone: &str) -> Option<String> {
+        let Self::Prefixed(prefix) = self else {
+            return None;
+        };
+        let split = zone.rfind(['\\', '/']).map_or(0, |i| i + 1);
+        let (directory, file) = zone.split_at(split);
+        file.strip_prefix(prefix)
+            .map(|race| format!("{directory}{race}"))
+    }
+
     /// The circuit a Zone race opens when the caller named none.
     ///
     /// `race_default` is [`RaceDefaults::track`](super::RaceDefaults::track).

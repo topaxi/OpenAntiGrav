@@ -220,7 +220,7 @@ honeycomb.
 - **Wired** (HD): the rest pose, the lens, the fit, the slide and `ObeySafeZone`, as
   `oag_title::ShipFit` (`oag_hd::frontend::SHIP_FIT`), drawn by
   `oag_game::preview::ship_model::fitted`. The Zone box is used where the screen draws the Zone
-  hull.
+  hull, the Detonator box (`ShipFit::detonator_box`) where it draws the Detonator hull.
 - **Wired 2026-11-12** (`hd-ship-swap-settle`): the easing between two models' depths, as
   `oag_game::preview::ship_model::FitMotion` (target, drawn depth, target slide, drawn slide; the
   fit measured at the target and stepped, then both eased at `ShipFit::depth_ease` 0.125 and
@@ -234,7 +234,7 @@ honeycomb.
   Captures: `--menu-picker-step-seconds T` plays `round(T * 60)` frames of a step from the entry
   above the selected one (chosen).
 - **Wired** (`hd-shipselect-controls`): the player's own turn, pan and zoom, below.
-- **Not wired**: the SIXAXIS tilt; the Detonator box (the preview does not draw the Detonator hull).
+- **Not wired**: the SIXAXIS tilt.
 
 ### The swap against the 60 fps film
 

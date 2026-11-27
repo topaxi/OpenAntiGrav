@@ -20,7 +20,7 @@ pub(super) struct PreviewRequest {
     pub skin: Option<String>,
     /// The livery folders the selected model paints the hull from
     /// ([`crate::preview::variant::livery_folders`]), or a Zone race's
-    /// ([`crate::preview::variant::zone_folders`]).
+    /// ([`crate::preview::variant::own_craft_folders`]).
     pub livery: Option<crate::preview::variant::Folders>,
     /// The race hull a front-end hull's flaps are seated from - see
     /// [`crate::preview::race_hull_entry`].

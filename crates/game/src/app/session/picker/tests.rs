@@ -41,24 +41,24 @@ fn no_other_mode_skips_the_ship_picker() {
 }
 
 /// A Zone race's ship source carries the team's Zone livery, and any other mode's does not. Fails
-/// on a `ship_source` that stops asking `crate::preview::variant::zone_folders`.
+/// on a `ship_source` that stops asking `crate::preview::variant::own_craft_folders`.
 #[test]
-fn a_zone_ship_source_carries_the_teams_zone_livery() {
+fn a_zone_ship_source_carries_the_teams_own_livery() {
     let xml = r#"<Plugin>
       <PI_Team name="Qirex"><Values type="Race" location="Data\Ships\Qirex"/>
         <PI_TeamModel name="zone"><Values texturelocation="zoneship_quirex"/></PI_TeamModel></PI_Team>
     </Plugin>"#;
     let team = oag_raceplay::catalogue::teams(xml).remove(0);
-    let zone_livery =
+    let own_livery =
         |mode| match super::ship_source(oag_hd::TITLE, Some(&team), "Qirex", mode, Vec::new(), &[])
         {
-            crate::app::picker_stage::PreviewSource::Ship { zone_livery, .. } => zone_livery,
+            crate::app::picker_stage::PreviewSource::Ship { own_livery, .. } => own_livery,
             crate::app::picker_stage::PreviewSource::Track { .. } => unreachable!("a ship source"),
         };
-    let zone = zone_livery(Mode::Zone).expect("Qirex's Zone livery");
+    let zone = own_livery(Mode::Zone).expect("Qirex's Zone livery");
     assert_eq!(
         (zone.own.as_str(), zone.worn.as_str()),
         ("zoneship_zone", "zoneship_quirex")
     );
-    assert_eq!(zone_livery(Mode::TimeTrial), None);
+    assert_eq!(own_livery(Mode::TimeTrial), None);
 }

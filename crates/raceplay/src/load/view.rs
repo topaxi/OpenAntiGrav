@@ -526,7 +526,25 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
     // circuit's own (`docs/ghidra/functions/ps3-hdfury-eu/detonator-emp.md`, "Do the circuit's
     // own pads still draw?"): where the title's pad model loaded, the circuit's two pad models
     // are dropped.
-    let (pad_model, weapon_pad_model) = if hides_circuit_pads {
+    let circuit_pad_key = craft_title
+        .race
+        .detonator
+        .and_then(|d| d.pads.circuit_weapon_pad_key)
+        .filter(|_| options.mode == Mode::Detonator && detonator_objects.is_none());
+    let (pad_model, weapon_pad_model) = if let Some(key) = circuit_pad_key {
+        // A title with no Detonator pad model: every pad carries the race circuit's own weapon
+        // pad, in place of the circuit's speed and weapon pads (`docs/gameplay/detonator-pulse.md`).
+        let places: Vec<[f32; 16]> = setup
+            .speedup_pads
+            .iter()
+            .chain(&setup.weapon_pads)
+            .map(|pad| pad.to_world)
+            .collect();
+        match pads::circuit_weapon_pads(&mut archives, title, &track, &places, key, &mut report) {
+            Some(model) => (Some(model), None),
+            None => (pad_model, weapon_pad_model),
+        }
+    } else if hides_circuit_pads {
         report.push(
             "detonator: the circuit's own speed and weapon pads are not drawn under the \
              Detonator pad"
@@ -895,6 +913,16 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
                 .race
                 .detonator
                 .is_some_and(|detonator| detonator.cannon_lights),
+        detonator_rounds_as_cannon: options.mode == Mode::Detonator
+            && craft_title
+                .race
+                .detonator
+                .is_some_and(|detonator| detonator.objects.is_none()),
+        detonator_emp_repulsor: options.mode == Mode::Detonator
+            && craft_title
+                .race
+                .detonator
+                .is_some_and(|detonator| detonator.emp_borrows_repulsor),
         detonator_score_popups: options.mode == Mode::Detonator
             && craft_title
                 .race
@@ -905,6 +933,10 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
                 .race
                 .detonator
                 .is_some_and(|detonator| detonator.emp_light),
+        detonator_mine_reach: mine_model
+            .as_ref()
+            .filter(|_| options.mode == Mode::Detonator && detonator_objects.is_none())
+            .map(crate::detonator_look::model_reach),
         detonator_mine_spin: craft_title
             .race
             .detonator

@@ -94,13 +94,13 @@ texture swap (`oag_livery`'s `zone_livery`) are the existing ones.
 
 Ship Select in a Zone race draws the one Zone hull in the picked team's livery, as the race
 does. The decision "which folder does this team's Zone hull wear" is one function,
-`oag_livery::zone_livery::swap`, over the rows `oag_raceplay::catalogue::Team::zone_liveries`
+`oag_livery::zone_livery::swap`, over the rows `oag_raceplay::catalogue::Team::craft_liveries`
 builds (the team and each variant of it). The race's hull build (`oag_livery::load`, given
-`load::zone_livery::resolve`'s rows) and the picker (`oag_game::preview::variant::zone_folders`,
+`load::zone_livery::resolve`'s rows) and the picker (`oag_game::preview::variant::own_craft_folders`,
 over the front end's own catalogue, so no extra disc read and nothing on the render thread) both
 call it. The texture reader is shared too (`oag_livery::zone_livery::Reads`), so a texture the
 livery folder lacks falls back to the default skin in both. The hull entry is
-`ShipPaths::hull_entry_name` in both (`zone_race_hull_entry` in the picker).
+`ShipPaths::hull_entry_name` in both (`own_craft_entry` in the picker). All of it asks the mode, so Detonator previews its own hull the same way.
 
 - **Test**, `crates/game/tests/zone_preview_ground_truth.rs`: for all twelve HD teams the preview's
   entry equals the race's hull entry, the folder is `zoneship_zone` -> the definition's name, and

@@ -36,6 +36,11 @@ use crate::Craft;
 /// Rounds the pool holds: fifteen volleys of two.
 pub const POOL: usize = 30;
 
+/// The longest clip the cannon holds: its hit slots, streak awards and HUD icons are one volley of
+/// two rounds each over [`POOL`]. A table naming more (Pulse's Cannon, 30) is held to it
+/// (`docs/gameplay/detonator-pulse.md`, "The cannon").
+pub const CLIP_VOLLEYS: u8 = (POOL / 2) as u8;
+
 /// Round speed, units/s, from the first update on; the launch tick adds the craft's speed.
 const SPEED: f32 = 500.0;
 
@@ -238,7 +243,7 @@ impl Default for Cannon {
 /// What the cannon reads of the title's tables.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Config {
-    /// `rounds`: volleys in a clip.
+    /// `rounds`: volleys in a clip, at most [`CLIP_VOLLEYS`].
     pub rounds: u8,
     /// Seconds between volleys (the table's `rate`, already the reciprocal).
     pub interval: f32,
@@ -278,7 +283,7 @@ impl Config {
         let detonator = stats.detonator()?;
         let count = |v: f32| v.max(0.0).round().min(255.0) as u8;
         Some(Self {
-            rounds: count(cannon.rounds),
+            rounds: count(cannon.rounds).min(CLIP_VOLLEYS),
             interval: cannon.rate,
             rebounds: count(detonator.cannon.num_rebounds?),
             shots_to_destroy: count(detonator.bomb.number_of_shots_to_destroy?),

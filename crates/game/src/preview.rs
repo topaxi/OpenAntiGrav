@@ -109,11 +109,11 @@ pub fn track_entry(
 /// `location`.
 #[must_use]
 pub fn ship_entry(title: &oag_title::Title, location: &str, mode: oag_race::Mode) -> String {
-    let zone = zone_hull_file(title, mode);
+    let own = own_hull_file(title, mode);
     let file = title.front_end.and_then(|f| f.ship_preview_hull);
     format!(
         r"{location}\{}",
-        zone.as_deref().or(file).unwrap_or("ship_FE.vex")
+        own.as_deref().or(file).unwrap_or("ship_FE.vex")
     )
 }
 
@@ -161,45 +161,44 @@ pub fn seat_flaps(archives: &mut oag_assets::Archives, race_entry: &str, model: 
     }
 }
 
-/// The front-end craft file a Zone race previews, `<hull>_FE.vex`, or `None` outside Zone and for a
-/// title whose Zone craft is not a file in the team's own directory ([`oag_title::ZoneCraft`]).
+/// The front-end craft file previewed for a mode that flies its own craft, `<hull>_FE.vex`, or
+/// `None` for a mode that flies the team's hull and for a craft that is not a file in the team's
+/// own directory ([`oag_title::ZoneCraft`]). Which modes those are is the race's own rule,
+/// [`oag_livery::entry::own_craft`], so the screen cannot offer a hull the race does not fly.
 ///
 /// Pulse's Zone hull is `Zone.vex` beside the team's `Ship.vex` and its front-end twin
 /// `Zone_FE.vex` is on the disc for every team; the name follows the lobby's own
 /// `%s\%s_FE.vex` template (`ship-skin.md`), which is read, not measured on Team Selection.
+/// Its Detonator flies the same hull (`docs/gameplay/detonator-pulse.md`).
 #[must_use]
-pub fn zone_hull_file(title: &oag_title::Title, mode: oag_race::Mode) -> Option<String> {
-    (mode == oag_race::Mode::Zone)
-        .then(|| title.race.zone_craft.hull())
-        .flatten()
+pub fn own_hull_file(title: &oag_title::Title, mode: oag_race::Mode) -> Option<String> {
+    oag_livery::entry::own_craft(title.race.ships(), mode)
+        .and_then(oag_title::ZoneCraft::hull)
         .map(|hull| format!("{hull}_FE.vex"))
 }
 
-/// The entry a Zone race's Ship Select previews for `team` on a title that keeps its Zone hull
-/// outside the team's own directory ([`oag_title::ZoneCraft::OwnShip`], `OwnShipAt`) and previews
-/// the race hull itself ([`draws_hull`]): the hull the race flies, `None` for any other mode, any
-/// other title and any other Zone craft.
+/// The entry Ship Select previews for `team` on a title that keeps `mode`'s own craft outside the
+/// team's directory ([`oag_title::ZoneCraft::OwnShip`], `OwnShipAt`) and previews the race hull
+/// itself ([`draws_hull`]): the hull the race flies, `None` for any other mode, title and craft.
 ///
-/// Without it HD's and Omega's screen drew the team's own race hull in Zone, a craft the race
-/// does not fly. The Zone hull is shared geometry, so every team previews the same model, painted
-/// in the team's livery by [`variant::zone_folders`], the decision the race's hull build takes.
+/// Without it HD's and Omega's screen drew the team's own race hull in Zone and Detonator, a
+/// craft the race does not fly. The hull is shared geometry, so every team previews the same
+/// model, painted in the team's livery by [`variant::own_craft_folders`], the decision the race's
+/// hull build takes.
 #[must_use]
-pub fn zone_race_hull_entry(
+pub fn own_craft_entry(
     title: &oag_title::Title,
     team: &str,
     mode: oag_race::Mode,
 ) -> Option<String> {
+    let ships = title.race.ships_for(team);
+    let craft = oag_livery::entry::own_craft(ships, mode)?;
     let outside_the_team = matches!(
-        title.race.zone_craft,
+        craft,
         oag_title::ZoneCraft::OwnShip(_) | oag_title::ZoneCraft::OwnShipAt { .. }
     );
-    (mode == oag_race::Mode::Zone
-        && outside_the_team
-        && draws_hull(title, oag_ui_screens::picker::Kind::Ship))
-    .then(|| {
-        let ships = title.race.ships_for(team);
-        ships.hull_entry_name(team, Some(ships.zone), None)
-    })
+    (outside_the_team && draws_hull(title, oag_ui_screens::picker::Kind::Ship))
+        .then(|| ships.hull_entry_name(team, Some(craft), None))
 }
 
 /// The orbit a capture frames a preview with: the fixed hull pose, or the

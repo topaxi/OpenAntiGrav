@@ -36,7 +36,7 @@ pub const LAYOUTS: &oag_title::HudLayouts = &oag_title::HudLayouts {
     speed_lap: layouts::TIME_TRIAL,
     zone: layouts::ZONE,
     elimination: layouts::ELIMINATION,
-    detonator: layouts::TIME_TRIAL,
+    detonator: layouts::DETONATOR,
     split: None,
     split_layout: Some(r"Data\XML\SplitHud_Pulse.toml"),
     player_tags: Some(layouts::MP_TAG),
@@ -338,6 +338,17 @@ pub const ALWAYS_ON: &[&str] = &[
     "SpeedBarMark",
     "ShieldBarMark",
     "TimeIcon",
+    // Our Detonator layout's empty gauge segments.
+    "EmpBack_0",
+    "EmpBack_1",
+    "EmpBack_2",
+    "EmpBack_3",
+    "EmpBack_4",
+    "EmpBack_5",
+    "EmpBack_6",
+    "EmpBack_7",
+    // The same layout's clip frame.
+    "ClipBack",
 ];
 
 /// Zone's speed-class line, `SpeedClass` and the `SpeedClassTxt` caption over it.
@@ -384,6 +395,11 @@ pub mod layouts {
     pub const ELIMINATION: &str = r"Data\XML\Elimination_HUD.xml";
     /// Time trial and speed lap: 10 images, 25 texts, 2 models.
     pub const TIME_TRIAL: &str = r"Data\XML\TimeTrial_HUD.xml";
+    /// Ours, not the disc's: Pulse ships no Detonator. A whole layout of this project's with an
+    /// EMP gauge and the clip (`assets/fallback/`, `docs/gameplay/detonator-pulse.md`, "The HUD").
+    pub const DETONATOR: &str = r"Data\XML\DetonatorLayouts_Pulse\Detonator_HUD.xml";
+    /// [`DETONATOR`] in the PS2 disc's 640x448 grid.
+    pub const DETONATOR_PS2: &str = r"Data\XML\DetonatorLayouts_Pulse\Detonator_HUD_PS2.xml";
     /// Zone mode: 7 images, 24 texts, 2 models.
     pub const ZONE: &str = r"Data\XML\Zone_HUD.xml";
     /// Multiplayer tag: no images, 8 texts, no models - the floating name tags

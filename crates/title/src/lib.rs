@@ -855,6 +855,8 @@ pub struct ShipFit {
     /// The box's fore and aft extent in a Zone race, in place of the model's
     /// length (the Zone hull's model authors none).
     pub zone_box: [f32; 2],
+    /// The same in a Detonator race.
+    pub detonator_box: [f32; 2],
 }
 
 /// The player's own turn, zoom and pan of the craft on `Team Selection`, read off the screen's

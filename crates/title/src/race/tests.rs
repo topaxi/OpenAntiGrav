@@ -701,3 +701,15 @@ fn a_zone_fallback_holds_back_only_the_circuits_that_keep_their_own_model() {
     };
     assert!(!open.holds_back(r"Data\Environments2048\bridge\track.vex"));
 }
+
+/// [`ZoneCircuit::race_of`] undoes a `Prefixed` rewrite, and has no answer elsewhere.
+#[test]
+fn a_prefixed_zone_circuit_names_its_race_twin() {
+    let zone = PULSE.variant_of(r"Data\Environments\16_Track\track.vex");
+    assert_eq!(
+        PULSE.race_of(&zone).as_deref(),
+        Some(r"Data\Environments\16_Track\track.vex")
+    );
+    assert_eq!(PULSE.race_of(r"Data\Environments\16_Track\track.vex"), None);
+    assert_eq!(ZoneCircuit::SameCircuit.race_of("a/zone_track.vex"), None);
+}

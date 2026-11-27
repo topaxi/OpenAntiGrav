@@ -1,7 +1,8 @@
 //! What Wipeout Pulse throws and draws in a race, as the `oag_title` tables the
 //! raceplay loader reads instead of comparing a title's name (ADR-0058).
 //!
-//! Every entry is **Measured** on the PSP executable and cites its page. The PS2
+//! Every entry is **Measured** on the PSP executable and cites its page, but Detonator's
+//! (a mode Pulse does not ship), which are chosen. The PS2
 //! port's own paths are unread, and the PSP is the reference this engine
 //! implements, so where an entry applies to a PS2 disc too it is the PSP's law
 //! carried over, which the [`LOOKS`] platform lists make explicit.
@@ -69,6 +70,29 @@ pub const EFFECTS: &Effects = &Effects::engine(Origin::Measured)
     .with(
         Trigger::WreckExplosion,
         EffectSpec::new(engine_effects::EXPLOSION_EFFECT, Origin::Measured),
+    )
+    // Detonator, which Pulse ships no effect of its own for: its nearest
+    // (`docs/gameplay/detonator-pulse.md`). A mine and a bomb go up as the Mine
+    // does, the cannon's round sparks as the Cannon's, and the EMP draws the Repulsor's wave.
+    .with(
+        Trigger::DetonatorMineExploDead,
+        EffectSpec::new(engine_effects::MINE_EXPLO_EFFECT, Origin::Chosen),
+    )
+    .with(
+        Trigger::DetonatorMineExplo,
+        EffectSpec::new(engine_effects::MINE_EXPLO_EFFECT, Origin::Chosen),
+    )
+    .with(
+        Trigger::DetonatorBombExplo,
+        EffectSpec::new(engine_effects::MINE_EXPLO_EFFECT, Origin::Chosen),
+    )
+    .with(
+        Trigger::DetonatorCannonSparks,
+        EffectSpec::new(engine_effects::CANNON_SPARKS_EFFECT, Origin::Chosen),
+    )
+    .with(
+        Trigger::DetonatorEmp,
+        EffectSpec::new(engine_effects::REPULSER_EFFECT, Origin::Chosen),
     );
 
 const PSP: Platforms = Platforms::Only(&[Platform::Psp]);

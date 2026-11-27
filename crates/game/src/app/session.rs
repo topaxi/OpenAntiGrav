@@ -1270,11 +1270,19 @@ impl Shell {
     }
 
     /// The list the CIRCUIT row shows for `mode` - [`Self::zone_tracks`] under
-    /// Zone, [`Self::tracks`] otherwise. The one place that dispatch is made,
-    /// so the row drawn, the row seeded and the circuit a launched race
+    /// Zone, and under a Detonator that flies the Zone circuit
+    /// (`oag_title::Detonator::races_zone_circuit`), [`Self::tracks`] otherwise. The one place
+    /// that dispatch is made, so the row drawn, the row seeded and the circuit a launched race
     /// resolves against cannot disagree about which list is current.
     pub(crate) fn tracks_for(&self, mode: oag_race::Mode) -> &[(catalogue::Track, String)] {
-        if mode == oag_race::Mode::Zone {
+        let zone_circuit = mode == oag_race::Mode::Zone
+            || (mode == oag_race::Mode::Detonator
+                && self
+                    .title
+                    .race
+                    .detonator
+                    .is_some_and(|d| d.races_zone_circuit));
+        if zone_circuit {
             &self.zone_tracks
         } else {
             &self.tracks

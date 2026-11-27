@@ -188,7 +188,14 @@ pub(super) fn load_hud(
         .map(|lineage| lineage.art)
         .or_else(|| skin.and_then(|skin| skin.art))
         .unwrap_or(title.hud_art);
-    let entry = hud_layout_for(hud, mode, views.people);
+    let ps2_grid = oag_display::space::Space::of(archives.layout.platform).size
+        == oag_display::space::Space::PS2.size;
+    let entry = title
+        .race
+        .detonator
+        .and_then(|detonator| detonator.ps2_hud)
+        .filter(|_| mode == Mode::Detonator && ps2_grid)
+        .unwrap_or_else(|| hud_layout_for(hud, mode, views.people));
     // **Through `compose`, on every title.** A Pulse or Pure layout includes
     // nothing and composes to itself, so this is the same read it always was
     // for them; HD's roots are *shells* that pull in up to sixteen fragments by

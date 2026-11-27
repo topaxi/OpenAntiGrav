@@ -52,20 +52,20 @@ pub(crate) enum PreviewSource {
         /// has a variant table - the preview follows the selected variant.
         join: Option<oag_title::VariantJoin>,
         /// The craft file this entry previews instead of the title's own, where the race
-        /// flies another hull: a Zone race's (`crate::preview::zone_hull_file`).
+        /// flies another hull (`crate::preview::own_hull_file`).
         hull_file: Option<String>,
-        /// The whole entry, for a Zone hull kept outside the team's directory
-        /// (`crate::preview::zone_race_hull_entry`), which beats the two above.
-        zone_entry: Option<String>,
+        /// The whole entry and the mode, for a mode's own craft kept outside the team's
+        /// directory (`crate::preview::own_craft_entry`), which beats the two above.
+        own_entry: Option<(String, oag_race::Mode)>,
         /// The race hull this front-end hull's flaps are seated from
         /// (`crate::preview::race_hull_entry`); `None` where the title draws the race hull.
         race_hull: Option<String>,
         /// Each variant id the row offers that paints the hull from another livery folder, with
         /// its folders (`crate::preview::variant::livery_folders`).
         liveries: Vec<(String, crate::preview::variant::Folders)>,
-        /// The team's livery on a Zone race's shared hull, whatever the variant row holds
-        /// (`crate::preview::variant::zone_folders`).
-        zone_livery: Option<crate::preview::variant::Folders>,
+        /// The team's livery on a mode's shared hull, whatever the variant row holds
+        /// (`crate::preview::variant::own_craft_folders`).
+        own_livery: Option<crate::preview::variant::Folders>,
     },
 }
 
@@ -101,7 +101,7 @@ impl PreviewSource {
                 location, reversed, ..
             } => crate::preview::track_entry(front_end?, location, *reversed),
             Self::Ship {
-                zone_entry: Some(entry),
+                own_entry: Some((entry, _)),
                 ..
             } => Some(entry.clone()),
             Self::Ship {
@@ -844,15 +844,15 @@ impl PickerStage {
         }
         let front_end = self.previews.front_end?;
         let fit = front_end.ship_preview_fit.as_ref()?;
-        let zone_hull = matches!(
-            self.sources.get(self.model.index()),
+        let own_craft = match self.sources.get(self.model.index()) {
             Some(PreviewSource::Ship {
-                zone_entry: Some(_),
+                own_entry: Some((_, mode)),
                 ..
-            })
-        );
+            }) => Some(*mode),
+            _ => None,
+        };
         let length = picker::hd::selected_length(&self.model);
-        crate::preview::ship_model::box_z(fit, zone_hull, length).map(|box_z| (fit, box_z))
+        crate::preview::ship_model::box_z(fit, own_craft, length).map(|box_z| (fit, box_z))
     }
 
     /// Advances the circuit model's turntable by the fixed ticks `dt` seconds make, in the
@@ -918,14 +918,14 @@ pub(crate) fn build_preview(
 }
 
 /// The livery folders a ship source paints its hull from: the selected variant's where it names
-/// one, else a Zone race's (whose fixed row holds no variant id).
+/// one, else the mode's own craft's (whose fixed row holds no variant id).
 fn livery_of<'a>(
     source: &'a PreviewSource,
     variant: Option<&str>,
 ) -> Option<oag_livery::LiveryFolder<'a>> {
     let PreviewSource::Ship {
         liveries,
-        zone_livery,
+        own_livery,
         ..
     } = source
     else {
@@ -934,7 +934,7 @@ fn livery_of<'a>(
     variant
         .and_then(|variant| liveries.iter().find(|(id, _)| id == variant))
         .map(|(_, folders)| folders)
-        .or(zone_livery.as_ref())
+        .or(own_livery.as_ref())
         .map(crate::preview::variant::Folders::folder)
 }
 
@@ -978,10 +978,10 @@ pub(crate) fn read_preview(
                 skins: Vec::new(),
                 join: None,
                 hull_file: None,
-                zone_entry: None,
+                own_entry: None,
                 race_hull: None,
                 liveries: Vec::new(),
-                zone_livery: None,
+                own_livery: None,
             }
             .entry_name(previews.ship_hull, previews.front_end)
         }
@@ -1097,10 +1097,10 @@ mod tests {
             skins: Vec::new(),
             join: None,
             hull_file: None,
-            zone_entry: None,
+            own_entry: None,
             race_hull: None,
             liveries: Vec::new(),
-            zone_livery: None,
+            own_livery: None,
         };
         assert_eq!(
             source.entry_name(None, None).as_deref(),
@@ -1108,30 +1108,40 @@ mod tests {
         );
     }
 
-    /// A Zone race previews the Zone hull's front-end twin, not the race hull's.
+    /// A Zone race previews the Zone hull's front-end twin, not the race hull's, and so does
+    /// Pulse's Detonator, which flies that hull.
     #[test]
     fn a_zone_race_previews_the_zone_hull() {
-        let zone = crate::preview::zone_hull_file(oag_pulse::TITLE, oag_race::Mode::Zone);
+        let zone = crate::preview::own_hull_file(oag_pulse::TITLE, oag_race::Mode::Zone);
         let source = PreviewSource::Ship {
             location: r"Data\Ships\Feisar".to_string(),
             skins: Vec::new(),
             join: None,
             hull_file: zone,
-            zone_entry: None,
+            own_entry: None,
             race_hull: None,
             liveries: Vec::new(),
-            zone_livery: None,
+            own_livery: None,
         };
         assert_eq!(
             source.entry_name(None, None).as_deref(),
             Some(r"Data\Ships\Feisar\Zone_FE.vex")
         );
         assert_eq!(
-            crate::preview::zone_hull_file(oag_pulse::TITLE, oag_race::Mode::TimeTrial),
+            crate::preview::own_hull_file(oag_pulse::TITLE, oag_race::Mode::Detonator).as_deref(),
+            Some("Zone_FE.vex")
+        );
+        assert_eq!(
+            crate::preview::own_hull_file(oag_pulse::TITLE, oag_race::Mode::TimeTrial),
             None
         );
         assert_eq!(
-            crate::preview::zone_hull_file(oag_hd::TITLE, oag_race::Mode::Zone),
+            crate::preview::own_hull_file(oag_hd::TITLE, oag_race::Mode::Detonator),
+            None,
+            "HD's Detonator hull is outside the team's directory"
+        );
+        assert_eq!(
+            crate::preview::own_hull_file(oag_hd::TITLE, oag_race::Mode::Zone),
             None,
             "HD's Zone craft is a ship of its own, not a file in the team's directory"
         );
@@ -1152,10 +1162,10 @@ mod tests {
             skins: Vec::new(),
             join: None,
             hull_file: None,
-            zone_entry: None,
+            own_entry: None,
             race_hull: None,
             liveries: vec![("@livery2".into(), folders("livery1", "livery2", false))],
-            zone_livery: Some(folders("zoneship_zone", "zoneship_quirex", true)),
+            own_livery: Some(folders("zoneship_zone", "zoneship_quirex", true)),
         };
         for variant in [None, Some("")] {
             let folder = livery_of(&source, variant).expect("the Zone livery");
@@ -1173,10 +1183,10 @@ mod tests {
             skins: Vec::new(),
             join: None,
             hull_file: None,
-            zone_entry: None,
+            own_entry: None,
             race_hull: None,
             liveries: Vec::new(),
-            zone_livery: None,
+            own_livery: None,
         };
         assert_eq!(
             source.entry_name(Some("ship.vex"), None).as_deref(),
@@ -1190,7 +1200,7 @@ mod tests {
     #[test]
     fn a_zone_race_previews_the_shared_hull_where_the_title_keeps_it_outside_the_team() {
         for title in [oag_hd::TITLE, oag_omega::TITLE] {
-            let entry = |team: &str, mode| crate::preview::zone_race_hull_entry(title, team, mode);
+            let entry = |team: &str, mode| crate::preview::own_craft_entry(title, team, mode);
             let zone = entry("Assegai", oag_race::Mode::Zone).expect("a Zone hull entry");
             assert_eq!(
                 entry("Feisar", oag_race::Mode::Zone),
@@ -1209,10 +1219,10 @@ mod tests {
                 skins: Vec::new(),
                 join: None,
                 hull_file: None,
-                zone_entry: Some(zone.clone()),
+                own_entry: Some((zone.clone(), oag_race::Mode::Zone)),
                 race_hull: None,
                 liveries: Vec::new(),
-                zone_livery: None,
+                own_livery: None,
             };
             assert_eq!(
                 source.entry_name(Some("ship.vex"), None).as_deref(),
@@ -1222,7 +1232,7 @@ mod tests {
         // Pulse's Zone hull is a file in the team's own directory, and Pure draws no mesh.
         for title in [oag_pulse::TITLE, oag_pure::TITLE] {
             assert_eq!(
-                crate::preview::zone_race_hull_entry(title, "Feisar", oag_race::Mode::Zone),
+                crate::preview::own_craft_entry(title, "Feisar", oag_race::Mode::Zone),
                 None,
                 "{}",
                 title.name

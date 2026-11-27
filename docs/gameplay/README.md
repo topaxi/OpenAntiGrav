@@ -8,6 +8,8 @@
 
 - [race modes](race-modes.md) - time trial, speed lap, Zone and single race:
   what each one does, what is recovered and what is approximated.
+- [Detonator on Pulse](detonator-pulse.md) - this project's own Detonator on Pulse's Zone
+  circuits, Pulse's mines and red weapon pads; every value chosen, not measured
 - [pickups](pickups.md) - what a `Weapon Pad` hands out and what a craft does
   with it. Read its first table before anything else: the machinery around the
   grant is recovered in detail and **the grant itself is ours**.

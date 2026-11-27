@@ -1005,9 +1005,9 @@ pub(super) fn picker_page(
                     let stats =
                         team.variant_stats(join, variants.iter().map(|(id, _)| id.as_str()));
                     // The live screen's rule, `session::picker`.
-                    let zone_entry = crate::preview::zone_race_hull_entry(title, &team.id, mode);
-                    let models = if zone_entry.is_some() {
-                        crate::livery_row::zone_model_cells()
+                    let own_entry = crate::preview::own_craft_entry(title, &team.id, mode);
+                    let models = if own_entry.is_some() {
+                        crate::livery_row::own_craft_model_cells()
                     } else {
                         team.hex_cells(join, variants.iter().map(|(id, _)| id.as_str()))
                     };
@@ -1025,7 +1025,7 @@ pub(super) fn picker_page(
                                 logo: Some(oag_ui_screens::picker::hd::logo_src(&team.location)),
                             },
                         },
-                        Some(zone_entry.unwrap_or_else(|| {
+                        Some(own_entry.unwrap_or_else(|| {
                             crate::preview::ship_entry(title, &team.location, mode)
                         })),
                     )
@@ -1103,10 +1103,10 @@ pub(super) fn picker_page(
         .filter(|_| kind == Kind::Ship)
         .and_then(|fit| {
             let box_of = |index: usize, length: Option<f32>| {
-                let zone_hull = teams.get(index).is_some_and(|team| {
-                    crate::preview::zone_race_hull_entry(title, &team.id, mode).is_some()
+                let own_craft = teams.get(index).and_then(|team| {
+                    crate::preview::own_craft_entry(title, &team.id, mode).map(|_| mode)
                 });
-                crate::preview::ship_model::box_z(&fit, zone_hull, length)
+                crate::preview::ship_model::box_z(&fit, own_craft, length)
             };
             let aspect = skin.space().display_aspect;
             let now = box_of(

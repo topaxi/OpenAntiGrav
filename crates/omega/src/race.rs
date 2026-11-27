@@ -162,6 +162,8 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
         cannon_lights: false,
         // `0x0133c150`, the EMP vtable's slot 5.
         emp_light: true,
+        emp_borrows_repulsor: false,
+        ps2_hud: None,
         // The mine's animate function is unread (`detonator-mine-draw.md`, "Lineage").
         mine_spin: None,
         ammo_gauge: None,
@@ -181,7 +183,9 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
             speed_pad_charges: oag_title::pre_race::Sourced::measured(true),
             weapon_pad_charges: oag_title::pre_race::Sourced::measured(true),
             replaces_circuit_pads: oag_title::pre_race::Sourced::measured(true),
+            circuit_weapon_pad_key: None,
         },
+        races_zone_circuit: false,
         // Omega plays Wwise events in place of named cues; the EMP's are not located.
         voices: None,
         // The executable names no `EmpReady` string, so its binder probably never binds the

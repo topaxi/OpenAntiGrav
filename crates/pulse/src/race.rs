@@ -29,10 +29,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     zone: oag_title::ZoneCircuit::Prefixed(ZONE_TRACK_PREFIX),
     // The one variant with a recovered selector behind it rather than a name
     // probe: `Ship_LoadModel`'s `case 6`. See `ships::ZONE_HULL`.
-    zone_craft: oag_title::ZoneCraft::ModelsInTeam {
-        hull: ships::ZONE_HULL,
-        boost: ships::ZONE_BOOST,
-    },
+    zone_craft: ZONE_CRAFT,
     // Measured: `Team Selection` runs in Zone - `zone-mode.md`, "`Team Selection` runs in Zone".
     zone_team_step: oag_title::ZoneTeamStep::OfferedAtFullRatings,
     // The one title with a standalone plume: `%s\%sboost.vex`, recovered at
@@ -84,7 +81,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // `None` on the same terms as the table above: Pulse ships no Zone
     // effectSettings and no located Zone sky.
     zone_sky: None,
-    detonator: None,
+    detonator: Some(DETONATOR),
     // Pulse authors one roster and no *second directory* for any team in it.
     team_variants: None,
     guest_roster: None,
@@ -107,6 +104,59 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
         names: oag_title::SpeedClasses::PULSE_LADDER,
         union_only: &[],
     }),
+};
+
+/// The hull a Zone run flies: `Zone.vex` inside the picked team.
+const ZONE_CRAFT: oag_title::ZoneCraft = oag_title::ZoneCraft::ModelsInTeam {
+    hull: ships::ZONE_HULL,
+    boost: ships::ZONE_BOOST,
+};
+
+/// Detonator on Pulse, which ships no such mode: HD's law on Pulse's own Zone circuits, Mine
+/// and Bomb models (`docs/gameplay/detonator-pulse.md`). What Pulse has no data for (the layout,
+/// the weapon table, the scoring) is this project's own file in the fallback layer, its figures
+/// chosen after HD's; the pad look is the circuit's own weapon pad, held at its cycle's red key.
+pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
+    palette: None,
+    fallback_palette: None,
+    stage_textures: None,
+    fallback_stage_textures: None,
+    camera_scale: 0.75,
+    hull_scale: None,
+    layouts: Some(oag_title::DetonatorLayouts {
+        pattern_file: r"Data\XML\DetonatorLayouts_Pulse\PatternFile.xml",
+        gameplay_values: r"Data\XML\DetonatorLayouts_Pulse\GamePlayValues.xml",
+        scoring: r"Data\XML\DetonatorLayouts_Pulse\DetonatorScoring.xml",
+    }),
+    // The Zone hull, until this project has a Detonator hull of its own; the handling stays
+    // the team's (`docs/gameplay/detonator-pulse.md`).
+    craft: Some(oag_title::DetonatorCraft {
+        hull: ZONE_CRAFT,
+        livery_fallback: None,
+    }),
+    cannon_lights: false,
+    emp_light: false,
+    emp_borrows_repulsor: true,
+    ps2_hud: Some(crate::hud::layouts::DETONATOR_PS2),
+    ammo_gauge: None,
+    hull_charge: None,
+    handling: None,
+    objects: None,
+    pads: oag_title::DetonatorPads {
+        speed_pad_charges: oag_title::pre_race::Sourced::chosen(true),
+        weapon_pad_charges: oag_title::pre_race::Sourced::chosen(true),
+        replaces_circuit_pads: oag_title::pre_race::Sourced::chosen(true),
+        // `READY_KEYFRAMES[0]`, the red one (`docs/rendering/pads.md`).
+        circuit_weapon_pad_key: Some(0),
+    },
+    races_zone_circuit: true,
+    voices: None,
+    binds_emp_ready: oag_title::pre_race::Sourced::chosen(true),
+    shows_medals: oag_title::pre_race::Sourced::chosen(false),
+    // The layout authors no floating-score widget.
+    floats_score: oag_title::pre_race::Sourced::chosen(false),
+    // `Pulse_Mine.vex` turns on its own authored animation.
+    mine_spin: None,
 };
 
 /// Pulse's Zone milestone announcer.

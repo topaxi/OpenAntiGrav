@@ -33,6 +33,10 @@ One `<GamePlayValues>` element. The attributes it names replace
 `MineCountsRepresentMaxTotalToAppear="1"` a stage's count is a total that includes the mines
 still alive.
 
+`MinesScaleToMusic` is this project's attribute, in no disc file: absent or `1`, laid mines
+scale with the music; `0` holds them at their authored size
+([detonator-pulse.md](../gameplay/detonator-pulse.md#mine-size)).
+
 ## Across titles
 
 `GamePlayValues.xml` is byte-identical on HD (`DATA00`), 2048 (`data.psarc`) and Omega

@@ -89,9 +89,11 @@ fn an_eliminator_row_holds_the_eliminator_skin_alone_with_nothing_unlocked() {
 #[test]
 fn a_zone_row_holds_the_zone_hull_alone() {
     for team in ["Assegai", "Plain"] {
-        let livery = row(team, 100_000, Mode::Zone);
-        assert_eq!(livery.variants.len(), 1, "{team}");
-        assert!(livery.skins.is_empty(), "{team}");
+        for mode in [Mode::Zone, Mode::Detonator] {
+            let livery = row(team, 100_000, mode);
+            assert_eq!(livery.variants.len(), 1, "{team} {mode:?}");
+            assert!(livery.skins.is_empty(), "{team} {mode:?}");
+        }
     }
 }
 
@@ -125,16 +127,18 @@ fn the_variant_row_is_cut_by_the_hull_gate() {
     );
 }
 
-/// The row is the mode's own in Zone and in an Eliminator race, where the screen shows its `skin
-/// fixed` label in place of the cycler, and the player's own in every other mode.
+/// The row is the mode's own where the race flies the mode's craft (Zone, Detonator) and in an
+/// Eliminator race, where the screen shows its `skin fixed` label in place of the cycler, and the
+/// player's own in every other mode.
 #[test]
-fn the_row_is_fixed_in_zone_and_an_eliminator_race_only() {
+fn the_row_is_fixed_for_a_modes_own_craft_and_an_eliminator_race_only() {
     for mode in Mode::ALL {
-        let forced = matches!(mode, Mode::Zone | Mode::Eliminator);
+        let forced = matches!(mode, Mode::Zone | Mode::Detonator | Mode::Eliminator);
         assert_eq!(fixed_row(T, mode), forced, "Pulse {mode:?}");
     }
     // HD has no mode-forced skin (`eliminator_skin` is `None`), so only Zone fixes its row.
     assert!(fixed_row(oag_hd::TITLE, Mode::Zone));
+    assert!(fixed_row(oag_hd::TITLE, Mode::Detonator));
     assert!(!fixed_row(oag_hd::TITLE, Mode::Eliminator));
 }
 

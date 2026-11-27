@@ -1596,8 +1596,10 @@ section is what implements it.
 
 HD/Fury's Fury-pack mode, also on 2048 (its Fury DLC) and Omega: one craft, alone,
 through fourteen stages. **Wired 2026-11-13 as `oag_race::Mode::Detonator`**, offered only
-where a title names its data (`oag_title::RaceDefaults::detonator`: HD, 2048, Omega; the
-RACE page's mode row drops it elsewhere, and `--mode detonator` on Pulse or Pure refuses).
+where a title names its data (`oag_title::RaceDefaults::detonator`: HD, 2048, Omega, and Pulse,
+which ships no Detonator and races this project's own on its Zone circuits, chosen, not
+measured: [detonator-pulse.md](detonator-pulse.md); the RACE page's mode row drops it on Pure,
+and `--mode detonator` there refuses).
 
 - **A stage is a lap.** `Detonator_UpdateRace` steps its stage counter on the player's own
   forward line crossing (never the race's first), opens it at `1` and ends the race at `15`,

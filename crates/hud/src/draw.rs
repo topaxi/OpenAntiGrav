@@ -421,6 +421,8 @@ pub(super) fn text_for(
         // with lap counting unrecovered that is the common case rather than a
         // corner one.
         "LapOf" => (readout.lap > 0 && readout.laps > 0).then(|| literal("/")),
+        // Our Pulse Detonator gauge's caption, a literal string in its layout.
+        "EmpLabel" => label.string.clone(),
         "PositionOf" => (readout.place > 0 && readout.ships > 0).then(|| literal("/")),
 
         // The four message slots - see [`super::messages`]. An id the table lacks

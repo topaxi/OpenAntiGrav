@@ -582,7 +582,12 @@ fn an_hd_emp_wave_carries_the_discs_effect_on_its_front_until_it_ends() {
 }
 
 /// A wave fired from a stand on `race`: the effect and the light ride its front and go with it.
-fn check_the_wave_is_the_discs_effect(mut race: Race) {
+fn check_the_wave_is_the_discs_effect(race: Race) {
+    check_the_wave_rides(race, true);
+}
+
+/// [`check_the_wave_is_the_discs_effect`] for a title whose wave submits a light, or not.
+fn check_the_wave_rides(mut race: Race, lights_the_wave: bool) {
     assert!(
         race.view.handles.get(Trigger::DetonatorEmp).is_some(),
         "WO_QUAKE_DETONATOR resolves to a loaded effect"
@@ -624,7 +629,7 @@ fn check_the_wave_is_the_discs_effect(mut race: Race) {
             .emp_effect
             .and_then(|p| race.view.stage.anchor_of(p));
         let lights = race.detonator_cannon_lights(&no_rounds);
-        if let Some(at) = anchor {
+        if let Some(at) = anchor.filter(|_| lights_the_wave) {
             assert!(
                 lights
                     .iter()
@@ -638,7 +643,10 @@ fn check_the_wave_is_the_discs_effect(mut race: Race) {
         }
         anchors.push(anchor);
     }
-    assert!(lit >= 10, "the wave was lit for {lit} ticks");
+    assert!(
+        !lights_the_wave || lit >= 10,
+        "the wave was lit for {lit} ticks"
+    );
     let live: Vec<Vec3> = anchors.iter().flatten().copied().collect();
     assert!(live.len() >= 10, "the effect rides the wave: {anchors:?}");
     assert!(
@@ -775,4 +783,185 @@ fn an_omega_wall_death_plays_the_discs_spark() {
         return;
     };
     check_the_title_plays_the_wall_spark(path.display().to_string(), None);
+}
+
+/// A Pulse Detonator race: its title ships no Detonator, so no cannon model, EMP effect or
+/// light of its own.
+fn pulse_race() -> Option<Race> {
+    let image = oag_testdata::image("data/images/pulse-psp-usa.chd")?;
+    let loaded = crate::load(&crate::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: Mode::Detonator,
+        ..crate::Options::default()
+    })
+    .expect("loading a Pulse Detonator race");
+    Some(Race::start(loaded.setup, loaded.view, loaded.modules))
+}
+
+/// **A Pulse Detonator round is drawn as Pulse's own Cannon's**: the Cannon model posed on the
+/// round, its bolt streak and, while young, its flash quad.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn a_pulse_detonator_round_is_drawn_as_the_pulse_cannons_own() {
+    let Some(mut race) = pulse_race() else {
+        return;
+    };
+    let draw = crate::CannonDraw::default();
+    assert!(race.cannon_model_matrices(&draw).is_empty());
+    let at = race.core.sim.world.ships[0].physics.body.position;
+    race.core.sim.world.detonator.cannon.rounds[0] = Round {
+        live: true,
+        pos: at + Vec3::Z * 10.0,
+        prev: at + Vec3::Z * 2.0,
+        vel: Vec3::Z * 500.0,
+        normal: Vec3::Y,
+        age: 0.02,
+        ..Round::default()
+    };
+    let models = race.cannon_model_matrices(&draw);
+    assert_eq!(models.len(), 1, "the round carries the Cannon's model");
+    assert!((models[0].w_axis.truncate() - (at + Vec3::Z * 10.0)).length() < 1e-3);
+    let (mut bolt, mut flash) = (Vec::new(), Vec::new());
+    race.cannon_quad_vertices(&draw, Vec3::X, Vec3::Y, &mut bolt, &mut flash);
+    assert_eq!(bolt.len(), 12, "its bolt streak");
+    assert_eq!(flash.len(), 6, "and its flash while young");
+    race.core.sim.world.detonator.cannon.rounds[0].age = 1.0;
+    let (mut bolt, mut flash) = (Vec::new(), Vec::new());
+    race.cannon_quad_vertices(&draw, Vec3::X, Vec3::Y, &mut bolt, &mut flash);
+    assert_eq!(
+        (bolt.len(), flash.len()),
+        (12, 0),
+        "no flash once it is old"
+    );
+}
+
+/// **A Pulse EMP draws the Repulsor**: `WO_REPULSER` rides the wave front with no light, and
+/// the launch opens the field ring on the firer, with the screen flash, for the Repulsor's life.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn a_pulse_emp_wave_is_the_repulsors_wave_and_opening() {
+    let Some(mut race) = pulse_race() else {
+        return;
+    };
+    let effect = race
+        .view
+        .handles
+        .get(Trigger::DetonatorEmp)
+        .expect("the EMP resolves to a loaded effect");
+    assert_eq!(effect.name, oag_title::engine_effects::REPULSER_EFFECT);
+    assert!(!race.view.detonator_emp_light, "no light is submitted");
+    assert!(race.repulser_field_draws()[0].is_none());
+    race.core
+        .sim
+        .detonator_events
+        .push(oag_weapons::detonator::Event {
+            kind: EventKind::EmpLaunch,
+            at: race.core.sim.world.ships[0].physics.body.position,
+            points: None,
+        });
+    race.view.advance_emp_repulsor(&race.core);
+    race.core.sim.detonator_events.clear();
+    let (_, alpha, _) = race.repulser_field_draws()[0].expect("the ring is up at the launch");
+    assert!(alpha > 0.0);
+    let eye = race.view.camera_position(&race.core);
+    let flash = race.view.screen_flash.as_mut().expect("Pulse flashes");
+    flash.advance(race.core.sim.dt, eye);
+    assert!(
+        flash.colour().is_some_and(|c| c[2] > c[0]),
+        "the Repulsor's blue screen flash starts"
+    );
+    for _ in 0..120 {
+        race.view.advance_emp_repulsor(&race.core);
+    }
+    assert!(
+        race.repulser_field_draws()[0].is_none(),
+        "and it is gone after the Repulsor's life"
+    );
+    check_the_wave_rides(race, false);
+}
+
+/// **A Pulse Detonator mine holds its authored size** however loud the music's envelope is,
+/// and a layout that names `MinesScaleToMusic="1"` grows it again.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn a_pulse_detonator_mine_scales_to_the_music_only_if_its_layout_says_so() {
+    let Some(mut race) = pulse_race() else {
+        return;
+    };
+    race.tick(&oag_gameplay::PlayerInputs::none());
+    let (ordinary, laid) = race.detonator_mine_looks();
+    assert!(laid.iter().any(|mine| mine.live), "stage 1 is laid");
+    let loud = vec![
+        crate::detonator_look::MineEnvelope {
+            football: 1.0,
+            spikes: 1.0,
+            ..Default::default()
+        };
+        laid.len()
+    ];
+    let ages = vec![0.0; laid.len()];
+    let size = |race: &Race| {
+        race.mine_model_matrices()[ordinary]
+            .x_axis
+            .truncate()
+            .length()
+    };
+    race.record_mine_poses(&laid, &loud, &ages);
+    // Held, the model's farthest point ends on the Mine's trigger sphere: 3 units, which
+    // `Pulse_Mine.vex` overshoots at its authored size by under a fifth of a unit.
+    let reach = race.view.detonator_mine_reach.expect("Pulse's Mine body");
+    let detonator = race.core.sim.detonator.as_ref().expect("a Detonator race");
+    let trigger = detonator
+        .contact
+        .as_ref()
+        .expect("contact")
+        .mine
+        .trigger_radius;
+    assert!((trigger - 3.0).abs() < 1e-4, "trigger: {trigger}");
+    assert!((3.1..3.3).contains(&reach), "reach: {reach}");
+    assert!(
+        (size(&race) * reach - trigger).abs() < 1e-3,
+        "held: {}",
+        size(&race)
+    );
+    let detonator = race.core.sim.detonator.as_mut().expect("a Detonator race");
+    std::sync::Arc::make_mut(&mut detonator.layout)
+        .values
+        .mines_scale_to_music = true;
+    race.record_mine_poses(&laid, &loud, &ages);
+    assert!(size(&race) > 2.0, "scaled: {}", size(&race));
+}
+
+/// **A destroyed craft ends a Pulse Detonator run as it ends a Pulse Zone run**: the same tick,
+/// the same camera, no wait of Fury's.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn a_pulse_detonator_run_ends_as_a_pulse_zone_run_does() {
+    let Some(image) = oag_testdata::image("data/images/pulse-psp-usa.chd") else {
+        return;
+    };
+    let end = |mode: Mode| {
+        let loaded = crate::load(&crate::Options {
+            source: image.display().to_string(),
+            class: "VENOM".to_string(),
+            mode,
+            ..crate::Options::default()
+        })
+        .expect("loading a Pulse race");
+        let mut race = Race::start(loaded.setup, loaded.view, loaded.modules);
+        race.tick(&oag_gameplay::PlayerInputs::none());
+        let ship = &mut race.core.sim.world.ships[0].physics;
+        ship.craft_state = oag_physics::CraftState::Destroyed;
+        ship.state_timer = oag_physics::damage::DESTROYED_DURATION;
+        let mut ticks = 0;
+        while !race.core.sim.world.race[0].finished && ticks < 1200 {
+            race.tick(&oag_gameplay::PlayerInputs::none());
+            ticks += 1;
+        }
+        (ticks, race.view.orbiting())
+    };
+    let zone = end(Mode::Zone);
+    assert!(zone.0 < 1200, "the Zone run ends");
+    assert_eq!(end(Mode::Detonator), zone);
 }

@@ -26,23 +26,7 @@ impl super::Scene {
             &mut ages,
             &crate::drawable::lock(&race.view.mine_pins),
         );
-        let mut poses = crate::drawable::lock(&race.view.mine_poses);
-        poses.clear();
-        for ((mine, envelope), &age) in laid.iter().zip(&envelopes).zip(&ages) {
-            let pose = if mine.live {
-                crate::detonator_look::MinePose {
-                    football: envelope.football_scale(),
-                    spikes: envelope.spike_scale(),
-                    age,
-                }
-            } else {
-                crate::detonator_look::MinePose {
-                    age,
-                    ..Default::default()
-                }
-            };
-            poses.insert((mine.entry, mine.lane), pose);
-        }
+        race.record_mine_poses(laid, &envelopes, &ages);
         envelopes
     }
 

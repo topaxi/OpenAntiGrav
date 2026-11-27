@@ -496,6 +496,8 @@ pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
     cannon_lights: false,
     // `FUN_811e8650`, the EMP vtable's slot 5.
     emp_light: true,
+    emp_borrows_repulsor: false,
+    ps2_hud: None,
     // The mine's animate function is unread (`detonator-mine-draw.md`, "Lineage").
     mine_spin: None,
     ammo_gauge: None,
@@ -516,7 +518,9 @@ pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
         speed_pad_charges: oag_title::pre_race::Sourced::measured(true),
         weapon_pad_charges: oag_title::pre_race::Sourced::measured(true),
         replaces_circuit_pads: oag_title::pre_race::Sourced::measured(true),
+        circuit_weapon_pad_key: None,
     },
+    races_zone_circuit: false,
     // 2048's cue names are hashed and its Detonator speech bank is not located.
     voices: None,
     // Its skin binds `EmpCharge`/`EmpFull`; the executable has no `EmpReady` string

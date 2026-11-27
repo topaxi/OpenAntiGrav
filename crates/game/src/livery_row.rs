@@ -29,12 +29,13 @@ pub struct Livery {
     pub variants: Vec<(String, String)>,
 }
 
-/// Whether the livery row of a `mode` race is the mode's rather than the player's: Zone's one hull
-/// and an Eliminator race's forced skin. The picker draws such a row as the screen's `skin fixed`
+/// Whether the livery row of a `mode` race is the mode's rather than the player's: the one hull of
+/// a mode that flies its own craft ([`oag_livery::entry::own_craft`]: Zone, and Detonator where
+/// the title ships one) and an Eliminator race's forced skin. The picker draws such a row as the screen's `skin fixed`
 /// label, with no cycler (`oag_ui_screens::picker::Picker::with_fixed_livery`).
 #[must_use]
 pub fn fixed_row(title: &oag_title::Title, mode: oag_race::Mode) -> bool {
-    mode == oag_race::Mode::Zone
+    oag_livery::entry::own_craft(title.race.ships(), mode).is_some()
         || (mode == oag_race::Mode::Eliminator && title.race.eliminator_skin.is_some())
 }
 
@@ -63,12 +64,12 @@ pub fn ship_rating(
     })
 }
 
-/// The hex grid's model row for a Zone race on a title whose Zone hull is not one of the team's own
-/// models (`crate::preview::zone_race_hull_entry`): the one hull, open, with no thumbnail, since
+/// The hex grid's model row where the mode's own craft is not one of the team's own models
+/// (`crate::preview::own_craft_entry`): the one hull, open, with no thumbnail, since
 /// the thumbnails the disc authors are the team's race hulls and the race will not fly any of
 /// them. An absent picture, not a padlock row and not a wrong craft.
 #[must_use]
-pub fn zone_model_cells() -> Vec<oag_ui_screens::picker::hd::hex::ModelCell> {
+pub fn own_craft_model_cells() -> Vec<oag_ui_screens::picker::hd::hex::ModelCell> {
     vec![oag_ui_screens::picker::hd::hex::ModelCell {
         thumb: None,
         open: true,
@@ -167,14 +168,20 @@ pub fn ship_livery(
     mode: oag_race::Mode,
 ) -> Livery {
     let gates = gates_variants(title);
-    // A Zone race flies one hull and applies no `PI_ModelSkin` (`oag_title::ZoneCraft`; the
-    // team's own paint is embedded in its `Zone.vex`): the row holds that hull alone, so there is
-    // nothing to pick, and the screen draws it as its fixed label (`fixed_row`).
-    if mode == oag_race::Mode::Zone {
+    // A mode with its own craft flies one hull and applies no `PI_ModelSkin`
+    // (`oag_title::ZoneCraft`; Pulse's team paint is embedded in its `Zone.vex`): the row holds
+    // that hull alone, so there is nothing to pick, and the screen draws it as its fixed label
+    // (`fixed_row`).
+    if oag_livery::entry::own_craft(title.race.ships(), mode).is_some() {
         return Livery {
             skinned: details.is_some_and(|team| !team.skins.is_empty()),
             skins: Vec::new(),
-            variants: vec![(String::new(), strings.get_or_id("Zone").to_string())],
+            variants: vec![(
+                String::new(),
+                strings
+                    .get_or_id(oag_livery::entry::craft_label(mode))
+                    .to_string(),
+            )],
         };
     }
     let declared = details.map_or(&[][..], |team| team.skins.as_slice());

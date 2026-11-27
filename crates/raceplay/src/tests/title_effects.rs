@@ -160,8 +160,9 @@ fn each_trigger_is_answered_by_exactly_the_titles_that_read_it() {
         );
     }
     // Detonator's mine and bomb effects: `DetonatorMine_Explode` and
-    // `DetonatorBombBlast_Start` name them on HD; 2048 and Omega ship the files and are
-    // "checked, applies, not wired".
+    // `DetonatorBombBlast_Start` name them on HD; 2048 and Omega ship
+    // the files and are "checked, applies, not wired". Pulse answers them with its own nearest
+    // effects, chosen (`docs/gameplay/detonator-pulse.md`).
     for detonator in [
         Trigger::DetonatorMineExploDead,
         Trigger::DetonatorMineExplo,
@@ -169,16 +170,18 @@ fn each_trigger_is_answered_by_exactly_the_titles_that_read_it() {
     ] {
         assert_eq!(
             has(detonator),
-            [false, false, true, false, false],
+            [true, false, true, false, false],
             "{detonator:?}"
         );
     }
-    // The EMP's wave: HD's, 2048's and Omega's own EMP launches spawn `WO_QUAKE_DETONATOR`.
-    assert_eq!(has(Trigger::DetonatorEmp), [false, false, true, true, true]);
-    // The cannon's wall spark: HD's, 2048's and Omega's own `PulseBullet` updates spawn it.
+    // The EMP's wave: HD's, 2048's and Omega's own EMP launches spawn `WO_QUAKE_DETONATOR`;
+    // Pulse's is chosen.
+    assert_eq!(has(Trigger::DetonatorEmp), [true, false, true, true, true]);
+    // The cannon's wall spark: HD's, 2048's and Omega's own `PulseBullet` updates spawn it;
+    // Pulse's is its Cannon's spark, chosen.
     assert_eq!(
         has(Trigger::DetonatorCannonSparks),
-        [false, false, true, true, true]
+        [true, false, true, true, true]
     );
     // Pure's laid Bomb glow and Disruptor bolt are read on its executable alone.
     for own in [
@@ -501,11 +504,27 @@ fn no_title_labels_a_present_effect_chosen_and_the_others_are_measured_or_inheri
         ) if n == oag_2048::TITLE.name || n == oag_omega::TITLE.name => Some("Wipeout HD"),
         _ => None,
     };
+    // Pulse ships no Detonator: which of its effects answers the mode's triggers is this
+    // project's pick (`docs/gameplay/detonator-pulse.md`), the one chosen label allowed.
+    let chosen = |title: &Title, trigger: Trigger| {
+        title.name == oag_pulse::TITLE.name
+            && matches!(
+                trigger,
+                Trigger::DetonatorMineExploDead
+                    | Trigger::DetonatorMineExplo
+                    | Trigger::DetonatorBombExplo
+                    | Trigger::DetonatorCannonSparks
+                    | Trigger::DetonatorEmp
+            )
+    };
     for title in ALL {
         for trigger in OWN {
             if let Some(spec) = title.effect_on(trigger) {
-                let want =
-                    inherited(title, trigger).map_or(Origin::Measured, Origin::InheritedFrom);
+                let want = if chosen(title, trigger) {
+                    Origin::Chosen
+                } else {
+                    inherited(title, trigger).map_or(Origin::Measured, Origin::InheritedFrom)
+                };
                 assert_eq!(spec.origin, want, "{} {trigger:?}", title.name);
             }
         }
