@@ -1061,6 +1061,84 @@ The far pairs (`rocket-craft-far-hit-0100`, `-0233`) are unchanged at 12.91 and 
 **2048 and Omega: not checked.** The brief says "Scope: HD only", and the skew is an RPCS3 pause
 property.
 
+### The trails start on the blast's hemisphere
+
+2026-11-27. **On the 0.233 s near pair our player's craft was hidden under white because the
+craft blast spawned every emitter at its anchor. HD spreads them by the extent law: the four
+`FIRE_TRAILS_ONEQUAD` heads start on their authored hemisphere of radius 8.824, so the `trail`
+smoke they leave fans out around the blast instead of stacking along the carry axis in front of
+the camera.** Confidence 85: the disc value and three films agree, the spawn routine that applies
+it on HD is not read (below).
+
+**Ruled out first** (falsifiers written before each run; `hit2` frame `a0233`):
+
+- **Depth, stencil, depth bounds, soft particles.** The particle run (draws 516 to 596) sets
+  depth test `LEQUAL`, mask off, stencil, depth bounds and alpha test off; no texture unit points
+  at the zeta surface. Its projection gives window depth within `1e-6` of the scene's at every
+  distance. The alpha-over fragment program (local `0x01111000`, dumped with the ring) is
+  `TEX R0, f[TEX0], tex0; MUL R0, f[COL0], R0; END`, the same `texel * colour` as ours, and the
+  hull is drawn (draws 436 to 466) before the particles, as ours is.
+- **The sprites.** `trail` samples `smoke_new4_8x4.gtf` in both, and the original's chains sample
+  flipbook cells 3 to 12, the dense first half, as ours do.
+- **The heads' speed.** HD's two velocity routines (`0x00291f18` for velocity mode 1,
+  `0x00292118` for 0 and 2) take the speed as `0x0028c978(instance +0x70, +0x74)`, centre plus
+  spread times `U(-1, 1)`, our form. Scaling our heads' speed by 1.55 (throwaway) left 13 to 18
+  `trail` quads over the craft on seeds 1 to 4, against the threshold of 5.
+- **The tint.** With our alpha-over smoke muted the craft reads yellow, and stays yellow with
+  `glow_longer` muted too: the tint is the additive fireballs in front of the hull, so it needs
+  the blast where the original's stands (the pose), not a law.
+
+**What differs.** Over the craft (screen point `(-0.02, -0.24)`), the original stacks about 3
+`trail` quads, ours 13 to 20. Plotted on the screen, the original's four chains per blast sit
+apart around the frame, ours pile into one blob over the craft. Each chain's nearest quad to its
+blast's `glow_longer` (the blast's site) is the head's spawn point plus at most a tick of travel
+(`scripts/hd-trail-onset.py`):
+
+| Film, frame | Chains | Onset, units from the site |
+| --- | --- | --- |
+| hit1 `a0167` | 12 | 4.3, 6.7, 7.6, 7.8, 8.2, 8.4, 8.4, 8.7, 9.0, 9.0, 9.0, 14.1 |
+| hit2 `a0100` | 4 | 8.3, 8.4, 8.5, 9.1 |
+| hit2 `a0233` | 11 | 8.6, 8.8, 9.0, 9.2, 9.2, 9.5, 9.6, 12.0, 15.0, 18.5, 19.6 |
+| hit3 `a0100` | 4 | 8.4, 8.4, 8.4, 8.6 |
+| hit3 `a0233` | 12 | 5.2, 7.9, 8.0, 8.5, 8.7, 9.2, 9.2, 9.3, 9.4, 12.3, 13.0, 13.9 |
+
+The disc authors `FIRE_TRAILS_ONEQUAD` as shape 7 (hemisphere), `+0x34 = 8.824`, radius mode 0
+(exactly the extent), spread `7.745` unused in that mode. Mode 1 would scatter onsets from about
+1 to 17; the films cluster at 8.3 to 9.6. The longer onsets are chains whose first quads the
+near law drops (the sites are 3.7 units or less from the eye), the shorter ones a chain measured
+against the other blast's site. Ours spawned every head at the anchor (`Spawn::Point`, by
+`without_extents`).
+
+**Wired.** `WO_ROCKET_EXPLO` joins `oag_hd::effects::EXTENTS`. Every emitter of the craft blast
+now spawns as its record says: the root, `SMOKE_BLUCLD` and both fireballs on a 2.255
+hemisphere (mode 1, spread 0.667), `SHIP_DEBRIS` 3.235, `SPARKS` 2.059, `MOLTEN_DEBRIS` 8.824,
+`FIRESPIKES` 0.1, `trail` and the smoke trails on their rings. The extent co-factor is 1 (no
+driver writes one for this effect; the onsets agree with 1). Tests:
+`near_law::hds_craft_blast_plays_the_screen_wash_templates` checks the heads' sphere (disc), and
+`hd_effect_sprites::the_extent_law_is_lifted_only_for_the_effects_each_title_lists` the list.
+
+**The pairs**, on their current flags, rendered twice byte-identical:
+
+| Pair | Before | After |
+| --- | --- | --- |
+| `rocket-craft-hit-0233` | 50.36 | 64.14 |
+| `rocket-craft-hit-0100` | 53.96 | 54.38 |
+| `rocket-craft-far-hit-0100` | 12.91 | 11.89 |
+| `rocket-craft-far-hit-0233` | 45.99 | 43.18 |
+
+Over `--stage-seed 1..8`, paired: 0233 mean grey 62.68 to 54.74 (-7.94 +/- 8.39, closer on 6
+of 8), RMSE -7.72 +/- 8.14; 0100 +0.54 +/- 0.63 (3 of 8 closer). 0233's own seed is worse: its
+50.36 was the second-lowest of its nine seeds, and its single-point pose stands the blast 22.7
+units out with our opponent's velocity, which carried the cloud into the eye ("Posing the near
+hits"). Now the craft stands in plain view where the original's does, without the original's
+yellow (the pose, above). The faithful two-wave pose ("The volley posed at its two points")
+goes from 90.03 to 73.23 on its own seed.
+
+**2048 and Omega.** 2048's own `WO_ROCKET_EXPLO` (`BANG_GLOW`, `DEBRIS_NO_TRAILS`, `SPARKS` and
+the root) authors no trail heads: checked, differs. Omega's two copies (`particles2048` and
+`particles`) both author HD's `FIRE_TRAILS_ONEQUAD` at 8.824: checked, applies, not wired (no
+capture of either's hit).
+
 ## Per effect: what fills the heavy frames
 
 2026-11-26, `blast-fill-split`, RX 7800 XT, RADV, 3840x2160. **The heavy frames of the
