@@ -68,11 +68,14 @@ renderer or UI code changed. The campaign pair (map plus event card pages 0 and 
 40 grey:
 
 **2026-11-27 (`2048-menu-pairs`):** Home 9.73 to 8.13, Game Mode 6.30 to 2.55, card page 0
-7.83 to 7.01, page 1 7.00 to 5.83 mean grey (`docs/formats/2048-frontend.md`, "Menu pairs:
-faces, glyph tint, header block, card text"). Closed: the header icon (a capture-tick
+7.83 to 7.01, page 1 7.00 to 5.83 mean grey (`docs/ui/campaign-screens.md`, "2048 menu pairs:
+what the four worst differed by"). Closed: the header icon (a capture-tick
 artifact plus a draw-order defect on Game Mode), the rows' label face and tint, the card's
 subtitle, tabs and `CURRENT BEST` bar. Left: the header rule, the card's `TouchHomeButton`
-composite (home square and badges), the blurred map backdrop.
+composite (home square and badges; `0x810fc422`, `FUN_813cf8cc`), the blurred ground
+(`CampaignEventCard_Draw` `0x810f1196`), and, on Omega, the card tabs in `NEOSANS_BOLD`
+(applies, not wired: Omega ships the face and `FUN_013a9040` names it; the hosted map loads
+no role face).
 
 1. **Select Team** (was 56.7 %, mean grey 94.9; 2026-10-27 `2048-team-grid`: 38.3): the grid, badges, cursor cell, header square and
    confirm tick now draw from the disc (`TouchTeamGrid` read in Ghidra). Still differs: the 19 locked cells (rule needs the save and the

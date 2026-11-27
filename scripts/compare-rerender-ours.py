@@ -70,7 +70,7 @@ def ps2_world_clock_flags(rec, flags):
 
 
 def settled_2048_menu_flags(rec, flags):
-    """2048's Home and Game Mode stills recorded before 2026-11-27 were taken on the tick the screen is entered (`--ticks`
+    """2048's Home and Game Mode stills in older records were taken on the tick the screen is entered (`--ticks`
     counts from boot), before the widgets' entry fades: run past it, as `vita3k-2048-menu-pair.py` records them now."""
     if rec.get("profile") != "2048" or rec.get("kind") != "menu" or "--until" not in flags:
         return flags

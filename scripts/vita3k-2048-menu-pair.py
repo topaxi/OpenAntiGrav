@@ -120,7 +120,7 @@ TO_MAP = "start,cross,cross,cross"
 TO_HOME = "start,cross,cross,triangle,cross"
 EVENT = "2048 - Event 1"
 #: `--ticks` counts from boot, and these screens are entered near tick 250: 490 leaves them four seconds, like the walk's `wait:4`, past
-#: the entry fades (`docs/tools/compare-page.md`, "The 2048 stills were taken on the entry tick").
+#: the entry fades (`docs/ui/campaign-screens.md`, "The 2048 stills were taken on the entry tick").
 SETTLED_TICKS = "490"
 
 #: The original's cold-boot walk, one plan, shots named by `WALK` ids. The original is a FRESH save (no campaign progress), ours a fresh profile.

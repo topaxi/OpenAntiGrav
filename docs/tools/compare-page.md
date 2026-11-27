@@ -2068,8 +2068,8 @@ scripts/vita3k-2048-menu-pair.py pairs --out D --oag-game target/release/oag-gam
 data/reference/compare-page/menus-2048.toml data/reference/compare-page/2048/menu-*`, then `just compare-page`.
 
 **2026-11-27 (`2048-menu-pairs`).** Home and Game Mode re-take their stills past the entry
-fade, and four pairs fell: `docs/formats/2048-frontend.md`, "Menu pairs: faces, glyph tint,
-header block, card text".
+fade, and four pairs fell: [campaign-screens.md](../ui/campaign-screens.md), "2048 menu pairs:
+what the four worst differed by".
 
 ## Menu pairs: Wipeout Pulse and Wipeout Pure (PSP) front-end screens (2026-10-27, `menu-pairs-pulse-pure`)
 
