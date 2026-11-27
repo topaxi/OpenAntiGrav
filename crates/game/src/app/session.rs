@@ -899,7 +899,7 @@ pub(crate) struct Session {
     /// because every one of them ended there; a tournament's own points
     /// total is the first fact that has to outlive one. `None` outside a
     /// Tournament cell, and cleared the moment its `EndRace Menu` is left by
-    /// any option, finished or abandoned - this engine implements no
+    /// any option, finished or abandoned, or a leg fails to load - this engine implements no
     /// save/resume (`Tournament_SaveProgress`/`_LoadProgress`), so leaving
     /// mid-tournament loses progress rather than parking it. **Chosen, not
     /// measured.**
