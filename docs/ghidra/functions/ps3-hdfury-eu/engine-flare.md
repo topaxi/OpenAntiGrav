@@ -251,10 +251,9 @@ The stored `talons-assegai-c1` original flies another hull than ours draws: a na
 `Assegai_c1` (read by eye; that pair predates the RAM hull check). The regrab's original reads `Assegai_c1` in RAM and matches ours,
 and its whole-pair score falls from the stored 4.78 to 2.65.
 
-**The Zone pair was not measured.** Zone runs the craft from the reload, and the pair script's start-up costs about 13 game seconds
-at full emulator speed, more than the 5.2 s countdown (compare-page.md's 2.4 s lead was set with the emulator at a fifth of real
-time). Both grabs landed at lap clock 10.0 to 10.1 s; one passed all ten checks, but ours' craft sits ahead of and smaller than the
-original's in that frame, so no flame crop compares.
+**The Zone pair was not measured here.** Both grabs of that lane landed at lap clock 10.0 to 10.1 s: the capture's default 12 s settle outlasts Zone's
+3 s countdown. It was regrabbed inside the countdown with the flame clock recorded (compare-page.md, "The countdown frame", 2026-11-27); no 8-phase flame
+sweep was run on it.
 
 Reproduce: `python3 scripts/rpcs3-drive.py grab <png>` on an attached HD race writes `flame_clock_s`;
 `python3 scripts/hd-draw-dump.py <dir> <stem>` dumps the frame's fragment programs and

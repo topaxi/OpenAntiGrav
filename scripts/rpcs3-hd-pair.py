@@ -360,9 +360,9 @@ def detonator_inputs(pair, out, ship, clock):
 #: under `--mode zone`.
 ZONE_HULL = "zone"
 
-#: Seconds into the countdown a `--countdown` pair is grabbed by default. The original's tone is still falling early in it
-#: (`docs/tools/compare-page.md`, "The countdown frame").
-COUNTDOWN_AT_S = 2.2
+#: Seconds into the countdown a `--countdown` pair is grabbed by default: the original's tone is still settling before about
+#: 2 s (`docs/tools/compare-page.md`, "The countdown frame").
+COUNTDOWN_AT_S = 2.4
 
 #: Horizontal speed above which a countdown grab is not at rest on the grid (the craft only bobs vertically there).
 COUNTDOWN_REST_SPEED = 0.5
