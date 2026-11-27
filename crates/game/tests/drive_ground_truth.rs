@@ -1445,11 +1445,11 @@ fn the_strength_row_follows_the_screen_filter() {
         "filter-row",
         "boot; select OPTIONS; press cross; until page=options; select GRAPHICS; press cross; \
          until page=graphics; select ADVANCED; press cross; until page=graphics_advanced; \
-         expect rows!=graphics.screen_filter_strength; \
+         expect rows!=\"SCREEN FILTER STRENGTH\"; \
          set graphics.screen_filter=crt-aperture; \
-         select graphics.screen_filter_strength; expect focus=graphics.screen_filter_strength; \
+         expect rows=\"SCREEN FILTER STRENGTH\"; \
          set graphics.screen_filter=crt-interlaced; \
-         expect rows!=graphics.screen_filter_strength",
+         expect rows!=\"SCREEN FILTER STRENGTH\"",
         None,
         &[
             ("XDG_CONFIG_HOME", config.to_str().expect("a path")),
