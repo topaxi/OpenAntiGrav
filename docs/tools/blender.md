@@ -471,6 +471,11 @@ An imported hull keeps the file's normals and texture coordinates in the corner 
 `oag_normal` and `oag_uv`, so untouched corners write back the same bytes; `just
 blender-fixtures` checks that both files survive an import and export byte for byte.
 
+To model against a disc hull, write it out as OBJ with its textures and node tree:
+`cargo run -p oag-mesh --example export_obj -- <image>:<archive> <entry.vex> <out-dir>`
+(`--locators`, `--swap` in the example's own docs). The output is disc content: keep it under
+`data/` and never commit it.
+
 ## Race it
 
 `oag-game --track-file name.track.toml` works in every build, and so does RACE REMIX's CUSTOM title (the files in

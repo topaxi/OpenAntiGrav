@@ -328,9 +328,9 @@ the engine names none of them.
   `--mode detonator` refuses. Detonator is single player, so it sets
   `network-races = false`: no LAN or online race mounts its entries, and it leaves the
   fingerprint alone (a player with it on races one without it).
-- **Delivery** (ADR-0083 decision 5): a checkout finds the submodule; packaged builds
-  (AppImage, AUR, Windows, macOS) copy the folder beside the executable, which the release
-  recipes do not do yet. Web and phone builds have no official mods.
+- **Delivery** (ADR-0083 decision 5): a checkout finds the submodule; every packaged desktop and
+  phone build ships the mods ([packaging.md](packaging.md#official-mods)). The web build has
+  none.
 
 ## Fallback entries: `fallback/<title>/`
 
@@ -344,7 +344,9 @@ by its path under the folder: `fallback/wipeout-pulse/Data/XML/Foo.xml` is Pulse
 An entry answers only a name **no disc or DLC holds**: it is searched after the DLC packs and
 before this project's own embedded fallback, and a player's `overrides/<title>/` file wins
 over it. Several mods holding one name: the first in search order wins. The load report
-names every entry a mod answered. A mod cannot replace disc data this way.
+names every entry a mod answered. A mod cannot replace disc data this way. The MODS detail
+page's ADDS line reads **GAME FILES** for a mod that is on and holds entries for the running
+title.
 
 A mode that loads data of its own (Detonator) is offered on a title only where every entry it
 names resolves, so a mod that carries a title's Detonator data turns the mode on there.

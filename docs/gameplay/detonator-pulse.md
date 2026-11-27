@@ -172,8 +172,10 @@ Pulse the mod does. With the mod off, the MODE row has no `DETONATOR`, a saved
 refuses with a `warn` naming the missing entries. Switching the mod on the MODS page re-offers
 the mode at once.
 
-Packaged builds do not copy the official mods yet, and web and phone builds have none
-([mods.md](../tools/mods.md#official-mods-assetsmodsofficial)), so Pulse Detonator is absent there until they do.
+Every packaged desktop and phone build ships the official mods
+([packaging.md](../tools/packaging.md#official-mods)), so the mode is there. The web build ships
+none, so it has no Pulse Detonator.
+
 Detonator is single player, so the mod sets `[mod] network-races = false`: no LAN or online
 race mounts its entries and it leaves the network fingerprint alone, so a player with it on
 races one without it.
