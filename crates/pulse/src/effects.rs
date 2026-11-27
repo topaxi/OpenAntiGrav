@@ -249,6 +249,7 @@ pub const LOOKS: &Looks = &Looks {
         origin: Origin::InheritedFrom("Wipeout Pulse (PSP)"),
     },
     blends_encoded: Rule::UNREAD,
+    shield_shell_lit: Rule::UNREAD,
     texels_srgb: Rule::UNREAD,
     final_composite_half_texel: Rule::UNREAD,
     screen_space_target: Rule::UNREAD,

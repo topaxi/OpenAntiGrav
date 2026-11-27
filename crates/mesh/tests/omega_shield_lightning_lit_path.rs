@@ -7,6 +7,10 @@
 //! (the entry's tint `y`), and the third binding's colour times the weight (tint `x`) is added
 //! on top. A surface whose entry is not the mode draws its first texture, still.
 //!
+//! The same fixture checks HD's lit shield shell (`Model::shield_lit`): the texel times the
+//! shell's colour times `ambient + sun * sat(N.L)` on the output scale
+//! (`docs/ghidra/functions/ps3-hdfury-eu/shield.md`, "The shell's draw state").
+//!
 //! Skips when there is no adapter. Runs in `just test`.
 
 use std::sync::Arc;
@@ -107,6 +111,7 @@ fn model(mode: f32, weight: f32, lightning: [u8; 4]) -> Model {
         flame: None,
         absorb_shell: false,
         shield_shell: false,
+        shield_lit: false,
         own_shield: false,
         material_lod_bias: 0.0,
         material_state: Vec::new(),
@@ -183,6 +188,47 @@ fn the_diffuse_scrolls_at_the_programs_rate_and_the_lightning_is_added() {
         plain[0] > 64 && plain[1] < 8 && plain[2] < 8,
         "an entry that is not the mode scrolls nothing and adds nothing: {plain:?}"
     );
+}
+
+/// HD's shield shell: red texel times the vertex colour's red (`0.8`) times `ambient 0.2 +
+/// sun 0.5 * sat(N.L)`, halved. The normal is `+z`.
+#[test]
+fn the_lit_shell_takes_ambient_and_the_sun_by_its_normal() {
+    let instance = wgpu::Instance::default();
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let (device, queue) = pollster::block_on(adapter.request_device(
+        &mesh_render::device_descriptor("lit shield shell", &adapter),
+    ))
+    .expect("requesting the device");
+    let mut shell = model(PROGRAM_SHIELD_LIGHTNING, 0.0, [0, 0, 0, 0]);
+    shell.shield_shell = true;
+    shell.shield_lit = true;
+    for vertex in &mut shell.vertices {
+        vertex.colour = [0.8, 1.0, 1.0, 1.0];
+    }
+    let red = |towards: [f32; 3], rig: f32| {
+        let mut scene = Scene::off();
+        scene.light.enabled = rig;
+        scene.light.direction = towards;
+        scene.light.ambient = [0.2, 0.2, 0.2];
+        scene.light.sun = [0.5, 0.5, 0.5];
+        scene.light.output_scale = 0.5;
+        f32::from(draw(&device, &queue, &shell, scene)[0]) / 255.0
+    };
+    // `N.L` of 0.8, then a light behind the surface, which the saturate holds at zero.
+    for (towards, ndl) in [([0.6, 0.0, 0.8], 0.8), ([0.0, 0.0, -1.0], 0.0)] {
+        let expected = 0.5 * 0.8 * (0.2 + 0.5 * ndl);
+        let got = red(towards, 1.0);
+        assert!(
+            (got - expected).abs() < 2.0 / 255.0,
+            "N.L {ndl}: {got}, not {expected}"
+        );
+    }
+    // No rig in the frame: the generic path draws the shell rather than black.
+    assert!(red([0.0, 0.0, -1.0], 0.0) > 0.25);
 }
 
 /// Identity camera and model, so clip space is model space.
