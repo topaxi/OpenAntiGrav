@@ -679,9 +679,9 @@ def preflight(args):
         if not iso.exists():
             print("    just extract-iso %s %s" % (image, iso), file=sys.stderr)
         print(r"    printf '[General]\nRemoteDebuggerOnStartup = True\n"
-              r"RemoteDebuggerLocal = True\nRemoteISOPort = %d\n' > data/scratch/debugger.ini"
+              r"RemoteDebuggerLocal = True\nRemoteISOPort = %d\n' > target/tmp/debugger.ini"
               % args.port, file=sys.stderr)
-        print("    SDL_VIDEODRIVER=wayland %s --appendconfig=data/scratch/debugger.ini "
+        print("    SDL_VIDEODRIVER=wayland %s --appendconfig=target/tmp/debugger.ini "
               "--windowed %s" % (args.emulator, iso), file=sys.stderr)
         print(file=sys.stderr)
         print("SDL_VIDEODRIVER=wayland is not optional on a Wayland session, and the "

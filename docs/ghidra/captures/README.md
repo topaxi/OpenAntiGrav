@@ -216,7 +216,7 @@ itself has not yet been through a live run. To close that gap:
 
 ```sh
 cp scripts/ghidra/DumpDatabaseState.java ~/ghidra_scripts/
-# in Ghidra: Script Manager -> DumpDatabaseState.java, argument $PWD/data/scratch/ghidra-capture/
+# in Ghidra: Script Manager -> DumpDatabaseState.java, argument $PWD/target/tmp/ghidra-capture/
 just capture-ghidra-state /tmp/ghidra-capture/
 git diff --stat docs/ghidra/captures   # an empty diff is the proof
 ```
