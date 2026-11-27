@@ -100,14 +100,16 @@ impl Drop for Scratch {
     }
 }
 
-/// This process's live music fetch threads, by the names `MusicFetchWorker` is
-/// given. Zero where `/proc` is not there to say.
+/// This process's live threads that write a music cache, by name (the menu
+/// music's and `MusicFetchWorker`'s). Zero where `/proc` is not there to say.
 fn fetch_threads() -> usize {
     std::fs::read_dir("/proc/self/task")
         .into_iter()
         .flatten()
         .filter_map(|task| std::fs::read_to_string(task.ok()?.path().join("comm")).ok())
-        .filter(|name| ["race-music", "race-source", "menu-source"].contains(&name.trim()))
+        .filter(|name| {
+            ["race-music", "race-source", "menu-source", "menu-music"].contains(&name.trim())
+        })
         .count()
 }
 
