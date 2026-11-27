@@ -1419,3 +1419,42 @@ fn a_wheel_over_the_craft_zooms_it_and_elsewhere_steps_the_team() {
         "zoomed, the d-pad pans and does not step the team"
     );
 }
+
+/// The real session takes SCREEN FILTER STRENGTH off the page for a filter with a fixed
+/// strength, both when the menus open on one and when the row is moved onto one.
+#[test]
+#[ignore = "needs the Pulse PSP image"]
+fn the_strength_row_follows_the_screen_filter() {
+    let Some(image) = pulse() else {
+        return;
+    };
+    let scratch = Path::new(env!("CARGO_TARGET_TMPDIR")).join("drive-filter-row-profile");
+    let _ = std::fs::remove_dir_all(&scratch);
+    std::fs::create_dir_all(scratch.join("config/oag")).expect("a profile");
+    std::fs::create_dir_all(scratch.join("no-mods")).expect("a mods directory");
+    std::fs::write(
+        scratch.join("config/oag/settings.toml"),
+        "[render_profiles.\"Wipeout Pulse (PSP)\"]\n\
+         screen_filter = \"crt-shadow-mask\"\nscreen_filter_strength = 50\n",
+    )
+    .expect("a settings file");
+    let config = scratch.join("config");
+    let mods = scratch.join("no-mods");
+    let run = drive_with(
+        &image,
+        "filter-row",
+        "boot; select OPTIONS; press cross; until page=options; select GRAPHICS; press cross; \
+         until page=graphics; select ADVANCED; press cross; until page=graphics_advanced; \
+         expect rows!=\"SCREEN FILTER STRENGTH\"; \
+         set graphics.screen_filter=crt-aperture; \
+         expect rows=\"SCREEN FILTER STRENGTH\"; \
+         set graphics.screen_filter=crt-interlaced; \
+         expect rows!=\"SCREEN FILTER STRENGTH\"",
+        None,
+        &[
+            ("XDG_CONFIG_HOME", config.to_str().expect("a path")),
+            ("OAG_MODS", mods.to_str().expect("a path")),
+        ],
+    );
+    assert!(run.output.status.success(), "{}", run.why_not_success());
+}

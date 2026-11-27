@@ -90,6 +90,18 @@ fn resolved_labels(data: &[u8], set: &mesh::Ps2TextureSet) -> Vec<Option<String>
         .collect()
 }
 
+/// Every resolved texture is capped at the one level its header authors: a race
+/// samples the base at every distance
+/// (`docs/rendering/texture-level-per-title.md`, "Pulse PS2 in a race").
+fn assert_one_level_each(track: &str, data: &[u8], set: &mesh::Ps2TextureSet) {
+    let nodes = vex::nodes(data).expect("decoding nodes");
+    let classes = vex::classes_of(data).expect("class table");
+    let slots = mesh::resolve_texture_slots(data, &nodes, classes.texture, set);
+    for texture in slots.iter().flatten() {
+        assert_eq!(texture.mip_count, Some(1), "{track}: {}", texture.label);
+    }
+}
+
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn ps2_texture_slots_resolve_by_name_not_position() {
@@ -119,6 +131,7 @@ fn ps2_texture_slots_resolve_by_name_not_position() {
                 panic!("{track}: the preceding entry is not a texture set ({e})")
             });
             let resolved = resolved_labels(&blob, &set);
+            assert_one_level_each(&track, &blob, &set);
 
             assert!(
                 !resolved.is_empty(),

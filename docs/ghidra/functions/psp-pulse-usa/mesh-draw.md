@@ -553,29 +553,144 @@ this mattered for: `pulse_boost2_ADD` (embedded in `shipboost.vex`) declares
 `Gu_TexLevelMode` (`0x088114b0`, confidence 80) is the `0xc8` `TEXLEVEL`
 emitter - `(bias & 0xff) << 16 | mode | 0xc8000000`, the bias scaled by
 `DAT_08ab0524` and clamped to `[-0x80, 0x7f]`. `Gfx_FlushRenderManager` calls
-it `(mode = 2, bias = 1.0)`; `Texture_BuildBindList` emits mode `2` with a
-computed bias, or mode `0` with none, on the texture's `+0x06 & 0x18` bits.
-Either way the level is selected by the GE, and **not "automatic, as it is under
-wgpu"** - corrected 2026-09-30. `Gfx_FlushRenderManager` follows the `(2, 1.0)`
-call with **`Gu_TexLodSlope`** (`0x08811694`, confidence 85): its body is
-`0xd0000000 | (float_bits >> 8)`, the `TEXLODSLOPE` word, and its only caller
-passes `0x3b800000` = `1/256`. Slope mode's level is `log2(|z| * slope) + bias`,
-so it follows **depth**, not texel density (level 0 inside about 128 units).
-Measured against PPSSPP at 480x272 the original resolves scenery at the base
-level throughout a race frame - see
-[frame-audit.md](../../../rendering/frame-audit.md). `oag_render` now uploads
-a PSP `.vex` texture with the levels the disc authors and selects among them by
-this rule (`mesh_render::PSP_TEXLOD_SLOPE`), so scenery is level 0 inside about
-128 units, as the emulator draws it, and level 1 from 256. Whether real hardware
-shows that is unmeasured, and the per-texture `Texture_BuildBindList` emission
-(mode 0 or 2 with a computed bias) is **read 2026-10-01 (pulse-fx-3), not yet applied**: on the texture's `+0x06 & 0x18` bits it
-emits slope mode (`0xc8000002`) with bias `(int)(FUN_08926f6c(*(float *)(header + 0x18)) * 16) & 0xff`, mode `0` (automatic, no bias) for
-value `1`, nothing otherwise, and `FUN_08926f6c(x)` is `log2(sqrt(x)) + *(float *)(g_display + 0x5df4) + 0.2 + 8.0` clamped to
-`[-8, 7.5]` (`0` for `x == 0`). So the bias is a per-texture function of a float in the header (a texel-density figure) and a display setting,
-not the `1.0` `Gfx_FlushRenderManager` writes; the GE dumps show `TLEVEL` offsets of `0x05`, `0x0d`, `0x1c`, `0x26`, `0x2e` (bias `0.3` to
-`2.9`) on the explosion's, the shield's and the Bomb ring's textures. At the 12 to 15 units of a Bomb ring the slope law gives level 0 whatever
-the bias, so this is **not** what makes that ring read dim; its reach is the mid-distance scenery (bias `5` or more steps to level 2 at 60
-units). Confidence 80 for the read; the header field's meaning and `g_display + 0x5df4` are unread.
+it `(mode = 2, bias = 1.0)` and follows with **`Gu_TexLodSlope`** (`0x08811694`,
+confidence 85): its body is `0xd0000000 | (float_bits >> 8)`, the `TEXLODSLOPE`
+word, and its only caller passes `0x3b800000` = `1/256`. So the level is
+selected by the GE in slope mode, which follows **depth**, and not "automatic, as
+it is under wgpu". The bias a mesh draws with is the texture's own, below.
+
+### The per-texture level bias
+
+`Texture_BuildBindList` `0x08928d4c` writes a `TEXLEVEL` for each texture, on
+the header's flags byte (`+0x06`), bits `0x18`:
+
+| `(flags & 0x18) >> 3` | Word | Meaning |
+| ---: | --- | --- |
+| 0 | `0xc8000002 \| (trunc(b * 16) & 0xff) << 16` | slope mode with the texture's bias `b` |
+| 1 | `0xc8000000` | automatic mode, bias 0 |
+| 2, 3 | none | whatever is in force stays |
+
+`Texture_LodBiasFromDensity` `0x08926f6c` (confidence 90) computes `b` from the
+`f32` `x` at header `+0x18`:
+
+```
+b = clamp(log2(sqrt(x)) + *(float *)(g_display + 0x5df4) + 0.2 + 8.0, -8.0, 7.5)
+b = 0   when x == 0 or bits(x) == 0xffc00000
+```
+
+Any other NaN falls through the comparisons to `7.5`.
+
+**`K = *(float *)(g_display + 0x5df4)`** is written by every camera that draws:
+`VexCamera_Draw` (`0x08900a9c`), `Camera_SubmitScene` (`0x08878874`) and
+`Camera_ApplyViewProjection` (`0x0887840c`) project `(-0.5, 0, 1, 1)` and `(0.5, 0, 1, 1)` by the projection
+just built, take `d = |x0/w0 - x1/w1| * 480` and store `log2(1/d) - log2(|w0|)`,
+which is `-log2(480 * m00)`. `Gfx_Init` stores 0.
+
+**Each texture keeps the `K` it was built with.** `Texture_RebuildBindList`
+`0x08928550` (confidence 85) calls `Texture_BuildBindList` and then stores `K` at
+the object's `+0xb0`. A bind list is rebuilt, and `K` re-stored, in three places:
+
+| Trigger | Where (return address seen live) | When |
+| --- | --- | --- |
+| load | `Texture_BindEmbeddedData` (`0x08928134`) | once, with whatever `K` the word holds. Before the first 3D camera that is `Gfx_Init`'s `0` |
+| residency | `Texture_PrepareForDraw_q` (`0x08928174`; `0x08928234`, `0x0892826c`), called by the draw paths before the test below | a texture with bit `0x10` at `+0xb6` and nothing at `+0x58`: rebuilt **whatever `K` it holds**, after the allocation attempt, succeeded or not |
+| the 0.2 test | `Gfx_BindTexture` (`0x08928520`), `FUN_0890f288` (`0x0890f580`), `Mesh_DrawBatchSet` | `\|object+0xb0 - K\| > 0.2` |
+
+So a bind list carries the `K` of the camera current at its last rebuild, which
+can be any `K` within 0.2 of the camera that draws with it later.
+
+**Measured live** (2026-11-27, PPSSPP software renderer, breakpoint at
+`0x089304bc` in `Mesh_DrawBatchSet`, 700 binds per grid, each texture's
+`+0x9c` header, `+0xb0` and `+0xc0` word read):
+
+| Grid | Mesh textures | `TEXLEVEL` equal to the formula at stored `K` | Stored `K` (textures) |
+| --- | ---: | ---: | --- |
+| Talon's Junction | 78 | 78 | -9.0506 (39), -8.8799 (35), -9.6439 (3), -9.7999 (1) |
+| Metropia White | 72 | 72 | -9.0506 (43), -8.8799 (25), -9.6439 (3), -9.7999 (1) |
+
+A memory write watch on `g_display+0x5df4` over a grid frame sees `-8.8799`
+(race camera `m00` 0.981491, exact), `-9.6439` and `-9.7999` (cameras of
+`m00` 1.667 and 1.857). Nothing writes `-9.0506` in a grid frame: it is the
+flyby's, below.
+
+### `K = -9.0506` is the pre-race flyby camera's
+
+**Confidence 93** (a runtime write watch on three cold boots, an exact
+arithmetic match, and Pure's twin doing the same; one circuit, Talon's Junction,
+PPSSPP).
+
+**Method** (2026-11-27, PPSSPP v1.20.4, software renderer, Racebox Time Trial
+Venom): a halting write watch on `g_display+0x5df4` armed at Team Selection,
+plus an execution breakpoint on `Texture_RebuildBindList` (`0x08928550`) logging
+texture, `K` and `ra`, from the ship confirmation to the grid. Boots 2 and 3
+stop only when the word changes (`change: true`). `K` reads `0` at every menu
+tap from boot to Team Selection.
+
+- The first `-9.0506` store is `Camera_SubmitScene` (`0x0887974c`), in the first
+  frame of `InGameTrackDescriptionScreen`, the flyby. `Camera_ApplyViewProjection`
+  (`0x08878618`) stores the same value each flyby frame.
+- The projection it came from has `m00` 1.104771, and `g_camera_fov_degrees`
+  reads `54.30899`: the flyby's field of view
+  ([race-intro.md](../../../gameplay/race-intro.md)). `-log2(272 / tan(54.30899429 / 2))`
+  is `-9.050638`, the live value to float precision.
+- Callers: `Camera_SubmitScene` from the scene walk `FUN_08944160`;
+  `Camera_ApplyViewProjection` from `Gfx_FlushRenderManager`.
+
+**How the textures get it.** They load at `K = 0`. The flyby's draws rebuild
+every texture they reach. The race camera is only 0.171 away, so the 0.2 test
+keeps `-9.0506`; only the residency path moves it afterwards.
+
+Counts over **every texture built during the load (887, not only the mesh
+textures of the table above)**:
+
+| Boot | Flyby ended by Cross at | Ever built at `-9.0506` | Hold it on the grid | Hold `-8.8799` | Never rebuilt (`0`) |
+| ---: | --- | ---: | ---: | ---: | ---: |
+| 1 | 20 s | 102 | 85 (last logged build, no live read) | 61 | 728 |
+| 2 | 20 s | 102 | 85 (`+0xb0` read live) | 61 | 727 |
+| 3 | 6.4 s | 70 | 70 (`+0xb0` read live) | 60 | 750 |
+
+(Boot 2's live read covers 886 of the 887.) In boot 2 the 85 were last built
+through the residency path (78), the 0.2 test in `Gfx_BindTexture` (2) and in
+`FUN_0890f288` (5). The 17 that moved from `-9.0506` to `-8.8799` all did so
+through the residency path, about when the race camera took over, with the two
+values closer than 0.2. Boot 3 was a prediction written before it ran: a shorter
+flyby draws fewer textures, so fewer hold `-9.0506`, and none gets it after the
+flyby.
+
+**Reproducing.** The logs, the pre-registration and the scripts are kept on the
+capture machine in `data/traces/k-writer-watch/` (gitignored). The scripts are
+there, not in `scripts/`. From the repository root, per cold boot:
+
+```sh
+scripts/ppsspp-start.sh <lane> 93 45093 data/cache/pulse-psp-usa.iso
+K_SKIP_AT=20 uv run --with websocket-client python3 data/traces/k-writer-watch/k_watch_load.py \
+    $PWD 45093 boot.jsonl 36        # boot 3: K_SKIP_AT=6, 20 s
+uv run --with websocket-client python3 data/traces/k-writer-watch/k_final.py $PWD 45093 boot.jsonl
+```
+
+`k_watch_load.py` ends in an invalid-address error when a texture was freed; the
+log is complete by then, and `k_final.py` does the `+0xb0` read. The walk's
+first attempt after a boot can miss the main menu: run it again.
+
+`Camera_ApplyViewProjection`: a vtable slot (word at `0x08acb24c`, the table
+that also holds `Camera_SubmitScene`) that copies the stored view and projection
+matrices into the display slots, hands both to the GE (`Gu_SetMatrix`), and ends
+with the `K` store above. `Texture_PrepareForDraw_q`: for a texture with bit
+`0x10` at `+0xb6` and nothing at `+0x58`, asks `FUN_089449ac` for memory and
+calls `Texture_RebuildBindList`; for one with bit `8` set, copies the pixel
+levels and palette into the second buffer and clears the bit. What the memory
+is (VRAM is the reading) is not read, hence `_q`.
+
+**The disc.** Every texture of the circuits' and ships' `.vex` files has
+`flags & 0x18 == 0` (flags 128, 194, 228); seven of them hold `x == 0` and the
+NaNs are exactly `0xffc00000`. Mode-0 draws in the recorded frames are blended
+effect (`.mip`) and HUD textures only. The renderer's side of this is in
+[frame-audit.md](../../../rendering/frame-audit.md), "The level law, measured".
+
+Slope mode's level in PPSSPP's software rasteriser is
+`log2(2 * w * slope) + b`, with `w` the clip `w`; that page carries its
+evidence. The explosion's, shield's and Bomb ring's textures carry `TEXLEVEL`
+bytes `0x05` to `0x2e` (bias 0.3 to 2.9) in recorded frames.
 
 **This one is a real divergence and it is measured inert.** `oag_render`
 synthesises a **full** box-filtered chain down to 1x1 (`mesh_render::mip_chain`,
@@ -1229,6 +1344,8 @@ previous pass on this subsystem got wrong.
 | `0x08811558` | function | `Gu_TexProjMapMode` | 85 |
 | `0x08810a88` | function | `Gu_SpecularCoef` | 82 |
 | `0x08928d4c` | function | `Texture_BuildBindList` | 85 |
+| `0x0887840c` | function | `Camera_ApplyViewProjection` | 75 |
+| `0x08928174` | function | `Texture_PrepareForDraw_q` | 65 |
 | `0x0890d904` | function | `Mesh_BeginTransparentPass` | 85 |
 | `0x0890dc20` | function | `Mesh_EndTransparentPass` | 82 |
 | `0x0887a268` | function | `SceneLight_CallMaterialList` | 78 |
@@ -1257,7 +1374,7 @@ while its return value's meaning (an accumulated light colour) is not,
 slot `+0x34` call (see [scene-light.md](scene-light.md), "Which models take the rig"), and `SceneLight_InitLists_q` only writes bare `RET`s and a flag.
 
 **Deliberately not named:** `FUN_0881129c` (a two-argument colour setter used by
-`FUN_0890d3ac`, body unread), `FUN_08927550`, `FUN_08928174`, `FUN_08944544`,
+`FUN_0890d3ac`, body unread), `FUN_08927550`, `FUN_08944544`,
 and `FUN_08a6bfc0`/`FUN_08a6bd6c` - the last two return their own address and are
 RTTI type tokens rather than real functions.
 

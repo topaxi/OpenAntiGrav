@@ -705,6 +705,10 @@ impl Session {
                 if let Some(profile) = self.render_profile_mut() {
                     profile.screen_filter = text.clone();
                 }
+                // The strength row leaves the page for a filter that has none.
+                if let Stage::Menu(stage) = &mut self.stage {
+                    crate::screen::offer_strength_row(&mut stage.menu, &self.screen_filters);
+                }
             }
             "graphics.screen_filter_strength" => match text.parse::<display::FilterStrength>() {
                 Ok(strength) => {

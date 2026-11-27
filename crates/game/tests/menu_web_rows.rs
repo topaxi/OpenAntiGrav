@@ -113,3 +113,26 @@ fn a_phone_drops_the_window_rows_and_keeps_fullscreen_resolution_enabled() {
         "nothing greys the row once its controller is gone"
     );
 }
+
+/// A Pulse PS2 boot offers no TEXTURE DETAIL: its textures have one level each, so the row
+/// would have no choice. The PSP pressing of the same title keeps it.
+#[test]
+fn a_ps2_disc_drops_the_texture_detail_row_and_psp_keeps_it() {
+    let offered = |platform| {
+        let mut definition = built_in();
+        oag_game::menu_tree::finish_definition(
+            &mut definition,
+            oag_pulse::TITLE,
+            platform,
+            &oag_ui::language::StringTable::default(),
+            &|_| false,
+        );
+        definition.pages.iter().any(|page| {
+            page.entries
+                .iter()
+                .any(|entry| entry.setting() == Some("graphics.texture_detail"))
+        })
+    };
+    assert!(offered(oag_assets::Platform::Psp));
+    assert!(!offered(oag_assets::Platform::Ps2));
+}

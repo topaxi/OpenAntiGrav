@@ -635,7 +635,9 @@ the 31 others found 89 emitter and template texture references, every one an exi
   `WO_BLUE_WELDER`.
 
 The streak emitters of the 21 also stay procedural (the Mine's `streaks_fat`, `plasma_core` and
-`sparks`, for instance). Listing one for `FAR_BARS` wants an original pair first.
+`sparks`, for instance). Listing one for `FAR_BARS` wants an original pair first;
+`WO_ROCKET_FLARE` and `WO_ROCKET_EXPLO_TRACK` have had theirs since 2026-11-27 ("A Rocket on the
+wall paired").
 
 The listing also gives these effects HD's flipbook walk, and each placed particle draws its spawn
 frame from the stage's generator, so every effect after one in a frame is dealt another
@@ -775,6 +777,134 @@ against 10; other emitters): checked, differs. Omega's `WO_BOMB_RAYS` is another
 `Data\particles` carries HD's three emitters with HD's extents (10, 6.471, 7.059) beside a
 `shockdistort`: checked, applies, not wired (no Omega frame).
 
+### A Rocket on the wall paired
+
+2026-11-27, RPCS3 0.0.43-20574, HD EU, Talon's Junction, Racebox Single Race, Venom, weapons on,
+`Write Color Buffers: true`, resolution scale 150, Pilot Assist off. Two films
+(`data/reference/hd-capture/blast/rocketwall1`, `rocketwall2`), each from a fresh restore of one
+save state: the player is held where the race left it, turned 35 degrees towards a wall, and fires
+its Rockets (`scripts/rpcs3-hd-blast-film.py --weapon rocket-wall --yaw 35`).
+`scripts/hd-blast-film-pair.py` makes a pair of one frame; ours holds the same pose and fires its
+own Rockets, which meet the same wall with nothing forced.
+
+**Written before the first capture.** A streak emitter is drawn as sprite bars if the original's
+ring holds stretched particle quads bound to its texture. A listing is kept only if the pair's
+RMSE and its mean over `--stage-seed` 1 to 8 do not rise by more than two paired standard errors
+and it moves pixels on a pair that holds the effect. The streak draws go to the scene target if
+their colour surface is the one the scene's draws use.
+
+**Every mode 5 emitter on screen is a stretched, textured quad** (`scripts/hd-particle-uv.py`,
+both films alike), confidence 92:
+
+| Effect and emitter | Texture | Quads a frame | Length over width, median |
+| --- | --- | --- | --- |
+| `WO_ROCKET_EXPLO_TRACK` `FIRESPIKES` | `explosion_01_blurred_yellow_streaks_128x128`, 6.72 wide | 87 to 92 (0.333, 0.4 s), 18 to 20 (0.5 s) | 1.8 to 5.6 |
+| its `FIREBALL_PARENT` and `FIRE_TRAILS_ONEQUAD` | `..._yellow_streaks_upsidedown`, 8.4 wide | 12 to 15 | 2.0 to 5.4 |
+| its `SPARKS` | `spark_mblurred` | 120 to 445 | 2.4 to 5.0 |
+| `WO_ROCKET_FLARE` `WO_ROCKET_FIRE` | `fireball_1024x512_yellow` | 37 to 61 (0.133, 0.2 s) | 1.8 to 2.0 |
+
+`launch_flare` (3-tick life) was on no sampled frame. `WO_ROCKET_EXPLO`'s streak sprite was
+already read stretched ("Strips (render mode 5 and 6)" below).
+
+**The buffer is the scene's** (confidence 94): colour surface `0x01920000`, depth `0x021a0000`,
+format `0x148`, the same as the frame's 550 other draws; additive blend, no depth write
+(`hd-particle-uv.py --surfaces`). The width differs from stop to stop (1300, 1340, 1540 and
+1700 by 1080): HD's width throttle. No particle draw goes to a smaller target.
+
+**What else the films show.**
+
+- Three blasts, born 14, 15 and 18 ticks after the press (read off the cells of
+  `FIREBALL_ADDITIVE`'s 64-frame sheet), at x = -83.2, -91.1 and -98.0 on the wall z = -206.2
+  (second film -84.3, -92.1, -98.8). Ours are born at 13, 13 and 14 ticks at x = -86.5, -91.2
+  and -95.2: the same wall, a narrower and tighter volley. Not a render law; open.
+- **The streaks fly off the wall to one side.** World direction, tail to head, at 0.5 s:
+  `FIRESPIKES` (0.23, 0.63, 0.20), not one quad heading down; `SPARKS` (0.48, 0.38, 0.57) and the
+  upside-down streaks (0.50, 0.33, 0.61), along the Rocket's heading and back off the wall.
+  Ours plays the blast with no orientation and fans out symmetrically about up. What matrix HD's
+  spawn is handed is unread.
+**The track blast's sprite template** (confidence 95). The file's one template on the root,
+`FLASHBANG`, draws `DC_Flare_D`: the original's rings hold 19 quads of it across the two films,
+one a blast, white, and each is as wide as the file's size curve says at the age its alpha says
+(width minus curve: mean 0.5, largest 1.6 units, on quads 16 to 100 wide). `Effects::templates`
+lists the effect; ours muted it before. Template on against off, with the flare's bar listed and
+the blast's not: change in the eight-seed mean RMSE (0 to 1), negative is closer, paired standard
+errors in units of 0.0001 in brackets, seeds closer with it out of 8.
+
+| Film | 0.333 s | 0.5 s | 0.6 s |
+| --- | --- | --- | --- |
+| 1 | -0.0774 (23), 8 | +0.0004 (1), 1 | +0.0003 (1), 2 |
+| 2 | -0.0295 (28), 8 | +0.0004 (3), 1 | +0.0000 (1), 1 |
+
+The whole gain is the white flash at 0.333 s; the small rise later is unread.
+
+**The pairs' age.** `--lag 2 --fire-shift 2`: the shift puts ours' mean birth on the original's,
+and the lag is bounded by the frames themselves (no burst on the picture 15 ticks after the press,
+a burst at 17, with the first blast born at 14). The whole-frame score does not choose an age
+here: with the template and the blast's bar still off, its minimum was at a shift of -5 at
+0.333 s, +6 to +8 at 0.5 s and -2 at 0.6 s, each frame preferring whichever arm is dimmer.
+Confidence in the age, 70.
+
+**Listings**, each on its own, same units. 0.2 s was measured before the template went in, which
+changes nothing there (identical scores).
+
+| Listing | Film | 0.2 s | 0.333 s | 0.5 s | 0.6 s | Kept |
+| --- | --- | --- | --- | --- | --- | --- |
+| `FAR_BARS` `WO_ROCKET_FLARE` | 1 | -0.0144 (13), 8 | -0.0023 (25), 4 | -0.0150 (67), 6 | +0.0007 (63), 4 | **yes** |
+| | 2 | -0.0164 (12), 8 | +0.0029 (37), 3 | -0.0053 (100), 5 | -0.0168 (38), 7 | |
+| `FAR_BARS` `WO_ROCKET_EXPLO_TRACK` | 1 | no pixel | +0.0003 (3), 3 | -0.0068 (33), 6 | -0.0019 (4), 7 | **yes** |
+| | 2 | no pixel | +0.0001 (2), 3 | -0.0143 (31), 8 | -0.0024 (3), 8 | |
+
+The blast's listing carries four emitters, all in the original's rings: `FIRESPIKES`,
+`FIREBALL_PARENT`, `SPARKS` and `FIRE_TRAILS_ONEQUAD`. Without the template it had read +0.0096
+(6) and +0.0100 (14) at 0.333 s, which is why the template came first. The flare on the four
+craft-hit pairs: `0100` -0.0043 (61), far `0100` +0.0002 (2), far `0233` -0.0002 (10), and `0233`
+-0.0028 (135) over 24 seeds (+0.0328 (159) on the first 8, which is that pair's own scatter).
+
+**The rule was applied to the eight-seed mean; at their own seed some pairs get worse**, against
+the "written before" wording above. Own-seed RMSE, listed minus unlisted:
+
+| Listing | Film | 0.333 s | 0.5 s | 0.6 s |
+| --- | --- | --- | --- | --- |
+| flare | 1 | -0.002 | +0.034 | +0.042 |
+| flare | 2 | -0.004 | +0.022 | -0.030 |
+| track blast | 1 | -0.0028 | -0.0034 | +0.0003 |
+| track blast | 2 | +0.0008 | -0.0087 | -0.0019 |
+
+On the craft-hit pairs the flare moves `0233` +0.0101, far `0100` +0.0003 and far `0233` +0.0013.
+At 0.5 and 0.6 s no flare streak quad of ours is in front of the camera (the player's Rockets are
+gone and the only live ones are another craft's, behind it: a throwaway print of each quad's
+position), so the bar is not what moved those frames. A listed streak takes a sprite, and each
+such particle draws its spawn frame from the stage's generator, which deals the blast another
+arrangement.
+
+**`WO_ROCKET_EXPLO`, the craft blast, is not judged here**: its look was being changed at the
+same time. On that look as it was, `FAR_BARS` for it read 0.0000, 0.0000, +0.0001 and +0.0047
+(23) on the four craft-hit pairs (`0100`, far `0100`, far `0233`, `0233`).
+
+**The pairs** (film 1), as wired, each re-rendered to identical pixels. The ids carry the age at
+the stop.
+
+| Pair | RMSE | Edge NCC | Mean grey | Film 2, RMSE |
+| --- | --- | --- | --- | --- |
+| `rocket-wall-0200` | 0.081 | 0.431 | 7.2 | 0.079 |
+| `rocket-wall-0333` | 0.093 | 0.403 | 10.2 | 0.115 |
+| `rocket-wall-0500` | 0.202 | 0.357 | 18.7 | 0.203 |
+| `rocket-wall-0600` | 0.253 | 0.325 | 28.1 | 0.196 |
+
+**Judged by eye.** At 0.2 s the procedural launch streaks were one white beam from under the craft
+to the bottom of the frame; as bars they are three small flames at the Rockets, as the original's,
+with a faint orange tail below the craft it does not show. At 0.333 s the white flash now sits
+where the original's does, ours a little wider. At 0.5 and 0.6 s ours' fire trails go up both
+sides and past the HUD where the original's all lean away from the wall, shorter, and at 0.5 s
+ours is white where the original is orange.
+
+**2048 and Omega.** Flare: checked, applies, not wired (2048's own `WO_ROCKET_FLARE` carries
+`WO_ROCKET_FIRE`, mode 5, on the same sprite; Omega's two carry it, `launch_flare` and a third
+streak `sparky`). Track blast streaks: checked, differs (2048's file authors one streak on its
+own sprite; Omega's carries three with HD's names on other sprites). Template: checked, differs
+(neither title's track blast authors one, read through each title's own load, an Omega 2048
+circuit included). No 2048 or Omega frame.
+
 ### Every effect that loads a sprite, read off the command ring
 
 2026-11-26, RPCS3 0.0.43-20574, HD EU, Talon's Junction. `scripts/rpcs3-hd-particle-ring.py` fires a
@@ -828,9 +958,9 @@ ours' bar does (the particle's position takes the top row). The Plasma wind-up r
 0 against 287 (`plasma_forks`), and its two emitters
 author a negative speed (-0.50 and -0.48 units a tick): they fly inward. Confidence 90.
 
-Ours samples no sprite at all on the strips of the Rocket's blasts, the Missile head, the Quake and
-the ship explosion (`Effects::far_bars` does not list them), so this reaches the Plasma, the trail
-hits and the two Detonator effects.
+Ours samples no sprite at all on the strips of the Rocket's craft blast, the Missile head, the Quake
+and the ship explosion (`Effects::far_bars` does not list them), so this reaches the Plasma, the
+trail hits, the two Detonator effects and, since 2026-11-27, the Rocket's flare and track blast.
 
 ### HD advances its flipbooks, from the authored top-left
 
@@ -1417,15 +1547,15 @@ cost nothing measurable at these ticks.
 
 | Heavy effect | Verdict | Why |
 | --- | --- | --- |
-| `FIRESPIKES` (track blast) | the disc's | Counts, sizes and lifetimes are the file's, one blast a rocket. HD reads no fade and no size cap on this render mode (5) ([particle-render.md](../ghidra/functions/ps3-hdfury-eu/particle-render.md), "The near-camera law"). Ours draws it with the procedural strip rather than HD's bar ([engine-trail.md](../ghidra/functions/ps3-hdfury-eu/engine-trail.md), "The class-6 draw law"); with that bar, its sprite and its near cull switched on for the probe, the same quads cover 8.44, 6.47, 7.27, 5.22 and 3.22 screens, -4 to +9 % |
+| `FIRESPIKES` (track blast) | the disc's | Counts, sizes and lifetimes are the file's, one blast a rocket. HD reads no fade and no size cap on this render mode (5) ([particle-render.md](../ghidra/functions/ps3-hdfury-eu/particle-render.md), "The near-camera law"). When this was counted ours drew it with the procedural strip rather than HD's bar ([engine-trail.md](../ghidra/functions/ps3-hdfury-eu/engine-trail.md), "The class-6 draw law"); it draws the bar since 2026-11-27 ("A Rocket on the wall paired"). With that bar, its sprite and its near cull switched on for the probe, the same quads covered 8.44, 6.47, 7.27, 5.22 and 3.22 screens, -4 to +9 % |
 | `launch_smoke`, `launch_flare`, `WO_ROCKET_FIRE` (own launch) | the disc's | The billboards already run the near law with the file's cap; the streaks are render mode 5 in the file, like the spikes |
 | `trail` and the craft blast's smoke (784) | the disc's | Under the near law with the file's cap (0.5 on `trail`). At a near craft blast the original's lists cover more than ours, not less ("Against the original at a near blast") |
 
 What this does not settle:
 
-- **No original frame holds a `.pob` streak quad** (the live dumps listed screen-facing quads
-  only), so the verdict on the spikes rests on the file's data and the executable's builder
-  (confidence 65), not on a picture.
+- The spikes are on the original's own frames since 2026-11-27 ("A Rocket on the wall paired"):
+  the disc's texture, stretched, additive, in the scene target (confidence 85 that the fill is the
+  original's too; its quads' sizes were not compared with ours one by one).
 - The blast's severity of 1.0 is **chosen, not measured**: nothing on HD's rocket path has been
   read feeding it.
 - Ours caps an instance at 256 particles, and every track blast older than a few ticks sits at

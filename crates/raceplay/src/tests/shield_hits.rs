@@ -323,3 +323,24 @@ fn a_bump_leaves_the_pool_of_a_hull_that_is_not_racing_alone() {
     assert_eq!(pools[0], 100.0, "a destroyed hull was charged");
     assert!(pools[1] < 100.0, "the racing partner was not charged");
 }
+
+/// `--force-hit` takes the branch a real hit takes: a running Shield swallows it
+/// (`Ship_ApplyPendingWeaponDamage`), so the shell flashes and bulges, and a craft
+/// with no Shield is left to the sparks.
+#[test]
+fn a_forced_hit_flashes_the_shell_of_a_shielded_craft_alone() {
+    let mut race = bump([true, false]);
+
+    race.force_weapon_hit(0);
+    race.force_weapon_hit(1);
+
+    assert_eq!(race.shield_of(0).swell(), SWELL_ON_HIT);
+    assert_eq!(
+        race.shield_of(0).colour()[..3],
+        oag_render::shield::HIT_COLOUR[..3]
+    );
+    assert!(
+        (race.shield_of(1).swell() - SWELL_REST).abs() < 0.01,
+        "an unshielded craft's shell reacted"
+    );
+}

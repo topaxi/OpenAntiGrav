@@ -43,12 +43,14 @@ locality optimisation rather than the only copy.
 ```text
 +0x00  u8    packed log2 dimensions, high nibble log2(height), low nibble log2(width)
 +0x01  u8    bits_per_pixel      4 or 8
-+0x02  u16   flags               0x2000 or 0x2040
++0x02  u8    flags               bits 0-4: mip levels beyond the base (0 on this disc); 0x00 or 0x40
++0x03  u8    CLUT bits per entry (32 on this disc)
 +0x04  u16   height
 +0x06  u16   width
-+0x08  u32   unknown, correlates with +0x0c
-+0x0c  u8    unknown
-+0x0d  qword[8]  GS state, not decoded
++0x08  u16[9]  VRAM block offset (256 bytes) of each level, then of the CLUT
++0x1a  u8[7]   pixel format per level
++0x21  u64[9]  upper half of each upload packet's DMA tag
++0x69  u32[9]  packet size in quadwords: one per level, then the CLUT
 +0x8d  qword     A+D register write, TRXPOS (0x51)
 +0x9d  qword     A+D register write, TRXREG (0x52)
 +0xad  qword     A+D register write, TRXDIR (0x53)
@@ -62,8 +64,13 @@ locality optimisation rather than the only copy.
        padding
 ```
 
+The header fields are the ones `Texture_ReadFromStream` reads
+([ps2-pulse-eu/texture-level.md](../ghidra/functions/ps2-pulse-eu/texture-level.md)). With one level the
+offsets are `(0, base, base + CLUT, 0, ...)` and the sizes `(4 + texels / 16, 4 + palette / 16, 0, ...)`,
+checked on all 14,005 texture objects on the disc (confidence 94).
+
 The blob is not a texture *file*. It is the **DMA packet that uploads one**: a
-13-byte header the game reads, then GIF packets that transfer the texels and
+141-byte header the game reads, then GIF packets that transfer the texels and
 then the palette into GS local memory. `BITBLTBUF` is absent, so the destination
 buffer is chosen by code, not by the file.
 
@@ -771,32 +778,17 @@ implemented by `oag_mesh::mesh::ship_skin::apply_ps2_atlas` and
 pinned by `crates/game/tests/ps2_ship_skin_ground_truth.rs`.
 
 ## Not determined
-- **`flags` at `+0x02`.** 0x2000 on 3,925 textures and 0x2040 on 1,423. Nothing
-  correlates it with dimensions or depth.
-- **`+0x08` and `+0x0c`.** They move together — `0x00400000` with 68,
-  `0x00100000` with 20, `0x01000000` with 4 — and look like a GS memory
-  allocation, which the file would have no reason to fix. Not needed to decode.
-  A wider sweep (403 textures across `01_Track`, `02_Track`, `05_Track`, run
-  while investigating a mirrored-speed-pad texture pair) measured both fields
-  against dimensions directly rather than against each other: `+0x0c` takes 9
-  distinct values and tracks size closely
-  (`0x04` at 256x256, `0x14` at 64x64, `0x0c` at both 64x32 and 128x16, `0x08`
-  at 32x32, `0x05` at both 8x8 and 16x16), and `+0x08` is a single bit walking
-  alongside it across five observed values (`0x01000000`, `0x00100000`,
-  `0x00080000`, `0x00040000`, `0x00010000`). Read together this looks like a
-  size class (`+0x0c`) paired with a log2-derived allocation hint (`+0x08`) -
-  plausible given the "GS memory allocation" reading above, but a correlation
-  across files, not a formula checked against the GS's own allocation rules or
-  a runtime trace. Confidence 55: consistent across a few hundred real files,
-  meaning not verified. Still not needed to decode.
-- **The eight quadwords at `+0x0d`.** GS state the game replays; `TEX0`-shaped
-  values are in there but nothing depends on reading them.
+- **Bit 6 of `flags` (`0x40`).** Set on 3,318 of 14,005 texture objects. The loader clears bit 5 (never set
+  on disc) and keeps this one; what reads it is not known. Nothing correlates it with dimensions or depth.
 - **The `Texture` node payloads in a PS2 `.vex` are stale.** They still carry
   PSP-shaped `clut_size`/`texel_size` including mip chains, and disagree with the
   actual texture: the Feisar node 0 says 512x512 8bpp with 6 mips, the entry the
-  game loads is 256x256 with one level. The PS2 blobs carry **no mips at all** —
-  the size formula would not close if they did.
+  game loads is 256x256 with one level. The PS2 textures carry **no mips at all**:
+  every texture object's `flags & 0x1f` is 0
+  ([texture-level-per-title.md](../rendering/texture-level-per-title.md#pulse-ps2-in-a-race)).
 - **Two outliers.** Entries `0xb077d3bd` and `0x8d17fa0d` of `WADS2.WAD` start
   with a valid 256x256 texture packet and then continue with more GIF packets to
   561,667 and 1,123,333 bytes. Some multi-part resource with a texture on the
-  front; refused rather than half-decoded.
+  front; refused rather than half-decoded. They hold 61 and 122 texture headers
+  (all with 0 mip levels), some closer together than their own texels, so the
+  packing is not the standalone one.

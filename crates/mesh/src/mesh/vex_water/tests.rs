@@ -7,6 +7,7 @@ fn texture(label: &str, texels: Texels) -> ModelTexture {
         height: 1,
         texels,
         mip_count: None,
+        lod_code: 0.0,
     }
 }
 

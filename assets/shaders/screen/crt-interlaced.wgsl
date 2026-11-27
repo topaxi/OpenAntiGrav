@@ -1,5 +1,6 @@
 //! name = "CRT INTERLACED"
 //! description = "The PS2 on a television over composite: one field a frame, phosphor decay between them, chroma smeared sideways, a slot mask and a curve."
+//! fixed_strength = true
 //!
 //! [[param]]
 //! name = "interlace"

@@ -1,5 +1,6 @@
 //! name = "CRT SHADOW MASK"
 //! description = "A curved consumer CRT: gaussian scanlines on the title's own line count, a shadow mask, barrel curvature and dark corners."
+//! fixed_strength = true
 //!
 //! [[param]]
 //! name = "scanline_hardness"

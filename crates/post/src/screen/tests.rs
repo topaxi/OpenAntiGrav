@@ -131,3 +131,14 @@ fn the_uniform_is_the_size_the_shader_declares() {
     // 6 floats, 3 floats of padding, 4 vec4s: 112 bytes, 16-aligned.
     assert_eq!(size_of::<Uniform>(), 112);
 }
+
+#[test]
+fn a_header_declares_a_fixed_strength_and_none_is_the_default() {
+    let body =
+        "fn screen_filter(uv: vec2<f32>, pixel: vec2<f32>) -> vec3<f32> { return frame_at(uv); }";
+    let fixed =
+        Preset::parse("bent", &format!("//! fixed_strength = true\n{body}")).expect("a preset");
+    assert!(fixed.fixed_strength);
+    let plain = Preset::parse("flat", body).expect("a preset");
+    assert!(!plain.fixed_strength);
+}

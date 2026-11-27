@@ -353,6 +353,7 @@ impl ViewSetup {
                 target: [0.0; 4],
                 hit: [0.0; 4],
                 tints_shell: true,
+                flickers_shell_alpha: true,
                 colour_rate: oag_render::shield::COLOUR_RATE,
                 target_alpha_from_cockpit: false,
             },

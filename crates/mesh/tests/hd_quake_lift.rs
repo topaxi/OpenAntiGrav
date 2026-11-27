@@ -57,6 +57,7 @@ fn texture() -> Arc<ModelTexture> {
         height: 1,
         texels: Texels::Rgba8(vec![255; 4]),
         mip_count: None,
+        lod_code: 0.0,
     })
 }
 

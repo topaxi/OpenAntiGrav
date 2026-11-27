@@ -54,6 +54,7 @@ fn texture(label: &str, rgb: [u8; 3]) -> Arc<ModelTexture> {
         height: 1,
         texels: Texels::Rgba8(vec![rgb[0], rgb[1], rgb[2], 255]),
         mip_count: None,
+        lod_code: 0.0,
     })
 }
 
@@ -399,6 +400,7 @@ fn halves() -> Arc<ModelTexture> {
         height: 1,
         texels: Texels::Rgba8(vec![51, 51, 51, 255, 204, 204, 204, 255]),
         mip_count: None,
+        lod_code: 0.0,
     })
 }
 

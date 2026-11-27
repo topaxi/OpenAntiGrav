@@ -1219,6 +1219,9 @@ impl Session {
         self.label_rate_rows(&mut model);
         self.resolve_menu_queries(&mut model);
         settings::supply_reset(&mut model, shell.title, shell.platform, &shell.strings);
+        // After the seed: it reads which filter the row holds, and a parked row
+        // is not seeded.
+        crate::screen::offer_strength_row(&mut model, &self.screen_filters);
         // What the row is set to comes from the settings file, above; what the
         // game is *drawing with* can only come from here, and the RENDERER row's
         // restart note is the difference between the two. Told every time the

@@ -195,8 +195,8 @@ pub const FADE_COLOUR: [f32; 4] = [0.0, 0.0, 0.0, 0.0];
 /// counterpart (`FUN_00125660`) copies exactly that block into the object's
 /// current colour on a hit - the same shape as Pulse's `ShipShield_Hit`
 /// copying its own `.bss` slot. See
-/// `docs/ghidra/functions/ps3-hdfury-eu/shield.md`. Confidence **80**: static
-/// evidence only, same ceiling Pulse's own page carries for the same reason.
+/// `docs/ghidra/functions/ps3-hdfury-eu/shield.md`. Confidence **92**: the live
+/// object holds it after an absorbed hit ("Watched on RPCS3").
 pub const HD_HIT_COLOUR: [f32; 4] = [1.0, 0.2, 0.0, 1.0];
 
 /// HD's own colour on activation, before the fade-up reaches [`TARGET_COLOUR`].
@@ -205,10 +205,8 @@ pub const HD_HIT_COLOUR: [f32; 4] = [1.0, 0.2, 0.0, 1.0];
 /// [`ACTIVATION_COLOUR`]'s neutral transparent black, read from the same
 /// initialiser as [`HD_HIT_COLOUR`]. The alpha is still `0.0`, so the shell is
 /// still invisible on the activation frame; only the hue the fade-up starts
-/// from moves. Confidence **78**: the literal reads are as solid as
-/// [`HD_HIT_COLOUR`]'s, one notch down only because the first component reads
-/// as a non-round `0x3F0C0831` rather than a value with an obvious decimal
-/// source, which is worth a second look if HD's shield is ever traced live.
+/// from moves. Confidence **90**: read statically and off the live object on
+/// the activation frame ("The steady-state colour is read").
 pub const HD_ACTIVATION_COLOUR: [f32; 4] = [0.547_126, 0.1, 0.1, 0.0];
 
 /// Which three colours a shell's animation moves between - the one axis this
@@ -235,6 +233,13 @@ pub struct Palette {
     /// is then drawn at its authored colours, scaled by the swell, until it
     /// switches off. See `docs/ghidra/functions/ps2-pulse-eu/shield-pickup.md`.
     pub tints_shell: bool,
+    /// Whether the shell's alpha takes the `sin` flicker.
+    ///
+    /// `false` on HD, whose shell program reads its alpha off the mesh's own
+    /// `VertexColour1` stream, so the flickered tint the draw writes per node
+    /// does not reach the picture
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/shield.md`, "Watched on RPCS3").
+    pub flickers_shell_alpha: bool,
     /// How far the colour moves toward its target per substep ([`COLOUR_RATE`]
     /// everywhere a race is launched; [`CONTENT_2048_COLOUR_RATE`] is the
     /// 2048-content modes' value).
@@ -252,6 +257,7 @@ pub const PULSE_PALETTE: Palette = Palette {
     target: TARGET_COLOUR,
     hit: HIT_COLOUR,
     tints_shell: true,
+    flickers_shell_alpha: true,
     colour_rate: COLOUR_RATE,
     target_alpha_from_cockpit: false,
 };
@@ -279,6 +285,7 @@ pub const HD_PALETTE: Palette = Palette {
     target: TARGET_COLOUR,
     hit: HD_HIT_COLOUR,
     tints_shell: true,
+    flickers_shell_alpha: false,
     colour_rate: COLOUR_RATE,
     target_alpha_from_cockpit: false,
 };
@@ -288,6 +295,7 @@ pub const HD_PALETTE: Palette = Palette {
 /// (`docs/ghidra/functions/ps4-omega-eu/shield.md`, `ShipShield_Construct`).
 pub const OMEGA_PALETTE: Palette = Palette {
     target_alpha_from_cockpit: true,
+    flickers_shell_alpha: true,
     ..HD_PALETTE
 };
 
@@ -310,6 +318,7 @@ pub const OWN_PALETTE: Palette = Palette {
     target: OWN_TARGET_COLOUR,
     hit: OWN_HIT_COLOUR,
     tints_shell: true,
+    flickers_shell_alpha: true,
     colour_rate: COLOUR_RATE,
     target_alpha_from_cockpit: false,
 };
@@ -504,13 +513,16 @@ impl ShipShield {
     }
 
     /// The colour the **shell** multiplies its authored vertices by: [`Self::colour`],
+    /// with the unflickered alpha where [`Palette::flickers_shell_alpha`] is `false`,
     /// or the identity where [`Palette::tints_shell`] is `false`.
     #[must_use]
     pub fn shell_colour(&self) -> [f32; 4] {
-        if self.palette.tints_shell {
+        if !self.palette.tints_shell {
+            [1.0; 4]
+        } else if self.palette.flickers_shell_alpha {
             self.colour()
         } else {
-            [1.0; 4]
+            self.rgba
         }
     }
 

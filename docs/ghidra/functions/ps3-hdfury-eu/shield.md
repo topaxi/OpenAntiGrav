@@ -3,10 +3,10 @@
 **Binary:** `ps3-hdfury-eu` `EBOOT.elf`.
 **Status:** the constructor, the activate, the per-frame update and the hit
 flash are read statically and cross-checked constant for constant against
-[`psp-pulse-usa/shield-pickup.md`](../psp-pulse-usa/shield-pickup.md). No
-runtime leg (no RPCS3 breakpoint), which caps every claim here at **88** per
-the [confidence rubric](../../../reverse-engineering/confidence-rubric.md),
-the same ceiling Pulse's own page carries for the same reason.
+[`psp-pulse-usa/shield-pickup.md`](../psp-pulse-usa/shield-pickup.md). The
+raised shell and the amber hit flash are watched on RPCS3 and paired against
+ours (last section). The static-only sections below were scored before that
+runtime leg.
 
 This page was opened because the user, who plays the originals, reported that
 HD/Fury's shield "renders and animates, it just does not look exactly like in
@@ -115,7 +115,8 @@ void ShipShield_Hit(ShipShield *self)
 Five stores, the same shape as Pulse's `ShipShield_Hit` (`0x0885eb04`) - a
 colour write and a swell write, nothing else. `1.1` is the literal Pulse's own
 Hit writes for [`SWELL_ON_HIT`](../../../../crates/render/src/shield.rs).
-Confidence **80**.
+Confidence **88** (80 static, raised by the live read of the values it writes,
+last section).
 
 Two callers, `FUN_000e8de0` and `FUN_000eadb8` - the same dual-consumer shape
 `shield-pickup.md`'s "two drains and a contact loop" section documents for
@@ -268,20 +269,23 @@ All below in `names.tsv` in this change.
 | `0x00126108` | `ShipShield_Update` | 84 |
 | `0x00125778` | `ShipShield_InitColours` | 78 |
 | `0x001258d8` | `ShipShield_DrawCockpit_q` | 68 |
+| `0x00125d98` | `ShipShield_DrawShell` | 80 |
+| `0x002c32c8` | `Model_SetNodeTint_q` | 65 |
+
+`ShipShield_Hit` is scored 88: the values it writes are read live (92), the
+attribution to this function is static (no program counter observed).
 
 ## What is not verified
 
-- **No runtime leg.** Nothing on this page has been watched in RPCS3, so
-  nothing exceeds 88 - the same ceiling Pulse's own shield page carries.
+- **No breakpoint on the object's functions.** The runtime leg reads the
+  shield object's fields and the frame, not the program counter.
 - **The steady-state target colour's real source.** `ShipShield_Activate`
   takes it as an argument; the call site (`FUN_000d5610`, HD's likely
   `Shield_Fire`) was not traced through this binary's TOC defect. A per-team
   `ShieldColour` config key exists and is parsed (`FUN_000dba30`) but is not
   confirmed to feed this argument.
-- **The flicker function**, `FUN_00676fe8`, takes three arguments where
-  Pulse's plain `sinf` takes one. Not decompiled.
-- **`FUN_00125d98`**, the external-camera draw call `ShipShield_Update`
-  dispatches to. Not decompiled at all.
+- ~~The flicker function and the external-camera draw call~~ both read, see
+  the last section.
 - **The two `ShipShield_Hit` callers**, `FUN_000e8de0` and `FUN_000eadb8`.
   Their existence and count match Pulse's two-drain shape; their bodies are
   unread.
@@ -412,11 +416,8 @@ authored Feisar `ShieldColour` read statically from the disc; the colour lerp
 reaches the target in about 2 s (rate 0.15 per 1/60 s step) and holds; the
 swell starts near 0.7 and settles at 1.0. The recorded frames show a Feisar hull wrapped in a
 **blue** translucent shell, with a purple-red tinge on the activation frame
-(kept untracked under the lane's scratch directory). The amber hit flash was **not** captured: a hit needs a damage
-source on the player; `ShipShield_Hit` has two callers (`FUN_000e8de0`,
-`FUN_000eadb8`) and no emulator-side trigger was built. Recipe if wanted: write
-a rival's rocket in front of the player, or gdb-break `ShipShield_Hit` at
-`0x00125660` and read the live colour (expected `(1, 0.2, 0, 1)`).
+(kept untracked under the lane's scratch directory). The amber hit flash was not captured in that run; it is in
+the last section.
 
 A later sample after the same press with state `6` showed the fade path
 (`fading = 1`, target `(0, 0, 0, 0)`, swell `1.166` then `1.194`, then
@@ -435,10 +436,9 @@ this is left at the structural reading.
   `(1, 0.3022, 0, 0)` with alpha 0; DATA02 `(0.4078, 0.3804, 0.1137, 1)`): HD
   loads the later archive's, to be confirmed with the existing archive-priority
   rule.
-- **Activation tint (measured, unwired):** `Activate` also writes the packed
-  activation colour onto both models through `FUN_002c32c8`, so the shell's
-  vertex tint is `(0.547, 0.1, 0.1, 0)` at the instant of activation as well as
-  the shader parameter; our port only feeds the lerped colour.
+- **Activation tint:** `Activate` also writes the packed activation colour onto
+  both models through `FUN_002c32c8`; every drawn frame then overwrites it (last
+  section), so it is not a separate effect.
 - **Shape (not measured here):** the original's shell comes from the
   `.rcsmodel` (the per-team `.vex` is a 2 KB wrapper); the existing loader
   report says ours draws it untextured and additive. No side-by-side of our
@@ -477,10 +477,10 @@ the live colour reads `(0.0, 0.031, 0.996)` for Feisar once settled.
 model the vertex colour is a baked light term, not a tint (`mesh.wesl`'s
 `colour_is_light` path forces the tint to white), so multiplying it by the
 shield colour left the shell white. The shell is now a `Model::shield_shell`
-(set when its material authors `ShieldColour`): its vertex colour is white at
-load, the race writes the shield colour into it each frame, and `shade.wesl`
-multiplies the composed output by it (`shield_shading`). The original's own
-`shipshield` fragment program is unread, so this multiply is the stand-in for
+(set when its material authors `ShieldColour`): its vertex RGB is white at load
+(the alpha is the authored `VertexColour1.w`, last section), the race writes the
+shield colour into it each frame, and `shade.wesl` multiplies the composed
+output by it (`shield_shading`). The multiply is the stand-in for
 "`ShieldColour` is a shader instance parameter" (shell frames: Feisar deep
 blue, Piranha orange, EGX green).
 
@@ -560,8 +560,127 @@ Battle has no `Mode` here, so no race of ours shows it.
 lightning layer: [Vita](../vita-2048-eu-v104/shield.md),
 [PS4](../ps4-omega-eu/shield.md), "The lattice scrolls").
 
+## Watched on RPCS3: the raised shell and the amber flash (2026-11-27)
+
+Lane `hd-shield-flash`. RPCS3 0.0.43-20574 restored from the weapons-on Talon's
+Junction grid state (Racebox Single Race, Venom, Feisar), Pilot Assist byte
+written off, the `hd-fury` compare profile (scale 100). The pickup slot is
+written with state 5 and TRIANGLE raises the shield; the craft rests on its
+grid slot. Reproduce with `scripts/rpcs3-hd-shield.py` (`steady`, `flash`,
+`plain`); pairs with `scripts/hd-shield-pair.py`.
+
+### The hit flash, live
+
+An absorbed hit needs no rival. `Ship_ApplyPendingDamage_q` (`0x000e8de0`,
+static) calls `ShipShield_Hit` when the pickup slot's shield bit
+(`slot+0x200 & 0x10`) is set, the shield object is active (`+0xf4`) and the
+pending damage word `slot+0x120` is positive; it then zeroes the word. Writing
+`10.0` there while paused and stepping one game frame:
+
+| | live colour `+0xc0` | swell `+0xe4` |
+| --- | --- | --- |
+| before | (0.000, 0.031, 0.996, 1.0) | 1.000 |
+| one frame after the write | (0.7225, 0.1532, 0.2764, 1.0) | 1.0640 |
+
+`(0.7225, 0.1532, 0.2764)` is exactly `target + (hit - target) * 0.85^2` for
+`hit = (1.0, 0.2, 0.0)`, and `1.064` is `1 + 0.1 * 0.8^2`: the amber
+`(1.0, 0.2, 0.0, 1.0)` and the swell `1.1` after two substeps, to four
+decimals, identical on two boots. Confidence **92** for both values and the
+lerp (runtime read, one binary, no breakpoint).
+
+On screen the shell turns salmon pink with a large hexagon lattice, then
+magenta, and is blue again within about a quarter second. The picture trails the
+RAM read: the frame paused 3 substeps after the hit still shows the blue shell,
+so the lag is at least 3 ticks there.
+
+### The shell draw: `FUN_00125d98` and the flicker
+
+`ShipShield_Update` calls the external-camera draw with the colour
+`(live.r, live.g, live.b, alpha)`, `alpha = live.a * (n * K1 + K2)`:
+
+- `K1 = 0.25` (`0x008aa210`) and `K2 = 0.75` (`0x008aa214`), read through the
+  function's own TOC (`0x008ad4d8`), confidence **92**;
+- `n` is `_FSin(time)`: the thunk `0x00676fe8` reaches `0x0042fbf0`, the C
+  library sine, with quadrant offset 0, confidence **90**.
+
+`ShipShield_DrawShell` (`0x00125d98`, **80**; the block after its first call is
+not disassembled by default, because the callee is marked no-return) draws model
+`+0x100` at `swell + 0.012 + n * 0.012`, packs that colour times 255 as
+`r | g<<8 | b<<16 | a<<24` and hands it to `Model_SetNodeTint_q` (`0x002c32c8`,
+**65**), which stores the word at `+0xf0` of each of the model's mesh nodes.
+
+So `FUN_002c32c8` is not an extra activation tint: `Activate` writes it once and
+every frame the external camera draws overwrites it with the live colour and
+flickered alpha.
+
+### What reaches the shell's pixels
+
+Both sides of the fragment program's `MUL H0.w, VertexColour1.w, ...` were read
+off the disc (`hexagonalshield_rich.rcsmaterial`):
+
+- the vertex program (block `0x3300`) copies attribute slot 3, `0x7493d450` =
+  `VertexColour1`, `.w` into the varying the fragment alpha reads
+  (`MOV R0.w, v[3].wwww` then `MOV o[TC2], R0`); it has no colour uniform;
+- each hexagon-lattice shell declares `VertexColour1` as its own stream (four
+  normalised bytes; Feisar: RGB a flat 127/255, `.w` from 0 to 178/255, most
+  vertices at the top).
+
+So the alpha is `texture.a * ShieldColour.a (live, unflickered) * VertexColour1.w`
+off the stream. The per-node tint can only reach the program as that same
+attribute, and a bound stream wins. Confidence **85** that the authored `.w` is
+the alpha (vertex program and declaration), **75** that the flickered tint
+reaches no pixel (the measurement below; node `+0xf0`'s consumer is unread). The
+flicker still scales the shell, and the cockpit sphere (an inline chunk with no
+declaration) keeps its flickered colour in ours, unread.
+
+### The pairs
+
+Ours before this lane flickered the shell's alpha and dropped the authored `.w`
+(the mesh build carries it as the sun mask). Blue of the shell's own light
+(shield frame minus the `plain` frame at the same lap clock, each side
+separately), mean 8-bit levels over the 640 x 420 craft box at (640, 560), one
+original run of each age:
+
+| shield clock | `sin` factor | original | ours before | ours after |
+| --- | --- | --- | --- | --- |
+| 1.73 s | 1.00 | 19.6 | 23.6 | 14.9 |
+| 3.21 s | 0.75 | 20.3 | 16.9 | 13.7 |
+| 4.75 s | 0.50 | 17.3 | 10.8 | 12.7 |
+| last / first | | 0.88 | 0.46 | 0.85 |
+
+The prediction written before the wire was that ours' last-over-first ratio
+would move from 0.46 to the original's 0.88 or above, and its peak level fall.
+
+| pair | whole frame RMSE before, after | craft box RMSE before, after |
+| --- | --- | --- |
+| raised, shield clock 4.0 s | 0.0527, 0.0524 | 0.0973, 0.0958 |
+| 1 substep after the hit (salmon pink, hex lattice) | 0.0755, 0.0743 | 0.1521, 0.1474 |
+
+**Open: the level.** Ours' settled shell now adds about 70 % of the original's
+blue at every age, mostly short at the nose, shoulders and wingtip rims, where
+the original has a cyan-white glow. Ruled out: the lattice scroll phase (six
+phases across one period moved the craft box RMSE only from 0.0973 to 0.0987,
+before the wire) and the flicker constants. Not read: the draw's blend state and
+alpha write mask (the shell writes no glow mask in ours) and
+`constantAmbientColour`'s value, which multiplies the shell's RGB.
+
+Without a shield (`plain`) the craft box matches: ours minus original is
+(-0.2, 0.0, 0.0) mean levels at lap clock 7.6 and (-0.6, -0.7, -2.0) at 8.6.
+
+### 2048 and Omega
+
+- **Hit colour and swell:** ported. Each executable's own value is the same
+  ([Vita](../vita-2048-eu-v104/shield.md), [PS4](../ps4-omega-eu/shield.md),
+  read statically) and ours already takes it through `OMEGA_PALETTE`; no
+  title-specific hit test, not watched live.
+- **Alpha off the stream, no flicker:** checked, applies, not wired. Their shell
+  programs also read the stream's `VertexColour1.w` (their pages) and their
+  `Update` writes the same flickered tint per submesh; whether that tint reaches
+  a pixel there is not measured, and ours' PS4/Vita shells are unchanged.
+
 ## History
 
+- 2026-11-27: `hd-shield-flash`. Raised shell and amber flash watched and paired; shell draw, flicker constants and sine read; shell alpha wired to the authored `VertexColour1.w` without the flicker.
 - 2026-09-16: page created. `Shield.cpp`'s constructor, activate, update, hit
   and colour-table initialiser read and cross-checked against
   `psp-pulse-usa/shield-pickup.md` field for field; two colours confirmed to

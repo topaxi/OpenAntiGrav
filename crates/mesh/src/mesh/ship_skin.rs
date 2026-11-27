@@ -173,12 +173,13 @@ pub fn apply_ps2_atlas(hull: &mut Model, width: u32, height: u32, rgba: &[u8]) -
         if !is_ps2_atlas(&existing.label) || existing.width != width || existing.height != height {
             continue;
         }
+        // The slot's own level cap: a PS2 hull atlas samples its base alone.
         *slot = Some(Arc::new(ModelTexture::rgba8(
             existing.label.clone(),
             width,
             height,
             rgba.to_vec(),
-            None,
+            existing.mip_count,
         )));
         applied += 1;
     }

@@ -189,10 +189,22 @@ fn a_saved_value_that_is_not_offered_draws_original() {
 fn the_boot_trim_applies_the_water_row_trim() {
     let strings = oag_ui::language::StringTable::default();
     let mut definition = built_in();
-    oag_game::menu_tree::finish_definition(&mut definition, oag_pulse::TITLE, &strings, &|_| false);
+    oag_game::menu_tree::finish_definition(
+        &mut definition,
+        oag_pulse::TITLE,
+        oag_assets::Platform::Psp,
+        &strings,
+        &|_| false,
+    );
     assert_eq!(offered(&definition), ["off", "original", "enhanced"]);
     let mut definition = built_in();
-    oag_game::menu_tree::finish_definition(&mut definition, oag_pulse::TITLE, &strings, &|_| true);
+    oag_game::menu_tree::finish_definition(
+        &mut definition,
+        oag_pulse::TITLE,
+        oag_assets::Platform::Psp,
+        &strings,
+        &|_| true,
+    );
     assert_eq!(
         offered(&definition),
         ["off", "original", "enhanced"],
@@ -205,20 +217,38 @@ fn the_boot_trim_applies_the_water_row_trim() {
         ..*oag_omega::TITLE
     }));
     let mut definition = built_in();
-    oag_game::menu_tree::finish_definition(&mut definition, dry, &strings, &|_| true);
+    oag_game::menu_tree::finish_definition(
+        &mut definition,
+        dry,
+        oag_assets::Platform::Ps4,
+        &strings,
+        &|_| true,
+    );
     assert!(
         offered(&definition).is_empty(),
         "the row is gone where nothing in it changes the picture"
     );
     let mut definition = built_in();
-    oag_game::menu_tree::finish_definition(&mut definition, oag_omega::TITLE, &strings, &|_| true);
+    oag_game::menu_tree::finish_definition(
+        &mut definition,
+        oag_omega::TITLE,
+        oag_assets::Platform::Ps4,
+        &strings,
+        &|_| true,
+    );
     assert_eq!(
         offered(&definition),
         ["off", "original"],
         "Omega's own seas draw under original, so the row stays"
     );
     let mut definition = built_in();
-    oag_game::menu_tree::finish_definition(&mut definition, oag_2048::TITLE, &strings, &|_| true);
+    oag_game::menu_tree::finish_definition(
+        &mut definition,
+        oag_2048::TITLE,
+        oag_assets::Platform::Vita,
+        &strings,
+        &|_| true,
+    );
     assert_eq!(
         offered(&definition),
         ["off", "original"],

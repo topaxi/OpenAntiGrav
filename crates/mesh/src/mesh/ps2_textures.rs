@@ -76,6 +76,8 @@ impl Ps2TextureSet {
             let Ok(texture) = oag_texture::ps2_texture::parse(&decompressed) else {
                 continue;
             };
+            // The file's own level count: a race samples the base at every distance
+            // (`docs/rendering/texture-level-per-title.md`, "Pulse PS2 in a race").
             by_hash.insert(
                 entry.name_hash,
                 Arc::new(ModelTexture::rgba8(
@@ -83,7 +85,7 @@ impl Ps2TextureSet {
                     u32::from(texture.width),
                     u32::from(texture.height),
                     texture.to_rgba(),
-                    None,
+                    Some(texture.level_count()),
                 )),
             );
         }

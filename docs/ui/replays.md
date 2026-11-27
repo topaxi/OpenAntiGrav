@@ -10,7 +10,8 @@ second a build reproduces, plays the file's `POSE` chunk; see "What stops it" be
 
 A race the session hands over is recorded from its first tick (`RaceStage::arm_auto_replay`, called
 once the session has finished writing to the race: seats, windows, the AI choice) unless the
-setting `[replay] record = false` (default on, `settings.tosd`) or the race is a network race. A
+setting `[replay] record = false` (default on, `settings.tosd`). A network race records its
+confirmed run ([networking](../networking/README.md#a-clients-recording-is-the-confirmed-run-2026-11-17)). A
 race with a simulation mod is recorded too: the header's `mods` list names each module, its SHA-256
 and its picks, and no ghost is offered from it
 ([determinism-and-state.md](../architecture/wasm-extensions/determinism-and-state.md#replays)). It is written to
@@ -211,11 +212,38 @@ recorded pose at the end and after a seek) and `..._stops_at_the_last_agreeing_s
 
 ## The end-of-race row
 
-WATCH REPLAY follows VIEW RESULTS AGAIN on the **Pulse dialect** (`EndRaceDialect::Pulse`, the list
-the PSP titles' `EndRace Menu` draws), for a race that was recorded: it writes the file now and opens it.
-HD's blocks and 2048's buttons are the disc's own and have no such row, and Pure and Omega draw no
-end-of-race menu, so on those the REPLAYS page is the way in. **Chosen, not measured.** A row on a
-dialect that cannot draw it would be a cursor stop with nothing on it.
+WATCH REPLAY follows VIEW RESULTS AGAIN on Pulse's `EndRace Menu` list and on HD/Fury's blocks, for a
+race that was recorded: it writes the file now and opens it. No original has the row
+(`offers_watch_replay`, `crates/game/src/app/race_stage/endrace.rs`).
+
+**HD/Fury** authors one `<Block>` per option, so the row is a block of ours: `view_again`'s own box,
+look and label widget, one step further down, the step being the screen's own from `return_to_menu`
+to `view_again` (`oag_ui_screens::endrace::hd`). On every copy of the screen on the Fury disc (five)
+and on the plain PSN install that is `375, 385, 520x40`, with no text, image or other option's box
+under it (`watch_replays_added_block_covers_nothing_on_*`, `crates/hd/tests/endrace_screens_ground_truth.rs`).
+It sits last so the disc's three rows keep their places. Up and Down step it in screen order, a mouse
+hover selects it and a click confirms, and a tap selects it and a second tap confirms, as on every
+other block.
+
+It is **not offered**:
+
+- on a race that was not recorded (`[replay] record = false`, or the recording failed);
+- while a Tournament has a leg left to race, on either title: watching replaces the finished race,
+  and NEXT RACE with it, and launching the cell again starts at leg 1;
+- while a network link is up (LAN or online), on either title. Watching does not drop the link, and
+  the loader takes its network branch first, so it would join the room with the recording's race
+  (read in `finish_loading`, not run). The recording is on the REPLAYS page once the room is left;
+- under `--original-menu`, so a compare shot lists what the original lists. The `--menu-page
+  endrace-menu` still never draws it;
+- on 2048, whose `EndRace` pages end in a strip of two icon tiles, not wired; Pure and Omega draw no
+  end-of-race menu. There the REPLAYS page is the way in.
+
+**Leaving the viewer lands on REPLAYS, not back on the end menu**: the menu belongs to the finished
+race, and loading the recording replaces that race. Nothing is lost by it. A campaign medal is saved
+on the tick the race ends and the loyalty award as the screens are built, both before the menu is up.
+HD checked live (2026-11-27, headless, `--autopilot`): a time trial and a campaign single race each
+reached the row, played the race and landed on REPLAYS
+(`replay_viewer_ground_truth::hd_end_of_race_menu_watches_the_race_just_finished` is the time trial).
 
 ## A screenshot opens the viewer
 
@@ -300,7 +328,6 @@ Omega's light backdrop needed the band behind the detail lines; 2048's value col
 
 - **Split screen**: one view per window.
 - **The Steam Deck** (ADR-0087 decision 3) is still unmeasured; the opening pass's wall time on this desktop is in the timeline page.
-- **A modded race and a network race record nothing** (decision 7).
 - **The web build** has no file system to keep a replay in: the page is empty there (`replays::WRITES`). **A phone
   records and lists replays** into the app's files directory (`<external files>/data/oag/replays`), reached over USB
   ([Android](../tools/android.md)); on Android 10 and later the page's EXPORT row copies the replay to `Download/OpenAntiGrav` (`oag_mobile::export`), where the file manager and the share sheet reach it, and a notice says whether it went. A share sheet of our own and an import are still open (`replays::REACHABLE` is the desktop-only half).

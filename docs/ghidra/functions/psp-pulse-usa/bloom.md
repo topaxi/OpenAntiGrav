@@ -22,7 +22,7 @@ Recorded first, because both are the natural first move and both fail:
 
 - **There is no framebuffer copy.** The binary's only `TRANSFERSTART`
   (`0xea`) emitter is `Gu_CopyImage` (`0x08810fe0`) and its single caller is
-  the texture-to-VRAM uploader (`FUN_08928174`). A block-transfer search
+  the texture-to-VRAM uploader (`Texture_PrepareForDraw_q`, `0x08928174`). A block-transfer search
   therefore concludes "no post-process", which is wrong: this bloom **binds
   the framebuffer directly as a texture** out of EDRAM and never copies it.
 - **A `lui 0xa000` scan for `TEXADDR` finds nothing**, because `Gu_TexImage`

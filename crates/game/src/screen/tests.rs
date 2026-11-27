@@ -177,3 +177,17 @@ fn a_file_that_never_compiled_is_not_offered() {
     assert!(catalogue.get("notes").is_none());
     assert_eq!(catalogue.choices().len(), 1 + BUILT_IN.len());
 }
+
+#[test]
+fn only_the_two_barrel_built_ins_declare_a_fixed_strength() {
+    let fixed: Vec<&str> = BUILT_IN
+        .iter()
+        .filter(|(id, source)| {
+            Preset::parse(id, source)
+                .expect("a built-in")
+                .fixed_strength
+        })
+        .map(|(id, _)| *id)
+        .collect();
+    assert_eq!(fixed, ["crt-interlaced", "crt-shadow-mask"]);
+}

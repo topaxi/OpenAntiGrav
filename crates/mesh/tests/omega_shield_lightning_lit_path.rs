@@ -51,6 +51,7 @@ fn texture(label: &str, width: u32, texels: &[[u8; 4]]) -> Option<Arc<ModelTextu
         height: 1,
         texels: Texels::Rgba8(texels.concat()),
         mip_count: None,
+        lod_code: 0.0,
     }))
 }
 

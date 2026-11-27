@@ -61,6 +61,11 @@ race-camera FOV thread's (see `just threads --category rendering`) and stays the
 
 ## 1. Texture level selection (fixed)
 
+**Read this subsection first with "The level law, measured" below**: the figures
+up to it are the 2026-09-30 audit's, taken against a PPSSPP backend that does not
+implement the GE's slope mode and so shows level 0. PPSSPP's software renderer
+does, and the original does select higher levels.
+
 The original **never minifies a scenery texture** at the distances a race frame
 shows. Measured four ways against PPSSPP on Talon's Junction:
 
@@ -79,57 +84,136 @@ result did not move, so it is not the emulator sharpening oblique floor.
 
 **What the binary says.** `Gfx_FlushRenderManager` programs the texture unit
 once per frame: `Gu_TexFilter(7, 1)` (trilinear minify, bilinear magnify),
-`Gu_TexLevelMode(2, 1.0)` (slope mode, bias 1.0) and one call to a `0xd0`
-`TEXLODSLOPE` emitter, **`Gu_TexLodSlope`** (`0x08811694`), with the float
-`0x3b800000` = `1/256`. That emitter is the only one in the binary, and this is
-its only call. The GE's slope law is `level = log2(|z| * slope) + bias`, which
-depends on **depth, not on texel density**: level 0 up to a view depth of 128,
-level 1 at 256, level 2 at 512. That is why a 480x272 race frame barely leaves
-level 0, and why PPSSPP, whose GPU backends do not implement slope mode, draws
-level 0 everywhere.
+`Gu_TexLevelMode(2, 1.0)` (slope mode, bias 1.0) and one call to the only
+`TEXLODSLOPE` emitter, **`Gu_TexLodSlope`** (`0x08811694`), with `0x3b800000` =
+`1/256`. That bias of 1.0 is not what a mesh draws with: each texture's bind
+list (`Texture_BuildBindList` `0x08928d4c`) writes its own `TEXLEVEL`. The next
+subsection is the law as measured.
 
-**Implemented as the game's rule, 2026-09-30 follow-up.** The first fix capped
-every PSP `.vex` texture at one level, which is PPSSPP's behaviour. The law is
-now in the shader:
+### The level law, measured
 
-- **The levels are the disc's, not ours.** The texel block of a `.vex` texture
-  carries every declared level after the base, at the padded stride the sum-check
-  on `texture_row_stride` establishes. `oag_vex::vex::EmbeddedTexture::levels` reads
-  them (all 135 textures of `16_Track`, and the level 1 of most differs from a box
-  filter of the base, which is asserted), and `Texels::Chain` carries them to the
-  GPU in place of the box-filtered chain this project used to make. A pre-swizzled
-  Pure texture keeps a synthesised chain capped at its declared depth.
-- **The selection is the game's**: `mesh.wgsl` takes
-  `textureSampleLevel(..., max(log2(view_depth / 256) + 1, 0))` when the model
-  carries a chain (`texlod_slope`/`texlod_bias` pipeline constants, from
-  `mesh_render::PSP_TEXLOD_SLOPE` and `PSP_TEXLOD_BIAS`), clamped to the levels
-  that exist by the sampler. The fractional part blends two levels, as the
-  trilinear filter asks. **Chosen, not measured**: `|z|` is the vertex's view
-  depth (`clip.w`) - an unverified reading of the GE's own `z` - and
-  `Texture_BuildBindList` emits its own mode and bias per texture, unread, so a
-  texture on its mode-0 branch may not follow this rule. The two constants are
-  recovered (confidence 85 on the emitter, and the values are read off the
-  call), the mapping to our depth is not.
-- **Proof.** `crates/mesh/tests/psp_slope_lod.rs` draws one quad with a
-  red/green/blue three-level chain at view depths 64, 128, 256, 512 and 100,000
-  and reads levels 0, 0, 1, 2, 2; a model without `Texels::Chain` stays on level
-  0. Disabling the constants fails it at depth 256.
+2026-11-27, lane `pulse-farfield-lod`. The question was whether the original
+samples level 1 past about 256 units. **It does not use one distance**: the
+bias is per texture, so level 1 starts anywhere from tens to thousands of units.
 
-**Near field kept, far field softens.** Same four Talon-mid regions as above,
-luma Laplacian standard deviation: original 13.45 / 6.13 / 14.94 / 7.54, base
-level only 12.73 / 6.24 / 15.47 / 8.19, slope law 12.73 / 6.24 / 15.08 / 8.19.
-Three regions sit under 128 units and are byte-for-byte the base level; the
-horizon strip, which reaches past it, moves from 15.47 to 15.08 - nearer the
-original's 14.94. A long-straight frame (`--pose -297.96,-50.5,-172.83`, Talon,
-`--ticks 1`, no original: PPSSPP draws level 0 here by construction) reads, base
-level against slope law, 24.51 to 22.77 and 28.36 to 26.40 in two strips past
-about 256 units (whole frame 16.74 to 16.56, 74 pixels differing by more than
-1 %). That gap is the level 1 the hardware rule selects and the emulator does
-not; whether real hardware shows it is still unmeasured.
+```
+level = log2(2 * w * (1/256)) + b          (min'd with the texture's last level; 0 below)
+b     = trunc16(clamp(0.5 * log2(x18) + K + 8.2, -8, 7.5))
+```
+
+- `w` is the vertex's clip `w`, which is the view depth: the recorded projection's
+  `w` column is `(0, 0, -1, 0)` and the view basis rows are unit length.
+- `x18` is the `f32` at the texture header's `+0x18`, a texel-density figure.
+  `b` is `0` when it is `0` or its bits are `0xffc00000`.
+- `K = -log2(480 * m00)` of the camera current when the texture's bind list was
+  built; at the race camera (`m00` 0.981491) it is `-8.8799`.
+- `trunc16` is toward zero to sixteenths, as the register holds it. The header
+  mode bits (`+0x06 & 0x18`) read `0` on every track and ship `.vex` texture, so
+  all of them take this branch ([mesh-draw.md](../ghidra/functions/psp-pulse-usa/mesh-draw.md),
+  "The per-texture level bias").
+- The factor `2` is the rasteriser's, not the game's.
+
+**Evidence, and what each part rests on.**
+
+| Part | Evidence | Confidence |
+| --- | --- | ---: |
+| `b` | Live, Talon's Junction and Metropia White grids: 150 of 150 mesh textures hold `TEXLEVEL` equal to the formula with the `K` stored in their own object (`+0xb0`) | 90 |
+| `K` at the race camera | Memory write watch on `g_display+0x5df4`, grid frame: `-8.8799` from the race and `VexCamera` writes, `-9.6439`/`-9.7999` from two other cameras | 90 |
+| `K` of the other textures | Of the 150, 82 hold `K = -9.0506`: the **pre-race flyby camera's** (field of view 54.309, `m00` 1.104771), written by `Camera_SubmitScene` and `Camera_ApplyViewProjection`. Write watch through race load on three cold boots ([mesh-draw.md](../ghidra/functions/psp-pulse-usa/mesh-draw.md), "`K = -9.0506` is the pre-race flyby camera's") | 93 |
+| `level = TexLog2(2 w slope) + b` | PPSSPP v1.20.4 software renderer (`Rasterizer.cpp`, `CalculateSamplingParams`), and recorded GE frames replayed with each level painted its own colour (`scripts/psp-ge-level-map.py`). With the bias forced to `0`, the level the pixels show against `log2(2 w slope)`: median error -0.001 (Talon, slope `1/64`, 93 % within 1/8 level), +0.059 (slope `1/32`, 83 %), +0.005 (Metropia, `1/64`, 68 %; the misses are last-level clamps). Without the factor 2: +0.92, +0.44, +0.31 | 85 for the emulator, hardware unmeasured |
+
+`log2(2 w / 256) + b` with `b = 0.5 * log2(x18) + K + 8.2` works out to the
+texels a 480x272 pixel covers, in levels, plus about 0.2. That reads as the
+intended design of a texel-density bias, which is an argument that hardware
+does the same, not a measurement of it.
+
+**What the renderer draws.** `ge_level` (`texture_lod.wesl`) is the formula
+above for a Pulse (version 6 `.vex`) texture, with `x18` read by
+`oag_vex::vex::texture_lods` and `K` taken from the drawing camera
+(`-log2(272 * m11)`, which is the same number at the PSP's aspect). Choices that
+are ours, and their size:
+
+- **The drawing camera's `K` for every texture.** The original instead stores `K`
+  per texture (`object+0xb0`) when it builds the bind list, and rebuilds only when
+  the drawing camera's `K` is more than 0.2 away. So the stored value is within 0.2
+  level of the current one, and ours is within that of the original: measured, the
+  split is `-9.0506` against `-8.8799`, 0.17 level, so those textures (82 of 150)
+  are 2 or 3 sixteenths finer in the original than ours. **Ours does not store
+  one yet.** To match, each texture needs a stored `K`, unset at load, replaced
+  by the drawing camera's whenever the two differ by more than 0.2, with the
+  flyby's draws counted. Our flyby's field of view gives the original's
+  `-9.050638` unchanged. Two limits: the original's residency path also rebuilds
+  (17 of 102 flyby-built textures ended at the race value in a full flyby), and
+  a run that skips the flyby (`--race`, a capture, a headless run) holds the race
+  camera's `K` everywhere, which is what ours draws today.
+- **`K` is referred to a 480x272 framebuffer at every output resolution**, so a
+  larger output draws the original's levels, softer than the old flat law at
+  mid distance. TEXTURE DETAIL sharpens.
+- Ours takes `w` per pixel and an exact `log2`; the emulator takes one affine
+  `w` per 2x2 quad and a piecewise-linear `log2` (under 0.1 level).
+- A texture pack's larger picture shifts `b` by `log2` of the width ratio.
+
+**Still on the flat law** `log2(w / 256) + 1`: every version 4 `.vex` texture and
+any draw without a header float. It is the formula above with `b = 0`, so it picks
+its levels as if no texture had a bias. Version 4 is Pure's format
+(`docs/rendering/texture-level-per-title.md` has Pure's measured form), and Pulse
+ships 33 such files on the PSP disc, 55 texture nodes, all in slope mode with a
+non-zero `+0x18`: ten Zone wreck textures in two files, then HUD, trophy,
+memory-stick and default-sky models. The original would apply the formula to the
+wrecks too, if their header holds the same field (not read off a wreck frame).
+The per-team `zonewreck.vex` files read (seven teams) are version 6 and already
+take the new law.
+
+**Far field, ours against the emulator** (Talon's Junction, craft at rest at
+`(198.5, -46.1, -186.0)` on the long straight, 480x272, no filters, no
+anisotropy; pose recorded with `scripts/psp-trace.py` and given to ours by
+`--pose-from`; original replayed at its framebuffer's own pixels). Luma
+Laplacian standard deviation, boxes as `x,y,w,h`:
+
+| Region | original | flat law | per-texture law |
+| --- | ---: | ---: | ---: |
+| far towers `0,60,480,40` | 45.51 | 45.11 | 44.33 |
+| track's vanishing point `150,90,200,40` | 49.07 | 55.92 | 49.33 |
+| mid track `100,130,280,40` | 30.00 | 33.50 | 30.40 |
+| near road `100,200,280,50` | 53.53 | 55.61 | 55.61 |
+| upper half `80,40,300,130` | 45.41 | 47.70 | 44.58 |
+
+Mean absolute luma error against the original over the same boxes, flat then
+per-texture: 10.08 to 9.89, 12.11 to 11.31, 4.21 to 3.76, 6.44 to 6.44, 8.75 to
+8.31. The near road is level 0 either way.
+
+**Distant trees stay lighter than the original's, and the level is not why.** In
+box `204,84,20,16` of the same frame the original's mean RGB is `88,98,86`; ours
+reads `101,115,106` under the flat law, `101,116,107` under the per-texture law
+and `104,118,107` forced to level 0. The recorded tree draws (`Tree_1x1.tga`,
+blended and alpha-tested) hold `TEXLEVEL` bias `+0.8125`, which is ours. Mean
+absolute error in the box goes from 32.1 to 31.3. The cause is unread.
+
+At a larger output the same law reads softer than the flat one did: at 1920x1080
+this frame's centre 960x400 has a Laplacian standard deviation of 24.8 against
+25.9, visible on the far road and treeline.
+
+**The comparison pairs** (2026-11-27, every pair re-rendered with the build
+before and after): 137 pairs of HD, Pure, Pulse PS2, 2048 and Omega are
+pixel-identical; 32 of the 40 Pulse PSP pairs move, identically on a second
+render. Over those 32, mean absolute luma error against the original goes from
+4.78 to 4.43 (better on 30, worse on 1) and the distance between the two
+pictures' Laplacian standard deviations from 3.03 to 1.37 (better on 30).
+
+**Proof.** `crates/mesh/tests/psp_slope_lod.rs` reads the level the shader picks
+for both branches (flat and per-texture, with the camera term and the
+sixteenths cut). `crates/render/tests/psp_texture_levels_ground_truth.rs` holds
+ten named Talon textures to the bytes the original wrote, at both recorded `K`.
+
+**Pulse PS2: checked, differs.** Its `.vex` texture nodes carry the same
+`+0x18` float, scaled by the PS2 picture's texel area (103 of 119 Talon textures
+within 1 % of the PSP value times the area ratio, 60 of 116 on Metropia), but
+the GS samples one level (`docs/rendering/texture-level-per-title.md`),
+so nothing is wired. The other titles' rules are on that page.
 
 **TEXTURE DETAIL** (`[render_profiles.<title>] texture_detail`, `--texture-detail`,
 the graphics page's row beside MODEL DETAIL) is one multiplier on that law, as
-levels: `original` (default) is the recovered slope law exactly; `high` doubles
+levels: `original` (default) is the recovered law exactly; `high` doubles
 the depth of every level step (the level shifted by -1); `maximum` never steps
 (level 0 at every depth). `high` and `maximum` are **chosen, not measured**. It is
 `Fog.texlod_shift` in the scene uniform (`mesh_render::TextureDetail::level_shift`,
@@ -140,8 +224,11 @@ live. Proof: `psp_slope_lod.rs` reads the level each preset selects at depths
 `texture_detail_ground_truth.rs` runs the binary per preset on the Talon straight
 and asserts the three pictures differ pairwise.
 
+The shift also reaches every model off the slope law, as a bias on the sampler's own level
+(Pulse PS2, HD, 2048, Omega): [texture-level-per-title.md](texture-level-per-title.md#what-texture-detail-reaches).
+
 Talon long straight (`--pose -297.96,-50.5,-172.83`, `--ticks 1`, 480x272),
-luma Laplacian standard deviation, same metric as above (`magick ... -colorspace
+luma Laplacian standard deviation, measured on the flat law, same metric as above (`magick ... -colorspace
 Gray -define convolve:scale='!' -morphology Convolve Laplacian:0`, sd x 255):
 
 | Region | original | high | maximum (= the old base level) |
@@ -606,6 +693,8 @@ python3 scripts/pvs-moving-census.py --spline spline.csv --pose-dir dir \\
 cargo build -q -p oag-render --example pvs_moving_phase --example pvs_section_boxes
 python3 scripts/pvs-moving-residue.py --spline spline.csv --pose-dir dir --prims dir/prims.json \\
     --entry 'Data\\Environments\\03_Track\\track.vex' --list
+# the level each pixel of a recorded frame samples (section 1; software renderer)
+uv run --with zstandard --with pillow python3 scripts/psp-ge-level-map.py frame.ppdmp out name --mode levels-bias0
 # ours
 oag-game --race --no-audio --size 480x272 --render-scale 100 --msaa off --motion-blur off \
     --screen-filter off --anisotropy off --ticks 1 --pose-from t.csv --pose-tick 2 --screenshot ours.png

@@ -72,6 +72,7 @@ fn texture(label: &str, rgba: [u8; 4]) -> Arc<ModelTexture> {
         height: 1,
         texels: Texels::Rgba8(rgba.to_vec()),
         mip_count: None,
+        lod_code: 0.0,
     })
 }
 
@@ -522,6 +523,7 @@ fn the_fourth_binding_and_the_scrolled_emissive_reach_a_plain_chunk() {
                 .collect(),
         ),
         mip_count: Some(1),
+        lod_code: 0.0,
     });
     let scrolled = |alpha: u8, offset: f32, bits: u32| {
         let mut m = model([0, 0, 0, alpha], bits | EXEMPT_SLOT);

@@ -1129,6 +1129,18 @@ fn build_class(
     // thing done to the lists: `pvs::DrawSections` is built from them and is
     // index-parallel, so it has to see them already sorted.
     model.sort_by_layer();
+    // A PS2 build's textures come from `external` and carry no code, so its
+    // vertices keep the 0.0 they were made with.
+    crate::mesh_render::texlod::assign_lod_codes(
+        &model.textures,
+        &model.indices,
+        &mut model.vertices,
+        model
+            .draws
+            .iter()
+            .chain(&model.alpha_tested_draws)
+            .chain(&model.transparent_draws),
+    );
     Ok(model)
 }
 
@@ -1166,6 +1178,7 @@ pub fn embedded_texture_slots(data: &[u8]) -> Result<TextureSlots> {
                 .collect(),
             _ => Vec::new(),
         };
+    let lods = vex::texture_lods(data).context("reading the texture headers")?;
     Ok(vex::textures(data)
         .context("extracting textures")?
         .into_iter()
@@ -1187,25 +1200,23 @@ pub fn embedded_texture_slots(data: &[u8]) -> Result<TextureSlots> {
                 // at the depth it declares; `.max(1)`: a 0 would upload no
                 // base level at all.
                 let chained = t.levels.len() + 1 == usize::from(t.mip_count.max(1));
-                if let Some(Some(image)) = replacements.get(index) {
-                    std::sync::Arc::new(ModelTexture::replaced(
-                        label,
-                        image,
-                        (width, height),
-                        t.mip_count,
-                        chained,
-                    ))
+                let mut texture = if let Some(Some(image)) = replacements.get(index) {
+                    ModelTexture::replaced(label, image, (width, height), t.mip_count, chained)
                 } else if chained {
-                    std::sync::Arc::new(ModelTexture::chain(label, width, height, t.levels_rgba()))
+                    ModelTexture::chain(label, width, height, t.levels_rgba())
                 } else {
-                    std::sync::Arc::new(ModelTexture::rgba8(
+                    ModelTexture::rgba8(
                         label,
                         width,
                         height,
                         t.to_rgba(),
                         Some(u32::from(t.mip_count).max(1)),
-                    ))
-                }
+                    )
+                };
+                let lod = lods.get(index).copied().flatten();
+                texture.lod_code =
+                    crate::mesh_render::texlod::texlod_vertex_code(lod, texture.width);
+                std::sync::Arc::new(texture)
             })
         })
         .collect())

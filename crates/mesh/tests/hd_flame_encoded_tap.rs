@@ -84,6 +84,7 @@ pub(crate) fn model(grey: u8) -> Model {
             height: 1,
             texels: Texels::Rgba8(vec![grey, grey, grey, 0]),
             mip_count: None,
+            lod_code: 0.0,
         }))],
         lightmaps: Vec::new(),
         pad_masks: Vec::new(),
