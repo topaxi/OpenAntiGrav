@@ -1393,11 +1393,10 @@ reads. A negate into a temporary, into `o[POS]`, or parked in a slot that
 `MUL` never looks at is not a flip - each is a test in
 `crates/rcs/src/rcsmaterial/vertex/tests.rs`.
 
-The renderer applies it on the CPU, once per vertex at build time, through
-`mesh::slots::FLIP_V`. That bit rides in the same word as the texture-unit
-roles because it is the same kind of statement - what this material's own
-microcode says - but unlike the other bits it never reaches `mesh.wgsl`: the
-orientation is a property of the material, not of the pixel.
+The renderer applies it on the CPU, once per vertex at build time, from
+`mesh::Model::material_flip_v`. The orientation is a property of the material,
+not of the pixel, so it never rides in the vertex's slot word and no shader
+reads it.
 
 What it moves is in [`rcsmodel.md`](rcsmodel.md#a-texture-coordinates-orientation-is-per-material-in-the-vertex-microcode),
 with the six explanations that were measured and died before the microcode was

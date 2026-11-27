@@ -382,8 +382,8 @@ original's chromaticity to 0.01.
   (`lambertemissive`'s `albedo * (1 - albedo.a)`) answer nothing; a unit fetched
   one lane at a time (`2diffuse_plus_spec_blend_via_alpha_n`'s blend mask) is
   not an albedo.
-- `oag_mesh::mesh::slots::LIT_ALPHA` (bit 31; the glow index is masked to seven
-  bits, 64 entries), set by `skin::roles` where the program reads `Alpha` **and**
+- `oag_mesh::mesh::slots::LIT_ALPHA` (bit 31, above the seven-bit glow index at
+  bits 24 to 30), set by `skin::roles` where the program reads `Alpha` **and**
   `picks` bound a picture: `m_diffuse_normal_constantspecular` lights
   `constant * normal.a` off a normal map at unit 0, the renderer binds that
   family's constant as its picture, and flagging it painted Ubermall's and Tech
