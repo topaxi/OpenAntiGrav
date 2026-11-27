@@ -74,12 +74,22 @@ pub fn disc_probe() -> impl Fn(&str) -> bool {
     }
 }
 
+/// Drops the TEXTURE DETAIL row on a PS2 disc: its textures author one level each, so no
+/// preset moves anything (`docs/rendering/texture-level-per-title.md`, "What TEXTURE DETAIL
+/// reaches").
+pub fn trim_texture_detail_row(definition: &mut menu::Definition, platform: oag_assets::Platform) {
+    if platform == oag_assets::Platform::Ps2 {
+        definition.drop_settings(&["graphics.texture_detail"]);
+    }
+}
+
 /// The title's trims of a tree [`mods_menu`] built: rows this title, platform or input
 /// lacks, and the rows its own words rename. Boot and a live rebuild both run it, so a
 /// rebuilt tree has the rows a booted one has.
 pub fn finish_definition(
     definition: &mut menu::Definition,
     title: &'static oag_title::Title,
+    platform: oag_assets::Platform,
     strings: &oag_ui::language::StringTable,
     present: &dyn Fn(&str) -> bool,
 ) {
@@ -127,6 +137,8 @@ pub fn finish_definition(
     crate::texture_cache::trim_row(definition, crate::texture_cache::offered());
     // And the WATER row's borrowed laws, where the lender's disc is absent or is this title.
     crate::water_setting::trim_row(definition, title, present);
+    // And the TEXTURE DETAIL row, where there is no finer level for it to reach.
+    trim_texture_detail_row(definition, platform);
     // And the three rows the race box's own screens pick, on a title
     // that authors them - see `menu::Definition::drop_rows_picked_on_screen`.
     definition.drop_rows_picked_on_screen(title);
@@ -201,6 +213,6 @@ pub fn rebuilt(
     let loaded = Mods::load_from(bases, switches)?;
     let (mut definition, listing, installed) =
         mods_menu(&loaded, language, title, platform, updated)?;
-    finish_definition(&mut definition, title, strings, &disc_probe());
+    finish_definition(&mut definition, title, platform, strings, &disc_probe());
     Ok((definition, listing, installed))
 }

@@ -2,7 +2,7 @@
 status: measure
 titles: [pure, pulse, hd, 2048, omega]
 updated: 2026-11-27
-summary: "Far-field texture level: 2048 bias to measure, Pure K to read, TEXTURE DETAIL row still shown on PS2"
+summary: "Far-field texture level: 2048 bias to measure, Pure K to read"
 ---
 
 # Far-field texture level, title by title
@@ -21,9 +21,6 @@ read values only, as `Title` data, with a test, a break-it, and the other titles
   Rule { on: Any, origin: Measured }` in `crates/2048/src/lib.rs`'s `Looks`, and a test like
   `oag-hd`'s `the_material_lod_bias_follows_its_rule`. Then re-render the three 2048 pairs. Omega must
   stay at bias 0 (its S# read 0.0).
-- **TEXTURE DETAIL is a row with no choice on Pulse PS2** (one level per texture, wired). Hiding it
-  needs a per-platform menu condition, which `oag_ui`'s `drop_unavailable_*` methods do not have (they
-  take a `Title`, and PSP and PS2 are one). About an hour.
 - **Pure: the per-texture bias and mode-0 textures follow Pulse's wiring, with one caveat.** Same
   functions (`docs/ghidra/functions/psp-pure-usa/texture-level.md`), K stored at texture `+0x2a0`
   with the 0.2 rebuild. The Modesto bytes fit K about -9.05, not the drawn camera's -8.32. A Pure

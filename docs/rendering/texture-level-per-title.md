@@ -153,10 +153,11 @@ Not reached:
 - explicit-level reads (`textureSampleLevel`: the panel march's field, probes, shadow maps);
 - sprites and particles (`oag-fx`).
 
-**On Pulse PS2 the row changes nothing**: every texture has one level, so there is no finer one to
-reach. The row is still shown there, because the menu has no per-platform condition and PSP and PS2
-are one title. Whole frames are byte-identical across the three presets
-(`texture_detail_ground_truth.rs`, `pulse_ps2_has_one_level_for_texture_detail_to_move`).
+**On Pulse PS2 the row has no choice**: every texture has one level, so there is no finer one to
+reach. Whole frames are byte-identical across the three presets
+(`texture_detail_ground_truth.rs`, `pulse_ps2_has_one_level_for_texture_detail_to_move`), so a PS2
+boot drops the row (`menu_tree::trim_texture_detail_row`, `menu_web_rows.rs`). The setting and
+`--texture-detail` are still read there.
 
 Tests:
 

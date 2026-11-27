@@ -404,8 +404,10 @@ fn maximum_texture_detail_is_level_zero_at_every_depth() {
     );
 }
 
+/// With one coordinate everywhere there is no derivative, so the sampler's own level is the
+/// base whatever the preset shifts it by.
 #[test]
-fn texture_detail_leaves_a_model_without_a_chain_alone() {
+fn a_constant_coordinate_without_a_chain_reads_the_base_at_every_preset() {
     let Some((device, queue)) = gpu() else { return };
     for detail in TextureDetail::ALL {
         assert_eq!(
