@@ -106,8 +106,9 @@ By eye at 3x on far-field crops the new frames match the originals and the old o
 box chain smeared the crowd stands and the trackside wall, and erased the tread texture on a girder
 at Vertica, all of which the original and the new frame resolve.
 
-**RMSE against the original went up all the same.** Over the 17 race frames mean RMSE went 0.1832 to 0.1878, farther
-on every one. Why: [below](#why-the-error-rose-when-the-law-went-in).
+**RMSE against the original went up all the same.** Over the 17 race frames mean RMSE went 0.1832 to 0.1878 (all
+three channels), farther on every one, and 0.1228 to 0.1230 after a 16x box reduction of both, so colour and coverage
+did not move. Why: [below](#why-the-error-rose-when-the-law-went-in).
 
 ## Why the error rose when the law went in
 
@@ -155,13 +156,14 @@ original's high band against 1.07). Level 0 is the closer one on 11, 13 and 12 o
 
 ### Error
 
-| Route | Summed mean grey, old to level 0 | Mean RMSE |
+| Route | Summed mean grey, old to level 0 | Mean RMSE of the pair score |
 | --- | --- | --- |
 | as paired | 215.09 to 222.31 (+7.22) | 0.1502 to 0.1543 |
 | projection matched | 122.62 to 126.71 (+4.09) | 0.0969 to 0.1000 |
 | projection and capture grid matched | 145.68 to 147.01 (+1.33) | 0.1154 to 0.1165 |
 
-Compare within a row only: in the last route our HUD was laid out at 1024x1024 and stretched, which raises both sides'
+Mean grey and RMSE here are the pair score's own (`compare_env.overlap_score`), so the RMSE does not match the
+0.18 figures above. Compare within a row only: in the last route our HUD was laid out at 1024x1024 and stretched, which raises both sides'
 error. Matching the projection removes 43 % of the rise and matching the grid as well another 38 %.
 
 **The last 18 % is not closed.** It sits in the far crowd boxes: there the old chain still scores a lower RMSE after
