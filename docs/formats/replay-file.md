@@ -53,8 +53,55 @@ table keeps its keys open (ADR-0087 decision 8).
 | `[options]` | the launch settings: `scheme`, `difficulty`, `autopilot`, `pilot_assist`, and the original driver's request `ai = "original"`, `ai_level`, `ai_skill` (`oag_raceplay::Launch`; the session flies a front-end race's opponents with it, so a rebuild must), `skill_level`, the rung a campaign cell raced at (`0` Easy to `2` Hard), which picks every craft's shield slot (`docs/formats/handling-stats.md`, "Which difficulty picks the shield slot"; absent: the rung `difficulty` stands for, `oag_ai::Difficulty::level`), and `campaign_skill`, a campaign cell's resolved skill scale (a float), written only for a campaign race, whichever driver flies it. It tunes the field (`oag_ai::Difficulty::tune_at_scale`) and the finished player's thrust, both simulation state, so `RaceSim::apply_launch` repeats it before the first tick (`RaceSim::apply_campaign_skill`); it is its own key because a campaign cell is tuned whichever driver flies it, and a 2048 event's driver skill tunes nothing. **Read back** by a rebuild; an absent key is the default, an unknown value is refused by name |
 | `[setup]` | the resolved launch request (`oag_replay::header::Setup`): mode, class, track, team, hull variant, skin, opponent teams, opponents, people, views, lap/weapon/Eliminator overrides, add-on campaign, Zone model. Written by `Race::start_recording` from the request the race was loaded with, so no caller can forget it |
 | `[[mods]]` | the simulation modules the race ran, in the order they ran (`oag_replay::header::ModUse`): `id`, `version`, `module` (path in the mod), `sha256` (of the module's bytes), `abi`, `revision`, `state_bytes`, `picks` (the player's `sim` picks by row). Absent for a vanilla race. A rebuild runs exactly these and `apply_recorded` refuses a missing module, another build, another layout or other picks by name ([wasm-extensions](../architecture/wasm-extensions/determinism-and-state.md#replays)) |
-| `[ghost]` | the lap a file's ghost is; never present in a modded race's file |
+| `[[active_mods]]` | every mod that was on for the race, in load order: `id`, `version`. Absent for a race with none. See "Active mods" |
+| `[ghost]` | the lap a file's ghost is; never present in the file of a race that ran a simulation module |
 | `[fork]` | read, never yet written (stage 7): `tick`, `offered_at`, `seats`, `parent_build`, `parent_hash` |
+
+## Active mods
+
+`oag_replay::Header::active_mods` lists every mod that was on for the race, data-only ones
+included (a mod that only carries `fallback/<title>/` entries has no module, so `[[mods]]` never
+named it). The built-in extras are the build's own and are left out. A mod is listed when its
+`titles` admit the track's or the craft's title, a PPSSPP texture pack only on a PSP source, and a
+`network-races = false` mod in no LAN or online race: what the race's archives could mount.
+Replays, ghost files and screenshot streams all carry it, because `Race::start_recording` writes
+it. The list travels the way the enabled mods' entries do (ADR-0100): the composition root
+registers it at start and on every MODS page switch (`oag_game::mods::ForLoads`,
+`oag_source::layers::register_enabled`), and the load takes its title's share.
+
+**It decides nothing about validity** (the stored hashes do, ADR-0055). A rebuild
+(`Options::apply_replay`, so the viewer, WATCH, a dropped or named file and `--from-png`) compares
+the list with the mods on now, and `oag_replay::ActiveMod::differences` names each difference,
+mod first:
+
+- `missing <id> <version>`: in the recording, not on now;
+- `extra <id> <version>`: on now, not in the recording;
+- `<id> is <here> here and <recorded> in the recording`;
+- `load order is <here> here and <recorded> in the recording`.
+
+Where it shows:
+
+| Case | What is said |
+| --- | --- |
+| always, before the race builds | `warn`: `replay: mods differ from the recording: ...` |
+| the load or the rebuild fails | the log chain starts with that line (`oag_raceplay::ModsDiffer`); a dropped screenshot's notice says the line alone; the REPLAYS row says the differences alone |
+| the race loads and plays | the notice band says the line as the viewer opens, and in place of a screenshot's "other hash" notice |
+| `--png-info` | one `# mod on: <id> <version>` line each |
+
+An online room's recording is rebuilt as a network race (`apply_replay` sets `Options::network`),
+so a single-player mod it never mounted is not reported as extra.
+
+Measured on Pulse PSP EU with `oag.detonator-pulse` 1.0.0: a Detonator race driven from the menus
+wrote the mod into its header; switched off on the MODS page and watched in the same session, the
+row said `missing oag.detonator-pulse 1.0.0` and the load failed on the mod's missing layout files,
+not on a hash (`drive_ground_truth::mod_fallback_switch`,
+`detonator_ground_truth::a_pulse_detonator_replay_names_the_mod_it_is_missing`). A Time Trial
+recorded with the mod on still loads with it off, and plays under the notice.
+
+**Not covered**: a player's `overrides/<title>/` directory and a `--menu` file's stale switches are
+not in the list. Records say nothing about mods
+([asset layers](../architecture/asset-layers.md), "Records and ghosts"). **Checked against the
+other titles**: title-agnostic code; **ported** to all five by construction, run on Pulse only.
 
 ## Rebuilding a race from a header
 

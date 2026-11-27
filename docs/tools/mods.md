@@ -591,7 +591,9 @@ each mod that ships one.
 The manifest is read with the others; the `.wasm` is opened only by the race that
 runs it. No module runs in an original campaign or a network race. A race running a
 module is MODDED: it records its inputs, and the replay header names each module with its
-SHA-256, but sets no ghost. The ABI, the event and the command are in
+SHA-256, but sets no ghost. Every replay also lists each mod that was on, data-only ones included,
+and playing it with other mods on names the difference ([replay file](../formats/replay-file.md),
+"Active mods"). The ABI, the event and the command are in
 [docs/architecture/wasm-extensions/](../architecture/wasm-extensions/README.md)
 ("What is built").
 
