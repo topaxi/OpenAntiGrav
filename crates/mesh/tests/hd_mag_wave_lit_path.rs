@@ -53,6 +53,7 @@ fn texture(label: &str, width: u32, rgba: Vec<u8>) -> Arc<ModelTexture> {
         height: 1,
         texels: Texels::Rgba8(rgba),
         mip_count: None,
+        lod_code: 0.0,
     })
 }
 

@@ -18,7 +18,7 @@ mod stamp;
 mod tables;
 mod uniforms;
 
-mod texlod;
+pub mod texlod;
 pub use blend::{ADDITIVE_BLEND, PlainBlend, TRANSPARENT_BLEND, TransparentPipelines};
 pub use foliage::Foliage;
 pub use glow_mask::GlowMask;

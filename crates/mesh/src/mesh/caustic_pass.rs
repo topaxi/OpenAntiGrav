@@ -134,6 +134,8 @@ pub fn build(track: &Model) -> Option<Pass> {
                 let mut vertex = track.vertices[index as usize];
                 vertex.texcoord = uv(vertex.position, flagged.origin);
                 vertex.colour = colour;
+                // The caustic frames are not selected by the base texture's level input.
+                vertex.texcoord2[1] = 0.0;
                 // `plain` whitens a lit vertex; the pass's colour is the tint alone.
                 vertex.lit = 0.0;
                 vertices.push(vertex);

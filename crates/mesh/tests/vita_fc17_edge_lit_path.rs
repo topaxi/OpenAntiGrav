@@ -58,6 +58,7 @@ fn texture(label: &str, texel: [u8; 4]) -> Option<Arc<ModelTexture>> {
         height: 1,
         texels: Texels::Rgba8(texel.to_vec()),
         mip_count: None,
+        lod_code: 0.0,
     }))
 }
 

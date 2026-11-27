@@ -10,6 +10,27 @@ override texlod_slope: f32 = 0.0;
 
 override texlod_bias: f32 = 0.0;
 
+// The race camera's part of a Pulse texture's own bias - `mesh_render::texlod::PSP_TEXLOD_FRAME`.
+override texlod_frame: f32 = 0.0;
+
+// The GE's level at view depth `w`, before TEXTURE DETAIL. `code` is the draw's
+// texture's (`mesh_render::texlod::texlod_vertex_code`, the same on all three corners):
+// 0 is the flat law, `log2(w * slope) + bias`. Any other is Pulse's per-texture
+// one, `log2(2 w slope) + b`, with `b` the texture's own bias clamped to
+// [-8, 7.5] and cut to sixteenths toward zero as the GE register holds it, or
+// exactly 0 for a negative code (`docs/rendering/frame-audit.md`, "The level
+// law, measured").
+fn ge_level(w: f32, code: f32, frame_shift: f32) -> f32 {
+    if code == 0.0 {
+        return log2(max(w * texlod_slope, 1.0e-6)) + texlod_bias;
+    }
+    var bias = 0.0;
+    if code > 0.0 {
+        bias = trunc(clamp(code - 64.0 + texlod_frame + frame_shift, -8.0, 7.5) * 16.0) / 16.0;
+    }
+    return log2(max(2.0 * w * texlod_slope, 1.0e-6)) + bias;
+}
+
 // Wipeout HD's LOD bias on its material textures, in levels (negative reads a
 // finer level): `0` is the sampler's own selection, and what a model that is not
 // a HD circuit's gets, so those pipelines compile to a plain `textureSample`.

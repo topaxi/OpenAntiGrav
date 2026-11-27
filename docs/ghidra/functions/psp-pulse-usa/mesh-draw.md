@@ -553,29 +553,71 @@ this mattered for: `pulse_boost2_ADD` (embedded in `shipboost.vex`) declares
 `Gu_TexLevelMode` (`0x088114b0`, confidence 80) is the `0xc8` `TEXLEVEL`
 emitter - `(bias & 0xff) << 16 | mode | 0xc8000000`, the bias scaled by
 `DAT_08ab0524` and clamped to `[-0x80, 0x7f]`. `Gfx_FlushRenderManager` calls
-it `(mode = 2, bias = 1.0)`; `Texture_BuildBindList` emits mode `2` with a
-computed bias, or mode `0` with none, on the texture's `+0x06 & 0x18` bits.
-Either way the level is selected by the GE, and **not "automatic, as it is under
-wgpu"** - corrected 2026-09-30. `Gfx_FlushRenderManager` follows the `(2, 1.0)`
-call with **`Gu_TexLodSlope`** (`0x08811694`, confidence 85): its body is
-`0xd0000000 | (float_bits >> 8)`, the `TEXLODSLOPE` word, and its only caller
-passes `0x3b800000` = `1/256`. Slope mode's level is `log2(|z| * slope) + bias`,
-so it follows **depth**, not texel density (level 0 inside about 128 units).
-Measured against PPSSPP at 480x272 the original resolves scenery at the base
-level throughout a race frame - see
-[frame-audit.md](../../../rendering/frame-audit.md). `oag_render` now uploads
-a PSP `.vex` texture with the levels the disc authors and selects among them by
-this rule (`mesh_render::PSP_TEXLOD_SLOPE`), so scenery is level 0 inside about
-128 units, as the emulator draws it, and level 1 from 256. Whether real hardware
-shows that is unmeasured, and the per-texture `Texture_BuildBindList` emission
-(mode 0 or 2 with a computed bias) is **read 2026-10-01 (pulse-fx-3), not yet applied**: on the texture's `+0x06 & 0x18` bits it
-emits slope mode (`0xc8000002`) with bias `(int)(FUN_08926f6c(*(float *)(header + 0x18)) * 16) & 0xff`, mode `0` (automatic, no bias) for
-value `1`, nothing otherwise, and `FUN_08926f6c(x)` is `log2(sqrt(x)) + *(float *)(g_display + 0x5df4) + 0.2 + 8.0` clamped to
-`[-8, 7.5]` (`0` for `x == 0`). So the bias is a per-texture function of a float in the header (a texel-density figure) and a display setting,
-not the `1.0` `Gfx_FlushRenderManager` writes; the GE dumps show `TLEVEL` offsets of `0x05`, `0x0d`, `0x1c`, `0x26`, `0x2e` (bias `0.3` to
-`2.9`) on the explosion's, the shield's and the Bomb ring's textures. At the 12 to 15 units of a Bomb ring the slope law gives level 0 whatever
-the bias, so this is **not** what makes that ring read dim; its reach is the mid-distance scenery (bias `5` or more steps to level 2 at 60
-units). Confidence 80 for the read; the header field's meaning and `g_display + 0x5df4` are unread.
+it `(mode = 2, bias = 1.0)` and follows with **`Gu_TexLodSlope`** (`0x08811694`,
+confidence 85): its body is `0xd0000000 | (float_bits >> 8)`, the `TEXLODSLOPE`
+word, and its only caller passes `0x3b800000` = `1/256`. So the level is
+selected by the GE in slope mode, which follows **depth**, and not "automatic, as
+it is under wgpu". The bias a mesh draws with is the texture's own, below.
+
+### The per-texture level bias
+
+`Texture_BuildBindList` `0x08928d4c` writes a `TEXLEVEL` for each texture, on
+the header's flags byte (`+0x06`), bits `0x18`:
+
+| `(flags & 0x18) >> 3` | Word | Meaning |
+| ---: | --- | --- |
+| 0 | `0xc8000002 \| (trunc(b * 16) & 0xff) << 16` | slope mode with the texture's bias `b` |
+| 1 | `0xc8000000` | automatic mode, bias 0 |
+| 2, 3 | none | whatever is in force stays |
+
+`Texture_LodBiasFromDensity` `0x08926f6c` (confidence 90) computes `b` from the
+`f32` `x` at header `+0x18`:
+
+```
+b = clamp(log2(sqrt(x)) + *(float *)(g_display + 0x5df4) + 0.2 + 8.0, -8.0, 7.5)
+b = 0   when x == 0 or bits(x) == 0xffc00000
+```
+
+Any other NaN falls through the comparisons to `7.5`.
+
+**`K = *(float *)(g_display + 0x5df4)`** is written by every camera that draws:
+`VexCamera_Draw` (`0x08900a9c`), `Camera_SubmitScene` (`0x08878874`) and
+`FUN_0887840c` project `(-0.5, 0, 1, 1)` and `(0.5, 0, 1, 1)` by the projection
+just built, take `d = |x0/w0 - x1/w1| * 480` and store `log2(1/d) - log2(|w0|)`,
+which is `-log2(480 * m00)`. `Gfx_Init` stores 0.
+
+**Each texture keeps the `K` it was built with.** `Texture_RebuildBindList`
+`0x08928550` (confidence 85) calls `Texture_BuildBindList` and then stores `K` at
+the object's `+0xb0`. `Gfx_BindTexture` (`0x08928460`) and
+`Mesh_DrawBatchSet` call it again only when `|object+0xb0 - K| > 0.2`. So a
+bind list can carry any `K` within 0.2 of the camera that draws with it.
+
+**Measured live** (2026-11-27, PPSSPP software renderer, breakpoint at
+`0x089304bc` in `Mesh_DrawBatchSet`, 700 binds per grid, each texture's
+`+0x9c` header, `+0xb0` and `+0xc0` word read):
+
+| Grid | Mesh textures | `TEXLEVEL` equal to the formula at stored `K` | Stored `K` (textures) |
+| --- | ---: | ---: | --- |
+| Talon's Junction | 78 | 78 | -9.0506 (39), -8.8799 (35), -9.6439 (3), -9.7999 (1) |
+| Metropia White | 72 | 72 | -9.0506 (43), -8.8799 (25), -9.6439 (3), -9.7999 (1) |
+
+A memory write watch on `g_display+0x5df4` over a grid frame sees `-8.8799`
+(race camera `m00` 0.981491, exact), `-9.6439` and `-9.7999` (cameras of
+`m00` 1.667 and 1.857). **Nothing writes `-9.0506` in a grid frame**: it is
+load-time history, and its camera is unread. Pure holds the same value on its
+Modesto textures (`psp-pure-usa/texture-level.md`)
+\- one read should settle both.
+
+**The disc.** Every texture of the circuits' and ships' `.vex` files has
+`flags & 0x18 == 0` (flags 128, 194, 228); seven of them hold `x == 0` and the
+NaNs are exactly `0xffc00000`. Mode-0 draws in the recorded frames are blended
+effect (`.mip`) and HUD textures only. The renderer's side of this is in
+[frame-audit.md](../../../rendering/frame-audit.md), "The level law, measured".
+
+Slope mode's level in PPSSPP's software rasteriser is
+`log2(2 * w * slope) + b`, with `w` the clip `w`; that page carries its
+evidence. The explosion's, shield's and Bomb ring's textures carry `TEXLEVEL`
+bytes `0x05` to `0x2e` (bias 0.3 to 2.9) in recorded frames.
 
 **This one is a real divergence and it is measured inert.** `oag_render`
 synthesises a **full** box-filtered chain down to 1x1 (`mesh_render::mip_chain`,

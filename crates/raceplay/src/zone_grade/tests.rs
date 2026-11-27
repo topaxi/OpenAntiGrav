@@ -314,6 +314,7 @@ fn hd_grade() -> ZoneGrade {
             height: 1,
             texels: oag_mesh::mesh::Texels::Rgba8(vec![255, 255, 255, 255]),
             mip_count: None,
+            lod_code: 0.0,
         }))
     };
     ZoneGrade::new(
@@ -544,6 +545,7 @@ fn arena_grade(arena: bool) -> ZoneGrade {
             height: 1,
             texels: oag_mesh::mesh::Texels::Rgba8(vec![255, 255, 255, 255]),
             mip_count: None,
+            lod_code: 0.0,
         }))
     };
     ZoneGrade::new(

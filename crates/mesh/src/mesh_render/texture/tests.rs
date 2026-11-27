@@ -114,6 +114,7 @@ fn blocks_over_the_limit_go_up_as_blocks_from_the_level_that_fits() {
             levels,
         },
         mip_count: None,
+        lod_code: 0.0,
     };
     let placed = upload(&device, &queue, &texture, true).expect("level 1 fits");
     assert_eq!(placed.dropped_levels, 1);
@@ -175,6 +176,7 @@ fn a_block_chain_parks_every_level_and_drains_in_whole_block_rows() {
             levels,
         },
         mip_count: None,
+        lod_code: 0.0,
     });
     let scope = oag_gpu::deferred_upload::Scope::open(&queue);
     let immediate = upload_shared(&device, &queue, &texture, true, false).expect("fits");
@@ -210,6 +212,7 @@ fn a_device_without_astc_keeps_its_rgba8_upload_with_the_setting_on() {
             levels: vec![vec![0x5a; 16 * 8]],
         },
         mip_count: None,
+        lod_code: 0.0,
     };
     let off = upload(&device, &queue, &texture, false).expect("fits");
     let dir = std::env::temp_dir().join(format!("oag-astc-inert-{}", std::process::id()));
