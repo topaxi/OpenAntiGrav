@@ -1331,18 +1331,49 @@ that places the text, and `menu::pointer::regions` takes those rects.
 
 | Gesture | Menus | Elsewhere |
 | --- | --- | --- |
-| Hover | selects the row under it - only on a tick the pointer *moved*, so a mouse resting on a row does not fight the keyboard for the cursor. On HD the block grows through `focus.rs`'s easing, which is what makes a mouse menu feel right | the same on the language picker, Pure's listed selection rows, the keyboard grid, a confirm's answers and the chooser |
+| Hover | selects the row under it, never scrolling the page (see below) - only on a tick the pointer *moved*, so a mouse resting on a row does not fight the keyboard for the cursor. On HD the block grows through `focus.rs`'s easing, which is what makes a mouse menu feel right | the same on the language picker, Pure's listed selection rows, the keyboard grid, a confirm's answers and the chooser |
 | Click | activates the row under it, whatever the cursor was on - one gesture, "that one". On a choice or toggle it steps forward as cross does; on one of HD's step arrows it steps the way the arrow points; on a binding row it opens the key capture | **two taps on the language picker and the selection screens**: a click selects, a click on the row already selected confirms. The choice is persisted the moment it confirms and the screen never comes back on its own, so a finger one row off must not race the whole game in the wrong language. Pulse's one-at-a-time selection screen confirms from its info panel or preview instead, having no rows; its `up arrow`/`down arrow` images step, as do the livery arrows |
 | Wheel | on a page longer than the screen, scrolls the view one row per detent; on a page that fits, walks the cursor one row per detent. Either **stops at the ends**: a list that jumps from last to first under a wheel has lost the player's place | steps the entry on a selection screen, the language on the picker, the row on the chooser |
 | Secondary button | back, which is what circle is on the same page; closes from the root, as circle does | back on a selection screen, cancel on a prompt, "back to the menus" on a paused race; nothing on the boot sequence, which has no back |
 | A disabled row | selectable and inert, exactly as for a pad: `Menu::adjust` refuses it and a click goes through the same gate | a chooser row that will not open is not a target at all, the rule `Launcher::step` already applies |
+
+### A pointer never moves a list under itself (2026-11-27)
+
+A play report: hovering a row at the edge of a long Pulse list scrolled it, so
+the next click landed on a neighbour. The cause was the pad's own rule. The
+window keeps one row of lookahead past the cursor (`window_start` in `menu.rs`),
+and a hover on an edge row asked for that row too. A drive on Pulse's DISPLAY
+page, hovering the last visible row (SCREEN SIZE) and clicking without moving,
+changed DYNAMIC HUD, the row that had slid under the pointer.
+
+**The rule, chosen** (no original has a pointer):
+
+- A hover, a click, a tap and a middle-button reset put the cursor on the row
+  and ask for **no lookahead**: the window only has to hold that row, so it does
+  not move (`Menu::point_cursor`). A row the pointer put the cursor on keeps
+  this until the cursor leaves it, so opening a page from an edge row and
+  backing out finds the list where it was.
+- A pad or keyboard move asks for the lookahead again, so stepping on from a
+  hovered edge row scrolls as it always did, by two rows if it was on the very
+  edge. Changing a value with left or right is no move and scrolls nothing.
+- A pointer scrolls with the **wheel** and a **finger drag** (below).
+- A click or tap acts on the row under the pointer **when it was pressed**:
+  `app::pointer::Window` reports the press position, not where the mouse or
+  finger had got to by the tick or the lift. HD's taller touch rows wait until
+  no finger is down and its tap has been read, so the first touch after a pad
+  does not move rows under the finger first.
+
+Every `Menu` page of every title follows from the one model. Pure's chain list
+(`oag_ui_screens::pure_chain`) has no lookahead and the 2048 campaign map pans
+only on a click, a pad step or the stick, so neither moved on a hover; a test
+holds each to that.
 
 **Touch is a pointer that is only there while it is down, and a tap is
 decided on lift.** A finger has no hover, so a tap has to select and
 activate together, which is what the models do with `moved` and `clicked` in
 the same tick and why the two-tap screens above compare against the row
 selected *before* the gesture. Because a finger can also drag, `Started`
-only remembers where it landed; `Ended` reports the position, a move and a
+only remembers where it landed; `Ended` reports that landing spot, a move and a
 click in one tick if the finger stayed within `DRAG_THRESHOLD` (12 physical
 pixels, **chosen, not measured**) of it, and then takes the position away so
 nothing stays highlighted under a finger nobody is holding there. Past the
@@ -1383,9 +1414,10 @@ Fury, 2048 and Omega, which share these models):
 | HD's `Team Selection` and track hex grids | steps the entry as before | pans the columns; a flick coasts across several, each column passed is the pad's own step; rests on a column (see [selection-screens.md](../ui/selection-screens.md)) |
 | Language picker, PSP selection screens, the race box chooser, campaign grids, prompts, tag entry | steps the entry as before; none of them has more rows than the screen holds (Pulse's `Grid Selection` pages by its own arrows and draws nothing between pages) | nothing to scroll |
 
-No scroll indicator or scroll arrow is drawn by any of the front-end models
-(2048's `<TouchScroll>` scrollbar thumb is only measured in the frame
-captures, not drawn), so there is nothing to make tappable; none was invented.
+No scroll indicator is drawn (2048's `<TouchScroll>` scrollbar thumb is only
+measured in the frame captures). The `ArrowScrollUp` and `ArrowScrollDown`
+marks a title's screen authors are drawn on a list that scrolls
+(`Frame::scroll_arrows_for`) but are not pointer targets.
 
 **The order is the pad's order.** `session::frame` routes a click through
 the same precedence it routes a button: a selection screen takes the tick

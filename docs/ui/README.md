@@ -27,6 +27,10 @@ apart (including under Steam Input), are in
 [button-prompts.md](button-prompts.md). Which button leaves a screen and which
 opens its Help, per title and pressing, is in [back-and-help.md](back-and-help.md).
 
+How every screen answers a mouse or a finger, including why a hover never
+scrolls a list, is in
+[menus.md](../architecture/menus.md#a-mouse-and-a-finger).
+
 The player's name and tag, and when they are asked for, are in
 [player-name.md](player-name.md). The attract demo an untouched main menu starts, and
 `--demo`/`--wallpaper`, are in [attract-demo.md](attract-demo.md).
