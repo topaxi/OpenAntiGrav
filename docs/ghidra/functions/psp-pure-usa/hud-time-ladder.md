@@ -52,5 +52,9 @@ all the pair is aligned on; the emulator's captured frame sits a few ticks behin
 and Modesto's frames fall inside the same tenth for both clocks. Not measurable closer without a tick-exact
 frame capture.
 
+**2026-11-27:** bounded from the digits of twelve pairs: the picture is two frames behind the read, not one (`docs/tools/compare-page.md`,
+"The Pure circuit pairs' residual, split by region and cause"). On the current pairs a two-frame lag
+reproduces Chenghou's, Blue Ridge's and Vineta K's countdowns; Modesto's was not re-read.
+
 Omega/2048/HD: this is Pure's own HUD law, not a 2048/Omega finding; HD counts `RECORD` from its own
 `stats.xml` (`docs/ui/hud.md`) and is unchanged (checked, differs).
