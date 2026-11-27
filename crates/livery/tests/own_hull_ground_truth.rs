@@ -10,7 +10,8 @@
 //! The files are read from the official mod `oag.detonator-pulse` (ADR-0100), which carries them:
 //! the test fails under `OAG_REQUIRE_GAME_DATA=1` without the official-mods submodule. Each
 //! pressing must take its own: the PSP discs `hull.glb`, the PS2 disc, whose `Zone.vex` is
-//! another model, `hull_ps2.glb`.
+//! another model, `hull_ps2.glb`. On both, the two airbrake flaps sit on the wings and rise when
+//! deflected ([`flaps_on_the_wings`]).
 
 use oag_mesh::mesh::{self, own_hull};
 
@@ -84,6 +85,7 @@ fn check(image: &str, teams: &[&str], file: &str) {
             model.mesh_count, parts,
             "{entry}: every part of {file} draws"
         );
+        flaps_on_the_wings(&entry, file, &model);
         println!("{entry}: {file}, {}", report.last().expect("a summary"));
         if team == &teams[0] {
             // A hull glb may carry images, reserved for textures of its own: none is read, and
@@ -101,6 +103,48 @@ fn check(image: &str, teams: &[&str], file: &str) {
                 "{report:#?}"
             );
         }
+    }
+}
+
+/// Outboard of every fuselage part of both hulls: the craft's flank ends inside 1.3 units of the
+/// centre line where the wings' trailing edges begin (`docs/gameplay/detonator-pulse.md`, "The
+/// craft").
+const WING_ROOT: f32 = 1.3;
+
+/// The left flap (`+X`) hinges on the left wing's trailing edge and the right flap on its mirror
+/// image, each flap's vertices lie outboard of the fuselage, and a positive deflection, a braking
+/// flap, lifts the flap's trailing edge (its mean height rises).
+fn flaps_on_the_wings(entry: &str, file: &str, model: &mesh::Model) {
+    let [Some(left), Some(right)] = &model.airbrakes else {
+        panic!("{entry} with {file}: both airbrake flaps recorded");
+    };
+    let (l, r) = (left.hinge.w_axis, right.hinge.w_axis);
+    assert!(
+        l.x > WING_ROOT && r.x < -WING_ROOT,
+        "{entry} with {file}: the hinges are on the wings, left at x {}, right at x {}",
+        l.x,
+        r.x
+    );
+    assert!(
+        (l.x + r.x).abs() < 1e-4 && (l.y - r.y).abs() < 1e-4 && (l.z - r.z).abs() < 1e-4,
+        "{entry} with {file}: the right hinge mirrors the left ({l:?}, {r:?})"
+    );
+    for (side, flap, outward) in [("left", left, 1.0_f32), ("right", right, -1.0)] {
+        let rest = &model.vertices[flap.vertices.start as usize..flap.vertices.end as usize];
+        assert!(
+            rest.iter().all(|v| v.position[0] * outward > WING_ROOT),
+            "{entry} with {file}: the {side} flap lies on its wing"
+        );
+        let mut swung = Vec::new();
+        flap.swung(&model.vertices, 0.4, &mut swung)
+            .expect("the flap's vertices are the model's");
+        let height = |vs: &[mesh::GpuVertex]| {
+            vs.iter().map(|v| v.position[1]).sum::<f32>() / vs.len() as f32
+        };
+        assert!(
+            height(&swung) > height(rest) + 0.02,
+            "{entry} with {file}: braking raises the {side} flap"
+        );
     }
 }
 

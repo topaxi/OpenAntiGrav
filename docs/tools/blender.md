@@ -446,7 +446,9 @@ The scene:
 - **Empties** named `engine_flare` or `ship_collision_fx<n>` move those anchors. Blender's
   `.NNN` suffixes are stripped.
 - **The object's origin is the part's pivot.** On an airbrake it is the hinge, and the flap
-  swings about the object's local X.
+  swings about the object's local X: lay the flap behind it (local `-Z`, engine axes) with local Y
+  the surface's normal, and a positive deflection lifts it. A rotated hinge is fine; an imported
+  part keeps its file matrix (`oag_matrix`) and writes it again while the object has not moved.
 - **Axes are glTF's:** Blender `(x, y, z)` is engine `(x, z, -y)`. The nose points Blender
   `-Y`, up is `+Z`, the craft's left is `+X`, and 1 unit is 1 engine unit.
 - **UV** `v` is flipped.

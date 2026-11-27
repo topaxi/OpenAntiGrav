@@ -44,6 +44,7 @@ import bpy  # noqa: E402
 from mathutils import Matrix, Vector  # noqa: E402
 
 from oag_track import trackfile  # noqa: E402
+from oag_track.scene import _flat16, _matrix_unmoved  # noqa: E402
 from oag_track.f32 import r as f32  # noqa: E402
 from oag_track.f32 import text as f32_text  # noqa: E402
 
@@ -65,6 +66,12 @@ KEPT_UVS = "oag_uv"
 SAME_UV = 1e-6
 # Two normals this close (radians) are one: the same corner read through two triangles.
 SAME_NORMAL = 1e-3
+# An imported part's or locator's matrix as the file holds it, and the object's matrix when it was
+# imported. Blender keeps an object's transform as location, rotation and scale, so a rotated
+# matrix read back is a hair off what was set; an object that has not moved writes the file's
+# digits again (the track add-on's `oag_matrix_at` rule).
+KEPT_MATRIX = "oag_matrix"
+MATRIX_AT = "oag_matrix_at"
 
 
 def clean(name):
@@ -81,7 +88,16 @@ def _column_major(m):
 
 
 def _engine_matrix(obj):
-    return AXES @ obj.matrix_world @ AXES_INV
+    """The object's part matrix, engine axes, column-major."""
+    kept = obj.get(KEPT_MATRIX)
+    if kept is not None and len(kept) == 16 and _matrix_unmoved(obj, MATRIX_AT):
+        return [float(v) for v in kept]
+    return _column_major(AXES @ obj.matrix_world @ AXES_INV)
+
+
+def _keep_matrix(obj, transform):
+    obj[KEPT_MATRIX] = [float(v) for v in transform]
+    obj[MATRIX_AT] = _flat16(obj.matrix_world)
 
 
 def _surfaces(obj, depsgraph):
@@ -239,8 +255,8 @@ def export_hull(objects, path):
         if clean(obj.name).lower() == SHADOW:
             shadow = _shadow(obj, depsgraph)
             continue
-        parts.append((clean(obj.name), _column_major(_engine_matrix(obj)), _surfaces(obj, depsgraph)))
-    locators = [(clean(obj.name), _column_major(_engine_matrix(obj))) for obj in empties]
+        parts.append((clean(obj.name), _engine_matrix(obj), _surfaces(obj, depsgraph)))
+    locators = [(clean(obj.name), _engine_matrix(obj)) for obj in empties]
     glb = write_glb(parts, locators, shadow)
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     with open(path, "wb") as f:
@@ -306,7 +322,7 @@ def import_hull(path, collection=None):
     with open(path, "rb") as f:
         parts, locators, shadow = read_glb(f.read())
     collection = collection or bpy.context.scene.collection
-    made = []
+    made, placed = [], []
     for name, transform, surfaces in parts:
         mesh = bpy.data.meshes.new(name)
         verts, faces, face_mats, normals, uvs, colours = [], [], [], [], [], []
@@ -351,12 +367,17 @@ def import_hull(path, collection=None):
         obj.matrix_world = AXES_INV @ _matrix(transform) @ AXES
         collection.objects.link(obj)
         made.append(obj)
+        placed.append((obj, transform))
     for name, transform in locators:
         obj = bpy.data.objects.new(name, None)
         obj.empty_display_type = "ARROWS"
         obj.matrix_world = AXES_INV @ _matrix(transform) @ AXES
         collection.objects.link(obj)
         made.append(obj)
+        placed.append((obj, transform))
+    bpy.context.view_layer.update()
+    for obj, transform in placed:
+        _keep_matrix(obj, transform)
     if shadow is not None:
         positions, triangles = shadow
         mesh = bpy.data.meshes.new(SHADOW_NAME)

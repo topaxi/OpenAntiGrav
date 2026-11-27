@@ -124,10 +124,39 @@ with. Format and rules: [own-hull.md](../formats/own-hull.md); authoring:
   is drawn.
 - Pulse PS2's `Zone.vex` is another model (other node names, one `Zone_ColourMap.tga`
   atlas), so the PS2 pressing has a hull of its own, modelled apart at that model's density:
-  462 triangles on the PSP (the disc's Zone hull has 417), 1,470 on the PS2 (1,494).
+  492 triangles on the PSP (the disc's Zone hull has 417), 1,434 on the PS2 (1,494).
 - Both are original shapes in the manner of Fury's Detonator craft: forward-swept drooping
-  wings ending in cannon pods, a wedge fuselage under a bubble canopy, twin canted fins and a
-  tail boom. Neither has a far LOD part; the hull draws at every distance.
+  wings ending in cannon pods, a wedge fuselage under a bubble canopy and a tail boom. Neither
+  has a far LOD part; the hull draws at every distance.
+- Neither hull has tail fins. The twin canted fins the first cut carried beside the fuselage
+  were taken out of both: they rose through the fuselage top, so removing their faces leaves the
+  hull closed, the PS2's red fin-tip lights went with them, and the shadow occluder's four
+  fin-tip vertices were lowered onto the pods and the tail.
+- The two airbrake flaps sit on the wings' trailing edges, one per wing, and rise out of the
+  wing when the player brakes on that side (the left brake lifts the left wing's flap). Each
+  swings about a hinge line parallel to the trailing edge (the hinge's local X,
+  `oag_mesh::mesh::Flap`) and lifts its trailing edge; the right flap is the left's mirror image.
+  - On the PSP the flap is a panel cut out of the wing: the wing's flat top triangle over the
+    trailing edge has a 0.92 by 0.36 opening, and the flap fills it flush, a 0.90 by 0.34 slab
+    (a 0.012 panel line around it) hinged on the opening's front edge at `(±1.74, 0.07, -1.03)`.
+    Under it is a 0.07-deep cavity, painted `engine_general.tga`'s black, which shows when the
+    flap opens. The flap is painted with the wing's olive (`texture2.tga`/`texture3.tga` texels of
+    the same colour as the wing's `texture1.tga`), and its top carries the wing's normals. The
+    right wing's quad there was split along the other diagonal and is not planar, so it was rebuilt
+    as the left's mirror.
+  - On the PS2 the wing droops steeply and its trailing edge runs nearly fore and aft, so a flap
+    hinged along it swings sideways and barely shows from behind. Each airbrake is instead a
+    spoiler: a 0.46 by 0.62 plate, 0.05 thick, sitting on the flat top of the wing root just
+    outboard of the engine pod, hinged on its front edge across the wing at
+    `(±1.56, 0.17, -1.85)`, its rear edge rising toward the chase camera. Its top and edges take
+    the wing's own `Zone_ColourMap.tga` colour and its underside `zone_engine.tga`'s black, so a
+    raised spoiler shows a dark wedge. The pods' rear faces, black with two lilac lights each, read
+    from behind as open flaps; they are painted in the pod top's hull colour, so the lights sit on
+    a panel.
+  - Open, the flap's top often turns bright: the hull's extra pass glosses it from its tilted
+    normal, the same environment-mapped gloss the wing gets (`oag_render::shine`).
+  - `own_hull_ground_truth` checks both hinges are on the wings, mirror each other, and that a
+    deflection raises each flap.
 - The hull's exhaust anchor (`engine_flare`), spark anchors and shadow occluder come from
   the file. The cannon still leaves from the hull's dimensions (on PS2 from the disc hull's
   `cannon_flash` locators, at its nose and not at the new pods) and the Plasma node is the
