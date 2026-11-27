@@ -1059,7 +1059,10 @@ Eliminator is won on points (HD, 2048, Omega), so a kill Eliminator (Pulse, Pure
 mode run as before. **The pace was tuned on HD alone**; 2048 and Omega take it unmeasured. The
 terms are per title (`oag_title::eliminator::ScorePaceTerms`, `Title::score_pace`, chosen): HD's
 were retuned on its own roster (see "HD's real pickup roster" below); 2048 and Omega keep the
-terms tuned with the Repulser and the Shuriken in the pool, because their draw still grants both.
+terms tuned with the Repulser and the Shuriken in the pool, because our draw for them still
+grants both. Checked, applies, not wired: neither title's executable has code or a tag for either
+weapon's manager, so their original rosters are likely HD's; once ours drops the two, they take
+HD's terms.
 
 | Term | What it does | Why |
 | --- | --- | --- |

@@ -32,3 +32,6 @@ Evidence: [pickup-draw.md](../../docs/ghidra/functions/ps3-hdfury-eu/pickup-draw
    stickiest weapon in the score race; rerun the pace pin as in step 1.
 3. Wire 2048 and Omega by lineage (`Sourced::inherited`; the value moves somewhere both can reach,
    title packages do not depend on each other), or read their draw first (static, half a day).
+   In the same change move their `score_pace` to HD's terms (`Sourced::inherited` from HD): they
+   keep `ScorePaceTerms::WITH_REPULSER_AND_SHURIKEN` only because our draw for them still grants
+   both, and without the swap their score Eliminator slows as HD's did (median 8 to 14 laps).
