@@ -80,7 +80,11 @@ left, engine units.
   the host batch.
 - **Pivots.** A part's vertices are baked through its `matrix`. On an airbrake
   node the transform is also the flap's hinge, and the flap swings about its local X
-  as Pulse's do (`oag_mesh::mesh::Flap`).
+  as Pulse's do (`oag_mesh::mesh::Flap`). A flap hinged on a swept wing has a rotated `matrix`: its local X
+  runs along the hinge line, its local Y is the wing's surface normal, and the flap lies behind
+  the hinge (local `-Z`), so a positive deflection lifts its trailing edge. In both committed
+  Detonator hulls the right flap's matrix is the left's mirrored with its X negated, a proper
+  rotation, so the same positive deflection lifts both.
 - **LOD.** A part named for a node under a coarser tier of a `LodGroup`
   (`lodShape`) keeps the switch. Without one, the group table is dropped and the hull
   draws at every distance.
@@ -142,9 +146,13 @@ Feisar's anchors on the PSP, engine space:
   did not carry.
 - **`own_hull_ground_truth`** (`crates/livery/tests/`): on all eight teams of PSP EU
   and USA, `hull.glb` fits and every part and surface of it resolves; on all twelve
-  teams of PS2 EU, `hull_ps2.glb` does.
+  teams of PS2 EU, `hull_ps2.glb` does. On each, both flaps hinge on the wings (outboard of 1.3
+  units), mirror each other, and rise under a positive deflection.
 - **`just blender-fixtures`** imports both files into Blender and exports them again, and
-  compares the bytes.
+  compares the bytes. A part's or locator's matrix survives that even when it is rotated: Blender
+  keeps an object's transform as location, rotation and scale and reads a rotation back a hair
+  off, so the import keeps the file's matrix beside the object (`oag_matrix`, with
+  `oag_matrix_at`, the track add-on's rule) and an object that has not moved writes it again.
 - **TOML to glb (2026-11-27).** The hull was a TOML file until then. Each glb was written by
   importing its TOML into Blender and exporting it with the glb writer. A check outside Blender
   then compared the two: the same parts, surfaces, materials, transforms, locators and shadow,
