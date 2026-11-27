@@ -72,6 +72,10 @@ override leach: f32 = 0.0;
 // drawn `SRC_ALPHA, ONE`, so the alpha leaves here unweighted for the blend.
 override fat: f32 = 0.0;
 
+// The title's sampler LOD bias on its textures, in levels (`FlareTexture::lod_bias`); `0`
+// reads the base, the only level such a title uploads.
+override disc_lod_bias: f32 = 0.0;
+
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
 
 struct VertexOutput {
@@ -110,14 +114,14 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     if leach > 0.5 {
         let u = in.texcoord.x;
         let v = in.texcoord.y;
-        let noise = textureSample(noise_texture, beam_sampler, vec2<f32>(u + 2.0 * in.clock, v)).r;
+        let noise = textureSampleBias(noise_texture, beam_sampler, vec2<f32>(u + 2.0 * in.clock, v), disc_lod_bias).r;
         let n = 2.0 * srgb_decode_channel(noise);
-        let glow = textureSample(beam_texture, beam_sampler, vec2<f32>(u + in.clock + n, v));
+        let glow = textureSampleBias(beam_texture, beam_sampler, vec2<f32>(u + in.clock + n, v), disc_lod_bias);
         let facing = abs(dot(normalize(in.normal), normalize(in.view)));
         let alpha = glow.a * facing * in.colour.a * saturate(in.clip.z * 0.75);
         return vec4<f32>(target_out(gamma_to_target(glow.rgb * in.colour.rgb, linear_out * decode_source)), alpha);
     }
-    let texel = textureSample(beam_texture, beam_sampler, in.texcoord);
+    let texel = textureSampleBias(beam_texture, beam_sampler, in.texcoord, disc_lod_bias);
     let rgb = texel.rgb * in.colour.rgb;
     if fat > 0.5 {
         return vec4<f32>(target_out(gamma_to_target(rgb, linear_out * decode_source)), texel.a * in.colour.a);

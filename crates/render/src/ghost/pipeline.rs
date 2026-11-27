@@ -232,6 +232,8 @@ impl Pipeline {
             width: 1,
             height: 1,
             rgba: vec![0; 4],
+            mips: Vec::new(),
+            lod_bias: 0.0,
         };
         let static_bind = bind_static(
             device,

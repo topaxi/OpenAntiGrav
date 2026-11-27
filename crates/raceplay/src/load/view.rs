@@ -1113,6 +1113,7 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
         }
     }
     lod_bias::finish(&mut loaded, title.looks.material_lod_levels());
+    lod_bias::finish_effects(&mut loaded, title.looks.every_texture_lod_levels());
     pulse_ps2::finish(
         &mut loaded,
         vex_geometry && pulse_ps2::is_pulse_ps2(title, &archives),

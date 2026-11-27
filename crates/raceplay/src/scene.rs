@@ -1143,12 +1143,13 @@ impl Scene {
             mesh_render::Velocity::Write,
             !ps2_mask,
         ));
-        let sparks = std::cell::RefCell::new(sparks::Pipeline::new(
+        let sparks = std::cell::RefCell::new(sparks::Pipeline::with_lod_bias(
             device,
             format,
             store,
             sample_count,
             mesh_render::Velocity::Write,
+            disc_lod_bias,
         ));
         let weapon_quads =
             weapon_quads::build(device, queue, format, store, cannon, liveries, sample_count);

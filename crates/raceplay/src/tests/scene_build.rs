@@ -333,6 +333,12 @@ struct BuiltRace {
     lod_biased: (usize, usize),
     track_material_bias: f32,
     speed_pad_pictures: usize,
+    /// Each effect texture the load holds: its name, bias and authored levels below the base.
+    effect_textures: Vec<(&'static str, f32, usize)>,
+    /// Whether the particle sheet holds a level below its base, and the load report's
+    /// lines for a sprite the sheet had no room for.
+    sheet_chained: bool,
+    sheet_misses: Vec<String>,
 }
 
 fn built_race_scene(image: &std::path::Path) -> Option<BuiltRace> {
@@ -357,6 +363,24 @@ fn built_race_scene(image: &std::path::Path) -> Option<BuiltRace> {
         .filter(|texture| texture.label.to_ascii_lowercase().contains("speedpad"))
         .count();
     let disc_lod_bias = loaded.title.looks.every_texture_lod_levels();
+    let effect_textures = [
+        ("flare sprite", loaded.flare.as_ref()),
+        ("ribbon noise", loaded.noise.as_ref()),
+        ("ribbon shape", loaded.trail_shape.as_ref()),
+        ("leach beam", loaded.leach_beam_texture.as_ref()),
+        ("cannon bolt", loaded.cannon_quad_textures.0.as_ref()),
+        ("cannon flash", loaded.cannon_quad_textures.1.as_ref()),
+    ]
+    .into_iter()
+    .filter_map(|(name, texture)| texture.map(|t| (name, t.lod_bias, t.mips.len())))
+    .collect();
+    let sheet_chained = loaded.view.effects.sheet().lower_pixels(1).is_some();
+    let sheet_misses = loaded
+        .report
+        .iter()
+        .filter(|line| line.contains("did not fit the sprite sheet"))
+        .cloned()
+        .collect();
     let served: Vec<u32> = loaded.billboards.adverts.iter().map(|c| c.slot).collect();
     let wanted = oag_render::gantry::placeholder_texture_slots(&loaded.track_model)
         .iter()
@@ -415,6 +439,9 @@ fn built_race_scene(image: &std::path::Path) -> Option<BuiltRace> {
         lod_biased: scene.lod_biased_pipelines(),
         track_material_bias,
         speed_pad_pictures,
+        effect_textures,
+        sheet_chained,
+        sheet_misses,
     })
 }
 
@@ -437,6 +464,22 @@ fn v2048_biases_every_race_pipeline_and_its_circuit() {
     let (biased, all) = built.lod_biased;
     assert!(biased > 0, "no pipeline carries the bias");
     assert_eq!(biased, all, "{biased} of {all} distinct pipelines biased");
+    // The effect textures `oag_fx` draws take the same bias over their files' own chains.
+    assert_eq!(
+        built.effect_textures.len(),
+        6,
+        "{:?}",
+        built.effect_textures
+    );
+    for (name, bias, mips) in &built.effect_textures {
+        assert_eq!(*bias, -1.5, "{name}");
+        assert!(*mips > 0, "{name} carries no chain");
+    }
+    assert!(
+        built.sheet_chained,
+        "the particle sheet holds no lower level"
+    );
+    assert!(built.sheet_misses.is_empty(), "{:?}", built.sheet_misses);
 }
 
 #[test]

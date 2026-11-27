@@ -35,6 +35,8 @@ fn uniform(grey: u8, alpha: u8) -> FlareTexture {
         width: 4,
         height: 4,
         rgba: [grey, grey, grey, alpha].repeat(16),
+        mips: Vec::new(),
+        lod_bias: 0.0,
     }
 }
 

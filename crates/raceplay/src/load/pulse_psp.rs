@@ -328,6 +328,8 @@ fn mist_texture(
                 width,
                 height,
                 rgba,
+                mips: Vec::new(),
+                lod_bias: 0.0,
             })
         }
         Err(error) => {

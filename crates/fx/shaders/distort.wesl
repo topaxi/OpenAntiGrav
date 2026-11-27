@@ -23,6 +23,9 @@ import oag_shaders::scene_vertex::Uniforms;
 @group(0) @binding(1) var sheet: texture_2d<f32>;
 @group(0) @binding(2) var sheet_sampler: sampler;
 
+// As `psys.wesl`'s: the title's sampler LOD bias on its sprites, in levels.
+override disc_lod_bias: f32 = 0.0;
+
 // The three attributes the program reads of `GpuVertex`: position, colour and
 // texture coordinate, plus the particle's tick move `psys.wesl` reads too (see
 // `psys/between_ticks.rs`). The normal and the rest are not consumed, and a
@@ -57,7 +60,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    let texel = textureSample(sheet, sheet_sampler, in.texcoord);
+    let texel = textureSampleBias(sheet, sheet_sampler, in.texcoord, disc_lod_bias);
     let k = in.colour.a * in.fade * texel.a;
     return vec4<f32>(in.colour.rg * k * (texel.rg - vec2<f32>(0.5)), 0.0, 1.0);
 }

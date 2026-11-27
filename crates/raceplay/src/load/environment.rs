@@ -1208,6 +1208,8 @@ pub(super) fn cloud_layer(
                 width: image.width,
                 height: image.height,
                 rgba: image.rgba.clone(),
+                mips: Vec::new(),
+                lod_bias: 0.0,
             },
         ));
     }
@@ -1227,6 +1229,8 @@ pub(super) fn cloud_layer(
                     width: u32::from(texture.width),
                     height: u32::from(texture.height),
                     rgba: texture.to_rgba(),
+                    mips: Vec::new(),
+                    lod_bias: 0.0,
                 },
             ))
         }

@@ -891,6 +891,8 @@ fn the_ribbon_textures_mean_is_weighted_by_alpha() {
         width: 2,
         height: 1,
         rgba: vec![255, 0, 0, 255, 0, 255, 0, 0],
+        mips: Vec::new(),
+        lod_bias: 0.0,
     };
     assert_eq!(texture.mean_rgb(), [1.0, 0.0, 0.0]);
 }

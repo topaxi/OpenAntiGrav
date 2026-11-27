@@ -76,6 +76,7 @@ fn a_distort_emitter_with_a_sprite_is_not_undrawn() {
         width: 1,
         height: 1,
         rgba: std::sync::Arc::from([128u8, 128, 128, 255]),
+        chain: None,
     });
     assert_eq!(effect.undrawn_emitters().count(), 0);
 }

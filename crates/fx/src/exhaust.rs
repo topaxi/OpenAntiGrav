@@ -1197,7 +1197,11 @@ impl Pipeline {
         // shader reads slot 2 is a property of that title's asset rather than
         // of the frame - the same shape as `linear_out` beside it. A pipeline
         // built without one never samples the view bound there.
-        let mut trail_constants = oag_mesh::mesh_render::linear_constants(format, store).to_vec();
+        // `FlareTexture::lod_bias` of what each pipeline binds.
+        let linear = oag_mesh::mesh_render::linear_constants(format, store);
+        let flare_constants = [linear, &[("disc_lod_bias", f64::from(flare.lod_bias))]].concat();
+        let mut trail_constants =
+            [linear, &[("disc_lod_bias", f64::from(noise.lod_bias))]].concat();
         if trail_shape.is_some() {
             trail_constants.push(("trail_shape", 1.0));
         }
@@ -1280,12 +1284,7 @@ impl Pipeline {
         // the flare writes no mask.** Its list disables the stencil test, and
         // the GE writes alpha only through a stencil op - see
         // `docs/rendering/glow-mask.md`. Only the ribbon feeds the bloom.
-        let pipeline = build_pipeline(
-            "exhaust",
-            BLEND,
-            wgpu::ColorWrites::COLOR,
-            oag_mesh::mesh_render::linear_constants(format, store),
-        );
+        let pipeline = build_pipeline("exhaust", BLEND, wgpu::ColorWrites::COLOR, &flare_constants);
         // The caller's, not [`TRAIL_BLEND`]: a title that authors its ribbon
         // passes its material's own pair - `race::Loaded::trail_blend`.
         // The PSP's ribbon stamps its ramp, the PS2's is in no mask.

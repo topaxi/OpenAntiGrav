@@ -336,10 +336,32 @@ impl Texture {
     /// [`Error::DataOutOfBounds`] if the level does not fit the blob (the wrong
     /// blob, since `Gxt::parse` checked).
     pub fn to_rgba(&self, blob: &[u8]) -> Result<Vec<[u8; 4]>> {
+        self.level_rgba(blob, 0)
+    }
+
+    /// Every level below the base that the file authors, as RGBA8 bytes, largest first;
+    /// empty for a one-level texture and for one whose chain does not decode whole.
+    #[must_use]
+    pub fn lower_levels_rgba(&self, blob: &[u8]) -> Vec<Vec<u8>> {
+        (1..self.mip_levels)
+            .map(|level| {
+                self.level_rgba(blob, level)
+                    .map(|texels| texels.into_flattened())
+            })
+            .collect::<Result<Vec<_>>>()
+            .unwrap_or_default()
+    }
+
+    /// Decodes one stored mip level to straight RGBA8, `level_size(level)` texels.
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::to_rgba`].
+    pub fn level_rgba(&self, blob: &[u8], level: u8) -> Result<Vec<[u8; 4]>> {
         let format = self.format().ok_or(Error::Unsupported {
             format: self.format_byte,
         })?;
-        let range = self.level_range(0).ok_or(Error::Unsupported {
+        let range = self.level_range(level).ok_or(Error::Unsupported {
             format: self.format_byte,
         })?;
         let texels = blob.get(range.clone()).ok_or(Error::DataOutOfBounds {
@@ -347,7 +369,7 @@ impl Texture {
             length: (range.end - range.start) as u32,
             got: blob.len(),
         })?;
-        let (width, height) = self.level_size(0);
+        let (width, height) = self.level_size(level);
         let decoded = match format {
             Format::Ubc1 => blocks(texels, width, height, 8, |b| {
                 bcn::dxt1(b.try_into().expect("8-byte block"))

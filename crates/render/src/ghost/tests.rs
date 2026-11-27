@@ -69,6 +69,8 @@ fn the_three_passes_build_against_a_race_target() {
         width: 2,
         height: 2,
         rgba: vec![255; 16],
+        mips: Vec::new(),
+        lod_bias: 0.0,
     };
     for (format, stamps) in [
         (wgpu::TextureFormat::Rgba8Unorm, true),
