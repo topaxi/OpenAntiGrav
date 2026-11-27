@@ -469,6 +469,10 @@ pub struct Frontend {
     /// pitch is to be one line of it - see
     /// [`Self::set_picker_line_height`]. `None` keeps the table.
     picker_line_height: Option<f32>,
+    /// The role tile labels draw in, see [`Self::set_label_face`].
+    label_face: Option<&'static str>,
+    /// The `Default` atlas the event card measures its words in, see [`Self::set_card_atlas`].
+    card_atlas: Option<std::sync::Arc<crate::font::Atlas>>,
 }
 
 impl Frontend {
@@ -606,6 +610,8 @@ impl Frontend {
             face_scales: Vec::new(),
             default_line_height: None,
             picker_line_height: None,
+            label_face: None,
+            card_atlas: None,
         };
         frontend.machine.transition_to(start);
         frontend

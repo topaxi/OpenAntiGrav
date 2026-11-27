@@ -30,6 +30,7 @@ fn the_boot_sequences_renderer_installs_the_titles_faces() {
             sprites: &oag_hud::sprite::Sheet::default(),
             skin,
             menu_font: None,
+            label_face: None,
             title_font: None,
             buttons_font: Some(&font),
         },
@@ -72,6 +73,7 @@ fn the_boot_sequences_second_slot_holds_the_menu_face_where_the_skin_draws_it() 
                 sprites: &oag_hud::sprite::Sheet::default(),
                 skin,
                 menu_font: Some(&font),
+                label_face: None,
                 title_font: None,
                 buttons_font: None,
             },
@@ -91,4 +93,23 @@ fn the_boot_sequences_second_slot_holds_the_menu_face_where_the_skin_draws_it() 
         None,
         "Pure's second slot is its title face, not loaded here"
     );
+    // A touch front end's tile label face takes the slot, whatever the skin.
+    let label = (font.clone(), "NEOSANS_BOLD");
+    let touch = frontend_renderer(
+        &device,
+        &queue,
+        wgpu::TextureFormat::Rgba8Unorm,
+        None,
+        &FrontendFaces {
+            font: &font,
+            sprites: &oag_hud::sprite::Sheet::default(),
+            skin: &oag_ui::placeholder::MENU_SKIN,
+            menu_font: None,
+            label_face: Some(&label),
+            title_font: None,
+            buttons_font: None,
+        },
+    )
+    .expect("the ui pipeline");
+    assert_eq!(touch.face_slot_role(), Some("NEOSANS_BOLD"));
 }

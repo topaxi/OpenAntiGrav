@@ -129,21 +129,40 @@ pub fn label_under_tile(
     color: [f32; 4],
     wrap: Option<f32>,
     small: bool,
+    face: Option<&'static str>,
 ) -> Draw {
-    let (scale, gap) = if small {
-        (LABEL_SCALE * SMALL_LABEL_RATIO, SMALL_LABEL_GAP)
+    let (ratio, gap) = if small {
+        (SMALL_LABEL_RATIO, SMALL_LABEL_GAP)
     } else {
-        (LABEL_SCALE, LABEL_GAP)
+        (1.0, LABEL_GAP)
     };
-    Draw::Text {
-        x: rect[0] + rect[2] * 0.5,
-        y: rect[1] + rect[3] + gap - PEN_ABOVE_CAPS * scale,
-        scale,
-        color,
-        border: None,
-        align: Align::Centre,
-        text,
-        wrap_width: wrap,
+    let scale = LABEL_SCALE * ratio;
+    let x = rect[0] + rect[2] * 0.5;
+    let y = rect[1] + rect[3] + gap - PEN_ABOVE_CAPS * scale;
+    match face {
+        // The face is its own size: its line is the same share of the `Default` one as
+        // [`LABEL_SCALE`].
+        Some(role) => Draw::FacedText {
+            role,
+            x,
+            y,
+            scale: ratio,
+            color,
+            border: None,
+            align: Align::Centre,
+            text,
+            wrap_width: wrap,
+        },
+        None => Draw::Text {
+            x,
+            y,
+            scale,
+            color,
+            border: None,
+            align: Align::Centre,
+            text,
+            wrap_width: wrap,
+        },
     }
 }
 
@@ -712,6 +731,17 @@ impl Frontend {
         }
     }
 
+    /// A tile glyph's tint: the button's authored `color`, and `White2048` for the white a
+    /// `<TouchButton>` that authors none reads as (`docs/formats/2048-frontend.md`, "The glyphs
+    /// are `White2048`").
+    fn glyph_colour(&self, authored: [f32; 4]) -> [f32; 4] {
+        if authored == [1.0; 4] {
+            self.global_colour("White2048")
+        } else {
+            authored
+        }
+    }
+
     /// The `Blue2048` block under a screen's white header icon.
     ///
     /// `GameModeChoice` authors `Icon_Mode_HomeBut.gtf` at `(15, 15)`,
@@ -723,8 +753,9 @@ impl Frontend {
     /// runs from the square to x=425 is not drawn: its right end is not
     /// derivable from anything the file authors.
     ///
-    /// Slotted in under the images rather than appended, since the draw
-    /// list is drawn in order and the glyph has to land on top.
+    /// Each block is slotted in directly under its own glyph's sprite: the draw list is drawn
+    /// in order, and a screen's earlier sprites (`GameModeChoice`'s lattice) would cover a block
+    /// put under the first of them.
     pub(super) fn underlay_header_blocks(
         &self,
         screen: &Screen,
@@ -736,23 +767,24 @@ impl Frontend {
             .globals
             .get("White2048")
             .and_then(|value| parse_argb(value));
-        let blocks: Vec<Draw> = screen
-            .images
-            .iter()
-            .filter(|image| white.is_some_and(|white| image.color == white))
-            .filter_map(|image| {
-                Some(Draw::Fill {
-                    rect: [image.x, image.y, image.width?, image.height?],
-                    color: tile,
+        for image in &screen.images {
+            if white.is_none_or(|white| image.color != white) {
+                continue;
+            }
+            let (Some(width), Some(height)) = (image.width, image.height) else {
+                continue;
+            };
+            let rect = [image.x, image.y, width, height];
+            let at = out
+                .iter()
+                .position(|draw| matches!(draw, Draw::Sprite { rect: glyph, .. } if *glyph == rect))
+                .or_else(|| {
+                    out.iter()
+                        .position(|draw| matches!(draw, Draw::Sprite { .. }))
                 })
-            })
-            .collect();
-        // After the base fills, before the first sprite.
-        let at = out
-            .iter()
-            .position(|draw| matches!(draw, Draw::Sprite { .. }))
-            .unwrap_or(out.len());
-        out.splice(at..at, blocks);
+                .unwrap_or(out.len());
+            out.insert(at, Draw::Fill { rect, color: tile });
+        }
     }
 
     pub(super) fn draw_tile(
@@ -789,7 +821,7 @@ impl Frontend {
                     h,
                 ],
                 uv: placed.sheet_rect([0.0, 0.0, placed.width as f32, placed.height as f32]),
-                color: tile.color,
+                color: self.glyph_colour(tile.color),
             });
         }
         let Some(label) = &tile.label else {
@@ -838,6 +870,7 @@ impl Frontend {
                 self.global_colour("Blue2048"),
                 tile.wrap,
                 false,
+                self.label_face,
             ));
             return;
         };

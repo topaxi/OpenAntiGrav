@@ -223,6 +223,7 @@ const CIRCUIT_MODELS: [oag_title::CircuitModel; 26] = {
 /// labels equal 2048's name for name and cell for cell
 /// (`omega_2048_map_ground_truth`).
 pub const TOUCH: &oag_title::TouchFrontEnd = &oag_title::TouchFrontEnd {
+    label_face: None,
     game_mode_choice: &[],
     home: &[],
     team_screen: None,

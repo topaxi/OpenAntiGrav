@@ -84,6 +84,8 @@ pub struct Boot {
     pub circuit_names: oag_ui::language::CircuitNames,
     /// The row face and the title's own - see [`Shell::menu_font`]/[`Shell::title_font`].
     pub menu_font: Option<oag_ui::font::Atlas>,
+    /// See [`Shell::label_face`].
+    pub label_face: Option<fonts::LabelFace>,
     /// See [`Shell::face_scales`].
     pub face_scales: Vec<(String, f32)>,
     pub title_font: Option<oag_ui::font::Atlas>,
@@ -307,6 +309,8 @@ pub struct Shell {
     /// The face menu rows are drawn in, when the title names one and it
     /// reads. `None` falls the menus back to [`Self::font`].
     pub menu_font: Option<oag_ui::font::Atlas>,
+    /// A touch front end's tile label face, see [`fonts::load_label_face`].
+    pub label_face: Option<fonts::LabelFace>,
     pub title_font: Option<oag_ui::font::Atlas>,
     /// The PlayStation button-glyph face (`PS_BUTTONS.fnt` on HD and Omega).
     pub buttons_font: Option<oag_ui::font::Atlas>,
@@ -601,6 +605,15 @@ pub fn load_shell(
         &languages,
         preferred_language,
         menu_skin,
+        texel_scale,
+        title.prompts,
+        &mut report,
+    );
+    let label_face = fonts::load_label_face(
+        &mut archives,
+        &languages,
+        preferred_language,
+        front_end.touch_shell().and_then(|touch| touch.label_face),
         texel_scale,
         title.prompts,
         &mut report,
@@ -992,6 +1005,7 @@ pub fn load_shell(
             ship_select_split,
             race_setup,
             menu_font,
+            label_face,
             title_font,
             buttons_font,
             face_scales,
@@ -1178,6 +1192,7 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
         ship_select_split,
         race_setup,
         menu_font,
+        label_face,
         title_font,
         buttons_font,
         face_scales,
@@ -1263,6 +1278,16 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
         ),
         (campaign_events, extra_tiles, tiers, team_ratings),
     );
+    if let Some((_, role)) = &label_face {
+        frontend.set_label_face(role);
+    }
+    if title
+        .front_end
+        .and_then(|front| front.touch_shell())
+        .is_some()
+    {
+        frontend.set_card_atlas(font.clone());
+    }
 
     // **Before `set_backdrop`, which bakes a rect out of it.** The PS2's `Skin.xml`
     // places widgets in a 640x448 grid rather than the PSP's 480x272, so every widget
@@ -1379,6 +1404,7 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
         race_setup,
         circuit_names,
         menu_font,
+        label_face,
         face_scales,
         title_font,
         buttons_font,

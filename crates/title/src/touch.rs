@@ -82,6 +82,9 @@ pub struct TouchButton {
 /// hangs off `Title` rather than being selected apart from it.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TouchFrontEnd {
+    /// The font role a tile's label under its box is drawn in, at that face's own size. `None`
+    /// draws it in the `Default` face scaled down (a title whose own tiles nothing measured).
+    pub label_face: Option<&'static str>,
     /// `NEWGUI/Definition.xml`'s `GameModeChoice` screen, in the file's own
     /// order. A title's own table, so a count is the title's: 2048's is the
     /// v1.04 patch's copy, **six** buttons in two rows of three (the extra two,

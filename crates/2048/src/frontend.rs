@@ -342,6 +342,10 @@ pub const BOOT_PROFILE: &oag_title::BootProfile = &oag_title::BootProfile {
 /// Confidence 92, the same cap that page puts on a claim read straight out of
 /// the disc's own XML.
 pub const TOUCH: &TouchFrontEnd = &TouchFrontEnd {
+    // The labels' widths are `NEOSANS_BOLD.fnt`'s advances at scale 1, not the `Default`
+    // (`NEOSANS_BOLD_LARGE`) face's at the same height
+    // (`docs/formats/2048-frontend.md`, "The tile labels are in `NEOSANS_BOLD`").
+    label_face: Some("NEOSANS_BOLD"),
     // `<Screen name="GameModeChoice" type="GameModeChoice_Screen">`'s six
     // `<TouchButton>`s as the v1.04 patch's `data1`/`data2` copy of the file
     // authors them (the base package's copy has four, one row at `y="190"`,

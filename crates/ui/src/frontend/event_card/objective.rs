@@ -11,6 +11,13 @@ const ROW_Y: f32 = 370.0;
 /// `FUN_81055006`'s width for a forced craft, and where `FUN_81061808`'s logo
 /// sits in it (`x + 7`).
 const CRAFT_CELL: f32 = 108.0;
+/// The pass and objective lines' scales in the `Default` face, their wrap (`0x43ac8000`), the
+/// medal's size and the units between its centre and the words.
+const PASS_SCALE: f32 = 0.66;
+const OBJECTIVE_SCALE: f32 = 0.8;
+const WORDS_WRAP: f32 = 345.0;
+const MEDAL_SIZE: f32 = 52.0;
+const MEDAL_SPACE: f32 = 40.0;
 
 impl CardPaint<'_> {
     /// The width of the glyph row (`FUN_81055006`), in the executable's own
@@ -43,17 +50,49 @@ impl CardPaint<'_> {
             ProgressState::Locked | ProgressState::Open => MEDAL_NONE,
             ProgressState::Passed | ProgressState::Elite => MEDAL_PASS,
         };
-        self.card_sprite(medal, [488.0, top + 6.0, 52.0, 52.0], white, out);
-        // Both lines start at `x=552` in frame 14 (bounding boxes 552 and
-        // 553). The original centres a block of the text's own width plus the
-        // medal on `x=682`; the frontend has no glyph metrics, so this
-        // left-aligns at the frame's own edge and a wider or narrower wording
-        // sits off by half the difference (open).
+        // The block of the widest line plus the medal's 40 units is centred on the panel: the
+        // medal's centre at the block's left edge, every line 40 to its right
+        // (`campaign-event-card.md`, "Page kind `0`"). With no atlas the lines start where
+        // frame 14's do.
+        let words = [
+            (card.pass_label.as_deref(), PASS_SCALE),
+            (card.objective.as_deref(), OBJECTIVE_SCALE),
+            (card.elite_label.as_deref().filter(|_| two_rows), PASS_SCALE),
+            (
+                card.elite_objective.as_deref().filter(|_| two_rows),
+                OBJECTIVE_SCALE,
+            ),
+        ];
+        let widest = words
+            .iter()
+            .filter_map(|(text, scale)| self.text_width((*text)?, *scale))
+            .fold(0.0_f32, f32::max);
+        let left = if widest > 0.0 {
+            CENTRE_X - (widest.min(WORDS_WRAP) + MEDAL_SPACE) * 0.5 + MEDAL_SPACE
+        } else {
+            552.0
+        };
+        let medal_x = left - MEDAL_SPACE - MEDAL_SIZE * 0.5;
+        self.card_sprite(
+            medal,
+            [medal_x, top + 6.0, MEDAL_SIZE, MEDAL_SIZE],
+            white,
+            out,
+        );
         if let Some(label) = &card.pass_label {
-            out.push(Self::left_text(label, 552.0, top, 0.66, blue, 345.0));
+            out.push(Self::left_text(
+                label, left, top, PASS_SCALE, blue, WORDS_WRAP,
+            ));
         }
         if let Some(text) = &card.objective {
-            out.push(Self::left_text(text, 552.0, top + 27.0, 0.8, blue, 345.0));
+            out.push(Self::left_text(
+                text,
+                left,
+                top + 27.0,
+                OBJECTIVE_SCALE,
+                blue,
+                WORDS_WRAP,
+            ));
         }
         if two_rows {
             let elite_medal = if state == ProgressState::Elite {
@@ -61,12 +100,26 @@ impl CardPaint<'_> {
             } else {
                 MEDAL_NONE
             };
-            self.card_sprite(elite_medal, [488.0, 265.0, 52.0, 52.0], white, out);
+            self.card_sprite(
+                elite_medal,
+                [medal_x, 265.0, MEDAL_SIZE, MEDAL_SIZE],
+                white,
+                out,
+            );
             if let Some(label) = &card.elite_label {
-                out.push(Self::left_text(label, 552.0, 259.0, 0.66, blue, 345.0));
+                out.push(Self::left_text(
+                    label, left, 259.0, PASS_SCALE, blue, WORDS_WRAP,
+                ));
             }
             if let Some(text) = &card.elite_objective {
-                out.push(Self::left_text(text, 552.0, 287.0, 0.8, blue, 345.0));
+                out.push(Self::left_text(
+                    text,
+                    left,
+                    287.0,
+                    OBJECTIVE_SCALE,
+                    blue,
+                    WORDS_WRAP,
+                ));
             }
         }
         out.push(Draw::Fill {

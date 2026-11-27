@@ -451,21 +451,71 @@ pub fn install_faces(
     renderer.set_bearing_pens(skin.bearing_pens);
 }
 
+/// A face the boot sequence draws beside its `Default` primary, in the renderer's second slot.
+pub type LabelFace = (oag_ui::font::Atlas, &'static str);
+
+/// Reads the face a touch front end's tile labels draw in
+/// ([`oag_title::TouchFrontEnd::label_face`]). `None` on a title that names none, or when it
+/// does not read, which leaves the labels in the `Default` face scaled down.
+pub(super) fn load_label_face(
+    archives: &mut oag_assets::Archives,
+    languages: &[Language],
+    preferred: Option<&Language>,
+    role: Option<&'static str>,
+    texel_scale: f32,
+    prompts: &oag_title::prompts::Prompts,
+    report: &mut Vec<String>,
+) -> Option<LabelFace> {
+    let role = role?;
+    let name = role_font(languages, preferred, role)?;
+    match archives.read_font(&name) {
+        Ok(font) => {
+            let atlas = face(
+                archives,
+                &name,
+                &font,
+                role_border(languages, preferred, role),
+                "tile label font",
+                prompts,
+                report,
+            );
+            Some((
+                atlas.with_prompts(prompts).with_texel_scale(texel_scale),
+                role,
+            ))
+        }
+        Err(why) => {
+            report.push(format!(
+                "tile label font {name} (role {role:?}) unavailable ({why}); labels draw in the \
+                 default face"
+            ));
+            None
+        }
+    }
+}
+
 /// Puts the menu face into the second glyph slot of a boot-sequence renderer, for a title whose
 /// sequence draws `font="menu"` texts in it ([`oag_title::MenuSkin::menu_face_in_boot`]).
 ///
 /// The sequence's primary atlas is `Default`, so the second slot's `Default` copy
 /// ([`face_atlas_slot`]) adds nothing there and the menu face takes its place, under the role
 /// the skin names. A menu stage keeps the other arrangement (menu primary, `Default` beside it).
-/// A no-op for a title that does not draw the sequence this way, or whose menu face did not load.
-pub fn install_boot_menu_face(
+/// A touch front end's tile label face (`label`) takes the slot where it has one; no title
+/// has both. A no-op for a title that does not draw the sequence this way, or whose face did
+/// not load.
+pub fn install_boot_face(
     renderer: &mut crate::render::Renderer,
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     skin: &oag_title::MenuSkin,
     menu_font: Option<&oag_ui::font::Atlas>,
+    label: Option<&LabelFace>,
 ) {
-    if let (true, Some(role), Some(face)) = (skin.menu_face_in_boot, skin.menu_font, menu_font) {
+    if let Some((atlas, role)) = label {
+        renderer.set_face_atlas(device, queue, Some(atlas.clone()), Some(role));
+    } else if let (true, Some(role), Some(face)) =
+        (skin.menu_face_in_boot, skin.menu_font, menu_font)
+    {
         renderer.set_face_atlas(device, queue, Some(face.clone()), Some(role));
     }
 }

@@ -233,6 +233,13 @@ fn the_kind_line_and_photo_follow_the_class_the_way_the_executable_does() {
         find("2048 - Event 1").card.kind_label.as_deref(),
         Some("RACE")
     );
+    // `M_DESCRIPTION` words the line under the title where the event has one
+    // (`CampaignEventCard_DrawPanel`); an empty one leaves the kind.
+    assert_eq!(
+        find("2048 - Event 1").card.description.as_deref(),
+        Some("NO WEAPONS")
+    );
+    assert_eq!(find("2048 - Event 3").card.description, None);
     let zone = find("2048 - Event 3-2");
     assert_eq!(zone.card.kind_label.as_deref(), Some("ZONE"));
     assert!(
@@ -325,6 +332,89 @@ fn the_race_load_of_event_one_draws_its_card_a_real_tip_and_the_modes_paragraph(
         "the mode page's paragraph: {second:?}"
     );
     assert!(!second.contains(&tip.title), "the tip is dropped");
+}
+
+/// The open card of the first event on screen: its description under the title, the pass
+/// group centred on the panel, the leaderboard's tabs in `NEOSANS_BOLD` over an orange bar
+/// and the buttons' glyphs in `White2048`.
+#[test]
+#[ignore = "needs the extracted package under data/extracted/vita/"]
+fn the_open_card_of_event_one_words_and_places_what_the_disc_authors() {
+    let Some(source) = source() else { return };
+    let loaded = boot::load(&options(&source)).expect("the whole boot");
+    let mut frontend = loaded.frontend;
+    let mut input = Input::new();
+    let mut tick = 0u32;
+    let mut run = |frontend: &mut frontend::Frontend, pressed: u32| {
+        input.begin_frame(if tick.is_multiple_of(2) { pressed } else { 0 });
+        tick += 1;
+        frontend.update(1.0 / 60.0, &mut input, None);
+    };
+    for _ in 0..3600 {
+        if frontend.machine().is(w2048::NEW_FE_SHELL) {
+            break;
+        }
+        run(&mut frontend, Button::Cross.bit() | Button::Start.bit());
+    }
+    assert!(frontend.select_campaign_event("2048 - Event 1"));
+    for _ in 0..600 {
+        if frontend.event_card_open() {
+            break;
+        }
+        run(&mut frontend, Button::Cross.bit());
+    }
+    assert!(frontend.event_card_open());
+
+    let draws = frontend.draw_list();
+    let texts: Vec<(&str, f32)> = draws
+        .iter()
+        .filter_map(|draw| match draw {
+            Draw::Text { text, x, .. } => Some((text.as_str(), *x)),
+            _ => None,
+        })
+        .collect();
+    assert!(
+        texts.iter().any(|(text, _)| *text == "NO WEAPONS"),
+        "{texts:?}"
+    );
+    // The original's frame starts both lines at x 574.
+    for line in ["PASS", "FINISH THE EVENT"] {
+        let x = texts.iter().find(|(text, _)| *text == line).expect(line).1;
+        assert!((x - 574.0).abs() < 3.0, "{line} at {x}");
+    }
+    let white = [225.0 / 255.0, 228.0 / 255.0, 235.0 / 255.0];
+    assert!(
+        draws
+            .iter()
+            .any(|draw| matches!(draw, Draw::Sprite { rect, color, .. }
+            if rect[0] == 851.0 && (color[0] - white[0]).abs() < 0.01)),
+        "the Launch glyph is White2048"
+    );
+
+    for _ in 0..30 {
+        if frontend.event_card_page() == Some(1) {
+            break;
+        }
+        run(&mut frontend, Button::Right.bit());
+    }
+    let draws = frontend.draw_list();
+    for word in ["PERSONAL", "CURRENT BEST"] {
+        assert!(
+            draws.iter().any(|draw| matches!(draw,
+                Draw::FacedText { role: "NEOSANS_BOLD", text, scale, .. }
+                    if text == word && *scale == 0.7)),
+            "{word} in NEOSANS_BOLD at 0.7"
+        );
+    }
+    let orange = [221.0 / 255.0, 88.0 / 255.0, 11.0 / 255.0];
+    assert!(
+        draws
+            .iter()
+            .any(|draw| matches!(draw, Draw::Fill { rect, color }
+            if *rect == [471.0, 234.0, 422.0, 37.0] && (color[0] - orange[0]).abs() < 0.01
+                && (color[1] - orange[1]).abs() < 0.01)),
+        "the CURRENT BEST bar is Orange2048"
+    );
 }
 
 /// 2048's front-end root authors no `NavigationController`, so there is no footer legend to flow
