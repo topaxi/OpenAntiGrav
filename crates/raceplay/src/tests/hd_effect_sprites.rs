@@ -85,8 +85,9 @@ fn only_hd_lists_effects_whose_gtf_sprites_play() {
 /// `Quake_Update`, `psp-pure-usa/quake.md`); HD also for the Detonator EMP's wave, its blue
 /// recolour (`ps3-hdfury-eu/detonator-emp.md`, "What HD draws for a fired EMP"), and the
 /// Plasma blast's two lightning effects (`ps3-hdfury-eu/plasma.md`, "The pairs") and the Rocket's
-/// craft blast (`docs/rendering/particle-fill.md`, "The trails start on the blast's hemisphere"). 2048 and Omega
-/// list the EMP's wave alone, as HD's does (`detonator-emp.md`, "2048 and Omega draw it").
+/// craft blast (`docs/rendering/particle-fill.md`, "The trails start on the blast's
+/// hemisphere"). 2048 and Omega list the EMP's wave alone, as HD's does (`detonator-emp.md`,
+/// "2048 and Omega draw it").
 #[test]
 fn the_extent_law_is_lifted_only_for_the_effects_each_title_lists() {
     use oag_title::engine_effects as n;
@@ -332,7 +333,6 @@ fn hd_2048_and_omega_list_the_trail_hit_burst_for_the_far_bar_draw_and_hd_its_pl
             n::PLASMA_LAUNCH_EFFECT,
             n::PLASMA_LIGHTNING_EXPAND_EFFECT,
             n::PLASMA_LIGHTNING_COLLAPSE_EFFECT,
-            n::CRAFT_BLAST_EFFECT,
         ]
     );
     // The head's and the wind-up's sprite templates play, and the Rocket craft blast's (its
