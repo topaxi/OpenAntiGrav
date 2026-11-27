@@ -175,7 +175,8 @@ Levels: every 2048 effect `.gxt` the sprites and ribbons name authors 3 to 9 lev
 (`data/particles2048/tex` is PVRTC), the ribbon textures 6 or 7, `engineflare_rich` 6. The atlas holds
 five, a chosen depth (`oag_fx::psys::sprite::ATLAS_LEVELS`): a sprite sits on a 16-texel grid with its
 edge texels repeated around it, and a level a file does not author is a box filter of the one above,
-also chosen. Every sprite of a 2048 race still fits the 4096 atlas.
+also chosen. A sprite with no chain of its own (a mod's, this engine's own art) takes the same grid
+and box-filtered levels. Every sprite of a 2048 race still fits the 4096 atlas.
 
 Open or inherited:
 

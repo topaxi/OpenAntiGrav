@@ -31,7 +31,7 @@
 //! Every other model is sampled at the sampler's own derivative level, where the
 //! same uniform is a bias (`texture_lod.wesl`, `detail_shift`). Those tests draw
 //! an authored block chain (red, green, blue) minified onto level 2, at no title
-//! bias (2048, Omega) and at HD's -1.5, through the material fetch and through an
+//! bias (Omega) and at -1.5 (HD, 2048), through the material fetch and through an
 //! effect program's own. A PS2 texture has one level, so a minified one reads the
 //! base (`docs/rendering/texture-level-per-title.md`, "Pulse PS2 in a race").
 //!

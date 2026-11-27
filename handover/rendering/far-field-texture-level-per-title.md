@@ -38,7 +38,7 @@ read values only, as `Title` data, with a test, a break-it, and the other titles
   texture `+0x2a0` with the 0.2 rebuild.
 - **Not read:**
   - Omega's two +1.0-bias samplers' materials;
-  - 2048's Zone and Detonator track skins and an HD/Fury circuit, live;
+  - 2048's Detonator track skins and an HD/Fury circuit, live;
   - Pure's four textures at `-9.0491`, and whether Pure has Pulse's residency rebuild.
 
 ## Next Steps

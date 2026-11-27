@@ -274,13 +274,15 @@ Tests:
 
 | Claim | Test |
 | --- | --- |
-| Level 2, 1, 0 per preset at no title bias (2048, Omega), at -1.5 (HD), and through an effect fetch | `psp_slope_lod.rs`, `texture_detail_shifts_the_samplers_own_level`, `..._adds_to_a_titles_own_material_bias`, `..._reaches_an_effect_programs_own_fetch` |
+| Level 2, 1, 0 per preset at no title bias (Omega), at -1.5 (HD, 2048), and through an effect fetch | `psp_slope_lod.rs`, `texture_detail_shifts_the_samplers_own_level`, `..._adds_to_a_titles_own_material_bias`, `..._reaches_an_effect_programs_own_fetch` |
+| 2048's bias on a material fetch and an effect fetch alike | `psp_slope_lod.rs`, `an_every_texture_bias_reaches_material_and_effect_fetches` |
 | The same through explicit gradients | `omega_panel_map_lit_path.rs`, `texture_detail_scales_the_explicit_gradients` |
 | HD's whole frame differs pairwise across the presets | `texture_detail_ground_truth.rs`, `each_texture_detail_preset_draws_its_own_picture_on_hd` |
 | A distant PS2 texel is a texel of the base | `psp_slope_lod.rs`, `a_distant_ps2_texel_reads_the_base_level`; `ps2_texture_binding_ground_truth.rs` over 32 track sets |
 
-2048 against Omega (CLAUDE.md's pairing): **ported**, both take the same hardware path and the
-no-title-bias test is theirs. Omega's panel-map road is the explicit-gradient test's fixture.
+2048 against Omega (CLAUDE.md's pairing): the setting is **ported**, both take the same hardware path
+and add its shift. The title bias under it **differs** (2048 -1.5, Omega 0), each with its own test.
+Omega's panel-map road is the explicit-gradient test's fixture.
 
 ## Reproducing
 
