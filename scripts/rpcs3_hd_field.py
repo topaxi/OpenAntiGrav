@@ -58,6 +58,22 @@ def pilot_assist(m):
     return m.rd(at, 1)[0] if at is not None else None
 
 
+#: The race manager (`*0x0095ae78`): `+0x1950 +0x20` is the phase word and `+0x1950 +0x18` the seconds in it. Phase 1 is
+#: the countdown (`docs/ghidra/functions/ps3-hdfury-eu/hud-start-gate.md`).
+RACE_MANAGER_PP = 0x0095AE78
+RACE_PHASE_BLOCK = 0x1950
+COUNTDOWN_PHASE = 1
+
+
+def race_phase(m):
+    """`{"phase": int, "elapsed_s": float}` of the race manager, or `None` before it exists."""
+    manager = m.u32(RACE_MANAGER_PP)
+    if not manager:
+        return None
+    block = m.rd(manager + RACE_PHASE_BLOCK, 0x28)
+    return {"phase": struct.unpack_from(">I", block, 0x20)[0], "elapsed_s": struct.unpack_from(">f", block, 0x18)[0]}
+
+
 class Mem:
     """Guest memory through any `seek`/`read`/`write` object (`serve`'s `RemoteMem`, or `/proc/<pid>/mem`)."""
 

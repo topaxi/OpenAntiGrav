@@ -6,6 +6,7 @@ Builds one synthetic pair in a temporary directory, writes its manifest with `co
 explanations arrive, that a pair without recorded times shows none (no file-time fallback), and that a pair without
 `meta` is refused instead of showing its directory name.
 """
+import argparse
 import importlib.util
 import json
 import struct
@@ -252,6 +253,62 @@ def check_hd_hull():
         assert pair.rec["original"]["team"] == ram
     zone = Pair()
     assert hd_pair.hull_check(zone, {"team": "Zone"}, hd_pair.ZONE_HULL, True), "a Zone race flies the mode's own hull"
+
+
+def check_hd_countdown():
+    """A `--countdown` Zone pair is refused unless the pause is in the countdown (race manager phase 1, lap clock 0, the
+    craft at rest), draws ours without `--hud-state`, and its capture takes the first shot where the attach pauses the game
+    (the default 12 s settle outlasts the 5.2 s countdown)."""
+    spec = importlib.util.spec_from_file_location("rpcs3_hd_pair", HERE / "rpcs3-hd-pair.py")
+    hd_pair = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(hd_pair)
+    import rpcs3_hd_field as field
+
+    class Pair:
+        def __init__(self):
+            self.rec = {"original": {}}
+            self.checks, self.caveats = [], []
+
+        def check(self, name, ok, detail):
+            self.checks.append((name, bool(ok), detail))
+            return ok
+
+        def check_equal(self, name, theirs, ours):
+            return self.check(name, theirs == ours, "%r %r" % (theirs, ours))
+
+        def caveat(self, text):
+            self.caveats.append(text)
+
+    class Mem:
+        """The race manager at 0x4000 with phase 1 and 1.5 s elapsed."""
+
+        def u32(self, addr):
+            return 0x4000 if addr == field.RACE_MANAGER_PP else 0
+
+        def rd(self, addr, n):
+            assert addr == 0x4000 + field.RACE_PHASE_BLOCK
+            block = bytearray(n)
+            struct.pack_into(">f", block, 0x18, 1.5)
+            struct.pack_into(">I", block, 0x20, 1)
+            return bytes(block)
+
+    assert field.race_phase(Mem()) == {"phase": 1, "elapsed_s": 1.5}
+    rest = {"phase": 1, "elapsed_s": 1.5}
+    for phase, clock, vel, live, ok in ((rest, 0, [0.1, 3.6, 0.1], True, True), ({"phase": 2, "elapsed_s": 4}, 0, [0, 0, 0], True, False),
+                                        (rest, 0.1, [0, 0, 0], True, False), (rest, 0, [0, 0, 5.0], True, False),
+                                        (None, 0, [0, 0, 0], True, False), (None, 3.0, [0, 0, 30.0], False, True)):
+        pair = Pair()
+        ship = {"race_clock_s": clock, "vel": vel, **({"race_phase": phase} if phase else {})}
+        got = hd_pair.countdown_check(pair, ship, live)
+        assert bool(got) == ok, (phase, clock, vel, live, pair.checks)
+    flags = hd_pair.zone_flags(Pair(), "1,0", countdown=True)
+    assert "--hud-state" not in flags, flags
+    assert hd_pair.zone_flags(Pair(), "5,100,4", countdown=False) == ["--hud-state", "1,1,0,0,0,100,0,5,100,0", "--zone-stage", "4"]
+    args = argparse.Namespace(interval=0.12, load=0, team="feisar", press="none", field=False, zone="1,0", keep_autopilot=False)
+    cap = [str(c) for c in hd_pair.capture_command(args, Path("o"))]
+    assert cap[cap.index("--settle") + 1] == "0" and "--first-at-pause" in cap, cap
+    args.zone = None
+    assert "--settle" not in [str(c) for c in hd_pair.capture_command(args, Path("o"))]
 
 
 def check_hd_pilot_assist():
@@ -501,6 +558,7 @@ def main():
     check_hd_flame_clock()
     check_hd_hull()
     check_hd_pilot_assist()
+    check_hd_countdown()
     check_detonator_volley_ticks()
     with tempfile.TemporaryDirectory() as t:
         check_detonator_picture_tick(Path(t))

@@ -34,7 +34,7 @@ MAIN = Path("/home/topaxi/projects/OpenAntiGrav")
 sys.path.insert(0, str(HERE))
 import compare_env as ce  # noqa: E402
 import compare_provenance as cp  # noqa: E402
-from rpcs3_hd_field import MINE_DRAW_WORDS  # noqa: E402
+from rpcs3_hd_field import COUNTDOWN_PHASE, MINE_DRAW_WORDS  # noqa: E402
 
 #: Our race's tick at which the race clock leaves 0: `oag_race::COUNTDOWN_TICKS`, read from ours by `compare_env.go_tick` (one
 #: length for every title today; it was a hard-coded 276 here until 2026-10-21, 4 ticks late).
@@ -360,6 +360,48 @@ def detonator_inputs(pair, out, ship, clock):
 #: under `--mode zone`.
 ZONE_HULL = "zone"
 
+#: Horizontal speed above which a countdown grab is not at rest on the grid (the craft only bobs vertically there).
+COUNTDOWN_REST_SPEED = 0.5
+
+
+def countdown_check(pair, ship, live):
+    """Refuse a `--countdown` pair whose pause is not inside the countdown. The lap clock reads 0 through the countdown and
+    at GO alike, so the race manager's phase read in the pause (`ship.race_phase`) is what tells them apart; the lap clock
+    and the craft's horizontal speed are checked beside it."""
+    phase = ship.get("race_phase")
+    pair.rec["original"]["race_phase"] = phase
+    if phase is None:
+        return pair.check("the race manager's phase was read from RAM", not live, "no `race_phase` in the capture record")
+    clock = ship.get("race_clock_s")
+    speed = math.hypot(ship["vel"][0], ship["vel"][2])
+    return all([pair.check_equal("the race manager is in its countdown phase", phase["phase"], COUNTDOWN_PHASE),
+                pair.check("the lap clock has not started", clock == 0, "ship+0x7014 reads %s s" % clock),
+                pair.check("the craft is at rest on the grid", speed <= COUNTDOWN_REST_SPEED,
+                           "horizontal speed %.3f units/s" % speed)])
+
+
+def zone_flags(pair, spec, countdown):
+    """Ours' flags for a Zone frame from `--zone ZONE,SCORE[,STAGE]`, and the pair's record of where the numbers came from.
+
+    A countdown frame draws no HUD, so ours is not given `--hud-state` (it draws the HUD whatever the race is at); a
+    later frame's zone and score are read off the original's own HUD by the caller and imposed."""
+    bits = spec.split(",")
+    zone_n, zone_score = int(bits[0]), int(bits[1])
+    stage = bits[2] if len(bits) > 2 else None
+    flags = [] if countdown else ["--hud-state", "1,1,0,0,0,100,0,%d,%d,0" % (zone_n, zone_score)]
+    if stage is not None:
+        flags += ["--zone-stage", stage]
+    source = ("by construction at race start: the countdown frame draws no HUD (the race manager's phase was read)" if countdown
+              else "read off the original's own HUD in the paused frame (HD's Zone counters are not located in RAM)")
+    pair.rec["original"]["zone"] = {"zone": zone_n, "score": zone_score, "stage_pinned": stage, "source": source}
+    if countdown:
+        pair.caveat("Zone countdown frame: the original draws no HUD yet, so zone %d and score %d are by construction, not read; "
+                    "ours runs no ticks, so every effect that needs history (exhaust, trail) starts cold" % (zone_n, zone_score))
+    else:
+        pair.caveat("Zone state read off the original's HUD by eye (zone %d, score %d), not from RAM; ours runs no ticks, so every "
+                    "effect that needs history (exhaust, trail) starts cold; speed readout shows 0 in ours" % (zone_n, zone_score))
+    return flags
+
 
 def hull_check(pair, ship, team, live):
     """Refuse a pair whose original flies another hull than `--team` names. The parity checks pass on a wrong hull (the
@@ -384,6 +426,22 @@ def pilot_assist_check(pair, ship, profile_value, live):
     if byte is None:
         return pair.check("the original's Pilot Assist option was read from RAM", not live, "no `pilot_assist` in the capture record")
     return pair.check_equal("the original's Pilot Assist option is ours'", "off" if byte == 0 else "on", profile_value)
+
+
+def capture_command(args, out):
+    """The `rpcs3-drive.py capture` this pair takes its frame with."""
+    cap = [sys.executable, HERE / "rpcs3-drive.py", "capture", "--out", out / "capture",
+           "--shots", 2, "--interval", args.interval, "--load", args.load, "--team", args.team,
+           "--press", args.press]
+    if args.field:
+        cap += ["--field", "--in-race", "--settle", "0", "--first-at-pause"]
+        if not args.keep_autopilot:
+            cap += ["--autopilot-timer", AUTOPILOT_AUTHORED_S]
+    elif args.zone:
+        # Zone flies itself and its countdown is 5.2 s: the default 12 s settle would capture the race, so the first shot is
+        # taken where the attach pauses it.
+        cap += ["--in-race", "--settle", "0", "--first-at-pause"]
+    return cap
 
 
 def main():
@@ -433,6 +491,9 @@ def main():
                          "(HD's Zone counters are not located in RAM, so the caller reads them off the original's own HUD in the "
                          "paused frame; recorded as read off the frame) and, with STAGE, the colour-grade stage pinned "
                          "(`--zone-stage`)")
+    ap.add_argument("--countdown", action="store_true",
+                    help="with --zone: a race-start frame. The pause must find the race manager in its countdown (refused "
+                         "otherwise) and ours is drawn without `--hud-state`, as the original draws no HUD yet")
     ap.add_argument("--detonator", action="store_true",
                     help="a Detonator race shot (`rpcs3-hd-detonator-shots.py` record, passed with --json): ours runs its own countdown and "
                          "clock from the grid in `--mode detonator` (its auto-speed, its own mines laid at ITS placement, the original's "
@@ -446,6 +507,8 @@ def main():
     ap.add_argument("--press", default="none",
                     help="the button held while the two frames are taken; `cross` is throttle")
     args = ap.parse_args()
+    if args.countdown and not args.zone:
+        ap.error("--countdown takes --zone (the one countdown frame this script pairs)")
     out = args.out.resolve()
     out.mkdir(parents=True, exist_ok=True)
     pair = ce.Pair(args.platform, out)
@@ -472,14 +535,7 @@ def main():
         record_path = args.json
     else:
         set_window(*plat["output"])
-        cap = [sys.executable, HERE / "rpcs3-drive.py", "capture", "--out", out / "capture",
-               "--shots", 2, "--interval", args.interval, "--load", args.load, "--team", args.team,
-               "--press", args.press]
-        if args.field:
-            cap += ["--field", "--in-race", "--settle", "0", "--first-at-pause"]
-            if not args.keep_autopilot:
-                cap += ["--autopilot-timer", AUTOPILOT_AUTHORED_S]
-        run(cap)
+        run(capture_command(args, out))
         record_path = out / "capture" / "00.json"
     record = json.loads(record_path.read_text())
     camera, ship = record.get("camera"), record.get("ship")
@@ -529,6 +585,8 @@ def main():
     if not args.field and not hull_check(pair, ship, ZONE_HULL if args.zone else args.team, live=not args.json):
         pair.finish()
     if not pilot_assist_check(pair, ship, plat["ours"].get("pilot_assist"), live=not args.json):
+        pair.finish()
+    if args.countdown and not countdown_check(pair, ship, live=not args.json):
         pair.finish()
     gantry = ship.get("gantry_seconds")
     pair.rec["original"]["gantry_seconds"] = gantry
@@ -611,15 +669,7 @@ def main():
         flags += ["--flame-clock", "%.4f" % ce.flame_pin(flame)]
     field_flags = []
     if args.zone:
-        zbits = args.zone.split(",")
-        zone_n, zone_score = int(zbits[0]), int(zbits[1])
-        field_flags = ["--hud-state", "1,1,0,0,0,100,0,%d,%d,0" % (zone_n, zone_score)]
-        if len(zbits) > 2:
-            field_flags += ["--zone-stage", zbits[2]]
-        pair.rec["original"]["zone"] = {"zone": zone_n, "score": zone_score, "stage_pinned": zbits[2] if len(zbits) > 2 else None,
-                                        "source": "read off the original's own HUD in the paused frame (HD's Zone counters are not located in RAM)"}
-        pair.caveat("Zone state read off the original's HUD by eye (zone %d, score %d), not from RAM; ours runs no ticks, so every effect "
-                    "that needs history (exhaust, trail) starts cold; speed readout shows 0 in ours" % (zone_n, zone_score))
+        field_flags = zone_flags(pair, args.zone, args.countdown)
     if args.field:
         rows = [{"slot": r["slot"], "player": r["player"], "team": r["team"], "left": r["rows"][0],
                  "up": r["rows"][1], "fwd": r["rows"][2], "pos": r["pos"], "vel": r["vel"]} for r in ship["field"]]

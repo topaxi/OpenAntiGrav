@@ -1906,6 +1906,12 @@ def cmd_capture(args):
                                                       {"time_s": grab_clock["world_clock_s"], "nodes": grab_clock["nodes"], "total": grab_clock["total"]})
                     except Exception as error:  # noqa: BLE001 - the phase is a bonus
                         print("  %s: no scenery clock (%s)" % (stem, error), flush=True)
+                    try:
+                        # The race manager's phase in the same pause: the lap clock reads 0 through the countdown and at GO alike.
+                        import rpcs3_hd_field
+                        ship_pose["race_phase"] = rpcs3_hd_field.race_phase(rpcs3_hd_field.Mem(session.open_mem()))
+                    except Exception as error:  # noqa: BLE001 - a countdown pair refuses a grab without it
+                        print("  %s: no race phase (%s)" % (stem, error), flush=True)
                     # The flame's boot clock in the same pause (`original.flame_clock_s` of the pair, `--flame-clock` of ours).
                     ship_pose["flame_clock_s"] = None if grab_clock is None else grab_clock.get("flame_clock_s")
                     if args.field:
