@@ -156,6 +156,10 @@ pub struct GamePlayValues {
     pub cannon_lockout_time_run_out_bullets: f32,
     /// `MineCountStage1`..`MineCountStage14`.
     pub mine_count_stage: [i32; STAGES],
+    /// `MinesScaleToMusic`: laid mines grow and shrink with the music. No shipped file names
+    /// it, so a disc's own layout scales; a layout that sets `0` holds its mines at their
+    /// authored size (`docs/gameplay/detonator-pulse.md`, "Mine size").
+    pub mines_scale_to_music: bool,
 }
 
 impl Default for GamePlayValues {
@@ -179,6 +183,7 @@ impl Default for GamePlayValues {
             cannon_lockout_time_from_manual_reload: 0.0,
             cannon_lockout_time_run_out_bullets: 0.0,
             mine_count_stage,
+            mines_scale_to_music: true,
         }
     }
 }
@@ -299,6 +304,7 @@ pub fn parse_values(xml: &str) -> GamePlayValues {
     if node.attr("CannonLockoutTimeRunOutBullets").is_some() {
         values.cannon_lockout_time_run_out_bullets = float(node, "CannonLockoutTimeRunOutBullets");
     }
+    values.mines_scale_to_music = flag(node, "MinesScaleToMusic", values.mines_scale_to_music);
     for (index, count) in values.mine_count_stage.iter_mut().enumerate() {
         if let Some(text) = node.attr(&format!("MineCountStage{}", index + 1)) {
             *count = atoi(text);

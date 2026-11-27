@@ -16,17 +16,27 @@ CIRCUIT row then lists the Zone circuits only).
 | --- | --- | --- |
 | Circuit | the picked circuit's Zone twin (`zone_track.vex` beside `track.vex`), as a Zone race flies | `oag_title::Detonator::races_zone_circuit` |
 | Mines and bombs | Pulse's own `Pulse_Mine.vex` and `Pulse_Bomb.vex`, laid by HD's placement law; contact radius, damage and slowdown are Pulse's race table's `Mine` and `Bomb` | `objects: None` (the ordinary mine and bomb pools draw them) |
+| Mine size | the mines hold their authored size; the music does not scale them (see [Mine size](#mine-size)) | `MinesScaleToMusic="0"` |
 | Layout | this project's six pattern groups and fourteen stage counts (30 mines at stage 1 to 108 at 14) | `assets/fallback/Data/XML/DetonatorLayouts_Pulse/` |
 | Pads | every speed pad (a Zone circuit authors no weapon pad: 0 on all eight PSP `zone_track.vex`, against 7 to 15 on the race files) is drawn as the race circuit's own first `Weapon Pad`, held at the red key of its ready cycle (`READY_KEYFRAMES[0]`, 204, 102, 102; `docs/rendering/pads.md`); the circuit's own speed pads are not drawn | `DetonatorPads::circuit_weapon_pad_key` |
 | Pad law | a pad gives no boost and charges the EMP once per entry, HD's arm | `DetonatorPads` `speed_pad_charges`, `weapon_pad_charges` |
 | EMP | HD's charge, gauge, L1 fire and wave on this project's `EMP` block: ready at 3 pads, full at 6, extent 1 to 3 s, 3 survey entries a tick; drawn as the Repulsor's (see [The EMP](#the-emp)), no light | `weapons_supplement`, `oag_pulse::effects`, `emp_borrows_repulsor` |
-| Cannon | HD's cannon on Pulse's own `Cannon` (`rounds`, `rate`); one wall rebound, three hits to a bomb; the rounds leave from the hull's dimensions (Pulse's hulls author no `cannon_flash`); each round is drawn as Pulse's own Cannon's (see [The cannon](#the-cannon)); a wall hit sparks Pulse's `WO_CANNON_SPARKS` | `weapons_supplement` |
+| Cannon | HD's cannon on Pulse's own `Cannon` (`rate`; `rounds` 30 held to 15 volleys); one wall rebound, three hits to a bomb; the rounds leave from the hull's dimensions (Pulse's hulls author no `cannon_flash`); each round is drawn as Pulse's own Cannon's (see [The cannon](#the-cannon)); a wall hit sparks Pulse's `WO_CANNON_SPARKS` | `weapons_supplement` |
 | Explosions | a mine and a bomb go up as Pulse's `WO_MINE_EXPLO` | `oag_pulse::effects` |
 | Mine slowdown | `velocity_reduction` 0.5, as the supplement names it | `weapons_supplement` |
 | Scoring | this project's `<Bullet>` and `<Emp>` values (10 a live mine, 5 a dark one, 5 an EMP'd live mine) | `DetonatorScoring.xml` in the same directory |
-| HUD | the disc's Time Trial layout plus the EMP gauge (see [The gauge](#the-gauge)) | `oag_pulse::hud::layouts::DETONATOR`, `ps2_hud` |
-| Not drawn | the stage grade (Pulse ships none), the score on the HUD, the medals, the announcer lines | `palette: None`, `shows_medals`, `voices: None` |
-| Craft | the team's own race hull and handling | `craft: None`, `handling: None` |
+| HUD | this project's own layout, arranged as Fury's (see [The HUD](#the-hud)) | `oag_pulse::hud::layouts::DETONATOR`, `ps2_hud` |
+| Not drawn | the stage grade (Pulse ships none), the medals, the announcer lines | `palette: None`, `shows_medals`, `voices: None` |
+| Craft | the team's Zone hull (`Zone.vex`) with its boost plume and wreck, until this project has a Detonator hull of its own; the team's race handling | `craft: Some`, `handling: None` |
+
+## Mine size
+
+HD scales a laid mine's body to the music. On Pulse the maintainer ruled that out (2026-11-27),
+so this project's `DetonatorLayouts_Pulse/GamePlayValues.xml` sets `MinesScaleToMusic="0"`; the
+mine still spins on its own authored animation. The attribute is this project's: no shipped file
+names it, so HD, Omega and 2048 scale as before. A player's override of that file with
+`MinesScaleToMusic="1"` (`overrides/wipeout-pulse/Data/XML/DetonatorLayouts_Pulse/GamePlayValues.xml`,
+[ADR-0061](../architecture/adr/0061-two-asset-layers-around-the-disc.md)) brings the scaling back.
 
 ## The cannon
 
@@ -38,6 +48,10 @@ while the flight, hit and wall laws stay Detonator's. The code gates on
 `Detonator::objects` being `None`, so HD, Omega and 2048, which name their own round model,
 are unchanged. The round flies at 500 units a second (HD's law), well past the Pickup's, so
 a round is read as a pair of glowing darts leaving the nose rather than as a lingering shot.
+
+The clip is 15 volleys of two rounds. Pulse's `Cannon` names `rounds` 30, which read as volleys
+would overrun the cannon's 15 volleys of hit slots, streak awards and HUD icons, so the clip is
+held to 15 (`oag_weapons::detonator::cannon::CLIP_VOLLEYS`). HD's table already says 15.
 
 ## The EMP
 
@@ -54,14 +68,25 @@ nothing visible half a second later. The EMP now borrows the Repulsor:
 The front itself is soon far ahead on the road and small; the launch look is what tells a
 player the EMP fired. Code: `oag_raceplay::emp_repulsor`.
 
-## The gauge
+## The HUD
 
-`assets/fallback/Data/XML/DetonatorLayouts_Pulse/Detonator_HUD.xml` pulls the disc's
-`TimeTrial_HUD.xml` in (`<LoadXML>`) and adds, over the speed bar: `EMP` in the small HUD
-face, six segments cut from Pulse's shield bar art (dim track, cyan fill) and a mark under
-the third, shown once the EMP can be fired. Six pips because Pulse's EMP is full at six
-pads. The PS2 disc authors its HUD in 640x448, so it reads `Detonator_HUD_PS2.xml`, the
-same widgets scaled by 4/3 and 448/272.
+`assets/fallback/Data/XML/DetonatorLayouts_Pulse/Detonator_HUD.xml` is a whole layout of this
+project's. None of the four Pulse layouts read (Arcade, Elimination, Time Trial, Zone) uses
+`<LoadXML>`; Detonator's does not either. It is arranged as Fury's:
+
+- bottom left, the score (`DetonatorScorePlain`, plain digits as Pulse's Zone score) under `SCORE`, at the
+  coordinates each pressing's `Zone_HUD.xml` gives its own;
+- above it, the EMP: `EMP` over six segments cut from the speed bar's art and a mark under the
+  third, shown once the EMP can be fired. Six pips because Pulse's EMP is full at six
+  pads;
+- bottom right, over the shield bar: the volleys left (`PulseBullets`), an icon a volley
+  (`Bullet00`-`14`) and over each a pip lit when that volley hits (`Multi00`-`14`);
+- the lap (the stage) top left, the countdown and the centre messages where Pulse puts them;
+- no speed readout, lap times or pickup box.
+
+It names the disc's own HUD texture, fonts, strings and countdown models. The PS2 disc authors
+its HUD in 640x448, so it reads `Detonator_HUD_PS2.xml`. Both replace by path from the override
+layer.
 
 ## Why the data lives in the fallback layer
 
@@ -89,7 +114,7 @@ Unchanged: the new `Title` fields are `false`/`None` there, and their Detonator 
 the Zone twin is flown, the layout and supplement are read, the 17 speed pads of
 `16_Track`'s Zone twin carry the weapon pad in red, the first tick lays 15 to 30 mines, three
 pads ready the EMP with no boost, L1 clears the mines ahead for 5 each, and Square spends the
-clip. `a_pulse_detonator_hud_shows_the_emp_gauge_lit_by_the_charge` (PSP and PS2) checks the
-gauge; `a_pulse_detonator_round_is_drawn_as_the_pulse_cannons_own` and
+clip. `a_pulse_detonator_hud_shows_the_emp_gauge_and_the_clip` (PSP and PS2) checks the
+gauge and the clip; `a_pulse_detonator_round_is_drawn_as_the_pulse_cannons_own` and
 `a_pulse_emp_wave_is_the_repulsors_wave_and_opening` (`crates/raceplay/src/tests/detonator_fx.rs`)
 the cannon and the EMP.

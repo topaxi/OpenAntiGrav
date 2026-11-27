@@ -131,6 +131,9 @@ pub(super) fn text(
     let shown = readout.detonator.as_ref();
     Some(match name {
         "DetonatorScore" => shown.map(|d| format!("{:07}", d.score)),
+        // This engine's widget, for Pulse's layout: its own `Score` is printed `%d`
+        // (`docs/ghidra/functions/psp-pulse-usa/zone-speed-class.md`).
+        "DetonatorScorePlain" => shown.map(|d| d.score.to_string()),
         "PulseBullets" => shown.map(|d| format!("{:02}", d.clip)),
         "DetonatorStage" => shown.map(|d| format!("{}/{STAGES}", d.stage)),
         // A language table without the id (HD's carries none) leaves the line empty: the text is

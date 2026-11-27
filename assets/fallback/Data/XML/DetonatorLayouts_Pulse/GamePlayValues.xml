@@ -2,5 +2,7 @@
 <!-- Detonator on Wipeout Pulse: this project's own values, chosen, not measured
      (docs/gameplay/detonator-pulse.md). What it omits keeps the static block
      (oag_tables::detonator_layout::GamePlayValues::default). Fewer mines per stage than the
-     static block: Pulse's craft and circuits are the handheld's. -->
-<GamePlayValues RemoveMinesEachStage="0" DistanceOffsetBetweenMines="3.5" NumStepsToIgnoreAfterJump="20" MineCountsRepresentMaxTotalToAppear="1" EnergyRechargePerStage="5" PointsForChainReactionMines="50" CannonLockoutTimeFromManualReload="1" CannonLockoutTimeRunOutBullets="2" MineCountStage1="30" MineCountStage2="36" MineCountStage3="42" MineCountStage4="48" MineCountStage5="54" MineCountStage6="60" MineCountStage7="66" MineCountStage8="72" MineCountStage9="78" MineCountStage10="84" MineCountStage11="90" MineCountStage12="96" MineCountStage13="102" MineCountStage14="108"></GamePlayValues>
+     static block: Pulse's craft and circuits are the handheld's. MinesScaleToMusic="0"
+     holds each mine at its authored size; an override of this file with "1" brings the
+     music's scaling back. -->
+<GamePlayValues RemoveMinesEachStage="0" DistanceOffsetBetweenMines="3.5" NumStepsToIgnoreAfterJump="20" MineCountsRepresentMaxTotalToAppear="1" EnergyRechargePerStage="5" PointsForChainReactionMines="50" CannonLockoutTimeFromManualReload="1" CannonLockoutTimeRunOutBullets="2" MineCountStage1="30" MineCountStage2="36" MineCountStage3="42" MineCountStage4="48" MineCountStage5="54" MineCountStage6="60" MineCountStage7="66" MineCountStage8="72" MineCountStage9="78" MineCountStage10="84" MineCountStage11="90" MineCountStage12="96" MineCountStage13="102" MineCountStage14="108" MinesScaleToMusic="0"></GamePlayValues>

@@ -30,8 +30,8 @@ pub struct Wreck {
 /// A title whose Zone craft is one hull of its own ([`oag_title::race::ZoneCraft::OwnShipAt`]:
 /// HD/Fury, 2048, Omega) keeps that craft's `shipwreck` in its directory beside the hull
 /// (`docs/ghidra/functions/ps3-hdfury-eu/detonator-hull.md`, loader step 6, `%s\shipwreck.vex`).
-/// Pulse keeps a per-team [`oag_pulse::race::ships::ZONE_WRECK`] in a Zone race,
-/// [`oag_pulse::race::ships::WRECK`] otherwise.
+/// Pulse keeps a per-team [`oag_pulse::race::ships::ZONE_WRECK`] wherever the Zone hull is
+/// flown (a Zone race, and its Detonator), [`oag_pulse::race::ships::WRECK`] otherwise.
 #[must_use]
 pub(crate) fn entry_name(
     archives: &mut oag_assets::Archives,
@@ -53,7 +53,7 @@ pub(crate) fn entry_name(
         );
         return entry::stem_entry_name(dir, owner, stems::WRECK);
     }
-    let stem = if mode == Mode::Zone {
+    let stem = if craft.is_some() {
         stems::ZONE_WRECK
     } else {
         stems::WRECK

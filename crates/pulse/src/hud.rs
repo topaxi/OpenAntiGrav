@@ -343,6 +343,8 @@ pub const ALWAYS_ON: &[&str] = &[
     "EmpBack_3",
     "EmpBack_4",
     "EmpBack_5",
+    // The same layout's clip frame.
+    "ClipBack",
 ];
 
 /// Zone's speed-class line, `SpeedClass` and the `SpeedClassTxt` caption over it.
@@ -389,10 +391,10 @@ pub mod layouts {
     pub const ELIMINATION: &str = r"Data\XML\Elimination_HUD.xml";
     /// Time trial and speed lap: 10 images, 25 texts, 2 models.
     pub const TIME_TRIAL: &str = r"Data\XML\TimeTrial_HUD.xml";
-    /// Ours, not the disc's: Pulse ships no Detonator. The Time Trial layout pulled from the
-    /// disc plus an EMP gauge (`assets/fallback/`, `docs/gameplay/detonator-pulse.md`).
+    /// Ours, not the disc's: Pulse ships no Detonator. A whole layout of this project's with an
+    /// EMP gauge and the clip (`assets/fallback/`, `docs/gameplay/detonator-pulse.md`, "The HUD").
     pub const DETONATOR: &str = r"Data\XML\DetonatorLayouts_Pulse\Detonator_HUD.xml";
-    /// [`DETONATOR`] with its gauge in the PS2 disc's 640x448 grid.
+    /// [`DETONATOR`] in the PS2 disc's 640x448 grid.
     pub const DETONATOR_PS2: &str = r"Data\XML\DetonatorLayouts_Pulse\Detonator_HUD_PS2.xml";
     /// Zone mode: 7 images, 24 texts, 2 models.
     pub const ZONE: &str = r"Data\XML\Zone_HUD.xml";

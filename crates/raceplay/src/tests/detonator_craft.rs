@@ -60,7 +60,11 @@ fn every_team_flies_the_one_detonator_hull_and_other_modes_keep_theirs() {
         r"Data\art\published\hdships\Detonator\Ship.vex"
     );
     let pulse = oag_pulse::TITLE.race.ships_for("Feisar");
-    assert_eq!(own_craft(pulse, Mode::Detonator), None);
+    assert_eq!(
+        pulse.hull_entry_name("Feisar", own_craft(pulse, Mode::Detonator), None),
+        r"Data\Ships\Feisar\Zone.vex",
+        "Pulse ships no Detonator hull: the team's Zone one is flown"
+    );
 }
 
 #[test]

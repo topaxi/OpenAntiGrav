@@ -29,10 +29,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     zone: oag_title::ZoneCircuit::Prefixed(ZONE_TRACK_PREFIX),
     // The one variant with a recovered selector behind it rather than a name
     // probe: `Ship_LoadModel`'s `case 6`. See `ships::ZONE_HULL`.
-    zone_craft: oag_title::ZoneCraft::ModelsInTeam {
-        hull: ships::ZONE_HULL,
-        boost: ships::ZONE_BOOST,
-    },
+    zone_craft: ZONE_CRAFT,
     // Measured: `Team Selection` runs in Zone - `zone-mode.md`, "`Team Selection` runs in Zone".
     zone_team_step: oag_title::ZoneTeamStep::OfferedAtFullRatings,
     // The one title with a standalone plume: `%s\%sboost.vex`, recovered at
@@ -109,6 +106,12 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     }),
 };
 
+/// The hull a Zone run flies: `Zone.vex` inside the picked team.
+const ZONE_CRAFT: oag_title::ZoneCraft = oag_title::ZoneCraft::ModelsInTeam {
+    hull: ships::ZONE_HULL,
+    boost: ships::ZONE_BOOST,
+};
+
 /// Detonator on Pulse, which ships no such mode: HD's law on Pulse's own Zone circuits, Mine,
 /// Bomb and Cannon (`docs/gameplay/detonator-pulse.md`). What Pulse has no data for (the layout,
 /// the EMP, the cannon's Detonator attributes) is this project's own file in the fallback
@@ -125,7 +128,12 @@ pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
         gameplay_values: r"Data\XML\DetonatorLayouts_Pulse\GamePlayValues.xml",
         scoring: r"Data\XML\DetonatorLayouts_Pulse\DetonatorScoring.xml",
     }),
-    craft: None,
+    // The Zone hull, until this project has a Detonator hull of its own; the handling stays
+    // the team's (`docs/gameplay/detonator-pulse.md`).
+    craft: Some(oag_title::DetonatorCraft {
+        hull: ZONE_CRAFT,
+        livery_fallback: None,
+    }),
     cannon_lights: false,
     emp_light: false,
     emp_borrows_repulsor: true,

@@ -1132,6 +1132,10 @@ fn a_pulse_detonator_race_lays_pulse_mines_on_a_zone_circuit_with_red_charging_p
         report.contains(r"WeaponStats_Detonator.xml: Detonator's own blocks beside the race table (EMP authored)"),
         "the EMP block is read beside Pulse's own table:\n{report}"
     );
+    // The Zone hull is flown, and wrecks as the Zone one.
+    for entry in [r"\Zone.vex", r"\zonewreck.vex", r"\Zoneboost.vex"] {
+        assert!(report.contains(entry), "{entry}:\n{report}");
+    }
     // Pulse's own Mine body rides the mine pool: no Detonator object model is named.
     assert!(loaded.mine_model.is_some(), "Pulse_Mine.vex loads");
     assert!(loaded.bomb_blast_models.detonator.pad.is_none());
@@ -1218,6 +1222,10 @@ fn a_pulse_detonator_race_lays_pulse_mines_on_a_zone_circuit_with_red_charging_p
     );
     start_racing(&mut race);
     let full = race.core.sim.world.detonator.cannon.clip;
+    assert_eq!(
+        full, 15,
+        "Pulse's 30 rounds are held to the cannon's 15 volleys"
+    );
     for _ in 0..3 {
         race.tick(&square());
         keep_alive(&mut race);
@@ -1228,12 +1236,12 @@ fn a_pulse_detonator_race_lays_pulse_mines_on_a_zone_circuit_with_red_charging_p
     );
 }
 
-/// **Pulse's Detonator HUD carries an EMP gauge**: the disc's Time Trial layout plus six pips
-/// of ours, lit one per charge, with the ready mark from the third. The PS2 disc reads the copy
-/// scaled into its own 640x448 grid.
+/// **Pulse's Detonator HUD is a layout of ours arranged as Fury's**: six EMP pips bottom left, the
+/// clip over the shield bar bottom right, and none of Time Trial's speed bar or lap times. The PS2
+/// disc reads the copy in its own 640x448 grid.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn a_pulse_detonator_hud_shows_the_emp_gauge_lit_by_the_charge() {
+fn a_pulse_detonator_hud_shows_the_emp_gauge_and_the_clip() {
     for (image, size) in [
         ("data/images/pulse-psp-usa.chd", (480.0, 272.0)),
         ("data/images/pulse-ps2-eu.chd", (640.0, 448.0)),
@@ -1251,25 +1259,45 @@ fn a_pulse_detonator_hud_shows_the_emp_gauge_lit_by_the_charge() {
         .expect("loading a Pulse Detonator race");
         assert_eq!(loaded.hud.space.size, size, "{image}");
         let layout = loaded.hud.layout.as_ref().expect("a HUD layout");
-        assert!(
-            layout.sprite("SpeedBarBg").is_some() && layout.sprite("TimeIcon").is_some(),
-            "{image}: the disc's Time Trial layout is pulled in"
-        );
-        for index in 0..6 {
-            let pip = layout
-                .sprite(&format!("Emp_{index}"))
-                .unwrap_or_else(|| panic!("{image}: Emp_{index}"));
+        for gone in ["SpeedBarBg", "SpeedBar", "TimeIcon"] {
+            assert!(layout.sprite(gone).is_none(), "{image}: {gone}");
+        }
+        let rect = |name: &str| {
+            let sprite = layout
+                .sprite(name)
+                .unwrap_or_else(|| panic!("{image}: {name}"));
             assert!(
-                oag_hud::inside_screen(pip.rect, size),
-                "{image}: {:?}",
-                pip.rect
+                oag_hud::inside_screen(sprite.rect, size),
+                "{image}: {name} {:?}",
+                sprite.rect
+            );
+            sprite.rect
+        };
+        for index in 0..6 {
+            assert!(
+                rect(&format!("Emp_{index}"))[0] < size.0 / 2.0,
+                "{image}: left"
             );
         }
-        let bar = layout.sprite("SpeedBarBg").expect("checked").rect;
-        let pip = layout.sprite("Emp_0").expect("checked").rect;
+        let shield = rect("ShieldBarBg");
+        for index in 0..15 {
+            let bullet = rect(&format!("Bullet{index:02}"));
+            assert!(
+                bullet[0] > size.0 / 2.0 && bullet[1] + bullet[3] <= shield[1],
+                "{image}: the clip sits over the shield bar: {bullet:?} against {shield:?}"
+            );
+        }
+        for name in ["PulseBullets", "DetonatorScorePlain", "ScoreTxt"] {
+            assert!(
+                layout.labels.iter().any(|l| l.name == name),
+                "{image}: {name}"
+            );
+        }
+        let score = layout.labels.iter().find(|l| l.name == "ScoreTxt");
+        let mark = rect("EmpReady");
         assert!(
-            pip[1] + pip[3] <= bar[1] && (pip[0] - bar[0]).abs() < 4.0,
-            "{image}: the gauge sits over the speed bar: {pip:?} against {bar:?}"
+            score.is_some_and(|score| mark[1] + mark[3] <= score.y),
+            "{image}: the gauge clears the score"
         );
         let context = loaded.hud.context().expect("the layout parses");
         let drawn = |charge: u32, ready: bool| {
@@ -1289,5 +1317,16 @@ fn a_pulse_detonator_hud_shows_the_emp_gauge_lit_by_the_charge() {
             "{image}: 3 pips and the mark"
         );
         assert_eq!(drawn(6, true), drawn(0, false) + 7, "{image}: full");
+        let clip = |clip: u8| {
+            let readout = oag_hud::Readout {
+                detonator: Some(oag_hud::Detonator {
+                    clip,
+                    ..oag_hud::Detonator::default()
+                }),
+                ..oag_hud::Readout::default()
+            };
+            oag_hud::draw_list(&context, &readout).sprites.len()
+        };
+        assert_eq!(clip(15), clip(0) + 15, "{image}: one icon a volley");
     }
 }

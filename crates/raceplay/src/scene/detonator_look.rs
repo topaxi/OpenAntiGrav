@@ -25,16 +25,7 @@ impl super::Scene {
             &mut envelopes,
             &crate::drawable::lock(&race.view.mine_pins),
         );
-        let mut sizes = crate::drawable::lock(&race.view.mine_sizes);
-        sizes.clear();
-        for (mine, envelope) in laid.iter().zip(&envelopes) {
-            if mine.live {
-                sizes.insert(
-                    (mine.entry, mine.lane),
-                    (envelope.football_scale(), envelope.spike_scale()),
-                );
-            }
-        }
+        race.record_mine_sizes(laid, &envelopes);
         envelopes
     }
 

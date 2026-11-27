@@ -1,56 +1,237 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Wipeout Pulse ships no Detonator HUD: its Time Trial layout, pulled from the disc, plus an
-     EMP charge gauge of ours cut from Pulse's own shield bar art (docs/gameplay/detonator-pulse.md,
-     "The gauge"). Six pips, one per pad charge up to a full EMP; EmpReady marks the third, where
-     the EMP can be fired. -->
+<!-- Detonator on Wipeout Pulse: this project's own HUD layout, since Pulse ships no
+     Detonator. Arranged as Fury's: the EMP gauge bottom left, the clip over the shield bar
+     bottom right, the score where Zone has it, drawn with the disc's own HUD texture, fonts, strings and countdown models
+     (docs/gameplay/detonator-pulse.md, "The HUD"). Six EMP pips, one per pad charge up
+     to a full EMP; EmpReady marks the third, where the EMP can be fired. -->
 <Screen>
-  <LoadXML>
-    <Values SrcRel="..\TimeTrial_HUD.xml" DirectEmbed="true"></Values>
-  </LoadXML>
   <Screen name="HUD">
-    <Item OffsetX="300" OffsetY="184">
+    <Variable global="HudColour1">
+      <Values String="0xFFFFFFFF"></Values>
+    </Variable>
+    <Variable global="HudColour2">
+      <Values String="0xFF7DEFC0"></Values>
+    </Variable>
+    <Variable global="HudColour3">
+      <Values String="0xFF0DDFDD"></Values>
+    </Variable>
+    <Variable global="HudColour3A">
+      <Values String="0x60B5D7C8"></Values>
+    </Variable>
+    <Variable global="HudBGColour">
+      <Values String="0x40000000"></Values>
+    </Variable>
+    <Mode3D>
+      <Values FirstPass="yes" OriginX="0.0" OriginY="35.0"></Values>
+      <Model name="ReadyGo" Enabletransition="0" Delay="0">
+        <Values Src="Data\HUD\Pulse_Ready_Go.vex" x="0.0" y="0.0" z="-70.0" ztest="0"></Values>
+      </Model>
+      <Model name="Cockpit321Go" Enabletransition="0" Delay="0">
+        <Values Src="Data\HUD\Cockpit_321GO.vex" x="0.0" y="0.0" z="-70.0" ztest="0"></Values>
+      </Model>
+    </Mode3D>
+    <Item OffsetX="5" OffsetY="5">
+      <Text name="LapTxt">
+        <Values idstring="IG_HUD_LAP" font="HUDSmall" scale="1.0" Color="FEConst->HudColour2" x="4" y="0" CalcBlur="1" BorderColor="FEConst->HudBGColour"></Values>
+      </Text>
+      <Text name="Lap">
+        <Values font="HUD" scale="1.0" align="left" vertalign="bottom" x="3" y="32" CalcBlur="1" BorderColor="FEConst->HudBGColour"></Values>
+      </Text>
+      <Text name="LapOf">
+        <Values string="/" font="HUD" scale="0.6" align="left" vertalign="bottom" Color="FEConst->HudColour2" x="27" y="33" CalcBlur="1" BorderColor="FEConst->HudBGColour"></Values>
+      </Text>
+      <Text name="Lap Outof">
+        <Values font="HUD" scale="0.6" align="left" vertalign="bottom" x="40" y="36" CalcBlur="1" BorderColor="FEConst->HudBGColour"></Values>
+      </Text>
+    </Item>
+    <Item OffsetX="5" OffsetY="186">
       <Text name="EmpLabel">
-        <Values string="EMP" font="HUDSmall" align="right" scale="1.0" x="2" y="6" CalcBlur="1" Color="FEConst->HudColour2" BorderColor="FEConst->HudBGColour"></Values>
+        <Values string="EMP" font="HUDSmall" align="left" scale="1.0" Color="FEConst->HudColour2" x="4" y="0" CalcBlur="1" BorderColor="FEConst->HudBGColour"></Values>
       </Text>
       <Image name="EmpBack_0">
-        <Values x="6" y="6" width="21" height="12" U="6" V="26" TxtrWidth="21" TxtrHeight="12" CalcBlur="1" Color="FEConst->HudColour3A" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+        <Values x="6" y="12" width="27" height="20" U="0" V="0" TxtrWidth="27" TxtrHeight="26" CalcBlur="1" Color="FEConst->HudColour3A" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
       </Image>
       <Image name="EmpBack_1">
-        <Values x="29" y="6" width="21" height="12" U="29" V="26" TxtrWidth="21" TxtrHeight="12" CalcBlur="1" Color="FEConst->HudColour3A" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+        <Values x="34" y="12" width="27" height="20" U="28" V="0" TxtrWidth="27" TxtrHeight="26" CalcBlur="1" Color="FEConst->HudColour3A" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
       </Image>
       <Image name="EmpBack_2">
-        <Values x="52" y="6" width="21" height="12" U="52" V="26" TxtrWidth="21" TxtrHeight="12" CalcBlur="1" Color="FEConst->HudColour3A" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+        <Values x="62" y="12" width="27" height="20" U="56" V="0" TxtrWidth="27" TxtrHeight="26" CalcBlur="1" Color="FEConst->HudColour3A" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
       </Image>
       <Image name="EmpBack_3">
-        <Values x="75" y="6" width="21" height="12" U="75" V="26" TxtrWidth="21" TxtrHeight="12" CalcBlur="1" Color="FEConst->HudColour3A" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+        <Values x="90" y="12" width="27" height="20" U="84" V="0" TxtrWidth="27" TxtrHeight="26" CalcBlur="1" Color="FEConst->HudColour3A" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
       </Image>
       <Image name="EmpBack_4">
-        <Values x="98" y="6" width="21" height="12" U="98" V="26" TxtrWidth="21" TxtrHeight="12" CalcBlur="1" Color="FEConst->HudColour3A" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+        <Values x="118" y="12" width="27" height="20" U="112" V="0" TxtrWidth="27" TxtrHeight="26" CalcBlur="1" Color="FEConst->HudColour3A" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
       </Image>
       <Image name="EmpBack_5">
-        <Values x="121" y="6" width="23" height="12" U="123" V="26" TxtrWidth="23" TxtrHeight="12" CalcBlur="1" Color="FEConst->HudColour3A" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+        <Values x="146" y="12" width="28" height="20" U="140" V="0" TxtrWidth="28" TxtrHeight="26" CalcBlur="1" Color="FEConst->HudColour3A" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
       </Image>
       <Image name="Emp_0">
-        <Values x="6" y="6" width="21" height="12" U="6" V="26" TxtrWidth="21" TxtrHeight="12" CalcBlur="1" Color="FEConst->HudColour3" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+        <Values x="6" y="12" width="27" height="20" U="0" V="0" TxtrWidth="27" TxtrHeight="26" CalcBlur="1" Color="FEConst->HudColour3" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
       </Image>
       <Image name="Emp_1">
-        <Values x="29" y="6" width="21" height="12" U="29" V="26" TxtrWidth="21" TxtrHeight="12" CalcBlur="1" Color="FEConst->HudColour3" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+        <Values x="34" y="12" width="27" height="20" U="28" V="0" TxtrWidth="27" TxtrHeight="26" CalcBlur="1" Color="FEConst->HudColour3" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
       </Image>
       <Image name="Emp_2">
-        <Values x="52" y="6" width="21" height="12" U="52" V="26" TxtrWidth="21" TxtrHeight="12" CalcBlur="1" Color="FEConst->HudColour3" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+        <Values x="62" y="12" width="27" height="20" U="56" V="0" TxtrWidth="27" TxtrHeight="26" CalcBlur="1" Color="FEConst->HudColour3" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
       </Image>
       <Image name="Emp_3">
-        <Values x="75" y="6" width="21" height="12" U="75" V="26" TxtrWidth="21" TxtrHeight="12" CalcBlur="1" Color="FEConst->HudColour3" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+        <Values x="90" y="12" width="27" height="20" U="84" V="0" TxtrWidth="27" TxtrHeight="26" CalcBlur="1" Color="FEConst->HudColour3" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
       </Image>
       <Image name="Emp_4">
-        <Values x="98" y="6" width="21" height="12" U="98" V="26" TxtrWidth="21" TxtrHeight="12" CalcBlur="1" Color="FEConst->HudColour3" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+        <Values x="118" y="12" width="27" height="20" U="112" V="0" TxtrWidth="27" TxtrHeight="26" CalcBlur="1" Color="FEConst->HudColour3" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
       </Image>
       <Image name="Emp_5">
-        <Values x="121" y="6" width="23" height="12" U="123" V="26" TxtrWidth="23" TxtrHeight="12" CalcBlur="1" Color="FEConst->HudColour3" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+        <Values x="146" y="12" width="28" height="20" U="140" V="0" TxtrWidth="28" TxtrHeight="26" CalcBlur="1" Color="FEConst->HudColour3" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
       </Image>
       <Image name="EmpReady">
-        <Values x="73" y="19" width="9" height="7" U="19" V="87" TxtrWidth="9" TxtrHeight="7" CalcBlur="1" Color="FEConst->HudColour1" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+        <Values x="85" y="33" width="9" height="7" U="19" V="87" TxtrWidth="9" TxtrHeight="7" CalcBlur="1" Color="FEConst->HudColour1" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
       </Image>
     </Item>
+    <Item OffsetX="300" OffsetY="210">
+      <Image name="ShieldBarBg">
+        <Values x="6" y="36" width="140" height="12" U="6" V="26" TxtrWidth="140" TxtrHeight="12" CalcBlur="1" Color="FEConst->HudColour3A" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+      </Image>
+      <Image name="ShieldBar">
+        <Values x="6" y="36" width="140" height="12" U="6" V="26" TxtrWidth="140" TxtrHeight="12" CalcBlur="1" Color="FEConst->HudColour3" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+      </Image>
+      <Image name="ShieldBarMark">
+        <Values x="2" y="48" width="9" height="7" U="19" V="87" TxtrWidth="9" TxtrHeight="7" CalcBlur="1" Color="FEConst->HudColour1" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+      </Image>
+      <Text name="ShieldBarText">
+        <Values string="+0" font="HUDSmall" align="right" scale="1.0" Color="FEConst->HudColour1" x="0" y="48" CalcBlur="1" BorderColor="FEConst->HudBGColour"></Values>
+      </Text>
+      <Image name="ClipBack">
+        <Values x="6" y="14" width="140" height="22" U="6" V="26" TxtrWidth="140" TxtrHeight="12" CalcBlur="1" Color="FEConst->HudColour3A" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+      </Image>
+      <Image name="Multi00">
+        <Values x="8" y="9" width="7" height="3" U="40" V="28" TxtrWidth="7" TxtrHeight="3" CalcBlur="1" Color="FEConst->HudColour1" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+      </Image>
+      <Image name="Multi01">
+        <Values x="17" y="9" width="7" height="3" U="40" V="28" TxtrWidth="7" TxtrHeight="3" CalcBlur="1" Color="FEConst->HudColour1" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+      </Image>
+      <Image name="Multi02">
+        <Values x="26" y="9" width="7" height="3" U="40" V="28" TxtrWidth="7" TxtrHeight="3" CalcBlur="1" Color="FEConst->HudColour1" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+      </Image>
+      <Image name="Multi03">
+        <Values x="35" y="9" width="7" height="3" U="40" V="28" TxtrWidth="7" TxtrHeight="3" CalcBlur="1" Color="FEConst->HudColour1" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+      </Image>
+      <Image name="Multi04">
+        <Values x="44" y="9" width="7" height="3" U="40" V="28" TxtrWidth="7" TxtrHeight="3" CalcBlur="1" Color="FEConst->HudColour1" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+      </Image>
+      <Image name="Multi05">
+        <Values x="53" y="9" width="7" height="3" U="40" V="28" TxtrWidth="7" TxtrHeight="3" CalcBlur="1" Color="FEConst->HudColour1" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+      </Image>
+      <Image name="Multi06">
+        <Values x="62" y="9" width="7" height="3" U="40" V="28" TxtrWidth="7" TxtrHeight="3" CalcBlur="1" Color="FEConst->HudColour1" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+      </Image>
+      <Image name="Multi07">
+        <Values x="71" y="9" width="7" height="3" U="40" V="28" TxtrWidth="7" TxtrHeight="3" CalcBlur="1" Color="FEConst->HudColour1" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+      </Image>
+      <Image name="Multi08">
+        <Values x="80" y="9" width="7" height="3" U="40" V="28" TxtrWidth="7" TxtrHeight="3" CalcBlur="1" Color="FEConst->HudColour1" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+      </Image>
+      <Image name="Multi09">
+        <Values x="89" y="9" width="7" height="3" U="40" V="28" TxtrWidth="7" TxtrHeight="3" CalcBlur="1" Color="FEConst->HudColour1" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+      </Image>
+      <Image name="Multi10">
+        <Values x="98" y="9" width="7" height="3" U="40" V="28" TxtrWidth="7" TxtrHeight="3" CalcBlur="1" Color="FEConst->HudColour1" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+      </Image>
+      <Image name="Multi11">
+        <Values x="107" y="9" width="7" height="3" U="40" V="28" TxtrWidth="7" TxtrHeight="3" CalcBlur="1" Color="FEConst->HudColour1" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+      </Image>
+      <Image name="Multi12">
+        <Values x="116" y="9" width="7" height="3" U="40" V="28" TxtrWidth="7" TxtrHeight="3" CalcBlur="1" Color="FEConst->HudColour1" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+      </Image>
+      <Image name="Multi13">
+        <Values x="125" y="9" width="7" height="3" U="40" V="28" TxtrWidth="7" TxtrHeight="3" CalcBlur="1" Color="FEConst->HudColour1" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+      </Image>
+      <Image name="Multi14">
+        <Values x="134" y="9" width="7" height="3" U="40" V="28" TxtrWidth="7" TxtrHeight="3" CalcBlur="1" Color="FEConst->HudColour1" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+      </Image>
+      <Image name="Bullet00">
+        <Values x="8" y="16" width="7" height="18" U="40" V="4" TxtrWidth="7" TxtrHeight="18" CalcBlur="1" Color="FEConst->HudColour2" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+      </Image>
+      <Image name="Bullet01">
+        <Values x="17" y="16" width="7" height="18" U="40" V="4" TxtrWidth="7" TxtrHeight="18" CalcBlur="1" Color="FEConst->HudColour2" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+      </Image>
+      <Image name="Bullet02">
+        <Values x="26" y="16" width="7" height="18" U="40" V="4" TxtrWidth="7" TxtrHeight="18" CalcBlur="1" Color="FEConst->HudColour2" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+      </Image>
+      <Image name="Bullet03">
+        <Values x="35" y="16" width="7" height="18" U="40" V="4" TxtrWidth="7" TxtrHeight="18" CalcBlur="1" Color="FEConst->HudColour2" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+      </Image>
+      <Image name="Bullet04">
+        <Values x="44" y="16" width="7" height="18" U="40" V="4" TxtrWidth="7" TxtrHeight="18" CalcBlur="1" Color="FEConst->HudColour2" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+      </Image>
+      <Image name="Bullet05">
+        <Values x="53" y="16" width="7" height="18" U="40" V="4" TxtrWidth="7" TxtrHeight="18" CalcBlur="1" Color="FEConst->HudColour2" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+      </Image>
+      <Image name="Bullet06">
+        <Values x="62" y="16" width="7" height="18" U="40" V="4" TxtrWidth="7" TxtrHeight="18" CalcBlur="1" Color="FEConst->HudColour2" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+      </Image>
+      <Image name="Bullet07">
+        <Values x="71" y="16" width="7" height="18" U="40" V="4" TxtrWidth="7" TxtrHeight="18" CalcBlur="1" Color="FEConst->HudColour2" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+      </Image>
+      <Image name="Bullet08">
+        <Values x="80" y="16" width="7" height="18" U="40" V="4" TxtrWidth="7" TxtrHeight="18" CalcBlur="1" Color="FEConst->HudColour2" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+      </Image>
+      <Image name="Bullet09">
+        <Values x="89" y="16" width="7" height="18" U="40" V="4" TxtrWidth="7" TxtrHeight="18" CalcBlur="1" Color="FEConst->HudColour2" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+      </Image>
+      <Image name="Bullet10">
+        <Values x="98" y="16" width="7" height="18" U="40" V="4" TxtrWidth="7" TxtrHeight="18" CalcBlur="1" Color="FEConst->HudColour2" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+      </Image>
+      <Image name="Bullet11">
+        <Values x="107" y="16" width="7" height="18" U="40" V="4" TxtrWidth="7" TxtrHeight="18" CalcBlur="1" Color="FEConst->HudColour2" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+      </Image>
+      <Image name="Bullet12">
+        <Values x="116" y="16" width="7" height="18" U="40" V="4" TxtrWidth="7" TxtrHeight="18" CalcBlur="1" Color="FEConst->HudColour2" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+      </Image>
+      <Image name="Bullet13">
+        <Values x="125" y="16" width="7" height="18" U="40" V="4" TxtrWidth="7" TxtrHeight="18" CalcBlur="1" Color="FEConst->HudColour2" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+      </Image>
+      <Image name="Bullet14">
+        <Values x="134" y="16" width="7" height="18" U="40" V="4" TxtrWidth="7" TxtrHeight="18" CalcBlur="1" Color="FEConst->HudColour2" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+      </Image>
+      <Text name="PulseBullets">
+        <Values font="HUD" align="right" vertalign="bottom" scale="1.0" x="2" y="37" CalcBlur="1" BorderColor="FEConst->HudBGColour"></Values>
+      </Text>
+    </Item>
+    <Item OffsetX="5" OffsetY="230">
+    <Text name="ScoreTxt">
+      <Values idstring="IG_HUD_SCORE" font="HUDSmall" align="left" scale="1.0" x="4" y="0" CalcBlur="1" Color="FEConst->HudColour2" BorderColor="FEConst->HudBGColour"></Values>
+    </Text>
+    <Text name="DetonatorScorePlain">
+      <Values font="HUD" scale="0.9" align="left" vertalign="bottom" x="4" y="30" CalcBlur="1" BorderColor="FEConst->HudBGColour"></Values>
+    </Text>
+    </Item>
+    <Text name="ReadyText">
+      <Values font="HUD" cached="0" scale="1.5" align="centre" vertalign="middle" x="240" y="100" CalcBlur="1" BorderColor="FEConst->HudBGColour"></Values>
+    </Text>
+    <Text name="GoText">
+      <Values font="HUD" cached="0" scale="1.5" align="centre" vertalign="middle" x="240" y="100" CalcBlur="1" BorderColor="FEConst->HudBGColour"></Values>
+    </Text>
+    <Text name="Info">
+      <Values font="HUD" scale="0.8" align="centre" vertalign="middle" x="240" y="70" CalcBlur="1" BorderColor="FEConst->HudBGColour"></Values>
+    </Text>
+    <Text name="Info2nd">
+      <Values font="HUD" scale="0.6" align="centre" vertalign="middle" x="240" y="90" CalcBlur="1" BorderColor="FEConst->HudBGColour"></Values>
+    </Text>
+    <Text name="Info1">
+      <Values font="HUD" scale="0.6" align="centre" vertalign="middle" x="240" y="80" CalcBlur="1" BorderColor="FEConst->HudBGColour"></Values>
+    </Text>
+    <Text name="Info2">
+      <Values font="HUD" scale="0.6" align="centre" vertalign="middle" x="240" y="95" CalcBlur="1" BorderColor="FEConst->HudBGColour"></Values>
+    </Text>
+    <Text name="Info3">
+      <Values font="HUD" scale="0.6" align="centre" vertalign="middle" x="240" y="110" CalcBlur="1" BorderColor="FEConst->HudBGColour"></Values>
+    </Text>
+    <Text name="Info4">
+      <Values font="HUD" scale="0.6" align="centre" vertalign="middle" x="240" y="125" CalcBlur="1" BorderColor="FEConst->HudBGColour"></Values>
+    </Text>
+    <Text name="WrongWay">
+      <Values font="HUD" scale="0.8" align="centre" vertalign="middle" x="240" y="70" CalcBlur="1" BorderColor="FEConst->HudBGColour"></Values>
+    </Text>
   </Screen>
 </Screen>

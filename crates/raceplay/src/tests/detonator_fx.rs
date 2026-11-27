@@ -691,3 +691,37 @@ fn a_pulse_emp_wave_is_the_repulsors_wave_and_opening() {
     );
     check_the_wave_rides(race, false);
 }
+
+/// **A Pulse Detonator mine holds its authored size** however loud the music's envelope is,
+/// and a layout that names `MinesScaleToMusic="1"` grows it again.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn a_pulse_detonator_mine_scales_to_the_music_only_if_its_layout_says_so() {
+    let Some(mut race) = pulse_race() else {
+        return;
+    };
+    race.tick(&oag_gameplay::PlayerInputs::none());
+    let (ordinary, laid) = race.detonator_mine_looks();
+    assert!(laid.iter().any(|mine| mine.live), "stage 1 is laid");
+    let loud = vec![
+        crate::detonator_look::MineEnvelope {
+            football: 1.0,
+            spikes: 1.0,
+        };
+        laid.len()
+    ];
+    let size = |race: &Race| {
+        race.mine_model_matrices()[ordinary]
+            .x_axis
+            .truncate()
+            .length()
+    };
+    race.record_mine_sizes(&laid, &loud);
+    assert!((size(&race) - 1.0).abs() < 1e-4, "held: {}", size(&race));
+    let detonator = race.core.sim.detonator.as_mut().expect("a Detonator race");
+    std::sync::Arc::make_mut(&mut detonator.layout)
+        .values
+        .mines_scale_to_music = true;
+    race.record_mine_sizes(&laid, &loud);
+    assert!(size(&race) > 2.0, "scaled: {}", size(&race));
+}

@@ -330,6 +330,34 @@ impl Race {
             .collect()
     }
 
+    /// Puts each live mine's football and spikes size where the matrices read it. A layout
+    /// that does not scale its mines to the music records none, so they stay at size 1.
+    pub(crate) fn record_mine_sizes(
+        &self,
+        laid: &[crate::detonator_look::LaidMine],
+        envelopes: &[crate::detonator_look::MineEnvelope],
+    ) {
+        let mut sizes = crate::drawable::lock(&self.view.mine_sizes);
+        sizes.clear();
+        let scales = self
+            .core
+            .sim
+            .detonator
+            .as_ref()
+            .is_some_and(|d| d.layout.values.mines_scale_to_music);
+        if !scales {
+            return;
+        }
+        for (mine, envelope) in laid.iter().zip(envelopes) {
+            if mine.live {
+                sizes.insert(
+                    (mine.entry, mine.lane),
+                    (envelope.football_scale(), envelope.spike_scale()),
+                );
+            }
+        }
+    }
+
     /// Holds laid mines' music envelopes at the original's read, `(survey entry, lane)` to the
     /// football's `s` and the spikes' `t` (`--detonator-mine-envelopes`): a live pinned mine draws
     /// from them and its envelope does not step.

@@ -71,6 +71,13 @@ fn the_values_file_overwrites_what_it_names_and_the_rest_keeps_the_static_block(
 }
 
 #[test]
+fn mines_scale_to_music_unless_the_file_says_otherwise() {
+    assert!(parse_values(VALUES).mines_scale_to_music);
+    let held = parse_values(r#"<GamePlayValues MinesScaleToMusic="0"></GamePlayValues>"#);
+    assert!(!held.mines_scale_to_music);
+}
+
+#[test]
 fn the_static_block_counts_run_seventy_to_two_hundred() {
     let d = GamePlayValues::default();
     assert_eq!(d.mine_count(1), Some(70));
