@@ -223,14 +223,21 @@ about 0.15 s on boot 1 and 0.05 s on boot 2, which is what separates the digits
 from the words. Boot 2 found `hud` at `0x329021b0`, `hud+0x1bc` non-null, its
 `0x4` bit clear before the shot and set at all four pauses.
 
-**Per title.** HD/Fury: wired (`oag_title::hud::ShieldCountdown`). The PSN
-download: **checked, differs**: none of its four archives' XML names the widget,
-so `hud+0x1bc` is null there and the percentage stays. Omega: **ported,
-inherited from HD**: its `data00` copy authors the widget and its executable
-holds both `DamageBarShieldBg` and `%2.1f`; its update was not read.
-2048: **checked, applies, not wired**: `data/xml/HUD_damage_indicator.xml`
-authors the widget and the executable holds its name; 2048's HUD update is its
-own (`oag_hud::dialect_2048`) and was not read.
+**Per title**, what the HUD shows while a Shield runs. The weapon box is empty on
+all of them: the fire clears the held pickup.
+
+| Title | Shown | Ours | Evidence | Confidence |
+| --- | --- | --- | --- | --- |
+| HD / Fury | seconds left in green, green backing | wired (`oag_title::hud::ShieldCountdown`) | above | 90 |
+| PSN HD download | the percentage | already right | none of its four archives' XML names `DamageBarShieldBg`, so `hud+0x1bc` is null | 75 |
+| Pulse (PSP) | nothing added: empty box, percentage | already right | static: `PlayerStatus_Update` (`0x0883b3b8`) takes the icon from the held id, writes the [`SubWeapon`](../psp-pulse-usa/sub-weapon.md) line for Autopilot and Cannon only, and reads neither the Shield flag nor its timer; [`shield-pickup.md`](../psp-pulse-usa/shield-pickup.md)'s image-wide scan finds no HUD reader | 85 |
+| Pulse (PS2) | as PSP | already right | inherited from PSP, its own binary not read | inherited |
+| Pure | nothing added: empty box, percentage | already right | static, USA: the fire (`0x0884c8bc`) clears the held id (`+0x1d8`) and the HUD update (`0x0892195c`) draws no icon for id `0`, with a text only for the Autopilot; no reader of the Shield fields (`+0x178`, `+0x17c`) found in it | 75 |
+| 2048 | the `ManualShield` outline drains from the top; percentage unchanged | wired (`HudArt::shield_drain_widget`) | static: [2048's `shield.md`](../vita-2048-eu-v104/shield.md#the-hud-manualshield-drains-while-the-shield-runs). The executable also carries this page's countdown, but no layout it loads has the widget | 75 |
+| Omega, HD circuits | seconds left | ported, inherited from HD | `data00`'s copy authors the widget and the executable holds `DamageBarShieldBg` and `%2.1f`; its update was not read | inherited |
+| Omega, 2048 circuits | the drain | ported, inherited from 2048 | its `2048_hud\` layout authors `ManualShield` | inherited |
+
+No comparison pair on any title holds a running Shield.
 
 ## `Hud_UpdateLapCounter` (`0x00096ef0`)
 

@@ -36,6 +36,10 @@ pub(super) struct SlotHud {
     /// HD's `hud+0x1e8`, the flash accumulator gated on
     /// [`Self::shield_flash_timer_whole`].
     pub(super) shield_blink_timer_whole: f32,
+    /// The running Shield's seconds left last tick, and what it started with: a rise of the
+    /// timer is a new shield. See [`Self::watch_shield`].
+    pub(super) shield_seconds_prev: f32,
+    pub(super) shield_seconds_started: f32,
     /// 2048's `EnergyBarDelay`, the lagging shield fraction
     /// ([`oag_hud::Readout::energy_bar_delay_fraction`]).
     pub(super) energy_bar_delay_fraction: f32,
@@ -184,6 +188,24 @@ impl SlotHud {
 }
 
 impl SlotHud {
+    /// Remembers what the running Shield started with, from its timer: the original keeps the
+    /// start beside the timer (`slot+0x1bc`), ours keeps only the time left, and every source
+    /// that arms it (pickup, Eliminator) raises it.
+    pub(super) fn watch_shield(&mut self, seconds: f32) {
+        if seconds > self.shield_seconds_prev {
+            self.shield_seconds_started = seconds;
+        }
+        self.shield_seconds_prev = seconds;
+    }
+
+    /// `seconds` left as a fraction of what the running Shield started with, `0.0` with none up.
+    pub(super) fn shield_fraction_left(&self, seconds: f32) -> f32 {
+        if seconds <= 0.0 || self.shield_seconds_started <= 0.0 {
+            return 0.0;
+        }
+        (seconds / self.shield_seconds_started).min(1.0)
+    }
+
     /// One frame of `Hud_UpdatePickupIcon`'s announcement timer: a change of the held weapon to
     /// a new one arms it, the same frame takes `dt` off, and nothing held clears the memory so
     /// the next grant announces even if it is the same weapon again. On the frame the timer
@@ -330,6 +352,7 @@ impl RaceView {
             let (shown, dt) = (core.sim.pilot_assist_shown(slot), core.sim.dt);
             let hud = &mut self.huds[slot];
             hud.advance(percent, fraction, thrust, absorbing, held, dt);
+            hud.watch_shield(ship.physics.shield_pickup_timer);
             if look.is_some() {
                 hud.pickup_look = look;
             }

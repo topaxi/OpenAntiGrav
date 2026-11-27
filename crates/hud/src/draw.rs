@@ -1076,8 +1076,13 @@ fn list(cx: &Context<'_>, readout: &Readout, sight: Sight) -> Frame {
     }
 
     // 2048's state-gated fills, over their dim backgrounds - see
-    // `dialect_2048::state_sprites`.
-    for sprite in super::dialect_2048::state_sprites(cx.layout, cx.art, readout) {
+    // `dialect_2048::state_sprites` - and the running Shield's drain.
+    for sprite in super::dialect_2048::state_sprites(cx.layout, cx.art, readout)
+        .into_iter()
+        .chain(super::dialect_2048::shield_drain(
+            cx.layout, cx.art, readout,
+        ))
+    {
         frame.sprites.extend(sprite_draw(&sprite, cx.sheet));
     }
 

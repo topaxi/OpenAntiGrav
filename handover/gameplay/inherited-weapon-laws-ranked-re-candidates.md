@@ -1,7 +1,7 @@
 ---
 status: re-first
 titles: [pure, hd, 2048, omega]
-updated: 2026-11-03
+updated: 2026-11-27
 summary: "Ranked list of weapon laws inherited from Pulse or HD: the fire law (Pure read: same as Pulse) on the other titles first, then 2048 LeachBeam"
 ---
 
@@ -79,6 +79,12 @@ Ranked, most play impact first. Each names what would settle it.
 Not ranked, because the matrix says `?` and a census would settle it first:
 Omega's Turbo, Shield, Autopilot, Shuriken and Repulser (no constructor or
 `.cpp` tag found), and every 2048 weapon constructor.
+11. **How long a picked-up Shield lasts in 2048's own modes.** The start at
+   `0x8120eaae` reads the ship's `ManualShieldStats` `life_time` (3) outside
+   `GameMode_IsHdLineage`, where `weaponstats_Race_2048.xml` authors `time="5"`
+   (static, 60; `docs/ghidra/functions/vita-2048-eu-v104/shield.md`, "The HUD").
+   Ours always takes the table's. Settles it: a Vita3K poll of the pickup slot's
+   `+0x1b8` after a Shield in a 2048 campaign race.
 
 ## Next Steps
 

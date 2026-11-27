@@ -163,6 +163,9 @@ pub const ART_2048: &oag_title::HudArt = &oag_title::HudArt {
     pickup_fade: None,
     shield_percent: true,
     sub_weapon_line: false,
+    // Inherited from 2048, unread in Omega's executable: Omega's `2048_hud\` damage indicator
+    // authors the same widget (`docs/ghidra/functions/vita-2048-eu-v104/shield.md`, "The HUD").
+    shield_drain_widget: Some("ManualShield"),
     hud_font_role: "2048HUD",
     hud_small_font_role: None,
     total_time_hundredths: true,
@@ -395,6 +398,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     bar_models: None,
     time_ladder_captions: None,
     pickup_icon_uv: None,
+    shield_drain_widget: None,
     zone_speed_classes: Some(ZONE_SPEED_CLASSES),
     zone_score: oag_title::ZoneScore::CentredOnThrees,
     shield_percent: false,
