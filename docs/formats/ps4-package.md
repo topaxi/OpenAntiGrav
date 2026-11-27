@@ -87,7 +87,10 @@ row's second word is an offset into it. Read on both Omega packages
 | `0x1200` | `icon0.png` | 512x512 | base and patch |
 | `0x1220` | `pic0.png` | 1920x1080, key art with the logo | base only |
 
-`0x1280`, `0x12a0` and `0x12c0` are `.dds` copies of the three, not read.
+`0x1280`, `0x12a0` and `0x12c0` are `.dds` copies of the three, not read. A
+320x176 PNG in the base package is not system art of the game: it is
+`ICON0.PNG` inside the trophy set (entry `0x1400`, `trophy/trophy00.trp`), the
+trophy list's own icon.
 `oag_disc::ps4_pkg::header::header_entry` reads one entry; the
 [title chooser](../ui/launcher.md) offers `pic0` then `pic1`. An unpacked folder
 does not keep them, so for one the chooser looks for a base package on the

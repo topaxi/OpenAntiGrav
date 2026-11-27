@@ -76,8 +76,9 @@ it turns out to be:
 - The HD logo is drawn as the opaque rectangle it is (`ICON0.PNG` is RGB with no
   alpha): no colour is keyed out. It sits over the left of the picture, at half
   the card's width; the position is this screen's own.
-- A `.vpk` is covered by the same file match as a disc image, but no real `.vpk`
-  with a `pic0.png` has been read here: the extracted folders have.
+- The `.vpk` read is checked on the stand-in packages
+  `scripts/make-test-vpk.sh` zips from the extracted folders, not on a NoNpDrm
+  dump.
 - An unpacked Omega folder keeps no system art (the extraction is the package's
   file system, and the pictures are header entries outside it). With the `.pkg`
   deleted the card shows the name.
