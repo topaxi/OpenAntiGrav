@@ -439,6 +439,9 @@ fn pulse_ink_lefts(atlas: &oag_ui::font::Atlas, text: &str, x: f32, scale: f32) 
     lefts
 }
 
+/// A text, the `x` it is authored at, and where each of its glyphs' ink starts in the frame.
+type Case<'a> = (&'a str, f32, &'a [f32]);
+
 /// Pulse's `Title` face stepped as the original draws it at a fractional scale, against the ink
 /// read off its frames (`docs/ui/menus-original.md`, "Pulse's text pens step up to whole units"):
 /// the PS2's headings at 0.8 and the PSP's legal line at 0.7.
@@ -466,7 +469,7 @@ fn pulses_pens_put_a_fractional_text_where_the_original_does() {
     // The legal line opens `\u{a9}2007 `, then a word of four: its first nine glyphs.
     let psp_legal: &[f32] = &[40.0, 47.0, 54.0, 61.0, 68.0, 78.0, 85.0, 92.0, 99.0];
     for (label, image, _) in images() {
-        let (cases, scale): (Vec<(&str, f32, &[f32])>, f32) = match label {
+        let (cases, scale): (Vec<Case>, f32) = match label {
             "pulse-ps2-eu" => (
                 ps2_headings.iter().map(|(t, l)| (*t, 66.0, *l)).collect(),
                 0.8,
