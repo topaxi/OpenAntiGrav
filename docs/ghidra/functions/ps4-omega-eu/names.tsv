@@ -276,3 +276,5 @@
 0x01728780	function	Psys_SetInheritedVelocity	80	../ps3-hdfury-eu/rocket-craft-blast.md
 
 0x0133c150	function	EMP_DrawLights	85	../ps3-hdfury-eu/detonator-emp.md
+0x013691b0	function	Rocket_Update	85	../ps3-hdfury-eu/projectile-floor-arms.md
+0x01351930	function	Missile_Update	85	../ps3-hdfury-eu/projectile-floor-arms.md

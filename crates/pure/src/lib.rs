@@ -207,6 +207,8 @@ pub const TITLE: &Title = &Title {
             oag_title::weapons::RocketOpenAir::Falls,
             "Wipeout Pulse",
         ),
+        // Pure's own update falls along world down (`psp-pure-usa/floor-follow.md`).
+        plasma_fall: oag_title::pre_race::Sourced::measured(oag_title::weapons::PlasmaFall::WorldY),
         // Measured: Pure's decision code equals Pulse's law (`psp-pure-usa/weapon-ai-fire.md`).
         opponent_fire: oag_title::pre_race::Sourced::measured(
             oag_title::weapons::OpponentFire::PULSE,

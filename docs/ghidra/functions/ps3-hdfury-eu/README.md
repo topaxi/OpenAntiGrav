@@ -84,6 +84,9 @@ Two structural facts to expect, both different from every other binary here:
   `MissileExplosion_Update` (1.0 s life, retired on `age > 1`), the sixteen
   `ThickLine_bighalo` `FatLine` streaks at `+0x190`, node to material for
   `sphere`/`bloom`/`rays`/`shockwave`, and the `Bloom adaption boost` override.
+- [projectile-floor-arms.md](projectile-floor-arms.md) - the probe and travel-sweep
+  floor arms of `Rocket_Update`, `Plasma_Update`, `Missile_Update` and `Shuriken_Update`,
+  the Plasma's world-Y fall, and Omega's and 2048's own copies.
 - [plasma.md](plasma.md) - `PlasmaManager_Update`, `Plasma_Update`,
   `Plasma_CheckShipHit` and the `WeaponExplosions` update/draw pair: the
   1.0 s hardcoded wind-up, the 10.0 s reap, the 6.0 probe, the +-6.0 hit

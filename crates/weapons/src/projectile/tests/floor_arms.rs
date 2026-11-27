@@ -1,9 +1,11 @@
 //! A projectile's two floor arms, the probe's and the travel sweep's, per title
-//! (`docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`, "By-catch in the flight arms").
+//! (`docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`, "By-catch in the flight arms";
+//! HD's in `docs/ghidra/functions/ps3-hdfury-eu/projectile-floor-arms.md`).
 //!
 //! The floor is flat at `y = 0`, so every expected velocity is a line of arithmetic.
 
 use super::*;
+use crate::projectile::{FlightLaws, PlasmaFall};
 
 const DT: f32 = 1.0 / 60.0;
 
@@ -57,40 +59,22 @@ const CROSSING: Vec3 = Vec3::new(0.0, 3.0, 0.0);
 const CROSSING_VELOCITY: Vec3 = Vec3::new(120.0, -240.0, 0.0);
 
 #[test]
-fn a_shuriken_probe_floor_arm_writes_the_step_to_the_ride_point_raw() {
-    let velocity = Vec3::new(300.0, 0.0, 0.0);
-    let after = once(
-        Weapon::Shuriken,
-        FloorArms::SteerToRidePoint,
-        ABOVE,
-        velocity,
-        Vec3::Y,
-    );
-    // `(hit + normal * 3.0 - from) / dt` = `((5, 3, 0) - (0, 4.5, 0)) * 60`: longer than it was.
-    assert!(
-        near(after.velocity, Vec3::new(300.0, -90.0, 0.0)),
-        "{:?}",
-        after.velocity
-    );
-    assert!(
-        near(after.position, Vec3::new(5.0, 3.0, 0.0)),
-        "{:?}",
-        after.position
-    );
-
-    let after = once(
-        Weapon::Shuriken,
-        FloorArms::ParallelToFloor,
-        ABOVE,
-        velocity,
-        Vec3::Y,
-    );
-    assert!(near(after.velocity, velocity), "{:?}", after.velocity);
-    assert!(
-        near(after.position, Vec3::new(5.0, 3.0, 0.0)),
-        "{:?}",
-        after.position
-    );
+fn a_shuriken_probe_floor_arm_writes_the_step_to_the_ride_point_raw_on_pulse_and_on_hd() {
+    for floor_arms in [FloorArms::SteerToRidePoint, FloorArms::ParallelToFloor] {
+        let velocity = Vec3::new(300.0, 0.0, 0.0);
+        let after = once(Weapon::Shuriken, floor_arms, ABOVE, velocity, Vec3::Y);
+        // `(hit + normal * 3.0 - from) / dt` = `((5, 3, 0) - (0, 4.5, 0)) * 60`: longer than it was.
+        assert!(
+            near(after.velocity, Vec3::new(300.0, -90.0, 0.0)),
+            "{floor_arms:?} {:?}",
+            after.velocity
+        );
+        assert!(
+            near(after.position, Vec3::new(5.0, 3.0, 0.0)),
+            "{floor_arms:?} {:?}",
+            after.position
+        );
+    }
 }
 
 #[test]
@@ -128,88 +112,194 @@ fn a_missile_probe_floor_arm_steers_to_the_ride_point_where_a_parallel_turn_does
     );
 }
 
+/// Where `CROSSING`'s step ends: past the floor it crosses.
+const CROSSED: Vec3 = Vec3::new(2.0, -1.0, 0.0);
+
 #[test]
 fn a_rocket_and_a_shuriken_sweep_floor_arm_writes_the_step_to_the_ride_point_raw() {
-    for kind in [Weapon::Rocket, Weapon::Shuriken] {
-        let after = once(
-            kind,
-            FloorArms::SteerToRidePoint,
-            CROSSING,
-            CROSSING_VELOCITY,
-            Vec3::X,
-        );
+    for (kind, floor_arms) in [
+        (Weapon::Rocket, FloorArms::SteerToRidePoint),
+        (Weapon::Shuriken, FloorArms::SteerToRidePoint),
+        (Weapon::Shuriken, FloorArms::ParallelToFloor),
+    ] {
+        let after = once(kind, floor_arms, CROSSING, CROSSING_VELOCITY, Vec3::X);
         // `(hit + normal * 3.0 - from) / dt` = `((1.5, 3, 0) - (0, 3, 0)) * 60`, whatever the speed
         // was, and the floor's normal adopted.
         assert!(
             near(after.velocity, Vec3::new(90.0, 0.0, 0.0)),
-            "{kind:?} {:?}",
+            "{kind:?} {floor_arms:?} {:?}",
             after.velocity
         );
         assert!(
             near(after.position, Vec3::new(1.5, 3.0, 0.0)),
-            "{kind:?} {:?}",
+            "{kind:?} {floor_arms:?} {:?}",
             after.position
         );
-        assert_eq!(after.surface, Vec3::Y, "{kind:?}");
-
-        let after = once(
-            kind,
-            FloorArms::ParallelToFloor,
-            CROSSING,
-            CROSSING_VELOCITY,
-            Vec3::X,
-        );
-        // Turned parallel to the floor at the speed it had (the fall has run: a rocket and a blade
-        // find nothing below their end, so `y` loses `50 dt`).
-        let speed = Vec3::new(120.0, -240.0 - 50.0 * DT, 0.0).length();
-        assert!(
-            near(after.velocity, Vec3::new(speed, 0.0, 0.0)),
-            "{kind:?} {:?}",
-            after.velocity
-        );
-        assert_eq!(after.surface, Vec3::Y, "{kind:?}");
+        assert_eq!(after.surface, Vec3::Y, "{kind:?} {floor_arms:?}");
     }
 }
 
 #[test]
-fn a_plasma_sweep_floor_arm_only_moves() {
-    // Carried normal tilted, so the fall along it is distinguishable from world down.
-    let carried = Vec3::new(0.6, 0.8, 0.0);
+fn hds_rocket_runs_no_sweep_floor_arm() {
     let after = once(
-        Weapon::Plasma,
-        FloorArms::SteerToRidePoint,
+        Weapon::Rocket,
+        FloorArms::ParallelToFloor,
         CROSSING,
         CROSSING_VELOCITY,
-        carried,
+        Vec3::X,
     );
-    // Seated at the Plasma's own ride height; the normal and the velocity are the probe's miss
-    // (`velocity -= surface * 50 dt`) and nothing more.
-    assert!(
-        near(after.position, Vec3::new(1.5, plasma::RIDE_HEIGHT, 0.0)),
-        "{:?}",
-        after.position
-    );
-    assert_eq!(after.surface, carried);
+    // The step's own end, the carried normal and the velocity the probe's miss left.
+    assert!(near(after.position, CROSSED), "{:?}", after.position);
+    assert_eq!(after.surface, Vec3::X);
     assert!(
         near(
             after.velocity,
-            CROSSING_VELOCITY - carried * (FALL_ACCELERATION * DT)
+            CROSSING_VELOCITY - Vec3::Y * (FALL_ACCELERATION * DT)
         ),
         "{:?}",
         after.velocity
     );
+}
 
-    let after = once(
-        Weapon::Plasma,
-        FloorArms::ParallelToFloor,
-        CROSSING,
-        CROSSING_VELOCITY,
+#[test]
+fn a_pulse_plasma_sweep_floor_arm_only_moves_and_hds_runs_none() {
+    // Carried normal tilted, so the fall along it is distinguishable from world down.
+    let carried = Vec3::new(0.6, 0.8, 0.0);
+    // Seated at the Plasma's own ride height on Pulse, at the step's end on HD; the normal and
+    // the velocity are the probe's miss (`velocity -= surface * 50 dt`) and nothing more.
+    for (floor_arms, position) in [
+        (
+            FloorArms::SteerToRidePoint,
+            Vec3::new(1.5, plasma::RIDE_HEIGHT, 0.0),
+        ),
+        (FloorArms::ParallelToFloor, CROSSED),
+    ] {
+        let after = once(
+            Weapon::Plasma,
+            floor_arms,
+            CROSSING,
+            CROSSING_VELOCITY,
+            carried,
+        );
+        assert!(
+            near(after.position, position),
+            "{floor_arms:?} {:?}",
+            after.position
+        );
+        assert_eq!(after.surface, carried, "{floor_arms:?}");
+        assert!(
+            near(
+                after.velocity,
+                CROSSING_VELOCITY - carried * (FALL_ACCELERATION * DT)
+            ),
+            "{floor_arms:?} {:?}",
+            after.velocity
+        );
+    }
+}
+
+#[test]
+fn a_craft_past_a_floor_hd_passes_through_is_still_struck() {
+    for kind in [Weapon::Rocket, Weapon::Plasma] {
+        let mut projectiles = Projectiles::new();
+        projectiles.slots[0] = Projectile {
+            kind: Some(kind),
+            position: CROSSING,
+            // Twice `CROSSING_VELOCITY`: the floor is met 3.4 along the step, the hull 5.8.
+            velocity: CROSSING_VELOCITY * 2.0,
+            surface: Vec3::X,
+            lifetime: MAX_FLIGHT_SECONDS - 0.1,
+            ..Projectile::default()
+        };
+        let impacts = projectiles.advance(
+            DT,
+            &floor_at_y(0.0),
+            None,
+            // Slot 0 fired it.
+            &ships(&[(false, Vec3::ZERO), (true, Vec3::new(3.5, -4.0, 0.0))]),
+            None,
+            None,
+            None,
+            TriggerRadii::default(),
+            "VENOM",
+            FloorArms::ParallelToFloor,
+            crate::projectile::OwnCraftProbe::PlasmaWindow(0.04),
+            crate::projectile::LaunchScale::DisplayScaled,
+        );
+        assert_eq!(
+            impacts[0].and_then(|impact| impact.struck),
+            Some(1),
+            "{kind:?}"
+        );
+    }
+}
+
+/// A Plasma bolt over a floor too far below to probe, one update under a title's fall.
+fn open_air_plasma(floor_arms: FloorArms, plasma_fall: PlasmaFall, carried: Vec3) -> Projectile {
+    let mut projectiles = Projectiles::new();
+    projectiles.slots[0] = Projectile {
+        kind: Some(Weapon::Plasma),
+        position: Vec3::new(0.0, 50.0, 0.0),
+        velocity: Vec3::new(0.0, 0.0, 300.0),
+        surface: carried,
+        launch_speed_kmh: 600.0,
+        lifetime: MAX_FLIGHT_SECONDS - 0.1,
+        ..Projectile::default()
+    };
+    let table = oag_tables::weapons::parse(
+        r#"<WeaponStats>
+             <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
+             <Weapon type="Plasma"><Stats absorb="1" blastforce="10" blastradius="12"
+               damage="25" slowdown_time="1" speed="600" launchSpeed="0"/></Weapon>
+           </WeaponStats>"#,
+    )
+    .expect("the fixture parses");
+    let impacts = projectiles.advance(
+        DT,
+        &floor_at_y(0.0),
+        None,
+        &ships(&[]),
+        None,
+        table.plasma().as_ref(),
+        None,
+        TriggerRadii::default(),
+        "VENOM",
+        FlightLaws {
+            plasma_fall,
+            ..FlightLaws::from(floor_arms)
+        },
+        crate::projectile::OwnCraftProbe::NoBox,
+        crate::projectile::LaunchScale::Unscaled,
+    );
+    assert!(impacts[0].is_none());
+    projectiles.slots[0]
+}
+
+#[test]
+fn hds_plasma_falls_on_world_y_and_is_pinned_back_to_its_speed() {
+    let carried = Vec3::new(0.6, 0.8, 0.0);
+    let hd = open_air_plasma(FloorArms::ParallelToFloor, PlasmaFall::WorldY, carried);
+    let fallen = Vec3::new(0.0, -FALL_ACCELERATION * DT, 300.0);
+    assert!(
+        near(hd.velocity, fallen.normalize() * (600.0 / 3.6)),
+        "{:?}",
+        hd.velocity
+    );
+    assert_eq!(hd.surface, carried);
+
+    // Pulse pulls along the carried normal and keeps whatever speed that leaves.
+    let pulse = open_air_plasma(
+        FloorArms::SteerToRidePoint,
+        PlasmaFall::AlongCarriedNormal,
         carried,
     );
-    assert_eq!(
-        after.surface,
-        Vec3::Y,
-        "a title without the law adopts the floor's normal"
+    assert!(
+        near(
+            pulse.velocity,
+            Vec3::new(0.0, 0.0, 300.0) - carried * (FALL_ACCELERATION * DT)
+        ),
+        "{:?}",
+        pulse.velocity
     );
 }
 

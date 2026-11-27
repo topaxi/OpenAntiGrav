@@ -271,7 +271,7 @@ Confidence 80 (the slot table is
 | `0x002ebde8` | `RibbonNode_Alloc` | 85 |
 | `0x002ebce8` | `RibbonNode_Link` | 75 |
 | `0x002ebd48` | `RibbonNode_Unlink` | 75 |
-| `0x00123fb0` | `Rocket_Update` | 70 |
+| `0x00123fb0` | `Rocket_Update` | 88, [projectile-floor-arms.md](projectile-floor-arms.md) |
 
 `Rocket_Update` sits between `PulseBullet.cpp`'s and `Rocket.cpp`'s
 constructors, reads the ribbon pointer at `rocket + 0x124`, and also calls the

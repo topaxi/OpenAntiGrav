@@ -3,7 +3,9 @@
 
 use super::craft_box::body_from_rows;
 use super::*;
-use crate::projectile::{FlightLaws, OwnCraftProbe, ProbeLengths, RocketOpenAir, own_box_blocks};
+use crate::projectile::{
+    FlightLaws, OwnCraftProbe, PlasmaFall, ProbeLengths, RocketOpenAir, own_box_blocks,
+};
 
 const DT: f32 = 1.0 / 60.0;
 
@@ -16,6 +18,7 @@ const HD: FlightLaws = FlightLaws {
         shuriken: 12.0,
     },
     rocket_open_air: RocketOpenAir::TurnsAlongNormal,
+    plasma_fall: PlasmaFall::WorldY,
 };
 
 /// A Feisar's `<Misc>` before the 0.75 scale: HD's live collider is `(3.75, 2.625, 9.75)`.

@@ -219,11 +219,10 @@ Landed: see plasma.md (HD), 2026-11-15 section. Open, in the order a player noti
    unread, same symptom as Pure's absorb burst).
 4. The blast after 0.5 s: the original's haze and two explosion lights (`*0x008aa260 +0x30/+0xa0`) are unwired.
 5. The sphere's probe and `iblScalePower` are the glass's, not read on the sphere's draw (two RSX dumps missed it).
-6. Past 1 s on a banked climb ours bends with the road; the original holds its heading (HD's floor arms unread).
-7. The Plasma's lights (wind-up two, release one, blast two) are unwired.
+6. The Plasma's lights (wind-up two, release one, blast two) are unwired.
 
 No new RPCS3 capture is needed to start 1-3 (the frames are reproducible with `scripts/hd-weapon-pair.py`,
-state 7, Talon's Junction, Feisar Venom); 4, 5 and 7 need RE; 6 needs HD's `Plasma_Update` floor arm read.
+state 7, Talon's Junction, Feisar Venom); 4, 5 and 6 need RE.
 
 ## Next Steps
 

@@ -50,8 +50,8 @@ pub(super) fn nearest_hit<R: Raycaster + ?Sized, S: Craft>(
     // `include_reset` is false: a `Reset Collision` volume is a respawn trigger, not
     // a surface, and the original's query skips it (`Collision_RaycastWorld`'s
     // Reset skip, request bit clear).
-    let mut best = Raycaster::raycast(raycaster, Ray::new(from, direction, distance), None, false)
-        .map(|hit| {
+    let wall = Raycaster::raycast(raycaster, Ray::new(from, direction, distance), None, false).map(
+        |hit| {
             (
                 hit.distance,
                 SweepHit {
@@ -61,8 +61,36 @@ pub(super) fn nearest_hit<R: Raycaster + ?Sized, S: Craft>(
                     surface: Some(hit.surface),
                 },
             )
-        });
+        },
+    );
 
+    match hull_along(from, to, distance, ships, owner) {
+        Some((travelled, hull)) if wall.is_none_or(|(track, _)| travelled < track) => Some(hull),
+        _ => wall.map(|(_, hit)| hit),
+    }
+}
+
+/// The nearest hull one tick's step meets, the firing craft's excluded, whatever the track does.
+pub(super) fn nearest_hull<S: Craft>(
+    from: Vec3,
+    to: Vec3,
+    distance: f32,
+    ships: &[S],
+    owner: u8,
+) -> Option<SweepHit> {
+    hull_along(from, to, distance, ships, owner).map(|(_, hit)| hit)
+}
+
+/// [`nearest_hull`] with how far along the step the hull is met.
+fn hull_along<S: Craft>(
+    from: Vec3,
+    to: Vec3,
+    distance: f32,
+    ships: &[S],
+    owner: u8,
+) -> Option<(f32, SweepHit)> {
+    let direction = (to - from) / distance;
+    let mut best: Option<(f32, SweepHit)> = None;
     for (slot, ship) in ships.iter().enumerate() {
         if !ship.active() || slot as u8 == owner {
             continue;
@@ -85,7 +113,7 @@ pub(super) fn nearest_hit<R: Raycaster + ?Sized, S: Craft>(
         }
     }
 
-    best.map(|(_, hit)| hit)
+    best
 }
 
 /// The sphere a craft is tested against.

@@ -44,6 +44,15 @@ fn rocket_open_air(
     }
 }
 
+/// The flight's Plasma fall axis for a title's.
+fn plasma_fall(axis: oag_title::weapons::PlasmaFall) -> oag_weapons::projectile::PlasmaFall {
+    use oag_title::weapons::PlasmaFall;
+    match axis {
+        PlasmaFall::AlongCarriedNormal => oag_weapons::projectile::PlasmaFall::AlongCarriedNormal,
+        PlasmaFall::WorldY => oag_weapons::projectile::PlasmaFall::WorldY,
+    }
+}
+
 /// The flight's probe rule for a title's own-craft box. A title that has not measured it keeps a
 /// Plasma off the probe for [`UNMEASURED_PLASMA_PROBE_WINDOW`] seconds (chosen).
 #[must_use]
@@ -509,13 +518,15 @@ impl RaceSim {
     }
 
     /// The title's flight laws for the flyers that probe the track: [`Self::floor_arms`] with
-    /// `oag_title::weapons::Weapons::surface_probe_lengths` and `rocket_open_air`.
+    /// `oag_title::weapons::Weapons::surface_probe_lengths`, `rocket_open_air` and
+    /// `plasma_fall`.
     #[must_use]
     pub fn flight_laws(&self) -> oag_weapons::projectile::FlightLaws {
         oag_weapons::projectile::FlightLaws {
             floor_arms: self.floor_arms(),
             probes: probe_lengths(self.surface_probe_lengths),
             rocket_open_air: rocket_open_air(self.rocket_open_air),
+            plasma_fall: plasma_fall(self.plasma_fall),
         }
     }
 
@@ -855,8 +866,8 @@ impl RaceView {
 
 #[cfg(test)]
 mod own_craft_box_tests {
-    use super::{own_craft_probe_for, probe_lengths, rocket_open_air};
-    use oag_weapons::projectile::{OwnCraftProbe, ProbeLengths, RocketOpenAir};
+    use super::{own_craft_probe_for, plasma_fall, probe_lengths, rocket_open_air};
+    use oag_weapons::projectile::{OwnCraftProbe, PlasmaFall, ProbeLengths, RocketOpenAir};
 
     /// Each title's measured own-craft box reaches the flight as the rule its executable runs
     /// (`docs/gameplay/projectile-floor.md`, "The other titles").
@@ -898,5 +909,21 @@ mod own_craft_box_tests {
             shuriken: 12.0,
         };
         assert_eq!(laws(oag_hd::TITLE), (hd, RocketOpenAir::TurnsAlongNormal));
+    }
+
+    /// Pulse's Plasma falls along its carried normal; HD's, Omega's, 2048's and Pure's own
+    /// executables pull world Y (`docs/gameplay/projectile-floor.md`, "HD's floor arms").
+    #[test]
+    fn only_pulses_plasma_falls_along_its_carried_normal() {
+        let axis = |title: &oag_title::Title| plasma_fall(title.weapons.plasma_fall.value);
+        assert_eq!(axis(oag_pulse::TITLE), PlasmaFall::AlongCarriedNormal);
+        for title in [
+            oag_pure::TITLE,
+            oag_hd::TITLE,
+            oag_omega::TITLE,
+            oag_2048::TITLE,
+        ] {
+            assert_eq!(axis(title), PlasmaFall::WorldY, "{}", title.name);
+        }
     }
 }

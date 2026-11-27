@@ -456,3 +456,6 @@
 
 0x811e8650	function	EMP_DrawLights	85	../ps3-hdfury-eu/detonator-emp.md
 0x812f0ec4	function	GxtLoader_LoadTexture	85	gxt-loader.md
+0x81204248	function	Rocket_Update	85	../ps3-hdfury-eu/projectile-floor-arms.md
+0x811fc650	function	Plasma_Update	85	../ps3-hdfury-eu/projectile-floor-arms.md
+0x811f5ef6	function	Missile_Update	85	../ps3-hdfury-eu/projectile-floor-arms.md

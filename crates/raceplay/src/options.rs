@@ -734,6 +734,8 @@ pub struct SimSetup {
     pub surface_probe_lengths: oag_title::weapons::ProbeLengths,
     /// `oag_title::weapons::Weapons::rocket_open_air`.
     pub rocket_open_air: oag_title::weapons::RocketOpenAir,
+    /// `oag_title::weapons::Weapons::plasma_fall`.
+    pub plasma_fall: oag_title::weapons::PlasmaFall,
     /// Which ways a craft is put back are on, and the numbers they fire on:
     /// `oag_race::recovery::ResetTriggers::PULSE` with the title's
     /// `oag_title::Title::reset_enables` applied.
