@@ -842,8 +842,16 @@ paired standard errors in brackets, seeds closer out of 8.
 
 (Standard errors in units of 0.0001.) The flare on the four craft-hit pairs: `0100` -0.0043
 (61), far `0100` +0.0002 (2), far `0233` -0.0002 (10), and `0233` -0.0028 (135) over 24 seeds
-(+0.0328 (159) on the first 8, which is that pair's own scatter). At 0.5 and 0.6 s one seed's
-score moves by up to 0.04 either way while the mean does not.
+(+0.0328 (159) on the first 8, which is that pair's own scatter).
+
+**At the pairs' own seed some get worse.** `rocket-wall-0600` reads 0.211 before and 0.253 listed
+(film 2 0.226 to 0.197), `rocket-wall-0500` moves +0.034 and +0.023, and on the craft-hit pairs
+`0100` 0.0000, `0233` +0.0101, far `0100` +0.0003, far `0233` +0.0013. At 0.5 and 0.6 s no flare
+streak quad of ours is in front of the camera (the player's Rockets are gone, and the only live
+ones are another craft's, behind it: a throwaway print of each quad's position), so the bar is
+not what moved those frames. The listed streaks now take a sprite, and each such particle draws
+its spawn frame from the stage's generator, which deals the blast another arrangement. The rule
+was therefore applied to the eight-seed mean, not to one arrangement.
 
 `FAR_BARS` `WO_ROCKET_EXPLO` on the craft-hit pairs (the wall holds no craft blast): `0100`
 0.0000, far `0100` 0.0000, far `0233` +0.0001, `0233` +0.0047 (23), closer on 1 of 8. **Not
