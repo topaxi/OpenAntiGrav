@@ -169,7 +169,7 @@ format = "ppsspp"            # the one format; anything else refuses the mod by 
   the zip PPSSPP prefers.
 - **`default-enabled`** is the one mod key that changes the settings file: a mod that starts
   off is switched on through `[mods] enabled = ["ppsspp.my-pack"]`, beside `disabled` for a mod
-  that starts on; an id is in at most one. The MODS page's ENABLED row writes the right one.
+  that starts on; an id is in at most one. The MODS list and a mod's ENABLED row write the right one.
   The page's ADDS line for a pack that is on reads **TEXTURES**.
 - **What it does.** A race load opens the packs that are on and made for the running title, takes the first whose `[games]`
   names the disc's serial (a PSP disc only: the keys are the PSP's), and the decoders ask it as
@@ -260,9 +260,9 @@ Rules:
   parent. On HD and Omega it is revealed below the parent tab while the parent or one of
   its attached rows has focus, with the pad (left and right step the top level, up and down
   step inside the family) and the pointer.
-- **Settings live on the MODS page.** A top-level `settings = "<page id>"` names one of the
-  mod's own pages as its settings page. The MODS page's SETTINGS row opens it for the mod the
-  MOD row is on (`oag_game::mods::settings_page`), BACK returns there, and it needs no `[[entry]]`
+- **Settings live on the mod's detail page.** A top-level `settings = "<page id>"` names one of
+  the mod's own pages as its settings page. The detail page's SETTINGS row opens it for the mod
+  the MOD row is on (`oag_game::mods::settings_page`), BACK returns there, and it needs no `[[entry]]`
   to be reached; ADDS lists it. A mod's options go there, not on the main menu
   (`oag.slipstream`'s PORTAL VIEW does). A `settings` that names no page of the mod is a load
   error naming the key (`a_settings_key_naming_no_page_of_the_mod_is_refused`).
@@ -365,14 +365,18 @@ mod files until `git submodule update`. Two lines make that visible:
 ## The MODS page
 
 Every title's main menu has a **MODS** row under OPTIONS (added by `oag-extras` like any mod row,
-after RECORDS and before QUIT). It opens a page with a **MOD** row that steps through the list,
-built-in first, then each mod in search order, then what was left out; an **ENABLED** row that
-turns the mod MOD is on on or off; a **SETTINGS** row that opens that mod's settings page, there
-only while the mod is on and its `menu.toml` names one (`settings`, below); and under them the lines for that mod: id, version (marked BUILT
-IN for `oag-extras`), authors, licence (**NO LICENSE STATED** when the manifest has neither
-`license` nor `license-file`; `see <file>` for a `license-file`) and what it added. Values over 22
-characters are cut with `...`. Where the page has no room for every line (Pulse: four under the
-three rows), AUTHORS goes first, then VERSION, then LICENSE (`Listing::table_within`).
+after RECORDS and before QUIT). It opens a list with one row per mod, name and `ON`/`OFF`, the
+mods that are on first; accept opens a mod's detail page and Square toggles it. The list, its
+controls, its order and the pointer are in [the MODS page](../ui/mods-page.md).
+
+The detail page has a **MOD** row that steps through the mods (built-in first, then each mod in
+search order, then what was left out); an **ENABLED** row that turns the mod MOD is on on or off;
+a **SETTINGS** row that opens that mod's settings page, there only while the mod is on and its
+`menu.toml` names one (`settings`, below); and under them the lines for that mod: id, version
+(marked BUILT IN for `oag-extras`), authors, licence (**NO LICENSE STATED** when the manifest has
+neither `license` nor `license-file`; `see <file>` for a `license-file`) and what it added. Values
+over 22 characters are cut with `...`. Where the page has no room for every line (Pulse: four
+under the three rows), AUTHORS goes first, then VERSION, then LICENSE (`Listing::table_within`).
 
 **The LAN content fingerprint** ([ADR-0083](../architecture/adr/0083-official-mods-are-a-public-folder-and-the-fingerprint-counts-race-changers.md))
 counts only the mods that are on and change a race: a simulation module (`[extension] simulation = true`),
@@ -388,7 +392,7 @@ out, so two machines that differ in one still match and can race. The filter is
   as `[mods] enabled = [...]`. `oag_game::mods::switch` writes it, and a switch that equals the default is not stored.
 - An off mod adds nothing: no menu rows, no strings, no campaigns, no pilots, no tracks on a
   CUSTOM title, and it is left out of the LAN content fingerprint (as is any mod that changes no race, below). It stays on the MODS
-  page, its ADDS line reading **NOTHING, TURNED OFF**, so it can be turned back on. The gate is
+  list, its detail page's ADDS line reading **NOTHING, TURNED OFF**, so it can be turned back on. The gate is
   one place, `oag_game::mods::Mods` (`player()` and `build()`).
 - **A live LANGUAGE pick rebuilds the tree through the same call** (`oag_game::menu_tree::rebuilt`,
   shared by the switch and `Session::resupply_language`), so a mod row and the MODS page
@@ -414,10 +418,10 @@ out, so two machines that differ in one still match and can race. The filter is
   its rules modules through `Mods::player()` as it loads (`oag_game::mod_extensions::attach`,
   called from `Session::launch_race` with the saved set), so an off mod's module is not found,
   and a race already parked keeps the modules it started with.
-- **It applies at once.** The menus are rebuilt as a boot builds them and reopen on the MODS page
-  with BACK leading where it led. A race parked under the menus keeps what it started with.
+- **It applies at once.** The menus are rebuilt as a boot builds them and reopen on the page the
+  switch was made on, with BACK leading where it led; the list keeps its order and scroll. A race parked under the menus keeps what it started with.
 - **`oag-extras` cannot be turned off**: it carries OPTIONS, this page's row and QUIT. Its
-  ENABLED row holds one value, **ALWAYS ON**. A candidate that never opened has one dimmed OFF:
+  switch holds one value, **ALWAYS ON**. A candidate that never opened has one dimmed OFF:
   there is nothing to switch.
 - **A campaign that races a track of a mod that is off or missing is left out whole**, the log
   names the reason (`mod "oag.hillside" is turned off on the MODS page`), and its mod's entry
@@ -428,10 +432,8 @@ A candidate the search left out (a broken zip, a duplicate id, a mod for another
 a mod whose rows did not fit the menu are listed too, **dimmed, with the error in the note line
 under the rows** and no detail lines: the mechanism a custom track that will not load uses. It
 is the same list the boot load report is written from (`oag_game::mods::Built::listing`); a mod
-turned off is a line of its own there. The pointer and touch move both rows as they move any
-choice row. A flat-list front end (Pulse, Pure, 2048) draws it as a page; HD and Omega reveal MODS
-below OPTIONS with the pad or pointer. `--menu-page mods` draws the page headless with the
-profile's switches, and `--menu-page mods:<mod id>` puts the MOD row on that mod. `just mods-list`
+turned off is a line of its own there. A flat-list front end (Pulse, Pure, 2048) draws the pages
+as pages; HD and Omega reveal MODS below OPTIONS with the pad or pointer. `just mods-list`
 (`oag-mod`) does not read the game's settings and lists every mod it finds.
 
 ## Event channels: `[channels]`
