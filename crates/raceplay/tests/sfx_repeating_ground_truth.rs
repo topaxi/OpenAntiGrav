@@ -286,3 +286,104 @@ fn hd_s_blowup_re_keys_a_pair_and_a_hit_every_45_ticks() {
     playing.stop(&mut mixer);
     assert_eq!(mixer.active_voices(), 0, "stopped");
 }
+
+/// Interleaved stereo of `ticks` ticks of the program for `cue` at `at`, `then`
+/// run before each one.
+fn stereo_of(
+    banks: &Banks,
+    cue: Cue,
+    ticks: usize,
+    at: impl Fn(usize) -> VoicePlace,
+) -> (Vec<f32>, Playing, Mixer, Rng) {
+    let program = banks.program(cue).expect("a program");
+    let mut mixer = Mixer::new(RATE);
+    let mut rng = Rng::new(1);
+    let mut playing = Playing::open(program, &mut mixer, cue.bus(), at(0), &mut rng);
+    let mut stereo = Vec::new();
+    for tick in 0..ticks {
+        playing.place(&mut mixer, at(tick));
+        playing.advance(TICK, &mut mixer, cue.bus(), at(tick), &mut rng);
+        let mut chunk = vec![0.0f32; 2 * (RATE / 60) as usize];
+        mixer.render(&mut chunk);
+        stereo.extend(chunk);
+    }
+    (stereo, playing, mixer, rng)
+}
+
+/// Left and right energy of an interleaved stretch.
+fn sides(stereo: &[f32]) -> (f32, f32) {
+    stereo
+        .chunks(2)
+        .fold((0.0, 0.0), |(l, r), f| (l + f[0] * f[0], r + f[1] * f[1]))
+}
+
+/// A travel list moves with its emitter, each voice keeping its own angle:
+/// `~ROCKETTVL`'s centred loop follows the pan, and `~QUAKETRAVEL`'s 270 and 90
+/// loops stay opposite, so balanced, wherever the wave is.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn hd_s_travel_list_follows_its_emitter_and_keeps_its_pair_apart() {
+    let Some(path) = oag_testdata::image(HD) else {
+        return;
+    };
+    let banks = banks(&path);
+    let at = |pan: f32| VoicePlace {
+        gain: 1.0,
+        pan: Some(pan),
+        front: 1.0,
+    };
+    // A second to the right, then a second to the left.
+    let (stereo, playing, mut mixer, mut rng) = stereo_of(&banks, Cue::RocketTravel, 120, |tick| {
+        at(if tick < 60 { 0.9 } else { -0.9 })
+    });
+    let half = stereo.len() / 2;
+    let settle = 2 * RATE as usize / 4;
+    let (first_l, first_r) = sides(&stereo[settle..half]);
+    let (last_l, last_r) = sides(&stereo[half + settle..]);
+    assert!(first_r > first_l * 1.5, "{first_l} {first_r}: placed right");
+    assert!(last_l > last_r * 1.5, "{last_l} {last_r}: moved left");
+    playing.release(&mut mixer, Cue::RocketTravel.bus(), &mut rng);
+    assert_eq!(mixer.active_voices(), 0, "released");
+
+    let (pair, playing, ..) = stereo_of(&banks, Cue::QuakeTravel, 60, |_| at(0.9));
+    assert_ne!(playing.bend(), 0, "the 0x1b ahead of the loops drew");
+    let (left, right) = sides(&pair[settle..]);
+    assert!(
+        (left / right - 1.0).abs() < 0.2,
+        "{left} {right}: the pair collapsed onto the emitter's pan"
+    );
+    assert!(
+        pair.chunks(2).any(|f| (f[0] - f[1]).abs() > 1e-3),
+        "the 270 and 90 voices are on one pan"
+    );
+}
+
+/// Renders of the held lists for a listen, dry, released at two seconds.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn hd_s_held_lists_render_and_release() {
+    let Some(path) = oag_testdata::image(HD) else {
+        return;
+    };
+    let banks = banks(&path);
+    for (cue, name, tail) in [
+        (Cue::Autopilot, "autopilot", 2),
+        (Cue::PlasmaTravel, "plasmatvl", 0),
+        (Cue::RocketTravel, "rockettvl", 0),
+        (Cue::ShurikenTravel, "shurikentravel", 0),
+        (Cue::QuakeTravel, "quaketravel", 0),
+    ] {
+        let (mut stereo, playing, mut mixer, mut rng) =
+            stereo_of(&banks, cue, 120, |_| VoicePlace::DRY);
+        assert!(playing.keyed() > 0, "{name} keyed nothing");
+        playing.release(&mut mixer, cue.bus(), &mut rng);
+        assert_eq!(mixer.active_voices(), tail, "{name}: voices after release");
+        let mut rest = vec![0.0f32; 2 * RATE as usize];
+        mixer.render(&mut rest);
+        stereo.extend(rest);
+        if let Some(dir) = std::env::var_os("OAG_RENDER_DIR") {
+            let path = PathBuf::from(dir).join(format!("hd-{name}-after.wav"));
+            std::fs::write(path, oag_audio::wav::from_samples(&stereo, RATE)).expect("write wav");
+        }
+    }
+}

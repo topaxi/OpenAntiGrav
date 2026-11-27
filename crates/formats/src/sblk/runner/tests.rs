@@ -300,7 +300,7 @@ fn hd_s_variable_writes_reach_the_guards_and_stop_ends_the_list() {
 
 #[test]
 fn hd_s_layout_refuses_what_it_does_not_run_and_pulse_refuses_hd_s_bend() {
-    for opcode in [0x04, 0x05, 0x1b, 0x26, 0x29] {
+    for opcode in [0x04, 0x05, 0x26, 0x29] {
         assert!(
             hd_runner(vec![key(0, 0, 0), raw(opcode, 0, 0)]).is_none(),
             "opcode {opcode:#x}"
@@ -308,7 +308,97 @@ fn hd_s_layout_refuses_what_it_does_not_run_and_pulse_refuses_hd_s_bend() {
     }
     // A guard on HD's global table (a negative variable) is not read.
     assert!(hd_runner(vec![raw(0x22, 0xff_0100, 0), key(0, 0, 0)]).is_none());
-    let data = build(&[Spec("A", 100, vec![raw(0x1c, 0, 0), key(0, 0, 0)])]);
+    for opcode in [0x1b, 0x1c] {
+        let data = build(&[Spec("A", 100, vec![raw(opcode, 0, 0), key(0, 0, 0)])]);
+        let bank = Bank::parse(&data).expect("parse");
+        assert!(
+            bank.cue_runner(&bank.cue_named("A").unwrap()).is_none(),
+            "Pulse's layout runs no {opcode:#x}"
+        );
+    }
+}
+
+#[test]
+fn hd_s_random_bend_scales_a_draw_by_its_percent_and_truncates() {
+    // The draw is `rand16 % 0x7fff`: `0x7ffe` is the top of the range, `0` the
+    // bottom, and `100` percent passes it straight through.
+    for (draw, percent, word) in [
+        (0, 100, -32768),
+        (0x7ffe, 100, 32764),
+        (0, 50, -16384),
+        (0x7ffe, -100, -32764),
+        (0x7fff, 100, -32768),
+    ] {
+        let (_data, mut runner) = hd_runner(vec![
+            raw(0x1b, (percent as u8 as u32) << 16, 0),
+            key(0, 0, 0),
+        ])
+        .expect("runs");
+        let _ = runner.start(&mut || draw);
+        assert_eq!(runner.bend(), word, "draw {draw:#x} at {percent}%");
+    }
+}
+
+#[test]
+fn hd_s_random_bend_after_a_key_on_moves_the_handler_later_than_the_voice() {
+    let (_data, mut runner) =
+        hd_runner(vec![key(0, 0, 0), raw(0x1b, 0x64_0000, 5), key(16, 0, 0)]).expect("runs");
+    let first = runner.start(&mut || 0);
+    assert_eq!(first.len(), 1);
+    assert_eq!(runner.bend(), 0, "not yet bent");
+    let mut later = Vec::new();
+    for _ in 0..5 {
+        later.extend(runner.tick(&mut || 0));
+    }
+    assert_eq!(later.len(), 1);
+    assert_eq!(runner.bend(), -32768, "the late write is the handler's");
+}
+
+/// HD's `~AUTOPILOT` shape: a loop, a `0x2b` that stops a run, and a tail no
+/// path reaches.
+fn hd_tailed() -> Vec<crate::sblk::timeline::tests::Grain> {
+    vec![
+        key(0, 0, 0),
+        raw(0x15, 0, 0),
+        raw(0x16, 0, 10),
+        raw(0x2b, 0, 0),
+        key(16, 0, 0),
+        key(32, 0, 15),
+    ]
+}
+
+#[test]
+fn hd_s_release_runs_the_tail_after_the_end_marker_at_once() {
+    let (_data, mut runner) = hd_runner(hd_tailed()).expect("runs");
+    let held = hd_keys(&mut runner, 40, &mut no_rand);
+    assert_eq!(held, vec![(0, 0)], "the tail is unreachable while held");
+    let tail: Vec<(u32, u32)> = runner
+        .release(&mut no_rand)
+        .into_iter()
+        .map(|g| (g.tick, g.sound.offset))
+        .collect();
+    // Both at the tick of the stop, the second's delay of 15 ignored.
+    assert_eq!(tail, vec![(40, 16), (40, 32)]);
+    assert!(runner.ended());
+}
+
+#[test]
+fn a_release_plays_nothing_without_a_tail_or_off_hd_s_layout() {
+    let (_data, mut plain) = hd_runner(vec![key(0, 0, 0), raw(0x2b, 0, 0)]).expect("runs");
+    let _ = plain.start(&mut no_rand);
+    assert!(plain.release(&mut no_rand).is_empty(), "the end is last");
+
+    let data = build(&[Spec(
+        "A",
+        100,
+        vec![raw(0x2b, 0, 0), key(0, 0, 0), key(16, 0, 0)],
+    )]);
     let bank = Bank::parse(&data).expect("parse");
-    assert!(bank.cue_runner(&bank.cue_named("A").unwrap()).is_none());
+    let mut psp = bank
+        .cue_runner(&bank.cue_named("A").expect("cue"))
+        .expect("runs");
+    assert!(
+        psp.release(&mut no_rand).is_empty(),
+        "Pulse's stop is unread"
+    );
 }
