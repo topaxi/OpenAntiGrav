@@ -1,5 +1,5 @@
 //! `~BLOWUP` and `~ROCKLOCK` played as the repeating lists Pulse's `hud.bnk`
-//! authors, against the discs.
+//! and HD's `weapons.bnk` author, against the discs.
 //!
 //! **`#[ignore]`d and never run in CI**: they need game content. Run with
 //! `just test-data`.
@@ -8,8 +8,8 @@
 //! key-on +15, 0x16]`: a beep every 30 master ticks while the reticle is
 //! seeking and every 15 once it is locked. `~BLOWUP` is `[key-on loop, 0x15,
 //! key-on, 0x1a, 0x16]`: the second waveform re-keyed every 43 ticks. Both at
-//! the measured 258.4 Hz. Set `OAG_RENDER_DIR` to also write each render as a
-//! WAV to look at.
+//! the measured 258.4 Hz. Those are Pulse's lists; HD's, at 240 Hz, are the
+//! `hd_s_` tests at the end. Set `OAG_RENDER_DIR` to also write renders as WAVs.
 
 use std::path::PathBuf;
 
