@@ -188,6 +188,10 @@ pub struct ModeGantry {
     /// the countdown's entry
     /// (`docs/ghidra/functions/ps3-hdfury-eu/gantry-clock.md`).
     pub assembly_ticks: u64,
+    /// Whether the title's race manager keeps this board's time in HD's lap windows from the
+    /// release on (same page, "The mode boards after the release"). `false` where the title's
+    /// own code is unread: the board's timeline then runs on.
+    pub race_windows: bool,
 }
 
 impl Adverts {

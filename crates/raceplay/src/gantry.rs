@@ -511,12 +511,18 @@ fn native_clock(
 /// [`oag_title::adverts::ModeGantry::assembly_ticks`] before the release, and the
 /// line says what is and is not measured.
 fn mode_clock(zone: oag_title::adverts::ModeGantry, name: &str, report: &mut Vec<String>) -> Clock {
-    let clock = Clock::assembled_at_release(zone.assembly_ticks);
+    let mut clock = Clock::assembled_at_release(zone.assembly_ticks);
+    let after = if zone.race_windows {
+        clock.window = Some(HD_PRE_LAP_WINDOW);
+        clock.laps = Some(HD_LAP_WINDOWS);
+        "from the release the race manager's lap windows hold it, as they hold `3 2 1 GO`"
+    } else {
+        "what it shows after the release is chosen, not measured - the timeline runs on and is \
+         held at its limit"
+    };
     report.push(format!(
         "start gantry clock: {name} is this title's {:?} board, its frame 0 {} ticks before \
-         the release, on tick {} (the title's own table says where that comes from); what it \
-         shows after the release is chosen, not measured - the timeline runs on and is held at \
-         its limit",
+         the release, on tick {} (the title's own table says where that comes from); {after}",
         zone.mode, zone.assembly_ticks, clock.start_tick,
     ));
     clock

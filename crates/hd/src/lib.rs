@@ -400,11 +400,13 @@ pub const TITLE: &Title = &Title {
                 mode: oag_title::adverts::GantryMode::Zone,
                 entry: "/Data/Billboards/HD_Adverts/321Go/321Go_Zone.vex",
                 assembly_ticks: 180,
+                race_windows: true,
             },
             oag_title::adverts::ModeGantry {
                 mode: oag_title::adverts::GantryMode::Detonator,
                 entry: "/Data/Billboards/HD_Adverts/321Go/321go_hd_detonator.vex",
                 assembly_ticks: 180,
+                race_windows: true,
             },
         ],
         origin: oag_title::Origin::Measured,

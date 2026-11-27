@@ -221,10 +221,10 @@ impl Clock {
     /// A board whose own timeline runs `assembly_ticks` ticks up to the
     /// release: frame 0 on tick `release - assembly_ticks`, then free-running.
     ///
-    /// HD's Zone board, whose clock the original zeroes on entering the
-    /// countdown (`oag_title::adverts::ModeGantry`). **What the board does after
-    /// the release is chosen, not measured**: the clock keeps running to the
-    /// asset's own end and the caller clamps it.
+    /// A mode board's, which HD zeroes on entering the countdown
+    /// (`oag_title::adverts::ModeGantry`). With no window set the clock keeps
+    /// running to the asset's own end and the caller clamps it; what a board
+    /// shows then is **chosen, not measured**.
     #[must_use]
     pub const fn assembled_at_release(assembly_ticks: u64) -> Self {
         Self {
