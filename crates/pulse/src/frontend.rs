@@ -293,18 +293,16 @@ const MENU_GLOW: oag_title::MenuGlow = oag_title::MenuGlow {
 /// screen's `helptext` step before leaning on it anywhere but the pages this
 /// build reads `Main Menu`/`Racebox` off.
 ///
-/// `title_font`, `selected`, `selected_pulse_period_secs`, `background`,
-/// `strip`, `blocks` and `list` are carried over from [`MENU_SKIN`]
-/// unchanged: none of the seven is a coordinate in [`MenuSkin::space`], so
-/// the PS2/PSP grid disagreement that motivates the rest of this table does
-/// not touch them, and nothing has measured a PS2-specific value for any of
-/// the seven to replace a PSP one with. `title_font` in particular stays
-/// `None` (and `body_font` with it: the `Default` face goes in the one face
-/// slot, as it did before the PSP pressings got a third) for the same reason [`MENU_SKIN`]'s does - a 2026-09-27 PCSX2
-/// capture of `Main Menu` shows `MAIN MENU`'s glyphs in what reads as the
-/// same face as `RACE CAMPAIGN` below it, not a taller one, which is a lean
-/// against flipping it rather than a capture that proves the flip the way
-/// this project's own rule requires.
+/// `selected`, `selected_pulse_period_secs`, `background`, `strip`, `blocks`
+/// and `list` are carried over from [`MENU_SKIN`] unchanged: none of the six
+/// is a coordinate in [`MenuSkin::space`], so the PS2/PSP grid disagreement
+/// that motivates the rest of this table does not touch them, and nothing has
+/// measured a PS2-specific value for any of them to replace a PSP one with.
+///
+/// `title_font` is **authored**: the PS2's own heading widgets name the
+/// `title` role (`docs/ui/menus-original.md`, "Pulse PS2's headings draw in the
+/// Title face"). `body_font` keeps `Default` in the renderer's second slot, as
+/// on the PSP.
 pub const PS2_MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     // `oag_display::space::Space::PS2.size` - a literal here, not that type,
     // the same way `MENU_SKIN.space` above is a literal `(480.0, 272.0)`
@@ -317,8 +315,9 @@ pub const PS2_MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     title_x: 66.0,
     title_y: 9.0,
     title_scale: 0.8,
-    title_font: None,
-    body_font: None,
+    // PS2-authored: see this skin's own doc.
+    title_font: Some("Title"),
+    body_font: Some("Default"),
     small_font: None,
     stats_font: None,
     snapped_pens: false,

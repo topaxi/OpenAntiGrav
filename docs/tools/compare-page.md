@@ -3393,3 +3393,23 @@ The two Zone pairs do not move (score and box equal). What is left in the box is
 
 `menu-pause` has no `ours.drive` beside the stored record on this machine: it was rebuilt from
 `scripts/pure-pause.drive` with `@TICKS@` 1612 (the record's `race_clock_read.basis`).
+
+## Pulse PS2's heading face (2026-11-27, `menu-pairs`)
+
+Claim: the PS2 Ship Select heading draws in the `Title` role's `Pulse_14` face, so `pulse-ps2/menu-team`'s header
+box `(40,0,480,60)` falls from 10.18. **True.** Evidence and what stays open:
+[menus-original.md](../ui/menus-original.md), "Pulse PS2's headings draw in the Title face".
+
+Copies of the stored pairs, ours re-rendered before and after, against the stored `theirs.png`. Header box mean grey;
+everything below `y = 60` is pixel-identical before and after on all five.
+
+| Pair | Header box | Whole frame |
+| --- | --- | --- |
+| `menu-main` | 8.74 -> 7.10 | 1.94 -> 1.88 |
+| `menu-team` | 10.19 -> 7.56 | 2.31 -> 2.22 |
+| `menu-grid` | 11.52 -> 8.85 | 1.81 -> 1.73 |
+| `menu-cell` | 11.52 -> 8.85 | 2.02 -> 1.93 |
+| `menu-options` | **8.11 -> 9.50 (worse)** | **1.87 -> 1.91 (worse)** |
+
+`menu-options` is worse because its heading authors no scale (1.0) and ours draws 0.8: at 1.0 its header box
+reads 7.57.
