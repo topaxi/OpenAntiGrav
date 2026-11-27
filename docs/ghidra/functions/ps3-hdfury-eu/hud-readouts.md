@@ -237,7 +237,9 @@ all of them: the fire clears the held pickup.
 | Omega, HD circuits | seconds left | ported, inherited from HD | `data00`'s copy authors the widget and the executable holds `DamageBarShieldBg` and `%2.1f`; its update was not read | inherited |
 | Omega, 2048 circuits | the drain | ported, inherited from 2048 | its `2048_hud\` layout authors `ManualShield` and its bind (`FUN_012d1590`) hides it; the update unread | inherited |
 
-No comparison pair on any title holds a running Shield.
+Of the comparison pairs, only HD's `shield-raised` and `shield-hit-flash` raise
+a Shield. No Pulse, Pure, 2048 or Omega pair gives ours one, so none holds a
+drain.
 
 ## `Hud_UpdateLapCounter` (`0x00096ef0`)
 
