@@ -105,6 +105,22 @@ shows the flyby camera with the HUD hidden. Pulse's flyby camera writes the same
 Not read: where the 4 textures' `-9.0491` comes from, the camera of `m00` 1.45836 seen in one
 restart, Pure's first load, and whether Pure has Pulse's residency rebuild.
 
+**Reproducing.** The logs and scripts are kept on the capture machine in
+`data/traces/k-writer-watch/` (gitignored). The state is
+`data/saves/pure-psp/time-trial-modesto-vector-feisar-restart.ppst`.
+
+```sh
+scripts/ppsspp-start.sh <lane> 93 45093 data/cache/pure-psp-usa.iso
+scripts/psp-state.py --port 45093 --home <home> load 2 --file <state> --serial UCUS98612_2.00
+# the textures' stored K and the K they bind under, 4 frames
+data/traces/k-writer-watch/k_pure_census.py $PWD 45093 0x088830c0 4
+# with the pause menu open on RESTART: confirm at 0.2 s, again at 2.5 s, 10 s of K changes
+data/traces/k-writer-watch/k_pure_restart.py $PWD 45093 restart.jsonl 10 0.2 2.5
+```
+
+The Python scripts run under `uv run --with websocket-client python3`, and
+`psp-state.py` needs the instance's `DISPLAY` (`pp/env.sh`).
+
 **Consequence for wiring.** Pure takes Pulse's rule: a stored `K` per texture, replaced past 0.2,
 with the flyby's draws counted. Current-camera `K` alone (-8.88 here) is 2 to 3 sixteenths coarser
 than the original on the textures the flyby drew.

@@ -657,6 +657,21 @@ values closer than 0.2. Boot 3 was a prediction written before it ran: a shorter
 flyby draws fewer textures, so fewer hold `-9.0506`, and none gets it after the
 flyby.
 
+**Reproducing.** The logs, the pre-registration and the scripts are kept on the
+capture machine in `data/traces/k-writer-watch/` (gitignored). The scripts are
+there, not in `scripts/`. From the repository root, per cold boot:
+
+```sh
+scripts/ppsspp-start.sh <lane> 93 45093 data/cache/pulse-psp-usa.iso
+K_SKIP_AT=20 uv run --with websocket-client python3 data/traces/k-writer-watch/k_watch_load.py \
+    $PWD 45093 boot.jsonl 36        # boot 3: K_SKIP_AT=6, 20 s
+uv run --with websocket-client python3 data/traces/k-writer-watch/k_final.py $PWD 45093 boot.jsonl
+```
+
+`k_watch_load.py` ends in an invalid-address error when a texture was freed; the
+log is complete by then, and `k_final.py` does the `+0xb0` read. The walk's
+first attempt after a boot can miss the main menu: run it again.
+
 `Camera_ApplyViewProjection`: a vtable slot (word at `0x08acb24c`, the table
 that also holds `Camera_SubmitScene`) that copies the stored view and projection
 matrices into the display slots, hands both to the GE (`Gu_SetMatrix`), and ends
@@ -1359,7 +1374,7 @@ while its return value's meaning (an accumulated light colour) is not,
 slot `+0x34` call (see [scene-light.md](scene-light.md), "Which models take the rig"), and `SceneLight_InitLists_q` only writes bare `RET`s and a flag.
 
 **Deliberately not named:** `FUN_0881129c` (a two-argument colour setter used by
-`FUN_0890d3ac`, body unread), `FUN_08927550`, `FUN_08928174`, `FUN_08944544`,
+`FUN_0890d3ac`, body unread), `FUN_08927550`, `FUN_08944544`,
 and `FUN_08a6bfc0`/`FUN_08a6bd6c` - the last two return their own address and are
 RTTI type tokens rather than real functions.
 
