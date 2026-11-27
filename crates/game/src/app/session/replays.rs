@@ -276,16 +276,21 @@ pub(crate) fn open_viewer(
         dropped,
     } = watching;
     let (setup, view, modules) = setup.context("the race's setup was not kept")?;
+    // Mods switched since the recording: whatever the rebuild then says, the mod is named.
+    let mods_differ =
+        oag_replay::ActiveMod::differences(&replay.header.active_mods, &view.active_mods);
     let viewer = Viewer::open(setup, view, modules, *replay).map_err(|e| {
-        let why = match &e {
-            OpenError::NoPoseTrack(_) => page::NO_POSE_TRACK.to_string(),
-            OpenError::Start(start) => format!("{start:#}"),
+        let why = match (&e, &mods_differ) {
+            (_, Some(differ)) => format!("{differ}; {e}"),
+            (OpenError::NoPoseTrack(_), None) => page::NO_POSE_TRACK.to_string(),
+            (OpenError::Start(start), None) => format!("{start:#}"),
         };
         // A screenshot is no row of the list: its refusal is told to the player at once.
         if shot.is_none() {
             refused.insert(path.clone(), why);
         }
-        anyhow::anyhow!("{} cannot be rebuilt here: {e}", path.display())
+        let differ = mods_differ.as_deref().map_or_else(String::new, |d| format!("{d}; "));
+        anyhow::anyhow!("{} cannot be rebuilt here: {differ}{e}", path.display())
     })?;
     let viewer = match shot {
         Some((tick, _)) => viewer.starting_at(tick),

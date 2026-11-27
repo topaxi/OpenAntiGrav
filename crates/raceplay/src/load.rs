@@ -206,7 +206,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
     let sim = load_sim(options)?;
     #[cfg(feature = "view")]
     {
-        load_view(sim, options)
+        let mods_differ = sim.mods_differ.clone();
+        load_view(sim, options).map_err(|e| sim::named(e, mods_differ.as_deref()))
     }
 
     #[cfg(not(feature = "view"))]

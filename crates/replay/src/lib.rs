@@ -38,6 +38,7 @@
 //! [`Race::tick`]: https://docs.rs/oag-game
 //! [`StateHasher`]: oag_core::StateHasher
 
+pub mod active_mods;
 pub mod codec;
 pub mod event;
 pub mod file;
@@ -49,6 +50,7 @@ pub mod shot;
 pub mod track;
 pub mod verify;
 
+pub use active_mods::ActiveMod;
 pub use event::{Event, Kind};
 pub use file::{FORMAT_VERSION, Read, ReadError, Replay};
 pub use header::Header;

@@ -69,6 +69,11 @@ pub struct SimLoad {
     pub circuit_hull: Option<&'static str>,
     /// Whether the race flies a Zone file's classless block.
     pub zone_file_read: bool,
+    /// Every mod on for this race, which a recording of it carries (`Header::active_mods`).
+    pub active_mods: Vec<oag_replay::ActiveMod>,
+    /// How they differ from the recording this load rebuilds, `None` when they do not or the
+    /// race is not a rebuild.
+    pub mods_differ: Option<String>,
     /// The simulation modules' sources, whose assets the view reads.
     pub extension_sources: Vec<crate::extensions::Source>,
     /// The circuit's own `stats.xml`, for the HUD's `RECORD` readout.
@@ -88,6 +93,21 @@ pub struct SimLoad {
 /// `WO Track` payload the spline parser cannot account for, and a `handlingstats.xml`
 /// with an attribute missing.
 pub fn load_sim(options: &Options) -> Result<SimLoad> {
+    // Named on whatever fails once it is known: a recording raced with a mod that is off now
+    // usually cannot even be loaded, and the missing file says less than the missing mod.
+    let mut mods_differ = None;
+    read_sim(options, &mut mods_differ).map_err(|e| named(e, mods_differ.as_deref()))
+}
+
+/// `error` under the line that names how the mods differ from a recording's, when they do.
+pub(super) fn named(error: anyhow::Error, mods_differ: Option<&str>) -> anyhow::Error {
+    match mods_differ {
+        Some(differ) => error.context(differ.to_string()),
+        None => error,
+    }
+}
+
+fn read_sim(options: &Options, mods_differ: &mut Option<String>) -> Result<SimLoad> {
     let mut report = Vec::new();
     let mut seams = Seams::default();
 
@@ -107,6 +127,7 @@ pub fn load_sim(options: &Options) -> Result<SimLoad> {
     );
     // **Opened as whichever title the source turned out to be**, the way the boot
     // path does, so `--race` and the menus' `Launch Game` reach every title.
+    let layering = options.layering();
     // **Two sources when `craft_source` names a second title** - see
     // `oag_source::pair::SourcePair`. `archives`/`title` stay the track's; a
     // craft-governed load reads `craft_title` and `craft_of(&mut craft, &mut archives)` instead.
@@ -118,7 +139,7 @@ pub fn load_sim(options: &Options) -> Result<SimLoad> {
             options.craft_source.as_deref(),
             packs,
             pure_packs,
-            &options.layering(),
+            &layering,
         )?
     };
     let (opened, craft_opened, title, craft_title) = pair.into_parts();
@@ -129,6 +150,18 @@ pub fn load_sim(options: &Options) -> Result<SimLoad> {
         report.push(format!("craft from {}", craft_title.name));
     }
     report.push(archives.layout.describe());
+    let active_mods: Vec<oag_replay::ActiveMod> = layering
+        .enabled
+        .iter()
+        .filter(|m| m.is_for(&[title, craft_title], archives.layout.platform))
+        .map(|m| oag_replay::ActiveMod::new(&m.id, &m.version))
+        .collect();
+    if let Some(recorded) = &options.recorded_active_mods {
+        *mods_differ = oag_replay::ActiveMod::differences(recorded, &active_mods);
+        if let Some(differ) = mods_differ.as_deref() {
+            log::warn!("replay: {differ}");
+        }
+    }
     refuse_a_mode_without_its_data(options.mode, title, &archives)?;
     let finder = options.find_texture_packs.as_ref();
     let texture_pack = crate::texture_pack::engage(finder, title, &archives, &mut report);
@@ -593,6 +626,8 @@ pub fn load_sim(options: &Options) -> Result<SimLoad> {
     };
     seams.mark(Seam::Finish, &report);
     Ok(SimLoad {
+        active_mods,
+        mods_differ: mods_differ.clone(),
         setup,
         modules,
         title,

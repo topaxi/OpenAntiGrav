@@ -11,6 +11,8 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
+use crate::ActiveMod;
+
 /// Everything needed to know what a replay is of, and to rebuild its race.
 ///
 /// The first five fields are the **key** a composition root files a replay
@@ -85,6 +87,11 @@ pub struct Header {
     /// "Replays").
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub mods: Vec<ModUse>,
+    /// Every mod that was on for the race, in load order; empty for a race with none. What a
+    /// machine with other mods on is told by name ([`ActiveMod::differences`]); it refuses
+    /// nothing.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub active_mods: Vec<ActiveMod>,
 }
 
 /// A simulation module a recorded race ran: what a reader needs to find the same module again
@@ -275,6 +282,7 @@ impl Header {
             ticks: 0,
             finish: None,
             mods: Vec::new(),
+            active_mods: Vec::new(),
         }
     }
 }

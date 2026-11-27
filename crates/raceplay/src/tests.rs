@@ -482,6 +482,7 @@ pub(crate) fn fixture_view() -> ViewSetup {
         intro_voice: None,
         trail_sparks: false,
         request: None,
+        active_mods: Vec::new(),
         campaign_event: false,
         score_pass: None,
         spark_anchors: Vec::new(),

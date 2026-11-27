@@ -115,6 +115,7 @@ impl Race {
         let ViewSetup {
             trail_sparks,
             request,
+            active_mods,
             campaign_event,
             score_pass,
             chase_close,
@@ -1114,7 +1115,7 @@ impl Race {
                 flap_graphics: airbrake_graphics,
             }),
             #[cfg(feature = "view")]
-            replay: replay::ReplayState::requested(request),
+            replay: replay::ReplayState::requested(request, active_mods),
             quiet: false,
             #[cfg(feature = "view")]
             journal: Default::default(),

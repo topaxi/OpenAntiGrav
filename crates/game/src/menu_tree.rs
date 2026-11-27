@@ -209,11 +209,11 @@ pub fn rebuilt(
     menu::Definition,
     Vec<Listing>,
     crate::campaign::custom::Installed,
-    Vec<oag_source::layers::ModFallback>,
+    crate::mods::ForLoads,
 )> {
     let loaded = Mods::load_from(bases, switches)?;
     let (mut definition, listing, installed) =
         mods_menu(&loaded, language, title, platform, updated)?;
     finish_definition(&mut definition, title, platform, strings, &disc_probe());
-    Ok((definition, listing, installed, loaded.fallbacks()))
+    Ok((definition, listing, installed, loaded.for_loads()))
 }

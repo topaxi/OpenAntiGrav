@@ -292,7 +292,7 @@ fn launch(mut cli: Cli) -> Result<Launch> {
     // Before any source opens: an enabled mod's fallback entries are part of every title's
     // archives (ADR-0100); the MODS page registers them again when a mod is switched.
     match crate::mods::Mods::load(&settings.mods) {
-        Ok(mods) => mods.register_fallbacks(),
+        Ok(mods) => mods.for_loads().register(),
         Err(why) => log::warn!("mods: their fallback entries are not mounted: {why:#}"),
     }
     if cli.diagnostics.fetch_ffmpeg {

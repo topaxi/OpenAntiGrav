@@ -158,8 +158,8 @@ fn a_mod_off_network_races_leaves_the_fingerprint_and_is_not_mounted_there() {
     let fallbacks = mods.fallbacks();
     assert!(!fallbacks.is_empty() && fallbacks.iter().all(|f| !f.network));
     let layering = oag_source::layers::Layering {
-        overrides: Vec::new(),
         mods: fallbacks,
+        ..oag_source::layers::Layering::none()
     };
     assert_eq!(layering.mods_for(oag_pulse::TITLE).len(), 1);
     assert!(layering.for_network().mods_for(oag_pulse::TITLE).is_empty());

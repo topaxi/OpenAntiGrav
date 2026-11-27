@@ -17,6 +17,9 @@ pub struct ViewSetup {
     /// into its header so the file can rebuild it ([`Options::replay_setup`]). `None` for a
     /// setup built by hand.
     pub request: Option<oag_replay::header::Setup>,
+    /// Every mod on for this race, which a recording of it writes into its header
+    /// ([`oag_replay::Header::active_mods`]).
+    pub active_mods: Vec<oag_replay::ActiveMod>,
     /// Whether the race is an event of the title's own single-player campaign: 2048's
     /// `SP.xml`, set by [`load_event`](super::load_event) and by nothing else. It is what the HUD
     /// reads as "an event object exists" - [`oag_hud::Readout::campaign_event`]. A DLC circuit
@@ -345,6 +348,7 @@ impl ViewSetup {
         Self {
             trail_sparks: false,
             request: None,
+            active_mods: Vec::new(),
             campaign_event: false,
             score_pass: None,
             hd_trail: None,

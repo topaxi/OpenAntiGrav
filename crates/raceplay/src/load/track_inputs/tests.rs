@@ -20,7 +20,7 @@ fn open(source: &str, overrides: &[PathBuf]) -> Opened {
         Vec::new(),
         &oag_source::layers::Layering {
             overrides: overrides.to_vec(),
-            mods: Vec::new(),
+            ..oag_source::layers::Layering::none()
         },
     )
     .expect("the source opens")

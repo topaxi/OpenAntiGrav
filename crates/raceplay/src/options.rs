@@ -93,6 +93,10 @@ pub struct Options {
     /// that are on offer. `None` is an ordinary race; `Some` of nothing is a recording of a
     /// vanilla race. Set by [`Self::apply_replay`].
     pub recorded_mods: Option<Vec<oag_replay::header::ModUse>>,
+    /// Every mod that was on in the recording this load rebuilds (`Header::active_mods`): the
+    /// load names how the mods on now differ ([`oag_replay::ActiveMod::differences`]). `None`
+    /// is an ordinary race. Set by [`Self::apply_replay`].
+    pub recorded_active_mods: Option<Vec<oag_replay::ActiveMod>>,
     /// Opens the texture packs the player has on, on the load thread
     /// ([`crate::texture_pack::Finder`]); `None` draws the disc's own textures.
     pub find_texture_packs: Option<crate::texture_pack::Finder>,
