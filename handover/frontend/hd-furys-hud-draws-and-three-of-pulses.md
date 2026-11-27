@@ -148,6 +148,13 @@ not measured as a scale, only seen in a 2x crop. 2048 and Omega not captured.
 - **The two `hd-shield-*` pairs record no gantry time**, so ours' board sits at another phase
   of the `GO` loop ([start-gantry.md](../../docs/rendering/start-gantry.md)). A re-grab through
   `rpcs3_hd_field.gantry_seconds`, as `scripts/rpcs3-hd-pair.py` does, then `--gantry-seconds`.
+- **The Shield countdown shows an earlier update's time** in the original (`hud+0x1c4` 0.016 to
+  0.033 s behind the slot, one boot). Ours draws the current tick's. Likely the last tenth by
+  which `hd-shield-raised` reads 1.0 against 1.1 (its lag 4 was carried from the film fits, not
+  read off the HUD). A second boot reading both words settles it.
+- **`--give` refills the slot every tick** in 13 more HD pairs that press fire
+  (`bomb-craft-hit-*`, `missile-craft-hit-*`, `rocket-craft-hit-*`, `rocket-craft-far-hit-*`,
+  `rocket-wall-*`): candidates for `--give-once`, none checked.
 - **2048's Shield countdown** is authored and bound by name, not wired: its HUD update is
   unread ([hud-readouts.md](../../docs/ghidra/functions/ps3-hdfury-eu/hud-readouts.md#the-shield-countdown)).
 - **HD/Omega `ThrustBar` (2026-10-16): done.** Drawn off the craft's throttle after Pilot Assist's scale (`Readout::thrust_percent`) with its truncated `NN%` label, no chase; see [hd-hud.md](../../docs/formats/hd-hud.md#hds-speed-bar-fill-is-a-curvebar-and-it-draws). Still open from the speed bar: its full scale (`Hud_UpdateSpeedReadout` multiplies by a reciprocal of 700, now HD's and Omega's `HudArt::speed_full_kmh`) and crop-versus-path-length past `CurveStartPos`.

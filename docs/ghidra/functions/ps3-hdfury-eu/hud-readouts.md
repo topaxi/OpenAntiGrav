@@ -216,7 +216,9 @@ the slot (state 5) and fired with TRIANGLE
 | digits on the frame, green | `4.6` `3.1` `2.1` `1.1` | `4.6` `3.0` `2.0` `1.0` |
 | `slot+0x200` | 16 | 16 |
 
-`hud+0x1c4` is the slot's value one update earlier. The frame trails RAM, by
+In the same pause `hud+0x1c4` is 0.016 to 0.033 s behind the slot (more time
+left): the HUD holds an earlier update's value. Ours draws the current tick's
+timer; **not wired**, one boot (boot 1 did not locate the HUD). The frame trails RAM, by
 about 0.15 s on boot 1 and 0.05 s on boot 2, which is what separates the digits
 from the words. Boot 2 found `hud` at `0x329021b0`, `hud+0x1bc` non-null, its
 `0x4` bit clear before the shot and set at all four pauses.
