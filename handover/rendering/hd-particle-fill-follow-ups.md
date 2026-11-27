@@ -1,7 +1,7 @@
 ---
 status: measure
 titles: [hd, omega, 2048]
-updated: 2026-11-26
+updated: 2026-11-27
 summary: "Owed: films of HD explosions and streaks, Rocket blast gaps, cap source, near pairs' field rewind to adopt; half-res parked"
 size: M (50)
 difficulty: medium (55)
@@ -46,8 +46,13 @@ blast the struck craft's velocity, on HD, 2048 and Omega
   fed ours the RAM poses, and the frame draws every craft 2 ticks back. That also explains the blast's
   "2-tick lag". `compare_env.py film-pair-field` moves a pair's field to the frame's instant. Adopted,
   0100 reads 53.96 (from 65.75) and 0233 50.36 (from 62.86), on their current flags. Still open:
-  - 0233's craft stays hidden under white on every arm, against the original's yellow-tinted
-    craft in plain view;
+  - ~~0233's craft stays hidden under white on every arm~~: closed 2026-11-27, the craft blast
+    spreads by the extent law (`particle-fill.md`, "The trails start on the blast's hemisphere").
+    Left: 0233's own-seed score went 50.36 to 64.14 (8-seed mean 62.68 to 54.74), because its
+    single-point pose stands the blast 22.7 units out; the original's yellow on the craft is the
+    additive fireballs in front of it and needs the blast at the original's sites. Re-posing
+    0233 on the two waves (73.23 now, from 90.03) is the next step, a pose decision for the lead;
+  - Omega authors the same trail heads (8.824) in both its files: checked, applies, not wired;
   - the two-wave pose is still not the best on 0233 (+1.09 +/- 3.64);
   - the wash quads are cut by the track where the original's cover the frame (hard edges on the
     floor);
