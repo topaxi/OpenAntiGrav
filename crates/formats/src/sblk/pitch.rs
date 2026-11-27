@@ -182,6 +182,15 @@ pub fn sas_pitch_scaled(centre_note: i8, centre_fine: i8, note: i32, fine: i32, 
     }
 }
 
+/// The bend word a `0x1b` (random bend) writes for a draw in `0..0x7fff` and
+/// its signed `percent` operand: `Scream_OpRandomBend` on Pulse and
+/// `Scream_DoGrainRandomBend` (`0x00625d50`) on HD, one arithmetic, truncating.
+#[must_use]
+pub fn random_bend_word(draw: u32, percent: i8) -> i16 {
+    let raw = i64::from(draw) * 0xffff / 0x7fff - 0x8000;
+    (raw * i64::from(percent) / 100) as i16
+}
+
 /// The playback rate in Hz a pitch word means on the PSP's SAS core, rounded to
 /// the nearest Hz. Wraps [`sample_rate_hz_at`] for [`SAS_SAMPLE_RATE`].
 ///

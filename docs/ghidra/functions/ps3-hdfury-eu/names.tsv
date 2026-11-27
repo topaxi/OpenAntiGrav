@@ -1294,3 +1294,8 @@
 
 0x00624418	function	Scream_SetCueParameter	90	cue-variables.md
 0x00087fa8	function	HudSight_UpdateTone	80	cue-variables.md
+0x0062c2d0	function	Scream_StopSound	80	cue-variables.md
+0x00626350	function	Scream_StopHandlerSound	88	cue-variables.md
+0x00623428	function	Scream_FindStopMarker	90	cue-variables.md
+0x002fea88	function	SoundEmitterCue_Stop	85	cue-variables.md
+0x002fd528	function	SoundEmitter_Release	78	cue-variables.md

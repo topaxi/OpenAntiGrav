@@ -971,7 +971,7 @@ fn load_cue(
             })
         })
     };
-    let program = if cue.repeats() {
+    let program = if cue.repeats() || (tick == oag_title::SequenceTick::Ps3 && cue.runs_hd_list()) {
         layers::program(&bank, name, tick)
     } else {
         Ok(None)

@@ -19,6 +19,7 @@ mod scenery_sort_ground_truth;
 mod selection_screens_ground_truth;
 mod settings_schema;
 mod sfx_ground_truth;
+mod sfx_hd_held_ground_truth;
 mod sfx_weapon_ground_truth;
 mod shake_blur_ground_truth;
 mod shield_shell_scroll_ground_truth;

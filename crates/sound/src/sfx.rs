@@ -505,11 +505,21 @@ impl Audio {
             // The Autopilot, level-and-latch like the explosion:
             // `Ship_FireHeldWeapon`'s case 6 opens a handle on `~AUTOPILOT`, and
             // `autopilot_eng` plays once on the same rising edge ([`Cue::Autopilot`],
-            // [`Cue::Engaging`]). Both dry.
+            // [`Cue::Engaging`]). Both dry. A title whose list runs plays it
+            // through the held driver instead of the picked voices.
+            let autopilot_played = voices.repeating.drive_autopilot(
+                autopilot_active,
+                banks,
+                mixer,
+                &mut voices.rng,
+            );
             match (autopilot_active, voices.autopilot_open) {
                 (true, false) => {
                     voices.autopilot_open = true;
-                    if let Some(started) = banks.voices_for(Cue::Autopilot, true, &mut voices.rng) {
+                    if !autopilot_played
+                        && let Some(started) =
+                            banks.voices_for(Cue::Autopilot, true, &mut voices.rng)
+                    {
                         voices.autopilot =
                             layers::start(mixer, &started, Cue::Autopilot.bus(), VoicePlace::DRY);
                         log::trace!(
@@ -524,10 +534,12 @@ impl Audio {
                 }
                 (false, true) => {
                     voices.autopilot_open = false;
-                    log::trace!(
-                        "sfx: held Autopilot released, {} voice(s)",
-                        voices.autopilot.len()
-                    );
+                    if !autopilot_played {
+                        log::trace!(
+                            "sfx: held Autopilot released, {} voice(s)",
+                            voices.autopilot.len()
+                        );
+                    }
                     for id in voices.autopilot.drain(..) {
                         mixer.stop(id);
                     }

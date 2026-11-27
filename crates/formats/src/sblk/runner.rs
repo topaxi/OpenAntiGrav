@@ -43,12 +43,14 @@
 //! list as HD's PS3 handlers do. The stepper and the per-tick countdown are the
 //! same (`Scream_StepCommandList` `0x00625218`, `Scream_TickCommandList`
 //! `0x006253d0`), the byte operands sit one place over (`a` is `operand >> 16`),
-//! and four more things run: the alternate group `0x19`, the marker gotos
-//! `0x24`/`0x25`, the variable writes `0x1e`/`0x20`, the fixed bend `0x1c` and
-//! the stop `0x18`. The guard reads the same four bytes
+//! and more runs: the alternate group `0x19`, the marker gotos `0x24`/`0x25`,
+//! the variable writes `0x1e`/`0x20`, the random and fixed bends `0x1b`/`0x1c`
+//! and the stop `0x18`. The guard reads the same four bytes
 //! `Scream_SetCueParameter` writes (`docs/ghidra/functions/ps3-hdfury-eu/cue-variables.md`,
-//! "Held cues run as lists").
+//! "Held cues run as lists"). A game that stops the handle runs what lies after
+//! the list's first `0x2b` ([`Runner::release`]).
 
+use super::pitch::random_bend_word;
 use super::timeline::{Frame, Grain, WalkModel, variable_guard_skips};
 use super::{Bank, COMMAND_LEN, Cue, KEY_ON_OPCODES};
 
@@ -60,6 +62,7 @@ const END: u8 = 0x2b;
 const STOP: u8 = 0x18;
 const ALTERNATE: u8 = 0x19;
 const FIXED_BEND: u8 = 0x1c;
+const RANDOM_BEND: u8 = 0x1b;
 const SET_VARIABLE: u8 = 0x1e;
 const INCREMENT_VARIABLE: u8 = 0x20;
 const MARKER: u8 = 0x23;
@@ -90,8 +93,8 @@ fn hd_runs(opcode: u8, operand: u32) -> bool {
     let local = (0..PARAMETERS as i8).contains(&a);
     match opcode {
         GUARD | SET_VARIABLE | INCREMENT_VARIABLE => local,
-        0x14 | NOP_MARKER | LOOP_BACK | STOP | ALTERNATE | RANDOM_DELAY | FIXED_BEND | MARKER
-        | GOTO | RANDOM_GOTO | END => true,
+        0x14 | NOP_MARKER | LOOP_BACK | STOP | ALTERNATE | RANDOM_DELAY | RANDOM_BEND
+        | FIXED_BEND | MARKER | GOTO | RANDOM_GOTO | END => true,
         _ => false,
     }
 }
@@ -106,7 +109,7 @@ pub struct Runner {
     /// Whether the list is read with HD's operand bytes and extra opcodes.
     hd: bool,
     parameters: [i8; PARAMETERS],
-    /// The handler's bend, `0x1c`'s write (`Scream_SetVoiceBend`).
+    /// The handler's bend, the write of `0x1b` and `0x1c` (`Scream_SetVoiceBend`).
     bend: i16,
     /// The last alternate each `0x19` picked, by command index; starts as the
     /// bank's own byte, which the original caches in place.
@@ -224,8 +227,8 @@ impl Runner {
         self.tick
     }
 
-    /// The handler's bend as `Scream_SetVoiceBend` holds it, `0` until a `0x1c`
-    /// runs. It reaches every voice the cue has keyed, sounding or not.
+    /// The handler's bend as `Scream_SetVoiceBend` holds it, `0` until a `0x1b`
+    /// or `0x1c` runs. It reaches every voice the cue has keyed, sounding or not.
     #[must_use]
     pub fn bend(&self) -> i16 {
         self.bend
@@ -274,6 +277,32 @@ impl Runner {
         out
     }
 
+    /// What a stopped handle still plays, as HD's stop does (`0x00626350`): when
+    /// a `0x2b` lies before the last command, the voices are keyed off and the
+    /// commands after the first one run at once, their delays ignored. The key-off
+    /// is the caller's. Empty for a list without one, and off HD's layout, whose
+    /// stop is unread. The runner is finished afterwards.
+    pub fn release(&mut self, rand: &mut dyn FnMut() -> u32) -> Vec<Grain> {
+        let mut out = Vec::new();
+        let tail = self
+            .commands
+            .iter()
+            .position(|c| c.opcode == END)
+            .filter(|&at| self.hd && at + 1 < self.commands.len());
+        if let Some(at) = tail {
+            self.pc = at as i32 + 1;
+            self.ended = false;
+            self.gotos_this_tick = 0;
+            self.looped_this_tick = false;
+            let mut steps = 0;
+            while !self.ended && steps < MAX_STEPS_PER_TICK && self.step(rand, &mut out) {
+                steps += 1;
+            }
+        }
+        self.ended = true;
+        out
+    }
+
     /// One `Scream_StepCommandList`. `false` is the handler dying.
     fn step(&mut self, rand: &mut dyn FnMut() -> u32, out: &mut Vec<Grain>) -> bool {
         let Some(&command) = usize::try_from(self.pc)
@@ -303,6 +332,10 @@ impl Runner {
             }
             END => self.pc = self.commands.len() as i32 - 1,
             STOP if self.hd => return false,
+            RANDOM_BEND if self.hd => {
+                let draw = (rand() & 0xffff) % 0x7fff;
+                self.bend = random_bend_word(draw, (command.operand >> 16) as u8 as i8);
+            }
             FIXED_BEND if self.hd => self.bend = fixed_bend((command.operand >> 16) as u8 as i8),
             SET_VARIABLE | INCREMENT_VARIABLE if self.hd => {
                 let a = usize::from((command.operand >> 16) as u8) % PARAMETERS;
