@@ -365,6 +365,7 @@ fn a_lit_shield_shell_reads_the_crafts_light_with_the_flames_clock() {
     scene.give_a_shield_for_tests(&device);
     scene.light_the_shield_for_tests();
     scene.share_scene_blocks_for_tests(&device);
+    scene.enable_light_rig_for_tests();
     scene.set_output_scale_for_tests(0.5);
     assert_eq!(
         scene.shield_scene_kinds_for_tests(),
@@ -402,4 +403,38 @@ fn a_lit_shield_shell_reads_the_crafts_light_with_the_flames_clock() {
         "the craft's fog"
     );
     assert_eq!(shield.time, flame.time, "the flame's clock");
+}
+
+/// With no authored rig (a circuit without `.envsettings`, or an HD craft on a PSP circuit) the
+/// lit shell's block is the flame's, so the shader keeps its unlit path and no fog is added.
+#[test]
+fn a_lit_shield_shell_without_a_rig_reads_the_flames_block() {
+    let Some((device, queue)) = test_gpu() else {
+        return;
+    };
+    let mut scene = bare_scene(&device, &queue);
+    scene.give_a_shield_for_tests(&device);
+    scene.light_the_shield_for_tests();
+    scene.share_scene_blocks_for_tests(&device);
+    let view = target(&device);
+    let race = race_with_a_grid();
+    scene.render_viewports(
+        &device,
+        &queue,
+        &view,
+        &race,
+        (0.0, 0.0, 64.0, 64.0),
+        Fov::AUTHORED,
+        true,
+        true,
+        None,
+        Shadows::Off,
+        &[],
+        crate::scene::WindowEffects::default(),
+        &mut [],
+    );
+    assert_eq!(
+        bytemuck::bytes_of(&scene.scene_block(&device, &queue, 0, SceneKind::Shield)),
+        bytemuck::bytes_of(&scene.scene_block(&device, &queue, 0, SceneKind::Flame)),
+    );
 }

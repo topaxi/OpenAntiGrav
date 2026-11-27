@@ -2011,7 +2011,9 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
     // directionalLight0Colour * sat(N.L))`, the world-space normal and light, then the fog lerp
     // and `/2`. The texel is decoded on fetch (gamma nibble 7) and the colour is a linear
     // constant, so nothing here is lit in gamma space.
-    if shield_lit != 0.0 {
+    // Where the frame holds no rig (a circuit with no `.envsettings`) the program's light would
+    // be zero, so the generic path above stands.
+    if shield_lit != 0.0 && scene.light.enabled > 0.5 {
         let shell_light = scene.light.ambient
             + scene.light.sun * clamp(dot(n, scene.light.direction), 0.0, 1.0);
         composed_lit = vec4<f32>(

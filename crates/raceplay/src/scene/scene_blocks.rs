@@ -241,11 +241,15 @@ pub(super) fn flame_scene(
 }
 
 /// A lit shield shell's block: the craft's light rig and fog (its program lerps the circuit's
-/// fog inside its `/2`) over the flame's block, whose clock its colour tap scrolls on.
+/// fog inside its `/2`) over the flame's block, whose clock its colour tap scrolls on. Where
+/// the circuit authors no rig the shell draws as on the flame's block, unlit and unfogged.
 pub(super) fn shield_scene(
     ship: &mesh_render::Scene,
     flame: &mesh_render::Scene,
 ) -> mesh_render::Scene {
+    if ship.light.enabled < 0.5 {
+        return *flame;
+    }
     mesh_render::Scene {
         fog: ship.fog,
         light: ship.light,
@@ -271,6 +275,18 @@ impl Scene {
         let (shell, sphere) = (copy(), copy());
         self.shield = vec![Some(shell)];
         self.shield_cockpit = Some(sphere);
+    }
+
+    /// Gives the circuit an authored light rig, as HD's loader does.
+    pub(crate) fn enable_light_rig_for_tests(&mut self) {
+        self.light = mesh_render::Light::authored(
+            [0.0, 1.0, 0.0],
+            [2.0, 1.5, 1.0],
+            [0.4, 0.4, 0.5],
+            [1.0; 3],
+            [1.0; 3],
+            0.0,
+        );
     }
 
     /// Flags slot 0's shell as one under its own lit program, as HD's loader does.

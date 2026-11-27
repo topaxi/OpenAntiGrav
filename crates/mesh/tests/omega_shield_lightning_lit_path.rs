@@ -209,8 +209,9 @@ fn the_lit_shell_takes_ambient_and_the_sun_by_its_normal() {
     for vertex in &mut shell.vertices {
         vertex.colour = [0.8, 1.0, 1.0, 1.0];
     }
-    let red = |towards: [f32; 3]| {
+    let red = |towards: [f32; 3], rig: f32| {
         let mut scene = Scene::off();
+        scene.light.enabled = rig;
         scene.light.direction = towards;
         scene.light.ambient = [0.2, 0.2, 0.2];
         scene.light.sun = [0.5, 0.5, 0.5];
@@ -220,12 +221,14 @@ fn the_lit_shell_takes_ambient_and_the_sun_by_its_normal() {
     // `N.L` of 0.8, then a light behind the surface, which the saturate holds at zero.
     for (towards, ndl) in [([0.6, 0.0, 0.8], 0.8), ([0.0, 0.0, -1.0], 0.0)] {
         let expected = 0.5 * 0.8 * (0.2 + 0.5 * ndl);
-        let got = red(towards);
+        let got = red(towards, 1.0);
         assert!(
             (got - expected).abs() < 2.0 / 255.0,
             "N.L {ndl}: {got}, not {expected}"
         );
     }
+    // No rig in the frame: the generic path draws the shell rather than black.
+    assert!(red([0.0, 0.0, -1.0], 0.0) > 0.25);
 }
 
 /// Identity camera and model, so clip space is model space.

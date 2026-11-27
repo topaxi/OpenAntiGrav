@@ -217,8 +217,9 @@ pub(super) fn own_shield(options: &crate::Options, craft_title: &oag_title::Titl
 #[cfg(feature = "view")]
 /// The shell draw of a title whose own lit shell program is read
 /// (`oag_title::Looks::shield_shell_lit`): back faces culled by the material's state word, and
-/// the lit program's flag. Only a shell that authors `ShieldColour`, and never our own shield.
-/// The cockpit sphere keeps its drawing: its draw is unread.
+/// the lit program's flag. Only a shell that authors `ShieldColour` and binds the program that
+/// was read (`hexagonalshield_rich`, known by its scroll entry: Zone's `zonebattle_shield` is
+/// unread), and never our own shield. The cockpit sphere keeps its drawing: its draw is unread.
 pub(crate) fn lit_shield_shell(
     shell: Option<&mut oag_mesh::mesh::Model>,
     options: &crate::Options,
@@ -228,10 +229,20 @@ pub(crate) fn lit_shield_shell(
     {
         return;
     }
-    if let Some(shell) = shell.filter(|shell| shell.shield_shell) {
+    if let Some(shell) = shell.filter(|shell| shell.shield_shell && scrolls_hexagons(shell)) {
         shell.honour_cull();
         shell.shield_lit = true;
     }
+}
+
+#[cfg(feature = "view")]
+/// Whether the model's shell program is the hexagon lattice's, which alone binds the scroll
+/// entry on HD (`oag_mesh::mesh::rcs::shield_scroll`).
+fn scrolls_hexagons(shell: &oag_mesh::mesh::Model) -> bool {
+    shell
+        .emissive
+        .iter()
+        .any(|entry| entry.program[0] == oag_mesh::mesh::PROGRAM_SHIELD_LIGHTNING)
 }
 
 #[cfg(feature = "view")]
