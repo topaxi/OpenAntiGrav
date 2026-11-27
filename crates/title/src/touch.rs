@@ -162,6 +162,7 @@ mod tests {
     /// 2048's own shape, as a fixture: this crate must not know any title's
     /// data, so the sanity check below cannot reach for `oag-2048`.
     const TWO_ZERO_FOUR_EIGHT_SHAPED: TouchFrontEnd = TouchFrontEnd {
+        label_face: Some("NEOSANS_BOLD"),
         game_mode_choice: &[
             TouchButton {
                 id: "FE_SP_CAMPAIGN",
