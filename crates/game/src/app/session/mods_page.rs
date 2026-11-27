@@ -178,7 +178,7 @@ impl Session {
         let Some(mut shell) = self.shell.clone() else {
             return;
         };
-        let (definition, listing, installed, fallbacks) = match built {
+        let built = match built {
             Ok(built) => built,
             Err(e) => {
                 error!(
@@ -187,13 +187,8 @@ impl Session {
                 return;
             }
         };
-        self.custom_tracks.set_mod_files(&installed.tracks);
-        shell.definition = definition;
-        shell.mods = listing;
-        shell.custom_campaigns = std::sync::Arc::new(installed);
-        // A mod's fallback entries can add a mode's data (ADR-0100): the MODE row follows.
-        oag_source::layers::register_mods(fallbacks);
-        shell.reoffer_modes();
+        self.custom_tracks.set_mod_files(&built.2.tracks);
+        shell.adopt_rebuilt(built);
         let Some(mut model) = self.reopened_menu(&shell) else {
             self.shell = Some(shell);
             return;

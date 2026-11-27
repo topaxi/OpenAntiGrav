@@ -103,7 +103,7 @@ fn the_embedded_table_is_sorted_with_no_path_twice() {
 /// title's, so a mod's Pulse entries never answer on Pure.
 #[test]
 fn a_mod_folder_is_one_layer_per_title_and_an_open_keeps_its_own() {
-    let root = std::env::temp_dir().join(format!("oag-mod-fallback-{}", std::process::id()));
+    let root = oag_testdata::scratch::dir("mod-fallback-layers");
     for (slug, file) in [
         ("wipeout-pulse", "Data/XML/Ours.xml"),
         ("wipeout-pure", "Data/XML/Other.xml"),

@@ -1033,7 +1033,7 @@ pub(crate) struct Shell {
     pub(crate) modes: Vec<menu::Choice>,
     /// The title's own mode data something other than a mod held at boot
     /// ([`crate::boot::RaceSetup::mode_data_held`]): with the mods on now, what [`Self::modes`]
-    /// is recomputed from when a mod is switched ([`Self::reoffer_modes`]).
+    /// is recomputed from when a mod is switched ([`Self::adopt_rebuilt`]).
     pub(crate) mode_data_held: Vec<String>,
     /// The `KILLS` row's values, off the disc's own `Eliminations` list.
     pub(crate) kill_targets: Vec<menu::Choice>,
@@ -1274,8 +1274,15 @@ impl Shell {
         }
     }
 
-    /// Recomputes [`Self::modes`] from [`Self::mode_data_held`] and the mods registered now.
-    pub(crate) fn reoffer_modes(&mut self) {
+    /// Takes what a rebuild for the mods made: its tree, listing and campaigns, its mods'
+    /// fallback entries (registered for every later open) and the modes they now offer.
+    pub(crate) fn adopt_rebuilt(&mut self, rebuilt: mods_page::Rebuilt) {
+        let (definition, listing, installed, fallbacks) = rebuilt;
+        self.definition = definition;
+        self.mods = listing;
+        self.custom_campaigns = std::sync::Arc::new(installed);
+        // A mod's fallback entries can add a mode's data (ADR-0100): the MODE row follows.
+        oag_source::layers::register_mods(fallbacks);
         let modes = crate::boot::offered_modes(self.title, &self.mode_data_held);
         self.modes = menu::mode_choices(&self.strings, &modes);
     }

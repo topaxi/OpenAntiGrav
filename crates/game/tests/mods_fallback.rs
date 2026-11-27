@@ -2,9 +2,10 @@
 //! from a folder or a `.oagmod`, one layer per title its `titles` admit, none when it is off.
 
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use oag_game::mods::Mods;
+use oag_testdata::scratch::TempDir;
 use zip::ZipWriter;
 use zip::write::SimpleFileOptions;
 
@@ -38,11 +39,8 @@ const FILES: [(&str, &[u8]); 3] = [
     ),
 ];
 
-fn base(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("oag-mods-fallback-{}-{name}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    dir
+fn base(name: &str) -> TempDir {
+    oag_testdata::scratch::dir(&format!("mods-fallback-{name}"))
 }
 
 fn folder(root: &Path, id: &str) {
