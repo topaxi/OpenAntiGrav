@@ -17,12 +17,12 @@ Like the fallback they answer only a name no disc or DLC holds. The composition 
 them (`oag_source::layers::register_mods`) at start and whenever a mod is switched; an open that
 mounts the player's layers (`Layering::player`) keeps its own title's.
 
-First hit wins. Override and fallback are loose entries, not archives: a name
-maps to a file or to embedded bytes. A name is compared lowercase, with `/` for
+First hit wins. Override, mods and fallback are loose entries, not archives: a name
+maps to a file, a packed mod's file or embedded bytes. A name is compared lowercase, with `/` for
 `\`, without a leading separator, so `Data\XML\Foo.xml` (a WAD's spelling) and
 `/data/xml/foo.xml` (a PSARC's) are one entry. The hash-addressed reads
 (`read_hash`) and the directory-position reads (`read_preceding`/`read_following`,
-`read_font`'s atlas) skip both layers: an entry with no hash and no position cannot
+`read_font`'s atlas) skip every such layer: an entry with no hash and no position cannot
 answer them. A mod that replaces a PS2 model therefore does not move its texture
 set, which sits by position in the disc's own archive.
 
@@ -44,7 +44,7 @@ is reported as answered by the override, searched ahead of the disc.
 
 **A circuit's `track.vex` is read like any other entry.** A race load takes it through
 `Archives::read_name`. `Archives::locate` answers with a label, which for a layer is a
-directory (override) or a description (fallback) and not an archive spec, so nothing may
+directory (override) or a description (a mod, the fallback) and not an archive spec, so nothing may
 reopen it: a loader that did failed every race on an overridden circuit, a byte-identical
 copy included. `load::track_inputs::tests` (raceplay) pins that a byte-identical override
 of the default circuit loads the same bytes, spline, collision, pads and start slot as the
