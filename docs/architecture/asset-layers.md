@@ -41,23 +41,12 @@ is reported as answered by the override, searched ahead of the disc.
 directory (override) or a description (fallback) and not an archive spec, so nothing may
 reopen it: a loader that did failed every race on an overridden circuit, a byte-identical
 copy included. `load::track_inputs::tests` (raceplay) pins that a byte-identical override
-of the default circuit loads the same spline, collision, pads and start slot as the source,
-on Pulse (PSP EU and PS2 EU), Pure, HD, 2048 and Omega (2026-11-27); the one fix is the
-shared loader's, so 2048 and Omega are **ported**. A Pulse PSP EU `16_Track` race with and
-without the override also drew a byte-identical frame at tick 600 and wrote a
-byte-identical 3,600-tick autopilot trace (`--trace-out`).
-
-**A mod that changes a table changes the simulation.** A replay carries the
-initial state hash and one every interval ([ADR-0055](adr/0055-replays-are-inputs-and-a-ghost-is-poses.md)), so a replay recorded
-without the mod and played with it reports a desync instead of diverging; a ghost
-is poses and is drawn regardless. The header does not yet say that mods were
-active - open.
-
-Proved through the shipped chain on 2026-10-11, with this project's own art and no disc
-content: a copy of `AssistIndicator.pix` with the main icon made a solid square, placed at
-`$tmp/wipeout-pulse/Data/HUD/Textures/AssistIndicator.pix`, then `OAG_OVERRIDES=$tmp oag-game
-pulse-psp-eu.chd --race --pilot-assist extreme ...`: the log said `Data\HUD\Textures\AssistIndicator.pix
-answered by the player's override`, and the screenshot drew the square where the ring was.
+of the default circuit loads the same bytes, spline, collision, pads and start slot as the
+source, on Pulse (PSP EU and PS2 EU), Pure, HD, 2048 and Omega (2026-11-27); the loader is
+shared, so 2048 and Omega are **ported**. Those tests stop at the circuit's simulation
+inputs. Whole races were compared with and without the override on two sources: Pulse PSP
+EU `16_Track` (byte-identical frame at tick 600, byte-identical 3,600-tick autopilot
+`--trace-out`) and HD Talon's Junction (byte-identical frame at tick 600).
 
 ## The fallback
 
