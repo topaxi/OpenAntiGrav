@@ -124,6 +124,23 @@ fn a_locked_disc_with_no_playing_copy_has_a_card_that_asks_for_its_key() {
 }
 
 #[test]
+fn a_locked_copy_listed_first_leaves_the_card_on_the_one_that_plays() {
+    let mut launcher = chooser(
+        vec![
+            locked("enc.iso", "BCES-00664"),
+            row("dec.iso", oag_hd::TITLE, Some("BCES-00664")),
+        ],
+        &[],
+    );
+    assert_eq!(launcher.card_list().len(), 1);
+    assert_eq!(
+        press(&mut launcher, Button::Cross).as_deref(),
+        Some("data/images/dec.iso")
+    );
+    assert!(launcher.entry().is_none());
+}
+
+#[test]
 fn the_cog_steps_through_a_titles_images_and_reports_the_choice() {
     let mut launcher = chooser(library(), &[]);
     read_art(&mut launcher);

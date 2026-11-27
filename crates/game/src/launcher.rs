@@ -813,7 +813,7 @@ pub fn not_found_notice_desktop(folder: &str) -> Vec<String> {
 /// own default is the PSP's.
 #[must_use]
 pub fn draw_list(launcher: &Launcher) -> Vec<Draw> {
-    with_drop_note(launcher, list_draw(launcher))
+    with_drop_note(launcher, list_draw(launcher), SCREEN.1 - 34.0)
 }
 
 /// Whether a run's chooser draws cards: `--launcher-list` asks for the list for
@@ -829,17 +829,22 @@ pub fn wants_cards(list_flag: bool, style: crate::settings::launcher::LauncherSt
 #[must_use]
 pub fn draw(launcher: &Launcher, sheet: &oag_hud::sprite::Sheet) -> Vec<Draw> {
     if launcher.is_cards() && launcher.entry().is_none() && launcher.notice().is_none() {
-        return with_drop_note(launcher, launcher.draw_cards(sheet));
+        // Under the heading: the foot of the screen is the captions'.
+        return with_drop_note(launcher, launcher.draw_cards(sheet), 24.0);
     }
     draw_list(launcher)
 }
 
-/// `out` with the note a file being dragged over the window gets.
-fn with_drop_note(launcher: &Launcher, mut out: Vec<Draw>) -> Vec<Draw> {
+/// `out` with the note a file being dragged over the window gets, at `y`.
+fn with_drop_note(launcher: &Launcher, mut out: Vec<Draw>, y: f32) -> Vec<Draw> {
     if launcher.hovering {
         out.push(text(
-            MARGIN,
-            SCREEN.1 - 34.0,
+            if y < SCREEN.1 / 2.0 {
+                SCREEN.0 / 2.0
+            } else {
+                MARGIN
+            },
+            y,
             1.0,
             SELECTED,
             "DROP THE FILE TO USE IT",

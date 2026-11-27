@@ -111,7 +111,11 @@ impl Launcher {
             focus: 0,
             changed: None,
         });
-        self.follow_row(self.cursor, false);
+        let first = self.rows.iter().position(Candidate::is_playable);
+        self.follow_row(first.unwrap_or(self.cursor), false);
+        // The cursor may sit on a row no card holds (a locked copy listed
+        // ahead of the one that plays).
+        self.sync();
         self
     }
 
