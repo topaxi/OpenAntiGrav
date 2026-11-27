@@ -2,7 +2,7 @@
 status: measure
 titles: [hd, omega, 2048]
 updated: 2026-11-27
-summary: "Owed: HD track-blast template and orientation, Mine/Detonator films, Bomb colour and spark gaps, Omega ring, cap source, near pairs; half-res parked"
+summary: "Owed: HD track-blast orientation, Mine/Detonator films, Bomb colour and spark gaps, Omega ring, cap source, near pairs; half-res parked"
 size: M (50)
 difficulty: medium (55)
 ---
@@ -84,20 +84,19 @@ blast the struck craft's velocity, on HD, 2048 and Omega
 
 ### The Rocket on the wall: what the pairs show
 
-`docs/rendering/particle-fill.md`, "A Rocket on the wall paired" has the films, the buffer and the
-listings (the flare is listed, both blasts are not). Left, by size of the picture difference:
+`docs/rendering/particle-fill.md`, "A Rocket on the wall paired" has the films, the buffer, the
+template and the listings (flare and track blast listed). Left, by size of the picture difference:
 
-- **The track blast's sprite template is muted and the original draws it** (three `dc_flare_d`
-  quads, up to 100 units). `TEMPLATES += TRACK_BLAST_EFFECT` read -0.075 and -0.033 at 0.333 s on
-  the two films and nothing at 0.5 and 0.6 s; with it on, `FAR_BARS += TRACK_BLAST_EFFECT` is no
-  longer worse anywhere and is -0.005 to -0.013 at 0.5 s. Two lines, pairs ready.
 - **The track blast flies off the wall in the original** (streaks one-sided, along the Rocket's
   heading and back off the wall); ours is unoriented and fans up both sides. Read what matrix HD's
   `Rocket_Update` hands the `WO_ROCKET_EXPLO_TRACK` spawn.
+- **Ours is white where the original is orange at 0.5 s** on the wall pairs; cause unread.
 - **HD's volley on the wall is wider and later than ours**: hits 14.8 units apart and born 14, 15
   and 18 ticks after the press, against ours' 8.7 units and 13, 13, 14. Simulation, not render.
 - **A faint orange tail below the craft at 0.2 s** in ours, with the flare's bar; the original
   shows none.
+- **The craft blast's streaks (`FAR_BARS` `WO_ROCKET_EXPLO`) are not judged**: left to whoever
+  holds that effect's far look; the craft-hit numbers on the doc page are for the earlier look.
 - **2048 and Omega author the same launch streak** (`WO_ROCKET_FIRE`): checked, applies, not
   wired; no frame of either.
 
@@ -174,4 +173,4 @@ HD's width throttle, the other idea here, is TARGET FPS `original`
 
 ## Next Steps
 
-1. Play the HD track blast's sprite template, then list its streaks ("The Rocket on the wall").
+1. Read the matrix HD hands the track blast's spawn ("The Rocket on the wall").

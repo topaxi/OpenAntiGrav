@@ -218,6 +218,31 @@ fn hds_craft_blast_plays_the_screen_wash_templates() {
     check_craft_blast_trails_start_on_the_hemisphere(blast);
 }
 
+/// HD's track blast plays its one root template, the `dc_flare_d` quad the original draws on a
+/// wall hit (`docs/rendering/particle-fill.md`, "A Rocket on the wall paired").
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn hds_track_blast_plays_its_flare_template() {
+    let Some(race) = race_on("data/images/hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let blast = race
+        .view
+        .handles
+        .get(Trigger::TrackBlast)
+        .expect("HD loads its track blast");
+    let playing: Vec<&str> = blast
+        .emitters
+        .iter()
+        .filter(|spec| spec.template && spec.per_emission != (0, 0))
+        .map(|spec| {
+            assert!(spec.sprite.is_some(), "{}", spec.name);
+            spec.name.as_str()
+        })
+        .collect();
+    assert_eq!(playing, ["FLASHBANG"]);
+}
+
 /// HD's craft blast spreads by the extent law: `FIRE_TRAILS_ONEQUAD`, the heads whose `trail`
 /// smoke the original draws fanning out around the blast, start on the authored 8.824-unit
 /// hemisphere (`docs/rendering/particle-fill.md`, "The trails start on the blast's hemisphere").

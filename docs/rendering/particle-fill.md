@@ -636,7 +636,8 @@ the 31 others found 89 emitter and template texture references, every one an exi
 
 The streak emitters of the 21 also stay procedural (the Mine's `streaks_fat`, `plasma_core` and
 `sparks`, for instance). Listing one for `FAR_BARS` wants an original pair first;
-`WO_ROCKET_FLARE` has had its own since 2026-11-27 ("A Rocket on the wall paired").
+`WO_ROCKET_FLARE` and `WO_ROCKET_EXPLO_TRACK` have had theirs since 2026-11-27 ("A Rocket on the
+wall paired").
 
 The listing also gives these effects HD's flipbook walk, and each placed particle draws its spawn
 frame from the stage's generator, so every effect after one in a frame is dealt another
@@ -821,53 +822,64 @@ format `0x148`, the same as the frame's 550 other draws; additive blend, no dept
   upside-down streaks (0.50, 0.33, 0.61), along the Rocket's heading and back off the wall.
   Ours plays the blast with no orientation and fans out symmetrically about up. What matrix HD's
   spawn is handed is unread.
-- **The track blast draws its sprite template**: three `dc_flare_d` quads, one a blast, up to 100
-  units across, white and fading. Ours mutes it (`TEMPLATES`).
+**The track blast's sprite template** (confidence 95). The file's one template on the root,
+`FLASHBANG`, draws `DC_Flare_D`: the original's rings hold 19 quads of it across the two films,
+one a blast, white, and each is as wide as the file's size curve says at the age its alpha says
+(width minus curve: mean 0.5, largest 1.6 units, on quads 16 to 100 wide). `Effects::templates`
+lists the effect; ours muted it before. Template on against off, with the flare's bar listed and
+the blast's not: change in the eight-seed mean RMSE (0 to 1), negative is closer, paired standard
+errors in units of 0.0001 in brackets, seeds closer with it out of 8.
+
+| Film | 0.333 s | 0.5 s | 0.6 s |
+| --- | --- | --- | --- |
+| 1 | -0.0774 (23), 8 | +0.0004 (1), 1 | +0.0003 (1), 2 |
+| 2 | -0.0295 (28), 8 | +0.0004 (3), 1 | +0.0000 (1), 1 |
+
+The whole gain is the white flash at 0.333 s; the small rise later is unread.
 
 **The pairs' age.** `--lag 2 --fire-shift 2`: the shift puts ours' mean birth on the original's,
 and the lag is bounded by the frames themselves (no burst on the picture 15 ticks after the press,
 a burst at 17, with the first blast born at 14). The whole-frame score does not choose an age
-here: its minimum is at a shift of -5 at 0.333 s, +6 to +8 at 0.5 s and -2 at 0.6 s, as each
-frame prefers whichever arm is dimmer. Confidence in the age, 70.
+here: with the template and the blast's bar still off, its minimum was at a shift of -5 at
+0.333 s, +6 to +8 at 0.5 s and -2 at 0.6 s, each frame preferring whichever arm is dimmer.
+Confidence in the age, 70.
 
-**Listings**, each on its own: change in the eight-seed mean RMSE (0 to 1), negative is closer,
-paired standard errors in brackets, seeds closer out of 8.
+**Listings**, each on its own, same units. 0.2 s was measured before the template went in, which
+changes nothing there (identical scores).
 
 | Listing | Film | 0.2 s | 0.333 s | 0.5 s | 0.6 s | Kept |
 | --- | --- | --- | --- | --- | --- | --- |
-| `FAR_BARS` `WO_ROCKET_FLARE` | 1 | -0.0144 (13), 8 | -0.0001 (9), 4 | -0.0150 (68), 6 | +0.0006 (64), 4 | **yes** |
-| | 2 | -0.0164 (12), 8 | -0.0001 (13), 3 | -0.0058 (101), 5 | -0.0164 (39), 7 | |
-| `FAR_BARS` `WO_ROCKET_EXPLO_TRACK` | 1 | no pixel | **+0.0096 (6), 0** | -0.0108 (28), 7 | -0.0023 (2), 8 | no |
-| | 2 | no pixel | **+0.0100 (14), 0** | -0.0025 (26), 5 | -0.0019 (2), 8 | |
+| `FAR_BARS` `WO_ROCKET_FLARE` | 1 | -0.0144 (13), 8 | -0.0023 (25), 4 | -0.0150 (67), 6 | +0.0007 (63), 4 | **yes** |
+| | 2 | -0.0164 (12), 8 | +0.0029 (37), 3 | -0.0053 (100), 5 | -0.0168 (38), 7 | |
+| `FAR_BARS` `WO_ROCKET_EXPLO_TRACK` | 1 | no pixel | +0.0003 (3), 3 | -0.0068 (33), 6 | -0.0019 (4), 7 | **yes** |
+| | 2 | no pixel | +0.0001 (2), 3 | -0.0143 (31), 8 | -0.0024 (3), 8 | |
 
-(Standard errors in units of 0.0001.) The flare on the four craft-hit pairs: `0100` -0.0043
-(61), far `0100` +0.0002 (2), far `0233` -0.0002 (10), and `0233` -0.0028 (135) over 24 seeds
-(+0.0328 (159) on the first 8, which is that pair's own scatter).
+The blast's listing carries four emitters, all in the original's rings: `FIRESPIKES`,
+`FIREBALL_PARENT`, `SPARKS` and `FIRE_TRAILS_ONEQUAD`. Without the template it had read +0.0096
+(6) and +0.0100 (14) at 0.333 s, which is why the template came first. The flare on the four
+craft-hit pairs: `0100` -0.0043 (61), far `0100` +0.0002 (2), far `0233` -0.0002 (10), and `0233`
+-0.0028 (135) over 24 seeds (+0.0328 (159) on the first 8, which is that pair's own scatter).
 
-**At the pairs' own seed some get worse.** `rocket-wall-0600` reads 0.211 before and 0.253 listed
-(film 2 0.226 to 0.197), `rocket-wall-0500` moves +0.034 and +0.023, and on the craft-hit pairs
-`0100` 0.0000, `0233` +0.0101, far `0100` +0.0003, far `0233` +0.0013. At 0.5 and 0.6 s no flare
-streak quad of ours is in front of the camera (the player's Rockets are gone, and the only live
-ones are another craft's, behind it: a throwaway print of each quad's position), so the bar is
-not what moved those frames. The listed streaks now take a sprite, and each such particle draws
-its spawn frame from the stage's generator, which deals the blast another arrangement. The rule
-was therefore applied to the eight-seed mean, not to one arrangement.
+**The rule was applied to the eight-seed mean; at their own seed some pairs get worse**, against
+the "written before" wording above. Own-seed RMSE, listed minus unlisted:
 
-`FAR_BARS` `WO_ROCKET_EXPLO` on the craft-hit pairs (the wall holds no craft blast): `0100`
-0.0000, far `0100` 0.0000, far `0233` +0.0001, `0233` +0.0047 (23), closer on 1 of 8. **Not
-listed.**
-
-**The track blast's loss at 0.333 s is the muted template, not the bar.** With a throwaway switch
-playing its template, the same two films read:
-
-| | Film | 0.333 s | 0.5 s | 0.6 s |
+| Listing | Film | 0.333 s | 0.5 s | 0.6 s |
 | --- | --- | --- | --- | --- |
-| template against today | 1 | -0.0751 | +0.0004 | +0.0002 |
-| | 2 | -0.0325 | -0.0001 | +0.0005 |
-| and the bar on top, against the template alone | 1 | -0.0002 | -0.0125 | -0.0023 |
-| | 2 | -0.0005 | -0.0047 | -0.0019 |
+| flare | 1 | -0.002 | +0.034 | +0.042 |
+| flare | 2 | -0.004 | +0.022 | -0.030 |
+| track blast | 1 | -0.0028 | -0.0034 | +0.0003 |
+| track blast | 2 | +0.0008 | -0.0087 | -0.0019 |
 
-Neither is wired: the template is a listing of its own, and the bar waits on it.
+On the craft-hit pairs the flare moves `0233` +0.0101, far `0100` +0.0003 and far `0233` +0.0013.
+At 0.5 and 0.6 s no flare streak quad of ours is in front of the camera (the player's Rockets are
+gone and the only live ones are another craft's, behind it: a throwaway print of each quad's
+position), so the bar is not what moved those frames. A listed streak takes a sprite, and each
+such particle draws its spawn frame from the stage's generator, which deals the blast another
+arrangement.
+
+**`WO_ROCKET_EXPLO`, the craft blast, is not judged here**: its look was being changed at the
+same time. On that look as it was, `FAR_BARS` for it read 0.0000, 0.0000, +0.0001 and +0.0047
+(23) on the four craft-hit pairs (`0100`, far `0100`, far `0233`, `0233`).
 
 **The pairs** (film 1), as wired, each re-rendered to identical pixels. The ids carry the age at
 the stop.
@@ -875,20 +887,23 @@ the stop.
 | Pair | RMSE | Edge NCC | Mean grey | Film 2, RMSE |
 | --- | --- | --- | --- | --- |
 | `rocket-wall-0200` | 0.081 | 0.431 | 7.2 | 0.079 |
-| `rocket-wall-0333` | 0.173 | 0.389 | 19.4 | 0.147 |
-| `rocket-wall-0600` | 0.253 | 0.323 | 27.9 | 0.197 |
+| `rocket-wall-0333` | 0.093 | 0.403 | 10.2 | 0.115 |
+| `rocket-wall-0500` | 0.202 | 0.357 | 18.7 | 0.203 |
+| `rocket-wall-0600` | 0.253 | 0.325 | 28.1 | 0.196 |
 
 **Judged by eye.** At 0.2 s the procedural launch streaks were one white beam from under the craft
 to the bottom of the frame; as bars they are three small flames at the Rockets, as the original's,
-with a faint orange tail below the craft it does not show. At 0.333 s ours' burst is half the
-size, without the white flash. At 0.6 s ours' fire trails go up both sides and past the HUD where
-the original's all lean away from the wall, shorter and deeper orange.
+with a faint orange tail below the craft it does not show. At 0.333 s the white flash now sits
+where the original's does, ours a little wider. At 0.5 and 0.6 s ours' fire trails go up both
+sides and past the HUD where the original's all lean away from the wall, shorter, and at 0.5 s
+ours is white where the original is orange.
 
-**2048 and Omega: checked, applies, not wired.** 2048's own `WO_ROCKET_FLARE` carries
+**2048 and Omega.** Flare: checked, applies, not wired (2048's own `WO_ROCKET_FLARE` carries
 `WO_ROCKET_FIRE`, mode 5, on the same sprite; Omega's two carry it, `launch_flare` and a third
-streak `sparky`. Their blasts' files are not HD's (2048's authors one streak in each, on its own
-sprites; Omega's track and craft blast carry the same three), so nothing is inherited for them
-here. No 2048 or Omega frame.
+streak `sparky`). Track blast streaks: checked, differs (2048's file authors one streak on its
+own sprite; Omega's carries three with HD's names on other sprites). Template: checked, differs
+(neither title's track blast authors one, read through each title's own load, an Omega 2048
+circuit included). No 2048 or Omega frame.
 
 ### Every effect that loads a sprite, read off the command ring
 
@@ -943,9 +958,9 @@ ours' bar does (the particle's position takes the top row). The Plasma wind-up r
 0 against 287 (`plasma_forks`), and its two emitters
 author a negative speed (-0.50 and -0.48 units a tick): they fly inward. Confidence 90.
 
-Ours samples no sprite at all on the strips of the Rocket's two blasts, the Missile head, the Quake
+Ours samples no sprite at all on the strips of the Rocket's craft blast, the Missile head, the Quake
 and the ship explosion (`Effects::far_bars` does not list them), so this reaches the Plasma, the
-trail hits, the two Detonator effects and, since 2026-11-27, the Rocket's flare.
+trail hits, the two Detonator effects and, since 2026-11-27, the Rocket's flare and track blast.
 
 ### HD advances its flipbooks, from the authored top-left
 
@@ -1428,7 +1443,7 @@ cost nothing measurable at these ticks.
 
 | Heavy effect | Verdict | Why |
 | --- | --- | --- |
-| `FIRESPIKES` (track blast) | the disc's | Counts, sizes and lifetimes are the file's, one blast a rocket. HD reads no fade and no size cap on this render mode (5) ([particle-render.md](../ghidra/functions/ps3-hdfury-eu/particle-render.md), "The near-camera law"). Ours draws it with the procedural strip rather than HD's bar ([engine-trail.md](../ghidra/functions/ps3-hdfury-eu/engine-trail.md), "The class-6 draw law"); with that bar, its sprite and its near cull switched on for the probe, the same quads cover 8.44, 6.47, 7.27, 5.22 and 3.22 screens, -4 to +9 % |
+| `FIRESPIKES` (track blast) | the disc's | Counts, sizes and lifetimes are the file's, one blast a rocket. HD reads no fade and no size cap on this render mode (5) ([particle-render.md](../ghidra/functions/ps3-hdfury-eu/particle-render.md), "The near-camera law"). When this was counted ours drew it with the procedural strip rather than HD's bar ([engine-trail.md](../ghidra/functions/ps3-hdfury-eu/engine-trail.md), "The class-6 draw law"); it draws the bar since 2026-11-27 ("A Rocket on the wall paired"). With that bar, its sprite and its near cull switched on for the probe, the same quads covered 8.44, 6.47, 7.27, 5.22 and 3.22 screens, -4 to +9 % |
 | `launch_smoke`, `launch_flare`, `WO_ROCKET_FIRE` (own launch) | the disc's | The billboards already run the near law with the file's cap; the streaks are render mode 5 in the file, like the spikes |
 | `trail` and the craft blast's smoke (784) | the disc's | Under the near law with the file's cap (0.5 on `trail`). At a near craft blast the original's lists cover more than ours, not less ("Against the original at a near blast") |
 
