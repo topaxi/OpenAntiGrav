@@ -10,6 +10,11 @@ use oag_gameplay::PlayerInputs;
 
 /// The fixture grid, with an engine on slot 1 so the race has something to scale.
 pub(super) fn grid(extensions: crate::extensions::Prepared) -> Race {
+    grid_seen(extensions, crate::tests::fixture_view())
+}
+
+/// [`grid`] set up with `view`.
+pub(super) fn grid_seen(extensions: crate::extensions::Prepared, view: crate::ViewSetup) -> Race {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::SingleRace;
     setup.start_position = Some(oag_vex::track::StartPosition {
@@ -18,7 +23,7 @@ pub(super) fn grid(extensions: crate::extensions::Prepared) -> Race {
         up: [0.0, 1.0, 0.0],
         forward: [1.0, 0.0, 0.0],
     });
-    let mut race = Race::start(setup, crate::tests::fixture_view(), extensions);
+    let mut race = Race::start(setup, view, extensions);
     let engine = &mut race.core.sim.world.ships[1].handling.engine;
     engine.amount = 20.0;
     engine.accelcap = 1000.0;
