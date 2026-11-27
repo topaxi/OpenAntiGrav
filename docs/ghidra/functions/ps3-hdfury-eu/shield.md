@@ -816,8 +816,36 @@ craft's light rig and fog and the flame surfaces' clock, writing no glow mask
 and receiving no shadow map. Where a circuit authors no rig, the shell draws as
 before.
 
-Left as before, because their draws are unread: the cockpit sphere, Zone
-Battle's `zonebattle_shield`, and our own shield.
+Left as before: the cockpit sphere (draw read since, "The cockpit sphere's draw"),
+and, their draws unread, Zone Battle's `zonebattle_shield` and our own shield.
+
+### The cockpit sphere's draw
+
+Lane `hd-shield-follow`, 2026-11-27, RPCS3, R1 held (look-back, which sets
+`craft+0x5f42`; the internal camera itself was not selected live), Shield raised, two
+boots. Confidence **88** for the draw and its state.
+
+- One draw absent from the plain frame: draw 372 of 470, and 365 of 468 on the second
+  boot; 2304 indices, `hexagonalshield_rich` fragment block #2, the shell's own program,
+  with ambient, sun and fog patched in. Unit 0 is a 256 x 128 DXT45.
+- Blend `SRC_ALPHA` / `ONE`, depth test `LEQUAL`, depth write off, colour mask
+  `0x00010101` (alpha masked), cull on, `GL_BACK`, front `CCW`.
+- `ShieldColour` is the object's live colour without the flicker.
+- The stride-18 vertex binds `VertexColour1` as unorm8 x 4 at `+0x0e` (`.w` 0..216 on the
+  disc's `vr_shield_cockpit.rcsmodel`).
+- The prediction written first (cull off or front, the eye being inside) was **wrong**.
+  The state is the shell's. The disc mesh is wound **inward** (761 of 768 triangles;
+  the Feisar shell is outward, 2190 of 2193), so back-face cull keeps the faces seen
+  from inside.
+- The draw's pixels are not detectable: shield frame minus plain frame has no blue
+  excess (mean blue minus red -0.02 over the frame). Cause unread.
+
+**Not wired.** This build queues the sphere in the internal view but no pixel of it was
+seen: a shield-on capture is unchanged by a white tint and by a 5x scale (temporary
+probes). That is its own open defect, and the lit program cannot be checked until it is
+read.
+
+2048: draw not captured. Omega: not checkable live (no memory or command readout).
 
 ### 2048 and Omega, the draw state
 
@@ -835,7 +863,7 @@ Battle's `zonebattle_shield`, and our own shield.
 
 ## History
 
-- 2026-11-27: `hd-shield-follow`. The 3.21 s red and green traced to a missing floor shadow in that frame; `ShipShield_Update`'s branch arms corrected.
+- 2026-11-27: `hd-shield-follow`. The cockpit sphere's draw read on two boots, not wired. The 3.21 s red and green traced to a missing floor shadow in that frame; `ShipShield_Update`'s branch arms corrected.
 - 2026-11-27: `hd-shield-blue`. The shell's draw state and lit program read off the command ring on two boots and wired; ours' shield blue moves from about 70 % to 91 to 100 % of the original's.
 - 2026-11-27: `hd-shield-flash`. Raised shell and amber flash watched and paired; shell draw, flicker constants and sine read; shell alpha wired to the authored `VertexColour1.w` without the flicker.
 - 2026-09-16: page created. `Shield.cpp`'s constructor, activate, update, hit

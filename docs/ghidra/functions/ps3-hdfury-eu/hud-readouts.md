@@ -559,12 +559,16 @@ statically; confidence **75**, the lit state not seen live):
    dot product clamped to `[-0.43, 0.43]` radians (halved under bit `0x200` of
    `hud+0x44`). Which two vectors, and the rotation's sign, are unread.
 
+Wired as `RuntimeHud::proximity`, the idle state only. The 2097 and WIP3OUT skins author
+their own widgets (`ProxArrow`, `ProxBar`) and draw none of it (`RETRO_ART.runtime` is
+`None`).
+
 **2048: checked, differs** (confidence 70). 2048's `data/xml/2048_hud/HUD_proximity.xml`
 authors its own `ProximityIndicator` and `ProximityBar` with `ProxBackground2048`
 and `Prox2048_*` children. Its original frames show no idle arc this build lacks
 (the ring under the craft is already in both). Not wired; its law is unread.
 
-**Omega: ported** (confidence 70). `data/xml/HUD_proximity.xml` ships the same two
+**Omega: checked, applies, wired** (confidence 70; no Omega test of its own yet). `data/xml/HUD_proximity.xml` ships the same two
 names and its original pairs (a native PC build of the same game) show the same
 arc; Omega draws HD's `ALWAYS_ON` list. Its update function is unread.
 
