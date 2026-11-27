@@ -72,7 +72,6 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     row_extra_leading: None,
     menu_font: None,
     menu_face_in_boot: false,
-    wrap_from_text_x: false,
     // `FEGlobals->TextColor`: `0xFFFFFFFF`, matching HD's.
     text: Some(0xFFFF_FFFF),
     // `None`, so the title draws in the frame's own ink (`Skin::title_color`):

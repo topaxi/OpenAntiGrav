@@ -374,7 +374,6 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     // `crates/game/tests/font_roles_ground_truth.rs`.
     menu_font: None,
     menu_face_in_boot: false,
-    wrap_from_text_x: false,
     // The same pixel measurements [`FALLBACK_GLOBALS`] carries, restated in the
     // units this type uses. Confidence 65, and of the *effect* rather than of
     // the source - see that constant's own docs.

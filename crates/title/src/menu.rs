@@ -225,11 +225,6 @@ pub struct MenuSkin {
     /// (`docs/architecture/frontend-boot.md`, "Show Logo's faces and its legal line's wrap"). `false` keeps every text of the
     /// sequence in the `Default` atlas.
     pub menu_face_in_boot: bool,
-    /// Whether a `widthlimited` text of the boot sequence wraps over its `Viewport`'s width less its
-    /// own `x` rather than over the `Viewport`'s width: Pulse's `BOOT_LEGAL` (`x=40` in a 400 wide
-    /// `Viewport`) breaks where a 360 wide line does (`docs/architecture/frontend-boot.md`, "Show
-    /// Logo's faces and its legal line's wrap", confidence 55). Measured on that one string.
-    pub wrap_from_text_x: bool,
     /// Unselected row text, as this title's own menu screens draw it.
     ///
     /// `FEGlobals->TextColor` on both PSP titles. HD is why the wording is "as its
@@ -625,7 +620,6 @@ mod tests {
         row_extra_leading: Some(6.0),
         menu_font: Some("menu"),
         menu_face_in_boot: false,
-        wrap_from_text_x: false,
         text: Some(0xFF33_A6B9),
         title: Some(0xFF00_0000),
         background: None,

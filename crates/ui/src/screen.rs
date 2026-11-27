@@ -136,12 +136,9 @@ pub struct Text {
     /// number the XML gives a `widthlimited` text to wrap against. `None`
     /// when `widthlimited` is absent or false, and also when it is true but
     /// nothing wraps the widget in a `Viewport` (nothing to wrap against).
-    /// `Show Logo`'s `USLegalText`/`BOOT_LEGAL` is the one measured case, and it breaks
-    /// where the line from the widget's own `x` is this wide, not where the `Viewport` is
-    /// wide from the screen's edge: `x="40"` in a 400 wide `Viewport` wraps at 360
-    /// (`docs/architecture/frontend-boot.md`, "Show Logo's faces and its legal line's wrap",
-    /// confidence 55). `Frontend::draw_screen_over` applies that where
-    /// `oag_title::MenuSkin::wrap_from_text_x` is set; this field keeps the `Viewport`'s own width.
+    /// `Show Logo`'s `USLegalText`/`BOOT_LEGAL` is the one measured case, and it breaks where a
+    /// line at this width does (`docs/architecture/frontend-boot.md`, "Show Logo's faces and its
+    /// legal line's wrap").
     pub wrap_width: Option<f32>,
     /// `PushHeight="true"`: the widget's `y` is an offset below the bottom of the text before it
     /// in the same `Viewport`, not a position of its own. `Cell Help`'s three paragraphs author it.
