@@ -19,6 +19,11 @@ read values only, as `Title` data, with a test, a break-it, and the other titles
   `Gxt::lower_levels_rgba` reads the rest. `Texels::Chain` cannot carry them: it also turns on the PSP
   slope law, so the model needs a form that brings levels without it. Omega's `.gnf` and HD's `.gtf`
   already upload their own chains.
+- **2048 pairs: the original is anti-aliased and its profile runs ours at MSAA off**
+  ([texture-level-per-title.md](../../docs/rendering/texture-level-per-title.md), "2048 wired: what moved in the
+  pairs"; inferred from the spectrum, 60). Read the render target's multisample mode in the executable or off a
+  RenderDoc capture, then set the profile. A top-band excess stays at 4x, mostly along y; the box-filtered material
+  chain above is the first thing to test against it.
 - **Pulse and Pure PSP: a stored `K` per texture, ready to wire** (Pulse 93, Pure 85). The `-9.0506`
   is the pre-race flyby camera's (`docs/ghidra/functions/psp-pulse-usa/mesh-draw.md`, "`K = -9.0506` is
   the pre-race flyby camera's"; `docs/ghidra/functions/psp-pure-usa/texture-level.md`). The rule:

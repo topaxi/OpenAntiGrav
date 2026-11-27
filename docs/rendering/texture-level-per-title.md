@@ -195,6 +195,43 @@ as it is and nothing is wired.
 - No GS dump was taken at a pair's state, for the same reason. `MXL` 0 there rests on the dumps above and the disc census.
 - Our renders repeat pixel for pixel on a second run.
 
+## 2048 wired: what moved in the pairs
+
+2026-11-27, the 16 `2048-vita` race pairs rendered before and after the bias went in, the new build twice (pixel for
+pixel the same). All 16 moved: 1.5 % to 10 % of their pixels by more than 8 levels in some channel. The other 167 pairs (HD, Omega,
+Pulse PSP and PS2, Pure and 2048's menus) are pixel-identical.
+
+**The error scores went up slightly.** Means over the 16: mean grey 24.99 to 25.25, RMSE 0.1646 to 0.1658, edge
+correlation 0.1460 to 0.1457. 15 pairs are farther and one (`zone-dlc-vineta-k-z5`) level.
+
+By eye at 4x the new frames resolve what the original resolves and the old ones lost (the grooves along the Queens
+Mall girder, figures in the far stands). Surfaces also carry more grain than the original's.
+
+### Detail by frequency
+
+Mean power per eighth of Nyquist along x, rows 110 to 360 of each frame (clear of the HUD), summed over the pairs, as
+a ratio to the original:
+
+| Build | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| before | 0.96 | 0.79 | 0.82 | 0.98 | 1.20 | 1.62 | 2.07 | 2.45 |
+| after | 1.00 | 0.97 | 1.03 | 1.29 | 1.62 | 2.19 | 2.85 | 3.35 |
+
+- The bias closes the deficit in bands 2 and 3.
+- **The top bands were already too strong before it**, and grow with it.
+- **The original is anti-aliased; ours is paired without.** On Queens Mall, Sebenco Climb and Sol 2, ours at
+  `--msaa 4x` before the change reads 0.91, 0.72, 0.68, 0.71, 0.79, 0.96, 1.09, 1.11: the top two bands meet the
+  original. After the change it reads 0.95, 0.91, 0.91, 1.03, 1.21, 1.56, 1.89, 2.05: the middle bands meet it and
+  the top ones keep an excess. So the 2048 compare profile's `msaa` is likely wrong (inferred from the spectrum,
+  confidence 60; the render target's multisample mode was not read).
+- Along y the excess is larger (4.13 in the top band after, 3.53 with 4x). Why is not established. Ours' material
+  levels are box-filtered rather than the file's ([gxt-loader.md](../ghidra/functions/vita-2048-eu-v104/gxt-loader.md#ours)),
+  which is one untested candidate.
+
+The captures do include the bias: Vita3K's Vulkan renderer sets `mipLodBias` from the bound descriptor
+(`vita3k/renderer/src/vulkan/texture.cpp`, `(lod_bias - 31) / 8`), and the capture ran at anisotropy 1 and
+resolution multiplier 1. The law's confidence stays 92: it is read off the descriptors, not off these scores.
+
 ## What TEXTURE DETAIL reaches
 
 The GRAPHICS row TEXTURE DETAIL (`original`, `high`, `maximum`) is `TextureDetail::level_shift`
