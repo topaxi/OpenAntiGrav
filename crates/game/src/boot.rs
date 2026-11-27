@@ -1424,58 +1424,6 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
     }
 }
 
-/// Loads the looping backdrop the disc plays behind its menus.
-///
-/// **The disc's own arrangement, not decoration we invented.** `FE Screen` -
-/// the original's main menu - carries a `Movie` widget naming
-/// `Data\Movies\Backdrop.PMF`, and a cold boot under PPSSPP with
-/// `MoviePlayer_Open` armed from reset opens exactly two movies in ten minutes:
-/// the intro, and this. See [`DEFAULT_BOOT_MOVIE`] and
-/// `docs/ghidra/functions/psp-pulse-usa/frontend-video.md`. Our menu tree is ours;
-/// what it sits on is the disc's.
-///
-/// Three differences from [`load_movie`], each of which is why this is its own
-/// function rather than a second call:
-///
-/// - **Absence is never an error.** `load_movie` bails on a movie the command
-///   line named and the source does not have, because a run that cannot play
-///   the movie it was asked for has failed. Nothing asked for this one, so
-///   every way of not getting it - no such entry, no `ffmpeg`, `--no-video` -
-///   ends as `None` and a note, and the menus draw on black.
-/// - **Always the whole movie**, whatever `--movie-frames` says. That flag
-///   exists so a first run need not transcode 1200 intro frames; capping a
-///   *loop* at four would make the backdrop stutter round every seventh of a
-///   second, which is not a shorter version of the same thing.
-/// - **It is loaded here, at boot, rather than when the menus first open.** The
-///   270 frames cost about thirteen seconds to transcode once and nothing on
-///   every run after, and boot is already paying that for the intro's 1200 -
-///   whereas the menus open on a keypress out of a race, where a
-///   thirteen-second freeze would read as a hang.
-fn load_backdrop(
-    archives: &mut oag_assets::Archives,
-    name: &str,
-    options: &Options,
-    report: &mut Vec<String>,
-    watch: crate::movie::Watch<'_>,
-) -> Option<Movie> {
-    if options.no_video {
-        return None;
-    }
-    let wanted = Options {
-        extent: Extent::Whole,
-        ..options.clone()
-    };
-    match load_movie(archives, name, &wanted, report, watch) {
-        Ok(movie) => movie,
-        // Reported and dropped. `load_movie` only errors here on an entry it
-        // cannot read, and the backdrop is not worth failing a boot over.
-        Err(e) => {
-            report.push(format!("no menu backdrop: {e:#}"));
-            None
-        }
-    }
-}
-
 pub mod backdrop;
 pub(crate) mod campaign2048;
 mod configure;
@@ -1503,8 +1451,8 @@ pub mod worker;
 use fonts::load_font;
 pub use movies::{DEFAULT_BOOT_MOVIE, DEVPUB_REEL, EntryRef};
 use movies::{
-    authored_movie, load_movie, load_movie_sound, load_second_movie, resolve_movie_region,
-    resolve_pure_movie_region, same_planes,
+    authored_movie, load_backdrop, load_movie, load_movie_sound, load_second_movie,
+    resolve_movie_region, resolve_pure_movie_region, same_planes,
 };
 use oag_ui::language::load::{chosen_language, load_languages, load_strings, with_overlays};
 use oag_ui::xml::expand;

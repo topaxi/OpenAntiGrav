@@ -698,66 +698,6 @@ fn the_title_and_game_mode_pages_draw_the_baked_canvas_lattice() {
         w2048::GAME_MODE_CHOICE
     ));
     assert_eq!(lattice(&frontend), 1, "one lattice on the game mode page");
-    // The label face is the disc's own, and the shell hands it to the renderer.
-    assert_eq!(
-        loaded.label_face.as_ref().map(|(_, role)| *role),
-        Some("NEOSANS_BOLD")
-    );
-    // Past the widgets' entry fades.
-    let mut input = Input::new();
-    for _ in 0..60 {
-        input.begin_frame(0);
-        frontend.update(1.0 / 60.0, &mut input, None);
-    }
-    check_the_header_block_and_the_tiles_glyphs_and_labels(&frontend.draw_list());
-}
-
-/// `GameModeChoice`'s header block sits above the lattice and under its glyph, the tiles'
-/// glyphs are `White2048` and their labels are drawn in `NEOSANS_BOLD`.
-fn check_the_header_block_and_the_tiles_glyphs_and_labels(draws: &[frontend::Draw]) {
-    let white = [225.0 / 255.0, 228.0 / 255.0, 235.0 / 255.0, 1.0];
-    let blue = [25.0 / 255.0, 41.0 / 255.0, 93.0 / 255.0, 1.0];
-    let close = |a: [f32; 4], b: [f32; 4]| a.iter().zip(b).all(|(a, b)| (a - b).abs() < 0.01);
-    let header = [15.0, 15.0, 70.0, 70.0];
-    let block = draws
-        .iter()
-        .position(|draw| {
-            matches!(draw, frontend::Draw::Fill { rect, color } if *rect == header && close(*color, blue))
-        })
-        .expect("the header's Blue2048 block");
-    let glyph = draws
-        .iter()
-        .position(|draw| matches!(draw, frontend::Draw::Sprite { rect, .. } if *rect == header))
-        .expect("the header glyph");
-    let lattice = draws
-        .iter()
-        .position(|draw| {
-            matches!(draw, frontend::Draw::Sprite { uv, .. }
-                if uv[2] == oag_ui::frontend::canvas_lattice::VIEWPORT[0] as f32)
-        })
-        .expect("the lattice");
-    assert!(
-        lattice < block && block < glyph,
-        "{lattice} {block} {glyph}"
-    );
-
-    // Single Player Campaign's 128x128 glyph, centred in its tile.
-    let single_player = [231.5, 98.5, 128.0, 128.0];
-    assert!(
-        draws.iter().any(|draw| matches!(draw,
-            frontend::Draw::Sprite { rect, color, .. } if *rect == single_player && close(*color, white))),
-        "the tile glyph is White2048"
-    );
-    let label = draws
-        .iter()
-        .find(|draw| {
-            matches!(draw, frontend::Draw::FacedText { text, .. } if text == "SINGLE PLAYER CAMPAIGN")
-        })
-        .expect("the Single Player label in its own face");
-    assert!(
-        matches!(label, frontend::Draw::FacedText { role: "NEOSANS_BOLD", scale, .. } if *scale == 1.0),
-        "{label:?}"
-    );
 }
 
 /// A network mode cannot be confirmed here, and says so.

@@ -334,6 +334,53 @@ fn the_race_load_of_event_one_draws_its_card_a_real_tip_and_the_modes_paragraph(
     assert!(!second.contains(&tip.title), "the tip is dropped");
 }
 
+/// `GameModeChoice`'s header block sits above the lattice and under its glyph, the tiles'
+/// glyphs are `White2048` and their labels are drawn in `NEOSANS_BOLD`.
+fn check_the_game_mode_header_glyphs_and_labels(draws: &[Draw]) {
+    let white = [225.0 / 255.0, 228.0 / 255.0, 235.0 / 255.0, 1.0];
+    let blue = [25.0 / 255.0, 41.0 / 255.0, 93.0 / 255.0, 1.0];
+    let close = |a: [f32; 4], b: [f32; 4]| a.iter().zip(b).all(|(a, b)| (a - b).abs() < 0.01);
+    let header = [15.0, 15.0, 70.0, 70.0];
+    let block = draws
+        .iter()
+        .position(|draw| {
+            matches!(draw, Draw::Fill { rect, color } if *rect == header && close(*color, blue))
+        })
+        .expect("the header's Blue2048 block");
+    let glyph = draws
+        .iter()
+        .position(|draw| matches!(draw, Draw::Sprite { rect, .. } if *rect == header))
+        .expect("the header glyph");
+    let lattice = draws
+        .iter()
+        .position(|draw| {
+            matches!(draw, Draw::Sprite { uv, .. }
+                if uv[2] == frontend::canvas_lattice::VIEWPORT[0] as f32)
+        })
+        .expect("the lattice");
+    assert!(
+        lattice < block && block < glyph,
+        "{lattice} {block} {glyph}"
+    );
+    // Single Player Campaign's 128x128 glyph, centred in its tile.
+    let single_player = [231.5, 98.5, 128.0, 128.0];
+    assert!(
+        draws.iter().any(|draw| matches!(draw,
+            Draw::Sprite { rect, color, .. } if *rect == single_player && close(*color, white))),
+        "the tile glyph is White2048"
+    );
+    let label = draws
+        .iter()
+        .find(
+            |draw| matches!(draw, Draw::FacedText { text, .. } if text == "SINGLE PLAYER CAMPAIGN"),
+        )
+        .expect("the Single Player label in its own face");
+    assert!(
+        matches!(label, Draw::FacedText { role: "NEOSANS_BOLD", scale, .. } if *scale == 1.0),
+        "{label:?}"
+    );
+}
+
 /// The open card of the first event on screen: its description under the title, the pass
 /// group centred on the panel, the leaderboard's tabs in `NEOSANS_BOLD` over an orange bar
 /// and the buttons' glyphs in `White2048`.
@@ -342,6 +389,11 @@ fn the_race_load_of_event_one_draws_its_card_a_real_tip_and_the_modes_paragraph(
 fn the_open_card_of_event_one_words_and_places_what_the_disc_authors() {
     let Some(source) = source() else { return };
     let loaded = boot::load(&options(&source)).expect("the whole boot");
+    // The label face is the disc's own, and the shell hands it to the renderer.
+    assert_eq!(
+        loaded.label_face.as_ref().map(|(_, role)| *role),
+        Some("NEOSANS_BOLD")
+    );
     let mut frontend = loaded.frontend;
     let mut input = Input::new();
     let mut tick = 0u32;
@@ -350,6 +402,17 @@ fn the_open_card_of_event_one_words_and_places_what_the_disc_authors() {
         tick += 1;
         frontend.update(1.0 / 60.0, &mut input, None);
     };
+    for _ in 0..3600 {
+        if frontend.machine().is(w2048::GAME_MODE_CHOICE) {
+            break;
+        }
+        run(&mut frontend, Button::Cross.bit() | Button::Start.bit());
+    }
+    // Past the widgets' entry fades.
+    for _ in 0..60 {
+        run(&mut frontend, 0);
+    }
+    check_the_game_mode_header_glyphs_and_labels(&frontend.draw_list());
     for _ in 0..3600 {
         if frontend.machine().is(w2048::NEW_FE_SHELL) {
             break;
