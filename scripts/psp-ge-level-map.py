@@ -18,12 +18,16 @@ common one are removed (clear-mode PRIMs stay).
                   is the `w` the level was picked from.
     plain         the unedited replay.
 
+The window is a 2x copy of the 480x272 framebuffer; the instance is started with nearest buffer filtering and
+no slow-emulator notice, so the saved picture is the framebuffer's own pixels.
+
 The output is derived game data: keep it under data/, never commit it.
 """
 
 import argparse
 import collections
 import importlib.util
+import os
 import struct
 import sys
 from pathlib import Path
@@ -173,6 +177,9 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
     dump = out / f"{args.name}.ppdmp"
     replay.build(data, edit(ge, data, cmds, push, args.mode, args.depth, args.slope), dump)
+    ini = out / "native-pixels.ini"
+    ini.write_text("[CPU]\nHideSlowWarnings = True\n[DisplayLayout.Landscape]\nBufferFiltering = 2\n")
+    os.environ["PPSSPP_EXTRA_INI"] = str(ini)
     replay.replay_shot(dump, out / f"{args.name}.png", args.lane, args.display, args.port)
     replay.subprocess.run([ROOT / "scripts/ppsspp-start.sh", args.lane, "stop"], stdout=sys.stderr)
     print(out / f"{args.name}.png")
