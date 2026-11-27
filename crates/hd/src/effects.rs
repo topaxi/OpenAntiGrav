@@ -185,6 +185,10 @@ const TURBULENCE: &[&str] = &[engine_effects::DETONATOR_EMP_EFFECT];
 /// The smoke ring's `sparks` are class 6 and the original draws them as sprite quads too, but
 /// listed they take the Bomb's 0.17 s pair further from the original, so they stay procedural
 /// (`docs/rendering/particle-fill.md`, "The Bomb's and the Missile's explosions paired").
+/// And the Rocket's flare, whose launch streaks the bar turns from one white beam at the camera
+/// into small flames. The original draws both Rocket blasts' streaks as sprite quads too, but
+/// listed they pair no closer, so they stay procedural
+/// (`docs/rendering/particle-fill.md`, "A Rocket on the wall paired").
 const FAR_BARS: &[&str] = &[
     engine_effects::DETONATOR_CANNON_SPARKS_EFFECT,
     engine_effects::TRAIL_HITSHIP_EFFECT,
@@ -196,6 +200,7 @@ const FAR_BARS: &[&str] = &[
     engine_effects::PLASMA_LIGHTNING_EXPAND_EFFECT,
     engine_effects::PLASMA_LIGHTNING_COLLAPSE_EFFECT,
     engine_effects::BOMB_RAYS_EFFECT,
+    engine_effects::ROCKET_FLARE_EFFECT,
 ];
 
 /// The effects whose sprite templates play: the Plasma head's ring and glow and the

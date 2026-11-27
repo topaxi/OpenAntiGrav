@@ -338,6 +338,7 @@ fn hd_2048_and_omega_list_the_trail_hit_burst_for_the_far_bar_draw_and_hd_its_pl
             n::PLASMA_LIGHTNING_EXPAND_EFFECT,
             n::PLASMA_LIGHTNING_COLLAPSE_EFFECT,
             n::BOMB_RAYS_EFFECT,
+            n::ROCKET_FLARE_EFFECT,
         ]
     );
     // The head's and the wind-up's sprite templates play, and the Rocket craft blast's (its
@@ -352,13 +353,42 @@ fn hd_2048_and_omega_list_the_trail_hit_burst_for_the_far_bar_draw_and_hd_its_pl
     );
 }
 
+/// The Rocket's three effects as HD's own lists load them: the flare's two class-6 emitters as
+/// HD's bar with their sprite, every class-6 emitter of both blasts procedural
+/// (`docs/rendering/particle-fill.md`, "A Rocket on the wall paired").
+fn check_the_rockets_streaks(load: &mut impl FnMut(&'static str) -> oag_fx::psys::Effect) {
+    use oag_fx::psys::streak::StreakDraw;
+    use oag_title::engine_effects as n;
+    let flare = load(n::ROCKET_FLARE_EFFECT);
+    let bars: Vec<&str> = flare
+        .emitters
+        .iter()
+        .filter(|e| matches!(e.streak, StreakDraw::FarBar { .. }))
+        .map(|e| {
+            assert!(e.sprite.is_some(), "{}", e.name);
+            e.name.as_str()
+        })
+        .collect();
+    assert_eq!(bars, ["WO_ROCKET_FIRE", "launch_flare"]);
+    for blast in [n::TRACK_BLAST_EFFECT, n::CRAFT_BLAST_EFFECT] {
+        let effect = load(blast);
+        let streaks: Vec<StreakDraw> = effect
+            .emitters
+            .iter()
+            .filter(|e| e.name == "FIRESPIKES" || e.name == "SPARKS")
+            .map(|e| e.streak)
+            .collect();
+        assert_eq!(streaks, [StreakDraw::Procedural; 2], "{blast}");
+    }
+}
+
 /// The Bomb's two effects as HD's own lists load them: both spread by the extent the file
 /// authors, the rays as HD's bar with their sprite, the ring's class-6 `sparks` still
 /// procedural (`docs/rendering/particle-fill.md`, "The Bomb's and the Missile's explosions
-/// paired").
+/// paired"). The Rocket's streaks are checked on the same load.
 #[test]
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
-fn the_bombs_rays_load_as_sprite_bars_on_their_shell_and_the_ring_sparks_stay_procedural() {
+fn the_bombs_and_the_rockets_streaks_load_as_the_pairs_decided() {
     use oag_fx::psys::streak::StreakDraw;
     use oag_title::engine_effects as n;
     let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
@@ -394,6 +424,8 @@ fn the_bombs_rays_load_as_sprite_bars_on_their_shell_and_the_ring_sparks_stay_pr
         .find(|e| e.name == "sparks")
         .expect("the ring carries sparks");
     assert_eq!(sparks.streak, StreakDraw::Procedural);
+
+    check_the_rockets_streaks(&mut load);
 }
 
 /// `WO_TRAIL_HITSHIP`'s two emitters are class 6 (`+0x4c8` aspect 1.0 and 2.0). Listed, both

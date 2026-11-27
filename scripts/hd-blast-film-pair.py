@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""A comparison pair from one frame of `rpcs3-hd-blast-film.py`'s Missile or Bomb film.
+"""A comparison pair from one frame of `rpcs3-hd-blast-film.py`'s Missile, Bomb or Rocket-on-the-wall film.
 
     python3 scripts/hd-blast-film-pair.py --film DIR --stem a0233 --out PAIRDIR --speed 385 \\
         --lag 4 --camera-back 3 [--lag-basis TEXT] [--oag-game target/debug/oag-game] [--shot-at X,Y,Z] [--no-render]
@@ -22,6 +22,11 @@ push buffer is itself 1 or 2 ticks behind RAM, so `K` is about `T` less that). P
 several values and taking the lowest whole-frame RMSE, and say what was scanned in `--lag-basis`; a resting
 player's camera needs no `K` (`docs/rendering/particle-fill.md`, "The Bomb's and the Missile's explosions
 paired").
+
+A `rocket-wall` film has no struck craft: ours holds the player at the parked pose and fires its own Rockets, which
+meet the same wall. `--fire-shift N` presses ours `N` ticks after the original's press (`hit.json`
+`pressed_clock`); with the player at rest only `--lag` plus `N` moves the blast, so fix `--lag` and scan `N`
+(`docs/rendering/particle-fill.md`, "A Rocket on the wall paired").
 """
 import argparse
 import datetime
@@ -63,6 +68,36 @@ def numbers(values):
     return ",".join("%.6f" % v for v in values)
 
 
+def wall_meta(film, hit, ship, player, args, camera_note):
+    return {
+        "id": "hd-rocket-wall-%04d" % round(ship["age_since_hit_s"] * 1000),
+        "title": "Talon's Junction, Rockets on the track wall, %.3f s after the press" % ship["age_since_hit_s"],
+        "track": "Talon's Junction, Racebox Single Race, Venom",
+        "craft": player["team"],
+        "state": "RPCS3 film %s (scripts/rpcs3-hd-blast-film.py --weapon rocket-wall --yaw %g)" % (film.name, hit["yaw"]),
+        "note": "Both sides hold the player still, turned into the wall, and press fire; ours' press is %d ticks after "
+                "the original's and its Rockets meet our wall with nothing forced. Ours' other craft are where its own "
+                "race put them; the HUD's pickup row and weapon name are not matched.%s"
+                % (args.fire_shift, " %s." % camera_note if camera_note else ""),
+    }
+
+
+def blast_meta(film, stem, weapon, force, ship, player, args, age_ticks, ram_age, camera_note):
+    ours_name = "ours moves its own %s to the original's blast point and sets it off there (--force-shot-at, %s)" % (
+        weapon.capitalize(), force)
+    return {
+        "id": "hd-%s-craft-%s" % (weapon, stem.lstrip("a")),
+        "title": "Talon's Junction, a %s on a craft, %.3f s after the hit" % (weapon.capitalize(), ship["age_since_hit_s"]),
+        "track": "Talon's Junction, Racebox Single Race, Venom",
+        "craft": player["team"],
+        "state": "RPCS3 film %s (scripts/rpcs3-hd-blast-film.py)" % film.name,
+        "note": "%s; the blast is %d ticks old on both sides (the original's %.3f s at the stop less %d). Ours' other "
+                "craft are where its own race put them after the countdown, only the struck one is moved; the HUD's "
+                "pickup row, sight and weapon name are not matched, and the original's hull shake is not patched out.%s"
+                % (ours_name, age_ticks, ram_age, args.lag, " %s." % camera_note if camera_note else ""),
+    }
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--film", type=Path, required=True)
@@ -70,6 +105,7 @@ def main():
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--speed", type=float, required=True, help="the HUD speed read off the frame, km/h")
     ap.add_argument("--shot-at", help="X,Y,Z ours moves the weapon to; default the film's blast centre")
+    ap.add_argument("--fire-shift", type=int, default=0, help="rocket-wall: ticks ours presses after the original")
     ap.add_argument("--lag", type=int, required=True, help="ticks the picture is behind the RAM read")
     ap.add_argument("--camera-back", type=float, default=0.0, help="ticks the push-buffer camera is moved back")
     ap.add_argument("--lag-basis", default="picked by rendering ours at several lags and scoring against theirs.png",
@@ -82,6 +118,7 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
     hit = json.loads((film / "hit.json").read_text())
     weapon = hit["weapon"]
+    wall = weapon == "rocket-wall"
     record = json.loads((film / ("%s.json" % stem)).read_text())
     clock = json.loads((film / ("%s.clock.json" % stem)).read_text())
     ship = record["ship"]
@@ -105,11 +142,11 @@ def main():
              "fwd": c["rows"][2], "pos": c["pos"], "vel": c["vel"]} for n, c in enumerate(crafts)]
     ce.write_field_csv(out / "field.csv", rows, with_player=True)
     opponents = [c for c in crafts if not c["player"]]
-    struck = next(n for n, c in enumerate(opponents, 1) if c["ship"] == hit["struck"])
+    struck = None if wall else next(n for n, c in enumerate(opponents, 1) if c["ship"] == hit["struck"])
     player = next(c for c in crafts if c["player"])
 
     ram_age = (ship["blasts"][0]["age"] if weapon == "missile" else ship["age_since_hit_s"])
-    centre = hit["blasts_at_hit"][0]["centre"]
+    centre = None if wall else hit["blasts_at_hit"][0]["centre"]
     shot_at = [float(v) for v in args.shot_at.split(",")] if args.shot_at else centre
 
     pair = {
@@ -137,16 +174,21 @@ def main():
         "field.csv moved back craft_ticks ticks of each craft's own velocity",
         picture="the camera is the push-buffer matrix moved back camera_back_ticks ticks along the player's velocity")
     rec = json.loads((out / "pair.json").read_text())
-    age_ticks = max(0, round(ram_age * 60) - args.lag)
     ticks = go + round(ship["race_clock_s"] * 60) - args.lag
-    hit_tick = ticks - 1 - age_ticks
-    fire_tick = hit_tick - (MISSILE_FLIGHT_TICKS if weapon == "missile" else BOMB_LAID_TICKS)
+    hit_tick = move_tick = None
+    if wall:
+        fire_tick = go + round(hit["pressed_clock"] * 60) + args.fire_shift
+        age_ticks = ticks - fire_tick
+    else:
+        age_ticks = max(0, round(ram_age * 60) - args.lag)
+        hit_tick = ticks - 1 - age_ticks
+        fire_tick = hit_tick - (MISSILE_FLIGHT_TICKS if weapon == "missile" else BOMB_LAID_TICKS)
+        move_tick = hit_tick if weapon == "missile" else fire_tick + BOMB_MOVE_TICKS
     (out / "ours.inputs").write_text("%d none\n1 square\n600 none\n" % fire_tick)
-    move_tick = hit_tick if weapon == "missile" else fire_tick + BOMB_MOVE_TICKS
 
     field = ce.read_field_rows(out / "field.csv")
     pose = ",".join("%.4f" % float(field[0]["pos_" + a]) for a in "xyz")
-    force = "--force-missile-hit" if weapon == "missile" else "--force-bomb-trip"
+    force = {"missile": "--force-missile-hit", "bomb": "--force-bomb-trip"}.get(weapon)
     ours_offset = clock["world_clock_offset_s"] - go / 60
     lap_time = ship["race_clock_s"] - args.lag / 60
     eye = [e - v * args.camera_back / 60.0 for e, v in zip(camera["eye"], player["vel"])]
@@ -155,14 +197,16 @@ def main():
              "--camera-pose=" + numbers(eye + list(camera["forward"]) + list(camera["up"])),
              "--camera-fov", "%.4f" % camera["fov_y_deg"], *ce.ours_flags(plat), "--mode", "single_race",
              "--field-from", str(out / "field.csv"), "--pose=" + pose, "--pose-hold", "--pose-hold-ticks",
-             "--give", weapon, "--input-script", str(out / "ours.inputs"),
-             "--force-shot-at", "%d:%s" % (move_tick, ",".join("%.4f" % v for v in shot_at)),
-             force, "%d:%d" % (hit_tick, struck), "--ticks", str(ticks),
+             "--give", "rocket" if wall else weapon, "--input-script", str(out / "ours.inputs"),
+             *([] if wall else ["--force-shot-at", "%d:%s" % (move_tick, ",".join("%.4f" % v for v in shot_at)),
+                                force, "%d:%d" % (hit_tick, struck)]),
+             "--ticks", str(ticks),
              "--world-clock-offset", "%.3f" % ours_offset,
              "--hud-state", "8,1,%.4f,%.4f,%.4f,100.0000" % (lap_time, lap_time, args.speed)]
 
-    rec["ours"] = {"flags": flags, "ticks": ticks, "image": str(IMAGE), "world_clock_offset_s": ours_offset,
-                   "blast_age_ticks": age_ticks, "hit_tick": hit_tick, "struck_slot": struck}
+    rec["ours"] = {"flags": flags, "ticks": ticks, "image": str(IMAGE), "world_clock_offset_s": ours_offset}
+    rec["ours"].update({"press_age_ticks": age_ticks, "fire_tick": fire_tick, "fire_shift": args.fire_shift} if wall
+                       else {"blast_age_ticks": age_ticks, "hit_tick": hit_tick, "struck_slot": struck})
     prov = {
         "schema": compare_provenance.SCHEMA,
         "pair_kind": "race",
@@ -176,7 +220,10 @@ def main():
              "when": "before the race starts", "source": "scripts/rpcs3-hd-pilot-assist.py --off"},
             {"target": "the player's pickup slot", "value": weapon, "why": "give the weapon",
              "when": "before the grab", "source": "film script"},
-            ({"target": "the player craft pose", "value": "%g units behind the nearest rival" % hit["back"],
+            ({"target": "the player craft pose", "value": "held where the race left it, turned %g degrees" % hit["yaw"],
+              "why": "aim the shot at the wall", "when": "every game frame from before the shot", "source": "film script"}
+             if wall else
+             {"target": "the player craft pose", "value": "%g units behind the nearest rival" % hit["back"],
               "why": "aim the shot", "when": "before the grab", "source": "film script"} if weapon == "missile" else
              {"target": "the player and one rival craft pose",
               "value": "player parked %g units behind the drop, then the rival parked on it" % hit["back"],
@@ -190,23 +237,12 @@ def main():
     }
     prov["emulator"]["settings_sha"] = compare_provenance.settings_sha(rec["original"]["emulator"])
     rec["original"]["provenance"] = prov
-    ours_name = "ours moves its own %s to the original's blast point and sets it off there (--force-shot-at, %s)" % (
-        weapon.capitalize(), force)
-    rec["meta"] = {
-        "id": "hd-%s-craft-%s" % (weapon, stem.lstrip("a")),
-        "title": "Talon's Junction, a %s on a craft, %.3f s after the hit" % (weapon.capitalize(), ship["age_since_hit_s"]),
-        "track": "Talon's Junction, Racebox Single Race, Venom",
-        "craft": player["team"],
-        "state": "RPCS3 film %s (scripts/rpcs3-hd-blast-film.py)" % film.name,
-        "note": "%s; the blast is %d ticks old on both sides (the original's %.3f s at the stop less %d). Ours' other "
-                "craft are where its own race put them after the countdown, only the struck one is moved; the HUD's "
-                "pickup row, sight and weapon name are not matched, and the original's hull shake is not patched out.%s"
-                % (ours_name, age_ticks, ram_age, args.lag, " %s." % camera_note if camera_note else ""),
-    }
+    rec["meta"] = wall_meta(film, hit, ship, player, args, camera_note) if wall else blast_meta(
+        film, stem, weapon, force, ship, player, args, age_ticks, ram_age, camera_note)
     rec["created"] = datetime.datetime.now().astimezone().isoformat(timespec="seconds")
     (out / "pair.json").write_text(json.dumps(rec, indent=2) + "\n")
-    print("%s: ticks %d, hit tick %d (age %d), struck slot %d, picture lag %d"
-          % (out.name, ticks, hit_tick, age_ticks, struck, args.lag))
+    what = "press tick %d" % fire_tick if wall else "hit tick %d (age %d), struck slot %d" % (hit_tick, age_ticks, struck)
+    print("%s: ticks %d, %s, picture lag %d" % (out.name, ticks, what, args.lag))
     if args.no_render:
         return
     rerender = load("compare_rerender_ours", "compare-rerender-ours.py")
